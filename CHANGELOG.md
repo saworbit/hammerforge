@@ -1,0 +1,28 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+The format is based on "Keep a Changelog", and this project follows semantic versioning.
+
+## [Unreleased]
+
+### Added
+- CAD-style brush creation: drag a base, then set height and commit with a second click.
+- Modifier keys: Shift (square base), Shift+Alt (cube), Alt (height-only).
+- Axis locks for drawing (X/Y/Z).
+- Draw/Select tool toggle in the dock.
+- Multi-select (Shift-click), Delete to remove, Ctrl+D to duplicate.
+- Nudge selected brushes with arrow keys and PageUp/PageDown.
+- Auto-create `LevelRoot` on first click if missing.
+- Create Floor button for quick raycast surface setup.
+- Pending Subtract cuts with Apply/Clear controls (Bake auto-applies).
+- Cylinder brushes, grid snap control, and colored Add/Subtract preview.
+
+### Fixed
+- Selection picking now works for cylinders and rotated brushes.
+- Height drag direction now matches mouse movement (up = taller).
+- Guarded brush deletion to avoid "Remove Node(s)" errors.
+- Dock instantiation issues caused by invalid parent paths.
+
+### Documentation
+- Added user guide and expanded LevelRoot explanation.
+- Updated MVP guide and spec to reflect current workflow.

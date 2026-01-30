@@ -1,0 +1,95 @@
+[gd_scene load_steps=2 format=3]
+[ext_resource path="res://addons/hammerforge/dock.gd" type="Script" id=1]
+
+[node name="Dock" type="Control"]
+script = ExtResource( 1 )
+anchor_right = 1.0
+anchor_bottom = 1.0
+margin_right = 300.0
+margin_bottom = 480.0
+
+[node name="VBox" type="VBoxContainer" parent="."]
+custom_constants/separation = 4.0
+rect_min_size = Vector2(240, 220)
+
+[node name="ToolRow" type="HBoxContainer" parent="VBox"]
+custom_constants/separation = 4.0
+
+[node name="ToolLabel" type="Label" parent="VBox/ToolRow"]
+text = "Tool"
+
+[node name="ToolDraw" type="Button" parent="VBox/ToolRow"]
+text = "Draw"
+
+[node name="ToolSelect" type="Button" parent="VBox/ToolRow"]
+text = "Select"
+
+[node name="ModeRow" type="HBoxContainer" parent="VBox"]
+custom_constants/separation = 4.0
+
+[node name="ModeLabel" type="Label" parent="VBox/ModeRow"]
+text = "Mode"
+
+[node name="ModeAdd" type="Button" parent="VBox/ModeRow"]
+text = "Add"
+
+[node name="ModeSubtract" type="Button" parent="VBox/ModeRow"]
+text = "Subtract"
+
+[node name="ShapeRow" type="HBoxContainer" parent="VBox"]
+custom_constants/separation = 4.0
+
+[node name="ShapeLabel" type="Label" parent="VBox/ShapeRow"]
+text = "Shape"
+
+[node name="ShapeBox" type="Button" parent="VBox/ShapeRow"]
+text = "Box"
+
+[node name="ShapeCylinder" type="Button" parent="VBox/ShapeRow"]
+text = "Cylinder"
+
+[node name="SizeX" type="SpinBox" parent="VBox"]
+min_value = 1.0
+max_value = 256.0
+step = 1.0
+value = 32.0
+page = 4.0
+
+[node name="SizeY" type="SpinBox" parent="VBox"]
+min_value = 1.0
+max_value = 256.0
+step = 1.0
+value = 24.0
+page = 4.0
+
+[node name="SizeZ" type="SpinBox" parent="VBox"]
+min_value = 1.0
+max_value = 256.0
+step = 1.0
+value = 24.0
+page = 4.0
+
+[node name="GridSnap" type="SpinBox" parent="VBox"]
+min_value = 0.0
+max_value = 128.0
+step = 1.0
+value = 16.0
+page = 4.0
+
+[node name="CreateFloor" type="Button" parent="VBox"]
+text = "Create Floor"
+
+[node name="ApplyCuts" type="Button" parent="VBox"]
+text = "Apply Cuts"
+
+[node name="ClearCuts" type="Button" parent="VBox"]
+text = "Clear Pending Cuts"
+
+[node name="CommitCuts" type="Button" parent="VBox"]
+text = "Commit Cuts (Bake)"
+
+[node name="Bake" type="Button" parent="VBox"]
+text = "Bake"
+
+[node name="Clear" type="Button" parent="VBox"]
+text = "Clear Brushes"

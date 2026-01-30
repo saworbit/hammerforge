@@ -1,0 +1,28 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+
+# Godot export presets
+export.cfg
+export_presets.cfg
+
+# Mono (if ever enabled)
+.mono/
+
+# Build outputs
+*.tmp
+*.log
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# IDEs/editors
+.vscode/
+.idea/
+.claude/
+
+# Python cache (if used for scripts/tools)
+__pycache__/
+*.pyc

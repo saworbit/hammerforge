@@ -1,0 +1,16 @@
+[gd_scene format=3 uid="uid://be36ud0gihbpm"]
+
+[ext_resource type="Script" uid="uid://2jktco8h5i23" path="res://addons/hammerforge/level_root.gd" id="1_qayhv"]
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_ndhg3"]
+
+[node name="LevelRoot" type="Node3D" unique_id=1405846836]
+script = ExtResource("1_qayhv")
+metadata/_custom_type_script = "uid://2jktco8h5i23"
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=810235790]
+mesh = SubResource("PlaneMesh_ndhg3")
+
+[node name="CSGBox3D" type="CSGBox3D" parent="." unique_id=983923864]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.055291653, -8.006434, -0.6666846)
+size = Vector3(1024, 16, 1024)
