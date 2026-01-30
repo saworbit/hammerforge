@@ -23,6 +23,8 @@ This guide explains how to use HammerForge inside the Godot 4.6 editor. It cover
 You normally don’t need to add it manually — HammerForge will auto-create it the first time you click in the viewport.
 
 ## Dock Controls
+Sections can be collapsed using the toggle button in each header.
+
 **Tool**
 - **Draw**: create new brushes by click-dragging.
 - **Select**: select existing brushes by clicking them. Press Delete to remove.

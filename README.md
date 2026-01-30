@@ -58,6 +58,7 @@
 - **On-Screen Shortcut HUD**: Optional cheat sheet in the 3D viewport
 - **Dynamic Editor Grid**: High-contrast shader grid that follows the active axis/brush
 - **Material Paint Mode**: Pick an active material and click brushes to apply it
+- **Collapsible Dock Sections**: Collapse Settings/Presets/Actions to reduce clutter
 
 ### ⌨️ Modifier Keys
 | Key | Effect |
@@ -169,6 +170,8 @@ Notes:
 ## 🎮 Controls Reference
 
 ### Dock Panel
+
+Sections can be collapsed using the toggle button in each header.
 
 | Control | Function |
 |---------|----------|

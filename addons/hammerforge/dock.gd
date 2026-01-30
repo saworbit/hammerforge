@@ -13,50 +13,56 @@ const PRESET_MENU_DELETE := 1
 @onready var settings_panel: PanelContainer = $Margin/VBox/SettingsPanel
 @onready var presets_panel: PanelContainer = $Margin/VBox/PresetsPanel
 @onready var actions_panel: PanelContainer = $Margin/VBox/ActionsPanel
+@onready var settings_toggle: Button = $Margin/VBox/SettingsPanel/SettingsContent/SettingsHeader/SettingsToggle
+@onready var presets_toggle: Button = $Margin/VBox/PresetsPanel/PresetsContent/PresetsHeader/PresetsToggle
+@onready var actions_toggle: Button = $Margin/VBox/ActionsPanel/ActionsContent/ActionsHeader/ActionsToggle
+@onready var settings_body: Control = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin
+@onready var presets_body: Control = $Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin
+@onready var actions_body: Control = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin
 
-@onready var tool_draw: Button = $Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ToolRow/ToolDraw
-@onready var tool_select: Button = $Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ToolRow/ToolSelect
-@onready var paint_mode: Button = $Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ToolRow/PaintMode
-@onready var mode_add: Button = $Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ModeRow/ModeAdd
-@onready var mode_subtract: Button = $Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ModeRow/ModeSubtract
-@onready var shape_box: Button = $Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ShapeRow/ShapeBox
-@onready var shape_cylinder: Button = $Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ShapeRow/ShapeCylinder
-@onready var active_material_button: Button = $Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/MaterialRow/ActiveMaterial
+@onready var tool_draw: Button = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ToolRow/ToolDraw
+@onready var tool_select: Button = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ToolRow/ToolSelect
+@onready var paint_mode: Button = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ToolRow/PaintMode
+@onready var mode_add: Button = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ModeRow/ModeAdd
+@onready var mode_subtract: Button = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ModeRow/ModeSubtract
+@onready var shape_box: Button = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ShapeRow/ShapeBox
+@onready var shape_cylinder: Button = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ShapeRow/ShapeCylinder
+@onready var active_material_button: Button = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/MaterialRow/ActiveMaterial
 @onready var material_dialog: FileDialog = $MaterialDialog
-@onready var size_x: SpinBox = $Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/SizeRow/SizeX
-@onready var size_y: SpinBox = $Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/SizeRow/SizeY
-@onready var size_z: SpinBox = $Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/SizeRow/SizeZ
-@onready var grid_snap: SpinBox = $Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/GridRow/GridSnap
-@onready var bake_layer: SpinBox = $Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/BakeLayerRow/BakeLayer
-@onready var commit_freeze: CheckBox = $Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/CommitFreeze
-@onready var show_hud: CheckBox = $Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ShowHUD
-@onready var show_grid: CheckBox = $Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ShowGrid
-@onready var follow_grid: CheckBox = $Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/FollowGrid
-@onready var debug_logs: CheckBox = $Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/DebugLogs
-@onready var floor_btn: Button = $Margin/VBox/ActionsPanel/ActionsMargin/ActionsVBox/CreateFloor
-@onready var apply_cuts_btn: Button = $Margin/VBox/ActionsPanel/ActionsMargin/ActionsVBox/ApplyCuts
-@onready var clear_cuts_btn: Button = $Margin/VBox/ActionsPanel/ActionsMargin/ActionsVBox/ClearCuts
-@onready var commit_cuts_btn: Button = $Margin/VBox/ActionsPanel/ActionsMargin/ActionsVBox/CommitCuts
-@onready var restore_cuts_btn: Button = $Margin/VBox/ActionsPanel/ActionsMargin/ActionsVBox/RestoreCuts
-@onready var bake_btn: Button = $Margin/VBox/ActionsPanel/ActionsMargin/ActionsVBox/Bake
-@onready var clear_btn: Button = $Margin/VBox/ActionsPanel/ActionsMargin/ActionsVBox/Clear
-@onready var status_label: Label = $Margin/VBox/ActionsPanel/ActionsMargin/ActionsVBox/Status
+@onready var size_x: SpinBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/SizeRow/SizeX
+@onready var size_y: SpinBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/SizeRow/SizeY
+@onready var size_z: SpinBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/SizeRow/SizeZ
+@onready var grid_snap: SpinBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/GridRow/GridSnap
+@onready var bake_layer: SpinBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/BakeLayerRow/BakeLayer
+@onready var commit_freeze: CheckBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/CommitFreeze
+@onready var show_hud: CheckBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ShowHUD
+@onready var show_grid: CheckBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ShowGrid
+@onready var follow_grid: CheckBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/FollowGrid
+@onready var debug_logs: CheckBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/DebugLogs
+@onready var floor_btn: Button = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/CreateFloor
+@onready var apply_cuts_btn: Button = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/ApplyCuts
+@onready var clear_cuts_btn: Button = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/ClearCuts
+@onready var commit_cuts_btn: Button = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/CommitCuts
+@onready var restore_cuts_btn: Button = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/RestoreCuts
+@onready var bake_btn: Button = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/Bake
+@onready var clear_btn: Button = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/Clear
+@onready var status_label: Label = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/Status
 @onready var quick_play_btn: Button = $Margin/VBox/QuickPlay
 
-@onready var save_preset_btn: Button = $Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox/SavePreset
-@onready var preset_grid: GridContainer = $Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox/PresetGrid
+@onready var save_preset_btn: Button = $Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin/PresetsVBox/SavePreset
+@onready var preset_grid: GridContainer = $Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin/PresetsVBox/PresetGrid
 @onready var preset_menu: PopupMenu = $PresetMenu
 @onready var preset_rename_dialog: AcceptDialog = $PresetRenameDialog
 @onready var preset_rename_line: LineEdit = $PresetRenameDialog/PresetRenameLine
 
 @onready var snap_buttons: Array[Button] = [
-    $Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox/QuickSnapRow/Snap1,
-    $Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox/QuickSnapRow/Snap2,
-    $Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox/QuickSnapRow/Snap4,
-    $Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox/QuickSnapRow/Snap8,
-    $Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox/QuickSnapRow/Snap16,
-    $Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox/QuickSnapRow/Snap32,
-    $Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox/QuickSnapRow/Snap64
+    $Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin/PresetsVBox/QuickSnapRow/Snap1,
+    $Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin/PresetsVBox/QuickSnapRow/Snap2,
+    $Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin/PresetsVBox/QuickSnapRow/Snap4,
+    $Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin/PresetsVBox/QuickSnapRow/Snap8,
+    $Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin/PresetsVBox/QuickSnapRow/Snap16,
+    $Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin/PresetsVBox/QuickSnapRow/Snap32,
+    $Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin/PresetsVBox/QuickSnapRow/Snap64
 ]
 
 var level_root: Node = null
@@ -181,6 +187,7 @@ func _ready():
         ])
         if not material_dialog.file_selected.is_connected(Callable(self, "_on_material_file_selected")):
             material_dialog.file_selected.connect(_on_material_file_selected)
+    _setup_collapsible_sections()
     status_label.text = "Status: Idle"
     _sync_snap_buttons(grid_snap.value)
     _ensure_presets_dir()
@@ -428,6 +435,31 @@ func _on_quick_play() -> void:
         await level_root.bake(true, true)
     if editor_interface:
         editor_interface.play_current_scene()
+
+func _setup_collapsible_sections() -> void:
+    _bind_section(settings_toggle, settings_body, true)
+    _bind_section(presets_toggle, presets_body, false)
+    _bind_section(actions_toggle, actions_body, true)
+
+func _bind_section(toggle: Button, body: Control, expanded: bool) -> void:
+    if not toggle or not body:
+        return
+    toggle.toggle_mode = true
+    toggle.button_pressed = expanded
+    toggle.flat = true
+    toggle.focus_mode = Control.FOCUS_NONE
+    _sync_section_toggle(toggle, body, expanded)
+    if not toggle.toggled.is_connected(Callable(self, "_on_section_toggled")):
+        toggle.toggled.connect(_on_section_toggled.bind(toggle, body))
+
+func _on_section_toggled(pressed: bool, toggle: Button, body: Control) -> void:
+    _sync_section_toggle(toggle, body, pressed)
+
+func _sync_section_toggle(toggle: Button, body: Control, expanded: bool) -> void:
+    if body:
+        body.visible = expanded
+    if toggle:
+        toggle.text = "v" if expanded else ">"
 
 func _on_active_material_pressed() -> void:
     if not material_dialog:

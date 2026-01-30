@@ -103,6 +103,7 @@ These are quality-of-life improvements added after the MVP core:
 5. **Hover Selection Highlight** - AABB wireframe to preview which brush is under the cursor.
 6. **Paint Mode** - Pick an active material and click brushes to apply it.
 7. **Gizmo Pass-through** - Allow Godot move/rotate/scale gizmos when a brush is selected.
+8. **Collapsible Dock Sections** - Toggle Settings/Presets/Actions to keep the dock compact.
 
 ## Troubleshooting Notes
 

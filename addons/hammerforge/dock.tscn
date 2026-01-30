@@ -20,74 +20,84 @@ rect_min_size = Vector2(240, 220)
 
 [node name="SettingsPanel" type="PanelContainer" parent="Margin/VBox"]
 
-[node name="SettingsMargin" type="MarginContainer" parent="Margin/VBox/SettingsPanel"]
+[node name="SettingsContent" type="VBoxContainer" parent="Margin/VBox/SettingsPanel"]
+custom_constants/separation = 4.0
+
+[node name="SettingsHeader" type="HBoxContainer" parent="Margin/VBox/SettingsPanel/SettingsContent"]
+custom_constants/separation = 4.0
+
+[node name="SettingsToggle" type="Button" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsHeader"]
+text = "v"
+toggle_mode = true
+
+[node name="SettingsMargin" type="MarginContainer" parent="Margin/VBox/SettingsPanel/SettingsContent"]
 theme_override_constants/margin_left = 6
 theme_override_constants/margin_top = 6
 theme_override_constants/margin_right = 6
 theme_override_constants/margin_bottom = 6
 
-[node name="SettingsVBox" type="VBoxContainer" parent="Margin/VBox/SettingsPanel/SettingsMargin"]
+[node name="SettingsVBox" type="VBoxContainer" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin"]
 custom_constants/separation = 4.0
 
-[node name="SettingsLabel" type="Label" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox"]
+[node name="SettingsLabel" type="Label" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsHeader"]
 text = "Settings"
 
-[node name="ToolRow" type="HBoxContainer" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox"]
+[node name="ToolRow" type="HBoxContainer" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox"]
 custom_constants/separation = 4.0
 
-[node name="ToolLabel" type="Label" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ToolRow"]
+[node name="ToolLabel" type="Label" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ToolRow"]
 text = "Tool"
 
-[node name="ToolDraw" type="Button" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ToolRow"]
+[node name="ToolDraw" type="Button" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ToolRow"]
 text = "Draw"
 
-[node name="ToolSelect" type="Button" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ToolRow"]
+[node name="ToolSelect" type="Button" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ToolRow"]
 text = "Select"
 
-[node name="PaintMode" type="Button" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ToolRow"]
+[node name="PaintMode" type="Button" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ToolRow"]
 text = "Paint Mode"
 
-[node name="ModeRow" type="HBoxContainer" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox"]
+[node name="ModeRow" type="HBoxContainer" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox"]
 custom_constants/separation = 4.0
 
-[node name="ModeLabel" type="Label" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ModeRow"]
+[node name="ModeLabel" type="Label" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ModeRow"]
 text = "Mode"
 
-[node name="ModeAdd" type="Button" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ModeRow"]
+[node name="ModeAdd" type="Button" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ModeRow"]
 text = "Add"
 
-[node name="ModeSubtract" type="Button" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ModeRow"]
+[node name="ModeSubtract" type="Button" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ModeRow"]
 text = "Subtract"
 
-[node name="ShapeRow" type="HBoxContainer" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox"]
+[node name="ShapeRow" type="HBoxContainer" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox"]
 custom_constants/separation = 4.0
 
-[node name="ShapeLabel" type="Label" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ShapeRow"]
+[node name="ShapeLabel" type="Label" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ShapeRow"]
 text = "Shape"
 
-[node name="ShapeBox" type="Button" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ShapeRow"]
+[node name="ShapeBox" type="Button" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ShapeRow"]
 text = "Box"
 
-[node name="ShapeCylinder" type="Button" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ShapeRow"]
+[node name="ShapeCylinder" type="Button" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ShapeRow"]
 text = "Cylinder"
 
-[node name="MaterialRow" type="HBoxContainer" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox"]
+[node name="MaterialRow" type="HBoxContainer" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox"]
 custom_constants/separation = 4.0
 
-[node name="MaterialLabel" type="Label" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/MaterialRow"]
+[node name="MaterialLabel" type="Label" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/MaterialRow"]
 text = "Material"
 
-[node name="ActiveMaterial" type="Button" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/MaterialRow"]
+[node name="ActiveMaterial" type="Button" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/MaterialRow"]
 text = "Active Material"
 size_flags_horizontal = 3
 
-[node name="SizeRow" type="HBoxContainer" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox"]
+[node name="SizeRow" type="HBoxContainer" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox"]
 custom_constants/separation = 4.0
 
-[node name="SizeLabel" type="Label" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/SizeRow"]
+[node name="SizeLabel" type="Label" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/SizeRow"]
 text = "Size"
 
-[node name="SizeX" type="SpinBox" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/SizeRow"]
+[node name="SizeX" type="SpinBox" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/SizeRow"]
 min_value = 1.0
 max_value = 256.0
 step = 1.0
@@ -95,7 +105,7 @@ value = 32.0
 page = 4.0
 size_flags_horizontal = 3
 
-[node name="SizeY" type="SpinBox" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/SizeRow"]
+[node name="SizeY" type="SpinBox" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/SizeRow"]
 min_value = 1.0
 max_value = 256.0
 step = 1.0
@@ -103,7 +113,7 @@ value = 24.0
 page = 4.0
 size_flags_horizontal = 3
 
-[node name="SizeZ" type="SpinBox" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/SizeRow"]
+[node name="SizeZ" type="SpinBox" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/SizeRow"]
 min_value = 1.0
 max_value = 256.0
 step = 1.0
@@ -111,13 +121,13 @@ value = 24.0
 page = 4.0
 size_flags_horizontal = 3
 
-[node name="GridRow" type="HBoxContainer" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox"]
+[node name="GridRow" type="HBoxContainer" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox"]
 custom_constants/separation = 4.0
 
-[node name="GridLabel" type="Label" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/GridRow"]
+[node name="GridLabel" type="Label" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/GridRow"]
 text = "Grid Snap"
 
-[node name="GridSnap" type="SpinBox" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/GridRow"]
+[node name="GridSnap" type="SpinBox" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/GridRow"]
 min_value = 0.0
 max_value = 128.0
 step = 1.0
@@ -125,13 +135,13 @@ value = 16.0
 page = 4.0
 size_flags_horizontal = 3
 
-[node name="BakeLayerRow" type="HBoxContainer" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox"]
+[node name="BakeLayerRow" type="HBoxContainer" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox"]
 custom_constants/separation = 4.0
 
-[node name="BakeLayerLabel" type="Label" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/BakeLayerRow"]
+[node name="BakeLayerLabel" type="Label" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/BakeLayerRow"]
 text = "Bake Layer"
 
-[node name="BakeLayer" type="SpinBox" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/BakeLayerRow"]
+[node name="BakeLayer" type="SpinBox" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/BakeLayerRow"]
 min_value = 1.0
 max_value = 32.0
 step = 1.0
@@ -139,109 +149,129 @@ value = 1.0
 page = 1.0
 size_flags_horizontal = 3
 
-[node name="CommitFreeze" type="CheckBox" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox"]
+[node name="CommitFreeze" type="CheckBox" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox"]
 text = "Freeze Commit (keep CSG hidden)"
 pressed = true
 
-[node name="ShowHUD" type="CheckBox" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox"]
+[node name="ShowHUD" type="CheckBox" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox"]
 text = "Show HUD"
 pressed = true
 
-[node name="ShowGrid" type="CheckBox" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox"]
+[node name="ShowGrid" type="CheckBox" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox"]
 text = "Show Grid"
 pressed = false
 
-[node name="FollowGrid" type="CheckBox" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox"]
+[node name="FollowGrid" type="CheckBox" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox"]
 text = "Follow Grid"
 pressed = false
 
-[node name="DebugLogs" type="CheckBox" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox"]
+[node name="DebugLogs" type="CheckBox" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox"]
 text = "Debug Logs"
 pressed = false
 
 [node name="PresetsPanel" type="PanelContainer" parent="Margin/VBox"]
 
-[node name="PresetsMargin" type="MarginContainer" parent="Margin/VBox/PresetsPanel"]
+[node name="PresetsContent" type="VBoxContainer" parent="Margin/VBox/PresetsPanel"]
+custom_constants/separation = 4.0
+
+[node name="PresetsHeader" type="HBoxContainer" parent="Margin/VBox/PresetsPanel/PresetsContent"]
+custom_constants/separation = 4.0
+
+[node name="PresetsToggle" type="Button" parent="Margin/VBox/PresetsPanel/PresetsContent/PresetsHeader"]
+text = "v"
+toggle_mode = true
+
+[node name="PresetsMargin" type="MarginContainer" parent="Margin/VBox/PresetsPanel/PresetsContent"]
 theme_override_constants/margin_left = 6
 theme_override_constants/margin_top = 6
 theme_override_constants/margin_right = 6
 theme_override_constants/margin_bottom = 6
 
-[node name="PresetsVBox" type="VBoxContainer" parent="Margin/VBox/PresetsPanel/PresetsMargin"]
+[node name="PresetsVBox" type="VBoxContainer" parent="Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin"]
 custom_constants/separation = 4.0
 
-[node name="PresetsLabel" type="Label" parent="Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox"]
+[node name="PresetsLabel" type="Label" parent="Margin/VBox/PresetsPanel/PresetsContent/PresetsHeader"]
 text = "Presets"
 
-[node name="QuickSnapRow" type="HBoxContainer" parent="Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox"]
+[node name="QuickSnapRow" type="HBoxContainer" parent="Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin/PresetsVBox"]
 custom_constants/separation = 4.0
 
-[node name="QuickSnapLabel" type="Label" parent="Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox/QuickSnapRow"]
+[node name="QuickSnapLabel" type="Label" parent="Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin/PresetsVBox/QuickSnapRow"]
 text = "Quick Snap"
 
-[node name="Snap1" type="Button" parent="Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox/QuickSnapRow"]
+[node name="Snap1" type="Button" parent="Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin/PresetsVBox/QuickSnapRow"]
 text = "1"
 
-[node name="Snap2" type="Button" parent="Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox/QuickSnapRow"]
+[node name="Snap2" type="Button" parent="Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin/PresetsVBox/QuickSnapRow"]
 text = "2"
 
-[node name="Snap4" type="Button" parent="Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox/QuickSnapRow"]
+[node name="Snap4" type="Button" parent="Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin/PresetsVBox/QuickSnapRow"]
 text = "4"
 
-[node name="Snap8" type="Button" parent="Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox/QuickSnapRow"]
+[node name="Snap8" type="Button" parent="Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin/PresetsVBox/QuickSnapRow"]
 text = "8"
 
-[node name="Snap16" type="Button" parent="Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox/QuickSnapRow"]
+[node name="Snap16" type="Button" parent="Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin/PresetsVBox/QuickSnapRow"]
 text = "16"
 
-[node name="Snap32" type="Button" parent="Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox/QuickSnapRow"]
+[node name="Snap32" type="Button" parent="Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin/PresetsVBox/QuickSnapRow"]
 text = "32"
 
-[node name="Snap64" type="Button" parent="Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox/QuickSnapRow"]
+[node name="Snap64" type="Button" parent="Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin/PresetsVBox/QuickSnapRow"]
 text = "64"
 
-[node name="SavePreset" type="Button" parent="Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox"]
+[node name="SavePreset" type="Button" parent="Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin/PresetsVBox"]
 text = "Save Current"
 
-[node name="PresetGrid" type="GridContainer" parent="Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox"]
+[node name="PresetGrid" type="GridContainer" parent="Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin/PresetsVBox"]
 columns = 2
 
 [node name="ActionsPanel" type="PanelContainer" parent="Margin/VBox"]
 
-[node name="ActionsMargin" type="MarginContainer" parent="Margin/VBox/ActionsPanel"]
+[node name="ActionsContent" type="VBoxContainer" parent="Margin/VBox/ActionsPanel"]
+custom_constants/separation = 4.0
+
+[node name="ActionsHeader" type="HBoxContainer" parent="Margin/VBox/ActionsPanel/ActionsContent"]
+custom_constants/separation = 4.0
+
+[node name="ActionsToggle" type="Button" parent="Margin/VBox/ActionsPanel/ActionsContent/ActionsHeader"]
+text = "v"
+toggle_mode = true
+
+[node name="ActionsMargin" type="MarginContainer" parent="Margin/VBox/ActionsPanel/ActionsContent"]
 theme_override_constants/margin_left = 6
 theme_override_constants/margin_top = 6
 theme_override_constants/margin_right = 6
 theme_override_constants/margin_bottom = 6
 
-[node name="ActionsVBox" type="VBoxContainer" parent="Margin/VBox/ActionsPanel/ActionsMargin"]
+[node name="ActionsVBox" type="VBoxContainer" parent="Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin"]
 custom_constants/separation = 4.0
 
-[node name="ActionsLabel" type="Label" parent="Margin/VBox/ActionsPanel/ActionsMargin/ActionsVBox"]
+[node name="ActionsLabel" type="Label" parent="Margin/VBox/ActionsPanel/ActionsContent/ActionsHeader"]
 text = "Actions"
 
-[node name="CreateFloor" type="Button" parent="Margin/VBox/ActionsPanel/ActionsMargin/ActionsVBox"]
+[node name="CreateFloor" type="Button" parent="Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox"]
 text = "Create Floor"
 
-[node name="ApplyCuts" type="Button" parent="Margin/VBox/ActionsPanel/ActionsMargin/ActionsVBox"]
+[node name="ApplyCuts" type="Button" parent="Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox"]
 text = "Apply Cuts"
 
-[node name="ClearCuts" type="Button" parent="Margin/VBox/ActionsPanel/ActionsMargin/ActionsVBox"]
+[node name="ClearCuts" type="Button" parent="Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox"]
 text = "Clear Pending Cuts"
 
-[node name="CommitCuts" type="Button" parent="Margin/VBox/ActionsPanel/ActionsMargin/ActionsVBox"]
+[node name="CommitCuts" type="Button" parent="Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox"]
 text = "Commit Cuts (Bake)"
 
-[node name="RestoreCuts" type="Button" parent="Margin/VBox/ActionsPanel/ActionsMargin/ActionsVBox"]
+[node name="RestoreCuts" type="Button" parent="Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox"]
 text = "Restore Committed Cuts"
 
-[node name="Bake" type="Button" parent="Margin/VBox/ActionsPanel/ActionsMargin/ActionsVBox"]
+[node name="Bake" type="Button" parent="Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox"]
 text = "Bake"
 
-[node name="Clear" type="Button" parent="Margin/VBox/ActionsPanel/ActionsMargin/ActionsVBox"]
+[node name="Clear" type="Button" parent="Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox"]
 text = "Clear Brushes"
 
-[node name="Status" type="Label" parent="Margin/VBox/ActionsPanel/ActionsMargin/ActionsVBox"]
+[node name="Status" type="Label" parent="Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox"]
 text = "Status: Idle"
 
 [node name="QuickPlay" type="Button" parent="Margin/VBox"]
