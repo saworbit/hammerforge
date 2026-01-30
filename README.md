@@ -48,7 +48,7 @@
 - **CAD-Style Two-Stage Drawing**
   - Stage 1: Click & drag to define base dimensions
   - Stage 2: Move mouse to set height, click to commit
-- **Multiple Shapes**: Box and Cylinder brushes
+- **Shape Palette**: Box, Cylinder, Sphere, Cone, Wedge, Pyramid, Prisms, Ellipsoid, Capsule, Torus, and Platonic solids
 - **CSG Operations**: Add (union) and Subtract (carve)
 - **Grid Snapping**: Configurable 1-128 unit increments
 
@@ -181,7 +181,8 @@ Sections can be collapsed using the toggle button in each header.
 | **Paint Mode** | Toggle paint-on-click when Select is active |
 | **Active Material** | Pick the material applied by Paint Mode |
 | **Mode** | `Add` - Union geometry / `Subtract` - Carve holes |
-| **Shape** | `Box` - Rectangular / `Cylinder` - Round |
+| **Shape** | Select from the dynamic Shape Palette grid |
+| **Sides** | Contextual sides control for pyramids/prisms |
 | **Size X/Y/Z** | Default brush dimensions |
 | **Grid Snap** | Snap increment (1-128 units) |
 | **Quick Snap** | Preset snap buttons (1/2/4/8/16/32/64) synced to Grid Snap |
@@ -287,7 +288,7 @@ LevelRoot (Node3D)
 
 ### 🔜 Upcoming Features
 - [ ] **Undo/Redo** - Full EditorUndoRedoManager integration
-- [ ] **More Shapes** - Wedge, Arch, Sphere, Stairs
+- [x] **More Shapes** - Wedge, Sphere, Cone, Pyramid, Prisms, Ellipsoid, Capsule, Torus, Platonic solids
 - [ ] **Texture Support** - Per-face material painting and UV tools
 - [ ] **Chunked Baking** - LOD generation for large levels
 - [ ] **Entity System** - Spawn points, triggers, lights

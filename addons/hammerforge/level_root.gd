@@ -4,8 +4,25 @@ class_name LevelRoot
 
 const BrushManager = preload("brush_manager.gd")
 const Baker = preload("baker.gd")
+const PrefabFactory = preload("prefab_factory.gd")
 
-enum BrushShape { BOX, CYLINDER }
+enum BrushShape {
+    BOX,
+    CYLINDER,
+    SPHERE,
+    CONE,
+    WEDGE,
+    PYRAMID,
+    PRISM_TRI,
+    PRISM_PENT,
+    ELLIPSOID,
+    CAPSULE,
+    TORUS,
+    TETRAHEDRON,
+    OCTAHEDRON,
+    DODECAHEDRON,
+    ICOSAHEDRON
+}
 enum AxisLock { NONE, X, Y, Z }
 
 var _grid_snap: float = 16.0
@@ -48,6 +65,7 @@ var drag_origin := Vector3.ZERO
 var drag_end := Vector3.ZERO
 var drag_operation := CSGShape3D.OPERATION_UNION
 var drag_shape := BrushShape.BOX
+var drag_sides := 4
 var drag_height := 32.0
 var drag_stage := 0
 var drag_size_default := Vector3(32, 32, 32)
@@ -310,7 +328,14 @@ func update_editor_grid(camera: Camera3D, mouse_pos: Vector2) -> void:
             return
     _update_grid_transform(axis, grid_plane_origin)
 
-func place_brush(mouse_pos: Vector2, operation: int, size: Vector3, camera: Camera3D = null, shape: int = BrushShape.BOX) -> bool:
+func place_brush(
+    mouse_pos: Vector2,
+    operation: int,
+    size: Vector3,
+    camera: Camera3D = null,
+    shape: int = BrushShape.BOX,
+    sides: int = 4
+) -> bool:
     if not csg_node:
         return false
 
@@ -323,7 +348,7 @@ func place_brush(mouse_pos: Vector2, operation: int, size: Vector3, camera: Came
         return false
 
     var snapped = _snap_point(hit.position)
-    var brush = _create_brush(shape, size, operation)
+    var brush = _create_brush(shape, size, operation, sides)
     brush.global_position = snapped + Vector3(0, size.y * 0.5, 0)
     if operation == CSGShape3D.OPERATION_SUBTRACTION and pending_node:
         _add_pending_cut(brush)
@@ -604,18 +629,8 @@ func duplicate_brush(brush: Node) -> Node:
     var info = build_duplicate_info(brush, offset)
     return create_brush_from_info(info)
 
-func _create_brush(shape: int, size: Vector3, operation: int) -> CSGShape3D:
-    var brush: CSGShape3D
-    if shape == BrushShape.CYLINDER:
-        var cylinder = CSGCylinder3D.new()
-        cylinder.height = size.y
-        cylinder.radius = max(size.x, size.z) * 0.5
-        cylinder.sides = 16
-        brush = cylinder
-    else:
-        var box = CSGBox3D.new()
-        box.size = size
-        brush = box
+func _create_brush(shape: int, size: Vector3, operation: int, sides: int) -> CSGShape3D:
+    var brush = PrefabFactory.create_prefab(shape, size, sides)
     brush.operation = operation
     brush.use_collision = true
     _apply_brush_material(brush, _make_brush_material(operation))
@@ -659,7 +674,7 @@ func _add_pending_cut(brush: CSGShape3D) -> void:
 
 func _build_brush_info(origin: Vector3, current: Vector3, height: float, shape: int, size_default: Vector3, operation: int, equal_base: bool, equal_all: bool) -> Dictionary:
     var computed = _compute_brush_info(origin, current, height, shape, size_default, _current_axis_lock(), equal_base, equal_all)
-    return {
+    var info = {
         "shape": shape,
         "size": computed.size,
         "center": computed.center,
@@ -667,6 +682,14 @@ func _build_brush_info(origin: Vector3, current: Vector3, height: float, shape: 
         "pending": operation == CSGShape3D.OPERATION_SUBTRACTION and pending_node != null,
         "brush_id": _next_brush_id()
     }
+    if _shape_uses_sides(shape):
+        info["sides"] = drag_sides
+    return info
+
+func _shape_uses_sides(shape: int) -> bool:
+    return shape == BrushShape.PYRAMID \
+        or shape == BrushShape.PRISM_TRI \
+        or shape == BrushShape.PRISM_PENT
 
 func _next_brush_id() -> String:
     _brush_id_counter += 1
@@ -677,8 +700,9 @@ func create_brush_from_info(info: Dictionary) -> Node:
         return null
     var shape = info.get("shape", BrushShape.BOX)
     var size = info.get("size", drag_size_default)
+    var sides = int(info.get("sides", 4))
     var operation = info.get("operation", CSGShape3D.OPERATION_UNION)
-    var brush = _create_brush(shape, size, operation)
+    var brush = _create_brush(shape, size, operation, sides)
     if brush is CSGCylinder3D and info.has("sides"):
         brush.sides = int(info["sides"])
     var pending = bool(info.get("pending", false))
@@ -726,6 +750,12 @@ func get_brush_info_from_node(brush: Node) -> Dictionary:
         info["shape"] = BrushShape.CYLINDER
         info["size"] = Vector3(brush.radius * 2.0, brush.height, brush.radius * 2.0)
         info["sides"] = brush.sides
+    elif brush.has_meta("prefab_shape"):
+        info["shape"] = int(brush.get_meta("prefab_shape"))
+        if brush.has_meta("prefab_size"):
+            info["size"] = brush.get_meta("prefab_size")
+        else:
+            info["size"] = drag_size_default
     else:
         return {}
     var pending = brush.get_parent() == pending_node or bool(brush.get_meta("pending_subtract", false))
@@ -736,6 +766,8 @@ func get_brush_info_from_node(brush: Node) -> Dictionary:
     var source_mat = brush.material_override if brush.material_override else brush.get("material")
     if source_mat:
         info["material"] = source_mat
+    if brush.has_meta("sides"):
+        info["sides"] = int(brush.get_meta("sides"))
     return info
 
 func build_duplicate_info(brush: Node, offset: Vector3) -> Dictionary:
@@ -776,7 +808,14 @@ func restore_brush(brush: Node, parent: Node, owner: Node, index: int) -> void:
     if brush_manager and brush is Node3D:
         brush_manager.add_brush(brush)
 
-func begin_drag(camera: Camera3D, mouse_pos: Vector2, operation: int, size: Vector3, shape: int) -> bool:
+func begin_drag(
+    camera: Camera3D,
+    mouse_pos: Vector2,
+    operation: int,
+    size: Vector3,
+    shape: int,
+    sides: int = 4
+) -> bool:
     if drag_stage != 0:
         return false
     var hit = _raycast(camera, mouse_pos)
@@ -787,6 +826,7 @@ func begin_drag(camera: Camera3D, mouse_pos: Vector2, operation: int, size: Vect
     drag_end = drag_origin
     drag_operation = operation
     drag_shape = shape
+    drag_sides = sides
     drag_height = grid_snap if grid_snap > 0.0 else size.y
     drag_size_default = size
     drag_stage = 1
@@ -796,7 +836,7 @@ func begin_drag(camera: Camera3D, mouse_pos: Vector2, operation: int, size: Vect
     locked_thickness = Vector3.ZERO
     height_stage_start_mouse = mouse_pos
     height_stage_start_height = drag_height
-    _ensure_preview(shape, operation)
+    _ensure_preview(shape, operation, drag_size_default, drag_sides)
     _update_preview(drag_origin, drag_origin, drag_height, drag_shape, drag_size_default, _current_axis_lock(), shift_pressed and not alt_pressed, shift_pressed and alt_pressed)
     return true
 
@@ -930,10 +970,10 @@ func _snap_point(point: Vector3) -> Vector3:
         return point
     return point.snapped(Vector3(grid_snap, grid_snap, grid_snap))
 
-func _ensure_preview(shape: int, operation: int) -> void:
+func _ensure_preview(shape: int, operation: int, size_default: Vector3, sides: int) -> void:
     if preview_brush:
-        var needs_replace = (shape == BrushShape.CYLINDER and not (preview_brush is CSGCylinder3D)) \
-            or (shape == BrushShape.BOX and not (preview_brush is CSGBox3D))
+        var current_shape = int(preview_brush.get_meta("prefab_shape", BrushShape.BOX))
+        var needs_replace = current_shape != shape
         if not needs_replace:
             if operation == CSGShape3D.OPERATION_SUBTRACTION:
                 preview_brush.operation = CSGShape3D.OPERATION_UNION
@@ -943,7 +983,7 @@ func _ensure_preview(shape: int, operation: int) -> void:
                 _apply_brush_material(preview_brush, _make_brush_material(operation))
             return
         _clear_preview()
-    preview_brush = _create_brush(shape, Vector3(1, 1, 1), operation)
+    preview_brush = _create_brush(shape, size_default, operation, sides)
     preview_brush.name = "PreviewBrush"
     preview_brush.use_collision = false
     if operation == CSGShape3D.OPERATION_SUBTRACTION and pending_node:
@@ -963,6 +1003,23 @@ func _update_preview(origin: Vector3, current: Vector3, height: float, shape: in
     elif preview_brush is CSGCylinder3D:
         preview_brush.height = info.size.y
         preview_brush.radius = max(info.size.x, info.size.z) * 0.5
+    elif preview_brush is CSGSphere3D:
+        var radius = max(info.size.x, info.size.z) * 0.5
+        preview_brush.radius = radius
+        if bool(preview_brush.get_meta("prefab_ellipsoid", false)):
+            preview_brush.scale = Vector3(
+                info.size.x / max(0.1, radius * 2.0),
+                info.size.y / max(0.1, radius * 2.0),
+                info.size.z / max(0.1, radius * 2.0)
+            )
+        else:
+            preview_brush.scale = Vector3.ONE
+    else:
+        preview_brush.scale = Vector3(
+            info.size.x / max(0.1, size_default.x),
+            info.size.y / max(0.1, size_default.y),
+            info.size.z / max(0.1, size_default.z)
+        )
 
 func _clear_preview() -> void:
     if preview_brush and preview_brush.is_inside_tree():

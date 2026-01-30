@@ -56,8 +56,8 @@ addons/
    * Auto-creates `LevelRoot` on the first click if missing.
 
 3. **Dock scene + script** – Build `dock.tscn` with:
-   * Tool selector (Draw/Select), Add/Subtract, Shape (Box/Cylinder).
-   * Size, Grid Snap, Create Floor, Apply Cuts, Clear Pending Cuts, Bake, Clear.
+   * Tool selector (Draw/Select), Add/Subtract, and a dynamic Shape Palette grid.
+   * Size, Sides (contextual), Grid Snap, Create Floor, Apply Cuts, Clear Pending Cuts, Bake, Clear.
    * `dock.gd` exposes `get_operation()`, `get_brush_size()`, `get_shape()`, `get_grid_snap()`.
    * The script keeps a reference to `LevelRoot` in the current scene.
 

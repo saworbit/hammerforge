@@ -86,6 +86,7 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
     var op = dock.get_operation()
     var size = dock.get_brush_size()
     var shape = dock.get_shape()
+    var sides = dock.get_sides() if dock.has_method("get_sides") else 4
     var grid = dock.get_grid_snap()
     root.grid_snap = grid
     var paint_mode = dock.has_method("is_paint_mode_enabled") and dock.is_paint_mode_enabled()
@@ -158,7 +159,7 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
         return EditorPlugin.AFTER_GUI_INPUT_STOP
     if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
         if event.pressed:
-            var started = root.begin_drag(camera, event.position, op, size, shape)
+            var started = root.begin_drag(camera, event.position, op, size, shape, sides)
             return EditorPlugin.AFTER_GUI_INPUT_STOP if started else EditorPlugin.AFTER_GUI_INPUT_PASS
         else:
             var result = root.end_drag_info(camera, event.position, size)

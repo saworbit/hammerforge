@@ -39,9 +39,11 @@ Sections can be collapsed using the toggle button in each header.
 - **Add**: creates solid geometry.
 - **Subtract**: creates a pending cut shape that does not carve until applied.
 
-**Shape**
-- **Box**: standard rectangular brush.
-- **Cylinder**: circular brush (radius derived from width/depth).
+**Shape Palette**
+- Choose from Box, Cylinder, Sphere, Cone, Wedge, Pyramid, Prisms, Ellipsoid, Capsule, Torus, and Platonic solids.
+
+**Sides**
+- Appears for pyramids/prisms to control the number of sides.
 
 **Size**
 - SizeX/SizeY/SizeZ are used as defaults and for axis-lock thickness.
@@ -99,6 +101,9 @@ Sections can be collapsed using the toggle button in each header.
 
 **Live Brushes**
 - Shows the active brush count with performance warning colors.
+
+## Shape Palette
+HammerForge now uses a dynamic palette grid for shapes. Click a shape to make it active, then draw as normal.
 
 ## Brush Creation (CAD-Style)
 HammerForge uses a two-stage drag workflow:

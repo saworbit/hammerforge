@@ -25,8 +25,9 @@ const PRESET_MENU_DELETE := 1
 @onready var paint_mode: Button = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ToolRow/PaintMode
 @onready var mode_add: Button = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ModeRow/ModeAdd
 @onready var mode_subtract: Button = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ModeRow/ModeSubtract
-@onready var shape_box: Button = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ShapeRow/ShapeBox
-@onready var shape_cylinder: Button = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ShapeRow/ShapeCylinder
+@onready var shape_palette_grid: GridContainer = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ShapePaletteGrid
+@onready var sides_row: HBoxContainer = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/SidesRow
+@onready var sides_spin: SpinBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/SidesRow/SidesSpin
 @onready var active_material_button: Button = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/MaterialRow/ActiveMaterial
 @onready var material_dialog: FileDialog = $MaterialDialog
 @onready var size_x: SpinBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/SizeRow/SizeX
@@ -77,6 +78,9 @@ var presets_dir := "res://addons/hammerforge/presets"
 var preset_buttons: Array[Button] = []
 var preset_context_button: Button = null
 var active_material: Material = null
+var active_shape: int = LevelRootType.BrushShape.BOX
+var shape_button_group: ButtonGroup
+var shape_buttons: Dictionary = {}
 
 func set_editor_interface(iface: EditorInterface) -> void:
     editor_interface = iface
@@ -131,12 +135,7 @@ func _ready():
     mode_subtract.button_group = mode_group
     mode_add.button_pressed = true
 
-    var shape_group = ButtonGroup.new()
-    shape_box.toggle_mode = true
-    shape_cylinder.toggle_mode = true
-    shape_box.button_group = shape_group
-    shape_cylinder.button_group = shape_group
-    shape_box.button_pressed = true
+    _populate_shape_palette()
 
     snap_button_group = ButtonGroup.new()
     var snap_values = [1, 2, 4, 8, 16, 32, 64]
@@ -245,7 +244,12 @@ func get_brush_size() -> Vector3:
     return Vector3(size_x.value, size_y.value, size_z.value)
 
 func get_shape() -> int:
-    return 0 if shape_box.button_pressed else 1
+    return active_shape
+
+func get_sides() -> int:
+    if not sides_spin:
+        return 4
+    return int(sides_spin.value)
 
 func get_grid_snap() -> float:
     return grid_snap.value
@@ -448,6 +452,52 @@ func _on_quick_play() -> void:
     if editor_interface:
         editor_interface.play_current_scene()
 
+func _populate_shape_palette() -> void:
+    if not shape_palette_grid:
+        return
+    for child in shape_palette_grid.get_children():
+        child.queue_free()
+    shape_button_group = ButtonGroup.new()
+    shape_buttons.clear()
+    for shape_key in LevelRootType.BrushShape.keys():
+        var shape_value = LevelRootType.BrushShape[shape_key]
+        var button := Button.new()
+        button.text = _shape_label(shape_key)
+        button.toggle_mode = true
+        button.button_group = shape_button_group
+        button.custom_minimum_size = Vector2(80, 32)
+        button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        shape_palette_grid.add_child(button)
+        shape_buttons[shape_value] = button
+        button.pressed.connect(_on_shape_button_pressed.bind(shape_value))
+    _set_active_shape(active_shape)
+
+func _shape_label(shape_key: String) -> String:
+    var parts = shape_key.to_lower().split("_")
+    var label := ""
+    for part in parts:
+        label += "%s " % part.capitalize()
+    return label.strip_edges()
+
+func _on_shape_button_pressed(shape_value: int) -> void:
+    _set_active_shape(shape_value)
+
+func _set_active_shape(shape_value: int) -> void:
+    active_shape = shape_value
+    if shape_buttons.has(shape_value):
+        var button: Button = shape_buttons[shape_value]
+        button.button_pressed = true
+    _update_sides_visibility()
+
+func _shape_requires_sides(shape_value: int) -> bool:
+    return shape_value == LevelRootType.BrushShape.PYRAMID \
+        or shape_value == LevelRootType.BrushShape.PRISM_TRI \
+        or shape_value == LevelRootType.BrushShape.PRISM_PENT
+
+func _update_sides_visibility() -> void:
+    if sides_row:
+        sides_row.visible = _shape_requires_sides(active_shape)
+
 func _update_perf_label() -> void:
     if not perf_label:
         return
@@ -563,6 +613,7 @@ func _on_save_preset() -> void:
     var preset = BrushPreset.new()
     preset.shape = get_shape()
     preset.size = get_brush_size()
+    preset.sides = get_sides()
     preset.operation = get_operation()
     var display_name = _suggest_preset_name()
     var path = _unique_preset_path(display_name)
@@ -619,10 +670,9 @@ func _apply_preset(preset: BrushPreset) -> void:
     size_x.value = preset.size.x
     size_y.value = preset.size.y
     size_z.value = preset.size.z
-    if preset.shape == BrushPreset.BrushShape.CYLINDER:
-        shape_cylinder.button_pressed = true
-    else:
-        shape_box.button_pressed = true
+    _set_active_shape(preset.shape)
+    if sides_spin:
+        sides_spin.value = preset.sides
     if preset.operation == CSGShape3D.OPERATION_SUBTRACTION:
         mode_subtract.button_pressed = true
     else:

@@ -69,17 +69,25 @@ text = "Add"
 [node name="ModeSubtract" type="Button" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ModeRow"]
 text = "Subtract"
 
-[node name="ShapeRow" type="HBoxContainer" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox"]
+[node name="ShapePaletteLabel" type="Label" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox"]
+text = "Shape Palette"
+
+[node name="ShapePaletteGrid" type="GridContainer" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox"]
+columns = 3
+
+[node name="SidesRow" type="HBoxContainer" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox"]
 custom_constants/separation = 4.0
 
-[node name="ShapeLabel" type="Label" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ShapeRow"]
-text = "Shape"
+[node name="SidesLabel" type="Label" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/SidesRow"]
+text = "Sides"
 
-[node name="ShapeBox" type="Button" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ShapeRow"]
-text = "Box"
-
-[node name="ShapeCylinder" type="Button" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ShapeRow"]
-text = "Cylinder"
+[node name="SidesSpin" type="SpinBox" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/SidesRow"]
+min_value = 3.0
+max_value = 16.0
+step = 1.0
+value = 4.0
+page = 1.0
+size_flags_horizontal = 3
 
 [node name="MaterialRow" type="HBoxContainer" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox"]
 custom_constants/separation = 4.0
