@@ -34,16 +34,9 @@ static func create_prefab(type: int, size: Vector3, sides: int = 4) -> CSGShape3
             cone.sides = 16
             brush = cone
         LevelRootType.BrushShape.PYRAMID:
-            var pyramid = CSGPolygon3D.new()
-            pyramid.mode = CSGPolygon3D.MODE_SPIN
-            pyramid.spin_degrees = 360.0
-            pyramid.spin_sides = safe_sides
-            var base_radius = max(size.x, size.z) * 0.5
-            pyramid.polygon = PackedVector2Array([
-                Vector2(0.0, 0.0),
-                Vector2(base_radius, 0.0),
-                Vector2(0.0, size.y)
-            ])
+            var pyramid_mesh = _pyramid_mesh(size, safe_sides)
+            var pyramid = CSGMesh3D.new()
+            pyramid.mesh = pyramid_mesh
             pyramid.set_meta("sides", safe_sides)
             brush = pyramid
         LevelRootType.BrushShape.WEDGE:
@@ -137,6 +130,33 @@ static func _mesh_from_faces(vertices: Array, faces: Array) -> ArrayMesh:
             st.add_vertex(vertices[face[0]])
             st.add_vertex(vertices[face[i]])
             st.add_vertex(vertices[face[i + 1]])
+    st.generate_normals()
+    return st.commit()
+
+static func _pyramid_mesh(size: Vector3, sides: int) -> ArrayMesh:
+    var st = SurfaceTool.new()
+    st.begin(Mesh.PRIMITIVE_TRIANGLES)
+    var count = max(3, sides)
+    var rx = size.x * 0.5
+    var rz = size.z * 0.5
+    var apex = Vector3(0.0, size.y, 0.0)
+    var base_center = Vector3.ZERO
+    var base: Array = []
+    for i in range(count):
+        var angle = TAU * float(i) / float(count)
+        base.append(Vector3(cos(angle) * rx, 0.0, sin(angle) * rz))
+    # side faces
+    for i in range(count):
+        var v0: Vector3 = base[i]
+        var v1: Vector3 = base[(i + 1) % count]
+        st.add_vertex(v0)
+        st.add_vertex(v1)
+        st.add_vertex(apex)
+    # base faces (clockwise to face down)
+    for i in range(1, count - 1):
+        st.add_vertex(base_center)
+        st.add_vertex(base[i + 1])
+        st.add_vertex(base[i])
     st.generate_normals()
     return st.commit()
 

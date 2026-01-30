@@ -753,7 +753,13 @@ func get_brush_info_from_node(brush: Node) -> Dictionary:
     elif brush.has_meta("prefab_shape"):
         info["shape"] = int(brush.get_meta("prefab_shape"))
         if brush.has_meta("prefab_size"):
-            info["size"] = brush.get_meta("prefab_size")
+            var base_size: Vector3 = brush.get_meta("prefab_size")
+            var scale := brush.scale
+            info["size"] = Vector3(
+                base_size.x * scale.x,
+                base_size.y * scale.y,
+                base_size.z * scale.z
+            )
         else:
             info["size"] = drag_size_default
     else:
