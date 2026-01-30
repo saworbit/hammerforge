@@ -33,7 +33,7 @@ addons/
 └── hammerforge/
     ├── plugin.cfg
     ├── plugin.gd          # EditorPlugin entry (adds LevelRoot, dock, captures viewport input)
-    ├── icon.svg           # 64x64 plugin icon
+    ├── icon.png           # 64x64 plugin icon
     ├── dock.tscn          # Dock UI scene
     ├── dock.gd            # Dock query/bake controls (tool, shape, grid, floor)
     ├── level_root.gd      # Root node that manages CSG brushes and baking

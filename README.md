@@ -116,7 +116,7 @@ your-project/
 │       ├── baker.gd
 │       ├── brush_manager.gd
 │       ├── brush_instance.gd
-│       └── icon.svg
+│       └── icon.png
 └── project.godot
 ```
 

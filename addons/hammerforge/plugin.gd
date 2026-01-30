@@ -8,7 +8,7 @@ var active_root: Node = null
 const LevelRootType = preload("level_root.gd")
 
 func _enter_tree():
-    add_custom_type("LevelRoot", "Node3D", preload("level_root.gd"), preload("icon.svg"))
+    add_custom_type("LevelRoot", "Node3D", preload("level_root.gd"), preload("icon.png"))
     dock = preload("dock.tscn").instantiate()
     base_control = get_editor_interface().get_base_control()
     if base_control:
