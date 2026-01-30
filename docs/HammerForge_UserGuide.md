@@ -40,6 +40,12 @@ You normally don’t need to add it manually — HammerForge will auto-create it
 **Grid Snap**
 - Sets the grid snapping increment (0 disables snap).
 
+**Bake Layer**
+- Sets the physics layer used by baked collision (1-32).
+
+**Freeze Commit**
+- Keeps committed cut shapes in a hidden container so you can restore them later.
+
 **Create Floor**
 - Adds a temporary CSGBox floor under LevelRoot for easy raycast placement.
 
@@ -56,8 +62,14 @@ You normally don’t need to add it manually — HammerForge will auto-create it
 - Use this if you want the carve to remain even after deleting the cut shapes.
 - To keep editing, re-enable visibility on `BrushCSG` (and `PendingCuts` if needed).
 
+**Restore Committed Cuts**
+- Moves hidden committed cuts back into the live CSG so they can be edited again.
+
 **Bake**
 - Converts the live CSG into a static mesh + collision.
+
+**Status**
+- Shows bake progress (e.g., "Baking..." or "Ready").
 
 ## Brush Creation (CAD-Style)
 HammerForge uses a two-stage drag workflow:
@@ -95,6 +107,7 @@ HammerForge uses a two-stage drag workflow:
 - Pending cuts appear as solid red geometry so you can position them before applying.
 - Applied cuts are procedural; deleting them removes the carve unless you **Commit Cuts** (Bake).
 - **Commit Cuts** hides the live CSG and leaves the baked mesh visible.
+- If **Freeze Commit** is enabled, you can bring cuts back with **Restore Committed Cuts**.
 
 ## Bake Output
 When you press **Bake**, HammerForge creates:

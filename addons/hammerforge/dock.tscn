@@ -76,6 +76,23 @@ step = 1.0
 value = 16.0
 page = 4.0
 
+[node name="BakeLayerRow" type="HBoxContainer" parent="VBox"]
+custom_constants/separation = 4.0
+
+[node name="BakeLayerLabel" type="Label" parent="VBox/BakeLayerRow"]
+text = "Bake Layer"
+
+[node name="BakeLayer" type="SpinBox" parent="VBox/BakeLayerRow"]
+min_value = 1.0
+max_value = 32.0
+step = 1.0
+value = 1.0
+page = 1.0
+
+[node name="CommitFreeze" type="CheckBox" parent="VBox"]
+text = "Freeze Commit (keep CSG hidden)"
+pressed = true
+
 [node name="CreateFloor" type="Button" parent="VBox"]
 text = "Create Floor"
 
@@ -88,8 +105,14 @@ text = "Clear Pending Cuts"
 [node name="CommitCuts" type="Button" parent="VBox"]
 text = "Commit Cuts (Bake)"
 
+[node name="RestoreCuts" type="Button" parent="VBox"]
+text = "Restore Committed Cuts"
+
 [node name="Bake" type="Button" parent="VBox"]
 text = "Bake"
 
 [node name="Clear" type="Button" parent="VBox"]
 text = "Clear Brushes"
+
+[node name="Status" type="Label" parent="VBox"]
+text = "Status: Idle"

@@ -14,15 +14,20 @@ const LevelRootType = preload("level_root.gd")
 @onready var size_y: SpinBox = $VBox/SizeY
 @onready var size_z: SpinBox = $VBox/SizeZ
 @onready var grid_snap: SpinBox = $VBox/GridSnap
+@onready var bake_layer: SpinBox = $VBox/BakeLayerRow/BakeLayer
+@onready var commit_freeze: CheckBox = $VBox/CommitFreeze
 @onready var floor_btn: Button = $VBox/CreateFloor
 @onready var apply_cuts_btn: Button = $VBox/ApplyCuts
 @onready var clear_cuts_btn: Button = $VBox/ClearCuts
 @onready var commit_cuts_btn: Button = $VBox/CommitCuts
+@onready var restore_cuts_btn: Button = $VBox/RestoreCuts
 @onready var bake_btn: Button = $VBox/Bake
 @onready var clear_btn: Button = $VBox/Clear
+@onready var status_label: Label = $VBox/Status
 
 var level_root: Node = null
 var editor_interface: EditorInterface = null
+var connected_root: Node = null
 
 func set_editor_interface(iface: EditorInterface) -> void:
     editor_interface = iface
@@ -54,6 +59,8 @@ func _ready():
     apply_cuts_btn.pressed.connect(_on_apply_cuts)
     clear_cuts_btn.pressed.connect(_on_clear_cuts)
     commit_cuts_btn.pressed.connect(_on_commit_cuts)
+    restore_cuts_btn.pressed.connect(_on_restore_cuts)
+    status_label.text = "Status: Idle"
     set_process(true)
 
 func _process(delta):
@@ -71,6 +78,13 @@ func _process(delta):
                 level_root = null
     else:
         level_root = null
+    if level_root != connected_root:
+        _disconnect_root_signals()
+        connected_root = level_root
+        _connect_root_signals()
+    if level_root and level_root.get_script() == LevelRootType:
+        level_root.bake_collision_layer_index = int(bake_layer.value)
+        level_root.commit_freeze = commit_freeze.button_pressed
 
 func get_operation() -> int:
     return CSGShape3D.OPERATION_UNION if mode_add.button_pressed else CSGShape3D.OPERATION_SUBTRACTION
@@ -114,3 +128,40 @@ func _on_commit_cuts():
             selection.clear()
     if level_root and level_root.has_method("commit_cuts"):
         level_root.call("commit_cuts")
+
+func _on_restore_cuts():
+    if level_root and level_root.has_method("restore_committed_cuts"):
+        level_root.call("restore_committed_cuts")
+
+func _connect_root_signals() -> void:
+    if not connected_root:
+        return
+    if connected_root.has_signal("bake_started"):
+        if not connected_root.is_connected("bake_started", Callable(self, "_on_bake_started")):
+            connected_root.connect("bake_started", Callable(self, "_on_bake_started"))
+    if connected_root.has_signal("bake_finished"):
+        if not connected_root.is_connected("bake_finished", Callable(self, "_on_bake_finished")):
+            connected_root.connect("bake_finished", Callable(self, "_on_bake_finished"))
+
+func _disconnect_root_signals() -> void:
+    if not connected_root:
+        return
+    if connected_root.has_signal("bake_started"):
+        if connected_root.is_connected("bake_started", Callable(self, "_on_bake_started")):
+            connected_root.disconnect("bake_started", Callable(self, "_on_bake_started"))
+    if connected_root.has_signal("bake_finished"):
+        if connected_root.is_connected("bake_finished", Callable(self, "_on_bake_finished")):
+            connected_root.disconnect("bake_finished", Callable(self, "_on_bake_finished"))
+
+func _on_bake_started() -> void:
+    status_label.text = "Status: Baking..."
+    _set_bake_buttons_disabled(true)
+
+func _on_bake_finished(success: bool) -> void:
+    status_label.text = "Status: Ready" if success else "Status: Bake failed"
+    _set_bake_buttons_disabled(false)
+
+func _set_bake_buttons_disabled(disabled: bool) -> void:
+    bake_btn.disabled = disabled
+    commit_cuts_btn.disabled = disabled
+    apply_cuts_btn.disabled = disabled

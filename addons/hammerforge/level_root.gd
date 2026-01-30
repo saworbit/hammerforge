@@ -10,9 +10,16 @@ enum AxisLock { NONE, X, Y, Z }
 
 @export var grid_snap: float = 16.0
 @export var brush_size_default: Vector3 = Vector3(32, 32, 32)
+@export_range(1, 32, 1) var bake_collision_layer_index: int = 1
+@export var bake_material_override: Material = null
+@export var commit_freeze: bool = true
+
+signal bake_started
+signal bake_finished(success: bool)
 
 var csg_node: CSGCombiner3D
 var pending_node: CSGCombiner3D
+var committed_node: Node3D
 var brush_manager: BrushManager
 var baker: Baker
 var baked_container: Node3D
@@ -38,6 +45,7 @@ var height_pixels_per_unit := 4.0
 func _ready():
     _setup_csg()
     _setup_pending()
+    _setup_committed()
     _setup_manager()
     _setup_baker()
 
@@ -69,6 +77,15 @@ func _setup_pending() -> void:
         pending_node.use_collision = false
         add_child(pending_node)
         _assign_owner(pending_node)
+
+func _setup_committed() -> void:
+    committed_node = get_node_or_null("CommittedCuts") as Node3D
+    if not committed_node:
+        committed_node = Node3D.new()
+        committed_node.name = "CommittedCuts"
+        committed_node.visible = false
+        add_child(committed_node)
+        _assign_owner(committed_node)
 
 func _setup_manager() -> void:
     brush_manager = get_node_or_null("BrushManager") as BrushManager
@@ -114,9 +131,15 @@ func bake(apply_cuts: bool = true, hide_live: bool = false) -> void:
         return
     if apply_cuts:
         apply_pending_cuts()
+    bake_started.emit()
     await _await_csg_update()
-    var baked = baker.bake_from_csg(csg_node)
+    var override = bake_material_override
+    if not override and csg_node.material_override:
+        override = csg_node.material_override
+    var layer = _layer_from_index(bake_collision_layer_index)
+    var baked = baker.bake_from_csg(csg_node, override, layer, layer)
     if not baked:
+        bake_finished.emit(false)
         return
     if baked_container:
         baked_container.queue_free()
@@ -127,6 +150,7 @@ func bake(apply_cuts: bool = true, hide_live: bool = false) -> void:
         csg_node.visible = false
         if pending_node:
             pending_node.visible = false
+    bake_finished.emit(true)
 
 func clear_brushes() -> void:
     if brush_manager:
@@ -136,6 +160,14 @@ func clear_brushes() -> void:
             child.queue_free()
     _clear_preview()
     clear_pending_cuts()
+    _clear_committed_cuts()
+
+func _clear_committed_cuts() -> void:
+    if not committed_node:
+        return
+    for child in committed_node.get_children():
+        if child is CSGShape3D:
+            child.queue_free()
 
 func apply_pending_cuts() -> void:
     if not pending_node or not csg_node:
@@ -160,13 +192,49 @@ func _clear_applied_cuts() -> void:
         return
     for child in csg_node.get_children():
         if child is CSGShape3D and child.operation == CSGShape3D.OPERATION_SUBTRACTION:
+            if commit_freeze:
+                _stash_committed_cut(child)
+            else:
+                if brush_manager:
+                    brush_manager.remove_brush(child)
+                child.call_deferred("queue_free")
+
+func _stash_committed_cut(brush: CSGShape3D) -> void:
+    if not committed_node or not csg_node:
+        return
+    if brush_manager:
+        brush_manager.remove_brush(brush)
+    csg_node.remove_child(brush)
+    committed_node.add_child(brush)
+    brush.visible = false
+    brush.set_meta("committed_cut", true)
+    _assign_owner(brush)
+
+func restore_committed_cuts() -> void:
+    if not committed_node or not csg_node:
+        return
+    for child in committed_node.get_children():
+        if child is CSGShape3D:
+            committed_node.remove_child(child)
+            csg_node.add_child(child)
+            child.visible = true
+            child.operation = CSGShape3D.OPERATION_SUBTRACTION
+            _apply_brush_material(child, _make_brush_material(CSGShape3D.OPERATION_SUBTRACTION, true, true))
+            child.set_meta("committed_cut", false)
+            _assign_owner(child)
             if brush_manager:
-                brush_manager.remove_brush(child)
-            child.call_deferred("queue_free")
+                brush_manager.add_brush(child)
+    csg_node.visible = true
+    if pending_node:
+        pending_node.visible = true
 
 func _await_csg_update() -> void:
     await get_tree().process_frame
     await get_tree().process_frame
+
+func _layer_from_index(index: int) -> int:
+    var clamped = clamp(index, 1, 32)
+    return 1 << (clamped - 1)
 
 func clear_pending_cuts() -> void:
     if not pending_node:
