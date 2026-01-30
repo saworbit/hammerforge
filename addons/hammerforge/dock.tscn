@@ -1,118 +1,244 @@
 [gd_scene load_steps=2 format=3]
 [ext_resource path="res://addons/hammerforge/dock.gd" type="Script" id=1]
 
-[node name="Dock" type="Control"]
+[node name="Dock" type="PanelContainer"]
 script = ExtResource( 1 )
 anchor_right = 1.0
 anchor_bottom = 1.0
 margin_right = 300.0
 margin_bottom = 480.0
 
-[node name="VBox" type="VBoxContainer" parent="."]
-custom_constants/separation = 4.0
+[node name="Margin" type="MarginContainer" parent="."]
+theme_override_constants/margin_left = 6
+theme_override_constants/margin_top = 6
+theme_override_constants/margin_right = 6
+theme_override_constants/margin_bottom = 6
+
+[node name="VBox" type="VBoxContainer" parent="Margin"]
+custom_constants/separation = 6.0
 rect_min_size = Vector2(240, 220)
 
-[node name="ToolRow" type="HBoxContainer" parent="VBox"]
+[node name="SettingsPanel" type="PanelContainer" parent="Margin/VBox"]
+
+[node name="SettingsMargin" type="MarginContainer" parent="Margin/VBox/SettingsPanel"]
+theme_override_constants/margin_left = 6
+theme_override_constants/margin_top = 6
+theme_override_constants/margin_right = 6
+theme_override_constants/margin_bottom = 6
+
+[node name="SettingsVBox" type="VBoxContainer" parent="Margin/VBox/SettingsPanel/SettingsMargin"]
 custom_constants/separation = 4.0
 
-[node name="ToolLabel" type="Label" parent="VBox/ToolRow"]
+[node name="SettingsLabel" type="Label" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox"]
+text = "Settings"
+
+[node name="ToolRow" type="HBoxContainer" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox"]
+custom_constants/separation = 4.0
+
+[node name="ToolLabel" type="Label" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ToolRow"]
 text = "Tool"
 
-[node name="ToolDraw" type="Button" parent="VBox/ToolRow"]
+[node name="ToolDraw" type="Button" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ToolRow"]
 text = "Draw"
 
-[node name="ToolSelect" type="Button" parent="VBox/ToolRow"]
+[node name="ToolSelect" type="Button" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ToolRow"]
 text = "Select"
 
-[node name="ModeRow" type="HBoxContainer" parent="VBox"]
+[node name="ModeRow" type="HBoxContainer" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox"]
 custom_constants/separation = 4.0
 
-[node name="ModeLabel" type="Label" parent="VBox/ModeRow"]
+[node name="ModeLabel" type="Label" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ModeRow"]
 text = "Mode"
 
-[node name="ModeAdd" type="Button" parent="VBox/ModeRow"]
+[node name="ModeAdd" type="Button" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ModeRow"]
 text = "Add"
 
-[node name="ModeSubtract" type="Button" parent="VBox/ModeRow"]
+[node name="ModeSubtract" type="Button" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ModeRow"]
 text = "Subtract"
 
-[node name="ShapeRow" type="HBoxContainer" parent="VBox"]
+[node name="ShapeRow" type="HBoxContainer" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox"]
 custom_constants/separation = 4.0
 
-[node name="ShapeLabel" type="Label" parent="VBox/ShapeRow"]
+[node name="ShapeLabel" type="Label" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ShapeRow"]
 text = "Shape"
 
-[node name="ShapeBox" type="Button" parent="VBox/ShapeRow"]
+[node name="ShapeBox" type="Button" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ShapeRow"]
 text = "Box"
 
-[node name="ShapeCylinder" type="Button" parent="VBox/ShapeRow"]
+[node name="ShapeCylinder" type="Button" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ShapeRow"]
 text = "Cylinder"
 
-[node name="SizeX" type="SpinBox" parent="VBox"]
+[node name="SizeRow" type="HBoxContainer" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox"]
+custom_constants/separation = 4.0
+
+[node name="SizeLabel" type="Label" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/SizeRow"]
+text = "Size"
+
+[node name="SizeX" type="SpinBox" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/SizeRow"]
 min_value = 1.0
 max_value = 256.0
 step = 1.0
 value = 32.0
 page = 4.0
+size_flags_horizontal = 3
 
-[node name="SizeY" type="SpinBox" parent="VBox"]
+[node name="SizeY" type="SpinBox" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/SizeRow"]
 min_value = 1.0
 max_value = 256.0
 step = 1.0
 value = 24.0
 page = 4.0
+size_flags_horizontal = 3
 
-[node name="SizeZ" type="SpinBox" parent="VBox"]
+[node name="SizeZ" type="SpinBox" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/SizeRow"]
 min_value = 1.0
 max_value = 256.0
 step = 1.0
 value = 24.0
 page = 4.0
+size_flags_horizontal = 3
 
-[node name="GridSnap" type="SpinBox" parent="VBox"]
+[node name="GridRow" type="HBoxContainer" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox"]
+custom_constants/separation = 4.0
+
+[node name="GridLabel" type="Label" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/GridRow"]
+text = "Grid Snap"
+
+[node name="GridSnap" type="SpinBox" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/GridRow"]
 min_value = 0.0
 max_value = 128.0
 step = 1.0
 value = 16.0
 page = 4.0
+size_flags_horizontal = 3
 
-[node name="BakeLayerRow" type="HBoxContainer" parent="VBox"]
+[node name="BakeLayerRow" type="HBoxContainer" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox"]
 custom_constants/separation = 4.0
 
-[node name="BakeLayerLabel" type="Label" parent="VBox/BakeLayerRow"]
+[node name="BakeLayerLabel" type="Label" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/BakeLayerRow"]
 text = "Bake Layer"
 
-[node name="BakeLayer" type="SpinBox" parent="VBox/BakeLayerRow"]
+[node name="BakeLayer" type="SpinBox" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/BakeLayerRow"]
 min_value = 1.0
 max_value = 32.0
 step = 1.0
 value = 1.0
 page = 1.0
+size_flags_horizontal = 3
 
-[node name="CommitFreeze" type="CheckBox" parent="VBox"]
+[node name="CommitFreeze" type="CheckBox" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox"]
 text = "Freeze Commit (keep CSG hidden)"
 pressed = true
 
-[node name="CreateFloor" type="Button" parent="VBox"]
+[node name="ShowHUD" type="CheckBox" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox"]
+text = "Show HUD"
+pressed = true
+
+[node name="ShowGrid" type="CheckBox" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox"]
+text = "Show Grid"
+pressed = false
+
+[node name="FollowGrid" type="CheckBox" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox"]
+text = "Follow Grid"
+pressed = false
+
+[node name="DebugLogs" type="CheckBox" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox"]
+text = "Debug Logs"
+pressed = false
+
+[node name="PresetsPanel" type="PanelContainer" parent="Margin/VBox"]
+
+[node name="PresetsMargin" type="MarginContainer" parent="Margin/VBox/PresetsPanel"]
+theme_override_constants/margin_left = 6
+theme_override_constants/margin_top = 6
+theme_override_constants/margin_right = 6
+theme_override_constants/margin_bottom = 6
+
+[node name="PresetsVBox" type="VBoxContainer" parent="Margin/VBox/PresetsPanel/PresetsMargin"]
+custom_constants/separation = 4.0
+
+[node name="PresetsLabel" type="Label" parent="Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox"]
+text = "Presets"
+
+[node name="QuickSnapRow" type="HBoxContainer" parent="Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox"]
+custom_constants/separation = 4.0
+
+[node name="QuickSnapLabel" type="Label" parent="Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox/QuickSnapRow"]
+text = "Quick Snap"
+
+[node name="Snap1" type="Button" parent="Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox/QuickSnapRow"]
+text = "1"
+
+[node name="Snap2" type="Button" parent="Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox/QuickSnapRow"]
+text = "2"
+
+[node name="Snap4" type="Button" parent="Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox/QuickSnapRow"]
+text = "4"
+
+[node name="Snap8" type="Button" parent="Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox/QuickSnapRow"]
+text = "8"
+
+[node name="Snap16" type="Button" parent="Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox/QuickSnapRow"]
+text = "16"
+
+[node name="Snap32" type="Button" parent="Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox/QuickSnapRow"]
+text = "32"
+
+[node name="Snap64" type="Button" parent="Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox/QuickSnapRow"]
+text = "64"
+
+[node name="SavePreset" type="Button" parent="Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox"]
+text = "Save Current"
+
+[node name="PresetGrid" type="GridContainer" parent="Margin/VBox/PresetsPanel/PresetsMargin/PresetsVBox"]
+columns = 2
+
+[node name="ActionsPanel" type="PanelContainer" parent="Margin/VBox"]
+
+[node name="ActionsMargin" type="MarginContainer" parent="Margin/VBox/ActionsPanel"]
+theme_override_constants/margin_left = 6
+theme_override_constants/margin_top = 6
+theme_override_constants/margin_right = 6
+theme_override_constants/margin_bottom = 6
+
+[node name="ActionsVBox" type="VBoxContainer" parent="Margin/VBox/ActionsPanel/ActionsMargin"]
+custom_constants/separation = 4.0
+
+[node name="ActionsLabel" type="Label" parent="Margin/VBox/ActionsPanel/ActionsMargin/ActionsVBox"]
+text = "Actions"
+
+[node name="CreateFloor" type="Button" parent="Margin/VBox/ActionsPanel/ActionsMargin/ActionsVBox"]
 text = "Create Floor"
 
-[node name="ApplyCuts" type="Button" parent="VBox"]
+[node name="ApplyCuts" type="Button" parent="Margin/VBox/ActionsPanel/ActionsMargin/ActionsVBox"]
 text = "Apply Cuts"
 
-[node name="ClearCuts" type="Button" parent="VBox"]
+[node name="ClearCuts" type="Button" parent="Margin/VBox/ActionsPanel/ActionsMargin/ActionsVBox"]
 text = "Clear Pending Cuts"
 
-[node name="CommitCuts" type="Button" parent="VBox"]
+[node name="CommitCuts" type="Button" parent="Margin/VBox/ActionsPanel/ActionsMargin/ActionsVBox"]
 text = "Commit Cuts (Bake)"
 
-[node name="RestoreCuts" type="Button" parent="VBox"]
+[node name="RestoreCuts" type="Button" parent="Margin/VBox/ActionsPanel/ActionsMargin/ActionsVBox"]
 text = "Restore Committed Cuts"
 
-[node name="Bake" type="Button" parent="VBox"]
+[node name="Bake" type="Button" parent="Margin/VBox/ActionsPanel/ActionsMargin/ActionsVBox"]
 text = "Bake"
 
-[node name="Clear" type="Button" parent="VBox"]
+[node name="Clear" type="Button" parent="Margin/VBox/ActionsPanel/ActionsMargin/ActionsVBox"]
 text = "Clear Brushes"
 
-[node name="Status" type="Label" parent="VBox"]
+[node name="Status" type="Label" parent="Margin/VBox/ActionsPanel/ActionsMargin/ActionsVBox"]
 text = "Status: Idle"
+
+[node name="QuickPlay" type="Button" parent="Margin/VBox"]
+text = "Quick Play"
+size_flags_horizontal = 3
+
+[node name="PresetMenu" type="PopupMenu" parent="."]
+
+[node name="PresetRenameDialog" type="AcceptDialog" parent="."]
+title = "Rename Preset"
+
+[node name="PresetRenameLine" type="LineEdit" parent="PresetRenameDialog"]
+size_flags_horizontal = 3

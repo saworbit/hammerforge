@@ -52,6 +52,12 @@
 - **CSG Operations**: Add (union) and Subtract (carve)
 - **Grid Snapping**: Configurable 1-128 unit increments
 
+### Editor UX
+- **Editor Theme Parity**: Dock styling inherits the active Godot editor theme
+- **Quick Snap Presets**: One-click 1/2/4/8/16/32/64 toggles synced with Grid Snap
+- **On-Screen Shortcut HUD**: Optional cheat sheet in the 3D viewport
+- **Dynamic Editor Grid**: High-contrast shader grid that follows the active axis/brush
+
 ### ⌨️ Modifier Keys
 | Key | Effect |
 |-----|--------|
@@ -108,6 +114,10 @@ your-project/
 └── project.godot
 ```
 
+Notes:
+- `CommittedCuts` stores frozen subtract brushes when "Freeze Commit" is enabled.
+- `EditorGrid` (MeshInstance3D) is editor-only and not saved to scenes.
+
 ---
 
 ## 🚀 Quick Start
@@ -163,8 +173,13 @@ your-project/
 | **Shape** | `Box` - Rectangular / `Cylinder` - Round |
 | **Size X/Y/Z** | Default brush dimensions |
 | **Grid Snap** | Snap increment (1-128 units) |
+| **Quick Snap** | Preset snap buttons (1/2/4/8/16/32/64) synced to Grid Snap |
 | **Bake Layer** | Physics layer for baked collision |
-| **Freeze Commit** | Keep committed cuts hidden for later restore |
+| **Freeze Commit** | Keep committed cuts hidden for later restore (off deletes cuts after commit) |
+| **Show HUD** | Toggle the on-screen shortcut legend |
+| **Show Grid** | Toggle the editor grid (off by default) |
+| **Follow Grid** | Toggle grid follow mode (requires Show Grid) |
+| **Debug Logs** | Print HammerForge events to the output console |
 
 ### Buttons
 
@@ -193,6 +208,12 @@ your-project/
 | `Alt` | Height-only mode |
 | `Right-click` | Cancel drag |
 
+### HUD and Editor Grid
+
+- **Shortcut HUD**: Toggle with "Show HUD" in the dock. The overlay is informational and does not change your active tool.
+- **Dynamic Grid**: Editor-only grid plane driven by a shader for high contrast. Enable with "Show Grid".
+- **Tuning**: Adjust `grid_visible`, `grid_follow_brush`, `grid_plane_size`, `grid_color`, and `grid_major_line_frequency` on `LevelRoot` in the Inspector.
+
 ---
 
 ## 📚 Documentation
@@ -220,6 +241,11 @@ your-project/
 │  brush_instance.gd  → Individual brush representation  │
 └─────────────────────────────────────────────────────────┘
 ```
+
+### Editor UX Files
+
+- `addons/hammerforge/shortcut_hud.tscn` + `addons/hammerforge/shortcut_hud.gd`: On-screen shortcut legend.
+- `addons/hammerforge/editor_grid.gdshader`: Shader-based grid for the editor viewport.
 
 ### Node Hierarchy
 

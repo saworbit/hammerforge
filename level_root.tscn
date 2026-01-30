@@ -1,11 +1,24 @@
 [gd_scene format=3 uid="uid://be36ud0gihbpm"]
 
 [ext_resource type="Script" uid="uid://2jktco8h5i23" path="res://addons/hammerforge/level_root.gd" id="1_qayhv"]
+[ext_resource type="Script" uid="uid://bx7ydxsoo45un" path="res://addons/hammerforge/brush_manager.gd" id="2_4d4qa"]
+[ext_resource type="Script" uid="uid://cfnswc2a51c0v" path="res://addons/hammerforge/baker.gd" id="3_e5u8s"]
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_ndhg3"]
 
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_rix17"]
+transparency = 1
+albedo_color = Color(0.3, 0.6, 1, 0.35)
+roughness = 0.6
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_oufh0"]
+transparency = 1
+shading_mode = 0
+albedo_color = Color(1, 0.2, 0.2, 0.85)
+
 [node name="LevelRoot" type="Node3D" unique_id=1405846836]
 script = ExtResource("1_qayhv")
+debug_logging = true
 metadata/_custom_type_script = "uid://2jktco8h5i23"
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=810235790]
@@ -14,3 +27,50 @@ mesh = SubResource("PlaneMesh_ndhg3")
 [node name="CSGBox3D" type="CSGBox3D" parent="." unique_id=983923864]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.055291653, -8.006434, -0.6666846)
 size = Vector3(1024, 16, 1024)
+
+[node name="BrushCSG" type="CSGCombiner3D" parent="." unique_id=416997165]
+visible = true
+use_collision = true
+
+[node name="Add_Brushes" type="CSGCombiner3D" parent="BrushCSG" unique_id=886092066]
+use_collision = true
+
+[node name="@CSGBox3D@18813" type="CSGBox3D" parent="BrushCSG/Add_Brushes" unique_id=1292075666]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 304, 96, 192)
+material_override = SubResource("StandardMaterial3D_rix17")
+use_collision = true
+size = Vector3(192, 192, 224)
+material = SubResource("StandardMaterial3D_rix17")
+metadata/brush_id = "44248363_1"
+
+[node name="Subtract_Brushes" type="CSGCombiner3D" parent="BrushCSG" unique_id=1557833420]
+use_collision = true
+
+[node name="@CSGBox3D@18814" type="CSGBox3D" parent="BrushCSG/Subtract_Brushes" unique_id=46062258]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 328, 72, 164.52173)
+material_override = SubResource("StandardMaterial3D_oufh0")
+operation = 2
+use_collision = true
+size = Vector3(112, 144, 392.21692)
+material = SubResource("StandardMaterial3D_oufh0")
+metadata/pending_subtract = false
+metadata/brush_id = "53526358_3"
+
+[node name="PendingCuts" type="CSGCombiner3D" parent="." unique_id=1922302937]
+visible = false
+
+[node name="CommittedCuts" type="Node3D" parent="." unique_id=1181955709]
+visible = false
+
+[node name="BrushManager" type="Node" parent="." unique_id=105217615]
+script = ExtResource("2_4d4qa")
+
+[node name="Baker" type="Node" parent="." unique_id=1071013309]
+script = ExtResource("3_e5u8s")
+
+[node name="TempFloor" type="CSGBox3D" parent="." unique_id=56550223]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -8, 0)
+use_collision = true
+size = Vector3(1024, 16, 1024)
+
+[node name="BakedGeometry" type="Node3D" parent="." unique_id=1220317200]

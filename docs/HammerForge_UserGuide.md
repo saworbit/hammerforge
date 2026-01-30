@@ -40,11 +40,27 @@ You normally don’t need to add it manually — HammerForge will auto-create it
 **Grid Snap**
 - Sets the grid snapping increment (0 disables snap).
 
+**Quick Snap**
+- Preset snap buttons (1/2/4/8/16/32/64) synced with Grid Snap.
+
 **Bake Layer**
 - Sets the physics layer used by baked collision (1-32).
 
 **Freeze Commit**
 - Keeps committed cut shapes in a hidden container so you can restore them later.
+  - If disabled, committed cuts are deleted after bake and cannot be reused in future bakes.
+
+**Show HUD**
+- Toggles the on-screen shortcut legend in the 3D viewport.
+
+**Show Grid**
+- Toggles the editor grid (off by default).
+
+**Follow Grid**
+- Toggles the grid follow mode (requires Show Grid).
+
+**Debug Logs**
+- Prints HammerForge events to the Output dock for troubleshooting.
 
 **Create Floor**
 - Adds a temporary CSGBox floor under LevelRoot for easy raycast placement.
@@ -119,6 +135,27 @@ When you press **Bake**, HammerForge creates:
 
 You can playtest with a CharacterBody3D or FPS controller after baking.
 
+## Shortcut HUD
+HammerForge can display a small on-screen cheat sheet inside the 3D viewport.
+
+- Toggle it with **Show HUD** in the dock.
+- The HUD is informational only; it does not change your active tool.
+- It mirrors the main modifier keys and axis locks so new users can learn quickly.
+
+## Dynamic Editor Grid
+HammerForge adds a high-contrast editor-only grid plane for clearer placement.
+
+- The grid is a shader-driven PlaneMesh for better performance than line meshes.
+- It follows the active axis and can update as you move the mouse (toggleable).
+- Snap spacing is tied directly to `grid_snap`.
+
+### Grid Tuning (LevelRoot Inspector)
+- `grid_visible`: show/hide the editor grid (default off).
+- `grid_follow_brush`: keep the grid centered under the cursor (default off).
+- `grid_plane_size`: size of the grid plane in world units.
+- `grid_color`: tint/alpha for line visibility.
+- `grid_major_line_frequency`: how often major lines appear (every 4 or 8 snaps).
+
 ## Troubleshooting
 **No brushes appear**
 - Make sure HammerForge is enabled.
@@ -130,6 +167,9 @@ You can playtest with a CharacterBody3D or FPS controller after baking.
 
 **Dock not showing**
 - Restart Godot after enabling the plugin.
+
+**Need diagnostics**
+- Enable **Debug Logs** in the dock to print tool actions and bake/cut steps.
 
 ---
 

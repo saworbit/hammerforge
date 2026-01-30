@@ -2,21 +2,60 @@
 extends EditorPlugin
 
 var dock: Control
+var hud: Control
+var base_control: Control
 var active_root: Node = null
 const LevelRootType = preload("level_root.gd")
 
 func _enter_tree():
     add_custom_type("LevelRoot", "Node3D", preload("level_root.gd"), preload("icon.png"))
     dock = preload("dock.tscn").instantiate()
+    base_control = get_editor_interface().get_base_control()
+    if base_control:
+        dock.theme = base_control.theme
+        if dock.has_method("apply_editor_styles"):
+            dock.call("apply_editor_styles", base_control)
+        if not base_control.is_connected("theme_changed", Callable(self, "_on_editor_theme_changed")):
+            base_control.connect("theme_changed", Callable(self, "_on_editor_theme_changed"))
     add_control_to_dock(DOCK_SLOT_LEFT_UL, dock)
     if dock and dock.has_method("set_editor_interface"):
         dock.call("set_editor_interface", get_editor_interface())
+    if dock and dock.has_signal("hud_visibility_changed"):
+        dock.connect("hud_visibility_changed", Callable(self, "_on_hud_visibility_changed"))
+
+    hud = preload("shortcut_hud.tscn").instantiate()
+    if base_control:
+        hud.theme = base_control.theme
+    add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, hud)
+    if dock and dock.has_method("get_show_hud"):
+        hud.visible = dock.call("get_show_hud")
 
 func _exit_tree():
     remove_custom_type("LevelRoot")
+    if base_control and base_control.is_connected("theme_changed", Callable(self, "_on_editor_theme_changed")):
+        base_control.disconnect("theme_changed", Callable(self, "_on_editor_theme_changed"))
     if dock:
+        if dock.is_connected("hud_visibility_changed", Callable(self, "_on_hud_visibility_changed")):
+            dock.disconnect("hud_visibility_changed", Callable(self, "_on_hud_visibility_changed"))
         remove_control_from_docks(dock)
         dock.free()
+    if hud:
+        remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, hud)
+        hud.free()
+
+func _on_editor_theme_changed() -> void:
+    if not base_control:
+        return
+    if dock:
+        dock.theme = base_control.theme
+        if dock.has_method("apply_editor_styles"):
+            dock.call("apply_editor_styles", base_control)
+    if hud:
+        hud.theme = base_control.theme
+
+func _on_hud_visibility_changed(visible: bool) -> void:
+    if hud:
+        hud.visible = visible
 
 func _handles(object: Object) -> bool:
     if not object:
@@ -38,6 +77,11 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
         root = _create_level_root()
     if not root or not dock:
         return EditorPlugin.AFTER_GUI_INPUT_PASS
+
+    if root.has_method("update_editor_grid"):
+        if event is InputEventMouseMotion or event is InputEventMouseButton:
+            root.call("update_editor_grid", camera, event.position)
+
     var tool = dock.get_tool()
     var op = dock.get_operation()
     var size = dock.get_brush_size()
@@ -96,8 +140,12 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
             var started = root.begin_drag(camera, event.position, op, size, shape)
             return EditorPlugin.AFTER_GUI_INPUT_STOP if started else EditorPlugin.AFTER_GUI_INPUT_PASS
         else:
-            var finished = root.end_drag(camera, event.position, size)
-            return EditorPlugin.AFTER_GUI_INPUT_STOP if finished else EditorPlugin.AFTER_GUI_INPUT_PASS
+            var result = root.end_drag_info(camera, event.position, size)
+            if result.get("handled", false):
+                if result.get("placed", false):
+                    _commit_brush_placement(root, result.get("info", {}))
+                return EditorPlugin.AFTER_GUI_INPUT_STOP
+            return EditorPlugin.AFTER_GUI_INPUT_PASS
     elif event is InputEventMouseMotion:
         root.set_shift_pressed(event.shift_pressed)
         root.set_alt_pressed(event.alt_pressed)
@@ -113,20 +161,76 @@ func _select_node(node: Node, additive: bool = false) -> void:
     if node:
         selection.add_node(node)
 
+func _get_undo_redo() -> EditorUndoRedoManager:
+    return get_undo_redo()
+
+func _commit_brush_placement(root: Node, info: Dictionary) -> void:
+    if info.is_empty():
+        return
+    var undo_redo = _get_undo_redo()
+    if not undo_redo:
+        root.create_brush_from_info(info)
+        return
+    undo_redo.create_action("Place Brush")
+    undo_redo.add_do_method(root, "create_brush_from_info", info)
+    undo_redo.add_undo_method(root, "delete_brush_by_id", info.get("brush_id", ""))
+    undo_redo.commit_action()
+
 func _delete_selected(root: Node) -> void:
     var selection = get_editor_interface().get_selection()
     var nodes = selection.get_selected_nodes()
+    var deletable: Array = []
     for node in nodes:
-        if node and node.get_parent() and node.get_parent().name == "BrushCSG":
+        if root.has_method("is_brush_node") and root.is_brush_node(node):
+            deletable.append(node)
+    if deletable.is_empty():
+        return
+    selection.clear()
+    var undo_redo = _get_undo_redo()
+    if not undo_redo:
+        for node in deletable:
             root.delete_brush(node)
+        return
+    undo_redo.create_action("Delete Brushes")
+    for node in deletable:
+        var parent = node.get_parent()
+        var owner = node.owner
+        var index = -1
+        if parent:
+            index = parent.get_children().find(node)
+        undo_redo.add_do_method(root, "delete_brush", node, false)
+        undo_redo.add_undo_method(root, "restore_brush", node, parent, owner, index)
+    undo_redo.commit_action()
 
 func _duplicate_selected(root: Node) -> void:
     var selection = get_editor_interface().get_selection()
     var nodes = selection.get_selected_nodes()
-    selection.clear()
+    var infos: Array = []
+    var step = root.grid_snap if root.grid_snap > 0.0 else 1.0
     for node in nodes:
-        if node and node.get_parent() and node.get_parent().name == "BrushCSG":
-            var dup = root.duplicate_brush(node)
+        if root.has_method("is_brush_node") and root.is_brush_node(node):
+            var info = root.build_duplicate_info(node, Vector3(step, 0.0, 0.0))
+            if not info.is_empty():
+                infos.append(info)
+    if infos.is_empty():
+        return
+    var undo_redo = _get_undo_redo()
+    if not undo_redo:
+        selection.clear()
+        for info in infos:
+            var dup = root.create_brush_from_info(info)
+            if dup:
+                selection.add_node(dup)
+        return
+    undo_redo.create_action("Duplicate Brushes")
+    for info in infos:
+        undo_redo.add_do_method(root, "create_brush_from_info", info)
+        undo_redo.add_undo_method(root, "delete_brush_by_id", info.get("brush_id", ""))
+    undo_redo.commit_action()
+    selection.clear()
+    if root.has_method("find_brush_by_id"):
+        for info in infos:
+            var dup = root.find_brush_by_id(info.get("brush_id", ""))
             if dup:
                 selection.add_node(dup)
 
@@ -134,9 +238,24 @@ func _nudge_selected(root: Node, dir: Vector3) -> void:
     var step = root.grid_snap if root.grid_snap > 0.0 else 1.0
     var selection = get_editor_interface().get_selection()
     var nodes = selection.get_selected_nodes()
+    var targets: Array = []
     for node in nodes:
-        if node and node is Node3D:
-            node.global_position += dir * step
+        if node and node is Node3D and root.has_method("is_brush_node") and root.is_brush_node(node):
+            targets.append(node)
+    if targets.is_empty():
+        return
+    var offset = dir * step
+    var undo_redo = _get_undo_redo()
+    if not undo_redo:
+        for node in targets:
+            node.global_position += offset
+        return
+    undo_redo.create_action("Nudge Brushes")
+    for node in targets:
+        var start_pos = node.global_position
+        undo_redo.add_do_property(node, "global_position", start_pos + offset)
+        undo_redo.add_undo_property(node, "global_position", start_pos)
+    undo_redo.commit_action()
 
 
 func _get_level_root() -> Node:

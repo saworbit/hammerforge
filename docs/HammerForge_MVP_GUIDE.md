@@ -37,6 +37,9 @@ addons/
     ├── dock.tscn          # Dock UI scene
     ├── dock.gd            # Dock query/bake controls (tool, shape, grid, floor)
     ├── level_root.gd      # Root node that manages CSG brushes and baking
+    ├── shortcut_hud.tscn  # On-screen shortcut legend (editor UI)
+    ├── shortcut_hud.gd    # HUD script for layout + label
+    ├── editor_grid.gdshader # Shader-based editor grid
     ├── brush_instance.gd  # Semi-transparent CSG brush shape
     ├── brush_manager.gd   # Brush lifecycle helper
     └── baker.gd           # Bake helper that creates meshes + collision
@@ -87,6 +90,15 @@ addons/
     * Use Subtract mode to place cut shapes, then click **Apply Cuts**.
     * Click Bake: a static `MeshInstance3D` + `StaticBody3D` appears with collision.
     * Add an FPS controller (e.g., `SRCoders FPS Controller` from Asset Library) and hit Play to move around the baked room.
+
+## Post-MVP UX Upgrades
+
+These are quality-of-life improvements added after the MVP core:
+
+1. **Editor Theme Binding** â€“ Dock inherits `EditorInterface.get_base_control().theme`, with live theme refresh.
+2. **Quick Snap Presets** â€“ Toggle buttons for 1/2/4/8/16/32/64 with a shared ButtonGroup.
+3. **Shortcut HUD** â€“ On-screen cheat sheet in the 3D viewport, toggleable from the dock.
+4. **Dynamic Editor Grid** â€“ Shader-based PlaneMesh that follows the active axis and snap size.
 
 ## Troubleshooting Notes
 
