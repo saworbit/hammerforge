@@ -92,8 +92,8 @@ addons/
     * Click Bake: a static `MeshInstance3D` + `StaticBody3D` appears with collision.
     * Add an FPS controller (e.g., `SRCoders FPS Controller` from Asset Library) and hit Play to move around the baked room.
 
-## Quadrant Viewports (Advanced)
-A 2x2 layout of SubViewports (Top/Front/Side/3D) can be overlaid on the editor and share the same World3D. Input should be routed to the camera under the mouse.
+## Quadrant Viewports (Native)
+Use Godot’s **View → Layout → 4 View** for Top/Front/Side/3D. The plugin no longer ships a custom quadrant overlay.
 
 ## Post-MVP UX Upgrades
 

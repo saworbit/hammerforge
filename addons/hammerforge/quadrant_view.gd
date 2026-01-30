@@ -9,14 +9,24 @@ enum ViewType { TOP, FRONT, SIDE, PERSPECTIVE }
 
 @onready var viewport: SubViewport = $SubViewport
 @onready var camera: Camera3D = $SubViewport/Camera3D
+var pending_world: World3D = null
 
 func _ready() -> void:
     if viewport:
-        viewport.own_world_3d = false
+        viewport.own_world_3d = true
         viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+        viewport.transparent_bg = true
+        viewport.render_target_clear_mode = SubViewport.CLEAR_MODE_ALWAYS
+        if viewport.has_method("set_disable_3d"):
+            viewport.set_disable_3d(false)
+        else:
+            viewport.disable_3d = false
     if camera:
         camera.current = true
     _setup_view()
+    if pending_world and viewport:
+        viewport.world_3d = pending_world
+        pending_world = null
 
 func _setup_view() -> void:
     if not camera:
@@ -43,8 +53,13 @@ func _setup_view() -> void:
             camera.look_at(Vector3.ZERO, Vector3.UP)
 
 func set_world_3d(world: World3D) -> void:
-    if viewport and world:
+    if not world:
+        return
+    if viewport:
         viewport.world_3d = world
+        pending_world = null
+    else:
+        pending_world = world
 
 func get_camera() -> Camera3D:
     return camera

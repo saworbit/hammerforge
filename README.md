@@ -191,7 +191,7 @@ Sections can be collapsed using the toggle button in each header.
 | **Show HUD** | Toggle the on-screen shortcut legend |
 | **Show Grid** | Toggle the editor grid (off by default) |
 | **Follow Grid** | Toggle grid follow mode (requires Show Grid) |
-| **Quadrant View** | Enable the 2x2 Top/Front/Side/3D viewport layout |
+| **3D View Layout (native)** | Use Godot’s View → Layout → 4 View for Top/Front/Side/3D |
 | **Debug Logs** | Print HammerForge events to the output console |
 | **Live Brushes** | Real-time CSG count with performance warning colors |
 

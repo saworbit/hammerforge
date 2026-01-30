@@ -39,7 +39,6 @@ const PRESET_MENU_DELETE := 1
 @onready var show_hud: CheckBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ShowHUD
 @onready var show_grid: CheckBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ShowGrid
 @onready var follow_grid: CheckBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/FollowGrid
-@onready var show_quadrant: CheckBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ShowQuadrant
 @onready var debug_logs: CheckBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/DebugLogs
 @onready var floor_btn: Button = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/CreateFloor
 @onready var apply_cuts_btn: Button = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/ApplyCuts
@@ -82,6 +81,22 @@ var active_material: Material = null
 var active_shape: int = LevelRootType.BrushShape.BOX
 var shape_button_group: ButtonGroup
 var shape_buttons: Dictionary = {}
+var root_properties: Dictionary = {}
+
+func _is_level_root(node: Node) -> bool:
+    return node != null and node is LevelRootType
+
+func _cache_root_properties() -> void:
+    root_properties.clear()
+    if not connected_root:
+        return
+    for prop in connected_root.get_property_list():
+        var name = prop.get("name", "")
+        if name != "":
+            root_properties[name] = true
+
+func _root_has_property(name: String) -> bool:
+    return root_properties.has(name)
 
 func set_editor_interface(iface: EditorInterface) -> void:
     editor_interface = iface
@@ -220,13 +235,15 @@ func _process(delta):
         _disconnect_root_signals()
         connected_root = level_root
         _connect_root_signals()
-    if level_root and level_root.get_script() == LevelRootType:
-        level_root.commit_freeze = commit_freeze.button_pressed
-        if show_grid:
-            level_root.grid_visible = show_grid.button_pressed
-        if follow_grid:
-            level_root.grid_follow_brush = follow_grid.button_pressed
-        level_root.debug_logging = debug_enabled
+    if level_root:
+        if _root_has_property("commit_freeze"):
+            level_root.set("commit_freeze", commit_freeze.button_pressed)
+        if show_grid and _root_has_property("grid_visible"):
+            level_root.set("grid_visible", show_grid.button_pressed)
+        if follow_grid and _root_has_property("grid_follow_brush"):
+            level_root.set("grid_follow_brush", follow_grid.button_pressed)
+        if _root_has_property("debug_logging"):
+            level_root.set("debug_logging", debug_enabled)
     _update_perf_label()
 
 func get_operation() -> int:
@@ -263,9 +280,6 @@ func get_collision_layer_mask() -> int:
 func get_show_hud() -> bool:
     return show_hud.button_pressed
 
-func is_quadrant_view_enabled() -> bool:
-    return show_quadrant and show_quadrant.button_pressed
-
 func set_show_hud(visible: bool) -> void:
     if show_hud.button_pressed == visible:
         return
@@ -289,8 +303,8 @@ func _apply_grid_snap(value: float) -> void:
     grid_snap.value = value
     syncing_snap = false
     _sync_snap_buttons(value)
-    if level_root and level_root.get_script() == LevelRootType:
-        level_root.grid_snap = value
+    if level_root and _root_has_property("grid_snap"):
+        level_root.set("grid_snap", value)
 
 func _sync_snap_buttons(value: float) -> void:
     syncing_snap = true
@@ -313,26 +327,27 @@ func _on_show_hud_toggled(pressed: bool) -> void:
     hud_visibility_changed.emit(pressed)
     _log("HUD visibility: %s" % ("on" if pressed else "off"))
 
+
 func _on_follow_grid_toggled(pressed: bool) -> void:
     if syncing_grid:
         return
-    if level_root and level_root.get_script() == LevelRootType:
-        level_root.grid_follow_brush = pressed
+    if level_root and _root_has_property("grid_follow_brush"):
+        level_root.set("grid_follow_brush", pressed)
     _log("Grid follow: %s" % ("on" if pressed else "off"))
 
 func _on_show_grid_toggled(pressed: bool) -> void:
     if syncing_grid:
         return
-    if level_root and level_root.get_script() == LevelRootType:
-        level_root.grid_visible = pressed
+    if level_root and _root_has_property("grid_visible"):
+        level_root.set("grid_visible", pressed)
     _log("Grid visible: %s" % ("on" if pressed else "off"))
 
 func _on_debug_logs_toggled(pressed: bool) -> void:
     if syncing_grid:
         return
     debug_enabled = pressed
-    if level_root and level_root.get_script() == LevelRootType:
-        level_root.debug_logging = pressed
+    if level_root and _root_has_property("debug_logging"):
+        level_root.set("debug_logging", pressed)
     _log("Debug logs: %s" % ("on" if pressed else "off"), true)
 
 func _log(message: String, force: bool = false) -> void:
@@ -382,6 +397,7 @@ func _on_restore_cuts():
 func _connect_root_signals() -> void:
     if not connected_root:
         return
+    _cache_root_properties()
     if connected_root.has_signal("bake_started"):
         if not connected_root.is_connected("bake_started", Callable(self, "_on_bake_started")):
             connected_root.connect("bake_started", Callable(self, "_on_bake_started"))
@@ -397,6 +413,7 @@ func _connect_root_signals() -> void:
 func _disconnect_root_signals() -> void:
     if not connected_root:
         return
+    root_properties.clear()
     if connected_root.has_signal("bake_started"):
         if connected_root.is_connected("bake_started", Callable(self, "_on_bake_started")):
             connected_root.disconnect("bake_started", Callable(self, "_on_bake_started"))
@@ -408,8 +425,8 @@ func _disconnect_root_signals() -> void:
             connected_root.disconnect("grid_snap_changed", Callable(self, "_on_root_grid_snap_changed"))
 
 func _sync_grid_snap_from_root() -> void:
-    if connected_root and connected_root.get_script() == LevelRootType:
-        var value = float(connected_root.grid_snap)
+    if connected_root and _root_has_property("grid_snap"):
+        var value = float(connected_root.get("grid_snap"))
         syncing_snap = true
         grid_snap.value = value
         syncing_snap = false
@@ -422,15 +439,15 @@ func _on_root_grid_snap_changed(value: float) -> void:
     _sync_snap_buttons(value)
 
 func _sync_grid_settings_from_root() -> void:
-    if not connected_root or connected_root.get_script() != LevelRootType:
+    if not connected_root:
         return
     syncing_grid = true
-    if show_grid:
-        show_grid.button_pressed = connected_root.grid_visible
-    if follow_grid:
-        follow_grid.button_pressed = connected_root.grid_follow_brush
-    if debug_logs:
-        debug_enabled = connected_root.debug_logging
+    if show_grid and _root_has_property("grid_visible"):
+        show_grid.button_pressed = bool(connected_root.get("grid_visible"))
+    if follow_grid and _root_has_property("grid_follow_brush"):
+        follow_grid.button_pressed = bool(connected_root.get("grid_follow_brush"))
+    if debug_logs and _root_has_property("debug_logging"):
+        debug_enabled = bool(connected_root.get("debug_logging"))
         debug_logs.button_pressed = debug_enabled
     syncing_grid = false
 

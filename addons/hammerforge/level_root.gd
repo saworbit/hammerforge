@@ -109,13 +109,19 @@ func _setup_highlight() -> void:
     hover_highlight.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
     var mesh := BoxMesh.new()
     hover_highlight.mesh = mesh
-    var mat := StandardMaterial3D.new()
-    mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-    mat.albedo_color = Color(1.0, 1.0, 0.0, 0.5)
-    mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-    mat.no_depth_test = true
-    mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-    mat.wireframe = true
+    var mat := ShaderMaterial.new()
+    var shader := Shader.new()
+    shader.code = """shader_type spatial;
+render_mode unshaded, cull_disabled, wireframe, depth_draw_never;
+
+uniform vec4 color : source_color = vec4(1.0, 1.0, 0.0, 0.5);
+
+void fragment() {
+    ALBEDO = color.rgb;
+    ALPHA = color.a;
+}
+"""
+    mat.shader = shader
     hover_highlight.material_override = mat
     hover_highlight.visible = false
 
@@ -754,7 +760,7 @@ func get_brush_info_from_node(brush: Node) -> Dictionary:
         info["shape"] = int(brush.get_meta("prefab_shape"))
         if brush.has_meta("prefab_size"):
             var base_size: Vector3 = brush.get_meta("prefab_size")
-            var scale := brush.scale
+            var scale: Vector3 = (brush as Node3D).scale
             info["size"] = Vector3(
                 base_size.x * scale.x,
                 base_size.y * scale.y,
