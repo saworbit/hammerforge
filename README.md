@@ -59,6 +59,8 @@
 - **Dynamic Editor Grid**: High-contrast shader grid that follows the active axis/brush
 - **Material Paint Mode**: Pick an active material and click brushes to apply it
 - **Collapsible Dock Sections**: Collapse Settings/Presets/Actions to reduce clutter
+- **Physics Layer Presets**: Set baked collision layers with a single dropdown
+- **Live Brush Count**: Real-time warning when active CSG gets heavy
 
 ### ⌨️ Modifier Keys
 | Key | Effect |
@@ -183,12 +185,13 @@ Sections can be collapsed using the toggle button in each header.
 | **Size X/Y/Z** | Default brush dimensions |
 | **Grid Snap** | Snap increment (1-128 units) |
 | **Quick Snap** | Preset snap buttons (1/2/4/8/16/32/64) synced to Grid Snap |
-| **Bake Layer** | Physics layer for baked collision |
+| **Physics Layer** | Preset collision layer mask for baked geometry |
 | **Freeze Commit** | Keep committed cuts hidden for later restore (off deletes cuts after commit) |
 | **Show HUD** | Toggle the on-screen shortcut legend |
 | **Show Grid** | Toggle the editor grid (off by default) |
 | **Follow Grid** | Toggle grid follow mode (requires Show Grid) |
 | **Debug Logs** | Print HammerForge events to the output console |
+| **Live Brushes** | Real-time CSG count with performance warning colors |
 
 ### Buttons
 

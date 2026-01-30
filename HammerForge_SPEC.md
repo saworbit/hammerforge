@@ -73,10 +73,11 @@ HammerForge (EditorPlugin)
 
 ## UI / UX Layout
 
-- **Dock (Left-Upper):** Tool (Draw/Select), Paint Mode, Active Material, Mode (Add/Subtract), Shape, Size, Grid, Create Floor, Apply/Clear Cuts, Bake.  
+- **Dock (Left-Upper):** Tool (Draw/Select), Paint Mode, Active Material, Mode (Add/Subtract), Shape, Size, Grid, Physics Layer, Create Floor, Apply/Clear Cuts, Bake.  
 - **Toolbar (Spatial Editor):** Mode switches (Brush/Object/Texture), Bake, Play FPS, Undo/Redo icons.  
 - **Viewport Overlays:** Grid (toggle), brush ghost (green wireframe), hover selection highlight, snap lines, gizmo handles for resizing/rotating brushes and entities.  
 - **Shortcuts:** `X/Y/Z` axis locks, `Shift` square base, `Shift+Alt` cube, `Alt` height-only, `Delete` remove, `Ctrl+D` duplicate.  
+- **Performance HUD:** Live brush count label with green/yellow/red thresholds.  
 - **First-run Wizard:** Guides creation of `LevelRoot.tscn`, loads sample FPS arena, sets defaults.  
 - **Mobile-friendly:** Touch gestures, DPI scaling for tablets.
 

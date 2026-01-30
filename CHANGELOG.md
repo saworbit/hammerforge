@@ -11,6 +11,9 @@ The format is based on "Keep a Changelog", and this project follows semantic ver
 - Axis locks for drawing (X/Y/Z).
 - Draw/Select tool toggle in the dock.
 - Collapsible dock sections for Settings, Presets, and Actions.
+- Physics layer presets for baked collision via dock dropdown.
+- Live brush count indicator with performance warning colors.
+- New SVG icon for LevelRoot in the scene tree.
 - Paint Mode: pick an active material and click brushes to apply it in the viewport.
 - Active material picker in the dock (resource file dialog for .tres/.material).
 - Hover selection highlight (AABB wireframe) when using Select.

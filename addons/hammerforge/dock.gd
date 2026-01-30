@@ -33,7 +33,7 @@ const PRESET_MENU_DELETE := 1
 @onready var size_y: SpinBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/SizeRow/SizeY
 @onready var size_z: SpinBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/SizeRow/SizeZ
 @onready var grid_snap: SpinBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/GridRow/GridSnap
-@onready var bake_layer: SpinBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/BakeLayerRow/BakeLayer
+@onready var collision_layer_opt: OptionButton = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/PhysicsLayerRow/PhysicsLayerOption
 @onready var commit_freeze: CheckBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/CommitFreeze
 @onready var show_hud: CheckBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ShowHUD
 @onready var show_grid: CheckBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ShowGrid
@@ -47,6 +47,7 @@ const PRESET_MENU_DELETE := 1
 @onready var bake_btn: Button = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/Bake
 @onready var clear_btn: Button = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/Clear
 @onready var status_label: Label = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/Status
+@onready var perf_label: Label = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/BrushCountLabel
 @onready var quick_play_btn: Button = $Margin/VBox/QuickPlay
 
 @onready var save_preset_btn: Button = $Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin/PresetsVBox/SavePreset
@@ -187,6 +188,12 @@ func _ready():
         ])
         if not material_dialog.file_selected.is_connected(Callable(self, "_on_material_file_selected")):
             material_dialog.file_selected.connect(_on_material_file_selected)
+    if collision_layer_opt:
+        collision_layer_opt.clear()
+        collision_layer_opt.add_item("Static World (Layer 1)", 1)
+        collision_layer_opt.add_item("Debris/Prop (Layer 2)", 2)
+        collision_layer_opt.add_item("Trigger Only (Layer 3)", 4)
+        collision_layer_opt.select(0)
     _setup_collapsible_sections()
     status_label.text = "Status: Idle"
     _sync_snap_buttons(grid_snap.value)
@@ -214,13 +221,13 @@ func _process(delta):
         connected_root = level_root
         _connect_root_signals()
     if level_root and level_root.get_script() == LevelRootType:
-        level_root.bake_collision_layer_index = int(bake_layer.value)
         level_root.commit_freeze = commit_freeze.button_pressed
         if show_grid:
             level_root.grid_visible = show_grid.button_pressed
         if follow_grid:
             level_root.grid_follow_brush = follow_grid.button_pressed
         level_root.debug_logging = debug_enabled
+    _update_perf_label()
 
 func get_operation() -> int:
     return CSGShape3D.OPERATION_UNION if mode_add.button_pressed else CSGShape3D.OPERATION_SUBTRACTION
@@ -242,6 +249,11 @@ func get_shape() -> int:
 
 func get_grid_snap() -> float:
     return grid_snap.value
+
+func get_collision_layer_mask() -> int:
+    if not collision_layer_opt:
+        return 0
+    return collision_layer_opt.get_selected_id()
 
 func get_show_hud() -> bool:
     return show_hud.button_pressed
@@ -323,7 +335,7 @@ func _log(message: String, force: bool = false) -> void:
 func _on_bake():
     _log("Bake requested")
     if level_root and level_root.has_method("bake"):
-        level_root.call("bake")
+        level_root.call("bake", true, false, get_collision_layer_mask())
 
 func _on_clear():
     _log("Clear brushes requested")
@@ -432,9 +444,25 @@ func _set_bake_buttons_disabled(disabled: bool) -> void:
 func _on_quick_play() -> void:
     _log("Quick play requested")
     if level_root and level_root.has_method("bake"):
-        await level_root.bake(true, true)
+        await level_root.bake(true, true, get_collision_layer_mask())
     if editor_interface:
         editor_interface.play_current_scene()
+
+func _update_perf_label() -> void:
+    if not perf_label:
+        return
+    if not level_root or not level_root.has_method("get_live_brush_count"):
+        perf_label.text = "Live Brushes: 0"
+        perf_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+        return
+    var count = int(level_root.call("get_live_brush_count"))
+    perf_label.text = "Live Brushes: %s" % count
+    if count <= 50:
+        perf_label.add_theme_color_override("font_color", Color(0.2, 0.85, 0.35))
+    elif count <= 100:
+        perf_label.add_theme_color_override("font_color", Color(0.95, 0.8, 0.2))
+    else:
+        perf_label.add_theme_color_override("font_color", Color(0.95, 0.3, 0.3))
 
 func _setup_collapsible_sections() -> void:
     _bind_section(settings_toggle, settings_body, true)

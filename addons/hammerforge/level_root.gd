@@ -364,7 +364,7 @@ func _add_brush_to_csg(brush: CSGShape3D, operation: int) -> void:
     parent.add_child(brush)
     _assign_owner(brush)
 
-func bake(apply_cuts: bool = true, hide_live: bool = false) -> void:
+func bake(apply_cuts: bool = true, hide_live: bool = false, collision_layer_mask: int = 0) -> void:
     if not baker or not csg_node:
         return
     if apply_cuts:
@@ -382,7 +382,7 @@ func bake(apply_cuts: bool = true, hide_live: bool = false) -> void:
     var override = bake_material_override
     if not override and csg_node.material_override:
         override = csg_node.material_override
-    var layer = _layer_from_index(bake_collision_layer_index)
+    var layer = collision_layer_mask if collision_layer_mask > 0 else _layer_from_index(bake_collision_layer_index)
     var baked = baker.bake_from_csg(csg_node, override, layer, layer)
     _restore_subtract_materials(restore_map)
     _restore_borrowed_committed_cuts(borrowed_cuts)
@@ -1046,6 +1046,13 @@ func pick_brush(camera: Camera3D, mouse_pos: Vector2) -> Node:
             best_t = t
             closest = child
     return closest
+
+func get_live_brush_count() -> int:
+    var count = 0
+    for node in _iter_pick_nodes():
+        if node and node is CSGShape3D:
+            count += 1
+    return count
 
 func update_hover(camera: Camera3D, mouse_pos: Vector2) -> void:
     if not hover_highlight or not camera:

@@ -104,6 +104,8 @@ These are quality-of-life improvements added after the MVP core:
 6. **Paint Mode** - Pick an active material and click brushes to apply it.
 7. **Gizmo Pass-through** - Allow Godot move/rotate/scale gizmos when a brush is selected.
 8. **Collapsible Dock Sections** - Toggle Settings/Presets/Actions to keep the dock compact.
+9. **Physics Layer Presets** - OptionButton that passes a collision layer bitmask into bake.
+10. **Live Brush Count** - Real-time label with green/yellow/red performance thresholds.
 
 ## Troubleshooting Notes
 

@@ -52,8 +52,8 @@ Sections can be collapsed using the toggle button in each header.
 **Quick Snap**
 - Preset snap buttons (1/2/4/8/16/32/64) synced with Grid Snap.
 
-**Bake Layer**
-- Sets the physics layer used by baked collision (1-32).
+**Physics Layer**
+- Selects a preset collision layer mask for baked geometry.
 
 **Freeze Commit**
 - Keeps committed cut shapes in a hidden container so you can restore them later.
@@ -96,6 +96,9 @@ Sections can be collapsed using the toggle button in each header.
 
 **Status**
 - Shows bake progress (e.g., "Baking..." or "Ready").
+
+**Live Brushes**
+- Shows the active brush count with performance warning colors.
 
 ## Brush Creation (CAD-Style)
 HammerForge uses a two-stage drag workflow:
