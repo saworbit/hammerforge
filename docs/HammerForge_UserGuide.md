@@ -40,7 +40,7 @@ Sections can be collapsed using the toggle button in each header.
 - **Subtract**: creates a pending cut shape that does not carve until applied.
 
 **Shape Palette**
-- Choose from Box, Cylinder, Sphere, Cone, Wedge, Pyramid, Prisms, Ellipsoid, Capsule, Torus, and Platonic solids.
+- Choose from Box, Cylinder, Sphere, Cone, Wedge, Pyramid, Prisms, Ellipsoid, Capsule, Torus, and Platonic solids. Mesh-based shapes scale to brush size.
 
 **Sides**
 - Appears for pyramids/prisms to control the number of sides.

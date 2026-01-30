@@ -48,7 +48,7 @@
 - **CAD-Style Two-Stage Drawing**
   - Stage 1: Click & drag to define base dimensions
   - Stage 2: Move mouse to set height, click to commit
-- **Shape Palette**: Box, Cylinder, Sphere, Cone, Wedge, Pyramid, Prisms, Ellipsoid, Capsule, Torus, and Platonic solids
+- **Shape Palette**: Box, Cylinder, Sphere, Cone, Wedge, Pyramid, Prisms, Ellipsoid, Capsule, Torus, and Platonic solids (mesh shapes scale to brush size)
 - **CSG Operations**: Add (union) and Subtract (carve)
 - **Grid Snapping**: Configurable 1-128 unit increments
 

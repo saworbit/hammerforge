@@ -84,7 +84,7 @@ addons/
 
 11. **Preview Scene** – Open any 3D scene, click once to auto-create `LevelRoot`, then use **Create Floor** for a collidable surface.
 
-12. **Optional Extras** - Selection mode, duplicate/drag/nudge, numeric input overlay, hover highlight, paint mode, and ortho views.
+12. **Optional Extras** - Selection mode, duplicate/drag/nudge, numeric input overlay, hover highlight, paint mode, mesh-shape scaling, and ortho views.
 
 13. **Test** – In the editor:
     * Use Draw tool to click-drag a base, release, then click to set height.
