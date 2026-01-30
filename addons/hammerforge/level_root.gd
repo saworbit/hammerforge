@@ -125,9 +125,11 @@ func _setup_brush_folders() -> void:
         subtract_brushes_node = CSGCombiner3D.new()
         subtract_brushes_node.name = "Subtract_Brushes"
         subtract_brushes_node.use_collision = true
-        subtract_brushes_node.operation = CSGShape3D.OPERATION_UNION
+        subtract_brushes_node.operation = CSGShape3D.OPERATION_SUBTRACTION
         csg_node.add_child(subtract_brushes_node)
         _assign_owner(subtract_brushes_node)
+    else:
+        subtract_brushes_node.operation = CSGShape3D.OPERATION_SUBTRACTION
 
 func _setup_pending() -> void:
     pending_node = get_node_or_null("PendingCuts") as CSGCombiner3D
@@ -137,6 +139,7 @@ func _setup_pending() -> void:
         pending_node.use_collision = false
         add_child(pending_node)
         _assign_owner(pending_node)
+    pending_node.visible = Engine.is_editor_hint()
 
 func _setup_committed() -> void:
     committed_node = get_node_or_null("CommittedCuts") as Node3D
@@ -313,10 +316,27 @@ func _get_live_brush_parent(operation: int, staged: bool) -> Node:
         return subtract_brushes_node if subtract_brushes_node else csg_node
     return add_brushes_node if add_brushes_node else csg_node
 
+func _is_subtract_brush(node: Node) -> bool:
+    if not (node is CSGShape3D):
+        return false
+    if node.operation == CSGShape3D.OPERATION_SUBTRACTION:
+        return true
+    return subtract_brushes_node and node.get_parent() == subtract_brushes_node
+
+func _set_brush_operation_for_parent(brush: CSGShape3D, parent: Node, operation: int) -> void:
+    if not brush:
+        return
+    if parent == subtract_brushes_node:
+        brush.operation = CSGShape3D.OPERATION_UNION
+    else:
+        brush.operation = operation
+
 func _add_brush_to_csg(brush: CSGShape3D, operation: int) -> void:
     var parent = _get_live_brush_parent(operation, false)
     if not parent:
         return
+    if operation == CSGShape3D.OPERATION_SUBTRACTION:
+        _set_brush_operation_for_parent(brush, parent, operation)
     parent.add_child(brush)
     _assign_owner(brush)
 
@@ -378,6 +398,7 @@ func _borrow_committed_cuts_for_bake() -> Array:
         committed_node.remove_child(node)
         if target_parent:
             target_parent.add_child(node)
+        _set_brush_operation_for_parent(node, target_parent, CSGShape3D.OPERATION_SUBTRACTION)
         node.visible = true
         _assign_owner(node)
     if borrowed.size() > 0:
@@ -409,7 +430,7 @@ func _neutralize_subtract_materials() -> Dictionary:
         if child is CSGShape3D and child != add_brushes_node and child != subtract_brushes_node:
             targets.append(child)
     for child in targets:
-        if child is CSGShape3D and child.operation == CSGShape3D.OPERATION_SUBTRACTION:
+        if _is_subtract_brush(child):
             restore[child] = {
                 "material": child.get("material"),
                 "material_override": child.get("material_override")
@@ -452,12 +473,13 @@ func apply_pending_cuts() -> void:
         return
     var pending_count = pending_node.get_child_count()
     var target_parent = _get_live_brush_parent(CSGShape3D.OPERATION_SUBTRACTION, false)
+    var use_union = target_parent == subtract_brushes_node
     for child in pending_node.get_children():
         if child is CSGShape3D:
             pending_node.remove_child(child)
             if target_parent:
                 target_parent.add_child(child)
-            child.operation = CSGShape3D.OPERATION_SUBTRACTION
+            child.operation = CSGShape3D.OPERATION_UNION if use_union else CSGShape3D.OPERATION_SUBTRACTION
             child.use_collision = true
             _apply_brush_material(child, _make_brush_material(CSGShape3D.OPERATION_SUBTRACTION, true, true))
             child.set_meta("pending_subtract", false)
@@ -479,7 +501,7 @@ func _clear_applied_cuts() -> void:
     else:
         targets = csg_node.get_children()
     for child in targets:
-        if child is CSGShape3D and child.operation == CSGShape3D.OPERATION_SUBTRACTION:
+        if _is_subtract_brush(child):
             if commit_freeze:
                 _stash_committed_cut(child)
             else:
@@ -510,7 +532,7 @@ func restore_committed_cuts() -> void:
             if target_parent:
                 target_parent.add_child(child)
             child.visible = true
-            child.operation = CSGShape3D.OPERATION_SUBTRACTION
+            _set_brush_operation_for_parent(child, target_parent, CSGShape3D.OPERATION_SUBTRACTION)
             _apply_brush_material(child, _make_brush_material(CSGShape3D.OPERATION_SUBTRACTION, true, true))
             child.set_meta("committed_cut", false)
             _assign_owner(child)
@@ -677,7 +699,8 @@ func get_brush_info_from_node(brush: Node) -> Dictionary:
     else:
         return {}
     var pending = brush.get_parent() == pending_node or bool(brush.get_meta("pending_subtract", false))
-    info["operation"] = CSGShape3D.OPERATION_SUBTRACTION if pending else brush.operation
+    var is_subtract = _is_subtract_brush(brush)
+    info["operation"] = CSGShape3D.OPERATION_SUBTRACTION if (pending or is_subtract) else brush.operation
     info["pending"] = pending
     info["transform"] = brush.global_transform
     var source_mat = brush.material_override if brush.material_override else brush.get("material")

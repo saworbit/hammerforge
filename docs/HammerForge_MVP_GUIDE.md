@@ -62,6 +62,7 @@ addons/
    * The script keeps a reference to `LevelRoot` in the current scene.
 
 4. **LevelRoot** – `level_root.gd` extends `Node3D`, sets up a `CSGCombiner3D`, a `PendingCuts` node, a `BrushManager`, and a `Baker`.
+   * LevelRoot can be a single node in the scene; it creates helper children on _ready().
    * CAD-style draw flow: drag to set base, release to set height, click to commit.
    * `place_brush(mouse_pos, operation, size)` can still place a default brush.
    * Subtract brushes are staged until `Apply Cuts` or Bake.

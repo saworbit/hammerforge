@@ -154,6 +154,36 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
             return EditorPlugin.AFTER_GUI_INPUT_STOP
     return EditorPlugin.AFTER_GUI_INPUT_PASS
 
+func _shortcut_input(event: InputEvent) -> void:
+    if not (event is InputEventKey):
+        return
+    if not event.pressed or event.echo:
+        return
+    if not event.ctrl_pressed:
+        return
+    var root = active_root if active_root else _get_level_root()
+    if not root:
+        return
+    match event.keycode:
+        KEY_UP:
+            _nudge_selected(root, Vector3(0.0, 0.0, -1.0))
+            event.accept()
+        KEY_DOWN:
+            _nudge_selected(root, Vector3(0.0, 0.0, 1.0))
+            event.accept()
+        KEY_LEFT:
+            _nudge_selected(root, Vector3(-1.0, 0.0, 0.0))
+            event.accept()
+        KEY_RIGHT:
+            _nudge_selected(root, Vector3(1.0, 0.0, 0.0))
+            event.accept()
+        KEY_PAGEUP:
+            _nudge_selected(root, Vector3(0.0, 1.0, 0.0))
+            event.accept()
+        KEY_PAGEDOWN:
+            _nudge_selected(root, Vector3(0.0, -1.0, 0.0))
+            event.accept()
+
 func _select_node(node: Node, additive: bool = false) -> void:
     var selection = get_editor_interface().get_selection()
     if not additive:

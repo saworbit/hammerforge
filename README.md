@@ -71,7 +71,7 @@
 - **Click to Select** brushes (Shift for multi-select)
 - **Delete** selected brushes
 - **Duplicate** with `Ctrl+D` (grid-snapped offset)
-- **Nudge** with arrow keys and PageUp/PageDown
+- **Nudge** with Ctrl+Arrow and Ctrl+PageUp/PageDown (arrow keys work when the 3D viewport has focus)
 
 ### ⚡ Pending Subtract System
 - **Stage Your Cuts**: Subtract brushes appear solid red until applied
@@ -117,6 +117,7 @@ your-project/
 Notes:
 - `CommittedCuts` stores frozen subtract brushes when "Freeze Commit" is enabled.
 - `EditorGrid` (MeshInstance3D) is editor-only and not saved to scenes.
+- `LevelRoot` can be a single node; child helpers are created automatically if missing.
 
 ---
 
@@ -199,9 +200,9 @@ Notes:
 |-----|--------|
 | `Delete` | Delete selected brushes |
 | `Ctrl+D` | Duplicate selected |
-| `←` `→` | Nudge X axis |
-| `↑` `↓` | Nudge Z axis |
-| `PgUp` `PgDn` | Nudge Y axis |
+| `Ctrl+Left` `Ctrl+Right` | Nudge X axis |
+| `Ctrl+Up` `Ctrl+Down` | Nudge Z axis |
+| `Ctrl+PgUp` `Ctrl+PgDn` | Nudge Y axis |
 | `X` `Y` `Z` | Lock axis during draw |
 | `Shift` | Square base constraint |
 | `Shift+Alt` | Cube constraint |

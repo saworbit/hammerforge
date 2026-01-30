@@ -18,6 +18,7 @@ This guide explains how to use HammerForge inside the Godot 4.6 editor. It cover
 - Tracks brushes for **selection**, **undo/redo**, and **cleanup**.
 - Owns the **Baker** that converts CSG into a static mesh + collision.
 - Ensures all generated nodes are saved with the scene (ownership in the editor).
+- Can start as a single node; child helpers are created automatically if missing.
 
 You normally don’t need to add it manually — HammerForge will auto-create it the first time you click in the viewport.
 
@@ -112,9 +113,9 @@ HammerForge uses a two-stage drag workflow:
 3. Shift-click to multi-select.
 4. Press **Delete** to remove selected brushes.
 5. Press **Ctrl+D** to duplicate selected brushes.
-6. Use arrow keys to nudge selected brushes by the grid size.
-   - Arrow keys: X/Z move.
-   - PageUp/PageDown: Y move.
+6. Use Ctrl+Arrow or Ctrl+PageUp/PageDown to nudge selected brushes by the grid size.
+   - Ctrl+Arrow: X/Z move.
+   - Ctrl+PageUp/PageDown: Y move.
 7. Use the standard Godot transform gizmos (move/rotate/scale) on selected brushes.
 
 ## Subtract Tips
