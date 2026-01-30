@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="addons/hammerforge/icon.png" alt="HammerForge Logo" width="128" height="128">
+  <img src="docs/images/hammerforge_logo.png" alt="HammerForge Logo" width="200" style="max-width: 60%; height: auto;">
 </p>
 
 <h1 align="center">🔨 HammerForge</h1>
