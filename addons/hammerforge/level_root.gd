@@ -1021,10 +1021,15 @@ func _update_preview(origin: Vector3, current: Vector3, height: float, shape: in
         else:
             preview_brush.scale = Vector3.ONE
     else:
+        var base_size = size_default
+        if preview_brush.has_meta("prefab_size"):
+            var meta_size = preview_brush.get_meta("prefab_size")
+            if meta_size is Vector3:
+                base_size = meta_size
         preview_brush.scale = Vector3(
-            info.size.x / max(0.1, size_default.x),
-            info.size.y / max(0.1, size_default.y),
-            info.size.z / max(0.1, size_default.z)
+            info.size.x / max(0.1, base_size.x),
+            info.size.y / max(0.1, base_size.y),
+            info.size.z / max(0.1, base_size.z)
         )
 
 func _clear_preview() -> void:

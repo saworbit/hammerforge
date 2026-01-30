@@ -25,6 +25,7 @@ static func create_prefab(type: int, size: Vector3, sides: int = 4) -> CSGShape3
                     size.z / max(0.1, radius * 2.0)
                 )
                 sphere.set_meta("prefab_ellipsoid", true)
+                sphere.set_meta("prefab_size", Vector3(radius * 2.0, radius * 2.0, radius * 2.0))
             brush = sphere
         LevelRootType.BrushShape.CONE:
             var cone = CSGCylinder3D.new()
@@ -62,20 +63,19 @@ static func create_prefab(type: int, size: Vector3, sides: int = 4) -> CSGShape3
             brush = prism_pent
         LevelRootType.BrushShape.CAPSULE:
             var capsule_mesh = CapsuleMesh.new()
-            var radius = max(size.x, size.z) * 0.5
-            capsule_mesh.radius = max(0.1, radius)
-            capsule_mesh.height = max(0.1, size.y - capsule_mesh.radius * 2.0)
+            capsule_mesh.radius = 0.5
+            capsule_mesh.height = 1.0
             var capsule = CSGMesh3D.new()
             capsule.mesh = capsule_mesh
+            _apply_mesh_scale(capsule, size)
             brush = capsule
         LevelRootType.BrushShape.TORUS:
             var torus_mesh = TorusMesh.new()
-            var outer_radius = max(size.x, size.z) * 0.5
-            var pipe_radius = max(0.1, min(size.x, size.z, size.y) * 0.15)
-            torus_mesh.ring_radius = max(0.1, outer_radius - pipe_radius)
-            torus_mesh.pipe_radius = pipe_radius
+            torus_mesh.ring_radius = 1.0
+            torus_mesh.pipe_radius = 0.25
             var torus = CSGMesh3D.new()
             torus.mesh = torus_mesh
+            _apply_mesh_scale(torus, size)
             brush = torus
         LevelRootType.BrushShape.TETRAHEDRON:
             brush = _platonic_brush(_tetrahedron_data(), size)
@@ -97,8 +97,22 @@ static func create_prefab(type: int, size: Vector3, sides: int = 4) -> CSGShape3
 
     brush.use_collision = true
     brush.set_meta("prefab_shape", type)
-    brush.set_meta("prefab_size", size)
+    if not brush.has_meta("prefab_size"):
+        brush.set_meta("prefab_size", size)
     return brush
+
+static func _apply_mesh_scale(node: CSGMesh3D, target_size: Vector3) -> void:
+    if not node or not node.mesh:
+        return
+    var base_size = node.mesh.get_aabb().size
+    if base_size.x <= 0.0 or base_size.y <= 0.0 or base_size.z <= 0.0:
+        return
+    node.scale = Vector3(
+        target_size.x / base_size.x,
+        target_size.y / base_size.y,
+        target_size.z / base_size.z
+    )
+    node.set_meta("prefab_size", base_size)
 
 static func _regular_polygon_points(sides: int, radius: Vector2) -> PackedVector2Array:
     var points := PackedVector2Array()
@@ -112,11 +126,7 @@ static func _platonic_brush(data: Dictionary, size: Vector3) -> CSGMesh3D:
     var mesh = _mesh_from_faces(data["vertices"], data["faces"])
     var brush = CSGMesh3D.new()
     brush.mesh = mesh
-    brush.scale = Vector3(
-        size.x / 2.0,
-        size.y / 2.0,
-        size.z / 2.0
-    )
+    _apply_mesh_scale(brush, size)
     return brush
 
 static func _mesh_from_faces(vertices: Array, faces: Array) -> ArrayMesh:
