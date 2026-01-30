@@ -70,6 +70,10 @@ Sections can be collapsed using the toggle button in each header.
 **Follow Grid**
 - Toggles the grid follow mode (requires Show Grid).
 
+**Quadrant View**
+- Enables a 2x2 layout: Top/Front/Side orthographic views plus a 3D perspective view.
+- All views share the same world and brush data.
+
 **Debug Logs**
 - Prints HammerForge events to the Output dock for troubleshooting.
 
@@ -165,6 +169,15 @@ HammerForge can display a small on-screen cheat sheet inside the 3D viewport.
 - Toggle it with **Show HUD** in the dock.
 - The HUD is informational only; it does not change your active tool.
 - It mirrors the main modifier keys and axis locks so new users can learn quickly.
+
+## Quadrant Viewports
+HammerForge can replace the single 3D view with a 2x2 viewport layout:
+- **Top** (orthographic)
+- **Front** (orthographic)
+- **Side** (orthographic)
+- **3D** (perspective)
+
+Use the **Quadrant View** toggle in the dock to enable it. All views share the same World3D, so brushes, previews, and selection highlights appear everywhere. Input is routed based on which pane the mouse is over.
 
 ## Dynamic Editor Grid
 HammerForge adds a high-contrast editor-only grid plane for clearer placement.

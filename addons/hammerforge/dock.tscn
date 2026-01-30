@@ -168,6 +168,10 @@ pressed = false
 text = "Follow Grid"
 pressed = false
 
+[node name="ShowQuadrant" type="CheckBox" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox"]
+text = "Quadrant View"
+pressed = false
+
 [node name="DebugLogs" type="CheckBox" parent="Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox"]
 text = "Debug Logs"
 pressed = false

@@ -1,0 +1,14 @@
+[gd_scene load_steps=2 format=3]
+[ext_resource path="res://addons/hammerforge/quadrant_view.gd" type="Script" id=1]
+
+[node name="QuadrantView" type="SubViewportContainer"]
+script = ExtResource( 1 )
+stretch = true
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="SubViewport" type="SubViewport" parent="."]
+render_target_update_mode = 2
+
+[node name="Camera3D" type="Camera3D" parent="SubViewport"]
+current = true

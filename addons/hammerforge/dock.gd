@@ -39,6 +39,7 @@ const PRESET_MENU_DELETE := 1
 @onready var show_hud: CheckBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ShowHUD
 @onready var show_grid: CheckBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ShowGrid
 @onready var follow_grid: CheckBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/FollowGrid
+@onready var show_quadrant: CheckBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ShowQuadrant
 @onready var debug_logs: CheckBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/DebugLogs
 @onready var floor_btn: Button = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/CreateFloor
 @onready var apply_cuts_btn: Button = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/ApplyCuts
@@ -261,6 +262,9 @@ func get_collision_layer_mask() -> int:
 
 func get_show_hud() -> bool:
     return show_hud.button_pressed
+
+func is_quadrant_view_enabled() -> bool:
+    return show_quadrant and show_quadrant.button_pressed
 
 func set_show_hud(visible: bool) -> void:
     if show_hud.button_pressed == visible:

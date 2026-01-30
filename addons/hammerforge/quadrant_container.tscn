@@ -1,0 +1,22 @@
+[gd_scene load_steps=3 format=3]
+[ext_resource path="res://addons/hammerforge/quadrant_container.gd" type="Script" id=1]
+[ext_resource path="res://addons/hammerforge/quadrant_view.tscn" type="PackedScene" id=2]
+
+[node name="QuadrantContainer" type="GridContainer"]
+script = ExtResource( 1 )
+columns = 2
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+
+[node name="TopView" parent="." instance=ExtResource( 2 )]
+view_type = 0
+
+[node name="FrontView" parent="." instance=ExtResource( 2 )]
+view_type = 1
+
+[node name="SideView" parent="." instance=ExtResource( 2 )]
+view_type = 2
+
+[node name="PerspectiveView" parent="." instance=ExtResource( 2 )]
+view_type = 3

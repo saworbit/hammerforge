@@ -21,6 +21,7 @@ The format is based on "Keep a Changelog", and this project follows semantic ver
 - Prefab factory for advanced shapes with dynamic shape palette.
 - Added wedges, pyramids, prisms, cones, spheres, ellipsoids, capsules, torus, and platonic solids.
 - Mesh prefab scaling now respects brush dimensions (capsule/torus/solids).
+- Quadrant viewport mode with Top/Front/Side/3D cameras.
 - Multi-select (Shift-click), Delete to remove, Ctrl+D to duplicate.
 - Nudge selected brushes with arrow keys and PageUp/PageDown.
 - Auto-create `LevelRoot` on first click if missing.

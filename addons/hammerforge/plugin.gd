@@ -4,6 +4,7 @@ extends EditorPlugin
 var dock: Control
 var hud: Control
 var base_control: Control
+var quadrant_container: Control
 var active_root: Node = null
 const LevelRootType = preload("level_root.gd")
 
@@ -30,6 +31,11 @@ func _enter_tree():
     if dock and dock.has_method("get_show_hud"):
         hud.visible = dock.call("get_show_hud")
 
+    quadrant_container = preload("quadrant_container.tscn").instantiate()
+    quadrant_container.visible = false
+    quadrant_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    _attach_quadrant_container()
+
 func _exit_tree():
     remove_custom_type("LevelRoot")
     if base_control and base_control.is_connected("theme_changed", Callable(self, "_on_editor_theme_changed")):
@@ -42,6 +48,9 @@ func _exit_tree():
     if hud:
         remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, hud)
         hud.free()
+    if quadrant_container and quadrant_container.get_parent():
+        quadrant_container.get_parent().remove_child(quadrant_container)
+        quadrant_container.free()
 
 func _on_editor_theme_changed() -> void:
     if not base_control:
@@ -78,9 +87,18 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
     if not root or not dock:
         return EditorPlugin.AFTER_GUI_INPUT_PASS
 
+    _update_quadrant_visibility()
+    var target_camera = camera
+    var target_pos = event.position if event is InputEventMouse else Vector2.ZERO
+    if quadrant_container and quadrant_container.visible:
+        var info = quadrant_container.get_camera_at_screen_pos(get_viewport().get_mouse_position())
+        if info and info.has("camera") and info.has("pos"):
+            target_camera = info["camera"]
+            target_pos = info["pos"]
+
     if root.has_method("update_editor_grid"):
         if event is InputEventMouseMotion or event is InputEventMouseButton:
-            root.call("update_editor_grid", camera, event.position)
+            root.call("update_editor_grid", target_camera, target_pos)
 
     var tool = dock.get_tool()
     var op = dock.get_operation()
@@ -129,7 +147,7 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 
     if tool == 1 and event is InputEventMouseMotion:
         if root.has_method("update_hover"):
-            root.call("update_hover", camera, event.position)
+            root.call("update_hover", target_camera, target_pos)
     elif tool != 1 and root.has_method("clear_hover"):
         root.call("clear_hover")
 
@@ -150,19 +168,19 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
     if tool == 1 and event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
         var active_mat = dock.get_active_material() if dock.has_method("get_active_material") else null
         if paint_mode and active_mat:
-            var painted = root.pick_brush(camera, event.position)
+            var painted = root.pick_brush(target_camera, target_pos)
             if painted:
                 root.apply_material_to_brush(painted, active_mat)
                 return EditorPlugin.AFTER_GUI_INPUT_STOP
-        var picked = root.pick_brush(camera, event.position)
+        var picked = root.pick_brush(target_camera, target_pos)
         _select_node(picked, event.shift_pressed)
         return EditorPlugin.AFTER_GUI_INPUT_STOP
     if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
         if event.pressed:
-            var started = root.begin_drag(camera, event.position, op, size, shape, sides)
+            var started = root.begin_drag(target_camera, target_pos, op, size, shape, sides)
             return EditorPlugin.AFTER_GUI_INPUT_STOP if started else EditorPlugin.AFTER_GUI_INPUT_PASS
         else:
-            var result = root.end_drag_info(camera, event.position, size)
+            var result = root.end_drag_info(target_camera, target_pos, size)
             if result.get("handled", false):
                 if result.get("placed", false):
                     _commit_brush_placement(root, result.get("info", {}))
@@ -172,9 +190,42 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
         root.set_shift_pressed(event.shift_pressed)
         root.set_alt_pressed(event.alt_pressed)
         if event.button_mask & MOUSE_BUTTON_MASK_LEFT != 0:
-            root.update_drag(camera, event.position)
+            root.update_drag(target_camera, target_pos)
             return EditorPlugin.AFTER_GUI_INPUT_STOP
     return EditorPlugin.AFTER_GUI_INPUT_PASS
+
+func _attach_quadrant_container() -> void:
+    if not quadrant_container:
+        return
+    if quadrant_container.get_parent():
+        return
+    var main_screen = get_editor_interface().get_editor_main_screen()
+    if main_screen:
+        main_screen.add_child(quadrant_container)
+        quadrant_container.anchor_left = 0.0
+        quadrant_container.anchor_top = 0.0
+        quadrant_container.anchor_right = 1.0
+        quadrant_container.anchor_bottom = 1.0
+        quadrant_container.offset_left = 0.0
+        quadrant_container.offset_top = 0.0
+        quadrant_container.offset_right = 0.0
+        quadrant_container.offset_bottom = 0.0
+
+func _update_quadrant_visibility() -> void:
+    if not quadrant_container or not dock:
+        return
+    var enabled = dock.has_method("is_quadrant_view_enabled") and dock.is_quadrant_view_enabled()
+    if enabled and not quadrant_container.get_parent():
+        _attach_quadrant_container()
+    if quadrant_container.visible != enabled:
+        quadrant_container.visible = enabled
+    if enabled and quadrant_container.has_method("set_world_3d"):
+        var world = null
+        var scene = get_editor_interface().get_edited_scene_root()
+        if scene and scene.is_inside_tree():
+            world = scene.get_viewport().world_3d
+        if world:
+            quadrant_container.call("set_world_3d", world)
 
 func _shortcut_input(event: InputEvent) -> void:
     if not (event is InputEventKey):
