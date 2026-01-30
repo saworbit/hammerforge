@@ -91,7 +91,7 @@ extends EditorPlugin
 func _enter_tree():
     add_custom_type("LevelRoot", "Node3D",
         preload("level_root.gd"),
-        preload("icon.png"))
+        preload("icon.svg"))
     dock = preload("dock.tscn").instantiate()
     add_control_to_dock(DOCK_SLOT_LEFT_UL, dock)
     # toolbar + gizmo setup
