@@ -22,6 +22,10 @@ const LevelRootType = preload("level_root.gd")
 @onready var clear_btn: Button = $VBox/Clear
 
 var level_root: Node = null
+var editor_interface: EditorInterface = null
+
+func set_editor_interface(iface: EditorInterface) -> void:
+    editor_interface = iface
 
 func _ready():
     var tool_group = ButtonGroup.new()
@@ -104,5 +108,9 @@ func _on_clear_cuts():
         level_root.call("clear_pending_cuts")
 
 func _on_commit_cuts():
+    if editor_interface:
+        var selection = editor_interface.get_selection()
+        if selection:
+            selection.clear()
     if level_root and level_root.has_method("commit_cuts"):
         level_root.call("commit_cuts")

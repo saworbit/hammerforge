@@ -109,10 +109,12 @@ func place_brush(mouse_pos: Vector2, operation: int, size: Vector3, camera: Came
     brush_manager.add_brush(brush)
     return true
 
-func bake() -> void:
+func bake(apply_cuts: bool = true, hide_live: bool = false) -> void:
     if not baker or not csg_node:
         return
-    apply_pending_cuts()
+    if apply_cuts:
+        apply_pending_cuts()
+    await _await_csg_update()
     var baked = baker.bake_from_csg(csg_node)
     if not baked:
         return
@@ -121,6 +123,10 @@ func bake() -> void:
     baked_container = baked
     add_child(baked_container)
     _assign_owner(baked_container)
+    if hide_live:
+        csg_node.visible = false
+        if pending_node:
+            pending_node.visible = false
 
 func clear_brushes() -> void:
     if brush_manager:
@@ -146,7 +152,7 @@ func apply_pending_cuts() -> void:
 
 func commit_cuts() -> void:
     apply_pending_cuts()
-    bake()
+    await bake(false, true)
     _clear_applied_cuts()
 
 func _clear_applied_cuts() -> void:
@@ -156,7 +162,11 @@ func _clear_applied_cuts() -> void:
         if child is CSGShape3D and child.operation == CSGShape3D.OPERATION_SUBTRACTION:
             if brush_manager:
                 brush_manager.remove_brush(child)
-            child.queue_free()
+            child.call_deferred("queue_free")
+
+func _await_csg_update() -> void:
+    await get_tree().process_frame
+    await get_tree().process_frame
 
 func clear_pending_cuts() -> void:
     if not pending_node:

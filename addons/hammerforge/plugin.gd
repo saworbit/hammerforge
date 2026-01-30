@@ -9,6 +9,8 @@ func _enter_tree():
     add_custom_type("LevelRoot", "Node3D", preload("level_root.gd"), preload("icon.png"))
     dock = preload("dock.tscn").instantiate()
     add_control_to_dock(DOCK_SLOT_LEFT_UL, dock)
+    if dock and dock.has_method("set_editor_interface"):
+        dock.call("set_editor_interface", get_editor_interface())
 
 func _exit_tree():
     remove_custom_type("LevelRoot")

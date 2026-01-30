@@ -9,6 +9,7 @@ This guide explains how to use HammerForge inside the Godot 4.6 editor. It cover
    - HammerForge auto-creates a `LevelRoot` if it does not exist.
 4. (Optional) Click **Create Floor** in the dock for a temporary collidable surface.
 5. Use **Apply Cuts** to commit staged Subtract brushes (Bake also applies them).
+   - Use **Commit Cuts** to bake and keep the carve while removing the cut shapes.
 
 ## What is LevelRoot (and why it’s required)
 `LevelRoot` is the main container node that HammerForge uses to manage your level data. It is required because it:
@@ -51,7 +52,9 @@ You normally don’t need to add it manually — HammerForge will auto-create it
 
 **Commit Cuts (Bake)**
 - Applies pending cuts, bakes the mesh, and removes applied subtract brushes.
+- Hides the live CSG so the baked result is clearly visible.
 - Use this if you want the carve to remain even after deleting the cut shapes.
+- To keep editing, re-enable visibility on `BrushCSG` (and `PendingCuts` if needed).
 
 **Bake**
 - Converts the live CSG into a static mesh + collision.
@@ -91,6 +94,7 @@ HammerForge uses a two-stage drag workflow:
 - For clear results: add a large block first, then subtract smaller ones.
 - Pending cuts appear as solid red geometry so you can position them before applying.
 - Applied cuts are procedural; deleting them removes the carve unless you **Commit Cuts** (Bake).
+- **Commit Cuts** hides the live CSG and leaves the baked mesh visible.
 
 ## Bake Output
 When you press **Bake**, HammerForge creates:
