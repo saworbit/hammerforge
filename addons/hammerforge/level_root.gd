@@ -133,11 +133,13 @@ func bake(apply_cuts: bool = true, hide_live: bool = false) -> void:
         apply_pending_cuts()
     bake_started.emit()
     await _await_csg_update()
+    var restore_map := _neutralize_subtract_materials()
     var override = bake_material_override
     if not override and csg_node.material_override:
         override = csg_node.material_override
     var layer = _layer_from_index(bake_collision_layer_index)
     var baked = baker.bake_from_csg(csg_node, override, layer, layer)
+    _restore_subtract_materials(restore_map)
     if not baked:
         bake_finished.emit(false)
         return
@@ -151,6 +153,27 @@ func bake(apply_cuts: bool = true, hide_live: bool = false) -> void:
         if pending_node:
             pending_node.visible = false
     bake_finished.emit(true)
+
+func _neutralize_subtract_materials() -> Dictionary:
+    var restore := {}
+    if not csg_node:
+        return restore
+    for child in csg_node.get_children():
+        if child is CSGShape3D and child.operation == CSGShape3D.OPERATION_SUBTRACTION:
+            restore[child] = {
+                "material": child.get("material"),
+                "material_override": child.get("material_override")
+            }
+            child.set("material", null)
+            child.set("material_override", null)
+    return restore
+
+func _restore_subtract_materials(restore: Dictionary) -> void:
+    for brush in restore.keys():
+        if brush and brush is Node:
+            var data = restore[brush]
+            brush.set("material", data.get("material", null))
+            brush.set("material_override", data.get("material_override", null))
 
 func clear_brushes() -> void:
     if brush_manager:

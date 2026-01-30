@@ -62,7 +62,8 @@ addons/
    * CAD-style draw flow: drag to set base, release to set height, click to commit.
    * `place_brush(mouse_pos, operation, size)` can still place a default brush.
    * Subtract brushes are staged until `Apply Cuts` or Bake.
-   * `bake()` delegates to `Baker` to convert the CSG mesh into a `MeshInstance3D` + `StaticBody3D` (collision).
+   * Commit Cuts bakes and neutralizes subtract materials so carved faces match.
+   * `bake()` delegates to `Baker` to convert CSG into baked meshes + collision.
    * `clear_brushes()` empties the manager and queues existing brushes.
 
 5. **BrushInstance** – `brush_instance.gd` is a transparent `CSGBox3D` with exported `brush_size` and `brush_operation`, automatic color/transparency, and size/operation setters.

@@ -61,6 +61,7 @@ You normally don’t need to add it manually — HammerForge will auto-create it
 - Hides the live CSG so the baked result is clearly visible.
 - Use this if you want the carve to remain even after deleting the cut shapes.
 - To keep editing, re-enable visibility on `BrushCSG` (and `PendingCuts` if needed).
+- Subtract brush materials are neutralized during bake so carved faces match the rest.
 
 **Restore Committed Cuts**
 - Moves hidden committed cuts back into the live CSG so they can be edited again.
@@ -108,6 +109,7 @@ HammerForge uses a two-stage drag workflow:
 - Applied cuts are procedural; deleting them removes the carve unless you **Commit Cuts** (Bake).
 - **Commit Cuts** hides the live CSG and leaves the baked mesh visible.
 - If **Freeze Commit** is enabled, you can bring cuts back with **Restore Committed Cuts**.
+- Commit also neutralizes subtract materials during bake so carved faces do not inherit the red preview color.
 
 ## Bake Output
 When you press **Bake**, HammerForge creates:

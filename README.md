@@ -71,11 +71,13 @@
 - **Stage Your Cuts**: Subtract brushes appear solid red until applied
 - **Preview Before Carving**: Position cuts precisely before committing
 - **Non-Destructive**: Clear pending cuts without affecting geometry
+- **Commit Cuts**: Bake and keep the carve while hiding live CSG
 
 ### 🏗️ One-Click Baking
 - Converts live CSG to optimized **MeshInstance3D**
 - Auto-generates **trimesh collision** (StaticBody3D)
 - Removes hidden geometry for better performance
+- Neutralizes subtract materials so carved faces match the final material
 
 ---
 
@@ -161,6 +163,8 @@ your-project/
 | **Shape** | `Box` - Rectangular / `Cylinder` - Round |
 | **Size X/Y/Z** | Default brush dimensions |
 | **Grid Snap** | Snap increment (1-128 units) |
+| **Bake Layer** | Physics layer for baked collision |
+| **Freeze Commit** | Keep committed cuts hidden for later restore |
 
 ### Buttons
 
@@ -170,6 +174,7 @@ your-project/
 | ⚡ **Apply Cuts** | Execute pending subtract operations |
 | 🧹 **Clear Pending** | Remove staged cuts without applying |
 | 🔥 **Commit Cuts** | Apply + Bake + Remove cut shapes |
+| ♻️ **Restore Cuts** | Bring committed cuts back for editing |
 | 📦 **Bake** | Convert CSG to optimized mesh |
 | 🗑️ **Clear All** | Remove all brushes |
 

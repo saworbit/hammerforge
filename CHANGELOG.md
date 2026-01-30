@@ -16,12 +16,14 @@ The format is based on "Keep a Changelog", and this project follows semantic ver
 - Create Floor button for quick raycast surface setup.
 - Pending Subtract cuts with Apply/Clear controls (Bake auto-applies).
 - Cylinder brushes, grid snap control, and colored Add/Subtract preview.
+- Commit cuts improvements: multi-mesh bake, freeze/restore committed cuts, bake status, bake collision layer control.
 
 ### Fixed
 - Selection picking now works for cylinders and rotated brushes.
 - Height drag direction now matches mouse movement (up = taller).
 - Guarded brush deletion to avoid "Remove Node(s)" errors.
 - Dock instantiation issues caused by invalid parent paths.
+- Commit cuts bake now neutralizes subtract materials so carved faces don't inherit the red preview.
 
 ### Documentation
 - Added user guide and expanded LevelRoot explanation.
