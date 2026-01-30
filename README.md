@@ -57,6 +57,7 @@
 - **Quick Snap Presets**: One-click 1/2/4/8/16/32/64 toggles synced with Grid Snap
 - **On-Screen Shortcut HUD**: Optional cheat sheet in the 3D viewport
 - **Dynamic Editor Grid**: High-contrast shader grid that follows the active axis/brush
+- **Material Paint Mode**: Pick an active material and click brushes to apply it
 
 ### ⌨️ Modifier Keys
 | Key | Effect |
@@ -69,9 +70,11 @@
 
 ### 🔧 Selection & Manipulation
 - **Click to Select** brushes (Shift for multi-select)
+- **Hover Highlight** shows the brush under the cursor in Select mode
 - **Delete** selected brushes
 - **Duplicate** with `Ctrl+D` (grid-snapped offset)
 - **Nudge** with Ctrl+Arrow and Ctrl+PageUp/PageDown (arrow keys work when the 3D viewport has focus)
+- **Use Godot Gizmos** for move/rotate/scale on selected brushes
 
 ### ⚡ Pending Subtract System
 - **Stage Your Cuts**: Subtract brushes appear solid red until applied
@@ -170,6 +173,8 @@ Notes:
 | Control | Function |
 |---------|----------|
 | **Tool** | `Draw` - Create brushes / `Select` - Pick brushes |
+| **Paint Mode** | Toggle paint-on-click when Select is active |
+| **Active Material** | Pick the material applied by Paint Mode |
 | **Mode** | `Add` - Union geometry / `Subtract` - Carve holes |
 | **Shape** | `Box` - Rectangular / `Cylinder` - Round |
 | **Size X/Y/Z** | Default brush dimensions |
@@ -277,7 +282,7 @@ LevelRoot (Node3D)
 ### 🔜 Upcoming Features
 - [ ] **Undo/Redo** - Full EditorUndoRedoManager integration
 - [ ] **More Shapes** - Wedge, Arch, Sphere, Stairs
-- [ ] **Texture Support** - Material assignment per brush face
+- [ ] **Texture Support** - Per-face material painting and UV tools
 - [ ] **Chunked Baking** - LOD generation for large levels
 - [ ] **Entity System** - Spawn points, triggers, lights
 

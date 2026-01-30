@@ -27,6 +27,12 @@ You normally don’t need to add it manually — HammerForge will auto-create it
 - **Draw**: create new brushes by click-dragging.
 - **Select**: select existing brushes by clicking them. Press Delete to remove.
 
+**Paint Mode**
+- When enabled, left-click applies the active material instead of selecting.
+
+**Active Material**
+- Opens a file dialog to pick a Material resource (.tres or .material).
+
 **Mode**
 - **Add**: creates solid geometry.
 - **Subtract**: creates a pending cut shape that does not carve until applied.
@@ -109,14 +115,21 @@ HammerForge uses a two-stage drag workflow:
 
 ## Selection
 1. Set **Tool = Select**.
-2. Click a brush to select it.
-3. Shift-click to multi-select.
-4. Press **Delete** to remove selected brushes.
-5. Press **Ctrl+D** to duplicate selected brushes.
-6. Use Ctrl+Arrow or Ctrl+PageUp/PageDown to nudge selected brushes by the grid size.
+2. Hover highlight shows the brush under the cursor.
+3. Click a brush to select it. (If Paint Mode is enabled, clicks apply material instead.)
+4. Shift-click to multi-select.
+5. Press **Delete** to remove selected brushes.
+6. Press **Ctrl+D** to duplicate selected brushes.
+7. Use Ctrl+Arrow or Ctrl+PageUp/PageDown to nudge selected brushes by the grid size.
    - Ctrl+Arrow: X/Z move.
    - Ctrl+PageUp/PageDown: Y move.
-7. Use the standard Godot transform gizmos (move/rotate/scale) on selected brushes.
+8. Use the standard Godot transform gizmos (move/rotate/scale) on selected brushes.
+
+## Material Painting (Paint Mode)
+1. Click **Active Material** and pick a .tres or .material resource.
+2. Enable **Paint Mode**.
+3. Click brushes in the viewport to apply the active material.
+4. Disable Paint Mode to return to selection.
 
 ## Subtract Tips
 - Subtract brushes are staged until you click **Apply Cuts** (or Bake).
@@ -177,4 +190,4 @@ HammerForge adds a high-contrast editor-only grid plane for clearer placement.
 ### Next Planned Features
 - Numeric input during drag (exact sizing).
 - Ortho views (Top/Front/Side).
-- Transform gizmos (move/rotate/scale).
+- Per-face material tools and UV controls.

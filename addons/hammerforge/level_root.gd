@@ -62,6 +62,7 @@ var height_stage_start_height := 32.0
 var height_pixels_per_unit := 4.0
 var grid_mesh: MeshInstance3D = null
 var grid_material: ShaderMaterial = null
+var hover_highlight: MeshInstance3D = null
 var grid_plane_axis := AxisLock.Y
 var grid_plane_origin := Vector3.ZERO
 var grid_axis_preference := AxisLock.Y
@@ -75,7 +76,30 @@ func _ready():
     _setup_manager()
     _setup_baker()
     _setup_editor_grid()
+    _setup_highlight()
     _log("Ready (grid_visible=%s, follow_grid=%s)" % [_grid_visible, grid_follow_brush])
+
+func _setup_highlight() -> void:
+    if not Engine.is_editor_hint():
+        return
+    hover_highlight = get_node_or_null("SelectionHighlight") as MeshInstance3D
+    if not hover_highlight:
+        hover_highlight = MeshInstance3D.new()
+        hover_highlight.name = "SelectionHighlight"
+        add_child(hover_highlight)
+    hover_highlight.owner = null
+    hover_highlight.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    var mesh := BoxMesh.new()
+    hover_highlight.mesh = mesh
+    var mat := StandardMaterial3D.new()
+    mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    mat.albedo_color = Color(1.0, 1.0, 0.0, 0.5)
+    mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+    mat.no_depth_test = true
+    mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+    mat.wireframe = true
+    hover_highlight.material_override = mat
+    hover_highlight.visible = false
 
 func _set_grid_snap(value: float) -> void:
     var clamped = max(value, 0.0)
@@ -618,6 +642,12 @@ func _apply_brush_material(brush: Node, mat: Material) -> void:
     brush.set("material", mat)
     brush.set("material_override", mat)
 
+func apply_material_to_brush(brush: Node, mat: Material) -> void:
+    if not brush or not mat:
+        return
+    brush.set("material_override", mat)
+    brush.set("material", mat)
+
 func _add_pending_cut(brush: CSGShape3D) -> void:
     if not pending_node:
         return
@@ -1016,6 +1046,22 @@ func pick_brush(camera: Camera3D, mouse_pos: Vector2) -> Node:
             best_t = t
             closest = child
     return closest
+
+func update_hover(camera: Camera3D, mouse_pos: Vector2) -> void:
+    if not hover_highlight or not camera:
+        return
+    var brush = pick_brush(camera, mouse_pos)
+    if brush and brush is CSGShape3D:
+        var aabb = brush.get_aabb()
+        hover_highlight.visible = true
+        hover_highlight.global_transform = brush.global_transform
+        hover_highlight.scale = aabb.size
+    else:
+        hover_highlight.visible = false
+
+func clear_hover() -> void:
+    if hover_highlight:
+        hover_highlight.visible = false
 
 func _iter_pick_nodes() -> Array:
     var nodes: Array = []

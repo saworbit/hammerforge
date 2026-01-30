@@ -10,6 +10,10 @@ The format is based on "Keep a Changelog", and this project follows semantic ver
 - Modifier keys: Shift (square base), Shift+Alt (cube), Alt (height-only).
 - Axis locks for drawing (X/Y/Z).
 - Draw/Select tool toggle in the dock.
+- Paint Mode: pick an active material and click brushes to apply it in the viewport.
+- Active material picker in the dock (resource file dialog for .tres/.material).
+- Hover selection highlight (AABB wireframe) when using Select.
+- Select tool now yields to built-in gizmos when a brush is already selected.
 - Multi-select (Shift-click), Delete to remove, Ctrl+D to duplicate.
 - Nudge selected brushes with arrow keys and PageUp/PageDown.
 - Auto-create `LevelRoot` on first click if missing.

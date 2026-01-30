@@ -88,6 +88,7 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
     var shape = dock.get_shape()
     var grid = dock.get_grid_snap()
     root.grid_snap = grid
+    var paint_mode = dock.has_method("is_paint_mode_enabled") and dock.is_paint_mode_enabled()
 
     if event is InputEventKey:
         if event.pressed and not event.echo:
@@ -125,6 +126,20 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
                 root.set_axis_lock(LevelRootType.AxisLock.Z, true)
                 return EditorPlugin.AFTER_GUI_INPUT_STOP
 
+    if tool == 1 and event is InputEventMouseMotion:
+        if root.has_method("update_hover"):
+            root.call("update_hover", camera, event.position)
+    elif tool != 1 and root.has_method("clear_hover"):
+        root.call("clear_hover")
+
+    var selection = get_editor_interface().get_selection()
+    var selected_nodes: Array = []
+    if selection:
+        selected_nodes = selection.get_selected_nodes()
+    if tool == 1 and not paint_mode and _selection_has_brush(selected_nodes, root):
+        if event is InputEventMouseButton or event is InputEventMouseMotion:
+            return EditorPlugin.AFTER_GUI_INPUT_PASS
+
     if event is InputEventMouseButton:
         root.set_shift_pressed(event.shift_pressed)
         root.set_alt_pressed(event.alt_pressed)
@@ -132,6 +147,12 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
             root.cancel_drag()
             return EditorPlugin.AFTER_GUI_INPUT_STOP
     if tool == 1 and event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+        var active_mat = dock.get_active_material() if dock.has_method("get_active_material") else null
+        if paint_mode and active_mat:
+            var painted = root.pick_brush(camera, event.position)
+            if painted:
+                root.apply_material_to_brush(painted, active_mat)
+                return EditorPlugin.AFTER_GUI_INPUT_STOP
         var picked = root.pick_brush(camera, event.position)
         _select_node(picked, event.shift_pressed)
         return EditorPlugin.AFTER_GUI_INPUT_STOP
@@ -190,6 +211,14 @@ func _select_node(node: Node, additive: bool = false) -> void:
         selection.clear()
     if node:
         selection.add_node(node)
+
+func _selection_has_brush(nodes: Array, root: Node) -> bool:
+    if not root or not root.has_method("is_brush_node"):
+        return false
+    for node in nodes:
+        if root.is_brush_node(node):
+            return true
+    return false
 
 func _get_undo_redo() -> EditorUndoRedoManager:
     return get_undo_redo()

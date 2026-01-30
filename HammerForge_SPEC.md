@@ -73,9 +73,9 @@ HammerForge (EditorPlugin)
 
 ## UI / UX Layout
 
-- **Dock (Left-Upper):** Tool (Draw/Select), Mode (Add/Subtract), Shape, Size, Grid, Create Floor, Apply/Clear Cuts, Bake.  
+- **Dock (Left-Upper):** Tool (Draw/Select), Paint Mode, Active Material, Mode (Add/Subtract), Shape, Size, Grid, Create Floor, Apply/Clear Cuts, Bake.  
 - **Toolbar (Spatial Editor):** Mode switches (Brush/Object/Texture), Bake, Play FPS, Undo/Redo icons.  
-- **Viewport Overlays:** Grid (toggle), brush ghost (green wireframe), snap lines, gizmo handles for resizing/rotating brushes and entities.  
+- **Viewport Overlays:** Grid (toggle), brush ghost (green wireframe), hover selection highlight, snap lines, gizmo handles for resizing/rotating brushes and entities.  
 - **Shortcuts:** `X/Y/Z` axis locks, `Shift` square base, `Shift+Alt` cube, `Alt` height-only, `Delete` remove, `Ctrl+D` duplicate.  
 - **First-run Wizard:** Guides creation of `LevelRoot.tscn`, loads sample FPS arena, sets defaults.  
 - **Mobile-friendly:** Touch gestures, DPI scaling for tablets.
@@ -175,7 +175,7 @@ C:/hammerforge/
 
 ## UX Mockups (Text)
 - **Viewport shot:** room filled with brushes; overlay shows viewport grid, brush ghost, and gizmo.  
-- **Dock snippet:** Brush tab shows shape buttons (`Box 16x8`, `Cyl`), subtract toggle, size slider, texture dropdown.  
+- **Dock snippet:** Brush tab shows shape buttons (`Box 16x8`, `Cyl`), subtract toggle, size slider, active material picker, paint toggle.  
 - **Toolbar snippet:** `[Brush Mode] [Snap 16] [Bake] [Play]`.
 
 ## Reliability & Testing

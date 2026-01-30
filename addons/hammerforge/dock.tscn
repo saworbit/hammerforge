@@ -44,6 +44,9 @@ text = "Draw"
 [node name="ToolSelect" type="Button" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ToolRow"]
 text = "Select"
 
+[node name="PaintMode" type="Button" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ToolRow"]
+text = "Paint Mode"
+
 [node name="ModeRow" type="HBoxContainer" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox"]
 custom_constants/separation = 4.0
 
@@ -67,6 +70,16 @@ text = "Box"
 
 [node name="ShapeCylinder" type="Button" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ShapeRow"]
 text = "Cylinder"
+
+[node name="MaterialRow" type="HBoxContainer" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox"]
+custom_constants/separation = 4.0
+
+[node name="MaterialLabel" type="Label" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/MaterialRow"]
+text = "Material"
+
+[node name="ActiveMaterial" type="Button" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/MaterialRow"]
+text = "Active Material"
+size_flags_horizontal = 3
 
 [node name="SizeRow" type="HBoxContainer" parent="Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox"]
 custom_constants/separation = 4.0
@@ -242,3 +255,8 @@ title = "Rename Preset"
 
 [node name="PresetRenameLine" type="LineEdit" parent="PresetRenameDialog"]
 size_flags_horizontal = 3
+
+[node name="MaterialDialog" type="FileDialog" parent="."]
+title = "Pick Material"
+access = 2
+file_mode = 0

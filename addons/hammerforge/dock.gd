@@ -16,10 +16,13 @@ const PRESET_MENU_DELETE := 1
 
 @onready var tool_draw: Button = $Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ToolRow/ToolDraw
 @onready var tool_select: Button = $Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ToolRow/ToolSelect
+@onready var paint_mode: Button = $Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ToolRow/PaintMode
 @onready var mode_add: Button = $Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ModeRow/ModeAdd
 @onready var mode_subtract: Button = $Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ModeRow/ModeSubtract
 @onready var shape_box: Button = $Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ShapeRow/ShapeBox
 @onready var shape_cylinder: Button = $Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/ShapeRow/ShapeCylinder
+@onready var active_material_button: Button = $Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/MaterialRow/ActiveMaterial
+@onready var material_dialog: FileDialog = $MaterialDialog
 @onready var size_x: SpinBox = $Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/SizeRow/SizeX
 @onready var size_y: SpinBox = $Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/SizeRow/SizeY
 @onready var size_z: SpinBox = $Margin/VBox/SettingsPanel/SettingsMargin/SettingsVBox/SizeRow/SizeZ
@@ -66,6 +69,7 @@ var syncing_grid := false
 var presets_dir := "res://addons/hammerforge/presets"
 var preset_buttons: Array[Button] = []
 var preset_context_button: Button = null
+var active_material: Material = null
 
 func set_editor_interface(iface: EditorInterface) -> void:
     editor_interface = iface
@@ -109,6 +113,9 @@ func _ready():
     tool_draw.button_group = tool_group
     tool_select.button_group = tool_group
     tool_draw.button_pressed = true
+    if paint_mode:
+        paint_mode.toggle_mode = true
+        paint_mode.button_pressed = false
 
     var mode_group = ButtonGroup.new()
     mode_add.toggle_mode = true
@@ -163,6 +170,17 @@ func _ready():
         preset_menu.id_pressed.connect(_on_preset_menu_id_pressed)
     if preset_rename_dialog:
         preset_rename_dialog.confirmed.connect(_on_preset_rename_confirmed)
+    if active_material_button:
+        active_material_button.pressed.connect(_on_active_material_pressed)
+    if material_dialog:
+        material_dialog.access = FileDialog.ACCESS_RESOURCES
+        material_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+        material_dialog.filters = PackedStringArray([
+            "*.tres ; Material",
+            "*.material ; Material"
+        ])
+        if not material_dialog.file_selected.is_connected(Callable(self, "_on_material_file_selected")):
+            material_dialog.file_selected.connect(_on_material_file_selected)
     status_label.text = "Status: Idle"
     _sync_snap_buttons(grid_snap.value)
     _ensure_presets_dir()
@@ -202,6 +220,12 @@ func get_operation() -> int:
 
 func get_tool() -> int:
     return 0 if tool_draw.button_pressed else 1
+
+func get_active_material() -> Material:
+    return active_material
+
+func is_paint_mode_enabled() -> bool:
+    return paint_mode and paint_mode.button_pressed
 
 func get_brush_size() -> Vector3:
     return Vector3(size_x.value, size_y.value, size_z.value)
@@ -404,6 +428,25 @@ func _on_quick_play() -> void:
         await level_root.bake(true, true)
     if editor_interface:
         editor_interface.play_current_scene()
+
+func _on_active_material_pressed() -> void:
+    if not material_dialog:
+        return
+    material_dialog.popup_centered_ratio(0.6)
+
+func _on_material_file_selected(path: String) -> void:
+    if path == "":
+        return
+    var resource = ResourceLoader.load(path)
+    if resource and resource is Material:
+        active_material = resource
+        var display_name = resource.resource_name
+        if display_name == "":
+            display_name = path.get_file()
+        if active_material_button:
+            active_material_button.text = "Active Material: %s" % display_name
+    else:
+        _log("Selected resource is not a material: %s" % path, true)
 
 func _ensure_presets_dir() -> void:
     var abs_path = ProjectSettings.globalize_path(presets_dir)

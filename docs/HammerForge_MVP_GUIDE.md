@@ -84,7 +84,7 @@ addons/
 
 11. **Preview Scene** – Open any 3D scene, click once to auto-create `LevelRoot`, then use **Create Floor** for a collidable surface.
 
-12. **Optional Extras** – Selection mode, duplicate/drag/nudge, numeric input overlay, and ortho views.
+12. **Optional Extras** - Selection mode, duplicate/drag/nudge, numeric input overlay, hover highlight, paint mode, and ortho views.
 
 13. **Test** – In the editor:
     * Use Draw tool to click-drag a base, release, then click to set height.
@@ -100,6 +100,9 @@ These are quality-of-life improvements added after the MVP core:
 2. **Quick Snap Presets** â€“ Toggle buttons for 1/2/4/8/16/32/64 with a shared ButtonGroup.
 3. **Shortcut HUD** â€“ On-screen cheat sheet in the 3D viewport, toggleable from the dock.
 4. **Dynamic Editor Grid** â€“ Shader-based PlaneMesh that follows the active axis and snap size.
+5. **Hover Selection Highlight** - AABB wireframe to preview which brush is under the cursor.
+6. **Paint Mode** - Pick an active material and click brushes to apply it.
+7. **Gizmo Pass-through** - Allow Godot move/rotate/scale gizmos when a brush is selected.
 
 ## Troubleshooting Notes
 
