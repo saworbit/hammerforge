@@ -114,6 +114,7 @@ Sections can be collapsed using the toggle button in each header.
 
 ## Shape Palette
 HammerForge now uses a dynamic palette grid for shapes. Click a shape to make it active, then draw as normal.
+Pyramids, prisms, and platonic solids use a lightweight line-mesh draft preview in the editor.
 
 ## Brush Creation (CAD-Style)
 HammerForge uses a two-stage drag workflow:
@@ -144,6 +145,7 @@ HammerForge uses a two-stage drag workflow:
    - Ctrl+Arrow: X/Z move.
    - Ctrl+PageUp/PageDown: Y move.
 8. Use the standard Godot transform gizmos (move/rotate/scale) on selected brushes.
+9. Use the DraftBrush face handles (white circles) to resize; the yellow wireframe is only a guide.
 
 ## Material Painting (Paint Mode)
 1. Click **Active Material** and pick a .tres or .material resource.
@@ -165,7 +167,7 @@ HammerForge uses a two-stage drag workflow:
 When you press **Bake**, HammerForge builds a temporary CSG tree from DraftBrushes and creates:
 - `BakedGeometry` (Node3D)
   - `MeshInstance3D` with the merged mesh
-  - `StaticBody3D` with a trimesh collision shape
+  - `StaticBody3D` with a trimesh collision shape (Add brushes only; Subtract brushes are excluded)
 
 You can playtest with a CharacterBody3D or FPS controller after baking.
 
@@ -207,6 +209,11 @@ HammerForge adds a high-contrast editor-only grid plane for clearer placement.
 
 **Dock not showing**
 - Restart Godot after enabling the plugin.
+
+**Can't drag the brush gizmo**
+- Make sure a DraftBrush is selected.
+- Drag the white circle handles (not the wireframe).
+- Confirm the 3D viewport "Gizmos" toggle is enabled.
 
 **Need diagnostics**
 - Enable **Debug Logs** in the dock to print tool actions and bake/cut steps.

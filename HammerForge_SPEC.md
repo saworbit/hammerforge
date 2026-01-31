@@ -40,6 +40,7 @@ HammerForge (EditorPlugin)
 ### Brush Editing
 - Add/subtract brushes (box, cylinder) with CAD-style drag: base drag + height stage.
 - Editing uses DraftBrush nodes for speed; CSG is generated only during Bake.
+- Viewport brush gizmo handles allow face-resize of DraftBrushes with undo/redo.
 - Subtract brushes can be staged as pending cuts and applied on demand.
 - Grid/snap options (1–64 units), quick Create Floor for raycast placement.
 - Undo/redo buffer + history panels; autosave `.hflevel` every 5 minutes.
@@ -53,6 +54,7 @@ HammerForge (EditorPlugin)
 ### Optimization & Baking
 - Chunk-level baking (configurable e.g., 128m tiles) merges visible faces, auto-culls hidden geometry.
 - Bake builds a temporary CSG tree from DraftBrush data to generate static meshes.
+- Collision baking uses Add brushes only (Subtract brushes are excluded) to avoid hollow collisions.
 - Generates `NavMeshInstance3D`, `LightmapGI`, collision meshes, LODs, and multi-threaded merge tasks.
 - Chunk scenes combine `StaticBody3D` + optimized meshes for runtime.
 - Versioned saves support incremental builds and reconstruction.

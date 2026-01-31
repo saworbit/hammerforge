@@ -357,19 +357,32 @@ func bake(apply_cuts: bool = true, hide_live: bool = false, collision_layer_mask
     bake_started.emit()
 
     var temp_csg = CSGCombiner3D.new()
+    temp_csg.hide()
     temp_csg.use_collision = false
     add_child(temp_csg)
+
+    var collision_csg = CSGCombiner3D.new()
+    collision_csg.hide()
+    collision_csg.use_collision = false
+    add_child(collision_csg)
+
+    var baked: Node3D = null
+    var collision_baked: Node3D = null
+    var layer = collision_layer_mask if collision_layer_mask > 0 else _layer_from_index(bake_collision_layer_index)
 
     _append_draft_brushes_to_csg(draft_brushes_node, temp_csg)
     if commit_freeze and committed_node:
         _append_draft_brushes_to_csg(committed_node, temp_csg, true)
 
+    _append_draft_brushes_to_csg(draft_brushes_node, collision_csg, false, true)
+
     await _await_csg_update()
 
-    var layer = collision_layer_mask if collision_layer_mask > 0 else _layer_from_index(bake_collision_layer_index)
-    var baked = baker.bake_from_csg(temp_csg, bake_material_override, layer, layer)
-
+    baked = baker.bake_from_csg(temp_csg, bake_material_override, layer, layer)
     if baked:
+        collision_baked = baker.bake_from_csg(collision_csg, null, layer, layer)
+        _apply_collision_from_bake(baked, collision_baked, layer)
+
         if baked_container:
             baked_container.queue_free()
         baked_container = baked
@@ -387,14 +400,24 @@ func bake(apply_cuts: bool = true, hide_live: bool = false, collision_layer_mask
         bake_finished.emit(false)
 
     temp_csg.queue_free()
+    collision_csg.queue_free()
+    if collision_baked:
+        collision_baked.free()
 
-func _append_draft_brushes_to_csg(source: Node3D, target: CSGCombiner3D, force_subtract: bool = false) -> void:
+func _append_draft_brushes_to_csg(
+    source: Node3D,
+    target: CSGCombiner3D,
+    force_subtract: bool = false,
+    only_additive: bool = false
+) -> void:
     if not source or not target:
         return
     for child in source.get_children():
         if not (child is DraftBrush):
             continue
         var draft: DraftBrush = child
+        if only_additive and (force_subtract or draft.operation == CSGShape3D.OPERATION_SUBTRACTION):
+            continue
         var csg_shape = PrefabFactory.create_prefab(draft.shape, draft.size, max(3, draft.sides))
         csg_shape.operation = CSGShape3D.OPERATION_SUBTRACTION if force_subtract else draft.operation
         csg_shape.global_transform = draft.global_transform
@@ -406,6 +429,28 @@ func _append_draft_brushes_to_csg(source: Node3D, target: CSGCombiner3D, force_s
                 csg_shape.set("material", mat)
                 csg_shape.set("material_override", mat)
         target.add_child(csg_shape)
+
+func _apply_collision_from_bake(target: Node3D, source: Node3D, layer: int) -> void:
+    if not target:
+        return
+    var target_body = target.get_node_or_null("FloorCollision") as StaticBody3D
+    if not target_body:
+        target_body = StaticBody3D.new()
+        target_body.name = "FloorCollision"
+        target.add_child(target_body)
+    target_body.collision_layer = layer
+    target_body.collision_mask = layer
+    for child in target_body.get_children():
+        child.queue_free()
+    if not source:
+        return
+    var source_body = source.get_node_or_null("FloorCollision") as StaticBody3D
+    if not source_body:
+        return
+    for child in source_body.get_children():
+        if child is CollisionShape3D:
+            var dup = child.duplicate()
+            target_body.add_child(dup)
 
 func clear_brushes() -> void:
     if brush_manager:

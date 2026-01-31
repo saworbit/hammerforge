@@ -29,6 +29,9 @@ The format is based on "Keep a Changelog", and this project follows semantic ver
 - Pending Subtract cuts with Apply/Clear controls (Bake auto-applies).
 - Cylinder brushes, grid snap control, and colored Add/Subtract preview.
 - Commit cuts improvements: multi-mesh bake, freeze/restore committed cuts, bake status, bake collision layer control.
+- Viewport DraftBrush resize gizmo with face handles (undo/redo friendly).
+- Line-mesh draft previews for pyramids, prisms, and platonic solids.
+- Collision baking uses Add brushes only (Subtract brushes excluded).
 
 ### Fixed
 - Selection picking now works for cylinders and rotated brushes.

@@ -6,12 +6,18 @@ var hud: Control
 var base_control: Control
 var active_root: Node = null
 var undo_redo_manager: EditorUndoRedoManager = null
+var brush_gizmo_plugin: EditorNode3DGizmoPlugin = null
 const LevelRootType = preload("level_root.gd")
 
 func _enter_tree():
     add_custom_type("LevelRoot", "Node3D", preload("level_root.gd"), preload("icon.png"))
     dock = preload("dock.tscn").instantiate()
     undo_redo_manager = get_undo_redo()
+    brush_gizmo_plugin = preload("brush_gizmo_plugin.gd").new()
+    if brush_gizmo_plugin and brush_gizmo_plugin.has_method("set_undo_redo"):
+        brush_gizmo_plugin.call("set_undo_redo", undo_redo_manager)
+    if brush_gizmo_plugin:
+        add_node_3d_gizmo_plugin(brush_gizmo_plugin)
     base_control = get_editor_interface().get_base_control()
     if base_control:
         dock.theme = base_control.theme
@@ -38,6 +44,10 @@ func _enter_tree():
 func _exit_tree():
     remove_custom_type("LevelRoot")
     undo_redo_manager = null
+    if brush_gizmo_plugin:
+        remove_node_3d_gizmo_plugin(brush_gizmo_plugin)
+        brush_gizmo_plugin.free()
+        brush_gizmo_plugin = null
     if base_control and base_control.is_connected("theme_changed", Callable(self, "_on_editor_theme_changed")):
         base_control.disconnect("theme_changed", Callable(self, "_on_editor_theme_changed"))
     if dock:

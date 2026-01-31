@@ -30,19 +30,20 @@ This guide walks through building the **HammerForge** MVP for Godot 4.6 (release
 
 ```
 addons/
-└── hammerforge/
-    ├── plugin.cfg
-    ├── plugin.gd          # EditorPlugin entry (adds LevelRoot, dock, captures viewport input)
-    ├── icon.png           # 64x64 plugin icon
-    ├── dock.tscn          # Dock UI scene
-    ├── dock.gd            # Dock query/bake controls (tool, shape, grid, floor)
-    ├── level_root.gd      # Root node that manages DraftBrushes and virtual baking
-    ├── shortcut_hud.tscn  # On-screen shortcut legend (editor UI)
-    ├── shortcut_hud.gd    # HUD script for layout + label
-    ├── editor_grid.gdshader # Shader-based editor grid
-    ├── brush_instance.gd  # DraftBrush node (Node3D + MeshInstance3D)
-    ├── brush_manager.gd   # Brush lifecycle helper
-    └── baker.gd           # Bake helper that creates meshes + collision
+`-- hammerforge/
+    |-- plugin.cfg
+    |-- plugin.gd          # EditorPlugin entry (adds LevelRoot, dock, captures viewport input)
+    |-- icon.png           # 64x64 plugin icon
+    |-- dock.tscn          # Dock UI scene
+    |-- dock.gd            # Dock query/bake controls (tool, shape, grid, floor)
+    |-- level_root.gd      # Root node that manages DraftBrushes and virtual baking
+    |-- shortcut_hud.tscn  # On-screen shortcut legend (editor UI)
+    |-- shortcut_hud.gd    # HUD script for layout + label
+    |-- editor_grid.gdshader # Shader-based editor grid
+    |-- brush_instance.gd  # DraftBrush node (Node3D + MeshInstance3D)
+    |-- brush_gizmo_plugin.gd # DraftBrush resize gizmo (viewport handles)
+    |-- brush_manager.gd   # Brush lifecycle helper
+    `-- baker.gd           # Bake helper that creates meshes + collision
 ```
 
 ## Step-by-Step Build
@@ -75,7 +76,7 @@ addons/
 
 6. **BrushManager** – Simple helper that tracks brush instances for cleanup (used from `LevelRoot.clear_brushes()`).
 
-7. **Baker** – Accepts a temporary `CSGCombiner3D`, creates a `MeshInstance3D`, and attaches a `StaticBody3D` with a `CollisionShape3D` based on the trimesh.
+7. **Baker** – Accepts a temporary `CSGCombiner3D`, creates a `MeshInstance3D`, and attaches a `StaticBody3D` with a `CollisionShape3D` based on the trimesh. (Add brushes only; Subtract brushes are excluded from collision).
 
 8. **Grid Snap** – `LevelRoot` snaps hit positions to `grid_snap` (default 16). Expose `grid_snap` from the dock UI for quick control.
 
@@ -111,6 +112,8 @@ These are quality-of-life improvements added after the MVP core:
 9. **Physics Layer Presets** - OptionButton that passes a collision layer bitmask into bake.
 10. **Live Brush Count** - Real-time label with green/yellow/red performance thresholds.
 11. **History Panel (beta)** - Undo/Redo controls plus a recent action list for HammerForge actions.
+12. **Viewport Brush Gizmo** - Face handles to resize DraftBrushes while keeping the opposite face pinned.
+13. **Draft Mesh Parity** - Line-mesh previews for pyramids/prisms/platonic solids in DraftBrush.
 
 ## Troubleshooting Notes
 

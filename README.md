@@ -50,6 +50,7 @@
   - Stage 2: Move mouse to set height, click to commit
 - **Draft Brush Editing**: Lightweight DraftBrush nodes for fast editor transforms (CSG is generated only during Bake)
 - **Shape Palette**: Box, Cylinder, Sphere, Cone, Wedge, Pyramid, Prisms, Ellipsoid, Capsule, Torus, and Platonic solids (mesh shapes scale to brush size)
+- **Draft Preview Parity**: Pyramids, prisms, and platonic solids render as lightweight line previews in the editor
 - **Brush Operations**: Add (union) and Subtract (carve at bake time)
 - **Grid Snapping**: Configurable 1-128 unit increments
 
@@ -58,6 +59,7 @@
 - **Quick Snap Presets**: One-click 1/2/4/8/16/32/64 toggles synced with Grid Snap
 - **On-Screen Shortcut HUD**: Optional cheat sheet in the 3D viewport
 - **Dynamic Editor Grid**: High-contrast shader grid that follows the active axis/brush
+- **Viewport Brush Gizmos**: Drag face handles to resize DraftBrushes with undo/redo support
 - **Material Paint Mode**: Pick an active material and click brushes to apply it
 - **Collapsible Dock Sections**: Collapse Settings/Presets/Actions to reduce clutter
 - **Physics Layer Presets**: Set baked collision layers with a single dropdown
@@ -80,6 +82,7 @@
 - **Duplicate** with `Ctrl+D` (grid-snapped offset)
 - **Nudge** with Ctrl+Arrow and Ctrl+PageUp/PageDown (arrow keys work when the 3D viewport has focus)
 - **Use Godot Gizmos** for move/rotate/scale on selected brushes
+- **Resize with Face Handles**: Drag the DraftBrush face handles to resize while the opposite face stays pinned
 
 ### ⚡ Pending Subtract System
 - **Stage Your Cuts**: Subtract brushes appear solid red until applied
@@ -89,7 +92,7 @@
 
 ### 🏗️ One-Click Baking
 - Builds a temporary CSG tree from DraftBrushes and bakes **MeshInstance3D**
-- Auto-generates **trimesh collision** (StaticBody3D)
+- Auto-generates **trimesh collision** (StaticBody3D) using Add brushes only (Subtracts are excluded)
 - Removes hidden geometry for better performance
 - Subtract previews do not bleed into baked materials
 
@@ -108,18 +111,19 @@
 ### Project Structure
 ```
 your-project/
-├── addons/
-│   └── hammerforge/      ← Copy this folder
-│       ├── plugin.cfg
-│       ├── plugin.gd
-│       ├── level_root.gd
-│       ├── dock.gd
-│       ├── dock.tscn
-│       ├── baker.gd
-│       ├── brush_manager.gd
-│       ├── brush_instance.gd
-│       └── icon.png
-└── project.godot
+|-- addons/
+|   `-- hammerforge/      <- Copy this folder
+|       |-- plugin.cfg
+|       |-- plugin.gd
+|       |-- level_root.gd
+|       |-- dock.gd
+|       |-- dock.tscn
+|       |-- baker.gd
+|       |-- brush_manager.gd
+|       |-- brush_instance.gd
+|       |-- brush_gizmo_plugin.gd
+|       `-- icon.png
+`-- project.godot
 ```
 
 Notes:
@@ -248,16 +252,14 @@ Sections can be collapsed using the toggle button in each header.
 ## 🛠️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                   HammerForge Plugin                    │
-├─────────────────────────────────────────────────────────┤
-│  plugin.gd          → EditorPlugin lifecycle & input   │
-│  level_root.gd      → Core brush management & virtual bake │
-│  dock.gd/tscn       → UI panel controls                │
-│  baker.gd           → CSG → StaticMesh converter       │
-│  brush_manager.gd   → Brush instance tracking          │
-│  brush_instance.gd  → DraftBrush (Node3D + MeshInstance3D) │
-└─────────────────────────────────────────────────────────┘
+HammerForge Plugin
+- plugin.gd -> EditorPlugin lifecycle & input
+- level_root.gd -> Core brush management & virtual bake
+- dock.gd/tscn -> UI panel controls
+- baker.gd -> CSG -> StaticMesh converter
+- brush_manager.gd -> Brush instance tracking
+- brush_instance.gd -> DraftBrush (Node3D + MeshInstance3D)
+- brush_gizmo_plugin.gd -> DraftBrush resize handles in the viewport
 ```
 
 ### Editor UX Files
@@ -346,3 +348,4 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
   <strong>Made with ❤️ for the Godot community</strong><br>
   <sub>Star ⭐ this repo if you find it useful!</sub>
 </p>
+
