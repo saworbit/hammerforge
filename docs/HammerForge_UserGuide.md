@@ -105,6 +105,11 @@ Sections can be collapsed using the toggle button in each header.
 **Live Brushes**
 - Shows the active brush count with performance warning colors.
 
+**History (beta)**
+- Shows recent HammerForge actions.
+- **Undo** / **Redo** buttons call the editor's undo stack.
+- Some actions (like bake output) may not fully restore in undo yet.
+
 ## Shape Palette
 HammerForge now uses a dynamic palette grid for shapes. Click a shape to make it active, then draw as normal.
 

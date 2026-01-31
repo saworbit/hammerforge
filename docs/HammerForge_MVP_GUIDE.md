@@ -109,6 +109,7 @@ These are quality-of-life improvements added after the MVP core:
 8. **Collapsible Dock Sections** - Toggle Settings/Presets/Actions to keep the dock compact.
 9. **Physics Layer Presets** - OptionButton that passes a collision layer bitmask into bake.
 10. **Live Brush Count** - Real-time label with green/yellow/red performance thresholds.
+11. **History Panel (beta)** - Undo/Redo controls plus a recent action list for HammerForge actions.
 
 ## Troubleshooting Notes
 

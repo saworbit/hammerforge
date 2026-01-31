@@ -71,8 +71,8 @@ static func create_prefab(type: int, size: Vector3, sides: int = 4) -> CSGShape3
             brush = capsule
         LevelRootType.BrushShape.TORUS:
             var torus_mesh = TorusMesh.new()
-            torus_mesh.ring_radius = 1.0
-            torus_mesh.pipe_radius = 0.25
+            _set_mesh_property(torus_mesh, "ring_radius", 1.0)
+            _set_mesh_property(torus_mesh, "pipe_radius", 0.25)
             var torus = CSGMesh3D.new()
             torus.mesh = torus_mesh
             _apply_mesh_scale(torus, size)
@@ -100,6 +100,14 @@ static func create_prefab(type: int, size: Vector3, sides: int = 4) -> CSGShape3
     if not brush.has_meta("prefab_size"):
         brush.set_meta("prefab_size", size)
     return brush
+
+static func _set_mesh_property(mesh: Object, property: String, value: Variant) -> void:
+    if not mesh:
+        return
+    for prop in mesh.get_property_list():
+        if str(prop.get("name", "")) == property:
+            mesh.set(property, value)
+            return
 
 static func _apply_mesh_scale(node: CSGMesh3D, target_size: Vector3) -> void:
     if not node or not node.mesh:

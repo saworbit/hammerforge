@@ -61,6 +61,7 @@
 - **Collapsible Dock Sections**: Collapse Settings/Presets/Actions to reduce clutter
 - **Physics Layer Presets**: Set baked collision layers with a single dropdown
 - **Live Brush Count**: Real-time warning when active CSG gets heavy
+- **History Panel (beta)**: Undo/Redo buttons plus a recent action list for HammerForge actions
 
 ### ⌨️ Modifier Keys
 | Key | Effect |
@@ -194,6 +195,7 @@ Sections can be collapsed using the toggle button in each header.
 | **3D View Layout (native)** | Use Godot’s View → Layout → 4 View for Top/Front/Side/3D |
 | **Debug Logs** | Print HammerForge events to the output console |
 | **Live Brushes** | Real-time CSG count with performance warning colors |
+| **History** | Undo/Redo controls and a recent action list (beta) |
 
 ### Buttons
 
@@ -288,7 +290,7 @@ LevelRoot (Node3D)
 - [x] One-click baking with collision
 
 ### 🔜 Upcoming Features
-- [ ] **Undo/Redo** - Full EditorUndoRedoManager integration
+- [ ] **Undo/Redo** - History panel and editor undo hooks (beta)
 - [x] **More Shapes** - Wedge, Sphere, Cone, Pyramid, Prisms, Ellipsoid, Capsule, Torus, Platonic solids
 - [ ] **Texture Support** - Per-face material painting and UV tools
 - [ ] **Chunked Baking** - LOD generation for large levels

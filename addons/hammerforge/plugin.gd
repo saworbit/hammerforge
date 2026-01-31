@@ -5,11 +5,13 @@ var dock: Control
 var hud: Control
 var base_control: Control
 var active_root: Node = null
+var undo_redo_manager: EditorUndoRedoManager = null
 const LevelRootType = preload("level_root.gd")
 
 func _enter_tree():
     add_custom_type("LevelRoot", "Node3D", preload("level_root.gd"), preload("icon.png"))
     dock = preload("dock.tscn").instantiate()
+    undo_redo_manager = get_undo_redo()
     base_control = get_editor_interface().get_base_control()
     if base_control:
         dock.theme = base_control.theme
@@ -20,6 +22,8 @@ func _enter_tree():
     add_control_to_dock(DOCK_SLOT_LEFT_UL, dock)
     if dock and dock.has_method("set_editor_interface"):
         dock.call("set_editor_interface", get_editor_interface())
+    if dock and dock.has_method("set_undo_redo"):
+        dock.call("set_undo_redo", undo_redo_manager)
     if dock and dock.has_signal("hud_visibility_changed"):
         dock.connect("hud_visibility_changed", Callable(self, "_on_hud_visibility_changed"))
 
@@ -33,6 +37,7 @@ func _enter_tree():
 
 func _exit_tree():
     remove_custom_type("LevelRoot")
+    undo_redo_manager = null
     if base_control and base_control.is_connected("theme_changed", Callable(self, "_on_editor_theme_changed")):
         base_control.disconnect("theme_changed", Callable(self, "_on_editor_theme_changed"))
     if dock:
@@ -157,7 +162,7 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
         if paint_mode and active_mat:
             var painted = root.pick_brush(target_camera, target_pos)
             if painted:
-                root.apply_material_to_brush(painted, active_mat)
+                _paint_brush_with_undo(root, painted, active_mat)
                 return EditorPlugin.AFTER_GUI_INPUT_STOP
         var picked = root.pick_brush(target_camera, target_pos)
         _select_node(picked, event.shift_pressed)
@@ -227,7 +232,27 @@ func _selection_has_brush(nodes: Array, root: Node) -> bool:
     return false
 
 func _get_undo_redo() -> EditorUndoRedoManager:
-    return get_undo_redo()
+    return undo_redo_manager if undo_redo_manager else get_undo_redo()
+
+func _record_history(action_name: String) -> void:
+    if dock and dock.has_method("record_history"):
+        dock.call("record_history", action_name)
+
+func _paint_brush_with_undo(root: Node, brush: Node, mat: Material) -> void:
+    if not root or not brush:
+        return
+    var undo_redo = _get_undo_redo()
+    if not undo_redo:
+        root.apply_material_to_brush(brush, mat)
+        return
+    var prev = brush.get("material_override") if brush.get("material_override") else brush.get("material")
+    if prev == mat:
+        return
+    undo_redo.create_action("Paint Brush")
+    undo_redo.add_do_method(root, "apply_material_to_brush", brush, mat)
+    undo_redo.add_undo_method(root, "apply_material_to_brush", brush, prev)
+    undo_redo.commit_action()
+    _record_history("Paint Brush")
 
 func _commit_brush_placement(root: Node, info: Dictionary) -> void:
     if info.is_empty():
@@ -240,6 +265,7 @@ func _commit_brush_placement(root: Node, info: Dictionary) -> void:
     undo_redo.add_do_method(root, "create_brush_from_info", info)
     undo_redo.add_undo_method(root, "delete_brush_by_id", info.get("brush_id", ""))
     undo_redo.commit_action()
+    _record_history("Place Brush")
 
 func _delete_selected(root: Node) -> void:
     var selection = get_editor_interface().get_selection()
@@ -266,6 +292,7 @@ func _delete_selected(root: Node) -> void:
         undo_redo.add_do_method(root, "delete_brush", node, false)
         undo_redo.add_undo_method(root, "restore_brush", node, parent, owner, index)
     undo_redo.commit_action()
+    _record_history("Delete Brushes")
 
 func _duplicate_selected(root: Node) -> void:
     var selection = get_editor_interface().get_selection()
@@ -292,6 +319,7 @@ func _duplicate_selected(root: Node) -> void:
         undo_redo.add_do_method(root, "create_brush_from_info", info)
         undo_redo.add_undo_method(root, "delete_brush_by_id", info.get("brush_id", ""))
     undo_redo.commit_action()
+    _record_history("Duplicate Brushes")
     selection.clear()
     if root.has_method("find_brush_by_id"):
         for info in infos:
@@ -321,6 +349,7 @@ func _nudge_selected(root: Node, dir: Vector3) -> void:
         undo_redo.add_do_property(node, "global_position", start_pos + offset)
         undo_redo.add_undo_property(node, "global_position", start_pos)
     undo_redo.commit_action()
+    _record_history("Nudge Brushes")
 
 
 func _get_level_root() -> Node:

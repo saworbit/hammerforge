@@ -141,6 +141,8 @@ func _get_editor_owner() -> Node:
     return get_owner()
 
 func _assign_owner(node: Node) -> void:
+    if not node:
+        return
     var owner = _get_editor_owner()
     if owner:
         node.owner = owner
@@ -515,6 +517,9 @@ func clear_brushes() -> void:
     _clear_preview()
     clear_pending_cuts()
     _clear_committed_cuts()
+    if baked_container:
+        baked_container.queue_free()
+        baked_container = null
 
 func _clear_committed_cuts() -> void:
     if not committed_node:
@@ -637,6 +642,10 @@ func duplicate_brush(brush: Node) -> Node:
 
 func _create_brush(shape: int, size: Vector3, operation: int, sides: int) -> CSGShape3D:
     var brush = PrefabFactory.create_prefab(shape, size, sides)
+    if not brush:
+        var fallback = CSGBox3D.new()
+        fallback.size = size
+        brush = fallback
     brush.operation = operation
     brush.use_collision = true
     _apply_brush_material(brush, _make_brush_material(operation))
@@ -664,7 +673,7 @@ func _apply_brush_material(brush: Node, mat: Material) -> void:
     brush.set("material_override", mat)
 
 func apply_material_to_brush(brush: Node, mat: Material) -> void:
-    if not brush or not mat:
+    if not brush:
         return
     brush.set("material_override", mat)
     brush.set("material", mat)
@@ -701,6 +710,19 @@ func _next_brush_id() -> String:
     _brush_id_counter += 1
     return "%s_%s" % [str(Time.get_ticks_usec()), str(_brush_id_counter)]
 
+func _register_brush_id(brush_id: String) -> void:
+    if brush_id == "":
+        return
+    var parts = brush_id.split("_")
+    if parts.size() == 0:
+        return
+    var tail = parts[parts.size() - 1]
+    if not tail.is_valid_int():
+        return
+    var value = int(tail)
+    if value > _brush_id_counter:
+        _brush_id_counter = value
+
 func create_brush_from_info(info: Dictionary) -> Node:
     if info.is_empty():
         return null
@@ -708,11 +730,21 @@ func create_brush_from_info(info: Dictionary) -> Node:
     var size = info.get("size", drag_size_default)
     var sides = int(info.get("sides", 4))
     var operation = info.get("operation", CSGShape3D.OPERATION_UNION)
+    var committed = bool(info.get("committed", false))
     var brush = _create_brush(shape, size, operation, sides)
+    if not brush:
+        return null
     if brush is CSGCylinder3D and info.has("sides"):
         brush.sides = int(info["sides"])
     var pending = bool(info.get("pending", false))
-    if operation == CSGShape3D.OPERATION_SUBTRACTION and pending:
+    if committed:
+        if committed_node:
+            committed_node.add_child(brush)
+        brush.visible = false
+        brush.set_meta("committed_cut", true)
+        brush.set_meta("pending_subtract", false)
+        _assign_owner(brush)
+    elif operation == CSGShape3D.OPERATION_SUBTRACTION and pending:
         _add_pending_cut(brush)
     else:
         _add_brush_to_csg(brush, operation)
@@ -720,13 +752,14 @@ func create_brush_from_info(info: Dictionary) -> Node:
         brush.global_transform = info["transform"]
     else:
         brush.global_position = info.get("center", Vector3.ZERO)
-    if info.has("material") and not (operation == CSGShape3D.OPERATION_SUBTRACTION and pending):
+    if info.has("material") and not committed and not (operation == CSGShape3D.OPERATION_SUBTRACTION and pending):
         _apply_brush_material(brush, info["material"])
-    if brush_manager:
+    if brush_manager and not committed:
         brush_manager.add_brush(brush)
     _record_last_brush(brush.global_position)
     var brush_id = info.get("brush_id", _next_brush_id())
     brush.set_meta("brush_id", brush_id)
+    _register_brush_id(str(brush_id))
     return brush
 
 func delete_brush_by_id(brush_id: String) -> void:
@@ -771,9 +804,14 @@ func get_brush_info_from_node(brush: Node) -> Dictionary:
     else:
         return {}
     var pending = brush.get_parent() == pending_node or bool(brush.get_meta("pending_subtract", false))
-    var is_subtract = _is_subtract_brush(brush)
+    var committed = brush.get_parent() == committed_node or bool(brush.get_meta("committed_cut", false))
+    if committed:
+        pending = false
+    var is_subtract = _is_subtract_brush(brush) or committed
     info["operation"] = CSGShape3D.OPERATION_SUBTRACTION if (pending or is_subtract) else brush.operation
     info["pending"] = pending
+    if committed:
+        info["committed"] = true
     info["transform"] = brush.global_transform
     var source_mat = brush.material_override if brush.material_override else brush.get("material")
     if source_mat:
@@ -794,6 +832,89 @@ func build_duplicate_info(brush: Node, offset: Vector3) -> Dictionary:
     else:
         info["center"] = info.get("center", Vector3.ZERO) + offset
     return info
+
+func _capture_floor_info() -> Dictionary:
+    var floor = get_node_or_null("TempFloor") as CSGBox3D
+    if not floor:
+        return { "exists": false }
+    return {
+        "exists": true,
+        "size": floor.size,
+        "transform": floor.global_transform,
+        "use_collision": floor.use_collision
+    }
+
+func _restore_floor_info(info: Dictionary) -> void:
+    if info.is_empty():
+        return
+    var should_exist = bool(info.get("exists", false))
+    var floor = get_node_or_null("TempFloor") as CSGBox3D
+    if not should_exist:
+        if floor:
+            floor.queue_free()
+        return
+    if not floor:
+        floor = CSGBox3D.new()
+        floor.name = "TempFloor"
+        add_child(floor)
+        _assign_owner(floor)
+    floor.size = info.get("size", Vector3(1024, 16, 1024))
+    if info.has("transform"):
+        floor.global_transform = info["transform"]
+    floor.use_collision = bool(info.get("use_collision", true))
+
+func capture_state() -> Dictionary:
+    var state: Dictionary = {}
+    state["brushes"] = []
+    state["pending"] = []
+    state["committed"] = []
+    state["floor"] = _capture_floor_info()
+    state["id_counter"] = _brush_id_counter
+    state["csg_visible"] = csg_node.visible if csg_node else true
+    state["pending_visible"] = pending_node.visible if pending_node else true
+    state["baked_present"] = baked_container != null
+    for node in _iter_pick_nodes():
+        var info = get_brush_info_from_node(node)
+        if info.is_empty():
+            continue
+        if info.get("pending", false):
+            state["pending"].append(info)
+        else:
+            state["brushes"].append(info)
+    if committed_node:
+        for child in committed_node.get_children():
+            if child is CSGShape3D:
+                var info = get_brush_info_from_node(child)
+                if info.is_empty():
+                    continue
+                info["committed"] = true
+                state["committed"].append(info)
+    return state
+
+func restore_state(state: Dictionary) -> void:
+    if state.is_empty():
+        return
+    clear_brushes()
+    _brush_id_counter = int(state.get("id_counter", 0))
+    var brushes: Array = state.get("brushes", [])
+    for info in brushes:
+        create_brush_from_info(info)
+    var pending: Array = state.get("pending", [])
+    for info in pending:
+        info["pending"] = true
+        create_brush_from_info(info)
+    var committed: Array = state.get("committed", [])
+    for info in committed:
+        info["committed"] = true
+        create_brush_from_info(info)
+    _restore_floor_info(state.get("floor", {}))
+    if csg_node:
+        csg_node.visible = bool(state.get("csg_visible", true))
+    if pending_node:
+        pending_node.visible = bool(state.get("pending_visible", true))
+    if not bool(state.get("baked_present", false)) and baked_container:
+        baked_container.queue_free()
+        baked_container = null
 
 func is_brush_node(node: Node) -> bool:
     if not node or not (node is CSGShape3D):
@@ -996,6 +1117,8 @@ func _ensure_preview(shape: int, operation: int, size_default: Vector3, sides: i
             return
         _clear_preview()
     preview_brush = _create_brush(shape, size_default, operation, sides)
+    if not preview_brush:
+        return
     preview_brush.name = "PreviewBrush"
     preview_brush.use_collision = false
     if operation == CSGShape3D.OPERATION_SUBTRACTION and pending_node:

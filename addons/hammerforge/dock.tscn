@@ -280,6 +280,43 @@ text = "Status: Idle"
 [node name="BrushCountLabel" type="Label" parent="Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox"]
 text = "Live Brushes: 0"
 
+[node name="HistoryPanel" type="PanelContainer" parent="Margin/VBox"]
+
+[node name="HistoryContent" type="VBoxContainer" parent="Margin/VBox/HistoryPanel"]
+custom_constants/separation = 4.0
+
+[node name="HistoryHeader" type="HBoxContainer" parent="Margin/VBox/HistoryPanel/HistoryContent"]
+custom_constants/separation = 4.0
+
+[node name="HistoryToggle" type="Button" parent="Margin/VBox/HistoryPanel/HistoryContent/HistoryHeader"]
+text = ">"
+toggle_mode = true
+
+[node name="HistoryMargin" type="MarginContainer" parent="Margin/VBox/HistoryPanel/HistoryContent"]
+theme_override_constants/margin_left = 6
+theme_override_constants/margin_top = 6
+theme_override_constants/margin_right = 6
+theme_override_constants/margin_bottom = 6
+
+[node name="HistoryVBox" type="VBoxContainer" parent="Margin/VBox/HistoryPanel/HistoryContent/HistoryMargin"]
+custom_constants/separation = 4.0
+
+[node name="HistoryLabel" type="Label" parent="Margin/VBox/HistoryPanel/HistoryContent/HistoryHeader"]
+text = "History"
+
+[node name="HistoryControls" type="HBoxContainer" parent="Margin/VBox/HistoryPanel/HistoryContent/HistoryMargin/HistoryVBox"]
+custom_constants/separation = 4.0
+
+[node name="Undo" type="Button" parent="Margin/VBox/HistoryPanel/HistoryContent/HistoryMargin/HistoryVBox/HistoryControls"]
+text = "Undo"
+
+[node name="Redo" type="Button" parent="Margin/VBox/HistoryPanel/HistoryContent/HistoryMargin/HistoryVBox/HistoryControls"]
+text = "Redo"
+
+[node name="HistoryList" type="ItemList" parent="Margin/VBox/HistoryPanel/HistoryContent/HistoryMargin/HistoryVBox"]
+custom_minimum_size = Vector2(0, 120)
+size_flags_vertical = 3
+
 [node name="QuickPlay" type="Button" parent="Margin/VBox"]
 text = "Quick Play"
 size_flags_horizontal = 3

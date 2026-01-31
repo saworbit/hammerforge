@@ -19,6 +19,9 @@ const PRESET_MENU_DELETE := 1
 @onready var settings_body: Control = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin
 @onready var presets_body: Control = $Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin
 @onready var actions_body: Control = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin
+@onready var history_panel: PanelContainer = $Margin/VBox/HistoryPanel
+@onready var history_toggle: Button = $Margin/VBox/HistoryPanel/HistoryContent/HistoryHeader/HistoryToggle
+@onready var history_body: Control = $Margin/VBox/HistoryPanel/HistoryContent/HistoryMargin
 
 @onready var tool_draw: Button = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ToolRow/ToolDraw
 @onready var tool_select: Button = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ToolRow/ToolSelect
@@ -49,6 +52,9 @@ const PRESET_MENU_DELETE := 1
 @onready var clear_btn: Button = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/Clear
 @onready var status_label: Label = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/Status
 @onready var perf_label: Label = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/BrushCountLabel
+@onready var undo_btn: Button = $Margin/VBox/HistoryPanel/HistoryContent/HistoryMargin/HistoryVBox/HistoryControls/Undo
+@onready var redo_btn: Button = $Margin/VBox/HistoryPanel/HistoryContent/HistoryMargin/HistoryVBox/HistoryControls/Redo
+@onready var history_list: ItemList = $Margin/VBox/HistoryPanel/HistoryContent/HistoryMargin/HistoryVBox/HistoryList
 @onready var quick_play_btn: Button = $Margin/VBox/QuickPlay
 
 @onready var save_preset_btn: Button = $Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin/PresetsVBox/SavePreset
@@ -69,6 +75,7 @@ const PRESET_MENU_DELETE := 1
 
 var level_root: Node = null
 var editor_interface: EditorInterface = null
+var undo_redo: EditorUndoRedoManager = null
 var connected_root: Node = null
 var snap_button_group: ButtonGroup
 var syncing_snap := false
@@ -82,6 +89,8 @@ var active_shape: int = LevelRootType.BrushShape.BOX
 var shape_button_group: ButtonGroup
 var shape_buttons: Dictionary = {}
 var root_properties: Dictionary = {}
+var history_entries: Array = []
+var history_max := 50
 
 func _is_level_root(node: Node) -> bool:
     return node != null and node is LevelRootType
@@ -101,6 +110,29 @@ func _root_has_property(name: String) -> bool:
 func set_editor_interface(iface: EditorInterface) -> void:
     editor_interface = iface
 
+func set_undo_redo(manager: EditorUndoRedoManager) -> void:
+    if undo_redo == manager:
+        return
+    if undo_redo and undo_redo.has_signal("version_changed"):
+        if undo_redo.is_connected("version_changed", Callable(self, "_on_undo_redo_version_changed")):
+            undo_redo.disconnect("version_changed", Callable(self, "_on_undo_redo_version_changed"))
+    undo_redo = manager
+    if undo_redo and undo_redo.has_signal("version_changed"):
+        if not undo_redo.is_connected("version_changed", Callable(self, "_on_undo_redo_version_changed")):
+            undo_redo.connect("version_changed", Callable(self, "_on_undo_redo_version_changed"))
+    _refresh_history_list()
+
+func record_history(action_name: String) -> void:
+    if action_name == "":
+        return
+    if not undo_redo:
+        return
+    var version = _get_undo_version()
+    history_entries.append({ "name": action_name, "version": version })
+    if history_entries.size() > history_max:
+        history_entries.pop_front()
+    _refresh_history_list()
+
 func apply_editor_styles(base_control: Control) -> void:
     if not base_control:
         return
@@ -110,6 +142,8 @@ func apply_editor_styles(base_control: Control) -> void:
         presets_panel = get_node_or_null("Margin/VBox/PresetsPanel")
     if not actions_panel:
         actions_panel = get_node_or_null("Margin/VBox/ActionsPanel")
+    if not history_panel:
+        history_panel = get_node_or_null("Margin/VBox/HistoryPanel")
     var panel_style = _resolve_stylebox(base_control, "panel", "PanelContainer")
     var inspector_style = _resolve_stylebox(base_control, "panel", "EditorInspector")
     var group_style = _resolve_stylebox(base_control, "panel", "Group")
@@ -125,6 +159,8 @@ func apply_editor_styles(base_control: Control) -> void:
             presets_panel.add_theme_stylebox_override("panel", section_style)
         if actions_panel:
             actions_panel.add_theme_stylebox_override("panel", section_style)
+        if history_panel:
+            history_panel.add_theme_stylebox_override("panel", section_style)
 
 func _resolve_stylebox(base_control: Control, name: String, type_name: String) -> StyleBox:
     if base_control.has_theme_stylebox(name, type_name):
@@ -132,6 +168,56 @@ func _resolve_stylebox(base_control: Control, name: String, type_name: String) -
     if base_control.theme and base_control.theme.has_stylebox(name, type_name):
         return base_control.theme.get_stylebox(name, type_name)
     return null
+
+func _get_undo_version() -> int:
+    if undo_redo and undo_redo.has_method("get_version"):
+        return int(undo_redo.get_version())
+    return history_entries.size()
+
+func _refresh_history_list() -> void:
+    if not history_list:
+        return
+    history_list.clear()
+    var current_version = _get_undo_version()
+    for entry in history_entries:
+        var name = str(entry.get("name", ""))
+        var version = int(entry.get("version", 0))
+        var prefix = "• " if version <= current_version else "  "
+        history_list.add_item("%s%s" % [prefix, name])
+    _update_history_buttons()
+
+func _update_history_buttons() -> void:
+    if not undo_btn or not redo_btn:
+        return
+    if not undo_redo:
+        undo_btn.disabled = true
+        redo_btn.disabled = true
+        return
+    var can_undo = true
+    var can_redo = true
+    if undo_redo.has_method("has_undo"):
+        can_undo = undo_redo.has_undo()
+    if undo_redo.has_method("has_redo"):
+        can_redo = undo_redo.has_redo()
+    undo_btn.disabled = not can_undo
+    redo_btn.disabled = not can_redo
+
+func _on_undo_redo_version_changed() -> void:
+    _refresh_history_list()
+
+func _on_history_undo() -> void:
+    if editor_interface and editor_interface.has_method("undo"):
+        editor_interface.call("undo")
+        return
+    if undo_redo and undo_redo.has_method("undo"):
+        undo_redo.undo()
+
+func _on_history_redo() -> void:
+    if editor_interface and editor_interface.has_method("redo"):
+        editor_interface.call("redo")
+        return
+    if undo_redo and undo_redo.has_method("redo"):
+        undo_redo.redo()
 
 func _ready():
     var tool_group = ButtonGroup.new()
@@ -181,6 +267,10 @@ func _ready():
     clear_cuts_btn.pressed.connect(_on_clear_cuts)
     commit_cuts_btn.pressed.connect(_on_commit_cuts)
     restore_cuts_btn.pressed.connect(_on_restore_cuts)
+    if undo_btn:
+        undo_btn.pressed.connect(_on_history_undo)
+    if redo_btn:
+        redo_btn.pressed.connect(_on_history_redo)
     if save_preset_btn:
         save_preset_btn.pressed.connect(_on_save_preset)
     if quick_play_btn:
@@ -210,6 +300,8 @@ func _ready():
         collision_layer_opt.add_item("Trigger Only (Layer 3)", 4)
         collision_layer_opt.select(0)
     _setup_collapsible_sections()
+    if history_list:
+        history_list.focus_mode = Control.FOCUS_NONE
     status_label.text = "Status: Idle"
     _sync_snap_buttons(grid_snap.value)
     _ensure_presets_dir()
@@ -355,30 +447,49 @@ func _log(message: String, force: bool = false) -> void:
         return
     print("[HammerForge Dock] %s" % message)
 
+func _commit_state_action(action_name: String, method_name: String, args: Array = []) -> void:
+    if not level_root or not level_root.has_method(method_name):
+        return
+    if args.size() > 3:
+        level_root.callv(method_name, args)
+        return
+    if not undo_redo or not level_root.has_method("capture_state") or not level_root.has_method("restore_state"):
+        level_root.callv(method_name, args)
+        return
+    var state = level_root.capture_state()
+    undo_redo.create_action(action_name)
+    match args.size():
+        0:
+            undo_redo.add_do_method(level_root, method_name)
+        1:
+            undo_redo.add_do_method(level_root, method_name, args[0])
+        2:
+            undo_redo.add_do_method(level_root, method_name, args[0], args[1])
+        3:
+            undo_redo.add_do_method(level_root, method_name, args[0], args[1], args[2])
+    undo_redo.add_undo_method(level_root, "restore_state", state)
+    undo_redo.commit_action()
+    record_history(action_name)
+
 func _on_bake():
     _log("Bake requested")
-    if level_root and level_root.has_method("bake"):
-        level_root.call("bake", true, false, get_collision_layer_mask())
+    _commit_state_action("Bake", "bake", [true, false, get_collision_layer_mask()])
 
 func _on_clear():
     _log("Clear brushes requested")
-    if level_root and level_root.has_method("clear_brushes"):
-        level_root.call("clear_brushes")
+    _commit_state_action("Clear Brushes", "clear_brushes")
 
 func _on_floor():
     _log("Create floor requested")
-    if level_root and level_root.has_method("create_floor"):
-        level_root.call("create_floor")
+    _commit_state_action("Create Floor", "create_floor")
 
 func _on_apply_cuts():
     _log("Apply cuts requested")
-    if level_root and level_root.has_method("apply_pending_cuts"):
-        level_root.call("apply_pending_cuts")
+    _commit_state_action("Apply Cuts", "apply_pending_cuts")
 
 func _on_clear_cuts():
     _log("Clear pending cuts requested")
-    if level_root and level_root.has_method("clear_pending_cuts"):
-        level_root.call("clear_pending_cuts")
+    _commit_state_action("Clear Pending Cuts", "clear_pending_cuts")
 
 func _on_commit_cuts():
     _log("Commit cuts requested (freeze=%s)" % (commit_freeze.button_pressed))
@@ -386,13 +497,11 @@ func _on_commit_cuts():
         var selection = editor_interface.get_selection()
         if selection:
             selection.clear()
-    if level_root and level_root.has_method("commit_cuts"):
-        level_root.call("commit_cuts")
+    _commit_state_action("Commit Cuts", "commit_cuts")
 
 func _on_restore_cuts():
     _log("Restore committed cuts requested")
-    if level_root and level_root.has_method("restore_committed_cuts"):
-        level_root.call("restore_committed_cuts")
+    _commit_state_action("Restore Committed Cuts", "restore_committed_cuts")
 
 func _connect_root_signals() -> void:
     if not connected_root:
@@ -539,6 +648,7 @@ func _setup_collapsible_sections() -> void:
     _bind_section(settings_toggle, settings_body, true)
     _bind_section(presets_toggle, presets_body, false)
     _bind_section(actions_toggle, actions_body, true)
+    _bind_section(history_toggle, history_body, false)
 
 func _bind_section(toggle: Button, body: Control, expanded: bool) -> void:
     if not toggle or not body:
