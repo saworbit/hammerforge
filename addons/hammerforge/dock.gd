@@ -82,6 +82,8 @@ var syncing_snap := false
 var debug_enabled := false
 var syncing_grid := false
 var presets_dir := "res://addons/hammerforge/presets"
+var entity_defs_path := "res://addons/hammerforge/entities.json"
+var entity_defs: Array = []
 var preset_buttons: Array[Button] = []
 var preset_context_button: Button = null
 var active_material: Material = null
@@ -306,6 +308,7 @@ func _ready():
     _sync_snap_buttons(grid_snap.value)
     _ensure_presets_dir()
     _load_presets()
+    _load_entity_definitions()
     set_process(true)
 
 func _process(delta):
@@ -713,6 +716,29 @@ func _load_presets() -> void:
         var preset = load(path)
         if preset and preset is BrushPreset:
             _create_preset_button(preset, path)
+
+func _load_entity_definitions() -> void:
+    entity_defs.clear()
+    if not ResourceLoader.exists(entity_defs_path):
+        return
+    var file = FileAccess.open(entity_defs_path, FileAccess.READ)
+    if not file:
+        _log("Failed to open entity definitions: %s" % entity_defs_path, true)
+        return
+    var text = file.get_as_text()
+    var data = JSON.parse_string(text)
+    if data == null:
+        _log("Failed to parse entity definitions: %s" % entity_defs_path, true)
+        return
+    if data is Dictionary:
+        var entries = data.get("entities", [])
+        if entries is Array:
+            entity_defs = entries
+    elif data is Array:
+        entity_defs = data
+
+func get_entity_definitions() -> Array:
+    return entity_defs.duplicate()
 
 func _clear_preset_buttons() -> void:
     for button in preset_buttons:

@@ -104,9 +104,9 @@ func _update_visuals() -> void:
             torus.pipe_radius = max(0.05, ring * 0.5)
             mesh_instance.mesh = torus
         BrushShape.PYRAMID, BrushShape.PRISM_TRI, BrushShape.PRISM_PENT, BrushShape.TETRAHEDRON, BrushShape.OCTAHEDRON, BrushShape.DODECAHEDRON, BrushShape.ICOSAHEDRON:
-            var draft_mesh = _generate_draft_mesh()
-            if draft_mesh:
-                mesh_instance.mesh = draft_mesh
+            var wire_mesh = _generate_wire_mesh()
+            if wire_mesh:
+                mesh_instance.mesh = wire_mesh
             else:
                 var fallback = BoxMesh.new()
                 fallback.size = size
@@ -117,7 +117,7 @@ func _update_visuals() -> void:
             mesh_instance.mesh = box_fallback
     _apply_material()
 
-func _generate_draft_mesh() -> ArrayMesh:
+func _generate_wire_mesh() -> ArrayMesh:
     var st = SurfaceTool.new()
     st.begin(Mesh.PRIMITIVE_LINES)
     match shape:

@@ -114,8 +114,8 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
     if event is InputEventKey:
         if event.pressed and not event.echo:
             if event.keycode == KEY_DELETE:
-                _delete_selected(root)
-                return EditorPlugin.AFTER_GUI_INPUT_STOP
+                var deleted = _delete_selected(root)
+                return EditorPlugin.AFTER_GUI_INPUT_STOP if deleted else EditorPlugin.AFTER_GUI_INPUT_PASS
             if event.ctrl_pressed and event.keycode == KEY_D:
                 _duplicate_selected(root)
                 return EditorPlugin.AFTER_GUI_INPUT_STOP
@@ -157,7 +157,7 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
     var selected_nodes: Array = []
     if selection:
         selected_nodes = selection.get_selected_nodes()
-    if tool == 1 and not paint_mode and _selection_has_brush(selected_nodes, root):
+    if tool == 1 and not paint_mode and (_selection_has_brush(selected_nodes, root) or _selection_has_entity(selected_nodes, root)):
         if event is InputEventMouseButton or event is InputEventMouseMotion:
             return EditorPlugin.AFTER_GUI_INPUT_PASS
 
@@ -170,7 +170,7 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
     if tool == 1 and event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
         var active_mat = dock.get_active_material() if dock.has_method("get_active_material") else null
         if paint_mode and active_mat:
-            var painted = root.pick_brush(target_camera, target_pos)
+            var painted = root.pick_brush(target_camera, target_pos, false)
             if painted:
                 _paint_brush_with_undo(root, painted, active_mat)
                 return EditorPlugin.AFTER_GUI_INPUT_STOP
@@ -241,6 +241,14 @@ func _selection_has_brush(nodes: Array, root: Node) -> bool:
             return true
     return false
 
+func _selection_has_entity(nodes: Array, root: Node) -> bool:
+    if not root or not root.has_method("is_entity_node"):
+        return false
+    for node in nodes:
+        if root.is_entity_node(node):
+            return true
+    return false
+
 func _get_undo_redo() -> EditorUndoRedoManager:
     return undo_redo_manager if undo_redo_manager else get_undo_redo()
 
@@ -277,7 +285,7 @@ func _commit_brush_placement(root: Node, info: Dictionary) -> void:
     undo_redo.commit_action()
     _record_history("Place Brush")
 
-func _delete_selected(root: Node) -> void:
+func _delete_selected(root: Node) -> bool:
     var selection = get_editor_interface().get_selection()
     var nodes = selection.get_selected_nodes()
     var deletable: Array = []
@@ -285,13 +293,13 @@ func _delete_selected(root: Node) -> void:
         if root.has_method("is_brush_node") and root.is_brush_node(node):
             deletable.append(node)
     if deletable.is_empty():
-        return
+        return false
     selection.clear()
     var undo_redo = _get_undo_redo()
     if not undo_redo:
         for node in deletable:
             root.delete_brush(node)
-        return
+        return true
     undo_redo.create_action("Delete Brushes")
     for node in deletable:
         var parent = node.get_parent()
@@ -303,6 +311,7 @@ func _delete_selected(root: Node) -> void:
         undo_redo.add_undo_method(root, "restore_brush", node, parent, owner, index)
     undo_redo.commit_action()
     _record_history("Delete Brushes")
+    return true
 
 func _duplicate_selected(root: Node) -> void:
     var selection = get_editor_interface().get_selection()

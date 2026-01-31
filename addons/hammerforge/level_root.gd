@@ -34,6 +34,7 @@ var _grid_snap: float = 16.0
 @export var brush_size_default: Vector3 = Vector3(32, 32, 32)
 @export_range(1, 32, 1) var bake_collision_layer_index: int = 1
 @export var bake_material_override: Material = null
+@export var bake_chunk_size: float = 32.0
 @export var commit_freeze: bool = true
 var _grid_visible: bool = false
 @export var grid_visible: bool = false:
@@ -54,6 +55,7 @@ signal grid_snap_changed(value: float)
 var draft_brushes_node: Node3D
 var pending_node: Node3D
 var committed_node: Node3D
+var entities_node: Node3D
 var brush_manager: BrushManager
 var baker: Baker
 var baked_container: Node3D
@@ -89,6 +91,7 @@ func _ready():
     _setup_draft_container()
     _setup_pending_container()
     _setup_committed()
+    _setup_entities_container()
     _setup_manager()
     _setup_baker()
     _setup_editor_grid()
@@ -172,6 +175,14 @@ func _setup_committed() -> void:
         committed_node.visible = false
         add_child(committed_node)
         _assign_owner(committed_node)
+
+func _setup_entities_container() -> void:
+    entities_node = get_node_or_null("Entities") as Node3D
+    if not entities_node:
+        entities_node = Node3D.new()
+        entities_node.name = "Entities"
+        add_child(entities_node)
+        _assign_owner(entities_node)
 
 func _setup_manager() -> void:
     brush_manager = get_node_or_null("BrushManager") as BrushManager
@@ -356,33 +367,14 @@ func bake(apply_cuts: bool = true, hide_live: bool = false, collision_layer_mask
     _log("Virtual Bake Started (apply_cuts=%s, hide_live=%s)" % [apply_cuts, hide_live])
     bake_started.emit()
 
-    var temp_csg = CSGCombiner3D.new()
-    temp_csg.hide()
-    temp_csg.use_collision = false
-    add_child(temp_csg)
-
-    var collision_csg = CSGCombiner3D.new()
-    collision_csg.hide()
-    collision_csg.use_collision = false
-    add_child(collision_csg)
-
-    var baked: Node3D = null
-    var collision_baked: Node3D = null
     var layer = collision_layer_mask if collision_layer_mask > 0 else _layer_from_index(bake_collision_layer_index)
+    var baked: Node3D = null
+    if bake_chunk_size > 0.0:
+        baked = await _bake_chunked(bake_chunk_size, layer)
+    else:
+        baked = await _bake_single(layer)
 
-    _append_draft_brushes_to_csg(draft_brushes_node, temp_csg)
-    if commit_freeze and committed_node:
-        _append_draft_brushes_to_csg(committed_node, temp_csg, true)
-
-    _append_draft_brushes_to_csg(draft_brushes_node, collision_csg, false, true)
-
-    await _await_csg_update()
-
-    baked = baker.bake_from_csg(temp_csg, bake_material_override, layer, layer)
     if baked:
-        collision_baked = baker.bake_from_csg(collision_csg, null, layer, layer)
-        _apply_collision_from_bake(baked, collision_baked, layer)
-
         if baked_container:
             baked_container.queue_free()
         baked_container = baked
@@ -399,10 +391,108 @@ func bake(apply_cuts: bool = true, hide_live: bool = false, collision_layer_mask
         _log("Bake failed")
         bake_finished.emit(false)
 
+func _bake_single(layer: int) -> Node3D:
+    var temp_csg = CSGCombiner3D.new()
+    temp_csg.hide()
+    temp_csg.use_collision = false
+    add_child(temp_csg)
+
+    var collision_csg = CSGCombiner3D.new()
+    collision_csg.hide()
+    collision_csg.use_collision = false
+    add_child(collision_csg)
+
+    _append_draft_brushes_to_csg(draft_brushes_node, temp_csg)
+    if commit_freeze and committed_node:
+        _append_draft_brushes_to_csg(committed_node, temp_csg, true)
+    _append_draft_brushes_to_csg(draft_brushes_node, collision_csg, false, true)
+
+    await _await_csg_update()
+
+    var baked = baker.bake_from_csg(temp_csg, bake_material_override, layer, layer)
+    var collision_baked: Node3D = null
+    if baked:
+        collision_baked = baker.bake_from_csg(collision_csg, null, layer, layer)
+        _apply_collision_from_bake(baked, collision_baked, layer)
+
     temp_csg.queue_free()
     collision_csg.queue_free()
     if collision_baked:
         collision_baked.free()
+    return baked
+
+func _bake_chunked(chunk_size: float, layer: int) -> Node3D:
+    var size = max(0.001, chunk_size)
+    var chunks: Dictionary = {}
+    _collect_chunk_brushes(draft_brushes_node, size, chunks, "brushes")
+    if commit_freeze and committed_node:
+        _collect_chunk_brushes(committed_node, size, chunks, "committed")
+    if chunks.is_empty():
+        return null
+
+    var container = Node3D.new()
+    container.name = "BakedGeometry"
+    var chunk_count = 0
+    for coord in chunks:
+        var entry: Dictionary = chunks[coord]
+        var brushes: Array = entry.get("brushes", [])
+        var committed: Array = entry.get("committed", [])
+        if brushes.is_empty() and committed.is_empty():
+            continue
+
+        var temp_csg = CSGCombiner3D.new()
+        temp_csg.hide()
+        temp_csg.use_collision = false
+        add_child(temp_csg)
+
+        var collision_csg = CSGCombiner3D.new()
+        collision_csg.hide()
+        collision_csg.use_collision = false
+        add_child(collision_csg)
+
+        _append_brush_list_to_csg(brushes, temp_csg)
+        if commit_freeze:
+            _append_brush_list_to_csg(committed, temp_csg, true)
+        _append_brush_list_to_csg(brushes, collision_csg, false, true)
+
+        await _await_csg_update()
+
+        var baked_chunk = baker.bake_from_csg(temp_csg, bake_material_override, layer, layer)
+        if baked_chunk:
+            var collision_baked = baker.bake_from_csg(collision_csg, null, layer, layer)
+            _apply_collision_from_bake(baked_chunk, collision_baked, layer)
+            baked_chunk.name = "BakedChunk_%s_%s_%s" % [coord.x, coord.y, coord.z]
+            container.add_child(baked_chunk)
+            _assign_owner(baked_chunk)
+            chunk_count += 1
+            if collision_baked:
+                collision_baked.free()
+
+        temp_csg.queue_free()
+        collision_csg.queue_free()
+
+    return container if chunk_count > 0 else null
+
+func _collect_chunk_brushes(source: Node3D, chunk_size: float, chunks: Dictionary, key: String) -> void:
+    if not source:
+        return
+    for child in source.get_children():
+        if not (child is DraftBrush):
+            continue
+        if _is_entity_node(child):
+            continue
+        var coord = _chunk_coord((child as Node3D).global_position, chunk_size)
+        if not chunks.has(coord):
+            chunks[coord] = { "brushes": [], "committed": [] }
+        chunks[coord][key].append(child)
+
+func _chunk_coord(position: Vector3, chunk_size: float) -> Vector3i:
+    var size = max(0.001, chunk_size)
+    return Vector3i(
+        int(floor(position.x / size)),
+        int(floor(position.y / size)),
+        int(floor(position.z / size))
+    )
 
 func _append_draft_brushes_to_csg(
     source: Node3D,
@@ -412,8 +502,20 @@ func _append_draft_brushes_to_csg(
 ) -> void:
     if not source or not target:
         return
-    for child in source.get_children():
+    _append_brush_list_to_csg(source.get_children(), target, force_subtract, only_additive)
+
+func _append_brush_list_to_csg(
+    brushes: Array,
+    target: CSGCombiner3D,
+    force_subtract: bool = false,
+    only_additive: bool = false
+) -> void:
+    if not target:
+        return
+    for child in brushes:
         if not (child is DraftBrush):
+            continue
+        if _is_entity_node(child):
             continue
         var draft: DraftBrush = child
         if only_additive and (force_subtract or draft.operation == CSGShape3D.OPERATION_SUBTRACTION):
@@ -839,8 +941,24 @@ func restore_state(state: Dictionary) -> void:
         baked_container.queue_free()
         baked_container = null
 
+func _is_entity_node(node: Node) -> bool:
+    if not node or not (node is Node3D):
+        return false
+    if bool(node.get_meta("is_entity", false)):
+        return true
+    if not entities_node:
+        return false
+    var current: Node = node
+    while current:
+        if current == entities_node:
+            return true
+        current = current.get_parent()
+    return false
+
 func is_brush_node(node: Node) -> bool:
     if not node or not (node is DraftBrush):
+        return false
+    if _is_entity_node(node):
         return false
     if node == pending_node:
         return false
@@ -848,6 +966,9 @@ func is_brush_node(node: Node) -> bool:
     if parent == pending_node:
         return true
     return parent == draft_brushes_node
+
+func is_entity_node(node: Node) -> bool:
+    return _is_entity_node(node)
 
 func restore_brush(brush: Node, parent: Node, owner: Node, index: int) -> void:
     if not brush or not parent:
@@ -1138,14 +1259,15 @@ func _compute_brush_info(origin: Vector3, current: Vector3, height: float, shape
         final_size = Vector3(radius * 2.0, height, radius * 2.0)
     return { "center": center, "size": final_size }
 
-func pick_brush(camera: Camera3D, mouse_pos: Vector2) -> Node:
+func pick_brush(camera: Camera3D, mouse_pos: Vector2, include_entities: bool = true) -> Node:
     if not draft_brushes_node or not camera:
         return null
     var ray_origin = camera.project_ray_origin(mouse_pos)
     var ray_dir = camera.project_ray_normal(mouse_pos).normalized()
     var closest = null
     var best_t = INF
-    for child in _iter_pick_nodes():
+    var nodes = _iter_pick_nodes()
+    for child in nodes:
         if not (child is DraftBrush):
             continue
         var mesh_inst: MeshInstance3D = child.mesh_instance
@@ -1159,7 +1281,18 @@ func pick_brush(camera: Camera3D, mouse_pos: Vector2) -> Node:
         if t >= 0.0 and t < best_t:
             best_t = t
             closest = child
-    return closest
+    if closest or not include_entities:
+        return closest
+    var closest_entity: Node = null
+    var best_entity_t = INF
+    for child in nodes:
+        if not (child is Node3D) or not _is_entity_node(child):
+            continue
+        var t_entity = _entity_pick_distance(child as Node3D, ray_origin, ray_dir)
+        if t_entity >= 0.0 and t_entity < best_entity_t:
+            best_entity_t = t_entity
+            closest_entity = child
+    return closest_entity
 
 func get_live_brush_count() -> int:
     var count = 0
@@ -1171,7 +1304,7 @@ func get_live_brush_count() -> int:
 func update_hover(camera: Camera3D, mouse_pos: Vector2) -> void:
     if not hover_highlight or not camera:
         return
-    var brush = pick_brush(camera, mouse_pos)
+    var brush = pick_brush(camera, mouse_pos, false)
     if brush and brush is DraftBrush:
         var mesh_inst: MeshInstance3D = brush.mesh_instance
         if not mesh_inst:
@@ -1194,7 +1327,52 @@ func _iter_pick_nodes() -> Array:
         nodes.append_array(draft_brushes_node.get_children())
     if pending_node:
         nodes.append_array(pending_node.get_children())
+    if entities_node:
+        nodes.append_array(entities_node.get_children())
     return nodes
+
+func _gather_visual_instances(node: Node, out: Array) -> void:
+    if not node:
+        return
+    if node is VisualInstance3D:
+        out.append(node)
+    for child in node.get_children():
+        _gather_visual_instances(child, out)
+
+func _entity_pick_distance(entity: Node3D, ray_origin: Vector3, ray_dir: Vector3) -> float:
+    if not entity:
+        return -1.0
+    var visuals: Array = []
+    _gather_visual_instances(entity, visuals)
+    var best_t = INF
+    for visual in visuals:
+        var vis = visual as VisualInstance3D
+        if not vis:
+            continue
+        var inv = vis.global_transform.affine_inverse()
+        var local_origin = inv * ray_origin
+        var local_dir = (inv.basis * ray_dir).normalized()
+        var aabb = vis.get_aabb()
+        var t = _ray_intersect_aabb(local_origin, local_dir, aabb)
+        if t >= 0.0 and t < best_t:
+            best_t = t
+    if best_t < INF:
+        return best_t
+    var radius = max(0.5, grid_snap * 0.25)
+    return _ray_intersect_sphere(ray_origin, ray_dir, entity.global_position, radius)
+
+func _ray_intersect_sphere(origin: Vector3, dir: Vector3, center: Vector3, radius: float) -> float:
+    var oc = origin - center
+    var b = oc.dot(dir)
+    var c = oc.dot(oc) - radius * radius
+    var h = b * b - c
+    if h < 0.0:
+        return -1.0
+    var sqrt_h = sqrt(h)
+    var t = -b - sqrt_h
+    if t < 0.0:
+        t = -b + sqrt_h
+    return t if t >= 0.0 else -1.0
 
 func _ray_intersect_aabb(origin: Vector3, dir: Vector3, aabb: AABB) -> float:
     var tmin = -INF

@@ -17,6 +17,7 @@ This guide explains how to use HammerForge inside the Godot 4.6 editor. It cover
 
 - Hosts the **DraftBrushes** and **PendingCuts** containers where all editable brushes live.
 - Stores **CommittedCuts** when Freeze Commit is enabled (hidden subtract brushes that can be restored).
+- Hosts **Entities** for non-geometry nodes (entities are selectable but excluded from bake).
 - Tracks brushes for **selection**, **undo/redo**, and **cleanup**.
 - Owns the **Baker** that builds a temporary CSG tree at bake time to create a static mesh + collision.
 - Ensures all generated nodes are saved with the scene (ownership in the editor).
@@ -138,20 +139,29 @@ HammerForge uses a two-stage drag workflow:
 1. Set **Tool = Select**.
 2. Hover highlight shows the brush under the cursor.
 3. Click a brush to select it. (If Paint Mode is enabled, clicks apply material instead.)
-4. Shift-click to multi-select.
-5. Press **Delete** to remove selected brushes.
-6. Press **Ctrl+D** to duplicate selected brushes.
-7. Use Ctrl+Arrow or Ctrl+PageUp/PageDown to nudge selected brushes by the grid size.
+4. Entities are selectable when placed under `Entities` or tagged with `is_entity` (Paint Mode ignores them).
+5. Shift-click to multi-select.
+6. Press **Delete** to remove selected brushes.
+7. Press **Ctrl+D** to duplicate selected brushes.
+8. Use Ctrl+Arrow or Ctrl+PageUp/PageDown to nudge selected brushes by the grid size.
    - Ctrl+Arrow: X/Z move.
    - Ctrl+PageUp/PageDown: Y move.
-8. Use the standard Godot transform gizmos (move/rotate/scale) on selected brushes.
-9. Use the DraftBrush face handles (white circles) to resize; the yellow wireframe is only a guide.
+9. Use the standard Godot transform gizmos (move/rotate/scale) on selected brushes.
+10. Use the DraftBrush face handles (white circles) to resize; the yellow wireframe is only a guide.
 
 ## Material Painting (Paint Mode)
 1. Click **Active Material** and pick a .tres or .material resource.
 2. Enable **Paint Mode**.
 3. Click brushes in the viewport to apply the active material.
 4. Disable Paint Mode to return to selection.
+
+## Entities (early)
+Entities are non-geometry nodes that should not participate in CSG or bake.
+
+- Place nodes under `LevelRoot/Entities` or add meta `is_entity = true`.
+- Entities are selectable and movable with standard gizmos.
+- Entities are ignored by Bake and do not affect collision.
+- Definitions can be authored in `res://addons/hammerforge/entities.json` (used by future palette UI).
 
 ## Subtract Tips
 - Subtract brushes are staged until you click **Apply Cuts** (or Bake).
@@ -166,8 +176,14 @@ HammerForge uses a two-stage drag workflow:
 ## Bake Output
 When you press **Bake**, HammerForge builds a temporary CSG tree from DraftBrushes and creates:
 - `BakedGeometry` (Node3D)
-  - `MeshInstance3D` with the merged mesh
-  - `StaticBody3D` with a trimesh collision shape (Add brushes only; Subtract brushes are excluded)
+  - `BakedChunk_x_y_z` (Node3D) when chunked baking is enabled
+    - `MeshInstance3D` with the merged mesh
+    - `StaticBody3D` with a trimesh collision shape (Add brushes only; Subtract brushes are excluded)
+  - If chunking is disabled, `BakedGeometry` contains the `MeshInstance3D` and `StaticBody3D` directly.
+
+Chunked baking is controlled by `LevelRoot.bake_chunk_size`:
+- `> 0`: chunked output (default 32 units)
+- `<= 0`: single bake output (no chunk splitting)
 
 You can playtest with a CharacterBody3D or FPS controller after baking.
 
@@ -214,6 +230,10 @@ HammerForge adds a high-contrast editor-only grid plane for clearer placement.
 - Make sure a DraftBrush is selected.
 - Drag the white circle handles (not the wireframe).
 - Confirm the 3D viewport "Gizmos" toggle is enabled.
+
+**Entity not selectable**
+- Place it under `LevelRoot/Entities` or set meta `is_entity = true`.
+- Ensure the node has a visible child (MeshInstance3D, Sprite3D, etc.) for easier picking.
 
 **Need diagnostics**
 - Enable **Debug Logs** in the dock to print tool actions and bake/cut steps.

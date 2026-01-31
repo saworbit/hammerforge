@@ -43,7 +43,8 @@ addons/
     |-- brush_instance.gd  # DraftBrush node (Node3D + MeshInstance3D)
     |-- brush_gizmo_plugin.gd # DraftBrush resize gizmo (viewport handles)
     |-- brush_manager.gd   # Brush lifecycle helper
-    `-- baker.gd           # Bake helper that creates meshes + collision
+    |-- baker.gd           # Bake helper that creates meshes + collision
+    `-- entities.json      # Entity definitions (JSON)
 ```
 
 ## Step-by-Step Build
@@ -62,7 +63,7 @@ addons/
    * `dock.gd` exposes `get_operation()`, `get_brush_size()`, `get_shape()`, `get_grid_snap()`.
    * The script keeps a reference to `LevelRoot` in the current scene.
 
-4. **LevelRoot** – `level_root.gd` extends `Node3D`, sets up `DraftBrushes`, `PendingCuts`, `CommittedCuts`, a `BrushManager`, and a `Baker`.
+4. **LevelRoot** – `level_root.gd` extends `Node3D`, sets up `DraftBrushes`, `PendingCuts`, `CommittedCuts`, `Entities`, a `BrushManager`, and a `Baker`.
    * LevelRoot can be a single node in the scene; it creates helper children on _ready().
    * CAD-style draw flow: drag to set base, release to set height, click to commit.
    * `place_brush(mouse_pos, operation, size)` can still place a default brush.
@@ -70,6 +71,7 @@ addons/
    * Apply Cuts marks subtracts as active for Bake (no live CSG).
    * Commit Cuts bakes and optionally freezes subtracts for later restore.
    * `bake()` builds a temporary CSG tree and delegates to `Baker` to convert it into baked meshes + collision.
+   * `bake_chunk_size` controls chunked baking (default 32). Set `<= 0` to disable chunk splitting.
    * `clear_brushes()` empties the manager and queues existing brushes.
 
 5. **DraftBrush** – `brush_instance.gd` is a `Node3D` with a `MeshInstance3D`, storing shape, size, operation, and material for fast editor previews.
@@ -114,6 +116,8 @@ These are quality-of-life improvements added after the MVP core:
 11. **History Panel (beta)** - Undo/Redo controls plus a recent action list for HammerForge actions.
 12. **Viewport Brush Gizmo** - Face handles to resize DraftBrushes while keeping the opposite face pinned.
 13. **Draft Mesh Parity** - Line-mesh previews for pyramids/prisms/platonic solids in DraftBrush.
+14. **Chunked Baking** - `bake_chunk_size` splits large maps into chunked bakes.
+15. **Entity System (early)** - `Entities` container and `is_entity` meta are selectable and excluded from bake.
 
 ## Troubleshooting Notes
 

@@ -1,0 +1,19 @@
+{
+  "entities": [
+    {
+      "class": "PlayerSpawn",
+      "node": "Marker3D",
+      "props": {
+        "team": "default"
+      }
+    },
+    {
+      "class": "PointLight",
+      "node": "OmniLight3D",
+      "props": {
+        "energy": 1.0,
+        "range": 10.0
+      }
+    }
+  ]
+}

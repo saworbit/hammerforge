@@ -61,6 +61,7 @@
 - **Dynamic Editor Grid**: High-contrast shader grid that follows the active axis/brush
 - **Viewport Brush Gizmos**: Drag face handles to resize DraftBrushes with undo/redo support
 - **Material Paint Mode**: Pick an active material and click brushes to apply it
+- **Entity Selection (early)**: Nodes under `Entities` or tagged `is_entity` are selectable and ignored by bake
 - **Collapsible Dock Sections**: Collapse Settings/Presets/Actions to reduce clutter
 - **Physics Layer Presets**: Set baked collision layers with a single dropdown
 - **Live Brush Count**: Real-time count of draft brushes with performance warning colors
@@ -83,6 +84,7 @@
 - **Nudge** with Ctrl+Arrow and Ctrl+PageUp/PageDown (arrow keys work when the 3D viewport has focus)
 - **Use Godot Gizmos** for move/rotate/scale on selected brushes
 - **Resize with Face Handles**: Drag the DraftBrush face handles to resize while the opposite face stays pinned
+- **Entities are selectable** when placed under `Entities` or tagged with `is_entity` (not included in bake)
 
 ### ⚡ Pending Subtract System
 - **Stage Your Cuts**: Subtract brushes appear solid red until applied
@@ -95,6 +97,7 @@
 - Auto-generates **trimesh collision** (StaticBody3D) using Add brushes only (Subtracts are excluded)
 - Removes hidden geometry for better performance
 - Subtract previews do not bleed into baked materials
+- **Chunked Bake**: set `bake_chunk_size` on `LevelRoot` to split large maps into chunk bakes (set `<= 0` to disable)
 
 ---
 
@@ -122,6 +125,7 @@ your-project/
 |       |-- brush_manager.gd
 |       |-- brush_instance.gd
 |       |-- brush_gizmo_plugin.gd
+|       |-- entities.json
 |       `-- icon.png
 `-- project.godot
 ```
@@ -129,6 +133,7 @@ your-project/
 Notes:
 - `DraftBrushes` stores lightweight DraftBrush nodes used during editing (no live CSG).
 - `CommittedCuts` stores frozen subtract brushes when "Freeze Commit" is enabled.
+- `Entities` stores non-geometry nodes (selection-only, excluded from bake).
 - `EditorGrid` (MeshInstance3D) is editor-only and not saved to scenes.
 - `LevelRoot` can be a single node; child helpers are created automatically if missing.
 
@@ -277,9 +282,11 @@ LevelRoot (Node3D)
 │   └── ...
 ├── PendingCuts (Node3D)          ← Staged subtracts (DraftBrush)
 ├── CommittedCuts (Node3D)        ← Hidden frozen cuts (optional)
-└── BakedGeometry (Node3D)        ← Output after bake
-    ├── MeshInstance3D
-    └── StaticBody3D
+├── Entities (Node3D)             ← Non-geometry nodes (not baked)
+└── BakedGeometry (Node3D)        ← Output after bake (chunked if enabled)
+    └── BakedChunk_x_y_z (Node3D)
+        ├── MeshInstance3D
+        └── StaticBody3D
 ```
 
 ---
@@ -298,8 +305,8 @@ LevelRoot (Node3D)
 - [ ] **Undo/Redo** - History panel and editor undo hooks (beta)
 - [x] **More Shapes** - Wedge, Sphere, Cone, Pyramid, Prisms, Ellipsoid, Capsule, Torus, Platonic solids
 - [ ] **Texture Support** - Per-face material painting and UV tools
-- [ ] **Chunked Baking** - LOD generation for large levels
-- [ ] **Entity System** - Spawn points, triggers, lights
+- [x] **Chunked Baking** - Bake large maps by chunk with `bake_chunk_size`
+- [x] **Entity System** - Selectable entities under `Entities` or tagged `is_entity` (excluded from bake)
 
 ### 🔮 Future Modules
 - [ ] **TerrainModule** - GPU heightmap sculpting

@@ -21,7 +21,7 @@ The format is based on "Keep a Changelog", and this project follows semantic ver
 - Prefab factory for advanced shapes with dynamic shape palette.
 - Added wedges, pyramids, prisms, cones, spheres, ellipsoids, capsules, torus, and platonic solids.
 - Mesh prefab scaling now respects brush dimensions (capsule/torus/solids).
-- Quadrant viewport mode with Top/Front/Side/3D cameras.
+- Native 4-view layout guidance (uses Godot's built-in view layout).
 - Multi-select (Shift-click), Delete to remove, Ctrl+D to duplicate.
 - Nudge selected brushes with arrow keys and PageUp/PageDown.
 - Auto-create `LevelRoot` on first click if missing.
@@ -31,6 +31,9 @@ The format is based on "Keep a Changelog", and this project follows semantic ver
 - Commit cuts improvements: multi-mesh bake, freeze/restore committed cuts, bake status, bake collision layer control.
 - Viewport DraftBrush resize gizmo with face handles (undo/redo friendly).
 - Line-mesh draft previews for pyramids, prisms, and platonic solids.
+- Chunked baking via `LevelRoot.bake_chunk_size` (default 32).
+- Entities container (`LevelRoot/Entities`) and `is_entity` meta for selection-only nodes (excluded from bake).
+- Entity definitions JSON loader (`res://addons/hammerforge/entities.json`).
 - Collision baking uses Add brushes only (Subtract brushes excluded).
 
 ### Fixed
@@ -42,4 +45,4 @@ The format is based on "Keep a Changelog", and this project follows semantic ver
 
 ### Documentation
 - Added user guide and expanded LevelRoot explanation.
-- Updated MVP guide and spec to reflect current workflow.
+- Updated README, user guide, MVP guide, and spec for chunked baking and entity workflow.
