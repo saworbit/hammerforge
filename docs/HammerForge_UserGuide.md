@@ -1,6 +1,6 @@
 # HammerForge User Guide (MVP)
 
-This guide explains how to use HammerForge inside the Godot 4.6 editor. It covers the current MVP features: drag-based brush creation, CSG add/subtract, selection, and baking.
+This guide explains how to use HammerForge inside the Godot 4.6 editor. It covers the current MVP features: drag-based brush creation, draft add/subtract operations, selection, and baking.
 
 ## Quick Start
 1. Enable the plugin: **Project ▶ Project Settings ▶ Plugins ▶ HammerForge**.
@@ -9,14 +9,16 @@ This guide explains how to use HammerForge inside the Godot 4.6 editor. It cover
    - HammerForge auto-creates a `LevelRoot` if it does not exist.
 4. (Optional) Click **Create Floor** in the dock for a temporary collidable surface.
 5. Use **Apply Cuts** to commit staged Subtract brushes (Bake also applies them).
+   - Carve results are visible after Bake.
    - Use **Commit Cuts** to bake and keep the carve while removing the cut shapes.
 
 ## What is LevelRoot (and why it’s required)
 `LevelRoot` is the main container node that HammerForge uses to manage your level data. It is required because it:
 
-- Hosts the **CSG combiner** (`BrushCSG`) where all live brushes are stored.
+- Hosts the **DraftBrushes** and **PendingCuts** containers where all editable brushes live.
+- Stores **CommittedCuts** when Freeze Commit is enabled (hidden subtract brushes that can be restored).
 - Tracks brushes for **selection**, **undo/redo**, and **cleanup**.
-- Owns the **Baker** that converts CSG into a static mesh + collision.
+- Owns the **Baker** that builds a temporary CSG tree at bake time to create a static mesh + collision.
 - Ensures all generated nodes are saved with the scene (ownership in the editor).
 - Can start as a single node; child helpers are created automatically if missing.
 
@@ -37,7 +39,7 @@ Sections can be collapsed using the toggle button in each header.
 
 **Mode**
 - **Add**: creates solid geometry.
-- **Subtract**: creates a pending cut shape that does not carve until applied.
+- **Subtract**: creates a pending cut shape that does not carve until applied (carve is visible after Bake).
 
 **Shape Palette**
 - Choose from Box, Cylinder, Sphere, Cone, Wedge, Pyramid, Prisms, Ellipsoid, Capsule, Torus, and Platonic solids. Mesh-based shapes scale to brush size.
@@ -80,7 +82,7 @@ Sections can be collapsed using the toggle button in each header.
 - Adds a temporary CSGBox floor under LevelRoot for easy raycast placement.
 
 **Apply Cuts**
-- Converts pending Subtract brushes into live cuts that carve the geometry.
+- Converts pending Subtract brushes into active cuts used during Bake.
   - Tip: create a cut, switch to **Select**, position it with gizmos, then **Apply Cuts**.
 
 **Clear Pending Cuts**
@@ -88,22 +90,22 @@ Sections can be collapsed using the toggle button in each header.
 
 **Commit Cuts (Bake)**
 - Applies pending cuts, bakes the mesh, and removes applied subtract brushes.
-- Hides the live CSG so the baked result is clearly visible.
+- Hides draft brushes so the baked result is clearly visible.
 - Use this if you want the carve to remain even after deleting the cut shapes.
-- To keep editing, re-enable visibility on `BrushCSG` (and `PendingCuts` if needed).
-- Subtract brush materials are neutralized during bake so carved faces match the rest.
+- To keep editing, re-enable visibility on `DraftBrushes` (and `PendingCuts` if needed).
+- Subtract preview materials do not carry into the baked mesh.
 
 **Restore Committed Cuts**
-- Moves hidden committed cuts back into the live CSG so they can be edited again.
+- Moves hidden committed cuts back into DraftBrushes so they can be edited again.
 
 **Bake**
-- Converts the live CSG into a static mesh + collision.
+- Builds a temporary CSG tree from DraftBrushes and bakes a static mesh + collision.
 
 **Status**
 - Shows bake progress (e.g., "Baking..." or "Ready").
 
 **Live Brushes**
-- Shows the active brush count with performance warning colors.
+- Shows the draft brush count with performance warning colors.
 
 **History (beta)**
 - Shows recent HammerForge actions.
@@ -151,16 +153,16 @@ HammerForge uses a two-stage drag workflow:
 
 ## Subtract Tips
 - Subtract brushes are staged until you click **Apply Cuts** (or Bake).
-- Only overlapping areas will carve from Add brushes.
+- Only overlapping areas will carve from Add brushes (visible after Bake).
 - For clear results: add a large block first, then subtract smaller ones.
 - Pending cuts appear as solid red geometry so you can position them before applying.
 - Applied cuts are procedural; deleting them removes the carve unless you **Commit Cuts** (Bake).
-- **Commit Cuts** hides the live CSG and leaves the baked mesh visible.
+- **Commit Cuts** hides draft brushes and leaves the baked mesh visible.
 - If **Freeze Commit** is enabled, you can bring cuts back with **Restore Committed Cuts**.
-- Commit also neutralizes subtract materials during bake so carved faces do not inherit the red preview color.
+- Subtract preview materials do not affect the baked mesh.
 
 ## Bake Output
-When you press **Bake**, HammerForge creates:
+When you press **Bake**, HammerForge builds a temporary CSG tree from DraftBrushes and creates:
 - `BakedGeometry` (Node3D)
   - `MeshInstance3D` with the merged mesh
   - `StaticBody3D` with a trimesh collision shape
@@ -201,6 +203,7 @@ HammerForge adds a high-contrast editor-only grid plane for clearer placement.
 
 **Subtract does nothing**
 - Ensure your subtract brush overlaps an existing Add brush.
+- Remember: carve results are visible after Bake.
 
 **Dock not showing**
 - Restart Godot after enabling the plugin.

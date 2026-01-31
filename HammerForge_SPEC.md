@@ -3,7 +3,7 @@
 
 ## Overview
 - **Target:** Godot 4.3+ editor plugin for FPS level creation (Quake-style).  
-- **Promise:** Browser-free, single-tool workflow—brush CSG, entities, optimization, and playtesting without leaving the editor.  
+- **Promise:** Browser-free, single-tool workflow—draft brushes, bake-time CSG, entities, optimization, and playtesting without leaving the editor.  
 - **Delivery:** Asset Library install → enable plugin → add `LevelRoot.tscn` → edit instantly with presets for FPS gameplay.
 
 ## Why This Wins
@@ -23,7 +23,7 @@ HammerForge (EditorPlugin)
 │   ├── Dock (Brush/Entities/Textures/Settings)
 │   └── Toolbar & Viewport Overlays (grid, gizmos, shortcuts)
 ├── Core Layer (LevelRoot Node, autoload)
-│   ├── BrushSystem       # CSG ops, raycast placement, texture paint
+│   ├── BrushSystem       # Draft brush ops, raycast placement, texture paint
 │   ├── EntitySystem      # JSON FGD parser, instancer, signals
 │   ├── OptimizationSystem# Chunk baker, navmesh/lightmap/collision/LOD
 │   └── PreviewSystem     # FPS flycam, lighting preview, hot-reload
@@ -39,6 +39,7 @@ HammerForge (EditorPlugin)
 
 ### Brush Editing
 - Add/subtract brushes (box, cylinder) with CAD-style drag: base drag + height stage.
+- Editing uses DraftBrush nodes for speed; CSG is generated only during Bake.
 - Subtract brushes can be staged as pending cuts and applied on demand.
 - Grid/snap options (1–64 units), quick Create Floor for raycast placement.
 - Undo/redo buffer + history panels; autosave `.hflevel` every 5 minutes.
@@ -51,6 +52,7 @@ HammerForge (EditorPlugin)
 
 ### Optimization & Baking
 - Chunk-level baking (configurable e.g., 128m tiles) merges visible faces, auto-culls hidden geometry.
+- Bake builds a temporary CSG tree from DraftBrush data to generate static meshes.
 - Generates `NavMeshInstance3D`, `LightmapGI`, collision meshes, LODs, and multi-threaded merge tasks.
 - Chunk scenes combine `StaticBody3D` + optimized meshes for runtime.
 - Versioned saves support incremental builds and reconstruction.
@@ -111,9 +113,11 @@ var space_state = get_world_3d().direct_space_state
 var query = PhysicsRayQueryParameters3D.from_viewport(viewport, mouse_pos)
 var hit = space_state.intersect_ray(query)
 if hit:
-    var brush = BrushInstance3D.new(hit.position, size, shape)
-    level_root.add_brush(brush)
-    brush.mesh = generate_convex_hull()
+    var brush = DraftBrush.new()
+    brush.shape = shape
+    brush.size = size
+    brush.global_position = hit.position
+    level_root.get_node("DraftBrushes").add_child(brush)
 ```
 
 ### Optimization/Baking (`optimizer.gd`)
@@ -191,12 +195,12 @@ C:/hammerforge/
 ## Roadmap
 | Phase | Duration | Deliverable |
 | --- | --- | --- |
-| MVP | 1–2w | Brush placement, CSG preview, dock, simple bake |
+| MVP | 1–2w | Brush placement, draft preview, dock, simple bake |
 | Core | 2–4w | Entity integration, optimizer, FPS preview |
 | Polish | 2w | UI/shortcuts, import/export, modules |
 | Release | 1w | Asset Library submission, docs/video |
 
 ## Next Actions
 1. Scaffold plugin folder per file layout above; start with `plugin.gd`, `level_root.gd`, and dock scene.  
-2. Build brush/editor prototype (Phase 1) using Godot’s CSG demo as reference.  
+2. Build brush/editor prototype (Phase 1) using DraftBrush previews and bake-time CSG as reference.  
 3. Later phases cover entity parser, optimizer, preview, and modules.

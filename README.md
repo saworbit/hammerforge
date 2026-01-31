@@ -28,7 +28,7 @@
 
 ## 🎯 What is HammerForge?
 
-**HammerForge** is a Godot Editor Plugin that brings classic brush-based level design workflows—inspired by **Hammer Editor** and **TrenchBroom**—directly into the Godot editor. Create complete FPS levels with CSG brushes, subtract carve operations, and one-click baking to optimized static meshes.
+**HammerForge** is a Godot Editor Plugin that brings classic brush-based level design workflows—inspired by **Hammer Editor** and **TrenchBroom**—directly into the Godot editor. Create complete FPS levels with lightweight draft brushes, subtract carve operations, and one-click baking to optimized static meshes (CSG is only invoked during Bake).
 
 > **Browser-free. Single-tool. Pure Godot.**
 
@@ -48,8 +48,9 @@
 - **CAD-Style Two-Stage Drawing**
   - Stage 1: Click & drag to define base dimensions
   - Stage 2: Move mouse to set height, click to commit
+- **Draft Brush Editing**: Lightweight DraftBrush nodes for fast editor transforms (CSG is generated only during Bake)
 - **Shape Palette**: Box, Cylinder, Sphere, Cone, Wedge, Pyramid, Prisms, Ellipsoid, Capsule, Torus, and Platonic solids (mesh shapes scale to brush size)
-- **CSG Operations**: Add (union) and Subtract (carve)
+- **Brush Operations**: Add (union) and Subtract (carve at bake time)
 - **Grid Snapping**: Configurable 1-128 unit increments
 
 ### Editor UX
@@ -60,7 +61,7 @@
 - **Material Paint Mode**: Pick an active material and click brushes to apply it
 - **Collapsible Dock Sections**: Collapse Settings/Presets/Actions to reduce clutter
 - **Physics Layer Presets**: Set baked collision layers with a single dropdown
-- **Live Brush Count**: Real-time warning when active CSG gets heavy
+- **Live Brush Count**: Real-time count of draft brushes with performance warning colors
 - **History Panel (beta)**: Undo/Redo buttons plus a recent action list for HammerForge actions
 
 ### ⌨️ Modifier Keys
@@ -82,15 +83,15 @@
 
 ### ⚡ Pending Subtract System
 - **Stage Your Cuts**: Subtract brushes appear solid red until applied
-- **Preview Before Carving**: Position cuts precisely before committing
+- **Preview Before Carving**: Position cuts precisely before committing (carve becomes visible after Bake)
 - **Non-Destructive**: Clear pending cuts without affecting geometry
-- **Commit Cuts**: Bake and keep the carve while hiding live CSG
+- **Commit Cuts**: Bake and keep the carve while hiding draft brushes (optional freeze keeps cut brushes)
 
 ### 🏗️ One-Click Baking
-- Converts live CSG to optimized **MeshInstance3D**
+- Builds a temporary CSG tree from DraftBrushes and bakes **MeshInstance3D**
 - Auto-generates **trimesh collision** (StaticBody3D)
 - Removes hidden geometry for better performance
-- Neutralizes subtract materials so carved faces match the final material
+- Subtract previews do not bleed into baked materials
 
 ---
 
@@ -122,6 +123,7 @@ your-project/
 ```
 
 Notes:
+- `DraftBrushes` stores lightweight DraftBrush nodes used during editing (no live CSG).
 - `CommittedCuts` stores frozen subtract brushes when "Freeze Commit" is enabled.
 - `EditorGrid` (MeshInstance3D) is editor-only and not saved to scenes.
 - `LevelRoot` can be a single node; child helpers are created automatically if missing.
@@ -156,8 +158,8 @@ Notes:
 1. Switch to "Subtract" mode
 2. Draw a brush that overlaps existing geometry
    → Appears as solid red (pending cut)
-3. Click "Apply Cuts" to carve
-   → Subtract brushes now cut into the geometry
+3. Click "Apply Cuts" to arm the carve
+   → Subtract brushes become active for the next Bake
 ```
 
 ### 4. Bake for Performance
@@ -181,7 +183,7 @@ Sections can be collapsed using the toggle button in each header.
 | **Tool** | `Draw` - Create brushes / `Select` - Pick brushes |
 | **Paint Mode** | Toggle paint-on-click when Select is active |
 | **Active Material** | Pick the material applied by Paint Mode |
-| **Mode** | `Add` - Union geometry / `Subtract` - Carve holes |
+| **Mode** | `Add` - Union geometry / `Subtract` - Carve holes (visible after Bake) |
 | **Shape** | Select from the dynamic Shape Palette grid |
 | **Sides** | Contextual sides control for pyramids/prisms |
 | **Size X/Y/Z** | Default brush dimensions |
@@ -194,7 +196,7 @@ Sections can be collapsed using the toggle button in each header.
 | **Follow Grid** | Toggle grid follow mode (requires Show Grid) |
 | **3D View Layout (native)** | Use Godot’s View → Layout → 4 View for Top/Front/Side/3D |
 | **Debug Logs** | Print HammerForge events to the output console |
-| **Live Brushes** | Real-time CSG count with performance warning colors |
+| **Live Brushes** | Real-time draft brush count with performance warning colors |
 | **History** | Undo/Redo controls and a recent action list (beta) |
 
 ### Buttons
@@ -206,7 +208,7 @@ Sections can be collapsed using the toggle button in each header.
 | 🧹 **Clear Pending** | Remove staged cuts without applying |
 | 🔥 **Commit Cuts** | Apply + Bake + Remove cut shapes |
 | ♻️ **Restore Cuts** | Bring committed cuts back for editing |
-| 📦 **Bake** | Convert CSG to optimized mesh |
+| 📦 **Bake** | Bake DraftBrushes to an optimized mesh (temporary CSG) |
 | 🗑️ **Clear All** | Remove all brushes |
 
 ### Keyboard Shortcuts
@@ -250,11 +252,11 @@ Sections can be collapsed using the toggle button in each header.
 │                   HammerForge Plugin                    │
 ├─────────────────────────────────────────────────────────┤
 │  plugin.gd          → EditorPlugin lifecycle & input   │
-│  level_root.gd      → Core brush management & CSG ops  │
+│  level_root.gd      → Core brush management & virtual bake │
 │  dock.gd/tscn       → UI panel controls                │
 │  baker.gd           → CSG → StaticMesh converter       │
 │  brush_manager.gd   → Brush instance tracking          │
-│  brush_instance.gd  → Individual brush representation  │
+│  brush_instance.gd  → DraftBrush (Node3D + MeshInstance3D) │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -267,11 +269,12 @@ Sections can be collapsed using the toggle button in each header.
 
 ```
 LevelRoot (Node3D)
-├── BrushCSG (CSGCombiner3D)      ← Active brushes
-│   ├── Brush_001 (CSGBox3D)
-│   ├── Brush_002 (CSGCylinder3D)
+├── DraftBrushes (Node3D)         ← Editable draft brushes
+│   ├── Brush_001 (DraftBrush)
+│   ├── Brush_002 (DraftBrush)
 │   └── ...
-├── PendingCuts (CSGCombiner3D)   ← Staged subtracts
+├── PendingCuts (Node3D)          ← Staged subtracts (DraftBrush)
+├── CommittedCuts (Node3D)        ← Hidden frozen cuts (optional)
 └── BakedGeometry (Node3D)        ← Output after bake
     ├── MeshInstance3D
     └── StaticBody3D
@@ -283,7 +286,7 @@ LevelRoot (Node3D)
 
 ### ✅ MVP (v0.1.0) - Current
 - [x] CAD-style brush creation (Box, Cylinder)
-- [x] CSG Add/Subtract operations
+- [x] Add/Subtract operations (virtual during edit, baked via CSG)
 - [x] Grid snapping with modifier constraints
 - [x] Selection, deletion, duplication, nudge
 - [x] Pending subtract system
