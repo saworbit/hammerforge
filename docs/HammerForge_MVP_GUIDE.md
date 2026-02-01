@@ -44,6 +44,7 @@ addons/
     |-- brush_gizmo_plugin.gd # DraftBrush resize gizmo (viewport handles)
     |-- brush_manager.gd   # Brush lifecycle helper
     |-- baker.gd           # Bake helper that creates meshes + collision
+    |-- draft_entity.gd    # Dynamic entity properties (schema-driven)
     `-- entities.json      # Entity definitions (JSON)
 ```
 
@@ -76,21 +77,24 @@ addons/
 
 5. **DraftBrush** – `brush_instance.gd` is a `Node3D` with a `MeshInstance3D`, storing shape, size, operation, and material for fast editor previews.
 
-6. **BrushManager** – Simple helper that tracks brush instances for cleanup (used from `LevelRoot.clear_brushes()`).
+6. **DraftEntity** – `draft_entity.gd` is a `Node3D` that exposes Inspector properties from `entities.json` based on `entity_type`.
 
-7. **Baker** – Accepts a temporary `CSGCombiner3D`, creates a `MeshInstance3D`, and attaches a `StaticBody3D` with a `CollisionShape3D` based on the trimesh. (Add brushes only; Subtract brushes are excluded from collision).
+7. **BrushManager** – Simple helper that tracks brush instances for cleanup (used from `LevelRoot.clear_brushes()`).
 
-8. **Grid Snap** – `LevelRoot` snaps hit positions to `grid_snap` (default 16). Expose `grid_snap` from the dock UI for quick control.
+8. **Baker** – Accepts a temporary `CSGCombiner3D`, creates a `MeshInstance3D`, and attaches a `StaticBody3D` with a `CollisionShape3D` based on the trimesh. (Add brushes only; Subtract brushes are excluded from collision).
 
-9. **Dock Bindings** – Bind the dock spinboxes to call `LevelRoot.place_brush` with the desired size, and `OptionButton` selection to toggle between `CSGShape3D.OPERATION_UNION` and `OPERATION_SUBTRACTION`.
+9. **Grid Snap** – `LevelRoot` snaps hit positions to `grid_snap` (default 16). Expose `grid_snap` from the dock UI for quick control.
+   * Brush resize gizmos snap to `grid_snap` during handle drags.
 
-10. **Bake & Clear Buttons** – Bake button executes `LevelRoot.bake()`, Clear removes existing draft/pending/committed brushes and baked output.
+10. **Dock Bindings** – Bind the dock spinboxes to call `LevelRoot.place_brush` with the desired size, and `OptionButton` selection to toggle between `CSGShape3D.OPERATION_UNION` and `OPERATION_SUBTRACTION`.
 
-11. **Preview Scene** – Open any 3D scene, click once to auto-create `LevelRoot`, then use **Create Floor** for a collidable surface.
+11. **Bake & Clear Buttons** – Bake button executes `LevelRoot.bake()`, Clear removes existing draft/pending/committed brushes and baked output.
 
-12. **Optional Extras** - Selection mode, duplicate/drag/nudge, numeric input overlay, hover highlight, paint mode, mesh-shape scaling, and ortho views.
+12. **Preview Scene** – Open any 3D scene, click once to auto-create `LevelRoot`, then use **Create Floor** for a collidable surface.
 
-13. **Test** – In the editor:
+13. **Optional Extras** - Selection mode, duplicate/drag/nudge, numeric input overlay, hover highlight, paint mode, mesh-shape scaling, and ortho views.
+
+14. **Test** – In the editor:
     * Use Draw tool to click-drag a base, release, then click to set height.
     * Use Subtract mode to place cut shapes, then click **Apply Cuts** (carve is visible after Bake).
     * Click Bake: a static `MeshInstance3D` + `StaticBody3D` appears with collision.
@@ -118,6 +122,9 @@ These are quality-of-life improvements added after the MVP core:
 13. **Draft Mesh Parity** - Line-mesh previews for pyramids/prisms/platonic solids in DraftBrush.
 14. **Chunked Baking** - `bake_chunk_size` splits large maps into chunked bakes.
 15. **Entity System (early)** - `Entities` container and `is_entity` meta are selectable and excluded from bake.
+16. **Gizmo Snapping** - Resize handles snap to `grid_snap` for consistent sizing.
+17. **Dynamic Entity Props** - `DraftEntity` exposes Inspector properties from `entities.json`.
+18. **Create DraftEntity Button** - Dock action spawns DraftEntity and focuses the Inspector.
 
 ## Troubleshooting Notes
 

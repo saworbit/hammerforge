@@ -5,6 +5,7 @@ class_name LevelRoot
 const BrushManager = preload("brush_manager.gd")
 const Baker = preload("baker.gd")
 const PrefabFactory = preload("prefab_factory.gd")
+const DraftEntity = preload("draft_entity.gd")
 
 enum BrushShape {
     BOX,
@@ -35,6 +36,7 @@ var _grid_snap: float = 16.0
 @export_range(1, 32, 1) var bake_collision_layer_index: int = 1
 @export var bake_material_override: Material = null
 @export var bake_chunk_size: float = 32.0
+@export var entity_definitions_path: String = "res://addons/hammerforge/entities.json"
 @export var commit_freeze: bool = true
 var _grid_visible: bool = false
 @export var grid_visible: bool = false:
@@ -86,12 +88,14 @@ var grid_plane_origin := Vector3.ZERO
 var grid_axis_preference := AxisLock.Y
 var last_brush_center := Vector3.ZERO
 var _brush_id_counter: int = 0
+var entity_definitions: Dictionary = {}
 
 func _ready():
     _setup_draft_container()
     _setup_pending_container()
     _setup_committed()
     _setup_entities_container()
+    _load_entity_definitions()
     _setup_manager()
     _setup_baker()
     _setup_editor_grid()
@@ -183,6 +187,53 @@ func _setup_entities_container() -> void:
         entities_node.name = "Entities"
         add_child(entities_node)
         _assign_owner(entities_node)
+
+func add_entity(entity: Node3D) -> void:
+    if not entity:
+        return
+    if not entities_node:
+        _setup_entities_container()
+    entity.set_meta("is_entity", true)
+    entities_node.add_child(entity)
+    _assign_owner(entity)
+
+func _load_entity_definitions() -> void:
+    entity_definitions.clear()
+    if entity_definitions_path == "" or not ResourceLoader.exists(entity_definitions_path):
+        return
+    var file = FileAccess.open(entity_definitions_path, FileAccess.READ)
+    if not file:
+        return
+    var text = file.get_as_text()
+    var data = JSON.parse_string(text)
+    if data == null:
+        return
+    if data is Dictionary:
+        var entries = data.get("entities", null)
+        if entries is Array:
+            for entry in entries:
+                if entry is Dictionary:
+                    var key = str(entry.get("id", entry.get("class", "")))
+                    if key != "":
+                        entity_definitions[key] = entry
+            return
+        entity_definitions = data
+        return
+    if data is Array:
+        # Back-compat: array entries with "class" become keyed by class name.
+        for entry in data:
+            if entry is Dictionary:
+                var key = str(entry.get("class", ""))
+                if key != "":
+                    entity_definitions[key] = entry
+
+func get_entity_definition(entity_type: String) -> Dictionary:
+    if entity_type == "":
+        return {}
+    return entity_definitions.get(entity_type, {})
+
+func get_entity_definitions() -> Dictionary:
+    return entity_definitions
 
 func _setup_manager() -> void:
     brush_manager = get_node_or_null("BrushManager") as BrushManager
@@ -568,6 +619,12 @@ func clear_brushes() -> void:
         baked_container.queue_free()
         baked_container = null
 
+func _clear_entities() -> void:
+    if not entities_node:
+        return
+    for child in entities_node.get_children():
+        child.queue_free()
+
 func _clear_committed_cuts() -> void:
     if not committed_node:
         return
@@ -845,6 +902,34 @@ func get_brush_info_from_node(brush: Node) -> Dictionary:
         info["material"] = draft.material_override
     return info
 
+func _capture_entity_info(entity: DraftEntity) -> Dictionary:
+    if not entity:
+        return {}
+    var info: Dictionary = {}
+    info["entity_type"] = entity.entity_type
+    info["transform"] = entity.global_transform
+    info["properties"] = entity.entity_properties.duplicate(true)
+    info["name"] = entity.name
+    return info
+
+func _restore_entity_from_info(info: Dictionary) -> DraftEntity:
+    if info.is_empty():
+        return null
+    if not entities_node:
+        _setup_entities_container()
+    var entity = DraftEntity.new()
+    entity.name = str(info.get("name", "Entity"))
+    entity.entity_type = str(info.get("entity_type", ""))
+    var props = info.get("properties", {})
+    if props is Dictionary:
+        entity.entity_properties = props.duplicate(true)
+    if info.has("transform"):
+        entity.global_transform = info["transform"]
+    entity.set_meta("is_entity", true)
+    entities_node.add_child(entity)
+    _assign_owner(entity)
+    return entity
+
 func build_duplicate_info(brush: Node, offset: Vector3) -> Dictionary:
     var info = get_brush_info_from_node(brush)
     if info.is_empty():
@@ -893,6 +978,7 @@ func capture_state() -> Dictionary:
     state["brushes"] = []
     state["pending"] = []
     state["committed"] = []
+    state["entities"] = []
     state["floor"] = _capture_floor_info()
     state["id_counter"] = _brush_id_counter
     state["csg_visible"] = draft_brushes_node.visible if draft_brushes_node else true
@@ -914,12 +1000,19 @@ func capture_state() -> Dictionary:
                     continue
                 info["committed"] = true
                 state["committed"].append(info)
+    if entities_node:
+        for child in entities_node.get_children():
+            if child is DraftEntity:
+                var info = _capture_entity_info(child as DraftEntity)
+                if not info.is_empty():
+                    state["entities"].append(info)
     return state
 
 func restore_state(state: Dictionary) -> void:
     if state.is_empty():
         return
     clear_brushes()
+    _clear_entities()
     _brush_id_counter = int(state.get("id_counter", 0))
     var brushes: Array = state.get("brushes", [])
     for info in brushes:
@@ -932,6 +1025,9 @@ func restore_state(state: Dictionary) -> void:
     for info in committed:
         info["committed"] = true
         create_brush_from_info(info)
+    var entities: Array = state.get("entities", [])
+    for info in entities:
+        _restore_entity_from_info(info)
     _restore_floor_info(state.get("floor", {}))
     if draft_brushes_node:
         draft_brushes_node.visible = bool(state.get("csg_visible", true))

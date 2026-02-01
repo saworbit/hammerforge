@@ -11,6 +11,7 @@ const LevelRootType = preload("level_root.gd")
 
 func _enter_tree():
     add_custom_type("LevelRoot", "Node3D", preload("level_root.gd"), preload("icon.png"))
+    add_custom_type("DraftEntity", "Node3D", preload("draft_entity.gd"), preload("icon.png"))
     dock = preload("dock.tscn").instantiate()
     undo_redo_manager = get_undo_redo()
     brush_gizmo_plugin = preload("brush_gizmo_plugin.gd").new()
@@ -43,6 +44,7 @@ func _enter_tree():
 
 func _exit_tree():
     remove_custom_type("LevelRoot")
+    remove_custom_type("DraftEntity")
     undo_redo_manager = null
     if brush_gizmo_plugin:
         remove_node_3d_gizmo_plugin(brush_gizmo_plugin)

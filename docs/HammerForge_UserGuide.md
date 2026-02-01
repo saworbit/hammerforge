@@ -45,6 +45,10 @@ Sections can be collapsed using the toggle button in each header.
 **Shape Palette**
 - Choose from Box, Cylinder, Sphere, Cone, Wedge, Pyramid, Prisms, Ellipsoid, Capsule, Torus, and Platonic solids. Mesh-based shapes scale to brush size.
 
+**Gizmo Snapping**
+- DraftBrush resize handles now respect `grid_snap` from `LevelRoot`.
+- Resize distances snap to the grid while keeping the opposite face pinned.
+
 **Sides**
 - Appears for pyramids/prisms to control the number of sides.
 
@@ -98,6 +102,10 @@ Sections can be collapsed using the toggle button in each header.
 
 **Restore Committed Cuts**
 - Moves hidden committed cuts back into DraftBrushes so they can be edited again.
+
+**Create DraftEntity**
+- Spawns a `DraftEntity` under `LevelRoot/Entities` and selects it.
+- Set `entity_type` to choose a schema (dropdown is populated from `entities.json`).
 
 **Bake**
 - Builds a temporary CSG tree from DraftBrushes and bakes a static mesh + collision.
@@ -162,6 +170,28 @@ Entities are non-geometry nodes that should not participate in CSG or bake.
 - Entities are selectable and movable with standard gizmos.
 - Entities are ignored by Bake and do not affect collision.
 - Definitions can be authored in `res://addons/hammerforge/entities.json` (used by future palette UI).
+- Use `DraftEntity` for dynamic Inspector properties powered by the JSON schema.
+
+### Entity Definitions Format (Schema Map)
+`entities.json` now supports a map-style schema:
+
+```json
+{
+  "light_point": {
+    "class": "OmniLight3D",
+    "properties": [
+      {"name": "range", "type": "float", "default": 10.0},
+      {"name": "energy", "type": "float", "default": 1.0},
+      {"name": "color", "type": "color", "default": "#ffffff"}
+    ]
+  }
+}
+```
+
+### DraftEntity Properties
+- `DraftEntity` exposes Inspector fields based on the schema.
+- Properties are stored on the node and persist in the scene.
+- Set `entity_type` to match a key in `entities.json` (e.g., `light_point`).
 
 ## Subtract Tips
 - Subtract brushes are staged until you click **Apply Cuts** (or Bake).

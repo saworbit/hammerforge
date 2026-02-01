@@ -30,10 +30,13 @@ The format is based on "Keep a Changelog", and this project follows semantic ver
 - Cylinder brushes, grid snap control, and colored Add/Subtract preview.
 - Commit cuts improvements: multi-mesh bake, freeze/restore committed cuts, bake status, bake collision layer control.
 - Viewport DraftBrush resize gizmo with face handles (undo/redo friendly).
+- Gizmo snapping uses `grid_snap` during handle drags.
 - Line-mesh draft previews for pyramids, prisms, and platonic solids.
 - Chunked baking via `LevelRoot.bake_chunk_size` (default 32).
 - Entities container (`LevelRoot/Entities`) and `is_entity` meta for selection-only nodes (excluded from bake).
 - Entity definitions JSON loader (`res://addons/hammerforge/entities.json`).
+- DraftEntity schema-driven properties with Inspector dropdowns.
+- Create DraftEntity action button in the dock.
 - Collision baking uses Add brushes only (Subtract brushes excluded).
 
 ### Fixed

@@ -6,6 +6,7 @@ signal hud_visibility_changed(visible: bool)
 
 const LevelRootType = preload("level_root.gd")
 const BrushPreset = preload("brush_preset.gd")
+const DraftEntity = preload("draft_entity.gd")
 
 const PRESET_MENU_RENAME := 0
 const PRESET_MENU_DELETE := 1
@@ -48,6 +49,7 @@ const PRESET_MENU_DELETE := 1
 @onready var clear_cuts_btn: Button = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/ClearCuts
 @onready var commit_cuts_btn: Button = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/CommitCuts
 @onready var restore_cuts_btn: Button = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/RestoreCuts
+@onready var create_entity_btn: Button = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/CreateEntity
 @onready var bake_btn: Button = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/Bake
 @onready var clear_btn: Button = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/Clear
 @onready var status_label: Label = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/Status
@@ -269,6 +271,8 @@ func _ready():
     clear_cuts_btn.pressed.connect(_on_clear_cuts)
     commit_cuts_btn.pressed.connect(_on_commit_cuts)
     restore_cuts_btn.pressed.connect(_on_restore_cuts)
+    if create_entity_btn:
+        create_entity_btn.pressed.connect(_on_create_entity)
     if undo_btn:
         undo_btn.pressed.connect(_on_history_undo)
     if redo_btn:
@@ -506,6 +510,42 @@ func _on_restore_cuts():
     _log("Restore committed cuts requested")
     _commit_state_action("Restore Committed Cuts", "restore_committed_cuts")
 
+func _on_create_entity() -> void:
+    if not level_root:
+        return
+    var entity = DraftEntity.new()
+    entity.name = "DraftEntity"
+    entity.set_meta("is_entity", true)
+    var def = _get_default_entity_definition()
+    if not def.is_empty():
+        var type_id = str(def.get("id", def.get("class", "")))
+        if type_id != "":
+            entity.entity_type = type_id
+    if level_root.has_method("add_entity"):
+        level_root.call("add_entity", entity)
+        _focus_entity_selection(entity)
+        return
+    var entities_node = level_root.get_node_or_null("Entities")
+    if not entities_node:
+        return
+    entities_node.add_child(entity)
+    if level_root.has_method("_assign_owner"):
+        level_root.call("_assign_owner", entity)
+    _focus_entity_selection(entity)
+
+func _focus_entity_selection(entity: Node) -> void:
+    if not editor_interface or not entity:
+        return
+    var selection = editor_interface.get_selection()
+    if selection:
+        selection.clear()
+        selection.add_node(entity)
+
+func _get_default_entity_definition() -> Dictionary:
+    if entity_defs.is_empty():
+        return {}
+    return entity_defs[0] if entity_defs[0] is Dictionary else {}
+
 func _connect_root_signals() -> void:
     if not connected_root:
         return
@@ -732,8 +772,15 @@ func _load_entity_definitions() -> void:
         return
     if data is Dictionary:
         var entries = data.get("entities", [])
-        if entries is Array:
+        if entries is Array and entries.size() > 0:
             entity_defs = entries
+            return
+        for key in data.keys():
+            var entry = data[key]
+            if entry is Dictionary:
+                var record = entry.duplicate(true)
+                record["id"] = str(key)
+                entity_defs.append(record)
     elif data is Array:
         entity_defs = data
 

@@ -11,9 +11,11 @@
 - DraftBrush workflow with add/subtract, pending cuts, bake-time CSG.
 - Wireframe draft previews for complex shapes (pyramids, prisms, platonic solids).
 - Viewport face-handle gizmo for resizing brushes with undo/redo.
+- Gizmo snapping respects `grid_snap` during handle drags.
 - Chunked baking via `LevelRoot.bake_chunk_size` (default 32).
 - Entities container (`LevelRoot/Entities`) and `is_entity` meta for selection-only nodes excluded from bake.
 - Entity definitions JSON loaded by the dock (`res://addons/hammerforge/entities.json`).
+- DraftEntity schema-driven properties with Inspector dropdowns.
 
 **Planned**
 - Autosave, .hflevel storage, import/export, and advanced optimization (LOD, navmesh, lightmap, multi-threaded merges).
@@ -55,6 +57,7 @@ Note: Diagram includes planned modules; current implementation focuses on BrushS
 - Add/subtract brushes (box, cylinder) with CAD-style drag: base drag + height stage.
 - Editing uses DraftBrush nodes for speed; CSG is generated only during Bake.
 - Viewport brush gizmo handles allow face-resize of DraftBrushes with undo/redo.
+- Resize handles snap to `grid_snap` for consistent sizing.
 - Subtract brushes can be staged as pending cuts and applied on demand.
 - Grid/snap options (1–64 units), quick Create Floor for raycast placement.
 - Undo/redo history panel (beta); autosave `.hflevel` planned.
@@ -63,6 +66,7 @@ Note: Diagram includes planned modules; current implementation focuses on BrushS
 ### Entity Placement
 - Entities live under `LevelRoot/Entities` or are tagged `is_entity` (selection-only, excluded from bake).
 - JSON entity definitions are stored in `res://addons/hammerforge/entities.json` and loaded by the dock (palette UI planned).
+- DraftEntity exposes schema-driven Inspector properties via `entity_type` and persists values in the scene.
 - Signals, instanced scenes, and palette tooling are planned additions.
 
 ### Optimization & Baking

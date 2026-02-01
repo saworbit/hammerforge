@@ -1,19 +1,23 @@
 {
-  "entities": [
-    {
-      "class": "PlayerSpawn",
-      "node": "Marker3D",
-      "props": {
-        "team": "default"
-      }
-    },
-    {
-      "class": "PointLight",
-      "node": "OmniLight3D",
-      "props": {
-        "energy": 1.0,
-        "range": 10.0
-      }
-    }
-  ]
+  "light_point": {
+    "class": "OmniLight3D",
+    "properties": [
+      {"name": "range", "type": "float", "default": 10.0},
+      {"name": "energy", "type": "float", "default": 1.0},
+      {"name": "color", "type": "color", "default": "#ffffff"}
+    ]
+  },
+  "player_spawn": {
+    "class": "Marker3D",
+    "properties": [
+      {"name": "team", "type": "string", "default": "default"}
+    ]
+  },
+  "door_basic": {
+    "class": "Node3D",
+    "properties": [
+      {"name": "speed", "type": "float", "default": 200.0},
+      {"name": "locked", "type": "bool", "default": false}
+    ]
+  }
 }

@@ -108,6 +108,7 @@ func _set_handle(
     var brush = gizmo.get_node_3d() as DraftBrush
     if not brush or handle_id < 0 or handle_id >= HANDLE_DATA.size():
         return
+    var snap_step = _resolve_grid_snap(brush)
     var handle_info = HANDLE_DATA[handle_id]
     var axis: Vector3 = handle_info["axis"]
     var dir: int = handle_info["dir"]
@@ -130,14 +131,26 @@ func _set_handle(
     var d = line_dir.dot(w0)
     var e = ray_dir.dot(w0)
     var t = (b * e - d) / denom
-    var new_size_axis = max(MIN_SIZE, t)
+    var new_size_axis = t
+    if snap_step > 0.0:
+        new_size_axis = snappedf(new_size_axis, snap_step)
+    new_size_axis = max(MIN_SIZE, new_size_axis)
     var new_center = opposite_face + line_dir * (new_size_axis * 0.5)
 
     var new_size = brush.size
     new_size[axis_index] = new_size_axis
     brush.size = new_size
     brush.global_position = new_center
-    gizmo.redraw()
+    _request_gizmo_redraw(gizmo)
+
+func _resolve_grid_snap(brush: DraftBrush) -> float:
+    var current: Node = brush
+    while current:
+        if current is LevelRoot:
+            var root = current as LevelRoot
+            return max(0.0, root.grid_snap)
+        current = current.get_parent()
+    return 0.0
 
 func _commit_handle(
     gizmo: EditorNode3DGizmo,
@@ -156,7 +169,7 @@ func _commit_handle(
                 brush.size = data["size"]
             if data.has("position"):
                 brush.global_position = data["position"]
-        gizmo.redraw()
+        _request_gizmo_redraw(gizmo)
         return
     if not (restore is Dictionary):
         return
@@ -176,7 +189,7 @@ func _commit_handle(
     else:
         brush.size = next_size
         brush.global_position = next_pos
-    gizmo.redraw()
+    _request_gizmo_redraw(gizmo)
 
 func _axis_index(axis: Vector3) -> int:
     if abs(axis.x) > 0.0:
@@ -184,3 +197,12 @@ func _axis_index(axis: Vector3) -> int:
     if abs(axis.y) > 0.0:
         return 1
     return 2
+
+func _request_gizmo_redraw(gizmo: EditorNode3DGizmo) -> void:
+    if not gizmo:
+        return
+    if gizmo.has_method("set_dirty"):
+        gizmo.call("set_dirty")
+        return
+    if gizmo.has_method("redraw"):
+        gizmo.call("redraw")

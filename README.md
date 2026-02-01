@@ -60,8 +60,10 @@
 - **On-Screen Shortcut HUD**: Optional cheat sheet in the 3D viewport
 - **Dynamic Editor Grid**: High-contrast shader grid that follows the active axis/brush
 - **Viewport Brush Gizmos**: Drag face handles to resize DraftBrushes with undo/redo support
+- **Gizmo Snapping**: Resize handles respect `grid_snap` for consistent sizing
 - **Material Paint Mode**: Pick an active material and click brushes to apply it
 - **Entity Selection (early)**: Nodes under `Entities` or tagged `is_entity` are selectable and ignored by bake
+- **DraftEntity Props (early)**: Schema-driven entity properties with Inspector dropdowns
 - **Collapsible Dock Sections**: Collapse Settings/Presets/Actions to reduce clutter
 - **Physics Layer Presets**: Set baked collision layers with a single dropdown
 - **Live Brush Count**: Real-time count of draft brushes with performance warning colors
@@ -125,6 +127,7 @@ your-project/
 |       |-- brush_manager.gd
 |       |-- brush_instance.gd
 |       |-- brush_gizmo_plugin.gd
+|       |-- draft_entity.gd
 |       |-- entities.json
 |       `-- icon.png
 `-- project.godot
@@ -217,6 +220,7 @@ Sections can be collapsed using the toggle button in each header.
 | 🧹 **Clear Pending** | Remove staged cuts without applying |
 | 🔥 **Commit Cuts** | Apply + Bake + Remove cut shapes |
 | ♻️ **Restore Cuts** | Bring committed cuts back for editing |
+| 🧩 **Create DraftEntity** | Spawn a DraftEntity under `Entities` |
 | 📦 **Bake** | Bake DraftBrushes to an optimized mesh (temporary CSG) |
 | 🗑️ **Clear All** | Remove all brushes |
 
@@ -264,6 +268,7 @@ HammerForge Plugin
 - baker.gd -> CSG -> StaticMesh converter
 - brush_manager.gd -> Brush instance tracking
 - brush_instance.gd -> DraftBrush (Node3D + MeshInstance3D)
+- draft_entity.gd -> DraftEntity (schema-driven entity properties)
 - brush_gizmo_plugin.gd -> DraftBrush resize handles in the viewport
 ```
 
@@ -283,6 +288,7 @@ LevelRoot (Node3D)
 ├── PendingCuts (Node3D)          ← Staged subtracts (DraftBrush)
 ├── CommittedCuts (Node3D)        ← Hidden frozen cuts (optional)
 ├── Entities (Node3D)             ← Non-geometry nodes (not baked)
+│   └── DraftEntity (Node3D)      ← Schema-driven entity with Inspector props
 └── BakedGeometry (Node3D)        ← Output after bake (chunked if enabled)
     └── BakedChunk_x_y_z (Node3D)
         ├── MeshInstance3D
