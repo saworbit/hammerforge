@@ -521,6 +521,7 @@ func _on_create_entity() -> void:
         var type_id = str(def.get("id", def.get("class", "")))
         if type_id != "":
             entity.entity_type = type_id
+            entity.entity_class = type_id
     if level_root.has_method("add_entity"):
         level_root.call("add_entity", entity)
         _focus_entity_selection(entity)

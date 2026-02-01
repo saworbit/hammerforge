@@ -192,6 +192,7 @@ Entities are non-geometry nodes that should not participate in CSG or bake.
 - `DraftEntity` exposes Inspector fields based on the schema.
 - Properties are stored on the node and persist in the scene.
 - Set `entity_type` to match a key in `entities.json` (e.g., `light_point`).
+- Properties serialize under `data/` (with `entity_data/` kept for backward compatibility).
 
 ## Subtract Tips
 - Subtract brushes are staged until you click **Apply Cuts** (or Bake).

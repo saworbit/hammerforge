@@ -907,8 +907,9 @@ func _capture_entity_info(entity: DraftEntity) -> Dictionary:
         return {}
     var info: Dictionary = {}
     info["entity_type"] = entity.entity_type
+    info["entity_class"] = entity.entity_class
     info["transform"] = entity.global_transform
-    info["properties"] = entity.entity_properties.duplicate(true)
+    info["properties"] = entity.entity_data.duplicate(true)
     info["name"] = entity.name
     return info
 
@@ -919,10 +920,12 @@ func _restore_entity_from_info(info: Dictionary) -> DraftEntity:
         _setup_entities_container()
     var entity = DraftEntity.new()
     entity.name = str(info.get("name", "Entity"))
-    entity.entity_type = str(info.get("entity_type", ""))
+    var type_value = str(info.get("entity_type", info.get("entity_class", "")))
+    entity.entity_type = type_value
+    entity.entity_class = type_value
     var props = info.get("properties", {})
     if props is Dictionary:
-        entity.entity_properties = props.duplicate(true)
+        entity.entity_data = props.duplicate(true)
     if info.has("transform"):
         entity.global_transform = info["transform"]
     entity.set_meta("is_entity", true)
