@@ -35,7 +35,7 @@ The format is based on "Keep a Changelog", and this project follows semantic ver
 - Chunked baking via `LevelRoot.bake_chunk_size` (default 32).
 - Entities container (`LevelRoot/Entities`) and `is_entity` meta for selection-only nodes (excluded from bake).
 - Entity definitions JSON loader (`res://addons/hammerforge/entities.json`).
-- DraftEntity schema-driven properties with Inspector dropdowns.
+- DraftEntity schema-driven properties with Inspector dropdowns (stored under `data/`, backward-compatible `entity_data/`).
 - Create DraftEntity action button in the dock.
 - Collision baking uses Add brushes only (Subtract brushes excluded).
 

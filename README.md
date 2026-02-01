@@ -63,7 +63,7 @@
 - **Gizmo Snapping**: Resize handles respect `grid_snap` for consistent sizing
 - **Material Paint Mode**: Pick an active material and click brushes to apply it
 - **Entity Selection (early)**: Nodes under `Entities` or tagged `is_entity` are selectable and ignored by bake
-- **DraftEntity Props (early)**: Schema-driven entity properties with Inspector dropdowns
+- **DraftEntity Props (early)**: Schema-driven entity properties with Inspector dropdowns (stored under `data/`)
 - **Collapsible Dock Sections**: Collapse Settings/Presets/Actions to reduce clutter
 - **Physics Layer Presets**: Set baked collision layers with a single dropdown
 - **Live Brush Count**: Real-time count of draft brushes with performance warning colors
