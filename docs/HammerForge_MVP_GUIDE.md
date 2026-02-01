@@ -125,6 +125,7 @@ These are quality-of-life improvements added after the MVP core:
 16. **Gizmo Snapping** - Resize handles snap to `grid_snap` for consistent sizing.
 17. **Dynamic Entity Props** - `DraftEntity` exposes Inspector properties from `entities.json`.
 18. **Create DraftEntity Button** - Dock action spawns DraftEntity and focuses the Inspector.
+19. **Entity Previews** - DraftEntity spawns editor-only billboards/meshes from `entities.json`.
 
 ## Troubleshooting Notes
 

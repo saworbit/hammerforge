@@ -171,6 +171,7 @@ Entities are non-geometry nodes that should not participate in CSG or bake.
 - Entities are ignored by Bake and do not affect collision.
 - Definitions can be authored in `res://addons/hammerforge/entities.json` (used by future palette UI).
 - Use `DraftEntity` for dynamic Inspector properties powered by the JSON schema.
+- Entity previews are editor-only billboards or meshes defined per entity (see `preview` in `entities.json`).
 
 ### Entity Definitions Format (Schema Map)
 `entities.json` now supports a map-style schema:
@@ -179,6 +180,11 @@ Entities are non-geometry nodes that should not participate in CSG or bake.
 {
   "light_point": {
     "class": "OmniLight3D",
+    "preview": {
+      "type": "billboard",
+      "path": "res://addons/hammerforge/icons/light_point.png",
+      "color": "#ffff00"
+    },
     "properties": [
       {"name": "range", "type": "float", "default": 10.0},
       {"name": "energy", "type": "float", "default": 1.0},

@@ -1,20 +1,33 @@
 {
+  "player_start": {
+    "class": "Node3D",
+    "preview": {
+      "type": "billboard",
+      "path": "res://addons/hammerforge/icons/player_start.png",
+      "color": "#00ff00"
+    },
+    "properties": []
+  },
   "light_point": {
     "class": "OmniLight3D",
+    "preview": {
+      "type": "billboard",
+      "path": "res://addons/hammerforge/icons/light_point.png",
+      "color": "#ffff00"
+    },
     "properties": [
       {"name": "range", "type": "float", "default": 10.0},
       {"name": "energy", "type": "float", "default": 1.0},
       {"name": "color", "type": "color", "default": "#ffffff"}
     ]
   },
-  "player_spawn": {
-    "class": "Marker3D",
-    "properties": [
-      {"name": "team", "type": "string", "default": "default"}
-    ]
-  },
   "door_basic": {
     "class": "Node3D",
+    "preview": {
+      "type": "mesh",
+      "path": "res://addons/hammerforge/meshes/light_bulb_proxy.obj",
+      "color": "#8888ff"
+    },
     "properties": [
       {"name": "speed", "type": "float", "default": 200.0},
       {"name": "locked", "type": "bool", "default": false}

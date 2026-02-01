@@ -6,6 +6,7 @@ class_name DraftEntity
 @export var entity_class: String = "": set = _set_entity_class
 
 var entity_data: Dictionary = {}
+var preview_node: Node3D = null
 var entity_properties: Dictionary:
     get:
         return entity_data
@@ -19,6 +20,7 @@ func _set_entity_type(val: String) -> void:
     entity_type = val
     if entity_class != val:
         entity_class = val
+    _update_preview()
     _apply_entity_defaults()
     notify_property_list_changed()
 
@@ -28,13 +30,78 @@ func _set_entity_class(val: String) -> void:
     entity_class = val
     if entity_type != val:
         entity_type = val
+    _update_preview()
     _apply_entity_defaults()
     notify_property_list_changed()
 
 func _ready() -> void:
+    _update_preview()
     if entity_type != "" and entity_data.is_empty():
         _apply_entity_defaults()
         notify_property_list_changed()
+
+func _exit_tree() -> void:
+    _clear_preview()
+
+func _update_preview() -> void:
+    if not is_inside_tree() or not Engine.is_editor_hint():
+        return
+    _clear_preview()
+    var definition = _get_entity_definition()
+    if definition.is_empty() or not definition.has("preview"):
+        return
+    var preview = definition.get("preview", {})
+    if not (preview is Dictionary):
+        return
+    var preview_type = str(preview.get("type", ""))
+    var preview_path = str(preview.get("path", ""))
+    if preview_type == "" or preview_path == "":
+        return
+    var preview_color = Color(preview.get("color", "#ffffff"))
+    match preview_type:
+        "billboard":
+            var sprite = Sprite3D.new()
+            var tex = load(preview_path)
+            if tex and tex is Texture2D:
+                sprite.texture = tex
+            sprite.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+            sprite.no_depth_test = true
+            sprite.modulate = preview_color
+            _assign_preview(sprite)
+        "mesh":
+            var mesh_inst = MeshInstance3D.new()
+            var mesh_res = load(preview_path)
+            if mesh_res and mesh_res is Mesh:
+                mesh_inst.mesh = mesh_res
+            var mat = StandardMaterial3D.new()
+            mat.albedo_color = preview_color
+            mat.albedo_color.a = 0.5
+            mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+            mesh_inst.material_override = mat
+            mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+            _assign_preview(mesh_inst)
+
+func _assign_preview(node: Node3D) -> void:
+    if not node:
+        return
+    node.name = "_EditorPreview"
+    add_child(node)
+    node.owner = null
+    preview_node = node
+
+func _clear_preview() -> void:
+    if preview_node and is_instance_valid(preview_node):
+        preview_node.queue_free()
+    preview_node = null
+
+func _get_entity_definition() -> Dictionary:
+    var key = entity_class if entity_class != "" else entity_type
+    if key == "":
+        return {}
+    var level_root = _find_level_root()
+    if not level_root:
+        return {}
+    return level_root.get_entity_definition(key)
 
 func _apply_entity_defaults() -> void:
     if entity_type == "":

@@ -16,6 +16,7 @@
 - Entities container (`LevelRoot/Entities`) and `is_entity` meta for selection-only nodes excluded from bake.
 - Entity definitions JSON loaded by the dock (`res://addons/hammerforge/entities.json`).
 - DraftEntity schema-driven properties with Inspector dropdowns (stored under `data/`, backward-compatible `entity_data/`).
+- Entity previews (billboards/meshes) spawned in the editor from `entities.json` preview metadata.
 
 **Planned**
 - Autosave, .hflevel storage, import/export, and advanced optimization (LOD, navmesh, lightmap, multi-threaded merges).
