@@ -2,9 +2,13 @@
   "player_start": {
     "class": "Node3D",
     "preview": {
-      "type": "billboard",
-      "path": "res://addons/hammerforge/icons/player_start.png",
-      "color": "#00ff00"
+      "type": "capsule",
+      "color": "#00ff66",
+      "radius": 0.5,
+      "height": 2.0,
+      "alpha": 0.7,
+      "unshaded": true,
+      "no_depth_test": true
     },
     "properties": []
   },

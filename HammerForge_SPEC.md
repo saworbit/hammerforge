@@ -17,6 +17,9 @@
 - Entity definitions JSON loaded by the dock (`res://addons/hammerforge/entities.json`).
 - DraftEntity schema-driven properties with Inspector dropdowns (stored under `data/`, backward-compatible `entity_data/`).
 - Entity previews (billboards/meshes) spawned in the editor from `entities.json` preview metadata.
+- Playtest FPS controller (sprint, crouch, jump, head-bob, FOV stretch, coyote time).
+- Playtest button: bake + launch current scene with hot-reload signal.
+- Player start entity support (`entity_class = "player_start"`).
 
 **Planned**
 - Autosave, .hflevel storage, import/export, and advanced optimization (LOD, navmesh, lightmap, multi-threaded merges).
@@ -79,7 +82,9 @@ Note: Diagram includes planned modules; current implementation focuses on BrushS
 - Versioned saves and incremental rebuilds are planned.
 
 ### Preview/Playtesting
-- Planned: embedded FPS flycam, quick play, and bake-and-run loop.
+- Playtest button bakes and launches the current scene.
+- Playtest FPS controller spawns at `player_start` (or falls back to a default).
+- Running instances can hot-reload via `res://.hammerforge/reload.lock`.
 
 ### Imports/Exports
 - Planned: .map (TrenchBroom), glTF, and USD import/export.
@@ -99,7 +104,7 @@ Planned modules and scalability targets:
 Planned optional 2x2 SubViewport layout: Top/Front/Side orthographic + 3D perspective. Current workflow uses Godot's native 4-view layout.
 
 
-- **Dock (Left-Upper):** Tool (Draw/Select), Paint Mode, Active Material, Shape Palette, Sides, Mode (Add/Subtract), Size, Grid, Physics Layer, Quadrant View toggle, Create Floor, Apply/Clear Cuts, Bake.  
+- **Dock (Left-Upper):** Tool (Draw/Select), Paint Mode, Active Material, Shape Palette, Sides, Mode (Add/Subtract), Size, Grid, Physics Layer, Quadrant View toggle, Create Floor, Apply/Clear Cuts, Bake, Playtest.  
 - **Toolbar (Spatial Editor):** Mode switches (Brush/Object/Texture), Bake, Play FPS, Undo/Redo icons.  
 - **Viewport Overlays:** Grid (toggle), brush ghost (green wireframe), hover selection highlight, snap lines, gizmo handles for resizing/rotating brushes and entities.  
 - **Shortcuts:** `X/Y/Z` axis locks, `Shift` square base, `Shift+Alt` cube, `Alt` height-only, `Delete` remove, `Ctrl+D` duplicate.  

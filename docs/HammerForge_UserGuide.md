@@ -110,6 +110,11 @@ Sections can be collapsed using the toggle button in each header.
 **Bake**
 - Builds a temporary CSG tree from DraftBrushes and bakes a static mesh + collision.
 
+**Playtest**
+- Bakes then launches the current scene with the HammerForge playtest controller.
+- Uses `player_start` entities for spawn location (fallbacks to a default if missing).
+- Running instances can hot-reload when a new bake is triggered.
+
 **Status**
 - Shows bake progress (e.g., "Baking..." or "Ready").
 
@@ -172,6 +177,7 @@ Entities are non-geometry nodes that should not participate in CSG or bake.
 - Definitions can be authored in `res://addons/hammerforge/entities.json` (used by future palette UI).
 - Use `DraftEntity` for dynamic Inspector properties powered by the JSON schema.
 - Entity previews are editor-only billboards or meshes defined per entity (see `preview` in `entities.json`).
+- `player_start` is a built-in entity used by Playtest to select spawn location (visible as a capsule preview).
 
 ### Entity Definitions Format (Schema Map)
 `entities.json` now supports a map-style schema:
@@ -222,7 +228,15 @@ Chunked baking is controlled by `LevelRoot.bake_chunk_size`:
 - `> 0`: chunked output (default 32 units)
 - `<= 0`: single bake output (no chunk splitting)
 
-You can playtest with a CharacterBody3D or FPS controller after baking.
+### Playtesting
+HammerForge includes a built-in playtest FPS controller and a Playtest button in the dock:
+
+- Click **Playtest** to bake and launch the current scene.
+- Add a `DraftEntity` under `Entities` with `entity_class = "player_start"` to set the spawn location.
+- The playtest controller supports sprint, crouch, jump, head-bob, and FOV stretch.
+- Running instances can hot-reload after a Bake via `res://.hammerforge/reload.lock`.
+
+If Bake fails with 0 brushes, there is no geometry to collide with. Create at least one Add brush (or use Create Floor) before playtesting.
 
 ## Shortcut HUD
 HammerForge can display a small on-screen cheat sheet inside the 3D viewport.
@@ -259,6 +273,10 @@ HammerForge adds a high-contrast editor-only grid plane for clearer placement.
 **Subtract does nothing**
 - Ensure your subtract brush overlaps an existing Add brush.
 - Remember: carve results are visible after Bake.
+
+**Bake failed (no geometry)**
+- Bake only succeeds when at least one Add brush exists.
+- Entities do not bake; use Create Floor or add a brush to generate collision.
 
 **Dock not showing**
 - Restart Godot after enabling the plugin.

@@ -620,11 +620,23 @@ func _set_bake_buttons_disabled(disabled: bool) -> void:
         quick_play_btn.disabled = disabled
 
 func _on_quick_play() -> void:
-    _log("Quick play requested")
+    _log("Playtest requested")
     if level_root and level_root.has_method("bake"):
-        await level_root.bake(true, true, get_collision_layer_mask())
+        await level_root.bake(true, false, get_collision_layer_mask())
+    _notify_running_instances()
     if editor_interface:
         editor_interface.play_current_scene()
+
+func _notify_running_instances() -> void:
+    var lock_dir = "res://.hammerforge"
+    var abs_lock_dir = ProjectSettings.globalize_path(lock_dir)
+    if not DirAccess.dir_exists_absolute(abs_lock_dir):
+        DirAccess.make_dir_recursive_absolute(abs_lock_dir)
+    var file = FileAccess.open("%s/reload.lock" % lock_dir, FileAccess.WRITE)
+    if not file:
+        _log("Failed to write reload lock file", true)
+        return
+    file.store_string(str(Time.get_ticks_msec()))
 
 func _populate_shape_palette() -> void:
     if not shape_palette_grid:

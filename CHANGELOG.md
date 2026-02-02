@@ -39,6 +39,10 @@ The format is based on "Keep a Changelog", and this project follows semantic ver
 - Create DraftEntity action button in the dock.
 - Editor-only entity previews (billboards/meshes) driven by `entities.json`.
 - Collision baking uses Add brushes only (Subtract brushes excluded).
+- Playtest FPS controller with sprint, crouch, jump, head-bob, FOV stretch, and coyote time.
+- Playtest button workflow: bake + launch current scene.
+- Player start entity support (`entity_class = "player_start"`).
+- Hot-reload signal for running playtests via `res://.hammerforge/reload.lock`.
 
 ### Fixed
 - Selection picking now works for cylinders and rotated brushes.
@@ -46,6 +50,8 @@ The format is based on "Keep a Changelog", and this project follows semantic ver
 - Guarded brush deletion to avoid "Remove Node(s)" errors.
 - Dock instantiation issues caused by invalid parent paths.
 - Commit cuts bake now neutralizes subtract materials so carved faces don't inherit the red preview.
+- Playtest spawning now waits for runtime tree readiness to avoid transform warnings.
+- Playtest now bakes before hiding draft geometry, so you can see brushes in-game.
 
 ### Documentation
 - Added user guide and expanded LevelRoot explanation.

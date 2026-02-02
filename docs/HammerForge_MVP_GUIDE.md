@@ -98,7 +98,8 @@ addons/
     * Use Draw tool to click-drag a base, release, then click to set height.
     * Use Subtract mode to place cut shapes, then click **Apply Cuts** (carve is visible after Bake).
     * Click Bake: a static `MeshInstance3D` + `StaticBody3D` appears with collision.
-    * Add an FPS controller (e.g., `SRCoders FPS Controller` from Asset Library) and hit Play to move around the baked room.
+    * Use the built-in Playtest button to bake + launch with the HammerForge playtest FPS controller.
+    * Add a `player_start` DraftEntity under `Entities` to control spawn location.
 
 ## Quadrant Viewports (Native)
 Use Godot’s **View → Layout → 4 View** for Top/Front/Side/3D. The plugin no longer ships a custom quadrant overlay.

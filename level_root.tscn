@@ -1,7 +1,73 @@
 [gd_scene format=3 uid="uid://be36ud0gihbpm"]
 
 [ext_resource type="Script" uid="uid://2jktco8h5i23" path="res://addons/hammerforge/level_root.gd" id="1_qayhv"]
+[ext_resource type="Script" uid="uid://baa0jehgyu0by" path="res://addons/hammerforge/draft_entity.gd" id="2_playerstart"]
+[ext_resource type="Script" uid="uid://bx7ydxsoo45un" path="res://addons/hammerforge/brush_manager.gd" id="3_e5u8s"]
+[ext_resource type="Script" uid="uid://c08wqo8o0bomi" path="res://addons/hammerforge/brush_instance.gd" id="3_rix17"]
+[ext_resource type="Script" uid="uid://cfnswc2a51c0v" path="res://addons/hammerforge/baker.gd" id="4_rix17"]
 
 [node name="LevelRoot" type="Node3D" unique_id=1405846836]
 script = ExtResource("1_qayhv")
+commit_freeze = false
 metadata/_custom_type_script = "uid://2jktco8h5i23"
+
+[node name="Entities" type="Node3D" parent="." unique_id=1657035298]
+
+[node name="PlayerStart" type="Node3D" parent="Entities" unique_id=785721058]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1207476, 0)
+script = ExtResource("2_playerstart")
+entity_type = "player_start"
+entity_class = "player_start"
+entity_type = "player_start"
+
+[node name="DraftEntity" type="Node3D" parent="Entities" unique_id=77594625]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.029501751, 0)
+script = ExtResource("2_playerstart")
+entity_type = "player_start"
+entity_class = "player_start"
+entity_type = "player_start"
+metadata/is_entity = true
+
+[node name="DraftBrushes" type="Node3D" parent="." unique_id=1800555703]
+
+[node name="@Node3D@20414" type="Node3D" parent="DraftBrushes" unique_id=1283626859]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16, 48, 48)
+script = ExtResource("3_rix17")
+size = Vector3(96, 96, 32)
+brush_id = "27757428_1"
+metadata/brush_id = "27757428_1"
+
+[node name="@Node3D@20415" type="Node3D" parent="DraftBrushes" unique_id=551405651]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 66.232056, 43.453518, -41.018414)
+script = ExtResource("3_rix17")
+shape = 2
+size = Vector3(48, 32, 0.1)
+brush_id = "35106978_3"
+metadata/brush_id = "35106978_3"
+
+[node name="@Node3D@20433" type="Node3D" parent="DraftBrushes" unique_id=1160713833]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 64, 88, 64)
+script = ExtResource("3_rix17")
+size = Vector3(32, 16, 24)
+brush_id = "26665323_1"
+metadata/brush_id = "26665323_1"
+
+[node name="PendingCuts" type="Node3D" parent="." unique_id=519979753]
+
+[node name="CommittedCuts" type="Node3D" parent="." unique_id=10602619]
+visible = false
+
+[node name="BrushManager" type="Node" parent="." unique_id=879362652]
+script = ExtResource("3_e5u8s")
+
+[node name="Baker" type="Node" parent="." unique_id=1581818682]
+script = ExtResource("4_rix17")
+
+[node name="TempFloor" type="CSGBox3D" parent="." unique_id=1411091884]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -8, 0)
+use_collision = true
+size = Vector3(1024, 16, 1024)
+
+[node name="BakedGeometry" type="Node3D" parent="." unique_id=746625067]
+
+[node name="@Node3D@20432" type="Node3D" parent="." unique_id=1777307114]

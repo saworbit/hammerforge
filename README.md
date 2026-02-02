@@ -69,6 +69,9 @@
 - **Physics Layer Presets**: Set baked collision layers with a single dropdown
 - **Live Brush Count**: Real-time count of draft brushes with performance warning colors
 - **History Panel (beta)**: Undo/Redo buttons plus a recent action list for HammerForge actions
+- **Playtest Button**: One-click bake + launch current scene (with hot-reload signal)
+- **Playtest FPS Controller**: Runtime CharacterBody3D with sprint, crouch, jump, head-bob, and FOV stretch
+- **Player Start Entity**: Spawn playtests at `Entities/DraftEntity` with `entity_class = "player_start"`
 
 ### ⌨️ Modifier Keys
 | Key | Effect |
@@ -101,6 +104,7 @@
 - Removes hidden geometry for better performance
 - Subtract previews do not bleed into baked materials
 - **Chunked Bake**: set `bake_chunk_size` on `LevelRoot` to split large maps into chunk bakes (set `<= 0` to disable)
+- **Playtest Flow**: Playtest button bakes then launches the scene; running instances can hot-reload via `res://.hammerforge/reload.lock`
 
 ---
 
@@ -182,7 +186,8 @@ Notes:
 ```
 1. Click "Bake" in the dock
    → Creates optimized static mesh with collision
-2. Press Play to test your level!
+2. Click "Playtest" to bake + launch with the playtest controller
+   → Place a `player_start` entity for spawn location
 ```
 
 ---
@@ -225,6 +230,7 @@ Sections can be collapsed using the toggle button in each header.
 | ♻️ **Restore Cuts** | Bring committed cuts back for editing |
 | 🧩 **Create DraftEntity** | Spawn a DraftEntity under `Entities` |
 | 📦 **Bake** | Bake DraftBrushes to an optimized mesh (temporary CSG) |
+| Playtest | Bake + launch current scene (supports hot-reload) |
 | 🗑️ **Clear All** | Remove all brushes |
 
 ### Keyboard Shortcuts
