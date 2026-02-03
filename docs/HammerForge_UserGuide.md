@@ -153,7 +153,7 @@ HammerForge uses a two-stage drag workflow:
 2. Hover highlight shows the brush under the cursor.
 3. Click a brush to select it. (If Paint Mode is enabled, clicks apply material instead.)
 4. Entities are selectable when placed under `Entities` or tagged with `is_entity` (Paint Mode ignores them).
-5. Shift-click to multi-select.
+5. Shift/Ctrl/Cmd-click to multi-select.
 6. Press **Delete** to remove selected brushes.
 7. Press **Ctrl+D** to duplicate selected brushes.
 8. Use Ctrl+Arrow or Ctrl+PageUp/PageDown to nudge selected brushes by the grid size.
@@ -163,7 +163,8 @@ HammerForge uses a two-stage drag workflow:
 10. Use the DraftBrush face handles (white circles) to resize; the yellow wireframe is only a guide.
 
 ### Known Issues (as of February 3, 2026)
-- Viewport multi-select can cap at 2 items, and drag-marquee selection may not register.
+- Viewport multi-select can cap at 2 items.
+- Drag-marquee selection is disabled in the viewport.
 - Workaround: use the Scene tree to multi-select (Shift/Ctrl) or select one-by-one and transform via the tree.
 
 ## Material Painting (Paint Mode)

@@ -43,6 +43,7 @@ var _grid_snap: float = 16.0
 @export var entity_definitions_path: String = "res://addons/hammerforge/entities.json"
 @export var commit_freeze: bool = true
 @export var auto_spawn_player: bool = true
+@export_range(1, 32, 1) var draft_pick_layer_index: int = 1
 var _grid_visible: bool = false
 @export var grid_visible: bool = false:
 	set(value):
@@ -1276,6 +1277,7 @@ func _raycast(camera: Camera3D, mouse_pos: Vector2) -> Dictionary:
 	query.to = to
 	query.collide_with_areas = true
 	query.collide_with_bodies = true
+	query.collision_mask = _layer_from_index(draft_pick_layer_index)
 	var hit = get_world_3d().direct_space_state.intersect_ray(query)
 	if hit:
 		return hit
@@ -1473,7 +1475,7 @@ func pick_brush(camera: Camera3D, mouse_pos: Vector2, include_entities: bool = t
 	var best_t = INF
 	var nodes = _iter_pick_nodes()
 	for child in nodes:
-		if not (child is DraftBrush):
+		if not (child is DraftBrush) or not is_brush_node(child):
 			continue
 		var mesh_inst: MeshInstance3D = child.mesh_instance
 		if not mesh_inst:
@@ -1491,7 +1493,7 @@ func pick_brush(camera: Camera3D, mouse_pos: Vector2, include_entities: bool = t
 	var closest_entity: Node = null
 	var best_entity_t = INF
 	for child in nodes:
-		if not (child is Node3D) or not _is_entity_node(child):
+		if not (child is Node3D) or not is_entity_node(child):
 			continue
 		var t_entity = _entity_pick_distance(child as Node3D, ray_origin, ray_dir)
 		if t_entity >= 0.0 and t_entity < best_entity_t:

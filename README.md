@@ -83,7 +83,7 @@
 | `Right-click` | Cancel current operation |
 
 ### 🔧 Selection & Manipulation
-- **Click to Select** brushes (Shift for multi-select)
+- **Click to Select** brushes (Shift/Ctrl/Cmd for multi-select)
 - **Hover Highlight** shows the brush under the cursor in Select mode
 - **Delete** selected brushes
 - **Duplicate** with `Ctrl+D` (grid-snapped offset)
@@ -93,7 +93,8 @@
 - **Entities are selectable** when placed under `Entities` or tagged with `is_entity` (not included in bake)
 
 ### ⚠️ Known Issues (as of February 3, 2026)
-- **Viewport multi-select is unreliable**: Shift-clicking can cap at 2 items, and drag-marquee selection may not register.
+- **Viewport multi-select is limited**: Shift/Ctrl/Cmd-clicking can cap at 2 items.
+- **Drag-marquee selection is disabled** in the viewport.
   - **Workaround**: Use the Scene tree to multi-select brushes (Shift/Ctrl), or select one-by-one and duplicate/transform via the tree.
 
 ### ⚡ Pending Subtract System

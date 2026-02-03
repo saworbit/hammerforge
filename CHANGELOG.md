@@ -44,6 +44,9 @@ The format is based on "Keep a Changelog", and this project follows semantic ver
 - Player start entity support (`entity_class = "player_start"`).
 - Hot-reload signal for running playtests via `res://.hammerforge/reload.lock`.
 
+### Changed
+- Disabled drag-marquee selection in the viewport to avoid input conflicts.
+
 ### Fixed
 - Selection picking now works for cylinders and rotated brushes.
 - Height drag direction now matches mouse movement (up = taller).
@@ -56,4 +59,4 @@ The format is based on "Keep a Changelog", and this project follows semantic ver
 ### Documentation
 - Added user guide and expanded LevelRoot explanation.
 - Updated README, user guide, MVP guide, and spec for chunked baking and entity workflow.
-- Documented a known issue: viewport multi-select is unreliable (Shift-click cap and marquee selection).
+- Documented selection limits and drag-marquee being disabled in the viewport.

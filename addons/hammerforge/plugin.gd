@@ -1,18 +1,6 @@
 @tool
 extends EditorPlugin
 
-class MarqueeControl:
-    extends Control
-    var rect := Rect2()
-    var fill_color := Color(0.3, 0.6, 1.0, 0.15)
-    var line_color := Color(0.3, 0.6, 1.0, 0.8)
-
-    func _draw() -> void:
-        if rect.size == Vector2.ZERO:
-            return
-        draw_rect(rect, fill_color, true)
-        draw_rect(rect, line_color, false, 1.0)
-
 var dock: Control
 var hud: Control
 var base_control: Control
@@ -23,15 +11,8 @@ var hf_selection: Array = []
 var select_drag_origin := Vector2.ZERO
 var select_drag_active := false
 var select_dragging := false
-var select_click_pending := false
-var select_click_consumed := false
-var select_click_time := 0
-var select_click_pos := Vector2.ZERO
-var select_click_camera: Camera3D = null
 var select_additive := false
 var select_drag_threshold := 6.0
-var marquee: MarqueeControl = null
-var marquee_viewport: Viewport = null
 const LevelRootType = preload("level_root.gd")
 
 func _enter_tree():
@@ -65,7 +46,12 @@ func _enter_tree():
     add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, hud)
     if dock and dock.has_method("get_show_hud"):
         hud.visible = dock.call("get_show_hud")
-    set_process(true)
+    var selection = get_editor_interface().get_selection()
+    if selection:
+        if not selection.is_connected("selection_changed", Callable(self, "_on_editor_selection_changed")):
+            selection.connect("selection_changed", Callable(self, "_on_editor_selection_changed"))
+        hf_selection = selection.get_selected_nodes()
+    set_process(false)
 
 
 func _exit_tree():
@@ -86,12 +72,9 @@ func _exit_tree():
     if hud:
         remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, hud)
         hud.free()
-    if marquee:
-        if marquee.get_parent():
-            marquee.get_parent().remove_child(marquee)
-        marquee.queue_free()
-        marquee = null
-    marquee_viewport = null
+    var selection = get_editor_interface().get_selection()
+    if selection and selection.is_connected("selection_changed", Callable(self, "_on_editor_selection_changed")):
+        selection.disconnect("selection_changed", Callable(self, "_on_editor_selection_changed"))
     set_process(false)
 
 func _on_editor_theme_changed() -> void:
@@ -108,30 +91,11 @@ func _on_hud_visibility_changed(visible: bool) -> void:
     if hud:
         hud.visible = visible
 
-func _process(delta: float) -> void:
-    if not select_click_pending or select_dragging:
-        _sync_editor_selection()
-        return
-    if Time.get_ticks_msec() - select_click_time < 100:
-        return
-    select_click_pending = false
-    select_click_consumed = true
-    var root = active_root if active_root else _get_level_root()
-    if not root or not select_click_camera:
-        return
-    var picked = root.pick_brush(select_click_camera, select_click_pos)
-    _select_node(picked, select_additive)
-    _sync_editor_selection()
-
-func _sync_editor_selection() -> void:
-    if hf_selection.is_empty():
-        return
+func _on_editor_selection_changed() -> void:
     var selection = get_editor_interface().get_selection()
     if not selection:
         return
-    var current = selection.get_selected_nodes()
-    if current.size() != hf_selection.size():
-        _apply_hf_selection(selection)
+    hf_selection = selection.get_selected_nodes()
 
 
 func _handles(object: Object) -> bool:
@@ -196,15 +160,16 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
             if event.keycode == KEY_PAGEDOWN:
                 _nudge_selected(root, Vector3(0.0, -1.0, 0.0))
                 return EditorPlugin.AFTER_GUI_INPUT_STOP
-            if event.keycode == KEY_X:
-                root.set_axis_lock(LevelRootType.AxisLock.X, true)
-                return EditorPlugin.AFTER_GUI_INPUT_STOP
-            if event.keycode == KEY_Y:
-                root.set_axis_lock(LevelRootType.AxisLock.Y, true)
-                return EditorPlugin.AFTER_GUI_INPUT_STOP
-            if event.keycode == KEY_Z:
-                root.set_axis_lock(LevelRootType.AxisLock.Z, true)
-                return EditorPlugin.AFTER_GUI_INPUT_STOP
+            if tool != 1:
+                if event.keycode == KEY_X:
+                    root.set_axis_lock(LevelRootType.AxisLock.X, true)
+                    return EditorPlugin.AFTER_GUI_INPUT_STOP
+                if event.keycode == KEY_Y:
+                    root.set_axis_lock(LevelRootType.AxisLock.Y, true)
+                    return EditorPlugin.AFTER_GUI_INPUT_STOP
+                if event.keycode == KEY_Z:
+                    root.set_axis_lock(LevelRootType.AxisLock.Z, true)
+                    return EditorPlugin.AFTER_GUI_INPUT_STOP
 
     if tool == 1 and event is InputEventMouseMotion:
         if root.has_method("update_hover"):
@@ -213,16 +178,13 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
         root.call("clear_hover")
 
     if event is InputEventMouseButton:
-        root.set_shift_pressed(event.shift_pressed)
-        root.set_alt_pressed(event.alt_pressed)
+        if tool != 1:
+            root.set_shift_pressed(event.shift_pressed)
+            root.set_alt_pressed(event.alt_pressed)
         if event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
             root.cancel_drag()
             select_drag_active = false
             select_dragging = false
-            select_click_pending = false
-            select_click_consumed = false
-            if marquee:
-                marquee.visible = false
             return EditorPlugin.AFTER_GUI_INPUT_STOP
     if tool == 1:
         if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
@@ -236,28 +198,21 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
                 select_drag_origin = target_pos
                 select_drag_active = true
                 select_dragging = false
-                select_click_pending = true
-                select_click_consumed = false
-                select_click_time = Time.get_ticks_msec()
-                select_click_pos = target_pos
-                select_click_camera = target_camera
-                select_additive = event.shift_pressed or event.ctrl_pressed \
-                    or Input.is_key_pressed(KEY_SHIFT) or Input.is_key_pressed(KEY_CTRL)
-                return EditorPlugin.AFTER_GUI_INPUT_STOP
+                select_additive = event.shift_pressed or event.ctrl_pressed or event.meta_pressed \
+                    or Input.is_key_pressed(KEY_SHIFT) or Input.is_key_pressed(KEY_CTRL) or Input.is_key_pressed(KEY_META)
+                return EditorPlugin.AFTER_GUI_INPUT_PASS
             else:
+                var selection_action := false
                 if select_drag_active:
                     if select_dragging:
-                        _select_nodes_in_rect(root, target_camera, select_drag_origin, target_pos, select_additive)
-                    elif select_click_pending and not select_click_consumed:
+                        selection_action = false
+                    else:
                         var picked = root.pick_brush(target_camera, target_pos)
                         _select_node(picked, select_additive)
-                    if marquee:
-                        marquee.visible = false
+                        selection_action = true
                 select_drag_active = false
                 select_dragging = false
-                select_click_pending = false
-                select_click_consumed = false
-                return EditorPlugin.AFTER_GUI_INPUT_STOP
+                return EditorPlugin.AFTER_GUI_INPUT_STOP if selection_action else EditorPlugin.AFTER_GUI_INPUT_PASS
     else:
         if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
             if event.pressed:
@@ -271,22 +226,13 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
                     return EditorPlugin.AFTER_GUI_INPUT_STOP
                 return EditorPlugin.AFTER_GUI_INPUT_PASS
     if event is InputEventMouseMotion:
-        root.set_shift_pressed(event.shift_pressed)
-        root.set_alt_pressed(event.alt_pressed)
+        if tool != 1:
+            root.set_shift_pressed(event.shift_pressed)
+            root.set_alt_pressed(event.alt_pressed)
         if tool == 1 and select_drag_active and event.button_mask & MOUSE_BUTTON_MASK_LEFT != 0:
             if not select_dragging and select_drag_origin.distance_to(target_pos) >= select_drag_threshold:
                 select_dragging = true
-                select_click_pending = false
-                select_click_consumed = false
-                _ensure_marquee(target_camera)
-                if marquee:
-                    marquee.visible = true
-            if select_dragging:
-                _ensure_marquee(target_camera)
-                if marquee:
-                    marquee.rect = Rect2(select_drag_origin, target_pos - select_drag_origin).abs()
-                    marquee.queue_redraw()
-            return EditorPlugin.AFTER_GUI_INPUT_STOP
+            return EditorPlugin.AFTER_GUI_INPUT_PASS
         if tool != 1 and event.button_mask & MOUSE_BUTTON_MASK_LEFT != 0:
             root.update_drag(target_camera, target_pos)
             return EditorPlugin.AFTER_GUI_INPUT_STOP
@@ -298,6 +244,9 @@ func _shortcut_input(event: InputEvent) -> void:
     if not event.pressed or event.echo:
         return
     if event.keycode == KEY_ESCAPE:
+        if select_drag_active:
+            select_drag_active = false
+            select_dragging = false
         var selection = get_editor_interface().get_selection()
         if selection:
             selection.clear()
@@ -360,18 +309,16 @@ func _select_nodes_in_rect(root: Node, camera: Camera3D, from: Vector2, to: Vect
     for node in nodes:
         if not (node is Node3D):
             continue
-        var include = false
         if root.has_method("is_brush_node") and root.is_brush_node(node):
-            include = true
+            pass
         elif root.has_method("is_entity_node") and root.is_entity_node(node):
-            include = true
-        if not include:
+            pass
+        else:
             continue
-        var pos3 = (node as Node3D).global_transform.origin
-        var screen_pos = _project_to_screen(camera, pos3)
-        if screen_pos == null:
+        var bounds = _node_screen_bounds(camera, node as Node3D, root)
+        if bounds.size == Vector2.ZERO:
             continue
-        if rect.has_point(screen_pos):
+        if rect.intersects(bounds) or bounds.has_point(rect.position) or bounds.has_point(rect.position + rect.size):
             picked.append(node)
     if not additive and picked.is_empty():
         hf_selection.clear()
@@ -413,6 +360,61 @@ func _project_to_screen(camera: Camera3D, position: Vector3) -> Variant:
     if camera.has_method("unproject_position"):
         return camera.unproject_position(position)
     return null
+
+func _node_screen_bounds(camera: Camera3D, node: Node3D, root: Node) -> Rect2:
+    if not camera or not node:
+        return Rect2()
+    var visuals: Array = []
+    if root and root.has_method("_gather_visual_instances"):
+        root.call("_gather_visual_instances", node, visuals)
+    else:
+        _gather_visual_instances_local(node, visuals)
+    if visuals.is_empty():
+        var fallback = _project_to_screen(camera, node.global_transform.origin)
+        return Rect2(fallback - Vector2.ONE, Vector2.ONE * 2.0) if fallback != null else Rect2()
+    var min_pt = Vector2(INF, INF)
+    var max_pt = Vector2(-INF, -INF)
+    var had_point = false
+    for visual in visuals:
+        if not (visual is VisualInstance3D):
+            continue
+        var vis := visual as VisualInstance3D
+        var aabb = vis.get_aabb()
+        var corners = [
+            aabb.position,
+            aabb.position + Vector3(aabb.size.x, 0.0, 0.0),
+            aabb.position + Vector3(0.0, aabb.size.y, 0.0),
+            aabb.position + Vector3(0.0, 0.0, aabb.size.z),
+            aabb.position + Vector3(aabb.size.x, aabb.size.y, 0.0),
+            aabb.position + Vector3(aabb.size.x, 0.0, aabb.size.z),
+            aabb.position + Vector3(0.0, aabb.size.y, aabb.size.z),
+            aabb.position + aabb.size
+        ]
+        for corner in corners:
+            var world_pos = vis.global_transform * corner
+            var screen = _project_to_screen(camera, world_pos)
+            if screen == null:
+                continue
+            had_point = true
+            min_pt.x = min(min_pt.x, screen.x)
+            min_pt.y = min(min_pt.y, screen.y)
+            max_pt.x = max(max_pt.x, screen.x)
+            max_pt.y = max(max_pt.y, screen.y)
+    if not had_point:
+        return Rect2()
+    var size = max_pt - min_pt
+    if size == Vector2.ZERO:
+        size = Vector2.ONE * 2.0
+        min_pt -= Vector2.ONE
+    return Rect2(min_pt, size)
+
+func _gather_visual_instances_local(node: Node, out: Array) -> void:
+    if not node:
+        return
+    if node is VisualInstance3D:
+        out.append(node)
+    for child in node.get_children():
+        _gather_visual_instances_local(child, out)
 
 func _selection_has_brush(nodes: Array, root: Node) -> bool:
     if not root or not root.has_method("is_brush_node"):
@@ -585,33 +587,6 @@ func _get_level_root_from_node(node: Node) -> Node:
             return current
         current = current.get_parent()
     return null
-
-func _ensure_marquee(camera: Camera3D) -> void:
-    if not camera:
-        return
-    var vp = camera.get_viewport()
-    if not vp:
-        return
-    if not marquee:
-        marquee = MarqueeControl.new()
-        marquee.name = "HFMarquee"
-        marquee.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        marquee.anchor_left = 0.0
-        marquee.anchor_top = 0.0
-        marquee.anchor_right = 1.0
-        marquee.anchor_bottom = 1.0
-        marquee.offset_left = 0.0
-        marquee.offset_top = 0.0
-        marquee.offset_right = 0.0
-        marquee.offset_bottom = 0.0
-        marquee.visible = false
-        marquee.z_index = 4096
-    if marquee_viewport != vp:
-        if marquee.get_parent():
-            marquee.get_parent().remove_child(marquee)
-        vp.add_child(marquee)
-        marquee_viewport = vp
-    # Anchors drive size; no manual resize needed.
 
 func _create_level_root() -> Node:
     var scene = get_editor_interface().get_edited_scene_root()
