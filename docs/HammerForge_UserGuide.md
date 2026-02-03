@@ -64,6 +64,14 @@ Sections can be collapsed using the toggle button in each header.
 **Physics Layer**
 - Selects a preset collision layer mask for baked geometry.
 
+**Bake Options**
+- **Merge Meshes**: Combine baked surfaces into a single mesh for fewer draw calls.
+- **Generate LODs**: Auto-generate LODs on baked meshes for distance culling.
+- **Lightmap UV2**: Unwrap UV2 for LightmapGI compatibility.
+- **Texel Size**: Controls UV2 density for lightmap unwrap.
+- **Bake Navmesh**: Generates a NavigationRegion3D from baked geometry.
+- **Navmesh Cell / Agent**: Adjust navmesh resolution and agent size.
+
 **Freeze Commit**
 - Keeps committed cut shapes in a hidden container so you can restore them later.
   - If disabled, committed cuts are deleted after bake and cannot be reused in future bakes.
@@ -106,6 +114,19 @@ Sections can be collapsed using the toggle button in each header.
 **Create DraftEntity**
 - Spawns a `DraftEntity` under `LevelRoot/Entities` and selects it.
 - Set `entity_type` to choose a schema (dropdown is populated from `entities.json`).
+
+**Save .hflevel / Load .hflevel**
+- Save or load the full level state (brushes, entities, settings).
+
+**Import .map / Export .map**
+- Import or export Quake/TrenchBroom `.map` files.
+
+**Export .glb**
+- Exports the baked geometry as a `.glb` for external tools.
+
+**Autosave**
+- Toggle background autosave and set the interval.
+- Use **Set Autosave Path** to control the destination file.
 
 **Bake**
 - Builds a temporary CSG tree from DraftBrushes and bakes a static mesh + collision.
@@ -179,10 +200,15 @@ Entities are non-geometry nodes that should not participate in CSG or bake.
 - Place nodes under `LevelRoot/Entities` or add meta `is_entity = true`.
 - Entities are selectable and movable with standard gizmos.
 - Entities are ignored by Bake and do not affect collision.
-- Definitions can be authored in `res://addons/hammerforge/entities.json` (used by future palette UI).
+- Definitions can be authored in `res://addons/hammerforge/entities.json` (used by the Entity Palette).
 - Use `DraftEntity` for dynamic Inspector properties powered by the JSON schema.
 - Entity previews are editor-only billboards or meshes defined per entity (see `preview` in `entities.json`).
 - `player_start` is a built-in entity used by Playtest to select spawn location (visible as a capsule preview).
+
+### Entity Palette
+The **Entities** tab now includes a visual palette.
+- Drag an entity from the palette into the 3D viewport to place it.
+- Icons come from `preview_icon` or `preview.path` (billboard) in `entities.json`.
 
 ### Entity Definitions Format (Schema Map)
 `entities.json` now supports a map-style schema:
@@ -232,6 +258,21 @@ When you press **Bake**, HammerForge builds a temporary CSG tree from DraftBrush
 Chunked baking is controlled by `LevelRoot.bake_chunk_size`:
 - `> 0`: chunked output (default 32 units)
 - `<= 0`: single bake output (no chunk splitting)
+
+### Lightmap UV2 + Navmesh
+- Enable **Lightmap UV2** to unwrap UV2 channels on baked meshes.
+- Enable **Bake Navmesh** to generate `BakedNavmesh` under `BakedGeometry`.
+
+## Autosave + .hflevel
+- **Save .hflevel** stores brushes, entities, and core settings.
+- **Load .hflevel** restores the level state (undoable).
+- **Autosave** runs in the editor on the configured interval.
+- **Set Autosave Path** changes the `.hflevel` autosave destination.
+
+## Import / Export
+- **Import .map** brings in Quake/TrenchBroom brushes and entity points.
+- **Export .map** writes DraftBrushes and entities to a `.map`.
+- **Export .glb** writes the baked geometry as a `.glb` (run **Bake** first).
 
 ### Playtesting
 HammerForge includes a built-in playtest FPS controller and a Playtest button in the dock:

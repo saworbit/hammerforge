@@ -13,25 +13,30 @@
 - Viewport face-handle gizmo for resizing brushes with undo/redo.
 - Gizmo snapping respects `grid_snap` during handle drags.
 - Chunked baking via `LevelRoot.bake_chunk_size` (default 32).
+- Advanced bake options (merge meshes, auto LOD, lightmap UV2 unwrap, navmesh bake).
 - Entities container (`LevelRoot/Entities`) and `is_entity` meta for selection-only nodes excluded from bake.
 - Entity definitions JSON loaded by the dock (`res://addons/hammerforge/entities.json`).
 - DraftEntity schema-driven properties with Inspector dropdowns (stored under `data/`, backward-compatible `entity_data/`).
 - Entity previews (billboards/meshes) spawned in the editor from `entities.json` preview metadata.
+- Entity palette UI with drag-and-drop placement.
 - Playtest FPS controller (sprint, crouch, jump, head-bob, FOV stretch, coyote time).
 - Playtest button: bake + launch current scene with hot-reload signal.
 - Player start entity support (`entity_class = "player_start"`).
+- .hflevel save/load with autosave support.
+- .map import/export and baked .glb export.
 
 **Planned**
-- Autosave, .hflevel storage, import/export, and advanced optimization (LOD, navmesh, lightmap, multi-threaded merges).
+- Per-face texture tools and UV workflows.
+- Additional import/export formats (USD, extended glTF pipelines).
 
 ## Why This Wins
 | Goal | HammerForge Response |
 | --- | --- |
 | Immediate setup | <1 minute: enable plugin, create LevelRoot, ready brush/entity workflow. |
-| Familiar workflow | Dock + toolbar mimic Hammer/Radiant; viewport brush handles (entity palette planned). |
-| Performance | Chunked baking today; MultiMesh previews, compute merges, LOD/navmesh/collision automation planned. |
+| Familiar workflow | Dock + toolbar mimic Hammer/Radiant; viewport brush handles and entity palette. |
+| Performance | Chunked baking with optional mesh merging, auto LOD, navmesh, and lightmap UV2 prep. |
 | Modularity | Toggleable modules (Terrain, Prefabs, AIPath) plus extensible signals/hooks/api for community tools. |
-| Future-proofing | GDExtension stubs for C++ acceleration, glTF/Map/USD import-export, Godot 5-ready codebase. |
+| Future-proofing | GDExtension stubs for C++ acceleration, .map/.glb export today, USD planned. |
 
 ## Architecture Diagram
 
@@ -64,21 +69,22 @@ Note: Diagram includes planned modules; current implementation focuses on BrushS
 - Resize handles snap to `grid_snap` for consistent sizing.
 - Subtract brushes can be staged as pending cuts and applied on demand.
 - Grid/snap options (1–64 units), quick Create Floor for raycast placement.
-- Undo/redo history panel (beta); autosave `.hflevel` planned.
-- Chunked baking via `bake_chunk_size` (default 32); advanced culling/merge planned.
+- Undo/redo history panel (beta); autosave `.hflevel` supported.
+- Chunked baking via `bake_chunk_size` (default 32); optional mesh merging available.
 
 ### Entity Placement
 - Entities live under `LevelRoot/Entities` or are tagged `is_entity` (selection-only, excluded from bake).
-- JSON entity definitions are stored in `res://addons/hammerforge/entities.json` and loaded by the dock (palette UI planned).
+- JSON entity definitions are stored in `res://addons/hammerforge/entities.json` and loaded by the dock.
+- Entity palette UI supports drag-and-drop placement in the 3D viewport.
 - DraftEntity exposes schema-driven Inspector properties via `entity_type` and persists values in the scene.
-- Signals, instanced scenes, and palette tooling are planned additions.
+- Signals and instanced scene workflows remain planned additions.
 
 ### Optimization & Baking
 - Chunked baking groups DraftBrushes by grid using `bake_chunk_size` (default 32) and bakes each chunk separately.
 - Bake builds a temporary CSG tree per chunk to generate static meshes.
 - Collision baking uses Add brushes only (Subtract brushes are excluded).
 - Each chunk becomes a BakedChunk_x_y_z under BakedGeometry with MeshInstance3D + StaticBody3D.
-- LOD, navmesh, lightmap, and merge optimizations are planned.
+- Optional bake flags support mesh merging, auto LOD, navmesh baking, and lightmap UV2 unwrap.
 - Versioned saves and incremental rebuilds are planned.
 
 ### Preview/Playtesting
@@ -87,7 +93,8 @@ Note: Diagram includes planned modules; current implementation focuses on BrushS
 - Running instances can hot-reload via `res://.hammerforge/reload.lock`.
 
 ### Imports/Exports
-- Planned: .map (TrenchBroom), glTF, and USD import/export.
+- Implemented: .map import/export and baked .glb export.
+- Planned: USD import/export and extended glTF pipelines.
 
 ### Optional Modules
 Planned modules and scalability targets:
@@ -104,7 +111,7 @@ Planned modules and scalability targets:
 Planned optional 2x2 SubViewport layout: Top/Front/Side orthographic + 3D perspective. Current workflow uses Godot's native 4-view layout.
 
 
-- **Dock (Left-Upper):** Tool (Draw/Select), Paint Mode, Active Material, Shape Palette, Sides, Mode (Add/Subtract), Size, Grid, Physics Layer, Quadrant View toggle, Create Floor, Apply/Clear Cuts, Bake, Playtest.  
+- **Dock (Left-Upper):** Tool (Draw/Select), Paint Mode, Active Material, Shape Palette, Sides, Mode (Add/Subtract), Size, Grid, Physics Layer, Bake Options (merge/LOD/lightmap/navmesh), Storage (save/load .hflevel, import/export .map/.glb), Autosave, Create Floor, Apply/Clear Cuts, Bake, Playtest.  
 - **Toolbar (Spatial Editor):** Mode switches (Brush/Object/Texture), Bake, Play FPS, Undo/Redo icons.  
 - **Viewport Overlays:** Grid (toggle), brush ghost (green wireframe), hover selection highlight, snap lines, gizmo handles for resizing/rotating brushes and entities.  
 - **Shortcuts:** `X/Y/Z` axis locks, `Shift` square base, `Shift+Alt` cube, `Alt` height-only, `Delete` remove, `Ctrl+D` duplicate.  
@@ -160,11 +167,11 @@ for coord in chunks:
 - Definitions are loaded by the dock; palette UI and instancing are planned.
 
 ## Storage Format
-Planned format (not yet implemented):
-- `.hflevel`: custom binary + JSON that records brushes, entities, metadata, and module state.  
-- Autosaves every 5 minutes via `ResourceSaver`.  
-- Supports versioning for diff-only rebake and undo.  
-- Preview scenes stored under `addons/hammerforge/levels/`.
+Implemented format:
+- `.hflevel`: custom header + JSON payload recording brushes, entities, settings, and module state.  
+- Autosaves on a configurable interval to a user-selected path.  
+- Supports full restore for undo/redo on load/import.  
+- Preview scenes stored under `addons/hammerforge/levels/` (planned).
 
 ## Extensibility
 - **Modules folder:** e.g., `modules/terrain/` includes its own `EditorPlugin` subclass toggled from settings.  

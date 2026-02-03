@@ -192,6 +192,80 @@ text = "Physics Layer"
 [node name="PhysicsLayerOption" type="OptionButton" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PhysicsLayerRow"]
 size_flags_horizontal = 3
 
+[node name="BuildSeparatorBake" type="HSeparator" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
+
+[node name="BakeLabel" type="Label" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
+text = "Bake Options"
+
+[node name="BakeMergeMeshes" type="CheckBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
+text = "Merge Meshes"
+pressed = false
+
+[node name="BakeGenerateLods" type="CheckBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
+text = "Generate LODs"
+pressed = false
+
+[node name="BakeLightmapUV2" type="CheckBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
+text = "Lightmap UV2"
+pressed = false
+
+[node name="BakeLightmapTexelRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
+custom_constants/separation = 4.0
+
+[node name="BakeLightmapTexelLabel" type="Label" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeLightmapTexelRow"]
+text = "Texel Size"
+
+[node name="BakeLightmapTexel" type="SpinBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeLightmapTexelRow"]
+min_value = 0.01
+max_value = 4.0
+step = 0.01
+value = 0.1
+size_flags_horizontal = 3
+
+[node name="BakeNavmesh" type="CheckBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
+text = "Bake Navmesh"
+pressed = false
+
+[node name="BakeNavmeshCellRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
+custom_constants/separation = 4.0
+
+[node name="BakeNavmeshCellLabel" type="Label" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeNavmeshCellRow"]
+text = "Navmesh Cell"
+
+[node name="BakeNavmeshCellSize" type="SpinBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeNavmeshCellRow"]
+min_value = 0.05
+max_value = 2.0
+step = 0.01
+value = 0.3
+size_flags_horizontal = 3
+
+[node name="BakeNavmeshCellHeight" type="SpinBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeNavmeshCellRow"]
+min_value = 0.05
+max_value = 2.0
+step = 0.01
+value = 0.2
+size_flags_horizontal = 3
+
+[node name="BakeNavmeshAgentRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
+custom_constants/separation = 4.0
+
+[node name="BakeNavmeshAgentLabel" type="Label" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeNavmeshAgentRow"]
+text = "Agent Size"
+
+[node name="BakeNavmeshAgentHeight" type="SpinBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeNavmeshAgentRow"]
+min_value = 0.5
+max_value = 5.0
+step = 0.1
+value = 2.0
+size_flags_horizontal = 3
+
+[node name="BakeNavmeshAgentRadius" type="SpinBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeNavmeshAgentRow"]
+min_value = 0.1
+max_value = 2.0
+step = 0.05
+value = 0.4
+size_flags_horizontal = 3
+
 [node name="BuildSeparator3" type="HSeparator" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
 
 [node name="EditorLabel" type="Label" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
@@ -236,6 +310,12 @@ text = "Entities"
 [node name="CreateEntity" type="Button" parent="Margin/VBox/MainTabs/Entities/EntitiesMargin/EntitiesVBox"]
 text = "Create DraftEntity"
 
+[node name="PaletteLabel" type="Label" parent="Margin/VBox/MainTabs/Entities/EntitiesMargin/EntitiesVBox"]
+text = "Palette"
+
+[node name="EntityPalette" type="GridContainer" parent="Margin/VBox/MainTabs/Entities/EntitiesMargin/EntitiesVBox"]
+columns = 3
+
 [node name="Manage" type="ScrollContainer" parent="Margin/VBox/MainTabs"]
 size_flags_horizontal = 3
 size_flags_vertical = 3
@@ -272,6 +352,49 @@ text = "Bake"
 
 [node name="Clear" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
 text = "Clear Brushes"
+
+[node name="ManageSeparatorStorage" type="HSeparator" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
+
+[node name="StorageLabel" type="Label" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
+text = "Storage"
+
+[node name="SaveHFLevel" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
+text = "Save .hflevel"
+
+[node name="LoadHFLevel" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
+text = "Load .hflevel"
+
+[node name="ImportMap" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
+text = "Import .map"
+
+[node name="ExportMap" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
+text = "Export .map"
+
+[node name="ExportGLB" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
+text = "Export .glb"
+
+[node name="AutosaveLabel" type="Label" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
+text = "Autosave"
+
+[node name="AutosaveEnabled" type="CheckBox" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
+text = "Enable Autosave"
+pressed = true
+
+[node name="AutosaveMinutesRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
+custom_constants/separation = 4.0
+
+[node name="AutosaveMinutesLabel" type="Label" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/AutosaveMinutesRow"]
+text = "Minutes"
+
+[node name="AutosaveMinutes" type="SpinBox" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/AutosaveMinutesRow"]
+min_value = 1.0
+max_value = 60.0
+step = 1.0
+value = 5.0
+size_flags_horizontal = 3
+
+[node name="AutosavePath" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
+text = "Set Autosave Path"
 
 [node name="ManageSeparator1" type="HSeparator" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
 
@@ -338,3 +461,33 @@ size_flags_horizontal = 3
 title = "Pick Material"
 access = 2
 file_mode = 0
+
+[node name="HFLevelSaveDialog" type="FileDialog" parent="."]
+title = "Save .hflevel"
+access = 2
+file_mode = 4
+
+[node name="HFLevelLoadDialog" type="FileDialog" parent="."]
+title = "Load .hflevel"
+access = 2
+file_mode = 0
+
+[node name="MapImportDialog" type="FileDialog" parent="."]
+title = "Import .map"
+access = 2
+file_mode = 0
+
+[node name="MapExportDialog" type="FileDialog" parent="."]
+title = "Export .map"
+access = 2
+file_mode = 4
+
+[node name="GLBExportDialog" type="FileDialog" parent="."]
+title = "Export .glb"
+access = 2
+file_mode = 4
+
+[node name="AutosavePathDialog" type="FileDialog" parent="."]
+title = "Set Autosave Path"
+access = 2
+file_mode = 4

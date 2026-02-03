@@ -13,6 +13,8 @@ var select_drag_active := false
 var select_dragging := false
 var select_additive := false
 var select_drag_threshold := 6.0
+var last_3d_camera: Camera3D = null
+var last_3d_mouse_pos := Vector2.ZERO
 const LevelRootType = preload("level_root.gd")
 
 func _enter_tree():
@@ -117,6 +119,11 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
         root = _create_level_root()
     if not root or not dock:
         return EditorPlugin.AFTER_GUI_INPUT_PASS
+
+    if camera:
+        last_3d_camera = camera
+    if event is InputEventMouse:
+        last_3d_mouse_pos = event.position
 
     var target_camera = camera
     var target_pos = event.position if event is InputEventMouse else Vector2.ZERO
@@ -567,6 +574,39 @@ func _nudge_selected(root: Node, dir: Vector3) -> void:
     _record_history("Nudge Brushes")
 
 
+func _can_drop_data(_position: Vector2, data: Variant) -> bool:
+    return _is_entity_drag_data(data)
+
+func _drop_data(position: Vector2, data: Variant) -> void:
+    _handle_entity_drop(position, data)
+
+func _is_entity_drag_data(data: Variant) -> bool:
+    return data is Dictionary and str(data.get("type", "")) == "hammerforge_entity"
+
+func _handle_entity_drop(position: Vector2, data: Variant) -> void:
+    if not _is_entity_drag_data(data):
+        return
+    var entity_id = str(data.get("entity_id", ""))
+    if entity_id == "":
+        return
+    var root = active_root if active_root else _get_level_root()
+    if not root:
+        root = _create_level_root()
+    if not root:
+        return
+    var camera = last_3d_camera
+    var mouse_pos = position if position != null else last_3d_mouse_pos
+    if camera and root.has_method("place_entity_at_screen"):
+        var entity = root.call("place_entity_at_screen", camera, mouse_pos, entity_id)
+        if entity:
+            var selection = get_editor_interface().get_selection()
+            if selection:
+                selection.clear()
+                selection.add_node(entity)
+            hf_selection.clear()
+            hf_selection.append(entity)
+
+
 func _get_level_root() -> Node:
     var scene = get_editor_interface().get_edited_scene_root()
     if scene:
@@ -603,3 +643,4 @@ func _create_level_root() -> Node:
     hf_selection.clear()
     hf_selection.append(root)
     return root
+

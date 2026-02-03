@@ -63,6 +63,7 @@
 - **Gizmo Snapping**: Resize handles respect `grid_snap` for consistent sizing
 - **Material Paint Mode**: Pick an active material and click brushes to apply it
 - **Entity Selection (early)**: Nodes under `Entities` or tagged `is_entity` are selectable and ignored by bake
+- **Entity Palette UI**: Visual dock palette with drag-and-drop entity placement
 - **DraftEntity Props (early)**: Schema-driven entity properties with Inspector dropdowns (stored under `data/`)
 - **Entity Previews (early)**: Editor-only billboards/meshes from `entities.json`
 - **Collapsible Dock Sections**: Collapse Settings/Presets/Actions to reduce clutter
@@ -108,8 +109,14 @@
 - Auto-generates **trimesh collision** (StaticBody3D) using Add brushes only (Subtracts are excluded)
 - Removes hidden geometry for better performance
 - Subtract previews do not bleed into baked materials
+- **Bake Options**: Merge meshes, auto-LOD generation, lightmap UV2 unwrap, and navmesh baking
 - **Chunked Bake**: set `bake_chunk_size` on `LevelRoot` to split large maps into chunk bakes (set `<= 0` to disable)
 - **Playtest Flow**: Playtest button bakes then launches the scene; running instances can hot-reload via `res://.hammerforge/reload.lock`
+
+### 💾 Storage & Exchange
+- **.hflevel Save/Load**: Store brushes, entities, and level settings in a portable file
+- **Autosave**: Background autosave to a configurable `.hflevel` path
+- **Import/Export**: `.map` (Quake/TrenchBroom) import/export and `.glb` export for baked geometry
 
 ---
 
@@ -215,6 +222,7 @@ Sections can be collapsed using the toggle button in each header.
 | **Grid Snap** | Snap increment (1-128 units) |
 | **Quick Snap** | Preset snap buttons (1/2/4/8/16/32/64) synced to Grid Snap |
 | **Physics Layer** | Preset collision layer mask for baked geometry |
+| **Bake Options** | Merge meshes, generate LODs, lightmap UV2 + texel size, and navmesh settings |
 | **Freeze Commit** | Keep committed cuts hidden for later restore (off deletes cuts after commit) |
 | **Show HUD** | Toggle the on-screen shortcut legend |
 | **Show Grid** | Toggle the editor grid (off by default) |
@@ -223,6 +231,7 @@ Sections can be collapsed using the toggle button in each header.
 | **Debug Logs** | Print HammerForge events to the output console |
 | **Live Brushes** | Real-time draft brush count with performance warning colors |
 | **History** | Undo/Redo controls and a recent action list (beta) |
+| **Autosave** | Enable background autosave and adjust autosave interval |
 
 ### Buttons
 
@@ -234,6 +243,12 @@ Sections can be collapsed using the toggle button in each header.
 | 🔥 **Commit Cuts** | Apply + Bake + Remove cut shapes |
 | ♻️ **Restore Cuts** | Bring committed cuts back for editing |
 | 🧩 **Create DraftEntity** | Spawn a DraftEntity under `Entities` |
+| 💾 **Save .hflevel** | Save brushes, entities, and settings to a `.hflevel` file |
+| 📂 **Load .hflevel** | Load brushes, entities, and settings from a `.hflevel` file |
+| 🧭 **Import .map** | Import Quake/TrenchBroom `.map` brushes and entities |
+| 📤 **Export .map** | Export DraftBrushes to a `.map` file |
+| 📦 **Export .glb** | Export baked geometry as a `.glb` |
+| 🗂 **Set Autosave Path** | Choose the autosave destination for `.hflevel` |
 | 📦 **Bake** | Bake DraftBrushes to an optimized mesh (temporary CSG) |
 | Playtest | Bake + launch current scene (supports hot-reload) |
 | 🗑️ **Clear All** | Remove all brushes |
@@ -284,6 +299,8 @@ HammerForge Plugin
 - brush_instance.gd -> DraftBrush (Node3D + MeshInstance3D)
 - draft_entity.gd -> DraftEntity (schema-driven entity properties)
 - brush_gizmo_plugin.gd -> DraftBrush resize handles in the viewport
+- hflevel_io.gd -> .hflevel serialization helpers
+- map_io.gd -> .map import/export utilities
 ```
 
 ### Editor UX Files
@@ -307,6 +324,7 @@ LevelRoot (Node3D)
     └── BakedChunk_x_y_z (Node3D)
         ├── MeshInstance3D
         └── StaticBody3D
+    └── BakedNavmesh (NavigationRegion3D)
 ```
 
 ---
@@ -327,12 +345,16 @@ LevelRoot (Node3D)
 - [ ] **Texture Support** - Per-face material painting and UV tools
 - [x] **Chunked Baking** - Bake large maps by chunk with `bake_chunk_size`
 - [x] **Entity System** - Selectable entities under `Entities` or tagged `is_entity` (excluded from bake)
+- [x] **Advanced Baking** - Mesh merging, LOD generation, lightmap UV2 unwrap, and integrated navmesh baking
+- [x] **Autosave + .hflevel Storage** - Custom format for brushes + metadata with background autosave
+- [x] **Entity Palette UI** - Visual dock palette with drag-and-drop entity placement
+- [x] **Import/Export** - `.map` import/export and `.glb` export for baked geometry
 
 ### 🔮 Future Modules
 - [ ] **TerrainModule** - GPU heightmap sculpting
 - [ ] **PrefabModule** - Drag-drop modular assets
 - [ ] **AIPathModule** - Navigation mesh helpers
-- [ ] **Import/Export** - `.map`, glTF, USD formats
+- [ ] **Import/Export** - USD and additional pipelines beyond `.map`/`.glb`
 
 ---
 

@@ -7,6 +7,8 @@ const Baker = preload("baker.gd")
 const PrefabFactory = preload("prefab_factory.gd")
 const DraftEntity = preload("draft_entity.gd")
 const PlaytestFPS = preload("playtest_fps.gd")
+const HFLevelIO = preload("hflevel_io.gd")
+const MapIO = preload("map_io.gd")
 
 const RELOAD_LOCK_PATH := "res://.hammerforge/reload.lock"
 const RELOAD_POLL_SECONDS := 0.5
@@ -40,6 +42,30 @@ var _grid_snap: float = 16.0
 @export_range(1, 32, 1) var bake_collision_layer_index: int = 1
 @export var bake_material_override: Material = null
 @export var bake_chunk_size: float = 32.0
+@export var bake_merge_meshes: bool = false
+@export var bake_generate_lods: bool = false
+@export var bake_lightmap_uv2: bool = false
+@export var bake_lightmap_texel_size: float = 0.1
+@export var bake_navmesh: bool = false
+@export var bake_navmesh_cell_size: float = 0.3
+@export var bake_navmesh_cell_height: float = 0.2
+@export var bake_navmesh_agent_height: float = 2.0
+@export var bake_navmesh_agent_radius: float = 0.4
+@export var bake_use_thread_pool: bool = true
+var _hflevel_autosave_enabled: bool = true
+@export var hflevel_autosave_enabled: bool = true:
+	set(value):
+		_set_hflevel_autosave_enabled(value)
+	get:
+		return _hflevel_autosave_enabled
+var _hflevel_autosave_minutes: int = 5
+@export_range(1, 60, 1) var hflevel_autosave_minutes: int = 5:
+	set(value):
+		_set_hflevel_autosave_minutes(value)
+	get:
+		return _hflevel_autosave_minutes
+@export var hflevel_autosave_path: String = "res://.hammerforge/autosave.hflevel"
+@export var hflevel_compress: bool = true
 @export var entity_definitions_path: String = "res://addons/hammerforge/entities.json"
 @export var commit_freeze: bool = true
 @export var auto_spawn_player: bool = true
@@ -97,6 +123,10 @@ var _brush_id_counter: int = 0
 var entity_definitions: Dictionary = {}
 var _last_bake_time: int = 0
 var _reload_timer: Timer = null
+var _autosave_timer: Timer = null
+var _hflevel_thread: Thread = null
+var _hflevel_pending: Dictionary = {}
+var _hflevel_last_hash: int = 0
 
 func _ready():
 	_setup_draft_container()
@@ -108,11 +138,27 @@ func _ready():
 	_setup_baker()
 	_setup_editor_grid()
 	_setup_highlight()
+	if Engine.is_editor_hint():
+		_set_hflevel_autosave_minutes(hflevel_autosave_minutes)
+		_set_hflevel_autosave_enabled(hflevel_autosave_enabled)
+		_setup_autosave()
+		set_process(true)
 	_log("Ready (grid_visible=%s, follow_grid=%s)" % [_grid_visible, grid_follow_brush])
 	if not Engine.is_editor_hint():
 		_setup_runtime_reload()
 		if auto_spawn_player:
 			call_deferred("_start_playtest")
+
+func _process(_delta: float) -> void:
+	if not Engine.is_editor_hint():
+		return
+	if _hflevel_thread and not _hflevel_thread.is_alive():
+		_hflevel_thread.wait_to_finish()
+		_hflevel_thread = null
+		if not _hflevel_pending.is_empty():
+			var next = _hflevel_pending.duplicate(true)
+			_hflevel_pending.clear()
+			_start_hflevel_thread(next.get("path", ""), next.get("payload", PackedByteArray()))
 
 func _setup_runtime_reload() -> void:
 	if _reload_timer:
@@ -125,6 +171,48 @@ func _setup_runtime_reload() -> void:
 	_reload_timer.autostart = true
 	_reload_timer.timeout.connect(_check_remote_reload)
 	add_child(_reload_timer)
+
+func _setup_autosave() -> void:
+	if not hflevel_autosave_enabled:
+		return
+	if not _autosave_timer:
+		_autosave_timer = Timer.new()
+		_autosave_timer.name = "HFLevelAutosave"
+		_autosave_timer.one_shot = false
+		_autosave_timer.timeout.connect(_on_autosave_timeout)
+		add_child(_autosave_timer)
+	_autosave_timer.wait_time = max(60.0, float(hflevel_autosave_minutes) * 60.0)
+	if not _autosave_timer.autostart:
+		_autosave_timer.autostart = true
+	if not _autosave_timer.is_stopped():
+		return
+	_autosave_timer.start()
+
+func _on_autosave_timeout() -> void:
+	if not hflevel_autosave_enabled:
+		return
+	save_hflevel(hflevel_autosave_path, true)
+
+func _set_hflevel_autosave_enabled(value: bool) -> void:
+	if _hflevel_autosave_enabled == value:
+		return
+	_hflevel_autosave_enabled = value
+	if not Engine.is_editor_hint():
+		return
+	if value:
+		_setup_autosave()
+	elif _autosave_timer:
+		_autosave_timer.stop()
+		_autosave_timer.queue_free()
+		_autosave_timer = null
+
+func _set_hflevel_autosave_minutes(value: int) -> void:
+	var clamped = max(1, value)
+	if _hflevel_autosave_minutes == clamped:
+		return
+	_hflevel_autosave_minutes = clamped
+	if _autosave_timer:
+		_autosave_timer.wait_time = max(60.0, float(_hflevel_autosave_minutes) * 60.0)
 
 func _read_reload_timestamp() -> int:
 	if not FileAccess.file_exists(RELOAD_LOCK_PATH):
@@ -508,10 +596,11 @@ func bake(apply_cuts: bool = true, hide_live: bool = false, collision_layer_mask
 
 	var layer = collision_layer_mask if collision_layer_mask > 0 else _layer_from_index(bake_collision_layer_index)
 	var baked: Node3D = null
+	var bake_options = _build_bake_options()
 	if bake_chunk_size > 0.0:
-		baked = await _bake_chunked(bake_chunk_size, layer)
+		baked = await _bake_chunked(bake_chunk_size, layer, bake_options)
 	else:
-		baked = await _bake_single(layer)
+		baked = await _bake_single(layer, bake_options)
 
 	if baked:
 		if baked_container:
@@ -519,6 +608,7 @@ func bake(apply_cuts: bool = true, hide_live: bool = false, collision_layer_mask
 		baked_container = baked
 		add_child(baked_container)
 		_assign_owner(baked_container)
+		_postprocess_bake(baked_container)
 		if hide_live:
 			if draft_brushes_node:
 				draft_brushes_node.visible = false
@@ -540,6 +630,21 @@ func _warn_bake_failure() -> void:
 		draft_count, pending_count, committed_count, entities_count
 	])
 
+func _build_bake_options() -> Dictionary:
+	return {
+		"merge_meshes": bake_merge_meshes,
+		"generate_lods": bake_generate_lods,
+		"unwrap_uv2": bake_lightmap_uv2,
+		"uv2_texel_size": bake_lightmap_texel_size,
+		"use_thread_pool": bake_use_thread_pool
+	}
+
+func _postprocess_bake(container: Node3D) -> void:
+	if not container:
+		return
+	if bake_navmesh:
+		_bake_navmesh(container)
+
 func _count_brushes_in(container: Node3D) -> int:
 	if not container:
 		return 0
@@ -549,7 +654,7 @@ func _count_brushes_in(container: Node3D) -> int:
 			count += 1
 	return count
 
-func _bake_single(layer: int) -> Node3D:
+func _bake_single(layer: int, options: Dictionary) -> Node3D:
 	var temp_csg = CSGCombiner3D.new()
 	temp_csg.hide()
 	temp_csg.use_collision = false
@@ -567,10 +672,10 @@ func _bake_single(layer: int) -> Node3D:
 
 	await _await_csg_update()
 
-	var baked = baker.bake_from_csg(temp_csg, bake_material_override, layer, layer)
+	var baked = baker.bake_from_csg(temp_csg, bake_material_override, layer, layer, options)
 	var collision_baked: Node3D = null
 	if baked:
-		collision_baked = baker.bake_from_csg(collision_csg, null, layer, layer)
+		collision_baked = baker.bake_from_csg(collision_csg, null, layer, layer, options)
 		_apply_collision_from_bake(baked, collision_baked, layer)
 
 	temp_csg.queue_free()
@@ -579,7 +684,7 @@ func _bake_single(layer: int) -> Node3D:
 		collision_baked.free()
 	return baked
 
-func _bake_chunked(chunk_size: float, layer: int) -> Node3D:
+func _bake_chunked(chunk_size: float, layer: int, options: Dictionary) -> Node3D:
 	var size = max(0.001, chunk_size)
 	var chunks: Dictionary = {}
 	_collect_chunk_brushes(draft_brushes_node, size, chunks, "brushes")
@@ -615,9 +720,9 @@ func _bake_chunked(chunk_size: float, layer: int) -> Node3D:
 
 		await _await_csg_update()
 
-		var baked_chunk = baker.bake_from_csg(temp_csg, bake_material_override, layer, layer)
+		var baked_chunk = baker.bake_from_csg(temp_csg, bake_material_override, layer, layer, options)
 		if baked_chunk:
-			var collision_baked = baker.bake_from_csg(collision_csg, null, layer, layer)
+			var collision_baked = baker.bake_from_csg(collision_csg, null, layer, layer, options)
 			_apply_collision_from_bake(baked_chunk, collision_baked, layer)
 			baked_chunk.name = "BakedChunk_%s_%s_%s" % [coord.x, coord.y, coord.z]
 			container.add_child(baked_chunk)
@@ -711,6 +816,32 @@ func _apply_collision_from_bake(target: Node3D, source: Node3D, layer: int) -> v
 		if child is CollisionShape3D:
 			var dup = child.duplicate()
 			target_body.add_child(dup)
+
+func _bake_navmesh(container: Node3D) -> void:
+	if not container:
+		return
+	var nav_region = container.get_node_or_null("BakedNavmesh") as NavigationRegion3D
+	if not nav_region:
+		nav_region = NavigationRegion3D.new()
+		nav_region.name = "BakedNavmesh"
+		container.add_child(nav_region)
+		_assign_owner(nav_region)
+	var nav_mesh = nav_region.navigation_mesh
+	if not nav_mesh:
+		nav_mesh = NavigationMesh.new()
+		nav_region.navigation_mesh = nav_mesh
+	nav_mesh.cell_size = bake_navmesh_cell_size
+	nav_mesh.cell_height = bake_navmesh_cell_height
+	nav_mesh.agent_height = bake_navmesh_agent_height
+	nav_mesh.agent_radius = bake_navmesh_agent_radius
+	if ClassDB.class_has_method("NavigationServer3D", "parse_source_geometry_data") \
+			and ClassDB.class_has_method("NavigationServer3D", "bake_from_source_geometry_data") \
+			and ClassDB.class_exists("NavigationMeshSourceGeometryData3D"):
+		var source = NavigationMeshSourceGeometryData3D.new()
+		NavigationServer3D.parse_source_geometry_data(nav_mesh, container, source)
+		NavigationServer3D.bake_from_source_geometry_data(nav_mesh, source)
+	elif nav_region.has_method("bake_navigation_mesh"):
+		nav_region.call("bake_navigation_mesh")
 
 func clear_brushes() -> void:
 	if brush_manager:
@@ -1146,6 +1277,244 @@ func restore_state(state: Dictionary) -> void:
 	if not bool(state.get("baked_present", false)) and baked_container:
 		baked_container.queue_free()
 		baked_container = null
+
+func capture_full_state() -> Dictionary:
+	return {
+		"settings": _capture_hflevel_settings(),
+		"state": capture_state()
+	}
+
+func restore_full_state(bundle: Dictionary) -> void:
+	if bundle.is_empty():
+		return
+	var settings = bundle.get("settings", {})
+	var state = bundle.get("state", {})
+	_apply_hflevel_settings(settings if settings is Dictionary else {})
+	restore_state(state if state is Dictionary else {})
+
+func _capture_hflevel_settings() -> Dictionary:
+	return {
+		"grid_snap": grid_snap,
+		"bake_chunk_size": bake_chunk_size,
+		"bake_collision_layer_index": bake_collision_layer_index,
+		"bake_material_override": bake_material_override,
+		"commit_freeze": commit_freeze,
+		"grid_visible": grid_visible,
+		"grid_follow_brush": grid_follow_brush,
+		"debug_logging": debug_logging,
+		"auto_spawn_player": auto_spawn_player,
+		"draft_pick_layer_index": draft_pick_layer_index,
+		"bake_merge_meshes": bake_merge_meshes,
+		"bake_generate_lods": bake_generate_lods,
+		"bake_lightmap_uv2": bake_lightmap_uv2,
+		"bake_lightmap_texel_size": bake_lightmap_texel_size,
+		"bake_navmesh": bake_navmesh,
+		"bake_navmesh_cell_size": bake_navmesh_cell_size,
+		"bake_navmesh_cell_height": bake_navmesh_cell_height,
+		"bake_navmesh_agent_height": bake_navmesh_agent_height,
+		"bake_navmesh_agent_radius": bake_navmesh_agent_radius,
+		"bake_use_thread_pool": bake_use_thread_pool
+	}
+
+func _apply_hflevel_settings(settings: Dictionary) -> void:
+	if settings.is_empty():
+		return
+	if settings.has("grid_snap"):
+		grid_snap = float(settings.get("grid_snap", grid_snap))
+	if settings.has("bake_chunk_size"):
+		bake_chunk_size = float(settings.get("bake_chunk_size", bake_chunk_size))
+	if settings.has("bake_collision_layer_index"):
+		bake_collision_layer_index = int(settings.get("bake_collision_layer_index", bake_collision_layer_index))
+	if settings.has("bake_material_override"):
+		bake_material_override = settings.get("bake_material_override", bake_material_override)
+	if settings.has("commit_freeze"):
+		commit_freeze = bool(settings.get("commit_freeze", commit_freeze))
+	if settings.has("grid_visible"):
+		grid_visible = bool(settings.get("grid_visible", grid_visible))
+	if settings.has("grid_follow_brush"):
+		grid_follow_brush = bool(settings.get("grid_follow_brush", grid_follow_brush))
+	if settings.has("debug_logging"):
+		debug_logging = bool(settings.get("debug_logging", debug_logging))
+	if settings.has("auto_spawn_player"):
+		auto_spawn_player = bool(settings.get("auto_spawn_player", auto_spawn_player))
+	if settings.has("draft_pick_layer_index"):
+		draft_pick_layer_index = int(settings.get("draft_pick_layer_index", draft_pick_layer_index))
+	if settings.has("bake_merge_meshes"):
+		bake_merge_meshes = bool(settings.get("bake_merge_meshes", bake_merge_meshes))
+	if settings.has("bake_generate_lods"):
+		bake_generate_lods = bool(settings.get("bake_generate_lods", bake_generate_lods))
+	if settings.has("bake_lightmap_uv2"):
+		bake_lightmap_uv2 = bool(settings.get("bake_lightmap_uv2", bake_lightmap_uv2))
+	if settings.has("bake_lightmap_texel_size"):
+		bake_lightmap_texel_size = float(settings.get("bake_lightmap_texel_size", bake_lightmap_texel_size))
+	if settings.has("bake_navmesh"):
+		bake_navmesh = bool(settings.get("bake_navmesh", bake_navmesh))
+	if settings.has("bake_navmesh_cell_size"):
+		bake_navmesh_cell_size = float(settings.get("bake_navmesh_cell_size", bake_navmesh_cell_size))
+	if settings.has("bake_navmesh_cell_height"):
+		bake_navmesh_cell_height = float(settings.get("bake_navmesh_cell_height", bake_navmesh_cell_height))
+	if settings.has("bake_navmesh_agent_height"):
+		bake_navmesh_agent_height = float(settings.get("bake_navmesh_agent_height", bake_navmesh_agent_height))
+	if settings.has("bake_navmesh_agent_radius"):
+		bake_navmesh_agent_radius = float(settings.get("bake_navmesh_agent_radius", bake_navmesh_agent_radius))
+	if settings.has("bake_use_thread_pool"):
+		bake_use_thread_pool = bool(settings.get("bake_use_thread_pool", bake_use_thread_pool))
+
+func _capture_hflevel_state() -> Dictionary:
+	var state = capture_state()
+	var data: Dictionary = {
+		"version": 1,
+		"saved_at": Time.get_datetime_string_from_system(),
+		"settings": _capture_hflevel_settings(),
+		"state": state
+	}
+	return HFLevelIO.encode_variant(data)
+
+func save_hflevel(path: String = "", force: bool = false) -> int:
+	var target = path if path != "" else hflevel_autosave_path
+	if target == "":
+		return ERR_INVALID_PARAMETER
+	_ensure_dir_for_path(target)
+	var encoded = _capture_hflevel_state()
+	var json = JSON.stringify(encoded)
+	var hash_value = json.hash()
+	if not force and hash_value == _hflevel_last_hash:
+		return OK
+	_hflevel_last_hash = hash_value
+	var payload = HFLevelIO.build_payload_from_json(json, hflevel_compress)
+	_start_hflevel_thread(target, payload)
+	return OK
+
+func load_hflevel(path: String = "") -> bool:
+	var target = path if path != "" else hflevel_autosave_path
+	if target == "":
+		return false
+	var data = HFLevelIO.load_from_path(target)
+	if data.is_empty():
+		return false
+	var decoded = HFLevelIO.decode_variant(data)
+	if not (decoded is Dictionary):
+		return false
+	var settings = decoded.get("settings", {})
+	var state = decoded.get("state", {})
+	_apply_hflevel_settings(settings if settings is Dictionary else {})
+	restore_state(state if state is Dictionary else {})
+	return true
+
+func _ensure_dir_for_path(path: String) -> void:
+	var abs_path = path
+	if path.begins_with("res://") or path.begins_with("user://"):
+		abs_path = ProjectSettings.globalize_path(path)
+	var dir_path = abs_path.get_base_dir()
+	if not DirAccess.dir_exists_absolute(dir_path):
+		DirAccess.make_dir_recursive_absolute(dir_path)
+
+func _start_hflevel_thread(path: String, payload: PackedByteArray) -> void:
+	if path == "" or payload.is_empty():
+		return
+	var abs_path = ProjectSettings.globalize_path(path)
+	_ensure_dir_for_path(abs_path)
+	if _hflevel_thread and _hflevel_thread.is_alive():
+		_hflevel_pending = {
+			"path": abs_path,
+			"payload": payload
+		}
+		return
+	_hflevel_thread = Thread.new()
+	_hflevel_thread.start(Callable(self, "_hflevel_thread_write").bind(abs_path, payload))
+
+func _hflevel_thread_write(path: String, payload: PackedByteArray) -> void:
+	var file = FileAccess.open(path, FileAccess.WRITE)
+	if not file:
+		return
+	file.store_buffer(payload)
+
+func import_map(path: String) -> int:
+	if path == "":
+		return ERR_INVALID_PARAMETER
+	var map_data = MapIO.load_map(path)
+	if map_data.is_empty():
+		return ERR_INVALID_DATA
+	clear_brushes()
+	_clear_entities()
+	for info in map_data.get("brushes", []):
+		if info is Dictionary:
+			create_brush_from_info(info)
+	for entity_info in map_data.get("entities", []):
+		if entity_info is Dictionary:
+			_create_entity_from_map(entity_info)
+	return OK
+
+func export_map(path: String) -> int:
+	if path == "":
+		return ERR_INVALID_PARAMETER
+	_ensure_dir_for_path(path)
+	var text = MapIO.export_map_from_level(self)
+	if text == "":
+		return ERR_INVALID_DATA
+	var file = FileAccess.open(path, FileAccess.WRITE)
+	if not file:
+		return ERR_CANT_OPEN
+	file.store_string(text)
+	return OK
+
+func export_baked_gltf(path: String) -> int:
+	if path == "":
+		return ERR_INVALID_PARAMETER
+	if not baked_container:
+		return ERR_DOES_NOT_EXIST
+	if not ClassDB.class_exists("GLTFDocument"):
+		return ERR_UNAVAILABLE
+	var doc = GLTFDocument.new()
+	var state = GLTFState.new()
+	var err = ERR_CANT_CREATE
+	if doc.has_method("append_from_scene"):
+		err = doc.call("append_from_scene", baked_container, state)
+	elif doc.has_method("append_from_node"):
+		err = doc.call("append_from_node", baked_container, state)
+	if err != OK:
+		return err
+	if doc.has_method("write_to_filesystem"):
+		return doc.call("write_to_filesystem", state, path)
+	return ERR_UNAVAILABLE
+
+func place_entity_at_screen(camera: Camera3D, mouse_pos: Vector2, entity_type: String) -> DraftEntity:
+	if not camera:
+		return null
+	var hit = _raycast(camera, mouse_pos)
+	if not hit:
+		return null
+	var snapped = _snap_point(hit.position)
+	var entity = DraftEntity.new()
+	entity.name = "DraftEntity"
+	if entity_type != "":
+		entity.entity_type = entity_type
+		entity.entity_class = entity_type
+	add_entity(entity)
+	entity.global_position = snapped
+	return entity
+
+func _create_entity_from_map(info: Dictionary) -> DraftEntity:
+	if info.is_empty():
+		return null
+	var entity_class = str(info.get("classname", ""))
+	if entity_class == "":
+		return null
+	var entity = DraftEntity.new()
+	entity.name = "DraftEntity"
+	entity.entity_type = entity_class
+	entity.entity_class = entity_class
+	var props = info.get("properties", {})
+	if props is Dictionary:
+		var data = props.duplicate(true)
+		data.erase("classname")
+		data.erase("origin")
+		entity.entity_data = data
+	var origin = info.get("origin", Vector3.ZERO)
+	if origin is Vector3:
+		entity.global_position = origin
+	add_entity(entity)
+	return entity
 
 func _is_entity_node(node: Node) -> bool:
 	if not node or not (node is Node3D):

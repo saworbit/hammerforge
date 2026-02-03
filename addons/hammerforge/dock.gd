@@ -11,6 +11,16 @@ const DraftEntity = preload("draft_entity.gd")
 const PRESET_MENU_RENAME := 0
 const PRESET_MENU_DELETE := 1
 
+class EntityPaletteButton extends Button:
+    var entity_id: String = ""
+    var entity_def: Dictionary = {}
+    var dock_ref: HammerForgeDock = null
+
+    func _get_drag_data(_at_position: Vector2) -> Variant:
+        if entity_id == "" or not dock_ref:
+            return null
+        return dock_ref._make_entity_drag_data(entity_id, entity_def, self)
+
 @onready var main_tabs: TabContainer = $Margin/VBox/MainTabs
 @onready var build_tab: ScrollContainer = $Margin/VBox/MainTabs/Build
 @onready var entity_tab: ScrollContainer = $Margin/VBox/MainTabs/Entities
@@ -28,11 +38,29 @@ const PRESET_MENU_DELETE := 1
 @onready var sides_spin: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/SidesRow/SidesSpin
 @onready var active_material_button: Button = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/MaterialRow/ActiveMaterial
 @onready var material_dialog: FileDialog = $MaterialDialog
+@onready var hflevel_save_dialog: FileDialog = $HFLevelSaveDialog
+@onready var hflevel_load_dialog: FileDialog = $HFLevelLoadDialog
+@onready var map_import_dialog: FileDialog = $MapImportDialog
+@onready var map_export_dialog: FileDialog = $MapExportDialog
+@onready var glb_export_dialog: FileDialog = $GLBExportDialog
+@onready var autosave_path_dialog: FileDialog = $AutosavePathDialog
 @onready var size_x: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/SizeRow/SizeX
 @onready var size_y: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/SizeRow/SizeY
 @onready var size_z: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/SizeRow/SizeZ
 @onready var grid_snap: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/GridRow/GridSnap
 @onready var collision_layer_opt: OptionButton = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PhysicsLayerRow/PhysicsLayerOption
+@onready var bake_merge_meshes: CheckBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeMergeMeshes
+@onready var bake_generate_lods: CheckBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeGenerateLods
+@onready var bake_lightmap_uv2: CheckBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeLightmapUV2
+@onready var bake_lightmap_texel_row: HBoxContainer = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeLightmapTexelRow
+@onready var bake_lightmap_texel: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeLightmapTexelRow/BakeLightmapTexel
+@onready var bake_navmesh: CheckBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeNavmesh
+@onready var bake_navmesh_cell_row: HBoxContainer = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeNavmeshCellRow
+@onready var bake_navmesh_cell_size: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeNavmeshCellRow/BakeNavmeshCellSize
+@onready var bake_navmesh_cell_height: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeNavmeshCellRow/BakeNavmeshCellHeight
+@onready var bake_navmesh_agent_row: HBoxContainer = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeNavmeshAgentRow
+@onready var bake_navmesh_agent_height: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeNavmeshAgentRow/BakeNavmeshAgentHeight
+@onready var bake_navmesh_agent_radius: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeNavmeshAgentRow/BakeNavmeshAgentRadius
 @onready var commit_freeze: CheckBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/CommitFreeze
 @onready var show_hud: CheckBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/ShowHUD
 @onready var show_grid: CheckBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/ShowGrid
@@ -44,8 +72,17 @@ const PRESET_MENU_DELETE := 1
 @onready var commit_cuts_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/CommitCuts
 @onready var restore_cuts_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/RestoreCuts
 @onready var create_entity_btn: Button = $Margin/VBox/MainTabs/Entities/EntitiesMargin/EntitiesVBox/CreateEntity
+@onready var entity_palette: GridContainer = $Margin/VBox/MainTabs/Entities/EntitiesMargin/EntitiesVBox/EntityPalette
 @onready var bake_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/Bake
 @onready var clear_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/Clear
+@onready var save_hflevel_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/SaveHFLevel
+@onready var load_hflevel_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/LoadHFLevel
+@onready var import_map_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/ImportMap
+@onready var export_map_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/ExportMap
+@onready var export_glb_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/ExportGLB
+@onready var autosave_enabled: CheckBox = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/AutosaveEnabled
+@onready var autosave_minutes: SpinBox = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/AutosaveMinutesRow/AutosaveMinutes
+@onready var autosave_path_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/AutosavePath
 @onready var status_label: Label = $Margin/VBox/Footer/StatusFooter/StatusLabel
 @onready var perf_label: Label = $Margin/VBox/Footer/StatusFooter/BrushCountLabel
 @onready var undo_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/HistoryControls/Undo
@@ -82,6 +119,7 @@ var presets_dir := "res://addons/hammerforge/presets"
 var entity_defs_path := "res://addons/hammerforge/entities.json"
 var entity_defs: Array = []
 var preset_buttons: Array[Button] = []
+var entity_palette_buttons: Array[Button] = []
 var preset_context_button: Button = null
 var active_material: Material = null
 var active_shape: int = LevelRootType.BrushShape.BOX
@@ -351,6 +389,18 @@ func _ready():
 
     bake_btn.pressed.connect(_on_bake)
     clear_btn.pressed.connect(_on_clear)
+    if save_hflevel_btn:
+        save_hflevel_btn.pressed.connect(_on_save_hflevel)
+    if load_hflevel_btn:
+        load_hflevel_btn.pressed.connect(_on_load_hflevel)
+    if import_map_btn:
+        import_map_btn.pressed.connect(_on_import_map)
+    if export_map_btn:
+        export_map_btn.pressed.connect(_on_export_map)
+    if export_glb_btn:
+        export_glb_btn.pressed.connect(_on_export_glb)
+    if autosave_path_btn:
+        autosave_path_btn.pressed.connect(_on_set_autosave_path)
     floor_btn.pressed.connect(_on_floor)
     apply_cuts_btn.pressed.connect(_on_apply_cuts)
     clear_cuts_btn.pressed.connect(_on_clear_cuts)
@@ -384,6 +434,15 @@ func _ready():
         ])
         if not material_dialog.file_selected.is_connected(Callable(self, "_on_material_file_selected")):
             material_dialog.file_selected.connect(_on_material_file_selected)
+    _setup_storage_dialogs()
+    if bake_lightmap_uv2:
+        var lightmap_toggle = Callable(self, "_on_bake_lightmap_uv2_toggled")
+        if not bake_lightmap_uv2.toggled.is_connected(lightmap_toggle):
+            bake_lightmap_uv2.toggled.connect(lightmap_toggle)
+    if bake_navmesh:
+        var nav_toggle = Callable(self, "_on_bake_navmesh_toggled")
+        if not bake_navmesh.toggled.is_connected(nav_toggle):
+            bake_navmesh.toggled.connect(nav_toggle)
     if collision_layer_opt:
         collision_layer_opt.clear()
         collision_layer_opt.add_item("Static World (Layer 1)", 1)
@@ -401,6 +460,7 @@ func _ready():
     _load_presets()
     _load_entity_definitions()
     _apply_pro_styles()
+    _sync_bake_option_visibility()
     set_process(true)
 
 func _process(delta):
@@ -425,6 +485,28 @@ func _process(delta):
     if level_root:
         if _root_has_property("commit_freeze"):
             level_root.set("commit_freeze", commit_freeze.button_pressed)
+        if _root_has_property("bake_merge_meshes") and bake_merge_meshes:
+            level_root.set("bake_merge_meshes", bake_merge_meshes.button_pressed)
+        if _root_has_property("bake_generate_lods") and bake_generate_lods:
+            level_root.set("bake_generate_lods", bake_generate_lods.button_pressed)
+        if _root_has_property("bake_lightmap_uv2") and bake_lightmap_uv2:
+            level_root.set("bake_lightmap_uv2", bake_lightmap_uv2.button_pressed)
+        if _root_has_property("bake_lightmap_texel_size") and bake_lightmap_texel:
+            level_root.set("bake_lightmap_texel_size", float(bake_lightmap_texel.value))
+        if _root_has_property("bake_navmesh") and bake_navmesh:
+            level_root.set("bake_navmesh", bake_navmesh.button_pressed)
+        if _root_has_property("bake_navmesh_cell_size") and bake_navmesh_cell_size:
+            level_root.set("bake_navmesh_cell_size", float(bake_navmesh_cell_size.value))
+        if _root_has_property("bake_navmesh_cell_height") and bake_navmesh_cell_height:
+            level_root.set("bake_navmesh_cell_height", float(bake_navmesh_cell_height.value))
+        if _root_has_property("bake_navmesh_agent_height") and bake_navmesh_agent_height:
+            level_root.set("bake_navmesh_agent_height", float(bake_navmesh_agent_height.value))
+        if _root_has_property("bake_navmesh_agent_radius") and bake_navmesh_agent_radius:
+            level_root.set("bake_navmesh_agent_radius", float(bake_navmesh_agent_radius.value))
+        if _root_has_property("hflevel_autosave_enabled") and autosave_enabled:
+            level_root.set("hflevel_autosave_enabled", autosave_enabled.button_pressed)
+        if _root_has_property("hflevel_autosave_minutes") and autosave_minutes:
+            level_root.set("hflevel_autosave_minutes", int(autosave_minutes.value))
         if show_grid and _root_has_property("grid_visible"):
             level_root.set("grid_visible", show_grid.button_pressed)
         if follow_grid and _root_has_property("grid_follow_brush"):
@@ -537,6 +619,20 @@ func _on_debug_logs_toggled(pressed: bool) -> void:
         level_root.set("debug_logging", pressed)
     _log("Debug logs: %s" % ("on" if pressed else "off"), true)
 
+func _on_bake_lightmap_uv2_toggled(_pressed: bool) -> void:
+    _sync_bake_option_visibility()
+
+func _on_bake_navmesh_toggled(_pressed: bool) -> void:
+    _sync_bake_option_visibility()
+
+func _sync_bake_option_visibility() -> void:
+    if bake_lightmap_texel_row and bake_lightmap_uv2:
+        bake_lightmap_texel_row.visible = bake_lightmap_uv2.button_pressed
+    if bake_navmesh_cell_row and bake_navmesh:
+        bake_navmesh_cell_row.visible = bake_navmesh.button_pressed
+    if bake_navmesh_agent_row and bake_navmesh:
+        bake_navmesh_agent_row.visible = bake_navmesh.button_pressed
+
 func _log(message: String, force: bool = false) -> void:
     if not debug_enabled and not force:
         return
@@ -563,6 +659,30 @@ func _commit_state_action(action_name: String, method_name: String, args: Array 
         3:
             undo_redo.add_do_method(level_root, method_name, args[0], args[1], args[2])
     undo_redo.add_undo_method(level_root, "restore_state", state)
+    undo_redo.commit_action()
+    record_history(action_name)
+
+func _commit_full_state_action(action_name: String, method_name: String, args: Array = []) -> void:
+    if not level_root or not level_root.has_method(method_name):
+        return
+    if not undo_redo or not level_root.has_method("capture_full_state") or not level_root.has_method("restore_full_state"):
+        level_root.callv(method_name, args)
+        return
+    var state = level_root.call("capture_full_state")
+    undo_redo.create_action(action_name)
+    match args.size():
+        0:
+            undo_redo.add_do_method(level_root, method_name)
+        1:
+            undo_redo.add_do_method(level_root, method_name, args[0])
+        2:
+            undo_redo.add_do_method(level_root, method_name, args[0], args[1])
+        3:
+            undo_redo.add_do_method(level_root, method_name, args[0], args[1], args[2])
+        _:
+            level_root.callv(method_name, args)
+            return
+    undo_redo.add_undo_method(level_root, "restore_full_state", state)
     undo_redo.commit_action()
     record_history(action_name)
 
@@ -690,7 +810,32 @@ func _sync_grid_settings_from_root() -> void:
     if debug_logs and _root_has_property("debug_logging"):
         debug_enabled = bool(connected_root.get("debug_logging"))
         debug_logs.button_pressed = debug_enabled
+    if commit_freeze and _root_has_property("commit_freeze"):
+        commit_freeze.button_pressed = bool(connected_root.get("commit_freeze"))
+    if bake_merge_meshes and _root_has_property("bake_merge_meshes"):
+        bake_merge_meshes.button_pressed = bool(connected_root.get("bake_merge_meshes"))
+    if bake_generate_lods and _root_has_property("bake_generate_lods"):
+        bake_generate_lods.button_pressed = bool(connected_root.get("bake_generate_lods"))
+    if bake_lightmap_uv2 and _root_has_property("bake_lightmap_uv2"):
+        bake_lightmap_uv2.button_pressed = bool(connected_root.get("bake_lightmap_uv2"))
+    if bake_lightmap_texel and _root_has_property("bake_lightmap_texel_size"):
+        bake_lightmap_texel.value = float(connected_root.get("bake_lightmap_texel_size"))
+    if bake_navmesh and _root_has_property("bake_navmesh"):
+        bake_navmesh.button_pressed = bool(connected_root.get("bake_navmesh"))
+    if bake_navmesh_cell_size and _root_has_property("bake_navmesh_cell_size"):
+        bake_navmesh_cell_size.value = float(connected_root.get("bake_navmesh_cell_size"))
+    if bake_navmesh_cell_height and _root_has_property("bake_navmesh_cell_height"):
+        bake_navmesh_cell_height.value = float(connected_root.get("bake_navmesh_cell_height"))
+    if bake_navmesh_agent_height and _root_has_property("bake_navmesh_agent_height"):
+        bake_navmesh_agent_height.value = float(connected_root.get("bake_navmesh_agent_height"))
+    if bake_navmesh_agent_radius and _root_has_property("bake_navmesh_agent_radius"):
+        bake_navmesh_agent_radius.value = float(connected_root.get("bake_navmesh_agent_radius"))
+    if autosave_enabled and _root_has_property("hflevel_autosave_enabled"):
+        autosave_enabled.button_pressed = bool(connected_root.get("hflevel_autosave_enabled"))
+    if autosave_minutes and _root_has_property("hflevel_autosave_minutes"):
+        autosave_minutes.value = float(connected_root.get("hflevel_autosave_minutes"))
     syncing_grid = false
+    _sync_bake_option_visibility()
 
 func _on_bake_started() -> void:
     status_label.text = "Baking..."
@@ -819,6 +964,122 @@ func _on_material_file_selected(path: String) -> void:
     else:
         _log("Selected resource is not a material: %s" % path, true)
 
+func _setup_storage_dialogs() -> void:
+    if hflevel_save_dialog:
+        hflevel_save_dialog.access = FileDialog.ACCESS_FILESYSTEM
+        hflevel_save_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
+        hflevel_save_dialog.filters = PackedStringArray(["*.hflevel ; HammerForge Level"])
+        if not hflevel_save_dialog.file_selected.is_connected(Callable(self, "_on_hflevel_save_selected")):
+            hflevel_save_dialog.file_selected.connect(_on_hflevel_save_selected)
+    if hflevel_load_dialog:
+        hflevel_load_dialog.access = FileDialog.ACCESS_FILESYSTEM
+        hflevel_load_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+        hflevel_load_dialog.filters = PackedStringArray(["*.hflevel ; HammerForge Level"])
+        if not hflevel_load_dialog.file_selected.is_connected(Callable(self, "_on_hflevel_load_selected")):
+            hflevel_load_dialog.file_selected.connect(_on_hflevel_load_selected)
+    if map_import_dialog:
+        map_import_dialog.access = FileDialog.ACCESS_FILESYSTEM
+        map_import_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+        map_import_dialog.filters = PackedStringArray(["*.map ; Quake Map"])
+        if not map_import_dialog.file_selected.is_connected(Callable(self, "_on_map_import_selected")):
+            map_import_dialog.file_selected.connect(_on_map_import_selected)
+    if map_export_dialog:
+        map_export_dialog.access = FileDialog.ACCESS_FILESYSTEM
+        map_export_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
+        map_export_dialog.filters = PackedStringArray(["*.map ; Quake Map"])
+        if not map_export_dialog.file_selected.is_connected(Callable(self, "_on_map_export_selected")):
+            map_export_dialog.file_selected.connect(_on_map_export_selected)
+    if glb_export_dialog:
+        glb_export_dialog.access = FileDialog.ACCESS_FILESYSTEM
+        glb_export_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
+        glb_export_dialog.filters = PackedStringArray(["*.glb ; GLB"])
+        if not glb_export_dialog.file_selected.is_connected(Callable(self, "_on_glb_export_selected")):
+            glb_export_dialog.file_selected.connect(_on_glb_export_selected)
+    if autosave_path_dialog:
+        autosave_path_dialog.access = FileDialog.ACCESS_FILESYSTEM
+        autosave_path_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
+        autosave_path_dialog.filters = PackedStringArray(["*.hflevel ; HammerForge Level"])
+        if not autosave_path_dialog.file_selected.is_connected(Callable(self, "_on_autosave_path_selected")):
+            autosave_path_dialog.file_selected.connect(_on_autosave_path_selected)
+
+func _on_save_hflevel() -> void:
+    if hflevel_save_dialog:
+        hflevel_save_dialog.popup_centered_ratio(0.6)
+
+func _on_load_hflevel() -> void:
+    if hflevel_load_dialog:
+        hflevel_load_dialog.popup_centered_ratio(0.6)
+
+func _on_import_map() -> void:
+    if map_import_dialog:
+        map_import_dialog.popup_centered_ratio(0.6)
+
+func _on_export_map() -> void:
+    if map_export_dialog:
+        map_export_dialog.popup_centered_ratio(0.6)
+
+func _on_export_glb() -> void:
+    if glb_export_dialog:
+        glb_export_dialog.popup_centered_ratio(0.6)
+
+func _on_set_autosave_path() -> void:
+    if autosave_path_dialog:
+        autosave_path_dialog.popup_centered_ratio(0.6)
+
+func _on_hflevel_save_selected(path: String) -> void:
+    if not level_root or not level_root.has_method("save_hflevel"):
+        _set_status("No LevelRoot for .hflevel save", true)
+        return
+    var err = int(level_root.call("save_hflevel", path, true))
+    _set_status("Saved .hflevel" if err == OK else "Failed to save .hflevel", err != OK)
+
+func _on_hflevel_load_selected(path: String) -> void:
+    if path == "" or not FileAccess.file_exists(path):
+        _set_status("Invalid .hflevel path", true)
+        return
+    if not level_root or not level_root.has_method("load_hflevel"):
+        _set_status("No LevelRoot for .hflevel load", true)
+        return
+    _commit_full_state_action("Load .hflevel", "load_hflevel", [path])
+    _set_status("Loaded .hflevel", false)
+
+func _on_map_import_selected(path: String) -> void:
+    if path == "" or not FileAccess.file_exists(path):
+        _set_status("Invalid .map path", true)
+        return
+    if not level_root or not level_root.has_method("import_map"):
+        _set_status("No LevelRoot for .map import", true)
+        return
+    _commit_full_state_action("Import .map", "import_map", [path])
+    _set_status("Imported .map", false)
+
+func _on_map_export_selected(path: String) -> void:
+    if not level_root or not level_root.has_method("export_map"):
+        _set_status("No LevelRoot for .map export", true)
+        return
+    var err = int(level_root.call("export_map", path))
+    _set_status("Exported .map" if err == OK else "Failed to export .map", err != OK)
+
+func _on_glb_export_selected(path: String) -> void:
+    if not level_root or not level_root.has_method("export_baked_gltf"):
+        _set_status("No LevelRoot for .glb export", true)
+        return
+    var err = int(level_root.call("export_baked_gltf", path))
+    _set_status("Exported .glb" if err == OK else "Failed to export .glb", err != OK)
+
+func _on_autosave_path_selected(path: String) -> void:
+    if not level_root or not _root_has_property("hflevel_autosave_path"):
+        _set_status("No LevelRoot for autosave path", true)
+        return
+    level_root.set("hflevel_autosave_path", path)
+    _set_status("Autosave path set", false)
+
+func _set_status(message: String, is_error: bool = false) -> void:
+    if status_label:
+        status_label.text = message
+    if is_error:
+        _log(message, true)
+
 func _ensure_presets_dir() -> void:
     var abs_path = ProjectSettings.globalize_path(presets_dir)
     if not DirAccess.dir_exists_absolute(abs_path):
@@ -846,6 +1107,7 @@ func _load_presets() -> void:
 
 func _load_entity_definitions() -> void:
     entity_defs.clear()
+    _clear_entity_palette()
     if not ResourceLoader.exists(entity_defs_path):
         return
     var file = FileAccess.open(entity_defs_path, FileAccess.READ)
@@ -870,9 +1132,99 @@ func _load_entity_definitions() -> void:
                 entity_defs.append(record)
     elif data is Array:
         entity_defs = data
+    _populate_entity_palette()
 
 func get_entity_definitions() -> Array:
     return entity_defs.duplicate()
+
+func _populate_entity_palette() -> void:
+    _clear_entity_palette()
+    if not entity_palette:
+        return
+    for entry in entity_defs:
+        if not (entry is Dictionary):
+            continue
+        var entity_id = str(entry.get("id", entry.get("class", "")))
+        if entity_id == "":
+            continue
+        var button = EntityPaletteButton.new()
+        button.entity_id = entity_id
+        button.entity_def = entry
+        button.dock_ref = self
+        button.text = _entity_display_name(entry, entity_id)
+        button.tooltip_text = entity_id
+        button.focus_mode = Control.FOCUS_NONE
+        var icon = _resolve_entity_icon(entry)
+        if icon:
+            button.icon = icon
+        button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        button.size_flags_vertical = Control.SIZE_FILL
+        entity_palette.add_child(button)
+        entity_palette_buttons.append(button)
+
+func _clear_entity_palette() -> void:
+    for button in entity_palette_buttons:
+        if button and button.get_parent():
+            button.get_parent().remove_child(button)
+            button.queue_free()
+    entity_palette_buttons.clear()
+
+func _entity_display_name(definition: Dictionary, fallback: String) -> String:
+    if definition.has("label"):
+        return str(definition.get("label", fallback))
+    if definition.has("name"):
+        return str(definition.get("name", fallback))
+    if definition.has("title"):
+        return str(definition.get("title", fallback))
+    return fallback
+
+func _resolve_entity_icon(definition: Dictionary) -> Texture2D:
+    var icon_path = str(definition.get("preview_icon", definition.get("icon", "")))
+    if icon_path == "":
+        var preview = definition.get("preview", {})
+        if preview is Dictionary:
+            if str(preview.get("type", "")) == "billboard":
+                icon_path = str(preview.get("path", ""))
+    if icon_path != "" and ResourceLoader.exists(icon_path):
+        var tex = load(icon_path)
+        if tex is Texture2D:
+            return tex
+    var class_id = str(definition.get("class", ""))
+    if class_id.find("Light") >= 0:
+        return _find_editor_icon(["Light3D", "OmniLight3D", "Light"])
+    if class_id.find("Camera") >= 0:
+        return _find_editor_icon(["Camera3D", "Camera"])
+    return _find_editor_icon(["Node3D", "Node"])
+
+func _make_entity_drag_data(entity_id: String, definition: Dictionary, source: Control) -> Variant:
+    if entity_id == "":
+        return null
+    var data = {
+        "type": "hammerforge_entity",
+        "entity_id": entity_id
+    }
+    if source:
+        var preview = _build_entity_drag_preview(definition, entity_id)
+        if preview:
+            source.set_drag_preview(preview)
+    return data
+
+func _build_entity_drag_preview(definition: Dictionary, entity_id: String) -> Control:
+    var container = HBoxContainer.new()
+    container.custom_minimum_size = Vector2(140, 28)
+    container.size_flags_horizontal = Control.SIZE_FILL
+    container.size_flags_vertical = Control.SIZE_FILL
+    var icon = _resolve_entity_icon(definition)
+    if icon:
+        var icon_rect = TextureRect.new()
+        icon_rect.texture = icon
+        icon_rect.custom_minimum_size = Vector2(20, 20)
+        icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+        container.add_child(icon_rect)
+    var label = Label.new()
+    label.text = _entity_display_name(definition, entity_id)
+    container.add_child(label)
+    return container
 
 func _clear_preset_buttons() -> void:
     for button in preset_buttons:
@@ -1036,3 +1388,4 @@ func _delete_preset(button: Button) -> void:
         return
     _load_presets()
     preset_context_button = null
+
