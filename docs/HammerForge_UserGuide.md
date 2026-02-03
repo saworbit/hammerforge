@@ -162,6 +162,10 @@ HammerForge uses a two-stage drag workflow:
 9. Use the standard Godot transform gizmos (move/rotate/scale) on selected brushes.
 10. Use the DraftBrush face handles (white circles) to resize; the yellow wireframe is only a guide.
 
+### Known Issues (as of February 3, 2026)
+- Viewport multi-select can cap at 2 items, and drag-marquee selection may not register.
+- Workaround: use the Scene tree to multi-select (Shift/Ctrl) or select one-by-one and transform via the tree.
+
 ## Material Painting (Paint Mode)
 1. Click **Active Material** and pick a .tres or .material resource.
 2. Enable **Paint Mode**.

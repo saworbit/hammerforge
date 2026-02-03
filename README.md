@@ -92,6 +92,10 @@
 - **Resize with Face Handles**: Drag the DraftBrush face handles to resize while the opposite face stays pinned
 - **Entities are selectable** when placed under `Entities` or tagged with `is_entity` (not included in bake)
 
+### ⚠️ Known Issues (as of February 3, 2026)
+- **Viewport multi-select is unreliable**: Shift-clicking can cap at 2 items, and drag-marquee selection may not register.
+  - **Workaround**: Use the Scene tree to multi-select brushes (Shift/Ctrl), or select one-by-one and duplicate/transform via the tree.
+
 ### ⚡ Pending Subtract System
 - **Stage Your Cuts**: Subtract brushes appear solid red until applied
 - **Preview Before Carving**: Position cuts precisely before committing (carve becomes visible after Bake)

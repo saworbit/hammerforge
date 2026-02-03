@@ -11,72 +11,67 @@ const DraftEntity = preload("draft_entity.gd")
 const PRESET_MENU_RENAME := 0
 const PRESET_MENU_DELETE := 1
 
-@onready var settings_panel: PanelContainer = $Margin/VBox/SettingsPanel
-@onready var presets_panel: PanelContainer = $Margin/VBox/PresetsPanel
-@onready var actions_panel: PanelContainer = $Margin/VBox/ActionsPanel
-@onready var settings_toggle: Button = $Margin/VBox/SettingsPanel/SettingsContent/SettingsHeader/SettingsToggle
-@onready var presets_toggle: Button = $Margin/VBox/PresetsPanel/PresetsContent/PresetsHeader/PresetsToggle
-@onready var actions_toggle: Button = $Margin/VBox/ActionsPanel/ActionsContent/ActionsHeader/ActionsToggle
-@onready var settings_body: Control = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin
-@onready var presets_body: Control = $Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin
-@onready var actions_body: Control = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin
-@onready var history_panel: PanelContainer = $Margin/VBox/HistoryPanel
-@onready var history_toggle: Button = $Margin/VBox/HistoryPanel/HistoryContent/HistoryHeader/HistoryToggle
-@onready var history_body: Control = $Margin/VBox/HistoryPanel/HistoryContent/HistoryMargin
+@onready var main_tabs: TabContainer = $Margin/VBox/MainTabs
+@onready var build_tab: ScrollContainer = $Margin/VBox/MainTabs/Build
+@onready var entity_tab: ScrollContainer = $Margin/VBox/MainTabs/Entities
+@onready var manage_tab: ScrollContainer = $Margin/VBox/MainTabs/Manage
+@onready var status_bar: HBoxContainer = $Margin/VBox/Footer/StatusFooter
+@onready var progress_bar: ProgressBar = $Margin/VBox/Footer/StatusFooter/ProgressBar
 
-@onready var tool_draw: Button = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ToolRow/ToolDraw
-@onready var tool_select: Button = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ToolRow/ToolSelect
-@onready var paint_mode: Button = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ToolRow/PaintMode
-@onready var mode_add: Button = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ModeRow/ModeAdd
-@onready var mode_subtract: Button = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ModeRow/ModeSubtract
-@onready var shape_palette_grid: GridContainer = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ShapePaletteGrid
-@onready var sides_row: HBoxContainer = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/SidesRow
-@onready var sides_spin: SpinBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/SidesRow/SidesSpin
-@onready var active_material_button: Button = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/MaterialRow/ActiveMaterial
+@onready var tool_draw: Button = $Margin/VBox/Toolbar/ToolDraw
+@onready var tool_select: Button = $Margin/VBox/Toolbar/ToolSelect
+@onready var paint_mode: Button = $Margin/VBox/Toolbar/PaintMode
+@onready var mode_add: Button = $Margin/VBox/Toolbar/ModeAdd
+@onready var mode_subtract: Button = $Margin/VBox/Toolbar/ModeSubtract
+@onready var shape_select: OptionButton = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/ShapeRow/ShapeSelect
+@onready var sides_row: HBoxContainer = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/SidesRow
+@onready var sides_spin: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/SidesRow/SidesSpin
+@onready var active_material_button: Button = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/MaterialRow/ActiveMaterial
 @onready var material_dialog: FileDialog = $MaterialDialog
-@onready var size_x: SpinBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/SizeRow/SizeX
-@onready var size_y: SpinBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/SizeRow/SizeY
-@onready var size_z: SpinBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/SizeRow/SizeZ
-@onready var grid_snap: SpinBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/GridRow/GridSnap
-@onready var collision_layer_opt: OptionButton = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/PhysicsLayerRow/PhysicsLayerOption
-@onready var commit_freeze: CheckBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/CommitFreeze
-@onready var show_hud: CheckBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ShowHUD
-@onready var show_grid: CheckBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/ShowGrid
-@onready var follow_grid: CheckBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/FollowGrid
-@onready var debug_logs: CheckBox = $Margin/VBox/SettingsPanel/SettingsContent/SettingsMargin/SettingsVBox/DebugLogs
-@onready var floor_btn: Button = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/CreateFloor
-@onready var apply_cuts_btn: Button = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/ApplyCuts
-@onready var clear_cuts_btn: Button = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/ClearCuts
-@onready var commit_cuts_btn: Button = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/CommitCuts
-@onready var restore_cuts_btn: Button = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/RestoreCuts
-@onready var create_entity_btn: Button = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/CreateEntity
-@onready var bake_btn: Button = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/Bake
-@onready var clear_btn: Button = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/Clear
-@onready var status_label: Label = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/Status
-@onready var perf_label: Label = $Margin/VBox/ActionsPanel/ActionsContent/ActionsMargin/ActionsVBox/BrushCountLabel
-@onready var undo_btn: Button = $Margin/VBox/HistoryPanel/HistoryContent/HistoryMargin/HistoryVBox/HistoryControls/Undo
-@onready var redo_btn: Button = $Margin/VBox/HistoryPanel/HistoryContent/HistoryMargin/HistoryVBox/HistoryControls/Redo
-@onready var history_list: ItemList = $Margin/VBox/HistoryPanel/HistoryContent/HistoryMargin/HistoryVBox/HistoryList
-@onready var quick_play_btn: Button = $Margin/VBox/QuickPlay
+@onready var size_x: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/SizeRow/SizeX
+@onready var size_y: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/SizeRow/SizeY
+@onready var size_z: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/SizeRow/SizeZ
+@onready var grid_snap: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/GridRow/GridSnap
+@onready var collision_layer_opt: OptionButton = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PhysicsLayerRow/PhysicsLayerOption
+@onready var commit_freeze: CheckBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/CommitFreeze
+@onready var show_hud: CheckBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/ShowHUD
+@onready var show_grid: CheckBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/ShowGrid
+@onready var follow_grid: CheckBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/FollowGrid
+@onready var debug_logs: CheckBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/DebugLogs
+@onready var floor_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/CreateFloor
+@onready var apply_cuts_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/ApplyCuts
+@onready var clear_cuts_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/ClearCuts
+@onready var commit_cuts_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/CommitCuts
+@onready var restore_cuts_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/RestoreCuts
+@onready var create_entity_btn: Button = $Margin/VBox/MainTabs/Entities/EntitiesMargin/EntitiesVBox/CreateEntity
+@onready var bake_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/Bake
+@onready var clear_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/Clear
+@onready var status_label: Label = $Margin/VBox/Footer/StatusFooter/StatusLabel
+@onready var perf_label: Label = $Margin/VBox/Footer/StatusFooter/BrushCountLabel
+@onready var undo_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/HistoryControls/Undo
+@onready var redo_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/HistoryControls/Redo
+@onready var history_list: ItemList = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/HistoryList
+@onready var quick_play_btn: Button = $Margin/VBox/Footer/QuickPlay
 
-@onready var save_preset_btn: Button = $Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin/PresetsVBox/SavePreset
-@onready var preset_grid: GridContainer = $Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin/PresetsVBox/PresetGrid
+@onready var save_preset_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/SavePreset
+@onready var preset_grid: GridContainer = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/PresetGrid
 @onready var preset_menu: PopupMenu = $PresetMenu
 @onready var preset_rename_dialog: AcceptDialog = $PresetRenameDialog
 @onready var preset_rename_line: LineEdit = $PresetRenameDialog/PresetRenameLine
 
 @onready var snap_buttons: Array[Button] = [
-    $Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin/PresetsVBox/QuickSnapRow/Snap1,
-    $Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin/PresetsVBox/QuickSnapRow/Snap2,
-    $Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin/PresetsVBox/QuickSnapRow/Snap4,
-    $Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin/PresetsVBox/QuickSnapRow/Snap8,
-    $Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin/PresetsVBox/QuickSnapRow/Snap16,
-    $Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin/PresetsVBox/QuickSnapRow/Snap32,
-    $Margin/VBox/PresetsPanel/PresetsContent/PresetsMargin/PresetsVBox/QuickSnapRow/Snap64
+    $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/QuickSnapGrid/Snap1,
+    $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/QuickSnapGrid/Snap2,
+    $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/QuickSnapGrid/Snap4,
+    $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/QuickSnapGrid/Snap8,
+    $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/QuickSnapGrid/Snap16,
+    $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/QuickSnapGrid/Snap32,
+    $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/QuickSnapGrid/Snap64
 ]
 
 var level_root: Node = null
 var editor_interface: EditorInterface = null
+var editor_base_control: Control = null
 var undo_redo: EditorUndoRedoManager = null
 var connected_root: Node = null
 var snap_button_group: ButtonGroup
@@ -90,11 +85,19 @@ var preset_buttons: Array[Button] = []
 var preset_context_button: Button = null
 var active_material: Material = null
 var active_shape: int = LevelRootType.BrushShape.BOX
-var shape_button_group: ButtonGroup
-var shape_buttons: Dictionary = {}
+var shape_id_to_key: Dictionary = {}
 var root_properties: Dictionary = {}
 var history_entries: Array = []
 var history_max := 50
+var shape_icon_candidates := {
+    "BOX": ["BoxShape3D"],
+    "CYLINDER": ["CylinderShape3D"],
+    "SPHERE": ["SphereShape3D"],
+    "CONE": ["ConeShape3D"],
+    "CAPSULE": ["CapsuleShape3D"],
+    "TORUS": ["TorusMesh"],
+    "ELLIPSOID": ["SphereShape3D"]
+}
 
 func _is_level_root(node: Node) -> bool:
     return node != null and node is LevelRootType
@@ -113,6 +116,9 @@ func _root_has_property(name: String) -> bool:
 
 func set_editor_interface(iface: EditorInterface) -> void:
     editor_interface = iface
+    if editor_interface:
+        editor_base_control = editor_interface.get_base_control()
+    _apply_pro_styles()
 
 func set_undo_redo(manager: EditorUndoRedoManager) -> void:
     if undo_redo == manager:
@@ -140,31 +146,17 @@ func record_history(action_name: String) -> void:
 func apply_editor_styles(base_control: Control) -> void:
     if not base_control:
         return
-    if not settings_panel:
-        settings_panel = get_node_or_null("Margin/VBox/SettingsPanel")
-    if not presets_panel:
-        presets_panel = get_node_or_null("Margin/VBox/PresetsPanel")
-    if not actions_panel:
-        actions_panel = get_node_or_null("Margin/VBox/ActionsPanel")
-    if not history_panel:
-        history_panel = get_node_or_null("Margin/VBox/HistoryPanel")
+    editor_base_control = base_control
+    var foreground_style = _resolve_stylebox(base_control, "PanelForeground", "EditorStyles")
     var panel_style = _resolve_stylebox(base_control, "panel", "PanelContainer")
     var inspector_style = _resolve_stylebox(base_control, "panel", "EditorInspector")
-    var group_style = _resolve_stylebox(base_control, "panel", "Group")
-    if inspector_style:
+    if foreground_style:
+        add_theme_stylebox_override("panel", foreground_style)
+    elif inspector_style:
         add_theme_stylebox_override("panel", inspector_style)
     elif panel_style:
         add_theme_stylebox_override("panel", panel_style)
-    if group_style or panel_style:
-        var section_style = group_style if group_style else panel_style
-        if settings_panel:
-            settings_panel.add_theme_stylebox_override("panel", section_style)
-        if presets_panel:
-            presets_panel.add_theme_stylebox_override("panel", section_style)
-        if actions_panel:
-            actions_panel.add_theme_stylebox_override("panel", section_style)
-        if history_panel:
-            history_panel.add_theme_stylebox_override("panel", section_style)
+    _apply_pro_styles()
 
 func _resolve_stylebox(base_control: Control, name: String, type_name: String) -> StyleBox:
     if base_control.has_theme_stylebox(name, type_name):
@@ -172,6 +164,97 @@ func _resolve_stylebox(base_control: Control, name: String, type_name: String) -
     if base_control.theme and base_control.theme.has_stylebox(name, type_name):
         return base_control.theme.get_stylebox(name, type_name)
     return null
+
+func _apply_pro_styles() -> void:
+    if not is_inside_tree():
+        return
+    _setup_toolbar_icons()
+    _refresh_shape_palette_icons()
+    _style_snap_buttons()
+
+func _style_snap_buttons() -> void:
+    for button in snap_buttons:
+        if not button:
+            continue
+        button.flat = true
+        button.focus_mode = Control.FOCUS_NONE
+
+func _setup_toolbar_icons() -> void:
+    _set_toolbar_button_icon(tool_draw, ["Edit", "ToolEdit"], "Draw")
+    _set_toolbar_button_icon(tool_select, ["ToolSelect", "Select"], "Select")
+    _set_toolbar_button_icon(mode_add, ["Add", "AddNode"], "Add")
+    _set_toolbar_button_icon(mode_subtract, ["Remove", "RemoveNode"], "Subtract")
+    if paint_mode:
+        _set_toolbar_button_icon(paint_mode, ["Paint", "Brush", "ToolPaint"], "Paint")
+    _apply_toolbar_tooltips()
+
+func _apply_toolbar_tooltips() -> void:
+    _set_tooltip(tool_draw, "Draw")
+    _set_tooltip(tool_select, "Select")
+    _set_tooltip(mode_add, "Add")
+    _set_tooltip(mode_subtract, "Subtract")
+    if paint_mode:
+        _set_tooltip(paint_mode, "Paint Mode")
+
+func _set_tooltip(control: Control, text: String) -> void:
+    if not control:
+        return
+    control.tooltip_text = text
+
+func _set_toolbar_button_icon(button: Button, icon_names: Array, fallback_text: String) -> void:
+    if not button:
+        return
+    var icon = _find_editor_icon(icon_names)
+    if icon:
+        button.icon = icon
+        button.text = ""
+    else:
+        button.text = fallback_text
+    button.flat = true
+    button.focus_mode = Control.FOCUS_NONE
+
+func _refresh_shape_palette_icons() -> void:
+    if not shape_select:
+        return
+    for index in range(shape_select.get_item_count()):
+        var shape_id = shape_select.get_item_id(index)
+        var shape_key = str(shape_id_to_key.get(shape_id, ""))
+        if shape_key == "":
+            continue
+        var icon = _resolve_shape_icon(shape_key)
+        if icon:
+            shape_select.set_item_icon(index, icon)
+        else:
+            shape_select.set_item_icon(index, null)
+
+func _resolve_shape_icon(shape_key: String) -> Texture2D:
+    var candidates = shape_icon_candidates.get(shape_key, [])
+    return _find_editor_icon(candidates)
+
+func _find_editor_icon(icon_names: Array) -> Texture2D:
+    for icon_name in icon_names:
+        if _has_editor_icon(icon_name):
+            return _get_editor_icon(icon_name)
+    return null
+
+func _has_editor_icon(icon_name: String) -> bool:
+    if editor_base_control and editor_base_control.has_theme_icon(icon_name, "EditorIcons"):
+        return true
+    return has_theme_icon(icon_name, "EditorIcons")
+
+func _get_editor_icon(icon_name: String) -> Texture2D:
+    if editor_base_control and editor_base_control.has_theme_icon(icon_name, "EditorIcons"):
+        return editor_base_control.get_theme_icon(icon_name, "EditorIcons")
+    return get_theme_icon(icon_name, "EditorIcons")
+
+func _get_editor_color(color_name: String, fallback: Color) -> Color:
+    if editor_base_control and editor_base_control.has_theme_color(color_name, "Editor"):
+        return editor_base_control.get_theme_color(color_name, "Editor")
+    if editor_base_control and editor_base_control.has_theme_color(color_name, "EditorStyles"):
+        return editor_base_control.get_theme_color(color_name, "EditorStyles")
+    if has_theme_color(color_name, "Editor"):
+        return get_theme_color(color_name, "Editor")
+    return fallback
 
 func _get_undo_version() -> int:
     if undo_redo and undo_redo.has_method("get_version"):
@@ -242,6 +325,8 @@ func _ready():
     mode_add.button_pressed = true
 
     _populate_shape_palette()
+    if shape_select and not shape_select.item_selected.is_connected(Callable(self, "_on_shape_selected")):
+        shape_select.item_selected.connect(_on_shape_selected)
 
     snap_button_group = ButtonGroup.new()
     var snap_values = [1, 2, 4, 8, 16, 32, 64]
@@ -250,7 +335,7 @@ func _ready():
         if not button:
             continue
         button.toggle_mode = true
-        button.flat = false
+        button.flat = true
         button.button_group = snap_button_group
         button.set_meta("snap_value", snap_values[index])
         button.toggled.connect(_on_snap_button_toggled.bind(button))
@@ -305,14 +390,17 @@ func _ready():
         collision_layer_opt.add_item("Debris/Prop (Layer 2)", 2)
         collision_layer_opt.add_item("Trigger Only (Layer 3)", 4)
         collision_layer_opt.select(0)
-    _setup_collapsible_sections()
     if history_list:
         history_list.focus_mode = Control.FOCUS_NONE
-    status_label.text = "Status: Idle"
+    status_label.text = "Ready"
+    if progress_bar:
+        progress_bar.value = 0
+        progress_bar.hide()
     _sync_snap_buttons(grid_snap.value)
     _ensure_presets_dir()
     _load_presets()
     _load_entity_definitions()
+    _apply_pro_styles()
     set_process(true)
 
 func _process(delta):
@@ -605,11 +693,16 @@ func _sync_grid_settings_from_root() -> void:
     syncing_grid = false
 
 func _on_bake_started() -> void:
-    status_label.text = "Status: Baking..."
+    status_label.text = "Baking..."
+    if progress_bar:
+        progress_bar.value = 0
+        progress_bar.show()
     _set_bake_buttons_disabled(true)
 
 func _on_bake_finished(success: bool) -> void:
-    status_label.text = "Status: Ready" if success else "Status: Bake failed"
+    status_label.text = "Ready" if success else "Error"
+    if progress_bar:
+        progress_bar.hide()
     _set_bake_buttons_disabled(false)
 
 func _set_bake_buttons_disabled(disabled: bool) -> void:
@@ -639,23 +732,19 @@ func _notify_running_instances() -> void:
     file.store_string(str(Time.get_ticks_msec()))
 
 func _populate_shape_palette() -> void:
-    if not shape_palette_grid:
+    if not shape_select:
         return
-    for child in shape_palette_grid.get_children():
-        child.queue_free()
-    shape_button_group = ButtonGroup.new()
-    shape_buttons.clear()
+    shape_select.clear()
+    shape_id_to_key.clear()
     for shape_key in LevelRootType.BrushShape.keys():
         var shape_value = LevelRootType.BrushShape[shape_key]
-        var button := Button.new()
-        button.text = _shape_label(shape_key)
-        button.toggle_mode = true
-        button.button_group = shape_button_group
-        button.custom_minimum_size = Vector2(80, 32)
-        button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-        shape_palette_grid.add_child(button)
-        shape_buttons[shape_value] = button
-        button.pressed.connect(_on_shape_button_pressed.bind(shape_value))
+        shape_id_to_key[shape_value] = shape_key
+        var label = _shape_label(shape_key)
+        var icon = _resolve_shape_icon(shape_key)
+        if icon:
+            shape_select.add_icon_item(icon, label, shape_value)
+        else:
+            shape_select.add_item(label, shape_value)
     _set_active_shape(active_shape)
 
 func _shape_label(shape_key: String) -> String:
@@ -665,14 +754,22 @@ func _shape_label(shape_key: String) -> String:
         label += "%s " % part.capitalize()
     return label.strip_edges()
 
-func _on_shape_button_pressed(shape_value: int) -> void:
+func _on_shape_selected(index: int) -> void:
+    if not shape_select:
+        return
+    var shape_value = shape_select.get_item_id(index)
     _set_active_shape(shape_value)
 
 func _set_active_shape(shape_value: int) -> void:
     active_shape = shape_value
-    if shape_buttons.has(shape_value):
-        var button: Button = shape_buttons[shape_value]
-        button.button_pressed = true
+    if shape_select:
+        var target_index = -1
+        for index in range(shape_select.get_item_count()):
+            if shape_select.get_item_id(index) == shape_value:
+                target_index = index
+                break
+        if target_index >= 0 and shape_select.selected != target_index:
+            shape_select.select(target_index)
     _update_sides_visibility()
 
 func _shape_requires_sides(shape_value: int) -> bool:
@@ -689,42 +786,19 @@ func _update_perf_label() -> void:
         return
     if not level_root or not level_root.has_method("get_live_brush_count"):
         perf_label.text = "Live Brushes: 0"
-        perf_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+        perf_label.remove_theme_color_override("font_color")
         return
     var count = int(level_root.call("get_live_brush_count"))
     perf_label.text = "Live Brushes: %s" % count
+    var ok_color = _get_editor_color("success_color", Color(0.2, 0.85, 0.35))
+    var warn_color = _get_editor_color("warning_color", Color(0.95, 0.8, 0.2))
+    var danger_color = _get_editor_color("error_color", Color(0.95, 0.3, 0.3))
     if count <= 50:
-        perf_label.add_theme_color_override("font_color", Color(0.2, 0.85, 0.35))
+        perf_label.add_theme_color_override("font_color", ok_color)
     elif count <= 100:
-        perf_label.add_theme_color_override("font_color", Color(0.95, 0.8, 0.2))
+        perf_label.add_theme_color_override("font_color", warn_color)
     else:
-        perf_label.add_theme_color_override("font_color", Color(0.95, 0.3, 0.3))
-
-func _setup_collapsible_sections() -> void:
-    _bind_section(settings_toggle, settings_body, true)
-    _bind_section(presets_toggle, presets_body, false)
-    _bind_section(actions_toggle, actions_body, true)
-    _bind_section(history_toggle, history_body, false)
-
-func _bind_section(toggle: Button, body: Control, expanded: bool) -> void:
-    if not toggle or not body:
-        return
-    toggle.toggle_mode = true
-    toggle.button_pressed = expanded
-    toggle.flat = true
-    toggle.focus_mode = Control.FOCUS_NONE
-    _sync_section_toggle(toggle, body, expanded)
-    if not toggle.toggled.is_connected(Callable(self, "_on_section_toggled")):
-        toggle.toggled.connect(_on_section_toggled.bind(toggle, body))
-
-func _on_section_toggled(pressed: bool, toggle: Button, body: Control) -> void:
-    _sync_section_toggle(toggle, body, pressed)
-
-func _sync_section_toggle(toggle: Button, body: Control, expanded: bool) -> void:
-    if body:
-        body.visible = expanded
-    if toggle:
-        toggle.text = "v" if expanded else ">"
+        perf_label.add_theme_color_override("font_color", danger_color)
 
 func _on_active_material_pressed() -> void:
     if not material_dialog:

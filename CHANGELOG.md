@@ -56,3 +56,4 @@ The format is based on "Keep a Changelog", and this project follows semantic ver
 ### Documentation
 - Added user guide and expanded LevelRoot explanation.
 - Updated README, user guide, MVP guide, and spec for chunked baking and entity workflow.
+- Documented a known issue: viewport multi-select is unreliable (Shift-click cap and marquee selection).
