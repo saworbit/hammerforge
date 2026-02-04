@@ -16,7 +16,7 @@
     "class": "OmniLight3D",
     "preview": {
       "type": "billboard",
-      "path": "res://addons/hammerforge/icons/light_point.png",
+      "path": "res://addons/hammerforge/icon.png",
       "color": "#ffff00"
     },
     "properties": [

@@ -9,6 +9,13 @@ const DraftEntity = preload("draft_entity.gd")
 const PlaytestFPS = preload("playtest_fps.gd")
 const HFLevelIO = preload("hflevel_io.gd")
 const MapIO = preload("map_io.gd")
+const HFPaintGrid = preload("paint/hf_paint_grid.gd")
+const HFPaintLayerManager = preload("paint/hf_paint_layer_manager.gd")
+const HFPaintTool = preload("paint/hf_paint_tool.gd")
+const HFInferenceEngine = preload("paint/hf_inference_engine.gd")
+const HFGeometrySynth = preload("paint/hf_geometry_synth.gd")
+const HFGeneratedReconciler = preload("paint/hf_reconciler.gd")
+const HFStroke = preload("paint/hf_stroke.gd")
 
 const RELOAD_LOCK_PATH := "res://.hammerforge/reload.lock"
 const RELOAD_POLL_SECONDS := 0.5
@@ -92,6 +99,11 @@ var committed_node: Node3D
 var entities_node: Node3D
 var brush_manager: BrushManager
 var baker: Baker
+var paint_layers: HFPaintLayerManager
+var paint_tool: HFPaintTool
+var generated_node: Node3D
+var generated_floors: Node3D
+var generated_walls: Node3D
 var baked_container: Node3D
 var preview_brush: DraftBrush = null
 var drag_active := false
@@ -136,6 +148,7 @@ func _ready():
 	_load_entity_definitions()
 	_setup_manager()
 	_setup_baker()
+	_setup_paint_system()
 	_setup_editor_grid()
 	_setup_highlight()
 	if Engine.is_editor_hint():
@@ -313,6 +326,11 @@ func _set_grid_snap(value: float) -> void:
 	_grid_snap = clamped
 	grid_snap_changed.emit(_grid_snap)
 	_update_grid_material()
+	_sync_paint_grid_from_root()
+	if paint_layers:
+		for layer in paint_layers.layers:
+			if layer and layer.grid:
+				layer.grid.cell_size = max(_grid_snap, 0.1)
 	_log("Grid snap set to %s" % _grid_snap)
 
 func _get_editor_owner() -> Node:
@@ -426,6 +444,63 @@ func _setup_baker() -> void:
 		baker.name = "Baker"
 		add_child(baker)
 		_assign_owner(baker)
+
+func _setup_paint_system() -> void:
+	paint_layers = get_node_or_null("PaintLayers") as HFPaintLayerManager
+	if not paint_layers:
+		paint_layers = HFPaintLayerManager.new()
+		paint_layers.name = "PaintLayers"
+		add_child(paint_layers)
+		_assign_owner(paint_layers)
+	_sync_paint_grid_from_root()
+	if paint_layers.layers.is_empty():
+		paint_layers.create_layer(&"layer_0", grid_plane_origin.y)
+
+	generated_node = get_node_or_null("Generated") as Node3D
+	if not generated_node:
+		generated_node = Node3D.new()
+		generated_node.name = "Generated"
+		add_child(generated_node)
+		_assign_owner(generated_node)
+	generated_floors = generated_node.get_node_or_null("Floors") as Node3D
+	if not generated_floors:
+		generated_floors = Node3D.new()
+		generated_floors.name = "Floors"
+		generated_node.add_child(generated_floors)
+		_assign_owner(generated_floors)
+	generated_walls = generated_node.get_node_or_null("Walls") as Node3D
+	if not generated_walls:
+		generated_walls = Node3D.new()
+		generated_walls.name = "Walls"
+		generated_node.add_child(generated_walls)
+		_assign_owner(generated_walls)
+
+	paint_tool = get_node_or_null("PaintTool") as HFPaintTool
+	if not paint_tool:
+		paint_tool = HFPaintTool.new()
+		paint_tool.name = "PaintTool"
+		add_child(paint_tool)
+		_assign_owner(paint_tool)
+	paint_tool.layer_manager = paint_layers
+	if not paint_tool.inference:
+		paint_tool.inference = HFInferenceEngine.new()
+	if not paint_tool.geometry:
+		paint_tool.geometry = HFGeometrySynth.new()
+	if not paint_tool.reconciler:
+		paint_tool.reconciler = HFGeneratedReconciler.new()
+	paint_tool.reconciler.floors_root = generated_floors
+	paint_tool.reconciler.walls_root = generated_walls
+	paint_tool.reconciler.owner = _get_editor_owner()
+
+func _sync_paint_grid_from_root() -> void:
+	if not paint_layers:
+		return
+	if not paint_layers.base_grid:
+		paint_layers.base_grid = HFPaintGrid.new()
+	paint_layers.base_grid.cell_size = max(_grid_snap, 0.1)
+	paint_layers.base_grid.origin = global_position
+	paint_layers.base_grid.basis = Basis.IDENTITY
+	paint_layers.base_grid.layer_y = grid_plane_origin.y
 
 func _setup_editor_grid() -> void:
 	if not Engine.is_editor_hint():
@@ -546,6 +621,86 @@ func update_editor_grid(camera: Camera3D, mouse_pos: Vector2) -> void:
 			_set_grid_plane_origin(snapped, axis)
 			return
 	_update_grid_transform(axis, grid_plane_origin)
+
+func handle_paint_input(
+	camera: Camera3D,
+	event: InputEvent,
+	screen_pos: Vector2,
+	operation: int,
+	size: Vector3,
+	paint_tool_id: int = -1,
+	paint_radius_cells: int = -1
+) -> bool:
+	if not Engine.is_editor_hint():
+		return false
+	if not paint_tool:
+		_setup_paint_system()
+	if not paint_tool or not paint_layers:
+		return false
+	var layer = paint_layers.get_active_layer()
+	if paint_radius_cells > 0:
+		paint_tool.brush_radius_cells = paint_radius_cells
+	elif layer and layer.grid:
+		var cell_size = max(layer.grid.cell_size, 0.1)
+		var radius_cells = max(1, int(round(size.x / cell_size)))
+		paint_tool.brush_radius_cells = radius_cells
+	if paint_tool_id >= 0:
+		paint_tool.tool = paint_tool_id
+	else:
+		paint_tool.tool = HFStroke.Tool.PAINT if operation == CSGShape3D.OPERATION_UNION else HFStroke.Tool.ERASE
+	return paint_tool.handle_input(camera, event, screen_pos)
+
+func get_paint_layer_names() -> Array:
+	var names: Array = []
+	if not paint_layers:
+		return names
+	for layer in paint_layers.layers:
+		if layer:
+			names.append(str(layer.layer_id))
+	return names
+
+func get_active_paint_layer_index() -> int:
+	return paint_layers.active_layer_index if paint_layers else 0
+
+func set_active_paint_layer(index: int) -> void:
+	if not paint_layers:
+		_setup_paint_system()
+	if not paint_layers:
+		return
+	paint_layers.set_active_layer(index)
+
+func add_paint_layer() -> void:
+	if not paint_layers:
+		_setup_paint_system()
+	if not paint_layers:
+		return
+	var new_id = _next_paint_layer_id()
+	paint_layers.create_layer(StringName(new_id), grid_plane_origin.y)
+	paint_layers.active_layer_index = paint_layers.layers.size() - 1
+
+func remove_active_paint_layer() -> void:
+	if not paint_layers:
+		return
+	if paint_layers.layers.size() <= 1:
+		return
+	var idx = paint_layers.active_layer_index
+	paint_layers.remove_layer(idx)
+	_regenerate_paint_layers()
+
+func _next_paint_layer_id() -> String:
+	var base = "layer_"
+	var index = paint_layers.layers.size() if paint_layers else 0
+	var seen: Dictionary = {}
+	if paint_layers:
+		for layer in paint_layers.layers:
+			if layer:
+				seen[str(layer.layer_id)] = true
+	while true:
+		var candidate = "%s%d" % [base, index]
+		if not seen.has(candidate):
+			return candidate
+		index += 1
+	return "%s0" % base
 
 func place_brush(
 	mouse_pos: Vector2,
@@ -669,6 +824,8 @@ func _bake_single(layer: int, options: Dictionary) -> Node3D:
 	if commit_freeze and committed_node:
 		_append_draft_brushes_to_csg(committed_node, temp_csg, true)
 	_append_draft_brushes_to_csg(draft_brushes_node, collision_csg, false, true)
+	_append_generated_brushes_to_csg(temp_csg)
+	_append_generated_brushes_to_csg(collision_csg, true)
 
 	await _await_csg_update()
 
@@ -690,6 +847,8 @@ func _bake_chunked(chunk_size: float, layer: int, options: Dictionary) -> Node3D
 	_collect_chunk_brushes(draft_brushes_node, size, chunks, "brushes")
 	if commit_freeze and committed_node:
 		_collect_chunk_brushes(committed_node, size, chunks, "committed")
+	_collect_chunk_brushes(generated_floors, size, chunks, "generated")
+	_collect_chunk_brushes(generated_walls, size, chunks, "generated")
 	if chunks.is_empty():
 		return null
 
@@ -700,7 +859,8 @@ func _bake_chunked(chunk_size: float, layer: int, options: Dictionary) -> Node3D
 		var entry: Dictionary = chunks[coord]
 		var brushes: Array = entry.get("brushes", [])
 		var committed: Array = entry.get("committed", [])
-		if brushes.is_empty() and committed.is_empty():
+		var generated: Array = entry.get("generated", [])
+		if brushes.is_empty() and committed.is_empty() and generated.is_empty():
 			continue
 
 		var temp_csg = CSGCombiner3D.new()
@@ -714,9 +874,11 @@ func _bake_chunked(chunk_size: float, layer: int, options: Dictionary) -> Node3D
 		add_child(collision_csg)
 
 		_append_brush_list_to_csg(brushes, temp_csg)
+		_append_brush_list_to_csg(generated, temp_csg)
 		if commit_freeze:
 			_append_brush_list_to_csg(committed, temp_csg, true)
 		_append_brush_list_to_csg(brushes, collision_csg, false, true)
+		_append_brush_list_to_csg(generated, collision_csg, false, true)
 
 		await _await_csg_update()
 
@@ -746,7 +908,9 @@ func _collect_chunk_brushes(source: Node3D, chunk_size: float, chunks: Dictionar
 			continue
 		var coord = _chunk_coord((child as Node3D).global_position, chunk_size)
 		if not chunks.has(coord):
-			chunks[coord] = { "brushes": [], "committed": [] }
+			chunks[coord] = { "brushes": [], "committed": [], "generated": [] }
+		if not chunks[coord].has(key):
+			chunks[coord][key] = []
 		chunks[coord][key].append(child)
 
 func _chunk_coord(position: Vector3, chunk_size: float) -> Vector3i:
@@ -766,6 +930,14 @@ func _append_draft_brushes_to_csg(
 	if not source or not target:
 		return
 	_append_brush_list_to_csg(source.get_children(), target, force_subtract, only_additive)
+
+func _append_generated_brushes_to_csg(target: CSGCombiner3D, only_additive: bool = false) -> void:
+	if not target:
+		return
+	if generated_floors:
+		_append_brush_list_to_csg(generated_floors.get_children(), target, false, only_additive)
+	if generated_walls:
+		_append_brush_list_to_csg(generated_walls.get_children(), target, false, only_additive)
 
 func _append_brush_list_to_csg(
 	brushes: Array,
@@ -838,7 +1010,7 @@ func _bake_navmesh(container: Node3D) -> void:
 			and ClassDB.class_has_method("NavigationServer3D", "bake_from_source_geometry_data") \
 			and ClassDB.class_exists("NavigationMeshSourceGeometryData3D"):
 		var source = NavigationMeshSourceGeometryData3D.new()
-		NavigationServer3D.parse_source_geometry_data(nav_mesh, container, source)
+		NavigationServer3D.parse_source_geometry_data(nav_mesh, source, container)
 		NavigationServer3D.bake_from_source_geometry_data(nav_mesh, source)
 	elif nav_region.has_method("bake_navigation_mesh"):
 		nav_region.call("bake_navigation_mesh")
@@ -850,12 +1022,23 @@ func clear_brushes() -> void:
 		for child in draft_brushes_node.get_children():
 			if child is DraftBrush:
 				child.queue_free()
+	_clear_generated()
 	_clear_preview()
 	clear_pending_cuts()
 	_clear_committed_cuts()
 	if baked_container:
 		baked_container.queue_free()
 		baked_container = null
+
+func _clear_generated() -> void:
+	if generated_floors:
+		for child in generated_floors.get_children():
+			if child is DraftBrush:
+				child.queue_free()
+	if generated_walls:
+		for child in generated_walls.get_children():
+			if child is DraftBrush:
+				child.queue_free()
 
 func _clear_entities() -> void:
 	if not entities_node:
@@ -1225,6 +1408,8 @@ func capture_state() -> Dictionary:
 	state["csg_visible"] = draft_brushes_node.visible if draft_brushes_node else true
 	state["pending_visible"] = pending_node.visible if pending_node else true
 	state["baked_present"] = baked_container != null
+	state["paint_layers"] = _capture_paint_layers()
+	state["paint_active_layer"] = paint_layers.active_layer_index if paint_layers else 0
 	for node in _iter_pick_nodes():
 		var info = get_brush_info_from_node(node)
 		if info.is_empty():
@@ -1249,11 +1434,44 @@ func capture_state() -> Dictionary:
 					state["entities"].append(info)
 	return state
 
+func _capture_paint_layers() -> Array:
+	var out: Array = []
+	if not paint_layers:
+		return out
+	for layer in paint_layers.layers:
+		if not layer:
+			continue
+		var grid = layer.grid
+		var entry: Dictionary = {
+			"id": str(layer.layer_id),
+			"chunk_size": layer.chunk_size,
+			"grid": {
+				"cell_size": grid.cell_size if grid else 1.0,
+				"origin": grid.origin if grid else Vector3.ZERO,
+				"basis": grid.basis if grid else Basis.IDENTITY,
+				"layer_y": grid.layer_y if grid else 0.0
+			},
+			"chunks": []
+		}
+		for cid in layer.get_chunk_ids():
+			var bits = layer.get_chunk_bits(cid)
+			var bytes: Array = []
+			for b in bits:
+				bytes.append(int(b))
+			entry["chunks"].append({
+				"cx": cid.x,
+				"cy": cid.y,
+				"bits": bytes
+			})
+		out.append(entry)
+	return out
+
 func restore_state(state: Dictionary) -> void:
 	if state.is_empty():
 		return
 	clear_brushes()
 	_clear_entities()
+	_restore_paint_layers(state.get("paint_layers", []), int(state.get("paint_active_layer", 0)))
 	_brush_id_counter = int(state.get("id_counter", 0))
 	var brushes: Array = state.get("brushes", [])
 	for info in brushes:
@@ -1277,6 +1495,64 @@ func restore_state(state: Dictionary) -> void:
 	if not bool(state.get("baked_present", false)) and baked_container:
 		baked_container.queue_free()
 		baked_container = null
+
+func _restore_paint_layers(data: Array, active_index: int) -> void:
+	if not paint_layers:
+		_setup_paint_system()
+	if not paint_layers:
+		return
+	paint_layers.clear_layers()
+	_clear_generated()
+	if data.is_empty():
+		paint_layers.create_layer(&"layer_0", grid_plane_origin.y)
+		paint_layers.active_layer_index = 0
+		return
+	for entry in data:
+		if not (entry is Dictionary):
+			continue
+		var layer_id = StringName(str(entry.get("id", "layer_0")))
+		var chunk_size = int(entry.get("chunk_size", paint_layers.chunk_size))
+		var grid_data = entry.get("grid", {})
+		var layer_y = float(grid_data.get("layer_y", grid_plane_origin.y)) if grid_data is Dictionary else grid_plane_origin.y
+		var layer = paint_layers.create_layer(layer_id, layer_y)
+		layer.chunk_size = chunk_size
+		if grid_data is Dictionary and layer.grid:
+			layer.grid.cell_size = float(grid_data.get("cell_size", layer.grid.cell_size))
+			layer.grid.origin = grid_data.get("origin", layer.grid.origin)
+			layer.grid.basis = grid_data.get("basis", layer.grid.basis)
+			layer.grid.layer_y = float(grid_data.get("layer_y", layer.grid.layer_y))
+		var chunks = entry.get("chunks", [])
+		if chunks is Array:
+			for chunk in chunks:
+				if not (chunk is Dictionary):
+					continue
+				var cx = int(chunk.get("cx", 0))
+				var cy = int(chunk.get("cy", 0))
+				var bytes = chunk.get("bits", [])
+				var bits = PackedByteArray()
+				if bytes is Array:
+					bits.resize(bytes.size())
+					for i in range(bytes.size()):
+						bits[i] = int(bytes[i])
+				layer.set_chunk_bits(Vector2i(cx, cy), bits)
+	if paint_layers.layers.size() > 0:
+		paint_layers.active_layer_index = clamp(active_index, 0, paint_layers.layers.size() - 1)
+	_regenerate_paint_layers()
+
+func _regenerate_paint_layers() -> void:
+	if not paint_tool or not paint_layers:
+		return
+	if not paint_tool.geometry or not paint_tool.reconciler:
+		return
+	_clear_generated()
+	for layer in paint_layers.layers:
+		if not layer:
+			continue
+		var chunk_ids = layer.get_chunk_ids()
+		if chunk_ids.is_empty():
+			continue
+		var model = paint_tool.geometry.build_for_chunks(layer, chunk_ids, paint_tool.synth_settings)
+		paint_tool.reconciler.reconcile(model, layer.grid, paint_tool.synth_settings, chunk_ids)
 
 func capture_full_state() -> Dictionary:
 	return {

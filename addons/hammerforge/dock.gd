@@ -47,6 +47,11 @@ class EntityPaletteButton extends Button:
 @onready var size_x: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/SizeRow/SizeX
 @onready var size_y: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/SizeRow/SizeY
 @onready var size_z: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/SizeRow/SizeZ
+@onready var paint_tool_select: OptionButton = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PaintToolRow/PaintToolSelect
+@onready var paint_radius: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PaintRadiusRow/PaintRadius
+@onready var paint_layer_select: OptionButton = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PaintLayerRow/PaintLayerSelect
+@onready var paint_layer_add: Button = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PaintLayerRow/PaintLayerAdd
+@onready var paint_layer_remove: Button = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PaintLayerRow/PaintLayerRemove
 @onready var grid_snap: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/GridRow/GridSnap
 @onready var collision_layer_opt: OptionButton = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PhysicsLayerRow/PhysicsLayerOption
 @onready var bake_merge_meshes: CheckBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeMergeMeshes
@@ -124,6 +129,7 @@ var preset_context_button: Button = null
 var active_material: Material = null
 var active_shape: int = LevelRootType.BrushShape.BOX
 var shape_id_to_key: Dictionary = {}
+var paint_layers_signature: String = ""
 var root_properties: Dictionary = {}
 var history_entries: Array = []
 var history_max := 50
@@ -363,8 +369,15 @@ func _ready():
     mode_add.button_pressed = true
 
     _populate_shape_palette()
+    _populate_paint_tools()
     if shape_select and not shape_select.item_selected.is_connected(Callable(self, "_on_shape_selected")):
         shape_select.item_selected.connect(_on_shape_selected)
+    if paint_layer_select and not paint_layer_select.item_selected.is_connected(Callable(self, "_on_paint_layer_selected")):
+        paint_layer_select.item_selected.connect(_on_paint_layer_selected)
+    if paint_layer_add and not paint_layer_add.pressed.is_connected(Callable(self, "_on_paint_layer_add")):
+        paint_layer_add.pressed.connect(_on_paint_layer_add)
+    if paint_layer_remove and not paint_layer_remove.pressed.is_connected(Callable(self, "_on_paint_layer_remove")):
+        paint_layer_remove.pressed.connect(_on_paint_layer_remove)
 
     snap_button_group = ButtonGroup.new()
     var snap_values = [1, 2, 4, 8, 16, 32, 64]
@@ -513,7 +526,25 @@ func _process(delta):
             level_root.set("grid_follow_brush", follow_grid.button_pressed)
         if _root_has_property("debug_logging"):
             level_root.set("debug_logging", debug_enabled)
+        _sync_paint_layers_from_root()
     _update_perf_label()
+
+func _sync_paint_layers_from_root() -> void:
+    if not level_root or not level_root.has_method("get_paint_layer_names"):
+        return
+    var names: Array = level_root.call("get_paint_layer_names")
+    var active_index = 0
+    if level_root.has_method("get_active_paint_layer_index"):
+        active_index = int(level_root.call("get_active_paint_layer_index"))
+    var joined := ""
+    for i in range(names.size()):
+        if i > 0:
+            joined += "|"
+        joined += str(names[i])
+    var sig = "%s:%d" % [joined, active_index]
+    if sig != paint_layers_signature:
+        paint_layers_signature = sig
+        _refresh_paint_layers()
 
 func get_operation() -> int:
     return CSGShape3D.OPERATION_UNION if mode_add.button_pressed else CSGShape3D.OPERATION_SUBTRACTION
@@ -540,6 +571,16 @@ func get_sides() -> int:
 
 func get_grid_snap() -> float:
     return grid_snap.value
+
+func get_paint_tool_id() -> int:
+    if not paint_tool_select:
+        return 0
+    return paint_tool_select.get_selected_id()
+
+func get_paint_radius_cells() -> int:
+    if not paint_radius:
+        return 1
+    return int(paint_radius.value)
 
 func get_collision_layer_mask() -> int:
     if not collision_layer_opt:
@@ -770,6 +811,7 @@ func _connect_root_signals() -> void:
             connected_root.connect("grid_snap_changed", Callable(self, "_on_root_grid_snap_changed"))
     _sync_grid_snap_from_root()
     _sync_grid_settings_from_root()
+    _refresh_paint_layers()
 
 func _disconnect_root_signals() -> void:
     if not connected_root:
@@ -891,6 +933,63 @@ func _populate_shape_palette() -> void:
         else:
             shape_select.add_item(label, shape_value)
     _set_active_shape(active_shape)
+
+func _populate_paint_tools() -> void:
+    if not paint_tool_select:
+        return
+    paint_tool_select.clear()
+    paint_tool_select.add_item("Paint", 0)
+    paint_tool_select.add_item("Erase", 1)
+    paint_tool_select.add_item("Rect", 2)
+    paint_tool_select.add_item("Line", 3)
+    paint_tool_select.add_item("Bucket", 4)
+    paint_tool_select.select(0)
+
+func _refresh_paint_layers() -> void:
+    if not paint_layer_select:
+        return
+    paint_layer_select.clear()
+    if not level_root or not level_root.has_method("get_paint_layer_names"):
+        paint_layer_select.add_item("Layer 0", 0)
+        paint_layer_select.select(0)
+        paint_layer_select.disabled = true
+        if paint_layer_add:
+            paint_layer_add.disabled = true
+        if paint_layer_remove:
+            paint_layer_remove.disabled = true
+        return
+    var names: Array = level_root.call("get_paint_layer_names")
+    var active_index = 0
+    if level_root.has_method("get_active_paint_layer_index"):
+        active_index = int(level_root.call("get_active_paint_layer_index"))
+    paint_layer_select.disabled = false
+    if paint_layer_add:
+        paint_layer_add.disabled = false
+    if paint_layer_remove:
+        paint_layer_remove.disabled = names.size() <= 1
+    for i in range(names.size()):
+        var label = str(names[i])
+        paint_layer_select.add_item(label, i)
+    if names.size() > 0:
+        paint_layer_select.select(clamp(active_index, 0, names.size() - 1))
+
+func _on_paint_layer_selected(index: int) -> void:
+    if not level_root or not level_root.has_method("set_active_paint_layer"):
+        return
+    level_root.call("set_active_paint_layer", index)
+    _refresh_paint_layers()
+
+func _on_paint_layer_add() -> void:
+    if not level_root or not level_root.has_method("add_paint_layer"):
+        return
+    level_root.call("add_paint_layer")
+    _refresh_paint_layers()
+
+func _on_paint_layer_remove() -> void:
+    if not level_root or not level_root.has_method("remove_active_paint_layer"):
+        return
+    level_root.call("remove_active_paint_layer")
+    _refresh_paint_layers()
 
 func _shape_label(shape_key: String) -> String:
     var parts = shape_key.to_lower().split("_")

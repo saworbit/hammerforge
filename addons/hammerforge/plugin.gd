@@ -62,7 +62,6 @@ func _exit_tree():
     undo_redo_manager = null
     if brush_gizmo_plugin:
         remove_node_3d_gizmo_plugin(brush_gizmo_plugin)
-        brush_gizmo_plugin.free()
         brush_gizmo_plugin = null
     if base_control and base_control.is_connected("theme_changed", Callable(self, "_on_editor_theme_changed")):
         base_control.disconnect("theme_changed", Callable(self, "_on_editor_theme_changed"))
@@ -140,6 +139,13 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
     var grid = dock.get_grid_snap()
     root.grid_snap = grid
     var paint_mode = dock.has_method("is_paint_mode_enabled") and dock.is_paint_mode_enabled()
+
+    if paint_mode and root.has_method("handle_paint_input"):
+        var paint_tool_id = dock.call("get_paint_tool_id") if dock.has_method("get_paint_tool_id") else 0
+        var paint_radius_cells = dock.call("get_paint_radius_cells") if dock.has_method("get_paint_radius_cells") else 1
+        var handled = root.call("handle_paint_input", target_camera, event, target_pos, op, size, paint_tool_id, paint_radius_cells)
+        if handled:
+            return EditorPlugin.AFTER_GUI_INPUT_STOP
 
     if event is InputEventKey:
         if event.pressed and not event.echo:

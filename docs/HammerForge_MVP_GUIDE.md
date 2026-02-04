@@ -1,142 +1,66 @@
-# HammerForge MVP: Step-by-Step Guide
+# HammerForge MVP Guide
 
-This guide walks through building the **HammerForge** MVP for Godot 4.6 (released January 26, 2026). The target is a minimal editor addon that exposes CAD-style brush creation (drag base + height), box/cylinder brushes, staged draft add/subtract, a dock UI, selection, and a one-click bake that turns a temporary CSG tree into optimized static geometry with collision.
+Last updated: February 5, 2026
 
----
+This guide is for contributors implementing or extending the MVP.
 
-## Target & Scope
-* **Engine:** Godot 4.6 stable.
-* **Focus:** In-editor blockout for FPS rooms (<5 minutes to mock up); one-click bake to performant static meshes.
-* **Files:** ~15 core files in `res://addons/hammerforge/`.
-* **Outcome:** Step-by-step deliverables described below cover setup, UI, brush placement, draft ops, bake, and testing.
+## Goals
+- Fast in-editor greyboxing with draft brushes.
+- Bake to optimized meshes only when needed.
+- Keep editor responsiveness high (no live CSG while editing).
 
-## Time Breakdown
+## Core Systems
 
-| Step | Time | Milestone |
-| --- | --- | --- |
-| 1–3 | 30 min | Addon loads in editor |
-| 4–6 | 1 h | Dock UI + LevelRoot node |
-| 7–9 | 2–3 h | Click-to-place brush creation |
-| 10–12 | 3–4 h | Draft ops + virtual bake logic |
-| 13 | 1 h | Test/polish one-room FPS blockout |
-| **Total** | ~1 day | Playable MVP |
+Brush workflow
+- DraftBrush nodes represent all authored geometry.
+- PendingCuts allow staging subtract operations.
+- Bake builds a temporary CSG tree, generates meshes and collision, then discards the CSG.
 
-## Prerequisites
-1. Download Godot 4.6 stable from [godotengine.org/download](https://godotengine.org/download).  
-2. Know GDScript and the EditorPlugin API.  
-3. Create an empty 3D project via **File ▶ New Project ▶ 3D Rendering ▶ Forward+**.
+Floor paint
+- Paint layers store grid occupancy in chunked bitsets.
+- Geometry synthesis runs per dirty chunk:
+  - Greedy rectangles for floors.
+  - Boundary edges and merged segments for walls.
+- Stable IDs are used to reconcile generated nodes without churn.
 
-## File Layout (create under `res://addons/hammerforge/`)
+Entities
+- Entities live under LevelRoot/Entities or `is_entity` meta.
+- Entities are excluded from bake.
+- Definitions are loaded from `addons/hammerforge/entities.json`.
 
+## High-Level Flow
+1. Input is handled by the EditorPlugin.
+2. LevelRoot forwards paint input to HFPaintTool when Paint Mode is enabled.
+3. PaintTool updates paint layers and requests geometry synth + reconcile.
+4. Bake assembles DraftBrushes (including generated paint geometry) into mesh output.
+
+## Testing Checklist
+- Create and resize draft brushes (Draw tool).
+- Apply/clear/commit subtract cuts.
+- Bake (with and without chunking).
+- Enable Paint Mode and test Brush/Erase/Line/Rect/Bucket.
+- Verify live paint preview while dragging.
+- Switch paint layers and ensure isolation.
+- Save and load .hflevel and verify paint data persists.
+- Drag entities from the palette and check selection/exclusion from bake.
+
+## Diagnostics
+- Enable Debug Logs in the dock for runtime tracing.
+- Capture exit-time errors with:
+
+```powershell
+Start-Process -FilePath "C:\Godot\Godot_v4.6-stable_win64.exe" `
+  -ArgumentList '--editor','--path','C:\hammerforge' `
+  -RedirectStandardOutput "C:\Godot\godot_stdout.log" `
+  -RedirectStandardError "C:\Godot\godot_stderr.log" `
+  -NoNewWindow
 ```
-addons/
-`-- hammerforge/
-    |-- plugin.cfg
-    |-- plugin.gd          # EditorPlugin entry (adds LevelRoot, dock, captures viewport input)
-    |-- icon.png           # 64x64 plugin icon
-    |-- dock.tscn          # Dock UI scene
-    |-- dock.gd            # Dock query/bake controls (tool, shape, grid, floor)
-    |-- level_root.gd      # Root node that manages DraftBrushes and virtual baking
-    |-- shortcut_hud.tscn  # On-screen shortcut legend (editor UI)
-    |-- shortcut_hud.gd    # HUD script for layout + label
-    |-- editor_grid.gdshader # Shader-based editor grid
-    |-- brush_instance.gd  # DraftBrush node (Node3D + MeshInstance3D)
-    |-- brush_gizmo_plugin.gd # DraftBrush resize gizmo (viewport handles)
-    |-- brush_manager.gd   # Brush lifecycle helper
-    |-- baker.gd           # Bake helper that creates meshes + collision
-    |-- draft_entity.gd    # Dynamic entity properties (schema-driven)
-    `-- entities.json      # Entity definitions (JSON)
-```
 
-## Step-by-Step Build
+## Known Issues (current)
+- Viewport drag-marquee selection is disabled.
+- Multi-select can cap at 2 items in the viewport.
 
-1. **plugin.cfg** – Define the Godot plugin block with `name`, `author`, `version`, and `script="plugin.gd"`. This exposes the addon in **Project ▶ Project Settings ▶ Plugins**.
-
-2. **plugin.gd** – Create a `@tool` `EditorPlugin` that:
-   * Registers `LevelRoot` as a custom type.
-   * Instantiates and docks `dock.tscn` to the left viewport.
-   * Forwards 3D input to handle CAD-style dragging (base → height).
-   * Auto-creates `LevelRoot` on the first click if missing.
-
-3. **Dock scene + script** – Build `dock.tscn` with:
-   * Tool selector (Draw/Select), Add/Subtract, and a dynamic Shape Palette grid.
-   * Size, Sides (contextual), Grid Snap, Create Floor, Apply Cuts, Clear Pending Cuts, Bake, Clear.
-   * `dock.gd` exposes `get_operation()`, `get_brush_size()`, `get_shape()`, `get_grid_snap()`.
-   * The script keeps a reference to `LevelRoot` in the current scene.
-
-4. **LevelRoot** – `level_root.gd` extends `Node3D`, sets up `DraftBrushes`, `PendingCuts`, `CommittedCuts`, `Entities`, a `BrushManager`, and a `Baker`.
-   * LevelRoot can be a single node in the scene; it creates helper children on _ready().
-   * CAD-style draw flow: drag to set base, release to set height, click to commit.
-   * `place_brush(mouse_pos, operation, size)` can still place a default brush.
-   * Subtract brushes are staged until `Apply Cuts` or Bake.
-   * Apply Cuts marks subtracts as active for Bake (no live CSG).
-   * Commit Cuts bakes and optionally freezes subtracts for later restore.
-   * `bake()` builds a temporary CSG tree and delegates to `Baker` to convert it into baked meshes + collision.
-   * `bake_chunk_size` controls chunked baking (default 32). Set `<= 0` to disable chunk splitting.
-   * `clear_brushes()` empties the manager and queues existing brushes.
-
-5. **DraftBrush** – `brush_instance.gd` is a `Node3D` with a `MeshInstance3D`, storing shape, size, operation, and material for fast editor previews.
-
-6. **DraftEntity** – `draft_entity.gd` is a `Node3D` that exposes Inspector properties from `entities.json` based on `entity_type`.
-
-7. **BrushManager** – Simple helper that tracks brush instances for cleanup (used from `LevelRoot.clear_brushes()`).
-
-8. **Baker** – Accepts a temporary `CSGCombiner3D`, creates a `MeshInstance3D`, and attaches a `StaticBody3D` with a `CollisionShape3D` based on the trimesh. (Add brushes only; Subtract brushes are excluded from collision).
-
-9. **Grid Snap** – `LevelRoot` snaps hit positions to `grid_snap` (default 16). Expose `grid_snap` from the dock UI for quick control.
-   * Brush resize gizmos snap to `grid_snap` during handle drags.
-
-10. **Dock Bindings** – Bind the dock spinboxes to call `LevelRoot.place_brush` with the desired size, and `OptionButton` selection to toggle between `CSGShape3D.OPERATION_UNION` and `OPERATION_SUBTRACTION`.
-
-11. **Bake & Clear Buttons** – Bake button executes `LevelRoot.bake()`, Clear removes existing draft/pending/committed brushes and baked output.
-
-12. **Preview Scene** – Open any 3D scene, click once to auto-create `LevelRoot`, then use **Create Floor** for a collidable surface.
-
-13. **Optional Extras** - Selection mode, duplicate/drag/nudge, numeric input overlay, hover highlight, paint mode, mesh-shape scaling, and ortho views.
-
-14. **Test** – In the editor:
-    * Use Draw tool to click-drag a base, release, then click to set height.
-    * Use Subtract mode to place cut shapes, then click **Apply Cuts** (carve is visible after Bake).
-    * Click Bake: a static `MeshInstance3D` + `StaticBody3D` appears with collision.
-    * Use the built-in Playtest button to bake + launch with the HammerForge playtest FPS controller.
-    * Add a `player_start` DraftEntity under `Entities` to control spawn location.
-
-## Quadrant Viewports (Native)
-Use Godot’s **View → Layout → 4 View** for Top/Front/Side/3D. The plugin no longer ships a custom quadrant overlay.
-
-## Post-MVP UX Upgrades
-
-These are quality-of-life improvements added after the MVP core:
-
-1. **Editor Theme Binding** â€“ Dock inherits `EditorInterface.get_base_control().theme`, with live theme refresh.
-2. **Quick Snap Presets** â€“ Toggle buttons for 1/2/4/8/16/32/64 with a shared ButtonGroup.
-3. **Shortcut HUD** â€“ On-screen cheat sheet in the 3D viewport, toggleable from the dock.
-4. **Dynamic Editor Grid** â€“ Shader-based PlaneMesh that follows the active axis and snap size.
-5. **Hover Selection Highlight** - AABB wireframe to preview which brush is under the cursor.
-6. **Paint Mode** - Pick an active material and click brushes to apply it.
-7. **Gizmo Pass-through** - Allow Godot move/rotate/scale gizmos when a brush is selected.
-8. **Collapsible Dock Sections** - Toggle Settings/Presets/Actions to keep the dock compact.
-9. **Physics Layer Presets** - OptionButton that passes a collision layer bitmask into bake.
-10. **Live Brush Count** - Real-time label with green/yellow/red performance thresholds.
-11. **History Panel (beta)** - Undo/Redo controls plus a recent action list for HammerForge actions.
-12. **Viewport Brush Gizmo** - Face handles to resize DraftBrushes while keeping the opposite face pinned.
-13. **Draft Mesh Parity** - Line-mesh previews for pyramids/prisms/platonic solids in DraftBrush.
-14. **Chunked Baking** - `bake_chunk_size` splits large maps into chunked bakes.
-15. **Entity System (early)** - `Entities` container and `is_entity` meta are selectable and excluded from bake.
-16. **Gizmo Snapping** - Resize handles snap to `grid_snap` for consistent sizing.
-17. **Dynamic Entity Props** - `DraftEntity` exposes Inspector properties from `entities.json`.
-18. **Create DraftEntity Button** - Dock action spawns DraftEntity and focuses the Inspector.
-19. **Entity Previews** - DraftEntity spawns editor-only billboards/meshes from `entities.json`.
-
-## Troubleshooting Notes
-
-* **Bake slow** – keep brush counts reasonable during editing; the bake step builds the temporary CSG and produces the optimized mesh used at runtime.
-* **No hit detected** – ensure a floor mesh exists and is not excluded from the raycast.
-* **Plugin not showing** – confirm `plugin.cfg` is loaded and the addon is enabled under **Project ▶ Project Settings ▶ Plugins**.
-
-## Next Steps After MVP
-
-1. Introduce entity palette & FGD parsing (Phase 2 core).  
-2. Improve optimization (chunked baker, LOD, navmesh).  
-3. Add UI polish and import/export support.  
-4. Package for the Asset Library (MIT license, metadata, ZIP).
+## Next Steps
+- Material painting
+- Numeric input during draw
+- Additional import/export pipelines

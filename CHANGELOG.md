@@ -1,9 +1,34 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
-The format is based on "Keep a Changelog", and this project follows semantic versioning.
+The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+- TBD
+
+## [0.1.1] - 2026-02-05
+
+### Added
+- Live paint preview while dragging for Brush/Erase/Line/Rect.
+- Paint preview reconciliation without node churn (dirty chunk scope).
+- Bucket fill improvements and guardrails.
+- Paint layer persistence in .hflevel files.
+- Log capture guidance for exit-time Godot errors.
+
+### Changed
+- Paint preview now updates generated floors/walls in real time.
+- Paint tool default radius behavior tuned (radius 1 = single cell).
+- Paint chunk indexing now floors correctly for negative coordinates.
+
+### Fixed
+- Quadrant mirroring caused by incorrect chunk indexing of negative cells.
+- Live preview not appearing until mouse-up.
+- Corrupt entity icon references updated in docs.
+
+### Documentation
+- Major refresh across README, spec, and guides to reflect paint system and workflows.
+
+## [0.1.0] - 2026-02-04
 
 ### Added
 - CAD-style brush creation: drag a base, then set height and commit with a second click.
@@ -24,28 +49,33 @@ The format is based on "Keep a Changelog", and this project follows semantic ver
 - Native 4-view layout guidance (uses Godot's built-in view layout).
 - Multi-select (Shift-click), Delete to remove, Ctrl+D to duplicate.
 - Nudge selected brushes with arrow keys and PageUp/PageDown.
-- Auto-create `LevelRoot` on first click if missing.
+- Auto-create LevelRoot on first click if missing.
 - Create Floor button for quick raycast surface setup.
 - Pending Subtract cuts with Apply/Clear controls (Bake auto-applies).
 - Cylinder brushes, grid snap control, and colored Add/Subtract preview.
 - Commit cuts improvements: multi-mesh bake, freeze/restore committed cuts, bake status, bake collision layer control.
 - Viewport DraftBrush resize gizmo with face handles (undo/redo friendly).
-- Gizmo snapping uses `grid_snap` during handle drags.
+- Gizmo snapping uses grid_snap during handle drags.
 - Line-mesh draft previews for pyramids, prisms, and platonic solids.
-- Chunked baking via `LevelRoot.bake_chunk_size` (default 32).
-- Entities container (`LevelRoot/Entities`) and `is_entity` meta for selection-only nodes (excluded from bake).
-- Entity definitions JSON loader (`res://addons/hammerforge/entities.json`).
-- DraftEntity schema-driven properties with Inspector dropdowns (stored under `data/`, backward-compatible `entity_data/`).
+- Chunked baking via LevelRoot.bake_chunk_size (default 32).
+- Entities container (LevelRoot/Entities) and is_entity meta for selection-only nodes (excluded from bake).
+- Entity definitions JSON loader (res://addons/hammerforge/entities.json).
+- DraftEntity schema-driven properties with Inspector dropdowns (stored under data/, backward-compatible entity_data/).
 - Create DraftEntity action button in the dock.
-- Editor-only entity previews (billboards/meshes) driven by `entities.json`.
+- Editor-only entity previews (billboards/meshes) driven by entities.json.
 - Collision baking uses Add brushes only (Subtract brushes excluded).
 - Playtest FPS controller with sprint, crouch, jump, head-bob, FOV stretch, and coyote time.
 - Playtest button workflow: bake + launch current scene.
-- Player start entity support (`entity_class = "player_start"`).
-- Hot-reload signal for running playtests via `res://.hammerforge/reload.lock`.
+- Player start entity support (entity_class = "player_start").
+- Hot-reload signal for running playtests via res://.hammerforge/reload.lock.
+- Floor paint system with grid-based paint layers and auto-generated floors/walls.
+- Paint tool selector (Brush/Erase/Rect/Line/Bucket), radius control, and layer picker in the dock.
+- Stable-ID reconciliation for generated paint geometry to avoid node churn.
+- .hflevel persistence for paint layers and chunk data.
 
 ### Changed
 - Disabled drag-marquee selection in the viewport to avoid input conflicts.
+- Paint Mode now routes to the floor paint system (material paint is reserved for a future pass).
 
 ### Fixed
 - Selection picking now works for cylinders and rotated brushes.
@@ -60,3 +90,5 @@ The format is based on "Keep a Changelog", and this project follows semantic ver
 - Added user guide and expanded LevelRoot explanation.
 - Updated README, user guide, MVP guide, and spec for chunked baking and entity workflow.
 - Documented selection limits and drag-marquee being disabled in the viewport.
+- Expanded docs for floor paint workflow, layers, and persistence.
+- Broad documentation refresh across README/spec/guides for floor paint, layers, and logs.

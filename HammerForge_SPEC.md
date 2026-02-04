@@ -1,262 +1,72 @@
-<!-- HammerForge design spec derived from user requirements -->
-# HammerForge: FPS Level Editor Addon Design Spec
+# HammerForge Spec
 
-## Overview
-- **Target:** Godot 4.6+ editor plugin for FPS level creation (Quake-style).  
-- **Promise:** Browser-free, single-tool workflow—draft brushes, bake-time CSG, entities, optimization, and playtesting without leaving the editor.  
-- **Delivery:** Asset Library install → enable plugin → add `LevelRoot.tscn` → edit instantly with presets for FPS gameplay.
+Last updated: February 5, 2026
 
-## Status (Jan 31, 2026)
-**Implemented**
-- DraftBrush workflow with add/subtract, pending cuts, bake-time CSG.
-- Wireframe draft previews for complex shapes (pyramids, prisms, platonic solids).
-- Viewport face-handle gizmo for resizing brushes with undo/redo.
-- Gizmo snapping respects `grid_snap` during handle drags.
-- Chunked baking via `LevelRoot.bake_chunk_size` (default 32).
-- Advanced bake options (merge meshes, auto LOD, lightmap UV2 unwrap, navmesh bake).
-- Entities container (`LevelRoot/Entities`) and `is_entity` meta for selection-only nodes excluded from bake.
-- Entity definitions JSON loaded by the dock (`res://addons/hammerforge/entities.json`).
-- DraftEntity schema-driven properties with Inspector dropdowns (stored under `data/`, backward-compatible `entity_data/`).
-- Entity previews (billboards/meshes) spawned in the editor from `entities.json` preview metadata.
-- Entity palette UI with drag-and-drop placement.
-- Playtest FPS controller (sprint, crouch, jump, head-bob, FOV stretch, coyote time).
-- Playtest button: bake + launch current scene with hot-reload signal.
-- Player start entity support (`entity_class = "player_start"`).
-- .hflevel save/load with autosave support.
-- .map import/export and baked .glb export.
+This document describes HammerForge's architecture and data flow.
 
-**Planned**
-- Per-face texture tools and UV workflows.
-- Additional import/export formats (USD, extended glTF pipelines).
+## Goals
+- Fast in-editor greyboxing with brush workflows.
+- Editor responsiveness by avoiding live CSG.
+- Reliable bake pipeline and clean data model.
 
-## Why This Wins
-| Goal | HammerForge Response |
-| --- | --- |
-| Immediate setup | <1 minute: enable plugin, create LevelRoot, ready brush/entity workflow. |
-| Familiar workflow | Dock + toolbar mimic Hammer/Radiant; viewport brush handles and entity palette. |
-| Performance | Chunked baking with optional mesh merging, auto LOD, navmesh, and lightmap UV2 prep. |
-| Modularity | Toggleable modules (Terrain, Prefabs, AIPath) plus extensible signals/hooks/api for community tools. |
-| Future-proofing | GDExtension stubs for C++ acceleration, .map/.glb export today, USD planned. |
+## Architecture
 
-## Architecture Diagram
+Core scripts
+- `addons/hammerforge/plugin.gd`: EditorPlugin entry, input routing.
+- `addons/hammerforge/level_root.gd`: central controller and containers.
+- `addons/hammerforge/dock.gd` + `dock.tscn`: UI and tool state.
+- `addons/hammerforge/brush_instance.gd`: DraftBrush node.
+- `addons/hammerforge/baker.gd`: CSG -> mesh bake pipeline.
+- `addons/hammerforge/paint/*`: floor paint system.
 
+## Node Hierarchy
 ```
-HammerForge (EditorPlugin)
-├── UI Layer
-│   ├── Dock (Brush/Entities/Textures/Settings)
-│   └── Toolbar & Viewport Overlays (grid, gizmos, shortcuts)
-├── Core Layer (LevelRoot Node, autoload)
-│   ├── BrushSystem       # Draft brush ops, raycast placement, texture paint
-│   ├── EntitySystem      # JSON FGD parser, instancer, signals
-│   ├── OptimizationSystem# Chunk baker, navmesh/lightmap/collision/LOD
-│   └── PreviewSystem     # FPS flycam, lighting preview, hot-reload
-├── Modules (toggleable)
-│   ├── TerrainModule     # Heightmap sculpt/paint
-│   ├── PrefabModule      # Modular asset palette + LOD
-│   └── AIPathModule      # Navmesh/path editing helpers
-└── Storage
-    └── .hflevel file storing brushes, entities, metadata (binary + JSON)
+LevelRoot (Node3D)
+- DraftBrushes
+- PendingCuts
+- CommittedCuts
+- PaintLayers
+- Generated
+  - Floors
+  - Walls
+- Entities
+- BakedGeometry
 ```
 
-Note: Diagram includes planned modules; current implementation focuses on BrushSystem, Baker, and the Entities container.
+## Brush Workflow
+- Draw creates DraftBrush nodes in DraftBrushes.
+- Subtract brushes are staged in PendingCuts until Apply Cuts.
+- Bake builds a temporary CSG tree from DraftBrushes + CommittedCuts and outputs BakedGeometry.
 
-## Core Features
+## Floor Paint System
 
-### Brush Editing
-- Add/subtract brushes (box, cylinder) with CAD-style drag: base drag + height stage.
-- Editing uses DraftBrush nodes for speed; CSG is generated only during Bake.
-- Viewport brush gizmo handles allow face-resize of DraftBrushes with undo/redo.
-- Resize handles snap to `grid_snap` for consistent sizing.
-- Subtract brushes can be staged as pending cuts and applied on demand.
-- Grid/snap options (1–64 units), quick Create Floor for raycast placement.
-- Undo/redo history panel (beta); autosave `.hflevel` supported.
-- Chunked baking via `bake_chunk_size` (default 32); optional mesh merging available.
+Data
+- Grid -> Layer -> Chunked bitset storage.
+- Paint layers are stored under PaintLayers.
 
-### Entity Placement
-- Entities live under `LevelRoot/Entities` or are tagged `is_entity` (selection-only, excluded from bake).
-- JSON entity definitions are stored in `res://addons/hammerforge/entities.json` and loaded by the dock.
-- Entity palette UI supports drag-and-drop placement in the 3D viewport.
-- DraftEntity exposes schema-driven Inspector properties via `entity_type` and persists values in the scene.
-- Signals and instanced scene workflows remain planned additions.
+Generation
+- Floors: greedy rectangle merge.
+- Walls: boundary edges + merged segments.
 
-### Optimization & Baking
-- Chunked baking groups DraftBrushes by grid using `bake_chunk_size` (default 32) and bakes each chunk separately.
-- Bake builds a temporary CSG tree per chunk to generate static meshes.
-- Collision baking uses Add brushes only (Subtract brushes are excluded).
-- Each chunk becomes a BakedChunk_x_y_z under BakedGeometry with MeshInstance3D + StaticBody3D.
-- Optional bake flags support mesh merging, auto LOD, navmesh baking, and lightmap UV2 unwrap.
-- Versioned saves and incremental rebuilds are planned.
+Reconciliation
+- Stable IDs for generated geometry.
+- Dirty chunk scoping to avoid unnecessary churn.
 
-### Preview/Playtesting
-- Playtest button bakes and launches the current scene.
-- Playtest FPS controller spawns at `player_start` (or falls back to a default).
-- Running instances can hot-reload via `res://.hammerforge/reload.lock`.
+## Entities
+- Entities live under LevelRoot/Entities or are tagged `is_entity`.
+- Entities are selectable but excluded from bake.
+- Definitions come from `addons/hammerforge/entities.json`.
 
-### Imports/Exports
-- Implemented: .map import/export and baked .glb export.
-- Planned: USD import/export and extended glTF pipelines.
+## Persistence (.hflevel)
+- Stores brushes, entities, level settings, and paint layers.
+- Paint layers include grid settings, chunk size, and bitset data.
 
-### Optional Modules
-Planned modules and scalability targets:
+## Bake Pipeline
+- Temporary CSG tree for DraftBrushes (including generated floors/walls).
+- Optional mesh merging, LODs, lightmap UV2, navmesh.
+- Collision uses Add brushes only.
 
-| Module | Purpose | FPS Value | Scalability |
-| --- | --- | --- | --- |
-| TerrainModule | Heightmap sculpt/paint with GPU clipmaps | Outdoor FPS maps | 64km seamless terrains |
-| PrefabModule | Drag-droppable modular assets | Rapid reuse of crates, lights | Auto LOD, instancing |
-| AIPathModule | Navmesh editing helpers | Smarter enemy movement | Chunk-streamed path data |
-
-## UI / UX Layout
-
-### Quadrant Viewports
-Planned optional 2x2 SubViewport layout: Top/Front/Side orthographic + 3D perspective. Current workflow uses Godot's native 4-view layout.
-
-
-- **Dock (Left-Upper):** Tool (Draw/Select), Paint Mode, Active Material, Shape Palette, Sides, Mode (Add/Subtract), Size, Grid, Physics Layer, Bake Options (merge/LOD/lightmap/navmesh), Storage (save/load .hflevel, import/export .map/.glb), Autosave, Create Floor, Apply/Clear Cuts, Bake, Playtest.  
-- **Toolbar (Spatial Editor):** Mode switches (Brush/Object/Texture), Bake, Play FPS, Undo/Redo icons.  
-- **Viewport Overlays:** Grid (toggle), brush ghost (green wireframe), hover selection highlight, snap lines, gizmo handles for resizing/rotating brushes and entities.  
-- **Shortcuts:** `X/Y/Z` axis locks, `Shift` square base, `Shift+Alt` cube, `Alt` height-only, `Delete` remove, `Ctrl+D` duplicate.  
-- **Performance HUD:** Live brush count label with green/yellow/red thresholds.  
-- **First-run Wizard (planned):** Guides creation of `LevelRoot.tscn`, loads a sample FPS arena, sets defaults.
-- **Mobile-friendly (planned):** Touch gestures and DPI scaling for tablets.
-
-## Implementation Highlights
-
-### Plugin Entry Point (`addons/hammerforge/plugin.gd`)
-```gdscript
-@tool
-extends EditorPlugin
-
-func _enter_tree():
-    add_custom_type("LevelRoot", "Node3D",
-        preload("level_root.gd"),
-        preload("icon.png"))
-    dock = preload("dock.tscn").instantiate()
-    add_control_to_dock(DOCK_SLOT_LEFT_UL, dock)
-    # toolbar + gizmo setup
-    make_visible(false)
-
-func _handles(type):
-    return type == "LevelRoot"
-```
-
-### Brush Placement (`addons/hammerforge/level_root.gd`)
-```gdscript
-var hit = _raycast(active_camera, mouse_pos)
-if hit:
-    var snapped = _snap_point(hit.position)
-    var brush = _create_brush(shape, size, operation, sides)
-    brush.global_position = snapped + Vector3(0, size.y * 0.5, 0)
-    _add_brush_to_draft(brush)
-```
-
-### Chunked Baking (`addons/hammerforge/level_root.gd`)
-```gdscript
-var chunks: Dictionary = {}
-_collect_chunk_brushes(draft_brushes_node, bake_chunk_size, chunks, "brushes")
-for coord in chunks:
-    var temp_csg = CSGCombiner3D.new()
-    _append_brush_list_to_csg(chunks[coord]["brushes"], temp_csg)
-    var baked_chunk = baker.bake_from_csg(temp_csg, bake_material_override, layer, layer)
-    baked_chunk.name = "BakedChunk_%s_%s_%s" % [coord.x, coord.y, coord.z]
-```
-
-### Entity Definitions (`addons/hammerforge/entities.json`)
-```json
-{"class":"Door","node":"Door3D","props":{"speed":200}}
-```
-- Definitions are loaded by the dock; palette UI and instancing are planned.
-
-## Storage Format
-Implemented format:
-- `.hflevel`: custom header + JSON payload recording brushes, entities, settings, and module state.  
-- Autosaves on a configurable interval to a user-selected path.  
-- Supports full restore for undo/redo on load/import.  
-- Preview scenes stored under `addons/hammerforge/levels/` (planned).
-
-## Extensibility
-- **Modules folder:** e.g., `modules/terrain/` includes its own `EditorPlugin` subclass toggled from settings.  
-- **Hooks:** Signals like `brush_placed(pos, normal)` let modules and user tool scripts respond.  
-- **API:** `HammerForge.add_tool("MyBrush", script_path)` to register community tools.  
-- **GDExtension Stubs:** Provide hooks for rewriting performance-critical systems in C++ for Godot 5.
-
-## Deployment & Metadata
-- Directory: `addons/hammerforge/` with `plugin.cfg` (name=HammerForge, version=1.0).  
-- License: MIT.  
-- Asset Library metadata: Categories = 3D Tools, Tags = fps, level-editor, brush.  
-- Package as ZIP for submission to `godotengine.org/asset-library`.  
-- Auto-update compatibility via Godot plugin manager.
-
-## File Layout (Current)
-```text
-C:/hammerforge/
-|-- addons/
-|   `-- hammerforge/
-|       |-- plugin.cfg
-|       |-- plugin.gd
-|       |-- level_root.gd
-|       |-- dock.gd
-|       |-- dock.tscn
-|       |-- baker.gd
-|       |-- brush_instance.gd
-|       |-- brush_gizmo_plugin.gd
-|       |-- brush_manager.gd
-|       |-- prefab_factory.gd
-|       |-- brush_preset.gd
-|       |-- brush_prefab.gd
-|       |-- shortcut_hud.gd
-|       |-- shortcut_hud.tscn
-|       |-- editor_grid.gdshader
-|       |-- entities.json
-|       |-- presets/
-|       |-- _archive/
-|-- docs/
-|-- HammerForge_SPEC.md
-```
-
-## UX Mockups (Text)
-- **Viewport shot:** room filled with brushes; overlay shows viewport grid, brush ghost, and gizmo.  
-- **Dock snippet:** Brush tab shows shape buttons (`Box 16x8`, `Cyl`), subtract toggle, size slider, active material picker, paint toggle.  
-- **Toolbar snippet:** `[Brush Mode] [Snap 16] [Bake] [Play]`.
-
-## Reliability & Testing
-- Planned: performance benchmarks (1M tris, FPS targets) and chunk streaming metrics.
-- Undo/redo uses EditorUndoRedoManager for supported actions; autosave is planned.
-- Diagnostic logs exist today; popups and parsing error fallbacks are planned.
-
-## Roadmap
-| Phase | Duration | Deliverable |
-| --- | --- | --- |
-| MVP | 1–2w | Brush placement, draft preview, dock, simple bake |
-| Core | 2–4w | Entity integration, optimizer, FPS preview |
-| Polish | 2w | UI/shortcuts, import/export, modules |
-| Release | 1w | Asset Library submission, docs/video |
-
-## Next Actions
-1. Scaffold plugin folder per file layout above; start with `plugin.gd`, `level_root.gd`, and dock scene.  
-2. Build brush/editor prototype (Phase 1) using DraftBrush previews and bake-time CSG as reference.  
-3. Later phases cover entity parser, optimizer, preview, and modules.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+## Editor UX
+- Theme-aware dock styling.
+- Optional HUD overlay for shortcuts.
+- Shader-based editor grid with follow mode.

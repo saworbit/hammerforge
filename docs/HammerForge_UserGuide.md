@@ -1,217 +1,83 @@
-# HammerForge User Guide (MVP)
+# HammerForge User Guide
 
-This guide explains how to use HammerForge inside the Godot 4.6 editor. It covers the current MVP features: drag-based brush creation, draft add/subtract operations, selection, and baking.
+Last updated: February 5, 2026
+
+This guide covers the current HammerForge workflow in Godot 4.6: brush-based greyboxing, bake, entities, and floor paint.
 
 ## Quick Start
-1. Enable the plugin: **Project ▶ Project Settings ▶ Plugins ▶ HammerForge**.
+1. Enable the plugin: Project -> Project Settings -> Plugins -> HammerForge.
 2. Open any 3D scene.
-3. Click in the 3D viewport to start drawing.
-   - HammerForge auto-creates a `LevelRoot` if it does not exist.
-4. (Optional) Click **Create Floor** in the dock for a temporary collidable surface.
-5. Use **Apply Cuts** to commit staged Subtract brushes (Bake also applies them).
-   - Carve results are visible after Bake.
-   - Use **Commit Cuts** to bake and keep the carve while removing the cut shapes.
+3. Click in the 3D viewport to auto-create `LevelRoot`.
+4. Optional: Click Create Floor for a temporary collidable surface.
+5. Draw brushes, then Bake for output geometry.
 
-## What is LevelRoot (and why it’s required)
-`LevelRoot` is the main container node that HammerForge uses to manage your level data. It is required because it:
+## LevelRoot
+`LevelRoot` is required because it owns the containers and systems HammerForge uses:
+- DraftBrushes, PendingCuts, CommittedCuts
+- PaintLayers and Generated (floors/walls)
+- Entities
+- Baker and paint systems
 
-- Hosts the **DraftBrushes** and **PendingCuts** containers where all editable brushes live.
-- Stores **CommittedCuts** when Freeze Commit is enabled (hidden subtract brushes that can be restored).
-- Hosts **Entities** for non-geometry nodes (entities are selectable but excluded from bake).
-- Tracks brushes for **selection**, **undo/redo**, and **cleanup**.
-- Owns the **Baker** that builds a temporary CSG tree at bake time to create a static mesh + collision.
-- Ensures all generated nodes are saved with the scene (ownership in the editor).
-- Can start as a single node; child helpers are created automatically if missing.
+If missing, HammerForge creates it automatically on first viewport click.
 
-You normally don’t need to add it manually — HammerForge will auto-create it the first time you click in the viewport.
+## Dock Controls (overview)
+Tool
+- Draw: create brushes.
+- Select: select existing brushes. Delete removes them.
 
-## Dock Controls
-Sections can be collapsed using the toggle button in each header.
+Paint Mode (floor paint)
+- Enables paint input in the viewport.
+- Paint Tool: Brush, Erase, Rect, Line, Bucket.
+- Paint Radius: brush radius in grid cells.
+- Paint Layer: choose active layer, add/remove layers.
 
-**Tool**
-- **Draw**: create new brushes by click-dragging.
-- **Select**: select existing brushes by clicking them. Press Delete to remove.
+Brush workflow
+- Mode: Add or Subtract.
+- Shape: choose from the palette.
+- Sides: for pyramids/prisms.
+- Size X/Y/Z: defaults for new brushes.
+- Grid Snap: snap increment.
+- Quick Snap: preset buttons.
 
-**Paint Mode**
-- When enabled, left-click applies the active material instead of selecting.
+Bake
+- Merge Meshes, Generate LODs, Lightmap UV2 + Texel Size.
+- Bake Navmesh with cell/agent settings.
 
-**Active Material**
-- Opens a file dialog to pick a Material resource (.tres or .material).
+Other
+- Show HUD, Show Grid, Follow Grid.
+- Debug Logs toggles HammerForge logs.
+- History panel (beta).
+- Playtest bakes and runs the scene.
 
-**Mode**
-- **Add**: creates solid geometry.
-- **Subtract**: creates a pending cut shape that does not carve until applied (carve is visible after Bake).
+## Brush Creation (CAD style)
+1) Base drag: click and drag to define the base.
+2) Height stage: release mouse, move up/down, click to commit.
 
-**Shape Palette**
-- Choose from Box, Cylinder, Sphere, Cone, Wedge, Pyramid, Prisms, Ellipsoid, Capsule, Torus, and Platonic solids. Mesh-based shapes scale to brush size.
+Modifier keys
+- Shift: square base.
+- Shift + Alt: cube.
+- Alt: height-only.
+- X/Y/Z: axis locks.
+- Right-click: cancel.
 
-**Gizmo Snapping**
-- DraftBrush resize handles now respect `grid_snap` from `LevelRoot`.
-- Resize distances snap to the grid while keeping the opposite face pinned.
+## Floor Paint
+1. Enable Paint Mode.
+2. Choose tool and radius.
+3. Paint in the viewport.
 
-**Sides**
-- Appears for pyramids/prisms to control the number of sides.
-
-**Size**
-- SizeX/SizeY/SizeZ are used as defaults and for axis-lock thickness.
-
-**Grid Snap**
-- Sets the grid snapping increment (0 disables snap).
-
-**Quick Snap**
-- Preset snap buttons (1/2/4/8/16/32/64) synced with Grid Snap.
-
-**Physics Layer**
-- Selects a preset collision layer mask for baked geometry.
-
-**Bake Options**
-- **Merge Meshes**: Combine baked surfaces into a single mesh for fewer draw calls.
-- **Generate LODs**: Auto-generate LODs on baked meshes for distance culling.
-- **Lightmap UV2**: Unwrap UV2 for LightmapGI compatibility.
-- **Texel Size**: Controls UV2 density for lightmap unwrap.
-- **Bake Navmesh**: Generates a NavigationRegion3D from baked geometry.
-- **Navmesh Cell / Agent**: Adjust navmesh resolution and agent size.
-
-**Freeze Commit**
-- Keeps committed cut shapes in a hidden container so you can restore them later.
-  - If disabled, committed cuts are deleted after bake and cannot be reused in future bakes.
-
-**Show HUD**
-- Toggles the on-screen shortcut legend in the 3D viewport.
-
-**Show Grid**
-- Toggles the editor grid (off by default).
-
-**Follow Grid**
-- Toggles the grid follow mode (requires Show Grid).
-
-**Quadrant View (Native)**
-- Use Godot’s **View → Layout → 4 View** for Top/Front/Side/3D.
-
-**Debug Logs**
-- Prints HammerForge events to the Output dock for troubleshooting.
-
-**Create Floor**
-- Adds a temporary CSGBox floor under LevelRoot for easy raycast placement.
-
-**Apply Cuts**
-- Converts pending Subtract brushes into active cuts used during Bake.
-  - Tip: create a cut, switch to **Select**, position it with gizmos, then **Apply Cuts**.
-
-**Clear Pending Cuts**
-- Removes all pending Subtract brushes without carving.
-
-**Commit Cuts (Bake)**
-- Applies pending cuts, bakes the mesh, and removes applied subtract brushes.
-- Hides draft brushes so the baked result is clearly visible.
-- Use this if you want the carve to remain even after deleting the cut shapes.
-- To keep editing, re-enable visibility on `DraftBrushes` (and `PendingCuts` if needed).
-- Subtract preview materials do not carry into the baked mesh.
-
-**Restore Committed Cuts**
-- Moves hidden committed cuts back into DraftBrushes so they can be edited again.
-
-**Create DraftEntity**
-- Spawns a `DraftEntity` under `LevelRoot/Entities` and selects it.
-- Set `entity_type` to choose a schema (dropdown is populated from `entities.json`).
-
-**Save .hflevel / Load .hflevel**
-- Save or load the full level state (brushes, entities, settings).
-
-**Import .map / Export .map**
-- Import or export Quake/TrenchBroom `.map` files.
-
-**Export .glb**
-- Exports the baked geometry as a `.glb` for external tools.
-
-**Autosave**
-- Toggle background autosave and set the interval.
-- Use **Set Autosave Path** to control the destination file.
-
-**Bake**
-- Builds a temporary CSG tree from DraftBrushes and bakes a static mesh + collision.
-
-**Playtest**
-- Bakes then launches the current scene with the HammerForge playtest controller.
-- Uses `player_start` entities for spawn location (fallbacks to a default if missing).
-- Running instances can hot-reload when a new bake is triggered.
-
-**Status**
-- Shows bake progress (e.g., "Baking..." or "Ready").
-
-**Live Brushes**
-- Shows the draft brush count with performance warning colors.
-
-**History (beta)**
-- Shows recent HammerForge actions.
-- **Undo** / **Redo** buttons call the editor's undo stack.
-- Some actions (like bake output) may not fully restore in undo yet.
-
-## Shape Palette
-HammerForge now uses a dynamic palette grid for shapes. Click a shape to make it active, then draw as normal.
-Pyramids, prisms, and platonic solids use a lightweight line-mesh draft preview in the editor.
-
-## Brush Creation (CAD-Style)
-HammerForge uses a two-stage drag workflow:
-
-1) **Base Drag**
-   - Click and drag to define the base on the floor plane.
-
-2) **Height Stage**
-   - Release the mouse, then move up/down to set height.
-   - Click again to commit the brush.
-   - Moving the mouse **up** increases height; moving down decreases it.
-
-### Modifier Keys
-- **Shift**: forces the base to be square (X and Z equal).
-- **Shift + Alt**: forces a cube (X, Y, Z equal).
-- **Alt**: adjusts height only while dragging (base stays fixed).
-- **Right-click**: cancels the current drag.
-- **X/Y/Z**: axis locks while drawing (X or Z lock one axis, Y locks base size).
-
-## Selection
-1. Set **Tool = Select**.
-2. Hover highlight shows the brush under the cursor.
-3. Click a brush to select it. (If Paint Mode is enabled, clicks apply material instead.)
-4. Entities are selectable when placed under `Entities` or tagged with `is_entity` (Paint Mode ignores them).
-5. Shift/Ctrl/Cmd-click to multi-select.
-6. Press **Delete** to remove selected brushes.
-7. Press **Ctrl+D** to duplicate selected brushes.
-8. Use Ctrl+Arrow or Ctrl+PageUp/PageDown to nudge selected brushes by the grid size.
-   - Ctrl+Arrow: X/Z move.
-   - Ctrl+PageUp/PageDown: Y move.
-9. Use the standard Godot transform gizmos (move/rotate/scale) on selected brushes.
-10. Use the DraftBrush face handles (white circles) to resize; the yellow wireframe is only a guide.
-
-### Known Issues (as of February 3, 2026)
-- Viewport multi-select can cap at 2 items.
-- Drag-marquee selection is disabled in the viewport.
-- Workaround: use the Scene tree to multi-select (Shift/Ctrl) or select one-by-one and transform via the tree.
-
-## Material Painting (Paint Mode)
-1. Click **Active Material** and pick a .tres or .material resource.
-2. Enable **Paint Mode**.
-3. Click brushes in the viewport to apply the active material.
-4. Disable Paint Mode to return to selection.
+Notes
+- Live preview updates while dragging.
+- Bucket fills a contiguous region (click filled to erase).
+- Generated geometry appears under `LevelRoot/Generated`.
+- Generated floors/walls are DraftBrush nodes and are included in Bake.
 
 ## Entities (early)
-Entities are non-geometry nodes that should not participate in CSG or bake.
+- Place nodes under `LevelRoot/Entities` or set meta `is_entity = true`.
+- Entities are selectable and excluded from bake.
+- Entity palette supports drag-and-drop placement.
 
-- Place nodes under `LevelRoot/Entities` or add meta `is_entity = true`.
-- Entities are selectable and movable with standard gizmos.
-- Entities are ignored by Bake and do not affect collision.
-- Definitions can be authored in `res://addons/hammerforge/entities.json` (used by the Entity Palette).
-- Use `DraftEntity` for dynamic Inspector properties powered by the JSON schema.
-- Entity previews are editor-only billboards or meshes defined per entity (see `preview` in `entities.json`).
-- `player_start` is a built-in entity used by Playtest to select spawn location (visible as a capsule preview).
-
-### Entity Palette
-The **Entities** tab now includes a visual palette.
-- Drag an entity from the palette into the 3D viewport to place it.
-- Icons come from `preview_icon` or `preview.path` (billboard) in `entities.json`.
-
-### Entity Definitions Format (Schema Map)
-`entities.json` now supports a map-style schema:
+Entity definitions live in `res://addons/hammerforge/entities.json`.
+Example (billboard preview):
 
 ```json
 {
@@ -219,7 +85,7 @@ The **Entities** tab now includes a visual palette.
     "class": "OmniLight3D",
     "preview": {
       "type": "billboard",
-      "path": "res://addons/hammerforge/icons/light_point.png",
+      "path": "res://addons/hammerforge/icon.png",
       "color": "#ffff00"
     },
     "properties": [
@@ -231,117 +97,40 @@ The **Entities** tab now includes a visual palette.
 }
 ```
 
-### DraftEntity Properties
-- `DraftEntity` exposes Inspector fields based on the schema.
-- Properties are stored on the node and persist in the scene.
-- Set `entity_type` to match a key in `entities.json` (e.g., `light_point`).
-- Properties serialize under `data/` (with `entity_data/` kept for backward compatibility).
-
-## Subtract Tips
-- Subtract brushes are staged until you click **Apply Cuts** (or Bake).
-- Only overlapping areas will carve from Add brushes (visible after Bake).
-- For clear results: add a large block first, then subtract smaller ones.
-- Pending cuts appear as solid red geometry so you can position them before applying.
-- Applied cuts are procedural; deleting them removes the carve unless you **Commit Cuts** (Bake).
-- **Commit Cuts** hides draft brushes and leaves the baked mesh visible.
-- If **Freeze Commit** is enabled, you can bring cuts back with **Restore Committed Cuts**.
-- Subtract preview materials do not affect the baked mesh.
-
 ## Bake Output
-When you press **Bake**, HammerForge builds a temporary CSG tree from DraftBrushes and creates:
-- `BakedGeometry` (Node3D)
-  - `BakedChunk_x_y_z` (Node3D) when chunked baking is enabled
-    - `MeshInstance3D` with the merged mesh
-    - `StaticBody3D` with a trimesh collision shape (Add brushes only; Subtract brushes are excluded)
-  - If chunking is disabled, `BakedGeometry` contains the `MeshInstance3D` and `StaticBody3D` directly.
+Bake creates `BakedGeometry`:
+- If chunked baking is enabled, it adds `BakedChunk_x_y_z` nodes.
+- Each chunk has a MeshInstance3D and StaticBody3D (trimesh) for collision.
 
-Chunked baking is controlled by `LevelRoot.bake_chunk_size`:
-- `> 0`: chunked output (default 32 units)
-- `<= 0`: single bake output (no chunk splitting)
+Generated floor paint brushes are included in the bake.
 
-### Lightmap UV2 + Navmesh
-- Enable **Lightmap UV2** to unwrap UV2 channels on baked meshes.
-- Enable **Bake Navmesh** to generate `BakedNavmesh` under `BakedGeometry`.
+## Save/Load (.hflevel)
+- Save .hflevel stores brushes, entities, settings, and paint layers.
+- Load .hflevel restores them.
+- Autosave can write to a configurable path.
 
-## Autosave + .hflevel
-- **Save .hflevel** stores brushes, entities, and core settings.
-- **Load .hflevel** restores the level state (undoable).
-- **Autosave** runs in the editor on the configured interval.
-- **Set Autosave Path** changes the `.hflevel` autosave destination.
+## Capturing Exit-Time Errors
+PowerShell command:
 
-## Import / Export
-- **Import .map** brings in Quake/TrenchBroom brushes and entity points.
-- **Export .map** writes DraftBrushes and entities to a `.map`.
-- **Export .glb** writes the baked geometry as a `.glb` (run **Bake** first).
-
-### Playtesting
-HammerForge includes a built-in playtest FPS controller and a Playtest button in the dock:
-
-- Click **Playtest** to bake and launch the current scene.
-- Add a `DraftEntity` under `Entities` with `entity_class = "player_start"` to set the spawn location.
-- The playtest controller supports sprint, crouch, jump, head-bob, and FOV stretch.
-- Running instances can hot-reload after a Bake via `res://.hammerforge/reload.lock`.
-
-If Bake fails with 0 brushes, there is no geometry to collide with. Create at least one Add brush (or use Create Floor) before playtesting.
-
-## Shortcut HUD
-HammerForge can display a small on-screen cheat sheet inside the 3D viewport.
-
-- Toggle it with **Show HUD** in the dock.
-- The HUD is informational only; it does not change your active tool.
-- It mirrors the main modifier keys and axis locks so new users can learn quickly.
-
-## Quadrant Viewports (Native)
-HammerForge now relies on Godot’s built-in multi-viewport layout.
-
-Use **View → Layout → 4 View** in the editor to enable Top/Front/Side/3D.
-
-## Dynamic Editor Grid
-HammerForge adds a high-contrast editor-only grid plane for clearer placement.
-
-- The grid is a shader-driven PlaneMesh for better performance than line meshes.
-- It follows the active axis and can update as you move the mouse (toggleable).
-- Snap spacing is tied directly to `grid_snap`.
-
-### Grid Tuning (LevelRoot Inspector)
-- `grid_visible`: show/hide the editor grid (default off).
-- `grid_follow_brush`: keep the grid centered under the cursor (default off).
-- `grid_plane_size`: size of the grid plane in world units.
-- `grid_color`: tint/alpha for line visibility.
-- `grid_major_line_frequency`: how often major lines appear (every 4 or 8 snaps).
+```powershell
+Start-Process -FilePath "C:\Godot\Godot_v4.6-stable_win64.exe" `
+  -ArgumentList '--editor','--path','C:\hammerforge' `
+  -RedirectStandardOutput "C:\Godot\godot_stdout.log" `
+  -RedirectStandardError "C:\Godot\godot_stderr.log" `
+  -NoNewWindow
+```
 
 ## Troubleshooting
-**No brushes appear**
-- Make sure HammerForge is enabled.
-- Select `LevelRoot` in the scene tree.
-- Use **Create Floor** to ensure raycasts hit something.
+No brushes appear
+- Ensure HammerForge is enabled.
+- Select LevelRoot.
+- Use Create Floor so raycasts hit something.
 
-**Subtract does nothing**
-- Ensure your subtract brush overlaps an existing Add brush.
-- Remember: carve results are visible after Bake.
+Subtract does nothing
+- Subtract only affects Add brushes and is visible after Bake.
 
-**Bake failed (no geometry)**
-- Bake only succeeds when at least one Add brush exists.
-- Entities do not bake; use Create Floor or add a brush to generate collision.
+Paint preview looks wrong
+- Regenerate by deleting `LevelRoot/Generated` and paint again.
 
-**Dock not showing**
+Dock not showing
 - Restart Godot after enabling the plugin.
-
-**Can't drag the brush gizmo**
-- Make sure a DraftBrush is selected.
-- Drag the white circle handles (not the wireframe).
-- Confirm the 3D viewport "Gizmos" toggle is enabled.
-
-**Entity not selectable**
-- Place it under `LevelRoot/Entities` or set meta `is_entity = true`.
-- Ensure the node has a visible child (MeshInstance3D, Sprite3D, etc.) for easier picking.
-
-**Need diagnostics**
-- Enable **Debug Logs** in the dock to print tool actions and bake/cut steps.
-
----
-
-### Next Planned Features
-- Numeric input during drag (exact sizing).
-- Ortho views (Top/Front/Side).
-- Per-face material tools and UV controls.

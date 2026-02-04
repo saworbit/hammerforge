@@ -94,6 +94,49 @@ size_flags_horizontal = 3
 
 [node name="BuildSeparator1" type="HSeparator" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
 
+[node name="PaintLabel" type="Label" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
+text = "Paint"
+
+[node name="PaintToolRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
+custom_constants/separation = 4.0
+
+[node name="PaintToolLabel" type="Label" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PaintToolRow"]
+text = "Tool"
+
+[node name="PaintToolSelect" type="OptionButton" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PaintToolRow"]
+size_flags_horizontal = 3
+
+[node name="PaintRadiusRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
+custom_constants/separation = 4.0
+
+[node name="PaintRadiusLabel" type="Label" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PaintRadiusRow"]
+text = "Radius (cells)"
+
+[node name="PaintRadius" type="SpinBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PaintRadiusRow"]
+min_value = 1.0
+max_value = 16.0
+step = 1.0
+value = 1.0
+page = 1.0
+size_flags_horizontal = 3
+
+[node name="PaintLayerRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
+custom_constants/separation = 4.0
+
+[node name="PaintLayerLabel" type="Label" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PaintLayerRow"]
+text = "Layer"
+
+[node name="PaintLayerSelect" type="OptionButton" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PaintLayerRow"]
+size_flags_horizontal = 3
+
+[node name="PaintLayerAdd" type="Button" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PaintLayerRow"]
+text = "+"
+custom_minimum_size = Vector2(24, 0)
+
+[node name="PaintLayerRemove" type="Button" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PaintLayerRow"]
+text = "-"
+custom_minimum_size = Vector2(24, 0)
+
 [node name="DimensionsLabel" type="Label" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
 text = "Dimensions"
 
