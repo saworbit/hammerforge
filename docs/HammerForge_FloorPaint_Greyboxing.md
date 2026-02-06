@@ -2,7 +2,7 @@
 
 Last updated: February 5, 2026
 
-This document describes the floor paint system: grid storage, tools, geometry synthesis, reconciliation, and persistence.
+This document describes the floor paint system: grid storage, tools, geometry synthesis, reconciliation, and persistence. Surface paint (per-face splat layers) is documented separately and does not use the grid system.
 
 ## Overview
 Floor Paint is a grid-based authoring tool that generates DraftBrush floors and walls. It is optimized for editor responsiveness:

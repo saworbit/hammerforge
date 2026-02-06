@@ -1,5 +1,6 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 [ext_resource path="res://addons/hammerforge/dock.gd" type="Script" id=1]
+[ext_resource path="res://addons/hammerforge/uv_editor.tscn" type="PackedScene" id=2]
 
 [node name="Dock" type="PanelContainer"]
 script = ExtResource( 1 )
@@ -46,7 +47,7 @@ flat = true
 [node name="ToolbarSep2" type="VSeparator" parent="Margin/VBox/Toolbar"]
 
 [node name="PaintMode" type="Button" parent="Margin/VBox/Toolbar"]
-text = "Paint"
+text = "Paint Mode"
 toggle_mode = true
 flat = true
 
@@ -68,6 +69,62 @@ theme_override_constants/margin_bottom = 4
 
 [node name="BuildVBox" type="VBoxContainer" parent="Margin/VBox/MainTabs/Build/BuildMargin"]
 custom_constants/separation = 6.0
+
+[node name="FloorPaint" type="ScrollContainer" parent="Margin/VBox/MainTabs"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="FloorPaintMargin" type="MarginContainer" parent="Margin/VBox/MainTabs/FloorPaint"]
+theme_override_constants/margin_left = 4
+theme_override_constants/margin_top = 4
+theme_override_constants/margin_right = 4
+theme_override_constants/margin_bottom = 4
+
+[node name="FloorPaintVBox" type="VBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin"]
+custom_constants/separation = 6.0
+
+[node name="FloorPaintLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
+text = "Floor Paint"
+
+[node name="PaintToolRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
+custom_constants/separation = 4.0
+
+[node name="PaintToolLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/PaintToolRow"]
+text = "Tool"
+
+[node name="PaintToolSelect" type="OptionButton" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/PaintToolRow"]
+size_flags_horizontal = 3
+
+[node name="PaintRadiusRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
+custom_constants/separation = 4.0
+
+[node name="PaintRadiusLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/PaintRadiusRow"]
+text = "Radius (cells)"
+
+[node name="PaintRadius" type="SpinBox" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/PaintRadiusRow"]
+min_value = 1.0
+max_value = 16.0
+step = 1.0
+value = 1.0
+page = 1.0
+size_flags_horizontal = 3
+
+[node name="PaintLayerRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
+custom_constants/separation = 4.0
+
+[node name="PaintLayerLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/PaintLayerRow"]
+text = "Layer"
+
+[node name="PaintLayerSelect" type="OptionButton" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/PaintLayerRow"]
+size_flags_horizontal = 3
+
+[node name="PaintLayerAdd" type="Button" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/PaintLayerRow"]
+text = "+"
+custom_minimum_size = Vector2(24, 0)
+
+[node name="PaintLayerRemove" type="Button" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/PaintLayerRow"]
+text = "-"
+custom_minimum_size = Vector2(24, 0)
 
 [node name="ShapeRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
 custom_constants/separation = 4.0
@@ -93,49 +150,6 @@ page = 1.0
 size_flags_horizontal = 3
 
 [node name="BuildSeparator1" type="HSeparator" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
-
-[node name="PaintLabel" type="Label" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
-text = "Paint"
-
-[node name="PaintToolRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
-custom_constants/separation = 4.0
-
-[node name="PaintToolLabel" type="Label" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PaintToolRow"]
-text = "Tool"
-
-[node name="PaintToolSelect" type="OptionButton" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PaintToolRow"]
-size_flags_horizontal = 3
-
-[node name="PaintRadiusRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
-custom_constants/separation = 4.0
-
-[node name="PaintRadiusLabel" type="Label" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PaintRadiusRow"]
-text = "Radius (cells)"
-
-[node name="PaintRadius" type="SpinBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PaintRadiusRow"]
-min_value = 1.0
-max_value = 16.0
-step = 1.0
-value = 1.0
-page = 1.0
-size_flags_horizontal = 3
-
-[node name="PaintLayerRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
-custom_constants/separation = 4.0
-
-[node name="PaintLayerLabel" type="Label" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PaintLayerRow"]
-text = "Layer"
-
-[node name="PaintLayerSelect" type="OptionButton" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PaintLayerRow"]
-size_flags_horizontal = 3
-
-[node name="PaintLayerAdd" type="Button" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PaintLayerRow"]
-text = "+"
-custom_minimum_size = Vector2(24, 0)
-
-[node name="PaintLayerRemove" type="Button" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PaintLayerRow"]
-text = "-"
-custom_minimum_size = Vector2(24, 0)
 
 [node name="DimensionsLabel" type="Label" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
 text = "Dimensions"
@@ -252,6 +266,10 @@ pressed = false
 text = "Lightmap UV2"
 pressed = false
 
+[node name="BakeUseFaceMaterials" type="CheckBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
+text = "Use Face Materials"
+pressed = false
+
 [node name="BakeLightmapTexelRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
 custom_constants/separation = 4.0
 
@@ -333,6 +351,132 @@ pressed = false
 [node name="DebugLogs" type="CheckBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
 text = "Debug Logs"
 pressed = false
+
+[node name="Materials" type="ScrollContainer" parent="Margin/VBox/MainTabs"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="MaterialsMargin" type="MarginContainer" parent="Margin/VBox/MainTabs/Materials"]
+theme_override_constants/margin_left = 4
+theme_override_constants/margin_top = 4
+theme_override_constants/margin_right = 4
+theme_override_constants/margin_bottom = 4
+
+[node name="MaterialsVBox" type="VBoxContainer" parent="Margin/VBox/MainTabs/Materials/MaterialsMargin"]
+custom_constants/separation = 6.0
+
+[node name="MaterialsLabel" type="Label" parent="Margin/VBox/MainTabs/Materials/MaterialsMargin/MaterialsVBox"]
+text = "Materials"
+
+[node name="MaterialsList" type="ItemList" parent="Margin/VBox/MainTabs/Materials/MaterialsMargin/MaterialsVBox"]
+custom_minimum_size = Vector2(0, 160)
+size_flags_vertical = 3
+
+[node name="MaterialsButtons" type="HBoxContainer" parent="Margin/VBox/MainTabs/Materials/MaterialsMargin/MaterialsVBox"]
+custom_constants/separation = 4.0
+
+[node name="MaterialAdd" type="Button" parent="Margin/VBox/MainTabs/Materials/MaterialsMargin/MaterialsVBox/MaterialsButtons"]
+text = "Add"
+
+[node name="MaterialRemove" type="Button" parent="Margin/VBox/MainTabs/Materials/MaterialsMargin/MaterialsVBox/MaterialsButtons"]
+text = "Remove"
+
+[node name="MaterialAssign" type="Button" parent="Margin/VBox/MainTabs/Materials/MaterialsMargin/MaterialsVBox"]
+text = "Assign to Selected Faces"
+
+[node name="FaceSelectMode" type="CheckBox" parent="Margin/VBox/MainTabs/Materials/MaterialsMargin/MaterialsVBox"]
+text = "Face Select Mode"
+
+[node name="FaceClear" type="Button" parent="Margin/VBox/MainTabs/Materials/MaterialsMargin/MaterialsVBox"]
+text = "Clear Face Selection"
+
+[node name="UV" type="MarginContainer" parent="Margin/VBox/MainTabs"]
+theme_override_constants/margin_left = 4
+theme_override_constants/margin_top = 4
+theme_override_constants/margin_right = 4
+theme_override_constants/margin_bottom = 4
+
+[node name="UVVBox" type="VBoxContainer" parent="Margin/VBox/MainTabs/UV"]
+custom_constants/separation = 6.0
+
+[node name="UVLabel" type="Label" parent="Margin/VBox/MainTabs/UV/UVVBox"]
+text = "UV Editor"
+
+[node name="UVEditor" parent="Margin/VBox/MainTabs/UV/UVVBox" instance=ExtResource( 2 )]
+
+[node name="UVReset" type="Button" parent="Margin/VBox/MainTabs/UV/UVVBox"]
+text = "Reset Projected UVs"
+
+[node name="SurfacePaint" type="ScrollContainer" parent="Margin/VBox/MainTabs"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="PaintMargin" type="MarginContainer" parent="Margin/VBox/MainTabs/SurfacePaint"]
+theme_override_constants/margin_left = 4
+theme_override_constants/margin_top = 4
+theme_override_constants/margin_right = 4
+theme_override_constants/margin_bottom = 4
+
+[node name="PaintVBox" type="VBoxContainer" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin"]
+custom_constants/separation = 6.0
+
+[node name="PaintLabel" type="Label" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox"]
+text = "Surface Paint"
+
+[node name="PaintTargetRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox"]
+custom_constants/separation = 4.0
+
+[node name="PaintTargetLabel" type="Label" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/PaintTargetRow"]
+text = "Paint Target"
+
+[node name="PaintTargetSelect" type="OptionButton" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/PaintTargetRow"]
+size_flags_horizontal = 3
+
+[node name="SurfacePaintRadiusRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox"]
+custom_constants/separation = 4.0
+
+[node name="SurfacePaintRadiusLabel" type="Label" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/SurfacePaintRadiusRow"]
+text = "Radius (UV)"
+
+[node name="SurfacePaintRadius" type="SpinBox" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/SurfacePaintRadiusRow"]
+min_value = 0.01
+max_value = 0.5
+step = 0.01
+value = 0.1
+size_flags_horizontal = 3
+
+[node name="SurfacePaintStrengthRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox"]
+custom_constants/separation = 4.0
+
+[node name="SurfacePaintStrengthLabel" type="Label" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/SurfacePaintStrengthRow"]
+text = "Strength"
+
+[node name="SurfacePaintStrength" type="SpinBox" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/SurfacePaintStrengthRow"]
+min_value = 0.0
+max_value = 1.0
+step = 0.05
+value = 1.0
+size_flags_horizontal = 3
+
+[node name="SurfacePaintLayerRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox"]
+custom_constants/separation = 4.0
+
+[node name="SurfacePaintLayerLabel" type="Label" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/SurfacePaintLayerRow"]
+text = "Layer"
+
+[node name="SurfacePaintLayerSelect" type="OptionButton" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/SurfacePaintLayerRow"]
+size_flags_horizontal = 3
+
+[node name="SurfacePaintLayerAdd" type="Button" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/SurfacePaintLayerRow"]
+text = "+"
+custom_minimum_size = Vector2(24, 0)
+
+[node name="SurfacePaintLayerRemove" type="Button" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/SurfacePaintLayerRow"]
+text = "-"
+custom_minimum_size = Vector2(24, 0)
+
+[node name="SurfacePaintTexture" type="Button" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox"]
+text = "Pick Layer Texture"
 
 [node name="Entities" type="ScrollContainer" parent="Margin/VBox/MainTabs"]
 size_flags_horizontal = 3
@@ -502,6 +646,16 @@ size_flags_horizontal = 3
 
 [node name="MaterialDialog" type="FileDialog" parent="."]
 title = "Pick Material"
+access = 2
+file_mode = 0
+
+[node name="MaterialPaletteDialog" type="FileDialog" parent="."]
+title = "Add Material"
+access = 2
+file_mode = 0
+
+[node name="SurfacePaintTextureDialog" type="FileDialog" parent="."]
+title = "Pick Layer Texture"
 access = 2
 file_mode = 0
 

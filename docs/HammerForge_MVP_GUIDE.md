@@ -1,6 +1,6 @@
 # HammerForge MVP Guide
 
-Last updated: February 5, 2026
+Last updated: February 6, 2026
 
 This guide is for contributors implementing or extending the MVP.
 
@@ -23,6 +23,11 @@ Floor paint
   - Boundary edges and merged segments for walls.
 - Stable IDs are used to reconcile generated nodes without churn.
 
+Face materials + surface paint
+- DraftBrush faces store material indices, UVs, and paint layers.
+- Materials are managed by a shared palette (MaterialManager).
+- Surface paint writes per-face weight images and updates previews.
+
 Entities
 - Entities live under LevelRoot/Entities or `is_entity` meta.
 - Entities are excluded from bake.
@@ -30,17 +35,24 @@ Entities
 
 ## High-Level Flow
 1. Input is handled by the EditorPlugin.
-2. LevelRoot forwards paint input to HFPaintTool when Paint Mode is enabled.
-3. PaintTool updates paint layers and requests geometry synth + reconcile.
+2. LevelRoot forwards paint input based on Paint Target:
+   - Floor: HFPaintTool updates layers and requests synth + reconcile.
+   - Surface: SurfacePaint updates per-face paint layers.
+3. Face selection routes to FaceSelector for per-face actions (materials/UV).
 4. Bake assembles DraftBrushes (including generated paint geometry) into mesh output.
 
 ## Testing Checklist
 - Create and resize draft brushes (Draw tool).
 - Apply/clear/commit subtract cuts.
 - Bake (with and without chunking).
-- Enable Paint Mode and test Brush/Erase/Line/Rect/Bucket.
+- Enable Paint Mode and test Floor Paint tab Brush/Erase/Line/Rect/Bucket.
 - Verify live paint preview while dragging.
 - Switch paint layers and ensure isolation.
+- Create a material resource (.tres/.material) in `materials/` and add it to the palette.
+- Enable Face Select Mode and assign materials to faces.
+- Edit UVs and ensure preview updates.
+- Surface paint on a face with two layers and verify blending (Paint Target = Surface).
+- Toggle Use Face Materials and compare bake output.
 - Save and load .hflevel and verify paint data persists.
 - Drag entities from the palette and check selection/exclusion from bake.
 
@@ -61,6 +73,6 @@ Start-Process -FilePath "C:\Godot\Godot_v4.6-stable_win64.exe" `
 - Multi-select can cap at 2 items in the viewport.
 
 ## Next Steps
-- Material painting
 - Numeric input during draw
+- Material atlasing and compression
 - Additional import/export pipelines

@@ -18,6 +18,11 @@ Core scripts
 - `addons/hammerforge/brush_instance.gd`: DraftBrush node.
 - `addons/hammerforge/baker.gd`: CSG -> mesh bake pipeline.
 - `addons/hammerforge/paint/*`: floor paint system.
+- `addons/hammerforge/face_data.gd`: per-face materials, UVs, and paint layers.
+- `addons/hammerforge/material_manager.gd`: shared materials palette.
+- `addons/hammerforge/face_selector.gd`: raycast face selection helper.
+- `addons/hammerforge/surface_paint.gd`: per-face surface paint tool.
+- `addons/hammerforge/uv_editor.gd` + `uv_editor.tscn`: UV editing dock control.
 
 ## Node Hierarchy
 ```
@@ -25,7 +30,9 @@ LevelRoot (Node3D)
 - DraftBrushes
 - PendingCuts
 - CommittedCuts
+- MaterialManager
 - PaintLayers
+- SurfacePaint
 - Generated
   - Floors
   - Walls
@@ -58,13 +65,19 @@ Reconciliation
 - Definitions come from `addons/hammerforge/entities.json`.
 
 ## Persistence (.hflevel)
-- Stores brushes, entities, level settings, and paint layers.
+- Stores brushes, entities, level settings, materials palette, and paint layers.
+- Brush records include face data (materials, UVs, paint layers).
 - Paint layers include grid settings, chunk size, and bitset data.
 
 ## Bake Pipeline
 - Temporary CSG tree for DraftBrushes (including generated floors/walls).
 - Optional mesh merging, LODs, lightmap UV2, navmesh.
+- Optional face-material bake (per-face materials, no CSG).
 - Collision uses Add brushes only.
+
+## Face Materials + Surface Paint
+Face data is stored per DraftBrush face with material assignment, UV projection, and optional paint layers.
+Surface paint is a per-face splat system. It updates preview materials and can be baked using the face-material bake option.
 
 ## Editor UX
 - Theme-aware dock styling.

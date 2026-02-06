@@ -26,19 +26,32 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 | **DraftBrush** | Lightweight, editable brush nodes |
 | **Bake** | CSG used only at bake time for performance |
 | **Floor Paint** | Grid-based tool that generates DraftBrush floors/walls |
+| **Face Materials** | Per-face materials, UVs, and surface paint layers |
 
 ---
 
 ## Features
 
 ### Brush Workflow
-- **Two-stage CAD drawing** — drag base, then click height
+- **Two-stage CAD drawing** -- drag base, then click height
 - **Add / Subtract operations** with pending cut staging
-- **Shape palette** — box, cylinder, sphere, cone, wedge, pyramid, prisms, ellipsoid, capsule, torus, and platonic solids
+- **Shape palette** -- box, cylinder, sphere, cone, wedge, pyramid, prisms, ellipsoid, capsule, torus, and platonic solids
 - **Grid snapping** with quick presets and axis locks
 - **Resize gizmo** with full undo/redo support
 
-### Floor Paint *(Early)*
+### Face Materials + UVs
+- **Materials palette** (dock) with add/remove and per-face assignment
+- **Face select mode** for per-face material painting
+- **UV editor** with per-vertex drag handles and reset-to-projection
+- Face data persists in `.hflevel` saves
+
+### Surface Paint (3D)
+- Paint target switch: **Floor** or **Surface**
+- Per-face splat layers with weight images
+- Live preview on DraftBrushes (per-face composite)
+- Per-layer texture picker and adjustable radius/strength
+
+### Floor Paint (Early)
 - Grid-based paint layers with chunked storage
 - **Tools:** Brush, Erase, Rect, Line, Bucket
 - Live preview while dragging
@@ -56,10 +69,9 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 ### Bake & Playtest
 - Bake draft brushes to meshes + collision
 - Optional: merge meshes, LOD generation, UV2 unwrap, navmesh baking
+- Optional: **Use Face Materials** (bake per-face materials without CSG)
 - Chunked baking via `LevelRoot.bake_chunk_size`
-- **Playtest button** — bakes and runs with an FPS controller
-
----
+- **Playtest button** -- bakes and runs with an FPS controller
 
 ## Installation
 
@@ -75,12 +87,11 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 
 | Step | Action |
 |------|--------|
-| **1. Draw a brush** | Tool = Draw, Mode = Add, Shape = Box → drag base → click height |
-| **2. Cut a door** | Mode = Subtract → draw brush → Apply Cuts → Bake |
-| **3. Paint floors** | Toggle Paint Mode → choose tool → set radius → paint |
-| **4. Bake** | Click Bake to create optimized geometry |
-
----
+| **1. Draw a brush** | Tool = Draw, Mode = Add, Shape = Box -> drag base -> click height |
+| **2. Cut a door** | Mode = Subtract -> draw brush -> Apply Cuts -> Bake |
+| **3. Face materials** | Materials tab -> Add -> pick `materials/test_mat.tres` (or create a StandardMaterial3D) -> Face Select Mode -> click faces -> Assign material |
+| **4. Surface paint** | Paint Mode -> Surface Paint tab -> Paint Target = Surface (not Floor) -> paint |
+| **5. Bake** | Click Bake (or enable Use Face Materials) |
 
 ## Documentation
 
@@ -88,16 +99,17 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 |----------|-------------|
 | [User Guide](docs/HammerForge_UserGuide.md) | Complete usage documentation |
 | [MVP Guide](docs/HammerForge_MVP_GUIDE.md) | Minimum viable product scope |
+| [Texture + Materials](docs/HammerForge_Texture_Materials.md) | Face materials, UVs, and surface paint |
+| [Development + Testing](DEVELOPMENT.md) | Local setup and test checklist |
 | [Floor Paint Design](docs/HammerForge_FloorPaint_Greyboxing.md) | Grid paint system design |
 | [Spec](HammerForge_SPEC.md) | Technical specification |
 | [Changelog](CHANGELOG.md) | Version history |
 
----
-
 ## Roadmap
 
-- [ ] Texture / UV tools
 - [ ] Numeric input during drag
+- [ ] Material atlasing for large scenes
+- [ ] Decals and trim tools
 - [ ] Additional bake pipelines
 
 ---
@@ -121,5 +133,5 @@ Start-Process -FilePath "C:\Godot\Godot_v4.6-stable_win64.exe" `
 
 <p align="center">
   <strong>MIT License</strong><br>
-  <sub>Last updated: February 5, 2026</sub>
+  <sub>Last updated: February 6, 2026</sub>
 </p>

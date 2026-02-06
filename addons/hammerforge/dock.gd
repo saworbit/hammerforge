@@ -7,6 +7,8 @@ signal hud_visibility_changed(visible: bool)
 const LevelRootType = preload("level_root.gd")
 const BrushPreset = preload("brush_preset.gd")
 const DraftEntity = preload("draft_entity.gd")
+const DraftBrush = preload("brush_instance.gd")
+const FaceData = preload("face_data.gd")
 
 const PRESET_MENU_RENAME := 0
 const PRESET_MENU_DELETE := 1
@@ -38,6 +40,8 @@ class EntityPaletteButton extends Button:
 @onready var sides_spin: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/SidesRow/SidesSpin
 @onready var active_material_button: Button = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/MaterialRow/ActiveMaterial
 @onready var material_dialog: FileDialog = $MaterialDialog
+@onready var material_palette_dialog: FileDialog = $MaterialPaletteDialog
+@onready var surface_paint_texture_dialog: FileDialog = $SurfacePaintTextureDialog
 @onready var hflevel_save_dialog: FileDialog = $HFLevelSaveDialog
 @onready var hflevel_load_dialog: FileDialog = $HFLevelLoadDialog
 @onready var map_import_dialog: FileDialog = $MapImportDialog
@@ -47,16 +51,17 @@ class EntityPaletteButton extends Button:
 @onready var size_x: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/SizeRow/SizeX
 @onready var size_y: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/SizeRow/SizeY
 @onready var size_z: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/SizeRow/SizeZ
-@onready var paint_tool_select: OptionButton = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PaintToolRow/PaintToolSelect
-@onready var paint_radius: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PaintRadiusRow/PaintRadius
-@onready var paint_layer_select: OptionButton = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PaintLayerRow/PaintLayerSelect
-@onready var paint_layer_add: Button = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PaintLayerRow/PaintLayerAdd
-@onready var paint_layer_remove: Button = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PaintLayerRow/PaintLayerRemove
+@onready var paint_tool_select: OptionButton = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/PaintToolRow/PaintToolSelect
+@onready var paint_radius: SpinBox = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/PaintRadiusRow/PaintRadius
+@onready var paint_layer_select: OptionButton = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/PaintLayerRow/PaintLayerSelect
+@onready var paint_layer_add: Button = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/PaintLayerRow/PaintLayerAdd
+@onready var paint_layer_remove: Button = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/PaintLayerRow/PaintLayerRemove
 @onready var grid_snap: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/GridRow/GridSnap
 @onready var collision_layer_opt: OptionButton = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PhysicsLayerRow/PhysicsLayerOption
 @onready var bake_merge_meshes: CheckBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeMergeMeshes
 @onready var bake_generate_lods: CheckBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeGenerateLods
 @onready var bake_lightmap_uv2: CheckBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeLightmapUV2
+@onready var bake_use_face_materials: CheckBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeUseFaceMaterials
 @onready var bake_lightmap_texel_row: HBoxContainer = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeLightmapTexelRow
 @onready var bake_lightmap_texel: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeLightmapTexelRow/BakeLightmapTexel
 @onready var bake_navmesh: CheckBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeNavmesh
@@ -95,6 +100,24 @@ class EntityPaletteButton extends Button:
 @onready var history_list: ItemList = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/HistoryList
 @onready var quick_play_btn: Button = $Margin/VBox/Footer/QuickPlay
 
+@onready var materials_list: ItemList = $Margin/VBox/MainTabs/Materials/MaterialsMargin/MaterialsVBox/MaterialsList
+@onready var material_add: Button = $Margin/VBox/MainTabs/Materials/MaterialsMargin/MaterialsVBox/MaterialsButtons/MaterialAdd
+@onready var material_remove: Button = $Margin/VBox/MainTabs/Materials/MaterialsMargin/MaterialsVBox/MaterialsButtons/MaterialRemove
+@onready var material_assign: Button = $Margin/VBox/MainTabs/Materials/MaterialsMargin/MaterialsVBox/MaterialAssign
+@onready var face_select_mode: CheckBox = $Margin/VBox/MainTabs/Materials/MaterialsMargin/MaterialsVBox/FaceSelectMode
+@onready var face_clear: Button = $Margin/VBox/MainTabs/Materials/MaterialsMargin/MaterialsVBox/FaceClear
+
+@onready var uv_editor: UVEditor = $Margin/VBox/MainTabs/UV/UVVBox/UVEditor
+@onready var uv_reset: Button = $Margin/VBox/MainTabs/UV/UVVBox/UVReset
+
+@onready var paint_target_select: OptionButton = $Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/PaintTargetRow/PaintTargetSelect
+@onready var surface_paint_radius: SpinBox = $Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/SurfacePaintRadiusRow/SurfacePaintRadius
+@onready var surface_paint_strength: SpinBox = $Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/SurfacePaintStrengthRow/SurfacePaintStrength
+@onready var surface_paint_layer_select: OptionButton = $Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/SurfacePaintLayerRow/SurfacePaintLayerSelect
+@onready var surface_paint_layer_add: Button = $Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/SurfacePaintLayerRow/SurfacePaintLayerAdd
+@onready var surface_paint_layer_remove: Button = $Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/SurfacePaintLayerRow/SurfacePaintLayerRemove
+@onready var surface_paint_texture: Button = $Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/SurfacePaintTexture
+
 @onready var save_preset_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/SavePreset
 @onready var preset_grid: GridContainer = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/PresetGrid
 @onready var preset_menu: PopupMenu = $PresetMenu
@@ -130,6 +153,8 @@ var active_material: Material = null
 var active_shape: int = LevelRootType.BrushShape.BOX
 var shape_id_to_key: Dictionary = {}
 var paint_layers_signature: String = ""
+var materials_signature: String = ""
+var surface_paint_signature: String = ""
 var root_properties: Dictionary = {}
 var history_entries: Array = []
 var history_max := 50
@@ -142,6 +167,12 @@ var shape_icon_candidates := {
     "TORUS": ["TorusMesh"],
     "ELLIPSOID": ["SphereShape3D"]
 }
+var _selected_material_index := -1
+var _uv_active_brush: DraftBrush = null
+var _uv_active_face: FaceData = null
+var _surface_active_brush: DraftBrush = null
+var _surface_active_face: FaceData = null
+var _pending_surface_texture_layer := -1
 
 func _is_level_root(node: Node) -> bool:
     return node != null and node is LevelRootType
@@ -370,6 +401,7 @@ func _ready():
 
     _populate_shape_palette()
     _populate_paint_tools()
+    _populate_paint_targets()
     if shape_select and not shape_select.item_selected.is_connected(Callable(self, "_on_shape_selected")):
         shape_select.item_selected.connect(_on_shape_selected)
     if paint_layer_select and not paint_layer_select.item_selected.is_connected(Callable(self, "_on_paint_layer_selected")):
@@ -378,6 +410,28 @@ func _ready():
         paint_layer_add.pressed.connect(_on_paint_layer_add)
     if paint_layer_remove and not paint_layer_remove.pressed.is_connected(Callable(self, "_on_paint_layer_remove")):
         paint_layer_remove.pressed.connect(_on_paint_layer_remove)
+    if materials_list and not materials_list.item_selected.is_connected(Callable(self, "_on_material_selected")):
+        materials_list.item_selected.connect(_on_material_selected)
+    if material_add and not material_add.pressed.is_connected(Callable(self, "_on_material_add")):
+        material_add.pressed.connect(_on_material_add)
+    if material_remove and not material_remove.pressed.is_connected(Callable(self, "_on_material_remove")):
+        material_remove.pressed.connect(_on_material_remove)
+    if material_assign and not material_assign.pressed.is_connected(Callable(self, "_on_material_assign")):
+        material_assign.pressed.connect(_on_material_assign)
+    if face_clear and not face_clear.pressed.is_connected(Callable(self, "_on_face_clear")):
+        face_clear.pressed.connect(_on_face_clear)
+    if uv_reset and not uv_reset.pressed.is_connected(Callable(self, "_on_uv_reset")):
+        uv_reset.pressed.connect(_on_uv_reset)
+    if uv_editor and not uv_editor.uv_changed.is_connected(Callable(self, "_on_uv_changed")):
+        uv_editor.uv_changed.connect(_on_uv_changed)
+    if surface_paint_layer_select and not surface_paint_layer_select.item_selected.is_connected(Callable(self, "_on_surface_paint_layer_selected")):
+        surface_paint_layer_select.item_selected.connect(_on_surface_paint_layer_selected)
+    if surface_paint_layer_add and not surface_paint_layer_add.pressed.is_connected(Callable(self, "_on_surface_paint_layer_add")):
+        surface_paint_layer_add.pressed.connect(_on_surface_paint_layer_add)
+    if surface_paint_layer_remove and not surface_paint_layer_remove.pressed.is_connected(Callable(self, "_on_surface_paint_layer_remove")):
+        surface_paint_layer_remove.pressed.connect(_on_surface_paint_layer_remove)
+    if surface_paint_texture and not surface_paint_texture.pressed.is_connected(Callable(self, "_on_surface_paint_texture")):
+        surface_paint_texture.pressed.connect(_on_surface_paint_texture)
 
     snap_button_group = ButtonGroup.new()
     var snap_values = [1, 2, 4, 8, 16, 32, 64]
@@ -504,6 +558,8 @@ func _process(delta):
             level_root.set("bake_generate_lods", bake_generate_lods.button_pressed)
         if _root_has_property("bake_lightmap_uv2") and bake_lightmap_uv2:
             level_root.set("bake_lightmap_uv2", bake_lightmap_uv2.button_pressed)
+        if _root_has_property("bake_use_face_materials") and bake_use_face_materials:
+            level_root.set("bake_use_face_materials", bake_use_face_materials.button_pressed)
         if _root_has_property("bake_lightmap_texel_size") and bake_lightmap_texel:
             level_root.set("bake_lightmap_texel_size", float(bake_lightmap_texel.value))
         if _root_has_property("bake_navmesh") and bake_navmesh:
@@ -527,6 +583,8 @@ func _process(delta):
         if _root_has_property("debug_logging"):
             level_root.set("debug_logging", debug_enabled)
         _sync_paint_layers_from_root()
+        _sync_materials_from_root()
+        _sync_surface_paint_from_root()
     _update_perf_label()
 
 func _sync_paint_layers_from_root() -> void:
@@ -546,6 +604,44 @@ func _sync_paint_layers_from_root() -> void:
         paint_layers_signature = sig
         _refresh_paint_layers()
 
+func _sync_materials_from_root() -> void:
+    if not level_root or not level_root.has_method("get_material_names"):
+        return
+    var names: Array = level_root.call("get_material_names")
+    var joined := ""
+    for i in range(names.size()):
+        if i > 0:
+            joined += "|"
+        joined += str(names[i])
+    if joined != materials_signature:
+        materials_signature = joined
+        _refresh_materials_list(names)
+
+func _sync_surface_paint_from_root() -> void:
+    if not level_root or not level_root.has_method("get_primary_selected_face"):
+        _set_uv_face(null, null)
+        _set_surface_face(null, null)
+        return
+    var info: Dictionary = level_root.call("get_primary_selected_face")
+    if info.is_empty():
+        _set_uv_face(null, null)
+        _set_surface_face(null, null)
+        return
+    var brush = info.get("brush", null)
+    var face_idx = int(info.get("face_idx", -1))
+    if brush == null or face_idx < 0 or not (brush is DraftBrush):
+        _set_uv_face(null, null)
+        _set_surface_face(null, null)
+        return
+    var draft := brush as DraftBrush
+    if face_idx >= draft.faces.size():
+        _set_uv_face(null, null)
+        _set_surface_face(null, null)
+        return
+    var face: FaceData = draft.faces[face_idx]
+    _set_uv_face(draft, face)
+    _set_surface_face(draft, face)
+
 func get_operation() -> int:
     return CSGShape3D.OPERATION_UNION if mode_add.button_pressed else CSGShape3D.OPERATION_SUBTRACTION
 
@@ -557,6 +653,14 @@ func get_active_material() -> Material:
 
 func is_paint_mode_enabled() -> bool:
     return paint_mode and paint_mode.button_pressed
+
+func is_face_select_mode_enabled() -> bool:
+    return face_select_mode and face_select_mode.button_pressed
+
+func get_paint_target() -> int:
+    if not paint_target_select:
+        return 0
+    return paint_target_select.get_selected_id()
 
 func get_brush_size() -> Vector3:
     return Vector3(size_x.value, size_y.value, size_z.value)
@@ -581,6 +685,21 @@ func get_paint_radius_cells() -> int:
     if not paint_radius:
         return 1
     return int(paint_radius.value)
+
+func get_surface_paint_radius() -> float:
+    if not surface_paint_radius:
+        return 0.1
+    return float(surface_paint_radius.value)
+
+func get_surface_paint_strength() -> float:
+    if not surface_paint_strength:
+        return 1.0
+    return float(surface_paint_strength.value)
+
+func get_surface_paint_layer() -> int:
+    if not surface_paint_layer_select:
+        return 0
+    return surface_paint_layer_select.get_selected_id()
 
 func get_collision_layer_mask() -> int:
     if not collision_layer_opt:
@@ -945,6 +1064,14 @@ func _populate_paint_tools() -> void:
     paint_tool_select.add_item("Bucket", 4)
     paint_tool_select.select(0)
 
+func _populate_paint_targets() -> void:
+    if not paint_target_select:
+        return
+    paint_target_select.clear()
+    paint_target_select.add_item("Floor", 0)
+    paint_target_select.add_item("Surface", 1)
+    paint_target_select.select(0)
+
 func _refresh_paint_layers() -> void:
     if not paint_layer_select:
         return
@@ -973,6 +1100,65 @@ func _refresh_paint_layers() -> void:
     if names.size() > 0:
         paint_layer_select.select(clamp(active_index, 0, names.size() - 1))
 
+func _refresh_materials_list(names: Array) -> void:
+    if not materials_list:
+        return
+    materials_list.clear()
+    for i in range(names.size()):
+        materials_list.add_item(str(names[i]), null, true)
+    if names.is_empty():
+        _selected_material_index = -1
+    else:
+        var target = clamp(_selected_material_index, 0, names.size() - 1)
+        materials_list.select(target)
+        _selected_material_index = target
+
+func _set_uv_face(brush: DraftBrush, face: FaceData) -> void:
+    if _uv_active_face == face and _uv_active_brush == brush:
+        return
+    _uv_active_brush = brush
+    _uv_active_face = face
+    if uv_editor:
+        uv_editor.set_face(face)
+
+func _set_surface_face(brush: DraftBrush, face: FaceData) -> void:
+    if _surface_active_face == face and _surface_active_brush == brush:
+        return
+    _surface_active_brush = brush
+    _surface_active_face = face
+    if _surface_active_face != null and paint_target_select and paint_target_select.selected != 1:
+        paint_target_select.select(1)
+    _refresh_surface_paint_layers()
+
+func _refresh_surface_paint_layers() -> void:
+    if not surface_paint_layer_select:
+        return
+    surface_paint_layer_select.clear()
+    if _surface_active_face == null:
+        surface_paint_layer_select.add_item("No Face", 0)
+        surface_paint_layer_select.select(0)
+        surface_paint_layer_select.disabled = true
+        if surface_paint_layer_add:
+            surface_paint_layer_add.disabled = true
+        if surface_paint_layer_remove:
+            surface_paint_layer_remove.disabled = true
+        if surface_paint_texture:
+            surface_paint_texture.disabled = true
+        return
+    var layer_count = _surface_active_face.paint_layers.size()
+    var label_count = max(layer_count, 1)
+    for i in range(label_count):
+        surface_paint_layer_select.add_item("Layer %d" % i, i)
+    surface_paint_layer_select.disabled = false
+    if surface_paint_layer_add:
+        surface_paint_layer_add.disabled = false
+    if surface_paint_layer_remove:
+        surface_paint_layer_remove.disabled = layer_count <= 1
+    if surface_paint_texture:
+        surface_paint_texture.disabled = false
+    var target = clamp(surface_paint_layer_select.selected, 0, label_count - 1)
+    surface_paint_layer_select.select(target)
+
 func _on_paint_layer_selected(index: int) -> void:
     if not level_root or not level_root.has_method("set_active_paint_layer"):
         return
@@ -990,6 +1176,101 @@ func _on_paint_layer_remove() -> void:
         return
     level_root.call("remove_active_paint_layer")
     _refresh_paint_layers()
+
+func _on_material_selected(index: int) -> void:
+    _selected_material_index = index
+
+func _on_material_add() -> void:
+    if material_palette_dialog:
+        material_palette_dialog.popup_centered_ratio(0.6)
+
+func _on_material_palette_selected(path: String) -> void:
+    if path == "":
+        return
+    if not level_root or not level_root.has_method("add_material_to_palette"):
+        return
+    var resource = ResourceLoader.load(path)
+    if resource and resource is Material:
+        level_root.call("add_material_to_palette", resource)
+        _sync_materials_from_root()
+    else:
+        _log("Selected resource is not a material: %s" % path, true)
+
+func _on_material_remove() -> void:
+    if _selected_material_index < 0:
+        return
+    if not level_root or not level_root.has_method("remove_material_from_palette"):
+        return
+    level_root.call("remove_material_from_palette", _selected_material_index)
+    _selected_material_index = -1
+    _sync_materials_from_root()
+
+func _on_material_assign() -> void:
+    if _selected_material_index < 0:
+        return
+    if not level_root or not level_root.has_method("assign_material_to_selected_faces"):
+        return
+    _commit_state_action("Assign Face Material", "assign_material_to_selected_faces", [_selected_material_index])
+
+func _on_face_clear() -> void:
+    if level_root and level_root.has_method("clear_face_selection"):
+        level_root.call("clear_face_selection")
+
+func _on_uv_reset() -> void:
+    if _uv_active_face == null:
+        return
+    _uv_active_face.custom_uvs = PackedVector2Array()
+    _uv_active_face.ensure_custom_uvs()
+    if level_root and level_root.has_method("rebuild_brush_preview") and _uv_active_brush:
+        level_root.call("rebuild_brush_preview", _uv_active_brush)
+
+func _on_uv_changed(_face: FaceData) -> void:
+    if level_root and level_root.has_method("rebuild_brush_preview") and _uv_active_brush:
+        level_root.call("rebuild_brush_preview", _uv_active_brush)
+
+func _on_surface_paint_layer_selected(_index: int) -> void:
+    pass
+
+func _on_surface_paint_layer_add() -> void:
+    if _surface_active_face == null:
+        return
+    _surface_active_face.paint_layers.append(FaceData.PaintLayer.new())
+    _refresh_surface_paint_layers()
+    if level_root and level_root.has_method("rebuild_brush_preview") and _surface_active_brush:
+        level_root.call("rebuild_brush_preview", _surface_active_brush)
+
+func _on_surface_paint_layer_remove() -> void:
+    if _surface_active_face == null:
+        return
+    var idx = surface_paint_layer_select.selected if surface_paint_layer_select else 0
+    if idx < 0 or idx >= _surface_active_face.paint_layers.size():
+        return
+    _surface_active_face.paint_layers.remove_at(idx)
+    _refresh_surface_paint_layers()
+    if level_root and level_root.has_method("rebuild_brush_preview") and _surface_active_brush:
+        level_root.call("rebuild_brush_preview", _surface_active_brush)
+
+func _on_surface_paint_texture() -> void:
+    if _surface_active_face == null or not surface_paint_texture_dialog:
+        return
+    _pending_surface_texture_layer = surface_paint_layer_select.selected if surface_paint_layer_select else 0
+    surface_paint_texture_dialog.popup_centered_ratio(0.6)
+
+func _on_surface_paint_texture_selected(path: String) -> void:
+    if path == "":
+        return
+    if _surface_active_face == null:
+        return
+    var resource = ResourceLoader.load(path)
+    if not resource or not (resource is Texture2D):
+        _log("Selected resource is not a texture: %s" % path, true)
+        return
+    var idx = _pending_surface_texture_layer
+    if idx < 0 or idx >= _surface_active_face.paint_layers.size():
+        return
+    _surface_active_face.paint_layers[idx].texture = resource
+    if level_root and level_root.has_method("rebuild_brush_preview") and _surface_active_brush:
+        level_root.call("rebuild_brush_preview", _surface_active_brush)
 
 func _shape_label(shape_key: String) -> String:
     var parts = shape_key.to_lower().split("_")
@@ -1070,6 +1351,18 @@ func _setup_storage_dialogs() -> void:
         hflevel_save_dialog.filters = PackedStringArray(["*.hflevel ; HammerForge Level"])
         if not hflevel_save_dialog.file_selected.is_connected(Callable(self, "_on_hflevel_save_selected")):
             hflevel_save_dialog.file_selected.connect(_on_hflevel_save_selected)
+    if material_palette_dialog:
+        material_palette_dialog.access = FileDialog.ACCESS_FILESYSTEM
+        material_palette_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+        material_palette_dialog.filters = PackedStringArray(["*.tres, *.res ; Material", "*.material ; Material", "*.tres ; Resource"])
+        if not material_palette_dialog.file_selected.is_connected(Callable(self, "_on_material_palette_selected")):
+            material_palette_dialog.file_selected.connect(_on_material_palette_selected)
+    if surface_paint_texture_dialog:
+        surface_paint_texture_dialog.access = FileDialog.ACCESS_FILESYSTEM
+        surface_paint_texture_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+        surface_paint_texture_dialog.filters = PackedStringArray(["*.png, *.jpg, *.tres, *.res ; Texture"])
+        if not surface_paint_texture_dialog.file_selected.is_connected(Callable(self, "_on_surface_paint_texture_selected")):
+            surface_paint_texture_dialog.file_selected.connect(_on_surface_paint_texture_selected)
     if hflevel_load_dialog:
         hflevel_load_dialog.access = FileDialog.ACCESS_FILESYSTEM
         hflevel_load_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE

@@ -4,7 +4,20 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
-- TBD
+### Added
+- Per-face material palette with face selection mode.
+- Sample material resource for palette testing (`materials/test_mat.tres`).
+- UV editor for per-face UV editing.
+- Surface paint tool with per-face paint layers and texture picker.
+- Bake option: Use Face Materials (bake per-face materials without CSG).
+- Dock reorganized: Floor Paint and Surface Paint tabs.
+
+### Changed
+- Paint Mode can target either floor paint or surface paint.
+- .hflevel now persists materials palette and per-face data.
+
+### Documentation
+- Added texture/materials guide, development/testing guide, and updated README/spec/user/MVP docs.
 
 ## [0.1.1] - 2026-02-05
 

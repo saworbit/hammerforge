@@ -1,8 +1,8 @@
 # HammerForge User Guide
 
-Last updated: February 5, 2026
+Last updated: February 6, 2026
 
-This guide covers the current HammerForge workflow in Godot 4.6: brush-based greyboxing, bake, entities, and floor paint.
+This guide covers the current HammerForge workflow in Godot 4.6: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs.
 
 ## Quick Start
 1. Enable the plugin: Project -> Project Settings -> Plugins -> HammerForge.
@@ -25,11 +25,26 @@ Tool
 - Draw: create brushes.
 - Select: select existing brushes. Delete removes them.
 
-Paint Mode (floor paint)
+Paint Mode (floor + surface)
 - Enables paint input in the viewport.
-- Paint Tool: Brush, Erase, Rect, Line, Bucket.
-- Paint Radius: brush radius in grid cells.
-- Paint Layer: choose active layer, add/remove layers.
+- Paint Target is global and decides whether strokes affect Floor or Surface.
+- Floor Paint tab: Brush, Erase, Rect, Line, Bucket.
+- Floor Paint tab: Radius in grid cells and layer picker.
+- Surface Paint tab: Paint Target, layers, texture picker, radius/strength.
+
+Materials (per-face)
+- Materials palette: add/remove materials.
+- Materials are Godot resources (.tres/.material). Create via FileSystem -> New Resource -> StandardMaterial3D or ShaderMaterial, then save under `materials/`.
+- Face Select Mode toggles face selection in the viewport.
+- Assign to Selected Faces applies the palette material to selected faces.
+
+UV Editor
+- Displays UVs for the primary selected face.
+- Drag points to edit UVs or reset to projected UVs.
+
+Paint (surface paint)
+- Paint Target: Floor or Surface.
+- Surface paint layers: choose layer, pick texture, adjust radius/strength.
 
 Brush workflow
 - Mode: Add or Subtract.
@@ -62,14 +77,43 @@ Modifier keys
 
 ## Floor Paint
 1. Enable Paint Mode.
-2. Choose tool and radius.
-3. Paint in the viewport.
+2. Open the Floor Paint tab.
+3. Choose tool, radius, and layer.
+4. Paint in the viewport.
 
 Notes
 - Live preview updates while dragging.
 - Bucket fills a contiguous region (click filled to erase).
 - Generated geometry appears under `LevelRoot/Generated`.
 - Generated floors/walls are DraftBrush nodes and are included in Bake.
+
+## Face Materials and UVs
+1. Open the Materials tab.
+2. Click `Add` to load a material resource into the palette (example: `materials/test_mat.tres`).
+3. Enable `Face Select Mode`.
+4. Use the Select tool and click faces in the viewport.
+5. Click `Assign to Selected Faces`.
+
+UV editing:
+- Open the UV tab after selecting a face.
+- Drag UV points to edit.
+- Use `Reset Projected UVs` to regenerate UVs from projection.
+
+Notes:
+- Face data is stored per DraftBrush face.
+- Materials and UVs persist in `.hflevel` saves.
+
+## Surface Paint (3D)
+1. Enable Paint Mode.
+2. Open the Surface Paint tab and set `Paint Target = Surface` (if needed).
+3. Pick a layer and assign a texture.
+4. Paint in the viewport.
+
+Notes:
+- Radius is in UV space (0.0 to 1.0).
+- Surface paint updates the DraftBrush preview immediately.
+- Surface paint is separate from floor paint layers.
+- If paint affects the floor, set `Paint Target = Surface` in the Surface Paint tab.
 
 ## Entities (early)
 - Place nodes under `LevelRoot/Entities` or set meta `is_entity = true`.
@@ -104,8 +148,12 @@ Bake creates `BakedGeometry`:
 
 Generated floor paint brushes are included in the bake.
 
+Use Face Materials (optional):
+- Enables per-face material baking without CSG.
+- Subtract brushes are ignored in this mode.
+
 ## Save/Load (.hflevel)
-- Save .hflevel stores brushes, entities, settings, and paint layers.
+- Save .hflevel stores brushes, entities, settings, materials palette, face data, and paint layers.
 - Load .hflevel restores them.
 - Autosave can write to a configurable path.
 
@@ -134,3 +182,7 @@ Paint preview looks wrong
 
 Dock not showing
 - Restart Godot after enabling the plugin.
+
+Face selection not working
+- Enable Face Select Mode in the Materials tab.
+- Use the Select tool (not Draw).

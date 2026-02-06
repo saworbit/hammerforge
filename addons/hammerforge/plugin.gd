@@ -139,13 +139,22 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
     var grid = dock.get_grid_snap()
     root.grid_snap = grid
     var paint_mode = dock.has_method("is_paint_mode_enabled") and dock.is_paint_mode_enabled()
+    var paint_target = dock.call("get_paint_target") if dock.has_method("get_paint_target") else 0
 
-    if paint_mode and root.has_method("handle_paint_input"):
-        var paint_tool_id = dock.call("get_paint_tool_id") if dock.has_method("get_paint_tool_id") else 0
-        var paint_radius_cells = dock.call("get_paint_radius_cells") if dock.has_method("get_paint_radius_cells") else 1
-        var handled = root.call("handle_paint_input", target_camera, event, target_pos, op, size, paint_tool_id, paint_radius_cells)
-        if handled:
-            return EditorPlugin.AFTER_GUI_INPUT_STOP
+    if paint_mode:
+        if paint_target == 0 and root.has_method("handle_paint_input"):
+            var paint_tool_id = dock.call("get_paint_tool_id") if dock.has_method("get_paint_tool_id") else 0
+            var paint_radius_cells = dock.call("get_paint_radius_cells") if dock.has_method("get_paint_radius_cells") else 1
+            var handled = root.call("handle_paint_input", target_camera, event, target_pos, op, size, paint_tool_id, paint_radius_cells)
+            if handled:
+                return EditorPlugin.AFTER_GUI_INPUT_STOP
+        elif paint_target == 1 and root.has_method("handle_surface_paint_input"):
+            var radius_uv = dock.call("get_surface_paint_radius") if dock.has_method("get_surface_paint_radius") else 0.1
+            var strength = dock.call("get_surface_paint_strength") if dock.has_method("get_surface_paint_strength") else 1.0
+            var layer_idx = dock.call("get_surface_paint_layer") if dock.has_method("get_surface_paint_layer") else 0
+            var handled_surface = root.call("handle_surface_paint_input", target_camera, event, target_pos, radius_uv, strength, layer_idx)
+            if handled_surface:
+                return EditorPlugin.AFTER_GUI_INPUT_STOP
 
     if event is InputEventKey:
         if event.pressed and not event.echo:
@@ -199,9 +208,15 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
             select_drag_active = false
             select_dragging = false
             return EditorPlugin.AFTER_GUI_INPUT_STOP
+    var face_select = dock.has_method("is_face_select_mode_enabled") and dock.is_face_select_mode_enabled()
     if tool == 1:
         if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
             if event.pressed:
+                if face_select and root.has_method("select_face_at_screen"):
+                    var additive_face = event.shift_pressed or event.ctrl_pressed or event.meta_pressed \
+                        or Input.is_key_pressed(KEY_SHIFT) or Input.is_key_pressed(KEY_CTRL) or Input.is_key_pressed(KEY_META)
+                    var face_handled = root.call("select_face_at_screen", target_camera, target_pos, additive_face)
+                    return EditorPlugin.AFTER_GUI_INPUT_STOP if face_handled else EditorPlugin.AFTER_GUI_INPUT_PASS
                 var active_mat = dock.get_active_material() if dock.has_method("get_active_material") else null
                 if paint_mode and active_mat:
                     var painted = root.pick_brush(target_camera, target_pos, false)
@@ -220,9 +235,10 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
                     if select_dragging:
                         selection_action = false
                     else:
-                        var picked = root.pick_brush(target_camera, target_pos)
-                        _select_node(picked, select_additive)
-                        selection_action = true
+                        if not face_select:
+                            var picked = root.pick_brush(target_camera, target_pos)
+                            _select_node(picked, select_additive)
+                            selection_action = true
                 select_drag_active = false
                 select_dragging = false
                 return EditorPlugin.AFTER_GUI_INPUT_STOP if selection_action else EditorPlugin.AFTER_GUI_INPUT_PASS
@@ -242,7 +258,7 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
         if tool != 1:
             root.set_shift_pressed(event.shift_pressed)
             root.set_alt_pressed(event.alt_pressed)
-        if tool == 1 and select_drag_active and event.button_mask & MOUSE_BUTTON_MASK_LEFT != 0:
+        if tool == 1 and select_drag_active and event.button_mask & MOUSE_BUTTON_MASK_LEFT != 0 and not face_select:
             if not select_dragging and select_drag_origin.distance_to(target_pos) >= select_drag_threshold:
                 select_dragging = true
             return EditorPlugin.AFTER_GUI_INPUT_PASS

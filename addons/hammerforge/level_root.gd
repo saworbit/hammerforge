@@ -9,6 +9,10 @@ const DraftEntity = preload("draft_entity.gd")
 const PlaytestFPS = preload("playtest_fps.gd")
 const HFLevelIO = preload("hflevel_io.gd")
 const MapIO = preload("map_io.gd")
+const FaceData = preload("face_data.gd")
+const MaterialManager = preload("material_manager.gd")
+const SurfacePaint = preload("surface_paint.gd")
+const FaceSelector = preload("face_selector.gd")
 const HFPaintGrid = preload("paint/hf_paint_grid.gd")
 const HFPaintLayerManager = preload("paint/hf_paint_layer_manager.gd")
 const HFPaintTool = preload("paint/hf_paint_tool.gd")
@@ -53,6 +57,7 @@ var _grid_snap: float = 16.0
 @export var bake_generate_lods: bool = false
 @export var bake_lightmap_uv2: bool = false
 @export var bake_lightmap_texel_size: float = 0.1
+@export var bake_use_face_materials: bool = false
 @export var bake_navmesh: bool = false
 @export var bake_navmesh_cell_size: float = 0.3
 @export var bake_navmesh_cell_height: float = 0.2
@@ -98,9 +103,11 @@ var pending_node: Node3D
 var committed_node: Node3D
 var entities_node: Node3D
 var brush_manager: BrushManager
+var material_manager: MaterialManager
 var baker: Baker
 var paint_layers: HFPaintLayerManager
 var paint_tool: HFPaintTool
+var surface_paint: SurfacePaint
 var generated_node: Node3D
 var generated_floors: Node3D
 var generated_walls: Node3D
@@ -139,6 +146,8 @@ var _autosave_timer: Timer = null
 var _hflevel_thread: Thread = null
 var _hflevel_pending: Dictionary = {}
 var _hflevel_last_hash: int = 0
+var face_selection: Dictionary = {}
+var _surface_painting := false
 
 func _ready():
 	_setup_draft_container()
@@ -147,8 +156,10 @@ func _ready():
 	_setup_entities_container()
 	_load_entity_definitions()
 	_setup_manager()
+	_setup_material_manager()
 	_setup_baker()
 	_setup_paint_system()
+	_setup_surface_paint()
 	_setup_editor_grid()
 	_setup_highlight()
 	if Engine.is_editor_hint():
@@ -437,6 +448,14 @@ func _setup_manager() -> void:
 		add_child(brush_manager)
 		_assign_owner(brush_manager)
 
+func _setup_material_manager() -> void:
+	material_manager = get_node_or_null("MaterialManager") as MaterialManager
+	if not material_manager:
+		material_manager = MaterialManager.new()
+		material_manager.name = "MaterialManager"
+		add_child(material_manager)
+		_assign_owner(material_manager)
+
 func _setup_baker() -> void:
 	baker = get_node_or_null("Baker") as Baker
 	if not baker:
@@ -444,6 +463,14 @@ func _setup_baker() -> void:
 		baker.name = "Baker"
 		add_child(baker)
 		_assign_owner(baker)
+
+func _setup_surface_paint() -> void:
+	surface_paint = get_node_or_null("SurfacePaint") as SurfacePaint
+	if not surface_paint:
+		surface_paint = SurfacePaint.new()
+		surface_paint.name = "SurfacePaint"
+		add_child(surface_paint)
+		_assign_owner(surface_paint)
 
 func _setup_paint_system() -> void:
 	paint_layers = get_node_or_null("PaintLayers") as HFPaintLayerManager
@@ -501,6 +528,183 @@ func _sync_paint_grid_from_root() -> void:
 	paint_layers.base_grid.origin = global_position
 	paint_layers.base_grid.basis = Basis.IDENTITY
 	paint_layers.base_grid.layer_y = grid_plane_origin.y
+
+func get_material_manager() -> MaterialManager:
+	return material_manager
+
+func get_materials() -> Array:
+	return material_manager.materials if material_manager else []
+
+func set_materials(materials: Array) -> void:
+	if not material_manager:
+		_setup_material_manager()
+	material_manager.materials = materials.duplicate()
+	_refresh_brush_previews()
+
+func add_material_to_palette(material: Material) -> int:
+	if not material_manager:
+		_setup_material_manager()
+	var idx = material_manager.add_material(material)
+	_refresh_brush_previews()
+	return idx
+
+func remove_material_from_palette(index: int) -> void:
+	if not material_manager:
+		return
+	material_manager.remove_material(index)
+	_refresh_brush_previews()
+
+func get_material_names() -> Array:
+	if not material_manager:
+		return []
+	return material_manager.get_material_names()
+
+func _refresh_brush_previews() -> void:
+	for node in _iter_pick_nodes():
+		if node is DraftBrush:
+			node.rebuild_preview()
+
+func pick_face(camera: Camera3D, mouse_pos: Vector2) -> Dictionary:
+	if not camera:
+		return {}
+	var ray_origin = camera.project_ray_origin(mouse_pos)
+	var ray_dir = camera.project_ray_normal(mouse_pos).normalized()
+	var brushes: Array = []
+	for node in _iter_pick_nodes():
+		if node is DraftBrush and is_brush_node(node):
+			brushes.append(node)
+	return FaceSelector.intersect_brushes(brushes, ray_origin, ray_dir)
+
+func select_face_at_screen(camera: Camera3D, mouse_pos: Vector2, additive: bool) -> bool:
+	var hit = pick_face(camera, mouse_pos)
+	if hit.is_empty():
+		if not additive:
+			clear_face_selection()
+		return false
+	var brush = hit.get("brush", null)
+	var face_idx = int(hit.get("face_idx", -1))
+	if brush and face_idx >= 0:
+		toggle_face_selection(brush, face_idx, additive)
+		return true
+	return false
+
+func toggle_face_selection(brush: DraftBrush, face_idx: int, additive: bool) -> void:
+	if not brush:
+		return
+	if not additive:
+		face_selection.clear()
+	var key = _face_key(brush)
+	var indices: Array = face_selection.get(key, [])
+	var idx = indices.find(face_idx)
+	if idx >= 0:
+		indices.remove_at(idx)
+	else:
+		indices.append(face_idx)
+	face_selection[key] = indices
+	_apply_face_selection()
+
+func clear_face_selection() -> void:
+	face_selection.clear()
+	_apply_face_selection()
+
+func get_face_selection() -> Dictionary:
+	return face_selection.duplicate(true)
+
+func get_primary_selected_face() -> Dictionary:
+	for key in face_selection.keys():
+		var indices: Array = face_selection.get(key, [])
+		if indices.is_empty():
+			continue
+		var brush = _find_brush_by_key(str(key))
+		if brush and indices[0] != null:
+			return { "brush": brush, "face_idx": int(indices[0]) }
+	return {}
+
+func assign_material_to_selected_faces(material_index: int) -> void:
+	for key in face_selection.keys():
+		var brush = _find_brush_by_key(str(key))
+		if not brush:
+			continue
+		var indices: Array = face_selection.get(key, [])
+		var typed: Array[int] = []
+		for idx in indices:
+			typed.append(int(idx))
+		brush.assign_material_to_faces(material_index, typed)
+
+func handle_surface_paint_input(
+	camera: Camera3D,
+	event: InputEvent,
+	mouse_pos: Vector2,
+	radius_uv: float,
+	strength: float,
+	layer_idx: int
+) -> bool:
+	if not surface_paint:
+		_setup_surface_paint()
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.pressed:
+			_surface_painting = true
+			_paint_surface_at(camera, mouse_pos, radius_uv, strength, layer_idx)
+			return true
+		if _surface_painting:
+			_surface_painting = false
+			return true
+	if event is InputEventMouseMotion:
+		if _surface_painting and event.button_mask & MOUSE_BUTTON_MASK_LEFT != 0:
+			_paint_surface_at(camera, mouse_pos, radius_uv, strength, layer_idx)
+			return true
+	return false
+
+func rebuild_brush_preview(brush: DraftBrush) -> void:
+	if brush:
+		brush.rebuild_preview()
+
+func _paint_surface_at(camera: Camera3D, mouse_pos: Vector2, radius_uv: float, strength: float, layer_idx: int) -> void:
+	if not camera:
+		return
+	var hit = pick_face(camera, mouse_pos)
+	if hit.is_empty():
+		return
+	var brush = hit.get("brush", null)
+	var face_idx = int(hit.get("face_idx", -1))
+	var uv = hit.get("uv", Vector2.ZERO)
+	if not brush or face_idx < 0 or face_idx >= brush.faces.size():
+		return
+	uv.x = clamp(uv.x, 0.0, 1.0)
+	uv.y = clamp(uv.y, 0.0, 1.0)
+	var face: FaceData = brush.faces[face_idx]
+	surface_paint.paint_at_uv(face, layer_idx, uv, radius_uv, strength)
+	brush.rebuild_preview()
+
+func _apply_face_selection() -> void:
+	for node in _iter_pick_nodes():
+		if not (node is DraftBrush):
+			continue
+		var brush := node as DraftBrush
+		var key = _face_key(brush)
+		var indices: Array = face_selection.get(key, [])
+		brush.set_selected_faces(PackedInt32Array(indices))
+
+func _face_key(brush: DraftBrush) -> String:
+	if brush == null:
+		return ""
+	if brush.brush_id != "":
+		return brush.brush_id
+	return str(brush.get_instance_id())
+
+func _find_brush_by_key(key: String) -> DraftBrush:
+	if key == "":
+		return null
+	var brush = _find_brush_by_id(key)
+	if brush and brush is DraftBrush:
+		return brush as DraftBrush
+	if not key.is_valid_int():
+		return null
+	var target_id = int(key)
+	for node in _iter_pick_nodes():
+		if node is DraftBrush and node.get_instance_id() == target_id:
+			return node as DraftBrush
+	return null
 
 func _setup_editor_grid() -> void:
 	if not Engine.is_editor_hint():
@@ -752,10 +956,14 @@ func bake(apply_cuts: bool = true, hide_live: bool = false, collision_layer_mask
 	var layer = collision_layer_mask if collision_layer_mask > 0 else _layer_from_index(bake_collision_layer_index)
 	var baked: Node3D = null
 	var bake_options = _build_bake_options()
-	if bake_chunk_size > 0.0:
-		baked = await _bake_chunked(bake_chunk_size, layer, bake_options)
+	if bake_use_face_materials:
+		var face_brushes = _collect_face_bake_brushes()
+		baked = baker.bake_from_faces(face_brushes, material_manager, bake_material_override, layer, layer, bake_options)
 	else:
-		baked = await _bake_single(layer, bake_options)
+		if bake_chunk_size > 0.0:
+			baked = await _bake_chunked(bake_chunk_size, layer, bake_options)
+		else:
+			baked = await _bake_single(layer, bake_options)
 
 	if baked:
 		if baked_container:
@@ -791,7 +999,8 @@ func _build_bake_options() -> Dictionary:
 		"generate_lods": bake_generate_lods,
 		"unwrap_uv2": bake_lightmap_uv2,
 		"uv2_texel_size": bake_lightmap_texel_size,
-		"use_thread_pool": bake_use_thread_pool
+		"use_thread_pool": bake_use_thread_pool,
+		"use_face_materials": bake_use_face_materials
 	}
 
 func _postprocess_bake(container: Node3D) -> void:
@@ -939,6 +1148,20 @@ func _append_generated_brushes_to_csg(target: CSGCombiner3D, only_additive: bool
 	if generated_walls:
 		_append_brush_list_to_csg(generated_walls.get_children(), target, false, only_additive)
 
+func _collect_face_bake_brushes() -> Array:
+	var out: Array = []
+	_append_face_bake_container(draft_brushes_node, out)
+	_append_face_bake_container(generated_floors, out)
+	_append_face_bake_container(generated_walls, out)
+	return out
+
+func _append_face_bake_container(container: Node3D, out: Array) -> void:
+	if not container:
+		return
+	for child in container.get_children():
+		if child is DraftBrush and not _is_subtract_brush(child):
+			out.append(child)
+
 func _append_brush_list_to_csg(
 	brushes: Array,
 	target: CSGCombiner3D,
@@ -1016,6 +1239,7 @@ func _bake_navmesh(container: Node3D) -> void:
 		nav_region.call("bake_navigation_mesh")
 
 func clear_brushes() -> void:
+	clear_face_selection()
 	if brush_manager:
 		brush_manager.clear_brushes()
 	if draft_brushes_node:
@@ -1142,6 +1366,11 @@ func clear_pending_cuts() -> void:
 func delete_brush(brush: Node, free: bool = true) -> void:
 	if not brush:
 		return
+	if brush is DraftBrush:
+		var key = _face_key(brush as DraftBrush)
+		if face_selection.has(key):
+			face_selection.erase(key)
+			_apply_face_selection()
 	if brush_manager:
 		brush_manager.remove_brush(brush)
 	if brush.get_parent():
@@ -1279,6 +1508,8 @@ func create_brush_from_info(info: Dictionary) -> Node:
 	brush.brush_id = str(brush_id)
 	brush.set_meta("brush_id", brush_id)
 	_register_brush_id(str(brush_id))
+	if info.has("faces"):
+		brush.apply_serialized_faces(info.get("faces", []))
 	return brush
 
 func delete_brush_by_id(brush_id: String) -> void:
@@ -1321,6 +1552,8 @@ func get_brush_info_from_node(brush: Node) -> Dictionary:
 	info["transform"] = draft.global_transform
 	if draft.material_override:
 		info["material"] = draft.material_override
+	if draft.faces.size() > 0:
+		info["faces"] = draft.serialize_faces()
 	return info
 
 func _capture_entity_info(entity: DraftEntity) -> Dictionary:
@@ -1410,6 +1643,8 @@ func capture_state() -> Dictionary:
 	state["baked_present"] = baked_container != null
 	state["paint_layers"] = _capture_paint_layers()
 	state["paint_active_layer"] = paint_layers.active_layer_index if paint_layers else 0
+	if material_manager:
+		state["materials"] = material_manager.materials
 	for node in _iter_pick_nodes():
 		var info = get_brush_info_from_node(node)
 		if info.is_empty():
@@ -1472,6 +1707,8 @@ func restore_state(state: Dictionary) -> void:
 	clear_brushes()
 	_clear_entities()
 	_restore_paint_layers(state.get("paint_layers", []), int(state.get("paint_active_layer", 0)))
+	if state.has("materials"):
+		set_materials(state.get("materials", []))
 	_brush_id_counter = int(state.get("id_counter", 0))
 	var brushes: Array = state.get("brushes", [])
 	for info in brushes:
@@ -1574,6 +1811,7 @@ func _capture_hflevel_settings() -> Dictionary:
 		"bake_chunk_size": bake_chunk_size,
 		"bake_collision_layer_index": bake_collision_layer_index,
 		"bake_material_override": bake_material_override,
+		"bake_use_face_materials": bake_use_face_materials,
 		"commit_freeze": commit_freeze,
 		"grid_visible": grid_visible,
 		"grid_follow_brush": grid_follow_brush,
@@ -1603,6 +1841,8 @@ func _apply_hflevel_settings(settings: Dictionary) -> void:
 		bake_collision_layer_index = int(settings.get("bake_collision_layer_index", bake_collision_layer_index))
 	if settings.has("bake_material_override"):
 		bake_material_override = settings.get("bake_material_override", bake_material_override)
+	if settings.has("bake_use_face_materials"):
+		bake_use_face_materials = bool(settings.get("bake_use_face_materials", bake_use_face_materials))
 	if settings.has("commit_freeze"):
 		commit_freeze = bool(settings.get("commit_freeze", commit_freeze))
 	if settings.has("grid_visible"):
