@@ -127,6 +127,7 @@ var autosave_minutes: SpinBox = $Margin/VBox/MainTabs/Manage/ManageMargin/Manage
 @onready
 var autosave_path_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/AutosavePath
 @onready var status_label: Label = $Margin/VBox/Footer/StatusFooter/StatusLabel
+@onready var selection_label: Label = $Margin/VBox/Footer/StatusFooter/SelectionLabel
 @onready var perf_label: Label = $Margin/VBox/Footer/StatusFooter/BrushCountLabel
 @onready
 var undo_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/HistoryControls/Undo
@@ -331,18 +332,98 @@ func _setup_toolbar_icons() -> void:
 
 
 func _apply_toolbar_tooltips() -> void:
-	_set_tooltip(tool_draw, "Draw")
-	_set_tooltip(tool_select, "Select")
-	_set_tooltip(mode_add, "Add")
-	_set_tooltip(mode_subtract, "Subtract")
+	_set_tooltip(tool_draw, "Draw Tool\nShift+Click: Place brush\nAlt: Height-only drag")
+	_set_tooltip(tool_select, "Select Tool\nClick: Select | Shift+Click: Add\nCtrl+Click: Toggle")
+	_set_tooltip(mode_add, "Additive Mode\nBrushes add geometry (union)")
+	_set_tooltip(mode_subtract, "Subtractive Mode\nBrushes cut geometry (pending cuts)")
 	if paint_mode:
-		_set_tooltip(paint_mode, "Paint Mode")
+		_set_tooltip(paint_mode, "Paint Mode\nToggle between building and painting")
 
 
 func _set_tooltip(control: Control, text: String) -> void:
 	if not control:
 		return
 	control.tooltip_text = text
+
+
+func _apply_all_tooltips() -> void:
+	# Build tab - Grid
+	_set_tooltip(grid_snap, "Grid snap size in units\nControls brush placement and nudge step")
+	for button in snap_buttons:
+		if button and button.has_meta("snap_value"):
+			_set_tooltip(button, "Quick snap: %s units" % str(button.get_meta("snap_value")))
+	# Build tab - Toggles
+	_set_tooltip(show_grid, "Show editor grid in 3D viewport")
+	_set_tooltip(follow_grid, "Grid follows last placed brush position")
+	_set_tooltip(show_hud, "Show keyboard shortcut overlay in viewport")
+	_set_tooltip(debug_logs, "Print debug info to Output panel")
+	# Build tab - Brush size & shape
+	_set_tooltip(size_x, "Brush width (X axis) in units")
+	_set_tooltip(size_y, "Brush height (Y axis) in units")
+	_set_tooltip(size_z, "Brush depth (Z axis) in units")
+	_set_tooltip(shape_select, "Brush shape for new brushes")
+	_set_tooltip(sides_spin, "Side count for polygon shapes (Pyramid, Prism)")
+	_set_tooltip(commit_freeze, "Keep committed cuts frozen (restorable)\ninstead of deleting them")
+	_set_tooltip(collision_layer_opt, "Physics collision layer for baked geometry")
+	_set_tooltip(active_material_button, "Active material for Select+Paint brush painting")
+	# Build tab - Bake options
+	_set_tooltip(bake_merge_meshes, "Merge meshes during bake for better performance")
+	_set_tooltip(bake_generate_lods, "Generate LOD meshes during bake")
+	_set_tooltip(bake_lightmap_uv2, "Generate UV2 for lightmap baking")
+	_set_tooltip(bake_use_face_materials, "Apply per-face materials from the Materials tab")
+	_set_tooltip(bake_navmesh, "Generate navigation mesh during bake")
+	_set_tooltip(bake_lightmap_texel, "Lightmap texel density (smaller = higher quality)")
+	_set_tooltip(bake_navmesh_cell_size, "Navigation mesh cell size (XZ)")
+	_set_tooltip(bake_navmesh_cell_height, "Navigation mesh cell height (Y)")
+	_set_tooltip(bake_navmesh_agent_height, "Navigation agent height")
+	_set_tooltip(bake_navmesh_agent_radius, "Navigation agent radius")
+	# FloorPaint tab
+	_set_tooltip(
+		paint_tool_select, "Floor paint tool\nB: Brush | E: Erase | R: Rect | L: Line | K: Bucket"
+	)
+	_set_tooltip(paint_radius, "Floor paint brush radius in grid cells")
+	_set_tooltip(paint_layer_select, "Active floor paint layer")
+	_set_tooltip(paint_layer_add, "Add a new floor paint layer")
+	_set_tooltip(paint_layer_remove, "Remove the selected floor paint layer")
+	# SurfacePaint tab
+	_set_tooltip(paint_target_select, "Paint target: Floor (grid) or Surface (UV)")
+	_set_tooltip(surface_paint_radius, "Surface paint radius in UV space (0.0 - 1.0)")
+	_set_tooltip(surface_paint_strength, "Surface paint opacity/strength (0.0 - 1.0)")
+	_set_tooltip(surface_paint_layer_select, "Active surface paint layer")
+	_set_tooltip(surface_paint_layer_add, "Add a new surface paint layer")
+	_set_tooltip(surface_paint_layer_remove, "Remove the selected surface paint layer")
+	_set_tooltip(surface_paint_texture, "Texture for the selected surface paint layer")
+	# Materials tab
+	_set_tooltip(
+		face_select_mode,
+		"Enable per-face selection for material assignment\nClick faces in viewport to select them"
+	)
+	_set_tooltip(material_add, "Add a material to the palette")
+	_set_tooltip(material_remove, "Remove selected material from palette")
+	_set_tooltip(material_assign, "Assign selected material to selected faces")
+	_set_tooltip(face_clear, "Clear face selection")
+	# UV tab
+	_set_tooltip(uv_reset, "Reset UV coordinates to defaults for selected face")
+	# Manage tab
+	_set_tooltip(floor_btn, "Create a default floor brush")
+	_set_tooltip(apply_cuts_btn, "Move pending cuts into the draft brush tree")
+	_set_tooltip(clear_cuts_btn, "Remove all pending cuts without applying")
+	_set_tooltip(commit_cuts_btn, "Apply pending cuts, bake, then freeze/remove cut geometry")
+	_set_tooltip(restore_cuts_btn, "Restore frozen committed cuts back to draft tree")
+	_set_tooltip(bake_btn, "Bake draft brushes into optimized static meshes")
+	_set_tooltip(clear_btn, "Remove all brushes and baked geometry")
+	_set_tooltip(save_hflevel_btn, "Save level to .hflevel file")
+	_set_tooltip(load_hflevel_btn, "Load level from .hflevel file")
+	_set_tooltip(import_map_btn, "Import a Quake-style .map file")
+	_set_tooltip(export_map_btn, "Export level as .map file")
+	_set_tooltip(export_glb_btn, "Export baked geometry as .glb file")
+	_set_tooltip(autosave_enabled, "Enable automatic saving at regular intervals")
+	_set_tooltip(autosave_minutes, "Autosave interval in minutes")
+	_set_tooltip(autosave_path_btn, "Set the autosave file path")
+	_set_tooltip(save_preset_btn, "Save current brush settings as a reusable preset")
+	_set_tooltip(quick_play_btn, "Bake and play the current scene")
+	# Entities tab
+	_set_tooltip(create_entity_btn, "Create a new entity at the cursor position")
 
 
 func _set_toolbar_button_icon(button: Button, icon_names: Array, fallback_text: String) -> void:
@@ -651,6 +732,7 @@ func _ready():
 	_load_presets()
 	_load_entity_definitions()
 	_apply_pro_styles()
+	_apply_all_tooltips()
 	_sync_bake_option_visibility()
 	set_process(true)
 
@@ -859,6 +941,26 @@ func set_show_hud(visible: bool) -> void:
 	if show_hud.button_pressed == visible:
 		return
 	show_hud.button_pressed = visible
+
+
+func set_paint_tool(tool_id: int) -> void:
+	if not paint_tool_select:
+		return
+	for i in range(paint_tool_select.get_item_count()):
+		if paint_tool_select.get_item_id(i) == tool_id:
+			paint_tool_select.select(i)
+			return
+
+
+func set_selection_count(count: int) -> void:
+	if not selection_label:
+		return
+	if count <= 0:
+		selection_label.text = ""
+	elif count == 1:
+		selection_label.text = "Sel: 1 brush"
+	else:
+		selection_label.text = "Sel: %d brushes" % count
 
 
 func _on_grid_snap_value_changed(value: float) -> void:
@@ -1181,7 +1283,10 @@ func _on_bake_started() -> void:
 
 
 func _on_bake_finished(success: bool) -> void:
-	status_label.text = "Ready" if success else "Error"
+	if success:
+		_set_status("Bake complete", false, 3.0)
+	else:
+		_set_status("Bake failed - check Output for details", true)
 	if progress_bar:
 		progress_bar.hide()
 	_set_bake_buttons_disabled(false)
@@ -1665,7 +1770,7 @@ func _on_hflevel_save_selected(path: String) -> void:
 		_set_status("No LevelRoot for .hflevel save", true)
 		return
 	var err = int(level_root.save_hflevel(path, true))
-	_set_status("Saved .hflevel" if err == OK else "Failed to save .hflevel", err != OK)
+	_set_status("Saved .hflevel" if err == OK else "Failed to save .hflevel", err != OK, 3.0)
 
 
 func _on_hflevel_load_selected(path: String) -> void:
@@ -1676,7 +1781,7 @@ func _on_hflevel_load_selected(path: String) -> void:
 		_set_status("No LevelRoot for .hflevel load", true)
 		return
 	_commit_full_state_action("Load .hflevel", "load_hflevel", [path])
-	_set_status("Loaded .hflevel", false)
+	_set_status("Loaded .hflevel", false, 3.0)
 
 
 func _on_map_import_selected(path: String) -> void:
@@ -1687,7 +1792,7 @@ func _on_map_import_selected(path: String) -> void:
 		_set_status("No LevelRoot for .map import", true)
 		return
 	_commit_full_state_action("Import .map", "import_map", [path])
-	_set_status("Imported .map", false)
+	_set_status("Imported .map", false, 3.0)
 
 
 func _on_map_export_selected(path: String) -> void:
@@ -1695,7 +1800,7 @@ func _on_map_export_selected(path: String) -> void:
 		_set_status("No LevelRoot for .map export", true)
 		return
 	var err = int(level_root.export_map(path))
-	_set_status("Exported .map" if err == OK else "Failed to export .map", err != OK)
+	_set_status("Exported .map" if err == OK else "Failed to export .map", err != OK, 3.0)
 
 
 func _on_glb_export_selected(path: String) -> void:
@@ -1703,7 +1808,7 @@ func _on_glb_export_selected(path: String) -> void:
 		_set_status("No LevelRoot for .glb export", true)
 		return
 	var err = int(level_root.export_baked_gltf(path))
-	_set_status("Exported .glb" if err == OK else "Failed to export .glb", err != OK)
+	_set_status("Exported .glb" if err == OK else "Failed to export .glb", err != OK, 3.0)
 
 
 func _on_autosave_path_selected(path: String) -> void:
@@ -1711,14 +1816,59 @@ func _on_autosave_path_selected(path: String) -> void:
 		_set_status("No LevelRoot for autosave path", true)
 		return
 	level_root.set("hflevel_autosave_path", path)
-	_set_status("Autosave path set", false)
+	_set_status("Autosave path set", false, 3.0)
 
 
-func _set_status(message: String, is_error: bool = false) -> void:
+var _status_timer: Timer = null
+
+
+func _set_status(message: String, is_error: bool = false, timeout: float = 0.0) -> void:
 	if status_label:
 		status_label.text = message
+		if is_error:
+			var error_color = _get_editor_color("error_color", Color(0.95, 0.3, 0.3))
+			status_label.add_theme_color_override("font_color", error_color)
+		else:
+			status_label.remove_theme_color_override("font_color")
 	if is_error:
 		_log(message, true)
+	var clear_time = timeout if timeout > 0.0 else (5.0 if is_error else 0.0)
+	if clear_time > 0.0:
+		_start_status_timer(clear_time)
+	else:
+		_stop_status_timer()
+
+
+func _set_status_warning(message: String, timeout: float = 5.0) -> void:
+	if status_label:
+		status_label.text = message
+		var warn_color = _get_editor_color("warning_color", Color(0.95, 0.8, 0.2))
+		status_label.add_theme_color_override("font_color", warn_color)
+	_log(message, true)
+	if timeout > 0.0:
+		_start_status_timer(timeout)
+
+
+func _start_status_timer(seconds: float) -> void:
+	if not _status_timer:
+		_status_timer = Timer.new()
+		_status_timer.one_shot = true
+		_status_timer.timeout.connect(_on_status_timer_timeout)
+		add_child(_status_timer)
+	_status_timer.stop()
+	_status_timer.wait_time = seconds
+	_status_timer.start()
+
+
+func _stop_status_timer() -> void:
+	if _status_timer:
+		_status_timer.stop()
+
+
+func _on_status_timer_timeout() -> void:
+	if status_label:
+		status_label.text = "Ready"
+		status_label.remove_theme_color_override("font_color")
 
 
 func _ensure_presets_dir() -> void:

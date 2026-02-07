@@ -627,6 +627,9 @@ custom_constants/separation = 6.0
 [node name="StatusLabel" type="Label" parent="Margin/VBox/Footer/StatusFooter"]
 text = "Ready"
 
+[node name="SelectionLabel" type="Label" parent="Margin/VBox/Footer/StatusFooter"]
+text = ""
+
 [node name="ProgressBar" type="ProgressBar" parent="Margin/VBox/Footer/StatusFooter"]
 size_flags_horizontal = 3
 min_value = 0.0

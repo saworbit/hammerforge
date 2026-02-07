@@ -134,10 +134,7 @@ func _ensure_preview(shape: int, operation: int, size_default: Vector3, sides: i
 			root.preview_brush.sides = sides
 			if operation == CSGShape3D.OPERATION_SUBTRACTION:
 				root.preview_brush.operation = CSGShape3D.OPERATION_SUBTRACTION
-				root._apply_brush_material(
-					root.preview_brush,
-					root._make_brush_material(CSGShape3D.OPERATION_SUBTRACTION, true, true)
-				)
+				root._apply_brush_material(root.preview_brush, root._make_pending_cut_material())
 			else:
 				root.preview_brush.operation = operation
 				root._apply_brush_material(root.preview_brush, root._make_brush_material(operation))
@@ -149,10 +146,7 @@ func _ensure_preview(shape: int, operation: int, size_default: Vector3, sides: i
 	root.preview_brush.name = "PreviewBrush"
 	if operation == CSGShape3D.OPERATION_SUBTRACTION and root.pending_node:
 		root.preview_brush.operation = CSGShape3D.OPERATION_SUBTRACTION
-		root._apply_brush_material(
-			root.preview_brush,
-			root._make_brush_material(CSGShape3D.OPERATION_SUBTRACTION, true, true)
-		)
+		root._apply_brush_material(root.preview_brush, root._make_pending_cut_material())
 		root.pending_node.add_child(root.preview_brush)
 	else:
 		if root.draft_brushes_node:

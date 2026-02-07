@@ -533,6 +533,10 @@ func _make_brush_material(operation: int, solid: bool = false, unshaded: bool = 
 	return brush_system._make_brush_material(operation, solid, unshaded)
 
 
+func _make_pending_cut_material() -> Material:
+	return brush_system._make_pending_cut_material()
+
+
 func _apply_brush_material(brush: Node, mat: Material) -> void:
 	brush_system._apply_brush_material(brush, mat)
 

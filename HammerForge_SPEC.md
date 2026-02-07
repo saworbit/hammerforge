@@ -139,7 +139,11 @@ All public methods on `LevelRoot` are thin one-line delegates to the appropriate
 Transitions: `begin_drag()` -> `advance_to_height()` -> `end_drag()` / `cancel()`.
 
 ## Editor UX
-- Theme-aware dock styling.
-- Optional HUD overlay for shortcuts.
+- Theme-aware dock styling with comprehensive tooltips on all controls.
+- Context-sensitive shortcut HUD overlay (6 views: draw idle, dragging base, adjusting height, select, floor paint, surface paint). Displays current axis lock. Updated via `plugin.gd` -> `shortcut_hud.gd:update_context()`.
+- Paint tool keyboard shortcuts (B/E/R/L/K) active when Paint Mode is enabled.
+- Selection count in status bar, updated on every selection change.
+- Color-coded status bar: errors in red (auto-clear 5s), warnings in yellow, success messages auto-clear after 3s.
+- Pending subtract brushes rendered in orange-red with high emission (`_make_pending_cut_material()`), visually distinct from applied cuts (standard red via `_make_brush_material()`).
 - Shader-based editor grid with follow mode.
 - Direct typed calls between plugin/dock/LevelRoot (no duck-typing).

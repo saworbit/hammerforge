@@ -6,6 +6,12 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 ## [Unreleased]
 ### Added
 - Per-face material palette with face selection mode.
+- Dynamic context-sensitive shortcut HUD that updates based on current tool and mode.
+- Comprehensive tooltips on all dock controls (snap buttons, bake options, paint settings, etc.).
+- Selection count indicator in the status bar ("Sel: N brushes").
+- Paint tool keyboard shortcuts: B (Brush), E (Erase), R (Rect), L (Line), K (Bucket).
+- Color-coded pending cuts: orange-red with high emission to distinguish from applied subtract brushes.
+- Color-coded error/warning status messages with auto-clear timeout.
 - Sample material resource for palette testing (`materials/test_mat.tres`).
 - UV editor for per-face UV editing.
 - Surface paint tool with per-face paint layers and texture picker.
@@ -36,9 +42,17 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 - Fixed paint blending loop in `face_data.gd` that only ran when the weight image needed resizing.
 - Threaded .hflevel writes now log errors on file open failure and `store_buffer` errors.
 
+### UX
+- Shortcut HUD now shows context-sensitive shortcuts (6 different views: draw idle, dragging base, adjusting height, select, floor paint, surface paint).
+- HUD displays current axis lock state (e.g. "[X Locked]").
+- Status bar errors appear in red, warnings in yellow, and auto-clear after a timeout.
+- Bake failure now shows "Bake failed - check Output for details" instead of generic "Error".
+- Pending subtract brushes are visually distinct (orange-red, high glow) from applied cuts (standard red).
+
 ### Documentation
 - Added texture/materials guide, development/testing guide, and updated README/spec/user/MVP docs.
 - Updated spec, development guide, MVP guide, and README to reflect subsystem architecture.
+- Updated all docs to document new UX features: dynamic HUD, tooltips, shortcuts, pending cut visuals.
 
 ## [0.1.1] - 2026-02-05
 

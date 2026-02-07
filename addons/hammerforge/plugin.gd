@@ -116,11 +116,29 @@ func _on_hud_visibility_changed(visible: bool) -> void:
 		hud.visible = visible
 
 
+func _update_hud_context() -> void:
+	if not hud or not hud.has_method("update_context"):
+		return
+	var ctx := {}
+	ctx["tool"] = dock.get_tool() if dock else 0
+	ctx["paint_mode"] = dock.is_paint_mode_enabled() if dock else false
+	ctx["paint_target"] = dock.get_paint_target() if dock else 0
+	ctx["mode"] = 0
+	ctx["axis_lock"] = 0
+	var root = active_root if active_root else _get_level_root()
+	if root and root.input_state:
+		ctx["mode"] = root.input_state.mode
+		ctx["axis_lock"] = root.input_state.axis_lock
+	hud.update_context(ctx)
+
+
 func _on_editor_selection_changed() -> void:
 	var selection = get_editor_interface().get_selection()
 	if not selection:
 		return
 	hf_selection = selection.get_selected_nodes()
+	if dock:
+		dock.set_selection_count(hf_selection.size())
 
 
 func _handles(object: Object) -> bool:
@@ -216,15 +234,34 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			if event.keycode == KEY_PAGEDOWN:
 				_nudge_selected(root, Vector3(0.0, -1.0, 0.0))
 				return EditorPlugin.AFTER_GUI_INPUT_STOP
+			if paint_mode:
+				var paint_key := -1
+				match event.keycode:
+					KEY_B:
+						paint_key = 0
+					KEY_E:
+						paint_key = 1
+					KEY_R:
+						paint_key = 2
+					KEY_L:
+						paint_key = 3
+					KEY_K:
+						paint_key = 4
+				if paint_key >= 0:
+					dock.set_paint_tool(paint_key)
+					return EditorPlugin.AFTER_GUI_INPUT_STOP
 			if tool != 1:
 				if event.keycode == KEY_X:
 					root.set_axis_lock(LevelRootType.AxisLock.X, true)
+					_update_hud_context()
 					return EditorPlugin.AFTER_GUI_INPUT_STOP
 				if event.keycode == KEY_Y:
 					root.set_axis_lock(LevelRootType.AxisLock.Y, true)
+					_update_hud_context()
 					return EditorPlugin.AFTER_GUI_INPUT_STOP
 				if event.keycode == KEY_Z:
 					root.set_axis_lock(LevelRootType.AxisLock.Z, true)
+					_update_hud_context()
 					return EditorPlugin.AFTER_GUI_INPUT_STOP
 
 	if tool == 1 and event is InputEventMouseMotion:
@@ -241,6 +278,7 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			root.cancel_drag()
 			select_drag_active = false
 			select_dragging = false
+			_update_hud_context()
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 	var face_select = dock != null and dock.is_face_select_mode_enabled()
 	if tool == 1:
@@ -330,7 +368,9 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			return EditorPlugin.AFTER_GUI_INPUT_PASS
 		if tool != 1 and event.button_mask & MOUSE_BUTTON_MASK_LEFT != 0:
 			root.update_drag(target_camera, target_pos)
+			_update_hud_context()
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
+	_update_hud_context()
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
 
 
@@ -347,6 +387,9 @@ func _shortcut_input(event: InputEvent) -> void:
 		if selection:
 			selection.clear()
 		hf_selection.clear()
+		if dock:
+			dock.set_selection_count(0)
+		_update_hud_context()
 		event.accept()
 		return
 	if not event.ctrl_pressed:

@@ -20,7 +20,8 @@ addons/hammerforge/
   plugin.gd              EditorPlugin entry point, input routing
   level_root.gd          Thin coordinator (~1,100 lines), delegates to subsystems
   input_state.gd         Drag/paint state machine (HFInputState)
-  dock.gd + dock.tscn    UI dock and tool state
+  dock.gd + dock.tscn    UI dock, tool state, tooltips, status bar
+  shortcut_hud.gd        Context-sensitive shortcut overlay (dynamic per mode)
   brush_instance.gd      DraftBrush node
   baker.gd               CSG -> mesh bake pipeline
   face_data.gd           Per-face materials, UVs, paint layers
@@ -111,6 +112,17 @@ Bake
 Save/Load
 - Save `.hflevel`.
 - Reload and verify materials palette, face data, and paint layers are restored.
+
+Editor UX
+- Toggle Draw/Select tool and verify shortcut HUD updates.
+- Start a brush drag and confirm HUD shows "Dragging Base" shortcuts.
+- Press X/Y/Z and confirm HUD shows axis lock state.
+- Enable Paint Mode and verify HUD shows paint shortcuts (B/E/R/L/K).
+- Press B/E/R/L/K in Paint Mode and confirm paint tool selector updates.
+- Hover dock controls (snap buttons, bake options, etc.) and verify tooltips appear.
+- Select brushes and confirm "Sel: N brushes" appears in status bar.
+- Trigger a bake error and confirm red status text auto-clears after 5 seconds.
+- Draw a Subtract brush and confirm it appears in orange-red (pending), then Apply Cuts and confirm it turns standard red.
 
 ## Troubleshooting
 - If paint affects floors while trying to surface paint, set `Paint Target = Surface`.

@@ -70,8 +70,10 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 ## Testing Checklist
 - Create and resize draft brushes (Draw tool).
 - Apply/clear/commit subtract cuts.
+- Verify pending cuts appear orange-red, applied cuts turn standard red.
 - Bake (with and without chunking).
 - Enable Paint Mode and test Floor Paint tab Brush/Erase/Line/Rect/Bucket.
+- Test paint tool shortcuts: B/E/R/L/K in Paint Mode.
 - Verify live paint preview while dragging.
 - Switch paint layers and ensure isolation.
 - Create a material resource (.tres/.material) in `materials/` and add it to the palette.
@@ -81,6 +83,10 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 - Toggle Use Face Materials and compare bake output.
 - Save and load .hflevel and verify paint data persists.
 - Drag entities from the palette and check selection/exclusion from bake.
+- Verify shortcut HUD updates when switching tools/modes.
+- Verify tooltips appear on all dock controls.
+- Verify selection count appears in status bar.
+- Trigger a bake failure and confirm red error message with auto-clear.
 
 ## CI
 Run `gdformat --check addons/hammerforge/` and `gdlint addons/hammerforge/` locally. These same checks run automatically on push/PR via `.github/workflows/ci.yml`.

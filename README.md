@@ -60,9 +60,13 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 - Paint layers persist in `.hflevel` saves
 
 ### Editor UX
-- Editor theme parity for the dock
-- On-screen shortcut HUD (optional)
-- High-contrast editor grid with follow mode
+- **Context-sensitive shortcut HUD** that updates based on current tool and mode
+- **Paint tool shortcuts**: B / E / R / L / K for Brush / Erase / Rect / Line / Bucket
+- **Tooltips** on all dock controls with shortcut hints
+- **Selection count** in the status bar
+- **Color-coded status bar** (red errors, yellow warnings, auto-clear)
+- **Pending cuts** visually distinct (orange-red glow) from applied cuts
+- Editor theme parity, high-contrast grid with follow mode
 - History panel (beta) and live brush count
 - Entity palette with drag-and-drop placement
 

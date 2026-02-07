@@ -290,7 +290,7 @@ func _add_pending_cut(brush: DraftBrush) -> void:
 	if not root.pending_node:
 		return
 	brush.operation = CSGShape3D.OPERATION_SUBTRACTION
-	_apply_brush_material(brush, _make_brush_material(CSGShape3D.OPERATION_SUBTRACTION, true, true))
+	_apply_brush_material(brush, _make_pending_cut_material())
 	brush.set_meta("pending_subtract", true)
 	root.pending_node.add_child(brush)
 	root._assign_owner(brush)
@@ -436,6 +436,17 @@ func _make_brush_material(operation: int, solid: bool = false, unshaded: bool = 
 			mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	else:
 		mat.albedo_color = Color(0.3, 0.6, 1.0, 0.35)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.roughness = 0.6
+	return mat
+
+
+func _make_pending_cut_material() -> Material:
+	var mat = StandardMaterial3D.new()
+	mat.albedo_color = Color(1.0, 0.3, 0.1, 0.5)
+	mat.emission = Color(1.0, 0.4, 0.1)
+	mat.emission_energy = 1.0
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.roughness = 0.6
 	return mat

@@ -1,6 +1,6 @@
 # HammerForge User Guide
 
-Last updated: February 6, 2026
+Last updated: February 7, 2026
 
 This guide covers the current HammerForge workflow in Godot 4.6: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs.
 
@@ -64,6 +64,26 @@ Other
 - History panel (beta).
 - Playtest bakes and runs the scene.
 
+Status bar
+- Shows current status ("Ready", "Baking...", errors in red, warnings in yellow).
+- Errors auto-clear after 5 seconds, success messages after 3 seconds.
+- Displays selection count ("Sel: N brushes") when brushes are selected.
+- Live brush count with color-coded performance warnings.
+
+## Shortcut HUD
+The on-screen shortcut overlay updates dynamically based on your current tool and mode. Toggle it via the Show HUD checkbox in the Build tab. It shows:
+
+| Context | Shortcuts Shown |
+|---------|----------------|
+| Draw (idle) | Click+Drag, Shift/Alt modifiers, X/Y/Z axis lock, Ctrl+Scroll size, Ctrl+D, Delete |
+| Draw (dragging base) | Shift: Square, Alt+Shift: Cube, Click: Height stage, Right-click: Cancel |
+| Draw (adjusting height) | Mouse: Change height, Click: Confirm, Right-click: Cancel |
+| Select | Click/Shift/Ctrl selection, Escape, Delete, Ctrl+D, Arrow nudge |
+| Floor Paint | Click+Drag, B/E/R/L/K tool shortcuts |
+| Surface Paint | Click+Drag, radius/strength info |
+
+The HUD also shows current axis lock state (e.g. "[X Locked]").
+
 ## Brush Creation (CAD style)
 1) Base drag: click and drag to define the base.
 2) Height stage: release mouse, move up/down, click to commit.
@@ -72,8 +92,23 @@ Modifier keys
 - Shift: square base.
 - Shift + Alt: cube.
 - Alt: height-only.
-- X/Y/Z: axis locks.
+- X/Y/Z: axis locks (shown in HUD as "[X Locked]" etc.).
 - Right-click: cancel.
+
+General keyboard shortcuts
+- Delete: remove selected brushes.
+- Ctrl+D: duplicate selected brushes.
+- Arrow keys: nudge selected brushes (XZ plane).
+- PageUp/PageDown: nudge selected brushes (Y axis).
+- Escape: clear selection.
+- Ctrl+Scroll: adjust brush size.
+
+Paint tool shortcuts (active when Paint Mode is enabled)
+- B: Brush tool.
+- E: Erase tool.
+- R: Rectangle tool.
+- L: Line tool.
+- K: Bucket fill tool.
 
 ## Floor Paint
 1. Enable Paint Mode.
@@ -176,6 +211,7 @@ No brushes appear
 
 Subtract does nothing
 - Subtract only affects Add brushes and is visible after Bake.
+- Pending cuts appear in bright orange-red; once applied they turn standard red.
 
 Paint preview looks wrong
 - Regenerate by deleting `LevelRoot/Generated` and paint again.
