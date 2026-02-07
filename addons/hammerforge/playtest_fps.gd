@@ -31,6 +31,7 @@ var head_bob_time := 0.0
 var time_since_on_floor := 0.0
 var is_crouching := false
 
+
 func _ready() -> void:
 	if Engine.is_editor_hint():
 		return
@@ -52,6 +53,7 @@ func _ready() -> void:
 
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
+
 func _ensure_collider() -> void:
 	var existing = get_node_or_null("CollisionShape3D") as CollisionShape3D
 	if existing:
@@ -63,6 +65,7 @@ func _ensure_collider() -> void:
 	collider.name = "CollisionShape3D"
 	collider.shape = shape
 	add_child(collider)
+
 
 func _ensure_input_map() -> void:
 	var defaults := {
@@ -89,6 +92,7 @@ func _ensure_input_map() -> void:
 				key_event.physical_keycode = keycode
 				InputMap.action_add_event(action_name, key_event)
 
+
 func _unhandled_input(event: InputEvent) -> void:
 	if Engine.is_editor_hint():
 		return
@@ -99,7 +103,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		camera_pivot.rotation.x = clamp(camera_pivot.rotation.x, -PI * 0.5, PI * 0.5)
 
 	if event.is_action_pressed("ui_cancel"):
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED else Input.MOUSE_MODE_CAPTURED
+		Input.mouse_mode = (
+			Input.MOUSE_MODE_VISIBLE
+			if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+			else Input.MOUSE_MODE_CAPTURED
+		)
+
 
 func _physics_process(delta: float) -> void:
 	if Engine.is_editor_hint():
@@ -113,7 +122,9 @@ func _physics_process(delta: float) -> void:
 		velocity.y -= gravity * delta
 
 	# 2. Handle Jump with Coyote Time
-	var wants_jump = Input.is_action_just_pressed(jump_action) or Input.is_action_just_pressed("ui_accept")
+	var wants_jump = (
+		Input.is_action_just_pressed(jump_action) or Input.is_action_just_pressed("ui_accept")
+	)
 	if wants_jump and time_since_on_floor < coyote_time:
 		velocity.y = jump_velocity
 		time_since_on_floor = coyote_time
@@ -145,6 +156,7 @@ func _physics_process(delta: float) -> void:
 
 	# 5. Effects (FOV and Head Bob)
 	_apply_camera_effects(delta, has_input)
+
 
 func _apply_camera_effects(delta: float, is_moving: bool) -> void:
 	if not camera:

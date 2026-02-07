@@ -5,6 +5,7 @@ class_name FaceData
 enum UVProjection { PLANAR_X, PLANAR_Y, PLANAR_Z, BOX_UV, CYLINDRICAL }
 enum PaintBlend { OVERLAY, MULTIPLY, ADD }
 
+
 class PaintLayer:
 	extends Resource
 	@export var texture: Texture2D = null
@@ -17,6 +18,7 @@ class PaintLayer:
 			weight_image = Image.create(size.x, size.y, false, Image.FORMAT_RGBA8)
 			weight_image.fill(Color(0, 0, 0, 1))
 
+
 @export var material_idx: int = -1
 @export var uv_projection: int = UVProjection.PLANAR_Z
 @export var uv_scale: Vector2 = Vector2.ONE
@@ -28,21 +30,24 @@ class PaintLayer:
 @export var local_verts: PackedVector3Array = PackedVector3Array()
 @export var normal: Vector3 = Vector3.UP
 
+
 func ensure_geometry() -> void:
 	_compute_normal()
 	_compute_bounds()
+
 
 func ensure_custom_uvs() -> void:
 	if custom_uvs.size() == local_verts.size():
 		return
 	custom_uvs = _project_uvs_for_vertices(local_verts)
 
+
 func triangulate() -> Dictionary:
 	var tri_verts := PackedVector3Array()
 	var tri_uvs := PackedVector2Array()
 	var count = local_verts.size()
 	if count < 3:
-		return { "verts": tri_verts, "uvs": tri_uvs }
+		return {"verts": tri_verts, "uvs": tri_uvs}
 	var source_uvs = custom_uvs
 	if source_uvs.size() != count:
 		source_uvs = _project_uvs_for_vertices(local_verts)
@@ -53,7 +58,8 @@ func triangulate() -> Dictionary:
 		tri_uvs.append(source_uvs[0])
 		tri_uvs.append(source_uvs[i])
 		tri_uvs.append(source_uvs[i + 1])
-	return { "verts": tri_verts, "uvs": tri_uvs }
+	return {"verts": tri_verts, "uvs": tri_uvs}
+
 
 func get_painted_albedo(max_size: int = 512) -> Image:
 	var layers: Array = paint_layers
@@ -79,27 +85,32 @@ func get_painted_albedo(max_size: int = 512) -> Image:
 		target_h = max(1, int(round(target_h * scale)))
 	var out = Image.create(target_w, target_h, false, Image.FORMAT_RGBA8)
 	out.fill(Color(1, 1, 1, 1))
+	var tex_cache: Dictionary = {}
 	for layer in layers:
 		if layer == null or layer.opacity <= 0.0:
 			continue
 		if not layer.texture or not layer.texture is Texture2D:
 			continue
-		var tex_img = layer.texture.get_image()
-		if tex_img.is_empty():
-			continue
+		var tex_key = layer.texture.resource_path
+		var tex_img: Image
+		if tex_key != "" and tex_cache.has(tex_key):
+			tex_img = tex_cache[tex_key]
+		else:
+			tex_img = layer.texture.get_image()
+			if tex_img.is_empty():
+				continue
+			if tex_img.get_width() != target_w or tex_img.get_height() != target_h:
+				tex_img = tex_img.duplicate()
+				tex_img.resize(target_w, target_h, Image.INTERPOLATE_LANCZOS)
+			if tex_key != "":
+				tex_cache[tex_key] = tex_img
 		var paint_img = layer.weight_image
 		if paint_img == null or paint_img.is_empty():
 			layer.ensure_weight_image(Vector2i(target_w, target_h))
 			paint_img = layer.weight_image
-		if tex_img.get_width() != target_w or tex_img.get_height() != target_h:
-			tex_img = tex_img.duplicate()
-			tex_img.resize(target_w, target_h, Image.INTERPOLATE_LANCZOS)
 		if paint_img.get_width() != target_w or paint_img.get_height() != target_h:
 			paint_img = paint_img.duplicate()
 			paint_img.resize(target_w, target_h, Image.INTERPOLATE_LANCZOS)
-		out.lock()
-		tex_img.lock()
-		paint_img.lock()
 		for y in range(target_h):
 			for x in range(target_w):
 				var w = clamp(paint_img.get_pixel(x, y).r * layer.opacity, 0.0, 1.0)
@@ -109,10 +120,8 @@ func get_painted_albedo(max_size: int = 512) -> Image:
 				var tex = tex_img.get_pixel(x, y)
 				var blended = _blend_color(base, tex, w, layer.blend_mode)
 				out.set_pixel(x, y, blended)
-		out.unlock()
-		tex_img.unlock()
-		paint_img.unlock()
 	return out
+
 
 func to_dict() -> Dictionary:
 	var layer_data: Array = []
@@ -141,6 +150,7 @@ func to_dict() -> Dictionary:
 		"normal": _encode_vec3(normal),
 		"paint_layers": layer_data
 	}
+
 
 static func from_dict(data: Dictionary) -> FaceData:
 	var face = FaceData.new()
@@ -180,21 +190,26 @@ static func from_dict(data: Dictionary) -> FaceData:
 	face.ensure_geometry()
 	return face
 
+
 static func _encode_vec2(value: Vector2) -> Array:
 	return [value.x, value.y]
 
+
 static func _encode_vec3(value: Vector3) -> Array:
 	return [value.x, value.y, value.z]
+
 
 static func _decode_vec2(value: Variant, fallback: Vector2) -> Vector2:
 	if value is Array and value.size() >= 2:
 		return Vector2(float(value[0]), float(value[1]))
 	return fallback
 
+
 static func _decode_vec3(value: Variant, fallback: Vector3) -> Vector3:
 	if value is Array and value.size() >= 3:
 		return Vector3(float(value[0]), float(value[1]), float(value[2]))
 	return fallback
+
 
 static func _encode_vec2_array(values: PackedVector2Array) -> Array:
 	var out: Array = []
@@ -202,11 +217,13 @@ static func _encode_vec2_array(values: PackedVector2Array) -> Array:
 		out.append([v.x, v.y])
 	return out
 
+
 static func _encode_vec3_array(values: PackedVector3Array) -> Array:
 	var out: Array = []
 	for v in values:
 		out.append([v.x, v.y, v.z])
 	return out
+
 
 static func _decode_vec2_array(values: Array) -> PackedVector2Array:
 	var out := PackedVector2Array()
@@ -215,12 +232,14 @@ static func _decode_vec2_array(values: Array) -> PackedVector2Array:
 			out.append(Vector2(float(entry[0]), float(entry[1])))
 	return out
 
+
 static func _decode_vec3_array(values: Array) -> PackedVector3Array:
 	var out := PackedVector3Array()
 	for entry in values:
 		if entry is Array and entry.size() >= 3:
 			out.append(Vector3(float(entry[0]), float(entry[1]), float(entry[2])))
 	return out
+
 
 func _project_uvs_for_vertices(verts: PackedVector3Array) -> PackedVector2Array:
 	var out := PackedVector2Array()
@@ -248,11 +267,13 @@ func _project_uvs_for_vertices(verts: PackedVector3Array) -> PackedVector2Array:
 		out.append(uv)
 	return out
 
+
 func _apply_uv_transform(uv: Vector2) -> Vector2:
 	var out = uv * uv_scale + uv_offset
 	if uv_rotation != 0.0:
 		out = out.rotated(uv_rotation)
 	return out
+
 
 func _box_projection_axis() -> int:
 	var n = normal
@@ -265,8 +286,10 @@ func _box_projection_axis() -> int:
 		return UVProjection.PLANAR_Y
 	return UVProjection.PLANAR_Z
 
+
 func _compute_bounds() -> void:
 	bounds = _compute_bounds_for(local_verts)
+
 
 func _compute_bounds_for(verts: PackedVector3Array) -> AABB:
 	if verts.is_empty():
@@ -275,6 +298,7 @@ func _compute_bounds_for(verts: PackedVector3Array) -> AABB:
 	for v in verts:
 		aabb = aabb.expand(v)
 	return aabb
+
 
 func _compute_normal() -> void:
 	if local_verts.size() < 3:
@@ -289,14 +313,12 @@ func _compute_normal() -> void:
 	else:
 		normal = Vector3.UP
 
+
 func _blend_color(base: Color, tex: Color, weight: float, mode: int) -> Color:
 	match mode:
 		PaintBlend.MULTIPLY:
 			var mult = Color(
-				lerp(1.0, tex.r, weight),
-				lerp(1.0, tex.g, weight),
-				lerp(1.0, tex.b, weight),
-				1.0
+				lerp(1.0, tex.r, weight), lerp(1.0, tex.g, weight), lerp(1.0, tex.b, weight), 1.0
 			)
 			return Color(base.r * mult.r, base.g * mult.g, base.b * mult.b, 1.0)
 		PaintBlend.ADD:

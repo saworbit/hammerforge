@@ -12,14 +12,21 @@ var walls_root: Node
 var owner: Node = null
 
 # Used to keep a fast index from stable-id -> node
-var _index: Dictionary = {} # Dictionary[StringName, Node]
+var _index: Dictionary = {}  # Dictionary[StringName, Node]
+
 
 func build_index() -> void:
 	_index.clear()
 	_index_children(floors_root)
 	_index_children(walls_root)
 
-func reconcile(model: HFGeneratedModel, grid: HFPaintGrid, settings: HFGeometrySynth.SynthSettings, dirty_chunks: Array[Vector2i] = []) -> void:
+
+func reconcile(
+	model: HFGeneratedModel,
+	grid: HFPaintGrid,
+	settings: HFGeometrySynth.SynthSettings,
+	dirty_chunks: Array[Vector2i] = []
+) -> void:
 	if not floors_root or not walls_root:
 		return
 	var scope: Dictionary = {}
@@ -45,6 +52,7 @@ func reconcile(model: HFGeneratedModel, grid: HFPaintGrid, settings: HFGeometryS
 			if node and node.is_inside_tree():
 				node.queue_free()
 
+
 func _index_children(root: Node, scope: Dictionary = {}) -> void:
 	if not root:
 		return
@@ -55,6 +63,7 @@ func _index_children(root: Node, scope: Dictionary = {}) -> void:
 		if scope.size() > 0 and not scope.has(chunk_tag):
 			continue
 		_index[child.get_meta("hf_gid")] = child
+
 
 func _upsert_floor(fr: HFGeneratedModel.FloorRect, grid: HFPaintGrid) -> void:
 	var node = _index.get(fr.id)
@@ -76,6 +85,7 @@ func _upsert_floor(fr: HFGeneratedModel.FloorRect, grid: HFPaintGrid) -> void:
 	var depth_world = fr.size.y * grid.cell_size
 	node.global_transform = Transform3D(grid.basis, center_world)
 	node.size = Vector3(width_world, fr.thickness, depth_world)
+
 
 func _upsert_wall(ws: HFGeneratedModel.WallSeg, grid: HFPaintGrid) -> void:
 	var node = _index.get(ws.id)
@@ -103,6 +113,7 @@ func _upsert_wall(ws: HFGeneratedModel.WallSeg, grid: HFPaintGrid) -> void:
 		size = Vector3(ws.thickness, ws.height, length_world)
 	node.global_transform = Transform3D(grid.basis, center_world)
 	node.size = size
+
 
 func _set_gen_meta(node: Node, gid: StringName, kind: String) -> void:
 	node.set_meta("hf_gid", gid)

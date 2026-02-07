@@ -7,10 +7,11 @@ extends Node
 @export var layer_id: StringName = &"layer_0"
 
 # Chunk storage: key -> ChunkData
-var _chunks: Dictionary = {} # Dictionary[Vector2i, HFChunkData]
-var _dirty_chunks: Dictionary = {} # Dictionary[Vector2i, bool] used as set
+var _chunks: Dictionary = {}  # Dictionary[Vector2i, HFChunkData]
+var _dirty_chunks: Dictionary = {}  # Dictionary[Vector2i, bool] used as set
 
 signal layer_changed(dirty_chunks: Array[Vector2i])
+
 
 func set_cell(cell: Vector2i, filled: bool) -> void:
 	var cid := _cell_to_chunk(cell)
@@ -20,12 +21,14 @@ func set_cell(cell: Vector2i, filled: bool) -> void:
 		_mark_dirty(cid)
 		_mark_dirty_neighbours(cid)
 
+
 func get_cell(cell: Vector2i) -> bool:
 	var cid := _cell_to_chunk(cell)
 	var chunk: HFChunkData = _chunks.get(cid) as HFChunkData
 	if chunk == null:
 		return false
 	return chunk.get_bit(_cell_to_local(cell))
+
 
 func consume_dirty_chunks() -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
@@ -34,11 +37,13 @@ func consume_dirty_chunks() -> Array[Vector2i]:
 	_dirty_chunks.clear()
 	return out
 
+
 func get_chunk_ids() -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	for k in _chunks.keys():
 		out.append(k)
 	return out
+
 
 func get_chunk_bits(cid: Vector2i) -> PackedByteArray:
 	var chunk: HFChunkData = _chunks.get(cid) as HFChunkData
@@ -46,26 +51,30 @@ func get_chunk_bits(cid: Vector2i) -> PackedByteArray:
 		return PackedByteArray()
 	return chunk.bits.duplicate()
 
+
 func set_chunk_bits(cid: Vector2i, bits: PackedByteArray) -> void:
 	var chunk: HFChunkData = _get_or_create_chunk(cid)
 	chunk.bits = bits.duplicate()
 	_mark_dirty(cid)
 	_mark_dirty_neighbours(cid)
 
+
 func clear_chunks() -> void:
 	_chunks.clear()
 	_dirty_chunks.clear()
 
+
 func _cell_to_chunk(cell: Vector2i) -> Vector2i:
 	return Vector2i(
-		floori(float(cell.x) / float(chunk_size)),
-		floori(float(cell.y) / float(chunk_size))
+		floori(float(cell.x) / float(chunk_size)), floori(float(cell.y) / float(chunk_size))
 	)
+
 
 func _cell_to_local(cell: Vector2i) -> Vector2i:
 	var lx := int(posmod(cell.x, chunk_size))
 	var ly := int(posmod(cell.y, chunk_size))
 	return Vector2i(lx, ly)
+
 
 func _get_or_create_chunk(cid: Vector2i) -> HFChunkData:
 	var c: HFChunkData = _chunks.get(cid) as HFChunkData
@@ -74,8 +83,10 @@ func _get_or_create_chunk(cid: Vector2i) -> HFChunkData:
 		_chunks[cid] = c
 	return c
 
+
 func _mark_dirty(cid: Vector2i) -> void:
 	_dirty_chunks[cid] = true
+
 
 func _mark_dirty_neighbours(cid: Vector2i) -> void:
 	# walls can span chunk boundaries, so include neighbours
@@ -83,10 +94,11 @@ func _mark_dirty_neighbours(cid: Vector2i) -> void:
 		for dx in [-1, 0, 1]:
 			_dirty_chunks[Vector2i(cid.x + dx, cid.y + dy)] = true
 
+
 # hf_chunk_data.gd (can live inside hf_paint_layer.gd file if you prefer)
 class HFChunkData:
 	var size: int
-	var bits: PackedByteArray # bitset, size*size bits
+	var bits: PackedByteArray  # bitset, size*size bits
 
 	func _init(sz: int) -> void:
 		size = sz

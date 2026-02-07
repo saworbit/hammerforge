@@ -1,0 +1,19 @@
+# gdlint configuration for HammerForge
+# See: https://github.com/Scony/godot-gdscript-toolkit
+
+# Suppress noisy rules that don't reflect real issues:
+# - class-definitions-order: gdlint is too strict about const/var/enum ordering
+# - max-public-methods: LevelRoot is a coordinator with 60+ thin delegates
+# - max-file-lines: LevelRoot is ~1,100 lines (down from ~2,500)
+# - max-line-length: gdformat handles wrapping; remaining long lines are signatures
+# - unused-argument: callback signatures require params we don't always use
+# - max-returns: _forward_3d_gui_input is a large input handler with many paths
+# - constant-name: PascalCase const aliases for types/enums (e.g. const BrushShape = ...)
+disable:
+  - class-definitions-order
+  - max-public-methods
+  - max-file-lines
+  - max-line-length
+  - unused-argument
+  - max-returns
+  - constant-name

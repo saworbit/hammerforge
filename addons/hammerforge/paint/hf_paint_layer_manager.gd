@@ -8,19 +8,23 @@ extends Node
 var layers: Array[HFPaintLayer] = []
 var active_layer_index: int = 0
 
+
 func _ready() -> void:
 	if layers.is_empty():
 		create_layer(&"layer_0", 0.0)
+
 
 func get_active_layer() -> HFPaintLayer:
 	if active_layer_index < 0 or active_layer_index >= layers.size():
 		return null
 	return layers[active_layer_index]
 
+
 func set_active_layer(index: int) -> void:
 	if index < 0 or index >= layers.size():
 		return
 	active_layer_index = index
+
 
 func clear_layers() -> void:
 	for layer in layers:
@@ -29,6 +33,7 @@ func clear_layers() -> void:
 			layer.queue_free()
 	layers.clear()
 	active_layer_index = 0
+
 
 func remove_layer(index: int) -> void:
 	if index < 0 or index >= layers.size():
@@ -42,6 +47,7 @@ func remove_layer(index: int) -> void:
 		active_layer_index = 0
 	else:
 		active_layer_index = clamp(active_layer_index, 0, layers.size() - 1)
+
 
 func create_layer(layer_id: StringName, layer_y: float) -> HFPaintLayer:
 	if not base_grid:

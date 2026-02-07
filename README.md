@@ -73,6 +73,13 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 - Chunked baking via `LevelRoot.bake_chunk_size`
 - **Playtest button** -- bakes and runs with an FPS controller
 
+### Modular Architecture
+- `LevelRoot` is a thin coordinator delegating to **8 subsystem classes** (grid, entity, brush, drag, bake, paint, state, file)
+- Explicit **input state machine** for drag/paint operations
+- Type-safe inter-module calls (no duck-typing)
+- Threaded .hflevel I/O with error handling
+- **CI**: automated `gdformat` + `gdlint` checks on push/PR
+
 ## Installation
 
 ```
@@ -133,5 +140,5 @@ Start-Process -FilePath "C:\Godot\Godot_v4.6-stable_win64.exe" `
 
 <p align="center">
   <strong>MIT License</strong><br>
-  <sub>Last updated: February 6, 2026</sub>
+  <sub>Last updated: February 7, 2026</sub>
 </p>

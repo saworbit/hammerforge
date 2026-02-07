@@ -9,6 +9,7 @@ const DraftEntity = preload("draft_entity.gd")
 const DEFAULT_TEXTURE := "__default"
 const AXIS_THRESHOLD := 0.98
 
+
 static func load_map(path: String) -> Dictionary:
 	if path == "" or not FileAccess.file_exists(path):
 		return {}
@@ -17,6 +18,7 @@ static func load_map(path: String) -> Dictionary:
 		return {}
 	var text = file.get_as_text()
 	return parse_map_text(text)
+
 
 static func parse_map_text(text: String) -> Dictionary:
 	var lines = text.replace("\r", "").split("\n")
@@ -39,11 +41,11 @@ static func parse_map_text(text: String) -> Dictionary:
 		if line == "{":
 			if not in_entity:
 				in_entity = true
-				current_entity = { "properties": {}, "brushes": [] }
+				current_entity = {"properties": {}, "brushes": []}
 				continue
 			if in_entity and not in_brush:
 				in_brush = true
-				current_brush = { "faces": [] }
+				current_brush = {"faces": []}
 				continue
 		if line == "}":
 			if in_brush:
@@ -74,26 +76,20 @@ static func parse_map_text(text: String) -> Dictionary:
 		var origin = _parse_origin(str(props.get("origin", "")))
 		var has_brushes = entity.get("brushes", []).size() > 0
 		if not has_brushes and entity_class != "":
-			entity_points.append({
-				"classname": entity_class,
-				"origin": origin,
-				"properties": props
-			})
+			entity_points.append({"classname": entity_class, "origin": origin, "properties": props})
 		for brush in entity.get("brushes", []):
 			var info = _brush_from_faces(brush.get("faces", []))
 			if not info.is_empty():
 				brushes.append(info)
-	return {
-		"entities": entity_points,
-		"brushes": brushes
-	}
+	return {"entities": entity_points, "brushes": brushes}
+
 
 static func export_map_from_level(level_root: Node) -> String:
 	if not level_root:
 		return ""
 	var lines: Array[String] = []
 	lines.append("{")
-	lines.append("\"classname\" \"worldspawn\"")
+	lines.append('"classname" "worldspawn"')
 	var brush_nodes: Array = []
 	if level_root.has_method("_iter_pick_nodes"):
 		brush_nodes.append_array(level_root.call("_iter_pick_nodes"))
@@ -124,6 +120,7 @@ static func export_map_from_level(level_root: Node) -> String:
 			lines.append_array(ent_lines)
 	return "\n".join(lines)
 
+
 static func _entity_to_map_lines(entity: DraftEntity) -> Array[String]:
 	if not entity:
 		return []
@@ -132,10 +129,11 @@ static func _entity_to_map_lines(entity: DraftEntity) -> Array[String]:
 		return []
 	var lines: Array[String] = []
 	lines.append("{")
-	lines.append("\"classname\" \"%s\"" % entity_class)
-	lines.append("\"origin\" \"%s\"" % _format_vec3(entity.global_transform.origin))
+	lines.append('"classname" "%s"' % entity_class)
+	lines.append('"origin" "%s"' % _format_vec3(entity.global_transform.origin))
 	lines.append("}")
 	return lines
+
 
 static func _brush_from_faces(faces: Array) -> Dictionary:
 	if faces.is_empty():
@@ -146,7 +144,7 @@ static func _brush_from_faces(faces: Array) -> Dictionary:
 		var face_points: Array = face.get("points", [])
 		if face_points.size() < 3:
 			continue
-			
+
 		points.append_array(face_points)
 		var normal = _face_normal(face_points)
 		if _axis_from_normal(normal) == Vector3.ZERO:
@@ -180,6 +178,7 @@ static func _brush_from_faces(faces: Array) -> Dictionary:
 		"operation": CSGShape3D.OPERATION_UNION
 	}
 
+
 static func _face_normal(face_points: Array) -> Vector3:
 	if face_points.size() < 3:
 		return Vector3.ZERO
@@ -188,6 +187,7 @@ static func _face_normal(face_points: Array) -> Vector3:
 	var c: Vector3 = face_points[2]
 	var n = (b - a).cross(c - a)
 	return n.normalized() if n.length() > 0.0001 else Vector3.ZERO
+
 
 static func _axis_from_normal(normal: Vector3) -> Vector3:
 	var nx = abs(normal.x)
@@ -201,6 +201,7 @@ static func _axis_from_normal(normal: Vector3) -> Vector3:
 		return Vector3(0, 0, sign(normal.z))
 	return Vector3.ZERO
 
+
 static func _parse_origin(text: String) -> Vector3:
 	if text == "":
 		return Vector3.ZERO
@@ -209,20 +210,22 @@ static func _parse_origin(text: String) -> Vector3:
 		return Vector3.ZERO
 	return Vector3(float(parts[0]), float(parts[1]), float(parts[2]))
 
+
 static func _parse_key_value(line: String) -> Array:
-	var first = line.find("\"")
+	var first = line.find('"')
 	if first < 0:
 		return []
-	var second = line.find("\"", first + 1)
+	var second = line.find('"', first + 1)
 	if second < 0:
 		return []
-	var third = line.find("\"", second + 1)
+	var third = line.find('"', second + 1)
 	if third < 0:
 		return []
-	var fourth = line.find("\"", third + 1)
+	var fourth = line.find('"', third + 1)
 	if fourth < 0:
 		return []
 	return [line.substr(first + 1, second - first - 1), line.substr(third + 1, fourth - third - 1)]
+
 
 static func _parse_face_line(line: String, face_re: RegEx) -> Dictionary:
 	var matches = face_re.search_all(line)
@@ -235,7 +238,8 @@ static func _parse_face_line(line: String, face_re: RegEx) -> Dictionary:
 		if parts.size() < 3:
 			return {}
 		points.append(Vector3(float(parts[0]), float(parts[1]), float(parts[2])))
-	return { "points": points }
+	return {"points": points}
+
 
 static func _brush_to_map_lines(brush: DraftBrush) -> Array[String]:
 	if not brush:
@@ -250,6 +254,7 @@ static func _brush_to_map_lines(brush: DraftBrush) -> Array[String]:
 		_:
 			lines.append_array(_box_to_map_lines(brush))
 	return lines
+
 
 static func _box_to_map_lines(brush: DraftBrush) -> Array[String]:
 	var lines: Array[String] = []
@@ -266,20 +271,14 @@ static func _box_to_map_lines(brush: DraftBrush) -> Array[String]:
 	]
 	for i in range(corners.size()):
 		corners[i] = brush.global_transform * corners[i]
-	var faces = [
-		[0, 3, 2],
-		[5, 6, 7],
-		[1, 2, 6],
-		[0, 4, 7],
-		[3, 7, 6],
-		[0, 1, 5]
-	]
+	var faces = [[0, 3, 2], [5, 6, 7], [1, 2, 6], [0, 4, 7], [3, 7, 6], [0, 1, 5]]
 	for face in faces:
 		var a = corners[face[0]]
 		var b = corners[face[1]]
 		var c = corners[face[2]]
 		lines.append(_format_face_line(a, b, c))
 	return lines
+
 
 static func _cylinder_to_map_lines(brush: DraftBrush) -> Array[String]:
 	var lines: Array[String] = []
@@ -310,20 +309,17 @@ static func _cylinder_to_map_lines(brush: DraftBrush) -> Array[String]:
 		lines.append(_format_face_line(a_bot, b_bot, bottom_center))
 	return lines
 
+
 static func _format_face_line(a: Vector3, b: Vector3, c: Vector3) -> String:
-	return "( %s ) ( %s ) ( %s ) %s 0 0 0 1 1" % [
-		_format_vec3(a),
-		_format_vec3(b),
-		_format_vec3(c),
-		DEFAULT_TEXTURE
-	]
+	return (
+		"( %s ) ( %s ) ( %s ) %s 0 0 0 1 1"
+		% [_format_vec3(a), _format_vec3(b), _format_vec3(c), DEFAULT_TEXTURE]
+	)
+
 
 static func _format_vec3(v: Vector3) -> String:
-	return "%s %s %s" % [
-		_snapped(v.x),
-		_snapped(v.y),
-		_snapped(v.z)
-	]
+	return "%s %s %s" % [_snapped(v.x), _snapped(v.y), _snapped(v.z)]
+
 
 static func _snapped(value: float) -> String:
 	return String.num(value, 3)

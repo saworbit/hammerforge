@@ -2,6 +2,7 @@
 extends RefCounted
 class_name FaceSelector
 
+
 static func intersect_brushes(brushes: Array, ray_origin: Vector3, ray_dir: Vector3) -> Dictionary:
 	var best_distance = INF
 	var best_hit: Dictionary = {}
@@ -16,7 +17,10 @@ static func intersect_brushes(brushes: Array, ray_origin: Vector3, ray_dir: Vect
 			best_hit = hit
 	return best_hit
 
-static func _intersect_brush(brush: Node3D, ray_origin: Vector3, ray_dir: Vector3, best_distance: float) -> Dictionary:
+
+static func _intersect_brush(
+	brush: Node3D, ray_origin: Vector3, ray_dir: Vector3, best_distance: float
+) -> Dictionary:
 	var faces: Array = brush.call("get_faces") if brush.has_method("get_faces") else []
 	if faces.is_empty():
 		return {}
@@ -61,7 +65,10 @@ static func _intersect_brush(brush: Node3D, ray_origin: Vector3, ray_dir: Vector
 		face_index += 1
 	return best_hit
 
-static func _ray_triangle(origin: Vector3, dir: Vector3, a: Vector3, b: Vector3, c: Vector3) -> float:
+
+static func _ray_triangle(
+	origin: Vector3, dir: Vector3, a: Vector3, b: Vector3, c: Vector3
+) -> float:
 	var e1 = b - a
 	var e2 = c - a
 	var p = dir.cross(e2)
@@ -80,6 +87,7 @@ static func _ray_triangle(origin: Vector3, dir: Vector3, a: Vector3, b: Vector3,
 	var t = e2.dot(qvec) * inv_det
 	return t if t >= 0.0 else -1.0
 
+
 static func _barycentric(p: Vector3, a: Vector3, b: Vector3, c: Vector3) -> Vector3:
 	var v0 = b - a
 	var v1 = c - a
@@ -96,6 +104,7 @@ static func _barycentric(p: Vector3, a: Vector3, b: Vector3, c: Vector3) -> Vect
 	var w = (d00 * d21 - d01 * d20) / denom
 	var u = 1.0 - v - w
 	return Vector3(u, v, w)
+
 
 static func _bary_uv(uv0: Vector2, uv1: Vector2, uv2: Vector2, bary: Vector3) -> Vector2:
 	return uv0 * bary.x + uv1 * bary.y + uv2 * bary.z

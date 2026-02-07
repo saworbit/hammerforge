@@ -18,10 +18,11 @@ var _active_stroke: HFStroke = null
 var _painting := false
 var _last_cell := Vector2i.ZERO
 var _start_cell := Vector2i.ZERO
-var _preview_cells: Dictionary = {} # Dictionary[Vector2i, bool]
-var _preview_original: Dictionary = {} # Dictionary[Vector2i, bool]
-var _stroke_dirty: Dictionary = {} # Dictionary[Vector2i, bool]
-var _preview_dirty: Dictionary = {} # Dictionary[Vector2i, bool]
+var _preview_cells: Dictionary = {}  # Dictionary[Vector2i, bool]
+var _preview_original: Dictionary = {}  # Dictionary[Vector2i, bool]
+var _stroke_dirty: Dictionary = {}  # Dictionary[Vector2i, bool]
+var _preview_dirty: Dictionary = {}  # Dictionary[Vector2i, bool]
+
 
 func handle_input(camera: Camera3D, event: InputEvent, screen_pos: Vector2) -> bool:
 	if not camera or not layer_manager:
@@ -37,6 +38,7 @@ func handle_input(camera: Camera3D, event: InputEvent, screen_pos: Vector2) -> b
 			_continue_stroke(camera, screen_pos)
 			return true
 	return false
+
 
 func _begin_stroke(camera: Camera3D, screen_pos: Vector2) -> bool:
 	var cell = _screen_to_cell(camera, screen_pos)
@@ -64,6 +66,7 @@ func _begin_stroke(camera: Camera3D, screen_pos: Vector2) -> bool:
 		_begin_preview()
 	return true
 
+
 func _continue_stroke(camera: Camera3D, screen_pos: Vector2) -> void:
 	var cell = _screen_to_cell(camera, screen_pos)
 	if cell == null:
@@ -79,6 +82,7 @@ func _continue_stroke(camera: Camera3D, screen_pos: Vector2) -> void:
 			_active_stroke.add_cell(cell, _now_seconds())
 		_update_preview(cell)
 	_last_cell = cell
+
 
 func _end_stroke() -> void:
 	_painting = false
@@ -116,6 +120,7 @@ func _end_stroke() -> void:
 		reconciler.reconcile(model, layer.grid, synth_settings, dirty)
 	_active_stroke = null
 
+
 func _screen_to_cell(camera: Camera3D, screen_pos: Vector2) -> Variant:
 	var layer = layer_manager.get_active_layer() if layer_manager else null
 	if not layer or not layer.grid:
@@ -134,6 +139,7 @@ func _screen_to_cell(camera: Camera3D, screen_pos: Vector2) -> Variant:
 	var hit = ray_origin + ray_dir * t
 	return grid.world_to_cell(hit)
 
+
 func _stamp_cell(cell: Vector2i) -> void:
 	var layer = layer_manager.get_active_layer() if layer_manager else null
 	if not layer:
@@ -149,10 +155,12 @@ func _stamp_cell(cell: Vector2i) -> void:
 			if _active_stroke:
 				_active_stroke.add_cell(target, _now_seconds())
 
+
 func _stamp_line(a: Vector2i, b: Vector2i) -> void:
 	var points = _bresenham(a, b)
 	for p in points:
 		_stamp_cell(p)
+
 
 func _stamp_rect(a: Vector2i, b: Vector2i) -> void:
 	var min_x = min(a.x, b.x)
@@ -163,15 +171,18 @@ func _stamp_rect(a: Vector2i, b: Vector2i) -> void:
 		for x in range(min_x, max_x + 1):
 			_stamp_cell(Vector2i(x, y))
 
+
 func _begin_preview() -> void:
 	_preview_cells.clear()
 	_preview_original.clear()
+
 
 func _update_preview(current: Vector2i) -> void:
 	if tool == HFStroke.Tool.LINE:
 		_apply_preview_cells(_line_cells(_start_cell, current))
 	elif tool == HFStroke.Tool.RECT:
 		_apply_preview_cells(_rect_cells(_start_cell, current))
+
 
 func _apply_preview_cells(cells: Array) -> void:
 	var layer = layer_manager.get_active_layer() if layer_manager else null
@@ -195,6 +206,7 @@ func _apply_preview_cells(cells: Array) -> void:
 	_preview_cells = next_set
 	_preview_reconcile()
 
+
 func _clear_preview_restore() -> void:
 	var layer = layer_manager.get_active_layer() if layer_manager else null
 	if not layer:
@@ -208,6 +220,7 @@ func _clear_preview_restore() -> void:
 	_preview_original.clear()
 	_preview_reconcile()
 
+
 func _commit_preview() -> void:
 	if not _active_stroke:
 		return
@@ -216,8 +229,10 @@ func _commit_preview() -> void:
 	_preview_cells.clear()
 	_preview_original.clear()
 
+
 func _line_cells(a: Vector2i, b: Vector2i) -> Array:
 	return _bresenham(a, b)
+
 
 func _rect_cells(a: Vector2i, b: Vector2i) -> Array:
 	var cells: Array = []
@@ -229,6 +244,7 @@ func _rect_cells(a: Vector2i, b: Vector2i) -> Array:
 		for x in range(min_x, max_x + 1):
 			cells.append(Vector2i(x, y))
 	return cells
+
 
 func _bucket_fill(start: Vector2i) -> void:
 	var layer = layer_manager.get_active_layer() if layer_manager else null
@@ -259,6 +275,7 @@ func _bucket_fill(start: Vector2i) -> void:
 	_collect_dirty_chunks()
 	_preview_reconcile()
 
+
 func _bresenham(a: Vector2i, b: Vector2i) -> Array:
 	var points: Array = []
 	var x0 = a.x
@@ -283,8 +300,10 @@ func _bresenham(a: Vector2i, b: Vector2i) -> Array:
 			y0 += sy
 	return points
 
+
 func _now_seconds() -> float:
 	return float(Time.get_ticks_msec()) / 1000.0
+
 
 func _collect_dirty_chunks() -> void:
 	var layer = layer_manager.get_active_layer() if layer_manager else null
@@ -294,6 +313,7 @@ func _collect_dirty_chunks() -> void:
 	for cid in dirty:
 		_stroke_dirty[cid] = true
 		_preview_dirty[cid] = true
+
 
 func _preview_reconcile() -> void:
 	var layer = layer_manager.get_active_layer() if layer_manager else null

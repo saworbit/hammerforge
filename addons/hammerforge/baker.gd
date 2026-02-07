@@ -6,6 +6,7 @@ const DEFAULT_UV2_TEXEL_SIZE := 0.1
 const FaceData = preload("face_data.gd")
 const MaterialManager = preload("material_manager.gd")
 
+
 func bake_from_csg(
 	csg_node: CSGCombiner3D,
 	material_override: Material = null,
@@ -39,17 +40,18 @@ func bake_from_csg(
 		var merged = _merge_entries(entries, use_thread_pool)
 		if merged:
 			merged = _postprocess_mesh(merged, generate_lods, unwrap_uv2, uv2_texel_size)
-			var mesh_inst = MeshInstance3D.new()
-			mesh_inst.name = "BakedMesh_0"
-			mesh_inst.mesh = merged
-			mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-			if material_override:
-				mesh_inst.material_override = material_override
-			result.add_child(mesh_inst)
-			var collision = CollisionShape3D.new()
-			collision.shape = merged.create_trimesh_shape()
-			static_body.add_child(collision)
-			return result
+			if merged:
+				var mesh_inst = MeshInstance3D.new()
+				mesh_inst.name = "BakedMesh_0"
+				mesh_inst.mesh = merged
+				mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+				if material_override:
+					mesh_inst.material_override = material_override
+				result.add_child(mesh_inst)
+				var collision = CollisionShape3D.new()
+				collision.shape = merged.create_trimesh_shape()
+				static_body.add_child(collision)
+				return result
 
 	var mesh_count := 0
 	for entry in entries:
@@ -66,6 +68,8 @@ func bake_from_csg(
 			continue
 
 		var processed = _postprocess_mesh(mesh, generate_lods, unwrap_uv2, uv2_texel_size)
+		if not processed:
+			continue
 
 		var mesh_inst = MeshInstance3D.new()
 		mesh_inst.name = "BakedMesh_%d" % mesh_count
@@ -87,6 +91,7 @@ func bake_from_csg(
 		return null
 
 	return result
+
 
 func bake_from_faces(
 	brushes: Array,
@@ -116,7 +121,9 @@ func bake_from_faces(
 			continue
 		var basis: Basis = brush.global_transform.basis
 		var origin: Vector3 = brush.global_transform.origin
-		var brush_material: Material = brush.get("material_override") if brush.has_method("get") else null
+		var brush_material: Material = (
+			brush.get("material_override") if brush.has_method("get") else null
+		)
 		for face in faces:
 			if face == null:
 				continue
@@ -126,7 +133,9 @@ func bake_from_faces(
 			var uvs: PackedVector2Array = tri.get("uvs", PackedVector2Array())
 			if verts.is_empty():
 				continue
-			var mat = _resolve_face_material(face, material_manager, brush_material, material_override)
+			var mat = _resolve_face_material(
+				face, material_manager, brush_material, material_override
+			)
 			var key = mat if mat != null else "_default"
 			if not groups.has(key):
 				groups[key] = {
@@ -175,11 +184,9 @@ func bake_from_faces(
 		return null
 	return result
 
+
 func _resolve_face_material(
-	face: FaceData,
-	material_manager: MaterialManager,
-	brush_material: Material,
-	fallback: Material
+	face: FaceData, material_manager: MaterialManager, brush_material: Material, fallback: Material
 ) -> Material:
 	var base: Material = null
 	if material_manager and face.material_idx >= 0:
@@ -191,6 +198,8 @@ func _resolve_face_material(
 	var painted = face.get_painted_albedo()
 	if painted:
 		var tex = ImageTexture.create_from_image(painted)
+		if not tex:
+			return base
 		var mat = StandardMaterial3D.new()
 		if base is StandardMaterial3D:
 			var base_std := base as StandardMaterial3D
@@ -201,7 +210,10 @@ func _resolve_face_material(
 		return mat
 	return base
 
-func _postprocess_mesh(mesh: Mesh, generate_lods: bool, unwrap_uv2: bool, uv2_texel_size: float) -> Mesh:
+
+func _postprocess_mesh(
+	mesh: Mesh, generate_lods: bool, unwrap_uv2: bool, uv2_texel_size: float
+) -> Mesh:
 	if not mesh:
 		return null
 	var result = mesh
@@ -213,11 +225,13 @@ func _postprocess_mesh(mesh: Mesh, generate_lods: bool, unwrap_uv2: bool, uv2_te
 		result.call("generate_lods")
 	return result
 
+
 func _merge_entries(entries: Array, _use_thread_pool: bool) -> ArrayMesh:
 	var mesh_entries = _collect_mesh_entries(entries)
 	if mesh_entries.is_empty():
 		return null
 	return _merge_entries_worker(mesh_entries)
+
 
 func _collect_mesh_entries(entries: Array) -> Array:
 	var list: Array = []
@@ -232,8 +246,9 @@ func _collect_mesh_entries(entries: Array) -> Array:
 			if entry.size() > 1 and entry[1] is Transform3D:
 				mesh_xform = entry[1]
 		if mesh:
-			list.append({ "mesh": mesh, "transform": mesh_xform })
+			list.append({"mesh": mesh, "transform": mesh_xform})
 	return list
+
 
 func _merge_entries_worker(mesh_entries: Array) -> ArrayMesh:
 	var merged = ArrayMesh.new()
@@ -251,6 +266,7 @@ func _merge_entries_worker(mesh_entries: Array) -> ArrayMesh:
 			var transformed = _transform_arrays(arrays, xform)
 			merged.add_surface_from_arrays(primitive, transformed)
 	return merged if merged.get_surface_count() > 0 else null
+
 
 func _transform_arrays(arrays: Array, xform: Transform3D) -> Array:
 	var out: Array = []

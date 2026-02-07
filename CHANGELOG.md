@@ -16,8 +16,29 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 - Paint Mode can target either floor paint or surface paint.
 - .hflevel now persists materials palette and per-face data.
 
+### Fixed
+- Fixed `test_mat.tres` UTF-8 BOM that prevented Godot from loading the sample material.
+- Fixed 59 "Invalid owner" errors during chunked bake: `_assign_owner` was called on chunk nodes before their parent container was added to the scene tree.
+- Changed navmesh `cell_height` default from 0.2 to 0.25 to match Godot's NavigationServer3D map default, eliminating mismatch warnings.
+- Added `_assign_owner_recursive()` so baked geometry (chunks, meshes, collision, navmesh) all get proper editor ownership in one pass after being added to the tree.
+- Added CI workflow (`.github/workflows/ci.yml`) for automated `gdformat` and `gdlint` checks on push/PR.
+
+### Refactored
+- Split `level_root.gd` from ~2,500 lines into thin coordinator (~1,100 lines) + 8 `RefCounted` subsystem classes in `systems/`.
+- Introduced `input_state.gd` (`HFInputState`) state machine replacing 18+ loose drag/paint state variables.
+- Replaced ~57 `has_method`/`call` duck-typing patterns in `plugin.gd` and `dock.gd` with direct typed calls.
+- Added recursion depth limits and inner-array validation to `hflevel_io.gd` variant encoding/decoding.
+- Added null-safety checks in `baker.gd` after `_postprocess_mesh()` and `ImageTexture.create_from_image()`.
+- Plugin cleanup (`_exit_tree`) now uses `is_instance_valid()` + `queue_free()` instead of `free()`.
+- Removed Godot 3 `Image.lock()`/`unlock()` remnants from `face_data.gd`.
+- Added texture image cache in `face_data.gd` paint blending to avoid redundant `get_image()`/resize calls.
+- Added early-exit in `plugin.gd` screen bounds calculation for objects fully behind the camera.
+- Fixed paint blending loop in `face_data.gd` that only ran when the weight image needed resizing.
+- Threaded .hflevel writes now log errors on file open failure and `store_buffer` errors.
+
 ### Documentation
 - Added texture/materials guide, development/testing guide, and updated README/spec/user/MVP docs.
+- Updated spec, development guide, MVP guide, and README to reflect subsystem architecture.
 
 ## [0.1.1] - 2026-02-05
 

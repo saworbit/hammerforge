@@ -5,19 +5,26 @@ extends RefCounted
 const HFHash = preload("hf_hash.gd")
 const HFGeneratedModel = preload("hf_generated_model.gd")
 
+
 class SynthSettings:
 	var floor_thickness := 0.2
 	var wall_height := 3.0
 	var wall_thickness := 0.2
 
-func build_for_chunks(layer: HFPaintLayer, chunk_ids: Array[Vector2i], settings: SynthSettings) -> HFGeneratedModel:
+
+func build_for_chunks(
+	layer: HFPaintLayer, chunk_ids: Array[Vector2i], settings: SynthSettings
+) -> HFGeneratedModel:
 	var model := HFGeneratedModel.new()
 	for cid in chunk_ids:
 		_add_floors_for_chunk(layer, cid, settings, model)
 		_add_walls_for_chunk(layer, cid, settings, model)
 	return model
 
-func _add_floors_for_chunk(layer: HFPaintLayer, cid: Vector2i, s: SynthSettings, model: HFGeneratedModel) -> void:
+
+func _add_floors_for_chunk(
+	layer: HFPaintLayer, cid: Vector2i, s: SynthSettings, model: HFGeneratedModel
+) -> void:
 	var size := layer.chunk_size
 	var origin := Vector2i(cid.x * size, cid.y * size)
 	var mask := _build_chunk_mask(layer, origin, size)
@@ -31,7 +38,10 @@ func _add_floors_for_chunk(layer: HFPaintLayer, cid: Vector2i, s: SynthSettings,
 		fr.id = HFHash.floor_id(layer.layer_id, cid, fr.min_cell, fr.size)
 		model.floors.append(fr)
 
-func _add_walls_for_chunk(layer: HFPaintLayer, cid: Vector2i, s: SynthSettings, model: HFGeneratedModel) -> void:
+
+func _add_walls_for_chunk(
+	layer: HFPaintLayer, cid: Vector2i, s: SynthSettings, model: HFGeneratedModel
+) -> void:
 	var size := layer.chunk_size
 	var origin := Vector2i(cid.x * size, cid.y * size)
 	var edges = _boundary_edges(layer, origin, size)
@@ -66,6 +76,7 @@ func _add_walls_for_chunk(layer: HFPaintLayer, cid: Vector2i, s: SynthSettings, 
 		ws.id = HFHash.wall_id(layer.layer_id, cid, ws.a, ws.b, ws.outward)
 		model.walls.append(ws)
 
+
 func _build_chunk_mask(layer: HFPaintLayer, origin: Vector2i, size: int) -> Array:
 	var rows: Array = []
 	for y in range(size):
@@ -76,6 +87,7 @@ func _build_chunk_mask(layer: HFPaintLayer, origin: Vector2i, size: int) -> Arra
 			row[x] = 1 if layer.get_cell(cell) else 0
 		rows.append(row)
 	return rows
+
 
 func _greedy_rectangles(mask: Array, size: int) -> Array:
 	var used: Array = []
@@ -111,6 +123,7 @@ func _greedy_rectangles(mask: Array, size: int) -> Array:
 			rects.append(Rect2i(x, y, w, h))
 	return rects
 
+
 func _boundary_edges(layer: HFPaintLayer, origin: Vector2i, size: int) -> Array:
 	var edges_h: Array = []
 	var edges_v: Array = []
@@ -120,14 +133,23 @@ func _boundary_edges(layer: HFPaintLayer, origin: Vector2i, size: int) -> Array:
 			if not layer.get_cell(cell):
 				continue
 			if not layer.get_cell(cell + Vector2i(0, -1)):
-				edges_h.append({ "x0": cell.x, "x1": cell.x + 1, "y": cell.y, "outward": Vector2i(0, -1) })
+				edges_h.append(
+					{"x0": cell.x, "x1": cell.x + 1, "y": cell.y, "outward": Vector2i(0, -1)}
+				)
 			if not layer.get_cell(cell + Vector2i(0, 1)):
-				edges_h.append({ "x0": cell.x, "x1": cell.x + 1, "y": cell.y + 1, "outward": Vector2i(0, 1) })
+				edges_h.append(
+					{"x0": cell.x, "x1": cell.x + 1, "y": cell.y + 1, "outward": Vector2i(0, 1)}
+				)
 			if not layer.get_cell(cell + Vector2i(-1, 0)):
-				edges_v.append({ "x": cell.x, "y0": cell.y, "y1": cell.y + 1, "outward": Vector2i(-1, 0) })
+				edges_v.append(
+					{"x": cell.x, "y0": cell.y, "y1": cell.y + 1, "outward": Vector2i(-1, 0)}
+				)
 			if not layer.get_cell(cell + Vector2i(1, 0)):
-				edges_v.append({ "x": cell.x + 1, "y0": cell.y, "y1": cell.y + 1, "outward": Vector2i(1, 0) })
+				edges_v.append(
+					{"x": cell.x + 1, "y0": cell.y, "y1": cell.y + 1, "outward": Vector2i(1, 0)}
+				)
 	return [edges_h, edges_v]
+
 
 func _merge_horizontal(edges_h: Array) -> Array:
 	var groups: Dictionary = {}
@@ -156,11 +178,12 @@ func _merge_horizontal(edges_h: Array) -> Array:
 			elif a < cur_end:
 				cur_end = max(cur_end, b)
 			else:
-				segs.append({ "x0": cur_start, "x1": cur_end, "y": y, "outward": outward })
+				segs.append({"x0": cur_start, "x1": cur_end, "y": y, "outward": outward})
 				cur_start = a
 				cur_end = b
-		segs.append({ "x0": cur_start, "x1": cur_end, "y": y, "outward": outward })
+		segs.append({"x0": cur_start, "x1": cur_end, "y": y, "outward": outward})
 	return segs
+
 
 func _merge_vertical(edges_v: Array) -> Array:
 	var groups: Dictionary = {}
@@ -189,8 +212,8 @@ func _merge_vertical(edges_v: Array) -> Array:
 			elif a < cur_end:
 				cur_end = max(cur_end, b)
 			else:
-				segs.append({ "x": x, "y0": cur_start, "y1": cur_end, "outward": outward })
+				segs.append({"x": x, "y0": cur_start, "y1": cur_end, "outward": outward})
 				cur_start = a
 				cur_end = b
-		segs.append({ "x": x, "y0": cur_start, "y1": cur_end, "outward": outward })
+		segs.append({"x": x, "y0": cur_start, "y1": cur_end, "outward": outward})
 	return segs

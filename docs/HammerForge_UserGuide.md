@@ -186,3 +186,6 @@ Dock not showing
 Face selection not working
 - Enable Face Select Mode in the Materials tab.
 - Use the Select tool (not Draw).
+
+Material fails to load
+- Material `.tres` files must not have a UTF-8 BOM. If Godot reports "Expected '['" on a `.tres` file, re-save it without BOM (or create a fresh one via FileSystem -> New Resource -> StandardMaterial3D).

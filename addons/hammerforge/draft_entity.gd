@@ -2,8 +2,10 @@
 extends Node3D
 class_name DraftEntity
 
-@export var entity_type: String = "": set = _set_entity_type
-@export var entity_class: String = "": set = _set_entity_class
+@export var entity_type: String = "":
+	set = _set_entity_type
+@export var entity_class: String = "":
+	set = _set_entity_class
 
 var entity_data: Dictionary = {}
 var preview_node: Node3D = null
@@ -13,6 +15,7 @@ var entity_properties: Dictionary:
 	set(value):
 		if value is Dictionary:
 			entity_data = value
+
 
 func _set_entity_type(val: String) -> void:
 	if entity_type == val:
@@ -24,6 +27,7 @@ func _set_entity_type(val: String) -> void:
 	_apply_entity_defaults()
 	notify_property_list_changed()
 
+
 func _set_entity_class(val: String) -> void:
 	if entity_class == val:
 		return
@@ -34,14 +38,17 @@ func _set_entity_class(val: String) -> void:
 	_apply_entity_defaults()
 	notify_property_list_changed()
 
+
 func _ready() -> void:
 	_update_preview()
 	if entity_type != "" and entity_data.is_empty():
 		_apply_entity_defaults()
 		notify_property_list_changed()
 
+
 func _exit_tree() -> void:
 	_clear_preview()
+
 
 func _update_preview() -> void:
 	if not is_inside_tree() or not Engine.is_editor_hint():
@@ -99,11 +106,16 @@ func _update_preview() -> void:
 			mat.albedo_color = preview_color
 			mat.albedo_color.a = clamp(alpha, 0.05, 1.0)
 			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-			mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED if unshaded else BaseMaterial3D.SHADING_MODE_PER_PIXEL
+			mat.shading_mode = (
+				BaseMaterial3D.SHADING_MODE_UNSHADED
+				if unshaded
+				else BaseMaterial3D.SHADING_MODE_PER_PIXEL
+			)
 			mat.no_depth_test = no_depth
 			mesh_inst.material_override = mat
 			mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			_assign_preview(mesh_inst)
+
 
 func _assign_preview(node: Node3D) -> void:
 	if not node:
@@ -113,10 +125,12 @@ func _assign_preview(node: Node3D) -> void:
 	node.owner = null
 	preview_node = node
 
+
 func _clear_preview() -> void:
 	if preview_node and is_instance_valid(preview_node):
 		preview_node.queue_free()
 	preview_node = null
+
 
 func _get_entity_definition() -> Dictionary:
 	var key = entity_class if entity_class != "" else entity_type
@@ -126,6 +140,7 @@ func _get_entity_definition() -> Dictionary:
 	if not level_root:
 		return {}
 	return level_root.get_entity_definition(key)
+
 
 func _apply_entity_defaults() -> void:
 	if entity_type == "":
@@ -144,6 +159,7 @@ func _apply_entity_defaults() -> void:
 		if entity_data.has(name):
 			continue
 		entity_data[name] = _parse_default_value(prop.get("type", ""), prop.get("default", null))
+
 
 func _parse_default_value(type_name: String, value: Variant) -> Variant:
 	match type_name:
@@ -170,41 +186,45 @@ func _parse_default_value(type_name: String, value: Variant) -> Variant:
 		_:
 			return value
 
+
 func _get_property_list() -> Array:
 	var properties: Array = []
 	var type_hints = _get_entity_type_hints()
 	if not type_hints.is_empty():
-		properties.append({
-			"name": "entity_type",
-			"type": TYPE_STRING,
-			"hint": PROPERTY_HINT_ENUM,
-			"hint_string": ",".join(type_hints),
-			"usage": PROPERTY_USAGE_DEFAULT
-		})
+		properties.append(
+			{
+				"name": "entity_type",
+				"type": TYPE_STRING,
+				"hint": PROPERTY_HINT_ENUM,
+				"hint_string": ",".join(type_hints),
+				"usage": PROPERTY_USAGE_DEFAULT
+			}
+		)
 	var schema: Array = _get_entity_schema()
 	if schema.is_empty():
 		return properties
-	properties.append({
-		"name": "Entity Props",
-		"type": TYPE_NIL,
-		"usage": PROPERTY_USAGE_CATEGORY
-	})
+	properties.append({"name": "Entity Props", "type": TYPE_NIL, "usage": PROPERTY_USAGE_CATEGORY})
 	for prop in schema:
 		var p_name = str(prop.get("name", ""))
 		if p_name == "":
 			continue
 		var prop_type = _type_from_schema(prop.get("type", ""))
-		properties.append({
-			"name": "data/" + p_name,
-			"type": prop_type,
-			"usage": PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_STORAGE
-		})
-		properties.append({
-			"name": "entity_data/" + p_name,
-			"type": prop_type,
-			"usage": PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_STORAGE
-		})
+		properties.append(
+			{
+				"name": "data/" + p_name,
+				"type": prop_type,
+				"usage": PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_STORAGE
+			}
+		)
+		properties.append(
+			{
+				"name": "entity_data/" + p_name,
+				"type": prop_type,
+				"usage": PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_STORAGE
+			}
+		)
 	return properties
+
 
 func _get(property: StringName) -> Variant:
 	var p_str = str(property)
@@ -224,6 +244,7 @@ func _get(property: StringName) -> Variant:
 			return schema_default
 	return null
 
+
 func _set(property: StringName, value: Variant) -> bool:
 	var p_str = str(property)
 	if p_str.begins_with("data/"):
@@ -236,12 +257,14 @@ func _set(property: StringName, value: Variant) -> bool:
 		return true
 	return false
 
+
 func _schema_default_value(key: String) -> Variant:
 	var schema: Array = _get_entity_schema()
 	for prop in schema:
 		if str(prop.get("name", "")) == key:
 			return _parse_default_value(prop.get("type", ""), prop.get("default", null))
 	return null
+
 
 func _get_entity_schema() -> Array:
 	if entity_type == "":
@@ -254,6 +277,7 @@ func _get_entity_schema() -> Array:
 		return []
 	var props: Array = definition.get("properties", [])
 	return props
+
 
 func _type_from_schema(type_name: String) -> int:
 	match type_name:
@@ -272,6 +296,7 @@ func _type_from_schema(type_name: String) -> int:
 		_:
 			return TYPE_NIL
 
+
 func _get_entity_type_hints() -> PackedStringArray:
 	var level_root = _find_level_root()
 	if not level_root:
@@ -283,6 +308,7 @@ func _get_entity_type_hints() -> PackedStringArray:
 	for key in keys:
 		list.append(str(key))
 	return list
+
 
 func _find_level_root() -> Node:
 	var current: Node = self

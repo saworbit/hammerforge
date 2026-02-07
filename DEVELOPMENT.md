@@ -1,8 +1,8 @@
 ﻿# Development Guide
 
-Last updated: February 6, 2026
+Last updated: February 7, 2026
 
-This document covers local setup, where material resources live, and how to test new features.
+This document covers local setup, codebase structure, and how to test features.
 
 ## Requirements
 - Godot Engine 4.6 (stable).
@@ -12,6 +12,67 @@ This document covers local setup, where material resources live, and how to test
 1. Open the project in Godot.
 2. Enable the plugin: Project -> Project Settings -> Plugins -> HammerForge.
 3. Open any 3D scene and click in the viewport to auto-create `LevelRoot`.
+
+## Codebase Structure
+
+```
+addons/hammerforge/
+  plugin.gd              EditorPlugin entry point, input routing
+  level_root.gd          Thin coordinator (~1,100 lines), delegates to subsystems
+  input_state.gd         Drag/paint state machine (HFInputState)
+  dock.gd + dock.tscn    UI dock and tool state
+  brush_instance.gd      DraftBrush node
+  baker.gd               CSG -> mesh bake pipeline
+  face_data.gd           Per-face materials, UVs, paint layers
+  material_manager.gd    Shared materials palette
+  face_selector.gd       Raycast face selection
+  surface_paint.gd       Per-face surface paint tool
+  uv_editor.gd           UV editing dock
+  hflevel_io.gd          Variant encoding/decoding for .hflevel
+  map_io.gd              .map import/export
+  prefab_factory.gd      Advanced shape generation
+
+  systems/               Subsystem classes (RefCounted)
+    hf_grid_system.gd      Editor grid management
+    hf_entity_system.gd    Entity definitions and placement
+    hf_brush_system.gd     Brush CRUD, cuts, materials, picking
+    hf_drag_system.gd      Drag lifecycle, preview, axis locking
+    hf_bake_system.gd      Bake orchestration (single/chunked)
+    hf_paint_system.gd     Floor + surface paint, layer CRUD
+    hf_state_system.gd     State capture/restore, settings
+    hf_file_system.gd      .hflevel/.map/.glTF I/O, threaded writes
+
+  paint/                 Floor paint subsystem
+    hf_paint_grid.gd       Grid storage
+    hf_paint_layer_manager.gd  Layer management
+    hf_paint_tool.gd       Paint tool input handling
+    hf_inference_engine.gd Inference for paint operations
+    hf_geometry_synth.gd   Greedy meshing for floors/walls
+    hf_reconciler.gd       Stable-ID reconciliation
+    hf_stroke.gd           Stroke types (brush/erase/rect/line/bucket)
+```
+
+### Architecture Conventions
+
+- **Subsystems are RefCounted.** Each receives a `LevelRoot` reference in `_init()` and accesses container nodes and properties through `root.*`.
+- **No circular preloads.** Subsystem files must not `preload("../level_root.gd")`. Use raw ints for default parameters and `root.EnumName.*` at runtime.
+- **LevelRoot is the public API.** Its methods are thin one-line delegates to subsystems. External callers (`plugin.gd`, `dock.gd`) always go through `LevelRoot`.
+- **Input state machine.** `HFDragSystem` owns the `HFInputState` instance. Drag state transitions are explicit (`begin_drag` -> `advance_to_height` -> `end_drag`).
+- **Direct typed calls.** `plugin.gd` and `dock.gd` use typed references (`LevelRoot`, `DockType`) with direct method calls instead of `has_method`/`call`.
+- **Undo/redo dynamic dispatch.** The `_commit_state_action` pattern in `dock.gd` intentionally uses string method names for undo/redo -- this is the one exception to the typed-calls rule.
+- **Bake owner assignment.** Use `_assign_owner_recursive()` (not `_assign_owner()`) for baked geometry so all descendants get proper editor ownership. Always call it *after* the container is added to the scene tree.
+
+### CI
+
+The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on push and PR to `main`:
+- `gdformat --check` -- verifies formatting
+- `gdlint` -- checks lint rules (configured in `.gdlintrc`)
+
+Run locally before pushing:
+```
+gdformat --check addons/hammerforge/
+gdlint addons/hammerforge/
+```
 
 ## Materials Resources
 HammerForge expects Godot material resources (`.tres` or `.material`) in the palette.

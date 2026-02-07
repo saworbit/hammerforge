@@ -7,7 +7,7 @@ enum Tool { PAINT, ERASE, RECT, LINE, BUCKET }
 var tool: int = Tool.PAINT
 var radius_cells: int = 1
 
-var cells: Array[Vector2i] = [] # stamped cells in order
+var cells: Array[Vector2i] = []  # stamped cells in order
 var times: PackedFloat64Array = PackedFloat64Array()
 
 # derived
@@ -17,9 +17,11 @@ var is_closed: bool = false
 var aspect_ratio: float = 1.0
 var avg_speed: float = 0.0
 
+
 func add_cell(c: Vector2i, t: float) -> void:
 	cells.append(c)
 	times.append(t)
+
 
 func analyse() -> void:
 	if cells.is_empty():

@@ -14,11 +14,13 @@ const FaceData = preload("face_data.gd")
 var _face: FaceData = null
 var _drag_index: int = -1
 
+
 func set_face(face: FaceData) -> void:
 	_face = face
 	if _face:
 		_face.ensure_custom_uvs()
 	queue_redraw()
+
 
 func _gui_input(event: InputEvent) -> void:
 	if _face == null:
@@ -41,6 +43,7 @@ func _gui_input(event: InputEvent) -> void:
 			emit_signal("uv_changed", _face)
 			queue_redraw()
 
+
 func _draw() -> void:
 	if _face == null:
 		return
@@ -58,6 +61,7 @@ func _draw() -> void:
 		var color = point_color_selected if i == _drag_index else point_color
 		draw_circle(p, point_radius, color)
 
+
 func _find_nearest_uv_index(pos: Vector2) -> int:
 	var uv_points = _face.custom_uvs
 	var best = -1
@@ -70,9 +74,11 @@ func _find_nearest_uv_index(pos: Vector2) -> int:
 			best = i
 	return best
 
+
 func _uv_to_screen(uv: Vector2) -> Vector2:
 	var rect = Rect2(Vector2.ZERO, size)
 	return rect.position + Vector2(uv.x * rect.size.x, (1.0 - uv.y) * rect.size.y)
+
 
 func _screen_to_uv(pos: Vector2) -> Vector2:
 	if size.x <= 0.0 or size.y <= 0.0:

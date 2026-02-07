@@ -6,7 +6,10 @@ const FaceData = preload("face_data.gd")
 
 @export var default_layer_size: Vector2i = Vector2i(256, 256)
 
-func paint_at_uv(face: FaceData, layer_idx: int, uv: Vector2, radius_uv: float, strength: float) -> void:
+
+func paint_at_uv(
+	face: FaceData, layer_idx: int, uv: Vector2, radius_uv: float, strength: float
+) -> void:
 	if face == null:
 		return
 	var layer = _ensure_layer(face, layer_idx)
@@ -37,6 +40,7 @@ func paint_at_uv(face: FaceData, layer_idx: int, uv: Vector2, radius_uv: float, 
 			var next = clamp(current.r + weight, 0.0, 1.0)
 			img.set_pixel(x, y, Color(next, current.g, current.b, 1.0))
 	img.unlock()
+
 
 func _ensure_layer(face: FaceData, layer_idx: int) -> FaceData.PaintLayer:
 	if layer_idx < 0:
