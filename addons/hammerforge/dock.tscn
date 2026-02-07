@@ -109,6 +109,15 @@ value = 1.0
 page = 1.0
 size_flags_horizontal = 3
 
+[node name="BrushShapeRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
+custom_constants/separation = 4.0
+
+[node name="BrushShapeLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/BrushShapeRow"]
+text = "Shape"
+
+[node name="BrushShapeSelect" type="OptionButton" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/BrushShapeRow"]
+size_flags_horizontal = 3
+
 [node name="PaintLayerRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
 custom_constants/separation = 4.0
 

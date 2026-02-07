@@ -5,6 +5,7 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- Floor paint brush shape selector (Square or Circle) in the Floor Paint tab.
 - Per-face material palette with face selection mode.
 - Dynamic context-sensitive shortcut HUD that updates based on current tool and mode.
 - Comprehensive tooltips on all dock controls (snap buttons, bake options, paint settings, etc.).

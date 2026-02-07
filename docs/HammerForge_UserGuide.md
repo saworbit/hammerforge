@@ -29,7 +29,7 @@ Paint Mode (floor + surface)
 - Enables paint input in the viewport.
 - Paint Target is global and decides whether strokes affect Floor or Surface.
 - Floor Paint tab: Brush, Erase, Rect, Line, Bucket.
-- Floor Paint tab: Radius in grid cells and layer picker.
+- Floor Paint tab: Brush shape (Square or Circle), radius in grid cells, and layer picker.
 - Surface Paint tab: Paint Target, layers, texture picker, radius/strength.
 
 Materials (per-face)
@@ -113,10 +113,11 @@ Paint tool shortcuts (active when Paint Mode is enabled)
 ## Floor Paint
 1. Enable Paint Mode.
 2. Open the Floor Paint tab.
-3. Choose tool, radius, and layer.
+3. Choose tool, brush shape (Square or Circle), radius, and layer.
 4. Paint in the viewport.
 
 Notes
+- **Brush Shape**: Square fills a full box of cells; Circle clips corners using Euclidean distance.
 - Live preview updates while dragging.
 - Bucket fills a contiguous region (click filled to erase).
 - Generated geometry appears under `LevelRoot/Generated`.

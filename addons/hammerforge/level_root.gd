@@ -669,10 +669,11 @@ func handle_paint_input(
 	operation: int,
 	size: Vector3,
 	paint_tool_id: int = -1,
-	paint_radius_cells: int = -1
+	paint_radius_cells: int = -1,
+	paint_brush_shape: int = 1
 ) -> bool:
 	return paint_system.handle_paint_input(
-		camera, event, screen_pos, operation, size, paint_tool_id, paint_radius_cells
+		camera, event, screen_pos, operation, size, paint_tool_id, paint_radius_cells, paint_brush_shape
 	)
 
 

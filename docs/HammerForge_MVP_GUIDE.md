@@ -73,6 +73,7 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 - Verify pending cuts appear orange-red, applied cuts turn standard red.
 - Bake (with and without chunking).
 - Enable Paint Mode and test Floor Paint tab Brush/Erase/Line/Rect/Bucket.
+- Switch brush shape (Square/Circle) and verify radius fills correctly for each.
 - Test paint tool shortcuts: B/E/R/L/K in Paint Mode.
 - Verify live paint preview while dragging.
 - Switch paint layers and ensure isolation.

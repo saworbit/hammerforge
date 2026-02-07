@@ -54,6 +54,7 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 ### Floor Paint (Early)
 - Grid-based paint layers with chunked storage
 - **Tools:** Brush, Erase, Rect, Line, Bucket
+- **Brush shape:** Square or Circle
 - Live preview while dragging
 - Greedy-meshed floors and merged wall segments
 - Stable IDs with scoped reconciliation (no node churn)

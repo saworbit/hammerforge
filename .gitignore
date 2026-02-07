@@ -17,6 +17,7 @@ export_presets.cfg
 Thumbs.db
 Desktop.ini
 .DS_Store
+nul
 
 # IDEs/editors
 .vscode/

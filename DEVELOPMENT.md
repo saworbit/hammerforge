@@ -103,6 +103,7 @@ Surface paint
 
 Floor paint
 - In Floor Paint tab, use Brush/Erase/Rect/Line/Bucket on a layer.
+- Switch brush shape between Square and Circle; confirm Square fills a box and Circle clips corners.
 - Confirm live preview while dragging.
 
 Bake

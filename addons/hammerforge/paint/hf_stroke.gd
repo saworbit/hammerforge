@@ -3,6 +3,7 @@ class_name HFStroke
 extends RefCounted
 
 enum Tool { PAINT, ERASE, RECT, LINE, BUCKET }
+enum BrushShape { CIRCLE, SQUARE }
 
 var tool: int = Tool.PAINT
 var radius_cells: int = 1

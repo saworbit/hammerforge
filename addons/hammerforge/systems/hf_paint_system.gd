@@ -28,7 +28,8 @@ func handle_paint_input(
 	operation: int,
 	size: Vector3,
 	paint_tool_id: int = -1,
-	paint_radius_cells: int = -1
+	paint_radius_cells: int = -1,
+	paint_brush_shape: int = 1
 ) -> bool:
 	if not Engine.is_editor_hint():
 		return false
@@ -37,6 +38,7 @@ func handle_paint_input(
 	if not root.paint_tool or not root.paint_layers:
 		return false
 	var layer = root.paint_layers.get_active_layer()
+	root.paint_tool.brush_shape = paint_brush_shape
 	if paint_radius_cells > 0:
 		root.paint_tool.brush_radius_cells = paint_radius_cells
 	elif layer and layer.grid:

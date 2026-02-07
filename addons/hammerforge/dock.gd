@@ -62,6 +62,8 @@ var paint_tool_select: OptionButton = $Margin/VBox/MainTabs/FloorPaint/FloorPain
 @onready
 var paint_radius: SpinBox = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/PaintRadiusRow/PaintRadius
 @onready
+var brush_shape_select: OptionButton = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/BrushShapeRow/BrushShapeSelect
+@onready
 var paint_layer_select: OptionButton = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/PaintLayerRow/PaintLayerSelect
 @onready
 var paint_layer_add: Button = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/PaintLayerRow/PaintLayerAdd
@@ -382,6 +384,7 @@ func _apply_all_tooltips() -> void:
 		paint_tool_select, "Floor paint tool\nB: Brush | E: Erase | R: Rect | L: Line | K: Bucket"
 	)
 	_set_tooltip(paint_radius, "Floor paint brush radius in grid cells")
+	_set_tooltip(brush_shape_select, "Brush shape: Square or Circle")
 	_set_tooltip(paint_layer_select, "Active floor paint layer")
 	_set_tooltip(paint_layer_add, "Add a new floor paint layer")
 	_set_tooltip(paint_layer_remove, "Remove the selected floor paint layer")
@@ -564,6 +567,7 @@ func _ready():
 
 	_populate_shape_palette()
 	_populate_paint_tools()
+	_populate_brush_shapes()
 	_populate_paint_targets()
 	if (
 		shape_select
@@ -907,6 +911,12 @@ func get_paint_radius_cells() -> int:
 	if not paint_radius:
 		return 1
 	return int(paint_radius.value)
+
+
+func get_brush_shape() -> int:
+	if not brush_shape_select:
+		return 1
+	return brush_shape_select.get_selected_id()
 
 
 func get_surface_paint_radius() -> float:
@@ -1348,6 +1358,15 @@ func _populate_paint_tools() -> void:
 	paint_tool_select.add_item("Line", 3)
 	paint_tool_select.add_item("Bucket", 4)
 	paint_tool_select.select(0)
+
+
+func _populate_brush_shapes() -> void:
+	if not brush_shape_select:
+		return
+	brush_shape_select.clear()
+	brush_shape_select.add_item("Square", 1)
+	brush_shape_select.add_item("Circle", 0)
+	brush_shape_select.select(0)
 
 
 func _populate_paint_targets() -> void:

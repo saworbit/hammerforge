@@ -77,6 +77,10 @@ Data
 - Grid -> Layer -> Chunked bitset storage.
 - Paint layers are stored under PaintLayers.
 
+Brush Shape
+- Square: fills every cell in the radius range (full box).
+- Circle: clips corners using Euclidean distance check.
+
 Generation
 - Floors: greedy rectangle merge.
 - Walls: boundary edges + merged segments.

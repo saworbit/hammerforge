@@ -9,6 +9,7 @@ var inference: HFInferenceEngine
 var geometry: HFGeometrySynth
 var reconciler: HFGeneratedReconciler
 @export var brush_radius_cells: int = 1
+@export var brush_shape: int = HFStroke.BrushShape.SQUARE
 @export var tool: int = HFStroke.Tool.PAINT
 
 var synth_settings := HFGeometrySynth.SynthSettings.new()
@@ -148,7 +149,7 @@ func _stamp_cell(cell: Vector2i) -> void:
 	var r = max(0, brush_radius_cells - 1)
 	for dy in range(-r, r + 1):
 		for dx in range(-r, r + 1):
-			if dx * dx + dy * dy > r * r:
+			if brush_shape == HFStroke.BrushShape.CIRCLE and dx * dx + dy * dy > r * r:
 				continue
 			var target = cell + Vector2i(dx, dy)
 			layer.set_cell(target, filled)

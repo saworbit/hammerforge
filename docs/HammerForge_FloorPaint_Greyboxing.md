@@ -34,6 +34,10 @@ HFStroke
 - Line: Bresenham line.
 - Bucket: flood fill (contiguous region).
 
+Brush Shape
+- **Square**: fills every cell in the [-r, r] range (full box).
+- **Circle**: clips corners using Euclidean distance (dx*dx + dy*dy > r*r).
+
 Live preview
 - During drag, preview writes into the layer and immediately regenerates affected chunks.
 - On mouse-up, inference (if enabled) runs and a final regeneration happens.
@@ -105,7 +109,7 @@ merge vertical by (x, outward) and contiguous y
 ## Implementation Notes
 - Chunk index must floor correctly for negative coordinates.
 - Live preview should reconcile on every drag update.
-- Radius 1 should produce a single cell (no cross pattern).
+- Radius 1 should produce a single cell (no cross pattern) regardless of brush shape.
 - Generated nodes live under LevelRoot/Generated/Floors and /Walls.
 
 ## Known Limitations
