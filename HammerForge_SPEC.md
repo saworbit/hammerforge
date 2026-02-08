@@ -45,10 +45,29 @@ HammerForge uses a coordinator + subsystems pattern. `LevelRoot` is a thin coord
 
 ### Other Modules
 
-- `addons/hammerforge/paint/*`: floor paint grid, layers, tools, inference, geometry synthesis, reconciliation
+- `addons/hammerforge/paint/*`: floor paint grid, layers, tools, inference, geometry synthesis, reconciliation, heightmap integration
 - `addons/hammerforge/hflevel_io.gd`: variant encoding/decoding for .hflevel format
 - `addons/hammerforge/map_io.gd`: .map file import/export
 - `addons/hammerforge/prefab_factory.gd`: advanced shape generation (wedges, prisms, platonic solids, etc.)
+
+### Paint Subsystem (`addons/hammerforge/paint/`)
+
+| Script | class_name | Responsibility |
+|--------|------------|----------------|
+| `hf_paint_grid.gd` | `HFPaintGrid` | Grid storage, coordinate conversion |
+| `hf_paint_layer.gd` | `HFPaintLayer` | Layer data: bitset + material_ids + blend_weights + heightmap |
+| `hf_paint_layer_manager.gd` | `HFPaintLayerManager` | Multi-layer management, active layer |
+| `hf_paint_tool.gd` | `HFPaintTool` | Paint input, stroke handling, routes to appropriate synth |
+| `hf_stroke.gd` | `HFStroke` | Stroke data (cells, timing, tool type, brush shape) |
+| `hf_geometry_synth.gd` | `HFGeometrySynth` | Greedy meshing for flat floors/walls |
+| `hf_heightmap_synth.gd` | `HFHeightmapSynth` | Heightmap-displaced mesh generation (SurfaceTool) |
+| `hf_heightmap_io.gd` | `HFHeightmapIO` | Load/generate/serialize heightmaps (base64 PNG) |
+| `hf_generated_model.gd` | `HFGeneratedModel` | Data model: FloorRect, WallSeg, HeightmapFloor |
+| `hf_reconciler.gd` | `HFGeneratedReconciler` | Stable-ID node reconciliation (floors, walls, heightmap floors) |
+| `hf_connector_tool.gd` | `HFConnectorTool` | Ramp/stair mesh generation between layers |
+| `hf_foliage_populator.gd` | `HFFoliagePopulator` | MultiMeshInstance3D procedural scatter |
+| `hf_blend.gdshader` | -- | Two-material blend shader (UV2 blend map) |
+| `hf_inference_engine.gd` | `HFInferenceEngine` | Inference for paint operations |
 
 ## Node Hierarchy
 ```
@@ -62,6 +81,7 @@ LevelRoot (Node3D)
 - Generated
   - Floors
   - Walls
+  - HeightmapFloors
 - Entities
 - BakedGeometry
 ```
@@ -74,20 +94,40 @@ LevelRoot (Node3D)
 ## Floor Paint System
 
 Data
-- Grid -> Layer -> Chunked bitset storage.
+- Grid -> Layer -> Chunked storage (bitset + material_ids + blend_weights).
+- Each layer optionally has a `heightmap: Image` and `height_scale: float`.
 - Paint layers are stored under PaintLayers.
+
+Tools
+- Brush, Erase, Rect, Line, Bucket, Blend (enum `HFStroke.Tool`, values 0-5).
+- Blend tool writes per-cell material_id and blend_weight to already-filled cells.
 
 Brush Shape
 - Square: fills every cell in the radius range (full box).
 - Circle: clips corners using Euclidean distance check.
 
-Generation
-- Floors: greedy rectangle merge.
-- Walls: boundary edges + merged segments.
+Generation (flat layers -- no heightmap)
+- Floors: greedy rectangle merge -> DraftBrush boxes.
+- Walls: boundary edges + merged segments -> DraftBrush boxes.
+
+Generation (heightmap layers)
+- Floors: per-cell displaced quads via `HFHeightmapSynth` -> ArrayMesh -> MeshInstance3D.
+- Per-chunk blend image (Image FORMAT_RF) built from cell blend weights.
+- Blend shader (`hf_blend.gdshader`) mixes two materials via UV2-sampled blend map.
+- Walls: still use flat `HFGeometrySynth` (no heightmap displacement on walls).
 
 Reconciliation
-- Stable IDs for generated geometry.
+- Stable IDs for generated geometry (floors, walls, heightmap floors).
 - Dirty chunk scoping to avoid unnecessary churn.
+- `Generated/HeightmapFloors` container for MeshInstance3D nodes.
+
+Auto-Connectors
+- `HFConnectorTool` generates ramp or stair ArrayMesh between two cells on different layers.
+- Ramp: sloped quad strip. Stairs: horizontal treads + vertical risers.
+
+Foliage Populator
+- `HFFoliagePopulator` scatters instances via MultiMeshInstance3D.
+- Filters by height range, slope threshold; configurable density, scale, rotation, seed.
 
 ## Entities
 - Entities live under LevelRoot/Entities or are tagged `is_entity`.
@@ -97,10 +137,12 @@ Reconciliation
 ## Persistence (.hflevel)
 - Stores brushes, entities, level settings, materials palette, and paint layers.
 - Brush records include face data (materials, UVs, paint layers).
-- Paint layers include grid settings, chunk size, and bitset data.
+- Paint layers include grid settings, chunk size, bitset data, `material_ids`, `blend_weights`.
+- Optional per-layer: `heightmap_b64` (base64 PNG), `height_scale`. Missing keys = no heightmap (backward-compatible).
 
 ## Bake Pipeline
-- Temporary CSG tree for DraftBrushes (including generated floors/walls).
+- Temporary CSG tree for DraftBrushes (including generated flat floors/walls).
+- Heightmap floor meshes are duplicated directly into baked output (bypass CSG) with trimesh collision shapes.
 - Chunked baking (default `bake_chunk_size = 32`): groups brushes by grid coordinate, bakes each chunk independently.
 - Owner assignment uses `_assign_owner_recursive()` after the baked container is added to the tree (avoids premature owner errors during chunked bake).
 - Optional mesh merging, LODs, lightmap UV2, navmesh.

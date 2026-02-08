@@ -135,6 +135,68 @@ custom_minimum_size = Vector2(24, 0)
 text = "-"
 custom_minimum_size = Vector2(24, 0)
 
+[node name="HeightmapSection" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
+text = "Heightmap"
+
+[node name="HeightmapRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
+custom_constants/separation = 4.0
+
+[node name="HeightmapImport" type="Button" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/HeightmapRow"]
+text = "Import..."
+size_flags_horizontal = 3
+
+[node name="HeightmapGenerate" type="Button" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/HeightmapRow"]
+text = "Generate Noise"
+size_flags_horizontal = 3
+
+[node name="HeightScaleRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
+custom_constants/separation = 4.0
+
+[node name="HeightScaleLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/HeightScaleRow"]
+text = "Height Scale"
+
+[node name="HeightScaleSpin" type="SpinBox" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/HeightScaleRow"]
+size_flags_horizontal = 3
+min_value = 0.1
+max_value = 100.0
+step = 0.1
+value = 10.0
+
+[node name="LayerYRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
+custom_constants/separation = 4.0
+
+[node name="LayerYLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/LayerYRow"]
+text = "Layer Y"
+
+[node name="LayerYSpin" type="SpinBox" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/LayerYRow"]
+size_flags_horizontal = 3
+min_value = -1000.0
+max_value = 1000.0
+step = 0.5
+value = 0.0
+
+[node name="BlendSection" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
+text = "Material Blend"
+
+[node name="BlendStrengthRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
+custom_constants/separation = 4.0
+
+[node name="BlendStrengthLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/BlendStrengthRow"]
+text = "Blend Strength"
+
+[node name="BlendStrengthSpin" type="SpinBox" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/BlendStrengthRow"]
+size_flags_horizontal = 3
+min_value = 0.0
+max_value = 1.0
+step = 0.05
+value = 0.5
+
+[node name="HeightmapImportDialog" type="FileDialog" parent="."]
+title = "Import Heightmap"
+access = 2
+filters = PackedStringArray("*.png ; PNG Image", "*.exr ; EXR Image")
+size = Vector2i(600, 400)
+
 [node name="ShapeRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
 custom_constants/separation = 4.0
 

@@ -5,6 +5,7 @@ class_name HFStateSystem
 const DraftBrush = preload("../brush_instance.gd")
 const DraftEntity = preload("../draft_entity.gd")
 const HFLevelIO = preload("../hflevel_io.gd")
+const HFHeightmapIO = preload("../paint/hf_heightmap_io.gd")
 
 var root: Node3D
 
@@ -257,11 +258,30 @@ func capture_paint_layers() -> Array:
 			},
 			"chunks": []
 		}
+		if layer.has_heightmap():
+			entry["heightmap_b64"] = HFHeightmapIO.encode_to_base64(layer.heightmap)
+			entry["height_scale"] = layer.height_scale
 		for cid in layer.get_chunk_ids():
 			var bits = layer.get_chunk_bits(cid)
 			var bytes: Array = []
 			for b in bits:
 				bytes.append(int(b))
-			entry["chunks"].append({"cx": cid.x, "cy": cid.y, "bits": bytes})
+			var mat_ids = layer.get_chunk_material_ids(cid)
+			var mat_bytes: Array = []
+			for b in mat_ids:
+				mat_bytes.append(int(b))
+			var blends = layer.get_chunk_blend_weights(cid)
+			var blend_bytes: Array = []
+			for b in blends:
+				blend_bytes.append(int(b))
+			entry["chunks"].append(
+				{
+					"cx": cid.x,
+					"cy": cid.y,
+					"bits": bytes,
+					"material_ids": mat_bytes,
+					"blend_weights": blend_bytes
+				}
+			)
 		out.append(entry)
 	return out

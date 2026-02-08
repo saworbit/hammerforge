@@ -21,5 +21,14 @@ class WallSeg:
 	var outward: Vector2i  # one of (1,0),(-1,0),(0,1),(0,-1)
 
 
+class HeightmapFloor:
+	var id: StringName
+	var mesh: ArrayMesh
+	var transform: Transform3D
+	var blend_image: Image = null
+	var blend_texture: ImageTexture = null
+
+
 var floors: Array[FloorRect] = []
 var walls: Array[WallSeg] = []
+var heightmap_floors: Array[HeightmapFloor] = []

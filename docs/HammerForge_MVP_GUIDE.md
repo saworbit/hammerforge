@@ -30,10 +30,15 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 - PendingCuts allow staging subtract operations before applying.
 
 ### Floor Paint (`HFPaintSystem` + `paint/*.gd`)
-- Paint layers store grid occupancy in chunked bitsets.
+- Paint layers store grid occupancy in chunked bitsets with per-cell material_ids and blend_weights.
+- Layers optionally have heightmaps (Image FORMAT_RF) for vertex displacement.
 - Geometry synthesis runs per dirty chunk:
-  - Greedy rectangles for floors.
-  - Boundary edges and merged segments for walls.
+  - Flat layers: greedy rectangles for floors, boundary edges + merged segments for walls.
+  - Heightmap layers: per-cell displaced quads via `HFHeightmapSynth`, walls still flat.
+- Per-chunk blend images drive a two-material shader (`hf_blend.gdshader`).
+- Blend tool paints material blend weights on already-filled cells.
+- Auto-connectors (`HFConnectorTool`) generate ramp/stair meshes between layers.
+- Foliage populator (`HFFoliagePopulator`) scatters MultiMeshInstance3D with height/slope filtering.
 - Stable IDs are used to reconcile generated nodes without churn.
 
 ### Face Materials + Surface Paint (`HFPaintSystem`)
@@ -42,7 +47,8 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 - Surface paint writes per-face weight images and updates previews.
 
 ### Bake (`HFBakeSystem`)
-- Assembles DraftBrushes (including generated paint geometry) into mesh output.
+- Assembles DraftBrushes (including generated flat paint geometry) into mesh output via CSG.
+- Heightmap floor meshes are duplicated directly into baked output (bypass CSG) with trimesh collision.
 - Supports single and chunked baking modes.
 - Optional: mesh merging, LODs, lightmap UV2, navmesh, collision.
 
@@ -77,12 +83,17 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 - Test paint tool shortcuts: B/E/R/L/K in Paint Mode.
 - Verify live paint preview while dragging.
 - Switch paint layers and ensure isolation.
+- Import a heightmap (PNG/EXR) or generate procedural noise on a paint layer.
+- Verify displaced mesh appears under `Generated/HeightmapFloors`.
+- Adjust Height Scale and Layer Y spinboxes; confirm mesh updates.
+- Select Blend tool, paint blend weights on filled cells; verify two-material shader blending.
+- Bake with heightmap floors and confirm baked output includes heightmap meshes with trimesh collision.
+- Save and load .hflevel with heightmap data; verify heightmap, material_ids, blend_weights persist.
 - Create a material resource (.tres/.material) in `materials/` and add it to the palette.
 - Enable Face Select Mode and assign materials to faces.
 - Edit UVs and ensure preview updates.
 - Surface paint on a face with two layers and verify blending (Paint Target = Surface).
 - Toggle Use Face Materials and compare bake output.
-- Save and load .hflevel and verify paint data persists.
 - Drag entities from the palette and check selection/exclusion from bake.
 - Verify shortcut HUD updates when switching tools/modes.
 - Verify tooltips appear on all dock controls.

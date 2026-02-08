@@ -45,12 +45,19 @@ addons/hammerforge/
 
   paint/                 Floor paint subsystem
     hf_paint_grid.gd       Grid storage
+    hf_paint_layer.gd      Layer data (bitset + material_ids + blend_weights + heightmap)
     hf_paint_layer_manager.gd  Layer management
-    hf_paint_tool.gd       Paint tool input handling
+    hf_paint_tool.gd       Paint tool input handling (routes to heightmap synth when layer has heightmap)
     hf_inference_engine.gd Inference for paint operations
-    hf_geometry_synth.gd   Greedy meshing for floors/walls
-    hf_reconciler.gd       Stable-ID reconciliation
-    hf_stroke.gd           Stroke types (brush/erase/rect/line/bucket)
+    hf_geometry_synth.gd   Greedy meshing for flat floors/walls
+    hf_heightmap_synth.gd  Heightmap-displaced mesh generation (SurfaceTool, per-vertex displacement)
+    hf_heightmap_io.gd     Heightmap load/generate/serialize (base64 PNG, FastNoiseLite)
+    hf_reconciler.gd       Stable-ID reconciliation (floors, walls, heightmap floors)
+    hf_generated_model.gd  Data model (FloorRect, WallSeg, HeightmapFloor)
+    hf_stroke.gd           Stroke types (brush/erase/rect/line/bucket/blend)
+    hf_connector_tool.gd   Ramp/stair mesh generation between layers
+    hf_foliage_populator.gd MultiMeshInstance3D procedural scatter (height/slope filtering)
+    hf_blend.gdshader      Two-material blend shader (UV2 blend map, default colors, cell grid overlay)
 ```
 
 ### Architecture Conventions
@@ -106,13 +113,24 @@ Floor paint
 - Switch brush shape between Square and Circle; confirm Square fills a box and Circle clips corners.
 - Confirm live preview while dragging.
 
+Heightmap + blend
+- Paint cells on a layer, then import a heightmap (PNG/EXR) or generate noise.
+- Verify displaced mesh appears under `Generated/HeightmapFloors`.
+- Adjust Height Scale spinner and confirm mesh updates.
+- Select Blend tool, paint blend weights on filled cells.
+- Verify two-material blend shader responds to per-cell blend weights.
+- Create two layers at different Y heights and generate a ramp/stair connector between them.
+- Populate foliage on a heightmap layer and verify MultiMesh scatter respects height/slope.
+
 Bake
 - Bake with default settings.
 - Toggle `Use Face Materials` and confirm bake output swaps to per-face materials.
+- Bake with heightmap floors and confirm baked output includes heightmap meshes with trimesh collision.
 
 Save/Load
 - Save `.hflevel`.
 - Reload and verify materials palette, face data, and paint layers are restored.
+- Reload and verify heightmap data, material_ids, blend_weights, and height_scale persist.
 
 Editor UX
 - Toggle Draw/Select tool and verify shortcut HUD updates.
@@ -128,3 +146,6 @@ Editor UX
 ## Troubleshooting
 - If paint affects floors while trying to surface paint, set `Paint Target = Surface`.
 - If previews look incorrect, delete `LevelRoot/Generated` and repaint.
+- If heightmap meshes don't appear, confirm the active layer has a heightmap assigned (Import or Generate).
+- If blend shader shows only one material, ensure blend weights have been painted with the Blend tool.
+- Heightmap floors use a blend shader with default green/brown terrain colors and a cell grid overlay. To customize: select a HeightmapFloor MeshInstance3D, edit the ShaderMaterial, and set `material_a`/`material_b` textures or adjust `color_a`/`color_b`/`grid_opacity`.

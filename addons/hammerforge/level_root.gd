@@ -20,6 +20,8 @@ const HFInferenceEngine = preload("paint/hf_inference_engine.gd")
 const HFGeometrySynth = preload("paint/hf_geometry_synth.gd")
 const HFGeneratedReconciler = preload("paint/hf_reconciler.gd")
 const HFStroke = preload("paint/hf_stroke.gd")
+const HFHeightmapSynth = preload("paint/hf_heightmap_synth.gd")
+const HFHeightmapIO = preload("paint/hf_heightmap_io.gd")
 const HFInputStateType = preload("input_state.gd")
 const HFGridSystemType = preload("systems/hf_grid_system.gd")
 const HFEntitySystemType = preload("systems/hf_entity_system.gd")
@@ -132,6 +134,7 @@ var surface_paint: SurfacePaint
 var generated_node: Node3D
 var generated_floors: Node3D
 var generated_walls: Node3D
+var generated_heightmap_floors: Node3D
 var baked_container: Node3D
 var preview_brush: DraftBrush = null
 
@@ -673,7 +676,14 @@ func handle_paint_input(
 	paint_brush_shape: int = 1
 ) -> bool:
 	return paint_system.handle_paint_input(
-		camera, event, screen_pos, operation, size, paint_tool_id, paint_radius_cells, paint_brush_shape
+		camera,
+		event,
+		screen_pos,
+		operation,
+		size,
+		paint_tool_id,
+		paint_radius_cells,
+		paint_brush_shape
 	)
 
 
@@ -712,6 +722,22 @@ func handle_surface_paint_input(
 
 func _regenerate_paint_layers() -> void:
 	paint_system.regenerate_paint_layers()
+
+
+func import_heightmap(path: String) -> void:
+	paint_system.import_heightmap(path)
+
+
+func generate_heightmap_noise(settings: Dictionary = {}) -> void:
+	paint_system.generate_heightmap_noise(settings)
+
+
+func set_heightmap_scale(value: float) -> void:
+	paint_system.set_heightmap_scale(value)
+
+
+func set_layer_y(value: float) -> void:
+	paint_system.set_layer_y(value)
 
 
 # ===========================================================================
@@ -923,6 +949,12 @@ func _setup_paint_system() -> void:
 		generated_walls.name = "Walls"
 		generated_node.add_child(generated_walls)
 		_assign_owner(generated_walls)
+	generated_heightmap_floors = generated_node.get_node_or_null("HeightmapFloors") as Node3D
+	if not generated_heightmap_floors:
+		generated_heightmap_floors = Node3D.new()
+		generated_heightmap_floors.name = "HeightmapFloors"
+		generated_node.add_child(generated_heightmap_floors)
+		_assign_owner(generated_heightmap_floors)
 
 	paint_tool = get_node_or_null("PaintTool") as HFPaintTool
 	if not paint_tool:
@@ -937,8 +969,11 @@ func _setup_paint_system() -> void:
 		paint_tool.geometry = HFGeometrySynth.new()
 	if not paint_tool.reconciler:
 		paint_tool.reconciler = HFGeneratedReconciler.new()
+	if not paint_tool.heightmap_synth:
+		paint_tool.heightmap_synth = HFHeightmapSynth.new()
 	paint_tool.reconciler.floors_root = generated_floors
 	paint_tool.reconciler.walls_root = generated_walls
+	paint_tool.reconciler.heightmap_floors_root = generated_heightmap_floors
 	paint_tool.reconciler.owner = _get_editor_owner()
 
 

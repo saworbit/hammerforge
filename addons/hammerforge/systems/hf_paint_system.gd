@@ -13,6 +13,9 @@ const HFInferenceEngine = preload("../paint/hf_inference_engine.gd")
 const HFGeometrySynth = preload("../paint/hf_geometry_synth.gd")
 const HFGeneratedReconciler = preload("../paint/hf_reconciler.gd")
 const HFStroke = preload("../paint/hf_stroke.gd")
+const HFHeightmapIO = preload("../paint/hf_heightmap_io.gd")
+const HFHeightmapSynth = preload("../paint/hf_heightmap_synth.gd")
+const HFGeneratedModel = preload("../paint/hf_generated_model.gd")
 
 var root: Node3D
 
@@ -260,12 +263,34 @@ func regenerate_paint_layers() -> void:
 		var chunk_ids = layer.get_chunk_ids()
 		if chunk_ids.is_empty():
 			continue
-		var model = root.paint_tool.geometry.build_for_chunks(
-			layer, chunk_ids, root.paint_tool.synth_settings
-		)
-		root.paint_tool.reconciler.reconcile(
-			model, layer.grid, root.paint_tool.synth_settings, chunk_ids
-		)
+		if layer.has_heightmap() and root.paint_tool.heightmap_synth:
+			var model := HFGeneratedModel.new()
+			var hm_results = root.paint_tool.heightmap_synth.build_for_chunks(
+				layer, chunk_ids, root.paint_tool.synth_settings
+			)
+			for hr in hm_results:
+				var hf := HFGeneratedModel.HeightmapFloor.new()
+				hf.id = hr.id
+				hf.mesh = hr.mesh
+				hf.transform = hr.transform
+				hf.blend_image = hr.blend_image
+				if hr.blend_image:
+					hf.blend_texture = ImageTexture.create_from_image(hr.blend_image)
+				model.heightmap_floors.append(hf)
+			var wall_model = root.paint_tool.geometry.build_for_chunks(
+				layer, chunk_ids, root.paint_tool.synth_settings
+			)
+			model.walls = wall_model.walls
+			root.paint_tool.reconciler.reconcile(
+				model, layer.grid, root.paint_tool.synth_settings, chunk_ids
+			)
+		else:
+			var model = root.paint_tool.geometry.build_for_chunks(
+				layer, chunk_ids, root.paint_tool.synth_settings
+			)
+			root.paint_tool.reconciler.reconcile(
+				model, layer.grid, root.paint_tool.synth_settings, chunk_ids
+			)
 
 
 func restore_paint_layers(data: Array, active_index: int) -> void:
@@ -297,6 +322,10 @@ func restore_paint_layers(data: Array, active_index: int) -> void:
 			layer.grid.origin = grid_data.get("origin", layer.grid.origin)
 			layer.grid.basis = grid_data.get("basis", layer.grid.basis)
 			layer.grid.layer_y = float(grid_data.get("layer_y", layer.grid.layer_y))
+		var hm_b64 = str(entry.get("heightmap_b64", ""))
+		if hm_b64 != "":
+			layer.heightmap = HFHeightmapIO.decode_from_base64(hm_b64)
+			layer.height_scale = float(entry.get("height_scale", 10.0))
 		var chunks = entry.get("chunks", [])
 		if chunks is Array:
 			for chunk in chunks:
@@ -311,8 +340,57 @@ func restore_paint_layers(data: Array, active_index: int) -> void:
 					for i in range(bytes.size()):
 						bits[i] = int(bytes[i])
 				layer.set_chunk_bits(Vector2i(cx, cy), bits)
+				var mat_bytes = chunk.get("material_ids", [])
+				if mat_bytes is Array and not mat_bytes.is_empty():
+					var mat_ids = PackedByteArray()
+					mat_ids.resize(mat_bytes.size())
+					for i in range(mat_bytes.size()):
+						mat_ids[i] = int(mat_bytes[i])
+					layer.set_chunk_material_ids(Vector2i(cx, cy), mat_ids)
+				var blend_bytes = chunk.get("blend_weights", [])
+				if blend_bytes is Array and not blend_bytes.is_empty():
+					var blends = PackedByteArray()
+					blends.resize(blend_bytes.size())
+					for i in range(blend_bytes.size()):
+						blends[i] = int(blend_bytes[i])
+					layer.set_chunk_blend_weights(Vector2i(cx, cy), blends)
 	if root.paint_layers.layers.size() > 0:
 		root.paint_layers.active_layer_index = clamp(
 			active_index, 0, root.paint_layers.layers.size() - 1
 		)
+	regenerate_paint_layers()
+
+
+func import_heightmap(path: String) -> void:
+	var layer = root.paint_layers.get_active_layer() if root.paint_layers else null
+	if not layer:
+		return
+	var img := HFHeightmapIO.load_from_file(path)
+	if img:
+		layer.heightmap = img
+		regenerate_paint_layers()
+
+
+func generate_heightmap_noise(settings: Dictionary = {}) -> void:
+	var layer = root.paint_layers.get_active_layer() if root.paint_layers else null
+	if not layer:
+		return
+	var s := max(layer.chunk_size * 4, 256)
+	layer.heightmap = HFHeightmapIO.generate_noise(s, s, settings)
+	regenerate_paint_layers()
+
+
+func set_heightmap_scale(value: float) -> void:
+	var layer = root.paint_layers.get_active_layer() if root.paint_layers else null
+	if not layer:
+		return
+	layer.height_scale = value
+	regenerate_paint_layers()
+
+
+func set_layer_y(value: float) -> void:
+	var layer = root.paint_layers.get_active_layer() if root.paint_layers else null
+	if not layer or not layer.grid:
+		return
+	layer.grid.layer_y = value
 	regenerate_paint_layers()

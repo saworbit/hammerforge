@@ -25,7 +25,7 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 |---------|-------------|
 | **DraftBrush** | Lightweight, editable brush nodes |
 | **Bake** | CSG used only at bake time for performance |
-| **Floor Paint** | Grid-based tool that generates DraftBrush floors/walls |
+| **Floor Paint** | Grid-based tool that generates floors/walls with optional heightmap terrain |
 | **Face Materials** | Per-face materials, UVs, and surface paint layers |
 
 ---
@@ -51,14 +51,19 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 - Live preview on DraftBrushes (per-face composite)
 - Per-layer texture picker and adjustable radius/strength
 
-### Floor Paint (Early)
+### Floor Paint
 - Grid-based paint layers with chunked storage
-- **Tools:** Brush, Erase, Rect, Line, Bucket
+- **Tools:** Brush, Erase, Rect, Line, Bucket, Blend
 - **Brush shape:** Square or Circle
 - Live preview while dragging
 - Greedy-meshed floors and merged wall segments
 - Stable IDs with scoped reconciliation (no node churn)
 - Paint layers persist in `.hflevel` saves
+- **Heightmaps:** import PNG/EXR or generate procedural noise per layer
+- **Displaced meshes:** per-vertex heightmap displacement via SurfaceTool
+- **Material blending:** two-material shader with per-cell blend weights (UV2 blend map)
+- **Auto-connectors:** ramp and stair mesh generation between layers
+- **Foliage scatter:** height/slope-filtered MultiMeshInstance3D placement
 
 ### Editor UX
 - **Context-sensitive shortcut HUD** that updates based on current tool and mode
@@ -75,6 +80,7 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 - Bake draft brushes to meshes + collision
 - Optional: merge meshes, LOD generation, UV2 unwrap, navmesh baking
 - Optional: **Use Face Materials** (bake per-face materials without CSG)
+- Heightmap floors bake directly (bypass CSG) with trimesh collision
 - Chunked baking via `LevelRoot.bake_chunk_size`
 - **Playtest button** -- bakes and runs with an FPS controller
 

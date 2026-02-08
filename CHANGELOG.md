@@ -5,6 +5,16 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Multi-layer heightmap integration** for floor paint:
+  - Heightmap import (PNG/EXR) and procedural noise generation (FastNoiseLite) per paint layer.
+  - Per-cell material IDs and blend weights stored alongside existing bitset data.
+  - Heightmap-displaced mesh generation via `HFHeightmapSynth` (SurfaceTool with per-vertex displacement).
+  - Two-material blend shader (`hf_blend.gdshader`) using UV2 channel for per-chunk blend maps, with default terrain colors (`color_a`/`color_b`), configurable grid overlay (`grid_opacity`/`grid_color`), and tint-compatible texture support.
+  - Blend paint tool (`HFStroke.Tool.BLEND = 5`) for painting material blend weights on filled cells.
+  - Auto-connector tool (`HFConnectorTool`) generating ramp and stair meshes between layers at different heights.
+  - Foliage populator (`HFFoliagePopulator`) with height/slope filtering and MultiMeshInstance3D scatter.
+  - Heightmap floors bake directly into output (bypass CSG) with trimesh collision shapes.
+  - Dock UI: Heightmap Import/Generate buttons, Height Scale and Layer Y spinboxes, Blend Strength control.
 - Floor paint brush shape selector (Square or Circle) in the Floor Paint tab.
 - Per-face material palette with face selection mode.
 - Dynamic context-sensitive shortcut HUD that updates based on current tool and mode.
@@ -22,8 +32,14 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 ### Changed
 - Paint Mode can target either floor paint or surface paint.
 - .hflevel now persists materials palette and per-face data.
+- .hflevel now persists per-chunk `material_ids`, `blend_weights`, `heightmap_b64`, and `height_scale`.
+- Floor paint layers with heightmaps route to `HFHeightmapSynth` (MeshInstance3D) instead of CSG DraftBrush.
+- Generated heightmap floors stored under `LevelRoot/Generated/HeightmapFloors`.
 
 ### Fixed
+- Fixed heightmap mesh disappearing on every regeneration (height scale change, second generate noise click). Root cause: `_clear_generated()` used `queue_free()` (deferred) but `reconcile()` ran immediately after, finding ghost nodes still in the tree. Fix: `remove_child()` before `queue_free()`.
+- Fixed missing walls when heightmap is active (same `queue_free` timing root cause).
+- Fixed heightmap mesh rendering as a featureless white pane. The blend shader required texture samplers (`material_a`/`material_b`) but none were assigned. Added default terrain colors (`color_a` green, `color_b` brown) and a cell grid overlay to the blend shader for immediate visual feedback without imported textures.
 - Fixed `test_mat.tres` UTF-8 BOM that prevented Godot from loading the sample material.
 - Fixed 59 "Invalid owner" errors during chunked bake: `_assign_owner` was called on chunk nodes before their parent container was added to the scene tree.
 - Changed navmesh `cell_height` default from 0.2 to 0.25 to match Godot's NavigationServer3D map default, eliminating mismatch warnings.
@@ -54,6 +70,7 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 - Added texture/materials guide, development/testing guide, and updated README/spec/user/MVP docs.
 - Updated spec, development guide, MVP guide, and README to reflect subsystem architecture.
 - Updated all docs to document new UX features: dynamic HUD, tooltips, shortcuts, pending cut visuals.
+- Updated all docs for multi-layer heightmap integration: heightmap workflow, blend tool, connectors, foliage, bake integration.
 
 ## [0.1.1] - 2026-02-05
 

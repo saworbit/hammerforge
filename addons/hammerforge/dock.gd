@@ -69,6 +69,17 @@ var paint_layer_select: OptionButton = $Margin/VBox/MainTabs/FloorPaint/FloorPai
 var paint_layer_add: Button = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/PaintLayerRow/PaintLayerAdd
 @onready
 var paint_layer_remove: Button = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/PaintLayerRow/PaintLayerRemove
+@onready
+var heightmap_import: Button = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/HeightmapRow/HeightmapImport
+@onready
+var heightmap_generate: Button = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/HeightmapRow/HeightmapGenerate
+@onready
+var height_scale_spin: SpinBox = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/HeightScaleRow/HeightScaleSpin
+@onready
+var layer_y_spin: SpinBox = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/LayerYRow/LayerYSpin
+@onready
+var blend_strength_spin: SpinBox = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/BlendStrengthRow/BlendStrengthSpin
+@onready var heightmap_import_dialog: FileDialog = $HeightmapImportDialog
 @onready var grid_snap: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/GridRow/GridSnap
 @onready
 var collision_layer_opt: OptionButton = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PhysicsLayerRow/PhysicsLayerOption
@@ -381,13 +392,19 @@ func _apply_all_tooltips() -> void:
 	_set_tooltip(bake_navmesh_agent_radius, "Navigation agent radius")
 	# FloorPaint tab
 	_set_tooltip(
-		paint_tool_select, "Floor paint tool\nB: Brush | E: Erase | R: Rect | L: Line | K: Bucket"
+		paint_tool_select,
+		"Floor paint tool\nB: Brush | E: Erase | R: Rect | L: Line | K: Bucket | N: Blend"
 	)
 	_set_tooltip(paint_radius, "Floor paint brush radius in grid cells")
 	_set_tooltip(brush_shape_select, "Brush shape: Square or Circle")
 	_set_tooltip(paint_layer_select, "Active floor paint layer")
 	_set_tooltip(paint_layer_add, "Add a new floor paint layer")
 	_set_tooltip(paint_layer_remove, "Remove the selected floor paint layer")
+	_set_tooltip(heightmap_import, "Import a heightmap image (PNG/EXR) for the active layer")
+	_set_tooltip(heightmap_generate, "Generate a procedural noise heightmap for the active layer")
+	_set_tooltip(height_scale_spin, "Height scale multiplier for the heightmap")
+	_set_tooltip(layer_y_spin, "Vertical Y offset for the active paint layer")
+	_set_tooltip(blend_strength_spin, "Blend strength when using the Blend paint tool")
 	# SurfacePaint tab
 	_set_tooltip(paint_target_select, "Paint target: Floor (grid) or Surface (UV)")
 	_set_tooltip(surface_paint_radius, "Surface paint radius in UV space (0.0 - 1.0)")
@@ -591,6 +608,42 @@ func _ready():
 		and not paint_layer_remove.pressed.is_connected(Callable(self, "_on_paint_layer_remove"))
 	):
 		paint_layer_remove.pressed.connect(_on_paint_layer_remove)
+	if (
+		heightmap_import
+		and not heightmap_import.pressed.is_connected(Callable(self, "_on_heightmap_import"))
+	):
+		heightmap_import.pressed.connect(_on_heightmap_import)
+	if (
+		heightmap_generate
+		and not heightmap_generate.pressed.is_connected(Callable(self, "_on_heightmap_generate"))
+	):
+		heightmap_generate.pressed.connect(_on_heightmap_generate)
+	if (
+		height_scale_spin
+		and not height_scale_spin.value_changed.is_connected(
+			Callable(self, "_on_height_scale_changed")
+		)
+	):
+		height_scale_spin.value_changed.connect(_on_height_scale_changed)
+	if (
+		layer_y_spin
+		and not layer_y_spin.value_changed.is_connected(Callable(self, "_on_layer_y_changed"))
+	):
+		layer_y_spin.value_changed.connect(_on_layer_y_changed)
+	if (
+		blend_strength_spin
+		and not blend_strength_spin.value_changed.is_connected(
+			Callable(self, "_on_blend_strength_changed")
+		)
+	):
+		blend_strength_spin.value_changed.connect(_on_blend_strength_changed)
+	if (
+		heightmap_import_dialog
+		and not heightmap_import_dialog.file_selected.is_connected(
+			Callable(self, "_on_heightmap_import_selected")
+		)
+	):
+		heightmap_import_dialog.file_selected.connect(_on_heightmap_import_selected)
 	if (
 		materials_list
 		and not materials_list.item_selected.is_connected(Callable(self, "_on_material_selected"))
@@ -1357,6 +1410,7 @@ func _populate_paint_tools() -> void:
 	paint_tool_select.add_item("Rect", 2)
 	paint_tool_select.add_item("Line", 3)
 	paint_tool_select.add_item("Bucket", 4)
+	paint_tool_select.add_item("Blend", 5)
 	paint_tool_select.select(0)
 
 
@@ -1487,6 +1541,41 @@ func _on_paint_layer_remove() -> void:
 		return
 	level_root.remove_active_paint_layer()
 	_refresh_paint_layers()
+
+
+func _on_heightmap_import() -> void:
+	if heightmap_import_dialog:
+		heightmap_import_dialog.popup_centered(Vector2(600, 400))
+
+
+func _on_heightmap_import_selected(path: String) -> void:
+	if not level_root:
+		return
+	level_root.import_heightmap(path)
+
+
+func _on_heightmap_generate() -> void:
+	if not level_root:
+		return
+	level_root.generate_heightmap_noise()
+
+
+func _on_height_scale_changed(value: float) -> void:
+	if not level_root:
+		return
+	level_root.set_heightmap_scale(value)
+
+
+func _on_layer_y_changed(value: float) -> void:
+	if not level_root:
+		return
+	level_root.set_layer_y(value)
+
+
+func _on_blend_strength_changed(value: float) -> void:
+	if not level_root or not level_root.paint_tool:
+		return
+	level_root.paint_tool.blend_strength = value
 
 
 func _on_material_selected(index: int) -> void:

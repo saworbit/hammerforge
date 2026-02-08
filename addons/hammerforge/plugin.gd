@@ -191,7 +191,14 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			var paint_radius_cells = dock.get_paint_radius_cells() if dock else 1
 			var paint_brush_shape = dock.get_brush_shape() if dock else 1
 			var handled = root.handle_paint_input(
-				target_camera, event, target_pos, op, size, paint_tool_id, paint_radius_cells, paint_brush_shape
+				target_camera,
+				event,
+				target_pos,
+				op,
+				size,
+				paint_tool_id,
+				paint_radius_cells,
+				paint_brush_shape
 			)
 			if handled:
 				return EditorPlugin.AFTER_GUI_INPUT_STOP

@@ -28,8 +28,9 @@ Tool
 Paint Mode (floor + surface)
 - Enables paint input in the viewport.
 - Paint Target is global and decides whether strokes affect Floor or Surface.
-- Floor Paint tab: Brush, Erase, Rect, Line, Bucket.
+- Floor Paint tab: Brush, Erase, Rect, Line, Bucket, Blend.
 - Floor Paint tab: Brush shape (Square or Circle), radius in grid cells, and layer picker.
+- Floor Paint tab: Heightmap Import/Generate, Height Scale, Layer Y, Blend Strength controls.
 - Surface Paint tab: Paint Target, layers, texture picker, radius/strength.
 
 Materials (per-face)
@@ -121,7 +122,25 @@ Notes
 - Live preview updates while dragging.
 - Bucket fills a contiguous region (click filled to erase).
 - Generated geometry appears under `LevelRoot/Generated`.
-- Generated floors/walls are DraftBrush nodes and are included in Bake.
+- Generated flat floors/walls are DraftBrush nodes and are included in Bake.
+
+### Heightmap Terrain
+Heightmaps add vertical displacement to painted floors:
+1. Paint cells on a layer using Brush/Rect/Line/Bucket.
+2. Click **Import** to load a PNG/EXR heightmap, or **Generate** for procedural noise.
+3. Adjust **Height Scale** to control displacement amplitude.
+4. Adjust **Layer Y** to set the base height of the layer.
+
+When a layer has a heightmap, its floors are generated as displaced MeshInstance3D nodes (not DraftBrush). These live under `Generated/HeightmapFloors` and are baked directly (bypassing CSG) with trimesh collision shapes.
+
+### Material Blending
+The Blend tool paints per-cell material blend weights on filled cells:
+1. Fill cells first (Brush/Rect/etc.).
+2. Switch to the **Blend** tool.
+3. Adjust **Blend Strength** (0.0-1.0) in the dock.
+4. Paint over filled cells to set blend weights.
+
+Blend weights drive a two-material shader (`hf_blend.gdshader`). The shader mixes `material_a` and `material_b` based on a per-chunk blend map sampled on the UV2 channel.
 
 ## Face Materials and UVs
 1. Open the Materials tab.
@@ -182,7 +201,7 @@ Bake creates `BakedGeometry`:
 - If chunked baking is enabled, it adds `BakedChunk_x_y_z` nodes.
 - Each chunk has a MeshInstance3D and StaticBody3D (trimesh) for collision.
 
-Generated floor paint brushes are included in the bake.
+Generated flat floor paint brushes are included in the CSG bake. Heightmap floor meshes are duplicated directly into the baked output with trimesh collision shapes (they bypass CSG since they are already ArrayMesh).
 
 Use Face Materials (optional):
 - Enables per-face material baking without CSG.
@@ -190,7 +209,8 @@ Use Face Materials (optional):
 
 ## Save/Load (.hflevel)
 - Save .hflevel stores brushes, entities, settings, materials palette, face data, and paint layers.
-- Load .hflevel restores them.
+- Paint layer data includes per-chunk `material_ids`, `blend_weights`, optional `heightmap_b64`, and `height_scale`.
+- Load .hflevel restores them. Missing heightmap/material fields default to zero (backward-compatible).
 - Autosave can write to a configurable path.
 
 ## Capturing Exit-Time Errors
@@ -226,3 +246,11 @@ Face selection not working
 
 Material fails to load
 - Material `.tres` files must not have a UTF-8 BOM. If Godot reports "Expected '['" on a `.tres` file, re-save it without BOM (or create a fresh one via FileSystem -> New Resource -> StandardMaterial3D).
+
+Heightmap mesh not appearing
+- Ensure the active layer has a heightmap assigned (use Import or Generate in the Floor Paint tab).
+- Confirm cells are painted first -- heightmap only displaces filled cells.
+
+Blend shader shows only one material
+- Paint blend weights using the Blend tool on already-filled cells.
+- Verify the blend_map texture is generated (requires cells with non-zero blend weights).

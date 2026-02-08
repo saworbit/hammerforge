@@ -130,6 +130,8 @@ func bake_single(layer: int, options: Dictionary) -> Node3D:
 	collision_csg.queue_free()
 	if collision_baked:
 		collision_baked.free()
+	if baked:
+		_append_heightmap_meshes_to_baked(baked, layer)
 	return baked
 
 
@@ -184,6 +186,8 @@ func bake_chunked(chunk_size: float, layer: int, options: Dictionary) -> Node3D:
 				collision_baked.free()
 		temp_csg.queue_free()
 		collision_csg.queue_free()
+	if container and chunk_count > 0:
+		_append_heightmap_meshes_to_baked(container, layer)
 	return container if chunk_count > 0 else null
 
 
@@ -297,6 +301,36 @@ func apply_collision_from_bake(target: Node3D, source: Node3D, layer: int) -> vo
 		if child is CollisionShape3D:
 			var dup = child.duplicate()
 			target_body.add_child(dup)
+
+
+func collect_generated_heightmap_meshes() -> Array:
+	var out: Array = []
+	if not root.generated_heightmap_floors:
+		return out
+	for child in root.generated_heightmap_floors.get_children():
+		if child is MeshInstance3D:
+			out.append(child)
+	return out
+
+
+func _append_heightmap_meshes_to_baked(container: Node3D, layer: int) -> void:
+	var hm_meshes := collect_generated_heightmap_meshes()
+	if hm_meshes.is_empty():
+		return
+	var body := container.get_node_or_null("FloorCollision") as StaticBody3D
+	if not body:
+		body = StaticBody3D.new()
+		body.name = "FloorCollision"
+		body.collision_layer = layer
+		body.collision_mask = layer
+		container.add_child(body)
+	for hm in hm_meshes:
+		var dup: MeshInstance3D = hm.duplicate()
+		container.add_child(dup)
+		if dup.mesh:
+			var col := CollisionShape3D.new()
+			col.shape = dup.mesh.create_trimesh_shape()
+			body.add_child(col)
 
 
 func bake_navmesh(container: Node3D) -> void:

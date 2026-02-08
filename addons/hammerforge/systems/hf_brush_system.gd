@@ -402,14 +402,20 @@ func clear_brushes() -> void:
 
 
 func _clear_generated() -> void:
+	# Remove children from tree BEFORE queue_free so the reconciler
+	# won't find ghost nodes that are pending deletion.
 	if root.generated_floors:
 		for child in root.generated_floors.get_children():
-			if child is DraftBrush:
-				child.queue_free()
+			root.generated_floors.remove_child(child)
+			child.queue_free()
 	if root.generated_walls:
 		for child in root.generated_walls.get_children():
-			if child is DraftBrush:
-				child.queue_free()
+			root.generated_walls.remove_child(child)
+			child.queue_free()
+	if root.generated_heightmap_floors:
+		for child in root.generated_heightmap_floors.get_children():
+			root.generated_heightmap_floors.remove_child(child)
+			child.queue_free()
 
 
 func _clear_committed_cuts() -> void:
