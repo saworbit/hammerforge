@@ -238,9 +238,7 @@ func _compute_preview_size(height: float, extrude_axis_world: Vector3) -> Vector
 	# Use source face extents for the two non-extrude dimensions
 	var face_size := source_face_size
 	var result := Vector3(
-		maxf(face_size.x, _snap),
-		maxf(face_size.y, _snap),
-		maxf(face_size.z, _snap)
+		maxf(face_size.x, _snap), maxf(face_size.y, _snap), maxf(face_size.z, _snap)
 	)
 
 	# Set the extrude dimension to the height

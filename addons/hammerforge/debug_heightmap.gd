@@ -24,7 +24,12 @@ func _run() -> void:
 	print("3. Material + Blend...")
 	layer.set_cell_material(Vector2i(0, 0), 2)
 	layer.set_cell_blend(Vector2i(0, 0), 0.5)
-	print("   OK: mat=%d blend=%.2f" % [layer.get_cell_material(Vector2i(0, 0)), layer.get_cell_blend(Vector2i(0, 0))])
+	print(
+		(
+			"   OK: mat=%d blend=%.2f"
+			% [layer.get_cell_material(Vector2i(0, 0)), layer.get_cell_blend(Vector2i(0, 0))]
+		)
+	)
 
 	# Test 4: heightmap IO
 	print("4. HFHeightmapIO...")
@@ -35,7 +40,12 @@ func _run() -> void:
 	print("5. Heightmap layer...")
 	layer.heightmap = hm
 	layer.height_scale = 5.0
-	print("   OK: has_heightmap=%s height_at(0,0)=%.2f" % [layer.has_heightmap(), layer.get_height_at(Vector2i(0, 0))])
+	print(
+		(
+			"   OK: has_heightmap=%s height_at(0,0)=%.2f"
+			% [layer.has_heightmap(), layer.get_height_at(Vector2i(0, 0))]
+		)
+	)
 
 	# Test 6: heightmap synth
 	print("6. HFHeightmapSynth...")
@@ -69,7 +79,12 @@ func _run() -> void:
 	# Test 10: connector
 	print("10. HFConnectorTool...")
 	var conn := HFConnectorTool.new()
-	print("   OK: RAMP=%d STAIRS=%d" % [HFConnectorTool.ConnectorType.RAMP, HFConnectorTool.ConnectorType.STAIRS])
+	print(
+		(
+			"   OK: RAMP=%d STAIRS=%d"
+			% [HFConnectorTool.ConnectorType.RAMP, HFConnectorTool.ConnectorType.STAIRS]
+		)
+	)
 
 	# Test 11: foliage
 	print("11. HFFoliagePopulator...")
