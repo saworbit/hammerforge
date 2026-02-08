@@ -238,6 +238,8 @@ var _uv_active_face: FaceData = null
 var _surface_active_brush: DraftBrush = null
 var _surface_active_face: FaceData = null
 var _pending_surface_texture_layer := -1
+var tool_extrude_up: Button = null
+var tool_extrude_down: Button = null
 
 
 func _is_level_root(node: Node) -> bool:
@@ -341,6 +343,10 @@ func _setup_toolbar_icons() -> void:
 	_set_toolbar_button_icon(mode_subtract, ["Remove", "RemoveNode"], "Subtract")
 	if paint_mode:
 		_set_toolbar_button_icon(paint_mode, ["Paint", "Brush", "ToolPaint"], "Paint")
+	if tool_extrude_up:
+		_set_toolbar_button_icon(tool_extrude_up, ["MoveUp", "ArrowUp", "ToolMove"], "Ext+")
+	if tool_extrude_down:
+		_set_toolbar_button_icon(tool_extrude_down, ["MoveDown", "ArrowDown", "ToolMove"], "Ext-")
 	_apply_toolbar_tooltips()
 
 
@@ -574,6 +580,25 @@ func _ready():
 	if paint_mode:
 		paint_mode.toggle_mode = true
 		paint_mode.button_pressed = false
+
+	# Extrude tool buttons (added programmatically to toolbar)
+	var toolbar = tool_draw.get_parent()
+	if toolbar:
+		tool_extrude_up = Button.new()
+		tool_extrude_up.toggle_mode = true
+		tool_extrude_up.button_group = tool_group
+		tool_extrude_up.flat = true
+		tool_extrude_up.focus_mode = Control.FOCUS_NONE
+		tool_extrude_up.tooltip_text = "Extrude Up (U)\nClick face + drag to extrude upward"
+		toolbar.add_child(tool_extrude_up)
+
+		tool_extrude_down = Button.new()
+		tool_extrude_down.toggle_mode = true
+		tool_extrude_down.button_group = tool_group
+		tool_extrude_down.flat = true
+		tool_extrude_down.focus_mode = Control.FOCUS_NONE
+		tool_extrude_down.tooltip_text = "Extrude Down (J)\nClick face + drag to extrude downward"
+		toolbar.add_child(tool_extrude_down)
 
 	var mode_group = ButtonGroup.new()
 	mode_add.toggle_mode = true
@@ -915,7 +940,13 @@ func get_operation() -> int:
 
 
 func get_tool() -> int:
-	return 0 if tool_draw.button_pressed else 1
+	if tool_draw.button_pressed:
+		return 0
+	if tool_extrude_up and tool_extrude_up.button_pressed:
+		return 2
+	if tool_extrude_down and tool_extrude_down.button_pressed:
+		return 3
+	return 1
 
 
 func get_active_material() -> Material:
@@ -1004,6 +1035,21 @@ func set_show_hud(visible: bool) -> void:
 	if show_hud.button_pressed == visible:
 		return
 	show_hud.button_pressed = visible
+
+
+func get_extrude_direction() -> int:
+	if tool_extrude_up and tool_extrude_up.button_pressed:
+		return 1  # UP
+	if tool_extrude_down and tool_extrude_down.button_pressed:
+		return -1  # DOWN
+	return 1
+
+
+func set_extrude_tool(direction: int) -> void:
+	if direction > 0 and tool_extrude_up:
+		tool_extrude_up.button_pressed = true
+	elif direction < 0 and tool_extrude_down:
+		tool_extrude_down.button_pressed = true
 
 
 func set_paint_tool(tool_id: int) -> void:

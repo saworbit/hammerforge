@@ -2,7 +2,7 @@
 extends RefCounted
 class_name HFInputState
 
-enum Mode { IDLE, DRAG_BASE, DRAG_HEIGHT, SURFACE_PAINT }
+enum Mode { IDLE, DRAG_BASE, DRAG_HEIGHT, SURFACE_PAINT, EXTRUDE }
 
 var mode := Mode.IDLE
 
@@ -97,6 +97,18 @@ func begin_surface_paint() -> void:
 
 func end_surface_paint() -> void:
 	mode = Mode.IDLE
+
+
+func begin_extrude() -> void:
+	mode = Mode.EXTRUDE
+
+
+func end_extrude() -> void:
+	mode = Mode.IDLE
+
+
+func is_extruding() -> bool:
+	return mode == Mode.EXTRUDE
 
 
 # Backward-compat: map to legacy drag_stage int

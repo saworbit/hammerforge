@@ -1,6 +1,6 @@
 # HammerForge User Guide
 
-Last updated: February 7, 2026
+Last updated: February 8, 2026
 
 This guide covers the current HammerForge workflow in Godot 4.6: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs.
 
@@ -24,6 +24,8 @@ If missing, HammerForge creates it automatically on first viewport click.
 Tool
 - Draw: create brushes.
 - Select: select existing brushes. Delete removes them.
+- Extrude Up: click a brush face and drag to extend it upward.
+- Extrude Down: click a brush face and drag to extend it downward.
 
 Paint Mode (floor + surface)
 - Enables paint input in the viewport.
@@ -80,6 +82,8 @@ The on-screen shortcut overlay updates dynamically based on your current tool an
 | Draw (dragging base) | Shift: Square, Alt+Shift: Cube, Click: Height stage, Right-click: Cancel |
 | Draw (adjusting height) | Mouse: Change height, Click: Confirm, Right-click: Cancel |
 | Select | Click/Shift/Ctrl selection, Escape, Delete, Ctrl+D, Arrow nudge |
+| Extrude Up/Down (idle) | Click face + drag, U/J tool switch, Right-click cancel |
+| Extrude Up/Down (active) | Move mouse to set height, Release to confirm, Right-click cancel |
 | Floor Paint | Click+Drag, B/E/R/L/K tool shortcuts |
 | Surface Paint | Click+Drag, radius/strength info |
 
@@ -104,12 +108,30 @@ General keyboard shortcuts
 - Escape: clear selection.
 - Ctrl+Scroll: adjust brush size.
 
+Extrude shortcuts
+- U: Extrude Up tool.
+- J: Extrude Down tool.
+
 Paint tool shortcuts (active when Paint Mode is enabled)
 - B: Brush tool.
 - E: Erase tool.
 - R: Rectangle tool.
 - L: Line tool.
 - K: Bucket fill tool.
+
+## Extrude (Up / Down)
+The Extrude tools let you extend an existing brush by clicking one of its faces and dragging to create a new brush.
+
+1. Press **U** (Extrude Up) or **J** (Extrude Down), or click the toolbar buttons.
+2. Click on a brush face in the viewport -- a semi-transparent preview appears.
+3. Drag the mouse vertically to set the extrude height (grid-snapped).
+4. Release the mouse to commit the new brush.
+
+Notes
+- **Extrude Up** shows a green preview; **Extrude Down** shows a red preview.
+- The new brush inherits the source brush's material.
+- The extruded brush is a standard DraftBrush (box) and works with Bake, materials, and undo/redo.
+- Right-click cancels the extrude in progress.
 
 ## Floor Paint
 1. Enable Paint Mode.

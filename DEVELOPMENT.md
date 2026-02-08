@@ -1,6 +1,6 @@
 ﻿# Development Guide
 
-Last updated: February 7, 2026
+Last updated: February 8, 2026
 
 This document covers local setup, codebase structure, and how to test features.
 
@@ -27,6 +27,7 @@ addons/hammerforge/
   face_data.gd           Per-face materials, UVs, paint layers
   material_manager.gd    Shared materials palette
   face_selector.gd       Raycast face selection
+  hf_extrude_tool.gd     Extrude Up/Down tool (face click + drag to extend brushes)
   surface_paint.gd       Per-face surface paint tool
   uv_editor.gd           UV editing dock
   hflevel_io.gd          Variant encoding/decoding for .hflevel
@@ -65,7 +66,7 @@ addons/hammerforge/
 - **Subsystems are RefCounted.** Each receives a `LevelRoot` reference in `_init()` and accesses container nodes and properties through `root.*`.
 - **No circular preloads.** Subsystem files must not `preload("../level_root.gd")`. Use raw ints for default parameters and `root.EnumName.*` at runtime.
 - **LevelRoot is the public API.** Its methods are thin one-line delegates to subsystems. External callers (`plugin.gd`, `dock.gd`) always go through `LevelRoot`.
-- **Input state machine.** `HFDragSystem` owns the `HFInputState` instance. Drag state transitions are explicit (`begin_drag` -> `advance_to_height` -> `end_drag`).
+- **Input state machine.** `HFDragSystem` owns the `HFInputState` instance. Drag state transitions are explicit (`begin_drag` -> `advance_to_height` -> `end_drag`). Extrude uses `begin_extrude` -> `end_extrude`.
 - **Direct typed calls.** `plugin.gd` and `dock.gd` use typed references (`LevelRoot`, `DockType`) with direct method calls instead of `has_method`/`call`.
 - **Undo/redo dynamic dispatch.** The `_commit_state_action` pattern in `dock.gd` intentionally uses string method names for undo/redo -- this is the one exception to the typed-calls rule.
 - **Bake owner assignment.** Use `_assign_owner_recursive()` (not `_assign_owner()`) for baked geometry so all descendants get proper editor ownership. Always call it *after* the container is added to the scene tree.
@@ -96,6 +97,10 @@ Then click `Add` in the Materials tab and choose that resource.
 Brush workflow
 - Draw an Add brush and confirm resize handles work.
 - Draw a Subtract brush and apply cuts.
+- Press U to enter Extrude Up, click a brush face, drag up, release -- confirm new brush appears.
+- Press J to enter Extrude Down, click a brush face, drag up, release -- confirm new brush extends downward.
+- Right-click during extrude drag to cancel and confirm preview is removed.
+- Verify undo removes the extruded brush.
 
 Face materials + UVs
 - Add a material to the palette and assign it to multiple faces.
@@ -133,7 +138,8 @@ Save/Load
 - Reload and verify heightmap data, material_ids, blend_weights, and height_scale persist.
 
 Editor UX
-- Toggle Draw/Select tool and verify shortcut HUD updates.
+- Toggle Draw/Select/Extrude Up/Extrude Down tools and verify shortcut HUD updates.
+- Press U/J and verify toolbar button toggles and HUD shows extrude shortcuts.
 - Start a brush drag and confirm HUD shows "Dragging Base" shortcuts.
 - Press X/Y/Z and confirm HUD shows axis lock state.
 - Enable Paint Mode and verify HUD shows paint shortcuts (B/E/R/L/K).

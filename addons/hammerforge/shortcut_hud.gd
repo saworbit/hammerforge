@@ -44,6 +44,13 @@ func _build_shortcuts_text(ctx: Dictionary) -> String:
 	if tool_id == 1:
 		return _select_mode_shortcuts()
 
+	if tool_id == 2 or tool_id == 3:
+		var dir_label := "Up" if tool_id == 2 else "Down"
+		# mode 4 = EXTRUDE (from HFInputState)
+		if mode == 4:
+			return _extrude_active_shortcuts(dir_label)
+		return _extrude_idle_shortcuts(dir_label)
+
 	# Draw tool
 	match mode:
 		1:
@@ -89,6 +96,24 @@ func _select_mode_shortcuts() -> String:
 	lines.append("Escape: Clear Selection")
 	lines.append("Del: Remove | Ctrl+D: Duplicate")
 	lines.append("Arrows: Nudge | PgUp/Dn: Y-Nudge")
+	return "\n".join(lines)
+
+
+func _extrude_idle_shortcuts(dir_label: String) -> String:
+	var lines := PackedStringArray()
+	lines.append("-- Extrude %s --" % dir_label)
+	lines.append("Click face + Drag: Extrude %s" % dir_label)
+	lines.append("U: Extrude Up | J: Extrude Down")
+	lines.append("Right-click: Cancel")
+	return "\n".join(lines)
+
+
+func _extrude_active_shortcuts(dir_label: String) -> String:
+	var lines := PackedStringArray()
+	lines.append("-- Extruding %s --" % dir_label)
+	lines.append("Move Mouse: Set Height")
+	lines.append("Release: Confirm")
+	lines.append("Right-click: Cancel")
 	return "\n".join(lines)
 
 

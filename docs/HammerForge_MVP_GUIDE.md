@@ -1,6 +1,6 @@
 # HammerForge MVP Guide
 
-Last updated: February 7, 2026
+Last updated: February 8, 2026
 
 This guide is for contributors implementing or extending the MVP.
 
@@ -23,9 +23,10 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 
 ## Core Systems
 
-### Brush Workflow (`HFBrushSystem` + `HFDragSystem`)
+### Brush Workflow (`HFBrushSystem` + `HFDragSystem` + `HFExtrudeTool`)
 - DraftBrush nodes represent all authored geometry.
 - `HFDragSystem` manages the two-stage draw lifecycle (base drag -> height click) and owns the `HFInputState` instance.
+- `HFExtrudeTool` handles face extrusion: picks a face via `FaceSelector`, shows a preview, and commits a new DraftBrush on release. Supports Up (along face normal) and Down (opposite).
 - `HFBrushSystem` handles brush CRUD, pending/committed cuts, materials, and picking.
 - PendingCuts allow staging subtract operations before applying.
 
@@ -65,6 +66,7 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 1. Input is handled by `plugin.gd` (EditorPlugin) with typed references to `LevelRoot` and the dock.
 2. `LevelRoot` delegates to the appropriate subsystem:
    - Draw tool -> `HFDragSystem` (drag lifecycle + preview)
+   - Extrude Up/Down -> `HFExtrudeTool` (face pick + drag + commit)
    - Select tool -> `HFBrushSystem` (picking + selection)
    - Paint (floor) -> `HFPaintSystem` -> `HFPaintTool` (layers + synth + reconcile)
    - Paint (surface) -> `HFPaintSystem` -> `SurfacePaint` (per-face weight images)
@@ -75,6 +77,8 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 
 ## Testing Checklist
 - Create and resize draft brushes (Draw tool).
+- Extrude Up (U) and Extrude Down (J) on brush faces; confirm new brushes appear with correct orientation.
+- Right-click during extrude to cancel; confirm preview is removed.
 - Apply/clear/commit subtract cuts.
 - Verify pending cuts appear orange-red, applied cuts turn standard red.
 - Bake (with and without chunking).

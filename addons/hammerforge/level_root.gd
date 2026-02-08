@@ -22,6 +22,7 @@ const HFGeneratedReconciler = preload("paint/hf_reconciler.gd")
 const HFStroke = preload("paint/hf_stroke.gd")
 const HFHeightmapSynth = preload("paint/hf_heightmap_synth.gd")
 const HFHeightmapIO = preload("paint/hf_heightmap_io.gd")
+const HFExtrudeToolType = preload("hf_extrude_tool.gd")
 const HFInputStateType = preload("input_state.gd")
 const HFGridSystemType = preload("systems/hf_grid_system.gd")
 const HFEntitySystemType = preload("systems/hf_entity_system.gd")
@@ -150,6 +151,7 @@ var bake_system: HFBakeSystemType
 var paint_system: HFPaintSystemType
 var state_system: HFStateSystemType
 var file_system: HFFileSystemType
+var extrude_tool: HFExtrudeToolType
 
 # ---------------------------------------------------------------------------
 # Input state (owned by drag_system, accessed via backward-compat accessors)
@@ -303,6 +305,7 @@ func _ready():
 	paint_system = HFPaintSystemType.new(self)
 	state_system = HFStateSystemType.new(self)
 	file_system = HFFileSystemType.new(self)
+	extrude_tool = HFExtrudeToolType.new(self)
 	entity_system.load_entity_definitions()
 	grid_system.setup_editor_grid()
 	if Engine.is_editor_hint():
@@ -649,6 +652,35 @@ func set_shift_pressed(pressed: bool) -> void:
 
 func set_alt_pressed(pressed: bool) -> void:
 	drag_system.set_alt_pressed(pressed)
+
+
+# ===========================================================================
+# Extrude API (delegates to extrude_tool)
+# ===========================================================================
+
+
+func begin_extrude(camera: Camera3D, mouse_pos: Vector2, extrude_direction: int) -> bool:
+	var started := extrude_tool.begin_extrude(camera, mouse_pos, extrude_direction)
+	if started and drag_system:
+		drag_system.input_state.begin_extrude()
+	return started
+
+
+func update_extrude(camera: Camera3D, mouse_pos: Vector2) -> void:
+	extrude_tool.update_extrude(camera, mouse_pos)
+
+
+func end_extrude_info() -> Dictionary:
+	var info := extrude_tool.end_extrude_info()
+	if drag_system:
+		drag_system.input_state.end_extrude()
+	return info
+
+
+func cancel_extrude() -> void:
+	extrude_tool.cancel_extrude()
+	if drag_system:
+		drag_system.input_state.end_extrude()
 
 
 # ===========================================================================

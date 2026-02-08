@@ -1,6 +1,6 @@
 # HammerForge Spec
 
-Last updated: February 7, 2026
+Last updated: February 8, 2026
 
 This document describes HammerForge's architecture and data flow.
 
@@ -21,7 +21,8 @@ HammerForge uses a coordinator + subsystems pattern. `LevelRoot` is a thin coord
 | `plugin.gd` | EditorPlugin entry point, input routing, undo/redo |
 | `level_root.gd` | Thin coordinator: containers, exports, signals, delegates to subsystems |
 | `dock.gd` + `dock.tscn` | UI dock: tool state, materials palette, paint controls |
-| `input_state.gd` | Drag/paint state machine (`Mode` enum: IDLE, DRAG_BASE, DRAG_HEIGHT, SURFACE_PAINT) |
+| `input_state.gd` | Drag/paint/extrude state machine (`Mode` enum: IDLE, DRAG_BASE, DRAG_HEIGHT, SURFACE_PAINT, EXTRUDE) |
+| `hf_extrude_tool.gd` | Extrude Up/Down tool (face pick + drag to extend brushes) |
 | `brush_instance.gd` | DraftBrush node (authored geometry) |
 | `baker.gd` | CSG -> mesh bake pipeline |
 | `face_data.gd` | Per-face materials, UVs, and paint layers |
@@ -89,6 +90,7 @@ LevelRoot (Node3D)
 ## Brush Workflow
 - Draw creates DraftBrush nodes in DraftBrushes.
 - Subtract brushes are staged in PendingCuts until Apply Cuts.
+- Extrude Up/Down picks a face via `FaceSelector`, creates a preview brush along the face normal, and commits a new DraftBrush on release. Uses `HFExtrudeTool` (RefCounted).
 - Bake builds a temporary CSG tree from DraftBrushes + CommittedCuts and outputs BakedGeometry.
 
 ## Floor Paint System
@@ -160,6 +162,7 @@ Surface paint is a per-face splat system. It updates preview materials and can b
 plugin.gd (input)
   -> level_root.gd (coordinator)
     -> hf_drag_system.gd    (draw tool: drag lifecycle + preview)
+    -> hf_extrude_tool.gd   (extrude up/down: face pick + drag + commit)
     -> hf_brush_system.gd   (brush CRUD, pending cuts, materials)
     -> hf_paint_system.gd   (floor + surface paint)
     -> hf_bake_system.gd    (CSG assembly + mesh output)
@@ -181,12 +184,13 @@ All public methods on `LevelRoot` are thin one-line delegates to the appropriate
 | `DRAG_BASE` | Drawing the base rectangle of a new brush |
 | `DRAG_HEIGHT` | Setting the height of a new brush |
 | `SURFACE_PAINT` | Actively painting on a brush face |
+| `EXTRUDE` | Actively extruding a face up or down |
 
-Transitions: `begin_drag()` -> `advance_to_height()` -> `end_drag()` / `cancel()`.
+Transitions: `begin_drag()` -> `advance_to_height()` -> `end_drag()` / `cancel()`. Extrude: `begin_extrude()` -> `end_extrude()` / `cancel()`.
 
 ## Editor UX
 - Theme-aware dock styling with comprehensive tooltips on all controls.
-- Context-sensitive shortcut HUD overlay (6 views: draw idle, dragging base, adjusting height, select, floor paint, surface paint). Displays current axis lock. Updated via `plugin.gd` -> `shortcut_hud.gd:update_context()`.
+- Context-sensitive shortcut HUD overlay (8 views: draw idle, dragging base, adjusting height, select, extrude idle, extruding active, floor paint, surface paint). Displays current axis lock. Updated via `plugin.gd` -> `shortcut_hud.gd:update_context()`.
 - Paint tool keyboard shortcuts (B/E/R/L/K) active when Paint Mode is enabled.
 - Selection count in status bar, updated on every selection change.
 - Color-coded status bar: errors in red (auto-clear 5s), warnings in yellow, success messages auto-clear after 3s.

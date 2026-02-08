@@ -5,6 +5,16 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Extrude Up / Extrude Down tools** for extending brush faces vertically:
+  - Click any brush face and drag to create a new box brush extruding from that face.
+  - Extrude Up (green preview) and Extrude Down (red preview) with grid-snapped height.
+  - Full undo/redo support via `_commit_brush_placement`.
+  - Inherits source brush material automatically.
+  - New `HFExtrudeTool` class (`hf_extrude_tool.gd`) using `FaceSelector` raycast.
+  - Toolbar buttons (Ext+/Ext-) in same button group as Draw/Select.
+  - Keyboard shortcuts: U (Extrude Up), J (Extrude Down).
+  - Input state machine: added `EXTRUDE` mode to `HFInputState`.
+  - Shortcut HUD: two new views (extrude idle, extruding active).
 - **Multi-layer heightmap integration** for floor paint:
   - Heightmap import (PNG/EXR) and procedural noise generation (FastNoiseLite) per paint layer.
   - Per-cell material IDs and blend weights stored alongside existing bitset data.

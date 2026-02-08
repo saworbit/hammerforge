@@ -242,6 +242,14 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			if event.keycode == KEY_PAGEDOWN:
 				_nudge_selected(root, Vector3(0.0, -1.0, 0.0))
 				return EditorPlugin.AFTER_GUI_INPUT_STOP
+			if event.keycode == KEY_U:
+				dock.set_extrude_tool(1)
+				_update_hud_context()
+				return EditorPlugin.AFTER_GUI_INPUT_STOP
+			if event.keycode == KEY_J:
+				dock.set_extrude_tool(-1)
+				_update_hud_context()
+				return EditorPlugin.AFTER_GUI_INPUT_STOP
 			if paint_mode:
 				var paint_key := -1
 				match event.keycode:
@@ -283,7 +291,10 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			root.set_shift_pressed(event.shift_pressed)
 			root.set_alt_pressed(event.alt_pressed)
 		if event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
-			root.cancel_drag()
+			if tool == 2 or tool == 3:
+				root.cancel_extrude()
+			else:
+				root.cancel_drag()
 			select_drag_active = false
 			select_dragging = false
 			_update_hud_context()
@@ -343,6 +354,21 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 				if selection_action
 				else EditorPlugin.AFTER_GUI_INPUT_PASS
 			)
+	elif tool == 2 or tool == 3:
+		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+			if event.pressed:
+				var extrude_dir = dock.get_extrude_direction()
+				var started = root.begin_extrude(target_camera, target_pos, extrude_dir)
+				return (
+					EditorPlugin.AFTER_GUI_INPUT_STOP
+					if started
+					else EditorPlugin.AFTER_GUI_INPUT_PASS
+				)
+			var info = root.end_extrude_info()
+			if not info.is_empty():
+				_commit_brush_placement(root, info)
+			_update_hud_context()
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
 	else:
 		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 			if event.pressed:
@@ -374,7 +400,11 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			):
 				select_dragging = true
 			return EditorPlugin.AFTER_GUI_INPUT_PASS
-		if tool != 1 and event.button_mask & MOUSE_BUTTON_MASK_LEFT != 0:
+		if (tool == 2 or tool == 3) and event.button_mask & MOUSE_BUTTON_MASK_LEFT != 0:
+			root.update_extrude(target_camera, target_pos)
+			_update_hud_context()
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+		if tool == 0 and event.button_mask & MOUSE_BUTTON_MASK_LEFT != 0:
 			root.update_drag(target_camera, target_pos)
 			_update_hud_context()
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
