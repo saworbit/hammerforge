@@ -26,6 +26,17 @@ class EntityPaletteButton:
 		return dock_ref._make_entity_drag_data(entity_id, entity_def, self)
 
 
+class BrushPresetButton:
+	extends Button
+	var preset_path: String = ""
+	var dock_ref: HammerForgeDock = null
+
+	func _get_drag_data(_at_position: Vector2) -> Variant:
+		if preset_path == "" or not dock_ref:
+			return null
+		return dock_ref._make_brush_drag_data(preset_path, text, self)
+
+
 @onready var main_tabs: TabContainer = $Margin/VBox/MainTabs
 @onready var build_tab: ScrollContainer = $Margin/VBox/MainTabs/Build
 @onready var entity_tab: ScrollContainer = $Margin/VBox/MainTabs/Entities
@@ -2178,6 +2189,28 @@ func _build_entity_drag_preview(definition: Dictionary, entity_id: String) -> Co
 	return container
 
 
+func _make_brush_drag_data(preset_path: String, display_name: String, source: Control) -> Variant:
+	if preset_path == "":
+		return null
+	var data = {"type": "hammerforge_brush_preset", "preset_path": preset_path}
+	if source:
+		var preview = _build_brush_drag_preview(display_name)
+		if preview:
+			source.set_drag_preview(preview)
+	return data
+
+
+func _build_brush_drag_preview(display_name: String) -> Control:
+	var container = HBoxContainer.new()
+	container.custom_minimum_size = Vector2(140, 28)
+	container.size_flags_horizontal = Control.SIZE_FILL
+	container.size_flags_vertical = Control.SIZE_FILL
+	var label = Label.new()
+	label.text = display_name
+	container.add_child(label)
+	return container
+
+
 func _clear_preset_buttons() -> void:
 	for button in preset_buttons:
 		if button and button.get_parent():
@@ -2189,7 +2222,9 @@ func _clear_preset_buttons() -> void:
 func _create_preset_button(preset: BrushPreset, path: String) -> void:
 	if not preset_grid:
 		return
-	var button := Button.new()
+	var button := BrushPresetButton.new()
+	button.preset_path = path
+	button.dock_ref = self
 	button.text = _preset_display_name(preset, path)
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	button.set_meta("preset_path", path)

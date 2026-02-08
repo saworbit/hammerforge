@@ -778,11 +778,14 @@ func _nudge_selected(root: Node, dir: Vector3) -> void:
 
 
 func _can_drop_data(_position: Vector2, data: Variant) -> bool:
-	return _is_entity_drag_data(data)
+	return _is_entity_drag_data(data) or _is_brush_preset_drag_data(data)
 
 
 func _drop_data(position: Vector2, data: Variant) -> void:
-	_handle_entity_drop(position, data)
+	if _is_brush_preset_drag_data(data):
+		_handle_brush_preset_drop(position, data)
+	else:
+		_handle_entity_drop(position, data)
 
 
 func _is_entity_drag_data(data: Variant) -> bool:
@@ -811,6 +814,51 @@ func _handle_entity_drop(position: Vector2, data: Variant) -> void:
 				selection.add_node(entity)
 			hf_selection.clear()
 			hf_selection.append(entity)
+
+
+func _is_brush_preset_drag_data(data: Variant) -> bool:
+	return data is Dictionary and str(data.get("type", "")) == "hammerforge_brush_preset"
+
+
+func _handle_brush_preset_drop(position: Vector2, data: Variant) -> void:
+	if not _is_brush_preset_drag_data(data):
+		return
+	var preset_path = str(data.get("preset_path", ""))
+	if preset_path == "":
+		return
+	var preset = load(preset_path)
+	if not preset or not (preset is BrushPreset):
+		return
+	var root = active_root if active_root else _get_level_root()
+	if not root:
+		root = _create_level_root()
+	if not root:
+		return
+	var camera = last_3d_camera
+	var mouse_pos = position if position != null else last_3d_mouse_pos
+	if not camera:
+		return
+	var hit = root._raycast(camera, mouse_pos)
+	if hit.is_empty():
+		return
+	var point = root._snap_point(hit.get("position", Vector3.ZERO))
+	var size = preset.size
+	var center = point + Vector3(0, size.y * 0.5, 0)
+	var operation = preset.operation
+	var info = {
+		"shape": preset.shape,
+		"size": size,
+		"center": center,
+		"operation": operation,
+		"pending": operation == CSGShape3D.OPERATION_SUBTRACTION and root.pending_node != null,
+		"brush_id": root._next_brush_id()
+	}
+	if root._shape_uses_sides(preset.shape):
+		info["sides"] = preset.sides
+	var mat = dock.get_active_material() if dock else null
+	if mat:
+		info["material"] = mat
+	_commit_brush_placement(root, info)
 
 
 func _get_level_root() -> Node:
