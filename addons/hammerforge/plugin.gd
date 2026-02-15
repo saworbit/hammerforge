@@ -19,6 +19,7 @@ var last_3d_mouse_pos := Vector2.ZERO
 const LevelRootType = preload("level_root.gd")
 const DraftEntityType = preload("draft_entity.gd")
 const IconRes = preload("icon.png")
+const HFUndoHelper = preload("undo_helper.gd")
 
 
 func _enter_tree():
@@ -654,63 +655,70 @@ func _record_history(action_name: String) -> void:
 func _paint_brush_with_undo(root: Node, brush: Node, mat: Material) -> void:
 	if not root or not brush:
 		return
-	var undo_redo = _get_undo_redo()
-	if not undo_redo:
-		root.apply_material_to_brush(brush, mat)
-		return
 	var prev = (
 		brush.get("material_override") if brush.get("material_override") else brush.get("material")
 	)
 	if prev == mat:
 		return
-	undo_redo.create_action("Paint Brush")
-	undo_redo.add_do_method(root, "apply_material_to_brush", brush, mat)
-	undo_redo.add_undo_method(root, "apply_material_to_brush", brush, prev)
-	undo_redo.commit_action()
-	_record_history("Paint Brush")
+	var brush_id := ""
+	if root.has_method("get_brush_info_from_node"):
+		var info = root.get_brush_info_from_node(brush)
+		brush_id = str(info.get("brush_id", ""))
+	var method_name = "apply_material_to_brush"
+	var args: Array = [brush, mat]
+	if brush_id != "":
+		method_name = "apply_material_to_brush_by_id"
+		args = [brush_id, mat]
+	HFUndoHelper.commit(
+		_get_undo_redo(),
+		root,
+		"Paint Brush",
+		method_name,
+		args,
+		false,
+		Callable(self, "_record_history")
+	)
 
 
 func _commit_brush_placement(root: Node, info: Dictionary) -> void:
 	if info.is_empty():
 		return
-	var undo_redo = _get_undo_redo()
-	if not undo_redo:
-		root.create_brush_from_info(info)
-		return
-	undo_redo.create_action("Place Brush")
-	undo_redo.add_do_method(root, "create_brush_from_info", info)
-	undo_redo.add_undo_method(root, "delete_brush_by_id", info.get("brush_id", ""))
-	undo_redo.commit_action()
-	_record_history("Place Brush")
+	HFUndoHelper.commit(
+		_get_undo_redo(),
+		root,
+		"Place Brush",
+		"create_brush_from_info",
+		[info],
+		false,
+		Callable(self, "_record_history")
+	)
 
 
 func _delete_selected(root: Node) -> bool:
 	var selection = get_editor_interface().get_selection()
 	var nodes = _current_selection_nodes()
-	var deletable: Array = []
+	var brush_ids: Array = []
 	for node in nodes:
 		if root.is_brush_node(node):
-			deletable.append(node)
-	if deletable.is_empty():
+			var info = root.get_brush_info_from_node(node)
+			if info.is_empty():
+				continue
+			var brush_id = str(info.get("brush_id", ""))
+			if brush_id != "":
+				brush_ids.append(brush_id)
+	if brush_ids.is_empty():
 		return false
 	selection.clear()
 	hf_selection.clear()
-	var undo_redo = _get_undo_redo()
-	if not undo_redo:
-		for node in deletable:
-			root.delete_brush(node)
-		return true
-	undo_redo.create_action("Delete Brushes")
-	for node in deletable:
-		var parent = node.get_parent()
-		var owner = node.owner
-		var index = -1
-		if parent:
-			index = parent.get_children().find(node)
-		undo_redo.add_do_method(root, "delete_brush", node, false)
-		undo_redo.add_undo_method(root, "restore_brush", node, parent, owner, index)
-	undo_redo.commit_action()
-	_record_history("Delete Brushes")
+	HFUndoHelper.commit(
+		_get_undo_redo(),
+		root,
+		"Delete Brushes",
+		"delete_brushes_by_id",
+		[brush_ids],
+		false,
+		Callable(self, "_record_history")
+	)
 	return true
 
 
@@ -726,22 +734,15 @@ func _duplicate_selected(root: Node) -> void:
 				infos.append(info)
 	if infos.is_empty():
 		return
-	var undo_redo = _get_undo_redo()
-	if not undo_redo:
-		selection.clear()
-		hf_selection.clear()
-		for info in infos:
-			var dup = root.create_brush_from_info(info)
-			if dup:
-				selection.add_node(dup)
-				hf_selection.append(dup)
-		return
-	undo_redo.create_action("Duplicate Brushes")
-	for info in infos:
-		undo_redo.add_do_method(root, "create_brush_from_info", info)
-		undo_redo.add_undo_method(root, "delete_brush_by_id", info.get("brush_id", ""))
-	undo_redo.commit_action()
-	_record_history("Duplicate Brushes")
+	HFUndoHelper.commit(
+		_get_undo_redo(),
+		root,
+		"Duplicate Brushes",
+		"create_brushes_from_infos",
+		[infos],
+		false,
+		Callable(self, "_record_history")
+	)
 	selection.clear()
 	hf_selection.clear()
 	if root:
@@ -756,25 +757,25 @@ func _nudge_selected(root: Node, dir: Vector3) -> void:
 	var step = root.grid_snap if root.grid_snap > 0.0 else 1.0
 	var selection = get_editor_interface().get_selection()
 	var nodes = _current_selection_nodes()
-	var targets: Array = []
+	var brush_ids: Array = []
 	for node in nodes:
 		if node and node is Node3D and root.is_brush_node(node):
-			targets.append(node)
-	if targets.is_empty():
+			var info = root.get_brush_info_from_node(node)
+			var brush_id = str(info.get("brush_id", ""))
+			if brush_id != "":
+				brush_ids.append(brush_id)
+	if brush_ids.is_empty():
 		return
 	var offset = dir * step
-	var undo_redo = _get_undo_redo()
-	if not undo_redo:
-		for node in targets:
-			node.global_position += offset
-		return
-	undo_redo.create_action("Nudge Brushes")
-	for node in targets:
-		var start_pos = node.global_position
-		undo_redo.add_do_property(node, "global_position", start_pos + offset)
-		undo_redo.add_undo_property(node, "global_position", start_pos)
-	undo_redo.commit_action()
-	_record_history("Nudge Brushes")
+	HFUndoHelper.commit(
+		_get_undo_redo(),
+		root,
+		"Nudge Brushes",
+		"nudge_brushes_by_id",
+		[brush_ids, offset],
+		false,
+		Callable(self, "_record_history")
+	)
 
 
 func _can_drop_data(_position: Vector2, data: Variant) -> bool:

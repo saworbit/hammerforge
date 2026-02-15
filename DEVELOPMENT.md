@@ -1,6 +1,6 @@
 ﻿# Development Guide
 
-Last updated: February 8, 2026
+Last updated: February 15, 2026
 
 This document covers local setup, codebase structure, and how to test features.
 
@@ -43,6 +43,7 @@ addons/hammerforge/
     hf_paint_system.gd     Floor + surface paint, layer CRUD
     hf_state_system.gd     State capture/restore, settings
     hf_file_system.gd      .hflevel/.map/.glTF I/O, threaded writes
+    hf_validation_system.gd Validation and dependency checks
 
   paint/                 Floor paint subsystem
     hf_paint_grid.gd       Grid storage
@@ -69,6 +70,8 @@ addons/hammerforge/
 - **Input state machine.** `HFDragSystem` owns the `HFInputState` instance. Drag state transitions are explicit (`begin_drag` -> `advance_to_height` -> `end_drag`). Extrude uses `begin_extrude` -> `end_extrude`.
 - **Direct typed calls.** `plugin.gd` and `dock.gd` use typed references (`LevelRoot`, `DockType`) with direct method calls instead of `has_method`/`call`.
 - **Undo/redo dynamic dispatch.** The `_commit_state_action` pattern in `dock.gd` intentionally uses string method names for undo/redo -- this is the one exception to the typed-calls rule.
+- **Undo/redo helper.** Use `HFUndoHelper` for editor actions to ensure consistent history and state snapshot restores.
+- **Undo/redo stability.** Prefer brush IDs and `create_brush_from_info()` for undo instead of storing Node references in history.
 - **Bake owner assignment.** Use `_assign_owner_recursive()` (not `_assign_owner()`) for baked geometry so all descendants get proper editor ownership. Always call it *after* the container is added to the scene tree.
 
 ### CI
@@ -131,6 +134,17 @@ Bake
 - Bake with default settings.
 - Toggle `Use Face Materials` and confirm bake output swaps to per-face materials.
 - Bake with heightmap floors and confirm baked output includes heightmap meshes with trimesh collision.
+- Set `bake_chunk_size > 0` and confirm the progress bar updates with chunk status.
+- Run Bake Dry Run and confirm counts match expected brushes and chunks.
+
+Validation + Settings
+- Run Validate Level on a clean scene and confirm no issues.
+- Create a zero-size brush and confirm Validate + Fix repairs it.
+- Export settings, change grid snap or bake options, then import and confirm values restore.
+- Confirm autosave history files are created under `res://.hammerforge/autosave_history` and old files are pruned.
+
+Performance Panel
+- Confirm brush count, paint memory, chunk count, and last bake time update after a bake.
 
 Save/Load
 - Save `.hflevel`.

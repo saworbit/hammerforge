@@ -1,6 +1,6 @@
 # HammerForge User Guide
 
-Last updated: February 8, 2026
+Last updated: February 15, 2026
 
 This guide covers the current HammerForge workflow in Godot 4.6: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs.
 
@@ -66,12 +66,36 @@ Other
 - Debug Logs toggles HammerForge logs.
 - History panel (beta).
 - Playtest bakes and runs the scene.
+- Bake Dry Run reports what will be baked without generating geometry.
+- Validate Level scans for common issues; Validate + Fix applies safe fixes.
+- Export/Import Settings saves grid snap presets, brush size, and bake options.
+- Autosave keeps the last N history files under `res://.hammerforge/autosave_history`.
 
 Status bar
 - Shows current status ("Ready", "Baking...", errors in red, warnings in yellow).
 - Errors auto-clear after 5 seconds, success messages after 3 seconds.
 - Displays selection count ("Sel: N brushes") when brushes are selected.
 - Live brush count with color-coded performance warnings.
+- Bake progress bar updates during chunked bakes.
+- Performance panel shows active brushes, paint memory, bake chunks, and last bake time.
+
+## Design Constraints (Summary)
+- DraftBrush previews are lightweight. Final geometry comes from bake.
+- Subtractive brushes are staged as Pending Cuts until applied.
+- Floor paint is grid-based; heightmaps displace floors only.
+- `.map` export/import is for blockouts and does not preserve per-face materials.
+
+For details, see `docs/HammerForge_Design_Constraints.md`.
+
+## Data Portability
+- `.hflevel` is the source of truth for full-fidelity editing.
+- `.map` exchange is limited to basic brushes and point entities.
+- `.glb` export includes baked geometry only.
+
+For full details, see `docs/HammerForge_Data_Portability.md`.
+
+## Install + Upgrade
+For install steps, upgrade guidance, and cache reset help, see `docs/HammerForge_Install_Upgrade.md`.
 
 ## Shortcut HUD
 The on-screen shortcut overlay updates dynamically based on your current tool and mode. Toggle it via the Show HUD checkbox in the Build tab. It shows:

@@ -32,6 +32,7 @@ const HFBakeSystemType = preload("systems/hf_bake_system.gd")
 const HFPaintSystemType = preload("systems/hf_paint_system.gd")
 const HFStateSystemType = preload("systems/hf_state_system.gd")
 const HFFileSystemType = preload("systems/hf_file_system.gd")
+const HFValidationSystemType = preload("systems/hf_validation_system.gd")
 
 const RELOAD_LOCK_PATH := "res://.hammerforge/reload.lock"
 const RELOAD_POLL_SECONDS := 0.5
@@ -92,6 +93,12 @@ var _hflevel_autosave_minutes: int = 5
 		_set_hflevel_autosave_minutes(value)
 	get:
 		return _hflevel_autosave_minutes
+var _hflevel_autosave_keep: int = 5
+@export_range(1, 50, 1) var hflevel_autosave_keep: int = 5:
+	set(value):
+		_set_hflevel_autosave_keep(value)
+	get:
+		return _hflevel_autosave_keep
 @export var hflevel_autosave_path: String = "res://.hammerforge/autosave.hflevel"
 @export var hflevel_compress: bool = true
 @export var entity_definitions_path: String = "res://addons/hammerforge/entities.json"
@@ -116,6 +123,7 @@ var _grid_visible: bool = false
 
 signal bake_started
 signal bake_finished(success: bool)
+signal bake_progress(value: float, label: String)
 signal grid_snap_changed(value: float)
 
 # ---------------------------------------------------------------------------
@@ -151,6 +159,7 @@ var bake_system: HFBakeSystemType
 var paint_system: HFPaintSystemType
 var state_system: HFStateSystemType
 var file_system: HFFileSystemType
+var validation_system: HFValidationSystemType
 var extrude_tool: HFExtrudeToolType
 
 # ---------------------------------------------------------------------------
@@ -279,6 +288,7 @@ var _last_bake_time: int = 0
 var _reload_timer: Timer = null
 var _autosave_timer: Timer = null
 var face_selection: Dictionary = {}
+var _last_bake_duration_ms: int = 0
 
 # ===========================================================================
 # Lifecycle
@@ -305,12 +315,14 @@ func _ready():
 	paint_system = HFPaintSystemType.new(self)
 	state_system = HFStateSystemType.new(self)
 	file_system = HFFileSystemType.new(self)
+	validation_system = HFValidationSystemType.new(self)
 	extrude_tool = HFExtrudeToolType.new(self)
 	entity_system.load_entity_definitions()
 	grid_system.setup_editor_grid()
 	if Engine.is_editor_hint():
 		_set_hflevel_autosave_minutes(hflevel_autosave_minutes)
 		_set_hflevel_autosave_enabled(hflevel_autosave_enabled)
+		_set_hflevel_autosave_keep(hflevel_autosave_keep)
 		_setup_autosave()
 		set_process(true)
 	_log("Ready (grid_visible=%s, follow_grid=%s)" % [_grid_visible, grid_follow_brush])
@@ -455,6 +467,12 @@ func create_brush_from_info(info: Dictionary) -> Node:
 	return brush_system.create_brush_from_info(info)
 
 
+func create_brushes_from_infos(infos: Array) -> void:
+	for info in infos:
+		if info is Dictionary:
+			brush_system.create_brush_from_info(info)
+
+
 func delete_brush(brush: Node, free: bool = true) -> void:
 	brush_system.delete_brush(brush, free)
 
@@ -463,8 +481,25 @@ func delete_brush_by_id(brush_id: String) -> void:
 	brush_system.delete_brush_by_id(brush_id)
 
 
+func delete_brushes_by_id(brush_ids: Array) -> void:
+	for brush_id in brush_ids:
+		brush_system.delete_brush_by_id(str(brush_id))
+
+
 func duplicate_brush(brush: Node) -> Node:
 	return brush_system.duplicate_brush(brush)
+
+
+func nudge_brushes_by_id(brush_ids: Array, offset: Vector3) -> void:
+	brush_system.nudge_brushes_by_id(brush_ids, offset)
+
+
+func apply_material_to_brush_by_id(brush_id: String, mat: Material) -> void:
+	brush_system.apply_material_to_brush_by_id(brush_id, mat)
+
+
+func set_brush_transform_by_id(brush_id: String, size: Vector3, position: Vector3) -> void:
+	brush_system.set_brush_transform_by_id(brush_id, size, position)
 
 
 func restore_brush(brush: Node, parent: Node, owner: Node, index: int) -> void:
@@ -557,6 +592,62 @@ func _refresh_brush_previews() -> void:
 
 func rebuild_brush_preview(brush: DraftBrush) -> void:
 	brush_system.rebuild_brush_preview(brush)
+
+
+func reset_uv_on_face(brush_id: String, face_idx: int) -> void:
+	var brush = brush_system.find_brush_by_id(brush_id)
+	if not brush or not (brush is DraftBrush):
+		return
+	var draft := brush as DraftBrush
+	if face_idx < 0 or face_idx >= draft.faces.size():
+		return
+	var face: FaceData = draft.faces[face_idx]
+	face.custom_uvs = PackedVector2Array()
+	face.ensure_custom_uvs()
+	draft.rebuild_preview()
+
+
+func add_surface_paint_layer(brush_id: String, face_idx: int) -> void:
+	var brush = brush_system.find_brush_by_id(brush_id)
+	if not brush or not (brush is DraftBrush):
+		return
+	var draft := brush as DraftBrush
+	if face_idx < 0 or face_idx >= draft.faces.size():
+		return
+	draft.faces[face_idx].paint_layers.append(FaceData.PaintLayer.new())
+	draft.rebuild_preview()
+
+
+func remove_surface_paint_layer(brush_id: String, face_idx: int, layer_idx: int) -> void:
+	var brush = brush_system.find_brush_by_id(brush_id)
+	if not brush or not (brush is DraftBrush):
+		return
+	var draft := brush as DraftBrush
+	if face_idx < 0 or face_idx >= draft.faces.size():
+		return
+	var layers = draft.faces[face_idx].paint_layers
+	if layer_idx < 0 or layer_idx >= layers.size():
+		return
+	layers.remove_at(layer_idx)
+	draft.rebuild_preview()
+
+
+func set_surface_paint_layer_texture(
+	brush_id: String, indices: Vector2i, texture: Texture2D
+) -> void:
+	var brush = brush_system.find_brush_by_id(brush_id)
+	if not brush or not (brush is DraftBrush):
+		return
+	var draft := brush as DraftBrush
+	var face_idx = indices.x
+	var layer_idx = indices.y
+	if face_idx < 0 or face_idx >= draft.faces.size():
+		return
+	var layers = draft.faces[face_idx].paint_layers
+	if layer_idx < 0 or layer_idx >= layers.size():
+		return
+	layers[layer_idx].texture = texture
+	draft.rebuild_preview()
 
 
 func _clear_preview() -> void:
@@ -692,6 +783,10 @@ func bake(apply_cuts: bool = true, hide_live: bool = false, collision_layer_mask
 	await bake_system.bake(apply_cuts, hide_live, collision_layer_mask)
 
 
+func bake_dry_run() -> Dictionary:
+	return bake_system.bake_dry_run() if bake_system else {}
+
+
 # ===========================================================================
 # Paint API (delegates to paint_system)
 # ===========================================================================
@@ -777,8 +872,8 @@ func set_layer_y(value: float) -> void:
 # ===========================================================================
 
 
-func capture_state() -> Dictionary:
-	return state_system.capture_state()
+func capture_state(include_transient: bool = true) -> Dictionary:
+	return state_system.capture_state(include_transient)
 
 
 func restore_state(state: Dictionary) -> void:
@@ -828,6 +923,26 @@ func export_map(path: String) -> int:
 
 func export_baked_gltf(path: String) -> int:
 	return file_system.export_baked_gltf(path)
+
+
+func check_missing_dependencies() -> Array:
+	return validation_system.check_missing_dependencies() if validation_system else []
+
+
+func validate_level(auto_fix: bool = false) -> Dictionary:
+	return validation_system.validate(auto_fix) if validation_system else {"issues": [], "fixed": 0}
+
+
+func get_paint_memory_bytes() -> int:
+	return paint_system.get_paint_memory_bytes() if paint_system else 0
+
+
+func get_bake_chunk_count() -> int:
+	return bake_system.get_bake_chunk_count() if bake_system else 0
+
+
+func get_last_bake_duration_ms() -> int:
+	return _last_bake_duration_ms
 
 
 # ===========================================================================
@@ -1126,6 +1241,13 @@ func _set_hflevel_autosave_minutes(value: int) -> void:
 	_hflevel_autosave_minutes = clamped
 	if _autosave_timer:
 		_autosave_timer.wait_time = max(60.0, float(_hflevel_autosave_minutes) * 60.0)
+
+
+func _set_hflevel_autosave_keep(value: int) -> void:
+	var clamped = clamp(value, 1, 50)
+	if _hflevel_autosave_keep == clamped:
+		return
+	_hflevel_autosave_keep = clamped
 
 
 func _read_reload_timestamp() -> int:

@@ -9,6 +9,7 @@ const BrushPreset = preload("brush_preset.gd")
 const DraftEntity = preload("draft_entity.gd")
 const DraftBrush = preload("brush_instance.gd")
 const FaceData = preload("face_data.gd")
+const HFUndoHelper = preload("undo_helper.gd")
 
 const PRESET_MENU_RENAME := 0
 const PRESET_MENU_DELETE := 1
@@ -132,6 +133,12 @@ var commit_cuts_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVB
 @onready
 var restore_cuts_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/RestoreCuts
 @onready
+var bake_dry_run_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/BakeDryRun
+@onready
+var validate_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/ValidateLevel
+@onready
+var validate_fix_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/ValidateFix
+@onready
 var create_entity_btn: Button = $Margin/VBox/MainTabs/Entities/EntitiesMargin/EntitiesVBox/CreateEntity
 @onready
 var entity_palette: GridContainer = $Margin/VBox/MainTabs/Entities/EntitiesMargin/EntitiesVBox/EntityPalette
@@ -150,6 +157,8 @@ var autosave_enabled: CheckBox = $Margin/VBox/MainTabs/Manage/ManageMargin/Manag
 var autosave_minutes: SpinBox = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/AutosaveMinutesRow/AutosaveMinutes
 @onready
 var autosave_path_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/AutosavePath
+@onready
+var autosave_keep: SpinBox = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/AutosaveKeepRow/AutosaveKeep
 @onready var status_label: Label = $Margin/VBox/Footer/StatusFooter/StatusLabel
 @onready var selection_label: Label = $Margin/VBox/Footer/StatusFooter/SelectionLabel
 @onready var perf_label: Label = $Margin/VBox/Footer/StatusFooter/BrushCountLabel
@@ -160,6 +169,24 @@ var redo_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/Hist
 @onready
 var history_list: ItemList = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/HistoryList
 @onready var quick_play_btn: Button = $Margin/VBox/Footer/QuickPlay
+
+@onready
+var export_settings_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/ExportSettings
+@onready
+var import_settings_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/ImportSettings
+@onready
+var settings_export_dialog: FileDialog = $SettingsExportDialog
+@onready
+var settings_import_dialog: FileDialog = $SettingsImportDialog
+
+@onready
+var perf_brushes_value: Label = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/PerformanceGrid/PerfBrushesValue
+@onready
+var perf_paint_mem_value: Label = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/PerformanceGrid/PerfPaintMemValue
+@onready
+var perf_bake_chunks_value: Label = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/PerformanceGrid/PerfBakeChunksValue
+@onready
+var perf_bake_time_value: Label = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/PerformanceGrid/PerfBakeTimeValue
 
 @onready
 var materials_list: ItemList = $Margin/VBox/MainTabs/Materials/MaterialsMargin/MaterialsVBox/MaterialsList
@@ -209,6 +236,7 @@ var preset_grid: GridContainer = $Margin/VBox/MainTabs/Manage/ManageMargin/Manag
 	$Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/QuickSnapGrid/Snap32,
 	$Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/QuickSnapGrid/Snap64
 ]
+var snap_preset_values: Array = [1, 2, 4, 8, 16, 32, 64]
 
 var level_root: LevelRootType = null
 var editor_interface: EditorInterface = null
@@ -249,6 +277,7 @@ var _uv_active_face: FaceData = null
 var _surface_active_brush: DraftBrush = null
 var _surface_active_face: FaceData = null
 var _pending_surface_texture_layer := -1
+var _bake_disabled := false
 var tool_extrude_up: Button = null
 var tool_extrude_down: Button = null
 
@@ -373,6 +402,8 @@ func _apply_toolbar_tooltips() -> void:
 func _set_tooltip(control: Control, text: String) -> void:
 	if not control:
 		return
+	if not control.has_meta("default_tooltip"):
+		control.set_meta("default_tooltip", text)
 	control.tooltip_text = text
 
 
@@ -448,6 +479,9 @@ func _apply_all_tooltips() -> void:
 	_set_tooltip(commit_cuts_btn, "Apply pending cuts, bake, then freeze/remove cut geometry")
 	_set_tooltip(restore_cuts_btn, "Restore frozen committed cuts back to draft tree")
 	_set_tooltip(bake_btn, "Bake draft brushes into optimized static meshes")
+	_set_tooltip(bake_dry_run_btn, "Report what will be baked without generating geometry")
+	_set_tooltip(validate_btn, "Scan the level for common issues")
+	_set_tooltip(validate_fix_btn, "Scan and auto-fix common issues")
 	_set_tooltip(clear_btn, "Remove all brushes and baked geometry")
 	_set_tooltip(save_hflevel_btn, "Save level to .hflevel file")
 	_set_tooltip(load_hflevel_btn, "Load level from .hflevel file")
@@ -457,6 +491,9 @@ func _apply_all_tooltips() -> void:
 	_set_tooltip(autosave_enabled, "Enable automatic saving at regular intervals")
 	_set_tooltip(autosave_minutes, "Autosave interval in minutes")
 	_set_tooltip(autosave_path_btn, "Set the autosave file path")
+	_set_tooltip(autosave_keep, "Keep the last N autosave history files")
+	_set_tooltip(export_settings_btn, "Export editor preferences to a settings file")
+	_set_tooltip(import_settings_btn, "Import editor preferences from a settings file")
 	_set_tooltip(save_preset_btn, "Save current brush settings as a reusable preset")
 	_set_tooltip(quick_play_btn, "Bake and play the current scene")
 	# Entities tab
@@ -733,15 +770,20 @@ func _ready():
 		surface_paint_texture.pressed.connect(_on_surface_paint_texture)
 
 	snap_button_group = ButtonGroup.new()
-	var snap_values = [1, 2, 4, 8, 16, 32, 64]
 	for index in range(snap_buttons.size()):
 		var button = snap_buttons[index]
 		if not button:
 			continue
+		var preset = (
+			snap_preset_values[index]
+			if index < snap_preset_values.size()
+			else snap_preset_values[snap_preset_values.size() - 1]
+		)
 		button.toggle_mode = true
 		button.flat = true
 		button.button_group = snap_button_group
-		button.set_meta("snap_value", snap_values[index])
+		button.set_meta("snap_value", preset)
+		button.text = str(preset)
 		button.toggled.connect(_on_snap_button_toggled.bind(button))
 
 	grid_snap.value_changed.connect(_on_grid_snap_value_changed)
@@ -754,6 +796,12 @@ func _ready():
 		debug_logs.toggled.connect(_on_debug_logs_toggled)
 
 	bake_btn.pressed.connect(_on_bake)
+	if bake_dry_run_btn:
+		bake_dry_run_btn.pressed.connect(_on_bake_dry_run)
+	if validate_btn:
+		validate_btn.pressed.connect(_on_validate_level)
+	if validate_fix_btn:
+		validate_fix_btn.pressed.connect(_on_validate_fix)
 	clear_btn.pressed.connect(_on_clear)
 	if save_hflevel_btn:
 		save_hflevel_btn.pressed.connect(_on_save_hflevel)
@@ -767,6 +815,10 @@ func _ready():
 		export_glb_btn.pressed.connect(_on_export_glb)
 	if autosave_path_btn:
 		autosave_path_btn.pressed.connect(_on_set_autosave_path)
+	if export_settings_btn:
+		export_settings_btn.pressed.connect(_on_export_settings)
+	if import_settings_btn:
+		import_settings_btn.pressed.connect(_on_import_settings)
 	floor_btn.pressed.connect(_on_floor)
 	apply_cuts_btn.pressed.connect(_on_apply_cuts)
 	clear_cuts_btn.pressed.connect(_on_clear_cuts)
@@ -876,6 +928,8 @@ func _process(delta):
 			level_root.set("hflevel_autosave_enabled", autosave_enabled.button_pressed)
 		if _root_has_property("hflevel_autosave_minutes") and autosave_minutes:
 			level_root.set("hflevel_autosave_minutes", int(autosave_minutes.value))
+		if _root_has_property("hflevel_autosave_keep") and autosave_keep:
+			level_root.set("hflevel_autosave_keep", int(autosave_keep.value))
 		if show_grid and _root_has_property("grid_visible"):
 			level_root.set("grid_visible", show_grid.button_pressed)
 		if follow_grid and _root_has_property("grid_follow_brush"):
@@ -885,6 +939,8 @@ func _process(delta):
 		_sync_paint_layers_from_root()
 		_sync_materials_from_root()
 		_sync_surface_paint_from_root()
+	_update_perf_panel()
+	_update_disabled_hints()
 	_update_perf_label()
 
 
@@ -1179,58 +1235,56 @@ func _log(message: String, force: bool = false) -> void:
 
 
 func _commit_state_action(action_name: String, method_name: String, args: Array = []) -> void:
-	if not level_root or not level_root.has_method(method_name):
+	if not level_root:
 		return
-	if args.size() > 3:
-		level_root.callv(method_name, args)
-		return
-	if not undo_redo:
-		level_root.callv(method_name, args)
-		return
-	var state = level_root.capture_state()
-	undo_redo.create_action(action_name)
-	match args.size():
-		0:
-			undo_redo.add_do_method(level_root, method_name)
-		1:
-			undo_redo.add_do_method(level_root, method_name, args[0])
-		2:
-			undo_redo.add_do_method(level_root, method_name, args[0], args[1])
-		3:
-			undo_redo.add_do_method(level_root, method_name, args[0], args[1], args[2])
-	undo_redo.add_undo_method(level_root, "restore_state", state)
-	undo_redo.commit_action()
-	record_history(action_name)
+	HFUndoHelper.commit(
+		undo_redo, level_root, action_name, method_name, args, false, Callable(self, "record_history")
+	)
 
 
 func _commit_full_state_action(action_name: String, method_name: String, args: Array = []) -> void:
-	if not level_root or not level_root.has_method(method_name):
+	if not level_root:
 		return
-	if not undo_redo:
-		level_root.callv(method_name, args)
-		return
-	var state = level_root.capture_full_state()
-	undo_redo.create_action(action_name)
-	match args.size():
-		0:
-			undo_redo.add_do_method(level_root, method_name)
-		1:
-			undo_redo.add_do_method(level_root, method_name, args[0])
-		2:
-			undo_redo.add_do_method(level_root, method_name, args[0], args[1])
-		3:
-			undo_redo.add_do_method(level_root, method_name, args[0], args[1], args[2])
-		_:
-			level_root.callv(method_name, args)
-			return
-	undo_redo.add_undo_method(level_root, "restore_full_state", state)
-	undo_redo.commit_action()
-	record_history(action_name)
+	HFUndoHelper.commit(
+		undo_redo, level_root, action_name, method_name, args, true, Callable(self, "record_history")
+	)
 
 
 func _on_bake():
 	_log("Bake requested")
+	_warn_missing_dependencies()
 	_commit_state_action("Bake", "bake", [true, false, get_collision_layer_mask()])
+
+
+func _on_bake_dry_run() -> void:
+	if not level_root:
+		_set_status("No LevelRoot for bake dry run", true)
+		return
+	var info: Dictionary = level_root.bake_dry_run()
+	if info.is_empty():
+		_set_status("Bake dry run failed", true)
+		return
+	var draft = int(info.get("draft", 0))
+	var pending = int(info.get("pending", 0))
+	var committed = int(info.get("committed", 0))
+	var gen_floors = int(info.get("generated_floors", 0))
+	var gen_walls = int(info.get("generated_walls", 0))
+	var hm = int(info.get("heightmap_floors", 0))
+	var chunks = int(info.get("chunk_count", 0))
+	var summary = (
+		"Dry run: draft %d, pending %d, committed %d, floors %d, walls %d, heightmap %d, chunks %d"
+		% [draft, pending, committed, gen_floors, gen_walls, hm, chunks]
+	)
+	_set_status(summary, false, 5.0)
+	_log(summary)
+
+
+func _on_validate_level() -> void:
+	_run_validation(false)
+
+
+func _on_validate_fix() -> void:
+	_run_validation(true)
 
 
 func _on_clear():
@@ -1255,6 +1309,7 @@ func _on_clear_cuts():
 
 func _on_commit_cuts():
 	_log("Commit cuts requested (freeze=%s)" % (commit_freeze.button_pressed))
+	_warn_missing_dependencies()
 	if editor_interface:
 		var selection = editor_interface.get_selection()
 		if selection:
@@ -1305,6 +1360,9 @@ func _connect_root_signals() -> void:
 	if connected_root.has_signal("bake_started"):
 		if not connected_root.is_connected("bake_started", Callable(self, "_on_bake_started")):
 			connected_root.connect("bake_started", Callable(self, "_on_bake_started"))
+	if connected_root.has_signal("bake_progress"):
+		if not connected_root.is_connected("bake_progress", Callable(self, "_on_bake_progress")):
+			connected_root.connect("bake_progress", Callable(self, "_on_bake_progress"))
 	if connected_root.has_signal("bake_finished"):
 		if not connected_root.is_connected("bake_finished", Callable(self, "_on_bake_finished")):
 			connected_root.connect("bake_finished", Callable(self, "_on_bake_finished"))
@@ -1327,6 +1385,9 @@ func _disconnect_root_signals() -> void:
 	if connected_root.has_signal("bake_started"):
 		if connected_root.is_connected("bake_started", Callable(self, "_on_bake_started")):
 			connected_root.disconnect("bake_started", Callable(self, "_on_bake_started"))
+	if connected_root.has_signal("bake_progress"):
+		if connected_root.is_connected("bake_progress", Callable(self, "_on_bake_progress")):
+			connected_root.disconnect("bake_progress", Callable(self, "_on_bake_progress"))
 	if connected_root.has_signal("bake_finished"):
 		if connected_root.is_connected("bake_finished", Callable(self, "_on_bake_finished")):
 			connected_root.disconnect("bake_finished", Callable(self, "_on_bake_finished"))
@@ -1390,16 +1451,34 @@ func _sync_grid_settings_from_root() -> void:
 		autosave_enabled.button_pressed = bool(connected_root.get("hflevel_autosave_enabled"))
 	if autosave_minutes and _root_has_property("hflevel_autosave_minutes"):
 		autosave_minutes.value = float(connected_root.get("hflevel_autosave_minutes"))
+	if autosave_keep and _root_has_property("hflevel_autosave_keep"):
+		autosave_keep.value = float(connected_root.get("hflevel_autosave_keep"))
 	syncing_grid = false
 	_sync_bake_option_visibility()
 
 
 func _on_bake_started() -> void:
-	status_label.text = "Baking..."
+	_set_status("Baking...", false, 0.0)
 	if progress_bar:
+		progress_bar.max_value = 100
 		progress_bar.value = 0
 		progress_bar.show()
 	_set_bake_buttons_disabled(true)
+
+
+func _on_bake_progress(value: float, label: String) -> void:
+	var clamped = clamp(value, 0.0, 1.0)
+	var pct = int(round(clamped * 100.0))
+	if progress_bar:
+		progress_bar.max_value = 100
+		progress_bar.value = pct
+		if not progress_bar.visible:
+			progress_bar.show()
+	var message = "Baking"
+	if label != "":
+		message = "%s: %s" % [message, label]
+	message += " (%d%%)" % pct
+	_set_status(message, false, 0.0)
 
 
 func _on_bake_finished(success: bool) -> void:
@@ -1413,6 +1492,7 @@ func _on_bake_finished(success: bool) -> void:
 
 
 func _set_bake_buttons_disabled(disabled: bool) -> void:
+	_bake_disabled = disabled
 	bake_btn.disabled = disabled
 	commit_cuts_btn.disabled = disabled
 	apply_cuts_btn.disabled = disabled
@@ -1422,9 +1502,10 @@ func _set_bake_buttons_disabled(disabled: bool) -> void:
 
 func _on_quick_play() -> void:
 	_log("Playtest requested")
+	_warn_missing_dependencies()
 	if level_root:
 		await level_root.bake(true, false, get_collision_layer_mask())
-	_notify_running_instances()
+		_notify_running_instances()
 	if editor_interface:
 		editor_interface.play_current_scene()
 
@@ -1439,6 +1520,149 @@ func _notify_running_instances() -> void:
 		_log("Failed to write reload lock file", true)
 		return
 	file.store_string(str(Time.get_ticks_msec()))
+
+
+func _warn_missing_dependencies() -> void:
+	if not level_root or not level_root.has_method("check_missing_dependencies"):
+		return
+	var warnings: Array = level_root.check_missing_dependencies()
+	if warnings.is_empty():
+		return
+	_set_status_warning("Missing dependencies: %d (see Output)" % warnings.size(), 5.0)
+	for warning in warnings:
+		_log("Dependency: %s" % str(warning), true)
+
+
+func _run_validation(auto_fix: bool) -> void:
+	if not level_root:
+		_set_status("No LevelRoot for validation", true)
+		return
+	var result: Dictionary = {}
+	var issues: Array = []
+	var fixed := 0
+	if auto_fix:
+		result = level_root.validate_level(false)
+		issues = result.get("issues", [])
+		var before_count = issues.size()
+		HFUndoHelper.commit(
+			undo_redo,
+			level_root,
+			"Validate + Fix",
+			"validate_level",
+			[true],
+			false,
+			Callable(self, "record_history")
+		)
+		var after = level_root.validate_level(false)
+		var after_count = int(after.get("issues", []).size())
+		fixed = max(0, before_count - after_count)
+	else:
+		result = level_root.validate_level(false)
+		issues = result.get("issues", [])
+	if issues.is_empty():
+		_set_status("Validate: no issues found", false, 3.0)
+		return
+	var message = "Validate: %d issue(s)" % issues.size()
+	if auto_fix:
+		message += ", fixed %d" % fixed
+	_set_status_warning(message, 6.0)
+	for issue in issues:
+		_log("[Validate] %s" % str(issue), true)
+
+
+func _update_perf_panel() -> void:
+	if not perf_brushes_value or not perf_paint_mem_value or not perf_bake_chunks_value:
+		return
+	if not level_root:
+		perf_brushes_value.text = "0"
+		perf_paint_mem_value.text = "0 KB"
+		perf_bake_chunks_value.text = "0"
+		if perf_bake_time_value:
+			perf_bake_time_value.text = "-"
+		return
+	perf_brushes_value.text = str(level_root.get_live_brush_count())
+	var bytes = level_root.get_paint_memory_bytes()
+	perf_paint_mem_value.text = _format_bytes(bytes)
+	perf_bake_chunks_value.text = str(level_root.get_bake_chunk_count())
+	if perf_bake_time_value:
+		var ms = int(level_root.get_last_bake_duration_ms())
+		perf_bake_time_value.text = ("%d ms" % ms) if ms > 0 else "-"
+
+
+func _format_bytes(count: int) -> String:
+	var value = float(count)
+	if value >= 1024.0 * 1024.0:
+		return "%.2f MB" % (value / (1024.0 * 1024.0))
+	if value >= 1024.0:
+		return "%.1f KB" % (value / 1024.0)
+	return "%d B" % int(value)
+
+
+func _update_disabled_hints() -> void:
+	var has_root = level_root != null
+	var need_root_hint = "Requires LevelRoot (click viewport to create)"
+	_set_control_disabled_hint(bake_btn, not has_root or _bake_disabled, need_root_hint)
+	_set_control_disabled_hint(bake_dry_run_btn, not has_root or _bake_disabled, need_root_hint)
+	_set_control_disabled_hint(validate_btn, not has_root, need_root_hint)
+	_set_control_disabled_hint(validate_fix_btn, not has_root, need_root_hint)
+	_set_control_disabled_hint(clear_btn, not has_root, need_root_hint)
+	_set_control_disabled_hint(save_hflevel_btn, not has_root, need_root_hint)
+	_set_control_disabled_hint(load_hflevel_btn, not has_root, need_root_hint)
+	_set_control_disabled_hint(import_map_btn, not has_root, need_root_hint)
+	_set_control_disabled_hint(export_map_btn, not has_root, need_root_hint)
+	_set_control_disabled_hint(autosave_enabled, not has_root, need_root_hint)
+	_set_control_disabled_hint(autosave_minutes, not has_root, need_root_hint)
+	_set_control_disabled_hint(autosave_keep, not has_root, need_root_hint)
+	_set_control_disabled_hint(autosave_path_btn, not has_root, need_root_hint)
+	_set_control_disabled_hint(floor_btn, not has_root, need_root_hint)
+	_set_control_disabled_hint(apply_cuts_btn, not has_root or _bake_disabled, need_root_hint)
+	_set_control_disabled_hint(clear_cuts_btn, not has_root, need_root_hint)
+	_set_control_disabled_hint(commit_cuts_btn, not has_root or _bake_disabled, need_root_hint)
+	_set_control_disabled_hint(restore_cuts_btn, not has_root, need_root_hint)
+	var has_face = _uv_active_face != null or _surface_active_face != null
+	var face_hint = "Requires a selected face"
+	_set_control_disabled_hint(material_assign, not has_root or not has_face, face_hint)
+	_set_control_disabled_hint(face_clear, not has_root or not has_face, face_hint)
+	_set_control_disabled_hint(uv_reset, not has_root or not has_face, face_hint)
+	var baked_ready = has_root and level_root.baked_container != null
+	_set_control_disabled_hint(export_glb_btn, not baked_ready, "Requires a successful bake")
+
+
+func _set_control_disabled_hint(control: Control, disabled: bool, hint: String) -> void:
+	if not control:
+		return
+	_set_control_disabled(control, disabled)
+	var default_tip = control.get_meta("default_tooltip", "")
+	if disabled:
+		control.tooltip_text = hint
+	elif default_tip != "":
+		control.tooltip_text = str(default_tip)
+
+
+func _set_control_disabled(control: Control, disabled: bool) -> void:
+	if control is SpinBox:
+		control.editable = not disabled
+		control.focus_mode = Control.FOCUS_NONE if disabled else Control.FOCUS_ALL
+		control.mouse_filter = (
+			Control.MOUSE_FILTER_IGNORE if disabled else Control.MOUSE_FILTER_STOP
+		)
+		return
+	if control is BaseButton:
+		control.disabled = disabled
+		return
+	if _control_has_property(control, "disabled"):
+		control.set("disabled", disabled)
+	elif _control_has_property(control, "editable"):
+		control.set("editable", not disabled)
+
+
+func _control_has_property(control: Object, property_name: String) -> bool:
+	if not control or property_name == "":
+		return false
+	for prop in control.get_property_list():
+		if prop.get("name", "") == property_name:
+			return true
+	return false
 
 
 func _populate_shape_palette() -> void:
@@ -1651,7 +1875,7 @@ func _on_material_palette_selected(path: String) -> void:
 		return
 	var resource = ResourceLoader.load(path)
 	if resource and resource is Material:
-		level_root.add_material_to_palette(resource)
+		_commit_state_action("Add Material", "add_material_to_palette", [resource])
 		_sync_materials_from_root()
 	else:
 		_log("Selected resource is not a material: %s" % path, true)
@@ -1662,7 +1886,7 @@ func _on_material_remove() -> void:
 		return
 	if not level_root:
 		return
-	level_root.remove_material_from_palette(_selected_material_index)
+	_commit_state_action("Remove Material", "remove_material_from_palette", [_selected_material_index])
 	_selected_material_index = -1
 	_sync_materials_from_root()
 
@@ -1679,16 +1903,21 @@ func _on_material_assign() -> void:
 
 func _on_face_clear() -> void:
 	if level_root:
-		level_root.clear_face_selection()
+		_commit_state_action("Clear Face Selection", "clear_face_selection")
 
 
 func _on_uv_reset() -> void:
-	if _uv_active_face == null:
+	if _uv_active_face == null or _uv_active_brush == null:
 		return
-	_uv_active_face.custom_uvs = PackedVector2Array()
-	_uv_active_face.ensure_custom_uvs()
-	if level_root and _uv_active_brush:
-		level_root.rebuild_brush_preview(_uv_active_brush)
+	if not level_root:
+		return
+	if _uv_active_brush.brush_id == "" and level_root.has_method("get_brush_info_from_node"):
+		level_root.get_brush_info_from_node(_uv_active_brush)
+	var brush_id = _uv_active_brush.brush_id
+	var face_idx = _uv_active_brush.faces.find(_uv_active_face)
+	if brush_id == "" or face_idx < 0:
+		return
+	_commit_state_action("Reset UV", "reset_uv_on_face", [brush_id, face_idx])
 
 
 func _on_uv_changed(_face: FaceData) -> void:
@@ -1701,24 +1930,38 @@ func _on_surface_paint_layer_selected(_index: int) -> void:
 
 
 func _on_surface_paint_layer_add() -> void:
-	if _surface_active_face == null:
+	if _surface_active_face == null or _surface_active_brush == null:
 		return
-	_surface_active_face.paint_layers.append(FaceData.PaintLayer.new())
+	if not level_root:
+		return
+	if _surface_active_brush.brush_id == "" and level_root.has_method("get_brush_info_from_node"):
+		level_root.get_brush_info_from_node(_surface_active_brush)
+	var brush_id = _surface_active_brush.brush_id
+	var face_idx = _surface_active_brush.faces.find(_surface_active_face)
+	if brush_id == "" or face_idx < 0:
+		return
+	_commit_state_action("Add Surface Paint Layer", "add_surface_paint_layer", [brush_id, face_idx])
 	_refresh_surface_paint_layers()
-	if level_root and _surface_active_brush:
-		level_root.rebuild_brush_preview(_surface_active_brush)
 
 
 func _on_surface_paint_layer_remove() -> void:
-	if _surface_active_face == null:
+	if _surface_active_face == null or _surface_active_brush == null:
 		return
 	var idx = surface_paint_layer_select.selected if surface_paint_layer_select else 0
 	if idx < 0 or idx >= _surface_active_face.paint_layers.size():
 		return
-	_surface_active_face.paint_layers.remove_at(idx)
+	if not level_root:
+		return
+	if _surface_active_brush.brush_id == "" and level_root.has_method("get_brush_info_from_node"):
+		level_root.get_brush_info_from_node(_surface_active_brush)
+	var brush_id = _surface_active_brush.brush_id
+	var face_idx = _surface_active_brush.faces.find(_surface_active_face)
+	if brush_id == "" or face_idx < 0:
+		return
+	_commit_state_action(
+		"Remove Surface Paint Layer", "remove_surface_paint_layer", [brush_id, face_idx, idx]
+	)
 	_refresh_surface_paint_layers()
-	if level_root and _surface_active_brush:
-		level_root.rebuild_brush_preview(_surface_active_brush)
 
 
 func _on_surface_paint_texture() -> void:
@@ -1733,7 +1976,7 @@ func _on_surface_paint_texture() -> void:
 func _on_surface_paint_texture_selected(path: String) -> void:
 	if path == "":
 		return
-	if _surface_active_face == null:
+	if _surface_active_face == null or _surface_active_brush == null:
 		return
 	var resource = ResourceLoader.load(path)
 	if not resource or not (resource is Texture2D):
@@ -1742,9 +1985,19 @@ func _on_surface_paint_texture_selected(path: String) -> void:
 	var idx = _pending_surface_texture_layer
 	if idx < 0 or idx >= _surface_active_face.paint_layers.size():
 		return
-	_surface_active_face.paint_layers[idx].texture = resource
-	if level_root and _surface_active_brush:
-		level_root.rebuild_brush_preview(_surface_active_brush)
+	if not level_root:
+		return
+	if _surface_active_brush.brush_id == "" and level_root.has_method("get_brush_info_from_node"):
+		level_root.get_brush_info_from_node(_surface_active_brush)
+	var brush_id = _surface_active_brush.brush_id
+	var face_idx = _surface_active_brush.faces.find(_surface_active_face)
+	if brush_id == "" or face_idx < 0:
+		return
+	_commit_state_action(
+		"Set Surface Paint Texture",
+		"set_surface_paint_layer_texture",
+		[brush_id, Vector2i(face_idx, idx), resource]
+	)
 
 
 func _shape_label(shape_key: String) -> String:
@@ -1898,6 +2151,26 @@ func _setup_storage_dialogs() -> void:
 			Callable(self, "_on_autosave_path_selected")
 		):
 			autosave_path_dialog.file_selected.connect(_on_autosave_path_selected)
+	if settings_export_dialog:
+		settings_export_dialog.access = FileDialog.ACCESS_FILESYSTEM
+		settings_export_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
+		settings_export_dialog.filters = PackedStringArray(
+			["*.hfsettings ; HammerForge Settings", "*.json ; JSON"]
+		)
+		if not settings_export_dialog.file_selected.is_connected(
+			Callable(self, "_on_settings_export_selected")
+		):
+			settings_export_dialog.file_selected.connect(_on_settings_export_selected)
+	if settings_import_dialog:
+		settings_import_dialog.access = FileDialog.ACCESS_FILESYSTEM
+		settings_import_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+		settings_import_dialog.filters = PackedStringArray(
+			["*.hfsettings ; HammerForge Settings", "*.json ; JSON"]
+		)
+		if not settings_import_dialog.file_selected.is_connected(
+			Callable(self, "_on_settings_import_selected")
+		):
+			settings_import_dialog.file_selected.connect(_on_settings_import_selected)
 
 
 func _on_save_hflevel() -> void:
@@ -1972,6 +2245,7 @@ func _on_glb_export_selected(path: String) -> void:
 	if not level_root:
 		_set_status("No LevelRoot for .glb export", true)
 		return
+	_warn_missing_dependencies()
 	var err = int(level_root.export_baked_gltf(path))
 	_set_status("Exported .glb" if err == OK else "Failed to export .glb", err != OK, 3.0)
 
@@ -1982,6 +2256,175 @@ func _on_autosave_path_selected(path: String) -> void:
 		return
 	level_root.set("hflevel_autosave_path", path)
 	_set_status("Autosave path set", false, 3.0)
+
+
+func _on_export_settings() -> void:
+	if settings_export_dialog:
+		settings_export_dialog.popup_centered_ratio(0.6)
+
+
+func _on_import_settings() -> void:
+	if settings_import_dialog:
+		settings_import_dialog.popup_centered_ratio(0.6)
+
+
+func _on_settings_export_selected(path: String) -> void:
+	if path == "":
+		_set_status("Invalid settings path", true)
+		return
+	var data = _collect_editor_settings()
+	var json = JSON.stringify(data, "\t")
+	var file = FileAccess.open(path, FileAccess.WRITE)
+	if not file:
+		_set_status("Failed to export settings", true)
+		return
+	file.store_string(json)
+	_set_status("Exported settings", false, 3.0)
+
+
+func _on_settings_import_selected(path: String) -> void:
+	if path == "":
+		_set_status("Invalid settings path", true)
+		return
+	if not FileAccess.file_exists(path):
+		_set_status("Settings file not found", true)
+		return
+	var file = FileAccess.open(path, FileAccess.READ)
+	if not file:
+		_set_status("Failed to open settings file", true)
+		return
+	var text = file.get_as_text()
+	var parsed = JSON.parse_string(text)
+	if not (parsed is Dictionary):
+		_set_status("Invalid settings file", true)
+		return
+	_apply_editor_settings(parsed)
+	_set_status("Imported settings", false, 3.0)
+
+
+func _collect_editor_settings() -> Dictionary:
+	var snap_values: Array = []
+	for button in snap_buttons:
+		if button and button.has_meta("snap_value"):
+			snap_values.append(int(button.get_meta("snap_value")))
+	var brush_size = {"x": size_x.value, "y": size_y.value, "z": size_z.value}
+	var bake_settings: Dictionary = {
+		"merge_meshes": bake_merge_meshes.button_pressed if bake_merge_meshes else false,
+		"generate_lods": bake_generate_lods.button_pressed if bake_generate_lods else false,
+		"lightmap_uv2": bake_lightmap_uv2.button_pressed if bake_lightmap_uv2 else false,
+		"lightmap_texel_size": float(bake_lightmap_texel.value) if bake_lightmap_texel else 0.1,
+		"use_face_materials": bake_use_face_materials.button_pressed if bake_use_face_materials else false,
+		"navmesh": bake_navmesh.button_pressed if bake_navmesh else false,
+		"navmesh_cell_size": float(bake_navmesh_cell_size.value) if bake_navmesh_cell_size else 0.3,
+		"navmesh_cell_height": float(bake_navmesh_cell_height.value) if bake_navmesh_cell_height else 0.25,
+		"navmesh_agent_height": float(bake_navmesh_agent_height.value) if bake_navmesh_agent_height else 2.0,
+		"navmesh_agent_radius": float(bake_navmesh_agent_radius.value) if bake_navmesh_agent_radius else 0.4,
+		"collision_mask": get_collision_layer_mask()
+	}
+	if level_root and _root_has_property("bake_chunk_size"):
+		bake_settings["chunk_size"] = float(level_root.get("bake_chunk_size"))
+	return {
+		"version": 1,
+		"saved_at": Time.get_datetime_string_from_system(),
+		"grid_snap": float(grid_snap.value),
+		"snap_presets": snap_values,
+		"brush_size": brush_size,
+		"bake": bake_settings
+	}
+
+
+func _apply_editor_settings(data: Dictionary) -> void:
+	if data.has("grid_snap"):
+		_apply_grid_snap(float(data.get("grid_snap", grid_snap.value)))
+	if data.has("snap_presets") and data["snap_presets"] is Array:
+		_apply_snap_presets(data["snap_presets"])
+	if data.has("brush_size") and data["brush_size"] is Dictionary:
+		var size = data["brush_size"]
+		size_x.value = float(size.get("x", size_x.value))
+		size_y.value = float(size.get("y", size_y.value))
+		size_z.value = float(size.get("z", size_z.value))
+		if level_root:
+			level_root.drag_size_default = Vector3(size_x.value, size_y.value, size_z.value)
+			if _root_has_property("brush_size_default"):
+				level_root.set("brush_size_default", Vector3(size_x.value, size_y.value, size_z.value))
+	if data.has("bake") and data["bake"] is Dictionary:
+		var bake = data["bake"]
+		if bake_merge_meshes:
+			bake_merge_meshes.button_pressed = bool(bake.get("merge_meshes", bake_merge_meshes.button_pressed))
+		if bake_generate_lods:
+			bake_generate_lods.button_pressed = bool(
+				bake.get("generate_lods", bake_generate_lods.button_pressed)
+			)
+		if bake_lightmap_uv2:
+			bake_lightmap_uv2.button_pressed = bool(
+				bake.get("lightmap_uv2", bake_lightmap_uv2.button_pressed)
+			)
+		if bake_lightmap_texel:
+			bake_lightmap_texel.value = float(
+				bake.get("lightmap_texel_size", bake_lightmap_texel.value)
+			)
+		if bake_use_face_materials:
+			bake_use_face_materials.button_pressed = bool(
+				bake.get("use_face_materials", bake_use_face_materials.button_pressed)
+			)
+		if bake_navmesh:
+			bake_navmesh.button_pressed = bool(bake.get("navmesh", bake_navmesh.button_pressed))
+		if bake_navmesh_cell_size:
+			bake_navmesh_cell_size.value = float(
+				bake.get("navmesh_cell_size", bake_navmesh_cell_size.value)
+			)
+		if bake_navmesh_cell_height:
+			bake_navmesh_cell_height.value = float(
+				bake.get("navmesh_cell_height", bake_navmesh_cell_height.value)
+			)
+		if bake_navmesh_agent_height:
+			bake_navmesh_agent_height.value = float(
+				bake.get("navmesh_agent_height", bake_navmesh_agent_height.value)
+			)
+		if bake_navmesh_agent_radius:
+			bake_navmesh_agent_radius.value = float(
+				bake.get("navmesh_agent_radius", bake_navmesh_agent_radius.value)
+			)
+		if collision_layer_opt and bake.has("collision_mask"):
+			_select_option_by_id(collision_layer_opt, int(bake.get("collision_mask", 1)))
+		if level_root and bake.has("chunk_size") and _root_has_property("bake_chunk_size"):
+			level_root.set("bake_chunk_size", float(bake.get("chunk_size", 0.0)))
+		_sync_bake_option_visibility()
+
+
+func _apply_snap_presets(values: Array) -> void:
+	if values.is_empty():
+		return
+	snap_preset_values.clear()
+	for value in values:
+		var v = float(value)
+		if v <= 0.0:
+			continue
+		snap_preset_values.append(v)
+	if snap_preset_values.is_empty():
+		snap_preset_values = [1, 2, 4, 8, 16, 32, 64]
+	for index in range(snap_buttons.size()):
+		var button = snap_buttons[index]
+		if not button:
+			continue
+		var preset = (
+			snap_preset_values[index]
+			if index < snap_preset_values.size()
+			else snap_preset_values[snap_preset_values.size() - 1]
+		)
+		button.set_meta("snap_value", preset)
+		button.text = str(preset)
+	_sync_snap_buttons(grid_snap.value)
+	_apply_all_tooltips()
+
+
+func _select_option_by_id(option: OptionButton, id: int) -> void:
+	if not option:
+		return
+	for i in range(option.get_item_count()):
+		if option.get_item_id(i) == id:
+			option.select(i)
+			return
 
 
 var _status_timer: Timer = null

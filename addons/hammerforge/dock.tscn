@@ -608,6 +608,15 @@ text = "Restore Committed Cuts"
 [node name="Bake" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
 text = "Bake"
 
+[node name="BakeDryRun" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
+text = "Bake Dry Run"
+
+[node name="ValidateLevel" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
+text = "Validate Level"
+
+[node name="ValidateFix" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
+text = "Validate + Fix"
+
 [node name="Clear" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
 text = "Clear Brushes"
 
@@ -651,8 +660,30 @@ step = 1.0
 value = 5.0
 size_flags_horizontal = 3
 
+[node name="AutosaveKeepRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
+custom_constants/separation = 4.0
+
+[node name="AutosaveKeepLabel" type="Label" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/AutosaveKeepRow"]
+text = "Keep"
+
+[node name="AutosaveKeep" type="SpinBox" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/AutosaveKeepRow"]
+min_value = 1.0
+max_value = 50.0
+step = 1.0
+value = 5.0
+size_flags_horizontal = 3
+
 [node name="AutosavePath" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
 text = "Set Autosave Path"
+
+[node name="SettingsLabel" type="Label" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
+text = "Settings"
+
+[node name="ExportSettings" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
+text = "Export Settings"
+
+[node name="ImportSettings" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
+text = "Import Settings"
 
 [node name="ManageSeparator1" type="HSeparator" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
 
@@ -682,6 +713,38 @@ text = "Redo"
 [node name="HistoryList" type="ItemList" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
 custom_minimum_size = Vector2(0, 120)
 size_flags_vertical = 3
+
+[node name="ManageSeparator3" type="HSeparator" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
+
+[node name="PerformanceLabel" type="Label" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
+text = "Performance"
+
+[node name="PerformanceGrid" type="GridContainer" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
+columns = 2
+
+[node name="PerfBrushesLabel" type="Label" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/PerformanceGrid"]
+text = "Active Brushes"
+
+[node name="PerfBrushesValue" type="Label" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/PerformanceGrid"]
+text = "0"
+
+[node name="PerfPaintMemLabel" type="Label" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/PerformanceGrid"]
+text = "Paint Memory"
+
+[node name="PerfPaintMemValue" type="Label" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/PerformanceGrid"]
+text = "0 KB"
+
+[node name="PerfBakeChunksLabel" type="Label" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/PerformanceGrid"]
+text = "Bake Chunks"
+
+[node name="PerfBakeChunksValue" type="Label" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/PerformanceGrid"]
+text = "0"
+
+[node name="PerfBakeTimeLabel" type="Label" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/PerformanceGrid"]
+text = "Last Bake"
+
+[node name="PerfBakeTimeValue" type="Label" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/PerformanceGrid"]
+text = "0 ms"
 
 [node name="BottomSeparator" type="HSeparator" parent="Margin/VBox"]
 
@@ -762,3 +825,13 @@ file_mode = 4
 title = "Set Autosave Path"
 access = 2
 file_mode = 4
+
+[node name="SettingsExportDialog" type="FileDialog" parent="."]
+title = "Export Settings"
+access = 2
+file_mode = 4
+
+[node name="SettingsImportDialog" type="FileDialog" parent="."]
+title = "Import Settings"
+access = 2
+file_mode = 0

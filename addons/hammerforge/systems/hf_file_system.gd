@@ -135,6 +135,53 @@ func _hflevel_thread_write(path: String, payload: PackedByteArray) -> void:
 	var err = file.get_error()
 	if err != OK:
 		push_error("HFLevel: store_buffer failed for %s (error: %d)" % [path, err])
+		return
+	_write_autosave_rotation(path, payload)
+
+
+func _write_autosave_rotation(path: String, payload: PackedByteArray) -> void:
+	if not root or payload.is_empty():
+		return
+	if root.hflevel_autosave_keep <= 0:
+		return
+	var autosave_abs = ProjectSettings.globalize_path(root.hflevel_autosave_path)
+	if autosave_abs == "" or path != autosave_abs:
+		return
+	var base_dir = autosave_abs.get_base_dir()
+	var history_dir = base_dir.path_join("autosave_history")
+	if not DirAccess.dir_exists_absolute(history_dir):
+		DirAccess.make_dir_recursive_absolute(history_dir)
+	var timestamp = Time.get_datetime_string_from_system().replace(":", "-").replace(" ", "_")
+	var base_name = autosave_abs.get_file().get_basename()
+	if base_name == "":
+		base_name = "autosave"
+	var history_path = history_dir.path_join("%s_%s.hflevel" % [base_name, timestamp])
+	var out = FileAccess.open(history_path, FileAccess.WRITE)
+	if not out:
+		push_warning("HFLevel: Failed to open autosave history file: %s" % history_path)
+		return
+	out.store_buffer(payload)
+	_prune_autosave_history(history_dir, root.hflevel_autosave_keep)
+
+
+func _prune_autosave_history(history_dir: String, keep: int) -> void:
+	if keep <= 0:
+		return
+	var files = DirAccess.get_files_at(history_dir)
+	if files.is_empty():
+		return
+	var entries: Array = []
+	for file_name in files:
+		if not file_name.ends_with(".hflevel"):
+			continue
+		var full_path = history_dir.path_join(file_name)
+		var mtime = FileAccess.get_modified_time(full_path)
+		entries.append({"path": full_path, "mtime": int(mtime)})
+	entries.sort_custom(func(a, b): return int(a.get("mtime", 0)) > int(b.get("mtime", 0)))
+	for i in range(keep, entries.size()):
+		var path = str(entries[i].get("path", ""))
+		if path != "" and FileAccess.file_exists(path):
+			DirAccess.remove_absolute(path)
 
 
 func process_thread_queue() -> void:

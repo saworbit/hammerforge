@@ -67,6 +67,16 @@ func get_paint_layer_names() -> Array:
 	return names
 
 
+func get_paint_memory_bytes() -> int:
+	if not root.paint_layers:
+		return 0
+	var total := 0
+	for layer in root.paint_layers.layers:
+		if layer:
+			total += layer.get_memory_bytes()
+	return total
+
+
 func get_active_paint_layer_index() -> int:
 	return root.paint_layers.active_layer_index if root.paint_layers else 0
 

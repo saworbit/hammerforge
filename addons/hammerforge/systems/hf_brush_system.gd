@@ -51,6 +51,9 @@ func place_brush(
 	var snapped = root._snap_point(hit.position)
 	var brush = _create_brush(shape, size, operation, sides)
 	brush.global_position = snapped + Vector3(0, size.y * 0.5, 0)
+	var brush_id = _next_brush_id()
+	brush.brush_id = str(brush_id)
+	brush.set_meta("brush_id", str(brush_id))
 	if operation == CSGShape3D.OPERATION_SUBTRACTION and root.pending_node:
 		_add_pending_cut(brush)
 	else:
@@ -130,6 +133,15 @@ func delete_brush_by_id(brush_id: String) -> void:
 		delete_brush(brush)
 
 
+func nudge_brushes_by_id(brush_ids: Array, offset: Vector3) -> void:
+	if brush_ids.is_empty():
+		return
+	for brush_id in brush_ids:
+		var brush = _find_brush_by_id(str(brush_id))
+		if brush and brush is Node3D:
+			(brush as Node3D).global_position += offset
+
+
 func duplicate_brush(brush: Node) -> Node:
 	if not brush:
 		return null
@@ -178,6 +190,14 @@ func get_brush_info_from_node(brush: Node) -> Dictionary:
 	var info: Dictionary = {}
 	info["shape"] = draft.shape
 	info["size"] = draft.size
+	var brush_id = str(draft.brush_id)
+	if brush_id == "" and draft.has_meta("brush_id"):
+		brush_id = str(draft.get_meta("brush_id"))
+	if brush_id == "":
+		brush_id = _next_brush_id()
+		draft.brush_id = str(brush_id)
+		draft.set_meta("brush_id", str(brush_id))
+	info["brush_id"] = brush_id
 	if _shape_uses_sides(draft.shape):
 		info["sides"] = draft.sides
 	var pending = (
@@ -476,6 +496,24 @@ func apply_material_to_brush(brush: Node, mat: Material) -> void:
 		return
 	brush.set("material_override", mat)
 	brush.set("material", mat)
+
+
+func apply_material_to_brush_by_id(brush_id: String, mat: Material) -> void:
+	if brush_id == "":
+		return
+	var brush = _find_brush_by_id(brush_id)
+	if brush:
+		apply_material_to_brush(brush, mat)
+
+
+func set_brush_transform_by_id(brush_id: String, size: Vector3, position: Vector3) -> void:
+	if brush_id == "":
+		return
+	var brush = _find_brush_by_id(brush_id)
+	if brush and brush is DraftBrush:
+		var draft := brush as DraftBrush
+		draft.size = size
+		draft.global_position = position
 
 
 func _refresh_brush_previews() -> void:

@@ -77,6 +77,9 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 - Editor theme parity, high-contrast grid with follow mode
 - History panel (beta) and live brush count
 - Entity palette with drag-and-drop placement
+- **Bake Dry Run** and **Validate Level** actions
+- **Performance panel** with brush, paint, and bake stats
+- **Settings export/import** for editor preferences
 
 ### Bake & Playtest
 - Bake draft brushes to meshes + collision
@@ -84,10 +87,11 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 - Optional: **Use Face Materials** (bake per-face materials without CSG)
 - Heightmap floors bake directly (bypass CSG) with trimesh collision
 - Chunked baking via `LevelRoot.bake_chunk_size`
+- Bake progress bar with chunk status updates
 - **Playtest button** -- bakes and runs with an FPS controller
 
 ### Modular Architecture
-- `LevelRoot` is a thin coordinator delegating to **8 subsystem classes** (grid, entity, brush, drag, bake, paint, state, file)
+- `LevelRoot` is a thin coordinator delegating to **9 subsystem classes** (grid, entity, brush, drag, bake, paint, state, file, validation)
 - Explicit **input state machine** for drag/paint operations
 - Type-safe inter-module calls (no duck-typing)
 - Threaded .hflevel I/O with error handling
@@ -100,6 +104,8 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 2. Enable the plugin: Project → Project Settings → Plugins → HammerForge
 3. Open a 3D scene and click in the viewport to auto-create LevelRoot
 ```
+
+For upgrade steps and cache reset help, see `docs/HammerForge_Install_Upgrade.md`.
 
 ---
 
@@ -120,18 +126,22 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 |----------|-------------|
 | [User Guide](docs/HammerForge_UserGuide.md) | Complete usage documentation |
 | [MVP Guide](docs/HammerForge_MVP_GUIDE.md) | Minimum viable product scope |
+| [Install + Upgrade](docs/HammerForge_Install_Upgrade.md) | Setup, upgrade, and cache reset |
+| [Design Constraints](docs/HammerForge_Design_Constraints.md) | Explicit tradeoffs and limits |
+| [Data Portability](docs/HammerForge_Data_Portability.md) | .hflevel/.map/.glb workflow |
+| [Demo Clips](docs/demos/README.md) | Clip list and naming scheme |
+| [Sample Levels](samples/) | Minimal and stress test scenes |
 | [Texture + Materials](docs/HammerForge_Texture_Materials.md) | Face materials, UVs, and surface paint |
 | [Development + Testing](DEVELOPMENT.md) | Local setup and test checklist |
 | [Floor Paint Design](docs/HammerForge_FloorPaint_Greyboxing.md) | Grid paint system design |
 | [Spec](HammerForge_SPEC.md) | Technical specification |
 | [Changelog](CHANGELOG.md) | Version history |
+| [Roadmap](ROADMAP.md) | Planned features |
+| [Contributing](CONTRIBUTING.md) | Contribution guidelines |
 
 ## Roadmap
 
-- [ ] Numeric input during drag
-- [ ] Material atlasing for large scenes
-- [ ] Decals and trim tools
-- [ ] Additional bake pipelines
+See `ROADMAP.md` for planned work and priorities.
 
 ---
 
@@ -154,5 +164,5 @@ Start-Process -FilePath "C:\Godot\Godot_v4.6-stable_win64.exe" `
 
 <p align="center">
   <strong>MIT License</strong><br>
-  <sub>Last updated: February 8, 2026</sub>
+  <sub>Last updated: February 15, 2026</sub>
 </p>

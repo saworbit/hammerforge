@@ -5,6 +5,19 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- Bake progress updates with chunk status in the dock.
+- Bake Dry Run action for preflight counts and chunk estimates.
+- Validate Level action with optional auto-fix for common issues.
+- Missing dependency checks before bake/export.
+- Autosave rotation with timestamped history files.
+- Performance panel with brush, paint memory, chunk, and bake time stats.
+- Settings export/import for editor preferences.
+- Sample levels: minimal scene and stress test scene.
+- Install + upgrade guide with cache reset steps.
+- Design constraints document to make tradeoffs explicit.
+- Data portability guide for `.hflevel`, `.map`, and `.glb`.
+- Demo clip checklist and naming convention doc.
+- Roadmap and contributing guidelines.
 - **Extrude Up / Extrude Down tools** for extending brush faces vertically:
   - Click any brush face and drag to create a new box brush extruding from that face.
   - Extrude Up (green preview) and Extrude Down (red preview) with grid-snapped height.
@@ -40,6 +53,9 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 - Dock reorganized: Floor Paint and Surface Paint tabs.
 
 ### Changed
+- Brush delete undo now uses brush IDs and `create_brush_from_info()` snapshots for stability.
+- New brushes placed via direct placement now receive stable brush IDs.
+- Standardized editor actions under a single undo/redo helper with state snapshots.
 - Paint Mode can target either floor paint or surface paint.
 - .hflevel now persists materials palette and per-face data.
 - .hflevel now persists per-chunk `material_ids`, `blend_weights`, `heightmap_b64`, and `height_scale`.
@@ -47,6 +63,7 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 - Generated heightmap floors stored under `LevelRoot/Generated/HeightmapFloors`.
 
 ### Fixed
+- Fixed dock disabled-state handling for SpinBox controls to avoid invalid `disabled` property assignments.
 - Fixed heightmap mesh disappearing on every regeneration (height scale change, second generate noise click). Root cause: `_clear_generated()` used `queue_free()` (deferred) but `reconcile()` ran immediately after, finding ghost nodes still in the tree. Fix: `remove_child()` before `queue_free()`.
 - Fixed missing walls when heightmap is active (same `queue_free` timing root cause).
 - Fixed heightmap mesh rendering as a featureless white pane. The blend shader required texture samplers (`material_a`/`material_b`) but none were assigned. Added default terrain colors (`color_a` green, `color_b` brown) and a cell grid overlay to the blend shader for immediate visual feedback without imported textures.

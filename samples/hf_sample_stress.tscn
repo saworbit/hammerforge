@@ -1,0 +1,10 @@
+﻿[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://addons/hammerforge/level_root.gd" id=1]
+[ext_resource type="Script" path="res://samples/hf_stress_spawner.gd" id=2]
+
+[node name="LevelRoot" type="Node3D"]
+script = ExtResource( 1 )
+
+[node name="StressSpawner" type="Node" parent="."]
+script = ExtResource( 2 )

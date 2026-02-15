@@ -150,6 +150,21 @@ func clear_chunks() -> void:
 	_dirty_chunks.clear()
 
 
+func get_memory_bytes() -> int:
+	var total := 0
+	for chunk in _chunks.values():
+		if chunk == null:
+			continue
+		total += chunk.bits.size()
+		total += chunk.material_ids.size()
+		total += chunk.blend_weights.size()
+	if has_heightmap() and heightmap:
+		var data := heightmap.get_data()
+		if data:
+			total += data.size()
+	return total
+
+
 func _cell_to_chunk(cell: Vector2i) -> Vector2i:
 	return Vector2i(
 		floori(float(cell.x) / float(chunk_size)), floori(float(cell.y) / float(chunk_size))

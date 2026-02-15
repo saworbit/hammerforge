@@ -1,0 +1,28 @@
+﻿# HammerForge Data Portability
+
+Last updated: February 15, 2026
+
+This document describes how to move data in and out of HammerForge safely.
+
+## Source of Truth: `.hflevel`
+- `.hflevel` files are the canonical save format for brushes, paint layers, materials, entities, and settings.
+- Files include a version field and default missing keys on load for backward compatibility.
+- Autosaves write to `res://.hammerforge/autosave.hflevel` by default.
+- Store `.hflevel` in version control for reliable recovery.
+
+## `.map` Import / Export
+- Use `.map` to exchange basic brush layouts with other editors.
+- Import supports axis-aligned boxes and simple cylinders.
+- Export writes box and cylinder primitives only and does not preserve per-face materials or paint data.
+- Treat `.map` as a blockout exchange format, not a full fidelity export.
+
+## `.glb` Export
+- `.glb` export writes the baked geometry only.
+- A successful bake is required before export.
+- Use `Bake -> Export .glb` when you need DCC or engine interoperability.
+
+## Recommended Pipeline
+1. Design and iterate in HammerForge.
+2. Save `.hflevel` to preserve full fidelity editing data.
+3. Bake when you need runtime geometry.
+4. Export `.glb` for downstream tools or external engines.

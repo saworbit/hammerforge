@@ -14,7 +14,7 @@ func _init(level_root: Node3D) -> void:
 	root = level_root
 
 
-func capture_state() -> Dictionary:
+func capture_state(include_transient: bool = true) -> Dictionary:
 	var state: Dictionary = {}
 	state["brushes"] = []
 	state["pending"] = []
@@ -27,6 +27,8 @@ func capture_state() -> Dictionary:
 	state["baked_present"] = root.baked_container != null
 	state["paint_layers"] = capture_paint_layers()
 	state["paint_active_layer"] = root.paint_layers.active_layer_index if root.paint_layers else 0
+	if include_transient:
+		state["face_selection"] = root.face_selection.duplicate(true)
 	if root.material_manager:
 		state["materials"] = root.material_manager.materials
 	for node in root._iter_pick_nodes():
@@ -64,6 +66,12 @@ func restore_state(state: Dictionary) -> void:
 	)
 	if state.has("materials"):
 		root.set_materials(state.get("materials", []))
+	if state.has("face_selection"):
+		root.face_selection = state.get("face_selection", {})
+		root._apply_face_selection()
+	else:
+		root.face_selection.clear()
+		root._apply_face_selection()
 	root._brush_id_counter = int(state.get("id_counter", 0))
 	var brushes: Array = state.get("brushes", [])
 	for info in brushes:
@@ -103,7 +111,7 @@ func restore_full_state(bundle: Dictionary) -> void:
 
 
 func capture_hflevel_state() -> Dictionary:
-	var state = capture_state()
+	var state = capture_state(false)
 	var data: Dictionary = {
 		"version": 1,
 		"saved_at": Time.get_datetime_string_from_system(),
@@ -135,7 +143,8 @@ func capture_hflevel_settings() -> Dictionary:
 		"bake_navmesh_cell_height": root.bake_navmesh_cell_height,
 		"bake_navmesh_agent_height": root.bake_navmesh_agent_height,
 		"bake_navmesh_agent_radius": root.bake_navmesh_agent_radius,
-		"bake_use_thread_pool": root.bake_use_thread_pool
+		"bake_use_thread_pool": root.bake_use_thread_pool,
+		"hflevel_autosave_keep": root.hflevel_autosave_keep
 	}
 
 
@@ -203,6 +212,10 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 	if settings.has("bake_use_thread_pool"):
 		root.bake_use_thread_pool = bool(
 			settings.get("bake_use_thread_pool", root.bake_use_thread_pool)
+		)
+	if settings.has("hflevel_autosave_keep"):
+		root.hflevel_autosave_keep = int(
+			settings.get("hflevel_autosave_keep", root.hflevel_autosave_keep)
 		)
 
 

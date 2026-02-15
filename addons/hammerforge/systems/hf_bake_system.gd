@@ -15,10 +15,12 @@ func _init(level_root: Node3D) -> void:
 func bake(apply_cuts: bool = true, hide_live: bool = false, collision_layer_mask: int = 0) -> void:
 	if not root.baker:
 		return
+	var started = Time.get_ticks_msec()
 	if apply_cuts:
 		root.apply_pending_cuts()
 	root._log("Virtual Bake Started (apply_cuts=%s, hide_live=%s)" % [apply_cuts, hide_live])
 	root.bake_started.emit()
+	root.bake_progress.emit(0.0, "Preparing")
 	var layer = (
 		collision_layer_mask
 		if collision_layer_mask > 0
@@ -27,6 +29,7 @@ func bake(apply_cuts: bool = true, hide_live: bool = false, collision_layer_mask
 	var baked: Node3D = null
 	var bake_options = build_bake_options()
 	if root.bake_use_face_materials:
+		root.bake_progress.emit(0.5, "Baking faces")
 		var face_brushes = collect_face_bake_brushes()
 		baked = root.baker.bake_from_faces(
 			face_brushes,
@@ -40,8 +43,11 @@ func bake(apply_cuts: bool = true, hide_live: bool = false, collision_layer_mask
 		if root.bake_chunk_size > 0.0:
 			baked = await bake_chunked(root.bake_chunk_size, layer, bake_options)
 		else:
+			root.bake_progress.emit(0.5, "Baking")
 			baked = await bake_single(layer, bake_options)
 	if baked:
+		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started)
+		root.bake_progress.emit(1.0, "Finalizing")
 		if root.baked_container and is_instance_valid(root.baked_container):
 			root.baked_container.queue_free()
 		root.baked_container = baked
@@ -56,6 +62,7 @@ func bake(apply_cuts: bool = true, hide_live: bool = false, collision_layer_mask
 		root._log("Bake finished (success=true)")
 		root.bake_finished.emit(true)
 	else:
+		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started)
 		root._log("Bake failed")
 		warn_bake_failure()
 		root.bake_finished.emit(false)
@@ -148,6 +155,18 @@ func bake_chunked(chunk_size: float, layer: int, options: Dictionary) -> Node3D:
 	var container = Node3D.new()
 	container.name = "BakedGeometry"
 	var chunk_count = 0
+	var total_chunks = 0
+	for coord in chunks:
+		var entry: Dictionary = chunks[coord]
+		var brushes: Array = entry.get("brushes", [])
+		var committed: Array = entry.get("committed", [])
+		var generated: Array = entry.get("generated", [])
+		if brushes.is_empty() and committed.is_empty() and generated.is_empty():
+			continue
+		total_chunks += 1
+	if total_chunks == 0:
+		return null
+	var processed = 0
 	for coord in chunks:
 		var entry: Dictionary = chunks[coord]
 		var brushes: Array = entry.get("brushes", [])
@@ -186,9 +205,63 @@ func bake_chunked(chunk_size: float, layer: int, options: Dictionary) -> Node3D:
 				collision_baked.free()
 		temp_csg.queue_free()
 		collision_csg.queue_free()
+		processed += 1
+		if total_chunks > 0:
+			var progress = float(processed) / float(total_chunks)
+			root.bake_progress.emit(progress, "Chunk %d/%d" % [processed, total_chunks])
 	if container and chunk_count > 0:
 		_append_heightmap_meshes_to_baked(container, layer)
 	return container if chunk_count > 0 else null
+
+
+func get_bake_chunk_count() -> int:
+	if root.bake_chunk_size <= 0.0:
+		var total = count_brushes_in(root.draft_brushes_node)
+		total += count_brushes_in(root.generated_floors)
+		total += count_brushes_in(root.generated_walls)
+		if root.commit_freeze:
+			total += count_brushes_in(root.committed_node)
+		return 1 if total > 0 else 0
+	var size = max(0.001, root.bake_chunk_size)
+	var chunks: Dictionary = {}
+	collect_chunk_brushes(root.draft_brushes_node, size, chunks, "brushes")
+	if root.commit_freeze and root.committed_node:
+		collect_chunk_brushes(root.committed_node, size, chunks, "committed")
+	collect_chunk_brushes(root.generated_floors, size, chunks, "generated")
+	collect_chunk_brushes(root.generated_walls, size, chunks, "generated")
+	var count := 0
+	for coord in chunks:
+		var entry: Dictionary = chunks[coord]
+		var brushes: Array = entry.get("brushes", [])
+		var committed: Array = entry.get("committed", [])
+		var generated: Array = entry.get("generated", [])
+		if brushes.is_empty() and committed.is_empty() and generated.is_empty():
+			continue
+		count += 1
+	return count
+
+
+func bake_dry_run() -> Dictionary:
+	var draft_count = count_brushes_in(root.draft_brushes_node)
+	var pending_count = count_brushes_in(root.pending_node)
+	var committed_count = count_brushes_in(root.committed_node)
+	var generated_floors = count_brushes_in(root.generated_floors)
+	var generated_walls = count_brushes_in(root.generated_walls)
+	var heightmap_floors := 0
+	if root.generated_heightmap_floors:
+		heightmap_floors = root.generated_heightmap_floors.get_child_count()
+	var chunk_count = get_bake_chunk_count()
+	return {
+		"draft": draft_count,
+		"pending": pending_count,
+		"committed": committed_count,
+		"generated_floors": generated_floors,
+		"generated_walls": generated_walls,
+		"heightmap_floors": heightmap_floors,
+		"chunk_count": chunk_count,
+		"use_face_materials": root.bake_use_face_materials,
+		"chunk_size": root.bake_chunk_size
+	}
 
 
 func collect_chunk_brushes(

@@ -1,6 +1,6 @@
 # HammerForge Spec
 
-Last updated: February 8, 2026
+Last updated: February 15, 2026
 
 This document describes HammerForge's architecture and data flow.
 
@@ -12,7 +12,13 @@ This document describes HammerForge's architecture and data flow.
 
 ## Architecture
 
-HammerForge uses a coordinator + subsystems pattern. `LevelRoot` is a thin coordinator that owns all container nodes, exported properties, and signals, and delegates work to 8 `RefCounted` subsystem classes. Each subsystem receives a reference to `LevelRoot` in its constructor.
+HammerForge uses a coordinator + subsystems pattern. `LevelRoot` is a thin coordinator that owns all container nodes, exported properties, and signals, and delegates work to 9 `RefCounted` subsystem classes. Each subsystem receives a reference to `LevelRoot` in its constructor.
+
+### Signals
+- `bake_started` -- emitted when a bake begins.
+- `bake_progress(value: float, label: String)` -- emitted during bake with progress 0..1 and a short label.
+- `bake_finished(success: bool)` -- emitted when a bake completes.
+- `grid_snap_changed(value: float)` -- emitted when grid snap is updated.
 
 ### Core Scripts
 
@@ -43,6 +49,7 @@ HammerForge uses a coordinator + subsystems pattern. `LevelRoot` is a thin coord
 | `hf_paint_system.gd` | `HFPaintSystem` | Floor paint input, surface paint, paint layer CRUD, face selection |
 | `hf_state_system.gd` | `HFStateSystem` | State capture/restore, settings, paint layer serialization |
 | `hf_file_system.gd` | `HFFileSystem` | .hflevel save/load, .map import/export, glTF export, threaded I/O |
+| `hf_validation_system.gd` | `HFValidationSystem` | Validation, dependency checks, auto-fix helpers |
 
 ### Other Modules
 
@@ -92,6 +99,7 @@ LevelRoot (Node3D)
 - Subtract brushes are staged in PendingCuts until Apply Cuts.
 - Extrude Up/Down picks a face via `FaceSelector`, creates a preview brush along the face normal, and commits a new DraftBrush on release. Uses `HFExtrudeTool` (RefCounted).
 - Bake builds a temporary CSG tree from DraftBrushes + CommittedCuts and outputs BakedGeometry.
+- Undo/redo actions prefer brush IDs and state snapshots over long-lived Node references.
 
 ## Floor Paint System
 
@@ -194,6 +202,13 @@ Transitions: `begin_drag()` -> `advance_to_height()` -> `end_drag()` / `cancel()
 - Paint tool keyboard shortcuts (B/E/R/L/K) active when Paint Mode is enabled.
 - Selection count in status bar, updated on every selection change.
 - Color-coded status bar: errors in red (auto-clear 5s), warnings in yellow, success messages auto-clear after 3s.
+- Bake progress bar with chunk status updates.
 - Pending subtract brushes rendered in orange-red with high emission (`_make_pending_cut_material()`), visually distinct from applied cuts (standard red via `_make_brush_material()`).
 - Shader-based editor grid with follow mode.
 - Direct typed calls between plugin/dock/LevelRoot (no duck-typing).
+
+## Validation + Diagnostics
+- Validate Level scans for missing materials, zero-size brushes, invalid face indices, and paint layers without grids.
+- Auto-fix clears invalid face selections, resets invalid face material indices, and rebuilds missing layer grids.
+- Bake Dry Run reports counts and chunking without generating geometry.
+- Performance panel shows active brush count, paint memory, bake chunk count, and last bake time.

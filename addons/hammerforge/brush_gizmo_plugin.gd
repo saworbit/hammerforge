@@ -2,6 +2,8 @@
 extends EditorNode3DGizmoPlugin
 
 const DraftBrush = preload("brush_instance.gd")
+const LevelRoot = preload("level_root.gd")
+const HFUndoHelper = preload("undo_helper.gd")
 const MIN_SIZE := 0.1
 
 var undo_redo: EditorUndoRedoManager = null
@@ -194,13 +196,18 @@ func _commit_handle(
 	var next_size = brush.size
 	var next_pos = brush.global_position
 
-	if undo_redo:
-		undo_redo.create_action("Resize Brush")
-		undo_redo.add_do_property(brush, "size", next_size)
-		undo_redo.add_do_property(brush, "global_position", next_pos)
-		undo_redo.add_undo_property(brush, "size", prev_size)
-		undo_redo.add_undo_property(brush, "global_position", prev_pos)
-		undo_redo.commit_action()
+	var root = _find_level_root(brush)
+	if root and brush.brush_id == "" and root.has_method("get_brush_info_from_node"):
+		root.get_brush_info_from_node(brush)
+	var brush_id = brush.brush_id
+	if undo_redo and root and brush_id != "":
+		HFUndoHelper.commit(
+			undo_redo,
+			root,
+			"Resize Brush",
+			"set_brush_transform_by_id",
+			[brush_id, next_size, next_pos]
+		)
 	else:
 		brush.size = next_size
 		brush.global_position = next_pos
@@ -223,3 +230,12 @@ func _request_gizmo_redraw(gizmo: EditorNode3DGizmo) -> void:
 		return
 	if gizmo.has_method("redraw"):
 		gizmo.call("redraw")
+
+
+func _find_level_root(node: Node) -> LevelRoot:
+	var current: Node = node
+	while current:
+		if current is LevelRoot:
+			return current as LevelRoot
+		current = current.get_parent()
+	return null
