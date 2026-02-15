@@ -286,6 +286,9 @@ func regenerate_paint_layers() -> void:
 				hf.blend_image = hr.blend_image
 				if hr.blend_image:
 					hf.blend_texture = ImageTexture.create_from_image(hr.blend_image)
+				hf.slot_textures = hr.slot_textures
+				hf.slot_uv_scales = hr.slot_uv_scales
+				hf.slot_tints = hr.slot_tints
 				model.heightmap_floors.append(hf)
 			var wall_model = root.paint_tool.geometry.build_for_chunks(
 				layer, chunk_ids, root.paint_tool.synth_settings
@@ -332,6 +335,17 @@ func restore_paint_layers(data: Array, active_index: int) -> void:
 			layer.grid.origin = grid_data.get("origin", layer.grid.origin)
 			layer.grid.basis = grid_data.get("basis", layer.grid.basis)
 			layer.grid.layer_y = float(grid_data.get("layer_y", layer.grid.layer_y))
+		layer._ensure_terrain_slots()
+		var slot_paths = entry.get("terrain_slot_paths", [])
+		if slot_paths is Array:
+			layer.terrain_slot_paths = slot_paths.duplicate()
+		var slot_scales = entry.get("terrain_slot_uv_scales", [])
+		if slot_scales is Array:
+			layer.terrain_slot_uv_scales = slot_scales.duplicate()
+		var slot_tints = entry.get("terrain_slot_tints", [])
+		if slot_tints is Array:
+			layer.terrain_slot_tints = slot_tints.duplicate()
+		layer._ensure_terrain_slots()
 		var hm_b64 = str(entry.get("heightmap_b64", ""))
 		if hm_b64 != "":
 			layer.heightmap = HFHeightmapIO.decode_from_base64(hm_b64)
@@ -364,6 +378,20 @@ func restore_paint_layers(data: Array, active_index: int) -> void:
 					for i in range(blend_bytes.size()):
 						blends[i] = int(blend_bytes[i])
 					layer.set_chunk_blend_weights(Vector2i(cx, cy), blends)
+				var blend2_bytes = chunk.get("blend_weights_2", [])
+				if blend2_bytes is Array and not blend2_bytes.is_empty():
+					var blends2 = PackedByteArray()
+					blends2.resize(blend2_bytes.size())
+					for i in range(blend2_bytes.size()):
+						blends2[i] = int(blend2_bytes[i])
+					layer.set_chunk_blend_weights_slot(Vector2i(cx, cy), 2, blends2)
+				var blend3_bytes = chunk.get("blend_weights_3", [])
+				if blend3_bytes is Array and not blend3_bytes.is_empty():
+					var blends3 = PackedByteArray()
+					blends3.resize(blend3_bytes.size())
+					for i in range(blend3_bytes.size()):
+						blends3[i] = int(blend3_bytes[i])
+					layer.set_chunk_blend_weights_slot(Vector2i(cx, cy), 3, blends3)
 	if root.paint_layers.layers.size() > 0:
 		root.paint_layers.active_layer_index = clamp(
 			active_index, 0, root.paint_layers.layers.size() - 1

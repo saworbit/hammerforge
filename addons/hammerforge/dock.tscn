@@ -191,10 +191,92 @@ max_value = 1.0
 step = 0.05
 value = 0.5
 
+[node name="BlendSlotRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
+custom_constants/separation = 4.0
+
+[node name="BlendSlotLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/BlendSlotRow"]
+text = "Blend Slot"
+
+[node name="BlendSlotSelect" type="OptionButton" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/BlendSlotRow"]
+size_flags_horizontal = 3
+
+[node name="TerrainSlotsSection" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
+text = "Terrain Slots"
+
+[node name="SlotARow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
+custom_constants/separation = 4.0
+
+[node name="SlotALabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotARow"]
+text = "Slot A"
+
+[node name="SlotATexture" type="Button" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotARow"]
+text = "Texture..."
+size_flags_horizontal = 3
+
+[node name="SlotAScale" type="SpinBox" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotARow"]
+min_value = 0.01
+max_value = 100.0
+step = 0.1
+value = 1.0
+
+[node name="SlotBRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
+custom_constants/separation = 4.0
+
+[node name="SlotBLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotBRow"]
+text = "Slot B"
+
+[node name="SlotBTexture" type="Button" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotBRow"]
+text = "Texture..."
+size_flags_horizontal = 3
+
+[node name="SlotBScale" type="SpinBox" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotBRow"]
+min_value = 0.01
+max_value = 100.0
+step = 0.1
+value = 1.0
+
+[node name="SlotCRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
+custom_constants/separation = 4.0
+
+[node name="SlotCLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotCRow"]
+text = "Slot C"
+
+[node name="SlotCTexture" type="Button" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotCRow"]
+text = "Texture..."
+size_flags_horizontal = 3
+
+[node name="SlotCScale" type="SpinBox" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotCRow"]
+min_value = 0.01
+max_value = 100.0
+step = 0.1
+value = 1.0
+
+[node name="SlotDRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
+custom_constants/separation = 4.0
+
+[node name="SlotDLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotDRow"]
+text = "Slot D"
+
+[node name="SlotDTexture" type="Button" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotDRow"]
+text = "Texture..."
+size_flags_horizontal = 3
+
+[node name="SlotDScale" type="SpinBox" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotDRow"]
+min_value = 0.01
+max_value = 100.0
+step = 0.1
+value = 1.0
+
 [node name="HeightmapImportDialog" type="FileDialog" parent="."]
 title = "Import Heightmap"
 access = 2
 filters = PackedStringArray("*.png ; PNG Image", "*.exr ; EXR Image")
+size = Vector2i(600, 400)
+
+[node name="TerrainSlotTextureDialog" type="FileDialog" parent="."]
+title = "Select Terrain Texture"
+access = 2
+filters = PackedStringArray("*.png ; PNG Image", "*.jpg ; JPEG Image", "*.jpeg ; JPEG Image", "*.tga ; TGA Image", "*.webp ; WebP Image", "*.exr ; EXR Image")
 size = Vector2i(600, 400)
 
 [node name="ShapeRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]

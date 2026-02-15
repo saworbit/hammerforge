@@ -2,6 +2,9 @@
 class_name HFPaintLayer
 extends Node
 
+const TERRAIN_SLOTS := 4
+const TERRAIN_BLEND_SLOTS := 3  # slots 1..3 have explicit weights; slot 0 is implicit base
+
 @export var grid: HFPaintGrid
 @export var chunk_size: int = 32
 @export var layer_id: StringName = &"layer_0"
@@ -9,6 +12,16 @@ extends Node
 # Heightmap data (optional; null = flat layer)
 var heightmap: Image = null
 var height_scale: float = 10.0
+
+# Terrain slot settings (per-layer)
+var terrain_slot_paths: Array[String] = ["", "", "", ""]
+var terrain_slot_uv_scales: Array[float] = [1.0, 1.0, 1.0, 1.0]
+var terrain_slot_tints: Array[Color] = [
+	Color(0.35, 0.55, 0.25),
+	Color(0.55, 0.45, 0.3),
+	Color(0.45, 0.5, 0.55),
+	Color(0.5, 0.5, 0.5)
+]
 
 # Chunk storage: key -> ChunkData
 var _chunks: Dictionary = {}  # Dictionary[Vector2i, HFChunkData]
@@ -90,6 +103,31 @@ func get_cell_blend(cell: Vector2i) -> float:
 	return chunk.get_blend(_cell_to_local(cell))
 
 
+func set_cell_blend_slot(cell: Vector2i, slot: int, weight: float) -> void:
+	if slot == 1:
+		set_cell_blend(cell, weight)
+		return
+	if slot < 1 or slot > 3:
+		return
+	var cid := _cell_to_chunk(cell)
+	var chunk: HFChunkData = _get_or_create_chunk(cid)
+	var local := _cell_to_local(cell)
+	chunk.set_blend_slot(local, slot, weight)
+	_mark_dirty(cid)
+
+
+func get_cell_blend_slot(cell: Vector2i, slot: int) -> float:
+	if slot == 1:
+		return get_cell_blend(cell)
+	if slot < 1 or slot > 3:
+		return 0.0
+	var cid := _cell_to_chunk(cell)
+	var chunk: HFChunkData = _chunks.get(cid) as HFChunkData
+	if chunk == null:
+		return 0.0
+	return chunk.get_blend_slot(_cell_to_local(cell), slot)
+
+
 func consume_dirty_chunks() -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	for k in _dirty_chunks.keys():
@@ -145,6 +183,19 @@ func set_chunk_blend_weights(cid: Vector2i, data: PackedByteArray) -> void:
 	_mark_dirty(cid)
 
 
+func get_chunk_blend_weights_slot(cid: Vector2i, slot: int) -> PackedByteArray:
+	var chunk: HFChunkData = _chunks.get(cid) as HFChunkData
+	if chunk == null:
+		return PackedByteArray()
+	return chunk.get_blend_weights_slot(slot).duplicate()
+
+
+func set_chunk_blend_weights_slot(cid: Vector2i, slot: int, data: PackedByteArray) -> void:
+	var chunk: HFChunkData = _get_or_create_chunk(cid)
+	chunk.set_blend_weights_slot(slot, data)
+	_mark_dirty(cid)
+
+
 func clear_chunks() -> void:
 	_chunks.clear()
 	_dirty_chunks.clear()
@@ -158,11 +209,34 @@ func get_memory_bytes() -> int:
 		total += chunk.bits.size()
 		total += chunk.material_ids.size()
 		total += chunk.blend_weights.size()
+		total += chunk.blend_weights_2.size()
+		total += chunk.blend_weights_3.size()
 	if has_heightmap() and heightmap:
 		var data := heightmap.get_data()
 		if data:
 			total += data.size()
 	return total
+
+
+func get_terrain_slot_textures() -> Array:
+	_ensure_terrain_slots()
+	var out: Array = []
+	for path in terrain_slot_paths:
+		if path == "" or not ResourceLoader.exists(path):
+			out.append(null)
+		else:
+			out.append(load(path))
+	return out
+
+
+func get_terrain_slot_uv_scales() -> Array[float]:
+	_ensure_terrain_slots()
+	return terrain_slot_uv_scales.duplicate()
+
+
+func get_terrain_slot_tints() -> Array[Color]:
+	_ensure_terrain_slots()
+	return terrain_slot_tints.duplicate()
 
 
 func _cell_to_chunk(cell: Vector2i) -> Vector2i:
@@ -202,6 +276,8 @@ class HFChunkData:
 	var bits: PackedByteArray  # bitset, size*size bits
 	var material_ids: PackedByteArray  # 1 byte per cell (0-255 material index)
 	var blend_weights: PackedByteArray  # 1 byte per cell (0-255, normalized to 0.0-1.0)
+	var blend_weights_2: PackedByteArray  # slot 2
+	var blend_weights_3: PackedByteArray  # slot 3
 
 	func _init(sz: int) -> void:
 		size = sz
@@ -219,6 +295,14 @@ class HFChunkData:
 		blend_weights.resize(n_cells)
 		for i in range(n_cells):
 			blend_weights[i] = 0
+		blend_weights_2 = PackedByteArray()
+		blend_weights_2.resize(n_cells)
+		for i in range(n_cells):
+			blend_weights_2[i] = 0
+		blend_weights_3 = PackedByteArray()
+		blend_weights_3.resize(n_cells)
+		for i in range(n_cells):
+			blend_weights_3[i] = 0
 
 	func _idx(local: Vector2i) -> int:
 		return local.y * size + local.x
@@ -254,3 +338,51 @@ class HFChunkData:
 
 	func set_blend(local: Vector2i, weight: float) -> void:
 		blend_weights[_idx(local)] = clampi(int(weight * 255.0), 0, 255)
+
+	func get_blend_slot(local: Vector2i, slot: int) -> float:
+		if slot == 2:
+			return float(blend_weights_2[_idx(local)]) / 255.0
+		if slot == 3:
+			return float(blend_weights_3[_idx(local)]) / 255.0
+		return get_blend(local)
+
+	func set_blend_slot(local: Vector2i, slot: int, weight: float) -> void:
+		var value := clampi(int(weight * 255.0), 0, 255)
+		if slot == 2:
+			blend_weights_2[_idx(local)] = value
+			return
+		if slot == 3:
+			blend_weights_3[_idx(local)] = value
+			return
+		blend_weights[_idx(local)] = value
+
+	func get_blend_weights_slot(slot: int) -> PackedByteArray:
+		if slot == 2:
+			return blend_weights_2
+		if slot == 3:
+			return blend_weights_3
+		return blend_weights
+
+	func set_blend_weights_slot(slot: int, data: PackedByteArray) -> void:
+		if slot == 2:
+			blend_weights_2 = data.duplicate()
+			return
+		if slot == 3:
+			blend_weights_3 = data.duplicate()
+			return
+		blend_weights = data.duplicate()
+
+
+func _ensure_terrain_slots() -> void:
+	while terrain_slot_paths.size() < TERRAIN_SLOTS:
+		terrain_slot_paths.append("")
+	while terrain_slot_uv_scales.size() < TERRAIN_SLOTS:
+		terrain_slot_uv_scales.append(1.0)
+	while terrain_slot_tints.size() < TERRAIN_SLOTS:
+		terrain_slot_tints.append(Color(0.5, 0.5, 0.5))
+	if terrain_slot_paths.size() > TERRAIN_SLOTS:
+		terrain_slot_paths.resize(TERRAIN_SLOTS)
+	if terrain_slot_uv_scales.size() > TERRAIN_SLOTS:
+		terrain_slot_uv_scales.resize(TERRAIN_SLOTS)
+	if terrain_slot_tints.size() > TERRAIN_SLOTS:
+		terrain_slot_tints.resize(TERRAIN_SLOTS)

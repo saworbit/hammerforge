@@ -63,7 +63,7 @@ HammerForge uses a coordinator + subsystems pattern. `LevelRoot` is a thin coord
 | Script | class_name | Responsibility |
 |--------|------------|----------------|
 | `hf_paint_grid.gd` | `HFPaintGrid` | Grid storage, coordinate conversion |
-| `hf_paint_layer.gd` | `HFPaintLayer` | Layer data: bitset + material_ids + blend_weights + heightmap |
+| `hf_paint_layer.gd` | `HFPaintLayer` | Layer data: bitset + material_ids + blend_weights (+ _2/_3) + heightmap |
 | `hf_paint_layer_manager.gd` | `HFPaintLayerManager` | Multi-layer management, active layer |
 | `hf_paint_tool.gd` | `HFPaintTool` | Paint input, stroke handling, routes to appropriate synth |
 | `hf_stroke.gd` | `HFStroke` | Stroke data (cells, timing, tool type, brush shape) |
@@ -74,7 +74,7 @@ HammerForge uses a coordinator + subsystems pattern. `LevelRoot` is a thin coord
 | `hf_reconciler.gd` | `HFGeneratedReconciler` | Stable-ID node reconciliation (floors, walls, heightmap floors) |
 | `hf_connector_tool.gd` | `HFConnectorTool` | Ramp/stair mesh generation between layers |
 | `hf_foliage_populator.gd` | `HFFoliagePopulator` | MultiMeshInstance3D procedural scatter |
-| `hf_blend.gdshader` | -- | Two-material blend shader (UV2 blend map) |
+| `hf_blend.gdshader` | -- | Four-slot blend shader (UV2 blend map, RGB weights) |
 | `hf_inference_engine.gd` | `HFInferenceEngine` | Inference for paint operations |
 
 ## Node Hierarchy
@@ -104,13 +104,13 @@ LevelRoot (Node3D)
 ## Floor Paint System
 
 Data
-- Grid -> Layer -> Chunked storage (bitset + material_ids + blend_weights).
+- Grid -> Layer -> Chunked storage (bitset + material_ids + blend_weights + blend_weights_2 + blend_weights_3).
 - Each layer optionally has a `heightmap: Image` and `height_scale: float`.
 - Paint layers are stored under PaintLayers.
 
 Tools
 - Brush, Erase, Rect, Line, Bucket, Blend (enum `HFStroke.Tool`, values 0-5).
-- Blend tool writes per-cell material_id and blend_weight to already-filled cells.
+- Blend tool writes per-cell blend weights to slots B/C/D on already-filled cells.
 
 Brush Shape
 - Square: fills every cell in the radius range (full box).
@@ -122,8 +122,8 @@ Generation (flat layers -- no heightmap)
 
 Generation (heightmap layers)
 - Floors: per-cell displaced quads via `HFHeightmapSynth` -> ArrayMesh -> MeshInstance3D.
-- Per-chunk blend image (Image FORMAT_RF) built from cell blend weights.
-- Blend shader (`hf_blend.gdshader`) mixes two materials via UV2-sampled blend map.
+- Per-chunk blend image (Image FORMAT_RGBA8) built from cell blend weights (RGB = slots B/C/D).
+- Blend shader (`hf_blend.gdshader`) mixes four slots via UV2-sampled blend map (slot A implicit).
 - Walls: still use flat `HFGeometrySynth` (no heightmap displacement on walls).
 
 Reconciliation
@@ -147,7 +147,7 @@ Foliage Populator
 ## Persistence (.hflevel)
 - Stores brushes, entities, level settings, materials palette, and paint layers.
 - Brush records include face data (materials, UVs, paint layers).
-- Paint layers include grid settings, chunk size, bitset data, `material_ids`, `blend_weights`.
+- Paint layers include grid settings, chunk size, bitset data, `material_ids`, `blend_weights` (+ _2/_3), and terrain slot settings.
 - Optional per-layer: `heightmap_b64` (base64 PNG), `height_scale`. Missing keys = no heightmap (backward-compatible).
 
 ## Bake Pipeline

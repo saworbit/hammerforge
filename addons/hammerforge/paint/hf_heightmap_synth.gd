@@ -11,6 +11,9 @@ class HeightmapMeshResult:
 	var mesh: ArrayMesh
 	var transform: Transform3D
 	var blend_image: Image = null
+	var slot_textures: Array = []
+	var slot_uv_scales: Array[float] = []
+	var slot_tints: Array[Color] = []
 
 
 func build_for_chunks(
@@ -56,6 +59,9 @@ func _build_chunk_mesh(
 	result.mesh = st.commit()
 	result.transform = Transform3D(grid.basis, grid.origin)
 	result.blend_image = _build_blend_image(layer, origin, size)
+	result.slot_textures = layer.get_terrain_slot_textures()
+	result.slot_uv_scales = layer.get_terrain_slot_uv_scales()
+	result.slot_tints = layer.get_terrain_slot_tints()
 	return result
 
 
@@ -109,10 +115,12 @@ func _add_cell_quad(
 
 
 func _build_blend_image(layer: HFPaintLayer, origin: Vector2i, size: int) -> Image:
-	var img := Image.create(size, size, false, Image.FORMAT_RF)
+	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
 	for y in range(size):
 		for x in range(size):
 			var cell := origin + Vector2i(x, y)
-			var w := layer.get_cell_blend(cell)
-			img.set_pixel(x, y, Color(w, 0.0, 0.0, 1.0))
+			var w1 := layer.get_cell_blend_slot(cell, 1)
+			var w2 := layer.get_cell_blend_slot(cell, 2)
+			var w3 := layer.get_cell_blend_slot(cell, 3)
+			img.set_pixel(x, y, Color(w1, w2, w3, 1.0))
 	return img

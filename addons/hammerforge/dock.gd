@@ -91,6 +91,26 @@ var height_scale_spin: SpinBox = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMarg
 var layer_y_spin: SpinBox = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/LayerYRow/LayerYSpin
 @onready
 var blend_strength_spin: SpinBox = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/BlendStrengthRow/BlendStrengthSpin
+@onready
+var blend_slot_select: OptionButton = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/BlendSlotRow/BlendSlotSelect
+@onready
+var terrain_slot_a_button: Button = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotARow/SlotATexture
+@onready
+var terrain_slot_a_scale: SpinBox = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotARow/SlotAScale
+@onready
+var terrain_slot_b_button: Button = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotBRow/SlotBTexture
+@onready
+var terrain_slot_b_scale: SpinBox = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotBRow/SlotBScale
+@onready
+var terrain_slot_c_button: Button = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotCRow/SlotCTexture
+@onready
+var terrain_slot_c_scale: SpinBox = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotCRow/SlotCScale
+@onready
+var terrain_slot_d_button: Button = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotDRow/SlotDTexture
+@onready
+var terrain_slot_d_scale: SpinBox = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotDRow/SlotDScale
+@onready
+var terrain_slot_texture_dialog: FileDialog = $TerrainSlotTextureDialog
 @onready var heightmap_import_dialog: FileDialog = $HeightmapImportDialog
 @onready var grid_snap: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/GridRow/GridSnap
 @onready
@@ -277,6 +297,10 @@ var _uv_active_face: FaceData = null
 var _surface_active_brush: DraftBrush = null
 var _surface_active_face: FaceData = null
 var _pending_surface_texture_layer := -1
+var terrain_slot_buttons: Array[Button] = []
+var terrain_slot_scales: Array[SpinBox] = []
+var _terrain_slot_pick_index: int = -1
+var _terrain_slot_refreshing := false
 var _bake_disabled := false
 var tool_extrude_up: Button = null
 var tool_extrude_down: Button = null
@@ -453,6 +477,15 @@ func _apply_all_tooltips() -> void:
 	_set_tooltip(height_scale_spin, "Height scale multiplier for the heightmap")
 	_set_tooltip(layer_y_spin, "Vertical Y offset for the active paint layer")
 	_set_tooltip(blend_strength_spin, "Blend strength when using the Blend paint tool")
+	_set_tooltip(blend_slot_select, "Blend target slot (B, C, or D)")
+	_set_tooltip(terrain_slot_a_button, "Texture for Slot A (base)")
+	_set_tooltip(terrain_slot_a_scale, "UV scale for Slot A texture")
+	_set_tooltip(terrain_slot_b_button, "Texture for Slot B")
+	_set_tooltip(terrain_slot_b_scale, "UV scale for Slot B texture")
+	_set_tooltip(terrain_slot_c_button, "Texture for Slot C")
+	_set_tooltip(terrain_slot_c_scale, "UV scale for Slot C texture")
+	_set_tooltip(terrain_slot_d_button, "Texture for Slot D")
+	_set_tooltip(terrain_slot_d_scale, "UV scale for Slot D texture")
 	# SurfacePaint tab
 	_set_tooltip(paint_target_select, "Paint target: Floor (grid) or Surface (UV)")
 	_set_tooltip(surface_paint_radius, "Surface paint radius in UV space (0.0 - 1.0)")
@@ -659,6 +692,8 @@ func _ready():
 	_populate_paint_tools()
 	_populate_brush_shapes()
 	_populate_paint_targets()
+	_populate_blend_slots()
+	_bind_terrain_slot_controls()
 	if (
 		shape_select
 		and not shape_select.item_selected.is_connected(Callable(self, "_on_shape_selected"))
@@ -711,12 +746,37 @@ func _ready():
 	):
 		blend_strength_spin.value_changed.connect(_on_blend_strength_changed)
 	if (
+		blend_slot_select
+		and not blend_slot_select.item_selected.is_connected(
+			Callable(self, "_on_blend_slot_selected")
+		)
+	):
+		blend_slot_select.item_selected.connect(_on_blend_slot_selected)
+	for i in range(terrain_slot_buttons.size()):
+		var button = terrain_slot_buttons[i]
+		if button and not button.pressed.is_connected(Callable(self, "_on_terrain_slot_pressed")):
+			button.pressed.connect(_on_terrain_slot_pressed.bind(i))
+	for i in range(terrain_slot_scales.size()):
+		var spin = terrain_slot_scales[i]
+		if (
+			spin
+			and not spin.value_changed.is_connected(Callable(self, "_on_terrain_slot_scale_changed"))
+		):
+			spin.value_changed.connect(_on_terrain_slot_scale_changed.bind(i))
+	if (
 		heightmap_import_dialog
 		and not heightmap_import_dialog.file_selected.is_connected(
 			Callable(self, "_on_heightmap_import_selected")
 		)
 	):
 		heightmap_import_dialog.file_selected.connect(_on_heightmap_import_selected)
+	if (
+		terrain_slot_texture_dialog
+		and not terrain_slot_texture_dialog.file_selected.is_connected(
+			Callable(self, "_on_terrain_slot_texture_selected")
+		)
+	):
+		terrain_slot_texture_dialog.file_selected.connect(_on_terrain_slot_texture_selected)
 	if (
 		materials_list
 		and not materials_list.item_selected.is_connected(Callable(self, "_on_material_selected"))
@@ -1713,6 +1773,31 @@ func _populate_paint_targets() -> void:
 	paint_target_select.select(0)
 
 
+func _populate_blend_slots() -> void:
+	if not blend_slot_select:
+		return
+	blend_slot_select.clear()
+	blend_slot_select.add_item("Slot B", 1)
+	blend_slot_select.add_item("Slot C", 2)
+	blend_slot_select.add_item("Slot D", 3)
+	blend_slot_select.select(0)
+
+
+func _bind_terrain_slot_controls() -> void:
+	terrain_slot_buttons = [
+		terrain_slot_a_button,
+		terrain_slot_b_button,
+		terrain_slot_c_button,
+		terrain_slot_d_button
+	]
+	terrain_slot_scales = [
+		terrain_slot_a_scale,
+		terrain_slot_b_scale,
+		terrain_slot_c_scale,
+		terrain_slot_d_scale
+	]
+
+
 func _refresh_paint_layers() -> void:
 	if not paint_layer_select:
 		return
@@ -1725,6 +1810,7 @@ func _refresh_paint_layers() -> void:
 			paint_layer_add.disabled = true
 		if paint_layer_remove:
 			paint_layer_remove.disabled = true
+		_refresh_terrain_slots()
 		return
 	var names: Array = level_root.get_paint_layer_names()
 	var active_index = int(level_root.get_active_paint_layer_index())
@@ -1738,6 +1824,7 @@ func _refresh_paint_layers() -> void:
 		paint_layer_select.add_item(label, i)
 	if names.size() > 0:
 		paint_layer_select.select(clamp(active_index, 0, names.size() - 1))
+	_refresh_terrain_slots()
 
 
 func _refresh_materials_list(names: Array) -> void:
@@ -1857,6 +1944,92 @@ func _on_blend_strength_changed(value: float) -> void:
 	if not level_root or not level_root.paint_tool:
 		return
 	level_root.paint_tool.blend_strength = value
+
+
+func _on_blend_slot_selected(index: int) -> void:
+	if not level_root or not level_root.paint_tool or not blend_slot_select:
+		return
+	var slot_id = blend_slot_select.get_item_id(index)
+	level_root.paint_tool.blend_slot = int(slot_id)
+
+
+func _on_terrain_slot_pressed(slot: int) -> void:
+	if not terrain_slot_texture_dialog:
+		return
+	_terrain_slot_pick_index = slot
+	terrain_slot_texture_dialog.popup_centered(Vector2(600, 400))
+
+
+func _on_terrain_slot_texture_selected(path: String) -> void:
+	if _terrain_slot_pick_index < 0:
+		return
+	if not level_root or not level_root.paint_layers:
+		return
+	var layer = level_root.paint_layers.get_active_layer()
+	if not layer:
+		return
+	layer._ensure_terrain_slots()
+	layer.terrain_slot_paths[_terrain_slot_pick_index] = path
+	_refresh_terrain_slots()
+	level_root._regenerate_paint_layers()
+
+
+func _on_terrain_slot_scale_changed(value: float, slot: int) -> void:
+	if _terrain_slot_refreshing:
+		return
+	if not level_root or not level_root.paint_layers:
+		return
+	var layer = level_root.paint_layers.get_active_layer()
+	if not layer:
+		return
+	layer._ensure_terrain_slots()
+	var current = float(layer.terrain_slot_uv_scales[slot])
+	if is_equal_approx(current, value):
+		return
+	layer.terrain_slot_uv_scales[slot] = float(value)
+	level_root._regenerate_paint_layers()
+
+
+func _refresh_terrain_slots() -> void:
+	_terrain_slot_refreshing = true
+	if not level_root or not level_root.paint_layers:
+		_set_terrain_slot_controls_enabled(false)
+		_terrain_slot_refreshing = false
+		return
+	var layer = level_root.paint_layers.get_active_layer()
+	if not layer:
+		_set_terrain_slot_controls_enabled(false)
+		_terrain_slot_refreshing = false
+		return
+	layer._ensure_terrain_slots()
+	_set_terrain_slot_controls_enabled(true)
+	for i in range(terrain_slot_buttons.size()):
+		var button = terrain_slot_buttons[i]
+		var scale = terrain_slot_scales[i]
+		if button:
+			var path = layer.terrain_slot_paths[i]
+			button.text = _terrain_slot_label(path)
+		if scale:
+			scale.value = float(layer.terrain_slot_uv_scales[i])
+	if blend_slot_select and level_root.paint_tool:
+		var slot = clamp(level_root.paint_tool.blend_slot, 1, 3)
+		_select_option_by_id(blend_slot_select, slot)
+	_terrain_slot_refreshing = false
+
+
+func _terrain_slot_label(path: String) -> String:
+	if path == "":
+		return "Texture..."
+	return path.get_file()
+
+
+func _set_terrain_slot_controls_enabled(enabled: bool) -> void:
+	for button in terrain_slot_buttons:
+		if button:
+			button.disabled = not enabled
+	for spin in terrain_slot_scales:
+		if spin:
+			spin.disabled = not enabled
 
 
 func _on_material_selected(index: int) -> void:

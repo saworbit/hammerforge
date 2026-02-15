@@ -32,12 +32,16 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   - Heightmap import (PNG/EXR) and procedural noise generation (FastNoiseLite) per paint layer.
   - Per-cell material IDs and blend weights stored alongside existing bitset data.
   - Heightmap-displaced mesh generation via `HFHeightmapSynth` (SurfaceTool with per-vertex displacement).
-  - Two-material blend shader (`hf_blend.gdshader`) using UV2 channel for per-chunk blend maps, with default terrain colors (`color_a`/`color_b`), configurable grid overlay (`grid_opacity`/`grid_color`), and tint-compatible texture support.
+  - Four-slot blend shader (`hf_blend.gdshader`) using UV2 channel for per-chunk blend maps (RGB = slots B/C/D), with default terrain colors, configurable grid overlay, and tint-compatible texture support.
   - Blend paint tool (`HFStroke.Tool.BLEND = 5`) for painting material blend weights on filled cells.
   - Auto-connector tool (`HFConnectorTool`) generating ramp and stair meshes between layers at different heights.
   - Foliage populator (`HFFoliagePopulator`) with height/slope filtering and MultiMeshInstance3D scatter.
   - Heightmap floors bake directly into output (bypass CSG) with trimesh collision shapes.
-  - Dock UI: Heightmap Import/Generate buttons, Height Scale and Layer Y spinboxes, Blend Strength control.
+  - Dock UI: Heightmap Import/Generate buttons, Height Scale and Layer Y spinboxes, Blend Strength + Blend Slot controls.
+- **Four-slot terrain blending** for heightmap floors:
+  - New blend map format (RGB weights for slots B/C/D, slot A implicit).
+  - Per-layer terrain slot textures + UV scales.
+  - Blend Slot selection in the Floor Paint tab.
 - Floor paint brush shape selector (Square or Circle) in the Floor Paint tab.
 - Per-face material palette with face selection mode.
 - Dynamic context-sensitive shortcut HUD that updates based on current tool and mode.
@@ -58,7 +62,7 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 - Standardized editor actions under a single undo/redo helper with state snapshots.
 - Paint Mode can target either floor paint or surface paint.
 - .hflevel now persists materials palette and per-face data.
-- .hflevel now persists per-chunk `material_ids`, `blend_weights`, `heightmap_b64`, and `height_scale`.
+- .hflevel now persists per-chunk `material_ids`, `blend_weights` (+ _2/_3), `heightmap_b64`, `height_scale`, and terrain slot settings.
 - Floor paint layers with heightmaps route to `HFHeightmapSynth` (MeshInstance3D) instead of CSG DraftBrush.
 - Generated heightmap floors stored under `LevelRoot/Generated/HeightmapFloors`.
 

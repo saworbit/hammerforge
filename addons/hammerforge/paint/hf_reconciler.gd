@@ -140,7 +140,9 @@ func _upsert_heightmap_floor(hf: HFGeneratedModel.HeightmapFloor) -> void:
 		_set_gen_meta(node, hf.id, "heightmap_floor")
 	node.mesh = hf.mesh
 	node.global_transform = hf.transform
-	node.material_override = _create_blend_material(hf.blend_texture)
+	node.material_override = _create_blend_material(
+		hf.blend_texture, hf.slot_textures, hf.slot_uv_scales, hf.slot_tints
+	)
 
 
 func _get_blend_shader() -> Shader:
@@ -151,7 +153,12 @@ func _get_blend_shader() -> Shader:
 	return _blend_shader
 
 
-func _create_blend_material(blend_tex: ImageTexture = null) -> ShaderMaterial:
+func _create_blend_material(
+	blend_tex: ImageTexture = null,
+	slot_textures: Array = [],
+	slot_uv_scales: Array = [],
+	slot_tints: Array = []
+) -> ShaderMaterial:
 	var shader := _get_blend_shader()
 	if not shader:
 		return null
@@ -159,7 +166,42 @@ func _create_blend_material(blend_tex: ImageTexture = null) -> ShaderMaterial:
 	mat.shader = shader
 	if blend_tex:
 		mat.set_shader_parameter("blend_map", blend_tex)
+	if slot_textures.size() > 0:
+		mat.set_shader_parameter("material_a", _slot_texture(slot_textures, 0))
+		mat.set_shader_parameter("material_b", _slot_texture(slot_textures, 1))
+		mat.set_shader_parameter("material_c", _slot_texture(slot_textures, 2))
+		mat.set_shader_parameter("material_d", _slot_texture(slot_textures, 3))
+	if slot_uv_scales.size() > 0:
+		mat.set_shader_parameter("uv_scale_a", _slot_float(slot_uv_scales, 0, 1.0))
+		mat.set_shader_parameter("uv_scale_b", _slot_float(slot_uv_scales, 1, 1.0))
+		mat.set_shader_parameter("uv_scale_c", _slot_float(slot_uv_scales, 2, 1.0))
+		mat.set_shader_parameter("uv_scale_d", _slot_float(slot_uv_scales, 3, 1.0))
+	if slot_tints.size() > 0:
+		mat.set_shader_parameter("color_a", _slot_color(slot_tints, 0, Color(0.35, 0.55, 0.25)))
+		mat.set_shader_parameter("color_b", _slot_color(slot_tints, 1, Color(0.55, 0.45, 0.3)))
+		mat.set_shader_parameter("color_c", _slot_color(slot_tints, 2, Color(0.45, 0.5, 0.55)))
+		mat.set_shader_parameter("color_d", _slot_color(slot_tints, 3, Color(0.5, 0.5, 0.5)))
 	return mat
+
+
+func _slot_texture(textures: Array, idx: int) -> Texture2D:
+	if idx < 0 or idx >= textures.size():
+		return null
+	var tex = textures[idx]
+	return tex if tex is Texture2D else null
+
+
+func _slot_float(values: Array, idx: int, fallback: float) -> float:
+	if idx < 0 or idx >= values.size():
+		return fallback
+	return float(values[idx])
+
+
+func _slot_color(values: Array, idx: int, fallback: Color) -> Color:
+	if idx < 0 or idx >= values.size():
+		return fallback
+	var c = values[idx]
+	return c if c is Color else fallback
 
 
 func _set_gen_meta(node: Node, gid: StringName, kind: String) -> void:

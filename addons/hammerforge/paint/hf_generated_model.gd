@@ -27,6 +27,9 @@ class HeightmapFloor:
 	var transform: Transform3D
 	var blend_image: Image = null
 	var blend_texture: ImageTexture = null
+	var slot_textures: Array = []
+	var slot_uv_scales: Array[float] = []
+	var slot_tints: Array[Color] = []
 
 
 var floors: Array[FloorRect] = []

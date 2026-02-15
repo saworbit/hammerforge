@@ -1,6 +1,6 @@
 # HammerForge Floor Paint Greyboxing
 
-Last updated: February 7, 2026
+Last updated: February 15, 2026
 
 This document describes the floor paint system: grid storage, tools, geometry synthesis, heightmap integration, reconciliation, and persistence. Surface paint (per-face splat layers) is documented separately and does not use the grid system.
 
@@ -10,7 +10,7 @@ Floor Paint is a grid-based authoring tool that generates DraftBrush floors, wal
 - Per-chunk regeneration (dirty chunk scope).
 - Stable IDs + reconciliation to avoid node churn.
 - Live preview while dragging.
-- Optional heightmap displacement with two-material blending.
+- Optional heightmap displacement with four-slot blending.
 
 ## Data Model
 
@@ -20,14 +20,17 @@ HFPaintGrid
 
 HFPaintLayer
 - Chunked grid storage using a bitset per chunk.
-- Per-chunk `material_ids` (PackedByteArray, 1 byte/cell) and `blend_weights` (PackedByteArray, 0-255 normalized).
+- Per-chunk `material_ids` (PackedByteArray, 1 byte/cell) and blend weights (`blend_weights`, `blend_weights_2`, `blend_weights_3`).
 - Optional `heightmap: Image` (FORMAT_RF) and `height_scale: float` for vertex displacement.
+- Per-layer terrain slot settings: `terrain_slot_paths`, `terrain_slot_uv_scales`, `terrain_slot_tints`.
 - Tracks dirty chunks for incremental regeneration.
 
 HFChunkData (inner class of HFPaintLayer)
 - `bits`: PackedByteArray bitset for cell occupancy.
 - `material_ids`: PackedByteArray for per-cell material index (0-255).
-- `blend_weights`: PackedByteArray for per-cell blend weight (0-255, normalized to 0.0-1.0).
+- `blend_weights`: PackedByteArray for per-cell blend weight (slot B, 0-255 normalized).
+- `blend_weights_2`: PackedByteArray for per-cell blend weight (slot C).
+- `blend_weights_3`: PackedByteArray for per-cell blend weight (slot D).
 
 HFPaintLayerManager
 - Holds multiple layers and an active layer index.
@@ -62,7 +65,7 @@ When a layer has a heightmap assigned, floors use `HFHeightmapSynth` instead of 
 - Per filled cell: generate a quad (2 triangles) with 4 corner vertices.
 - Each corner vertex is displaced vertically by `layer.get_height_at(corner_cell) * height_scale`.
 - UV channel: tiled per cell (0-1 range). UV2 channel: position within chunk (for blend map sampling).
-- Per-chunk blend image (Image FORMAT_RF) built from cell blend weights.
+- Per-chunk blend image (Image FORMAT_RGBA8) built from cell blend weights (RGB = slots B/C/D).
 - Output: MeshInstance3D nodes (not DraftBrush) stored under `Generated/HeightmapFloors`.
 
 ### Walls
@@ -94,8 +97,9 @@ Note: `_clear_generated()` must `remove_child()` before `queue_free()` so that a
 Paint layers serialize into the level save:
 - grid settings (cell size, origin, basis, layer y)
 - chunk size
-- chunks with bitset data, `material_ids`, and `blend_weights`
+- chunks with bitset data, `material_ids`, and `blend_weights` / `blend_weights_2` / `blend_weights_3`
 - `heightmap_b64` (base64-encoded PNG) and `height_scale` per layer (optional, backward-compatible)
+- `terrain_slot_paths`, `terrain_slot_uv_scales`, `terrain_slot_tints` per layer
 
 ## Pseudo-code
 
@@ -136,10 +140,10 @@ merge vertical by (x, outward) and contiguous y
 - `decode_from_base64(data) -> Image`: base64 to Image for load.
 
 ## Material Blending
-The blend system uses a two-material spatial shader (`hf_blend.gdshader`):
-- `material_a` and `material_b`: two texture samplers with configurable UV scale.
-- `blend_map`: sampled on UV2, controls mix ratio (R channel, 0.0-1.0).
-- `color_a` (default green) and `color_b` (default brown): tint/fallback colors. When no textures are assigned, these provide immediate visual feedback. When textures are assigned, they act as a tint multiplier (set to white for unmodified texture color).
+The blend system uses a four-slot spatial shader (`hf_blend.gdshader`):
+- `material_a`..`material_d`: four texture samplers with configurable UV scale.
+- `blend_map`: sampled on UV2, RGB channels represent weights for slots B/C/D. Slot A is implicit base weight (`1 - (B+C+D)`).
+- `color_a`..`color_d`: tint/fallback colors. When no textures are assigned, these provide immediate visual feedback. When textures are assigned, they act as a tint multiplier (set to white for unmodified texture color).
 - `grid_opacity` (default 0.25) and `grid_color` (default black): cell-boundary grid overlay drawn using UV coordinates. Helps visualize terrain at low height scales.
 - Per-chunk blend images are built from cell-level blend weights during mesh generation.
 - The blend material is always applied to heightmap floor MeshInstance3D nodes (even without explicit blend textures).
@@ -170,5 +174,5 @@ Procedural scatter using MultiMeshInstance3D:
 - Greedy rects can change after edits, which can change IDs for floors.
 - Walls are more stable because they follow boundary edges.
 - Heightmap displacement is per-cell corner (4 vertices per cell); sub-cell terrain detail requires a denser grid.
-- Blend shader supports exactly two materials; more materials would require a different approach.
+- Blend shader supports four slots (A-D); more slots would require a different approach (texture arrays or atlasing).
 - Connectors generate geometry but do not automatically detect optimal placement.

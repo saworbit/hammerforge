@@ -32,7 +32,7 @@ Paint Mode (floor + surface)
 - Paint Target is global and decides whether strokes affect Floor or Surface.
 - Floor Paint tab: Brush, Erase, Rect, Line, Bucket, Blend.
 - Floor Paint tab: Brush shape (Square or Circle), radius in grid cells, and layer picker.
-- Floor Paint tab: Heightmap Import/Generate, Height Scale, Layer Y, Blend Strength controls.
+- Floor Paint tab: Heightmap Import/Generate, Height Scale, Layer Y, Blend Strength, Blend Slot, and Terrain Slots controls.
 - Surface Paint tab: Paint Target, layers, texture picker, radius/strength.
 
 Materials (per-face)
@@ -183,10 +183,15 @@ When a layer has a heightmap, its floors are generated as displaced MeshInstance
 The Blend tool paints per-cell material blend weights on filled cells:
 1. Fill cells first (Brush/Rect/etc.).
 2. Switch to the **Blend** tool.
-3. Adjust **Blend Strength** (0.0-1.0) in the dock.
-4. Paint over filled cells to set blend weights.
+3. Choose a **Blend Slot** (B/C/D).
+4. Adjust **Blend Strength** (0.0-1.0) in the dock.
+5. Paint over filled cells to set blend weights.
 
-Blend weights drive a two-material shader (`hf_blend.gdshader`). The shader mixes `material_a` and `material_b` based on a per-chunk blend map sampled on the UV2 channel.
+Blend weights drive a four-slot shader (`hf_blend.gdshader`). Slot A is the implicit base, while slots B/C/D are controlled by the blend map (RGB) sampled on the UV2 channel.
+
+Terrain slots:
+- Use **Slot A-D** texture pickers to assign textures for the terrain blend shader.
+- **Slot Scale** controls per-slot UV tiling.
 
 ## Face Materials and UVs
 1. Open the Materials tab.
@@ -255,7 +260,7 @@ Use Face Materials (optional):
 
 ## Save/Load (.hflevel)
 - Save .hflevel stores brushes, entities, settings, materials palette, face data, and paint layers.
-- Paint layer data includes per-chunk `material_ids`, `blend_weights`, optional `heightmap_b64`, and `height_scale`.
+- Paint layer data includes per-chunk `material_ids`, `blend_weights` (+ _2/_3), optional `heightmap_b64`, `height_scale`, and terrain slot settings.
 - Load .hflevel restores them. Missing heightmap/material fields default to zero (backward-compatible).
 - Autosave can write to a configurable path.
 
@@ -297,6 +302,7 @@ Heightmap mesh not appearing
 - Ensure the active layer has a heightmap assigned (use Import or Generate in the Floor Paint tab).
 - Confirm cells are painted first -- heightmap only displaces filled cells.
 
-Blend shader shows only one material
+Blend shader shows only one slot
 - Paint blend weights using the Blend tool on already-filled cells.
+- Set a Blend Slot (B/C/D) and assign textures to Slot A-D.
 - Verify the blend_map texture is generated (requires cells with non-zero blend weights).

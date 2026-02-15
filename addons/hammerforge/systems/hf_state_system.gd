@@ -271,6 +271,10 @@ func capture_paint_layers() -> Array:
 			},
 			"chunks": []
 		}
+		layer._ensure_terrain_slots()
+		entry["terrain_slot_paths"] = layer.terrain_slot_paths.duplicate()
+		entry["terrain_slot_uv_scales"] = layer.terrain_slot_uv_scales.duplicate()
+		entry["terrain_slot_tints"] = layer.terrain_slot_tints.duplicate()
 		if layer.has_heightmap():
 			entry["heightmap_b64"] = HFHeightmapIO.encode_to_base64(layer.heightmap)
 			entry["height_scale"] = layer.height_scale
@@ -287,13 +291,23 @@ func capture_paint_layers() -> Array:
 			var blend_bytes: Array = []
 			for b in blends:
 				blend_bytes.append(int(b))
+			var blends_2 = layer.get_chunk_blend_weights_slot(cid, 2)
+			var blend2_bytes: Array = []
+			for b in blends_2:
+				blend2_bytes.append(int(b))
+			var blends_3 = layer.get_chunk_blend_weights_slot(cid, 3)
+			var blend3_bytes: Array = []
+			for b in blends_3:
+				blend3_bytes.append(int(b))
 			entry["chunks"].append(
 				{
 					"cx": cid.x,
 					"cy": cid.y,
 					"bits": bytes,
 					"material_ids": mat_bytes,
-					"blend_weights": blend_bytes
+					"blend_weights": blend_bytes,
+					"blend_weights_2": blend2_bytes,
+					"blend_weights_3": blend3_bytes
 				}
 			)
 		out.append(entry)
