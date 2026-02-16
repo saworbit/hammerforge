@@ -144,6 +144,7 @@ var generated_node: Node3D
 var generated_floors: Node3D
 var generated_walls: Node3D
 var generated_heightmap_floors: Node3D
+var generated_region_overlay: MeshInstance3D
 var baked_container: Node3D
 var preview_brush: DraftBrush = null
 
@@ -867,6 +868,39 @@ func set_layer_y(value: float) -> void:
 	paint_system.set_layer_y(value)
 
 
+func set_region_streaming_enabled(value: bool) -> void:
+	if paint_system:
+		paint_system.set_region_streaming_enabled(value)
+
+
+func set_region_size_cells(value: int) -> void:
+	if paint_system:
+		paint_system.set_region_size_cells(value)
+
+
+func set_region_streaming_radius(value: int) -> void:
+	if paint_system:
+		paint_system.set_region_streaming_radius(value)
+
+
+func set_region_memory_budget_mb(value: int) -> void:
+	if paint_system:
+		paint_system.set_region_memory_budget_mb(value)
+
+
+func set_region_show_grid(value: bool) -> void:
+	if paint_system:
+		paint_system.set_region_show_grid(value)
+
+
+func get_region_settings() -> Dictionary:
+	return paint_system.get_region_settings() if paint_system else {}
+
+
+func get_loaded_regions() -> Array:
+	return paint_system.get_loaded_regions() if paint_system else []
+
+
 # ===========================================================================
 # State API (delegates to state_system)
 # ===========================================================================
@@ -1102,6 +1136,13 @@ func _setup_paint_system() -> void:
 		generated_heightmap_floors.name = "HeightmapFloors"
 		generated_node.add_child(generated_heightmap_floors)
 		_assign_owner(generated_heightmap_floors)
+	generated_region_overlay = generated_node.get_node_or_null("RegionOverlay") as MeshInstance3D
+	if not generated_region_overlay:
+		generated_region_overlay = MeshInstance3D.new()
+		generated_region_overlay.name = "RegionOverlay"
+		generated_region_overlay.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		generated_node.add_child(generated_region_overlay)
+		_assign_owner(generated_region_overlay)
 
 	paint_tool = get_node_or_null("PaintTool") as HFPaintTool
 	if not paint_tool:

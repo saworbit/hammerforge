@@ -32,7 +32,7 @@ Paint Mode (floor + surface)
 - Paint Target is global and decides whether strokes affect Floor or Surface.
 - Floor Paint tab: Brush, Erase, Rect, Line, Bucket, Blend.
 - Floor Paint tab: Brush shape (Square or Circle), radius in grid cells, and layer picker.
-- Floor Paint tab: Heightmap Import/Generate, Height Scale, Layer Y, Blend Strength, Blend Slot, and Terrain Slots controls.
+- Floor Paint tab: Region Streaming controls, Heightmap Import/Generate, Height Scale, Layer Y, Blend Strength, Blend Slot, and Terrain Slots controls.
 - Surface Paint tab: Paint Target, layers, texture picker, radius/strength.
 
 Materials (per-face)
@@ -169,6 +169,17 @@ Notes
 - Bucket fills a contiguous region (click filled to erase).
 - Generated geometry appears under `LevelRoot/Generated`.
 - Generated flat floors/walls are DraftBrush nodes and are included in Bake.
+
+### Region Streaming (Large Worlds)
+Region streaming keeps large paint grids responsive by loading only nearby regions.
+1. Enable **Streaming** in the Floor Paint tab.
+2. Set **Region Size** (cells) and **Stream Radius** (regions).
+3. Toggle **Show Region Grid** to visualize loaded regions.
+4. Paint normally; regions auto-load around the cursor.
+
+Notes
+- Region data is saved to `.hfr` files in `<level>.hfregions/`.
+- The `.hflevel` stores a region index and layer settings.
 
 ### Heightmap Terrain
 Heightmaps add vertical displacement to painted floors:

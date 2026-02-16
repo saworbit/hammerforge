@@ -23,6 +23,7 @@ This document makes the current tradeoffs explicit so level designers and develo
 - Floor paint is grid-based and produces axis-aligned floors and walls.
 - Heightmaps displace floors only. Walls remain flat.
 - Heightmap blending uses four slots (A-D) with per-cell blend weights for B/C/D.
+- Region streaming loads only nearby paint data; distant regions are unloaded.
 
 ## Import / Export Limits
 - `.map` import/export preserves basic brush shapes and point entities, not full material or face data.

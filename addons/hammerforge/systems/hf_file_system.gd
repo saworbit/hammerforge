@@ -20,6 +20,9 @@ func save_hflevel(path: String = "", force: bool = false) -> int:
 	if target == "":
 		return ERR_INVALID_PARAMETER
 	ensure_dir_for_path(target)
+	if root.paint_system:
+		root.paint_system.set_region_base_path(target)
+		root.paint_system.save_loaded_regions()
 	var encoded = root._capture_hflevel_state()
 	var json = JSON.stringify(encoded)
 	var hash_value = json.hash()
@@ -35,6 +38,8 @@ func load_hflevel(path: String = "") -> bool:
 	var target = path if path != "" else root.hflevel_autosave_path
 	if target == "":
 		return false
+	if root.paint_system:
+		root.paint_system.set_region_base_path(target)
 	var data = HFLevelIO.load_from_path(target)
 	if data.is_empty():
 		return false

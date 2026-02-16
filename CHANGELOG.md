@@ -42,6 +42,10 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   - New blend map format (RGB weights for slots B/C/D, slot A implicit).
   - Per-layer terrain slot textures + UV scales.
   - Blend Slot selection in the Floor Paint tab.
+- **Region streaming** for floor paint:
+  - Region-based loading/unloading of paint chunks.
+  - `.hfr` region files alongside `.hflevel` with a region index.
+  - Floor Paint tab controls for streaming settings + region grid overlay.
 - Floor paint brush shape selector (Square or Circle) in the Floor Paint tab.
 - Per-face material palette with face selection mode.
 - Dynamic context-sensitive shortcut HUD that updates based on current tool and mode.

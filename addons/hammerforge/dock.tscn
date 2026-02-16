@@ -135,6 +135,66 @@ custom_minimum_size = Vector2(24, 0)
 text = "-"
 custom_minimum_size = Vector2(24, 0)
 
+[node name="RegionSection" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
+text = "Regions"
+
+[node name="RegionEnableRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
+custom_constants/separation = 4.0
+
+[node name="RegionEnableLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/RegionEnableRow"]
+text = "Streaming"
+
+[node name="RegionEnable" type="CheckBox" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/RegionEnableRow"]
+size_flags_horizontal = 3
+
+[node name="RegionSizeRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
+custom_constants/separation = 4.0
+
+[node name="RegionSizeLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/RegionSizeRow"]
+text = "Region Size"
+
+[node name="RegionSizeSpin" type="SpinBox" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/RegionSizeRow"]
+size_flags_horizontal = 3
+min_value = 64.0
+max_value = 2048.0
+step = 64.0
+value = 512.0
+
+[node name="RegionRadiusRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
+custom_constants/separation = 4.0
+
+[node name="RegionRadiusLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/RegionRadiusRow"]
+text = "Stream Radius"
+
+[node name="RegionRadiusSpin" type="SpinBox" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/RegionRadiusRow"]
+size_flags_horizontal = 3
+min_value = 0.0
+max_value = 8.0
+step = 1.0
+value = 2.0
+
+[node name="RegionMemoryRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
+custom_constants/separation = 4.0
+
+[node name="RegionMemoryLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/RegionMemoryRow"]
+text = "Memory (MB)"
+
+[node name="RegionMemorySpin" type="SpinBox" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/RegionMemoryRow"]
+size_flags_horizontal = 3
+min_value = 32.0
+max_value = 4096.0
+step = 32.0
+value = 256.0
+
+[node name="RegionGridRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
+custom_constants/separation = 4.0
+
+[node name="RegionGridLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/RegionGridRow"]
+text = "Show Region Grid"
+
+[node name="RegionGridToggle" type="CheckBox" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/RegionGridRow"]
+size_flags_horizontal = 3
+
 [node name="HeightmapSection" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
 text = "Heightmap"
 

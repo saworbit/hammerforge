@@ -6,6 +6,7 @@ This document describes how to move data in and out of HammerForge safely.
 
 ## Source of Truth: `.hflevel`
 - `.hflevel` files are the canonical save format for brushes, paint layers, materials, entities, and settings.
+- When region streaming is enabled, per-region paint data is stored in a sibling `<level>.hfregions/` folder.
 - Files include a version field and default missing keys on load for backward compatibility.
 - Autosaves write to `res://.hammerforge/autosave.hflevel` by default.
 - Store `.hflevel` in version control for reliable recovery.

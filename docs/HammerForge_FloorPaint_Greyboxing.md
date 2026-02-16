@@ -11,6 +11,7 @@ Floor Paint is a grid-based authoring tool that generates DraftBrush floors, wal
 - Stable IDs + reconciliation to avoid node churn.
 - Live preview while dragging.
 - Optional heightmap displacement with four-slot blending.
+- Region streaming for large worlds (region-based chunk loading).
 
 ## Data Model
 
@@ -34,6 +35,10 @@ HFChunkData (inner class of HFPaintLayer)
 
 HFPaintLayerManager
 - Holds multiple layers and an active layer index.
+
+HFTerrainRegionManager
+- Groups chunks into regions for streaming and on-disk storage.
+- Computes region bounds in cells/chunks and streaming radius.
 
 HFStroke
 - Captures cells, timing, bounding box, and intent hints.
@@ -100,6 +105,10 @@ Paint layers serialize into the level save:
 - chunks with bitset data, `material_ids`, and `blend_weights` / `blend_weights_2` / `blend_weights_3`
 - `heightmap_b64` (base64-encoded PNG) and `height_scale` per layer (optional, backward-compatible)
 - `terrain_slot_paths`, `terrain_slot_uv_scales`, `terrain_slot_tints` per layer
+
+Region streaming:
+- Region index stored in `.hflevel` under `terrain_regions`.
+- Per-region chunk data stored in `.hfr` files inside `<level>.hfregions/`.
 
 ## Pseudo-code
 

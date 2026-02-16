@@ -82,6 +82,16 @@ var paint_layer_add: Button = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/
 @onready
 var paint_layer_remove: Button = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/PaintLayerRow/PaintLayerRemove
 @onready
+var region_enable: CheckBox = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/RegionEnableRow/RegionEnable
+@onready
+var region_size_spin: SpinBox = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/RegionSizeRow/RegionSizeSpin
+@onready
+var region_radius_spin: SpinBox = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/RegionRadiusRow/RegionRadiusSpin
+@onready
+var region_memory_spin: SpinBox = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/RegionMemoryRow/RegionMemorySpin
+@onready
+var region_grid_toggle: CheckBox = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/RegionGridRow/RegionGridToggle
+@onready
 var heightmap_import: Button = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/HeightmapRow/HeightmapImport
 @onready
 var heightmap_generate: Button = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/HeightmapRow/HeightmapGenerate
@@ -109,8 +119,7 @@ var terrain_slot_c_scale: SpinBox = $Margin/VBox/MainTabs/FloorPaint/FloorPaintM
 var terrain_slot_d_button: Button = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotDRow/SlotDTexture
 @onready
 var terrain_slot_d_scale: SpinBox = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotDRow/SlotDScale
-@onready
-var terrain_slot_texture_dialog: FileDialog = $TerrainSlotTextureDialog
+@onready var terrain_slot_texture_dialog: FileDialog = $TerrainSlotTextureDialog
 @onready var heightmap_import_dialog: FileDialog = $HeightmapImportDialog
 @onready var grid_snap: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/GridRow/GridSnap
 @onready
@@ -194,10 +203,8 @@ var history_list: ItemList = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBo
 var export_settings_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/ExportSettings
 @onready
 var import_settings_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/ImportSettings
-@onready
-var settings_export_dialog: FileDialog = $SettingsExportDialog
-@onready
-var settings_import_dialog: FileDialog = $SettingsImportDialog
+@onready var settings_export_dialog: FileDialog = $SettingsExportDialog
+@onready var settings_import_dialog: FileDialog = $SettingsImportDialog
 
 @onready
 var perf_brushes_value: Label = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/PerformanceGrid/PerfBrushesValue
@@ -301,6 +308,7 @@ var terrain_slot_buttons: Array[Button] = []
 var terrain_slot_scales: Array[SpinBox] = []
 var _terrain_slot_pick_index: int = -1
 var _terrain_slot_refreshing := false
+var _region_settings_refreshing := false
 var _bake_disabled := false
 var tool_extrude_up: Button = null
 var tool_extrude_down: Button = null
@@ -472,6 +480,11 @@ func _apply_all_tooltips() -> void:
 	_set_tooltip(paint_layer_select, "Active floor paint layer")
 	_set_tooltip(paint_layer_add, "Add a new floor paint layer")
 	_set_tooltip(paint_layer_remove, "Remove the selected floor paint layer")
+	_set_tooltip(region_enable, "Enable region streaming for floor paint data")
+	_set_tooltip(region_size_spin, "Region size in grid cells (power of two recommended)")
+	_set_tooltip(region_radius_spin, "Streaming radius in regions around the cursor")
+	_set_tooltip(region_memory_spin, "Memory budget for loaded regions (MB)")
+	_set_tooltip(region_grid_toggle, "Show region boundaries in the viewport")
 	_set_tooltip(heightmap_import, "Import a heightmap image (PNG/EXR) for the active layer")
 	_set_tooltip(heightmap_generate, "Generate a procedural noise heightmap for the active layer")
 	_set_tooltip(height_scale_spin, "Height scale multiplier for the heightmap")
@@ -746,6 +759,37 @@ func _ready():
 	):
 		blend_strength_spin.value_changed.connect(_on_blend_strength_changed)
 	if (
+		region_enable
+		and not region_enable.toggled.is_connected(Callable(self, "_on_region_enable_toggled"))
+	):
+		region_enable.toggled.connect(_on_region_enable_toggled)
+	if (
+		region_size_spin
+		and not region_size_spin.value_changed.is_connected(
+			Callable(self, "_on_region_size_changed")
+		)
+	):
+		region_size_spin.value_changed.connect(_on_region_size_changed)
+	if (
+		region_radius_spin
+		and not region_radius_spin.value_changed.is_connected(
+			Callable(self, "_on_region_radius_changed")
+		)
+	):
+		region_radius_spin.value_changed.connect(_on_region_radius_changed)
+	if (
+		region_memory_spin
+		and not region_memory_spin.value_changed.is_connected(
+			Callable(self, "_on_region_memory_changed")
+		)
+	):
+		region_memory_spin.value_changed.connect(_on_region_memory_changed)
+	if (
+		region_grid_toggle
+		and not region_grid_toggle.toggled.is_connected(Callable(self, "_on_region_grid_toggled"))
+	):
+		region_grid_toggle.toggled.connect(_on_region_grid_toggled)
+	if (
 		blend_slot_select
 		and not blend_slot_select.item_selected.is_connected(
 			Callable(self, "_on_blend_slot_selected")
@@ -760,7 +804,9 @@ func _ready():
 		var spin = terrain_slot_scales[i]
 		if (
 			spin
-			and not spin.value_changed.is_connected(Callable(self, "_on_terrain_slot_scale_changed"))
+			and not spin.value_changed.is_connected(
+				Callable(self, "_on_terrain_slot_scale_changed")
+			)
 		):
 			spin.value_changed.connect(_on_terrain_slot_scale_changed.bind(i))
 	if (
@@ -1018,6 +1064,29 @@ func _sync_paint_layers_from_root() -> void:
 	if sig != paint_layers_signature:
 		paint_layers_signature = sig
 		_refresh_paint_layers()
+	_sync_region_settings_from_root()
+
+
+func _sync_region_settings_from_root() -> void:
+	_region_settings_refreshing = true
+	if not level_root:
+		_region_settings_refreshing = false
+		return
+	var settings: Dictionary = level_root.get_region_settings()
+	if settings.is_empty():
+		_region_settings_refreshing = false
+		return
+	if region_enable:
+		region_enable.button_pressed = bool(settings.get("enabled", false))
+	if region_size_spin:
+		region_size_spin.value = float(settings.get("region_size_cells", region_size_spin.value))
+	if region_radius_spin:
+		region_radius_spin.value = float(settings.get("streaming_radius", region_radius_spin.value))
+	if region_memory_spin:
+		region_memory_spin.value = float(settings.get("memory_budget_mb", region_memory_spin.value))
+	if region_grid_toggle:
+		region_grid_toggle.button_pressed = bool(settings.get("show_grid", false))
+	_region_settings_refreshing = false
 
 
 func _sync_materials_from_root() -> void:
@@ -1298,7 +1367,13 @@ func _commit_state_action(action_name: String, method_name: String, args: Array 
 	if not level_root:
 		return
 	HFUndoHelper.commit(
-		undo_redo, level_root, action_name, method_name, args, false, Callable(self, "record_history")
+		undo_redo,
+		level_root,
+		action_name,
+		method_name,
+		args,
+		false,
+		Callable(self, "record_history")
 	)
 
 
@@ -1306,7 +1381,13 @@ func _commit_full_state_action(action_name: String, method_name: String, args: A
 	if not level_root:
 		return
 	HFUndoHelper.commit(
-		undo_redo, level_root, action_name, method_name, args, true, Callable(self, "record_history")
+		undo_redo,
+		level_root,
+		action_name,
+		method_name,
+		args,
+		true,
+		Callable(self, "record_history")
 	)
 
 
@@ -1785,16 +1866,10 @@ func _populate_blend_slots() -> void:
 
 func _bind_terrain_slot_controls() -> void:
 	terrain_slot_buttons = [
-		terrain_slot_a_button,
-		terrain_slot_b_button,
-		terrain_slot_c_button,
-		terrain_slot_d_button
+		terrain_slot_a_button, terrain_slot_b_button, terrain_slot_c_button, terrain_slot_d_button
 	]
 	terrain_slot_scales = [
-		terrain_slot_a_scale,
-		terrain_slot_b_scale,
-		terrain_slot_c_scale,
-		terrain_slot_d_scale
+		terrain_slot_a_scale, terrain_slot_b_scale, terrain_slot_c_scale, terrain_slot_d_scale
 	]
 
 
@@ -1946,6 +2021,46 @@ func _on_blend_strength_changed(value: float) -> void:
 	level_root.paint_tool.blend_strength = value
 
 
+func _on_region_enable_toggled(enabled: bool) -> void:
+	if _region_settings_refreshing:
+		return
+	if not level_root:
+		return
+	level_root.set_region_streaming_enabled(enabled)
+
+
+func _on_region_size_changed(value: float) -> void:
+	if _region_settings_refreshing:
+		return
+	if not level_root:
+		return
+	level_root.set_region_size_cells(int(value))
+
+
+func _on_region_radius_changed(value: float) -> void:
+	if _region_settings_refreshing:
+		return
+	if not level_root:
+		return
+	level_root.set_region_streaming_radius(int(value))
+
+
+func _on_region_memory_changed(value: float) -> void:
+	if _region_settings_refreshing:
+		return
+	if not level_root:
+		return
+	level_root.set_region_memory_budget_mb(int(value))
+
+
+func _on_region_grid_toggled(enabled: bool) -> void:
+	if _region_settings_refreshing:
+		return
+	if not level_root:
+		return
+	level_root.set_region_show_grid(enabled)
+
+
 func _on_blend_slot_selected(index: int) -> void:
 	if not level_root or not level_root.paint_tool or not blend_slot_select:
 		return
@@ -2029,7 +2144,7 @@ func _set_terrain_slot_controls_enabled(enabled: bool) -> void:
 			button.disabled = not enabled
 	for spin in terrain_slot_scales:
 		if spin:
-			spin.disabled = not enabled
+			spin.editable = enabled
 
 
 func _on_material_selected(index: int) -> void:
@@ -2059,7 +2174,9 @@ func _on_material_remove() -> void:
 		return
 	if not level_root:
 		return
-	_commit_state_action("Remove Material", "remove_material_from_palette", [_selected_material_index])
+	_commit_state_action(
+		"Remove Material", "remove_material_from_palette", [_selected_material_index]
+	)
 	_selected_material_index = -1
 	_sync_materials_from_root()
 
@@ -2486,12 +2603,16 @@ func _collect_editor_settings() -> Dictionary:
 		"generate_lods": bake_generate_lods.button_pressed if bake_generate_lods else false,
 		"lightmap_uv2": bake_lightmap_uv2.button_pressed if bake_lightmap_uv2 else false,
 		"lightmap_texel_size": float(bake_lightmap_texel.value) if bake_lightmap_texel else 0.1,
-		"use_face_materials": bake_use_face_materials.button_pressed if bake_use_face_materials else false,
+		"use_face_materials":
+		bake_use_face_materials.button_pressed if bake_use_face_materials else false,
 		"navmesh": bake_navmesh.button_pressed if bake_navmesh else false,
 		"navmesh_cell_size": float(bake_navmesh_cell_size.value) if bake_navmesh_cell_size else 0.3,
-		"navmesh_cell_height": float(bake_navmesh_cell_height.value) if bake_navmesh_cell_height else 0.25,
-		"navmesh_agent_height": float(bake_navmesh_agent_height.value) if bake_navmesh_agent_height else 2.0,
-		"navmesh_agent_radius": float(bake_navmesh_agent_radius.value) if bake_navmesh_agent_radius else 0.4,
+		"navmesh_cell_height":
+		float(bake_navmesh_cell_height.value) if bake_navmesh_cell_height else 0.25,
+		"navmesh_agent_height":
+		float(bake_navmesh_agent_height.value) if bake_navmesh_agent_height else 2.0,
+		"navmesh_agent_radius":
+		float(bake_navmesh_agent_radius.value) if bake_navmesh_agent_radius else 0.4,
 		"collision_mask": get_collision_layer_mask()
 	}
 	if level_root and _root_has_property("bake_chunk_size"):
@@ -2519,11 +2640,15 @@ func _apply_editor_settings(data: Dictionary) -> void:
 		if level_root:
 			level_root.drag_size_default = Vector3(size_x.value, size_y.value, size_z.value)
 			if _root_has_property("brush_size_default"):
-				level_root.set("brush_size_default", Vector3(size_x.value, size_y.value, size_z.value))
+				level_root.set(
+					"brush_size_default", Vector3(size_x.value, size_y.value, size_z.value)
+				)
 	if data.has("bake") and data["bake"] is Dictionary:
 		var bake = data["bake"]
 		if bake_merge_meshes:
-			bake_merge_meshes.button_pressed = bool(bake.get("merge_meshes", bake_merge_meshes.button_pressed))
+			bake_merge_meshes.button_pressed = bool(
+				bake.get("merge_meshes", bake_merge_meshes.button_pressed)
+			)
 		if bake_generate_lods:
 			bake_generate_lods.button_pressed = bool(
 				bake.get("generate_lods", bake_generate_lods.button_pressed)

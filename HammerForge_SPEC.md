@@ -54,6 +54,7 @@ HammerForge uses a coordinator + subsystems pattern. `LevelRoot` is a thin coord
 ### Other Modules
 
 - `addons/hammerforge/paint/*`: floor paint grid, layers, tools, inference, geometry synthesis, reconciliation, heightmap integration
+- `addons/hammerforge/paint/hf_region_manager.gd`: region streaming helpers (region bounds, radius, index)
 - `addons/hammerforge/hflevel_io.gd`: variant encoding/decoding for .hflevel format
 - `addons/hammerforge/map_io.gd`: .map file import/export
 - `addons/hammerforge/prefab_factory.gd`: advanced shape generation (wedges, prisms, platonic solids, etc.)
@@ -138,6 +139,12 @@ Auto-Connectors
 Foliage Populator
 - `HFFoliagePopulator` scatters instances via MultiMeshInstance3D.
 - Filters by height range, slope threshold; configurable density, scale, rotation, seed.
+
+## Region Streaming (Floor Paint)
+- Floor paint chunks are grouped into regions (default 512x512 cells).
+- Streaming loads regions within a radius of the cursor and unloads distant regions.
+- Region files (`.hfr`) store per-region chunk data to keep `.hflevel` small.
+- Region index is stored in the `.hflevel` state under `terrain_regions`.
 
 ## Entities
 - Entities live under LevelRoot/Entities or are tagged `is_entity`.

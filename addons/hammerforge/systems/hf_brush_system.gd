@@ -436,6 +436,8 @@ func _clear_generated() -> void:
 		for child in root.generated_heightmap_floors.get_children():
 			root.generated_heightmap_floors.remove_child(child)
 			child.queue_free()
+	if root.generated_region_overlay:
+		root.generated_region_overlay.mesh = null
 
 
 func _clear_committed_cuts() -> void:

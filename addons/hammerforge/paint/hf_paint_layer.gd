@@ -143,6 +143,10 @@ func get_chunk_ids() -> Array[Vector2i]:
 	return out
 
 
+func has_chunk(cid: Vector2i) -> bool:
+	return _chunks.has(cid)
+
+
 func get_chunk_bits(cid: Vector2i) -> PackedByteArray:
 	var chunk: HFChunkData = _chunks.get(cid) as HFChunkData
 	if chunk == null:
@@ -199,6 +203,29 @@ func set_chunk_blend_weights_slot(cid: Vector2i, slot: int, data: PackedByteArra
 func clear_chunks() -> void:
 	_chunks.clear()
 	_dirty_chunks.clear()
+
+
+func remove_chunk(cid: Vector2i) -> bool:
+	if not _chunks.has(cid):
+		return false
+	_chunks.erase(cid)
+	_dirty_chunks.erase(cid)
+	return true
+
+
+func remove_chunks_in_range(min_chunk: Vector2i, max_chunk: Vector2i) -> Array[Vector2i]:
+	var removed: Array[Vector2i] = []
+	for cid in _chunks.keys():
+		var c := cid as Vector2i
+		if c.x < min_chunk.x or c.x > max_chunk.x:
+			continue
+		if c.y < min_chunk.y or c.y > max_chunk.y:
+			continue
+		removed.append(c)
+	for cid in removed:
+		_chunks.erase(cid)
+		_dirty_chunks.erase(cid)
+	return removed
 
 
 func get_memory_bytes() -> int:

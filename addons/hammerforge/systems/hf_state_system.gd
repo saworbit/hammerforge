@@ -25,7 +25,7 @@ func capture_state(include_transient: bool = true) -> Dictionary:
 	state["csg_visible"] = root.draft_brushes_node.visible if root.draft_brushes_node else true
 	state["pending_visible"] = root.pending_node.visible if root.pending_node else true
 	state["baked_present"] = root.baked_container != null
-	state["paint_layers"] = capture_paint_layers()
+	state["paint_layers"] = capture_paint_layers(true)
 	state["paint_active_layer"] = root.paint_layers.active_layer_index if root.paint_layers else 0
 	if include_transient:
 		state["face_selection"] = root.face_selection.duplicate(true)
@@ -61,9 +61,17 @@ func restore_state(state: Dictionary) -> void:
 		return
 	root.clear_brushes()
 	root.entity_system.clear_entities()
+	var region_data = state.get("terrain_regions", {})
+	if region_data is Dictionary and not region_data.is_empty():
+		if root.paint_system:
+			root.paint_system.region_streaming_enabled = true
+			root.paint_system.load_region_index(region_data)
 	root.paint_system.restore_paint_layers(
 		state.get("paint_layers", []), int(state.get("paint_active_layer", 0))
 	)
+	if region_data is Dictionary and not region_data.is_empty():
+		if root.paint_system:
+			root.paint_system.load_initial_regions()
 	if state.has("materials"):
 		root.set_materials(state.get("materials", []))
 	if state.has("face_selection"):
@@ -112,6 +120,9 @@ func restore_full_state(bundle: Dictionary) -> void:
 
 func capture_hflevel_state() -> Dictionary:
 	var state = capture_state(false)
+	if root.paint_system and root.paint_system.region_streaming_enabled:
+		state["terrain_regions"] = root.paint_system.capture_region_index()
+		state["paint_layers"] = capture_paint_layers(false)
 	var data: Dictionary = {
 		"version": 1,
 		"saved_at": Time.get_datetime_string_from_system(),
@@ -144,7 +155,37 @@ func capture_hflevel_settings() -> Dictionary:
 		"bake_navmesh_agent_height": root.bake_navmesh_agent_height,
 		"bake_navmesh_agent_radius": root.bake_navmesh_agent_radius,
 		"bake_use_thread_pool": root.bake_use_thread_pool,
-		"hflevel_autosave_keep": root.hflevel_autosave_keep
+		"hflevel_autosave_keep": root.hflevel_autosave_keep,
+		"region_streaming_enabled":
+		(
+			root.paint_system.region_streaming_enabled
+			if root.paint_system
+			else false
+		),
+		"region_size_cells":
+		(
+			root.paint_system.region_manager.region_size_cells
+			if root.paint_system and root.paint_system.region_manager
+			else 512
+		),
+		"region_streaming_radius":
+		(
+			root.paint_system.region_manager.streaming_radius
+			if root.paint_system and root.paint_system.region_manager
+			else 2
+		),
+		"region_memory_budget_mb":
+		(
+			root.paint_system.region_memory_budget_mb
+			if root.paint_system
+			else 256
+		),
+		"region_show_grid":
+		(
+			root.paint_system.region_show_grid
+			if root.paint_system
+			else false
+		)
 	}
 
 
@@ -217,6 +258,32 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 		root.hflevel_autosave_keep = int(
 			settings.get("hflevel_autosave_keep", root.hflevel_autosave_keep)
 		)
+	if root.paint_system:
+		if settings.has("region_streaming_enabled"):
+			root.paint_system.region_streaming_enabled = bool(
+				settings.get("region_streaming_enabled", root.paint_system.region_streaming_enabled)
+			)
+		if settings.has("region_size_cells"):
+			root.paint_system.set_region_size_cells(
+				int(settings.get("region_size_cells", root.paint_system.region_manager.region_size_cells))
+			)
+		if settings.has("region_streaming_radius"):
+			root.paint_system.set_region_streaming_radius(
+				int(
+					settings.get(
+						"region_streaming_radius",
+						root.paint_system.region_manager.streaming_radius
+					)
+				)
+			)
+		if settings.has("region_memory_budget_mb"):
+			root.paint_system.set_region_memory_budget_mb(
+				int(settings.get("region_memory_budget_mb", root.paint_system.region_memory_budget_mb))
+			)
+		if settings.has("region_show_grid"):
+			root.paint_system.set_region_show_grid(
+				bool(settings.get("region_show_grid", root.paint_system.region_show_grid))
+			)
 
 
 func capture_floor_info() -> Dictionary:
@@ -251,7 +318,7 @@ func restore_floor_info(info: Dictionary) -> void:
 	floor.use_collision = bool(info.get("use_collision", true))
 
 
-func capture_paint_layers() -> Array:
+func capture_paint_layers(include_chunks: bool = true) -> Array:
 	var out: Array = []
 	if not root.paint_layers:
 		return out
@@ -278,37 +345,38 @@ func capture_paint_layers() -> Array:
 		if layer.has_heightmap():
 			entry["heightmap_b64"] = HFHeightmapIO.encode_to_base64(layer.heightmap)
 			entry["height_scale"] = layer.height_scale
-		for cid in layer.get_chunk_ids():
-			var bits = layer.get_chunk_bits(cid)
-			var bytes: Array = []
-			for b in bits:
-				bytes.append(int(b))
-			var mat_ids = layer.get_chunk_material_ids(cid)
-			var mat_bytes: Array = []
-			for b in mat_ids:
-				mat_bytes.append(int(b))
-			var blends = layer.get_chunk_blend_weights(cid)
-			var blend_bytes: Array = []
-			for b in blends:
-				blend_bytes.append(int(b))
-			var blends_2 = layer.get_chunk_blend_weights_slot(cid, 2)
-			var blend2_bytes: Array = []
-			for b in blends_2:
-				blend2_bytes.append(int(b))
-			var blends_3 = layer.get_chunk_blend_weights_slot(cid, 3)
-			var blend3_bytes: Array = []
-			for b in blends_3:
-				blend3_bytes.append(int(b))
-			entry["chunks"].append(
-				{
-					"cx": cid.x,
-					"cy": cid.y,
-					"bits": bytes,
-					"material_ids": mat_bytes,
-					"blend_weights": blend_bytes,
-					"blend_weights_2": blend2_bytes,
-					"blend_weights_3": blend3_bytes
-				}
-			)
+		if include_chunks:
+			for cid in layer.get_chunk_ids():
+				var bits = layer.get_chunk_bits(cid)
+				var bytes: Array = []
+				for b in bits:
+					bytes.append(int(b))
+				var mat_ids = layer.get_chunk_material_ids(cid)
+				var mat_bytes: Array = []
+				for b in mat_ids:
+					mat_bytes.append(int(b))
+				var blends = layer.get_chunk_blend_weights(cid)
+				var blend_bytes: Array = []
+				for b in blends:
+					blend_bytes.append(int(b))
+				var blends_2 = layer.get_chunk_blend_weights_slot(cid, 2)
+				var blend2_bytes: Array = []
+				for b in blends_2:
+					blend2_bytes.append(int(b))
+				var blends_3 = layer.get_chunk_blend_weights_slot(cid, 3)
+				var blend3_bytes: Array = []
+				for b in blends_3:
+					blend3_bytes.append(int(b))
+				entry["chunks"].append(
+					{
+						"cx": cid.x,
+						"cy": cid.y,
+						"bits": bytes,
+						"material_ids": mat_bytes,
+						"blend_weights": blend_bytes,
+						"blend_weights_2": blend2_bytes,
+						"blend_weights_3": blend3_bytes
+					}
+				)
 		out.append(entry)
 	return out

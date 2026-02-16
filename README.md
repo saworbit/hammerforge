@@ -63,6 +63,7 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 - **Heightmaps:** import PNG/EXR or generate procedural noise per layer
 - **Displaced meshes:** per-vertex heightmap displacement via SurfaceTool
 - **Material blending:** four-slot shader with per-cell blend weights (UV2 blend map, RGB = slots B/C/D)
+- **Region streaming:** sparse loading of paint chunks for large worlds
 - **Auto-connectors:** ramp and stair mesh generation between layers
 - **Foliage scatter:** height/slope-filtered MultiMeshInstance3D placement
 

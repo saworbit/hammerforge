@@ -87,6 +87,7 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 - Test paint tool shortcuts: B/E/R/L/K in Paint Mode.
 - Verify live paint preview while dragging.
 - Switch paint layers and ensure isolation.
+- Enable Region Streaming, paint across regions, and verify `.hfr` files are created on save.
 - Import a heightmap (PNG/EXR) or generate procedural noise on a paint layer.
 - Verify displaced mesh appears under `Generated/HeightmapFloors`.
 - Adjust Height Scale and Layer Y spinboxes; confirm mesh updates.
