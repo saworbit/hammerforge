@@ -17,10 +17,7 @@ var height_scale: float = 10.0
 var terrain_slot_paths: Array[String] = ["", "", "", ""]
 var terrain_slot_uv_scales: Array[float] = [1.0, 1.0, 1.0, 1.0]
 var terrain_slot_tints: Array[Color] = [
-	Color(0.35, 0.55, 0.25),
-	Color(0.55, 0.45, 0.3),
-	Color(0.45, 0.5, 0.55),
-	Color(0.5, 0.5, 0.5)
+	Color(0.35, 0.55, 0.25), Color(0.55, 0.45, 0.3), Color(0.45, 0.5, 0.55), Color(0.5, 0.5, 0.5)
 ]
 
 # Chunk storage: key -> ChunkData

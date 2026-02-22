@@ -177,11 +177,7 @@ func capture_hflevel_settings() -> Dictionary:
 		"bake_use_thread_pool": root.bake_use_thread_pool,
 		"hflevel_autosave_keep": root.hflevel_autosave_keep,
 		"region_streaming_enabled":
-		(
-			root.paint_system.region_streaming_enabled
-			if root.paint_system
-			else false
-		),
+		root.paint_system.region_streaming_enabled if root.paint_system else false,
 		"region_size_cells":
 		(
 			root.paint_system.region_manager.region_size_cells
@@ -195,21 +191,14 @@ func capture_hflevel_settings() -> Dictionary:
 			else 2
 		),
 		"region_memory_budget_mb":
-		(
-			root.paint_system.region_memory_budget_mb
-			if root.paint_system
-			else 256
-		),
-		"region_show_grid":
-		(
-			root.paint_system.region_show_grid
-			if root.paint_system
-			else false
-		),
+		root.paint_system.region_memory_budget_mb if root.paint_system else 256,
+		"region_show_grid": root.paint_system.region_show_grid if root.paint_system else false,
 		"texture_lock": root.texture_lock,
 		"cordon_enabled": root.cordon_enabled,
-		"cordon_aabb_pos": [root.cordon_aabb.position.x, root.cordon_aabb.position.y, root.cordon_aabb.position.z],
-		"cordon_aabb_size": [root.cordon_aabb.size.x, root.cordon_aabb.size.y, root.cordon_aabb.size.z]
+		"cordon_aabb_pos":
+		[root.cordon_aabb.position.x, root.cordon_aabb.position.y, root.cordon_aabb.position.z],
+		"cordon_aabb_size":
+		[root.cordon_aabb.size.x, root.cordon_aabb.size.y, root.cordon_aabb.size.z]
 	}
 
 
@@ -289,20 +278,27 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 			)
 		if settings.has("region_size_cells"):
 			root.paint_system.set_region_size_cells(
-				int(settings.get("region_size_cells", root.paint_system.region_manager.region_size_cells))
+				int(
+					settings.get(
+						"region_size_cells", root.paint_system.region_manager.region_size_cells
+					)
+				)
 			)
 		if settings.has("region_streaming_radius"):
 			root.paint_system.set_region_streaming_radius(
 				int(
 					settings.get(
-						"region_streaming_radius",
-						root.paint_system.region_manager.streaming_radius
+						"region_streaming_radius", root.paint_system.region_manager.streaming_radius
 					)
 				)
 			)
 		if settings.has("region_memory_budget_mb"):
 			root.paint_system.set_region_memory_budget_mb(
-				int(settings.get("region_memory_budget_mb", root.paint_system.region_memory_budget_mb))
+				int(
+					settings.get(
+						"region_memory_budget_mb", root.paint_system.region_memory_budget_mb
+					)
+				)
 			)
 		if settings.has("region_show_grid"):
 			root.paint_system.set_region_show_grid(

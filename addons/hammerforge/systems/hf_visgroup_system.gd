@@ -208,7 +208,13 @@ func capture_visgroups() -> Dictionary:
 		var vg = visgroups[key]
 		out[key] = {
 			"visible": bool(vg.get("visible", true)),
-			"color": [vg.get("color", Color.WHITE).r, vg.get("color", Color.WHITE).g, vg.get("color", Color.WHITE).b, vg.get("color", Color.WHITE).a]
+			"color":
+			[
+				vg.get("color", Color.WHITE).r,
+				vg.get("color", Color.WHITE).g,
+				vg.get("color", Color.WHITE).b,
+				vg.get("color", Color.WHITE).a
+			]
 		}
 	return out
 
@@ -225,10 +231,7 @@ func restore_visgroups(data: Dictionary) -> void:
 		var c_arr = entry.get("color", [1, 1, 1, 1])
 		if c_arr is Array and c_arr.size() >= 4:
 			color = Color(float(c_arr[0]), float(c_arr[1]), float(c_arr[2]), float(c_arr[3]))
-		visgroups[str(key)] = {
-			"visible": bool(entry.get("visible", true)),
-			"color": color
-		}
+		visgroups[str(key)] = {"visible": bool(entry.get("visible", true)), "color": color}
 	refresh_visibility()
 
 

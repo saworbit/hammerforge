@@ -77,9 +77,7 @@ func validate(auto_fix: bool = false) -> Dictionary:
 			issues.append("Zero-size brush: %s" % brush.name)
 			if auto_fix:
 				var next = Vector3(
-					max(0.1, abs(size.x)),
-					max(0.1, abs(size.y)),
-					max(0.1, abs(size.z))
+					max(0.1, abs(size.x)), max(0.1, abs(size.y)), max(0.1, abs(size.z))
 				)
 				brush.size = next
 				fixed += 1

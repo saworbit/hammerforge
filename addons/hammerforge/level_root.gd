@@ -458,7 +458,6 @@ func get_group_members(group_name: String) -> Array:
 # Cordon API
 # ===========================================================================
 
-
 var cordon_wireframe: MeshInstance3D = null
 
 
@@ -517,9 +516,18 @@ func update_cordon_visual() -> void:
 		Vector3(min_pt.x, max_pt.y, max_pt.z)
 	]
 	var edges = [
-		[0, 1], [1, 2], [2, 3], [3, 0],
-		[4, 5], [5, 6], [6, 7], [7, 4],
-		[0, 4], [1, 5], [2, 6], [3, 7]
+		[0, 1],
+		[1, 2],
+		[2, 3],
+		[3, 0],
+		[4, 5],
+		[5, 6],
+		[6, 7],
+		[7, 4],
+		[0, 4],
+		[1, 5],
+		[2, 6],
+		[3, 7]
 	]
 	for edge in edges:
 		im.surface_add_vertex(corners[edge[0]])

@@ -36,12 +36,10 @@ func region_bounds_chunks(region_id: Vector2i) -> Rect2i:
 	var min_cell := cell_bounds.position
 	var max_cell := cell_bounds.position + cell_bounds.size - Vector2i.ONE
 	var min_chunk := Vector2i(
-		floori(float(min_cell.x) / float(chunk_size)),
-		floori(float(min_cell.y) / float(chunk_size))
+		floori(float(min_cell.x) / float(chunk_size)), floori(float(min_cell.y) / float(chunk_size))
 	)
 	var max_chunk := Vector2i(
-		floori(float(max_cell.x) / float(chunk_size)),
-		floori(float(max_cell.y) / float(chunk_size))
+		floori(float(max_cell.x) / float(chunk_size)), floori(float(max_cell.y) / float(chunk_size))
 	)
 	var size := Vector2i(max_chunk.x - min_chunk.x + 1, max_chunk.y - min_chunk.y + 1)
 	return Rect2i(min_chunk, size)

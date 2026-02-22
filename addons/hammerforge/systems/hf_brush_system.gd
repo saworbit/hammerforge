@@ -536,8 +536,7 @@ func set_brush_transform_by_id(brush_id: String, size: Vector3, position: Vector
 
 
 func _adjust_face_uvs_for_transform(
-	draft: DraftBrush, old_size: Vector3, new_size: Vector3,
-	old_pos: Vector3, new_pos: Vector3
+	draft: DraftBrush, old_size: Vector3, new_size: Vector3, old_pos: Vector3, new_pos: Vector3
 ) -> void:
 	var pos_delta = new_pos - old_pos
 	var size_ratio = Vector3(
