@@ -313,6 +313,26 @@ var _bake_disabled := false
 var tool_extrude_up: Button = null
 var tool_extrude_down: Button = null
 
+# Wave 1 UI controls
+var _selection_nodes: Array = []
+var texture_lock_check: CheckBox = null
+var visgroup_list: ItemList = null
+var visgroup_name_input: LineEdit = null
+var visgroup_add_btn: Button = null
+var visgroup_add_sel_btn: Button = null
+var visgroup_rem_sel_btn: Button = null
+var visgroup_delete_btn: Button = null
+var group_sel_btn: Button = null
+var ungroup_btn: Button = null
+var cordon_enabled_check: CheckBox = null
+var cordon_min_x: SpinBox = null
+var cordon_min_y: SpinBox = null
+var cordon_min_z: SpinBox = null
+var cordon_max_x: SpinBox = null
+var cordon_max_y: SpinBox = null
+var cordon_max_z: SpinBox = null
+var cordon_from_sel_btn: Button = null
+
 
 func _is_level_root(node: Node) -> bool:
 	return node != null and node is LevelRootType
@@ -985,6 +1005,9 @@ func _ready():
 	_apply_pro_styles()
 	_apply_all_tooltips()
 	_sync_bake_option_visibility()
+	_setup_texture_lock_ui()
+	_setup_visgroup_ui()
+	_setup_cordon_ui()
 	set_process(true)
 
 
@@ -1266,6 +1289,10 @@ func set_selection_count(count: int) -> void:
 		selection_label.text = "Sel: 1 brush"
 	else:
 		selection_label.text = "Sel: %d brushes" % count
+
+
+func set_selection_nodes(nodes: Array) -> void:
+	_selection_nodes = nodes
 
 
 func _on_grid_snap_value_changed(value: float) -> void:
@@ -1594,6 +1621,25 @@ func _sync_grid_settings_from_root() -> void:
 		autosave_minutes.value = float(connected_root.get("hflevel_autosave_minutes"))
 	if autosave_keep and _root_has_property("hflevel_autosave_keep"):
 		autosave_keep.value = float(connected_root.get("hflevel_autosave_keep"))
+	if texture_lock_check and _root_has_property("texture_lock"):
+		texture_lock_check.button_pressed = bool(connected_root.get("texture_lock"))
+	if cordon_enabled_check and _root_has_property("cordon_enabled"):
+		cordon_enabled_check.button_pressed = bool(connected_root.get("cordon_enabled"))
+	if _root_has_property("cordon_aabb"):
+		var aabb: AABB = connected_root.get("cordon_aabb")
+		if cordon_min_x:
+			cordon_min_x.value = aabb.position.x
+		if cordon_min_y:
+			cordon_min_y.value = aabb.position.y
+		if cordon_min_z:
+			cordon_min_z.value = aabb.position.z
+		if cordon_max_x:
+			cordon_max_x.value = aabb.position.x + aabb.size.x
+		if cordon_max_y:
+			cordon_max_y.value = aabb.position.y + aabb.size.y
+		if cordon_max_z:
+			cordon_max_z.value = aabb.position.z + aabb.size.z
+	refresh_visgroup_ui()
 	syncing_grid = false
 	_sync_bake_option_visibility()
 
@@ -3132,3 +3178,333 @@ func _delete_preset(button: Button) -> void:
 		return
 	_load_presets()
 	preset_context_button = null
+
+
+# ===========================================================================
+# Wave 1: Texture Lock UI
+# ===========================================================================
+
+
+func _setup_texture_lock_ui() -> void:
+	var build_vbox = build_tab.get_node_or_null("BuildMargin/BuildVBox")
+	if not build_vbox:
+		return
+	texture_lock_check = CheckBox.new()
+	texture_lock_check.text = "Texture Lock"
+	texture_lock_check.button_pressed = true
+	texture_lock_check.tooltip_text = "Preserve UV alignment when moving or resizing brushes"
+	texture_lock_check.toggled.connect(_on_texture_lock_toggled)
+	var follow_idx = follow_grid.get_index() if follow_grid else -1
+	if follow_idx >= 0:
+		build_vbox.add_child(texture_lock_check)
+		build_vbox.move_child(texture_lock_check, follow_idx + 1)
+	else:
+		build_vbox.add_child(texture_lock_check)
+
+
+func _on_texture_lock_toggled(pressed: bool) -> void:
+	if syncing_grid:
+		return
+	if level_root and _root_has_property("texture_lock"):
+		level_root.set("texture_lock", pressed)
+
+
+# ===========================================================================
+# Wave 1: Visgroups & Groups UI
+# ===========================================================================
+
+
+func _setup_visgroup_ui() -> void:
+	var manage_vbox = manage_tab.get_node_or_null("ManageMargin/ManageVBox")
+	if not manage_vbox:
+		return
+
+	# --- Visgroups section ---
+	var sep = HSeparator.new()
+	manage_vbox.add_child(sep)
+
+	var vg_label = Label.new()
+	vg_label.text = "Visgroups"
+	vg_label.add_theme_font_size_override("font_size", 13)
+	manage_vbox.add_child(vg_label)
+
+	visgroup_list = ItemList.new()
+	visgroup_list.custom_minimum_size.y = 80
+	visgroup_list.select_mode = ItemList.SELECT_SINGLE
+	visgroup_list.allow_reselect = true
+	manage_vbox.add_child(visgroup_list)
+	visgroup_list.item_clicked.connect(_on_visgroup_item_clicked)
+
+	var name_row = HBoxContainer.new()
+	visgroup_name_input = LineEdit.new()
+	visgroup_name_input.placeholder_text = "Visgroup name"
+	visgroup_name_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_row.add_child(visgroup_name_input)
+	visgroup_add_btn = Button.new()
+	visgroup_add_btn.text = "New"
+	visgroup_add_btn.tooltip_text = "Create a new visgroup"
+	visgroup_add_btn.pressed.connect(_on_visgroup_add)
+	name_row.add_child(visgroup_add_btn)
+	manage_vbox.add_child(name_row)
+
+	var vg_btn_row = HBoxContainer.new()
+	visgroup_add_sel_btn = Button.new()
+	visgroup_add_sel_btn.text = "Add Sel"
+	visgroup_add_sel_btn.tooltip_text = "Add selected brushes/entities to the highlighted visgroup"
+	visgroup_add_sel_btn.pressed.connect(_on_visgroup_add_selection)
+	vg_btn_row.add_child(visgroup_add_sel_btn)
+	visgroup_rem_sel_btn = Button.new()
+	visgroup_rem_sel_btn.text = "Rem Sel"
+	visgroup_rem_sel_btn.tooltip_text = "Remove selected brushes/entities from the highlighted visgroup"
+	visgroup_rem_sel_btn.pressed.connect(_on_visgroup_remove_selection)
+	vg_btn_row.add_child(visgroup_rem_sel_btn)
+	visgroup_delete_btn = Button.new()
+	visgroup_delete_btn.text = "Delete"
+	visgroup_delete_btn.tooltip_text = "Delete the highlighted visgroup"
+	visgroup_delete_btn.pressed.connect(_on_visgroup_delete)
+	vg_btn_row.add_child(visgroup_delete_btn)
+	manage_vbox.add_child(vg_btn_row)
+
+	# --- Groups section ---
+	var grp_label = Label.new()
+	grp_label.text = "Groups"
+	grp_label.add_theme_font_size_override("font_size", 13)
+	manage_vbox.add_child(grp_label)
+
+	var grp_btn_row = HBoxContainer.new()
+	group_sel_btn = Button.new()
+	group_sel_btn.text = "Group Sel (Ctrl+G)"
+	group_sel_btn.tooltip_text = "Group the current selection"
+	group_sel_btn.pressed.connect(_on_group_selection)
+	grp_btn_row.add_child(group_sel_btn)
+	ungroup_btn = Button.new()
+	ungroup_btn.text = "Ungroup (Ctrl+U)"
+	ungroup_btn.tooltip_text = "Remove selected brushes/entities from their group"
+	ungroup_btn.pressed.connect(_on_ungroup_selection)
+	grp_btn_row.add_child(ungroup_btn)
+	manage_vbox.add_child(grp_btn_row)
+
+
+func refresh_visgroup_ui() -> void:
+	if not visgroup_list:
+		return
+	visgroup_list.clear()
+	if not level_root or not level_root.get("visgroup_system"):
+		return
+	var sys = level_root.get("visgroup_system")
+	if not sys:
+		return
+	var names: PackedStringArray = sys.get_visgroup_names()
+	for vg_name in names:
+		var visible = sys.is_visgroup_visible(vg_name)
+		var icon_text = "[V] " if visible else "[H] "
+		visgroup_list.add_item(icon_text + vg_name)
+
+
+func _get_selected_visgroup_name() -> String:
+	if not visgroup_list:
+		return ""
+	var selected = visgroup_list.get_selected_items()
+	if selected.is_empty():
+		return ""
+	var text = visgroup_list.get_item_text(selected[0])
+	# Strip the [V]/[H] prefix
+	if text.begins_with("[V] "):
+		return text.substr(4)
+	if text.begins_with("[H] "):
+		return text.substr(4)
+	return text
+
+
+func _on_visgroup_add() -> void:
+	if not visgroup_name_input:
+		return
+	var vg_name = visgroup_name_input.text.strip_edges()
+	if vg_name == "" or not level_root:
+		return
+	level_root.create_visgroup(vg_name)
+	visgroup_name_input.text = ""
+	refresh_visgroup_ui()
+
+
+func _on_visgroup_item_clicked(index: int, _at_position: Vector2, mouse_button_index: int) -> void:
+	if mouse_button_index != MOUSE_BUTTON_LEFT:
+		return
+	# Double-click or single click toggles visibility
+	var text = visgroup_list.get_item_text(index)
+	var vg_name = ""
+	var was_visible = true
+	if text.begins_with("[V] "):
+		vg_name = text.substr(4)
+		was_visible = true
+	elif text.begins_with("[H] "):
+		vg_name = text.substr(4)
+		was_visible = false
+	else:
+		return
+	if vg_name == "" or not level_root:
+		return
+	level_root.set_visgroup_visible(vg_name, not was_visible)
+	refresh_visgroup_ui()
+	# Reselect same index
+	if index < visgroup_list.item_count:
+		visgroup_list.select(index)
+
+
+func _on_visgroup_add_selection() -> void:
+	var vg_name = _get_selected_visgroup_name()
+	if vg_name == "" or not level_root:
+		return
+	level_root.add_selection_to_visgroup(vg_name, _selection_nodes)
+	refresh_visgroup_ui()
+
+
+func _on_visgroup_remove_selection() -> void:
+	var vg_name = _get_selected_visgroup_name()
+	if vg_name == "" or not level_root:
+		return
+	level_root.remove_selection_from_visgroup(vg_name, _selection_nodes)
+	refresh_visgroup_ui()
+
+
+func _on_visgroup_delete() -> void:
+	var vg_name = _get_selected_visgroup_name()
+	if vg_name == "" or not level_root:
+		return
+	level_root.remove_visgroup(vg_name)
+	refresh_visgroup_ui()
+
+
+func _on_group_selection() -> void:
+	if not level_root or _selection_nodes.size() < 2:
+		return
+	var group_name = "group_%d" % Time.get_ticks_usec()
+	level_root.group_selection(group_name, _selection_nodes)
+	record_history("Group Selection")
+
+
+func _on_ungroup_selection() -> void:
+	if not level_root or _selection_nodes.is_empty():
+		return
+	level_root.ungroup_nodes(_selection_nodes)
+	record_history("Ungroup Selection")
+
+
+# ===========================================================================
+# Wave 1: Cordon (Partial Bake) UI
+# ===========================================================================
+
+
+func _setup_cordon_ui() -> void:
+	var manage_vbox = manage_tab.get_node_or_null("ManageMargin/ManageVBox")
+	if not manage_vbox:
+		return
+
+	var sep = HSeparator.new()
+	manage_vbox.add_child(sep)
+
+	var label = Label.new()
+	label.text = "Cordon (Partial Bake)"
+	label.add_theme_font_size_override("font_size", 13)
+	manage_vbox.add_child(label)
+
+	cordon_enabled_check = CheckBox.new()
+	cordon_enabled_check.text = "Enable Cordon"
+	cordon_enabled_check.tooltip_text = "Only bake geometry inside the cordon AABB"
+	cordon_enabled_check.toggled.connect(_on_cordon_toggled)
+	manage_vbox.add_child(cordon_enabled_check)
+
+	var min_label = Label.new()
+	min_label.text = "Min (X, Y, Z):"
+	manage_vbox.add_child(min_label)
+
+	var min_row = HBoxContainer.new()
+	cordon_min_x = _make_cordon_spin(-9999, 9999, -128)
+	cordon_min_y = _make_cordon_spin(-9999, 9999, -128)
+	cordon_min_z = _make_cordon_spin(-9999, 9999, -128)
+	min_row.add_child(cordon_min_x)
+	min_row.add_child(cordon_min_y)
+	min_row.add_child(cordon_min_z)
+	manage_vbox.add_child(min_row)
+
+	var max_label = Label.new()
+	max_label.text = "Max (X, Y, Z):"
+	manage_vbox.add_child(max_label)
+
+	var max_row = HBoxContainer.new()
+	cordon_max_x = _make_cordon_spin(-9999, 9999, 128)
+	cordon_max_y = _make_cordon_spin(-9999, 9999, 128)
+	cordon_max_z = _make_cordon_spin(-9999, 9999, 128)
+	max_row.add_child(cordon_max_x)
+	max_row.add_child(cordon_max_y)
+	max_row.add_child(cordon_max_z)
+	manage_vbox.add_child(max_row)
+
+	cordon_from_sel_btn = Button.new()
+	cordon_from_sel_btn.text = "Set from Selection"
+	cordon_from_sel_btn.tooltip_text = "Set cordon bounds to encompass the selected brushes"
+	cordon_from_sel_btn.pressed.connect(_on_cordon_from_selection)
+	manage_vbox.add_child(cordon_from_sel_btn)
+
+
+func _make_cordon_spin(min_val: float, max_val: float, default_val: float) -> SpinBox:
+	var spin = SpinBox.new()
+	spin.min_value = min_val
+	spin.max_value = max_val
+	spin.value = default_val
+	spin.step = 1.0
+	spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	spin.value_changed.connect(_on_cordon_value_changed)
+	return spin
+
+
+func _on_cordon_toggled(pressed: bool) -> void:
+	if syncing_grid:
+		return
+	if level_root and _root_has_property("cordon_enabled"):
+		level_root.set("cordon_enabled", pressed)
+		if level_root.has_method("update_cordon_visual"):
+			level_root.update_cordon_visual()
+
+
+func _on_cordon_value_changed(_value: float) -> void:
+	if syncing_grid:
+		return
+	if not level_root or not _root_has_property("cordon_aabb"):
+		return
+	var min_pt = Vector3(
+		cordon_min_x.value if cordon_min_x else -128,
+		cordon_min_y.value if cordon_min_y else -128,
+		cordon_min_z.value if cordon_min_z else -128
+	)
+	var max_pt = Vector3(
+		cordon_max_x.value if cordon_max_x else 128,
+		cordon_max_y.value if cordon_max_y else 128,
+		cordon_max_z.value if cordon_max_z else 128
+	)
+	level_root.set("cordon_aabb", AABB(min_pt, max_pt - min_pt))
+	if level_root.has_method("update_cordon_visual"):
+		level_root.update_cordon_visual()
+
+
+func _on_cordon_from_selection() -> void:
+	if not level_root or _selection_nodes.is_empty():
+		return
+	level_root.set_cordon_from_selection(_selection_nodes)
+	# Sync spinboxes from updated AABB
+	if _root_has_property("cordon_aabb"):
+		var aabb: AABB = level_root.get("cordon_aabb")
+		if cordon_min_x:
+			cordon_min_x.value = aabb.position.x
+		if cordon_min_y:
+			cordon_min_y.value = aabb.position.y
+		if cordon_min_z:
+			cordon_min_z.value = aabb.position.z
+		if cordon_max_x:
+			cordon_max_x.value = aabb.position.x + aabb.size.x
+		if cordon_max_y:
+			cordon_max_y.value = aabb.position.y + aabb.size.y
+		if cordon_max_z:
+			cordon_max_z.value = aabb.position.z + aabb.size.z
+	if cordon_enabled_check:
+		cordon_enabled_check.button_pressed = true

@@ -42,6 +42,32 @@ func ensure_custom_uvs() -> void:
 	custom_uvs = _project_uvs_for_vertices(local_verts)
 
 
+func adjust_uvs_for_transform(pos_delta: Vector3, size_ratio: Vector3) -> void:
+	var projection = uv_projection
+	if projection == UVProjection.BOX_UV:
+		projection = _box_projection_axis()
+	if projection == UVProjection.CYLINDRICAL:
+		return
+	var offset_delta = Vector2.ZERO
+	var inv_size = Vector2.ONE
+	match projection:
+		UVProjection.PLANAR_X:
+			offset_delta = Vector2(pos_delta.z, pos_delta.y)
+			if size_ratio.z > 0.001 and size_ratio.y > 0.001:
+				inv_size = Vector2(1.0 / size_ratio.z, 1.0 / size_ratio.y)
+		UVProjection.PLANAR_Y:
+			offset_delta = Vector2(pos_delta.x, pos_delta.z)
+			if size_ratio.x > 0.001 and size_ratio.z > 0.001:
+				inv_size = Vector2(1.0 / size_ratio.x, 1.0 / size_ratio.z)
+		UVProjection.PLANAR_Z:
+			offset_delta = Vector2(pos_delta.x, pos_delta.y)
+			if size_ratio.x > 0.001 and size_ratio.y > 0.001:
+				inv_size = Vector2(1.0 / size_ratio.x, 1.0 / size_ratio.y)
+	uv_offset -= offset_delta * uv_scale
+	if not inv_size.is_equal_approx(Vector2.ONE):
+		uv_scale *= inv_size
+
+
 func triangulate() -> Dictionary:
 	var tri_verts := PackedVector3Array()
 	var tri_uvs := PackedVector2Array()

@@ -52,7 +52,16 @@ func capture_state(include_transient: bool = true) -> Dictionary:
 			if child is DraftEntity:
 				var info = root.entity_system.capture_entity_info(child as DraftEntity)
 				if not info.is_empty():
+					var vgs: PackedStringArray = child.get_meta("visgroups", PackedStringArray())
+					if not vgs.is_empty():
+						info["visgroups"] = Array(vgs)
+					var gid: String = str(child.get_meta("group_id", ""))
+					if gid != "":
+						info["group_id"] = gid
 					state["entities"].append(info)
+	if root.visgroup_system:
+		state["visgroups"] = root.visgroup_system.capture_visgroups()
+		state["groups"] = root.visgroup_system.capture_groups()
 	return state
 
 
@@ -94,7 +103,18 @@ func restore_state(state: Dictionary) -> void:
 		root.create_brush_from_info(info)
 	var entities: Array = state.get("entities", [])
 	for info in entities:
-		root.entity_system.restore_entity_from_info(info)
+		var entity = root.entity_system.restore_entity_from_info(info)
+		if entity:
+			if info.has("visgroups"):
+				var vgs = PackedStringArray()
+				for v in info.get("visgroups", []):
+					vgs.append(str(v))
+				entity.set_meta("visgroups", vgs)
+			if info.has("group_id") and str(info["group_id"]) != "":
+				entity.set_meta("group_id", str(info["group_id"]))
+	if root.visgroup_system:
+		root.visgroup_system.restore_visgroups(state.get("visgroups", {}))
+		root.visgroup_system.restore_groups(state.get("groups", {}))
 	restore_floor_info(state.get("floor", {}))
 	if root.draft_brushes_node:
 		root.draft_brushes_node.visible = bool(state.get("csg_visible", true))
@@ -185,7 +205,11 @@ func capture_hflevel_settings() -> Dictionary:
 			root.paint_system.region_show_grid
 			if root.paint_system
 			else false
-		)
+		),
+		"texture_lock": root.texture_lock,
+		"cordon_enabled": root.cordon_enabled,
+		"cordon_aabb_pos": [root.cordon_aabb.position.x, root.cordon_aabb.position.y, root.cordon_aabb.position.z],
+		"cordon_aabb_size": [root.cordon_aabb.size.x, root.cordon_aabb.size.y, root.cordon_aabb.size.z]
 	}
 
 
@@ -284,6 +308,20 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 			root.paint_system.set_region_show_grid(
 				bool(settings.get("region_show_grid", root.paint_system.region_show_grid))
 			)
+	if settings.has("texture_lock"):
+		root.texture_lock = bool(settings.get("texture_lock", true))
+	if settings.has("cordon_enabled"):
+		root.cordon_enabled = bool(settings.get("cordon_enabled", false))
+	if settings.has("cordon_aabb_pos") and settings.has("cordon_aabb_size"):
+		var pos_arr = settings.get("cordon_aabb_pos", [-128, -128, -128])
+		var size_arr = settings.get("cordon_aabb_size", [256, 256, 256])
+		if pos_arr is Array and size_arr is Array and pos_arr.size() >= 3 and size_arr.size() >= 3:
+			root.cordon_aabb = AABB(
+				Vector3(float(pos_arr[0]), float(pos_arr[1]), float(pos_arr[2])),
+				Vector3(float(size_arr[0]), float(size_arr[1]), float(size_arr[2]))
+			)
+	if root.has_method("update_cordon_visual"):
+		root.update_cordon_visual()
 
 
 func capture_floor_info() -> Dictionary:

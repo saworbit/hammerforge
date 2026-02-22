@@ -1,6 +1,6 @@
 ﻿# Development Guide
 
-Last updated: February 15, 2026
+Last updated: February 22, 2026
 
 This document covers local setup, codebase structure, and how to test features.
 
@@ -44,6 +44,7 @@ addons/hammerforge/
     hf_state_system.gd     State capture/restore, settings
     hf_file_system.gd      .hflevel/.map/.glTF I/O, threaded writes
     hf_validation_system.gd Validation and dependency checks
+    hf_visgroup_system.gd  Visgroups (visibility groups) + brush/entity grouping
 
   paint/                 Floor paint subsystem
     hf_paint_grid.gd       Grid storage
@@ -79,12 +80,40 @@ addons/hammerforge/
 The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on push and PR to `main`:
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
+- **GUT unit tests** -- 47 tests across 4 test files (runs Godot headless)
 
 Run locally before pushing:
 ```
 gdformat --check addons/hammerforge/
 gdlint addons/hammerforge/
+godot --headless -s res://addons/gut/gut_cmdln.gd --path .
 ```
+
+### Unit Tests (GUT)
+
+Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framework (installed in `addons/gut/`).
+
+| Test File | Tests | Coverage |
+|-----------|-------|----------|
+| `test_visgroup_system.gd` | 18 | Visgroup CRUD, visibility, membership, serialization |
+| `test_grouping.gd` | 9 | Group creation, meta, ungroup, regroup, serialization |
+| `test_texture_lock.gd` | 10 | UV offset/scale compensation for all projection types |
+| `test_cordon_filter.gd` | 10 | AABB intersection, cordon-filtered collection, chunk_coord |
+
+Run all tests:
+```
+godot --headless -s res://addons/gut/gut_cmdln.gd --path .
+```
+
+If you see "class_names not imported", run `godot --headless --import --path .` first to register GUT classes.
+
+Configuration is in `.gutconfig.json` (test directory, prefix, exit behavior).
+
+**Writing new tests:**
+- Add files in `tests/` with the `test_` prefix and `.gd` suffix.
+- Extend `GutTest`. Use `before_each()` / `after_each()` for setup/teardown.
+- Use root shim scripts (dynamically created GDScript) to provide the LevelRoot interface without circular preload. See existing tests for the pattern.
+- Keep tests focused: one behavior per test function.
 
 ## Materials Resources
 HammerForge expects Godot material resources (`.tres` or `.material`) in the palette.
@@ -97,6 +126,33 @@ Create one quickly:
 Then click `Add` in the Materials tab and choose that resource.
 
 ## Manual Test Checklist
+
+Visgroups
+- Create a visgroup "walls" from the Manage tab.
+- Add 2 brushes to the visgroup and toggle visibility off -- confirm those 2 brushes hide.
+- Toggle visibility on -- confirm brushes reappear.
+- Create a second visgroup, add a brush to both, hide one -- confirm brush is hidden.
+- Save and reload `.hflevel` -- confirm visgroup names and membership persist.
+
+Grouping
+- Select 2 brushes and press Ctrl+G -- confirm a group is created.
+- Click one grouped brush -- confirm all group members are selected.
+- Press Ctrl+U -- confirm brushes are ungrouped and select independently.
+- Save and reload -- confirm group persists.
+
+Texture Lock
+- Place a textured brush with Texture Lock enabled (Build tab checkbox).
+- Resize the brush via gizmo -- confirm UV alignment stays consistent.
+- Move the brush -- confirm UVs track the movement.
+- Disable Texture Lock and resize -- confirm UVs shift with the resize.
+
+Cordon (Partial Bake)
+- Enable cordon in the Manage tab.
+- Set a small AABB around 1 of 3 brushes (or use "Set from Selection").
+- Confirm yellow wireframe appears in the viewport.
+- Bake -- confirm only the brush inside the cordon appears in baked output.
+- Disable cordon and bake -- confirm all brushes appear.
+
 Brush workflow
 - Draw an Add brush and confirm resize handles work.
 - Draw a Subtract brush and apply cuts.

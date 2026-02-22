@@ -140,6 +140,7 @@ func _on_editor_selection_changed() -> void:
 	hf_selection = selection.get_selected_nodes()
 	if dock:
 		dock.set_selection_count(hf_selection.size())
+		dock.set_selection_nodes(hf_selection)
 
 
 func _handles(object: Object) -> bool:
@@ -224,6 +225,12 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 				)
 			if event.ctrl_pressed and event.keycode == KEY_D:
 				_duplicate_selected(root)
+				return EditorPlugin.AFTER_GUI_INPUT_STOP
+			if event.ctrl_pressed and event.keycode == KEY_G:
+				_group_selected(root)
+				return EditorPlugin.AFTER_GUI_INPUT_STOP
+			if event.ctrl_pressed and event.keycode == KEY_U:
+				_ungroup_selected(root)
 				return EditorPlugin.AFTER_GUI_INPUT_STOP
 			if event.keycode == KEY_UP:
 				_nudge_selected(root, Vector3(0.0, 0.0, -1.0))
@@ -462,17 +469,26 @@ func _select_node(node: Node, additive: bool = false) -> void:
 	if not selection:
 		return
 	var toggle = Input.is_key_pressed(KEY_CTRL) or Input.is_key_pressed(KEY_META)
+	# Expand grouped nodes
+	var expanded: Array = [node] if node else []
+	var root = active_root if active_root else _get_level_root()
+	if node and root and root.visgroup_system:
+		var group_id = root.visgroup_system.get_group_of(node)
+		if group_id != "":
+			expanded = root.visgroup_system.get_group_members(group_id)
 	if not additive:
 		hf_selection.clear()
-		if node:
-			hf_selection.append(node)
+		for n in expanded:
+			if n and not hf_selection.has(n):
+				hf_selection.append(n)
 	else:
 		_sync_hf_selection_if_empty()
-		if node:
-			if toggle and hf_selection.has(node):
-				hf_selection.erase(node)
-			elif not hf_selection.has(node):
-				hf_selection.append(node)
+		for n in expanded:
+			if n:
+				if toggle and hf_selection.has(n):
+					hf_selection.erase(n)
+				elif not hf_selection.has(n):
+					hf_selection.append(n)
 	if not additive and node == null:
 		hf_selection.clear()
 	_apply_hf_selection(selection)
@@ -776,6 +792,27 @@ func _nudge_selected(root: Node, dir: Vector3) -> void:
 		false,
 		Callable(self, "_record_history")
 	)
+
+
+func _group_selected(root: Node) -> void:
+	var nodes = _current_selection_nodes()
+	if nodes.size() < 2 or not root or not root.visgroup_system:
+		return
+	var group_name = "group_%d" % Time.get_ticks_usec()
+	root.visgroup_system.group_selection(group_name, nodes)
+	_record_history("Group Selection")
+	if dock:
+		dock.refresh_visgroup_ui()
+
+
+func _ungroup_selected(root: Node) -> void:
+	var nodes = _current_selection_nodes()
+	if nodes.is_empty() or not root or not root.visgroup_system:
+		return
+	root.visgroup_system.ungroup_nodes(nodes)
+	_record_history("Ungroup Selection")
+	if dock:
+		dock.refresh_visgroup_ui()
 
 
 func _can_drop_data(_position: Vector2, data: Variant) -> bool:

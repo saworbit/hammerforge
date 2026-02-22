@@ -106,6 +106,13 @@ func create_brush_from_info(info: Dictionary) -> Node:
 	_register_brush_id(str(brush_id))
 	if info.has("faces"):
 		brush.apply_serialized_faces(info.get("faces", []))
+	if info.has("visgroups"):
+		var vgs = PackedStringArray()
+		for v in info.get("visgroups", []):
+			vgs.append(str(v))
+		brush.set_meta("visgroups", vgs)
+	if info.has("group_id") and str(info["group_id"]) != "":
+		brush.set_meta("group_id", str(info["group_id"]))
 	return brush
 
 
@@ -220,6 +227,12 @@ func get_brush_info_from_node(brush: Node) -> Dictionary:
 		info["material"] = draft.material_override
 	if draft.faces.size() > 0:
 		info["faces"] = draft.serialize_faces()
+	var vgs: PackedStringArray = draft.get_meta("visgroups", PackedStringArray())
+	if not vgs.is_empty():
+		info["visgroups"] = Array(vgs)
+	var gid: String = str(draft.get_meta("group_id", ""))
+	if gid != "":
+		info["group_id"] = gid
 	return info
 
 
@@ -514,8 +527,28 @@ func set_brush_transform_by_id(brush_id: String, size: Vector3, position: Vector
 	var brush = _find_brush_by_id(brush_id)
 	if brush and brush is DraftBrush:
 		var draft := brush as DraftBrush
+		var old_size = draft.size
+		var old_pos = draft.global_position
 		draft.size = size
 		draft.global_position = position
+		if root.texture_lock and not draft.faces.is_empty():
+			_adjust_face_uvs_for_transform(draft, old_size, size, old_pos, position)
+
+
+func _adjust_face_uvs_for_transform(
+	draft: DraftBrush, old_size: Vector3, new_size: Vector3,
+	old_pos: Vector3, new_pos: Vector3
+) -> void:
+	var pos_delta = new_pos - old_pos
+	var size_ratio = Vector3(
+		new_size.x / old_size.x if old_size.x > 0.001 else 1.0,
+		new_size.y / old_size.y if old_size.y > 0.001 else 1.0,
+		new_size.z / old_size.z if old_size.z > 0.001 else 1.0
+	)
+	for face in draft.faces:
+		if face == null:
+			continue
+		face.adjust_uvs_for_transform(pos_delta, size_ratio)
 
 
 func _refresh_brush_previews() -> void:

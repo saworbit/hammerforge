@@ -1,6 +1,6 @@
 # HammerForge Spec
 
-Last updated: February 15, 2026
+Last updated: February 22, 2026
 
 This document describes HammerForge's architecture and data flow.
 
@@ -12,7 +12,7 @@ This document describes HammerForge's architecture and data flow.
 
 ## Architecture
 
-HammerForge uses a coordinator + subsystems pattern. `LevelRoot` is a thin coordinator that owns all container nodes, exported properties, and signals, and delegates work to 9 `RefCounted` subsystem classes. Each subsystem receives a reference to `LevelRoot` in its constructor.
+HammerForge uses a coordinator + subsystems pattern. `LevelRoot` is a thin coordinator that owns all container nodes, exported properties, and signals, and delegates work to 10 `RefCounted` subsystem classes. Each subsystem receives a reference to `LevelRoot` in its constructor.
 
 ### Signals
 - `bake_started` -- emitted when a bake begins.
@@ -50,6 +50,7 @@ HammerForge uses a coordinator + subsystems pattern. `LevelRoot` is a thin coord
 | `hf_state_system.gd` | `HFStateSystem` | State capture/restore, settings, paint layer serialization |
 | `hf_file_system.gd` | `HFFileSystem` | .hflevel save/load, .map import/export, glTF export, threaded I/O |
 | `hf_validation_system.gd` | `HFValidationSystem` | Validation, dependency checks, auto-fix helpers |
+| `hf_visgroup_system.gd` | `HFVisgroupSystem` | Visgroups (visibility groups), brush/entity grouping |
 
 ### Other Modules
 
@@ -95,11 +96,46 @@ LevelRoot (Node3D)
 - BakedGeometry
 ```
 
+## Visgroups + Grouping
+
+### Visgroups (Visibility Groups)
+- Named groups (e.g. "walls", "detail") with per-group show/hide.
+- Membership stored on nodes via `node.set_meta("visgroups", PackedStringArray)`. A node can belong to multiple visgroups.
+- A node in ANY hidden visgroup becomes hidden (Hammer semantics). Nodes not in any visgroup are always visible.
+- `HFVisgroupSystem` manages CRUD, membership, visibility refresh, and serialization.
+- Visgroups persist in `.hflevel` via `capture_visgroups()` / `restore_visgroups()`.
+
+### Grouping
+- Persistent groups that select and move together.
+- Single group per node via `node.set_meta("group_id", group_name)`.
+- Clicking a grouped node expands selection to all group members.
+- Ctrl+G groups selection, Ctrl+U ungroups.
+- Groups persist in `.hflevel` via `capture_groups()` / `restore_groups()`.
+
+## Texture Lock
+- When `texture_lock` is enabled (default), moving or resizing a brush automatically compensates face UV offset and scale.
+- Per-projection-axis math in `face_data.gd:adjust_uvs_for_transform()`:
+  - PLANAR_X: projects (z, y), PLANAR_Y: projects (x, z), PLANAR_Z: projects (x, y).
+  - BOX_UV resolves to the planar axis matching the face normal.
+  - CYLINDRICAL is skipped (complex, future enhancement).
+- Position compensation: `uv_offset -= projected_delta * uv_scale`.
+- Size compensation: `uv_scale *= inverse_size_ratio` per projection axis.
+- Hook in `hf_brush_system.gd:set_brush_transform_by_id()` captures old transform, applies new, then adjusts UVs.
+
+## Cordon (Partial Bake)
+- Restricts bake to an AABB region. Brushes outside the cordon are skipped.
+- Properties on LevelRoot: `cordon_enabled: bool`, `cordon_aabb: AABB`.
+- Filter applied in `hf_bake_system.gd`: `collect_chunk_brushes()`, `append_brush_list_to_csg()`, `_append_face_bake_container()`.
+- Helper `_brush_in_cordon()` computes brush world AABB and tests intersection with `cordon_aabb`.
+- "Set from Selection" computes merged AABB of selected brushes + 1.0 margin.
+- Yellow wireframe visualization via ImmediateMesh (12 AABB edge lines, unshaded, no depth test).
+- Cordon settings persist in `.hflevel`.
+
 ## Brush Workflow
 - Draw creates DraftBrush nodes in DraftBrushes.
 - Subtract brushes are staged in PendingCuts until Apply Cuts.
 - Extrude Up/Down picks a face via `FaceSelector`, creates a preview brush along the face normal, and commits a new DraftBrush on release. Uses `HFExtrudeTool` (RefCounted).
-- Bake builds a temporary CSG tree from DraftBrushes + CommittedCuts and outputs BakedGeometry.
+- Bake builds a temporary CSG tree from DraftBrushes + CommittedCuts and outputs BakedGeometry. If cordon is enabled, only brushes intersecting the cordon AABB are included.
 - Undo/redo actions prefer brush IDs and state snapshots over long-lived Node references.
 
 ## Floor Paint System
@@ -153,9 +189,12 @@ Foliage Populator
 
 ## Persistence (.hflevel)
 - Stores brushes, entities, level settings, materials palette, and paint layers.
-- Brush records include face data (materials, UVs, paint layers).
+- Brush records include face data (materials, UVs, paint layers), visgroup membership, and group_id.
+- Entity records include visgroup membership and group_id.
 - Paint layers include grid settings, chunk size, bitset data, `material_ids`, `blend_weights` (+ _2/_3), and terrain slot settings.
 - Optional per-layer: `heightmap_b64` (base64 PNG), `height_scale`. Missing keys = no heightmap (backward-compatible).
+- Level settings include `texture_lock`, `cordon_enabled`, `cordon_aabb_pos`, `cordon_aabb_size`.
+- Visgroup definitions and group registry stored in state via `capture_visgroups()` / `capture_groups()`.
 
 ## Bake Pipeline
 - Temporary CSG tree for DraftBrushes (including generated flat floors/walls).
@@ -185,6 +224,7 @@ plugin.gd (input)
     -> hf_file_system.gd    (persistence, threaded I/O)
     -> hf_grid_system.gd    (editor grid)
     -> hf_entity_system.gd  (entity placement)
+    -> hf_visgroup_system.gd (visgroups + grouping)
 ```
 
 All public methods on `LevelRoot` are thin one-line delegates to the appropriate subsystem. This preserves the existing API so `plugin.gd` and `dock.gd` call `root.bake()`, `root.begin_drag()`, etc. without change.
@@ -212,6 +252,7 @@ Transitions: `begin_drag()` -> `advance_to_height()` -> `end_drag()` / `cancel()
 - Bake progress bar with chunk status updates.
 - Pending subtract brushes rendered in orange-red with high emission (`_make_pending_cut_material()`), visually distinct from applied cuts (standard red via `_make_brush_material()`).
 - Shader-based editor grid with follow mode.
+- Grouping shortcuts: Ctrl+G (group selection), Ctrl+U (ungroup).
 - Direct typed calls between plugin/dock/LevelRoot (no duck-typing).
 
 ## Validation + Diagnostics
@@ -219,3 +260,16 @@ Transitions: `begin_drag()` -> `advance_to_height()` -> `end_drag()` / `cancel()
 - Auto-fix clears invalid face selections, resets invalid face material indices, and rebuilds missing layer grids.
 - Bake Dry Run reports counts and chunking without generating geometry.
 - Performance panel shows active brush count, paint memory, bake chunk count, and last bake time.
+
+## Testing
+
+Unit tests use the [GUT](https://github.com/bitwes/Gut) framework and run headless via CI.
+
+| Test File | Tests | Coverage |
+|-----------|-------|----------|
+| `test_visgroup_system.gd` | 18 | Visgroup CRUD, visibility toggle, membership, round-trip serialization |
+| `test_grouping.gd` | 9 | Group creation, meta storage, ungroup, regroup, serialization |
+| `test_texture_lock.gd` | 10 | UV offset/scale compensation for PLANAR_X/Y/Z, BOX_UV, CYLINDRICAL |
+| `test_cordon_filter.gd` | 10 | AABB intersection, cordon-filtered collection, chunk_coord utility |
+
+Tests use root shim scripts (dynamically created GDScript) to provide the LevelRoot interface without circular preload dependencies. Configuration in `.gutconfig.json`.

@@ -67,10 +67,17 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 - **Auto-connectors:** ramp and stair mesh generation between layers
 - **Foliage scatter:** height/slope-filtered MultiMeshInstance3D placement
 
+### Organization + Workflow
+- **Visgroups** -- named visibility groups (e.g. "walls", "detail", "lighting") with per-group show/hide toggle
+- **Brush/Entity Grouping** -- persistent groups that select/move together (Ctrl+G / Ctrl+U)
+- **Texture Lock** -- UV alignment preserved automatically when moving or resizing brushes
+- **Cordon (Partial Bake)** -- restrict bake to an AABB region with yellow wireframe visualization
+
 ### Editor UX
 - **Context-sensitive shortcut HUD** that updates based on current tool and mode
 - **Paint tool shortcuts**: B / E / R / L / K for Brush / Erase / Rect / Line / Bucket
 - **Extrude shortcuts**: U (Extrude Up), J (Extrude Down)
+- **Group shortcuts**: Ctrl+G (Group), Ctrl+U (Ungroup)
 - **Tooltips** on all dock controls with shortcut hints
 - **Selection count** in the status bar
 - **Color-coded status bar** (red errors, yellow warnings, auto-clear)
@@ -88,15 +95,16 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 - Optional: **Use Face Materials** (bake per-face materials without CSG)
 - Heightmap floors bake directly (bypass CSG) with trimesh collision
 - Chunked baking via `LevelRoot.bake_chunk_size`
+- **Cordon bake** -- restrict bake to an AABB region (skip brushes outside the cordon)
 - Bake progress bar with chunk status updates
 - **Playtest button** -- bakes and runs with an FPS controller
 
 ### Modular Architecture
-- `LevelRoot` is a thin coordinator delegating to **9 subsystem classes** (grid, entity, brush, drag, bake, paint, state, file, validation)
+- `LevelRoot` is a thin coordinator delegating to **10 subsystem classes** (grid, entity, brush, drag, bake, paint, state, file, validation, visgroup)
 - Explicit **input state machine** for drag/paint operations
 - Type-safe inter-module calls (no duck-typing)
 - Threaded .hflevel I/O with error handling
-- **CI**: automated `gdformat` + `gdlint` checks on push/PR
+- **CI**: automated `gdformat` + `gdlint` checks and **GUT unit tests** (47 tests) on push/PR
 
 ## Installation
 
@@ -165,5 +173,5 @@ Start-Process -FilePath "C:\Godot\Godot_v4.6-stable_win64.exe" `
 
 <p align="center">
   <strong>MIT License</strong><br>
-  <sub>Last updated: February 15, 2026</sub>
+  <sub>Last updated: February 22, 2026</sub>
 </p>

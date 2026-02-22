@@ -1,6 +1,6 @@
 # HammerForge User Guide
 
-Last updated: February 15, 2026
+Last updated: February 22, 2026
 
 This guide covers the current HammerForge workflow in Godot 4.6: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs.
 
@@ -26,6 +26,12 @@ Tool
 - Select: select existing brushes. Delete removes them.
 - Extrude Up: click a brush face and drag to extend it upward.
 - Extrude Down: click a brush face and drag to extend it downward.
+
+Organization
+- Visgroups: named visibility groups (Manage tab). Show/hide groups of brushes and entities.
+- Grouping: persistent groups that select/move together. Ctrl+G to group, Ctrl+U to ungroup.
+- Texture Lock: UV alignment preserved on move/resize (Build tab checkbox).
+- Cordon: restrict bake to a region (Manage tab). Yellow wireframe shows the cordon AABB.
 
 Paint Mode (floor + surface)
 - Enables paint input in the viewport.
@@ -136,12 +142,67 @@ Extrude shortcuts
 - U: Extrude Up tool.
 - J: Extrude Down tool.
 
+Group shortcuts
+- Ctrl+G: Group selected brushes/entities.
+- Ctrl+U: Ungroup selected brushes/entities.
+
 Paint tool shortcuts (active when Paint Mode is enabled)
 - B: Brush tool.
 - E: Erase tool.
 - R: Rectangle tool.
 - L: Line tool.
 - K: Bucket fill tool.
+
+## Visgroups (Visibility Groups)
+Visgroups let you organize your map into logical groups and toggle their visibility.
+
+1. Open the **Manage** tab in the dock.
+2. Type a name in the Visgroup field and click **New** to create a visgroup.
+3. Select brushes/entities in the viewport, then click **Add Sel** to add them to the visgroup.
+4. Click the visgroup name in the list to toggle between **[V]** (visible) and **[H]** (hidden).
+
+Notes:
+- A node can belong to multiple visgroups. If ANY visgroup it belongs to is hidden, the node is hidden.
+- Nodes not in any visgroup are always visible.
+- Use **Rem Sel** to remove selected nodes from the visgroup, or **Delete** to remove the visgroup entirely.
+- Visgroups persist in `.hflevel` saves and undo/redo state.
+
+## Grouping
+Groups let you persistently link brushes/entities so they select and move together.
+
+1. Select the brushes/entities you want to group.
+2. Press **Ctrl+G** (or click **Group Sel** in the Manage tab).
+3. Click any member of the group -- all members are selected automatically.
+4. Press **Ctrl+U** (or click **Ungroup**) to dissolve the group.
+
+Notes:
+- Each node can belong to one group at a time.
+- Groups persist in `.hflevel` saves and undo/redo state.
+
+## Texture Lock
+When Texture Lock is enabled, moving or resizing a brush automatically adjusts its face UVs so textures stay aligned.
+
+1. Check **Texture Lock** in the Build tab (enabled by default).
+2. Move or resize brushes normally -- UV alignment is preserved.
+3. Uncheck to disable (UVs will shift with transforms as before).
+
+Notes:
+- Works with PLANAR_X, PLANAR_Y, PLANAR_Z, and BOX_UV projections.
+- CYLINDRICAL projection is not compensated (complex; future enhancement).
+- Persists in `.hflevel` settings.
+
+## Cordon (Partial Bake)
+The cordon restricts bake output to an AABB region, useful for iterating on a specific area of a large map.
+
+1. Open the **Manage** tab in the dock.
+2. Check **Enable Cordon** to activate.
+3. Set the min/max coordinates with the spinboxes, or select brushes and click **Set from Selection**.
+4. A yellow wireframe shows the cordon bounds in the viewport.
+5. Bake -- only brushes intersecting the cordon AABB are included.
+
+Notes:
+- Disable cordon to bake the entire map.
+- Cordon settings persist in `.hflevel` saves.
 
 ## Extrude (Up / Down)
 The Extrude tools let you extend an existing brush by clicking one of its faces and dragging to create a new brush.

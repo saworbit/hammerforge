@@ -274,6 +274,8 @@ func collect_chunk_brushes(
 			continue
 		if root.is_entity_node(child):
 			continue
+		if root.cordon_enabled and not _brush_in_cordon(child as DraftBrush):
+			continue
 		var coord = chunk_coord((child as Node3D).global_position, chunk_size)
 		if not chunks.has(coord):
 			chunks[coord] = {"brushes": [], "committed": [], "generated": []}
@@ -319,6 +321,8 @@ func _append_face_bake_container(container: Node3D, out: Array) -> void:
 		return
 	for child in container.get_children():
 		if child is DraftBrush and child.operation != CSGShape3D.OPERATION_SUBTRACTION:
+			if root.cordon_enabled and not _brush_in_cordon(child as DraftBrush):
+				continue
 			out.append(child)
 
 
@@ -331,6 +335,8 @@ func append_brush_list_to_csg(
 		if not (child is DraftBrush):
 			continue
 		if root.is_entity_node(child):
+			continue
+		if root.cordon_enabled and not _brush_in_cordon(child as DraftBrush):
 			continue
 		var draft: DraftBrush = child
 		if (
@@ -432,3 +438,9 @@ func bake_navmesh(container: Node3D) -> void:
 		NavigationServer3D.bake_from_source_geometry_data(nav_mesh, source)
 	elif nav_region.has_method("bake_navigation_mesh"):
 		nav_region.call("bake_navigation_mesh")
+
+
+func _brush_in_cordon(brush: DraftBrush) -> bool:
+	var half = brush.size * 0.5
+	var brush_aabb = AABB(brush.global_position - half, brush.size)
+	return root.cordon_aabb.intersects(brush_aabb)

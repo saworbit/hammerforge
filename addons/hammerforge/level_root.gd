@@ -33,6 +33,7 @@ const HFPaintSystemType = preload("systems/hf_paint_system.gd")
 const HFStateSystemType = preload("systems/hf_state_system.gd")
 const HFFileSystemType = preload("systems/hf_file_system.gd")
 const HFValidationSystemType = preload("systems/hf_validation_system.gd")
+const HFVisgroupSystemType = preload("systems/hf_visgroup_system.gd")
 
 const RELOAD_LOCK_PATH := "res://.hammerforge/reload.lock"
 const RELOAD_POLL_SECONDS := 0.5
@@ -116,6 +117,9 @@ var _grid_visible: bool = false
 @export var grid_plane_size: float = 500.0
 @export var grid_color: Color = Color(0.85, 0.95, 1.0, 0.15)
 @export_range(1, 16, 1) var grid_major_line_frequency: int = 4
+@export var texture_lock: bool = true
+@export var cordon_enabled: bool = false
+@export var cordon_aabb: AABB = AABB(Vector3(-128, -128, -128), Vector3(256, 256, 256))
 
 # ---------------------------------------------------------------------------
 # Signals
@@ -161,6 +165,7 @@ var paint_system: HFPaintSystemType
 var state_system: HFStateSystemType
 var file_system: HFFileSystemType
 var validation_system: HFValidationSystemType
+var visgroup_system: HFVisgroupSystemType
 var extrude_tool: HFExtrudeToolType
 
 # ---------------------------------------------------------------------------
@@ -317,6 +322,7 @@ func _ready():
 	state_system = HFStateSystemType.new(self)
 	file_system = HFFileSystemType.new(self)
 	validation_system = HFValidationSystemType.new(self)
+	visgroup_system = HFVisgroupSystemType.new(self)
 	extrude_tool = HFExtrudeToolType.new(self)
 	entity_system.load_entity_definitions()
 	grid_system.setup_editor_grid()
@@ -387,6 +393,139 @@ func _intersect_axis_plane(
 	return (
 		grid_system.intersect_axis_plane(camera, mouse_pos, axis, origin) if grid_system else null
 	)
+
+
+# ===========================================================================
+# Visgroup / Group API (delegates to visgroup_system)
+# ===========================================================================
+
+
+func create_visgroup(vg_name: String, color: Color = Color.WHITE) -> void:
+	if visgroup_system:
+		visgroup_system.create_visgroup(vg_name, color)
+
+
+func remove_visgroup(vg_name: String) -> void:
+	if visgroup_system:
+		visgroup_system.remove_visgroup(vg_name)
+
+
+func set_visgroup_visible(vg_name: String, visible: bool) -> void:
+	if visgroup_system:
+		visgroup_system.set_visgroup_visible(vg_name, visible)
+
+
+func add_selection_to_visgroup(vg_name: String, nodes: Array) -> void:
+	if not visgroup_system:
+		return
+	for node in nodes:
+		visgroup_system.add_to_visgroup(node, vg_name)
+	visgroup_system.refresh_visibility()
+
+
+func remove_selection_from_visgroup(vg_name: String, nodes: Array) -> void:
+	if not visgroup_system:
+		return
+	for node in nodes:
+		visgroup_system.remove_from_visgroup(node, vg_name)
+	visgroup_system.refresh_visibility()
+
+
+func get_visgroup_names() -> PackedStringArray:
+	return visgroup_system.get_visgroup_names() if visgroup_system else PackedStringArray()
+
+
+func refresh_visgroup_visibility() -> void:
+	if visgroup_system:
+		visgroup_system.refresh_visibility()
+
+
+func group_selection(group_name: String, nodes: Array) -> void:
+	if visgroup_system:
+		visgroup_system.group_selection(group_name, nodes)
+
+
+func ungroup_nodes(nodes: Array) -> void:
+	if visgroup_system:
+		visgroup_system.ungroup_nodes(nodes)
+
+
+func get_group_members(group_name: String) -> Array:
+	return visgroup_system.get_group_members(group_name) if visgroup_system else []
+
+
+# ===========================================================================
+# Cordon API
+# ===========================================================================
+
+
+var cordon_wireframe: MeshInstance3D = null
+
+
+func set_cordon_from_selection(nodes: Array) -> void:
+	if nodes.is_empty():
+		return
+	var combined = AABB()
+	var first := true
+	for node in nodes:
+		if not (node is Node3D):
+			continue
+		var n3d := node as Node3D
+		var half = Vector3.ONE
+		if n3d is DraftBrush:
+			half = (n3d as DraftBrush).size * 0.5
+		var brush_aabb = AABB(n3d.global_position - half, half * 2.0)
+		if first:
+			combined = brush_aabb
+			first = false
+		else:
+			combined = combined.merge(brush_aabb)
+	if not first:
+		combined = combined.grow(1.0)
+		cordon_aabb = combined
+		cordon_enabled = true
+		update_cordon_visual()
+
+
+func update_cordon_visual() -> void:
+	if not cordon_wireframe:
+		cordon_wireframe = MeshInstance3D.new()
+		cordon_wireframe.name = "CordonWireframe"
+		cordon_wireframe.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(cordon_wireframe)
+		var mat = StandardMaterial3D.new()
+		mat.albedo_color = Color(1.0, 0.8, 0.0, 0.6)
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.no_depth_test = true
+		cordon_wireframe.material_override = mat
+	cordon_wireframe.visible = cordon_enabled
+	if not cordon_enabled:
+		return
+	var im = ImmediateMesh.new()
+	var min_pt = cordon_aabb.position
+	var max_pt = cordon_aabb.position + cordon_aabb.size
+	im.surface_begin(Mesh.PRIMITIVE_LINES)
+	var corners = [
+		Vector3(min_pt.x, min_pt.y, min_pt.z),
+		Vector3(max_pt.x, min_pt.y, min_pt.z),
+		Vector3(max_pt.x, max_pt.y, min_pt.z),
+		Vector3(min_pt.x, max_pt.y, min_pt.z),
+		Vector3(min_pt.x, min_pt.y, max_pt.z),
+		Vector3(max_pt.x, min_pt.y, max_pt.z),
+		Vector3(max_pt.x, max_pt.y, max_pt.z),
+		Vector3(min_pt.x, max_pt.y, max_pt.z)
+	]
+	var edges = [
+		[0, 1], [1, 2], [2, 3], [3, 0],
+		[4, 5], [5, 6], [6, 7], [7, 4],
+		[0, 4], [1, 5], [2, 6], [3, 7]
+	]
+	for edge in edges:
+		im.surface_add_vertex(corners[edge[0]])
+		im.surface_add_vertex(corners[edge[1]])
+	im.surface_end()
+	cordon_wireframe.mesh = im
 
 
 # ===========================================================================

@@ -5,6 +5,34 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Visgroups (visibility groups):** Named groups (e.g. "walls", "detail") with per-group show/hide.
+  - `HFVisgroupSystem` subsystem manages CRUD, membership (stored as node meta), and visibility refresh.
+  - Nodes in ANY hidden visgroup are hidden (Hammer semantics). Nodes not in any visgroup stay visible.
+  - Dock UI: visgroup list with [V]/[H] toggle, New/Add Sel/Rem Sel/Delete buttons in Manage tab.
+  - Full serialization: visgroups persist in `.hflevel` saves and undo/redo state.
+- **Brush/entity grouping:** Persistent groups that select and move together.
+  - Single group per node via `group_id` meta. Auto-generated or named groups.
+  - Ctrl+G groups selection, Ctrl+U ungroups. Clicking a grouped node selects all group members.
+  - Dock UI: Group Sel / Ungroup buttons in Manage tab.
+  - Groups persist in `.hflevel` saves and undo/redo state.
+- **Texture lock:** UV alignment preserved when moving or resizing brushes.
+  - Per-projection-axis UV offset and scale compensation in `face_data.gd`.
+  - Supports PLANAR_X/Y/Z and BOX_UV projections. Skips CYLINDRICAL.
+  - Toggle via `texture_lock` property on LevelRoot (default: on).
+  - Dock UI: "Texture Lock" checkbox in Build tab.
+  - Persists in `.hflevel` settings.
+- **Cordon (partial bake):** Restrict bake to an AABB region.
+  - Brushes outside the cordon AABB are skipped during collection and CSG assembly.
+  - Yellow wireframe visualization via ImmediateMesh (12 AABB edge lines).
+  - "Set from Selection" computes merged AABB of selected brushes + margin.
+  - Dock UI: Enable checkbox, min/max spinboxes, "Set from Selection" button in Manage tab.
+  - Persists in `.hflevel` settings.
+- **GUT unit test suite** with 47 tests across 4 test files:
+  - `test_visgroup_system.gd` (18 tests): CRUD, visibility, membership, serialization.
+  - `test_grouping.gd` (9 tests): group creation, meta, ungroup, regroup, serialization.
+  - `test_texture_lock.gd` (10 tests): UV compensation for all projection types.
+  - `test_cordon_filter.gd` (10 tests): AABB filtering, chunk collection, chunk_coord utility.
+- CI workflow now runs GUT tests alongside gdformat/gdlint checks.
 - Bake progress updates with chunk status in the dock.
 - Bake Dry Run action for preflight counts and chunk estimates.
 - Validate Level action with optional auto-fix for common issues.

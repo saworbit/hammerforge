@@ -24,3 +24,26 @@ jobs:
 
       - name: Lint
         run: gdlint addons/hammerforge/
+
+  unit-tests:
+    name: GUT Unit Tests
+    runs-on: ubuntu-latest
+    env:
+      GODOT_VERSION: "4.6-stable"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Godot
+        run: |
+          wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip" -O godot.zip
+          unzip -q godot.zip
+          mv Godot_v${GODOT_VERSION}_linux.x86_64 /usr/local/bin/godot
+          chmod +x /usr/local/bin/godot
+
+      - name: Import project
+        run: godot --headless --import --path . 2>&1 || true
+
+      - name: Run GUT tests
+        run: |
+          godot --headless -s res://addons/gut/gut_cmdln.gd --path . 2>&1
+          exit $?
