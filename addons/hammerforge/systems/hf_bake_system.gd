@@ -427,7 +427,11 @@ func bake_navmesh(container: Node3D) -> void:
 	nav_mesh.cell_size = root.bake_navmesh_cell_size
 	nav_mesh.cell_height = root.bake_navmesh_cell_height
 	nav_mesh.agent_height = root.bake_navmesh_agent_height
-	nav_mesh.agent_radius = root.bake_navmesh_agent_radius
+	# Ceil agent_radius to cell_size units to avoid precision warning
+	var cs: float = root.bake_navmesh_cell_size
+	nav_mesh.agent_radius = ceil(root.bake_navmesh_agent_radius / cs) * cs
+	# Parse collision shapes instead of visual meshes (avoids GPU readback stall)
+	nav_mesh.parsed_geometry_type = NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS
 	if (
 		ClassDB.class_has_method("NavigationServer3D", "parse_source_geometry_data")
 		and ClassDB.class_has_method("NavigationServer3D", "bake_from_source_geometry_data")
