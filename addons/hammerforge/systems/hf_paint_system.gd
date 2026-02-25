@@ -44,8 +44,6 @@ func handle_paint_input(
 ) -> bool:
 	if not Engine.is_editor_hint():
 		return false
-	if not root.paint_tool:
-		return false
 	if not root.paint_tool or not root.paint_layers:
 		return false
 	_sync_region_manager()
@@ -168,6 +166,7 @@ func remove_active_paint_layer() -> void:
 
 
 func next_paint_layer_id() -> String:
+	const MAX_LAYER_ID_SEARCH := 10_000
 	var base = "layer_"
 	var index = root.paint_layers.layers.size() if root.paint_layers else 0
 	var seen: Dictionary = {}
@@ -175,7 +174,7 @@ func next_paint_layer_id() -> String:
 		for layer in root.paint_layers.layers:
 			if layer:
 				seen[str(layer.layer_id)] = true
-	while true:
+	for _i in range(MAX_LAYER_ID_SEARCH):
 		var candidate = "%s%d" % [base, index]
 		if not seen.has(candidate):
 			return candidate
@@ -336,26 +335,7 @@ func regenerate_paint_layers() -> void:
 		if chunk_ids.is_empty():
 			continue
 		if layer.has_heightmap() and root.paint_tool.heightmap_synth:
-			var model := HFGeneratedModel.new()
-			var hm_results = root.paint_tool.heightmap_synth.build_for_chunks(
-				layer, chunk_ids, root.paint_tool.synth_settings
-			)
-			for hr in hm_results:
-				var hf := HFGeneratedModel.HeightmapFloor.new()
-				hf.id = hr.id
-				hf.mesh = hr.mesh
-				hf.transform = hr.transform
-				hf.blend_image = hr.blend_image
-				if hr.blend_image:
-					hf.blend_texture = ImageTexture.create_from_image(hr.blend_image)
-				hf.slot_textures = hr.slot_textures
-				hf.slot_uv_scales = hr.slot_uv_scales
-				hf.slot_tints = hr.slot_tints
-				model.heightmap_floors.append(hf)
-			var wall_model = root.paint_tool.geometry.build_for_chunks(
-				layer, chunk_ids, root.paint_tool.synth_settings
-			)
-			model.walls = wall_model.walls
+			var model = root.paint_tool.build_heightmap_model(layer, chunk_ids)
 			root.paint_tool.reconciler.reconcile(
 				model, layer.grid, root.paint_tool.synth_settings, chunk_ids
 			)
@@ -419,51 +399,63 @@ func restore_paint_layers(data: Array, active_index: int) -> void:
 			layer.height_scale = float(entry.get("height_scale", 10.0))
 		var chunks = entry.get("chunks", [])
 		if chunks is Array:
-			for chunk in chunks:
-				if not (chunk is Dictionary):
-					continue
-				var cx = int(chunk.get("cx", 0))
-				var cy = int(chunk.get("cy", 0))
-				var bytes = chunk.get("bits", [])
-				var bits = PackedByteArray()
-				if bytes is Array:
-					bits.resize(bytes.size())
-					for i in range(bytes.size()):
-						bits[i] = int(bytes[i])
-				layer.set_chunk_bits(Vector2i(cx, cy), bits)
-				var mat_bytes = chunk.get("material_ids", [])
-				if mat_bytes is Array and not mat_bytes.is_empty():
-					var mat_ids = PackedByteArray()
-					mat_ids.resize(mat_bytes.size())
-					for i in range(mat_bytes.size()):
-						mat_ids[i] = int(mat_bytes[i])
-					layer.set_chunk_material_ids(Vector2i(cx, cy), mat_ids)
-				var blend_bytes = chunk.get("blend_weights", [])
-				if blend_bytes is Array and not blend_bytes.is_empty():
-					var blends = PackedByteArray()
-					blends.resize(blend_bytes.size())
-					for i in range(blend_bytes.size()):
-						blends[i] = int(blend_bytes[i])
-					layer.set_chunk_blend_weights(Vector2i(cx, cy), blends)
-				var blend2_bytes = chunk.get("blend_weights_2", [])
-				if blend2_bytes is Array and not blend2_bytes.is_empty():
-					var blends2 = PackedByteArray()
-					blends2.resize(blend2_bytes.size())
-					for i in range(blend2_bytes.size()):
-						blends2[i] = int(blend2_bytes[i])
-					layer.set_chunk_blend_weights_slot(Vector2i(cx, cy), 2, blends2)
-				var blend3_bytes = chunk.get("blend_weights_3", [])
-				if blend3_bytes is Array and not blend3_bytes.is_empty():
-					var blends3 = PackedByteArray()
-					blends3.resize(blend3_bytes.size())
-					for i in range(blend3_bytes.size()):
-						blends3[i] = int(blend3_bytes[i])
-					layer.set_chunk_blend_weights_slot(Vector2i(cx, cy), 3, blends3)
+			_deserialize_chunks_to_layer(layer, chunks)
 	if root.paint_layers.layers.size() > 0:
 		root.paint_layers.active_layer_index = clamp(
 			active_index, 0, root.paint_layers.layers.size() - 1
 		)
 	regenerate_paint_layers()
+
+
+## Deserialize an array of chunk dictionaries into a paint layer.
+## Returns the list of chunk IDs (Vector2i) that were loaded.
+func _deserialize_chunks_to_layer(
+	layer: HFPaintLayer, chunks: Array
+) -> Array[Vector2i]:
+	var loaded: Array[Vector2i] = []
+	for chunk in chunks:
+		if not (chunk is Dictionary):
+			continue
+		var cx = int(chunk.get("cx", 0))
+		var cy = int(chunk.get("cy", 0))
+		var cid = Vector2i(cx, cy)
+		var bytes = chunk.get("bits", [])
+		var bits = PackedByteArray()
+		if bytes is Array:
+			bits.resize(bytes.size())
+			for i in range(bytes.size()):
+				bits[i] = int(bytes[i])
+		layer.set_chunk_bits(cid, bits)
+		var mat_bytes = chunk.get("material_ids", [])
+		if mat_bytes is Array and not mat_bytes.is_empty():
+			var mat_ids = PackedByteArray()
+			mat_ids.resize(mat_bytes.size())
+			for i in range(mat_bytes.size()):
+				mat_ids[i] = int(mat_bytes[i])
+			layer.set_chunk_material_ids(cid, mat_ids)
+		var blend_bytes = chunk.get("blend_weights", [])
+		if blend_bytes is Array and not blend_bytes.is_empty():
+			var blends = PackedByteArray()
+			blends.resize(blend_bytes.size())
+			for i in range(blend_bytes.size()):
+				blends[i] = int(blend_bytes[i])
+			layer.set_chunk_blend_weights(cid, blends)
+		var blend2_bytes = chunk.get("blend_weights_2", [])
+		if blend2_bytes is Array and not blend2_bytes.is_empty():
+			var blends2 = PackedByteArray()
+			blends2.resize(blend2_bytes.size())
+			for i in range(blend2_bytes.size()):
+				blends2[i] = int(blend2_bytes[i])
+			layer.set_chunk_blend_weights_slot(cid, 2, blends2)
+		var blend3_bytes = chunk.get("blend_weights_3", [])
+		if blend3_bytes is Array and not blend3_bytes.is_empty():
+			var blends3 = PackedByteArray()
+			blends3.resize(blend3_bytes.size())
+			for i in range(blend3_bytes.size()):
+				blends3[i] = int(blend3_bytes[i])
+			layer.set_chunk_blend_weights_slot(cid, 3, blends3)
+		loaded.append(cid)
+	return loaded
 
 
 func _rebuild_loaded_regions_from_layers() -> void:
@@ -578,16 +570,14 @@ func load_region_index(index_data: Dictionary, hflevel_path: String = "") -> voi
 
 func capture_region_index() -> Dictionary:
 	var regions: Array = []
+	var seen: Dictionary = {}
 	for rid in region_manager.region_index.keys():
 		regions.append({"x": rid.x, "y": rid.y})
+		seen[rid] = true
 	for rid in region_manager.loaded_regions.keys():
-		var exists = false
-		for entry in regions:
-			if int(entry.get("x", 0)) == rid.x and int(entry.get("y", 0)) == rid.y:
-				exists = true
-				break
-		if not exists and _region_has_data(rid):
+		if not seen.has(rid) and _region_has_data(rid):
 			regions.append({"x": rid.x, "y": rid.y})
+			seen[rid] = true
 	return {
 		"region_size_cells": region_manager.region_size_cells,
 		"streaming_radius": region_manager.streaming_radius,
@@ -751,47 +741,8 @@ func _load_region(region_id: Vector2i) -> void:
 		var chunks = entry.get("chunks", [])
 		if not (chunks is Array):
 			continue
-		for chunk in chunks:
-			if not (chunk is Dictionary):
-				continue
-			var cx = int(chunk.get("cx", 0))
-			var cy = int(chunk.get("cy", 0))
-			var cid = Vector2i(cx, cy)
-			var bytes = chunk.get("bits", [])
-			var bits = PackedByteArray()
-			if bytes is Array:
-				bits.resize(bytes.size())
-				for i in range(bytes.size()):
-					bits[i] = int(bytes[i])
-			layer.set_chunk_bits(cid, bits)
-			var mat_bytes = chunk.get("material_ids", [])
-			if mat_bytes is Array and not mat_bytes.is_empty():
-				var mat_ids = PackedByteArray()
-				mat_ids.resize(mat_bytes.size())
-				for i in range(mat_bytes.size()):
-					mat_ids[i] = int(mat_bytes[i])
-				layer.set_chunk_material_ids(cid, mat_ids)
-			var blend_bytes = chunk.get("blend_weights", [])
-			if blend_bytes is Array and not blend_bytes.is_empty():
-				var blends = PackedByteArray()
-				blends.resize(blend_bytes.size())
-				for i in range(blend_bytes.size()):
-					blends[i] = int(blend_bytes[i])
-				layer.set_chunk_blend_weights(cid, blends)
-			var blend2_bytes = chunk.get("blend_weights_2", [])
-			if blend2_bytes is Array and not blend2_bytes.is_empty():
-				var blends2 = PackedByteArray()
-				blends2.resize(blend2_bytes.size())
-				for i in range(blend2_bytes.size()):
-					blends2[i] = int(blend2_bytes[i])
-				layer.set_chunk_blend_weights_slot(cid, 2, blends2)
-			var blend3_bytes = chunk.get("blend_weights_3", [])
-			if blend3_bytes is Array and not blend3_bytes.is_empty():
-				var blends3 = PackedByteArray()
-				blends3.resize(blend3_bytes.size())
-				for i in range(blend3_bytes.size()):
-					blends3[i] = int(blend3_bytes[i])
-				layer.set_chunk_blend_weights_slot(cid, 3, blends3)
+		var loaded_cids = _deserialize_chunks_to_layer(layer, chunks)
+		for cid in loaded_cids:
 			dirty_chunks[cid] = true
 	var dirty_list: Array[Vector2i] = []
 	for cid in dirty_chunks.keys():
@@ -830,26 +781,7 @@ func _reconcile_dirty_chunks(dirty: Array[Vector2i], layer_override: HFPaintLaye
 
 func _reconcile_layer(layer: HFPaintLayer, dirty: Array[Vector2i]) -> void:
 	if layer.has_heightmap() and root.paint_tool.heightmap_synth:
-		var model := HFGeneratedModel.new()
-		var hm_results = root.paint_tool.heightmap_synth.build_for_chunks(
-			layer, dirty, root.paint_tool.synth_settings
-		)
-		for hr in hm_results:
-			var hf := HFGeneratedModel.HeightmapFloor.new()
-			hf.id = hr.id
-			hf.mesh = hr.mesh
-			hf.transform = hr.transform
-			hf.blend_image = hr.blend_image
-			if hr.blend_image:
-				hf.blend_texture = ImageTexture.create_from_image(hr.blend_image)
-			hf.slot_textures = hr.slot_textures
-			hf.slot_uv_scales = hr.slot_uv_scales
-			hf.slot_tints = hr.slot_tints
-			model.heightmap_floors.append(hf)
-		var wall_model = root.paint_tool.geometry.build_for_chunks(
-			layer, dirty, root.paint_tool.synth_settings
-		)
-		model.walls = wall_model.walls
+		var model = root.paint_tool.build_heightmap_model(layer, dirty)
 		root.paint_tool.reconciler.reconcile(
 			model, layer.grid, root.paint_tool.synth_settings, dirty
 		)

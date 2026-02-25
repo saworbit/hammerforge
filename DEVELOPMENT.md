@@ -1,6 +1,6 @@
 ﻿# Development Guide
 
-Last updated: February 22, 2026
+Last updated: February 25, 2026
 
 This document covers local setup, codebase structure, and how to test features.
 
@@ -17,10 +17,10 @@ This document covers local setup, codebase structure, and how to test features.
 
 ```
 addons/hammerforge/
-  plugin.gd              EditorPlugin entry point, input routing
+  plugin.gd              EditorPlugin entry point, input routing, sticky LevelRoot discovery
   level_root.gd          Thin coordinator (~1,100 lines), delegates to subsystems
   input_state.gd         Drag/paint state machine (HFInputState)
-  dock.gd + dock.tscn    UI dock, tool state, tooltips, status bar
+  dock.gd + dock.tscn    UI dock (4 tabs: Brush, Paint, Entities, Manage), collapsible sections
   shortcut_hud.gd        Context-sensitive shortcut overlay (dynamic per mode)
   brush_instance.gd      DraftBrush node
   baker.gd               CSG -> mesh bake pipeline
@@ -30,9 +30,13 @@ addons/hammerforge/
   hf_extrude_tool.gd     Extrude Up/Down tool (face click + drag to extend brushes)
   surface_paint.gd       Per-face surface paint tool
   uv_editor.gd           UV editing dock
+  highlight.gdshader     Selection highlight shader (wireframe, unshaded, alpha)
   hflevel_io.gd          Variant encoding/decoding for .hflevel
   map_io.gd              .map import/export
   prefab_factory.gd      Advanced shape generation
+
+  ui/                    Reusable UI components
+    collapsible_section.gd HFCollapsibleSection: toggle-header VBoxContainer for dock sections
 
   systems/               Subsystem classes (RefCounted)
     hf_grid_system.gd      Editor grid management
@@ -70,10 +74,16 @@ addons/hammerforge/
 - **LevelRoot is the public API.** Its methods are thin one-line delegates to subsystems. External callers (`plugin.gd`, `dock.gd`) always go through `LevelRoot`.
 - **Input state machine.** `HFDragSystem` owns the `HFInputState` instance. Drag state transitions are explicit (`begin_drag` -> `advance_to_height` -> `end_drag`). Extrude uses `begin_extrude` -> `end_extrude`.
 - **Direct typed calls.** `plugin.gd` and `dock.gd` use typed references (`LevelRoot`, `DockType`) with direct method calls instead of `has_method`/`call`.
+- **Sticky LevelRoot discovery.** `plugin.gd` keeps `active_root` sticky: `_edit()` does not null it when non-LevelRoot nodes are selected. `_handles()` returns true for any node when a LevelRoot exists (deep recursive search). `dock.gd` mirrors this pattern.
+- **Collapsible sections.** Use `HFCollapsibleSection.create("Name", start_expanded)` from `ui/collapsible_section.gd` for dock sections. Paint and Manage tab contents are built programmatically in `_build_paint_tab()` and `_build_manage_tab()`.
+- **Signal-driven dock sync.** Setting controls (checkboxes, spinboxes) in the dock push values to LevelRoot via `toggled`/`value_changed` signal connections. `_process()` no longer polls 17 properties every frame. Perf panel updates every 30 frames; paint/material sync every 10 frames; disabled hints are flag-driven.
+- **Input decomposition.** `_forward_3d_gui_input()` in `plugin.gd` is a ~50-line dispatcher that routes to focused handlers: `_handle_paint_input()`, `_handle_keyboard_input()`, `_handle_rmb_cancel()`, `_handle_select_mouse()`, `_handle_extrude_mouse()`, `_handle_draw_mouse()`, `_handle_mouse_motion()`. Shared `_get_nudge_direction()` is used by both `_forward_3d_gui_input()` and `_shortcut_input()`.
+- **Brush/material caching.** `hf_brush_system.gd` uses `_brush_cache: Dictionary` for O(1) brush ID lookup, `_brush_count: int` for O(1) count, and `_material_cache: Dictionary` for material instance reuse. All CRUD methods maintain these caches.
 - **Undo/redo dynamic dispatch.** The `_commit_state_action` pattern in `dock.gd` intentionally uses string method names for undo/redo -- this is the one exception to the typed-calls rule.
 - **Undo/redo helper.** Use `HFUndoHelper` for editor actions to ensure consistent history and state snapshot restores.
 - **Undo/redo stability.** Prefer brush IDs and `create_brush_from_info()` for undo instead of storing Node references in history.
 - **Bake owner assignment.** Use `_assign_owner_recursive()` (not `_assign_owner()`) for baked geometry so all descendants get proper editor ownership. Always call it *after* the container is added to the scene tree.
+- **Shader files.** Prefer standalone `.gdshader` files over inline GLSL strings in GDScript (e.g. `highlight.gdshader` for the selection wireframe shader). Use `preload("file.gdshader")` to load them.
 
 ### CI
 
@@ -123,7 +133,7 @@ Create one quickly:
 2. Select `New Resource` -> `StandardMaterial3D` (or `ShaderMaterial`).
 3. Save it as `materials/test_mat.tres`.
 
-Then click `Add` in the Materials tab and choose that resource.
+Then click `Add` in the Paint tab → Materials section and choose that resource.
 
 ## Manual Test Checklist
 
@@ -141,7 +151,7 @@ Grouping
 - Save and reload -- confirm group persists.
 
 Texture Lock
-- Place a textured brush with Texture Lock enabled (Build tab checkbox).
+- Place a textured brush with Texture Lock enabled (Brush tab checkbox).
 - Resize the brush via gizmo -- confirm UV alignment stays consistent.
 - Move the brush -- confirm UVs track the movement.
 - Disable Texture Lock and resize -- confirm UVs shift with the resize.
@@ -164,16 +174,16 @@ Brush workflow
 Face materials + UVs
 - Add a material to the palette and assign it to multiple faces.
 - Toggle Face Select Mode and ensure face selection only works when enabled.
-- Open UV tab and drag points; confirm preview updates.
+- Open Paint tab → UV Editor section and drag points; confirm preview updates.
 
 Surface paint
 - Enable Paint Mode.
-- In Surface Paint tab, set `Paint Target = Surface`.
+- In Paint tab → Surface Paint section, set `Paint Target = Surface`.
 - Assign a texture to a layer and paint on a face.
 - Switch layers and verify isolated weights.
 
 Floor paint
-- In Floor Paint tab, use Brush/Erase/Rect/Line/Bucket on a layer.
+- In Paint tab → Floor Paint section, use Brush/Erase/Rect/Line/Bucket on a layer.
 - Switch brush shape between Square and Circle; confirm Square fills a box and Circle clips corners.
 - Confirm live preview while dragging.
 

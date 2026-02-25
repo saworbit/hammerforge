@@ -59,7 +59,9 @@ func reconcile(
 	for gid in _index.keys():
 		if not want.has(gid):
 			var node = _index.get(gid)
-			if node and node.is_inside_tree():
+			_index.erase(gid)
+			if node and is_instance_valid(node) and node.is_inside_tree():
+				node.get_parent().remove_child(node)
 				node.queue_free()
 
 

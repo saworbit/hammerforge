@@ -1,6 +1,6 @@
 ﻿# HammerForge Design Constraints
 
-Last updated: February 15, 2026
+Last updated: February 25, 2026
 
 This document makes the current tradeoffs explicit so level designers and developers know what HammerForge optimizes for.
 

@@ -1,6 +1,6 @@
 # HammerForge User Guide
 
-Last updated: February 22, 2026
+Last updated: February 25, 2026
 
 This guide covers the current HammerForge workflow in Godot 4.6: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs.
 
@@ -18,64 +18,44 @@ This guide covers the current HammerForge workflow in Godot 4.6: brush-based gre
 - Entities
 - Baker and paint systems
 
-If missing, HammerForge creates it automatically on first viewport click.
+If missing, HammerForge creates it automatically on first viewport click. LevelRoot stays active even when you select other scene nodes (sticky root discovery) -- you do not need to re-select it after clicking a camera, light, or other node.
 
-## Dock Controls (overview)
-Tool
-- Draw: create brushes.
-- Select: select existing brushes. Delete removes them.
-- Extrude Up: click a brush face and drag to extend it upward.
-- Extrude Down: click a brush face and drag to extend it downward.
+## Dock Layout (4 tabs)
+The dock has 4 tabs with collapsible sections for organized access to all controls. A "No LevelRoot" banner appears at the top when no root node is found. Toolbar buttons show keyboard shortcut labels.
 
-Organization
-- Visgroups: named visibility groups (Manage tab). Show/hide groups of brushes and entities.
-- Grouping: persistent groups that select/move together. Ctrl+G to group, Ctrl+U to ungroup.
-- Texture Lock: UV alignment preserved on move/resize (Build tab checkbox).
-- Cordon: restrict bake to a region (Manage tab). Yellow wireframe shows the cordon AABB.
+### Brush tab
+- **Tool**: Draw (D), Select (S), Extrude Up (U), Extrude Down (J).
+- **Mode**: Add or Subtract.
+- **Shape**: choose from the palette. Sides for pyramids/prisms.
+- **Size** X/Y/Z: defaults for new brushes.
+- **Grid Snap**: snap increment with quick preset buttons (1, 2, 4, 8, 16, 32, 64).
+- **Material**: active material picker.
+- **Physics Layer**: collision layer for baked output.
+- **Texture Lock**: UV alignment preserved on move/resize (enabled by default).
 
-Paint Mode (floor + surface)
-- Enables paint input in the viewport.
-- Paint Target is global and decides whether strokes affect Floor or Surface.
-- Floor Paint tab: Brush, Erase, Rect, Line, Bucket, Blend.
-- Floor Paint tab: Brush shape (Square or Circle), radius in grid cells, and layer picker.
-- Floor Paint tab: Region Streaming controls, Heightmap Import/Generate, Height Scale, Layer Y, Blend Strength, Blend Slot, and Terrain Slots controls.
-- Surface Paint tab: Paint Target, layers, texture picker, radius/strength.
+### Paint tab (collapsible sections)
+- **Floor Paint**: Brush, Erase, Rect, Line, Bucket, Blend tools. Brush shape (Square/Circle), radius, and layer picker.
+- **Heightmap**: Import PNG/EXR or Generate procedural noise. Height Scale and Layer Y spinboxes.
+- **Blend & Terrain**: Blend Strength, Blend Slot (B/C/D), and Terrain Slot A-D texture pickers with UV scales.
+- **Regions**: Region Streaming enable, Region Size, Stream Radius, Show Region Grid, memory stats.
+- **Materials**: Palette with Add/Remove. Face Select Mode toggle. Assign to Selected Faces.
+- **UV Editor**: Per-face UV editing with drag handles and Reset Projected UVs.
+- **Surface Paint**: Paint Target (Floor/Surface), layers, texture picker, radius/strength.
 
-Materials (per-face)
-- Materials palette: add/remove materials.
-- Materials are Godot resources (.tres/.material). Create via FileSystem -> New Resource -> StandardMaterial3D or ShaderMaterial, then save under `materials/`.
-- Face Select Mode toggles face selection in the viewport.
-- Assign to Selected Faces applies the palette material to selected faces.
+### Entities tab
+- Create DraftEntity button.
+- Entity palette with drag-and-drop placement.
 
-UV Editor
-- Displays UVs for the primary selected face.
-- Drag points to edit UVs or reset to projected UVs.
-
-Paint (surface paint)
-- Paint Target: Floor or Surface.
-- Surface paint layers: choose layer, pick texture, adjust radius/strength.
-
-Brush workflow
-- Mode: Add or Subtract.
-- Shape: choose from the palette.
-- Sides: for pyramids/prisms.
-- Size X/Y/Z: defaults for new brushes.
-- Grid Snap: snap increment.
-- Quick Snap: preset buttons.
-
-Bake
-- Merge Meshes, Generate LODs, Lightmap UV2 + Texel Size.
-- Bake Navmesh with cell/agent settings.
-
-Other
-- Show HUD, Show Grid, Follow Grid.
-- Debug Logs toggles HammerForge logs.
-- History panel (beta).
-- Playtest bakes and runs the scene.
-- Bake Dry Run reports what will be baked without generating geometry.
-- Validate Level scans for common issues; Validate + Fix applies safe fixes.
-- Export/Import Settings saves grid snap presets, brush size, and bake options.
-- Autosave keeps the last N history files under `res://.hammerforge/autosave_history`.
+### Manage tab (collapsible sections)
+- **Bake**: Bake button, Dry Run, Validate Level/Fix. Options: Merge Meshes, Generate LODs, Lightmap UV2, Texel Size, Navmesh (cell size, agent height), Use Face Materials, Quick Play.
+- **Actions**: Create Floor, Apply/Clear/Commit/Restore Cuts.
+- **File**: Save/Load .hflevel, Import/Export .map, Export .glb.
+- **Presets**: Save/rename presets grid.
+- **History**: History panel (beta).
+- **Settings**: Show HUD, Show Grid, Follow Grid, Debug Logs, Autosave path/toggle, Settings Export/Import.
+- **Performance**: Brush count, paint memory, chunk count, last bake time.
+- **Visgroups & Groups**: Visgroup list with [V]/[H] toggle, New/Add Sel/Rem Sel/Delete, Group Sel/Ungroup.
+- **Cordon**: Enable checkbox, min/max spinboxes, Set from Selection.
 
 Status bar
 - Shows current status ("Ready", "Baking...", errors in red, warnings in yellow).
@@ -104,7 +84,7 @@ For full details, see `docs/HammerForge_Data_Portability.md`.
 For install steps, upgrade guidance, and cache reset help, see `docs/HammerForge_Install_Upgrade.md`.
 
 ## Shortcut HUD
-The on-screen shortcut overlay updates dynamically based on your current tool and mode. Toggle it via the Show HUD checkbox in the Build tab. It shows:
+The on-screen shortcut overlay updates dynamically based on your current tool and mode. Toggle it via the Show HUD checkbox in the Manage tab → Settings section. It shows:
 
 | Context | Shortcuts Shown |
 |---------|----------------|
@@ -171,7 +151,7 @@ Notes:
 Groups let you persistently link brushes/entities so they select and move together.
 
 1. Select the brushes/entities you want to group.
-2. Press **Ctrl+G** (or click **Group Sel** in the Manage tab).
+2. Press **Ctrl+G** (or click **Group Sel** in the Manage tab → Visgroups & Groups section).
 3. Click any member of the group -- all members are selected automatically.
 4. Press **Ctrl+U** (or click **Ungroup**) to dissolve the group.
 
@@ -182,7 +162,7 @@ Notes:
 ## Texture Lock
 When Texture Lock is enabled, moving or resizing a brush automatically adjusts its face UVs so textures stay aligned.
 
-1. Check **Texture Lock** in the Build tab (enabled by default).
+1. Check **Texture Lock** in the Brush tab (enabled by default).
 2. Move or resize brushes normally -- UV alignment is preserved.
 3. Uncheck to disable (UVs will shift with transforms as before).
 
@@ -220,7 +200,7 @@ Notes
 
 ## Floor Paint
 1. Enable Paint Mode.
-2. Open the Floor Paint tab.
+2. Open the **Paint** tab → **Floor Paint** section.
 3. Choose tool, brush shape (Square or Circle), radius, and layer.
 4. Paint in the viewport.
 
@@ -233,7 +213,7 @@ Notes
 
 ### Region Streaming (Large Worlds)
 Region streaming keeps large paint grids responsive by loading only nearby regions.
-1. Enable **Streaming** in the Floor Paint tab.
+1. Enable **Streaming** in the Paint tab → Regions section.
 2. Set **Region Size** (cells) and **Stream Radius** (regions).
 3. Toggle **Show Region Grid** to visualize loaded regions.
 4. Paint normally; regions auto-load around the cursor.
@@ -266,14 +246,14 @@ Terrain slots:
 - **Slot Scale** controls per-slot UV tiling.
 
 ## Face Materials and UVs
-1. Open the Materials tab.
+1. Open the **Paint** tab → **Materials** section.
 2. Click `Add` to load a material resource into the palette (example: `materials/test_mat.tres`).
 3. Enable `Face Select Mode`.
 4. Use the Select tool and click faces in the viewport.
 5. Click `Assign to Selected Faces`.
 
 UV editing:
-- Open the UV tab after selecting a face.
+- Open the **Paint** tab → **UV Editor** section after selecting a face.
 - Drag UV points to edit.
 - Use `Reset Projected UVs` to regenerate UVs from projection.
 
@@ -283,7 +263,7 @@ Notes:
 
 ## Surface Paint (3D)
 1. Enable Paint Mode.
-2. Open the Surface Paint tab and set `Paint Target = Surface` (if needed).
+2. Open the **Paint** tab → **Surface Paint** section and set `Paint Target = Surface` (if needed).
 3. Pick a layer and assign a texture.
 4. Paint in the viewport.
 
@@ -291,7 +271,7 @@ Notes:
 - Radius is in UV space (0.0 to 1.0).
 - Surface paint updates the DraftBrush preview immediately.
 - Surface paint is separate from floor paint layers.
-- If paint affects the floor, set `Paint Target = Surface` in the Surface Paint tab.
+- If paint affects the floor, set `Paint Target = Surface` in the Surface Paint section.
 
 ## Entities (early)
 - Place nodes under `LevelRoot/Entities` or set meta `is_entity = true`.
@@ -364,14 +344,14 @@ Dock not showing
 - Restart Godot after enabling the plugin.
 
 Face selection not working
-- Enable Face Select Mode in the Materials tab.
+- Enable Face Select Mode in the Paint tab → Materials section.
 - Use the Select tool (not Draw).
 
 Material fails to load
 - Material `.tres` files must not have a UTF-8 BOM. If Godot reports "Expected '['" on a `.tres` file, re-save it without BOM (or create a fresh one via FileSystem -> New Resource -> StandardMaterial3D).
 
 Heightmap mesh not appearing
-- Ensure the active layer has a heightmap assigned (use Import or Generate in the Floor Paint tab).
+- Ensure the active layer has a heightmap assigned (use Import or Generate in the Paint tab → Heightmap section).
 - Confirm cells are painted first -- heightmap only displaces filled cells.
 
 Blend shader shows only one slot

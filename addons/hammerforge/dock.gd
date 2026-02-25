@@ -10,6 +10,8 @@ const DraftEntity = preload("draft_entity.gd")
 const DraftBrush = preload("brush_instance.gd")
 const FaceData = preload("face_data.gd")
 const HFUndoHelper = preload("undo_helper.gd")
+const HFCollapsibleSection = preload("ui/collapsible_section.gd")
+const UVEditorScene = preload("uv_editor.tscn")
 
 const PRESET_MENU_RENAME := 0
 const PRESET_MENU_DELETE := 1
@@ -39,9 +41,11 @@ class BrushPresetButton:
 
 
 @onready var main_tabs: TabContainer = $Margin/VBox/MainTabs
-@onready var build_tab: ScrollContainer = $Margin/VBox/MainTabs/Build
+@onready var brush_tab: ScrollContainer = $Margin/VBox/MainTabs/Brush
+@onready var paint_tab: ScrollContainer = $Margin/VBox/MainTabs/Paint
 @onready var entity_tab: ScrollContainer = $Margin/VBox/MainTabs/Entities
 @onready var manage_tab: ScrollContainer = $Margin/VBox/MainTabs/Manage
+@onready var no_root_banner: PanelContainer = $Margin/VBox/NoRootBanner
 @onready var status_bar: HBoxContainer = $Margin/VBox/Footer/StatusFooter
 @onready var progress_bar: ProgressBar = $Margin/VBox/Footer/StatusFooter/ProgressBar
 
@@ -51,12 +55,12 @@ class BrushPresetButton:
 @onready var mode_add: Button = $Margin/VBox/Toolbar/ModeAdd
 @onready var mode_subtract: Button = $Margin/VBox/Toolbar/ModeSubtract
 @onready
-var shape_select: OptionButton = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/ShapeRow/ShapeSelect
-@onready var sides_row: HBoxContainer = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/SidesRow
+var shape_select: OptionButton = $Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/ShapeRow/ShapeSelect
+@onready var sides_row: HBoxContainer = $Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/SidesRow
 @onready
-var sides_spin: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/SidesRow/SidesSpin
+var sides_spin: SpinBox = $Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/SidesRow/SidesSpin
 @onready
-var active_material_button: Button = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/MaterialRow/ActiveMaterial
+var active_material_button: Button = $Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/MaterialRow/ActiveMaterial
 @onready var material_dialog: FileDialog = $MaterialDialog
 @onready var material_palette_dialog: FileDialog = $MaterialPaletteDialog
 @onready var surface_paint_texture_dialog: FileDialog = $SurfacePaintTextureDialog
@@ -66,202 +70,137 @@ var active_material_button: Button = $Margin/VBox/MainTabs/Build/BuildMargin/Bui
 @onready var map_export_dialog: FileDialog = $MapExportDialog
 @onready var glb_export_dialog: FileDialog = $GLBExportDialog
 @onready var autosave_path_dialog: FileDialog = $AutosavePathDialog
-@onready var size_x: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/SizeRow/SizeX
-@onready var size_y: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/SizeRow/SizeY
-@onready var size_z: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/SizeRow/SizeZ
-@onready
-var paint_tool_select: OptionButton = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/PaintToolRow/PaintToolSelect
-@onready
-var paint_radius: SpinBox = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/PaintRadiusRow/PaintRadius
-@onready
-var brush_shape_select: OptionButton = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/BrushShapeRow/BrushShapeSelect
-@onready
-var paint_layer_select: OptionButton = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/PaintLayerRow/PaintLayerSelect
-@onready
-var paint_layer_add: Button = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/PaintLayerRow/PaintLayerAdd
-@onready
-var paint_layer_remove: Button = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/PaintLayerRow/PaintLayerRemove
-@onready
-var region_enable: CheckBox = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/RegionEnableRow/RegionEnable
-@onready
-var region_size_spin: SpinBox = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/RegionSizeRow/RegionSizeSpin
-@onready
-var region_radius_spin: SpinBox = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/RegionRadiusRow/RegionRadiusSpin
-@onready
-var region_memory_spin: SpinBox = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/RegionMemoryRow/RegionMemorySpin
-@onready
-var region_grid_toggle: CheckBox = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/RegionGridRow/RegionGridToggle
-@onready
-var heightmap_import: Button = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/HeightmapRow/HeightmapImport
-@onready
-var heightmap_generate: Button = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/HeightmapRow/HeightmapGenerate
-@onready
-var height_scale_spin: SpinBox = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/HeightScaleRow/HeightScaleSpin
-@onready
-var layer_y_spin: SpinBox = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/LayerYRow/LayerYSpin
-@onready
-var blend_strength_spin: SpinBox = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/BlendStrengthRow/BlendStrengthSpin
-@onready
-var blend_slot_select: OptionButton = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/BlendSlotRow/BlendSlotSelect
-@onready
-var terrain_slot_a_button: Button = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotARow/SlotATexture
-@onready
-var terrain_slot_a_scale: SpinBox = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotARow/SlotAScale
-@onready
-var terrain_slot_b_button: Button = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotBRow/SlotBTexture
-@onready
-var terrain_slot_b_scale: SpinBox = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotBRow/SlotBScale
-@onready
-var terrain_slot_c_button: Button = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotCRow/SlotCTexture
-@onready
-var terrain_slot_c_scale: SpinBox = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotCRow/SlotCScale
-@onready
-var terrain_slot_d_button: Button = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotDRow/SlotDTexture
-@onready
-var terrain_slot_d_scale: SpinBox = $Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotDRow/SlotDScale
+@onready var size_x: SpinBox = $Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/SizeRow/SizeX
+@onready var size_y: SpinBox = $Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/SizeRow/SizeY
+@onready var size_z: SpinBox = $Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/SizeRow/SizeZ
+# -- Paint tab controls (built programmatically in _build_paint_tab) --
+var paint_tool_select: OptionButton = null
+var paint_radius: SpinBox = null
+var brush_shape_select: OptionButton = null
+var paint_layer_select: OptionButton = null
+var paint_layer_add: Button = null
+var paint_layer_remove: Button = null
+var region_enable: CheckBox = null
+var region_size_spin: SpinBox = null
+var region_radius_spin: SpinBox = null
+var region_memory_spin: SpinBox = null
+var region_grid_toggle: CheckBox = null
+var heightmap_import: Button = null
+var heightmap_generate: Button = null
+var height_scale_spin: SpinBox = null
+var layer_y_spin: SpinBox = null
+var blend_strength_spin: SpinBox = null
+var blend_slot_select: OptionButton = null
+var terrain_slot_a_button: Button = null
+var terrain_slot_a_scale: SpinBox = null
+var terrain_slot_b_button: Button = null
+var terrain_slot_b_scale: SpinBox = null
+var terrain_slot_c_button: Button = null
+var terrain_slot_c_scale: SpinBox = null
+var terrain_slot_d_button: Button = null
+var terrain_slot_d_scale: SpinBox = null
 @onready var terrain_slot_texture_dialog: FileDialog = $TerrainSlotTextureDialog
 @onready var heightmap_import_dialog: FileDialog = $HeightmapImportDialog
-@onready var grid_snap: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/GridRow/GridSnap
+@onready var grid_snap: SpinBox = $Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/GridRow/GridSnap
 @onready
-var collision_layer_opt: OptionButton = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PhysicsLayerRow/PhysicsLayerOption
-@onready
-var bake_merge_meshes: CheckBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeMergeMeshes
-@onready
-var bake_generate_lods: CheckBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeGenerateLods
-@onready
-var bake_lightmap_uv2: CheckBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeLightmapUV2
-@onready
-var bake_use_face_materials: CheckBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeUseFaceMaterials
-@onready
-var bake_lightmap_texel_row: HBoxContainer = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeLightmapTexelRow
-@onready
-var bake_lightmap_texel: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeLightmapTexelRow/BakeLightmapTexel
-@onready var bake_navmesh: CheckBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeNavmesh
-@onready
-var bake_navmesh_cell_row: HBoxContainer = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeNavmeshCellRow
-@onready
-var bake_navmesh_cell_size: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeNavmeshCellRow/BakeNavmeshCellSize
-@onready
-var bake_navmesh_cell_height: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeNavmeshCellRow/BakeNavmeshCellHeight
-@onready
-var bake_navmesh_agent_row: HBoxContainer = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeNavmeshAgentRow
-@onready
-var bake_navmesh_agent_height: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeNavmeshAgentRow/BakeNavmeshAgentHeight
-@onready
-var bake_navmesh_agent_radius: SpinBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeNavmeshAgentRow/BakeNavmeshAgentRadius
-@onready var commit_freeze: CheckBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/CommitFreeze
-@onready var show_hud: CheckBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/ShowHUD
-@onready var show_grid: CheckBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/ShowGrid
-@onready var follow_grid: CheckBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/FollowGrid
-@onready var debug_logs: CheckBox = $Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/DebugLogs
-@onready var floor_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/CreateFloor
-@onready var apply_cuts_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/ApplyCuts
-@onready var clear_cuts_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/ClearCuts
-@onready
-var commit_cuts_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/CommitCuts
-@onready
-var restore_cuts_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/RestoreCuts
-@onready
-var bake_dry_run_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/BakeDryRun
-@onready
-var validate_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/ValidateLevel
-@onready
-var validate_fix_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/ValidateFix
+var collision_layer_opt: OptionButton = $Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/PhysicsLayerRow/PhysicsLayerOption
+# -- Bake options (built programmatically in _build_manage_tab) --
+var bake_merge_meshes: CheckBox = null
+var bake_generate_lods: CheckBox = null
+var bake_lightmap_uv2: CheckBox = null
+var bake_use_face_materials: CheckBox = null
+var bake_lightmap_texel_row: HBoxContainer = null
+var bake_lightmap_texel: SpinBox = null
+var bake_navmesh: CheckBox = null
+var bake_navmesh_cell_row: HBoxContainer = null
+var bake_navmesh_cell_size: SpinBox = null
+var bake_navmesh_cell_height: SpinBox = null
+var bake_navmesh_agent_row: HBoxContainer = null
+var bake_navmesh_agent_height: SpinBox = null
+var bake_navmesh_agent_radius: SpinBox = null
+# -- Editor toggles (built programmatically in _build_manage_tab) --
+var commit_freeze: CheckBox = null
+var show_hud: CheckBox = null
+var show_grid: CheckBox = null
+var follow_grid: CheckBox = null
+var debug_logs: CheckBox = null
+# -- Manage tab action buttons (built programmatically) --
+var floor_btn: Button = null
+var apply_cuts_btn: Button = null
+var clear_cuts_btn: Button = null
+var commit_cuts_btn: Button = null
+var restore_cuts_btn: Button = null
+var bake_dry_run_btn: Button = null
+var validate_btn: Button = null
+var validate_fix_btn: Button = null
 @onready
 var create_entity_btn: Button = $Margin/VBox/MainTabs/Entities/EntitiesMargin/EntitiesVBox/CreateEntity
 @onready
 var entity_palette: GridContainer = $Margin/VBox/MainTabs/Entities/EntitiesMargin/EntitiesVBox/EntityPalette
-@onready var bake_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/Bake
-@onready var clear_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/Clear
-@onready
-var save_hflevel_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/SaveHFLevel
-@onready
-var load_hflevel_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/LoadHFLevel
-@onready var import_map_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/ImportMap
-@onready var export_map_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/ExportMap
-@onready var export_glb_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/ExportGLB
-@onready
-var autosave_enabled: CheckBox = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/AutosaveEnabled
-@onready
-var autosave_minutes: SpinBox = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/AutosaveMinutesRow/AutosaveMinutes
-@onready
-var autosave_path_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/AutosavePath
-@onready
-var autosave_keep: SpinBox = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/AutosaveKeepRow/AutosaveKeep
+var bake_btn: Button = null
+var clear_btn: Button = null
+# -- File buttons (built programmatically) --
+var save_hflevel_btn: Button = null
+var load_hflevel_btn: Button = null
+var import_map_btn: Button = null
+var export_map_btn: Button = null
+var export_glb_btn: Button = null
+# -- Autosave controls (built programmatically) --
+var autosave_enabled: CheckBox = null
+var autosave_minutes: SpinBox = null
+var autosave_path_btn: Button = null
+var autosave_keep: SpinBox = null
 @onready var status_label: Label = $Margin/VBox/Footer/StatusFooter/StatusLabel
 @onready var selection_label: Label = $Margin/VBox/Footer/StatusFooter/SelectionLabel
 @onready var perf_label: Label = $Margin/VBox/Footer/StatusFooter/BrushCountLabel
-@onready
-var undo_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/HistoryControls/Undo
-@onready
-var redo_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/HistoryControls/Redo
-@onready
-var history_list: ItemList = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/HistoryList
+# -- History (built programmatically) --
+var undo_btn: Button = null
+var redo_btn: Button = null
+var history_list: ItemList = null
 @onready var quick_play_btn: Button = $Margin/VBox/Footer/QuickPlay
-
-@onready
-var export_settings_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/ExportSettings
-@onready
-var import_settings_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/ImportSettings
+# -- Settings (built programmatically) --
+var export_settings_btn: Button = null
+var import_settings_btn: Button = null
 @onready var settings_export_dialog: FileDialog = $SettingsExportDialog
 @onready var settings_import_dialog: FileDialog = $SettingsImportDialog
-
-@onready
-var perf_brushes_value: Label = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/PerformanceGrid/PerfBrushesValue
-@onready
-var perf_paint_mem_value: Label = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/PerformanceGrid/PerfPaintMemValue
-@onready
-var perf_bake_chunks_value: Label = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/PerformanceGrid/PerfBakeChunksValue
-@onready
-var perf_bake_time_value: Label = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/PerformanceGrid/PerfBakeTimeValue
-
-@onready
-var materials_list: ItemList = $Margin/VBox/MainTabs/Materials/MaterialsMargin/MaterialsVBox/MaterialsList
-@onready
-var material_add: Button = $Margin/VBox/MainTabs/Materials/MaterialsMargin/MaterialsVBox/MaterialsButtons/MaterialAdd
-@onready
-var material_remove: Button = $Margin/VBox/MainTabs/Materials/MaterialsMargin/MaterialsVBox/MaterialsButtons/MaterialRemove
-@onready
-var material_assign: Button = $Margin/VBox/MainTabs/Materials/MaterialsMargin/MaterialsVBox/MaterialAssign
-@onready
-var face_select_mode: CheckBox = $Margin/VBox/MainTabs/Materials/MaterialsMargin/MaterialsVBox/FaceSelectMode
-@onready
-var face_clear: Button = $Margin/VBox/MainTabs/Materials/MaterialsMargin/MaterialsVBox/FaceClear
-
-@onready var uv_editor: UVEditor = $Margin/VBox/MainTabs/UV/UVVBox/UVEditor
-@onready var uv_reset: Button = $Margin/VBox/MainTabs/UV/UVVBox/UVReset
-
-@onready
-var paint_target_select: OptionButton = $Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/PaintTargetRow/PaintTargetSelect
-@onready
-var surface_paint_radius: SpinBox = $Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/SurfacePaintRadiusRow/SurfacePaintRadius
-@onready
-var surface_paint_strength: SpinBox = $Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/SurfacePaintStrengthRow/SurfacePaintStrength
-@onready
-var surface_paint_layer_select: OptionButton = $Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/SurfacePaintLayerRow/SurfacePaintLayerSelect
-@onready
-var surface_paint_layer_add: Button = $Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/SurfacePaintLayerRow/SurfacePaintLayerAdd
-@onready
-var surface_paint_layer_remove: Button = $Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/SurfacePaintLayerRow/SurfacePaintLayerRemove
-@onready
-var surface_paint_texture: Button = $Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/SurfacePaintTexture
-
-@onready
-var save_preset_btn: Button = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/SavePreset
-@onready
-var preset_grid: GridContainer = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/PresetGrid
+# -- Performance (built programmatically) --
+var perf_brushes_value: Label = null
+var perf_paint_mem_value: Label = null
+var perf_bake_chunks_value: Label = null
+var perf_bake_time_value: Label = null
+# -- Materials (built programmatically in _build_paint_tab) --
+var materials_list: ItemList = null
+var material_add: Button = null
+var material_remove: Button = null
+var material_assign: Button = null
+var face_select_mode: CheckBox = null
+var face_clear: Button = null
+# -- UV (built programmatically in _build_paint_tab) --
+var uv_editor: UVEditor = null
+var uv_reset: Button = null
+# -- Surface paint (built programmatically in _build_paint_tab) --
+var paint_target_select: OptionButton = null
+var surface_paint_radius: SpinBox = null
+var surface_paint_strength: SpinBox = null
+var surface_paint_layer_select: OptionButton = null
+var surface_paint_layer_add: Button = null
+var surface_paint_layer_remove: Button = null
+var surface_paint_texture: Button = null
+# -- Presets (built programmatically) --
+var save_preset_btn: Button = null
+var preset_grid: GridContainer = null
 @onready var preset_menu: PopupMenu = $PresetMenu
 @onready var preset_rename_dialog: AcceptDialog = $PresetRenameDialog
 @onready var preset_rename_line: LineEdit = $PresetRenameDialog/PresetRenameLine
 
 @onready var snap_buttons: Array[Button] = [
-	$Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/QuickSnapGrid/Snap1,
-	$Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/QuickSnapGrid/Snap2,
-	$Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/QuickSnapGrid/Snap4,
-	$Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/QuickSnapGrid/Snap8,
-	$Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/QuickSnapGrid/Snap16,
-	$Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/QuickSnapGrid/Snap32,
-	$Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/QuickSnapGrid/Snap64
+	$Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid/Snap1,
+	$Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid/Snap2,
+	$Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid/Snap4,
+	$Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid/Snap8,
+	$Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid/Snap16,
+	$Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid/Snap32,
+	$Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid/Snap64
 ]
 var snap_preset_values: Array = [1, 2, 4, 8, 16, 32, 64]
 
@@ -310,6 +249,10 @@ var _terrain_slot_pick_index: int = -1
 var _terrain_slot_refreshing := false
 var _region_settings_refreshing := false
 var _bake_disabled := false
+var _perf_frame_counter: int = 0
+var _sync_frame_counter: int = 0
+var _hints_dirty: bool = true
+var _prop_cache: Dictionary = {}
 var tool_extrude_up: Button = null
 var tool_extrude_down: Button = null
 
@@ -338,6 +281,34 @@ func _is_level_root(node: Node) -> bool:
 	return node != null and node is LevelRootType
 
 
+func _find_level_root_in(scene: Node) -> Node:
+	if not scene:
+		return null
+	# Check scene root itself
+	if scene.get_script() == LevelRootType or scene is LevelRootType:
+		return scene
+	# Check direct child named "LevelRoot" (fast path)
+	var candidate = scene.get_node_or_null("LevelRoot")
+	if candidate:
+		return candidate
+	# Deep search — find any LevelRoot anywhere in the tree
+	for child in scene.get_children():
+		var found = _find_level_root_recursive(child)
+		if found:
+			return found
+	return null
+
+
+func _find_level_root_recursive(node: Node) -> Node:
+	if node.get_script() == LevelRootType or node is LevelRootType:
+		return node
+	for child in node.get_children():
+		var found = _find_level_root_recursive(child)
+		if found:
+			return found
+	return null
+
+
 func _cache_root_properties() -> void:
 	root_properties.clear()
 	if not connected_root:
@@ -350,6 +321,117 @@ func _cache_root_properties() -> void:
 
 func _root_has_property(name: String) -> bool:
 	return root_properties.has(name)
+
+
+func _on_setting_toggled(pressed: bool, prop: String) -> void:
+	if level_root and _root_has_property(prop):
+		level_root.set(prop, pressed)
+
+
+func _on_setting_float_changed(value: float, prop: String) -> void:
+	if level_root and _root_has_property(prop):
+		level_root.set(prop, value)
+
+
+func _on_setting_int_changed(value: float, prop: String) -> void:
+	if level_root and _root_has_property(prop):
+		level_root.set(prop, int(value))
+
+
+func _on_debug_toggled(pressed: bool) -> void:
+	debug_enabled = pressed
+	if level_root and _root_has_property("debug_logging"):
+		level_root.set("debug_logging", pressed)
+
+
+func _connect_setting_signals() -> void:
+	# CheckBox → bool property
+	var toggle_bindings: Array = [
+		[bake_merge_meshes, "bake_merge_meshes"],
+		[bake_generate_lods, "bake_generate_lods"],
+		[bake_lightmap_uv2, "bake_lightmap_uv2"],
+		[bake_use_face_materials, "bake_use_face_materials"],
+		[bake_navmesh, "bake_navmesh"],
+		[commit_freeze, "commit_freeze"],
+		[autosave_enabled, "hflevel_autosave_enabled"],
+		[show_grid, "grid_visible"],
+		[follow_grid, "grid_follow_brush"],
+	]
+	for binding in toggle_bindings:
+		var ctrl: CheckBox = binding[0] as CheckBox
+		var prop: String = binding[1]
+		if ctrl:
+			ctrl.toggled.connect(_on_setting_toggled.bind(prop))
+	# SpinBox → float property
+	var float_bindings: Array = [
+		[bake_lightmap_texel, "bake_lightmap_texel_size"],
+		[bake_navmesh_cell_size, "bake_navmesh_cell_size"],
+		[bake_navmesh_cell_height, "bake_navmesh_cell_height"],
+		[bake_navmesh_agent_height, "bake_navmesh_agent_height"],
+		[bake_navmesh_agent_radius, "bake_navmesh_agent_radius"],
+	]
+	for binding in float_bindings:
+		var ctrl: SpinBox = binding[0] as SpinBox
+		var prop: String = binding[1]
+		if ctrl:
+			ctrl.value_changed.connect(_on_setting_float_changed.bind(prop))
+	# SpinBox → int property
+	var int_bindings: Array = [
+		[autosave_minutes, "hflevel_autosave_minutes"],
+		[autosave_keep, "hflevel_autosave_keep"],
+	]
+	for binding in int_bindings:
+		var ctrl: SpinBox = binding[0] as SpinBox
+		var prop: String = binding[1]
+		if ctrl:
+			ctrl.value_changed.connect(_on_setting_int_changed.bind(prop))
+	# Debug checkbox (special — also sets local debug_enabled bool)
+	if debug_logs:
+		debug_logs.toggled.connect(_on_debug_toggled)
+
+
+func _apply_ui_state_to_root() -> void:
+	if not level_root:
+		return
+	var toggle_pairs: Array = [
+		[bake_merge_meshes, "bake_merge_meshes"],
+		[bake_generate_lods, "bake_generate_lods"],
+		[bake_lightmap_uv2, "bake_lightmap_uv2"],
+		[bake_use_face_materials, "bake_use_face_materials"],
+		[bake_navmesh, "bake_navmesh"],
+		[commit_freeze, "commit_freeze"],
+		[autosave_enabled, "hflevel_autosave_enabled"],
+		[show_grid, "grid_visible"],
+		[follow_grid, "grid_follow_brush"],
+	]
+	for pair in toggle_pairs:
+		var ctrl: CheckBox = pair[0] as CheckBox
+		var prop: String = pair[1]
+		if ctrl and _root_has_property(prop):
+			level_root.set(prop, ctrl.button_pressed)
+	var float_pairs: Array = [
+		[bake_lightmap_texel, "bake_lightmap_texel_size"],
+		[bake_navmesh_cell_size, "bake_navmesh_cell_size"],
+		[bake_navmesh_cell_height, "bake_navmesh_cell_height"],
+		[bake_navmesh_agent_height, "bake_navmesh_agent_height"],
+		[bake_navmesh_agent_radius, "bake_navmesh_agent_radius"],
+	]
+	for pair in float_pairs:
+		var ctrl: SpinBox = pair[0] as SpinBox
+		var prop: String = pair[1]
+		if ctrl and _root_has_property(prop):
+			level_root.set(prop, float(ctrl.value))
+	var int_pairs: Array = [
+		[autosave_minutes, "hflevel_autosave_minutes"],
+		[autosave_keep, "hflevel_autosave_keep"],
+	]
+	for pair in int_pairs:
+		var ctrl: SpinBox = pair[0] as SpinBox
+		var prop: String = pair[1]
+		if ctrl and _root_has_property(prop):
+			level_root.set(prop, int(ctrl.value))
+	if _root_has_property("debug_logging"):
+		level_root.set("debug_logging", debug_enabled)
 
 
 func set_editor_interface(iface: EditorInterface) -> void:
@@ -672,7 +754,7 @@ func _on_history_undo() -> void:
 	if editor_interface and editor_interface.has_method("undo"):
 		editor_interface.call("undo")
 		return
-	if undo_redo and undo_redo.has_method("undo"):
+	if undo_redo:
 		undo_redo.undo()
 
 
@@ -680,17 +762,465 @@ func _on_history_redo() -> void:
 	if editor_interface and editor_interface.has_method("redo"):
 		editor_interface.call("redo")
 		return
-	if undo_redo and undo_redo.has_method("redo"):
+	if undo_redo:
 		undo_redo.redo()
 
 
+# ===========================================================================
+# UI builders — construct Paint and Manage tabs with collapsible sections
+# ===========================================================================
+
+
+func _make_label_row(label_text: String, control: Control) -> HBoxContainer:
+	var row = HBoxContainer.new()
+	var label = Label.new()
+	label.text = label_text
+	row.add_child(label)
+	control.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(control)
+	return row
+
+
+func _make_spin(
+	min_val: float, max_val: float, step_val: float, default_val: float
+) -> SpinBox:
+	var spin = SpinBox.new()
+	spin.min_value = min_val
+	spin.max_value = max_val
+	spin.step = step_val
+	spin.value = default_val
+	spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	return spin
+
+
+func _make_check(label_text: String, default_on: bool = false) -> CheckBox:
+	var check = CheckBox.new()
+	check.text = label_text
+	check.button_pressed = default_on
+	return check
+
+
+func _make_button(label_text: String) -> Button:
+	var btn = Button.new()
+	btn.text = label_text
+	return btn
+
+
+func _build_paint_tab() -> void:
+	var root_vbox = $Margin/VBox/MainTabs/Paint/PaintMargin/PaintVBox
+	if not root_vbox:
+		return
+
+	# --- Floor Paint section ---
+	var floor_sec = HFCollapsibleSection.create("Floor Paint", true)
+	root_vbox.add_child(floor_sec)
+	var fc = floor_sec.get_content()
+
+	paint_tool_select = OptionButton.new()
+	fc.add_child(_make_label_row("Tool", paint_tool_select))
+
+	paint_radius = _make_spin(1, 16, 1, 1)
+	fc.add_child(_make_label_row("Radius", paint_radius))
+
+	brush_shape_select = OptionButton.new()
+	fc.add_child(_make_label_row("Shape", brush_shape_select))
+
+	var layer_row = HBoxContainer.new()
+	var layer_label = Label.new()
+	layer_label.text = "Layer"
+	layer_row.add_child(layer_label)
+	paint_layer_select = OptionButton.new()
+	paint_layer_select.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	layer_row.add_child(paint_layer_select)
+	paint_layer_add = Button.new()
+	paint_layer_add.text = "+"
+	paint_layer_add.custom_minimum_size = Vector2(24, 0)
+	layer_row.add_child(paint_layer_add)
+	paint_layer_remove = Button.new()
+	paint_layer_remove.text = "-"
+	paint_layer_remove.custom_minimum_size = Vector2(24, 0)
+	layer_row.add_child(paint_layer_remove)
+	fc.add_child(layer_row)
+
+	layer_y_spin = _make_spin(-1000, 1000, 0.5, 0.0)
+	fc.add_child(_make_label_row("Layer Y", layer_y_spin))
+
+	height_scale_spin = _make_spin(0.1, 100, 0.1, 10.0)
+	fc.add_child(_make_label_row("Height Scale", height_scale_spin))
+
+	# --- Heightmap section ---
+	var hm_sec = HFCollapsibleSection.create("Heightmap", false)
+	root_vbox.add_child(hm_sec)
+	var hmc = hm_sec.get_content()
+
+	var hm_row = HBoxContainer.new()
+	heightmap_import = Button.new()
+	heightmap_import.text = "Import..."
+	heightmap_import.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hm_row.add_child(heightmap_import)
+	heightmap_generate = Button.new()
+	heightmap_generate.text = "Generate Noise"
+	heightmap_generate.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hm_row.add_child(heightmap_generate)
+	hmc.add_child(hm_row)
+
+	# --- Blend & Terrain section ---
+	var blend_sec = HFCollapsibleSection.create("Blend & Terrain", false)
+	root_vbox.add_child(blend_sec)
+	var bc = blend_sec.get_content()
+
+	blend_strength_spin = _make_spin(0, 1, 0.05, 0.5)
+	bc.add_child(_make_label_row("Strength", blend_strength_spin))
+
+	blend_slot_select = OptionButton.new()
+	bc.add_child(_make_label_row("Blend Slot", blend_slot_select))
+
+	var slot_labels = ["Slot A", "Slot B", "Slot C", "Slot D"]
+	var slot_buttons: Array[Button] = []
+	var slot_scales: Array[SpinBox] = []
+	for i in range(4):
+		var slot_row = HBoxContainer.new()
+		var slot_label = Label.new()
+		slot_label.text = slot_labels[i]
+		slot_row.add_child(slot_label)
+		var tex_btn = Button.new()
+		tex_btn.text = "Texture..."
+		tex_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		slot_row.add_child(tex_btn)
+		var scale_spin = _make_spin(0.01, 100, 0.1, 1.0)
+		slot_row.add_child(scale_spin)
+		bc.add_child(slot_row)
+		slot_buttons.append(tex_btn)
+		slot_scales.append(scale_spin)
+	terrain_slot_a_button = slot_buttons[0]
+	terrain_slot_b_button = slot_buttons[1]
+	terrain_slot_c_button = slot_buttons[2]
+	terrain_slot_d_button = slot_buttons[3]
+	terrain_slot_a_scale = slot_scales[0]
+	terrain_slot_b_scale = slot_scales[1]
+	terrain_slot_c_scale = slot_scales[2]
+	terrain_slot_d_scale = slot_scales[3]
+
+	# --- Regions section ---
+	var region_sec = HFCollapsibleSection.create("Regions", false)
+	root_vbox.add_child(region_sec)
+	var rc = region_sec.get_content()
+
+	region_enable = CheckBox.new()
+	rc.add_child(_make_label_row("Streaming", region_enable))
+
+	region_size_spin = _make_spin(64, 2048, 64, 512)
+	rc.add_child(_make_label_row("Region Size", region_size_spin))
+
+	region_radius_spin = _make_spin(0, 8, 1, 2)
+	rc.add_child(_make_label_row("Stream Radius", region_radius_spin))
+
+	region_memory_spin = _make_spin(32, 4096, 32, 256)
+	rc.add_child(_make_label_row("Memory (MB)", region_memory_spin))
+
+	region_grid_toggle = CheckBox.new()
+	rc.add_child(_make_label_row("Show Region Grid", region_grid_toggle))
+
+	# --- Materials section ---
+	var mat_sec = HFCollapsibleSection.create("Materials", true)
+	root_vbox.add_child(mat_sec)
+	var mc = mat_sec.get_content()
+
+	materials_list = ItemList.new()
+	materials_list.custom_minimum_size = Vector2(0, 120)
+	materials_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	mc.add_child(materials_list)
+
+	var mat_btn_row = HBoxContainer.new()
+	material_add = Button.new()
+	material_add.text = "Add"
+	mat_btn_row.add_child(material_add)
+	material_remove = Button.new()
+	material_remove.text = "Remove"
+	mat_btn_row.add_child(material_remove)
+	mc.add_child(mat_btn_row)
+
+	material_assign = Button.new()
+	material_assign.text = "Assign to Selected Faces"
+	mc.add_child(material_assign)
+
+	face_select_mode = CheckBox.new()
+	face_select_mode.text = "Face Select Mode"
+	mc.add_child(face_select_mode)
+
+	face_clear = Button.new()
+	face_clear.text = "Clear Face Selection"
+	mc.add_child(face_clear)
+
+	# --- UV section ---
+	var uv_sec = HFCollapsibleSection.create("UV Editor", false)
+	root_vbox.add_child(uv_sec)
+	var uc = uv_sec.get_content()
+
+	var uv_instance = UVEditorScene.instantiate()
+	uv_editor = uv_instance as UVEditor
+	uc.add_child(uv_instance)
+
+	uv_reset = Button.new()
+	uv_reset.text = "Reset Projected UVs"
+	uc.add_child(uv_reset)
+
+	# --- Surface Paint section ---
+	var sp_sec = HFCollapsibleSection.create("Surface Paint", false)
+	root_vbox.add_child(sp_sec)
+	var sc = sp_sec.get_content()
+
+	paint_target_select = OptionButton.new()
+	sc.add_child(_make_label_row("Target", paint_target_select))
+
+	surface_paint_radius = _make_spin(0.01, 0.5, 0.01, 0.1)
+	sc.add_child(_make_label_row("Radius (UV)", surface_paint_radius))
+
+	surface_paint_strength = _make_spin(0.0, 1.0, 0.05, 1.0)
+	sc.add_child(_make_label_row("Strength", surface_paint_strength))
+
+	var sp_layer_row = HBoxContainer.new()
+	var sp_layer_label = Label.new()
+	sp_layer_label.text = "Layer"
+	sp_layer_row.add_child(sp_layer_label)
+	surface_paint_layer_select = OptionButton.new()
+	surface_paint_layer_select.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sp_layer_row.add_child(surface_paint_layer_select)
+	surface_paint_layer_add = Button.new()
+	surface_paint_layer_add.text = "+"
+	surface_paint_layer_add.custom_minimum_size = Vector2(24, 0)
+	sp_layer_row.add_child(surface_paint_layer_add)
+	surface_paint_layer_remove = Button.new()
+	surface_paint_layer_remove.text = "-"
+	surface_paint_layer_remove.custom_minimum_size = Vector2(24, 0)
+	sp_layer_row.add_child(surface_paint_layer_remove)
+	sc.add_child(sp_layer_row)
+
+	surface_paint_texture = Button.new()
+	surface_paint_texture.text = "Pick Layer Texture"
+	sc.add_child(surface_paint_texture)
+
+
+func _build_manage_tab() -> void:
+	var root_vbox = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox
+	if not root_vbox:
+		return
+
+	# --- Bake section ---
+	var bake_sec = HFCollapsibleSection.create("Bake", true)
+	root_vbox.add_child(bake_sec)
+	var bk = bake_sec.get_content()
+
+	bake_btn = _make_button("Bake")
+	bk.add_child(bake_btn)
+
+	bake_dry_run_btn = _make_button("Bake Dry Run")
+	bk.add_child(bake_dry_run_btn)
+
+	validate_btn = _make_button("Validate Level")
+	bk.add_child(validate_btn)
+
+	validate_fix_btn = _make_button("Validate + Fix")
+	bk.add_child(validate_fix_btn)
+
+	bake_merge_meshes = _make_check("Merge Meshes")
+	bk.add_child(bake_merge_meshes)
+
+	bake_generate_lods = _make_check("Generate LODs")
+	bk.add_child(bake_generate_lods)
+
+	bake_lightmap_uv2 = _make_check("Lightmap UV2")
+	bk.add_child(bake_lightmap_uv2)
+
+	bake_use_face_materials = _make_check("Use Face Materials")
+	bk.add_child(bake_use_face_materials)
+
+	bake_lightmap_texel_row = HBoxContainer.new()
+	var texel_label = Label.new()
+	texel_label.text = "Texel Size"
+	bake_lightmap_texel_row.add_child(texel_label)
+	bake_lightmap_texel = _make_spin(0.01, 4.0, 0.01, 0.1)
+	bake_lightmap_texel_row.add_child(bake_lightmap_texel)
+	bk.add_child(bake_lightmap_texel_row)
+
+	bake_navmesh = _make_check("Bake Navmesh")
+	bk.add_child(bake_navmesh)
+
+	bake_navmesh_cell_row = HBoxContainer.new()
+	var nav_cell_label = Label.new()
+	nav_cell_label.text = "Navmesh Cell"
+	bake_navmesh_cell_row.add_child(nav_cell_label)
+	bake_navmesh_cell_size = _make_spin(0.05, 2.0, 0.01, 0.3)
+	bake_navmesh_cell_row.add_child(bake_navmesh_cell_size)
+	bake_navmesh_cell_height = _make_spin(0.05, 2.0, 0.01, 0.2)
+	bake_navmesh_cell_row.add_child(bake_navmesh_cell_height)
+	bk.add_child(bake_navmesh_cell_row)
+
+	bake_navmesh_agent_row = HBoxContainer.new()
+	var nav_agent_label = Label.new()
+	nav_agent_label.text = "Agent Size"
+	bake_navmesh_agent_row.add_child(nav_agent_label)
+	bake_navmesh_agent_height = _make_spin(0.5, 5.0, 0.1, 2.0)
+	bake_navmesh_agent_row.add_child(bake_navmesh_agent_height)
+	bake_navmesh_agent_radius = _make_spin(0.1, 2.0, 0.05, 0.4)
+	bake_navmesh_agent_row.add_child(bake_navmesh_agent_radius)
+	bk.add_child(bake_navmesh_agent_row)
+
+	# --- Actions section ---
+	var act_sec = HFCollapsibleSection.create("Actions", true)
+	root_vbox.add_child(act_sec)
+	var ac = act_sec.get_content()
+
+	floor_btn = _make_button("Create Floor")
+	ac.add_child(floor_btn)
+
+	apply_cuts_btn = _make_button("Apply Cuts")
+	ac.add_child(apply_cuts_btn)
+
+	clear_cuts_btn = _make_button("Clear Pending Cuts")
+	ac.add_child(clear_cuts_btn)
+
+	commit_cuts_btn = _make_button("Commit Cuts (Bake)")
+	ac.add_child(commit_cuts_btn)
+
+	restore_cuts_btn = _make_button("Restore Committed Cuts")
+	ac.add_child(restore_cuts_btn)
+
+	clear_btn = _make_button("Clear Brushes")
+	ac.add_child(clear_btn)
+
+	# --- File section ---
+	var file_sec = HFCollapsibleSection.create("File", true)
+	root_vbox.add_child(file_sec)
+	var flc = file_sec.get_content()
+
+	save_hflevel_btn = _make_button("Save .hflevel")
+	flc.add_child(save_hflevel_btn)
+
+	load_hflevel_btn = _make_button("Load .hflevel")
+	flc.add_child(load_hflevel_btn)
+
+	import_map_btn = _make_button("Import .map")
+	flc.add_child(import_map_btn)
+
+	export_map_btn = _make_button("Export .map")
+	flc.add_child(export_map_btn)
+
+	export_glb_btn = _make_button("Export .glb")
+	flc.add_child(export_glb_btn)
+
+	# --- Presets section ---
+	var preset_sec = HFCollapsibleSection.create("Presets", false)
+	root_vbox.add_child(preset_sec)
+	var pc = preset_sec.get_content()
+
+	save_preset_btn = _make_button("Save Current")
+	pc.add_child(save_preset_btn)
+
+	preset_grid = GridContainer.new()
+	preset_grid.columns = 2
+	pc.add_child(preset_grid)
+
+	# --- History section (collapsed by default) ---
+	var hist_sec = HFCollapsibleSection.create("History", false)
+	root_vbox.add_child(hist_sec)
+	var hc = hist_sec.get_content()
+
+	var hist_controls = HBoxContainer.new()
+	undo_btn = _make_button("Undo")
+	hist_controls.add_child(undo_btn)
+	redo_btn = _make_button("Redo")
+	hist_controls.add_child(redo_btn)
+	hc.add_child(hist_controls)
+
+	history_list = ItemList.new()
+	history_list.custom_minimum_size = Vector2(0, 80)
+	history_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	history_list.focus_mode = Control.FOCUS_NONE
+	hc.add_child(history_list)
+
+	# --- Settings section (collapsed by default) ---
+	var set_sec = HFCollapsibleSection.create("Settings", false)
+	root_vbox.add_child(set_sec)
+	var stc = set_sec.get_content()
+
+	commit_freeze = _make_check("Freeze Commit (keep CSG hidden)", true)
+	stc.add_child(commit_freeze)
+
+	show_hud = _make_check("Show HUD", true)
+	stc.add_child(show_hud)
+
+	show_grid = _make_check("Show Grid", false)
+	stc.add_child(show_grid)
+
+	follow_grid = _make_check("Follow Grid", false)
+	stc.add_child(follow_grid)
+
+	debug_logs = _make_check("Debug Logs", false)
+	stc.add_child(debug_logs)
+
+	autosave_enabled = _make_check("Enable Autosave", true)
+	stc.add_child(autosave_enabled)
+
+	autosave_minutes = _make_spin(1, 60, 1, 5)
+	stc.add_child(_make_label_row("Autosave Minutes", autosave_minutes))
+
+	autosave_keep = _make_spin(1, 50, 1, 5)
+	stc.add_child(_make_label_row("Keep Backups", autosave_keep))
+
+	autosave_path_btn = _make_button("Set Autosave Path")
+	stc.add_child(autosave_path_btn)
+
+	export_settings_btn = _make_button("Export Settings")
+	stc.add_child(export_settings_btn)
+
+	import_settings_btn = _make_button("Import Settings")
+	stc.add_child(import_settings_btn)
+
+	# --- Performance section (collapsed by default) ---
+	var perf_sec = HFCollapsibleSection.create("Performance", false)
+	root_vbox.add_child(perf_sec)
+	var pfc = perf_sec.get_content()
+
+	var perf_grid = GridContainer.new()
+	perf_grid.columns = 2
+	pfc.add_child(perf_grid)
+
+	var perf_labels = [
+		["Active Brushes", "0"],
+		["Paint Memory", "0 KB"],
+		["Bake Chunks", "0"],
+		["Last Bake", "0 ms"]
+	]
+	var perf_value_nodes: Array[Label] = []
+	for pair in perf_labels:
+		var key_label = Label.new()
+		key_label.text = pair[0]
+		perf_grid.add_child(key_label)
+		var val_label = Label.new()
+		val_label.text = pair[1]
+		perf_grid.add_child(val_label)
+		perf_value_nodes.append(val_label)
+	perf_brushes_value = perf_value_nodes[0]
+	perf_paint_mem_value = perf_value_nodes[1]
+	perf_bake_chunks_value = perf_value_nodes[2]
+	perf_bake_time_value = perf_value_nodes[3]
+
+
 func _ready():
+	# --- Build programmatic tabs first ---
+	_build_paint_tab()
+	_build_manage_tab()
+
+	# --- Toolbar setup ---
 	var tool_group = ButtonGroup.new()
 	tool_draw.toggle_mode = true
 	tool_select.toggle_mode = true
 	tool_draw.button_group = tool_group
 	tool_select.button_group = tool_group
 	tool_draw.button_pressed = true
+	tool_draw.text = "Draw (D)"
+	tool_select.text = "Sel (S)"
 	if paint_mode:
 		paint_mode.toggle_mode = true
 		paint_mode.button_pressed = false
@@ -703,6 +1233,7 @@ func _ready():
 		tool_extrude_up.button_group = tool_group
 		tool_extrude_up.flat = true
 		tool_extrude_up.focus_mode = Control.FOCUS_NONE
+		tool_extrude_up.text = "Ext\u25b2"
 		tool_extrude_up.tooltip_text = "Extrude Up (U)\nClick face + drag to extrude upward"
 		toolbar.add_child(tool_extrude_up)
 
@@ -711,6 +1242,7 @@ func _ready():
 		tool_extrude_down.button_group = tool_group
 		tool_extrude_down.flat = true
 		tool_extrude_down.focus_mode = Control.FOCUS_NONE
+		tool_extrude_down.text = "Ext\u25bc"
 		tool_extrude_down.tooltip_text = "Extrude Down (J)\nClick face + drag to extrude downward"
 		toolbar.add_child(tool_extrude_down)
 
@@ -721,180 +1253,81 @@ func _ready():
 	mode_subtract.button_group = mode_group
 	mode_add.button_pressed = true
 
+	# --- Populate dropdowns ---
 	_populate_shape_palette()
 	_populate_paint_tools()
 	_populate_brush_shapes()
 	_populate_paint_targets()
 	_populate_blend_slots()
 	_bind_terrain_slot_controls()
-	if (
-		shape_select
-		and not shape_select.item_selected.is_connected(Callable(self, "_on_shape_selected"))
-	):
+
+	# --- Connect signals (paint tab) ---
+	if shape_select:
 		shape_select.item_selected.connect(_on_shape_selected)
-	if (
-		paint_layer_select
-		and not paint_layer_select.item_selected.is_connected(
-			Callable(self, "_on_paint_layer_selected")
-		)
-	):
+	if paint_layer_select:
 		paint_layer_select.item_selected.connect(_on_paint_layer_selected)
-	if (
-		paint_layer_add
-		and not paint_layer_add.pressed.is_connected(Callable(self, "_on_paint_layer_add"))
-	):
+	if paint_layer_add:
 		paint_layer_add.pressed.connect(_on_paint_layer_add)
-	if (
-		paint_layer_remove
-		and not paint_layer_remove.pressed.is_connected(Callable(self, "_on_paint_layer_remove"))
-	):
+	if paint_layer_remove:
 		paint_layer_remove.pressed.connect(_on_paint_layer_remove)
-	if (
-		heightmap_import
-		and not heightmap_import.pressed.is_connected(Callable(self, "_on_heightmap_import"))
-	):
+	if heightmap_import:
 		heightmap_import.pressed.connect(_on_heightmap_import)
-	if (
-		heightmap_generate
-		and not heightmap_generate.pressed.is_connected(Callable(self, "_on_heightmap_generate"))
-	):
+	if heightmap_generate:
 		heightmap_generate.pressed.connect(_on_heightmap_generate)
-	if (
-		height_scale_spin
-		and not height_scale_spin.value_changed.is_connected(
-			Callable(self, "_on_height_scale_changed")
-		)
-	):
+	if height_scale_spin:
 		height_scale_spin.value_changed.connect(_on_height_scale_changed)
-	if (
-		layer_y_spin
-		and not layer_y_spin.value_changed.is_connected(Callable(self, "_on_layer_y_changed"))
-	):
+	if layer_y_spin:
 		layer_y_spin.value_changed.connect(_on_layer_y_changed)
-	if (
-		blend_strength_spin
-		and not blend_strength_spin.value_changed.is_connected(
-			Callable(self, "_on_blend_strength_changed")
-		)
-	):
+	if blend_strength_spin:
 		blend_strength_spin.value_changed.connect(_on_blend_strength_changed)
-	if (
-		region_enable
-		and not region_enable.toggled.is_connected(Callable(self, "_on_region_enable_toggled"))
-	):
+	if region_enable:
 		region_enable.toggled.connect(_on_region_enable_toggled)
-	if (
-		region_size_spin
-		and not region_size_spin.value_changed.is_connected(
-			Callable(self, "_on_region_size_changed")
-		)
-	):
+	if region_size_spin:
 		region_size_spin.value_changed.connect(_on_region_size_changed)
-	if (
-		region_radius_spin
-		and not region_radius_spin.value_changed.is_connected(
-			Callable(self, "_on_region_radius_changed")
-		)
-	):
+	if region_radius_spin:
 		region_radius_spin.value_changed.connect(_on_region_radius_changed)
-	if (
-		region_memory_spin
-		and not region_memory_spin.value_changed.is_connected(
-			Callable(self, "_on_region_memory_changed")
-		)
-	):
+	if region_memory_spin:
 		region_memory_spin.value_changed.connect(_on_region_memory_changed)
-	if (
-		region_grid_toggle
-		and not region_grid_toggle.toggled.is_connected(Callable(self, "_on_region_grid_toggled"))
-	):
+	if region_grid_toggle:
 		region_grid_toggle.toggled.connect(_on_region_grid_toggled)
-	if (
-		blend_slot_select
-		and not blend_slot_select.item_selected.is_connected(
-			Callable(self, "_on_blend_slot_selected")
-		)
-	):
+	if blend_slot_select:
 		blend_slot_select.item_selected.connect(_on_blend_slot_selected)
 	for i in range(terrain_slot_buttons.size()):
 		var button = terrain_slot_buttons[i]
-		if button and not button.pressed.is_connected(Callable(self, "_on_terrain_slot_pressed")):
+		if button:
 			button.pressed.connect(_on_terrain_slot_pressed.bind(i))
 	for i in range(terrain_slot_scales.size()):
 		var spin = terrain_slot_scales[i]
-		if (
-			spin
-			and not spin.value_changed.is_connected(
-				Callable(self, "_on_terrain_slot_scale_changed")
-			)
-		):
+		if spin:
 			spin.value_changed.connect(_on_terrain_slot_scale_changed.bind(i))
-	if (
-		heightmap_import_dialog
-		and not heightmap_import_dialog.file_selected.is_connected(
-			Callable(self, "_on_heightmap_import_selected")
-		)
-	):
+	if heightmap_import_dialog:
 		heightmap_import_dialog.file_selected.connect(_on_heightmap_import_selected)
-	if (
-		terrain_slot_texture_dialog
-		and not terrain_slot_texture_dialog.file_selected.is_connected(
-			Callable(self, "_on_terrain_slot_texture_selected")
-		)
-	):
+	if terrain_slot_texture_dialog:
 		terrain_slot_texture_dialog.file_selected.connect(_on_terrain_slot_texture_selected)
-	if (
-		materials_list
-		and not materials_list.item_selected.is_connected(Callable(self, "_on_material_selected"))
-	):
+	if materials_list:
 		materials_list.item_selected.connect(_on_material_selected)
-	if material_add and not material_add.pressed.is_connected(Callable(self, "_on_material_add")):
+	if material_add:
 		material_add.pressed.connect(_on_material_add)
-	if (
-		material_remove
-		and not material_remove.pressed.is_connected(Callable(self, "_on_material_remove"))
-	):
+	if material_remove:
 		material_remove.pressed.connect(_on_material_remove)
-	if (
-		material_assign
-		and not material_assign.pressed.is_connected(Callable(self, "_on_material_assign"))
-	):
+	if material_assign:
 		material_assign.pressed.connect(_on_material_assign)
-	if face_clear and not face_clear.pressed.is_connected(Callable(self, "_on_face_clear")):
+	if face_clear:
 		face_clear.pressed.connect(_on_face_clear)
-	if uv_reset and not uv_reset.pressed.is_connected(Callable(self, "_on_uv_reset")):
+	if uv_reset:
 		uv_reset.pressed.connect(_on_uv_reset)
-	if uv_editor and not uv_editor.uv_changed.is_connected(Callable(self, "_on_uv_changed")):
+	if uv_editor:
 		uv_editor.uv_changed.connect(_on_uv_changed)
-	if (
-		surface_paint_layer_select
-		and not surface_paint_layer_select.item_selected.is_connected(
-			Callable(self, "_on_surface_paint_layer_selected")
-		)
-	):
+	if surface_paint_layer_select:
 		surface_paint_layer_select.item_selected.connect(_on_surface_paint_layer_selected)
-	if (
-		surface_paint_layer_add
-		and not surface_paint_layer_add.pressed.is_connected(
-			Callable(self, "_on_surface_paint_layer_add")
-		)
-	):
+	if surface_paint_layer_add:
 		surface_paint_layer_add.pressed.connect(_on_surface_paint_layer_add)
-	if (
-		surface_paint_layer_remove
-		and not surface_paint_layer_remove.pressed.is_connected(
-			Callable(self, "_on_surface_paint_layer_remove")
-		)
-	):
+	if surface_paint_layer_remove:
 		surface_paint_layer_remove.pressed.connect(_on_surface_paint_layer_remove)
-	if (
-		surface_paint_texture
-		and not surface_paint_texture.pressed.is_connected(
-			Callable(self, "_on_surface_paint_texture")
-		)
-	):
+	if surface_paint_texture:
 		surface_paint_texture.pressed.connect(_on_surface_paint_texture)
 
+	# --- Snap buttons ---
 	snap_button_group = ButtonGroup.new()
 	for index in range(snap_buttons.size()):
 		var button = snap_buttons[index]
@@ -912,23 +1345,26 @@ func _ready():
 		button.text = str(preset)
 		button.toggled.connect(_on_snap_button_toggled.bind(button))
 
+	# --- Connect signals (brush tab + manage tab) ---
 	grid_snap.value_changed.connect(_on_grid_snap_value_changed)
-	show_hud.toggled.connect(_on_show_hud_toggled)
+	if show_hud:
+		show_hud.toggled.connect(_on_show_hud_toggled)
 	if show_grid:
 		show_grid.toggled.connect(_on_show_grid_toggled)
 	if follow_grid:
 		follow_grid.toggled.connect(_on_follow_grid_toggled)
 	if debug_logs:
 		debug_logs.toggled.connect(_on_debug_logs_toggled)
-
-	bake_btn.pressed.connect(_on_bake)
+	if bake_btn:
+		bake_btn.pressed.connect(_on_bake)
 	if bake_dry_run_btn:
 		bake_dry_run_btn.pressed.connect(_on_bake_dry_run)
 	if validate_btn:
 		validate_btn.pressed.connect(_on_validate_level)
 	if validate_fix_btn:
 		validate_fix_btn.pressed.connect(_on_validate_fix)
-	clear_btn.pressed.connect(_on_clear)
+	if clear_btn:
+		clear_btn.pressed.connect(_on_clear)
 	if save_hflevel_btn:
 		save_hflevel_btn.pressed.connect(_on_save_hflevel)
 	if load_hflevel_btn:
@@ -945,11 +1381,16 @@ func _ready():
 		export_settings_btn.pressed.connect(_on_export_settings)
 	if import_settings_btn:
 		import_settings_btn.pressed.connect(_on_import_settings)
-	floor_btn.pressed.connect(_on_floor)
-	apply_cuts_btn.pressed.connect(_on_apply_cuts)
-	clear_cuts_btn.pressed.connect(_on_clear_cuts)
-	commit_cuts_btn.pressed.connect(_on_commit_cuts)
-	restore_cuts_btn.pressed.connect(_on_restore_cuts)
+	if floor_btn:
+		floor_btn.pressed.connect(_on_floor)
+	if apply_cuts_btn:
+		apply_cuts_btn.pressed.connect(_on_apply_cuts)
+	if clear_cuts_btn:
+		clear_cuts_btn.pressed.connect(_on_clear_cuts)
+	if commit_cuts_btn:
+		commit_cuts_btn.pressed.connect(_on_commit_cuts)
+	if restore_cuts_btn:
+		restore_cuts_btn.pressed.connect(_on_restore_cuts)
 	if create_entity_btn:
 		create_entity_btn.pressed.connect(_on_create_entity)
 	if undo_btn:
@@ -973,31 +1414,26 @@ func _ready():
 		material_dialog.access = FileDialog.ACCESS_RESOURCES
 		material_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 		material_dialog.filters = PackedStringArray(["*.tres ; Material", "*.material ; Material"])
-		if not material_dialog.file_selected.is_connected(
-			Callable(self, "_on_material_file_selected")
-		):
-			material_dialog.file_selected.connect(_on_material_file_selected)
+		material_dialog.file_selected.connect(_on_material_file_selected)
 	_setup_storage_dialogs()
 	if bake_lightmap_uv2:
-		var lightmap_toggle = Callable(self, "_on_bake_lightmap_uv2_toggled")
-		if not bake_lightmap_uv2.toggled.is_connected(lightmap_toggle):
-			bake_lightmap_uv2.toggled.connect(lightmap_toggle)
+		bake_lightmap_uv2.toggled.connect(_on_bake_lightmap_uv2_toggled)
 	if bake_navmesh:
-		var nav_toggle = Callable(self, "_on_bake_navmesh_toggled")
-		if not bake_navmesh.toggled.is_connected(nav_toggle):
-			bake_navmesh.toggled.connect(nav_toggle)
+		bake_navmesh.toggled.connect(_on_bake_navmesh_toggled)
 	if collision_layer_opt:
 		collision_layer_opt.clear()
 		collision_layer_opt.add_item("Static World (Layer 1)", 1)
 		collision_layer_opt.add_item("Debris/Prop (Layer 2)", 2)
 		collision_layer_opt.add_item("Trigger Only (Layer 3)", 4)
 		collision_layer_opt.select(0)
-	if history_list:
-		history_list.focus_mode = Control.FOCUS_NONE
+
+	# --- Final setup ---
 	status_label.text = "Ready"
 	if progress_bar:
 		progress_bar.value = 0
 		progress_bar.hide()
+	if no_root_banner:
+		no_root_banner.visible = true
 	_sync_snap_buttons(grid_snap.value)
 	_ensure_presets_dir()
 	_load_presets()
@@ -1008,69 +1444,47 @@ func _ready():
 	_setup_texture_lock_ui()
 	_setup_visgroup_ui()
 	_setup_cordon_ui()
+	_connect_setting_signals()
 	set_process(true)
 
 
-func _process(delta):
+func _process(_delta):
 	var scene = get_tree().edited_scene_root
 	if not scene:
 		scene = get_tree().get_current_scene()
-	if scene:
-		if scene.get_script() == LevelRootType or scene.name == "LevelRoot":
-			level_root = scene
-		else:
-			var candidate = scene.get_node_or_null("LevelRoot")
-			if candidate:
-				level_root = candidate
-			else:
-				level_root = null
+	# Keep current root if it's still valid — avoids losing connection when
+	# the user selects a non-LevelRoot node.
+	if level_root and is_instance_valid(level_root) and level_root.is_inside_tree():
+		pass  # keep it
+	elif scene:
+		level_root = _find_level_root_in(scene)
 	else:
 		level_root = null
 	if level_root != connected_root:
 		_disconnect_root_signals()
 		connected_root = level_root
 		_connect_root_signals()
+	# Show/hide the "no root" banner
+	if no_root_banner:
+		no_root_banner.visible = level_root == null
+	# Property sync is now signal-driven (see _connect_setting_signals).
+	# Only throttled sync calls remain here for data that changes on the root side.
 	if level_root:
-		if _root_has_property("commit_freeze"):
-			level_root.set("commit_freeze", commit_freeze.button_pressed)
-		if _root_has_property("bake_merge_meshes") and bake_merge_meshes:
-			level_root.set("bake_merge_meshes", bake_merge_meshes.button_pressed)
-		if _root_has_property("bake_generate_lods") and bake_generate_lods:
-			level_root.set("bake_generate_lods", bake_generate_lods.button_pressed)
-		if _root_has_property("bake_lightmap_uv2") and bake_lightmap_uv2:
-			level_root.set("bake_lightmap_uv2", bake_lightmap_uv2.button_pressed)
-		if _root_has_property("bake_use_face_materials") and bake_use_face_materials:
-			level_root.set("bake_use_face_materials", bake_use_face_materials.button_pressed)
-		if _root_has_property("bake_lightmap_texel_size") and bake_lightmap_texel:
-			level_root.set("bake_lightmap_texel_size", float(bake_lightmap_texel.value))
-		if _root_has_property("bake_navmesh") and bake_navmesh:
-			level_root.set("bake_navmesh", bake_navmesh.button_pressed)
-		if _root_has_property("bake_navmesh_cell_size") and bake_navmesh_cell_size:
-			level_root.set("bake_navmesh_cell_size", float(bake_navmesh_cell_size.value))
-		if _root_has_property("bake_navmesh_cell_height") and bake_navmesh_cell_height:
-			level_root.set("bake_navmesh_cell_height", float(bake_navmesh_cell_height.value))
-		if _root_has_property("bake_navmesh_agent_height") and bake_navmesh_agent_height:
-			level_root.set("bake_navmesh_agent_height", float(bake_navmesh_agent_height.value))
-		if _root_has_property("bake_navmesh_agent_radius") and bake_navmesh_agent_radius:
-			level_root.set("bake_navmesh_agent_radius", float(bake_navmesh_agent_radius.value))
-		if _root_has_property("hflevel_autosave_enabled") and autosave_enabled:
-			level_root.set("hflevel_autosave_enabled", autosave_enabled.button_pressed)
-		if _root_has_property("hflevel_autosave_minutes") and autosave_minutes:
-			level_root.set("hflevel_autosave_minutes", int(autosave_minutes.value))
-		if _root_has_property("hflevel_autosave_keep") and autosave_keep:
-			level_root.set("hflevel_autosave_keep", int(autosave_keep.value))
-		if show_grid and _root_has_property("grid_visible"):
-			level_root.set("grid_visible", show_grid.button_pressed)
-		if follow_grid and _root_has_property("grid_follow_brush"):
-			level_root.set("grid_follow_brush", follow_grid.button_pressed)
-		if _root_has_property("debug_logging"):
-			level_root.set("debug_logging", debug_enabled)
-		_sync_paint_layers_from_root()
-		_sync_materials_from_root()
-		_sync_surface_paint_from_root()
-	_update_perf_panel()
-	_update_disabled_hints()
-	_update_perf_label()
+		_sync_frame_counter += 1
+		if _sync_frame_counter >= 10:
+			_sync_frame_counter = 0
+			_sync_paint_layers_from_root()
+			_sync_materials_from_root()
+			_sync_surface_paint_from_root()
+	# Throttled UI updates
+	if _hints_dirty:
+		_hints_dirty = false
+		_update_disabled_hints()
+	_perf_frame_counter += 1
+	if _perf_frame_counter >= 30:
+		_perf_frame_counter = 0
+		_update_perf_panel()
+		_update_perf_label()
 
 
 func _sync_paint_layers_from_root() -> void:
@@ -1544,12 +1958,15 @@ func _connect_root_signals() -> void:
 	_sync_grid_snap_from_root()
 	_sync_grid_settings_from_root()
 	_refresh_paint_layers()
+	_apply_ui_state_to_root()
+	_hints_dirty = true
 
 
 func _disconnect_root_signals() -> void:
 	if not connected_root:
 		return
 	root_properties.clear()
+	_hints_dirty = true
 	if connected_root.has_signal("bake_started"):
 		if connected_root.is_connected("bake_started", Callable(self, "_on_bake_started")):
 			connected_root.disconnect("bake_started", Callable(self, "_on_bake_started"))
@@ -1651,6 +2068,7 @@ func _on_bake_started() -> void:
 		progress_bar.value = 0
 		progress_bar.show()
 	_set_bake_buttons_disabled(true)
+	_hints_dirty = true
 
 
 func _on_bake_progress(value: float, label: String) -> void:
@@ -1676,6 +2094,7 @@ func _on_bake_finished(success: bool) -> void:
 	if progress_bar:
 		progress_bar.hide()
 	_set_bake_buttons_disabled(false)
+	_hints_dirty = true
 
 
 func _set_bake_buttons_disabled(disabled: bool) -> void:
@@ -1710,7 +2129,7 @@ func _notify_running_instances() -> void:
 
 
 func _warn_missing_dependencies() -> void:
-	if not level_root or not level_root.has_method("check_missing_dependencies"):
+	if not level_root:
 		return
 	var warnings: Array = level_root.check_missing_dependencies()
 	if warnings.is_empty():
@@ -1846,9 +2265,14 @@ func _set_control_disabled(control: Control, disabled: bool) -> void:
 func _control_has_property(control: Object, property_name: String) -> bool:
 	if not control or property_name == "":
 		return false
+	var key = "%d_%s" % [control.get_instance_id(), property_name]
+	if _prop_cache.has(key):
+		return _prop_cache[key]
 	for prop in control.get_property_list():
 		if prop.get("name", "") == property_name:
+			_prop_cache[key] = true
 			return true
+	_prop_cache[key] = false
 	return false
 
 
@@ -2247,7 +2671,7 @@ func _on_uv_reset() -> void:
 		return
 	if not level_root:
 		return
-	if _uv_active_brush.brush_id == "" and level_root.has_method("get_brush_info_from_node"):
+	if _uv_active_brush.brush_id == "" and true:
 		level_root.get_brush_info_from_node(_uv_active_brush)
 	var brush_id = _uv_active_brush.brush_id
 	var face_idx = _uv_active_brush.faces.find(_uv_active_face)
@@ -2270,7 +2694,7 @@ func _on_surface_paint_layer_add() -> void:
 		return
 	if not level_root:
 		return
-	if _surface_active_brush.brush_id == "" and level_root.has_method("get_brush_info_from_node"):
+	if _surface_active_brush.brush_id == "" and true:
 		level_root.get_brush_info_from_node(_surface_active_brush)
 	var brush_id = _surface_active_brush.brush_id
 	var face_idx = _surface_active_brush.faces.find(_surface_active_face)
@@ -2288,7 +2712,7 @@ func _on_surface_paint_layer_remove() -> void:
 		return
 	if not level_root:
 		return
-	if _surface_active_brush.brush_id == "" and level_root.has_method("get_brush_info_from_node"):
+	if _surface_active_brush.brush_id == "" and true:
 		level_root.get_brush_info_from_node(_surface_active_brush)
 	var brush_id = _surface_active_brush.brush_id
 	var face_idx = _surface_active_brush.faces.find(_surface_active_face)
@@ -2323,7 +2747,7 @@ func _on_surface_paint_texture_selected(path: String) -> void:
 		return
 	if not level_root:
 		return
-	if _surface_active_brush.brush_id == "" and level_root.has_method("get_brush_info_from_node"):
+	if _surface_active_brush.brush_id == "" and true:
 		level_root.get_brush_info_from_node(_surface_active_brush)
 	var brush_id = _surface_active_brush.brush_id
 	var face_idx = _surface_active_brush.faces.find(_surface_active_face)
@@ -3186,20 +3610,15 @@ func _delete_preset(button: Button) -> void:
 
 
 func _setup_texture_lock_ui() -> void:
-	var build_vbox = build_tab.get_node_or_null("BuildMargin/BuildVBox")
-	if not build_vbox:
+	var brush_vbox = brush_tab.get_node_or_null("BrushMargin/BrushVBox")
+	if not brush_vbox:
 		return
 	texture_lock_check = CheckBox.new()
 	texture_lock_check.text = "Texture Lock"
 	texture_lock_check.button_pressed = true
 	texture_lock_check.tooltip_text = "Preserve UV alignment when moving or resizing brushes"
 	texture_lock_check.toggled.connect(_on_texture_lock_toggled)
-	var follow_idx = follow_grid.get_index() if follow_grid else -1
-	if follow_idx >= 0:
-		build_vbox.add_child(texture_lock_check)
-		build_vbox.move_child(texture_lock_check, follow_idx + 1)
-	else:
-		build_vbox.add_child(texture_lock_check)
+	brush_vbox.add_child(texture_lock_check)
 
 
 func _on_texture_lock_toggled(pressed: bool) -> void:
@@ -3219,20 +3638,18 @@ func _setup_visgroup_ui() -> void:
 	if not manage_vbox:
 		return
 
-	# --- Visgroups section ---
-	var sep = HSeparator.new()
-	manage_vbox.add_child(sep)
-
-	var vg_label = Label.new()
-	vg_label.text = "Visgroups"
-	vg_label.add_theme_font_size_override("font_size", 13)
-	manage_vbox.add_child(vg_label)
+	# --- Visgroups & Groups section (collapsible, placed after Bake) ---
+	var vg_sec = HFCollapsibleSection.create("Visgroups & Groups", true)
+	# Insert after the Bake section (index 0) for visibility
+	manage_vbox.add_child(vg_sec)
+	manage_vbox.move_child(vg_sec, 1)
+	var vgc = vg_sec.get_content()
 
 	visgroup_list = ItemList.new()
 	visgroup_list.custom_minimum_size.y = 80
 	visgroup_list.select_mode = ItemList.SELECT_SINGLE
 	visgroup_list.allow_reselect = true
-	manage_vbox.add_child(visgroup_list)
+	vgc.add_child(visgroup_list)
 	visgroup_list.item_clicked.connect(_on_visgroup_item_clicked)
 
 	var name_row = HBoxContainer.new()
@@ -3245,7 +3662,7 @@ func _setup_visgroup_ui() -> void:
 	visgroup_add_btn.tooltip_text = "Create a new visgroup"
 	visgroup_add_btn.pressed.connect(_on_visgroup_add)
 	name_row.add_child(visgroup_add_btn)
-	manage_vbox.add_child(name_row)
+	vgc.add_child(name_row)
 
 	var vg_btn_row = HBoxContainer.new()
 	visgroup_add_sel_btn = Button.new()
@@ -3255,7 +3672,9 @@ func _setup_visgroup_ui() -> void:
 	vg_btn_row.add_child(visgroup_add_sel_btn)
 	visgroup_rem_sel_btn = Button.new()
 	visgroup_rem_sel_btn.text = "Rem Sel"
-	visgroup_rem_sel_btn.tooltip_text = "Remove selected brushes/entities from the highlighted visgroup"
+	visgroup_rem_sel_btn.tooltip_text = (
+		"Remove selected brushes/entities from the highlighted visgroup"
+	)
 	visgroup_rem_sel_btn.pressed.connect(_on_visgroup_remove_selection)
 	vg_btn_row.add_child(visgroup_rem_sel_btn)
 	visgroup_delete_btn = Button.new()
@@ -3263,13 +3682,11 @@ func _setup_visgroup_ui() -> void:
 	visgroup_delete_btn.tooltip_text = "Delete the highlighted visgroup"
 	visgroup_delete_btn.pressed.connect(_on_visgroup_delete)
 	vg_btn_row.add_child(visgroup_delete_btn)
-	manage_vbox.add_child(vg_btn_row)
+	vgc.add_child(vg_btn_row)
 
-	# --- Groups section ---
-	var grp_label = Label.new()
-	grp_label.text = "Groups"
-	grp_label.add_theme_font_size_override("font_size", 13)
-	manage_vbox.add_child(grp_label)
+	# --- Groups subsection ---
+	var grp_sep = HSeparator.new()
+	vgc.add_child(grp_sep)
 
 	var grp_btn_row = HBoxContainer.new()
 	group_sel_btn = Button.new()
@@ -3282,7 +3699,7 @@ func _setup_visgroup_ui() -> void:
 	ungroup_btn.tooltip_text = "Remove selected brushes/entities from their group"
 	ungroup_btn.pressed.connect(_on_ungroup_selection)
 	grp_btn_row.add_child(ungroup_btn)
-	manage_vbox.add_child(grp_btn_row)
+	vgc.add_child(grp_btn_row)
 
 
 func refresh_visgroup_ui() -> void:
@@ -3400,23 +3817,21 @@ func _setup_cordon_ui() -> void:
 	if not manage_vbox:
 		return
 
-	var sep = HSeparator.new()
-	manage_vbox.add_child(sep)
-
-	var label = Label.new()
-	label.text = "Cordon (Partial Bake)"
-	label.add_theme_font_size_override("font_size", 13)
-	manage_vbox.add_child(label)
+	var cordon_sec = HFCollapsibleSection.create("Cordon (Partial Bake)", false)
+	# Insert after Visgroups section (index 2)
+	manage_vbox.add_child(cordon_sec)
+	manage_vbox.move_child(cordon_sec, 2)
+	var cc = cordon_sec.get_content()
 
 	cordon_enabled_check = CheckBox.new()
 	cordon_enabled_check.text = "Enable Cordon"
 	cordon_enabled_check.tooltip_text = "Only bake geometry inside the cordon AABB"
 	cordon_enabled_check.toggled.connect(_on_cordon_toggled)
-	manage_vbox.add_child(cordon_enabled_check)
+	cc.add_child(cordon_enabled_check)
 
 	var min_label = Label.new()
 	min_label.text = "Min (X, Y, Z):"
-	manage_vbox.add_child(min_label)
+	cc.add_child(min_label)
 
 	var min_row = HBoxContainer.new()
 	cordon_min_x = _make_cordon_spin(-9999, 9999, -128)
@@ -3425,11 +3840,11 @@ func _setup_cordon_ui() -> void:
 	min_row.add_child(cordon_min_x)
 	min_row.add_child(cordon_min_y)
 	min_row.add_child(cordon_min_z)
-	manage_vbox.add_child(min_row)
+	cc.add_child(min_row)
 
 	var max_label = Label.new()
 	max_label.text = "Max (X, Y, Z):"
-	manage_vbox.add_child(max_label)
+	cc.add_child(max_label)
 
 	var max_row = HBoxContainer.new()
 	cordon_max_x = _make_cordon_spin(-9999, 9999, 128)
@@ -3438,13 +3853,13 @@ func _setup_cordon_ui() -> void:
 	max_row.add_child(cordon_max_x)
 	max_row.add_child(cordon_max_y)
 	max_row.add_child(cordon_max_z)
-	manage_vbox.add_child(max_row)
+	cc.add_child(max_row)
 
 	cordon_from_sel_btn = Button.new()
 	cordon_from_sel_btn.text = "Set from Selection"
 	cordon_from_sel_btn.tooltip_text = "Set cordon bounds to encompass the selected brushes"
 	cordon_from_sel_btn.pressed.connect(_on_cordon_from_selection)
-	manage_vbox.add_child(cordon_from_sel_btn)
+	cc.add_child(cordon_from_sel_btn)
 
 
 func _make_cordon_spin(min_val: float, max_val: float, default_val: float) -> SpinBox:
@@ -3483,8 +3898,7 @@ func _on_cordon_value_changed(_value: float) -> void:
 		cordon_max_z.value if cordon_max_z else 128
 	)
 	level_root.set("cordon_aabb", AABB(min_pt, max_pt - min_pt))
-	if level_root.has_method("update_cordon_visual"):
-		level_root.update_cordon_visual()
+	level_root.update_cordon_visual()
 
 
 func _on_cordon_from_selection() -> void:

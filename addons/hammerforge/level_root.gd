@@ -459,6 +459,7 @@ func get_group_members(group_name: String) -> Array:
 # ===========================================================================
 
 var cordon_wireframe: MeshInstance3D = null
+var _cordon_mesh: ImmediateMesh = null
 
 
 func set_cordon_from_selection(nodes: Array) -> void:
@@ -501,7 +502,11 @@ func update_cordon_visual() -> void:
 	cordon_wireframe.visible = cordon_enabled
 	if not cordon_enabled:
 		return
-	var im = ImmediateMesh.new()
+	if not _cordon_mesh:
+		_cordon_mesh = ImmediateMesh.new()
+	else:
+		_cordon_mesh.clear_surfaces()
+	var im = _cordon_mesh
 	var min_pt = cordon_aabb.position
 	var max_pt = cordon_aabb.position + cordon_aabb.size
 	im.surface_begin(Mesh.PRIMITIVE_LINES)
@@ -571,12 +576,13 @@ func _create_entity_from_map(info: Dictionary) -> DraftEntity:
 	return entity_system.create_entity_from_map(info)
 
 
-func _is_entity_node(node: Node) -> bool:
-	return entity_system.is_entity_node(node)
-
-
 func is_entity_node(node: Node) -> bool:
 	return entity_system.is_entity_node(node)
+
+
+## Backward-compat alias — prefer is_entity_node().
+func _is_entity_node(node: Node) -> bool:
+	return is_entity_node(node)
 
 
 func _capture_entity_info(entity: DraftEntity) -> Dictionary:
@@ -1336,18 +1342,7 @@ func _setup_highlight() -> void:
 	var mesh := BoxMesh.new()
 	hover_highlight.mesh = mesh
 	var mat := ShaderMaterial.new()
-	var shader := Shader.new()
-	shader.code = """shader_type spatial;
-render_mode unshaded, cull_disabled, wireframe, depth_draw_never;
-
-uniform vec4 color : source_color = vec4(1.0, 1.0, 0.0, 0.5);
-
-void fragment() {
-	ALBEDO = color.rgb;
-	ALPHA = color.a;
-}
-"""
-	mat.shader = shader
+	mat.shader = preload("highlight.gdshader")
 	hover_highlight.material_override = mat
 	hover_highlight.visible = false
 

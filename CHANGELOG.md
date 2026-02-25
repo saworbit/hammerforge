@@ -5,6 +5,18 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Dock UX overhaul:** Consolidated from 8 tabs to 4 (Brush, Paint, Entities, Manage).
+  - New `HFCollapsibleSection` (`ui/collapsible_section.gd`) reusable component for collapsible UI sections.
+  - **Brush tab** (was Build): focused on shape, size, grid snap, material, operation mode, texture lock.
+  - **Paint tab** (merged FloorPaint + SurfacePaint + Materials + UV): 7 collapsible sections.
+  - **Manage tab** reorganized with 8 collapsible sections: Bake, Actions, File, Presets, History, Settings, Performance, plus Visgroups & Cordon.
+  - "No LevelRoot" banner displayed at dock top when no root is found.
+  - Toolbar buttons now show keyboard shortcut labels: `Draw (D)`, `Sel (S)`, `Ext▲ (U)`, `Ext▼ (J)`.
+  - Paint and Manage tab contents built programmatically via `_build_paint_tab()` and `_build_manage_tab()`.
+  - Bake options and editor toggles moved from old Build tab into Manage → Bake Settings and Settings sections.
+- **Sticky LevelRoot discovery:** Users no longer need to re-select LevelRoot after clicking other nodes.
+  - `plugin.gd`: `_handles()` returns true for any node when a LevelRoot exists; `_edit()` keeps `active_root` sticky; deep recursive tree search via `_find_level_root_deep()`.
+  - `dock.gd`: sticky `level_root` reference in `_process()`; deep recursive search via `_find_level_root_in()` / `_find_level_root_recursive()`.
 - **Visgroups (visibility groups):** Named groups (e.g. "walls", "detail") with per-group show/hide.
   - `HFVisgroupSystem` subsystem manages CRUD, membership (stored as node meta), and visibility refresh.
   - Nodes in ANY hidden visgroup are hidden (Hammer semantics). Nodes not in any visgroup stay visible.
@@ -89,6 +101,13 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 - Dock reorganized: Floor Paint and Surface Paint tabs.
 
 ### Changed
+- Dock consolidated from 8 tabs (Build, FloorPaint, Materials, UV, SurfacePaint, Entities, Manage) to 4 tabs (Brush, Paint, Entities, Manage).
+- Build tab renamed to **Brush** tab; bake options and editor toggles moved to Manage tab.
+- FloorPaint, SurfacePaint, Materials, and UV tabs merged into single **Paint** tab with collapsible sections.
+- Manage tab reorganized with collapsible sections for better discoverability.
+- LevelRoot discovery is now "sticky": selecting non-LevelRoot nodes no longer breaks viewport input.
+- Plugin `_handles()` uses deep recursive tree search and accepts any node when a LevelRoot exists.
+- Dock `_process()` uses sticky reference; only nulls `level_root` when node is removed from tree.
 - Brush delete undo now uses brush IDs and `create_brush_from_info()` snapshots for stability.
 - New brushes placed via direct placement now receive stable brush IDs.
 - Standardized editor actions under a single undo/redo helper with state snapshots.
@@ -99,6 +118,11 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 - Generated heightmap floors stored under `LevelRoot/Generated/HeightmapFloors`.
 
 ### Fixed
+- Fixed reconciler ghost references: `_index.erase(gid)` and `remove_child()` before `queue_free()` in `hf_reconciler.gd` to prevent stale node references.
+- Fixed silent write failure in `hf_file_system.gd:export_map()` — added `file.get_error()` check after `store_string()`.
+- Fixed unreachable guard in `hf_brush_system.gd` — `parts.size() == 0` after `String.split()` changed to `parts.size() < 2`.
+- Reverted bloated `level_root.tscn` (11,652 lines of serialized FaceData back to 79-line template).
+- Fixed LevelRoot discovery: plugin no longer loses `active_root` when clicking non-LevelRoot nodes; dock uses deep recursive search.
 - Fixed dock disabled-state handling for SpinBox controls to avoid invalid `disabled` property assignments.
 - Fixed heightmap mesh disappearing on every regeneration (height scale change, second generate noise click). Root cause: `_clear_generated()` used `queue_free()` (deferred) but `reconcile()` ran immediately after, finding ghost nodes still in the tree. Fix: `remove_child()` before `queue_free()`.
 - Fixed missing walls when heightmap is active (same `queue_free` timing root cause).
@@ -110,6 +134,12 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 - Added CI workflow (`.github/workflows/ci.yml`) for automated `gdformat` and `gdlint` checks on push/PR.
 
 ### Refactored
+- Dock UX: rewrote `dock.gd` to build Paint and Manage tab contents programmatically using `HFCollapsibleSection`.
+- Dock UX: ~100 `@onready var` declarations changed to plain `var` (controls created in code, not in .tscn).
+- Dock UX: `dock.tscn` reduced to ~280 lines (tab shells only; content populated by `_ready()`).
+- Replaced duck-typing in `baker.gd` (`has_method("get_faces")/.call()`) with typed `DraftBrush` access.
+- Added `_find_level_root_deep()` to `plugin.gd` for recursive LevelRoot discovery.
+- Added `_find_level_root_in()` and `_find_level_root_recursive()` to `dock.gd` for deep tree search.
 - Split `level_root.gd` from ~2,500 lines into thin coordinator (~1,100 lines) + 8 `RefCounted` subsystem classes in `systems/`.
 - Introduced `input_state.gd` (`HFInputState`) state machine replacing 18+ loose drag/paint state variables.
 - Replaced ~57 `has_method`/`call` duck-typing patterns in `plugin.gd` and `dock.gd` with direct typed calls.
@@ -121,8 +151,26 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 - Added early-exit in `plugin.gd` screen bounds calculation for objects fully behind the camera.
 - Fixed paint blending loop in `face_data.gd` that only ran when the weight image needed resizing.
 - Threaded .hflevel writes now log errors on file open failure and `store_buffer` errors.
+- **Code quality audit** (~30 issues across 11 files):
+  - Comprehensive duck-typing removal: `baker.gd` (typed `ArrayMesh` cast for lightmap/LODs), `hf_file_system.gd` (direct `GLTFDocument` calls), `plugin.gd` (direct `set_undo_redo`), `dock.gd` (6 sites: undo/redo, cordon visual, brush info, dependency checks).
+  - Removed redundancies: duplicate null checks, unbounded `while true` loops, redundant `ensure_dir_for_path`, consolidated init guards.
+  - Named constants: `MAX_BUCKET_FILL_CELLS`, `MAX_LAYER_ID_SEARCH`; `is_entity_node()` as primary public API.
+  - Extracted `_deserialize_chunks_to_layer()` in `hf_paint_system.gd` (eliminated ~40-line duplication).
+  - Fixed O(n²) in `capture_region_index()` via Dictionary lookup.
+  - Extracted `_collect_all_chunks()` in `hf_bake_system.gd` (shared by `bake_chunked` and `get_bake_chunk_count`).
+  - Added brush/material caching in `hf_brush_system.gd`: O(1) brush ID lookup, O(1) brush count, material instance cache.
+  - Cordon visual: persistent `ImmediateMesh` reused via `clear_surfaces()`.
+  - Extracted inline GLSL to `highlight.gdshader` file.
+  - Added `build_heightmap_model()` on `hf_paint_tool.gd` (shared by 3 heightmap reconcile callers).
+  - Signal-driven sync in `dock.gd`: replaced 17 per-frame property writes with signal handlers; throttled perf updates (every 30 frames), sync calls (every 10 frames), flag-driven disabled hints; cached `_control_has_property()`.
+  - Input decomposition in `plugin.gd`: split 260-line `_forward_3d_gui_input()` into ~50-line dispatcher + 7 focused handlers + shared `_get_nudge_direction()`.
 
 ### UX
+- Dock now has 4 tabs (Brush, Paint, Entities, Manage) instead of 8 for faster navigation.
+- Collapsible sections throughout Paint and Manage tabs for visual hierarchy and reduced scrolling.
+- "No LevelRoot" banner at dock top guides users when no LevelRoot is found.
+- Toolbar buttons display keyboard shortcut labels (Draw (D), Sel (S), Ext▲ (U), Ext▼ (J)).
+- LevelRoot stays active when clicking other scene nodes (sticky root discovery).
 - Shortcut HUD now shows context-sensitive shortcuts (6 different views: draw idle, dragging base, adjusting height, select, floor paint, surface paint).
 - HUD displays current axis lock state (e.g. "[X Locked]").
 - Status bar errors appear in red, warnings in yellow, and auto-clear after a timeout.

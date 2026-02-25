@@ -6,8 +6,8 @@
 script = ExtResource( 1 )
 anchor_right = 1.0
 anchor_bottom = 1.0
-margin_right = 320.0
-margin_bottom = 560.0
+offset_right = 320.0
+offset_bottom = 560.0
 
 [node name="Margin" type="MarginContainer" parent="."]
 theme_override_constants/margin_left = 6
@@ -16,11 +16,9 @@ theme_override_constants/margin_right = 6
 theme_override_constants/margin_bottom = 6
 
 [node name="VBox" type="VBoxContainer" parent="Margin"]
-custom_constants/separation = 6.0
-rect_min_size = Vector2(260, 260)
+custom_minimum_size = Vector2(260, 260)
 
 [node name="Toolbar" type="HBoxContainer" parent="Margin/VBox"]
-custom_constants/separation = 4.0
 
 [node name="ToolDraw" type="Button" parent="Margin/VBox/Toolbar"]
 text = "Draw"
@@ -40,16 +38,23 @@ toggle_mode = true
 flat = true
 
 [node name="ModeSubtract" type="Button" parent="Margin/VBox/Toolbar"]
-text = "Subtract"
+text = "Sub"
 toggle_mode = true
 flat = true
 
 [node name="ToolbarSep2" type="VSeparator" parent="Margin/VBox/Toolbar"]
 
 [node name="PaintMode" type="Button" parent="Margin/VBox/Toolbar"]
-text = "Paint Mode"
+text = "Paint"
 toggle_mode = true
 flat = true
+
+[node name="NoRootBanner" type="PanelContainer" parent="Margin/VBox"]
+visible = false
+
+[node name="BannerLabel" type="Label" parent="Margin/VBox/NoRootBanner"]
+text = "Select a LevelRoot node to begin"
+horizontal_alignment = 1
 
 [node name="TopSeparator" type="HSeparator" parent="Margin/VBox"]
 
@@ -57,639 +62,128 @@ flat = true
 size_flags_horizontal = 3
 size_flags_vertical = 3
 
-[node name="Build" type="ScrollContainer" parent="Margin/VBox/MainTabs"]
+[node name="Brush" type="ScrollContainer" parent="Margin/VBox/MainTabs"]
 size_flags_horizontal = 3
 size_flags_vertical = 3
 
-[node name="BuildMargin" type="MarginContainer" parent="Margin/VBox/MainTabs/Build"]
+[node name="BrushMargin" type="MarginContainer" parent="Margin/VBox/MainTabs/Brush"]
 theme_override_constants/margin_left = 4
 theme_override_constants/margin_top = 4
 theme_override_constants/margin_right = 4
 theme_override_constants/margin_bottom = 4
 
-[node name="BuildVBox" type="VBoxContainer" parent="Margin/VBox/MainTabs/Build/BuildMargin"]
-custom_constants/separation = 6.0
+[node name="BrushVBox" type="VBoxContainer" parent="Margin/VBox/MainTabs/Brush/BrushMargin"]
 
-[node name="FloorPaint" type="ScrollContainer" parent="Margin/VBox/MainTabs"]
-size_flags_horizontal = 3
-size_flags_vertical = 3
+[node name="ShapeRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox"]
 
-[node name="FloorPaintMargin" type="MarginContainer" parent="Margin/VBox/MainTabs/FloorPaint"]
-theme_override_constants/margin_left = 4
-theme_override_constants/margin_top = 4
-theme_override_constants/margin_right = 4
-theme_override_constants/margin_bottom = 4
-
-[node name="FloorPaintVBox" type="VBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin"]
-custom_constants/separation = 6.0
-
-[node name="FloorPaintLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
-text = "Floor Paint"
-
-[node name="PaintToolRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
-custom_constants/separation = 4.0
-
-[node name="PaintToolLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/PaintToolRow"]
-text = "Tool"
-
-[node name="PaintToolSelect" type="OptionButton" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/PaintToolRow"]
-size_flags_horizontal = 3
-
-[node name="PaintRadiusRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
-custom_constants/separation = 4.0
-
-[node name="PaintRadiusLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/PaintRadiusRow"]
-text = "Radius (cells)"
-
-[node name="PaintRadius" type="SpinBox" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/PaintRadiusRow"]
-min_value = 1.0
-max_value = 16.0
-step = 1.0
-value = 1.0
-page = 1.0
-size_flags_horizontal = 3
-
-[node name="BrushShapeRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
-custom_constants/separation = 4.0
-
-[node name="BrushShapeLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/BrushShapeRow"]
+[node name="ShapeLabel" type="Label" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/ShapeRow"]
 text = "Shape"
 
-[node name="BrushShapeSelect" type="OptionButton" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/BrushShapeRow"]
+[node name="ShapeSelect" type="OptionButton" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/ShapeRow"]
 size_flags_horizontal = 3
 
-[node name="PaintLayerRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
-custom_constants/separation = 4.0
+[node name="SidesRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox"]
 
-[node name="PaintLayerLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/PaintLayerRow"]
-text = "Layer"
-
-[node name="PaintLayerSelect" type="OptionButton" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/PaintLayerRow"]
-size_flags_horizontal = 3
-
-[node name="PaintLayerAdd" type="Button" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/PaintLayerRow"]
-text = "+"
-custom_minimum_size = Vector2(24, 0)
-
-[node name="PaintLayerRemove" type="Button" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/PaintLayerRow"]
-text = "-"
-custom_minimum_size = Vector2(24, 0)
-
-[node name="RegionSection" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
-text = "Regions"
-
-[node name="RegionEnableRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
-custom_constants/separation = 4.0
-
-[node name="RegionEnableLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/RegionEnableRow"]
-text = "Streaming"
-
-[node name="RegionEnable" type="CheckBox" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/RegionEnableRow"]
-size_flags_horizontal = 3
-
-[node name="RegionSizeRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
-custom_constants/separation = 4.0
-
-[node name="RegionSizeLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/RegionSizeRow"]
-text = "Region Size"
-
-[node name="RegionSizeSpin" type="SpinBox" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/RegionSizeRow"]
-size_flags_horizontal = 3
-min_value = 64.0
-max_value = 2048.0
-step = 64.0
-value = 512.0
-
-[node name="RegionRadiusRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
-custom_constants/separation = 4.0
-
-[node name="RegionRadiusLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/RegionRadiusRow"]
-text = "Stream Radius"
-
-[node name="RegionRadiusSpin" type="SpinBox" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/RegionRadiusRow"]
-size_flags_horizontal = 3
-min_value = 0.0
-max_value = 8.0
-step = 1.0
-value = 2.0
-
-[node name="RegionMemoryRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
-custom_constants/separation = 4.0
-
-[node name="RegionMemoryLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/RegionMemoryRow"]
-text = "Memory (MB)"
-
-[node name="RegionMemorySpin" type="SpinBox" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/RegionMemoryRow"]
-size_flags_horizontal = 3
-min_value = 32.0
-max_value = 4096.0
-step = 32.0
-value = 256.0
-
-[node name="RegionGridRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
-custom_constants/separation = 4.0
-
-[node name="RegionGridLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/RegionGridRow"]
-text = "Show Region Grid"
-
-[node name="RegionGridToggle" type="CheckBox" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/RegionGridRow"]
-size_flags_horizontal = 3
-
-[node name="HeightmapSection" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
-text = "Heightmap"
-
-[node name="HeightmapRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
-custom_constants/separation = 4.0
-
-[node name="HeightmapImport" type="Button" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/HeightmapRow"]
-text = "Import..."
-size_flags_horizontal = 3
-
-[node name="HeightmapGenerate" type="Button" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/HeightmapRow"]
-text = "Generate Noise"
-size_flags_horizontal = 3
-
-[node name="HeightScaleRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
-custom_constants/separation = 4.0
-
-[node name="HeightScaleLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/HeightScaleRow"]
-text = "Height Scale"
-
-[node name="HeightScaleSpin" type="SpinBox" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/HeightScaleRow"]
-size_flags_horizontal = 3
-min_value = 0.1
-max_value = 100.0
-step = 0.1
-value = 10.0
-
-[node name="LayerYRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
-custom_constants/separation = 4.0
-
-[node name="LayerYLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/LayerYRow"]
-text = "Layer Y"
-
-[node name="LayerYSpin" type="SpinBox" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/LayerYRow"]
-size_flags_horizontal = 3
-min_value = -1000.0
-max_value = 1000.0
-step = 0.5
-value = 0.0
-
-[node name="BlendSection" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
-text = "Material Blend"
-
-[node name="BlendStrengthRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
-custom_constants/separation = 4.0
-
-[node name="BlendStrengthLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/BlendStrengthRow"]
-text = "Blend Strength"
-
-[node name="BlendStrengthSpin" type="SpinBox" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/BlendStrengthRow"]
-size_flags_horizontal = 3
-min_value = 0.0
-max_value = 1.0
-step = 0.05
-value = 0.5
-
-[node name="BlendSlotRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
-custom_constants/separation = 4.0
-
-[node name="BlendSlotLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/BlendSlotRow"]
-text = "Blend Slot"
-
-[node name="BlendSlotSelect" type="OptionButton" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/BlendSlotRow"]
-size_flags_horizontal = 3
-
-[node name="TerrainSlotsSection" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
-text = "Terrain Slots"
-
-[node name="SlotARow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
-custom_constants/separation = 4.0
-
-[node name="SlotALabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotARow"]
-text = "Slot A"
-
-[node name="SlotATexture" type="Button" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotARow"]
-text = "Texture..."
-size_flags_horizontal = 3
-
-[node name="SlotAScale" type="SpinBox" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotARow"]
-min_value = 0.01
-max_value = 100.0
-step = 0.1
-value = 1.0
-
-[node name="SlotBRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
-custom_constants/separation = 4.0
-
-[node name="SlotBLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotBRow"]
-text = "Slot B"
-
-[node name="SlotBTexture" type="Button" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotBRow"]
-text = "Texture..."
-size_flags_horizontal = 3
-
-[node name="SlotBScale" type="SpinBox" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotBRow"]
-min_value = 0.01
-max_value = 100.0
-step = 0.1
-value = 1.0
-
-[node name="SlotCRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
-custom_constants/separation = 4.0
-
-[node name="SlotCLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotCRow"]
-text = "Slot C"
-
-[node name="SlotCTexture" type="Button" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotCRow"]
-text = "Texture..."
-size_flags_horizontal = 3
-
-[node name="SlotCScale" type="SpinBox" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotCRow"]
-min_value = 0.01
-max_value = 100.0
-step = 0.1
-value = 1.0
-
-[node name="SlotDRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox"]
-custom_constants/separation = 4.0
-
-[node name="SlotDLabel" type="Label" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotDRow"]
-text = "Slot D"
-
-[node name="SlotDTexture" type="Button" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotDRow"]
-text = "Texture..."
-size_flags_horizontal = 3
-
-[node name="SlotDScale" type="SpinBox" parent="Margin/VBox/MainTabs/FloorPaint/FloorPaintMargin/FloorPaintVBox/SlotDRow"]
-min_value = 0.01
-max_value = 100.0
-step = 0.1
-value = 1.0
-
-[node name="HeightmapImportDialog" type="FileDialog" parent="."]
-title = "Import Heightmap"
-access = 2
-filters = PackedStringArray("*.png ; PNG Image", "*.exr ; EXR Image")
-size = Vector2i(600, 400)
-
-[node name="TerrainSlotTextureDialog" type="FileDialog" parent="."]
-title = "Select Terrain Texture"
-access = 2
-filters = PackedStringArray("*.png ; PNG Image", "*.jpg ; JPEG Image", "*.jpeg ; JPEG Image", "*.tga ; TGA Image", "*.webp ; WebP Image", "*.exr ; EXR Image")
-size = Vector2i(600, 400)
-
-[node name="ShapeRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
-custom_constants/separation = 4.0
-
-[node name="ShapeLabel" type="Label" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/ShapeRow"]
-text = "Shape"
-
-[node name="ShapeSelect" type="OptionButton" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/ShapeRow"]
-size_flags_horizontal = 3
-
-[node name="SidesRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
-custom_constants/separation = 4.0
-
-[node name="SidesLabel" type="Label" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/SidesRow"]
+[node name="SidesLabel" type="Label" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/SidesRow"]
 text = "Sides"
 
-[node name="SidesSpin" type="SpinBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/SidesRow"]
+[node name="SidesSpin" type="SpinBox" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/SidesRow"]
 min_value = 3.0
 max_value = 16.0
 step = 1.0
 value = 4.0
-page = 1.0
 size_flags_horizontal = 3
 
-[node name="BuildSeparator1" type="HSeparator" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
+[node name="SizeRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox"]
 
-[node name="DimensionsLabel" type="Label" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
-text = "Dimensions"
-
-[node name="SizeRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
-custom_constants/separation = 4.0
-
-[node name="SizeLabel" type="Label" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/SizeRow"]
+[node name="SizeLabel" type="Label" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/SizeRow"]
 text = "Size"
 
-[node name="SizeX" type="SpinBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/SizeRow"]
+[node name="SizeX" type="SpinBox" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/SizeRow"]
 min_value = 1.0
 max_value = 256.0
 step = 1.0
 value = 32.0
-page = 4.0
 size_flags_horizontal = 3
 
-[node name="SizeY" type="SpinBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/SizeRow"]
+[node name="SizeY" type="SpinBox" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/SizeRow"]
 min_value = 1.0
 max_value = 256.0
 step = 1.0
 value = 24.0
-page = 4.0
 size_flags_horizontal = 3
 
-[node name="SizeZ" type="SpinBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/SizeRow"]
+[node name="SizeZ" type="SpinBox" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/SizeRow"]
 min_value = 1.0
 max_value = 256.0
 step = 1.0
 value = 24.0
-page = 4.0
 size_flags_horizontal = 3
 
-[node name="GridRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
-custom_constants/separation = 4.0
+[node name="GridRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox"]
 
-[node name="GridLabel" type="Label" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/GridRow"]
+[node name="GridLabel" type="Label" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/GridRow"]
 text = "Grid Snap"
 
-[node name="GridSnap" type="SpinBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/GridRow"]
+[node name="GridSnap" type="SpinBox" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/GridRow"]
 min_value = 0.0
 max_value = 128.0
 step = 1.0
 value = 16.0
-page = 4.0
 size_flags_horizontal = 3
 
-[node name="QuickSnapLabel" type="Label" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
-text = "Quick Snap"
+[node name="QuickSnapGrid" type="GridContainer" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox"]
+columns = 7
 
-[node name="QuickSnapGrid" type="GridContainer" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
-columns = 4
-
-[node name="Snap1" type="Button" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/QuickSnapGrid"]
+[node name="Snap1" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid"]
 text = "1"
 
-[node name="Snap2" type="Button" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/QuickSnapGrid"]
+[node name="Snap2" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid"]
 text = "2"
 
-[node name="Snap4" type="Button" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/QuickSnapGrid"]
+[node name="Snap4" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid"]
 text = "4"
 
-[node name="Snap8" type="Button" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/QuickSnapGrid"]
+[node name="Snap8" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid"]
 text = "8"
 
-[node name="Snap16" type="Button" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/QuickSnapGrid"]
+[node name="Snap16" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid"]
 text = "16"
 
-[node name="Snap32" type="Button" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/QuickSnapGrid"]
+[node name="Snap32" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid"]
 text = "32"
 
-[node name="Snap64" type="Button" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/QuickSnapGrid"]
+[node name="Snap64" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid"]
 text = "64"
 
-[node name="BuildSeparator2" type="HSeparator" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
+[node name="MaterialRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox"]
 
-[node name="MaterialsLabel" type="Label" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
-text = "Materials"
-
-[node name="MaterialRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
-custom_constants/separation = 4.0
-
-[node name="MaterialLabel" type="Label" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/MaterialRow"]
+[node name="MaterialLabel" type="Label" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/MaterialRow"]
 text = "Material"
 
-[node name="ActiveMaterial" type="Button" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/MaterialRow"]
+[node name="ActiveMaterial" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/MaterialRow"]
 text = "Active Material"
 size_flags_horizontal = 3
 
-[node name="PhysicsLayerRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
-custom_constants/separation = 4.0
+[node name="PhysicsLayerRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox"]
 
-[node name="PhysicsLayerLabel" type="Label" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PhysicsLayerRow"]
+[node name="PhysicsLayerLabel" type="Label" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/PhysicsLayerRow"]
 text = "Physics Layer"
 
-[node name="PhysicsLayerOption" type="OptionButton" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/PhysicsLayerRow"]
+[node name="PhysicsLayerOption" type="OptionButton" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/PhysicsLayerRow"]
 size_flags_horizontal = 3
 
-[node name="BuildSeparatorBake" type="HSeparator" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
-
-[node name="BakeLabel" type="Label" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
-text = "Bake Options"
-
-[node name="BakeMergeMeshes" type="CheckBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
-text = "Merge Meshes"
-pressed = false
-
-[node name="BakeGenerateLods" type="CheckBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
-text = "Generate LODs"
-pressed = false
-
-[node name="BakeLightmapUV2" type="CheckBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
-text = "Lightmap UV2"
-pressed = false
-
-[node name="BakeUseFaceMaterials" type="CheckBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
-text = "Use Face Materials"
-pressed = false
-
-[node name="BakeLightmapTexelRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
-custom_constants/separation = 4.0
-
-[node name="BakeLightmapTexelLabel" type="Label" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeLightmapTexelRow"]
-text = "Texel Size"
-
-[node name="BakeLightmapTexel" type="SpinBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeLightmapTexelRow"]
-min_value = 0.01
-max_value = 4.0
-step = 0.01
-value = 0.1
-size_flags_horizontal = 3
-
-[node name="BakeNavmesh" type="CheckBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
-text = "Bake Navmesh"
-pressed = false
-
-[node name="BakeNavmeshCellRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
-custom_constants/separation = 4.0
-
-[node name="BakeNavmeshCellLabel" type="Label" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeNavmeshCellRow"]
-text = "Navmesh Cell"
-
-[node name="BakeNavmeshCellSize" type="SpinBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeNavmeshCellRow"]
-min_value = 0.05
-max_value = 2.0
-step = 0.01
-value = 0.3
-size_flags_horizontal = 3
-
-[node name="BakeNavmeshCellHeight" type="SpinBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeNavmeshCellRow"]
-min_value = 0.05
-max_value = 2.0
-step = 0.01
-value = 0.2
-size_flags_horizontal = 3
-
-[node name="BakeNavmeshAgentRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
-custom_constants/separation = 4.0
-
-[node name="BakeNavmeshAgentLabel" type="Label" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeNavmeshAgentRow"]
-text = "Agent Size"
-
-[node name="BakeNavmeshAgentHeight" type="SpinBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeNavmeshAgentRow"]
-min_value = 0.5
-max_value = 5.0
-step = 0.1
-value = 2.0
-size_flags_horizontal = 3
-
-[node name="BakeNavmeshAgentRadius" type="SpinBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox/BakeNavmeshAgentRow"]
-min_value = 0.1
-max_value = 2.0
-step = 0.05
-value = 0.4
-size_flags_horizontal = 3
-
-[node name="BuildSeparator3" type="HSeparator" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
-
-[node name="EditorLabel" type="Label" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
-text = "Editor"
-
-[node name="CommitFreeze" type="CheckBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
-text = "Freeze Commit (keep CSG hidden)"
-pressed = true
-
-[node name="ShowHUD" type="CheckBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
-text = "Show HUD"
-pressed = true
-
-[node name="ShowGrid" type="CheckBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
-text = "Show Grid"
-pressed = false
-
-[node name="FollowGrid" type="CheckBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
-text = "Follow Grid"
-pressed = false
-
-[node name="DebugLogs" type="CheckBox" parent="Margin/VBox/MainTabs/Build/BuildMargin/BuildVBox"]
-text = "Debug Logs"
-pressed = false
-
-[node name="Materials" type="ScrollContainer" parent="Margin/VBox/MainTabs"]
+[node name="Paint" type="ScrollContainer" parent="Margin/VBox/MainTabs"]
 size_flags_horizontal = 3
 size_flags_vertical = 3
 
-[node name="MaterialsMargin" type="MarginContainer" parent="Margin/VBox/MainTabs/Materials"]
+[node name="PaintMargin" type="MarginContainer" parent="Margin/VBox/MainTabs/Paint"]
 theme_override_constants/margin_left = 4
 theme_override_constants/margin_top = 4
 theme_override_constants/margin_right = 4
 theme_override_constants/margin_bottom = 4
 
-[node name="MaterialsVBox" type="VBoxContainer" parent="Margin/VBox/MainTabs/Materials/MaterialsMargin"]
-custom_constants/separation = 6.0
-
-[node name="MaterialsLabel" type="Label" parent="Margin/VBox/MainTabs/Materials/MaterialsMargin/MaterialsVBox"]
-text = "Materials"
-
-[node name="MaterialsList" type="ItemList" parent="Margin/VBox/MainTabs/Materials/MaterialsMargin/MaterialsVBox"]
-custom_minimum_size = Vector2(0, 160)
-size_flags_vertical = 3
-
-[node name="MaterialsButtons" type="HBoxContainer" parent="Margin/VBox/MainTabs/Materials/MaterialsMargin/MaterialsVBox"]
-custom_constants/separation = 4.0
-
-[node name="MaterialAdd" type="Button" parent="Margin/VBox/MainTabs/Materials/MaterialsMargin/MaterialsVBox/MaterialsButtons"]
-text = "Add"
-
-[node name="MaterialRemove" type="Button" parent="Margin/VBox/MainTabs/Materials/MaterialsMargin/MaterialsVBox/MaterialsButtons"]
-text = "Remove"
-
-[node name="MaterialAssign" type="Button" parent="Margin/VBox/MainTabs/Materials/MaterialsMargin/MaterialsVBox"]
-text = "Assign to Selected Faces"
-
-[node name="FaceSelectMode" type="CheckBox" parent="Margin/VBox/MainTabs/Materials/MaterialsMargin/MaterialsVBox"]
-text = "Face Select Mode"
-
-[node name="FaceClear" type="Button" parent="Margin/VBox/MainTabs/Materials/MaterialsMargin/MaterialsVBox"]
-text = "Clear Face Selection"
-
-[node name="UV" type="MarginContainer" parent="Margin/VBox/MainTabs"]
-theme_override_constants/margin_left = 4
-theme_override_constants/margin_top = 4
-theme_override_constants/margin_right = 4
-theme_override_constants/margin_bottom = 4
-
-[node name="UVVBox" type="VBoxContainer" parent="Margin/VBox/MainTabs/UV"]
-custom_constants/separation = 6.0
-
-[node name="UVLabel" type="Label" parent="Margin/VBox/MainTabs/UV/UVVBox"]
-text = "UV Editor"
-
-[node name="UVEditor" parent="Margin/VBox/MainTabs/UV/UVVBox" instance=ExtResource( 2 )]
-
-[node name="UVReset" type="Button" parent="Margin/VBox/MainTabs/UV/UVVBox"]
-text = "Reset Projected UVs"
-
-[node name="SurfacePaint" type="ScrollContainer" parent="Margin/VBox/MainTabs"]
-size_flags_horizontal = 3
-size_flags_vertical = 3
-
-[node name="PaintMargin" type="MarginContainer" parent="Margin/VBox/MainTabs/SurfacePaint"]
-theme_override_constants/margin_left = 4
-theme_override_constants/margin_top = 4
-theme_override_constants/margin_right = 4
-theme_override_constants/margin_bottom = 4
-
-[node name="PaintVBox" type="VBoxContainer" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin"]
-custom_constants/separation = 6.0
-
-[node name="PaintLabel" type="Label" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox"]
-text = "Surface Paint"
-
-[node name="PaintTargetRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox"]
-custom_constants/separation = 4.0
-
-[node name="PaintTargetLabel" type="Label" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/PaintTargetRow"]
-text = "Paint Target"
-
-[node name="PaintTargetSelect" type="OptionButton" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/PaintTargetRow"]
-size_flags_horizontal = 3
-
-[node name="SurfacePaintRadiusRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox"]
-custom_constants/separation = 4.0
-
-[node name="SurfacePaintRadiusLabel" type="Label" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/SurfacePaintRadiusRow"]
-text = "Radius (UV)"
-
-[node name="SurfacePaintRadius" type="SpinBox" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/SurfacePaintRadiusRow"]
-min_value = 0.01
-max_value = 0.5
-step = 0.01
-value = 0.1
-size_flags_horizontal = 3
-
-[node name="SurfacePaintStrengthRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox"]
-custom_constants/separation = 4.0
-
-[node name="SurfacePaintStrengthLabel" type="Label" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/SurfacePaintStrengthRow"]
-text = "Strength"
-
-[node name="SurfacePaintStrength" type="SpinBox" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/SurfacePaintStrengthRow"]
-min_value = 0.0
-max_value = 1.0
-step = 0.05
-value = 1.0
-size_flags_horizontal = 3
-
-[node name="SurfacePaintLayerRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox"]
-custom_constants/separation = 4.0
-
-[node name="SurfacePaintLayerLabel" type="Label" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/SurfacePaintLayerRow"]
-text = "Layer"
-
-[node name="SurfacePaintLayerSelect" type="OptionButton" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/SurfacePaintLayerRow"]
-size_flags_horizontal = 3
-
-[node name="SurfacePaintLayerAdd" type="Button" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/SurfacePaintLayerRow"]
-text = "+"
-custom_minimum_size = Vector2(24, 0)
-
-[node name="SurfacePaintLayerRemove" type="Button" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox/SurfacePaintLayerRow"]
-text = "-"
-custom_minimum_size = Vector2(24, 0)
-
-[node name="SurfacePaintTexture" type="Button" parent="Margin/VBox/MainTabs/SurfacePaint/PaintMargin/PaintVBox"]
-text = "Pick Layer Texture"
+[node name="PaintVBox" type="VBoxContainer" parent="Margin/VBox/MainTabs/Paint/PaintMargin"]
 
 [node name="Entities" type="ScrollContainer" parent="Margin/VBox/MainTabs"]
 size_flags_horizontal = 3
@@ -702,10 +196,6 @@ theme_override_constants/margin_right = 4
 theme_override_constants/margin_bottom = 4
 
 [node name="EntitiesVBox" type="VBoxContainer" parent="Margin/VBox/MainTabs/Entities/EntitiesMargin"]
-custom_constants/separation = 6.0
-
-[node name="EntitiesLabel" type="Label" parent="Margin/VBox/MainTabs/Entities/EntitiesMargin/EntitiesVBox"]
-text = "Entities"
 
 [node name="CreateEntity" type="Button" parent="Margin/VBox/MainTabs/Entities/EntitiesMargin/EntitiesVBox"]
 text = "Create DraftEntity"
@@ -727,178 +217,16 @@ theme_override_constants/margin_right = 4
 theme_override_constants/margin_bottom = 4
 
 [node name="ManageVBox" type="VBoxContainer" parent="Margin/VBox/MainTabs/Manage/ManageMargin"]
-custom_constants/separation = 6.0
-
-[node name="ActionsLabel" type="Label" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-text = "Actions"
-
-[node name="CreateFloor" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-text = "Create Floor"
-
-[node name="ApplyCuts" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-text = "Apply Cuts"
-
-[node name="ClearCuts" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-text = "Clear Pending Cuts"
-
-[node name="CommitCuts" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-text = "Commit Cuts (Bake)"
-
-[node name="RestoreCuts" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-text = "Restore Committed Cuts"
-
-[node name="Bake" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-text = "Bake"
-
-[node name="BakeDryRun" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-text = "Bake Dry Run"
-
-[node name="ValidateLevel" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-text = "Validate Level"
-
-[node name="ValidateFix" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-text = "Validate + Fix"
-
-[node name="Clear" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-text = "Clear Brushes"
-
-[node name="ManageSeparatorStorage" type="HSeparator" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-
-[node name="StorageLabel" type="Label" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-text = "Storage"
-
-[node name="SaveHFLevel" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-text = "Save .hflevel"
-
-[node name="LoadHFLevel" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-text = "Load .hflevel"
-
-[node name="ImportMap" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-text = "Import .map"
-
-[node name="ExportMap" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-text = "Export .map"
-
-[node name="ExportGLB" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-text = "Export .glb"
-
-[node name="AutosaveLabel" type="Label" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-text = "Autosave"
-
-[node name="AutosaveEnabled" type="CheckBox" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-text = "Enable Autosave"
-pressed = true
-
-[node name="AutosaveMinutesRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-custom_constants/separation = 4.0
-
-[node name="AutosaveMinutesLabel" type="Label" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/AutosaveMinutesRow"]
-text = "Minutes"
-
-[node name="AutosaveMinutes" type="SpinBox" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/AutosaveMinutesRow"]
-min_value = 1.0
-max_value = 60.0
-step = 1.0
-value = 5.0
-size_flags_horizontal = 3
-
-[node name="AutosaveKeepRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-custom_constants/separation = 4.0
-
-[node name="AutosaveKeepLabel" type="Label" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/AutosaveKeepRow"]
-text = "Keep"
-
-[node name="AutosaveKeep" type="SpinBox" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/AutosaveKeepRow"]
-min_value = 1.0
-max_value = 50.0
-step = 1.0
-value = 5.0
-size_flags_horizontal = 3
-
-[node name="AutosavePath" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-text = "Set Autosave Path"
-
-[node name="SettingsLabel" type="Label" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-text = "Settings"
-
-[node name="ExportSettings" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-text = "Export Settings"
-
-[node name="ImportSettings" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-text = "Import Settings"
-
-[node name="ManageSeparator1" type="HSeparator" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-
-[node name="PresetsLabel" type="Label" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-text = "Presets"
-
-[node name="SavePreset" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-text = "Save Current"
-
-[node name="PresetGrid" type="GridContainer" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-columns = 2
-
-[node name="ManageSeparator2" type="HSeparator" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-
-[node name="HistoryLabel" type="Label" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-text = "History"
-
-[node name="HistoryControls" type="HBoxContainer" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-custom_constants/separation = 4.0
-
-[node name="Undo" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/HistoryControls"]
-text = "Undo"
-
-[node name="Redo" type="Button" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/HistoryControls"]
-text = "Redo"
-
-[node name="HistoryList" type="ItemList" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-custom_minimum_size = Vector2(0, 120)
-size_flags_vertical = 3
-
-[node name="ManageSeparator3" type="HSeparator" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-
-[node name="PerformanceLabel" type="Label" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-text = "Performance"
-
-[node name="PerformanceGrid" type="GridContainer" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox"]
-columns = 2
-
-[node name="PerfBrushesLabel" type="Label" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/PerformanceGrid"]
-text = "Active Brushes"
-
-[node name="PerfBrushesValue" type="Label" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/PerformanceGrid"]
-text = "0"
-
-[node name="PerfPaintMemLabel" type="Label" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/PerformanceGrid"]
-text = "Paint Memory"
-
-[node name="PerfPaintMemValue" type="Label" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/PerformanceGrid"]
-text = "0 KB"
-
-[node name="PerfBakeChunksLabel" type="Label" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/PerformanceGrid"]
-text = "Bake Chunks"
-
-[node name="PerfBakeChunksValue" type="Label" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/PerformanceGrid"]
-text = "0"
-
-[node name="PerfBakeTimeLabel" type="Label" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/PerformanceGrid"]
-text = "Last Bake"
-
-[node name="PerfBakeTimeValue" type="Label" parent="Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox/PerformanceGrid"]
-text = "0 ms"
 
 [node name="BottomSeparator" type="HSeparator" parent="Margin/VBox"]
 
 [node name="Footer" type="VBoxContainer" parent="Margin/VBox"]
-custom_constants/separation = 4.0
 
 [node name="QuickPlay" type="Button" parent="Margin/VBox/Footer"]
 text = "Quick Play"
 size_flags_horizontal = 3
 
 [node name="StatusFooter" type="HBoxContainer" parent="Margin/VBox/Footer"]
-custom_constants/separation = 6.0
 
 [node name="StatusLabel" type="Label" parent="Margin/VBox/Footer/StatusFooter"]
 text = "Ready"
@@ -913,7 +241,7 @@ max_value = 100.0
 value = 0.0
 
 [node name="BrushCountLabel" type="Label" parent="Margin/VBox/Footer/StatusFooter"]
-text = "Live Brushes: 0"
+text = "Brushes: 0"
 
 [node name="PresetMenu" type="PopupMenu" parent="."]
 
@@ -977,3 +305,15 @@ file_mode = 4
 title = "Import Settings"
 access = 2
 file_mode = 0
+
+[node name="HeightmapImportDialog" type="FileDialog" parent="."]
+title = "Import Heightmap"
+access = 2
+filters = PackedStringArray("*.png ; PNG Image", "*.exr ; EXR Image")
+size = Vector2i(600, 400)
+
+[node name="TerrainSlotTextureDialog" type="FileDialog" parent="."]
+title = "Select Terrain Texture"
+access = 2
+filters = PackedStringArray("*.png ; PNG Image", "*.jpg ; JPEG Image", "*.jpeg ; JPEG Image", "*.tga ; TGA Image", "*.webp ; WebP Image", "*.exr ; EXR Image")
+size = Vector2i(600, 400)

@@ -3,6 +3,7 @@ extends Node
 class_name Baker
 
 const DEFAULT_UV2_TEXEL_SIZE := 0.1
+const DraftBrush = preload("brush_instance.gd")
 const FaceData = preload("face_data.gd")
 const MaterialManager = preload("material_manager.gd")
 
@@ -114,16 +115,14 @@ func bake_from_faces(
 
 	var groups: Dictionary = {}
 	for brush in brushes:
-		if brush == null or not brush.has_method("get_faces"):
+		if not brush is DraftBrush:
 			continue
-		var faces: Array = brush.call("get_faces")
+		var faces: Array = brush.get_faces()
 		if faces.is_empty():
 			continue
 		var basis: Basis = brush.global_transform.basis
 		var origin: Vector3 = brush.global_transform.origin
-		var brush_material: Material = (
-			brush.get("material_override") if brush.has_method("get") else null
-		)
+		var brush_material: Material = brush.material_override
 		for face in faces:
 			if face == null:
 				continue
@@ -217,12 +216,14 @@ func _postprocess_mesh(
 	if not mesh:
 		return null
 	var result = mesh
-	if unwrap_uv2 and result.has_method("lightmap_unwrap"):
-		var unwrapped = result.call("lightmap_unwrap", Transform3D.IDENTITY, uv2_texel_size)
-		if unwrapped is Mesh:
-			result = unwrapped
-	if generate_lods and result.has_method("generate_lods"):
-		result.call("generate_lods")
+	if result is ArrayMesh:
+		var arr_mesh := result as ArrayMesh
+		if unwrap_uv2:
+			var unwrapped = arr_mesh.lightmap_unwrap(Transform3D.IDENTITY, uv2_texel_size)
+			if unwrapped is Mesh:
+				result = unwrapped
+		if generate_lods and result is ArrayMesh:
+			(result as ArrayMesh).generate_lods()
 	return result
 
 

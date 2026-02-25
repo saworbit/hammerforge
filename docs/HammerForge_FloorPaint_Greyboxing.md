@@ -1,6 +1,6 @@
 # HammerForge Floor Paint Greyboxing
 
-Last updated: February 15, 2026
+Last updated: February 25, 2026
 
 This document describes the floor paint system: grid storage, tools, geometry synthesis, heightmap integration, reconciliation, and persistence. Surface paint (per-face splat layers) is documented separately and does not use the grid system.
 

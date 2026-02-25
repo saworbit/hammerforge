@@ -1,6 +1,6 @@
 # HammerForge Spec
 
-Last updated: February 22, 2026
+Last updated: February 25, 2026
 
 This document describes HammerForge's architecture and data flow.
 
@@ -24,9 +24,10 @@ HammerForge uses a coordinator + subsystems pattern. `LevelRoot` is a thin coord
 
 | Script | Role |
 |--------|------|
-| `plugin.gd` | EditorPlugin entry point, input routing, undo/redo |
+| `plugin.gd` | EditorPlugin entry point, input routing, undo/redo, sticky LevelRoot discovery |
 | `level_root.gd` | Thin coordinator: containers, exports, signals, delegates to subsystems |
-| `dock.gd` + `dock.tscn` | UI dock: tool state, materials palette, paint controls |
+| `dock.gd` + `dock.tscn` | UI dock (4 tabs: Brush, Paint, Entities, Manage), collapsible sections, tool state |
+| `ui/collapsible_section.gd` | Reusable `HFCollapsibleSection` toggle-header VBoxContainer |
 | `input_state.gd` | Drag/paint/extrude state machine (`Mode` enum: IDLE, DRAG_BASE, DRAG_HEIGHT, SURFACE_PAINT, EXTRUDE) |
 | `hf_extrude_tool.gd` | Extrude Up/Down tool (face pick + drag to extend brushes) |
 | `brush_instance.gd` | DraftBrush node (authored geometry) |
@@ -43,7 +44,7 @@ HammerForge uses a coordinator + subsystems pattern. `LevelRoot` is a thin coord
 |-----------|------------|----------------|
 | `hf_grid_system.gd` | `HFGridSystem` | Editor grid setup, visibility, transform, axis-plane intersection |
 | `hf_entity_system.gd` | `HFEntitySystem` | Entity definitions, placement, capture/restore |
-| `hf_brush_system.gd` | `HFBrushSystem` | Brush CRUD, picking, pending/committed cuts, materials, face selection |
+| `hf_brush_system.gd` | `HFBrushSystem` | Brush CRUD, picking, pending/committed cuts, materials, face selection. O(1) brush ID cache and material instance cache |
 | `hf_drag_system.gd` | `HFDragSystem` | Drag lifecycle, preview management, axis locking, height computation. Owns `HFInputState` |
 | `hf_bake_system.gd` | `HFBakeSystem` | Bake orchestration (single/chunked), CSG assembly, navmesh, collision |
 | `hf_paint_system.gd` | `HFPaintSystem` | Floor paint input, surface paint, paint layer CRUD, face selection |
@@ -54,6 +55,8 @@ HammerForge uses a coordinator + subsystems pattern. `LevelRoot` is a thin coord
 
 ### Other Modules
 
+- `addons/hammerforge/ui/collapsible_section.gd`: `HFCollapsibleSection` -- reusable collapsible section with toggle-header button
+- `addons/hammerforge/highlight.gdshader`: selection highlight shader (wireframe, unshaded, alpha)
 - `addons/hammerforge/paint/*`: floor paint grid, layers, tools, inference, geometry synthesis, reconciliation, heightmap integration
 - `addons/hammerforge/paint/hf_region_manager.gd`: region streaming helpers (region bounds, radius, index)
 - `addons/hammerforge/hflevel_io.gd`: variant encoding/decoding for .hflevel format
@@ -67,7 +70,7 @@ HammerForge uses a coordinator + subsystems pattern. `LevelRoot` is a thin coord
 | `hf_paint_grid.gd` | `HFPaintGrid` | Grid storage, coordinate conversion |
 | `hf_paint_layer.gd` | `HFPaintLayer` | Layer data: bitset + material_ids + blend_weights (+ _2/_3) + heightmap |
 | `hf_paint_layer_manager.gd` | `HFPaintLayerManager` | Multi-layer management, active layer |
-| `hf_paint_tool.gd` | `HFPaintTool` | Paint input, stroke handling, routes to appropriate synth |
+| `hf_paint_tool.gd` | `HFPaintTool` | Paint input, stroke handling, routes to appropriate synth. Shared `build_heightmap_model()` for heightmap reconciliation |
 | `hf_stroke.gd` | `HFStroke` | Stroke data (cells, timing, tool type, brush shape) |
 | `hf_geometry_synth.gd` | `HFGeometrySynth` | Greedy meshing for flat floors/walls |
 | `hf_heightmap_synth.gd` | `HFHeightmapSynth` | Heightmap-displaced mesh generation (SurfaceTool) |
@@ -229,6 +232,8 @@ plugin.gd (input)
 
 All public methods on `LevelRoot` are thin one-line delegates to the appropriate subsystem. This preserves the existing API so `plugin.gd` and `dock.gd` call `root.bake()`, `root.begin_drag()`, etc. without change.
 
+`plugin.gd`'s `_forward_3d_gui_input()` is a ~50-line dispatcher that routes to focused handlers: `_handle_paint_input()`, `_handle_keyboard_input()`, `_handle_rmb_cancel()`, `_handle_select_mouse()`, `_handle_extrude_mouse()`, `_handle_draw_mouse()`, `_handle_mouse_motion()`. A shared `_get_nudge_direction()` helper is used by both `_forward_3d_gui_input()` and `_shortcut_input()`.
+
 ## Input State Machine
 
 `input_state.gd` (`HFInputState`) replaces 18+ loose state variables with an explicit `Mode` enum:
@@ -243,6 +248,27 @@ All public methods on `LevelRoot` are thin one-line delegates to the appropriate
 
 Transitions: `begin_drag()` -> `advance_to_height()` -> `end_drag()` / `cancel()`. Extrude: `begin_extrude()` -> `end_extrude()` / `cancel()`.
 
+## Dock UI
+The dock uses 4 tabs with collapsible sections for visual hierarchy:
+
+| Tab | Contents |
+|-----|----------|
+| **Brush** | Shape, size, grid snap, quick snap presets, material picker, operation mode (Add/Sub), texture lock |
+| **Paint** | 7 collapsible sections: Floor Paint, Heightmap, Blend & Terrain, Regions, Materials, UV Editor, Surface Paint |
+| **Entities** | Entity palette with drag-and-drop, Create DraftEntity |
+| **Manage** | 8 collapsible sections: Bake (options), Actions, File (I/O), Presets, History, Settings (editor toggles + autosave), Performance, plus Visgroups & Cordon (inserted programmatically) |
+
+- Paint and Manage tab contents built programmatically in `_build_paint_tab()` and `_build_manage_tab()` using `HFCollapsibleSection`.
+- "No LevelRoot" banner visible at dock top when no root is found.
+- Toolbar buttons display shortcut labels: `Draw (D)`, `Sel (S)`, `Ext▲ (U)`, `Ext▼ (J)`.
+- **Signal-driven sync**: Setting controls (checkboxes, spinboxes) push values to LevelRoot via `toggled`/`value_changed` signals instead of polling every frame. Perf panel throttled to every 30 frames; paint/material sync every 10 frames; disabled hints are flag-driven.
+
+## LevelRoot Discovery
+- `plugin.gd` uses sticky `active_root`: selecting non-LevelRoot nodes does not null the reference.
+- `_handles()` returns true for any node when a LevelRoot exists in the scene (deep recursive search).
+- `_edit()` only nulls `active_root` when the root node is removed from the tree.
+- `dock.gd` mirrors the sticky pattern and uses `_find_level_root_in()` for deep tree search.
+
 ## Editor UX
 - Theme-aware dock styling with comprehensive tooltips on all controls.
 - Context-sensitive shortcut HUD overlay (8 views: draw idle, dragging base, adjusting height, select, extrude idle, extruding active, floor paint, surface paint). Displays current axis lock. Updated via `plugin.gd` -> `shortcut_hud.gd:update_context()`.
@@ -254,6 +280,10 @@ Transitions: `begin_drag()` -> `advance_to_height()` -> `end_drag()` / `cancel()
 - Shader-based editor grid with follow mode.
 - Grouping shortcuts: Ctrl+G (group selection), Ctrl+U (ungroup).
 - Direct typed calls between plugin/dock/LevelRoot (no duck-typing).
+- O(1) brush ID lookup and brush count via `_brush_cache` / `_brush_count` in `HFBrushSystem`.
+- Material instance caching in `HFBrushSystem` (composite key: operation/solid/unshaded).
+- Persistent cordon `ImmediateMesh` reused via `clear_surfaces()` (no per-call allocation).
+- Selection highlight uses external `highlight.gdshader` (no inline GLSL strings).
 
 ## Validation + Diagnostics
 - Validate Level scans for missing materials, zero-size brushes, invalid face indices, and paint layers without grids.

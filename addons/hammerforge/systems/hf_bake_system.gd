@@ -144,12 +144,7 @@ func bake_single(layer: int, options: Dictionary) -> Node3D:
 
 func bake_chunked(chunk_size: float, layer: int, options: Dictionary) -> Node3D:
 	var size = max(0.001, chunk_size)
-	var chunks: Dictionary = {}
-	collect_chunk_brushes(root.draft_brushes_node, size, chunks, "brushes")
-	if root.commit_freeze and root.committed_node:
-		collect_chunk_brushes(root.committed_node, size, chunks, "committed")
-	collect_chunk_brushes(root.generated_floors, size, chunks, "generated")
-	collect_chunk_brushes(root.generated_walls, size, chunks, "generated")
+	var chunks = _collect_all_chunks(size)
 	if chunks.is_empty():
 		return null
 	var container = Node3D.new()
@@ -223,12 +218,7 @@ func get_bake_chunk_count() -> int:
 			total += count_brushes_in(root.committed_node)
 		return 1 if total > 0 else 0
 	var size = max(0.001, root.bake_chunk_size)
-	var chunks: Dictionary = {}
-	collect_chunk_brushes(root.draft_brushes_node, size, chunks, "brushes")
-	if root.commit_freeze and root.committed_node:
-		collect_chunk_brushes(root.committed_node, size, chunks, "committed")
-	collect_chunk_brushes(root.generated_floors, size, chunks, "generated")
-	collect_chunk_brushes(root.generated_walls, size, chunks, "generated")
+	var chunks = _collect_all_chunks(size)
 	var count := 0
 	for coord in chunks:
 		var entry: Dictionary = chunks[coord]
@@ -239,6 +229,16 @@ func get_bake_chunk_count() -> int:
 			continue
 		count += 1
 	return count
+
+
+func _collect_all_chunks(chunk_size: float) -> Dictionary:
+	var chunks: Dictionary = {}
+	collect_chunk_brushes(root.draft_brushes_node, chunk_size, chunks, "brushes")
+	if root.commit_freeze and root.committed_node:
+		collect_chunk_brushes(root.committed_node, chunk_size, chunks, "committed")
+	collect_chunk_brushes(root.generated_floors, chunk_size, chunks, "generated")
+	collect_chunk_brushes(root.generated_walls, chunk_size, chunks, "generated")
+	return chunks
 
 
 func bake_dry_run() -> Dictionary:

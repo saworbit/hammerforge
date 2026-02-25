@@ -28,9 +28,8 @@ func _enter_tree():
 	dock = preload("dock.tscn").instantiate()
 	undo_redo_manager = get_undo_redo()
 	brush_gizmo_plugin = preload("brush_gizmo_plugin.gd").new()
-	if brush_gizmo_plugin and brush_gizmo_plugin.has_method("set_undo_redo"):
-		brush_gizmo_plugin.call("set_undo_redo", undo_redo_manager)
 	if brush_gizmo_plugin:
+		brush_gizmo_plugin.set_undo_redo(undo_redo_manager)
 		add_node_3d_gizmo_plugin(brush_gizmo_plugin)
 	base_control = get_editor_interface().get_base_control()
 	if base_control:
@@ -44,10 +43,9 @@ func _enter_tree():
 	add_control_to_dock(DOCK_SLOT_LEFT_UL, dock)
 	if dock:
 		dock.set_editor_interface(get_editor_interface())
-	if dock:
 		dock.set_undo_redo(undo_redo_manager)
-	if dock and dock.has_signal("hud_visibility_changed"):
-		dock.connect("hud_visibility_changed", Callable(self, "_on_hud_visibility_changed"))
+		if dock.has_signal("hud_visibility_changed"):
+			dock.connect("hud_visibility_changed", Callable(self, "_on_hud_visibility_changed"))
 
 	hud = preload("shortcut_hud.tscn").instantiate()
 	if base_control:
@@ -146,7 +144,14 @@ func _on_editor_selection_changed() -> void:
 func _handles(object: Object) -> bool:
 	if not object or not (object is Node):
 		return false
-	return _get_level_root_from_node(object as Node) != null
+	# Accept if the node is under a LevelRoot, OR if a LevelRoot exists anywhere
+	# in the scene. This keeps _forward_3d_gui_input() active so the user can
+	# draw/select without having to re-click the LevelRoot node.
+	if _get_level_root_from_node(object as Node) != null:
+		return true
+	if active_root and is_instance_valid(active_root) and active_root.is_inside_tree():
+		return true
+	return _get_level_root() != null
 
 
 func _edit(object: Object) -> void:
@@ -155,6 +160,11 @@ func _edit(object: Object) -> void:
 		if root:
 			active_root = root
 			return
+	# Don't null active_root — keep the previous root alive as long as it still
+	# exists in the scene. This prevents losing the dock/3D connection when the
+	# user clicks a Camera, Light, or other non-LevelRoot node.
+	if active_root and is_instance_valid(active_root) and active_root.is_inside_tree():
+		return
 	active_root = null
 
 
@@ -173,249 +183,308 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 	var target_camera = camera
 	var target_pos = event.position if event is InputEventMouse else Vector2.ZERO
 
-	if root:
-		if event is InputEventMouseMotion or event is InputEventMouseButton:
-			root.update_editor_grid(target_camera, target_pos)
+	if event is InputEventMouseMotion or event is InputEventMouseButton:
+		root.update_editor_grid(target_camera, target_pos)
 
-	var tool = dock.get_tool()
-	var op = dock.get_operation()
-	var size = dock.get_brush_size()
-	var shape = dock.get_shape()
-	var sides = dock.get_sides() if dock else 4
-	var grid = dock.get_grid_snap()
-	root.grid_snap = grid
-	var paint_mode = dock != null and dock.is_paint_mode_enabled()
-	var paint_target = dock.get_paint_target() if dock else 0
+	var tool_id = dock.get_tool()
+	var paint_mode = dock.is_paint_mode_enabled()
+	root.grid_snap = dock.get_grid_snap()
 
+	# Paint mode intercept
 	if paint_mode:
-		if paint_target == 0 and root:
-			var paint_tool_id = dock.get_paint_tool_id() if dock else 0
-			var paint_radius_cells = dock.get_paint_radius_cells() if dock else 1
-			var paint_brush_shape = dock.get_brush_shape() if dock else 1
-			var handled = root.handle_paint_input(
-				target_camera,
-				event,
-				target_pos,
-				op,
-				size,
-				paint_tool_id,
-				paint_radius_cells,
-				paint_brush_shape
-			)
-			if handled:
-				return EditorPlugin.AFTER_GUI_INPUT_STOP
-		elif paint_target == 1 and root:
-			var radius_uv = dock.get_surface_paint_radius() if dock else 0.1
-			var strength = dock.get_surface_paint_strength() if dock else 1.0
-			var layer_idx = dock.get_surface_paint_layer() if dock else 0
-			var handled_surface = root.handle_surface_paint_input(
-				target_camera, event, target_pos, radius_uv, strength, layer_idx
-			)
-			if handled_surface:
-				return EditorPlugin.AFTER_GUI_INPUT_STOP
+		var r = _handle_paint_input(event, root, target_camera, target_pos)
+		if r != EditorPlugin.AFTER_GUI_INPUT_PASS:
+			return r
 
-	if event is InputEventKey:
-		if event.pressed and not event.echo:
-			if event.keycode == KEY_DELETE:
-				var deleted = _delete_selected(root)
-				return (
-					EditorPlugin.AFTER_GUI_INPUT_STOP
-					if deleted
-					else EditorPlugin.AFTER_GUI_INPUT_PASS
-				)
-			if event.ctrl_pressed and event.keycode == KEY_D:
-				_duplicate_selected(root)
-				return EditorPlugin.AFTER_GUI_INPUT_STOP
-			if event.ctrl_pressed and event.keycode == KEY_G:
-				_group_selected(root)
-				return EditorPlugin.AFTER_GUI_INPUT_STOP
-			if event.ctrl_pressed and event.keycode == KEY_U:
-				_ungroup_selected(root)
-				return EditorPlugin.AFTER_GUI_INPUT_STOP
-			if event.keycode == KEY_UP:
-				_nudge_selected(root, Vector3(0.0, 0.0, -1.0))
-				return EditorPlugin.AFTER_GUI_INPUT_STOP
-			if event.keycode == KEY_DOWN:
-				_nudge_selected(root, Vector3(0.0, 0.0, 1.0))
-				return EditorPlugin.AFTER_GUI_INPUT_STOP
-			if event.keycode == KEY_LEFT:
-				_nudge_selected(root, Vector3(-1.0, 0.0, 0.0))
-				return EditorPlugin.AFTER_GUI_INPUT_STOP
-			if event.keycode == KEY_RIGHT:
-				_nudge_selected(root, Vector3(1.0, 0.0, 0.0))
-				return EditorPlugin.AFTER_GUI_INPUT_STOP
-			if event.keycode == KEY_PAGEUP:
-				_nudge_selected(root, Vector3(0.0, 1.0, 0.0))
-				return EditorPlugin.AFTER_GUI_INPUT_STOP
-			if event.keycode == KEY_PAGEDOWN:
-				_nudge_selected(root, Vector3(0.0, -1.0, 0.0))
-				return EditorPlugin.AFTER_GUI_INPUT_STOP
-			if event.keycode == KEY_U:
-				dock.set_extrude_tool(1)
-				_update_hud_context()
-				return EditorPlugin.AFTER_GUI_INPUT_STOP
-			if event.keycode == KEY_J:
-				dock.set_extrude_tool(-1)
-				_update_hud_context()
-				return EditorPlugin.AFTER_GUI_INPUT_STOP
-			if paint_mode:
-				var paint_key := -1
-				match event.keycode:
-					KEY_B:
-						paint_key = 0
-					KEY_E:
-						paint_key = 1
-					KEY_R:
-						paint_key = 2
-					KEY_L:
-						paint_key = 3
-					KEY_K:
-						paint_key = 4
-				if paint_key >= 0:
-					dock.set_paint_tool(paint_key)
-					return EditorPlugin.AFTER_GUI_INPUT_STOP
-			if tool != 1:
-				if event.keycode == KEY_X:
-					root.set_axis_lock(LevelRootType.AxisLock.X, true)
-					_update_hud_context()
-					return EditorPlugin.AFTER_GUI_INPUT_STOP
-				if event.keycode == KEY_Y:
-					root.set_axis_lock(LevelRootType.AxisLock.Y, true)
-					_update_hud_context()
-					return EditorPlugin.AFTER_GUI_INPUT_STOP
-				if event.keycode == KEY_Z:
-					root.set_axis_lock(LevelRootType.AxisLock.Z, true)
-					_update_hud_context()
-					return EditorPlugin.AFTER_GUI_INPUT_STOP
+	# Keyboard shortcuts
+	if event is InputEventKey and event.pressed and not event.echo:
+		var r = _handle_keyboard_input(event, root, tool_id, paint_mode)
+		if r != EditorPlugin.AFTER_GUI_INPUT_PASS:
+			return r
 
-	if tool == 1 and event is InputEventMouseMotion:
-		if root:
-			root.update_hover(target_camera, target_pos)
-	elif tool != 1 and root:
+	# Hover update
+	if tool_id == 1 and event is InputEventMouseMotion:
+		root.update_hover(target_camera, target_pos)
+	elif tool_id != 1:
 		root.clear_hover()
 
+	# Mouse button handling
 	if event is InputEventMouseButton:
-		if tool != 1:
+		if tool_id != 1:
 			root.set_shift_pressed(event.shift_pressed)
 			root.set_alt_pressed(event.alt_pressed)
 		if event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
-			if tool == 2 or tool == 3:
-				root.cancel_extrude()
-			else:
-				root.cancel_drag()
-			select_drag_active = false
-			select_dragging = false
+			return _handle_rmb_cancel(root, tool_id)
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			match tool_id:
+				0:
+					return _handle_draw_mouse(event, root, target_camera, target_pos)
+				1:
+					return _handle_select_mouse(
+						event, root, target_camera, target_pos, paint_mode
+					)
+				2, 3:
+					return _handle_extrude_mouse(event, root, target_camera, target_pos)
+
+	# Mouse motion handling
+	if event is InputEventMouseMotion:
+		return _handle_mouse_motion(event, root, target_camera, target_pos, tool_id)
+
+	_update_hud_context()
+	return EditorPlugin.AFTER_GUI_INPUT_PASS
+
+
+func _handle_paint_input(
+	event: InputEvent, root: Node, cam: Camera3D, pos: Vector2
+) -> int:
+	var paint_target = dock.get_paint_target()
+	var op = dock.get_operation()
+	var size = dock.get_brush_size()
+	if paint_target == 0:
+		var paint_tool_id = dock.get_paint_tool_id()
+		var paint_radius_cells = dock.get_paint_radius_cells()
+		var paint_brush_shape = dock.get_brush_shape()
+		var handled = root.handle_paint_input(
+			cam, event, pos, op, size, paint_tool_id, paint_radius_cells, paint_brush_shape
+		)
+		if handled:
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+	elif paint_target == 1:
+		var radius_uv = dock.get_surface_paint_radius()
+		var strength = dock.get_surface_paint_strength()
+		var layer_idx = dock.get_surface_paint_layer()
+		var handled_surface = root.handle_surface_paint_input(
+			cam, event, pos, radius_uv, strength, layer_idx
+		)
+		if handled_surface:
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+	return EditorPlugin.AFTER_GUI_INPUT_PASS
+
+
+func _get_nudge_direction(keycode: int) -> Vector3:
+	match keycode:
+		KEY_UP:
+			return Vector3(0.0, 0.0, -1.0)
+		KEY_DOWN:
+			return Vector3(0.0, 0.0, 1.0)
+		KEY_LEFT:
+			return Vector3(-1.0, 0.0, 0.0)
+		KEY_RIGHT:
+			return Vector3(1.0, 0.0, 0.0)
+		KEY_PAGEUP:
+			return Vector3(0.0, 1.0, 0.0)
+		KEY_PAGEDOWN:
+			return Vector3(0.0, -1.0, 0.0)
+	return Vector3.ZERO
+
+
+func _handle_keyboard_input(
+	event: InputEventKey, root: Node, tool_id: int, paint_mode: bool
+) -> int:
+	if event.keycode == KEY_DELETE:
+		var deleted = _delete_selected(root)
+		return (
+			EditorPlugin.AFTER_GUI_INPUT_STOP
+			if deleted
+			else EditorPlugin.AFTER_GUI_INPUT_PASS
+		)
+	if event.ctrl_pressed and event.keycode == KEY_D:
+		_duplicate_selected(root)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	if event.ctrl_pressed and event.keycode == KEY_G:
+		_group_selected(root)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	if event.ctrl_pressed and event.keycode == KEY_U:
+		_ungroup_selected(root)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	# Nudge keys
+	var nudge = _get_nudge_direction(event.keycode)
+	if nudge != Vector3.ZERO:
+		_nudge_selected(root, nudge)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	# Extrude tool shortcuts
+	if event.keycode == KEY_U:
+		dock.set_extrude_tool(1)
+		_update_hud_context()
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	if event.keycode == KEY_J:
+		dock.set_extrude_tool(-1)
+		_update_hud_context()
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	# Paint tool shortcuts
+	if paint_mode:
+		var paint_key := -1
+		match event.keycode:
+			KEY_B:
+				paint_key = 0
+			KEY_E:
+				paint_key = 1
+			KEY_R:
+				paint_key = 2
+			KEY_L:
+				paint_key = 3
+			KEY_K:
+				paint_key = 4
+		if paint_key >= 0:
+			dock.set_paint_tool(paint_key)
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+	# Axis lock (non-select tools only)
+	if tool_id != 1:
+		if event.keycode == KEY_X:
+			root.set_axis_lock(LevelRootType.AxisLock.X, true)
 			_update_hud_context()
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
-	var face_select = dock != null and dock.is_face_select_mode_enabled()
-	if tool == 1:
-		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-			if event.pressed:
-				if face_select and root:
-					var additive_face = (
-						event.shift_pressed
-						or event.ctrl_pressed
-						or event.meta_pressed
-						or Input.is_key_pressed(KEY_SHIFT)
-						or Input.is_key_pressed(KEY_CTRL)
-						or Input.is_key_pressed(KEY_META)
-					)
-					var face_handled = root.select_face_at_screen(
-						target_camera, target_pos, additive_face
-					)
-					return (
-						EditorPlugin.AFTER_GUI_INPUT_STOP
-						if face_handled
-						else EditorPlugin.AFTER_GUI_INPUT_PASS
-					)
-				var active_mat = dock.get_active_material() if dock else null
-				if paint_mode and active_mat:
-					var painted = root.pick_brush(target_camera, target_pos, false)
-					if painted:
-						_paint_brush_with_undo(root, painted, active_mat)
-						return EditorPlugin.AFTER_GUI_INPUT_STOP
-				select_drag_origin = target_pos
-				select_drag_active = true
-				select_dragging = false
-				select_additive = (
-					event.shift_pressed
-					or event.ctrl_pressed
-					or event.meta_pressed
-					or Input.is_key_pressed(KEY_SHIFT)
-					or Input.is_key_pressed(KEY_CTRL)
-					or Input.is_key_pressed(KEY_META)
-				)
-				return EditorPlugin.AFTER_GUI_INPUT_PASS
-			var selection_action := false
-			if select_drag_active:
-				if select_dragging:
-					selection_action = false
-				else:
-					if not face_select:
-						var picked = root.pick_brush(target_camera, target_pos)
-						_select_node(picked, select_additive)
-						selection_action = true
-			select_drag_active = false
-			select_dragging = false
+		if event.keycode == KEY_Y:
+			root.set_axis_lock(LevelRootType.AxisLock.Y, true)
+			_update_hud_context()
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+		if event.keycode == KEY_Z:
+			root.set_axis_lock(LevelRootType.AxisLock.Z, true)
+			_update_hud_context()
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+	return EditorPlugin.AFTER_GUI_INPUT_PASS
+
+
+func _handle_rmb_cancel(root: Node, tool_id: int) -> int:
+	if tool_id == 2 or tool_id == 3:
+		root.cancel_extrude()
+	else:
+		root.cancel_drag()
+	select_drag_active = false
+	select_dragging = false
+	_update_hud_context()
+	return EditorPlugin.AFTER_GUI_INPUT_STOP
+
+
+func _handle_select_mouse(
+	event: InputEventMouseButton,
+	root: Node,
+	cam: Camera3D,
+	pos: Vector2,
+	paint_mode: bool,
+) -> int:
+	var face_select = dock.is_face_select_mode_enabled()
+	if event.pressed:
+		if face_select:
+			var additive_face = (
+				event.shift_pressed
+				or event.ctrl_pressed
+				or event.meta_pressed
+				or Input.is_key_pressed(KEY_SHIFT)
+				or Input.is_key_pressed(KEY_CTRL)
+				or Input.is_key_pressed(KEY_META)
+			)
+			var face_handled = root.select_face_at_screen(cam, pos, additive_face)
 			return (
 				EditorPlugin.AFTER_GUI_INPUT_STOP
-				if selection_action
+				if face_handled
 				else EditorPlugin.AFTER_GUI_INPUT_PASS
 			)
-	elif tool == 2 or tool == 3:
-		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-			if event.pressed:
-				var extrude_dir = dock.get_extrude_direction()
-				var started = root.begin_extrude(target_camera, target_pos, extrude_dir)
-				return (
-					EditorPlugin.AFTER_GUI_INPUT_STOP
-					if started
-					else EditorPlugin.AFTER_GUI_INPUT_PASS
-				)
-			var info = root.end_extrude_info()
-			if not info.is_empty():
-				_commit_brush_placement(root, info)
-			_update_hud_context()
-			return EditorPlugin.AFTER_GUI_INPUT_STOP
-	else:
-		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-			if event.pressed:
-				var started = root.begin_drag(target_camera, target_pos, op, size, shape, sides)
-				return (
-					EditorPlugin.AFTER_GUI_INPUT_STOP
-					if started
-					else EditorPlugin.AFTER_GUI_INPUT_PASS
-				)
-			var result = root.end_drag_info(target_camera, target_pos, size)
-			if result.get("handled", false):
-				if result.get("placed", false):
-					_commit_brush_placement(root, result.get("info", {}))
+		var active_mat = dock.get_active_material()
+		if paint_mode and active_mat:
+			var painted = root.pick_brush(cam, pos, false)
+			if painted:
+				_paint_brush_with_undo(root, painted, active_mat)
 				return EditorPlugin.AFTER_GUI_INPUT_STOP
-			return EditorPlugin.AFTER_GUI_INPUT_PASS
-	if event is InputEventMouseMotion:
-		if tool != 1:
-			root.set_shift_pressed(event.shift_pressed)
-			root.set_alt_pressed(event.alt_pressed)
+		select_drag_origin = pos
+		select_drag_active = true
+		select_dragging = false
+		select_additive = (
+			event.shift_pressed
+			or event.ctrl_pressed
+			or event.meta_pressed
+			or Input.is_key_pressed(KEY_SHIFT)
+			or Input.is_key_pressed(KEY_CTRL)
+			or Input.is_key_pressed(KEY_META)
+		)
+		return EditorPlugin.AFTER_GUI_INPUT_PASS
+	# Mouse release
+	var selection_action := false
+	if select_drag_active:
+		if not select_dragging and not face_select:
+			var picked = root.pick_brush(cam, pos)
+			_select_node(picked, select_additive)
+			selection_action = true
+	select_drag_active = false
+	select_dragging = false
+	return (
+		EditorPlugin.AFTER_GUI_INPUT_STOP
+		if selection_action
+		else EditorPlugin.AFTER_GUI_INPUT_PASS
+	)
+
+
+func _handle_extrude_mouse(
+	event: InputEventMouseButton, root: Node, cam: Camera3D, pos: Vector2
+) -> int:
+	if event.pressed:
+		var extrude_dir = dock.get_extrude_direction()
+		var started = root.begin_extrude(cam, pos, extrude_dir)
+		return (
+			EditorPlugin.AFTER_GUI_INPUT_STOP
+			if started
+			else EditorPlugin.AFTER_GUI_INPUT_PASS
+		)
+	var info = root.end_extrude_info()
+	if not info.is_empty():
+		_commit_brush_placement(root, info)
+	_update_hud_context()
+	return EditorPlugin.AFTER_GUI_INPUT_STOP
+
+
+func _handle_draw_mouse(
+	event: InputEventMouseButton, root: Node, cam: Camera3D, pos: Vector2
+) -> int:
+	var op = dock.get_operation()
+	var size = dock.get_brush_size()
+	var shape = dock.get_shape()
+	var sides = dock.get_sides()
+	if event.pressed:
+		var started = root.begin_drag(cam, pos, op, size, shape, sides)
+		return (
+			EditorPlugin.AFTER_GUI_INPUT_STOP
+			if started
+			else EditorPlugin.AFTER_GUI_INPUT_PASS
+		)
+	var result = root.end_drag_info(cam, pos, size)
+	if result.get("handled", false):
+		if result.get("placed", false):
+			_commit_brush_placement(root, result.get("info", {}))
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	return EditorPlugin.AFTER_GUI_INPUT_PASS
+
+
+func _handle_mouse_motion(
+	event: InputEventMouseMotion,
+	root: Node,
+	cam: Camera3D,
+	pos: Vector2,
+	tool_id: int,
+) -> int:
+	if tool_id != 1:
+		root.set_shift_pressed(event.shift_pressed)
+		root.set_alt_pressed(event.alt_pressed)
+	var face_select = dock.is_face_select_mode_enabled()
+	if (
+		tool_id == 1
+		and select_drag_active
+		and event.button_mask & MOUSE_BUTTON_MASK_LEFT != 0
+		and not face_select
+	):
 		if (
-			tool == 1
-			and select_drag_active
-			and event.button_mask & MOUSE_BUTTON_MASK_LEFT != 0
-			and not face_select
+			not select_dragging
+			and select_drag_origin.distance_to(pos) >= select_drag_threshold
 		):
-			if (
-				not select_dragging
-				and select_drag_origin.distance_to(target_pos) >= select_drag_threshold
-			):
-				select_dragging = true
-			return EditorPlugin.AFTER_GUI_INPUT_PASS
-		if (tool == 2 or tool == 3) and event.button_mask & MOUSE_BUTTON_MASK_LEFT != 0:
-			root.update_extrude(target_camera, target_pos)
-			_update_hud_context()
-			return EditorPlugin.AFTER_GUI_INPUT_STOP
-		if tool == 0 and event.button_mask & MOUSE_BUTTON_MASK_LEFT != 0:
-			root.update_drag(target_camera, target_pos)
-			_update_hud_context()
-			return EditorPlugin.AFTER_GUI_INPUT_STOP
+			select_dragging = true
+		return EditorPlugin.AFTER_GUI_INPUT_PASS
+	if (tool_id == 2 or tool_id == 3) and event.button_mask & MOUSE_BUTTON_MASK_LEFT != 0:
+		root.update_extrude(cam, pos)
+		_update_hud_context()
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	if tool_id == 0 and event.button_mask & MOUSE_BUTTON_MASK_LEFT != 0:
+		root.update_drag(cam, pos)
+		_update_hud_context()
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	_update_hud_context()
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
 
@@ -443,25 +512,10 @@ func _shortcut_input(event: InputEvent) -> void:
 	var root = active_root if active_root else _get_level_root()
 	if not root:
 		return
-	match event.keycode:
-		KEY_UP:
-			_nudge_selected(root, Vector3(0.0, 0.0, -1.0))
-			event.accept()
-		KEY_DOWN:
-			_nudge_selected(root, Vector3(0.0, 0.0, 1.0))
-			event.accept()
-		KEY_LEFT:
-			_nudge_selected(root, Vector3(-1.0, 0.0, 0.0))
-			event.accept()
-		KEY_RIGHT:
-			_nudge_selected(root, Vector3(1.0, 0.0, 0.0))
-			event.accept()
-		KEY_PAGEUP:
-			_nudge_selected(root, Vector3(0.0, 1.0, 0.0))
-			event.accept()
-		KEY_PAGEDOWN:
-			_nudge_selected(root, Vector3(0.0, -1.0, 0.0))
-			event.accept()
+	var nudge = _get_nudge_direction(event.keycode)
+	if nudge != Vector3.ZERO:
+		_nudge_selected(root, nudge)
+		event.accept()
 
 
 func _select_node(node: Node, additive: bool = false) -> void:
@@ -904,12 +958,30 @@ func _get_level_root() -> Node:
 	if scene:
 		if scene.get_script() == LevelRootType or scene.name == "LevelRoot":
 			return scene
+		# Check direct child (fast path)
 		var node = scene.get_node_or_null("LevelRoot")
 		if node:
 			return node
+		# Deep search — find any LevelRoot anywhere in the scene tree
+		var found = _find_level_root_deep(scene)
+		if found:
+			return found
 	var current = get_tree().get_current_scene()
 	if current:
-		return current.get_node_or_null("LevelRoot")
+		var node = current.get_node_or_null("LevelRoot")
+		if node:
+			return node
+		return _find_level_root_deep(current)
+	return null
+
+
+func _find_level_root_deep(node: Node) -> Node:
+	for child in node.get_children():
+		if child.get_script() == LevelRootType or child is LevelRoot:
+			return child
+		var found = _find_level_root_deep(child)
+		if found:
+			return found
 	return null
 
 

@@ -9,6 +9,9 @@ const FaceSelector = preload("../face_selector.gd")
 const FaceData = preload("../face_data.gd")
 
 var root: Node3D
+var _brush_cache: Dictionary = {}  # brush_id (String) -> Node
+var _brush_count: int = 0
+var _material_cache: Dictionary = {}  # key (String) -> Material
 
 
 func _init(level_root: Node3D) -> void:
@@ -54,6 +57,8 @@ func place_brush(
 	var brush_id = _next_brush_id()
 	brush.brush_id = str(brush_id)
 	brush.set_meta("brush_id", str(brush_id))
+	_brush_cache[str(brush_id)] = brush
+	_brush_count += 1
 	if operation == CSGShape3D.OPERATION_SUBTRACTION and root.pending_node:
 		_add_pending_cut(brush)
 	else:
@@ -103,7 +108,7 @@ func create_brush_from_info(info: Dictionary) -> Node:
 	var brush_id = info.get("brush_id", _next_brush_id())
 	brush.brush_id = str(brush_id)
 	brush.set_meta("brush_id", brush_id)
-	_register_brush_id(str(brush_id))
+	_register_brush_id(str(brush_id), brush)
 	if info.has("faces"):
 		brush.apply_serialized_faces(info.get("faces", []))
 	if info.has("visgroups"):
@@ -120,10 +125,14 @@ func delete_brush(brush: Node, free: bool = true) -> void:
 	if not brush:
 		return
 	if brush is DraftBrush:
+		var bid = str((brush as DraftBrush).brush_id)
+		if bid != "":
+			_brush_cache.erase(bid)
 		var key = _face_key(brush as DraftBrush)
 		if root.face_selection.has(key):
 			root.face_selection.erase(key)
 			_apply_face_selection()
+	_brush_count = max(0, _brush_count - 1)
 	if root.brush_manager:
 		root.brush_manager.remove_brush(brush)
 	if brush.get_parent():
@@ -177,11 +186,20 @@ func restore_brush(brush: Node, parent: Node, owner: Node, index: int) -> void:
 
 
 func _find_brush_by_id(brush_id: String) -> Node:
+	# Fast path: cache lookup
+	if _brush_cache.has(brush_id):
+		var cached = _brush_cache[brush_id]
+		if is_instance_valid(cached) and cached.is_inside_tree():
+			return cached
+		_brush_cache.erase(brush_id)
+	# Slow path: scan and populate cache
 	for node in root._iter_pick_nodes():
 		if node and node is DraftBrush:
 			if node.has_meta("brush_id") and str(node.get_meta("brush_id")) == brush_id:
+				_brush_cache[brush_id] = node
 				return node
 			if str((node as DraftBrush).brush_id) == brush_id:
+				_brush_cache[brush_id] = node
 				return node
 	return null
 
@@ -253,7 +271,7 @@ func build_duplicate_info(brush: Node, offset: Vector3) -> Dictionary:
 func is_brush_node(node: Node) -> bool:
 	if not node or not (node is DraftBrush):
 		return false
-	if root._is_entity_node(node):
+	if root.is_entity_node(node):
 		return false
 	if node == root.pending_node:
 		return false
@@ -268,11 +286,7 @@ func _is_subtract_brush(node: Node) -> bool:
 
 
 func get_live_brush_count() -> int:
-	var count = 0
-	for node in root._iter_pick_nodes():
-		if node and node is DraftBrush:
-			count += 1
-	return count
+	return _brush_count
 
 
 # ---------------------------------------------------------------------------
@@ -285,11 +299,14 @@ func _next_brush_id() -> String:
 	return "%s_%s" % [str(Time.get_ticks_usec()), str(root._brush_id_counter)]
 
 
-func _register_brush_id(brush_id: String) -> void:
+func _register_brush_id(brush_id: String, brush_node: Node = null) -> void:
 	if brush_id == "":
 		return
+	if brush_node:
+		_brush_cache[brush_id] = brush_node
+	_brush_count += 1
 	var parts = brush_id.split("_")
-	if parts.size() == 0:
+	if parts.size() < 2:
 		return
 	var tail = parts[parts.size() - 1]
 	if not tail.is_valid_int():
@@ -419,6 +436,8 @@ func restore_committed_cuts() -> void:
 
 func clear_brushes() -> void:
 	clear_face_selection()
+	_brush_cache.clear()
+	_brush_count = 0
 	if root.brush_manager:
 		root.brush_manager.clear_brushes()
 	if root.draft_brushes_node:
@@ -467,6 +486,9 @@ func _clear_committed_cuts() -> void:
 
 
 func _make_brush_material(operation: int, solid: bool = false, unshaded: bool = false) -> Material:
+	var cache_key = "%d_%d_%d" % [operation, int(solid), int(unshaded)]
+	if _material_cache.has(cache_key):
+		return _material_cache[cache_key]
 	var mat = StandardMaterial3D.new()
 	if operation == CSGShape3D.OPERATION_SUBTRACTION:
 		var alpha = 0.85 if solid else 0.35
@@ -479,6 +501,7 @@ func _make_brush_material(operation: int, solid: bool = false, unshaded: bool = 
 		mat.albedo_color = Color(0.3, 0.6, 1.0, 0.35)
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.roughness = 0.6
+	_material_cache[cache_key] = mat
 	return mat
 
 

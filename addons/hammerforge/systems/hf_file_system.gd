@@ -81,6 +81,10 @@ func export_map(path: String) -> int:
 	if not file:
 		return ERR_CANT_OPEN
 	file.store_string(text)
+	var err = file.get_error()
+	if err != OK:
+		push_error("HFLevel: store_string failed for %s (error: %d)" % [path, err])
+		return err
 	return OK
 
 
@@ -93,16 +97,10 @@ func export_baked_gltf(path: String) -> int:
 		return ERR_UNAVAILABLE
 	var doc = GLTFDocument.new()
 	var state = GLTFState.new()
-	var err = ERR_CANT_CREATE
-	if doc.has_method("append_from_scene"):
-		err = doc.call("append_from_scene", root.baked_container, state)
-	elif doc.has_method("append_from_node"):
-		err = doc.call("append_from_node", root.baked_container, state)
+	var err = doc.append_from_scene(root.baked_container, state)
 	if err != OK:
 		return err
-	if doc.has_method("write_to_filesystem"):
-		return doc.call("write_to_filesystem", state, path)
-	return ERR_UNAVAILABLE
+	return doc.write_to_filesystem(state, path)
 
 
 func ensure_dir_for_path(path: String) -> void:
@@ -118,7 +116,6 @@ func start_hflevel_thread(path: String, payload: PackedByteArray) -> void:
 	if path == "" or payload.is_empty():
 		return
 	var abs_path = ProjectSettings.globalize_path(path)
-	ensure_dir_for_path(abs_path)
 	if _hflevel_thread and _hflevel_thread.is_alive():
 		_hflevel_pending = {"path": abs_path, "payload": payload}
 		return

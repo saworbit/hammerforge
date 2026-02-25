@@ -1,6 +1,6 @@
 # HammerForge MVP Guide
 
-Last updated: February 15, 2026
+Last updated: February 25, 2026
 
 This guide is for contributors implementing or extending the MVP.
 
@@ -14,10 +14,11 @@ This guide is for contributors implementing or extending the MVP.
 
 HammerForge uses a **coordinator + subsystems** pattern:
 
-- **`plugin.gd`** handles editor input and routes to `LevelRoot`.
-- **`level_root.gd`** is a thin coordinator (~1,100 lines) that owns containers, exports, and signals. All public methods delegate to one of 8 subsystem classes.
+- **`plugin.gd`** handles editor input and routes to `LevelRoot`. Uses sticky `active_root` with deep recursive tree search.
+- **`level_root.gd`** is a thin coordinator (~1,100 lines) that owns containers, exports, and signals. All public methods delegate to one of 10 subsystem classes.
 - **Subsystems** (`systems/*.gd`) are `RefCounted` classes that do the real work. Each receives a `LevelRoot` reference in its constructor.
 - **`input_state.gd`** is a state machine managing drag/paint modes.
+- **`dock.gd`** uses 4 tabs (Brush, Paint, Entities, Manage) with collapsible sections built programmatically via `HFCollapsibleSection` (`ui/collapsible_section.gd`).
 
 See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture conventions.
 
@@ -82,7 +83,7 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 - Apply/clear/commit subtract cuts.
 - Verify pending cuts appear orange-red, applied cuts turn standard red.
 - Bake (with and without chunking).
-- Enable Paint Mode and test Floor Paint tab Brush/Erase/Line/Rect/Bucket.
+- Enable Paint Mode and test Paint tab → Floor Paint section Brush/Erase/Line/Rect/Bucket.
 - Switch brush shape (Square/Circle) and verify radius fills correctly for each.
 - Test paint tool shortcuts: B/E/R/L/K in Paint Mode.
 - Verify live paint preview while dragging.
@@ -109,7 +110,7 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 Run `gdformat --check addons/hammerforge/` and `gdlint addons/hammerforge/` locally. These same checks run automatically on push/PR via `.github/workflows/ci.yml`.
 
 ## Diagnostics
-- Enable Debug Logs in the dock for runtime tracing.
+- Enable Debug Logs in the Manage tab → Settings section for runtime tracing.
 - Capture exit-time errors with:
 
 ```powershell

@@ -72,9 +72,12 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 - **Brush/Entity Grouping** -- persistent groups that select/move together (Ctrl+G / Ctrl+U)
 - **Texture Lock** -- UV alignment preserved automatically when moving or resizing brushes
 - **Cordon (Partial Bake)** -- restrict bake to an AABB region with yellow wireframe visualization
+- **Sticky LevelRoot** -- selecting other scene nodes no longer breaks viewport input
 
 ### Editor UX
+- **4-tab dock** (Brush, Paint, Entities, Manage) with **collapsible sections** for visual hierarchy
 - **Context-sensitive shortcut HUD** that updates based on current tool and mode
+- **Toolbar shortcut labels**: Draw (D), Sel (S), Ext▲ (U), Ext▼ (J)
 - **Paint tool shortcuts**: B / E / R / L / K for Brush / Erase / Rect / Line / Bucket
 - **Extrude shortcuts**: U (Extrude Up), J (Extrude Down)
 - **Group shortcuts**: Ctrl+G (Group), Ctrl+U (Ungroup)
@@ -82,6 +85,7 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 - **Selection count** in the status bar
 - **Color-coded status bar** (red errors, yellow warnings, auto-clear)
 - **Pending cuts** visually distinct (orange-red glow) from applied cuts
+- **"No LevelRoot" banner** guides users when no root node is found
 - Editor theme parity, high-contrast grid with follow mode
 - History panel (beta) and live brush count
 - Entity palette with drag-and-drop placement
@@ -125,9 +129,9 @@ For upgrade steps and cache reset help, see `docs/HammerForge_Install_Upgrade.md
 | **1. Draw a brush** | Tool = Draw, Mode = Add, Shape = Box -> drag base -> click height |
 | **2. Extrude a wall** | Tool = Extrude Up (U) -> click face -> drag up -> release |
 | **3. Cut a door** | Mode = Subtract -> draw brush -> Apply Cuts -> Bake |
-| **4. Face materials** | Materials tab -> Add -> pick `materials/test_mat.tres` (or create a StandardMaterial3D) -> Face Select Mode -> click faces -> Assign material |
-| **5. Surface paint** | Paint Mode -> Surface Paint tab -> Paint Target = Surface (not Floor) -> paint |
-| **6. Bake** | Click Bake (or enable Use Face Materials) |
+| **4. Face materials** | Paint tab -> Materials section -> Add -> pick `materials/test_mat.tres` -> Face Select Mode -> click faces -> Assign material |
+| **5. Surface paint** | Paint Mode -> Paint tab -> Surface Paint section -> Paint Target = Surface -> paint |
+| **6. Bake** | Manage tab -> Bake section -> Click Bake (or enable Use Face Materials) |
 
 ## Documentation
 
@@ -173,5 +177,5 @@ Start-Process -FilePath "C:\Godot\Godot_v4.6-stable_win64.exe" `
 
 <p align="center">
   <strong>MIT License</strong><br>
-  <sub>Last updated: February 22, 2026</sub>
+  <sub>Last updated: February 25, 2026</sub>
 </p>

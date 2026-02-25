@@ -1,6 +1,6 @@
 # HammerForge Texture and Materials
 
-Last updated: February 6, 2026
+Last updated: February 25, 2026
 
 This document describes the per-face material system, UV editing tools, and surface paint workflow.
 
@@ -35,10 +35,10 @@ Quick ways to get one:
 2. Choose `New Resource` -> `StandardMaterial3D` (or `ShaderMaterial`).
 3. Save it as a `.tres` file (example: `materials/test_mat.tres`).
 
-You can then click `Add` in the Materials tab and pick that resource.
+You can then click `Add` in the Paint tab → Materials section and pick that resource.
 
 ## Materials Palette
-The Materials tab hosts the palette used by face assignment.
+The Paint tab → Materials section hosts the palette used by face assignment.
 
 Workflow:
 1. Click `Add` to load a material resource.
@@ -51,7 +51,7 @@ Notes:
 - The palette is saved in `.hflevel`.
 
 ## UV Editor
-The UV tab shows a simple per-face UV editor.
+The Paint tab → UV Editor section shows a simple per-face UV editor.
 
 Workflow:
 1. Select a face (Face Select Mode).
@@ -63,11 +63,11 @@ Notes:
 - UV edits trigger preview rebuilds on the owning DraftBrush.
 
 ## Surface Paint (3D)
-Surface paint uses the Surface Paint tab with target set to `Surface`.
+Surface paint uses the Paint tab → Surface Paint section with target set to `Surface`.
 
 Workflow:
 1. Enable Paint Mode.
-2. Surface Paint tab: set `Paint Target = Surface`.
+2. Paint tab → Surface Paint section: set `Paint Target = Surface`.
 3. Select a layer and pick a texture.
 4. Paint on faces in the viewport.
 
@@ -80,7 +80,7 @@ Notes:
 - Weights are stored per face as images (default 256x256).
 - Surface paint updates the DraftBrush preview immediately.
 - Surface paint does not modify floor paint layers.
-- If paint affects floors, set `Paint Target = Surface` in the Surface Paint tab.
+- If paint affects floors, set `Paint Target = Surface` in the Paint tab → Surface Paint section.
 
 ## Bake Integration
 A bake option `Use Face Materials` switches the bake pipeline to per-face materials.
