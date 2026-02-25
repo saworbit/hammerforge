@@ -369,6 +369,10 @@ func clear_pending_cuts() -> void:
 	var cleared = root.pending_node.get_child_count()
 	for child in root.pending_node.get_children():
 		if child is DraftBrush:
+			var bid = str((child as DraftBrush).brush_id)
+			if bid != "":
+				_brush_cache.erase(bid)
+			_brush_count = max(0, _brush_count - 1)
 			child.queue_free()
 	if cleared > 0:
 		root._log("Cleared pending cuts (%s)" % cleared)
@@ -387,6 +391,10 @@ func _clear_applied_cuts() -> void:
 	var targets: Array = root.draft_brushes_node.get_children()
 	for child in targets:
 		if child is DraftBrush and _is_subtract_brush(child):
+			var bid = str((child as DraftBrush).brush_id)
+			if bid != "":
+				_brush_cache.erase(bid)
+			_brush_count = max(0, _brush_count - 1)
 			if root.commit_freeze:
 				_stash_committed_cut(child)
 			else:
