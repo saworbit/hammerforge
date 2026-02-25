@@ -409,9 +409,7 @@ func restore_paint_layers(data: Array, active_index: int) -> void:
 
 ## Deserialize an array of chunk dictionaries into a paint layer.
 ## Returns the list of chunk IDs (Vector2i) that were loaded.
-func _deserialize_chunks_to_layer(
-	layer: HFPaintLayer, chunks: Array
-) -> Array[Vector2i]:
+func _deserialize_chunks_to_layer(layer: HFPaintLayer, chunks: Array) -> Array[Vector2i]:
 	var loaded: Array[Vector2i] = []
 	for chunk in chunks:
 		if not (chunk is Dictionary):

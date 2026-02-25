@@ -220,9 +220,7 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 				0:
 					return _handle_draw_mouse(event, root, target_camera, target_pos)
 				1:
-					return _handle_select_mouse(
-						event, root, target_camera, target_pos, paint_mode
-					)
+					return _handle_select_mouse(event, root, target_camera, target_pos, paint_mode)
 				2, 3:
 					return _handle_extrude_mouse(event, root, target_camera, target_pos)
 
@@ -234,9 +232,7 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
 
 
-func _handle_paint_input(
-	event: InputEvent, root: Node, cam: Camera3D, pos: Vector2
-) -> int:
+func _handle_paint_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vector2) -> int:
 	var paint_target = dock.get_paint_target()
 	var op = dock.get_operation()
 	var size = dock.get_brush_size()
@@ -283,11 +279,7 @@ func _handle_keyboard_input(
 ) -> int:
 	if event.keycode == KEY_DELETE:
 		var deleted = _delete_selected(root)
-		return (
-			EditorPlugin.AFTER_GUI_INPUT_STOP
-			if deleted
-			else EditorPlugin.AFTER_GUI_INPUT_PASS
-		)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP if deleted else EditorPlugin.AFTER_GUI_INPUT_PASS
 	if event.ctrl_pressed and event.keycode == KEY_D:
 		_duplicate_selected(root)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
@@ -408,9 +400,7 @@ func _handle_select_mouse(
 	select_drag_active = false
 	select_dragging = false
 	return (
-		EditorPlugin.AFTER_GUI_INPUT_STOP
-		if selection_action
-		else EditorPlugin.AFTER_GUI_INPUT_PASS
+		EditorPlugin.AFTER_GUI_INPUT_STOP if selection_action else EditorPlugin.AFTER_GUI_INPUT_PASS
 	)
 
 
@@ -420,11 +410,7 @@ func _handle_extrude_mouse(
 	if event.pressed:
 		var extrude_dir = dock.get_extrude_direction()
 		var started = root.begin_extrude(cam, pos, extrude_dir)
-		return (
-			EditorPlugin.AFTER_GUI_INPUT_STOP
-			if started
-			else EditorPlugin.AFTER_GUI_INPUT_PASS
-		)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP if started else EditorPlugin.AFTER_GUI_INPUT_PASS
 	var info = root.end_extrude_info()
 	if not info.is_empty():
 		_commit_brush_placement(root, info)
@@ -441,11 +427,7 @@ func _handle_draw_mouse(
 	var sides = dock.get_sides()
 	if event.pressed:
 		var started = root.begin_drag(cam, pos, op, size, shape, sides)
-		return (
-			EditorPlugin.AFTER_GUI_INPUT_STOP
-			if started
-			else EditorPlugin.AFTER_GUI_INPUT_PASS
-		)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP if started else EditorPlugin.AFTER_GUI_INPUT_PASS
 	var result = root.end_drag_info(cam, pos, size)
 	if result.get("handled", false):
 		if result.get("placed", false):
@@ -471,10 +453,7 @@ func _handle_mouse_motion(
 		and event.button_mask & MOUSE_BUTTON_MASK_LEFT != 0
 		and not face_select
 	):
-		if (
-			not select_dragging
-			and select_drag_origin.distance_to(pos) >= select_drag_threshold
-		):
+		if not select_dragging and select_drag_origin.distance_to(pos) >= select_drag_threshold:
 			select_dragging = true
 		return EditorPlugin.AFTER_GUI_INPUT_PASS
 	if (tool_id == 2 or tool_id == 3) and event.button_mask & MOUSE_BUTTON_MASK_LEFT != 0:

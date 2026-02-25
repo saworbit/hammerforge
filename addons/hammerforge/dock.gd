@@ -781,9 +781,7 @@ func _make_label_row(label_text: String, control: Control) -> HBoxContainer:
 	return row
 
 
-func _make_spin(
-	min_val: float, max_val: float, step_val: float, default_val: float
-) -> SpinBox:
+func _make_spin(min_val: float, max_val: float, step_val: float, default_val: float) -> SpinBox:
 	var spin = SpinBox.new()
 	spin.min_value = min_val
 	spin.max_value = max_val
@@ -3672,9 +3670,7 @@ func _setup_visgroup_ui() -> void:
 	vg_btn_row.add_child(visgroup_add_sel_btn)
 	visgroup_rem_sel_btn = Button.new()
 	visgroup_rem_sel_btn.text = "Rem Sel"
-	visgroup_rem_sel_btn.tooltip_text = (
-		"Remove selected brushes/entities from the highlighted visgroup"
-	)
+	visgroup_rem_sel_btn.tooltip_text = ("Remove selected brushes/entities from the highlighted visgroup")
 	visgroup_rem_sel_btn.pressed.connect(_on_visgroup_remove_selection)
 	vg_btn_row.add_child(visgroup_rem_sel_btn)
 	visgroup_delete_btn = Button.new()
