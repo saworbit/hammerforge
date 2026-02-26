@@ -90,7 +90,7 @@ addons/hammerforge/
 The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on push and PR to `main`:
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
-- **GUT unit tests** -- 47 tests across 4 test files (runs Godot headless)
+- **GUT unit tests** -- 245 tests across 15 test files (runs Godot headless)
 
 Run locally before pushing:
 ```
@@ -109,6 +109,17 @@ Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framewor
 | `test_grouping.gd` | 9 | Group creation, meta, ungroup, regroup, serialization |
 | `test_texture_lock.gd` | 10 | UV offset/scale compensation for all projection types |
 | `test_cordon_filter.gd` | 10 | AABB intersection, cordon-filtered collection, chunk_coord |
+| `test_hollow_tool.gd` | 10 | Hollow creation (6 walls), thickness validation, material/operation preservation |
+| `test_clip_tool.gd` | 16 | Axis splitting (X/Y/Z), size correctness, property preservation (material, visgroups, group_id, brush_entity_class), edge rejection |
+| `test_brush_entity.gd` | 16 | Tie/untie entity classes, structural brush filtering, bake collection exclusion, brush info round-trip |
+| `test_entity_io.gd` | 21 | Entity I/O CRUD (add/remove/get outputs), find by name, get_all_connections, serialization, default values |
+| `test_justify_uv.gd` | 10 | UV justify modes (fit/center/left/right/top/bottom), zero-range safety, offset accumulation |
+| `test_brush_info_roundtrip.gd` | 19 | Brush info capture/restore with visgroups, group_id, brush_entity_class, material, move floor/ceiling argument safety |
+| `test_face_data.gd` | 15 | FaceData to_dict/from_dict round-trip, ensure_geometry, triangulate, box_projection_axis |
+| `test_paint_layer.gd` | 32 | Cell bit storage, chunk management, material IDs, blend weights, dirty tracking, heightmap, memory |
+| `test_heightmap_io.gd` | 12 | Base64 encode/decode round-trip, noise generation (FastNoiseLite), determinism |
+| `test_hflevel_io.gd` | 32 | Variant encode/decode (Vector2/3, Transform3D, Basis, Color), payload build/parse, full pipeline |
+| `test_brush_shapes.gd` | 15 | Box face generation, normals, vertex bounds, triangulation, serialization, prism mesh |
 
 Run all tests:
 ```

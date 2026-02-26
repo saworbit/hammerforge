@@ -118,7 +118,7 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 - Explicit **input state machine** for drag/paint operations
 - Type-safe inter-module calls (no duck-typing)
 - Threaded .hflevel I/O with error handling
-- **CI**: automated `gdformat` + `gdlint` checks and **GUT unit tests** (47 tests) on push/PR
+- **CI**: automated `gdformat` + `gdlint` checks and **GUT unit tests** (245 tests) on push/PR
 
 ## Installation
 
