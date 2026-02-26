@@ -597,6 +597,36 @@ func _clear_entities() -> void:
 	entity_system.clear_entities()
 
 
+func add_entity_output(
+	entity: Node,
+	output_name: String,
+	target_name: String,
+	input_name: String,
+	parameter: String = "",
+	delay: float = 0.0,
+	fire_once: bool = false
+) -> void:
+	entity_system.add_entity_output(
+		entity, output_name, target_name, input_name, parameter, delay, fire_once
+	)
+
+
+func remove_entity_output(entity: Node, index: int) -> void:
+	entity_system.remove_entity_output(entity, index)
+
+
+func get_entity_outputs(entity: Node) -> Array:
+	return entity_system.get_entity_outputs(entity)
+
+
+func find_entities_by_name(entity_name: String) -> Array:
+	return entity_system.find_entities_by_name(entity_name)
+
+
+func get_all_entity_connections() -> Array:
+	return entity_system.get_all_connections()
+
+
 # ===========================================================================
 # Brush API (delegates to brush_system)
 # ===========================================================================
@@ -722,6 +752,38 @@ func clear_brushes() -> void:
 
 func _clear_generated() -> void:
 	brush_system._clear_generated()
+
+
+func hollow_brush_by_id(brush_id: String, wall_thickness: float) -> void:
+	brush_system.hollow_brush_by_id(brush_id, wall_thickness)
+
+
+func move_brushes_to_floor(brush_ids: Array) -> void:
+	brush_system.move_brushes_to_floor(brush_ids)
+
+
+func move_brushes_to_ceiling(brush_ids: Array) -> void:
+	brush_system.move_brushes_to_ceiling(brush_ids)
+
+
+func clip_brush_by_id(brush_id: String, axis: int, split_pos: float) -> void:
+	brush_system.clip_brush_by_id(brush_id, axis, split_pos)
+
+
+func clip_brush_at_point(brush_id: String, face_idx: int, hit_position: Vector3) -> void:
+	brush_system.clip_brush_at_point(brush_id, face_idx, hit_position)
+
+
+func tie_brushes_to_entity(brush_ids: Array, entity_class: String) -> void:
+	brush_system.tie_brushes_to_entity(brush_ids, entity_class)
+
+
+func untie_brushes_from_entity(brush_ids: Array) -> void:
+	brush_system.untie_brushes_from_entity(brush_ids)
+
+
+func justify_selected_faces(mode: String, treat_as_one: bool) -> void:
+	brush_system.justify_selected_faces(mode, treat_as_one)
 
 
 func _make_brush_material(operation: int, solid: bool = false, unshaded: bool = false) -> Material:

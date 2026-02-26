@@ -1,6 +1,6 @@
 ﻿# HammerForge Data Portability
 
-Last updated: February 25, 2026
+Last updated: February 26, 2026
 
 This document describes how to move data in and out of HammerForge safely.
 
@@ -10,6 +10,16 @@ This document describes how to move data in and out of HammerForge safely.
 - Files include a version field and default missing keys on load for backward compatibility.
 - Autosaves write to `res://.hammerforge/autosave.hflevel` by default.
 - Store `.hflevel` in version control for reliable recovery.
+
+### Entity I/O Serialization
+- Entity I/O connections are stored per-entity in the `io_outputs` key of each entity record.
+- Each connection is a Dictionary: `{output_name, target_name, input_name, parameter, delay, fire_once}`.
+- Connections are captured by `capture_entity_info()` and restored by `restore_entity_from_info()`.
+- Missing `io_outputs` key on load = no connections (backward-compatible).
+
+### Brush Entity Class Serialization
+- Brush entity class (`func_detail`, `func_wall`, `trigger_once`, `trigger_multiple`) is stored in the `brush_entity_class` key of each brush record.
+- Missing key on load = no entity class (standard structural brush).
 
 ## `.map` Import / Export
 - Use `.map` to exchange basic brush layouts with other editors.

@@ -1,6 +1,6 @@
 # HammerForge MVP Guide
 
-Last updated: February 25, 2026
+Last updated: February 26, 2026
 
 This guide is for contributors implementing or extending the MVP.
 
@@ -28,7 +28,7 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 - DraftBrush nodes represent all authored geometry.
 - `HFDragSystem` manages the two-stage draw lifecycle (base drag -> height click) and owns the `HFInputState` instance.
 - `HFExtrudeTool` handles face extrusion: picks a face via `FaceSelector`, shows a preview, and commits a new DraftBrush on release. Supports Up (along face normal) and Down (opposite).
-- `HFBrushSystem` handles brush CRUD, pending/committed cuts, materials, and picking.
+- `HFBrushSystem` handles brush CRUD, pending/committed cuts, materials, picking, hollow, clip, tie/untie, move floor/ceiling, and UV justify.
 - PendingCuts allow staging subtract operations before applying.
 
 ### Floor Paint (`HFPaintSystem` + `paint/*.gd`)
@@ -58,6 +58,14 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 - Entities live under LevelRoot/Entities or `is_entity` meta.
 - Entities are excluded from bake.
 - Definitions are loaded from `addons/hammerforge/entities.json`.
+- **Entity I/O**: Source-style input/output connections stored as `entity_io_outputs` meta. Fields: output_name, target_name, input_name, parameter, delay, fire_once. Managed via `add_entity_output()`, `remove_entity_output()`, `get_entity_outputs()`. Connections serialize with entity info in `.hflevel`.
+
+### Brush Operations (`HFBrushSystem` extended)
+- **Hollow** (Ctrl+H): creates 6 wall brushes, deletes original. Configurable wall thickness.
+- **Clip** (Shift+X): splits a brush along an axis-aligned plane. Preserves material, entity class, visgroups, group ID.
+- **Tie/Untie**: tag brushes as brush entity classes (`func_detail`, `func_wall`, `trigger_once`, `trigger_multiple`). Tagged brushes get color-coded overlays and may be excluded from structural bake.
+- **Move to Floor/Ceiling** (Ctrl+Shift+F/C): raycasts against other brush AABBs to snap vertically.
+- **UV Justify**: fit/center/left/right/top/bottom alignment for selected faces.
 
 ### Persistence (`HFFileSystem` + `HFStateSystem`)
 - `HFStateSystem` captures and restores brush/entity/paint/settings state for undo/redo.

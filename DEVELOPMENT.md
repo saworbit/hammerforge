@@ -1,6 +1,6 @@
 ﻿# Development Guide
 
-Last updated: February 25, 2026
+Last updated: February 26, 2026
 
 This document covers local setup, codebase structure, and how to test features.
 
@@ -40,8 +40,8 @@ addons/hammerforge/
 
   systems/               Subsystem classes (RefCounted)
     hf_grid_system.gd      Editor grid management
-    hf_entity_system.gd    Entity definitions and placement
-    hf_brush_system.gd     Brush CRUD, cuts, materials, picking
+    hf_entity_system.gd    Entity definitions, placement, Entity I/O connections
+    hf_brush_system.gd     Brush CRUD, cuts, materials, picking, hollow, clip, tie/untie
     hf_drag_system.gd      Drag lifecycle, preview, axis locking
     hf_bake_system.gd      Bake orchestration (single/chunked)
     hf_paint_system.gd     Floor + surface paint, layer CRUD
@@ -75,7 +75,7 @@ addons/hammerforge/
 - **Input state machine.** `HFDragSystem` owns the `HFInputState` instance. Drag state transitions are explicit (`begin_drag` -> `advance_to_height` -> `end_drag`). Extrude uses `begin_extrude` -> `end_extrude`.
 - **Direct typed calls.** `plugin.gd` and `dock.gd` use typed references (`LevelRoot`, `DockType`) with direct method calls instead of `has_method`/`call`.
 - **Sticky LevelRoot discovery.** `plugin.gd` keeps `active_root` sticky: `_edit()` does not null it when non-LevelRoot nodes are selected. `_handles()` returns true for any node when a LevelRoot exists (deep recursive search). `dock.gd` mirrors this pattern.
-- **Collapsible sections.** Use `HFCollapsibleSection.create("Name", start_expanded)` from `ui/collapsible_section.gd` for dock sections. Paint and Manage tab contents are built programmatically in `_build_paint_tab()` and `_build_manage_tab()`.
+- **Collapsible sections.** Use `HFCollapsibleSection.create("Name", start_expanded)` from `ui/collapsible_section.gd` for dock sections. Paint, Manage, and Entity I/O tab contents are built programmatically in `_build_paint_tab()`, `_build_manage_tab()`, and `_build_entity_io_section()`.
 - **Signal-driven dock sync.** Setting controls (checkboxes, spinboxes) in the dock push values to LevelRoot via `toggled`/`value_changed` signal connections. `_process()` no longer polls 17 properties every frame. Perf panel updates every 30 frames; paint/material sync every 10 frames; disabled hints are flag-driven.
 - **Input decomposition.** `_forward_3d_gui_input()` in `plugin.gd` is a ~50-line dispatcher that routes to focused handlers: `_handle_paint_input()`, `_handle_keyboard_input()`, `_handle_rmb_cancel()`, `_handle_select_mouse()`, `_handle_extrude_mouse()`, `_handle_draw_mouse()`, `_handle_mouse_motion()`. Shared `_get_nudge_direction()` is used by both `_forward_3d_gui_input()` and `_shortcut_input()`.
 - **Brush/material caching.** `hf_brush_system.gd` uses `_brush_cache: Dictionary` for O(1) brush ID lookup, `_brush_count: int` for O(1) count, and `_material_cache: Dictionary` for material instance reuse. All CRUD methods maintain these caches.
@@ -162,6 +162,24 @@ Cordon (Partial Bake)
 - Confirm yellow wireframe appears in the viewport.
 - Bake -- confirm only the brush inside the cordon appears in baked output.
 - Disable cordon and bake -- confirm all brushes appear.
+
+Wave 2 Tools
+- Select a brush and press Ctrl+H -- confirm it converts to 6 wall brushes (hollow).
+- Adjust wall thickness spinner before hollowing and confirm different thicknesses.
+- Select a brush and press Shift+X -- confirm it splits into two brushes along the Y axis.
+- During a base drag, type "64" then Enter -- confirm the brush base is 64 units.
+- During height adjustment, type "32" then Enter -- confirm the brush height is 32 units.
+- Select brushes, choose func_detail from dropdown, click Tie -- confirm cyan tint overlay appears.
+- Select tied brushes, click Untie -- confirm tint is removed.
+- Tie brushes as trigger_once -- confirm orange tint overlay appears.
+- Bake with func_detail brushes -- confirm they are excluded from structural bake output.
+- Select a brush and press Ctrl+Shift+F -- confirm it snaps to nearest surface below.
+- Select a brush and press Ctrl+Shift+C -- confirm it snaps to nearest surface above.
+- In Face Select Mode, select faces and use Justify Fit/Center/Left/Right/Top/Bottom.
+- Select an entity, open Entity I/O section, fill Output/Target/Input, click Add -- confirm connection appears in list.
+- Select the connection in the list and click Remove -- confirm it is removed.
+- Select a different entity -- confirm the I/O list updates to show that entity's connections.
+- Save .hflevel with entity I/O connections, reload, and confirm connections persist.
 
 Brush workflow
 - Draw an Add brush and confirm resize handles work.

@@ -35,30 +35,35 @@ func _build_shortcuts_text(ctx: Dictionary) -> String:
 	var is_paint: bool = ctx.get("paint_mode", false)
 	var paint_target: int = ctx.get("paint_target", 0)
 	var axis_lock: int = ctx.get("axis_lock", 0)
+	var numeric: String = ctx.get("numeric", "")
+
+	var text := ""
+	if numeric.length() > 0:
+		text = "[Size: %s] Type digits, Enter to apply\n" % numeric
 
 	if is_paint:
 		if paint_target == 1:
-			return _surface_paint_shortcuts()
-		return _floor_paint_shortcuts()
+			return text + _surface_paint_shortcuts()
+		return text + _floor_paint_shortcuts()
 
 	if tool_id == 1:
-		return _select_mode_shortcuts()
+		return text + _select_mode_shortcuts()
 
 	if tool_id == 2 or tool_id == 3:
 		var dir_label := "Up" if tool_id == 2 else "Down"
 		# mode 4 = EXTRUDE (from HFInputState)
 		if mode == 4:
-			return _extrude_active_shortcuts(dir_label)
-		return _extrude_idle_shortcuts(dir_label)
+			return text + _extrude_active_shortcuts(dir_label)
+		return text + _extrude_idle_shortcuts(dir_label)
 
 	# Draw tool
 	match mode:
 		1:
-			return _draw_base_shortcuts(axis_lock)
+			return text + _draw_base_shortcuts(axis_lock)
 		2:
-			return _draw_height_shortcuts()
+			return text + _draw_height_shortcuts()
 		_:
-			return _draw_idle_shortcuts(axis_lock)
+			return text + _draw_idle_shortcuts(axis_lock)
 
 
 func _draw_idle_shortcuts(axis_lock: int) -> String:
@@ -75,6 +80,7 @@ func _draw_base_shortcuts(axis_lock: int) -> String:
 	var lines := PackedStringArray()
 	lines.append("-- Dragging Base%s --" % _axis_suffix(axis_lock))
 	lines.append("Shift: Square | Alt+Shift: Cube")
+	lines.append("Type number: Set exact size")
 	lines.append("Click: Set Height Stage")
 	lines.append("Right-click: Cancel")
 	return "\n".join(lines)
@@ -84,6 +90,7 @@ func _draw_height_shortcuts() -> String:
 	var lines := PackedStringArray()
 	lines.append("-- Adjusting Height --")
 	lines.append("Move Mouse: Change Height")
+	lines.append("Type number + Enter: Exact height")
 	lines.append("Click: Confirm Placement")
 	lines.append("Right-click: Cancel")
 	return "\n".join(lines)
@@ -96,6 +103,8 @@ func _select_mode_shortcuts() -> String:
 	lines.append("Escape: Clear Selection")
 	lines.append("Del: Remove | Ctrl+D: Duplicate")
 	lines.append("Arrows: Nudge | PgUp/Dn: Y-Nudge")
+	lines.append("Ctrl+H: Hollow | Shift+X: Clip")
+	lines.append("Ctrl+Shift+F/C: Floor/Ceiling")
 	return "\n".join(lines)
 
 
@@ -112,6 +121,7 @@ func _extrude_active_shortcuts(dir_label: String) -> String:
 	var lines := PackedStringArray()
 	lines.append("-- Extruding %s --" % dir_label)
 	lines.append("Move Mouse: Set Height")
+	lines.append("Type number + Enter: Exact height")
 	lines.append("Release: Confirm")
 	lines.append("Right-click: Cancel")
 	return "\n".join(lines)

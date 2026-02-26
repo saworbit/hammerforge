@@ -67,6 +67,15 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 - **Auto-connectors:** ramp and stair mesh generation between layers
 - **Foliage scatter:** height/slope-filtered MultiMeshInstance3D placement
 
+### Structural Tools (Hammer-Inspired)
+- **Hollow** (Ctrl+H) -- convert solid brushes to hollow rooms with configurable wall thickness
+- **Clip** (Shift+X) -- split brushes along an axis-aligned plane into two pieces
+- **Brush Entity Classes** -- Tie/Untie brushes as func_detail, func_wall, trigger volumes (color-coded viewport overlays)
+- **Entity I/O** -- Source-style input/output connections (output → target.input with parameter, delay, fire-once)
+- **Move to Floor/Ceiling** (Ctrl+Shift+F/C) -- snap brushes to nearest surface
+- **Numeric Input** -- type exact dimensions during drag or extrude
+- **UV Justify** -- fit/center/left/right/top/bottom alignment for selected faces
+
 ### Organization + Workflow
 - **Visgroups** -- named visibility groups (e.g. "walls", "detail", "lighting") with per-group show/hide toggle
 - **Brush/Entity Grouping** -- persistent groups that select/move together (Ctrl+G / Ctrl+U)
@@ -80,6 +89,7 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 - **Toolbar shortcut labels**: Draw (D), Sel (S), Ext▲ (U), Ext▼ (J)
 - **Paint tool shortcuts**: B / E / R / L / K for Brush / Erase / Rect / Line / Bucket
 - **Extrude shortcuts**: U (Extrude Up), J (Extrude Down)
+- **Brush tool shortcuts**: Ctrl+H (Hollow), Shift+X (Clip), Ctrl+Shift+F/C (Floor/Ceiling)
 - **Group shortcuts**: Ctrl+G (Group), Ctrl+U (Ungroup)
 - **Tooltips** on all dock controls with shortcut hints
 - **Selection count** in the status bar
@@ -177,5 +187,5 @@ Start-Process -FilePath "C:\Godot\Godot_v4.6-stable_win64.exe" `
 
 <p align="center">
   <strong>MIT License</strong><br>
-  <sub>Last updated: February 25, 2026</sub>
+  <sub>Last updated: February 26, 2026</sub>
 </p>

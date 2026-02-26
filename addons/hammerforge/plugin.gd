@@ -16,6 +16,7 @@ var select_additive := false
 var select_drag_threshold := 6.0
 var last_3d_camera: Camera3D = null
 var last_3d_mouse_pos := Vector2.ZERO
+var numeric_buffer := ""
 const LevelRootType = preload("level_root.gd")
 const DraftEntityType = preload("draft_entity.gd")
 const IconRes = preload("icon.png")
@@ -128,6 +129,8 @@ func _update_hud_context() -> void:
 	if root and root.input_state:
 		ctx["mode"] = root.input_state.mode
 		ctx["axis_lock"] = root.input_state.axis_lock
+	if numeric_buffer.length() > 0:
+		ctx["numeric"] = numeric_buffer
 	hud.update_context(ctx)
 
 
@@ -274,9 +277,102 @@ func _get_nudge_direction(keycode: int) -> Vector3:
 	return Vector3.ZERO
 
 
+func _handle_numeric_input(event: InputEventKey, root: Node) -> int:
+	if not root.input_state.is_dragging() and not root.input_state.is_extruding():
+		return EditorPlugin.AFTER_GUI_INPUT_PASS
+
+	var keycode = event.keycode
+	# Digit keys (0-9)
+	if keycode >= KEY_0 and keycode <= KEY_9:
+		numeric_buffer += str(keycode - KEY_0)
+		_update_numeric_preview(root)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+
+	# Decimal point
+	if keycode == KEY_PERIOD and "." not in numeric_buffer:
+		numeric_buffer += "."
+		_update_numeric_preview(root)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+
+	# Backspace: remove last character
+	if keycode == KEY_BACKSPACE and numeric_buffer.length() > 0:
+		numeric_buffer = numeric_buffer.substr(0, numeric_buffer.length() - 1)
+		_update_numeric_preview(root)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+
+	# Enter: apply the numeric value
+	if keycode == KEY_ENTER or keycode == KEY_KP_ENTER:
+		if numeric_buffer.length() > 0:
+			_apply_numeric_value(root)
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+
+	# Tab: apply and move to next dimension (base → height)
+	if keycode == KEY_TAB and numeric_buffer.length() > 0:
+		_apply_numeric_value(root)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+
+	return EditorPlugin.AFTER_GUI_INPUT_PASS
+
+
+func _update_numeric_preview(root: Node) -> void:
+	if not root.input_state.is_dragging() and not root.input_state.is_extruding():
+		return
+	if numeric_buffer.length() == 0:
+		return
+	var value = float(numeric_buffer) if numeric_buffer.is_valid_float() else 0.0
+	if value <= 0.0:
+		return
+	if root.input_state.is_drag_height() or root.input_state.is_extruding():
+		root.input_state.drag_height = value
+		root.update_drag(last_3d_camera, last_3d_mouse_pos)
+	elif root.input_state.is_drag_base():
+		# Set the base extent from the origin
+		var snap = root.grid_snap if root.grid_snap > 0.0 else 1.0
+		var extent = Vector3(value, 0.0, value)
+		root.input_state.drag_end = root.input_state.drag_origin + extent
+		root.update_drag(last_3d_camera, last_3d_mouse_pos)
+	_update_hud_context()
+
+
+func _apply_numeric_value(root: Node) -> void:
+	if numeric_buffer.length() == 0:
+		return
+	var value = float(numeric_buffer) if numeric_buffer.is_valid_float() else 0.0
+	numeric_buffer = ""
+	if value <= 0.0:
+		return
+	if root.input_state.is_drag_height():
+		root.input_state.drag_height = value
+		# Finalize: place the brush
+		var size = dock.get_brush_size()
+		var info_result = root.end_drag_info(last_3d_camera, last_3d_mouse_pos, size)
+		if info_result.get("placed", false):
+			_commit_brush_placement(root, info_result.get("info", {}))
+		_update_hud_context()
+	elif root.input_state.is_drag_base():
+		# Apply base size and advance to height
+		var extent = Vector3(value, 0.0, value)
+		root.input_state.drag_end = root.input_state.drag_origin + extent
+		root.input_state.advance_to_height(last_3d_mouse_pos)
+		root.update_drag(last_3d_camera, last_3d_mouse_pos)
+		_update_hud_context()
+	elif root.input_state.is_extruding():
+		root.input_state.drag_height = value
+		var info = root.end_extrude_info()
+		if not info.is_empty():
+			_commit_brush_placement(root, info)
+		_update_hud_context()
+
+
 func _handle_keyboard_input(
 	event: InputEventKey, root: Node, tool_id: int, paint_mode: bool
 ) -> int:
+	# Numeric input during drag/extrude
+	if root.input_state.is_dragging() or root.input_state.is_extruding():
+		var nr = _handle_numeric_input(event, root)
+		if nr != EditorPlugin.AFTER_GUI_INPUT_PASS:
+			return nr
+
 	if event.keycode == KEY_DELETE:
 		var deleted = _delete_selected(root)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP if deleted else EditorPlugin.AFTER_GUI_INPUT_PASS
@@ -288,6 +384,18 @@ func _handle_keyboard_input(
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	if event.ctrl_pressed and event.keycode == KEY_U:
 		_ungroup_selected(root)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	if event.ctrl_pressed and event.keycode == KEY_H:
+		_hollow_selected(root)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	if event.ctrl_pressed and event.shift_pressed and event.keycode == KEY_F:
+		_move_selected_to_floor(root)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	if event.ctrl_pressed and event.shift_pressed and event.keycode == KEY_C:
+		_move_selected_to_ceiling(root)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	if event.shift_pressed and not event.ctrl_pressed and event.keycode == KEY_X:
+		_clip_selected(root)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	# Nudge keys
 	var nudge = _get_nudge_direction(event.keycode)
@@ -342,6 +450,7 @@ func _handle_rmb_cancel(root: Node, tool_id: int) -> int:
 		root.cancel_extrude()
 	else:
 		root.cancel_drag()
+	numeric_buffer = ""
 	select_drag_active = false
 	select_dragging = false
 	_update_hud_context()
@@ -408,6 +517,7 @@ func _handle_extrude_mouse(
 	event: InputEventMouseButton, root: Node, cam: Camera3D, pos: Vector2
 ) -> int:
 	if event.pressed:
+		numeric_buffer = ""
 		var extrude_dir = dock.get_extrude_direction()
 		var started = root.begin_extrude(cam, pos, extrude_dir)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP if started else EditorPlugin.AFTER_GUI_INPUT_PASS
@@ -426,6 +536,7 @@ func _handle_draw_mouse(
 	var shape = dock.get_shape()
 	var sides = dock.get_sides()
 	if event.pressed:
+		numeric_buffer = ""
 		var started = root.begin_drag(cam, pos, op, size, shape, sides)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP if started else EditorPlugin.AFTER_GUI_INPUT_PASS
 	var result = root.end_drag_info(cam, pos, size)
@@ -846,6 +957,84 @@ func _ungroup_selected(root: Node) -> void:
 	_record_history("Ungroup Selection")
 	if dock:
 		dock.refresh_visgroup_ui()
+
+
+func _hollow_selected(root: Node) -> void:
+	var nodes = _current_selection_nodes()
+	if nodes.is_empty():
+		return
+	var brush = nodes[0]
+	if not root.is_brush_node(brush):
+		return
+	var info = root.get_brush_info_from_node(brush)
+	var brush_id = str(info.get("brush_id", ""))
+	if brush_id == "":
+		return
+	var thickness = dock.get_hollow_thickness() if dock else 4.0
+	HFUndoHelper.commit(
+		_get_undo_redo(),
+		root,
+		"Hollow",
+		"hollow_brush_by_id",
+		[brush_id, thickness],
+		false,
+		Callable(self, "_record_history")
+	)
+
+
+func _move_selected_to_floor(root: Node) -> void:
+	_move_selected_vertical(root, "Move to Floor", "move_brushes_to_floor")
+
+
+func _move_selected_to_ceiling(root: Node) -> void:
+	_move_selected_vertical(root, "Move to Ceiling", "move_brushes_to_ceiling")
+
+
+func _move_selected_vertical(root: Node, action_name: String, method_name: String) -> void:
+	var nodes = _current_selection_nodes()
+	var brush_ids: Array = []
+	for node in nodes:
+		if node and root.is_brush_node(node):
+			var info = root.get_brush_info_from_node(node)
+			var bid = str(info.get("brush_id", ""))
+			if bid != "":
+				brush_ids.append(bid)
+	if brush_ids.is_empty():
+		return
+	HFUndoHelper.commit(
+		_get_undo_redo(),
+		root,
+		action_name,
+		method_name,
+		[brush_ids],
+		false,
+		Callable(self, "_record_history")
+	)
+
+
+func _clip_selected(root: Node) -> void:
+	var nodes = _current_selection_nodes()
+	if nodes.is_empty():
+		return
+	var brush = nodes[0]
+	if not root.is_brush_node(brush):
+		return
+	var info = root.get_brush_info_from_node(brush)
+	var brush_id = str(info.get("brush_id", ""))
+	if brush_id == "":
+		return
+	# Default clip: split along Y axis at center
+	var center = info.get("center", Vector3.ZERO)
+	var split_pos = center.y if center is Vector3 else 0.0
+	HFUndoHelper.commit(
+		_get_undo_redo(),
+		root,
+		"Clip Brush",
+		"clip_brush_by_id",
+		[brush_id, 1, split_pos],
+		false,
+		Callable(self, "_record_history")
+	)
 
 
 func _can_drop_data(_position: Vector2, data: Variant) -> bool:

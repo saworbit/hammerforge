@@ -1,6 +1,6 @@
 # HammerForge Spec
 
-Last updated: February 25, 2026
+Last updated: February 26, 2026
 
 This document describes HammerForge's architecture and data flow.
 
@@ -43,8 +43,8 @@ HammerForge uses a coordinator + subsystems pattern. `LevelRoot` is a thin coord
 | Subsystem | class_name | Responsibility |
 |-----------|------------|----------------|
 | `hf_grid_system.gd` | `HFGridSystem` | Editor grid setup, visibility, transform, axis-plane intersection |
-| `hf_entity_system.gd` | `HFEntitySystem` | Entity definitions, placement, capture/restore |
-| `hf_brush_system.gd` | `HFBrushSystem` | Brush CRUD, picking, pending/committed cuts, materials, face selection. O(1) brush ID cache and material instance cache |
+| `hf_entity_system.gd` | `HFEntitySystem` | Entity definitions, placement, capture/restore, Entity I/O connections |
+| `hf_brush_system.gd` | `HFBrushSystem` | Brush CRUD, picking, pending/committed cuts, materials, face selection, hollow, clip, tie/untie. O(1) brush ID cache and material instance cache |
 | `hf_drag_system.gd` | `HFDragSystem` | Drag lifecycle, preview management, axis locking, height computation. Owns `HFInputState` |
 | `hf_bake_system.gd` | `HFBakeSystem` | Bake orchestration (single/chunked), CSG assembly, navmesh, collision |
 | `hf_paint_system.gd` | `HFPaintSystem` | Floor paint input, surface paint, paint layer CRUD, face selection |
@@ -138,7 +138,12 @@ LevelRoot (Node3D)
 - Draw creates DraftBrush nodes in DraftBrushes.
 - Subtract brushes are staged in PendingCuts until Apply Cuts.
 - Extrude Up/Down picks a face via `FaceSelector`, creates a preview brush along the face normal, and commits a new DraftBrush on release. Uses `HFExtrudeTool` (RefCounted).
-- Bake builds a temporary CSG tree from DraftBrushes + CommittedCuts and outputs BakedGeometry. If cordon is enabled, only brushes intersecting the cordon AABB are included.
+- **Hollow** (Ctrl+H): converts a solid brush into 6 wall brushes with configurable thickness.
+- **Clip** (Shift+X): splits a brush along an axis-aligned plane into two new brushes. Preserves material, brush entity class, visgroups, and group ID.
+- **Move to Floor/Ceiling** (Ctrl+Shift+F/C): raycasts against other brush AABBs to snap selection vertically.
+- **Numeric input**: type exact dimensions during drag or extrude (Enter applies, Backspace edits).
+- **UV Justify**: fit/center/left/right/top/bottom alignment modes for selected faces.
+- Bake builds a temporary CSG tree from DraftBrushes + CommittedCuts and outputs BakedGeometry. If cordon is enabled, only brushes intersecting the cordon AABB are included. Brush entity classes `func_detail` and `trigger_*` are excluded from structural bake.
 - Undo/redo actions prefer brush IDs and state snapshots over long-lived Node references.
 
 ## Floor Paint System
@@ -190,10 +195,25 @@ Foliage Populator
 - Entities are selectable but excluded from bake.
 - Definitions come from `addons/hammerforge/entities.json`.
 
+### Entity I/O (Input/Output Connections)
+- Source-style trigger/target system modeled after Hammer/Source entity I/O.
+- Connections stored as `entity_io_outputs` meta (Array of Dictionaries) on entity nodes.
+- Each connection: `{output_name, target_name, input_name, parameter, delay, fire_once}`.
+- `HFEntitySystem` provides: `add_entity_output()`, `remove_entity_output()`, `get_entity_outputs()`, `find_entities_by_name()`, `get_all_connections()`.
+- `find_entities_by_name()` searches both `entities_node` and `draft_brushes_node` for target resolution.
+- I/O connections are serialized with entity info in `.hflevel` saves and undo/redo state via `capture_entity_info()` / `restore_entity_from_info()`.
+- Dock UI: collapsible "Entity I/O" section in Entities tab with fields for Output, Target, Input, Parameter, Delay, Fire Once. Add/Remove buttons and connection ItemList. Auto-refreshes on entity selection change.
+
+### Brush Entity Classes
+- Brushes can be tagged with a `brush_entity_class` meta: `func_detail`, `func_wall`, `trigger_once`, `trigger_multiple`.
+- Tie/Untie via `HFBrushSystem.tie_brushes_to_entity()` / `untie_brushes_from_entity()`.
+- `func_detail` and `trigger_*` brushes are excluded from structural bake via `_is_structural_brush()` in `HFBakeSystem`.
+- Visual indicators: `func_detail` = cyan tint, `trigger_*` = orange tint (semi-transparent overlay in `brush_instance.gd`).
+
 ## Persistence (.hflevel)
 - Stores brushes, entities, level settings, materials palette, and paint layers.
-- Brush records include face data (materials, UVs, paint layers), visgroup membership, and group_id.
-- Entity records include visgroup membership and group_id.
+- Brush records include face data (materials, UVs, paint layers), visgroup membership, group_id, and `brush_entity_class`.
+- Entity records include visgroup membership, group_id, and `io_outputs` (Entity I/O connections).
 - Paint layers include grid settings, chunk size, bitset data, `material_ids`, `blend_weights` (+ _2/_3), and terrain slot settings.
 - Optional per-layer: `heightmap_b64` (base64 PNG), `height_scale`. Missing keys = no heightmap (backward-compatible).
 - Level settings include `texture_lock`, `cordon_enabled`, `cordon_aabb_pos`, `cordon_aabb_size`.
@@ -255,8 +275,8 @@ The dock uses 4 tabs with collapsible sections for visual hierarchy:
 |-----|----------|
 | **Brush** | Shape, size, grid snap, quick snap presets, material picker, operation mode (Add/Sub), texture lock |
 | **Paint** | 7 collapsible sections: Floor Paint, Heightmap, Blend & Terrain, Regions, Materials, UV Editor, Surface Paint |
-| **Entities** | Entity palette with drag-and-drop, Create DraftEntity |
-| **Manage** | 8 collapsible sections: Bake (options), Actions, File (I/O), Presets, History, Settings (editor toggles + autosave), Performance, plus Visgroups & Cordon (inserted programmatically) |
+| **Entities** | Entity palette with drag-and-drop, Create DraftEntity, Entity I/O connections (collapsible section) |
+| **Manage** | 8 collapsible sections: Bake (options), Actions (Hollow, Clip, Move Floor/Ceiling, Tie/Untie), File (I/O), Presets, History, Settings (editor toggles + autosave), Performance, plus Visgroups & Cordon (inserted programmatically) |
 
 - Paint and Manage tab contents built programmatically in `_build_paint_tab()` and `_build_manage_tab()` using `HFCollapsibleSection`.
 - "No LevelRoot" banner visible at dock top when no root is found.
@@ -279,6 +299,7 @@ The dock uses 4 tabs with collapsible sections for visual hierarchy:
 - Pending subtract brushes rendered in orange-red with high emission (`_make_pending_cut_material()`), visually distinct from applied cuts (standard red via `_make_brush_material()`).
 - Shader-based editor grid with follow mode.
 - Grouping shortcuts: Ctrl+G (group selection), Ctrl+U (ungroup).
+- Brush operations: Ctrl+H (hollow), Shift+X (clip), Ctrl+Shift+F (floor), Ctrl+Shift+C (ceiling).
 - Direct typed calls between plugin/dock/LevelRoot (no duck-typing).
 - O(1) brush ID lookup and brush count via `_brush_cache` / `_brush_count` in `HFBrushSystem`.
 - Material instance caching in `HFBrushSystem` (composite key: operation/solid/unshaded).

@@ -677,6 +677,7 @@ func _apply_material(force: bool = false) -> void:
 		return
 	if not force and faces.size() > 0:
 		mesh_instance.material_override = null
+		_apply_brush_entity_overlay()
 		return
 	var mat: Material = null
 	if material_override:
@@ -691,7 +692,54 @@ func _apply_material(force: bool = false) -> void:
 			base.emission_energy = 0.2
 		else:
 			base.albedo_color = Color(0.3, 0.6, 1.0, 0.35)
+		# Apply brush entity class tint
+		var bec = str(get_meta("brush_entity_class", ""))
+		if bec == "func_detail":
+			base.albedo_color = Color(0.3, 0.9, 0.9, 0.35)
+			base.emission = Color(0.3, 0.8, 0.8)
+			base.emission_energy = 0.15
+		elif bec.begins_with("trigger_"):
+			base.albedo_color = Color(1.0, 0.6, 0.1, 0.3)
+			base.emission = Color(1.0, 0.5, 0.1)
+			base.emission_energy = 0.3
 		base.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		base.roughness = 0.6
 		mat = base
 	mesh_instance.material_override = mat
+	_apply_brush_entity_overlay()
+
+
+func _apply_brush_entity_overlay() -> void:
+	# Remove existing overlay
+	var existing = get_node_or_null("_BrushEntityOverlay")
+	if existing:
+		existing.queue_free()
+
+	var bec = str(get_meta("brush_entity_class", ""))
+	if bec == "":
+		return
+	if not mesh_instance or not mesh_instance.mesh:
+		return
+
+	# Create a wireframe overlay for brush entities
+	var overlay = MeshInstance3D.new()
+	overlay.name = "_BrushEntityOverlay"
+	overlay.mesh = mesh_instance.mesh
+	overlay.transform = mesh_instance.transform
+	var mat = StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.no_depth_test = true
+	if bec == "func_detail":
+		mat.albedo_color = Color(0.2, 0.9, 0.9, 0.12)
+	elif bec == "func_wall":
+		mat.albedo_color = Color(0.4, 0.7, 0.4, 0.08)
+	elif bec.begins_with("trigger_"):
+		mat.albedo_color = Color(1.0, 0.5, 0.0, 0.15)
+	else:
+		mat.albedo_color = Color(0.5, 0.5, 0.5, 0.1)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	overlay.material_override = mat
+	overlay.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(overlay)
+	overlay.owner = null

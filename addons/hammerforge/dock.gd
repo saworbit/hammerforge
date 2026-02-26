@@ -276,6 +276,33 @@ var cordon_max_y: SpinBox = null
 var cordon_max_z: SpinBox = null
 var cordon_from_sel_btn: Button = null
 
+# Wave 2 UI controls
+var hollow_thickness: SpinBox = null
+var hollow_btn: Button = null
+var move_floor_btn: Button = null
+var move_ceiling_btn: Button = null
+var tie_entity_btn: Button = null
+var untie_entity_btn: Button = null
+var brush_entity_class_opt: OptionButton = null
+var justify_fit_btn: Button = null
+var justify_center_btn: Button = null
+var justify_left_btn: Button = null
+var justify_right_btn: Button = null
+var justify_top_btn: Button = null
+var justify_bottom_btn: Button = null
+var justify_treat_as_one: CheckBox = null
+var clip_btn: Button = null
+# Entity I/O controls
+var io_output_name: LineEdit = null
+var io_target_name: LineEdit = null
+var io_input_name: LineEdit = null
+var io_parameter: LineEdit = null
+var io_delay: SpinBox = null
+var io_fire_once: CheckBox = null
+var io_add_btn: Button = null
+var io_list: ItemList = null
+var io_remove_btn: Button = null
+
 
 func _is_level_root(node: Node) -> bool:
 	return node != null and node is LevelRootType
@@ -626,6 +653,23 @@ func _apply_all_tooltips() -> void:
 	_set_tooltip(clear_cuts_btn, "Remove all pending cuts without applying")
 	_set_tooltip(commit_cuts_btn, "Apply pending cuts, bake, then freeze/remove cut geometry")
 	_set_tooltip(restore_cuts_btn, "Restore frozen committed cuts back to draft tree")
+	_set_tooltip(hollow_btn, "Convert selected solid brush into a hollow room (Ctrl+H)")
+	_set_tooltip(hollow_thickness, "Wall thickness for the hollow operation")
+	_set_tooltip(
+		move_floor_btn, "Snap selected brushes to the nearest surface below (Ctrl+Shift+F)"
+	)
+	_set_tooltip(
+		move_ceiling_btn, "Snap selected brushes to the nearest surface above (Ctrl+Shift+C)"
+	)
+	_set_tooltip(tie_entity_btn, "Tag selected brushes as a brush entity class")
+	_set_tooltip(untie_entity_btn, "Remove brush entity tag from selected brushes")
+	_set_tooltip(brush_entity_class_opt, "Choose brush entity class (func_detail, trigger, etc.)")
+	_set_tooltip(justify_fit_btn, "Scale UVs to fit the face exactly")
+	_set_tooltip(justify_center_btn, "Center UVs on the face")
+	_set_tooltip(justify_left_btn, "Align UVs to the left edge")
+	_set_tooltip(justify_right_btn, "Align UVs to the right edge")
+	_set_tooltip(justify_top_btn, "Align UVs to the top edge")
+	_set_tooltip(justify_bottom_btn, "Align UVs to the bottom edge")
 	_set_tooltip(bake_btn, "Bake draft brushes into optimized static meshes")
 	_set_tooltip(bake_dry_run_btn, "Report what will be baked without generating geometry")
 	_set_tooltip(validate_btn, "Scan the level for common issues")
@@ -644,8 +688,17 @@ func _apply_all_tooltips() -> void:
 	_set_tooltip(import_settings_btn, "Import editor preferences from a settings file")
 	_set_tooltip(save_preset_btn, "Save current brush settings as a reusable preset")
 	_set_tooltip(quick_play_btn, "Bake and play the current scene")
+	_set_tooltip(clip_btn, "Split selected brush along nearest axis plane (Shift+X)")
 	# Entities tab
 	_set_tooltip(create_entity_btn, "Create a new entity at the cursor position")
+	_set_tooltip(io_output_name, "Output event name (e.g. OnTrigger, OnDamaged)")
+	_set_tooltip(io_target_name, "Target entity name to fire the input on")
+	_set_tooltip(io_input_name, "Input action on target entity (e.g. Open, Kill)")
+	_set_tooltip(io_parameter, "Optional parameter string passed to the input")
+	_set_tooltip(io_delay, "Delay in seconds before firing the input")
+	_set_tooltip(io_fire_once, "If checked, connection fires only once then auto-removes")
+	_set_tooltip(io_add_btn, "Add an output connection to the selected entity")
+	_set_tooltip(io_remove_btn, "Remove the selected output connection")
 
 
 func _set_toolbar_button_icon(button: Button, icon_names: Array, fallback_text: String) -> void:
@@ -963,6 +1016,43 @@ func _build_paint_tab() -> void:
 	uv_reset.text = "Reset Projected UVs"
 	uc.add_child(uv_reset)
 
+	# Justify alignment buttons
+	var justify_label = Label.new()
+	justify_label.text = "Justify:"
+	uc.add_child(justify_label)
+	var justify_row1 = HBoxContainer.new()
+	uc.add_child(justify_row1)
+	justify_fit_btn = Button.new()
+	justify_fit_btn.text = "Fit"
+	justify_fit_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	justify_row1.add_child(justify_fit_btn)
+	justify_center_btn = Button.new()
+	justify_center_btn.text = "Center"
+	justify_center_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	justify_row1.add_child(justify_center_btn)
+	var justify_row2 = HBoxContainer.new()
+	uc.add_child(justify_row2)
+	justify_left_btn = Button.new()
+	justify_left_btn.text = "Left"
+	justify_left_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	justify_row2.add_child(justify_left_btn)
+	justify_right_btn = Button.new()
+	justify_right_btn.text = "Right"
+	justify_right_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	justify_row2.add_child(justify_right_btn)
+	justify_top_btn = Button.new()
+	justify_top_btn.text = "Top"
+	justify_top_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	justify_row2.add_child(justify_top_btn)
+	justify_bottom_btn = Button.new()
+	justify_bottom_btn.text = "Bottom"
+	justify_bottom_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	justify_row2.add_child(justify_bottom_btn)
+	justify_treat_as_one = CheckBox.new()
+	justify_treat_as_one.text = "Treat as One"
+	justify_treat_as_one.tooltip_text = "Align selected faces as a single unified surface"
+	uc.add_child(justify_treat_as_one)
+
 	# --- Surface Paint section ---
 	var sp_sec = HFCollapsibleSection.create("Surface Paint", false)
 	root_vbox.add_child(sp_sec)
@@ -997,6 +1087,102 @@ func _build_paint_tab() -> void:
 	surface_paint_texture = Button.new()
 	surface_paint_texture.text = "Pick Layer Texture"
 	sc.add_child(surface_paint_texture)
+
+
+func _build_entity_io_section() -> void:
+	var entities_vbox = $Margin/VBox/MainTabs/Entities/EntitiesMargin/EntitiesVBox
+	if not entities_vbox:
+		return
+
+	# --- Entity I/O section ---
+	var io_sec = HFCollapsibleSection.create("Entity I/O", false)
+	entities_vbox.add_child(io_sec)
+	var ioc = io_sec.get_content()
+
+	# Output Name
+	var out_row = HBoxContainer.new()
+	ioc.add_child(out_row)
+	var out_lbl = Label.new()
+	out_lbl.text = "Output:"
+	out_lbl.custom_minimum_size.x = 55
+	out_row.add_child(out_lbl)
+	io_output_name = LineEdit.new()
+	io_output_name.placeholder_text = "OnTrigger"
+	io_output_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	out_row.add_child(io_output_name)
+
+	# Target Name
+	var tgt_row = HBoxContainer.new()
+	ioc.add_child(tgt_row)
+	var tgt_lbl = Label.new()
+	tgt_lbl.text = "Target:"
+	tgt_lbl.custom_minimum_size.x = 55
+	tgt_row.add_child(tgt_lbl)
+	io_target_name = LineEdit.new()
+	io_target_name.placeholder_text = "door_1"
+	io_target_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tgt_row.add_child(io_target_name)
+
+	# Input Name
+	var inp_row = HBoxContainer.new()
+	ioc.add_child(inp_row)
+	var inp_lbl = Label.new()
+	inp_lbl.text = "Input:"
+	inp_lbl.custom_minimum_size.x = 55
+	inp_row.add_child(inp_lbl)
+	io_input_name = LineEdit.new()
+	io_input_name.placeholder_text = "Open"
+	io_input_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	inp_row.add_child(io_input_name)
+
+	# Parameter
+	var param_row = HBoxContainer.new()
+	ioc.add_child(param_row)
+	var param_lbl = Label.new()
+	param_lbl.text = "Param:"
+	param_lbl.custom_minimum_size.x = 55
+	param_row.add_child(param_lbl)
+	io_parameter = LineEdit.new()
+	io_parameter.placeholder_text = "(optional)"
+	io_parameter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	param_row.add_child(io_parameter)
+
+	# Delay + Fire Once row
+	var delay_row = HBoxContainer.new()
+	ioc.add_child(delay_row)
+	var delay_lbl = Label.new()
+	delay_lbl.text = "Delay:"
+	delay_lbl.custom_minimum_size.x = 55
+	delay_row.add_child(delay_lbl)
+	io_delay = SpinBox.new()
+	io_delay.min_value = 0.0
+	io_delay.max_value = 999.0
+	io_delay.step = 0.1
+	io_delay.value = 0.0
+	io_delay.suffix = "s"
+	io_delay.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	delay_row.add_child(io_delay)
+	io_fire_once = CheckBox.new()
+	io_fire_once.text = "Once"
+	delay_row.add_child(io_fire_once)
+
+	# Add / Remove buttons
+	var io_btn_row = HBoxContainer.new()
+	ioc.add_child(io_btn_row)
+	io_add_btn = _make_button("Add Output")
+	io_add_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	io_btn_row.add_child(io_add_btn)
+	io_remove_btn = _make_button("Remove")
+	io_btn_row.add_child(io_remove_btn)
+
+	# Connection list
+	var list_lbl = Label.new()
+	list_lbl.text = "Connections:"
+	ioc.add_child(list_lbl)
+	io_list = ItemList.new()
+	io_list.custom_minimum_size.y = 80
+	io_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ioc.add_child(io_list)
 
 
 func _build_manage_tab() -> void:
@@ -1083,6 +1269,52 @@ func _build_manage_tab() -> void:
 
 	restore_cuts_btn = _make_button("Restore Committed Cuts")
 	ac.add_child(restore_cuts_btn)
+
+	# --- Hollow ---
+	var hollow_row = HBoxContainer.new()
+	ac.add_child(hollow_row)
+	var hollow_label = Label.new()
+	hollow_label.text = "Wall:"
+	hollow_row.add_child(hollow_label)
+	hollow_thickness = SpinBox.new()
+	hollow_thickness.min_value = 1.0
+	hollow_thickness.max_value = 128.0
+	hollow_thickness.step = 1.0
+	hollow_thickness.value = 4.0
+	hollow_thickness.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hollow_row.add_child(hollow_thickness)
+	hollow_btn = _make_button("Hollow (Ctrl+H)")
+	hollow_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hollow_row.add_child(hollow_btn)
+
+	# --- Move to Floor / Ceiling ---
+	var move_row = HBoxContainer.new()
+	ac.add_child(move_row)
+	move_floor_btn = _make_button("To Floor (Ctrl+Shift+F)")
+	move_floor_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	move_row.add_child(move_floor_btn)
+	move_ceiling_btn = _make_button("To Ceiling (Ctrl+Shift+C)")
+	move_ceiling_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	move_row.add_child(move_ceiling_btn)
+
+	# --- Brush Entity (Tie to Entity) ---
+	var tie_row = HBoxContainer.new()
+	ac.add_child(tie_row)
+	brush_entity_class_opt = OptionButton.new()
+	brush_entity_class_opt.add_item("func_detail", 0)
+	brush_entity_class_opt.add_item("func_wall", 1)
+	brush_entity_class_opt.add_item("trigger_once", 2)
+	brush_entity_class_opt.add_item("trigger_multiple", 3)
+	brush_entity_class_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tie_row.add_child(brush_entity_class_opt)
+	tie_entity_btn = _make_button("Tie")
+	tie_row.add_child(tie_entity_btn)
+	untie_entity_btn = _make_button("Untie")
+	tie_row.add_child(untie_entity_btn)
+
+	# --- Clip ---
+	clip_btn = _make_button("Clip Selected (Shift+X)")
+	ac.add_child(clip_btn)
 
 	clear_btn = _make_button("Clear Brushes")
 	ac.add_child(clear_btn)
@@ -1209,6 +1441,7 @@ func _ready():
 	# --- Build programmatic tabs first ---
 	_build_paint_tab()
 	_build_manage_tab()
+	_build_entity_io_section()
 
 	# --- Toolbar setup ---
 	var tool_group = ButtonGroup.new()
@@ -1389,6 +1622,34 @@ func _ready():
 		commit_cuts_btn.pressed.connect(_on_commit_cuts)
 	if restore_cuts_btn:
 		restore_cuts_btn.pressed.connect(_on_restore_cuts)
+	if hollow_btn:
+		hollow_btn.pressed.connect(_on_hollow)
+	if move_floor_btn:
+		move_floor_btn.pressed.connect(_on_move_to_floor)
+	if move_ceiling_btn:
+		move_ceiling_btn.pressed.connect(_on_move_to_ceiling)
+	if tie_entity_btn:
+		tie_entity_btn.pressed.connect(_on_tie_entity)
+	if untie_entity_btn:
+		untie_entity_btn.pressed.connect(_on_untie_entity)
+	if justify_fit_btn:
+		justify_fit_btn.pressed.connect(_on_justify.bind("fit"))
+	if justify_center_btn:
+		justify_center_btn.pressed.connect(_on_justify.bind("center"))
+	if justify_left_btn:
+		justify_left_btn.pressed.connect(_on_justify.bind("left"))
+	if justify_right_btn:
+		justify_right_btn.pressed.connect(_on_justify.bind("right"))
+	if justify_top_btn:
+		justify_top_btn.pressed.connect(_on_justify.bind("top"))
+	if justify_bottom_btn:
+		justify_bottom_btn.pressed.connect(_on_justify.bind("bottom"))
+	if clip_btn:
+		clip_btn.pressed.connect(_on_clip)
+	if io_add_btn:
+		io_add_btn.pressed.connect(_on_io_add)
+	if io_remove_btn:
+		io_remove_btn.pressed.connect(_on_io_remove)
 	if create_entity_btn:
 		create_entity_btn.pressed.connect(_on_create_entity)
 	if undo_btn:
@@ -1705,6 +1966,11 @@ func set_selection_count(count: int) -> void:
 
 func set_selection_nodes(nodes: Array) -> void:
 	_selection_nodes = nodes
+	# Refresh Entity I/O list when selection changes
+	if not nodes.is_empty() and level_root and level_root.is_entity_node(nodes[0]):
+		_refresh_io_list(nodes[0])
+	elif io_list:
+		io_list.clear()
 
 
 func _on_grid_snap_value_changed(value: float) -> void:
@@ -1900,6 +2166,99 @@ func _on_commit_cuts():
 func _on_restore_cuts():
 	_log("Restore committed cuts requested")
 	_commit_state_action("Restore Committed Cuts", "restore_committed_cuts")
+
+
+func _on_hollow() -> void:
+	if not level_root or _selection_nodes.is_empty():
+		_set_status("Select a brush to hollow", true)
+		return
+	var brush = _selection_nodes[0]
+	if not level_root.is_brush_node(brush):
+		_set_status("Select a brush to hollow", true)
+		return
+	var info = level_root.get_brush_info_from_node(brush)
+	var brush_id = str(info.get("brush_id", ""))
+	if brush_id == "":
+		return
+	var thickness = hollow_thickness.value if hollow_thickness else 4.0
+	_commit_state_action("Hollow", "hollow_brush_by_id", [brush_id, thickness])
+
+
+func _on_move_to_floor() -> void:
+	if not level_root or _selection_nodes.is_empty():
+		return
+	var brush_ids: Array = []
+	for node in _selection_nodes:
+		if level_root.is_brush_node(node):
+			var info = level_root.get_brush_info_from_node(node)
+			var bid = str(info.get("brush_id", ""))
+			if bid != "":
+				brush_ids.append(bid)
+	if brush_ids.is_empty():
+		return
+	_commit_state_action("Move to Floor", "move_brushes_to_floor", [brush_ids])
+
+
+func _on_move_to_ceiling() -> void:
+	if not level_root or _selection_nodes.is_empty():
+		return
+	var brush_ids: Array = []
+	for node in _selection_nodes:
+		if level_root.is_brush_node(node):
+			var info = level_root.get_brush_info_from_node(node)
+			var bid = str(info.get("brush_id", ""))
+			if bid != "":
+				brush_ids.append(bid)
+	if brush_ids.is_empty():
+		return
+	_commit_state_action("Move to Ceiling", "move_brushes_to_ceiling", [brush_ids])
+
+
+func _on_tie_entity() -> void:
+	if not level_root or _selection_nodes.is_empty():
+		_set_status("Select brushes to tie", true)
+		return
+	var class_name_str = (
+		brush_entity_class_opt.get_item_text(brush_entity_class_opt.selected)
+		if brush_entity_class_opt
+		else "func_detail"
+	)
+	var brush_ids: Array = []
+	for node in _selection_nodes:
+		if level_root.is_brush_node(node):
+			var info = level_root.get_brush_info_from_node(node)
+			var bid = str(info.get("brush_id", ""))
+			if bid != "":
+				brush_ids.append(bid)
+	if brush_ids.is_empty():
+		return
+	_commit_state_action("Tie to Entity", "tie_brushes_to_entity", [brush_ids, class_name_str])
+
+
+func _on_untie_entity() -> void:
+	if not level_root or _selection_nodes.is_empty():
+		return
+	var brush_ids: Array = []
+	for node in _selection_nodes:
+		if level_root.is_brush_node(node):
+			var info = level_root.get_brush_info_from_node(node)
+			var bid = str(info.get("brush_id", ""))
+			if bid != "":
+				brush_ids.append(bid)
+	if brush_ids.is_empty():
+		return
+	_commit_state_action("Untie Entity", "untie_brushes_from_entity", [brush_ids])
+
+
+func _on_justify(mode: String) -> void:
+	if not level_root:
+		return
+	var treat_as_one = justify_treat_as_one.button_pressed if justify_treat_as_one else false
+	_commit_state_action("Justify UV (%s)" % mode, "justify_selected_faces", [mode, treat_as_one])
+
+
+func get_hollow_thickness() -> float:
+	return hollow_thickness.value if hollow_thickness else 4.0
 
 
 func _on_create_entity() -> void:
@@ -3918,3 +4277,92 @@ func _on_cordon_from_selection() -> void:
 			cordon_max_z.value = aabb.position.z + aabb.size.z
 	if cordon_enabled_check:
 		cordon_enabled_check.button_pressed = true
+
+
+func _on_clip() -> void:
+	if not level_root or _selection_nodes.is_empty():
+		_set_status("Select a brush to clip", true)
+		return
+	var brush = _selection_nodes[0]
+	if not level_root.is_brush_node(brush):
+		_set_status("Select a brush to clip", true)
+		return
+	var info = level_root.get_brush_info_from_node(brush)
+	var brush_id = str(info.get("brush_id", ""))
+	if brush_id == "":
+		return
+	# Default clip: split along Y axis at center
+	var center = info.get("center", Vector3.ZERO)
+	if center is Vector3:
+		_commit_state_action("Clip Brush", "clip_brush_by_id", [brush_id, 1, center.y])
+	else:
+		_commit_state_action("Clip Brush", "clip_brush_by_id", [brush_id, 1, 0.0])
+
+
+func _on_io_add() -> void:
+	if not level_root or _selection_nodes.is_empty():
+		_set_status("Select an entity to add output", true)
+		return
+	var entity = _selection_nodes[0]
+	if not level_root.is_entity_node(entity):
+		_set_status("Select an entity to add output", true)
+		return
+	var output_name = io_output_name.text.strip_edges() if io_output_name else ""
+	var target_name = io_target_name.text.strip_edges() if io_target_name else ""
+	var input_name = io_input_name.text.strip_edges() if io_input_name else ""
+	if output_name == "" or target_name == "" or input_name == "":
+		_set_status("Fill in Output, Target, and Input fields", true)
+		return
+	var parameter = io_parameter.text.strip_edges() if io_parameter else ""
+	var delay = io_delay.value if io_delay else 0.0
+	var fire_once = io_fire_once.button_pressed if io_fire_once else false
+	level_root.add_entity_output(
+		entity, output_name, target_name, input_name, parameter, delay, fire_once
+	)
+	_refresh_io_list(entity)
+	_set_status("Added output: %s → %s.%s" % [output_name, target_name, input_name])
+
+
+func _on_io_remove() -> void:
+	if not level_root or _selection_nodes.is_empty():
+		return
+	var entity = _selection_nodes[0]
+	if not level_root.is_entity_node(entity):
+		return
+	if not io_list:
+		return
+	var selected_items = io_list.get_selected_items()
+	if selected_items.is_empty():
+		_set_status("Select a connection to remove", true)
+		return
+	var index = selected_items[0]
+	level_root.remove_entity_output(entity, index)
+	_refresh_io_list(entity)
+	_set_status("Removed output connection")
+
+
+func _refresh_io_list(entity: Node = null) -> void:
+	if not io_list:
+		return
+	io_list.clear()
+	if not entity:
+		if _selection_nodes.is_empty():
+			return
+		entity = _selection_nodes[0]
+	if not level_root or not level_root.is_entity_node(entity):
+		return
+	var outputs = level_root.get_entity_outputs(entity)
+	for conn in outputs:
+		if not (conn is Dictionary):
+			continue
+		var out_name = str(conn.get("output_name", ""))
+		var tgt = str(conn.get("target_name", ""))
+		var inp = str(conn.get("input_name", ""))
+		var delay = float(conn.get("delay", 0.0))
+		var once = bool(conn.get("fire_once", false))
+		var label = "%s → %s.%s" % [out_name, tgt, inp]
+		if delay > 0.0:
+			label += " (%.1fs)" % delay
+		if once:
+			label += " [once]"
+		io_list.add_item(label)

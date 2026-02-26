@@ -5,6 +5,48 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Clipping tool:** Split a brush along an axis-aligned plane into two pieces.
+  - `clip_brush_by_id(brush_id, axis, split_pos)` on `hf_brush_system.gd`.
+  - Auto-detect split axis from face normal via `clip_brush_at_point()`.
+  - Snaps split position to grid. Copies material, brush entity class, visgroups, and group ID.
+  - Keyboard shortcut: Shift+X. Clip button in Actions section of Manage tab.
+  - Full undo/redo support via state snapshot.
+- **Entity I/O system:** Source-style entity input/output connections.
+  - Data model: output connections stored as `entity_io_outputs` meta on entity nodes.
+  - Connection fields: output_name, target_name, input_name, parameter, delay, fire_once.
+  - `add_entity_output()`, `remove_entity_output()`, `get_entity_outputs()` on entity system.
+  - `find_entities_by_name()` resolves target references across entities and brushes.
+  - `get_all_connections()` returns all I/O connections in the scene for visualization.
+  - I/O connections serialized in `.hflevel` saves and undo/redo state.
+  - Dock UI: collapsible "Entity I/O" section in Entities tab with Output, Target, Input,
+    Parameter, Delay, Fire Once fields. Add/Remove buttons and connection ItemList.
+  - I/O list auto-refreshes when selecting an entity.
+- **Brush entity visual indicators:** Color-coded overlays for tagged brush entities.
+  - `func_detail` brushes get cyan tint, `trigger_*` brushes get orange tint.
+  - Semi-transparent MeshInstance3D overlay for visual differentiation in viewport.
+- **Hollow tool:** Convert a solid brush into a hollow room with configurable wall thickness.
+  - Creates 6 wall brushes (top/bottom/left/right/front/back) and removes the original.
+  - Preserves material from the original brush. Keyboard shortcut: Ctrl+H.
+  - Wall thickness SpinBox in Actions section of Manage tab.
+  - Full undo/redo support via state snapshot.
+- **Numeric input during drag:** Type exact dimensions while drawing or extruding brushes.
+  - During base drag or height adjustment, type digits to set precise size.
+  - Enter applies the value and advances/commits. Backspace edits. Escape cancels.
+  - Numeric buffer displayed in the shortcut HUD during drag.
+- **Brush entity conversion (Tie to Entity):** Tag brushes as brush entity classes.
+  - Tie/Untie buttons in Actions section with class dropdown (func_detail, func_wall, trigger_once, trigger_multiple).
+  - `func_detail` brushes are excluded from structural CSG bake (detail geometry).
+  - `trigger_*` brushes are excluded from structural bake (collision-only volumes).
+  - `brush_entity_class` meta persists in `.hflevel` saves and undo/redo state.
+- **Move to Floor / Move to Ceiling:** Snap selected brushes to the nearest surface.
+  - Raycasts against other brushes and physics bodies to find nearest surface.
+  - Grid-snapped result. Keyboard shortcuts: Ctrl+Shift+F (floor), Ctrl+Shift+C (ceiling).
+  - Buttons in Actions section of Manage tab. Full undo/redo support.
+- **Texture alignment Justify panel:** Quick UV alignment controls in the UV Editor section.
+  - Fit, Center, Left, Right, Top, Bottom alignment modes.
+  - "Treat as One" checkbox for aligning multiple selected faces as a unified surface.
+  - Works with the existing face selection system.
+- **Hammer gap analysis** documented in ROADMAP.md with prioritized wave plan.
 - **Dock UX overhaul:** Consolidated from 8 tabs to 4 (Brush, Paint, Entities, Manage).
   - New `HFCollapsibleSection` (`ui/collapsible_section.gd`) reusable component for collapsible UI sections.
   - **Brush tab** (was Build): focused on shape, size, grid snap, material, operation mode, texture lock.

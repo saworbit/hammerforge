@@ -118,6 +118,8 @@ func create_brush_from_info(info: Dictionary) -> Node:
 		brush.set_meta("visgroups", vgs)
 	if info.has("group_id") and str(info["group_id"]) != "":
 		brush.set_meta("group_id", str(info["group_id"]))
+	if info.has("brush_entity_class") and str(info["brush_entity_class"]) != "":
+		brush.set_meta("brush_entity_class", str(info["brush_entity_class"]))
 	return brush
 
 
@@ -251,6 +253,9 @@ func get_brush_info_from_node(brush: Node) -> Dictionary:
 	var gid: String = str(draft.get_meta("group_id", ""))
 	if gid != "":
 		info["group_id"] = gid
+	var bec: String = str(draft.get_meta("brush_entity_class", ""))
+	if bec != "":
+		info["brush_entity_class"] = bec
 	return info
 
 
@@ -776,3 +781,455 @@ func _find_brush_by_key(key: String) -> DraftBrush:
 		if node is DraftBrush and node.get_instance_id() == target_id:
 			return node as DraftBrush
 	return null
+
+
+# ---------------------------------------------------------------------------
+# Hollow
+# ---------------------------------------------------------------------------
+
+
+func hollow_brush_by_id(brush_id: String, wall_thickness: float) -> void:
+	if brush_id == "":
+		return
+	var brush = _find_brush_by_id(brush_id)
+	if not brush or not (brush is DraftBrush):
+		return
+	var draft := brush as DraftBrush
+	var size = draft.size
+	var pos = draft.global_position
+	var mat = draft.material_override
+	var t = wall_thickness
+
+	# Wall thickness must be less than half the smallest dimension
+	var min_dim = min(size.x, min(size.y, size.z))
+	if t * 2.0 >= min_dim:
+		root._log("Hollow: wall thickness too large for brush size")
+		return
+
+	var infos: Array = []
+	# Top wall
+	(
+		infos
+		. append(
+			{
+				"shape": root.BrushShape.BOX,
+				"size": Vector3(size.x, t, size.z),
+				"center": Vector3(pos.x, pos.y + (size.y - t) / 2.0, pos.z),
+				"operation": CSGShape3D.OPERATION_UNION,
+				"brush_id": _next_brush_id(),
+			}
+		)
+	)
+	# Bottom wall
+	(
+		infos
+		. append(
+			{
+				"shape": root.BrushShape.BOX,
+				"size": Vector3(size.x, t, size.z),
+				"center": Vector3(pos.x, pos.y - (size.y - t) / 2.0, pos.z),
+				"operation": CSGShape3D.OPERATION_UNION,
+				"brush_id": _next_brush_id(),
+			}
+		)
+	)
+	# Left wall (X-)
+	(
+		infos
+		. append(
+			{
+				"shape": root.BrushShape.BOX,
+				"size": Vector3(t, size.y - 2.0 * t, size.z),
+				"center": Vector3(pos.x - (size.x - t) / 2.0, pos.y, pos.z),
+				"operation": CSGShape3D.OPERATION_UNION,
+				"brush_id": _next_brush_id(),
+			}
+		)
+	)
+	# Right wall (X+)
+	(
+		infos
+		. append(
+			{
+				"shape": root.BrushShape.BOX,
+				"size": Vector3(t, size.y - 2.0 * t, size.z),
+				"center": Vector3(pos.x + (size.x - t) / 2.0, pos.y, pos.z),
+				"operation": CSGShape3D.OPERATION_UNION,
+				"brush_id": _next_brush_id(),
+			}
+		)
+	)
+	# Front wall (Z+)
+	(
+		infos
+		. append(
+			{
+				"shape": root.BrushShape.BOX,
+				"size": Vector3(size.x - 2.0 * t, size.y - 2.0 * t, t),
+				"center": Vector3(pos.x, pos.y, pos.z + (size.z - t) / 2.0),
+				"operation": CSGShape3D.OPERATION_UNION,
+				"brush_id": _next_brush_id(),
+			}
+		)
+	)
+	# Back wall (Z-)
+	(
+		infos
+		. append(
+			{
+				"shape": root.BrushShape.BOX,
+				"size": Vector3(size.x - 2.0 * t, size.y - 2.0 * t, t),
+				"center": Vector3(pos.x, pos.y, pos.z - (size.z - t) / 2.0),
+				"operation": CSGShape3D.OPERATION_UNION,
+				"brush_id": _next_brush_id(),
+			}
+		)
+	)
+
+	# Copy material to all wall infos
+	if mat:
+		for info in infos:
+			info["material"] = mat
+
+	# Delete original brush
+	delete_brush(brush)
+
+	# Create wall brushes
+	var count := 0
+	for info in infos:
+		var wall = create_brush_from_info(info)
+		if wall:
+			count += 1
+
+	root._log("Hollow: created %d walls (thickness %.1f)" % [count, t])
+
+
+# ---------------------------------------------------------------------------
+# Move to Floor / Ceiling
+# ---------------------------------------------------------------------------
+
+
+func move_brushes_to_floor(brush_ids: Array) -> void:
+	_move_brushes_vertical(brush_ids, -1.0)
+
+
+func move_brushes_to_ceiling(brush_ids: Array) -> void:
+	_move_brushes_vertical(brush_ids, 1.0)
+
+
+func _move_brushes_vertical(brush_ids: Array, direction: float) -> void:
+	if brush_ids.is_empty():
+		return
+	for brush_id in brush_ids:
+		var brush = _find_brush_by_id(str(brush_id))
+		if not brush or not (brush is DraftBrush):
+			continue
+		var draft := brush as DraftBrush
+		var half_y = draft.size.y * 0.5
+		var origin = draft.global_position
+		# Cast ray from brush center in the vertical direction
+		var ray_origin = origin + Vector3(0.0, half_y * direction, 0.0)
+		var ray_dir = Vector3(0.0, direction, 0.0)
+		var space = root.get_world_3d().direct_space_state
+		if not space:
+			continue
+		var query = PhysicsRayQueryParameters3D.new()
+		query.from = ray_origin
+		query.to = ray_origin + ray_dir * 10000.0
+		var result = space.intersect_ray(query)
+		if result.is_empty():
+			# No physics hit — try raycasting against other brushes
+			var best_t = INF
+			var best_pos = Vector3.ZERO
+			var found = false
+			for node in root._iter_pick_nodes():
+				if not (node is DraftBrush) or node == brush:
+					continue
+				var other := node as DraftBrush
+				if not other.mesh_instance:
+					continue
+				var inv = other.mesh_instance.global_transform.affine_inverse()
+				var local_origin = inv * ray_origin
+				var local_dir = (inv.basis * ray_dir).normalized()
+				var aabb = other.mesh_instance.get_aabb()
+				var t = root._ray_intersect_aabb(local_origin, local_dir, aabb)
+				if t >= 0.0 and t < best_t:
+					best_t = t
+					best_pos = ray_origin + ray_dir * best_t
+					found = true
+			if found:
+				var new_y = best_pos.y - half_y * direction
+				var snap = root.grid_snap if root.grid_snap > 0.0 else 0.0
+				draft.global_position.y = snapped(new_y, snap) if snap > 0.0 else new_y
+		else:
+			var hit_pos: Vector3 = result["position"]
+			var new_y = hit_pos.y - half_y * direction
+			var snap = root.grid_snap if root.grid_snap > 0.0 else 0.0
+			draft.global_position.y = snapped(new_y, snap) if snap > 0.0 else new_y
+
+
+# ---------------------------------------------------------------------------
+# Clip (Split Brush)
+# ---------------------------------------------------------------------------
+
+
+## Split a brush along an axis-aligned plane.
+## axis: 0=X, 1=Y, 2=Z.  split_pos: world coordinate on that axis.
+func clip_brush_by_id(brush_id: String, axis: int, split_pos: float) -> void:
+	if brush_id == "":
+		return
+	var brush = _find_brush_by_id(brush_id)
+	if not brush or not (brush is DraftBrush):
+		return
+	var draft := brush as DraftBrush
+	var pos = draft.global_position
+	var half = draft.size * 0.5
+
+	# Compute brush min/max along the clip axis
+	var brush_min: float
+	var brush_max: float
+	match axis:
+		0:
+			brush_min = pos.x - half.x
+			brush_max = pos.x + half.x
+		1:
+			brush_min = pos.y - half.y
+			brush_max = pos.y + half.y
+		_:
+			brush_min = pos.z - half.z
+			brush_max = pos.z + half.z
+
+	# Snap the split position to the grid
+	var snap = root.grid_snap if root.grid_snap > 0.0 else 0.0
+	if snap > 0.0:
+		split_pos = snapped(split_pos, snap)
+
+	# Reject if split is outside or on the edge of the brush
+	var margin = snap if snap > 0.0 else 0.01
+	if split_pos <= brush_min + margin or split_pos >= brush_max - margin:
+		root._log("Clip: split position outside brush bounds")
+		return
+
+	var mat = draft.material_override
+	var operation = draft.operation
+
+	# Build two brush infos — one for each side
+	var size_a = draft.size.abs()
+	var size_b = draft.size.abs()
+	var center_a = pos
+	var center_b = pos
+
+	match axis:
+		0:  # X axis
+			size_a.x = split_pos - brush_min
+			size_b.x = brush_max - split_pos
+			center_a.x = (brush_min + split_pos) / 2.0
+			center_b.x = (split_pos + brush_max) / 2.0
+		1:  # Y axis
+			size_a.y = split_pos - brush_min
+			size_b.y = brush_max - split_pos
+			center_a.y = (brush_min + split_pos) / 2.0
+			center_b.y = (split_pos + brush_max) / 2.0
+		_:  # Z axis
+			size_a.z = split_pos - brush_min
+			size_b.z = brush_max - split_pos
+			center_a.z = (brush_min + split_pos) / 2.0
+			center_b.z = (split_pos + brush_max) / 2.0
+
+	var infos: Array = [
+		{
+			"shape": root.BrushShape.BOX,
+			"size": size_a,
+			"center": center_a,
+			"operation": operation,
+			"brush_id": _next_brush_id(),
+		},
+		{
+			"shape": root.BrushShape.BOX,
+			"size": size_b,
+			"center": center_b,
+			"operation": operation,
+			"brush_id": _next_brush_id(),
+		},
+	]
+
+	if mat:
+		for info in infos:
+			info["material"] = mat
+
+	# Copy brush entity class if present
+	var bec = str(draft.get_meta("brush_entity_class", ""))
+	if bec != "":
+		for info in infos:
+			info["brush_entity_class"] = bec
+
+	# Copy visgroups / group_id
+	var vgs: PackedStringArray = draft.get_meta("visgroups", PackedStringArray())
+	if not vgs.is_empty():
+		for info in infos:
+			info["visgroups"] = Array(vgs)
+	var gid = str(draft.get_meta("group_id", ""))
+	if gid != "":
+		for info in infos:
+			info["group_id"] = gid
+
+	delete_brush(brush)
+
+	var count := 0
+	for info in infos:
+		var piece = create_brush_from_info(info)
+		if piece:
+			count += 1
+
+	var axis_name = ["X", "Y", "Z"][clampi(axis, 0, 2)]
+	root._log("Clip: split along %s at %.1f → %d pieces" % [axis_name, split_pos, count])
+
+
+## Clip brush using a face hit from FaceSelector.
+## Determines the axis from the face normal and uses the hit position.
+func clip_brush_at_point(brush_id: String, face_idx: int, hit_position: Vector3) -> void:
+	if brush_id == "":
+		return
+	var brush = _find_brush_by_id(brush_id)
+	if not brush or not (brush is DraftBrush):
+		return
+	var draft := brush as DraftBrush
+	if face_idx < 0 or face_idx >= draft.faces.size():
+		return
+
+	var face: FaceData = draft.faces[face_idx]
+	face.ensure_geometry()
+
+	# Transform face normal to world space to determine clip axis
+	var world_normal = (draft.global_transform.basis * face.normal).normalized()
+	var abs_normal = world_normal.abs()
+
+	var axis: int
+	var split_pos: float
+	if abs_normal.x >= abs_normal.y and abs_normal.x >= abs_normal.z:
+		axis = 0
+		split_pos = hit_position.x
+	elif abs_normal.y >= abs_normal.x and abs_normal.y >= abs_normal.z:
+		axis = 1
+		split_pos = hit_position.y
+	else:
+		axis = 2
+		split_pos = hit_position.z
+
+	clip_brush_by_id(brush_id, axis, split_pos)
+
+
+# ---------------------------------------------------------------------------
+# Brush Entity (Tie / Untie)
+# ---------------------------------------------------------------------------
+
+
+func tie_brushes_to_entity(brush_ids: Array, entity_class: String) -> void:
+	for brush_id in brush_ids:
+		var brush = _find_brush_by_id(str(brush_id))
+		if brush and brush is DraftBrush:
+			brush.set_meta("brush_entity_class", entity_class)
+	root._log("Tied %d brushes as '%s'" % [brush_ids.size(), entity_class])
+
+
+func untie_brushes_from_entity(brush_ids: Array) -> void:
+	for brush_id in brush_ids:
+		var brush = _find_brush_by_id(str(brush_id))
+		if brush and brush is DraftBrush:
+			if brush.has_meta("brush_entity_class"):
+				brush.remove_meta("brush_entity_class")
+	root._log("Untied %d brushes" % brush_ids.size())
+
+
+# ---------------------------------------------------------------------------
+# UV Justify
+# ---------------------------------------------------------------------------
+
+
+func justify_selected_faces(mode: String, treat_as_one: bool) -> void:
+	if root.face_selection.is_empty():
+		return
+
+	# Collect all selected face references
+	var face_refs: Array = []
+	for key in root.face_selection.keys():
+		var brush = _find_brush_by_key(str(key))
+		if not brush:
+			continue
+		var indices: Array = root.face_selection.get(key, [])
+		for idx in indices:
+			var face_idx = int(idx)
+			if face_idx >= 0 and face_idx < brush.faces.size():
+				face_refs.append({"brush": brush, "face": brush.faces[face_idx]})
+
+	if face_refs.is_empty():
+		return
+
+	if treat_as_one and face_refs.size() > 1:
+		# Compute unified bounds across all faces
+		var all_min := Vector2(INF, INF)
+		var all_max := Vector2(-INF, -INF)
+		for ref in face_refs:
+			var face: FaceData = ref["face"]
+			face.ensure_custom_uvs()
+			for uv in face.custom_uvs:
+				all_min.x = min(all_min.x, uv.x)
+				all_min.y = min(all_min.y, uv.y)
+				all_max.x = max(all_max.x, uv.x)
+				all_max.y = max(all_max.y, uv.y)
+		for ref in face_refs:
+			var face: FaceData = ref["face"]
+			_justify_face(face, mode, all_min, all_max)
+			ref["brush"].rebuild_preview()
+	else:
+		for ref in face_refs:
+			var face: FaceData = ref["face"]
+			face.ensure_custom_uvs()
+			var uv_min := Vector2(INF, INF)
+			var uv_max := Vector2(-INF, -INF)
+			for uv in face.custom_uvs:
+				uv_min.x = min(uv_min.x, uv.x)
+				uv_min.y = min(uv_min.y, uv.y)
+				uv_max.x = max(uv_max.x, uv.x)
+				uv_max.y = max(uv_max.y, uv.y)
+			_justify_face(face, mode, uv_min, uv_max)
+			ref["brush"].rebuild_preview()
+
+
+func _justify_face(face: FaceData, mode: String, uv_min: Vector2, uv_max: Vector2) -> void:
+	var uv_size = uv_max - uv_min
+	if uv_size.x < 0.0001 and uv_size.y < 0.0001:
+		return
+
+	match mode:
+		"fit":
+			# Scale UVs to fill 0..1 range
+			var scale_x = 1.0 / uv_size.x if uv_size.x > 0.0001 else 1.0
+			var scale_y = 1.0 / uv_size.y if uv_size.y > 0.0001 else 1.0
+			face.uv_scale = Vector2(face.uv_scale.x * scale_x, face.uv_scale.y * scale_y)
+			face.uv_offset = Vector2(
+				-uv_min.x * scale_x + face.uv_offset.x * scale_x,
+				-uv_min.y * scale_y + face.uv_offset.y * scale_y
+			)
+			face.custom_uvs = PackedVector2Array()
+		"center":
+			var center = (uv_min + uv_max) * 0.5
+			var shift = Vector2(0.5, 0.5) - center
+			face.uv_offset += shift
+			face.custom_uvs = PackedVector2Array()
+		"left":
+			var shift_x = -uv_min.x
+			face.uv_offset.x += shift_x
+			face.custom_uvs = PackedVector2Array()
+		"right":
+			var shift_x = 1.0 - uv_max.x
+			face.uv_offset.x += shift_x
+			face.custom_uvs = PackedVector2Array()
+		"top":
+			var shift_y = -uv_min.y
+			face.uv_offset.y += shift_y
+			face.custom_uvs = PackedVector2Array()
+		"bottom":
+			var shift_y = 1.0 - uv_max.y
+			face.uv_offset.y += shift_y
+			face.custom_uvs = PackedVector2Array()

@@ -1,6 +1,6 @@
 # HammerForge User Guide
 
-Last updated: February 25, 2026
+Last updated: February 26, 2026
 
 This guide covers the current HammerForge workflow in Godot 4.6: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs.
 
@@ -45,10 +45,11 @@ The dock has 4 tabs with collapsible sections for organized access to all contro
 ### Entities tab
 - Create DraftEntity button.
 - Entity palette with drag-and-drop placement.
+- **Entity I/O** (collapsible): Output, Target, Input, Parameter fields. Delay (seconds) and Fire Once checkbox. Add Output / Remove buttons and connection ItemList. Connections auto-refresh when selecting an entity.
 
 ### Manage tab (collapsible sections)
 - **Bake**: Bake button, Dry Run, Validate Level/Fix. Options: Merge Meshes, Generate LODs, Lightmap UV2, Texel Size, Navmesh (cell size, agent height), Use Face Materials, Quick Play.
-- **Actions**: Create Floor, Apply/Clear/Commit/Restore Cuts.
+- **Actions**: Create Floor, Apply/Clear/Commit/Restore Cuts. Hollow (wall thickness spinner + button, Ctrl+H). Move to Floor (Ctrl+Shift+F) / Ceiling (Ctrl+Shift+C). Tie/Untie brush entity class (func_detail, func_wall, trigger_once, trigger_multiple). Clip Selected (Shift+X).
 - **File**: Save/Load .hflevel, Import/Export .map, Export .glb.
 - **Presets**: Save/rename presets grid.
 - **History**: History panel (beta).
@@ -91,7 +92,7 @@ The on-screen shortcut overlay updates dynamically based on your current tool an
 | Draw (idle) | Click+Drag, Shift/Alt modifiers, X/Y/Z axis lock, Ctrl+Scroll size, Ctrl+D, Delete |
 | Draw (dragging base) | Shift: Square, Alt+Shift: Cube, Click: Height stage, Right-click: Cancel |
 | Draw (adjusting height) | Mouse: Change height, Click: Confirm, Right-click: Cancel |
-| Select | Click/Shift/Ctrl selection, Escape, Delete, Ctrl+D, Arrow nudge |
+| Select | Click/Shift/Ctrl selection, Escape, Delete, Ctrl+D, Arrow nudge, Ctrl+H Hollow, Shift+X Clip, Ctrl+Shift+F/C Floor/Ceiling |
 | Extrude Up/Down (idle) | Click face + drag, U/J tool switch, Right-click cancel |
 | Extrude Up/Down (active) | Move mouse to set height, Release to confirm, Right-click cancel |
 | Floor Paint | Click+Drag, B/E/R/L/K tool shortcuts |

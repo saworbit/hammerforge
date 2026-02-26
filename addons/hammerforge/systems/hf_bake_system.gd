@@ -264,6 +264,16 @@ func bake_dry_run() -> Dictionary:
 	}
 
 
+func _is_trigger_brush(brush: DraftBrush) -> bool:
+	var bec = str(brush.get_meta("brush_entity_class", ""))
+	return bec.begins_with("trigger_")
+
+
+func _is_structural_brush(brush: DraftBrush) -> bool:
+	var bec = str(brush.get_meta("brush_entity_class", ""))
+	return bec == "" or bec == "func_wall"
+
+
 func collect_chunk_brushes(
 	source: Node3D, chunk_size: float, chunks: Dictionary, key: String
 ) -> void:
@@ -275,6 +285,9 @@ func collect_chunk_brushes(
 		if root.is_entity_node(child):
 			continue
 		if root.cordon_enabled and not _brush_in_cordon(child as DraftBrush):
+			continue
+		# func_detail and trigger brushes skip structural CSG
+		if not _is_structural_brush(child as DraftBrush):
 			continue
 		var coord = chunk_coord((child as Node3D).global_position, chunk_size)
 		if not chunks.has(coord):
@@ -323,6 +336,8 @@ func _append_face_bake_container(container: Node3D, out: Array) -> void:
 		if child is DraftBrush and child.operation != CSGShape3D.OPERATION_SUBTRACTION:
 			if root.cordon_enabled and not _brush_in_cordon(child as DraftBrush):
 				continue
+			if not _is_structural_brush(child as DraftBrush):
+				continue
 			out.append(child)
 
 
@@ -337,6 +352,8 @@ func append_brush_list_to_csg(
 		if root.is_entity_node(child):
 			continue
 		if root.cordon_enabled and not _brush_in_cordon(child as DraftBrush):
+			continue
+		if not _is_structural_brush(child as DraftBrush):
 			continue
 		var draft: DraftBrush = child
 		if (

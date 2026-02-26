@@ -130,6 +130,9 @@ func capture_entity_info(entity: DraftEntity) -> Dictionary:
 	info["transform"] = entity.global_transform
 	info["properties"] = entity.entity_data.duplicate(true)
 	info["name"] = entity.name
+	var outputs = entity.get_meta("entity_io_outputs", [])
+	if not outputs.is_empty():
+		info["io_outputs"] = outputs.duplicate(true)
 	return info
 
 
@@ -148,6 +151,9 @@ func restore_entity_from_info(info: Dictionary) -> DraftEntity:
 		entity.entity_data = props.duplicate(true)
 	if info.has("transform"):
 		entity.global_transform = info["transform"]
+	var io_outputs = info.get("io_outputs", [])
+	if not io_outputs.is_empty():
+		entity.set_meta("entity_io_outputs", io_outputs.duplicate(true))
 	entity.set_meta("is_entity", true)
 	root.entities_node.add_child(entity)
 	root._assign_owner(entity)
@@ -159,3 +165,100 @@ func clear_entities() -> void:
 		return
 	for child in root.entities_node.get_children():
 		child.queue_free()
+
+
+# ---------------------------------------------------------------------------
+# Entity I/O (inputs / outputs / connections)
+# ---------------------------------------------------------------------------
+
+
+## Add an output connection to a source entity.
+## Each connection: {output_name, target_name, input_name, parameter, delay, fire_once}
+func add_entity_output(
+	entity: Node,
+	output_name: String,
+	target_name: String,
+	input_name: String,
+	parameter: String = "",
+	delay: float = 0.0,
+	fire_once: bool = false
+) -> void:
+	if not entity:
+		return
+	var outputs: Array = entity.get_meta("entity_io_outputs", [])
+	(
+		outputs
+		. append(
+			{
+				"output_name": output_name,
+				"target_name": target_name,
+				"input_name": input_name,
+				"parameter": parameter,
+				"delay": delay,
+				"fire_once": fire_once,
+			}
+		)
+	)
+	entity.set_meta("entity_io_outputs", outputs)
+
+
+## Remove an output connection by index.
+func remove_entity_output(entity: Node, index: int) -> void:
+	if not entity:
+		return
+	var outputs: Array = entity.get_meta("entity_io_outputs", [])
+	if index < 0 or index >= outputs.size():
+		return
+	outputs.remove_at(index)
+	entity.set_meta("entity_io_outputs", outputs)
+
+
+## Get all output connections for an entity.
+func get_entity_outputs(entity: Node) -> Array:
+	if not entity:
+		return []
+	return entity.get_meta("entity_io_outputs", [])
+
+
+## Find all entities by name (used for resolving target_name references).
+func find_entities_by_name(entity_name: String) -> Array:
+	var result: Array = []
+	if not root.entities_node or entity_name == "":
+		return result
+	for child in root.entities_node.get_children():
+		if child.name == entity_name or str(child.get_meta("entity_name", "")) == entity_name:
+			result.append(child)
+	# Also check brush entities
+	if root.draft_brushes_node:
+		for child in root.draft_brushes_node.get_children():
+			if child.name == entity_name:
+				result.append(child)
+	return result
+
+
+## Get all I/O connections in the scene (for visualization).
+func get_all_connections() -> Array:
+	var connections: Array = []
+	if not root.entities_node:
+		return connections
+	for child in root.entities_node.get_children():
+		var outputs = get_entity_outputs(child)
+		for conn in outputs:
+			if not (conn is Dictionary):
+				continue
+			(
+				connections
+				. append(
+					{
+						"source": child,
+						"source_name": child.name,
+						"output_name": str(conn.get("output_name", "")),
+						"target_name": str(conn.get("target_name", "")),
+						"input_name": str(conn.get("input_name", "")),
+						"parameter": str(conn.get("parameter", "")),
+						"delay": float(conn.get("delay", 0.0)),
+						"fire_once": bool(conn.get("fire_once", false)),
+					}
+				)
+			)
+	return connections
