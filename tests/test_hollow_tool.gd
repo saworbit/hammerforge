@@ -90,7 +90,7 @@ func _make_brush(
 
 
 func test_hollow_creates_six_wall_brushes():
-	var b = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
+	_make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
 	sys.hollow_brush_by_id("brush_1", 2.0)
 	# Original brush should be deleted, 6 walls created
 	var children = root.draft_brushes_node.get_children()
@@ -98,14 +98,14 @@ func test_hollow_creates_six_wall_brushes():
 
 
 func test_hollow_deletes_original_brush():
-	var b = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
+	_make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
 	sys.hollow_brush_by_id("brush_1", 2.0)
 	var found = sys.find_brush_by_id("brush_1")
 	assert_null(found, "Original brush should be deleted after hollow")
 
 
 func test_hollow_wall_thickness_reflected_in_sizes():
-	var b = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
+	_make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
 	sys.hollow_brush_by_id("brush_1", 4.0)
 	var children = root.draft_brushes_node.get_children()
 	# Top and bottom walls should have full X and Z but thickness Y=4
@@ -140,7 +140,7 @@ func test_hollow_preserves_material():
 
 func test_hollow_rejects_thickness_too_large():
 	# Smallest dim is 10. Wall thickness 6 -> 2*6=12 >= 10, should reject
-	var b = _make_brush(Vector3.ZERO, Vector3(10, 20, 30), "brush_1")
+	_make_brush(Vector3.ZERO, Vector3(10, 20, 30), "brush_1")
 	sys.hollow_brush_by_id("brush_1", 6.0)
 	# Original brush should still exist
 	var found = sys.find_brush_by_id("brush_1")
@@ -149,7 +149,7 @@ func test_hollow_rejects_thickness_too_large():
 
 func test_hollow_accepts_valid_thickness():
 	# Smallest dim is 10. Wall thickness 4 -> 2*4=8 < 10, should accept
-	var b = _make_brush(Vector3.ZERO, Vector3(10, 20, 30), "brush_1")
+	_make_brush(Vector3.ZERO, Vector3(10, 20, 30), "brush_1")
 	sys.hollow_brush_by_id("brush_1", 4.0)
 	var children = root.draft_brushes_node.get_children()
 	assert_eq(children.size(), 6, "Should accept valid thickness")
@@ -174,7 +174,7 @@ func test_hollow_nonexistent_id_noop():
 
 
 func test_hollow_walls_are_union_operation():
-	var b = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
+	_make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
 	sys.hollow_brush_by_id("brush_1", 2.0)
 	var children = root.draft_brushes_node.get_children()
 	for child in children:
@@ -187,7 +187,7 @@ func test_hollow_walls_are_union_operation():
 
 
 func test_hollow_different_thickness():
-	var b = _make_brush(Vector3.ZERO, Vector3(64, 64, 64), "brush_1")
+	_make_brush(Vector3.ZERO, Vector3(64, 64, 64), "brush_1")
 	sys.hollow_brush_by_id("brush_1", 8.0)
 	var children = root.draft_brushes_node.get_children()
 	assert_eq(children.size(), 6, "Should create 6 walls with different thickness")

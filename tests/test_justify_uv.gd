@@ -129,7 +129,6 @@ func test_justify_center():
 	)
 	var uv_min = Vector2(0.1, 0.2)
 	var uv_max = Vector2(0.5, 0.6)
-	var original_offset = face.uv_offset
 	sys._justify_face(face, "center", uv_min, uv_max)
 	# Center of (0.1,0.2)-(0.5,0.6) is (0.3, 0.4). Shift = (0.5-0.3, 0.5-0.4) = (0.2, 0.1)
 	assert_almost_eq(face.uv_offset.x, 0.2, 0.01, "Center X offset")

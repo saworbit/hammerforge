@@ -90,28 +90,28 @@ func _make_brush(
 
 
 func test_clip_y_axis_creates_two_pieces():
-	var b = _make_brush(Vector3(0, 16, 0), Vector3(32, 32, 32), "brush_1")
+	_make_brush(Vector3(0, 16, 0), Vector3(32, 32, 32), "brush_1")
 	sys.clip_brush_by_id("brush_1", 1, 16.0)  # Y axis, split at center
 	var children = root.draft_brushes_node.get_children()
 	assert_eq(children.size(), 2, "Clip should create 2 pieces")
 
 
 func test_clip_x_axis_creates_two_pieces():
-	var b = _make_brush(Vector3(0, 0, 0), Vector3(32, 32, 32), "brush_1")
+	_make_brush(Vector3(0, 0, 0), Vector3(32, 32, 32), "brush_1")
 	sys.clip_brush_by_id("brush_1", 0, 0.0)  # X axis, split at center
 	var children = root.draft_brushes_node.get_children()
 	assert_eq(children.size(), 2, "X-axis clip should create 2 pieces")
 
 
 func test_clip_z_axis_creates_two_pieces():
-	var b = _make_brush(Vector3(0, 0, 0), Vector3(32, 32, 32), "brush_1")
+	_make_brush(Vector3(0, 0, 0), Vector3(32, 32, 32), "brush_1")
 	sys.clip_brush_by_id("brush_1", 2, 0.0)  # Z axis, split at center
 	var children = root.draft_brushes_node.get_children()
 	assert_eq(children.size(), 2, "Z-axis clip should create 2 pieces")
 
 
 func test_clip_deletes_original():
-	var b = _make_brush(Vector3(0, 0, 0), Vector3(32, 32, 32), "brush_1")
+	_make_brush(Vector3(0, 0, 0), Vector3(32, 32, 32), "brush_1")
 	sys.clip_brush_by_id("brush_1", 1, 0.0)
 	var found = sys.find_brush_by_id("brush_1")
 	assert_null(found, "Original brush should be deleted after clip")
@@ -124,7 +124,7 @@ func test_clip_deletes_original():
 
 func test_clip_y_sizes_sum_to_original():
 	# Brush at Y=0, size 32 → spans Y=-16 to Y=16. Split at Y=0
-	var b = _make_brush(Vector3(0, 0, 0), Vector3(32, 32, 32), "brush_1")
+	_make_brush(Vector3(0, 0, 0), Vector3(32, 32, 32), "brush_1")
 	sys.clip_brush_by_id("brush_1", 1, 0.0)
 	var children = root.draft_brushes_node.get_children()
 	assert_eq(children.size(), 2)
@@ -136,7 +136,7 @@ func test_clip_y_sizes_sum_to_original():
 
 
 func test_clip_preserves_non_split_dimensions():
-	var b = _make_brush(Vector3(0, 0, 0), Vector3(32, 64, 48), "brush_1")
+	_make_brush(Vector3(0, 0, 0), Vector3(32, 64, 48), "brush_1")
 	sys.clip_brush_by_id("brush_1", 1, 0.0)  # Split along Y
 	var children = root.draft_brushes_node.get_children()
 	for child in children:
@@ -148,7 +148,7 @@ func test_clip_preserves_non_split_dimensions():
 
 func test_clip_x_sizes_correct():
 	# Brush at X=0, size.x=40 → spans -20 to 20. Split at X=10
-	var b = _make_brush(Vector3(0, 0, 0), Vector3(40, 32, 32), "brush_1")
+	_make_brush(Vector3(0, 0, 0), Vector3(40, 32, 32), "brush_1")
 	sys.clip_brush_by_id("brush_1", 0, 10.0)
 	var children = root.draft_brushes_node.get_children()
 	assert_eq(children.size(), 2)
@@ -169,7 +169,7 @@ func test_clip_x_sizes_correct():
 
 func test_clip_outside_brush_is_rejected():
 	# Brush at Y=0, size 32 → spans -16 to 16. Split at Y=100 → outside
-	var b = _make_brush(Vector3(0, 0, 0), Vector3(32, 32, 32), "brush_1")
+	_make_brush(Vector3(0, 0, 0), Vector3(32, 32, 32), "brush_1")
 	sys.clip_brush_by_id("brush_1", 1, 100.0)
 	# Original should still be there
 	assert_not_null(sys.find_brush_by_id("brush_1"), "Clip outside bounds should be rejected")
@@ -177,7 +177,7 @@ func test_clip_outside_brush_is_rejected():
 
 func test_clip_on_edge_is_rejected():
 	# Brush at Y=0, size 32 → spans -16 to 16. Split at Y=16 → on edge
-	var b = _make_brush(Vector3(0, 0, 0), Vector3(32, 32, 32), "brush_1")
+	_make_brush(Vector3(0, 0, 0), Vector3(32, 32, 32), "brush_1")
 	sys.clip_brush_by_id("brush_1", 1, 16.0)
 	assert_not_null(sys.find_brush_by_id("brush_1"), "Clip on brush edge should be rejected")
 

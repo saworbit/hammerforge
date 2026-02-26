@@ -183,7 +183,7 @@ func test_non_structural_trigger_multiple():
 
 
 func test_collect_excludes_func_detail():
-	var b1 = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
+	_make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
 	var b2 = _make_brush(Vector3(10, 0, 0), Vector3(32, 32, 32), "b2")
 	b2.set_meta("brush_entity_class", "func_detail")
 	var chunks: Dictionary = {}
@@ -195,7 +195,7 @@ func test_collect_excludes_func_detail():
 
 
 func test_collect_includes_func_wall():
-	var b1 = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
+	_make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
 	var b2 = _make_brush(Vector3(10, 0, 0), Vector3(32, 32, 32), "b2")
 	b2.set_meta("brush_entity_class", "func_wall")
 	var chunks: Dictionary = {}
@@ -207,7 +207,7 @@ func test_collect_includes_func_wall():
 
 
 func test_collect_excludes_triggers():
-	var b1 = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
+	_make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
 	var b2 = _make_brush(Vector3(10, 0, 0), Vector3(32, 32, 32), "b2")
 	b2.set_meta("brush_entity_class", "trigger_once")
 	var b3 = _make_brush(Vector3(20, 0, 0), Vector3(32, 32, 32), "b3")
