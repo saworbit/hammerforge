@@ -1,6 +1,6 @@
 ﻿# HammerForge Data Portability
 
-Last updated: February 26, 2026
+Last updated: March 22, 2026
 
 This document describes how to move data in and out of HammerForge safely.
 
@@ -31,6 +31,22 @@ This document describes how to move data in and out of HammerForge safely.
 - `.glb` export writes the baked geometry only.
 - A successful bake is required before export.
 - Use `Bake -> Export .glb` when you need DCC or engine interoperability.
+
+## Material Library
+- The material palette can be saved and loaded independently via `MaterialManager.save_library()` / `load_library()`.
+- Library files are JSON containing material resource paths — portable across projects.
+- The library path can be stored alongside `.hflevel` saves.
+
+## Entity Definitions
+- Entity types and brush entity classes are loaded from `entities.json` (data-driven, not hardcoded).
+- Custom entity definitions can be added by creating or editing `res://addons/hammerforge/entities.json`.
+- Definitions include `classname`, `description`, `color`, `is_brush_entity`, `properties`, and optional `scene_path`.
+
+## Autosave Safety
+- Autosave writes happen on a background thread.
+- If a write fails (e.g., disk full, permissions), the `autosave_failed` signal fires and the dock shows a red warning label.
+- The next autosave interval retries automatically.
+- Manual save is always available via Manage tab → File section.
 
 ## Recommended Pipeline
 1. Design and iterate in HammerForge.

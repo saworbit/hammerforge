@@ -1,6 +1,6 @@
 ﻿# Development Guide
 
-Last updated: February 26, 2026
+Last updated: March 22, 2026
 
 This document covers local setup, codebase structure, and how to test features.
 
@@ -25,9 +25,11 @@ addons/hammerforge/
   brush_instance.gd      DraftBrush node
   baker.gd               CSG -> mesh bake pipeline
   face_data.gd           Per-face materials, UVs, paint layers
-  material_manager.gd    Shared materials palette
+  material_manager.gd    Shared materials palette (+ library persistence, usage tracking)
   face_selector.gd       Raycast face selection
   hf_extrude_tool.gd     Extrude Up/Down tool (face click + drag to extend brushes)
+  hf_gesture.gd          Gesture tracker base class (update/commit/cancel pattern)
+  hf_entity_def.gd       Data-driven entity definition system (JSON + built-in defaults)
   surface_paint.gd       Per-face surface paint tool
   uv_editor.gd           UV editing dock
   highlight.gdshader     Selection highlight shader (wireframe, unshaded, alpha)
@@ -45,8 +47,8 @@ addons/hammerforge/
     hf_drag_system.gd      Drag lifecycle, preview, axis locking
     hf_bake_system.gd      Bake orchestration (single/chunked)
     hf_paint_system.gd     Floor + surface paint, layer CRUD
-    hf_state_system.gd     State capture/restore, settings
-    hf_file_system.gd      .hflevel/.map/.glTF I/O, threaded writes
+    hf_state_system.gd     State capture/restore, settings, transactions
+    hf_file_system.gd      .hflevel/.map/.glTF I/O, threaded writes, autosave failure reporting
     hf_validation_system.gd Validation and dependency checks
     hf_visgroup_system.gd  Visgroups (visibility groups) + brush/entity grouping
 
@@ -80,7 +82,12 @@ addons/hammerforge/
 - **Input decomposition.** `_forward_3d_gui_input()` in `plugin.gd` is a ~50-line dispatcher that routes to focused handlers: `_handle_paint_input()`, `_handle_keyboard_input()`, `_handle_rmb_cancel()`, `_handle_select_mouse()`, `_handle_extrude_mouse()`, `_handle_draw_mouse()`, `_handle_mouse_motion()`. Shared `_get_nudge_direction()` is used by both `_forward_3d_gui_input()` and `_shortcut_input()`.
 - **Brush/material caching.** `hf_brush_system.gd` uses `_brush_cache: Dictionary` for O(1) brush ID lookup, `_brush_count: int` for O(1) count, and `_material_cache: Dictionary` for material instance reuse. All CRUD methods maintain these caches.
 - **Undo/redo dynamic dispatch.** The `_commit_state_action` pattern in `dock.gd` intentionally uses string method names for undo/redo -- this is the one exception to the typed-calls rule.
-- **Undo/redo helper.** Use `HFUndoHelper` for editor actions to ensure consistent history and state snapshot restores.
+- **Undo/redo helper.** Use `HFUndoHelper` for editor actions to ensure consistent history and state snapshot restores. Pass a `collation_tag` for operations that fire rapidly (nudge, resize, paint) — consecutive actions with the same tag within 1 second are merged into one undo entry. Collation also requires matching `full_state` scope — a `full_state=true` action will not merge with a prior `full_state=false` run.
+- **Transactions.** For multi-step operations (hollow, clip, tie), use `state_system.begin_transaction()` / `commit_transaction()` / `rollback_transaction()` to group mutations atomically. If any step fails, `rollback_transaction()` restores the snapshot.
+- **Entity definitions.** Entity types and brush entity classes are data-driven via `HFEntityDef`. Load from `entities.json` or use built-in defaults. New entity types should be added to the JSON file, not hardcoded.
+- **Gesture trackers.** New tools should subclass `HFGesture` (hf_gesture.gd) to encapsulate input state. Override `update()`, `commit()`, `cancel()`. The gesture holds its own state (start position, axis lock, numeric buffer), making the tool self-contained.
+- **Central signals.** Subscribe to LevelRoot signals (`brush_added`, `brush_removed`, `selection_changed`, `state_saved`, etc.) instead of polling. Subsystems emit these via `root.<signal>.emit(...)`.
+- **Autosave failure.** The `autosave_failed(error_message)` signal on LevelRoot fires when a threaded write fails. Connect to it in the dock to show user-facing warnings.
 - **Undo/redo stability.** Prefer brush IDs and `create_brush_from_info()` for undo instead of storing Node references in history.
 - **Bake owner assignment.** Use `_assign_owner_recursive()` (not `_assign_owner()`) for baked geometry so all descendants get proper editor ownership. Always call it *after* the container is added to the scene tree.
 - **Shader files.** Prefer standalone `.gdshader` files over inline GLSL strings in GDScript (e.g. `highlight.gdshader` for the selection wireframe shader). Use `preload("file.gdshader")` to load them.

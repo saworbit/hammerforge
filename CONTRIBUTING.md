@@ -15,7 +15,11 @@ Thanks for helping improve HammerForge.
 
 ## Code Expectations
 - Follow the subsystem architecture (LevelRoot is the public API).
-- Prefer undo actions that use stable IDs and state snapshots.
+- Prefer undo actions that use stable IDs and state snapshots. Use `collation_tag` for rapid operations.
+- Use transactions (`begin_transaction` / `commit_transaction`) for multi-step brush operations.
+- New entity types go in `entities.json`, not hardcoded in GDScript.
+- New input tools should subclass `HFGesture` for self-contained state management.
+- Subscribe to LevelRoot signals instead of polling in `_process()`.
 - Avoid adding new dependencies unless necessary.
 
 ## Running Checks Locally

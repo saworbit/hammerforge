@@ -122,13 +122,37 @@ var _grid_visible: bool = false
 @export var cordon_aabb: AABB = AABB(Vector3(-128, -128, -128), Vector3(256, 256, 256))
 
 # ---------------------------------------------------------------------------
-# Signals
+# Signals — Central registry.  Subsystems and UI should subscribe to these
+# rather than polling.  Emit via root.<signal>.emit(...) from subsystems.
 # ---------------------------------------------------------------------------
 
+# Bake lifecycle
 signal bake_started
 signal bake_finished(success: bool)
 signal bake_progress(value: float, label: String)
+
+# Settings
 signal grid_snap_changed(value: float)
+
+# Brush lifecycle
+signal brush_added(brush_id: String)
+signal brush_removed(brush_id: String)
+signal brush_changed(brush_id: String)
+
+# Entity lifecycle
+signal entity_added(node: Node)
+signal entity_removed(node: Node)
+
+# Selection
+signal selection_changed(brush_ids: Array)
+
+# Paint
+signal paint_layer_changed(layer_index: int)
+
+# I/O
+signal state_saved
+signal state_loaded
+signal autosave_failed(error_message: String)
 
 # ---------------------------------------------------------------------------
 # Container / manager nodes
@@ -342,7 +366,9 @@ func _ready():
 func _process(_delta: float) -> void:
 	if not Engine.is_editor_hint():
 		return
-	file_system.process_thread_queue()
+	var write_error := file_system.process_thread_queue()
+	if write_error != "":
+		autosave_failed.emit(write_error)
 
 
 # ===========================================================================
@@ -1155,11 +1181,17 @@ func _apply_hflevel_settings(settings: Dictionary) -> void:
 
 
 func save_hflevel(path: String = "", force: bool = false) -> int:
-	return file_system.save_hflevel(path, force)
+	var err = file_system.save_hflevel(path, force)
+	if err == OK:
+		state_saved.emit()
+	return err
 
 
 func load_hflevel(path: String = "") -> bool:
-	return file_system.load_hflevel(path)
+	var ok = file_system.load_hflevel(path)
+	if ok:
+		state_loaded.emit()
+	return ok
 
 
 func import_map(path: String) -> int:

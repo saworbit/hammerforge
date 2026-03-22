@@ -115,6 +115,13 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 
 ### Modular Architecture
 - `LevelRoot` is a thin coordinator delegating to **10 subsystem classes** (grid, entity, brush, drag, bake, paint, state, file, validation, visgroup)
+- **Central signal registry** -- 14 signals on LevelRoot for event-driven UI updates
+- **Command collation** -- rapid operations (nudge, resize, paint) merge into single undo entries
+- **Transaction support** -- atomic multi-step operations with rollback
+- **Entity definitions** -- data-driven entity types from JSON (extensible, not hardcoded)
+- **Material library persistence** -- save/load material palettes with usage tracking
+- **Autosave failure notification** -- threaded write errors surface to the UI
+- **Gesture tracker pattern** -- base class for self-contained input tool gestures
 - Explicit **input state machine** for drag/paint operations
 - Type-safe inter-module calls (no duck-typing)
 - Threaded .hflevel I/O with error handling
@@ -187,5 +194,5 @@ Start-Process -FilePath "C:\Godot\Godot_v4.6-stable_win64.exe" `
 
 <p align="center">
   <strong>MIT License</strong><br>
-  <sub>Last updated: February 26, 2026</sub>
+  <sub>Last updated: March 22, 2026</sub>
 </p>

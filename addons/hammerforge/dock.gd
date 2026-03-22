@@ -11,6 +11,7 @@ const DraftBrush = preload("brush_instance.gd")
 const FaceData = preload("face_data.gd")
 const HFUndoHelper = preload("undo_helper.gd")
 const HFCollapsibleSection = preload("ui/collapsible_section.gd")
+const HFEntityDef = preload("hf_entity_def.gd")
 const UVEditorScene = preload("uv_editor.tscn")
 
 const PRESET_MENU_RENAME := 0
@@ -212,6 +213,7 @@ var connected_root: Node = null
 var snap_button_group: ButtonGroup
 var syncing_snap := false
 var debug_enabled := false
+var _autosave_warning: Label = null
 var syncing_grid := false
 var presets_dir := "res://addons/hammerforge/presets"
 var entity_defs_path := "res://addons/hammerforge/entities.json"
@@ -1301,10 +1303,7 @@ func _build_manage_tab() -> void:
 	var tie_row = HBoxContainer.new()
 	ac.add_child(tie_row)
 	brush_entity_class_opt = OptionButton.new()
-	brush_entity_class_opt.add_item("func_detail", 0)
-	brush_entity_class_opt.add_item("func_wall", 1)
-	brush_entity_class_opt.add_item("trigger_once", 2)
-	brush_entity_class_opt.add_item("trigger_multiple", 3)
+	_populate_brush_entity_classes()
 	brush_entity_class_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tie_row.add_child(brush_entity_class_opt)
 	tie_entity_btn = _make_button("Tie")
@@ -1483,6 +1482,16 @@ func _ready():
 	mode_add.button_group = mode_group
 	mode_subtract.button_group = mode_group
 	mode_add.button_pressed = true
+
+	# --- Autosave warning label (hidden by default) ---
+	_autosave_warning = Label.new()
+	_autosave_warning.text = "Autosave failed!"
+	_autosave_warning.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_autosave_warning.add_theme_color_override("font_color", Color(1, 0.3, 0.3))
+	_autosave_warning.visible = false
+	if no_root_banner and no_root_banner.get_parent():
+		no_root_banner.get_parent().add_child(_autosave_warning)
+		no_root_banner.get_parent().move_child(_autosave_warning, no_root_banner.get_index() + 1)
 
 	# --- Populate dropdowns ---
 	_populate_shape_palette()
@@ -2218,11 +2227,9 @@ func _on_tie_entity() -> void:
 	if not level_root or _selection_nodes.is_empty():
 		_set_status("Select brushes to tie", true)
 		return
-	var class_name_str = (
-		brush_entity_class_opt.get_item_text(brush_entity_class_opt.selected)
-		if brush_entity_class_opt
-		else "func_detail"
-	)
+	var class_name_str := "func_detail"
+	if brush_entity_class_opt and brush_entity_class_opt.item_count > 0 and brush_entity_class_opt.selected >= 0:
+		class_name_str = brush_entity_class_opt.get_item_text(brush_entity_class_opt.selected)
 	var brush_ids: Array = []
 	for node in _selection_nodes:
 		if level_root.is_brush_node(node):
@@ -2312,6 +2319,11 @@ func _connect_root_signals() -> void:
 			connected_root.connect(
 				"grid_snap_changed", Callable(self, "_on_root_grid_snap_changed")
 			)
+	if connected_root.has_signal("autosave_failed"):
+		if not connected_root.is_connected(
+			"autosave_failed", Callable(self, "_on_autosave_failed")
+		):
+			connected_root.connect("autosave_failed", Callable(self, "_on_autosave_failed"))
 	_sync_grid_snap_from_root()
 	_sync_grid_settings_from_root()
 	_refresh_paint_layers()
@@ -2340,6 +2352,9 @@ func _disconnect_root_signals() -> void:
 			connected_root.disconnect(
 				"grid_snap_changed", Callable(self, "_on_root_grid_snap_changed")
 			)
+	if connected_root.has_signal("autosave_failed"):
+		if connected_root.is_connected("autosave_failed", Callable(self, "_on_autosave_failed")):
+			connected_root.disconnect("autosave_failed", Callable(self, "_on_autosave_failed"))
 
 
 func _sync_grid_snap_from_root() -> void:
@@ -2441,6 +2456,21 @@ func _on_bake_progress(value: float, label: String) -> void:
 		message = "%s: %s" % [message, label]
 	message += " (%d%%)" % pct
 	_set_status(message, false, 0.0)
+
+
+func _on_autosave_failed(error_message: String) -> void:
+	push_warning("HammerForge autosave failed: %s" % error_message)
+	if _autosave_warning:
+		_autosave_warning.text = "Autosave failed! Save manually."
+		_autosave_warning.tooltip_text = error_message
+		_autosave_warning.visible = true
+		# Auto-hide after 30 seconds (will reappear if it fails again)
+		if _autosave_warning.is_inside_tree():
+			get_tree().create_timer(30.0).timeout.connect(
+				func():
+					if is_instance_valid(_autosave_warning):
+						_autosave_warning.visible = false
+			)
 
 
 func _on_bake_finished(success: bool) -> void:
@@ -3663,6 +3693,25 @@ func _load_entity_definitions() -> void:
 
 func get_entity_definitions() -> Array:
 	return entity_defs.duplicate()
+
+
+func _populate_brush_entity_classes() -> void:
+	if not brush_entity_class_opt:
+		return
+	brush_entity_class_opt.clear()
+	var defs = HFEntityDef.load_definitions(entity_defs_path)
+	var brush_defs = HFEntityDef.filter_brush_entities(defs)
+	if brush_defs.is_empty():
+		# Fallback: ensure at least the built-in brush entity classes are available.
+		brush_entity_class_opt.add_item("func_detail", 0)
+		brush_entity_class_opt.add_item("func_wall", 1)
+		brush_entity_class_opt.add_item("trigger_once", 2)
+		brush_entity_class_opt.add_item("trigger_multiple", 3)
+	else:
+		for i in range(brush_defs.size()):
+			brush_entity_class_opt.add_item(brush_defs[i].classname, i)
+			if brush_defs[i].description != "":
+				brush_entity_class_opt.set_item_tooltip(i, brush_defs[i].description)
 
 
 func _populate_entity_palette() -> void:

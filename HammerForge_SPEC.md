@@ -1,6 +1,6 @@
 # HammerForge Spec
 
-Last updated: February 26, 2026
+Last updated: March 22, 2026
 
 This document describes HammerForge's architecture and data flow.
 
@@ -14,11 +14,25 @@ This document describes HammerForge's architecture and data flow.
 
 HammerForge uses a coordinator + subsystems pattern. `LevelRoot` is a thin coordinator that owns all container nodes, exported properties, and signals, and delegates work to 10 `RefCounted` subsystem classes. Each subsystem receives a reference to `LevelRoot` in its constructor.
 
-### Signals
-- `bake_started` -- emitted when a bake begins.
-- `bake_progress(value: float, label: String)` -- emitted during bake with progress 0..1 and a short label.
-- `bake_finished(success: bool)` -- emitted when a bake completes.
-- `grid_snap_changed(value: float)` -- emitted when grid snap is updated.
+### Signals (Central Registry)
+All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.emit(...)`. UI and other consumers subscribe instead of polling.
+
+| Signal | Description |
+|--------|-------------|
+| `bake_started` | Emitted when a bake begins |
+| `bake_progress(value, label)` | Progress 0..1 with short label during bake |
+| `bake_finished(success)` | Emitted when a bake completes |
+| `grid_snap_changed(value)` | Grid snap updated |
+| `brush_added(brush_id)` | A brush was created |
+| `brush_removed(brush_id)` | A brush was deleted |
+| `brush_changed(brush_id)` | A brush was modified (transform, material, etc.) |
+| `entity_added(node)` | An entity was added |
+| `entity_removed(node)` | An entity was removed |
+| `selection_changed(brush_ids)` | Brush selection changed |
+| `paint_layer_changed(layer_index)` | A paint layer was modified |
+| `state_saved()` | `.hflevel` save completed |
+| `state_loaded()` | `.hflevel` load completed |
+| `autosave_failed(error_message)` | Threaded autosave write failed |
 
 ### Core Scripts
 
@@ -33,7 +47,10 @@ HammerForge uses a coordinator + subsystems pattern. `LevelRoot` is a thin coord
 | `brush_instance.gd` | DraftBrush node (authored geometry) |
 | `baker.gd` | CSG -> mesh bake pipeline |
 | `face_data.gd` | Per-face materials, UVs, and paint layers |
-| `material_manager.gd` | Shared materials palette |
+| `material_manager.gd` | Shared materials palette (+ library persistence, usage tracking) |
+| `hf_entity_def.gd` | Data-driven entity definition system (JSON + built-in defaults) |
+| `hf_gesture.gd` | Gesture tracker base class (update/commit/cancel pattern) |
+| `undo_helper.gd` | Undo/redo helper with command collation support |
 | `face_selector.gd` | Raycast face selection helper |
 | `surface_paint.gd` | Per-face surface paint tool |
 | `uv_editor.gd` + `uv_editor.tscn` | UV editing dock control |
@@ -48,8 +65,8 @@ HammerForge uses a coordinator + subsystems pattern. `LevelRoot` is a thin coord
 | `hf_drag_system.gd` | `HFDragSystem` | Drag lifecycle, preview management, axis locking, height computation. Owns `HFInputState` |
 | `hf_bake_system.gd` | `HFBakeSystem` | Bake orchestration (single/chunked), CSG assembly, navmesh, collision |
 | `hf_paint_system.gd` | `HFPaintSystem` | Floor paint input, surface paint, paint layer CRUD, face selection |
-| `hf_state_system.gd` | `HFStateSystem` | State capture/restore, settings, paint layer serialization |
-| `hf_file_system.gd` | `HFFileSystem` | .hflevel save/load, .map import/export, glTF export, threaded I/O |
+| `hf_state_system.gd` | `HFStateSystem` | State capture/restore, settings, paint layer serialization, transactions (begin/commit/rollback) |
+| `hf_file_system.gd` | `HFFileSystem` | .hflevel save/load, .map import/export, glTF export, threaded I/O, autosave failure reporting |
 | `hf_validation_system.gd` | `HFValidationSystem` | Validation, dependency checks, auto-fix helpers |
 | `hf_visgroup_system.gd` | `HFVisgroupSystem` | Visgroups (visibility groups), brush/entity grouping |
 
@@ -145,6 +162,33 @@ LevelRoot (Node3D)
 - **UV Justify**: fit/center/left/right/top/bottom alignment modes for selected faces.
 - Bake builds a temporary CSG tree from DraftBrushes + CommittedCuts and outputs BakedGeometry. If cordon is enabled, only brushes intersecting the cordon AABB are included. Brush entity classes `func_detail` and `trigger_*` are excluded from structural bake.
 - Undo/redo actions prefer brush IDs and state snapshots over long-lived Node references.
+- **Command collation**: `HFUndoHelper` supports a `collation_tag` parameter. Consecutive actions with the same tag and same `full_state` scope within 1 second merge into one undo entry via `MERGE_ENDS` (nudge, resize, paint). Mismatched `full_state` breaks the collation window.
+- **Transactions**: `HFStateSystem` provides `begin_transaction()` / `commit_transaction()` / `rollback_transaction()` for atomic multi-step operations. The transaction captures a state snapshot on begin and restores it on rollback.
+
+## Entity Definitions
+
+Entity types and brush entity classes are data-driven via `HFEntityDef` (`hf_entity_def.gd`):
+- Loaded from `entities.json` at `entity_defs_path` (default: `res://addons/hammerforge/entities.json`).
+- Falls back to built-in defaults (func_detail, func_wall, trigger_once, trigger_multiple).
+- Each definition has: `classname`, `description`, `color`, `is_brush_entity`, `properties`, `scene_path`.
+- `HFEntityDef.load_definitions(path)` returns `Array[HFEntityDef]`.
+- `filter_brush_entities()` / `filter_point_entities()` for filtering by type.
+- Dock brush entity class dropdown is populated from definitions, not hardcoded.
+
+## Gesture Tracker
+
+`HFGesture` (`hf_gesture.gd`) is a base class for encapsulated input gestures:
+- Holds `root`, `camera`, `start_position`, `current_position`, `numeric_buffer`.
+- Subclasses override `update(event)`, `commit()`, `cancel()`.
+- `handle_numeric_key(keycode)` routes digit/period/backspace/enter to the numeric buffer.
+- New tools should subclass `HFGesture` to be self-contained (own state, no global mode enum needed).
+
+## Material Manager
+
+`MaterialManager` (`material_manager.gd`) manages the shared material palette:
+- **Library persistence**: `save_library(path)` / `load_library(path)` serialize material resource paths to JSON.
+- **Usage tracking**: `record_usage()` / `release_usage()` / `rebuild_usage()` track which materials are used by brushes.
+- **Cleanup**: `find_unused_materials()` returns palette materials not used by any brush.
 
 ## Floor Paint System
 

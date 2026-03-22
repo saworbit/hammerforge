@@ -9,6 +9,9 @@ var root: Node3D
 var _hflevel_thread: Thread = null
 var _hflevel_pending: Dictionary = {}
 var _hflevel_last_hash: int = 0
+## Set to a non-empty string by the write thread on failure, consumed by
+## process_thread_queue() on the main thread so it can emit a signal.
+var _last_write_error := ""
 
 
 func _init(level_root: Node3D) -> void:
@@ -126,18 +129,21 @@ func start_hflevel_thread(path: String, payload: PackedByteArray) -> void:
 func _hflevel_thread_write(path: String, payload: PackedByteArray) -> void:
 	var file = FileAccess.open(path, FileAccess.WRITE)
 	if not file:
-		push_error(
-			(
-				"HFLevel: Failed to open file for write: %s (error: %d)"
-				% [path, FileAccess.get_open_error()]
-			)
+		var msg := (
+			"HFLevel: Failed to open file for write: %s (error: %d)"
+			% [path, FileAccess.get_open_error()]
 		)
+		push_error(msg)
+		_last_write_error = msg
 		return
 	file.store_buffer(payload)
 	var err = file.get_error()
 	if err != OK:
-		push_error("HFLevel: store_buffer failed for %s (error: %d)" % [path, err])
+		var msg := "HFLevel: store_buffer failed for %s (error: %d)" % [path, err]
+		push_error(msg)
+		_last_write_error = msg
 		return
+	_last_write_error = ""
 	_write_autosave_rotation(path, payload)
 
 
@@ -186,10 +192,14 @@ func _prune_autosave_history(history_dir: String, keep: int) -> void:
 			DirAccess.remove_absolute(path)
 
 
-func process_thread_queue() -> void:
+## Process the write thread queue.  Returns a non-empty error string if the
+## most recent write failed, empty string otherwise.
+func process_thread_queue() -> String:
 	if _hflevel_thread and not _hflevel_thread.is_alive():
 		_hflevel_thread.wait_to_finish()
 		_hflevel_thread = null
+		var error := _last_write_error
+		_last_write_error = ""
 		if not _hflevel_pending.is_empty():
 			var next = _hflevel_pending.duplicate(true)
 			_hflevel_pending.clear()
@@ -199,3 +209,5 @@ func process_thread_queue() -> void:
 				push_warning("HFLevel: Discarding pending write with empty path or payload")
 			else:
 				start_hflevel_thread(pending_path, pending_payload)
+		return error
+	return ""

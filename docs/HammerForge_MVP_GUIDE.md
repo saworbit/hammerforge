@@ -1,6 +1,6 @@
 # HammerForge MVP Guide
 
-Last updated: February 26, 2026
+Last updated: March 22, 2026
 
 This guide is for contributors implementing or extending the MVP.
 
@@ -45,8 +45,23 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 
 ### Face Materials + Surface Paint (`HFPaintSystem`)
 - DraftBrush faces store material indices, UVs, and paint layers.
-- Materials are managed by a shared palette (MaterialManager).
+- Materials are managed by a shared palette (`MaterialManager`) with library persistence (save/load JSON) and usage tracking.
 - Surface paint writes per-face weight images and updates previews.
+
+### Undo/Redo (`HFUndoHelper` + `HFStateSystem`)
+- `HFUndoHelper.commit()` wraps all editor actions with state snapshot restore on undo.
+- **Command collation**: pass a `collation_tag` for rapid operations (nudge, resize, paint). Consecutive actions with the same tag and same `full_state` scope within 1 second merge into one undo entry via `MERGE_ENDS`.
+- **Transactions**: `state_system.begin_transaction()` / `commit_transaction()` / `rollback_transaction()` for atomic multi-step operations.
+
+### Entity Definitions (`HFEntityDef`)
+- Entity types and brush entity classes are data-driven via `hf_entity_def.gd`.
+- Loaded from `entities.json` or built-in defaults (func_detail, func_wall, trigger_once, trigger_multiple).
+- Dock brush entity class dropdown populated from definitions, not hardcoded.
+
+### Gesture Tracker (`HFGesture`)
+- Base class for encapsulated input gestures (`hf_gesture.gd`).
+- Holds root, camera, positions, numeric buffer. Subclasses override `update()`, `commit()`, `cancel()`.
+- New tools should subclass this instead of adding modes to the `HFInputState` enum.
 
 ### Bake (`HFBakeSystem`)
 - Assembles DraftBrushes (including generated flat paint geometry) into mesh output via CSG.

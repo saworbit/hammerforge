@@ -836,7 +836,8 @@ func _paint_brush_with_undo(root: Node, brush: Node, mat: Material) -> void:
 		method_name,
 		args,
 		false,
-		Callable(self, "_record_history")
+		Callable(self, "_record_history"),
+		"paint_brush"
 	)
 
 
@@ -934,7 +935,8 @@ func _nudge_selected(root: Node, dir: Vector3) -> void:
 		"nudge_brushes_by_id",
 		[brush_ids, offset],
 		false,
-		Callable(self, "_record_history")
+		Callable(self, "_record_history"),
+		"nudge"
 	)
 
 

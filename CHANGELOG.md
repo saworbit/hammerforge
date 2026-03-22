@@ -5,6 +5,29 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Command collation** for undo/redo: consecutive similar operations (nudge, resize, paint)
+  within a 1-second window are merged into a single undo entry. Prevents undo flooding during
+  rapid drag/nudge sequences. Collation tags: `nudge`, `resize_brush`, `paint_brush`.
+- **Transaction support** in `HFStateSystem`: `begin_transaction()` / `commit_transaction()` /
+  `rollback_transaction()` for atomic multi-step operations (hollow, clip). Captures state
+  snapshot on begin; restores on rollback.
+- **Autosave failure notification**: threaded write errors now propagate to the UI via
+  `autosave_failed` signal on LevelRoot. Dock shows a red warning label when autosave fails.
+  Warning auto-hides after 30 seconds and reappears on subsequent failures.
+- **Central signal registry** on LevelRoot: `brush_added`, `brush_removed`, `brush_changed`,
+  `entity_added`, `entity_removed`, `selection_changed`, `paint_layer_changed`, `state_saved`,
+  `state_loaded`, `autosave_failed`. Subsystems emit these signals; UI can subscribe instead of
+  polling.
+- **Material manager persistence**: `save_library()` / `load_library()` for JSON-based material
+  palette save/load. Usage tracking via `record_usage()` / `release_usage()` /
+  `find_unused_materials()`.
+- **Entity definition system** (`hf_entity_def.gd`): data-driven `HFEntityDef` class with
+  `classname`, `description`, `color`, `is_brush_entity`, `properties`, `scene_path`. Loads
+  definitions from JSON (entities.json), falls back to built-in defaults. Brush entity class
+  dropdown in dock populated from definitions instead of hardcoded strings.
+- **Gesture tracker base class** (`hf_gesture.gd`): `HFGesture` base for encapsulated input
+  gestures. Holds root, camera, positions, numeric buffer. Subclasses override `update()`,
+  `commit()`, `cancel()`. Ready for incremental adoption by new tools.
 - **Clipping tool:** Split a brush along an axis-aligned plane into two pieces.
   - `clip_brush_by_id(brush_id, axis, split_pos)` on `hf_brush_system.gd`.
   - Auto-detect split axis from face normal via `clip_brush_at_point()`.
@@ -160,6 +183,26 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 - Generated heightmap floors stored under `LevelRoot/Generated/HeightmapFloors`.
 
 ### Fixed
+- Fixed undo collation never merging: `create_action()` was passing `can_collate` as
+  `backward_undo_ops` (4th positional arg) instead of setting `merge_mode` to `MERGE_ENDS` (1).
+  Undo history was flooding with one entry per nudge/resize/paint stroke. Now uses
+  `merge_mode = 1` when collating and `false` for `backward_undo_ops`.
+- Fixed undo collation merging across mismatched `full_state` scopes: added `full_state`
+  equality check to collation eligibility. A `full_state=true` action no longer merges with
+  a prior `full_state=false` run (or vice versa), preventing undo from restoring the wrong
+  state scope.
+- Fixed autosave warning timer crash: the timer closure assigned `null` to
+  `_autosave_warning.visible` (a `bool`) when the dock was freed before the timer fired.
+  Now guards with `is_instance_valid()` and skips the assignment entirely if the label is gone.
+- Fixed material library `load_library()` silently remapping palette indices: empty or
+  missing material entries were skipped with `continue`, compacting the array. Any data
+  referencing materials by index (paint layers, brush face data) could point to the wrong
+  material after reload. Now preserves `null` placeholder slots to keep indices stable.
+- Fixed brush entity class dropdown becoming empty when `entities.json` contains only point
+  entities: `_populate_brush_entity_classes()` now falls back to built-in defaults
+  (func_detail, func_wall, trigger_once, trigger_multiple) when filtered brush defs are empty.
+- Fixed `_on_tie_entity()` crash when dropdown has no items: now guards `item_count > 0` and
+  `selected >= 0` before reading dropdown text, falling back to `"func_detail"`.
 - Fixed reconciler ghost references: `_index.erase(gid)` and `remove_child()` before `queue_free()` in `hf_reconciler.gd` to prevent stale node references.
 - Fixed silent write failure in `hf_file_system.gd:export_map()` — added `file.get_error()` check after `store_string()`.
 - Fixed unreachable guard in `hf_brush_system.gd` — `parts.size() == 0` after `String.split()` changed to `parts.size() < 2`.

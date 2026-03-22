@@ -206,7 +206,10 @@ func _commit_handle(
 			root,
 			"Resize Brush",
 			"set_brush_transform_by_id",
-			[brush_id, next_size, next_pos]
+			[brush_id, next_size, next_pos],
+			false,
+			Callable(),
+			"resize_brush"
 		)
 	else:
 		brush.size = next_size

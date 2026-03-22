@@ -1,6 +1,6 @@
 # HammerForge User Guide
 
-Last updated: February 26, 2026
+Last updated: March 22, 2026
 
 This guide covers the current HammerForge workflow in Godot 4.6: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs.
 
@@ -49,7 +49,7 @@ The dock has 4 tabs with collapsible sections for organized access to all contro
 
 ### Manage tab (collapsible sections)
 - **Bake**: Bake button, Dry Run, Validate Level/Fix. Options: Merge Meshes, Generate LODs, Lightmap UV2, Texel Size, Navmesh (cell size, agent height), Use Face Materials, Quick Play.
-- **Actions**: Create Floor, Apply/Clear/Commit/Restore Cuts. Hollow (wall thickness spinner + button, Ctrl+H). Move to Floor (Ctrl+Shift+F) / Ceiling (Ctrl+Shift+C). Tie/Untie brush entity class (func_detail, func_wall, trigger_once, trigger_multiple). Clip Selected (Shift+X).
+- **Actions**: Create Floor, Apply/Clear/Commit/Restore Cuts. Hollow (wall thickness spinner + button, Ctrl+H). Move to Floor (Ctrl+Shift+F) / Ceiling (Ctrl+Shift+C). Tie/Untie brush entity class (populated from entity definitions). Clip Selected (Shift+X).
 - **File**: Save/Load .hflevel, Import/Export .map, Export .glb.
 - **Presets**: Save/rename presets grid.
 - **History**: History panel (beta).
@@ -65,6 +65,26 @@ Status bar
 - Live brush count with color-coded performance warnings.
 - Bake progress bar updates during chunked bakes.
 - Performance panel shows active brushes, paint memory, bake chunks, and last bake time.
+- **Autosave warning**: a red "Autosave failed!" label appears if a threaded save fails. Auto-hides after 30 seconds.
+
+## Undo/Redo
+- All brush operations (draw, delete, nudge, resize, paint, hollow, clip) support undo/redo.
+- **Command collation**: rapid repeated operations (nudging with arrow keys, resizing via gizmo, painting brushes) are merged into a single undo entry within a 1-second window. One undo press reverses the entire sequence.
+- Multi-step operations (hollow, clip) use transactions for atomicity.
+
+## Entity Definitions
+Brush entity classes (func_detail, func_wall, trigger_once, trigger_multiple) and point entities are data-driven. Definitions are loaded from `entities.json` (if present) or fall back to built-in defaults.
+
+To add custom entity types:
+1. Create `res://addons/hammerforge/entities.json`.
+2. Add entries with `classname`, `description`, `is_brush_entity`, and optional `color` and `properties`.
+3. The dock entity palette and brush entity class dropdown will auto-populate from these definitions.
+
+## Material Library
+The material palette can be saved and loaded as a JSON library file:
+- **Save**: preserves resource paths of all palette materials.
+- **Load**: restores the palette from saved paths.
+- **Usage tracking**: materials in use by brushes are tracked; `find_unused_materials()` identifies cleanup candidates.
 
 ## Design Constraints (Summary)
 - DraftBrush previews are lightweight. Final geometry comes from bake.

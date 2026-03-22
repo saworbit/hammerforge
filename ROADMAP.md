@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: February 26, 2026
+Last updated: March 22, 2026
 
 This roadmap is a directional plan. Items may change based on user feedback.
 Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md for details.
@@ -43,6 +43,15 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - Entity I/O system (Source-style input/output connections with parameter, delay, fire-once).
 - Entity I/O dock UI (collapsible section in Entities tab with connection list).
 - Brush entity visual indicators (color-coded overlays: cyan = func_detail, orange = triggers).
+
+## Done (TrenchBroom-Inspired Architecture Improvements)
+- Command collation: nudge/resize/paint undo entries merge within 1-second window.
+- Transaction support: begin/commit/rollback for atomic multi-step operations (hollow, clip).
+- Autosave failure notification: red warning label in dock when threaded writes fail.
+- Central signal registry: 10 new signals on LevelRoot (brush/entity lifecycle, I/O, selection).
+- Material manager persistence: save/load library to JSON, usage tracking, find unused.
+- Entity definition system: data-driven HFEntityDef from JSON, replaces hardcoded brush entity classes.
+- Gesture tracker base class: HFGesture for self-contained input gestures (ready for incremental adoption).
 
 ## Next (Wave 2b remaining + Wave 2c)
 - Vertex editing (move individual brush vertices).

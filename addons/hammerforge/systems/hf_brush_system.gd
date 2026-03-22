@@ -120,14 +120,18 @@ func create_brush_from_info(info: Dictionary) -> Node:
 		brush.set_meta("group_id", str(info["group_id"]))
 	if info.has("brush_entity_class") and str(info["brush_entity_class"]) != "":
 		brush.set_meta("brush_entity_class", str(info["brush_entity_class"]))
+	if root.has_signal("brush_added"):
+		root.brush_added.emit(str(brush_id))
 	return brush
 
 
 func delete_brush(brush: Node, free: bool = true) -> void:
 	if not brush:
 		return
+	var removed_id := ""
 	if brush is DraftBrush:
 		var bid = str((brush as DraftBrush).brush_id)
+		removed_id = bid
 		if bid != "":
 			_brush_cache.erase(bid)
 		var key = _face_key(brush as DraftBrush)
@@ -141,6 +145,8 @@ func delete_brush(brush: Node, free: bool = true) -> void:
 		brush.get_parent().remove_child(brush)
 	if free:
 		brush.queue_free()
+	if removed_id != "" and root.has_signal("brush_removed"):
+		root.brush_removed.emit(removed_id)
 
 
 func delete_brush_by_id(brush_id: String) -> void:

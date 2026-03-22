@@ -9,9 +9,62 @@ const HFHeightmapIO = preload("../paint/hf_heightmap_io.gd")
 
 var root: Node3D
 
+## Transaction support — wraps multi-step operations (hollow, clip) so they
+## appear as a single undo entry and can be rolled back on failure.
+var _transaction_name := ""
+var _transaction_snapshot: Dictionary = {}
+var _transaction_active := false
+
 
 func _init(level_root: Node3D) -> void:
 	root = level_root
+
+
+# ---------------------------------------------------------------------------
+# Transactions
+# ---------------------------------------------------------------------------
+
+
+## Begin a transaction.  Captures a full state snapshot.  All mutations until
+## commit_transaction() or rollback_transaction() will be grouped.
+func begin_transaction(name: String) -> void:
+	if _transaction_active:
+		push_warning(
+			"HFStateSystem: nested transaction '%s' while '%s' active" % [name, _transaction_name]
+		)
+		return
+	_transaction_name = name
+	_transaction_snapshot = capture_state()
+	_transaction_active = true
+
+
+## Commit the current transaction.  Returns the before-snapshot so the caller
+## can push a single undo entry covering all mutations since begin_transaction().
+func commit_transaction() -> Dictionary:
+	if not _transaction_active:
+		push_warning("HFStateSystem: commit_transaction() called with no active transaction")
+		return {}
+	var snapshot := _transaction_snapshot
+	_transaction_active = false
+	_transaction_name = ""
+	_transaction_snapshot = {}
+	return snapshot
+
+
+## Roll back — restores the state captured at begin_transaction().
+func rollback_transaction() -> void:
+	if not _transaction_active:
+		push_warning("HFStateSystem: rollback_transaction() called with no active transaction")
+		return
+	restore_state(_transaction_snapshot)
+	_transaction_active = false
+	_transaction_name = ""
+	_transaction_snapshot = {}
+
+
+## Returns true when a transaction is in progress.
+func is_in_transaction() -> bool:
+	return _transaction_active
 
 
 func capture_state(include_transient: bool = true) -> Dictionary:
