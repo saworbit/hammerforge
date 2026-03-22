@@ -2228,7 +2228,11 @@ func _on_tie_entity() -> void:
 		_set_status("Select brushes to tie", true)
 		return
 	var class_name_str := "func_detail"
-	if brush_entity_class_opt and brush_entity_class_opt.item_count > 0 and brush_entity_class_opt.selected >= 0:
+	if (
+		brush_entity_class_opt
+		and brush_entity_class_opt.item_count > 0
+		and brush_entity_class_opt.selected >= 0
+	):
 		class_name_str = brush_entity_class_opt.get_item_text(brush_entity_class_opt.selected)
 	var brush_ids: Array = []
 	for node in _selection_nodes:
