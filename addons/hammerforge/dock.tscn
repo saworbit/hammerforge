@@ -21,31 +21,36 @@ custom_minimum_size = Vector2(260, 260)
 [node name="Toolbar" type="HBoxContainer" parent="Margin/VBox"]
 
 [node name="ToolDraw" type="Button" parent="Margin/VBox/Toolbar"]
-text = "Draw"
+text = "D"
+tooltip_text = "Draw"
 toggle_mode = true
 flat = true
 
 [node name="ToolSelect" type="Button" parent="Margin/VBox/Toolbar"]
-text = "Select"
+text = "S"
+tooltip_text = "Select"
 toggle_mode = true
 flat = true
 
 [node name="ToolbarSep1" type="VSeparator" parent="Margin/VBox/Toolbar"]
 
 [node name="ModeAdd" type="Button" parent="Margin/VBox/Toolbar"]
-text = "Add"
+text = "+"
+tooltip_text = "Add (additive brush)"
 toggle_mode = true
 flat = true
 
 [node name="ModeSubtract" type="Button" parent="Margin/VBox/Toolbar"]
-text = "Sub"
+text = "-"
+tooltip_text = "Subtract (subtractive brush)"
 toggle_mode = true
 flat = true
 
 [node name="ToolbarSep2" type="VSeparator" parent="Margin/VBox/Toolbar"]
 
 [node name="PaintMode" type="Button" parent="Margin/VBox/Toolbar"]
-text = "Paint"
+text = "P"
+tooltip_text = "Paint Mode"
 toggle_mode = true
 flat = true
 
@@ -55,6 +60,12 @@ visible = false
 [node name="BannerLabel" type="Label" parent="Margin/VBox/NoRootBanner"]
 text = "Select a LevelRoot node to begin"
 horizontal_alignment = 1
+
+[node name="AutosaveWarning" type="Label" parent="Margin/VBox"]
+visible = false
+text = "Autosave failed!"
+horizontal_alignment = 1
+theme_override_colors/font_color = Color(1, 0.3, 0.3, 1)
 
 [node name="TopSeparator" type="HSeparator" parent="Margin/VBox"]
 

@@ -7,7 +7,9 @@ class_name HFCollapsibleSection
 
 signal toggled(expanded: bool)
 
+var _separator: HSeparator
 var _header: Button
+var _content_margin: MarginContainer
 var _content: VBoxContainer
 var _expanded := true
 var _section_name := ""
@@ -19,6 +21,9 @@ func _init(section_name: String = "", start_expanded: bool = true) -> void:
 
 
 func _ready() -> void:
+	_separator = HSeparator.new()
+	add_child(_separator)
+
 	_header = Button.new()
 	_header.flat = true
 	_header.focus_mode = Control.FOCUS_NONE
@@ -28,12 +33,16 @@ func _ready() -> void:
 	_header.toggled.connect(_on_header_toggled)
 	_update_header_text()
 	add_child(_header)
-	move_child(_header, 0)
+
+	_content_margin = MarginContainer.new()
+	_content_margin.name = "ContentMargin"
+	_content_margin.add_theme_constant_override("margin_left", 4)
+	_content_margin.visible = _expanded
+	add_child(_content_margin)
 
 	_content = VBoxContainer.new()
 	_content.name = "Content"
-	_content.visible = _expanded
-	add_child(_content)
+	_content_margin.add_child(_content)
 
 
 static func create(section_name: String, start_expanded: bool = true) -> HFCollapsibleSection:
@@ -48,8 +57,8 @@ func get_content() -> VBoxContainer:
 
 func set_expanded(value: bool) -> void:
 	_expanded = value
-	if _content:
-		_content.visible = _expanded
+	if _content_margin:
+		_content_margin.visible = _expanded
 	if _header:
 		_header.button_pressed = _expanded
 		_update_header_text()
@@ -61,8 +70,8 @@ func is_expanded() -> bool:
 
 func _on_header_toggled(pressed: bool) -> void:
 	_expanded = pressed
-	if _content:
-		_content.visible = _expanded
+	if _content_margin:
+		_content_margin.visible = _expanded
 	_update_header_text()
 	toggled.emit(_expanded)
 

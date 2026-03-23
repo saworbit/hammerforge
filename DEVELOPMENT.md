@@ -20,7 +20,7 @@ addons/hammerforge/
   plugin.gd              EditorPlugin entry point, input routing, sticky LevelRoot discovery
   level_root.gd          Thin coordinator (~1,100 lines), delegates to subsystems
   input_state.gd         Drag/paint state machine (HFInputState)
-  dock.gd + dock.tscn    UI dock (4 tabs: Brush, Paint, Entities, Manage), collapsible sections
+  dock.gd + dock.tscn    UI dock (4 tabs: Brush, Paint, Entities, Manage), collapsible sections with persisted state
   shortcut_hud.gd        Context-sensitive shortcut overlay (dynamic per mode)
   brush_instance.gd      DraftBrush node
   baker.gd               CSG -> mesh bake pipeline
@@ -87,8 +87,8 @@ addons/hammerforge/
 - **Input state machine.** `HFDragSystem` owns the `HFInputState` instance. Drag state transitions are explicit (`begin_drag` -> `advance_to_height` -> `end_drag`). Extrude uses `begin_extrude` -> `end_extrude`.
 - **Direct typed calls.** `plugin.gd` and `dock.gd` use typed references (`LevelRoot`, `DockType`) with direct method calls instead of `has_method`/`call`.
 - **Sticky LevelRoot discovery.** `plugin.gd` keeps `active_root` sticky: `_edit()` does not null it when non-LevelRoot nodes are selected. `_handles()` returns true for any node when a LevelRoot exists (deep recursive search). `dock.gd` mirrors this pattern.
-- **Collapsible sections.** Use `HFCollapsibleSection.create("Name", start_expanded)` from `ui/collapsible_section.gd` for dock sections. Paint, Manage, and Entity I/O tab contents are built programmatically in `_build_paint_tab()`, `_build_manage_tab()`, and `_build_entity_io_section()`.
-- **Signal-driven dock sync.** Setting controls (checkboxes, spinboxes) in the dock push values to LevelRoot via `toggled`/`value_changed` signal connections. `_process()` no longer polls 17 properties every frame. Perf panel updates every 30 frames; paint/material sync every 10 frames; disabled hints are flag-driven.
+- **Collapsible sections.** Use `HFCollapsibleSection.create("Name", start_expanded)` from `ui/collapsible_section.gd` for dock sections. Each section has an HSeparator, indented content, and persisted collapsed state via user prefs. Tab contents are built programmatically in `_build_paint_tab()`, `_build_manage_tab()`, `_build_selection_tools_section()`, and `_build_entity_io_section()`. All 18 sections tracked in `_all_sections: Dictionary`.
+- **Signal-driven dock sync.** Setting controls push values to LevelRoot via `toggled`/`value_changed` signal connections. Paint layers, materials, and surface paint sync instantly via `paint_layer_changed`, `material_list_changed`, and `selection_changed` signals. Perf panel updates every 30 frames; disabled hints are flag-driven. Form label widths standardized to 70px.
 - **Input decomposition.** `_forward_3d_gui_input()` in `plugin.gd` is a ~50-line dispatcher that routes to focused handlers: `_handle_paint_input()`, `_handle_keyboard_input()`, `_handle_rmb_cancel()`, `_handle_select_mouse()`, `_handle_extrude_mouse()`, `_handle_draw_mouse()`, `_handle_mouse_motion()`. Shared `_get_nudge_direction()` is used by both `_forward_3d_gui_input()` and `_shortcut_input()`.
 - **Brush/material caching.** `hf_brush_system.gd` uses `_brush_cache: Dictionary` for O(1) brush ID lookup, `_brush_count: int` for O(1) count, and `_material_cache: Dictionary` for material instance reuse. All CRUD methods maintain these caches.
 - **Undo/redo dynamic dispatch.** The `_commit_state_action` pattern in `dock.gd` intentionally uses string method names for undo/redo -- this is the one exception to the typed-calls rule.
@@ -96,7 +96,7 @@ addons/hammerforge/
 - **Transactions.** For multi-step operations (hollow, clip, tie), use `state_system.begin_transaction()` / `commit_transaction()` / `rollback_transaction()` to group mutations atomically. If any step fails, `rollback_transaction()` restores the snapshot.
 - **Entity definitions.** Entity types and brush entity classes are data-driven via `HFEntityDef`. Load from `entities.json` or use built-in defaults. New entity types should be added to the JSON file, not hardcoded.
 - **Gesture trackers.** New tools should subclass `HFGesture` (hf_gesture.gd) to encapsulate input state. Override `update()`, `commit()`, `cancel()`. The gesture holds its own state (start position, axis lock, numeric buffer), making the tool self-contained.
-- **Central signals.** Subscribe to LevelRoot signals (`brush_added`, `brush_removed`, `selection_changed`, `state_saved`, etc.) instead of polling. Subsystems emit these via `root.<signal>.emit(...)`.
+- **Central signals.** Subscribe to LevelRoot signals (`brush_added`, `brush_removed`, `selection_changed`, `paint_layer_changed`, `material_list_changed`, `face_selection_changed`, `state_saved`, etc.) instead of polling. Subsystems emit these via `root.<signal>.emit(...)`. `face_selection_changed` emits only when selection actually changes (snapshot comparison in `select_face_at_screen`).
 - **Autosave failure.** The `autosave_failed(error_message)` signal on LevelRoot fires when a threaded write fails. Connect to it in the dock to show user-facing warnings.
 - **Undo/redo stability.** Prefer brush IDs and `create_brush_from_info()` for undo instead of storing Node references in history.
 - **Bake owner assignment.** Use `_assign_owner_recursive()` (not `_assign_owner()`) for baked geometry so all descendants get proper editor ownership. Always call it *after* the container is added to the scene tree.
@@ -204,14 +204,14 @@ Cordon (Partial Bake)
 - Bake -- confirm only the brush inside the cordon appears in baked output.
 - Disable cordon and bake -- confirm all brushes appear.
 
-Wave 2 Tools
+Selection Tools (Brush tab — visible when brushes are selected)
 - Select a brush and press Ctrl+H -- confirm it converts to 6 wall brushes (hollow).
-- Adjust wall thickness spinner before hollowing and confirm different thicknesses.
+- Adjust wall thickness spinner in Selection Tools before hollowing and confirm different thicknesses.
 - Select a brush and press Shift+X -- confirm it splits into two brushes along the Y axis.
 - During a base drag, type "64" then Enter -- confirm the brush base is 64 units.
 - During height adjustment, type "32" then Enter -- confirm the brush height is 32 units.
-- Select brushes, choose func_detail from dropdown, click Tie -- confirm cyan tint overlay appears.
-- Select tied brushes, click Untie -- confirm tint is removed.
+- Select brushes, choose func_detail from dropdown in Selection Tools, click Tie -- confirm cyan tint overlay appears.
+- Select tied brushes, click Untie in Selection Tools -- confirm tint is removed.
 - Tie brushes as trigger_once -- confirm orange tint overlay appears.
 - Bake with func_detail brushes -- confirm they are excluded from structural bake output.
 - Select a brush and press Ctrl+Shift+F -- confirm it snaps to nearest surface below.

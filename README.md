@@ -84,10 +84,12 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 - **Sticky LevelRoot** -- selecting other scene nodes no longer breaks viewport input
 
 ### Editor UX
-- **4-tab dock** (Brush, Paint, Entities, Manage) with **collapsible sections** for visual hierarchy
+- **4-tab dock** (Brush, Paint, Entities, Manage) with **collapsible sections** (separators, indented content, persisted state)
+- **Contextual Selection Tools** in Brush tab -- hollow, clip, move, tie, duplicator appear when brushes are selected
+- **Compact toolbar** with single-char labels (D, S, +, -, P, ▲, ▼) and descriptive tooltips
+- **Instant sync** -- paint layer, material, and surface paint changes reflected immediately (signal-driven)
 - **Context-sensitive shortcut HUD** that updates based on current tool and mode
 - **Customizable keymaps** -- all shortcuts data-driven via JSON; rebind any key
-- **Toolbar shortcut labels** auto-update from keymap: Draw (D), Sel (S), Ext▲ (U), Ext▼ (J)
 - **User preferences** -- grid defaults, recent files, collapsed sections persist across sessions
 - **Tool poll system** -- buttons gray out with tooltip when action can't run (e.g. Hollow with no selection)
 - **Status bar mode indicator** -- shows active mode (Draw/Select/Extrude/Paint) with live state

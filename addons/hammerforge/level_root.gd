@@ -148,6 +148,8 @@ signal selection_changed(brush_ids: Array)
 
 # Paint
 signal paint_layer_changed(layer_index: int)
+signal material_list_changed
+signal face_selection_changed
 
 # I/O
 signal state_saved
@@ -1027,15 +1029,21 @@ func pick_face(camera: Camera3D, mouse_pos: Vector2) -> Dictionary:
 
 
 func select_face_at_screen(camera: Camera3D, mouse_pos: Vector2, additive: bool) -> bool:
-	return brush_system.select_face_at_screen(camera, mouse_pos, additive)
+	var old_sel := face_selection.duplicate(true)
+	var result := brush_system.select_face_at_screen(camera, mouse_pos, additive)
+	if face_selection != old_sel:
+		face_selection_changed.emit()
+	return result
 
 
 func toggle_face_selection(brush: DraftBrush, face_idx: int, additive: bool) -> void:
 	brush_system.toggle_face_selection(brush, face_idx, additive)
+	face_selection_changed.emit()
 
 
 func clear_face_selection() -> void:
 	brush_system.clear_face_selection()
+	face_selection_changed.emit()
 
 
 func get_face_selection() -> Dictionary:
@@ -1180,14 +1188,17 @@ func get_active_paint_layer_index() -> int:
 
 func set_active_paint_layer(index: int) -> void:
 	paint_system.set_active_paint_layer(index)
+	paint_layer_changed.emit(index)
 
 
 func add_paint_layer() -> void:
 	paint_system.add_paint_layer()
+	paint_layer_changed.emit(paint_system.get_active_paint_layer_index())
 
 
 func remove_active_paint_layer() -> void:
 	paint_system.remove_active_paint_layer()
+	paint_layer_changed.emit(paint_system.get_active_paint_layer_index())
 
 
 func handle_surface_paint_input(
@@ -1365,6 +1376,7 @@ func add_material_to_palette(material: Material) -> int:
 		_setup_material_manager()
 	var idx = material_manager.add_material(material)
 	_refresh_brush_previews()
+	material_list_changed.emit()
 	return idx
 
 
@@ -1373,6 +1385,7 @@ func remove_material_from_palette(index: int) -> void:
 		return
 	material_manager.remove_material(index)
 	_refresh_brush_previews()
+	material_list_changed.emit()
 
 
 func get_material_names() -> Array:

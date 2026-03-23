@@ -72,6 +72,9 @@ func _enter_tree():
 		):
 			selection.connect("selection_changed", Callable(self, "_on_editor_selection_changed"))
 		hf_selection = selection.get_selected_nodes()
+		if dock and hf_selection.size() > 0:
+			dock.set_selection_count(hf_selection.size())
+			dock.set_selection_nodes(hf_selection)
 	set_process(false)
 
 

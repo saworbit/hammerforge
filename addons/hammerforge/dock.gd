@@ -215,7 +215,7 @@ var connected_root: Node = null
 var snap_button_group: ButtonGroup
 var syncing_snap := false
 var debug_enabled := false
-var _autosave_warning: Label = null
+@onready var _autosave_warning: Label = $Margin/VBox/AutosaveWarning
 var syncing_grid := false
 var presets_dir := "res://addons/hammerforge/presets"
 var entity_defs_path := "res://addons/hammerforge/entities.json"
@@ -254,7 +254,6 @@ var _terrain_slot_refreshing := false
 var _region_settings_refreshing := false
 var _bake_disabled := false
 var _perf_frame_counter: int = 0
-var _sync_frame_counter: int = 0
 var _hints_dirty: bool = true
 var _prop_cache: Dictionary = {}
 var tool_extrude_up: Button = null
@@ -262,6 +261,8 @@ var tool_extrude_down: Button = null
 
 # Wave 1 UI controls
 var _selection_nodes: Array = []
+var _all_sections: Dictionary = {}
+var _selection_tools_section: HFCollapsibleSection = null
 var texture_lock_check: CheckBox = null
 var visgroup_list: ItemList = null
 var visgroup_name_input: LineEdit = null
@@ -495,6 +496,11 @@ func _apply_user_prefs() -> void:
 	var hud_vis = _user_prefs.get_pref("show_hud", true)
 	if show_hud:
 		show_hud.button_pressed = bool(hud_vis)
+	# Restore collapsed section state
+	for sec_name in _all_sections:
+		var collapsed = _user_prefs.get_section_collapsed(sec_name)
+		if collapsed != null:
+			_all_sections[sec_name].set_expanded(not bool(collapsed))
 
 
 ## Persist a pref change to disk.
@@ -503,6 +509,17 @@ func _save_user_pref(key: String, value: Variant) -> void:
 		return
 	_user_prefs.set_pref(key, value)
 	_user_prefs.save()
+
+
+func _register_section(section: HFCollapsibleSection, section_name: String) -> void:
+	_all_sections[section_name] = section
+	section.toggled.connect(_on_section_toggled.bind(section_name))
+
+
+func _on_section_toggled(expanded: bool, section_name: String) -> void:
+	if _user_prefs:
+		_user_prefs.set_section_collapsed(section_name, not expanded)
+		_user_prefs.save()
 
 
 func set_keymap(km: HFKeymap) -> void:
@@ -514,18 +531,22 @@ func _update_toolbar_shortcut_labels() -> void:
 	if not _keymap:
 		return
 	if tool_draw:
-		tool_draw.text = "Draw (%s)" % _keymap.get_display_string("tool_draw")
+		var key = _keymap.get_display_string("tool_draw")
+		tool_draw.text = key
+		tool_draw.tooltip_text = "Draw (%s)" % key
 	if tool_select:
-		tool_select.text = "Sel (%s)" % _keymap.get_display_string("tool_select")
+		var key = _keymap.get_display_string("tool_select")
+		tool_select.text = key
+		tool_select.tooltip_text = "Select (%s)" % key
 	if tool_extrude_up:
-		tool_extrude_up.tooltip_text = (
-			"Extrude Up (%s)\nClick face + drag to extrude upward"
-			% _keymap.get_display_string("tool_extrude_up")
-		)
+		var key = _keymap.get_display_string("tool_extrude_up")
+		tool_extrude_up.text = "\u25b2"
+		tool_extrude_up.tooltip_text = "Extrude Up (%s)\nClick face + drag to extrude upward" % key
 	if tool_extrude_down:
+		var key = _keymap.get_display_string("tool_extrude_down")
+		tool_extrude_down.text = "\u25bc"
 		tool_extrude_down.tooltip_text = (
-			"Extrude Down (%s)\nClick face + drag to extrude downward"
-			% _keymap.get_display_string("tool_extrude_down")
+			"Extrude Down (%s)\nClick face + drag to extrude downward" % key
 		)
 
 
@@ -933,6 +954,7 @@ func _build_paint_tab() -> void:
 	# --- Floor Paint section ---
 	var floor_sec = HFCollapsibleSection.create("Floor Paint", true)
 	root_vbox.add_child(floor_sec)
+	_register_section(floor_sec, "Floor Paint")
 	var fc = floor_sec.get_content()
 
 	paint_tool_select = OptionButton.new()
@@ -953,11 +975,11 @@ func _build_paint_tab() -> void:
 	layer_row.add_child(paint_layer_select)
 	paint_layer_add = Button.new()
 	paint_layer_add.text = "+"
-	paint_layer_add.custom_minimum_size = Vector2(24, 0)
+	paint_layer_add.custom_minimum_size = Vector2(32, 0)
 	layer_row.add_child(paint_layer_add)
 	paint_layer_remove = Button.new()
 	paint_layer_remove.text = "-"
-	paint_layer_remove.custom_minimum_size = Vector2(24, 0)
+	paint_layer_remove.custom_minimum_size = Vector2(32, 0)
 	layer_row.add_child(paint_layer_remove)
 	fc.add_child(layer_row)
 
@@ -970,6 +992,7 @@ func _build_paint_tab() -> void:
 	# --- Heightmap section ---
 	var hm_sec = HFCollapsibleSection.create("Heightmap", false)
 	root_vbox.add_child(hm_sec)
+	_register_section(hm_sec, "Heightmap")
 	var hmc = hm_sec.get_content()
 
 	var hm_row = HBoxContainer.new()
@@ -986,6 +1009,7 @@ func _build_paint_tab() -> void:
 	# --- Blend & Terrain section ---
 	var blend_sec = HFCollapsibleSection.create("Blend & Terrain", false)
 	root_vbox.add_child(blend_sec)
+	_register_section(blend_sec, "Blend & Terrain")
 	var bc = blend_sec.get_content()
 
 	blend_strength_spin = _make_spin(0, 1, 0.05, 0.5)
@@ -1023,6 +1047,7 @@ func _build_paint_tab() -> void:
 	# --- Regions section ---
 	var region_sec = HFCollapsibleSection.create("Regions", false)
 	root_vbox.add_child(region_sec)
+	_register_section(region_sec, "Regions")
 	var rc = region_sec.get_content()
 
 	region_enable = CheckBox.new()
@@ -1043,10 +1068,11 @@ func _build_paint_tab() -> void:
 	# --- Materials section ---
 	var mat_sec = HFCollapsibleSection.create("Materials", true)
 	root_vbox.add_child(mat_sec)
+	_register_section(mat_sec, "Materials")
 	var mc = mat_sec.get_content()
 
 	materials_list = ItemList.new()
-	materials_list.custom_minimum_size = Vector2(0, 120)
+	materials_list.custom_minimum_size = Vector2(0, 80)
 	materials_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	mc.add_child(materials_list)
 
@@ -1074,6 +1100,7 @@ func _build_paint_tab() -> void:
 	# --- UV section ---
 	var uv_sec = HFCollapsibleSection.create("UV Editor", false)
 	root_vbox.add_child(uv_sec)
+	_register_section(uv_sec, "UV Editor")
 	var uc = uv_sec.get_content()
 
 	var uv_instance = UVEditorScene.instantiate()
@@ -1088,34 +1115,33 @@ func _build_paint_tab() -> void:
 	var justify_label = Label.new()
 	justify_label.text = "Justify:"
 	uc.add_child(justify_label)
-	var justify_row1 = HBoxContainer.new()
-	uc.add_child(justify_row1)
+	var justify_grid = GridContainer.new()
+	justify_grid.columns = 3
+	uc.add_child(justify_grid)
 	justify_fit_btn = Button.new()
 	justify_fit_btn.text = "Fit"
 	justify_fit_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	justify_row1.add_child(justify_fit_btn)
+	justify_grid.add_child(justify_fit_btn)
 	justify_center_btn = Button.new()
 	justify_center_btn.text = "Center"
 	justify_center_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	justify_row1.add_child(justify_center_btn)
-	var justify_row2 = HBoxContainer.new()
-	uc.add_child(justify_row2)
+	justify_grid.add_child(justify_center_btn)
 	justify_left_btn = Button.new()
 	justify_left_btn.text = "Left"
 	justify_left_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	justify_row2.add_child(justify_left_btn)
+	justify_grid.add_child(justify_left_btn)
 	justify_right_btn = Button.new()
 	justify_right_btn.text = "Right"
 	justify_right_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	justify_row2.add_child(justify_right_btn)
+	justify_grid.add_child(justify_right_btn)
 	justify_top_btn = Button.new()
 	justify_top_btn.text = "Top"
 	justify_top_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	justify_row2.add_child(justify_top_btn)
+	justify_grid.add_child(justify_top_btn)
 	justify_bottom_btn = Button.new()
 	justify_bottom_btn.text = "Bottom"
 	justify_bottom_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	justify_row2.add_child(justify_bottom_btn)
+	justify_grid.add_child(justify_bottom_btn)
 	justify_treat_as_one = CheckBox.new()
 	justify_treat_as_one.text = "Treat as One"
 	justify_treat_as_one.tooltip_text = "Align selected faces as a single unified surface"
@@ -1124,6 +1150,7 @@ func _build_paint_tab() -> void:
 	# --- Surface Paint section ---
 	var sp_sec = HFCollapsibleSection.create("Surface Paint", false)
 	root_vbox.add_child(sp_sec)
+	_register_section(sp_sec, "Surface Paint")
 	var sc = sp_sec.get_content()
 
 	paint_target_select = OptionButton.new()
@@ -1144,11 +1171,11 @@ func _build_paint_tab() -> void:
 	sp_layer_row.add_child(surface_paint_layer_select)
 	surface_paint_layer_add = Button.new()
 	surface_paint_layer_add.text = "+"
-	surface_paint_layer_add.custom_minimum_size = Vector2(24, 0)
+	surface_paint_layer_add.custom_minimum_size = Vector2(32, 0)
 	sp_layer_row.add_child(surface_paint_layer_add)
 	surface_paint_layer_remove = Button.new()
 	surface_paint_layer_remove.text = "-"
-	surface_paint_layer_remove.custom_minimum_size = Vector2(24, 0)
+	surface_paint_layer_remove.custom_minimum_size = Vector2(32, 0)
 	sp_layer_row.add_child(surface_paint_layer_remove)
 	sc.add_child(sp_layer_row)
 
@@ -1163,6 +1190,7 @@ func _build_entity_props_section() -> void:
 		return
 	var sec = HFCollapsibleSection.create("Entity Properties", true)
 	entities_vbox.add_child(sec)
+	_register_section(sec, "Entity Properties")
 	sec.visible = false
 	_entity_props_section = sec
 
@@ -1224,7 +1252,7 @@ func _rebuild_entity_props(entity: Node3D) -> void:
 
 		var lbl = Label.new()
 		lbl.text = prop_label + ":"
-		lbl.custom_minimum_size.x = 75
+		lbl.custom_minimum_size.x = 70
 		row.add_child(lbl)
 
 		match prop_type:
@@ -1295,7 +1323,7 @@ func _rebuild_entity_props(entity: Node3D) -> void:
 					sb.allow_lesser = true
 					sb.value = vec[axis_i]
 					sb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-					sb.custom_minimum_size.x = 55
+					sb.custom_minimum_size.x = 70
 					sb.value_changed.connect(
 						_on_entity_prop_vec3_changed.bind(entity, prop_name, axis_i)
 					)
@@ -1425,7 +1453,7 @@ func rebuild_tool_settings(tool: HFEditorToolType, parent: Control) -> void:
 		_tool_settings_controls.append(row)
 		var lbl = Label.new()
 		lbl.text = prop_label + ":"
-		lbl.custom_minimum_size.x = 75
+		lbl.custom_minimum_size.x = 70
 		row.add_child(lbl)
 		match prop_type:
 			"bool":
@@ -1508,6 +1536,7 @@ func _build_entity_io_section() -> void:
 	# --- Entity I/O section ---
 	var io_sec = HFCollapsibleSection.create("Entity I/O", false)
 	entities_vbox.add_child(io_sec)
+	_register_section(io_sec, "Entity I/O")
 	var ioc = io_sec.get_content()
 
 	# Output Name
@@ -1515,7 +1544,7 @@ func _build_entity_io_section() -> void:
 	ioc.add_child(out_row)
 	var out_lbl = Label.new()
 	out_lbl.text = "Output:"
-	out_lbl.custom_minimum_size.x = 55
+	out_lbl.custom_minimum_size.x = 70
 	out_row.add_child(out_lbl)
 	io_output_name = LineEdit.new()
 	io_output_name.placeholder_text = "OnTrigger"
@@ -1527,7 +1556,7 @@ func _build_entity_io_section() -> void:
 	ioc.add_child(tgt_row)
 	var tgt_lbl = Label.new()
 	tgt_lbl.text = "Target:"
-	tgt_lbl.custom_minimum_size.x = 55
+	tgt_lbl.custom_minimum_size.x = 70
 	tgt_row.add_child(tgt_lbl)
 	io_target_name = LineEdit.new()
 	io_target_name.placeholder_text = "door_1"
@@ -1539,7 +1568,7 @@ func _build_entity_io_section() -> void:
 	ioc.add_child(inp_row)
 	var inp_lbl = Label.new()
 	inp_lbl.text = "Input:"
-	inp_lbl.custom_minimum_size.x = 55
+	inp_lbl.custom_minimum_size.x = 70
 	inp_row.add_child(inp_lbl)
 	io_input_name = LineEdit.new()
 	io_input_name.placeholder_text = "Open"
@@ -1551,7 +1580,7 @@ func _build_entity_io_section() -> void:
 	ioc.add_child(param_row)
 	var param_lbl = Label.new()
 	param_lbl.text = "Param:"
-	param_lbl.custom_minimum_size.x = 55
+	param_lbl.custom_minimum_size.x = 70
 	param_row.add_child(param_lbl)
 	io_parameter = LineEdit.new()
 	io_parameter.placeholder_text = "(optional)"
@@ -1563,7 +1592,7 @@ func _build_entity_io_section() -> void:
 	ioc.add_child(delay_row)
 	var delay_lbl = Label.new()
 	delay_lbl.text = "Delay:"
-	delay_lbl.custom_minimum_size.x = 55
+	delay_lbl.custom_minimum_size.x = 70
 	delay_row.add_child(delay_lbl)
 	io_delay = SpinBox.new()
 	io_delay.min_value = 0.0
@@ -1593,6 +1622,7 @@ func _build_entity_io_section() -> void:
 	io_list = ItemList.new()
 	io_list.custom_minimum_size.y = 80
 	io_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	io_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	ioc.add_child(io_list)
 
 
@@ -1604,6 +1634,7 @@ func _build_manage_tab() -> void:
 	# --- Bake section ---
 	var bake_sec = HFCollapsibleSection.create("Bake", true)
 	root_vbox.add_child(bake_sec)
+	_register_section(bake_sec, "Bake")
 	var bk = bake_sec.get_content()
 
 	bake_btn = _make_button("Bake")
@@ -1664,6 +1695,7 @@ func _build_manage_tab() -> void:
 	# --- Actions section ---
 	var act_sec = HFCollapsibleSection.create("Actions", true)
 	root_vbox.add_child(act_sec)
+	_register_section(act_sec, "Actions")
 	var ac = act_sec.get_content()
 
 	floor_btn = _make_button("Create Floor")
@@ -1681,115 +1713,13 @@ func _build_manage_tab() -> void:
 	restore_cuts_btn = _make_button("Restore Committed Cuts")
 	ac.add_child(restore_cuts_btn)
 
-	# --- Hollow ---
-	var hollow_row = HBoxContainer.new()
-	ac.add_child(hollow_row)
-	var hollow_label = Label.new()
-	hollow_label.text = "Wall:"
-	hollow_row.add_child(hollow_label)
-	hollow_thickness = SpinBox.new()
-	hollow_thickness.min_value = 1.0
-	hollow_thickness.max_value = 128.0
-	hollow_thickness.step = 1.0
-	hollow_thickness.value = 4.0
-	hollow_thickness.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hollow_row.add_child(hollow_thickness)
-	hollow_btn = _make_button("Hollow (Ctrl+H)")
-	hollow_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hollow_row.add_child(hollow_btn)
-
-	# --- Move to Floor / Ceiling ---
-	var move_row = HBoxContainer.new()
-	ac.add_child(move_row)
-	move_floor_btn = _make_button("To Floor (Ctrl+Shift+F)")
-	move_floor_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	move_row.add_child(move_floor_btn)
-	move_ceiling_btn = _make_button("To Ceiling (Ctrl+Shift+C)")
-	move_ceiling_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	move_row.add_child(move_ceiling_btn)
-
-	# --- Brush Entity (Tie to Entity) ---
-	var tie_row = HBoxContainer.new()
-	ac.add_child(tie_row)
-	brush_entity_class_opt = OptionButton.new()
-	_populate_brush_entity_classes()
-	brush_entity_class_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	tie_row.add_child(brush_entity_class_opt)
-	tie_entity_btn = _make_button("Tie")
-	tie_row.add_child(tie_entity_btn)
-	untie_entity_btn = _make_button("Untie")
-	tie_row.add_child(untie_entity_btn)
-
-	# --- Clip ---
-	clip_btn = _make_button("Clip Selected (Shift+X)")
-	ac.add_child(clip_btn)
-
-	# --- Duplicate Array ---
-	var dup_label = Label.new()
-	dup_label.text = "Duplicate Array"
-	ac.add_child(dup_label)
-
-	var dup_row1 = HBoxContainer.new()
-	ac.add_child(dup_row1)
-	var count_lbl = Label.new()
-	count_lbl.text = "Count:"
-	dup_row1.add_child(count_lbl)
-	dup_count_spin = SpinBox.new()
-	dup_count_spin.min_value = 1
-	dup_count_spin.max_value = 100
-	dup_count_spin.value = 3
-	dup_count_spin.tooltip_text = "Number of copies to create"
-	dup_row1.add_child(dup_count_spin)
-
-	var dup_row2 = HBoxContainer.new()
-	ac.add_child(dup_row2)
-	var off_lbl = Label.new()
-	off_lbl.text = "Offset:"
-	dup_row2.add_child(off_lbl)
-	dup_offset_x = SpinBox.new()
-	dup_offset_x.min_value = -1000
-	dup_offset_x.max_value = 1000
-	dup_offset_x.value = 8
-	dup_offset_x.step = 1
-	dup_offset_x.tooltip_text = "X offset per copy"
-	dup_offset_x.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	dup_row2.add_child(dup_offset_x)
-	dup_offset_y = SpinBox.new()
-	dup_offset_y.min_value = -1000
-	dup_offset_y.max_value = 1000
-	dup_offset_y.value = 0
-	dup_offset_y.step = 1
-	dup_offset_y.tooltip_text = "Y offset per copy"
-	dup_offset_y.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	dup_row2.add_child(dup_offset_y)
-	dup_offset_z = SpinBox.new()
-	dup_offset_z.min_value = -1000
-	dup_offset_z.max_value = 1000
-	dup_offset_z.value = 0
-	dup_offset_z.step = 1
-	dup_offset_z.tooltip_text = "Z offset per copy"
-	dup_offset_z.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	dup_row2.add_child(dup_offset_z)
-
-	var dup_btns = HBoxContainer.new()
-	ac.add_child(dup_btns)
-	var create_dup_btn = Button.new()
-	create_dup_btn.text = "Create Array"
-	create_dup_btn.tooltip_text = "Create duplicate array from selected brushes"
-	create_dup_btn.pressed.connect(_on_create_duplicate_array)
-	dup_btns.add_child(create_dup_btn)
-	var remove_dup_btn = Button.new()
-	remove_dup_btn.text = "Remove Array"
-	remove_dup_btn.tooltip_text = "Remove duplicate array for selected brushes"
-	remove_dup_btn.pressed.connect(_on_remove_duplicate_array)
-	dup_btns.add_child(remove_dup_btn)
-
 	clear_btn = _make_button("Clear Brushes")
 	ac.add_child(clear_btn)
 
 	# --- File section ---
 	var file_sec = HFCollapsibleSection.create("File", true)
 	root_vbox.add_child(file_sec)
+	_register_section(file_sec, "File")
 	var flc = file_sec.get_content()
 
 	save_hflevel_btn = _make_button("Save .hflevel")
@@ -1816,6 +1746,7 @@ func _build_manage_tab() -> void:
 	# --- Presets section ---
 	var preset_sec = HFCollapsibleSection.create("Presets", false)
 	root_vbox.add_child(preset_sec)
+	_register_section(preset_sec, "Presets")
 	var pc = preset_sec.get_content()
 
 	save_preset_btn = _make_button("Save Current")
@@ -1828,6 +1759,7 @@ func _build_manage_tab() -> void:
 	# --- History section (collapsed by default) ---
 	var hist_sec = HFCollapsibleSection.create("History", false)
 	root_vbox.add_child(hist_sec)
+	_register_section(hist_sec, "History")
 	var hc = hist_sec.get_content()
 
 	var hist_controls = HBoxContainer.new()
@@ -1846,6 +1778,7 @@ func _build_manage_tab() -> void:
 	# --- Settings section (collapsed by default) ---
 	var set_sec = HFCollapsibleSection.create("Settings", false)
 	root_vbox.add_child(set_sec)
+	_register_section(set_sec, "Settings")
 	var stc = set_sec.get_content()
 
 	commit_freeze = _make_check("Freeze Commit (keep CSG hidden)", true)
@@ -1884,6 +1817,7 @@ func _build_manage_tab() -> void:
 	# --- Performance section (collapsed by default) ---
 	var perf_sec = HFCollapsibleSection.create("Performance", false)
 	root_vbox.add_child(perf_sec)
+	_register_section(perf_sec, "Performance")
 	var pfc = perf_sec.get_content()
 
 	var perf_grid = GridContainer.new()
@@ -1911,11 +1845,126 @@ func _build_manage_tab() -> void:
 	perf_bake_time_value = perf_value_nodes[3]
 
 
+func _build_selection_tools_section() -> void:
+	var brush_vbox = $Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox
+	if not brush_vbox:
+		return
+	_selection_tools_section = HFCollapsibleSection.create("Selection Tools", true)
+	_selection_tools_section.visible = false
+	brush_vbox.add_child(_selection_tools_section)
+	_register_section(_selection_tools_section, "Selection Tools")
+	var sc = _selection_tools_section.get_content()
+
+	# --- Hollow ---
+	var hollow_row = HBoxContainer.new()
+	sc.add_child(hollow_row)
+	var hollow_label = Label.new()
+	hollow_label.text = "Wall:"
+	hollow_row.add_child(hollow_label)
+	hollow_thickness = SpinBox.new()
+	hollow_thickness.min_value = 1.0
+	hollow_thickness.max_value = 128.0
+	hollow_thickness.step = 1.0
+	hollow_thickness.value = 4.0
+	hollow_thickness.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hollow_row.add_child(hollow_thickness)
+	hollow_btn = _make_button("Hollow (Ctrl+H)")
+	hollow_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hollow_row.add_child(hollow_btn)
+
+	# --- Move to Floor / Ceiling ---
+	var move_row = HBoxContainer.new()
+	sc.add_child(move_row)
+	move_floor_btn = _make_button("To Floor (Ctrl+Shift+F)")
+	move_floor_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	move_row.add_child(move_floor_btn)
+	move_ceiling_btn = _make_button("To Ceiling (Ctrl+Shift+C)")
+	move_ceiling_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	move_row.add_child(move_ceiling_btn)
+
+	# --- Brush Entity (Tie to Entity) ---
+	var tie_row = HBoxContainer.new()
+	sc.add_child(tie_row)
+	brush_entity_class_opt = OptionButton.new()
+	_populate_brush_entity_classes()
+	brush_entity_class_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tie_row.add_child(brush_entity_class_opt)
+	tie_entity_btn = _make_button("Tie")
+	tie_row.add_child(tie_entity_btn)
+	untie_entity_btn = _make_button("Untie")
+	tie_row.add_child(untie_entity_btn)
+
+	# --- Clip ---
+	clip_btn = _make_button("Clip Selected (Shift+X)")
+	sc.add_child(clip_btn)
+
+	# --- Duplicate Array ---
+	var dup_label = Label.new()
+	dup_label.text = "Duplicate Array"
+	sc.add_child(dup_label)
+
+	var dup_row1 = HBoxContainer.new()
+	sc.add_child(dup_row1)
+	var count_lbl = Label.new()
+	count_lbl.text = "Count:"
+	dup_row1.add_child(count_lbl)
+	dup_count_spin = SpinBox.new()
+	dup_count_spin.min_value = 1
+	dup_count_spin.max_value = 100
+	dup_count_spin.value = 3
+	dup_count_spin.tooltip_text = "Number of copies to create"
+	dup_row1.add_child(dup_count_spin)
+
+	var dup_row2 = HBoxContainer.new()
+	sc.add_child(dup_row2)
+	var off_lbl = Label.new()
+	off_lbl.text = "Offset:"
+	dup_row2.add_child(off_lbl)
+	dup_offset_x = SpinBox.new()
+	dup_offset_x.min_value = -1000
+	dup_offset_x.max_value = 1000
+	dup_offset_x.value = 8
+	dup_offset_x.step = 1
+	dup_offset_x.tooltip_text = "X offset per copy"
+	dup_offset_x.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dup_row2.add_child(dup_offset_x)
+	dup_offset_y = SpinBox.new()
+	dup_offset_y.min_value = -1000
+	dup_offset_y.max_value = 1000
+	dup_offset_y.value = 0
+	dup_offset_y.step = 1
+	dup_offset_y.tooltip_text = "Y offset per copy"
+	dup_offset_y.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dup_row2.add_child(dup_offset_y)
+	dup_offset_z = SpinBox.new()
+	dup_offset_z.min_value = -1000
+	dup_offset_z.max_value = 1000
+	dup_offset_z.value = 0
+	dup_offset_z.step = 1
+	dup_offset_z.tooltip_text = "Z offset per copy"
+	dup_offset_z.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dup_row2.add_child(dup_offset_z)
+
+	var dup_btns = HBoxContainer.new()
+	sc.add_child(dup_btns)
+	var create_dup_btn = Button.new()
+	create_dup_btn.text = "Create Array"
+	create_dup_btn.tooltip_text = "Create duplicate array from selected brushes"
+	create_dup_btn.pressed.connect(_on_create_duplicate_array)
+	dup_btns.add_child(create_dup_btn)
+	var remove_dup_btn = Button.new()
+	remove_dup_btn.text = "Remove Array"
+	remove_dup_btn.tooltip_text = "Remove duplicate array for selected brushes"
+	remove_dup_btn.pressed.connect(_on_remove_duplicate_array)
+	dup_btns.add_child(remove_dup_btn)
+
+
 func _ready():
 	# --- Build programmatic tabs first ---
 	_build_paint_tab()
 	_build_manage_tab()
 	_build_entity_io_section()
+	_build_selection_tools_section()
 
 	# --- Toolbar setup ---
 	var tool_group = ButtonGroup.new()
@@ -1925,8 +1974,10 @@ func _ready():
 	tool_draw.button_group = tool_group
 	tool_select.button_group = tool_group
 	tool_draw.button_pressed = true
-	tool_draw.text = "Draw (D)"
-	tool_select.text = "Sel (S)"
+	tool_draw.text = "D"
+	tool_draw.tooltip_text = "Draw (D)"
+	tool_select.text = "S"
+	tool_select.tooltip_text = "Select (S)"
 	if paint_mode:
 		paint_mode.toggle_mode = true
 		paint_mode.button_pressed = false
@@ -1934,12 +1985,15 @@ func _ready():
 	# Extrude tool buttons (added programmatically to toolbar)
 	var toolbar = tool_draw.get_parent()
 	if toolbar:
+		var ext_sep = VSeparator.new()
+		toolbar.add_child(ext_sep)
+
 		tool_extrude_up = Button.new()
 		tool_extrude_up.toggle_mode = true
 		tool_extrude_up.button_group = tool_group
 		tool_extrude_up.flat = true
 		tool_extrude_up.focus_mode = Control.FOCUS_NONE
-		tool_extrude_up.text = "Ext\u25b2"
+		tool_extrude_up.text = "\u25b2"
 		tool_extrude_up.tooltip_text = "Extrude Up (U)\nClick face + drag to extrude upward"
 		toolbar.add_child(tool_extrude_up)
 
@@ -1948,7 +2002,7 @@ func _ready():
 		tool_extrude_down.button_group = tool_group
 		tool_extrude_down.flat = true
 		tool_extrude_down.focus_mode = Control.FOCUS_NONE
-		tool_extrude_down.text = "Ext\u25bc"
+		tool_extrude_down.text = "\u25bc"
 		tool_extrude_down.tooltip_text = "Extrude Down (J)\nClick face + drag to extrude downward"
 		toolbar.add_child(tool_extrude_down)
 
@@ -1958,16 +2012,6 @@ func _ready():
 	mode_add.button_group = mode_group
 	mode_subtract.button_group = mode_group
 	mode_add.button_pressed = true
-
-	# --- Autosave warning label (hidden by default) ---
-	_autosave_warning = Label.new()
-	_autosave_warning.text = "Autosave failed!"
-	_autosave_warning.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_autosave_warning.add_theme_color_override("font_color", Color(1, 0.3, 0.3))
-	_autosave_warning.visible = false
-	if no_root_banner and no_root_banner.get_parent():
-		no_root_banner.get_parent().add_child(_autosave_warning)
-		no_root_banner.get_parent().move_child(_autosave_warning, no_root_banner.get_index() + 1)
 
 	# --- Populate dropdowns ---
 	_populate_shape_palette()
@@ -2211,15 +2255,9 @@ func _process(_delta):
 	# Show/hide the "no root" banner
 	if no_root_banner:
 		no_root_banner.visible = level_root == null
-	# Property sync is now signal-driven (see _connect_setting_signals).
-	# Only throttled sync calls remain here for data that changes on the root side.
-	if level_root:
-		_sync_frame_counter += 1
-		if _sync_frame_counter >= 10:
-			_sync_frame_counter = 0
-			_sync_paint_layers_from_root()
-			_sync_materials_from_root()
-			_sync_surface_paint_from_root()
+	# Paint layers, materials, and surface paint sync are now signal-driven
+	# (see _connect_root_signals for paint_layer_changed, material_list_changed,
+	# selection_changed connections).
 	# Throttled UI updates
 	if _hints_dirty:
 		_hints_dirty = false
@@ -2468,6 +2506,9 @@ func set_selection_count(count: int) -> void:
 
 func set_selection_nodes(nodes: Array) -> void:
 	_selection_nodes = nodes
+	# Show/hide selection tools in Brush tab
+	if _selection_tools_section:
+		_selection_tools_section.visible = _selection_nodes.size() > 0
 	# Mark hints dirty so selection-dependent buttons update
 	_hints_dirty = true
 	# Refresh Entity I/O list and property form when selection changes
@@ -2866,9 +2907,39 @@ func _connect_root_signals() -> void:
 			"autosave_failed", Callable(self, "_on_autosave_failed")
 		):
 			connected_root.connect("autosave_failed", Callable(self, "_on_autosave_failed"))
+	if connected_root.has_signal("paint_layer_changed"):
+		if not connected_root.is_connected(
+			"paint_layer_changed", Callable(self, "_on_root_paint_layer_changed")
+		):
+			connected_root.connect(
+				"paint_layer_changed", Callable(self, "_on_root_paint_layer_changed")
+			)
+	if connected_root.has_signal("material_list_changed"):
+		if not connected_root.is_connected(
+			"material_list_changed", Callable(self, "_on_root_material_list_changed")
+		):
+			connected_root.connect(
+				"material_list_changed", Callable(self, "_on_root_material_list_changed")
+			)
+	if connected_root.has_signal("selection_changed"):
+		if not connected_root.is_connected(
+			"selection_changed", Callable(self, "_on_root_selection_for_surface")
+		):
+			connected_root.connect(
+				"selection_changed", Callable(self, "_on_root_selection_for_surface")
+			)
+	if connected_root.has_signal("face_selection_changed"):
+		if not connected_root.is_connected(
+			"face_selection_changed", Callable(self, "_on_root_face_selection_changed")
+		):
+			connected_root.connect(
+				"face_selection_changed", Callable(self, "_on_root_face_selection_changed")
+			)
 	_sync_grid_snap_from_root()
 	_sync_grid_settings_from_root()
 	_refresh_paint_layers()
+	_sync_materials_from_root()
+	_sync_surface_paint_from_root()
 	_apply_ui_state_to_root()
 	_hints_dirty = true
 
@@ -2897,6 +2968,34 @@ func _disconnect_root_signals() -> void:
 	if connected_root.has_signal("autosave_failed"):
 		if connected_root.is_connected("autosave_failed", Callable(self, "_on_autosave_failed")):
 			connected_root.disconnect("autosave_failed", Callable(self, "_on_autosave_failed"))
+	if connected_root.has_signal("paint_layer_changed"):
+		if connected_root.is_connected(
+			"paint_layer_changed", Callable(self, "_on_root_paint_layer_changed")
+		):
+			connected_root.disconnect(
+				"paint_layer_changed", Callable(self, "_on_root_paint_layer_changed")
+			)
+	if connected_root.has_signal("material_list_changed"):
+		if connected_root.is_connected(
+			"material_list_changed", Callable(self, "_on_root_material_list_changed")
+		):
+			connected_root.disconnect(
+				"material_list_changed", Callable(self, "_on_root_material_list_changed")
+			)
+	if connected_root.has_signal("selection_changed"):
+		if connected_root.is_connected(
+			"selection_changed", Callable(self, "_on_root_selection_for_surface")
+		):
+			connected_root.disconnect(
+				"selection_changed", Callable(self, "_on_root_selection_for_surface")
+			)
+	if connected_root.has_signal("face_selection_changed"):
+		if connected_root.is_connected(
+			"face_selection_changed", Callable(self, "_on_root_face_selection_changed")
+		):
+			connected_root.disconnect(
+				"face_selection_changed", Callable(self, "_on_root_face_selection_changed")
+			)
 
 
 func _sync_grid_snap_from_root() -> void:
@@ -2913,6 +3012,23 @@ func _on_root_grid_snap_changed(value: float) -> void:
 	grid_snap.value = value
 	syncing_snap = false
 	_sync_snap_buttons(value)
+
+
+func _on_root_paint_layer_changed(_index: int) -> void:
+	_sync_paint_layers_from_root()
+
+
+func _on_root_material_list_changed() -> void:
+	_sync_materials_from_root()
+
+
+func _on_root_selection_for_surface(_brush_ids: Array) -> void:
+	_sync_surface_paint_from_root()
+
+
+func _on_root_face_selection_changed() -> void:
+	_sync_surface_paint_from_root()
+	_hints_dirty = true
 
 
 func _sync_grid_settings_from_root() -> void:
@@ -4607,6 +4723,7 @@ func _setup_visgroup_ui() -> void:
 	# Insert after the Bake section (index 0) for visibility
 	manage_vbox.add_child(vg_sec)
 	manage_vbox.move_child(vg_sec, 1)
+	_register_section(vg_sec, "Visgroups & Groups")
 	var vgc = vg_sec.get_content()
 
 	visgroup_list = ItemList.new()
@@ -4783,6 +4900,7 @@ func _setup_cordon_ui() -> void:
 	# Insert after Visgroups section (index 2)
 	manage_vbox.add_child(cordon_sec)
 	manage_vbox.move_child(cordon_sec, 2)
+	_register_section(cordon_sec, "Cordon (Partial Bake)")
 	var cc = cordon_sec.get_content()
 
 	cordon_enabled_check = CheckBox.new()

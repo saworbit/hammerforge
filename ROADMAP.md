@@ -14,15 +14,18 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 
 ## Done (Dock UX Overhaul)
 - Consolidated 8 tabs to 4 (Brush, Paint, Entities, Manage).
-- Collapsible sections throughout Paint and Manage tabs.
-- "No LevelRoot" banner for user guidance.
-- Toolbar shortcut labels on all tool buttons.
+- Collapsible sections with separators, indented content, persisted collapsed state.
+- Selection tools (hollow, clip, move, tie, duplicator) contextually shown in Brush tab.
+- Compact toolbar (single-char labels with tooltips, VSeparator before extrude).
+- Signal-driven paint/material/surface paint sync (replaced 10-frame polling).
+- UV Justify 3×2 grid layout. Standardized 70px label widths, 32px +/- buttons.
+- "No LevelRoot" banner and autosave warning defined in dock.tscn.
 - Sticky LevelRoot discovery (deep recursive search, no re-selection needed).
-- Bake options and editor toggles reorganized into Manage tab.
+- Manage tab trimmed: Actions has only floor/cuts/clear.
 
 ## Done (Code Quality Audit)
 - Comprehensive duck-typing removal across baker, file system, plugin, and dock (~30 sites total).
-- Signal-driven dock sync replacing 17 per-frame property writes.
+- Fully signal-driven dock sync (settings, paint layers, materials, surface paint).
 - Input handler decomposed from 260-line monolith into 7 focused handlers.
 - O(1) brush ID lookup and material instance caching.
 - Extracted shared methods: chunk deserialization, chunk collection, heightmap model building.

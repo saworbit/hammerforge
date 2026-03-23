@@ -21,17 +21,22 @@ This guide covers the current HammerForge workflow in Godot 4.6: brush-based gre
 If missing, HammerForge creates it automatically on first viewport click. LevelRoot stays active even when you select other scene nodes (sticky root discovery) -- you do not need to re-select it after clicking a camera, light, or other node.
 
 ## Dock Layout (4 tabs)
-The dock has 4 tabs with collapsible sections for organized access to all controls. A "No LevelRoot" banner appears at the top when no root node is found. Toolbar buttons show keyboard shortcut labels.
+The dock has 4 tabs with collapsible sections for organized access to all controls. Each collapsible section has a visual separator and indented content; collapsed state persists across sessions. A "No LevelRoot" banner appears at the top when no root node is found. The compact toolbar uses single-character labels (D, S, +, -, P, ▲, ▼) with full descriptions in tooltips.
 
 ### Brush tab
-- **Tool**: Draw (D), Select (S), Extrude Up (U), Extrude Down (J).
-- **Mode**: Add or Subtract.
+- **Toolbar** (compact single-char labels, full names in tooltips): D (Draw), S (Select), + (Add), - (Subtract), P (Paint), ▲ (Extrude Up), ▼ (Extrude Down).
 - **Shape**: choose from the palette. Sides for pyramids/prisms.
 - **Size** X/Y/Z: defaults for new brushes.
 - **Grid Snap**: snap increment with quick preset buttons (1, 2, 4, 8, 16, 32, 64).
 - **Material**: active material picker.
 - **Physics Layer**: collision layer for baked output.
 - **Texture Lock**: UV alignment preserved on move/resize (enabled by default).
+- **Selection Tools** (visible when brushes are selected):
+  - Hollow (wall thickness spinner + button, Ctrl+H).
+  - Move to Floor (Ctrl+Shift+F) / Ceiling (Ctrl+Shift+C).
+  - Tie/Untie brush entity class (populated from entity definitions).
+  - Clip Selected (Shift+X).
+  - Duplicate Array: count, X/Y/Z offset, Create/Remove Array buttons.
 
 ### Paint tab (collapsible sections)
 - **Floor Paint**: Brush, Erase, Rect, Line, Bucket, Blend tools. Brush shape (Square/Circle), radius, and layer picker.
@@ -39,18 +44,19 @@ The dock has 4 tabs with collapsible sections for organized access to all contro
 - **Blend & Terrain**: Blend Strength, Blend Slot (B/C/D), and Terrain Slot A-D texture pickers with UV scales.
 - **Regions**: Region Streaming enable, Region Size, Stream Radius, Show Region Grid, memory stats.
 - **Materials**: Palette with Add/Remove. Face Select Mode toggle. Assign to Selected Faces.
-- **UV Editor**: Per-face UV editing with drag handles and Reset Projected UVs.
+- **UV Editor**: Per-face UV editing with drag handles, Reset Projected UVs, and Justify grid (Fit, Center, Left, Right, Top, Bottom in 3×2 layout).
 - **Surface Paint**: Paint Target (Floor/Surface), layers, texture picker, radius/strength.
 
 ### Entities tab
 - Create DraftEntity button.
 - Entity palette with drag-and-drop placement.
+- **Entity Properties** (collapsible): auto-generated typed controls based on entity definition.
 - **Entity I/O** (collapsible): Output, Target, Input, Parameter fields. Delay (seconds) and Fire Once checkbox. Add Output / Remove buttons and connection ItemList. Connections auto-refresh when selecting an entity.
 
 ### Manage tab (collapsible sections)
 - **Bake**: Bake button, Dry Run, Validate Level/Fix. Options: Merge Meshes, Generate LODs, Lightmap UV2, Texel Size, Navmesh (cell size, agent height), Use Face Materials, Quick Play.
-- **Actions**: Create Floor, Apply/Clear/Commit/Restore Cuts. Hollow (wall thickness spinner + button, Ctrl+H). Move to Floor (Ctrl+Shift+F) / Ceiling (Ctrl+Shift+C). Tie/Untie brush entity class (populated from entity definitions). Clip Selected (Shift+X).
-- **File**: Save/Load .hflevel, Import/Export .map, Export .glb.
+- **Actions**: Create Floor, Apply/Clear/Commit/Restore Cuts, Clear Brushes.
+- **File**: Save/Load .hflevel, Import/Export .map (Classic Quake / Valve 220), Export .glb.
 - **Presets**: Save/rename presets grid.
 - **History**: History panel (beta).
 - **Settings**: Show HUD, Show Grid, Follow Grid, Debug Logs, Autosave path/toggle, Settings Export/Import.
@@ -58,7 +64,7 @@ The dock has 4 tabs with collapsible sections for organized access to all contro
 - **Visgroups & Groups**: Visgroup list with [V]/[H] toggle, New/Add Sel/Rem Sel/Delete, Group Sel/Ungroup.
 - **Cordon**: Enable checkbox, min/max spinboxes, Set from Selection.
 
-Status bar
+### Status bar
 - Shows current status ("Ready", "Baking...", errors in red, warnings in yellow).
 - Errors auto-clear after 5 seconds, success messages after 3 seconds.
 - Displays selection count ("Sel: N brushes") when brushes are selected.
@@ -145,7 +151,7 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 
 **Rebinding:** Edit `user://hammerforge_keymap.json` (created on first run). Each entry maps an action name to `{"keycode": KEY_*, "ctrl": bool, "shift": bool, "alt": bool}`. Restart the plugin after editing.
 
-**Toolbar labels** (Draw (D), Sel (S), etc.) and **tooltips** update automatically from the keymap, so custom bindings are always reflected in the UI.
+**Toolbar labels** and **tooltips** update automatically from the keymap, so custom bindings are always reflected in the UI. The toolbar uses compact single-character labels with full descriptions in tooltips.
 
 ## User Preferences
 

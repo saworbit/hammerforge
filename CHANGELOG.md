@@ -5,6 +5,27 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Dock UX improvements (Mar 2026):**
+  - **Selection Tools section** in Brush tab: hollow, clip, move floor/ceiling, tie entity, and
+    duplicator controls now appear contextually when brushes are selected (moved from Manage tab).
+  - **Collapsible section polish**: each section now has an HSeparator divider and 4px left-indented
+    content for visual hierarchy. Collapsed state persists across sessions via user preferences.
+  - **Signal-driven paint/material/face sync**: paint layer, material palette, surface paint, and
+    face selection updates are now instant via `paint_layer_changed`, `material_list_changed`,
+    `face_selection_changed`, and `selection_changed` signals (replaced 10-frame polling throttle).
+  - **`material_list_changed` signal** on LevelRoot: emitted on material add/remove for instant
+    dock sync.
+  - **`face_selection_changed` signal** on LevelRoot: emitted from `select_face_at_screen()`,
+    `toggle_face_selection()`, and `clear_face_selection()` (only when selection actually changes).
+    Drives UV/surface paint panel sync and disabled-hint updates.
+  - **Initial sync on root connect**: `_connect_root_signals()` now calls `_sync_materials_from_root()`
+    and `_sync_surface_paint_from_root()` so existing materials/surface data appear immediately.
+  - **Initial selection state on startup**: plugin pushes cached editor selection to dock in
+    `_enter_tree()`, so Selection Tools visibility is correct from first frame.
+  - **Compact toolbar**: single-char button labels (D, S, +, -, P, ▲, ▼) with full descriptions in
+    tooltips. VSeparator before extrude buttons. Labels update from keymap.
+  - **UV Justify grid**: 3x2 GridContainer layout replaces cramped 2-row HBoxContainer.
+  - **Autosave warning** defined in dock.tscn (was runtime-created Label).
 - **Customizable keymaps** (`hf_keymap.gd`): all keyboard shortcuts are now data-driven via
   `HFKeymap` instead of hardcoded `KEY_*` constants. Bindings stored as action → {keycode, ctrl,
   shift, alt} maps. `load_or_default()` reads `user://hammerforge_keymap.json` or falls back to
@@ -49,9 +70,9 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   `autosave_failed` signal on LevelRoot. Dock shows a red warning label when autosave fails.
   Warning auto-hides after 30 seconds and reappears on subsequent failures.
 - **Central signal registry** on LevelRoot: `brush_added`, `brush_removed`, `brush_changed`,
-  `entity_added`, `entity_removed`, `selection_changed`, `paint_layer_changed`, `state_saved`,
-  `state_loaded`, `autosave_failed`. Subsystems emit these signals; UI can subscribe instead of
-  polling.
+  `entity_added`, `entity_removed`, `selection_changed`, `paint_layer_changed`,
+  `material_list_changed`, `face_selection_changed`, `state_saved`, `state_loaded`,
+  `autosave_failed`. Subsystems emit these signals; UI subscribes instead of polling.
 - **Material manager persistence**: `save_library()` / `load_library()` for JSON-based material
   palette save/load. Usage tracking via `record_usage()` / `release_usage()` /
   `find_unused_materials()`.
@@ -70,8 +91,8 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 - **Duplicator / instanced geometry** (`hf_duplicator.gd`): create N copies of selected
   brushes with progressive offset. `HFDuplicator` RefCounted class with `generate()`,
   `clear_instances()`, `to_dict()`/`from_dict()` serialization. Dock UI: count SpinBox,
-  X/Y/Z offset, Create/Remove Array buttons in Actions section. Undo/redo via state snapshot.
-  Inspired by QuArK's duplicator system.
+  X/Y/Z offset, Create/Remove Array buttons in Selection Tools section (Brush tab). Undo/redo
+  via state snapshot. Inspired by QuArK's duplicator system.
 - **Multi-format .map export adapters**: strategy-pattern writers for map export.
   - `HFMapAdapter` base class with `format_face_line()` and `format_entity_properties()`.
   - `HFMapQuake`: Classic Quake format (existing behavior, extracted).
@@ -86,7 +107,7 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   - `clip_brush_by_id(brush_id, axis, split_pos)` on `hf_brush_system.gd`.
   - Auto-detect split axis from face normal via `clip_brush_at_point()`.
   - Snaps split position to grid. Copies material, brush entity class, visgroups, and group ID.
-  - Keyboard shortcut: Shift+X. Clip button in Actions section of Manage tab.
+  - Keyboard shortcut: Shift+X. Clip button in Selection Tools section of Brush tab.
   - Full undo/redo support via state snapshot.
 - **Entity I/O system:** Source-style entity input/output connections.
   - Data model: output connections stored as `entity_io_outputs` meta on entity nodes.
@@ -104,35 +125,35 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 - **Hollow tool:** Convert a solid brush into a hollow room with configurable wall thickness.
   - Creates 6 wall brushes (top/bottom/left/right/front/back) and removes the original.
   - Preserves material from the original brush. Keyboard shortcut: Ctrl+H.
-  - Wall thickness SpinBox in Actions section of Manage tab.
+  - Wall thickness SpinBox in Selection Tools section of Brush tab.
   - Full undo/redo support via state snapshot.
 - **Numeric input during drag:** Type exact dimensions while drawing or extruding brushes.
   - During base drag or height adjustment, type digits to set precise size.
   - Enter applies the value and advances/commits. Backspace edits. Escape cancels.
   - Numeric buffer displayed in the shortcut HUD during drag.
 - **Brush entity conversion (Tie to Entity):** Tag brushes as brush entity classes.
-  - Tie/Untie buttons in Actions section with class dropdown (func_detail, func_wall, trigger_once, trigger_multiple).
+  - Tie/Untie buttons in Selection Tools section (Brush tab) with class dropdown (func_detail, func_wall, trigger_once, trigger_multiple).
   - `func_detail` brushes are excluded from structural CSG bake (detail geometry).
   - `trigger_*` brushes are excluded from structural bake (collision-only volumes).
   - `brush_entity_class` meta persists in `.hflevel` saves and undo/redo state.
 - **Move to Floor / Move to Ceiling:** Snap selected brushes to the nearest surface.
   - Raycasts against other brushes and physics bodies to find nearest surface.
   - Grid-snapped result. Keyboard shortcuts: Ctrl+Shift+F (floor), Ctrl+Shift+C (ceiling).
-  - Buttons in Actions section of Manage tab. Full undo/redo support.
+  - Buttons in Selection Tools section of Brush tab. Full undo/redo support.
 - **Texture alignment Justify panel:** Quick UV alignment controls in the UV Editor section.
   - Fit, Center, Left, Right, Top, Bottom alignment modes.
   - "Treat as One" checkbox for aligning multiple selected faces as a unified surface.
   - Works with the existing face selection system.
 - **Hammer gap analysis** documented in ROADMAP.md with prioritized wave plan.
 - **Dock UX overhaul:** Consolidated from 8 tabs to 4 (Brush, Paint, Entities, Manage).
-  - New `HFCollapsibleSection` (`ui/collapsible_section.gd`) reusable component for collapsible UI sections.
-  - **Brush tab** (was Build): focused on shape, size, grid snap, material, operation mode, texture lock.
-  - **Paint tab** (merged FloorPaint + SurfacePaint + Materials + UV): 7 collapsible sections.
-  - **Manage tab** reorganized with 8 collapsible sections: Bake, Actions, File, Presets, History, Settings, Performance, plus Visgroups & Cordon.
-  - "No LevelRoot" banner displayed at dock top when no root is found.
-  - Toolbar buttons now show keyboard shortcut labels: `Draw (D)`, `Sel (S)`, `Ext▲ (U)`, `Ext▼ (J)`.
-  - Paint and Manage tab contents built programmatically via `_build_paint_tab()` and `_build_manage_tab()`.
-  - Bake options and editor toggles moved from old Build tab into Manage → Bake Settings and Settings sections.
+  - `HFCollapsibleSection` (`ui/collapsible_section.gd`) with HSeparator, indented content, persisted collapsed state.
+  - **Brush tab** (was Build): shape, size, grid snap, material, operation mode, texture lock, plus contextual **Selection Tools** section (hollow, clip, move, tie, duplicator — visible when brushes selected).
+  - **Paint tab** (merged FloorPaint + SurfacePaint + Materials + UV): 7 collapsible sections. UV Justify uses 3×2 grid layout.
+  - **Manage tab**: Bake, Actions (floor/cuts/clear), File, Presets, History, Settings, Performance, plus Visgroups & Cordon.
+  - "No LevelRoot" banner and autosave warning defined in dock.tscn.
+  - Compact toolbar: single-char labels (D, S, +, -, P, ▲, ▼) with tooltips. VSeparator before extrude buttons.
+  - Paint/material sync is signal-driven (instant). Form label widths standardized to 70px. +/- buttons 32px wide.
+  - Tab contents built programmatically via `_build_paint_tab()`, `_build_manage_tab()`, `_build_selection_tools_section()`.
 - **Sticky LevelRoot discovery:** Users no longer need to re-select LevelRoot after clicking other nodes.
   - `plugin.gd`: `_handles()` returns true for any node when a LevelRoot exists; `_edit()` keeps `active_root` sticky; deep recursive tree search via `_find_level_root_deep()`.
   - `dock.gd`: sticky `level_root` reference in `_process()`; deep recursive search via `_find_level_root_in()` / `_find_level_root_recursive()`.
@@ -224,10 +245,11 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 - Dock reorganized: Floor Paint and Surface Paint tabs.
 
 ### Changed
-- Dock consolidated from 8 tabs (Build, FloorPaint, Materials, UV, SurfacePaint, Entities, Manage) to 4 tabs (Brush, Paint, Entities, Manage).
+- Dock consolidated from 8 tabs to 4 (Brush, Paint, Entities, Manage). Selection-dependent tools (hollow, clip, move, tie, duplicator) moved from Manage → Brush tab's contextual Selection Tools section.
 - Build tab renamed to **Brush** tab; bake options and editor toggles moved to Manage tab.
 - FloorPaint, SurfacePaint, Materials, and UV tabs merged into single **Paint** tab with collapsible sections.
-- Manage tab reorganized with collapsible sections for better discoverability.
+- Manage tab trimmed: Actions section now contains only floor/cuts/clear. Toolbar uses single-char labels with tooltips.
+- Paint layer/material/surface paint sync changed from 10-frame polling to signal-driven instant updates.
 - LevelRoot discovery is now "sticky": selecting non-LevelRoot nodes no longer breaks viewport input.
 - Plugin `_handles()` uses deep recursive tree search and accepts any node when a LevelRoot exists.
 - Dock `_process()` uses sticky reference; only nulls `level_root` when node is removed from tree.
@@ -287,9 +309,10 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 - Added CI workflow (`.github/workflows/ci.yml`) for automated `gdformat` and `gdlint` checks on push/PR.
 
 ### Refactored
-- Dock UX: rewrote `dock.gd` to build Paint and Manage tab contents programmatically using `HFCollapsibleSection`.
+- Dock UX: rewrote `dock.gd` to build Paint, Manage, and Selection Tools contents programmatically using `HFCollapsibleSection`.
 - Dock UX: ~100 `@onready var` declarations changed to plain `var` (controls created in code, not in .tscn).
-- Dock UX: `dock.tscn` reduced to ~280 lines (tab shells only; content populated by `_ready()`).
+- Dock UX: `dock.tscn` reduced to ~320 lines (tab shells + toolbar + autosave warning; content populated by `_ready()`).
+- Dock UX: collapsible sections now have HSeparator + indented content + persisted state. All 18 sections registered in `_all_sections` dict.
 - Replaced duck-typing in `baker.gd` (`has_method("get_faces")/.call()`) with typed `DraftBrush` access.
 - Added `_find_level_root_deep()` to `plugin.gd` for recursive LevelRoot discovery.
 - Added `_find_level_root_in()` and `_find_level_root_recursive()` to `dock.gd` for deep tree search.
@@ -315,14 +338,17 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   - Cordon visual: persistent `ImmediateMesh` reused via `clear_surfaces()`.
   - Extracted inline GLSL to `highlight.gdshader` file.
   - Added `build_heightmap_model()` on `hf_paint_tool.gd` (shared by 3 heightmap reconcile callers).
-  - Signal-driven sync in `dock.gd`: replaced 17 per-frame property writes with signal handlers; throttled perf updates (every 30 frames), sync calls (every 10 frames), flag-driven disabled hints; cached `_control_has_property()`.
+  - Signal-driven sync in `dock.gd`: replaced 17 per-frame property writes with signal handlers; paint/material/surface paint sync now fully signal-driven via LevelRoot signals; throttled perf updates (every 30 frames), flag-driven disabled hints; cached `_control_has_property()`.
   - Input decomposition in `plugin.gd`: split 260-line `_forward_3d_gui_input()` into ~50-line dispatcher + 7 focused handlers + shared `_get_nudge_direction()`.
 
 ### UX
 - Dock now has 4 tabs (Brush, Paint, Entities, Manage) instead of 8 for faster navigation.
-- Collapsible sections throughout Paint and Manage tabs for visual hierarchy and reduced scrolling.
+- Selection tools (hollow, clip, move, tie, duplicator) appear contextually in Brush tab when brushes are selected.
+- Collapsible sections with separators, indented content, and persisted collapsed state across sessions.
 - "No LevelRoot" banner at dock top guides users when no LevelRoot is found.
-- Toolbar buttons display keyboard shortcut labels (Draw (D), Sel (S), Ext▲ (U), Ext▼ (J)).
+- Compact toolbar with single-char labels (D, S, +, -, P, ▲, ▼) and descriptive tooltips.
+- Paint layer and material changes sync instantly (signal-driven, no 167ms polling delay).
+- Wider +/- buttons (32px), standardized label widths (70px), UV Justify in clean 3×2 grid.
 - LevelRoot stays active when clicking other scene nodes (sticky root discovery).
 - Shortcut HUD now shows context-sensitive shortcuts (6 different views: draw idle, dragging base, adjusting height, select, floor paint, surface paint).
 - HUD displays current axis lock state (e.g. "[X Locked]").

@@ -18,7 +18,7 @@ HammerForge uses a **coordinator + subsystems** pattern:
 - **`level_root.gd`** is a thin coordinator (~1,100 lines) that owns containers, exports, and signals. All public methods delegate to one of 10 subsystem classes.
 - **Subsystems** (`systems/*.gd`) are `RefCounted` classes that do the real work. Each receives a `LevelRoot` reference in its constructor.
 - **`input_state.gd`** is a state machine managing drag/paint modes.
-- **`dock.gd`** uses 4 tabs (Brush, Paint, Entities, Manage) with collapsible sections built programmatically via `HFCollapsibleSection` (`ui/collapsible_section.gd`).
+- **`dock.gd`** uses 4 tabs (Brush, Paint, Entities, Manage) with collapsible sections (persisted state, separators, indented content) built programmatically. Selection tools appear contextually in Brush tab when brushes are selected. Compact toolbar with single-char labels.
 
 See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture conventions.
 

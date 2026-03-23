@@ -322,13 +322,15 @@ The dock uses 4 tabs with collapsible sections for visual hierarchy:
 |-----|----------|
 | **Brush** | Shape, size, grid snap, quick snap presets, material picker, operation mode (Add/Sub), texture lock |
 | **Paint** | 7 collapsible sections: Floor Paint, Heightmap, Blend & Terrain, Regions, Materials, UV Editor, Surface Paint |
-| **Entities** | Entity palette with drag-and-drop, Create DraftEntity, Entity I/O connections (collapsible section) |
-| **Manage** | 8 collapsible sections: Bake (options), Actions (Hollow, Clip, Move Floor/Ceiling, Tie/Untie), File (I/O), Presets, History, Settings (editor toggles + autosave), Performance, plus Visgroups & Cordon (inserted programmatically) |
+| **Entities** | Entity palette with drag-and-drop, Create DraftEntity, Entity Properties, Entity I/O connections (collapsible sections) |
+| **Manage** | Bake, Actions (floor/cuts/clear), File, Presets, History, Settings, Performance, plus Visgroups & Cordon (inserted programmatically) |
 
-- Paint and Manage tab contents built programmatically in `_build_paint_tab()` and `_build_manage_tab()` using `HFCollapsibleSection`.
-- "No LevelRoot" banner visible at dock top when no root is found.
-- Toolbar buttons display shortcut labels: `Draw (D)`, `Sel (S)`, `Ext▲ (U)`, `Ext▼ (J)`.
-- **Signal-driven sync**: Setting controls (checkboxes, spinboxes) push values to LevelRoot via `toggled`/`value_changed` signals instead of polling every frame. Perf panel throttled to every 30 frames; paint/material sync every 10 frames; disabled hints are flag-driven.
+- **Brush tab** includes contextual **Selection Tools** section (hollow, clip, move, tie, duplicator) visible when brushes are selected.
+- Tab contents built programmatically in `_build_paint_tab()`, `_build_manage_tab()`, and `_build_selection_tools_section()` using `HFCollapsibleSection`.
+- Collapsible sections have HSeparator, 4px indented content, and persisted collapsed state. All 18 sections tracked in `_all_sections` dict.
+- "No LevelRoot" banner and autosave warning defined in dock.tscn.
+- Compact toolbar: single-char labels (D, S, +, -, P, ▲, ▼) with descriptive tooltips. VSeparator before extrude buttons.
+- **Signal-driven sync**: Setting controls push values via `toggled`/`value_changed` signals. Paint layers, materials, surface paint, and face selection sync instantly via `paint_layer_changed`, `material_list_changed`, `face_selection_changed`, `selection_changed` signals. Initial sync on root connect populates materials and surface paint. Perf panel throttled to every 30 frames; disabled hints are flag-driven. Form label widths standardized to 70px.
 
 ## LevelRoot Discovery
 - `plugin.gd` uses sticky `active_root`: selecting non-LevelRoot nodes does not null the reference.
