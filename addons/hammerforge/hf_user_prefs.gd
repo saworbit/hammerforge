@@ -35,6 +35,8 @@ static func _defaults() -> Dictionary:
 		"collapsed_sections": {},
 		"last_tool_id": 0,
 		"show_hud": true,
+		"show_welcome": true,
+		"hints_dismissed": {},
 	}
 
 

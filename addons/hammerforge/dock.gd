@@ -12,6 +12,8 @@ const DraftBrush = preload("brush_instance.gd")
 const FaceData = preload("face_data.gd")
 const HFUndoHelper = preload("undo_helper.gd")
 const HFCollapsibleSection = preload("ui/collapsible_section.gd")
+const HFToast = preload("ui/hf_toast.gd")
+const HFWelcomePanel = preload("ui/hf_welcome_panel.gd")
 const HFEntityDef = preload("hf_entity_def.gd")
 const UVEditorScene = preload("uv_editor.tscn")
 
@@ -153,6 +155,10 @@ var autosave_enabled: CheckBox = null
 var autosave_minutes: SpinBox = null
 var autosave_path_btn: Button = null
 var autosave_keep: SpinBox = null
+@onready var _mode_indicator: PanelContainer = $Margin/VBox/ModeIndicator
+@onready var _mode_label: Label = $Margin/VBox/ModeIndicator/ModeLabel
+var _mode_style: StyleBoxFlat = null
+var _mode_last_color := Color.TRANSPARENT
 @onready var status_label: Label = $Margin/VBox/Footer/StatusFooter/StatusLabel
 @onready var selection_label: Label = $Margin/VBox/Footer/StatusFooter/SelectionLabel
 @onready var perf_label: Label = $Margin/VBox/Footer/StatusFooter/BrushCountLabel
@@ -263,6 +269,15 @@ var tool_extrude_down: Button = null
 var _selection_nodes: Array = []
 var _all_sections: Dictionary = {}
 var _selection_tools_section: HFCollapsibleSection = null
+var _sel_tools_hint_label: Label = null
+var _uv_hint_label: Label = null
+var _toast_container: VBoxContainer = null
+var _clear_sel_btn: Button = null
+var _welcome_panel: PanelContainer = null
+var _brush_hint: Label = null
+var _paint_hint: Label = null
+var _entity_hint: Label = null
+var _manage_hint: Label = null
 var texture_lock_check: CheckBox = null
 var visgroup_list: ItemList = null
 var visgroup_name_input: LineEdit = null
@@ -501,6 +516,102 @@ func _apply_user_prefs() -> void:
 		var collapsed = _user_prefs.get_section_collapsed(sec_name)
 		if collapsed != null:
 			_all_sections[sec_name].set_expanded(not bool(collapsed))
+	# Show welcome panel on first launch
+	if _user_prefs.get_pref("show_welcome", true) and not _welcome_panel:
+		_show_welcome_panel()
+
+
+func _make_context_hint() -> Label:
+	var label = Label.new()
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	label.add_theme_font_size_override("font_size", 11)
+	label.add_theme_color_override("font_color", Color(0.7, 0.8, 1.0, 0.55))
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	return label
+
+
+func _setup_context_hints() -> void:
+	var brush_vbox = $Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox
+	if brush_vbox:
+		_brush_hint = _make_context_hint()
+		brush_vbox.add_child(_brush_hint)
+
+	var paint_vbox = $Margin/VBox/MainTabs/Paint/PaintMargin/PaintVBox
+	if paint_vbox:
+		_paint_hint = _make_context_hint()
+		paint_vbox.add_child(_paint_hint)
+
+	var ent_vbox = $Margin/VBox/MainTabs/Entities/EntitiesMargin/EntitiesVBox
+	if ent_vbox:
+		_entity_hint = _make_context_hint()
+		ent_vbox.add_child(_entity_hint)
+
+	var manage_vbox = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox
+	if manage_vbox:
+		_manage_hint = _make_context_hint()
+		manage_vbox.add_child(_manage_hint)
+
+	_update_context_hints()
+
+
+func _update_context_hints() -> void:
+	var has_root = level_root != null
+	var has_brushes = has_root and level_root.has_method("get_brush_count") and level_root.get_brush_count() > 0
+	var has_selection = _selection_nodes.size() > 0
+
+	if _brush_hint:
+		if not has_root:
+			_brush_hint.text = "Add a LevelRoot node to your scene to begin"
+		elif not has_brushes:
+			_brush_hint.text = "Click and drag in the viewport to draw your first brush"
+		elif has_selection:
+			_brush_hint.text = "Try: Hollow (Ctrl+H), Clip (Shift+X), or Extrude (U)"
+		else:
+			_brush_hint.text = "Click a brush in the viewport to select it"
+
+	if _paint_hint:
+		if not has_root:
+			_paint_hint.text = ""
+		elif has_brushes:
+			_paint_hint.text = ""
+		else:
+			_paint_hint.text = "Draw some brushes first, then paint them here"
+
+	if _entity_hint:
+		if has_root:
+			_entity_hint.text = "Drag an entity from the palette into the viewport"
+		else:
+			_entity_hint.text = ""
+
+	if _manage_hint:
+		if has_root and has_brushes:
+			_manage_hint.text = "When ready, use Bake to convert brushes into final geometry"
+		else:
+			_manage_hint.text = ""
+
+
+func _show_welcome_panel() -> void:
+	_welcome_panel = HFWelcomePanel.new()
+	_welcome_panel.dismissed.connect(_on_welcome_dismissed)
+	var vbox = $Margin/VBox
+	var tabs = $Margin/VBox/MainTabs
+	# Insert before MainTabs
+	var idx = tabs.get_index()
+	vbox.add_child(_welcome_panel)
+	vbox.move_child(_welcome_panel, idx)
+	tabs.visible = false
+
+
+func _on_welcome_dismissed(dont_show_again: bool) -> void:
+	if dont_show_again and _user_prefs:
+		_user_prefs.set_pref("show_welcome", false)
+		_user_prefs.save()
+	var tabs = $Margin/VBox/MainTabs
+	if tabs:
+		tabs.visible = true
+	if _welcome_panel:
+		_welcome_panel.queue_free()
+		_welcome_panel = null
 
 
 ## Persist a pref change to disk.
@@ -630,13 +741,13 @@ func _setup_toolbar_icons() -> void:
 	_set_toolbar_button_icon(tool_draw, ["Edit", "ToolEdit"], "Draw")
 	_set_toolbar_button_icon(tool_select, ["ToolSelect", "Select"], "Select")
 	_set_toolbar_button_icon(mode_add, ["Add", "AddNode"], "Add")
-	_set_toolbar_button_icon(mode_subtract, ["Remove", "RemoveNode"], "Subtract")
+	_set_toolbar_button_icon(mode_subtract, ["Remove", "RemoveNode"], "Sub")
 	if paint_mode:
 		_set_toolbar_button_icon(paint_mode, ["Paint", "Brush", "ToolPaint"], "Paint")
 	if tool_extrude_up:
-		_set_toolbar_button_icon(tool_extrude_up, ["MoveUp", "ArrowUp", "ToolMove"], "Ext+")
+		_set_toolbar_button_icon(tool_extrude_up, ["MoveUp", "ArrowUp", "ToolMove"], "Ext Up")
 	if tool_extrude_down:
-		_set_toolbar_button_icon(tool_extrude_down, ["MoveDown", "ArrowDown", "ToolMove"], "Ext-")
+		_set_toolbar_button_icon(tool_extrude_down, ["MoveDown", "ArrowDown", "ToolMove"], "Ext Dn")
 	_apply_toolbar_tooltips()
 
 
@@ -796,9 +907,7 @@ func _set_toolbar_button_icon(button: Button, icon_names: Array, fallback_text: 
 	var icon = _find_editor_icon(icon_names)
 	if icon:
 		button.icon = icon
-		button.text = ""
-	else:
-		button.text = fallback_text
+	button.text = fallback_text
 	button.flat = true
 	button.focus_mode = Control.FOCUS_NONE
 
@@ -1084,6 +1193,15 @@ func _build_paint_tab() -> void:
 	material_remove.text = "Remove"
 	mat_btn_row.add_child(material_remove)
 	mc.add_child(mat_btn_row)
+
+	# Inline hint when no face is selected
+	_uv_hint_label = Label.new()
+	_uv_hint_label.text = "Enable Face Select Mode and click a face to edit"
+	_uv_hint_label.add_theme_font_size_override("font_size", 11)
+	_uv_hint_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.45))
+	_uv_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_uv_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	mc.add_child(_uv_hint_label)
 
 	material_assign = Button.new()
 	material_assign.text = "Assign to Selected Faces"
@@ -1855,6 +1973,14 @@ func _build_selection_tools_section() -> void:
 	_register_section(_selection_tools_section, "Selection Tools")
 	var sc = _selection_tools_section.get_content()
 
+	# Inline hint when no selection
+	_sel_tools_hint_label = Label.new()
+	_sel_tools_hint_label.text = "Select a brush to use these tools"
+	_sel_tools_hint_label.add_theme_font_size_override("font_size", 11)
+	_sel_tools_hint_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.45))
+	_sel_tools_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sc.add_child(_sel_tools_hint_label)
+
 	# --- Hollow ---
 	var hollow_row = HBoxContainer.new()
 	sc.add_child(hollow_row)
@@ -2005,6 +2131,18 @@ func _ready():
 		tool_extrude_down.text = "\u25bc"
 		tool_extrude_down.tooltip_text = "Extrude Down (J)\nClick face + drag to extrude downward"
 		toolbar.add_child(tool_extrude_down)
+
+	# --- Shortcuts help button ---
+	if toolbar:
+		var help_sep = VSeparator.new()
+		toolbar.add_child(help_sep)
+		var help_btn = Button.new()
+		help_btn.text = "?"
+		help_btn.tooltip_text = "Show keyboard shortcuts"
+		help_btn.flat = true
+		help_btn.focus_mode = Control.FOCUS_NONE
+		help_btn.pressed.connect(_on_shortcuts_help)
+		toolbar.add_child(help_btn)
 
 	var mode_group = ButtonGroup.new()
 	mode_add.toggle_mode = true
@@ -2233,6 +2371,9 @@ func _ready():
 	_setup_visgroup_ui()
 	_setup_cordon_ui()
 	_connect_setting_signals()
+	_setup_toast_container()
+	_setup_clear_selection_button()
+	_setup_context_hints()
 	set_process(true)
 
 
@@ -2262,6 +2403,7 @@ func _process(_delta):
 	if _hints_dirty:
 		_hints_dirty = false
 		_update_disabled_hints()
+		_update_context_hints()
 	_perf_frame_counter += 1
 	if _perf_frame_counter >= 30:
 		_perf_frame_counter = 0
@@ -2356,6 +2498,55 @@ func get_operation() -> int:
 
 func _on_builtin_tool_pressed(_button: BaseButton) -> void:
 	builtin_tool_changed.emit()
+
+
+func _on_shortcuts_help() -> void:
+	var popup = PopupPanel.new()
+	popup.title = "Keyboard Shortcuts"
+	var label = RichTextLabel.new()
+	label.bbcode_enabled = true
+	label.fit_content = true
+	label.custom_minimum_size = Vector2(280, 350)
+	label.scroll_active = true
+
+	var sections := {
+		"Tools": ["tool_draw", "tool_select", "tool_extrude_up", "tool_extrude_down"],
+		"Editing": ["delete", "duplicate", "group", "ungroup", "hollow", "clip", "move_to_floor", "move_to_ceiling"],
+		"Paint": ["paint_bucket", "paint_erase", "paint_ramp", "paint_line", "paint_blend"],
+		"Axis Lock": ["axis_x", "axis_y", "axis_z"],
+	}
+	var names := {
+		"tool_draw": "Draw", "tool_select": "Select",
+		"tool_extrude_up": "Extrude Up", "tool_extrude_down": "Extrude Down",
+		"delete": "Delete", "duplicate": "Duplicate",
+		"group": "Group", "ungroup": "Ungroup",
+		"hollow": "Hollow", "clip": "Clip",
+		"move_to_floor": "Move to Floor", "move_to_ceiling": "Move to Ceiling",
+		"paint_bucket": "Bucket", "paint_erase": "Erase",
+		"paint_ramp": "Ramp/Rect", "paint_line": "Line", "paint_blend": "Blend",
+		"axis_x": "Lock X", "axis_y": "Lock Y", "axis_z": "Lock Z",
+	}
+
+	var text := ""
+	for section_name in sections:
+		text += "[b]%s[/b]\n" % section_name
+		for action in sections[section_name]:
+			var display = _keymap.get_display_string(action) if _keymap else "?"
+			var name = names.get(action, action)
+			text += "  %s  —  [code]%s[/code]\n" % [name, display]
+		text += "\n"
+
+	text += "[b]During Drag / Extrude[/b]\n"
+	text += "  Type number + Enter — Exact size\n"
+	text += "  Backspace — Edit numeric input\n"
+	text += "  Shift — Constrain to square\n"
+	text += "  Right-click — Cancel\n"
+
+	label.text = text
+	popup.add_child(label)
+	add_child(popup)
+	popup.popup_centered(Vector2i(300, 400))
+	popup.popup_hide.connect(func(): popup.queue_free())
 
 
 func get_tool() -> int:
@@ -2480,10 +2671,102 @@ func set_paint_tool(tool_id: int) -> void:
 			return
 
 
-## Update the mode indicator in the status bar.
+## Update the mode indicator banner and status bar.
 func set_status_mode(mode_name: String) -> void:
 	if status_label:
 		status_label.text = mode_name
+	_update_mode_indicator(mode_name)
+
+
+## Update the prominent mode indicator with structured info.
+## stage_hint: e.g. "Step 1/2: Draw base", numeric: e.g. "64"
+func set_mode_indicator(mode_name: String, stage_hint: String = "", numeric: String = "") -> void:
+	if status_label:
+		status_label.text = mode_name
+	var display = mode_name
+	if stage_hint != "":
+		display += "  —  " + stage_hint
+	if numeric != "":
+		display += "  [" + numeric + "]"
+	_update_mode_indicator_text(display, mode_name)
+
+
+func _update_mode_indicator(mode_name: String) -> void:
+	_update_mode_indicator_text(mode_name, mode_name)
+
+
+func _update_mode_indicator_text(display_text: String, mode_key: String) -> void:
+	if not _mode_indicator or not _mode_label:
+		return
+	_mode_label.text = display_text
+	var color := Color(0.25, 0.25, 0.25, 1.0)
+	if mode_key.begins_with("Draw"):
+		color = Color(0.18, 0.35, 0.55, 1.0)
+	elif mode_key.begins_with("Select"):
+		color = Color(0.2, 0.35, 0.2, 1.0)
+	elif mode_key.begins_with("Extrude"):
+		if "▲" in mode_key:
+			color = Color(0.15, 0.4, 0.25, 1.0)
+		else:
+			color = Color(0.45, 0.18, 0.18, 1.0)
+	elif mode_key.begins_with("Paint"):
+		color = Color(0.45, 0.3, 0.12, 1.0)
+	# Reuse cached StyleBoxFlat — only update bg_color if changed
+	if not _mode_style:
+		_mode_style = StyleBoxFlat.new()
+		_mode_style.set_corner_radius_all(3)
+		_mode_style.content_margin_left = 6
+		_mode_style.content_margin_right = 6
+		_mode_style.content_margin_top = 2
+		_mode_style.content_margin_bottom = 2
+		_mode_indicator.add_theme_stylebox_override("panel", _mode_style)
+	if _mode_last_color != color:
+		_mode_last_color = color
+		_mode_style.bg_color = color
+
+
+func _setup_toast_container() -> void:
+	_toast_container = HFToast.new()
+	# Insert above footer (BottomSeparator is 2nd-to-last in VBox)
+	var vbox = $Margin/VBox
+	var footer_idx = vbox.get_child_count() - 1  # Footer is last
+	vbox.add_child(_toast_container)
+	vbox.move_child(_toast_container, footer_idx)
+
+
+func _setup_clear_selection_button() -> void:
+	var footer = $Margin/VBox/Footer/StatusFooter
+	if not footer:
+		return
+	_clear_sel_btn = Button.new()
+	_clear_sel_btn.text = "x"
+	_clear_sel_btn.tooltip_text = "Clear selection (Esc)"
+	_clear_sel_btn.flat = true
+	_clear_sel_btn.focus_mode = Control.FOCUS_NONE
+	_clear_sel_btn.custom_minimum_size = Vector2(20, 0)
+	_clear_sel_btn.visible = false
+	_clear_sel_btn.pressed.connect(_on_clear_selection_pressed)
+	# Insert right after the SelectionLabel
+	var idx = footer.get_children().find(selection_label)
+	if idx >= 0:
+		footer.add_child(_clear_sel_btn)
+		footer.move_child(_clear_sel_btn, idx + 1)
+	else:
+		footer.add_child(_clear_sel_btn)
+
+
+func _on_clear_selection_pressed() -> void:
+	if editor_interface:
+		var sel = editor_interface.get_selection()
+		if sel:
+			sel.clear()
+
+
+## Show a transient toast notification in the dock.
+## level: 0=INFO, 1=WARNING, 2=ERROR
+func show_toast(message: String, level: int = 0) -> void:
+	if _toast_container:
+		_toast_container.show_toast(message, level)
 
 
 ## Update the grid display in the status bar.
@@ -2502,6 +2785,8 @@ func set_selection_count(count: int) -> void:
 		selection_label.text = "Sel: 1 brush"
 	else:
 		selection_label.text = "Sel: %d brushes" % count
+	if _clear_sel_btn:
+		_clear_sel_btn.visible = count > 0
 
 
 func set_selection_nodes(nodes: Array) -> void:
@@ -2511,6 +2796,7 @@ func set_selection_nodes(nodes: Array) -> void:
 		_selection_tools_section.visible = _selection_nodes.size() > 0
 	# Mark hints dirty so selection-dependent buttons update
 	_hints_dirty = true
+	_update_context_hints()
 	# Refresh Entity I/O list and property form when selection changes
 	if not nodes.is_empty() and level_root and level_root.is_entity_node(nodes[0]):
 		_refresh_io_list(nodes[0])
@@ -2935,6 +3221,11 @@ func _connect_root_signals() -> void:
 			connected_root.connect(
 				"face_selection_changed", Callable(self, "_on_root_face_selection_changed")
 			)
+	if connected_root.has_signal("user_message"):
+		if not connected_root.is_connected(
+			"user_message", Callable(self, "_on_root_user_message")
+		):
+			connected_root.connect("user_message", Callable(self, "_on_root_user_message"))
 	_sync_grid_snap_from_root()
 	_sync_grid_settings_from_root()
 	_refresh_paint_layers()
@@ -2996,6 +3287,11 @@ func _disconnect_root_signals() -> void:
 			connected_root.disconnect(
 				"face_selection_changed", Callable(self, "_on_root_face_selection_changed")
 			)
+	if connected_root.has_signal("user_message"):
+		if connected_root.is_connected(
+			"user_message", Callable(self, "_on_root_user_message")
+		):
+			connected_root.disconnect("user_message", Callable(self, "_on_root_user_message"))
 
 
 func _sync_grid_snap_from_root() -> void:
@@ -3118,6 +3414,7 @@ func _on_bake_progress(value: float, label: String) -> void:
 
 func _on_autosave_failed(error_message: String) -> void:
 	push_warning("HammerForge autosave failed: %s" % error_message)
+	show_toast("Autosave failed: %s" % error_message, 2)
 	if _autosave_warning:
 		_autosave_warning.text = "Autosave failed! Save manually."
 		_autosave_warning.tooltip_text = error_message
@@ -3131,11 +3428,17 @@ func _on_autosave_failed(error_message: String) -> void:
 			)
 
 
+func _on_root_user_message(text: String, level: int) -> void:
+	show_toast(text, level)
+
+
 func _on_bake_finished(success: bool) -> void:
 	if success:
 		_set_status("Bake complete", false, 3.0)
+		show_toast("Bake complete", 0)
 	else:
 		_set_status("Bake failed - check Output for details", true)
+		show_toast("Bake failed — check Output for details", 2)
 	if progress_bar:
 		progress_bar.hide()
 	_set_bake_buttons_disabled(false)
@@ -3284,6 +3587,11 @@ func _update_disabled_hints() -> void:
 	_set_control_disabled_hint(clip_btn, not has_root or not has_selection, need_sel_hint)
 	_set_control_disabled_hint(move_floor_btn, not has_root or not has_selection, need_sel_hint)
 	_set_control_disabled_hint(move_ceiling_btn, not has_root or not has_selection, need_sel_hint)
+	# Inline hint labels
+	if _sel_tools_hint_label:
+		_sel_tools_hint_label.visible = not has_selection
+	if _uv_hint_label:
+		_uv_hint_label.visible = not has_face
 
 
 func _set_control_disabled_hint(control: Control, disabled: bool, hint: String) -> void:
@@ -4021,6 +4329,10 @@ func _on_hflevel_save_selected(path: String) -> void:
 		return
 	var err = int(level_root.save_hflevel(path, true))
 	_set_status("Saved .hflevel" if err == OK else "Failed to save .hflevel", err != OK, 3.0)
+	if err != OK:
+		show_toast("Failed to save .hflevel: %s" % path.get_file(), 2)
+	else:
+		show_toast("Saved: %s" % path.get_file(), 0)
 	if err == OK and _user_prefs:
 		_user_prefs.add_recent_file(path)
 		_user_prefs.save()
@@ -4060,6 +4372,10 @@ func _on_map_export_selected(path: String) -> void:
 	var fmt_name = "Valve 220" if format == "valve220" else "Classic Quake"
 	var msg = "Exported .map (%s)" % fmt_name if err == OK else "Failed to export .map"
 	_set_status(msg, err != OK, 3.0)
+	if err != OK:
+		show_toast("Failed to export .map", 2)
+	else:
+		show_toast("Exported .map (%s)" % fmt_name, 0)
 
 
 func _on_glb_export_selected(path: String) -> void:
@@ -4069,6 +4385,10 @@ func _on_glb_export_selected(path: String) -> void:
 	_warn_missing_dependencies()
 	var err = int(level_root.export_baked_gltf(path))
 	_set_status("Exported .glb" if err == OK else "Failed to export .glb", err != OK, 3.0)
+	if err != OK:
+		show_toast("Failed to export .glb", 2)
+	else:
+		show_toast("Exported .glb", 0)
 
 
 func _on_autosave_path_selected(path: String) -> void:

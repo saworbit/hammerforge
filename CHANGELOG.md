@@ -5,6 +5,35 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **UX Intuitiveness Overhaul (Mar 2026):**
+  - **Mode indicator banner**: colored banner between toolbar and tabs shows current tool, gesture
+    stage ("Step 1/2: Draw base"), and numeric input. Color-coded per tool: Draw (blue), Select
+    (green), Extrude Up (green), Extrude Down (red), Paint (orange). Replaces ambiguous footer text.
+  - **Toast notification system** (`ui/hf_toast.gd`): transient notifications surface errors and
+    confirmations in the dock. Levels: INFO, WARNING, ERROR with color-coded backgrounds and
+    auto-fade. Connected to save/load/export/bake results and new `user_message` signal on
+    LevelRoot. Replaces silent `push_error`/`push_warning` calls for user-facing operations.
+  - **Readable toolbar labels**: toolbar buttons now show icon + text label (Draw, Select, Add,
+    Sub, Paint, Ext Up, Ext Dn) instead of blanking text when icons load.
+  - **Inline disabled hints**: "Select a brush to use these tools" text in Selection Tools section
+    and "Enable Face Select Mode and click a face to edit" in Materials section. Visible without
+    hovering, toggles based on selection/face state.
+  - **First-run welcome panel** (`ui/hf_welcome_panel.gd`): 5-step quick-start guide shown on
+    first launch. "Don't show again" checkbox persists via user preferences.
+  - **Context-sensitive next action hints**: per-tab hint labels at the bottom of each dock tab
+    guide users through the workflow (e.g. "Click and drag in the viewport to draw your first
+    brush", "Try: Hollow, Clip, or Extrude"). Updates based on scene state.
+  - **Shortcuts quick-reference popup**: "?" button on toolbar opens a popup listing all keybindings
+    grouped by context (Tools, Editing, Paint, Axis Lock) plus drag/extrude tips. Built dynamically
+    from keymap data.
+  - **Face hover highlight for extrude**: in extrude mode, hovering over a brush face shows a
+    semi-transparent overlay (green for up, red for down) previewing which face will be selected.
+    Uses StandardMaterial3D with alpha transparency for filled overlay.
+  - **Clear selection button**: small "x" button appears next to "Sel: N brushes" in the footer
+    when selection is non-empty. Provides a visible deselect action beyond the Escape key.
+  - **`user_message` signal** on LevelRoot: subsystems can surface messages to the dock toast
+    system via `root.user_message.emit(text, level)`.
+  - `show_welcome` and `hints_dismissed` added to user preferences defaults.
 - **Dock UX improvements (Mar 2026):**
   - **Selection Tools section** in Brush tab: hollow, clip, move floor/ceiling, tie entity, and
     duplicator controls now appear contextually when brushes are selected (moved from Manage tab).

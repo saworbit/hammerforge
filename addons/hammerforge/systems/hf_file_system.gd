@@ -94,6 +94,8 @@ func export_map(path: String, format: String = "quake") -> int:
 	var err = file.get_error()
 	if err != OK:
 		push_error("HFLevel: store_string failed for %s (error: %d)" % [path, err])
+		if root and root.has_signal("user_message"):
+			root.user_message.emit("File save failed: %s" % path.get_file(), 2)
 		return err
 	return OK
 

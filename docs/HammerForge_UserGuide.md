@@ -1,6 +1,6 @@
 # HammerForge User Guide
 
-Last updated: March 23, 2026
+Last updated: March 24, 2026
 
 This guide covers the current HammerForge workflow in Godot 4.6: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs.
 
@@ -20,11 +20,26 @@ This guide covers the current HammerForge workflow in Godot 4.6: brush-based gre
 
 If missing, HammerForge creates it automatically on first viewport click. LevelRoot stays active even when you select other scene nodes (sticky root discovery) -- you do not need to re-select it after clicking a camera, light, or other node.
 
+## First-Run Welcome
+On first launch, a welcome panel appears with a 5-step quick-start guide. Check "Don't show again" to dismiss it permanently. You can reset this by editing `user://hammerforge_prefs.json` and setting `"show_welcome": true`.
+
 ## Dock Layout (4 tabs)
-The dock has 4 tabs with collapsible sections for organized access to all controls. Each collapsible section has a visual separator and indented content; collapsed state persists across sessions. A "No LevelRoot" banner appears at the top when no root node is found. The compact toolbar uses single-character labels (D, S, +, -, P, ▲, ▼) with full descriptions in tooltips.
+The dock has 4 tabs with collapsible sections for organized access to all controls. Each collapsible section has a visual separator and indented content; collapsed state persists across sessions. A "No LevelRoot" banner appears at the top when no root node is found.
+
+### Mode Indicator
+A colored banner between the toolbar and tabs always shows your current tool and gesture stage:
+- **Draw** (blue) -- "Step 1/2: Draw base" / "Step 2/2: Set height"
+- **Select** (green)
+- **Extrude ▲** (green) / **Extrude ▼** (red) -- "Extruding..."
+- **Paint** (orange)
+
+When typing numeric input during a gesture, the value appears in brackets (e.g. "[64]").
+
+### Toolbar
+The compact toolbar shows icon + text labels (Draw, Select, Add, Sub, Paint, Ext Up, Ext Dn) with full descriptions in tooltips. A **?** button at the right end opens a keyboard shortcuts quick-reference popup.
 
 ### Brush tab
-- **Toolbar** (compact single-char labels, full names in tooltips): D (Draw), S (Select), + (Add), - (Subtract), P (Paint), ▲ (Extrude Up), ▼ (Extrude Down).
+- **Toolbar**: Draw, Select, Add, Sub, Paint, Ext Up, Ext Dn (icon + text labels). Press **?** for shortcuts reference.
 - **Shape**: choose from the palette. Sides for pyramids/prisms.
 - **Size** X/Y/Z: defaults for new brushes.
 - **Grid Snap**: snap increment with quick preset buttons (1, 2, 4, 8, 16, 32, 64).
@@ -64,10 +79,24 @@ The dock has 4 tabs with collapsible sections for organized access to all contro
 - **Visgroups & Groups**: Visgroup list with [V]/[H] toggle, New/Add Sel/Rem Sel/Delete, Group Sel/Ungroup.
 - **Cordon**: Enable checkbox, min/max spinboxes, Set from Selection.
 
+### Toast Notifications
+Transient notifications appear in the dock for important events:
+- **Save/load/export** results (success or failure).
+- **Bake** completion or errors.
+- **Autosave failures** (also shown as a persistent red warning label).
+- Notifications auto-fade after 4-8 seconds depending on severity (INFO, WARNING, ERROR).
+
+### Context Hints
+Each tab shows a contextual hint at the bottom guiding you through the workflow:
+- Brush tab: "Click and drag in the viewport to draw your first brush" → "Try: Hollow, Clip, or Extrude"
+- Paint tab: "Draw some brushes first, then paint them here"
+- Entities tab: "Drag an entity from the palette into the viewport"
+- Manage tab: "When ready, use Bake to convert brushes into final geometry"
+
 ### Status bar
 - Shows current status ("Ready", "Baking...", errors in red, warnings in yellow).
 - Errors auto-clear after 5 seconds, success messages after 3 seconds.
-- Displays selection count ("Sel: N brushes") when brushes are selected.
+- Displays selection count ("Sel: N brushes") when brushes are selected, with a **clear (x)** button to deselect.
 - Live brush count with color-coded performance warnings.
 - Bake progress bar updates during chunked bakes.
 - Performance panel shows active brushes, paint memory, bake chunks, and last bake time.
@@ -151,7 +180,7 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 
 **Rebinding:** Edit `user://hammerforge_keymap.json` (created on first run). Each entry maps an action name to `{"keycode": KEY_*, "ctrl": bool, "shift": bool, "alt": bool}`. Restart the plugin after editing.
 
-**Toolbar labels** and **tooltips** update automatically from the keymap, so custom bindings are always reflected in the UI. The toolbar uses compact single-character labels with full descriptions in tooltips.
+**Toolbar labels** and **tooltips** update automatically from the keymap, so custom bindings are always reflected in the UI. Press the **?** button on the toolbar to see a quick-reference popup of all current keybindings.
 
 ## User Preferences
 
@@ -164,17 +193,20 @@ Preferences include:
 - Collapsed section states (which dock sections are expanded/collapsed)
 - Last active tool
 - HUD visibility
+- Welcome panel visibility (first-run guide)
+- Dismissed context hints
 
 These persist across editor restarts. Per-level settings (cordon, texture lock, materials) remain in `.hflevel` files.
 
 ## Tool Availability (Poll System)
 
 Some actions require specific conditions to run:
-- **Hollow, Clip, Move to Floor/Ceiling** require at least one brush selected. When nothing is selected, these buttons are grayed out with a tooltip explaining why.
-- **Extrude** requires a LevelRoot in the scene.
+- **Hollow, Clip, Move to Floor/Ceiling** require at least one brush selected. When nothing is selected, these buttons are grayed out with an inline hint ("Select a brush to use these tools") visible in the Selection Tools section.
+- **Face-dependent controls** (Assign to Selected Faces, UV editing) show "Enable Face Select Mode and click a face to edit" when no face is selected.
+- **Extrude** requires a LevelRoot in the scene. In extrude mode, a semi-transparent face highlight (green for up, red for down) previews which face you'll select before clicking.
 - **External tools** can define their own requirements via `can_activate()`.
 
-The status bar at the bottom of the dock shows the current mode (Draw, Select, Extrude ▲/▼, Paint) and updates with [dragging] or [extruding] during active gestures.
+The mode indicator banner always shows the current tool and gesture stage. The status bar shows selection count with a clear button.
 
 ## Brush Creation (CAD style)
 1) Base drag: click and drag to define the base.
@@ -265,9 +297,10 @@ Notes:
 The Extrude tools let you extend an existing brush by clicking one of its faces and dragging to create a new brush.
 
 1. Press **U** (Extrude Up) or **J** (Extrude Down), or click the toolbar buttons.
-2. Click on a brush face in the viewport -- a semi-transparent preview appears.
-3. Drag the mouse vertically to set the extrude height (grid-snapped).
-4. Release the mouse to commit the new brush.
+2. Move the mouse over brush faces -- a **semi-transparent hover highlight** shows which face you'll select (green for up, red for down).
+3. Click on a brush face -- a semi-transparent preview appears.
+4. Drag the mouse vertically to set the extrude height (grid-snapped). The mode indicator shows "Extruding..." with numeric input if you type.
+5. Release the mouse to commit the new brush.
 
 Notes
 - **Extrude Up** shows a green preview; **Extrude Down** shows a red preview.

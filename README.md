@@ -85,20 +85,26 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 
 ### Editor UX
 - **4-tab dock** (Brush, Paint, Entities, Manage) with **collapsible sections** (separators, indented content, persisted state)
+- **Mode indicator banner** -- color-coded banner shows current tool, gesture stage ("Step 1/2: Draw base"), and numeric input
+- **Toast notifications** -- transient messages surface save/load/bake results and errors in the dock
+- **First-run welcome panel** -- 5-step quick-start guide on first launch
+- **Context hints** -- per-tab guidance labels that update based on scene state
+- **Shortcuts quick-reference** -- "?" toolbar button shows all keybindings in a popup
+- **Face hover highlights** -- extrude mode previews which face you'll select (green/red overlay)
 - **Contextual Selection Tools** in Brush tab -- hollow, clip, move, tie, duplicator appear when brushes are selected
-- **Compact toolbar** with single-char labels (D, S, +, -, P, ▲, ▼) and descriptive tooltips
+- **Readable toolbar** with icon + text labels (Draw, Select, Add, Sub, Paint, Ext Up, Ext Dn) and descriptive tooltips
+- **Inline disabled hints** -- "Select a brush to use these tools" visible without hovering
 - **Instant sync** -- paint layer, material, and surface paint changes reflected immediately (signal-driven)
 - **Context-sensitive shortcut HUD** that updates based on current tool and mode
 - **Customizable keymaps** -- all shortcuts data-driven via JSON; rebind any key
-- **User preferences** -- grid defaults, recent files, collapsed sections persist across sessions
-- **Tool poll system** -- buttons gray out with tooltip when action can't run (e.g. Hollow with no selection)
-- **Status bar mode indicator** -- shows active mode (Draw/Select/Extrude/Paint) with live state
+- **User preferences** -- grid defaults, recent files, collapsed sections, welcome state persist across sessions
+- **Tool poll system** -- buttons gray out with inline hints when action can't run
 - **Paint tool shortcuts**: B / E / R / L / K for Brush / Erase / Rect / Line / Bucket
 - **Extrude shortcuts**: U (Extrude Up), J (Extrude Down)
 - **Brush tool shortcuts**: Ctrl+H (Hollow), Shift+X (Clip), Ctrl+Shift+F/C (Floor/Ceiling)
 - **Group shortcuts**: Ctrl+G (Group), Ctrl+U (Ungroup)
 - **Tooltips** on all dock controls with shortcut hints
-- **Selection count** in the status bar
+- **Selection count** in the status bar with **clear (x)** button
 - **Color-coded status bar** (red errors, yellow warnings, auto-clear)
 - **Pending cuts** visually distinct (orange-red glow) from applied cuts
 - **"No LevelRoot" banner** guides users when no root node is found
@@ -206,5 +212,5 @@ Start-Process -FilePath "C:\Godot\Godot_v4.6-stable_win64.exe" `
 
 <p align="center">
   <strong>MIT License</strong><br>
-  <sub>Last updated: March 23, 2026</sub>
+  <sub>Last updated: March 24, 2026</sub>
 </p>

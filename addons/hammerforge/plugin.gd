@@ -57,7 +57,7 @@ func _enter_tree():
 		if dock.has_signal("hud_visibility_changed"):
 			dock.connect("hud_visibility_changed", Callable(self, "_on_hud_visibility_changed"))
 		if dock.has_signal("builtin_tool_changed"):
-			dock.connect("builtin_tool_changed", Callable(self, "_deactivate_external_tool"))
+			dock.connect("builtin_tool_changed", Callable(self, "_on_builtin_tool_changed"))
 
 	hud = preload("shortcut_hud.tscn").instantiate()
 	if base_control:
@@ -145,7 +145,7 @@ func _update_hud_context() -> void:
 	if root and root.input_state:
 		ctx["mode"] = root.input_state.mode
 		ctx["axis_lock"] = root.input_state.axis_lock
-	# Update dock status bar mode indicator
+	# Update dock mode indicator banner
 	if dock:
 		var mode_name := "Draw"
 		if ctx.get("paint_mode", false):
@@ -158,12 +158,24 @@ func _update_hud_context() -> void:
 					mode_name = "Extrude ▲"
 				3:
 					mode_name = "Extrude ▼"
+		var stage_hint := ""
 		if root and root.input_state:
-			if root.input_state.is_dragging():
-				mode_name += " [dragging]"
+			if root.input_state.is_drag_base():
+				stage_hint = "Step 1/2: Draw base"
+			elif root.input_state.is_drag_height():
+				stage_hint = "Step 2/2: Set height"
 			elif root.input_state.is_extruding():
-				mode_name += " [extruding]"
-		dock.set_status_mode(mode_name)
+				stage_hint = "Extruding..."
+			elif root.input_state.is_surface_painting():
+				stage_hint = "Painting..."
+		var num_display := ""
+		if numeric_buffer.length() > 0:
+			num_display = numeric_buffer
+		dock.set_mode_indicator(mode_name, stage_hint, num_display)
+	# Clear stale face hover highlight when not in extrude mode
+	if root and tool_id_ctx != 2 and tool_id_ctx != 3:
+		if root.has_method("clear_face_hover_highlight"):
+			root.clear_face_hover_highlight()
 	if numeric_buffer.length() > 0:
 		ctx["numeric"] = numeric_buffer
 	hud.update_context(ctx)
@@ -408,6 +420,11 @@ func _apply_numeric_value(root: Node) -> void:
 func _deactivate_external_tool() -> void:
 	if _tool_registry and _tool_registry.has_active_external_tool():
 		_tool_registry.deactivate_current()
+
+
+func _on_builtin_tool_changed() -> void:
+	_deactivate_external_tool()
+	_update_hud_context()
 
 
 func _handle_keyboard_input(
@@ -655,6 +672,13 @@ func _handle_mouse_motion(
 		root.update_drag(cam, pos)
 		_update_hud_context()
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	# Face hover highlight for extrude tools (when idle, not dragging)
+	if (tool_id == 2 or tool_id == 3) and event.button_mask == 0:
+		var hover_color = Color(0.2, 0.8, 0.3, 0.35) if tool_id == 2 else Color(0.8, 0.2, 0.2, 0.35)
+		if root.has_method("highlight_hovered_face"):
+			root.highlight_hovered_face(cam, pos, hover_color)
+	elif root.has_method("clear_face_hover_highlight"):
+		root.clear_face_hover_highlight()
 	_update_hud_context()
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
 

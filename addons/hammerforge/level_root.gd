@@ -155,6 +155,7 @@ signal face_selection_changed
 signal state_saved
 signal state_loaded
 signal autosave_failed(error_message: String)
+signal user_message(text: String, level: int)
 
 # ---------------------------------------------------------------------------
 # Container / manager nodes
@@ -416,6 +417,11 @@ var height_stage_start_height: float:
 var grid_mesh: MeshInstance3D = null
 var grid_material: ShaderMaterial = null
 var hover_highlight: MeshInstance3D = null
+var _face_hover_highlight: MeshInstance3D = null
+var _face_hover_material: StandardMaterial3D = null
+var _face_hover_st: SurfaceTool = null
+var _face_hover_last_brush: Node3D = null
+var _face_hover_last_face_idx: int = -1
 var grid_plane_axis := AxisLock.Y
 var grid_plane_origin := Vector3.ZERO
 var grid_axis_preference := AxisLock.Y
@@ -1566,6 +1572,83 @@ func _setup_highlight() -> void:
 	mat.shader = preload("highlight.gdshader")
 	hover_highlight.material_override = mat
 	hover_highlight.visible = false
+
+
+## Highlight the face under the cursor for extrude preview.
+## Returns true if a face was found and highlighted.
+func highlight_hovered_face(camera: Camera3D, mouse_pos: Vector2, color: Color) -> bool:
+	if not camera:
+		clear_face_hover_highlight()
+		return false
+	var ray_origin := camera.project_ray_origin(mouse_pos)
+	var ray_dir := camera.project_ray_normal(mouse_pos).normalized()
+	var brushes: Array = []
+	for node in _iter_pick_nodes():
+		if node is DraftBrush:
+			brushes.append(node)
+	var hit := FaceSelector.intersect_brushes(brushes, ray_origin, ray_dir)
+	if hit.is_empty():
+		clear_face_hover_highlight()
+		return false
+
+	var brush: DraftBrush = hit.get("brush", null) as DraftBrush
+	var face_idx: int = int(hit.get("face_idx", -1))
+	if not brush or face_idx < 0 or face_idx >= brush.faces.size():
+		clear_face_hover_highlight()
+		return false
+
+	var face: FaceData = brush.faces[face_idx]
+	if not face:
+		clear_face_hover_highlight()
+		return false
+
+	# Build or reuse the highlight node
+	if not _face_hover_highlight:
+		_face_hover_highlight = MeshInstance3D.new()
+		_face_hover_highlight.name = "_FaceHoverHighlight"
+		_face_hover_highlight.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(_face_hover_highlight)
+		_face_hover_highlight.owner = null
+
+	# Reuse cached material — only update color if changed
+	if not _face_hover_material:
+		_face_hover_material = StandardMaterial3D.new()
+		_face_hover_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_face_hover_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_face_hover_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+		_face_hover_material.no_depth_test = true
+		_face_hover_highlight.material_override = _face_hover_material
+	if _face_hover_material.albedo_color != color:
+		_face_hover_material.albedo_color = color
+
+	# Skip mesh rebuild if same brush + face (avoids SurfaceTool churn)
+	if brush == _face_hover_last_brush and face_idx == _face_hover_last_face_idx:
+		_face_hover_highlight.visible = true
+		return true
+	_face_hover_last_brush = brush
+	_face_hover_last_face_idx = face_idx
+
+	# Rebuild mesh from face vertices
+	face.ensure_geometry()
+	if not _face_hover_st:
+		_face_hover_st = SurfaceTool.new()
+	_face_hover_st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var tri_data = face.triangulate()
+	var verts: PackedVector3Array = tri_data.get("verts", PackedVector3Array())
+	for i in range(verts.size()):
+		_face_hover_st.add_vertex(brush.global_transform * verts[i])
+	_face_hover_highlight.mesh = _face_hover_st.commit()
+	_face_hover_highlight.global_transform = Transform3D.IDENTITY
+	_face_hover_highlight.visible = true
+	return true
+
+
+## Hide the face hover highlight.
+func clear_face_hover_highlight() -> void:
+	if _face_hover_highlight:
+		_face_hover_highlight.visible = false
+	_face_hover_last_brush = null
+	_face_hover_last_face_idx = -1
 
 
 func _set_grid_snap(value: float) -> void:

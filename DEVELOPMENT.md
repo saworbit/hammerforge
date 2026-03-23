@@ -1,6 +1,6 @@
 ﻿# Development Guide
 
-Last updated: March 23, 2026
+Last updated: March 24, 2026
 
 This document covers local setup, codebase structure, and how to test features.
 
@@ -49,6 +49,8 @@ addons/hammerforge/
 
   ui/                    Reusable UI components
     collapsible_section.gd HFCollapsibleSection: toggle-header VBoxContainer for dock sections
+    hf_toast.gd            Toast notification system (auto-fading stacked messages)
+    hf_welcome_panel.gd    First-run welcome panel (5-step quick-start guide)
 
   systems/               Subsystem classes (RefCounted)
     hf_grid_system.gd      Editor grid management
@@ -98,6 +100,11 @@ addons/hammerforge/
 - **Gesture trackers.** New tools should subclass `HFGesture` (hf_gesture.gd) to encapsulate input state. Override `update()`, `commit()`, `cancel()`. The gesture holds its own state (start position, axis lock, numeric buffer), making the tool self-contained.
 - **Central signals.** Subscribe to LevelRoot signals (`brush_added`, `brush_removed`, `selection_changed`, `paint_layer_changed`, `material_list_changed`, `face_selection_changed`, `state_saved`, etc.) instead of polling. Subsystems emit these via `root.<signal>.emit(...)`. `face_selection_changed` emits only when selection actually changes (snapshot comparison in `select_face_at_screen`).
 - **Autosave failure.** The `autosave_failed(error_message)` signal on LevelRoot fires when a threaded write fails. Connect to it in the dock to show user-facing warnings.
+- **Toast notifications.** Use `dock.show_toast(message, level)` (0=INFO, 1=WARNING, 2=ERROR) for user-facing messages. Subsystems can also emit `root.user_message.emit(text, level)` which the dock auto-routes to the toast system.
+- **Mode indicator.** Call `dock.set_mode_indicator(mode_name, stage_hint, numeric)` from `plugin.gd` to update the colored mode banner. `stage_hint` shows gesture progress (e.g. "Step 1/2: Draw base"), `numeric` shows typed input.
+- **Welcome panel.** The first-run welcome panel (`ui/hf_welcome_panel.gd`) is shown when `show_welcome` is true in user prefs. Dismissed by user action; the `dont_show_again` flag persists.
+- **Context hints.** Per-tab hint labels at the bottom of each dock tab update via `_update_context_hints()` in `dock.gd`. Driven by `_hints_dirty` flag alongside `_update_disabled_hints()`.
+- **Face hover highlight.** `level_root.highlight_hovered_face(camera, mouse_pos, color)` performs a FaceSelector raycast and renders a semi-transparent overlay on the hit face. Used by `plugin.gd` in extrude mode when idle. Call `clear_face_hover_highlight()` when switching tools.
 - **Undo/redo stability.** Prefer brush IDs and `create_brush_from_info()` for undo instead of storing Node references in history.
 - **Bake owner assignment.** Use `_assign_owner_recursive()` (not `_assign_owner()`) for baked geometry so all descendants get proper editor ownership. Always call it *after* the container is added to the scene tree.
 - **Shader files.** Prefer standalone `.gdshader` files over inline GLSL strings in GDScript (e.g. `highlight.gdshader` for the selection wireframe shader). Use `preload("file.gdshader")` to load them.
@@ -278,13 +285,25 @@ Save/Load
 
 Editor UX
 - Toggle Draw/Select/Extrude Up/Extrude Down tools and verify shortcut HUD updates.
+- Verify mode indicator banner changes color and text per tool (Draw=blue, Select=green, etc.).
+- Start a brush drag and confirm mode indicator shows "Step 1/2: Draw base" then "Step 2/2: Set height".
+- Type "64" during drag and confirm numeric input appears in mode indicator as "[64]".
 - Press U/J and verify toolbar button toggles and HUD shows extrude shortcuts.
-- Start a brush drag and confirm HUD shows "Dragging Base" shortcuts.
+- In Extrude mode, hover over brush faces and confirm green/red highlight overlay appears.
+- Click a face and confirm the hover highlight clears during extrude gesture.
+- Save a .hflevel and confirm toast notification "Saved: filename.hflevel" appears.
+- Trigger a bake error and confirm red toast notification appears.
+- Press the **?** button on toolbar and confirm shortcuts popup appears with all keybindings.
+- Select brushes and confirm "Sel: N brushes" appears with "x" clear button in footer.
+- Click the "x" button and confirm selection is cleared.
+- With no brushes selected, confirm "Select a brush to use these tools" hint appears in Selection Tools section.
+- Delete `user://hammerforge_prefs.json` and reopen editor -- confirm welcome panel appears.
+- Click "Get Started" with "Don't show again" checked -- confirm welcome panel doesn't reappear.
+- Confirm per-tab context hints show appropriate guidance (e.g. "Click and drag..." in Brush tab).
 - Press X/Y/Z and confirm HUD shows axis lock state.
 - Enable Paint Mode and verify HUD shows paint shortcuts (B/E/R/L/K).
 - Press B/E/R/L/K in Paint Mode and confirm paint tool selector updates.
 - Hover dock controls (snap buttons, bake options, etc.) and verify tooltips appear.
-- Select brushes and confirm "Sel: N brushes" appears in status bar.
 - Trigger a bake error and confirm red status text auto-clears after 5 seconds.
 - Draw a Subtract brush and confirm it appears in orange-red (pending), then Apply Cuts and confirm it turns standard red.
 

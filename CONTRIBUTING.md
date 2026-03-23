@@ -23,6 +23,7 @@ Thanks for helping improve HammerForge.
 - **Keyboard shortcuts** go through `_keymap.matches("action_name", event)`, never hardcoded `KEY_*` checks. Add new default bindings in `HFKeymap._default_bindings()`. Toolbar uses single-char labels with tooltips.
 - **External tools** should implement `can_activate()` for tool availability and `get_settings_schema()` for auto-generated dock UI. See `hf_editor_tool.gd` for the full API.
 - **New dock sections** should use `HFCollapsibleSection.create()` and register with `_register_section()` for persisted collapse state. Use 70px label widths for form rows.
+- **User-facing messages** should use `dock.show_toast(msg, level)` or `root.user_message.emit(msg, level)` instead of (or in addition to) `push_error`/`push_warning`. Level: 0=INFO, 1=WARNING, 2=ERROR.
 - **Brush mutations** should call `root.tag_brush_dirty(id)` (guarded with `has_method`) so the reconciler can skip unchanged geometry.
 - **Multi-brush operations** should wrap in `begin_signal_batch()` / `end_signal_batch()` (or use transactions, which batch automatically) to prevent UI thrash.
 - **User preferences** (application-scoped) go in `HFUserPrefs`. **Level settings** go on LevelRoot.
