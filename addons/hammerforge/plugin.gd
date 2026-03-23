@@ -17,6 +17,7 @@ var select_drag_threshold := 6.0
 var last_3d_camera: Camera3D = null
 var last_3d_mouse_pos := Vector2.ZERO
 var numeric_buffer := ""
+var _tool_registry: HFToolRegistry = null
 const LevelRootType = preload("level_root.gd")
 const DraftEntityType = preload("draft_entity.gd")
 const IconRes = preload("icon.png")
@@ -47,6 +48,8 @@ func _enter_tree():
 		dock.set_undo_redo(undo_redo_manager)
 		if dock.has_signal("hud_visibility_changed"):
 			dock.connect("hud_visibility_changed", Callable(self, "_on_hud_visibility_changed"))
+		if dock.has_signal("builtin_tool_changed"):
+			dock.connect("builtin_tool_changed", Callable(self, "_deactivate_external_tool"))
 
 	hud = preload("shortcut_hud.tscn").instantiate()
 	if base_control:
@@ -61,6 +64,8 @@ func _enter_tree():
 		):
 			selection.connect("selection_changed", Callable(self, "_on_editor_selection_changed"))
 		hf_selection = selection.get_selected_nodes()
+	_tool_registry = HFToolRegistry.new()
+	_tool_registry.load_external_tools("res://addons/hammerforge/tools/")
 	set_process(false)
 
 
@@ -98,6 +103,7 @@ func _exit_tree():
 		)
 	):
 		selection.disconnect("selection_changed", Callable(self, "_on_editor_selection_changed"))
+	_tool_registry = null
 	set_process(false)
 
 
@@ -198,6 +204,12 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 		var r = _handle_paint_input(event, root, target_camera, target_pos)
 		if r != EditorPlugin.AFTER_GUI_INPUT_PASS:
 			return r
+
+	# External tool dispatch
+	if _tool_registry:
+		var ext_result = _tool_registry.dispatch_input(event, target_camera, target_pos)
+		if ext_result == EditorPlugin.AFTER_GUI_INPUT_STOP:
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
 
 	# Keyboard shortcuts
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -364,6 +376,11 @@ func _apply_numeric_value(root: Node) -> void:
 		_update_hud_context()
 
 
+func _deactivate_external_tool() -> void:
+	if _tool_registry and _tool_registry.has_active_external_tool():
+		_tool_registry.deactivate_current()
+
+
 func _handle_keyboard_input(
 	event: InputEventKey, root: Node, tool_id: int, paint_mode: bool
 ) -> int:
@@ -404,10 +421,12 @@ func _handle_keyboard_input(
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	# Extrude tool shortcuts
 	if event.keycode == KEY_U:
+		_deactivate_external_tool()
 		dock.set_extrude_tool(1)
 		_update_hud_context()
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	if event.keycode == KEY_J:
+		_deactivate_external_tool()
 		dock.set_extrude_tool(-1)
 		_update_hud_context()
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
@@ -440,6 +459,13 @@ func _handle_keyboard_input(
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 		if event.keycode == KEY_Z:
 			root.set_axis_lock(LevelRootType.AxisLock.Z, true)
+			_update_hud_context()
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+	# External tool shortcuts
+	if _tool_registry:
+		var ext_id = _tool_registry.check_shortcut(event.keycode)
+		if ext_id >= 0 and active_root:
+			_tool_registry.activate_tool(ext_id, active_root, last_3d_camera)
 			_update_hud_context()
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 	return EditorPlugin.AFTER_GUI_INPUT_PASS

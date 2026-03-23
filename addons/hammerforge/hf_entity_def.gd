@@ -105,12 +105,48 @@ static func _built_in_defaults() -> Array[HFEntityDef]:
 			"description": "Fires outputs once when activated",
 			"is_brush_entity": true,
 			"color": [1.0, 0.6, 0.0],
+			"properties":
+			[
+				{
+					"name": "filter_class",
+					"type": "string",
+					"label": "Filter Class",
+					"default": "",
+				},
+				{
+					"name": "start_disabled",
+					"type": "bool",
+					"label": "Start Disabled",
+					"default": false,
+				},
+			],
 		},
 		{
 			"classname": "trigger_multiple",
 			"description": "Fires outputs every time activated",
 			"is_brush_entity": true,
 			"color": [1.0, 0.5, 0.0],
+			"properties":
+			[
+				{
+					"name": "filter_class",
+					"type": "string",
+					"label": "Filter Class",
+					"default": "",
+				},
+				{
+					"name": "start_disabled",
+					"type": "bool",
+					"label": "Start Disabled",
+					"default": false,
+				},
+				{
+					"name": "wait_time",
+					"type": "float",
+					"label": "Wait Time",
+					"default": 1.0,
+				},
+			],
 		},
 	]
 	for d in defaults:

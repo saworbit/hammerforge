@@ -1239,3 +1239,51 @@ func _justify_face(face: FaceData, mode: String, uv_min: Vector2, uv_max: Vector
 			var shift_y = 1.0 - uv_max.y
 			face.uv_offset.y += shift_y
 			face.custom_uvs = PackedVector2Array()
+
+
+# ---------------------------------------------------------------------------
+# Duplicator / Instanced Geometry
+# ---------------------------------------------------------------------------
+
+var _duplicators: Dictionary = {}  # duplicator_id -> HFDuplicator
+
+
+func create_duplicate_array(
+	brush_ids: PackedStringArray, p_count: int, p_offset: Vector3
+) -> Variant:
+	if brush_ids.is_empty() or p_count < 1:
+		return null
+	# Clean up any existing duplicator that owns these source brushes.
+	for bid in brush_ids:
+		var brush = _brush_cache.get(bid)
+		if brush and brush.has_meta("duplicator_id"):
+			var old_id: String = str(brush.get_meta("duplicator_id"))
+			if old_id != "" and _duplicators.has(old_id):
+				_duplicators[old_id].clear_instances(self)
+				_duplicators.erase(old_id)
+	var dup := HFDuplicator.new()
+	dup.source_brush_ids = brush_ids
+	if not dup.generate(self, p_count, p_offset):
+		return null
+	_duplicators[dup.duplicator_id] = dup
+	return dup
+
+
+func remove_duplicate_array(duplicator_id: String) -> void:
+	if not _duplicators.has(duplicator_id):
+		return
+	var dup: HFDuplicator = _duplicators[duplicator_id]
+	dup.clear_instances(self)
+	_duplicators.erase(duplicator_id)
+
+
+func get_duplicator_for_brush(brush_id: String) -> Variant:
+	var brush = _brush_cache.get(brush_id)
+	if not is_instance_valid(brush):
+		brush = find_brush_by_id(brush_id)
+	if not is_instance_valid(brush):
+		return null
+	var dup_id: String = str(brush.get_meta("duplicator_id", ""))
+	if dup_id == "" or not _duplicators.has(dup_id):
+		return null
+	return _duplicators[dup_id]

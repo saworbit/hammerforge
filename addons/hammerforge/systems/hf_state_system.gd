@@ -115,6 +115,10 @@ func capture_state(include_transient: bool = true) -> Dictionary:
 	if root.visgroup_system:
 		state["visgroups"] = root.visgroup_system.capture_visgroups()
 		state["groups"] = root.visgroup_system.capture_groups()
+	var duplicators: Array = []
+	for dup_id in root.brush_system._duplicators:
+		duplicators.append(root.brush_system._duplicators[dup_id].to_dict())
+	state["duplicators"] = duplicators
 	return state
 
 
@@ -168,6 +172,15 @@ func restore_state(state: Dictionary) -> void:
 	if root.visgroup_system:
 		root.visgroup_system.restore_visgroups(state.get("visgroups", {}))
 		root.visgroup_system.restore_groups(state.get("groups", {}))
+	root.brush_system._duplicators.clear()
+	for dup_dict in state.get("duplicators", []):
+		var dup = HFDuplicator.from_dict(dup_dict)
+		root.brush_system._duplicators[dup.duplicator_id] = dup
+		# Reapply duplicator_id meta on source brushes so Remove Array can find them.
+		for src_id in dup.source_brush_ids:
+			var src_brush = root.brush_system._brush_cache.get(src_id)
+			if is_instance_valid(src_brush):
+				src_brush.set_meta("duplicator_id", dup.duplicator_id)
 	restore_floor_info(state.get("floor", {}))
 	if root.draft_brushes_node:
 		root.draft_brushes_node.visible = bool(state.get("csg_visible", true))

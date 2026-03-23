@@ -812,6 +812,14 @@ func justify_selected_faces(mode: String, treat_as_one: bool) -> void:
 	brush_system.justify_selected_faces(mode, treat_as_one)
 
 
+func create_duplicate_array(brush_ids: PackedStringArray, count: int, p_offset: Vector3) -> Variant:
+	return brush_system.create_duplicate_array(brush_ids, count, p_offset)
+
+
+func remove_duplicate_array(duplicator_id: String) -> void:
+	brush_system.remove_duplicate_array(duplicator_id)
+
+
 func _make_brush_material(operation: int, solid: bool = false, unshaded: bool = false) -> Material:
 	return brush_system._make_brush_material(operation, solid, unshaded)
 
@@ -1198,8 +1206,8 @@ func import_map(path: String) -> int:
 	return file_system.import_map(path)
 
 
-func export_map(path: String) -> int:
-	return file_system.export_map(path)
+func export_map(path: String, format: String = "quake") -> int:
+	return file_system.export_map(path, format)
 
 
 func export_baked_gltf(path: String) -> int:

@@ -174,6 +174,7 @@ Entity types and brush entity classes are data-driven via `HFEntityDef` (`hf_ent
 - `HFEntityDef.load_definitions(path)` returns `Array[HFEntityDef]`.
 - `filter_brush_entities()` / `filter_point_entities()` for filtering by type.
 - Dock brush entity class dropdown is populated from definitions, not hardcoded.
+- **Planned: Declarative property forms** — the `properties` array on each definition will support typed entries (e.g., `{name, type, default, label}`) that auto-generate dock controls when an entity is selected. Inspired by QuArK's `:form` system where `Typ` fields determine UI widgets. This would let users define custom entity types with editable properties entirely through JSON.
 
 ## Gesture Tracker
 

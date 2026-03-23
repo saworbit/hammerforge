@@ -28,6 +28,26 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 - **Gesture tracker base class** (`hf_gesture.gd`): `HFGesture` base for encapsulated input
   gestures. Holds root, camera, positions, numeric buffer. Subclasses override `update()`,
   `commit()`, `cancel()`. Ready for incremental adoption by new tools.
+- **Declarative entity property forms**: when an entity is selected, the dock auto-generates
+  typed controls (LineEdit, SpinBox, CheckBox, OptionButton, ColorPickerButton, Vector3) from
+  the entity definition's `properties` array. Changes write to `entity.entity_data` and sync
+  with Godot's Inspector. Built-in trigger defs now include `filter_class`, `start_disabled`,
+  `wait_time` properties. Inspired by QuArK's `:form` system.
+- **Duplicator / instanced geometry** (`hf_duplicator.gd`): create N copies of selected
+  brushes with progressive offset. `HFDuplicator` RefCounted class with `generate()`,
+  `clear_instances()`, `to_dict()`/`from_dict()` serialization. Dock UI: count SpinBox,
+  X/Y/Z offset, Create/Remove Array buttons in Actions section. Undo/redo via state snapshot.
+  Inspired by QuArK's duplicator system.
+- **Multi-format .map export adapters**: strategy-pattern writers for map export.
+  - `HFMapAdapter` base class with `format_face_line()` and `format_entity_properties()`.
+  - `HFMapQuake`: Classic Quake format (existing behavior, extracted).
+  - `HFMapValve220`: Valve 220 format with UV texture axes from FaceData.
+  - Format selector OptionButton in dock File section.
+  - Entity properties now included in .map export.
+- **Formalized plugin API** (`hf_editor_tool.gd` + `hf_tool_registry.gd`): base class and
+  registry for custom editor tools. External tools (ID >= 100) loaded from
+  `res://addons/hammerforge/tools/` at startup. Non-breaking Phase 1: built-in tools remain
+  as-is; registry dispatches to external tools only.
 - **Clipping tool:** Split a brush along an axis-aligned plane into two pieces.
   - `clip_brush_by_id(brush_id, axis, split_pos)` on `hf_brush_system.gd`.
   - Auto-detect split axis from face normal via `clip_brush_at_point()`.
@@ -104,11 +124,15 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   - "Set from Selection" computes merged AABB of selected brushes + margin.
   - Dock UI: Enable checkbox, min/max spinboxes, "Set from Selection" button in Manage tab.
   - Persists in `.hflevel` settings.
-- **GUT unit test suite** with 47 tests across 4 test files:
+- **GUT unit test suite** with 308 tests across 19 test files:
   - `test_visgroup_system.gd` (18 tests): CRUD, visibility, membership, serialization.
   - `test_grouping.gd` (9 tests): group creation, meta, ungroup, regroup, serialization.
   - `test_texture_lock.gd` (10 tests): UV compensation for all projection types.
   - `test_cordon_filter.gd` (10 tests): AABB filtering, chunk collection, chunk_coord utility.
+  - `test_entity_props.gd` (12 tests): entity property form defaults, roundtrip capture/restore.
+  - `test_duplicator.gd` (7 tests): instance count, offset, clear, serialization, edge cases.
+  - `test_map_export.gd` (19 tests): Quake/Valve220 face formats, auto-axes, projections.
+  - `test_tool_registry.gd` (25 tests): registration, activation lifecycle, dispatch, deactivation.
 - CI workflow now runs GUT tests alongside gdformat/gdlint checks.
 - Bake progress updates with chunk status in the dock.
 - Bake Dry Run action for preflight counts and chunk estimates.
@@ -203,6 +227,16 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   (func_detail, func_wall, trigger_once, trigger_multiple) when filtered brush defs are empty.
 - Fixed `_on_tie_entity()` crash when dropdown has no items: now guards `item_count > 0` and
   `selected >= 0` before reading dropdown text, falling back to `"func_detail"`.
+- Fixed duplicate arrays becoming non-removable after undo/redo or state restore:
+  `restore_state()` now reapplies `duplicator_id` metadata on source brushes after rebuilding
+  `_duplicators` from serialized data.
+- Fixed creating a duplicate array on already-linked source brushes orphaning older groups:
+  `create_duplicate_array()` now cleans up any existing duplicator that owns the same sources
+  before creating the new one.
+- Fixed external tools having no deactivation path when switching back to built-in tools:
+  `activate_tool()` now nulls `_active_tool` after deactivating. Built-in tool selection
+  (U/J keyboard shortcuts, dock toolbar button clicks) deactivates the active external tool
+  via targeted `_deactivate_external_tool()` calls instead of per-frame checks.
 - Fixed reconciler ghost references: `_index.erase(gid)` and `remove_child()` before `queue_free()` in `hf_reconciler.gd` to prevent stale node references.
 - Fixed silent write failure in `hf_file_system.gd:export_map()` — added `file.get_error()` check after `store_string()`.
 - Fixed unreachable guard in `hf_brush_system.gd` — `parts.size() == 0` after `String.split()` changed to `parts.size() < 2`.
@@ -267,6 +301,16 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 - Updated spec, development guide, MVP guide, and README to reflect subsystem architecture.
 - Updated all docs to document new UX features: dynamic HUD, tooltips, shortcuts, pending cut visuals.
 - Updated all docs for multi-layer heightmap integration: heightmap workflow, blend tool, connectors, foliage, bake integration.
+- Added TrenchBroom + QuArK architecture learnings document (`project_editor_learnings.md`).
+- Updated ROADMAP with QuArK-inspired items: declarative entity property forms, multi-format `.map`
+  export adapters, duplicator/instanced geometry, formalized plugin API, bezier patches.
+- Updated SPEC entity definitions section with planned declarative property forms.
+- Updated data portability doc with planned multi-format `.map` export strategy.
+- Updated CONTRIBUTING, DEVELOPMENT, SPEC, MVP guide, user guide, texture/materials doc, and
+  README with command collation, transactions, signals, entity defs, gestures, material persistence,
+  autosave failure, and all code review bugfixes.
+- Updated DEVELOPMENT test table with actual test counts: entity_props (12), duplicator (10),
+  map_export (19), tool_registry (25). Total: 308 tests across 19 files.
 
 ## [0.1.1] - 2026-02-05
 

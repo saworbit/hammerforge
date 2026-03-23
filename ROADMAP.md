@@ -53,6 +53,12 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - Entity definition system: data-driven HFEntityDef from JSON, replaces hardcoded brush entity classes.
 - Gesture tracker base class: HFGesture for self-contained input gestures (ready for incremental adoption).
 
+## Done (QuArK-Inspired Features)
+- Declarative entity property forms: dock auto-generates typed controls from entity definition `properties` array.
+- Duplicator / instanced geometry: create N copies with progressive offset, undo/redo, serialization.
+- Multi-format `.map` export adapters: Classic Quake + Valve 220 via strategy-pattern writers.
+- Formalized plugin API: `HFEditorTool` base class + `HFToolRegistry` for custom tools (external tools from `tools/`).
+
 ## Next (Wave 2b remaining + Wave 2c)
 - Vertex editing (move individual brush vertices).
 - Entity connection visualization (colored lines between connected entities in viewport).
@@ -64,6 +70,7 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - Path tool (click-to-place path_corner/path_track chains for NPC routes, cameras).
 - Displacement sewing (stitch adjacent heightmap edges to share vertices).
 - Material atlasing for large scenes.
+- Duplicator / instanced geometry (source brush group + transform rules → N synchronized copies — inspired by QuArK's duplicator system).
 
 ## Future (Wave 3 -- Polish)
 - Polygon tool (draw arbitrary convex shapes by clicking vertices, extrude to brush).
@@ -71,7 +78,9 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - Multiple simultaneous cordons.
 - Multi-tool presets for common workflows.
 - Additional bake pipelines (merge strategies, export helpers).
-- Extended import/export formats.
+- Formalized plugin API (`HFEditorPlugin` base class for custom tool scripts with menu/toolbar hooks).
+- Per-project entity definition files (game pak separation — different entity sets per project).
+- Bezier patch editing (control-point-grid surfaces as first-class brush type).
 
 ## Out of Scope (for now)
 - Real-time CSG of full scenes.

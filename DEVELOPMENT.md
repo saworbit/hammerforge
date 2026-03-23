@@ -30,12 +30,20 @@ addons/hammerforge/
   hf_extrude_tool.gd     Extrude Up/Down tool (face click + drag to extend brushes)
   hf_gesture.gd          Gesture tracker base class (update/commit/cancel pattern)
   hf_entity_def.gd       Data-driven entity definition system (JSON + built-in defaults)
+  hf_duplicator.gd       Duplicator / instanced geometry (source brushes + progressive offset)
+  hf_editor_tool.gd      Plugin API: base class for custom editor tools
+  hf_tool_registry.gd    Plugin API: tool registration, dispatch, external tool loader
   surface_paint.gd       Per-face surface paint tool
   uv_editor.gd           UV editing dock
   highlight.gdshader     Selection highlight shader (wireframe, unshaded, alpha)
   hflevel_io.gd          Variant encoding/decoding for .hflevel
-  map_io.gd              .map import/export
+  map_io.gd              .map import/export (uses adapter pattern for multi-format support)
   prefab_factory.gd      Advanced shape generation
+
+  map_adapters/          .map export format adapters (strategy pattern)
+    hf_map_adapter.gd      Base adapter class (format_name, format_face_line, format_entity_properties)
+    hf_map_quake.gd        Classic Quake format adapter
+    hf_map_valve220.gd     Valve 220 format adapter (with UV texture axes)
 
   ui/                    Reusable UI components
     collapsible_section.gd HFCollapsibleSection: toggle-header VBoxContainer for dock sections
@@ -97,7 +105,7 @@ addons/hammerforge/
 The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on push and PR to `main`:
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
-- **GUT unit tests** -- 245 tests across 15 test files (runs Godot headless)
+- **GUT unit tests** -- 308 tests across 19 test files (runs Godot headless)
 
 Run locally before pushing:
 ```
@@ -127,6 +135,10 @@ Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framewor
 | `test_heightmap_io.gd` | 12 | Base64 encode/decode round-trip, noise generation (FastNoiseLite), determinism |
 | `test_hflevel_io.gd` | 32 | Variant encode/decode (Vector2/3, Transform3D, Basis, Color), payload build/parse, full pipeline |
 | `test_brush_shapes.gd` | 15 | Box face generation, normals, vertex bounds, triangulation, serialization, prism mesh |
+| `test_entity_props.gd` | 12 | Entity property form defaults (all types), roundtrip capture/restore, empty properties safety |
+| `test_duplicator.gd` | 7 | Instance count, progressive offset, clear cleanup, to_dict/from_dict roundtrip, edge cases |
+| `test_map_export.gd` | 19 | Quake/Valve220 face line format, auto-axes, entity property formatting, fractional coords, projections |
+| `test_tool_registry.gd` | 25 | Tool registration, activate/deactivate, deactivate_current, has_active_external_tool, dispatch routing, shortcut check, external ID guard, stays-active-across-dispatch regression |
 
 Run all tests:
 ```

@@ -20,9 +20,9 @@
       "color": "#ffff00"
     },
     "properties": [
-      {"name": "range", "type": "float", "default": 10.0},
-      {"name": "energy", "type": "float", "default": 1.0},
-      {"name": "color", "type": "color", "default": "#ffffff"}
+      {"name": "range", "type": "float", "label": "Range", "default": 10.0},
+      {"name": "energy", "type": "float", "label": "Energy", "default": 1.0},
+      {"name": "color", "type": "color", "label": "Color", "default": "#ffffff"}
     ]
   },
   "door_basic": {
@@ -33,8 +33,8 @@
       "color": "#8888ff"
     },
     "properties": [
-      {"name": "speed", "type": "float", "default": 200.0},
-      {"name": "locked", "type": "bool", "default": false}
+      {"name": "speed", "type": "float", "label": "Speed", "default": 200.0},
+      {"name": "locked", "type": "bool", "label": "Locked", "default": false}
     ]
   }
 }

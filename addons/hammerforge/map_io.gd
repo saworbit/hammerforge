@@ -5,6 +5,8 @@ class_name MapIO
 const LevelRoot = preload("level_root.gd")
 const DraftBrush = preload("brush_instance.gd")
 const DraftEntity = preload("draft_entity.gd")
+const HFMapAdapterType = preload("map_adapters/hf_map_adapter.gd")
+const HFMapQuakeType = preload("map_adapters/hf_map_quake.gd")
 
 const DEFAULT_TEXTURE := "__default"
 const AXIS_THRESHOLD := 0.98
@@ -84,9 +86,11 @@ static func parse_map_text(text: String) -> Dictionary:
 	return {"entities": entity_points, "brushes": brushes}
 
 
-static func export_map_from_level(level_root: Node) -> String:
+static func export_map_from_level(level_root: Node, adapter: HFMapAdapterType = null) -> String:
 	if not level_root:
 		return ""
+	if adapter == null:
+		adapter = HFMapQuakeType.new()
 	var lines: Array[String] = []
 	lines.append("{")
 	lines.append('"classname" "worldspawn"')
@@ -103,7 +107,7 @@ static func export_map_from_level(level_root: Node) -> String:
 			continue
 		if node.get_parent() and node.get_parent().name == "PendingCuts":
 			continue
-		var brush_lines = _brush_to_map_lines(node)
+		var brush_lines = _brush_to_map_lines(node, adapter)
 		if brush_lines.is_empty():
 			continue
 		lines.append("{")
@@ -114,14 +118,16 @@ static func export_map_from_level(level_root: Node) -> String:
 		for node in level_root.call("_iter_pick_nodes"):
 			if not (node is DraftEntity):
 				continue
-			var ent_lines = _entity_to_map_lines(node)
+			var ent_lines = _entity_to_map_lines(node, adapter)
 			if ent_lines.is_empty():
 				continue
 			lines.append_array(ent_lines)
 	return "\n".join(lines)
 
 
-static func _entity_to_map_lines(entity: DraftEntity) -> Array[String]:
+static func _entity_to_map_lines(
+	entity: DraftEntity, adapter: HFMapAdapterType = null
+) -> Array[String]:
 	if not entity:
 		return []
 	var entity_class = entity.entity_class if entity.entity_class != "" else entity.entity_type
@@ -129,8 +135,12 @@ static func _entity_to_map_lines(entity: DraftEntity) -> Array[String]:
 		return []
 	var lines: Array[String] = []
 	lines.append("{")
-	lines.append('"classname" "%s"' % entity_class)
-	lines.append('"origin" "%s"' % _format_vec3(entity.global_transform.origin))
+	var props := {"classname": entity_class, "origin": _format_vec3(entity.global_transform.origin)}
+	if adapter:
+		lines.append_array(adapter.format_entity_properties(props))
+	else:
+		lines.append('"classname" "%s"' % entity_class)
+		lines.append('"origin" "%s"' % _format_vec3(entity.global_transform.origin))
 	lines.append("}")
 	return lines
 
@@ -241,22 +251,28 @@ static func _parse_face_line(line: String, face_re: RegEx) -> Dictionary:
 	return {"points": points}
 
 
-static func _brush_to_map_lines(brush: DraftBrush) -> Array[String]:
+static func _brush_to_map_lines(
+	brush: DraftBrush, adapter: HFMapAdapterType = null
+) -> Array[String]:
 	if not brush:
 		return []
+	if adapter == null:
+		adapter = HFMapQuakeType.new()
 	var lines: Array[String] = []
 	var shape = brush.shape
 	match shape:
 		LevelRoot.BrushShape.BOX:
-			lines.append_array(_box_to_map_lines(brush))
+			lines.append_array(_box_to_map_lines(brush, adapter))
 		LevelRoot.BrushShape.CYLINDER:
-			lines.append_array(_cylinder_to_map_lines(brush))
+			lines.append_array(_cylinder_to_map_lines(brush, adapter))
 		_:
-			lines.append_array(_box_to_map_lines(brush))
+			lines.append_array(_box_to_map_lines(brush, adapter))
 	return lines
 
 
-static func _box_to_map_lines(brush: DraftBrush) -> Array[String]:
+static func _box_to_map_lines(brush: DraftBrush, adapter: HFMapAdapterType = null) -> Array[String]:
+	if adapter == null:
+		adapter = HFMapQuakeType.new()
 	var lines: Array[String] = []
 	var half = brush.size * 0.5
 	var corners = [
@@ -271,16 +287,23 @@ static func _box_to_map_lines(brush: DraftBrush) -> Array[String]:
 	]
 	for i in range(corners.size()):
 		corners[i] = brush.global_transform * corners[i]
-	var faces = [[0, 3, 2], [5, 6, 7], [1, 2, 6], [0, 4, 7], [3, 7, 6], [0, 1, 5]]
-	for face in faces:
+	var face_indices = [[0, 3, 2], [5, 6, 7], [1, 2, 6], [0, 4, 7], [3, 7, 6], [0, 1, 5]]
+	var brush_faces = brush.faces
+	for fi in range(face_indices.size()):
+		var face = face_indices[fi]
 		var a = corners[face[0]]
 		var b = corners[face[1]]
 		var c = corners[face[2]]
-		lines.append(_format_face_line(a, b, c))
+		var fd: Variant = brush_faces[fi] if fi < brush_faces.size() else null
+		lines.append(adapter.format_face_line(a, b, c, DEFAULT_TEXTURE, fd))
 	return lines
 
 
-static func _cylinder_to_map_lines(brush: DraftBrush) -> Array[String]:
+static func _cylinder_to_map_lines(
+	brush: DraftBrush, adapter: HFMapAdapterType = null
+) -> Array[String]:
+	if adapter == null:
+		adapter = HFMapQuakeType.new()
 	var lines: Array[String] = []
 	var sides = max(6, brush.sides)
 	var radius = max(brush.size.x, brush.size.z) * 0.5
@@ -293,20 +316,28 @@ static func _cylinder_to_map_lines(brush: DraftBrush) -> Array[String]:
 		var z = sin(angle) * radius
 		points_top.append(brush.global_transform * Vector3(x, half_y, z))
 		points_bottom.append(brush.global_transform * Vector3(x, -half_y, z))
+	var brush_faces = brush.faces
+	var face_idx := 0
 	for i in range(sides):
 		var a = points_bottom[i]
 		var b = points_bottom[(i + 1) % sides]
 		var c = points_top[(i + 1) % sides]
-		lines.append(_format_face_line(a, b, c))
+		var fd: Variant = brush_faces[face_idx] if face_idx < brush_faces.size() else null
+		lines.append(adapter.format_face_line(a, b, c, DEFAULT_TEXTURE, fd))
+		face_idx += 1
 	var top_center = brush.global_transform.origin + brush.global_transform.basis.y * half_y
 	var bottom_center = brush.global_transform.origin - brush.global_transform.basis.y * half_y
 	for i in range(sides):
 		var a_top = points_top[i]
 		var b_top = points_top[(i + 1) % sides]
-		lines.append(_format_face_line(a_top, b_top, top_center))
+		var fd_top: Variant = brush_faces[face_idx] if face_idx < brush_faces.size() else null
+		lines.append(adapter.format_face_line(a_top, b_top, top_center, DEFAULT_TEXTURE, fd_top))
+		face_idx += 1
 		var a_bot = points_bottom[(i + 1) % sides]
 		var b_bot = points_bottom[i]
-		lines.append(_format_face_line(a_bot, b_bot, bottom_center))
+		var fd_bot: Variant = brush_faces[face_idx] if face_idx < brush_faces.size() else null
+		lines.append(adapter.format_face_line(a_bot, b_bot, bottom_center, DEFAULT_TEXTURE, fd_bot))
+		face_idx += 1
 	return lines
 
 

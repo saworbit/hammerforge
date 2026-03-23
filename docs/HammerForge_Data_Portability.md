@@ -26,6 +26,7 @@ This document describes how to move data in and out of HammerForge safely.
 - Import supports axis-aligned boxes and simple cylinders.
 - Export writes box and cylinder primitives only and does not preserve per-face materials or paint data.
 - Treat `.map` as a blockout exchange format, not a full fidelity export.
+- **Planned**: multi-format `.map` export adapters (Valve 220, Classic Quake) as strategy classes for broader interop with TrenchBroom, Hammer, and GtkRadiant.
 
 ## `.glb` Export
 - `.glb` export writes the baked geometry only.

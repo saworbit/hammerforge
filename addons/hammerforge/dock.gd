@@ -3,6 +3,7 @@ extends Control
 class_name HammerForgeDock
 
 signal hud_visibility_changed(visible: bool)
+signal builtin_tool_changed
 
 const LevelRootType = preload("level_root.gd")
 const BrushPreset = preload("brush_preset.gd")
@@ -145,6 +146,7 @@ var save_hflevel_btn: Button = null
 var load_hflevel_btn: Button = null
 var import_map_btn: Button = null
 var export_map_btn: Button = null
+var map_format_select: OptionButton = null
 var export_glb_btn: Button = null
 # -- Autosave controls (built programmatically) --
 var autosave_enabled: CheckBox = null
@@ -294,6 +296,11 @@ var justify_top_btn: Button = null
 var justify_bottom_btn: Button = null
 var justify_treat_as_one: CheckBox = null
 var clip_btn: Button = null
+# Duplicator controls
+var dup_count_spin: SpinBox = null
+var dup_offset_x: SpinBox = null
+var dup_offset_y: SpinBox = null
+var dup_offset_z: SpinBox = null
 # Entity I/O controls
 var io_output_name: LineEdit = null
 var io_target_name: LineEdit = null
@@ -304,6 +311,10 @@ var io_fire_once: CheckBox = null
 var io_add_btn: Button = null
 var io_list: ItemList = null
 var io_remove_btn: Button = null
+# Entity Properties controls
+var _entity_props_section: VBoxContainer = null
+var _entity_props_controls: Array = []
+var _entity_props_entity: Node3D = null
 
 
 func _is_level_root(node: Node) -> bool:
@@ -1091,10 +1102,250 @@ func _build_paint_tab() -> void:
 	sc.add_child(surface_paint_texture)
 
 
+func _build_entity_props_section() -> void:
+	var entities_vbox = $Margin/VBox/MainTabs/Entities/EntitiesMargin/EntitiesVBox
+	if not entities_vbox:
+		return
+	var sec = HFCollapsibleSection.create("Entity Properties", true)
+	entities_vbox.add_child(sec)
+	sec.visible = false
+	_entity_props_section = sec
+
+
+func _rebuild_entity_props(entity: Node3D) -> void:
+	_clear_entity_props()
+	if not entity or not is_instance_valid(entity):
+		return
+	if not level_root or not level_root.is_entity_node(entity):
+		return
+
+	# Look up entity definition from dock entity_defs
+	var entity_type_key := ""
+	if entity is DraftEntity:
+		entity_type_key = entity.entity_type
+	elif entity.has_meta("entity_type"):
+		entity_type_key = str(entity.get_meta("entity_type"))
+	if entity_type_key == "":
+		return
+
+	var definition: Dictionary = {}
+	for entry in entity_defs:
+		if not (entry is Dictionary):
+			continue
+		var eid = str(entry.get("id", entry.get("class", "")))
+		if eid == entity_type_key:
+			definition = entry
+			break
+
+	var props: Array = definition.get("properties", [])
+	if props.is_empty():
+		return
+
+	_entity_props_section.visible = true
+	_entity_props_entity = entity
+	var content = _entity_props_section.get_content()
+
+	var e_data: Dictionary = {}
+	if entity is DraftEntity:
+		e_data = entity.entity_data
+	elif entity.has_meta("entity_data"):
+		e_data = entity.get_meta("entity_data")
+
+	for prop in props:
+		if not (prop is Dictionary):
+			continue
+		var prop_name: String = str(prop.get("name", ""))
+		if prop_name == "":
+			continue
+		var prop_type: String = str(prop.get("type", "string"))
+		var prop_label: String = str(prop.get("label", prop_name))
+		var prop_default: Variant = prop.get("default", null)
+		var default_val: Variant = _entity_prop_default(prop_type, prop_default)
+		var current_val: Variant = e_data.get(prop_name, default_val)
+
+		var row = HBoxContainer.new()
+		content.add_child(row)
+		_entity_props_controls.append(row)
+
+		var lbl = Label.new()
+		lbl.text = prop_label + ":"
+		lbl.custom_minimum_size.x = 75
+		row.add_child(lbl)
+
+		match prop_type:
+			"string":
+				var le = LineEdit.new()
+				le.text = str(current_val)
+				le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				le.text_changed.connect(_on_entity_prop_changed.bind(entity, prop_name))
+				row.add_child(le)
+			"int":
+				var sb = SpinBox.new()
+				sb.step = 1
+				sb.allow_greater = true
+				sb.allow_lesser = true
+				sb.value = int(current_val)
+				sb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				sb.value_changed.connect(_on_entity_prop_changed.bind(entity, prop_name))
+				row.add_child(sb)
+			"float":
+				var sb = SpinBox.new()
+				sb.step = 0.01
+				sb.allow_greater = true
+				sb.allow_lesser = true
+				sb.value = float(current_val)
+				sb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				sb.value_changed.connect(_on_entity_prop_changed.bind(entity, prop_name))
+				row.add_child(sb)
+			"bool":
+				var cb = CheckBox.new()
+				cb.button_pressed = bool(current_val)
+				cb.toggled.connect(_on_entity_prop_changed.bind(entity, prop_name))
+				row.add_child(cb)
+			"enum":
+				var ob = OptionButton.new()
+				var enum_vals: Array = prop.get("enum_values", [])
+				for ev in enum_vals:
+					ob.add_item(str(ev))
+				var idx = enum_vals.find(current_val)
+				if idx >= 0:
+					ob.select(idx)
+				ob.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				ob.item_selected.connect(
+					_on_entity_prop_enum_changed.bind(entity, prop_name, enum_vals)
+				)
+				row.add_child(ob)
+			"color":
+				var cpb = ColorPickerButton.new()
+				if current_val is Color:
+					cpb.color = current_val
+				elif current_val is String:
+					cpb.color = Color(current_val)
+				else:
+					cpb.color = Color.WHITE
+				cpb.custom_minimum_size = Vector2(40, 24)
+				cpb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				cpb.color_changed.connect(_on_entity_prop_changed.bind(entity, prop_name))
+				row.add_child(cpb)
+			"vector3":
+				var vec: Vector3 = Vector3.ZERO
+				if current_val is Vector3:
+					vec = current_val
+				elif current_val is Array and current_val.size() == 3:
+					vec = Vector3(current_val[0], current_val[1], current_val[2])
+				for axis_i in range(3):
+					var sb = SpinBox.new()
+					sb.step = 0.01
+					sb.allow_greater = true
+					sb.allow_lesser = true
+					sb.value = vec[axis_i]
+					sb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+					sb.custom_minimum_size.x = 55
+					sb.value_changed.connect(
+						_on_entity_prop_vec3_changed.bind(entity, prop_name, axis_i)
+					)
+					row.add_child(sb)
+			_:
+				var le = LineEdit.new()
+				le.text = str(current_val)
+				le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				le.text_changed.connect(_on_entity_prop_changed.bind(entity, prop_name))
+				row.add_child(le)
+
+
+func _clear_entity_props() -> void:
+	for ctrl in _entity_props_controls:
+		if is_instance_valid(ctrl):
+			ctrl.queue_free()
+	_entity_props_controls.clear()
+	_entity_props_entity = null
+	if _entity_props_section:
+		_entity_props_section.visible = false
+
+
+func _on_entity_prop_changed(value: Variant, entity: Node3D, prop_name: String) -> void:
+	if not is_instance_valid(entity):
+		return
+	if entity is DraftEntity:
+		entity.entity_data[prop_name] = value
+		entity.notify_property_list_changed()
+	elif entity.has_meta("entity_data"):
+		var d: Dictionary = entity.get_meta("entity_data")
+		d[prop_name] = value
+		entity.set_meta("entity_data", d)
+
+
+func _on_entity_prop_enum_changed(
+	index: int, entity: Node3D, prop_name: String, enum_vals: Array
+) -> void:
+	if not is_instance_valid(entity):
+		return
+	var value: Variant = enum_vals[index] if index < enum_vals.size() else ""
+	if entity is DraftEntity:
+		entity.entity_data[prop_name] = value
+		entity.notify_property_list_changed()
+	elif entity.has_meta("entity_data"):
+		var d: Dictionary = entity.get_meta("entity_data")
+		d[prop_name] = value
+		entity.set_meta("entity_data", d)
+
+
+func _on_entity_prop_vec3_changed(
+	value: float, entity: Node3D, prop_name: String, axis_index: int
+) -> void:
+	if not is_instance_valid(entity):
+		return
+	var vec: Vector3 = Vector3.ZERO
+	if entity is DraftEntity:
+		var cur = entity.entity_data.get(prop_name, Vector3.ZERO)
+		if cur is Vector3:
+			vec = cur
+		vec[axis_index] = value
+		entity.entity_data[prop_name] = vec
+		entity.notify_property_list_changed()
+	elif entity.has_meta("entity_data"):
+		var d: Dictionary = entity.get_meta("entity_data")
+		var cur = d.get(prop_name, Vector3.ZERO)
+		if cur is Vector3:
+			vec = cur
+		vec[axis_index] = value
+		d[prop_name] = vec
+		entity.set_meta("entity_data", d)
+
+
+func _entity_prop_default(type_name: String, value: Variant) -> Variant:
+	match type_name:
+		"float":
+			return float(value) if value != null else 0.0
+		"int":
+			return int(value) if value != null else 0
+		"bool":
+			return bool(value) if value != null else false
+		"color":
+			if value is Color:
+				return value
+			if value is String:
+				return Color(value)
+			return Color.WHITE
+		"vector3":
+			if value is Vector3:
+				return value
+			if value is Array and value.size() == 3:
+				return Vector3(value[0], value[1], value[2])
+			return Vector3.ZERO
+		"string":
+			return str(value) if value != null else ""
+		_:
+			return value
+
+
 func _build_entity_io_section() -> void:
 	var entities_vbox = $Margin/VBox/MainTabs/Entities/EntitiesMargin/EntitiesVBox
 	if not entities_vbox:
 		return
+
+	# --- Entity Properties section (above I/O) ---
+	_build_entity_props_section()
 
 	# --- Entity I/O section ---
 	var io_sec = HFCollapsibleSection.create("Entity I/O", false)
@@ -1315,6 +1566,66 @@ func _build_manage_tab() -> void:
 	clip_btn = _make_button("Clip Selected (Shift+X)")
 	ac.add_child(clip_btn)
 
+	# --- Duplicate Array ---
+	var dup_label = Label.new()
+	dup_label.text = "Duplicate Array"
+	ac.add_child(dup_label)
+
+	var dup_row1 = HBoxContainer.new()
+	ac.add_child(dup_row1)
+	var count_lbl = Label.new()
+	count_lbl.text = "Count:"
+	dup_row1.add_child(count_lbl)
+	dup_count_spin = SpinBox.new()
+	dup_count_spin.min_value = 1
+	dup_count_spin.max_value = 100
+	dup_count_spin.value = 3
+	dup_count_spin.tooltip_text = "Number of copies to create"
+	dup_row1.add_child(dup_count_spin)
+
+	var dup_row2 = HBoxContainer.new()
+	ac.add_child(dup_row2)
+	var off_lbl = Label.new()
+	off_lbl.text = "Offset:"
+	dup_row2.add_child(off_lbl)
+	dup_offset_x = SpinBox.new()
+	dup_offset_x.min_value = -1000
+	dup_offset_x.max_value = 1000
+	dup_offset_x.value = 8
+	dup_offset_x.step = 1
+	dup_offset_x.tooltip_text = "X offset per copy"
+	dup_offset_x.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dup_row2.add_child(dup_offset_x)
+	dup_offset_y = SpinBox.new()
+	dup_offset_y.min_value = -1000
+	dup_offset_y.max_value = 1000
+	dup_offset_y.value = 0
+	dup_offset_y.step = 1
+	dup_offset_y.tooltip_text = "Y offset per copy"
+	dup_offset_y.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dup_row2.add_child(dup_offset_y)
+	dup_offset_z = SpinBox.new()
+	dup_offset_z.min_value = -1000
+	dup_offset_z.max_value = 1000
+	dup_offset_z.value = 0
+	dup_offset_z.step = 1
+	dup_offset_z.tooltip_text = "Z offset per copy"
+	dup_offset_z.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dup_row2.add_child(dup_offset_z)
+
+	var dup_btns = HBoxContainer.new()
+	ac.add_child(dup_btns)
+	var create_dup_btn = Button.new()
+	create_dup_btn.text = "Create Array"
+	create_dup_btn.tooltip_text = "Create duplicate array from selected brushes"
+	create_dup_btn.pressed.connect(_on_create_duplicate_array)
+	dup_btns.add_child(create_dup_btn)
+	var remove_dup_btn = Button.new()
+	remove_dup_btn.text = "Remove Array"
+	remove_dup_btn.tooltip_text = "Remove duplicate array for selected brushes"
+	remove_dup_btn.pressed.connect(_on_remove_duplicate_array)
+	dup_btns.add_child(remove_dup_btn)
+
 	clear_btn = _make_button("Clear Brushes")
 	ac.add_child(clear_btn)
 
@@ -1331,6 +1642,12 @@ func _build_manage_tab() -> void:
 
 	import_map_btn = _make_button("Import .map")
 	flc.add_child(import_map_btn)
+
+	map_format_select = OptionButton.new()
+	map_format_select.add_item("Classic Quake", 0)
+	map_format_select.add_item("Valve 220", 1)
+	map_format_select.tooltip_text = "Map export format"
+	flc.add_child(map_format_select)
 
 	export_map_btn = _make_button("Export .map")
 	flc.add_child(export_map_btn)
@@ -1444,6 +1761,7 @@ func _ready():
 
 	# --- Toolbar setup ---
 	var tool_group = ButtonGroup.new()
+	tool_group.pressed.connect(_on_builtin_tool_pressed)
 	tool_draw.toggle_mode = true
 	tool_select.toggle_mode = true
 	tool_draw.button_group = tool_group
@@ -1840,6 +2158,10 @@ func get_operation() -> int:
 	)
 
 
+func _on_builtin_tool_pressed(_button: BaseButton) -> void:
+	builtin_tool_changed.emit()
+
+
 func get_tool() -> int:
 	if tool_draw.button_pressed:
 		return 0
@@ -1975,11 +2297,14 @@ func set_selection_count(count: int) -> void:
 
 func set_selection_nodes(nodes: Array) -> void:
 	_selection_nodes = nodes
-	# Refresh Entity I/O list when selection changes
+	# Refresh Entity I/O list and property form when selection changes
 	if not nodes.is_empty() and level_root and level_root.is_entity_node(nodes[0]):
 		_refresh_io_list(nodes[0])
-	elif io_list:
-		io_list.clear()
+		_rebuild_entity_props(nodes[0])
+	else:
+		if io_list:
+			io_list.clear()
+		_clear_entity_props()
 
 
 func _on_grid_snap_value_changed(value: float) -> void:
@@ -2221,6 +2546,44 @@ func _on_move_to_ceiling() -> void:
 	if brush_ids.is_empty():
 		return
 	_commit_state_action("Move to Ceiling", "move_brushes_to_ceiling", [brush_ids])
+
+
+func _on_create_duplicate_array() -> void:
+	if not level_root or _selection_nodes.is_empty():
+		_set_status("Select brushes first", true)
+		return
+	var brush_ids = PackedStringArray()
+	for node in _selection_nodes:
+		if level_root.is_brush_node(node):
+			var info = level_root.get_brush_info_from_node(node)
+			if info and info.has("brush_id"):
+				brush_ids.append(info["brush_id"])
+	if brush_ids.is_empty():
+		_set_status("No brushes selected", true)
+		return
+	var cnt = int(dup_count_spin.value) if dup_count_spin else 3
+	var off = Vector3(
+		dup_offset_x.value if dup_offset_x else 8,
+		dup_offset_y.value if dup_offset_y else 0,
+		dup_offset_z.value if dup_offset_z else 0,
+	)
+	_commit_state_action("Create Duplicate Array", "create_duplicate_array", [brush_ids, cnt, off])
+	_set_status("Created %d copies" % cnt)
+
+
+func _on_remove_duplicate_array() -> void:
+	if not level_root or _selection_nodes.is_empty():
+		_set_status("Select a duplicator source brush", true)
+		return
+	for node in _selection_nodes:
+		if not level_root.is_brush_node(node):
+			continue
+		var dup_id: String = str(node.get_meta("duplicator_id", ""))
+		if dup_id != "":
+			_commit_state_action("Remove Duplicate Array", "remove_duplicate_array", [dup_id])
+			_set_status("Removed duplicate array")
+			return
+	_set_status("Selected brush is not a duplicator source", true)
 
 
 func _on_tie_entity() -> void:
@@ -3388,8 +3751,11 @@ func _on_map_export_selected(path: String) -> void:
 	if not level_root:
 		_set_status("No LevelRoot for .map export", true)
 		return
-	var err = int(level_root.export_map(path))
-	_set_status("Exported .map" if err == OK else "Failed to export .map", err != OK, 3.0)
+	var format = "valve220" if map_format_select and map_format_select.selected == 1 else "quake"
+	var err = int(level_root.export_map(path, format))
+	var fmt_name = "Valve 220" if format == "valve220" else "Classic Quake"
+	var msg = "Exported .map (%s)" % fmt_name if err == OK else "Failed to export .map"
+	_set_status(msg, err != OK, 3.0)
 
 
 func _on_glb_export_selected(path: String) -> void:

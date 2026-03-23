@@ -4,6 +4,8 @@ class_name HFFileSystem
 
 const HFLevelIO = preload("../hflevel_io.gd")
 const MapIO = preload("../map_io.gd")
+const HFMapQuakeType = preload("../map_adapters/hf_map_quake.gd")
+const HFMapValve220Type = preload("../map_adapters/hf_map_valve220.gd")
 
 var root: Node3D
 var _hflevel_thread: Thread = null
@@ -73,11 +75,16 @@ func import_map(path: String) -> int:
 	return OK
 
 
-func export_map(path: String) -> int:
+func export_map(path: String, format: String = "quake") -> int:
 	if path == "":
 		return ERR_INVALID_PARAMETER
 	ensure_dir_for_path(path)
-	var text = MapIO.export_map_from_level(root)
+	var adapter: RefCounted
+	if format == "valve220":
+		adapter = HFMapValve220Type.new()
+	else:
+		adapter = HFMapQuakeType.new()
+	var text = MapIO.export_map_from_level(root, adapter)
 	if text == "":
 		return ERR_INVALID_DATA
 	var file = FileAccess.open(path, FileAccess.WRITE)
