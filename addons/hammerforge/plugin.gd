@@ -18,6 +18,8 @@ var last_3d_camera: Camera3D = null
 var last_3d_mouse_pos := Vector2.ZERO
 var numeric_buffer := ""
 var _tool_registry: HFToolRegistry = null
+var _keymap: HFKeymap = null
+var _user_prefs: HFUserPrefs = null
 const LevelRootType = preload("level_root.gd")
 const DraftEntityType = preload("draft_entity.gd")
 const IconRes = preload("icon.png")
@@ -42,10 +44,16 @@ func _enter_tree():
 			"theme_changed", Callable(self, "_on_editor_theme_changed")
 		):
 			base_control.connect("theme_changed", Callable(self, "_on_editor_theme_changed"))
+	_tool_registry = HFToolRegistry.new()
+	_tool_registry.load_external_tools("res://addons/hammerforge/tools/")
+	_keymap = HFKeymap.load_or_default("user://hammerforge_keymap.json")
+	_user_prefs = HFUserPrefs.load_prefs()
 	add_control_to_dock(DOCK_SLOT_LEFT_UL, dock)
 	if dock:
 		dock.set_editor_interface(get_editor_interface())
 		dock.set_undo_redo(undo_redo_manager)
+		dock.set_keymap(_keymap)
+		dock.set_user_prefs(_user_prefs)
 		if dock.has_signal("hud_visibility_changed"):
 			dock.connect("hud_visibility_changed", Callable(self, "_on_hud_visibility_changed"))
 		if dock.has_signal("builtin_tool_changed"):
@@ -64,8 +72,6 @@ func _enter_tree():
 		):
 			selection.connect("selection_changed", Callable(self, "_on_editor_selection_changed"))
 		hf_selection = selection.get_selected_nodes()
-	_tool_registry = HFToolRegistry.new()
-	_tool_registry.load_external_tools("res://addons/hammerforge/tools/")
 	set_process(false)
 
 
@@ -126,7 +132,8 @@ func _update_hud_context() -> void:
 	if not hud or not hud.has_method("update_context"):
 		return
 	var ctx := {}
-	ctx["tool"] = dock.get_tool() if dock else 0
+	var tool_id_ctx = dock.get_tool() if dock else 0
+	ctx["tool"] = tool_id_ctx
 	ctx["paint_mode"] = dock.is_paint_mode_enabled() if dock else false
 	ctx["paint_target"] = dock.get_paint_target() if dock else 0
 	ctx["mode"] = 0
@@ -135,6 +142,25 @@ func _update_hud_context() -> void:
 	if root and root.input_state:
 		ctx["mode"] = root.input_state.mode
 		ctx["axis_lock"] = root.input_state.axis_lock
+	# Update dock status bar mode indicator
+	if dock:
+		var mode_name := "Draw"
+		if ctx.get("paint_mode", false):
+			mode_name = "Paint"
+		else:
+			match tool_id_ctx:
+				1:
+					mode_name = "Select"
+				2:
+					mode_name = "Extrude ▲"
+				3:
+					mode_name = "Extrude ▼"
+		if root and root.input_state:
+			if root.input_state.is_dragging():
+				mode_name += " [dragging]"
+			elif root.input_state.is_extruding():
+				mode_name += " [extruding]"
+		dock.set_status_mode(mode_name)
 	if numeric_buffer.length() > 0:
 		ctx["numeric"] = numeric_buffer
 	hud.update_context(ctx)
@@ -390,28 +416,42 @@ func _handle_keyboard_input(
 		if nr != EditorPlugin.AFTER_GUI_INPUT_PASS:
 			return nr
 
-	if event.keycode == KEY_DELETE:
+	# External tool keyboard dispatch first — external tools can override keys
+	if _tool_registry and _tool_registry.has_active_external_tool():
+		var ext_result = _tool_registry.dispatch_keyboard(event)
+		if ext_result == EditorPlugin.AFTER_GUI_INPUT_STOP:
+			return ext_result
+
+	if _keymap.matches("delete", event):
 		var deleted = _delete_selected(root)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP if deleted else EditorPlugin.AFTER_GUI_INPUT_PASS
-	if event.ctrl_pressed and event.keycode == KEY_D:
+	if _keymap.matches("duplicate", event):
 		_duplicate_selected(root)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
-	if event.ctrl_pressed and event.keycode == KEY_G:
+	if _keymap.matches("group", event):
 		_group_selected(root)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
-	if event.ctrl_pressed and event.keycode == KEY_U:
+	if _keymap.matches("ungroup", event):
 		_ungroup_selected(root)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
-	if event.ctrl_pressed and event.keycode == KEY_H:
+	if _keymap.matches("hollow", event):
+		if hf_selection.is_empty():
+			return EditorPlugin.AFTER_GUI_INPUT_PASS
 		_hollow_selected(root)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
-	if event.ctrl_pressed and event.shift_pressed and event.keycode == KEY_F:
+	if _keymap.matches("move_to_floor", event):
+		if hf_selection.is_empty():
+			return EditorPlugin.AFTER_GUI_INPUT_PASS
 		_move_selected_to_floor(root)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
-	if event.ctrl_pressed and event.shift_pressed and event.keycode == KEY_C:
+	if _keymap.matches("move_to_ceiling", event):
+		if hf_selection.is_empty():
+			return EditorPlugin.AFTER_GUI_INPUT_PASS
 		_move_selected_to_ceiling(root)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
-	if event.shift_pressed and not event.ctrl_pressed and event.keycode == KEY_X:
+	if _keymap.matches("clip", event):
+		if hf_selection.is_empty():
+			return EditorPlugin.AFTER_GUI_INPUT_PASS
 		_clip_selected(root)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	# Nudge keys
@@ -419,13 +459,25 @@ func _handle_keyboard_input(
 	if nudge != Vector3.ZERO:
 		_nudge_selected(root, nudge)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
-	# Extrude tool shortcuts
-	if event.keycode == KEY_U:
+	# Tool switch shortcuts
+	if _keymap.matches("tool_draw", event):
+		_deactivate_external_tool()
+		if dock.tool_draw:
+			dock.tool_draw.button_pressed = true
+		_update_hud_context()
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	if _keymap.matches("tool_select", event):
+		_deactivate_external_tool()
+		if dock.tool_select:
+			dock.tool_select.button_pressed = true
+		_update_hud_context()
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	if _keymap.matches("tool_extrude_up", event):
 		_deactivate_external_tool()
 		dock.set_extrude_tool(1)
 		_update_hud_context()
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
-	if event.keycode == KEY_J:
+	if _keymap.matches("tool_extrude_down", event):
 		_deactivate_external_tool()
 		dock.set_extrude_tool(-1)
 		_update_hud_context()
@@ -433,31 +485,30 @@ func _handle_keyboard_input(
 	# Paint tool shortcuts
 	if paint_mode:
 		var paint_key := -1
-		match event.keycode:
-			KEY_B:
-				paint_key = 0
-			KEY_E:
-				paint_key = 1
-			KEY_R:
-				paint_key = 2
-			KEY_L:
-				paint_key = 3
-			KEY_K:
-				paint_key = 4
+		if _keymap.matches("paint_bucket", event):
+			paint_key = 0
+		elif _keymap.matches("paint_erase", event):
+			paint_key = 1
+		elif _keymap.matches("paint_ramp", event):
+			paint_key = 2
+		elif _keymap.matches("paint_line", event):
+			paint_key = 3
+		elif _keymap.matches("paint_blend", event):
+			paint_key = 4
 		if paint_key >= 0:
 			dock.set_paint_tool(paint_key)
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 	# Axis lock (non-select tools only)
 	if tool_id != 1:
-		if event.keycode == KEY_X:
+		if _keymap.matches("axis_x", event):
 			root.set_axis_lock(LevelRootType.AxisLock.X, true)
 			_update_hud_context()
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
-		if event.keycode == KEY_Y:
+		if _keymap.matches("axis_y", event):
 			root.set_axis_lock(LevelRootType.AxisLock.Y, true)
 			_update_hud_context()
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
-		if event.keycode == KEY_Z:
+		if _keymap.matches("axis_z", event):
 			root.set_axis_lock(LevelRootType.AxisLock.Z, true)
 			_update_hud_context()
 			return EditorPlugin.AFTER_GUI_INPUT_STOP

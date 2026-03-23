@@ -85,10 +85,9 @@ func _auto_axes(normal: Vector3) -> Array:
 	var abs_n := normal.abs()
 	if abs_n.y >= abs_n.x and abs_n.y >= abs_n.z:
 		return [Vector3.RIGHT, Vector3.BACK]  # floor/ceiling
-	elif abs_n.x >= abs_n.z:
+	if abs_n.x >= abs_n.z:
 		return [Vector3.BACK, Vector3.UP]  # east/west wall
-	else:
-		return [Vector3.RIGHT, Vector3.UP]  # north/south wall
+	return [Vector3.RIGHT, Vector3.UP]  # north/south wall
 
 
 static func _fmt_axis(v: Vector3) -> String:
@@ -97,5 +96,5 @@ static func _fmt_axis(v: Vector3) -> String:
 
 static func _fmt_float(f: float) -> String:
 	if absf(f - roundf(f)) < 0.001:
-		return str(int(f))
-	return "%.4g" % f
+		return str(int(roundf(f)))
+	return String.num(f, 4)

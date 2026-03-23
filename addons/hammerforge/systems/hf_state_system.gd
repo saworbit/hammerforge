@@ -36,6 +36,7 @@ func begin_transaction(name: String) -> void:
 	_transaction_name = name
 	_transaction_snapshot = capture_state()
 	_transaction_active = true
+	root.begin_signal_batch()
 
 
 ## Commit the current transaction.  Returns the before-snapshot so the caller
@@ -48,6 +49,7 @@ func commit_transaction() -> Dictionary:
 	_transaction_active = false
 	_transaction_name = ""
 	_transaction_snapshot = {}
+	root.end_signal_batch()
 	return snapshot
 
 
@@ -56,6 +58,7 @@ func rollback_transaction() -> void:
 	if not _transaction_active:
 		push_warning("HFStateSystem: rollback_transaction() called with no active transaction")
 		return
+	root.discard_signal_batch()
 	restore_state(_transaction_snapshot)
 	_transaction_active = false
 	_transaction_name = ""

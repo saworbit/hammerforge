@@ -5,6 +5,40 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Customizable keymaps** (`hf_keymap.gd`): all keyboard shortcuts are now data-driven via
+  `HFKeymap` instead of hardcoded `KEY_*` constants. Bindings stored as action → {keycode, ctrl,
+  shift, alt} maps. `load_or_default()` reads `user://hammerforge_keymap.json` or falls back to
+  built-in defaults. `matches(action, event)` replaces ~25 inline keycode checks in `plugin.gd`.
+  `get_display_string()` provides human-readable labels (e.g. "Ctrl+Shift+F"). Toolbar button
+  labels and tooltips update from keymap automatically. `set_binding()` + `save()` for rebinding.
+- **User preferences** (`hf_user_prefs.gd`): application-scoped preferences that persist across
+  sessions via `user://hammerforge_prefs.json`. Stores: default grid snap, autosave interval,
+  recent files (max 10, deduplicated, MRU order), collapsed section states, last tool ID, HUD
+  visibility. Separate from per-level settings in `hf_state_system.gd`. Loaded in plugin
+  `_enter_tree()` and passed to dock.
+- **Gesture poll system**: `can_activate()` and `get_poll_fail_reason()` on `HFEditorTool`;
+  `can_start()` on `HFGesture`. Dock disables selection-dependent buttons (Hollow, Clip, Floor,
+  Ceiling) when nothing is selected. Plugin guards keyboard shortcuts with early-exit when
+  `hf_selection` is empty.
+- **Tag-based reconciler invalidation**: `tag_brush_dirty()`, `tag_paint_dirty()`,
+  `tag_full_reconcile()`, and `consume_dirty_tags()` on LevelRoot. Brush system tags dirty on
+  create/delete/transform; tags full reconcile on structural operations (hollow, clip). Enables
+  future selective reconciliation (skip unchanged geometry).
+- **Batched signal emission**: `begin_signal_batch()` / `end_signal_batch()` on LevelRoot with
+  depth-counted nesting. During a batch, signals are queued; on flush, brush add/remove/change
+  signals are coalesced into a single `selection_changed` emission. Wired into state system
+  transactions. `discard_signal_batch()` on rollback.
+- **Declarative tool settings**: `HFEditorTool` now exposes `get_settings_schema()` returning an
+  array of property descriptors (name, type, label, default, min, max, options). Dock
+  `rebuild_tool_settings()` auto-generates CheckBox/SpinBox/LineEdit/OptionButton/ColorPickerButton
+  from the schema. `get_setting()` / `set_setting()` with defaults from schema.
+- **Status bar mode indicator**: dock status label now shows the active tool mode (Draw, Select,
+  Extrude ▲/▼, Paint) with [dragging]/[extruding] suffix during active gestures. Updated on
+  every HUD context refresh.
+- **Input pass-through reorder**: external tool `dispatch_keyboard()` now runs before built-in
+  keyboard shortcuts in `_handle_keyboard_input()`, allowing external tools to override keys.
+- **GUT tests** for new systems: `test_keymap.gd` (16), `test_user_prefs.gd` (9),
+  `test_dirty_tags.gd` (11) = 36 new tests. Total: 344 tests across 22 files.
 - **Command collation** for undo/redo: consecutive similar operations (nudge, resize, paint)
   within a 1-second window are merged into a single undo entry. Prevents undo flooding during
   rapid drag/nudge sequences. Collation tags: `nudge`, `resize_brush`, `paint_brush`.
@@ -124,7 +158,7 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   - "Set from Selection" computes merged AABB of selected brushes + margin.
   - Dock UI: Enable checkbox, min/max spinboxes, "Set from Selection" button in Manage tab.
   - Persists in `.hflevel` settings.
-- **GUT unit test suite** with 308 tests across 19 test files:
+- **GUT unit test suite** with 344 tests across 22 test files:
   - `test_visgroup_system.gd` (18 tests): CRUD, visibility, membership, serialization.
   - `test_grouping.gd` (9 tests): group creation, meta, ungroup, regroup, serialization.
   - `test_texture_lock.gd` (10 tests): UV compensation for all projection types.

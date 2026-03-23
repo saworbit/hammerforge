@@ -27,6 +27,12 @@ var current_position := Vector2.ZERO
 var numeric_buffer := ""
 
 
+## Returns true if this gesture can start in the current state.
+## Override in subclass to add specific requirements (e.g., needs selection).
+static func can_start(p_root: Node3D) -> bool:
+	return p_root != null
+
+
 func _init(p_root: Node3D, p_camera: Camera3D, p_start: Vector2) -> void:
 	root = p_root
 	camera = p_camera

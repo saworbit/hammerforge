@@ -1,6 +1,6 @@
 ﻿# Development Guide
 
-Last updated: March 22, 2026
+Last updated: March 23, 2026
 
 This document covers local setup, codebase structure, and how to test features.
 
@@ -31,8 +31,10 @@ addons/hammerforge/
   hf_gesture.gd          Gesture tracker base class (update/commit/cancel pattern)
   hf_entity_def.gd       Data-driven entity definition system (JSON + built-in defaults)
   hf_duplicator.gd       Duplicator / instanced geometry (source brushes + progressive offset)
-  hf_editor_tool.gd      Plugin API: base class for custom editor tools
+  hf_editor_tool.gd      Plugin API: base class for custom editor tools (+ poll, declarative settings)
   hf_tool_registry.gd    Plugin API: tool registration, dispatch, external tool loader
+  hf_keymap.gd           Customizable keyboard shortcuts (JSON load/save, action matching)
+  hf_user_prefs.gd       Cross-session user preferences (user://hammerforge_prefs.json)
   surface_paint.gd       Per-face surface paint tool
   uv_editor.gd           UV editing dock
   highlight.gdshader     Selection highlight shader (wireframe, unshaded, alpha)
@@ -99,13 +101,19 @@ addons/hammerforge/
 - **Undo/redo stability.** Prefer brush IDs and `create_brush_from_info()` for undo instead of storing Node references in history.
 - **Bake owner assignment.** Use `_assign_owner_recursive()` (not `_assign_owner()`) for baked geometry so all descendants get proper editor ownership. Always call it *after* the container is added to the scene tree.
 - **Shader files.** Prefer standalone `.gdshader` files over inline GLSL strings in GDScript (e.g. `highlight.gdshader` for the selection wireframe shader). Use `preload("file.gdshader")` to load them.
+- **Customizable keymaps.** All keyboard shortcuts go through `_keymap.matches("action_name", event)` instead of hardcoded `event.keycode == KEY_*` checks. Default bindings are defined in `HFKeymap._default_bindings()`. Users can override via `user://hammerforge_keymap.json`. Toolbar labels pull display strings from the keymap.
+- **User preferences vs. level settings.** Application-scoped prefs (grid default, UI state, recent files) go in `HFUserPrefs` (`user://hammerforge_prefs.json`). Per-level settings (cordon, texture lock, materials) live on `LevelRoot` and serialize in `.hflevel`.
+- **Tool poll pattern.** Override `can_activate(root)` and `get_poll_fail_reason(root)` on `HFEditorTool` to control when tools are available. Dock uses poll results to disable buttons and set tooltips. Plugin guards shortcuts with early-exit when poll fails.
+- **Declarative tool settings.** External tools expose `get_settings_schema()` → Array of `{name, type, label, default, min, max, options}`. Dock auto-generates controls via `rebuild_tool_settings()`. Use `get_setting(key)` / `set_setting(key, val)` for storage.
+- **Tag-based invalidation.** Call `root.tag_brush_dirty(id)` when a brush is modified; `root.tag_full_reconcile()` for structural changes (hollow, clip). Guard with `root.has_method("tag_brush_dirty")` for test shim compatibility.
+- **Signal batching.** Wrap multi-brush operations in `root.begin_signal_batch()` / `root.end_signal_batch()`. Transactions do this automatically. On rollback, call `root.discard_signal_batch()` to drop queued signals without emission.
 
 ### CI
 
 The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on push and PR to `main`:
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
-- **GUT unit tests** -- 308 tests across 19 test files (runs Godot headless)
+- **GUT unit tests** -- 344 tests across 22 test files (runs Godot headless)
 
 Run locally before pushing:
 ```
@@ -139,6 +147,9 @@ Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framewor
 | `test_duplicator.gd` | 7 | Instance count, progressive offset, clear cleanup, to_dict/from_dict roundtrip, edge cases |
 | `test_map_export.gd` | 19 | Quake/Valve220 face line format, auto-axes, entity property formatting, fractional coords, projections |
 | `test_tool_registry.gd` | 25 | Tool registration, activate/deactivate, deactivate_current, has_active_external_tool, dispatch routing, shortcut check, external ID guard, stays-active-across-dispatch regression |
+| `test_keymap.gd` | 16 | Default bindings loaded, simple/ctrl/shift/ctrl+shift key matching, modifier mismatch rejection, display string formatting, rebinding, JSON roundtrip |
+| `test_user_prefs.gd` | 9 | Default values, get/set prefs, section collapsed state, recent files (add/dedup/max 10), JSON roundtrip |
+| `test_dirty_tags.gd` | 11 | Brush dirty tags (add/dedup), paint chunk tags, full reconcile flag, consume-clears, signal batch queue/flush/discard/nesting |
 
 Run all tests:
 ```

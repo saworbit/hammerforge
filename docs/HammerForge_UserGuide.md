@@ -1,6 +1,6 @@
 # HammerForge User Guide
 
-Last updated: March 22, 2026
+Last updated: March 23, 2026
 
 This guide covers the current HammerForge workflow in Godot 4.6: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs.
 
@@ -119,6 +119,56 @@ The on-screen shortcut overlay updates dynamically based on your current tool an
 | Surface Paint | Click+Drag, radius/strength info |
 
 The HUD also shows current axis lock state (e.g. "[X Locked]").
+
+## Customizable Keyboard Shortcuts
+
+All keyboard shortcuts are data-driven and can be customized. The default bindings match the shortcuts shown throughout this guide.
+
+**Default bindings:**
+
+| Action | Default Key | Description |
+|--------|-------------|-------------|
+| Draw tool | D | Switch to Draw mode |
+| Select tool | S | Switch to Select mode |
+| Extrude Up | U | Switch to Extrude Up mode |
+| Extrude Down | J | Switch to Extrude Down mode |
+| Delete | Delete | Delete selected brushes |
+| Duplicate | Ctrl+D | Duplicate selection |
+| Group | Ctrl+G | Group selected brushes |
+| Ungroup | Ctrl+U | Ungroup selection |
+| Hollow | Ctrl+H | Convert brush to hollow room |
+| Clip | Shift+X | Split brush along axis plane |
+| Move to Floor | Ctrl+Shift+F | Snap to nearest surface below |
+| Move to Ceiling | Ctrl+Shift+C | Snap to nearest surface above |
+| Axis Lock X/Y/Z | X / Y / Z | Constrain to axis |
+| Paint tools | B / E / R / L / K | Bucket / Erase / Ramp / Line / Blend |
+
+**Rebinding:** Edit `user://hammerforge_keymap.json` (created on first run). Each entry maps an action name to `{"keycode": KEY_*, "ctrl": bool, "shift": bool, "alt": bool}`. Restart the plugin after editing.
+
+**Toolbar labels** (Draw (D), Sel (S), etc.) and **tooltips** update automatically from the keymap, so custom bindings are always reflected in the UI.
+
+## User Preferences
+
+HammerForge stores cross-session preferences in `user://hammerforge_prefs.json`, separate from per-level settings.
+
+Preferences include:
+- Default grid snap size
+- Autosave interval
+- Recent file list (up to 10)
+- Collapsed section states (which dock sections are expanded/collapsed)
+- Last active tool
+- HUD visibility
+
+These persist across editor restarts. Per-level settings (cordon, texture lock, materials) remain in `.hflevel` files.
+
+## Tool Availability (Poll System)
+
+Some actions require specific conditions to run:
+- **Hollow, Clip, Move to Floor/Ceiling** require at least one brush selected. When nothing is selected, these buttons are grayed out with a tooltip explaining why.
+- **Extrude** requires a LevelRoot in the scene.
+- **External tools** can define their own requirements via `can_activate()`.
+
+The status bar at the bottom of the dock shows the current mode (Draw, Select, Extrude ▲/▼, Paint) and updates with [dragging] or [extruding] during active gestures.
 
 ## Brush Creation (CAD style)
 1) Base drag: click and drag to define the base.

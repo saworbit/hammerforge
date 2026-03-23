@@ -120,7 +120,11 @@ func create_brush_from_info(info: Dictionary) -> Node:
 		brush.set_meta("group_id", str(info["group_id"]))
 	if info.has("brush_entity_class") and str(info["brush_entity_class"]) != "":
 		brush.set_meta("brush_entity_class", str(info["brush_entity_class"]))
-	if root.has_signal("brush_added"):
+	if root.has_method("tag_brush_dirty"):
+		root.tag_brush_dirty(str(brush_id))
+	if root.has_method("_emit_or_batch"):
+		root._emit_or_batch("brush_added", [str(brush_id)])
+	elif root.has_signal("brush_added"):
 		root.brush_added.emit(str(brush_id))
 	return brush
 
@@ -145,8 +149,13 @@ func delete_brush(brush: Node, free: bool = true) -> void:
 		brush.get_parent().remove_child(brush)
 	if free:
 		brush.queue_free()
-	if removed_id != "" and root.has_signal("brush_removed"):
-		root.brush_removed.emit(removed_id)
+	if removed_id != "":
+		if root.has_method("tag_brush_dirty"):
+			root.tag_brush_dirty(removed_id)
+		if root.has_method("_emit_or_batch"):
+			root._emit_or_batch("brush_removed", [removed_id])
+		elif root.has_signal("brush_removed"):
+			root.brush_removed.emit(removed_id)
 
 
 func delete_brush_by_id(brush_id: String) -> void:
@@ -573,6 +582,8 @@ func set_brush_transform_by_id(brush_id: String, size: Vector3, position: Vector
 		var old_pos = draft.global_position
 		draft.size = size
 		draft.global_position = position
+		if root.has_method("tag_brush_dirty"):
+			root.tag_brush_dirty(brush_id)
 		if root.texture_lock and not draft.faces.is_empty():
 			_adjust_face_uvs_for_transform(draft, old_size, size, old_pos, position)
 
@@ -797,6 +808,8 @@ func _find_brush_by_key(key: String) -> DraftBrush:
 func hollow_brush_by_id(brush_id: String, wall_thickness: float) -> void:
 	if brush_id == "":
 		return
+	if root.has_method("tag_full_reconcile"):
+		root.tag_full_reconcile()
 	var brush = _find_brush_by_id(brush_id)
 	if not brush or not (brush is DraftBrush):
 		return
@@ -984,6 +997,8 @@ func _move_brushes_vertical(brush_ids: Array, direction: float) -> void:
 func clip_brush_by_id(brush_id: String, axis: int, split_pos: float) -> void:
 	if brush_id == "":
 		return
+	if root.has_method("tag_full_reconcile"):
+		root.tag_full_reconcile()
 	var brush = _find_brush_by_id(brush_id)
 	if not brush or not (brush is DraftBrush):
 		return

@@ -1,6 +1,6 @@
 # HammerForge Spec
 
-Last updated: March 22, 2026
+Last updated: March 23, 2026
 
 This document describes HammerForge's architecture and data flow.
 
@@ -54,6 +54,8 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `face_selector.gd` | Raycast face selection helper |
 | `surface_paint.gd` | Per-face surface paint tool |
 | `uv_editor.gd` + `uv_editor.tscn` | UV editing dock control |
+| `hf_keymap.gd` | Customizable keyboard shortcuts (JSON load/save, action → binding mapping) |
+| `hf_user_prefs.gd` | Cross-session user preferences (`user://hammerforge_prefs.json`) |
 
 ### Subsystems (`addons/hammerforge/systems/`)
 
@@ -334,9 +336,46 @@ The dock uses 4 tabs with collapsible sections for visual hierarchy:
 - `_edit()` only nulls `active_root` when the root node is removed from the tree.
 - `dock.gd` mirrors the sticky pattern and uses `_find_level_root_in()` for deep tree search.
 
+## Customizable Keymaps
+
+All keyboard shortcuts are data-driven via `HFKeymap` (`hf_keymap.gd`). Plugin loads bindings from `user://hammerforge_keymap.json` (or built-in defaults). Each binding maps an action name (e.g. `"hollow"`) to `{keycode, ctrl, shift, alt}`. Plugin uses `_keymap.matches(action, event)` instead of hardcoded `KEY_*` checks. Toolbar labels and tooltips pull display strings from the keymap.
+
+## User Preferences
+
+`HFUserPrefs` (`hf_user_prefs.gd`) stores cross-session application-scoped preferences in `user://hammerforge_prefs.json`. Separate from per-level settings on LevelRoot. Includes: default grid snap, autosave interval, recent files (max 10, MRU), collapsed section states, last tool ID, HUD visibility.
+
+## Tag-Based Invalidation
+
+LevelRoot maintains dirty tags for selective reconciliation:
+- `tag_brush_dirty(brush_id)` — marks a specific brush as needing rebuild.
+- `tag_paint_dirty(chunk_coord)` — marks a paint chunk as dirty.
+- `tag_full_reconcile()` — marks entire scene for full rebuild (structural changes like hollow/clip).
+- `consume_dirty_tags()` — returns and clears all tags (called by reconciler).
+
+Brush system calls these on create/delete/transform/hollow/clip. Tags are guarded with `has_method()` for test shim compatibility.
+
+## Signal Batching
+
+LevelRoot supports batched signal emission for multi-brush operations:
+- `begin_signal_batch()` / `end_signal_batch()` with depth-counted nesting.
+- During batch, signals are queued. On flush, brush add/remove/change signals coalesce into a single `selection_changed` emission.
+- Transactions auto-batch: `begin_transaction()` calls `begin_signal_batch()`; `commit_transaction()` calls `end_signal_batch()`.
+- `discard_signal_batch()` drops queued signals on rollback.
+
+## Tool Poll System
+
+`HFEditorTool` exposes `can_activate(root)` and `get_poll_fail_reason(root)`. `HFGesture` exposes `can_start(root)`. Dock uses these to gray out buttons and set tooltips. Plugin guards keyboard shortcuts with early-exit when poll fails (e.g. Hollow requires selection).
+
+## Declarative Tool Settings
+
+External tools expose `get_settings_schema()` → Array of `{name, type, label, default, min, max, options}`. Supported types: `bool`, `int`, `float`, `string`, `enum`, `color`. Dock `rebuild_tool_settings()` auto-generates controls from the schema. `get_setting(key)` / `set_setting(key, val)` for storage.
+
 ## Editor UX
 - Theme-aware dock styling with comprehensive tooltips on all controls.
 - Context-sensitive shortcut HUD overlay (8 views: draw idle, dragging base, adjusting height, select, extrude idle, extruding active, floor paint, surface paint). Displays current axis lock. Updated via `plugin.gd` -> `shortcut_hud.gd:update_context()`.
+- **Customizable keyboard shortcuts** -- all bindings data-driven via `HFKeymap` JSON.
+- **Status bar mode indicator** -- shows active mode (Draw/Select/Extrude/Paint) with live state updates.
+- **Tool poll** -- buttons gray out with tooltip when action can't run (e.g. Hollow with no selection).
 - Paint tool keyboard shortcuts (B/E/R/L/K) active when Paint Mode is enabled.
 - Selection count in status bar, updated on every selection change.
 - Color-coded status bar: errors in red (auto-clear 5s), warnings in yellow, success messages auto-clear after 3s.
@@ -367,5 +406,10 @@ Unit tests use the [GUT](https://github.com/bitwes/Gut) framework and run headle
 | `test_grouping.gd` | 9 | Group creation, meta storage, ungroup, regroup, serialization |
 | `test_texture_lock.gd` | 10 | UV offset/scale compensation for PLANAR_X/Y/Z, BOX_UV, CYLINDRICAL |
 | `test_cordon_filter.gd` | 10 | AABB intersection, cordon-filtered collection, chunk_coord utility |
+| `test_keymap.gd` | 16 | Default bindings, key matching (simple/ctrl/shift/ctrl+shift), modifier rejection, display strings, rebinding, JSON roundtrip |
+| `test_user_prefs.gd` | 9 | Default values, get/set prefs, section collapse state, recent files (add/dedup/max 10), JSON roundtrip |
+| `test_dirty_tags.gd` | 11 | Brush dirty tags, paint chunk tags, full reconcile flag, consume-clears, signal batch queue/flush/discard/nesting |
+
+Total: **344 tests** across **22 files**.
 
 Tests use root shim scripts (dynamically created GDScript) to provide the LevelRoot interface without circular preload dependencies. Configuration in `.gutconfig.json`.

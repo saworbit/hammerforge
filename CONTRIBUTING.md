@@ -20,6 +20,11 @@ Thanks for helping improve HammerForge.
 - New entity types go in `entities.json`, not hardcoded in GDScript.
 - New input tools should subclass `HFGesture` for self-contained state management.
 - Subscribe to LevelRoot signals instead of polling in `_process()`.
+- **Keyboard shortcuts** go through `_keymap.matches("action_name", event)`, never hardcoded `KEY_*` checks. Add new default bindings in `HFKeymap._default_bindings()`.
+- **External tools** should implement `can_activate()` for tool availability and `get_settings_schema()` for auto-generated dock UI. See `hf_editor_tool.gd` for the full API.
+- **Brush mutations** should call `root.tag_brush_dirty(id)` (guarded with `has_method`) so the reconciler can skip unchanged geometry.
+- **Multi-brush operations** should wrap in `begin_signal_batch()` / `end_signal_batch()` (or use transactions, which batch automatically) to prevent UI thrash.
+- **User preferences** (application-scoped) go in `HFUserPrefs`. **Level settings** go on LevelRoot.
 - Avoid adding new dependencies unless necessary.
 
 ## Running Checks Locally

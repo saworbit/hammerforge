@@ -474,6 +474,61 @@ func _apply_ui_state_to_root() -> void:
 		level_root.set("debug_logging", debug_enabled)
 
 
+var _keymap: HFKeymap = null
+var _user_prefs: HFUserPrefs = null
+
+
+func set_user_prefs(prefs: HFUserPrefs) -> void:
+	_user_prefs = prefs
+	_apply_user_prefs()
+
+
+## Read persisted prefs and apply them to dock controls.
+func _apply_user_prefs() -> void:
+	if not _user_prefs:
+		return
+	# Grid snap default
+	var snap_val = _user_prefs.get_pref("grid_snap", 16.0)
+	if grid_snap and float(snap_val) > 0.0:
+		grid_snap.value = float(snap_val)
+	# Show HUD
+	var hud_vis = _user_prefs.get_pref("show_hud", true)
+	if show_hud:
+		show_hud.button_pressed = bool(hud_vis)
+
+
+## Persist a pref change to disk.
+func _save_user_pref(key: String, value: Variant) -> void:
+	if not _user_prefs:
+		return
+	_user_prefs.set_pref(key, value)
+	_user_prefs.save()
+
+
+func set_keymap(km: HFKeymap) -> void:
+	_keymap = km
+	_update_toolbar_shortcut_labels()
+
+
+func _update_toolbar_shortcut_labels() -> void:
+	if not _keymap:
+		return
+	if tool_draw:
+		tool_draw.text = "Draw (%s)" % _keymap.get_display_string("tool_draw")
+	if tool_select:
+		tool_select.text = "Sel (%s)" % _keymap.get_display_string("tool_select")
+	if tool_extrude_up:
+		tool_extrude_up.tooltip_text = (
+			"Extrude Up (%s)\nClick face + drag to extrude upward"
+			% _keymap.get_display_string("tool_extrude_up")
+		)
+	if tool_extrude_down:
+		tool_extrude_down.tooltip_text = (
+			"Extrude Down (%s)\nClick face + drag to extrude downward"
+			% _keymap.get_display_string("tool_extrude_down")
+		)
+
+
 func set_editor_interface(iface: EditorInterface) -> void:
 	editor_interface = iface
 	if editor_interface:
@@ -1337,6 +1392,109 @@ func _entity_prop_default(type_name: String, value: Variant) -> Variant:
 			return str(value) if value != null else ""
 		_:
 			return value
+
+
+# ---------------------------------------------------------------------------
+# External Tool Settings — auto-generated UI from HFEditorTool.get_settings_schema()
+# ---------------------------------------------------------------------------
+
+var _tool_settings_controls: Array = []
+const HFEditorToolType = preload("hf_editor_tool.gd")
+
+
+## Rebuild the tool settings panel from an external tool's schema.
+## Called when an external tool is activated via the registry.
+func rebuild_tool_settings(tool: HFEditorToolType, parent: Control) -> void:
+	_clear_tool_settings(parent)
+	if not tool:
+		return
+	var schema: Array = tool.get_settings_schema()
+	if schema.is_empty():
+		return
+	for prop in schema:
+		if not (prop is Dictionary):
+			continue
+		var prop_name: String = str(prop.get("name", ""))
+		if prop_name == "":
+			continue
+		var prop_type: String = str(prop.get("type", "string"))
+		var prop_label: String = str(prop.get("label", prop_name))
+		var current_val: Variant = tool.get_setting(prop_name)
+		var row = HBoxContainer.new()
+		parent.add_child(row)
+		_tool_settings_controls.append(row)
+		var lbl = Label.new()
+		lbl.text = prop_label + ":"
+		lbl.custom_minimum_size.x = 75
+		row.add_child(lbl)
+		match prop_type:
+			"bool":
+				var cb = CheckBox.new()
+				cb.button_pressed = bool(current_val) if current_val != null else false
+				cb.toggled.connect(_on_tool_setting_changed.bind(tool, prop_name))
+				row.add_child(cb)
+			"int":
+				var sb = SpinBox.new()
+				sb.step = 1
+				sb.min_value = float(prop.get("min", 0))
+				sb.max_value = float(prop.get("max", 100))
+				sb.value = int(current_val) if current_val != null else 0
+				sb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				sb.value_changed.connect(_on_tool_setting_changed.bind(tool, prop_name))
+				row.add_child(sb)
+			"float":
+				var sb = SpinBox.new()
+				sb.step = 0.01
+				sb.min_value = float(prop.get("min", 0.0))
+				sb.max_value = float(prop.get("max", 100.0))
+				sb.value = float(current_val) if current_val != null else 0.0
+				sb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				sb.value_changed.connect(_on_tool_setting_changed.bind(tool, prop_name))
+				row.add_child(sb)
+			"string":
+				var le = LineEdit.new()
+				le.text = str(current_val) if current_val != null else ""
+				le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				le.text_changed.connect(_on_tool_setting_changed.bind(tool, prop_name))
+				row.add_child(le)
+			"enum":
+				var ob = OptionButton.new()
+				var options: Array = prop.get("options", [])
+				for opt in options:
+					ob.add_item(str(opt))
+				var idx = options.find(current_val) if current_val != null else 0
+				if idx >= 0:
+					ob.select(idx)
+				ob.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				ob.item_selected.connect(
+					_on_tool_setting_enum_changed.bind(tool, prop_name, options)
+				)
+				row.add_child(ob)
+			"color":
+				var cp = ColorPickerButton.new()
+				cp.color = current_val if current_val is Color else Color.WHITE
+				cp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				cp.color_changed.connect(_on_tool_setting_changed.bind(tool, prop_name))
+				row.add_child(cp)
+
+
+func _clear_tool_settings(parent: Control) -> void:
+	for ctrl in _tool_settings_controls:
+		if is_instance_valid(ctrl):
+			ctrl.queue_free()
+	_tool_settings_controls.clear()
+
+
+func _on_tool_setting_changed(value: Variant, tool: HFEditorToolType, prop_name: String) -> void:
+	if tool:
+		tool.set_setting(prop_name, value)
+
+
+func _on_tool_setting_enum_changed(
+	index: int, tool: HFEditorToolType, prop_name: String, options: Array
+) -> void:
+	if tool and index < options.size():
+		tool.set_setting(prop_name, options[index])
 
 
 func _build_entity_io_section() -> void:
@@ -2284,6 +2442,19 @@ func set_paint_tool(tool_id: int) -> void:
 			return
 
 
+## Update the mode indicator in the status bar.
+func set_status_mode(mode_name: String) -> void:
+	if status_label:
+		status_label.text = mode_name
+
+
+## Update the grid display in the status bar.
+func set_status_grid(snap_value: float) -> void:
+	if perf_label:
+		# Perf label doubles as grid indicator when not showing brush counts
+		pass  # Grid is already visible in the Brush tab SpinBox
+
+
 func set_selection_count(count: int) -> void:
 	if not selection_label:
 		return
@@ -2297,6 +2468,8 @@ func set_selection_count(count: int) -> void:
 
 func set_selection_nodes(nodes: Array) -> void:
 	_selection_nodes = nodes
+	# Mark hints dirty so selection-dependent buttons update
+	_hints_dirty = true
 	# Refresh Entity I/O list and property form when selection changes
 	if not nodes.is_empty() and level_root and level_root.is_entity_node(nodes[0]):
 		_refresh_io_list(nodes[0])
@@ -2329,6 +2502,7 @@ func _apply_grid_snap(value: float) -> void:
 	_sync_snap_buttons(value)
 	if level_root and _root_has_property("grid_snap"):
 		level_root.set("grid_snap", value)
+	_save_user_pref("grid_snap", value)
 
 
 func _sync_snap_buttons(value: float) -> void:
@@ -2351,6 +2525,7 @@ func _sync_snap_buttons(value: float) -> void:
 
 func _on_show_hud_toggled(pressed: bool) -> void:
 	hud_visibility_changed.emit(pressed)
+	_save_user_pref("show_hud", pressed)
 	_log("HUD visibility: %s" % ("on" if pressed else "off"))
 
 
@@ -2986,6 +3161,13 @@ func _update_disabled_hints() -> void:
 	_set_control_disabled_hint(uv_reset, not has_root or not has_face, face_hint)
 	var baked_ready = has_root and level_root.baked_container != null
 	_set_control_disabled_hint(export_glb_btn, not baked_ready, "Requires a successful bake")
+	# Selection-dependent tools: gray out when nothing is selected
+	var has_selection = _selection_nodes.size() > 0
+	var need_sel_hint = "Requires a selected brush"
+	_set_control_disabled_hint(hollow_btn, not has_root or not has_selection, need_sel_hint)
+	_set_control_disabled_hint(clip_btn, not has_root or not has_selection, need_sel_hint)
+	_set_control_disabled_hint(move_floor_btn, not has_root or not has_selection, need_sel_hint)
+	_set_control_disabled_hint(move_ceiling_btn, not has_root or not has_selection, need_sel_hint)
 
 
 func _set_control_disabled_hint(control: Control, disabled: bool, hint: String) -> void:
@@ -3723,6 +3905,9 @@ func _on_hflevel_save_selected(path: String) -> void:
 		return
 	var err = int(level_root.save_hflevel(path, true))
 	_set_status("Saved .hflevel" if err == OK else "Failed to save .hflevel", err != OK, 3.0)
+	if err == OK and _user_prefs:
+		_user_prefs.add_recent_file(path)
+		_user_prefs.save()
 
 
 func _on_hflevel_load_selected(path: String) -> void:
@@ -3734,6 +3919,9 @@ func _on_hflevel_load_selected(path: String) -> void:
 		return
 	_commit_full_state_action("Load .hflevel", "load_hflevel", [path])
 	_set_status("Loaded .hflevel", false, 3.0)
+	if _user_prefs:
+		_user_prefs.add_recent_file(path)
+		_user_prefs.save()
 
 
 func _on_map_import_selected(path: String) -> void:

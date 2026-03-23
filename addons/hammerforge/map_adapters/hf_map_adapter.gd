@@ -24,7 +24,10 @@ func format_entity_properties(properties: Dictionary) -> Array[String]:
 
 
 ## Snap a float to 3 decimal places, matching MapIO._snapped().
+## Outputs clean integers when the value has no fractional part (e.g. "64" not "64.000").
 static func _snapped(value: float) -> String:
+	if absf(value - roundf(value)) < 0.001:
+		return str(int(roundf(value)))
 	return String.num(value, 3)
 
 

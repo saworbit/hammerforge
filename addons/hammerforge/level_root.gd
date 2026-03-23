@@ -193,6 +193,112 @@ var visgroup_system: HFVisgroupSystemType
 var extrude_tool: HFExtrudeToolType
 
 # ---------------------------------------------------------------------------
+# Dirty-tag system for selective reconciliation
+# ---------------------------------------------------------------------------
+
+var _dirty_brush_ids: Dictionary = {}  # brush_id -> true
+var _dirty_paint_chunks: Array[Vector2i] = []
+var _full_reconcile_needed := false
+
+
+## Mark a specific brush as needing reconciliation.
+func tag_brush_dirty(brush_id: String) -> void:
+	_dirty_brush_ids[brush_id] = true
+
+
+## Mark a specific paint chunk as needing reconciliation.
+func tag_paint_dirty(chunk_coord: Vector2i) -> void:
+	if not _dirty_paint_chunks.has(chunk_coord):
+		_dirty_paint_chunks.append(chunk_coord)
+
+
+## Mark the entire scene as needing full reconciliation (structural changes).
+func tag_full_reconcile() -> void:
+	_full_reconcile_needed = true
+
+
+## Consume and clear all dirty tags. Returns dict with keys:
+## "brush_ids" (Array[String]), "paint_chunks" (Array[Vector2i]), "full" (bool).
+func consume_dirty_tags() -> Dictionary:
+	var result := {
+		"brush_ids": _dirty_brush_ids.keys(),
+		"paint_chunks": _dirty_paint_chunks.duplicate(),
+		"full": _full_reconcile_needed,
+	}
+	_dirty_brush_ids.clear()
+	_dirty_paint_chunks.clear()
+	_full_reconcile_needed = false
+	return result
+
+
+# ---------------------------------------------------------------------------
+# Signal batching — coalesce rapid signal emissions (e.g. multi-brush delete)
+# ---------------------------------------------------------------------------
+
+var _signal_batch_depth := 0
+var _batched_signals: Array = []  # Array of {name: String, args: Array}
+
+
+## Begin batching signals. Nested calls are supported (depth-counted).
+func begin_signal_batch() -> void:
+	_signal_batch_depth += 1
+
+
+## End batching. When depth returns to 0, flush coalesced signals.
+func end_signal_batch() -> void:
+	_signal_batch_depth -= 1
+	if _signal_batch_depth <= 0:
+		_signal_batch_depth = 0
+		_flush_batched_signals()
+
+
+## Queue a signal for emission, or emit immediately if not batching.
+func _emit_or_batch(signal_name: String, args: Array = []) -> void:
+	if _signal_batch_depth > 0:
+		_batched_signals.append({"name": signal_name, "args": args})
+	else:
+		_emit_signal_by_name(signal_name, args)
+
+
+## Flush all queued signals, coalescing brush add/remove/change into a single
+## selection_changed emission.
+func _flush_batched_signals() -> void:
+	var brush_ids_changed: Array = []
+	var other_signals: Array = []
+	for entry in _batched_signals:
+		var sname: String = entry.get("name", "")
+		if sname in ["brush_added", "brush_removed", "brush_changed"]:
+			var bid = entry.get("args", [])
+			if not bid.is_empty():
+				brush_ids_changed.append(bid[0])
+		else:
+			other_signals.append(entry)
+	_batched_signals.clear()
+	if not brush_ids_changed.is_empty():
+		selection_changed.emit(brush_ids_changed)
+	for entry in other_signals:
+		_emit_signal_by_name(entry.get("name", ""), entry.get("args", []))
+
+
+## Discard all queued signals without emitting (used on rollback).
+func discard_signal_batch() -> void:
+	_batched_signals.clear()
+	_signal_batch_depth = 0
+
+
+func _emit_signal_by_name(signal_name: String, args: Array) -> void:
+	match args.size():
+		0:
+			emit_signal(signal_name)
+		1:
+			emit_signal(signal_name, args[0])
+		2:
+			emit_signal(signal_name, args[0], args[1])
+		3:
+			emit_signal(signal_name, args[0], args[1], args[2])
+
+
+# ---------------------------------------------------------------------------
 # Input state (owned by drag_system, accessed via backward-compat accessors)
 # ---------------------------------------------------------------------------
 

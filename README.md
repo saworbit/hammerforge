@@ -86,7 +86,11 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 ### Editor UX
 - **4-tab dock** (Brush, Paint, Entities, Manage) with **collapsible sections** for visual hierarchy
 - **Context-sensitive shortcut HUD** that updates based on current tool and mode
-- **Toolbar shortcut labels**: Draw (D), Sel (S), Ext▲ (U), Ext▼ (J)
+- **Customizable keymaps** -- all shortcuts data-driven via JSON; rebind any key
+- **Toolbar shortcut labels** auto-update from keymap: Draw (D), Sel (S), Ext▲ (U), Ext▼ (J)
+- **User preferences** -- grid defaults, recent files, collapsed sections persist across sessions
+- **Tool poll system** -- buttons gray out with tooltip when action can't run (e.g. Hollow with no selection)
+- **Status bar mode indicator** -- shows active mode (Draw/Select/Extrude/Paint) with live state
 - **Paint tool shortcuts**: B / E / R / L / K for Brush / Erase / Rect / Line / Bucket
 - **Extrude shortcuts**: U (Extrude Up), J (Extrude Down)
 - **Brush tool shortcuts**: Ctrl+H (Hollow), Shift+X (Clip), Ctrl+Shift+F/C (Floor/Ceiling)
@@ -116,8 +120,14 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 ### Modular Architecture
 - `LevelRoot` is a thin coordinator delegating to **10 subsystem classes** (grid, entity, brush, drag, bake, paint, state, file, validation, visgroup)
 - **Central signal registry** -- 14 signals on LevelRoot for event-driven UI updates
+- **Batched signal emission** -- multi-brush operations coalesce signals to prevent UI thrash
+- **Tag-based invalidation** -- dirty tags on brushes/paint/chunks for selective reconciliation
 - **Command collation** -- rapid operations (nudge, resize, paint) merge into single undo entries
 - **Transaction support** -- atomic multi-step operations with rollback
+- **Customizable keymaps** -- all shortcuts data-driven via `HFKeymap`; rebind via JSON
+- **User preferences** -- persistent cross-session prefs separate from per-level settings
+- **Declarative tool settings** -- external tools expose schema; dock auto-generates UI controls
+- **Tool poll system** -- `can_activate()` / `get_poll_fail_reason()` for context-aware tool availability
 - **Entity definitions** -- data-driven entity types from JSON (extensible, not hardcoded)
 - **Material library persistence** -- save/load material palettes with usage tracking
 - **Autosave failure notification** -- threaded write errors surface to the UI
@@ -125,7 +135,7 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 - Explicit **input state machine** for drag/paint operations
 - Type-safe inter-module calls (no duck-typing)
 - Threaded .hflevel I/O with error handling
-- **CI**: automated `gdformat` + `gdlint` checks and **GUT unit tests** (245 tests) on push/PR
+- **CI**: automated `gdformat` + `gdlint` checks and **GUT unit tests** (344 tests) on push/PR
 
 ## Installation
 
@@ -194,5 +204,5 @@ Start-Process -FilePath "C:\Godot\Godot_v4.6-stable_win64.exe" `
 
 <p align="center">
   <strong>MIT License</strong><br>
-  <sub>Last updated: March 22, 2026</sub>
+  <sub>Last updated: March 23, 2026</sub>
 </p>

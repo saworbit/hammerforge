@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: March 22, 2026
+Last updated: March 23, 2026
 
 This roadmap is a directional plan. Items may change based on user feedback.
 Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md for details.
@@ -58,6 +58,17 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - Duplicator / instanced geometry: create N copies with progressive offset, undo/redo, serialization.
 - Multi-format `.map` export adapters: Classic Quake + Valve 220 via strategy-pattern writers.
 - Formalized plugin API: `HFEditorTool` base class + `HFToolRegistry` for custom tools (external tools from `tools/`).
+
+## Done (Blender-Inspired Architecture Improvements)
+- Customizable keymaps: all shortcuts data-driven via `HFKeymap` JSON. Toolbar labels auto-update.
+- User preferences: cross-session prefs (grid default, recent files, UI state) in `user://hammerforge_prefs.json`.
+- Gesture poll system: `can_activate()` / `get_poll_fail_reason()` on tools. Buttons gray out when unavailable.
+- Tag-based reconciler invalidation: dirty tags on brushes/paint for selective rebuild.
+- Batched signal emission: multi-brush ops coalesce signals. Wired into transactions.
+- Declarative tool settings: external tools expose schema; dock auto-generates UI controls.
+- Status bar mode indicator: live mode/state display in dock footer.
+- Input pass-through reorder: external tools can override built-in keyboard shortcuts.
+- 36 new tests (keymap, user prefs, dirty tags). Total: 344 tests across 22 files.
 
 ## Next (Wave 2b remaining + Wave 2c)
 - Vertex editing (move individual brush vertices).
