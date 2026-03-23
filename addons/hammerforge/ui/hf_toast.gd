@@ -64,8 +64,9 @@ func show_toast(message: String, level: int = Level.INFO) -> void:
 	var tween = create_tween()
 	tween.tween_interval(duration - 1.0)
 	tween.tween_property(panel, "modulate:a", 0.0, 1.0)
-	tween.tween_callback(func():
-		if is_instance_valid(panel):
-			remove_child(panel)
-			panel.queue_free()
+	tween.tween_callback(
+		func():
+			if is_instance_valid(panel):
+				remove_child(panel)
+				panel.queue_free()
 	)

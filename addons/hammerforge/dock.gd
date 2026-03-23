@@ -556,7 +556,9 @@ func _setup_context_hints() -> void:
 
 func _update_context_hints() -> void:
 	var has_root = level_root != null
-	var has_brushes = has_root and level_root.has_method("get_brush_count") and level_root.get_brush_count() > 0
+	var has_brushes = (
+		has_root and level_root.has_method("get_brush_count") and level_root.get_brush_count() > 0
+	)
 	var has_selection = _selection_nodes.size() > 0
 
 	if _brush_hint:
@@ -2511,20 +2513,41 @@ func _on_shortcuts_help() -> void:
 
 	var sections := {
 		"Tools": ["tool_draw", "tool_select", "tool_extrude_up", "tool_extrude_down"],
-		"Editing": ["delete", "duplicate", "group", "ungroup", "hollow", "clip", "move_to_floor", "move_to_ceiling"],
+		"Editing":
+		[
+			"delete",
+			"duplicate",
+			"group",
+			"ungroup",
+			"hollow",
+			"clip",
+			"move_to_floor",
+			"move_to_ceiling"
+		],
 		"Paint": ["paint_bucket", "paint_erase", "paint_ramp", "paint_line", "paint_blend"],
 		"Axis Lock": ["axis_x", "axis_y", "axis_z"],
 	}
 	var names := {
-		"tool_draw": "Draw", "tool_select": "Select",
-		"tool_extrude_up": "Extrude Up", "tool_extrude_down": "Extrude Down",
-		"delete": "Delete", "duplicate": "Duplicate",
-		"group": "Group", "ungroup": "Ungroup",
-		"hollow": "Hollow", "clip": "Clip",
-		"move_to_floor": "Move to Floor", "move_to_ceiling": "Move to Ceiling",
-		"paint_bucket": "Bucket", "paint_erase": "Erase",
-		"paint_ramp": "Ramp/Rect", "paint_line": "Line", "paint_blend": "Blend",
-		"axis_x": "Lock X", "axis_y": "Lock Y", "axis_z": "Lock Z",
+		"tool_draw": "Draw",
+		"tool_select": "Select",
+		"tool_extrude_up": "Extrude Up",
+		"tool_extrude_down": "Extrude Down",
+		"delete": "Delete",
+		"duplicate": "Duplicate",
+		"group": "Group",
+		"ungroup": "Ungroup",
+		"hollow": "Hollow",
+		"clip": "Clip",
+		"move_to_floor": "Move to Floor",
+		"move_to_ceiling": "Move to Ceiling",
+		"paint_bucket": "Bucket",
+		"paint_erase": "Erase",
+		"paint_ramp": "Ramp/Rect",
+		"paint_line": "Line",
+		"paint_blend": "Blend",
+		"axis_x": "Lock X",
+		"axis_y": "Lock Y",
+		"axis_z": "Lock Z",
 	}
 
 	var text := ""
@@ -3222,9 +3245,7 @@ func _connect_root_signals() -> void:
 				"face_selection_changed", Callable(self, "_on_root_face_selection_changed")
 			)
 	if connected_root.has_signal("user_message"):
-		if not connected_root.is_connected(
-			"user_message", Callable(self, "_on_root_user_message")
-		):
+		if not connected_root.is_connected("user_message", Callable(self, "_on_root_user_message")):
 			connected_root.connect("user_message", Callable(self, "_on_root_user_message"))
 	_sync_grid_snap_from_root()
 	_sync_grid_settings_from_root()
@@ -3288,9 +3309,7 @@ func _disconnect_root_signals() -> void:
 				"face_selection_changed", Callable(self, "_on_root_face_selection_changed")
 			)
 	if connected_root.has_signal("user_message"):
-		if connected_root.is_connected(
-			"user_message", Callable(self, "_on_root_user_message")
-		):
+		if connected_root.is_connected("user_message", Callable(self, "_on_root_user_message")):
 			connected_root.disconnect("user_message", Callable(self, "_on_root_user_message"))
 
 
