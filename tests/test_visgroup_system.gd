@@ -29,14 +29,14 @@ func _make_brush(parent: Node3D) -> Node3D:
 
 func before_each():
 	root = _make_root()
-	add_child(root)
+	add_child_autoqfree(root)
 	# Attach _iter_pick_nodes and entities_node via script
 	root.set_script(_root_shim_script())
 	sys = HFVisgroupSystem.new(root)
 
 
 func after_each():
-	root.queue_free()
+	root = null
 	sys = null
 
 

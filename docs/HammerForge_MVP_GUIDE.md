@@ -46,6 +46,7 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 ### Face Materials + Surface Paint (`HFPaintSystem`)
 - DraftBrush faces store material indices, UVs, and paint layers.
 - Materials are managed by a shared palette (`MaterialManager`) with library persistence (save/load JSON) and usage tracking.
+- `HFPrototypeTextures` provides 150 built-in SVG textures (15 patterns x 10 colors) loadable via the "Load Prototypes" button for rapid material testing.
 - Surface paint writes per-face weight images and updates previews.
 
 ### Undo/Redo (`HFUndoHelper` + `HFStateSystem`)
@@ -118,6 +119,8 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 - Select Blend tool, choose Blend Slot B/C/D, paint blend weights on filled cells; verify four-slot shader blending.
 - Bake with heightmap floors and confirm baked output includes heightmap meshes with trimesh collision.
 - Save and load .hflevel with heightmap data; verify heightmap, material_ids, blend_weights, and terrain slot settings persist.
+- Click Load Prototypes in Paint tab → Materials section; confirm 150 prototype textures appear in the palette.
+- Assign a prototype texture to faces and verify preview updates.
 - Create a material resource (.tres/.material) in `materials/` and add it to the palette.
 - Enable Face Select Mode and assign materials to faces.
 - Edit UVs and ensure preview updates.

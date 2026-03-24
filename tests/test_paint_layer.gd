@@ -10,11 +10,10 @@ func before_each():
 	layer = HFPaintLayer.new()
 	layer.grid = HFPaintGrid.new()
 	layer.chunk_size = 8
-	add_child(layer)
+	add_child_autoqfree(layer)
 
 
 func after_each():
-	layer.queue_free()
 	layer = null
 
 

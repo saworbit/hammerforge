@@ -9,7 +9,7 @@ var sys: HFEntitySystem
 func before_each():
 	root = Node3D.new()
 	root.set_script(_root_shim_script())
-	add_child(root)
+	add_child_autoqfree(root)
 	var entities = Node3D.new()
 	entities.name = "Entities"
 	root.add_child(entities)
@@ -24,7 +24,7 @@ func before_each():
 
 
 func after_each():
-	root.queue_free()
+	root = null
 	sys = null
 
 

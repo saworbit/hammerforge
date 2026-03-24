@@ -10,7 +10,7 @@ var bake_sys: HFBakeSystem
 func before_each():
 	root = Node3D.new()
 	root.set_script(_root_shim_script())
-	add_child(root)
+	add_child_autoqfree(root)
 	# Setup containers
 	var draft = Node3D.new()
 	draft.name = "DraftBrushes"
@@ -23,7 +23,7 @@ func before_each():
 
 
 func after_each():
-	root.queue_free()
+	root = null
 	bake_sys = null
 
 
@@ -103,9 +103,9 @@ func test_collect_without_cordon_gets_all():
 
 func test_collect_with_cordon_filters():
 	var draft = root.draft_brushes_node
-	_make_brush_at(draft, Vector3(0, 0, 0))       # inside -10..10
-	_make_brush_at(draft, Vector3(100, 0, 0))      # outside
-	_make_brush_at(draft, Vector3(-200, 0, 0))     # outside
+	_make_brush_at(draft, Vector3(0, 0, 0))  # inside -10..10
+	_make_brush_at(draft, Vector3(100, 0, 0))  # outside
+	_make_brush_at(draft, Vector3(-200, 0, 0))  # outside
 	root.cordon_enabled = true
 	root.cordon_aabb = AABB(Vector3(-10, -10, -10), Vector3(20, 20, 20))
 	var chunks: Dictionary = {}

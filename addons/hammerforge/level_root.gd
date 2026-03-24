@@ -34,6 +34,7 @@ const HFStateSystemType = preload("systems/hf_state_system.gd")
 const HFFileSystemType = preload("systems/hf_file_system.gd")
 const HFValidationSystemType = preload("systems/hf_validation_system.gd")
 const HFVisgroupSystemType = preload("systems/hf_visgroup_system.gd")
+const HFPrototypeTextures = preload("hf_prototype_textures.gd")
 
 const RELOAD_LOCK_PATH := "res://.hammerforge/reload.lock"
 const RELOAD_POLL_SECONDS := 0.5
@@ -1394,6 +1395,25 @@ func remove_material_from_palette(index: int) -> void:
 	material_list_changed.emit()
 
 
+## Batch-loads all built-in prototype textures into the material palette.
+## Uses signal batching and a single preview refresh for performance.
+func add_prototype_materials() -> int:
+	if not material_manager:
+		_setup_material_manager()
+	begin_signal_batch()
+	var count := 0
+	for pattern in HFPrototypeTextures.PATTERNS:
+		for color in HFPrototypeTextures.COLORS:
+			var mat = HFPrototypeTextures.create_material(pattern, color)
+			if mat:
+				material_manager.add_material(mat)
+				count += 1
+	_refresh_brush_previews()
+	end_signal_batch()
+	material_list_changed.emit()
+	return count
+
+
 func get_material_names() -> Array:
 	if not material_manager:
 		return []
@@ -1461,6 +1481,8 @@ func _setup_material_manager() -> void:
 		material_manager.name = "MaterialManager"
 		add_child(material_manager)
 		_assign_owner(material_manager)
+	if Engine.is_editor_hint() and material_manager.materials.is_empty():
+		HFPrototypeTextures.load_all_into(material_manager)
 
 
 func _setup_baker() -> void:

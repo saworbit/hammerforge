@@ -22,12 +22,12 @@ func before_each():
 	entities.name = "Entities"
 	root.add_child(entities)
 	root.set_script(_root_shim_script())
-	add_child(root)
+	add_child_autoqfree(root)
 	sys = HFVisgroupSystem.new(root)
 
 
 func after_each():
-	root.queue_free()
+	root = null
 	sys = null
 
 

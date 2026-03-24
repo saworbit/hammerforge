@@ -18,6 +18,7 @@ This document makes the current tradeoffs explicit so level designers and develo
 - Face materials use planar projection per face.
 - UV editing is per face and not a full unwrap workflow.
 - Preview complexity is capped. When a brush has many painted faces, the preview falls back to a simplified mesh to stay responsive.
+- Prototype textures (150 built-in SVGs) are pre-packaged for greyboxing. They are not user-editable or extensible -- add custom materials via the Add button for project-specific textures.
 
 ## Floor Paint + Heightmaps
 - Floor paint is grid-based and produces axis-aligned floors and walls.

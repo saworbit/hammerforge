@@ -12,7 +12,7 @@ var bake_sys: HFBakeSystem
 func before_each():
 	root = Node3D.new()
 	root.set_script(_root_shim_script())
-	add_child(root)
+	add_child_autoqfree(root)
 	var draft = Node3D.new()
 	draft.name = "DraftBrushes"
 	root.add_child(draft)
@@ -30,7 +30,7 @@ func before_each():
 
 
 func after_each():
-	root.queue_free()
+	root = null
 	brush_sys = null
 	bake_sys = null
 

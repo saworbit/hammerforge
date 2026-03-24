@@ -26,6 +26,7 @@ addons/hammerforge/
   baker.gd               CSG -> mesh bake pipeline
   face_data.gd           Per-face materials, UVs, paint layers
   material_manager.gd    Shared materials palette (+ library persistence, usage tracking)
+  hf_prototype_textures.gd  HFPrototypeTextures: 150 built-in SVG textures (15 patterns x 10 colors)
   face_selector.gd       Raycast face selection
   hf_extrude_tool.gd     Extrude Up/Down tool (face click + drag to extend brushes)
   hf_gesture.gd          Gesture tracker base class (update/commit/cancel pattern)
@@ -41,6 +42,8 @@ addons/hammerforge/
   hflevel_io.gd          Variant encoding/decoding for .hflevel
   map_io.gd              .map import/export (uses adapter pattern for multi-format support)
   prefab_factory.gd      Advanced shape generation
+
+  textures/prototypes/   150 SVG prototype textures ({pattern}_{color}.svg)
 
   map_adapters/          .map export format adapters (strategy pattern)
     hf_map_adapter.gd      Base adapter class (format_name, format_face_line, format_entity_properties)
@@ -120,7 +123,7 @@ addons/hammerforge/
 The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on push and PR to `main`:
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
-- **GUT unit tests** -- 344 tests across 22 test files (runs Godot headless)
+- **GUT unit tests** -- 371 tests across 23 test files (runs Godot headless)
 
 Run locally before pushing:
 ```
@@ -157,6 +160,7 @@ Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framewor
 | `test_keymap.gd` | 16 | Default bindings loaded, simple/ctrl/shift/ctrl+shift key matching, modifier mismatch rejection, display string formatting, rebinding, JSON roundtrip |
 | `test_user_prefs.gd` | 9 | Default values, get/set prefs, section collapsed state, recent files (add/dedup/max 10), JSON roundtrip |
 | `test_dirty_tags.gd` | 11 | Brush dirty tags (add/dedup), paint chunk tags, full reconcile flag, consume-clears, signal batch queue/flush/discard/nesting |
+| `test_prototype_textures.gd` | 27 | Catalog constants, path generation, texture existence, material persistence (resource_path), batch loading into MaterialManager |
 
 Run all tests:
 ```
@@ -176,7 +180,10 @@ Configuration is in `.gutconfig.json` (test directory, prefix, exit behavior).
 ## Materials Resources
 HammerForge expects Godot material resources (`.tres` or `.material`) in the palette.
 
-Create one quickly:
+**Quick start with prototype textures:**
+Click **Load Prototypes** in the Paint tab → Materials section to load all 150 built-in SVG textures (15 patterns x 10 colors) as `StandardMaterial3D` resources. See `docs/HammerForge_Prototype_Textures.md` for full details.
+
+**Create a custom material:**
 1. In the FileSystem dock, right-click `materials/` (or any folder).
 2. Select `New Resource` -> `StandardMaterial3D` (or `ShaderMaterial`).
 3. Save it as `materials/test_mat.tres`.
@@ -238,7 +245,9 @@ Brush workflow
 - Verify undo removes the extruded brush.
 
 Face materials + UVs
-- Add a material to the palette and assign it to multiple faces.
+- Click Load Prototypes in Paint tab → Materials section; confirm 150 prototype textures appear in palette.
+- Assign a prototype texture to faces and verify preview updates with the new material.
+- Add a custom material to the palette and assign it to multiple faces.
 - Toggle Face Select Mode and ensure face selection only works when enabled.
 - Open Paint tab → UV Editor section and drag points; confirm preview updates.
 

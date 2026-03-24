@@ -71,7 +71,7 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - Declarative tool settings: external tools expose schema; dock auto-generates UI controls.
 - Status bar mode indicator: live mode/state display in dock footer.
 - Input pass-through reorder: external tools can override built-in keyboard shortcuts.
-- 36 new tests (keymap, user prefs, dirty tags). Total: 344 tests across 22 files.
+- 36 new tests (keymap, user prefs, dirty tags). Total at time of wave: 344 tests across 22 files.
 
 ## Done (UX Intuitiveness Overhaul)
 - Mode indicator banner: color-coded tool/stage/numeric display between toolbar and tabs.
@@ -84,6 +84,13 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - Face hover highlight for extrude: semi-transparent green/red overlay on hovered faces.
 - Clear selection button: "x" button in footer for visible deselect action.
 - `user_message` signal on LevelRoot for subsystem-to-dock notification routing.
+
+## Done (Built-in Prototype Textures)
+- 150 SVG prototype textures (15 patterns x 10 colors) ship with the plugin for instant greyboxing.
+- "Load Prototypes" button in Paint tab → Materials section for one-click palette population.
+- `HFPrototypeTextures` static catalog class with query, load, and batch-load API.
+- HTML preview page (`docs/prototype_textures_preview.html`) for browsing all textures.
+- GUT tests (27 cases) and dedicated documentation.
 
 ## Next (Wave 2b remaining + Wave 2c)
 - Vertex editing (move individual brush vertices).

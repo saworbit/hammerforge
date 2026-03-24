@@ -7,16 +7,11 @@ var brush: DraftBrush
 
 
 func before_each():
-	brush = DraftBrush.new()
+	brush = autoqfree(DraftBrush.new())
 	# Don't add to tree — _build_box_faces doesn't need it
 
 
 func after_each():
-	if brush and is_instance_valid(brush):
-		if brush.is_inside_tree():
-			brush.queue_free()
-		else:
-			brush.free()
 	brush = null
 
 

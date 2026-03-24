@@ -42,6 +42,7 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 
 ### Face Materials + UVs
 - **Materials palette** (dock) with add/remove and per-face assignment
+- **150 built-in prototype textures** (15 patterns x 10 colors) -- one-click **Load Prototypes** in the Paint tab for instant greyboxing materials
 - **Face select mode** for per-face material painting
 - **UV editor** with per-vertex drag handles and reset-to-projection
 - Face data persists in `.hflevel` saves
@@ -143,7 +144,7 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 - Explicit **input state machine** for drag/paint operations
 - Type-safe inter-module calls (no duck-typing)
 - Threaded .hflevel I/O with error handling
-- **CI**: automated `gdformat` + `gdlint` checks and **GUT unit tests** (344 tests) on push/PR
+- **CI**: automated `gdformat` + `gdlint` checks and **GUT unit tests** (371 tests) on push/PR
 
 ## Installation
 
@@ -164,7 +165,7 @@ For upgrade steps and cache reset help, see `docs/HammerForge_Install_Upgrade.md
 | **1. Draw a brush** | Tool = Draw, Mode = Add, Shape = Box -> drag base -> click height |
 | **2. Extrude a wall** | Tool = Extrude Up (U) -> click face -> drag up -> release |
 | **3. Cut a door** | Mode = Subtract -> draw brush -> Apply Cuts -> Bake |
-| **4. Face materials** | Paint tab -> Materials section -> Add -> pick `materials/test_mat.tres` -> Face Select Mode -> click faces -> Assign material |
+| **4. Face materials** | Paint tab -> Materials section -> **Load Prototypes** (or Add -> pick `materials/test_mat.tres`) -> Face Select Mode -> click faces -> Assign material |
 | **5. Surface paint** | Paint Mode -> Paint tab -> Surface Paint section -> Paint Target = Surface -> paint |
 | **6. Bake** | Manage tab -> Bake section -> Click Bake (or enable Use Face Materials) |
 
@@ -180,6 +181,7 @@ For upgrade steps and cache reset help, see `docs/HammerForge_Install_Upgrade.md
 | [Demo Clips](docs/demos/README.md) | Clip list and naming scheme |
 | [Sample Levels](samples/) | Minimal and stress test scenes |
 | [Texture + Materials](docs/HammerForge_Texture_Materials.md) | Face materials, UVs, and surface paint |
+| [Prototype Textures](docs/HammerForge_Prototype_Textures.md) | Built-in 150 SVG textures for greyboxing |
 | [Development + Testing](DEVELOPMENT.md) | Local setup and test checklist |
 | [Floor Paint Design](docs/HammerForge_FloorPaint_Greyboxing.md) | Grid paint system design |
 | [Spec](HammerForge_SPEC.md) | Technical specification |

@@ -181,6 +181,7 @@ var perf_bake_time_value: Label = null
 var materials_list: ItemList = null
 var material_add: Button = null
 var material_remove: Button = null
+var material_load_prototypes: Button = null
 var material_assign: Button = null
 var face_select_mode: CheckBox = null
 var face_clear: Button = null
@@ -845,6 +846,7 @@ func _apply_all_tooltips() -> void:
 	)
 	_set_tooltip(material_add, "Add a material to the palette")
 	_set_tooltip(material_remove, "Remove selected material from palette")
+	_set_tooltip(material_load_prototypes, "Load all built-in prototype textures as materials")
 	_set_tooltip(material_assign, "Assign selected material to selected faces")
 	_set_tooltip(face_clear, "Clear face selection")
 	# UV tab
@@ -1194,6 +1196,9 @@ func _build_paint_tab() -> void:
 	material_remove = Button.new()
 	material_remove.text = "Remove"
 	mat_btn_row.add_child(material_remove)
+	material_load_prototypes = Button.new()
+	material_load_prototypes.text = "Load Prototypes"
+	mat_btn_row.add_child(material_load_prototypes)
 	mc.add_child(mat_btn_row)
 
 	# Inline hint when no face is selected
@@ -2210,6 +2215,8 @@ func _ready():
 		material_add.pressed.connect(_on_material_add)
 	if material_remove:
 		material_remove.pressed.connect(_on_material_remove)
+	if material_load_prototypes:
+		material_load_prototypes.pressed.connect(_on_material_load_prototypes)
 	if material_assign:
 		material_assign.pressed.connect(_on_material_assign)
 	if face_clear:
@@ -4028,6 +4035,14 @@ func _on_material_remove() -> void:
 	)
 	_selected_material_index = -1
 	_sync_materials_from_root()
+
+
+func _on_material_load_prototypes() -> void:
+	if not level_root:
+		return
+	_commit_state_action("Load Prototypes", "add_prototype_materials")
+	_sync_materials_from_root()
+	show_toast("Prototype materials loaded", 0)
 
 
 func _on_material_assign() -> void:

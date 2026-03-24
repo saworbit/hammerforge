@@ -76,6 +76,8 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 
 - `addons/hammerforge/ui/collapsible_section.gd`: `HFCollapsibleSection` -- reusable collapsible section with toggle-header button
 - `addons/hammerforge/highlight.gdshader`: selection highlight shader (wireframe, unshaded, alpha)
+- `addons/hammerforge/hf_prototype_textures.gd`: `HFPrototypeTextures` -- 150 built-in SVG textures (15 patterns x 10 colors) with static catalog API
+- `addons/hammerforge/textures/prototypes/`: embedded SVG texture library for greyboxing
 - `addons/hammerforge/paint/*`: floor paint grid, layers, tools, inference, geometry synthesis, reconciliation, heightmap integration
 - `addons/hammerforge/paint/hf_region_manager.gd`: region streaming helpers (region bounds, radius, index)
 - `addons/hammerforge/hflevel_io.gd`: variant encoding/decoding for .hflevel format
@@ -192,6 +194,7 @@ Entity types and brush entity classes are data-driven via `HFEntityDef` (`hf_ent
 - **Library persistence**: `save_library(path)` / `load_library(path)` serialize material resource paths to JSON.
 - **Usage tracking**: `record_usage()` / `release_usage()` / `rebuild_usage()` track which materials are used by brushes.
 - **Cleanup**: `find_unused_materials()` returns palette materials not used by any brush.
+- **Prototype textures**: `HFPrototypeTextures.load_all_into(manager)` batch-loads 150 built-in SVG textures as `StandardMaterial3D` resources. The dock exposes this via the "Load Prototypes" button in the Paint tab → Materials section.
 
 ## Floor Paint System
 
@@ -321,7 +324,7 @@ The dock uses 4 tabs with collapsible sections for visual hierarchy:
 | Tab | Contents |
 |-----|----------|
 | **Brush** | Shape, size, grid snap, quick snap presets, material picker, operation mode (Add/Sub), texture lock |
-| **Paint** | 7 collapsible sections: Floor Paint, Heightmap, Blend & Terrain, Regions, Materials, UV Editor, Surface Paint |
+| **Paint** | 7 collapsible sections: Floor Paint, Heightmap, Blend & Terrain, Regions, Materials (with Load Prototypes), UV Editor, Surface Paint |
 | **Entities** | Entity palette with drag-and-drop, Create DraftEntity, Entity Properties, Entity I/O connections (collapsible sections) |
 | **Manage** | Bake, Actions (floor/cuts/clear), File, Presets, History, Settings, Performance, plus Visgroups & Cordon (inserted programmatically) |
 
@@ -411,7 +414,8 @@ Unit tests use the [GUT](https://github.com/bitwes/Gut) framework and run headle
 | `test_keymap.gd` | 16 | Default bindings, key matching (simple/ctrl/shift/ctrl+shift), modifier rejection, display strings, rebinding, JSON roundtrip |
 | `test_user_prefs.gd` | 9 | Default values, get/set prefs, section collapse state, recent files (add/dedup/max 10), JSON roundtrip |
 | `test_dirty_tags.gd` | 11 | Brush dirty tags, paint chunk tags, full reconcile flag, consume-clears, signal batch queue/flush/discard/nesting |
+| `test_prototype_textures.gd` | 27 | Catalog constants, path generation, texture existence, material persistence (resource_path), batch loading into MaterialManager |
 
-Total: **344 tests** across **22 files**.
+Total: **371 tests** across **23 files**.
 
 Tests use root shim scripts (dynamically created GDScript) to provide the LevelRoot interface without circular preload dependencies. Configuration in `.gutconfig.json`.

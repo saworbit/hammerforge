@@ -21,9 +21,7 @@ func test_defaults_loaded():
 	assert_eq(prefs.get_pref("grid_snap"), 16.0, "Default grid snap should be 16.0")
 	assert_eq(prefs.get_pref("autosave_interval"), 300, "Default autosave interval should be 300")
 	assert_eq(prefs.get_pref("show_hud"), true, "Default show_hud should be true")
-	assert_eq(
-		prefs.get_pref("show_welcome"), true, "Default show_welcome should be true"
-	)
+	assert_eq(prefs.get_pref("show_welcome"), true, "Default show_welcome should be true")
 	assert_eq(
 		prefs.get_pref("hints_dismissed"),
 		{},

@@ -12,7 +12,7 @@ This guide covers installing, upgrading, and recovering the HammerForge plugin i
 1. Copy `addons/hammerforge` into your project.
 2. Enable the plugin: Project -> Project Settings -> Plugins -> HammerForge.
 3. Open any 3D scene and click in the viewport to auto-create `LevelRoot`.
-4. Verify the dock appears with 4 tabs (Brush, Paint, Entities, Manage) and a compact toolbar (D, S, +, -, P, ▲, ▼). A `LevelRoot` node should exist in the scene tree, and the Brush tab should show shape, size, and grid snap controls.
+4. Verify the dock appears with 4 tabs (Brush, Paint, Entities, Manage) and a compact toolbar (D, S, +, -, P, ▲, ▼). A `LevelRoot` node should exist in the scene tree, and the Brush tab should show shape, size, and grid snap controls. The Paint tab → Materials section should show Add, Remove, and **Load Prototypes** buttons.
 
 ## Upgrade
 1. Close Godot.

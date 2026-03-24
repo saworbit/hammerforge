@@ -99,12 +99,10 @@ func _emit_signal_by_name(signal_name: String, args: Array) -> void:
 	root_script.reload()
 	root = Node3D.new()
 	root.set_script(root_script)
-	add_child(root)
+	add_child_autoqfree(root)
 
 
 func after_each():
-	if root and is_instance_valid(root):
-		root.queue_free()
 	root = null
 
 

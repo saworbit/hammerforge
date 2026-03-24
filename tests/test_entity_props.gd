@@ -10,7 +10,7 @@ var sys: HFEntitySystem
 func before_each():
 	root = Node3D.new()
 	root.set_script(_root_shim_script())
-	add_child(root)
+	add_child_autoqfree(root)
 	var entities = Node3D.new()
 	entities.name = "Entities"
 	root.add_child(entities)
@@ -25,7 +25,7 @@ func before_each():
 
 
 func after_each():
-	root.queue_free()
+	root = null
 	sys = null
 
 
@@ -203,7 +203,6 @@ func test_roundtrip_preserves_properties():
 	assert_not_null(restored)
 	assert_eq(restored.entity_data.get("speed"), 500.0)
 	assert_eq(restored.entity_data.get("locked"), true)
-	restored.queue_free()
 
 
 func test_roundtrip_all_types():
@@ -224,7 +223,6 @@ func test_roundtrip_all_types():
 	assert_eq(restored.entity_data.get("active"), false)
 	assert_eq(restored.entity_data.get("tint"), Color.GREEN)
 	assert_eq(restored.entity_data.get("offset"), Vector3(10, 20, 30))
-	restored.queue_free()
 
 
 # ===========================================================================
@@ -239,7 +237,6 @@ func test_empty_properties_no_crash():
 	assert_true(info.has("properties"))
 	var restored = sys.restore_entity_from_info(info)
 	assert_not_null(restored)
-	restored.queue_free()
 
 
 func test_missing_property_uses_default():

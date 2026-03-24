@@ -34,6 +34,21 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   - **`user_message` signal** on LevelRoot: subsystems can surface messages to the dock toast
     system via `root.user_message.emit(text, level)`.
   - `show_welcome` and `hints_dismissed` added to user preferences defaults.
+- **Built-in prototype textures (Mar 2026):**
+  - **150 SVG prototype textures** (15 patterns x 10 colors) ship with the plugin at
+    `addons/hammerforge/textures/prototypes/`. Patterns include solid, brick, checker, cross,
+    diamond, dots, hex, stripes (diagonal/horizontal), triangles, zigzag, and directional arrows.
+  - **"Load Prototypes" button** in Paint tab → Materials section: one-click batch-load of all 150
+    textures as `StandardMaterial3D` resources into the material palette.
+  - **`HFPrototypeTextures` catalog class** (`hf_prototype_textures.gd`): static API for querying
+    patterns/colors, loading individual textures, creating materials, and batch-populating a
+    `MaterialManager`. Uses hardcoded arrays for headless-test compatibility.
+  - **HTML preview page** (`docs/prototype_textures_preview.html`): self-contained browser-viewable
+    catalog of all 150 textures with search and filtering.
+  - **Documentation** (`docs/HammerForge_Prototype_Textures.md`): patterns/colors reference, UI and
+    GDScript usage, API reference.
+  - **GUT tests** (`tests/test_prototype_textures.gd`): 27 test cases covering catalog constants,
+    path generation, resource loading, material persistence (resource_path), and batch loading.
 - **Dock UX improvements (Mar 2026):**
   - **Selection Tools section** in Brush tab: hollow, clip, move floor/ceiling, tie entity, and
     duplicator controls now appear contextually when brushes are selected (moved from Manage tab).

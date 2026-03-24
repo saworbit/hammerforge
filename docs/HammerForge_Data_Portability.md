@@ -38,6 +38,12 @@ This document describes how to move data in and out of HammerForge safely.
 - Library files are JSON containing material resource paths — portable across projects.
 - The library path can be stored alongside `.hflevel` saves.
 
+## Prototype Textures
+- HammerForge ships with 150 built-in SVG prototype textures at `addons/hammerforge/textures/prototypes/`.
+- Click **Load Prototypes** in Paint tab → Materials section to batch-load all textures into the palette.
+- Once loaded, prototype materials are serialized in `.hflevel` saves alongside custom materials.
+- Prototype textures are included in the plugin directory and travel with the project automatically.
+
 ## Entity Definitions
 - Entity types and brush entity classes are loaded from `entities.json` (data-driven, not hardcoded).
 - Custom entity definitions can be added by creating or editing `res://addons/hammerforge/entities.json`.

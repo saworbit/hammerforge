@@ -2,7 +2,6 @@ extends GutTest
 
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
 
-
 # ===========================================================================
 # adjust_uvs_for_transform — position compensation
 # ===========================================================================

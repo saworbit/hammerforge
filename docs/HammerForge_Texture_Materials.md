@@ -30,7 +30,17 @@ Paint layer fields:
 ## Getting Materials
 Materials are Godot resources stored as `.tres` or `.material` files.
 
-Quick ways to get one:
+### Using Prototype Textures (Quick Start)
+For rapid prototyping without creating custom materials:
+1. Open the Paint tab in the dock.
+2. Click **Load Prototypes** in the Materials section.
+3. 150 built-in SVG textures are added to the palette (15 patterns x 10 colors).
+4. Open `docs/prototype_textures_preview.html` in a browser to preview all available textures.
+5. Assign prototype textures to faces using Face Select Mode and Assign to Selected Faces.
+
+For full details, see [Prototype Textures](HammerForge_Prototype_Textures.md).
+
+### Creating Custom Materials
 1. In the FileSystem dock, right-click a folder (e.g. `materials/`).
 2. Choose `New Resource` -> `StandardMaterial3D` (or `ShaderMaterial`).
 3. Save it as a `.tres` file (example: `materials/test_mat.tres`).
@@ -110,7 +120,11 @@ Paint weights are stored as embedded PNG bytes (base64) per layer.
 - Surface paint is per-face and does not share weights across faces.
 - Preview materials are rebuilt per face and can be heavy on very large brush counts.
 
+## See Also
+- [Prototype Textures](HammerForge_Prototype_Textures.md) -- 150 built-in SVG textures for greyboxing.
+
 ## Suggested Testing
+- Click Load Prototypes and confirm 150 materials appear in the palette.
 - Assign different materials to multiple faces and verify preview rebuild.
 - Edit UVs and confirm the preview updates.
 - Paint two layers and confirm blend behavior.
