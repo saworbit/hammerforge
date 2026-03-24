@@ -24,6 +24,7 @@ nul
 .idea/
 .claude/
 .hammerforge/
+.appdata/
 
 # Python cache (if used for scripts/tools)
 __pycache__/
