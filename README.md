@@ -5,160 +5,192 @@
 <h1 align="center">HammerForge</h1>
 
 <p align="center">
-  <strong>FPS-style level editor plugin for Godot 4.6+</strong><br>
-  Brush-based greyboxing and fast bake workflows inside the editor.
+  <strong>Brush-based level editor for Godot 4.6+</strong><br>
+  Draw rooms, carve doors, paint terrain, and bake to optimized meshes — all inside the Godot editor.
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Godot-4.6%2B-478cbf?logo=godot-engine&logoColor=white" alt="Godot 4.6+">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
   <img src="https://img.shields.io/badge/Status-Alpha-orange" alt="Alpha">
+  <img src="https://img.shields.io/badge/Tests-432%2B%20passing-brightgreen" alt="432+ tests passing">
+  <img src="https://img.shields.io/badge/GDScript-21k%2B%20lines-blueviolet" alt="21k+ lines">
 </p>
 
 ---
 
-## What is HammerForge?
+## Why HammerForge?
 
-HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into Godot. Draw draft brushes, preview quickly, and bake to optimized meshes only when needed.
+Level editors like Hammer and TrenchBroom proved that **brush-based workflows** are the fastest way to block out 3D spaces. HammerForge brings that paradigm into Godot so you never have to leave the editor:
 
-| Concept | Description |
-|---------|-------------|
-| **DraftBrush** | Lightweight, editable brush nodes |
-| **Bake** | CSG used only at bake time for performance |
-| **Floor Paint** | Grid-based tool that generates floors/walls with optional heightmap terrain |
-| **Face Materials** | Per-face materials, UVs, and surface paint layers |
+- **No live CSG** -- brushes are lightweight preview nodes; CSG runs only at bake time, keeping the editor snappy even with hundreds of brushes.
+- **Two-click geometry** -- drag a base rectangle, click to set height. Extrude faces to extend rooms. Type exact numbers any time.
+- **Paint floors and terrain** -- grid-based floor paint with heightmaps, multi-material blending, auto-connectors (ramps/stairs), and foliage scatter.
+- **Bake when ready** -- one click produces merged meshes, collision shapes, lightmap UVs, navmeshes, and LODs.
+
+HammerForge is a single `addons/` folder. No external tools, no custom builds, no export plugins. Drop it in, enable, draw.
 
 ---
 
-## Features
+## At a Glance
 
-### Brush Workflow
-- **Two-stage CAD drawing** -- drag base, then click height
-- **Add / Subtract operations** with pending cut staging
-- **Extrude Up / Down** -- click a face and drag to extend brushes vertically
-- **Shape palette** -- box, cylinder, sphere, cone, wedge, pyramid, prisms, ellipsoid, capsule, torus, and platonic solids
-- **Geometry-aware snapping** -- Grid, Vertex (brush corners), and Center snap modes with G/V/C toggles
-- **Live dimensions** -- real-time W x H x D display during drag and height adjustment
-- **Resize gizmo** with full undo/redo support
+| | |
+|---|---|
+| **Modular subsystem architecture** | **432+ unit tests** with CI on every push |
+| **15 brush shapes** (box through dodecahedron) | **150 built-in prototype textures** for instant greyboxing |
+| **Quake `.map`** + **glTF `.glb`** export | **.hflevel** native format with threaded I/O |
+| **Customizable keymaps** (JSON) | **Plugin API** for custom tools |
 
-### Face Materials + UVs
-- **Materials palette** (dock) with add/remove and per-face assignment
-- **150 built-in prototype textures** (15 patterns x 10 colors) -- one-click **Load Prototypes** in the Paint tab for instant greyboxing materials
-- **Face select mode** for per-face material painting
-- **UV editor** with per-vertex drag handles and reset-to-projection
-- Face data persists in `.hflevel` saves
+---
 
-### Surface Paint (3D)
-- Paint target switch: **Floor** or **Surface**
-- Per-face splat layers with weight images
-- Live preview on DraftBrushes (per-face composite)
-- Per-layer texture picker and adjustable radius/strength
+## Core Workflows
 
-### Floor Paint
-- Grid-based paint layers with chunked storage
-- **Tools:** Brush, Erase, Rect, Line, Bucket, Blend
-- **Brush shape:** Square or Circle
-- Live preview while dragging
-- Greedy-meshed floors and merged wall segments
-- Stable IDs with scoped reconciliation (no node churn)
-- Paint layers persist in `.hflevel` saves
-- **Heightmaps:** import PNG/EXR or generate procedural noise per layer
-- **Displaced meshes:** per-vertex heightmap displacement via SurfaceTool
-- **Material blending:** four-slot shader with per-cell blend weights (UV2 blend map, RGB = slots B/C/D)
-- **Region streaming:** sparse loading of paint chunks for large worlds
-- **Auto-connectors:** ramp and stair mesh generation between layers
+### Draw and Shape Brushes
+
+Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Subtract** operations with pending cut staging, so you can preview subtractions before committing.
+
+- **15 shapes** -- box, cylinder, sphere, cone, wedge, pyramid, prisms, ellipsoid, capsule, torus, and platonic solids
+- **Extrude Up/Down** (U / J) -- click any face and drag to extend
+- **Hollow** (Ctrl+H) -- convert a solid brush to a room with configurable wall thickness
+- **Clip** (Shift+X) -- split a brush along an axis-aligned plane
+- **Numeric input** -- type exact dimensions during any drag or extrude
+- **Resize gizmo** with full undo/redo
+
+### Snap and Align
+
+Geometry-aware snapping goes beyond a simple grid:
+
+| Mode | Key | What it snaps to |
+|------|-----|------------------|
+| Grid | G | Regular grid intersections |
+| Vertex | V | Corners of existing brushes (8 per box) |
+| Center | C | Center points of existing brushes |
+
+Closest candidate within threshold wins. Modes combine freely. **Texture Lock** preserves UV alignment when moving or resizing. **Move to Floor/Ceiling** (Ctrl+Shift+F/C) raycasts to snap brushes vertically. **UV Justify** offers fit/center/left/right/top/bottom alignment for selected faces.
+
+### Paint Floors and Terrain
+
+Grid-based paint layers with chunked storage for large worlds:
+
+- **Tools:** Brush (B), Erase (E), Rect (R), Line (L), Bucket (K), Blend
+- **Shapes:** Square, Circle with adjustable radius
+- **Heightmaps:** import PNG/EXR or generate procedural noise -- per-vertex displacement via SurfaceTool
+- **Material blending:** four-slot shader with per-cell blend weights painted directly on the grid
+- **Auto-connectors:** ramp and stair mesh generation between layers at different heights
 - **Foliage scatter:** height/slope-filtered MultiMeshInstance3D placement
+- **Region streaming:** sparse chunk loading for open worlds
 
-### Structural Tools (Hammer-Inspired)
-- **Hollow** (Ctrl+H) -- convert solid brushes to hollow rooms with configurable wall thickness (actionable error toast on invalid thickness)
-- **Clip** (Shift+X) -- split brushes along an axis-aligned plane into two pieces (actionable error toast on out-of-bounds split)
-- **Brush Entity Classes** -- Tie/Untie brushes as func_detail, func_wall, trigger volumes (color-coded viewport overlays)
-- **Entity I/O** -- Source-style input/output connections (output → target.input with parameter, delay, fire-once)
-- **Move to Floor/Ceiling** (Ctrl+Shift+F/C) -- snap brushes to nearest surface
-- **Numeric Input** -- type exact dimensions during drag or extrude
-- **UV Justify** -- fit/center/left/right/top/bottom alignment for selected faces
+### Materials and Surface Paint
 
-### Organization + Workflow
-- **Visgroups** -- named visibility groups (e.g. "walls", "detail", "lighting") with per-group show/hide toggle
-- **Brush/Entity Grouping** -- persistent groups that select/move together (Ctrl+G / Ctrl+U)
-- **Reference cleanup on deletion** -- deleting brushes auto-cleans group/visgroup membership and warns about dangling entity I/O connections
-- **Texture Lock** -- UV alignment preserved automatically when moving or resizing brushes
-- **Cordon (Partial Bake)** -- restrict bake to an AABB region with yellow wireframe visualization
-- **Sticky LevelRoot** -- selecting other scene nodes no longer breaks viewport input
+- **Materials palette** with add/remove and per-face assignment
+- **150 built-in prototype textures** (15 patterns x 10 colors) -- click **Load Prototypes** for instant greyboxing
+- **Face select mode** for painting materials onto individual brush faces
+- **Surface paint** with per-face splat layers, weight images, and live preview
+- **UV editor** with per-vertex drag handles and reset-to-projection
+- **Material library persistence** -- save/load palettes as JSON with usage tracking
 
-### Editor UX
-- **4-tab dock** (Brush, Paint, Entities, Manage) with **collapsible sections** (separators, indented content, persisted state)
-- **Mode indicator banner** -- color-coded banner shows current tool, gesture stage ("Step 1/2: Draw base"), and numeric input
-- **Toast notifications** -- transient messages surface save/load/bake results and errors in the dock
-- **First-run welcome panel** -- 5-step quick-start guide on first launch
-- **Context hints** -- per-tab guidance labels that update based on scene state
-- **Shortcuts quick-reference** -- "?" toolbar button shows all keybindings in a popup
-- **Face hover highlights** -- extrude mode previews which face you'll select (green/red overlay)
-- **Contextual Selection Tools** in Brush tab -- hollow, clip, move, tie, duplicator appear when brushes are selected
-- **Readable toolbar** with icon + text labels (Draw, Select, Add, Sub, Paint, Ext Up, Ext Dn) and descriptive tooltips
-- **Inline disabled hints** -- "Select a brush to use these tools" visible without hovering
-- **Instant sync** -- paint layer, material, and surface paint changes reflected immediately (signal-driven)
-- **Context-sensitive shortcut HUD** that updates based on current tool and mode
-- **Customizable keymaps** -- all shortcuts data-driven via JSON; rebind any key
-- **User preferences** -- grid defaults, recent files, collapsed sections, welcome state persist across sessions
-- **Tool poll system** -- buttons gray out with inline hints when action can't run
-- **Paint tool shortcuts**: B / E / R / L / K for Brush / Erase / Rect / Line / Bucket
-- **Extrude shortcuts**: U (Extrude Up), J (Extrude Down)
-- **Brush tool shortcuts**: Ctrl+H (Hollow), Shift+X (Clip), Ctrl+Shift+F/C (Floor/Ceiling)
-- **Group shortcuts**: Ctrl+G (Group), Ctrl+U (Ungroup)
-- **Tooltips** on all dock controls with shortcut hints
-- **Selection count** in the status bar with **clear (x)** button
-- **Color-coded status bar** (red errors, yellow warnings, auto-clear)
-- **Pending cuts** visually distinct (orange-red glow) from applied cuts
-- **"No LevelRoot" banner** guides users when no root node is found
-- Editor theme parity, high-contrast grid with follow mode
-- History panel (beta) and live brush count
-- Entity palette with drag-and-drop placement
-- **Bake Dry Run** and **Validate Level** actions
-- **Performance panel** with brush, paint, and bake stats
-- **Settings export/import** for editor preferences
+### Entities and I/O
 
-### Bake & Playtest
-- Bake draft brushes to meshes + collision
-- Optional: merge meshes, LOD generation, UV2 unwrap, navmesh baking
-- Optional: **Use Face Materials** (bake per-face materials without CSG)
-- Heightmap floors bake directly (bypass CSG) with trimesh collision
-- Chunked baking via `LevelRoot.bake_chunk_size`
-- **Cordon bake** -- restrict bake to an AABB region (skip brushes outside the cordon)
-- Bake progress bar with chunk status updates
-- **Playtest button** -- bakes and runs with an FPS controller
+- **Data-driven entity types** from `entities.json` (point entities, brush entities like func_detail, func_wall, trigger volumes)
+- **Source-style I/O connections** -- wire output events to target inputs with parameter, delay, and fire-once options
+- **Declarative property forms** -- dock auto-generates typed controls (string, int, float, bool, enum, color, vector3) from entity definitions
+- **Drag-and-drop placement** from the entity palette
+- **Color-coded overlays** -- cyan for func_detail, orange for triggers
 
-### Modular Architecture
-- `LevelRoot` is a thin coordinator delegating to **10 subsystem classes** (grid, entity, brush, drag, bake, paint, state, file, validation, visgroup)
-- **Operation result reporting** -- `HFOpResult` return values with actionable fix hints on brush operations (hollow, clip, delete)
-- **Centralized snap system** -- `HFSnapSystem` with Grid/Vertex/Center modes, threshold-based candidate selection
-- **Central signal registry** -- 14 signals on LevelRoot for event-driven UI updates
-- **Batched signal emission** -- multi-brush operations coalesce signals to prevent UI thrash
-- **Tag-based invalidation** -- dirty tags on brushes/paint/chunks for selective reconciliation
-- **Command collation** -- rapid operations (nudge, resize, paint) merge into single undo entries
-- **Transaction support** -- atomic multi-step operations with rollback
-- **Customizable keymaps** -- all shortcuts data-driven via `HFKeymap`; rebind via JSON
-- **User preferences** -- persistent cross-session prefs separate from per-level settings
-- **Declarative tool settings** -- external tools expose schema; dock auto-generates UI controls
-- **Tool poll system** -- `can_activate()` / `get_poll_fail_reason()` for context-aware tool availability
-- **Entity definitions** -- data-driven entity types from JSON (extensible, not hardcoded)
-- **Material library persistence** -- save/load material palettes with usage tracking
-- **Autosave failure notification** -- threaded write errors surface to the UI
-- **Gesture tracker pattern** -- base class for self-contained input tool gestures
-- Explicit **input state machine** for drag/paint operations
-- Type-safe inter-module calls (no duck-typing)
-- Threaded .hflevel I/O with error handling
-- **CI**: automated `gdformat` + `gdlint` checks and **GUT unit tests** (413 tests) on push/PR
+### Organize Your Level
+
+- **Visgroups** -- named visibility groups ("walls", "detail", "lighting") with per-group show/hide
+- **Grouping** (Ctrl+G / Ctrl+U) -- persistent groups that select and move together
+- **Cordon** -- restrict bake to an AABB region with yellow wireframe; skip everything outside
+- **Reference cleanup** -- deleting brushes auto-cleans group/visgroup membership and warns about dangling entity I/O connections
+- **Duplicator** -- create N copies of a brush with progressive offset
+
+### Bake and Export
+
+| Option | What it does |
+|--------|--------------|
+| **Bake** | CSG assembly to merged meshes + trimesh collision |
+| **Chunked bake** | Split output by spatial chunks |
+| **Cordon bake** | Restrict to AABB region |
+| **Face materials** | Bake per-face materials without CSG |
+| **Heightmap floors** | Bypass CSG, bake displaced meshes directly with collision |
+| **LODs** | Auto-generate level-of-detail meshes |
+| **Lightmap UV2** | Unwrap for lightmap baking |
+| **Navmesh** | Bake navigation mesh |
+| **Dry run** | Preview bake counts without building |
+| **Validate** | Check level integrity before bake |
+| **.map export** | Classic Quake or Valve 220 format |
+| **.glb export** | glTF binary for external tools |
+| **Quick Play** | Bake + run with FPS controller |
+
+---
+
+## Editor UX
+
+HammerForge's dock is designed to stay out of your way while keeping everything reachable:
+
+- **4-tab dock** (Brush, Paint, Entities, Manage) with **collapsible sections** -- persisted state, separators, indented content
+- **Mode indicator banner** -- color-coded strip shows current tool, gesture stage ("Step 1/2: Draw base -- 64 x 32"), and numeric input buffer
+- **Toast notifications** -- transient messages for save/load/bake/error results
+- **First-run welcome panel** -- 5-step quick-start guide (dismissible)
+- **Context hints** -- per-tab guidance that updates based on scene state
+- **Shortcuts popup** -- "?" button shows all keybindings from your custom keymap
+- **Tool poll system** -- buttons gray out with inline hints when an action can't run ("Select a brush to use these tools")
+- **Contextual selection tools** -- hollow, clip, move, tie, duplicator appear in Brush tab only when brushes are selected
+- **Live dimensions** -- real-time W x H x D display during drag gestures
+- **Operation feedback** -- actionable error toasts with fix hints ("Wall thickness 6 is too large -- Use a thickness less than 5")
+- **Instant sync** -- paint, material, and surface paint changes reflected immediately via signals (no polling)
+- **Customizable keymaps** -- rebind any shortcut via JSON; toolbar labels auto-update
+- **User preferences** -- grid defaults, recent files, UI state persist across sessions
+
+---
+
+## Architecture
+
+HammerForge uses a **coordinator + subsystems** pattern:
+
+```
+plugin.gd            EditorPlugin — input routing, toolbar, viewport overlay
+  └─ level_root.gd   Thin coordinator (~1,100 lines) — owns containers, exports, signals
+       ├─ HFBrushSystem     Brush CRUD, hollow, clip, tie, move, UV justify, caching
+       ├─ HFDragSystem      Two-stage draw lifecycle + preview management
+       ├─ HFExtrudeTool     Face extrusion (Up/Down) via FaceSelector
+       ├─ HFPaintSystem     Floor paint layers, heightmaps, blend, surface paint
+       ├─ HFBakeSystem      CSG assembly, mesh merge, LOD, navmesh, collision
+       ├─ HFEntitySystem    Entity CRUD, I/O connections, definition loading
+       ├─ HFStateSystem     Undo/redo snapshots, transactions, autosave
+       ├─ HFFileSystem      Threaded .hflevel / .map / .glb I/O
+       ├─ HFGridSystem      Grid rendering and follow mode
+       ├─ HFVisgroupSystem  Named visibility groups + brush grouping
+       ├─ HFSnapSystem      Grid / Vertex / Center snap with threshold
+       └─ HFToolRegistry    External tool loading and dispatch
+```
+
+Key design choices:
+
+- **No live CSG** -- brushes are Node3D with box metadata; CSG runs only during bake
+- **RefCounted subsystems** -- each receives a LevelRoot reference; no circular preloads
+- **Signal-driven UI** -- signals on LevelRoot replace polling; batched emission prevents UI thrash
+- **Tag-based invalidation** -- dirty tags on brushes/paint for selective reconciliation
+- **Command collation** -- rapid operations merge into single undo entries within a 1-second window
+- **Transactions** -- atomic multi-step operations (hollow, clip) with rollback on failure
+- **HFOpResult** -- failable operations return structured results with actionable fix hints
+- **HFGesture** -- base class for self-contained input tool gestures
+- **Explicit state machine** -- `HFInputState` manages IDLE / DRAG_BASE / DRAG_HEIGHT / SURFACE_PAINT / EXTRUDE modes
+- **Type-safe calls** -- no duck-typing between modules (dynamic dispatch only in undo/redo by design)
+
+---
 
 ## Installation
 
 ```
 1. Copy addons/hammerforge into your project
-2. Enable the plugin: Project → Project Settings → Plugins → HammerForge
+2. Enable the plugin: Project -> Project Settings -> Plugins -> HammerForge
 3. Open a 3D scene and click in the viewport to auto-create LevelRoot
+4. Verify: dock appears with 4 tabs (Brush, Paint, Entities, Manage), toolbar shows D/S/+/-/P/▲/▼, snap buttons show G/V/C
 ```
 
-For upgrade steps and cache reset help, see `docs/HammerForge_Install_Upgrade.md`.
+See [Install + Upgrade](docs/HammerForge_Install_Upgrade.md) for upgrade steps and cache reset.
 
 ---
 
@@ -166,40 +198,99 @@ For upgrade steps and cache reset help, see `docs/HammerForge_Install_Upgrade.md
 
 | Step | Action |
 |------|--------|
-| **1. Draw a brush** | Tool = Draw, Mode = Add, Shape = Box -> drag base -> click height |
-| **2. Extrude a wall** | Tool = Extrude Up (U) -> click face -> drag up -> release |
-| **3. Cut a door** | Mode = Subtract -> draw brush -> Apply Cuts -> Bake |
-| **4. Face materials** | Paint tab -> Materials section -> **Load Prototypes** (or Add -> pick `materials/test_mat.tres`) -> Face Select Mode -> click faces -> Assign material |
-| **5. Surface paint** | Paint Mode -> Paint tab -> Surface Paint section -> Paint Target = Surface -> paint |
-| **6. Bake** | Manage tab -> Bake section -> Click Bake (or enable Use Face Materials) |
+| **1. Draw** | Tool = Draw, Mode = Add, Shape = Box -> drag base -> click height |
+| **2. Extrude** | Press U (Extrude Up) -> click a face -> drag -> release |
+| **3. Subtract** | Mode = Subtract -> draw a brush through a wall -> Apply Cuts -> Bake |
+| **4. Material** | Paint tab -> Materials -> **Load Prototypes** -> Face Select Mode -> click faces -> Assign |
+| **5. Paint floor** | Paint Mode -> Brush tool (B) -> paint grid cells -> switch layers for different heights |
+| **6. Bake** | Manage tab -> Bake -> click Bake (or Quick Play to bake + run) |
+
+---
+
+## Keyboard Shortcuts
+
+All shortcuts are rebindable via `user://hammerforge_keymap.json`.
+
+| Key | Action | | Key | Action |
+|-----|--------|-|-----|--------|
+| D | Draw tool | | B | Brush (paint) |
+| S | Select tool | | E | Erase (paint) |
+| U | Extrude Up | | R | Rect (paint) |
+| J | Extrude Down | | L | Line (paint) |
+| Ctrl+H | Hollow | | K | Bucket (paint) |
+| Shift+X | Clip | | Ctrl+G | Group selection |
+| Ctrl+Shift+F | Move to Floor | | Ctrl+U | Ungroup |
+| Ctrl+Shift+C | Move to Ceiling | | ? | Shortcuts popup |
+
+---
+
+## Testing
+
+432+ tests across 27 files using the [GUT](https://github.com/bitwes/Gut) framework. All checks run on every push via GitHub Actions.
+
+```bash
+# Run all tests headless
+godot --headless -s res://addons/gut/gut_cmdln.gd --path .
+
+# If class_names aren't imported
+godot --headless --import --path .
+
+# Format + lint
+gdformat --check addons/hammerforge/
+gdlint addons/hammerforge/
+```
+
+---
 
 ## Documentation
 
 | Document | Description |
 |----------|-------------|
 | [User Guide](docs/HammerForge_UserGuide.md) | Complete usage documentation |
-| [MVP Guide](docs/HammerForge_MVP_GUIDE.md) | Minimum viable product scope |
+| [MVP Guide](docs/HammerForge_MVP_GUIDE.md) | Architecture and contributor reference |
 | [Install + Upgrade](docs/HammerForge_Install_Upgrade.md) | Setup, upgrade, and cache reset |
 | [Design Constraints](docs/HammerForge_Design_Constraints.md) | Explicit tradeoffs and limits |
-| [Data Portability](docs/HammerForge_Data_Portability.md) | .hflevel/.map/.glb workflow |
-| [Demo Clips](docs/demos/README.md) | Clip list and naming scheme |
-| [Sample Levels](samples/) | Minimal and stress test scenes |
+| [Data Portability](docs/HammerForge_Data_Portability.md) | .hflevel / .map / .glb workflow |
 | [Texture + Materials](docs/HammerForge_Texture_Materials.md) | Face materials, UVs, and surface paint |
-| [Prototype Textures](docs/HammerForge_Prototype_Textures.md) | Built-in 150 SVG textures for greyboxing |
-| [Development + Testing](DEVELOPMENT.md) | Local setup and test checklist |
+| [Prototype Textures](docs/HammerForge_Prototype_Textures.md) | Built-in 150 SVG textures |
 | [Floor Paint Design](docs/HammerForge_FloorPaint_Greyboxing.md) | Grid paint system design |
+| [Development + Testing](DEVELOPMENT.md) | Local setup, architecture, test checklist |
 | [Spec](HammerForge_SPEC.md) | Technical specification |
 | [Changelog](CHANGELOG.md) | Version history |
-| [Roadmap](ROADMAP.md) | Planned features |
-| [Contributing](CONTRIBUTING.md) | Contribution guidelines |
+| [Roadmap](ROADMAP.md) | Planned features and priorities |
+| [Contributing](CONTRIBUTING.md) | How to contribute |
+| [Demo Clips](docs/demos/README.md) | Clip list and naming scheme |
+| [Sample Levels](samples/) | Minimal and stress test scenes |
 
-## Roadmap
+---
 
-See `ROADMAP.md` for planned work and priorities.
+## Roadmap Highlights
+
+See [ROADMAP.md](ROADMAP.md) for the full plan.
+
+**Next up:**
+- Vertex editing (move individual brush vertices)
+- Entity connection visualization (colored lines in viewport)
+- Carve tool (boolean-subtract from intersecting brushes)
+
+**Later:**
+- Interactive terrain sculpting (raise/lower/smooth/noise brushes)
+- Polygon tool (click vertices, extrude to brush)
+- Bezier patch editing
+- Snap-to-edge and snap-to-perpendicular modes
 
 ---
 
 ## Troubleshooting
+
+<details>
+<summary>Plugin not loading or dock missing</summary>
+
+1. Close Godot
+2. Delete `.godot/editor` (and optionally `.godot/imported`)
+3. Reopen and re-enable the plugin
+
+</details>
 
 <details>
 <summary>Capture exit-time errors (PowerShell)</summary>
@@ -214,9 +305,16 @@ Start-Process -FilePath "C:\Godot\Godot_v4.6-stable_win64.exe" `
 
 </details>
 
+<details>
+<summary>"class_names not imported" when running tests</summary>
+
+Run `godot --headless --import --path .` first, then re-run the test command.
+
+</details>
+
 ---
 
 <p align="center">
   <strong>MIT License</strong><br>
-  <sub>Last updated: March 26, 2026</sub>
+  <sub>Built for Godot 4.6+ | Last updated March 2026</sub>
 </p>
