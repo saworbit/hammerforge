@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: March 24, 2026
+Last updated: March 26, 2026
 
 This roadmap is a directional plan. Items may change based on user feedback.
 Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md for details.
@@ -92,6 +92,13 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - HTML preview page (`docs/prototype_textures_preview.html`) for browsing all textures.
 - GUT tests (27 cases) and dedicated documentation.
 
+## Done (FreeCAD-Inspired Improvements)
+- Operation result reporting: `HFOpResult` return values with actionable fix hints on hollow/clip/delete. Failures auto-toast via `user_message`.
+- Geometry-aware snap system: `HFSnapSystem` with Grid/Vertex/Center modes. Closest geometry candidate within threshold beats grid snap. G/V/C toggle buttons in dock.
+- Live dimensions during drag: mode indicator banner shows real-time W x H x D during DRAG_BASE and DRAG_HEIGHT.
+- Reference cleanup on deletion: deleting brushes auto-strips group/visgroup membership and cleans dangling entity I/O connections with toast notification.
+- 44 new tests (op_result, snap_system, drag_dimensions, reference_cleanup). Total: 413 tests across 27 files.
+
 ## Next (Wave 2b remaining + Wave 2c)
 - Vertex editing (move individual brush vertices).
 - Entity connection visualization (colored lines between connected entities in viewport).
@@ -103,7 +110,7 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - Path tool (click-to-place path_corner/path_track chains for NPC routes, cameras).
 - Displacement sewing (stitch adjacent heightmap edges to share vertices).
 - Material atlasing for large scenes.
-- Duplicator / instanced geometry (source brush group + transform rules → N synchronized copies — inspired by QuArK's duplicator system).
+- Measurement tools (ruler, dimension display on selected brushes, distance between brushes).
 
 ## Future (Wave 3 -- Polish)
 - Polygon tool (draw arbitrary convex shapes by clicking vertices, extrude to brush).
@@ -111,6 +118,8 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - Multiple simultaneous cordons.
 - Multi-tool presets for common workflows.
 - Additional bake pipelines (merge strategies, export helpers).
+- Snap-to-edge and snap-to-perpendicular modes for the snap system.
+- Preference packs (e.g. "Speedrunner", "Precision") for one-click workflow presets.
 - Formalized plugin API (`HFEditorPlugin` base class for custom tool scripts with menu/toolbar hooks).
 - Per-project entity definition files (game pak separation — different entity sets per project).
 - Bezier patch editing (control-point-grid surfaces as first-class brush type).

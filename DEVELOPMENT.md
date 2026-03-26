@@ -1,6 +1,6 @@
 ﻿# Development Guide
 
-Last updated: March 24, 2026
+Last updated: March 26, 2026
 
 This document covers local setup, codebase structure, and how to test features.
 
@@ -36,6 +36,8 @@ addons/hammerforge/
   hf_tool_registry.gd    Plugin API: tool registration, dispatch, external tool loader
   hf_keymap.gd           Customizable keyboard shortcuts (JSON load/save, action matching)
   hf_user_prefs.gd       Cross-session user preferences (user://hammerforge_prefs.json)
+  hf_snap_system.gd      Centralized snap (Grid/Vertex/Center modes, threshold-based candidates)
+  hf_op_result.gd        Lightweight operation result (ok, message, fix_hint)
   surface_paint.gd       Per-face surface paint tool
   uv_editor.gd           UV editing dock
   highlight.gdshader     Selection highlight shader (wireframe, unshaded, alpha)
@@ -117,13 +119,17 @@ addons/hammerforge/
 - **Declarative tool settings.** External tools expose `get_settings_schema()` → Array of `{name, type, label, default, min, max, options}`. Dock auto-generates controls via `rebuild_tool_settings()`. Use `get_setting(key)` / `set_setting(key, val)` for storage.
 - **Tag-based invalidation.** Call `root.tag_brush_dirty(id)` when a brush is modified; `root.tag_full_reconcile()` for structural changes (hollow, clip). Guard with `root.has_method("tag_brush_dirty")` for test shim compatibility.
 - **Signal batching.** Wrap multi-brush operations in `root.begin_signal_batch()` / `root.end_signal_batch()`. Transactions do this automatically. On rollback, call `root.discard_signal_batch()` to drop queued signals without emission.
+- **Operation results.** Methods that can fail (hollow, clip, delete) return `HFOpResult` with `ok`, `message`, and `fix_hint`. Use `_op_fail(msg, hint)` in brush_system to both emit `user_message` and return a fail result. Callers can check `result.ok` programmatically, but failures also auto-toast via the `user_message` signal.
+- **Geometry-aware snapping.** `_snap_point()` delegates to `HFSnapSystem`. Three modes (Grid=1, Vertex=2, Center=4) as a bitmask. Vertex mode collects 8 box corners from all brushes; Center mode collects brush centers. Closest candidate within `snap_threshold` beats grid snap. Pass `exclude_ids` to skip the brush being dragged.
+- **Reference cleanup.** `delete_brush()` calls `_cleanup_brush_references()` which strips group_id meta (+ cleans empty groups via `visgroup_system._cleanup_empty_group()`), clears visgroup membership, and calls `entity_system.cleanup_dangling_connections()` to remove I/O connections targeting the deleted node. Always fires before the node is removed from the tree.
+- **Live dimensions.** `input_state.get_drag_dimensions()` returns `Vector3(W, H, D)` during DRAG_BASE/DRAG_HEIGHT; `Vector3.ZERO` otherwise. `format_dimensions()` renders as `"64 x 32 x 48"` (whole numbers omit decimals). The mode indicator banner appends dimensions to the stage hint during drag gestures.
 
 ### CI
 
 The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on push and PR to `main`:
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
-- **GUT unit tests** -- 371 tests across 23 test files (runs Godot headless)
+- **GUT unit tests** -- 413 tests across 27 test files (runs Godot headless)
 
 Run locally before pushing:
 ```
@@ -161,6 +167,10 @@ Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framewor
 | `test_user_prefs.gd` | 9 | Default values, get/set prefs, section collapsed state, recent files (add/dedup/max 10), JSON roundtrip |
 | `test_dirty_tags.gd` | 11 | Brush dirty tags (add/dedup), paint chunk tags, full reconcile flag, consume-clears, signal batch queue/flush/discard/nesting |
 | `test_prototype_textures.gd` | 27 | Catalog constants, path generation, texture existence, material persistence (resource_path), batch loading into MaterialManager |
+| `test_op_result.gd` | 15 | HFOpResult constructors, hollow/clip/delete return values, fail emits user_message, fix_hint population |
+| `test_snap_system.gd` | 12 | Grid/Vertex/Center snap modes, threshold, exclude list, priority (closer geometry beats grid), empty scene fallback |
+| `test_drag_dimensions.gd` | 8 | get_drag_dimensions() in all modes, format_dimensions() whole/fractional/zero |
+| `test_reference_cleanup.gd` | 9 | Delete cleans group/visgroup membership, entity I/O cleanup_dangling_connections, preserves unrelated, no-crash on clean node |
 
 Run all tests:
 ```
@@ -235,6 +245,28 @@ Selection Tools (Brush tab — visible when brushes are selected)
 - Select the connection in the list and click Remove -- confirm it is removed.
 - Select a different entity -- confirm the I/O list updates to show that entity's connections.
 - Save .hflevel with entity I/O connections, reload, and confirm connections persist.
+
+Snap Modes
+- In Brush tab, click V (Vertex) toggle next to Grid Snap presets.
+- Place a brush, then start drawing another near a corner of the first brush -- confirm it snaps to the exact corner.
+- Click C (Center) toggle. Draw a brush near the center of an existing brush -- confirm it snaps to the center.
+- Disable G (Grid) and both V and C -- confirm brush placement is unsnapped.
+- Re-enable G -- confirm grid snapping resumes.
+
+Live Dimensions
+- Start drawing a brush and observe the mode indicator banner showing "Step 1/2: Draw base — W x H x D" with live updating dimensions.
+- Click to advance to height stage and observe "Step 2/2: Set height — W x H x D" with height updating as you move the mouse.
+- Type "64" and press Enter -- confirm the dimension display reflects the typed value.
+
+Operation Feedback
+- Select a very small brush (e.g. 4x4x4) and press Ctrl+H with wall thickness 4 -- confirm a toast appears with "Wall thickness too large" and a fix hint.
+- Select a brush and press Ctrl+H with a valid thickness -- confirm success (no error toast, 6 walls created).
+- Press Shift+X on a brush -- confirm success toast or appropriate error if split position is invalid.
+
+Reference Cleanup
+- Place a brush, add it to a group (Ctrl+G), then delete it. Confirm the group is automatically cleaned up.
+- Place a brush, add it to a visgroup in the Manage tab, then delete the brush. Confirm the visgroup no longer lists the deleted brush.
+- Create two entities with an I/O connection between them. Delete the target entity. Confirm a toast reports the removed connection count.
 
 Brush workflow
 - Draw an Add brush and confirm resize handles work.

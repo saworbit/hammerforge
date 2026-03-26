@@ -1,6 +1,6 @@
 # HammerForge User Guide
 
-Last updated: March 24, 2026
+Last updated: March 26, 2026
 
 This guide covers the current HammerForge workflow in Godot 4.6: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs.
 
@@ -28,7 +28,7 @@ The dock has 4 tabs with collapsible sections for organized access to all contro
 
 ### Mode Indicator
 A colored banner between the toolbar and tabs always shows your current tool and gesture stage:
-- **Draw** (blue) -- "Step 1/2: Draw base" / "Step 2/2: Set height"
+- **Draw** (blue) -- "Step 1/2: Draw base — 64 x 32 x 48" / "Step 2/2: Set height — 64 x 96 x 48" (live dimensions update as you drag)
 - **Select** (green)
 - **Extrude ▲** (green) / **Extrude ▼** (red) -- "Extruding..."
 - **Paint** (orange)
@@ -43,14 +43,15 @@ The compact toolbar shows icon + text labels (Draw, Select, Add, Sub, Paint, Ext
 - **Shape**: choose from the palette. Sides for pyramids/prisms.
 - **Size** X/Y/Z: defaults for new brushes.
 - **Grid Snap**: snap increment with quick preset buttons (1, 2, 4, 8, 16, 32, 64).
+- **Snap Modes**: G (Grid), V (Vertex — snap to brush corners), C (Center — snap to brush centers). Toggle independently; closest geometry within threshold beats grid snap.
 - **Material**: active material picker.
 - **Physics Layer**: collision layer for baked output.
 - **Texture Lock**: UV alignment preserved on move/resize (enabled by default).
 - **Selection Tools** (visible when brushes are selected):
-  - Hollow (wall thickness spinner + button, Ctrl+H).
+  - Hollow (wall thickness spinner + button, Ctrl+H). Shows actionable error toast if thickness is too large.
   - Move to Floor (Ctrl+Shift+F) / Ceiling (Ctrl+Shift+C).
   - Tie/Untie brush entity class (populated from entity definitions).
-  - Clip Selected (Shift+X).
+  - Clip Selected (Shift+X). Shows actionable error toast if split position is invalid.
   - Duplicate Array: count, X/Y/Z offset, Create/Remove Array buttons.
 
 ### Paint tab (collapsible sections)
@@ -83,6 +84,8 @@ The compact toolbar shows icon + text labels (Draw, Select, Add, Sub, Paint, Ext
 Transient notifications appear in the dock for important events:
 - **Save/load/export** results (success or failure).
 - **Bake** completion or errors.
+- **Operation errors** with actionable hints (e.g. "Wall thickness 6 is too large — Use a thickness less than 5").
+- **Reference cleanup** reports (e.g. "Removed 2 I/O connection(s) targeting deleted brush 'door1'").
 - **Autosave failures** (also shown as a persistent red warning label).
 - Notifications auto-fade after 4-8 seconds depending on severity (INFO, WARNING, ERROR).
 
@@ -101,6 +104,19 @@ Each tab shows a contextual hint at the bottom guiding you through the workflow:
 - Bake progress bar updates during chunked bakes.
 - Performance panel shows active brushes, paint memory, bake chunks, and last bake time.
 - **Autosave warning**: a red "Autosave failed!" label appears if a threaded save fails. Auto-hides after 30 seconds.
+
+## Snap Modes
+HammerForge supports three snap modes that can be combined:
+
+| Mode | Button | Behavior |
+|------|--------|----------|
+| **Grid** | G | Snap to grid increments (default, always-on) |
+| **Vertex** | V | Snap to the 8 corners of existing brushes |
+| **Center** | C | Snap to the center point of existing brushes |
+
+Toggle modes independently using the G/V/C buttons below the Grid Snap row in the Brush tab. When multiple modes are enabled, the closest candidate wins — a nearby brush corner will beat a farther grid point. The snap threshold (default 2.0 world units) determines how close you need to be to a geometry candidate for it to take effect.
+
+**Tip:** Enable Vertex snap when aligning brushes edge-to-edge. Enable Center snap when centering a brush inside another.
 
 ## Undo/Redo
 - All brush operations (draw, delete, nudge, resize, paint, hollow, clip) support undo/redo.
@@ -150,8 +166,8 @@ The on-screen shortcut overlay updates dynamically based on your current tool an
 | Context | Shortcuts Shown |
 |---------|----------------|
 | Draw (idle) | Click+Drag, Shift/Alt modifiers, X/Y/Z axis lock, Ctrl+Scroll size, Ctrl+D, Delete |
-| Draw (dragging base) | Shift: Square, Alt+Shift: Cube, Click: Height stage, Right-click: Cancel |
-| Draw (adjusting height) | Mouse: Change height, Click: Confirm, Right-click: Cancel |
+| Draw (dragging base) | Shift: Square, Alt+Shift: Cube, Click: Height stage, Right-click: Cancel. Live dimensions shown in banner |
+| Draw (adjusting height) | Mouse: Change height, Click: Confirm, Right-click: Cancel. Live dimensions shown in banner |
 | Select | Click/Shift/Ctrl selection, Escape, Delete, Ctrl+D, Arrow nudge, Ctrl+H Hollow, Shift+X Clip, Ctrl+Shift+F/C Floor/Ceiling |
 | Extrude Up/Down (idle) | Click face + drag, U/J tool switch, Right-click cancel |
 | Extrude Up/Down (active) | Move mouse to set height, Release to confirm, Right-click cancel |

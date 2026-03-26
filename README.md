@@ -37,7 +37,8 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 - **Add / Subtract operations** with pending cut staging
 - **Extrude Up / Down** -- click a face and drag to extend brushes vertically
 - **Shape palette** -- box, cylinder, sphere, cone, wedge, pyramid, prisms, ellipsoid, capsule, torus, and platonic solids
-- **Grid snapping** with quick presets and axis locks
+- **Geometry-aware snapping** -- Grid, Vertex (brush corners), and Center snap modes with G/V/C toggles
+- **Live dimensions** -- real-time W x H x D display during drag and height adjustment
 - **Resize gizmo** with full undo/redo support
 
 ### Face Materials + UVs
@@ -69,8 +70,8 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 - **Foliage scatter:** height/slope-filtered MultiMeshInstance3D placement
 
 ### Structural Tools (Hammer-Inspired)
-- **Hollow** (Ctrl+H) -- convert solid brushes to hollow rooms with configurable wall thickness
-- **Clip** (Shift+X) -- split brushes along an axis-aligned plane into two pieces
+- **Hollow** (Ctrl+H) -- convert solid brushes to hollow rooms with configurable wall thickness (actionable error toast on invalid thickness)
+- **Clip** (Shift+X) -- split brushes along an axis-aligned plane into two pieces (actionable error toast on out-of-bounds split)
 - **Brush Entity Classes** -- Tie/Untie brushes as func_detail, func_wall, trigger volumes (color-coded viewport overlays)
 - **Entity I/O** -- Source-style input/output connections (output → target.input with parameter, delay, fire-once)
 - **Move to Floor/Ceiling** (Ctrl+Shift+F/C) -- snap brushes to nearest surface
@@ -80,6 +81,7 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 ### Organization + Workflow
 - **Visgroups** -- named visibility groups (e.g. "walls", "detail", "lighting") with per-group show/hide toggle
 - **Brush/Entity Grouping** -- persistent groups that select/move together (Ctrl+G / Ctrl+U)
+- **Reference cleanup on deletion** -- deleting brushes auto-cleans group/visgroup membership and warns about dangling entity I/O connections
 - **Texture Lock** -- UV alignment preserved automatically when moving or resizing brushes
 - **Cordon (Partial Bake)** -- restrict bake to an AABB region with yellow wireframe visualization
 - **Sticky LevelRoot** -- selecting other scene nodes no longer breaks viewport input
@@ -128,6 +130,8 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 
 ### Modular Architecture
 - `LevelRoot` is a thin coordinator delegating to **10 subsystem classes** (grid, entity, brush, drag, bake, paint, state, file, validation, visgroup)
+- **Operation result reporting** -- `HFOpResult` return values with actionable fix hints on brush operations (hollow, clip, delete)
+- **Centralized snap system** -- `HFSnapSystem` with Grid/Vertex/Center modes, threshold-based candidate selection
 - **Central signal registry** -- 14 signals on LevelRoot for event-driven UI updates
 - **Batched signal emission** -- multi-brush operations coalesce signals to prevent UI thrash
 - **Tag-based invalidation** -- dirty tags on brushes/paint/chunks for selective reconciliation
@@ -144,7 +148,7 @@ HammerForge brings classic brush workflows (Hammer / TrenchBroom style) into God
 - Explicit **input state machine** for drag/paint operations
 - Type-safe inter-module calls (no duck-typing)
 - Threaded .hflevel I/O with error handling
-- **CI**: automated `gdformat` + `gdlint` checks and **GUT unit tests** (371 tests) on push/PR
+- **CI**: automated `gdformat` + `gdlint` checks and **GUT unit tests** (413 tests) on push/PR
 
 ## Installation
 
@@ -214,5 +218,5 @@ Start-Process -FilePath "C:\Godot\Godot_v4.6-stable_win64.exe" `
 
 <p align="center">
   <strong>MIT License</strong><br>
-  <sub>Last updated: March 24, 2026</sub>
+  <sub>Last updated: March 26, 2026</sub>
 </p>

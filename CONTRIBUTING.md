@@ -27,6 +27,9 @@ Thanks for helping improve HammerForge.
 - **Brush mutations** should call `root.tag_brush_dirty(id)` (guarded with `has_method`) so the reconciler can skip unchanged geometry.
 - **Multi-brush operations** should wrap in `begin_signal_batch()` / `end_signal_batch()` (or use transactions, which batch automatically) to prevent UI thrash.
 - **User preferences** (application-scoped) go in `HFUserPrefs`. **Level settings** go on LevelRoot.
+- **Operations that can fail** (hollow, clip, delete) should return `HFOpResult`. Use `_op_fail(msg, hint)` in brush_system to emit `user_message` and return a fail result in one call. Include an actionable `fix_hint` string so users know how to resolve the issue.
+- **Snapping** goes through `HFSnapSystem` (on `level_root.snap_system`). New snap modes should be added as bitmask flags in `SnapMode` enum and collected in `_collect_candidates()`.
+- **Deletion cleanup** is handled automatically by `_cleanup_brush_references()` in brush_system. If you add new cross-reference types (beyond groups, visgroups, entity I/O), add cleanup logic there.
 - Avoid adding new dependencies unless necessary.
 
 ## Running Checks Locally

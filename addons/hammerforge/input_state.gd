@@ -111,6 +111,32 @@ func is_extruding() -> bool:
 	return mode == Mode.EXTRUDE
 
 
+func get_drag_dimensions() -> Vector3:
+	if mode == Mode.DRAG_BASE:
+		var delta = drag_end - drag_origin
+		return Vector3(absf(delta.x), drag_height, absf(delta.z))
+	if mode == Mode.DRAG_HEIGHT:
+		var delta = drag_end - drag_origin
+		return Vector3(absf(delta.x), drag_height, absf(delta.z))
+	return Vector3.ZERO
+
+
+static func format_dimensions(dims: Vector3) -> String:
+	if dims == Vector3.ZERO:
+		return ""
+	# Show W x H x D, omitting decimals if whole numbers
+	var w := _fmt_num(dims.x)
+	var h := _fmt_num(dims.y)
+	var d := _fmt_num(dims.z)
+	return "%s x %s x %s" % [w, h, d]
+
+
+static func _fmt_num(v: float) -> String:
+	if absf(v - roundf(v)) < 0.01:
+		return str(int(v))
+	return "%.1f" % v
+
+
 # Backward-compat: map to legacy drag_stage int
 func get_drag_stage() -> int:
 	match mode:

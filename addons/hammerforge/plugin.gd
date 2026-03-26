@@ -24,6 +24,7 @@ const LevelRootType = preload("level_root.gd")
 const DraftEntityType = preload("draft_entity.gd")
 const IconRes = preload("icon.png")
 const HFUndoHelper = preload("undo_helper.gd")
+const HFInputStateType = preload("input_state.gd")
 
 
 func _enter_tree():
@@ -161,9 +162,17 @@ func _update_hud_context() -> void:
 		var stage_hint := ""
 		if root and root.input_state:
 			if root.input_state.is_drag_base():
+				var dims = root.input_state.get_drag_dimensions()
+				var dim_str = HFInputStateType.format_dimensions(dims)
 				stage_hint = "Step 1/2: Draw base"
+				if dim_str != "":
+					stage_hint += " — " + dim_str
 			elif root.input_state.is_drag_height():
+				var dims = root.input_state.get_drag_dimensions()
+				var dim_str = HFInputStateType.format_dimensions(dims)
 				stage_hint = "Step 2/2: Set height"
+				if dim_str != "":
+					stage_hint += " — " + dim_str
 			elif root.input_state.is_extruding():
 				stage_hint = "Extruding..."
 			elif root.input_state.is_surface_painting():
@@ -1077,6 +1086,10 @@ func _hollow_selected(root: Node) -> void:
 	if brush_id == "":
 		return
 	var thickness = dock.get_hollow_thickness() if dock else 4.0
+	var check: HFOpResult = root.can_hollow_brush(brush_id, thickness)
+	if not check.ok:
+		root.user_message.emit(check.user_text(), 1)
+		return
 	HFUndoHelper.commit(
 		_get_undo_redo(),
 		root,
@@ -1132,6 +1145,10 @@ func _clip_selected(root: Node) -> void:
 	# Default clip: split along Y axis at center
 	var center = info.get("center", Vector3.ZERO)
 	var split_pos = center.y if center is Vector3 else 0.0
+	var check: HFOpResult = root.can_clip_brush(brush_id, 1, split_pos)
+	if not check.ok:
+		root.user_message.emit(check.user_text(), 1)
+		return
 	HFUndoHelper.commit(
 		_get_undo_redo(),
 		root,

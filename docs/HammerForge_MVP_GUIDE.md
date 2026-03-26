@@ -1,6 +1,6 @@
 # HammerForge MVP Guide
 
-Last updated: March 22, 2026
+Last updated: March 26, 2026
 
 This guide is for contributors implementing or extending the MVP.
 
@@ -28,7 +28,9 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 - DraftBrush nodes represent all authored geometry.
 - `HFDragSystem` manages the two-stage draw lifecycle (base drag -> height click) and owns the `HFInputState` instance.
 - `HFExtrudeTool` handles face extrusion: picks a face via `FaceSelector`, shows a preview, and commits a new DraftBrush on release. Supports Up (along face normal) and Down (opposite).
-- `HFBrushSystem` handles brush CRUD, pending/committed cuts, materials, picking, hollow, clip, tie/untie, move floor/ceiling, and UV justify.
+- `HFBrushSystem` handles brush CRUD, pending/committed cuts, materials, picking, hollow, clip, tie/untie, move floor/ceiling, and UV justify. Failable operations (hollow, clip, delete) return `HFOpResult` with actionable fix hints.
+- `HFSnapSystem` provides centralized snapping with Grid, Vertex (brush corners), and Center modes. `_snap_point()` delegates to it.
+- `HFInputState` exposes `get_drag_dimensions()` for live W x H x D display during drag gestures.
 - PendingCuts allow staging subtract operations before applying.
 
 ### Floor Paint (`HFPaintSystem` + `paint/*.gd`)

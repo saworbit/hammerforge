@@ -34,6 +34,7 @@ const HFStateSystemType = preload("systems/hf_state_system.gd")
 const HFFileSystemType = preload("systems/hf_file_system.gd")
 const HFValidationSystemType = preload("systems/hf_validation_system.gd")
 const HFVisgroupSystemType = preload("systems/hf_visgroup_system.gd")
+const HFSnapSystemType = preload("hf_snap_system.gd")
 const HFPrototypeTextures = preload("hf_prototype_textures.gd")
 
 const RELOAD_LOCK_PATH := "res://.hammerforge/reload.lock"
@@ -194,6 +195,7 @@ var state_system: HFStateSystemType
 var file_system: HFFileSystemType
 var validation_system: HFValidationSystemType
 var visgroup_system: HFVisgroupSystemType
+var snap_system: HFSnapSystemType
 var extrude_tool: HFExtrudeToolType
 
 # ---------------------------------------------------------------------------
@@ -462,6 +464,7 @@ func _ready():
 	file_system = HFFileSystemType.new(self)
 	validation_system = HFValidationSystemType.new(self)
 	visgroup_system = HFVisgroupSystemType.new(self)
+	snap_system = HFSnapSystemType.new(self)
 	extrude_tool = HFExtrudeToolType.new(self)
 	entity_system.load_entity_definitions()
 	grid_system.setup_editor_grid()
@@ -764,6 +767,10 @@ func find_entities_by_name(entity_name: String) -> Array:
 	return entity_system.find_entities_by_name(entity_name)
 
 
+func cleanup_dangling_connections(deleted_name: String) -> int:
+	return entity_system.cleanup_dangling_connections(deleted_name)
+
+
 func get_all_entity_connections() -> Array:
 	return entity_system.get_all_connections()
 
@@ -802,8 +809,8 @@ func delete_brush(brush: Node, free: bool = true) -> void:
 	brush_system.delete_brush(brush, free)
 
 
-func delete_brush_by_id(brush_id: String) -> void:
-	brush_system.delete_brush_by_id(brush_id)
+func delete_brush_by_id(brush_id: String) -> HFOpResult:
+	return brush_system.delete_brush_by_id(brush_id)
 
 
 func delete_brushes_by_id(brush_ids: Array) -> void:
@@ -895,8 +902,16 @@ func _clear_generated() -> void:
 	brush_system._clear_generated()
 
 
-func hollow_brush_by_id(brush_id: String, wall_thickness: float) -> void:
-	brush_system.hollow_brush_by_id(brush_id, wall_thickness)
+func can_hollow_brush(brush_id: String, wall_thickness: float) -> HFOpResult:
+	return brush_system.can_hollow_brush(brush_id, wall_thickness)
+
+
+func can_clip_brush(brush_id: String, axis: int, split_pos: float) -> HFOpResult:
+	return brush_system.can_clip_brush(brush_id, axis, split_pos)
+
+
+func hollow_brush_by_id(brush_id: String, wall_thickness: float) -> HFOpResult:
+	return brush_system.hollow_brush_by_id(brush_id, wall_thickness)
 
 
 func move_brushes_to_floor(brush_ids: Array) -> void:
@@ -907,8 +922,8 @@ func move_brushes_to_ceiling(brush_ids: Array) -> void:
 	brush_system.move_brushes_to_ceiling(brush_ids)
 
 
-func clip_brush_by_id(brush_id: String, axis: int, split_pos: float) -> void:
-	brush_system.clip_brush_by_id(brush_id, axis, split_pos)
+func clip_brush_by_id(brush_id: String, axis: int, split_pos: float) -> HFOpResult:
+	return brush_system.clip_brush_by_id(brush_id, axis, split_pos)
 
 
 func clip_brush_at_point(brush_id: String, face_idx: int, hit_position: Vector3) -> void:
@@ -1904,7 +1919,9 @@ func _gather_visual_instances(node: Node, out: Array) -> void:
 		_gather_visual_instances(child, out)
 
 
-func _snap_point(point: Vector3) -> Vector3:
+func _snap_point(point: Vector3, exclude_ids: Array = []) -> Vector3:
+	if snap_system:
+		return snap_system.snap_point(point, grid_snap, exclude_ids)
 	if grid_snap <= 0.0:
 		return point
 	return point.snapped(Vector3(grid_snap, grid_snap, grid_snap))

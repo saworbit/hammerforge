@@ -5,6 +5,29 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **FreeCAD-Inspired Improvements (Mar 2026):**
+  - **Operation result reporting** (`hf_op_result.gd`): `HFOpResult` lightweight result class returned
+    by `hollow_brush_by_id()`, `clip_brush_by_id()`, and `delete_brush_by_id()`. Carries `ok`, `message`,
+    and `fix_hint` fields. Failed operations now surface actionable toast notifications (e.g. "Wall
+    thickness 6 is too large for brush (smallest dim 10) — Use a thickness less than 5") instead of
+    silently returning. `_op_fail()` helper emits `user_message` signal at WARNING level automatically.
+  - **Geometry-aware snap system** (`hf_snap_system.gd`): centralized `HFSnapSystem` with three snap
+    modes — **Grid** (existing behavior), **Vertex** (8 box corners of all brushes), and **Center**
+    (brush centers). Closest geometry candidate within threshold beats grid snap. `_snap_point()` in
+    `level_root.gd` now delegates to the snap system. Dock shows G/V/C toggle buttons below the grid
+    snap row. Replaces the previous grid-only snapping.
+  - **Live dimensions during drag**: `input_state.gd` gains `get_drag_dimensions()` and
+    `format_dimensions()`. The mode indicator banner now shows real-time brush dimensions during
+    DRAG_BASE and DRAG_HEIGHT gestures (e.g. "Step 1/2: Draw base — 64 x 32 x 48",
+    "Step 2/2: Set height — 64 x 96 x 48").
+  - **Reference cleanup on deletion**: `delete_brush()` now calls `_cleanup_brush_references()` which
+    strips group membership (auto-cleans empty groups), clears visgroup meta, and warns via toast when
+    entity I/O connections targeting the deleted node are removed. New
+    `cleanup_dangling_connections(deleted_name)` on `HFEntitySystem` removes all I/O connections
+    targeting a deleted node and returns the removal count. Exposed on LevelRoot as a delegate.
+  - **GUT tests** for new systems: `test_op_result.gd` (15), `test_snap_system.gd` (12),
+    `test_drag_dimensions.gd` (8), `test_reference_cleanup.gd` (9) = 44 new tests.
+    Total: 413 tests across 27 files.
 - **UX Intuitiveness Overhaul (Mar 2026):**
   - **Mode indicator banner**: colored banner between toolbar and tabs shows current tool, gesture
     stage ("Step 1/2: Draw base"), and numeric input. Color-coded per tool: Draw (blue), Select

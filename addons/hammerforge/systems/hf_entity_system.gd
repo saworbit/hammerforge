@@ -220,6 +220,27 @@ func get_entity_outputs(entity: Node) -> Array:
 	return entity.get_meta("entity_io_outputs", [])
 
 
+## Remove all I/O connections that target a deleted node by name.
+## Returns the number of connections removed.
+func cleanup_dangling_connections(deleted_name: String) -> int:
+	var removed := 0
+	if deleted_name == "" or not root.entities_node:
+		return removed
+	for child in root.entities_node.get_children():
+		var outputs: Array = child.get_meta("entity_io_outputs", [])
+		if outputs.is_empty():
+			continue
+		var cleaned: Array = []
+		for conn in outputs:
+			if conn is Dictionary and str(conn.get("target_name", "")) == deleted_name:
+				removed += 1
+			else:
+				cleaned.append(conn)
+		if cleaned.size() != outputs.size():
+			child.set_meta("entity_io_outputs", cleaned)
+	return removed
+
+
 ## Find all entities by name (used for resolving target_name references).
 func find_entities_by_name(entity_name: String) -> Array:
 	var result: Array = []

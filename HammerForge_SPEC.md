@@ -1,6 +1,6 @@
 # HammerForge Spec
 
-Last updated: March 23, 2026
+Last updated: March 26, 2026
 
 This document describes HammerForge's architecture and data flow.
 
@@ -33,6 +33,9 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `state_saved()` | `.hflevel` save completed |
 | `state_loaded()` | `.hflevel` load completed |
 | `autosave_failed(error_message)` | Threaded autosave write failed |
+| `user_message(text, level)` | Subsystem-to-dock notification routing (0=INFO, 1=WARNING, 2=ERROR) |
+| `material_list_changed()` | Material palette updated (add/remove) |
+| `face_selection_changed()` | Face selection changed (snapshot comparison) |
 
 ### Core Scripts
 
@@ -56,14 +59,16 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `uv_editor.gd` + `uv_editor.tscn` | UV editing dock control |
 | `hf_keymap.gd` | Customizable keyboard shortcuts (JSON load/save, action → binding mapping) |
 | `hf_user_prefs.gd` | Cross-session user preferences (`user://hammerforge_prefs.json`) |
+| `hf_snap_system.gd` | Centralized snap system (Grid/Vertex/Center modes, threshold-based candidate selection) |
+| `hf_op_result.gd` | Lightweight operation result (`ok`, `message`, `fix_hint`) returned by brush operations |
 
 ### Subsystems (`addons/hammerforge/systems/`)
 
 | Subsystem | class_name | Responsibility |
 |-----------|------------|----------------|
 | `hf_grid_system.gd` | `HFGridSystem` | Editor grid setup, visibility, transform, axis-plane intersection |
-| `hf_entity_system.gd` | `HFEntitySystem` | Entity definitions, placement, capture/restore, Entity I/O connections |
-| `hf_brush_system.gd` | `HFBrushSystem` | Brush CRUD, picking, pending/committed cuts, materials, face selection, hollow, clip, tie/untie. O(1) brush ID cache and material instance cache |
+| `hf_entity_system.gd` | `HFEntitySystem` | Entity definitions, placement, capture/restore, Entity I/O connections, dangling connection cleanup |
+| `hf_brush_system.gd` | `HFBrushSystem` | Brush CRUD, picking, pending/committed cuts, materials, face selection, hollow, clip, tie/untie. O(1) brush ID cache. Returns `HFOpResult` on failable ops. Auto-cleans references on deletion |
 | `hf_drag_system.gd` | `HFDragSystem` | Drag lifecycle, preview management, axis locking, height computation. Owns `HFInputState` |
 | `hf_bake_system.gd` | `HFBakeSystem` | Bake orchestration (single/chunked), CSG assembly, navmesh, collision |
 | `hf_paint_system.gd` | `HFPaintSystem` | Floor paint input, surface paint, paint layer CRUD, face selection |

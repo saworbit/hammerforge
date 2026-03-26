@@ -132,6 +132,8 @@ func create_brush_from_info(info: Dictionary) -> Node:
 func delete_brush(brush: Node, free: bool = true) -> void:
 	if not brush:
 		return
+	# Clean up cross-references before removal
+	_cleanup_brush_references(brush)
 	var removed_id := ""
 	if brush is DraftBrush:
 		var bid = str((brush as DraftBrush).brush_id)
@@ -158,12 +160,14 @@ func delete_brush(brush: Node, free: bool = true) -> void:
 			root.brush_removed.emit(removed_id)
 
 
-func delete_brush_by_id(brush_id: String) -> void:
+func delete_brush_by_id(brush_id: String) -> HFOpResult:
 	if brush_id == "":
-		return
+		return _op_fail("Delete: no brush ID provided")
 	var brush = _find_brush_by_id(brush_id)
-	if brush:
-		delete_brush(brush)
+	if not brush:
+		return _op_fail("Delete: brush '%s' not found" % brush_id)
+	delete_brush(brush)
+	return HFOpResult.success()
 
 
 func nudge_brushes_by_id(brush_ids: Array, offset: Vector3) -> void:
@@ -801,18 +805,76 @@ func _find_brush_by_key(key: String) -> DraftBrush:
 
 
 # ---------------------------------------------------------------------------
+# Pre-validation (check preconditions without performing the operation)
+# ---------------------------------------------------------------------------
+
+
+func can_hollow_brush(brush_id: String, wall_thickness: float) -> HFOpResult:
+	if brush_id == "":
+		return HFOpResult.fail("Hollow: no brush ID provided")
+	var brush = _find_brush_by_id(brush_id)
+	if not brush or not (brush is DraftBrush):
+		return HFOpResult.fail("Hollow: brush not found")
+	var draft := brush as DraftBrush
+	var min_dim = min(draft.size.x, min(draft.size.y, draft.size.z))
+	if wall_thickness * 2.0 >= min_dim:
+		return HFOpResult.fail(
+			(
+				"Wall thickness %.0f is too large for brush (smallest dim %.0f)"
+				% [wall_thickness, min_dim]
+			),
+			"Use a thickness less than %.0f" % (min_dim / 2.0)
+		)
+	return HFOpResult.success()
+
+
+func can_clip_brush(brush_id: String, axis: int, split_pos: float) -> HFOpResult:
+	if brush_id == "":
+		return HFOpResult.fail("Clip: no brush ID provided")
+	var brush = _find_brush_by_id(brush_id)
+	if not brush or not (brush is DraftBrush):
+		return HFOpResult.fail("Clip: brush not found")
+	var draft := brush as DraftBrush
+	var pos = draft.global_position
+	var half = draft.size * 0.5
+	var brush_min: float
+	var brush_max: float
+	match axis:
+		0:
+			brush_min = pos.x - half.x
+			brush_max = pos.x + half.x
+		1:
+			brush_min = pos.y - half.y
+			brush_max = pos.y + half.y
+		_:
+			brush_min = pos.z - half.z
+			brush_max = pos.z + half.z
+	var snap = root.grid_snap if root.grid_snap > 0.0 else 0.0
+	if snap > 0.0:
+		split_pos = snapped(split_pos, snap)
+	var margin = snap if snap > 0.0 else 0.01
+	if split_pos <= brush_min + margin or split_pos >= brush_max - margin:
+		var axis_name = ["X", "Y", "Z"][clampi(axis, 0, 2)]
+		return HFOpResult.fail(
+			"Clip: split position %.1f is outside brush bounds on %s axis" % [split_pos, axis_name],
+			"Click inside the brush face to pick a valid split point"
+		)
+	return HFOpResult.success()
+
+
+# ---------------------------------------------------------------------------
 # Hollow
 # ---------------------------------------------------------------------------
 
 
-func hollow_brush_by_id(brush_id: String, wall_thickness: float) -> void:
+func hollow_brush_by_id(brush_id: String, wall_thickness: float) -> HFOpResult:
 	if brush_id == "":
-		return
+		return _op_fail("Hollow: no brush ID provided")
 	if root.has_method("tag_full_reconcile"):
 		root.tag_full_reconcile()
 	var brush = _find_brush_by_id(brush_id)
 	if not brush or not (brush is DraftBrush):
-		return
+		return _op_fail("Hollow: brush not found")
 	var draft := brush as DraftBrush
 	var size = draft.size
 	var pos = draft.global_position
@@ -822,8 +884,10 @@ func hollow_brush_by_id(brush_id: String, wall_thickness: float) -> void:
 	# Wall thickness must be less than half the smallest dimension
 	var min_dim = min(size.x, min(size.y, size.z))
 	if t * 2.0 >= min_dim:
-		root._log("Hollow: wall thickness too large for brush size")
-		return
+		return _op_fail(
+			"Wall thickness %.0f is too large for brush (smallest dim %.0f)" % [t, min_dim],
+			"Use a thickness less than %.0f" % (min_dim / 2.0)
+		)
 
 	var infos: Array = []
 	# Top wall
@@ -921,6 +985,7 @@ func hollow_brush_by_id(brush_id: String, wall_thickness: float) -> void:
 			count += 1
 
 	root._log("Hollow: created %d walls (thickness %.1f)" % [count, t])
+	return HFOpResult.success("Hollow: created %d walls" % count)
 
 
 # ---------------------------------------------------------------------------
@@ -994,14 +1059,14 @@ func _move_brushes_vertical(brush_ids: Array, direction: float) -> void:
 
 ## Split a brush along an axis-aligned plane.
 ## axis: 0=X, 1=Y, 2=Z.  split_pos: world coordinate on that axis.
-func clip_brush_by_id(brush_id: String, axis: int, split_pos: float) -> void:
+func clip_brush_by_id(brush_id: String, axis: int, split_pos: float) -> HFOpResult:
 	if brush_id == "":
-		return
+		return _op_fail("Clip: no brush ID provided")
 	if root.has_method("tag_full_reconcile"):
 		root.tag_full_reconcile()
 	var brush = _find_brush_by_id(brush_id)
 	if not brush or not (brush is DraftBrush):
-		return
+		return _op_fail("Clip: brush not found")
 	var draft := brush as DraftBrush
 	var pos = draft.global_position
 	var half = draft.size * 0.5
@@ -1028,8 +1093,11 @@ func clip_brush_by_id(brush_id: String, axis: int, split_pos: float) -> void:
 	# Reject if split is outside or on the edge of the brush
 	var margin = snap if snap > 0.0 else 0.01
 	if split_pos <= brush_min + margin or split_pos >= brush_max - margin:
-		root._log("Clip: split position outside brush bounds")
-		return
+		var axis_name = ["X", "Y", "Z"][clampi(axis, 0, 2)]
+		return _op_fail(
+			"Clip: split position %.1f is outside brush bounds on %s axis" % [split_pos, axis_name],
+			"Click inside the brush face to pick a valid split point"
+		)
 
 	var mat = draft.material_override
 	var operation = draft.operation
@@ -1102,8 +1170,9 @@ func clip_brush_by_id(brush_id: String, axis: int, split_pos: float) -> void:
 		if piece:
 			count += 1
 
-	var axis_name = ["X", "Y", "Z"][clampi(axis, 0, 2)]
-	root._log("Clip: split along %s at %.1f → %d pieces" % [axis_name, split_pos, count])
+	var axis_label = ["X", "Y", "Z"][clampi(axis, 0, 2)]
+	root._log("Clip: split along %s at %.1f → %d pieces" % [axis_label, split_pos, count])
+	return HFOpResult.success("Clip: split into %d pieces" % count)
 
 
 ## Clip brush using a face hit from FaceSelector.
@@ -1302,3 +1371,48 @@ func get_duplicator_for_brush(brush_id: String) -> Variant:
 	if dup_id == "" or not _duplicators.has(dup_id):
 		return null
 	return _duplicators[dup_id]
+
+
+# ---------------------------------------------------------------------------
+# Reference cleanup on deletion
+# ---------------------------------------------------------------------------
+
+
+func _cleanup_brush_references(brush: Node) -> void:
+	if not brush:
+		return
+	# Strip group membership
+	var group_id := str(brush.get_meta("group_id", ""))
+	if group_id != "" and root.has_method("visgroup_system"):
+		pass  # groups are on visgroup_system
+	if group_id != "":
+		brush.set_meta("group_id", "")
+		if root.get("visgroup_system") and root.visgroup_system.has_method("_cleanup_empty_group"):
+			root.visgroup_system._cleanup_empty_group(group_id)
+	# Strip visgroup membership
+	var vgs: PackedStringArray = brush.get_meta("visgroups", PackedStringArray())
+	if not vgs.is_empty():
+		brush.set_meta("visgroups", PackedStringArray())
+	# Clean up entity I/O connections targeting this brush by name
+	var brush_name := brush.name
+	if brush_name != "" and root.get("entity_system"):
+		var removed_count: int = root.entity_system.cleanup_dangling_connections(brush_name)
+		if removed_count > 0 and root.has_signal("user_message"):
+			root.user_message.emit(
+				(
+					"Removed %d I/O connection(s) targeting deleted brush '%s'"
+					% [removed_count, brush_name]
+				),
+				1
+			)
+
+
+# ---------------------------------------------------------------------------
+# Operation result helpers
+# ---------------------------------------------------------------------------
+
+
+func _op_fail(msg: String, hint: String = "") -> HFOpResult:
+	if root and root.has_signal("user_message"):
+		root.user_message.emit(msg, 1)  # WARNING level
+	return HFOpResult.fail(msg, hint)

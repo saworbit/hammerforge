@@ -221,6 +221,9 @@ var undo_redo: EditorUndoRedoManager = null
 var connected_root: Node = null
 var snap_button_group: ButtonGroup
 var syncing_snap := false
+var snap_grid_btn: Button = null
+var snap_vertex_btn: Button = null
+var snap_center_btn: Button = null
 var debug_enabled := false
 @onready var _autosave_warning: Label = $Margin/VBox/AutosaveWarning
 var syncing_grid := false
@@ -2252,6 +2255,9 @@ func _ready():
 		button.text = str(preset)
 		button.toggled.connect(_on_snap_button_toggled.bind(button))
 
+	# --- Snap mode buttons (Grid / Vertex / Center) ---
+	_build_snap_mode_buttons()
+
 	# --- Connect signals (brush tab + manage tab) ---
 	grid_snap.value_changed.connect(_on_grid_snap_value_changed)
 	if show_hud:
@@ -2837,6 +2843,49 @@ func set_selection_nodes(nodes: Array) -> void:
 		_clear_entity_props()
 
 
+func _build_snap_mode_buttons() -> void:
+	# Find the GridRow parent to add snap mode row after it
+	var grid_row = grid_snap.get_parent() if grid_snap else null
+	if not grid_row or not grid_row.get_parent():
+		return
+	var parent = grid_row.get_parent()
+	var idx = grid_row.get_index() + 1
+	var row = HBoxContainer.new()
+	var lbl = Label.new()
+	lbl.text = "Snap:"
+	lbl.custom_minimum_size.x = 70
+	row.add_child(lbl)
+	snap_grid_btn = Button.new()
+	snap_grid_btn.text = "G"
+	snap_grid_btn.tooltip_text = "Grid snap"
+	snap_grid_btn.toggle_mode = true
+	snap_grid_btn.button_pressed = true
+	snap_grid_btn.custom_minimum_size.x = 32
+	snap_grid_btn.toggled.connect(_on_snap_mode_toggled.bind(1))
+	row.add_child(snap_grid_btn)
+	snap_vertex_btn = Button.new()
+	snap_vertex_btn.text = "V"
+	snap_vertex_btn.tooltip_text = "Vertex snap (brush corners)"
+	snap_vertex_btn.toggle_mode = true
+	snap_vertex_btn.custom_minimum_size.x = 32
+	snap_vertex_btn.toggled.connect(_on_snap_mode_toggled.bind(2))
+	row.add_child(snap_vertex_btn)
+	snap_center_btn = Button.new()
+	snap_center_btn.text = "C"
+	snap_center_btn.tooltip_text = "Center snap (brush centers)"
+	snap_center_btn.toggle_mode = true
+	snap_center_btn.custom_minimum_size.x = 32
+	snap_center_btn.toggled.connect(_on_snap_mode_toggled.bind(4))
+	row.add_child(snap_center_btn)
+	parent.add_child(row)
+	parent.move_child(row, idx)
+
+
+func _on_snap_mode_toggled(pressed: bool, mode: int) -> void:
+	if level_root and level_root.get("snap_system"):
+		level_root.snap_system.set_mode(mode, pressed)
+
+
 func _on_grid_snap_value_changed(value: float) -> void:
 	if syncing_snap:
 		return
@@ -3047,6 +3096,10 @@ func _on_hollow() -> void:
 	if brush_id == "":
 		return
 	var thickness = hollow_thickness.value if hollow_thickness else 4.0
+	var check: HFOpResult = level_root.can_hollow_brush(brush_id, thickness)
+	if not check.ok:
+		show_toast(check.user_text(), 1)
+		return
 	_commit_state_action("Hollow", "hollow_brush_by_id", [brush_id, thickness])
 
 
@@ -5372,10 +5425,12 @@ func _on_clip() -> void:
 		return
 	# Default clip: split along Y axis at center
 	var center = info.get("center", Vector3.ZERO)
-	if center is Vector3:
-		_commit_state_action("Clip Brush", "clip_brush_by_id", [brush_id, 1, center.y])
-	else:
-		_commit_state_action("Clip Brush", "clip_brush_by_id", [brush_id, 1, 0.0])
+	var split_pos: float = center.y if center is Vector3 else 0.0
+	var check: HFOpResult = level_root.can_clip_brush(brush_id, 1, split_pos)
+	if not check.ok:
+		show_toast(check.user_text(), 1)
+		return
+	_commit_state_action("Clip Brush", "clip_brush_by_id", [brush_id, 1, split_pos])
 
 
 func _on_io_add() -> void:
