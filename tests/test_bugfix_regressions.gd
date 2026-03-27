@@ -342,8 +342,11 @@ func test_plugin_stores_ref_y_from_picked_vertex():
 	)
 
 	# Verify the actual call site passes _vertex_drag_ref_y to the projection fn
+	var compact_source = source.replace("\r", "").replace("\n", "").replace("\t", "").replace(" ", "")
 	assert_true(
-		source.contains("_vertex_screen_to_world_delta(cam, _vertex_drag_start, pos, root, _vertex_drag_ref_y)"),
+		compact_source.contains(
+			"_vertex_screen_to_world_delta(cam,_vertex_drag_start,pos,root,_vertex_drag_ref_y)"
+		),
 		"Call site must pass _vertex_drag_ref_y as the ref_y argument"
 	)
 

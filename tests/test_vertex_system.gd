@@ -98,6 +98,7 @@ func test_no_faces_returns_empty():
 	# Don't add to tree — DraftBrush._ready() auto-builds faces
 	var verts = vs.get_brush_vertices(b)
 	assert_eq(verts.size(), 0)
+	b.free()
 
 
 func test_null_brush_returns_empty():
