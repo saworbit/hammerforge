@@ -115,6 +115,14 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - Integration test suite (22 end-to-end tests across 8 categories).
 - 99 new tests. Total: **512 tests across 30 files**.
 
+## Done (UX Feature Wave — Tutorial, Hints, Subtract Preview, Prefabs)
+- **Dynamic contextual hints**: viewport overlay hints per tool mode (draw, select, extrude, paint) with auto-fade tween and per-hint dismissal persistence via user prefs.
+- **Searchable shortcut dialog**: `HFShortcutDialog` replaces static popup. Filterable Tree with categories (Tools, Editing, Paint, Axis Lock). Built from keymap data.
+- **Interactive tutorial wizard**: `HFTutorialWizard` 5-step guided walkthrough (Draw → Subtract → Paint → Entity → Bake) with signal-driven auto-advance, validation, progress bar, and persistent resume.
+- **Real-time subtract preview**: `HFSubtractPreview` system shows wireframe AABB intersection overlays between additive and subtractive brushes. Debounced rebuild, pooled MeshInstance3D, toggle in Settings.
+- **Prefabs / reusable brush groups**: `HFPrefab` captures brush + entity selections as centroid-relative groups. Save/load `.hfprefab` JSON files. `HFPrefabLibrary` dock section with drag-and-drop instantiation. Entity I/O remapping on instantiate.
+- 56 new tests (shortcut_dialog, tutorial_wizard, subtract_preview, prefab, user_prefs additions). Total: **568 tests across 34 files**.
+
 ## Next (Wave 2c remaining)
 - Vertex editing (move individual brush vertices with convexity enforcement).
 - Path tool (click-to-place path_corner/path_track chains for NPC routes, cameras).

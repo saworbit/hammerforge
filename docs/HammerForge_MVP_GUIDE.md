@@ -15,7 +15,7 @@ This guide is for contributors implementing or extending the MVP.
 HammerForge uses a **coordinator + subsystems** pattern:
 
 - **`plugin.gd`** handles editor input and routes to `LevelRoot`. Uses sticky `active_root` with deep recursive tree search.
-- **`level_root.gd`** is a thin coordinator (~1,100 lines) that owns containers, exports, and signals. All public methods delegate to one of 10 subsystem classes.
+- **`level_root.gd`** is a thin coordinator (~1,100 lines) that owns containers, exports, and signals. All public methods delegate to one of 13 subsystem classes.
 - **Subsystems** (`systems/*.gd`) are `RefCounted` classes that do the real work. Each receives a `LevelRoot` reference in its constructor.
 - **`input_state.gd`** is a state machine managing drag/paint modes.
 - **`dock.gd`** uses 4 tabs (Brush, Paint, Entities, Manage) with collapsible sections (persisted state, separators, indented content) built programmatically. Selection tools appear contextually in Brush tab when brushes are selected. Compact toolbar with single-char labels.
@@ -77,6 +77,28 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 - Entities are excluded from bake.
 - Definitions are loaded from `addons/hammerforge/entities.json`.
 - **Entity I/O**: Source-style input/output connections stored as `entity_io_outputs` meta. Fields: output_name, target_name, input_name, parameter, delay, fire_once. Managed via `add_entity_output()`, `remove_entity_output()`, `get_entity_outputs()`. Connections serialize with entity info in `.hflevel`.
+
+### Subtract Preview (`HFSubtractPreview`)
+- `RefCounted` subsystem showing wireframe AABB intersection overlays between additive and subtractive brushes.
+- Uses `ImmediateMesh` with `PRIMITIVE_LINES` (same 12-edge box pattern as cordon wireframe).
+- Debounced rebuild (0.15s), MeshInstance3D pool (max 50 entries).
+- Connects to `brush_added`, `brush_removed`, `brush_changed` signals for automatic updates.
+- Toggle via `show_subtract_preview` export on LevelRoot. Persisted in state settings.
+
+### Prefabs (`HFPrefab` + `HFPrefabLibrary`)
+- `HFPrefab` captures brush + entity selections with transforms relative to the group centroid.
+- `capture_from_selection()` computes centroid, strips brush_id/group_id, stores infos as dictionaries.
+- `instantiate()` assigns new IDs, offsets transforms by placement position, remaps entity I/O connections.
+- `save_to_file()` / `load_from_file()` use JSON with `HFLevelIO` encoding for Godot types.
+- `HFPrefabLibrary` (dock section) scans `res://prefabs/` and provides drag-and-drop.
+- Plugin handles `"hammerforge_prefab"` drop type with raycast + snap + undo/redo.
+
+### Tutorial Wizard (`HFTutorialWizard`)
+- 5-step interactive tutorial replacing the static welcome panel.
+- Each step listens for a specific LevelRoot signal (brush_added, paint_layer_changed, entity_added, bake_finished).
+- Optional validation (e.g. step 2 checks that the brush operation is SUBTRACTION).
+- Progress persisted via `tutorial_step` in user prefs; resumes on editor restart.
+- Dock `highlight_tab()` flashes the relevant tab on each step.
 
 ### Brush Operations (`HFBrushSystem` extended)
 - **Hollow** (Ctrl+H): creates 6 wall brushes, deletes original. Configurable wall thickness.

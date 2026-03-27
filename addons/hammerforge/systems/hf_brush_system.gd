@@ -323,6 +323,11 @@ func _next_brush_id() -> String:
 	return "%s_%s" % [str(Time.get_ticks_usec()), str(root._brush_id_counter)]
 
 
+## Public wrapper for prefab instantiation.
+func next_brush_id() -> String:
+	return _next_brush_id()
+
+
 func _register_brush_id(brush_id: String, brush_node: Node = null) -> void:
 	if brush_id == "":
 		return

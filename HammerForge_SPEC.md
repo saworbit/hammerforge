@@ -12,7 +12,7 @@ This document describes HammerForge's architecture and data flow.
 
 ## Architecture
 
-HammerForge uses a coordinator + subsystems pattern. `LevelRoot` is a thin coordinator that owns all container nodes, exported properties, and signals, and delegates work to 10 `RefCounted` subsystem classes. Each subsystem receives a reference to `LevelRoot` in its constructor.
+HammerForge uses a coordinator + subsystems pattern. `LevelRoot` is a thin coordinator that owns all container nodes, exported properties, and signals, and delegates work to 13 `RefCounted` subsystem classes. Each subsystem receives a reference to `LevelRoot` in its constructor.
 
 ### Signals (Central Registry)
 All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.emit(...)`. UI and other consumers subscribe instead of polling.
@@ -61,6 +61,21 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `hf_user_prefs.gd` | Cross-session user preferences (`user://hammerforge_prefs.json`) |
 | `hf_snap_system.gd` | Centralized snap system (Grid/Vertex/Center modes, threshold-based candidate selection) |
 | `hf_op_result.gd` | Lightweight operation result (`ok`, `message`, `fix_hint`) returned by brush operations |
+| `hf_prefab.gd` | Reusable brush+entity group (save/load `.hfprefab`, centroid-relative transforms, I/O remap) |
+
+### UI Components (`addons/hammerforge/ui/`)
+
+| Script | Role |
+|--------|------|
+| `hf_tutorial_wizard.gd` | Interactive 5-step tutorial with signal-driven auto-advance and persistent progress |
+| `hf_shortcut_dialog.gd` | Searchable shortcut reference dialog (filterable Tree with categories) |
+| `hf_prefab_library.gd` | Prefab library dock section (ItemList, save button, drag-and-drop) |
+| `hf_welcome_panel.gd` | Legacy welcome panel (replaced by tutorial wizard) |
+| `hf_toast.gd` | Toast notification system (auto-fading stacked messages) |
+| `paint_tab_builder.gd` | Builds Paint tab sections + signal connections |
+| `entity_tab_builder.gd` | Builds Entity Properties + Entity I/O sections |
+| `manage_tab_builder.gd` | Builds Manage tab sections (Bake, File, Settings, Prefabs, etc.) |
+| `selection_tools_builder.gd` | Builds Selection Tools section (hollow, clip, move, tie, duplicator) |
 
 ### Subsystems (`addons/hammerforge/systems/`)
 
@@ -78,6 +93,7 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `hf_visgroup_system.gd` | `HFVisgroupSystem` | Visgroups (visibility groups), brush/entity grouping |
 | `hf_carve_system.gd` | `HFCarveSystem` | Boolean-subtract carve (progressive-remainder box slicing) |
 | `hf_io_visualizer.gd` | `HFIOVisualizer` | Entity I/O connection lines in viewport (ImmediateMesh) |
+| `hf_subtract_preview.gd` | `HFSubtractPreview` | Wireframe AABB intersection overlay between subtract and additive brushes (debounced, pooled) |
 
 ### Other Modules
 
@@ -87,6 +103,9 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 - `addons/hammerforge/textures/prototypes/`: embedded SVG texture library for greyboxing
 - `addons/hammerforge/hf_measure_tool.gd`: `HFMeasureTool` -- measurement/ruler tool (tool_id=100, click A→B, distance + dX/dY/dZ)
 - `addons/hammerforge/hf_decal_tool.gd`: `HFDecalTool` -- decal placement tool (tool_id=101, raycast + surface-normal Decal nodes)
+- `addons/hammerforge/ui/hf_tutorial_wizard.gd`: interactive 5-step tutorial wizard (Draw → Subtract → Paint → Entity → Bake)
+- `addons/hammerforge/ui/hf_shortcut_dialog.gd`: searchable shortcut reference dialog with category grouping
+- `addons/hammerforge/ui/hf_prefab_library.gd`: prefab library dock section with drag-and-drop
 - `addons/hammerforge/paint/*`: floor paint grid, layers, tools, inference, geometry synthesis, reconciliation, heightmap integration
 - `addons/hammerforge/paint/hf_region_manager.gd`: region streaming helpers (region bounds, radius, index)
 - `addons/hammerforge/hflevel_io.gd`: variant encoding/decoding for .hflevel format
@@ -424,7 +443,7 @@ Unit tests use the [GUT](https://github.com/bitwes/Gut) framework and run headle
 | `test_texture_lock.gd` | 10 | UV offset/scale compensation for PLANAR_X/Y/Z, BOX_UV, CYLINDRICAL |
 | `test_cordon_filter.gd` | 10 | AABB intersection, cordon-filtered collection, chunk_coord utility |
 | `test_keymap.gd` | 16 | Default bindings, key matching (simple/ctrl/shift/ctrl+shift), modifier rejection, display strings, rebinding, JSON roundtrip |
-| `test_user_prefs.gd` | 9 | Default values, get/set prefs, section collapse state, recent files (add/dedup/max 10), JSON roundtrip |
+| `test_user_prefs.gd` | 12 | Default values, get/set prefs, section collapse state, recent files (add/dedup/max 10), JSON roundtrip, hint dismissed/dismiss/roundtrip |
 | `test_dirty_tags.gd` | 11 | Brush dirty tags, paint chunk tags, full reconcile flag, consume-clears, signal batch queue/flush/discard/nesting |
 | `test_prototype_textures.gd` | 27 | Catalog constants, path generation, texture existence, material persistence (resource_path), batch loading into MaterialManager |
 | `test_op_result.gd` | 15 | HFOpResult constructors, hollow/clip/delete return values, fail emits user_message, fix_hint population |
@@ -433,7 +452,11 @@ Unit tests use the [GUT](https://github.com/bitwes/Gut) framework and run headle
 | `test_reference_cleanup.gd` | 9 | Delete cleans group/visgroup membership, entity I/O cleanup_dangling_connections |
 | `test_bake_system.gd` | 18 | build_bake_options, structural/trigger brush filtering, chunk_coord, bake_dry_run, warn_bake_failure |
 | `test_integration.gd` | 22 | End-to-end: brush lifecycle, paint + heightmap, entity workflow, visgroup cross-system, snap, bake, I/O cleanup, info round-trip |
+| `test_shortcut_dialog.gd` | 8 | Category assignment (tools, paint, axis lock, editing), action labels, get_all_bindings copy safety |
+| `test_tutorial_wizard.gd` | 7 | Step advancement, persistence, skip/dismiss, validate_subtract, no-root safety |
+| `test_subtract_preview.gd` | 8 | AABB intersection math (overlapping, no-overlap, contained, partial axis), enable/disable, debounce |
+| `test_prefab.gd` | 11 | Empty prefab, to_dict/from_dict roundtrip, transform preservation, file save/load, invalid data, entity I/O |
 
-Total: **512 tests** across **30 files**.
+Total: **568 tests** across **34 files**.
 
 Tests use root shim scripts (dynamically created GDScript) to provide the LevelRoot interface without circular preload dependencies. Configuration in `.gutconfig.json`.

@@ -15,6 +15,7 @@ const HFUndoHelper = preload("undo_helper.gd")
 const HFCollapsibleSection = preload("ui/collapsible_section.gd")
 const HFToast = preload("ui/hf_toast.gd")
 const HFWelcomePanel = preload("ui/hf_welcome_panel.gd")
+const HFTutorialWizard = preload("ui/hf_tutorial_wizard.gd")
 const HFEntityDef = preload("hf_entity_def.gd")
 const UVEditorScene = preload("uv_editor.tscn")
 const PaintTabBuilder = preload("ui/paint_tab_builder.gd")
@@ -234,6 +235,8 @@ var _axis_lock_x: Button = null
 var _axis_lock_y: Button = null
 var _axis_lock_z: Button = null
 var _show_io_lines: CheckBox = null
+var _show_subtract_preview: CheckBox = null
+var _prefab_library = null  # HFPrefabLibrary
 var _sculpt_raise_btn: Button = null
 var _sculpt_lower_btn: Button = null
 var _sculpt_smooth_btn: Button = null
@@ -296,6 +299,7 @@ var _uv_hint_label: Label = null
 var _toast_container: VBoxContainer = null
 var _clear_sel_btn: Button = null
 var _welcome_panel: PanelContainer = null
+var _tutorial_wizard = null
 var _brush_hint: Label = null
 var _paint_hint: Label = null
 var _entity_hint: Label = null
@@ -615,15 +619,61 @@ func _update_context_hints() -> void:
 
 
 func _show_welcome_panel() -> void:
-	_welcome_panel = HFWelcomePanel.new()
-	_welcome_panel.dismissed.connect(_on_welcome_dismissed)
+	var start_step: int = 0
+	if _user_prefs:
+		start_step = int(_user_prefs.get_pref("tutorial_step", 0))
+	# If tutorial was already completed, don't show again
+	if start_step >= HFTutorialWizard.get_step_count():
+		return
+	_tutorial_wizard = HFTutorialWizard.new()
+	_tutorial_wizard.set_user_prefs(_user_prefs)
+	_tutorial_wizard.dismissed.connect(_on_tutorial_dismissed)
+	_tutorial_wizard.completed.connect(_on_tutorial_completed)
 	var vbox = $Margin/VBox
 	var tabs = $Margin/VBox/MainTabs
-	# Insert before MainTabs
 	var idx = tabs.get_index()
-	vbox.add_child(_welcome_panel)
-	vbox.move_child(_welcome_panel, idx)
-	tabs.visible = false
+	vbox.add_child(_tutorial_wizard)
+	vbox.move_child(_tutorial_wizard, idx)
+	# Always call start() so labels/progress are populated immediately.
+	# If level_root is null, the wizard shows text but can't auto-advance
+	# until set_root() connects signals later.
+	_tutorial_wizard.start(level_root, self, start_step)
+
+
+func _on_tutorial_dismissed(dont_show_again: bool) -> void:
+	if dont_show_again and _user_prefs:
+		_user_prefs.set_pref("show_welcome", false)
+		_user_prefs.save()
+	_close_tutorial()
+
+
+func _on_tutorial_completed() -> void:
+	# Auto-close after a brief delay so user sees the "Done!" message
+	if is_instance_valid(_tutorial_wizard):
+		var tree := get_tree()
+		if tree:
+			tree.create_timer(2.0).timeout.connect(_close_tutorial)
+
+
+func _close_tutorial() -> void:
+	if _tutorial_wizard and is_instance_valid(_tutorial_wizard):
+		_tutorial_wizard.queue_free()
+		_tutorial_wizard = null
+	# Legacy compat
+	if _welcome_panel:
+		_welcome_panel.queue_free()
+		_welcome_panel = null
+
+
+## Highlight a dock tab by name (brief flash effect for tutorial).
+func highlight_tab(tab_name: String) -> void:
+	var tabs_node = $Margin/VBox/MainTabs
+	if not tabs_node:
+		return
+	for i in tabs_node.get_tab_count():
+		if tabs_node.get_tab_title(i) == tab_name:
+			tabs_node.current_tab = i
+			break
 
 
 func _on_welcome_dismissed(dont_show_again: bool) -> void:
@@ -1632,6 +1682,9 @@ func _process(_delta):
 		_disconnect_root_signals()
 		connected_root = level_root
 		_connect_root_signals()
+		# Pass root to tutorial wizard if active
+		if _tutorial_wizard and is_instance_valid(_tutorial_wizard) and level_root:
+			_tutorial_wizard.set_root(level_root, self)
 	# Show/hide the "no root" banner
 	if no_root_banner:
 		no_root_banner.visible = level_root == null
@@ -1740,74 +1793,13 @@ func _on_builtin_tool_pressed(_button: BaseButton) -> void:
 
 
 func _on_shortcuts_help() -> void:
-	var popup = PopupPanel.new()
-	popup.title = "Keyboard Shortcuts"
-	var label = RichTextLabel.new()
-	label.bbcode_enabled = true
-	label.fit_content = true
-	label.custom_minimum_size = Vector2(280, 350)
-	label.scroll_active = true
-
-	var sections := {
-		"Tools":
-		["tool_draw", "tool_select", "tool_extrude_up", "tool_extrude_down", "vertex_edit"],
-		"Editing":
-		[
-			"delete",
-			"duplicate",
-			"group",
-			"ungroup",
-			"hollow",
-			"clip",
-			"move_to_floor",
-			"move_to_ceiling"
-		],
-		"Paint": ["paint_bucket", "paint_erase", "paint_ramp", "paint_line", "paint_blend"],
-		"Axis Lock": ["axis_x", "axis_y", "axis_z"],
-	}
-	var names := {
-		"tool_draw": "Draw",
-		"tool_select": "Select",
-		"tool_extrude_up": "Extrude Up",
-		"tool_extrude_down": "Extrude Down",
-		"delete": "Delete",
-		"duplicate": "Duplicate",
-		"group": "Group",
-		"ungroup": "Ungroup",
-		"hollow": "Hollow",
-		"clip": "Clip",
-		"move_to_floor": "Move to Floor",
-		"move_to_ceiling": "Move to Ceiling",
-		"paint_bucket": "Bucket",
-		"paint_erase": "Erase",
-		"paint_ramp": "Ramp/Rect",
-		"paint_line": "Line",
-		"paint_blend": "Blend",
-		"axis_x": "Lock X",
-		"axis_y": "Lock Y",
-		"axis_z": "Lock Z",
-	}
-
-	var text := ""
-	for section_name in sections:
-		text += "[b]%s[/b]\n" % section_name
-		for action in sections[section_name]:
-			var display = _keymap.get_display_string(action) if _keymap else "?"
-			var name = names.get(action, action)
-			text += "  %s  —  [code]%s[/code]\n" % [name, display]
-		text += "\n"
-
-	text += "[b]During Drag / Extrude[/b]\n"
-	text += "  Type number + Enter — Exact size\n"
-	text += "  Backspace — Edit numeric input\n"
-	text += "  Shift — Constrain to square\n"
-	text += "  Right-click — Cancel\n"
-
-	label.text = text
-	popup.add_child(label)
-	add_child(popup)
-	popup.popup_centered(Vector2i(300, 400))
-	popup.popup_hide.connect(func(): popup.queue_free())
+	var HFShortcutDialog = preload("res://addons/hammerforge/ui/hf_shortcut_dialog.gd")
+	var dialog = HFShortcutDialog.new()
+	add_child(dialog)
+	dialog.populate(_keymap)
+	dialog.popup_centered(Vector2i(380, 460))
+	dialog.confirmed.connect(func(): dialog.queue_free())
+	dialog.canceled.connect(func(): dialog.queue_free())
 
 
 func get_tool() -> int:
@@ -2236,6 +2228,39 @@ func _on_show_grid_toggled(pressed: bool) -> void:
 func _on_show_io_lines_toggled(pressed: bool) -> void:
 	if level_root and level_root.io_visualizer:
 		level_root.io_visualizer.set_enabled(pressed)
+
+
+func _on_show_subtract_preview_toggled(pressed: bool) -> void:
+	if level_root:
+		level_root.show_subtract_preview = pressed
+
+
+func _on_prefab_save_requested(prefab_name: String) -> void:
+	if not level_root:
+		return
+	var HFPrefabType = preload("res://addons/hammerforge/hf_prefab.gd")
+	var brush_nodes: Array = []
+	var entity_nodes: Array = []
+	for node in _selection_nodes:
+		if node is CSGShape3D:
+			brush_nodes.append(node)
+		elif node.has_meta("is_entity"):
+			entity_nodes.append(node)
+	if brush_nodes.is_empty() and entity_nodes.is_empty():
+		return
+	var prefab = HFPrefabType.capture_from_selection(
+		level_root.brush_system, level_root.entity_system, brush_nodes, entity_nodes
+	)
+	prefab.prefab_name = prefab_name
+	# Ensure directory exists
+	var dir_path := "res://prefabs"
+	if not DirAccess.dir_exists_absolute(dir_path):
+		DirAccess.make_dir_recursive_absolute(dir_path)
+	var file_name := prefab_name.to_snake_case() + ".hfprefab"
+	var path := dir_path.path_join(file_name)
+	var err := prefab.save_to_file(path)
+	if err == OK and _prefab_library:
+		_prefab_library.on_prefab_saved()
 
 
 func _on_vertex_tool_toggled(pressed: bool) -> void:

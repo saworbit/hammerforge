@@ -4,11 +4,26 @@ extends Control
 @onready var label: Label = $Panel/Margin/Label
 
 var _last_context := {}
+var _user_prefs = null  # HFUserPrefs — untyped to avoid preload
+var _hint_label: Label
+var _hint_tween: Tween
+var _current_hint_key := ""
+
+const MODE_HINTS := {
+	"draw_idle": "Click to place corner \u2192 drag to set size \u2192 release for height",
+	"select": "Click brush to select, Shift+click to multi-select, drag to move",
+	"extrude_up_idle": "Click a face to start extruding upward",
+	"extrude_down_idle": "Click a face to start extruding downward",
+	"paint_floor": "Click cells to paint, Shift+click to erase",
+	"paint_surface": "Click brush faces to apply material",
+	"vertex_edit": "Click vertex to select, drag to move, X/Y/Z to lock axis",
+}
 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_apply_layout()
+	_setup_hint_label()
 	update_context({})
 
 
@@ -17,7 +32,24 @@ func _apply_layout() -> void:
 	offset_left = -270.0
 	offset_top = 8.0
 	offset_right = -8.0
-	offset_bottom = 170.0
+	offset_bottom = 200.0
+
+
+func set_user_prefs(prefs) -> void:
+	_user_prefs = prefs
+
+
+func _setup_hint_label() -> void:
+	if not has_node("Panel/Margin/Label"):
+		return
+	_hint_label = Label.new()
+	_hint_label.name = "HintLabel"
+	_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_hint_label.add_theme_font_size_override("font_size", 11)
+	_hint_label.add_theme_color_override("font_color", Color(0.8, 0.9, 1.0, 0.7))
+	_hint_label.visible = false
+	_hint_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	$Panel/Margin.add_child(_hint_label)
 
 
 func update_context(ctx: Dictionary) -> void:
@@ -27,6 +59,81 @@ func update_context(ctx: Dictionary) -> void:
 	if not label:
 		return
 	label.text = _build_shortcuts_text(ctx)
+	_check_mode_hint(ctx)
+
+
+func _check_mode_hint(ctx: Dictionary) -> void:
+	if not _hint_label:
+		return
+	var key := _compute_hint_key(ctx)
+	if key == _current_hint_key:
+		return
+	_current_hint_key = key
+	if key.is_empty():
+		_hide_hint()
+		return
+	if _user_prefs and _user_prefs.is_hint_dismissed(key):
+		_hide_hint()
+		return
+	if not MODE_HINTS.has(key):
+		_hide_hint()
+		return
+	_show_hint(MODE_HINTS[key])
+
+
+func _compute_hint_key(ctx: Dictionary) -> String:
+	var tool_id: int = ctx.get("tool", 0)
+	var mode: int = ctx.get("mode", 0)
+	var is_paint: bool = ctx.get("paint_mode", false)
+
+	if is_paint:
+		var paint_target: int = ctx.get("paint_target", 0)
+		return "paint_surface" if paint_target == 1 else "paint_floor"
+
+	# mode 5 = VERTEX_EDIT
+	if mode == 5:
+		return "vertex_edit"
+
+	if tool_id == 1:
+		return "select"
+
+	if tool_id == 2:
+		return "extrude_up_idle" if mode != 4 else ""
+	if tool_id == 3:
+		return "extrude_down_idle" if mode != 4 else ""
+
+	# Draw tool — only show hint when idle
+	if mode == 0:
+		return "draw_idle"
+	return ""
+
+
+func _show_hint(text: String) -> void:
+	_hint_label.text = "\n" + text
+	_hint_label.modulate = Color(1, 1, 1, 1)
+	_hint_label.visible = true
+	if _hint_tween and _hint_tween.is_valid():
+		_hint_tween.kill()
+	_hint_tween = create_tween()
+	_hint_tween.tween_interval(4.0)
+	_hint_tween.tween_property(_hint_label, "modulate:a", 0.0, 1.0)
+	_hint_tween.tween_callback(_hide_hint)
+
+
+func _hide_hint() -> void:
+	if _hint_label:
+		_hint_label.visible = false
+	if _hint_tween and _hint_tween.is_valid():
+		_hint_tween.kill()
+		_hint_tween = null
+
+
+func dismiss_current_hint() -> void:
+	if _current_hint_key.is_empty():
+		return
+	if _user_prefs:
+		_user_prefs.dismiss_hint(_current_hint_key)
+	_hide_hint()
 
 
 func _build_shortcuts_text(ctx: Dictionary) -> String:

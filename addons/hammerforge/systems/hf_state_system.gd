@@ -263,6 +263,7 @@ func capture_hflevel_settings() -> Dictionary:
 		root.paint_system.region_memory_budget_mb if root.paint_system else 256,
 		"region_show_grid": root.paint_system.region_show_grid if root.paint_system else false,
 		"texture_lock": root.texture_lock,
+		"show_subtract_preview": root.show_subtract_preview,
 		"cordon_enabled": root.cordon_enabled,
 		"cordon_aabb_pos":
 		[root.cordon_aabb.position.x, root.cordon_aabb.position.y, root.cordon_aabb.position.z],
@@ -375,6 +376,8 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 			)
 	if settings.has("texture_lock"):
 		root.texture_lock = bool(settings.get("texture_lock", true))
+	if settings.has("show_subtract_preview"):
+		root.show_subtract_preview = bool(settings.get("show_subtract_preview", false))
 	if settings.has("cordon_enabled"):
 		root.cordon_enabled = bool(settings.get("cordon_enabled", false))
 	if settings.has("cordon_aabb_pos") and settings.has("cordon_aabb_size"):

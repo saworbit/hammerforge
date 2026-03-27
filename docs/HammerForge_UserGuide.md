@@ -20,8 +20,20 @@ This guide covers the current HammerForge workflow in Godot 4.6: brush-based gre
 
 If missing, HammerForge creates it automatically on first viewport click. LevelRoot stays active even when you select other scene nodes (sticky root discovery) -- you do not need to re-select it after clicking a camera, light, or other node.
 
-## First-Run Welcome
-On first launch, a welcome panel appears with a 5-step quick-start guide. Check "Don't show again" to dismiss it permanently. You can reset this by editing `user://hammerforge_prefs.json` and setting `"show_welcome": true`.
+## First-Run Tutorial
+On first launch, an interactive tutorial wizard appears guiding you through 5 steps:
+
+| Step | Goal | Trigger |
+|------|------|---------|
+| 1 | Draw your first room | Place any brush |
+| 2 | Subtract a window | Place a brush with Subtract operation |
+| 3 | Paint a floor | Paint cells on any layer |
+| 4 | Place an entity | Drag or create an entity |
+| 5 | Bake & preview | Run a bake |
+
+Each step auto-advances when you complete the required action. A progress bar shows your position. You can skip individual steps or dismiss the entire tutorial. Progress persists across sessions — if you close the editor at step 3, it resumes there next time.
+
+Check "Don't show again" when dismissing to hide it permanently. Reset by editing `user://hammerforge_prefs.json` and setting `"show_welcome": true` and `"tutorial_step": 0`.
 
 ## Dock Layout (4 tabs)
 The dock has 4 tabs with collapsible sections for organized access to all controls. Each collapsible section has a visual separator and indented content; collapsed state persists across sessions. A "No LevelRoot" banner appears at the top when no root node is found.
@@ -36,10 +48,10 @@ A colored banner between the toolbar and tabs always shows your current tool and
 When typing numeric input during a gesture, the value appears in brackets (e.g. "[64]").
 
 ### Toolbar
-The compact toolbar shows icon + text labels (Draw, Select, Add, Sub, Paint, Ext Up, Ext Dn) with full descriptions in tooltips. A **?** button at the right end opens a keyboard shortcuts quick-reference popup.
+The compact toolbar shows icon + text labels (Draw, Select, Add, Sub, Paint, Ext Up, Ext Dn) with full descriptions in tooltips. A **?** button at the right end opens a searchable shortcut reference dialog where you can filter by action name or key binding.
 
 ### Brush tab
-- **Toolbar**: Draw, Select, Add, Sub, Paint, Ext Up, Ext Dn (icon + text labels). Press **?** for shortcuts reference.
+- **Toolbar**: Draw, Select, Add, Sub, Paint, Ext Up, Ext Dn (icon + text labels). Press **?** for searchable shortcuts dialog.
 - **Shape**: choose from the palette. Sides for pyramids/prisms.
 - **Size** X/Y/Z: defaults for new brushes.
 - **Grid Snap**: snap increment with quick preset buttons (1, 2, 4, 8, 16, 32, 64).
@@ -80,6 +92,7 @@ The compact toolbar shows icon + text labels (Draw, Select, Add, Sub, Paint, Ext
 - **Performance**: Brush count, paint memory, chunk count, last bake time.
 - **Visgroups & Groups**: Visgroup list with [V]/[H] toggle, New/Add Sel/Rem Sel/Delete, Group Sel/Ungroup.
 - **Cordon**: Enable checkbox, min/max spinboxes, Set from Selection.
+- **Prefabs**: Save current selection as a `.hfprefab` file. Browse and drag-from the prefab library to instantiate groups of brushes and entities at a new position.
 
 ### Toast Notifications
 Transient notifications appear in the dock for important events:
@@ -96,6 +109,19 @@ Each tab shows a contextual hint at the bottom guiding you through the workflow:
 - Paint tab: "Draw some brushes first, then paint them here"
 - Entities tab: "Drag an entity from the palette into the viewport"
 - Manage tab: "When ready, use Bake to convert brushes into final geometry"
+
+### Viewport Contextual Hints
+When you switch tools, a brief instruction hint appears in the viewport overlay:
+- **Draw**: "Click to place corner → drag to set size → release for height"
+- **Select**: "Click brush to select, Shift+click to multi-select, drag to move"
+- **Extrude Up/Down**: "Click a face to start extruding upward/downward"
+- **Paint Floor**: "Click cells to paint, Shift+click to erase"
+- **Paint Surface**: "Click brush faces to apply material"
+
+Hints auto-fade after 4 seconds. Once you dismiss a hint (by switching away), it won't appear again. Hint dismissal persists across sessions. To reset all hints, delete `user://hammerforge_prefs.json` or clear the `hints_dismissed` key.
+
+### Subtract Preview
+Enable **Subtract Preview** in Manage tab → Settings to see real-time wireframe overlays at the AABB intersection of additive and subtractive brushes. Red wireframe boxes show exactly where subtractive brushes will cut into additive geometry. The preview updates automatically when brushes are added, removed, or moved (with a 0.15s debounce for performance). This helps visualize the effect of subtract operations before baking.
 
 ### Status bar
 - Shows current status ("Ready", "Baking...", errors in red, warnings in yellow).
@@ -205,7 +231,7 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 
 **Rebinding:** Edit `user://hammerforge_keymap.json` (created on first run). Each entry maps an action name to `{"keycode": KEY_*, "ctrl": bool, "shift": bool, "alt": bool}`. Restart the plugin after editing.
 
-**Toolbar labels** and **tooltips** update automatically from the keymap, so custom bindings are always reflected in the UI. Press the **?** button on the toolbar to see a quick-reference popup of all current keybindings.
+**Toolbar labels** and **tooltips** update automatically from the keymap, so custom bindings are always reflected in the UI. Press the **?** button on the toolbar to open a searchable shortcut dialog showing all current keybindings grouped by category (Tools, Editing, Paint, Axis Lock).
 
 ## User Preferences
 
@@ -218,8 +244,32 @@ Preferences include:
 - Collapsed section states (which dock sections are expanded/collapsed)
 - Last active tool
 - HUD visibility
-- Welcome panel visibility (first-run guide)
-- Dismissed context hints
+- Tutorial wizard visibility and progress step
+- Dismissed viewport contextual hints
+
+## Prefabs (Reusable Brush Groups)
+
+Prefabs let you save a selection of brushes and entities as a reusable group and place copies anywhere in your level.
+
+### Saving a Prefab
+1. Select the brushes and/or entities you want to save.
+2. Open Manage tab → Prefabs section.
+3. Enter a name and click **Save as Prefab**.
+4. The prefab is saved as a `.hfprefab` JSON file in `res://prefabs/`.
+
+### Instantiating a Prefab
+- Drag a prefab from the library list into the 3D viewport.
+- The brushes and entities are placed at the drop position with new unique IDs.
+- Entity I/O connections are automatically remapped to the new entity names.
+- The operation supports undo/redo.
+
+### What's Captured
+- Brush geometry (shape, size, operation, material, transform relative to group centroid)
+- Entity data (type, class, properties, I/O connections, transform relative to centroid)
+- Brush IDs and group IDs are cleared on capture; new ones are assigned on instantiation.
+
+### File Format
+`.hfprefab` files are JSON with the same encoding as `.hflevel` (Vector3, Transform3D serialized via `HFLevelIO`). They are portable and can be shared between projects.
 
 These persist across editor restarts. Per-level settings (cordon, texture lock, materials) remain in `.hflevel` files.
 

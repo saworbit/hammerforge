@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/Godot-4.6%2B-478cbf?logo=godot-engine&logoColor=white" alt="Godot 4.6+">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
   <img src="https://img.shields.io/badge/Status-Alpha-orange" alt="Alpha">
-  <img src="https://img.shields.io/badge/Tests-512%20passing-brightgreen" alt="512 tests passing">
+  <img src="https://img.shields.io/badge/Tests-572%20passing-brightgreen" alt="572 tests passing">
   <img src="https://img.shields.io/badge/GDScript-23k%2B%20lines-blueviolet" alt="23k+ lines">
 </p>
 
@@ -36,7 +36,7 @@ HammerForge is a single `addons/` folder. No external tools, no custom builds, n
 
 | | |
 |---|---|
-| **Modular subsystem architecture** | **512 unit + integration tests** with CI on every push |
+| **Modular subsystem architecture** | **572 unit + integration tests** with CI on every push |
 | **15 brush shapes** (box through dodecahedron) | **150 built-in prototype textures** for instant greyboxing |
 | **Quake `.map`** + **glTF `.glb`** export | **.hflevel** native format with threaded I/O |
 | **Customizable keymaps** (JSON) | **Plugin API** for custom tools |
@@ -107,7 +107,9 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Cordon** -- restrict bake to an AABB region with yellow wireframe; skip everything outside
 - **Reference cleanup** -- deleting brushes auto-cleans group/visgroup membership and warns about dangling entity I/O connections
 - **Duplicator** -- create N copies of a brush with progressive offset
+- **Prefabs** -- save brush + entity groups as `.hfprefab` files, drag from library to instantiate with new IDs and remapped I/O
 - **Decal placement** (N key) -- raycast decals onto brush surfaces with live preview
+- **Real-time subtract preview** -- toggle wireframe AABB intersection overlays between additive and subtractive brushes
 
 ### Bake and Export
 
@@ -136,9 +138,9 @@ HammerForge's dock is designed to stay out of your way while keeping everything 
 - **4-tab dock** (Brush, Paint, Entities, Manage) with **collapsible sections** -- persisted state, separators, indented content
 - **Mode indicator banner** -- color-coded strip shows current tool, gesture stage ("Step 1/2: Draw base -- 64 x 32"), and numeric input buffer
 - **Toast notifications** -- transient messages for save/load/bake/error results
-- **First-run welcome panel** -- 5-step quick-start guide (dismissible)
-- **Context hints** -- per-tab guidance that updates based on scene state
-- **Shortcuts popup** -- "?" button shows all keybindings from your custom keymap
+- **Interactive tutorial wizard** -- 5-step guided walkthrough (Draw → Subtract → Paint → Entity → Bake) with signal-driven auto-advance, progress bar, and persistent resume across sessions
+- **Dynamic contextual hints** -- viewport overlay hints that appear when switching tools (e.g. "Click to place corner → drag to set size → release for height"), auto-dismiss after 4s with per-hint persistence
+- **Searchable shortcut dialog** -- "?" button opens a filterable, categorized shortcut reference (replaces static popup)
 - **Tool poll system** -- buttons gray out with inline hints when an action can't run ("Select a brush to use these tools")
 - **Contextual selection tools** -- hollow, clip, move, tie, duplicator appear in Brush tab only when brushes are selected
 - **Live dimensions** -- real-time W x H x D display during drag gestures
@@ -169,6 +171,7 @@ plugin.gd            EditorPlugin — input routing, toolbar, viewport overlay
        ├─ HFCarveSystem     Boolean-subtract carve (progressive-remainder slicing)
        ├─ HFIOVisualizer    Entity I/O connection lines in viewport
        ├─ HFSnapSystem      Grid / Vertex / Center snap with threshold
+       ├─ HFSubtractPreview Wireframe AABB intersection overlay for subtract brushes
        └─ HFToolRegistry    External tool loading and dispatch
             ├─ HFMeasureTool   Ruler/distance measurement (tool_id=100)
             └─ HFDecalTool     Decal placement with live preview (tool_id=101)
@@ -236,11 +239,14 @@ All shortcuts are rebindable via `user://hammerforge_keymap.json`.
 
 ## Testing
 
-512 tests across 30 files using the [GUT](https://github.com/bitwes/Gut) framework, including unit tests and end-to-end integration tests. All checks run on every push via GitHub Actions.
+572 tests across 35 files using the [GUT](https://github.com/bitwes/Gut) framework, including unit tests and end-to-end integration tests. All checks run on every push via GitHub Actions.
 
 ```bash
 # Run all tests headless
 godot --headless -s res://addons/gut/gut_cmdln.gd --path .
+
+# Reset prefs for the editor smoke checklist
+godot --headless -s res://tools/prepare_editor_smoke.gd --path .
 
 # If class_names aren't imported
 godot --headless --import --path .
@@ -264,6 +270,7 @@ gdlint addons/hammerforge/
 | [Texture + Materials](docs/HammerForge_Texture_Materials.md) | Face materials, UVs, and surface paint |
 | [Prototype Textures](docs/HammerForge_Prototype_Textures.md) | Built-in 150 SVG textures |
 | [Floor Paint Design](docs/HammerForge_FloorPaint_Greyboxing.md) | Grid paint system design |
+| [Editor Smoke Checklist](docs/HammerForge_Editor_Smoke_Checklist.md) | Repeatable live-editor verification flow |
 | [Development + Testing](DEVELOPMENT.md) | Local setup, architecture, test checklist |
 | [Spec](HammerForge_SPEC.md) | Technical specification |
 | [Changelog](CHANGELOG.md) | Version history |
@@ -277,6 +284,12 @@ gdlint addons/hammerforge/
 ## Roadmap Highlights
 
 See [ROADMAP.md](ROADMAP.md) for the full plan.
+
+**Recently shipped:**
+- Interactive tutorial wizard with 5-step guided walkthrough
+- Real-time subtract preview (wireframe AABB intersection overlays)
+- Dynamic contextual hints + searchable shortcut dialog
+- Prefab system (save/load/drag-and-drop reusable brush+entity groups)
 
 **Next up:**
 - Vertex editing (move individual brush vertices)

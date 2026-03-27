@@ -88,3 +88,17 @@ func add_recent_file(path: String) -> void:
 ## Get the recent files list.
 func get_recent_files() -> Array:
 	return data.get("recent_files", [])
+
+
+## Check if a contextual hint has been dismissed.
+func is_hint_dismissed(hint_key: String) -> bool:
+	var dismissed: Dictionary = data.get("hints_dismissed", {})
+	return dismissed.get(hint_key, false)
+
+
+## Mark a contextual hint as dismissed and persist.
+func dismiss_hint(hint_key: String) -> void:
+	var dismissed: Dictionary = data.get("hints_dismissed", {})
+	dismissed[hint_key] = true
+	data["hints_dismissed"] = dismissed
+	save()

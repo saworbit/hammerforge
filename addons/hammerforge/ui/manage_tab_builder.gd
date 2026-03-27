@@ -142,6 +142,14 @@ func build(parent: Control) -> void:
 	dock.preset_grid.columns = 2
 	pc.add_child(dock.preset_grid)
 
+	# --- Prefabs section ---
+	var prefab_sec = hf_collapsible_section.create("Prefabs", false)
+	root_vbox.add_child(prefab_sec)
+	dock._register_section(prefab_sec, "Prefabs")
+	var HFPrefabLibrary = preload("res://addons/hammerforge/ui/hf_prefab_library.gd")
+	dock._prefab_library = HFPrefabLibrary.new()
+	prefab_sec.get_content().add_child(dock._prefab_library)
+
 	# --- History section (collapsed by default) ---
 	var hist_sec = hf_collapsible_section.create("History", false)
 	root_vbox.add_child(hist_sec)
@@ -184,6 +192,9 @@ func build(parent: Control) -> void:
 
 	dock._show_io_lines = dock._make_check("Show I/O Lines", false)
 	stc.add_child(dock._show_io_lines)
+
+	dock._show_subtract_preview = dock._make_check("Subtract Preview", false)
+	stc.add_child(dock._show_subtract_preview)
 
 	dock.autosave_enabled = dock._make_check("Enable Autosave", true)
 	stc.add_child(dock.autosave_enabled)
@@ -287,6 +298,10 @@ func connect_signals() -> void:
 		dock.debug_logs.toggled.connect(dock._on_debug_logs_toggled)
 	if dock._show_io_lines:
 		dock._show_io_lines.toggled.connect(dock._on_show_io_lines_toggled)
+	if dock._show_subtract_preview:
+		dock._show_subtract_preview.toggled.connect(dock._on_show_subtract_preview_toggled)
+	if dock._prefab_library and dock._prefab_library.has_signal("save_requested"):
+		dock._prefab_library.save_requested.connect(dock._on_prefab_save_requested)
 	if dock.bake_lightmap_uv2:
 		dock.bake_lightmap_uv2.toggled.connect(dock._on_bake_lightmap_uv2_toggled)
 	if dock.bake_navmesh:

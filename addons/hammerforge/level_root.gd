@@ -38,6 +38,7 @@ const HFSnapSystemType = preload("hf_snap_system.gd")
 const HFIOVisualizerType = preload("systems/hf_io_visualizer.gd")
 const HFVertexSystemType = preload("systems/hf_vertex_system.gd")
 const HFCarveSystemType = preload("systems/hf_carve_system.gd")
+const HFSubtractPreviewType = preload("systems/hf_subtract_preview.gd")
 const HFPrototypeTextures = preload("hf_prototype_textures.gd")
 
 const RELOAD_LOCK_PATH := "res://.hammerforge/reload.lock"
@@ -203,6 +204,13 @@ var extrude_tool: HFExtrudeToolType
 var io_visualizer: HFIOVisualizerType
 var vertex_system: HFVertexSystemType
 var carve_system: HFCarveSystemType
+var subtract_preview: HFSubtractPreviewType
+
+@export var show_subtract_preview: bool = false:
+	set(value):
+		show_subtract_preview = value
+		if subtract_preview:
+			subtract_preview.set_enabled(value)
 
 # ---------------------------------------------------------------------------
 # Dirty-tag system for selective reconciliation
@@ -475,6 +483,9 @@ func _ready():
 	io_visualizer = HFIOVisualizerType.new(self)
 	vertex_system = HFVertexSystemType.new(self)
 	carve_system = HFCarveSystemType.new(self)
+	subtract_preview = HFSubtractPreviewType.new(self)
+	if show_subtract_preview:
+		subtract_preview.set_enabled(true)
 	entity_system.load_entity_definitions()
 	grid_system.setup_editor_grid()
 	if Engine.is_editor_hint():
@@ -498,6 +509,8 @@ func _process(_delta: float) -> void:
 		autosave_failed.emit(write_error)
 	if io_visualizer:
 		io_visualizer.process()
+	if subtract_preview and subtract_preview.is_enabled():
+		subtract_preview.process(_delta)
 
 
 # ===========================================================================

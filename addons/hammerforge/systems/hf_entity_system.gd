@@ -241,6 +241,23 @@ func cleanup_dangling_connections(deleted_name: String) -> int:
 	return removed
 
 
+## Remap I/O connection target names using a name_map (old_name -> new_name).
+## Used when instancing prefabs to update entity references.
+func remap_io_connections(entity: Node, name_map: Dictionary) -> void:
+	var outputs: Array = entity.get_meta("entity_io_outputs", [])
+	if outputs.is_empty():
+		return
+	var changed := false
+	for conn in outputs:
+		if conn is Dictionary:
+			var target: String = str(conn.get("target_name", ""))
+			if name_map.has(target):
+				conn["target_name"] = name_map[target]
+				changed = true
+	if changed:
+		entity.set_meta("entity_io_outputs", outputs)
+
+
 ## Find all entities by name (used for resolving target_name references).
 func find_entities_by_name(entity_name: String) -> Array:
 	var result: Array = []

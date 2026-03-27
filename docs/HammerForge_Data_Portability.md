@@ -49,6 +49,15 @@ This document describes how to move data in and out of HammerForge safely.
 - Custom entity definitions can be added by creating or editing `res://addons/hammerforge/entities.json`.
 - Definitions include `classname`, `description`, `color`, `is_brush_entity`, `properties`, and optional `scene_path`.
 
+## Prefabs: `.hfprefab`
+- `.hfprefab` files store reusable brush + entity groups as JSON.
+- Transforms are stored relative to the group centroid, so prefabs can be placed at any world position.
+- Brush IDs and group IDs are stripped on capture; new ones are assigned on instantiation.
+- Entity I/O connections are captured and remapped to new entity names when instantiated.
+- Data encoding uses the same `HFLevelIO.encode_variant()` / `decode_variant()` pipeline as `.hflevel` (handles Vector3, Transform3D, Basis, etc.).
+- Prefab files are saved to `res://prefabs/` by default. The directory is created automatically on first save.
+- Prefabs are portable between projects — just copy `.hfprefab` files to another project's `res://prefabs/` folder.
+
 ## Autosave Safety
 - Autosave writes happen on a background thread.
 - If a write fails (e.g., disk full, permissions), the `autosave_failed` signal fires and the dock shows a red warning label.

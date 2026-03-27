@@ -39,6 +39,7 @@ addons/hammerforge/
   hf_keymap.gd           Customizable keyboard shortcuts (JSON load/save, action matching)
   hf_user_prefs.gd       Cross-session user preferences (user://hammerforge_prefs.json)
   hf_snap_system.gd      Centralized snap (Grid/Vertex/Center modes, threshold-based candidates)
+  hf_prefab.gd           Reusable brush+entity groups (save/load .hfprefab, centroid-relative transforms)
   hf_op_result.gd        Lightweight operation result (ok, message, fix_hint)
   surface_paint.gd       Per-face surface paint tool
   uv_editor.gd           UV editing dock
@@ -57,7 +58,10 @@ addons/hammerforge/
   ui/                    Reusable UI components
     collapsible_section.gd HFCollapsibleSection: toggle-header VBoxContainer for dock sections
     hf_toast.gd            Toast notification system (auto-fading stacked messages)
-    hf_welcome_panel.gd    First-run welcome panel (5-step quick-start guide)
+    hf_welcome_panel.gd    First-run welcome panel (legacy, replaced by tutorial wizard)
+    hf_tutorial_wizard.gd  Interactive 5-step tutorial wizard (signal-driven auto-advance)
+    hf_shortcut_dialog.gd  Searchable shortcut reference dialog (filterable Tree with categories)
+    hf_prefab_library.gd   Prefab library dock section (ItemList + drag-and-drop)
     paint_tab_builder.gd   Builds Paint tab sections + signal connections
     entity_tab_builder.gd  Builds Entity Properties + Entity I/O sections
     manage_tab_builder.gd  Builds Manage tab sections (Bake, File, Settings, etc.)
@@ -76,6 +80,7 @@ addons/hammerforge/
     hf_visgroup_system.gd  Visgroups (visibility groups) + brush/entity grouping
     hf_carve_system.gd     Boolean-subtract carve (progressive-remainder box slicing)
     hf_io_visualizer.gd    Entity I/O connection lines in viewport (ImmediateMesh)
+    hf_subtract_preview.gd Wireframe AABB intersection overlay for subtract brushes (debounced, pooled)
 
   paint/                 Floor paint subsystem
     hf_paint_grid.gd       Grid storage
@@ -115,7 +120,11 @@ addons/hammerforge/
 - **Autosave failure.** The `autosave_failed(error_message)` signal on LevelRoot fires when a threaded write fails. Connect to it in the dock to show user-facing warnings.
 - **Toast notifications.** Use `dock.show_toast(message, level)` (0=INFO, 1=WARNING, 2=ERROR) for user-facing messages. Subsystems can also emit `root.user_message.emit(text, level)` which the dock auto-routes to the toast system.
 - **Mode indicator.** Call `dock.set_mode_indicator(mode_name, stage_hint, numeric)` from `plugin.gd` to update the colored mode banner. `stage_hint` shows gesture progress (e.g. "Step 1/2: Draw base"), `numeric` shows typed input.
-- **Welcome panel.** The first-run welcome panel (`ui/hf_welcome_panel.gd`) is shown when `show_welcome` is true in user prefs. Dismissed by user action; the `dont_show_again` flag persists.
+- **Tutorial wizard.** The interactive tutorial (`ui/hf_tutorial_wizard.gd`) replaces the static welcome panel when `show_welcome` is true. 5 steps, each listening for a LevelRoot signal (brush_added, paint_layer_changed, entity_added, bake_finished). Progress persists via `tutorial_step` in user prefs. Dock `highlight_tab()` flashes the relevant tab on each step.
+- **Dynamic contextual hints.** `shortcut_hud.gd` shows per-mode viewport hints (e.g. "Click to place corner → drag to set size → release for height"). Hints auto-dismiss after 4s fade tween and persist dismissal via `is_hint_dismissed()`/`dismiss_hint()` on `hf_user_prefs.gd`. Mode key is computed from HUD context dict.
+- **Searchable shortcut dialog.** `ui/hf_shortcut_dialog.gd` extends `AcceptDialog` with a search `LineEdit` and `Tree`. Categories populated from `HFKeymap.get_category()`. Replaces the static shortcuts popup.
+- **Subtract preview.** `systems/hf_subtract_preview.gd` is a `RefCounted` subsystem that renders wireframe AABB intersections between additive and subtractive brushes using `ImmediateMesh` (same 12-edge box pattern as cordon). Debounced (0.15s), pooled `MeshInstance3D` (max 50). Toggle via `show_subtract_preview` on LevelRoot. Persisted in state settings.
+- **Prefabs.** `hf_prefab.gd` (`HFPrefab`) stores brush_infos + entity_infos with centroid-relative transforms. `capture_from_selection()` computes centroid and strips brush_id/group_id. `instantiate()` assigns new IDs, offsets transforms, and remaps entity I/O via name_map. `save_to_file()`/`load_from_file()` use JSON via `HFLevelIO` encoding. `ui/hf_prefab_library.gd` provides the dock section with ItemList and drag-and-drop (`"hammerforge_prefab"` type tag). Plugin handles drop with raycast + snap + undo/redo.
 - **Context hints.** Per-tab hint labels at the bottom of each dock tab update via `_update_context_hints()` in `dock.gd`. Driven by `_hints_dirty` flag alongside `_update_disabled_hints()`.
 - **Face hover highlight.** `level_root.highlight_hovered_face(camera, mouse_pos, color)` performs a FaceSelector raycast and renders a semi-transparent overlay on the hit face. Used by `plugin.gd` in extrude mode when idle. Call `clear_face_hover_highlight()` when switching tools.
 - **Undo/redo stability.** Prefer brush IDs and `create_brush_from_info()` for undo instead of storing Node references in history.
@@ -137,7 +146,7 @@ addons/hammerforge/
 The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on push and PR to `main`:
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
-- **GUT unit + integration tests** -- 512 tests across 30 test files (runs Godot headless)
+- **GUT unit + integration tests** -- 572 tests across 35 test files (runs Godot headless)
 
 Run locally before pushing:
 ```
@@ -172,7 +181,7 @@ Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framewor
 | `test_map_export.gd` | 19 | Quake/Valve220 face line format, auto-axes, entity property formatting, fractional coords, projections |
 | `test_tool_registry.gd` | 25 | Tool registration, activate/deactivate, deactivate_current, has_active_external_tool, dispatch routing, shortcut check, external ID guard, stays-active-across-dispatch regression |
 | `test_keymap.gd` | 16 | Default bindings loaded, simple/ctrl/shift/ctrl+shift key matching, modifier mismatch rejection, display string formatting, rebinding, JSON roundtrip |
-| `test_user_prefs.gd` | 9 | Default values, get/set prefs, section collapsed state, recent files (add/dedup/max 10), JSON roundtrip |
+| `test_user_prefs.gd` | 12 | Default values, get/set prefs, section collapsed state, recent files (add/dedup/max 10), JSON roundtrip, hint dismissed default/dismiss/roundtrip |
 | `test_dirty_tags.gd` | 11 | Brush dirty tags (add/dedup), paint chunk tags, full reconcile flag, consume-clears, signal batch queue/flush/discard/nesting |
 | `test_prototype_textures.gd` | 27 | Catalog constants, path generation, texture existence, material persistence (resource_path), batch loading into MaterialManager |
 | `test_op_result.gd` | 15 | HFOpResult constructors, hollow/clip/delete return values, fail emits user_message, fix_hint population |
@@ -181,11 +190,25 @@ Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framewor
 | `test_reference_cleanup.gd` | 9 | Delete cleans group/visgroup membership, entity I/O cleanup_dangling_connections, preserves unrelated, no-crash on clean node |
 | `test_bake_system.gd` | 18 | build_bake_options, _is_structural_brush, _is_trigger_brush, count_brushes_in, chunk_coord, bake_dry_run, warn_bake_failure, structural filtering |
 | `test_integration.gd` | 22 | End-to-end: brush lifecycle, paint + heightmap, entity workflow, visgroup cross-system, snap, bake cross-system, entity I/O cleanup, brush info round-trip |
+| `test_shortcut_dialog.gd` | 8 | Category assignment (tools, paint, axis lock, editing), action labels (known/unknown), get_all_bindings copy safety |
+| `test_tutorial_wizard.gd` | 14 | Step advancement, persistence, deferred start, resume, bake validation, no-root safety |
+| `test_subtract_preview.gd` | 8 | AABB intersection math (overlapping, no-overlap, contained, partial axis), enable/disable, debounce timing |
+| `test_prefab.gd` | 10 | Empty prefab, to_dict/from_dict roundtrip, transform preservation, file save/load, invalid data handling, multiple brushes, entity I/O preservation, instantiate empty |
 
 Run all tests:
 ```
 godot --headless -s res://addons/gut/gut_cmdln.gd --path .
 ```
+
+Reset user prefs for a repeatable editor smoke run:
+```
+godot --headless -s res://tools/prepare_editor_smoke.gd --path .
+godot --headless -s res://tools/prepare_editor_smoke.gd --path . -- --tutorial-step=3
+```
+
+For editor-only coverage that headless tests cannot exercise, use:
+- `res://samples/hf_editor_smoke_start.tscn`
+- [`docs/HammerForge_Editor_Smoke_Checklist.md`](docs/HammerForge_Editor_Smoke_Checklist.md)
 
 If you see "class_names not imported", run `godot --headless --import --path .` first to register GUT classes.
 
@@ -315,6 +338,45 @@ Axis Lock Visual
 - Press X/Y/Z to toggle axis locks. Confirm the dock axis lock buttons (X/Y/Z) update their pressed state and color (red/green/blue).
 - Click the dock axis lock buttons and confirm keyboard state matches.
 
+Tutorial Wizard
+- Delete `user://hammerforge_prefs.json` and reopen editor -- confirm tutorial wizard appears (not static welcome panel).
+- Draw a brush (step 1) -- confirm tutorial auto-advances to step 2.
+- Draw a Subtract brush -- confirm step 2 validates operation and advances.
+- Paint floor cells -- confirm step 3 advances.
+- Place an entity -- confirm step 4 advances.
+- Bake -- confirm step 5 completes and tutorial shows "Complete!" message.
+- Click "Dismiss Tutorial" at step 2 -- confirm wizard closes and prefs are saved.
+- Reopen editor at step 3 -- confirm tutorial resumes at step 3.
+
+Contextual Hints
+- Switch to Draw tool -- confirm "Click to place corner → drag to set size → release for height" hint appears in viewport.
+- Wait 4 seconds -- confirm hint fades out.
+- Switch to Select tool -- confirm a different hint appears.
+- Switch back to Draw -- confirm hint does NOT reappear (dismissed).
+- Delete `user://hammerforge_prefs.json` -- confirm hints reappear.
+
+Searchable Shortcut Dialog
+- Press the **?** button on toolbar -- confirm searchable dialog opens (not static popup).
+- Type "hollow" in the search field -- confirm only matching entries are visible.
+- Clear search -- confirm all entries reappear grouped by category.
+- Confirm categories: Tools, Editing, Paint, Axis Lock.
+
+Subtract Preview
+- Place an additive brush and a subtractive brush overlapping it.
+- Enable "Subtract Preview" checkbox in Manage tab → Settings.
+- Confirm a red wireframe appears at the AABB intersection of the two brushes.
+- Move one brush -- confirm wireframe updates (with slight debounce).
+- Disable the checkbox -- confirm wireframe disappears.
+- Save and reload `.hflevel` -- confirm the toggle state persists.
+
+Prefabs
+- Select 2 brushes + 1 entity. In Manage tab → Prefabs, enter a name and click Save.
+- Confirm `.hfprefab` file appears in `res://prefabs/`.
+- Confirm the file appears in the Prefab Library list.
+- Drag a prefab from the library into the viewport -- confirm brushes and entity are placed at the drop position with new IDs.
+- Undo -- confirm all instantiated nodes are removed.
+- Create two entities with I/O connections, select them + brushes, save as prefab, instantiate -- confirm I/O target names are remapped.
+
 Brush workflow
 - Draw an Add brush and confirm resize handles work.
 - Draw a Subtract brush and apply cuts.
@@ -381,12 +443,12 @@ Editor UX
 - Click a face and confirm the hover highlight clears during extrude gesture.
 - Save a .hflevel and confirm toast notification "Saved: filename.hflevel" appears.
 - Trigger a bake error and confirm red toast notification appears.
-- Press the **?** button on toolbar and confirm shortcuts popup appears with all keybindings.
+- Press the **?** button on toolbar and confirm searchable shortcuts dialog opens with filterable keybindings.
 - Select brushes and confirm "Sel: N brushes" appears with "x" clear button in footer.
 - Click the "x" button and confirm selection is cleared.
 - With no brushes selected, confirm "Select a brush to use these tools" hint appears in Selection Tools section.
-- Delete `user://hammerforge_prefs.json` and reopen editor -- confirm welcome panel appears.
-- Click "Get Started" with "Don't show again" checked -- confirm welcome panel doesn't reappear.
+- Delete `user://hammerforge_prefs.json` and reopen editor -- confirm tutorial wizard appears.
+- Click "Dismiss Tutorial" with "Don't show again" checked -- confirm tutorial doesn't reappear.
 - Confirm per-tab context hints show appropriate guidance (e.g. "Click and drag..." in Brush tab).
 - Press X/Y/Z and confirm HUD shows axis lock state.
 - Enable Paint Mode and verify HUD shows paint shortcuts (B/E/R/L/K).

@@ -112,3 +112,27 @@ func test_data_roundtrip_via_json():
 	assert_eq(loaded.get_section_collapsed("Bake"), true, "Loaded section state should match")
 	var recent = loaded.get_recent_files()
 	assert_eq(recent.size(), 1, "Loaded recent files should have 1 entry")
+
+
+func test_hint_dismissed_default():
+	assert_false(prefs.is_hint_dismissed("draw_idle"), "Hints should not be dismissed by default")
+
+
+func test_dismiss_hint():
+	prefs.dismiss_hint("draw_idle")
+	assert_true(prefs.is_hint_dismissed("draw_idle"), "Dismissed hint should return true")
+	assert_false(prefs.is_hint_dismissed("select"), "Other hints remain undismissed")
+
+
+func test_hint_dismissed_roundtrip():
+	prefs.dismiss_hint("select")
+	prefs.dismiss_hint("paint_floor")
+	var json_text = JSON.stringify(prefs.data, "\t")
+	var parsed = JSON.parse_string(json_text)
+	var loaded = HFUserPrefsType.new()
+	loaded.data = parsed
+	assert_true(loaded.is_hint_dismissed("select"), "select hint should survive roundtrip")
+	assert_true(
+		loaded.is_hint_dismissed("paint_floor"), "paint_floor hint should survive roundtrip"
+	)
+	assert_false(loaded.is_hint_dismissed("draw_idle"), "draw_idle should still be undismissed")

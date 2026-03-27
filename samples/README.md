@@ -1,4 +1,8 @@
-﻿# Sample Levels
+# Sample Levels
+
+## `hf_editor_smoke_start.tscn`
+Empty 3D scene used with `res://tools/prepare_editor_smoke.gd` and
+`docs/HammerForge_Editor_Smoke_Checklist.md` for repeatable editor smoke tests.
 
 ## `hf_sample_minimal.tscn`
 Small scene with a floor and wall DraftBrush for quick smoke tests.

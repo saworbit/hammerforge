@@ -5,6 +5,43 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **UX Feature Wave — Tutorial, Hints, Subtract Preview, Prefabs (Mar 2026):**
+  - **Dynamic contextual hints** (`shortcut_hud.gd`): viewport overlay hints appear when switching
+    tool modes (draw, select, extrude, paint). Each hint shows instructional text specific to the
+    current mode (e.g. "Click to place corner → drag to set size → release for height"). Auto-fades
+    after 4 seconds via tween. Per-hint dismissal persists in user preferences via
+    `is_hint_dismissed()` / `dismiss_hint()` on `hf_user_prefs.gd`. `MODE_HINTS` const dictionary
+    maps mode keys to hint strings.
+  - **Searchable shortcut dialog** (`ui/hf_shortcut_dialog.gd`): replaces the static shortcuts
+    popup. Extends `AcceptDialog` with a search `LineEdit` and categorized `Tree`. Categories
+    (Tools, Editing, Paint, Axis Lock) populated from `HFKeymap.get_category()` and
+    `get_action_label()`. Real-time case-insensitive filtering on action name or key binding string.
+  - **Interactive tutorial wizard** (`ui/hf_tutorial_wizard.gd`): 5-step guided first-run experience
+    replacing the static welcome panel. Steps: Draw room (`brush_added` signal) → Subtract window
+    (`brush_added` + operation validation) → Paint floor (`paint_layer_changed`) → Place entity
+    (`entity_added`) → Bake & preview (`bake_finished`). Each step listens for the corresponding
+    LevelRoot signal. Optional validation (e.g. `_validate_subtract` checks `operation ==
+    SUBTRACTION`). ProgressBar shows step N of 5. Skip Step / Dismiss buttons. Progress persisted
+    via `tutorial_step` in user prefs. Dock `highlight_tab()` flashes the relevant tab on each step.
+  - **Real-time subtract preview** (`systems/hf_subtract_preview.gd`): wireframe AABB intersection
+    overlays between additive and subtractive brushes. Uses ImmediateMesh `PRIMITIVE_LINES` (same
+    12-edge box pattern as cordon wireframe). Red material `Color(1.0, 0.3, 0.3, 0.7)`, unshaded,
+    no depth test. Debounced rebuild (0.15s), MeshInstance3D pool (max 50), automatic update on
+    `brush_added` / `brush_removed` / `brush_changed` signals. Toggle via `show_subtract_preview`
+    export on LevelRoot (persisted in state settings). Checkbox in Manage tab → Settings.
+  - **Prefab system** (`hf_prefab.gd` + `ui/hf_prefab_library.gd`): save and load reusable brush +
+    entity groups as `.hfprefab` JSON files. `HFPrefab.capture_from_selection()` computes centroid
+    and stores transforms relative to it. `instantiate()` assigns new brush IDs, offsets transforms,
+    and remaps entity I/O connections via name map. Uses `begin_signal_batch()` /
+    `end_signal_batch()` for atomic multi-brush creation. `HFPrefabLibrary` dock section in Manage
+    tab shows `.hfprefab` files from `res://prefabs/` with drag-and-drop support. Plugin handles
+    `"hammerforge_prefab"` drop type with raycast + snap + undo/redo.
+  - **New public API methods**: `HFBrushSystem.next_brush_id()` (public wrapper),
+    `HFEntitySystem.remap_io_connections()` (remap I/O targets on prefab instantiate),
+    `HFKeymap.get_all_bindings()`, `HFKeymap.get_category()`, `HFKeymap.get_action_label()`.
+  - **GUT tests**: 4 new test files — `test_shortcut_dialog.gd` (8), `test_tutorial_wizard.gd` (7),
+    `test_subtract_preview.gd` (8), `test_prefab.gd` (11). Plus 3 additions to
+    `test_user_prefs.gd`. Total: **568 tests** across **34 files**.
 - **Usability & Feature Upgrade (Mar 2026):**
   - **Bake failure toast notifications**: `warn_bake_failure()` now emits contextual error messages
     via `user_message` signal (e.g. "No draft brushes found", "You have N pending cuts — try

@@ -118,6 +118,53 @@ func get_actions() -> PackedStringArray:
 	return result
 
 
+## Get a copy of all bindings for display purposes.
+func get_all_bindings() -> Dictionary:
+	return _bindings.duplicate()
+
+
+## Map an action name to its UI category.
+static func get_category(action: String) -> String:
+	if action.begins_with("tool_"):
+		return "Tools"
+	if action.begins_with("paint_"):
+		return "Paint"
+	if action.begins_with("axis_"):
+		return "Axis Lock"
+	if action in ["vertex_edit"]:
+		return "Tools"
+	return "Editing"
+
+
+## Map an action name to a human-readable label.
+static func get_action_label(action: String) -> String:
+	const LABELS := {
+		"tool_draw": "Draw",
+		"tool_select": "Select",
+		"tool_extrude_up": "Extrude Up",
+		"tool_extrude_down": "Extrude Down",
+		"vertex_edit": "Vertex Edit",
+		"delete": "Delete",
+		"duplicate": "Duplicate",
+		"group": "Group",
+		"ungroup": "Ungroup",
+		"hollow": "Hollow",
+		"clip": "Clip",
+		"carve": "Carve",
+		"move_to_floor": "Move to Floor",
+		"move_to_ceiling": "Move to Ceiling",
+		"paint_bucket": "Bucket",
+		"paint_erase": "Erase",
+		"paint_ramp": "Ramp / Rect",
+		"paint_line": "Line",
+		"paint_blend": "Blend",
+		"axis_x": "Lock X",
+		"axis_y": "Lock Y",
+		"axis_z": "Lock Z",
+	}
+	return LABELS.get(action, action.capitalize().replace("_", " "))
+
+
 static func _keycode_to_label(keycode: int) -> String:
 	match keycode:
 		KEY_DELETE:

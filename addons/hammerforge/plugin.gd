@@ -74,6 +74,8 @@ func _enter_tree():
 	if base_control:
 		hud.theme = base_control.theme
 	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, hud)
+	if hud.has_method("set_user_prefs"):
+		hud.set_user_prefs(_user_prefs)
 	if dock:
 		hud.visible = dock.get_show_hud()
 	var selection = get_editor_interface().get_selection()
@@ -1460,12 +1462,16 @@ func _carve_selected(root: Node) -> void:
 
 
 func _can_drop_data(_position: Vector2, data: Variant) -> bool:
-	return _is_entity_drag_data(data) or _is_brush_preset_drag_data(data)
+	return (
+		_is_entity_drag_data(data) or _is_brush_preset_drag_data(data) or _is_prefab_drag_data(data)
+	)
 
 
 func _drop_data(position: Vector2, data: Variant) -> void:
 	if _is_brush_preset_drag_data(data):
 		_handle_brush_preset_drop(position, data)
+	elif _is_prefab_drag_data(data):
+		_handle_prefab_drop(position, data)
 	else:
 		_handle_entity_drop(position, data)
 
@@ -1541,6 +1547,50 @@ func _handle_brush_preset_drop(position: Vector2, data: Variant) -> void:
 	if mat:
 		info["material"] = mat
 	_commit_brush_placement(root, info)
+
+
+func _is_prefab_drag_data(data: Variant) -> bool:
+	return data is Dictionary and str(data.get("type", "")) == "hammerforge_prefab"
+
+
+func _handle_prefab_drop(position: Vector2, data: Variant) -> void:
+	if not _is_prefab_drag_data(data):
+		return
+	var prefab_path = str(data.get("path", ""))
+	if prefab_path == "":
+		return
+	var HFPrefabType = preload("res://addons/hammerforge/hf_prefab.gd")
+	var prefab = HFPrefabType.load_from_file(prefab_path)
+	if not prefab:
+		return
+	var root = active_root if active_root else _get_level_root()
+	if not root:
+		root = _create_level_root()
+	if not root:
+		return
+	var camera = last_3d_camera
+	var mouse_pos = position if position != null else last_3d_mouse_pos
+	if not camera:
+		return
+	var hit = root._raycast(camera, mouse_pos)
+	if hit.is_empty():
+		return
+	var point = root._snap_point(hit.get("position", Vector3.ZERO))
+	# Capture state for undo
+	var full_state = root.state_system.capture_state(true)
+	var result = prefab.instantiate(root.brush_system, root.entity_system, root, point)
+	var placed_anything: bool = (
+		not result.get("brush_ids", []).is_empty() or result.get("entity_count", 0) > 0
+	)
+	if placed_anything:
+		var undo_redo = undo_redo_manager
+		if undo_redo:
+			undo_redo.create_action("Place Prefab: %s" % prefab.prefab_name)
+			undo_redo.add_do_method(
+				root.state_system, "restore_state", root.state_system.capture_state(true)
+			)
+			undo_redo.add_undo_method(root.state_system, "restore_state", full_state)
+			undo_redo.commit_action(false)
 
 
 func _get_level_root() -> Node:

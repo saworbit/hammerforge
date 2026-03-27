@@ -12,6 +12,7 @@ export_presets.cfg
 # Build outputs
 *.tmp
 *.log
+gut-results*.xml
 
 # OS files
 Thumbs.db
