@@ -1,6 +1,6 @@
 # HammerForge MVP Guide
 
-Last updated: March 26, 2026
+Last updated: March 27, 2026
 
 This guide is for contributors implementing or extending the MVP.
 

@@ -20,6 +20,12 @@ var numeric_buffer := ""
 var _tool_registry: HFToolRegistry = null
 var _keymap: HFKeymap = null
 var _user_prefs: HFUserPrefs = null
+var _vertex_mode := false
+var _vertex_drag_active := false
+var _vertex_drag_start := Vector2.ZERO
+var _vertex_drag_ref_y := 0.0  # World Y of the picked vertex for projection plane
+var _vertex_overlay_mesh: MeshInstance3D = null
+var _vertex_overlay_imesh: ImmediateMesh = null
 const LevelRootType = preload("level_root.gd")
 const DraftEntityType = preload("draft_entity.gd")
 const IconRes = preload("icon.png")
@@ -46,6 +52,8 @@ func _enter_tree():
 		):
 			base_control.connect("theme_changed", Callable(self, "_on_editor_theme_changed"))
 	_tool_registry = HFToolRegistry.new()
+	_tool_registry.register_tool(HFMeasureTool.new())
+	_tool_registry.register_tool(HFDecalTool.new())
 	_tool_registry.load_external_tools("res://addons/hammerforge/tools/")
 	_keymap = HFKeymap.load_or_default("user://hammerforge_keymap.json")
 	_user_prefs = HFUserPrefs.load_prefs()
@@ -59,6 +67,8 @@ func _enter_tree():
 			dock.connect("hud_visibility_changed", Callable(self, "_on_hud_visibility_changed"))
 		if dock.has_signal("builtin_tool_changed"):
 			dock.connect("builtin_tool_changed", Callable(self, "_on_builtin_tool_changed"))
+		if dock.has_signal("vertex_mode_toggled"):
+			dock.connect("vertex_mode_toggled", Callable(self, "_on_vertex_mode_toggled"))
 
 	hud = preload("shortcut_hud.tscn").instantiate()
 	if base_control:
@@ -149,7 +159,9 @@ func _update_hud_context() -> void:
 	# Update dock mode indicator banner
 	if dock:
 		var mode_name := "Draw"
-		if ctx.get("paint_mode", false):
+		if _vertex_mode:
+			mode_name = "Vertex"
+		elif ctx.get("paint_mode", false):
 			mode_name = "Paint"
 		else:
 			match tool_id_ctx:
@@ -198,6 +210,15 @@ func _on_editor_selection_changed() -> void:
 	if dock:
 		dock.set_selection_count(hf_selection.size())
 		dock.set_selection_nodes(hf_selection)
+	# Update vertex system with current brush selection
+	if _vertex_mode:
+		var root = active_root if active_root else _get_level_root()
+		if root and root.vertex_system:
+			var brushes: Array = []
+			for node in hf_selection:
+				if node is DraftBrush:
+					brushes.append(node)
+			root.vertex_system.set_selection(brushes)
 
 
 func _handles(object: Object) -> bool:
@@ -260,6 +281,12 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 		var ext_result = _tool_registry.dispatch_input(event, target_camera, target_pos)
 		if ext_result == EditorPlugin.AFTER_GUI_INPUT_STOP:
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
+
+	# Vertex editing mode intercept
+	if _vertex_mode and root.vertex_system:
+		var vr = _handle_vertex_input(event, root, target_camera, target_pos)
+		if vr != EditorPlugin.AFTER_GUI_INPUT_PASS:
+			return vr
 
 	# Keyboard shortcuts
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -433,7 +460,18 @@ func _deactivate_external_tool() -> void:
 
 func _on_builtin_tool_changed() -> void:
 	_deactivate_external_tool()
+	if _vertex_mode:
+		var root = active_root if active_root else _get_level_root()
+		_toggle_vertex_mode(root)
 	_update_hud_context()
+
+
+func _on_vertex_mode_toggled(enabled: bool) -> void:
+	var root = active_root if active_root else _get_level_root()
+	if enabled and not _vertex_mode:
+		_toggle_vertex_mode(root)
+	elif not enabled and _vertex_mode:
+		_toggle_vertex_mode(root)
 
 
 func _handle_keyboard_input(
@@ -482,6 +520,11 @@ func _handle_keyboard_input(
 		if hf_selection.is_empty():
 			return EditorPlugin.AFTER_GUI_INPUT_PASS
 		_clip_selected(root)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	if _keymap.matches("carve", event):
+		if hf_selection.is_empty():
+			return EditorPlugin.AFTER_GUI_INPUT_PASS
+		_carve_selected(root)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	# Nudge keys
 	var nudge = _get_nudge_direction(event.keycode)
@@ -532,15 +575,25 @@ func _handle_keyboard_input(
 		if _keymap.matches("axis_x", event):
 			root.set_axis_lock(LevelRootType.AxisLock.X, true)
 			_update_hud_context()
+			if dock:
+				dock.update_axis_lock_buttons(LevelRootType.AxisLock.X)
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 		if _keymap.matches("axis_y", event):
 			root.set_axis_lock(LevelRootType.AxisLock.Y, true)
 			_update_hud_context()
+			if dock:
+				dock.update_axis_lock_buttons(LevelRootType.AxisLock.Y)
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 		if _keymap.matches("axis_z", event):
 			root.set_axis_lock(LevelRootType.AxisLock.Z, true)
 			_update_hud_context()
+			if dock:
+				dock.update_axis_lock_buttons(LevelRootType.AxisLock.Z)
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
+	# Vertex edit toggle (V key)
+	if _keymap.matches("vertex_edit", event):
+		_toggle_vertex_mode(root)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	# External tool shortcuts
 	if _tool_registry:
 		var ext_id = _tool_registry.check_shortcut(event.keycode)
@@ -690,6 +743,233 @@ func _handle_mouse_motion(
 		root.clear_face_hover_highlight()
 	_update_hud_context()
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
+
+
+# ---------------------------------------------------------------------------
+# Vertex editing mode
+# ---------------------------------------------------------------------------
+
+func _toggle_vertex_mode(root: Node) -> void:
+	_vertex_mode = not _vertex_mode
+	if _vertex_mode:
+		_deactivate_external_tool()
+		if root and root.vertex_system:
+			root.vertex_system.clear_selection()
+			# Pass current brush selection
+			var brushes: Array = []
+			for node in hf_selection:
+				if node is DraftBrush:
+					brushes.append(node)
+			root.vertex_system.set_selection(brushes)
+			root.input_state.begin_vertex_edit()
+	else:
+		if root and root.vertex_system:
+			root.vertex_system.clear_selection()
+			root.input_state.end_vertex_edit()
+		_clear_vertex_overlay()
+	if dock:
+		dock.set_vertex_mode(_vertex_mode)
+	_update_hud_context()
+
+
+func _handle_vertex_input(
+	event: InputEvent, root: Node, cam: Camera3D, pos: Vector2
+) -> int:
+	var vs = root.vertex_system
+	if not vs:
+		return EditorPlugin.AFTER_GUI_INPUT_PASS
+
+	# Escape exits vertex mode
+	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+		if vs.has_selection():
+			vs.clear_selection()
+			_update_vertex_overlay(root, cam)
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+		else:
+			_toggle_vertex_mode(root)
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+
+	# Mouse click — select or begin drag
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.pressed:
+			var pick = vs.pick_vertex(cam, pos)
+			if pick.is_empty():
+				if not event.shift_pressed:
+					vs.clear_selection()
+				_update_vertex_overlay(root, cam)
+				return EditorPlugin.AFTER_GUI_INPUT_PASS
+			vs.select_vertex(pick.brush_id, pick.vertex_index, event.shift_pressed)
+			# Begin drag
+			_vertex_drag_active = true
+			_vertex_drag_start = pos
+			_vertex_drag_ref_y = pick.world_pos.y  # Use picked vertex depth for projection
+			vs.begin_drag(pick.world_pos)
+			_update_vertex_overlay(root, cam)
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+		else:
+			# Mouse release — end drag
+			if _vertex_drag_active:
+				_vertex_drag_active = false
+				var snapshots = vs.end_drag()
+				if not snapshots.is_empty() and undo_redo_manager:
+					_commit_vertex_move(root, snapshots)
+				_update_vertex_overlay(root, cam)
+				return EditorPlugin.AFTER_GUI_INPUT_STOP
+
+	# Right click cancels drag
+	if (
+		event is InputEventMouseButton
+		and event.button_index == MOUSE_BUTTON_RIGHT
+		and event.pressed
+		and _vertex_drag_active
+	):
+		_vertex_drag_active = false
+		vs.cancel_drag()
+		_update_vertex_overlay(root, cam)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+
+	# Mouse motion — update drag or hover
+	if event is InputEventMouseMotion:
+		if _vertex_drag_active and vs.is_dragging():
+			# Project mouse delta to world-space movement
+			var delta = _vertex_screen_to_world_delta(cam, _vertex_drag_start, pos, root, _vertex_drag_ref_y)
+			if delta.length() > 0.001:
+				# Snap delta
+				if root.grid_snap > 0.0:
+					delta = Vector3(
+						snappedf(delta.x, root.grid_snap),
+						snappedf(delta.y, root.grid_snap),
+						snappedf(delta.z, root.grid_snap)
+					)
+				# Apply axis lock (AxisLock enum: NONE=0, X=1, Y=2, Z=3)
+				if root.input_state.axis_lock == 1:  # X
+					delta = Vector3(delta.x, 0, 0)
+				elif root.input_state.axis_lock == 2:  # Y
+					delta = Vector3(0, delta.y, 0)
+				elif root.input_state.axis_lock == 3:  # Z
+					delta = Vector3(0, 0, delta.z)
+				vs.cancel_drag()
+				vs.begin_drag(Vector3.ZERO)
+				vs.move_vertices(delta)
+			_update_vertex_overlay(root, cam)
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+		else:
+			vs.update_hover(cam, pos)
+			_update_vertex_overlay(root, cam)
+
+	return EditorPlugin.AFTER_GUI_INPUT_PASS
+
+
+func _vertex_screen_to_world_delta(
+	cam: Camera3D, start_screen: Vector2, end_screen: Vector2, root: Node,
+	ref_y: float = 0.0
+) -> Vector3:
+	# Project screen movement onto a horizontal plane at the picked vertex's Y
+	# height, so dragging works correctly for elevated geometry and all view angles.
+	var start_origin = cam.project_ray_origin(start_screen)
+	var start_dir = cam.project_ray_normal(start_screen)
+	var end_origin = cam.project_ray_origin(end_screen)
+	var end_dir = cam.project_ray_normal(end_screen)
+	var start_pos = _intersect_y_plane(start_origin, start_dir, ref_y)
+	var end_pos = _intersect_y_plane(end_origin, end_dir, ref_y)
+	if start_pos == null or end_pos == null:
+		return Vector3.ZERO
+	return end_pos - start_pos
+
+
+func _intersect_y_plane(origin: Vector3, dir: Vector3, y: float) -> Variant:
+	if abs(dir.y) < 0.0001:
+		return null
+	var t = (y - origin.y) / dir.y
+	if t < 0.0:
+		return null
+	return origin + dir * t
+
+
+func _commit_vertex_move(root: Node, pre_drag_snapshots: Dictionary) -> void:
+	if not undo_redo_manager:
+		return
+	# Capture current (post-move) face state as the "do" state
+	var post_state: Dictionary = {}
+	for brush_id in pre_drag_snapshots:
+		var brush = root.brush_system.find_brush_by_id(brush_id) if root.brush_system else null
+		if brush and brush.get("faces"):
+			var current: Array = []
+			for face in brush.faces:
+				if face:
+					current.append(face.to_dict())
+			post_state[brush_id] = current
+
+	# We must NOT use HFUndoHelper.commit() here because it captures undo
+	# state at commit time (post-move), which would replay the move on undo
+	# instead of reverting it.  Instead, wire undo/redo manually using the
+	# pre-drag snapshots we saved before the drag began.
+	undo_redo_manager.create_action("Move Vertices", 0, null, false)
+	undo_redo_manager.add_do_method(root, "_apply_vertex_faces", post_state)
+	undo_redo_manager.add_undo_method(root, "_apply_vertex_faces", pre_drag_snapshots)
+	undo_redo_manager.commit_action()
+	_record_history("Move Vertices")
+
+
+func _update_vertex_overlay(root: Node, cam: Camera3D) -> void:
+	if not _vertex_mode or not root or not root.vertex_system:
+		_clear_vertex_overlay()
+		return
+	var vs = root.vertex_system
+	var vertex_data = vs.get_all_vertex_world_positions()
+	if vertex_data.is_empty():
+		_clear_vertex_overlay()
+		return
+	_ensure_vertex_overlay(root)
+	_vertex_overlay_imesh.clear_surfaces()
+	_vertex_overlay_imesh.surface_begin(Mesh.PRIMITIVE_LINES)
+	for entry in vertex_data:
+		var pos: Vector3 = entry.pos
+		var color := Color.WHITE
+		if entry.selected:
+			color = Color.ORANGE
+		elif entry.hovered:
+			color = Color.YELLOW
+		# Draw small cross at each vertex
+		var s := 0.4
+		_vertex_overlay_imesh.surface_set_color(color)
+		_vertex_overlay_imesh.surface_add_vertex(pos + Vector3(-s, 0, 0))
+		_vertex_overlay_imesh.surface_set_color(color)
+		_vertex_overlay_imesh.surface_add_vertex(pos + Vector3(s, 0, 0))
+		_vertex_overlay_imesh.surface_set_color(color)
+		_vertex_overlay_imesh.surface_add_vertex(pos + Vector3(0, -s, 0))
+		_vertex_overlay_imesh.surface_set_color(color)
+		_vertex_overlay_imesh.surface_add_vertex(pos + Vector3(0, s, 0))
+		_vertex_overlay_imesh.surface_set_color(color)
+		_vertex_overlay_imesh.surface_add_vertex(pos + Vector3(0, 0, -s))
+		_vertex_overlay_imesh.surface_set_color(color)
+		_vertex_overlay_imesh.surface_add_vertex(pos + Vector3(0, 0, s))
+	_vertex_overlay_imesh.surface_end()
+
+
+func _ensure_vertex_overlay(root: Node) -> void:
+	if _vertex_overlay_mesh and is_instance_valid(_vertex_overlay_mesh):
+		return
+	_vertex_overlay_mesh = MeshInstance3D.new()
+	_vertex_overlay_mesh.name = "_VertexEditOverlay"
+	_vertex_overlay_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var mat = StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.vertex_color_use_as_albedo = true
+	mat.no_depth_test = true
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_vertex_overlay_mesh.material_override = mat
+	_vertex_overlay_imesh = ImmediateMesh.new()
+	_vertex_overlay_mesh.mesh = _vertex_overlay_imesh
+	root.add_child(_vertex_overlay_mesh)
+
+
+func _clear_vertex_overlay() -> void:
+	if _vertex_overlay_mesh and is_instance_valid(_vertex_overlay_mesh):
+		_vertex_overlay_mesh.get_parent().remove_child(_vertex_overlay_mesh)
+		_vertex_overlay_mesh.queue_free()
+		_vertex_overlay_mesh = null
+	_vertex_overlay_imesh = null
 
 
 func _shortcut_input(event: InputEvent) -> void:
@@ -1158,6 +1438,28 @@ func _clip_selected(root: Node) -> void:
 		false,
 		Callable(self, "_record_history")
 	)
+
+
+func _carve_selected(root: Node) -> void:
+	var nodes = _current_selection_nodes()
+	if nodes.is_empty():
+		return
+	for node in nodes:
+		if not root.is_brush_node(node):
+			continue
+		var info = root.get_brush_info_from_node(node)
+		var brush_id = str(info.get("brush_id", ""))
+		if brush_id == "":
+			continue
+		HFUndoHelper.commit(
+			_get_undo_redo(),
+			root,
+			"Carve",
+			"carve_with_brush",
+			[brush_id],
+			false,
+			Callable(self, "_record_history")
+		)
 
 
 func _can_drop_data(_position: Vector2, data: Variant) -> bool:

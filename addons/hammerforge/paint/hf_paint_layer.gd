@@ -8,6 +8,7 @@ const TERRAIN_BLEND_SLOTS := 3  # slots 1..3 have explicit weights; slot 0 is im
 @export var grid: HFPaintGrid
 @export var chunk_size: int = 32
 @export var layer_id: StringName = &"layer_0"
+var display_name: String = ""
 
 # Heightmap data (optional; null = flat layer)
 var heightmap: Image = null

@@ -49,6 +49,14 @@ func remove_layer(index: int) -> void:
 		active_layer_index = clamp(active_layer_index, 0, layers.size() - 1)
 
 
+func rename_layer(index: int, new_name: String) -> void:
+	if index < 0 or index >= layers.size():
+		return
+	var layer = layers[index]
+	if layer:
+		layer.display_name = new_name
+
+
 func create_layer(layer_id: StringName, layer_y: float) -> HFPaintLayer:
 	if not base_grid:
 		base_grid = HFPaintGrid.new()

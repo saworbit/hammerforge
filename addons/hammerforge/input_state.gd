@@ -2,7 +2,7 @@
 extends RefCounted
 class_name HFInputState
 
-enum Mode { IDLE, DRAG_BASE, DRAG_HEIGHT, SURFACE_PAINT, EXTRUDE }
+enum Mode { IDLE, DRAG_BASE, DRAG_HEIGHT, SURFACE_PAINT, EXTRUDE, VERTEX_EDIT }
 
 var mode := Mode.IDLE
 
@@ -109,6 +109,18 @@ func end_extrude() -> void:
 
 func is_extruding() -> bool:
 	return mode == Mode.EXTRUDE
+
+
+func begin_vertex_edit() -> void:
+	mode = Mode.VERTEX_EDIT
+
+
+func end_vertex_edit() -> void:
+	mode = Mode.IDLE
+
+
+func is_vertex_editing() -> bool:
+	return mode == Mode.VERTEX_EDIT
 
 
 func get_drag_dimensions() -> Vector3:

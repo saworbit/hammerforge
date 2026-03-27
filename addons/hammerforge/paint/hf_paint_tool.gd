@@ -18,6 +18,11 @@ var heightmap_synth: HFHeightmapSynth
 var blend_material_id: int = 1
 var blend_strength: float = 0.5
 var blend_slot: int = 1  # 1..3 (slot 0 is implicit base)
+var sculpt_strength: float = 5.0
+var sculpt_radius: float = 3.0
+var sculpt_falloff: float = 0.5  # 0 = hard edge, 1 = soft
+var _sculpt_flatten_height: float = 0.0
+var _sculpt_flatten_captured := false
 
 var synth_settings := HFGeometrySynth.SynthSettings.new()
 var inference_settings := HFInferenceEngine.InferenceSettings.new()
@@ -34,6 +39,8 @@ var _preview_dirty: Dictionary = {}  # Dictionary[Vector2i, bool]
 
 func handle_input(camera: Camera3D, event: InputEvent, screen_pos: Vector2) -> bool:
 	if not camera or not layer_manager:
+		if not layer_manager:
+			push_warning("HammerForge: paint input ignored — no layer manager")
 		return false
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
@@ -48,7 +55,13 @@ func handle_input(camera: Camera3D, event: InputEvent, screen_pos: Vector2) -> b
 	return false
 
 
+func _is_sculpt_tool() -> bool:
+	return tool >= HFStroke.Tool.SCULPT_RAISE and tool <= HFStroke.Tool.SCULPT_FLATTEN
+
+
 func _begin_stroke(camera: Camera3D, screen_pos: Vector2) -> bool:
+	if _is_sculpt_tool():
+		return _begin_sculpt_stroke(camera, screen_pos)
 	var cell = _screen_to_cell(camera, screen_pos)
 	if cell == null:
 		return false
@@ -76,6 +89,11 @@ func _begin_stroke(camera: Camera3D, screen_pos: Vector2) -> bool:
 
 
 func _continue_stroke(camera: Camera3D, screen_pos: Vector2) -> void:
+	if _is_sculpt_tool():
+		var layer = layer_manager.get_active_layer() if layer_manager else null
+		if layer:
+			_apply_sculpt_at_screen(camera, screen_pos, layer)
+		return
 	var cell = _screen_to_cell(camera, screen_pos)
 	if cell == null:
 		return
@@ -105,6 +123,7 @@ func _end_stroke() -> void:
 	_active_stroke.analyse()
 	var layer = layer_manager.get_active_layer()
 	if not layer:
+		push_warning("HammerForge: paint stroke ended with no active layer — changes lost")
 		_active_stroke = null
 		return
 	var dirty: Array[Vector2i] = []
@@ -165,6 +184,7 @@ func _stamp_cell(cell: Vector2i) -> void:
 			var target = cell + Vector2i(dx, dy)
 			if is_blend:
 				if not layer.get_cell(target):
+					# Blend only works on filled cells — skip unfilled silently during strokes
 					continue
 				layer.set_cell_material(target, blend_material_id)
 				layer.set_cell_blend_slot(target, blend_slot, blend_strength)
@@ -289,6 +309,7 @@ func _bucket_fill(start: Vector2i) -> void:
 		stack.append(cell + Vector2i(0, -1))
 		guard += 1
 		if guard > MAX_BUCKET_FILL_CELLS:
+			push_warning("HammerForge: bucket fill hit cell limit (%d) — area may be unbounded" % MAX_BUCKET_FILL_CELLS)
 			break
 	_collect_dirty_chunks()
 	_preview_reconcile()
@@ -373,3 +394,95 @@ func build_heightmap_model(layer: HFPaintLayer, chunk_ids: Array) -> HFGenerated
 func _reconcile_heightmap(layer: HFPaintLayer, dirty: Array[Vector2i]) -> void:
 	var model = build_heightmap_model(layer, dirty)
 	reconciler.reconcile(model, layer.grid, synth_settings, dirty)
+
+
+# ---------------------------------------------------------------------------
+# Terrain Sculpting
+# ---------------------------------------------------------------------------
+
+
+func _begin_sculpt_stroke(camera: Camera3D, screen_pos: Vector2) -> bool:
+	var layer = layer_manager.get_active_layer() if layer_manager else null
+	if not layer or not layer.has_heightmap():
+		push_warning("HammerForge: sculpt requires an active layer with a heightmap")
+		return false
+	_painting = true
+	_sculpt_flatten_captured = false
+	_stroke_dirty.clear()
+	_apply_sculpt_at_screen(camera, screen_pos, layer)
+	return true
+
+
+func _apply_sculpt_at_screen(camera: Camera3D, screen_pos: Vector2, layer: HFPaintLayer) -> void:
+	if not camera or not layer or not layer.heightmap:
+		return
+	var cell = _screen_to_cell(camera, screen_pos)
+	if cell == null:
+		return
+	_apply_terrain_brush(layer, cell)
+	# Reconcile affected chunks
+	var dirty = layer.consume_dirty_chunks()
+	var dirty_typed: Array[Vector2i] = []
+	for cid in dirty:
+		dirty_typed.append(cid)
+		_stroke_dirty[cid] = true
+	if not dirty_typed.is_empty() and geometry and reconciler and heightmap_synth:
+		_reconcile_heightmap(layer, dirty_typed)
+
+
+func _apply_terrain_brush(layer: HFPaintLayer, center_cell: Vector2i) -> void:
+	var img = layer.heightmap
+	if not img:
+		return
+	var w = img.get_width()
+	var h = img.get_height()
+	var r = int(ceil(sculpt_radius))
+	# For FLATTEN, capture height at center on first application
+	if tool == HFStroke.Tool.SCULPT_FLATTEN and not _sculpt_flatten_captured:
+		var cx = posmod(center_cell.x, w)
+		var cy = posmod(center_cell.y, h)
+		_sculpt_flatten_height = img.get_pixel(cx, cy).r
+		_sculpt_flatten_captured = true
+	for dy in range(-r, r + 1):
+		for dx in range(-r, r + 1):
+			var dist = sqrt(float(dx * dx + dy * dy))
+			if dist > sculpt_radius:
+				continue
+			var px = posmod(center_cell.x + dx, w)
+			var py = posmod(center_cell.y + dy, h)
+			# Falloff: 1.0 at center, 0.0 at edge (when falloff=1)
+			var t = dist / max(0.01, sculpt_radius)
+			var weight = 1.0 - t * sculpt_falloff
+			weight = clamp(weight, 0.0, 1.0)
+			var current = img.get_pixel(px, py).r
+			var new_val = current
+			match tool:
+				HFStroke.Tool.SCULPT_RAISE:
+					new_val = current + sculpt_strength * weight * 0.01
+				HFStroke.Tool.SCULPT_LOWER:
+					new_val = current - sculpt_strength * weight * 0.01
+				HFStroke.Tool.SCULPT_SMOOTH:
+					# Average with neighbors (3x3 kernel)
+					var avg := 0.0
+					var count := 0
+					for sy in range(-1, 2):
+						for sx in range(-1, 2):
+							avg += img.get_pixel(posmod(px + sx, w), posmod(py + sy, h)).r
+							count += 1
+					avg /= float(count)
+					new_val = lerp(current, avg, weight * 0.5)
+				HFStroke.Tool.SCULPT_FLATTEN:
+					new_val = lerp(current, _sculpt_flatten_height, weight * 0.5)
+			new_val = clamp(new_val, 0.0, 1.0)
+			if new_val != current:
+				img.set_pixel(px, py, Color(new_val, new_val, new_val))
+	# Mark chunks dirty for the affected area
+	if layer.grid:
+		var chunk_size = layer.chunk_size
+		var min_cx = int(floor(float(center_cell.x - r) / float(chunk_size)))
+		var max_cx = int(floor(float(center_cell.x + r) / float(chunk_size)))
+		var min_cy = int(floor(float(center_cell.y - r) / float(chunk_size)))
+		var max_cy = int(floor(float(center_cell.y + r) / float(chunk_size)))
+		for cy in range(min_cy, max_cy + 1):
+			for cx in range(min_cx, max_cx + 1):
+				layer._dirty_chunks[Vector2i(cx, cy)] = true

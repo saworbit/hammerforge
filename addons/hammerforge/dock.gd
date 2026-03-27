@@ -4,6 +4,7 @@ class_name HammerForgeDock
 
 signal hud_visibility_changed(visible: bool)
 signal builtin_tool_changed
+signal vertex_mode_toggled(enabled: bool)
 
 const LevelRootType = preload("level_root.gd")
 const BrushPreset = preload("brush_preset.gd")
@@ -16,6 +17,10 @@ const HFToast = preload("ui/hf_toast.gd")
 const HFWelcomePanel = preload("ui/hf_welcome_panel.gd")
 const HFEntityDef = preload("hf_entity_def.gd")
 const UVEditorScene = preload("uv_editor.tscn")
+const PaintTabBuilder = preload("ui/paint_tab_builder.gd")
+const EntityTabBuilder = preload("ui/entity_tab_builder.gd")
+const ManageTabBuilder = preload("ui/manage_tab_builder.gd")
+const SelectionToolsBuilder = preload("ui/selection_tools_builder.gd")
 
 const PRESET_MENU_RENAME := 0
 const PRESET_MENU_DELETE := 1
@@ -84,6 +89,7 @@ var brush_shape_select: OptionButton = null
 var paint_layer_select: OptionButton = null
 var paint_layer_add: Button = null
 var paint_layer_remove: Button = null
+var paint_layer_rename: Button = null
 var region_enable: CheckBox = null
 var region_size_spin: SpinBox = null
 var region_radius_spin: SpinBox = null
@@ -224,6 +230,17 @@ var syncing_snap := false
 var snap_grid_btn: Button = null
 var snap_vertex_btn: Button = null
 var snap_center_btn: Button = null
+var _axis_lock_x: Button = null
+var _axis_lock_y: Button = null
+var _axis_lock_z: Button = null
+var _show_io_lines: CheckBox = null
+var _sculpt_raise_btn: Button = null
+var _sculpt_lower_btn: Button = null
+var _sculpt_smooth_btn: Button = null
+var _sculpt_flatten_btn: Button = null
+var _sculpt_strength_spin: SpinBox = null
+var _sculpt_radius_spin: SpinBox = null
+var _sculpt_falloff_spin: SpinBox = null
 var debug_enabled := false
 @onready var _autosave_warning: Label = $Margin/VBox/AutosaveWarning
 var syncing_grid := false
@@ -268,6 +285,7 @@ var _hints_dirty: bool = true
 var _prop_cache: Dictionary = {}
 var tool_extrude_up: Button = null
 var tool_extrude_down: Button = null
+var tool_vertex: Button = null
 
 # Wave 1 UI controls
 var _selection_nodes: Array = []
@@ -815,6 +833,7 @@ func _apply_all_tooltips() -> void:
 	_set_tooltip(paint_layer_select, "Active floor paint layer")
 	_set_tooltip(paint_layer_add, "Add a new floor paint layer")
 	_set_tooltip(paint_layer_remove, "Remove the selected floor paint layer")
+	_set_tooltip(paint_layer_rename, "Rename the selected floor paint layer")
 	_set_tooltip(region_enable, "Enable region streaming for floor paint data")
 	_set_tooltip(region_size_spin, "Region size in grid cells (power of two recommended)")
 	_set_tooltip(region_radius_spin, "Streaming radius in regions around the cursor")
@@ -1066,261 +1085,12 @@ func _build_paint_tab() -> void:
 	var root_vbox = $Margin/VBox/MainTabs/Paint/PaintMargin/PaintVBox
 	if not root_vbox:
 		return
-
-	# --- Floor Paint section ---
-	var floor_sec = HFCollapsibleSection.create("Floor Paint", true)
-	root_vbox.add_child(floor_sec)
-	_register_section(floor_sec, "Floor Paint")
-	var fc = floor_sec.get_content()
-
-	paint_tool_select = OptionButton.new()
-	fc.add_child(_make_label_row("Tool", paint_tool_select))
-
-	paint_radius = _make_spin(1, 16, 1, 1)
-	fc.add_child(_make_label_row("Radius", paint_radius))
-
-	brush_shape_select = OptionButton.new()
-	fc.add_child(_make_label_row("Shape", brush_shape_select))
-
-	var layer_row = HBoxContainer.new()
-	var layer_label = Label.new()
-	layer_label.text = "Layer"
-	layer_row.add_child(layer_label)
-	paint_layer_select = OptionButton.new()
-	paint_layer_select.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	layer_row.add_child(paint_layer_select)
-	paint_layer_add = Button.new()
-	paint_layer_add.text = "+"
-	paint_layer_add.custom_minimum_size = Vector2(32, 0)
-	layer_row.add_child(paint_layer_add)
-	paint_layer_remove = Button.new()
-	paint_layer_remove.text = "-"
-	paint_layer_remove.custom_minimum_size = Vector2(32, 0)
-	layer_row.add_child(paint_layer_remove)
-	fc.add_child(layer_row)
-
-	layer_y_spin = _make_spin(-1000, 1000, 0.5, 0.0)
-	fc.add_child(_make_label_row("Layer Y", layer_y_spin))
-
-	height_scale_spin = _make_spin(0.1, 100, 0.1, 10.0)
-	fc.add_child(_make_label_row("Height Scale", height_scale_spin))
-
-	# --- Heightmap section ---
-	var hm_sec = HFCollapsibleSection.create("Heightmap", false)
-	root_vbox.add_child(hm_sec)
-	_register_section(hm_sec, "Heightmap")
-	var hmc = hm_sec.get_content()
-
-	var hm_row = HBoxContainer.new()
-	heightmap_import = Button.new()
-	heightmap_import.text = "Import..."
-	heightmap_import.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hm_row.add_child(heightmap_import)
-	heightmap_generate = Button.new()
-	heightmap_generate.text = "Generate Noise"
-	heightmap_generate.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hm_row.add_child(heightmap_generate)
-	hmc.add_child(hm_row)
-
-	# --- Blend & Terrain section ---
-	var blend_sec = HFCollapsibleSection.create("Blend & Terrain", false)
-	root_vbox.add_child(blend_sec)
-	_register_section(blend_sec, "Blend & Terrain")
-	var bc = blend_sec.get_content()
-
-	blend_strength_spin = _make_spin(0, 1, 0.05, 0.5)
-	bc.add_child(_make_label_row("Strength", blend_strength_spin))
-
-	blend_slot_select = OptionButton.new()
-	bc.add_child(_make_label_row("Blend Slot", blend_slot_select))
-
-	var slot_labels = ["Slot A", "Slot B", "Slot C", "Slot D"]
-	var slot_buttons: Array[Button] = []
-	var slot_scales: Array[SpinBox] = []
-	for i in range(4):
-		var slot_row = HBoxContainer.new()
-		var slot_label = Label.new()
-		slot_label.text = slot_labels[i]
-		slot_row.add_child(slot_label)
-		var tex_btn = Button.new()
-		tex_btn.text = "Texture..."
-		tex_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		slot_row.add_child(tex_btn)
-		var scale_spin = _make_spin(0.01, 100, 0.1, 1.0)
-		slot_row.add_child(scale_spin)
-		bc.add_child(slot_row)
-		slot_buttons.append(tex_btn)
-		slot_scales.append(scale_spin)
-	terrain_slot_a_button = slot_buttons[0]
-	terrain_slot_b_button = slot_buttons[1]
-	terrain_slot_c_button = slot_buttons[2]
-	terrain_slot_d_button = slot_buttons[3]
-	terrain_slot_a_scale = slot_scales[0]
-	terrain_slot_b_scale = slot_scales[1]
-	terrain_slot_c_scale = slot_scales[2]
-	terrain_slot_d_scale = slot_scales[3]
-
-	# --- Regions section ---
-	var region_sec = HFCollapsibleSection.create("Regions", false)
-	root_vbox.add_child(region_sec)
-	_register_section(region_sec, "Regions")
-	var rc = region_sec.get_content()
-
-	region_enable = CheckBox.new()
-	rc.add_child(_make_label_row("Streaming", region_enable))
-
-	region_size_spin = _make_spin(64, 2048, 64, 512)
-	rc.add_child(_make_label_row("Region Size", region_size_spin))
-
-	region_radius_spin = _make_spin(0, 8, 1, 2)
-	rc.add_child(_make_label_row("Stream Radius", region_radius_spin))
-
-	region_memory_spin = _make_spin(32, 4096, 32, 256)
-	rc.add_child(_make_label_row("Memory (MB)", region_memory_spin))
-
-	region_grid_toggle = CheckBox.new()
-	rc.add_child(_make_label_row("Show Region Grid", region_grid_toggle))
-
-	# --- Materials section ---
-	var mat_sec = HFCollapsibleSection.create("Materials", true)
-	root_vbox.add_child(mat_sec)
-	_register_section(mat_sec, "Materials")
-	var mc = mat_sec.get_content()
-
-	materials_list = ItemList.new()
-	materials_list.custom_minimum_size = Vector2(0, 80)
-	materials_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	mc.add_child(materials_list)
-
-	var mat_btn_row = HBoxContainer.new()
-	material_add = Button.new()
-	material_add.text = "Add"
-	mat_btn_row.add_child(material_add)
-	material_remove = Button.new()
-	material_remove.text = "Remove"
-	mat_btn_row.add_child(material_remove)
-	material_load_prototypes = Button.new()
-	material_load_prototypes.text = "Load Prototypes"
-	mat_btn_row.add_child(material_load_prototypes)
-	mc.add_child(mat_btn_row)
-
-	# Inline hint when no face is selected
-	_uv_hint_label = Label.new()
-	_uv_hint_label.text = "Enable Face Select Mode and click a face to edit"
-	_uv_hint_label.add_theme_font_size_override("font_size", 11)
-	_uv_hint_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.45))
-	_uv_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_uv_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD
-	mc.add_child(_uv_hint_label)
-
-	material_assign = Button.new()
-	material_assign.text = "Assign to Selected Faces"
-	mc.add_child(material_assign)
-
-	face_select_mode = CheckBox.new()
-	face_select_mode.text = "Face Select Mode"
-	mc.add_child(face_select_mode)
-
-	face_clear = Button.new()
-	face_clear.text = "Clear Face Selection"
-	mc.add_child(face_clear)
-
-	# --- UV section ---
-	var uv_sec = HFCollapsibleSection.create("UV Editor", false)
-	root_vbox.add_child(uv_sec)
-	_register_section(uv_sec, "UV Editor")
-	var uc = uv_sec.get_content()
-
-	var uv_instance = UVEditorScene.instantiate()
-	uv_editor = uv_instance as UVEditor
-	uc.add_child(uv_instance)
-
-	uv_reset = Button.new()
-	uv_reset.text = "Reset Projected UVs"
-	uc.add_child(uv_reset)
-
-	# Justify alignment buttons
-	var justify_label = Label.new()
-	justify_label.text = "Justify:"
-	uc.add_child(justify_label)
-	var justify_grid = GridContainer.new()
-	justify_grid.columns = 3
-	uc.add_child(justify_grid)
-	justify_fit_btn = Button.new()
-	justify_fit_btn.text = "Fit"
-	justify_fit_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	justify_grid.add_child(justify_fit_btn)
-	justify_center_btn = Button.new()
-	justify_center_btn.text = "Center"
-	justify_center_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	justify_grid.add_child(justify_center_btn)
-	justify_left_btn = Button.new()
-	justify_left_btn.text = "Left"
-	justify_left_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	justify_grid.add_child(justify_left_btn)
-	justify_right_btn = Button.new()
-	justify_right_btn.text = "Right"
-	justify_right_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	justify_grid.add_child(justify_right_btn)
-	justify_top_btn = Button.new()
-	justify_top_btn.text = "Top"
-	justify_top_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	justify_grid.add_child(justify_top_btn)
-	justify_bottom_btn = Button.new()
-	justify_bottom_btn.text = "Bottom"
-	justify_bottom_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	justify_grid.add_child(justify_bottom_btn)
-	justify_treat_as_one = CheckBox.new()
-	justify_treat_as_one.text = "Treat as One"
-	justify_treat_as_one.tooltip_text = "Align selected faces as a single unified surface"
-	uc.add_child(justify_treat_as_one)
-
-	# --- Surface Paint section ---
-	var sp_sec = HFCollapsibleSection.create("Surface Paint", false)
-	root_vbox.add_child(sp_sec)
-	_register_section(sp_sec, "Surface Paint")
-	var sc = sp_sec.get_content()
-
-	paint_target_select = OptionButton.new()
-	sc.add_child(_make_label_row("Target", paint_target_select))
-
-	surface_paint_radius = _make_spin(0.01, 0.5, 0.01, 0.1)
-	sc.add_child(_make_label_row("Radius (UV)", surface_paint_radius))
-
-	surface_paint_strength = _make_spin(0.0, 1.0, 0.05, 1.0)
-	sc.add_child(_make_label_row("Strength", surface_paint_strength))
-
-	var sp_layer_row = HBoxContainer.new()
-	var sp_layer_label = Label.new()
-	sp_layer_label.text = "Layer"
-	sp_layer_row.add_child(sp_layer_label)
-	surface_paint_layer_select = OptionButton.new()
-	surface_paint_layer_select.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	sp_layer_row.add_child(surface_paint_layer_select)
-	surface_paint_layer_add = Button.new()
-	surface_paint_layer_add.text = "+"
-	surface_paint_layer_add.custom_minimum_size = Vector2(32, 0)
-	sp_layer_row.add_child(surface_paint_layer_add)
-	surface_paint_layer_remove = Button.new()
-	surface_paint_layer_remove.text = "-"
-	surface_paint_layer_remove.custom_minimum_size = Vector2(32, 0)
-	sp_layer_row.add_child(surface_paint_layer_remove)
-	sc.add_child(sp_layer_row)
-
-	surface_paint_texture = Button.new()
-	surface_paint_texture.text = "Pick Layer Texture"
-	sc.add_child(surface_paint_texture)
+	var builder = PaintTabBuilder.new(self)
+	builder.build(root_vbox)
 
 
 func _build_entity_props_section() -> void:
-	var entities_vbox = $Margin/VBox/MainTabs/Entities/EntitiesMargin/EntitiesVBox
-	if not entities_vbox:
-		return
-	var sec = HFCollapsibleSection.create("Entity Properties", true)
-	entities_vbox.add_child(sec)
-	_register_section(sec, "Entity Properties")
-	sec.visible = false
-	_entity_props_section = sec
+	pass  # Now built by EntityTabBuilder
 
 
 func _rebuild_entity_props(entity: Node3D) -> void:
@@ -1657,442 +1427,24 @@ func _build_entity_io_section() -> void:
 	var entities_vbox = $Margin/VBox/MainTabs/Entities/EntitiesMargin/EntitiesVBox
 	if not entities_vbox:
 		return
-
-	# --- Entity Properties section (above I/O) ---
-	_build_entity_props_section()
-
-	# --- Entity I/O section ---
-	var io_sec = HFCollapsibleSection.create("Entity I/O", false)
-	entities_vbox.add_child(io_sec)
-	_register_section(io_sec, "Entity I/O")
-	var ioc = io_sec.get_content()
-
-	# Output Name
-	var out_row = HBoxContainer.new()
-	ioc.add_child(out_row)
-	var out_lbl = Label.new()
-	out_lbl.text = "Output:"
-	out_lbl.custom_minimum_size.x = 70
-	out_row.add_child(out_lbl)
-	io_output_name = LineEdit.new()
-	io_output_name.placeholder_text = "OnTrigger"
-	io_output_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	out_row.add_child(io_output_name)
-
-	# Target Name
-	var tgt_row = HBoxContainer.new()
-	ioc.add_child(tgt_row)
-	var tgt_lbl = Label.new()
-	tgt_lbl.text = "Target:"
-	tgt_lbl.custom_minimum_size.x = 70
-	tgt_row.add_child(tgt_lbl)
-	io_target_name = LineEdit.new()
-	io_target_name.placeholder_text = "door_1"
-	io_target_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	tgt_row.add_child(io_target_name)
-
-	# Input Name
-	var inp_row = HBoxContainer.new()
-	ioc.add_child(inp_row)
-	var inp_lbl = Label.new()
-	inp_lbl.text = "Input:"
-	inp_lbl.custom_minimum_size.x = 70
-	inp_row.add_child(inp_lbl)
-	io_input_name = LineEdit.new()
-	io_input_name.placeholder_text = "Open"
-	io_input_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	inp_row.add_child(io_input_name)
-
-	# Parameter
-	var param_row = HBoxContainer.new()
-	ioc.add_child(param_row)
-	var param_lbl = Label.new()
-	param_lbl.text = "Param:"
-	param_lbl.custom_minimum_size.x = 70
-	param_row.add_child(param_lbl)
-	io_parameter = LineEdit.new()
-	io_parameter.placeholder_text = "(optional)"
-	io_parameter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	param_row.add_child(io_parameter)
-
-	# Delay + Fire Once row
-	var delay_row = HBoxContainer.new()
-	ioc.add_child(delay_row)
-	var delay_lbl = Label.new()
-	delay_lbl.text = "Delay:"
-	delay_lbl.custom_minimum_size.x = 70
-	delay_row.add_child(delay_lbl)
-	io_delay = SpinBox.new()
-	io_delay.min_value = 0.0
-	io_delay.max_value = 999.0
-	io_delay.step = 0.1
-	io_delay.value = 0.0
-	io_delay.suffix = "s"
-	io_delay.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	delay_row.add_child(io_delay)
-	io_fire_once = CheckBox.new()
-	io_fire_once.text = "Once"
-	delay_row.add_child(io_fire_once)
-
-	# Add / Remove buttons
-	var io_btn_row = HBoxContainer.new()
-	ioc.add_child(io_btn_row)
-	io_add_btn = _make_button("Add Output")
-	io_add_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	io_btn_row.add_child(io_add_btn)
-	io_remove_btn = _make_button("Remove")
-	io_btn_row.add_child(io_remove_btn)
-
-	# Connection list
-	var list_lbl = Label.new()
-	list_lbl.text = "Connections:"
-	ioc.add_child(list_lbl)
-	io_list = ItemList.new()
-	io_list.custom_minimum_size.y = 80
-	io_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	io_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	ioc.add_child(io_list)
+	var builder = EntityTabBuilder.new(self)
+	builder.build(entities_vbox)
 
 
 func _build_manage_tab() -> void:
 	var root_vbox = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox
 	if not root_vbox:
 		return
-
-	# --- Bake section ---
-	var bake_sec = HFCollapsibleSection.create("Bake", true)
-	root_vbox.add_child(bake_sec)
-	_register_section(bake_sec, "Bake")
-	var bk = bake_sec.get_content()
-
-	bake_btn = _make_button("Bake")
-	bk.add_child(bake_btn)
-
-	bake_dry_run_btn = _make_button("Bake Dry Run")
-	bk.add_child(bake_dry_run_btn)
-
-	validate_btn = _make_button("Validate Level")
-	bk.add_child(validate_btn)
-
-	validate_fix_btn = _make_button("Validate + Fix")
-	bk.add_child(validate_fix_btn)
-
-	bake_merge_meshes = _make_check("Merge Meshes")
-	bk.add_child(bake_merge_meshes)
-
-	bake_generate_lods = _make_check("Generate LODs")
-	bk.add_child(bake_generate_lods)
-
-	bake_lightmap_uv2 = _make_check("Lightmap UV2")
-	bk.add_child(bake_lightmap_uv2)
-
-	bake_use_face_materials = _make_check("Use Face Materials")
-	bk.add_child(bake_use_face_materials)
-
-	bake_lightmap_texel_row = HBoxContainer.new()
-	var texel_label = Label.new()
-	texel_label.text = "Texel Size"
-	bake_lightmap_texel_row.add_child(texel_label)
-	bake_lightmap_texel = _make_spin(0.01, 4.0, 0.01, 0.1)
-	bake_lightmap_texel_row.add_child(bake_lightmap_texel)
-	bk.add_child(bake_lightmap_texel_row)
-
-	bake_navmesh = _make_check("Bake Navmesh")
-	bk.add_child(bake_navmesh)
-
-	bake_navmesh_cell_row = HBoxContainer.new()
-	var nav_cell_label = Label.new()
-	nav_cell_label.text = "Navmesh Cell"
-	bake_navmesh_cell_row.add_child(nav_cell_label)
-	bake_navmesh_cell_size = _make_spin(0.05, 2.0, 0.01, 0.3)
-	bake_navmesh_cell_row.add_child(bake_navmesh_cell_size)
-	bake_navmesh_cell_height = _make_spin(0.05, 2.0, 0.01, 0.2)
-	bake_navmesh_cell_row.add_child(bake_navmesh_cell_height)
-	bk.add_child(bake_navmesh_cell_row)
-
-	bake_navmesh_agent_row = HBoxContainer.new()
-	var nav_agent_label = Label.new()
-	nav_agent_label.text = "Agent Size"
-	bake_navmesh_agent_row.add_child(nav_agent_label)
-	bake_navmesh_agent_height = _make_spin(0.5, 5.0, 0.1, 2.0)
-	bake_navmesh_agent_row.add_child(bake_navmesh_agent_height)
-	bake_navmesh_agent_radius = _make_spin(0.1, 2.0, 0.05, 0.4)
-	bake_navmesh_agent_row.add_child(bake_navmesh_agent_radius)
-	bk.add_child(bake_navmesh_agent_row)
-
-	# --- Actions section ---
-	var act_sec = HFCollapsibleSection.create("Actions", true)
-	root_vbox.add_child(act_sec)
-	_register_section(act_sec, "Actions")
-	var ac = act_sec.get_content()
-
-	floor_btn = _make_button("Create Floor")
-	ac.add_child(floor_btn)
-
-	apply_cuts_btn = _make_button("Apply Cuts")
-	ac.add_child(apply_cuts_btn)
-
-	clear_cuts_btn = _make_button("Clear Pending Cuts")
-	ac.add_child(clear_cuts_btn)
-
-	commit_cuts_btn = _make_button("Commit Cuts (Bake)")
-	ac.add_child(commit_cuts_btn)
-
-	restore_cuts_btn = _make_button("Restore Committed Cuts")
-	ac.add_child(restore_cuts_btn)
-
-	clear_btn = _make_button("Clear Brushes")
-	ac.add_child(clear_btn)
-
-	# --- File section ---
-	var file_sec = HFCollapsibleSection.create("File", true)
-	root_vbox.add_child(file_sec)
-	_register_section(file_sec, "File")
-	var flc = file_sec.get_content()
-
-	save_hflevel_btn = _make_button("Save .hflevel")
-	flc.add_child(save_hflevel_btn)
-
-	load_hflevel_btn = _make_button("Load .hflevel")
-	flc.add_child(load_hflevel_btn)
-
-	import_map_btn = _make_button("Import .map")
-	flc.add_child(import_map_btn)
-
-	map_format_select = OptionButton.new()
-	map_format_select.add_item("Classic Quake", 0)
-	map_format_select.add_item("Valve 220", 1)
-	map_format_select.tooltip_text = "Map export format"
-	flc.add_child(map_format_select)
-
-	export_map_btn = _make_button("Export .map")
-	flc.add_child(export_map_btn)
-
-	export_glb_btn = _make_button("Export .glb")
-	flc.add_child(export_glb_btn)
-
-	# --- Presets section ---
-	var preset_sec = HFCollapsibleSection.create("Presets", false)
-	root_vbox.add_child(preset_sec)
-	_register_section(preset_sec, "Presets")
-	var pc = preset_sec.get_content()
-
-	save_preset_btn = _make_button("Save Current")
-	pc.add_child(save_preset_btn)
-
-	preset_grid = GridContainer.new()
-	preset_grid.columns = 2
-	pc.add_child(preset_grid)
-
-	# --- History section (collapsed by default) ---
-	var hist_sec = HFCollapsibleSection.create("History", false)
-	root_vbox.add_child(hist_sec)
-	_register_section(hist_sec, "History")
-	var hc = hist_sec.get_content()
-
-	var hist_controls = HBoxContainer.new()
-	undo_btn = _make_button("Undo")
-	hist_controls.add_child(undo_btn)
-	redo_btn = _make_button("Redo")
-	hist_controls.add_child(redo_btn)
-	hc.add_child(hist_controls)
-
-	history_list = ItemList.new()
-	history_list.custom_minimum_size = Vector2(0, 80)
-	history_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	history_list.focus_mode = Control.FOCUS_NONE
-	hc.add_child(history_list)
-
-	# --- Settings section (collapsed by default) ---
-	var set_sec = HFCollapsibleSection.create("Settings", false)
-	root_vbox.add_child(set_sec)
-	_register_section(set_sec, "Settings")
-	var stc = set_sec.get_content()
-
-	commit_freeze = _make_check("Freeze Commit (keep CSG hidden)", true)
-	stc.add_child(commit_freeze)
-
-	show_hud = _make_check("Show HUD", true)
-	stc.add_child(show_hud)
-
-	show_grid = _make_check("Show Grid", false)
-	stc.add_child(show_grid)
-
-	follow_grid = _make_check("Follow Grid", false)
-	stc.add_child(follow_grid)
-
-	debug_logs = _make_check("Debug Logs", false)
-	stc.add_child(debug_logs)
-
-	autosave_enabled = _make_check("Enable Autosave", true)
-	stc.add_child(autosave_enabled)
-
-	autosave_minutes = _make_spin(1, 60, 1, 5)
-	stc.add_child(_make_label_row("Autosave Minutes", autosave_minutes))
-
-	autosave_keep = _make_spin(1, 50, 1, 5)
-	stc.add_child(_make_label_row("Keep Backups", autosave_keep))
-
-	autosave_path_btn = _make_button("Set Autosave Path")
-	stc.add_child(autosave_path_btn)
-
-	export_settings_btn = _make_button("Export Settings")
-	stc.add_child(export_settings_btn)
-
-	import_settings_btn = _make_button("Import Settings")
-	stc.add_child(import_settings_btn)
-
-	# --- Performance section (collapsed by default) ---
-	var perf_sec = HFCollapsibleSection.create("Performance", false)
-	root_vbox.add_child(perf_sec)
-	_register_section(perf_sec, "Performance")
-	var pfc = perf_sec.get_content()
-
-	var perf_grid = GridContainer.new()
-	perf_grid.columns = 2
-	pfc.add_child(perf_grid)
-
-	var perf_labels = [
-		["Active Brushes", "0"],
-		["Paint Memory", "0 KB"],
-		["Bake Chunks", "0"],
-		["Last Bake", "0 ms"]
-	]
-	var perf_value_nodes: Array[Label] = []
-	for pair in perf_labels:
-		var key_label = Label.new()
-		key_label.text = pair[0]
-		perf_grid.add_child(key_label)
-		var val_label = Label.new()
-		val_label.text = pair[1]
-		perf_grid.add_child(val_label)
-		perf_value_nodes.append(val_label)
-	perf_brushes_value = perf_value_nodes[0]
-	perf_paint_mem_value = perf_value_nodes[1]
-	perf_bake_chunks_value = perf_value_nodes[2]
-	perf_bake_time_value = perf_value_nodes[3]
+	var builder = ManageTabBuilder.new(self)
+	builder.build(root_vbox)
 
 
 func _build_selection_tools_section() -> void:
 	var brush_vbox = $Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox
 	if not brush_vbox:
 		return
-	_selection_tools_section = HFCollapsibleSection.create("Selection Tools", true)
-	_selection_tools_section.visible = false
-	brush_vbox.add_child(_selection_tools_section)
-	_register_section(_selection_tools_section, "Selection Tools")
-	var sc = _selection_tools_section.get_content()
-
-	# Inline hint when no selection
-	_sel_tools_hint_label = Label.new()
-	_sel_tools_hint_label.text = "Select a brush to use these tools"
-	_sel_tools_hint_label.add_theme_font_size_override("font_size", 11)
-	_sel_tools_hint_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.45))
-	_sel_tools_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sc.add_child(_sel_tools_hint_label)
-
-	# --- Hollow ---
-	var hollow_row = HBoxContainer.new()
-	sc.add_child(hollow_row)
-	var hollow_label = Label.new()
-	hollow_label.text = "Wall:"
-	hollow_row.add_child(hollow_label)
-	hollow_thickness = SpinBox.new()
-	hollow_thickness.min_value = 1.0
-	hollow_thickness.max_value = 128.0
-	hollow_thickness.step = 1.0
-	hollow_thickness.value = 4.0
-	hollow_thickness.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hollow_row.add_child(hollow_thickness)
-	hollow_btn = _make_button("Hollow (Ctrl+H)")
-	hollow_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hollow_row.add_child(hollow_btn)
-
-	# --- Move to Floor / Ceiling ---
-	var move_row = HBoxContainer.new()
-	sc.add_child(move_row)
-	move_floor_btn = _make_button("To Floor (Ctrl+Shift+F)")
-	move_floor_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	move_row.add_child(move_floor_btn)
-	move_ceiling_btn = _make_button("To Ceiling (Ctrl+Shift+C)")
-	move_ceiling_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	move_row.add_child(move_ceiling_btn)
-
-	# --- Brush Entity (Tie to Entity) ---
-	var tie_row = HBoxContainer.new()
-	sc.add_child(tie_row)
-	brush_entity_class_opt = OptionButton.new()
-	_populate_brush_entity_classes()
-	brush_entity_class_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	tie_row.add_child(brush_entity_class_opt)
-	tie_entity_btn = _make_button("Tie")
-	tie_row.add_child(tie_entity_btn)
-	untie_entity_btn = _make_button("Untie")
-	tie_row.add_child(untie_entity_btn)
-
-	# --- Clip ---
-	clip_btn = _make_button("Clip Selected (Shift+X)")
-	sc.add_child(clip_btn)
-
-	# --- Duplicate Array ---
-	var dup_label = Label.new()
-	dup_label.text = "Duplicate Array"
-	sc.add_child(dup_label)
-
-	var dup_row1 = HBoxContainer.new()
-	sc.add_child(dup_row1)
-	var count_lbl = Label.new()
-	count_lbl.text = "Count:"
-	dup_row1.add_child(count_lbl)
-	dup_count_spin = SpinBox.new()
-	dup_count_spin.min_value = 1
-	dup_count_spin.max_value = 100
-	dup_count_spin.value = 3
-	dup_count_spin.tooltip_text = "Number of copies to create"
-	dup_row1.add_child(dup_count_spin)
-
-	var dup_row2 = HBoxContainer.new()
-	sc.add_child(dup_row2)
-	var off_lbl = Label.new()
-	off_lbl.text = "Offset:"
-	dup_row2.add_child(off_lbl)
-	dup_offset_x = SpinBox.new()
-	dup_offset_x.min_value = -1000
-	dup_offset_x.max_value = 1000
-	dup_offset_x.value = 8
-	dup_offset_x.step = 1
-	dup_offset_x.tooltip_text = "X offset per copy"
-	dup_offset_x.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	dup_row2.add_child(dup_offset_x)
-	dup_offset_y = SpinBox.new()
-	dup_offset_y.min_value = -1000
-	dup_offset_y.max_value = 1000
-	dup_offset_y.value = 0
-	dup_offset_y.step = 1
-	dup_offset_y.tooltip_text = "Y offset per copy"
-	dup_offset_y.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	dup_row2.add_child(dup_offset_y)
-	dup_offset_z = SpinBox.new()
-	dup_offset_z.min_value = -1000
-	dup_offset_z.max_value = 1000
-	dup_offset_z.value = 0
-	dup_offset_z.step = 1
-	dup_offset_z.tooltip_text = "Z offset per copy"
-	dup_offset_z.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	dup_row2.add_child(dup_offset_z)
-
-	var dup_btns = HBoxContainer.new()
-	sc.add_child(dup_btns)
-	var create_dup_btn = Button.new()
-	create_dup_btn.text = "Create Array"
-	create_dup_btn.tooltip_text = "Create duplicate array from selected brushes"
-	create_dup_btn.pressed.connect(_on_create_duplicate_array)
-	dup_btns.add_child(create_dup_btn)
-	var remove_dup_btn = Button.new()
-	remove_dup_btn.text = "Remove Array"
-	remove_dup_btn.tooltip_text = "Remove duplicate array for selected brushes"
-	remove_dup_btn.pressed.connect(_on_remove_duplicate_array)
-	dup_btns.add_child(remove_dup_btn)
+	var builder = SelectionToolsBuilder.new(self)
+	builder.build(brush_vbox)
 
 
 func _ready():
@@ -2142,6 +1494,18 @@ func _ready():
 		tool_extrude_down.tooltip_text = "Extrude Down (J)\nClick face + drag to extrude downward"
 		toolbar.add_child(tool_extrude_down)
 
+		var vert_sep = VSeparator.new()
+		toolbar.add_child(vert_sep)
+
+		tool_vertex = Button.new()
+		tool_vertex.toggle_mode = true
+		tool_vertex.flat = true
+		tool_vertex.focus_mode = Control.FOCUS_NONE
+		tool_vertex.text = "V"
+		tool_vertex.tooltip_text = "Vertex Edit (V)\nSelect and drag brush vertices"
+		tool_vertex.toggled.connect(_on_vertex_tool_toggled)
+		toolbar.add_child(tool_vertex)
+
 	# --- Shortcuts help button ---
 	if toolbar:
 		var help_sep = VSeparator.new()
@@ -2169,73 +1533,9 @@ func _ready():
 	_populate_blend_slots()
 	_bind_terrain_slot_controls()
 
-	# --- Connect signals (paint tab) ---
+	# --- Connect signals (brush tab — non-builder) ---
 	if shape_select:
 		shape_select.item_selected.connect(_on_shape_selected)
-	if paint_layer_select:
-		paint_layer_select.item_selected.connect(_on_paint_layer_selected)
-	if paint_layer_add:
-		paint_layer_add.pressed.connect(_on_paint_layer_add)
-	if paint_layer_remove:
-		paint_layer_remove.pressed.connect(_on_paint_layer_remove)
-	if heightmap_import:
-		heightmap_import.pressed.connect(_on_heightmap_import)
-	if heightmap_generate:
-		heightmap_generate.pressed.connect(_on_heightmap_generate)
-	if height_scale_spin:
-		height_scale_spin.value_changed.connect(_on_height_scale_changed)
-	if layer_y_spin:
-		layer_y_spin.value_changed.connect(_on_layer_y_changed)
-	if blend_strength_spin:
-		blend_strength_spin.value_changed.connect(_on_blend_strength_changed)
-	if region_enable:
-		region_enable.toggled.connect(_on_region_enable_toggled)
-	if region_size_spin:
-		region_size_spin.value_changed.connect(_on_region_size_changed)
-	if region_radius_spin:
-		region_radius_spin.value_changed.connect(_on_region_radius_changed)
-	if region_memory_spin:
-		region_memory_spin.value_changed.connect(_on_region_memory_changed)
-	if region_grid_toggle:
-		region_grid_toggle.toggled.connect(_on_region_grid_toggled)
-	if blend_slot_select:
-		blend_slot_select.item_selected.connect(_on_blend_slot_selected)
-	for i in range(terrain_slot_buttons.size()):
-		var button = terrain_slot_buttons[i]
-		if button:
-			button.pressed.connect(_on_terrain_slot_pressed.bind(i))
-	for i in range(terrain_slot_scales.size()):
-		var spin = terrain_slot_scales[i]
-		if spin:
-			spin.value_changed.connect(_on_terrain_slot_scale_changed.bind(i))
-	if heightmap_import_dialog:
-		heightmap_import_dialog.file_selected.connect(_on_heightmap_import_selected)
-	if terrain_slot_texture_dialog:
-		terrain_slot_texture_dialog.file_selected.connect(_on_terrain_slot_texture_selected)
-	if materials_list:
-		materials_list.item_selected.connect(_on_material_selected)
-	if material_add:
-		material_add.pressed.connect(_on_material_add)
-	if material_remove:
-		material_remove.pressed.connect(_on_material_remove)
-	if material_load_prototypes:
-		material_load_prototypes.pressed.connect(_on_material_load_prototypes)
-	if material_assign:
-		material_assign.pressed.connect(_on_material_assign)
-	if face_clear:
-		face_clear.pressed.connect(_on_face_clear)
-	if uv_reset:
-		uv_reset.pressed.connect(_on_uv_reset)
-	if uv_editor:
-		uv_editor.uv_changed.connect(_on_uv_changed)
-	if surface_paint_layer_select:
-		surface_paint_layer_select.item_selected.connect(_on_surface_paint_layer_selected)
-	if surface_paint_layer_add:
-		surface_paint_layer_add.pressed.connect(_on_surface_paint_layer_add)
-	if surface_paint_layer_remove:
-		surface_paint_layer_remove.pressed.connect(_on_surface_paint_layer_remove)
-	if surface_paint_texture:
-		surface_paint_texture.pressed.connect(_on_surface_paint_texture)
 
 	# --- Snap buttons ---
 	snap_button_group = ButtonGroup.new()
@@ -2258,88 +1558,16 @@ func _ready():
 	# --- Snap mode buttons (Grid / Vertex / Center) ---
 	_build_snap_mode_buttons()
 
-	# --- Connect signals (brush tab + manage tab) ---
+	# --- Connect builder signals ---
+	PaintTabBuilder.new(self).connect_signals()
+	ManageTabBuilder.new(self).connect_signals()
+	SelectionToolsBuilder.new(self).connect_signals()
+	EntityTabBuilder.new(self).connect_signals()
+
+	# --- Connect signals (brush tab — non-builder) ---
 	grid_snap.value_changed.connect(_on_grid_snap_value_changed)
-	if show_hud:
-		show_hud.toggled.connect(_on_show_hud_toggled)
-	if show_grid:
-		show_grid.toggled.connect(_on_show_grid_toggled)
-	if follow_grid:
-		follow_grid.toggled.connect(_on_follow_grid_toggled)
-	if debug_logs:
-		debug_logs.toggled.connect(_on_debug_logs_toggled)
-	if bake_btn:
-		bake_btn.pressed.connect(_on_bake)
-	if bake_dry_run_btn:
-		bake_dry_run_btn.pressed.connect(_on_bake_dry_run)
-	if validate_btn:
-		validate_btn.pressed.connect(_on_validate_level)
-	if validate_fix_btn:
-		validate_fix_btn.pressed.connect(_on_validate_fix)
-	if clear_btn:
-		clear_btn.pressed.connect(_on_clear)
-	if save_hflevel_btn:
-		save_hflevel_btn.pressed.connect(_on_save_hflevel)
-	if load_hflevel_btn:
-		load_hflevel_btn.pressed.connect(_on_load_hflevel)
-	if import_map_btn:
-		import_map_btn.pressed.connect(_on_import_map)
-	if export_map_btn:
-		export_map_btn.pressed.connect(_on_export_map)
-	if export_glb_btn:
-		export_glb_btn.pressed.connect(_on_export_glb)
-	if autosave_path_btn:
-		autosave_path_btn.pressed.connect(_on_set_autosave_path)
-	if export_settings_btn:
-		export_settings_btn.pressed.connect(_on_export_settings)
-	if import_settings_btn:
-		import_settings_btn.pressed.connect(_on_import_settings)
-	if floor_btn:
-		floor_btn.pressed.connect(_on_floor)
-	if apply_cuts_btn:
-		apply_cuts_btn.pressed.connect(_on_apply_cuts)
-	if clear_cuts_btn:
-		clear_cuts_btn.pressed.connect(_on_clear_cuts)
-	if commit_cuts_btn:
-		commit_cuts_btn.pressed.connect(_on_commit_cuts)
-	if restore_cuts_btn:
-		restore_cuts_btn.pressed.connect(_on_restore_cuts)
-	if hollow_btn:
-		hollow_btn.pressed.connect(_on_hollow)
-	if move_floor_btn:
-		move_floor_btn.pressed.connect(_on_move_to_floor)
-	if move_ceiling_btn:
-		move_ceiling_btn.pressed.connect(_on_move_to_ceiling)
-	if tie_entity_btn:
-		tie_entity_btn.pressed.connect(_on_tie_entity)
-	if untie_entity_btn:
-		untie_entity_btn.pressed.connect(_on_untie_entity)
-	if justify_fit_btn:
-		justify_fit_btn.pressed.connect(_on_justify.bind("fit"))
-	if justify_center_btn:
-		justify_center_btn.pressed.connect(_on_justify.bind("center"))
-	if justify_left_btn:
-		justify_left_btn.pressed.connect(_on_justify.bind("left"))
-	if justify_right_btn:
-		justify_right_btn.pressed.connect(_on_justify.bind("right"))
-	if justify_top_btn:
-		justify_top_btn.pressed.connect(_on_justify.bind("top"))
-	if justify_bottom_btn:
-		justify_bottom_btn.pressed.connect(_on_justify.bind("bottom"))
-	if clip_btn:
-		clip_btn.pressed.connect(_on_clip)
-	if io_add_btn:
-		io_add_btn.pressed.connect(_on_io_add)
-	if io_remove_btn:
-		io_remove_btn.pressed.connect(_on_io_remove)
 	if create_entity_btn:
 		create_entity_btn.pressed.connect(_on_create_entity)
-	if undo_btn:
-		undo_btn.pressed.connect(_on_history_undo)
-	if redo_btn:
-		redo_btn.pressed.connect(_on_history_redo)
-	if save_preset_btn:
-		save_preset_btn.pressed.connect(_on_save_preset)
 	if quick_play_btn:
 		quick_play_btn.pressed.connect(_on_quick_play)
 	if preset_menu:
@@ -2357,10 +1585,6 @@ func _ready():
 		material_dialog.filters = PackedStringArray(["*.tres ; Material", "*.material ; Material"])
 		material_dialog.file_selected.connect(_on_material_file_selected)
 	_setup_storage_dialogs()
-	if bake_lightmap_uv2:
-		bake_lightmap_uv2.toggled.connect(_on_bake_lightmap_uv2_toggled)
-	if bake_navmesh:
-		bake_navmesh.toggled.connect(_on_bake_navmesh_toggled)
 	if collision_layer_opt:
 		collision_layer_opt.clear()
 		collision_layer_opt.add_item("Static World (Layer 1)", 1)
@@ -2525,7 +1749,7 @@ func _on_shortcuts_help() -> void:
 	label.scroll_active = true
 
 	var sections := {
-		"Tools": ["tool_draw", "tool_select", "tool_extrude_up", "tool_extrude_down"],
+		"Tools": ["tool_draw", "tool_select", "tool_extrude_up", "tool_extrude_down", "vertex_edit"],
 		"Editing":
 		[
 			"delete",
@@ -2879,6 +2103,63 @@ func _build_snap_mode_buttons() -> void:
 	row.add_child(snap_center_btn)
 	parent.add_child(row)
 	parent.move_child(row, idx)
+	# Axis Lock row
+	var axis_row = HBoxContainer.new()
+	var axis_lbl = Label.new()
+	axis_lbl.text = "Axis:"
+	axis_lbl.custom_minimum_size.x = 70
+	axis_row.add_child(axis_lbl)
+	_axis_lock_x = Button.new()
+	_axis_lock_x.text = "X"
+	_axis_lock_x.tooltip_text = "Lock to X axis"
+	_axis_lock_x.toggle_mode = true
+	_axis_lock_x.custom_minimum_size.x = 32
+	_axis_lock_x.add_theme_color_override("font_pressed_color", Color(1.0, 0.3, 0.3))
+	_axis_lock_x.toggled.connect(_on_axis_lock_toggled.bind(1))
+	axis_row.add_child(_axis_lock_x)
+	_axis_lock_y = Button.new()
+	_axis_lock_y.text = "Y"
+	_axis_lock_y.tooltip_text = "Lock to Y axis"
+	_axis_lock_y.toggle_mode = true
+	_axis_lock_y.custom_minimum_size.x = 32
+	_axis_lock_y.add_theme_color_override("font_pressed_color", Color(0.3, 1.0, 0.3))
+	_axis_lock_y.toggled.connect(_on_axis_lock_toggled.bind(2))
+	axis_row.add_child(_axis_lock_y)
+	_axis_lock_z = Button.new()
+	_axis_lock_z.text = "Z"
+	_axis_lock_z.tooltip_text = "Lock to Z axis"
+	_axis_lock_z.toggle_mode = true
+	_axis_lock_z.custom_minimum_size.x = 32
+	_axis_lock_z.add_theme_color_override("font_pressed_color", Color(0.3, 0.5, 1.0))
+	_axis_lock_z.toggled.connect(_on_axis_lock_toggled.bind(3))
+	axis_row.add_child(_axis_lock_z)
+	parent.add_child(axis_row)
+	parent.move_child(axis_row, idx + 1)
+
+
+func _on_axis_lock_toggled(pressed: bool, axis: int) -> void:
+	if not level_root:
+		return
+	if pressed:
+		# Unpress the other two buttons
+		if axis != 1 and _axis_lock_x:
+			_axis_lock_x.set_pressed_no_signal(false)
+		if axis != 2 and _axis_lock_y:
+			_axis_lock_y.set_pressed_no_signal(false)
+		if axis != 3 and _axis_lock_z:
+			_axis_lock_z.set_pressed_no_signal(false)
+		level_root.set_axis_lock(axis, true)
+	else:
+		level_root.set_axis_lock(0, false)
+
+
+func update_axis_lock_buttons(axis: int) -> void:
+	if _axis_lock_x:
+		_axis_lock_x.set_pressed_no_signal(axis == 1)
+	if _axis_lock_y:
+		_axis_lock_y.set_pressed_no_signal(axis == 2)
+	if _axis_lock_z:
+		_axis_lock_z.set_pressed_no_signal(axis == 3)
 
 
 func _on_snap_mode_toggled(pressed: bool, mode: int) -> void:
@@ -2949,6 +2230,21 @@ func _on_show_grid_toggled(pressed: bool) -> void:
 	if level_root and _root_has_property("grid_visible"):
 		level_root.set("grid_visible", pressed)
 	_log("Grid visible: %s" % ("on" if pressed else "off"))
+
+
+func _on_show_io_lines_toggled(pressed: bool) -> void:
+	if level_root and level_root.io_visualizer:
+		level_root.io_visualizer.set_enabled(pressed)
+
+
+func _on_vertex_tool_toggled(pressed: bool) -> void:
+	vertex_mode_toggled.emit(pressed)
+
+
+## Called by plugin to sync vertex button state.
+func set_vertex_mode(enabled: bool) -> void:
+	if tool_vertex:
+		tool_vertex.set_pressed_no_signal(enabled)
 
 
 func _on_debug_logs_toggled(pressed: bool) -> void:
@@ -3888,6 +3184,33 @@ func _on_paint_layer_add() -> void:
 	_refresh_paint_layers()
 
 
+func _on_paint_layer_rename() -> void:
+	if not level_root or not paint_layer_select:
+		return
+	var idx = paint_layer_select.selected
+	if idx < 0:
+		return
+	var current_name = paint_layer_select.get_item_text(idx)
+	# Create inline rename dialog
+	var dialog = AcceptDialog.new()
+	dialog.title = "Rename Layer"
+	var line_edit = LineEdit.new()
+	line_edit.text = current_name
+	line_edit.select_all()
+	dialog.add_child(line_edit)
+	dialog.confirmed.connect(func():
+		var new_name = line_edit.text.strip_edges()
+		if new_name != "" and new_name != current_name:
+			level_root.rename_paint_layer(idx, new_name)
+			_refresh_paint_layers()
+	)
+	dialog.canceled.connect(func(): dialog.queue_free())
+	dialog.confirmed.connect(func(): dialog.queue_free(), CONNECT_DEFERRED)
+	add_child(dialog)
+	dialog.popup_centered(Vector2i(300, 80))
+	line_edit.grab_focus()
+
+
 func _on_paint_layer_remove() -> void:
 	if not level_root:
 		return
@@ -3910,6 +3233,37 @@ func _on_heightmap_generate() -> void:
 	if not level_root:
 		return
 	level_root.generate_heightmap_noise()
+
+
+func _on_sculpt_tool_toggled(pressed: bool, tool_id: int) -> void:
+	if not level_root or not level_root.paint_tool:
+		return
+	# Unpress other sculpt buttons (radio behavior)
+	var btns = [_sculpt_raise_btn, _sculpt_lower_btn, _sculpt_smooth_btn, _sculpt_flatten_btn]
+	var ids = [HFStroke.Tool.SCULPT_RAISE, HFStroke.Tool.SCULPT_LOWER, HFStroke.Tool.SCULPT_SMOOTH, HFStroke.Tool.SCULPT_FLATTEN]
+	if pressed:
+		for i in range(btns.size()):
+			if ids[i] != tool_id and btns[i]:
+				btns[i].set_pressed_no_signal(false)
+		level_root.paint_tool.tool = tool_id
+	else:
+		# If unpressing active sculpt, revert to PAINT
+		level_root.paint_tool.tool = HFStroke.Tool.PAINT
+
+
+func _on_sculpt_strength_changed(value: float) -> void:
+	if level_root and level_root.paint_tool:
+		level_root.paint_tool.sculpt_strength = value
+
+
+func _on_sculpt_radius_changed(value: float) -> void:
+	if level_root and level_root.paint_tool:
+		level_root.paint_tool.sculpt_radius = value
+
+
+func _on_sculpt_falloff_changed(value: float) -> void:
+	if level_root and level_root.paint_tool:
+		level_root.paint_tool.sculpt_falloff = value
 
 
 func _on_height_scale_changed(value: float) -> void:

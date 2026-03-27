@@ -1,6 +1,6 @@
 # HammerForge Floor Paint Greyboxing
 
-Last updated: February 25, 2026
+Last updated: March 27, 2026
 
 This document describes the floor paint system: grid storage, tools, geometry synthesis, heightmap integration, reconciliation, and persistence. Surface paint (per-face splat layers) is documented separately and does not use the grid system.
 
@@ -50,6 +50,12 @@ HFStroke
 - Line: Bresenham line.
 - Bucket: flood fill (contiguous region).
 - Blend: paint material blend weights on already-filled cells (does not fill new cells).
+- Sculpt Raise: raises heightmap terrain under the cursor (requires layer with heightmap).
+- Sculpt Lower: lowers heightmap terrain under the cursor.
+- Sculpt Smooth: averages terrain to reduce jaggedness (3x3 kernel).
+- Sculpt Flatten: captures reference height on first click, lerps terrain toward it.
+
+Sculpt tools operate directly on heightmap Image pixels (not cell bits). Configurable: strength (0.1–10.0), radius (1–50 cells), falloff (0.0–1.0 Gaussian curve). Available in dock Paint tab → Heightmap section.
 
 Brush Shape
 - **Square**: fills every cell in the [-r, r] range (full box).

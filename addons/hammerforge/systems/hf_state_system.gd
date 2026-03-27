@@ -431,6 +431,7 @@ func capture_paint_layers(include_chunks: bool = true) -> Array:
 		var grid = layer.grid
 		var entry: Dictionary = {
 			"id": str(layer.layer_id),
+			"display_name": layer.display_name,
 			"chunk_size": layer.chunk_size,
 			"grid":
 			{

@@ -1,6 +1,6 @@
 # HammerForge User Guide
 
-Last updated: March 26, 2026
+Last updated: March 27, 2026
 
 This guide covers the current HammerForge workflow in Godot 4.6: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs.
 
@@ -52,11 +52,12 @@ The compact toolbar shows icon + text labels (Draw, Select, Add, Sub, Paint, Ext
   - Move to Floor (Ctrl+Shift+F) / Ceiling (Ctrl+Shift+C).
   - Tie/Untie brush entity class (populated from entity definitions).
   - Clip Selected (Shift+X). Shows actionable error toast if split position is invalid.
+  - Carve (Ctrl+Shift+R): boolean-subtract from intersecting brushes.
   - Duplicate Array: count, X/Y/Z offset, Create/Remove Array buttons.
 
 ### Paint tab (collapsible sections)
-- **Floor Paint**: Brush, Erase, Rect, Line, Bucket, Blend tools. Brush shape (Square/Circle), radius, and layer picker.
-- **Heightmap**: Import PNG/EXR or Generate procedural noise. Height Scale and Layer Y spinboxes.
+- **Floor Paint**: Brush, Erase, Rect, Line, Bucket, Blend tools. Brush shape (Square/Circle), radius, and layer picker. Rename button ("R") for custom layer display names.
+- **Heightmap**: Import PNG/EXR or Generate procedural noise. Height Scale and Layer Y spinboxes. **Sculpt tools**: Raise, Lower, Smooth, Flatten buttons with strength/radius/falloff spinboxes for interactive terrain editing.
 - **Blend & Terrain**: Blend Strength, Blend Slot (B/C/D), and Terrain Slot A-D texture pickers with UV scales.
 - **Regions**: Region Streaming enable, Region Size, Stream Radius, Show Region Grid, memory stats.
 - **Materials**: Palette with Add/Remove/Load Prototypes. Face Select Mode toggle. Assign to Selected Faces. The **Load Prototypes** button batch-loads 150 built-in SVG textures (15 patterns x 10 colors) for quick greyboxing.
@@ -67,7 +68,7 @@ The compact toolbar shows icon + text labels (Draw, Select, Add, Sub, Paint, Ext
 - Create DraftEntity button.
 - Entity palette with drag-and-drop placement.
 - **Entity Properties** (collapsible): auto-generated typed controls based on entity definition.
-- **Entity I/O** (collapsible): Output, Target, Input, Parameter fields. Delay (seconds) and Fire Once checkbox. Add Output / Remove buttons and connection ItemList. Connections auto-refresh when selecting an entity.
+- **Entity I/O** (collapsible): Output, Target, Input, Parameter fields. Delay (seconds) and Fire Once checkbox. Add Output / Remove buttons and connection ItemList. Connections auto-refresh when selecting an entity. **Show I/O Lines** checkbox to visualize connections in the viewport (green=standard, orange=fire_once, yellow=selected).
 
 ### Manage tab (collapsible sections)
 - **Bake**: Bake button, Dry Run, Validate Level/Fix. Options: Merge Meshes, Generate LODs, Lightmap UV2, Texel Size, Navmesh (cell size, agent height), Use Face Materials, Quick Play.
@@ -194,8 +195,11 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Ungroup | Ctrl+U | Ungroup selection |
 | Hollow | Ctrl+H | Convert brush to hollow room |
 | Clip | Shift+X | Split brush along axis plane |
+| Carve | Ctrl+Shift+R | Boolean-subtract from intersecting brushes |
 | Move to Floor | Ctrl+Shift+F | Snap to nearest surface below |
 | Move to Ceiling | Ctrl+Shift+C | Snap to nearest surface above |
+| Measure | M | Ruler tool (click A, click B, shows distance) |
+| Decal | N | Place decal on surface with live preview |
 | Axis Lock X/Y/Z | X / Y / Z | Constrain to axis |
 | Paint tools | B / E / R / L / K | Bucket / Erase / Ramp / Line / Blend |
 

@@ -38,6 +38,7 @@ static func _default_bindings() -> Dictionary:
 		"ungroup": {"keycode": KEY_U, "ctrl": true},
 		"hollow": {"keycode": KEY_H, "ctrl": true},
 		"clip": {"keycode": KEY_X, "shift": true},
+		"carve": {"keycode": KEY_R, "shift": true, "ctrl": true},
 		"move_to_floor": {"keycode": KEY_F, "ctrl": true, "shift": true},
 		"move_to_ceiling": {"keycode": KEY_C, "ctrl": true, "shift": true},
 		# Paint tools
@@ -46,6 +47,8 @@ static func _default_bindings() -> Dictionary:
 		"paint_ramp": {"keycode": KEY_R},
 		"paint_line": {"keycode": KEY_L},
 		"paint_blend": {"keycode": KEY_K},
+		# Vertex editing
+		"vertex_edit": {"keycode": KEY_V},
 		# Axis lock
 		"axis_x": {"keycode": KEY_X},
 		"axis_y": {"keycode": KEY_Y},

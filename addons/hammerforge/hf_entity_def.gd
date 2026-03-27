@@ -59,10 +59,12 @@ static func load_definitions(path: String) -> Array[HFEntityDef]:
 		return _built_in_defaults()
 	var file = FileAccess.open(path, FileAccess.READ)
 	if not file:
+		push_warning("HammerForge: cannot open entity definitions at '%s' — using built-in defaults" % path)
 		return _built_in_defaults()
 	var text = file.get_as_text()
 	var data = JSON.parse_string(text)
 	if data == null:
+		push_error("HammerForge: failed to parse entities JSON at '%s' — check for syntax errors. Using built-in defaults" % path)
 		return _built_in_defaults()
 	var entries: Array = []
 	if data is Dictionary:
@@ -76,10 +78,21 @@ static func load_definitions(path: String) -> Array[HFEntityDef]:
 					entries.append(record)
 	elif data is Array:
 		entries = data
+	var skipped := 0
 	for entry in entries:
 		if entry is Dictionary:
+			var classname = str(entry.get("id", entry.get("class", entry.get("classname", ""))))
+			if classname == "":
+				skipped += 1
+				push_warning("HammerForge: skipping entity definition with no classname in '%s'" % path)
+				continue
 			defs.append(HFEntityDef.from_dict(entry))
+		else:
+			skipped += 1
+	if skipped > 0:
+		push_warning("HammerForge: skipped %d malformed entries in '%s'" % [skipped, path])
 	if defs.is_empty():
+		push_warning("HammerForge: no valid entity definitions found in '%s' — using built-in defaults" % path)
 		return _built_in_defaults()
 	return defs
 

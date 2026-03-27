@@ -1,6 +1,6 @@
 # HammerForge Spec
 
-Last updated: March 26, 2026
+Last updated: March 27, 2026
 
 This document describes HammerForge's architecture and data flow.
 
@@ -76,6 +76,8 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `hf_file_system.gd` | `HFFileSystem` | .hflevel save/load, .map import/export, glTF export, threaded I/O, autosave failure reporting |
 | `hf_validation_system.gd` | `HFValidationSystem` | Validation, dependency checks, auto-fix helpers |
 | `hf_visgroup_system.gd` | `HFVisgroupSystem` | Visgroups (visibility groups), brush/entity grouping |
+| `hf_carve_system.gd` | `HFCarveSystem` | Boolean-subtract carve (progressive-remainder box slicing) |
+| `hf_io_visualizer.gd` | `HFIOVisualizer` | Entity I/O connection lines in viewport (ImmediateMesh) |
 
 ### Other Modules
 
@@ -83,6 +85,8 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 - `addons/hammerforge/highlight.gdshader`: selection highlight shader (wireframe, unshaded, alpha)
 - `addons/hammerforge/hf_prototype_textures.gd`: `HFPrototypeTextures` -- 150 built-in SVG textures (15 patterns x 10 colors) with static catalog API
 - `addons/hammerforge/textures/prototypes/`: embedded SVG texture library for greyboxing
+- `addons/hammerforge/hf_measure_tool.gd`: `HFMeasureTool` -- measurement/ruler tool (tool_id=100, click A→B, distance + dX/dY/dZ)
+- `addons/hammerforge/hf_decal_tool.gd`: `HFDecalTool` -- decal placement tool (tool_id=101, raycast + surface-normal Decal nodes)
 - `addons/hammerforge/paint/*`: floor paint grid, layers, tools, inference, geometry synthesis, reconciliation, heightmap integration
 - `addons/hammerforge/paint/hf_region_manager.gd`: region streaming helpers (region bounds, radius, index)
 - `addons/hammerforge/hflevel_io.gd`: variant encoding/decoding for .hflevel format
@@ -167,6 +171,7 @@ LevelRoot (Node3D)
 - **Hollow** (Ctrl+H): converts a solid brush into 6 wall brushes with configurable thickness.
 - **Clip** (Shift+X): splits a brush along an axis-aligned plane into two new brushes. Preserves material, brush entity class, visgroups, and group ID.
 - **Move to Floor/Ceiling** (Ctrl+Shift+F/C): raycasts against other brush AABBs to snap selection vertically.
+- **Carve** (Ctrl+Shift+R): boolean-subtract one brush from all intersecting brushes. `HFCarveSystem` uses progressive-remainder algorithm to produce up to 6 box slices per target. Preserves material, operation, visgroups, group_id, brush_entity_class.
 - **Numeric input**: type exact dimensions during drag or extrude (Enter applies, Backspace edits).
 - **UV Justify**: fit/center/left/right/top/bottom alignment modes for selected faces.
 - Bake builds a temporary CSG tree from DraftBrushes + CommittedCuts and outputs BakedGeometry. If cordon is enabled, only brushes intersecting the cordon AABB are included. Brush entity classes `func_detail` and `trigger_*` are excluded from structural bake.
@@ -183,7 +188,7 @@ Entity types and brush entity classes are data-driven via `HFEntityDef` (`hf_ent
 - `HFEntityDef.load_definitions(path)` returns `Array[HFEntityDef]`.
 - `filter_brush_entities()` / `filter_point_entities()` for filtering by type.
 - Dock brush entity class dropdown is populated from definitions, not hardcoded.
-- **Planned: Declarative property forms** — the `properties` array on each definition will support typed entries (e.g., `{name, type, default, label}`) that auto-generate dock controls when an entity is selected. Inspired by QuArK's `:form` system where `Typ` fields determine UI widgets. This would let users define custom entity types with editable properties entirely through JSON.
+- **Declarative property forms**: the `properties` array on each definition supports typed entries (`{name, type, default, label}`) that auto-generate dock controls (LineEdit, SpinBox, CheckBox, OptionButton, ColorPickerButton, Vector3 spinboxes) when an entity is selected. Changes write to `entity.entity_data` and sync the Inspector. Inspired by QuArK's `:form` system.
 
 ## Gesture Tracker
 
@@ -210,6 +215,7 @@ Data
 
 Tools
 - Brush, Erase, Rect, Line, Bucket, Blend (enum `HFStroke.Tool`, values 0-5).
+- Sculpt Raise, Sculpt Lower, Sculpt Smooth, Sculpt Flatten (values 6-9) — operate directly on heightmap Image pixels with configurable strength, radius, and falloff.
 - Blend tool writes per-cell blend weights to slots B/C/D on already-filled cells.
 
 Brush Shape
@@ -258,6 +264,7 @@ Foliage Populator
 - `find_entities_by_name()` searches both `entities_node` and `draft_brushes_node` for target resolution.
 - I/O connections are serialized with entity info in `.hflevel` saves and undo/redo state via `capture_entity_info()` / `restore_entity_from_info()`.
 - Dock UI: collapsible "Entity I/O" section in Entities tab with fields for Output, Target, Input, Parameter, Delay, Fire Once. Add/Remove buttons and connection ItemList. Auto-refreshes on entity selection change.
+- **Viewport visualization**: `HFIOVisualizer` draws ImmediateMesh lines between connected entities. Color-coded: green=standard, orange=fire_once, yellow=selected entity connections. Throttled refresh (10 frames). "Show I/O Lines" checkbox in Entities tab.
 
 ### Brush Entity Classes
 - Brushes can be tagged with a `brush_entity_class` meta: `func_detail`, `func_wall`, `trigger_once`, `trigger_multiple`.
@@ -334,7 +341,7 @@ The dock uses 4 tabs with collapsible sections for visual hierarchy:
 | **Manage** | Bake, Actions (floor/cuts/clear), File, Presets, History, Settings, Performance, plus Visgroups & Cordon (inserted programmatically) |
 
 - **Brush tab** includes contextual **Selection Tools** section (hollow, clip, move, tie, duplicator) visible when brushes are selected.
-- Tab contents built programmatically in `_build_paint_tab()`, `_build_manage_tab()`, and `_build_selection_tools_section()` using `HFCollapsibleSection`.
+- Tab contents built by dedicated builder classes: `PaintTabBuilder`, `EntityTabBuilder`, `ManageTabBuilder`, `SelectionToolsBuilder` (in `ui/`). Each is RefCounted with `build()` and `connect_signals()` methods. Dock delegates to builders, reducing `dock.gd` by ~35%.
 - Collapsible sections have HSeparator, 4px indented content, and persisted collapsed state. All 18 sections tracked in `_all_sections` dict.
 - "No LevelRoot" banner and autosave warning defined in dock.tscn.
 - Compact toolbar: single-char labels (D, S, +, -, P, ▲, ▼) with descriptive tooltips. VSeparator before extrude buttons.
@@ -420,7 +427,13 @@ Unit tests use the [GUT](https://github.com/bitwes/Gut) framework and run headle
 | `test_user_prefs.gd` | 9 | Default values, get/set prefs, section collapse state, recent files (add/dedup/max 10), JSON roundtrip |
 | `test_dirty_tags.gd` | 11 | Brush dirty tags, paint chunk tags, full reconcile flag, consume-clears, signal batch queue/flush/discard/nesting |
 | `test_prototype_textures.gd` | 27 | Catalog constants, path generation, texture existence, material persistence (resource_path), batch loading into MaterialManager |
+| `test_op_result.gd` | 15 | HFOpResult constructors, hollow/clip/delete return values, fail emits user_message, fix_hint population |
+| `test_snap_system.gd` | 12 | Grid/Vertex/Center snap modes, threshold, exclude list, priority, empty scene fallback |
+| `test_drag_dimensions.gd` | 8 | get_drag_dimensions() in all modes, format_dimensions() whole/fractional/zero |
+| `test_reference_cleanup.gd` | 9 | Delete cleans group/visgroup membership, entity I/O cleanup_dangling_connections |
+| `test_bake_system.gd` | 18 | build_bake_options, structural/trigger brush filtering, chunk_coord, bake_dry_run, warn_bake_failure |
+| `test_integration.gd` | 22 | End-to-end: brush lifecycle, paint + heightmap, entity workflow, visgroup cross-system, snap, bake, I/O cleanup, info round-trip |
 
-Total: **371 tests** across **23 files**.
+Total: **512 tests** across **30 files**.
 
 Tests use root shim scripts (dynamically created GDScript) to provide the LevelRoot interface without circular preload dependencies. Configuration in `.gutconfig.json`.

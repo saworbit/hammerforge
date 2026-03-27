@@ -45,6 +45,7 @@ func handle_paint_input(
 	if not Engine.is_editor_hint():
 		return false
 	if not root.paint_tool or not root.paint_layers:
+		push_warning("HammerForge: paint input ignored — paint system not initialized")
 		return false
 	_sync_region_manager()
 	var layer = root.paint_layers.get_active_layer()
@@ -74,8 +75,15 @@ func get_paint_layer_names() -> Array:
 		return names
 	for layer in root.paint_layers.layers:
 		if layer:
-			names.append(str(layer.layer_id))
+			var label = layer.display_name if layer.display_name != "" else str(layer.layer_id)
+			names.append(label)
 	return names
+
+
+func rename_paint_layer(index: int, new_name: String) -> void:
+	if not root.paint_layers:
+		return
+	root.paint_layers.rename_layer(index, new_name)
 
 
 func set_region_streaming_enabled(value: bool) -> void:
@@ -324,8 +332,10 @@ func face_key(brush: DraftBrush) -> String:
 
 func regenerate_paint_layers() -> void:
 	if not root.paint_tool or not root.paint_layers:
+		push_warning("HammerForge: cannot regenerate paint — paint system not initialized")
 		return
 	if not root.paint_tool.geometry or not root.paint_tool.reconciler:
+		push_warning("HammerForge: cannot regenerate paint — geometry synth or reconciler missing")
 		return
 	root._clear_generated()
 	for layer in root.paint_layers.layers:
@@ -376,6 +386,7 @@ func restore_paint_layers(data: Array, active_index: int) -> void:
 			else root.grid_plane_origin.y
 		)
 		var layer = root.paint_layers.create_layer(layer_id, layer_y)
+		layer.display_name = str(entry.get("display_name", ""))
 		layer.chunk_size = chunk_size
 		if grid_data is Dictionary and layer.grid:
 			layer.grid.cell_size = float(grid_data.get("cell_size", layer.grid.cell_size))
@@ -476,11 +487,16 @@ func _rebuild_loaded_regions_from_layers() -> void:
 func import_heightmap(path: String) -> void:
 	var layer = root.paint_layers.get_active_layer() if root.paint_layers else null
 	if not layer:
+		push_warning("HammerForge: cannot import heightmap — no active paint layer")
+		root.user_message.emit("Import failed — no active paint layer", 1)
 		return
 	var img := HFHeightmapIO.load_from_file(path)
 	if img:
 		layer.heightmap = img
 		regenerate_paint_layers()
+	else:
+		push_warning("HammerForge: failed to load heightmap from '%s'" % path)
+		root.user_message.emit("Failed to load heightmap from '%s'" % path, 2)
 
 
 func generate_heightmap_noise(settings: Dictionary = {}) -> void:

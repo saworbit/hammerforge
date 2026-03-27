@@ -5,6 +5,51 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Usability & Feature Upgrade (Mar 2026):**
+  - **Bake failure toast notifications**: `warn_bake_failure()` now emits contextual error messages
+    via `user_message` signal (e.g. "No draft brushes found", "You have N pending cuts — try
+    'Commit Cuts' before baking", "CSG produced no geometry — check brush operations"). Null baker
+    guard also toasts.
+  - **Silent failure logging in paint system**: ~20 guard clauses across `hf_paint_system.gd`,
+    `hf_paint_tool.gd` now emit `push_warning()` for internal logging and `user_message` for
+    user-facing failures (heightmap import failure, paint input ignored, bucket fill limit hit).
+  - **Entity definition load error reporting**: `hf_entity_def.gd` now emits `push_error()` on JSON
+    parse failure, `push_warning()` for malformed entries and fallback to built-in defaults.
+  - **Paint layer rename**: new `display_name` field on `HFPaintLayer` with `rename_layer()` on
+    `HFPaintLayerManager`. Dock shows "R" rename button with dialog. Display names serialize in
+    `.hflevel` and fall back to layer ID when empty. Backward compatible.
+  - **Axis lock visual indicator**: dock shows X/Y/Z toggle buttons with color-coded pressed states
+    (red=X, green=Y, blue=Z). Bidirectional sync with keyboard axis lock via
+    `set_pressed_no_signal()`.
+  - **Entity I/O viewport visualization**: `HFIOVisualizer` (`systems/hf_io_visualizer.gd`) draws
+    ImmediateMesh lines between connected entities. Color-coded: green=standard, orange=fire_once,
+    yellow=selected entity connections. Throttled refresh (10 frames). Toggle in Entities tab.
+  - **Measurement/ruler tool**: `HFMeasureTool` (`hf_measure_tool.gd`) extends `HFEditorTool`
+    (tool_id=100, M key). Click point A → click point B → persistent line + Label3D with distance
+    and dX/dY/dZ decomposition. Grid-snapped. Escape clears.
+  - **Terrain sculpting brushes**: 4 new stroke tools — SCULPT_RAISE, SCULPT_LOWER, SCULPT_SMOOTH,
+    SCULPT_FLATTEN (HFStroke.Tool values 6-9). Operates directly on heightmap Image pixels with
+    configurable strength, radius, and falloff curve. Dock shows 4 toggle buttons + 3 spinboxes.
+    Flatten captures height on first click and lerps toward it.
+  - **Dock decomposition into tab builders**: extracted ~2,000 lines from `dock.gd` into 4 builder
+    files: `ui/paint_tab_builder.gd`, `ui/entity_tab_builder.gd`, `ui/manage_tab_builder.gd`,
+    `ui/selection_tools_builder.gd`. Each is RefCounted, receives dock reference, has `build()` and
+    `connect_signals()` methods. `dock.gd` reduced by ~35%.
+  - **Baker test coverage**: new `tests/test_bake_system.gd` with 18 tests covering
+    `build_bake_options()`, `_is_structural_brush()`, `_is_trigger_brush()`, `count_brushes_in()`,
+    `chunk_coord()`, `bake_dry_run()`, `warn_bake_failure()`, and structural filtering.
+  - **Carve tool**: `HFCarveSystem` (`systems/hf_carve_system.gd`) — boolean-subtract one brush from
+    all intersecting brushes. Progressive-remainder algorithm produces up to 6 box slices per target.
+    Preserves material, operation, visgroups, group_id, brush_entity_class. Ctrl+Shift+R shortcut.
+    Undo/redo via `HFUndoHelper`.
+  - **Decal/overlay system**: `HFDecalTool` (`hf_decal_tool.gd`) extends `HFEditorTool`
+    (tool_id=101, N key). Raycast placement of Godot `Decal` nodes oriented to surface normal. Live
+    preview follows cursor. Declarative settings: texture path, size, fade. Tagged with `hf_decal`
+    meta for serialization.
+  - **Integration test suite**: new `tests/test_integration.gd` with 22 end-to-end tests across 8
+    categories: brush lifecycle, paint + heightmap, entity workflow, visgroup cross-system, snap
+    system, bake cross-system, entity I/O cleanup, and brush info round-trip.
+  - **GUT tests**: 99 new tests across 3 files. Total: **512 tests** across **30 files**.
 - **FreeCAD-Inspired Improvements (Mar 2026):**
   - **Operation result reporting** (`hf_op_result.gd`): `HFOpResult` lightweight result class returned
     by `hollow_brush_by_id()`, `clip_brush_by_id()`, and `delete_brush_by_id()`. Carries `ok`, `message`,

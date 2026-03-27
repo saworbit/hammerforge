@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: March 26, 2026
+Last updated: March 27, 2026
 
 This roadmap is a directional plan. Items may change based on user feedback.
 Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md for details.
@@ -99,18 +99,27 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - Reference cleanup on deletion: deleting brushes auto-strips group/visgroup membership and cleans dangling entity I/O connections with toast notification.
 - 44 new tests (op_result, snap_system, drag_dimensions, reference_cleanup). Total: 413 tests across 27 files.
 
-## Next (Wave 2b remaining + Wave 2c)
-- Vertex editing (move individual brush vertices).
-- Entity connection visualization (colored lines between connected entities in viewport).
-- Carve tool (boolean-subtract one brush from all intersecting brushes).
+## Done (Usability & Feature Upgrade)
+- Bake failure toast notifications with contextual error messages.
+- Silent failure logging across paint system (~20 guard clauses now emit warnings).
+- Entity definition load error reporting (JSON parse, malformed entries, fallback).
+- Paint layer rename UI (display_name field, "R" button, dialog, serialized in .hflevel).
+- Axis lock visual indicator (color-coded X/Y/Z toggle buttons in dock, bidirectional sync).
+- Entity I/O viewport visualization (colored ImmediateMesh lines, green/orange/yellow, throttled).
+- Measurement/ruler tool (HFMeasureTool, tool_id=100, M key, distance + dX/dY/dZ decomposition).
+- Terrain sculpting brushes (Raise/Lower/Smooth/Flatten, configurable strength/radius/falloff).
+- Dock decomposition into 4 tab builder files (paint, entity, manage, selection tools).
+- Baker test coverage (18 tests covering all public methods and structural filtering).
+- Carve tool (HFCarveSystem, progressive-remainder box slicing, Ctrl+Shift+R).
+- Decal/overlay system (HFDecalTool, tool_id=101, N key, raycast placement, live preview).
+- Integration test suite (22 end-to-end tests across 8 categories).
+- 99 new tests. Total: **512 tests across 30 files**.
 
-## Later (Wave 2c -- Terrain & Workflow, full)
-- Interactive terrain sculpting (viewport brush: raise/lower/smooth/noise on heightmaps).
-- Decals and overlay tools.
+## Next (Wave 2c remaining)
+- Vertex editing (move individual brush vertices with convexity enforcement).
 - Path tool (click-to-place path_corner/path_track chains for NPC routes, cameras).
 - Displacement sewing (stitch adjacent heightmap edges to share vertices).
 - Material atlasing for large scenes.
-- Measurement tools (ruler, dimension display on selected brushes, distance between brushes).
 
 ## Future (Wave 3 -- Polish)
 - Polygon tool (draw arbitrary convex shapes by clicking vertices, extrude to brush).

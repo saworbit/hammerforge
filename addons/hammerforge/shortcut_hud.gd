@@ -49,6 +49,10 @@ func _build_shortcuts_text(ctx: Dictionary) -> String:
 	if tool_id == 1:
 		return text + _select_mode_shortcuts()
 
+	# mode 5 = VERTEX_EDIT
+	if mode == 5:
+		return text + _vertex_edit_shortcuts()
+
 	if tool_id == 2 or tool_id == 3:
 		var dir_label := "Up" if tool_id == 2 else "Down"
 		# mode 4 = EXTRUDE (from HFInputState)
@@ -141,6 +145,17 @@ func _surface_paint_shortcuts() -> String:
 	lines.append("-- Surface Paint --")
 	lines.append("Click + Drag: Paint Surface")
 	lines.append("Radius/Strength in SurfacePaint tab")
+	return "\n".join(lines)
+
+
+func _vertex_edit_shortcuts() -> String:
+	var lines := PackedStringArray()
+	lines.append("-- Vertex Edit --")
+	lines.append("Click: Select vertex")
+	lines.append("Shift+Click: Multi-select")
+	lines.append("Drag: Move selected")
+	lines.append("X / Y / Z: Lock axis")
+	lines.append("Esc: Deselect / V: Exit")
 	return "\n".join(lines)
 
 

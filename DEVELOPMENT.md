@@ -1,6 +1,6 @@
 ﻿# Development Guide
 
-Last updated: March 26, 2026
+Last updated: March 27, 2026
 
 This document covers local setup, codebase structure, and how to test features.
 
@@ -34,6 +34,8 @@ addons/hammerforge/
   hf_duplicator.gd       Duplicator / instanced geometry (source brushes + progressive offset)
   hf_editor_tool.gd      Plugin API: base class for custom editor tools (+ poll, declarative settings)
   hf_tool_registry.gd    Plugin API: tool registration, dispatch, external tool loader
+  hf_measure_tool.gd     Measurement/ruler tool (click A → click B → distance + decomposition)
+  hf_decal_tool.gd       Decal placement tool (raycast + surface-normal aligned Decal nodes)
   hf_keymap.gd           Customizable keyboard shortcuts (JSON load/save, action matching)
   hf_user_prefs.gd       Cross-session user preferences (user://hammerforge_prefs.json)
   hf_snap_system.gd      Centralized snap (Grid/Vertex/Center modes, threshold-based candidates)
@@ -56,6 +58,10 @@ addons/hammerforge/
     collapsible_section.gd HFCollapsibleSection: toggle-header VBoxContainer for dock sections
     hf_toast.gd            Toast notification system (auto-fading stacked messages)
     hf_welcome_panel.gd    First-run welcome panel (5-step quick-start guide)
+    paint_tab_builder.gd   Builds Paint tab sections + signal connections
+    entity_tab_builder.gd  Builds Entity Properties + Entity I/O sections
+    manage_tab_builder.gd  Builds Manage tab sections (Bake, File, Settings, etc.)
+    selection_tools_builder.gd  Builds Selection Tools section (hollow, clip, move, tie, duplicator)
 
   systems/               Subsystem classes (RefCounted)
     hf_grid_system.gd      Editor grid management
@@ -68,6 +74,8 @@ addons/hammerforge/
     hf_file_system.gd      .hflevel/.map/.glTF I/O, threaded writes, autosave failure reporting
     hf_validation_system.gd Validation and dependency checks
     hf_visgroup_system.gd  Visgroups (visibility groups) + brush/entity grouping
+    hf_carve_system.gd     Boolean-subtract carve (progressive-remainder box slicing)
+    hf_io_visualizer.gd    Entity I/O connection lines in viewport (ImmediateMesh)
 
   paint/                 Floor paint subsystem
     hf_paint_grid.gd       Grid storage
@@ -80,7 +88,7 @@ addons/hammerforge/
     hf_heightmap_io.gd     Heightmap load/generate/serialize (base64 PNG, FastNoiseLite)
     hf_reconciler.gd       Stable-ID reconciliation (floors, walls, heightmap floors)
     hf_generated_model.gd  Data model (FloorRect, WallSeg, HeightmapFloor)
-    hf_stroke.gd           Stroke types (brush/erase/rect/line/bucket/blend)
+    hf_stroke.gd           Stroke types (brush/erase/rect/line/bucket/blend/sculpt_raise/lower/smooth/flatten)
     hf_connector_tool.gd   Ramp/stair mesh generation between layers
     hf_foliage_populator.gd MultiMeshInstance3D procedural scatter (height/slope filtering)
     hf_blend.gdshader      Two-material blend shader (UV2 blend map, default colors, cell grid overlay)
@@ -129,7 +137,7 @@ addons/hammerforge/
 The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on push and PR to `main`:
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
-- **GUT unit tests** -- 432+ tests across 27 test files (runs Godot headless)
+- **GUT unit + integration tests** -- 512 tests across 30 test files (runs Godot headless)
 
 Run locally before pushing:
 ```
@@ -171,6 +179,8 @@ Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framewor
 | `test_snap_system.gd` | 12 | Grid/Vertex/Center snap modes, threshold, exclude list, priority (closer geometry beats grid), empty scene fallback |
 | `test_drag_dimensions.gd` | 8 | get_drag_dimensions() in all modes, format_dimensions() whole/fractional/zero |
 | `test_reference_cleanup.gd` | 9 | Delete cleans group/visgroup membership, entity I/O cleanup_dangling_connections, preserves unrelated, no-crash on clean node |
+| `test_bake_system.gd` | 18 | build_bake_options, _is_structural_brush, _is_trigger_brush, count_brushes_in, chunk_coord, bake_dry_run, warn_bake_failure, structural filtering |
+| `test_integration.gd` | 22 | End-to-end: brush lifecycle, paint + heightmap, entity workflow, visgroup cross-system, snap, bake cross-system, entity I/O cleanup, brush info round-trip |
 
 Run all tests:
 ```
@@ -267,6 +277,43 @@ Reference Cleanup
 - Place a brush, add it to a group (Ctrl+G), then delete it. Confirm the group is automatically cleaned up.
 - Place a brush, add it to a visgroup in the Manage tab, then delete the brush. Confirm the visgroup no longer lists the deleted brush.
 - Create two entities with an I/O connection between them. Delete the target entity. Confirm a toast reports the removed connection count.
+
+Carve Tool
+- Place 2 overlapping brushes. Select the smaller one and press Ctrl+Shift+R. Confirm the larger brush is split into box slices around the carved volume.
+- Confirm the carving brush is removed after carve.
+- Confirm carved pieces preserve material, visgroups, group_id, and brush_entity_class.
+- Undo the carve and confirm original brushes are restored.
+
+Measurement Tool
+- Press M to activate the measure tool. Click point A, then click point B. Confirm a line and Label3D appear showing total distance and dX/dY/dZ.
+- Confirm measurement snaps to grid.
+- Press Escape to clear the measurement.
+
+Decal Tool
+- Press N to activate the decal tool. Move mouse over a brush surface and confirm a semi-transparent preview decal follows the cursor.
+- Click to place the decal. Confirm a Decal node is added as a child of LevelRoot.
+- Confirm the decal is oriented to match the surface normal.
+- Press Escape to exit decal mode and confirm preview is cleaned up.
+
+Entity I/O Visualization
+- Create two entities with an I/O connection. Enable "Show I/O Lines" in the Entities tab. Confirm colored lines appear between connected entities in the viewport.
+- Select one entity and confirm its connections highlight in yellow.
+- Disable "Show I/O Lines" and confirm lines disappear.
+
+Terrain Sculpting
+- On a paint layer with a heightmap, select Sculpt Raise in the Paint tab. Click and drag on the terrain. Confirm terrain raises under the cursor.
+- Switch to Sculpt Lower and confirm terrain lowers.
+- Switch to Sculpt Smooth and confirm jagged terrain smooths out.
+- Switch to Sculpt Flatten, click (captures reference height), then drag. Confirm terrain levels to that height.
+- Adjust strength, radius, and falloff spinboxes and confirm they affect sculpt behavior.
+
+Paint Layer Rename
+- In the Paint tab, select a layer and click the "R" rename button. Enter a new name. Confirm the layer list shows the new display name.
+- Save and reload the .hflevel. Confirm the display name persists.
+
+Axis Lock Visual
+- Press X/Y/Z to toggle axis locks. Confirm the dock axis lock buttons (X/Y/Z) update their pressed state and color (red/green/blue).
+- Click the dock axis lock buttons and confirm keyboard state matches.
 
 Brush workflow
 - Draw an Add brush and confirm resize handles work.

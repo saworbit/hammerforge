@@ -974,6 +974,11 @@ func hollow_brush_by_id(brush_id: String, wall_thickness: float) -> HFOpResult:
 		for info in infos:
 			info["material"] = mat
 
+	# Capture metadata to copy to walls
+	var src_visgroups = draft.get_meta("visgroups", PackedStringArray())
+	var src_group_id = draft.get_meta("group_id", "")
+	var src_bec = draft.get_meta("brush_entity_class", "")
+
 	# Delete original brush
 	delete_brush(brush)
 
@@ -982,6 +987,12 @@ func hollow_brush_by_id(brush_id: String, wall_thickness: float) -> HFOpResult:
 	for info in infos:
 		var wall = create_brush_from_info(info)
 		if wall:
+			if src_visgroups.size() > 0:
+				wall.set_meta("visgroups", src_visgroups.duplicate())
+			if src_group_id != "":
+				wall.set_meta("group_id", src_group_id)
+			if src_bec != "":
+				wall.set_meta("brush_entity_class", src_bec)
 			count += 1
 
 	root._log("Hollow: created %d walls (thickness %.1f)" % [count, t])

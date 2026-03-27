@@ -35,6 +35,9 @@ const HFFileSystemType = preload("systems/hf_file_system.gd")
 const HFValidationSystemType = preload("systems/hf_validation_system.gd")
 const HFVisgroupSystemType = preload("systems/hf_visgroup_system.gd")
 const HFSnapSystemType = preload("hf_snap_system.gd")
+const HFIOVisualizerType = preload("systems/hf_io_visualizer.gd")
+const HFVertexSystemType = preload("systems/hf_vertex_system.gd")
+const HFCarveSystemType = preload("systems/hf_carve_system.gd")
 const HFPrototypeTextures = preload("hf_prototype_textures.gd")
 
 const RELOAD_LOCK_PATH := "res://.hammerforge/reload.lock"
@@ -197,6 +200,9 @@ var validation_system: HFValidationSystemType
 var visgroup_system: HFVisgroupSystemType
 var snap_system: HFSnapSystemType
 var extrude_tool: HFExtrudeToolType
+var io_visualizer: HFIOVisualizerType
+var vertex_system: HFVertexSystemType
+var carve_system: HFCarveSystemType
 
 # ---------------------------------------------------------------------------
 # Dirty-tag system for selective reconciliation
@@ -466,6 +472,9 @@ func _ready():
 	visgroup_system = HFVisgroupSystemType.new(self)
 	snap_system = HFSnapSystemType.new(self)
 	extrude_tool = HFExtrudeToolType.new(self)
+	io_visualizer = HFIOVisualizerType.new(self)
+	vertex_system = HFVertexSystemType.new(self)
+	carve_system = HFCarveSystemType.new(self)
 	entity_system.load_entity_definitions()
 	grid_system.setup_editor_grid()
 	if Engine.is_editor_hint():
@@ -487,6 +496,8 @@ func _process(_delta: float) -> void:
 	var write_error := file_system.process_thread_queue()
 	if write_error != "":
 		autosave_failed.emit(write_error)
+	if io_visualizer:
+		io_visualizer.process()
 
 
 # ===========================================================================
@@ -926,6 +937,10 @@ func clip_brush_by_id(brush_id: String, axis: int, split_pos: float) -> HFOpResu
 	return brush_system.clip_brush_by_id(brush_id, axis, split_pos)
 
 
+func carve_with_brush(brush_id: String) -> HFOpResult:
+	return carve_system.carve_with_brush(brush_id)
+
+
 func clip_brush_at_point(brush_id: String, face_idx: int, hit_position: Vector3) -> void:
 	brush_system.clip_brush_at_point(brush_id, face_idx, hit_position)
 
@@ -1218,9 +1233,22 @@ func add_paint_layer() -> void:
 	paint_layer_changed.emit(paint_system.get_active_paint_layer_index())
 
 
+func rename_paint_layer(index: int, new_name: String) -> void:
+	paint_system.rename_paint_layer(index, new_name)
+	paint_layer_changed.emit(paint_system.get_active_paint_layer_index())
+
+
 func remove_active_paint_layer() -> void:
 	paint_system.remove_active_paint_layer()
 	paint_layer_changed.emit(paint_system.get_active_paint_layer_index())
+
+
+## Apply serialized face data to brushes (used by vertex edit undo/redo).
+func _apply_vertex_faces(face_map: Dictionary) -> void:
+	for brush_id in face_map:
+		var brush = brush_system.find_brush_by_id(brush_id)
+		if brush and brush.has_method("apply_serialized_faces"):
+			brush.apply_serialized_faces(face_map[brush_id])
 
 
 func handle_surface_paint_input(

@@ -13,8 +13,8 @@
   <img src="https://img.shields.io/badge/Godot-4.6%2B-478cbf?logo=godot-engine&logoColor=white" alt="Godot 4.6+">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
   <img src="https://img.shields.io/badge/Status-Alpha-orange" alt="Alpha">
-  <img src="https://img.shields.io/badge/Tests-432%2B%20passing-brightgreen" alt="432+ tests passing">
-  <img src="https://img.shields.io/badge/GDScript-21k%2B%20lines-blueviolet" alt="21k+ lines">
+  <img src="https://img.shields.io/badge/Tests-512%20passing-brightgreen" alt="512 tests passing">
+  <img src="https://img.shields.io/badge/GDScript-23k%2B%20lines-blueviolet" alt="23k+ lines">
 </p>
 
 ---
@@ -36,7 +36,7 @@ HammerForge is a single `addons/` folder. No external tools, no custom builds, n
 
 | | |
 |---|---|
-| **Modular subsystem architecture** | **432+ unit tests** with CI on every push |
+| **Modular subsystem architecture** | **512 unit + integration tests** with CI on every push |
 | **15 brush shapes** (box through dodecahedron) | **150 built-in prototype textures** for instant greyboxing |
 | **Quake `.map`** + **glTF `.glb`** export | **.hflevel** native format with threaded I/O |
 | **Customizable keymaps** (JSON) | **Plugin API** for custom tools |
@@ -53,6 +53,7 @@ Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Su
 - **Extrude Up/Down** (U / J) -- click any face and drag to extend
 - **Hollow** (Ctrl+H) -- convert a solid brush to a room with configurable wall thickness
 - **Clip** (Shift+X) -- split a brush along an axis-aligned plane
+- **Carve** (Ctrl+Shift+R) -- boolean-subtract one brush from all intersecting brushes
 - **Numeric input** -- type exact dimensions during any drag or extrude
 - **Resize gizmo** with full undo/redo
 
@@ -73,6 +74,7 @@ Closest candidate within threshold wins. Modes combine freely. **Texture Lock** 
 Grid-based paint layers with chunked storage for large worlds:
 
 - **Tools:** Brush (B), Erase (E), Rect (R), Line (L), Bucket (K), Blend
+- **Sculpting:** Raise, Lower, Smooth, Flatten brushes for interactive terrain editing with configurable strength, radius, and falloff
 - **Shapes:** Square, Circle with adjustable radius
 - **Heightmaps:** import PNG/EXR or generate procedural noise -- per-vertex displacement via SurfaceTool
 - **Material blending:** four-slot shader with per-cell blend weights painted directly on the grid
@@ -93,6 +95,7 @@ Grid-based paint layers with chunked storage for large worlds:
 
 - **Data-driven entity types** from `entities.json` (point entities, brush entities like func_detail, func_wall, trigger volumes)
 - **Source-style I/O connections** -- wire output events to target inputs with parameter, delay, and fire-once options
+- **I/O viewport visualization** -- colored lines between connected entities (green=standard, orange=fire_once, yellow=selected)
 - **Declarative property forms** -- dock auto-generates typed controls (string, int, float, bool, enum, color, vector3) from entity definitions
 - **Drag-and-drop placement** from the entity palette
 - **Color-coded overlays** -- cyan for func_detail, orange for triggers
@@ -104,6 +107,7 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Cordon** -- restrict bake to an AABB region with yellow wireframe; skip everything outside
 - **Reference cleanup** -- deleting brushes auto-cleans group/visgroup membership and warns about dangling entity I/O connections
 - **Duplicator** -- create N copies of a brush with progressive offset
+- **Decal placement** (N key) -- raycast decals onto brush surfaces with live preview
 
 ### Bake and Export
 
@@ -162,8 +166,12 @@ plugin.gd            EditorPlugin — input routing, toolbar, viewport overlay
        ├─ HFFileSystem      Threaded .hflevel / .map / .glb I/O
        ├─ HFGridSystem      Grid rendering and follow mode
        ├─ HFVisgroupSystem  Named visibility groups + brush grouping
+       ├─ HFCarveSystem     Boolean-subtract carve (progressive-remainder slicing)
+       ├─ HFIOVisualizer    Entity I/O connection lines in viewport
        ├─ HFSnapSystem      Grid / Vertex / Center snap with threshold
        └─ HFToolRegistry    External tool loading and dispatch
+            ├─ HFMeasureTool   Ruler/distance measurement (tool_id=100)
+            └─ HFDecalTool     Decal placement with live preview (tool_id=101)
 ```
 
 Key design choices:
@@ -219,14 +227,16 @@ All shortcuts are rebindable via `user://hammerforge_keymap.json`.
 | J | Extrude Down | | L | Line (paint) |
 | Ctrl+H | Hollow | | K | Bucket (paint) |
 | Shift+X | Clip | | Ctrl+G | Group selection |
-| Ctrl+Shift+F | Move to Floor | | Ctrl+U | Ungroup |
-| Ctrl+Shift+C | Move to Ceiling | | ? | Shortcuts popup |
+| Ctrl+Shift+R | Carve | | Ctrl+U | Ungroup |
+| Ctrl+Shift+F | Move to Floor | | M | Measure tool |
+| Ctrl+Shift+C | Move to Ceiling | | N | Decal tool |
+| X / Y / Z | Axis lock | | ? | Shortcuts popup |
 
 ---
 
 ## Testing
 
-432+ tests across 27 files using the [GUT](https://github.com/bitwes/Gut) framework. All checks run on every push via GitHub Actions.
+512 tests across 30 files using the [GUT](https://github.com/bitwes/Gut) framework, including unit tests and end-to-end integration tests. All checks run on every push via GitHub Actions.
 
 ```bash
 # Run all tests headless
@@ -270,14 +280,14 @@ See [ROADMAP.md](ROADMAP.md) for the full plan.
 
 **Next up:**
 - Vertex editing (move individual brush vertices)
-- Entity connection visualization (colored lines in viewport)
-- Carve tool (boolean-subtract from intersecting brushes)
+- Polygon tool (click vertices, extrude to brush)
+- Path tool (click-to-place path_corner/path_track chains)
 
 **Later:**
-- Interactive terrain sculpting (raise/lower/smooth/noise brushes)
-- Polygon tool (click vertices, extrude to brush)
+- Displacement sewing (stitch adjacent heightmap edges)
 - Bezier patch editing
 - Snap-to-edge and snap-to-perpendicular modes
+- Material atlasing for large scenes
 
 ---
 
@@ -316,5 +326,5 @@ Run `godot --headless --import --path .` first, then re-run the test command.
 
 <p align="center">
   <strong>MIT License</strong><br>
-  <sub>Built for Godot 4.6+ | Last updated March 2026</sub>
+  <sub>Built for Godot 4.6+ | Last updated March 27, 2026</sub>
 </p>

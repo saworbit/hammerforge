@@ -30,6 +30,8 @@ Thanks for helping improve HammerForge.
 - **Operations that can fail** (hollow, clip, delete) should return `HFOpResult`. Use `_op_fail(msg, hint)` in brush_system to emit `user_message` and return a fail result in one call. Include an actionable `fix_hint` string so users know how to resolve the issue.
 - **Snapping** goes through `HFSnapSystem` (on `level_root.snap_system`). New snap modes should be added as bitmask flags in `SnapMode` enum and collected in `_collect_candidates()`.
 - **Deletion cleanup** is handled automatically by `_cleanup_brush_references()` in brush_system. If you add new cross-reference types (beyond groups, visgroups, entity I/O), add cleanup logic there.
+- **Dock tab builders**: New UI sections should be added to the appropriate builder file (`ui/paint_tab_builder.gd`, `ui/entity_tab_builder.gd`, `ui/manage_tab_builder.gd`, `ui/selection_tools_builder.gd`) rather than directly in `dock.gd`. Each builder has `build()` (creates controls) and `connect_signals()` (wires them up).
+- **Registered tools** (HFEditorTool subclasses) get automatic dock settings UI via `get_settings_schema()`, keyboard dispatch via `handle_keyboard()`, and poll-based button state via `can_activate()`. Register in plugin.gd via `_tool_registry.register_tool()`.
 - Avoid adding new dependencies unless necessary.
 
 ## Running Checks Locally
