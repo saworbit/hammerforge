@@ -36,17 +36,13 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 	var carver_draft := carver as DraftBrush
 	var carver_pos: Vector3 = carver_draft.global_position
 	var carver_size: Vector3 = carver_draft.size
-	var carver_aabb := AABB(
-		carver_pos - carver_size * 0.5,
-		carver_size
-	)
+	var carver_aabb := AABB(carver_pos - carver_size * 0.5, carver_size)
 
 	# Find all overlapping brushes (excluding the carver itself)
 	var targets: Array = _find_overlapping_brushes(brush_id, carver_aabb)
 	if targets.is_empty():
 		return _op_fail(
-			"Carve: no overlapping brushes found",
-			"Move the carver so it overlaps other brushes"
+			"Carve: no overlapping brushes found", "Move the carver so it overlaps other brushes"
 		)
 
 	var total_pieces := 0
@@ -59,21 +55,24 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 			target_id = str(target_draft.get_meta("brush_id"))
 		var target_pos: Vector3 = target_draft.global_position
 		var target_size: Vector3 = target_draft.size
-		var target_aabb := AABB(
-			target_pos - target_size * 0.5,
-			target_size
-		)
+		var target_aabb := AABB(target_pos - target_size * 0.5, target_size)
 
 		# Compute intersection — skip if ANY axis has zero/negligible overlap
 		# (face/edge contact only, not a volumetric intersection)
 		var inter := target_aabb.intersection(carver_aabb)
-		if inter.size.x <= min_thickness or inter.size.y <= min_thickness or inter.size.z <= min_thickness:
+		if (
+			inter.size.x <= min_thickness
+			or inter.size.y <= min_thickness
+			or inter.size.z <= min_thickness
+		):
 			continue
 
 		# Gather metadata from target to copy to pieces
 		var target_mat = target_draft.material_override
 		var target_operation: int = target_draft.operation
-		var target_visgroups: PackedStringArray = target_draft.get_meta("visgroups", PackedStringArray())
+		var target_visgroups: PackedStringArray = target_draft.get_meta(
+			"visgroups", PackedStringArray()
+		)
 		var target_group_id: String = str(target_draft.get_meta("group_id", ""))
 		var target_bec: String = str(target_draft.get_meta("brush_entity_class", ""))
 
@@ -120,8 +119,7 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 ## computed by progressive remainder — each successive slice uses the space
 ## remaining after the previous axis was consumed.
 func _compute_slices(
-	target_pos: Vector3, target_size: Vector3,
-	carver_pos: Vector3, carver_size: Vector3
+	target_pos: Vector3, target_size: Vector3, carver_pos: Vector3, carver_size: Vector3
 ) -> Array:
 	# Target bounds
 	var t_min := target_pos - target_size * 0.5
@@ -144,18 +142,22 @@ func _compute_slices(
 	# Left slice (X-): full Y and Z extent of target, from t_min.x to c_min.x
 	var left_w := c_min.x - t_min.x
 	if left_w > min_thickness:
-		slices.append(_make_slice(
-			Vector3(left_w, target_size.y, target_size.z),
-			Vector3(t_min.x + left_w * 0.5, target_pos.y, target_pos.z)
-		))
+		slices.append(
+			_make_slice(
+				Vector3(left_w, target_size.y, target_size.z),
+				Vector3(t_min.x + left_w * 0.5, target_pos.y, target_pos.z)
+			)
+		)
 
 	# Right slice (X+): full Y and Z extent, from c_max.x to t_max.x
 	var right_w := t_max.x - c_max.x
 	if right_w > min_thickness:
-		slices.append(_make_slice(
-			Vector3(right_w, target_size.y, target_size.z),
-			Vector3(c_max.x + right_w * 0.5, target_pos.y, target_pos.z)
-		))
+		slices.append(
+			_make_slice(
+				Vector3(right_w, target_size.y, target_size.z),
+				Vector3(c_max.x + right_w * 0.5, target_pos.y, target_pos.z)
+			)
+		)
 
 	# Remaining X span for Y and Z slices
 	var mid_x_min := c_min.x
@@ -166,18 +168,22 @@ func _compute_slices(
 	# Bottom slice (Y-): uses middle X span, full Z extent
 	var bottom_h := c_min.y - t_min.y
 	if bottom_h > min_thickness and mid_x_size > min_thickness:
-		slices.append(_make_slice(
-			Vector3(mid_x_size, bottom_h, target_size.z),
-			Vector3(mid_x_center, t_min.y + bottom_h * 0.5, target_pos.z)
-		))
+		slices.append(
+			_make_slice(
+				Vector3(mid_x_size, bottom_h, target_size.z),
+				Vector3(mid_x_center, t_min.y + bottom_h * 0.5, target_pos.z)
+			)
+		)
 
 	# Top slice (Y+): uses middle X span, full Z extent
 	var top_h := t_max.y - c_max.y
 	if top_h > min_thickness and mid_x_size > min_thickness:
-		slices.append(_make_slice(
-			Vector3(mid_x_size, top_h, target_size.z),
-			Vector3(mid_x_center, c_max.y + top_h * 0.5, target_pos.z)
-		))
+		slices.append(
+			_make_slice(
+				Vector3(mid_x_size, top_h, target_size.z),
+				Vector3(mid_x_center, c_max.y + top_h * 0.5, target_pos.z)
+			)
+		)
 
 	# Remaining Y span for Z slices
 	var mid_y_min := c_min.y
@@ -188,18 +194,22 @@ func _compute_slices(
 	# Back slice (Z-): uses middle X and Y span
 	var back_d := c_min.z - t_min.z
 	if back_d > min_thickness and mid_x_size > min_thickness and mid_y_size > min_thickness:
-		slices.append(_make_slice(
-			Vector3(mid_x_size, mid_y_size, back_d),
-			Vector3(mid_x_center, mid_y_center, t_min.z + back_d * 0.5)
-		))
+		slices.append(
+			_make_slice(
+				Vector3(mid_x_size, mid_y_size, back_d),
+				Vector3(mid_x_center, mid_y_center, t_min.z + back_d * 0.5)
+			)
+		)
 
 	# Front slice (Z+): uses middle X and Y span
 	var front_d := t_max.z - c_max.z
 	if front_d > min_thickness and mid_x_size > min_thickness and mid_y_size > min_thickness:
-		slices.append(_make_slice(
-			Vector3(mid_x_size, mid_y_size, front_d),
-			Vector3(mid_x_center, mid_y_center, c_max.z + front_d * 0.5)
-		))
+		slices.append(
+			_make_slice(
+				Vector3(mid_x_size, mid_y_size, front_d),
+				Vector3(mid_x_center, mid_y_center, c_max.z + front_d * 0.5)
+			)
+		)
 
 	return slices
 
@@ -227,10 +237,7 @@ func _find_overlapping_brushes(exclude_id: String, aabb: AABB) -> Array:
 			continue
 		var node_pos: Vector3 = draft.global_position
 		var node_size: Vector3 = draft.size
-		var node_aabb := AABB(
-			node_pos - node_size * 0.5,
-			node_size
-		)
+		var node_aabb := AABB(node_pos - node_size * 0.5, node_size)
 		if aabb.intersects(node_aabb):
 			result.append(draft)
 	return result

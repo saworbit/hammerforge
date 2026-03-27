@@ -15,10 +15,10 @@ func build(parent: Control) -> void:
 	if not root_vbox:
 		return
 
-	var HFCollapsibleSection = dock.HFCollapsibleSection
+	var hf_collapsible_section = dock.HFCollapsibleSection
 
 	# --- Floor Paint section ---
-	var floor_sec = HFCollapsibleSection.create("Floor Paint", true)
+	var floor_sec = hf_collapsible_section.create("Floor Paint", true)
 	root_vbox.add_child(floor_sec)
 	dock._register_section(floor_sec, "Floor Paint")
 	var fc = floor_sec.get_content()
@@ -60,7 +60,7 @@ func build(parent: Control) -> void:
 	fc.add_child(dock._make_label_row("Height Scale", dock.height_scale_spin))
 
 	# --- Heightmap section ---
-	var hm_sec = HFCollapsibleSection.create("Heightmap", false)
+	var hm_sec = hf_collapsible_section.create("Heightmap", false)
 	root_vbox.add_child(hm_sec)
 	dock._register_section(hm_sec, "Heightmap")
 	var hmc = hm_sec.get_content()
@@ -110,7 +110,7 @@ func build(parent: Control) -> void:
 	hmc.add_child(dock._make_label_row("Falloff", dock._sculpt_falloff_spin))
 
 	# --- Blend & Terrain section ---
-	var blend_sec = HFCollapsibleSection.create("Blend & Terrain", false)
+	var blend_sec = hf_collapsible_section.create("Blend & Terrain", false)
 	root_vbox.add_child(blend_sec)
 	dock._register_section(blend_sec, "Blend & Terrain")
 	var bc = blend_sec.get_content()
@@ -148,7 +148,7 @@ func build(parent: Control) -> void:
 	dock.terrain_slot_d_scale = slot_scales[3]
 
 	# --- Regions section ---
-	var region_sec = HFCollapsibleSection.create("Regions", false)
+	var region_sec = hf_collapsible_section.create("Regions", false)
 	root_vbox.add_child(region_sec)
 	dock._register_section(region_sec, "Regions")
 	var rc = region_sec.get_content()
@@ -169,7 +169,7 @@ func build(parent: Control) -> void:
 	rc.add_child(dock._make_label_row("Show Region Grid", dock.region_grid_toggle))
 
 	# --- Materials section ---
-	var mat_sec = HFCollapsibleSection.create("Materials", true)
+	var mat_sec = hf_collapsible_section.create("Materials", true)
 	root_vbox.add_child(mat_sec)
 	dock._register_section(mat_sec, "Materials")
 	var mc = mat_sec.get_content()
@@ -213,13 +213,13 @@ func build(parent: Control) -> void:
 	mc.add_child(dock.face_clear)
 
 	# --- UV section ---
-	var uv_sec = HFCollapsibleSection.create("UV Editor", false)
+	var uv_sec = hf_collapsible_section.create("UV Editor", false)
 	root_vbox.add_child(uv_sec)
 	dock._register_section(uv_sec, "UV Editor")
 	var uc = uv_sec.get_content()
 
-	var UVEditorScene = dock.UVEditorScene
-	var uv_instance = UVEditorScene.instantiate()
+	var uv_editor_scene = dock.UVEditorScene
+	var uv_instance = uv_editor_scene.instantiate()
 	dock.uv_editor = uv_instance as UVEditor
 	uc.add_child(uv_instance)
 
@@ -264,7 +264,7 @@ func build(parent: Control) -> void:
 	uc.add_child(dock.justify_treat_as_one)
 
 	# --- Surface Paint section ---
-	var sp_sec = HFCollapsibleSection.create("Surface Paint", false)
+	var sp_sec = hf_collapsible_section.create("Surface Paint", false)
 	root_vbox.add_child(sp_sec)
 	dock._register_section(sp_sec, "Surface Paint")
 	var sc = sp_sec.get_content()
@@ -316,13 +316,21 @@ func connect_signals() -> void:
 	if dock.height_scale_spin:
 		dock.height_scale_spin.value_changed.connect(dock._on_height_scale_changed)
 	if dock._sculpt_raise_btn:
-		dock._sculpt_raise_btn.toggled.connect(dock._on_sculpt_tool_toggled.bind(HFStroke.Tool.SCULPT_RAISE))
+		dock._sculpt_raise_btn.toggled.connect(
+			dock._on_sculpt_tool_toggled.bind(HFStroke.Tool.SCULPT_RAISE)
+		)
 	if dock._sculpt_lower_btn:
-		dock._sculpt_lower_btn.toggled.connect(dock._on_sculpt_tool_toggled.bind(HFStroke.Tool.SCULPT_LOWER))
+		dock._sculpt_lower_btn.toggled.connect(
+			dock._on_sculpt_tool_toggled.bind(HFStroke.Tool.SCULPT_LOWER)
+		)
 	if dock._sculpt_smooth_btn:
-		dock._sculpt_smooth_btn.toggled.connect(dock._on_sculpt_tool_toggled.bind(HFStroke.Tool.SCULPT_SMOOTH))
+		dock._sculpt_smooth_btn.toggled.connect(
+			dock._on_sculpt_tool_toggled.bind(HFStroke.Tool.SCULPT_SMOOTH)
+		)
 	if dock._sculpt_flatten_btn:
-		dock._sculpt_flatten_btn.toggled.connect(dock._on_sculpt_tool_toggled.bind(HFStroke.Tool.SCULPT_FLATTEN))
+		dock._sculpt_flatten_btn.toggled.connect(
+			dock._on_sculpt_tool_toggled.bind(HFStroke.Tool.SCULPT_FLATTEN)
+		)
 	if dock._sculpt_strength_spin:
 		dock._sculpt_strength_spin.value_changed.connect(dock._on_sculpt_strength_changed)
 	if dock._sculpt_radius_spin:
@@ -356,7 +364,9 @@ func connect_signals() -> void:
 	if dock.heightmap_import_dialog:
 		dock.heightmap_import_dialog.file_selected.connect(dock._on_heightmap_import_selected)
 	if dock.terrain_slot_texture_dialog:
-		dock.terrain_slot_texture_dialog.file_selected.connect(dock._on_terrain_slot_texture_selected)
+		dock.terrain_slot_texture_dialog.file_selected.connect(
+			dock._on_terrain_slot_texture_selected
+		)
 	if dock.materials_list:
 		dock.materials_list.item_selected.connect(dock._on_material_selected)
 	if dock.material_add:

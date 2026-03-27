@@ -1749,7 +1749,8 @@ func _on_shortcuts_help() -> void:
 	label.scroll_active = true
 
 	var sections := {
-		"Tools": ["tool_draw", "tool_select", "tool_extrude_up", "tool_extrude_down", "vertex_edit"],
+		"Tools":
+		["tool_draw", "tool_select", "tool_extrude_up", "tool_extrude_down", "vertex_edit"],
 		"Editing":
 		[
 			"delete",
@@ -3198,11 +3199,12 @@ func _on_paint_layer_rename() -> void:
 	line_edit.text = current_name
 	line_edit.select_all()
 	dialog.add_child(line_edit)
-	dialog.confirmed.connect(func():
-		var new_name = line_edit.text.strip_edges()
-		if new_name != "" and new_name != current_name:
-			level_root.rename_paint_layer(idx, new_name)
-			_refresh_paint_layers()
+	dialog.confirmed.connect(
+		func():
+			var new_name = line_edit.text.strip_edges()
+			if new_name != "" and new_name != current_name:
+				level_root.rename_paint_layer(idx, new_name)
+				_refresh_paint_layers()
 	)
 	dialog.canceled.connect(func(): dialog.queue_free())
 	dialog.confirmed.connect(func(): dialog.queue_free(), CONNECT_DEFERRED)
@@ -3240,7 +3242,12 @@ func _on_sculpt_tool_toggled(pressed: bool, tool_id: int) -> void:
 		return
 	# Unpress other sculpt buttons (radio behavior)
 	var btns = [_sculpt_raise_btn, _sculpt_lower_btn, _sculpt_smooth_btn, _sculpt_flatten_btn]
-	var ids = [HFStroke.Tool.SCULPT_RAISE, HFStroke.Tool.SCULPT_LOWER, HFStroke.Tool.SCULPT_SMOOTH, HFStroke.Tool.SCULPT_FLATTEN]
+	var ids = [
+		HFStroke.Tool.SCULPT_RAISE,
+		HFStroke.Tool.SCULPT_LOWER,
+		HFStroke.Tool.SCULPT_SMOOTH,
+		HFStroke.Tool.SCULPT_FLATTEN
+	]
 	if pressed:
 		for i in range(btns.size()):
 			if ids[i] != tool_id and btns[i]:

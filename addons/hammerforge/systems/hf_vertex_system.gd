@@ -84,7 +84,7 @@ func move_vertices(delta: Vector3) -> bool:
 		if brush and not validate_convexity(brush):
 			_restore_face_snapshots()
 			if root and root.has_signal("user_message"):
-				root.emit_signal("user_message","Move rejected: would create non-convex brush", 1)
+				root.emit_signal("user_message", "Move rejected: would create non-convex brush", 1)
 			return false
 	# Rebuild previews
 	for brush_id in selected_vertices:
@@ -261,12 +261,8 @@ func get_all_vertex_world_positions() -> Array:
 		var sel_indices: PackedInt32Array = selected_vertices.get(brush_id, PackedInt32Array())
 		for i in range(verts.size()):
 			var is_sel = sel_indices.has(i)
-			var is_hov = (brush_id == _hovered_brush_id and i == _hovered_vertex_idx)
-			result.append({
-				"pos": xform * verts[i],
-				"selected": is_sel,
-				"hovered": is_hov
-			})
+			var is_hov = brush_id == _hovered_brush_id and i == _hovered_vertex_idx
+			result.append({"pos": xform * verts[i], "selected": is_sel, "hovered": is_hov})
 	return result
 
 
@@ -274,15 +270,23 @@ func get_all_vertex_world_positions() -> Array:
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+
 func _vertex_key(v: Vector3) -> String:
 	# Round to avoid floating point uniqueness issues
-	return "%d,%d,%d" % [snappedi(int(v.x * 1000), 1), snappedi(int(v.y * 1000), 1), snappedi(int(v.z * 1000), 1)]
+	return (
+		"%d,%d,%d"
+		% [snappedi(int(v.x * 1000), 1), snappedi(int(v.y * 1000), 1), snappedi(int(v.z * 1000), 1)]
+	)
 
 
 func _find_brush(brush_id: String) -> Node3D:
 	if not root:
 		return null
-	if root.get("brush_system") and root.brush_system and root.brush_system.has_method("find_brush_by_id"):
+	if (
+		root.get("brush_system")
+		and root.brush_system
+		and root.brush_system.has_method("find_brush_by_id")
+	):
 		return root.brush_system.find_brush_by_id(brush_id)
 	# Fallback: search selection list
 	for b in _selection_brushes:
@@ -301,6 +305,7 @@ func _get_selected_brushes() -> Array:
 
 ## Set by plugin when selection changes so vertex system knows which brushes to show vertices for.
 var _selection_brushes: Array = []
+
 
 func set_selection(brushes: Array) -> void:
 	_selection_brushes = brushes

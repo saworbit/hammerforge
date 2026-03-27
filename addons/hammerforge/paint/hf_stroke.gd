@@ -2,7 +2,18 @@
 class_name HFStroke
 extends RefCounted
 
-enum Tool { PAINT, ERASE, RECT, LINE, BUCKET, BLEND, SCULPT_RAISE, SCULPT_LOWER, SCULPT_SMOOTH, SCULPT_FLATTEN }
+enum Tool {
+	PAINT,
+	ERASE,
+	RECT,
+	LINE,
+	BUCKET,
+	BLEND,
+	SCULPT_RAISE,
+	SCULPT_LOWER,
+	SCULPT_SMOOTH,
+	SCULPT_FLATTEN
+}
 enum BrushShape { CIRCLE, SQUARE }
 
 var tool: int = Tool.PAINT

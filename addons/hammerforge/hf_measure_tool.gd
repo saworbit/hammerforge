@@ -61,11 +61,10 @@ func handle_input(event: InputEvent, camera: Camera3D, mouse_pos: Vector2) -> in
 			_has_point_a = true
 			_update_visuals()
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
-		else:
-			_point_b = hit_pos
-			_has_point_b = true
-			_update_visuals()
-			return EditorPlugin.AFTER_GUI_INPUT_STOP
+		_point_b = hit_pos
+		_has_point_b = true
+		_update_visuals()
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
 
 
@@ -192,7 +191,9 @@ func _update_visuals() -> void:
 	_label_3d.global_position = midpoint
 	var dist = _point_a.distance_to(_point_b)
 	var delta = _point_b - _point_a
-	_label_3d.text = "%.1f\ndX:%.1f dY:%.1f dZ:%.1f" % [dist, abs(delta.x), abs(delta.y), abs(delta.z)]
+	_label_3d.text = (
+		"%.1f\ndX:%.1f dY:%.1f dZ:%.1f" % [dist, abs(delta.x), abs(delta.y), abs(delta.z)]
+	)
 	_label_3d.visible = true
 
 

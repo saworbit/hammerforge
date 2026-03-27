@@ -15,10 +15,10 @@ func build(parent: Control) -> void:
 	if not root_vbox:
 		return
 
-	var HFCollapsibleSection = dock.HFCollapsibleSection
+	var hf_collapsible_section = dock.HFCollapsibleSection
 
 	# --- Bake section ---
-	var bake_sec = HFCollapsibleSection.create("Bake", true)
+	var bake_sec = hf_collapsible_section.create("Bake", true)
 	root_vbox.add_child(bake_sec)
 	dock._register_section(bake_sec, "Bake")
 	var bk = bake_sec.get_content()
@@ -79,7 +79,7 @@ func build(parent: Control) -> void:
 	bk.add_child(dock.bake_navmesh_agent_row)
 
 	# --- Actions section ---
-	var act_sec = HFCollapsibleSection.create("Actions", true)
+	var act_sec = hf_collapsible_section.create("Actions", true)
 	root_vbox.add_child(act_sec)
 	dock._register_section(act_sec, "Actions")
 	var ac = act_sec.get_content()
@@ -103,7 +103,7 @@ func build(parent: Control) -> void:
 	ac.add_child(dock.clear_btn)
 
 	# --- File section ---
-	var file_sec = HFCollapsibleSection.create("File", true)
+	var file_sec = hf_collapsible_section.create("File", true)
 	root_vbox.add_child(file_sec)
 	dock._register_section(file_sec, "File")
 	var flc = file_sec.get_content()
@@ -130,7 +130,7 @@ func build(parent: Control) -> void:
 	flc.add_child(dock.export_glb_btn)
 
 	# --- Presets section ---
-	var preset_sec = HFCollapsibleSection.create("Presets", false)
+	var preset_sec = hf_collapsible_section.create("Presets", false)
 	root_vbox.add_child(preset_sec)
 	dock._register_section(preset_sec, "Presets")
 	var pc = preset_sec.get_content()
@@ -143,7 +143,7 @@ func build(parent: Control) -> void:
 	pc.add_child(dock.preset_grid)
 
 	# --- History section (collapsed by default) ---
-	var hist_sec = HFCollapsibleSection.create("History", false)
+	var hist_sec = hf_collapsible_section.create("History", false)
 	root_vbox.add_child(hist_sec)
 	dock._register_section(hist_sec, "History")
 	var hc = hist_sec.get_content()
@@ -162,7 +162,7 @@ func build(parent: Control) -> void:
 	hc.add_child(dock.history_list)
 
 	# --- Settings section (collapsed by default) ---
-	var set_sec = HFCollapsibleSection.create("Settings", false)
+	var set_sec = hf_collapsible_section.create("Settings", false)
 	root_vbox.add_child(set_sec)
 	dock._register_section(set_sec, "Settings")
 	var stc = set_sec.get_content()
@@ -204,7 +204,7 @@ func build(parent: Control) -> void:
 	stc.add_child(dock.import_settings_btn)
 
 	# --- Performance section (collapsed by default) ---
-	var perf_sec = HFCollapsibleSection.create("Performance", false)
+	var perf_sec = hf_collapsible_section.create("Performance", false)
 	root_vbox.add_child(perf_sec)
 	dock._register_section(perf_sec, "Performance")
 	var pfc = perf_sec.get_content()

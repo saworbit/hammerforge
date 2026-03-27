@@ -749,6 +749,7 @@ func _handle_mouse_motion(
 # Vertex editing mode
 # ---------------------------------------------------------------------------
 
+
 func _toggle_vertex_mode(root: Node) -> void:
 	_vertex_mode = not _vertex_mode
 	if _vertex_mode:
@@ -772,9 +773,7 @@ func _toggle_vertex_mode(root: Node) -> void:
 	_update_hud_context()
 
 
-func _handle_vertex_input(
-	event: InputEvent, root: Node, cam: Camera3D, pos: Vector2
-) -> int:
+func _handle_vertex_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vector2) -> int:
 	var vs = root.vertex_system
 	if not vs:
 		return EditorPlugin.AFTER_GUI_INPUT_PASS
@@ -785,9 +784,8 @@ func _handle_vertex_input(
 			vs.clear_selection()
 			_update_vertex_overlay(root, cam)
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
-		else:
-			_toggle_vertex_mode(root)
-			return EditorPlugin.AFTER_GUI_INPUT_STOP
+		_toggle_vertex_mode(root)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
 
 	# Mouse click — select or begin drag
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
@@ -806,15 +804,14 @@ func _handle_vertex_input(
 			vs.begin_drag(pick.world_pos)
 			_update_vertex_overlay(root, cam)
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
-		else:
-			# Mouse release — end drag
-			if _vertex_drag_active:
-				_vertex_drag_active = false
-				var snapshots = vs.end_drag()
-				if not snapshots.is_empty() and undo_redo_manager:
-					_commit_vertex_move(root, snapshots)
-				_update_vertex_overlay(root, cam)
-				return EditorPlugin.AFTER_GUI_INPUT_STOP
+		# Mouse release — end drag
+		if _vertex_drag_active:
+			_vertex_drag_active = false
+			var snapshots = vs.end_drag()
+			if not snapshots.is_empty() and undo_redo_manager:
+				_commit_vertex_move(root, snapshots)
+			_update_vertex_overlay(root, cam)
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
 
 	# Right click cancels drag
 	if (
@@ -832,7 +829,9 @@ func _handle_vertex_input(
 	if event is InputEventMouseMotion:
 		if _vertex_drag_active and vs.is_dragging():
 			# Project mouse delta to world-space movement
-			var delta = _vertex_screen_to_world_delta(cam, _vertex_drag_start, pos, root, _vertex_drag_ref_y)
+			var delta = _vertex_screen_to_world_delta(
+				cam, _vertex_drag_start, pos, root, _vertex_drag_ref_y
+			)
 			if delta.length() > 0.001:
 				# Snap delta
 				if root.grid_snap > 0.0:
@@ -853,16 +852,14 @@ func _handle_vertex_input(
 				vs.move_vertices(delta)
 			_update_vertex_overlay(root, cam)
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
-		else:
-			vs.update_hover(cam, pos)
-			_update_vertex_overlay(root, cam)
+		vs.update_hover(cam, pos)
+		_update_vertex_overlay(root, cam)
 
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
 
 
 func _vertex_screen_to_world_delta(
-	cam: Camera3D, start_screen: Vector2, end_screen: Vector2, root: Node,
-	ref_y: float = 0.0
+	cam: Camera3D, start_screen: Vector2, end_screen: Vector2, root: Node, ref_y: float = 0.0
 ) -> Vector3:
 	# Project screen movement onto a horizontal plane at the picked vertex's Y
 	# height, so dragging works correctly for elevated geometry and all view angles.

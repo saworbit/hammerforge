@@ -110,6 +110,7 @@ func get_shortcut_hud_lines() -> PackedStringArray:
 # Raycasting
 # ---------------------------------------------------------------------------
 
+
 ## Raycast into the scene and return the hit dictionary (position + normal).
 ## Returns an empty Dictionary on miss.
 func _raycast_surface(camera: Camera3D, mouse_pos: Vector2) -> Dictionary:
@@ -132,6 +133,7 @@ func _raycast_surface(camera: Camera3D, mouse_pos: Vector2) -> Dictionary:
 # ---------------------------------------------------------------------------
 # Decal placement
 # ---------------------------------------------------------------------------
+
 
 func _place_decal(position: Vector3, normal: Vector3) -> void:
 	if not root:
@@ -179,6 +181,7 @@ func _orient_decal(decal: Decal, normal: Vector3) -> void:
 # ---------------------------------------------------------------------------
 # Preview decal (transient, not saved)
 # ---------------------------------------------------------------------------
+
 
 func _update_preview(position: Vector3, normal: Vector3) -> void:
 	if not root:

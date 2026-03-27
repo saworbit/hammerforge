@@ -15,17 +15,17 @@ func build(parent: Control) -> void:
 	if not entities_vbox:
 		return
 
-	var HFCollapsibleSection = dock.HFCollapsibleSection
+	var hf_collapsible_section = dock.HFCollapsibleSection
 
 	# --- Entity Properties section (above I/O) ---
-	var prop_sec = HFCollapsibleSection.create("Entity Properties", true)
+	var prop_sec = hf_collapsible_section.create("Entity Properties", true)
 	entities_vbox.add_child(prop_sec)
 	dock._register_section(prop_sec, "Entity Properties")
 	prop_sec.visible = false
 	dock._entity_props_section = prop_sec
 
 	# --- Entity I/O section ---
-	var io_sec = HFCollapsibleSection.create("Entity I/O", false)
+	var io_sec = hf_collapsible_section.create("Entity I/O", false)
 	entities_vbox.add_child(io_sec)
 	dock._register_section(io_sec, "Entity I/O")
 	var ioc = io_sec.get_content()

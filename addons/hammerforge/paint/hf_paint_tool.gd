@@ -309,7 +309,12 @@ func _bucket_fill(start: Vector2i) -> void:
 		stack.append(cell + Vector2i(0, -1))
 		guard += 1
 		if guard > MAX_BUCKET_FILL_CELLS:
-			push_warning("HammerForge: bucket fill hit cell limit (%d) — area may be unbounded" % MAX_BUCKET_FILL_CELLS)
+			push_warning(
+				(
+					"HammerForge: bucket fill hit cell limit (%d) — area may be unbounded"
+					% MAX_BUCKET_FILL_CELLS
+				)
+			)
 			break
 	_collect_dirty_chunks()
 	_preview_reconcile()

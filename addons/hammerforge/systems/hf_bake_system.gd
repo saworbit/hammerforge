@@ -15,7 +15,7 @@ func _init(level_root: Node3D) -> void:
 func bake(apply_cuts: bool = true, hide_live: bool = false, collision_layer_mask: int = 0) -> void:
 	if not root.baker:
 		push_warning("Bake skipped: baker not initialized")
-		root.emit_signal("user_message","Bake failed — baker not initialized", 2)
+		root.emit_signal("user_message", "Bake failed — baker not initialized", 2)
 		return
 	var started = Time.get_ticks_msec()
 	if apply_cuts:
@@ -87,7 +87,7 @@ func warn_bake_failure() -> void:
 		hint = "You have %d pending cuts — try 'Commit Cuts' before baking" % pending_count
 	else:
 		hint = "CSG produced no geometry — check brush operations and overlaps"
-	root.emit_signal("user_message",hint, 2)
+	root.emit_signal("user_message", hint, 2)
 
 
 func build_bake_options() -> Dictionary:

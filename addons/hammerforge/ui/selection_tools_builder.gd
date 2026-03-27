@@ -15,9 +15,9 @@ func build(parent: Control) -> void:
 	if not brush_vbox:
 		return
 
-	var HFCollapsibleSection = dock.HFCollapsibleSection
+	var hf_collapsible_section = dock.HFCollapsibleSection
 
-	dock._selection_tools_section = HFCollapsibleSection.create("Selection Tools", true)
+	dock._selection_tools_section = hf_collapsible_section.create("Selection Tools", true)
 	dock._selection_tools_section.visible = false
 	brush_vbox.add_child(dock._selection_tools_section)
 	dock._register_section(dock._selection_tools_section, "Selection Tools")
