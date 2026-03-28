@@ -1,6 +1,6 @@
 # HammerForge Texture and Materials
 
-Last updated: March 22, 2026
+Last updated: March 28, 2026
 
 This document describes the per-face material system, UV editing tools, and surface paint workflow.
 
@@ -33,10 +33,11 @@ Materials are Godot resources stored as `.tres` or `.material` files.
 ### Using Prototype Textures (Quick Start)
 For rapid prototyping without creating custom materials:
 1. Open the Paint tab in the dock.
-2. Click **Load Prototypes** in the Materials section.
+2. Click **Refresh Prototypes** in the Materials section.
 3. 150 built-in SVG textures are added to the palette (15 patterns x 10 colors).
-4. Open `docs/prototype_textures_preview.html` in a browser to preview all available textures.
-5. Assign prototype textures to faces using Face Select Mode and Assign to Selected Faces.
+4. Browse textures visually in the **Material Browser** thumbnail grid — filter by pattern, color, or search text.
+5. Click a thumbnail to select it, then click **Assign to Selected Faces** (or right-click → "Apply to Selected Faces").
+6. Alternatively, press **T** to use the **Texture Picker** — click any face to sample its material.
 
 For full details, see [Prototype Textures](HammerForge_Prototype_Textures.md).
 
@@ -47,14 +48,31 @@ For full details, see [Prototype Textures](HammerForge_Prototype_Textures.md).
 
 You can then click `Add` in the Paint tab → Materials section and pick that resource.
 
-## Materials Palette
-The Paint tab → Materials section hosts the palette used by face assignment.
+## Materials Palette & Visual Browser
+The Paint tab → Materials section hosts a **visual material browser** (`HFMaterialBrowser`) that replaces the old text-only list.
 
-Workflow:
-1. Click `Add` to load a material resource.
-2. Enable `Face Select Mode`.
-3. Click faces in the viewport (Select tool).
-4. Click `Assign to Selected Faces`.
+### Visual Browser
+The browser displays a scrollable thumbnail grid (64px cells, 5 columns). Each cell shows the actual texture preview with a short label. Features:
+- **Search bar**: live text filtering by material name.
+- **Pattern filter**: dropdown with 15 patterns + "All".
+- **Color swatches**: 10 clickable color buttons + "All" to filter by color.
+- **View toggle**: Prototypes (only built-in), Palette (all loaded), Favorites (starred only).
+- **Hover preview**: hovering a thumbnail temporarily applies that material to selected faces in the viewport.
+- **Right-click context menu**: Apply to Selected Faces, Apply to Whole Brush, Toggle Favorite, Copy Name.
+- **Status bar**: "X of Y materials" with filter feedback.
+
+### Workflow
+1. Click `Add` to load a material resource, or click `Refresh Prototypes` to load all 150 built-in textures.
+2. Browse the thumbnail grid — use filters and search to narrow down.
+3. Click a thumbnail to select it as the current material.
+4. Enable `Face Select Mode` and click faces in the viewport (Select tool).
+5. Click `Assign to Selected Faces` (or right-click the thumbnail → "Apply to Selected Faces").
+
+### Texture Picker (Eyedropper)
+Press **T** to activate the texture picker. Click any face in the viewport to sample its assigned material — the browser selection updates to match. Useful for "what material is this?" queries and quick material matching.
+
+### Favorites
+Right-click any thumbnail and choose "Toggle Favorite". Switch the view toggle to "Favorites" to see only starred materials. Favorites persist within the editor session.
 
 Notes:
 - Per-face materials override the DraftBrush material for preview and face-material bake.
@@ -119,12 +137,22 @@ Paint weights are stored as embedded PNG bytes (base64) per layer.
 - Face-material bake ignores subtract/pending cuts.
 - Surface paint is per-face and does not share weights across faces.
 - Preview materials are rebuilt per face and can be heavy on very large brush counts.
+- Favorites are stored in the browser instance and do not persist across editor restarts (future: save to user prefs).
+- Hover preview applies to the first surface override material slot only; multi-material faces may not preview accurately.
 
 ## See Also
 - [Prototype Textures](HammerForge_Prototype_Textures.md) -- 150 built-in SVG textures for greyboxing.
 
 ## Suggested Testing
-- Click Load Prototypes and confirm 150 materials appear in the palette.
+- Click Refresh Prototypes and confirm 150 materials appear in the browser grid with thumbnails.
+- Use pattern filter, color swatches, and search bar to narrow the grid. Verify counts in the status label.
+- Switch between Prototypes / Palette / Favorites views.
+- Right-click a thumbnail → Toggle Favorite. Switch to Favorites view and confirm it appears.
+- Hover a thumbnail with faces selected and confirm temporary material preview in viewport.
+- Press T (Texture Picker) and click a face — confirm the browser selection updates.
+- Right-click → Apply to Selected Faces and confirm assignment.
+- Right-click → Apply to Whole Brush and confirm all faces change.
+- Right-click → Copy Name and confirm clipboard contents.
 - Assign different materials to multiple faces and verify preview rebuild.
 - Edit UVs and confirm the preview updates.
 - Paint two layers and confirm blend behavior.

@@ -1,6 +1,6 @@
 # HammerForge Prototype Textures
 
-Last updated: March 24, 2026
+Last updated: March 28, 2026
 
 HammerForge ships with 150 built-in prototype textures designed for greyboxing and level layout testing. Each texture is a lightweight SVG that renders at any resolution, making it ideal for quick material differentiation during early design phases.
 
@@ -64,12 +64,14 @@ Godot 4.6 automatically imports SVGs as `CompressedTexture2D` resources.
 ## Usage via Editor UI
 
 1. Open the **Paint** tab in the HammerForge dock.
-2. In the **Materials** section, click **Load Prototypes**.
-3. All 150 prototype materials are added to the palette.
-4. Enable **Face Select Mode** and click faces in the viewport.
-5. Select a material from the palette and click **Assign to Selected Faces**.
+2. In the **Materials** section, click **Refresh Prototypes**.
+3. All 150 prototype materials are added to the palette and displayed as a visual thumbnail grid in the **Material Browser**.
+4. Use the **pattern dropdown**, **color swatches**, or **search bar** to filter the grid.
+5. Click a thumbnail to select a material. Enable **Face Select Mode** and click faces in the viewport.
+6. Click **Assign to Selected Faces**, or right-click the thumbnail for more options (Apply to Whole Brush, Toggle Favorite, Copy Name).
+7. Press **T** to use the **Texture Picker** — click any face to sample its material back into the browser.
 
-The "Load Prototypes" button creates `StandardMaterial3D` resources with each SVG set as the albedo texture. Material names follow the format `proto_{pattern}_{color}` (e.g., `proto_checker_red`).
+The "Refresh Prototypes" button loads `StandardMaterial3D` resources with each SVG set as the albedo texture. Material names follow the format `proto_{pattern}_{color}` (e.g., `proto_checker_red`). The browser shows the actual SVG preview as each cell's thumbnail.
 
 ## Usage via GDScript
 
@@ -130,7 +132,11 @@ if HFPrototypeTextures.texture_exists("hex", "purple"):
 | `load_all_into(manager)` | `int` | Loads all 150 into a MaterialManager; returns count |
 | `get_all_texture_paths()` | `Array[String]` | All 150 resource paths |
 
-## HTML Preview
+## In-Editor Preview
+
+The **Material Browser** in the Paint tab now displays all prototype textures as a visual thumbnail grid with search and filters. This replaces the need to use the external HTML preview for most workflows.
+
+## HTML Preview (Legacy)
 
 Open `docs/prototype_textures_preview.html` in any web browser to see all 150 textures displayed in a searchable grid. This is a self-contained HTML file with all SVGs embedded inline.
 

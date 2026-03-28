@@ -74,6 +74,7 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `hf_prefab_library.gd` | Prefab library dock section (ItemList, save button, drag-and-drop) |
 | `hf_welcome_panel.gd` | Legacy welcome panel (replaced by tutorial wizard) |
 | `hf_toast.gd` | Toast notification system (auto-fading stacked messages) |
+| `hf_material_browser.gd` | Visual material browser (thumbnail grid, search, filters, favorites, drag-drop) |
 | `paint_tab_builder.gd` | Builds Paint tab sections + signal connections |
 | `entity_tab_builder.gd` | Builds Entity Properties + Entity I/O sections |
 | `manage_tab_builder.gd` | Builds Manage tab sections (Bake, File, Settings, Prefabs, etc.) |
@@ -228,7 +229,9 @@ Entity types and brush entity classes are data-driven via `HFEntityDef` (`hf_ent
 - **Library persistence**: `save_library(path)` / `load_library(path)` serialize material resource paths to JSON.
 - **Usage tracking**: `record_usage()` / `release_usage()` / `rebuild_usage()` track which materials are used by brushes.
 - **Cleanup**: `find_unused_materials()` returns palette materials not used by any brush.
-- **Prototype textures**: `HFPrototypeTextures.load_all_into(manager)` batch-loads 150 built-in SVG textures as `StandardMaterial3D` resources. The dock exposes this via the "Load Prototypes" button in the Paint tab → Materials section.
+- **Prototype textures**: `HFPrototypeTextures.load_all_into(manager)` batch-loads 150 built-in SVG textures as `StandardMaterial3D` resources. The dock exposes this via the "Refresh Prototypes" button in the Paint tab → Materials section.
+- **Visual browser**: `HFMaterialBrowser` (`ui/hf_material_browser.gd`) provides a thumbnail grid with search, pattern/color filters, favorites, hover preview, context menu, and drag-and-drop. Replaces the text-only `ItemList`.
+- **Texture Picker**: T key activates an eyedropper that raycasts to a face, reads `FaceData.material_idx`, and sets it as the browser's current selection.
 
 ## Floor Paint System
 
@@ -360,7 +363,7 @@ The dock uses 4 tabs with collapsible sections for visual hierarchy:
 | Tab | Contents |
 |-----|----------|
 | **Brush** | Shape, size, grid snap, quick snap presets, material picker, operation mode (Add/Sub), texture lock |
-| **Paint** | 7 collapsible sections: Floor Paint, Heightmap, Blend & Terrain, Regions, Materials (with Load Prototypes), UV Editor, Surface Paint |
+| **Paint** | 7 collapsible sections: Floor Paint, Heightmap, Blend & Terrain, Regions, Materials (with Refresh Prototypes), UV Editor, Surface Paint |
 | **Entities** | Entity palette with drag-and-drop, Create DraftEntity, Entity Properties, Entity I/O connections (collapsible sections) |
 | **Manage** | Bake, Actions (floor/cuts/clear), File, Presets, History, Settings, Performance, plus Visgroups & Cordon (inserted programmatically) |
 

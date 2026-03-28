@@ -52,6 +52,8 @@ static func _default_bindings() -> Dictionary:
 		"vertex_edge_mode": {"keycode": KEY_E},
 		"vertex_merge": {"keycode": KEY_W, "ctrl": true},
 		"vertex_split_edge": {"keycode": KEY_E, "ctrl": true},
+		# Material tools
+		"texture_picker": {"keycode": KEY_T},
 		# Axis lock
 		"axis_x": {"keycode": KEY_X},
 		"axis_y": {"keycode": KEY_Y},
@@ -134,7 +136,16 @@ static func get_category(action: String) -> String:
 		return "Paint"
 	if action.begins_with("axis_"):
 		return "Axis Lock"
-	if action in ["vertex_edit", "vertex_edge_mode", "vertex_merge", "vertex_split_edge"]:
+	if (
+		action
+		in [
+			"vertex_edit",
+			"vertex_edge_mode",
+			"vertex_merge",
+			"vertex_split_edge",
+			"texture_picker",
+		]
+	):
 		return "Tools"
 	return "Editing"
 
@@ -164,6 +175,7 @@ static func get_action_label(action: String) -> String:
 		"paint_ramp": "Ramp / Rect",
 		"paint_line": "Line",
 		"paint_blend": "Blend",
+		"texture_picker": "Texture Picker",
 		"axis_x": "Lock X",
 		"axis_y": "Lock Y",
 		"axis_z": "Lock Z",

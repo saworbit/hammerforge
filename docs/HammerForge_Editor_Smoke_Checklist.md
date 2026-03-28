@@ -11,6 +11,8 @@ This checklist covers the editor-only flows that are hard to validate in headles
 - vertex editing: edge sub-mode, split, merge, wireframe overlay
 - polygon tool: click vertices, close, extrude height, brush creation
 - path tool: place waypoints, finalize, corridor + miter joint brushes
+- material browser: thumbnail grid, search, filters, favorites, hover preview, context menu
+- texture picker: T key eyedropper for sampling face materials
 
 ## Prep
 
@@ -122,11 +124,26 @@ Enable the HammerForge plugin if it is not already enabled.
 - Test with only 2 waypoints (straight corridor, no miters).
 - Press Escape during waypoint placement; confirm last waypoint is removed.
 
-### 11. Cleanup / Persistence
+### 11. Material Browser + Texture Picker
+- Open the **Paint** tab → **Materials** section.
+- Click **Refresh Prototypes**; confirm the thumbnail grid populates with 150 texture previews.
+- Type "brick" in the search bar; confirm the grid filters to brick-pattern materials only.
+- Click a color swatch (e.g. red); confirm only red materials remain. Click "All" to reset.
+- Select the "Favorites" view toggle; confirm it is empty initially.
+- Right-click a thumbnail → "Toggle Favorite"; switch to Favorites view and confirm the item appears.
+- Switch back to "Prototypes" view. Click a thumbnail to select a material.
+- Enable **Face Select Mode**, click a face on a brush, then click **Assign to Selected Faces**; confirm the face material changes.
+- Hover a different thumbnail in the grid; confirm the selected face temporarily previews that material. Move the mouse away; confirm the preview reverts.
+- Right-click a thumbnail → "Apply to Whole Brush"; confirm all faces of the selected brush(es) update.
+- Right-click a thumbnail → "Copy Name"; paste elsewhere to confirm clipboard content.
+- Press **T** (Texture Picker); click a face in the viewport. Confirm the browser selection updates to match that face's material.
+- Press **T** on a face with no material; confirm a toast message appears ("Face has no material assigned").
+
+### 12. Cleanup / Persistence
 - Dismiss the tutorial with and without `Don't show again` checked.
 - Restart Godot and confirm the `show_welcome` preference behaves as expected.
 - Reopen the dock and confirm no layout corruption remains after closing the tutorial and shortcut dialog.
 
 ## Expected Outcome
 
-If all steps pass, the remaining risk on the tutorial/prefab/shortcut/subtract-preview/vertex-editing/polygon/path feature set is low and limited mainly to edge cases outside this smoke path.
+If all steps pass, the remaining risk on the tutorial/prefab/shortcut/subtract-preview/vertex-editing/polygon/path/material-browser feature set is low and limited mainly to edge cases outside this smoke path.

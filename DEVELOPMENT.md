@@ -63,6 +63,7 @@ addons/hammerforge/
     hf_welcome_panel.gd    First-run welcome panel (legacy, replaced by tutorial wizard)
     hf_tutorial_wizard.gd  Interactive 5-step tutorial wizard (signal-driven auto-advance)
     hf_shortcut_dialog.gd  Searchable shortcut reference dialog (filterable Tree with categories)
+    hf_material_browser.gd Visual material browser (thumbnail grid, search, filters, favorites, drag-drop)
     hf_prefab_library.gd   Prefab library dock section (ItemList + drag-and-drop)
     paint_tab_builder.gd   Builds Paint tab sections + signal connections
     entity_tab_builder.gd  Builds Entity Properties + Entity I/O sections
@@ -233,7 +234,7 @@ Configuration is in `.gutconfig.json` (test directory, prefix, exit behavior).
 HammerForge expects Godot material resources (`.tres` or `.material`) in the palette.
 
 **Quick start with prototype textures:**
-Click **Load Prototypes** in the Paint tab → Materials section to load all 150 built-in SVG textures (15 patterns x 10 colors) as `StandardMaterial3D` resources. See `docs/HammerForge_Prototype_Textures.md` for full details.
+Click **Refresh Prototypes** in the Paint tab → Materials section to load all 150 built-in SVG textures (15 patterns x 10 colors) as `StandardMaterial3D` resources. See `docs/HammerForge_Prototype_Textures.md` for full details.
 
 **Create a custom material:**
 1. In the FileSystem dock, right-click `materials/` (or any folder).
@@ -395,7 +396,7 @@ Brush workflow
 - Verify undo removes the extruded brush.
 
 Face materials + UVs
-- Click Load Prototypes in Paint tab → Materials section; confirm 150 prototype textures appear in palette.
+- Click Refresh Prototypes in Paint tab → Materials section; confirm 150 prototype textures appear in palette.
 - Assign a prototype texture to faces and verify preview updates with the new material.
 - Add a custom material to the palette and assign it to multiple faces.
 - Toggle Face Select Mode and ensure face selection only works when enabled.

@@ -26,6 +26,7 @@ var _vertex_drag_start := Vector2.ZERO
 var _vertex_drag_ref_y := 0.0  # World Y of the picked vertex for projection plane
 var _vertex_overlay_mesh: MeshInstance3D = null
 var _vertex_overlay_imesh: ImmediateMesh = null
+var _texture_picker_active := false
 const LevelRootType = preload("level_root.gd")
 const DraftEntityType = preload("draft_entity.gd")
 const IconRes = preload("icon.png")
@@ -292,6 +293,32 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 		if vr != EditorPlugin.AFTER_GUI_INPUT_PASS:
 			return vr
 
+	# Texture picker modal intercept — must be ABOVE keyboard shortcuts so that
+	# tool-switch keys cannot sneak through while picker is armed.
+	if _texture_picker_active:
+		if event is InputEventMouseButton and event.pressed:
+			if event.button_index == MOUSE_BUTTON_LEFT:
+				_texture_picker_active = false
+				_pick_face_material(root)
+				return EditorPlugin.AFTER_GUI_INPUT_STOP
+			if event.button_index == MOUSE_BUTTON_RIGHT:
+				_texture_picker_active = false
+				if dock:
+					dock.show_toast("Texture Picker cancelled", 1)
+				return EditorPlugin.AFTER_GUI_INPUT_STOP
+		if event is InputEventKey and event.pressed:
+			if event.keycode == KEY_ESCAPE:
+				_texture_picker_active = false
+				if dock:
+					dock.show_toast("Texture Picker cancelled", 1)
+				return EditorPlugin.AFTER_GUI_INPUT_STOP
+			# Block all other key events while picker is active.
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+		# Pass through mouse motion so last_3d_mouse_pos stays current.
+		if event is InputEventMouseMotion:
+			return EditorPlugin.AFTER_GUI_INPUT_PASS
+		return EditorPlugin.AFTER_GUI_INPUT_PASS
+
 	# Keyboard shortcuts
 	if event is InputEventKey and event.pressed and not event.echo:
 		var r = _handle_keyboard_input(event, root, tool_id, paint_mode)
@@ -557,6 +584,12 @@ func _handle_keyboard_input(
 		_deactivate_external_tool()
 		dock.set_extrude_tool(-1)
 		_update_hud_context()
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	# Texture picker (eyedropper) — T key activates click-to-sample mode
+	if _keymap.matches("texture_picker", event):
+		_texture_picker_active = true
+		if dock:
+			dock.show_toast("Texture Picker: click a face to sample its material", 0)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	# Paint tool shortcuts
 	if paint_mode:
@@ -1347,6 +1380,48 @@ func _commit_brush_placement(root: Node, info: Dictionary) -> void:
 	)
 
 
+func _collect_brushes(root: Node) -> Array:
+	var brushes: Array = []
+	var nodes: Array = (
+		root._iter_pick_nodes() if root.has_method("_iter_pick_nodes") else root.get_children()
+	)
+	for node in nodes:
+		if node is DraftBrush:
+			brushes.append(node)
+	return brushes
+
+
+func _pick_face_material(root: Node) -> void:
+	if not last_3d_camera or not dock:
+		return
+	var cam = last_3d_camera
+	var pos = last_3d_mouse_pos
+	var ray_origin = cam.project_ray_origin(pos)
+	var ray_dir = cam.project_ray_normal(pos)
+	var brushes: Array = _collect_brushes(root)
+	var hit = FaceSelector.intersect_brushes(brushes, ray_origin, ray_dir)
+	if hit.is_empty():
+		if dock:
+			dock.show_toast("No face under cursor", 1)
+		return
+	var brush: DraftBrush = hit.get("brush") as DraftBrush
+	var face_idx: int = int(hit.get("face_idx", -1))
+	if brush == null or face_idx < 0:
+		return
+	if face_idx >= brush.faces.size():
+		return
+	var face: FaceData = brush.faces[face_idx]
+	var mat_idx: int = face.material_idx if face else -1
+	if mat_idx < 0:
+		if dock:
+			dock.show_toast("Face has no material assigned", 1)
+		return
+	dock._selected_material_index = mat_idx
+	if dock.material_browser:
+		dock.material_browser.set_selected_index(mat_idx)
+	dock.show_toast("Picked material #%d" % mat_idx, 0)
+
+
 func _delete_selected(root: Node) -> bool:
 	var selection = get_editor_interface().get_selection()
 	var nodes = _current_selection_nodes()
@@ -1563,12 +1638,17 @@ func _carve_selected(root: Node) -> void:
 
 func _can_drop_data(_position: Vector2, data: Variant) -> bool:
 	return (
-		_is_entity_drag_data(data) or _is_brush_preset_drag_data(data) or _is_prefab_drag_data(data)
+		_is_entity_drag_data(data)
+		or _is_brush_preset_drag_data(data)
+		or _is_prefab_drag_data(data)
+		or _is_material_drag_data(data)
 	)
 
 
 func _drop_data(position: Vector2, data: Variant) -> void:
-	if _is_brush_preset_drag_data(data):
+	if _is_material_drag_data(data):
+		_handle_material_drop(position, data)
+	elif _is_brush_preset_drag_data(data):
 		_handle_brush_preset_drop(position, data)
 	elif _is_prefab_drag_data(data):
 		_handle_prefab_drop(position, data)
@@ -1691,6 +1771,54 @@ func _handle_prefab_drop(position: Vector2, data: Variant) -> void:
 			)
 			undo_redo.add_undo_method(root.state_system, "restore_state", full_state)
 			undo_redo.commit_action(false)
+
+
+func _is_material_drag_data(data: Variant) -> bool:
+	return data is Dictionary and str(data.get("type", "")) == "hammerforge_material"
+
+
+func _handle_material_drop(position: Vector2, data: Variant) -> void:
+	if not _is_material_drag_data(data):
+		return
+	var mat_idx: int = int(data.get("index", -1))
+	if mat_idx < 0:
+		return
+	var root = active_root if active_root else _get_level_root()
+	if not root:
+		return
+	var camera = last_3d_camera
+	var mouse_pos = position if position != null else last_3d_mouse_pos
+	if not camera:
+		return
+	# Raycast to find the face under the drop position.
+	var brushes: Array = _collect_brushes(root)
+	var hit = FaceSelector.intersect_brushes(
+		brushes, camera.project_ray_origin(mouse_pos), camera.project_ray_normal(mouse_pos)
+	)
+	if hit.is_empty():
+		if dock:
+			dock.show_toast("No face under drop position", 1)
+		return
+	var brush: DraftBrush = hit.get("brush") as DraftBrush
+	var face_idx: int = int(hit.get("face_idx", -1))
+	if brush == null or face_idx < 0:
+		return
+	# Apply material to the hit face via undoable action.
+	var brush_key: String = brush.brush_id if brush.brush_id != "" else str(brush.get_instance_id())
+	HFUndoHelper.commit(
+		_get_undo_redo(),
+		root,
+		"Drop Material on Face",
+		"assign_material_to_faces_by_id",
+		[brush_key, [face_idx], mat_idx],
+		false,
+		Callable(self, "_record_history")
+	)
+	if dock:
+		dock._selected_material_index = mat_idx
+		if dock.material_browser:
+			dock.material_browser.set_selected_index(mat_idx)
+		dock.show_toast("Applied material #%d to face" % mat_idx, 0)
 
 
 func _get_level_root() -> Node:

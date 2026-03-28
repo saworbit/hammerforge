@@ -185,6 +185,7 @@ var perf_paint_mem_value: Label = null
 var perf_bake_chunks_value: Label = null
 var perf_bake_time_value: Label = null
 # -- Materials (built programmatically in _build_paint_tab) --
+var material_browser: HFMaterialBrowser = null
 var materials_list: ItemList = null
 var material_add: Button = null
 var material_remove: Button = null
@@ -192,6 +193,9 @@ var material_load_prototypes: Button = null
 var material_assign: Button = null
 var face_select_mode: CheckBox = null
 var face_clear: Button = null
+var _material_context_popup: PopupMenu = null
+var _material_context_index: int = -1
+var _hover_preview_faces: Array = []
 # -- UV (built programmatically in _build_paint_tab) --
 var uv_editor: UVEditor = null
 var uv_reset: Button = null
@@ -918,7 +922,9 @@ func _apply_all_tooltips() -> void:
 	)
 	_set_tooltip(material_add, "Add a material to the palette")
 	_set_tooltip(material_remove, "Remove selected material from palette")
-	_set_tooltip(material_load_prototypes, "Load all built-in prototype textures as materials")
+	_set_tooltip(
+		material_load_prototypes, "Refresh all built-in prototype textures into the palette"
+	)
 	_set_tooltip(material_assign, "Assign selected material to selected faces")
 	_set_tooltip(face_clear, "Clear face selection")
 	# UV tab
@@ -1754,6 +1760,14 @@ func _sync_materials_from_root() -> void:
 	if joined != materials_signature:
 		materials_signature = joined
 		_refresh_materials_list(names)
+		_refresh_material_browser()
+
+
+func _refresh_material_browser() -> void:
+	if not material_browser or not level_root:
+		return
+	material_browser.set_material_manager(level_root.material_manager)
+	material_browser.set_selected_index(_selected_material_index)
 
 
 func _sync_surface_paint_from_root() -> void:
@@ -3497,6 +3511,175 @@ func _on_material_assign() -> void:
 func _on_face_clear() -> void:
 	if level_root:
 		_commit_state_action("Clear Face Selection", "clear_face_selection")
+
+
+# ---------------------------------------------------------------------------
+# Material Browser handlers
+# ---------------------------------------------------------------------------
+
+
+func _on_browser_material_selected(index: int) -> void:
+	_selected_material_index = index
+	if material_browser:
+		material_browser.set_selected_index(index)
+
+
+func _on_browser_material_double_clicked(index: int) -> void:
+	_selected_material_index = index
+	if material_browser:
+		material_browser.set_selected_index(index)
+	# Double-click triggers immediate face assignment.
+	if level_root and index >= 0:
+		_commit_state_action("Assign Face Material", "assign_material_to_selected_faces", [index])
+
+
+func _on_browser_context_menu(index: int, global_pos: Vector2) -> void:
+	_material_context_index = index
+	if not _material_context_popup:
+		_material_context_popup = (
+			material_browser.create_context_popup() if material_browser else PopupMenu.new()
+		)
+		add_child(_material_context_popup)
+		_material_context_popup.id_pressed.connect(_on_material_context_action)
+	_material_context_popup.position = Vector2i(int(global_pos.x), int(global_pos.y))
+	_material_context_popup.popup()
+
+
+func _on_material_context_action(id: int) -> void:
+	if not level_root:
+		return
+	var idx = _material_context_index
+	if idx < 0:
+		return
+	match id:
+		0:  # Apply to Selected Faces
+			_selected_material_index = idx
+			_commit_state_action("Assign Face Material", "assign_material_to_selected_faces", [idx])
+		1:  # Apply to Whole Brush — assign material to ALL faces on selected brushes
+			_selected_material_index = idx
+			if _selection_nodes.is_empty():
+				show_toast("No brushes selected", 1)
+				return
+			_commit_state_action(
+				"Assign Brush Material",
+				"assign_material_to_whole_brushes",
+				[idx, _get_selected_brush_ids()]
+			)
+		2:  # Toggle Favorite
+			if material_browser:
+				var mat = level_root.material_manager.get_material(idx)
+				if mat:
+					if material_browser.is_favorite(mat.resource_path):
+						material_browser.remove_favorite(mat.resource_path)
+					else:
+						material_browser.add_favorite(mat.resource_path)
+					material_browser.rebuild()
+		3:  # Copy Name
+			var mat = level_root.material_manager.get_material(idx)
+			if mat:
+				var label = mat.resource_name
+				if label == "":
+					label = mat.resource_path.get_file().get_basename()
+				DisplayServer.clipboard_set(label)
+				show_toast("Copied: " + label, 0)
+
+
+func _get_selected_brush_ids() -> Array:
+	var ids: Array = []
+	for node in _selection_nodes:
+		if node is DraftBrush and is_instance_valid(node):
+			var bid: String = (node as DraftBrush).brush_id
+			if bid != "":
+				ids.append(bid)
+			else:
+				ids.append(str(node.get_instance_id()))
+	return ids
+
+
+func _on_browser_material_hovered(index: int) -> void:
+	if not level_root:
+		return
+	var mat_idx: int = index
+	if mat_idx < 0:
+		return
+	_apply_hover_preview(mat_idx)
+
+
+func _on_browser_material_hover_ended() -> void:
+	_revert_hover_preview()
+
+
+func _apply_hover_preview(mat_idx: int) -> void:
+	if not level_root or not level_root.brush_system:
+		return
+	var face_sel: Dictionary = level_root.face_selection
+	if face_sel.is_empty():
+		return
+	_revert_hover_preview()
+	var mat_mgr: MaterialManager = level_root.get_material_manager()
+	var preview_mat: Material = mat_mgr.get_material(mat_idx) if mat_mgr else null
+	if preview_mat == null:
+		return
+	for key in face_sel.keys():
+		var brush: DraftBrush = level_root.brush_system.find_brush_by_id(str(key))
+		if not brush or not is_instance_valid(brush):
+			continue
+		var indices: Array = face_sel.get(key, [])
+		if indices.is_empty():
+			continue
+		# Build an overlay mesh from just the selected faces.
+		var overlay_mesh := _build_face_overlay_mesh(brush, indices, preview_mat)
+		if overlay_mesh == null:
+			continue
+		var overlay := MeshInstance3D.new()
+		overlay.name = "_HoverPreview"
+		overlay.mesh = overlay_mesh
+		overlay.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		brush.add_child(overlay)
+		overlay.owner = null
+		_hover_preview_faces.append({"brush": brush, "overlay": overlay})
+
+
+func _build_face_overlay_mesh(brush: DraftBrush, face_indices: Array, mat: Material) -> ArrayMesh:
+	const NORMAL_OFFSET := 0.001
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_material(mat)
+	var vert_count := 0
+	for face_idx in face_indices:
+		var fi: int = int(face_idx)
+		if fi < 0 or fi >= brush.faces.size():
+			continue
+		var face: FaceData = brush.faces[fi]
+		if face == null:
+			continue
+		face.ensure_geometry()
+		var tri: Dictionary = face.triangulate()
+		var verts: PackedVector3Array = tri.get("verts", PackedVector3Array())
+		var uvs: PackedVector2Array = tri.get("uvs", PackedVector2Array())
+		var offset: Vector3 = face.normal.normalized() * NORMAL_OFFSET
+		for i in range(verts.size()):
+			st.set_normal(face.normal)
+			if uvs.size() > i:
+				st.set_uv(uvs[i])
+			st.add_vertex(verts[i] + offset)
+			vert_count += 1
+	if vert_count == 0:
+		return null
+	var mesh := ArrayMesh.new()
+	st.commit(mesh)
+	return mesh
+
+
+func _revert_hover_preview() -> void:
+	for entry in _hover_preview_faces:
+		var brush: DraftBrush = entry.get("brush")
+		var overlay: MeshInstance3D = entry.get("overlay")
+		if is_instance_valid(overlay):
+			if is_instance_valid(brush):
+				brush.remove_child(overlay)
+			overlay.queue_free()
+	_hover_preview_faces.clear()
 
 
 func _on_uv_reset() -> void:

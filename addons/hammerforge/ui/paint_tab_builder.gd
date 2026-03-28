@@ -174,9 +174,15 @@ func build(parent: Control) -> void:
 	dock._register_section(mat_sec, "Materials")
 	var mc = mat_sec.get_content()
 
+	# Visual material browser (replaces old text-only ItemList)
+	dock.material_browser = HFMaterialBrowser.new()
+	dock.material_browser.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dock.material_browser.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	mc.add_child(dock.material_browser)
+
+	# Keep the legacy ItemList hidden for backwards compat with sync logic
 	dock.materials_list = ItemList.new()
-	dock.materials_list.custom_minimum_size = Vector2(0, 80)
-	dock.materials_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	dock.materials_list.visible = false
 	mc.add_child(dock.materials_list)
 
 	var mat_btn_row = HBoxContainer.new()
@@ -187,7 +193,7 @@ func build(parent: Control) -> void:
 	dock.material_remove.text = "Remove"
 	mat_btn_row.add_child(dock.material_remove)
 	dock.material_load_prototypes = Button.new()
-	dock.material_load_prototypes.text = "Load Prototypes"
+	dock.material_load_prototypes.text = "Refresh Prototypes"
 	mat_btn_row.add_child(dock.material_load_prototypes)
 	mc.add_child(mat_btn_row)
 
@@ -367,6 +373,12 @@ func connect_signals() -> void:
 		dock.terrain_slot_texture_dialog.file_selected.connect(
 			dock._on_terrain_slot_texture_selected
 		)
+	if dock.material_browser:
+		dock.material_browser.material_selected.connect(dock._on_browser_material_selected)
+		dock.material_browser.material_double_clicked.connect(dock._on_browser_material_double_clicked)
+		dock.material_browser.material_context_menu.connect(dock._on_browser_context_menu)
+		dock.material_browser.material_hovered.connect(dock._on_browser_material_hovered)
+		dock.material_browser.material_hover_ended.connect(dock._on_browser_material_hover_ended)
 	if dock.materials_list:
 		dock.materials_list.item_selected.connect(dock._on_material_selected)
 	if dock.material_add:

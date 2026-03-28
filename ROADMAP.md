@@ -87,7 +87,7 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 
 ## Done (Built-in Prototype Textures)
 - 150 SVG prototype textures (15 patterns x 10 colors) ship with the plugin for instant greyboxing.
-- "Load Prototypes" button in Paint tab → Materials section for one-click palette population.
+- "Refresh Prototypes" button in Paint tab → Materials section for one-click palette population.
 - `HFPrototypeTextures` static catalog class with query, load, and batch-load API.
 - HTML preview page (`docs/prototype_textures_preview.html`) for browsing all textures.
 - GUT tests (27 cases) and dedicated documentation.
@@ -133,6 +133,16 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - Tool registry updated to pass `EditorUndoRedoManager` to tools on activation.
 - `HFEditorTool` base class gains `undo_redo` member for brush-creating tools.
 - 50 new tests (vertex_edges 19, polygon_tool 16, path_tool 15). Total: **622 tests across 38 files**.
+
+## Done (Visual Texture Browser)
+- **Visual material browser** (`HFMaterialBrowser`): thumbnail grid replacing text-only ItemList. 64px cells, 5 columns, actual SVG preview thumbnails.
+- **Search and filters**: live text search, pattern dropdown (15 + All), color swatch row (10 buttons + All), view toggle (Prototypes / Palette / Favorites).
+- **Favorites**: right-click to star materials. Favorites view filters to starred only.
+- **Hover preview**: temporarily applies hovered material to selected faces in viewport.
+- **Texture Picker** (T key): eyedropper raycasts to face under cursor, reads `material_idx`, sets as current browser selection.
+- **Context menu**: Apply to Selected Faces, Apply to Whole Brush, Toggle Favorite, Copy Name.
+- **Drag-and-drop**: thumbnails emit `hammerforge_material` drag data with preview, matching existing entity/preset pattern.
+- "Load Prototypes" renamed to "Refresh Prototypes".
 
 ## Next (Wave 2c remaining)
 - Displacement sewing (stitch adjacent heightmap edges to share vertices).

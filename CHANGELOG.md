@@ -5,6 +5,30 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Visual Texture Browser + Texture Picker (Mar 2026):**
+  - **Visual material browser** (`ui/hf_material_browser.gd`): replaces the text-only material
+    ItemList with a scrollable thumbnail grid (64px cells, 5 columns). Each cell shows the actual
+    SVG texture preview via `TextureRect`, with a short label and tooltip. Click to select, right-click
+    for context menu (Apply to Faces, Apply to Whole Brush, Toggle Favorite, Copy Name).
+  - **Search and filters**: live text search bar, pattern dropdown filter (15 patterns + "All"),
+    color swatch row (10 clickable color buttons + "All"), and view toggle (Prototypes / Palette /
+    Favorites). Filters combine — e.g. pattern=brick + color=red + search="dark" all narrow together.
+  - **Favorites system**: right-click any thumbnail to toggle favorite. Favorites view shows only
+    starred materials. Favorite state persists in the browser instance.
+  - **Hover preview**: hovering a thumbnail in the browser temporarily applies that material to all
+    currently selected faces in the viewport. Material reverts on mouse leave.
+  - **Texture Picker tool** (T key): eyedropper that raycasts to the face under the cursor, reads
+    its `material_idx` from `FaceData`, and sets it as the current selection in the browser. Registered
+    in `HFKeymap` under the "Tools" category with display label "Texture Picker".
+  - **Context menu**: `PopupMenu` with "Apply to Selected Faces" (uses existing
+    `assign_material_to_selected_faces` state action), "Apply to Whole Brush" (iterates selected
+    brushes), "Toggle Favorite", and "Copy Name" (clipboard).
+  - **Drag-and-drop support**: thumbnails emit drag data `{"type": "hammerforge_material", "index": N}`
+    with a thumbnail + label drag preview, following the existing entity/brush preset pattern.
+  - **"Load Prototypes" renamed to "Refresh Prototypes"** for clarity (behavior unchanged).
+  - **Status bar**: shows "X of Y materials" with filter state, or guidance text when palette is empty.
+  - **Backwards compatibility**: hidden legacy `ItemList` preserved for `_refresh_materials_list()`
+    sync path; browser rebuilds via new `_refresh_material_browser()` called alongside it.
 - **Vertex Editing Enhancements + Polygon Tool + Path Tool (Mar 2026):**
   - **Edge sub-mode for vertex editing** (`systems/hf_vertex_system.gd`): new `VertexSubMode` enum
     (VERTEX, EDGE) toggled with `E` key. Edge selection, additive/toggle selection, wireframe overlay

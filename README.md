@@ -112,8 +112,11 @@ Grid-based paint layers with chunked storage for large worlds:
 
 ### Materials and Surface Paint
 
-- **Materials palette** with add/remove and per-face assignment
-- **150 built-in prototype textures** (15 patterns x 10 colors) -- click **Load Prototypes** for instant greyboxing
+- **Visual material browser** -- thumbnail grid with search, pattern/color filters, and Prototypes/Palette/Favorites views
+- **150 built-in prototype textures** (15 patterns x 10 colors) -- click **Refresh Prototypes** for instant greyboxing with visual browsing
+- **Texture Picker** (T key) -- eyedropper tool samples material from any face
+- **Hover preview** -- hovering a thumbnail temporarily previews it on selected faces
+- **Right-click context menu** -- Apply to Faces, Apply to Whole Brush, Toggle Favorite, Copy Name
 - **Face select mode** for painting materials onto individual brush faces
 - **Surface paint** with per-face splat layers, weight images, and live preview
 - **UV editor** with per-vertex drag handles and reset-to-projection
@@ -243,7 +246,7 @@ See [Install + Upgrade](docs/HammerForge_Install_Upgrade.md) for upgrade steps a
 | **1. Draw** | Tool = Draw, Mode = Add, Shape = Box -> drag base -> click height |
 | **2. Extrude** | Press U (Extrude Up) -> click a face -> drag -> release |
 | **3. Subtract** | Mode = Subtract -> draw a brush through a wall -> Apply Cuts -> Bake |
-| **4. Material** | Paint tab -> Materials -> **Load Prototypes** -> Face Select Mode -> click faces -> Assign |
+| **4. Material** | Paint tab -> Materials -> **Refresh Prototypes** -> browse thumbnails -> Face Select Mode -> click faces -> Assign |
 | **5. Paint floor** | Paint Mode -> Brush tool (B) -> paint grid cells -> switch layers for different heights |
 | **6. Bake** | Manage tab -> Bake -> click Bake (or Quick Play to bake + run) |
 
@@ -267,7 +270,8 @@ All shortcuts are rebindable via `user://hammerforge_keymap.json`.
 | V | Vertex mode | | P | Polygon tool |
 | E | Edge sub-mode (in vertex) | | ; | Path tool |
 | Ctrl+E | Split edge | | Ctrl+W | Merge vertices |
-| X / Y / Z | Axis lock | | ? | Shortcuts popup |
+| T | Texture Picker | | ? | Shortcuts popup |
+| X / Y / Z | Axis lock | | | |
 
 ---
 
@@ -320,6 +324,8 @@ gdlint addons/hammerforge/
 See [ROADMAP.md](ROADMAP.md) for the full plan.
 
 **Recently shipped:**
+- Visual material browser with thumbnail grid, search, pattern/color filters, favorites, and hover preview
+- Texture Picker tool (T key) — eyedropper to sample face materials
 - Vertex editing enhancements (edge sub-mode, split, merge, wireframe overlay)
 - Polygon tool (click convex vertices, extrude to brush)
 - Path tool (waypoints, rectangular cross-section, miter joints)

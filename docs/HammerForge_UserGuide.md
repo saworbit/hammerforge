@@ -72,7 +72,7 @@ The compact toolbar shows icon + text labels (Draw, Select, Add, Sub, Paint, Ext
 - **Heightmap**: Import PNG/EXR or Generate procedural noise. Height Scale and Layer Y spinboxes. **Sculpt tools**: Raise, Lower, Smooth, Flatten buttons with strength/radius/falloff spinboxes for interactive terrain editing.
 - **Blend & Terrain**: Blend Strength, Blend Slot (B/C/D), and Terrain Slot A-D texture pickers with UV scales.
 - **Regions**: Region Streaming enable, Region Size, Stream Radius, Show Region Grid, memory stats.
-- **Materials**: Palette with Add/Remove/Load Prototypes. Face Select Mode toggle. Assign to Selected Faces. The **Load Prototypes** button batch-loads 150 built-in SVG textures (15 patterns x 10 colors) for quick greyboxing.
+- **Materials**: Visual thumbnail browser (`HFMaterialBrowser`) with search, pattern/color filters, and Prototypes/Palette/Favorites view toggle. Add/Remove/Refresh Prototypes buttons. Face Select Mode toggle. Assign to Selected Faces. Right-click thumbnails for context menu (Apply to Faces, Apply to Whole Brush, Toggle Favorite, Copy Name). Hover a thumbnail to preview on selected faces. Press **T** for Texture Picker (eyedropper). The **Refresh Prototypes** button batch-loads 150 built-in SVG textures (15 patterns x 10 colors) for quick greyboxing.
 - **UV Editor**: Per-face UV editing with drag handles, Reset Projected UVs, and Justify grid (Fit, Center, Left, Right, Top, Bottom in 3×2 layout).
 - **Surface Paint**: Paint Target (Floor/Surface), layers, texture picker, radius/strength.
 
@@ -165,9 +165,9 @@ The material palette can be saved and loaded as a JSON library file:
 - **Usage tracking**: materials in use by brushes are tracked; `find_unused_materials()` identifies cleanup candidates.
 
 ## Prototype Textures
-HammerForge includes 150 built-in SVG prototype textures organized as 15 patterns in 10 color variations. Click **Load Prototypes** in the Paint tab → Materials section to add them all to the palette. Patterns include solid, brick, checker, cross, diamond, dots, hex, stripes (diagonal/horizontal), triangles, zigzag, and directional arrows (up/down/left/right).
+HammerForge includes 150 built-in SVG prototype textures organized as 15 patterns in 10 color variations. Click **Refresh Prototypes** in the Paint tab → Materials section to add them all to the palette. The **Material Browser** displays them as a visual thumbnail grid with search and pattern/color filters — no need to memorize names. Patterns include solid, brick, checker, cross, diamond, dots, hex, stripes (diagonal/horizontal), triangles, zigzag, and directional arrows (up/down/left/right).
 
-Open `docs/prototype_textures_preview.html` in a browser to browse all textures visually. For GDScript API usage, see `docs/HammerForge_Prototype_Textures.md`.
+For GDScript API usage, see `docs/HammerForge_Prototype_Textures.md`.
 
 ## Design Constraints (Summary)
 - DraftBrush previews are lightweight. Final geometry comes from bake.
@@ -234,6 +234,7 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Edge sub-mode | E | Toggle vertex/edge sub-mode (in vertex mode) |
 | Split edge | Ctrl+E | Insert midpoint on selected edge |
 | Merge vertices | Ctrl+W | Merge selected vertices to centroid |
+| Texture Picker | T | Eyedropper — sample face material |
 | Axis Lock X/Y/Z | X / Y / Z | Constrain to axis |
 | Paint tools | B / E / R / L / K | Bucket / Erase / Ramp / Line / Blend |
 
@@ -523,10 +524,13 @@ Terrain slots:
 
 ## Face Materials and UVs
 1. Open the **Paint** tab → **Materials** section.
-2. Click **Load Prototypes** to load all 150 built-in textures, or click `Add` to load a custom material resource (example: `materials/test_mat.tres`).
-3. Enable `Face Select Mode`.
-4. Use the Select tool and click faces in the viewport.
-5. Click `Assign to Selected Faces`.
+2. Click **Refresh Prototypes** to load all 150 built-in textures, or click `Add` to load a custom material resource (example: `materials/test_mat.tres`).
+3. Browse the visual thumbnail grid — use search, pattern dropdown, or color swatches to filter.
+4. Click a thumbnail to select a material. Hover to preview it on selected faces.
+5. Enable `Face Select Mode`.
+6. Use the Select tool and click faces in the viewport.
+7. Click `Assign to Selected Faces`, or right-click the thumbnail → "Apply to Selected Faces".
+8. Press **T** to use the **Texture Picker** — click any face to sample its material.
 
 UV editing:
 - Open the **Paint** tab → **UV Editor** section after selecting a face.
