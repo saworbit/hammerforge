@@ -1,16 +1,21 @@
 {
   "player_start": {
     "class": "Node3D",
+    "category": "Player",
     "preview": {
       "type": "capsule",
-      "color": "#00ff66",
+      "color": "#00ffff",
       "radius": 0.5,
       "height": 2.0,
       "alpha": 0.7,
       "unshaded": true,
       "no_depth_test": true
     },
-    "properties": []
+    "properties": [
+      {"name": "primary", "type": "bool", "label": "Primary Spawn", "default": false},
+      {"name": "angle", "type": "float", "label": "Yaw Angle (deg)", "default": 0.0},
+      {"name": "height_offset", "type": "float", "label": "Height Offset", "default": 1.0}
+    ]
   },
   "light_point": {
     "class": "OmniLight3D",

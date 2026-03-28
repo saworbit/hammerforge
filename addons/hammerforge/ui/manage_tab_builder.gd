@@ -150,6 +150,21 @@ func build(parent: Control) -> void:
 	dock._prefab_library = HFPrefabLibrary.new()
 	prefab_sec.get_content().add_child(dock._prefab_library)
 
+	# --- Spawn section ---
+	var spawn_sec = hf_collapsible_section.create("Spawn", false)
+	root_vbox.add_child(spawn_sec)
+	dock._register_section(spawn_sec, "Spawn")
+	var spc = spawn_sec.get_content()
+
+	dock._spawn_validate_btn = dock._make_button("Validate Spawn")
+	spc.add_child(dock._spawn_validate_btn)
+
+	dock._spawn_auto_create_btn = dock._make_button("Create Default Spawn")
+	spc.add_child(dock._spawn_auto_create_btn)
+
+	dock._show_spawn_debug = dock._make_check("Preview Spawn Debug", false)
+	spc.add_child(dock._show_spawn_debug)
+
 	# --- History section (collapsed by default) ---
 	var hist_sec = hf_collapsible_section.create("History", false)
 	root_vbox.add_child(hist_sec)
@@ -306,3 +321,9 @@ func connect_signals() -> void:
 		dock.bake_lightmap_uv2.toggled.connect(dock._on_bake_lightmap_uv2_toggled)
 	if dock.bake_navmesh:
 		dock.bake_navmesh.toggled.connect(dock._on_bake_navmesh_toggled)
+	if dock._spawn_validate_btn:
+		dock._spawn_validate_btn.pressed.connect(dock._on_spawn_validate)
+	if dock._spawn_auto_create_btn:
+		dock._spawn_auto_create_btn.pressed.connect(dock._on_spawn_auto_create)
+	if dock._show_spawn_debug:
+		dock._show_spawn_debug.toggled.connect(dock._on_show_spawn_debug_toggled)

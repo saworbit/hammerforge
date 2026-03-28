@@ -36,6 +36,7 @@ Thanks for helping improve HammerForge.
 - **Registered tools** (HFEditorTool subclasses) get automatic dock settings UI via `get_settings_schema()`, keyboard dispatch via `handle_keyboard()`, and poll-based button state via `can_activate()`. Register in plugin.gd via `_tool_registry.register_tool()`. Tools that create brushes should use `self.undo_redo` (set by the registry on activation).
 - **Vertex system** operations (`split_edge`, `merge_vertices`) should use `get_pre_op_snapshots()` for face snapshot undo. Edge splitting skips convexity validation (mathematically safe on convex hulls). Vertex merging validates convexity and reverts on failure.
 - **Polygon/path tools** create brushes via `root.brush_system.create_brush_from_info()` with a `faces` key containing serialized face data. Use `FaceData.from_dict()` / `to_dict()` for serialization.
+- **Spawn system** (`root.spawn_system`): use `get_active_spawn()` for primary-flag-aware spawn lookup, `validate_spawn()` for physics-based validation, `auto_fix_spawn()` to apply suggested fixes, `create_default_spawn()` for fallback creation. Quick Play flow calls these automatically. Debug visualisation via `show_validation_debug()` / `cleanup_debug()`. Spawn properties (`primary`, `angle`, `height_offset`) are defined in `entities.json` and auto-generated in the Entities dock.
 - Avoid adding new dependencies unless necessary.
 
 ## Running Checks Locally

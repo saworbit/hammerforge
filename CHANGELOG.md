@@ -5,6 +5,41 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Player Spawn System + Quick Play Overhaul (Mar 2026):**
+  - **New subsystem** (`systems/hf_spawn_system.gd`): `HFSpawnSystem` manages spawn lookup, physics-
+    based validation, auto-fix, default spawn creation, and debug visualisation. Follows the
+    coordinator+subsystem pattern (RefCounted, injected LevelRoot reference).
+  - **Spawn validation** before every Quick Play: floor raycast (PhysicsDirectSpaceState3D), capsule
+    collision check (player-sized CapsuleShape3D), ceiling/headroom check, and below-map heuristic.
+    Returns structured result with issues list, severity (NONE/WARNING/ERROR), and suggested fix
+    position. Runs in < 5 ms via direct space queries.
+  - **Auto-fix dialog**: when spawn has critical issues (inside geometry, floating), a
+    ConfirmationDialog offers "Fix & Play" (snaps to suggested position) or "Cancel". Warnings
+    show a toast but proceed automatically.
+  - **Auto-create fallback spawn**: if no `player_start` entity exists, Quick Play auto-creates one
+    at the centroid of all brushes + safe height offset, with a warning toast.
+  - **Debug visualisation** (`show_validation_debug()`): green/red capsule preview at spawn
+    position, floor ray (ImmediateMesh line to hit point or red ray to void), ceiling ray (yellow),
+    floor disc marker, red collision sphere for penetration issues. Auto-cleans after configurable
+    duration or stays persistent (duration=0) for the "Preview Spawn Debug" toggle.
+  - **Manage tab → Spawn section**: "Validate Spawn" button (runs validation + shows debug for 10s),
+    "Create Default Spawn" button (creates fallback player_start), "Preview Spawn Debug" checkbox
+    (persistent visualisation toggle).
+  - **player_start entity enhanced** (`entities.json`): three new properties — `primary` (bool,
+    preferred spawn for Quick Play), `angle` (float, yaw rotation in degrees), `height_offset`
+    (float, extra height above floor). Color changed from green to cyan. Auto-generated property
+    form in Entities dock via existing `hf_entity_def.gd` loader.
+  - **Playtest FPS controller** (`playtest_fps.gd`): new `player_start_position` and
+    `player_start_rotation_y` exports. `_ready()` applies spawn position/rotation if set.
+  - **level_root.gd**: `spawn_system` subsystem initialised in `_ready()`. `_start_playtest()`
+    rewritten to use `spawn_system.get_active_spawn()` with primary-flag priority, yaw rotation
+    from `angle` property, and legacy fallback scan.
+  - **Quick Play tooltip**: dynamically shows active spawn name and position.
+  - **21 new GUT tests** (`tests/test_spawn_system.gd`): spawn lookup (no spawns, single, primary
+    priority, first fallback, non-player_start filtering), validation (null, not-in-tree, no-physics),
+    auto-fix (applies suggested position, null safety), default creation (empty level, brush
+    centroid), debug viz (create/cleanup, floor hit, issues, null safety), entity property helpers,
+    severity ordering. **Total: 685 tests across 41 files.**
 - **Visual Texture Browser + Texture Picker (Mar 2026):**
   - **Visual material browser** (`ui/hf_material_browser.gd`): replaces the text-only material
     ItemList with a scrollable thumbnail grid (64px cells, 5 columns). Each cell shows the actual

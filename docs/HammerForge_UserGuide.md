@@ -1,6 +1,6 @@
 # HammerForge User Guide
 
-Last updated: March 28, 2026
+Last updated: March 29, 2026
 
 This guide covers the current HammerForge workflow in Godot 4.6: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs.
 
@@ -85,6 +85,7 @@ The compact toolbar shows icon + text labels (Draw, Select, Add, Sub, Paint, Ext
 ### Manage tab (collapsible sections)
 - **Bake**: Bake button, Dry Run, Validate Level/Fix. Options: Merge Meshes, Generate LODs, Lightmap UV2, Texel Size, Navmesh (cell size, agent height), Use Face Materials, Quick Play.
 - **Actions**: Create Floor, Apply/Clear/Commit/Restore Cuts, Clear Brushes.
+- **Spawn**: Validate Spawn (bakes, then runs physics-based checks and shows debug overlay), Create Default Spawn (auto-places a `player_start` at brush centroid), Preview Spawn Debug (bakes, then shows persistent capsule/ray overlay toggle).
 - **File**: Save/Load .hflevel, Import/Export .map (Classic Quake / Valve 220), Export .glb.
 - **Presets**: Save/rename presets grid.
 - **History**: History panel (beta).
@@ -93,6 +94,25 @@ The compact toolbar shows icon + text labels (Draw, Select, Add, Sub, Paint, Ext
 - **Visgroups & Groups**: Visgroup list with [V]/[H] toggle, New/Add Sel/Rem Sel/Delete, Group Sel/Ungroup.
 - **Cordon**: Enable checkbox, min/max spinboxes, Set from Selection.
 - **Prefabs**: Save current selection as a `.hfprefab` file. Browse and drag-from the prefab library to instantiate groups of brushes and entities at a new position.
+
+### Quick Play and Spawn Validation
+Quick Play (footer button) bakes the level and launches it with a first-person controller. Before every Quick Play:
+
+1. **Spawn lookup**: finds the active `player_start` entity (primary-flagged first, then first found).
+2. **Auto-create**: if no `player_start` exists, a safe default is created at the centroid of all brushes + 5 m height.
+3. **Validation**: physics-based checks (floor raycast, capsule collision, headroom, below-map). Issues appear as toasts and optional debug overlays.
+4. **Fix dialog**: critical issues (inside geometry, floating in void) show a dialog offering "Fix & Play" (snaps to nearest valid floor) or "Cancel".
+5. **Launch**: bakes geometry + collision, then runs the scene with the FPS controller spawned at the validated position and yaw rotation.
+
+**player_start properties** (set in the Entity Properties panel):
+- `primary` (bool) -- preferred spawn when multiple exist.
+- `angle` (float, degrees) -- initial yaw rotation for the player.
+- `height_offset` (float) -- extra height above floor for safety.
+
+**Manage tab → Spawn section**:
+- **Validate Spawn** -- triggers a bake, then runs validation against real collision geometry and shows debug overlay (green/red capsule, floor ray, ceiling ray) for 10 seconds.
+- **Create Default Spawn** -- places a `player_start` at brush centroid if none exists. Fully undoable and redoable.
+- **Preview Spawn Debug** -- triggers a bake, then shows persistent overlay toggle (stays visible until unchecked).
 
 ### Toast Notifications
 Transient notifications appear in the dock for important events:

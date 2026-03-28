@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: March 28, 2026
+Last updated: March 29, 2026
 
 This roadmap is a directional plan. Items may change based on user feedback.
 Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md for details.
@@ -143,6 +143,15 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - **Context menu**: Apply to Selected Faces, Apply to Whole Brush, Toggle Favorite, Copy Name.
 - **Drag-and-drop**: thumbnails emit `hammerforge_material` drag data with preview, matching existing entity/preset pattern.
 - "Load Prototypes" renamed to "Refresh Prototypes".
+
+## Done (Player Spawn System + Quick Play Overhaul)
+- **HFSpawnSystem** subsystem: spawn lookup with primary-flag priority, physics-based validation (floor raycast, capsule collision, headroom, below-map), auto-fix to suggested position, default spawn creation from brush centroid.
+- **Quick Play validation flow**: pre-flight spawn check before every bake+play. Critical issues show fix dialog. Warnings toast and proceed. Missing spawn auto-creates a safe default.
+- **Debug visualisation**: green/red capsule, floor/ceiling rays (ImmediateMesh), floor disc, collision sphere. Auto-cleanup timer or persistent toggle ("Preview Spawn Debug" in Manage tab).
+- **Manage tab → Spawn section**: Validate Spawn, Create Default Spawn, Preview Spawn Debug toggle.
+- **player_start entity** enhanced with `primary`, `angle`, `height_offset` properties. Color changed to cyan.
+- **Playtest FPS controller** updated with `player_start_position` / `player_start_rotation_y` exports.
+- 21 new tests. Total: **685 tests across 41 files**.
 
 ## Next (Wave 2c remaining)
 - Displacement sewing (stitch adjacent heightmap edges to share vertices).

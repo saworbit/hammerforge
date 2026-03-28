@@ -1,6 +1,6 @@
 ﻿# Development Guide
 
-Last updated: March 28, 2026
+Last updated: March 29, 2026
 
 This document covers local setup, codebase structure, and how to test features.
 
@@ -85,6 +85,7 @@ addons/hammerforge/
     hf_io_visualizer.gd    Entity I/O connection lines in viewport (ImmediateMesh)
     hf_subtract_preview.gd Wireframe AABB intersection overlay for subtract brushes (debounced, pooled)
     hf_vertex_system.gd    Vertex/edge selection, move, split, merge with convexity validation
+    hf_spawn_system.gd     Player spawn lookup, validation, auto-fix, debug visualisation
 
   paint/                 Floor paint subsystem
     hf_paint_grid.gd       Grid storage

@@ -240,6 +240,9 @@ var _axis_lock_y: Button = null
 var _axis_lock_z: Button = null
 var _show_io_lines: CheckBox = null
 var _show_subtract_preview: CheckBox = null
+var _show_spawn_debug: CheckBox = null
+var _spawn_validate_btn: Button = null
+var _spawn_auto_create_btn: Button = null
 var _prefab_library = null  # HFPrefabLibrary
 var _sculpt_raise_btn: Button = null
 var _sculpt_lower_btn: Button = null
@@ -2872,11 +2875,168 @@ func _set_bake_buttons_disabled(disabled: bool) -> void:
 func _on_quick_play() -> void:
 	_log("Playtest requested")
 	_warn_missing_dependencies()
-	if level_root:
-		await level_root.bake(true, false, get_collision_layer_mask())
-		_notify_running_instances()
+	if not level_root:
+		return
+
+	# --- Ensure a spawn exists (before bake, so it's included in the scene) ---
+	var spawn: Node3D = null
+	if level_root.spawn_system:
+		spawn = level_root.spawn_system.get_active_spawn()
+	if not spawn:
+		show_toast("No player_start found — auto-creating default spawn", 1)
+		if level_root.spawn_system:
+			var pre_state: Dictionary = {}
+			if undo_redo and level_root.state_system:
+				pre_state = level_root.state_system.capture_state(true)
+			spawn = level_root.spawn_system.create_default_spawn()
+			if undo_redo and spawn and not pre_state.is_empty():
+				_record_spawn_create_undo(pre_state)
+
+	# --- Bake FIRST so collision bodies exist for validation ---
+	var mask := get_collision_layer_mask()
+	await level_root.bake(true, false, mask)
+
+	# --- Validate AFTER bake against real collision geometry ---
+	if spawn and level_root.spawn_system:
+		var validation: Dictionary = level_root.spawn_system.validate_spawn(spawn, mask)
+		var severity: int = validation.get("severity", 0)
+		var issues: PackedStringArray = validation.get("issues", PackedStringArray())
+
+		if severity >= 2:  # ERROR
+			level_root.spawn_system.show_validation_debug(spawn, validation, 10.0)
+			var issue_text := "\n".join(issues)
+			show_toast("Spawn issues: %s" % issue_text, 2)
+			_show_spawn_fix_dialog(spawn, validation, mask)
+			return
+		if severity >= 1:  # WARNING
+			level_root.spawn_system.show_validation_debug(spawn, validation, 6.0)
+			show_toast("Spawn warning: %s" % "\n".join(issues), 1)
+
+	_notify_running_instances()
 	if editor_interface:
 		editor_interface.play_current_scene()
+
+
+func _show_spawn_fix_dialog(spawn: Node3D, validation: Dictionary, mask: int) -> void:
+	var issues: PackedStringArray = validation.get("issues", PackedStringArray())
+	var dialog := ConfirmationDialog.new()
+	dialog.title = "Quick Play — Spawn Warning"
+	dialog.dialog_text = (
+		"Player spawn may be invalid:\n\n"
+		+ "\n".join(issues)
+		+ "\n\nFix automatically and play, or cancel?"
+	)
+	dialog.ok_button_text = "Fix & Play"
+	dialog.add_cancel_button("Cancel")
+	dialog.confirmed.connect(
+		func():
+			if is_instance_valid(spawn) and level_root and level_root.spawn_system:
+				var old_pos := spawn.global_position
+				level_root.spawn_system.auto_fix_spawn(spawn, validation)
+				level_root.spawn_system.cleanup_debug()
+				_record_spawn_move_undo(spawn, old_pos, spawn.global_position)
+				show_toast("Spawn fixed — launching playtest", 0)
+			_notify_running_instances()
+			if editor_interface:
+				editor_interface.play_current_scene()
+			dialog.queue_free()
+	)
+	dialog.canceled.connect(
+		func():
+			show_toast("Quick Play cancelled", 0)
+			dialog.queue_free()
+	)
+	add_child(dialog)
+	dialog.popup_centered()
+
+
+## Record an undo entry for auto-creating a spawn entity.
+## Uses state capture/restore so redo correctly re-creates the entity.
+## [before_state]: captured BEFORE the spawn was added to the tree.
+func _record_spawn_create_undo(before_state: Dictionary) -> void:
+	if not undo_redo or not level_root or not level_root.state_system:
+		return
+	var after_state: Dictionary = level_root.state_system.capture_state(true)
+	undo_redo.create_action("Auto-create player_start")
+	undo_redo.add_do_method(level_root.state_system, "restore_state", after_state)
+	undo_redo.add_undo_method(level_root.state_system, "restore_state", before_state)
+	undo_redo.commit_action(false)
+
+
+## Record an undo entry for auto-fixing spawn position.
+func _record_spawn_move_undo(spawn: Node3D, old_pos: Vector3, new_pos: Vector3) -> void:
+	if not undo_redo or not level_root or old_pos == new_pos:
+		return
+	undo_redo.create_action("Fix player_start position")
+	undo_redo.add_do_property(spawn, "global_position", new_pos)
+	undo_redo.add_undo_property(spawn, "global_position", old_pos)
+	undo_redo.commit_action(false)
+
+
+func _on_spawn_validate() -> void:
+	if not level_root or not level_root.spawn_system:
+		show_toast("No LevelRoot available", 1)
+		return
+	var spawn := level_root.spawn_system.get_active_spawn()
+	if not spawn:
+		show_toast("No player_start entity found", 1)
+		return
+	# Bake first so validation queries real collision geometry, not stale state
+	var mask := get_collision_layer_mask()
+	show_toast("Baking before validation…", 0)
+	await level_root.bake(true, false, mask)
+	# Re-check spawn is still valid after async bake
+	if not is_instance_valid(spawn) or not spawn.is_inside_tree():
+		show_toast("Spawn was removed during bake", 2)
+		return
+	var validation: Dictionary = level_root.spawn_system.validate_spawn(spawn, mask)
+	level_root.spawn_system.show_validation_debug(spawn, validation, 10.0)
+	var issues: PackedStringArray = validation.get("issues", PackedStringArray())
+	if validation.get("valid", false):
+		show_toast("Spawn is valid", 0)
+	else:
+		show_toast("Spawn issues: %s" % "\n".join(issues), 2)
+
+
+func _on_spawn_auto_create() -> void:
+	if not level_root or not level_root.spawn_system:
+		show_toast("No LevelRoot available", 1)
+		return
+	var existing := level_root.spawn_system.get_active_spawn()
+	if existing:
+		show_toast("player_start already exists — select and move it instead", 1)
+		return
+	var pre_state: Dictionary = {}
+	if undo_redo and level_root.state_system:
+		pre_state = level_root.state_system.capture_state(true)
+	var spawn := level_root.spawn_system.create_default_spawn()
+	if spawn and not pre_state.is_empty():
+		_record_spawn_create_undo(pre_state)
+	show_toast("Default player_start created", 0)
+
+
+func _on_show_spawn_debug_toggled(enabled: bool) -> void:
+	if not level_root or not level_root.spawn_system:
+		return
+	if enabled:
+		var spawn := level_root.spawn_system.get_active_spawn()
+		if not spawn:
+			show_toast("No player_start to preview", 1)
+			if _show_spawn_debug:
+				_show_spawn_debug.set_pressed_no_signal(false)
+			return
+		# Bake first so the debug overlay reflects real collision state
+		var mask := get_collision_layer_mask()
+		await level_root.bake(true, false, mask)
+		if not is_instance_valid(spawn) or not spawn.is_inside_tree():
+			show_toast("Spawn was removed during bake", 2)
+			if _show_spawn_debug:
+				_show_spawn_debug.set_pressed_no_signal(false)
+			return
+		var validation: Dictionary = level_root.spawn_system.validate_spawn(spawn, mask)
+		level_root.spawn_system.show_validation_debug(spawn, validation, 0.0)
+	else:
+		level_root.spawn_system.cleanup_debug()
 
 
 func _notify_running_instances() -> void:

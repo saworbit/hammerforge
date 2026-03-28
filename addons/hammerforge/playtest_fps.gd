@@ -23,6 +23,10 @@ extends CharacterBody3D
 @export var capsule_radius := 0.35
 @export var capsule_height := 1.6
 
+# --- Spawn (set by Quick Play before adding to scene tree) ---
+@export var player_start_position: Vector3 = Vector3.ZERO
+@export var player_start_rotation_y: float = 0.0
+
 # --- State Variables ---
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var camera_pivot: Node3D
@@ -50,6 +54,12 @@ func _ready() -> void:
 	camera.fov = base_fov
 	camera_pivot.add_child(camera)
 	camera.make_current()
+
+	# Apply spawn position/rotation if set by Quick Play
+	if player_start_position != Vector3.ZERO:
+		global_position = player_start_position
+	if player_start_rotation_y != 0.0:
+		rotation.y = player_start_rotation_y
 
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 

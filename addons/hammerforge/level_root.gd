@@ -39,6 +39,7 @@ const HFIOVisualizerType = preload("systems/hf_io_visualizer.gd")
 const HFVertexSystemType = preload("systems/hf_vertex_system.gd")
 const HFCarveSystemType = preload("systems/hf_carve_system.gd")
 const HFSubtractPreviewType = preload("systems/hf_subtract_preview.gd")
+const HFSpawnSystemType = preload("systems/hf_spawn_system.gd")
 const HFPrototypeTextures = preload("hf_prototype_textures.gd")
 
 const RELOAD_LOCK_PATH := "res://.hammerforge/reload.lock"
@@ -206,6 +207,7 @@ var io_visualizer: HFIOVisualizerType
 var vertex_system: HFVertexSystemType
 var carve_system: HFCarveSystemType
 var subtract_preview: HFSubtractPreviewType
+var spawn_system: HFSpawnSystemType
 
 @export var show_subtract_preview: bool = false:
 	set(value):
@@ -485,6 +487,7 @@ func _ready():
 	vertex_system = HFVertexSystemType.new(self)
 	carve_system = HFCarveSystemType.new(self)
 	subtract_preview = HFSubtractPreviewType.new(self)
+	spawn_system = HFSpawnSystemType.new(self)
 	if show_subtract_preview:
 		subtract_preview.set_enabled(true)
 	entity_system.load_entity_definitions()
@@ -1891,29 +1894,39 @@ func _start_playtest() -> void:
 		if pending_node:
 			pending_node.visible = false
 
+	var spawn: Node3D = null
+	var spawn_yaw := 0.0
+	if spawn_system:
+		spawn = spawn_system.get_active_spawn()
+	if not spawn:
+		# Legacy fallback — scan entities directly
+		for node in _iter_pick_nodes():
+			if node is DraftEntity:
+				var draft_entity := node as DraftEntity
+				var ec := draft_entity.entity_class
+				if ec == "":
+					ec = draft_entity.entity_type
+				if ec == "player_start":
+					spawn = draft_entity
+					break
+
 	var spawn_pos := Vector3(0, 2, 0)
-	var found_spawn := false
-	for node in _iter_pick_nodes():
-		if node is DraftEntity:
-			var draft_entity := node as DraftEntity
-			var entity_class := draft_entity.entity_class
-			if entity_class == "":
-				entity_class = draft_entity.entity_type
-			if entity_class == "player_start":
-				spawn_pos = (
-					draft_entity.global_position
-					if draft_entity.is_inside_tree()
-					else draft_entity.position
-				)
-				found_spawn = true
-				break
+	var found_spawn := spawn != null
+	var height_offset := 1.0
+	if found_spawn:
+		spawn_pos = (spawn.global_position if spawn.is_inside_tree() else spawn.position)
+		if spawn is DraftEntity:
+			spawn_yaw = deg_to_rad(float(spawn.entity_data.get("angle", 0.0)))
+			height_offset = float(spawn.entity_data.get("height_offset", 1.0))
 
 	var player = CharacterBody3D.new()
 	player.name = "PlaytestPlayer"
 	player.set_script(PlaytestFPS)
-	var offset = Vector3(0, 1.0, 0) if found_spawn else Vector3.ZERO
+	var offset = Vector3(0, height_offset, 0) if found_spawn else Vector3.ZERO
 	add_child(player)
 	player.global_position = spawn_pos + offset
+	if found_spawn:
+		player.rotation.y = spawn_yaw
 
 
 # ===========================================================================

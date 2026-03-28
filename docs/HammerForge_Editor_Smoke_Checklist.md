@@ -1,6 +1,6 @@
 # HammerForge Editor Smoke Checklist
 
-Last updated: March 28, 2026
+Last updated: March 29, 2026
 
 This checklist covers the editor-only flows that are hard to validate in headless tests:
 - tutorial banner startup before `LevelRoot` exists
@@ -13,6 +13,7 @@ This checklist covers the editor-only flows that are hard to validate in headles
 - path tool: place waypoints, finalize, corridor + miter joint brushes
 - material browser: thumbnail grid, search, filters, favorites, hover preview, context menu
 - texture picker: T key eyedropper for sampling face materials
+- spawn system: validation debug overlay, Quick Play with missing/invalid spawn, Manage tab spawn controls
 
 ## Prep
 
@@ -139,11 +140,29 @@ Enable the HammerForge plugin if it is not already enabled.
 - Press **T** (Texture Picker); click a face in the viewport. Confirm the browser selection updates to match that face's material.
 - Press **T** on a face with no material; confirm a toast message appears ("Face has no material assigned").
 
-### 12. Cleanup / Persistence
+### 12. Spawn System + Quick Play Validation
+- Delete all `player_start` entities (or start with a fresh scene).
+- Click **Quick Play**; confirm a toast warns "No player_start found — auto-creating default spawn".
+- Confirm the playtest launches and the player spawns above the brush centroid.
+- Stop the playtest. Move the auto-created `player_start` inside a solid brush.
+- Click **Quick Play**; confirm a dialog appears listing "Spawn inside solid geometry".
+- Click **Fix & Play**; confirm the spawn snaps to a valid floor position and playtest launches.
+- Stop the playtest. Place `player_start` high above geometry (floating in space).
+- Click **Quick Play**; confirm a warning dialog about floating/no floor.
+- Click **Cancel**; confirm playtest does not launch and a "Quick Play cancelled" toast appears.
+- Open **Manage → Spawn** section.
+- Click **Validate Spawn**; confirm the debug overlay appears (capsule, floor ray, markers) for ~10 seconds.
+- Check **Preview Spawn Debug**; confirm the overlay stays persistent.
+- Uncheck **Preview Spawn Debug**; confirm the overlay is cleaned up.
+- Place two `player_start` entities. Set `primary = true` on the second one via Entity Properties.
+- Click **Quick Play**; confirm the player spawns at the primary-flagged entity (not the first one).
+- Set `angle = 90` on the primary spawn; playtest and confirm the player faces 90 degrees rotated.
+
+### 13. Cleanup / Persistence
 - Dismiss the tutorial with and without `Don't show again` checked.
 - Restart Godot and confirm the `show_welcome` preference behaves as expected.
 - Reopen the dock and confirm no layout corruption remains after closing the tutorial and shortcut dialog.
 
 ## Expected Outcome
 
-If all steps pass, the remaining risk on the tutorial/prefab/shortcut/subtract-preview/vertex-editing/polygon/path/material-browser feature set is low and limited mainly to edge cases outside this smoke path.
+If all steps pass, the remaining risk on the tutorial/prefab/shortcut/subtract-preview/vertex-editing/polygon/path/material-browser/spawn-system feature set is low and limited mainly to edge cases outside this smoke path.

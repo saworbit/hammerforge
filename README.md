@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/Godot-4.6%2B-478cbf?logo=godot-engine&logoColor=white" alt="Godot 4.6+">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
   <img src="https://img.shields.io/badge/Status-Alpha-orange" alt="Alpha">
-  <img src="https://img.shields.io/badge/Tests-622%20passing-brightgreen" alt="622 tests passing">
+  <img src="https://img.shields.io/badge/Tests-694%20passing-brightgreen" alt="694 tests passing">
   <img src="https://img.shields.io/badge/GDScript-23k%2B%20lines-blueviolet" alt="23k+ lines">
 </p>
 
@@ -36,7 +36,7 @@ HammerForge is a single `addons/` folder. No external tools, no custom builds, n
 
 | | |
 |---|---|
-| **Modular subsystem architecture** | **622 unit + integration tests** with CI on every push |
+| **Modular subsystem architecture** | **694 unit + integration tests** with CI on every push |
 | **15 brush shapes** (box through dodecahedron) | **150 built-in prototype textures** for instant greyboxing |
 | **Quake `.map`** + **glTF `.glb`** export | **.hflevel** native format with threaded I/O |
 | **Customizable keymaps** (JSON) | **Plugin API** for custom tools |
@@ -158,7 +158,7 @@ Grid-based paint layers with chunked storage for large worlds:
 | **Validate** | Check level integrity before bake |
 | **.map export** | Classic Quake or Valve 220 format |
 | **.glb export** | glTF binary for external tools |
-| **Quick Play** | Bake + run with FPS controller |
+| **Quick Play** | Bake + validate spawn + run with FPS controller |
 
 ---
 
@@ -204,6 +204,7 @@ plugin.gd            EditorPlugin — input routing, toolbar, viewport overlay
        ├─ HFSnapSystem      Grid / Vertex / Center snap with threshold
        ├─ HFSubtractPreview Wireframe AABB intersection overlay for subtract brushes
        ├─ HFVertexSystem    Vertex/edge selection, move, split, merge with convexity validation
+       ├─ HFSpawnSystem     Player spawn lookup, validation, auto-fix, debug visualisation
        └─ HFToolRegistry    External tool loading and dispatch
             ├─ HFMeasureTool   Ruler/distance measurement (tool_id=100)
             ├─ HFDecalTool     Decal placement with live preview (tool_id=101)
