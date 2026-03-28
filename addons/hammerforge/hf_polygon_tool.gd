@@ -80,7 +80,11 @@ func handle_input(event: InputEvent, camera: Camera3D, mouse_pos: Vector2) -> in
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 
 	# Right-click to undo last point or cancel
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
+	if (
+		event is InputEventMouseButton
+		and event.button_index == MOUSE_BUTTON_RIGHT
+		and event.pressed
+	):
 		return _handle_escape()
 
 	# Mouse motion

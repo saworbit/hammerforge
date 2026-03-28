@@ -602,7 +602,9 @@ func _handle_keyboard_input(
 	if _tool_registry:
 		var ext_id = _tool_registry.check_shortcut(event.keycode)
 		if ext_id >= 0 and active_root:
-			_tool_registry.activate_tool(ext_id, active_root, last_3d_camera, undo_redo_manager, _record_history)
+			_tool_registry.activate_tool(
+				ext_id, active_root, last_3d_camera, undo_redo_manager, _record_history
+			)
 			_update_hud_context()
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 	return EditorPlugin.AFTER_GUI_INPUT_PASS

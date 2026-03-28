@@ -86,7 +86,11 @@ func handle_input(event: InputEvent, camera: Camera3D, mouse_pos: Vector2) -> in
 		return _handle_click(camera, mouse_pos)
 
 	# Right click — undo last point
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
+	if (
+		event is InputEventMouseButton
+		and event.button_index == MOUSE_BUTTON_RIGHT
+		and event.pressed
+	):
 		return _handle_escape()
 
 	# Mouse motion
@@ -244,7 +248,7 @@ func _build_path() -> void:
 func _build_segment_brush(
 	a: Vector3, b: Vector3, width: float, height: float, group_id: String
 ) -> Dictionary:
-	var dir := (b - a)
+	var dir := b - a
 	dir.y = 0.0
 	var length := dir.length()
 	if length < 0.01:
@@ -262,7 +266,12 @@ func _build_segment_brush(
 	for vert_y in [-half_h, half_h]:
 		for wp in [-1.0, 1.0]:  # width direction
 			for lp in [-1.0, 1.0]:  # length direction
-				var world_pt: Vector3 = center + dir * (length * 0.5 * lp) + perp * (half_w * wp) + Vector3(0, vert_y, 0)
+				var world_pt: Vector3 = (
+					center
+					+ dir * (length * 0.5 * lp)
+					+ perp * (half_w * wp)
+					+ Vector3(0, vert_y, 0)
+				)
 				corners.append(world_pt - center)  # to local space
 
 	# corners layout:
@@ -303,17 +312,16 @@ func _build_segment_brush(
 
 
 func _build_miter_brush(
-	prev: Vector3, curr: Vector3, next: Vector3,
-	width: float, height: float, group_id: String
+	prev: Vector3, curr: Vector3, next: Vector3, width: float, height: float, group_id: String
 ) -> Dictionary:
 	# Compute directions
-	var dir_in := (curr - prev)
+	var dir_in := curr - prev
 	dir_in.y = 0.0
 	if dir_in.length() < 0.01:
 		return {}
 	dir_in = dir_in.normalized()
 
-	var dir_out := (next - curr)
+	var dir_out := next - curr
 	dir_out.y = 0.0
 	if dir_out.length() < 0.01:
 		return {}
@@ -366,10 +374,11 @@ func _build_miter_brush(
 	var sorted_indices: Array = []
 	for i in range(xz_pts.size()):
 		sorted_indices.append(i)
-	sorted_indices.sort_custom(func(a_idx: int, b_idx: int) -> bool:
-		var aa := atan2(xz_pts[a_idx].z - cx.z, xz_pts[a_idx].x - cx.x)
-		var bb := atan2(xz_pts[b_idx].z - cx.z, xz_pts[b_idx].x - cx.x)
-		return aa < bb
+	sorted_indices.sort_custom(
+		func(a_idx: int, b_idx: int) -> bool:
+			var aa := atan2(xz_pts[a_idx].z - cx.z, xz_pts[a_idx].x - cx.x)
+			var bb := atan2(xz_pts[b_idx].z - cx.z, xz_pts[b_idx].x - cx.x)
+			return aa < bb
 	)
 
 	var sorted_pts := PackedVector3Array()
@@ -469,7 +478,7 @@ func _update_preview() -> void:
 	for i in range(n - 1):
 		var a: Vector3 = _waypoints[i]
 		var b: Vector3 = _waypoints[i + 1]
-		var dir := (b - a)
+		var dir := b - a
 		dir.y = 0.0
 		if dir.length() < 0.01:
 			continue

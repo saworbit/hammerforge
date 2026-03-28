@@ -28,7 +28,9 @@ func unregister_tool(tool_id: int) -> void:
 
 
 func activate_tool(
-	tool_id: int, root: Node3D, camera: Camera3D,
+	tool_id: int,
+	root: Node3D,
+	camera: Camera3D,
 	p_undo_redo: EditorUndoRedoManager = null,
 	p_history_callback: Callable = Callable()
 ) -> void:

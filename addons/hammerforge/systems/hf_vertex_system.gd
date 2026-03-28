@@ -528,12 +528,17 @@ func get_all_edge_world_positions() -> Array:
 				and _hovered_edge[2] == edge[1]
 			):
 				is_hov = true
-			result.append({
-				"a": xform * verts[edge[0]],
-				"b": xform * verts[edge[1]],
-				"selected": is_sel,
-				"hovered": is_hov,
-			})
+			(
+				result
+				. append(
+					{
+						"a": xform * verts[edge[0]],
+						"b": xform * verts[edge[1]],
+						"selected": is_sel,
+						"hovered": is_hov,
+					}
+				)
+			)
 	return result
 
 
