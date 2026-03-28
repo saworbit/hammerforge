@@ -845,9 +845,9 @@ func _handle_vertex_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vec
 				for brush_id in vs.selected_vertices:
 					var indices: PackedInt32Array = vs.selected_vertices[brush_id]
 					if indices.size() >= 2:
-						var ok := vs.merge_vertices(brush_id, indices)
+						var ok: bool = vs.merge_vertices(brush_id, indices)
 						if ok and undo_redo_manager:
-							var snapshots := vs.get_pre_op_snapshots()
+							var snapshots: Dictionary = vs.get_pre_op_snapshots()
 							if not snapshots.is_empty():
 								_commit_vertex_op(root, snapshots, "Merge Vertices")
 						vs.clear_selection()
@@ -856,11 +856,11 @@ func _handle_vertex_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vec
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 		# Ctrl+E: split edge
 		if _keymap and _keymap.matches("vertex_split_edge", event):
-			var single := vs.get_single_selected_edge()
+			var single: Array = vs.get_single_selected_edge()
 			if single.size() == 2:
-				var ok := vs.split_edge(single[0], single[1])
+				var ok: bool = vs.split_edge(single[0], single[1])
 				if ok and undo_redo_manager:
-					var snapshots := vs.get_pre_op_snapshots()
+					var snapshots: Dictionary = vs.get_pre_op_snapshots()
 					if not snapshots.is_empty():
 						_commit_vertex_op(root, snapshots, "Split Edge")
 				vs.clear_selection()
@@ -872,7 +872,7 @@ func _handle_vertex_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vec
 		if event.pressed:
 			if vs.sub_mode == vs.VertexSubMode.EDGE:
 				# Edge sub-mode: pick edges
-				var pick := vs.pick_edge(cam, pos)
+				var pick: Dictionary = vs.pick_edge(cam, pos)
 				if pick.is_empty():
 					if not event.shift_pressed:
 						vs.clear_selection()
