@@ -1,6 +1,6 @@
 # HammerForge User Guide
 
-Last updated: March 27, 2026
+Last updated: March 28, 2026
 
 This guide covers the current HammerForge workflow in Godot 4.6: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs.
 
@@ -200,6 +200,9 @@ The on-screen shortcut overlay updates dynamically based on your current tool an
 | Extrude Up/Down (active) | Move mouse to set height, Release to confirm, Right-click cancel |
 | Floor Paint | Click+Drag, B/E/R/L/K tool shortcuts |
 | Surface Paint | Click+Drag, radius/strength info |
+| Vertex Edit | Click vertex to select, drag to move, E: edge mode, Ctrl+W: merge, Ctrl+E: split |
+| Polygon Tool | Click to place verts, Enter: close, Escape: remove last |
+| Path Tool | Click to place waypoints, Enter: finalize, Escape: remove last |
 
 The HUD also shows current axis lock state (e.g. "[X Locked]").
 
@@ -226,6 +229,11 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Move to Ceiling | Ctrl+Shift+C | Snap to nearest surface above |
 | Measure | M | Ruler tool (click A, click B, shows distance) |
 | Decal | N | Place decal on surface with live preview |
+| Polygon | P | Draw convex polygon, extrude to brush |
+| Path | ; | Place waypoints, extrude corridor brushes |
+| Edge sub-mode | E | Toggle vertex/edge sub-mode (in vertex mode) |
+| Split edge | Ctrl+E | Insert midpoint on selected edge |
+| Merge vertices | Ctrl+W | Merge selected vertices to centroid |
 | Axis Lock X/Y/Z | X / Y / Z | Constrain to axis |
 | Paint tools | B / E / R / L / K | Bucket / Erase / Ramp / Line / Blend |
 
@@ -316,6 +324,89 @@ Paint tool shortcuts (active when Paint Mode is enabled)
 - R: Rectangle tool.
 - L: Line tool.
 - K: Bucket fill tool.
+
+## Vertex Editing
+
+Vertex mode lets you select and move individual brush vertices for precision geometry editing.
+
+### Entering Vertex Mode
+Press **V** (keyboard shortcut or the **V** toggle button in the toolbar) to enter vertex mode. Selected brushes show their vertices as crosses and edges as wireframe lines.
+
+### Vertex Sub-Mode
+- **Vertex mode** (default): click vertices to select them, drag to move.
+- **Edge mode** (press **E** to toggle): click edges to select them. Selected edges highlight orange; hovered edges highlight yellow.
+
+### Edge Operations
+- **Split edge** (Ctrl+E): select exactly one edge, then press Ctrl+E to insert a midpoint vertex. The two faces sharing the edge each gain the new vertex. Convexity is mathematically guaranteed.
+- **Merge vertices** (Ctrl+W): select 2+ vertices, then press Ctrl+W to merge them to their centroid. Merging is rejected if it would break convexity.
+
+### Convexity Enforcement
+All vertex operations validate that the brush remains convex. If a move or merge would create a concave shape, the operation is rejected and the brush reverts to its previous state.
+
+### Shortcuts
+| Key | Action |
+|-----|--------|
+| V | Enter vertex mode |
+| E | Toggle vertex/edge sub-mode |
+| Ctrl+E | Split selected edge |
+| Ctrl+W | Merge selected vertices |
+
+## Polygon Tool
+
+The polygon tool lets you draw arbitrary convex shapes and extrude them into brushes.
+
+### Workflow
+1. Press **P** to activate the Polygon tool.
+2. Click in the viewport to place vertices on the ground plane (grid-snapped).
+3. Each new vertex is validated for convexity -- concave placements are rejected.
+4. Close the polygon by clicking near the first vertex (within the auto-close threshold) or pressing **Enter** (requires 3+ vertices).
+5. Move the mouse up/down to set the extrusion height, then click to confirm.
+6. The brush is created with full undo/redo support.
+
+### Preview
+During placement, a cyan outline shows the polygon shape. During height extrusion, green vertical edges and the top face outline appear.
+
+### Settings
+| Setting | Default | Description |
+|---------|---------|-------------|
+| auto_close_threshold | 1.5 | Distance to first vertex that triggers auto-close |
+
+### Shortcuts
+| Key | Action |
+|-----|--------|
+| P | Activate Polygon tool |
+| Left-click | Place vertex / confirm height |
+| Enter | Close polygon (3+ verts) / confirm height |
+| Escape / Right-click | Remove last vertex / cancel |
+
+## Path Tool
+
+The path tool creates corridors by placing waypoints and extruding a rectangular cross-section along the path.
+
+### Workflow
+1. Press **;** (semicolon) to activate the Path tool.
+2. Click in the viewport to place waypoints on the ground plane (grid-snapped).
+3. Press **Enter** to finalize the path (requires 2+ waypoints).
+4. For each segment, an oriented-box brush is created. At interior corners, a miter joint brush fills the gap.
+5. All brushes are auto-grouped and created in a single undo action.
+
+### Preview
+During placement, a cyan polyline shows the path with parallel offset lines indicating width and perpendicular ticks at waypoints.
+
+### Settings
+| Setting | Default | Description |
+|---------|---------|-------------|
+| path_width | 4.0 | Width of the corridor cross-section |
+| path_height | 4.0 | Height of the corridor cross-section |
+| miter_joints | true | Fill gaps at path corners with wedge brushes |
+
+### Shortcuts
+| Key | Action |
+|-----|--------|
+| ; | Activate Path tool |
+| Left-click | Place waypoint |
+| Enter | Finalize path (2+ waypoints) |
+| Escape / Right-click | Remove last waypoint / cancel |
 
 ## Visgroups (Visibility Groups)
 Visgroups let you organize your map into logical groups and toggle their visibility.

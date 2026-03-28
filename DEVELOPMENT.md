@@ -1,6 +1,6 @@
 ﻿# Development Guide
 
-Last updated: March 27, 2026
+Last updated: March 28, 2026
 
 This document covers local setup, codebase structure, and how to test features.
 
@@ -36,6 +36,8 @@ addons/hammerforge/
   hf_tool_registry.gd    Plugin API: tool registration, dispatch, external tool loader
   hf_measure_tool.gd     Measurement/ruler tool (click A → click B → distance + decomposition)
   hf_decal_tool.gd       Decal placement tool (raycast + surface-normal aligned Decal nodes)
+  hf_polygon_tool.gd     Polygon tool (click convex verts → extrude to brush, tool_id=102)
+  hf_path_tool.gd        Path tool (waypoints → corridor brushes with miter joints, tool_id=103)
   hf_keymap.gd           Customizable keyboard shortcuts (JSON load/save, action matching)
   hf_user_prefs.gd       Cross-session user preferences (user://hammerforge_prefs.json)
   hf_snap_system.gd      Centralized snap (Grid/Vertex/Center modes, threshold-based candidates)
@@ -81,6 +83,7 @@ addons/hammerforge/
     hf_carve_system.gd     Boolean-subtract carve (progressive-remainder box slicing)
     hf_io_visualizer.gd    Entity I/O connection lines in viewport (ImmediateMesh)
     hf_subtract_preview.gd Wireframe AABB intersection overlay for subtract brushes (debounced, pooled)
+    hf_vertex_system.gd    Vertex/edge selection, move, split, merge with convexity validation
 
   paint/                 Floor paint subsystem
     hf_paint_grid.gd       Grid storage
@@ -125,6 +128,9 @@ addons/hammerforge/
 - **Searchable shortcut dialog.** `ui/hf_shortcut_dialog.gd` extends `AcceptDialog` with a search `LineEdit` and `Tree`. Categories populated from `HFKeymap.get_category()`. Replaces the static shortcuts popup.
 - **Subtract preview.** `systems/hf_subtract_preview.gd` is a `RefCounted` subsystem that renders wireframe AABB intersections between additive and subtractive brushes using `ImmediateMesh` (same 12-edge box pattern as cordon). Debounced (0.15s), pooled `MeshInstance3D` (max 50). Toggle via `show_subtract_preview` on LevelRoot. Persisted in state settings.
 - **Prefabs.** `hf_prefab.gd` (`HFPrefab`) stores brush_infos + entity_infos with centroid-relative transforms. `capture_from_selection()` computes centroid and strips brush_id/group_id. `instantiate()` assigns new IDs, offsets transforms, and remaps entity I/O via name_map. `save_to_file()`/`load_from_file()` use JSON via `HFLevelIO` encoding. `ui/hf_prefab_library.gd` provides the dock section with ItemList and drag-and-drop (`"hammerforge_prefab"` type tag). Plugin handles drop with raycast + snap + undo/redo.
+- **Vertex system.** `HFVertexSystem` (`systems/hf_vertex_system.gd`) manages vertex/edge selection, movement with convexity validation, edge splitting, and vertex merging. Supports two sub-modes: `VertexSubMode.VERTEX` and `VertexSubMode.EDGE`, toggled with E key. Edge selection syncs to `selected_vertices` so `move_vertices()` works transparently for both modes. `split_edge()` inserts midpoints and skips convexity validation (mathematically guaranteed on convex hulls). `merge_vertices()` validates convexity and reverts via face snapshots on failure. Edge deduplication uses canonical vertex key pairs (`"vkey_a|vkey_b"` where a < b).
+- **Polygon tool.** `HFPolygonTool` (`hf_polygon_tool.gd`, tool_id=102, KEY_P) creates arbitrary convex polygon brushes via a three-phase state machine (IDLE → PLACING_VERTS → SETTING_HEIGHT). Enforces convexity via 2D cross product on XZ plane. Constructs face data with proper winding (top=CCW for up-normal, bottom=CW, N side quads) in local space relative to AABB center. Uses `create_brush_from_info()` with undo/redo via `self.undo_redo`.
+- **Path tool.** `HFPathTool` (`hf_path_tool.gd`, tool_id=103, KEY_SEMICOLON) creates corridor brushes from waypoints. Each segment is an oriented-box brush (8 corners from direction + perpendicular). Miter joint brushes fill gaps at interior waypoints. All brushes share a `group_id`. Single undo action for the entire path.
 - **Context hints.** Per-tab hint labels at the bottom of each dock tab update via `_update_context_hints()` in `dock.gd`. Driven by `_hints_dirty` flag alongside `_update_disabled_hints()`.
 - **Face hover highlight.** `level_root.highlight_hovered_face(camera, mouse_pos, color)` performs a FaceSelector raycast and renders a semi-transparent overlay on the hit face. Used by `plugin.gd` in extrude mode when idle. Call `clear_face_hover_highlight()` when switching tools.
 - **Undo/redo stability.** Prefer brush IDs and `create_brush_from_info()` for undo instead of storing Node references in history.
@@ -146,7 +152,7 @@ addons/hammerforge/
 The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on push and PR to `main`:
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
-- **GUT unit + integration tests** -- 572 tests across 35 test files (runs Godot headless)
+- **GUT unit + integration tests** -- 622 tests across 38 test files (runs Godot headless)
 
 Run locally before pushing:
 ```
@@ -194,6 +200,9 @@ Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framewor
 | `test_tutorial_wizard.gd` | 14 | Step advancement, persistence, deferred start, resume, bake validation, no-root safety |
 | `test_subtract_preview.gd` | 8 | AABB intersection math (overlapping, no-overlap, contained, partial axis), enable/disable, debounce timing |
 | `test_prefab.gd` | 10 | Empty prefab, to_dict/from_dict roundtrip, transform preservation, file save/load, invalid data handling, multiple brushes, entity I/O preservation, instantiate empty |
+| `test_vertex_edges.gd` | 19 | Edge extraction (12 edges for box), dedup, edge selection (additive, toggle, clear), edge world positions, edge split (vertex count, face vert count), vertex merge, sub-mode toggle, get_single_selected_edge, point-to-segment-dist-2d |
+| `test_polygon_tool.gd` | 16 | Convexity validation (square, triangle, L-shape, pentagon, collinear, degenerate), face data construction (square/triangle extrusion, local space, top face normal), empty/two-point, tool metadata, settings schema |
+| `test_path_tool.gd` | 15 | Segment brush construction (straight, diagonal, zero-length, center, size), miter joint construction (right angle, straight skipped, acute skipped, group_id), face data validation, face reconstruction, tool metadata |
 
 Run all tests:
 ```

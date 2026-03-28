@@ -107,7 +107,7 @@ func test_from_dict_invalid_types():
 func test_instantiate_empty_prefab():
 	var prefab = HFPrefabType.new()
 	# With no brush_system or entity_system, instantiate should return empty result
-	var result = prefab.instantiate(null, null, Node3D.new(), Vector3.ZERO)
+	var result = prefab.instantiate(null, null, null, Vector3.ZERO)
 	assert_eq(result.get("brush_ids", []).size(), 0, "Empty prefab should produce no brush IDs")
 	assert_eq(result.get("entity_count", 0), 0, "Empty prefab should produce no entities")
 

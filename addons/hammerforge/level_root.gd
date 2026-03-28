@@ -59,7 +59,8 @@ enum BrushShape {
 	TETRAHEDRON,
 	OCTAHEDRON,
 	DODECAHEDRON,
-	ICOSAHEDRON
+	ICOSAHEDRON,
+	CUSTOM  # Polygon/path tool brushes with custom face data (not axis-aligned)
 }
 enum AxisLock { NONE, X, Y, Z }
 

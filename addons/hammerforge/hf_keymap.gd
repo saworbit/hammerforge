@@ -49,6 +49,9 @@ static func _default_bindings() -> Dictionary:
 		"paint_blend": {"keycode": KEY_K},
 		# Vertex editing
 		"vertex_edit": {"keycode": KEY_V},
+		"vertex_edge_mode": {"keycode": KEY_E},
+		"vertex_merge": {"keycode": KEY_W, "ctrl": true},
+		"vertex_split_edge": {"keycode": KEY_E, "ctrl": true},
 		# Axis lock
 		"axis_x": {"keycode": KEY_X},
 		"axis_y": {"keycode": KEY_Y},
@@ -131,7 +134,7 @@ static func get_category(action: String) -> String:
 		return "Paint"
 	if action.begins_with("axis_"):
 		return "Axis Lock"
-	if action in ["vertex_edit"]:
+	if action in ["vertex_edit", "vertex_edge_mode", "vertex_merge", "vertex_split_edge"]:
 		return "Tools"
 	return "Editing"
 
@@ -144,6 +147,9 @@ static func get_action_label(action: String) -> String:
 		"tool_extrude_up": "Extrude Up",
 		"tool_extrude_down": "Extrude Down",
 		"vertex_edit": "Vertex Edit",
+		"vertex_edge_mode": "Edge Mode",
+		"vertex_merge": "Merge Vertices",
+		"vertex_split_edge": "Split Edge",
 		"delete": "Delete",
 		"duplicate": "Duplicate",
 		"group": "Group",

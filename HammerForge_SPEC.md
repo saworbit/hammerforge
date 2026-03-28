@@ -1,6 +1,6 @@
 # HammerForge Spec
 
-Last updated: March 27, 2026
+Last updated: March 28, 2026
 
 This document describes HammerForge's architecture and data flow.
 
@@ -62,6 +62,8 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `hf_snap_system.gd` | Centralized snap system (Grid/Vertex/Center modes, threshold-based candidate selection) |
 | `hf_op_result.gd` | Lightweight operation result (`ok`, `message`, `fix_hint`) returned by brush operations |
 | `hf_prefab.gd` | Reusable brush+entity group (save/load `.hfprefab`, centroid-relative transforms, I/O remap) |
+| `hf_polygon_tool.gd` | Polygon tool: click convex verts → extrude to brush (tool_id=102, KEY_P) |
+| `hf_path_tool.gd` | Path tool: click waypoints → corridor brushes with miter joints (tool_id=103, KEY_SEMICOLON) |
 
 ### UI Components (`addons/hammerforge/ui/`)
 
@@ -94,6 +96,7 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `hf_carve_system.gd` | `HFCarveSystem` | Boolean-subtract carve (progressive-remainder box slicing) |
 | `hf_io_visualizer.gd` | `HFIOVisualizer` | Entity I/O connection lines in viewport (ImmediateMesh) |
 | `hf_subtract_preview.gd` | `HFSubtractPreview` | Wireframe AABB intersection overlay between subtract and additive brushes (debounced, pooled) |
+| `hf_vertex_system.gd` | `HFVertexSystem` | Vertex/edge selection, move, split, merge with convexity validation. Edge sub-mode with wireframe overlay |
 
 ### Other Modules
 
@@ -103,6 +106,8 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 - `addons/hammerforge/textures/prototypes/`: embedded SVG texture library for greyboxing
 - `addons/hammerforge/hf_measure_tool.gd`: `HFMeasureTool` -- measurement/ruler tool (tool_id=100, click A→B, distance + dX/dY/dZ)
 - `addons/hammerforge/hf_decal_tool.gd`: `HFDecalTool` -- decal placement tool (tool_id=101, raycast + surface-normal Decal nodes)
+- `addons/hammerforge/hf_polygon_tool.gd`: `HFPolygonTool` -- convex polygon → extruded brush (tool_id=102, KEY_P)
+- `addons/hammerforge/hf_path_tool.gd`: `HFPathTool` -- waypoint path → corridor brushes with miter joints (tool_id=103, KEY_SEMICOLON)
 - `addons/hammerforge/ui/hf_tutorial_wizard.gd`: interactive 5-step tutorial wizard (Draw → Subtract → Paint → Entity → Bake)
 - `addons/hammerforge/ui/hf_shortcut_dialog.gd`: searchable shortcut reference dialog with category grouping
 - `addons/hammerforge/ui/hf_prefab_library.gd`: prefab library dock section with drag-and-drop

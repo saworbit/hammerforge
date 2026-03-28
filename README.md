@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/Godot-4.6%2B-478cbf?logo=godot-engine&logoColor=white" alt="Godot 4.6+">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
   <img src="https://img.shields.io/badge/Status-Alpha-orange" alt="Alpha">
-  <img src="https://img.shields.io/badge/Tests-572%20passing-brightgreen" alt="572 tests passing">
+  <img src="https://img.shields.io/badge/Tests-622%20passing-brightgreen" alt="622 tests passing">
   <img src="https://img.shields.io/badge/GDScript-23k%2B%20lines-blueviolet" alt="23k+ lines">
 </p>
 
@@ -36,7 +36,7 @@ HammerForge is a single `addons/` folder. No external tools, no custom builds, n
 
 | | |
 |---|---|
-| **Modular subsystem architecture** | **572 unit + integration tests** with CI on every push |
+| **Modular subsystem architecture** | **622 unit + integration tests** with CI on every push |
 | **15 brush shapes** (box through dodecahedron) | **150 built-in prototype textures** for instant greyboxing |
 | **Quake `.map`** + **glTF `.glb`** export | **.hflevel** native format with threaded I/O |
 | **Customizable keymaps** (JSON) | **Plugin API** for custom tools |
@@ -56,6 +56,34 @@ Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Su
 - **Carve** (Ctrl+Shift+R) -- boolean-subtract one brush from all intersecting brushes
 - **Numeric input** -- type exact dimensions during any drag or extrude
 - **Resize gizmo** with full undo/redo
+
+### Vertex Editing
+
+Precision vertex-level editing for fine-tuning brush geometry:
+
+- **Vertex mode** (V) -- select and move individual brush vertices with convexity enforcement
+- **Edge sub-mode** (E) -- toggle to select, move, split, and merge edges
+- **Edge splitting** (Ctrl+E) -- insert midpoint vertex on a selected edge
+- **Vertex merging** (Ctrl+W) -- merge selected vertices to their centroid
+- **Wireframe overlay** -- color-coded edge display (gray default, orange selected, yellow hovered)
+
+### Polygon Tool
+
+Draw arbitrary convex polygons and extrude them into brushes:
+
+- **Polygon tool** (P) -- click to place vertices on the ground plane, Enter or auto-close to finish
+- **Convexity enforcement** -- rejects concave vertex placements in real time
+- **Height extrusion** -- drag to set height after closing the polygon
+- **Grid snapping** -- vertices snap to the active grid
+
+### Path Tool
+
+Create corridors and paths by placing waypoints:
+
+- **Path tool** (;) -- click to place waypoints, Enter to finalize
+- **Rectangular cross-section** -- configurable width and height per path
+- **Miter joints** -- automatic gap-filling brushes at corners
+- **Auto-grouping** -- all segment brushes share a group ID
 
 ### Snap and Align
 
@@ -172,9 +200,12 @@ plugin.gd            EditorPlugin — input routing, toolbar, viewport overlay
        ├─ HFIOVisualizer    Entity I/O connection lines in viewport
        ├─ HFSnapSystem      Grid / Vertex / Center snap with threshold
        ├─ HFSubtractPreview Wireframe AABB intersection overlay for subtract brushes
+       ├─ HFVertexSystem    Vertex/edge selection, move, split, merge with convexity validation
        └─ HFToolRegistry    External tool loading and dispatch
             ├─ HFMeasureTool   Ruler/distance measurement (tool_id=100)
-            └─ HFDecalTool     Decal placement with live preview (tool_id=101)
+            ├─ HFDecalTool     Decal placement with live preview (tool_id=101)
+            ├─ HFPolygonTool   Convex polygon → extruded brush (tool_id=102)
+            └─ HFPathTool      Waypoint path → corridor brushes (tool_id=103)
 ```
 
 Key design choices:
@@ -233,13 +264,16 @@ All shortcuts are rebindable via `user://hammerforge_keymap.json`.
 | Ctrl+Shift+R | Carve | | Ctrl+U | Ungroup |
 | Ctrl+Shift+F | Move to Floor | | M | Measure tool |
 | Ctrl+Shift+C | Move to Ceiling | | N | Decal tool |
+| V | Vertex mode | | P | Polygon tool |
+| E | Edge sub-mode (in vertex) | | ; | Path tool |
+| Ctrl+E | Split edge | | Ctrl+W | Merge vertices |
 | X / Y / Z | Axis lock | | ? | Shortcuts popup |
 
 ---
 
 ## Testing
 
-572 tests across 35 files using the [GUT](https://github.com/bitwes/Gut) framework, including unit tests and end-to-end integration tests. All checks run on every push via GitHub Actions.
+622 tests across 38 files using the [GUT](https://github.com/bitwes/Gut) framework, including unit tests and end-to-end integration tests. All checks run on every push via GitHub Actions.
 
 ```bash
 # Run all tests headless
@@ -286,21 +320,22 @@ gdlint addons/hammerforge/
 See [ROADMAP.md](ROADMAP.md) for the full plan.
 
 **Recently shipped:**
+- Vertex editing enhancements (edge sub-mode, split, merge, wireframe overlay)
+- Polygon tool (click convex vertices, extrude to brush)
+- Path tool (waypoints, rectangular cross-section, miter joints)
 - Interactive tutorial wizard with 5-step guided walkthrough
-- Real-time subtract preview (wireframe AABB intersection overlays)
-- Dynamic contextual hints + searchable shortcut dialog
 - Prefab system (save/load/drag-and-drop reusable brush+entity groups)
 
 **Next up:**
-- Vertex editing (move individual brush vertices)
-- Polygon tool (click vertices, extrude to brush)
-- Path tool (click-to-place path_corner/path_track chains)
+- Displacement sewing (stitch adjacent heightmap edges)
+- Material atlasing for large scenes
+- Merge tool (combine two adjacent brushes)
 
 **Later:**
-- Displacement sewing (stitch adjacent heightmap edges)
 - Bezier patch editing
 - Snap-to-edge and snap-to-perpendicular modes
-- Material atlasing for large scenes
+- Multiple simultaneous cordons
+- Preference packs for one-click workflow presets
 
 ---
 
@@ -339,5 +374,5 @@ Run `godot --headless --import --path .` first, then re-run the test command.
 
 <p align="center">
   <strong>MIT License</strong><br>
-  <sub>Built for Godot 4.6+ | Last updated March 27, 2026</sub>
+  <sub>Built for Godot 4.6+ | Last updated March 28, 2026</sub>
 </p>

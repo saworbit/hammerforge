@@ -5,6 +5,53 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Vertex Editing Enhancements + Polygon Tool + Path Tool (Mar 2026):**
+  - **Edge sub-mode for vertex editing** (`systems/hf_vertex_system.gd`): new `VertexSubMode` enum
+    (VERTEX, EDGE) toggled with `E` key. Edge selection, additive/toggle selection, wireframe overlay
+    (dim gray default, orange selected, yellow hovered). `get_brush_edges()` extracts unique undirected
+    edges from face data with canonical deduplication. `pick_edge()` projects edges to screen space for
+    click selection. Edge selection syncs to vertex selection so `move_vertices()` works transparently.
+  - **Edge splitting** (`Ctrl+E`): `split_edge()` inserts midpoint vertex into every face containing
+    the edge, updating `local_verts` and calling `ensure_geometry()`. Mathematically guaranteed to
+    preserve convexity on convex hulls. Face snapshot undo via `get_pre_op_snapshots()`.
+  - **Vertex merging** (`Ctrl+W`): `merge_vertices()` computes centroid of selected vertices, replaces
+    all occurrences in all faces, removes degenerate faces (< 3 unique verts). Validates convexity;
+    reverts via face snapshots if invalid.
+  - **Edge wireframe overlay** in `plugin.gd :: _update_vertex_overlay`: ImmediateMesh `PRIMITIVE_LINES`
+    pass draws all brush edges with color-coded selection/hover state before vertex crosses.
+  - **`get_single_selected_edge()`**: returns `[brush_id, edge]` when exactly one edge is selected,
+    empty array otherwise. Used by split_edge input handler.
+  - **`get_all_edge_world_positions()`**: returns `[{a, b, selected, hovered}]` for overlay rendering.
+  - **Static `_point_to_segment_dist_2d()`**: 2D point-to-segment distance for edge picking.
+  - **Polygon tool** (`hf_polygon_tool.gd`): `HFPolygonTool` extends `HFEditorTool` (tool_id=102,
+    KEY_P). Three-phase state machine: IDLE → PLACING_VERTS → SETTING_HEIGHT. Click to place convex
+    polygon vertices on ground plane (grid-snapped), auto-close when clicking near first point (threshold
+    configurable via `auto_close_threshold` setting), or Enter to close manually. Mouse drag sets
+    extrusion height. Convexity enforced via 2D cross product on XZ plane (`_is_convex_xz()` static
+    method). Face data construction: top (CCW winding), bottom (CW), N side quads, all in local space
+    relative to AABB center. Winding detection via shoelace formula. ImmediateMesh preview (cyan outline,
+    green vertical edges during height stage). Creates brush via `create_brush_from_info()` with undo/redo.
+  - **Path tool** (`hf_path_tool.gd`): `HFPathTool` extends `HFEditorTool` (tool_id=103,
+    KEY_SEMICOLON). Two-phase state machine: IDLE → PLACING_WAYPOINTS. Click to place waypoints on
+    ground plane, Enter to finalize (requires 2+). For each consecutive waypoint pair, builds an
+    oriented-box brush (8 corners from direction + perpendicular vectors, 6 FaceData quads). Miter joint
+    brushes fill triangular gaps at interior waypoints (angular sorting for convex hull, skipped if angle
+    too straight or too acute). All brushes share a `group_id` for auto-grouping. Settings:
+    `path_width` (4.0), `path_height` (4.0), `miter_joints` (bool, true). ImmediateMesh preview (cyan
+    polyline, parallel width offset lines, perpendicular ticks). Single undo action for entire path.
+  - **New keymap bindings** (`hf_keymap.gd`): `vertex_edge_mode` (E), `vertex_merge` (Ctrl+W),
+    `vertex_split_edge` (Ctrl+E). Added to "Tools" category with display labels.
+  - **Shortcut HUD update** (`shortcut_hud.gd`): vertex edit hints now include "E: Toggle edge mode"
+    and "Ctrl+W: Merge verts | Ctrl+E: Split edge".
+  - **Tool registry update** (`hf_tool_registry.gd`): `activate_tool()` now accepts optional
+    `EditorUndoRedoManager` parameter, passed to tools that create brushes.
+  - **Base tool update** (`hf_editor_tool.gd`): added `var undo_redo: EditorUndoRedoManager` member
+    for tools that create brushes (polygon, path).
+  - **GUT tests**: 3 new test files — `test_vertex_edges.gd` (19 tests: edge extraction, dedup,
+    selection, world positions, split, merge, sub-mode, point-to-segment), `test_polygon_tool.gd`
+    (16 tests: convexity validation, face construction, normals, empty/degenerate, tool metadata),
+    `test_path_tool.gd` (15 tests: segment brush construction, miter joints, face validation,
+    tool metadata). Total: **622 tests** across **38 files**.
 - **UX Feature Wave — Tutorial, Hints, Subtract Preview, Prefabs (Mar 2026):**
   - **Dynamic contextual hints** (`shortcut_hud.gd`): viewport overlay hints appear when switching
     tool modes (draw, select, extrude, paint). Each hint shows instructional text specific to the

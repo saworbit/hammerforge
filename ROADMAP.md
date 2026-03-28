@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: March 27, 2026
+Last updated: March 28, 2026
 
 This roadmap is a directional plan. Items may change based on user feedback.
 Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md for details.
@@ -123,14 +123,22 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - **Prefabs / reusable brush groups**: `HFPrefab` captures brush + entity selections as centroid-relative groups. Save/load `.hfprefab` JSON files. `HFPrefabLibrary` dock section with drag-and-drop instantiation. Entity I/O remapping on instantiate.
 - 56 new tests (shortcut_dialog, tutorial_wizard, subtract_preview, prefab, user_prefs additions). Total: **568 tests across 34 files**.
 
+## Done (Vertex Editing + Polygon Tool + Path Tool)
+- **Vertex editing enhancements**: edge sub-mode (E key), edge selection/split/merge, wireframe overlay with color-coded selection/hover.
+  - `split_edge()` inserts midpoint vertex (Ctrl+E). `merge_vertices()` merges to centroid (Ctrl+W).
+  - Edge wireframe overlay in plugin.gd with ImmediateMesh PRIMITIVE_LINES pass.
+  - New keymap bindings: `vertex_edge_mode`, `vertex_merge`, `vertex_split_edge`.
+- **Polygon tool** (`hf_polygon_tool.gd`, tool_id=102, KEY_P): click convex vertices on ground plane, auto-close or Enter, drag height, creates brush with undo/redo. Convexity enforced via 2D cross product.
+- **Path tool** (`hf_path_tool.gd`, tool_id=103, KEY_SEMICOLON): click waypoints, Enter to finalize, builds oriented-box segment brushes with miter joints at corners. Auto-grouped via shared group_id.
+- Tool registry updated to pass `EditorUndoRedoManager` to tools on activation.
+- `HFEditorTool` base class gains `undo_redo` member for brush-creating tools.
+- 50 new tests (vertex_edges 19, polygon_tool 16, path_tool 15). Total: **622 tests across 38 files**.
+
 ## Next (Wave 2c remaining)
-- Vertex editing (move individual brush vertices with convexity enforcement).
-- Path tool (click-to-place path_corner/path_track chains for NPC routes, cameras).
 - Displacement sewing (stitch adjacent heightmap edges to share vertices).
 - Material atlasing for large scenes.
 
 ## Future (Wave 3 -- Polish)
-- Polygon tool (draw arbitrary convex shapes by clicking vertices, extrude to brush).
 - Merge tool (combine two adjacent brushes into one convex brush).
 - Multiple simultaneous cordons.
 - Multi-tool presets for common workflows.

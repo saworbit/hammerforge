@@ -1,6 +1,6 @@
 # HammerForge Editor Smoke Checklist
 
-Last updated: March 27, 2026
+Last updated: March 28, 2026
 
 This checklist covers the editor-only flows that are hard to validate in headless tests:
 - tutorial banner startup before `LevelRoot` exists
@@ -8,6 +8,9 @@ This checklist covers the editor-only flows that are hard to validate in headles
 - shortcut dialog behavior in the real dock
 - prefab save + drag/drop + undo/redo
 - subtract preview toggle in the viewport
+- vertex editing: edge sub-mode, split, merge, wireframe overlay
+- polygon tool: click vertices, close, extrude height, brush creation
+- path tool: place waypoints, finalize, corridor + miter joint brushes
 
 ## Prep
 
@@ -85,11 +88,45 @@ Enable the HammerForge plugin if it is not already enabled.
 - Move or resize either brush; confirm the preview updates.
 - Toggle `Subtract Preview` off; confirm the wireframe is removed.
 
-### 8. Cleanup / Persistence
+### 8. Vertex Editing (Edge Sub-Mode)
+- Select a brush and enter vertex mode (V key or the V toggle button in the toolbar).
+- Confirm vertex crosses and edge wireframe lines appear on the brush.
+- Click a vertex to select it (orange cross). Shift+click to multi-select.
+- Drag to move vertices; confirm convexity enforcement (invalid moves revert).
+- Press E to toggle to edge sub-mode; confirm edges become clickable.
+- Click an edge; confirm it highlights orange and both endpoints are selected.
+- Select a single edge and press Ctrl+E; confirm the edge is split (9 vertices on box).
+- Undo the split; confirm 8 vertices return.
+- Select 2 vertices and press Ctrl+W; confirm merge (or rejection if non-convex).
+- Press E again to return to vertex sub-mode.
+
+### 9. Polygon Tool
+- Press P to activate the Polygon tool.
+- Click 4+ points on the ground plane; confirm cyan outline preview appears.
+- Confirm concave vertex placements are rejected (e.g. try to create an L-shape).
+- Press Enter (or click near the first point) to close the polygon.
+- Move mouse up/down to set height; confirm green vertical edges + top outline preview.
+- Click to confirm; confirm a brush appears in DraftBrushes.
+- Undo; confirm the brush is removed.
+- Redo; confirm the brush returns.
+- Press Escape during vertex placement; confirm last point is removed. Press again to cancel entirely.
+
+### 10. Path Tool
+- Press semicolon (;) to activate the Path tool.
+- Click 3+ waypoints on the ground plane; confirm cyan polyline with width indicators.
+- Press Enter to finalize the path.
+- Confirm corridor brushes appear (one per segment + miter joints at corners).
+- Confirm all brushes share a group (click one, all select).
+- Undo; confirm all path brushes are removed in one step.
+- Redo; confirm they return.
+- Test with only 2 waypoints (straight corridor, no miters).
+- Press Escape during waypoint placement; confirm last waypoint is removed.
+
+### 11. Cleanup / Persistence
 - Dismiss the tutorial with and without `Don't show again` checked.
 - Restart Godot and confirm the `show_welcome` preference behaves as expected.
 - Reopen the dock and confirm no layout corruption remains after closing the tutorial and shortcut dialog.
 
 ## Expected Outcome
 
-If all steps pass, the remaining risk on the tutorial/prefab/shortcut/subtract-preview feature set is low and limited mainly to edge cases outside this smoke path.
+If all steps pass, the remaining risk on the tutorial/prefab/shortcut/subtract-preview/vertex-editing/polygon/path feature set is low and limited mainly to edge cases outside this smoke path.

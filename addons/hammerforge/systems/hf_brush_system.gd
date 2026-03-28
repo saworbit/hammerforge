@@ -881,6 +881,12 @@ func hollow_brush_by_id(brush_id: String, wall_thickness: float) -> HFOpResult:
 	if not brush or not (brush is DraftBrush):
 		return _op_fail("Hollow: brush not found")
 	var draft := brush as DraftBrush
+	# Hollow only works on axis-aligned box brushes — reject custom geometry
+	if draft.shape == root.BrushShape.CUSTOM:
+		return _op_fail(
+			"Hollow: not supported on polygon/path brushes",
+			"Hollow only works on axis-aligned box brushes"
+		)
 	var size = draft.size
 	var pos = draft.global_position
 	var mat = draft.material_override
@@ -1084,6 +1090,12 @@ func clip_brush_by_id(brush_id: String, axis: int, split_pos: float) -> HFOpResu
 	if not brush or not (brush is DraftBrush):
 		return _op_fail("Clip: brush not found")
 	var draft := brush as DraftBrush
+	# Clip only works on axis-aligned box brushes — reject custom geometry
+	if draft.shape == root.BrushShape.CUSTOM:
+		return _op_fail(
+			"Clip: not supported on polygon/path brushes",
+			"Clip only works on axis-aligned box brushes"
+		)
 	var pos = draft.global_position
 	var half = draft.size * 0.5
 

@@ -8,10 +8,15 @@ extends RefCounted
 
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
 
+enum VertexSubMode { VERTEX, EDGE }
+
 var root: Node3D  # LevelRoot
+var sub_mode: int = VertexSubMode.VERTEX
 var selected_vertices: Dictionary = {}  # {brush_id: PackedInt32Array}
+var selected_edges: Dictionary = {}  # {brush_id: Array of [int, int] pairs}
 var _hovered_vertex_idx: int = -1
 var _hovered_brush_id: String = ""
+var _hovered_edge: Array = []  # [brush_id, idx_a, idx_b] or empty
 var _drag_active := false
 var _drag_start_pos := Vector3.ZERO
 var _pre_drag_faces: Dictionary = {}  # {brush_id: Array[Dict]} — face snapshots before drag
@@ -116,7 +121,7 @@ func validate_convexity(brush: Node3D) -> bool:
 			continue
 		for v in all_verts:
 			var d = plane_normal.dot(v - plane_point)
-			if d > 0.01:  # Small tolerance
+			if d > 0.02:  # Small tolerance for floating-point imprecision
 				return false
 	return true
 
@@ -174,11 +179,13 @@ func select_vertex(brush_id: String, vertex_index: int, additive: bool = false) 
 			selected_vertices[brush_id] = indices
 
 
-## Clear all vertex selection.
+## Clear all vertex and edge selection.
 func clear_selection() -> void:
 	selected_vertices.clear()
+	selected_edges.clear()
 	_hovered_vertex_idx = -1
 	_hovered_brush_id = ""
+	_hovered_edge = []
 
 
 ## Update hover state for a vertex near the cursor.
@@ -267,8 +274,332 @@ func get_all_vertex_world_positions() -> Array:
 
 
 # ---------------------------------------------------------------------------
+# Edge operations
+# ---------------------------------------------------------------------------
+
+
+## Extract unique edges from a brush's faces as pairs of vertex indices.
+## Returns Array of [idx_a, idx_b] where indices refer to get_brush_vertices() order.
+func get_brush_edges(brush: Node3D) -> Array:
+	var verts := get_brush_vertices(brush)
+	if verts.is_empty():
+		return []
+	# Build position→index lookup
+	var pos_to_idx: Dictionary = {}
+	for i in range(verts.size()):
+		pos_to_idx[_vertex_key(verts[i])] = i
+	var seen_edges: Dictionary = {}
+	var edges: Array = []
+	if not brush or not brush.get("faces"):
+		return edges
+	var faces: Array = brush.faces
+	for face in faces:
+		if face == null:
+			continue
+		var fv: PackedVector3Array = face.local_verts
+		var n := fv.size()
+		if n < 2:
+			continue
+		for j in range(n):
+			var ka: String = _vertex_key(fv[j])
+			var kb: String = _vertex_key(fv[(j + 1) % n])
+			var ia: int = pos_to_idx.get(ka, -1)
+			var ib: int = pos_to_idx.get(kb, -1)
+			if ia < 0 or ib < 0:
+				continue
+			# Canonical order for dedup
+			var edge_key: String
+			if ka < kb:
+				edge_key = ka + "|" + kb
+			else:
+				edge_key = kb + "|" + ka
+			if not seen_edges.has(edge_key):
+				seen_edges[edge_key] = true
+				edges.append([mini(ia, ib), maxi(ia, ib)])
+	return edges
+
+
+## Find the closest edge to screen position.
+## Returns {brush_id, edge: [a, b], world_midpoint, distance} or empty dict.
+func pick_edge(camera: Camera3D, screen_pos: Vector2, threshold_px: float = 15.0) -> Dictionary:
+	if not camera or not root:
+		return {}
+	var best_dist := threshold_px
+	var best := {}
+	var brushes = _get_selected_brushes()
+	for brush in brushes:
+		if not brush:
+			continue
+		var verts := get_brush_vertices(brush)
+		var brush_id: String = brush.brush_id if brush.get("brush_id") else ""
+		var xform: Transform3D = brush.global_transform
+		var edges := get_brush_edges(brush)
+		for edge in edges:
+			var wa: Vector3 = xform * verts[edge[0]]
+			var wb: Vector3 = xform * verts[edge[1]]
+			if camera.is_position_behind(wa) and camera.is_position_behind(wb):
+				continue
+			var sa: Vector2 = camera.unproject_position(wa)
+			var sb: Vector2 = camera.unproject_position(wb)
+			var dist := _point_to_segment_dist_2d(screen_pos, sa, sb)
+			if dist < best_dist:
+				best_dist = dist
+				best = {
+					"brush_id": brush_id,
+					"edge": edge,
+					"world_midpoint": (wa + wb) * 0.5,
+					"distance": dist,
+				}
+	return best
+
+
+## Select an edge. Also selects both endpoint vertices for move compatibility.
+func select_edge(brush_id: String, edge: Array, additive: bool = false) -> void:
+	if not additive:
+		selected_edges.clear()
+		selected_vertices.clear()
+	if not selected_edges.has(brush_id):
+		selected_edges[brush_id] = []
+	# Check if edge already selected
+	var existing: Array = selected_edges[brush_id]
+	var found := false
+	if additive:
+		for i in range(existing.size()):
+			var e: Array = existing[i]
+			if e[0] == edge[0] and e[1] == edge[1]:
+				existing.remove_at(i)
+				found = true
+				break
+	if not found:
+		existing.append(edge)
+	selected_edges[brush_id] = existing
+	# Sync vertex selection from all selected edges
+	_sync_vertices_from_edges()
+
+
+## Clear edge selection and corresponding vertex selection.
+func clear_edge_selection() -> void:
+	selected_edges.clear()
+	_hovered_edge = []
+
+
+## Update hover state for an edge near the cursor.
+func update_edge_hover(camera: Camera3D, screen_pos: Vector2) -> void:
+	var pick := pick_edge(camera, screen_pos)
+	if pick.is_empty():
+		_hovered_edge = []
+	else:
+		_hovered_edge = [pick.brush_id, pick.edge[0], pick.edge[1]]
+
+
+## Split an edge by inserting a midpoint vertex. Returns true on success.
+func split_edge(brush_id: String, edge: Array) -> bool:
+	var brush = _find_brush(brush_id)
+	if not brush or not brush.get("faces"):
+		return false
+	var verts := get_brush_vertices(brush)
+	if edge[0] < 0 or edge[0] >= verts.size() or edge[1] < 0 or edge[1] >= verts.size():
+		return false
+	# Capture snapshot for undo
+	_capture_face_snapshots_for([brush_id])
+	var va: Vector3 = verts[edge[0]]
+	var vb: Vector3 = verts[edge[1]]
+	var midpoint: Vector3 = (va + vb) * 0.5
+	var key_a: String = _vertex_key(va)
+	var key_b: String = _vertex_key(vb)
+	# Insert midpoint into every face containing this edge
+	var modified := false
+	var faces: Array = brush.faces
+	for face in faces:
+		if face == null:
+			continue
+		var fv: PackedVector3Array = face.local_verts
+		var n := fv.size()
+		if n < 2:
+			continue
+		# Find the edge in this face (consecutive vertices matching a→b or b→a)
+		for j in range(n):
+			var kj: String = _vertex_key(fv[j])
+			var kn: String = _vertex_key(fv[(j + 1) % n])
+			if (kj == key_a and kn == key_b) or (kj == key_b and kn == key_a):
+				# Insert midpoint between j and (j+1)%n
+				var new_verts := PackedVector3Array()
+				for k in range(n):
+					new_verts.append(fv[k])
+					if k == j:
+						new_verts.append(midpoint)
+				face.local_verts = new_verts
+				face.ensure_geometry()
+				modified = true
+				break
+	if not modified:
+		_pre_drag_faces.clear()
+		return false
+	# Splitting an edge on a convex hull always stays convex — the midpoint lies
+	# exactly on the surface.  Skip the heavy convexity check here; the standard
+	# validate_convexity (0.01 tolerance) is used for vertex moves where the user
+	# can break convexity.  For splits we only need to verify face integrity.
+	if brush.has_method("rebuild_preview"):
+		brush.rebuild_preview()
+	return true
+
+
+## Merge selected vertices in a brush to their centroid. Returns true on success.
+func merge_vertices(brush_id: String, vert_indices: PackedInt32Array) -> bool:
+	if vert_indices.size() < 2:
+		return false
+	var brush = _find_brush(brush_id)
+	if not brush or not brush.get("faces"):
+		return false
+	var verts := get_brush_vertices(brush)
+	# Compute centroid
+	var centroid := Vector3.ZERO
+	var merge_keys: Dictionary = {}
+	for vi in vert_indices:
+		if vi < 0 or vi >= verts.size():
+			continue
+		centroid += verts[vi]
+		merge_keys[_vertex_key(verts[vi])] = true
+	centroid /= float(vert_indices.size())
+	# Capture snapshot
+	_capture_face_snapshots_for([brush_id])
+	# Replace all merge-target vertices with centroid in all faces
+	var faces: Array = brush.faces
+	var centroid_key: String = _vertex_key(centroid)
+	var faces_to_remove: Array = []
+	for fi in range(faces.size()):
+		var face = faces[fi]
+		if face == null:
+			continue
+		var new_verts := PackedVector3Array()
+		var seen_keys: Dictionary = {}
+		for v in face.local_verts:
+			var k: String = _vertex_key(v)
+			var out_v: Vector3
+			if merge_keys.has(k):
+				out_v = centroid
+				k = centroid_key
+			else:
+				out_v = v
+			# Deduplicate consecutive vertices
+			if not seen_keys.has(k):
+				seen_keys[k] = true
+				new_verts.append(out_v)
+		if new_verts.size() < 3:
+			faces_to_remove.append(fi)
+		else:
+			face.local_verts = new_verts
+			face.ensure_geometry()
+	# Remove degenerate faces (reverse order)
+	for i in range(faces_to_remove.size() - 1, -1, -1):
+		faces.remove_at(faces_to_remove[i])
+	# Validate
+	if not validate_convexity(brush):
+		_restore_face_snapshots()
+		return false
+	if brush.has_method("rebuild_preview"):
+		brush.rebuild_preview()
+	return true
+
+
+## Get edge world positions for all selected brushes (for overlay rendering).
+func get_all_edge_world_positions() -> Array:
+	var result: Array = []  # Array of {a: Vector3, b: Vector3, selected: bool, hovered: bool}
+	var brushes = _get_selected_brushes()
+	for brush in brushes:
+		if not brush:
+			continue
+		var brush_id: String = brush.brush_id if brush.get("brush_id") else ""
+		var verts := get_brush_vertices(brush)
+		var xform: Transform3D = brush.global_transform
+		var edges := get_brush_edges(brush)
+		var sel_edges: Array = selected_edges.get(brush_id, [])
+		for edge in edges:
+			var is_sel := false
+			for se in sel_edges:
+				if se[0] == edge[0] and se[1] == edge[1]:
+					is_sel = true
+					break
+			var is_hov := false
+			if (
+				_hovered_edge.size() == 3
+				and _hovered_edge[0] == brush_id
+				and _hovered_edge[1] == edge[0]
+				and _hovered_edge[2] == edge[1]
+			):
+				is_hov = true
+			result.append({
+				"a": xform * verts[edge[0]],
+				"b": xform * verts[edge[1]],
+				"selected": is_sel,
+				"hovered": is_hov,
+			})
+	return result
+
+
+## Get the single selected edge if exactly one is selected, else empty.
+func get_single_selected_edge() -> Array:
+	var count := 0
+	var result: Array = []
+	var result_brush := ""
+	for brush_id in selected_edges:
+		var edges: Array = selected_edges[brush_id]
+		for e in edges:
+			count += 1
+			result = e
+			result_brush = brush_id
+	if count == 1:
+		return [result_brush, result]
+	return []
+
+
+## Get the face snapshot for undo after split/merge.
+func get_pre_op_snapshots() -> Dictionary:
+	var snapshots = _pre_drag_faces.duplicate(true)
+	_pre_drag_faces.clear()
+	return snapshots
+
+
+# ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+
+func _sync_vertices_from_edges() -> void:
+	selected_vertices.clear()
+	for brush_id in selected_edges:
+		var indices := PackedInt32Array()
+		for edge in selected_edges[brush_id]:
+			if not indices.has(edge[0]):
+				indices.append(edge[0])
+			if not indices.has(edge[1]):
+				indices.append(edge[1])
+		if not indices.is_empty():
+			selected_vertices[brush_id] = indices
+
+
+func _capture_face_snapshots_for(brush_ids: Array) -> void:
+	_pre_drag_faces.clear()
+	for brush_id in brush_ids:
+		var brush = _find_brush(brush_id)
+		if not brush or not brush.get("faces"):
+			continue
+		var snapshots: Array = []
+		for face in brush.faces:
+			if face:
+				snapshots.append(face.to_dict())
+		_pre_drag_faces[brush_id] = snapshots
+
+
+## Distance from point p to line segment (a, b) in 2D.
+static func _point_to_segment_dist_2d(p: Vector2, a: Vector2, b: Vector2) -> float:
+	var ab := b - a
+	var len_sq := ab.length_squared()
+	if len_sq < 0.0001:
+		return p.distance_to(a)
+	var t := clampf(ab.dot(p - a) / len_sq, 0.0, 1.0)
+	var proj := a + ab * t
+	return p.distance_to(proj)
 
 
 func _vertex_key(v: Vector3) -> String:

@@ -124,13 +124,17 @@ func test_activate_switches_deactivates_previous():
 	assert_true(t2.is_active)
 
 
-func test_activate_same_tool_twice_no_op():
+func test_activate_same_tool_toggles_off():
 	var tool = MockTool.new(100)
 	registry.register_tool(tool)
 	registry.activate_tool(100, null, null)
+	assert_true(tool.is_active, "Tool should be active after first activation")
 	tool.activated = false
 	registry.activate_tool(100, null, null)
 	assert_false(tool.activated, "Should not re-activate same tool")
+	assert_true(tool.deactivated, "Tool should be deactivated on second press")
+	assert_false(tool.is_active, "Tool should no longer be active")
+	assert_eq(registry.get_active_tool(), null, "Registry should have no active tool")
 
 
 func test_dispatch_input_routes_to_active_external():

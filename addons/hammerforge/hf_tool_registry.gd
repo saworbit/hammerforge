@@ -27,14 +27,21 @@ func unregister_tool(tool_id: int) -> void:
 	_tool_by_id.erase(tool_id)
 
 
-func activate_tool(tool_id: int, root: Node3D, camera: Camera3D) -> void:
+func activate_tool(
+	tool_id: int, root: Node3D, camera: Camera3D,
+	p_undo_redo: EditorUndoRedoManager = null,
+	p_history_callback: Callable = Callable()
+) -> void:
 	if _active_tool and _active_tool.tool_id() == tool_id:
+		deactivate_current()
 		return
 	if _active_tool:
 		_active_tool.deactivate()
 		_active_tool = null
 	if _tool_by_id.has(tool_id):
 		_active_tool = _tool_by_id[tool_id]
+		_active_tool.undo_redo = p_undo_redo
+		_active_tool.history_callback = p_history_callback
 		_active_tool.activate(root, camera)
 
 

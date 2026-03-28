@@ -261,6 +261,8 @@ func _vertex_edit_shortcuts() -> String:
 	lines.append("Click: Select vertex")
 	lines.append("Shift+Click: Multi-select")
 	lines.append("Drag: Move selected")
+	lines.append("E: Toggle edge mode")
+	lines.append("Ctrl+W: Merge verts | Ctrl+E: Split edge")
 	lines.append("X / Y / Z: Lock axis")
 	lines.append("Esc: Deselect / V: Exit")
 	return "\n".join(lines)

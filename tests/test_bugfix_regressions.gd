@@ -39,7 +39,7 @@ var draft_brushes_node: Node3D
 var brush_system: RefCounted
 var grid_snap := 8.0
 var drag_size_default := Vector3(32, 32, 32)
-enum BrushShape { BOX }
+enum BrushShape { BOX, CYLINDER, SPHERE, CONE, WEDGE, PYRAMID, PRISM_TRI, PRISM_PENT, ELLIPSOID, CAPSULE, TORUS, TETRAHEDRON, OCTAHEDRON, DODECAHEDRON, ICOSAHEDRON, CUSTOM }
 signal user_message(msg, level)
 
 func _log(msg: String) -> void:

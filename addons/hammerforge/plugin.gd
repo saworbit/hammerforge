@@ -54,6 +54,8 @@ func _enter_tree():
 	_tool_registry = HFToolRegistry.new()
 	_tool_registry.register_tool(HFMeasureTool.new())
 	_tool_registry.register_tool(HFDecalTool.new())
+	_tool_registry.register_tool(HFPolygonTool.new())
+	_tool_registry.register_tool(HFPathTool.new())
 	_tool_registry.load_external_tools("res://addons/hammerforge/tools/")
 	_keymap = HFKeymap.load_or_default("user://hammerforge_keymap.json")
 	_user_prefs = HFUserPrefs.load_prefs()
@@ -263,7 +265,7 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 		last_3d_mouse_pos = event.position
 
 	var target_camera = camera
-	var target_pos = event.position if event is InputEventMouse else Vector2.ZERO
+	var target_pos = event.position if event is InputEventMouse else last_3d_mouse_pos
 
 	if event is InputEventMouseMotion or event is InputEventMouseButton:
 		root.update_editor_grid(target_camera, target_pos)
@@ -600,7 +602,7 @@ func _handle_keyboard_input(
 	if _tool_registry:
 		var ext_id = _tool_registry.check_shortcut(event.keycode)
 		if ext_id >= 0 and active_root:
-			_tool_registry.activate_tool(ext_id, active_root, last_3d_camera)
+			_tool_registry.activate_tool(ext_id, active_root, last_3d_camera, undo_redo_manager, _record_history)
 			_update_hud_context()
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
@@ -780,32 +782,91 @@ func _handle_vertex_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vec
 	if not vs:
 		return EditorPlugin.AFTER_GUI_INPUT_PASS
 
-	# Escape exits vertex mode
-	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
-		if vs.has_selection():
-			vs.clear_selection()
+	# Keyboard shortcuts
+	if event is InputEventKey and event.pressed:
+		# Escape exits vertex mode
+		if event.keycode == KEY_ESCAPE:
+			if vs.has_selection():
+				vs.clear_selection()
+				_update_vertex_overlay(root, cam)
+				return EditorPlugin.AFTER_GUI_INPUT_STOP
+			_toggle_vertex_mode(root)
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+		# E toggles edge sub-mode (without modifiers)
+		if _keymap and _keymap.matches("vertex_edge_mode", event):
+			if vs.sub_mode == vs.VertexSubMode.VERTEX:
+				vs.sub_mode = vs.VertexSubMode.EDGE
+				vs.clear_selection()
+			else:
+				vs.sub_mode = vs.VertexSubMode.VERTEX
+				vs.clear_selection()
+			_update_vertex_overlay(root, cam)
+			_update_hud_context()
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+		# Ctrl+W: merge vertices
+		if _keymap and _keymap.matches("vertex_merge", event):
+			if vs.get_selection_count() >= 2:
+				# Merge in first brush that has selected verts
+				for brush_id in vs.selected_vertices:
+					var indices: PackedInt32Array = vs.selected_vertices[brush_id]
+					if indices.size() >= 2:
+						var ok := vs.merge_vertices(brush_id, indices)
+						if ok and undo_redo_manager:
+							var snapshots := vs.get_pre_op_snapshots()
+							if not snapshots.is_empty():
+								_commit_vertex_op(root, snapshots, "Merge Vertices")
+						vs.clear_selection()
+						break
 			_update_vertex_overlay(root, cam)
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
-		_toggle_vertex_mode(root)
-		return EditorPlugin.AFTER_GUI_INPUT_STOP
+		# Ctrl+E: split edge
+		if _keymap and _keymap.matches("vertex_split_edge", event):
+			var single := vs.get_single_selected_edge()
+			if single.size() == 2:
+				var ok := vs.split_edge(single[0], single[1])
+				if ok and undo_redo_manager:
+					var snapshots := vs.get_pre_op_snapshots()
+					if not snapshots.is_empty():
+						_commit_vertex_op(root, snapshots, "Split Edge")
+				vs.clear_selection()
+			_update_vertex_overlay(root, cam)
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
 
 	# Mouse click — select or begin drag
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
-			var pick = vs.pick_vertex(cam, pos)
-			if pick.is_empty():
-				if not event.shift_pressed:
-					vs.clear_selection()
+			if vs.sub_mode == vs.VertexSubMode.EDGE:
+				# Edge sub-mode: pick edges
+				var pick := vs.pick_edge(cam, pos)
+				if pick.is_empty():
+					if not event.shift_pressed:
+						vs.clear_selection()
+					_update_vertex_overlay(root, cam)
+					return EditorPlugin.AFTER_GUI_INPUT_PASS
+				vs.select_edge(pick.brush_id, pick.edge, event.shift_pressed)
+				# Begin drag using edge midpoint
+				_vertex_drag_active = true
+				_vertex_drag_start = pos
+				_vertex_drag_ref_y = pick.world_midpoint.y
+				vs.begin_drag(pick.world_midpoint)
 				_update_vertex_overlay(root, cam)
-				return EditorPlugin.AFTER_GUI_INPUT_PASS
-			vs.select_vertex(pick.brush_id, pick.vertex_index, event.shift_pressed)
-			# Begin drag
-			_vertex_drag_active = true
-			_vertex_drag_start = pos
-			_vertex_drag_ref_y = pick.world_pos.y  # Use picked vertex depth for projection
-			vs.begin_drag(pick.world_pos)
-			_update_vertex_overlay(root, cam)
-			return EditorPlugin.AFTER_GUI_INPUT_STOP
+				return EditorPlugin.AFTER_GUI_INPUT_STOP
+			else:
+				# Vertex sub-mode: pick vertices
+				var pick = vs.pick_vertex(cam, pos)
+				if pick.is_empty():
+					if not event.shift_pressed:
+						vs.clear_selection()
+					_update_vertex_overlay(root, cam)
+					return EditorPlugin.AFTER_GUI_INPUT_PASS
+				vs.select_vertex(pick.brush_id, pick.vertex_index, event.shift_pressed)
+				# Begin drag
+				_vertex_drag_active = true
+				_vertex_drag_start = pos
+				_vertex_drag_ref_y = pick.world_pos.y
+				vs.begin_drag(pick.world_pos)
+				_update_vertex_overlay(root, cam)
+				return EditorPlugin.AFTER_GUI_INPUT_STOP
 		# Mouse release — end drag
 		if _vertex_drag_active:
 			_vertex_drag_active = false
@@ -854,7 +915,10 @@ func _handle_vertex_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vec
 				vs.move_vertices(delta)
 			_update_vertex_overlay(root, cam)
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
-		vs.update_hover(cam, pos)
+		if vs.sub_mode == vs.VertexSubMode.EDGE:
+			vs.update_edge_hover(cam, pos)
+		else:
+			vs.update_hover(cam, pos)
 		_update_vertex_overlay(root, cam)
 
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
@@ -883,6 +947,25 @@ func _intersect_y_plane(origin: Vector3, dir: Vector3, y: float) -> Variant:
 	if t < 0.0:
 		return null
 	return origin + dir * t
+
+
+func _commit_vertex_op(root: Node, pre_op_snapshots: Dictionary, action_name: String) -> void:
+	if not undo_redo_manager:
+		return
+	var post_state: Dictionary = {}
+	for brush_id in pre_op_snapshots:
+		var brush = root.brush_system.find_brush_by_id(brush_id) if root.brush_system else null
+		if brush and brush.get("faces"):
+			var current: Array = []
+			for face in brush.faces:
+				if face:
+					current.append(face.to_dict())
+			post_state[brush_id] = current
+	undo_redo_manager.create_action(action_name, 0, null, false)
+	undo_redo_manager.add_do_method(root, "_apply_vertex_faces", post_state)
+	undo_redo_manager.add_undo_method(root, "_apply_vertex_faces", pre_op_snapshots)
+	undo_redo_manager.commit_action()
+	_record_history(action_name)
 
 
 func _commit_vertex_move(root: Node, pre_drag_snapshots: Dictionary) -> void:
@@ -921,6 +1004,22 @@ func _update_vertex_overlay(root: Node, cam: Camera3D) -> void:
 		return
 	_ensure_vertex_overlay(root)
 	_vertex_overlay_imesh.clear_surfaces()
+	# Draw edge wireframe
+	var edge_data = vs.get_all_edge_world_positions()
+	if not edge_data.is_empty():
+		_vertex_overlay_imesh.surface_begin(Mesh.PRIMITIVE_LINES)
+		for e in edge_data:
+			var ecolor := Color(0.5, 0.5, 0.5, 0.5)
+			if e.selected:
+				ecolor = Color.ORANGE
+			elif e.hovered:
+				ecolor = Color.YELLOW
+			_vertex_overlay_imesh.surface_set_color(ecolor)
+			_vertex_overlay_imesh.surface_add_vertex(e.a)
+			_vertex_overlay_imesh.surface_set_color(ecolor)
+			_vertex_overlay_imesh.surface_add_vertex(e.b)
+		_vertex_overlay_imesh.surface_end()
+	# Draw vertex crosses
 	_vertex_overlay_imesh.surface_begin(Mesh.PRIMITIVE_LINES)
 	for entry in vertex_data:
 		var pos: Vector3 = entry.pos
