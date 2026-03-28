@@ -375,7 +375,9 @@ func connect_signals() -> void:
 		)
 	if dock.material_browser:
 		dock.material_browser.material_selected.connect(dock._on_browser_material_selected)
-		dock.material_browser.material_double_clicked.connect(dock._on_browser_material_double_clicked)
+		dock.material_browser.material_double_clicked.connect(
+			dock._on_browser_material_double_clicked
+		)
 		dock.material_browser.material_context_menu.connect(dock._on_browser_context_menu)
 		dock.material_browser.material_hovered.connect(dock._on_browser_material_hovered)
 		dock.material_browser.material_hover_ended.connect(dock._on_browser_material_hover_ended)
