@@ -853,22 +853,21 @@ func _handle_vertex_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vec
 				vs.begin_drag(pick.world_midpoint)
 				_update_vertex_overlay(root, cam)
 				return EditorPlugin.AFTER_GUI_INPUT_STOP
-			else:
-				# Vertex sub-mode: pick vertices
-				var pick = vs.pick_vertex(cam, pos)
-				if pick.is_empty():
-					if not event.shift_pressed:
-						vs.clear_selection()
-					_update_vertex_overlay(root, cam)
-					return EditorPlugin.AFTER_GUI_INPUT_PASS
-				vs.select_vertex(pick.brush_id, pick.vertex_index, event.shift_pressed)
-				# Begin drag
-				_vertex_drag_active = true
-				_vertex_drag_start = pos
-				_vertex_drag_ref_y = pick.world_pos.y
-				vs.begin_drag(pick.world_pos)
+			# Vertex sub-mode: pick vertices
+			var pick = vs.pick_vertex(cam, pos)
+			if pick.is_empty():
+				if not event.shift_pressed:
+					vs.clear_selection()
 				_update_vertex_overlay(root, cam)
-				return EditorPlugin.AFTER_GUI_INPUT_STOP
+				return EditorPlugin.AFTER_GUI_INPUT_PASS
+			vs.select_vertex(pick.brush_id, pick.vertex_index, event.shift_pressed)
+			# Begin drag
+			_vertex_drag_active = true
+			_vertex_drag_start = pos
+			_vertex_drag_ref_y = pick.world_pos.y
+			vs.begin_drag(pick.world_pos)
+			_update_vertex_overlay(root, cam)
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
 		# Mouse release — end drag
 		if _vertex_drag_active:
 			_vertex_drag_active = false
