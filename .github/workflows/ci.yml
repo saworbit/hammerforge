@@ -1,5 +1,8 @@
 name: CI
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 on:
   push:
     branches: [main]
@@ -15,7 +18,7 @@ jobs:
     name: GDScript Lint & Format
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: Scony/godot-gdscript-toolkit@master
 
@@ -31,7 +34,7 @@ jobs:
     env:
       GODOT_VERSION: "4.6-stable"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download Godot
         run: |
