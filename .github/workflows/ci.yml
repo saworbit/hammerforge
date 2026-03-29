@@ -2,6 +2,7 @@ name: CI
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  GDTOOLKIT_VERSION: "4.*"
 
 on:
   push:
@@ -20,7 +21,15 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: Scony/godot-gdscript-toolkit@master
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+          cache: "pip"
+
+      - name: Install gdtoolkit
+        run: |
+          python -m pip install --upgrade setuptools
+          python -m pip install "gdtoolkit==${GDTOOLKIT_VERSION}"
 
       - name: Check formatting
         run: gdformat --check addons/hammerforge/
