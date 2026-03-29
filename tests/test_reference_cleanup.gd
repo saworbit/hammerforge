@@ -116,6 +116,12 @@ func _make_entity(entity_name: String) -> DraftEntity:
 	return e
 
 
+func _delete_brush_now(brush: DraftBrush) -> void:
+	brush_sys.delete_brush(brush, false)
+	if is_instance_valid(brush):
+		brush.free()
+
+
 # ===========================================================================
 # Group cleanup
 # ===========================================================================
@@ -125,7 +131,7 @@ func test_delete_brush_cleans_group_membership():
 	var b = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "g1")
 	visgroup_sys.group_selection("mygroup", [b])
 	assert_eq(visgroup_sys.get_group_members("mygroup").size(), 1)
-	brush_sys.delete_brush(b)
+	_delete_brush_now(b)
 	assert_eq(visgroup_sys.get_group_members("mygroup").size(), 0)
 
 
@@ -133,7 +139,7 @@ func test_delete_brush_cleans_empty_group():
 	var b = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "g2")
 	visgroup_sys.group_selection("tempgroup", [b])
 	assert_true(visgroup_sys.groups.has("tempgroup"))
-	brush_sys.delete_brush(b)
+	_delete_brush_now(b)
 	assert_false(visgroup_sys.groups.has("tempgroup"), "Empty group should be removed")
 
 
@@ -147,7 +153,7 @@ func test_delete_brush_clears_visgroup_meta():
 	visgroup_sys.create_visgroup("lights")
 	visgroup_sys.add_to_visgroup(b, "lights")
 	assert_eq(visgroup_sys.get_members_of("lights").size(), 1)
-	brush_sys.delete_brush(b)
+	_delete_brush_now(b)
 	# After deletion, the visgroup should have no members
 	assert_eq(visgroup_sys.get_members_of("lights").size(), 0)
 
@@ -197,6 +203,6 @@ func test_cleanup_no_connections_returns_zero():
 
 func test_delete_with_no_references_no_crash():
 	var b = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "plain")
-	brush_sys.delete_brush(b)
+	_delete_brush_now(b)
 	# No crash, no error — just works
 	assert_true(true)

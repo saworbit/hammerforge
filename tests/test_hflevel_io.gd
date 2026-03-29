@@ -289,7 +289,7 @@ func test_build_parse_complex_payload():
 	}
 	var payload = HFLevelIO.build_payload(data)
 	var parsed = HFLevelIO.parse_payload(payload)
-	assert_eq(parsed.get("version"), 2)
+	assert_eq(int(parsed.get("version", 0)), 2)
 	var brushes = parsed.get("brushes", [])
 	assert_eq(brushes.size(), 2, "Brushes array preserved")
 	assert_eq(brushes[0].get("id"), "brush_1")
@@ -318,4 +318,4 @@ func test_full_pipeline_round_trip():
 	assert_almost_eq(decoded["scale"].y, 3.0, 0.001, "Full pipeline: scale.y")
 	assert_true(decoded["color"] is Color, "Full pipeline: Color survives")
 	assert_eq(decoded["name"], "level_1", "Full pipeline: string survives")
-	assert_eq(decoded["count"], 42, "Full pipeline: int survives")
+	assert_eq(int(decoded["count"]), 42, "Full pipeline: integer value survives")

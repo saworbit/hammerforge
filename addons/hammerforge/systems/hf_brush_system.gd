@@ -764,7 +764,8 @@ func get_primary_selected_face() -> Dictionary:
 	return {}
 
 
-func assign_material_to_selected_faces(material_index: int) -> void:
+func assign_material_to_selected_faces(material_index: int) -> int:
+	var count := 0
 	for key in root.face_selection.keys():
 		var brush = _find_brush_by_key(str(key))
 		if not brush:
@@ -774,6 +775,8 @@ func assign_material_to_selected_faces(material_index: int) -> void:
 		for idx in indices:
 			typed.append(int(idx))
 		brush.assign_material_to_faces(material_index, typed)
+		count += typed.size()
+	return count
 
 
 func _apply_face_selection() -> void:

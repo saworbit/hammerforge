@@ -1108,8 +1108,8 @@ func get_primary_selected_face() -> Dictionary:
 	return brush_system.get_primary_selected_face()
 
 
-func assign_material_to_selected_faces(material_index: int) -> void:
-	brush_system.assign_material_to_selected_faces(material_index)
+func assign_material_to_selected_faces(material_index: int) -> int:
+	return brush_system.assign_material_to_selected_faces(material_index)
 
 
 func assign_material_to_faces_by_id(
@@ -1124,15 +1124,18 @@ func assign_material_to_faces_by_id(
 	brush.assign_material_to_faces(material_index, typed_indices)
 
 
-func assign_material_to_whole_brushes(material_index: int, brush_ids: Array) -> void:
+func assign_material_to_whole_brushes(material_index: int, brush_ids: Array) -> int:
+	var count := 0
 	for bid in brush_ids:
-		var brush: DraftBrush = brush_system.find_brush_by_id(str(bid))
+		var brush: DraftBrush = brush_system._find_brush_by_key(str(bid))
 		if not brush or not is_instance_valid(brush):
 			continue
 		var all_indices: Array[int] = []
 		for i in range(brush.faces.size()):
 			all_indices.append(i)
 		brush.assign_material_to_faces(material_index, all_indices)
+		count += all_indices.size()
+	return count
 
 
 func _apply_face_selection() -> void:

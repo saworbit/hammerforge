@@ -263,9 +263,16 @@ func _create_thumb_button(palette_index: int, mat: Material, mat_path: String) -
 	container.add_child(label)
 
 	# Tooltip
-	container.tooltip_text = _get_material_label(mat)
+	var tip := _get_material_label(mat)
 	if _favorites.has(mat_path):
-		container.tooltip_text += " [Favorite]"
+		tip += " [Favorite]"
+	tip += (
+		"\n\nLeft-click: Select material"
+		+ "\nHover: Preview on selected faces"
+		+ "\nDouble-click: Apply to selected faces"
+		+ "\nRight-click: Apply to whole brush, favorite, copy name"
+	)
+	container.tooltip_text = tip
 
 	# Wrap in a button-like panel for click/hover
 	var btn = Button.new()

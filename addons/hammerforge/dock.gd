@@ -868,12 +868,24 @@ func _apply_all_tooltips() -> void:
 	_set_tooltip(sides_spin, "Side count for polygon shapes (Pyramid, Prism)")
 	_set_tooltip(commit_freeze, "Keep committed cuts frozen (restorable)\ninstead of deleting them")
 	_set_tooltip(collision_layer_opt, "Physics collision layer for baked geometry")
-	_set_tooltip(active_material_button, "Active material for Select+Paint brush painting")
+	_set_tooltip(
+		active_material_button,
+		(
+			"Brush-level material override for whole brushes"
+			+ "\nThis is separate from per-face materials in the Materials tab"
+		)
+	)
 	# Build tab - Bake options
 	_set_tooltip(bake_merge_meshes, "Merge meshes during bake for better performance")
 	_set_tooltip(bake_generate_lods, "Generate LOD meshes during bake")
 	_set_tooltip(bake_lightmap_uv2, "Generate UV2 for lightmap baking")
-	_set_tooltip(bake_use_face_materials, "Apply per-face materials from the Materials tab")
+	_set_tooltip(
+		bake_use_face_materials,
+		(
+			"Bake per-face materials into the final mesh"
+			+ "\nTurn off to ignore face assignments and use brush-level materials instead"
+		)
+	)
 	_set_tooltip(bake_navmesh, "Generate navigation mesh during bake")
 	_set_tooltip(bake_lightmap_texel, "Lightmap texel density (smaller = higher quality)")
 	_set_tooltip(bake_navmesh_cell_size, "Navigation mesh cell size (XZ)")
@@ -902,13 +914,25 @@ func _apply_all_tooltips() -> void:
 	_set_tooltip(layer_y_spin, "Vertical Y offset for the active paint layer")
 	_set_tooltip(blend_strength_spin, "Blend strength when using the Blend paint tool")
 	_set_tooltip(blend_slot_select, "Blend target slot (B, C, or D)")
-	_set_tooltip(terrain_slot_a_button, "Texture for Slot A (base)")
+	_set_tooltip(
+		terrain_slot_a_button,
+		"Choose terrain texture for Slot A (base layer)\nBlend between slots with the Blend paint tool"
+	)
 	_set_tooltip(terrain_slot_a_scale, "UV scale for Slot A texture")
-	_set_tooltip(terrain_slot_b_button, "Texture for Slot B")
+	_set_tooltip(
+		terrain_slot_b_button,
+		"Choose terrain texture for Slot B\nBlend between slots with the Blend paint tool"
+	)
 	_set_tooltip(terrain_slot_b_scale, "UV scale for Slot B texture")
-	_set_tooltip(terrain_slot_c_button, "Texture for Slot C")
+	_set_tooltip(
+		terrain_slot_c_button,
+		"Choose terrain texture for Slot C\nBlend between slots with the Blend paint tool"
+	)
 	_set_tooltip(terrain_slot_c_scale, "UV scale for Slot C texture")
-	_set_tooltip(terrain_slot_d_button, "Texture for Slot D")
+	_set_tooltip(
+		terrain_slot_d_button,
+		"Choose terrain texture for Slot D\nBlend between slots with the Blend paint tool"
+	)
 	_set_tooltip(terrain_slot_d_scale, "UV scale for Slot D texture")
 	# SurfacePaint tab
 	_set_tooltip(paint_target_select, "Paint target: Floor (grid) or Surface (UV)")
@@ -917,21 +941,48 @@ func _apply_all_tooltips() -> void:
 	_set_tooltip(surface_paint_layer_select, "Active surface paint layer")
 	_set_tooltip(surface_paint_layer_add, "Add a new surface paint layer")
 	_set_tooltip(surface_paint_layer_remove, "Remove the selected surface paint layer")
-	_set_tooltip(surface_paint_texture, "Texture for the selected surface paint layer")
+	_set_tooltip(
+		surface_paint_texture,
+		(
+			"Choose the texture for the selected surface-paint layer"
+			+ "\nRequires a selected face and an existing paint layer"
+		)
+	)
 	# Materials tab
 	_set_tooltip(
 		face_select_mode,
-		"Enable per-face selection for material assignment\nClick faces in viewport to select them"
+		(
+			"Enable per-face texturing"
+			+ "\nClick faces in the viewport to select them"
+			+ "\nShift+Click adds more faces"
+			+ "\nRequired for per-face assign, UV edit, and surface paint"
+		)
 	)
 	_set_tooltip(material_add, "Add a material to the palette")
 	_set_tooltip(material_remove, "Remove selected material from palette")
 	_set_tooltip(
-		material_load_prototypes, "Refresh all built-in prototype textures into the palette"
+		material_load_prototypes,
+		(
+			"Load built-in prototype textures into the palette"
+			+ "\nUse this first if the browser looks empty"
+		)
 	)
-	_set_tooltip(material_assign, "Assign selected material to selected faces")
+	_set_tooltip(
+		material_assign,
+		(
+			"Apply the selected material to all selected faces"
+			+ "\nTip: choose a texture in the browser, then click faces in Face Select Mode"
+		)
+	)
 	_set_tooltip(face_clear, "Clear face selection")
 	# UV tab
-	_set_tooltip(uv_reset, "Reset UV coordinates to defaults for selected face")
+	_set_tooltip(
+		uv_reset,
+		(
+			"Reset this face to default projected UVs"
+			+ "\nUse after stretching or before Fit/Center/Left/Right justify"
+		)
+	)
 	# Manage tab
 	_set_tooltip(floor_btn, "Create a default floor brush")
 	_set_tooltip(apply_cuts_btn, "Move pending cuts into the draft brush tree")
@@ -3663,9 +3714,44 @@ func _on_material_assign() -> void:
 		return
 	if not level_root:
 		return
+	var face_count := _count_selected_faces()
+	if face_count == 0:
+		show_toast("No faces selected — select faces first", 1)
+		return
 	_commit_state_action(
 		"Assign Face Material", "assign_material_to_selected_faces", [_selected_material_index]
 	)
+	var mat_name := _material_display_name(_selected_material_index)
+	show_toast(
+		"Applied %s to %d face%s" % [mat_name, face_count, "" if face_count == 1 else "s"], 0
+	)
+
+
+func _count_selected_faces() -> int:
+	if not level_root:
+		return 0
+	var total := 0
+	for key in level_root.face_selection.keys():
+		var brush = level_root._find_brush_by_key(str(key))
+		if not brush:
+			continue
+		var indices: Array = level_root.face_selection.get(key, [])
+		for idx in indices:
+			if int(idx) >= 0 and int(idx) < brush.faces.size():
+				total += 1
+	return total
+
+
+func _material_display_name(index: int) -> String:
+	if not level_root or not level_root.material_manager:
+		return "material"
+	var mat = level_root.material_manager.get_material(index)
+	if mat == null:
+		return "material"
+	var name: String = (
+		mat.resource_name if mat.resource_name != "" else mat.resource_path.get_file()
+	)
+	return name if name != "" else "material"
 
 
 func _on_face_clear() -> void:
@@ -3690,7 +3776,15 @@ func _on_browser_material_double_clicked(index: int) -> void:
 		material_browser.set_selected_index(index)
 	# Double-click triggers immediate face assignment.
 	if level_root and index >= 0:
+		var face_count := _count_selected_faces()
+		if face_count == 0:
+			show_toast("No faces selected — select faces first", 1)
+			return
 		_commit_state_action("Assign Face Material", "assign_material_to_selected_faces", [index])
+		var mat_name := _material_display_name(index)
+		show_toast(
+			"Applied %s to %d face%s" % [mat_name, face_count, "" if face_count == 1 else "s"], 0
+		)
 
 
 func _on_browser_context_menu(index: int, global_pos: Vector2) -> void:
@@ -3711,19 +3805,34 @@ func _on_material_context_action(id: int) -> void:
 	var idx = _material_context_index
 	if idx < 0:
 		return
+	var mat_name := _material_display_name(idx)
 	match id:
 		0:  # Apply to Selected Faces
 			_selected_material_index = idx
+			var face_count := _count_selected_faces()
+			if face_count == 0:
+				show_toast("No faces selected — select faces first", 1)
+				return
 			_commit_state_action("Assign Face Material", "assign_material_to_selected_faces", [idx])
+			show_toast(
+				"Applied %s to %d face%s" % [mat_name, face_count, "" if face_count == 1 else "s"],
+				0
+			)
 		1:  # Apply to Whole Brush — assign material to ALL faces on selected brushes
 			_selected_material_index = idx
-			if _selection_nodes.is_empty():
+			var brush_ids := _get_selected_brush_ids()
+			if brush_ids.is_empty():
 				show_toast("No brushes selected", 1)
 				return
 			_commit_state_action(
-				"Assign Brush Material",
-				"assign_material_to_whole_brushes",
-				[idx, _get_selected_brush_ids()]
+				"Assign Brush Material", "assign_material_to_whole_brushes", [idx, brush_ids]
+			)
+			show_toast(
+				(
+					"Applied %s to %d brush%s"
+					% [mat_name, brush_ids.size(), "" if brush_ids.size() == 1 else "es"]
+				),
+				0
 			)
 		2:  # Toggle Favorite
 			if material_browser:
@@ -4832,7 +4941,7 @@ func _setup_texture_lock_ui() -> void:
 	texture_lock_check = CheckBox.new()
 	texture_lock_check.text = "Texture Lock"
 	texture_lock_check.button_pressed = true
-	texture_lock_check.tooltip_text = "Preserve UV alignment when moving or resizing brushes"
+	texture_lock_check.tooltip_text = "Keep texture alignment while moving, resizing, hollowing, or clipping brushes"
 	texture_lock_check.toggled.connect(_on_texture_lock_toggled)
 	brush_vbox.add_child(texture_lock_check)
 
