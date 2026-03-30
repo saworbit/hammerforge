@@ -4,7 +4,62 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Fixed
+- **Material assignment no longer requires face selection (Mar 2026):**
+  - Double-clicking a texture in the material browser, or clicking the Assign button, now
+    falls back to **whole-brush assignment** when no individual faces are selected but brushes
+    are selected in the viewport. Previously this showed "No faces selected — select faces
+    first" even with brushes highlighted.
+  - New `resolve_material_assign_action()` pure-decision helper on `dock.gd` encapsulates
+    the face-vs-brush fallback logic, shared by `_on_material_assign()`,
+    `_on_browser_material_double_clicked()`, and available for future callers.
+- **Texture reimport no longer clears brush selection (Mar 2026):**
+  - Loading prototype SVG textures in the material browser could trigger Godot's texture
+    reimport pipeline, which emitted spurious empty `selection_changed` signals that cleared
+    the dock's brush selection cache.
+  - Added `should_suppress_empty_selection()` static guard in `plugin.gd`: ignores empty
+    editor selection events when `hf_selection` is still populated. Intentional deselects
+    (Escape key, delete, dock Clear Selection button, Commit Cuts) clear `hf_selection`
+    first so the guard lets them through.
+  - New `selection_clear_requested` signal on `dock.gd` lets the dock tell the plugin to
+    clear its cache before calling `editor_selection.clear()`.
+  - Reordered `hf_selection.clear()` before `selection.clear()` in three plugin deselect
+    paths (Escape, delete brushes, duplicate brushes) for consistency with the guard.
+
 ### Added
+- **Smart Contextual Toolbar + Command Palette (Mar 2026):**
+  - **Floating context toolbar** (`ui/hf_context_toolbar.gd`): appears in the 3D viewport overlay with
+    context-sensitive actions based on current selection and tool state. Automatically shows/hides as
+    context changes — no manual tab switching needed.
+  - **Brush selected** → Extrude Up/Down, Hollow, Clip, Carve, Duplicate, Delete buttons. Label shows
+    "N brush(es)" count.
+  - **Face selected** → Material thumbnail strip (5 favorites), UV Justify buttons (Fit/Center/L/R/T/B),
+    "Apply to Whole Brush" button. Label shows "N face(s)" count.
+  - **Entity selected** → I/O connect and Properties quick-edit buttons (jump to Entities tab),
+    Duplicate, Delete.
+  - **Draw idle** → Quick shape selector (Box/Cyl/Sph/Cone), Add/Subtract toggle with color-coded label
+    (green Add / red Sub) and one-click switch.
+  - **Dragging** → Live dimension display, Axis Lock buttons (X/Y/Z), Cancel button.
+  - **Vertex edit** → Vertex/Edge sub-mode toggle, Merge, Split, Exit buttons.
+  - **Auto-mode hint bar**: during brush drawing, a blue overlay bar appears with the current operation
+    mode ("Drawing in Add mode — press Subtract to toggle") and a one-click "Switch to Subtract/Add"
+    button. Fades in smoothly, auto-hides when not drawing.
+  - **Command palette** (`ui/hf_hotkey_palette.gd`): searchable action palette toggled with `Shift+?`
+    or `F1`. Lists all HammerForge actions grouped by category (Tools, Editing, Paint, Axis Lock) with
+    key bindings. Live search filters by action name or binding. **Live gray-out**: actions that cannot
+    run in the current state are visually disabled (e.g. Hollow grayed out with no brush selection,
+    paint tools grayed out outside paint mode, vertex tools grayed outside vertex mode). Press Enter to
+    execute the first visible+enabled match. Esc to close.
+  - **Dock integration**: `dock.gd` gains `_apply_material_to_whole_brush()` and
+    `_on_face_assign_material()` convenience methods for toolbar-initiated material assignment.
+  - **Plugin integration** (`plugin.gd`): context toolbar and palette added to
+    `CONTAINER_SPATIAL_EDITOR_MENU` alongside existing HUD. State updates every frame via
+    `_update_context_toolbar_state()` which computes brush/entity/face counts, input mode, operation,
+    and vertex state. Action dispatch routes to existing dock/plugin methods (hollow, clip, carve,
+    justify, axis lock, tool switch, etc.) with full undo/redo support.
+  - **32 new GUT tests** (`test_context_toolbar.gd` 20 tests, `test_hotkey_palette.gd` 12 tests):
+    context determination, label content, action signals, material thumbnails, search filtering,
+    gray-out logic, toggle visibility. **Total: 726 tests across 43 files.**
 - **Player Spawn System + Quick Play Overhaul (Mar 2026):**
   - **New subsystem** (`systems/hf_spawn_system.gd`): `HFSpawnSystem` manages spawn lookup, physics-
     based validation, auto-fix, default spawn creation, and debug visualisation. Follows the

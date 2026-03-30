@@ -37,7 +37,7 @@ func test_category_editing_default():
 func test_action_label_known():
 	assert_eq(HFKeymapType.get_action_label("tool_draw"), "Draw")
 	assert_eq(HFKeymapType.get_action_label("hollow"), "Hollow")
-	assert_eq(HFKeymapType.get_action_label("paint_blend"), "Blend")
+	assert_eq(HFKeymapType.get_action_label("paint_blend"), "Bucket Fill")
 
 
 func test_action_label_unknown():

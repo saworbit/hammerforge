@@ -5,6 +5,7 @@ class_name HammerForgeDock
 signal hud_visibility_changed(visible: bool)
 signal builtin_tool_changed
 signal vertex_mode_toggled(enabled: bool)
+signal selection_clear_requested
 
 const LevelRootType = preload("level_root.gd")
 const BrushPreset = preload("brush_preset.gd")
@@ -2077,6 +2078,10 @@ func _setup_clear_selection_button() -> void:
 
 
 func _on_clear_selection_pressed() -> void:
+	_selection_nodes = []
+	set_selection_count(0)
+	set_selection_nodes([])
+	selection_clear_requested.emit()
 	if editor_interface:
 		var sel = editor_interface.get_selection()
 		if sel:
@@ -2461,6 +2466,7 @@ func _on_clear_cuts():
 func _on_commit_cuts():
 	_log("Commit cuts requested (freeze=%s)" % (commit_freeze.button_pressed))
 	_warn_missing_dependencies()
+	selection_clear_requested.emit()
 	if editor_interface:
 		var selection = editor_interface.get_selection()
 		if selection:
@@ -3714,17 +3720,41 @@ func _on_material_assign() -> void:
 		return
 	if not level_root:
 		return
-	var face_count := _count_selected_faces()
-	if face_count == 0:
-		show_toast("No faces selected — select faces first", 1)
+	var decision := resolve_material_assign_action(_selected_material_index)
+	if decision.action == "":
+		show_toast(decision.toast, 1)
 		return
-	_commit_state_action(
-		"Assign Face Material", "assign_material_to_selected_faces", [_selected_material_index]
-	)
-	var mat_name := _material_display_name(_selected_material_index)
-	show_toast(
-		"Applied %s to %d face%s" % [mat_name, face_count, "" if face_count == 1 else "s"], 0
-	)
+	_commit_state_action(decision.action, decision.method, decision.args)
+	show_toast(decision.toast, 0)
+
+
+## Pure decision helper for material assignment.  Returns a Dictionary with
+## keys: action (String – empty on error), method (String), args (Array),
+## toast (String).  Separated from side-effects so tests can exercise the
+## face-vs-brush fallback without undo/redo infrastructure.
+func resolve_material_assign_action(mat_index: int) -> Dictionary:
+	var face_count := _count_selected_faces()
+	if face_count > 0:
+		var mat_name := _material_display_name(mat_index)
+		return {
+			"action": "Assign Face Material",
+			"method": "assign_material_to_selected_faces",
+			"args": [mat_index],
+			"toast": "Applied %s to %d face%s" % [mat_name, face_count, "" if face_count == 1 else "s"],
+		}
+	var brush_ids := _get_selected_brush_ids()
+	if brush_ids.is_empty():
+		return {"action": "", "method": "", "args": [], "toast": "No brushes selected — select a brush first"}
+	var mat_name := _material_display_name(mat_index)
+	return {
+		"action": "Assign Brush Material",
+		"method": "assign_material_to_whole_brushes",
+		"args": [mat_index, brush_ids],
+		"toast": (
+			"Applied %s to %d brush%s"
+			% [mat_name, brush_ids.size(), "" if brush_ids.size() == 1 else "es"]
+		),
+	}
 
 
 func _count_selected_faces() -> int:
@@ -3776,15 +3806,12 @@ func _on_browser_material_double_clicked(index: int) -> void:
 		material_browser.set_selected_index(index)
 	# Double-click triggers immediate face assignment.
 	if level_root and index >= 0:
-		var face_count := _count_selected_faces()
-		if face_count == 0:
-			show_toast("No faces selected — select faces first", 1)
+		var decision := resolve_material_assign_action(index)
+		if decision.action == "":
+			show_toast(decision.toast, 1)
 			return
-		_commit_state_action("Assign Face Material", "assign_material_to_selected_faces", [index])
-		var mat_name := _material_display_name(index)
-		show_toast(
-			"Applied %s to %d face%s" % [mat_name, face_count, "" if face_count == 1 else "s"], 0
-		)
+		_commit_state_action(decision.action, decision.method, decision.args)
+		show_toast(decision.toast, 0)
 
 
 func _on_browser_context_menu(index: int, global_pos: Vector2) -> void:
@@ -5338,3 +5365,35 @@ func _refresh_io_list(entity: Node = null) -> void:
 		if once:
 			label += " [once]"
 		io_list.add_item(label)
+
+
+# ---------------------------------------------------------------------------
+# Context toolbar helper methods
+# ---------------------------------------------------------------------------
+
+
+## Apply the currently selected material to ALL faces on selected brushes.
+func _apply_material_to_whole_brush() -> void:
+	if not level_root or _selected_material_index < 0:
+		show_toast("No material selected", 1)
+		return
+	var brush_ids := _get_selected_brush_ids()
+	if brush_ids.is_empty():
+		show_toast("No brushes selected", 1)
+		return
+	_commit_state_action(
+		"Assign Brush Material",
+		"assign_material_to_whole_brushes",
+		[_selected_material_index, brush_ids]
+	)
+	var mat_name := _material_display_name(_selected_material_index)
+	show_toast(
+		"Applied %s to %d brush%s"
+		% [mat_name, brush_ids.size(), "" if brush_ids.size() == 1 else "es"],
+		0
+	)
+
+
+## Assign face material — called by context toolbar for quick material apply.
+func _on_face_assign_material() -> void:
+	_on_material_assign()

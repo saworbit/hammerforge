@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/Godot-4.6%2B-478cbf?logo=godot-engine&logoColor=white" alt="Godot 4.6+">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
   <img src="https://img.shields.io/badge/Status-Alpha-orange" alt="Alpha">
-  <img src="https://img.shields.io/badge/Tests-694%20passing-brightgreen" alt="694 tests passing">
+  <img src="https://img.shields.io/badge/Tests-737%20passing-brightgreen" alt="737 tests passing">
   <img src="https://img.shields.io/badge/GDScript-23k%2B%20lines-blueviolet" alt="23k+ lines">
 </p>
 
@@ -36,7 +36,7 @@ HammerForge is a single `addons/` folder. No external tools, no custom builds, n
 
 | | |
 |---|---|
-| **Modular subsystem architecture** | **694 unit + integration tests** with CI on every push |
+| **Modular subsystem architecture** | **726 unit + integration tests** with CI on every push |
 | **15 brush shapes** (box through dodecahedron) | **150 built-in prototype textures** for instant greyboxing |
 | **Quake `.map`** + **glTF `.glb`** export | **.hflevel** native format with threaded I/O |
 | **Customizable keymaps** (JSON) | **Plugin API** for custom tools |
@@ -172,6 +172,9 @@ HammerForge's dock is designed to stay out of your way while keeping everything 
 - **Interactive tutorial wizard** -- 5-step guided walkthrough (Draw → Subtract → Paint → Entity → Bake) with signal-driven auto-advance, progress bar, and persistent resume across sessions
 - **Dynamic contextual hints** -- viewport overlay hints that appear when switching tools (e.g. "Click to place corner → drag to set size → release for height"), auto-dismiss after 4s with per-hint persistence
 - **Searchable shortcut dialog** -- "?" button opens a filterable, categorized shortcut reference (replaces static popup)
+- **Smart contextual toolbar** -- floating mini-toolbar in the 3D viewport shows context-sensitive actions (brush ops when brushes selected, UV tools when faces selected, shape picker in draw mode, axis locks while dragging)
+- **Command palette** (Shift+? or F1) -- searchable action palette with live gray-out for unavailable actions; type to filter, Enter to execute
+- **Auto-mode hints** -- "Drawing in Add mode" bar appears during drag with one-click Add/Subtract toggle
 - **Tool poll system** -- buttons gray out with inline hints when an action can't run ("Select a brush to use these tools")
 - **Contextual selection tools** -- hollow, clip, move, tie, duplicator appear in Brush tab only when brushes are selected
 - **Live dimensions** -- real-time W x H x D display during drag gestures
@@ -272,13 +275,13 @@ All shortcuts are rebindable via `user://hammerforge_keymap.json`.
 | E | Edge sub-mode (in vertex) | | ; | Path tool |
 | Ctrl+E | Split edge | | Ctrl+W | Merge vertices |
 | T | Texture Picker | | ? | Shortcuts popup |
-| X / Y / Z | Axis lock | | | |
+| Shift+? / F1 | Command palette | | X / Y / Z | Axis lock |
 
 ---
 
 ## Testing
 
-622 tests across 38 files using the [GUT](https://github.com/bitwes/Gut) framework, including unit tests and end-to-end integration tests. All checks run on every push via GitHub Actions.
+726 tests across 43 files using the [GUT](https://github.com/bitwes/Gut) framework, including unit tests and end-to-end integration tests. All checks run on every push via GitHub Actions.
 
 ```bash
 # Run all tests headless

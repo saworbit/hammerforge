@@ -27,7 +27,11 @@ var _vertex_drag_ref_y := 0.0  # World Y of the picked vertex for projection pla
 var _vertex_overlay_mesh: MeshInstance3D = null
 var _vertex_overlay_imesh: ImmediateMesh = null
 var _texture_picker_active := false
+var _context_toolbar: Control = null
+var _hotkey_palette: Control = null
 const LevelRootType = preload("level_root.gd")
+const HFContextToolbar = preload("ui/hf_context_toolbar.gd")
+const HFHotkeyPalette = preload("ui/hf_hotkey_palette.gd")
 const DraftEntityType = preload("draft_entity.gd")
 const IconRes = preload("icon.png")
 const HFUndoHelper = preload("undo_helper.gd")
@@ -72,6 +76,10 @@ func _enter_tree():
 			dock.connect("builtin_tool_changed", Callable(self, "_on_builtin_tool_changed"))
 		if dock.has_signal("vertex_mode_toggled"):
 			dock.connect("vertex_mode_toggled", Callable(self, "_on_vertex_mode_toggled"))
+		if dock.has_signal("selection_clear_requested"):
+			dock.connect(
+				"selection_clear_requested", Callable(self, "_on_dock_selection_clear")
+			)
 
 	hud = preload("shortcut_hud.tscn").instantiate()
 	if base_control:
@@ -81,6 +89,24 @@ func _enter_tree():
 		hud.set_user_prefs(_user_prefs)
 	if dock:
 		hud.visible = dock.get_show_hud()
+	# Context toolbar (floating above 3D viewport)
+	_context_toolbar = HFContextToolbar.new()
+	if base_control:
+		_context_toolbar.theme = base_control.theme
+	_context_toolbar.set_keymap(_keymap)
+	_context_toolbar.action_requested.connect(_on_context_toolbar_action)
+	_context_toolbar.operation_toggle_requested.connect(_on_context_toggle_operation)
+	_context_toolbar.tool_switch_requested.connect(_on_context_tool_switch)
+	_context_toolbar.material_quick_apply.connect(_on_context_material_apply)
+	_context_toolbar.hotkey_palette_requested.connect(_on_toggle_hotkey_palette)
+	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, _context_toolbar)
+	# Hotkey palette (command palette overlay)
+	_hotkey_palette = HFHotkeyPalette.new()
+	if base_control:
+		_hotkey_palette.theme = base_control.theme
+	_hotkey_palette.populate(_keymap)
+	_hotkey_palette.action_invoked.connect(_on_hotkey_palette_action)
+	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, _hotkey_palette)
 	var selection = get_editor_interface().get_selection()
 	if selection:
 		if not selection.is_connected(
@@ -120,6 +146,16 @@ func _exit_tree():
 		if is_instance_valid(hud):
 			hud.queue_free()
 		hud = null
+	if _context_toolbar:
+		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _context_toolbar)
+		if is_instance_valid(_context_toolbar):
+			_context_toolbar.queue_free()
+		_context_toolbar = null
+	if _hotkey_palette:
+		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _hotkey_palette)
+		if is_instance_valid(_hotkey_palette):
+			_hotkey_palette.queue_free()
+		_hotkey_palette = null
 	var selection = get_editor_interface().get_selection()
 	if (
 		selection
@@ -140,6 +176,10 @@ func _on_editor_theme_changed() -> void:
 		dock.apply_editor_styles(base_control)
 	if hud:
 		hud.theme = base_control.theme
+	if _context_toolbar:
+		_context_toolbar.theme = base_control.theme
+	if _hotkey_palette:
+		_hotkey_palette.theme = base_control.theme
 
 
 func _on_hud_visibility_changed(visible: bool) -> void:
@@ -205,13 +245,76 @@ func _update_hud_context() -> void:
 	if numeric_buffer.length() > 0:
 		ctx["numeric"] = numeric_buffer
 	hud.update_context(ctx)
+	# Update context toolbar and hotkey palette state
+	_update_context_toolbar_state(root, tool_id_ctx)
+
+
+func _update_context_toolbar_state(root: Node, tool_id: int) -> void:
+	if not _context_toolbar and not _hotkey_palette:
+		return
+	var state := {}
+	state["has_root"] = root != null
+	state["tool"] = tool_id
+	state["paint_mode"] = dock.is_paint_mode_enabled() if dock else false
+	state["vertex_mode"] = _vertex_mode
+	state["is_subtract"] = dock.get_operation() != 0 if dock else false  # 0 = UNION
+
+	# Input mode
+	var input_mode := 0
+	if root and root.input_state:
+		input_mode = root.input_state.mode
+		var dims = root.input_state.get_drag_dimensions()
+		state["dimensions"] = HFInputStateType.format_dimensions(dims)
+	state["input_mode"] = input_mode
+
+	# Count brushes, entities, faces in selection
+	var brush_count := 0
+	var entity_count := 0
+	for node in hf_selection:
+		if node is DraftBrush:
+			brush_count += 1
+		elif root and root.has_method("is_entity_node") and root.is_entity_node(node):
+			entity_count += 1
+	state["brush_count"] = brush_count
+	state["entity_count"] = entity_count
+
+	# Face selection count
+	var face_count := 0
+	if root and root.get("face_selection") is Dictionary:
+		for key in root.face_selection.keys():
+			var indices = root.face_selection.get(key, [])
+			face_count += indices.size()
+	state["face_count"] = face_count
+
+	if _context_toolbar:
+		_context_toolbar.update_state(state)
+		# Feed favorite materials to the face-context thumbnail strip
+		if face_count > 0 and dock and dock.material_browser:
+			_context_toolbar.set_favorite_materials(dock.material_browser.get_favorite_infos(5))
+	if _hotkey_palette and _hotkey_palette.visible:
+		_hotkey_palette.update_state(state)
+
+
+## Returns true when an incoming (empty) editor selection should be ignored
+## because hf_selection still holds brushes — i.e. the empty signal is
+## likely a spurious side-effect (texture reimport, resource scan) rather
+## than an intentional user deselect.  Intentional deselects clear
+## hf_selection *before* the editor selection, so the guard lets them
+## through.
+static func should_suppress_empty_selection(
+	incoming_nodes: Array, current_hf_selection: Array
+) -> bool:
+	return incoming_nodes.is_empty() and not current_hf_selection.is_empty()
 
 
 func _on_editor_selection_changed() -> void:
 	var selection = get_editor_interface().get_selection()
 	if not selection:
 		return
-	hf_selection = selection.get_selected_nodes()
+	var nodes = selection.get_selected_nodes()
+	if should_suppress_empty_selection(nodes, hf_selection):
+		return
+	hf_selection = nodes
 	if dock:
 		dock.set_selection_count(hf_selection.size())
 		dock.set_selection_nodes(hf_selection)
@@ -505,6 +608,10 @@ func _on_vertex_mode_toggled(enabled: bool) -> void:
 		_toggle_vertex_mode(root)
 
 
+func _on_dock_selection_clear() -> void:
+	hf_selection.clear()
+
+
 func _handle_keyboard_input(
 	event: InputEventKey, root: Node, tool_id: int, paint_mode: bool
 ) -> int:
@@ -513,6 +620,18 @@ func _handle_keyboard_input(
 		var nr = _handle_numeric_input(event, root)
 		if nr != EditorPlugin.AFTER_GUI_INPUT_PASS:
 			return nr
+
+	# Hotkey palette toggle (? = Shift+/ or F1)
+	if _hotkey_palette:
+		if _hotkey_palette.visible and event.keycode == KEY_ESCAPE:
+			_hotkey_palette.visible = false
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+		if (
+			(event.keycode == KEY_SLASH and event.shift_pressed)
+			or event.keycode == KEY_F1
+		):
+			_on_toggle_hotkey_palette()
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
 
 	# External tool keyboard dispatch first — external tools can override keys
 	if _tool_registry and _tool_registry.has_active_external_tool():
@@ -1113,12 +1232,13 @@ func _shortcut_input(event: InputEvent) -> void:
 		if select_drag_active:
 			select_drag_active = false
 			select_dragging = false
+		hf_selection.clear()
 		var selection = get_editor_interface().get_selection()
 		if selection:
 			selection.clear()
-		hf_selection.clear()
 		if dock:
 			dock.set_selection_count(0)
+			dock.set_selection_nodes([])
 		_update_hud_context()
 		event.accept()
 		return
@@ -1436,8 +1556,8 @@ func _delete_selected(root: Node) -> bool:
 				brush_ids.append(brush_id)
 	if brush_ids.is_empty():
 		return false
-	selection.clear()
 	hf_selection.clear()
+	selection.clear()
 	HFUndoHelper.commit(
 		_get_undo_redo(),
 		root,
@@ -1471,14 +1591,14 @@ func _duplicate_selected(root: Node) -> void:
 		false,
 		Callable(self, "_record_history")
 	)
-	selection.clear()
 	hf_selection.clear()
+	selection.clear()
 	if root:
 		for info in infos:
 			var dup = root.find_brush_by_id(info.get("brush_id", ""))
 			if dup:
-				selection.add_node(dup)
 				hf_selection.append(dup)
+				selection.add_node(dup)
 
 
 func _nudge_selected(root: Node, dir: Vector3) -> void:
@@ -1819,6 +1939,252 @@ func _handle_material_drop(position: Vector2, data: Variant) -> void:
 		if dock.material_browser:
 			dock.material_browser.set_selected_index(mat_idx)
 		dock.show_toast("Applied material #%d to face" % mat_idx, 0)
+
+
+# ---------------------------------------------------------------------------
+# Context Toolbar + Hotkey Palette handlers
+# ---------------------------------------------------------------------------
+
+
+func _on_context_toolbar_action(action: String, args: Array) -> void:
+	var root = active_root if active_root else _get_level_root()
+	if not root:
+		return
+	match action:
+		"extrude_up":
+			_deactivate_external_tool()
+			dock.set_extrude_tool(1)
+			_update_hud_context()
+		"extrude_down":
+			_deactivate_external_tool()
+			dock.set_extrude_tool(-1)
+			_update_hud_context()
+		"hollow":
+			_hollow_selected(root)
+		"clip":
+			_clip_selected(root)
+		"carve":
+			_carve_selected(root)
+		"duplicate":
+			_duplicate_selected(root)
+		"delete":
+			_delete_selected(root)
+		"set_player_start":
+			if dock:
+				dock._on_spawn_set_primary()
+		"justify_fit":
+			if dock:
+				dock._on_justify("fit")
+		"justify_center":
+			if dock:
+				dock._on_justify("center")
+		"justify_left":
+			if dock:
+				dock._on_justify("left")
+		"justify_right":
+			if dock:
+				dock._on_justify("right")
+		"justify_top":
+			if dock:
+				dock._on_justify("top")
+		"justify_bottom":
+			if dock:
+				dock._on_justify("bottom")
+		"apply_to_brush":
+			if dock:
+				dock._apply_material_to_whole_brush()
+		"entity_io":
+			if dock:
+				dock.main_tabs.current_tab = 2  # Entities tab
+		"entity_props":
+			if dock:
+				dock.main_tabs.current_tab = 2  # Entities tab
+		"shape_box":
+			if dock and dock.shape_select:
+				dock.shape_select.select(0)
+				dock._on_shape_selected(0)
+		"shape_cylinder":
+			if dock and dock.shape_select:
+				dock.shape_select.select(1)
+				dock._on_shape_selected(1)
+		"shape_sphere":
+			if dock and dock.shape_select:
+				dock.shape_select.select(2)
+				dock._on_shape_selected(2)
+		"shape_cone":
+			if dock and dock.shape_select:
+				dock.shape_select.select(3)
+				dock._on_shape_selected(3)
+		"axis_x":
+			root.set_axis_lock(LevelRootType.AxisLock.X, true)
+			_update_hud_context()
+			if dock:
+				dock.update_axis_lock_buttons(LevelRootType.AxisLock.X)
+		"axis_y":
+			root.set_axis_lock(LevelRootType.AxisLock.Y, true)
+			_update_hud_context()
+			if dock:
+				dock.update_axis_lock_buttons(LevelRootType.AxisLock.Y)
+		"axis_z":
+			root.set_axis_lock(LevelRootType.AxisLock.Z, true)
+			_update_hud_context()
+			if dock:
+				dock.update_axis_lock_buttons(LevelRootType.AxisLock.Z)
+		"cancel_drag":
+			root.cancel_drag()
+			numeric_buffer = ""
+			_update_hud_context()
+		"vertex_submode":
+			if root.vertex_system:
+				root.vertex_system.set_sub_mode(0)  # VERTEX
+		"edge_submode":
+			if root.vertex_system:
+				root.vertex_system.set_sub_mode(1)  # EDGE
+		"vertex_merge":
+			if root.vertex_system:
+				root.vertex_system.merge_selected()
+		"vertex_split":
+			if root.vertex_system:
+				root.vertex_system.split_selected_edge()
+		"vertex_exit":
+			_toggle_vertex_mode(root)
+
+
+func _on_context_toggle_operation() -> void:
+	if dock:
+		if dock.mode_add.button_pressed:
+			dock.mode_subtract.button_pressed = true
+		else:
+			dock.mode_add.button_pressed = true
+		_update_hud_context()
+
+
+func _on_context_tool_switch(tool_id: int) -> void:
+	_deactivate_external_tool()
+	if dock:
+		match tool_id:
+			0:
+				dock.tool_draw.button_pressed = true
+			1:
+				dock.tool_select.button_pressed = true
+			2:
+				dock.set_extrude_tool(1)
+			3:
+				dock.set_extrude_tool(-1)
+	_update_hud_context()
+
+
+func _on_context_material_apply(mat_index: int) -> void:
+	var root = active_root if active_root else _get_level_root()
+	if not root or not dock:
+		return
+	dock._selected_material_index = mat_index
+	# Apply to selected faces if any
+	var face_count = dock._count_selected_faces()
+	if face_count > 0:
+		dock._on_face_assign_material()
+	else:
+		# Apply to selected brush
+		for node in hf_selection:
+			if node is DraftBrush:
+				var mat = root.material_manager.get_material(mat_index) if root.material_manager else null
+				if mat:
+					_paint_brush_with_undo(root, node, mat)
+				break
+
+
+func _on_toggle_hotkey_palette() -> void:
+	if _hotkey_palette:
+		_hotkey_palette.toggle_visible()
+		if _hotkey_palette.visible:
+			var root = active_root if active_root else _get_level_root()
+			var tool_id = dock.get_tool() if dock else 0
+			_update_context_toolbar_state(root, tool_id)
+
+
+func _on_hotkey_palette_action(action: String) -> void:
+	var root = active_root if active_root else _get_level_root()
+	if not root:
+		return
+	match action:
+		"tool_draw":
+			_deactivate_external_tool()
+			if dock and dock.tool_draw:
+				dock.tool_draw.button_pressed = true
+		"tool_select":
+			_deactivate_external_tool()
+			if dock and dock.tool_select:
+				dock.tool_select.button_pressed = true
+		"tool_extrude_up":
+			_deactivate_external_tool()
+			if dock:
+				dock.set_extrude_tool(1)
+		"tool_extrude_down":
+			_deactivate_external_tool()
+			if dock:
+				dock.set_extrude_tool(-1)
+		"delete":
+			_delete_selected(root)
+		"duplicate":
+			_duplicate_selected(root)
+		"group":
+			_group_selected(root)
+		"ungroup":
+			_ungroup_selected(root)
+		"hollow":
+			_hollow_selected(root)
+		"clip":
+			_clip_selected(root)
+		"carve":
+			_carve_selected(root)
+		"move_to_floor":
+			_move_selected_to_floor(root)
+		"move_to_ceiling":
+			_move_selected_to_ceiling(root)
+		"vertex_edit":
+			_toggle_vertex_mode(root)
+		"texture_picker":
+			_texture_picker_active = true
+			if dock:
+				dock.show_toast("Texture Picker: click a face to sample its material", 0)
+		"paint_bucket":
+			if dock:
+				dock.set_paint_tool(0)  # B key = Paint Brush tool
+		"paint_erase":
+			if dock:
+				dock.set_paint_tool(1)
+		"paint_ramp":
+			if dock:
+				dock.set_paint_tool(2)
+		"paint_line":
+			if dock:
+				dock.set_paint_tool(3)
+		"paint_blend":
+			if dock:
+				dock.set_paint_tool(4)  # K key = Bucket Fill tool
+		"vertex_edge_mode":
+			if root.vertex_system:
+				var current = root.vertex_system.sub_mode if root.vertex_system.get("sub_mode") != null else 0
+				root.vertex_system.set_sub_mode(1 if current == 0 else 0)
+		"vertex_merge":
+			if root.vertex_system:
+				root.vertex_system.merge_selected()
+		"vertex_split_edge":
+			if root.vertex_system:
+				root.vertex_system.split_selected_edge()
+		"axis_x":
+			root.set_axis_lock(LevelRootType.AxisLock.X, true)
+			if dock:
+				dock.update_axis_lock_buttons(LevelRootType.AxisLock.X)
+		"axis_y":
+			root.set_axis_lock(LevelRootType.AxisLock.Y, true)
+			if dock:
+				dock.update_axis_lock_buttons(LevelRootType.AxisLock.Y)
+		"axis_z":
+			root.set_axis_lock(LevelRootType.AxisLock.Z, true)
+			if dock:
+				dock.update_axis_lock_buttons(LevelRootType.AxisLock.Z)
+	_update_hud_context()
 
 
 func _get_level_root() -> Node:

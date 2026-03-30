@@ -36,6 +36,7 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `user_message(text, level)` | Subsystem-to-dock notification routing (0=INFO, 1=WARNING, 2=ERROR) |
 | `material_list_changed()` | Material palette updated (add/remove) |
 | `face_selection_changed()` | Face selection changed (snapshot comparison) |
+| `selection_clear_requested()` | Dock requests plugin clear `hf_selection` before `editor_selection.clear()` (reimport guard) |
 
 ### Core Scripts
 
@@ -379,6 +380,15 @@ The dock uses 4 tabs with collapsible sections for visual hierarchy:
 - `_handles()` returns true for any node when a LevelRoot exists in the scene (deep recursive search).
 - `_edit()` only nulls `active_root` when the root node is removed from the tree.
 - `dock.gd` mirrors the sticky pattern and uses `_find_level_root_in()` for deep tree search.
+
+## Selection Guard (Reimport Resilience)
+- `plugin.gd` suppresses spurious empty `selection_changed` signals via `should_suppress_empty_selection()` (static method). Texture reimport can trigger Godot's EditorSelection to emit empty selections; the guard ignores these when `hf_selection` is non-empty.
+- **Intentional deselect protocol**: clear `hf_selection` *before* calling `editor_selection.clear()`. Plugin deselect paths (Escape, delete, duplicate) do this directly. Dock deselect paths (`_on_clear_selection_pressed`, `_on_commit_cuts`) emit `selection_clear_requested` signal; plugin's `_on_dock_selection_clear` handler clears `hf_selection` in response.
+
+## Material Assignment Fallback
+- `dock.resolve_material_assign_action(mat_index)` returns `{action, method, args, toast}`. Used by `_on_material_assign()` and `_on_browser_material_double_clicked()`.
+- Priority: face selection (via `_count_selected_faces()`) > whole-brush (via `_get_selected_brush_ids()`) > error toast.
+- Context menu options "Apply to Selected Faces" and "Apply to Whole Brush" remain explicit (no fallback).
 
 ## Customizable Keymaps
 

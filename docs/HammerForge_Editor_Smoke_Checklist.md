@@ -14,6 +14,8 @@ This checklist covers the editor-only flows that are hard to validate in headles
 - material browser: thumbnail grid, search, filters, favorites, hover preview, context menu
 - texture picker: T key eyedropper for sampling face materials
 - spawn system: validation debug overlay, Quick Play with missing/invalid spawn, Manage tab spawn controls
+- context toolbar: floating toolbar shows/hides per selection, correct buttons per context
+- command palette: search, gray-out, action execution, Shift+?/F1 toggle
 
 ## Prep
 
@@ -133,12 +135,15 @@ Enable the HammerForge plugin if it is not already enabled.
 - Select the "Favorites" view toggle; confirm it is empty initially.
 - Right-click a thumbnail → "Toggle Favorite"; switch to Favorites view and confirm the item appears.
 - Switch back to "Prototypes" view. Click a thumbnail to select a material.
-- Enable **Face Select Mode**, click a face on a brush, then click **Assign to Selected Faces**; confirm the face material changes.
+- With a brush selected (but no faces), **double-click** a thumbnail; confirm all faces of the selected brush(es) update (whole-brush fallback).
+- With **no brush or face selected**, double-click a thumbnail; confirm a toast "No brushes selected — select a brush first".
+- Enable **Face Select Mode**, click a face on a brush, then double-click a thumbnail or click **Assign to Selected Faces**; confirm only the selected face material changes.
 - Hover a different thumbnail in the grid; confirm the selected face temporarily previews that material. Move the mouse away; confirm the preview reverts.
 - Right-click a thumbnail → "Apply to Whole Brush"; confirm all faces of the selected brush(es) update.
 - Right-click a thumbnail → "Copy Name"; paste elsewhere to confirm clipboard content.
 - Press **T** (Texture Picker); click a face in the viewport. Confirm the browser selection updates to match that face's material.
 - Press **T** on a face with no material; confirm a toast message appears ("Face has no material assigned").
+- **Reimport resilience**: select a brush, switch to the Paint tab, scroll through thumbnails (triggering any lazy texture reimport). Confirm the brush selection label in the dock footer still shows "Sel: 1 brush" — the selection must not be cleared by reimport.
 
 ### 12. Spawn System + Quick Play Validation
 - Delete all `player_start` entities (or start with a fresh scene).
@@ -158,11 +163,35 @@ Enable the HammerForge plugin if it is not already enabled.
 - Click **Quick Play**; confirm the player spawns at the primary-flagged entity (not the first one).
 - Set `angle = 90` on the primary spawn; playtest and confirm the player faces 90 degrees rotated.
 
-### 13. Cleanup / Persistence
+### 13. Context Toolbar + Command Palette
+- Select a brush in the viewport. Confirm the floating context toolbar appears at the top of the 3D viewport showing "1 brush" with Extrude/Hollow/Clip/Carve/Duplicate/Delete buttons.
+- Select multiple brushes; confirm the label updates to "N brushes".
+- Click the "Hol" button in the toolbar; confirm hollow executes on the selected brush.
+- Click "Dup"; confirm a duplicate brush is created.
+- Switch to Draw tool (D key). Confirm the toolbar shows shape buttons (Box/Cyl/Sph/Cone) and an "Add" toggle.
+- Click the "Sub" toggle; confirm the operation mode switches to Subtract.
+- Begin a drag (click+hold in viewport). Confirm the toolbar switches to "Drawing" context with live dimension display and X/Y/Z axis lock buttons.
+- Right-click to cancel the drag. Confirm the toolbar returns to Draw idle context.
+- Enable Face Select Mode. Select one or more faces. Confirm the toolbar shows face count, UV justify buttons, and "All" (Apply to Whole Brush) button.
+- Click a justify button (e.g. "Fit"); confirm UV justify applies to selected faces.
+- Enter Vertex mode (V key). Confirm the toolbar shows Vtx/Edge/Merge/Split/Exit buttons.
+- Click "Exit"; confirm vertex mode is deactivated.
+- Select an entity (if available). Confirm the toolbar shows "1 entity" with I/O and Props buttons.
+- Deselect all (Esc); confirm the toolbar hides when no context applies.
+- Press **Shift+?** (or F1) in the 3D viewport. Confirm the command palette appears with a search field and categorized action list.
+- Type "hollow" in the search; confirm only the Hollow action is visible.
+- Clear the search; confirm all actions reappear.
+- With no brush selected, confirm "Hollow", "Clip", "Carve" entries are grayed out.
+- Select a brush; press **Shift+?** again. Confirm "Hollow" is now enabled (not grayed out).
+- Click "Hollow" in the palette (or press Enter); confirm hollow executes and the palette closes.
+- Press **Esc** while the palette is open; confirm it closes without executing anything.
+- Toggle paint mode on; press **Shift+?**. Confirm paint tools (Bucket, Erase, Ramp, etc.) are now enabled.
+
+### 14. Cleanup / Persistence
 - Dismiss the tutorial with and without `Don't show again` checked.
 - Restart Godot and confirm the `show_welcome` preference behaves as expected.
 - Reopen the dock and confirm no layout corruption remains after closing the tutorial and shortcut dialog.
 
 ## Expected Outcome
 
-If all steps pass, the remaining risk on the tutorial/prefab/shortcut/subtract-preview/vertex-editing/polygon/path/material-browser/spawn-system feature set is low and limited mainly to edge cases outside this smoke path.
+If all steps pass, the remaining risk on the tutorial/prefab/shortcut/subtract-preview/vertex-editing/polygon/path/material-browser/spawn-system/context-toolbar/command-palette feature set is low and limited mainly to edge cases outside this smoke path.

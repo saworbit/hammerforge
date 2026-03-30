@@ -48,7 +48,7 @@ A colored banner between the toolbar and tabs always shows your current tool and
 When typing numeric input during a gesture, the value appears in brackets (e.g. "[64]").
 
 ### Toolbar
-The compact toolbar shows icon + text labels (Draw, Select, Add, Sub, Paint, Ext Up, Ext Dn) with full descriptions in tooltips. A **?** button at the right end opens a searchable shortcut reference dialog where you can filter by action name or key binding.
+The compact toolbar shows icon + text labels (Draw, Select, Add, Sub, Paint, Ext Up, Ext Dn) with full descriptions in tooltips. A **?** button at the right end opens a searchable shortcut reference dialog where you can filter by action name or key binding. Press **Shift+?** or **F1** in the 3D viewport to open the command palette for executing any action by name.
 
 ### Brush tab
 - **Toolbar**: Draw, Select, Add, Sub, Paint, Ext Up, Ext Dn (icon + text labels). Press **?** for searchable shortcuts dialog.
@@ -129,6 +129,21 @@ Each tab shows a contextual hint at the bottom guiding you through the workflow:
 - Paint tab: "Draw some brushes first, then paint them here"
 - Entities tab: "Drag an entity from the palette into the viewport"
 - Manage tab: "When ready, use Bake to convert brushes into final geometry"
+
+### Smart Contextual Toolbar
+A floating mini-toolbar appears in the 3D viewport showing context-sensitive actions based on your current selection and tool state. It eliminates the need to switch dock tabs for common operations:
+
+- **Brushes selected** → Extrude Up/Down, Hollow, Clip, Carve, Duplicate, Delete. Shows "N brush(es)" count.
+- **Faces selected** → Material thumbnails (favorites strip), UV Justify (Fit/Center/L/R/T/B), Apply to Whole Brush. Shows "N face(s)" count.
+- **Entities selected** → I/O connect, Properties quick-edit (jumps to Entities tab), Duplicate, Delete.
+- **Draw mode (idle)** → Quick shape selector (Box/Cyl/Sph/Cone), Add/Subtract toggle.
+- **Dragging** → Live dimensions display, Axis Lock buttons (X/Y/Z), Cancel.
+- **Vertex mode** → Vertex/Edge sub-mode toggle, Merge, Split, Exit.
+
+An **auto-mode hint bar** appears during brush drawing, showing the current operation mode (e.g. "Drawing in Add mode — press Subtract to toggle") with a one-click toggle button.
+
+### Command Palette
+Press **Shift+?** or **F1** to open the command palette — a searchable list of all HammerForge actions with key bindings. Actions that cannot run in the current state are grayed out (e.g. Hollow is disabled when nothing is selected, paint tools are disabled outside paint mode). Type to filter, press **Enter** to execute the first matching action, **Esc** to close.
 
 ### Viewport Contextual Hints
 When you switch tools, a brief instruction hint appears in the viewport overlay:

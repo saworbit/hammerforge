@@ -153,6 +153,13 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - **Playtest FPS controller** updated with `player_start_position` / `player_start_rotation_y` exports.
 - 21 new tests. Total: **685 tests across 41 files**.
 
+## Done (Smart Contextual Toolbar + Command Palette)
+- **Floating context toolbar** (`HFContextToolbar`): appears in the 3D viewport with context-sensitive buttons (brush ops, face UV tools, entity quick-edit, shape picker, axis locks, vertex tools). Auto-shows/hides based on selection and tool state.
+- **Auto-mode hint bar**: blue overlay during brush drawing shows current Add/Subtract mode with one-click toggle.
+- **Command palette** (`HFHotkeyPalette`): searchable action list (Shift+? or F1) with live gray-out for unavailable actions. Filters by name or binding, Enter to execute.
+- **Dock convenience methods**: `_apply_material_to_whole_brush()` and `_on_face_assign_material()` for toolbar-initiated material assignment.
+- 32 new tests (context_toolbar 20, hotkey_palette 12). Total: **726 tests across 43 files**.
+
 ## Next (Wave 2c remaining)
 - Displacement sewing (stitch adjacent heightmap edges to share vertices).
 - Material atlasing for large scenes.

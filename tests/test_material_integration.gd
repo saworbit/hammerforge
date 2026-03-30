@@ -430,3 +430,213 @@ func test_find_brush_by_brush_id():
 func test_find_nonexistent_brush_returns_null():
 	var found = brush_sys.find_brush_by_id("no_such_brush")
 	assert_null(found, "Should return null for nonexistent brush")
+
+
+# ---------------------------------------------------------------------------
+# 6. Dock material assignment fallback: whole-brush when no faces selected
+#
+# These tests instantiate a real LevelRoot so the dock's production helpers
+# (_count_selected_faces, _get_selected_brush_ids, resolve_material_assign_action)
+# are called on their actual typed level_root field — no shims, no re-implementations.
+# ---------------------------------------------------------------------------
+
+var _real_root: LevelRoot = null
+var _dock_for_root: DockType = null
+
+
+func _setup_dock_with_real_root() -> void:
+	_real_root = LevelRoot.new()
+	add_child(_real_root)
+	# _ready fires: builds all subsystems, containers, and material manager.
+	_real_root.material_manager.add_material(_make_standard_material("test_mat", Color.RED))
+	_dock_for_root = DockType.new()
+	_dock_for_root.level_root = _real_root
+
+
+func _teardown_dock_with_real_root() -> void:
+	if _dock_for_root:
+		_dock_for_root.free()
+		_dock_for_root = null
+	if _real_root and is_instance_valid(_real_root):
+		_real_root.set_process(false)
+		remove_child(_real_root)
+		_real_root.free()
+	_real_root = null
+
+
+## Create a DraftBrush under the real LevelRoot and register it with the
+## real brush_system.  Uses create_brush_from_info so the brush goes
+## through the production path (face generation, id assignment, etc.).
+func _make_brush_for_real_root(bid: String) -> DraftBrush:
+	var info := {"size": Vector3(32, 32, 32), "brush_id": bid}
+	var node: Node = _real_root.create_brush_from_info(info)
+	return node as DraftBrush
+
+
+func test_count_selected_faces_zero_when_empty():
+	_setup_dock_with_real_root()
+	_real_root.face_selection = {}
+	assert_eq(
+		_dock_for_root._count_selected_faces(), 0,
+		"Production _count_selected_faces must return 0 with empty face_selection"
+	)
+	_teardown_dock_with_real_root()
+
+
+func test_count_selected_faces_counts_valid_entries():
+	_setup_dock_with_real_root()
+	var brush := _make_brush_for_real_root("count_dock_test")
+	assert_true(brush.faces.size() >= 3, "Precondition: brush has enough faces")
+	# Select two faces via face_selection
+	_real_root.face_selection = {brush.brush_id: [0, 2]}
+	assert_eq(
+		_dock_for_root._count_selected_faces(), 2,
+		"Production _count_selected_faces must count valid face entries"
+	)
+	_teardown_dock_with_real_root()
+
+
+func test_resolve_assign_returns_face_action_when_faces_selected():
+	_setup_dock_with_real_root()
+	var brush := _make_brush_for_real_root("face_action_test")
+	_real_root.face_selection = {brush.brush_id: [0]}
+	var decision: Dictionary = _dock_for_root.resolve_material_assign_action(0)
+	assert_eq(decision.action, "Assign Face Material", "Should pick face action")
+	assert_eq(decision.method, "assign_material_to_selected_faces")
+	assert_eq(decision.args, [0])
+	_teardown_dock_with_real_root()
+
+
+func test_resolve_assign_falls_back_to_whole_brush():
+	_setup_dock_with_real_root()
+	var brush := _make_brush_for_real_root("fallback_dock_test")
+	# No face selection, but brush is in _selection_nodes
+	_real_root.face_selection = {}
+	_dock_for_root._selection_nodes = [brush]
+	var decision: Dictionary = _dock_for_root.resolve_material_assign_action(0)
+	assert_eq(decision.action, "Assign Brush Material",
+		"Must fall back to whole-brush when no faces selected")
+	assert_eq(decision.method, "assign_material_to_whole_brushes")
+	assert_eq(decision.args[0], 0, "Material index must match")
+	assert_true(decision.args[1].has(brush.brush_id),
+		"Brush id must appear in args")
+	_teardown_dock_with_real_root()
+
+
+func test_resolve_assign_returns_error_when_nothing_selected():
+	_setup_dock_with_real_root()
+	_real_root.face_selection = {}
+	_dock_for_root._selection_nodes = []
+	var decision: Dictionary = _dock_for_root.resolve_material_assign_action(0)
+	assert_eq(decision.action, "",
+		"Empty action signals an error when nothing is selected")
+	assert_true(decision.toast.find("No brushes") >= 0,
+		"Toast must mention no brushes selected")
+	_teardown_dock_with_real_root()
+
+
+# ---------------------------------------------------------------------------
+# 7. Dock selection_clear_requested signal
+# ---------------------------------------------------------------------------
+
+
+func test_clear_selection_emits_signal():
+	# Verify the dock emits selection_clear_requested so the plugin can
+	# clear hf_selection before the editor selection.clear() fires.
+	var signal_received := [false]
+	var cb := func(): signal_received[0] = true
+	dock.selection_clear_requested.connect(cb)
+	dock._on_clear_selection_pressed()
+	assert_true(signal_received[0], "selection_clear_requested should be emitted")
+
+
+# ---------------------------------------------------------------------------
+# 8. Empty-selection suppression guard (reimport resilience)
+# ---------------------------------------------------------------------------
+
+const PluginScript = preload("res://addons/hammerforge/plugin.gd")
+
+
+func test_suppress_empty_selection_blocks_spurious_reimport():
+	# Simulates the reimport scenario: editor fires selection_changed with
+	# an empty node list while the plugin still has brushes cached.
+	var dummy_node := Node3D.new()
+	add_child_autoqfree(dummy_node)
+	var hf_sel: Array = [dummy_node]
+	var incoming: Array = []  # empty — as during texture reimport
+	assert_true(
+		PluginScript.should_suppress_empty_selection(incoming, hf_sel),
+		"Empty incoming + non-empty hf_selection must be suppressed"
+	)
+
+
+func test_suppress_empty_selection_allows_intentional_deselect():
+	# When the dock/plugin clears hf_selection before calling
+	# selection.clear(), the guard must NOT suppress the event.
+	var hf_sel: Array = []  # already cleared by _on_dock_selection_clear
+	var incoming: Array = []
+	assert_false(
+		PluginScript.should_suppress_empty_selection(incoming, hf_sel),
+		"Empty incoming + empty hf_selection must NOT be suppressed"
+	)
+
+
+func test_suppress_empty_selection_allows_new_selection():
+	# When the user clicks a different node, incoming is non-empty.
+	var old := Node3D.new()
+	var new_node := Node3D.new()
+	add_child_autoqfree(old)
+	add_child_autoqfree(new_node)
+	var hf_sel: Array = [old]
+	var incoming: Array = [new_node]
+	assert_false(
+		PluginScript.should_suppress_empty_selection(incoming, hf_sel),
+		"Non-empty incoming must never be suppressed"
+	)
+
+
+func test_suppress_empty_selection_allows_first_select():
+	# Plugin starts with no selection; user selects a brush.
+	var new_node := Node3D.new()
+	add_child_autoqfree(new_node)
+	var hf_sel: Array = []
+	var incoming: Array = [new_node]
+	assert_false(
+		PluginScript.should_suppress_empty_selection(incoming, hf_sel),
+		"First selection must not be suppressed"
+	)
+
+
+func test_dock_signal_clears_cache_before_guard_runs():
+	# Verifies the PROTOCOL that makes dock-driven deselection work:
+	# 1. Dock._on_clear_selection_pressed emits selection_clear_requested
+	# 2. A handler connected to that signal clears the selection cache
+	# 3. should_suppress_empty_selection then sees an empty cache → allows
+	#
+	# This does NOT verify the actual plugin.gd wiring (line 79 → line 611)
+	# because EditorPlugin cannot be instantiated in headless tests.  What
+	# it does verify:
+	# - The dock emits the signal at the right time (before editor clear)
+	# - The guard produces the correct result given the expected cache state
+	# - The two pieces compose correctly when wired together
+	#
+	# The real plugin.gd connection is a single signal→method hookup that
+	# is straightforward to audit visually.
+	var dummy := Node3D.new()
+	add_child_autoqfree(dummy)
+	var hf_sel: Array = [dummy]  # stands in for plugin.hf_selection
+	# Wire up the protocol: signal → clear cache (mirrors _on_dock_selection_clear)
+	dock.selection_clear_requested.connect(func(): hf_sel.clear())
+	# Trigger the production dock method
+	dock._on_clear_selection_pressed()
+	# Verify the signal fired and cleared the cache BEFORE we check the guard
+	assert_true(
+		hf_sel.is_empty(),
+		"Signal handler must clear cache before editor selection.clear()"
+	)
+	# Now the guard should allow the empty selection through
+	var incoming: Array = []
+	assert_false(
+		PluginScript.should_suppress_empty_selection(incoming, hf_sel),
+		"Guard must allow empty selection after cache was cleared by signal"
+	)

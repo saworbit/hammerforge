@@ -1,4 +1,4 @@
-﻿# Development Guide
+# Development Guide
 
 Last updated: March 29, 2026
 
@@ -65,6 +65,8 @@ addons/hammerforge/
     hf_shortcut_dialog.gd  Searchable shortcut reference dialog (filterable Tree with categories)
     hf_material_browser.gd Visual material browser (thumbnail grid, search, filters, favorites, drag-drop)
     hf_prefab_library.gd   Prefab library dock section (ItemList + drag-and-drop)
+    hf_context_toolbar.gd  Floating contextual mini-toolbar (context-sensitive actions in 3D viewport)
+    hf_hotkey_palette.gd   Searchable command palette with live gray-out (Shift+? or F1)
     paint_tab_builder.gd   Builds Paint tab sections + signal connections
     entity_tab_builder.gd  Builds Entity Properties + Entity I/O sections
     manage_tab_builder.gd  Builds Manage tab sections (Bake, File, Settings, etc.)
@@ -112,6 +114,8 @@ addons/hammerforge/
 - **Input state machine.** `HFDragSystem` owns the `HFInputState` instance. Drag state transitions are explicit (`begin_drag` -> `advance_to_height` -> `end_drag`). Extrude uses `begin_extrude` -> `end_extrude`.
 - **Direct typed calls.** `plugin.gd` and `dock.gd` use typed references (`LevelRoot`, `DockType`) with direct method calls instead of `has_method`/`call`.
 - **Sticky LevelRoot discovery.** `plugin.gd` keeps `active_root` sticky: `_edit()` does not null it when non-LevelRoot nodes are selected. `_handles()` returns true for any node when a LevelRoot exists (deep recursive search). `dock.gd` mirrors this pattern.
+- **Sticky brush selection.** `plugin.gd` suppresses spurious empty `selection_changed` signals (e.g. from texture reimport) via `should_suppress_empty_selection()`. When the editor selection goes empty but `hf_selection` is still populated, the event is ignored. Intentional deselects must clear `hf_selection` *before* calling `editor_selection.clear()`. Dock paths that clear editor selection emit `selection_clear_requested` first so the plugin can clear its cache.
+- **Material assignment fallback.** `dock.resolve_material_assign_action(mat_index)` is a pure helper returning `{action, method, args, toast}`. Both `_on_material_assign()` and `_on_browser_material_double_clicked()` delegate to it. When faces are selected → face assignment. When no faces but brushes are selected → whole-brush fallback. When nothing is selected → error toast. Context menu options (Apply to Faces, Apply to Whole Brush) remain explicit and do not use the fallback.
 - **Collapsible sections.** Use `HFCollapsibleSection.create("Name", start_expanded)` from `ui/collapsible_section.gd` for dock sections. Each section has an HSeparator, indented content, and persisted collapsed state via user prefs. Tab contents are built programmatically in `_build_paint_tab()`, `_build_manage_tab()`, `_build_selection_tools_section()`, and `_build_entity_io_section()`. All 18 sections tracked in `_all_sections: Dictionary`.
 - **Signal-driven dock sync.** Setting controls push values to LevelRoot via `toggled`/`value_changed` signal connections. Paint layers, materials, and surface paint sync instantly via `paint_layer_changed`, `material_list_changed`, and `selection_changed` signals. Perf panel updates every 30 frames; disabled hints are flag-driven. Form label widths standardized to 70px.
 - **Input decomposition.** `_forward_3d_gui_input()` in `plugin.gd` is a ~50-line dispatcher that routes to focused handlers: `_handle_paint_input()`, `_handle_keyboard_input()`, `_handle_rmb_cancel()`, `_handle_select_mouse()`, `_handle_extrude_mouse()`, `_handle_draw_mouse()`, `_handle_mouse_motion()`. Shared `_get_nudge_direction()` is used by both `_forward_3d_gui_input()` and `_shortcut_input()`.
@@ -148,13 +152,15 @@ addons/hammerforge/
 - **Geometry-aware snapping.** `_snap_point()` delegates to `HFSnapSystem`. Three modes (Grid=1, Vertex=2, Center=4) as a bitmask. Vertex mode collects 8 box corners from all brushes; Center mode collects brush centers. Closest candidate within `snap_threshold` beats grid snap. Pass `exclude_ids` to skip the brush being dragged.
 - **Reference cleanup.** `delete_brush()` calls `_cleanup_brush_references()` which strips group_id meta (+ cleans empty groups via `visgroup_system._cleanup_empty_group()`), clears visgroup membership, and calls `entity_system.cleanup_dangling_connections()` to remove I/O connections targeting the deleted node. Always fires before the node is removed from the tree.
 - **Live dimensions.** `input_state.get_drag_dimensions()` returns `Vector3(W, H, D)` during DRAG_BASE/DRAG_HEIGHT; `Vector3.ZERO` otherwise. `format_dimensions()` renders as `"64 x 32 x 48"` (whole numbers omit decimals). The mode indicator banner appends dimensions to the stage hint during drag gestures.
+- **Context toolbar.** `ui/hf_context_toolbar.gd` is a `PanelContainer` added to `CONTAINER_SPATIAL_EDITOR_MENU` via `plugin.gd`. It determines context via `_determine_context(state)` using a priority chain: vertex_mode > dragging > face_selected > entity_selected > brush_selected > draw_idle > NONE. Each context maps to a pre-built `HBoxContainer` section with tool buttons. The toolbar emits `action_requested(action, args)` which `plugin.gd` dispatches to existing dock/plugin methods. Auto-hint bar uses a separate `PanelContainer` child with fade-in tween. State is pushed every frame from `_update_hud_context()` via `_update_context_toolbar_state()`.
+- **Command palette.** `ui/hf_hotkey_palette.gd` extends `PanelContainer`. Populated once via `populate(keymap)`. Live gray-out uses `_is_action_available(action)` which checks brush_count, entity_count, paint_mode, vertex_mode, and tool_id from the state dict. Toggle with Shift+? or F1. Emits `action_invoked(action)` which `plugin.gd` handles identically to keyboard shortcuts.
 
 ### CI
 
 The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on push and PR to `main`:
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
-- **GUT unit + integration tests** -- 622 tests across 38 test files (runs Godot headless)
+- **GUT unit + integration tests** -- 737 tests across 43 test files (runs Godot headless)
 
 Run locally before pushing:
 ```
@@ -205,6 +211,11 @@ Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framewor
 | `test_vertex_edges.gd` | 19 | Edge extraction (12 edges for box), dedup, edge selection (additive, toggle, clear), edge world positions, edge split (vertex count, face vert count), vertex merge, sub-mode toggle, get_single_selected_edge, point-to-segment-dist-2d |
 | `test_polygon_tool.gd` | 16 | Convexity validation (square, triangle, L-shape, pentagon, collinear, degenerate), face data construction (square/triangle extrusion, local space, top face normal), empty/two-point, tool metadata, settings schema |
 | `test_path_tool.gd` | 15 | Segment brush construction (straight, diagonal, zero-length, center, size), miter joint construction (right angle, straight skipped, acute skipped, group_id), face data validation, face reconstruction, tool metadata |
+| `test_material_browser.gd` | 24 | Thumbnail grid, palette view, null material skip, selection signals, double-click, drag data, search, pattern/color filters, favorites, hover preview, context popup |
+| `test_material_integration.gd` | 28 | Brush search (_iter_pick_nodes), hover overlay mesh (normals, mutation, lifecycle), whole-brush/per-face assignment via root, face selection counting via dock, resolve_material_assign_action fallback (face→brush→error), selection_clear_requested signal, empty-selection suppression guard (reimport, intentional deselect, new selection, first select, dock clear protocol) |
+| `test_context_toolbar.gd` | 20 | Context determination, label content, action signals, material thumbnails, search filtering, gray-out logic, toggle visibility |
+| `test_hotkey_palette.gd` | 12 | Search filtering, action availability gray-out, key binding display, action invocation |
+| `test_spawn_system.gd` | 21 | Spawn lookup, validation, auto-fix, default creation, debug viz, entity property helpers, severity ordering |
 
 Run all tests:
 ```

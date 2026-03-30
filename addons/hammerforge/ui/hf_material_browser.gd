@@ -144,6 +144,25 @@ func is_favorite(resource_path: String) -> bool:
 	return _favorites.has(resource_path)
 
 
+## Returns up to `limit` favorite materials as [{index, name}] for the context toolbar.
+func get_favorite_infos(limit: int = 5) -> Array:
+	var result: Array = []
+	if not _material_manager:
+		return result
+	for i in range(_material_manager.materials.size()):
+		if result.size() >= limit:
+			break
+		var mat = _material_manager.materials[i]
+		if mat == null:
+			continue
+		var mat_path: String = mat.resource_path
+		if not _favorites.has(mat_path):
+			continue
+		var mat_name: String = mat.resource_name if mat.resource_name != "" else mat_path.get_file()
+		result.append({"index": i, "name": mat_name})
+	return result
+
+
 ## Full rebuild of the thumbnail grid.
 func rebuild() -> void:
 	if not _grid:
