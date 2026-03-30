@@ -132,7 +132,9 @@ func populate(keymap) -> void:
 			_entries.append(entry)
 
 
-func _create_entry(action: String, label_text: String, binding: String, category: String) -> Dictionary:
+func _create_entry(
+	action: String, label_text: String, binding: String, category: String
+) -> Dictionary:
 	var btn = Button.new()
 	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	btn.flat = true
@@ -227,10 +229,14 @@ func toggle_visible() -> void:
 		_search_field.text = ""
 		_on_search_changed("")
 		_apply_gray_out()
-		# Defer focus grab to next idle frame.  The lambda re-checks
-		# is_inside_tree() at execution time so we never call grab_focus()
-		# on a node that left the tree between scheduling and running.
-		(func(): if is_instance_valid(_search_field) and _search_field.is_inside_tree(): _search_field.grab_focus()).call_deferred()
+		# Defer focus grab to next idle frame and re-check tree membership
+		# at execution time so we never call grab_focus() on a stale node.
+		call_deferred("_grab_search_focus_if_ready")
+
+
+func _grab_search_focus_if_ready() -> void:
+	if is_instance_valid(_search_field) and _search_field.is_inside_tree():
+		_search_field.grab_focus()
 
 
 func _on_search_changed(text: String) -> void:

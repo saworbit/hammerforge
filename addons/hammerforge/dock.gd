@@ -3740,17 +3740,24 @@ func resolve_material_assign_action(mat_index: int) -> Dictionary:
 			"action": "Assign Face Material",
 			"method": "assign_material_to_selected_faces",
 			"args": [mat_index],
-			"toast": "Applied %s to %d face%s" % [mat_name, face_count, "" if face_count == 1 else "s"],
+			"toast":
+			"Applied %s to %d face%s" % [mat_name, face_count, "" if face_count == 1 else "s"],
 		}
 	var brush_ids := _get_selected_brush_ids()
 	if brush_ids.is_empty():
-		return {"action": "", "method": "", "args": [], "toast": "No brushes selected — select a brush first"}
+		return {
+			"action": "",
+			"method": "",
+			"args": [],
+			"toast": "No brushes selected — select a brush first"
+		}
 	var mat_name := _material_display_name(mat_index)
 	return {
 		"action": "Assign Brush Material",
 		"method": "assign_material_to_whole_brushes",
 		"args": [mat_index, brush_ids],
-		"toast": (
+		"toast":
+		(
 			"Applied %s to %d brush%s"
 			% [mat_name, brush_ids.size(), "" if brush_ids.size() == 1 else "es"]
 		),
@@ -5388,8 +5395,10 @@ func _apply_material_to_whole_brush() -> void:
 	)
 	var mat_name := _material_display_name(_selected_material_index)
 	show_toast(
-		"Applied %s to %d brush%s"
-		% [mat_name, brush_ids.size(), "" if brush_ids.size() == 1 else "es"],
+		(
+			"Applied %s to %d brush%s"
+			% [mat_name, brush_ids.size(), "" if brush_ids.size() == 1 else "es"]
+		),
 		0
 	)
 

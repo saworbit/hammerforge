@@ -77,9 +77,7 @@ func _enter_tree():
 		if dock.has_signal("vertex_mode_toggled"):
 			dock.connect("vertex_mode_toggled", Callable(self, "_on_vertex_mode_toggled"))
 		if dock.has_signal("selection_clear_requested"):
-			dock.connect(
-				"selection_clear_requested", Callable(self, "_on_dock_selection_clear")
-			)
+			dock.connect("selection_clear_requested", Callable(self, "_on_dock_selection_clear"))
 
 	hud = preload("shortcut_hud.tscn").instantiate()
 	if base_control:
@@ -626,10 +624,7 @@ func _handle_keyboard_input(
 		if _hotkey_palette.visible and event.keycode == KEY_ESCAPE:
 			_hotkey_palette.visible = false
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
-		if (
-			(event.keycode == KEY_SLASH and event.shift_pressed)
-			or event.keycode == KEY_F1
-		):
+		if (event.keycode == KEY_SLASH and event.shift_pressed) or event.keycode == KEY_F1:
 			_on_toggle_hotkey_palette()
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 
@@ -2087,7 +2082,9 @@ func _on_context_material_apply(mat_index: int) -> void:
 		# Apply to selected brush
 		for node in hf_selection:
 			if node is DraftBrush:
-				var mat = root.material_manager.get_material(mat_index) if root.material_manager else null
+				var mat = (
+					root.material_manager.get_material(mat_index) if root.material_manager else null
+				)
 				if mat:
 					_paint_brush_with_undo(root, node, mat)
 				break
@@ -2164,7 +2161,9 @@ func _on_hotkey_palette_action(action: String) -> void:
 				dock.set_paint_tool(4)  # K key = Bucket Fill tool
 		"vertex_edge_mode":
 			if root.vertex_system:
-				var current = root.vertex_system.sub_mode if root.vertex_system.get("sub_mode") != null else 0
+				var current = (
+					root.vertex_system.sub_mode if root.vertex_system.get("sub_mode") != null else 0
+				)
 				root.vertex_system.set_sub_mode(1 if current == 0 else 0)
 		"vertex_merge":
 			if root.vertex_system:

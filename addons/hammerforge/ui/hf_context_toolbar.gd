@@ -124,6 +124,7 @@ func _build_auto_hint_bar() -> void:
 
 # --- Section Builders ---
 
+
 func _build_brush_section() -> void:
 	var section = HBoxContainer.new()
 	section.add_theme_constant_override("separation", 2)
@@ -259,6 +260,7 @@ func _build_vertex_section() -> void:
 
 # --- Helpers ---
 
+
 func _add_tool_button(parent: Control, text: String, tooltip: String, action: String) -> Button:
 	var btn = Button.new()
 	btn.text = text
@@ -278,6 +280,7 @@ func _add_sep(parent: Control) -> void:
 
 
 # --- Public API ---
+
 
 func set_keymap(keymap) -> void:
 	_keymap = keymap
@@ -306,6 +309,7 @@ func set_favorite_materials(materials: Array) -> void:
 
 
 # --- Context Logic ---
+
 
 func _determine_context(state: Dictionary) -> Context:
 	if not state.get("has_root", false):
@@ -401,11 +405,7 @@ func _update_auto_hint(state: Dictionary) -> void:
 	if mode == 1 and tool_id == 0:
 		var is_sub: bool = state.get("is_subtract", false)
 		if is_sub:
-			_show_auto_hint(
-				"Drawing in Subtract mode",
-				"Switch to Add",
-				"toggle_add"
-			)
+			_show_auto_hint("Drawing in Subtract mode", "Switch to Add", "toggle_add")
 		else:
 			_show_auto_hint(
 				"Drawing in Add mode \u2014 press Subtract to toggle",
