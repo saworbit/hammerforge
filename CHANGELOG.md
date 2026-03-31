@@ -5,6 +5,42 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **Godot 4.6 API compatibility fixes (Mar 2026):**
+  - **Dock undo/redo buttons targeted wrong history**: `_on_history_undo()`, `_on_history_redo()`,
+    `_update_history_buttons()`, and `_get_undo_version()` all hard-coded
+    `EditorUndoRedoManager.GLOBAL_HISTORY`, but HammerForge actions are recorded against the
+    scene's history (first do/undo object is the LevelRoot node). Buttons could disable
+    incorrectly or no-op. Fixed with `_get_scene_history_id()` /
+    `_get_scene_undo_redo()` helpers that resolve the correct history via
+    `get_object_history_id(level_root)`.
+  - **`EditorUndoRedoManager` has no `undo()`/`redo()`/`has_undo()`/`has_redo()`**: dock
+    buttons called these directly on `EditorUndoRedoManager` which doesn't expose them.
+    Fixed to call them on the `UndoRedo` object returned by `get_history_undo_redo()`.
+  - **`Image.load()` removed in Godot 4**: `hf_heightmap_io.gd` used the Godot 3 instance
+    method. Replaced with the static `Image.load_from_file()` (returns `Image` or `null`).
+  - **`popup_centered(Vector2(...))` type mismatch**: two dialog popups passed `Vector2` instead
+    of `Vector2i`. Fixed in heightmap import and terrain slot texture dialogs.
+  - **Gizmo redraw via nonexistent methods**: `brush_gizmo_plugin.gd` tried `set_dirty()` /
+    `redraw()` on `EditorNode3DGizmo` which aren't exposed to script. Replaced with
+    `gizmo.get_node_3d().update_gizmos()`.
+- **Selection filter popup not attached to scene tree (Mar 2026):**
+  - `HFSelectionFilter` (`PopupPanel`, a `Window` subclass) was instantiated but never added
+    to the tree, so `popup()` silently failed. Now added as a child of
+    `EditorInterface.get_base_control()`.
+- **Node-only selection filters left stale face context (Mar 2026):**
+  - Filters like "Similar Brushes", visgroup, and detail/structural applied node selection
+    without clearing `root.face_selection`. The context toolbar kept showing face-mode UI and
+    material ops targeted old faces. Fixed: node-only filter results now call
+    `_apply_face_selection(root, {})` to clear faces and update the HUD before applying node
+    selection.
+- **Apply Last Texture only affected first brush (Mar 2026):**
+  - `_apply_last_texture()` broke after the first `DraftBrush` in the selection loop. Fixed to
+    iterate all selected brushes. Same fix applied to `_on_context_material_apply()`.
+- **Selection filters used local-space normals (Mar 2026):**
+  - Normal-based face filters (Walls/Floors/Ceilings) and "Select Similar Faces" compared
+    `face.normal` in local space. Rotated brushes would be classified incorrectly. Fixed to
+    transform normals to world space via `brush.global_transform.basis * face.normal`. Same
+    fix applied to `_select_similar_faces()` in `plugin.gd`.
 - **Material assignment no longer requires face selection (Mar 2026):**
   - Double-clicking a texture in the material browser, or clicking the Assign button, now
     falls back to **whole-brush assignment** when no individual faces are selected but brushes
@@ -27,6 +63,38 @@ The format is based on Keep a Changelog, and this project follows semantic versi
     paths (Escape, delete brushes, duplicate brushes) for consistency with the guard.
 
 ### Added
+- **Improved Selection & Multi-Select (Mar 2026):**
+  - **Marquee / box selection**: click-and-drag in Select mode to rubber-band select brushes
+    and entities. In Face Select mode, marquee selects individual faces across multiple brushes.
+    Semi-transparent blue overlay rectangle drawn during drag. Uses `_select_nodes_in_rect()` for
+    brushes/entities and new `_select_faces_in_rect()` for face mode.
+  - **Selection filter popover** (`ui/hf_selection_filter.gd`): popup panel with bulk selection
+    tools organized by category:
+    - **By Normal**: Walls (|Y| < 0.3), Floors (Y > 0.7), Ceilings (Y < -0.7).
+    - **By Material**: select all faces matching the currently selected face's material.
+    - **Select Similar**: Similar Faces (material + normal within 15°), Similar Brushes (size
+      within 20% tolerance, orientation-agnostic).
+    - **By Visgroup**: dynamic buttons for each visgroup (auto-rebuilt on open).
+    - **By Type**: Detail Brushes (func_detail), Structural (worldspawn).
+    Emits `filter_applied(nodes, faces)` signal handled by plugin to apply selection.
+  - **"Select Similar" hotkey** (Shift+S): quick-invoke from viewport. Selects faces with
+    matching material + normal when faces are selected, or brushes with similar size when
+    brushes are selected.
+  - **"Apply Last Texture" hotkey** (Shift+T): applies the last texture picked with the
+    Texture Picker (T) to the current face or brush selection. Stores `_last_picked_material_index`
+    when T picks a material.
+  - **"Selection Filters" hotkey** (Shift+F): opens the selection filter popover at mouse position.
+  - **Enhanced selection count badge**: status bar now shows combined counts when applicable
+    (e.g. "Sel: 3 brushes, 5 faces").
+  - **Context toolbar updates**: face section gains "Sim" (Select Similar) and "Last" (Apply
+    Last Texture) buttons; brush section gains "Sim" and "Flt" (Selection Filters) buttons.
+    Labels now show "N brush(es) selected", "N faces on M brush(es)", "N entities selected".
+  - **Command palette updates**: `select_similar`, `apply_last_texture`, and `selection_filter`
+    actions added with live gray-out rules.
+  - **3 new keymap bindings** in "Tools" and "Selection" categories with human-readable labels.
+  - **18 new GUT tests** (`test_selection_features.gd`): keymap binding matches, labels,
+    categories, display strings, toolbar label content, `_size_similar()` helper logic.
+    **Total: 753 tests across 44 files.**
 - **Smart Contextual Toolbar + Command Palette (Mar 2026):**
   - **Floating context toolbar** (`ui/hf_context_toolbar.gd`): appears in the 3D viewport overlay with
     context-sensitive actions based on current selection and tool state. Automatically shows/hides as

@@ -4,10 +4,9 @@ extends RefCounted
 
 
 static func load_from_file(path: String) -> Image:
-	var img := Image.new()
-	var err := img.load(path)
-	if err != OK:
-		push_error("HFHeightmapIO: Failed to load '%s': %s" % [path, error_string(err)])
+	var img := Image.load_from_file(path)
+	if img == null:
+		push_error("HFHeightmapIO: Failed to load '%s'" % path)
 		return null
 	img.convert(Image.FORMAT_RF)
 	return img

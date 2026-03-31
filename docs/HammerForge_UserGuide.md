@@ -1,6 +1,6 @@
 # HammerForge User Guide
 
-Last updated: March 29, 2026
+Last updated: March 31, 2026
 
 This guide covers the current HammerForge workflow in Godot 4.6: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs.
 
@@ -130,12 +130,36 @@ Each tab shows a contextual hint at the bottom guiding you through the workflow:
 - Entities tab: "Drag an entity from the palette into the viewport"
 - Manage tab: "When ready, use Bake to convert brushes into final geometry"
 
+### Marquee Selection
+Click and drag in the 3D viewport while in **Select mode** to draw a selection rectangle. All brushes and entities whose screen-space center falls within the rectangle are selected. Hold **Shift** to add to the existing selection.
+
+In **Face Select mode**, marquee selection works on individual faces — drag a box across multiple brushes to select all faces whose screen-projected center is within the rectangle.
+
+### Selection Filters
+Press **Shift+F** or click the **Flt** button on the context toolbar to open the Selection Filter popover. It provides bulk selection tools organized by category:
+
+| Category | Filters | Description |
+|----------|---------|-------------|
+| **By Normal** | Walls, Floors, Ceilings | Select faces by surface direction |
+| **By Material** | Same Material | Select all faces matching the selected face's material |
+| **Select Similar** | Similar Faces, Similar Brushes | Faces: match material + normal (15°). Brushes: match size (20% tolerance, orientation-agnostic) |
+| **By Visgroup** | *(dynamic)* | One button per visgroup — select all members |
+| **By Type** | Detail, Structural | func_detail vs worldspawn brushes |
+
+### Select Similar
+Press **Shift+S** to quickly select similar geometry without opening the filter popover:
+- When **faces** are selected: selects all faces in the level with matching material AND normal direction (within 15°).
+- When **brushes** are selected: selects all brushes with similar dimensions (within 20% tolerance, ignoring orientation/rotation).
+
+### Apply Last Texture
+Press **Shift+T** to apply the last texture you sampled with the Texture Picker (T key) to the current selection. Works on both face and brush selections. This enables a fast pick-and-paint workflow: press T to sample a material from any face, then Shift+T to stamp it onto other faces or brushes.
+
 ### Smart Contextual Toolbar
 A floating mini-toolbar appears in the 3D viewport showing context-sensitive actions based on your current selection and tool state. It eliminates the need to switch dock tabs for common operations:
 
-- **Brushes selected** → Extrude Up/Down, Hollow, Clip, Carve, Duplicate, Delete. Shows "N brush(es)" count.
-- **Faces selected** → Material thumbnails (favorites strip), UV Justify (Fit/Center/L/R/T/B), Apply to Whole Brush. Shows "N face(s)" count.
-- **Entities selected** → I/O connect, Properties quick-edit (jumps to Entities tab), Duplicate, Delete.
+- **Brushes selected** → Extrude Up/Down, Hollow, Clip, Carve, Select Similar (Sim), Selection Filters (Flt), Duplicate, Delete. Shows "N brush(es) selected" count.
+- **Faces selected** → Material thumbnails (favorites strip), UV Justify (Fit/Center/L/R/T/B), Select Similar (Sim), Apply Last Texture (Last), Apply to Whole Brush. Shows "N faces on M brush(es)" count.
+- **Entities selected** → I/O connect, Properties quick-edit (jumps to Entities tab), Duplicate, Delete. Shows "N entities selected" count.
 - **Draw mode (idle)** → Quick shape selector (Box/Cyl/Sph/Cone), Add/Subtract toggle.
 - **Dragging** → Live dimensions display, Axis Lock buttons (X/Y/Z), Cancel.
 - **Vertex mode** → Vertex/Edge sub-mode toggle, Merge, Split, Exit.
@@ -161,7 +185,7 @@ Enable **Subtract Preview** in Manage tab → Settings to see real-time wirefram
 ### Status bar
 - Shows current status ("Ready", "Baking...", errors in red, warnings in yellow).
 - Errors auto-clear after 5 seconds, success messages after 3 seconds.
-- Displays selection count ("Sel: N brushes") when brushes are selected, with a **clear (x)** button to deselect.
+- Displays selection count ("Sel: N brushes" or "Sel: 3 brushes, 5 faces") when brushes/faces are selected, with a **clear (x)** button to deselect.
 - Live brush count with color-coded performance warnings.
 - Bake progress bar updates during chunked bakes.
 - Performance panel shows active brushes, paint memory, bake chunks, and last bake time.
@@ -270,6 +294,9 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Split edge | Ctrl+E | Insert midpoint on selected edge |
 | Merge vertices | Ctrl+W | Merge selected vertices to centroid |
 | Texture Picker | T | Eyedropper — sample face material |
+| Apply Last Texture | Shift+T | Apply last picked texture to selection |
+| Select Similar | Shift+S | Select faces/brushes similar to current selection |
+| Selection Filters | Shift+F | Open selection filter popover |
 | Axis Lock X/Y/Z | X / Y / Z | Constrain to axis |
 | Paint tools | B / E / R / L / K | Bucket / Erase / Ramp / Line / Blend |
 

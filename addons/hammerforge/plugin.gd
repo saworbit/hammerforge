@@ -27,11 +27,15 @@ var _vertex_drag_ref_y := 0.0  # World Y of the picked vertex for projection pla
 var _vertex_overlay_mesh: MeshInstance3D = null
 var _vertex_overlay_imesh: ImmediateMesh = null
 var _texture_picker_active := false
+var _last_picked_material_index := -1
 var _context_toolbar: Control = null
 var _hotkey_palette: Control = null
+var _selection_filter: Window = null
+var _marquee_overlay: Control = null
 const LevelRootType = preload("level_root.gd")
 const HFContextToolbar = preload("ui/hf_context_toolbar.gd")
 const HFHotkeyPalette = preload("ui/hf_hotkey_palette.gd")
+const HFSelectionFilter = preload("ui/hf_selection_filter.gd")
 const DraftEntityType = preload("draft_entity.gd")
 const IconRes = preload("icon.png")
 const HFUndoHelper = preload("undo_helper.gd")
@@ -105,6 +109,14 @@ func _enter_tree():
 	_hotkey_palette.populate(_keymap)
 	_hotkey_palette.action_invoked.connect(_on_hotkey_palette_action)
 	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, _hotkey_palette)
+	# Selection filter popover (Window-based — not a Control, so managed manually)
+	_selection_filter = HFSelectionFilter.new()
+	_selection_filter.filter_applied.connect(_on_selection_filter_applied)
+	get_editor_interface().get_base_control().add_child(_selection_filter)
+	# Marquee overlay (2D rect drawn over 3D viewport during drag-select)
+	_marquee_overlay = _MarqueeOverlay.new()
+	_marquee_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, _marquee_overlay)
 	var selection = get_editor_interface().get_selection()
 	if selection:
 		if not selection.is_connected(
@@ -154,6 +166,17 @@ func _exit_tree():
 		if is_instance_valid(_hotkey_palette):
 			_hotkey_palette.queue_free()
 		_hotkey_palette = null
+	if _selection_filter:
+		if is_instance_valid(_selection_filter):
+			if _selection_filter.get_parent():
+				_selection_filter.get_parent().remove_child(_selection_filter)
+			_selection_filter.queue_free()
+		_selection_filter = null
+	if _marquee_overlay:
+		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _marquee_overlay)
+		if is_instance_valid(_marquee_overlay):
+			_marquee_overlay.queue_free()
+		_marquee_overlay = null
 	var selection = get_editor_interface().get_selection()
 	if (
 		selection
@@ -705,6 +728,18 @@ func _handle_keyboard_input(
 		if dock:
 			dock.show_toast("Texture Picker: click a face to sample its material", 0)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	# Apply Last Texture — Shift+T reapplies the last picked material
+	if _keymap.matches("apply_last_texture", event):
+		_apply_last_texture(root)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	# Select Similar — Shift+S selects matching faces/brushes
+	if _keymap.matches("select_similar", event):
+		_select_similar(root)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	# Selection Filter popup — Shift+F opens the filter popover
+	if _keymap.matches("selection_filter", event):
+		_show_selection_filter()
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	# Paint tool shortcuts
 	if paint_mode:
 		var paint_key := -1
@@ -765,6 +800,7 @@ func _handle_rmb_cancel(root: Node, tool_id: int) -> int:
 	numeric_buffer = ""
 	select_drag_active = false
 	select_dragging = false
+	_update_marquee_overlay(Vector2.ZERO, Vector2.ZERO, false)
 	_update_hud_context()
 	return EditorPlugin.AFTER_GUI_INPUT_STOP
 
@@ -779,7 +815,11 @@ func _handle_select_mouse(
 	var face_select = dock.is_face_select_mode_enabled()
 	if event.pressed:
 		if face_select:
-			var additive_face = (
+			# Start drag tracking for possible marquee face selection
+			select_drag_origin = pos
+			select_drag_active = true
+			select_dragging = false
+			select_additive = (
 				event.shift_pressed
 				or event.ctrl_pressed
 				or event.meta_pressed
@@ -787,12 +827,7 @@ func _handle_select_mouse(
 				or Input.is_key_pressed(KEY_CTRL)
 				or Input.is_key_pressed(KEY_META)
 			)
-			var face_handled = root.select_face_at_screen(cam, pos, additive_face)
-			return (
-				EditorPlugin.AFTER_GUI_INPUT_STOP
-				if face_handled
-				else EditorPlugin.AFTER_GUI_INPUT_PASS
-			)
+			return EditorPlugin.AFTER_GUI_INPUT_PASS
 		var active_mat = dock.get_active_material()
 		if paint_mode and active_mat:
 			var painted = root.pick_brush(cam, pos, false)
@@ -814,12 +849,25 @@ func _handle_select_mouse(
 	# Mouse release
 	var selection_action := false
 	if select_drag_active:
-		if not select_dragging and not face_select:
+		if select_dragging:
+			# Marquee box selection
+			if face_select:
+				_select_faces_in_rect(root, cam, select_drag_origin, pos, select_additive)
+			else:
+				_select_nodes_in_rect(root, cam, select_drag_origin, pos, select_additive)
+			selection_action = true
+		elif face_select:
+			# Single click — select individual face
+			var face_handled = root.select_face_at_screen(cam, pos, select_additive)
+			if face_handled:
+				selection_action = true
+		else:
 			var picked = root.pick_brush(cam, pos)
 			_select_node(picked, select_additive)
 			selection_action = true
 	select_drag_active = false
 	select_dragging = false
+	_update_marquee_overlay(Vector2.ZERO, Vector2.ZERO, false)
 	return (
 		EditorPlugin.AFTER_GUI_INPUT_STOP if selection_action else EditorPlugin.AFTER_GUI_INPUT_PASS
 	)
@@ -870,14 +918,11 @@ func _handle_mouse_motion(
 		root.set_shift_pressed(event.shift_pressed)
 		root.set_alt_pressed(event.alt_pressed)
 	var face_select = dock.is_face_select_mode_enabled()
-	if (
-		tool_id == 1
-		and select_drag_active
-		and event.button_mask & MOUSE_BUTTON_MASK_LEFT != 0
-		and not face_select
-	):
+	if tool_id == 1 and select_drag_active and event.button_mask & MOUSE_BUTTON_MASK_LEFT != 0:
 		if not select_dragging and select_drag_origin.distance_to(pos) >= select_drag_threshold:
 			select_dragging = true
+		if select_dragging:
+			_update_marquee_overlay(select_drag_origin, pos, true)
 		return EditorPlugin.AFTER_GUI_INPUT_PASS
 	if (tool_id == 2 or tool_id == 3) and event.button_mask & MOUSE_BUTTON_MASK_LEFT != 0:
 		root.update_extrude(cam, pos)
@@ -1532,9 +1577,295 @@ func _pick_face_material(root: Node) -> void:
 			dock.show_toast("Face has no material assigned", 1)
 		return
 	dock._selected_material_index = mat_idx
+	_last_picked_material_index = mat_idx
 	if dock.material_browser:
 		dock.material_browser.set_selected_index(mat_idx)
 	dock.show_toast("Picked material #%d" % mat_idx, 0)
+
+
+# ---------------------------------------------------------------------------
+# Marquee & face rect selection
+# ---------------------------------------------------------------------------
+
+
+func _select_faces_in_rect(
+	root: Node, camera: Camera3D, from: Vector2, to: Vector2, additive: bool
+) -> void:
+	if not root or not camera:
+		return
+	var rect = Rect2(from, to - from).abs()
+	var face_sel: Dictionary = {} if not additive else root.face_selection.duplicate(true)
+	var nodes: Array = root._iter_pick_nodes() if root.has_method("_iter_pick_nodes") else []
+	for node in nodes:
+		if not (node is DraftBrush):
+			continue
+		var brush := node as DraftBrush
+		var faces: Array = brush.get_faces() if brush.has_method("get_faces") else []
+		var key: String = _face_key_for(brush)
+		var indices: Array = face_sel.get(key, []) if additive else []
+		for i in range(faces.size()):
+			var face = faces[i]
+			if not face:
+				continue
+			var center := _face_screen_center(camera, brush, face)
+			if center != Vector2(-1, -1) and rect.has_point(center):
+				if not indices.has(i):
+					indices.append(i)
+		if not indices.is_empty():
+			face_sel[key] = indices
+	_apply_face_selection(root, face_sel)
+
+
+func _face_screen_center(camera: Camera3D, brush: DraftBrush, face) -> Vector2:
+	if face.local_verts.is_empty():
+		return Vector2(-1, -1)
+	var center := Vector3.ZERO
+	for v in face.local_verts:
+		center += v
+	center /= float(face.local_verts.size())
+	var world_pos: Vector3 = brush.global_transform * center
+	if camera.is_position_behind(world_pos):
+		return Vector2(-1, -1)
+	return camera.unproject_position(world_pos)
+
+
+func _face_key_for(brush: DraftBrush) -> String:
+	if brush.brush_id != "":
+		return brush.brush_id
+	return str(brush.get_instance_id())
+
+
+func _apply_face_selection(root: Node, face_sel: Dictionary) -> void:
+	root.face_selection = face_sel
+	if root.brush_system:
+		root.brush_system._apply_face_selection()
+	root.face_selection_changed.emit()
+	_update_hud_context()
+
+
+# ---------------------------------------------------------------------------
+# Apply Last Texture
+# ---------------------------------------------------------------------------
+
+
+func _apply_last_texture(root: Node) -> void:
+	if _last_picked_material_index < 0:
+		if dock:
+			dock.show_toast("No texture picked yet — use T to pick first", 1)
+		return
+	if not dock:
+		return
+	dock._selected_material_index = _last_picked_material_index
+	var face_count = dock._count_selected_faces()
+	if face_count > 0:
+		dock._on_face_assign_material()
+		dock.show_toast(
+			"Applied last texture to %d face%s" % [face_count, "" if face_count == 1 else "s"], 0
+		)
+	else:
+		var applied_count := 0
+		var mat = (
+			root.material_manager.get_material(_last_picked_material_index)
+			if root.material_manager
+			else null
+		)
+		if mat:
+			for node in hf_selection:
+				if node is DraftBrush:
+					_paint_brush_with_undo(root, node, mat)
+					applied_count += 1
+		if applied_count > 0:
+			dock.show_toast(
+				"Applied last texture to %d brush%s" % [applied_count, "" if applied_count == 1 else "es"], 0
+			)
+		else:
+			dock.show_toast("No brushes or faces selected", 1)
+
+
+# ---------------------------------------------------------------------------
+# Select Similar
+# ---------------------------------------------------------------------------
+
+
+func _select_similar(root: Node) -> void:
+	if not root:
+		return
+	# If faces are selected, find similar faces across all brushes
+	var face_count := 0
+	for key in root.face_selection.keys():
+		face_count += root.face_selection.get(key, []).size()
+	if face_count > 0:
+		_select_similar_faces(root)
+		return
+	# Otherwise match similar brushes by size
+	if not hf_selection.is_empty():
+		_select_similar_brushes(root)
+		return
+	if dock:
+		dock.show_toast("Select a face or brush first", 1)
+
+
+func _select_similar_faces(root: Node) -> void:
+	# Gather reference face properties with world-space normals
+	var ref_faces: Array = []
+	var ref_world_normals: Array = []
+	for key in root.face_selection.keys():
+		var brush = root._find_brush_by_key(str(key))
+		if not brush:
+			continue
+		var basis: Basis = brush.global_transform.basis if brush is Node3D else Basis.IDENTITY
+		var faces: Array = brush.get_faces() if brush.has_method("get_faces") else []
+		for fi in root.face_selection.get(key, []):
+			if int(fi) >= 0 and int(fi) < faces.size():
+				ref_faces.append(faces[int(fi)])
+				ref_world_normals.append((basis * faces[int(fi)].normal).normalized())
+	if ref_faces.is_empty():
+		return
+	# Find all matching faces (same material AND similar world-space normal within ~15 degrees)
+	var face_sel: Dictionary = {}
+	var nodes: Array = root._iter_pick_nodes() if root.has_method("_iter_pick_nodes") else []
+	var total := 0
+	for node in nodes:
+		if not (node is DraftBrush):
+			continue
+		var brush := node as DraftBrush
+		var basis: Basis = brush.global_transform.basis
+		var faces: Array = brush.get_faces() if brush.has_method("get_faces") else []
+		var key: String = _face_key_for(brush)
+		var indices: Array = []
+		for i in range(faces.size()):
+			var face = faces[i]
+			if not face:
+				continue
+			var world_normal: Vector3 = (basis * face.normal).normalized()
+			for ri in range(ref_faces.size()):
+				var ref = ref_faces[ri]
+				var ref_wn: Vector3 = ref_world_normals[ri]
+				if face.material_idx == ref.material_idx and world_normal.dot(ref_wn) > 0.966:
+					indices.append(i)
+					total += 1
+					break
+		if not indices.is_empty():
+			face_sel[key] = indices
+	_apply_face_selection(root, face_sel)
+	if dock:
+		dock.show_toast("Selected %d similar face%s" % [total, "" if total == 1 else "s"], 0)
+
+
+func _select_similar_brushes(root: Node) -> void:
+	var ref_sizes: Array = []
+	for node in hf_selection:
+		if node is DraftBrush and is_instance_valid(node):
+			ref_sizes.append((node as DraftBrush).size)
+	if ref_sizes.is_empty():
+		return
+	var tolerance := 0.2
+	var picked: Array = []
+	var nodes: Array = root._iter_pick_nodes() if root.has_method("_iter_pick_nodes") else []
+	for node in nodes:
+		if not (node is DraftBrush):
+			continue
+		var sz: Vector3 = (node as DraftBrush).size
+		for ref_sz in ref_sizes:
+			if _size_similar(sz, ref_sz, tolerance):
+				picked.append(node)
+				break
+	_apply_selection_list(picked, false)
+	if dock:
+		dock.show_toast(
+			"Selected %d similar brush%s" % [picked.size(), "" if picked.size() == 1 else "es"], 0
+		)
+
+
+func _size_similar(a: Vector3, b: Vector3, tolerance: float) -> bool:
+	var sa := _sorted_vec(a)
+	var sb := _sorted_vec(b)
+	for i in range(3):
+		var ref_val: float = maxf(sb[i], 0.01)
+		if absf(sa[i] - sb[i]) / ref_val > tolerance:
+			return false
+	return true
+
+
+func _sorted_vec(v: Vector3) -> Array:
+	var arr := [v.x, v.y, v.z]
+	arr.sort()
+	return arr
+
+
+# ---------------------------------------------------------------------------
+# Selection Filter popup
+# ---------------------------------------------------------------------------
+
+
+func _show_selection_filter() -> void:
+	if not _selection_filter:
+		return
+	var root = active_root if active_root else _get_level_root()
+	_selection_filter.show_for(root, hf_selection)
+	# Position near the mouse
+	var popup_pos := Vector2i(int(last_3d_mouse_pos.x), int(last_3d_mouse_pos.y))
+	_selection_filter.popup(Rect2i(popup_pos, Vector2i.ZERO))
+
+
+func _on_selection_filter_applied(nodes: Array, faces: Dictionary) -> void:
+	var root = active_root if active_root else _get_level_root()
+	if not root:
+		return
+	# Apply face selection if provided
+	if not faces.is_empty():
+		_apply_face_selection(root, faces)
+		var total := 0
+		for key in faces.keys():
+			total += faces[key].size()
+		if dock:
+			dock.show_toast("Selected %d face%s" % [total, "" if total == 1 else "s"], 0)
+	elif not nodes.is_empty():
+		# Node-only filter — clear any stale face selection first
+		_apply_face_selection(root, {})
+		_apply_selection_list(nodes, false)
+		if dock:
+			dock.show_toast(
+				"Selected %d node%s" % [nodes.size(), "" if nodes.size() == 1 else "s"], 0
+			)
+
+
+# ---------------------------------------------------------------------------
+# Marquee overlay
+# ---------------------------------------------------------------------------
+
+
+func _update_marquee_overlay(from: Vector2, to: Vector2, active: bool) -> void:
+	if _marquee_overlay and is_instance_valid(_marquee_overlay):
+		_marquee_overlay.set_rect(from, to, active)
+
+
+## Lightweight Control that draws a semi-transparent selection rectangle.
+class _MarqueeOverlay:
+	extends Control
+
+	var _from := Vector2.ZERO
+	var _to := Vector2.ZERO
+	var _active := false
+
+	func _ready() -> void:
+		set_anchors_preset(Control.PRESET_FULL_RECT)
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func set_rect(from: Vector2, to: Vector2, active: bool) -> void:
+		_from = from
+		_to = to
+		_active = active
+		queue_redraw()
+
+	func _draw() -> void:
+		if not _active:
+			return
+		var rect = Rect2(_from, _to - _from).abs()
+		# Fill
+		draw_rect(rect, Color(0.3, 0.6, 1.0, 0.12))
+		# Border
+		draw_rect(rect, Color(0.3, 0.6, 1.0, 0.7), false, 1.5)
 
 
 func _delete_selected(root: Node) -> bool:
@@ -2043,6 +2374,12 @@ func _on_context_toolbar_action(action: String, args: Array) -> void:
 				root.vertex_system.split_selected_edge()
 		"vertex_exit":
 			_toggle_vertex_mode(root)
+		"select_similar":
+			_select_similar(root)
+		"apply_last_texture":
+			_apply_last_texture(root)
+		"selection_filter":
+			_show_selection_filter()
 
 
 func _on_context_toggle_operation() -> void:
@@ -2079,15 +2416,14 @@ func _on_context_material_apply(mat_index: int) -> void:
 	if face_count > 0:
 		dock._on_face_assign_material()
 	else:
-		# Apply to selected brush
-		for node in hf_selection:
-			if node is DraftBrush:
-				var mat = (
-					root.material_manager.get_material(mat_index) if root.material_manager else null
-				)
-				if mat:
+		# Apply to all selected brushes
+		var mat = (
+			root.material_manager.get_material(mat_index) if root.material_manager else null
+		)
+		if mat:
+			for node in hf_selection:
+				if node is DraftBrush:
 					_paint_brush_with_undo(root, node, mat)
-				break
 
 
 func _on_toggle_hotkey_palette() -> void:
@@ -2183,6 +2519,12 @@ func _on_hotkey_palette_action(action: String) -> void:
 			root.set_axis_lock(LevelRootType.AxisLock.Z, true)
 			if dock:
 				dock.update_axis_lock_buttons(LevelRootType.AxisLock.Z)
+		"select_similar":
+			_select_similar(root)
+		"apply_last_texture":
+			_apply_last_texture(root)
+		"selection_filter":
+			_show_selection_filter()
 	_update_hud_context()
 
 

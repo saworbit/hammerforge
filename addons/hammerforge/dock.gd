@@ -1098,9 +1098,22 @@ func _get_editor_color(color_name: String, fallback: Color) -> Color:
 	return fallback
 
 
+func _get_scene_history_id() -> int:
+	if undo_redo and level_root and is_instance_valid(level_root):
+		return undo_redo.get_object_history_id(level_root)
+	return EditorUndoRedoManager.GLOBAL_HISTORY
+
+
+func _get_scene_undo_redo() -> UndoRedo:
+	if not undo_redo:
+		return null
+	return undo_redo.get_history_undo_redo(_get_scene_history_id())
+
+
 func _get_undo_version() -> int:
-	if undo_redo and undo_redo.has_method("get_version"):
-		return int(undo_redo.get_version())
+	var ur := _get_scene_undo_redo()
+	if ur:
+		return ur.get_version()
 	return history_entries.size()
 
 
@@ -1120,18 +1133,13 @@ func _refresh_history_list() -> void:
 func _update_history_buttons() -> void:
 	if not undo_btn or not redo_btn:
 		return
-	if not undo_redo:
+	var ur := _get_scene_undo_redo()
+	if ur:
+		undo_btn.disabled = not ur.has_undo()
+		redo_btn.disabled = not ur.has_redo()
+	else:
 		undo_btn.disabled = true
 		redo_btn.disabled = true
-		return
-	var can_undo = true
-	var can_redo = true
-	if undo_redo.has_method("has_undo"):
-		can_undo = undo_redo.has_undo()
-	if undo_redo.has_method("has_redo"):
-		can_redo = undo_redo.has_redo()
-	undo_btn.disabled = not can_undo
-	redo_btn.disabled = not can_redo
 
 
 func _on_undo_redo_version_changed() -> void:
@@ -1139,19 +1147,15 @@ func _on_undo_redo_version_changed() -> void:
 
 
 func _on_history_undo() -> void:
-	if editor_interface and editor_interface.has_method("undo"):
-		editor_interface.call("undo")
-		return
-	if undo_redo:
-		undo_redo.undo()
+	var ur := _get_scene_undo_redo()
+	if ur and ur.has_undo():
+		ur.undo()
 
 
 func _on_history_redo() -> void:
-	if editor_interface and editor_interface.has_method("redo"):
-		editor_interface.call("redo")
-		return
-	if undo_redo:
-		undo_redo.redo()
+	var ur := _get_scene_undo_redo()
+	if ur and ur.has_redo():
+		ur.redo()
 
 
 # ===========================================================================
@@ -2105,14 +2109,22 @@ func set_status_grid(snap_value: float) -> void:
 func set_selection_count(count: int) -> void:
 	if not selection_label:
 		return
-	if count <= 0:
+	var face_count := _count_selected_faces()
+	if count <= 0 and face_count <= 0:
 		selection_label.text = ""
+	elif face_count > 0 and count > 0:
+		selection_label.text = (
+			"Sel: %d brush%s, %d face%s"
+			% [count, "" if count == 1 else "es", face_count, "" if face_count == 1 else "s"]
+		)
+	elif face_count > 0:
+		selection_label.text = "Sel: %d face%s" % [face_count, "" if face_count == 1 else "s"]
 	elif count == 1:
 		selection_label.text = "Sel: 1 brush"
 	else:
 		selection_label.text = "Sel: %d brushes" % count
 	if _clear_sel_btn:
-		_clear_sel_btn.visible = count > 0
+		_clear_sel_btn.visible = count > 0 or face_count > 0
 
 
 func set_selection_nodes(nodes: Array) -> void:
@@ -3478,7 +3490,7 @@ func _on_paint_layer_remove() -> void:
 
 func _on_heightmap_import() -> void:
 	if heightmap_import_dialog:
-		heightmap_import_dialog.popup_centered(Vector2(600, 400))
+		heightmap_import_dialog.popup_centered(Vector2i(600, 400))
 
 
 func _on_heightmap_import_selected(path: String) -> void:
@@ -3598,7 +3610,7 @@ func _on_terrain_slot_pressed(slot: int) -> void:
 	if not terrain_slot_texture_dialog:
 		return
 	_terrain_slot_pick_index = slot
-	terrain_slot_texture_dialog.popup_centered(Vector2(600, 400))
+	terrain_slot_texture_dialog.popup_centered(Vector2i(600, 400))
 
 
 func _on_terrain_slot_texture_selected(path: String) -> void:

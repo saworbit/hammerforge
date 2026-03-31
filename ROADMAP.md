@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: March 29, 2026
+Last updated: March 31, 2026
 
 This roadmap is a directional plan. Items may change based on user feedback.
 Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md for details.
@@ -159,6 +159,17 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - **Command palette** (`HFHotkeyPalette`): searchable action list (Shift+? or F1) with live gray-out for unavailable actions. Filters by name or binding, Enter to execute.
 - **Dock convenience methods**: `_apply_material_to_whole_brush()` and `_on_face_assign_material()` for toolbar-initiated material assignment.
 - 32 new tests (context_toolbar 20, hotkey_palette 12). Total: **726 tests across 43 files**.
+
+## Done (Improved Selection & Multi-Select)
+- **Marquee / box selection**: drag-to-select brushes, entities, and faces in viewport. Semi-transparent blue overlay rectangle. Works in both Select mode and Face Select mode.
+- **Selection filter popover** (`HFSelectionFilter`): bulk selection by normal (Walls/Floors/Ceilings), by material, Select Similar (faces by material+normal, brushes by size), by visgroup (dynamic buttons), by type (Detail/Structural).
+- **Apply Last Texture** (Shift+T): rapid texture painting after using Texture Picker (T).
+- **Select Similar hotkey** (Shift+S): quick-invoke similar face/brush selection from viewport.
+- **Selection Filters hotkey** (Shift+F): opens filter popover at mouse position.
+- **Enhanced status bar**: combined selection count badge ("Sel: 3 brushes, 5 faces").
+- **Context toolbar**: new Sim/Last/Flt buttons, descriptive labels ("N brushes selected", "N faces on M brushes").
+- **Command palette**: 3 new actions with live gray-out.
+- 18 new tests (selection_features). Total: **753 tests across 44 files**.
 
 ## Next (Wave 2c remaining)
 - Displacement sewing (stitch adjacent heightmap edges to share vertices).

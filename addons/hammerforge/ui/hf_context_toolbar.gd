@@ -143,6 +143,8 @@ func _build_brush_section() -> void:
 	_add_tool_button(section, "Del", "Delete (Del)", "delete")
 	_add_sep(section)
 	_add_tool_button(section, "\u2302", "Set as Player Start", "set_player_start")
+	_add_tool_button(section, "Sim", "Select Similar brushes (Shift+S)", "select_similar")
+	_add_tool_button(section, "Flt", "Selection Filters (Shift+F)", "selection_filter")
 
 
 func _build_face_section() -> void:
@@ -174,6 +176,9 @@ func _build_face_section() -> void:
 	_add_tool_button(section, "\u2193", "UV Bottom", "justify_bottom")
 	_add_sep(section)
 	_add_tool_button(section, "All", "Apply to Whole Brush", "apply_to_brush")
+	_add_sep(section)
+	_add_tool_button(section, "Sim", "Select Similar faces (Shift+S)", "select_similar")
+	_add_tool_button(section, "Last", "Apply Last Texture (Shift+T)", "apply_last_texture")
 
 
 func _build_entity_section() -> void:
@@ -354,17 +359,31 @@ func _apply_context(state: Dictionary) -> void:
 	if _sections.has(_context):
 		_sections[_context].visible = true
 
-	# Update label
+	# Update label with selection count badge
 	match _context:
 		Context.BRUSH_SELECTED:
-			var count: int = state.get("brush_count", 0)
-			_label.text = "%d brush%s" % [count, "" if count == 1 else "es"]
+			var bc: int = state.get("brush_count", 0)
+			var ec: int = state.get("entity_count", 0)
+			if ec > 0:
+				_label.text = (
+					"%d brush%s + %d entit%s"
+					% [bc, "" if bc == 1 else "es", ec, "y" if ec == 1 else "ies"]
+				)
+			else:
+				_label.text = "%d brush%s selected" % [bc, "" if bc == 1 else "es"]
 		Context.FACE_SELECTED:
-			var count: int = state.get("face_count", 0)
-			_label.text = "%d face%s" % [count, "" if count == 1 else "s"]
+			var fc: int = state.get("face_count", 0)
+			var bc: int = state.get("brush_count", 0)
+			if bc > 0:
+				_label.text = (
+					"%d face%s on %d brush%s"
+					% [fc, "" if fc == 1 else "s", bc, "" if bc == 1 else "es"]
+				)
+			else:
+				_label.text = "%d face%s selected" % [fc, "" if fc == 1 else "s"]
 		Context.ENTITY_SELECTED:
 			var count: int = state.get("entity_count", 0)
-			_label.text = "%d entit%s" % [count, "y" if count == 1 else "ies"]
+			_label.text = "%d entit%s selected" % [count, "y" if count == 1 else "ies"]
 		Context.DRAW_IDLE:
 			_label.text = "Draw"
 		Context.DRAGGING:

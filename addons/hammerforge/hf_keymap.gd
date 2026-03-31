@@ -54,6 +54,10 @@ static func _default_bindings() -> Dictionary:
 		"vertex_split_edge": {"keycode": KEY_E, "ctrl": true},
 		# Material tools
 		"texture_picker": {"keycode": KEY_T},
+		"apply_last_texture": {"keycode": KEY_T, "shift": true},
+		# Selection
+		"select_similar": {"keycode": KEY_S, "shift": true},
+		"selection_filter": {"keycode": KEY_F, "shift": true},
 		# Axis lock
 		"axis_x": {"keycode": KEY_X},
 		"axis_y": {"keycode": KEY_Y},
@@ -144,9 +148,12 @@ static func get_category(action: String) -> String:
 			"vertex_merge",
 			"vertex_split_edge",
 			"texture_picker",
+			"apply_last_texture",
 		]
 	):
 		return "Tools"
+	if action in ["select_similar", "selection_filter"]:
+		return "Selection"
 	return "Editing"
 
 
@@ -176,6 +183,9 @@ static func get_action_label(action: String) -> String:
 		"paint_line": "Line",
 		"paint_blend": "Bucket Fill",
 		"texture_picker": "Texture Picker",
+		"apply_last_texture": "Apply Last Texture",
+		"select_similar": "Select Similar",
+		"selection_filter": "Selection Filters",
 		"axis_x": "Lock X",
 		"axis_y": "Lock Y",
 		"axis_z": "Lock Z",

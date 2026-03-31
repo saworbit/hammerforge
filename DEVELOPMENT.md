@@ -1,6 +1,6 @@
 # Development Guide
 
-Last updated: March 29, 2026
+Last updated: March 31, 2026
 
 This document covers local setup, codebase structure, and how to test features.
 
@@ -67,6 +67,7 @@ addons/hammerforge/
     hf_prefab_library.gd   Prefab library dock section (ItemList + drag-and-drop)
     hf_context_toolbar.gd  Floating contextual mini-toolbar (context-sensitive actions in 3D viewport)
     hf_hotkey_palette.gd   Searchable command palette with live gray-out (Shift+? or F1)
+    hf_selection_filter.gd Selection filter popover (by normal/material/similar/visgroup/type)
     paint_tab_builder.gd   Builds Paint tab sections + signal connections
     entity_tab_builder.gd  Builds Entity Properties + Entity I/O sections
     manage_tab_builder.gd  Builds Manage tab sections (Bake, File, Settings, etc.)
@@ -122,6 +123,7 @@ addons/hammerforge/
 - **Brush/material caching.** `hf_brush_system.gd` uses `_brush_cache: Dictionary` for O(1) brush ID lookup, `_brush_count: int` for O(1) count, and `_material_cache: Dictionary` for material instance reuse. All CRUD methods maintain these caches.
 - **Undo/redo dynamic dispatch.** The `_commit_state_action` pattern in `dock.gd` intentionally uses string method names for undo/redo -- this is the one exception to the typed-calls rule.
 - **Undo/redo helper.** Use `HFUndoHelper` for editor actions to ensure consistent history and state snapshot restores. Pass a `collation_tag` for operations that fire rapidly (nudge, resize, paint) — consecutive actions with the same tag within 1 second are merged into one undo entry. Collation also requires matching `full_state` scope — a `full_state=true` action will not merge with a prior `full_state=false` run.
+- **Undo/redo history binding.** HammerForge actions go into the **scene history** (not global) because `create_action()` passes `null` context and the first do/undo object is a Node (LevelRoot). Dock history UI (`_update_history_buttons`, `_on_history_undo/redo`) resolves the correct history via `_get_scene_history_id()` → `undo_redo.get_object_history_id(level_root)`. Never hard-code `EditorUndoRedoManager.GLOBAL_HISTORY` — use `_get_scene_undo_redo()` to get the `UndoRedo` object for the active scene.
 - **Transactions.** For multi-step operations (hollow, clip, tie), use `state_system.begin_transaction()` / `commit_transaction()` / `rollback_transaction()` to group mutations atomically. If any step fails, `rollback_transaction()` restores the snapshot.
 - **Entity definitions.** Entity types and brush entity classes are data-driven via `HFEntityDef`. Load from `entities.json` or use built-in defaults. New entity types should be added to the JSON file, not hardcoded.
 - **Gesture trackers.** New tools should subclass `HFGesture` (hf_gesture.gd) to encapsulate input state. Override `update()`, `commit()`, `cancel()`. The gesture holds its own state (start position, axis lock, numeric buffer), making the tool self-contained.
@@ -154,6 +156,9 @@ addons/hammerforge/
 - **Live dimensions.** `input_state.get_drag_dimensions()` returns `Vector3(W, H, D)` during DRAG_BASE/DRAG_HEIGHT; `Vector3.ZERO` otherwise. `format_dimensions()` renders as `"64 x 32 x 48"` (whole numbers omit decimals). The mode indicator banner appends dimensions to the stage hint during drag gestures.
 - **Context toolbar.** `ui/hf_context_toolbar.gd` is a `PanelContainer` added to `CONTAINER_SPATIAL_EDITOR_MENU` via `plugin.gd`. It determines context via `_determine_context(state)` using a priority chain: vertex_mode > dragging > face_selected > entity_selected > brush_selected > draw_idle > NONE. Each context maps to a pre-built `HBoxContainer` section with tool buttons. The toolbar emits `action_requested(action, args)` which `plugin.gd` dispatches to existing dock/plugin methods. Auto-hint bar uses a separate `PanelContainer` child with fade-in tween. State is pushed every frame from `_update_hud_context()` via `_update_context_toolbar_state()`.
 - **Command palette.** `ui/hf_hotkey_palette.gd` extends `PanelContainer`. Populated once via `populate(keymap)`. Live gray-out uses `_is_action_available(action)` which checks brush_count, entity_count, paint_mode, vertex_mode, and tool_id from the state dict. Toggle with Shift+? or F1. Emits `action_invoked(action)` which `plugin.gd` handles identically to keyboard shortcuts.
+- **Marquee selection.** `plugin.gd` tracks drag start on mouse-down in Select mode. On mouse-up, if the drag exceeds a threshold, `_select_nodes_in_rect()` performs box selection for brushes/entities, or `_select_faces_in_rect()` selects faces across multiple brushes when in Face Select mode. A semi-transparent blue overlay (`_MarqueeOverlay` inner class) draws the selection rectangle during drag.
+- **Selection filter.** `ui/hf_selection_filter.gd` extends `PopupPanel` (a `Window` subclass, not `Control`). Opened via Shift+F or context toolbar button. Emits `filter_applied(nodes, faces)` which `plugin.gd` handles via `_on_selection_filter_applied()` to update `hf_selection` and `face_selection`. Dynamic visgroup buttons rebuilt on each `show_for()` call.
+- **Apply Last Texture.** `plugin.gd` stores `_last_picked_material_index` when Texture Picker (T) samples a face. Shift+T applies that material index to the current face or brush selection via existing `assign_material_to_selected_faces()` / `assign_material_to_whole_brushes()` methods.
 
 ### CI
 

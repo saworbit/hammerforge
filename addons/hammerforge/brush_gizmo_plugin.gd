@@ -228,11 +228,9 @@ func _axis_index(axis: Vector3) -> int:
 func _request_gizmo_redraw(gizmo: EditorNode3DGizmo) -> void:
 	if not gizmo:
 		return
-	if gizmo.has_method("set_dirty"):
-		gizmo.call("set_dirty")
-		return
-	if gizmo.has_method("redraw"):
-		gizmo.call("redraw")
+	var node := gizmo.get_node_3d()
+	if node:
+		node.update_gizmos()
 
 
 func _find_level_root(node: Node) -> LevelRoot:

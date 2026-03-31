@@ -216,6 +216,15 @@ func _is_action_available(action: String) -> bool:
 		# Axis lock not in select mode
 		"axis_x", "axis_y", "axis_z":
 			return tool_id != 1
+		# Select similar needs a selection or face selection
+		"select_similar":
+			return has_selection or _state.get("face_count", 0) > 0
+		# Apply last texture needs a selection
+		"apply_last_texture":
+			return has_selection or _state.get("face_count", 0) > 0
+		# Selection filter always available
+		"selection_filter":
+			return true
 		# Tool switches always available
 		"tool_draw", "tool_select", "tool_extrude_up", "tool_extrude_down", "vertex_edit", "texture_picker":
 			return true
