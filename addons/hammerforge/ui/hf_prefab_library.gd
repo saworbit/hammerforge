@@ -172,9 +172,7 @@ func refresh() -> void:
 		# Set tooltip with tags
 		if prefab and not prefab.tags.is_empty():
 			var idx: int = _file_list.item_count - 1
-			_file_list.set_item_tooltip(
-				idx, "Tags: %s" % ", ".join(Array(prefab.tags))
-			)
+			_file_list.set_item_tooltip(idx, "Tags: %s" % ", ".join(Array(prefab.tags)))
 
 	_refresh_tag_filter()
 	_apply_filters()
@@ -329,11 +327,12 @@ func _show_variant_dialog(prefab_path: String) -> void:
 	var input = LineEdit.new()
 	input.placeholder_text = "e.g. wooden, metal, ornate"
 	dialog.add_child(input)
-	dialog.confirmed.connect(func():
-		var vname: String = input.text.strip_edges()
-		if vname != "":
-			variant_add_requested.emit(prefab_path, vname)
-		dialog.queue_free()
+	dialog.confirmed.connect(
+		func():
+			var vname: String = input.text.strip_edges()
+			if vname != "":
+				variant_add_requested.emit(prefab_path, vname)
+			dialog.queue_free()
 	)
 	dialog.canceled.connect(func(): dialog.queue_free())
 	add_child(dialog)
@@ -350,17 +349,18 @@ func _show_tags_dialog(prefab_path: String) -> void:
 	var input = LineEdit.new()
 	input.text = ", ".join(Array(prefab.tags))
 	dialog.add_child(input)
-	dialog.confirmed.connect(func():
-		var raw: String = input.text.strip_edges()
-		var new_tags: PackedStringArray = []
-		for part in raw.split(","):
-			var t: String = part.strip_edges().to_lower()
-			if t != "":
-				new_tags.append(t)
-		prefab.tags = new_tags
-		prefab.save_to_file(prefab_path)
-		refresh()
-		dialog.queue_free()
+	dialog.confirmed.connect(
+		func():
+			var raw: String = input.text.strip_edges()
+			var new_tags: PackedStringArray = []
+			for part in raw.split(","):
+				var t: String = part.strip_edges().to_lower()
+				if t != "":
+					new_tags.append(t)
+			prefab.tags = new_tags
+			prefab.save_to_file(prefab_path)
+			refresh()
+			dialog.queue_free()
 	)
 	dialog.canceled.connect(func(): dialog.queue_free())
 	add_child(dialog)

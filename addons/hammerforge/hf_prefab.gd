@@ -82,10 +82,14 @@ static func capture_from_selection(
 ## variant_name selects which variant to use ("base" or "" = default).
 ## Returns a dictionary: {"brush_ids": Array, "entity_count": int, "entity_names": Array, "entity_nodes": Array}.
 func instantiate(
-	brush_system, entity_system, root, placement_pos: Vector3,
-	variant_name: String = ""
+	brush_system, entity_system, root, placement_pos: Vector3, variant_name: String = ""
 ) -> Dictionary:
-	var result := {"brush_ids": [] as Array, "entity_count": 0, "entity_names": [] as Array, "entity_nodes": [] as Array}
+	var result := {
+		"brush_ids": [] as Array,
+		"entity_count": 0,
+		"entity_names": [] as Array,
+		"entity_nodes": [] as Array
+	}
 
 	# Resolve variant data
 	var b_infos: Array = brush_infos
@@ -189,9 +193,7 @@ func get_variant_data(variant_name: String) -> Dictionary:
 
 
 ## Set/create a variant's data.
-func set_variant_data(
-	variant_name: String, p_brush_infos: Array, p_entity_infos: Array
-) -> void:
+func set_variant_data(variant_name: String, p_brush_infos: Array, p_entity_infos: Array) -> void:
 	if variant_name == "base" or variant_name == "":
 		brush_infos = p_brush_infos
 		entity_infos = p_entity_infos
@@ -211,8 +213,7 @@ func remove_variant(variant_name: String) -> bool:
 
 ## Add a variant by capturing from a selection (convenience wrapper).
 func add_variant_from_selection(
-	variant_name: String, brush_system, entity_system,
-	brush_nodes: Array, entity_nodes: Array
+	variant_name: String, brush_system, entity_system, brush_nodes: Array, entity_nodes: Array
 ) -> void:
 	var captured = HFPrefab.capture_from_selection(
 		brush_system, entity_system, brush_nodes, entity_nodes

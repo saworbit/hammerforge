@@ -21,12 +21,12 @@ var _next_entity_uid: int = 1
 
 class PrefabInstanceRecord:
 	var instance_id: String = ""
-	var source_path: String = ""         # res://prefabs/foo.hfprefab
-	var variant_name: String = "base"    # active variant
-	var brush_ids: Array = []            # String brush IDs belonging to this instance
-	var entity_uids: Array = []          # stable IDs ("pent_N") belonging to this instance
-	var overrides: Dictionary = {}       # field_path → value  (per-instance tweaks)
-	var linked: bool = false             # if true, propagation applies
+	var source_path: String = ""  # res://prefabs/foo.hfprefab
+	var variant_name: String = "base"  # active variant
+	var brush_ids: Array = []  # String brush IDs belonging to this instance
+	var entity_uids: Array = []  # stable IDs ("pent_N") belonging to this instance
+	var overrides: Dictionary = {}  # field_path → value  (per-instance tweaks)
+	var linked: bool = false  # if true, propagation applies
 
 
 func _init(level_root: Node3D) -> void:
@@ -211,9 +211,7 @@ func set_variant(instance_id: String, variant_name: String) -> bool:
 	return true
 
 
-func _apply_variant(
-	rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_name: String
-) -> void:
+func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_name: String) -> void:
 	# Compute centroid of current instance to keep placement stable
 	var centroid := _compute_instance_centroid(rec)
 
@@ -408,27 +406,42 @@ func compute_instance_diff(instance_id: String) -> Array:
 
 	# Compare brush counts
 	if source_brushes.size() != rec.brush_ids.size():
-		diff.append({
-			"field": "brush_count",
-			"source_value": source_brushes.size(),
-			"instance_value": rec.brush_ids.size(),
-		})
+		(
+			diff
+			. append(
+				{
+					"field": "brush_count",
+					"source_value": source_brushes.size(),
+					"instance_value": rec.brush_ids.size(),
+				}
+			)
+		)
 
 	# Compare entity counts
 	if source_entities.size() != rec.entity_uids.size():
-		diff.append({
-			"field": "entity_count",
-			"source_value": source_entities.size(),
-			"instance_value": rec.entity_uids.size(),
-		})
+		(
+			diff
+			. append(
+				{
+					"field": "entity_count",
+					"source_value": source_entities.size(),
+					"instance_value": rec.entity_uids.size(),
+				}
+			)
+		)
 
 	# Per-field overrides
 	for field_path in rec.overrides:
-		diff.append({
-			"field": field_path,
-			"source_value": "(original)",
-			"instance_value": rec.overrides[field_path],
-		})
+		(
+			diff
+			. append(
+				{
+					"field": field_path,
+					"source_value": "(original)",
+					"instance_value": rec.overrides[field_path],
+				}
+			)
+		)
 
 	return diff
 
@@ -484,21 +497,25 @@ func suggest_prefab_name(brush_nodes: Array, entity_nodes: Array) -> String:
 func _shape_name(shape: int) -> String:
 	# Maps to LevelRoot.BrushShape enum
 	match shape:
-		0: return "box"
-		1: return "cylinder"
-		2: return "sphere"
-		3: return "cone"
-		4: return "wedge"
-		5: return "pyramid"
-		_: return "brush"
+		0:
+			return "box"
+		1:
+			return "cylinder"
+		2:
+			return "sphere"
+		3:
+			return "cone"
+		4:
+			return "wedge"
+		5:
+			return "pyramid"
+		_:
+			return "brush"
 
 
 ## Quick-save selection as prefab. Returns the saved path or "".
 func quick_save_prefab(
-	brush_nodes: Array,
-	entity_nodes: Array,
-	prefab_name: String = "",
-	linked: bool = false
+	brush_nodes: Array, entity_nodes: Array, prefab_name: String = "", linked: bool = false
 ) -> String:
 	if brush_nodes.is_empty() and entity_nodes.is_empty():
 		return ""
@@ -542,15 +559,20 @@ func capture_state() -> Dictionary:
 	var instances_data: Array = []
 	for iid in _instances:
 		var rec: PrefabInstanceRecord = _instances[iid]
-		instances_data.append({
-			"instance_id": rec.instance_id,
-			"source_path": rec.source_path,
-			"variant_name": rec.variant_name,
-			"brush_ids": rec.brush_ids.duplicate(),
-			"entity_uids": rec.entity_uids.duplicate(),
-			"overrides": rec.overrides.duplicate(true),
-			"linked": rec.linked,
-		})
+		(
+			instances_data
+			. append(
+				{
+					"instance_id": rec.instance_id,
+					"source_path": rec.source_path,
+					"variant_name": rec.variant_name,
+					"brush_ids": rec.brush_ids.duplicate(),
+					"entity_uids": rec.entity_uids.duplicate(),
+					"overrides": rec.overrides.duplicate(true),
+					"linked": rec.linked,
+				}
+			)
+		)
 	data["instances"] = instances_data
 	return data
 

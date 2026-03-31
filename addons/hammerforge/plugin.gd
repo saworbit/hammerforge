@@ -974,7 +974,9 @@ func _update_prefab_hover_overlay(root, cam: Camera3D, pos: Vector2) -> void:
 	if not space:
 		root.prefab_overlay.hide_overlay()
 		return
-	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(from, from + dir * 1000.0)
+	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(
+		from, from + dir * 1000.0
+	)
 	var hit: Dictionary = space.intersect_ray(query)
 	if hit.is_empty():
 		root.prefab_overlay.hide_overlay()
@@ -2289,10 +2291,7 @@ func _handle_prefab_drop(position: Vector2, data: Variant) -> void:
 		# Register prefab instance for tracking/propagation
 		if root.prefab_system:
 			root.prefab_system.register_instance(
-				prefab_path,
-				result.get("brush_ids", []),
-				result.get("entity_nodes", []),
-				false  # not linked by default on drag-drop
+				prefab_path, result.get("brush_ids", []), result.get("entity_nodes", []), false  # not linked by default on drag-drop
 			)
 		var undo_redo = undo_redo_manager
 		if undo_redo:
@@ -2388,7 +2387,9 @@ func _propagate_prefab(root) -> void:
 	var count: int = root.prefab_system.propagate_from_source(source)
 	if count > 0:
 		if dock:
-			dock.show_toast("Propagated to %d linked instance%s" % [count, "" if count == 1 else "s"], 0)
+			dock.show_toast(
+				"Propagated to %d linked instance%s" % [count, "" if count == 1 else "s"], 0
+			)
 		var undo_redo = undo_redo_manager
 		if undo_redo:
 			undo_redo.create_action("Propagate Prefab")

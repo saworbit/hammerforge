@@ -18,6 +18,7 @@ const HFToast = preload("ui/hf_toast.gd")
 const HFWelcomePanel = preload("ui/hf_welcome_panel.gd")
 const HFTutorialWizard = preload("ui/hf_tutorial_wizard.gd")
 const HFEntityDef = preload("hf_entity_def.gd")
+const HFPrefabType = preload("hf_prefab.gd")
 const UVEditorScene = preload("uv_editor.tscn")
 const PaintTabBuilder = preload("ui/paint_tab_builder.gd")
 const EntityTabBuilder = preload("ui/entity_tab_builder.gd")
@@ -2323,7 +2324,6 @@ func _on_show_subtract_preview_toggled(pressed: bool) -> void:
 func _on_prefab_save_requested(prefab_name: String) -> void:
 	if not level_root:
 		return
-	var HFPrefabType = preload("res://addons/hammerforge/hf_prefab.gd")
 	var brush_nodes: Array = []
 	var entity_nodes: Array = []
 	for node in _selection_nodes:
@@ -2378,7 +2378,6 @@ func _on_prefab_delete_requested(prefab_path: String) -> void:
 func _on_prefab_variant_add_requested(prefab_path: String, variant_name: String) -> void:
 	if not level_root or prefab_path == "" or variant_name == "":
 		return
-	var HFPrefabType = preload("res://addons/hammerforge/hf_prefab.gd")
 	var prefab = HFPrefabType.load_from_file(prefab_path)
 	if not prefab:
 		return
@@ -2392,8 +2391,7 @@ func _on_prefab_variant_add_requested(prefab_path: String, variant_name: String)
 	if brush_nodes.is_empty() and entity_nodes.is_empty():
 		return
 	prefab.add_variant_from_selection(
-		variant_name, level_root.brush_system, level_root.entity_system,
-		brush_nodes, entity_nodes
+		variant_name, level_root.brush_system, level_root.entity_system, brush_nodes, entity_nodes
 	)
 	prefab.save_to_file(prefab_path)
 	if _prefab_library:

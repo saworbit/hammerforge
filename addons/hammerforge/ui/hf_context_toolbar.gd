@@ -381,7 +381,10 @@ func _apply_context(state: Dictionary) -> void:
 	var pfb_src: String = state.get("prefab_source", "")
 	var pfb_variant: String = state.get("prefab_variant", "")
 	var pfb_linked: bool = state.get("prefab_linked", false)
-	var is_prefab_context: bool = pfb_src != "" and (_context == Context.BRUSH_SELECTED or _context == Context.ENTITY_SELECTED)
+	var is_prefab_context: bool = (
+		pfb_src != ""
+		and (_context == Context.BRUSH_SELECTED or _context == Context.ENTITY_SELECTED)
+	)
 	# Show/hide prefab instance buttons on relevant sections
 	for ctx_key in [Context.BRUSH_SELECTED, Context.ENTITY_SELECTED]:
 		var sec = _sections.get(ctx_key)

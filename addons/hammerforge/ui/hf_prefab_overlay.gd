@@ -127,9 +127,18 @@ func _draw_wireframe_box(aabb: AABB) -> void:
 		Vector3(min_pt.x, max_pt.y, max_pt.z),
 	]
 	var edges = [
-		[0, 1], [1, 2], [2, 3], [3, 0],
-		[4, 5], [5, 6], [6, 7], [7, 4],
-		[0, 4], [1, 5], [2, 6], [3, 7],
+		[0, 1],
+		[1, 2],
+		[2, 3],
+		[3, 0],
+		[4, 5],
+		[5, 6],
+		[6, 7],
+		[7, 4],
+		[0, 4],
+		[1, 5],
+		[2, 6],
+		[3, 7],
 	]
 	for edge in edges:
 		im.surface_add_vertex(corners[edge[0]])
@@ -202,7 +211,9 @@ func _get_node_aabb(node: Node3D) -> AABB:
 			for i in range(0, meshes.size(), 2):
 				if meshes[i + 1] is Mesh:
 					var mesh_aabb: AABB = meshes[i + 1].get_aabb()
-					var t: Transform3D = meshes[i] if meshes[i] is Transform3D else node.global_transform
+					var t: Transform3D = (
+						meshes[i] if meshes[i] is Transform3D else node.global_transform
+					)
 					return t * mesh_aabb
 
 	# Fallback: use brush_size meta or default
