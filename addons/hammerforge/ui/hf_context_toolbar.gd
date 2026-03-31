@@ -145,6 +145,15 @@ func _build_brush_section() -> void:
 	_add_tool_button(section, "\u2302", "Set as Player Start", "set_player_start")
 	_add_tool_button(section, "Sim", "Select Similar brushes (Shift+S)", "select_similar")
 	_add_tool_button(section, "Flt", "Selection Filters (Shift+F)", "selection_filter")
+	_add_sep(section)
+	_add_tool_button(section, "Pfb", "Save selection as Prefab (Ctrl+Shift+P)", "quick_save_prefab")
+	_add_tool_button(section, "Lnk", "Save as Live-Linked Prefab", "quick_save_linked_prefab")
+	# Prefab instance buttons — hidden by default, shown when prefab instance selected
+	_add_sep(section).name = "PfbSep"
+	_add_tool_button(section, "Var\u25b6", "Cycle Variant (Ctrl+Shift+V)", "cycle_variant").name = "PfbVarBtn"
+	_add_tool_button(section, "Push", "Push changes to prefab source", "push_to_source").name = "PfbPushBtn"
+	_add_tool_button(section, "Pull", "Propagate source to all linked instances", "propagate_prefab").name = "PfbPullBtn"
+	_set_prefab_buttons_visible(section, false)
 
 
 func _build_face_section() -> void:
@@ -193,6 +202,14 @@ func _build_entity_section() -> void:
 	_add_sep(section)
 	_add_tool_button(section, "Dup", "Duplicate (Ctrl+D)", "duplicate")
 	_add_tool_button(section, "Del", "Delete (Del)", "delete")
+	_add_sep(section)
+	_add_tool_button(section, "Pfb", "Save selection as Prefab (Ctrl+Shift+P)", "quick_save_prefab")
+	# Prefab instance buttons — hidden by default, shown when prefab instance selected
+	_add_sep(section).name = "PfbSep"
+	_add_tool_button(section, "Var\u25b6", "Cycle Variant (Ctrl+Shift+V)", "cycle_variant").name = "PfbVarBtn"
+	_add_tool_button(section, "Push", "Push changes to prefab source", "push_to_source").name = "PfbPushBtn"
+	_add_tool_button(section, "Pull", "Propagate source to all linked instances", "propagate_prefab").name = "PfbPullBtn"
+	_set_prefab_buttons_visible(section, false)
 
 
 func _build_draw_section() -> void:
@@ -279,9 +296,10 @@ func _add_tool_button(parent: Control, text: String, tooltip: String, action: St
 	return btn
 
 
-func _add_sep(parent: Control) -> void:
+func _add_sep(parent: Control) -> VSeparator:
 	var sep = VSeparator.new()
 	parent.add_child(sep)
+	return sep
 
 
 # --- Public API ---
@@ -358,6 +376,27 @@ func _apply_context(state: Dictionary) -> void:
 	# Show active section
 	if _sections.has(_context):
 		_sections[_context].visible = true
+
+	# Prefab instance info badge
+	var pfb_src: String = state.get("prefab_source", "")
+	var pfb_variant: String = state.get("prefab_variant", "")
+	var pfb_linked: bool = state.get("prefab_linked", false)
+	var is_prefab_context: bool = pfb_src != "" and (_context == Context.BRUSH_SELECTED or _context == Context.ENTITY_SELECTED)
+	# Show/hide prefab instance buttons on relevant sections
+	for ctx_key in [Context.BRUSH_SELECTED, Context.ENTITY_SELECTED]:
+		var sec = _sections.get(ctx_key)
+		if sec:
+			_set_prefab_buttons_visible(sec, is_prefab_context and _context == ctx_key)
+
+	if is_prefab_context:
+		var pfb_name: String = pfb_src.get_file().get_basename()
+		var badge := pfb_name
+		if pfb_variant != "" and pfb_variant != "base":
+			badge += " (%s)" % pfb_variant
+		if pfb_linked:
+			badge += " [linked]"
+		_label.text = badge
+		return
 
 	# Update label with selection count badge
 	match _context:
@@ -478,6 +517,13 @@ func _on_material_thumb(index: int) -> void:
 		var mat_idx: int = _favorite_materials[index].get("index", -1)
 		if mat_idx >= 0:
 			material_quick_apply.emit(mat_idx)
+
+
+func _set_prefab_buttons_visible(section: Control, vis: bool) -> void:
+	for child_name in ["PfbSep", "PfbVarBtn", "PfbPushBtn", "PfbPullBtn"]:
+		var child = section.get_node_or_null(child_name)
+		if child:
+			child.visible = vis
 
 
 func _refresh_material_thumbs() -> void:

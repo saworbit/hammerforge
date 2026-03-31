@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Added
+- **Prefab variants** (Mar 2026): Prefabs can now contain multiple variants (e.g., wooden/metal/ornate
+  door styles). Variants are stored alongside the base data in `.hfprefab` files. Cycle through
+  variants on a placed instance with **Ctrl+Shift+V** or the **Var▶** context toolbar button.
+  Add new variants via right-click → "Add Variant" in the prefab library.
+- **Live-linked prefabs** (Mar 2026): "Save Linked" creates prefab instances that maintain a
+  connection to the source `.hfprefab` file. Edit one instance and **Push** changes back to the
+  source, or **Pull** to propagate the source to all linked instances. Per-instance overrides
+  (transforms, sizes) are preserved during propagation.
+- **Enhanced prefab browser** (Mar 2026): Searchable prefab library with tag filtering, variant
+  count indicators, right-click context menu (Add Variant, Edit Tags, Delete), and "Save Linked"
+  button alongside standard save. Tags support comma-separated values and are persisted in the
+  `.hfprefab` file format.
+- **Quick group-to-prefab** (Mar 2026): **Ctrl+Shift+P** or **Pfb** button in the context toolbar
+  saves the current selection as a prefab instantly with an auto-generated name based on contents.
+  Available in both brush-selected and entity-selected toolbar contexts.
+- **Prefab ghost overlay** (Mar 2026): Hovering a node that belongs to a prefab instance in the
+  3D viewport draws a cyan wireframe bounding box around the entire instance. Orange sphere markers
+  highlight nodes with per-instance overrides.
+- **HFPrefabSystem subsystem** (Mar 2026): New `systems/hf_prefab_system.gd` subsystem manages
+  instance registry, variant cycling, override tracking, live-linked propagation, push-to-source,
+  and state serialization. Integrates with undo/redo via state capture/restore.
+- **Prefab tags** (Mar 2026): `.hfprefab` files now support a `tags` field (array of strings)
+  for categorization. Tags are searchable in the library and filterable via a dropdown.
+- 24 new tests (variants, tags, system state, overrides, suggestions, overlay). Total: **777 tests
+  across 45 files**.
+
 ### Fixed
 - **Godot 4.6 API compatibility fixes (Mar 2026):**
   - **Dock undo/redo buttons targeted wrong history**: `_on_history_undo()`, `_on_history_redo()`,
@@ -61,6 +88,29 @@ The format is based on Keep a Changelog, and this project follows semantic versi
     clear its cache before calling `editor_selection.clear()`.
   - Reordered `hf_selection.clear()` before `selection.clear()` in three plugin deselect
     paths (Escape, delete brushes, duplicate brushes) for consistency with the guard.
+- **Prefab system stability fixes (Apr 2026):**
+  - **Inferred-type compilation errors**: GDScript `:=` on untyped `root` parameter returns
+    caused Godot 4.6 parse failures in `plugin.gd` and `hf_prefab_overlay.gd`. Changed to
+    explicit typed declarations (`var x: Type = ...`).
+  - **Undo/redo lost prefab node tags**: `restore_state()` rebuilt the `_instances` registry
+    but never re-tagged scene nodes with `hf_prefab_instance`/`hf_prefab_source`/
+    `hf_prefab_variant` meta. Prefab overlay and toolbar badge stopped working after undo.
+    Fixed by calling `_tag_nodes(rec)` in the restore loop.
+  - **Entity identity collisions**: Prefab instance entity membership was tracked by scene
+    node name, which can collide across unrelated entities. Replaced with stable UIDs
+    (`hf_prefab_entity_id` meta) assigned at registration time. `hf_prefab.gd` `instantiate()`
+    now returns `entity_nodes` (Node3D refs) alongside `entity_names`.
+  - **Permanent prefab buttons in context toolbar**: Var▶/Push/Pull buttons were permanently
+    appended to toolbar sections on first prefab selection and never removed. Rebuilt as
+    named child nodes created at build time, toggled visible/hidden in `_apply_context()`
+    based on whether a prefab instance is currently selected.
+  - **Vertex system API mismatch**: Context toolbar and hotkey palette dispatchers called
+    nonexistent `set_sub_mode()`, `merge_selected()`, and `split_selected_edge()` on
+    `HFVertexSystem`. Fixed to use `sub_mode` property assignment and new
+    `_vertex_merge_selected()` / `_vertex_split_selected_edge()` helpers that resolve
+    selection state before calling `merge_vertices()` / `split_edge()`.
+  - **Orphan warnings in prefab tests**: `queue_free()` defers deletion past GUT's per-test
+    orphan counter. Changed to immediate `free()` in test cleanup.
 
 ### Added
 - **Improved Selection & Multi-Select (Mar 2026):**

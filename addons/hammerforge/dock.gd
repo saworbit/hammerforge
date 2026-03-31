@@ -2348,6 +2348,58 @@ func _on_prefab_save_requested(prefab_name: String) -> void:
 		_prefab_library.on_prefab_saved()
 
 
+func _on_prefab_save_linked_requested(prefab_name: String) -> void:
+	if not level_root:
+		return
+	var brush_nodes: Array = []
+	var entity_nodes: Array = []
+	for node in _selection_nodes:
+		if node is CSGShape3D:
+			brush_nodes.append(node)
+		elif node.has_meta("is_entity"):
+			entity_nodes.append(node)
+	if brush_nodes.is_empty() and entity_nodes.is_empty():
+		return
+	var path := level_root.prefab_system.quick_save_prefab(
+		brush_nodes, entity_nodes, prefab_name, true
+	)
+	if path != "" and _prefab_library:
+		_prefab_library.on_prefab_saved()
+
+
+func _on_prefab_delete_requested(prefab_path: String) -> void:
+	if prefab_path == "" or not FileAccess.file_exists(prefab_path):
+		return
+	DirAccess.remove_absolute(prefab_path)
+	if _prefab_library:
+		_prefab_library.on_prefab_saved()
+
+
+func _on_prefab_variant_add_requested(prefab_path: String, variant_name: String) -> void:
+	if not level_root or prefab_path == "" or variant_name == "":
+		return
+	var HFPrefabType = preload("res://addons/hammerforge/hf_prefab.gd")
+	var prefab = HFPrefabType.load_from_file(prefab_path)
+	if not prefab:
+		return
+	var brush_nodes: Array = []
+	var entity_nodes: Array = []
+	for node in _selection_nodes:
+		if node is CSGShape3D:
+			brush_nodes.append(node)
+		elif node.has_meta("is_entity"):
+			entity_nodes.append(node)
+	if brush_nodes.is_empty() and entity_nodes.is_empty():
+		return
+	prefab.add_variant_from_selection(
+		variant_name, level_root.brush_system, level_root.entity_system,
+		brush_nodes, entity_nodes
+	)
+	prefab.save_to_file(prefab_path)
+	if _prefab_library:
+		_prefab_library.on_prefab_saved()
+
+
 func _on_vertex_tool_toggled(pressed: bool) -> void:
 	vertex_mode_toggled.emit(pressed)
 

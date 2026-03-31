@@ -317,6 +317,12 @@ func connect_signals() -> void:
 		dock._show_subtract_preview.toggled.connect(dock._on_show_subtract_preview_toggled)
 	if dock._prefab_library and dock._prefab_library.has_signal("save_requested"):
 		dock._prefab_library.save_requested.connect(dock._on_prefab_save_requested)
+	if dock._prefab_library and dock._prefab_library.has_signal("save_linked_requested"):
+		dock._prefab_library.save_linked_requested.connect(dock._on_prefab_save_linked_requested)
+	if dock._prefab_library and dock._prefab_library.has_signal("delete_requested"):
+		dock._prefab_library.delete_requested.connect(dock._on_prefab_delete_requested)
+	if dock._prefab_library and dock._prefab_library.has_signal("variant_add_requested"):
+		dock._prefab_library.variant_add_requested.connect(dock._on_prefab_variant_add_requested)
 	if dock.bake_lightmap_uv2:
 		dock.bake_lightmap_uv2.toggled.connect(dock._on_bake_lightmap_uv2_toggled)
 	if dock.bake_navmesh:

@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: March 31, 2026
+Last updated: April 1, 2026
 
 This roadmap is a directional plan. Items may change based on user feedback.
 Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md for details.
@@ -170,6 +170,17 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - **Context toolbar**: new Sim/Last/Flt buttons, descriptive labels ("N brushes selected", "N faces on M brushes").
 - **Command palette**: 3 new actions with live gray-out.
 - 18 new tests (selection_features). Total: **753 tests across 44 files**.
+
+## Done (Prefab & Group Enhancements — Reuse & Iteration Speed)
+- **Prefab variants**: Multiple configurations per `.hfprefab` (e.g., wooden/metal/ornate door). Cycle on instances with Ctrl+Shift+V. Add via right-click library menu.
+- **Live-linked prefabs**: "Save Linked" for bi-directional sync. Push instance changes to source. Propagate source to all linked instances with override preservation.
+- **Enhanced prefab browser**: Search bar, tag filtering dropdown, variant count badges, right-click context menu (Add Variant, Edit Tags, Delete), Save Linked button.
+- **Quick group-to-prefab**: Ctrl+Shift+P or Pfb context toolbar button for instant save with auto-generated name.
+- **Prefab ghost overlay**: Cyan wireframe bounding box on hover over prefab instance nodes. Orange override markers.
+- **HFPrefabSystem subsystem**: Instance registry with stable entity UIDs (not scene names), variant cycling, override tracking, state serialization with node re-tagging, propagation.
+- **Prefab tags**: Comma-separated tags in `.hfprefab` files for categorization and search.
+- **Stability fixes** (Apr 2026): GDScript inferred-type compilation errors, undo/redo node re-tagging, entity UID stability, dynamic toolbar prefab buttons, vertex system API corrections (context toolbar + hotkey palette), test orphan cleanup.
+- 24 new tests. Total: **777 tests across 45 files**.
 
 ## Next (Wave 2c remaining)
 - Displacement sewing (stitch adjacent heightmap edges to share vertices).

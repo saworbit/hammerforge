@@ -307,6 +307,17 @@ func _update_context_toolbar_state(root: Node, tool_id: int) -> void:
 			face_count += indices.size()
 	state["face_count"] = face_count
 
+	# Prefab instance info for context toolbar badge
+	if root and root.prefab_system and not hf_selection.is_empty():
+		var first_node: Node3D = hf_selection[0]
+		var pfb_iid: String = str(first_node.get_meta("hf_prefab_instance", ""))
+		if pfb_iid != "":
+			var pfb_rec = root.prefab_system.get_instance(pfb_iid)
+			if pfb_rec:
+				state["prefab_source"] = pfb_rec.source_path
+				state["prefab_variant"] = pfb_rec.variant_name
+				state["prefab_linked"] = pfb_rec.linked
+
 	if _context_toolbar:
 		_context_toolbar.update_state(state)
 		# Feed favorite materials to the face-context thumbnail strip
@@ -740,6 +751,14 @@ func _handle_keyboard_input(
 	if _keymap.matches("selection_filter", event):
 		_show_selection_filter()
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	# Quick Save as Prefab — Ctrl+Shift+P
+	if event.keycode == KEY_P and event.ctrl_pressed and event.shift_pressed:
+		_quick_save_prefab(root, false)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	# Cycle Prefab Variant — Ctrl+Shift+V
+	if event.keycode == KEY_V and event.ctrl_pressed and event.shift_pressed:
+		_cycle_prefab_variant(root)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	# Paint tool shortcuts
 	if paint_mode:
 		var paint_key := -1
@@ -939,8 +958,43 @@ func _handle_mouse_motion(
 			root.highlight_hovered_face(cam, pos, hover_color)
 	elif root.has_method("clear_face_hover_highlight"):
 		root.clear_face_hover_highlight()
+
+	# Prefab ghost overlay on hover
+	if root.prefab_overlay and event.button_mask == 0 and cam:
+		_update_prefab_hover_overlay(root, cam, pos)
+
 	_update_hud_context()
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
+
+
+func _update_prefab_hover_overlay(root, cam: Camera3D, pos: Vector2) -> void:
+	var from: Vector3 = cam.project_ray_origin(pos)
+	var dir: Vector3 = cam.project_ray_normal(pos)
+	var space: PhysicsDirectSpaceState3D = root.get_world_3d().direct_space_state
+	if not space:
+		root.prefab_overlay.hide_overlay()
+		return
+	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(from, from + dir * 1000.0)
+	var hit: Dictionary = space.intersect_ray(query)
+	if hit.is_empty():
+		root.prefab_overlay.hide_overlay()
+		return
+	var collider = hit.get("collider")
+	if not collider or not (collider is Node3D):
+		root.prefab_overlay.hide_overlay()
+		return
+	# Walk up to find a node with prefab instance meta
+	var node: Node = collider
+	var iid := ""
+	while node and node != root:
+		iid = str(node.get_meta("hf_prefab_instance", ""))
+		if iid != "":
+			break
+		node = node.get_parent()
+	if iid != "":
+		root.prefab_overlay.show_instance_overlay(iid)
+	else:
+		root.prefab_overlay.hide_overlay()
 
 
 # ---------------------------------------------------------------------------
@@ -969,6 +1023,25 @@ func _toggle_vertex_mode(root: Node) -> void:
 	if dock:
 		dock.set_vertex_mode(_vertex_mode)
 	_update_hud_context()
+
+
+func _vertex_merge_selected(root: Node) -> void:
+	var vs = root.vertex_system
+	if not vs:
+		return
+	for brush_id in vs.selected_vertices:
+		var indices: PackedInt32Array = vs.selected_vertices[brush_id]
+		if indices.size() >= 2:
+			vs.merge_vertices(brush_id, indices)
+
+
+func _vertex_split_selected_edge(root: Node) -> void:
+	var vs = root.vertex_system
+	if not vs:
+		return
+	var sel: Array = vs.get_single_selected_edge()
+	if sel.size() == 2:
+		vs.split_edge(sel[0], sel[1])
 
 
 func _handle_vertex_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vector2) -> int:
@@ -2213,6 +2286,14 @@ func _handle_prefab_drop(position: Vector2, data: Variant) -> void:
 		not result.get("brush_ids", []).is_empty() or result.get("entity_count", 0) > 0
 	)
 	if placed_anything:
+		# Register prefab instance for tracking/propagation
+		if root.prefab_system:
+			root.prefab_system.register_instance(
+				prefab_path,
+				result.get("brush_ids", []),
+				result.get("entity_nodes", []),
+				false  # not linked by default on drag-drop
+			)
 		var undo_redo = undo_redo_manager
 		if undo_redo:
 			undo_redo.create_action("Place Prefab: %s" % prefab.prefab_name)
@@ -2221,6 +2302,104 @@ func _handle_prefab_drop(position: Vector2, data: Variant) -> void:
 			)
 			undo_redo.add_undo_method(root.state_system, "restore_state", full_state)
 			undo_redo.commit_action(false)
+
+
+# ---------------------------------------------------------------------------
+# Prefab enhancement helpers
+# ---------------------------------------------------------------------------
+
+
+func _quick_save_prefab(root, linked: bool) -> void:
+	var brush_nodes: Array = []
+	var entity_nodes: Array = []
+	for node in hf_selection:
+		if node is CSGShape3D:
+			brush_nodes.append(node)
+		elif node.has_meta("is_entity"):
+			entity_nodes.append(node)
+	if brush_nodes.is_empty() and entity_nodes.is_empty():
+		return
+	var suggested: String = root.prefab_system.suggest_prefab_name(brush_nodes, entity_nodes)
+	var path: String = root.prefab_system.quick_save_prefab(
+		brush_nodes, entity_nodes, suggested, linked
+	)
+	if path != "":
+		if dock and dock._prefab_library:
+			dock._prefab_library.on_prefab_saved()
+		if dock:
+			dock.show_toast("Saved prefab: %s%s" % [suggested, " (linked)" if linked else ""], 0)
+
+
+func _cycle_prefab_variant(root) -> void:
+	if hf_selection.is_empty():
+		return
+	var node: Node3D = hf_selection[0]
+	var iid: String = str(node.get_meta("hf_prefab_instance", ""))
+	if iid == "":
+		if dock:
+			dock.show_toast("Not a prefab instance", 1)
+		return
+	var full_state: Dictionary = root.state_system.capture_state(true)
+	var new_variant: String = root.prefab_system.cycle_variant(iid)
+	if new_variant != "":
+		if dock:
+			dock.show_toast("Variant: %s" % new_variant, 0)
+		var undo_redo = undo_redo_manager
+		if undo_redo:
+			undo_redo.create_action("Cycle Prefab Variant")
+			undo_redo.add_do_method(
+				root.state_system, "restore_state", root.state_system.capture_state(true)
+			)
+			undo_redo.add_undo_method(root.state_system, "restore_state", full_state)
+			undo_redo.commit_action(false)
+		_update_hud_context()
+
+
+func _push_prefab_to_source(root) -> void:
+	if hf_selection.is_empty():
+		return
+	var node: Node3D = hf_selection[0]
+	var iid: String = str(node.get_meta("hf_prefab_instance", ""))
+	if iid == "":
+		if dock:
+			dock.show_toast("Not a prefab instance", 1)
+		return
+	var ok: bool = root.prefab_system.push_instance_to_source(iid)
+	if ok:
+		if dock:
+			dock.show_toast("Pushed changes to prefab source", 0)
+		if dock and dock._prefab_library:
+			dock._prefab_library.on_prefab_saved()
+	else:
+		if dock:
+			dock.show_toast("Failed to push to source", 1)
+
+
+func _propagate_prefab(root) -> void:
+	if hf_selection.is_empty():
+		return
+	var node: Node3D = hf_selection[0]
+	var source: String = str(node.get_meta("hf_prefab_source", ""))
+	if source == "":
+		if dock:
+			dock.show_toast("Not a prefab instance", 1)
+		return
+	var full_state: Dictionary = root.state_system.capture_state(true)
+	var count: int = root.prefab_system.propagate_from_source(source)
+	if count > 0:
+		if dock:
+			dock.show_toast("Propagated to %d linked instance%s" % [count, "" if count == 1 else "s"], 0)
+		var undo_redo = undo_redo_manager
+		if undo_redo:
+			undo_redo.create_action("Propagate Prefab")
+			undo_redo.add_do_method(
+				root.state_system, "restore_state", root.state_system.capture_state(true)
+			)
+			undo_redo.add_undo_method(root.state_system, "restore_state", full_state)
+			undo_redo.commit_action(false)
+	else:
+		if dock:
+			dock.show_toast("No linked instances to propagate", 1)
 
 
 func _is_material_drag_data(data: Variant) -> bool:
@@ -2366,16 +2545,16 @@ func _on_context_toolbar_action(action: String, args: Array) -> void:
 			_update_hud_context()
 		"vertex_submode":
 			if root.vertex_system:
-				root.vertex_system.set_sub_mode(0)  # VERTEX
+				root.vertex_system.sub_mode = 0  # VERTEX
 		"edge_submode":
 			if root.vertex_system:
-				root.vertex_system.set_sub_mode(1)  # EDGE
+				root.vertex_system.sub_mode = 1  # EDGE
 		"vertex_merge":
 			if root.vertex_system:
-				root.vertex_system.merge_selected()
+				_vertex_merge_selected(root)
 		"vertex_split":
 			if root.vertex_system:
-				root.vertex_system.split_selected_edge()
+				_vertex_split_selected_edge(root)
 		"vertex_exit":
 			_toggle_vertex_mode(root)
 		"select_similar":
@@ -2384,6 +2563,16 @@ func _on_context_toolbar_action(action: String, args: Array) -> void:
 			_apply_last_texture(root)
 		"selection_filter":
 			_show_selection_filter()
+		"quick_save_prefab":
+			_quick_save_prefab(root, false)
+		"quick_save_linked_prefab":
+			_quick_save_prefab(root, true)
+		"cycle_variant":
+			_cycle_prefab_variant(root)
+		"push_to_source":
+			_push_prefab_to_source(root)
+		"propagate_prefab":
+			_propagate_prefab(root)
 
 
 func _on_context_toggle_operation() -> void:
@@ -2499,16 +2688,14 @@ func _on_hotkey_palette_action(action: String) -> void:
 				dock.set_paint_tool(4)  # K key = Bucket Fill tool
 		"vertex_edge_mode":
 			if root.vertex_system:
-				var current = (
-					root.vertex_system.sub_mode if root.vertex_system.get("sub_mode") != null else 0
-				)
-				root.vertex_system.set_sub_mode(1 if current == 0 else 0)
+				var current: int = root.vertex_system.sub_mode
+				root.vertex_system.sub_mode = 1 if current == 0 else 0
 		"vertex_merge":
 			if root.vertex_system:
-				root.vertex_system.merge_selected()
+				_vertex_merge_selected(root)
 		"vertex_split_edge":
 			if root.vertex_system:
-				root.vertex_system.split_selected_edge()
+				_vertex_split_selected_edge(root)
 		"axis_x":
 			root.set_axis_lock(LevelRootType.AxisLock.X, true)
 			if dock:

@@ -1,6 +1,6 @@
 # Development Guide
 
-Last updated: March 31, 2026
+Last updated: April 1, 2026
 
 This document covers local setup, codebase structure, and how to test features.
 
@@ -41,7 +41,7 @@ addons/hammerforge/
   hf_keymap.gd           Customizable keyboard shortcuts (JSON load/save, action matching)
   hf_user_prefs.gd       Cross-session user preferences (user://hammerforge_prefs.json)
   hf_snap_system.gd      Centralized snap (Grid/Vertex/Center modes, threshold-based candidates)
-  hf_prefab.gd           Reusable brush+entity groups (save/load .hfprefab, centroid-relative transforms)
+  hf_prefab.gd           Reusable brush+entity groups (variants, tags, save/load .hfprefab)
   hf_op_result.gd        Lightweight operation result (ok, message, fix_hint)
   surface_paint.gd       Per-face surface paint tool
   uv_editor.gd           UV editing dock
@@ -64,7 +64,8 @@ addons/hammerforge/
     hf_tutorial_wizard.gd  Interactive 5-step tutorial wizard (signal-driven auto-advance)
     hf_shortcut_dialog.gd  Searchable shortcut reference dialog (filterable Tree with categories)
     hf_material_browser.gd Visual material browser (thumbnail grid, search, filters, favorites, drag-drop)
-    hf_prefab_library.gd   Prefab library dock section (ItemList + drag-and-drop)
+    hf_prefab_library.gd   Prefab library dock section (search, tags, variants, drag-drop, context menu)
+    hf_prefab_overlay.gd   Prefab ghost overlay (wireframe bounding box + override markers)
     hf_context_toolbar.gd  Floating contextual mini-toolbar (context-sensitive actions in 3D viewport)
     hf_hotkey_palette.gd   Searchable command palette with live gray-out (Shift+? or F1)
     hf_selection_filter.gd Selection filter popover (by normal/material/similar/visgroup/type)
@@ -89,6 +90,7 @@ addons/hammerforge/
     hf_subtract_preview.gd Wireframe AABB intersection overlay for subtract brushes (debounced, pooled)
     hf_vertex_system.gd    Vertex/edge selection, move, split, merge with convexity validation
     hf_spawn_system.gd     Player spawn lookup, validation, auto-fix, debug visualisation
+    hf_prefab_system.gd    Prefab instance registry, variant cycling, live-linked propagation, overrides
 
   paint/                 Floor paint subsystem
     hf_paint_grid.gd       Grid storage
@@ -135,8 +137,8 @@ addons/hammerforge/
 - **Dynamic contextual hints.** `shortcut_hud.gd` shows per-mode viewport hints (e.g. "Click to place corner → drag to set size → release for height"). Hints auto-dismiss after 4s fade tween and persist dismissal via `is_hint_dismissed()`/`dismiss_hint()` on `hf_user_prefs.gd`. Mode key is computed from HUD context dict.
 - **Searchable shortcut dialog.** `ui/hf_shortcut_dialog.gd` extends `AcceptDialog` with a search `LineEdit` and `Tree`. Categories populated from `HFKeymap.get_category()`. Replaces the static shortcuts popup.
 - **Subtract preview.** `systems/hf_subtract_preview.gd` is a `RefCounted` subsystem that renders wireframe AABB intersections between additive and subtractive brushes using `ImmediateMesh` (same 12-edge box pattern as cordon). Debounced (0.15s), pooled `MeshInstance3D` (max 50). Toggle via `show_subtract_preview` on LevelRoot. Persisted in state settings.
-- **Prefabs.** `hf_prefab.gd` (`HFPrefab`) stores brush_infos + entity_infos with centroid-relative transforms. `capture_from_selection()` computes centroid and strips brush_id/group_id. `instantiate()` assigns new IDs, offsets transforms, and remaps entity I/O via name_map. `save_to_file()`/`load_from_file()` use JSON via `HFLevelIO` encoding. `ui/hf_prefab_library.gd` provides the dock section with ItemList and drag-and-drop (`"hammerforge_prefab"` type tag). Plugin handles drop with raycast + snap + undo/redo.
-- **Vertex system.** `HFVertexSystem` (`systems/hf_vertex_system.gd`) manages vertex/edge selection, movement with convexity validation, edge splitting, and vertex merging. Supports two sub-modes: `VertexSubMode.VERTEX` and `VertexSubMode.EDGE`, toggled with E key. Edge selection syncs to `selected_vertices` so `move_vertices()` works transparently for both modes. `split_edge()` inserts midpoints and skips convexity validation (mathematically guaranteed on convex hulls). `merge_vertices()` validates convexity and reverts via face snapshots on failure. Edge deduplication uses canonical vertex key pairs (`"vkey_a|vkey_b"` where a < b).
+- **Prefabs.** `hf_prefab.gd` (`HFPrefab`) stores brush_infos + entity_infos with centroid-relative transforms. `capture_from_selection()` computes centroid and strips brush_id/group_id. `instantiate()` assigns new IDs, offsets transforms, remaps entity I/O via name_map, and returns `entity_nodes` (Node3D refs) alongside `entity_names` for stable registration. `save_to_file()`/`load_from_file()` use JSON via `HFLevelIO` encoding. `ui/hf_prefab_library.gd` provides the dock section with ItemList and drag-and-drop (`"hammerforge_prefab"` type tag). Plugin handles drop with raycast + snap + undo/redo. `HFPrefabSystem` tracks entity membership via stable UIDs (`hf_prefab_entity_id` meta) — never scene node names. Context toolbar prefab buttons (Var▶/Push/Pull) are built at init time and toggled visible in `_apply_context()`.
+- **Vertex system.** `HFVertexSystem` (`systems/hf_vertex_system.gd`) manages vertex/edge selection, movement with convexity validation, edge splitting, and vertex merging. Supports two sub-modes via the `sub_mode` property: `VertexSubMode.VERTEX` (0) and `VertexSubMode.EDGE` (1), toggled with E key. **Note:** `sub_mode` is a public property, not a setter — assign directly (`vs.sub_mode = 1`). `merge_vertices(brush_id, indices)` and `split_edge(brush_id, edge)` require explicit brush_id and selection data; `plugin.gd` provides `_vertex_merge_selected()` and `_vertex_split_selected_edge()` wrappers that resolve current selection before calling. Edge selection syncs to `selected_vertices` so `move_vertices()` works transparently for both modes. `split_edge()` inserts midpoints and skips convexity validation (mathematically guaranteed on convex hulls). `merge_vertices()` validates convexity and reverts via face snapshots on failure. Edge deduplication uses canonical vertex key pairs (`"vkey_a|vkey_b"` where a < b).
 - **Polygon tool.** `HFPolygonTool` (`hf_polygon_tool.gd`, tool_id=102, KEY_P) creates arbitrary convex polygon brushes via a three-phase state machine (IDLE → PLACING_VERTS → SETTING_HEIGHT). Enforces convexity via 2D cross product on XZ plane. Constructs face data with proper winding (top=CCW for up-normal, bottom=CW, N side quads) in local space relative to AABB center. Uses `create_brush_from_info()` with undo/redo via `self.undo_redo`.
 - **Path tool.** `HFPathTool` (`hf_path_tool.gd`, tool_id=103, KEY_SEMICOLON) creates corridor brushes from waypoints. Each segment is an oriented-box brush (8 corners from direction + perpendicular). Miter joint brushes fill gaps at interior waypoints. All brushes share a `group_id`. Single undo action for the entire path.
 - **Context hints.** Per-tab hint labels at the bottom of each dock tab update via `_update_context_hints()` in `dock.gd`. Driven by `_hints_dirty` flag alongside `_update_disabled_hints()`.
@@ -165,7 +167,7 @@ addons/hammerforge/
 The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on push and PR to `main`:
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
-- **GUT unit + integration tests** -- 737 tests across 43 test files (runs Godot headless)
+- **GUT unit + integration tests** -- 777 tests across 45 test files (runs Godot headless)
 
 Run locally before pushing:
 ```

@@ -122,6 +122,8 @@ func capture_state(include_transient: bool = true) -> Dictionary:
 	for dup_id in root.brush_system._duplicators:
 		duplicators.append(root.brush_system._duplicators[dup_id].to_dict())
 	state["duplicators"] = duplicators
+	if root.prefab_system:
+		state["prefab_instances"] = root.prefab_system.capture_state()
 	return state
 
 
@@ -192,6 +194,8 @@ func restore_state(state: Dictionary) -> void:
 	if not bool(state.get("baked_present", false)) and root.baked_container:
 		root.baked_container.queue_free()
 		root.baked_container = null
+	if root.prefab_system and state.has("prefab_instances"):
+		root.prefab_system.restore_state(state["prefab_instances"])
 
 
 func capture_full_state() -> Dictionary:

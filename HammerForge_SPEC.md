@@ -62,7 +62,7 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `hf_user_prefs.gd` | Cross-session user preferences (`user://hammerforge_prefs.json`) |
 | `hf_snap_system.gd` | Centralized snap system (Grid/Vertex/Center modes, threshold-based candidate selection) |
 | `hf_op_result.gd` | Lightweight operation result (`ok`, `message`, `fix_hint`) returned by brush operations |
-| `hf_prefab.gd` | Reusable brush+entity group (save/load `.hfprefab`, centroid-relative transforms, I/O remap) |
+| `hf_prefab.gd` | Reusable brush+entity group with variants, tags, live-linking (save/load `.hfprefab`, I/O remap) |
 | `hf_polygon_tool.gd` | Polygon tool: click convex verts → extrude to brush (tool_id=102, KEY_P) |
 | `hf_path_tool.gd` | Path tool: click waypoints → corridor brushes with miter joints (tool_id=103, KEY_SEMICOLON) |
 
@@ -72,7 +72,8 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 |--------|------|
 | `hf_tutorial_wizard.gd` | Interactive 5-step tutorial with signal-driven auto-advance and persistent progress |
 | `hf_shortcut_dialog.gd` | Searchable shortcut reference dialog (filterable Tree with categories) |
-| `hf_prefab_library.gd` | Prefab library dock section (ItemList, save button, drag-and-drop) |
+| `hf_prefab_library.gd` | Prefab library dock section (search, tags, variants, drag-drop, context menu) |
+| `hf_prefab_overlay.gd` | Prefab ghost overlay (wireframe bounding box + override markers on hover) |
 | `hf_welcome_panel.gd` | Legacy welcome panel (replaced by tutorial wizard) |
 | `hf_toast.gd` | Toast notification system (auto-fading stacked messages) |
 | `hf_material_browser.gd` | Visual material browser (thumbnail grid, search, filters, favorites, drag-drop) |
@@ -99,6 +100,8 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `hf_io_visualizer.gd` | `HFIOVisualizer` | Entity I/O connection lines in viewport (ImmediateMesh) |
 | `hf_subtract_preview.gd` | `HFSubtractPreview` | Wireframe AABB intersection overlay between subtract and additive brushes (debounced, pooled) |
 | `hf_vertex_system.gd` | `HFVertexSystem` | Vertex/edge selection, move, split, merge with convexity validation. Edge sub-mode with wireframe overlay |
+| `hf_spawn_system.gd` | `HFSpawnSystem` | Player spawn lookup, validation (floor/collision/headroom), auto-fix, debug visualisation |
+| `hf_prefab_system.gd` | `HFPrefabSystem` | Prefab instance registry (stable entity UIDs), variant cycling, live-linked propagation, override tracking, push-to-source |
 
 ### Other Modules
 

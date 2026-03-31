@@ -93,7 +93,7 @@ The compact toolbar shows icon + text labels (Draw, Select, Add, Sub, Paint, Ext
 - **Performance**: Brush count, paint memory, chunk count, last bake time.
 - **Visgroups & Groups**: Visgroup list with [V]/[H] toggle, New/Add Sel/Rem Sel/Delete, Group Sel/Ungroup.
 - **Cordon**: Enable checkbox, min/max spinboxes, Set from Selection.
-- **Prefabs**: Save current selection as a `.hfprefab` file. Browse and drag-from the prefab library to instantiate groups of brushes and entities at a new position.
+- **Prefabs**: Save/search/filter/delete prefabs. Browse with tag filtering and variant indicators. Drag-from the library to instantiate. Save Linked for live propagation. Right-click for variant/tag editing.
 
 ### Quick Play and Spawn Validation
 Quick Play (footer button) bakes the level and launches it with a first-person controller. Before every Quick Play:
@@ -320,27 +320,55 @@ Preferences include:
 
 ## Prefabs (Reusable Brush Groups)
 
-Prefabs let you save a selection of brushes and entities as a reusable group and place copies anywhere in your level.
+Prefabs let you save a selection of brushes and entities as a reusable group and place copies anywhere in your level. The system supports variants, tags, live-linked instances, and visual debug overlays.
 
 ### Saving a Prefab
 1. Select the brushes and/or entities you want to save.
 2. Open Manage tab → Prefabs section.
-3. Enter a name and click **Save as Prefab**.
+3. Enter a name and click **Save** (or **Save Linked** to enable live propagation).
 4. The prefab is saved as a `.hfprefab` JSON file in `res://prefabs/`.
+
+**Quick Save**: Press **Ctrl+Shift+P** or click **Pfb** in the context toolbar to instantly save the current selection as a prefab with an auto-generated name. Also available via the context toolbar in both brush and entity selected contexts.
 
 ### Instantiating a Prefab
 - Drag a prefab from the library list into the 3D viewport.
 - The brushes and entities are placed at the drop position with new unique IDs.
 - Entity I/O connections are automatically remapped to the new entity names.
+- Each placed instance is tracked in the prefab system for variant cycling and propagation.
 - The operation supports undo/redo.
+
+### Prefab Variants
+Prefabs can contain multiple variants (e.g., different door styles: wooden, metal, ornate).
+
+- **Adding a variant**: Right-click a prefab in the library → **Add Variant**. Select the replacement geometry and name the variant.
+- **Cycling variants**: Select a placed prefab instance and press **Ctrl+Shift+V** or click **Var▶** in the context toolbar. This cycles through all available variants in place.
+- **Variant indicator**: The library list shows `[N variants]` next to prefabs that have multiple variants.
+
+### Live-Linked Prefabs
+When you save a prefab with **Save Linked**, all placed instances of that prefab maintain a link to the source file.
+
+- **Push to source**: Edit a placed instance, then click **Push** in the context toolbar to update the `.hfprefab` source file with the current state.
+- **Propagate to all**: Click **Pull** on any linked instance to propagate the current source file to all linked instances in the level.
+- Per-instance overrides (size, transform changes) are tracked and reapplied after propagation.
+- The context toolbar shows a `[linked]` badge on linked prefab instances.
+
+### Tags and Search
+- **Adding tags**: Right-click a prefab in the library → **Edit Tags**. Enter comma-separated tags (e.g., `door, architecture, interior`).
+- **Searching**: Use the search bar at the top of the prefab library. Searches match both prefab names and tags.
+- **Tag filtering**: Use the Tag dropdown to filter the list to prefabs with a specific tag.
+
+### Visual Debug Overlay
+When hovering over a node that belongs to a prefab instance in the 3D viewport, a cyan wireframe bounding box appears around the entire instance. If the instance has overrides relative to the source, orange sphere markers appear on modified nodes.
 
 ### What's Captured
 - Brush geometry (shape, size, operation, material, transform relative to group centroid)
-- Entity data (type, class, properties, I/O connections, transform relative to centroid)
+- Entity data (type, class, properties, I/O connections, transform relative to centroid). Each entity receives a stable unique ID on instantiation — entity membership is tracked by UID, not scene name, so renaming nodes or having duplicate names will not break prefab tracking.
 - Brush IDs and group IDs are cleared on capture; new ones are assigned on instantiation.
+- Tags (metadata for search/filtering)
+- Variants (alternate brush/entity configurations stored alongside the base)
 
 ### File Format
-`.hfprefab` files are JSON with the same encoding as `.hflevel` (Vector3, Transform3D serialized via `HFLevelIO`). They are portable and can be shared between projects.
+`.hfprefab` files are JSON with the same encoding as `.hflevel` (Vector3, Transform3D serialized via `HFLevelIO`). They support optional `tags` (string array) and `variants` (named alternate configurations) fields. They are portable and can be shared between projects.
 
 These persist across editor restarts. Per-level settings (cordon, texture lock, materials) remain in `.hflevel` files.
 

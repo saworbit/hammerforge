@@ -40,6 +40,8 @@ const HFVertexSystemType = preload("systems/hf_vertex_system.gd")
 const HFCarveSystemType = preload("systems/hf_carve_system.gd")
 const HFSubtractPreviewType = preload("systems/hf_subtract_preview.gd")
 const HFSpawnSystemType = preload("systems/hf_spawn_system.gd")
+const HFPrefabSystemType = preload("systems/hf_prefab_system.gd")
+const HFPrefabOverlayType = preload("ui/hf_prefab_overlay.gd")
 const HFPrototypeTextures = preload("hf_prototype_textures.gd")
 
 const RELOAD_LOCK_PATH := "res://.hammerforge/reload.lock"
@@ -208,6 +210,8 @@ var vertex_system: HFVertexSystemType
 var carve_system: HFCarveSystemType
 var subtract_preview: HFSubtractPreviewType
 var spawn_system: HFSpawnSystemType
+var prefab_system: HFPrefabSystemType
+var prefab_overlay: HFPrefabOverlayType
 
 @export var show_subtract_preview: bool = false:
 	set(value):
@@ -488,6 +492,8 @@ func _ready():
 	carve_system = HFCarveSystemType.new(self)
 	subtract_preview = HFSubtractPreviewType.new(self)
 	spawn_system = HFSpawnSystemType.new(self)
+	prefab_system = HFPrefabSystemType.new(self)
+	prefab_overlay = HFPrefabOverlayType.new(self)
 	if show_subtract_preview:
 		subtract_preview.set_enabled(true)
 	entity_system.load_entity_definitions()
