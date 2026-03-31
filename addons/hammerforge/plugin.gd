@@ -1676,7 +1676,11 @@ func _apply_last_texture(root: Node) -> void:
 					applied_count += 1
 		if applied_count > 0:
 			dock.show_toast(
-				"Applied last texture to %d brush%s" % [applied_count, "" if applied_count == 1 else "es"], 0
+				(
+					"Applied last texture to %d brush%s"
+					% [applied_count, "" if applied_count == 1 else "es"]
+				),
+				0
 			)
 		else:
 			dock.show_toast("No brushes or faces selected", 1)
@@ -2417,9 +2421,7 @@ func _on_context_material_apply(mat_index: int) -> void:
 		dock._on_face_assign_material()
 	else:
 		# Apply to all selected brushes
-		var mat = (
-			root.material_manager.get_material(mat_index) if root.material_manager else null
-		)
+		var mat = root.material_manager.get_material(mat_index) if root.material_manager else null
 		if mat:
 			for node in hf_selection:
 				if node is DraftBrush:
