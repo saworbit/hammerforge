@@ -479,6 +479,7 @@ func _ready():
 	entity_system = HFEntitySystemType.new(self)
 	brush_system = HFBrushSystemType.new(self)
 	drag_system = HFDragSystemType.new(self)
+	drag_system.input_state.on_force_reset = _on_input_state_force_reset
 	bake_system = HFBakeSystemType.new(self)
 	paint_system = HFPaintSystemType.new(self)
 	state_system = HFStateSystemType.new(self)
@@ -509,6 +510,17 @@ func _ready():
 		_setup_runtime_reload()
 		if auto_spawn_player:
 			call_deferred("_start_playtest")
+
+
+func _exit_tree() -> void:
+	if _autosave_timer:
+		_autosave_timer.stop()
+		if _autosave_timer.timeout.is_connected(_on_autosave_timeout):
+			_autosave_timer.timeout.disconnect(_on_autosave_timeout)
+	if _reload_timer:
+		_reload_timer.stop()
+		if _reload_timer.timeout.is_connected(_check_remote_reload):
+			_reload_timer.timeout.disconnect(_check_remote_reload)
 
 
 func _process(_delta: float) -> void:
@@ -1179,6 +1191,19 @@ func end_drag(camera: Camera3D, mouse_pos: Vector2, size_default: Vector3) -> bo
 	return drag_system.end_drag(camera, mouse_pos, size_default)
 
 
+## Called by HFInputState when a begin_* guard fires from a non-IDLE mode.
+## Tears down whatever tool implementation was active for the old mode so
+## the state machine and tool objects stay in sync.
+func _on_input_state_force_reset(old_mode: int) -> void:
+	if old_mode == HFInputStateType.Mode.DRAG_BASE or old_mode == HFInputStateType.Mode.DRAG_HEIGHT:
+		drag_system._clear_preview()
+	elif old_mode == HFInputStateType.Mode.EXTRUDE:
+		extrude_tool.cancel_extrude()
+	elif old_mode == HFInputStateType.Mode.VERTEX_EDIT:
+		if vertex_system:
+			vertex_system.clear_selection()
+
+
 func cancel_drag() -> void:
 	drag_system.cancel_drag()
 
@@ -1209,6 +1234,9 @@ func begin_extrude(camera: Camera3D, mouse_pos: Vector2, extrude_direction: int)
 
 func update_extrude(camera: Camera3D, mouse_pos: Vector2) -> void:
 	extrude_tool.update_extrude(camera, mouse_pos)
+	# If the tool self-cancelled (e.g. source brush deleted), sync input_state
+	if not extrude_tool.active and drag_system and drag_system.input_state.is_extruding():
+		drag_system.input_state.end_extrude()
 
 
 func end_extrude_info() -> Dictionary:
@@ -1831,6 +1859,8 @@ func _set_hflevel_autosave_enabled(value: bool) -> void:
 		_setup_autosave()
 	elif _autosave_timer:
 		_autosave_timer.stop()
+		if _autosave_timer.timeout.is_connected(_on_autosave_timeout):
+			_autosave_timer.timeout.disconnect(_on_autosave_timeout)
 		_autosave_timer.queue_free()
 		_autosave_timer = null
 

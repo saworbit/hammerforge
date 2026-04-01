@@ -397,6 +397,8 @@ func split_edge(brush_id: String, edge: Array) -> bool:
 	var brush = _find_brush(brush_id)
 	if not brush or not brush.get("faces"):
 		return false
+	if edge.size() < 2:
+		return false
 	var verts := get_brush_vertices(brush)
 	if edge[0] < 0 or edge[0] >= verts.size() or edge[1] < 0 or edge[1] >= verts.size():
 		return false

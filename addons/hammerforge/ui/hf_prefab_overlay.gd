@@ -95,13 +95,17 @@ func show_instance_overlay(instance_id: String) -> void:
 func hide_overlay() -> void:
 	_active_instance_id = ""
 	if _overlay_mesh_instance and is_instance_valid(_overlay_mesh_instance):
-		_overlay_mesh_instance.get_parent().remove_child(_overlay_mesh_instance)
+		var mi_parent: Node = _overlay_mesh_instance.get_parent()
+		if mi_parent:
+			mi_parent.remove_child(_overlay_mesh_instance)
 		_overlay_mesh_instance.queue_free()
 	_overlay_mesh_instance = null
 	_immediate_mesh = null
 	for marker in _override_markers:
 		if is_instance_valid(marker):
-			marker.get_parent().remove_child(marker)
+			var mk_parent: Node = marker.get_parent()
+			if mk_parent:
+				mk_parent.remove_child(marker)
 			marker.queue_free()
 	_override_markers.clear()
 

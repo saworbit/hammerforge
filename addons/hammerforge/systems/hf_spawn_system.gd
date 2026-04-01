@@ -250,7 +250,7 @@ func show_validation_debug(spawn: Node3D, validation: Dictionary, duration: floa
 
 	# 2. Floor ray
 	var floor_hit: Variant = validation.get("floor_hit", null)
-	if floor_hit is Dictionary:
+	if floor_hit is Dictionary and floor_hit.has("position"):
 		var hit_pos: Vector3 = floor_hit.position
 		_draw_debug_line(
 			pos + Vector3.UP * 2.0,
@@ -269,7 +269,12 @@ func show_validation_debug(spawn: Node3D, validation: Dictionary, duration: floa
 
 	# 3. Ceiling ray
 	var ceiling_hit: Variant = validation.get("ceiling_hit", null)
-	if ceiling_hit is Dictionary and floor_hit is Dictionary:
+	if (
+		ceiling_hit is Dictionary
+		and ceiling_hit.has("position")
+		and floor_hit is Dictionary
+		and floor_hit.has("position")
+	):
 		var head_pos: Vector3 = floor_hit.position + Vector3.UP * PLAYER_HEIGHT
 		_draw_debug_line(head_pos, ceiling_hit.position, Color.YELLOW)
 

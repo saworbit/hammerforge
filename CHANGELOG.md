@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Fixed
+- **Signal disconnection leaks in plugin.gd** (Apr 2026): 10 signals connected in `_enter_tree()`
+  (context toolbar ×5, hotkey palette ×1, selection filter ×1, dock ×3) were missing corresponding
+  disconnections in `_exit_tree()`. This caused duplicate signal handlers after plugin reload cycles,
+  leading to repeated action firings and potential crashes.
+- **Timer cleanup in level_root.gd** (Apr 2026): Added `_exit_tree()` method to properly stop and
+  disconnect `_autosave_timer` and `_reload_timer` signals. Previously, disabling autosave via the
+  property setter called `queue_free()` without disconnecting the `timeout` signal first.
+- **Extrude tool crash on deleted brush** (Apr 2026): `hf_extrude_tool.gd` now validates
+  `is_instance_valid(source_brush)` in `update_extrude()`, `_update_preview()`, and
+  `end_extrude_info()`. If the source brush is deleted mid-extrude (e.g., undo), the tool
+  gracefully cancels instead of crashing on a freed object reference. `level_root.update_extrude()`
+  now detects the self-cancellation and syncs `input_state.end_extrude()` so the HUD and numeric
+  input path leave extrude mode cleanly.
+- **Input state machine overlapping transitions** (Apr 2026): `input_state.gd` now warns and
+  force-resets when `begin_drag()`, `begin_surface_paint()`, `begin_extrude()`, or
+  `begin_vertex_edit()` are called from a non-IDLE state. `advance_to_height()` validates it's
+  in DRAG_BASE before transitioning. The new `on_force_reset` callback (set by `level_root.gd`)
+  tears down active tool implementations (drag preview, extrude preview, vertex selection) before
+  mode changes, keeping the state machine and tool objects in sync.
+- **Prefab overlay parent null check** (Apr 2026): `hf_prefab_overlay.gd` `hide_overlay()` now
+  checks `get_parent()` is not null before calling `remove_child()`, preventing crashes if the
+  parent node was freed during plugin unload.
+- **Vertex edge array bounds** (Apr 2026): `hf_vertex_system.gd` `split_edge()` now validates
+  `edge.size() >= 2` before indexing, preventing out-of-bounds access on malformed input.
+
 ### Added
 - **Prefab variants** (Mar 2026): Prefabs can now contain multiple variants (e.g., wooden/metal/ornate
   door styles). Variants are stored alongside the base data in `.hfprefab` files. Cycle through

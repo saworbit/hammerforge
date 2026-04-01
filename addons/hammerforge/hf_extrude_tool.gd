@@ -81,6 +81,9 @@ func begin_extrude(camera: Camera3D, mouse_pos: Vector2, extrude_direction: int)
 func update_extrude(camera: Camera3D, mouse_pos: Vector2) -> void:
 	if not active:
 		return
+	if not is_instance_valid(source_brush):
+		cancel_extrude()
+		return
 	# Dragging up (negative y delta) = positive height for UP direction
 	var delta_px := _start_mouse_y - mouse_pos.y
 	var raw_height := delta_px * HEIGHT_SENSITIVITY * _snap
@@ -92,6 +95,9 @@ func update_extrude(camera: Camera3D, mouse_pos: Vector2) -> void:
 
 func end_extrude_info() -> Dictionary:
 	if not active or _current_height <= 0.0:
+		cancel_extrude()
+		return {}
+	if not is_instance_valid(source_brush):
 		cancel_extrude()
 		return {}
 
@@ -121,6 +127,9 @@ func get_current_height() -> float:
 func _update_preview(height: float) -> void:
 	_clear_preview()
 	if height <= 0.0:
+		return
+	if not is_instance_valid(source_brush) or not is_instance_valid(root):
+		active = false
 		return
 
 	_preview_brush = DraftBrush.new()

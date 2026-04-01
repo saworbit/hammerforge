@@ -147,6 +147,14 @@ func _exit_tree():
 			"hud_visibility_changed", Callable(self, "_on_hud_visibility_changed")
 		):
 			dock.disconnect("hud_visibility_changed", Callable(self, "_on_hud_visibility_changed"))
+		if dock.is_connected("builtin_tool_changed", Callable(self, "_on_builtin_tool_changed")):
+			dock.disconnect("builtin_tool_changed", Callable(self, "_on_builtin_tool_changed"))
+		if dock.is_connected("vertex_mode_toggled", Callable(self, "_on_vertex_mode_toggled")):
+			dock.disconnect("vertex_mode_toggled", Callable(self, "_on_vertex_mode_toggled"))
+		if dock.is_connected(
+			"selection_clear_requested", Callable(self, "_on_dock_selection_clear")
+		):
+			dock.disconnect("selection_clear_requested", Callable(self, "_on_dock_selection_clear"))
 		remove_control_from_docks(dock)
 		if is_instance_valid(dock):
 			dock.queue_free()
@@ -157,17 +165,26 @@ func _exit_tree():
 			hud.queue_free()
 		hud = null
 	if _context_toolbar:
+		if is_instance_valid(_context_toolbar):
+			_context_toolbar.action_requested.disconnect(_on_context_toolbar_action)
+			_context_toolbar.operation_toggle_requested.disconnect(_on_context_toggle_operation)
+			_context_toolbar.tool_switch_requested.disconnect(_on_context_tool_switch)
+			_context_toolbar.material_quick_apply.disconnect(_on_context_material_apply)
+			_context_toolbar.hotkey_palette_requested.disconnect(_on_toggle_hotkey_palette)
 		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _context_toolbar)
 		if is_instance_valid(_context_toolbar):
 			_context_toolbar.queue_free()
 		_context_toolbar = null
 	if _hotkey_palette:
+		if is_instance_valid(_hotkey_palette):
+			_hotkey_palette.action_invoked.disconnect(_on_hotkey_palette_action)
 		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _hotkey_palette)
 		if is_instance_valid(_hotkey_palette):
 			_hotkey_palette.queue_free()
 		_hotkey_palette = null
 	if _selection_filter:
 		if is_instance_valid(_selection_filter):
+			_selection_filter.filter_applied.disconnect(_on_selection_filter_applied)
 			if _selection_filter.get_parent():
 				_selection_filter.get_parent().remove_child(_selection_filter)
 			_selection_filter.queue_free()
