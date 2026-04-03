@@ -386,7 +386,7 @@ func clear_edge_selection() -> void:
 ## Update hover state for an edge near the cursor.
 func update_edge_hover(camera: Camera3D, screen_pos: Vector2) -> void:
 	var pick := pick_edge(camera, screen_pos)
-	if pick.is_empty():
+	if pick.is_empty() or pick.edge.size() < 2:
 		_hovered_edge = []
 	else:
 		_hovered_edge = [pick.brush_id, pick.edge[0], pick.edge[1]]
@@ -457,12 +457,16 @@ func merge_vertices(brush_id: String, vert_indices: PackedInt32Array) -> bool:
 	# Compute centroid
 	var centroid := Vector3.ZERO
 	var merge_keys: Dictionary = {}
+	var valid_count := 0
 	for vi in vert_indices:
 		if vi < 0 or vi >= verts.size():
 			continue
 		centroid += verts[vi]
 		merge_keys[_vertex_key(verts[vi])] = true
-	centroid /= float(vert_indices.size())
+		valid_count += 1
+	if valid_count == 0:
+		return false
+	centroid /= float(valid_count)
 	# Capture snapshot
 	_capture_face_snapshots_for([brush_id])
 	# Replace all merge-target vertices with centroid in all faces

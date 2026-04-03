@@ -32,10 +32,14 @@ var _context_toolbar: Control = null
 var _hotkey_palette: Control = null
 var _selection_filter: Window = null
 var _marquee_overlay: Control = null
+var _coach_marks: Control = null
+var _operation_replay: Control = null
 const LevelRootType = preload("level_root.gd")
 const HFContextToolbar = preload("ui/hf_context_toolbar.gd")
 const HFHotkeyPalette = preload("ui/hf_hotkey_palette.gd")
 const HFSelectionFilter = preload("ui/hf_selection_filter.gd")
+const HFCoachMarks = preload("ui/hf_coach_marks.gd")
+const HFOperationReplay = preload("ui/hf_operation_replay.gd")
 const DraftEntityType = preload("draft_entity.gd")
 const IconRes = preload("icon.png")
 const HFUndoHelper = preload("undo_helper.gd")
@@ -118,6 +122,21 @@ func _enter_tree():
 	_marquee_overlay = _MarqueeOverlay.new()
 	_marquee_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, _marquee_overlay)
+	# Coach marks (first-use tool guides)
+	_coach_marks = HFCoachMarks.new()
+	if base_control:
+		_coach_marks.theme = base_control.theme
+	_coach_marks.set_user_prefs(_user_prefs)
+	_coach_marks.guide_dismissed.connect(_on_coach_mark_dismissed)
+	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, _coach_marks)
+	# Operation replay timeline
+	_operation_replay = HFOperationReplay.new()
+	if base_control:
+		_operation_replay.theme = base_control.theme
+	_operation_replay.replay_requested.connect(_on_replay_requested)
+	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, _operation_replay)
+	if dock:
+		dock.set_operation_replay(_operation_replay)
 	var selection = get_editor_interface().get_selection()
 	if selection:
 		if not selection.is_connected(
@@ -195,6 +214,20 @@ func _exit_tree():
 		if is_instance_valid(_marquee_overlay):
 			_marquee_overlay.queue_free()
 		_marquee_overlay = null
+	if _coach_marks:
+		if is_instance_valid(_coach_marks):
+			_coach_marks.guide_dismissed.disconnect(_on_coach_mark_dismissed)
+		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _coach_marks)
+		if is_instance_valid(_coach_marks):
+			_coach_marks.queue_free()
+		_coach_marks = null
+	if _operation_replay:
+		if is_instance_valid(_operation_replay):
+			_operation_replay.replay_requested.disconnect(_on_replay_requested)
+		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _operation_replay)
+		if is_instance_valid(_operation_replay):
+			_operation_replay.queue_free()
+		_operation_replay = null
 	var selection = get_editor_interface().get_selection()
 	if (
 		selection
@@ -219,6 +252,10 @@ func _on_editor_theme_changed() -> void:
 		_context_toolbar.theme = base_control.theme
 	if _hotkey_palette:
 		_hotkey_palette.theme = base_control.theme
+	if _coach_marks:
+		_coach_marks.theme = base_control.theme
+	if _operation_replay:
+		_operation_replay.theme = base_control.theme
 
 
 func _on_hud_visibility_changed(visible: bool) -> void:
@@ -316,6 +353,30 @@ func _update_context_toolbar_state(root: Node, tool_id: int) -> void:
 			entity_count += 1
 	state["brush_count"] = brush_count
 	state["entity_count"] = entity_count
+
+	# I/O connection summary for entity context toolbar
+	if entity_count > 0 and root and root.has_method("get_connection_summary"):
+		var first_entity: Node = null
+		for node in hf_selection:
+			if root.has_method("is_entity_node") and root.is_entity_node(node):
+				first_entity = node
+				break
+		if first_entity:
+			var summary = root.get_connection_summary(first_entity.name)
+			var triggers: int = summary.get("triggers", 0)
+			var triggered_by: int = summary.get("triggered_by", 0)
+			var parts: Array = []
+			if triggers > 0:
+				var targets: Array = summary.get("target_names", [])
+				parts.append("%d out" % triggers)
+			if triggered_by > 0:
+				parts.append("%d in" % triggered_by)
+			if not parts.is_empty():
+				state["io_summary"] = " | ".join(parts)
+
+	# Push highlight_connected state so both toolbar and wiring panel stay in sync
+	if root and root.get("io_visualizer") and root.io_visualizer:
+		state["highlight_connected"] = root.io_visualizer.highlight_connected
 
 	# Face selection count
 	var face_count := 0
@@ -647,6 +708,11 @@ func _on_builtin_tool_changed() -> void:
 	if _vertex_mode:
 		var root = active_root if active_root else _get_level_root()
 		_toggle_vertex_mode(root)
+	# Show coach marks for extrude tools on first use
+	if dock:
+		var tool_id: int = dock.get_tool()
+		if tool_id == 2 or tool_id == 3:
+			_show_coach_mark_for_action("tool_extrude_up")
 	_update_hud_context()
 
 
@@ -671,7 +737,7 @@ func _handle_keyboard_input(
 		if nr != EditorPlugin.AFTER_GUI_INPUT_PASS:
 			return nr
 
-	# Hotkey palette toggle (? = Shift+/ or F1)
+	# Hotkey palette toggle (? = Shift+/ or F1 or Ctrl+K)
 	if _hotkey_palette:
 		if _hotkey_palette.visible and event.keycode == KEY_ESCAPE:
 			_hotkey_palette.visible = false
@@ -679,6 +745,14 @@ func _handle_keyboard_input(
 		if (event.keycode == KEY_SLASH and event.shift_pressed) or event.keycode == KEY_F1:
 			_on_toggle_hotkey_palette()
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
+		if event.keycode == KEY_K and event.ctrl_pressed:
+			_on_toggle_hotkey_palette()
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+	# Operation replay toggle (Ctrl+Shift+T)
+	if event.keycode == KEY_T and event.ctrl_pressed and event.shift_pressed:
+		if _operation_replay and is_instance_valid(_operation_replay):
+			_operation_replay.toggle_visible()
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
 
 	# External tool keyboard dispatch first — external tools can override keys
 	if _tool_registry and _tool_registry.has_active_external_tool():
@@ -816,6 +890,7 @@ func _handle_keyboard_input(
 	# Vertex edit toggle (V key)
 	if _keymap.matches("vertex_edit", event):
 		_toggle_vertex_mode(root)
+		_show_coach_mark_for_action("vertex_edit")
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	# External tool shortcuts
 	if _tool_registry:
@@ -824,6 +899,7 @@ func _handle_keyboard_input(
 			_tool_registry.activate_tool(
 				ext_id, active_root, last_3d_camera, undo_redo_manager, _record_history
 			)
+			_show_coach_mark_for_tool_id(ext_id)
 			_update_hud_context()
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
@@ -1350,7 +1426,8 @@ func _ensure_vertex_overlay(root: Node) -> void:
 
 func _clear_vertex_overlay() -> void:
 	if _vertex_overlay_mesh and is_instance_valid(_vertex_overlay_mesh):
-		_vertex_overlay_mesh.get_parent().remove_child(_vertex_overlay_mesh)
+		if _vertex_overlay_mesh.get_parent():
+			_vertex_overlay_mesh.get_parent().remove_child(_vertex_overlay_mesh)
 		_vertex_overlay_mesh.queue_free()
 		_vertex_overlay_mesh = null
 	_vertex_overlay_imesh = null
@@ -1588,6 +1665,16 @@ func _get_undo_redo() -> EditorUndoRedoManager:
 func _record_history(action_name: String) -> void:
 	if dock:
 		dock.record_history(action_name)
+	if _operation_replay and is_instance_valid(_operation_replay):
+		var version := -1
+		if undo_redo_manager:
+			var history_id := (
+				undo_redo_manager.get_object_history_id(active_root) if active_root else 0
+			)
+			var undo_redo_obj: UndoRedo = undo_redo_manager.get_history_undo_redo(history_id)
+			if undo_redo_obj:
+				version = undo_redo_obj.get_version()
+		_operation_replay.record_operation(action_name, version)
 
 
 func _paint_brush_with_undo(root: Node, brush: Node, mat: Material) -> void:
@@ -2527,6 +2614,12 @@ func _on_context_toolbar_action(action: String, args: Array) -> void:
 		"entity_props":
 			if dock:
 				dock.main_tabs.current_tab = 2  # Entities tab
+		"highlight_connected":
+			if root and root.has_method("set_highlight_connected"):
+				var pressed: bool = args[0] if not args.is_empty() else false
+				root.set_highlight_connected(pressed)
+			if dock:
+				dock.sync_wiring_highlight_state()
 		"shape_box":
 			if dock and dock.shape_select:
 				dock.shape_select.select(0)
@@ -2733,7 +2826,93 @@ func _on_hotkey_palette_action(action: String) -> void:
 			_apply_last_texture(root)
 		"selection_filter":
 			_show_selection_filter()
+	_show_coach_mark_for_action(action)
 	_update_hud_context()
+
+
+func _show_coach_mark_for_action(action: String) -> void:
+	if not _coach_marks or not is_instance_valid(_coach_marks):
+		return
+	# Map action names to coach mark tool keys
+	var coach_key := ""
+	match action:
+		"vertex_edit":
+			coach_key = "vertex_edit"
+		"hollow":
+			coach_key = "hollow"
+		"clip":
+			coach_key = "clip"
+		"carve":
+			coach_key = "carve"
+		"tool_extrude_up", "tool_extrude_down":
+			coach_key = "extrude"
+		"paint_bucket", "paint_erase", "paint_ramp", "paint_line", "paint_blend":
+			coach_key = "surface_paint"
+	if not coach_key.is_empty():
+		_coach_marks.show_guide(coach_key)
+
+
+func _show_coach_mark_for_tool_id(tool_id: int) -> void:
+	if not _coach_marks or not is_instance_valid(_coach_marks):
+		return
+	if not _tool_registry:
+		return
+	var tool_obj = _tool_registry.get_tool_by_id(tool_id)
+	if not tool_obj:
+		return
+	var tool_name: String = tool_obj.tool_name().to_lower()
+	# Map tool names to coach mark keys
+	if "polygon" in tool_name:
+		_coach_marks.show_guide("polygon")
+	elif "path" in tool_name:
+		_coach_marks.show_guide("path")
+	elif "measure" in tool_name:
+		_coach_marks.show_guide("measure")
+	elif "decal" in tool_name:
+		_coach_marks.show_guide("decal")
+
+
+func _on_coach_mark_dismissed(_tool_key: String, _dont_show: bool) -> void:
+	pass  # Persistence is handled internally by HFCoachMarks
+
+
+func _on_replay_requested(entry_index: int) -> void:
+	if not _operation_replay or not is_instance_valid(_operation_replay):
+		return
+	var target_version: int = _operation_replay.get_entry_version(entry_index)
+	if target_version < 0:
+		if dock:
+			dock.show_toast("Replay: no undo version recorded for this operation", 1)
+		return
+	if not undo_redo_manager or not active_root:
+		if dock:
+			dock.show_toast("Replay: no undo history available", 1)
+		return
+	var history_id: int = undo_redo_manager.get_object_history_id(active_root)
+	var ur: UndoRedo = undo_redo_manager.get_history_undo_redo(history_id)
+	if not ur:
+		if dock:
+			dock.show_toast("Replay: no undo history available", 1)
+		return
+	var current_version: int = ur.get_version()
+	if target_version == current_version:
+		if dock:
+			dock.show_toast("Already at this operation", 0)
+		return
+	# Undo or redo to reach the target version
+	var steps := 0
+	if target_version < current_version:
+		while ur.get_version() > target_version and ur.has_undo():
+			ur.undo()
+			steps += 1
+		if dock:
+			dock.show_toast("Replay: undid %d step%s" % [steps, "" if steps == 1 else "s"], 0)
+	else:
+		while ur.get_version() < target_version and ur.has_redo():
+			ur.redo()
+			steps += 1
+		if dock:
+			dock.show_toast("Replay: redid %d step%s" % [steps, "" if steps == 1 else "s"], 0)
 
 
 func _get_level_root() -> Node:

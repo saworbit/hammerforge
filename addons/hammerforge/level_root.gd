@@ -42,6 +42,7 @@ const HFSubtractPreviewType = preload("systems/hf_subtract_preview.gd")
 const HFSpawnSystemType = preload("systems/hf_spawn_system.gd")
 const HFPrefabSystemType = preload("systems/hf_prefab_system.gd")
 const HFPrefabOverlayType = preload("ui/hf_prefab_overlay.gd")
+const HFIOPresetsType = preload("systems/hf_io_presets.gd")
 const HFPrototypeTextures = preload("hf_prototype_textures.gd")
 
 const RELOAD_LOCK_PATH := "res://.hammerforge/reload.lock"
@@ -212,6 +213,7 @@ var subtract_preview: HFSubtractPreviewType
 var spawn_system: HFSpawnSystemType
 var prefab_system: HFPrefabSystemType
 var prefab_overlay: HFPrefabOverlayType
+var io_presets: HFIOPresetsType
 
 @export var show_subtract_preview: bool = false:
 	set(value):
@@ -495,6 +497,8 @@ func _ready():
 	spawn_system = HFSpawnSystemType.new(self)
 	prefab_system = HFPrefabSystemType.new(self)
 	prefab_overlay = HFPrefabOverlayType.new(self)
+	io_presets = HFIOPresetsType.new(self)
+	io_presets.load_presets()
 	if show_subtract_preview:
 		subtract_preview.set_enabled(true)
 	entity_system.load_entity_definitions()
@@ -517,10 +521,14 @@ func _exit_tree() -> void:
 		_autosave_timer.stop()
 		if _autosave_timer.timeout.is_connected(_on_autosave_timeout):
 			_autosave_timer.timeout.disconnect(_on_autosave_timeout)
+		_autosave_timer.queue_free()
+		_autosave_timer = null
 	if _reload_timer:
 		_reload_timer.stop()
 		if _reload_timer.timeout.is_connected(_check_remote_reload):
 			_reload_timer.timeout.disconnect(_check_remote_reload)
+		_reload_timer.queue_free()
+		_reload_timer = null
 
 
 func _process(_delta: float) -> void:
@@ -819,6 +827,17 @@ func cleanup_dangling_connections(deleted_name: String) -> int:
 
 func get_all_entity_connections() -> Array:
 	return entity_system.get_all_connections()
+
+
+func set_highlight_connected(value: bool) -> void:
+	if io_visualizer:
+		io_visualizer.set_highlight_connected(value)
+
+
+func get_connection_summary(entity_name: String) -> Dictionary:
+	if io_visualizer:
+		return io_visualizer.get_connection_summary(entity_name)
+	return {}
 
 
 # ===========================================================================

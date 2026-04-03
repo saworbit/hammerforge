@@ -164,6 +164,7 @@ func clear_entities() -> void:
 	if not root.entities_node:
 		return
 	for child in root.entities_node.get_children():
+		root.entities_node.remove_child(child)
 		child.queue_free()
 
 

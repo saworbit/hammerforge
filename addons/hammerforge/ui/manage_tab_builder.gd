@@ -278,6 +278,14 @@ func build(parent: Control) -> void:
 	dock.import_settings_btn = dock._make_button("Import Settings")
 	stc.add_child(dock.import_settings_btn)
 
+	# --- Examples section (collapsed by default) ---
+	var ex_sec = hf_collapsible_section.create("Examples", false)
+	root_vbox.add_child(ex_sec)
+	dock._register_section(ex_sec, "Examples")
+	var HFExampleLibrary = preload("res://addons/hammerforge/ui/hf_example_library.gd")
+	dock._example_library = HFExampleLibrary.new()
+	ex_sec.get_content().add_child(dock._example_library)
+
 	# --- Performance section (collapsed by default) ---
 	var perf_sec = hf_collapsible_section.create("Performance", false)
 	root_vbox.add_child(perf_sec)
@@ -392,3 +400,5 @@ func connect_signals() -> void:
 		dock._spawn_auto_create_btn.pressed.connect(dock._on_spawn_auto_create)
 	if dock._show_spawn_debug:
 		dock._show_spawn_debug.toggled.connect(dock._on_show_spawn_debug_toggled)
+	if dock._example_library and dock._example_library.has_signal("load_requested"):
+		dock._example_library.load_requested.connect(dock._on_example_load_requested)

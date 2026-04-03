@@ -27,6 +27,9 @@ nul
 .hammerforge/
 .appdata/
 
+# HammerForge user state (should live in editor config, not repo)
+io_presets.json
+
 # Python cache (if used for scripts/tools)
 __pycache__/
 *.pyc

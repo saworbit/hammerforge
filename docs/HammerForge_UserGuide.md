@@ -1,6 +1,6 @@
 # HammerForge User Guide
 
-Last updated: March 31, 2026
+Last updated: April 3, 2026
 
 This guide covers the current HammerForge workflow in Godot 4.6: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs.
 
@@ -34,6 +34,67 @@ On first launch, an interactive tutorial wizard appears guiding you through 5 st
 Each step auto-advances when you complete the required action. A progress bar shows your position. You can skip individual steps or dismiss the entire tutorial. Progress persists across sessions — if you close the editor at step 3, it resumes there next time.
 
 Check "Don't show again" when dismissing to hide it permanently. Reset by editing `user://hammerforge_prefs.json` and setting `"show_welcome": true` and `"tutorial_step": 0`.
+
+## Coach Marks (First-Use Tool Guides)
+
+When you activate an advanced tool for the first time, a floating overlay appears with step-by-step instructions. Coach marks are available for 10 tools:
+
+| Tool | Trigger | Steps shown |
+|------|---------|-------------|
+| Polygon | P key | Click vertices → close loop → set height → confirm |
+| Path | ; key | Place waypoints → Enter → set height → confirm |
+| Vertex Edit | V key | Select → multi-select → edge mode → merge/split |
+| Extrude | U/J keys | Select brush → click face → drag → confirm |
+| Carve | Ctrl+Shift+R | Select brushes → execute → delete fragments |
+| Clip | Shift+X | Select → execute → delete unwanted half |
+| Hollow | Ctrl+H | Select solid → execute → set thickness |
+| Measure | M key | Click start → click end → read distance |
+| Decal | N key | Click surface → resize/rotate → assign material |
+| Surface Paint | P toggle | Toggle paint → select tool → click cells |
+
+Each guide has a "Don't show again" checkbox. Dismissed guides are persisted in user prefs. Guides trigger from keyboard shortcuts, the command palette, and context toolbar actions.
+
+## Operation Replay Timeline
+
+Press **Ctrl+Shift+T** to toggle a compact timeline showing your recent operations (up to 20). Each operation appears as a color-coded icon:
+
+| Color | Action Type |
+|-------|-------------|
+| Blue | Draw / Create brush |
+| Red | Delete / Remove |
+| Orange | Subtract |
+| Green | Extrude |
+| Yellow | Carve / Clip |
+| Purple | Vertex / Merge / Split |
+
+Hover an entry to see its name and elapsed time. Click an entry, then click **Replay** to undo or redo the history to that point. The timeline records every action that passes through the undo/redo system.
+
+## Command Palette (Ctrl+K)
+
+The command palette is a searchable action list. Open it with **Shift+?**, **F1**, or **Ctrl+K**.
+
+- Type to filter actions by name or keybinding
+- **Fuzzy search**: if no exact match, the palette finds approximate matches using subsequence matching with word-boundary bonuses
+- **"Did you mean: ..."** suggestion appears when fuzzy matching kicks in
+- Actions gray out when unavailable (e.g., Hollow requires a brush selection)
+- Press **Enter** to execute the first visible enabled action
+- Press **Esc** to close without executing
+
+## Example Library
+
+The **Manage** tab contains an **Examples** section (collapsed by default) with 5 built-in demo levels:
+
+| Example | Difficulty | Key Concepts |
+|---------|------------|--------------|
+| Simple Room | Beginner | Additive brushes, floor |
+| Corridor with Doorway | Beginner | Subtract operations, spatial planning |
+| Jump Puzzle Platforms | Intermediate | Multiple brushes, player spawn entity |
+| Hollowed Building | Intermediate | Hollow + subtract for windows |
+| Simple Arena | Advanced | Multi-level, ramps, cover, multiple spawns |
+
+- **Load** clears the current level and instantiates the example's brushes and entities
+- **Study This** shows numbered annotations explaining the design decisions
+- Search/filter by title, description, tags, or difficulty level
 
 ## Dock Layout (4 tabs)
 The dock has 4 tabs with collapsible sections for organized access to all controls. Each collapsible section has a visual separator and indented content; collapsed state persists across sessions. A "No LevelRoot" banner appears at the top when no root node is found.
@@ -80,7 +141,10 @@ The compact toolbar shows icon + text labels (Draw, Select, Add, Sub, Paint, Ext
 - Create DraftEntity button.
 - Entity palette with drag-and-drop placement.
 - **Entity Properties** (collapsible): auto-generated typed controls based on entity definition.
-- **Entity I/O** (collapsible): Output, Target, Input, Parameter fields. Delay (seconds) and Fire Once checkbox. Add Output / Remove buttons and connection ItemList. Connections auto-refresh when selecting an entity. **Show I/O Lines** checkbox to visualize connections in the viewport (green=standard, orange=fire_once, yellow=selected).
+- **Entity I/O** (collapsible): Output, Target, Input, Parameter fields. Delay (seconds) and Fire Once checkbox. Add Output / Remove buttons and connection ItemList. Connections auto-refresh when selecting an entity. **Show I/O Lines** checkbox to visualize connections in the viewport.
+- **I/O Wiring** (collapsible): Quick-wire form (output name, target dropdown, input name, parameter, delay, fire-once). Connection summary shows triggers and triggered-by counts. **Highlight** toggle button pulses all linked entities in the viewport. **Connection Presets** picker with 6 built-in patterns (Door+Light+Sound, Button→Toggle, Alarm Sequence, Pickup+Remove, Damage+Break, Timer Lights) plus user-saved presets. Target tag mapping lets you assign preset target placeholders to actual entity names.
+  - **I/O connection lines**: Bézier curves with arrowheads, color-coded by output type (cyan=OnTrigger, red=OnDamage, yellow=OnUse, green=OnOpen, magenta=OnBreak, orange=OnTimer). Fire-once connections pulse brighter; delayed connections dim proportionally. Parallel connections between the same pair offset laterally.
+  - **Highlight Connected**: when enabled, all entities wired to the selected entity display a pulsing overlay. The context toolbar shows an "HL" toggle and an I/O summary label ("Triggers 2 targets (door1, light1)"). The highlight state stays in sync between the context toolbar and the wiring panel.
 
 ### Manage tab (collapsible sections)
 - **Bake**: Bake button, Bake Selected, Bake Changed, Check Bake Issues, Dry Run, Validate Level/Fix. Options: Merge Meshes, Generate LODs, Lightmap UV2, Texel Size, Navmesh (cell size, agent height), Use Face Materials, Preview Mode (Full/Wireframe/Proxy), Bake Estimate label, Quick Play, Play from Camera, Play Selected Area.
@@ -337,6 +401,8 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Selection Filters | Shift+F | Open selection filter popover |
 | Axis Lock X/Y/Z | X / Y / Z | Constrain to axis |
 | Paint tools | B / E / R / L / K | Bucket / Erase / Ramp / Line / Blend |
+| Command palette | Shift+? / F1 / Ctrl+K | Searchable action palette with fuzzy search |
+| Operation timeline | Ctrl+Shift+T | Toggle operation replay timeline |
 
 **Rebinding:** Edit `user://hammerforge_keymap.json` (created on first run). Each entry maps an action name to `{"keycode": KEY_*, "ctrl": bool, "shift": bool, "alt": bool}`. Restart the plugin after editing.
 

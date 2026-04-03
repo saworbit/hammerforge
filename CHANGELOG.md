@@ -29,8 +29,87 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   parent node was freed during plugin unload.
 - **Vertex edge array bounds** (Apr 2026): `hf_vertex_system.gd` `split_edge()` now validates
   `edge.size() >= 2` before indexing, preventing out-of-bounds access on malformed input.
+- **Duplicate variable declaration in plugin.gd** (Apr 2026): `_on_context_toolbar_action()` had a
+  redundant `var root` inside the `"highlight_connected"` match branch that shadowed the function-level
+  `root`, causing a parse error. Removed the duplicate.
+- **Debug `and true` remnants in dock.gd** (Apr 2026): Four surface paint/UV functions
+  (`_on_uv_reset`, `_on_surface_paint_layer_add`, `_on_surface_paint_layer_remove`,
+  `_on_surface_paint_texture_selected`) had leftover `and true` in conditions that made the
+  conditional check a no-op. Removed all four.
+- **Timer closure crash in dock.gd** (Apr 2026): `_on_tutorial_completed()` used a direct method
+  reference in `create_timer().timeout.connect(_close_tutorial)`. If the dock was freed before the
+  2-second timer fired, the callback would reference a freed object. Wrapped in a lambda with
+  `is_instance_valid(self)` guard.
+- **Timer nodes leaked in level_root.gd** (Apr 2026): `_exit_tree()` disconnected timer signals but
+  never called `queue_free()` on `_autosave_timer` or `_reload_timer`, leaking child Timer nodes.
+  Now frees and nulls both.
+- **get_parent() null crashes across 8 files** (Apr 2026): `remove_child()` was called via
+  `node.get_parent().remove_child(node)` without checking `get_parent()` for null in:
+  hf_decal_tool.gd, hf_measure_tool.gd (×2), hf_path_tool.gd, hf_polygon_tool.gd, plugin.gd,
+  hf_prefab_system.gd (×2), brush_manager.gd. All now guard with `if node.get_parent():`.
+- **Orphan nodes in bulk-clear paths** (Apr 2026): `hf_entity_system.gd clear_entities()`,
+  `hf_brush_system.gd clear_brushes()`, and `brush_manager.gd clear_brushes()` called
+  `queue_free()` without `remove_child()` first. During state restore, old nodes could still be
+  in the tree when new nodes were added. All now call `remove_child()` before `queue_free()`.
+- **Division by zero in merge_vertices** (Apr 2026): `hf_vertex_system.gd merge_vertices()` divided
+  by `vert_indices.size()` to compute centroid, ignoring that out-of-bounds indices are skipped. If
+  all indices were invalid, this was a divide-by-zero. Now tracks `valid_count` and early-returns
+  if zero.
+- **Edge hover bounds check** (Apr 2026): `hf_vertex_system.gd update_edge_hover()` now validates
+  `pick.edge.size() >= 2` before indexing into the edge array.
+- **Extrude preview orphan node** (Apr 2026): `hf_extrude_tool.gd _update_preview()` created a
+  `_preview_brush` DraftBrush but only added it to the tree if `draft_brushes_node` existed. If
+  null, the node leaked. Now `free()`s and nulls it in the else branch.
+- **Axis lock return value discarded** (Apr 2026): `hf_drag_system.gd update_drag()` called
+  `_apply_axis_lock()` but discarded the return value, making axis lock position clamping a
+  silent no-op. Now assigns the result back to `input_state.drag_end`.
 
 ### Added
+- **Learning & Discovery Aids** (Apr 2026):
+  - **Coach marks** (`HFCoachMarks`): first-use floating step-by-step guides for 10 advanced tools
+    (Polygon, Path, Carve, Vertex Edit, Extrude, Clip, Hollow, Measure, Decal, Surface Paint).
+    Auto-triggered on tool activation. Per-tool "Don't show again" persisted via user prefs.
+  - **Operation replay timeline** (`HFOperationReplay`): compact horizontal timeline of up to 20
+    recent operations with color-coded icons per action type. Hover for elapsed time, click Replay to
+    undo/redo to that point in the history. Toggle with Ctrl+Shift+T. Records undo versions from
+    `EditorUndoRedoManager` and drives `UndoRedo.undo()`/`redo()` to reach the target version.
+  - **Enhanced command palette** (Ctrl+K): fuzzy search with subsequence matching, word-boundary and
+    consecutive-character bonuses. "Did you mean: ..." suggestion when no exact match found. Caps at 5
+    fuzzy results. Ctrl+K added as additional toggle shortcut alongside Shift+? and F1.
+  - **Example library** (`HFExampleLibrary`): 5 built-in demo levels (Simple Room, Corridor with
+    Doorway, Jump Puzzle Platforms, Hollowed Building, Simple Arena) with difficulty badges, tags,
+    searchable browser, and "Study This" annotations. Load button clears the scene and instantiates
+    brushes + entities from JSON definitions. Section in Manage tab (collapsed by default).
+  - `data/example_levels.json`: structured example level data with brush/entity definitions and
+    per-level annotations.
+  - 63 new tests across 4 files (test_coach_marks 14, test_operation_replay 23, test_fuzzy_search 9,
+    test_example_library 17). Total: **944 tests across 54 files**.
+
+- **I/O Connections & Entity Polish** (Apr 2026):
+  - **Smart auto-routing**: connection lines now use quadratic Bézier curves with arrowheads instead
+    of straight lines. Parallel connections between the same pair of entities offset laterally to
+    avoid overlap (0.3 units per route).
+  - **Color by type/delay**: output names are mapped to colors (cyan=OnTrigger, red=OnDamage,
+    yellow=OnUse, green=OnOpen, magenta=OnBreak, orange=OnTimer, etc.). Fire-once connections pulse
+    brighter. Delayed connections dim proportionally.
+  - **I/O wiring panel** (`HFIOWiringPanel`): embedded in Entities tab with connection summary,
+    outputs list, quick-wire form (output/target dropdown/input/param/delay/once), and preset
+    picker with target tag mapping.
+  - **Connection presets** (`HFIOPresets`): 6 built-in presets (Door+Light+Sound, Button→Toggle,
+    Alarm Sequence, Pickup+Remove, Damage+Break, Timer Lights). Save entity connections as reusable
+    user presets. Target tags map to actual entity names at apply time. User presets persist to the
+    editor config directory (not the repo).
+  - **Highlight Connected**: toggle to pulse-highlight all entities linked to the selected entity.
+    SphereMesh overlays with animated alpha. Summary label in context toolbar ("Triggers 2 targets").
+  - **Cross-UI highlight sync**: `highlight_connected` is authoritative on the visualizer, pushed
+    to context toolbar via state dict and to wiring panel via `_sync_highlight_button()`. Both paths
+    use `set_pressed_no_signal()` to avoid signal loops.
+  - Context toolbar gains "HL" toggle button and "IOSummary" label in entity section.
+  - `level_root.gd` gains `io_presets` subsystem, `set_highlight_connected()`, and
+    `get_connection_summary()` delegation methods.
+  - 57 new tests across 3 files (test_io_presets 21, test_io_visualizer_enhanced 20,
+    test_io_highlight_sync 16). Total: **873 tests across 50 files**.
+
 - **Bake & Quick Play Optimizations** (Apr 2026):
   - **Bake Selected**: bake only the currently selected brushes and merge output into the existing
     baked container (preserving previously baked geometry).

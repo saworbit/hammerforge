@@ -50,6 +50,9 @@ addons/hammerforge/
   map_io.gd              .map import/export (uses adapter pattern for multi-format support)
   prefab_factory.gd      Advanced shape generation
 
+  data/
+    example_levels.json    Built-in demo level definitions (5 levels with annotations)
+
   textures/prototypes/   150 SVG prototype textures ({pattern}_{color}.svg)
 
   map_adapters/          .map export format adapters (strategy pattern)
@@ -67,10 +70,14 @@ addons/hammerforge/
     hf_prefab_library.gd   Prefab library dock section (search, tags, variants, drag-drop, context menu)
     hf_prefab_overlay.gd   Prefab ghost overlay (wireframe bounding box + override markers)
     hf_context_toolbar.gd  Floating contextual mini-toolbar (context-sensitive actions in 3D viewport)
-    hf_hotkey_palette.gd   Searchable command palette with live gray-out (Shift+? or F1)
+    hf_hotkey_palette.gd   Searchable command palette with fuzzy search and live gray-out (Shift+?/F1/Ctrl+K)
+    hf_coach_marks.gd      First-use tool guides (10 tools, per-tool dismissal, auto-trigger on activation)
+    hf_operation_replay.gd Operation timeline with undo/redo replay (Ctrl+Shift+T toggle)
+    hf_example_library.gd  Example level browser (5 built-in demos, search, annotations, one-click load)
     hf_selection_filter.gd Selection filter popover (by normal/material/similar/visgroup/type)
     paint_tab_builder.gd   Builds Paint tab sections + signal connections
-    entity_tab_builder.gd  Builds Entity Properties + Entity I/O sections
+    entity_tab_builder.gd  Builds Entity Properties + Entity I/O + I/O Wiring sections
+    hf_io_wiring_panel.gd  I/O wiring panel (quick wire, presets, highlight toggle, connection summary)
     manage_tab_builder.gd  Builds Manage tab sections (Bake, File, Settings, etc.)
     selection_tools_builder.gd  Builds Selection Tools section (hollow, clip, move, tie, duplicator)
 
@@ -86,7 +93,8 @@ addons/hammerforge/
     hf_validation_system.gd Validation, dependency checks, bake issue detection (degenerate/floating/overlapping)
     hf_visgroup_system.gd  Visgroups (visibility groups) + brush/entity grouping
     hf_carve_system.gd     Boolean-subtract carve (progressive-remainder box slicing)
-    hf_io_visualizer.gd    Entity I/O connection lines in viewport (ImmediateMesh)
+    hf_io_visualizer.gd    Entity I/O connection lines (Bézier curves, color-coded, highlight pulse)
+    hf_io_presets.gd       Reusable I/O connection presets (built-in + user-saved, target tag mapping)
     hf_subtract_preview.gd Wireframe AABB intersection overlay for subtract brushes (debounced, pooled)
     hf_vertex_system.gd    Vertex/edge selection, move, split, merge with convexity validation
     hf_spawn_system.gd     Player spawn lookup, validation, auto-fix, debug visualisation
@@ -141,6 +149,9 @@ addons/hammerforge/
 - **Vertex system.** `HFVertexSystem` (`systems/hf_vertex_system.gd`) manages vertex/edge selection, movement with convexity validation, edge splitting, and vertex merging. Supports two sub-modes via the `sub_mode` property: `VertexSubMode.VERTEX` (0) and `VertexSubMode.EDGE` (1), toggled with E key. **Note:** `sub_mode` is a public property, not a setter — assign directly (`vs.sub_mode = 1`). `merge_vertices(brush_id, indices)` and `split_edge(brush_id, edge)` require explicit brush_id and selection data; `plugin.gd` provides `_vertex_merge_selected()` and `_vertex_split_selected_edge()` wrappers that resolve current selection before calling. Edge selection syncs to `selected_vertices` so `move_vertices()` works transparently for both modes. `split_edge()` inserts midpoints and skips convexity validation (mathematically guaranteed on convex hulls). `merge_vertices()` validates convexity and reverts via face snapshots on failure. Edge deduplication uses canonical vertex key pairs (`"vkey_a|vkey_b"` where a < b).
 - **Polygon tool.** `HFPolygonTool` (`hf_polygon_tool.gd`, tool_id=102, KEY_P) creates arbitrary convex polygon brushes via a three-phase state machine (IDLE → PLACING_VERTS → SETTING_HEIGHT). Enforces convexity via 2D cross product on XZ plane. Constructs face data with proper winding (top=CCW for up-normal, bottom=CW, N side quads) in local space relative to AABB center. Uses `create_brush_from_info()` with undo/redo via `self.undo_redo`.
 - **Path tool.** `HFPathTool` (`hf_path_tool.gd`, tool_id=103, KEY_SEMICOLON) creates corridor brushes from waypoints. Each segment is an oriented-box brush (8 corners from direction + perpendicular). Miter joint brushes fill gaps at interior waypoints. All brushes share a `group_id`. Single undo action for the entire path.
+- **I/O connection presets.** `systems/hf_io_presets.gd` manages built-in and user-saved connection presets. 6 built-in presets (Door+Light+Sound, Button→Toggle, etc.) are always available. User presets persist to `EditorInterface.get_editor_paths().get_config_dir()` in editor, `user://` fallback for tests. `apply_preset(source, preset, target_map)` maps target tags to actual entity names ("self" → source name). `save_entity_as_preset()` captures existing connections. Tests use explicit temp paths with cleanup in `after_each()`.
+- **I/O wiring panel.** `ui/hf_io_wiring_panel.gd` is a `VBoxContainer` embedded in the Entities tab via `entity_tab_builder.gd`. Shows connection summary, outputs list, quick-wire form, and preset picker with target tag mapping. Emits `connection_added`, `preset_applied`, `highlight_toggled`. `_sync_highlight_button()` reads `_io_visualizer.highlight_connected` and uses `set_pressed_no_signal()` to avoid signal loops. Called from `set_source_entity()` and `dock.sync_wiring_highlight_state()`.
+- **Highlight Connected sync.** `hf_io_visualizer.highlight_connected` is the single source of truth. Context toolbar reads it from `state["highlight_connected"]` via `set_pressed_no_signal()`. Wiring panel syncs via `_sync_highlight_button()`. Plugin.gd handles `"highlight_connected"` action from toolbar, calls `root.set_highlight_connected()` then `dock.sync_wiring_highlight_state()`. Panel's `highlight_toggled` signal flows through dock to visualizer then toolbar state push.
 - **Context hints.** Per-tab hint labels at the bottom of each dock tab update via `_update_context_hints()` in `dock.gd`. Driven by `_hints_dirty` flag alongside `_update_disabled_hints()`.
 - **Face hover highlight.** `level_root.highlight_hovered_face(camera, mouse_pos, color)` performs a FaceSelector raycast and renders a semi-transparent overlay on the hit face. Used by `plugin.gd` in extrude mode when idle. Call `clear_face_hover_highlight()` when switching tools.
 - **Undo/redo stability.** Prefer brush IDs and `create_brush_from_info()` for undo instead of storing Node references in history.
@@ -167,7 +178,7 @@ addons/hammerforge/
 The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on push and PR to `main`:
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
-- **GUT unit + integration tests** -- 807 tests across 47 test files (runs Godot headless)
+- **GUT unit + integration tests** -- 845 tests across 49 test files (runs Godot headless)
 
 Run locally before pushing:
 ```
@@ -226,6 +237,9 @@ Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framewor
 | `test_hotkey_palette.gd` | 12 | Search filtering, action availability gray-out, key binding display, action invocation |
 | `test_spawn_system.gd` | 21 | Spawn lookup, validation, auto-fix, default creation, debug viz, entity property helpers, severity ordering |
 | `test_selection_features.gd` | 18 | Marquee, selection filters, Select Similar, Apply Last Texture |
+| `test_io_presets.gd` | 21 | Builtin preset structure, user preset CRUD, apply with target mapping/self/delay/fire_once, save entity as preset, get target tags |
+| `test_io_visualizer_enhanced.gd` | 20 | Color logic (selected/fire_once/type/default/delay), Bézier math (endpoints/midpoint/tangent), connection summary, highlight connected toggle/clear |
+| `test_io_highlight_sync.gd` | 16 | Panel/toolbar sync from visualizer, set_pressed_no_signal contracts, signal emission, signal-driven integration (toolbar↔panel propagation, alternating sources) |
 
 Run all tests:
 ```

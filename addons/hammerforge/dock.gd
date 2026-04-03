@@ -256,6 +256,8 @@ var _show_spawn_debug: CheckBox = null
 var _spawn_validate_btn: Button = null
 var _spawn_auto_create_btn: Button = null
 var _prefab_library = null  # HFPrefabLibrary
+var _example_library = null  # HFExampleLibrary
+var _operation_replay = null  # HFOperationReplay
 var _sculpt_raise_btn: Button = null
 var _sculpt_lower_btn: Button = null
 var _sculpt_smooth_btn: Button = null
@@ -372,6 +374,7 @@ var io_fire_once: CheckBox = null
 var io_add_btn: Button = null
 var io_list: ItemList = null
 var io_remove_btn: Button = null
+var _io_wiring_panel = null  # HFIOWiringPanel
 # Entity Properties controls
 var _entity_props_section: VBoxContainer = null
 var _entity_props_controls: Array = []
@@ -671,7 +674,11 @@ func _on_tutorial_completed() -> void:
 	if is_instance_valid(_tutorial_wizard):
 		var tree := get_tree()
 		if tree:
-			tree.create_timer(2.0).timeout.connect(_close_tutorial)
+			tree.create_timer(2.0).timeout.connect(
+				func():
+					if is_instance_valid(self):
+						_close_tutorial()
+			)
 
 
 func _close_tutorial() -> void:
@@ -2154,10 +2161,14 @@ func set_selection_nodes(nodes: Array) -> void:
 	if not nodes.is_empty() and level_root and level_root.is_entity_node(nodes[0]):
 		_refresh_io_list(nodes[0])
 		_rebuild_entity_props(nodes[0])
+		if _io_wiring_panel:
+			_io_wiring_panel.set_source_entity(nodes[0])
 	else:
 		if io_list:
 			io_list.clear()
 		_clear_entity_props()
+		if _io_wiring_panel:
+			_io_wiring_panel.set_source_entity(null)
 
 
 func _build_snap_mode_buttons() -> void:
@@ -2879,6 +2890,7 @@ func _connect_root_signals() -> void:
 	_sync_materials_from_root()
 	_sync_surface_paint_from_root()
 	_apply_ui_state_to_root()
+	_setup_io_wiring_panel()
 	_hints_dirty = true
 
 
@@ -4347,7 +4359,7 @@ func _on_uv_reset() -> void:
 		return
 	if not level_root:
 		return
-	if _uv_active_brush.brush_id == "" and true:
+	if _uv_active_brush.brush_id == "":
 		level_root.get_brush_info_from_node(_uv_active_brush)
 	var brush_id = _uv_active_brush.brush_id
 	var face_idx = _uv_active_brush.faces.find(_uv_active_face)
@@ -4370,7 +4382,7 @@ func _on_surface_paint_layer_add() -> void:
 		return
 	if not level_root:
 		return
-	if _surface_active_brush.brush_id == "" and true:
+	if _surface_active_brush.brush_id == "":
 		level_root.get_brush_info_from_node(_surface_active_brush)
 	var brush_id = _surface_active_brush.brush_id
 	var face_idx = _surface_active_brush.faces.find(_surface_active_face)
@@ -4388,7 +4400,7 @@ func _on_surface_paint_layer_remove() -> void:
 		return
 	if not level_root:
 		return
-	if _surface_active_brush.brush_id == "" and true:
+	if _surface_active_brush.brush_id == "":
 		level_root.get_brush_info_from_node(_surface_active_brush)
 	var brush_id = _surface_active_brush.brush_id
 	var face_idx = _surface_active_brush.faces.find(_surface_active_face)
@@ -4423,7 +4435,7 @@ func _on_surface_paint_texture_selected(path: String) -> void:
 		return
 	if not level_root:
 		return
-	if _surface_active_brush.brush_id == "" and true:
+	if _surface_active_brush.brush_id == "":
 		level_root.get_brush_info_from_node(_surface_active_brush)
 	var brush_id = _surface_active_brush.brush_id
 	var face_idx = _surface_active_brush.faces.find(_surface_active_face)
@@ -5731,6 +5743,42 @@ func _refresh_io_list(entity: Node = null) -> void:
 		io_list.add_item(label)
 
 
+func _setup_io_wiring_panel() -> void:
+	if not _io_wiring_panel or not level_root:
+		return
+	_io_wiring_panel.setup(
+		level_root.entity_system, level_root.io_presets, level_root.io_visualizer
+	)
+
+
+func _on_wiring_connection_added(
+	source: Node,
+	output_name: String,
+	target_name: String,
+	input_name: String,
+	_parameter: String,
+	_delay: float,
+	_fire_once: bool,
+) -> void:
+	_refresh_io_list(source)
+	_set_status("Wired: %s → %s.%s" % [output_name, target_name, input_name])
+
+
+func _on_wiring_preset_applied(source: Node, preset_name: String, count: int) -> void:
+	_refresh_io_list(source)
+	_set_status("Applied preset '%s' (%d connections)" % [preset_name, count])
+
+
+func _on_wiring_highlight_toggled(enabled: bool) -> void:
+	if level_root:
+		level_root.set_highlight_connected(enabled)
+
+
+func sync_wiring_highlight_state() -> void:
+	if _io_wiring_panel and _io_wiring_panel.has_method("_sync_highlight_button"):
+		_io_wiring_panel._sync_highlight_button()
+
+
 # ---------------------------------------------------------------------------
 # Context toolbar helper methods
 # ---------------------------------------------------------------------------
@@ -5763,3 +5811,69 @@ func _apply_material_to_whole_brush() -> void:
 ## Assign face material — called by context toolbar for quick material apply.
 func _on_face_assign_material() -> void:
 	_on_material_assign()
+
+
+## Set the operation replay control (passed from plugin.gd).
+func set_operation_replay(replay) -> void:
+	_operation_replay = replay
+
+
+## Handle example level load request from the example library.
+func _on_example_load_requested(example_id: String) -> void:
+	if not _example_library:
+		return
+	var data: Dictionary = _example_library.get_example_data(example_id)
+	if data.is_empty():
+		show_toast("Example not found: %s" % example_id, 2)
+		return
+	if not level_root:
+		show_toast("No LevelRoot in scene — add one first", 1)
+		return
+	_load_example_data(data)
+
+
+func _load_example_data(data: Dictionary) -> void:
+	var brushes: Array = data.get("brushes", [])
+	var entities: Array = data.get("entities", [])
+	var title: String = data.get("title", "Example")
+
+	# Clear existing content before loading
+	if level_root.has_method("clear_brushes"):
+		level_root.clear_brushes()
+	if level_root.entity_system and level_root.entity_system.has_method("clear_entities"):
+		level_root.entity_system.clear_entities()
+
+	var loaded_count := 0
+	for brush_data in brushes:
+		var pos_arr: Array = brush_data.get("position", [0, 0, 0])
+		var size_arr: Array = brush_data.get("size", [4, 4, 4])
+		var shape: int = brush_data.get("shape", 0)
+		var operation: int = brush_data.get("operation", 0)
+		var pos := Vector3(pos_arr[0], pos_arr[1], pos_arr[2])
+		var brush_size := Vector3(size_arr[0], size_arr[1], size_arr[2])
+
+		# hf_brush_system reads "center" for position (not "position")
+		var info := {
+			"center": pos,
+			"size": brush_size,
+			"shape": shape,
+			"operation": operation,
+		}
+		if level_root.has_method("create_brush_from_info"):
+			level_root.create_brush_from_info(info)
+			loaded_count += 1
+
+	for entity_data in entities:
+		var etype: String = entity_data.get("type", "point_light")
+		var epos_arr: Array = entity_data.get("position", [0, 0, 0])
+		var epos := Vector3(epos_arr[0], epos_arr[1], epos_arr[2])
+		var entity = DraftEntity.new()
+		entity.name = "DraftEntity"
+		entity.entity_type = etype
+		entity.entity_class = etype
+		if level_root.has_method("add_entity"):
+			level_root.add_entity(entity)
+			entity.global_position = epos
+			loaded_count += 1
+
+	show_toast("Loaded '%s': %d objects" % [title, loaded_count], 0)

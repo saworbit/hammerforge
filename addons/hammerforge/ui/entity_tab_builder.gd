@@ -3,6 +3,8 @@ extends RefCounted
 ## Builds the Entity I/O section and Entity Properties section in the Entities tab.
 ## Extracted from dock.gd — purely organizational, no behavior changes.
 
+const HFIOWiringPanelType = preload("hf_io_wiring_panel.gd")
+
 var dock  # HammerForgeDock reference
 
 
@@ -116,9 +118,22 @@ func build(parent: Control) -> void:
 	dock.io_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	ioc.add_child(dock.io_list)
 
+	# --- I/O Wiring Panel section ---
+	var wire_sec = hf_collapsible_section.create("I/O Wiring", true)
+	entities_vbox.add_child(wire_sec)
+	dock._register_section(wire_sec, "I/O Wiring")
+	var wire_content = wire_sec.get_content()
+
+	dock._io_wiring_panel = HFIOWiringPanelType.new()
+	wire_content.add_child(dock._io_wiring_panel)
+
 
 func connect_signals() -> void:
 	if dock.io_add_btn:
 		dock.io_add_btn.pressed.connect(dock._on_io_add)
 	if dock.io_remove_btn:
 		dock.io_remove_btn.pressed.connect(dock._on_io_remove)
+	if dock._io_wiring_panel:
+		dock._io_wiring_panel.connection_added.connect(dock._on_wiring_connection_added)
+		dock._io_wiring_panel.preset_applied.connect(dock._on_wiring_preset_applied)
+		dock._io_wiring_panel.highlight_toggled.connect(dock._on_wiring_highlight_toggled)

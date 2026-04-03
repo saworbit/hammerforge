@@ -13,6 +13,7 @@ signal action_invoked(action: String)
 var _search_field: LineEdit
 var _list: VBoxContainer
 var _scroll: ScrollContainer
+var _suggest_label: Label  # "Did you mean: ..." suggestion
 var _keymap = null  # HFKeymap
 var _entries: Array = []  # Array of {action, label, binding, button, category}
 var _state: Dictionary = {}  # Current context for graying out
@@ -82,9 +83,17 @@ func _build_ui() -> void:
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_scroll.add_child(_list)
 
+	# "Did you mean" suggestion label
+	_suggest_label = Label.new()
+	_suggest_label.add_theme_font_size_override("font_size", 11)
+	_suggest_label.add_theme_color_override("font_color", Color(0.4, 0.7, 1.0, 0.8))
+	_suggest_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_suggest_label.visible = false
+	vbox.add_child(_suggest_label)
+
 	# Hint
 	var hint = Label.new()
-	hint.text = "Press Enter to execute, Esc to close"
+	hint.text = "Press Enter to execute, Esc to close  |  Ctrl+K"
 	hint.add_theme_font_size_override("font_size", 10)
 	hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.35))
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -250,26 +259,84 @@ func _grab_search_focus_if_ready() -> void:
 
 func _on_search_changed(text: String) -> void:
 	var query := text.strip_edges().to_lower()
-	var current_cat := ""
 	var cat_visible: Dictionary = {}
+	_suggest_label.visible = false
 
-	for entry in _entries:
-		if query.is_empty():
+	if query.is_empty():
+		for entry in _entries:
 			entry["button"].visible = true
 			cat_visible[entry["category"]] = true
-		else:
+	else:
+		# Phase 1: exact substring match
+		var exact_count := 0
+		for entry in _entries:
 			var match_found: bool = (
 				entry["label_lower"].contains(query) or entry["binding_lower"].contains(query)
 			)
 			entry["button"].visible = match_found
 			if match_found:
 				cat_visible[entry["category"]] = true
+				exact_count += 1
+
+		# Phase 2: fuzzy match if no exact hits
+		if exact_count == 0:
+			var scored: Array = []
+			for i in range(_entries.size()):
+				var entry: Dictionary = _entries[i]
+				var score := _fuzzy_score(query, entry["label_lower"])
+				var binding_score := _fuzzy_score(query, entry["binding_lower"])
+				var best: int = maxi(score, binding_score)
+				if best > 0:
+					scored.append({"index": i, "score": best, "label": entry["label"]})
+
+			scored.sort_custom(func(a, b): return a["score"] > b["score"])
+
+			# Show top fuzzy results (up to 5)
+			var shown := 0
+			for item in scored:
+				if shown >= 5:
+					break
+				var entry: Dictionary = _entries[item["index"]]
+				entry["button"].visible = true
+				cat_visible[entry["category"]] = true
+				shown += 1
+
+			# Show "Did you mean" if we have suggestions
+			if scored.size() > 0:
+				var suggestion: String = scored[0]["label"]
+				_suggest_label.text = "Did you mean: %s?" % suggestion
+				_suggest_label.visible = true
 
 	# Show/hide category headers
 	for child in _list.get_children():
 		if child is Label and child.name.begins_with("Cat_"):
 			var cat_name = child.text
 			child.visible = cat_visible.get(cat_name, false)
+
+
+## Fuzzy matching: returns a score > 0 if all query chars appear in order in target.
+## Higher score = tighter match. Returns 0 for no match.
+static func _fuzzy_score(query: String, target: String) -> int:
+	if query.is_empty():
+		return 0
+	var qi := 0
+	var score := 0
+	var last_match_pos := -1
+	for ti in range(target.length()):
+		if qi < query.length() and target[ti] == query[qi]:
+			# Bonus for consecutive matches
+			if last_match_pos >= 0 and ti == last_match_pos + 1:
+				score += 3
+			# Bonus for matching at word boundary
+			elif ti == 0 or target[ti - 1] == " " or target[ti - 1] == "_":
+				score += 2
+			else:
+				score += 1
+			last_match_pos = ti
+			qi += 1
+	if qi < query.length():
+		return 0  # Not all query chars found
+	return score
 
 
 func _on_search_input(event: InputEvent) -> void:
@@ -288,6 +355,11 @@ func _execute_first_match() -> void:
 		if entry["button"].visible and not entry["button"].disabled:
 			_on_entry_pressed(entry["action"])
 			return
+
+
+## Execute the "Did you mean" suggestion (first fuzzy match).
+func _accept_suggestion() -> void:
+	_execute_first_match()
 
 
 func _on_entry_pressed(action: String) -> void:

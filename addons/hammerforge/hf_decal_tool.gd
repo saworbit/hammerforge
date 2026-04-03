@@ -214,6 +214,7 @@ func _update_preview(position: Vector3, normal: Vector3) -> void:
 
 func _remove_preview() -> void:
 	if _preview_decal and is_instance_valid(_preview_decal):
-		_preview_decal.get_parent().remove_child(_preview_decal)
+		if _preview_decal.get_parent():
+			_preview_decal.get_parent().remove_child(_preview_decal)
 		_preview_decal.queue_free()
 		_preview_decal = null

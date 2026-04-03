@@ -296,12 +296,16 @@ func _remove_instance_nodes(rec: PrefabInstanceRecord) -> void:
 	for bid in rec.brush_ids:
 		var brush = _find_brush_by_id(bid)
 		if brush:
-			brush.get_parent().remove_child(brush)
+			var parent: Node = brush.get_parent()
+			if parent:
+				parent.remove_child(brush)
 			brush.queue_free()
 	for uid in rec.entity_uids:
 		var ent = _find_entity_by_uid(uid)
 		if ent:
-			ent.get_parent().remove_child(ent)
+			var parent: Node = ent.get_parent()
+			if parent:
+				parent.remove_child(ent)
 			ent.queue_free()
 
 

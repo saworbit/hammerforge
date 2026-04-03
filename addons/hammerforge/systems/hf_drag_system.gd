@@ -53,7 +53,7 @@ func update_drag(camera: Camera3D, mouse_pos: Vector2) -> void:
 			return
 		if not input_state.alt_pressed or input_state.shift_pressed:
 			input_state.drag_end = root._snap_point(hit.position)
-			_apply_axis_lock(input_state.drag_origin, input_state.drag_end)
+			input_state.drag_end = _apply_axis_lock(input_state.drag_origin, input_state.drag_end)
 			_update_lock_state(input_state.drag_origin, input_state.drag_end)
 		if input_state.alt_pressed:
 			input_state.drag_height = _height_from_mouse(

@@ -1,6 +1,6 @@
 # HammerForge Editor Smoke Checklist
 
-Last updated: March 29, 2026
+Last updated: April 3, 2026
 
 This checklist covers the editor-only flows that are hard to validate in headless tests:
 - tutorial banner startup before `LevelRoot` exists
@@ -15,7 +15,10 @@ This checklist covers the editor-only flows that are hard to validate in headles
 - texture picker: T key eyedropper for sampling face materials
 - spawn system: validation debug overlay, Quick Play with missing/invalid spawn, Manage tab spawn controls
 - context toolbar: floating toolbar shows/hides per selection, correct buttons per context
-- command palette: search, gray-out, action execution, Shift+?/F1 toggle
+- command palette: search, fuzzy search, gray-out, action execution, Shift+?/F1/Ctrl+K toggle
+- coach marks: first-use tool guides appear on tool activation, dismissal persistence
+- operation replay: timeline display, hover details, replay undo/redo navigation
+- example library: load examples, study annotations, search/filter
 
 ## Prep
 
@@ -202,7 +205,48 @@ Enable the HammerForge plugin if it is not already enabled.
 - Press **Esc** while the palette is open; confirm it closes without executing anything.
 - Toggle paint mode on; press **Shift+?**. Confirm paint tools (Bucket, Erase, Ramp, etc.) are now enabled.
 
-### 14. Cleanup / Persistence
+### 14. Coach Marks (First-Use Tool Guides)
+- Press **P** to activate the Polygon tool for the first time. Confirm a floating coach mark overlay appears with step-by-step instructions.
+- Read the steps; confirm they describe the Polygon workflow (click vertices → close → set height → confirm).
+- Click **Got it**; confirm the overlay dismisses.
+- Press **P** again; confirm the coach mark reappears (since "Don't show again" was not checked).
+- Press **P** once more, check **"Don't show again"**, and click **Got it**.
+- Press **P** again; confirm the coach mark does NOT appear.
+- Press **V** to enter Vertex mode; confirm a different coach mark appears (Vertex Editing guide).
+- Press **Ctrl+H** (Hollow) with a brush selected; confirm the Hollow coach mark appears.
+- Restart Godot. Press **P**; confirm the Polygon coach mark is still dismissed (persisted via user prefs).
+- Reset by clearing `coach_dismissed_*` keys from `user://hammerforge_prefs.json`.
+
+### 15. Operation Replay Timeline
+- Press **Ctrl+Shift+T**; confirm the operation replay timeline appears (initially empty or with a "Hover an operation to see details" message).
+- Draw a brush; confirm a "+" icon appears in the timeline.
+- Delete the brush; confirm an "x" icon appears.
+- Undo the delete; confirm the timeline still shows both operations.
+- Hover an icon in the timeline; confirm the detail label shows the operation name and elapsed time (e.g. "Draw Brush (5s ago)").
+- Click an icon, then click **Replay**; confirm the editor undoes/redoes to reach that point in history with a toast ("Replay: undid N steps" or "Replay: redid N steps").
+- Draw several more brushes to accumulate 5+ timeline entries. Confirm the timeline scrolls horizontally.
+- Press **Ctrl+Shift+T** again; confirm the timeline hides.
+
+### 16. Command Palette Fuzzy Search
+- Press **Ctrl+K**; confirm the command palette opens (same as Shift+? and F1).
+- Type "hollow"; confirm exact match shows the Hollow action.
+- Clear and type "hllow" (typo); confirm the "Did you mean: Hollow?" suggestion appears and the Hollow entry is visible.
+- Clear and type "extrd"; confirm fuzzy matches for Extrude Up/Down appear.
+- Press **Enter**; confirm the first fuzzy match executes.
+- Press **Ctrl+K** again; type "zzzqq" (no match at all); confirm no entries and no suggestion shown.
+
+### 17. Example Library
+- Open **Manage** tab. Expand the **Examples** section (collapsed by default).
+- Confirm 5 example cards are visible with titles, difficulty badges, and descriptions.
+- Type "corridor" in the search bar; confirm only the "Corridor with Doorway" card is visible.
+- Clear the search. Type "advanced"; confirm only the "Simple Arena" card is visible.
+- Clear the search. Click **Study This** on "Simple Room"; confirm the annotation panel appears with numbered design notes.
+- Click **Close** on the annotation panel; confirm it disappears.
+- Click **Load** on "Simple Room"; confirm existing brushes are cleared and the example's brushes appear in the viewport at their correct positions (not piled at the origin).
+- Click **Load** on "Jump Puzzle Platforms"; confirm the room brushes are cleared and platform brushes appear at staggered heights with a player_start entity.
+- Undo is not supported for example loads (they bypass undo/redo). Confirm a toast "Loaded 'Jump Puzzle Platforms': N objects" appeared.
+
+### 18. Cleanup / Persistence
 - Dismiss the tutorial with and without `Don't show again` checked.
 - Restart Godot and confirm the `show_welcome` preference behaves as expected.
 - Reopen the dock and confirm no layout corruption remains after closing the tutorial and shortcut dialog.

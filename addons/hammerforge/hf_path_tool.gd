@@ -594,7 +594,8 @@ func _ensure_mesh() -> void:
 
 func _clear_visuals() -> void:
 	if _mesh_instance and is_instance_valid(_mesh_instance):
-		_mesh_instance.get_parent().remove_child(_mesh_instance)
+		if _mesh_instance.get_parent():
+			_mesh_instance.get_parent().remove_child(_mesh_instance)
 		_mesh_instance.queue_free()
 		_mesh_instance = null
 	_immediate_mesh = null

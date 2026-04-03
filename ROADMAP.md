@@ -193,6 +193,21 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - Both new Quick Play modes share severity ≥ 2 blocking, auto-create, and fix-dialog patterns with standard Quick Play.
 - 30 new tests (bake_system, bake_issues, quick_play_modes). Total: **807 tests across 47 files**.
 
+## Done (I/O Connections & Entity Polish — Make Wiring Delightful)
+- **Smart auto-routing**: Bézier curved connection lines with arrowheads, parallel route offset (0.3 units per route), color-coded by output type (cyan=OnTrigger, red=OnDamage, yellow=OnUse, green=OnOpen, magenta=OnBreak, orange=OnTimer). Fire-once pulses brighter; delayed connections dim proportionally.
+- **I/O wiring panel** (`HFIOWiringPanel`): embedded in Entities tab with connection summary, outputs list, quick-wire form (output/target dropdown/input/param/delay/fire-once), and preset picker with target tag mapping.
+- **Connection presets** (`HFIOPresets`): 6 built-in presets (Door+Light+Sound, Button→Toggle, Alarm Sequence, Pickup+Remove, Damage+Break, Timer Lights). Save entity connections as reusable user presets. Target tags map to actual names at apply time. User presets persist to editor config directory.
+- **Highlight Connected**: toggle to pulse-highlight all linked entities (SphereMesh overlays with animated alpha). Summary label in context toolbar. Cross-UI sync between context toolbar and wiring panel via `set_pressed_no_signal()`.
+- Context toolbar entity section gains HL toggle button and IOSummary label.
+- 57 new tests (io_presets 21, io_visualizer_enhanced 20, io_highlight_sync 16). Total: **845 tests across 49 files**.
+
+## Done (Learning & Discovery Aids — Lower the Onboarding Wall)
+- **Coach marks** (`HFCoachMarks`): first-use floating step-by-step guides for 10 advanced tools (Polygon, Path, Carve, Vertex Edit, Extrude, Clip, Hollow, Measure, Decal, Surface Paint). Auto-triggered when tools are activated via keyboard, command palette, or context toolbar. Per-tool "Don't show again" persisted via user prefs.
+- **Operation replay timeline** (`HFOperationReplay`): compact horizontal timeline of up to 20 recent operations with color-coded icons by action type. Hover for detail + elapsed time, click Replay to undo/redo to that history point. Toggle with Ctrl+Shift+T. Records undo versions and drives `UndoRedo.undo()`/`redo()`.
+- **Enhanced command palette** (Ctrl+K): fuzzy search with subsequence matching (word-boundary and consecutive-char bonuses). "Did you mean: ..." suggestion label when no exact match. Caps at 5 fuzzy results. Ctrl+K added as toggle shortcut alongside Shift+?/F1.
+- **Example library** (`HFExampleLibrary`): 5 built-in demo levels (Simple Room, Corridor with Doorway, Jump Puzzle Platforms, Hollowed Building, Simple Arena). Difficulty badges, tags, searchable browser, "Study This" annotations. Load clears current scene and instantiates from JSON definitions. Manage tab section (collapsed by default).
+- 63 new tests across 4 files (coach_marks, operation_replay, fuzzy_search, example_library). Total: **944 tests across 54 files**.
+
 ## Next (Wave 2c remaining)
 - Displacement sewing (stitch adjacent heightmap edges to share vertices).
 - Material atlasing for large scenes.
