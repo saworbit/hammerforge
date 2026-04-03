@@ -201,6 +201,13 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - Context toolbar entity section gains HL toggle button and IOSummary label.
 - 57 new tests (io_presets 21, io_visualizer_enhanced 20, io_highlight_sync 16). Total: **845 tests across 49 files**.
 
+## Done (Learning & Discovery Aids — Lower the Onboarding Wall)
+- **Coach marks** (`HFCoachMarks`): first-use floating step-by-step guides for 10 advanced tools (Polygon, Path, Carve, Vertex Edit, Extrude, Clip, Hollow, Measure, Decal, Surface Paint). Auto-triggered when tools are activated via keyboard, command palette, or context toolbar. Per-tool "Don't show again" persisted via user prefs.
+- **Operation replay timeline** (`HFOperationReplay`): compact horizontal timeline of up to 20 recent operations with color-coded icons by action type. Hover for detail + elapsed time, click Replay to undo/redo to that history point. Toggle with Ctrl+Shift+T. Records undo versions and drives `UndoRedo.undo()`/`redo()`.
+- **Enhanced command palette** (Ctrl+K): fuzzy search with subsequence matching (word-boundary and consecutive-char bonuses). "Did you mean: ..." suggestion label when no exact match. Caps at 5 fuzzy results. Ctrl+K added as toggle shortcut alongside Shift+?/F1.
+- **Example library** (`HFExampleLibrary`): 5 built-in demo levels (Simple Room, Corridor with Doorway, Jump Puzzle Platforms, Hollowed Building, Simple Arena). Difficulty badges, tags, searchable browser, "Study This" annotations. Load clears current scene and instantiates from JSON definitions. Manage tab section (collapsed by default).
+- 63 new tests across 4 files (coach_marks, operation_replay, fuzzy_search, example_library). Total: **944 tests across 54 files**.
+
 ## Next (Wave 2c remaining)
 - Displacement sewing (stitch adjacent heightmap edges to share vertices).
 - Material atlasing for large scenes.

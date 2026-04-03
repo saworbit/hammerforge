@@ -1,0 +1,283 @@
+{
+	"examples": [
+		{
+			"id": "simple_room",
+			"title": "Simple Room",
+			"description": "A single room with four walls, a floor, and ceiling. Great starting point for learning brush-based building.",
+			"difficulty": "Beginner",
+			"tags": ["basics", "room", "brush"],
+			"annotations": [
+				{"text": "This is an additive brush — it defines solid geometry", "target": "room_brush"},
+				{"text": "The floor is a separate flat brush at Y=0", "target": "floor_brush"},
+				{"text": "Try selecting the room brush and pressing Ctrl+H to hollow it", "target": "action_hint"}
+			],
+			"brushes": [
+				{
+					"id": "room_brush",
+					"shape": 0,
+					"position": [0, 2, 0],
+					"size": [8, 4, 8],
+					"operation": 0
+				},
+				{
+					"id": "floor_brush",
+					"shape": 0,
+					"position": [0, -0.125, 0],
+					"size": [10, 0.25, 10],
+					"operation": 0
+				}
+			],
+			"entities": []
+		},
+		{
+			"id": "corridor",
+			"title": "Corridor with Doorway",
+			"description": "Two rooms connected by a subtracted doorway. Demonstrates subtract operations and spatial planning.",
+			"difficulty": "Beginner",
+			"tags": ["subtract", "doorway", "corridor"],
+			"annotations": [
+				{"text": "The orange brush is a subtraction — it carves away geometry", "target": "doorway_sub"},
+				{"text": "Subtractive brushes must overlap additive ones to work", "target": "overlap_hint"},
+				{"text": "Try moving the subtraction brush to change the doorway position", "target": "action_hint"}
+			],
+			"brushes": [
+				{
+					"id": "room_a",
+					"shape": 0,
+					"position": [-6, 2, 0],
+					"size": [8, 4, 8],
+					"operation": 0
+				},
+				{
+					"id": "room_b",
+					"shape": 0,
+					"position": [6, 2, 0],
+					"size": [8, 4, 8],
+					"operation": 0
+				},
+				{
+					"id": "wall_between",
+					"shape": 0,
+					"position": [0, 2, 0],
+					"size": [4, 4, 8],
+					"operation": 0
+				},
+				{
+					"id": "doorway_sub",
+					"shape": 0,
+					"position": [0, 1.5, 0],
+					"size": [4.5, 3, 2],
+					"operation": 1
+				}
+			],
+			"entities": []
+		},
+		{
+			"id": "jump_puzzle",
+			"title": "Jump Puzzle Platforms",
+			"description": "Staggered platforms at varying heights with a player spawn. Practice brush placement and entity positioning.",
+			"difficulty": "Intermediate",
+			"tags": ["platforms", "entities", "gameplay"],
+			"annotations": [
+				{"text": "Platforms at different heights create jump challenges", "target": "platform_3"},
+				{"text": "The player_start entity defines where the player spawns", "target": "spawn_entity"},
+				{"text": "Try adding more platforms or adjusting heights for difficulty", "target": "action_hint"}
+			],
+			"brushes": [
+				{
+					"id": "platform_1",
+					"shape": 0,
+					"position": [0, 0.5, 0],
+					"size": [4, 1, 4],
+					"operation": 0
+				},
+				{
+					"id": "platform_2",
+					"shape": 0,
+					"position": [6, 1.5, 0],
+					"size": [3, 1, 3],
+					"operation": 0
+				},
+				{
+					"id": "platform_3",
+					"shape": 0,
+					"position": [12, 2.5, 2],
+					"size": [3, 1, 3],
+					"operation": 0
+				},
+				{
+					"id": "platform_4",
+					"shape": 0,
+					"position": [18, 3.5, 0],
+					"size": [4, 1, 4],
+					"operation": 0
+				},
+				{
+					"id": "platform_5",
+					"shape": 0,
+					"position": [24, 5, -2],
+					"size": [5, 1, 5],
+					"operation": 0
+				}
+			],
+			"entities": [
+				{
+					"id": "spawn_entity",
+					"type": "player_start",
+					"position": [0, 1.5, 0]
+				}
+			]
+		},
+		{
+			"id": "hollow_building",
+			"title": "Hollowed Building",
+			"description": "A pre-hollowed structure with window subtractions. Shows hollow + subtract workflow for architectural modeling.",
+			"difficulty": "Intermediate",
+			"tags": ["hollow", "windows", "architecture"],
+			"annotations": [
+				{"text": "The outer shell was created with Hollow (Ctrl+H) on a solid block", "target": "shell_brush"},
+				{"text": "Each window is a subtract brush punched through the wall", "target": "window_sub_1"},
+				{"text": "Try adding a door using another subtract brush at ground level", "target": "action_hint"}
+			],
+			"brushes": [
+				{
+					"id": "shell_brush",
+					"shape": 0,
+					"position": [0, 3, 0],
+					"size": [12, 6, 10],
+					"operation": 0
+				},
+				{
+					"id": "interior_sub",
+					"shape": 0,
+					"position": [0, 3, 0],
+					"size": [11, 5.5, 9],
+					"operation": 1
+				},
+				{
+					"id": "window_sub_1",
+					"shape": 0,
+					"position": [-6.1, 3.5, -2],
+					"size": [1, 1.5, 2],
+					"operation": 1
+				},
+				{
+					"id": "window_sub_2",
+					"shape": 0,
+					"position": [-6.1, 3.5, 2],
+					"size": [1, 1.5, 2],
+					"operation": 1
+				},
+				{
+					"id": "window_sub_3",
+					"shape": 0,
+					"position": [6.1, 3.5, 0],
+					"size": [1, 1.5, 2],
+					"operation": 1
+				},
+				{
+					"id": "floor_brush",
+					"shape": 0,
+					"position": [0, -0.125, 0],
+					"size": [14, 0.25, 12],
+					"operation": 0
+				}
+			],
+			"entities": [
+				{
+					"id": "light_1",
+					"type": "light_point",
+					"position": [0, 4.5, 0]
+				}
+			]
+		},
+		{
+			"id": "arena",
+			"title": "Simple Arena",
+			"description": "A multi-level arena with ramps, cover, and spawn points. Demonstrates combining multiple techniques for gameplay spaces.",
+			"difficulty": "Advanced",
+			"tags": ["arena", "ramps", "gameplay", "entities", "multi-level"],
+			"annotations": [
+				{"text": "The raised platform creates verticality for interesting combat", "target": "upper_platform"},
+				{"text": "Multiple spawn points ensure fair player placement", "target": "spawn_2"},
+				{"text": "The central pillar provides cover. Try using Carve to add details", "target": "pillar"},
+				{"text": "Try extruding faces (U key) on the walls to add ledges", "target": "action_hint"}
+			],
+			"brushes": [
+				{
+					"id": "arena_floor",
+					"shape": 0,
+					"position": [0, -0.25, 0],
+					"size": [24, 0.5, 24],
+					"operation": 0
+				},
+				{
+					"id": "wall_n",
+					"shape": 0,
+					"position": [0, 2, -12.25],
+					"size": [24, 4, 0.5],
+					"operation": 0
+				},
+				{
+					"id": "wall_s",
+					"shape": 0,
+					"position": [0, 2, 12.25],
+					"size": [24, 4, 0.5],
+					"operation": 0
+				},
+				{
+					"id": "wall_e",
+					"shape": 0,
+					"position": [12.25, 2, 0],
+					"size": [0.5, 4, 24],
+					"operation": 0
+				},
+				{
+					"id": "wall_w",
+					"shape": 0,
+					"position": [-12.25, 2, 0],
+					"size": [0.5, 4, 24],
+					"operation": 0
+				},
+				{
+					"id": "upper_platform",
+					"shape": 0,
+					"position": [8, 1, 8],
+					"size": [6, 2, 6],
+					"operation": 0
+				},
+				{
+					"id": "ramp",
+					"shape": 0,
+					"position": [5, 0.5, 8],
+					"size": [4, 1, 3],
+					"operation": 0
+				},
+				{
+					"id": "pillar",
+					"shape": 1,
+					"position": [0, 2, 0],
+					"size": [2, 4, 2],
+					"operation": 0
+				}
+			],
+			"entities": [
+				{
+					"id": "spawn_1",
+					"type": "player_start",
+					"position": [-8, 0.5, -8]
+				},
+				{
+					"id": "spawn_2",
+					"type": "player_start",
+					"position": [8, 3, 8]
+				},
+				{
+					"id": "arena_light",
+					"type": "light_point",
+					"position": [0, 3.5, 0]
+				}
+			]
+		}
+	]
+}

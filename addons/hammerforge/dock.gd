@@ -256,6 +256,8 @@ var _show_spawn_debug: CheckBox = null
 var _spawn_validate_btn: Button = null
 var _spawn_auto_create_btn: Button = null
 var _prefab_library = null  # HFPrefabLibrary
+var _example_library = null  # HFExampleLibrary
+var _operation_replay = null  # HFOperationReplay
 var _sculpt_raise_btn: Button = null
 var _sculpt_lower_btn: Button = null
 var _sculpt_smooth_btn: Button = null
@@ -5809,3 +5811,69 @@ func _apply_material_to_whole_brush() -> void:
 ## Assign face material — called by context toolbar for quick material apply.
 func _on_face_assign_material() -> void:
 	_on_material_assign()
+
+
+## Set the operation replay control (passed from plugin.gd).
+func set_operation_replay(replay) -> void:
+	_operation_replay = replay
+
+
+## Handle example level load request from the example library.
+func _on_example_load_requested(example_id: String) -> void:
+	if not _example_library:
+		return
+	var data: Dictionary = _example_library.get_example_data(example_id)
+	if data.is_empty():
+		show_toast("Example not found: %s" % example_id, 2)
+		return
+	if not level_root:
+		show_toast("No LevelRoot in scene — add one first", 1)
+		return
+	_load_example_data(data)
+
+
+func _load_example_data(data: Dictionary) -> void:
+	var brushes: Array = data.get("brushes", [])
+	var entities: Array = data.get("entities", [])
+	var title: String = data.get("title", "Example")
+
+	# Clear existing content before loading
+	if level_root.has_method("clear_brushes"):
+		level_root.clear_brushes()
+	if level_root.entity_system and level_root.entity_system.has_method("clear_entities"):
+		level_root.entity_system.clear_entities()
+
+	var loaded_count := 0
+	for brush_data in brushes:
+		var pos_arr: Array = brush_data.get("position", [0, 0, 0])
+		var size_arr: Array = brush_data.get("size", [4, 4, 4])
+		var shape: int = brush_data.get("shape", 0)
+		var operation: int = brush_data.get("operation", 0)
+		var pos := Vector3(pos_arr[0], pos_arr[1], pos_arr[2])
+		var brush_size := Vector3(size_arr[0], size_arr[1], size_arr[2])
+
+		# hf_brush_system reads "center" for position (not "position")
+		var info := {
+			"center": pos,
+			"size": brush_size,
+			"shape": shape,
+			"operation": operation,
+		}
+		if level_root.has_method("create_brush_from_info"):
+			level_root.create_brush_from_info(info)
+			loaded_count += 1
+
+	for entity_data in entities:
+		var etype: String = entity_data.get("type", "point_light")
+		var epos_arr: Array = entity_data.get("position", [0, 0, 0])
+		var epos := Vector3(epos_arr[0], epos_arr[1], epos_arr[2])
+		var entity = DraftEntity.new()
+		entity.name = "DraftEntity"
+		entity.entity_type = etype
+		entity.entity_class = etype
+		if level_root.has_method("add_entity"):
+			level_root.add_entity(entity)
+			entity.global_position = epos
+			loaded_count += 1
+
+	show_toast("Loaded '%s': %d objects" % [title, loaded_count], 0)

@@ -65,6 +65,26 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   silent no-op. Now assigns the result back to `input_state.drag_end`.
 
 ### Added
+- **Learning & Discovery Aids** (Apr 2026):
+  - **Coach marks** (`HFCoachMarks`): first-use floating step-by-step guides for 10 advanced tools
+    (Polygon, Path, Carve, Vertex Edit, Extrude, Clip, Hollow, Measure, Decal, Surface Paint).
+    Auto-triggered on tool activation. Per-tool "Don't show again" persisted via user prefs.
+  - **Operation replay timeline** (`HFOperationReplay`): compact horizontal timeline of up to 20
+    recent operations with color-coded icons per action type. Hover for elapsed time, click Replay to
+    undo/redo to that point in the history. Toggle with Ctrl+Shift+T. Records undo versions from
+    `EditorUndoRedoManager` and drives `UndoRedo.undo()`/`redo()` to reach the target version.
+  - **Enhanced command palette** (Ctrl+K): fuzzy search with subsequence matching, word-boundary and
+    consecutive-character bonuses. "Did you mean: ..." suggestion when no exact match found. Caps at 5
+    fuzzy results. Ctrl+K added as additional toggle shortcut alongside Shift+? and F1.
+  - **Example library** (`HFExampleLibrary`): 5 built-in demo levels (Simple Room, Corridor with
+    Doorway, Jump Puzzle Platforms, Hollowed Building, Simple Arena) with difficulty badges, tags,
+    searchable browser, and "Study This" annotations. Load button clears the scene and instantiates
+    brushes + entities from JSON definitions. Section in Manage tab (collapsed by default).
+  - `data/example_levels.json`: structured example level data with brush/entity definitions and
+    per-level annotations.
+  - 63 new tests across 4 files (test_coach_marks 14, test_operation_replay 23, test_fuzzy_search 9,
+    test_example_library 17). Total: **944 tests across 54 files**.
+
 - **I/O Connections & Entity Polish** (Apr 2026):
   - **Smart auto-routing**: connection lines now use quadratic Bézier curves with arrowheads instead
     of straight lines. Parallel connections between the same pair of entities offset laterally to

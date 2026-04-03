@@ -50,6 +50,9 @@ addons/hammerforge/
   map_io.gd              .map import/export (uses adapter pattern for multi-format support)
   prefab_factory.gd      Advanced shape generation
 
+  data/
+    example_levels.json    Built-in demo level definitions (5 levels with annotations)
+
   textures/prototypes/   150 SVG prototype textures ({pattern}_{color}.svg)
 
   map_adapters/          .map export format adapters (strategy pattern)
@@ -67,7 +70,10 @@ addons/hammerforge/
     hf_prefab_library.gd   Prefab library dock section (search, tags, variants, drag-drop, context menu)
     hf_prefab_overlay.gd   Prefab ghost overlay (wireframe bounding box + override markers)
     hf_context_toolbar.gd  Floating contextual mini-toolbar (context-sensitive actions in 3D viewport)
-    hf_hotkey_palette.gd   Searchable command palette with live gray-out (Shift+? or F1)
+    hf_hotkey_palette.gd   Searchable command palette with fuzzy search and live gray-out (Shift+?/F1/Ctrl+K)
+    hf_coach_marks.gd      First-use tool guides (10 tools, per-tool dismissal, auto-trigger on activation)
+    hf_operation_replay.gd Operation timeline with undo/redo replay (Ctrl+Shift+T toggle)
+    hf_example_library.gd  Example level browser (5 built-in demos, search, annotations, one-click load)
     hf_selection_filter.gd Selection filter popover (by normal/material/similar/visgroup/type)
     paint_tab_builder.gd   Builds Paint tab sections + signal connections
     entity_tab_builder.gd  Builds Entity Properties + Entity I/O + I/O Wiring sections
