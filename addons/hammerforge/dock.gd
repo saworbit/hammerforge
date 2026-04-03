@@ -672,7 +672,11 @@ func _on_tutorial_completed() -> void:
 	if is_instance_valid(_tutorial_wizard):
 		var tree := get_tree()
 		if tree:
-			tree.create_timer(2.0).timeout.connect(_close_tutorial)
+			tree.create_timer(2.0).timeout.connect(
+				func():
+					if is_instance_valid(self):
+						_close_tutorial()
+			)
 
 
 func _close_tutorial() -> void:
@@ -4353,7 +4357,7 @@ func _on_uv_reset() -> void:
 		return
 	if not level_root:
 		return
-	if _uv_active_brush.brush_id == "" and true:
+	if _uv_active_brush.brush_id == "":
 		level_root.get_brush_info_from_node(_uv_active_brush)
 	var brush_id = _uv_active_brush.brush_id
 	var face_idx = _uv_active_brush.faces.find(_uv_active_face)
@@ -4376,7 +4380,7 @@ func _on_surface_paint_layer_add() -> void:
 		return
 	if not level_root:
 		return
-	if _surface_active_brush.brush_id == "" and true:
+	if _surface_active_brush.brush_id == "":
 		level_root.get_brush_info_from_node(_surface_active_brush)
 	var brush_id = _surface_active_brush.brush_id
 	var face_idx = _surface_active_brush.faces.find(_surface_active_face)
@@ -4394,7 +4398,7 @@ func _on_surface_paint_layer_remove() -> void:
 		return
 	if not level_root:
 		return
-	if _surface_active_brush.brush_id == "" and true:
+	if _surface_active_brush.brush_id == "":
 		level_root.get_brush_info_from_node(_surface_active_brush)
 	var brush_id = _surface_active_brush.brush_id
 	var face_idx = _surface_active_brush.faces.find(_surface_active_face)
@@ -4429,7 +4433,7 @@ func _on_surface_paint_texture_selected(path: String) -> void:
 		return
 	if not level_root:
 		return
-	if _surface_active_brush.brush_id == "" and true:
+	if _surface_active_brush.brush_id == "":
 		level_root.get_brush_info_from_node(_surface_active_brush)
 	var brush_id = _surface_active_brush.brush_id
 	var face_idx = _surface_active_brush.faces.find(_surface_active_face)

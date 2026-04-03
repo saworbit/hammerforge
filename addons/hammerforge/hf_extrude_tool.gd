@@ -165,6 +165,9 @@ func _update_preview(height: float) -> void:
 
 	if root.draft_brushes_node:
 		root.draft_brushes_node.add_child(_preview_brush)
+	else:
+		_preview_brush.free()
+		_preview_brush = null
 
 
 func _clear_preview() -> void:

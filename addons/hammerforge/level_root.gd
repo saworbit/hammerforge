@@ -521,10 +521,14 @@ func _exit_tree() -> void:
 		_autosave_timer.stop()
 		if _autosave_timer.timeout.is_connected(_on_autosave_timeout):
 			_autosave_timer.timeout.disconnect(_on_autosave_timeout)
+		_autosave_timer.queue_free()
+		_autosave_timer = null
 	if _reload_timer:
 		_reload_timer.stop()
 		if _reload_timer.timeout.is_connected(_check_remote_reload):
 			_reload_timer.timeout.disconnect(_check_remote_reload)
+		_reload_timer.queue_free()
+		_reload_timer = null
 
 
 func _process(_delta: float) -> void:

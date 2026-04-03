@@ -1374,7 +1374,8 @@ func _ensure_vertex_overlay(root: Node) -> void:
 
 func _clear_vertex_overlay() -> void:
 	if _vertex_overlay_mesh and is_instance_valid(_vertex_overlay_mesh):
-		_vertex_overlay_mesh.get_parent().remove_child(_vertex_overlay_mesh)
+		if _vertex_overlay_mesh.get_parent():
+			_vertex_overlay_mesh.get_parent().remove_child(_vertex_overlay_mesh)
 		_vertex_overlay_mesh.queue_free()
 		_vertex_overlay_mesh = null
 	_vertex_overlay_imesh = null
@@ -2552,7 +2553,6 @@ func _on_context_toolbar_action(action: String, args: Array) -> void:
 			if dock:
 				dock.main_tabs.current_tab = 2  # Entities tab
 		"highlight_connected":
-			var root = active_root if active_root else _get_level_root()
 			if root and root.has_method("set_highlight_connected"):
 				var pressed: bool = args[0] if not args.is_empty() else false
 				root.set_highlight_connected(pressed)

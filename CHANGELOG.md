@@ -29,6 +29,40 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   parent node was freed during plugin unload.
 - **Vertex edge array bounds** (Apr 2026): `hf_vertex_system.gd` `split_edge()` now validates
   `edge.size() >= 2` before indexing, preventing out-of-bounds access on malformed input.
+- **Duplicate variable declaration in plugin.gd** (Apr 2026): `_on_context_toolbar_action()` had a
+  redundant `var root` inside the `"highlight_connected"` match branch that shadowed the function-level
+  `root`, causing a parse error. Removed the duplicate.
+- **Debug `and true` remnants in dock.gd** (Apr 2026): Four surface paint/UV functions
+  (`_on_uv_reset`, `_on_surface_paint_layer_add`, `_on_surface_paint_layer_remove`,
+  `_on_surface_paint_texture_selected`) had leftover `and true` in conditions that made the
+  conditional check a no-op. Removed all four.
+- **Timer closure crash in dock.gd** (Apr 2026): `_on_tutorial_completed()` used a direct method
+  reference in `create_timer().timeout.connect(_close_tutorial)`. If the dock was freed before the
+  2-second timer fired, the callback would reference a freed object. Wrapped in a lambda with
+  `is_instance_valid(self)` guard.
+- **Timer nodes leaked in level_root.gd** (Apr 2026): `_exit_tree()` disconnected timer signals but
+  never called `queue_free()` on `_autosave_timer` or `_reload_timer`, leaking child Timer nodes.
+  Now frees and nulls both.
+- **get_parent() null crashes across 8 files** (Apr 2026): `remove_child()` was called via
+  `node.get_parent().remove_child(node)` without checking `get_parent()` for null in:
+  hf_decal_tool.gd, hf_measure_tool.gd (×2), hf_path_tool.gd, hf_polygon_tool.gd, plugin.gd,
+  hf_prefab_system.gd (×2), brush_manager.gd. All now guard with `if node.get_parent():`.
+- **Orphan nodes in bulk-clear paths** (Apr 2026): `hf_entity_system.gd clear_entities()`,
+  `hf_brush_system.gd clear_brushes()`, and `brush_manager.gd clear_brushes()` called
+  `queue_free()` without `remove_child()` first. During state restore, old nodes could still be
+  in the tree when new nodes were added. All now call `remove_child()` before `queue_free()`.
+- **Division by zero in merge_vertices** (Apr 2026): `hf_vertex_system.gd merge_vertices()` divided
+  by `vert_indices.size()` to compute centroid, ignoring that out-of-bounds indices are skipped. If
+  all indices were invalid, this was a divide-by-zero. Now tracks `valid_count` and early-returns
+  if zero.
+- **Edge hover bounds check** (Apr 2026): `hf_vertex_system.gd update_edge_hover()` now validates
+  `pick.edge.size() >= 2` before indexing into the edge array.
+- **Extrude preview orphan node** (Apr 2026): `hf_extrude_tool.gd _update_preview()` created a
+  `_preview_brush` DraftBrush but only added it to the tree if `draft_brushes_node` existed. If
+  null, the node leaked. Now `free()`s and nulls it in the else branch.
+- **Axis lock return value discarded** (Apr 2026): `hf_drag_system.gd update_drag()` called
+  `_apply_axis_lock()` but discarded the return value, making axis lock position clamping a
+  silent no-op. Now assigns the result back to `input_state.drag_end`.
 
 ### Added
 - **I/O Connections & Entity Polish** (Apr 2026):
@@ -54,7 +88,7 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   - `level_root.gd` gains `io_presets` subsystem, `set_highlight_connected()`, and
     `get_connection_summary()` delegation methods.
   - 57 new tests across 3 files (test_io_presets 21, test_io_visualizer_enhanced 20,
-    test_io_highlight_sync 16). Total: **845 tests across 49 files**.
+    test_io_highlight_sync 16). Total: **873 tests across 50 files**.
 
 - **Bake & Quick Play Optimizations** (Apr 2026):
   - **Bake Selected**: bake only the currently selected brushes and merge output into the existing

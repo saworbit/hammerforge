@@ -480,6 +480,7 @@ func clear_brushes() -> void:
 	if root.draft_brushes_node:
 		for child in root.draft_brushes_node.get_children():
 			if child is DraftBrush:
+				root.draft_brushes_node.remove_child(child)
 				child.queue_free()
 	_clear_generated()
 	_clear_preview()
