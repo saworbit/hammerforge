@@ -193,6 +193,14 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - Both new Quick Play modes share severity ≥ 2 blocking, auto-create, and fix-dialog patterns with standard Quick Play.
 - 30 new tests (bake_system, bake_issues, quick_play_modes). Total: **807 tests across 47 files**.
 
+## Done (I/O Connections & Entity Polish — Make Wiring Delightful)
+- **Smart auto-routing**: Bézier curved connection lines with arrowheads, parallel route offset (0.3 units per route), color-coded by output type (cyan=OnTrigger, red=OnDamage, yellow=OnUse, green=OnOpen, magenta=OnBreak, orange=OnTimer). Fire-once pulses brighter; delayed connections dim proportionally.
+- **I/O wiring panel** (`HFIOWiringPanel`): embedded in Entities tab with connection summary, outputs list, quick-wire form (output/target dropdown/input/param/delay/fire-once), and preset picker with target tag mapping.
+- **Connection presets** (`HFIOPresets`): 6 built-in presets (Door+Light+Sound, Button→Toggle, Alarm Sequence, Pickup+Remove, Damage+Break, Timer Lights). Save entity connections as reusable user presets. Target tags map to actual names at apply time. User presets persist to editor config directory.
+- **Highlight Connected**: toggle to pulse-highlight all linked entities (SphereMesh overlays with animated alpha). Summary label in context toolbar. Cross-UI sync between context toolbar and wiring panel via `set_pressed_no_signal()`.
+- Context toolbar entity section gains HL toggle button and IOSummary label.
+- 57 new tests (io_presets 21, io_visualizer_enhanced 20, io_highlight_sync 16). Total: **845 tests across 49 files**.
+
 ## Next (Wave 2c remaining)
 - Displacement sewing (stitch adjacent heightmap edges to share vertices).
 - Material atlasing for large scenes.

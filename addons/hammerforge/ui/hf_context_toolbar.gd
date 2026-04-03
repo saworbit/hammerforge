@@ -200,6 +200,26 @@ func _build_entity_section() -> void:
 	_add_tool_button(section, "I/O", "Edit I/O Connections", "entity_io")
 	_add_tool_button(section, "Props", "Quick-Edit Properties", "entity_props")
 	_add_sep(section)
+	var hl_btn = Button.new()
+	hl_btn.text = "HL"
+	hl_btn.tooltip_text = "Highlight Connected — pulse linked entities"
+	hl_btn.toggle_mode = true
+	hl_btn.flat = true
+	hl_btn.focus_mode = Control.FOCUS_NONE
+	hl_btn.add_theme_font_size_override("font_size", 11)
+	hl_btn.custom_minimum_size = Vector2(32, 0)
+	hl_btn.toggled.connect(
+		func(pressed: bool): action_requested.emit("highlight_connected", [pressed])
+	)
+	hl_btn.name = "HighlightBtn"
+	section.add_child(hl_btn)
+	# Connection summary label (updated dynamically)
+	var io_summary = Label.new()
+	io_summary.name = "IOSummary"
+	io_summary.add_theme_font_size_override("font_size", 10)
+	io_summary.add_theme_color_override("font_color", Color(0.6, 0.8, 1.0, 0.7))
+	section.add_child(io_summary)
+	_add_sep(section)
 	_add_tool_button(section, "Dup", "Duplicate (Ctrl+D)", "duplicate")
 	_add_tool_button(section, "Del", "Delete (Del)", "delete")
 	_add_sep(section)
@@ -437,6 +457,22 @@ func _apply_context(state: Dictionary) -> void:
 
 
 func _update_dynamic_content(state: Dictionary) -> void:
+	# Update entity I/O summary badge and highlight toggle
+	if _context == Context.ENTITY_SELECTED:
+		var section = _sections.get(Context.ENTITY_SELECTED)
+		if section:
+			var io_summary = section.get_node_or_null("IOSummary")
+			if io_summary:
+				var io_text: String = state.get("io_summary", "")
+				io_summary.text = io_text
+				io_summary.visible = io_text != ""
+			# Sync highlight button pressed state from the authoritative visualizer
+			var hl_btn = section.get_node_or_null("HighlightBtn") as Button
+			if hl_btn and state.has("highlight_connected"):
+				var hl_state: bool = state["highlight_connected"]
+				if hl_btn.button_pressed != hl_state:
+					hl_btn.set_pressed_no_signal(hl_state)
+
 	# Update operation toggle label
 	if _context == Context.DRAW_IDLE:
 		var section = _sections.get(Context.DRAW_IDLE)

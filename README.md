@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/Godot-4.6%2B-478cbf?logo=godot-engine&logoColor=white" alt="Godot 4.6+">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
   <img src="https://img.shields.io/badge/Status-Alpha-orange" alt="Alpha">
-  <img src="https://img.shields.io/badge/Tests-807%20passing-brightgreen" alt="807 tests passing">
+  <img src="https://img.shields.io/badge/Tests-845%20passing-brightgreen" alt="845 tests passing">
   <img src="https://img.shields.io/badge/GDScript-23k%2B%20lines-blueviolet" alt="23k+ lines">
 </p>
 
@@ -36,7 +36,7 @@ HammerForge is a single `addons/` folder. No external tools, no custom builds, n
 
 | | |
 |---|---|
-| **Modular subsystem architecture** | **807 unit + integration tests** with CI on every push |
+| **Modular subsystem architecture** | **845 unit + integration tests** with CI on every push |
 | **15 brush shapes** (box through dodecahedron) | **150 built-in prototype textures** for instant greyboxing |
 | **Quake `.map`** + **glTF `.glb`** export | **.hflevel** native format with threaded I/O |
 | **Customizable keymaps** (JSON) | **Plugin API** for custom tools |
@@ -126,7 +126,10 @@ Grid-based paint layers with chunked storage for large worlds:
 
 - **Data-driven entity types** from `entities.json` (point entities, brush entities like func_detail, func_wall, trigger volumes)
 - **Source-style I/O connections** -- wire output events to target inputs with parameter, delay, and fire-once options
-- **I/O viewport visualization** -- colored lines between connected entities (green=standard, orange=fire_once, yellow=selected)
+- **Smart auto-routed connection lines** -- quadratic Bezier curves with arrowheads, parallel route offset, color-coded by output type (cyan=OnTrigger, red=OnDamage, yellow=OnUse, etc.) and dimmed by delay
+- **I/O wiring panel** -- quick-wire form (output/target/input/param/delay/once), connection summary, and preset picker embedded in the Entities tab
+- **Connection presets** -- 6 built-in patterns (Door+Light+Sound, Button→Toggle, Alarm Sequence, etc.) plus user-saved presets with target tag mapping
+- **Highlight Connected** -- toggle to pulse-highlight all entities linked to the selected one, with summary counts in the context toolbar
 - **Declarative property forms** -- dock auto-generates typed controls (string, int, float, bool, enum, color, vector3) from entity definitions
 - **Drag-and-drop placement** from the entity palette
 - **Color-coded overlays** -- cyan for func_detail, orange for triggers
@@ -210,7 +213,8 @@ plugin.gd            EditorPlugin — input routing, toolbar, viewport overlay
        ├─ HFGridSystem      Grid rendering and follow mode
        ├─ HFVisgroupSystem  Named visibility groups + brush grouping
        ├─ HFCarveSystem     Boolean-subtract carve (progressive-remainder slicing)
-       ├─ HFIOVisualizer    Entity I/O connection lines in viewport
+       ├─ HFIOVisualizer    Entity I/O connection lines in viewport (curved, color-coded, highlight pulse)
+       ├─ HFIOPresets       Reusable I/O connection presets (built-in + user-saved)
        ├─ HFSnapSystem      Grid / Vertex / Center snap with threshold
        ├─ HFSubtractPreview Wireframe AABB intersection overlay for subtract brushes
        ├─ HFVertexSystem    Vertex/edge selection, move, split, merge with convexity validation
@@ -288,7 +292,7 @@ All shortcuts are rebindable via `user://hammerforge_keymap.json`.
 
 ## Testing
 
-807 tests across 47 files using the [GUT](https://github.com/bitwes/Gut) framework, including unit tests and end-to-end integration tests. All checks run on every push via GitHub Actions.
+845 tests across 49 files using the [GUT](https://github.com/bitwes/Gut) framework, including unit tests and end-to-end integration tests. All checks run on every push via GitHub Actions.
 
 ```bash
 # Run all tests headless
@@ -335,6 +339,7 @@ gdlint addons/hammerforge/
 See [ROADMAP.md](ROADMAP.md) for the full plan.
 
 **Recently shipped:**
+- I/O Connections & Entity Polish (curved auto-routed lines, connection presets, wiring panel, Highlight Connected)
 - Bake & Quick Play optimizations (Bake Selected, Bake Changed, preview modes, Play from Camera, Play Selected Area)
 - Prefab variants, live-linked prefabs, quick group-to-prefab
 - Improved selection & multi-select (marquee, selection filters, Select Similar, Apply Last Texture)

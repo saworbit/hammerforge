@@ -31,6 +31,31 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   `edge.size() >= 2` before indexing, preventing out-of-bounds access on malformed input.
 
 ### Added
+- **I/O Connections & Entity Polish** (Apr 2026):
+  - **Smart auto-routing**: connection lines now use quadratic Bézier curves with arrowheads instead
+    of straight lines. Parallel connections between the same pair of entities offset laterally to
+    avoid overlap (0.3 units per route).
+  - **Color by type/delay**: output names are mapped to colors (cyan=OnTrigger, red=OnDamage,
+    yellow=OnUse, green=OnOpen, magenta=OnBreak, orange=OnTimer, etc.). Fire-once connections pulse
+    brighter. Delayed connections dim proportionally.
+  - **I/O wiring panel** (`HFIOWiringPanel`): embedded in Entities tab with connection summary,
+    outputs list, quick-wire form (output/target dropdown/input/param/delay/once), and preset
+    picker with target tag mapping.
+  - **Connection presets** (`HFIOPresets`): 6 built-in presets (Door+Light+Sound, Button→Toggle,
+    Alarm Sequence, Pickup+Remove, Damage+Break, Timer Lights). Save entity connections as reusable
+    user presets. Target tags map to actual entity names at apply time. User presets persist to the
+    editor config directory (not the repo).
+  - **Highlight Connected**: toggle to pulse-highlight all entities linked to the selected entity.
+    SphereMesh overlays with animated alpha. Summary label in context toolbar ("Triggers 2 targets").
+  - **Cross-UI highlight sync**: `highlight_connected` is authoritative on the visualizer, pushed
+    to context toolbar via state dict and to wiring panel via `_sync_highlight_button()`. Both paths
+    use `set_pressed_no_signal()` to avoid signal loops.
+  - Context toolbar gains "HL" toggle button and "IOSummary" label in entity section.
+  - `level_root.gd` gains `io_presets` subsystem, `set_highlight_connected()`, and
+    `get_connection_summary()` delegation methods.
+  - 57 new tests across 3 files (test_io_presets 21, test_io_visualizer_enhanced 20,
+    test_io_highlight_sync 16). Total: **845 tests across 49 files**.
+
 - **Bake & Quick Play Optimizations** (Apr 2026):
   - **Bake Selected**: bake only the currently selected brushes and merge output into the existing
     baked container (preserving previously baked geometry).

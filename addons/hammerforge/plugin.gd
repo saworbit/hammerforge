@@ -317,6 +317,30 @@ func _update_context_toolbar_state(root: Node, tool_id: int) -> void:
 	state["brush_count"] = brush_count
 	state["entity_count"] = entity_count
 
+	# I/O connection summary for entity context toolbar
+	if entity_count > 0 and root and root.has_method("get_connection_summary"):
+		var first_entity: Node = null
+		for node in hf_selection:
+			if root.has_method("is_entity_node") and root.is_entity_node(node):
+				first_entity = node
+				break
+		if first_entity:
+			var summary = root.get_connection_summary(first_entity.name)
+			var triggers: int = summary.get("triggers", 0)
+			var triggered_by: int = summary.get("triggered_by", 0)
+			var parts: Array = []
+			if triggers > 0:
+				var targets: Array = summary.get("target_names", [])
+				parts.append("%d out" % triggers)
+			if triggered_by > 0:
+				parts.append("%d in" % triggered_by)
+			if not parts.is_empty():
+				state["io_summary"] = " | ".join(parts)
+
+	# Push highlight_connected state so both toolbar and wiring panel stay in sync
+	if root and root.get("io_visualizer") and root.io_visualizer:
+		state["highlight_connected"] = root.io_visualizer.highlight_connected
+
 	# Face selection count
 	var face_count := 0
 	if root and root.get("face_selection") is Dictionary:
@@ -2527,6 +2551,13 @@ func _on_context_toolbar_action(action: String, args: Array) -> void:
 		"entity_props":
 			if dock:
 				dock.main_tabs.current_tab = 2  # Entities tab
+		"highlight_connected":
+			var root = active_root if active_root else _get_level_root()
+			if root and root.has_method("set_highlight_connected"):
+				var pressed: bool = args[0] if not args.is_empty() else false
+				root.set_highlight_connected(pressed)
+			if dock:
+				dock.sync_wiring_highlight_state()
 		"shape_box":
 			if dock and dock.shape_select:
 				dock.shape_select.select(0)
