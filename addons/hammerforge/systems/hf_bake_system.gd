@@ -5,14 +5,210 @@ class_name HFBakeSystem
 const PrefabFactory = preload("../prefab_factory.gd")
 const DraftBrush = preload("../brush_instance.gd")
 
+## Bake preview mode: FULL produces final geometry, WIREFRAME skips materials
+## and generates unshaded wireframe, PROXY uses simplified box meshes.
+enum PreviewMode { FULL, WIREFRAME, PROXY }
+
 var root: Node3D
+var _last_dirty_brush_ids: Dictionary = {}  # brush_id -> true; captured at bake start
+var _last_bake_success: bool = false
 
 
 func _init(level_root: Node3D) -> void:
 	root = level_root
 
 
-func bake(apply_cuts: bool = true, hide_live: bool = false, collision_layer_mask: int = 0) -> void:
+# ---------------------------------------------------------------------------
+# Bake time estimation
+# ---------------------------------------------------------------------------
+
+
+## Returns an estimate dict: {estimated_ms, brush_count, tip}.
+## Uses the ratio from the last real bake if available.
+func estimate_bake_time(brush_ids: Array = []) -> Dictionary:
+	var count := 0
+	if brush_ids.is_empty():
+		count = _total_bakeable_brush_count()
+	else:
+		count = brush_ids.size()
+	var ms_per_brush := 2.0  # default fallback
+	var last_count := _total_bakeable_brush_count()
+	if root._last_bake_duration_ms > 0 and last_count > 0:
+		ms_per_brush = float(root._last_bake_duration_ms) / float(last_count)
+	var estimated_ms: int = int(ceil(ms_per_brush * count))
+	var tip := ""
+	if count > 500:
+		tip = "Chunking recommended for >500 brushes"
+	elif count > 200:
+		tip = "Consider enabling thread pool for faster bakes"
+	elif count == 0:
+		tip = "No brushes to bake"
+	return {"estimated_ms": estimated_ms, "brush_count": count, "tip": tip}
+
+
+func _total_bakeable_brush_count() -> int:
+	var total := count_brushes_in(root.draft_brushes_node)
+	total += count_brushes_in(root.generated_floors)
+	total += count_brushes_in(root.generated_walls)
+	if root.commit_freeze:
+		total += count_brushes_in(root.committed_node)
+	return total
+
+
+# ---------------------------------------------------------------------------
+# Selection / incremental bake
+# ---------------------------------------------------------------------------
+
+
+## Bake only the given brush nodes (selection bake).
+func bake_selected(
+	brush_nodes: Array, collision_layer_mask: int = 0, preview_mode: int = 0  # PreviewMode.FULL
+) -> void:
+	if not root.baker:
+		push_warning("Bake skipped: baker not initialized")
+		root.emit_signal("user_message", "Bake failed — baker not initialized", 2)
+		return
+	if brush_nodes.is_empty():
+		root.emit_signal("user_message", "No brushes selected to bake", 1)
+		return
+	var started = Time.get_ticks_msec()
+	root._log("Selection Bake Started (%d brushes)" % brush_nodes.size())
+	root.bake_started.emit()
+	root.bake_progress.emit(0.0, "Preparing selection")
+	var layer = (
+		collision_layer_mask
+		if collision_layer_mask > 0
+		else root._layer_from_index(root.bake_collision_layer_index)
+	)
+	var bake_options = build_bake_options()
+	_apply_preview_mode(bake_options, preview_mode)
+	var temp_csg = CSGCombiner3D.new()
+	temp_csg.hide()
+	temp_csg.use_collision = false
+	root.add_child(temp_csg)
+	var collision_csg = CSGCombiner3D.new()
+	collision_csg.hide()
+	collision_csg.use_collision = false
+	root.add_child(collision_csg)
+	append_brush_list_to_csg(brush_nodes, temp_csg)
+	append_brush_list_to_csg(brush_nodes, collision_csg, false, true)
+	root.bake_progress.emit(0.5, "Baking selection")
+	await root.get_tree().process_frame
+	await root.get_tree().process_frame
+	var baked = root.baker.bake_from_csg(
+		temp_csg, root.bake_material_override, layer, layer, bake_options
+	)
+	if baked:
+		var collision_baked = root.baker.bake_from_csg(
+			collision_csg, null, layer, layer, bake_options
+		)
+		apply_collision_from_bake(baked, collision_baked, layer)
+		if collision_baked:
+			collision_baked.free()
+		_apply_preview_visuals(baked, preview_mode)
+	temp_csg.queue_free()
+	collision_csg.queue_free()
+	if baked:
+		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started)
+		root.bake_progress.emit(1.0, "Finalizing")
+		# Merge into existing baked container rather than replacing it
+		if root.baked_container and is_instance_valid(root.baked_container):
+			baked.name = "BakedSelection_%d" % Time.get_ticks_msec()
+			root.baked_container.add_child(baked)
+		else:
+			root.baked_container = baked
+			root.add_child(root.baked_container)
+		postprocess_bake(baked)
+		root._assign_owner_recursive(root.baked_container)
+		_last_bake_success = true
+		root._log("Selection bake finished (success=true)")
+		root.bake_finished.emit(true)
+	else:
+		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started)
+		_last_bake_success = false
+		root._log("Selection bake failed")
+		root.bake_finished.emit(false)
+
+
+## Bake only brushes that have been modified since the last bake.
+func bake_dirty(collision_layer_mask: int = 0, preview_mode: int = 0) -> void:
+	var dirty_ids: Array = root._dirty_brush_ids.keys()
+	if dirty_ids.is_empty():
+		root.emit_signal("user_message", "No changed brushes since last bake", 1)
+		return
+	_last_dirty_brush_ids = root._dirty_brush_ids.duplicate()
+	var brush_nodes: Array = []
+	for bid in dirty_ids:
+		var brush = root._find_brush_by_key(str(bid))
+		if brush:
+			brush_nodes.append(brush)
+	if brush_nodes.is_empty():
+		root.emit_signal("user_message", "Dirty brushes no longer in scene", 1)
+		return
+	root._log("Incremental bake: %d dirty brushes" % brush_nodes.size())
+	# Full context needed for correct CSG — bake everything but track dirty set
+	await bake(true, false, collision_layer_mask, preview_mode)
+	# Only clear dirty tags if the bake actually succeeded
+	if _last_bake_success:
+		root._dirty_brush_ids.clear()
+
+
+# ---------------------------------------------------------------------------
+# Preview mode helpers
+# ---------------------------------------------------------------------------
+
+
+func _apply_preview_mode(options: Dictionary, mode: int) -> void:
+	if mode == PreviewMode.WIREFRAME:
+		options["merge_meshes"] = false
+		options["generate_lods"] = false
+		options["unwrap_uv2"] = false
+	elif mode == PreviewMode.PROXY:
+		options["merge_meshes"] = false
+		options["generate_lods"] = false
+		options["unwrap_uv2"] = false
+
+
+func _apply_preview_visuals(container: Node3D, mode: int) -> void:
+	if mode == PreviewMode.FULL:
+		return
+	var mat: Material = null
+	if mode == PreviewMode.WIREFRAME:
+		# Godot 4 has no StandardMaterial3D.wireframe property.
+		# Use a ShaderMaterial with render_mode wireframe instead.
+		var shader := Shader.new()
+		shader.code = (
+			"shader_type spatial;\n"
+			+ "render_mode unshaded, cull_disabled, wireframe, depth_draw_never;\n"
+			+ "uniform vec4 color : source_color = vec4(0.2, 0.8, 1.0, 0.6);\n"
+			+ "void fragment() { ALBEDO = color.rgb; ALPHA = color.a; }\n"
+		)
+		var smat := ShaderMaterial.new()
+		smat.shader = shader
+		mat = smat
+	elif mode == PreviewMode.PROXY:
+		var std_mat := StandardMaterial3D.new()
+		std_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		std_mat.albedo_color = Color(0.5, 0.5, 0.5, 0.4)
+		std_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat = std_mat
+	if mat:
+		for child in container.get_children():
+			if child is MeshInstance3D:
+				child.material_override = mat
+
+
+# ---------------------------------------------------------------------------
+# Main bake
+# ---------------------------------------------------------------------------
+
+
+func bake(
+	apply_cuts: bool = true,
+	hide_live: bool = false,
+	collision_layer_mask: int = 0,
+	preview_mode: int = 0  # PreviewMode.FULL
+) -> void:
 	if not root.baker:
 		push_warning("Bake skipped: baker not initialized")
 		root.emit_signal("user_message", "Bake failed — baker not initialized", 2)
@@ -30,6 +226,7 @@ func bake(apply_cuts: bool = true, hide_live: bool = false, collision_layer_mask
 	)
 	var baked: Node3D = null
 	var bake_options = build_bake_options()
+	_apply_preview_mode(bake_options, preview_mode)
 	if root.bake_use_face_materials:
 		root.bake_progress.emit(0.5, "Baking faces")
 		var face_brushes = collect_face_bake_brushes()
@@ -55,6 +252,7 @@ func bake(apply_cuts: bool = true, hide_live: bool = false, collision_layer_mask
 		root.baked_container = baked
 		root.add_child(root.baked_container)
 		postprocess_bake(root.baked_container)
+		_apply_preview_visuals(root.baked_container, preview_mode)
 		root._assign_owner_recursive(root.baked_container)
 		if hide_live:
 			if root.draft_brushes_node:
@@ -62,10 +260,12 @@ func bake(apply_cuts: bool = true, hide_live: bool = false, collision_layer_mask
 			if root.pending_node:
 				root.pending_node.visible = false
 		root._log("Bake finished (success=true)")
+		_last_bake_success = true
 		root.bake_finished.emit(true)
 	else:
 		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started)
 		root._log("Bake failed")
+		_last_bake_success = false
 		warn_bake_failure()
 		root.bake_finished.emit(false)
 

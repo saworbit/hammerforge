@@ -150,3 +150,114 @@ func validate(auto_fix: bool = false) -> Dictionary:
 					fixed += 1
 
 	return {"issues": issues, "fixed": fixed}
+
+
+# ---------------------------------------------------------------------------
+# Bake-specific issue detection
+# ---------------------------------------------------------------------------
+
+
+## Scan for issues that affect bake quality. Returns Array of Dictionaries:
+## {type: String, severity: int (0=info,1=warn,2=error), message: String, node: Node3D or null}
+func check_bake_issues() -> Array:
+	var issues: Array = []
+	if not root:
+		return issues
+	var brush_nodes: Array = []
+	if root.draft_brushes_node:
+		brush_nodes.append_array(root.draft_brushes_node.get_children())
+	if root.committed_node:
+		brush_nodes.append_array(root.committed_node.get_children())
+
+	for node in brush_nodes:
+		if not (node is DraftBrush):
+			continue
+		var brush := node as DraftBrush
+		if root.is_entity_node(brush):
+			continue
+		_check_degenerate_brush(brush, issues)
+		_check_floating_subtract(brush, brush_nodes, issues)
+
+	_check_overlapping_subtracts(brush_nodes, issues)
+	return issues
+
+
+func _check_degenerate_brush(brush: DraftBrush, issues: Array) -> void:
+	var size = brush.size
+	var min_dim := min(size.x, min(size.y, size.z))
+	if min_dim < 0.01 and (size.x > 0.0 or size.y > 0.0 or size.z > 0.0):
+		issues.append(
+			{
+				"type": "degenerate",
+				"severity": 2,
+				"message": "Near-zero thickness brush '%s' (%.3f)" % [brush.name, min_dim],
+				"node": brush
+			}
+		)
+	var max_dim := max(size.x, max(size.y, size.z))
+	if max_dim > 2048.0:
+		issues.append(
+			{
+				"type": "oversized",
+				"severity": 1,
+				"message": "Very large brush '%s' (%.0f units)" % [brush.name, max_dim],
+				"node": brush
+			}
+		)
+
+
+func _check_floating_subtract(brush: DraftBrush, all_brushes: Array, issues: Array) -> void:
+	if brush.operation != CSGShape3D.OPERATION_SUBTRACTION:
+		return
+	var half = brush.size * 0.5
+	var sub_aabb = AABB(brush.global_position - half, brush.size)
+	var intersects_any := false
+	for other in all_brushes:
+		if other == brush or not (other is DraftBrush):
+			continue
+		var ob := other as DraftBrush
+		if ob.operation == CSGShape3D.OPERATION_SUBTRACTION:
+			continue
+		if root.is_entity_node(ob):
+			continue
+		var other_half = ob.size * 0.5
+		var other_aabb = AABB(ob.global_position - other_half, ob.size)
+		if sub_aabb.intersects(other_aabb):
+			intersects_any = true
+			break
+	if not intersects_any:
+		issues.append(
+			{
+				"type": "floating_subtract",
+				"severity": 1,
+				"message": "Subtraction '%s' doesn't intersect any additive brush" % brush.name,
+				"node": brush
+			}
+		)
+
+
+func _check_overlapping_subtracts(all_brushes: Array, issues: Array) -> void:
+	var subtracts: Array = []
+	for node in all_brushes:
+		if not (node is DraftBrush):
+			continue
+		var brush := node as DraftBrush
+		if brush.operation == CSGShape3D.OPERATION_SUBTRACTION and not root.is_entity_node(brush):
+			subtracts.append(brush)
+	for i in range(subtracts.size()):
+		var a: DraftBrush = subtracts[i]
+		var a_half = a.size * 0.5
+		var a_aabb = AABB(a.global_position - a_half, a.size)
+		for j in range(i + 1, subtracts.size()):
+			var b: DraftBrush = subtracts[j]
+			var b_half = b.size * 0.5
+			var b_aabb = AABB(b.global_position - b_half, b.size)
+			if a_aabb.intersects(b_aabb):
+				issues.append(
+					{
+						"type": "overlapping_subtract",
+						"severity": 1,
+						"message": "Overlapping subtractions: '%s' and '%s'" % [a.name, b.name],
+						"node": a
+					}
+				)

@@ -78,6 +78,55 @@ func build(parent: Control) -> void:
 	dock.bake_navmesh_agent_row.add_child(dock.bake_navmesh_agent_radius)
 	bk.add_child(dock.bake_navmesh_agent_row)
 
+	# -- Incremental / selection bake --
+	var bake_opt_sep = HSeparator.new()
+	bk.add_child(bake_opt_sep)
+
+	dock.bake_selected_btn = dock._make_button("Bake Selected")
+	dock.bake_selected_btn.tooltip_text = "Bake only the currently selected brushes"
+	bk.add_child(dock.bake_selected_btn)
+
+	dock.bake_changed_btn = dock._make_button("Bake Changed")
+	dock.bake_changed_btn.tooltip_text = "Bake only brushes modified since last bake"
+	bk.add_child(dock.bake_changed_btn)
+
+	dock.bake_check_issues_btn = dock._make_button("Check Bake Issues")
+	dock.bake_check_issues_btn.tooltip_text = ("Scan for bake problems: degenerate brushes, floating subtracts, overlapping cuts")
+	bk.add_child(dock.bake_check_issues_btn)
+
+	# -- Preview mode --
+	var preview_row = HBoxContainer.new()
+	var preview_label = Label.new()
+	preview_label.text = "Preview"
+	preview_row.add_child(preview_label)
+	dock.bake_preview_mode_opt = OptionButton.new()
+	dock.bake_preview_mode_opt.add_item("Full", 0)
+	dock.bake_preview_mode_opt.add_item("Wireframe", 1)
+	dock.bake_preview_mode_opt.add_item("Proxy", 2)
+	dock.bake_preview_mode_opt.tooltip_text = ("Full: final quality. Wireframe: fast unshaded outline. Proxy: low-res solid.")
+	dock.bake_preview_mode_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	preview_row.add_child(dock.bake_preview_mode_opt)
+	bk.add_child(preview_row)
+
+	# -- Bake time estimate --
+	dock.bake_estimate_label = Label.new()
+	dock.bake_estimate_label.text = "Est: — "
+	dock.bake_estimate_label.add_theme_font_size_override("font_size", 11)
+	dock.bake_estimate_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 1.0))
+	bk.add_child(dock.bake_estimate_label)
+
+	# -- Quick Play modes --
+	var qp_sep = HSeparator.new()
+	bk.add_child(qp_sep)
+
+	dock.quick_play_camera_btn = dock._make_button("Play from Camera")
+	dock.quick_play_camera_btn.tooltip_text = ("Teleport spawn to current editor camera position and play")
+	bk.add_child(dock.quick_play_camera_btn)
+
+	dock.quick_play_area_btn = dock._make_button("Play Selected Area")
+	dock.quick_play_area_btn.tooltip_text = ("Auto-cordon to selection, bake only that area, and play")
+	bk.add_child(dock.quick_play_area_btn)
+
 	# --- Actions section ---
 	var act_sec = hf_collapsible_section.create("Actions", true)
 	root_vbox.add_child(act_sec)
@@ -327,6 +376,16 @@ func connect_signals() -> void:
 		dock.bake_lightmap_uv2.toggled.connect(dock._on_bake_lightmap_uv2_toggled)
 	if dock.bake_navmesh:
 		dock.bake_navmesh.toggled.connect(dock._on_bake_navmesh_toggled)
+	if dock.bake_selected_btn:
+		dock.bake_selected_btn.pressed.connect(dock._on_bake_selected)
+	if dock.bake_changed_btn:
+		dock.bake_changed_btn.pressed.connect(dock._on_bake_changed)
+	if dock.bake_check_issues_btn:
+		dock.bake_check_issues_btn.pressed.connect(dock._on_bake_check_issues)
+	if dock.quick_play_camera_btn:
+		dock.quick_play_camera_btn.pressed.connect(dock._on_quick_play_from_camera)
+	if dock.quick_play_area_btn:
+		dock.quick_play_area_btn.pressed.connect(dock._on_quick_play_selected_area)
 	if dock._spawn_validate_btn:
 		dock._spawn_validate_btn.pressed.connect(dock._on_spawn_validate)
 	if dock._spawn_auto_create_btn:

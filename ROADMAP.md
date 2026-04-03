@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: April 1, 2026
+Last updated: April 3, 2026
 
 This roadmap is a directional plan. Items may change based on user feedback.
 Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md for details.
@@ -181,6 +181,17 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - **Prefab tags**: Comma-separated tags in `.hfprefab` files for categorization and search.
 - **Stability fixes** (Apr 2026): GDScript inferred-type compilation errors, undo/redo node re-tagging, entity UID stability, dynamic toolbar prefab buttons, vertex system API corrections (context toolbar + hotkey palette), test orphan cleanup.
 - 24 new tests. Total: **777 tests across 45 files**.
+
+## Done (Bake & Quick Play Optimizations — Faster Feedback Loops)
+- **Bake Selected**: bake only selected brushes, merging output into existing baked container.
+- **Bake Changed**: bake only dirty-tagged brushes since last successful bake. Dirty tags survive failed bakes.
+- **Bake preview modes**: Full / Wireframe / Proxy toggle. Wireframe uses `ShaderMaterial` with `render_mode wireframe`. Proxy uses unshaded semi-transparent material.
+- **Bake time estimate**: ratio-based extrapolation from last bake duration. "Chunking recommended" tip for >500 brushes.
+- **Bake issue detection**: degenerate brush (sev=2), oversized (sev=1), floating subtract (sev=1), overlapping subtracts (sev=1). Structured severity/message dicts via `HFValidationSystem.check_bake_issues()`.
+- **Play from Camera**: temporary spawn teleport to editor camera with yaw propagation via `entity_data["angle"]`. Full restore on both success and error paths. Undo/redo support.
+- **Play Selected Area**: temporary cordon from selection AABB. Cordon state saved/restored on both success and severity ≥ 2 error paths.
+- Both new Quick Play modes share severity ≥ 2 blocking, auto-create, and fix-dialog patterns with standard Quick Play.
+- 30 new tests (bake_system, bake_issues, quick_play_modes). Total: **807 tests across 47 files**.
 
 ## Next (Wave 2c remaining)
 - Displacement sewing (stitch adjacent heightmap edges to share vertices).

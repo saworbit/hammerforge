@@ -1,6 +1,6 @@
 # HammerForge Spec
 
-Last updated: March 28, 2026
+Last updated: April 3, 2026
 
 This document describes HammerForge's architecture and data flow.
 
@@ -12,7 +12,7 @@ This document describes HammerForge's architecture and data flow.
 
 ## Architecture
 
-HammerForge uses a coordinator + subsystems pattern. `LevelRoot` is a thin coordinator that owns all container nodes, exported properties, and signals, and delegates work to 14 `RefCounted` subsystem classes. Each subsystem receives a reference to `LevelRoot` in its constructor.
+HammerForge uses a coordinator + subsystems pattern. `LevelRoot` is a thin coordinator that owns all container nodes, exported properties, and signals, and delegates work to 16 `RefCounted` subsystem classes. Each subsystem receives a reference to `LevelRoot` in its constructor.
 
 ### Signals (Central Registry)
 All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.emit(...)`. UI and other consumers subscribe instead of polling.
@@ -90,11 +90,11 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `hf_entity_system.gd` | `HFEntitySystem` | Entity definitions, placement, capture/restore, Entity I/O connections, dangling connection cleanup |
 | `hf_brush_system.gd` | `HFBrushSystem` | Brush CRUD, picking, pending/committed cuts, materials, face selection, hollow, clip, tie/untie. O(1) brush ID cache. Returns `HFOpResult` on failable ops. Auto-cleans references on deletion |
 | `hf_drag_system.gd` | `HFDragSystem` | Drag lifecycle, preview management, axis locking, height computation. Owns `HFInputState` |
-| `hf_bake_system.gd` | `HFBakeSystem` | Bake orchestration (single/chunked), CSG assembly, navmesh, collision |
+| `hf_bake_system.gd` | `HFBakeSystem` | Bake orchestration (single/chunked/selected/dirty), CSG assembly, navmesh, collision, preview modes (Full/Wireframe/Proxy), time estimate |
 | `hf_paint_system.gd` | `HFPaintSystem` | Floor paint input, surface paint, paint layer CRUD, face selection |
 | `hf_state_system.gd` | `HFStateSystem` | State capture/restore, settings, paint layer serialization, transactions (begin/commit/rollback) |
 | `hf_file_system.gd` | `HFFileSystem` | .hflevel save/load, .map import/export, glTF export, threaded I/O, autosave failure reporting |
-| `hf_validation_system.gd` | `HFValidationSystem` | Validation, dependency checks, auto-fix helpers |
+| `hf_validation_system.gd` | `HFValidationSystem` | Validation, dependency checks, auto-fix helpers, bake issue detection (degenerate/floating/overlapping) |
 | `hf_visgroup_system.gd` | `HFVisgroupSystem` | Visgroups (visibility groups), brush/entity grouping |
 | `hf_carve_system.gd` | `HFCarveSystem` | Boolean-subtract carve (progressive-remainder box slicing) |
 | `hf_io_visualizer.gd` | `HFIOVisualizer` | Entity I/O connection lines in viewport (ImmediateMesh) |
@@ -321,6 +321,11 @@ Foliage Populator
 - Optional face-material bake (per-face materials, no CSG).
 - Collision uses Add brushes only.
 - Navmesh defaults: `cell_height = 0.25` (matches Godot NavigationServer3D map default).
+- **Bake Selected** (`bake_selected()`): bakes only selected brushes and merges output into the existing `baked_container` (does not replace it).
+- **Bake Changed** (`bake_dirty()`): bakes only brushes with dirty tags (`_dirty_brush_ids`). Tags are cleared only when `_last_bake_success` is true; failed bakes retain all dirty tags.
+- **Preview modes** (`PreviewMode` enum: FULL, WIREFRAME, PROXY): `_apply_preview_visuals()` overrides material on baked meshes. Wireframe uses inline `ShaderMaterial` with `render_mode wireframe`. Proxy uses unshaded semi-transparent `StandardMaterial3D`.
+- **Bake time estimate** (`estimate_bake_time()`): ratio-based extrapolation from `_last_bake_duration_ms` and brush count.
+- **Bake issue detection** (`HFValidationSystem.check_bake_issues()`): returns Array of `{type, severity, message, node}` dicts. Checks: degenerate brush (sev=2), oversized (sev=1), floating subtract (sev=1), overlapping subtracts (sev=1).
 
 ## Face Materials + Surface Paint
 Face data is stored per DraftBrush face with material assignment, UV projection, and optional paint layers.
@@ -471,13 +476,15 @@ Unit tests use the [GUT](https://github.com/bitwes/Gut) framework and run headle
 | `test_snap_system.gd` | 12 | Grid/Vertex/Center snap modes, threshold, exclude list, priority, empty scene fallback |
 | `test_drag_dimensions.gd` | 8 | get_drag_dimensions() in all modes, format_dimensions() whole/fractional/zero |
 | `test_reference_cleanup.gd` | 9 | Delete cleans group/visgroup membership, entity I/O cleanup_dangling_connections |
-| `test_bake_system.gd` | 18 | build_bake_options, structural/trigger brush filtering, chunk_coord, bake_dry_run, warn_bake_failure |
+| `test_bake_system.gd` | 38 | build_bake_options, structural/trigger filtering, chunk_coord, bake_dry_run, warn_bake_failure, estimate_bake_time, preview modes, _last_bake_success, dirty tag retention, wireframe ShaderMaterial |
+| `test_bake_issues.gd` | 10 | check_bake_issues: degenerate, oversized, floating subtract, overlapping subtracts, clean level, entity skip |
+| `test_quick_play_modes.gd` | 12 | Severity blocking (0/1/2), cordon save/restore, dirty tag retention, camera yaw via entity_data, spawn restore |
 | `test_integration.gd` | 22 | End-to-end: brush lifecycle, paint + heightmap, entity workflow, visgroup cross-system, snap, bake, I/O cleanup, info round-trip |
 | `test_shortcut_dialog.gd` | 8 | Category assignment (tools, paint, axis lock, editing), action labels, get_all_bindings copy safety |
 | `test_tutorial_wizard.gd` | 7 | Step advancement, persistence, skip/dismiss, validate_subtract, no-root safety |
 | `test_subtract_preview.gd` | 8 | AABB intersection math (overlapping, no-overlap, contained, partial axis), enable/disable, debounce |
 | `test_prefab.gd` | 11 | Empty prefab, to_dict/from_dict roundtrip, transform preservation, file save/load, invalid data, entity I/O |
 
-Total: **568 tests** across **34 files**.
+Total: **807 tests** across **47 files**.
 
 Tests use root shim scripts (dynamically created GDScript) to provide the LevelRoot interface without circular preload dependencies. Configuration in `.gutconfig.json`.

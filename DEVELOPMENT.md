@@ -1,6 +1,6 @@
 # Development Guide
 
-Last updated: April 1, 2026
+Last updated: April 3, 2026
 
 This document covers local setup, codebase structure, and how to test features.
 
@@ -79,11 +79,11 @@ addons/hammerforge/
     hf_entity_system.gd    Entity definitions, placement, Entity I/O connections
     hf_brush_system.gd     Brush CRUD, cuts, materials, picking, hollow, clip, tie/untie
     hf_drag_system.gd      Drag lifecycle, preview, axis locking
-    hf_bake_system.gd      Bake orchestration (single/chunked)
+    hf_bake_system.gd      Bake orchestration (single/chunked/selected/dirty), preview modes (Full/Wireframe/Proxy), time estimate
     hf_paint_system.gd     Floor + surface paint, layer CRUD
     hf_state_system.gd     State capture/restore, settings, transactions
     hf_file_system.gd      .hflevel/.map/.glTF I/O, threaded writes, autosave failure reporting
-    hf_validation_system.gd Validation and dependency checks
+    hf_validation_system.gd Validation, dependency checks, bake issue detection (degenerate/floating/overlapping)
     hf_visgroup_system.gd  Visgroups (visibility groups) + brush/entity grouping
     hf_carve_system.gd     Boolean-subtract carve (progressive-remainder box slicing)
     hf_io_visualizer.gd    Entity I/O connection lines in viewport (ImmediateMesh)
@@ -167,7 +167,7 @@ addons/hammerforge/
 The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on push and PR to `main`:
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
-- **GUT unit + integration tests** -- 777 tests across 45 test files (runs Godot headless)
+- **GUT unit + integration tests** -- 807 tests across 47 test files (runs Godot headless)
 
 Run locally before pushing:
 ```
@@ -209,7 +209,9 @@ Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framewor
 | `test_snap_system.gd` | 12 | Grid/Vertex/Center snap modes, threshold, exclude list, priority (closer geometry beats grid), empty scene fallback |
 | `test_drag_dimensions.gd` | 8 | get_drag_dimensions() in all modes, format_dimensions() whole/fractional/zero |
 | `test_reference_cleanup.gd` | 9 | Delete cleans group/visgroup membership, entity I/O cleanup_dangling_connections, preserves unrelated, no-crash on clean node |
-| `test_bake_system.gd` | 18 | build_bake_options, _is_structural_brush, _is_trigger_brush, count_brushes_in, chunk_coord, bake_dry_run, warn_bake_failure, structural filtering |
+| `test_bake_system.gd` | 38 | build_bake_options, structural/trigger filtering, chunk_coord, bake_dry_run, warn_bake_failure, estimate_bake_time, preview mode helpers, _last_bake_success, dirty tag retention, wireframe ShaderMaterial |
+| `test_bake_issues.gd` | 10 | check_bake_issues: degenerate, oversized, floating subtract, overlapping subtracts, clean level, entity skip |
+| `test_quick_play_modes.gd` | 12 | Severity blocking (0/1/2), cordon save/restore, dirty tag retention patterns, camera yaw via entity_data, spawn restore after camera play, spawn restore on error path |
 | `test_integration.gd` | 22 | End-to-end: brush lifecycle, paint + heightmap, entity workflow, visgroup cross-system, snap, bake cross-system, entity I/O cleanup, brush info round-trip |
 | `test_shortcut_dialog.gd` | 8 | Category assignment (tools, paint, axis lock, editing), action labels (known/unknown), get_all_bindings copy safety |
 | `test_tutorial_wizard.gd` | 14 | Step advancement, persistence, deferred start, resume, bake validation, no-root safety |
@@ -223,6 +225,7 @@ Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framewor
 | `test_context_toolbar.gd` | 20 | Context determination, label content, action signals, material thumbnails, search filtering, gray-out logic, toggle visibility |
 | `test_hotkey_palette.gd` | 12 | Search filtering, action availability gray-out, key binding display, action invocation |
 | `test_spawn_system.gd` | 21 | Spawn lookup, validation, auto-fix, default creation, debug viz, entity property helpers, severity ordering |
+| `test_selection_features.gd` | 18 | Marquee, selection filters, Select Similar, Apply Last Texture |
 
 Run all tests:
 ```

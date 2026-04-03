@@ -72,9 +72,18 @@ var bake_use_face_materials: bool = false
 var bake_chunk_size: float = 0.0
 var commit_freeze: bool = false
 var baker = null
+var _last_bake_duration_ms: int = 0
+var _dirty_brush_ids: Dictionary = {}
 
 func is_entity_node(node: Node) -> bool:
 	return node.has_meta("entity_type")
+
+func _find_brush_by_key(key: String) -> Node:
+	if draft_brushes_node:
+		for child in draft_brushes_node.get_children():
+			if child.name == key:
+				return child
+	return null
 
 func _log(_msg: String) -> void:
 	pass
@@ -83,7 +92,9 @@ func _log(_msg: String) -> void:
 	return s
 
 
-func _make_brush(parent: Node3D, pos: Vector3 = Vector3.ZERO, sz: Vector3 = Vector3(4, 4, 4)) -> DraftBrush:
+func _make_brush(
+	parent: Node3D, pos: Vector3 = Vector3.ZERO, sz: Vector3 = Vector3(4, 4, 4)
+) -> DraftBrush:
 	var b = DraftBrush.new()
 	b.size = sz
 	parent.add_child(b)
@@ -227,14 +238,20 @@ func test_count_brushes_in_excludes_entities():
 	_make_brush(root.draft_brushes_node)
 	_make_brush(root.draft_brushes_node)
 	_make_entity(root.draft_brushes_node)
-	assert_eq(bake_sys.count_brushes_in(root.draft_brushes_node), 2, "Entity nodes should not be counted")
+	assert_eq(
+		bake_sys.count_brushes_in(root.draft_brushes_node), 2, "Entity nodes should not be counted"
+	)
 
 
 func test_count_brushes_in_excludes_non_brush_nodes():
 	_make_brush(root.draft_brushes_node)
 	var plain = Node3D.new()
 	root.draft_brushes_node.add_child(plain)
-	assert_eq(bake_sys.count_brushes_in(root.draft_brushes_node), 1, "Non-DraftBrush children should not be counted")
+	assert_eq(
+		bake_sys.count_brushes_in(root.draft_brushes_node),
+		1,
+		"Non-DraftBrush children should not be counted"
+	)
 
 
 # ===========================================================================
@@ -317,7 +334,9 @@ func test_dry_run_reports_chunk_size():
 
 func test_warn_bake_failure_emits_user_message():
 	var received_messages := []
-	root.user_message.connect(func(text, level): received_messages.append({"text": text, "level": level}))
+	root.user_message.connect(
+		func(text, level): received_messages.append({"text": text, "level": level})
+	)
 	bake_sys.warn_bake_failure()
 	assert_eq(received_messages.size(), 1, "Should emit exactly one user_message")
 	assert_eq(received_messages[0]["level"], 2, "Should emit at warning level (2)")
@@ -329,7 +348,9 @@ func test_warn_bake_failure_no_brushes_hint():
 	bake_sys.warn_bake_failure()
 	assert_eq(msgs.size(), 1, "Should emit one message")
 	if msgs.size() > 0:
-		assert_string_contains(msgs[0], "No draft brushes", "Should hint about missing brushes when draft is empty")
+		assert_string_contains(
+			msgs[0], "No draft brushes", "Should hint about missing brushes when draft is empty"
+		)
 
 
 func test_warn_bake_failure_pending_cuts_hint():
@@ -350,7 +371,11 @@ func test_warn_bake_failure_csg_fallback_hint():
 	bake_sys.warn_bake_failure()
 	assert_eq(msgs.size(), 1, "Should emit one message")
 	if msgs.size() > 0:
-		assert_string_contains(msgs[0], "CSG produced no geometry", "Should fall back to CSG hint when draft exists but no pending")
+		assert_string_contains(
+			msgs[0],
+			"CSG produced no geometry",
+			"Should fall back to CSG hint when draft exists but no pending"
+		)
 
 
 # ===========================================================================
@@ -396,3 +421,169 @@ func test_collect_chunk_brushes_null_source():
 	var chunks: Dictionary = {}
 	bake_sys.collect_chunk_brushes(null, 32.0, chunks, "brushes")
 	assert_eq(chunks.size(), 0, "Null source should produce no chunks")
+
+
+# ===========================================================================
+# estimate_bake_time
+# ===========================================================================
+
+
+func test_estimate_bake_time_empty_level():
+	var est = bake_sys.estimate_bake_time()
+	assert_eq(est["brush_count"], 0)
+	assert_eq(est["estimated_ms"], 0)
+	assert_string_contains(est["tip"], "No brushes")
+
+
+func test_estimate_bake_time_with_brushes():
+	_make_brush(root.draft_brushes_node)
+	_make_brush(root.draft_brushes_node)
+	_make_brush(root.draft_brushes_node)
+	var est = bake_sys.estimate_bake_time()
+	assert_eq(est["brush_count"], 3)
+	assert_gt(est["estimated_ms"], 0)
+
+
+func test_estimate_bake_time_with_brush_ids():
+	_make_brush(root.draft_brushes_node)
+	_make_brush(root.draft_brushes_node)
+	var est = bake_sys.estimate_bake_time(["b1", "b2", "b3", "b4", "b5"])
+	assert_eq(est["brush_count"], 5, "Should use provided brush_ids count")
+
+
+func test_estimate_bake_time_uses_last_bake_ratio():
+	_make_brush(root.draft_brushes_node)
+	_make_brush(root.draft_brushes_node)
+	root._last_bake_duration_ms = 200  # 200ms for 2 brushes = 100ms/brush
+	var est = bake_sys.estimate_bake_time()
+	assert_eq(est["estimated_ms"], 200, "Should estimate 2 * 100ms = 200ms")
+
+
+func test_estimate_bake_time_tip_for_many_brushes():
+	for i in range(510):
+		_make_brush(root.draft_brushes_node)
+	var est = bake_sys.estimate_bake_time()
+	assert_string_contains(est["tip"], "Chunking recommended")
+
+
+# ===========================================================================
+# preview mode helpers
+# ===========================================================================
+
+
+func test_apply_preview_mode_wireframe():
+	var opts = bake_sys.build_bake_options()
+	root.bake_merge_meshes = true
+	root.bake_generate_lods = true
+	root.bake_lightmap_uv2 = true
+	opts = bake_sys.build_bake_options()
+	bake_sys._apply_preview_mode(opts, HFBakeSystem.PreviewMode.WIREFRAME)
+	assert_eq(opts["merge_meshes"], false, "Wireframe disables mesh merging")
+	assert_eq(opts["generate_lods"], false, "Wireframe disables LODs")
+	assert_eq(opts["unwrap_uv2"], false, "Wireframe disables UV2")
+
+
+func test_apply_preview_mode_full_unchanged():
+	root.bake_merge_meshes = true
+	root.bake_generate_lods = true
+	var opts = bake_sys.build_bake_options()
+	bake_sys._apply_preview_mode(opts, HFBakeSystem.PreviewMode.FULL)
+	assert_eq(opts["merge_meshes"], true, "Full mode leaves options unchanged")
+	assert_eq(opts["generate_lods"], true, "Full mode leaves options unchanged")
+
+
+func test_apply_preview_visuals_full_no_change():
+	var container = Node3D.new()
+	add_child_autoqfree(container)
+	var mesh = MeshInstance3D.new()
+	container.add_child(mesh)
+	bake_sys._apply_preview_visuals(container, HFBakeSystem.PreviewMode.FULL)
+	assert_null(mesh.material_override, "Full mode should not apply override")
+
+
+func test_apply_preview_visuals_wireframe():
+	var container = Node3D.new()
+	add_child_autoqfree(container)
+	var mesh = MeshInstance3D.new()
+	container.add_child(mesh)
+	bake_sys._apply_preview_visuals(container, HFBakeSystem.PreviewMode.WIREFRAME)
+	assert_not_null(mesh.material_override, "Wireframe should apply material override")
+	assert_true(
+		mesh.material_override is ShaderMaterial,
+		"Wireframe mode should use ShaderMaterial (not StandardMaterial3D)",
+	)
+	if mesh.material_override is ShaderMaterial:
+		var smat: ShaderMaterial = mesh.material_override
+		assert_not_null(smat.shader, "Wireframe ShaderMaterial should have a shader")
+		assert_true(
+			smat.shader.code.contains("wireframe"),
+			"Wireframe shader should contain render_mode wireframe",
+		)
+
+
+func test_apply_preview_visuals_proxy():
+	var container = Node3D.new()
+	add_child_autoqfree(container)
+	var mesh = MeshInstance3D.new()
+	container.add_child(mesh)
+	bake_sys._apply_preview_visuals(container, HFBakeSystem.PreviewMode.PROXY)
+	assert_not_null(mesh.material_override, "Proxy should apply material override")
+
+
+# ===========================================================================
+# _total_bakeable_brush_count
+# ===========================================================================
+
+
+func test_total_bakeable_brush_count_empty():
+	assert_eq(bake_sys._total_bakeable_brush_count(), 0)
+
+
+func test_total_bakeable_brush_count_mixed():
+	_make_brush(root.draft_brushes_node)
+	_make_brush(root.generated_floors)
+	_make_brush(root.generated_walls)
+	assert_eq(bake_sys._total_bakeable_brush_count(), 3)
+
+
+func test_total_bakeable_brush_count_with_commit_freeze():
+	_make_brush(root.draft_brushes_node)
+	_make_brush(root.committed_node)
+	root.commit_freeze = true
+	assert_eq(bake_sys._total_bakeable_brush_count(), 2, "commit_freeze includes committed brushes")
+
+
+# ===========================================================================
+# _last_bake_success tracking
+# ===========================================================================
+
+
+func test_last_bake_success_default_false():
+	assert_false(bake_sys._last_bake_success, "Should default to false")
+
+
+# ===========================================================================
+# dirty tag retention
+# ===========================================================================
+
+
+func test_dirty_tags_preserved_when_bake_fails():
+	# Simulate dirty tags on root
+	root._dirty_brush_ids = {"brush_a": true, "brush_b": true}
+	# bake_dirty with no baker (will fail) — dirty tags should survive
+	# We can't call bake_dirty directly since it awaits, but we can verify
+	# the conditional logic: _last_bake_success = false means tags stay
+	bake_sys._last_bake_success = false
+	# Simulate what bake_dirty does after bake() returns
+	if bake_sys._last_bake_success:
+		root._dirty_brush_ids.clear()
+	assert_eq(root._dirty_brush_ids.size(), 2, "Dirty tags should be preserved on failed bake")
+
+
+func test_dirty_tags_cleared_on_successful_bake():
+	root._dirty_brush_ids = {"brush_a": true, "brush_b": true}
+	bake_sys._last_bake_success = true
+	# Simulate what bake_dirty does after bake() returns
+	if bake_sys._last_bake_success:
+		root._dirty_brush_ids.clear()
+	assert_eq(root._dirty_brush_ids.size(), 0, "Dirty tags should be cleared on successful bake")

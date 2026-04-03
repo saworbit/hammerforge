@@ -31,6 +31,31 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   `edge.size() >= 2` before indexing, preventing out-of-bounds access on malformed input.
 
 ### Added
+- **Bake & Quick Play Optimizations** (Apr 2026):
+  - **Bake Selected**: bake only the currently selected brushes and merge output into the existing
+    baked container (preserving previously baked geometry).
+  - **Bake Changed**: bake only brushes flagged dirty since the last successful bake. Dirty tags are
+    retained across failed bakes (`_last_bake_success` guard) and accumulate until the next success.
+  - **Bake preview modes**: Full / Wireframe / Proxy toggle in Manage tab. Wireframe uses inline
+    `ShaderMaterial` with `render_mode wireframe`. Proxy uses unshaded semi-transparent grey.
+  - **Bake time estimate**: extrapolated from the last bake duration and brush count ratio. Shown in
+    the Manage tab bake section; includes a "Chunking recommended" tip for >500 brushes.
+  - **Bake issue detection** (`check_bake_issues()`): degenerate brush (near-zero thickness sev=2,
+    oversized sev=1), floating subtract (sev=1), overlapping subtracts (sev=1). Color-coded overlay
+    via `user_message` toast.
+  - **Play from Camera**: temporarily moves spawn to editor camera position and writes camera yaw to
+    `entity_data["angle"]`, bakes, validates, plays, then restores spawn to its original
+    position/angle. Full undo/redo support via `_record_spawn_camera_undo()`.
+  - **Play Selected Area**: saves cordon state, sets cordon from selection AABB, bakes within that
+    region, validates spawn, plays, then restores the original cordon. Cordon is restored on both
+    success and error (severity ≥ 2) paths.
+  - Both new Quick Play modes share the same severity ≥ 2 blocking, auto-create, and fix-dialog
+    patterns as the standard Quick Play path.
+  - **Expanded validation** (`HFValidationSystem.check_bake_issues()`): non-convex/degenerate
+    brushes, floating detail, overlapping subtracts with structured severity + message dicts.
+  - 30 new tests (bake_system additions, bake_issues, quick_play_modes). Total: **807 tests
+    across 47 files**.
+
 - **Prefab variants** (Mar 2026): Prefabs can now contain multiple variants (e.g., wooden/metal/ornate
   door styles). Variants are stored alongside the base data in `.hfprefab` files. Cycle through
   variants on a placed instance with **Ctrl+Shift+V** or the **Var▶** context toolbar button.

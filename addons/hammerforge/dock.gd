@@ -131,6 +131,15 @@ var bake_navmesh_cell_height: SpinBox = null
 var bake_navmesh_agent_row: HBoxContainer = null
 var bake_navmesh_agent_height: SpinBox = null
 var bake_navmesh_agent_radius: SpinBox = null
+# -- Bake optimization controls (built programmatically) --
+var bake_selected_btn: Button = null
+var bake_changed_btn: Button = null
+var bake_check_issues_btn: Button = null
+var bake_preview_mode_opt: OptionButton = null
+var bake_estimate_label: Label = null
+# -- Quick Play mode controls --
+var quick_play_camera_btn: Button = null
+var quick_play_area_btn: Button = null
 # -- Editor toggles (built programmatically in _build_manage_tab) --
 var commit_freeze: CheckBox = null
 var show_hud: CheckBox = null
@@ -229,6 +238,7 @@ var snap_preset_values: Array = [1, 2, 4, 8, 16, 32, 64]
 
 var level_root: LevelRootType = null
 var editor_interface: EditorInterface = null
+var _plugin: EditorPlugin = null
 var editor_base_control: Control = null
 var undo_redo: EditorUndoRedoManager = null
 var connected_root: Node = null
@@ -749,6 +759,10 @@ func set_editor_interface(iface: EditorInterface) -> void:
 	if editor_interface:
 		editor_base_control = editor_interface.get_base_control()
 	_apply_pro_styles()
+
+
+func set_plugin(p: EditorPlugin) -> void:
+	_plugin = p
 
 
 func set_undo_redo(manager: EditorUndoRedoManager) -> void:
@@ -2471,7 +2485,9 @@ func _commit_full_state_action(action_name: String, method_name: String, args: A
 func _on_bake():
 	_log("Bake requested")
 	_warn_missing_dependencies()
-	_commit_state_action("Bake", "bake", [true, false, get_collision_layer_mask()])
+	_commit_state_action(
+		"Bake", "bake", [true, false, get_collision_layer_mask(), _get_bake_preview_mode()]
+	)
 
 
 func _on_bake_dry_run() -> void:
@@ -2495,6 +2511,98 @@ func _on_bake_dry_run() -> void:
 	)
 	_set_status(summary, false, 5.0)
 	_log(summary)
+
+
+func _get_bake_preview_mode() -> int:
+	if bake_preview_mode_opt:
+		return bake_preview_mode_opt.get_selected_id()
+	return 0  # FULL
+
+
+func _on_bake_selected() -> void:
+	_log("Bake selected requested")
+	if not level_root:
+		return
+	if _selection_nodes.is_empty():
+		show_toast("Select brushes to bake", 1)
+		return
+	var brush_nodes: Array = []
+	for node in _selection_nodes:
+		if level_root.is_brush_node(node):
+			brush_nodes.append(node)
+	if brush_nodes.is_empty():
+		show_toast("No brushes in selection", 1)
+		return
+	_warn_missing_dependencies()
+	var mask := get_collision_layer_mask()
+	_set_bake_buttons_disabled(true)
+	await level_root.bake_selected(brush_nodes, mask, _get_bake_preview_mode())
+	_set_bake_buttons_disabled(false)
+
+
+func _on_bake_changed() -> void:
+	_log("Bake changed requested")
+	if not level_root:
+		return
+	_warn_missing_dependencies()
+	var mask := get_collision_layer_mask()
+	_set_bake_buttons_disabled(true)
+	await level_root.bake_dirty(mask, _get_bake_preview_mode())
+	_set_bake_buttons_disabled(false)
+
+
+func _on_bake_check_issues() -> void:
+	if not level_root or not level_root.validation_system:
+		return
+	var issues: Array = level_root.validation_system.check_bake_issues()
+	if issues.is_empty():
+		show_toast("No bake issues found", 0)
+		_set_status("Bake check: no issues", false, 3.0)
+		return
+	var errors := 0
+	var warnings := 0
+	for issue in issues:
+		var sev: int = issue.get("severity", 0)
+		if sev >= 2:
+			errors += 1
+		elif sev >= 1:
+			warnings += 1
+	var summary := "Bake check: %d errors, %d warnings" % [errors, warnings]
+	_set_status(summary, errors > 0, 5.0)
+	# Show first few issues as toasts
+	var shown := 0
+	for issue in issues:
+		if shown >= 3:
+			break
+		var msg: String = issue.get("message", "")
+		var sev: int = issue.get("severity", 0)
+		show_toast(msg, min(sev, 2))
+		shown += 1
+	if issues.size() > 3:
+		show_toast("...and %d more issues (check Output)" % (issues.size() - 3), 1)
+	# Log all to output
+	for issue in issues:
+		push_warning("HF Bake Issue: %s" % issue.get("message", ""))
+
+
+func _update_bake_estimate() -> void:
+	if not level_root or not bake_estimate_label:
+		return
+	var est: Dictionary = level_root.estimate_bake_time()
+	var ms: int = est.get("estimated_ms", 0)
+	var count: int = est.get("brush_count", 0)
+	var tip: String = est.get("tip", "")
+	var time_str := ""
+	if ms < 1000:
+		time_str = "%d ms" % ms
+	elif ms < 60000:
+		time_str = "%.1f s" % (float(ms) / 1000.0)
+	else:
+		time_str = "%.1f min" % (float(ms) / 60000.0)
+	var label_text := "Est: %s (%d brushes)" % [time_str, count]
+	if tip != "":
+		label_text += " — %s" % tip
+	bake_estimate_label.text = label_text
 
 
 func _on_validate_level() -> void:
@@ -2925,6 +3033,7 @@ func _sync_grid_settings_from_root() -> void:
 
 
 func _on_bake_started() -> void:
+	_update_bake_estimate()
 	_set_status("Baking...", false, 0.0)
 	if progress_bar:
 		progress_bar.max_value = 100
@@ -2978,6 +3087,7 @@ func _on_bake_finished(success: bool) -> void:
 		show_toast("Bake failed — check Output for details", 2)
 	if progress_bar:
 		progress_bar.hide()
+	_update_bake_estimate()
 	_set_bake_buttons_disabled(false)
 	_hints_dirty = true
 
@@ -2989,6 +3099,14 @@ func _set_bake_buttons_disabled(disabled: bool) -> void:
 	apply_cuts_btn.disabled = disabled
 	if quick_play_btn:
 		quick_play_btn.disabled = disabled
+	if bake_selected_btn:
+		bake_selected_btn.disabled = disabled
+	if bake_changed_btn:
+		bake_changed_btn.disabled = disabled
+	if quick_play_camera_btn:
+		quick_play_camera_btn.disabled = disabled
+	if quick_play_area_btn:
+		quick_play_area_btn.disabled = disabled
 
 
 func _on_quick_play() -> void:
@@ -3034,6 +3152,149 @@ func _on_quick_play() -> void:
 	_notify_running_instances()
 	if editor_interface:
 		editor_interface.play_current_scene()
+
+
+## Play from the current editor camera position (temporarily teleports spawn).
+## The spawn is restored to its original position/angle after the playtest
+## launches.  An undo entry is recorded as fallback safety.
+func _on_quick_play_from_camera() -> void:
+	_log("Play from Camera requested")
+	_warn_missing_dependencies()
+	if not level_root:
+		return
+	# Get the current editor camera from plugin
+	var camera: Camera3D = null
+	if _plugin and _plugin.last_3d_camera:
+		camera = _plugin.last_3d_camera
+	if not camera:
+		show_toast("No editor camera available", 2)
+		return
+
+	# Ensure spawn exists (with undo support, matching _on_quick_play)
+	var spawn: Node3D = null
+	if level_root.spawn_system:
+		spawn = level_root.spawn_system.get_active_spawn()
+	if not spawn:
+		show_toast("No player_start found — auto-creating default spawn", 1)
+		if level_root.spawn_system:
+			var pre_state: Dictionary = {}
+			if undo_redo and level_root.state_system:
+				pre_state = level_root.state_system.capture_state(true)
+			spawn = level_root.spawn_system.create_default_spawn()
+			if undo_redo and spawn and not pre_state.is_empty():
+				_record_spawn_create_undo(pre_state)
+	if not spawn:
+		show_toast("Could not create spawn point", 2)
+		return
+
+	# Save original state for restore after launch
+	var old_pos := spawn.global_position
+	var old_angle: float = 0.0
+	if spawn is DraftEntity:
+		old_angle = float((spawn as DraftEntity).entity_data.get("angle", 0.0))
+
+	# Temporarily move spawn to camera position + yaw
+	spawn.global_position = camera.global_position
+	var camera_yaw_deg: float = rad_to_deg(camera.global_rotation.y)
+	if spawn is DraftEntity:
+		(spawn as DraftEntity).entity_data["angle"] = camera_yaw_deg
+	# Record undo as fallback in case restore fails (e.g. editor crash)
+	_record_spawn_camera_undo(spawn, old_pos, camera.global_position, old_angle, camera_yaw_deg)
+	_log(
+		"Spawn temporarily at camera: %s (yaw %.1f)" % [str(camera.global_position), camera_yaw_deg]
+	)
+
+	# Bake and validate (same error-blocking as _on_quick_play)
+	var mask := get_collision_layer_mask()
+	await level_root.bake(true, false, mask)
+
+	if spawn and level_root.spawn_system:
+		var validation: Dictionary = level_root.spawn_system.validate_spawn(spawn, mask)
+		var severity: int = validation.get("severity", 0)
+		var issues: PackedStringArray = validation.get("issues", PackedStringArray())
+
+		if severity >= 2:
+			level_root.spawn_system.show_validation_debug(spawn, validation, 10.0)
+			show_toast("Spawn issues: %s" % "\n".join(issues), 2)
+			_show_spawn_fix_dialog(spawn, validation, mask)
+			# Restore spawn even on error
+			_restore_spawn(spawn, old_pos, old_angle)
+			return
+		if severity >= 1:
+			level_root.spawn_system.show_validation_debug(spawn, validation, 6.0)
+			show_toast("Camera spawn warning: %s" % "\n".join(issues), 1)
+
+	_notify_running_instances()
+	if editor_interface:
+		editor_interface.play_current_scene()
+
+	# Restore spawn to original position/angle now that the scene is playing
+	_restore_spawn(spawn, old_pos, old_angle)
+
+
+## Play only the selected area (auto-cordon to selection, bake, play).
+func _on_quick_play_selected_area() -> void:
+	_log("Play Selected Area requested")
+	_warn_missing_dependencies()
+	if not level_root:
+		return
+	if _selection_nodes.is_empty():
+		show_toast("Select brushes to define play area", 1)
+		return
+
+	# Save original cordon state
+	var prev_cordon_enabled: bool = level_root.cordon_enabled
+	var prev_cordon_aabb: AABB = level_root.cordon_aabb
+
+	# Set cordon from selection
+	level_root.set_cordon_from_selection(_selection_nodes)
+	show_toast("Cordon set to selection — baking area", 0)
+
+	# Ensure spawn exists (with undo support, matching _on_quick_play)
+	var spawn: Node3D = null
+	if level_root.spawn_system:
+		spawn = level_root.spawn_system.get_active_spawn()
+	if not spawn:
+		show_toast("No player_start found — auto-creating default spawn", 1)
+		if level_root.spawn_system:
+			var pre_state: Dictionary = {}
+			if undo_redo and level_root.state_system:
+				pre_state = level_root.state_system.capture_state(true)
+			spawn = level_root.spawn_system.create_default_spawn()
+			if undo_redo and spawn and not pre_state.is_empty():
+				_record_spawn_create_undo(pre_state)
+
+	# Bake with cordon active (only selected area geometry)
+	var mask := get_collision_layer_mask()
+	await level_root.bake(true, false, mask)
+
+	# Validate spawn (same error-blocking as _on_quick_play)
+	if spawn and level_root.spawn_system:
+		var validation: Dictionary = level_root.spawn_system.validate_spawn(spawn, mask)
+		var severity: int = validation.get("severity", 0)
+		var issues: PackedStringArray = validation.get("issues", PackedStringArray())
+
+		if severity >= 2:
+			level_root.spawn_system.show_validation_debug(spawn, validation, 10.0)
+			show_toast("Spawn issues: %s" % "\n".join(issues), 2)
+			_show_spawn_fix_dialog(spawn, validation, mask)
+			# Restore cordon even on error
+			level_root.cordon_enabled = prev_cordon_enabled
+			level_root.cordon_aabb = prev_cordon_aabb
+			level_root.update_cordon_visual()
+			return
+		if severity >= 1:
+			level_root.spawn_system.show_validation_debug(spawn, validation, 6.0)
+			show_toast("Spawn warning: %s" % "\n".join(issues), 1)
+
+	_notify_running_instances()
+	if editor_interface:
+		editor_interface.play_current_scene()
+
+	# Restore original cordon
+	level_root.cordon_enabled = prev_cordon_enabled
+	level_root.cordon_aabb = prev_cordon_aabb
+	level_root.update_cordon_visual()
 
 
 func _show_spawn_fix_dialog(spawn: Node3D, validation: Dictionary, mask: int) -> void:
@@ -3090,6 +3351,40 @@ func _record_spawn_move_undo(spawn: Node3D, old_pos: Vector3, new_pos: Vector3) 
 	undo_redo.add_do_property(spawn, "global_position", new_pos)
 	undo_redo.add_undo_property(spawn, "global_position", old_pos)
 	undo_redo.commit_action(false)
+
+
+## Record undo for Play from Camera: position + yaw angle on entity_data.
+func _record_spawn_camera_undo(
+	spawn: Node3D,
+	old_pos: Vector3,
+	new_pos: Vector3,
+	old_angle: float,
+	new_angle: float,
+) -> void:
+	if not undo_redo or not level_root:
+		return
+	if old_pos == new_pos and is_equal_approx(old_angle, new_angle):
+		return
+	undo_redo.create_action("Play from Camera — move spawn")
+	undo_redo.add_do_property(spawn, "global_position", new_pos)
+	undo_redo.add_undo_property(spawn, "global_position", old_pos)
+	if spawn is DraftEntity:
+		var do_data: Dictionary = (spawn as DraftEntity).entity_data.duplicate()
+		var undo_data: Dictionary = do_data.duplicate()
+		do_data["angle"] = new_angle
+		undo_data["angle"] = old_angle
+		undo_redo.add_do_property(spawn, "entity_data", do_data)
+		undo_redo.add_undo_property(spawn, "entity_data", undo_data)
+	undo_redo.commit_action(false)
+
+
+## Restore spawn to its original position and angle after a temporary move.
+func _restore_spawn(spawn: Node3D, pos: Vector3, angle_deg: float) -> void:
+	if not is_instance_valid(spawn):
+		return
+	spawn.global_position = pos
+	if spawn is DraftEntity:
+		(spawn as DraftEntity).entity_data["angle"] = angle_deg
 
 
 func _on_spawn_validate() -> void:

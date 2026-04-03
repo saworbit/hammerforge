@@ -83,7 +83,7 @@ The compact toolbar shows icon + text labels (Draw, Select, Add, Sub, Paint, Ext
 - **Entity I/O** (collapsible): Output, Target, Input, Parameter fields. Delay (seconds) and Fire Once checkbox. Add Output / Remove buttons and connection ItemList. Connections auto-refresh when selecting an entity. **Show I/O Lines** checkbox to visualize connections in the viewport (green=standard, orange=fire_once, yellow=selected).
 
 ### Manage tab (collapsible sections)
-- **Bake**: Bake button, Dry Run, Validate Level/Fix. Options: Merge Meshes, Generate LODs, Lightmap UV2, Texel Size, Navmesh (cell size, agent height), Use Face Materials, Quick Play.
+- **Bake**: Bake button, Bake Selected, Bake Changed, Check Bake Issues, Dry Run, Validate Level/Fix. Options: Merge Meshes, Generate LODs, Lightmap UV2, Texel Size, Navmesh (cell size, agent height), Use Face Materials, Preview Mode (Full/Wireframe/Proxy), Bake Estimate label, Quick Play, Play from Camera, Play Selected Area.
 - **Actions**: Create Floor, Apply/Clear/Commit/Restore Cuts, Clear Brushes.
 - **Spawn**: Validate Spawn (bakes, then runs physics-based checks and shows debug overlay), Create Default Spawn (auto-places a `player_start` at brush centroid), Preview Spawn Debug (bakes, then shows persistent capsule/ray overlay toggle).
 - **File**: Save/Load .hflevel, Import/Export .map (Classic Quake / Valve 220), Export .glb.
@@ -101,8 +101,46 @@ Quick Play (footer button) bakes the level and launches it with a first-person c
 1. **Spawn lookup**: finds the active `player_start` entity (primary-flagged first, then first found).
 2. **Auto-create**: if no `player_start` exists, a safe default is created at the centroid of all brushes + 5 m height.
 3. **Validation**: physics-based checks (floor raycast, capsule collision, headroom, below-map). Issues appear as toasts and optional debug overlays.
-4. **Fix dialog**: critical issues (inside geometry, floating in void) show a dialog offering "Fix & Play" (snaps to nearest valid floor) or "Cancel".
+4. **Fix dialog**: critical issues (severity ≥ 2: inside geometry, floating in void) show a dialog offering "Fix & Play" (snaps to nearest valid floor) or "Cancel". Severity 1 warnings toast and proceed.
 5. **Launch**: bakes geometry + collision, then runs the scene with the FPS controller spawned at the validated position and yaw rotation.
+
+#### Play from Camera
+Click **Play from Camera** in the Manage tab to playtest from your current editor camera position:
+- The spawn entity is temporarily moved to the camera position; camera yaw is written to `entity_data["angle"]`.
+- The level bakes, spawn is validated, and the playtest launches.
+- After launch, the spawn is automatically restored to its original position and angle.
+- On validation failure (severity ≥ 2), the spawn is restored before showing the fix dialog.
+- Full undo/redo support records both the position move and yaw change.
+
+#### Play Selected Area
+Click **Play Selected Area** to bake and playtest only the region around your current brush selection:
+- The current cordon state (enabled, AABB) is saved.
+- A temporary cordon is set from the AABB of the selected brushes.
+- The level bakes within that cordon, spawn is validated, and the playtest launches.
+- After launch, the original cordon state is restored (enabled/disabled, original AABB).
+- On validation failure (severity ≥ 2), the cordon is restored before showing the fix dialog.
+
+### Incremental Bake
+For faster iteration on large levels:
+- **Bake Selected**: bakes only the currently selected brushes and merges the output into the existing baked container. Previously baked geometry is preserved.
+- **Bake Changed**: bakes only brushes that have been modified (dirty-tagged) since the last successful bake. Dirty tags survive failed bakes and accumulate until the next success.
+
+### Bake Preview Modes
+Use the **Preview Mode** dropdown in the Manage tab → Bake section to choose how baked geometry renders:
+- **Full**: standard material rendering (default).
+- **Wireframe**: cyan wireframe overlay using a custom shader — useful for inspecting geometry topology.
+- **Proxy**: semi-transparent grey unshaded material — ultra-fast rendering for layout testing.
+
+### Bake Issue Detection
+Click **Check Bake Issues** to scan for potential problems before baking:
+- **Degenerate brush** (severity 2): near-zero thickness on any axis — blocks play.
+- **Oversized brush** (severity 1): very large dimensions — warning only.
+- **Floating subtract** (severity 1): a subtractive brush that doesn't intersect any additive brush.
+- **Overlapping subtracts** (severity 1): two subtractive brushes with intersecting AABBs.
+Issues appear as color-coded toast notifications.
+
+### Bake Time Estimate
+The Manage tab shows an estimated bake time based on the last bake duration and current brush count. If the level has more than 500 brushes, a "Chunking recommended" tip appears.
 
 **player_start properties** (set in the Entity Properties panel):
 - `primary` (bool) -- preferred spawn when multiple exist.

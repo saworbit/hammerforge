@@ -1257,8 +1257,29 @@ func cancel_extrude() -> void:
 # ===========================================================================
 
 
-func bake(apply_cuts: bool = true, hide_live: bool = false, collision_layer_mask: int = 0) -> void:
-	await bake_system.bake(apply_cuts, hide_live, collision_layer_mask)
+func bake(
+	apply_cuts: bool = true,
+	hide_live: bool = false,
+	collision_layer_mask: int = 0,
+	preview_mode: int = 0
+) -> void:
+	await bake_system.bake(apply_cuts, hide_live, collision_layer_mask, preview_mode)
+
+
+func bake_selected(
+	brush_nodes: Array, collision_layer_mask: int = 0, preview_mode: int = 0
+) -> void:
+	if bake_system:
+		await bake_system.bake_selected(brush_nodes, collision_layer_mask, preview_mode)
+
+
+func bake_dirty(collision_layer_mask: int = 0, preview_mode: int = 0) -> void:
+	if bake_system:
+		await bake_system.bake_dirty(collision_layer_mask, preview_mode)
+
+
+func estimate_bake_time(brush_ids: Array = []) -> Dictionary:
+	return bake_system.estimate_bake_time(brush_ids) if bake_system else {}
 
 
 func bake_dry_run() -> Dictionary:

@@ -163,6 +163,21 @@ Enable the HammerForge plugin if it is not already enabled.
 - Click **Quick Play**; confirm the player spawns at the primary-flagged entity (not the first one).
 - Set `angle = 90` on the primary spawn; playtest and confirm the player faces 90 degrees rotated.
 
+### 12a. Bake Optimizations + Quick Play Modes
+- Select 2-3 brushes. Click **Bake Selected**; confirm only those brushes are baked and previously baked geometry is preserved (not replaced).
+- Modify a brush (move/resize). Click **Bake Changed**; confirm only the modified brush is rebaked. Unmodified geometry stays intact.
+- Set Preview Mode to **Wireframe**; click Bake. Confirm baked output renders as cyan wireframe overlay.
+- Set Preview Mode to **Proxy**; click Bake. Confirm baked output renders as semi-transparent grey.
+- Set Preview Mode back to **Full**; click Bake. Confirm normal material rendering resumes.
+- Click **Check Bake Issues** on a clean level; confirm no issues reported.
+- Create a brush with near-zero thickness (e.g. 0.01 on Y axis). Click **Check Bake Issues**; confirm a severity-2 "degenerate brush" issue appears.
+- Create a subtract brush floating in empty space (not intersecting any additive). Click **Check Bake Issues**; confirm a severity-1 "floating subtract" warning.
+- Check the **bake estimate label** updates after each bake (shows estimated time for next bake).
+- Click **Play from Camera**; confirm the player spawns at the editor camera position with matching yaw. Stop playtest; confirm the spawn entity is back in its original position.
+- Move the camera to an invalid position (inside geometry). Click **Play from Camera**; confirm the fix dialog appears and spawn is restored on cancel.
+- Select a subset of brushes. Click **Play Selected Area**; confirm only the selected area is baked. Stop playtest; confirm the cordon returns to its previous state (enabled/disabled, original AABB).
+- With cordon disabled, click **Play Selected Area**, then stop. Confirm cordon is still disabled afterward.
+
 ### 13. Context Toolbar + Command Palette
 - Select a brush in the viewport. Confirm the floating context toolbar appears at the top of the 3D viewport showing "1 brush" with Extrude/Hollow/Clip/Carve/Duplicate/Delete buttons.
 - Select multiple brushes; confirm the label updates to "N brushes".

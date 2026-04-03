@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/Godot-4.6%2B-478cbf?logo=godot-engine&logoColor=white" alt="Godot 4.6+">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
   <img src="https://img.shields.io/badge/Status-Alpha-orange" alt="Alpha">
-  <img src="https://img.shields.io/badge/Tests-753%20passing-brightgreen" alt="753 tests passing">
+  <img src="https://img.shields.io/badge/Tests-807%20passing-brightgreen" alt="807 tests passing">
   <img src="https://img.shields.io/badge/GDScript-23k%2B%20lines-blueviolet" alt="23k+ lines">
 </p>
 
@@ -36,7 +36,7 @@ HammerForge is a single `addons/` folder. No external tools, no custom builds, n
 
 | | |
 |---|---|
-| **Modular subsystem architecture** | **753 unit + integration tests** with CI on every push |
+| **Modular subsystem architecture** | **807 unit + integration tests** with CI on every push |
 | **15 brush shapes** (box through dodecahedron) | **150 built-in prototype textures** for instant greyboxing |
 | **Quake `.map`** + **glTF `.glb`** export | **.hflevel** native format with threaded I/O |
 | **Customizable keymaps** (JSON) | **Plugin API** for custom tools |
@@ -155,10 +155,17 @@ Grid-based paint layers with chunked storage for large worlds:
 | **Lightmap UV2** | Unwrap for lightmap baking |
 | **Navmesh** | Bake navigation mesh |
 | **Dry run** | Preview bake counts without building |
+| **Bake Selected** | Bake only selected brushes (merged into existing output) |
+| **Bake Changed** | Bake only dirty-tagged brushes since last successful bake |
+| **Preview modes** | Full / Wireframe / Proxy toggle for ultra-fast iteration |
+| **Check Issues** | Flag degenerate, floating, or overlapping brushes with severity |
+| **Bake estimate** | Time estimate with "Chunking recommended" tip for large levels |
 | **Validate** | Check level integrity before bake |
 | **.map export** | Classic Quake or Valve 220 format |
 | **.glb export** | glTF binary for external tools |
 | **Quick Play** | Bake + validate spawn + run with FPS controller |
+| **Play from Camera** | Quick Play from the editor camera position and yaw |
+| **Play Selected Area** | Auto-cordon to selection, bake + play that region only |
 
 ---
 
@@ -196,7 +203,7 @@ plugin.gd            EditorPlugin — input routing, toolbar, viewport overlay
        ├─ HFDragSystem      Two-stage draw lifecycle + preview management
        ├─ HFExtrudeTool     Face extrusion (Up/Down) via FaceSelector
        ├─ HFPaintSystem     Floor paint layers, heightmaps, blend, surface paint
-       ├─ HFBakeSystem      CSG assembly, mesh merge, LOD, navmesh, collision
+       ├─ HFBakeSystem      CSG assembly, mesh merge, LOD, navmesh, collision, incremental/selection bake, preview modes
        ├─ HFEntitySystem    Entity CRUD, I/O connections, definition loading
        ├─ HFStateSystem     Undo/redo snapshots, transactions, autosave
        ├─ HFFileSystem      Threaded .hflevel / .map / .glb I/O
@@ -281,7 +288,7 @@ All shortcuts are rebindable via `user://hammerforge_keymap.json`.
 
 ## Testing
 
-726 tests across 43 files using the [GUT](https://github.com/bitwes/Gut) framework, including unit tests and end-to-end integration tests. All checks run on every push via GitHub Actions.
+807 tests across 47 files using the [GUT](https://github.com/bitwes/Gut) framework, including unit tests and end-to-end integration tests. All checks run on every push via GitHub Actions.
 
 ```bash
 # Run all tests headless
@@ -328,13 +335,14 @@ gdlint addons/hammerforge/
 See [ROADMAP.md](ROADMAP.md) for the full plan.
 
 **Recently shipped:**
+- Bake & Quick Play optimizations (Bake Selected, Bake Changed, preview modes, Play from Camera, Play Selected Area)
+- Prefab variants, live-linked prefabs, quick group-to-prefab
+- Improved selection & multi-select (marquee, selection filters, Select Similar, Apply Last Texture)
+- Smart contextual toolbar + command palette
 - Visual material browser with thumbnail grid, search, pattern/color filters, favorites, and hover preview
-- Texture Picker tool (T key) — eyedropper to sample face materials
 - Vertex editing enhancements (edge sub-mode, split, merge, wireframe overlay)
 - Polygon tool (click convex vertices, extrude to brush)
 - Path tool (waypoints, rectangular cross-section, miter joints)
-- Interactive tutorial wizard with 5-step guided walkthrough
-- Prefab system (save/load/drag-and-drop reusable brush+entity groups)
 
 **Next up:**
 - Displacement sewing (stitch adjacent heightmap edges)
@@ -384,5 +392,5 @@ Run `godot --headless --import --path .` first, then re-run the test command.
 
 <p align="center">
   <strong>MIT License</strong><br>
-  <sub>Built for Godot 4.6+ | Last updated March 28, 2026</sub>
+  <sub>Built for Godot 4.6+ | Last updated April 3, 2026</sub>
 </p>

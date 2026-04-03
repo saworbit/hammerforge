@@ -72,6 +72,7 @@ func _enter_tree():
 	if dock:
 		dock.set_editor_interface(get_editor_interface())
 		dock.set_undo_redo(undo_redo_manager)
+		dock.set_plugin(self)
 		dock.set_keymap(_keymap)
 		dock.set_user_prefs(_user_prefs)
 		if dock.has_signal("hud_visibility_changed"):
