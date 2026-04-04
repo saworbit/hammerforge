@@ -8,7 +8,6 @@ extends RefCounted
 
 const HFHash = preload("hf_hash.gd")
 
-
 ## Brush shape for scatter placement.
 enum BrushShape { CIRCLE, SPLINE }
 
@@ -97,9 +96,7 @@ func scatter_circle(
 
 
 ## Generate scatter transforms along a spline path.
-func scatter_spline(
-	layer: HFPaintLayer, settings: ScatterSettings
-) -> ScatterResult:
+func scatter_spline(layer: HFPaintLayer, settings: ScatterSettings) -> ScatterResult:
 	var result := ScatterResult.new()
 	if not layer or not layer.grid:
 		return result
@@ -149,9 +146,7 @@ func scatter_spline(
 
 
 ## Build a density preview MultiMesh (lightweight wireframe dots).
-func build_preview(
-	transforms: Array[Transform3D], settings: ScatterSettings
-) -> MultiMesh:
+func build_preview(transforms: Array[Transform3D], settings: ScatterSettings) -> MultiMesh:
 	if transforms.is_empty():
 		return null
 
@@ -205,15 +200,17 @@ func _compute_slope(layer: HFPaintLayer, cell: Vector2i, grid: HFPaintGrid) -> f
 	var h := layer.get_height_at(cell)
 	var h_right := layer.get_height_at(cell + Vector2i(1, 0))
 	var h_up := layer.get_height_at(cell + Vector2i(0, 1))
-	var slope_rad := atan(
-		maxf(absf(h_right - h), absf(h_up - h)) / maxf(grid.cell_size, 0.001)
-	)
+	var slope_rad := atan(maxf(absf(h_right - h), absf(h_up - h)) / maxf(grid.cell_size, 0.001))
 	return rad_to_deg(slope_rad)
 
 
 func _build_transform(
-	pos: Vector3, rng: RandomNumberGenerator, settings: ScatterSettings,
-	layer: HFPaintLayer, cell: Vector2i, grid: HFPaintGrid
+	pos: Vector3,
+	rng: RandomNumberGenerator,
+	settings: ScatterSettings,
+	layer: HFPaintLayer,
+	cell: Vector2i,
+	grid: HFPaintGrid
 ) -> Transform3D:
 	var s := rng.randf_range(settings.scale_range.x, settings.scale_range.y)
 	var rot := rng.randf() * TAU if settings.random_rotation else 0.0
@@ -291,7 +288,9 @@ func _make_wireframe_mesh(source: Mesh) -> ArrayMesh:
 	if arrays.is_empty() or arrays[Mesh.ARRAY_VERTEX] == null:
 		return _make_dot_mesh()
 	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX] if arrays[Mesh.ARRAY_INDEX] else PackedInt32Array()
+	var indices: PackedInt32Array = (
+		arrays[Mesh.ARRAY_INDEX] if arrays[Mesh.ARRAY_INDEX] else PackedInt32Array()
+	)
 
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_LINES)

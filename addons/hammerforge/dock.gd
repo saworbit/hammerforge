@@ -3925,11 +3925,17 @@ func _on_heightmap_convert() -> void:
 	if level_root.has_signal("paint_layer_changed"):
 		level_root.paint_layer_changed.emit(mgr.active_layer_index)
 	# Regenerate geometry so the new terrain appears immediately
-	if level_root.get("paint_system") and level_root.paint_system.has_method("regenerate_paint_layers"):
+	if (
+		level_root.get("paint_system")
+		and level_root.paint_system.has_method("regenerate_paint_layers")
+	):
 		level_root.paint_system.regenerate_paint_layers()
 	level_root.emit_signal(
 		"user_message",
-		"Converted %d brushes to heightmap layer '%s'" % [result.brush_count, result.layer.display_name],
+		(
+			"Converted %d brushes to heightmap layer '%s'"
+			% [result.brush_count, result.layer.display_name]
+		),
 		0
 	)
 	_refresh_paint_layers()
@@ -3948,12 +3954,13 @@ func _on_scatter_mesh_pick() -> void:
 	dialog.file_mode = EditorFileDialog.FILE_MODE_OPEN_FILE
 	dialog.access = EditorFileDialog.ACCESS_RESOURCES
 	dialog.add_filter("*.tres,*.res,*.obj,*.glb,*.gltf", "Mesh Resources")
-	dialog.file_selected.connect(func(path: String) -> void:
-		_scatter_mesh_path = path
-		if scatter_mesh_btn:
-			var fname := path.get_file()
-			scatter_mesh_btn.text = fname if fname != "" else "Pick Mesh..."
-		dialog.queue_free()
+	dialog.file_selected.connect(
+		func(path: String) -> void:
+			_scatter_mesh_path = path
+			if scatter_mesh_btn:
+				var fname := path.get_file()
+				scatter_mesh_btn.text = fname if fname != "" else "Pick Mesh..."
+			dialog.queue_free()
 	)
 	dialog.canceled.connect(func() -> void: dialog.queue_free())
 	add_child(dialog)
@@ -4027,9 +4034,7 @@ func _on_scatter_preview() -> void:
 			_scatter_clear_preview()
 			_scatter_last_result = []
 			level_root.emit_signal(
-				"user_message",
-				"Spline scatter requires 2+ selected nodes to define the path",
-				1
+				"user_message", "Spline scatter requires 2+ selected nodes to define the path", 1
 			)
 			return
 		result = brush.scatter_spline(layer, settings)
@@ -4073,9 +4078,7 @@ func _on_scatter_commit() -> void:
 		parent = level_root.generated_floors.get_parent()
 	brush.commit(_scatter_last_result, settings, parent)
 	level_root.emit_signal(
-		"user_message",
-		"Scattered %d instances" % _scatter_last_result.size(),
-		0
+		"user_message", "Scattered %d instances" % _scatter_last_result.size(), 0
 	)
 	_scatter_last_result = []
 

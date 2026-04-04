@@ -62,13 +62,9 @@ func convert(brushes: Array, settings: ConvertSettings) -> ConvertResult:
 	var cs: float = maxf(settings.cell_size, 0.01)
 	var margin := settings.margin_cells
 	var cell_min := Vector2i(
-		floori(aabb.position.x / cs) - margin,
-		floori(aabb.position.z / cs) - margin
+		floori(aabb.position.x / cs) - margin, floori(aabb.position.z / cs) - margin
 	)
-	var cell_max := Vector2i(
-		ceili(aabb.end.x / cs) + margin,
-		ceili(aabb.end.z / cs) + margin
-	)
+	var cell_max := Vector2i(ceili(aabb.end.x / cs) + margin, ceili(aabb.end.z / cs) + margin)
 	var width := cell_max.x - cell_min.x
 	var height := cell_max.y - cell_min.y
 	if width <= 0 or height <= 0:
@@ -145,8 +141,13 @@ func _get_brush_aabb(brush: Node3D) -> AABB:
 
 ## Rasterize a single brush's height contribution into raw_heights array.
 func _rasterize_brush(
-	brush: Node3D, raw_heights: PackedFloat32Array,
-	img_w: int, img_h: int, cell_min: Vector2i, cs: float, y_min: float
+	brush: Node3D,
+	raw_heights: PackedFloat32Array,
+	img_w: int,
+	img_h: int,
+	cell_min: Vector2i,
+	cs: float,
+	y_min: float
 ) -> void:
 	var b_aabb := _get_brush_aabb(brush)
 
@@ -170,8 +171,10 @@ func _rasterize_brush(
 			var world_z := (cell_min.y + ly + 0.5) * cs
 			# Check if this XZ point is inside the brush footprint
 			if (
-				world_x >= b_aabb.position.x and world_x <= b_aabb.end.x
-				and world_z >= b_aabb.position.z and world_z <= b_aabb.end.z
+				world_x >= b_aabb.position.x
+				and world_x <= b_aabb.end.x
+				and world_z >= b_aabb.position.z
+				and world_z <= b_aabb.end.z
 			):
 				var idx := ly * img_w + lx
 				var h := top_y - y_min

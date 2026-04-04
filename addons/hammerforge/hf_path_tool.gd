@@ -582,9 +582,7 @@ func _build_stairs(
 # ---------------------------------------------------------------------------
 
 
-func _build_railings(
-	path_width: float, group_id: String, custom_shape: int
-) -> Array:
+func _build_railings(path_width: float, group_id: String, custom_shape: int) -> Array:
 	var infos: Array = []
 	var rail_h: float = get_setting("railing_height")
 	var rail_t: float = get_setting("railing_thickness")
@@ -609,9 +607,7 @@ func _build_railings(
 			rail_a.y = lerpf(a.y, b.y, 0.0) + rail_h
 			rail_b.y = lerpf(a.y, b.y, 1.0) + rail_h
 
-			var rail_info := _build_segment_brush(
-				rail_a, rail_b, rail_t, rail_t, group_id
-			)
+			var rail_info := _build_segment_brush(rail_a, rail_b, rail_t, rail_t, group_id)
 			if not rail_info.is_empty():
 				rail_info["shape"] = custom_shape
 				infos.append(rail_info)
@@ -642,9 +638,7 @@ func _build_railings(
 # ---------------------------------------------------------------------------
 
 
-func _build_trim(
-	path_width: float, group_id: String, custom_shape: int
-) -> Array:
+func _build_trim(path_width: float, group_id: String, custom_shape: int) -> Array:
 	var infos: Array = []
 	var trim_w: float = get_setting("trim_width")
 	var trim_h: float = get_setting("trim_height")
@@ -671,9 +665,7 @@ func _build_trim(
 			trim_a.y = a.y
 			trim_b.y = b.y
 
-			var info := _build_segment_brush(
-				trim_a, trim_b, trim_w, trim_h, group_id
-			)
+			var info := _build_segment_brush(trim_a, trim_b, trim_w, trim_h, group_id)
 			if not info.is_empty():
 				info["shape"] = custom_shape
 				# Apply material to all faces
