@@ -11,11 +11,11 @@ extends "hf_editor_tool.gd"
 const MAX_RULERS := 20
 const RULER_COLORS: Array[Color] = [
 	Color.YELLOW,
-	Color(0.3, 0.85, 1.0),   # cyan
-	Color(0.3, 1.0, 0.5),    # green
-	Color(1.0, 0.6, 0.3),    # orange
-	Color(0.8, 0.5, 1.0),    # purple
-	Color(1.0, 0.4, 0.6),    # pink
+	Color(0.3, 0.85, 1.0),  # cyan
+	Color(0.3, 1.0, 0.5),  # green
+	Color(1.0, 0.6, 0.3),  # orange
+	Color(0.8, 0.5, 1.0),  # purple
+	Color(1.0, 0.4, 0.6),  # pink
 ]
 
 var _measurements: Array = []  # Array of {a: Vector3, b: Vector3}
@@ -116,9 +116,7 @@ func get_shortcut_hud_lines() -> PackedStringArray:
 # ---------------------------------------------------------------------------
 
 
-func _handle_left_click(
-	event: InputEventMouseButton, camera: Camera3D, mouse_pos: Vector2
-) -> int:
+func _handle_left_click(event: InputEventMouseButton, camera: Camera3D, mouse_pos: Vector2) -> int:
 	var hit_pos = _raycast_world(camera, mouse_pos)
 	if hit_pos == null:
 		return EditorPlugin.AFTER_GUI_INPUT_PASS
@@ -309,9 +307,9 @@ func _update_visuals() -> void:
 		var midpoint: Vector3 = (m["a"] + m["b"]) * 0.5 + Vector3(0, 0.5, 0)
 		var dist: float = m["a"].distance_to(m["b"])
 		var delta: Vector3 = m["b"] - m["a"]
-		var text := "%.1f\ndX:%.1f dY:%.1f dZ:%.1f" % [
-			dist, abs(delta.x), abs(delta.y), abs(delta.z)
-		]
+		var text := (
+			"%.1f\ndX:%.1f dY:%.1f dZ:%.1f" % [dist, abs(delta.x), abs(delta.y), abs(delta.z)]
+		)
 		if is_snap_ref:
 			text += "\n[SNAP REF]"
 		_add_label(midpoint, text, color)
@@ -331,9 +329,7 @@ func _update_visuals() -> void:
 				var offset: Vector3 = (dir_a + dir_b).normalized() * 0.8
 				if offset.length_squared() < 0.001:
 					offset = Vector3(0, 0.5, 0)
-				_add_label(
-					vertex + offset, "%.1f\u00b0" % angle_deg, Color(1.0, 0.9, 0.4)
-				)
+				_add_label(vertex + offset, "%.1f\u00b0" % angle_deg, Color(1.0, 0.9, 0.4))
 				# Draw small angle arc lines
 				var arc_color := Color(1.0, 0.9, 0.4, 0.6)
 				var arc_radius := 0.6

@@ -128,9 +128,7 @@ func build(parent: Control) -> void:
 	bk.add_child(dock.quick_play_area_btn)
 
 	dock.export_playtest_btn = dock._make_button("Export Playtest Build")
-	dock.export_playtest_btn.tooltip_text = (
-		"Validate, bake optimized, and launch as playable scene"
-	)
+	dock.export_playtest_btn.tooltip_text = ("Validate, bake optimized, and launch as playable scene")
 	bk.add_child(dock.export_playtest_btn)
 
 	# --- Actions section ---
