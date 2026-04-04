@@ -76,6 +76,12 @@ func build(parent: Control) -> void:
 	hm_row.add_child(dock.heightmap_generate)
 	hmc.add_child(hm_row)
 
+	# Convert selection to heightmap
+	dock.heightmap_convert_btn = Button.new()
+	dock.heightmap_convert_btn.text = "Convert Selection → Heightmap"
+	dock.heightmap_convert_btn.tooltip_text = "Convert selected brushes into a sculptable heightmap layer"
+	hmc.add_child(dock.heightmap_convert_btn)
+
 	# Sculpt tools
 	var sculpt_label = Label.new()
 	sculpt_label.text = "Sculpt:"
@@ -146,6 +152,99 @@ func build(parent: Control) -> void:
 	dock.terrain_slot_b_scale = slot_scales[1]
 	dock.terrain_slot_c_scale = slot_scales[2]
 	dock.terrain_slot_d_scale = slot_scales[3]
+
+	# --- Foliage & Scatter section ---
+	var foliage_sec = hf_collapsible_section.create("Foliage & Scatter", false)
+	root_vbox.add_child(foliage_sec)
+	dock._register_section(foliage_sec, "Foliage & Scatter")
+	var flc = foliage_sec.get_content()
+
+	dock.scatter_mesh_btn = Button.new()
+	dock.scatter_mesh_btn.text = "Pick Mesh..."
+	dock.scatter_mesh_btn.tooltip_text = "Select a mesh resource for scattering"
+	flc.add_child(dock.scatter_mesh_btn)
+
+	dock.scatter_density_spin = dock._make_spin(0.01, 10.0, 0.1, 0.5)
+	flc.add_child(dock._make_label_row("Density", dock.scatter_density_spin))
+
+	dock.scatter_radius_spin = dock._make_spin(0.5, 100.0, 0.5, 5.0)
+	flc.add_child(dock._make_label_row("Radius", dock.scatter_radius_spin))
+
+	dock.scatter_min_height_spin = dock._make_spin(-1000, 1000, 1.0, -1000.0)
+	flc.add_child(dock._make_label_row("Min Height", dock.scatter_min_height_spin))
+
+	dock.scatter_max_height_spin = dock._make_spin(-1000, 1000, 1.0, 1000.0)
+	flc.add_child(dock._make_label_row("Max Height", dock.scatter_max_height_spin))
+
+	dock.scatter_max_slope_spin = dock._make_spin(0, 90, 1.0, 45.0)
+	flc.add_child(dock._make_label_row("Max Slope", dock.scatter_max_slope_spin))
+
+	dock.scatter_scale_min_spin = dock._make_spin(0.1, 5.0, 0.05, 0.8)
+	dock.scatter_scale_max_spin = dock._make_spin(0.1, 5.0, 0.05, 1.2)
+	var scale_row = HBoxContainer.new()
+	var scale_label = Label.new()
+	scale_label.text = "Scale"
+	scale_row.add_child(scale_label)
+	scale_row.add_child(dock.scatter_scale_min_spin)
+	var dash_label = Label.new()
+	dash_label.text = "-"
+	scale_row.add_child(dash_label)
+	scale_row.add_child(dock.scatter_scale_max_spin)
+	flc.add_child(scale_row)
+
+	dock.scatter_align_normal = CheckBox.new()
+	dock.scatter_align_normal.text = "Align to Surface"
+	dock.scatter_align_normal.tooltip_text = "Rotate instances to match terrain normal"
+	flc.add_child(dock.scatter_align_normal)
+
+	dock.scatter_random_rotation = CheckBox.new()
+	dock.scatter_random_rotation.text = "Random Rotation"
+	dock.scatter_random_rotation.button_pressed = true
+	flc.add_child(dock.scatter_random_rotation)
+
+	var scatter_shape_row = HBoxContainer.new()
+	var shape_label = Label.new()
+	shape_label.text = "Shape"
+	scatter_shape_row.add_child(shape_label)
+	dock.scatter_shape_select = OptionButton.new()
+	dock.scatter_shape_select.add_item("Circle", 0)
+	dock.scatter_shape_select.add_item("Spline", 1)
+	dock.scatter_shape_select.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scatter_shape_row.add_child(dock.scatter_shape_select)
+	flc.add_child(scatter_shape_row)
+
+	dock.scatter_spline_width_spin = dock._make_spin(0.5, 50.0, 0.5, 3.0)
+	flc.add_child(dock._make_label_row("Spline Width", dock.scatter_spline_width_spin))
+
+	var preview_row = HBoxContainer.new()
+	var preview_label = Label.new()
+	preview_label.text = "Preview"
+	preview_row.add_child(preview_label)
+	dock.scatter_preview_select = OptionButton.new()
+	dock.scatter_preview_select.add_item("Dots", 0)
+	dock.scatter_preview_select.add_item("Wireframe", 1)
+	dock.scatter_preview_select.add_item("Full", 2)
+	dock.scatter_preview_select.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	preview_row.add_child(dock.scatter_preview_select)
+	flc.add_child(preview_row)
+
+	var scatter_btn_row = HBoxContainer.new()
+	dock.scatter_preview_btn = Button.new()
+	dock.scatter_preview_btn.text = "Preview"
+	dock.scatter_preview_btn.tooltip_text = "Show density preview at current selection"
+	dock.scatter_preview_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scatter_btn_row.add_child(dock.scatter_preview_btn)
+	dock.scatter_commit_btn = Button.new()
+	dock.scatter_commit_btn.text = "Scatter"
+	dock.scatter_commit_btn.tooltip_text = "Place foliage instances permanently"
+	dock.scatter_commit_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scatter_btn_row.add_child(dock.scatter_commit_btn)
+	dock.scatter_clear_btn = Button.new()
+	dock.scatter_clear_btn.text = "Clear"
+	dock.scatter_clear_btn.tooltip_text = "Remove scatter preview"
+	dock.scatter_clear_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scatter_btn_row.add_child(dock.scatter_clear_btn)
+	flc.add_child(scatter_btn_row)
 
 	# --- Regions section ---
 	var region_sec = hf_collapsible_section.create("Regions", false)
@@ -307,6 +406,8 @@ func build(parent: Control) -> void:
 
 
 func connect_signals() -> void:
+	if dock.heightmap_convert_btn:
+		dock.heightmap_convert_btn.pressed.connect(dock._on_heightmap_convert)
 	if dock.paint_layer_select:
 		dock.paint_layer_select.item_selected.connect(dock._on_paint_layer_selected)
 	if dock.paint_layer_add:
@@ -417,3 +518,12 @@ func connect_signals() -> void:
 		dock.justify_top_btn.pressed.connect(dock._on_justify.bind("top"))
 	if dock.justify_bottom_btn:
 		dock.justify_bottom_btn.pressed.connect(dock._on_justify.bind("bottom"))
+	# Scatter / foliage signals
+	if dock.scatter_mesh_btn:
+		dock.scatter_mesh_btn.pressed.connect(dock._on_scatter_mesh_pick)
+	if dock.scatter_preview_btn:
+		dock.scatter_preview_btn.pressed.connect(dock._on_scatter_preview)
+	if dock.scatter_commit_btn:
+		dock.scatter_commit_btn.pressed.connect(dock._on_scatter_commit)
+	if dock.scatter_clear_btn:
+		dock.scatter_clear_btn.pressed.connect(dock._on_scatter_clear)

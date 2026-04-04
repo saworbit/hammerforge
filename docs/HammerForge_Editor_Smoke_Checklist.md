@@ -1,6 +1,6 @@
 # HammerForge Editor Smoke Checklist
 
-Last updated: April 3, 2026
+Last updated: April 4, 2026
 
 This checklist covers the editor-only flows that are hard to validate in headless tests:
 - tutorial banner startup before `LevelRoot` exists
@@ -10,7 +10,7 @@ This checklist covers the editor-only flows that are hard to validate in headles
 - subtract preview toggle in the viewport
 - vertex editing: edge sub-mode, split, merge, wireframe overlay
 - polygon tool: click vertices, close, extrude height, brush creation
-- path tool: place waypoints, finalize, corridor + miter joint brushes
+- path tool: place waypoints, finalize, corridor + miter joint brushes, auto-stairs/railings/trim extras
 - material browser: thumbnail grid, search, filters, favorites, hover preview, context menu
 - texture picker: T key eyedropper for sampling face materials
 - spawn system: validation debug overlay, Quick Play with missing/invalid spawn, Manage tab spawn controls
@@ -19,6 +19,8 @@ This checklist covers the editor-only flows that are hard to validate in headles
 - coach marks: first-use tool guides appear on tool activation, dismissal persistence
 - operation replay: timeline display, hover details, replay undo/redo navigation
 - example library: load examples, study annotations, search/filter
+- convert selection to heightmap: brush selection → heightmap layer with terrain
+- foliage & scatter: circle/spline preview, commit, clear, UI controls in Paint tab
 
 ## Prep
 
@@ -246,11 +248,34 @@ Enable the HammerForge plugin if it is not already enabled.
 - Click **Load** on "Jump Puzzle Platforms"; confirm the room brushes are cleared and platform brushes appear at staggered heights with a player_start entity.
 - Undo is not supported for example loads (they bypass undo/redo). Confirm a toast "Loaded 'Jump Puzzle Platforms': N objects" appeared.
 
-### 18. Cleanup / Persistence
+### 18. Convert Selection to Heightmap
+- Draw 2-3 brushes at different heights.
+- Select all brushes. Switch to Paint tab → Heightmap section.
+- Click **Convert Selection → Heightmap**. Confirm a toast appears ("Converted N brushes to heightmap layer 'Converted Terrain'").
+- Confirm the Paint layer dropdown now shows the new layer as active.
+- Confirm terrain geometry appears in the viewport where the brushes were.
+
+### 19. Foliage & Scatter
+- In Paint tab → Foliage & Scatter section, click the mesh picker and select any `.tres` or `.obj` mesh.
+- Set density to 2.0, radius to 5.0. Click **Preview**. Confirm dot instances appear in the viewport around the center of your selection.
+- Change preview mode to Wireframe; click **Preview** again; confirm wireframe preview replaces dots.
+- Click **Scatter** to commit. Confirm a toast appears ("Scattered N instances") and the preview is replaced by a permanent MultiMeshInstance3D.
+- Click **Clear**. Confirm the preview node is removed from the viewport.
+- Switch shape to Spline. Select 3+ nodes/brushes. Click **Preview**. Confirm scatter instances follow the path defined by the selected node positions.
+- With only 1 node selected in Spline mode, click **Preview**. Confirm a warning toast appears and no preview is created.
+
+### 20. Path Tool Extras
+- Activate the Path tool (;). In the tool settings, set path_extra to **Stairs**.
+- Place 2 waypoints at different Y heights (use grid snap or numeric input). Press Enter.
+- Confirm step brushes are generated along the sloped segment.
+- Undo. Change path_extra to **Railing**. Repeat the path. Confirm top rails and posts appear on both sides.
+- Undo. Change path_extra to **Trim**. Repeat. Confirm edge strips appear alongside the path.
+
+### 21. Cleanup / Persistence
 - Dismiss the tutorial with and without `Don't show again` checked.
 - Restart Godot and confirm the `show_welcome` preference behaves as expected.
 - Reopen the dock and confirm no layout corruption remains after closing the tutorial and shortcut dialog.
 
 ## Expected Outcome
 
-If all steps pass, the remaining risk on the tutorial/prefab/shortcut/subtract-preview/vertex-editing/polygon/path/material-browser/spawn-system/context-toolbar/command-palette feature set is low and limited mainly to edge cases outside this smoke path.
+If all steps pass, the remaining risk on the tutorial/prefab/shortcut/subtract-preview/vertex-editing/polygon/path/material-browser/spawn-system/context-toolbar/command-palette/terrain-scatter feature set is low and limited mainly to edge cases outside this smoke path.

@@ -26,7 +26,7 @@ func test_shortcut_key():
 func test_settings_schema():
 	var tool = HFPathTool.new()
 	var schema = tool.get_settings_schema()
-	assert_eq(schema.size(), 3, "Should have width, height, miter settings")
+	assert_gte(schema.size(), 3, "Should have width, height, miter + extra settings")
 	var names = []
 	for s in schema:
 		names.append(s.name)

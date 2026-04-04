@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: April 3, 2026
+Last updated: April 4, 2026
 
 This roadmap is a directional plan. Items may change based on user feedback.
 Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md for details.
@@ -207,6 +207,13 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - **Enhanced command palette** (Ctrl+K): fuzzy search with subsequence matching (word-boundary and consecutive-char bonuses). "Did you mean: ..." suggestion label when no exact match. Caps at 5 fuzzy results. Ctrl+K added as toggle shortcut alongside Shift+?/F1.
 - **Example library** (`HFExampleLibrary`): 5 built-in demo levels (Simple Room, Corridor with Doorway, Jump Puzzle Platforms, Hollowed Building, Simple Arena). Difficulty badges, tags, searchable browser, "Study This" annotations. Load clears current scene and instantiates from JSON definitions. Manage tab section (collapsed by default).
 - 63 new tests across 4 files (coach_marks, operation_replay, fuzzy_search, example_library). Total: **944 tests across 54 files**.
+
+## Done (Terrain & Organic Enhancements — Brush-to-Terrain Pipeline)
+- **Convert Selection to Heightmap** (`HFBrushToHeightmap`): select brushes → rasterize top faces → create sculptable heightmap paint layer. Inherits `base_grid` origin/basis and `chunk_size` from the manager. Emits `paint_layer_changed` and triggers `regenerate_paint_layers()`. Dock button in Paint tab → Heightmap section.
+- **Foliage & Scatter brush** (`HFScatterBrush`): circle and spline shapes, density/radius/height/slope filtering, scale variation, align-to-normal, deterministic seeding. Preview via MultiMesh (Dots/Wireframe/Full). Commit as permanent `MultiMeshInstance3D`. Full dock UI with mesh picker, shape selector, Preview/Scatter/Clear buttons. Spline mode uses selected node positions as control points.
+- **Path tool extras**: auto-generate stairs (step brushes along sloped segments), railings (top rails + posts on both sides), and trim strips (edge strips with material auto-assign) along path tool paths. New `path_extra` setting (None/Stairs/Railing/Trim) with 8 additional parameters. Color-coded preview lines.
+- **Dock integration tests** (`test_dock_terrain_integration.gd`): 30 tests covering full heightmap convert pipeline, scatter handlers, settings wiring, and layer lookups using real `LevelRoot` (with `auto_spawn_player=false`).
+- 77 new tests across 4 files. Total: **974 tests across 55 files**.
 
 ## Next (Wave 2c remaining)
 - Displacement sewing (stitch adjacent heightmap edges to share vertices).
