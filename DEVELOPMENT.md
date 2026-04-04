@@ -1,6 +1,6 @@
 # Development Guide
 
-Last updated: April 3, 2026
+Last updated: April 4, 2026
 
 This document covers local setup, codebase structure, and how to test features.
 
@@ -37,7 +37,7 @@ addons/hammerforge/
   hf_measure_tool.gd     Measurement/ruler tool (click A → click B → distance + decomposition)
   hf_decal_tool.gd       Decal placement tool (raycast + surface-normal aligned Decal nodes)
   hf_polygon_tool.gd     Polygon tool (click convex verts → extrude to brush, tool_id=102)
-  hf_path_tool.gd        Path tool (waypoints → corridor brushes with miter joints, tool_id=103)
+  hf_path_tool.gd        Path tool (waypoints → corridor brushes with miter joints, stairs, railings, trim, tool_id=103)
   hf_keymap.gd           Customizable keyboard shortcuts (JSON load/save, action matching)
   hf_user_prefs.gd       Cross-session user preferences (user://hammerforge_prefs.json)
   hf_snap_system.gd      Centralized snap (Grid/Vertex/Center modes, threshold-based candidates)
@@ -114,6 +114,8 @@ addons/hammerforge/
     hf_stroke.gd           Stroke types (brush/erase/rect/line/bucket/blend/sculpt_raise/lower/smooth/flatten)
     hf_connector_tool.gd   Ramp/stair mesh generation between layers
     hf_foliage_populator.gd MultiMeshInstance3D procedural scatter (height/slope filtering)
+    hf_brush_to_heightmap.gd Convert selected brushes to heightmap paint layer (rasterize top faces)
+    hf_scatter_brush.gd    Interactive scatter/foliage brush (circle/spline, density preview, commit)
     hf_blend.gdshader      Two-material blend shader (UV2 blend map, default colors, cell grid overlay)
 ```
 
@@ -148,7 +150,9 @@ addons/hammerforge/
 - **Prefabs.** `hf_prefab.gd` (`HFPrefab`) stores brush_infos + entity_infos with centroid-relative transforms. `capture_from_selection()` computes centroid and strips brush_id/group_id. `instantiate()` assigns new IDs, offsets transforms, remaps entity I/O via name_map, and returns `entity_nodes` (Node3D refs) alongside `entity_names` for stable registration. `save_to_file()`/`load_from_file()` use JSON via `HFLevelIO` encoding. `ui/hf_prefab_library.gd` provides the dock section with ItemList and drag-and-drop (`"hammerforge_prefab"` type tag). Plugin handles drop with raycast + snap + undo/redo. `HFPrefabSystem` tracks entity membership via stable UIDs (`hf_prefab_entity_id` meta) — never scene node names. Context toolbar prefab buttons (Var▶/Push/Pull) are built at init time and toggled visible in `_apply_context()`.
 - **Vertex system.** `HFVertexSystem` (`systems/hf_vertex_system.gd`) manages vertex/edge selection, movement with convexity validation, edge splitting, and vertex merging. Supports two sub-modes via the `sub_mode` property: `VertexSubMode.VERTEX` (0) and `VertexSubMode.EDGE` (1), toggled with E key. **Note:** `sub_mode` is a public property, not a setter — assign directly (`vs.sub_mode = 1`). `merge_vertices(brush_id, indices)` and `split_edge(brush_id, edge)` require explicit brush_id and selection data; `plugin.gd` provides `_vertex_merge_selected()` and `_vertex_split_selected_edge()` wrappers that resolve current selection before calling. Edge selection syncs to `selected_vertices` so `move_vertices()` works transparently for both modes. `split_edge()` inserts midpoints and skips convexity validation (mathematically guaranteed on convex hulls). `merge_vertices()` validates convexity and reverts via face snapshots on failure. Edge deduplication uses canonical vertex key pairs (`"vkey_a|vkey_b"` where a < b).
 - **Polygon tool.** `HFPolygonTool` (`hf_polygon_tool.gd`, tool_id=102, KEY_P) creates arbitrary convex polygon brushes via a three-phase state machine (IDLE → PLACING_VERTS → SETTING_HEIGHT). Enforces convexity via 2D cross product on XZ plane. Constructs face data with proper winding (top=CCW for up-normal, bottom=CW, N side quads) in local space relative to AABB center. Uses `create_brush_from_info()` with undo/redo via `self.undo_redo`.
-- **Path tool.** `HFPathTool` (`hf_path_tool.gd`, tool_id=103, KEY_SEMICOLON) creates corridor brushes from waypoints. Each segment is an oriented-box brush (8 corners from direction + perpendicular). Miter joint brushes fill gaps at interior waypoints. All brushes share a `group_id`. Single undo action for the entire path.
+- **Path tool.** `HFPathTool` (`hf_path_tool.gd`, tool_id=103, KEY_SEMICOLON) creates corridor brushes from waypoints. Each segment is an oriented-box brush (8 corners from direction + perpendicular). Miter joint brushes fill gaps at interior waypoints. All brushes share a `group_id`. Single undo action for the entire path. `path_extra` setting (None/Stairs/Railing/Trim) auto-generates additional geometry after base segments: step brushes along sloped segments, top rails + posts on both sides, or edge trim strips with material auto-assign.
+- **Convert to heightmap.** `HFBrushToHeightmap` (`paint/hf_brush_to_heightmap.gd`) rasterizes brush top faces onto a grid, creating a heightmap paint layer. Dock handler `_on_heightmap_convert()` inherits `base_grid` (origin/basis) and `chunk_size` from the paint layer manager, emits `paint_layer_changed`, and calls `regenerate_paint_layers()`. Uses `level_root.grid_snap` as cell size when > 0.
+- **Scatter brush.** `HFScatterBrush` (`paint/hf_scatter_brush.gd`) generates scatter transforms for circle or spline shapes with height/slope filtering. `build_preview()` creates a MultiMesh for preview. `commit()` creates a permanent `MultiMeshInstance3D`. Dock wires UI controls → `_build_scatter_settings()` → preview/commit. Spline mode populates control points from `_selection_nodes` positions.
 - **I/O connection presets.** `systems/hf_io_presets.gd` manages built-in and user-saved connection presets. 6 built-in presets (Door+Light+Sound, Button→Toggle, etc.) are always available. User presets persist to `EditorInterface.get_editor_paths().get_config_dir()` in editor, `user://` fallback for tests. `apply_preset(source, preset, target_map)` maps target tags to actual entity names ("self" → source name). `save_entity_as_preset()` captures existing connections. Tests use explicit temp paths with cleanup in `after_each()`.
 - **I/O wiring panel.** `ui/hf_io_wiring_panel.gd` is a `VBoxContainer` embedded in the Entities tab via `entity_tab_builder.gd`. Shows connection summary, outputs list, quick-wire form, and preset picker with target tag mapping. Emits `connection_added`, `preset_applied`, `highlight_toggled`. `_sync_highlight_button()` reads `_io_visualizer.highlight_connected` and uses `set_pressed_no_signal()` to avoid signal loops. Called from `set_source_entity()` and `dock.sync_wiring_highlight_state()`.
 - **Highlight Connected sync.** `hf_io_visualizer.highlight_connected` is the single source of truth. Context toolbar reads it from `state["highlight_connected"]` via `set_pressed_no_signal()`. Wiring panel syncs via `_sync_highlight_button()`. Plugin.gd handles `"highlight_connected"` action from toolbar, calls `root.set_highlight_connected()` then `dock.sync_wiring_highlight_state()`. Panel's `highlight_toggled` signal flows through dock to visualizer then toolbar state push.
@@ -178,7 +182,7 @@ addons/hammerforge/
 The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on push and PR to `main`:
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
-- **GUT unit + integration tests** -- 845 tests across 49 test files (runs Godot headless)
+- **GUT unit + integration tests** -- 974 tests across 55 test files (runs Godot headless)
 
 Run locally before pushing:
 ```
@@ -240,6 +244,10 @@ Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framewor
 | `test_io_presets.gd` | 21 | Builtin preset structure, user preset CRUD, apply with target mapping/self/delay/fire_once, save entity as preset, get target tags |
 | `test_io_visualizer_enhanced.gd` | 20 | Color logic (selected/fire_once/type/default/delay), Bézier math (endpoints/midpoint/tangent), connection summary, highlight connected toggle/clear |
 | `test_io_highlight_sync.gd` | 16 | Panel/toolbar sync from visualizer, set_pressed_no_signal contracts, signal emission, signal-driven integration (toolbar↔panel propagation, alternating sources) |
+| `test_brush_to_heightmap.gd` | 11 | Default settings, empty input, single/multi brush conversion, height scale, cell bounds, target layer reuse, grid properties, display name, height roundtrip at non-zero origin |
+| `test_scatter_brush.gd` | 14 | Default settings, circle scatter (transforms, empty/null layer, deterministic), height/slope filtering, spline scatter (basic, too few points), preview (dots, empty, wireframe), commit (creates MMI, no mesh), scale variation |
+| `test_path_tool_extras.gd` | 22 | Extended schema, PathExtra defaults/options, stairs (flat/slope/step count/group id/faces), railings (basic/both sides/post count/group id), trim (basic/material/both sides/multi segment/group id), HUD lines, vertical placement, edge cases |
+| `test_dock_terrain_integration.gd` | 30 | Dock heightmap convert (selection→convert→grid inheritance→chunk_size→signal→active layer→regenerate→height data), scatter settings (defaults, spline points, circle, null controls), scatter preview (circle, no layer, spline too few/stale/valid), scatter commit (empty, no mesh early return, preserves result), scatter clear (removes preview, safe when null, already-freed) |
 
 Run all tests:
 ```

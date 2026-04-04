@@ -32,6 +32,10 @@ func tool_shortcut_key() -> int:
 	return KEY_SEMICOLON
 
 
+## Auto-generation mode for path extras.
+enum PathExtra { NONE, STAIRS, RAILING, TRIM }
+
+
 func get_settings_schema() -> Array:
 	return [
 		{
@@ -55,6 +59,69 @@ func get_settings_schema() -> Array:
 			"type": "bool",
 			"label": "Miter Joints",
 			"default": true,
+		},
+		{
+			"name": "path_extra",
+			"type": "enum",
+			"label": "Auto-Generate",
+			"default": 0,
+			"options": ["None", "Stairs", "Railings", "Trim"],
+		},
+		{
+			"name": "stair_step_height",
+			"type": "float",
+			"label": "Step Height",
+			"default": 0.25,
+			"min": 0.05,
+			"max": 2.0,
+		},
+		{
+			"name": "railing_height",
+			"type": "float",
+			"label": "Railing Height",
+			"default": 1.0,
+			"min": 0.2,
+			"max": 5.0,
+		},
+		{
+			"name": "railing_thickness",
+			"type": "float",
+			"label": "Railing Thickness",
+			"default": 0.1,
+			"min": 0.02,
+			"max": 1.0,
+		},
+		{
+			"name": "railing_post_spacing",
+			"type": "float",
+			"label": "Post Spacing",
+			"default": 2.0,
+			"min": 0.5,
+			"max": 10.0,
+		},
+		{
+			"name": "trim_width",
+			"type": "float",
+			"label": "Trim Width",
+			"default": 0.3,
+			"min": 0.05,
+			"max": 2.0,
+		},
+		{
+			"name": "trim_height",
+			"type": "float",
+			"label": "Trim Height",
+			"default": 0.15,
+			"min": 0.02,
+			"max": 1.0,
+		},
+		{
+			"name": "trim_material_idx",
+			"type": "int",
+			"label": "Trim Material",
+			"default": 0,
+			"min": 0,
+			"max": 255,
 		},
 	]
 
@@ -125,6 +192,10 @@ func get_shortcut_hud_lines() -> PackedStringArray:
 			lines.append("Enter: Build path")
 			lines.append("Esc/RMB: Undo point")
 	lines.append("Width: %.1f  Height: %.1f" % [w, h])
+	var extra_mode: int = get_setting("path_extra")
+	var extra_names := ["None", "Stairs", "Railings", "Trim"]
+	if extra_mode > 0 and extra_mode < extra_names.size():
+		lines.append("Auto: %s" % extra_names[extra_mode])
 	lines.append(";: Exit tool")
 	return lines
 
@@ -217,6 +288,18 @@ func _build_path() -> void:
 				miter["shape"] = custom_shape
 				brush_infos.append(miter)
 
+	# Auto-generate extras (stairs, railings, trim)
+	var extra_mode: int = get_setting("path_extra")
+	if extra_mode == PathExtra.STAIRS:
+		var stair_infos := _build_stairs(path_width, path_height, group_id, custom_shape)
+		brush_infos.append_array(stair_infos)
+	elif extra_mode == PathExtra.RAILING:
+		var railing_infos := _build_railings(path_width, group_id, custom_shape)
+		brush_infos.append_array(railing_infos)
+	elif extra_mode == PathExtra.TRIM:
+		var trim_infos := _build_trim(path_width, group_id, custom_shape)
+		brush_infos.append_array(trim_infos)
+
 	# Create all brushes
 	if (
 		not brush_infos.is_empty()
@@ -259,7 +342,7 @@ func _build_segment_brush(
 	var half_w := width * 0.5
 	var half_h := height * 0.5
 	var center := (a + b) * 0.5
-	center.y = _ground_y + half_h
+	center.y = (a.y + b.y) * 0.5 + half_h
 
 	# 8 corners of oriented box (in world space, then convert to local)
 	var corners: Array = []
@@ -439,6 +522,171 @@ func _build_miter_brush(
 
 
 # ---------------------------------------------------------------------------
+# Auto-generation: Stairs
+# ---------------------------------------------------------------------------
+
+
+func _build_stairs(
+	path_width: float, path_height: float, group_id: String, custom_shape: int
+) -> Array:
+	var infos: Array = []
+	var step_h: float = get_setting("stair_step_height")
+	if step_h < 0.01:
+		return infos
+
+	for i in range(_waypoints.size() - 1):
+		var a: Vector3 = _waypoints[i]
+		var b: Vector3 = _waypoints[i + 1]
+		var height_diff := b.y - a.y
+		if absf(height_diff) < 0.01:
+			continue  # Flat segment — no stairs needed
+
+		var dir := b - a
+		dir.y = 0.0
+		var seg_length := dir.length()
+		if seg_length < 0.01:
+			continue
+		dir = dir.normalized()
+		var perp := Vector3(-dir.z, 0.0, dir.x)
+		var half_w := path_width * 0.5
+
+		var num_steps := maxi(1, int(ceil(absf(height_diff) / maxf(step_h, 0.01))))
+		var actual_step_h := height_diff / float(num_steps)
+		var step_depth := seg_length / float(num_steps)
+
+		for s_idx in range(num_steps):
+			var t0 := float(s_idx) / float(num_steps)
+			var t1 := float(s_idx + 1) / float(num_steps)
+			var y_base := a.y + actual_step_h * float(s_idx + 1)
+			var step_start := a + dir * (seg_length * t0)
+			var step_end := a + dir * (seg_length * t1)
+			step_start.y = y_base
+			step_end.y = y_base
+
+			# Build a thin box for the tread
+			var tread_height := absf(actual_step_h)
+			if tread_height < 0.02:
+				tread_height = 0.02
+			var info := _build_segment_brush(
+				step_start, step_end, path_width, tread_height, group_id
+			)
+			if not info.is_empty():
+				info["shape"] = custom_shape
+				infos.append(info)
+
+	return infos
+
+
+# ---------------------------------------------------------------------------
+# Auto-generation: Railings
+# ---------------------------------------------------------------------------
+
+
+func _build_railings(
+	path_width: float, group_id: String, custom_shape: int
+) -> Array:
+	var infos: Array = []
+	var rail_h: float = get_setting("railing_height")
+	var rail_t: float = get_setting("railing_thickness")
+	var post_spacing: float = get_setting("railing_post_spacing")
+
+	for i in range(_waypoints.size() - 1):
+		var a: Vector3 = _waypoints[i]
+		var b: Vector3 = _waypoints[i + 1]
+		var dir := b - a
+		dir.y = 0.0
+		var seg_length := dir.length()
+		if seg_length < 0.01:
+			continue
+		dir = dir.normalized()
+		var perp := Vector3(-dir.z, 0.0, dir.x)
+		var half_w := path_width * 0.5
+
+		# Top rail on each side
+		for side in [-1.0, 1.0]:
+			var rail_a: Vector3 = a + perp * (half_w * side)
+			var rail_b: Vector3 = b + perp * (half_w * side)
+			rail_a.y = lerpf(a.y, b.y, 0.0) + rail_h
+			rail_b.y = lerpf(a.y, b.y, 1.0) + rail_h
+
+			var rail_info := _build_segment_brush(
+				rail_a, rail_b, rail_t, rail_t, group_id
+			)
+			if not rail_info.is_empty():
+				rail_info["shape"] = custom_shape
+				infos.append(rail_info)
+
+		# Posts along each side
+		var num_posts := maxi(2, int(ceil(seg_length / maxf(post_spacing, 0.1))) + 1)
+		for p_idx in range(num_posts):
+			var t := float(p_idx) / float(num_posts - 1)
+			var pos := a.lerp(b, t)
+
+			for side in [-1.0, 1.0]:
+				var post_base: Vector3 = pos + perp * (half_w * side)
+				var post_top: Vector3 = post_base + Vector3(0, rail_h, 0)
+				var post_info := _build_segment_brush(
+					post_base, post_base + dir * rail_t, rail_t, rail_h, group_id
+				)
+				if not post_info.is_empty():
+					post_info["shape"] = custom_shape
+					# Adjust center Y for the post
+					post_info["center"].y = post_base.y + rail_h * 0.5
+					infos.append(post_info)
+
+	return infos
+
+
+# ---------------------------------------------------------------------------
+# Auto-generation: Trim (edge strips with material assignment)
+# ---------------------------------------------------------------------------
+
+
+func _build_trim(
+	path_width: float, group_id: String, custom_shape: int
+) -> Array:
+	var infos: Array = []
+	var trim_w: float = get_setting("trim_width")
+	var trim_h: float = get_setting("trim_height")
+	var trim_mat: int = get_setting("trim_material_idx")
+
+	for i in range(_waypoints.size() - 1):
+		var a: Vector3 = _waypoints[i]
+		var b: Vector3 = _waypoints[i + 1]
+		var dir := b - a
+		dir.y = 0.0
+		var seg_length := dir.length()
+		if seg_length < 0.01:
+			continue
+		dir = dir.normalized()
+		var perp := Vector3(-dir.z, 0.0, dir.x)
+		var half_w := path_width * 0.5
+
+		# Trim strip on each side of the path
+		for side in [-1.0, 1.0]:
+			var trim_offset: float = half_w + trim_w * 0.5
+			var trim_a: Vector3 = a + perp * (trim_offset * side)
+			var trim_b: Vector3 = b + perp * (trim_offset * side)
+			# Match the Y of the path segment
+			trim_a.y = a.y
+			trim_b.y = b.y
+
+			var info := _build_segment_brush(
+				trim_a, trim_b, trim_w, trim_h, group_id
+			)
+			if not info.is_empty():
+				info["shape"] = custom_shape
+				# Apply material to all faces
+				if trim_mat > 0:
+					for f_idx in range(info["faces"].size()):
+						var face_dict: Dictionary = info["faces"][f_idx]
+						face_dict["material_idx"] = trim_mat
+				infos.append(info)
+
+	return infos
+
+
+# ---------------------------------------------------------------------------
 # Preview rendering
 # ---------------------------------------------------------------------------
 
@@ -524,7 +772,100 @@ func _update_preview() -> void:
 		_immediate_mesh.surface_set_color(Color(1.0, 1.0, 1.0, 0.3))
 		_immediate_mesh.surface_add_vertex(_waypoints[i] - perp)
 
+	# Draw auto-generation extras preview
+	var extra_mode: int = get_setting("path_extra")
+	if extra_mode == PathExtra.RAILING and n >= 2:
+		_draw_railing_preview(pw)
+	elif extra_mode == PathExtra.TRIM and n >= 2:
+		_draw_trim_preview(pw)
+	elif extra_mode == PathExtra.STAIRS and n >= 2:
+		_draw_stairs_preview(pw)
+
 	_immediate_mesh.surface_end()
+
+
+func _draw_railing_preview(pw: float) -> void:
+	var rail_h: float = get_setting("railing_height")
+	var n := _waypoints.size()
+	for i in range(n - 1):
+		var a: Vector3 = _waypoints[i]
+		var b: Vector3 = _waypoints[i + 1]
+		var dir := b - a
+		dir.y = 0.0
+		if dir.length() < 0.01:
+			continue
+		dir = dir.normalized()
+		var perp := Vector3(-dir.z, 0.0, dir.x) * pw * 0.5
+		# Railing lines on each side (at rail height)
+		for side_sign in [-1.0, 1.0]:
+			var ra: Vector3 = a + perp * side_sign + Vector3(0, rail_h, 0)
+			var rb: Vector3 = b + perp * side_sign + Vector3(0, rail_h, 0)
+			_immediate_mesh.surface_set_color(Color(1.0, 0.8, 0.2, 0.6))
+			_immediate_mesh.surface_add_vertex(ra)
+			_immediate_mesh.surface_set_color(Color(1.0, 0.8, 0.2, 0.6))
+			_immediate_mesh.surface_add_vertex(rb)
+			# Vertical posts at endpoints
+			_immediate_mesh.surface_set_color(Color(1.0, 0.8, 0.2, 0.4))
+			_immediate_mesh.surface_add_vertex(a + perp * side_sign)
+			_immediate_mesh.surface_set_color(Color(1.0, 0.8, 0.2, 0.4))
+			_immediate_mesh.surface_add_vertex(ra)
+			if i == n - 2:
+				_immediate_mesh.surface_set_color(Color(1.0, 0.8, 0.2, 0.4))
+				_immediate_mesh.surface_add_vertex(b + perp * side_sign)
+				_immediate_mesh.surface_set_color(Color(1.0, 0.8, 0.2, 0.4))
+				_immediate_mesh.surface_add_vertex(rb)
+
+
+func _draw_trim_preview(pw: float) -> void:
+	var trim_w: float = get_setting("trim_width")
+	var n := _waypoints.size()
+	for i in range(n - 1):
+		var a: Vector3 = _waypoints[i]
+		var b: Vector3 = _waypoints[i + 1]
+		var dir := b - a
+		dir.y = 0.0
+		if dir.length() < 0.01:
+			continue
+		dir = dir.normalized()
+		var perp := Vector3(-dir.z, 0.0, dir.x)
+		var half_w := pw * 0.5
+		# Trim strip edges (offset from path edge)
+		for side_sign in [-1.0, 1.0]:
+			var inner: Vector3 = perp * (half_w * side_sign)
+			var outer: Vector3 = perp * ((half_w + trim_w) * side_sign)
+			_immediate_mesh.surface_set_color(Color(0.9, 0.4, 0.1, 0.5))
+			_immediate_mesh.surface_add_vertex(a + outer)
+			_immediate_mesh.surface_set_color(Color(0.9, 0.4, 0.1, 0.5))
+			_immediate_mesh.surface_add_vertex(b + outer)
+
+
+func _draw_stairs_preview(pw: float) -> void:
+	var step_h: float = get_setting("stair_step_height")
+	var n := _waypoints.size()
+	for i in range(n - 1):
+		var a: Vector3 = _waypoints[i]
+		var b: Vector3 = _waypoints[i + 1]
+		var height_diff := b.y - a.y
+		if absf(height_diff) < 0.01:
+			continue
+		var dir := b - a
+		dir.y = 0.0
+		var seg_length := dir.length()
+		if seg_length < 0.01:
+			continue
+		dir = dir.normalized()
+		var perp := Vector3(-dir.z, 0.0, dir.x) * pw * 0.5
+		var num_steps := maxi(1, int(ceil(absf(height_diff) / maxf(step_h, 0.01))))
+		for s_idx in range(num_steps):
+			var t := float(s_idx + 1) / float(num_steps)
+			var y := a.y + height_diff * t
+			var pos := a + dir * (seg_length * t)
+			pos.y = y
+			# Horizontal tick at each step
+			_immediate_mesh.surface_set_color(Color(0.4, 1.0, 0.4, 0.4))
+			_immediate_mesh.surface_add_vertex(pos + perp)
+			_immediate_mesh.surface_set_color(Color(0.4, 1.0, 0.4, 0.4))
+			_immediate_mesh.surface_add_vertex(pos - perp)
 
 
 # ---------------------------------------------------------------------------

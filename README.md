@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/Godot-4.6%2B-478cbf?logo=godot-engine&logoColor=white" alt="Godot 4.6+">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
   <img src="https://img.shields.io/badge/Status-Alpha-orange" alt="Alpha">
-  <img src="https://img.shields.io/badge/Tests-944%20passing-brightgreen" alt="944 tests passing">
+  <img src="https://img.shields.io/badge/Tests-974%20passing-brightgreen" alt="974 tests passing">
   <img src="https://img.shields.io/badge/GDScript-23k%2B%20lines-blueviolet" alt="23k+ lines">
 </p>
 
@@ -36,7 +36,7 @@ HammerForge is a single `addons/` folder. No external tools, no custom builds, n
 
 | | |
 |---|---|
-| **Modular subsystem architecture** | **944 unit + integration tests** with CI on every push |
+| **Modular subsystem architecture** | **974 unit + integration tests** with CI on every push |
 | **15 brush shapes** (box through dodecahedron) | **150 built-in prototype textures** for instant greyboxing |
 | **Quake `.map`** + **glTF `.glb`** export | **.hflevel** native format with threaded I/O |
 | **Customizable keymaps** (JSON) | **Plugin API** for custom tools |
@@ -84,6 +84,9 @@ Create corridors and paths by placing waypoints:
 - **Rectangular cross-section** -- configurable width and height per path
 - **Miter joints** -- automatic gap-filling brushes at corners
 - **Auto-grouping** -- all segment brushes share a group ID
+- **Auto-stairs** -- step brushes along sloped segments with configurable step height
+- **Auto-railings** -- top rails + posts on both sides with configurable height, thickness, and post spacing
+- **Auto-trim strips** -- edge strips alongside path with material auto-assign
 
 ### Snap and Align
 
@@ -105,9 +108,10 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Sculpting:** Raise, Lower, Smooth, Flatten brushes for interactive terrain editing with configurable strength, radius, and falloff
 - **Shapes:** Square, Circle with adjustable radius
 - **Heightmaps:** import PNG/EXR or generate procedural noise -- per-vertex displacement via SurfaceTool
+- **Convert Selection to Heightmap:** select brushes → rasterize top faces → create sculptable terrain layer
 - **Material blending:** four-slot shader with per-cell blend weights painted directly on the grid
 - **Auto-connectors:** ramp and stair mesh generation between layers at different heights
-- **Foliage scatter:** height/slope-filtered MultiMeshInstance3D placement
+- **Foliage & Scatter brush:** circle/spline shapes, density preview via MultiMesh (Dots/Wireframe/Full), slope/height filtering, align-to-normal, commit as permanent MultiMeshInstance3D
 - **Region streaming:** sparse chunk loading for open worlds
 
 ### Materials and Surface Paint
@@ -296,7 +300,7 @@ All shortcuts are rebindable via `user://hammerforge_keymap.json`.
 
 ## Testing
 
-944 tests across 54 files using the [GUT](https://github.com/bitwes/Gut) framework, including unit tests and end-to-end integration tests. All checks run on every push via GitHub Actions.
+974 tests across 55 files using the [GUT](https://github.com/bitwes/Gut) framework, including unit tests and end-to-end integration tests. All checks run on every push via GitHub Actions.
 
 ```bash
 # Run all tests headless

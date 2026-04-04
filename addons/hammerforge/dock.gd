@@ -100,6 +100,27 @@ var region_memory_spin: SpinBox = null
 var region_grid_toggle: CheckBox = null
 var heightmap_import: Button = null
 var heightmap_generate: Button = null
+var heightmap_convert_btn: Button = null
+# -- Foliage & Scatter controls (built by paint_tab_builder) --
+var scatter_mesh_btn: Button = null
+var scatter_density_spin: SpinBox = null
+var scatter_radius_spin: SpinBox = null
+var scatter_min_height_spin: SpinBox = null
+var scatter_max_height_spin: SpinBox = null
+var scatter_max_slope_spin: SpinBox = null
+var scatter_scale_min_spin: SpinBox = null
+var scatter_scale_max_spin: SpinBox = null
+var scatter_align_normal: CheckBox = null
+var scatter_random_rotation: CheckBox = null
+var scatter_shape_select: OptionButton = null
+var scatter_spline_width_spin: SpinBox = null
+var scatter_preview_select: OptionButton = null
+var scatter_preview_btn: Button = null
+var scatter_commit_btn: Button = null
+var scatter_clear_btn: Button = null
+var _scatter_mesh_path: String = ""
+var _scatter_preview_node: MultiMeshInstance3D = null
+var _scatter_last_result: Array[Transform3D] = []
 var height_scale_spin: SpinBox = null
 var layer_y_spin: SpinBox = null
 var blend_strength_spin: SpinBox = null
@@ -3860,6 +3881,216 @@ func _on_heightmap_generate() -> void:
 	if not level_root:
 		return
 	level_root.generate_heightmap_noise()
+
+
+func _on_heightmap_convert() -> void:
+	if not level_root:
+		return
+	var brushes: Array = []
+	for node in _selection_nodes:
+		if node is DraftBrush and is_instance_valid(node):
+			brushes.append(node)
+	if brushes.is_empty():
+		level_root.emit_signal("user_message", "Select brushes first to convert to heightmap", 1)
+		return
+	var converter := HFBrushToHeightmap.new()
+	var settings := HFBrushToHeightmap.ConvertSettings.new()
+	if level_root.get("grid_snap") and level_root.grid_snap > 0:
+		settings.cell_size = level_root.grid_snap
+	if height_scale_spin:
+		settings.height_scale = height_scale_spin.value
+	var result := converter.convert(brushes, settings)
+	if result.error != "":
+		level_root.emit_signal("user_message", "Convert failed: " + result.error, 2)
+		return
+	# Attach the converted layer via paint_layers (HFPaintLayerManager)
+	if not level_root.get("paint_layers") or not level_root.paint_layers:
+		level_root.emit_signal("user_message", "Convert failed: no paint layer manager", 2)
+		return
+	var mgr: HFPaintLayerManager = level_root.paint_layers
+	# Inherit base_grid properties (origin, basis) and chunk_size from manager
+	# so the converted layer is spatially consistent with normal paint layers.
+	if mgr.base_grid:
+		var grid := mgr.base_grid.duplicate() as HFPaintGrid
+		if grid:
+			grid.layer_y = result.layer.grid.layer_y if result.layer.grid else 0.0
+			grid.cell_size = result.layer.grid.cell_size if result.layer.grid else grid.cell_size
+			result.layer.grid = grid
+	result.layer.chunk_size = mgr.chunk_size
+	result.layer.name = "Layer_%s" % str(result.layer.layer_id)
+	mgr.add_child(result.layer)
+	mgr.layers.append(result.layer)
+	mgr.active_layer_index = mgr.layers.size() - 1
+	# Notify listeners (tutorial wizard, external UI) of the layer change
+	if level_root.has_signal("paint_layer_changed"):
+		level_root.paint_layer_changed.emit(mgr.active_layer_index)
+	# Regenerate geometry so the new terrain appears immediately
+	if level_root.get("paint_system") and level_root.paint_system.has_method("regenerate_paint_layers"):
+		level_root.paint_system.regenerate_paint_layers()
+	level_root.emit_signal(
+		"user_message",
+		"Converted %d brushes to heightmap layer '%s'" % [result.brush_count, result.layer.display_name],
+		0
+	)
+	_refresh_paint_layers()
+
+
+# ---------------------------------------------------------------------------
+# Scatter / foliage handlers
+# ---------------------------------------------------------------------------
+
+
+func _on_scatter_mesh_pick() -> void:
+	if not level_root:
+		return
+	# Reuse the terrain slot texture dialog for mesh picking
+	var dialog := EditorFileDialog.new()
+	dialog.file_mode = EditorFileDialog.FILE_MODE_OPEN_FILE
+	dialog.access = EditorFileDialog.ACCESS_RESOURCES
+	dialog.add_filter("*.tres,*.res,*.obj,*.glb,*.gltf", "Mesh Resources")
+	dialog.file_selected.connect(func(path: String) -> void:
+		_scatter_mesh_path = path
+		if scatter_mesh_btn:
+			var fname := path.get_file()
+			scatter_mesh_btn.text = fname if fname != "" else "Pick Mesh..."
+		dialog.queue_free()
+	)
+	dialog.canceled.connect(func() -> void: dialog.queue_free())
+	add_child(dialog)
+	dialog.popup_centered(Vector2i(600, 400))
+
+
+func _build_scatter_settings() -> HFScatterBrush.ScatterSettings:
+	var s := HFScatterBrush.ScatterSettings.new()
+	if _scatter_mesh_path != "" and ResourceLoader.exists(_scatter_mesh_path):
+		var res = load(_scatter_mesh_path)
+		if res is Mesh:
+			s.mesh = res
+	if scatter_density_spin:
+		s.density = scatter_density_spin.value
+	if scatter_radius_spin:
+		s.radius = scatter_radius_spin.value
+	if scatter_min_height_spin:
+		s.min_height = scatter_min_height_spin.value
+	if scatter_max_height_spin:
+		s.max_height = scatter_max_height_spin.value
+	if scatter_max_slope_spin:
+		s.max_slope = scatter_max_slope_spin.value
+	if scatter_scale_min_spin and scatter_scale_max_spin:
+		s.scale_range = Vector2(scatter_scale_min_spin.value, scatter_scale_max_spin.value)
+	if scatter_align_normal:
+		s.align_to_normal = scatter_align_normal.button_pressed
+	if scatter_random_rotation:
+		s.random_rotation = scatter_random_rotation.button_pressed
+	if scatter_shape_select:
+		s.shape = scatter_shape_select.get_selected_id()
+	if scatter_spline_width_spin:
+		s.spline_width = scatter_spline_width_spin.value
+	if scatter_preview_select:
+		s.preview_mode = scatter_preview_select.get_selected_id()
+	# Build spline points from selected node positions (in selection order)
+	if s.shape == HFScatterBrush.BrushShape.SPLINE:
+		var pts := PackedVector3Array()
+		for node in _selection_nodes:
+			if is_instance_valid(node) and node is Node3D:
+				pts.append(node.global_position)
+		s.spline_points = pts
+	return s
+
+
+func _get_active_paint_layer() -> HFPaintLayer:
+	if not level_root:
+		return null
+	if level_root.get("paint_layers") and level_root.paint_layers:
+		return level_root.paint_layers.get_active_layer()
+	return null
+
+
+func _on_scatter_preview() -> void:
+	if not level_root:
+		return
+	var layer := _get_active_paint_layer()
+	if not layer:
+		level_root.emit_signal("user_message", "No active paint layer — add one first", 1)
+		return
+	var settings := _build_scatter_settings()
+	var brush := HFScatterBrush.new()
+	var result: HFScatterBrush.ScatterResult
+	if settings.shape == HFScatterBrush.BrushShape.CIRCLE:
+		# Use camera look-at point or scene center
+		var center := Vector3.ZERO
+		if _selection_nodes.size() > 0 and is_instance_valid(_selection_nodes[0]):
+			center = _selection_nodes[0].global_position
+		result = brush.scatter_circle(center, layer, settings)
+	else:
+		if settings.spline_points.size() < 2:
+			_scatter_clear_preview()
+			_scatter_last_result = []
+			level_root.emit_signal(
+				"user_message",
+				"Spline scatter requires 2+ selected nodes to define the path",
+				1
+			)
+			return
+		result = brush.scatter_spline(layer, settings)
+
+	_scatter_last_result = result.transforms
+	# Build preview MultiMesh
+	_scatter_clear_preview()
+	var mm := brush.build_preview(result.transforms, settings)
+	if mm:
+		var mmi := MultiMeshInstance3D.new()
+		mmi.multimesh = mm
+		mmi.name = "_ScatterPreview"
+		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.vertex_color_use_as_albedo = true
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mmi.material_override = mat
+		level_root.add_child(mmi)
+		_scatter_preview_node = mmi
+	var msg := "%d instances (%d filtered)" % [result.transforms.size(), result.rejected_count]
+	level_root.emit_signal("user_message", "Scatter preview: " + msg, 0)
+
+
+func _on_scatter_commit() -> void:
+	if not level_root:
+		return
+	if _scatter_last_result.is_empty():
+		_on_scatter_preview()
+		if _scatter_last_result.is_empty():
+			level_root.emit_signal("user_message", "No scatter instances to commit", 1)
+			return
+	var settings := _build_scatter_settings()
+	if not settings.mesh:
+		level_root.emit_signal("user_message", "Pick a mesh first", 1)
+		return
+	var brush := HFScatterBrush.new()
+	_scatter_clear_preview()
+	var parent: Node3D = level_root
+	if level_root.get("generated_floors") and level_root.generated_floors:
+		parent = level_root.generated_floors.get_parent()
+	brush.commit(_scatter_last_result, settings, parent)
+	level_root.emit_signal(
+		"user_message",
+		"Scattered %d instances" % _scatter_last_result.size(),
+		0
+	)
+	_scatter_last_result = []
+
+
+func _on_scatter_clear() -> void:
+	_scatter_clear_preview()
+	_scatter_last_result = []
+
+
+func _scatter_clear_preview() -> void:
+	if _scatter_preview_node and is_instance_valid(_scatter_preview_node):
+		if _scatter_preview_node.get_parent():
+			_scatter_preview_node.get_parent().remove_child(_scatter_preview_node)
+		_scatter_preview_node.queue_free()
+		_scatter_preview_node = null
 
 
 func _on_sculpt_tool_toggled(pressed: bool, tool_id: int) -> void:

@@ -65,6 +65,31 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   silent no-op. Now assigns the result back to `input_state.drag_end`.
 
 ### Added
+- **Terrain & Organic Enhancements** (Apr 2026):
+  - **Convert Selection to Heightmap** (`HFBrushToHeightmap`): select brushes → rasterize top faces
+    onto a grid → create a sculptable heightmap paint layer. Dock button in Paint tab → Heightmap
+    section. Converted layers inherit `base_grid` origin/basis and `chunk_size` from the paint layer
+    manager. Emits `paint_layer_changed` and calls `regenerate_paint_layers()` for immediate geometry.
+    Supports `grid_snap` as cell size and `height_scale_spin` for height multiplier.
+  - **Foliage & Scatter brush** (`HFScatterBrush`): interactive scatter placement with circle and
+    spline brush shapes, density/radius/height/slope filtering, scale variation, align-to-normal, and
+    deterministic seeding. Preview via MultiMesh (Dots/Wireframe/Full modes). Commit creates permanent
+    `MultiMeshInstance3D`. Full dock UI in Paint tab → Foliage & Scatter section with mesh picker,
+    density/radius/height/slope/scale spinboxes, shape selector, and Preview/Scatter/Clear buttons.
+    Spline mode uses selected node positions as control points with configurable width band.
+  - **Path tool extras** (`HFPathTool`): auto-generate stairs (step brushes along sloped segments),
+    railings (top rails + posts on both sides with configurable spacing), and trim strips (edge strips
+    with material auto-assign) along path tool paths. New `path_extra` enum setting (None/Stairs/
+    Railing/Trim) with 8 additional schema parameters. Preview lines: green ticks for stairs,
+    yellow for railings, orange for trim.
+  - **Dock-level integration tests** (`test_dock_terrain_integration.gd`): 30 tests covering the
+    full heightmap convert pipeline (selection → convert → grid inheritance → signal emission →
+    regenerate), scatter handler paths (preview circle/spline, commit, clear, stale state cleanup),
+    `_build_scatter_settings` UI-to-settings wiring, and `_get_active_paint_layer` lookups.
+    Uses a real `LevelRoot` with `auto_spawn_player=false` to avoid bake/playtest orphans.
+  - 77 new tests across 4 files (test_brush_to_heightmap 11, test_scatter_brush 14,
+    test_path_tool_extras 22, test_dock_terrain_integration 30). Total: **974 tests across 55 files**.
+
 - **Learning & Discovery Aids** (Apr 2026):
   - **Coach marks** (`HFCoachMarks`): first-use floating step-by-step guides for 10 advanced tools
     (Polygon, Path, Carve, Vertex Edit, Extrude, Clip, Hollow, Measure, Decal, Surface Paint).

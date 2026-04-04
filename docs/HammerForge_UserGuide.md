@@ -1,6 +1,6 @@
 # HammerForge User Guide
 
-Last updated: April 3, 2026
+Last updated: April 4, 2026
 
 This guide covers the current HammerForge workflow in Godot 4.6: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs.
 
@@ -130,8 +130,9 @@ The compact toolbar shows icon + text labels (Draw, Select, Add, Sub, Paint, Ext
 
 ### Paint tab (collapsible sections)
 - **Floor Paint**: Brush, Erase, Rect, Line, Bucket, Blend tools. Brush shape (Square/Circle), radius, and layer picker. Rename button ("R") for custom layer display names.
-- **Heightmap**: Import PNG/EXR or Generate procedural noise. Height Scale and Layer Y spinboxes. **Sculpt tools**: Raise, Lower, Smooth, Flatten buttons with strength/radius/falloff spinboxes for interactive terrain editing.
+- **Heightmap**: Import PNG/EXR or Generate procedural noise. Height Scale and Layer Y spinboxes. **Sculpt tools**: Raise, Lower, Smooth, Flatten buttons with strength/radius/falloff spinboxes for interactive terrain editing. **Convert Selection → Heightmap** button rasterizes selected brush top faces into a new heightmap layer (inherits grid origin/basis and chunk_size from the paint layer manager).
 - **Blend & Terrain**: Blend Strength, Blend Slot (B/C/D), and Terrain Slot A-D texture pickers with UV scales.
+- **Foliage & Scatter**: Interactive scatter brush for foliage and object placement. Pick a mesh resource, set density/radius/height constraints/slope filter/scale variation. Choose Circle or Spline brush shape. Preview generates a MultiMesh preview (Dots/Wireframe/Full). Scatter commits as a permanent `MultiMeshInstance3D`. Clear removes the preview. Spline mode uses selected nodes as path control points with a configurable width band.
 - **Regions**: Region Streaming enable, Region Size, Stream Radius, Show Region Grid, memory stats.
 - **Materials**: Visual thumbnail browser (`HFMaterialBrowser`) with search, pattern/color filters, and Prototypes/Palette/Favorites view toggle. Add/Remove/Refresh Prototypes buttons. Face Select Mode toggle. Assign to Selected Faces. Right-click thumbnails for context menu (Apply to Faces, Apply to Whole Brush, Toggle Favorite, Copy Name). Hover a thumbnail to preview on selected faces. Press **T** for Texture Picker (eyedropper). The **Refresh Prototypes** button batch-loads 150 built-in SVG textures (15 patterns x 10 colors) for quick greyboxing.
 - **UV Editor**: Per-face UV editing with drag handles, Reset Projected UVs, and Justify grid (Fit, Center, Left, Right, Top, Bottom in 3×2 layout).
@@ -594,6 +595,23 @@ During placement, a cyan polyline shows the path with parallel offset lines indi
 | path_width | 4.0 | Width of the corridor cross-section |
 | path_height | 4.0 | Height of the corridor cross-section |
 | miter_joints | true | Fill gaps at path corners with wedge brushes |
+| path_extra | None | Auto-generate extras: None, Stairs, Railing, or Trim |
+| stair_step_height | 0.25 | Step height for auto-stairs (only when path_extra = Stairs) |
+| railing_height | 1.0 | Railing height above path surface |
+| railing_thickness | 0.1 | Thickness of railing rails and posts |
+| railing_post_spacing | 2.0 | Distance between railing posts |
+| trim_width | 0.2 | Width of edge trim strips |
+| trim_height | 0.1 | Height of edge trim strips |
+| trim_material_idx | -1 | Material index for trim faces (-1 = default material) |
+
+### Auto-Generated Extras
+When `path_extra` is set to a value other than None, additional geometry is auto-generated after the base path segments:
+
+- **Stairs**: Step brushes along sloped path segments. Step count is derived from height difference / step height. Flat segments are skipped.
+- **Railings**: Top rail + posts on both sides of the path. Posts are spaced evenly along each segment. Both rails and posts share the group ID with path segments.
+- **Trim**: Edge strips run alongside both sides of the path. If `trim_material_idx >= 0`, all faces of trim brushes are assigned that material index.
+
+Preview lines during placement: green ticks for stairs, yellow for railings, orange for trim.
 
 ### Shortcuts
 | Key | Action |
