@@ -127,6 +127,12 @@ func build(parent: Control) -> void:
 	dock.quick_play_area_btn.tooltip_text = ("Auto-cordon to selection, bake only that area, and play")
 	bk.add_child(dock.quick_play_area_btn)
 
+	dock.export_playtest_btn = dock._make_button("Export Playtest Build")
+	dock.export_playtest_btn.tooltip_text = (
+		"Validate, bake optimized, and launch as playable scene"
+	)
+	bk.add_child(dock.export_playtest_btn)
+
 	# --- Actions section ---
 	var act_sec = hf_collapsible_section.create("Actions", true)
 	root_vbox.add_child(act_sec)
@@ -220,18 +226,11 @@ func build(parent: Control) -> void:
 	dock._register_section(hist_sec, "History")
 	var hc = hist_sec.get_content()
 
-	var hist_controls = HBoxContainer.new()
-	dock.undo_btn = dock._make_button("Undo")
-	hist_controls.add_child(dock.undo_btn)
-	dock.redo_btn = dock._make_button("Redo")
-	hist_controls.add_child(dock.redo_btn)
-	hc.add_child(hist_controls)
-
-	dock.history_list = ItemList.new()
-	dock.history_list.custom_minimum_size = Vector2(0, 80)
-	dock.history_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	dock.history_list.focus_mode = Control.FOCUS_NONE
-	hc.add_child(dock.history_list)
+	var HFHistoryBrowserScript = preload("res://addons/hammerforge/ui/hf_history_browser.gd")
+	dock.history_browser = HFHistoryBrowserScript.new()
+	hc.add_child(dock.history_browser)
+	dock.undo_btn = dock.history_browser.get_undo_button()
+	dock.redo_btn = dock.history_browser.get_redo_button()
 
 	# --- Settings section (collapsed by default) ---
 	var set_sec = hf_collapsible_section.create("Settings", false)
@@ -292,29 +291,54 @@ func build(parent: Control) -> void:
 	dock._register_section(perf_sec, "Performance")
 	var pfc = perf_sec.get_content()
 
+	# Health summary
+	dock.perf_health_label = Label.new()
+	dock.perf_health_label.text = "Healthy"
+	dock.perf_health_label.add_theme_font_size_override("font_size", 13)
+	dock.perf_health_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	pfc.add_child(dock.perf_health_label)
+
+	# Brush count progress bar
+	dock.perf_brush_bar = ProgressBar.new()
+	dock.perf_brush_bar.min_value = 0
+	dock.perf_brush_bar.max_value = 200
+	dock.perf_brush_bar.value = 0
+	dock.perf_brush_bar.show_percentage = false
+	dock.perf_brush_bar.custom_minimum_size = Vector2(0, 14)
+	dock.perf_brush_bar.tooltip_text = "Brush count relative to recommended max (200)"
+	pfc.add_child(dock.perf_brush_bar)
+
 	var perf_grid = GridContainer.new()
 	perf_grid.columns = 2
 	pfc.add_child(perf_grid)
 
 	var perf_labels = [
 		["Active Brushes", "0"],
+		["Entities", "0"],
+		["Vertices (est)", "0"],
 		["Paint Memory", "0 KB"],
 		["Bake Chunks", "0"],
-		["Last Bake", "0 ms"]
+		["Last Bake", "0 ms"],
+		["Rec. Chunk Size", "-"],
 	]
 	var perf_value_nodes: Array[Label] = []
 	for pair in perf_labels:
 		var key_label = Label.new()
 		key_label.text = pair[0]
+		key_label.add_theme_font_size_override("font_size", 11)
 		perf_grid.add_child(key_label)
 		var val_label = Label.new()
 		val_label.text = pair[1]
+		val_label.add_theme_font_size_override("font_size", 11)
 		perf_grid.add_child(val_label)
 		perf_value_nodes.append(val_label)
 	dock.perf_brushes_value = perf_value_nodes[0]
-	dock.perf_paint_mem_value = perf_value_nodes[1]
-	dock.perf_bake_chunks_value = perf_value_nodes[2]
-	dock.perf_bake_time_value = perf_value_nodes[3]
+	dock.perf_entity_value = perf_value_nodes[1]
+	dock.perf_vertex_value = perf_value_nodes[2]
+	dock.perf_paint_mem_value = perf_value_nodes[3]
+	dock.perf_bake_chunks_value = perf_value_nodes[4]
+	dock.perf_bake_time_value = perf_value_nodes[5]
+	dock.perf_chunk_rec_value = perf_value_nodes[6]
 
 
 func connect_signals() -> void:
@@ -358,6 +382,8 @@ func connect_signals() -> void:
 		dock.undo_btn.pressed.connect(dock._on_history_undo)
 	if dock.redo_btn:
 		dock.redo_btn.pressed.connect(dock._on_history_redo)
+	if dock.history_browser:
+		dock.history_browser.navigate_requested.connect(dock._on_history_navigate)
 	if dock.save_preset_btn:
 		dock.save_preset_btn.pressed.connect(dock._on_save_preset)
 	if dock.show_hud:
@@ -394,6 +420,8 @@ func connect_signals() -> void:
 		dock.quick_play_camera_btn.pressed.connect(dock._on_quick_play_from_camera)
 	if dock.quick_play_area_btn:
 		dock.quick_play_area_btn.pressed.connect(dock._on_quick_play_selected_area)
+	if dock.export_playtest_btn:
+		dock.export_playtest_btn.pressed.connect(dock._on_export_playtest)
 	if dock._spawn_validate_btn:
 		dock._spawn_validate_btn.pressed.connect(dock._on_spawn_validate)
 	if dock._spawn_auto_create_btn:

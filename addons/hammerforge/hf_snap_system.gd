@@ -11,6 +11,9 @@ enum SnapMode { GRID = 1, VERTEX = 2, CENTER = 4 }
 var root: Node3D
 var enabled_modes: int = SnapMode.GRID
 var snap_threshold: float = 2.0
+var _custom_snap_origin: Vector3 = Vector3.ZERO
+var _custom_snap_dir: Vector3 = Vector3.ZERO
+var _has_custom_snap := false
 
 
 func _init(level_root: Node3D) -> void:
@@ -50,9 +53,35 @@ func snap_point(point: Vector3, grid_snap: float, exclude_ids: Array = []) -> Ve
 				best = c
 				best_dist = d
 
+	# Custom snap line (from measure tool "Align to this")
+	if _has_custom_snap:
+		var projected := _project_onto_line(point, _custom_snap_origin, _custom_snap_dir)
+		var d := point.distance_to(projected)
+		if d < snap_threshold and d < best_dist:
+			best = projected
+			best_dist = d
+
 	if best_dist == INF:
 		return point
 	return best
+
+
+func set_custom_snap_line(origin: Vector3, direction: Vector3) -> void:
+	_custom_snap_origin = origin
+	_custom_snap_dir = direction.normalized()
+	_has_custom_snap = true
+
+
+func clear_custom_snap_line() -> void:
+	_has_custom_snap = false
+	_custom_snap_origin = Vector3.ZERO
+	_custom_snap_dir = Vector3.ZERO
+
+
+func _project_onto_line(point: Vector3, line_origin: Vector3, line_dir: Vector3) -> Vector3:
+	var to_point: Vector3 = point - line_origin
+	var t: float = to_point.dot(line_dir)
+	return line_origin + line_dir * t
 
 
 func _collect_candidates(exclude_ids: Array) -> PackedVector3Array:

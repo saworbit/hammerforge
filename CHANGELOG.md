@@ -65,6 +65,40 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   silent no-op. Now assigns the result back to `input_state.drag_end`.
 
 ### Added
+- **Quality-of-Life & Polish** (Apr 2026):
+  - **Dark/Light Theme Sync** (`HFThemeUtils`): static utility class detecting dark/light theme via
+    `EditorInterface` base color luminance. All custom UI panels (context toolbar, coach marks, hotkey
+    palette, operation replay, toasts, selection filter) now use theme-aware colors instead of
+    hardcoded values. Each component gains a `refresh_theme_colors()` method called from
+    `plugin.gd:_on_editor_theme_changed()`. Toggling Godot's theme instantly updates all HammerForge
+    custom panels.
+  - **Undo History Browser with Thumbnails** (`HFHistoryBrowser`): replaces the plain ItemList in the
+    Manage tab History section. Up to 30 entries with action name, color-coded icon, and viewport
+    thumbnail (80x48 captured from `EditorInterface.get_editor_viewport_3d()`). Hover for enlarged
+    preview; double-click to navigate undo history to that version. Undo/Redo buttons integrated
+    into the browser header.
+  - **Measurement Tool Improvements** (`HFMeasureTool`): persistent multi-ruler system (up to 20
+    rulers with cycling colors). Shift+Click chains from last endpoint. Angle display between
+    consecutive chained rulers at shared vertices. Right-click a ruler to set it as snap reference
+    line (projected via `HFSnapSystem.set_custom_snap_line()`). A key toggles align mode. Delete
+    removes last ruler; Escape clears all. HUD shows ruler count, distance, alignment status.
+  - **Snap System Custom Lines** (`HFSnapSystem`): new `set_custom_snap_line()` /
+    `clear_custom_snap_line()` methods. `snap_point()` now considers custom reference lines
+    alongside grid/vertex/center candidates.
+  - **Performance Monitor Enhancement**: Manage tab Performance section expanded with Entity Count,
+    Vertex Estimate, Recommended Chunk Size, and Health summary (green/yellow/red color-coded).
+    ProgressBar for brush count (max 200, color-coded). New `level_root` helpers:
+    `get_entity_count()`, `get_total_vertex_estimate()`, `get_recommended_chunk_size()`,
+    `get_level_health()`.
+  - **One-Click Export Playtest Build**: "Export Playtest Build" button in Manage tab Bake section.
+    Validates spawn (severity ≥ 2 blocks), bakes, packs baked scene + entities + default lighting as
+    temporary `.tscn` at `user://hammerforge_playtest.tscn`, launches via
+    `EditorInterface.play_custom_scene()`. Auto-created spawns are fully undoable (state capture
+    before spawn creation). New `level_root.export_playtest_scene()` method.
+  - 117 new tests across 7 files (theme_utils 15, perf_monitor 5, measure_tool 17, snap_system_custom
+    6, history_browser 10, export_playtest 3, dock_history_and_playtest 7 + updates to existing).
+    Total: **1091 tests across 62 files**.
+
 - **Terrain & Organic Enhancements** (Apr 2026):
   - **Convert Selection to Heightmap** (`HFBrushToHeightmap`): select brushes → rasterize top faces
     onto a grid → create a sculptable heightmap paint layer. Dock button in Paint tab → Heightmap

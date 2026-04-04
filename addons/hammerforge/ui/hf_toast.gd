@@ -38,11 +38,11 @@ func show_toast(message: String, level: int = Level.INFO) -> void:
 
 	match level:
 		Level.WARNING:
-			style.bg_color = Color(0.55, 0.45, 0.1, 0.92)
+			style.bg_color = HFThemeUtils.toast_warning_bg()
 		Level.ERROR:
-			style.bg_color = Color(0.55, 0.15, 0.15, 0.92)
+			style.bg_color = HFThemeUtils.toast_error_bg()
 		_:
-			style.bg_color = Color(0.2, 0.2, 0.2, 0.88)
+			style.bg_color = HFThemeUtils.toast_bg()
 
 	panel.add_theme_stylebox_override("panel", style)
 

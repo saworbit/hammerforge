@@ -32,7 +32,7 @@ func _build_ui() -> void:
 	var normal_label = Label.new()
 	normal_label.text = "By Normal"
 	normal_label.add_theme_font_size_override("font_size", 11)
-	normal_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.6))
+	normal_label.add_theme_color_override("font_color", HFThemeUtils.muted_text())
 	_vbox.add_child(normal_label)
 
 	var normal_row1 = HBoxContainer.new()
@@ -48,7 +48,7 @@ func _build_ui() -> void:
 	var mat_label = Label.new()
 	mat_label.text = "By Material"
 	mat_label.add_theme_font_size_override("font_size", 11)
-	mat_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.6))
+	mat_label.add_theme_color_override("font_color", HFThemeUtils.muted_text())
 	_vbox.add_child(mat_label)
 
 	var mat_row = HBoxContainer.new()
@@ -67,7 +67,7 @@ func _build_ui() -> void:
 	var sim_label = Label.new()
 	sim_label.text = "Select Similar"
 	sim_label.add_theme_font_size_override("font_size", 11)
-	sim_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.6))
+	sim_label.add_theme_color_override("font_color", HFThemeUtils.muted_text())
 	_vbox.add_child(sim_label)
 
 	var sim_row = HBoxContainer.new()
@@ -89,7 +89,7 @@ func _build_ui() -> void:
 	var vg_label = Label.new()
 	vg_label.text = "By Visgroup"
 	vg_label.add_theme_font_size_override("font_size", 11)
-	vg_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.6))
+	vg_label.add_theme_color_override("font_color", HFThemeUtils.muted_text())
 	_vbox.add_child(vg_label)
 
 	var vg_row = HBoxContainer.new()
@@ -143,7 +143,9 @@ func _rebuild_visgroup_buttons() -> void:
 		var none_lbl = Label.new()
 		none_lbl.text = "(no visgroups)"
 		none_lbl.add_theme_font_size_override("font_size", 11)
-		none_lbl.add_theme_color_override("font_color", Color(1, 1, 1, 0.35))
+		var _muted = HFThemeUtils.muted_text()
+		_muted.a = 0.45
+		none_lbl.add_theme_color_override("font_color", _muted)
 		row.add_child(none_lbl)
 		return
 	var names: PackedStringArray = _root.get_visgroup_names()
@@ -151,7 +153,9 @@ func _rebuild_visgroup_buttons() -> void:
 		var none_lbl = Label.new()
 		none_lbl.text = "(no visgroups)"
 		none_lbl.add_theme_font_size_override("font_size", 11)
-		none_lbl.add_theme_color_override("font_color", Color(1, 1, 1, 0.35))
+		var _muted = HFThemeUtils.muted_text()
+		_muted.a = 0.45
+		none_lbl.add_theme_color_override("font_color", _muted)
 		row.add_child(none_lbl)
 		return
 	for vg_name in names:

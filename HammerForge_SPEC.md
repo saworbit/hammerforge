@@ -109,7 +109,7 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 - `addons/hammerforge/highlight.gdshader`: selection highlight shader (wireframe, unshaded, alpha)
 - `addons/hammerforge/hf_prototype_textures.gd`: `HFPrototypeTextures` -- 150 built-in SVG textures (15 patterns x 10 colors) with static catalog API
 - `addons/hammerforge/textures/prototypes/`: embedded SVG texture library for greyboxing
-- `addons/hammerforge/hf_measure_tool.gd`: `HFMeasureTool` -- measurement/ruler tool (tool_id=100, click A→B, distance + dX/dY/dZ)
+- `addons/hammerforge/hf_measure_tool.gd`: `HFMeasureTool` -- multi-ruler measurement tool (tool_id=100, persistent rulers, angle display, snap reference)
 - `addons/hammerforge/hf_decal_tool.gd`: `HFDecalTool` -- decal placement tool (tool_id=101, raycast + surface-normal Decal nodes)
 - `addons/hammerforge/hf_polygon_tool.gd`: `HFPolygonTool` -- convex polygon → extruded brush (tool_id=102, KEY_P)
 - `addons/hammerforge/hf_path_tool.gd`: `HFPathTool` -- waypoint path → corridor brushes with miter joints (tool_id=103, KEY_SEMICOLON)
@@ -456,7 +456,7 @@ External tools expose `get_settings_schema()` → Array of `{name, type, label, 
 - Validate Level scans for missing materials, zero-size brushes, invalid face indices, and paint layers without grids.
 - Auto-fix clears invalid face selections, resets invalid face material indices, and rebuilds missing layer grids.
 - Bake Dry Run reports counts and chunking without generating geometry.
-- Performance panel shows active brush count, paint memory, bake chunk count, and last bake time.
+- Performance panel shows active brush count (with ProgressBar), entity count, vertex estimate, paint memory, bake chunk count, last bake time, recommended chunk size, and health summary (green/yellow/red).
 
 ## Testing
 

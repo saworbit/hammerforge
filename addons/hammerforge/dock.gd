@@ -161,6 +161,7 @@ var bake_estimate_label: Label = null
 # -- Quick Play mode controls --
 var quick_play_camera_btn: Button = null
 var quick_play_area_btn: Button = null
+var export_playtest_btn: Button = null
 # -- Editor toggles (built programmatically in _build_manage_tab) --
 var commit_freeze: CheckBox = null
 var show_hud: CheckBox = null
@@ -204,7 +205,8 @@ var _mode_last_color := Color.TRANSPARENT
 # -- History (built programmatically) --
 var undo_btn: Button = null
 var redo_btn: Button = null
-var history_list: ItemList = null
+var history_list: ItemList = null  # Legacy — kept for compat, may be null
+var history_browser: HFHistoryBrowser = null
 @onready var quick_play_btn: Button = $Margin/VBox/Footer/QuickPlay
 # -- Settings (built programmatically) --
 var export_settings_btn: Button = null
@@ -213,9 +215,14 @@ var import_settings_btn: Button = null
 @onready var settings_import_dialog: FileDialog = $SettingsImportDialog
 # -- Performance (built programmatically) --
 var perf_brushes_value: Label = null
+var perf_entity_value: Label = null
+var perf_vertex_value: Label = null
 var perf_paint_mem_value: Label = null
 var perf_bake_chunks_value: Label = null
 var perf_bake_time_value: Label = null
+var perf_chunk_rec_value: Label = null
+var perf_health_label: Label = null
+var perf_brush_bar: ProgressBar = null
 # -- Materials (built programmatically in _build_paint_tab) --
 var material_browser: HFMaterialBrowser = null
 var materials_list: ItemList = null
@@ -820,6 +827,9 @@ func record_history(action_name: String) -> void:
 	if history_entries.size() > history_max:
 		history_entries.pop_front()
 	_refresh_history_list()
+	# Also record into the rich history browser
+	if history_browser:
+		history_browser.record_entry(action_name, version)
 
 
 func apply_editor_styles(base_control: Control) -> void:
@@ -1161,15 +1171,14 @@ func _get_undo_version() -> int:
 
 
 func _refresh_history_list() -> void:
-	if not history_list:
-		return
-	history_list.clear()
-	var current_version = _get_undo_version()
-	for entry in history_entries:
-		var name = str(entry.get("name", ""))
-		var version = int(entry.get("version", 0))
-		var prefix = "• " if version <= current_version else "  "
-		history_list.add_item("%s%s" % [prefix, name])
+	if history_list:
+		history_list.clear()
+		var current_version = _get_undo_version()
+		for entry in history_entries:
+			var entry_name = str(entry.get("name", ""))
+			var version = int(entry.get("version", 0))
+			var prefix = "• " if version <= current_version else "  "
+			history_list.add_item("%s%s" % [prefix, entry_name])
 	_update_history_buttons()
 
 
@@ -1199,6 +1208,21 @@ func _on_history_redo() -> void:
 	var ur := _get_scene_undo_redo()
 	if ur and ur.has_redo():
 		ur.redo()
+
+
+func _on_history_navigate(version: int) -> void:
+	var ur := _get_scene_undo_redo()
+	if not ur:
+		return
+	var current := ur.get_version()
+	if version < current:
+		# Undo to target version
+		while ur.get_version() > version and ur.has_undo():
+			ur.undo()
+	elif version > current:
+		# Redo to target version
+		while ur.get_version() < version and ur.has_redo():
+			ur.redo()
 
 
 # ===========================================================================
@@ -3330,6 +3354,57 @@ func _on_quick_play_selected_area() -> void:
 	level_root.update_cordon_visual()
 
 
+func _on_export_playtest() -> void:
+	_log("Export Playtest Build requested")
+	if not level_root:
+		show_toast("No LevelRoot active", 2)
+		return
+
+	# Step 1: Validate spawn
+	var spawn: Node3D = null
+	if level_root.spawn_system:
+		spawn = level_root.spawn_system.get_active_spawn()
+	if not spawn:
+		show_toast("No player_start found — creating default spawn", 1)
+		if level_root.spawn_system:
+			var pre_state: Dictionary = {}
+			if undo_redo and level_root.state_system:
+				pre_state = level_root.state_system.capture_state(true)
+			spawn = level_root.spawn_system.create_default_spawn()
+			if undo_redo and spawn and not pre_state.is_empty():
+				_record_spawn_create_undo(pre_state)
+
+	if spawn and level_root.spawn_system:
+		var mask := get_collision_layer_mask()
+		var validation: Dictionary = level_root.spawn_system.validate_spawn(spawn, mask)
+		var severity: int = validation.get("severity", 0)
+		if severity >= 2:
+			var issues: PackedStringArray = validation.get("issues", PackedStringArray())
+			level_root.spawn_system.show_validation_debug(spawn, validation, 10.0)
+			show_toast("Spawn blocked: %s" % "\n".join(issues), 2)
+			return
+
+	# Step 2: Bake full (optimized)
+	show_toast("Baking for playtest...", 0)
+	var mask := get_collision_layer_mask()
+	await level_root.bake(true, false, mask)
+	show_toast("Bake complete — exporting scene...", 0)
+
+	# Step 3: Export as temporary scene
+	var export_path := "user://hammerforge_playtest.tscn"
+	var success: bool = level_root.export_playtest_scene(export_path)
+	if not success:
+		show_toast("Export failed — could not pack scene", 2)
+		return
+
+	# Step 4: Launch via editor
+	show_toast("Launching playtest...", 0)
+	if editor_interface:
+		editor_interface.play_custom_scene(export_path)
+	else:
+		show_toast("No EditorInterface — cannot launch", 2)
+
+
 func _show_spawn_fix_dialog(spawn: Node3D, validation: Dictionary, mask: int) -> void:
 	var issues: PackedStringArray = validation.get("issues", PackedStringArray())
 	var dialog := ConfirmationDialog.new()
@@ -3551,18 +3626,74 @@ func _update_perf_panel() -> void:
 		return
 	if not level_root:
 		perf_brushes_value.text = "0"
+		if perf_entity_value:
+			perf_entity_value.text = "0"
+		if perf_vertex_value:
+			perf_vertex_value.text = "0"
 		perf_paint_mem_value.text = "0 KB"
 		perf_bake_chunks_value.text = "0"
 		if perf_bake_time_value:
 			perf_bake_time_value.text = "-"
+		if perf_chunk_rec_value:
+			perf_chunk_rec_value.text = "-"
+		if perf_health_label:
+			perf_health_label.text = "-"
+			perf_health_label.remove_theme_color_override("font_color")
+		if perf_brush_bar:
+			perf_brush_bar.value = 0
 		return
-	perf_brushes_value.text = str(level_root.get_live_brush_count())
+
+	var brush_count := int(level_root.get_live_brush_count())
+	perf_brushes_value.text = str(brush_count)
+
+	if perf_entity_value:
+		perf_entity_value.text = str(level_root.get_entity_count())
+
+	if perf_vertex_value:
+		perf_vertex_value.text = str(level_root.get_total_vertex_estimate())
+
 	var bytes = level_root.get_paint_memory_bytes()
 	perf_paint_mem_value.text = _format_bytes(bytes)
 	perf_bake_chunks_value.text = str(level_root.get_bake_chunk_count())
+
 	if perf_bake_time_value:
 		var ms = int(level_root.get_last_bake_duration_ms())
 		perf_bake_time_value.text = ("%d ms" % ms) if ms > 0 else "-"
+
+	if perf_chunk_rec_value:
+		var rec: float = level_root.get_recommended_chunk_size()
+		perf_chunk_rec_value.text = ("%.0f" % rec) if rec > 0.0 else "N/A"
+
+	# Brush count progress bar
+	if perf_brush_bar:
+		perf_brush_bar.value = mini(brush_count, 200)
+
+	# Health summary with color coding
+	if perf_health_label:
+		var health: Dictionary = level_root.get_level_health()
+		perf_health_label.text = health.get("label", "-")
+		var severity: int = health.get("severity", 0)
+		var ok_color = _get_editor_color("success_color", Color(0.2, 0.85, 0.35))
+		var warn_color = _get_editor_color("warning_color", Color(0.95, 0.8, 0.2))
+		var danger_color = _get_editor_color("error_color", Color(0.95, 0.3, 0.3))
+		match severity:
+			0:
+				perf_health_label.add_theme_color_override("font_color", ok_color)
+			1:
+				perf_health_label.add_theme_color_override("font_color", warn_color)
+			_:
+				perf_health_label.add_theme_color_override("font_color", danger_color)
+
+	# Color-code brush count value
+	var ok_c = _get_editor_color("success_color", Color(0.2, 0.85, 0.35))
+	var warn_c = _get_editor_color("warning_color", Color(0.95, 0.8, 0.2))
+	var danger_c = _get_editor_color("error_color", Color(0.95, 0.3, 0.3))
+	if brush_count <= 50:
+		perf_brushes_value.add_theme_color_override("font_color", ok_c)
+	elif brush_count <= 100:
+		perf_brushes_value.add_theme_color_override("font_color", warn_c)
+	else:
+		perf_brushes_value.add_theme_color_override("font_color", danger_c)
 
 
 func _format_bytes(count: int) -> String:

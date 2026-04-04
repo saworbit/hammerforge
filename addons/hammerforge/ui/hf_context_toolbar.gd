@@ -54,15 +54,12 @@ func _ready() -> void:
 
 
 func _build_style() -> void:
-	_style = StyleBoxFlat.new()
-	_style.bg_color = Color(0.12, 0.14, 0.18, 0.92)
-	_style.set_corner_radius_all(4)
+	_style = HFThemeUtils.make_panel_stylebox()
 	_style.content_margin_left = 6
 	_style.content_margin_right = 6
 	_style.content_margin_top = 4
 	_style.content_margin_bottom = 4
-	_style.border_width_bottom = 1
-	_style.border_color = Color(0.3, 0.4, 0.6, 0.4)
+	_style.set_corner_radius_all(4)
 	add_theme_stylebox_override("panel", _style)
 
 
@@ -74,7 +71,7 @@ func _build_content() -> void:
 	# Context label (left side)
 	_label = Label.new()
 	_label.add_theme_font_size_override("font_size", 11)
-	_label.add_theme_color_override("font_color", Color(0.7, 0.8, 1.0, 0.8))
+	_label.add_theme_color_override("font_color", HFThemeUtils.muted_text())
 	_content.add_child(_label)
 
 	var sep = VSeparator.new()
@@ -92,7 +89,8 @@ func _build_content() -> void:
 func _build_auto_hint_bar() -> void:
 	_auto_hint_bar = PanelContainer.new()
 	var hint_style = StyleBoxFlat.new()
-	hint_style.bg_color = Color(0.2, 0.3, 0.5, 0.88)
+	var _dark := HFThemeUtils.is_dark_theme()
+	hint_style.bg_color = Color(0.2, 0.3, 0.5, 0.88) if _dark else Color(0.7, 0.78, 0.92, 0.88)
 	hint_style.set_corner_radius_all(3)
 	hint_style.content_margin_left = 8
 	hint_style.content_margin_right = 8
@@ -107,14 +105,14 @@ func _build_auto_hint_bar() -> void:
 
 	_auto_hint_label = Label.new()
 	_auto_hint_label.add_theme_font_size_override("font_size", 11)
-	_auto_hint_label.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0, 0.9))
+	_auto_hint_label.add_theme_color_override("font_color", HFThemeUtils.primary_text())
 	hbox.add_child(_auto_hint_label)
 
 	_auto_hint_btn = Button.new()
 	_auto_hint_btn.flat = true
 	_auto_hint_btn.focus_mode = Control.FOCUS_NONE
 	_auto_hint_btn.add_theme_font_size_override("font_size", 11)
-	_auto_hint_btn.add_theme_color_override("font_color", Color(0.5, 0.8, 1.0, 1.0))
+	_auto_hint_btn.add_theme_color_override("font_color", HFThemeUtils.accent())
 	_auto_hint_btn.pressed.connect(_on_auto_hint_action)
 	hbox.add_child(_auto_hint_btn)
 
@@ -323,6 +321,12 @@ func _add_sep(parent: Control) -> VSeparator:
 
 
 # --- Public API ---
+
+
+func refresh_theme_colors() -> void:
+	_build_style()
+	if _label:
+		_label.add_theme_color_override("font_color", HFThemeUtils.muted_text())
 
 
 func set_keymap(keymap) -> void:

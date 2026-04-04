@@ -29,19 +29,7 @@ func _ready() -> void:
 
 
 func _build_style() -> void:
-	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.1, 0.12, 0.16, 0.95)
-	style.set_corner_radius_all(6)
-	style.content_margin_left = 8
-	style.content_margin_right = 8
-	style.content_margin_top = 6
-	style.content_margin_bottom = 6
-	style.border_width_bottom = 2
-	style.border_width_left = 1
-	style.border_width_right = 1
-	style.border_width_top = 1
-	style.border_color = Color(0.3, 0.4, 0.6, 0.5)
-	add_theme_stylebox_override("panel", style)
+	add_theme_stylebox_override("panel", HFThemeUtils.make_panel_stylebox())
 	custom_minimum_size = Vector2(300, 72)
 
 
@@ -57,7 +45,7 @@ func _build_ui() -> void:
 	var title = Label.new()
 	title.text = "Operation Timeline"
 	title.add_theme_font_size_override("font_size", 11)
-	title.add_theme_color_override("font_color", Color(0.7, 0.75, 0.85, 0.8))
+	title.add_theme_color_override("font_color", HFThemeUtils.muted_text())
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(title)
 
@@ -82,8 +70,15 @@ func _build_ui() -> void:
 	_detail_label = Label.new()
 	_detail_label.text = "Hover an operation to see details"
 	_detail_label.add_theme_font_size_override("font_size", 10)
-	_detail_label.add_theme_color_override("font_color", Color(0.6, 0.65, 0.75, 0.7))
+	_detail_label.add_theme_color_override("font_color", HFThemeUtils.muted_text())
 	vbox.add_child(_detail_label)
+
+
+## Refresh colors when editor theme changes.
+func refresh_theme_colors() -> void:
+	_build_style()
+	if _detail_label:
+		_detail_label.add_theme_color_override("font_color", HFThemeUtils.muted_text())
 
 
 ## Record an operation into the timeline.
@@ -189,7 +184,7 @@ func _on_replay_pressed() -> void:
 		replay_requested.emit(_hovered_index)
 
 
-func _get_icon_for_action(action_name: String) -> String:
+static func _get_icon_for_action(action_name: String) -> String:
 	var lower := action_name.to_lower()
 	# More specific matches first (before generic "brush" catch-all)
 	if "carve" in lower:
@@ -237,7 +232,7 @@ func _get_icon_for_action(action_name: String) -> String:
 	return "*"
 
 
-func _get_color_for_action(action_name: String) -> Color:
+static func _get_color_for_action(action_name: String) -> Color:
 	var lower := action_name.to_lower()
 	if "delete" in lower or "remove" in lower:
 		return Color(0.9, 0.35, 0.3, 0.9)

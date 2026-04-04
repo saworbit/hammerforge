@@ -13,8 +13,8 @@
   <img src="https://img.shields.io/badge/Godot-4.6%2B-478cbf?logo=godot-engine&logoColor=white" alt="Godot 4.6+">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
   <img src="https://img.shields.io/badge/Status-Alpha-orange" alt="Alpha">
-  <img src="https://img.shields.io/badge/Tests-974%20passing-brightgreen" alt="974 tests passing">
-  <img src="https://img.shields.io/badge/GDScript-23k%2B%20lines-blueviolet" alt="23k+ lines">
+  <img src="https://img.shields.io/badge/Tests-1091%20passing-brightgreen" alt="1091 tests passing">
+  <img src="https://img.shields.io/badge/GDScript-25k%2B%20lines-blueviolet" alt="25k+ lines">
 </p>
 
 ---
@@ -36,7 +36,7 @@ HammerForge is a single `addons/` folder. No external tools, no custom builds, n
 
 | | |
 |---|---|
-| **Modular subsystem architecture** | **974 unit + integration tests** with CI on every push |
+| **Modular subsystem architecture** | **1091 unit + integration tests** with CI on every push |
 | **15 brush shapes** (box through dodecahedron) | **150 built-in prototype textures** for instant greyboxing |
 | **Quake `.map`** + **glTF `.glb`** export | **.hflevel** native format with threaded I/O |
 | **Customizable keymaps** (JSON) | **Plugin API** for custom tools |
@@ -173,6 +173,7 @@ Grid-based paint layers with chunked storage for large worlds:
 | **Quick Play** | Bake + validate spawn + run with FPS controller |
 | **Play from Camera** | Quick Play from the editor camera position and yaw |
 | **Play Selected Area** | Auto-cordon to selection, bake + play that region only |
+| **Export Playtest** | Bake + pack scene + launch as standalone playable scene |
 
 ---
 
@@ -181,6 +182,7 @@ Grid-based paint layers with chunked storage for large worlds:
 HammerForge's dock is designed to stay out of your way while keeping everything reachable:
 
 - **4-tab dock** (Brush, Paint, Entities, Manage) with **collapsible sections** -- persisted state, separators, indented content
+- **Dark/light theme sync** -- all custom panels adapt to Godot's theme setting automatically
 - **Mode indicator banner** -- color-coded strip shows current tool, gesture stage ("Step 1/2: Draw base -- 64 x 32"), and numeric input buffer
 - **Toast notifications** -- transient messages for save/load/bake/error results
 - **Interactive tutorial wizard** -- 5-step guided walkthrough (Draw → Subtract → Paint → Entity → Bake) with signal-driven auto-advance, progress bar, and persistent resume across sessions
@@ -189,6 +191,7 @@ HammerForge's dock is designed to stay out of your way while keeping everything 
 - **Smart contextual toolbar** -- floating mini-toolbar in the 3D viewport shows context-sensitive actions (brush ops when brushes selected, UV tools when faces selected, shape picker in draw mode, axis locks while dragging)
 - **Command palette** (Shift+? or F1 or Ctrl+K) -- searchable action palette with fuzzy search, "Did you mean" suggestions, and live gray-out for unavailable actions
 - **Coach marks** -- first-use step-by-step guides for advanced tools (Polygon, Path, Carve, Vertex, Extrude, etc.) with "Don't show again" persistence
+- **Undo history browser** -- thumbnail-equipped history panel (Manage tab) with double-click navigation to any undo point
 - **Operation replay timeline** (Ctrl+Shift+T) -- visual timeline of recent operations with undo/redo replay to any recorded point
 - **Example library** -- 5 built-in demo levels (Manage tab) with difficulty ratings, annotations, and one-click loading for learning
 - **Auto-mode hints** -- "Drawing in Add mode" bar appears during drag with one-click Add/Subtract toggle
@@ -227,7 +230,7 @@ plugin.gd            EditorPlugin — input routing, toolbar, viewport overlay
        ├─ HFVertexSystem    Vertex/edge selection, move, split, merge with convexity validation
        ├─ HFSpawnSystem     Player spawn lookup, validation, auto-fix, debug visualisation
        └─ HFToolRegistry    External tool loading and dispatch
-            ├─ HFMeasureTool   Ruler/distance measurement (tool_id=100)
+            ├─ HFMeasureTool   Multi-ruler measurement + snap reference (tool_id=100)
             ├─ HFDecalTool     Decal placement with live preview (tool_id=101)
             ├─ HFPolygonTool   Convex polygon → extruded brush (tool_id=102)
             └─ HFPathTool      Waypoint path → corridor brushes (tool_id=103)
@@ -287,7 +290,7 @@ All shortcuts are rebindable via `user://hammerforge_keymap.json`.
 | Ctrl+H | Hollow | | K | Bucket (paint) |
 | Shift+X | Clip | | Ctrl+G | Group selection |
 | Ctrl+Shift+R | Carve | | Ctrl+U | Ungroup |
-| Ctrl+Shift+F | Move to Floor | | M | Measure tool |
+| Ctrl+Shift+F | Move to Floor | | M | Measure tool (multi-ruler) |
 | Ctrl+Shift+C | Move to Ceiling | | N | Decal tool |
 | V | Vertex mode | | P | Polygon tool |
 | E | Edge sub-mode (in vertex) | | ; | Path tool |
@@ -300,7 +303,7 @@ All shortcuts are rebindable via `user://hammerforge_keymap.json`.
 
 ## Testing
 
-974 tests across 55 files using the [GUT](https://github.com/bitwes/Gut) framework, including unit tests and end-to-end integration tests. All checks run on every push via GitHub Actions.
+1091 tests across 62 files using the [GUT](https://github.com/bitwes/Gut) framework, including unit tests and end-to-end integration tests. All checks run on every push via GitHub Actions.
 
 ```bash
 # Run all tests headless
@@ -347,6 +350,7 @@ gdlint addons/hammerforge/
 See [ROADMAP.md](ROADMAP.md) for the full plan.
 
 **Recently shipped:**
+- Quality-of-Life & Polish (theme sync, undo history browser, multi-ruler measure tool, performance monitor, export playtest)
 - Learning & Discovery Aids (coach marks, operation replay timeline, fuzzy command palette, example library)
 - I/O Connections & Entity Polish (curved auto-routed lines, connection presets, wiring panel, Highlight Connected)
 - Bake & Quick Play optimizations (Bake Selected, Bake Changed, preview modes, Play from Camera, Play Selected Area)
@@ -406,5 +410,5 @@ Run `godot --headless --import --path .` first, then re-run the test command.
 
 <p align="center">
   <strong>MIT License</strong><br>
-  <sub>Built for Godot 4.6+ | Last updated April 3, 2026</sub>
+  <sub>Built for Godot 4.6+ | Last updated April 4, 2026</sub>
 </p>

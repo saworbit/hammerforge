@@ -215,6 +215,15 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - **Dock integration tests** (`test_dock_terrain_integration.gd`): 30 tests covering full heightmap convert pipeline, scatter handlers, settings wiring, and layer lookups using real `LevelRoot` (with `auto_spawn_player=false`).
 - 77 new tests across 4 files. Total: **974 tests across 55 files**.
 
+## Done (Quality-of-Life & Polish — Small but Add Up)
+- **Dark/Light Theme Sync** (`HFThemeUtils`): static helper class for theme-aware colors. All custom UI panels (context toolbar, coach marks, hotkey palette, operation replay, toasts, selection filter) replace hardcoded colors with theme-aware calls. Each gains `refresh_theme_colors()` called from `_on_editor_theme_changed()`.
+- **Undo History Browser** (`HFHistoryBrowser`): replaces the plain ItemList in History section. Up to 30 entries with color-coded icons and 80x48 viewport thumbnails. Hover for enlarged preview, double-click to navigate undo history. Integrated undo/redo buttons.
+- **Measurement Tool Improvements** (`HFMeasureTool`): persistent multi-ruler system (max 20, cycling colors). Shift+Click chains rulers. Angle display at shared vertices. Right-click to set snap reference line via `HFSnapSystem`. A key toggles align mode. Enhanced HUD with ruler count and alignment status.
+- **Snap System Custom Lines** (`HFSnapSystem`): `set_custom_snap_line()` / `clear_custom_snap_line()` API for the measure tool's snap reference feature.
+- **Performance Monitor Enhancement**: Entity Count, Vertex Estimate, Recommended Chunk Size, Health summary (green/yellow/red) with ProgressBar. New `level_root` helpers: `get_entity_count()`, `get_total_vertex_estimate()`, `get_recommended_chunk_size()`, `get_level_health()`.
+- **One-Click Export Playtest Build**: Validates spawn, bakes, packs scene (baked + entities + default lighting), launches via `play_custom_scene()`. Auto-created spawns are undoable. New `level_root.export_playtest_scene()`.
+- 117 new tests across 7 files. Total: **1091 tests across 62 files**.
+
 ## Next (Wave 2c remaining)
 - Displacement sewing (stitch adjacent heightmap edges to share vertices).
 - Material atlasing for large scenes.

@@ -140,18 +140,13 @@ func _ready() -> void:
 
 
 func _build_style() -> void:
-	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.08, 0.1, 0.15, 0.95)
-	style.set_corner_radius_all(6)
+	var style = HFThemeUtils.make_panel_stylebox()
 	style.content_margin_left = 12
 	style.content_margin_right = 12
 	style.content_margin_top = 10
 	style.content_margin_bottom = 10
-	style.border_width_bottom = 2
-	style.border_width_left = 1
-	style.border_width_right = 1
-	style.border_width_top = 1
-	style.border_color = Color(0.25, 0.5, 0.8, 0.6)
+	style.border_color = HFThemeUtils.accent()
+	style.border_color.a = 0.6
 	add_theme_stylebox_override("panel", style)
 	custom_minimum_size = Vector2(260, 0)
 
@@ -168,12 +163,12 @@ func _build_ui() -> void:
 	var icon_label = Label.new()
 	icon_label.text = "? "
 	icon_label.add_theme_font_size_override("font_size", 14)
-	icon_label.add_theme_color_override("font_color", Color(0.4, 0.7, 1.0, 0.9))
+	icon_label.add_theme_color_override("font_color", HFThemeUtils.accent())
 	header.add_child(icon_label)
 
 	_title_label = Label.new()
 	_title_label.add_theme_font_size_override("font_size", 13)
-	_title_label.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0, 1.0))
+	_title_label.add_theme_color_override("font_color", HFThemeUtils.primary_text())
 	_title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(_title_label)
 
@@ -203,6 +198,13 @@ func _build_ui() -> void:
 	_dismiss_btn.text = "Got it"
 	_dismiss_btn.pressed.connect(_on_dismiss)
 	footer.add_child(_dismiss_btn)
+
+
+## Refresh colors when editor theme changes.
+func refresh_theme_colors() -> void:
+	_build_style()
+	if _title_label:
+		_title_label.add_theme_color_override("font_color", HFThemeUtils.primary_text())
 
 
 ## Set user prefs for persistence of dismissed guides.
@@ -248,14 +250,14 @@ func _populate_steps(steps: Array) -> void:
 		var num_label = Label.new()
 		num_label.text = "%d." % step_num
 		num_label.add_theme_font_size_override("font_size", 11)
-		num_label.add_theme_color_override("font_color", Color(0.4, 0.7, 1.0, 0.8))
+		num_label.add_theme_color_override("font_color", HFThemeUtils.accent())
 		num_label.custom_minimum_size = Vector2(18, 0)
 		row.add_child(num_label)
 
 		var text_label = Label.new()
 		text_label.text = step_text
 		text_label.add_theme_font_size_override("font_size", 11)
-		text_label.add_theme_color_override("font_color", Color(0.8, 0.82, 0.88, 0.9))
+		text_label.add_theme_color_override("font_color", HFThemeUtils.primary_text())
 		text_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 		text_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(text_label)

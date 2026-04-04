@@ -34,13 +34,13 @@ addons/hammerforge/
   hf_duplicator.gd       Duplicator / instanced geometry (source brushes + progressive offset)
   hf_editor_tool.gd      Plugin API: base class for custom editor tools (+ poll, declarative settings)
   hf_tool_registry.gd    Plugin API: tool registration, dispatch, external tool loader
-  hf_measure_tool.gd     Measurement/ruler tool (click A → click B → distance + decomposition)
+  hf_measure_tool.gd     Multi-ruler measurement tool (persistent rulers, angles, snap reference)
   hf_decal_tool.gd       Decal placement tool (raycast + surface-normal aligned Decal nodes)
   hf_polygon_tool.gd     Polygon tool (click convex verts → extrude to brush, tool_id=102)
   hf_path_tool.gd        Path tool (waypoints → corridor brushes with miter joints, stairs, railings, trim, tool_id=103)
   hf_keymap.gd           Customizable keyboard shortcuts (JSON load/save, action matching)
   hf_user_prefs.gd       Cross-session user preferences (user://hammerforge_prefs.json)
-  hf_snap_system.gd      Centralized snap (Grid/Vertex/Center modes, threshold-based candidates)
+  hf_snap_system.gd      Centralized snap (Grid/Vertex/Center modes + custom snap lines, threshold-based candidates)
   hf_prefab.gd           Reusable brush+entity groups (variants, tags, save/load .hfprefab)
   hf_op_result.gd        Lightweight operation result (ok, message, fix_hint)
   surface_paint.gd       Per-face surface paint tool
@@ -71,6 +71,8 @@ addons/hammerforge/
     hf_prefab_overlay.gd   Prefab ghost overlay (wireframe bounding box + override markers)
     hf_context_toolbar.gd  Floating contextual mini-toolbar (context-sensitive actions in 3D viewport)
     hf_hotkey_palette.gd   Searchable command palette with fuzzy search and live gray-out (Shift+?/F1/Ctrl+K)
+    hf_theme_utils.gd      Static dark/light theme detection and color helpers for custom UI
+    hf_history_browser.gd  Undo history browser with thumbnails, icons, and double-click navigation
     hf_coach_marks.gd      First-use tool guides (10 tools, per-tool dismissal, auto-trigger on activation)
     hf_operation_replay.gd Operation timeline with undo/redo replay (Ctrl+Shift+T toggle)
     hf_example_library.gd  Example level browser (5 built-in demos, search, annotations, one-click load)
@@ -168,7 +170,11 @@ addons/hammerforge/
 - **Tag-based invalidation.** Call `root.tag_brush_dirty(id)` when a brush is modified; `root.tag_full_reconcile()` for structural changes (hollow, clip). Guard with `root.has_method("tag_brush_dirty")` for test shim compatibility.
 - **Signal batching.** Wrap multi-brush operations in `root.begin_signal_batch()` / `root.end_signal_batch()`. Transactions do this automatically. On rollback, call `root.discard_signal_batch()` to drop queued signals without emission.
 - **Operation results.** Methods that can fail (hollow, clip, delete) return `HFOpResult` with `ok`, `message`, and `fix_hint`. Use `_op_fail(msg, hint)` in brush_system to both emit `user_message` and return a fail result. Callers can check `result.ok` programmatically, but failures also auto-toast via the `user_message` signal.
-- **Geometry-aware snapping.** `_snap_point()` delegates to `HFSnapSystem`. Three modes (Grid=1, Vertex=2, Center=4) as a bitmask. Vertex mode collects 8 box corners from all brushes; Center mode collects brush centers. Closest candidate within `snap_threshold` beats grid snap. Pass `exclude_ids` to skip the brush being dragged.
+- **Theme-aware UI.** All custom panels (context toolbar, coach marks, hotkey palette, operation replay, toasts, selection filter) use `HFThemeUtils` static methods (`panel_bg()`, `muted_text()`, `accent()`, etc.) instead of hardcoded colors. Each component provides a `refresh_theme_colors()` method called from `plugin.gd:_on_editor_theme_changed()`. `HFThemeUtils.is_dark_theme()` reads `interface/theme/base_color` luminance from `EditorInterface.get_editor_settings()`.
+- **History browser.** `ui/hf_history_browser.gd` replaces the plain ItemList in the Manage tab History section. Records entries via `record_entry(name, version, undo_redo)` with viewport thumbnail capture. Double-click emits `navigate_requested(version)` which `dock._on_history_navigate()` handles by looping undo/redo to the target version. Undo/redo buttons are exposed via `get_undo_button()`/`get_redo_button()`. `dock._refresh_history_list()` wraps ItemList code in `if history_list:` and always calls `_update_history_buttons()`.
+- **Multi-ruler measure tool.** `hf_measure_tool.gd` stores up to 20 rulers in `_measurements: Array[Dictionary]`. Shift+Click chains from last endpoint. Angles computed at shared vertices via `dir_a.angle_to(dir_b)`. Right-click sets snap reference via `HFSnapSystem.set_custom_snap_line()`. `_finish_ruler()` adjusts `_snap_ref_index` on rollover (decrement if after evicted, clear if evicted).
+- **Export playtest.** `dock._on_export_playtest()` validates spawn, auto-creates if missing (with full undo via state capture before `create_default_spawn()`), bakes, calls `level_root.export_playtest_scene()` to pack baked + entities + default lighting into a `.tscn`, then launches via `play_custom_scene()`.
+- **Geometry-aware snapping.** `_snap_point()` delegates to `HFSnapSystem`. Three modes (Grid=1, Vertex=2, Center=4) as a bitmask. Custom snap lines (set via `set_custom_snap_line()`) are checked alongside grid/geometry candidates. Vertex mode collects 8 box corners from all brushes; Center mode collects brush centers. Closest candidate within `snap_threshold` beats grid snap. Pass `exclude_ids` to skip the brush being dragged.
 - **Reference cleanup.** `delete_brush()` calls `_cleanup_brush_references()` which strips group_id meta (+ cleans empty groups via `visgroup_system._cleanup_empty_group()`), clears visgroup membership, and calls `entity_system.cleanup_dangling_connections()` to remove I/O connections targeting the deleted node. Always fires before the node is removed from the tree.
 - **Live dimensions.** `input_state.get_drag_dimensions()` returns `Vector3(W, H, D)` during DRAG_BASE/DRAG_HEIGHT; `Vector3.ZERO` otherwise. `format_dimensions()` renders as `"64 x 32 x 48"` (whole numbers omit decimals). The mode indicator banner appends dimensions to the stage hint during drag gestures.
 - **Context toolbar.** `ui/hf_context_toolbar.gd` is a `PanelContainer` added to `CONTAINER_SPATIAL_EDITOR_MENU` via `plugin.gd`. It determines context via `_determine_context(state)` using a priority chain: vertex_mode > dragging > face_selected > entity_selected > brush_selected > draw_idle > NONE. Each context maps to a pre-built `HBoxContainer` section with tool buttons. The toolbar emits `action_requested(action, args)` which `plugin.gd` dispatches to existing dock/plugin methods. Auto-hint bar uses a separate `PanelContainer` child with fade-in tween. State is pushed every frame from `_update_hud_context()` via `_update_context_toolbar_state()`.
@@ -182,7 +188,7 @@ addons/hammerforge/
 The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on push and PR to `main`:
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
-- **GUT unit + integration tests** -- 974 tests across 55 test files (runs Godot headless)
+- **GUT unit + integration tests** -- 1091 tests across 62 test files (runs Godot headless)
 
 Run locally before pushing:
 ```
@@ -248,6 +254,13 @@ Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framewor
 | `test_scatter_brush.gd` | 14 | Default settings, circle scatter (transforms, empty/null layer, deterministic), height/slope filtering, spline scatter (basic, too few points), preview (dots, empty, wireframe), commit (creates MMI, no mesh), scale variation |
 | `test_path_tool_extras.gd` | 22 | Extended schema, PathExtra defaults/options, stairs (flat/slope/step count/group id/faces), railings (basic/both sides/post count/group id), trim (basic/material/both sides/multi segment/group id), HUD lines, vertical placement, edge cases |
 | `test_dock_terrain_integration.gd` | 30 | Dock heightmap convert (selection→convert→grid inheritance→chunk_size→signal→active layer→regenerate→height data), scatter settings (defaults, spline points, circle, null controls), scatter preview (circle, no layer, spline too few/stale/valid), scatter commit (empty, no mesh early return, preserves result), scatter clear (removes preview, safe when null, already-freed) |
+| `test_theme_utils.gd` | 15 | Dark/light detection, panel_bg, panel_border, muted_text, primary_text, accent, success/warning/error colors, toast bg variants, make_panel_stylebox, consistency across dark/light |
+| `test_perf_monitor.gd` | 5 | Entity count, vertex estimate, recommended chunk size, level health (Healthy/Consider Chunking/Optimize), level AABB |
+| `test_measure_tool.gd` | 17 | Tool name/id/shortcut, initial state, ruler colors cycle, point-line distance (on-line/off-line/beyond/degenerate), finish ruler, max cap, remove last, clear all, snap ref index rollover, snap ref eviction, HUD lines (empty/with measurement) |
+| `test_snap_system_custom.gd` | 6 | Custom snap line set/clear, projection onto line, snap_point with custom line, threshold, clear restores default |
+| `test_history_browser.gd` | 10 | Record entry, max 30 cap, clear, undo/redo button exposure, icon/color for action types, navigate signal on double-click |
+| `test_export_playtest.gd` | 3 | Export empty level, includes DirectionalLight3D, includes WorldEnvironment |
+| `test_dock_history_and_playtest.gd` | 7 | history_list null by default, refresh doesn't crash when null, update_history_buttons called when null, version_changed updates buttons, spawn creation, state capture before/after spawn |
 
 Run all tests:
 ```

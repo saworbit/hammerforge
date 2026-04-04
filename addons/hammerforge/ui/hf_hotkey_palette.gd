@@ -35,18 +35,11 @@ var _deferred_keymap = null  # Holds keymap if populate() is called before _read
 
 
 func _build_style() -> void:
-	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.1, 0.12, 0.16, 0.95)
-	style.set_corner_radius_all(6)
+	var style = HFThemeUtils.make_panel_stylebox()
 	style.content_margin_left = 10
 	style.content_margin_right = 10
 	style.content_margin_top = 8
 	style.content_margin_bottom = 8
-	style.border_width_bottom = 2
-	style.border_width_left = 1
-	style.border_width_right = 1
-	style.border_width_top = 1
-	style.border_color = Color(0.3, 0.4, 0.6, 0.5)
 	add_theme_stylebox_override("panel", style)
 	custom_minimum_size = Vector2(320, 380)
 
@@ -60,7 +53,7 @@ func _build_ui() -> void:
 	var title = Label.new()
 	title.text = "Command Palette"
 	title.add_theme_font_size_override("font_size", 13)
-	title.add_theme_color_override("font_color", Color(0.8, 0.85, 1.0, 0.9))
+	title.add_theme_color_override("font_color", HFThemeUtils.primary_text())
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(title)
 
@@ -86,7 +79,7 @@ func _build_ui() -> void:
 	# "Did you mean" suggestion label
 	_suggest_label = Label.new()
 	_suggest_label.add_theme_font_size_override("font_size", 11)
-	_suggest_label.add_theme_color_override("font_color", Color(0.4, 0.7, 1.0, 0.8))
+	_suggest_label.add_theme_color_override("font_color", HFThemeUtils.accent())
 	_suggest_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_suggest_label.visible = false
 	vbox.add_child(_suggest_label)
@@ -95,7 +88,9 @@ func _build_ui() -> void:
 	var hint = Label.new()
 	hint.text = "Press Enter to execute, Esc to close  |  Ctrl+K"
 	hint.add_theme_font_size_override("font_size", 10)
-	hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.35))
+	var _hint_color = HFThemeUtils.muted_text()
+	_hint_color.a = 0.45
+	hint.add_theme_color_override("font_color", _hint_color)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(hint)
 
@@ -130,7 +125,7 @@ func populate(keymap) -> void:
 		var header = Label.new()
 		header.text = cat
 		header.add_theme_font_size_override("font_size", 10)
-		header.add_theme_color_override("font_color", Color(0.5, 0.6, 0.8, 0.7))
+		header.add_theme_color_override("font_color", HFThemeUtils.muted_text())
 		header.name = "Cat_" + cat.replace(" ", "_")
 		_list.add_child(header)
 
@@ -162,7 +157,7 @@ func _create_entry(
 	var bind_lbl = Label.new()
 	bind_lbl.text = binding
 	bind_lbl.add_theme_font_size_override("font_size", 11)
-	bind_lbl.add_theme_color_override("font_color", Color(0.5, 0.6, 0.8, 0.6))
+	bind_lbl.add_theme_color_override("font_color", HFThemeUtils.muted_text())
 	bind_lbl.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
 	bind_lbl.position.x = -8
 	bind_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -181,6 +176,10 @@ func _create_entry(
 		"bind_label": bind_lbl,
 		"category": category,
 	}
+
+
+func refresh_theme_colors() -> void:
+	_build_style()
 
 
 func update_state(state: Dictionary) -> void:

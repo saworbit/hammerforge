@@ -1518,6 +1518,128 @@ func get_last_bake_duration_ms() -> int:
 	return _last_bake_duration_ms
 
 
+func get_entity_count() -> int:
+	if entities_node:
+		return entities_node.get_child_count()
+	return 0
+
+
+func get_total_vertex_estimate() -> int:
+	var total := 0
+	if not draft_brushes_node:
+		return 0
+	for child in draft_brushes_node.get_children():
+		if child.has_method("get_faces"):
+			var faces: Array = child.get_faces()
+			for face in faces:
+				if face and face.has_method("get_vertex_count"):
+					total += face.get_vertex_count()
+				elif face:
+					total += 4  # default quad estimate
+	return total
+
+
+func get_recommended_chunk_size() -> float:
+	var brush_count := get_live_brush_count()
+	if brush_count < 30:
+		return 0.0
+	var aabb := _compute_level_aabb()
+	var extent: float = maxf(aabb.size.x, maxf(aabb.size.y, aabb.size.z))
+	if extent < 128.0:
+		return 0.0
+	return snappedf(extent / 4.0, grid_snap)
+
+
+func get_level_health() -> Dictionary:
+	var brush_count := get_live_brush_count()
+	var entity_count := get_entity_count()
+	var total := brush_count + entity_count
+	if total <= 50:
+		return {"label": "Healthy", "severity": 0}
+	if total <= 100:
+		return {"label": "Consider Chunking", "severity": 1}
+	return {"label": "Optimize Brush Count", "severity": 2}
+
+
+func _compute_level_aabb() -> AABB:
+	var result := AABB()
+	if not draft_brushes_node:
+		return result
+	var first := true
+	for child in draft_brushes_node.get_children():
+		if child is Node3D:
+			var pos: Vector3 = child.global_position
+			var sz: Vector3 = child.get("size") if child.get("size") else Vector3.ONE
+			var brush_aabb := AABB(pos - sz * 0.5, sz)
+			if first:
+				result = brush_aabb
+				first = false
+			else:
+				result = result.merge(brush_aabb)
+	return result
+
+
+func export_playtest_scene(path: String) -> bool:
+	var scene_root := Node3D.new()
+	scene_root.name = "PlaytestScene"
+
+	# Copy baked geometry
+	if baked_container:
+		for child in baked_container.get_children():
+			if child is Node3D:
+				var dup = child.duplicate()
+				scene_root.add_child(dup)
+				dup.owner = scene_root
+
+	# Copy entities (spawn points, lights, etc.)
+	if entities_node:
+		for child in entities_node.get_children():
+			if child is Node3D:
+				var dup = child.duplicate()
+				scene_root.add_child(dup)
+				dup.owner = scene_root
+
+	# Add basic environment if none exists
+	var has_light := false
+	for child in scene_root.get_children():
+		if child is Light3D:
+			has_light = true
+			break
+	if not has_light:
+		var light := DirectionalLight3D.new()
+		light.name = "PlaytestSun"
+		light.rotation_degrees = Vector3(-45, -30, 0)
+		scene_root.add_child(light)
+		light.owner = scene_root
+
+	var env := WorldEnvironment.new()
+	env.name = "PlaytestEnv"
+	var environment := Environment.new()
+	environment.background_mode = Environment.BG_COLOR
+	environment.background_color = Color(0.3, 0.35, 0.45)
+	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	environment.ambient_light_color = Color(0.5, 0.5, 0.55)
+	environment.ambient_light_energy = 0.5
+	env.environment = environment
+	scene_root.add_child(env)
+	env.owner = scene_root
+
+	# Pack and save
+	var packed := PackedScene.new()
+	var err := packed.pack(scene_root)
+	scene_root.free()
+	if err != OK:
+		push_error("HammerForge: Failed to pack playtest scene: %s" % error_string(err))
+		return false
+
+	err = ResourceSaver.save(packed, path)
+	if err != OK:
+		push_error("HammerForge: Failed to save playtest scene: %s" % error_string(err))
+		return false
+
+	return true
+
+
 # ===========================================================================
 # Material manager API (stays on root — thin wrappers over material_manager)
 # ===========================================================================

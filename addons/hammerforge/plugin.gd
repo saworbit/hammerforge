@@ -250,12 +250,20 @@ func _on_editor_theme_changed() -> void:
 		hud.theme = base_control.theme
 	if _context_toolbar:
 		_context_toolbar.theme = base_control.theme
+		if _context_toolbar.has_method("refresh_theme_colors"):
+			_context_toolbar.refresh_theme_colors()
 	if _hotkey_palette:
 		_hotkey_palette.theme = base_control.theme
+		if _hotkey_palette.has_method("refresh_theme_colors"):
+			_hotkey_palette.refresh_theme_colors()
 	if _coach_marks:
 		_coach_marks.theme = base_control.theme
+		if _coach_marks.has_method("refresh_theme_colors"):
+			_coach_marks.refresh_theme_colors()
 	if _operation_replay:
 		_operation_replay.theme = base_control.theme
+		if _operation_replay.has_method("refresh_theme_colors"):
+			_operation_replay.refresh_theme_colors()
 
 
 func _on_hud_visibility_changed(visible: bool) -> void:

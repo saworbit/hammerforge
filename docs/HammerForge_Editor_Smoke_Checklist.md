@@ -271,11 +271,47 @@ Enable the HammerForge plugin if it is not already enabled.
 - Undo. Change path_extra to **Railing**. Repeat the path. Confirm top rails and posts appear on both sides.
 - Undo. Change path_extra to **Trim**. Repeat. Confirm edge strips appear alongside the path.
 
-### 21. Cleanup / Persistence
+### 21. Measure Tool (Multi-Ruler)
+- Press **M** to activate the Measure tool.
+- Click two points in the viewport; confirm a ruler line appears with distance and dX/dY/dZ labels.
+- Hold **Shift** and click a third point; confirm a second ruler chains from the last endpoint and an angle label appears at the shared vertex.
+- Confirm up to 20 rulers can exist (draw several). Older rulers are evicted when the cap is reached.
+- Right-click near a ruler; confirm it is set as snap reference (line turns white, HUD shows "Align: ON").
+- Press **A**; confirm align mode toggles off.
+- Press **Delete**; confirm the last ruler is removed.
+- Press **Escape**; confirm all rulers are cleared.
+
+### 22. Undo History Browser
+- Open **Manage → History** section.
+- Perform 3-4 operations (draw, delete, move). Confirm entries appear in the history browser with color-coded icons.
+- Hover an entry; confirm an enlarged thumbnail preview appears.
+- Double-click an older entry; confirm the editor undoes to that point in history.
+- Click the **Undo** button in the history header; confirm it undoes one step. Click **Redo**; confirm it redoes.
+- With nothing to undo, confirm the Undo button is disabled. With nothing to redo, confirm Redo is disabled.
+
+### 23. Performance Monitor
+- Open **Manage → Performance** section.
+- Confirm it shows: Health label, Active Brushes (with ProgressBar), Entities, Vertices (est), Paint Memory, Bake Chunks, Last Bake, Rec. Chunk Size.
+- Draw 5+ brushes; confirm the brush count and vertex estimate update.
+- Create entities; confirm the entity count updates.
+- With many brushes (>50), confirm the Health label turns yellow ("Consider Chunking").
+
+### 24. Theme Sync
+- Switch Godot to a light theme (Editor Settings → Interface → Theme → Base Color).
+- Confirm all HammerForge panels (context toolbar, coach marks, toasts, command palette, operation replay) adapt to light colors.
+- Switch back to dark theme; confirm panels revert to dark colors.
+
+### 25. Export Playtest Build
+- Open **Manage → Bake** section. Click **Export Playtest Build**.
+- If no spawn exists, confirm a toast about auto-creating a default spawn, and confirm the spawn creation is undoable.
+- Confirm the level bakes and a playtest scene launches.
+- Stop the playtest. Undo; confirm the auto-created spawn is removed.
+
+### 26. Cleanup / Persistence
 - Dismiss the tutorial with and without `Don't show again` checked.
 - Restart Godot and confirm the `show_welcome` preference behaves as expected.
 - Reopen the dock and confirm no layout corruption remains after closing the tutorial and shortcut dialog.
 
 ## Expected Outcome
 
-If all steps pass, the remaining risk on the tutorial/prefab/shortcut/subtract-preview/vertex-editing/polygon/path/material-browser/spawn-system/context-toolbar/command-palette/terrain-scatter feature set is low and limited mainly to edge cases outside this smoke path.
+If all steps pass, the remaining risk on the tutorial/prefab/shortcut/subtract-preview/vertex-editing/polygon/path/material-browser/spawn-system/context-toolbar/command-palette/terrain-scatter/measure-tool/history-browser/performance-monitor/theme-sync/export-playtest feature set is low and limited mainly to edge cases outside this smoke path.

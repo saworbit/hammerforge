@@ -48,7 +48,7 @@ When you activate an advanced tool for the first time, a floating overlay appear
 | Carve | Ctrl+Shift+R | Select brushes → execute → delete fragments |
 | Clip | Shift+X | Select → execute → delete unwanted half |
 | Hollow | Ctrl+H | Select solid → execute → set thickness |
-| Measure | M key | Click start → click end → read distance |
+| Measure | M key | Click start → click end → Shift+Click to chain → RMB for snap ref |
 | Decal | N key | Click surface → resize/rotate → assign material |
 | Surface Paint | P toggle | Toggle paint → select tool → click cells |
 
@@ -68,6 +68,29 @@ Press **Ctrl+Shift+T** to toggle a compact timeline showing your recent operatio
 | Purple | Vertex / Merge / Split |
 
 Hover an entry to see its name and elapsed time. Click an entry, then click **Replay** to undo or redo the history to that point. The timeline records every action that passes through the undo/redo system.
+
+## Undo History Browser
+
+The **Manage** tab → **History** section contains a visual undo history browser with viewport thumbnails. It replaces the plain text history list:
+
+- Up to **30 entries** are recorded, each with a color-coded action icon and an 80x48 viewport thumbnail captured at the time of the action.
+- **Hover** an entry to see an enlarged thumbnail preview.
+- **Double-click** an entry to navigate the undo/redo system to that point in history.
+- **Undo/Redo buttons** are integrated into the browser header, with disabled state automatically tracking the undo/redo manager.
+- Action icons reuse the same color scheme as the Operation Replay Timeline (blue=draw, red=delete, etc.).
+
+## Measure Tool (Multi-Ruler)
+
+Press **M** to activate the Measure tool. It supports persistent multi-ruler measurements with angle display and snap references:
+
+- **Click** to set point A, click again to set point B — a ruler line appears with distance, dX/dY/dZ decomposition.
+- **Shift+Click** chains a new ruler from the last ruler's endpoint. Consecutive chained rulers that share a vertex display the **angle** between them in degrees.
+- Up to **20 rulers** can be active simultaneously, each drawn in a cycling color palette.
+- **Right-click** near a ruler to set it as a **snap reference line**. The snap system will project nearby points onto that line.
+- Press **A** to toggle align mode on/off.
+- Press **Delete/Backspace** to remove the last ruler.
+- Press **Escape** to clear all rulers.
+- The HUD shows ruler count, distance of the last ruler, and alignment status.
 
 ## Command Palette (Ctrl+K)
 
@@ -153,9 +176,9 @@ The compact toolbar shows icon + text labels (Draw, Select, Add, Sub, Paint, Ext
 - **Spawn**: Validate Spawn (bakes, then runs physics-based checks and shows debug overlay), Create Default Spawn (auto-places a `player_start` at brush centroid), Preview Spawn Debug (bakes, then shows persistent capsule/ray overlay toggle).
 - **File**: Save/Load .hflevel, Import/Export .map (Classic Quake / Valve 220), Export .glb.
 - **Presets**: Save/rename presets grid.
-- **History**: History panel (beta).
+- **History**: Undo history browser with thumbnails, color-coded action icons, double-click navigation, undo/redo buttons.
 - **Settings**: Show HUD, Show Grid, Follow Grid, Debug Logs, Autosave path/toggle, Settings Export/Import.
-- **Performance**: Brush count, paint memory, chunk count, last bake time.
+- **Performance**: Health summary (green/yellow/red), brush count ProgressBar, entity count, vertex estimate, paint memory, chunk count, last bake time, recommended chunk size.
 - **Visgroups & Groups**: Visgroup list with [V]/[H] toggle, New/Add Sel/Rem Sel/Delete, Group Sel/Ungroup.
 - **Cordon**: Enable checkbox, min/max spinboxes, Set from Selection.
 - **Prefabs**: Save/search/filter/delete prefabs. Browse with tag filtering and variant indicators. Drag-from the library to instantiate. Save Linked for live propagation. Right-click for variant/tag editing.
@@ -184,6 +207,15 @@ Click **Play Selected Area** to bake and playtest only the region around your cu
 - The level bakes within that cordon, spawn is validated, and the playtest launches.
 - After launch, the original cordon state is restored (enabled/disabled, original AABB).
 - On validation failure (severity ≥ 2), the cordon is restored before showing the fix dialog.
+
+#### Export Playtest Build
+Click **Export Playtest Build** in the Manage tab → Bake section to create a standalone playable scene:
+- Validates spawn (severity ≥ 2 blocks the export).
+- If no spawn exists, auto-creates a default (fully undoable with state capture).
+- Bakes the level in Full mode.
+- Packs baked geometry, entities, and default lighting (DirectionalLight3D + WorldEnvironment if none exists) into a temporary scene at `user://hammerforge_playtest.tscn`.
+- Launches the scene via `EditorInterface.play_custom_scene()`.
+- A toast confirms "Playtest launched" on success.
 
 ### Incremental Bake
 For faster iteration on large levels:
@@ -389,7 +421,7 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Carve | Ctrl+Shift+R | Boolean-subtract from intersecting brushes |
 | Move to Floor | Ctrl+Shift+F | Snap to nearest surface below |
 | Move to Ceiling | Ctrl+Shift+C | Snap to nearest surface above |
-| Measure | M | Ruler tool (click A, click B, shows distance) |
+| Measure | M | Multi-ruler tool (persistent rulers, angles, snap ref) |
 | Decal | N | Place decal on surface with live preview |
 | Polygon | P | Draw convex polygon, extrude to brush |
 | Path | ; | Place waypoints, extrude corridor brushes |
