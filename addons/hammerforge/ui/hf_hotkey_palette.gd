@@ -88,9 +88,9 @@ func _build_ui() -> void:
 	var hint = Label.new()
 	hint.text = "Press Enter to execute, Esc to close  |  Ctrl+K"
 	hint.add_theme_font_size_override("font_size", 10)
-	var _hint_color = HFThemeUtils.muted_text()
-	_hint_color.a = 0.45
-	hint.add_theme_color_override("font_color", _hint_color)
+	var hint_color = HFThemeUtils.muted_text()
+	hint_color.a = 0.45
+	hint.add_theme_color_override("font_color", hint_color)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(hint)
 

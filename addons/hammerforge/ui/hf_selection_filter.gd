@@ -143,9 +143,9 @@ func _rebuild_visgroup_buttons() -> void:
 		var none_lbl = Label.new()
 		none_lbl.text = "(no visgroups)"
 		none_lbl.add_theme_font_size_override("font_size", 11)
-		var _muted = HFThemeUtils.muted_text()
-		_muted.a = 0.45
-		none_lbl.add_theme_color_override("font_color", _muted)
+		var muted_color = HFThemeUtils.muted_text()
+		muted_color.a = 0.45
+		none_lbl.add_theme_color_override("font_color", muted_color)
 		row.add_child(none_lbl)
 		return
 	var names: PackedStringArray = _root.get_visgroup_names()
@@ -153,9 +153,9 @@ func _rebuild_visgroup_buttons() -> void:
 		var none_lbl = Label.new()
 		none_lbl.text = "(no visgroups)"
 		none_lbl.add_theme_font_size_override("font_size", 11)
-		var _muted = HFThemeUtils.muted_text()
-		_muted.a = 0.45
-		none_lbl.add_theme_color_override("font_color", _muted)
+		var muted_color = HFThemeUtils.muted_text()
+		muted_color.a = 0.45
+		none_lbl.add_theme_color_override("font_color", muted_color)
 		row.add_child(none_lbl)
 		return
 	for vg_name in names:

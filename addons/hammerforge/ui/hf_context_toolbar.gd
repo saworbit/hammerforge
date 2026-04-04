@@ -89,8 +89,8 @@ func _build_content() -> void:
 func _build_auto_hint_bar() -> void:
 	_auto_hint_bar = PanelContainer.new()
 	var hint_style = StyleBoxFlat.new()
-	var _dark := HFThemeUtils.is_dark_theme()
-	hint_style.bg_color = Color(0.2, 0.3, 0.5, 0.88) if _dark else Color(0.7, 0.78, 0.92, 0.88)
+	var dark_theme := HFThemeUtils.is_dark_theme()
+	hint_style.bg_color = Color(0.2, 0.3, 0.5, 0.88) if dark_theme else Color(0.7, 0.78, 0.92, 0.88)
 	hint_style.set_corner_radius_all(3)
 	hint_style.content_margin_left = 8
 	hint_style.content_margin_right = 8

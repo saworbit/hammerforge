@@ -426,7 +426,7 @@ func _raycast_world(camera: Camera3D, mouse_pos: Vector2) -> Variant:
 func _snap_hit(hit_pos: Vector3) -> Vector3:
 	if root.has_method("_snap_point"):
 		return root._snap_point(hit_pos)
-	elif root.get("snap_system"):
+	if root.get("snap_system"):
 		return root.snap_system.snap_point(hit_pos)
 	return hit_pos
 
