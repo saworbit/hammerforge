@@ -65,11 +65,14 @@ var cordon_enabled: bool = false
 var cordon_aabb: AABB = AABB(Vector3(-500, -500, -500), Vector3(1000, 1000, 1000))
 var bake_merge_meshes: bool = true
 var bake_generate_lods: bool = false
+var bake_unwrap_uv0: bool = false
 var bake_lightmap_uv2: bool = false
 var bake_lightmap_texel_size: float = 0.1
 var bake_use_thread_pool: bool = false
 var bake_use_face_materials: bool = false
 var bake_chunk_size: float = 0.0
+var bake_visible_only: bool = false
+var bake_use_multimesh: bool = false
 var commit_freeze: bool = false
 var baker = null
 var _last_bake_duration_ms: int = 0
@@ -118,6 +121,7 @@ func test_build_bake_options_returns_all_keys():
 	var opts = bake_sys.build_bake_options()
 	assert_has(opts, "merge_meshes")
 	assert_has(opts, "generate_lods")
+	assert_has(opts, "unwrap_uv0")
 	assert_has(opts, "unwrap_uv2")
 	assert_has(opts, "uv2_texel_size")
 	assert_has(opts, "use_thread_pool")
@@ -128,6 +132,7 @@ func test_build_bake_options_reflects_root_defaults():
 	var opts = bake_sys.build_bake_options()
 	assert_eq(opts["merge_meshes"], true)
 	assert_eq(opts["generate_lods"], false)
+	assert_eq(opts["unwrap_uv0"], false)
 	assert_eq(opts["unwrap_uv2"], false)
 	assert_eq(opts["uv2_texel_size"], 0.1)
 	assert_eq(opts["use_thread_pool"], false)
@@ -528,6 +533,70 @@ func test_apply_preview_visuals_proxy():
 	container.add_child(mesh)
 	bake_sys._apply_preview_visuals(container, HFBakeSystem.PreviewMode.PROXY)
 	assert_not_null(mesh.material_override, "Proxy should apply material override")
+
+
+func test_apply_preview_visuals_wireframe_recurses_into_chunks():
+	## BakedChunk_* nodes nest MeshInstance3D children — preview must recurse.
+	var container = Node3D.new()
+	add_child_autoqfree(container)
+	var chunk = Node3D.new()
+	chunk.name = "BakedChunk_0_0_0"
+	container.add_child(chunk)
+	var mesh = MeshInstance3D.new()
+	chunk.add_child(mesh)
+	# Also a direct child for comparison
+	var direct_mesh = MeshInstance3D.new()
+	container.add_child(direct_mesh)
+	bake_sys._apply_preview_visuals(container, HFBakeSystem.PreviewMode.WIREFRAME)
+	assert_not_null(
+		mesh.material_override,
+		"Nested MeshInstance3D inside chunk should get wireframe override"
+	)
+	assert_not_null(
+		direct_mesh.material_override,
+		"Direct child MeshInstance3D should also get override"
+	)
+
+
+func test_apply_preview_visuals_proxy_recurses_into_chunks():
+	var container = Node3D.new()
+	add_child_autoqfree(container)
+	var chunk = Node3D.new()
+	chunk.name = "BakedChunk_1_2_3"
+	container.add_child(chunk)
+	var mesh = MeshInstance3D.new()
+	chunk.add_child(mesh)
+	bake_sys._apply_preview_visuals(container, HFBakeSystem.PreviewMode.PROXY)
+	assert_not_null(mesh.material_override, "Nested mesh in chunk should get proxy override")
+
+
+func test_apply_preview_visuals_multimesh_in_chunk():
+	## MultiMeshInstance3D inside a chunk node should also receive the override.
+	var container = Node3D.new()
+	add_child_autoqfree(container)
+	var chunk = Node3D.new()
+	chunk.name = "BakedChunk_0_0_0"
+	container.add_child(chunk)
+	var mmi = MultiMeshInstance3D.new()
+	chunk.add_child(mmi)
+	bake_sys._apply_preview_visuals(container, HFBakeSystem.PreviewMode.WIREFRAME)
+	assert_not_null(
+		mmi.material_override,
+		"MultiMeshInstance3D nested in chunk should get wireframe override"
+	)
+
+
+func test_apply_preview_visuals_full_mode_skips_chunks():
+	## Full mode should not apply any override, even to nested children.
+	var container = Node3D.new()
+	add_child_autoqfree(container)
+	var chunk = Node3D.new()
+	chunk.name = "BakedChunk_0_0_0"
+	container.add_child(chunk)
+	var mesh = MeshInstance3D.new()
+	chunk.add_child(mesh)
+	bake_sys._apply_preview_visuals(container, HFBakeSystem.PreviewMode.FULL)
+	assert_null(mesh.material_override, "Full mode should not apply override to nested mesh")
 
 
 # ===========================================================================

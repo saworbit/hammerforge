@@ -294,6 +294,7 @@ func _build_vertex_section() -> void:
 	_add_sep(section)
 	_add_tool_button(section, "Merge", "Merge vertices (Ctrl+W)", "vertex_merge")
 	_add_tool_button(section, "Split", "Split edge (Ctrl+E)", "vertex_split")
+	_add_tool_button(section, "Convex", "Clip to convex hull", "vertex_clip_convex")
 	_add_sep(section)
 	_add_tool_button(section, "Exit", "Exit vertex mode (V)", "vertex_exit")
 

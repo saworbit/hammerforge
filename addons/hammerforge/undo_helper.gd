@@ -26,14 +26,9 @@ static func commit(
 ) -> void:
 	if not root or method_name == "" or not root.has_method(method_name):
 		return
-	if args.size() > 3:
-		# Avoid partial undo if too many args were supplied.
-		root.callv(method_name, args)
-		return
-	if not undo_redo:
-		root.callv(method_name, args)
-		return
 
+	# Evaluate collation state up front — needed for both undo_redo and direct
+	# call paths so that history callback suppression works everywhere.
 	var now := Time.get_ticks_msec()
 	var can_collate := (
 		collation_tag != ""
@@ -42,6 +37,21 @@ static func commit(
 		and (now - _last_collation_time) < COLLATION_WINDOW_MS
 		and not _last_collation_state.is_empty()
 	)
+
+	if args.size() > 5:
+		root.callv(method_name, args)
+		var state: Dictionary = root.capture_full_state() if full_state else root.capture_state()
+		_update_collation(collation_tag, can_collate, full_state, now, state)
+		_fire_history_cb(history_cb, action_name, can_collate)
+		return
+	if not undo_redo:
+		root.callv(method_name, args)
+		# Still maintain collation tracking + history even without undo_redo,
+		# so history UI stays consistent in edge cases.
+		var state: Dictionary = root.capture_full_state() if full_state else root.capture_state()
+		_update_collation(collation_tag, can_collate, full_state, now, state)
+		_fire_history_cb(history_cb, action_name, can_collate)
+		return
 
 	var state: Dictionary
 	if can_collate:
@@ -63,21 +73,35 @@ static func commit(
 			undo_redo.add_do_method(root, method_name, args[0], args[1])
 		3:
 			undo_redo.add_do_method(root, method_name, args[0], args[1], args[2])
+		4:
+			undo_redo.add_do_method(root, method_name, args[0], args[1], args[2], args[3])
+		5:
+			undo_redo.add_do_method(root, method_name, args[0], args[1], args[2], args[3], args[4])
 	undo_redo.add_undo_method(root, "restore_full_state" if full_state else "restore_state", state)
 	undo_redo.commit_action()
 
-	# Update collation tracking.
-	if collation_tag != "":
-		if not can_collate:
+	_update_collation(collation_tag, can_collate, full_state, now, state)
+	_fire_history_cb(history_cb, action_name, can_collate)
+
+
+## Update collation tracking after a commit.
+static func _update_collation(
+	tag: String, was_collated: bool, full: bool, now_ms: int, state: Dictionary
+) -> void:
+	if tag != "":
+		if not was_collated:
 			_last_collation_state = state
-		_last_collation_tag = collation_tag
-		_last_collation_time = now
-		_last_collation_full = full_state
+		_last_collation_tag = tag
+		_last_collation_time = now_ms
+		_last_collation_full = full
 	else:
 		_reset_collation()
 
-	if history_cb != null and history_cb.is_valid():
-		history_cb.call(action_name)
+
+## Fire history callback only on the first action of a collation run.
+static func _fire_history_cb(cb: Callable, action_name: String, was_collated: bool) -> void:
+	if cb != null and cb.is_valid() and not was_collated:
+		cb.call(action_name)
 
 
 static func _reset_collation() -> void:

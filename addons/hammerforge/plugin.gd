@@ -1148,6 +1148,20 @@ func _vertex_split_selected_edge(root: Node) -> void:
 		vs.split_edge(sel[0], sel[1])
 
 
+func _vertex_clip_to_convex(root: Node) -> void:
+	var vs = root.vertex_system
+	if not vs:
+		return
+	var clipped := false
+	for brush_id in vs.selected_vertices:
+		if vs.clip_to_convex(brush_id):
+			clipped = true
+	if clipped:
+		root.emit_signal("user_message", "Clipped to convex hull", 0)
+	else:
+		root.emit_signal("user_message", "Brush is already convex", 0)
+
+
 func _handle_vertex_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vector2) -> int:
 	var vs = root.vertex_system
 	if not vs:
@@ -2675,6 +2689,9 @@ func _on_context_toolbar_action(action: String, args: Array) -> void:
 		"vertex_split":
 			if root.vertex_system:
 				_vertex_split_selected_edge(root)
+		"vertex_clip_convex":
+			if root.vertex_system:
+				_vertex_clip_to_convex(root)
 		"vertex_exit":
 			_toggle_vertex_mode(root)
 		"select_similar":
@@ -2816,6 +2833,9 @@ func _on_hotkey_palette_action(action: String) -> void:
 		"vertex_split_edge":
 			if root.vertex_system:
 				_vertex_split_selected_edge(root)
+		"vertex_clip_convex":
+			if root.vertex_system:
+				_vertex_clip_to_convex(root)
 		"axis_x":
 			root.set_axis_lock(LevelRootType.AxisLock.X, true)
 			if dock:

@@ -678,6 +678,7 @@ func _apply_material(force: bool = false) -> void:
 	if not force and faces.size() > 0:
 		mesh_instance.material_override = null
 		_apply_brush_entity_overlay()
+		_apply_subtract_wireframe_overlay()
 		return
 	var mat: Material = null
 	if material_override:
@@ -707,6 +708,7 @@ func _apply_material(force: bool = false) -> void:
 		mat = base
 	mesh_instance.material_override = mat
 	_apply_brush_entity_overlay()
+	_apply_subtract_wireframe_overlay()
 
 
 func _apply_brush_entity_overlay() -> void:
@@ -740,6 +742,40 @@ func _apply_brush_entity_overlay() -> void:
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	overlay.material_override = mat
+	overlay.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(overlay)
+	overlay.owner = null
+
+
+static var _subtract_wireframe_shader: Shader = null
+
+
+func _apply_subtract_wireframe_overlay() -> void:
+	var existing = get_node_or_null("_SubtractWireOverlay")
+	if existing:
+		existing.queue_free()
+
+	if operation != CSGShape3D.OPERATION_SUBTRACTION:
+		return
+	if not mesh_instance or not mesh_instance.mesh:
+		return
+
+	if _subtract_wireframe_shader == null:
+		_subtract_wireframe_shader = Shader.new()
+		_subtract_wireframe_shader.code = (
+			"shader_type spatial;\n"
+			+ "render_mode unshaded, cull_disabled, wireframe, depth_draw_never;\n"
+			+ "uniform vec4 color : source_color = vec4(1.0, 0.25, 0.2, 0.7);\n"
+			+ "void fragment() { ALBEDO = color.rgb; ALPHA = color.a; }\n"
+		)
+
+	var overlay = MeshInstance3D.new()
+	overlay.name = "_SubtractWireOverlay"
+	overlay.mesh = mesh_instance.mesh
+	overlay.transform = mesh_instance.transform
+	var smat = ShaderMaterial.new()
+	smat.shader = _subtract_wireframe_shader
+	overlay.material_override = smat
 	overlay.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(overlay)
 	overlay.owner = null

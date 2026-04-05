@@ -141,6 +141,7 @@ var collision_layer_opt: OptionButton = $Margin/VBox/MainTabs/Brush/BrushMargin/
 # -- Bake options (built programmatically in _build_manage_tab) --
 var bake_merge_meshes: CheckBox = null
 var bake_generate_lods: CheckBox = null
+var bake_unwrap_uv0: CheckBox = null
 var bake_lightmap_uv2: CheckBox = null
 var bake_use_face_materials: CheckBox = null
 var bake_lightmap_texel_row: HBoxContainer = null
@@ -158,6 +159,9 @@ var bake_changed_btn: Button = null
 var bake_check_issues_btn: Button = null
 var bake_preview_mode_opt: OptionButton = null
 var bake_estimate_label: Label = null
+var bake_chunk_size_spin: SpinBox = null
+var bake_visible_only_check: CheckBox = null
+var bake_use_multimesh_check: CheckBox = null
 # -- Quick Play mode controls --
 var quick_play_camera_btn: Button = null
 var quick_play_area_btn: Button = null
@@ -238,6 +242,13 @@ var _hover_preview_faces: Array = []
 # -- UV (built programmatically in _build_paint_tab) --
 var uv_editor: UVEditor = null
 var uv_reset: Button = null
+var uv_projection_opt: OptionButton = null
+var uv_reproject_btn: Button = null
+var uv_scale_x: SpinBox = null
+var uv_scale_y: SpinBox = null
+var uv_offset_x: SpinBox = null
+var uv_offset_y: SpinBox = null
+var uv_rotation_spin: SpinBox = null
 # -- Surface paint (built programmatically in _build_paint_tab) --
 var paint_target_select: OptionButton = null
 var surface_paint_radius: SpinBox = null
@@ -481,9 +492,12 @@ func _connect_setting_signals() -> void:
 	var toggle_bindings: Array = [
 		[bake_merge_meshes, "bake_merge_meshes"],
 		[bake_generate_lods, "bake_generate_lods"],
+		[bake_unwrap_uv0, "bake_unwrap_uv0"],
 		[bake_lightmap_uv2, "bake_lightmap_uv2"],
 		[bake_use_face_materials, "bake_use_face_materials"],
 		[bake_navmesh, "bake_navmesh"],
+		[bake_visible_only_check, "bake_visible_only"],
+		[bake_use_multimesh_check, "bake_use_multimesh"],
 		[commit_freeze, "commit_freeze"],
 		[autosave_enabled, "hflevel_autosave_enabled"],
 		[show_grid, "grid_visible"],
@@ -496,6 +510,7 @@ func _connect_setting_signals() -> void:
 			ctrl.toggled.connect(_on_setting_toggled.bind(prop))
 	# SpinBox → float property
 	var float_bindings: Array = [
+		[bake_chunk_size_spin, "bake_chunk_size"],
 		[bake_lightmap_texel, "bake_lightmap_texel_size"],
 		[bake_navmesh_cell_size, "bake_navmesh_cell_size"],
 		[bake_navmesh_cell_height, "bake_navmesh_cell_height"],
@@ -528,9 +543,12 @@ func _apply_ui_state_to_root() -> void:
 	var toggle_pairs: Array = [
 		[bake_merge_meshes, "bake_merge_meshes"],
 		[bake_generate_lods, "bake_generate_lods"],
+		[bake_unwrap_uv0, "bake_unwrap_uv0"],
 		[bake_lightmap_uv2, "bake_lightmap_uv2"],
 		[bake_use_face_materials, "bake_use_face_materials"],
 		[bake_navmesh, "bake_navmesh"],
+		[bake_visible_only_check, "bake_visible_only"],
+		[bake_use_multimesh_check, "bake_use_multimesh"],
 		[commit_freeze, "commit_freeze"],
 		[autosave_enabled, "hflevel_autosave_enabled"],
 		[show_grid, "grid_visible"],
@@ -542,6 +560,7 @@ func _apply_ui_state_to_root() -> void:
 		if ctrl and _root_has_property(prop):
 			level_root.set(prop, ctrl.button_pressed)
 	var float_pairs: Array = [
+		[bake_chunk_size_spin, "bake_chunk_size"],
 		[bake_lightmap_texel, "bake_lightmap_texel_size"],
 		[bake_navmesh_cell_size, "bake_navmesh_cell_size"],
 		[bake_navmesh_cell_height, "bake_navmesh_cell_height"],
@@ -932,6 +951,10 @@ func _apply_all_tooltips() -> void:
 	# Build tab - Bake options
 	_set_tooltip(bake_merge_meshes, "Merge meshes during bake for better performance")
 	_set_tooltip(bake_generate_lods, "Generate LOD meshes during bake")
+	_set_tooltip(
+		bake_unwrap_uv0,
+		"Run Godot UV unwrap on baked meshes (UV0) for complex geometry"
+	)
 	_set_tooltip(bake_lightmap_uv2, "Generate UV2 for lightmap baking")
 	_set_tooltip(
 		bake_use_face_materials,
@@ -2541,6 +2564,15 @@ func _commit_full_state_action(action_name: String, method_name: String, args: A
 func _on_bake():
 	_log("Bake requested")
 	_warn_missing_dependencies()
+	# Prefer incremental bake when only specific brushes are dirty
+	if (
+		level_root
+		and not level_root._dirty_brush_ids.is_empty()
+		and not level_root._full_reconcile_needed
+	):
+		_log("Dirty brushes detected — using incremental bake")
+		_on_bake_changed()
+		return
 	_commit_state_action(
 		"Bake", "bake", [true, false, get_collision_layer_mask(), _get_bake_preview_mode()]
 	)
@@ -3046,10 +3078,18 @@ func _sync_grid_settings_from_root() -> void:
 		bake_merge_meshes.button_pressed = bool(connected_root.get("bake_merge_meshes"))
 	if bake_generate_lods and _root_has_property("bake_generate_lods"):
 		bake_generate_lods.button_pressed = bool(connected_root.get("bake_generate_lods"))
+	if bake_unwrap_uv0 and _root_has_property("bake_unwrap_uv0"):
+		bake_unwrap_uv0.button_pressed = bool(connected_root.get("bake_unwrap_uv0"))
 	if bake_lightmap_uv2 and _root_has_property("bake_lightmap_uv2"):
 		bake_lightmap_uv2.button_pressed = bool(connected_root.get("bake_lightmap_uv2"))
 	if bake_lightmap_texel and _root_has_property("bake_lightmap_texel_size"):
 		bake_lightmap_texel.value = float(connected_root.get("bake_lightmap_texel_size"))
+	if bake_visible_only_check and _root_has_property("bake_visible_only"):
+		bake_visible_only_check.button_pressed = bool(connected_root.get("bake_visible_only"))
+	if bake_use_multimesh_check and _root_has_property("bake_use_multimesh"):
+		bake_use_multimesh_check.button_pressed = bool(connected_root.get("bake_use_multimesh"))
+	if bake_chunk_size_spin and _root_has_property("bake_chunk_size"):
+		bake_chunk_size_spin.value = float(connected_root.get("bake_chunk_size"))
 	if bake_navmesh and _root_has_property("bake_navmesh"):
 		bake_navmesh.button_pressed = bool(connected_root.get("bake_navmesh"))
 	if bake_navmesh_cell_size and _root_has_property("bake_navmesh_cell_size"):
@@ -3906,6 +3946,8 @@ func _set_uv_face(brush: DraftBrush, face: FaceData) -> void:
 	_uv_active_face = face
 	if uv_editor:
 		uv_editor.set_face(face)
+	if face:
+		_sync_uv_params_to_face(face)
 
 
 func _set_surface_face(brush: DraftBrush, face: FaceData) -> void:
@@ -4619,6 +4661,22 @@ func _on_material_context_action(id: int) -> void:
 					label = mat.resource_path.get_file().get_basename()
 				DisplayServer.clipboard_set(label)
 				show_toast("Copied: " + label, 0)
+		4:  # Apply + Re-project (Box UV)
+			_selected_material_index = idx
+			var face_count := _count_selected_faces()
+			if face_count == 0:
+				show_toast("No faces selected — select faces first", 1)
+				return
+			_commit_state_action(
+				"Assign + Re-project",
+				"assign_material_and_reproject",
+				[idx, FaceData.UVProjection.BOX_UV]
+			)
+			show_toast(
+				"Applied %s + Box UV to %d face%s"
+				% [mat_name, face_count, "" if face_count == 1 else "s"],
+				0
+			)
 
 
 func _get_selected_brush_ids() -> Array:
@@ -4731,6 +4789,76 @@ func _on_uv_reset() -> void:
 	if brush_id == "" or face_idx < 0:
 		return
 	_commit_state_action("Reset UV", "reset_uv_on_face", [brush_id, face_idx])
+
+
+func _on_uv_reproject() -> void:
+	if _uv_active_face == null or _uv_active_brush == null:
+		return
+	if not level_root:
+		return
+	if _uv_active_brush.brush_id == "":
+		level_root.get_brush_info_from_node(_uv_active_brush)
+	var brush_id = _uv_active_brush.brush_id
+	var face_idx = _uv_active_brush.faces.find(_uv_active_face)
+	if brush_id == "" or face_idx < 0:
+		return
+	var proj: int = uv_projection_opt.selected if uv_projection_opt else FaceData.UVProjection.BOX_UV
+	_commit_state_action("Re-project UV", "reproject_face_uvs", [brush_id, face_idx, proj])
+
+
+var _uv_param_updating := false
+
+
+func _on_uv_param_changed(_value: float, _param: String) -> void:
+	if _uv_param_updating:
+		return
+	if _uv_active_face == null or _uv_active_brush == null:
+		return
+	if not level_root:
+		return
+	if _uv_active_brush.brush_id == "":
+		level_root.get_brush_info_from_node(_uv_active_brush)
+	var brush_id: String = _uv_active_brush.brush_id
+	var face_idx: int = _uv_active_brush.faces.find(_uv_active_face)
+	if brush_id == "" or face_idx < 0:
+		return
+	var scale := Vector2(
+		uv_scale_x.value if uv_scale_x else 1.0,
+		uv_scale_y.value if uv_scale_y else 1.0
+	)
+	var offset := Vector2(
+		uv_offset_x.value if uv_offset_x else 0.0,
+		uv_offset_y.value if uv_offset_y else 0.0
+	)
+	var rotation: float = deg_to_rad(uv_rotation_spin.value) if uv_rotation_spin else 0.0
+	# Route through undo system with collation so rapid spinbox changes merge
+	HFUndoHelper.commit(
+		undo_redo,
+		level_root,
+		"Set UV Params",
+		"set_face_uv_params",
+		[brush_id, face_idx, scale, offset, rotation],
+		false,
+		Callable(self, "record_history"),
+		"uv_param_%s_%d" % [brush_id, face_idx]
+	)
+
+
+func _sync_uv_params_to_face(face: FaceData) -> void:
+	_uv_param_updating = true
+	if uv_projection_opt:
+		uv_projection_opt.selected = face.uv_projection
+	if uv_scale_x:
+		uv_scale_x.value = face.uv_scale.x
+	if uv_scale_y:
+		uv_scale_y.value = face.uv_scale.y
+	if uv_offset_x:
+		uv_offset_x.value = face.uv_offset.x
+	if uv_offset_y:
+		uv_offset_y.value = face.uv_offset.y
+	if uv_rotation_spin:
+		uv_rotation_spin.value = rad_to_deg(face.uv_rotation)
+	_uv_param_updating = false
 
 
 func _on_uv_changed(_face: FaceData) -> void:
@@ -5145,6 +5273,7 @@ func _collect_editor_settings() -> Dictionary:
 	var bake_settings: Dictionary = {
 		"merge_meshes": bake_merge_meshes.button_pressed if bake_merge_meshes else false,
 		"generate_lods": bake_generate_lods.button_pressed if bake_generate_lods else false,
+		"unwrap_uv0": bake_unwrap_uv0.button_pressed if bake_unwrap_uv0 else false,
 		"lightmap_uv2": bake_lightmap_uv2.button_pressed if bake_lightmap_uv2 else false,
 		"lightmap_texel_size": float(bake_lightmap_texel.value) if bake_lightmap_texel else 0.1,
 		"use_face_materials":
@@ -5161,6 +5290,10 @@ func _collect_editor_settings() -> Dictionary:
 	}
 	if level_root and _root_has_property("bake_chunk_size"):
 		bake_settings["chunk_size"] = float(level_root.get("bake_chunk_size"))
+	if bake_visible_only_check:
+		bake_settings["visible_only"] = bake_visible_only_check.button_pressed
+	if bake_use_multimesh_check:
+		bake_settings["use_multimesh"] = bake_use_multimesh_check.button_pressed
 	return {
 		"version": 1,
 		"saved_at": Time.get_datetime_string_from_system(),
@@ -5197,6 +5330,10 @@ func _apply_editor_settings(data: Dictionary) -> void:
 			bake_generate_lods.button_pressed = bool(
 				bake.get("generate_lods", bake_generate_lods.button_pressed)
 			)
+		if bake_unwrap_uv0:
+			bake_unwrap_uv0.button_pressed = bool(
+				bake.get("unwrap_uv0", bake_unwrap_uv0.button_pressed)
+			)
 		if bake_lightmap_uv2:
 			bake_lightmap_uv2.button_pressed = bool(
 				bake.get("lightmap_uv2", bake_lightmap_uv2.button_pressed)
@@ -5231,6 +5368,12 @@ func _apply_editor_settings(data: Dictionary) -> void:
 			_select_option_by_id(collision_layer_opt, int(bake.get("collision_mask", 1)))
 		if level_root and bake.has("chunk_size") and _root_has_property("bake_chunk_size"):
 			level_root.set("bake_chunk_size", float(bake.get("chunk_size", 0.0)))
+		if bake_chunk_size_spin and bake.has("chunk_size"):
+			bake_chunk_size_spin.value = float(bake.get("chunk_size", 32.0))
+		if bake_visible_only_check and bake.has("visible_only"):
+			bake_visible_only_check.button_pressed = bool(bake.get("visible_only", false))
+		if bake_use_multimesh_check and bake.has("use_multimesh"):
+			bake_use_multimesh_check.button_pressed = bool(bake.get("use_multimesh", false))
 		_sync_bake_option_visibility()
 
 

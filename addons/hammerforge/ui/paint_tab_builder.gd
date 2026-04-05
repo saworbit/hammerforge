@@ -332,6 +332,66 @@ func build(parent: Control) -> void:
 	dock.uv_reset.text = "Reset Projected UVs"
 	uc.add_child(dock.uv_reset)
 
+	# Projection mode dropdown + Re-project button
+	var proj_label = Label.new()
+	proj_label.text = "Projection:"
+	uc.add_child(proj_label)
+	dock.uv_projection_opt = OptionButton.new()
+	dock.uv_projection_opt.add_item("Planar X", 0)
+	dock.uv_projection_opt.add_item("Planar Y", 1)
+	dock.uv_projection_opt.add_item("Planar Z", 2)
+	dock.uv_projection_opt.add_item("Box UV", 3)
+	dock.uv_projection_opt.add_item("Cylindrical", 4)
+	dock.uv_projection_opt.selected = 3
+	uc.add_child(dock.uv_projection_opt)
+
+	dock.uv_reproject_btn = Button.new()
+	dock.uv_reproject_btn.text = "Re-project UVs"
+	dock.uv_reproject_btn.tooltip_text = "Apply selected projection mode to selected face"
+	uc.add_child(dock.uv_reproject_btn)
+
+	# Per-face UV scale / offset / rotation
+	var uv_params_label = Label.new()
+	uv_params_label.text = "UV Transform:"
+	uc.add_child(uv_params_label)
+
+	var uv_sc_row = HBoxContainer.new()
+	var uv_sc_lbl = Label.new()
+	uv_sc_lbl.text = "Scale"
+	uv_sc_lbl.custom_minimum_size.x = 48
+	uv_sc_row.add_child(uv_sc_lbl)
+	dock.uv_scale_x = dock._make_spin(-100.0, 100.0, 0.01, 1.0)
+	dock.uv_scale_x.tooltip_text = "UV scale X"
+	uv_sc_row.add_child(dock.uv_scale_x)
+	dock.uv_scale_y = dock._make_spin(-100.0, 100.0, 0.01, 1.0)
+	dock.uv_scale_y.tooltip_text = "UV scale Y"
+	uv_sc_row.add_child(dock.uv_scale_y)
+	uc.add_child(uv_sc_row)
+
+	var uv_off_row = HBoxContainer.new()
+	var uv_off_lbl = Label.new()
+	uv_off_lbl.text = "Offset"
+	uv_off_lbl.custom_minimum_size.x = 48
+	uv_off_row.add_child(uv_off_lbl)
+	dock.uv_offset_x = dock._make_spin(-1000.0, 1000.0, 0.01, 0.0)
+	dock.uv_offset_x.tooltip_text = "UV offset X"
+	uv_off_row.add_child(dock.uv_offset_x)
+	dock.uv_offset_y = dock._make_spin(-1000.0, 1000.0, 0.01, 0.0)
+	dock.uv_offset_y.tooltip_text = "UV offset Y"
+	uv_off_row.add_child(dock.uv_offset_y)
+	uc.add_child(uv_off_row)
+
+	var uv_rot_row = HBoxContainer.new()
+	var uv_rot_lbl = Label.new()
+	uv_rot_lbl.text = "Rotate"
+	uv_rot_lbl.custom_minimum_size.x = 48
+	uv_rot_row.add_child(uv_rot_lbl)
+	dock.uv_rotation_spin = dock._make_spin(-360.0, 360.0, 1.0, 0.0)
+	dock.uv_rotation_spin.tooltip_text = "UV rotation in degrees"
+	dock.uv_rotation_spin.suffix = "\u00b0"
+	uv_rot_row.add_child(dock.uv_rotation_spin)
+	uc.add_child(uv_rot_row)
+
 	# Justify alignment buttons
 	var justify_label = Label.new()
 	justify_label.text = "Justify:"
@@ -496,6 +556,18 @@ func connect_signals() -> void:
 		dock.face_clear.pressed.connect(dock._on_face_clear)
 	if dock.uv_reset:
 		dock.uv_reset.pressed.connect(dock._on_uv_reset)
+	if dock.uv_reproject_btn:
+		dock.uv_reproject_btn.pressed.connect(dock._on_uv_reproject)
+	if dock.uv_scale_x:
+		dock.uv_scale_x.value_changed.connect(dock._on_uv_param_changed.bind("scale_x"))
+	if dock.uv_scale_y:
+		dock.uv_scale_y.value_changed.connect(dock._on_uv_param_changed.bind("scale_y"))
+	if dock.uv_offset_x:
+		dock.uv_offset_x.value_changed.connect(dock._on_uv_param_changed.bind("offset_x"))
+	if dock.uv_offset_y:
+		dock.uv_offset_y.value_changed.connect(dock._on_uv_param_changed.bind("offset_y"))
+	if dock.uv_rotation_spin:
+		dock.uv_rotation_spin.value_changed.connect(dock._on_uv_param_changed.bind("rotation"))
 	if dock.uv_editor:
 		dock.uv_editor.uv_changed.connect(dock._on_uv_changed)
 	if dock.surface_paint_layer_select:

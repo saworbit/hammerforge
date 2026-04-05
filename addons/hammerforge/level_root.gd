@@ -84,6 +84,7 @@ var _grid_snap: float = 16.0
 @export var bake_chunk_size: float = 32.0
 @export var bake_merge_meshes: bool = false
 @export var bake_generate_lods: bool = false
+@export var bake_unwrap_uv0: bool = false
 @export var bake_lightmap_uv2: bool = false
 @export var bake_lightmap_texel_size: float = 0.1
 @export var bake_use_face_materials: bool = false
@@ -92,6 +93,8 @@ var _grid_snap: float = 16.0
 @export var bake_navmesh_cell_height: float = 0.25
 @export var bake_navmesh_agent_height: float = 2.0
 @export var bake_navmesh_agent_radius: float = 0.4
+@export var bake_visible_only: bool = false
+@export var bake_use_multimesh: bool = false
 @export var bake_use_thread_pool: bool = true
 var _hflevel_autosave_enabled: bool = true
 @export var hflevel_autosave_enabled: bool = true:
@@ -1056,6 +1059,49 @@ func reset_uv_on_face(brush_id: String, face_idx: int) -> void:
 	draft.rebuild_preview()
 
 
+func reproject_face_uvs(brush_id: String, face_idx: int, projection: int) -> void:
+	var brush = brush_system.find_brush_by_id(brush_id)
+	if not brush or not (brush is DraftBrush):
+		return
+	var draft := brush as DraftBrush
+	if face_idx < 0 or face_idx >= draft.faces.size():
+		return
+	var face: FaceData = draft.faces[face_idx]
+	face.uv_projection = projection
+	face.uv_scale = Vector2.ONE
+	face.uv_offset = Vector2.ZERO
+	face.uv_rotation = 0.0
+	face.custom_uvs = PackedVector2Array()
+	face.ensure_custom_uvs()
+	draft.rebuild_preview()
+
+
+## Set UV transform params on a specific face. Used by undo-capable state actions.
+func set_face_uv_params(
+	brush_id: String, face_idx: int,
+	scale: Vector2, offset: Vector2, rotation: float
+) -> void:
+	var brush = brush_system.find_brush_by_id(brush_id)
+	if not brush or not (brush is DraftBrush):
+		return
+	var draft := brush as DraftBrush
+	if face_idx < 0 or face_idx >= draft.faces.size():
+		return
+	var face: FaceData = draft.faces[face_idx]
+	face.uv_scale = scale
+	face.uv_offset = offset
+	face.uv_rotation = rotation
+	face.custom_uvs = PackedVector2Array()
+	face.ensure_custom_uvs()
+	draft.rebuild_preview()
+
+
+func clip_brush_to_convex(brush_id: String) -> bool:
+	if not vertex_system:
+		return false
+	return vertex_system.clip_to_convex(brush_id)
+
+
 func add_surface_paint_layer(brush_id: String, face_idx: int) -> void:
 	var brush = brush_system.find_brush_by_id(brush_id)
 	if not brush or not (brush is DraftBrush):
@@ -1172,6 +1218,32 @@ func assign_material_to_whole_brushes(material_index: int, brush_ids: Array) -> 
 			all_indices.append(i)
 		brush.assign_material_to_faces(material_index, all_indices)
 		count += all_indices.size()
+	return count
+
+
+func assign_material_and_reproject(material_index: int, projection: int) -> int:
+	var sel = get_face_selection()
+	var count := 0
+	for brush_key in sel.keys():
+		var brush: DraftBrush = brush_system.find_brush_by_id(brush_key)
+		if not brush or not is_instance_valid(brush):
+			continue
+		var face_indices: Array = sel[brush_key]
+		var typed_indices: Array[int] = []
+		for fi in face_indices:
+			typed_indices.append(int(fi))
+		brush.assign_material_to_faces(material_index, typed_indices)
+		for fi in typed_indices:
+			if fi >= 0 and fi < brush.faces.size():
+				var face: FaceData = brush.faces[fi]
+				face.uv_projection = projection
+				face.uv_scale = Vector2.ONE
+				face.uv_offset = Vector2.ZERO
+				face.uv_rotation = 0.0
+				face.custom_uvs = PackedVector2Array()
+				face.ensure_custom_uvs()
+		brush.rebuild_preview()
+		count += typed_indices.size()
 	return count
 
 

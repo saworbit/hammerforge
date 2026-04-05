@@ -520,6 +520,7 @@ func create_context_popup() -> PopupMenu:
 	var popup = PopupMenu.new()
 	popup.add_item("Apply to Selected Faces", 0)
 	popup.add_item("Apply to Whole Brush", 1)
+	popup.add_item("Apply + Re-project (Box UV)", 4)
 	popup.add_separator()
 	popup.add_item("Toggle Favorite", 2)
 	popup.add_separator()

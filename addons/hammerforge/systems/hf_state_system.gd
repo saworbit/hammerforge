@@ -229,6 +229,8 @@ func capture_hflevel_settings() -> Dictionary:
 	return {
 		"grid_snap": root.grid_snap,
 		"bake_chunk_size": root.bake_chunk_size,
+		"bake_visible_only": root.bake_visible_only,
+		"bake_use_multimesh": root.bake_use_multimesh,
 		"bake_collision_layer_index": root.bake_collision_layer_index,
 		"bake_material_override": root.bake_material_override,
 		"bake_use_face_materials": root.bake_use_face_materials,
@@ -240,6 +242,7 @@ func capture_hflevel_settings() -> Dictionary:
 		"draft_pick_layer_index": root.draft_pick_layer_index,
 		"bake_merge_meshes": root.bake_merge_meshes,
 		"bake_generate_lods": root.bake_generate_lods,
+		"bake_unwrap_uv0": root.bake_unwrap_uv0,
 		"bake_lightmap_uv2": root.bake_lightmap_uv2,
 		"bake_lightmap_texel_size": root.bake_lightmap_texel_size,
 		"bake_navmesh": root.bake_navmesh,
@@ -283,6 +286,10 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 		root.grid_snap = float(settings.get("grid_snap", root.grid_snap))
 	if settings.has("bake_chunk_size"):
 		root.bake_chunk_size = float(settings.get("bake_chunk_size", root.bake_chunk_size))
+	if settings.has("bake_visible_only"):
+		root.bake_visible_only = bool(settings.get("bake_visible_only", root.bake_visible_only))
+	if settings.has("bake_use_multimesh"):
+		root.bake_use_multimesh = bool(settings.get("bake_use_multimesh", root.bake_use_multimesh))
 	if settings.has("bake_collision_layer_index"):
 		root.bake_collision_layer_index = int(
 			settings.get("bake_collision_layer_index", root.bake_collision_layer_index)
@@ -313,6 +320,8 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 		root.bake_merge_meshes = bool(settings.get("bake_merge_meshes", root.bake_merge_meshes))
 	if settings.has("bake_generate_lods"):
 		root.bake_generate_lods = bool(settings.get("bake_generate_lods", root.bake_generate_lods))
+	if settings.has("bake_unwrap_uv0"):
+		root.bake_unwrap_uv0 = bool(settings.get("bake_unwrap_uv0", root.bake_unwrap_uv0))
 	if settings.has("bake_lightmap_uv2"):
 		root.bake_lightmap_uv2 = bool(settings.get("bake_lightmap_uv2", root.bake_lightmap_uv2))
 	if settings.has("bake_lightmap_texel_size"):

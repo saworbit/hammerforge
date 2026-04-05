@@ -126,6 +126,211 @@ func validate_convexity(brush: Node3D) -> bool:
 	return true
 
 
+## Clip a non-convex brush to its convex hull. Recomputes faces from the convex
+## hull of the brush's vertices. Returns true if the brush was modified.
+func clip_to_convex(brush_id: String) -> bool:
+	var brush = _find_brush(brush_id)
+	if not brush or not brush.get("faces"):
+		return false
+	if validate_convexity(brush):
+		return false  # Already convex, nothing to do
+
+	var all_verts := get_brush_vertices(brush)
+	if all_verts.size() < 4:
+		return false
+
+	# Snapshot for undo
+	_capture_face_snapshots_for([brush_id])
+
+	# Use Geometry3D.compute_convex_mesh_points to get hull vertices,
+	# then rebuild faces from the hull planes.
+	var hull_points: PackedVector3Array = _convex_hull_3d(all_verts)
+	if hull_points.size() < 4:
+		_pre_drag_faces.clear()
+		return false
+
+	var new_faces := _faces_from_convex_hull(hull_points, brush.faces)
+	if new_faces.is_empty():
+		_pre_drag_faces.clear()
+		return false
+
+	# Replace brush faces
+	brush.faces.clear()
+	for f in new_faces:
+		brush.faces.append(f)
+
+	if brush.has_method("rebuild_preview"):
+		brush.rebuild_preview()
+	return true
+
+
+## Compute the convex hull of a set of 3D points.
+## Returns only the points that lie on the hull surface.
+func _convex_hull_3d(points: PackedVector3Array) -> PackedVector3Array:
+	if points.size() < 4:
+		return points
+	# Build planes from all triangle combinations, keep points on the hull.
+	# Use Geometry3D.build_convex_mesh_points (available in Godot 4.x) if possible.
+	# Fallback: iterative convex hull via extreme-point method.
+	var hull_planes: Array[Plane] = []
+
+	# Build planes from all face triples — brute force for small vertex counts.
+	# For brush editing, vertex count is typically < 100.
+	var n := points.size()
+	for i in range(n):
+		for j in range(i + 1, n):
+			for k in range(j + 1, n):
+				var a: Vector3 = points[i]
+				var b: Vector3 = points[j]
+				var c: Vector3 = points[k]
+				var normal: Vector3 = (b - a).cross(c - a)
+				if normal.length_squared() < 0.0001:
+					continue
+				normal = normal.normalized()
+				var d: float = normal.dot(a)
+				# Check if all other points are on the same side (behind or on)
+				var all_behind := true
+				var all_in_front := true
+				for m in range(n):
+					if m == i or m == j or m == k:
+						continue
+					var dist: float = normal.dot(points[m]) - d
+					if dist > 0.01:
+						all_behind = false
+					if dist < -0.01:
+						all_in_front = false
+				if all_behind:
+					hull_planes.append(Plane(normal, d))
+				elif all_in_front:
+					hull_planes.append(Plane(-normal, -d))
+
+	# Collect hull vertices: points that lie on at least one hull plane
+	var hull_verts := PackedVector3Array()
+	var seen: Dictionary = {}
+	for p in points:
+		for plane in hull_planes:
+			if abs(plane.normal.dot(p) - plane.d) < 0.02:
+				var key := _vertex_key(p)
+				if not seen.has(key):
+					seen[key] = true
+					hull_verts.append(p)
+				break
+	return hull_verts
+
+
+## Build FaceData objects from convex hull vertices grouped by coplanar sets.
+## Inherits UV settings from the closest original face.
+func _faces_from_convex_hull(hull_verts: PackedVector3Array, original_faces: Array) -> Array:
+	# Group vertices by hull plane.
+	# A vertex can belong to multiple faces (e.g. cube corner → 3 faces),
+	# so we track discovered *planes* (not vertices) to avoid duplicates.
+	var plane_groups: Array = []  # [{normal: Vector3, verts: PackedVector3Array}]
+	var found_planes: Array = []  # Array[{normal: Vector3, d: float}] for dedup
+
+	# Discover hull planes by finding coplanar groups from all vertex triples
+	for i in range(hull_verts.size()):
+		for j in range(i + 1, hull_verts.size()):
+			for k in range(j + 1, hull_verts.size()):
+				var a: Vector3 = hull_verts[i]
+				var b: Vector3 = hull_verts[j]
+				var c: Vector3 = hull_verts[k]
+				var normal: Vector3 = (b - a).cross(c - a)
+				if normal.length_squared() < 0.0001:
+					continue
+				normal = normal.normalized()
+				var d: float = normal.dot(a)
+				# Verify this is a hull face (all verts on or behind the plane)
+				var is_hull_face := true
+				for m in range(hull_verts.size()):
+					if normal.dot(hull_verts[m]) - d > 0.02:
+						is_hull_face = false
+						break
+				if not is_hull_face:
+					normal = -normal
+					d = -d
+					var still_valid := true
+					for m in range(hull_verts.size()):
+						if normal.dot(hull_verts[m]) - d > 0.02:
+							still_valid = false
+							break
+					if not still_valid:
+						continue
+				# Check if we already found this plane (same normal & distance)
+				var is_duplicate := false
+				for existing in found_planes:
+					var en: Vector3 = existing["normal"]
+					var ed: float = existing["d"]
+					if en.dot(normal) > 0.99 and abs(ed - d) < 0.02:
+						is_duplicate = true
+						break
+				if is_duplicate:
+					continue
+				# Collect all coplanar hull verts
+				var coplanar := PackedVector3Array()
+				for m in range(hull_verts.size()):
+					if abs(normal.dot(hull_verts[m]) - d) < 0.02:
+						coplanar.append(hull_verts[m])
+				if coplanar.size() >= 3:
+					var sorted_verts := _sort_coplanar_verts(coplanar, normal)
+					if sorted_verts.size() >= 3:
+						plane_groups.append({
+							"normal": normal,
+							"verts": sorted_verts
+						})
+						found_planes.append({"normal": normal, "d": d})
+
+	# Create FaceData for each plane group
+	var result: Array = []
+	for group in plane_groups:
+		var face = FaceData.new()
+		face.local_verts = group["verts"]
+		face.normal = group["normal"]
+		# Inherit UV settings from closest original face by normal similarity
+		var best_dot := -2.0
+		var best_face: FaceData = null
+		for orig in original_faces:
+			if orig == null:
+				continue
+			var dot_val: float = group["normal"].dot(orig.normal)
+			if dot_val > best_dot:
+				best_dot = dot_val
+				best_face = orig
+		if best_face:
+			face.material_idx = best_face.material_idx
+			face.uv_projection = best_face.uv_projection
+			face.uv_scale = best_face.uv_scale
+			face.uv_offset = best_face.uv_offset
+			face.uv_rotation = best_face.uv_rotation
+		face.ensure_geometry()
+		result.append(face)
+	return result
+
+
+## Sort coplanar vertices in winding order around their centroid.
+func _sort_coplanar_verts(verts: PackedVector3Array, normal: Vector3) -> PackedVector3Array:
+	if verts.size() < 3:
+		return verts
+	var centroid := Vector3.ZERO
+	for v in verts:
+		centroid += v
+	centroid /= float(verts.size())
+	# Build a local 2D basis on the plane
+	var arbitrary := Vector3.UP if abs(normal.dot(Vector3.UP)) < 0.99 else Vector3.RIGHT
+	var u: Vector3 = normal.cross(arbitrary).normalized()
+	var v_axis: Vector3 = normal.cross(u).normalized()
+	# Project to 2D and sort by angle
+	var angles: Array = []
+	for i in range(verts.size()):
+		var rel: Vector3 = verts[i] - centroid
+		var angle: float = atan2(rel.dot(v_axis), rel.dot(u))
+		angles.append({"idx": i, "angle": angle})
+	angles.sort_custom(func(a, b): return a["angle"] < b["angle"])
+	var sorted := PackedVector3Array()
+	for entry in angles:
+		sorted.append(verts[entry["idx"]])
+	return sorted
+
+
 ## Find the closest vertex to screen position. Returns {brush_id, vertex_index, distance}
 ## or empty dict if none within threshold.
 func pick_vertex(camera: Camera3D, screen_pos: Vector2, threshold_px: float = 12.0) -> Dictionary:

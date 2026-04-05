@@ -41,6 +41,9 @@ func build(parent: Control) -> void:
 	dock.bake_generate_lods = dock._make_check("Generate LODs")
 	bk.add_child(dock.bake_generate_lods)
 
+	dock.bake_unwrap_uv0 = dock._make_check("Unwrap UV0")
+	bk.add_child(dock.bake_unwrap_uv0)
+
 	dock.bake_lightmap_uv2 = dock._make_check("Lightmap UV2")
 	bk.add_child(dock.bake_lightmap_uv2)
 
@@ -107,6 +110,26 @@ func build(parent: Control) -> void:
 	dock.bake_preview_mode_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	preview_row.add_child(dock.bake_preview_mode_opt)
 	bk.add_child(preview_row)
+
+	# -- Chunk size --
+	var chunk_row = HBoxContainer.new()
+	var chunk_label = Label.new()
+	chunk_label.text = "Chunk Size"
+	chunk_row.add_child(chunk_label)
+	dock.bake_chunk_size_spin = dock._make_spin(0.0, 256.0, 1.0, 32.0)
+	dock.bake_chunk_size_spin.tooltip_text = "Spatial chunk size for bake grouping (0 = no chunking)"
+	chunk_row.add_child(dock.bake_chunk_size_spin)
+	bk.add_child(chunk_row)
+
+	# -- Bake Visible Only --
+	dock.bake_visible_only_check = dock._make_check("Bake Visible Only")
+	dock.bake_visible_only_check.tooltip_text = "Skip hidden visgroups and invisible brushes during bake"
+	bk.add_child(dock.bake_visible_only_check)
+
+	# -- MultiMesh consolidation --
+	dock.bake_use_multimesh_check = dock._make_check("Use MultiMesh")
+	dock.bake_use_multimesh_check.tooltip_text = "Consolidate repeated identical meshes into MultiMeshInstance3D"
+	bk.add_child(dock.bake_use_multimesh_check)
 
 	# -- Bake time estimate --
 	dock.bake_estimate_label = Label.new()

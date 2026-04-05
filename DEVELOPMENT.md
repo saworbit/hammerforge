@@ -43,6 +43,7 @@ addons/hammerforge/
   hf_snap_system.gd      Centralized snap (Grid/Vertex/Center modes + custom snap lines, threshold-based candidates)
   hf_prefab.gd           Reusable brush+entity groups (variants, tags, save/load .hfprefab)
   hf_op_result.gd        Lightweight operation result (ok, message, fix_hint)
+  undo_helper.gd         HFUndoHelper: state-capture undo with collation (merges rapid edits into one step)
   surface_paint.gd       Per-face surface paint tool
   uv_editor.gd           UV editing dock
   highlight.gdshader     Selection highlight shader (wireframe, unshaded, alpha)
@@ -190,7 +191,7 @@ addons/hammerforge/
 The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on push and PR to `main`:
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
-- **GUT unit + integration tests** -- 1091 tests across 62 test files (runs Godot headless)
+- **GUT unit + integration tests** -- 1118 tests across 67 test files (runs Godot headless)
 
 Run locally before pushing:
 ```
@@ -232,8 +233,8 @@ Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framewor
 | `test_snap_system.gd` | 12 | Grid/Vertex/Center snap modes, threshold, exclude list, priority (closer geometry beats grid), empty scene fallback |
 | `test_drag_dimensions.gd` | 8 | get_drag_dimensions() in all modes, format_dimensions() whole/fractional/zero |
 | `test_reference_cleanup.gd` | 9 | Delete cleans group/visgroup membership, entity I/O cleanup_dangling_connections, preserves unrelated, no-crash on clean node |
-| `test_bake_system.gd` | 38 | build_bake_options, structural/trigger filtering, chunk_coord, bake_dry_run, warn_bake_failure, estimate_bake_time, preview mode helpers, _last_bake_success, dirty tag retention, wireframe ShaderMaterial |
-| `test_bake_issues.gd` | 10 | check_bake_issues: degenerate, oversized, floating subtract, overlapping subtracts, clean level, entity skip |
+| `test_bake_system.gd` | 43 | build_bake_options, structural/trigger filtering, chunk_coord, bake_dry_run, warn_bake_failure, estimate_bake_time, preview mode helpers (+ recursive chunk wireframe/proxy/multimesh/full), _last_bake_success, dirty tag retention, wireframe ShaderMaterial |
+| `test_bake_issues.gd` | 10 | check_bake_issues: degenerate, oversized, floating subtract, overlapping subtracts, non-manifold/open-edge, clean level, entity skip |
 | `test_quick_play_modes.gd` | 12 | Severity blocking (0/1/2), cordon save/restore, dirty tag retention patterns, camera yaw via entity_data, spawn restore after camera play, spawn restore on error path |
 | `test_integration.gd` | 22 | End-to-end: brush lifecycle, paint + heightmap, entity workflow, visgroup cross-system, snap, bake cross-system, entity I/O cleanup, brush info round-trip |
 | `test_shortcut_dialog.gd` | 8 | Category assignment (tools, paint, axis lock, editing), action labels (known/unknown), get_all_bindings copy safety |
@@ -263,6 +264,8 @@ Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framewor
 | `test_history_browser.gd` | 10 | Record entry, max 30 cap, clear, undo/redo button exposure, icon/color for action types, navigate signal on double-click |
 | `test_export_playtest.gd` | 3 | Export empty level, includes DirectionalLight3D, includes WorldEnvironment |
 | `test_dock_history_and_playtest.gd` | 7 | history_list null by default, refresh doesn't crash when null, update_history_buttons called when null, version_changed updates buttons, spawn creation, state capture before/after spawn |
+| `test_baker.gd` | 14 | Material preservation in merge (single, group-by, null-material, transform), bake_from_faces (single/multiple materials), _concat_surface_arrays (single, two, empty, indexed rebasing, non-indexed first + indexed second, indexed first + non-indexed second, both non-indexed stays non-indexed) |
+| `test_undo_helper.gd` | 9 | HFUndoHelper.commit without collation (fires history each time), collation first-commit fires + subsequent suppressed, different tags each fire, tag-switch resets collation, 5-arg + 6-arg collation suppression, null history callback safety |
 
 Run all tests:
 ```

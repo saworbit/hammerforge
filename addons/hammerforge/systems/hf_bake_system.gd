@@ -193,9 +193,17 @@ func _apply_preview_visuals(container: Node3D, mode: int) -> void:
 		std_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		mat = std_mat
 	if mat:
-		for child in container.get_children():
-			if child is MeshInstance3D:
-				child.material_override = mat
+		_apply_material_recursive(container, mat)
+
+
+func _apply_material_recursive(node: Node3D, mat: Material) -> void:
+	for child in node.get_children():
+		if child is MeshInstance3D:
+			child.material_override = mat
+		elif child is MultiMeshInstance3D:
+			child.material_override = mat
+		elif child is Node3D:
+			_apply_material_recursive(child, mat)
 
 
 # ---------------------------------------------------------------------------
@@ -252,6 +260,8 @@ func bake(
 		root.baked_container = baked
 		root.add_child(root.baked_container)
 		postprocess_bake(root.baked_container)
+		if root.bake_use_multimesh:
+			_consolidate_to_multimesh(root.baked_container)
 		_apply_preview_visuals(root.baked_container, preview_mode)
 		root._assign_owner_recursive(root.baked_container)
 		if hide_live:
@@ -294,6 +304,7 @@ func build_bake_options() -> Dictionary:
 	return {
 		"merge_meshes": root.bake_merge_meshes,
 		"generate_lods": root.bake_generate_lods,
+		"unwrap_uv0": root.bake_unwrap_uv0,
 		"unwrap_uv2": root.bake_lightmap_uv2,
 		"uv2_texel_size": root.bake_lightmap_texel_size,
 		"use_thread_pool": root.bake_use_thread_pool,
@@ -543,6 +554,8 @@ func _append_face_bake_container(container: Node3D, out: Array) -> void:
 		return
 	for child in container.get_children():
 		if child is DraftBrush and child.operation != CSGShape3D.OPERATION_SUBTRACTION:
+			if root.bake_visible_only and not child.visible:
+				continue
 			if root.cordon_enabled and not _brush_in_cordon(child as DraftBrush):
 				continue
 			if not _is_structural_brush(child as DraftBrush):
@@ -559,6 +572,8 @@ func append_brush_list_to_csg(
 		if not (child is DraftBrush):
 			continue
 		if root.is_entity_node(child):
+			continue
+		if root.bake_visible_only and not child.visible:
 			continue
 		if root.cordon_enabled and not _brush_in_cordon(child as DraftBrush):
 			continue
@@ -674,3 +689,53 @@ func _brush_in_cordon(brush: DraftBrush) -> bool:
 	var half = brush.size * 0.5
 	var brush_aabb = AABB(brush.global_position - half, brush.size)
 	return root.cordon_aabb.intersects(brush_aabb)
+
+
+## Consolidate identical meshes in the baked container into MultiMeshInstance3D nodes.
+## Groups MeshInstance3D children by mesh resource identity (same Mesh = same group).
+## Groups with 2+ instances are replaced with a single MultiMeshInstance3D.
+func _consolidate_to_multimesh(container: Node3D) -> void:
+	if not container:
+		return
+	# Group MeshInstance3D children by mesh resource
+	var mesh_groups: Dictionary = {}  # Mesh -> Array[MeshInstance3D]
+	for child in container.get_children():
+		if not (child is MeshInstance3D):
+			continue
+		var mi: MeshInstance3D = child
+		if not mi.mesh:
+			continue
+		var key: Mesh = mi.mesh
+		if not mesh_groups.has(key):
+			mesh_groups[key] = []
+		mesh_groups[key].append(mi)
+	var consolidated := 0
+	for mesh_key: Mesh in mesh_groups:
+		var instances: Array = mesh_groups[mesh_key]
+		if instances.size() < 2:
+			continue
+		# Build MultiMesh
+		var mm = MultiMesh.new()
+		mm.mesh = mesh_key
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.instance_count = instances.size()
+		for i in range(instances.size()):
+			var mi: MeshInstance3D = instances[i]
+			mm.set_instance_transform(i, mi.global_transform)
+		# Carry material from first instance
+		var mmi = MultiMeshInstance3D.new()
+		mmi.multimesh = mm
+		mmi.name = "MMI_%s" % mesh_key.resource_name if mesh_key.resource_name else "MMI_%d" % consolidated
+		var first_mi: MeshInstance3D = instances[0]
+		if first_mi.get_surface_override_material(0):
+			mmi.material_override = first_mi.get_surface_override_material(0)
+		elif first_mi.material_override:
+			mmi.material_override = first_mi.material_override
+		container.add_child(mmi)
+		# Remove originals
+		for mi: MeshInstance3D in instances:
+			mi.get_parent().remove_child(mi)
+			mi.queue_free()
+		consolidated += 1
+	if consolidated > 0:
+		root._log("MultiMesh: consolidated %d groups" % consolidated)

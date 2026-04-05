@@ -128,11 +128,14 @@ var entity_system = null
 var preview_brush: Node3D = null
 var bake_merge_meshes: bool = true
 var bake_generate_lods: bool = false
+var bake_unwrap_uv0: bool = false
 var bake_lightmap_uv2: bool = false
 var bake_lightmap_texel_size: float = 0.1
 var bake_use_thread_pool: bool = false
 var bake_use_face_materials: bool = false
 var bake_chunk_size: float = 0.0
+var bake_visible_only: bool = false
+var bake_use_multimesh: bool = false
 var commit_freeze: bool = false
 var baker = null
 

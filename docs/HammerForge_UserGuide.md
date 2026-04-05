@@ -228,12 +228,23 @@ Use the **Preview Mode** dropdown in the Manage tab → Bake section to choose h
 - **Wireframe**: cyan wireframe overlay using a custom shader — useful for inspecting geometry topology.
 - **Proxy**: semi-transparent grey unshaded material — ultra-fast rendering for layout testing.
 
+### Bake Options
+The Manage tab Bake section exposes additional controls:
+- **Chunk Size** (SpinBox, 0-256, default 32): spatial chunk size for bake grouping. Set to 0 to disable chunking.
+- **Bake Visible Only** (checkbox): skips hidden visgroups and invisible brushes during bake.
+- **Use MultiMesh** (checkbox): after baking, consolidates repeated identical meshes into `MultiMeshInstance3D` nodes. Useful for levels with many copies of the same brush shape — reduces draw calls.
+- **Unwrap UV0** (checkbox): applies per-vertex planar UV projection during bake for surfaces that lack explicit UVs.
+
+The main **Bake** button is smart: if only specific brushes have been modified since the last bake, it automatically uses incremental bake (`Bake Changed`) instead of a full re-bake.
+
 ### Bake Issue Detection
 Click **Check Bake Issues** to scan for potential problems before baking:
 - **Degenerate brush** (severity 2): near-zero thickness on any axis — blocks play.
 - **Oversized brush** (severity 1): very large dimensions — warning only.
 - **Floating subtract** (severity 1): a subtractive brush that doesn't intersect any additive brush.
 - **Overlapping subtracts** (severity 1): two subtractive brushes with intersecting AABBs.
+- **Open edges** (severity 1): edges shared by only one face — geometry is not watertight.
+- **Non-manifold edges** (severity 2): edges shared by 3+ faces — may cause bake artifacts.
 Issues appear as color-coded toast notifications.
 
 ### Bake Time Estimate
@@ -571,6 +582,14 @@ Press **V** (keyboard shortcut or the **V** toggle button in the toolbar) to ent
 ### Convexity Enforcement
 All vertex operations validate that the brush remains convex. If a move or merge would create a concave shape, the operation is rejected and the brush reverts to its previous state.
 
+### Clip to Convex
+If a brush has been deformed into a non-convex shape (e.g., by external editing or import), use the **Convex** button in the vertex edit context toolbar to recompute its convex hull. This:
+1. Computes the convex hull of all brush vertices.
+2. Rebuilds faces from the hull planes.
+3. Inherits UV settings (projection, scale, offset, rotation, material) from the closest original face for each new hull face.
+
+This is a fallback repair tool, not a modeling operation — it discards any concave geometry.
+
 ### Shortcuts
 | Key | Action |
 |-----|--------|
@@ -678,6 +697,29 @@ Groups let you persistently link brushes/entities so they select and move togeth
 Notes:
 - Each node can belong to one group at a time.
 - Groups persist in `.hflevel` saves and undo/redo state.
+
+## Per-Face UV Controls
+
+The Paint tab includes a UV Editor section for fine-tuning per-face UV settings:
+
+### Projection Mode
+Select a UV projection mode from the dropdown:
+- **Planar X/Y/Z**: projects UVs along the specified axis.
+- **Box UV**: automatically picks the best axis per face (default for most workflows).
+- **Cylindrical**: wraps UVs around a cylinder (best for round shapes).
+
+Click **Re-project UVs** to recompute UVs using the selected projection mode (resets scale/offset/rotation).
+
+### UV Transform
+When a face is selected, adjust its UV parameters with the spinboxes:
+- **Scale X/Y**: texture repeat scale (default 1.0).
+- **Offset X/Y**: texture offset in UV space.
+- **Rotation**: texture rotation in degrees.
+
+Changes are live-previewed and fully undoable. Rapid spinbox changes merge into a single undo step.
+
+### Material Browser Integration
+Right-click a material thumbnail in the Material Browser and choose **Apply + Re-project (Box UV)** to assign the material and reset UV projection in one step.
 
 ## Texture Lock
 When Texture Lock is enabled, moving or resizing a brush automatically adjusts its face UVs so textures stay aligned.

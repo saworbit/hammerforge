@@ -177,6 +177,7 @@ func check_bake_issues() -> Array:
 			continue
 		_check_degenerate_brush(brush, issues)
 		_check_floating_subtract(brush, brush_nodes, issues)
+		_check_non_manifold(brush, issues)
 
 	_check_overlapping_subtracts(brush_nodes, issues)
 	return issues
@@ -261,3 +262,59 @@ func _check_overlapping_subtracts(all_brushes: Array, issues: Array) -> void:
 						"node": a
 					}
 				)
+
+
+## Check for non-manifold and open-edge geometry by analyzing the edge adjacency
+## of a brush's faces. An edge shared by exactly 2 faces is manifold; 1 = open edge;
+## 3+ = non-manifold edge.
+func _check_non_manifold(brush: DraftBrush, issues: Array) -> void:
+	if brush.faces.is_empty():
+		return
+	# Build edge→face count map. Edge key = sorted pair of rounded vertex positions.
+	var edge_counts: Dictionary = {}  # String -> int
+	for face_idx in range(brush.faces.size()):
+		var face = brush.faces[face_idx]
+		if not face or face.local_verts.size() < 3:
+			continue
+		var verts: PackedVector3Array = face.local_verts
+		for i in range(verts.size()):
+			var a: Vector3 = verts[i]
+			var b: Vector3 = verts[(i + 1) % verts.size()]
+			var key: String = _edge_key(a, b)
+			edge_counts[key] = edge_counts.get(key, 0) + 1
+	var open_count := 0
+	var non_manifold_count := 0
+	for key: String in edge_counts:
+		var count: int = edge_counts[key]
+		if count == 1:
+			open_count += 1
+		elif count > 2:
+			non_manifold_count += 1
+	if open_count > 0:
+		issues.append({
+			"type": "open_edge",
+			"severity": 1,
+			"message": "Brush '%s' has %d open edge(s) — geometry is not watertight" % [brush.name, open_count],
+			"node": brush
+		})
+	if non_manifold_count > 0:
+		issues.append({
+			"type": "non_manifold",
+			"severity": 2,
+			"message": "Brush '%s' has %d non-manifold edge(s) — may cause bake artifacts" % [brush.name, non_manifold_count],
+			"node": brush
+		})
+
+
+## Create a canonical edge key from two vertices (order-independent, rounded to 0.001).
+func _edge_key(a: Vector3, b: Vector3) -> String:
+	var ax := snapped(a.x, 0.001)
+	var ay := snapped(a.y, 0.001)
+	var az := snapped(a.z, 0.001)
+	var bx := snapped(b.x, 0.001)
+	var by := snapped(b.y, 0.001)
+	var bz := snapped(b.z, 0.001)
+	# Sort so edge (A,B) == edge (B,A)
+	if ax < bx or (ax == bx and ay < by) or (ax == bx and ay == by and az < bz):
+		return "%s,%s,%s-%s,%s,%s" % [ax, ay, az, bx, by, bz]
+	return "%s,%s,%s-%s,%s,%s" % [bx, by, bz, ax, ay, az]

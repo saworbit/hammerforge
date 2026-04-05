@@ -5,6 +5,74 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **Index rebasing in merged geometry** (Apr 2026): `baker.gd _concat_surface_arrays()` appended
+  `ARRAY_INDEX` buffers without rebasing by the running vertex count, corrupting triangles when
+  merging indexed surfaces. Also failed when mixing indexed and non-indexed surfaces (first non-indexed
+  caused later indexed buffers to be silently dropped). Now synthesizes sequential indices for
+  non-indexed surfaces and rebases all subsequent indices by the accumulated vertex count.
+- **Convex hull face reconstruction** (Apr 2026): `hf_vertex_system.gd _faces_from_convex_hull()`
+  tracked an `assigned` dictionary that prevented hull vertices from appearing in multiple faces.
+  Since convex hull vertices belong to 3+ faces (e.g., cube corners), this dropped valid faces and
+  produced incomplete shells. Rewritten to track discovered *planes* (by normal+distance dedup)
+  instead, allowing vertices to participate in all their coplanar groups.
+- **Preview visuals on chunked bakes** (Apr 2026): `hf_bake_system.gd _apply_preview_visuals()` only
+  iterated direct children, missing `MeshInstance3D` and `MultiMeshInstance3D` nodes nested under
+  `BakedChunk_*` nodes from chunked bakes. Extracted to `_apply_material_recursive()` that walks the
+  full subtree.
+- **UV spinbox edits not undoable** (Apr 2026): `dock.gd _on_uv_param_changed()` mutated `FaceData`
+  directly without going through the undo system. Now routes through `level_root.set_face_uv_params()`
+  via `HFUndoHelper.commit()` with a collation tag so rapid spinbox drags merge into one undo step.
+- **UV undo history spam** (Apr 2026): `HFUndoHelper.commit()` fired the history callback on every
+  collated commit, flooding the history UI with duplicate entries during spinbox drags. Now only fires
+  on the first action of a collation run. Collation tracking and history callback logic extracted into
+  `_update_collation()` / `_fire_history_cb()` helpers, wired into all three code paths (>5 args,
+  null undo_redo, and normal) so suppression works everywhere.
+- **bake_unwrap_uv0 not persisted** (Apr 2026): The "Unwrap UV0" toggle was exported on `level_root`
+  and used in bake options but missing from `hf_state_system.gd capture_hflevel_settings()` /
+  `apply_hflevel_settings()`, silently resetting across state round-trips. Added to both.
+- **HFUndoHelper >5 args collation** (Apr 2026): The >5-args early-return path in `undo_helper.gd`
+  passed an empty dict `{}` to `_update_collation()`, so `_last_collation_state.is_empty()` was
+  always true and subsequent same-tag calls could never collate. Now captures actual state before
+  the early return.
+
+### Added
+- **Clip to Convex** (Apr 2026): `hf_vertex_system.gd clip_to_convex(brush_id)` computes the convex
+  hull of a brush's vertices and rebuilds its faces to match. Each hull face inherits UV settings
+  (projection, scale, offset, rotation, material) from the closest original face by normal dot
+  product. Available as "Convex" button in vertex edit context toolbar and via the command palette.
+- **Smart incremental bake** (Apr 2026): The main Bake button now auto-detects dirty brushes and
+  routes to `bake_dirty()` when `_dirty_brush_ids` is non-empty and no full reconcile is needed,
+  avoiding unnecessary full re-bakes during iterative editing.
+- **Chunk Size control** (Apr 2026): SpinBox in Manage tab Bake section (0-256, default 32) to
+  configure `bake_chunk_size` directly from the dock. Synced through toggle/float bindings, root
+  state sync, and preset save/load.
+- **Bake Visible Only** (Apr 2026): Checkbox in Manage tab Bake section that skips hidden brushes
+  during bake. Filtering applied in both `append_brush_list_to_csg()` and
+  `_append_face_bake_container()`. Persisted in state system and presets.
+- **MultiMesh bake consolidation** (Apr 2026): "Use MultiMesh" checkbox in Manage tab Bake section.
+  `_consolidate_to_multimesh()` in `hf_bake_system.gd` post-processes the baked container, grouping
+  identical mesh resources and replacing groups of 2+ with `MultiMeshInstance3D` nodes (preserving
+  materials). Preview visuals (wireframe/proxy) apply to consolidated MMI nodes.
+- **Non-manifold geometry warnings** (Apr 2026): `check_bake_issues()` in `hf_validation_system.gd`
+  now analyzes edge adjacency from each brush's `FaceData.local_verts`. Reports open edges
+  (shared by 1 face, severity 1) and non-manifold edges (shared by 3+ faces, severity 2).
+- **UV projection controls** (Apr 2026): Per-face UV controls in Paint tab — projection dropdown
+  (Planar X/Y/Z, Box UV, Cylindrical), scale/offset/rotation spinboxes, and Re-project button.
+  Material browser gains "Apply + Re-project (Box UV)" context action.
+- **UV0 unwrap during bake** (Apr 2026): Optional "Unwrap UV0" toggle applies per-vertex planar
+  projection based on dominant normal axis during bake. Available in Manage tab Bake section.
+- **Subtract brush wireframe overlay** (Apr 2026): Subtraction brushes render a red-orange wireframe
+  overlay (shared shader across all instances) for visibility in both face-material and fallback
+  material paths.
+- **Per-surface material preservation in baker** (Apr 2026): `_merge_entries_worker()` groups meshes
+  by material and `bake_from_faces()` builds a single ArrayMesh with one surface per material group,
+  preserving per-face materials through the bake pipeline.
+- **HFUndoHelper 4/5-arg support** (Apr 2026): `undo_helper.gd` `commit()` now handles methods with
+  up to 5 arguments (was limited to 3), enabling undo for `set_face_uv_params()` and similar.
+- 27 new tests: mixed indexed/non-indexed concat (5), recursive preview on chunks (5), UV-history
+  collation (8), >5-arg collation (1), baker material preservation (10). Total: **1118 tests across
+  67 files**.
+
 - **UV transform order corrected** (Apr 2026): `_apply_uv_transform()` in `face_data.gd` previously
   applied rotation after scale+offset (`(uv * scale + offset).rotated(R)`), which rotated the offset
   and caused texture drift when combining rotation with offset. Now applies rotation first

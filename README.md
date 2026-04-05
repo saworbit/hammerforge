@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/Godot-4.6%2B-478cbf?logo=godot-engine&logoColor=white" alt="Godot 4.6+">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
   <img src="https://img.shields.io/badge/Status-Early%20Alpha-red" alt="Early Alpha">
-  <img src="https://img.shields.io/badge/Tests-1091%20passing-brightgreen" alt="1091 tests passing">
+  <img src="https://img.shields.io/badge/Tests-1118%20passing-brightgreen" alt="1118 tests passing">
   <img src="https://img.shields.io/badge/GDScript-25k%2B%20lines-blueviolet" alt="25k+ lines">
 </p>
 
@@ -40,7 +40,7 @@ HammerForge is a single `addons/` folder. No external tools, no custom builds, n
 
 | | |
 |---|---|
-| **19 subsystems** + coordinator architecture | **1091 unit + integration tests** with CI on every push |
+| **19 subsystems** + coordinator architecture | **1118 unit + integration tests** with CI on every push |
 | **15 brush shapes** (box through dodecahedron) | **150 built-in prototype textures** for instant greyboxing |
 | **Quake `.map`** + **glTF `.glb`** export | **.hflevel** native format with threaded I/O |
 | **Customizable keymaps** (JSON) | **Plugin API** for custom tools |
@@ -71,6 +71,7 @@ Precision vertex-level editing for fine-tuning brush geometry:
 - **Edge splitting** (Ctrl+E) -- insert midpoint vertex on a selected edge
 - **Vertex merging** (Ctrl+W) -- merge selected vertices to their centroid
 - **Wireframe overlay** -- color-coded edge display (gray default, orange selected, yellow hovered)
+- **Clip to Convex** -- repair non-convex brushes by recomputing the convex hull with UV inheritance
 
 ### Polygon Tool
 
@@ -171,7 +172,10 @@ Grid-based paint layers with chunked storage for large worlds:
 | **Bake Selected** | Bake only selected brushes (merged into existing output) |
 | **Bake Changed** | Bake only dirty-tagged brushes since last successful bake |
 | **Preview modes** | Full / Wireframe / Proxy toggle for ultra-fast iteration |
-| **Check Issues** | Flag degenerate, floating, or overlapping brushes with severity |
+| **MultiMesh** | Consolidate repeated identical meshes into MultiMeshInstance3D |
+| **Bake Visible Only** | Skip hidden visgroups and invisible brushes |
+| **Unwrap UV0** | Per-vertex planar UV projection for surfaces without UVs |
+| **Check Issues** | Flag degenerate, floating, overlapping, non-manifold, and open-edge brushes |
 | **Bake estimate** | Time estimate with "Chunking recommended" tip for large levels |
 | **Validate** | Check level integrity before bake |
 | **.map export** | Classic Quake or Valve 220 format |
