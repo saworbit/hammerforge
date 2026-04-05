@@ -1078,8 +1078,7 @@ func reproject_face_uvs(brush_id: String, face_idx: int, projection: int) -> voi
 
 ## Set UV transform params on a specific face. Used by undo-capable state actions.
 func set_face_uv_params(
-	brush_id: String, face_idx: int,
-	scale: Vector2, offset: Vector2, rotation: float
+	brush_id: String, face_idx: int, scale: Vector2, offset: Vector2, rotation: float
 ) -> void:
 	var brush = brush_system.find_brush_by_id(brush_id)
 	if not brush or not (brush is DraftBrush):

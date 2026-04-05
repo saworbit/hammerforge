@@ -291,19 +291,31 @@ func _check_non_manifold(brush: DraftBrush, issues: Array) -> void:
 		elif count > 2:
 			non_manifold_count += 1
 	if open_count > 0:
-		issues.append({
-			"type": "open_edge",
-			"severity": 1,
-			"message": "Brush '%s' has %d open edge(s) — geometry is not watertight" % [brush.name, open_count],
-			"node": brush
-		})
+		issues.append(
+			{
+				"type": "open_edge",
+				"severity": 1,
+				"message":
+				(
+					"Brush '%s' has %d open edge(s) — geometry is not watertight"
+					% [brush.name, open_count]
+				),
+				"node": brush
+			}
+		)
 	if non_manifold_count > 0:
-		issues.append({
-			"type": "non_manifold",
-			"severity": 2,
-			"message": "Brush '%s' has %d non-manifold edge(s) — may cause bake artifacts" % [brush.name, non_manifold_count],
-			"node": brush
-		})
+		issues.append(
+			{
+				"type": "non_manifold",
+				"severity": 2,
+				"message":
+				(
+					"Brush '%s' has %d non-manifold edge(s) — may cause bake artifacts"
+					% [brush.name, non_manifold_count]
+				),
+				"node": brush
+			}
+		)
 
 
 ## Create a canonical edge key from two vertices (order-independent, rounded to 0.001).

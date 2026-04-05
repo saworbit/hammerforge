@@ -951,10 +951,7 @@ func _apply_all_tooltips() -> void:
 	# Build tab - Bake options
 	_set_tooltip(bake_merge_meshes, "Merge meshes during bake for better performance")
 	_set_tooltip(bake_generate_lods, "Generate LOD meshes during bake")
-	_set_tooltip(
-		bake_unwrap_uv0,
-		"Run Godot UV unwrap on baked meshes (UV0) for complex geometry"
-	)
+	_set_tooltip(bake_unwrap_uv0, "Run Godot UV unwrap on baked meshes (UV0) for complex geometry")
 	_set_tooltip(bake_lightmap_uv2, "Generate UV2 for lightmap baking")
 	_set_tooltip(
 		bake_use_face_materials,
@@ -4673,8 +4670,10 @@ func _on_material_context_action(id: int) -> void:
 				[idx, FaceData.UVProjection.BOX_UV]
 			)
 			show_toast(
-				"Applied %s + Box UV to %d face%s"
-				% [mat_name, face_count, "" if face_count == 1 else "s"],
+				(
+					"Applied %s + Box UV to %d face%s"
+					% [mat_name, face_count, "" if face_count == 1 else "s"]
+				),
 				0
 			)
 
@@ -4802,7 +4801,9 @@ func _on_uv_reproject() -> void:
 	var face_idx = _uv_active_brush.faces.find(_uv_active_face)
 	if brush_id == "" or face_idx < 0:
 		return
-	var proj: int = uv_projection_opt.selected if uv_projection_opt else FaceData.UVProjection.BOX_UV
+	var proj: int = (
+		uv_projection_opt.selected if uv_projection_opt else FaceData.UVProjection.BOX_UV
+	)
 	_commit_state_action("Re-project UV", "reproject_face_uvs", [brush_id, face_idx, proj])
 
 
@@ -4823,12 +4824,10 @@ func _on_uv_param_changed(_value: float, _param: String) -> void:
 	if brush_id == "" or face_idx < 0:
 		return
 	var scale := Vector2(
-		uv_scale_x.value if uv_scale_x else 1.0,
-		uv_scale_y.value if uv_scale_y else 1.0
+		uv_scale_x.value if uv_scale_x else 1.0, uv_scale_y.value if uv_scale_y else 1.0
 	)
 	var offset := Vector2(
-		uv_offset_x.value if uv_offset_x else 0.0,
-		uv_offset_y.value if uv_offset_y else 0.0
+		uv_offset_x.value if uv_offset_x else 0.0, uv_offset_y.value if uv_offset_y else 0.0
 	)
 	var rotation: float = deg_to_rad(uv_rotation_spin.value) if uv_rotation_spin else 0.0
 	# Route through undo system with collation so rapid spinbox changes merge

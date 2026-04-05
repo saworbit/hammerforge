@@ -41,7 +41,9 @@ func bake_from_csg(
 	if merge_meshes:
 		var merged = _merge_entries(entries, use_thread_pool)
 		if merged:
-			merged = _postprocess_mesh(merged, generate_lods, unwrap_uv2, uv2_texel_size, unwrap_uv0_flag)
+			merged = _postprocess_mesh(
+				merged, generate_lods, unwrap_uv2, uv2_texel_size, unwrap_uv0_flag
+			)
 			if merged:
 				var mesh_inst = MeshInstance3D.new()
 				mesh_inst.name = "BakedMesh_0"
@@ -69,7 +71,9 @@ func bake_from_csg(
 		if not mesh:
 			continue
 
-		var processed = _postprocess_mesh(mesh, generate_lods, unwrap_uv2, uv2_texel_size, unwrap_uv0_flag)
+		var processed = _postprocess_mesh(
+			mesh, generate_lods, unwrap_uv2, uv2_texel_size, unwrap_uv0_flag
+		)
 		if not processed:
 			continue
 
@@ -261,7 +265,9 @@ func _unwrap_uv0(mesh: ArrayMesh) -> ArrayMesh:
 		new_uvs.resize(verts.size())
 		for i in range(verts.size()):
 			var v: Vector3 = verts[i]
-			var n: Vector3 = normals[i] if normals is PackedVector3Array and normals.size() > i else Vector3.UP
+			var n: Vector3 = (
+				normals[i] if normals is PackedVector3Array and normals.size() > i else Vector3.UP
+			)
 			var abs_n = n.abs()
 			if abs_n.y >= abs_n.x and abs_n.y >= abs_n.z:
 				new_uvs[i] = Vector2(v.x, v.z)
@@ -320,9 +326,7 @@ func _merge_entries_worker(mesh_entries: Array) -> ArrayMesh:
 			var key = mat if mat != null else "_default"
 			if not mat_groups.has(key):
 				mat_groups[key] = {"material": mat, "arrays_list": []}
-			mat_groups[key]["arrays_list"].append(
-				_transform_arrays(arrays, xform)
-			)
+			mat_groups[key]["arrays_list"].append(_transform_arrays(arrays, xform))
 
 	var merged = ArrayMesh.new()
 	for group in mat_groups.values():

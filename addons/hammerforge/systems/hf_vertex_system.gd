@@ -273,10 +273,7 @@ func _faces_from_convex_hull(hull_verts: PackedVector3Array, original_faces: Arr
 				if coplanar.size() >= 3:
 					var sorted_verts := _sort_coplanar_verts(coplanar, normal)
 					if sorted_verts.size() >= 3:
-						plane_groups.append({
-							"normal": normal,
-							"verts": sorted_verts
-						})
+						plane_groups.append({"normal": normal, "verts": sorted_verts})
 						found_planes.append({"normal": normal, "d": d})
 
 	# Create FaceData for each plane group

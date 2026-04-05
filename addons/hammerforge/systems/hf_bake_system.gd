@@ -725,7 +725,9 @@ func _consolidate_to_multimesh(container: Node3D) -> void:
 		# Carry material from first instance
 		var mmi = MultiMeshInstance3D.new()
 		mmi.multimesh = mm
-		mmi.name = "MMI_%s" % mesh_key.resource_name if mesh_key.resource_name else "MMI_%d" % consolidated
+		mmi.name = (
+			"MMI_%s" % mesh_key.resource_name if mesh_key.resource_name else "MMI_%d" % consolidated
+		)
 		var first_mi: MeshInstance3D = instances[0]
 		if first_mi.get_surface_override_material(0):
 			mmi.material_override = first_mi.get_surface_override_material(0)
