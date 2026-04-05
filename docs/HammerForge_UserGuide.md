@@ -1,6 +1,6 @@
 # HammerForge User Guide
 
-Last updated: April 4, 2026
+Last updated: April 5, 2026
 
 This guide covers the current HammerForge workflow in Godot 4.6: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs.
 

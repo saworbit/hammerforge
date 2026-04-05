@@ -171,9 +171,9 @@ Start-Process -FilePath "C:\Godot\Godot_v4.6-stable_win64.exe" `
   -NoNewWindow
 ```
 
-## Known Issues (current)
-- Viewport drag-marquee selection is disabled.
-- Multi-select can cap at 2 items in the viewport.
+## Resolved Issues
+- ~~Viewport drag-marquee selection is disabled.~~ Marquee selection for brushes, entities, and faces was added in the Improved Selection & Multi-Select wave.
+- ~~Multi-select can cap at 2 items in the viewport.~~ Multi-select works for arbitrary counts via marquee or Ctrl+Click.
 
 ## Next Steps
 - Numeric input during draw

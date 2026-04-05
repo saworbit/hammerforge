@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="docs/images/hammerforge_logo.png" alt="HammerForge Logo" width="400">
-</p>
-
 <h1 align="center">HammerForge</h1>
 
 <p align="center">
@@ -12,10 +8,18 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Godot-4.6%2B-478cbf?logo=godot-engine&logoColor=white" alt="Godot 4.6+">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
-  <img src="https://img.shields.io/badge/Status-Alpha-orange" alt="Alpha">
+  <img src="https://img.shields.io/badge/Status-Early%20Alpha-red" alt="Early Alpha">
   <img src="https://img.shields.io/badge/Tests-1091%20passing-brightgreen" alt="1091 tests passing">
   <img src="https://img.shields.io/badge/GDScript-25k%2B%20lines-blueviolet" alt="25k+ lines">
 </p>
+
+> **Fair warning:** This is a solo hobby project in early alpha. I built it to support another project and it grew from there. It's buggy, rough around the edges, and a bit directionless. If any of this looks useful to you, I'd genuinely appreciate help testing and filing issues. Contributions welcome -- just know you're signing up for an adventure, not a polished product.
+
+---
+
+## Looking for a Logo
+
+The previous AI-generated logo has been retired. If you're a designer or artist and want to contribute a logo for HammerForge, I'd love to use it (with credit). Requirements: free to use under MIT, ideally SVG so it scales. Open an issue or PR if interested.
 
 ---
 
@@ -36,10 +40,11 @@ HammerForge is a single `addons/` folder. No external tools, no custom builds, n
 
 | | |
 |---|---|
-| **Modular subsystem architecture** | **1091 unit + integration tests** with CI on every push |
+| **19 subsystems** + coordinator architecture | **1091 unit + integration tests** with CI on every push |
 | **15 brush shapes** (box through dodecahedron) | **150 built-in prototype textures** for instant greyboxing |
 | **Quake `.map`** + **glTF `.glb`** export | **.hflevel** native format with threaded I/O |
 | **Customizable keymaps** (JSON) | **Plugin API** for custom tools |
+| **Dark/light theme sync** across all custom UI | **Performance health monitor** with recommendations |
 
 ---
 
@@ -98,7 +103,7 @@ Geometry-aware snapping goes beyond a simple grid:
 | Vertex | V | Corners of existing brushes (8 per box) |
 | Center | C | Center points of existing brushes |
 
-Closest candidate within threshold wins. Modes combine freely. **Texture Lock** preserves UV alignment when moving or resizing. **Move to Floor/Ceiling** (Ctrl+Shift+F/C) raycasts to snap brushes vertically. **UV Justify** offers fit/center/left/right/top/bottom alignment for selected faces.
+Closest candidate within threshold wins. Modes combine freely. The Measure tool can set a **custom snap reference line** (right-click a ruler) for alignment along arbitrary axes. **Texture Lock** preserves UV alignment when moving or resizing. **Move to Floor/Ceiling** (Ctrl+Shift+F/C) raycasts to snap brushes vertically. **UV Justify** offers fit/center/left/right/top/bottom alignment for selected faces.
 
 ### Paint Floors and Terrain
 
@@ -145,7 +150,8 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Cordon** -- restrict bake to an AABB region with yellow wireframe; skip everything outside
 - **Reference cleanup** -- deleting brushes auto-cleans group/visgroup membership and warns about dangling entity I/O connections
 - **Duplicator** -- create N copies of a brush with progressive offset
-- **Prefabs** -- save brush + entity groups as `.hfprefab` files, drag from library to instantiate with new IDs and remapped I/O
+- **Prefabs** -- save brush + entity groups as `.hfprefab` files with variants, tags, and live-linked propagation. Drag from library to instantiate with new IDs and remapped I/O
+- **Measurement** (M key) -- persistent multi-ruler with angle display, Shift+Click chaining, and snap reference alignment
 - **Decal placement** (N key) -- raycast decals onto brush surfaces with live preview
 - **Real-time subtract preview** -- toggle wireframe AABB intersection overlays between additive and subtractive brushes
 
@@ -196,6 +202,8 @@ HammerForge's dock is designed to stay out of your way while keeping everything 
 - **Example library** -- 5 built-in demo levels (Manage tab) with difficulty ratings, annotations, and one-click loading for learning
 - **Auto-mode hints** -- "Drawing in Add mode" bar appears during drag with one-click Add/Subtract toggle
 - **Tool poll system** -- buttons gray out with inline hints when an action can't run ("Select a brush to use these tools")
+- **Marquee selection** -- drag-to-select brushes, entities, and faces with selection filter popover (by normal, material, similar, visgroup, type)
+- **Performance monitor** -- health summary, brush/entity/vertex counts, chunk recommendations, color-coded ProgressBar
 - **Contextual selection tools** -- hollow, clip, move, tie, duplicator appear in Brush tab only when brushes are selected
 - **Live dimensions** -- real-time W x H x D display during drag gestures
 - **Operation feedback** -- actionable error toasts with fix hints ("Wall thickness 6 is too large -- Use a thickness less than 5")
@@ -211,7 +219,7 @@ HammerForge uses a **coordinator + subsystems** pattern:
 
 ```
 plugin.gd            EditorPlugin — input routing, toolbar, viewport overlay
-  └─ level_root.gd   Thin coordinator (~1,100 lines) — owns containers, exports, signals
+  └─ level_root.gd   Thin coordinator — owns containers, exports, signals
        ├─ HFBrushSystem     Brush CRUD, hollow, clip, tie, move, UV justify, caching
        ├─ HFDragSystem      Two-stage draw lifecycle + preview management
        ├─ HFExtrudeTool     Face extrusion (Up/Down) via FaceSelector
@@ -220,15 +228,17 @@ plugin.gd            EditorPlugin — input routing, toolbar, viewport overlay
        ├─ HFEntitySystem    Entity CRUD, I/O connections, definition loading
        ├─ HFStateSystem     Undo/redo snapshots, transactions, autosave
        ├─ HFFileSystem      Threaded .hflevel / .map / .glb I/O
+       ├─ HFValidationSystem Level integrity checks, bake issue detection
        ├─ HFGridSystem      Grid rendering and follow mode
        ├─ HFVisgroupSystem  Named visibility groups + brush grouping
        ├─ HFCarveSystem     Boolean-subtract carve (progressive-remainder slicing)
        ├─ HFIOVisualizer    Entity I/O connection lines in viewport (curved, color-coded, highlight pulse)
        ├─ HFIOPresets       Reusable I/O connection presets (built-in + user-saved)
-       ├─ HFSnapSystem      Grid / Vertex / Center snap with threshold
+       ├─ HFSnapSystem      Grid / Vertex / Center snap + custom reference lines
        ├─ HFSubtractPreview Wireframe AABB intersection overlay for subtract brushes
        ├─ HFVertexSystem    Vertex/edge selection, move, split, merge with convexity validation
        ├─ HFSpawnSystem     Player spawn lookup, validation, auto-fix, debug visualisation
+       ├─ HFPrefabSystem    Instance registry, variant cycling, live-linked propagation
        └─ HFToolRegistry    External tool loading and dispatch
             ├─ HFMeasureTool   Multi-ruler measurement + snap reference (tool_id=100)
             ├─ HFDecalTool     Decal placement with live preview (tool_id=101)
@@ -246,7 +256,7 @@ Key design choices:
 - **Transactions** -- atomic multi-step operations (hollow, clip) with rollback on failure
 - **HFOpResult** -- failable operations return structured results with actionable fix hints
 - **HFGesture** -- base class for self-contained input tool gestures
-- **Explicit state machine** -- `HFInputState` manages IDLE / DRAG_BASE / DRAG_HEIGHT / SURFACE_PAINT / EXTRUDE modes
+- **Explicit state machine** -- `HFInputState` manages IDLE / DRAG_BASE / DRAG_HEIGHT / SURFACE_PAINT / EXTRUDE / VERTEX_EDIT modes
 - **Type-safe calls** -- no duck-typing between modules (dynamic dispatch only in undo/redo by design)
 
 ---
@@ -279,25 +289,27 @@ See [Install + Upgrade](docs/HammerForge_Install_Upgrade.md) for upgrade steps a
 
 ## Keyboard Shortcuts
 
-All shortcuts are rebindable via `user://hammerforge_keymap.json`.
+Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`. Tool-specific keys (M, N, P, ;, A, Ctrl+Shift+P) are defined by their respective tools and not yet keymap-backed.
 
 | Key | Action | | Key | Action |
 |-----|--------|-|-----|--------|
-| D | Draw tool | | B | Brush (paint) |
-| S | Select tool | | E | Erase (paint) |
-| U | Extrude Up | | R | Rect (paint) |
-| J | Extrude Down | | L | Line (paint) |
-| Ctrl+H | Hollow | | K | Bucket (paint) |
-| Shift+X | Clip | | Ctrl+G | Group selection |
-| Ctrl+Shift+R | Carve | | Ctrl+U | Ungroup |
-| Ctrl+Shift+F | Move to Floor | | M | Measure tool (multi-ruler) |
-| Ctrl+Shift+C | Move to Ceiling | | N | Decal tool |
-| V | Vertex mode | | P | Polygon tool |
-| E | Edge sub-mode (in vertex) | | ; | Path tool |
-| Ctrl+E | Split edge | | Ctrl+W | Merge vertices |
-| T | Texture Picker | | ? | Shortcuts popup |
+| D * | Draw tool | | B * | Brush (paint) |
+| S * | Select tool | | E * | Erase (paint) |
+| U * | Extrude Up | | R * | Rect (paint) |
+| J * | Extrude Down | | L * | Line (paint) |
+| Ctrl+H * | Hollow | | K * | Bucket (paint) |
+| Shift+X * | Clip | | Ctrl+G * | Group selection |
+| Ctrl+Shift+R * | Carve | | Ctrl+U * | Ungroup |
+| Ctrl+Shift+F * | Move to Floor | | M | Measure tool (multi-ruler) |
+| Ctrl+Shift+C * | Move to Ceiling | | N | Decal tool |
+| V * | Vertex mode | | P | Polygon tool |
+| E * | Edge sub-mode (in vertex) | | ; | Path tool |
+| Ctrl+E * | Split edge | | Ctrl+W * | Merge vertices |
+| T * | Texture Picker | | ? | Shortcuts popup |
 | Shift+? / F1 / Ctrl+K | Command palette | | Ctrl+Shift+T | Operation timeline |
-| X / Y / Z | Axis lock | | | |
+| Shift+S * | Select Similar | | Shift+T * | Apply Last Texture |
+| Shift+F * | Selection Filters | | Ctrl+Shift+P | Quick group-to-prefab |
+| X / Y / Z * | Axis lock | | A | Align mode (measure) |
 
 ---
 
@@ -351,16 +363,13 @@ See [ROADMAP.md](ROADMAP.md) for the full plan.
 
 **Recently shipped:**
 - Quality-of-Life & Polish (theme sync, undo history browser, multi-ruler measure tool, performance monitor, export playtest)
+- Terrain & Organic Enhancements (brush-to-heightmap, foliage scatter, path tool extras)
 - Learning & Discovery Aids (coach marks, operation replay timeline, fuzzy command palette, example library)
 - I/O Connections & Entity Polish (curved auto-routed lines, connection presets, wiring panel, Highlight Connected)
 - Bake & Quick Play optimizations (Bake Selected, Bake Changed, preview modes, Play from Camera, Play Selected Area)
-- Prefab variants, live-linked prefabs, quick group-to-prefab
+- Prefab & Group Enhancements (variants, live-linked, tags/search, quick group-to-prefab)
 - Improved selection & multi-select (marquee, selection filters, Select Similar, Apply Last Texture)
-- Smart contextual toolbar + command palette
-- Visual material browser with thumbnail grid, search, pattern/color filters, favorites, and hover preview
-- Vertex editing enhancements (edge sub-mode, split, merge, wireframe overlay)
-- Polygon tool (click convex vertices, extrude to brush)
-- Path tool (waypoints, rectangular cross-section, miter joints)
+- Smart contextual toolbar + command palette with fuzzy search
 
 **Next up:**
 - Displacement sewing (stitch adjacent heightmap edges)
@@ -372,6 +381,19 @@ See [ROADMAP.md](ROADMAP.md) for the full plan.
 - Snap-to-edge and snap-to-perpendicular modes
 - Multiple simultaneous cordons
 - Preference packs for one-click workflow presets
+
+---
+
+## Help Wanted
+
+This is a one-person project and there's more here than one person can properly test. If you try HammerForge and something breaks, **please open an issue** -- even a one-liner like "Hollow crashed on a cylinder" is helpful. Specific areas where help would make a real difference:
+
+- **Bug reports** -- the test suite covers a lot, but editor-context bugs are hard to catch headless
+- **Playtesting** -- try the workflows (draw, bake, quick play) and report what feels broken or confusing
+- **Edge cases** -- large levels, unusual brush shapes, rapid undo/redo, plugin reload cycles
+- **Documentation** -- if something in the user guide doesn't match reality, flag it
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to get started.
 
 ---
 
@@ -410,5 +432,5 @@ Run `godot --headless --import --path .` first, then re-run the test command.
 
 <p align="center">
   <strong>MIT License</strong><br>
-  <sub>Built for Godot 4.6+ | Last updated April 4, 2026</sub>
+  <sub>Built for Godot 4.6+ | Last updated April 5, 2026</sub>
 </p>

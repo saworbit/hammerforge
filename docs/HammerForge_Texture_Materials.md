@@ -133,7 +133,7 @@ When to use:
 Paint weights are stored as embedded PNG bytes (base64) per layer.
 
 ## Known Limitations
-- Face selection is per-brush and does not support lasso/marquee selection.
+- Face selection supports marquee/box selection across multiple brushes (added in the Improved Selection & Multi-Select wave). Lasso selection is not supported.
 - Face-material bake ignores subtract/pending cuts.
 - Surface paint is per-face and does not share weights across faces.
 - Preview materials are rebuilt per face and can be heavy on very large brush counts.
