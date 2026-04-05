@@ -103,7 +103,7 @@ Geometry-aware snapping goes beyond a simple grid:
 | Vertex | V | Corners of existing brushes (8 per box) |
 | Center | C | Center points of existing brushes |
 
-Closest candidate within threshold wins. Modes combine freely. The Measure tool can set a **custom snap reference line** (right-click a ruler) for alignment along arbitrary axes. **Texture Lock** preserves UV alignment when moving or resizing. **Move to Floor/Ceiling** (Ctrl+Shift+F/C) raycasts to snap brushes vertically. **UV Justify** offers fit/center/left/right/top/bottom alignment for selected faces.
+Closest candidate within threshold wins. Modes combine freely. The Measure tool can set a **custom snap reference line** (right-click a ruler) for alignment along arbitrary axes. **Texture Lock** preserves UV alignment when moving or resizing. **Move to Floor/Ceiling** (Ctrl+Shift+F/C) raycasts to snap brushes vertically. **UV Justify** offers fit/center/left/right/top/bottom/stretch/tile alignment for selected faces.
 
 ### Paint Floors and Terrain
 

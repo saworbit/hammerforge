@@ -98,6 +98,13 @@ Enable the HammerForge plugin if it is not already enabled.
 - Move or resize either brush; confirm the preview updates.
 - Toggle `Subtract Preview` off; confirm the wireframe is removed.
 
+### 7b. Carve UV Preservation
+- Apply a distinct grid texture to a large additive brush.
+- Place a smaller brush overlapping the textured brush.
+- Carve (Ctrl+Shift+R) the small brush. Confirm the carver is deleted and the target splits into slice pieces.
+- Inspect each surviving slice: confirm the grid texture is aligned with the original — no visible seams or jumps at slice boundaries.
+- Undo the carve; confirm the original brush and carver are restored.
+
 ### 8. Vertex Editing (Edge Sub-Mode)
 - Select a brush and enter vertex mode (V key or the V toggle button in the toolbar).
 - Confirm vertex crosses and edge wireframe lines appear on the brush.
@@ -194,6 +201,8 @@ Enable the HammerForge plugin if it is not already enabled.
 - Right-click to cancel the drag. Confirm the toolbar returns to Draw idle context.
 - Enable Face Select Mode. Select one or more faces. Confirm the toolbar shows face count, UV justify buttons, and "All" (Apply to Whole Brush) button.
 - Click a justify button (e.g. "Fit"); confirm UV justify applies to selected faces.
+- Click "Stretch"; confirm UVs fill 0..1 on both axes (non-uniform).
+- Click "Tile" on a non-square face; confirm the shorter axis fills 0..1 and the longer axis tiles.
 - Enter Vertex mode (V key). Confirm the toolbar shows Vtx/Edge/Merge/Split/Exit buttons.
 - Click "Exit"; confirm vertex mode is deactivated.
 - Select an entity (if available). Confirm the toolbar shows "1 entity" with I/O and Props buttons.

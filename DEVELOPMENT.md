@@ -161,6 +161,8 @@ addons/hammerforge/
 - **Context hints.** Per-tab hint labels at the bottom of each dock tab update via `_update_context_hints()` in `dock.gd`. Driven by `_hints_dirty` flag alongside `_update_disabled_hints()`.
 - **Face hover highlight.** `level_root.highlight_hovered_face(camera, mouse_pos, color)` performs a FaceSelector raycast and renders a semi-transparent overlay on the hit face. Used by `plugin.gd` in extrude mode when idle. Call `clear_face_hover_highlight()` when switching tools.
 - **Undo/redo stability.** Prefer brush IDs and `create_brush_from_info()` for undo instead of storing Node references in history.
+- **UV transform order.** `FaceData._apply_uv_transform()` applies transforms as **rotate → scale → offset** (matching Valve 220 convention). The older order (scale+offset → rotate) is preserved in `_apply_uv_transform_v0()` solely for migrating legacy data on load. New code should never use the v0 order. When serializing, `to_dict()` writes `uv_format_version: 1` and `from_dict()` auto-migrates version 0 data.
+- **Carve UV preservation.** `HFCarveSystem._copy_uv_settings_to_piece()` copies UV parameters from the original target brush to each carved slice and compensates the UV offset for the position difference. The compensation formula is `O_new = O_old + delta_2d.rotated(R) * S` where `delta_2d` is the projected position delta between the original and slice centers.
 - **Bake owner assignment.** Use `_assign_owner_recursive()` (not `_assign_owner()`) for baked geometry so all descendants get proper editor ownership. Always call it *after* the container is added to the scene tree.
 - **Shader files.** Prefer standalone `.gdshader` files over inline GLSL strings in GDScript (e.g. `highlight.gdshader` for the selection wireframe shader). Use `preload("file.gdshader")` to load them.
 - **Customizable keymaps.** All keyboard shortcuts go through `_keymap.matches("action_name", event)` instead of hardcoded `event.keycode == KEY_*` checks. Default bindings are defined in `HFKeymap._default_bindings()`. Users can override via `user://hammerforge_keymap.json`. Toolbar labels pull display strings from the keymap.
@@ -211,7 +213,7 @@ Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framewor
 | `test_clip_tool.gd` | 16 | Axis splitting (X/Y/Z), size correctness, property preservation (material, visgroups, group_id, brush_entity_class), edge rejection |
 | `test_brush_entity.gd` | 16 | Tie/untie entity classes, structural brush filtering, bake collection exclusion, brush info round-trip |
 | `test_entity_io.gd` | 21 | Entity I/O CRUD (add/remove/get outputs), find by name, get_all_connections, serialization, default values |
-| `test_justify_uv.gd` | 10 | UV justify modes (fit/center/left/right/top/bottom), zero-range safety, offset accumulation |
+| `test_justify_uv.gd` | 10 | UV justify modes (fit/center/left/right/top/bottom/stretch/tile), zero-range safety, offset accumulation |
 | `test_brush_info_roundtrip.gd` | 19 | Brush info capture/restore with visgroups, group_id, brush_entity_class, material, move floor/ceiling argument safety |
 | `test_face_data.gd` | 15 | FaceData to_dict/from_dict round-trip, ensure_geometry, triangulate, box_projection_axis |
 | `test_paint_layer.gd` | 32 | Cell bit storage, chunk management, material IDs, blend weights, dirty tracking, heightmap, memory |
@@ -320,6 +322,12 @@ Texture Lock
 - Resize the brush via gizmo -- confirm UV alignment stays consistent.
 - Move the brush -- confirm UVs track the movement.
 - Disable Texture Lock and resize -- confirm UVs shift with the resize.
+
+Carve UV Preservation
+- Apply a grid texture to a large brush.
+- Place a smaller brush overlapping it and carve (Ctrl+Shift+R).
+- Inspect surviving slices -- confirm textures are seamless across slice boundaries.
+- Undo -- confirm original state restored.
 
 Cordon (Partial Bake)
 - Enable cordon in the Manage tab.

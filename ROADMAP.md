@@ -8,7 +8,7 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 ## Done (Wave 1 -- Hammer-Inspired Quick Wins)
 - Visgroups (visibility groups) with per-group show/hide and dock UI.
 - Brush/entity grouping with Ctrl+G/U and group-aware selection.
-- Texture lock (UV alignment preserved on move/resize).
+- Texture lock (UV alignment preserved on move/resize/rotation).
 - Cordon (partial bake) with AABB filter and wireframe visualization.
 - GUT unit test suite (47 tests) with CI integration.
 
@@ -38,7 +38,7 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - Hollow tool (convert solid brush to hollow room with configurable wall thickness). Ctrl+H.
 - Numeric input during drag (precise dimensions while drawing or extruding).
 - Brush entity conversion (Tie to Entity / Untie): tag brushes as func_detail, trigger volumes, func_wall, etc.
-- Texture alignment panel: Justify (Fit/Center/Left/Right/Top/Bottom), Treat-as-One for multi-face.
+- Texture alignment panel: Justify (Fit/Center/Left/Right/Top/Bottom/Stretch/Tile), Treat-as-One for multi-face.
 - Move to Floor / Move to Ceiling (snap selection to nearest surface below/above). Ctrl+Shift+F/C.
 
 ## Done (Wave 2b -- Structural Tools)
@@ -110,7 +110,7 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - Terrain sculpting brushes (Raise/Lower/Smooth/Flatten, configurable strength/radius/falloff).
 - Dock decomposition into 4 tab builder files (paint, entity, manage, selection tools).
 - Baker test coverage (18 tests covering all public methods and structural filtering).
-- Carve tool (HFCarveSystem, progressive-remainder box slicing, Ctrl+Shift+R).
+- Carve tool (HFCarveSystem, progressive-remainder box slicing, Ctrl+Shift+R, UV-preserving slice pieces).
 - Decal/overlay system (HFDecalTool, tool_id=101, N key, raycast placement, live preview).
 - Integration test suite (22 end-to-end tests across 8 categories).
 - 99 new tests. Total: **512 tests across 30 files**.

@@ -1,6 +1,6 @@
 # HammerForge Texture and Materials
 
-Last updated: March 28, 2026
+Last updated: April 5, 2026
 
 This document describes the per-face material system, UV editing tools, and surface paint workflow.
 
@@ -17,8 +17,9 @@ Face data lives on each DraftBrush in `faces` and is serialized into `.hflevel`.
 
 - `material_idx`: Index into `MaterialManager.materials`.
 - `uv_projection`: Projection enum (planar X/Y/Z, box, cylindrical).
-- `uv_scale`, `uv_offset`, `uv_rotation`: Projection transform.
+- `uv_scale`, `uv_offset`, `uv_rotation`: Projection transform. Transform order: rotate → scale → offset (matches Valve 220 convention).
 - `custom_uvs`: Optional explicit UVs (per vertex).
+- `uv_format_version`: Serialization version (1 = current). Old data (version 0) used a different transform order and is auto-migrated on load.
 - `paint_layers`: Array of paint layers.
 
 Paint layer fields:
@@ -132,6 +133,16 @@ When to use:
 
 Paint weights are stored as embedded PNG bytes (base64) per layer.
 
+## UV Transform Order
+The UV transform is applied as: **rotate → scale → offset** (matching Valve 220 convention). This means `uv_rotation` rotates the raw projected UV around the origin, then `uv_scale` is applied, then `uv_offset` shifts the result. This order ensures that offset values are stable regardless of rotation.
+
+Serialized face data includes `uv_format_version`. Version 0 (legacy) used a different order (scale+offset → rotate). On load, legacy data is auto-migrated:
+- **Uniform scale** (sx == sy): offset is rotated to match the new semantics.
+- **Non-uniform scale with rotation**: UVs are baked into `custom_uvs` using the old transform, then parametric transforms are cleared.
+
+## Carve and UV Preservation
+When a brush is carved (boolean subtracted), the resulting slice pieces inherit UV settings from the original target brush. Each slice face is matched to the closest source face by normal direction, copying `uv_scale`, `uv_offset`, `uv_rotation`, and `material_idx`. The UV offset is compensated for the positional difference between the original brush center and the slice center, ensuring textures remain aligned across all surviving faces. Slice faces use BOX_UV projection to auto-select the correct planar axis.
+
 ## Known Limitations
 - Face selection supports marquee/box selection across multiple brushes (added in the Improved Selection & Multi-Select wave). Lasso selection is not supported.
 - Face-material bake ignores subtract/pending cuts.
@@ -158,3 +169,6 @@ Paint weights are stored as embedded PNG bytes (base64) per layer.
 - Paint two layers and confirm blend behavior.
 - Save and load `.hflevel` and verify face data is restored.
 - Toggle `Use Face Materials` and compare bake output.
+- Apply a rotated texture (non-zero `uv_rotation`), save, reload, and confirm texture alignment is preserved.
+- Carve a textured brush and confirm slice pieces retain the original texture alignment.
+- Use Tile justify on a non-square face and confirm the texture tiles along the longer axis.

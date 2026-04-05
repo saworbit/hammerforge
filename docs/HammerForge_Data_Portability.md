@@ -1,6 +1,6 @@
 ﻿# HammerForge Data Portability
 
-Last updated: March 27, 2026
+Last updated: April 5, 2026
 
 This document describes how to move data in and out of HammerForge safely.
 
@@ -8,6 +8,7 @@ This document describes how to move data in and out of HammerForge safely.
 - `.hflevel` files are the canonical save format for brushes, paint layers, materials, entities, and settings.
 - When region streaming is enabled, per-region paint data is stored in a sibling `<level>.hfregions/` folder.
 - Files include a version field and default missing keys on load for backward compatibility.
+- Per-face UV data includes `uv_format_version` (current: 1). Legacy data (version 0, pre-April 2026) used a different UV transform order (scale+offset before rotation). On load, legacy faces are auto-migrated: uniform-scale faces get their offset adjusted; non-uniform-scale faces with rotation are baked to `custom_uvs`. No manual intervention is needed.
 - Autosaves write to `res://.hammerforge/autosave.hflevel` by default.
 - Store `.hflevel` in version control for reliable recovery.
 

@@ -105,7 +105,7 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 - **Clip** (Shift+X): splits a brush along an axis-aligned plane. Preserves material, entity class, visgroups, group ID.
 - **Tie/Untie**: tag brushes as brush entity classes (`func_detail`, `func_wall`, `trigger_once`, `trigger_multiple`). Tagged brushes get color-coded overlays and may be excluded from structural bake.
 - **Move to Floor/Ceiling** (Ctrl+Shift+F/C): raycasts against other brush AABBs to snap vertically.
-- **UV Justify**: fit/center/left/right/top/bottom alignment for selected faces.
+- **UV Justify**: fit/center/left/right/top/bottom/stretch/tile alignment for selected faces.
 
 ### Persistence (`HFFileSystem` + `HFStateSystem`)
 - `HFStateSystem` captures and restores brush/entity/paint/settings state for undo/redo.

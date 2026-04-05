@@ -75,6 +75,7 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 		)
 		var target_group_id: String = str(target_draft.get_meta("group_id", ""))
 		var target_bec: String = str(target_draft.get_meta("brush_entity_class", ""))
+		var target_faces: Array = target_draft.faces
 
 		# Build up to 6 slices around the carved-out region
 		var slices: Array = _compute_slices(target_pos, target_size, carver_pos, carver_size)
@@ -99,6 +100,8 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 					piece.set_meta("group_id", target_group_id)
 				if target_bec != "":
 					piece.set_meta("brush_entity_class", target_bec)
+				var slice_center: Vector3 = slice_info.get("center", Vector3.ZERO)
+				_copy_uv_settings_to_piece(piece, target_faces, target_pos, slice_center)
 				total_pieces += 1
 
 		targets_carved += 1
@@ -241,6 +244,60 @@ func _find_overlapping_brushes(exclude_id: String, aabb: AABB) -> Array:
 		if aabb.intersects(node_aabb):
 			result.append(draft)
 	return result
+
+
+## Copy UV settings from the original target's faces to a carved slice piece.
+## Each new face gets BOX_UV projection and inherits UV scale/offset/rotation
+## from the best-matching original face (matched by normal direction).
+## Compensates UV offset for the positional difference between the original
+## brush center and the slice center so textures stay aligned.
+func _copy_uv_settings_to_piece(
+	piece: Node, target_faces: Array, target_pos: Vector3, slice_center: Vector3
+) -> void:
+	if not (piece is DraftBrush):
+		return
+	var draft := piece as DraftBrush
+	if draft.faces.is_empty() or target_faces.is_empty():
+		return
+	var pos_delta: Vector3 = slice_center - target_pos
+	for face in draft.faces:
+		if face == null:
+			continue
+		face.uv_projection = FaceData.UVProjection.BOX_UV
+		var best_face: FaceData = null
+		var best_dot: float = -2.0
+		for src_face in target_faces:
+			if src_face == null:
+				continue
+			var d: float = face.normal.dot(src_face.normal)
+			if d > best_dot:
+				best_dot = d
+				best_face = src_face
+		if best_face:
+			face.uv_scale = best_face.uv_scale
+			face.uv_rotation = best_face.uv_rotation
+			face.material_idx = best_face.material_idx
+			# Compensate offset for the slice's different position in world space.
+			# The slice center moved by pos_delta, so each face's local vertices
+			# shift by -pos_delta, making projected UVs: uv_new = uv_old - delta_2d.
+			# Under new transform order uv.rotated(R)*S + O, solving for O_new:
+			#   O_new = O_old + delta_2d.rotated(R) * S
+			var resolved_proj: int = best_face.uv_projection
+			if resolved_proj == FaceData.UVProjection.BOX_UV:
+				resolved_proj = face._box_projection_axis()
+			var delta_2d := Vector2.ZERO
+			match resolved_proj:
+				FaceData.UVProjection.PLANAR_X:
+					delta_2d = Vector2(pos_delta.z, pos_delta.y)
+				FaceData.UVProjection.PLANAR_Y:
+					delta_2d = Vector2(pos_delta.x, pos_delta.z)
+				FaceData.UVProjection.PLANAR_Z:
+					delta_2d = Vector2(pos_delta.x, pos_delta.y)
+			var rotated_delta: Vector2 = delta_2d
+			if best_face.uv_rotation != 0.0:
+				rotated_delta = delta_2d.rotated(best_face.uv_rotation)
+			face.uv_offset = best_face.uv_offset + rotated_delta * best_face.uv_scale
+	draft.rebuild_preview()
 
 
 func _op_fail(msg: String, hint: String = "") -> HFOpResult:

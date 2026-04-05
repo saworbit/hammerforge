@@ -5,6 +5,31 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **UV transform order corrected** (Apr 2026): `_apply_uv_transform()` in `face_data.gd` previously
+  applied rotation after scale+offset (`(uv * scale + offset).rotated(R)`), which rotated the offset
+  and caused texture drift when combining rotation with offset. Now applies rotation first
+  (`uv.rotated(R) * scale + offset`), matching Valve 220 convention. Includes v0→v1 migration in
+  `from_dict()`: uniform-scale faces get offset adjusted; non-uniform-scale+rotated faces are baked
+  to `custom_uvs`. `to_dict()` now writes `uv_format_version: 1`.
+- **Carve UV preservation** (Apr 2026): `hf_carve_system.gd` carved slice pieces previously lost all
+  UV settings from the original brush, defaulting to PLANAR_Z with no offset. `_copy_uv_settings_to_piece()`
+  now matches each slice face to the best source face by normal dot product, copies `uv_scale`,
+  `uv_offset`, `uv_rotation`, and `material_idx`, sets BOX_UV projection, and compensates the UV
+  offset for the positional difference between the original brush center and the slice center so
+  textures remain aligned across all surviving faces.
+- **Tile justify mode fixed** (Apr 2026): The "tile" UV justify mode in `hf_brush_system.gd` was using
+  `1.0 / max(axis)` which fit the larger axis to 1.0 (letterbox behavior). Now uses `1.0 / min(axis)`
+  so the shorter axis fills 0..1 and the longer axis tiles past 1.0, preserving aspect ratio.
+
+### Added
+- **Stretch and Tile UV justify modes** (Apr 2026): `hf_brush_system.gd` `_justify_face()` now
+  supports "stretch" (non-uniform scale to fill 0..1 on both axes) and "tile" (uniform scale so the
+  shorter axis fills 0..1, longer axis tiles, centered). Available via context toolbar and dock UI.
+- **Rotation texture lock support** (Apr 2026): `face_data.gd` gains `adjust_uvs_for_rotation(angle_rad)`
+  which counter-rotates the UV rotation parameter and clears cached UVs. `hf_brush_system.gd` gains
+  `_adjust_face_uvs_for_rotation(draft, angle_rad)` wrapper. Ready to wire into future brush rotation
+  features (brushes are currently axis-aligned).
+
 - **Signal disconnection leaks in plugin.gd** (Apr 2026): 10 signals connected in `_enter_tree()`
   (context toolbar ×5, hotkey palette ×1, selection filter ×1, dock ×3) were missing corresponding
   disconnections in `_exit_tree()`. This caused duplicate signal handlers after plugin reload cycles,

@@ -68,6 +68,13 @@ func adjust_uvs_for_transform(pos_delta: Vector3, size_ratio: Vector3) -> void:
 		uv_scale *= inv_size
 
 
+func adjust_uvs_for_rotation(angle_rad: float) -> void:
+	if uv_projection == UVProjection.CYLINDRICAL:
+		return
+	uv_rotation -= angle_rad
+	custom_uvs = PackedVector2Array()
+
+
 func triangulate() -> Dictionary:
 	var tri_verts := PackedVector3Array()
 	var tri_uvs := PackedVector2Array()
@@ -171,6 +178,7 @@ func to_dict() -> Dictionary:
 		"uv_scale": _encode_vec2(uv_scale),
 		"uv_offset": _encode_vec2(uv_offset),
 		"uv_rotation": uv_rotation,
+		"uv_format_version": 1,
 		"custom_uvs": _encode_vec2_array(custom_uvs),
 		"local_verts": _encode_vec3_array(local_verts),
 		"normal": _encode_vec3(normal),
@@ -214,6 +222,27 @@ static func from_dict(data: Dictionary) -> FaceData:
 			layer.ensure_weight_image(Vector2i(w, h))
 		face.paint_layers.append(layer)
 	face.ensure_geometry()
+	# Migrate v0 UV data: old order was (uv * scale + offset).rotated(R),
+	# new order is uv.rotated(R) * scale + offset. Only affects faces with
+	# non-zero rotation.
+	var uv_fmt: int = int(data.get("uv_format_version", 0))
+	if uv_fmt < 1 and face.uv_rotation != 0.0:
+		if is_equal_approx(face.uv_scale.x, face.uv_scale.y):
+			# Uniform scale: rotation commutes with scale, only offset changes.
+			# Old: rotate(uv*s + O, R) = rotate(uv,R)*s + rotate(O,R)
+			face.uv_offset = face.uv_offset.rotated(face.uv_rotation)
+		else:
+			# Non-uniform scale: can't represent with same params. Bake UVs
+			# using old transform order, then clear parametric transforms.
+			if face.local_verts.size() >= 3 and face.custom_uvs.size() != face.local_verts.size():
+				face.custom_uvs = face._project_uvs_v0(face.local_verts)
+			elif face.custom_uvs.size() == face.local_verts.size():
+				# custom_uvs were already baked with old transform — re-apply
+				# the old rotation that was previously baked in at save time.
+				pass  # custom_uvs are already correct from the old save
+			face.uv_rotation = 0.0
+			face.uv_scale = Vector2.ONE
+			face.uv_offset = Vector2.ZERO
 	return face
 
 
@@ -295,9 +324,47 @@ func _project_uvs_for_vertices(verts: PackedVector3Array) -> PackedVector2Array:
 
 
 func _apply_uv_transform(uv: Vector2) -> Vector2:
+	var out = uv
+	if uv_rotation != 0.0:
+		out = out.rotated(uv_rotation)
+	out = out * uv_scale + uv_offset
+	return out
+
+
+## Old (v0) transform order: scale+offset first, then rotate.
+## Used only for migrating persisted data from before uv_format_version 1.
+func _apply_uv_transform_v0(uv: Vector2) -> Vector2:
 	var out = uv * uv_scale + uv_offset
 	if uv_rotation != 0.0:
 		out = out.rotated(uv_rotation)
+	return out
+
+
+## Project UVs using the old (v0) transform order for migration.
+func _project_uvs_v0(verts: PackedVector3Array) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	var projection = uv_projection
+	if projection == UVProjection.BOX_UV:
+		projection = _box_projection_axis()
+	var aabb = _compute_bounds_for(verts)
+	var height = max(0.001, aabb.size.y)
+	for v in verts:
+		var uv = Vector2.ZERO
+		match projection:
+			UVProjection.PLANAR_X:
+				uv = Vector2(v.z, v.y)
+			UVProjection.PLANAR_Y:
+				uv = Vector2(v.x, v.z)
+			UVProjection.PLANAR_Z:
+				uv = Vector2(v.x, v.y)
+			UVProjection.CYLINDRICAL:
+				var angle = atan2(v.z, v.x) / TAU + 0.5
+				var vcoord = (v.y - aabb.position.y) / height
+				uv = Vector2(angle, vcoord)
+			_:
+				uv = Vector2(v.x, v.y)
+		uv = _apply_uv_transform_v0(uv)
+		out.append(uv)
 	return out
 
 

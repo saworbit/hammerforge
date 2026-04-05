@@ -613,6 +613,13 @@ func _adjust_face_uvs_for_transform(
 		face.adjust_uvs_for_transform(pos_delta, size_ratio)
 
 
+func _adjust_face_uvs_for_rotation(draft: DraftBrush, angle_rad: float) -> void:
+	for face in draft.faces:
+		if face == null:
+			continue
+		face.adjust_uvs_for_rotation(angle_rad)
+
+
 func _refresh_brush_previews() -> void:
 	for node in root._iter_pick_nodes():
 		if node is DraftBrush:
@@ -1354,6 +1361,28 @@ func _justify_face(face: FaceData, mode: String, uv_min: Vector2, uv_max: Vector
 		"bottom":
 			var shift_y = 1.0 - uv_max.y
 			face.uv_offset.y += shift_y
+			face.custom_uvs = PackedVector2Array()
+		"stretch":
+			# Scale UVs to exactly fill 0..1, stretching non-uniformly
+			var scale_x = 1.0 / uv_size.x if uv_size.x > 0.0001 else 1.0
+			var scale_y = 1.0 / uv_size.y if uv_size.y > 0.0001 else 1.0
+			face.uv_scale = Vector2(face.uv_scale.x * scale_x, face.uv_scale.y * scale_y)
+			face.uv_offset = Vector2(
+				-uv_min.x * scale_x + face.uv_offset.x * scale_x,
+				-uv_min.y * scale_y + face.uv_offset.y * scale_y
+			)
+			face.custom_uvs = PackedVector2Array()
+		"tile":
+			# Scale UVs uniformly so the shorter axis fills 0..1, preserving aspect ratio
+			# (the longer axis exceeds 1.0 and tiles)
+			var min_dim: float = minf(uv_size.x, uv_size.y)
+			var scale_uniform = 1.0 / min_dim if min_dim > 0.0001 else 1.0
+			face.uv_scale = face.uv_scale * scale_uniform
+			var new_min = uv_min * scale_uniform
+			var new_max = uv_max * scale_uniform
+			var new_center = (new_min + new_max) * 0.5
+			var shift = Vector2(0.5, 0.5) - new_center
+			face.uv_offset = face.uv_offset * scale_uniform + shift
 			face.custom_uvs = PackedVector2Array()
 
 
