@@ -5,6 +5,14 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **Inside-out face rendering** (Apr 2026): Manually-defined brush faces (`_build_box_faces()`, polygon
+  tool, path tool) used CCW vertex winding, which Godot 4's CW front-face convention treated as
+  back-facing. Textures appeared on the inside of brushes. Fixed by reversing vertex order to CW in all
+  three face generators and swapping the cross-product in `_compute_normal()` (`(c-a).cross(b-a)` instead
+  of `(b-a).cross(c-a)`) so `ensure_geometry()` naturally produces outward normals for CW-wound faces.
+  Includes `winding_version` serialization field and centroid-based load-time migration in
+  `apply_serialized_faces()` so existing `.hflevel` and `.hfprefab` saves render correctly without
+  manual intervention.
 - **Index rebasing in merged geometry** (Apr 2026): `baker.gd _concat_surface_arrays()` appended
   `ARRAY_INDEX` buffers without rebasing by the running vertex count, corrupting triangles when
   merging indexed surfaces. Also failed when mixing indexed and non-indexed surfaces (first non-indexed
@@ -69,9 +77,14 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   preserving per-face materials through the bake pipeline.
 - **HFUndoHelper 4/5-arg support** (Apr 2026): `undo_helper.gd` `commit()` now handles methods with
   up to 5 arguments (was limited to 3), enabling undo for `set_face_uv_params()` and similar.
-- 27 new tests: mixed indexed/non-indexed concat (5), recursive preview on chunks (5), UV-history
-  collation (8), >5-arg collation (1), baker material preservation (10). Total: **1118 tests across
-  67 files**.
+- **Face winding migration** (Apr 2026): `to_dict()` now writes `winding_version: 1`. On load,
+  `apply_serialized_faces()` detects v0 data and runs `_migrate_face_winding()`, which computes the
+  brush centroid and reverses any face whose normal points inward. This correctly handles both old CCW
+  manual faces (reversed to CW) and old CW mesh-extracted faces (left unchanged). No manual
+  intervention is needed for existing saves.
+- 29 new tests: mixed indexed/non-indexed concat (5), recursive preview on chunks (5), UV-history
+  collation (8), >5-arg collation (1), baker material preservation (10), winding migration v0→v1 (1),
+  winding round-trip v1 (1). Total: **1120 tests across 67 files**.
 
 - **UV transform order corrected** (Apr 2026): `_apply_uv_transform()` in `face_data.gd` previously
   applied rotation after scale+offset (`(uv * scale + offset).rotated(R)`), which rotated the offset

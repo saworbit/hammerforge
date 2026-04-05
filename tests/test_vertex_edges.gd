@@ -48,19 +48,20 @@ func _make_box_brush(pos: Vector3, sz: Vector3, id: String) -> DraftBrush:
 	draft_node.add_child(b)
 	b.global_position = pos
 	var half = sz * 0.5
+	# CW winding from outside (matches _build_box_faces in production code)
 	var quads = [
-		[Vector3(half.x, -half.y, -half.z), Vector3(half.x, half.y, -half.z),
-		 Vector3(half.x, half.y, half.z), Vector3(half.x, -half.y, half.z)],
-		[Vector3(-half.x, -half.y, half.z), Vector3(-half.x, half.y, half.z),
-		 Vector3(-half.x, half.y, -half.z), Vector3(-half.x, -half.y, -half.z)],
-		[Vector3(-half.x, half.y, -half.z), Vector3(-half.x, half.y, half.z),
-		 Vector3(half.x, half.y, half.z), Vector3(half.x, half.y, -half.z)],
-		[Vector3(-half.x, -half.y, half.z), Vector3(-half.x, -half.y, -half.z),
-		 Vector3(half.x, -half.y, -half.z), Vector3(half.x, -half.y, half.z)],
-		[Vector3(-half.x, -half.y, half.z), Vector3(half.x, -half.y, half.z),
-		 Vector3(half.x, half.y, half.z), Vector3(-half.x, half.y, half.z)],
-		[Vector3(-half.x, half.y, -half.z), Vector3(half.x, half.y, -half.z),
-		 Vector3(half.x, -half.y, -half.z), Vector3(-half.x, -half.y, -half.z)]
+		[Vector3(half.x, -half.y, half.z), Vector3(half.x, half.y, half.z),
+		 Vector3(half.x, half.y, -half.z), Vector3(half.x, -half.y, -half.z)],
+		[Vector3(-half.x, -half.y, -half.z), Vector3(-half.x, half.y, -half.z),
+		 Vector3(-half.x, half.y, half.z), Vector3(-half.x, -half.y, half.z)],
+		[Vector3(half.x, half.y, -half.z), Vector3(half.x, half.y, half.z),
+		 Vector3(-half.x, half.y, half.z), Vector3(-half.x, half.y, -half.z)],
+		[Vector3(half.x, -half.y, half.z), Vector3(half.x, -half.y, -half.z),
+		 Vector3(-half.x, -half.y, -half.z), Vector3(-half.x, -half.y, half.z)],
+		[Vector3(-half.x, half.y, half.z), Vector3(half.x, half.y, half.z),
+		 Vector3(half.x, -half.y, half.z), Vector3(-half.x, -half.y, half.z)],
+		[Vector3(-half.x, -half.y, -half.z), Vector3(half.x, -half.y, -half.z),
+		 Vector3(half.x, half.y, -half.z), Vector3(-half.x, half.y, -half.z)]
 	]
 	var faces: Array[FaceData] = []
 	for quad in quads:

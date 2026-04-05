@@ -204,6 +204,73 @@ func test_serialize_empty_faces():
 
 
 # ===========================================================================
+# Winding migration: old-format (v0) face data loaded via apply_serialized_faces
+# ===========================================================================
+
+
+func test_v0_ccw_faces_migrated_to_cw_outward_normals():
+	# Simulate old-format saved faces: CCW winding from outside, no
+	# winding_version key.  After migration, normals should point outward.
+	brush.size = Vector3(32, 32, 32)
+	var half := brush.size * 0.5
+	# Old CCW quads (the original _build_box_faces winding)
+	var old_quads := [
+		[Vector3(half.x, -half.y, -half.z), Vector3(half.x, half.y, -half.z),
+		 Vector3(half.x, half.y, half.z), Vector3(half.x, -half.y, half.z)],
+		[Vector3(-half.x, -half.y, half.z), Vector3(-half.x, half.y, half.z),
+		 Vector3(-half.x, half.y, -half.z), Vector3(-half.x, -half.y, -half.z)],
+		[Vector3(-half.x, half.y, -half.z), Vector3(-half.x, half.y, half.z),
+		 Vector3(half.x, half.y, half.z), Vector3(half.x, half.y, -half.z)],
+		[Vector3(-half.x, -half.y, half.z), Vector3(-half.x, -half.y, -half.z),
+		 Vector3(half.x, -half.y, -half.z), Vector3(half.x, -half.y, half.z)],
+		[Vector3(-half.x, -half.y, half.z), Vector3(half.x, -half.y, half.z),
+		 Vector3(half.x, half.y, half.z), Vector3(-half.x, half.y, half.z)],
+		[Vector3(-half.x, half.y, -half.z), Vector3(half.x, half.y, -half.z),
+		 Vector3(half.x, -half.y, -half.z), Vector3(-half.x, -half.y, -half.z)]
+	]
+	# Build old-format dicts (no winding_version)
+	var old_data: Array = []
+	for quad in old_quads:
+		var face := FaceData.new()
+		face.local_verts = PackedVector3Array(quad)
+		var d := face.to_dict()
+		d.erase("winding_version")  # Simulate v0
+		old_data.append(d)
+	brush.apply_serialized_faces(old_data)
+	assert_eq(brush.faces.size(), 6, "Should load 6 faces")
+	# All normals should point outward (away from origin for a centered box)
+	var expected_dirs := [Vector3.RIGHT, Vector3.LEFT, Vector3.UP, Vector3.DOWN, Vector3.BACK, Vector3.FORWARD]
+	for i in range(brush.faces.size()):
+		var face: FaceData = brush.faces[i]
+		var face_center := Vector3.ZERO
+		for v in face.local_verts:
+			face_center += v
+		face_center /= float(face.local_verts.size())
+		var outward := face_center.normalized()
+		assert_true(
+			face.normal.dot(outward) > 0.5,
+			"Face %d normal should point outward, got %s vs expected ~%s" % [i, face.normal, outward]
+		)
+
+
+func test_v1_faces_not_double_migrated():
+	# New-format faces (winding_version=1) should pass through unchanged.
+	brush.size = Vector3(32, 32, 32)
+	var box_faces := brush._build_box_faces()
+	brush.faces = box_faces
+	var serialized := brush.serialize_faces()
+	var normals_before: Array[Vector3] = []
+	for face in brush.faces:
+		normals_before.append(face.normal)
+	brush.apply_serialized_faces(serialized)
+	for i in range(brush.faces.size()):
+		assert_true(
+			brush.faces[i].normal.is_equal_approx(normals_before[i]),
+			"Face %d normal should be unchanged after v1 round-trip" % i
+		)
+
+
+# ===========================================================================
 # Prism mesh generation (needs tree for full test, but we can test output)
 # ===========================================================================
 

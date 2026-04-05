@@ -44,9 +44,9 @@ func test_round_trip_custom_uvs():
 
 func test_round_trip_normal():
 	# from_dict calls ensure_geometry() which recomputes normal from local_verts.
-	# Normal for this triangle = cross((1,0,0), (0,1,0)) = (0,0,1)
+	# CW triangle (from +Z): cross((0,1,0)-(0,0,0), (1,0,0)-(0,0,0)) flipped = (0,0,1)
 	var face = FaceData.new()
-	face.local_verts = PackedVector3Array([Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(0, 1, 0)])
+	face.local_verts = PackedVector3Array([Vector3(0, 0, 0), Vector3(0, 1, 0), Vector3(1, 0, 0)])
 	face.ensure_geometry()
 	var data = face.to_dict()
 	var restored = FaceData.from_dict(data)

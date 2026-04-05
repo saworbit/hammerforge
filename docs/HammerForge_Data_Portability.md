@@ -1,6 +1,6 @@
 ﻿# HammerForge Data Portability
 
-Last updated: April 5, 2026
+Last updated: April 6, 2026
 
 This document describes how to move data in and out of HammerForge safely.
 
@@ -9,6 +9,7 @@ This document describes how to move data in and out of HammerForge safely.
 - When region streaming is enabled, per-region paint data is stored in a sibling `<level>.hfregions/` folder.
 - Files include a version field and default missing keys on load for backward compatibility.
 - Per-face UV data includes `uv_format_version` (current: 1). Legacy data (version 0, pre-April 2026) used a different UV transform order (scale+offset before rotation). On load, legacy faces are auto-migrated: uniform-scale faces get their offset adjusted; non-uniform-scale faces with rotation are baked to `custom_uvs`. No manual intervention is needed.
+- Per-face vertex winding includes `winding_version` (current: 1). Legacy data (version 0, pre-April 2026) used CCW vertex winding for manually-created faces, which rendered inside-out under Godot 4's CW front-face convention. On load, `apply_serialized_faces()` detects v0 faces and runs a centroid-based migration: each face's normal is checked against the outward direction from the brush center, and faces pointing inward have their vertices reversed to CW. Mesh-extracted faces (already CW) are left unchanged. No manual intervention is needed.
 - Autosaves write to `res://.hammerforge/autosave.hflevel` by default.
 - Store `.hflevel` in version control for reliable recovery.
 

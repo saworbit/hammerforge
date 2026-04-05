@@ -400,42 +400,50 @@ func _faces_from_mesh(mesh: Mesh, mesh_scale: Vector3) -> Array[FaceData]:
 func _build_box_faces() -> Array[FaceData]:
 	var half = size * 0.5
 	var faces_out: Array[FaceData] = []
+	# Quads wound clockwise (as seen from outside the brush) so that
+	# triangulate() produces front-facing triangles in Godot's CW convention.
 	var quads = [
+		# Right (+X)
 		[
-			Vector3(half.x, -half.y, -half.z),
-			Vector3(half.x, half.y, -half.z),
-			Vector3(half.x, half.y, half.z),
-			Vector3(half.x, -half.y, half.z)
-		],
-		[
-			Vector3(-half.x, -half.y, half.z),
-			Vector3(-half.x, half.y, half.z),
-			Vector3(-half.x, half.y, -half.z),
-			Vector3(-half.x, -half.y, -half.z)
-		],
-		[
-			Vector3(-half.x, half.y, -half.z),
-			Vector3(-half.x, half.y, half.z),
-			Vector3(half.x, half.y, half.z),
-			Vector3(half.x, half.y, -half.z)
-		],
-		[
-			Vector3(-half.x, -half.y, half.z),
-			Vector3(-half.x, -half.y, -half.z),
-			Vector3(half.x, -half.y, -half.z),
-			Vector3(half.x, -half.y, half.z)
-		],
-		[
-			Vector3(-half.x, -half.y, half.z),
 			Vector3(half.x, -half.y, half.z),
 			Vector3(half.x, half.y, half.z),
-			Vector3(-half.x, half.y, half.z)
-		],
-		[
-			Vector3(-half.x, half.y, -half.z),
 			Vector3(half.x, half.y, -half.z),
+			Vector3(half.x, -half.y, -half.z)
+		],
+		# Left (-X)
+		[
+			Vector3(-half.x, -half.y, -half.z),
+			Vector3(-half.x, half.y, -half.z),
+			Vector3(-half.x, half.y, half.z),
+			Vector3(-half.x, -half.y, half.z)
+		],
+		# Top (+Y)
+		[
+			Vector3(half.x, half.y, -half.z),
+			Vector3(half.x, half.y, half.z),
+			Vector3(-half.x, half.y, half.z),
+			Vector3(-half.x, half.y, -half.z)
+		],
+		# Bottom (-Y)
+		[
+			Vector3(half.x, -half.y, half.z),
 			Vector3(half.x, -half.y, -half.z),
-			Vector3(-half.x, -half.y, -half.z)
+			Vector3(-half.x, -half.y, -half.z),
+			Vector3(-half.x, -half.y, half.z)
+		],
+		# Front (+Z)
+		[
+			Vector3(-half.x, half.y, half.z),
+			Vector3(half.x, half.y, half.z),
+			Vector3(half.x, -half.y, half.z),
+			Vector3(-half.x, -half.y, half.z)
+		],
+		# Back (-Z)
+		[
+			Vector3(-half.x, -half.y, -half.z),
+			Vector3(half.x, -half.y, -half.z),
+			Vector3(half.x, half.y, -half.z),
+			Vector3(-half.x, half.y, -half.z)
 		]
 	]
 	for quad in quads:
@@ -556,11 +564,55 @@ func serialize_faces() -> Array:
 
 func apply_serialized_faces(data: Array) -> void:
 	faces.clear()
+	var needs_winding_migration := false
 	for entry in data:
 		if entry is Dictionary:
+			if int(entry.get("winding_version", 0)) < 1:
+				needs_winding_migration = true
 			faces.append(FaceData.from_dict(entry))
+	if needs_winding_migration:
+		_migrate_face_winding()
 	geometry_dirty = false
 	rebuild_preview()
+
+
+func _migrate_face_winding() -> void:
+	# Old saves used CCW winding for manual faces (box/polygon/path) and CW
+	# for mesh-extracted faces, with normals computed by the old cross-product
+	# formula.  New code uses CW winding everywhere with a flipped cross
+	# product.  To migrate: compute the brush centroid, then for each face
+	# check whether the normal points outward (away from centroid).  If not,
+	# reverse the face's vertices so the new formula produces the outward
+	# normal and triangulate() emits CW front-facing triangles.
+	if faces.is_empty():
+		return
+	var centroid := Vector3.ZERO
+	var vert_count := 0
+	for face in faces:
+		if face == null:
+			continue
+		for v in face.local_verts:
+			centroid += v
+			vert_count += 1
+	if vert_count == 0:
+		return
+	centroid /= float(vert_count)
+	for face in faces:
+		if face == null or face.local_verts.size() < 3:
+			continue
+		var face_center := Vector3.ZERO
+		for v in face.local_verts:
+			face_center += v
+		face_center /= float(face.local_verts.size())
+		var outward_dir: Vector3 = (face_center - centroid).normalized()
+		if outward_dir.length() < 0.001:
+			continue
+		# If the face normal points inward (away from expected outward), reverse
+		if face.normal.dot(outward_dir) < 0.0:
+			face.local_verts.reverse()
+			if face.custom_uvs.size() == face.local_verts.size():
+				face.custom_uvs.reverse()
+			face.ensure_geometry()
 
 
 func _generate_wire_mesh() -> ArrayMesh:

@@ -296,7 +296,7 @@ func test_overlay_vertices_offset_along_face_normal():
 	# Face 0 has normal = UP (index 0 mod 6). Set a wall face instead.
 	brush.faces[0].normal = Vector3.RIGHT
 	brush.faces[0].local_verts = PackedVector3Array(
-		[Vector3(0, 0, 0), Vector3(0, 1, 0), Vector3(0, 1, 1), Vector3(0, 0, 1)]
+		[Vector3(0, 0, 1), Vector3(0, 1, 1), Vector3(0, 1, 0), Vector3(0, 0, 0)]
 	)
 	var mat = _make_standard_material("wall_preview", Color.RED)
 	var mesh: ArrayMesh = dock._build_face_overlay_mesh(brush, [0], mat)

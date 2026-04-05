@@ -362,20 +362,21 @@ func _build_segment_brush(
 	# 4: top, -w, -l  |  5: top, -w, +l  |  6: top, +w, -l  |  7: top, +w, +l
 
 	var faces: Array = []
-	# Build 6 quads
+	# Build 6 quads — winding reversed for front-face visibility from
+	# outside; normals negated to point outward.
 	var quads := [
-		# Front (+length dir): 1, 3, 7, 5
-		[corners[1], corners[3], corners[7], corners[5]],
-		# Back (-length dir): 2, 0, 4, 6
-		[corners[2], corners[0], corners[4], corners[6]],
-		# Right (+perp): 3, 2, 6, 7
-		[corners[3], corners[2], corners[6], corners[7]],
-		# Left (-perp): 0, 1, 5, 4
-		[corners[0], corners[1], corners[5], corners[4]],
-		# Top: 4, 5, 7, 6
-		[corners[4], corners[5], corners[7], corners[6]],
-		# Bottom: 0, 2, 3, 1
-		[corners[0], corners[2], corners[3], corners[1]],
+		# Front (+length dir)
+		[corners[5], corners[7], corners[3], corners[1]],
+		# Back (-length dir)
+		[corners[6], corners[4], corners[0], corners[2]],
+		# Right (+perp)
+		[corners[7], corners[6], corners[2], corners[3]],
+		# Left (-perp)
+		[corners[4], corners[5], corners[1], corners[0]],
+		# Top
+		[corners[6], corners[7], corners[5], corners[4]],
+		# Bottom
+		[corners[1], corners[3], corners[2], corners[0]],
 	]
 
 	for quad in quads:
@@ -471,33 +472,33 @@ func _build_miter_brush(
 	var n := sorted_pts.size()
 	var faces: Array = []
 
-	# Top face
+	# Top face — CW winding from above.
 	var top_face := FaceData.new()
 	var top_verts := PackedVector3Array()
-	for i in range(n):
+	for i in range(n - 1, -1, -1):
 		top_verts.append(Vector3(sorted_pts[i].x, half_h, sorted_pts[i].z))
 	top_face.local_verts = top_verts
 	top_face.ensure_geometry()
 	faces.append(top_face.to_dict())
 
-	# Bottom face (reverse winding)
+	# Bottom face (reverse winding of top)
 	var bot_face := FaceData.new()
 	var bot_verts := PackedVector3Array()
-	for i in range(n - 1, -1, -1):
+	for i in range(n):
 		bot_verts.append(Vector3(sorted_pts[i].x, -half_h, sorted_pts[i].z))
 	bot_face.local_verts = bot_verts
 	bot_face.ensure_geometry()
 	faces.append(bot_face.to_dict())
 
-	# Side faces
+	# Side faces — CW winding from outside.
 	for i in range(n):
 		var j := (i + 1) % n
 		var side := FaceData.new()
 		var sv := PackedVector3Array()
-		sv.append(Vector3(sorted_pts[j].x, -half_h, sorted_pts[j].z))
-		sv.append(Vector3(sorted_pts[j].x, half_h, sorted_pts[j].z))
-		sv.append(Vector3(sorted_pts[i].x, half_h, sorted_pts[i].z))
 		sv.append(Vector3(sorted_pts[i].x, -half_h, sorted_pts[i].z))
+		sv.append(Vector3(sorted_pts[i].x, half_h, sorted_pts[i].z))
+		sv.append(Vector3(sorted_pts[j].x, half_h, sorted_pts[j].z))
+		sv.append(Vector3(sorted_pts[j].x, -half_h, sorted_pts[j].z))
 		side.local_verts = sv
 		side.ensure_geometry()
 		faces.append(side.to_dict())

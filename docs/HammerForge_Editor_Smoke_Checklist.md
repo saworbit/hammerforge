@@ -1,6 +1,6 @@
 # HammerForge Editor Smoke Checklist
 
-Last updated: April 4, 2026
+Last updated: April 6, 2026
 
 This checklist covers the editor-only flows that are hard to validate in headless tests:
 - tutorial banner startup before `LevelRoot` exists
@@ -104,6 +104,14 @@ Enable the HammerForge plugin if it is not already enabled.
 - Carve (Ctrl+Shift+R) the small brush. Confirm the carver is deleted and the target splits into slice pieces.
 - Inspect each surviving slice: confirm the grid texture is aligned with the original — no visible seams or jumps at slice boundaries.
 - Undo the carve; confirm the original brush and carver are restored.
+
+### 7c. Face Winding Migration (Old Saves)
+- Open a `.hflevel` file saved before the CW winding fix (April 6, 2026 or earlier).
+- Confirm all brush faces render with textures visible from outside (not inside-out).
+- Select a brush, enable Face Select Mode, and click each face — confirm the face normal gizmo (if visible) points outward.
+- Bake the level; confirm baked geometry is textured correctly (not inside-out or black).
+- Save the level. Re-open it; confirm faces still render correctly (migration should have written `winding_version: 1`).
+- Create a new brush in the same level; confirm its faces also render correctly alongside the migrated ones.
 
 ### 8. Vertex Editing (Edge Sub-Mode)
 - Select a brush and enter vertex mode (V key or the V toggle button in the toolbar).

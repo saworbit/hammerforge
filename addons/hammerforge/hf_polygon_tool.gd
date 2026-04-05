@@ -273,17 +273,16 @@ func _build_face_data() -> Array:
 	for pt in _polygon_points:
 		local_xz.append(Vector3(pt.x - center.x, 0.0, pt.z - center.z))
 
-	# Top face — needs normal pointing UP. For cross product (e1 x e2) to point up,
-	# vertices must be CCW when viewed from +Y in Godot's right-handed coordinate system.
-	# If our polygon is CW from above, reverse it for the top face.
+	# Top face — needs normal pointing UP.  Winding is reversed from the
+	# cross-product convention so that triangulate() emits front-facing
+	# triangles; the normal is then negated to point outward.
 	var top_face := FaceData.new()
 	var top_verts := PackedVector3Array()
 	if ccw:
-		# Already CCW — but ensure_geometry cross product needs reversed order
-		for i in range(n - 1, -1, -1):
+		for i in range(n):
 			top_verts.append(Vector3(local_xz[i].x, top_y, local_xz[i].z))
 	else:
-		for i in range(n):
+		for i in range(n - 1, -1, -1):
 			top_verts.append(Vector3(local_xz[i].x, top_y, local_xz[i].z))
 	top_face.local_verts = top_verts
 	top_face.ensure_geometry()
@@ -293,22 +292,21 @@ func _build_face_data() -> Array:
 	var bot_face := FaceData.new()
 	var bot_verts := PackedVector3Array()
 	if ccw:
-		for i in range(n):
+		for i in range(n - 1, -1, -1):
 			bot_verts.append(Vector3(local_xz[i].x, bot_y, local_xz[i].z))
 	else:
-		for i in range(n - 1, -1, -1):
+		for i in range(n):
 			bot_verts.append(Vector3(local_xz[i].x, bot_y, local_xz[i].z))
 	bot_face.local_verts = bot_verts
 	bot_face.ensure_geometry()
 	faces.append(bot_face.to_dict())
 
-	# Side faces — quads for each polygon edge
+	# Side faces — quads for each polygon edge, wound CW from outside.
 	for i in range(n):
 		var j := (i + 1) % n
 		var side := FaceData.new()
-		var a_xz: Vector3 = local_xz[j] if ccw else local_xz[i]
-		var b_xz: Vector3 = local_xz[i] if ccw else local_xz[j]
-		# Winding: bottom-left, top-left, top-right, bottom-right (outward normal)
+		var a_xz: Vector3 = local_xz[i] if ccw else local_xz[j]
+		var b_xz: Vector3 = local_xz[j] if ccw else local_xz[i]
 		var side_verts := PackedVector3Array()
 		side_verts.append(Vector3(b_xz.x, bot_y, b_xz.z))
 		side_verts.append(Vector3(b_xz.x, top_y, b_xz.z))
