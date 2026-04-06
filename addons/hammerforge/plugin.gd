@@ -956,6 +956,11 @@ func _handle_keyboard_input(
 			return EditorPlugin.AFTER_GUI_INPUT_PASS
 		_carve_selected(root)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	if _keymap.matches("merge", event):
+		if hf_selection.size() < 2:
+			return EditorPlugin.AFTER_GUI_INPUT_PASS
+		_merge_selected(root)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	# Nudge keys
 	var nudge = _get_nudge_direction(event.keycode)
 	if nudge != Vector3.ZERO:
@@ -2358,6 +2363,34 @@ func _hollow_selected(root: Node) -> void:
 	)
 
 
+func _merge_selected(root: Node) -> void:
+	var nodes = _current_selection_nodes()
+	var brush_ids: Array = []
+	for node in nodes:
+		if node and root.is_brush_node(node):
+			var info = root.get_brush_info_from_node(node)
+			var bid = str(info.get("brush_id", ""))
+			if bid != "":
+				brush_ids.append(bid)
+	if brush_ids.size() < 2:
+		if dock:
+			dock.show_toast("Select at least 2 brushes to merge", 1)
+		return
+	var check: HFOpResult = root.can_merge_brushes(brush_ids)
+	if not check.ok:
+		root.user_message.emit(check.user_text(), 1)
+		return
+	HFUndoHelper.commit(
+		_get_undo_redo(),
+		root,
+		"Merge Brushes",
+		"merge_brushes_by_ids",
+		[brush_ids],
+		false,
+		Callable(self, "_record_history")
+	)
+
+
 func _move_selected_to_floor(root: Node) -> void:
 	_move_selected_vertical(root, "Move to Floor", "move_brushes_to_floor")
 
@@ -2753,6 +2786,8 @@ func _on_context_toolbar_action(action: String, args: Array) -> void:
 			_clip_selected(root)
 		"carve":
 			_carve_selected(root)
+		"merge":
+			_merge_selected(root)
 		"duplicate":
 			_duplicate_selected(root)
 		"delete":
@@ -2949,6 +2984,8 @@ func _on_hotkey_palette_action(action: String) -> void:
 			_clip_selected(root)
 		"carve":
 			_carve_selected(root)
+		"merge":
+			_merge_selected(root)
 		"move_to_floor":
 			_move_selected_to_floor(root)
 		"move_to_ceiling":

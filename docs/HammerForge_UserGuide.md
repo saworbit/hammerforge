@@ -149,6 +149,7 @@ The compact toolbar shows icon + text labels (Draw, Select, Add, Sub, Paint, Ext
   - Tie/Untie brush entity class (populated from entity definitions).
   - Clip Selected (Shift+X). Shows actionable error toast if split position is invalid.
   - Carve (Ctrl+Shift+R): boolean-subtract from intersecting brushes.
+  - Merge (Ctrl+Shift+M): combine 2+ selected brushes into one. Preserves per-brush materials (registered as per-face material indices) and full transforms (rotation/scale). All brushes must share the same operation type (add or subtract).
   - Duplicate Array: count, X/Y/Z offset, Create/Remove Array buttons.
 
 ### Paint tab (collapsible sections)
@@ -304,7 +305,7 @@ Press **Shift+T** to apply the last texture you sampled with the Texture Picker 
 ### Smart Contextual Toolbar
 A floating mini-toolbar appears in the 3D viewport showing context-sensitive actions based on your current selection and tool state. It eliminates the need to switch dock tabs for common operations:
 
-- **Brushes selected** → Extrude Up/Down, Hollow, Clip, Carve, Select Similar (Sim), Selection Filters (Flt), Duplicate, Delete. Shows "N brush(es) selected" count.
+- **Brushes selected** → Extrude Up/Down, Hollow, Clip, Carve, Merge (Mrg), Select Similar (Sim), Selection Filters (Flt), Duplicate, Delete. Shows "N brush(es) selected" count.
 - **Faces selected** → Material thumbnails (favorites strip), UV Justify (Fit/Center/L/R/T/B), Select Similar (Sim), Apply Last Texture (Last), Apply to Whole Brush. Shows "N faces on M brush(es)" count.
 - **Entities selected** → I/O connect, Properties quick-edit (jumps to Entities tab), Duplicate, Delete. Shows "N entities selected" count.
 - **Draw mode (idle)** → Quick shape selector (Box/Cyl/Sph/Cone), Add/Subtract toggle.

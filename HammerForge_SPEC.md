@@ -80,7 +80,7 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `paint_tab_builder.gd` | Builds Paint tab sections + signal connections |
 | `entity_tab_builder.gd` | Builds Entity Properties + Entity I/O sections |
 | `manage_tab_builder.gd` | Builds Manage tab sections (Bake, File, Settings, Prefabs, etc.) |
-| `selection_tools_builder.gd` | Builds Selection Tools section (hollow, clip, move, tie, duplicator) |
+| `selection_tools_builder.gd` | Builds Selection Tools section (hollow, clip, merge, move, tie, duplicator) |
 
 ### Subsystems (`addons/hammerforge/systems/`)
 
@@ -88,7 +88,7 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 |-----------|------------|----------------|
 | `hf_grid_system.gd` | `HFGridSystem` | Editor grid setup, visibility, transform, axis-plane intersection |
 | `hf_entity_system.gd` | `HFEntitySystem` | Entity definitions, placement, capture/restore, Entity I/O connections, dangling connection cleanup |
-| `hf_brush_system.gd` | `HFBrushSystem` | Brush CRUD, picking, pending/committed cuts, materials, face selection, hollow, clip, tie/untie. O(1) brush ID cache. Returns `HFOpResult` on failable ops. Auto-cleans references on deletion |
+| `hf_brush_system.gd` | `HFBrushSystem` | Brush CRUD, picking, pending/committed cuts, materials, face selection, hollow, clip, merge, tie/untie. O(1) brush ID cache. Returns `HFOpResult` on failable ops. Auto-cleans references on deletion |
 | `hf_drag_system.gd` | `HFDragSystem` | Drag lifecycle, preview management, axis locking, height computation. Owns `HFInputState` |
 | `hf_bake_system.gd` | `HFBakeSystem` | Bake orchestration (single/chunked/selected/dirty), CSG assembly, navmesh, collision, preview modes (Full/Wireframe/Proxy), time estimate |
 | `hf_paint_system.gd` | `HFPaintSystem` | Floor paint input, surface paint, paint layer CRUD, face selection |
@@ -201,6 +201,7 @@ LevelRoot (Node3D)
 - **Clip** (Shift+X): splits a brush along an axis-aligned plane into two new brushes. Preserves material, brush entity class, visgroups, and group ID.
 - **Move to Floor/Ceiling** (Ctrl+Shift+F/C): raycasts against other brush AABBs to snap selection vertically.
 - **Carve** (Ctrl+Shift+R): boolean-subtract one brush from all intersecting brushes. `HFCarveSystem` uses progressive-remainder algorithm to produce up to 6 box slices per target. Preserves material, operation, visgroups, group_id, brush_entity_class.
+- **Merge** (Ctrl+Shift+M): combines 2+ selected brushes into a single CUSTOM brush. Transforms all face `local_verts` and normals through the full `Transform3D` pipeline (source local → world → merged local via `affine_inverse()`), so rotated/scaled brushes merge correctly. Per-brush `material_override` is registered into MaterialManager and stamped as per-face `material_idx`. Validates same operation type. Inherits metadata from first brush.
 - **Numeric input**: type exact dimensions during drag or extrude (Enter applies, Backspace edits).
 - **UV Justify**: fit/center/left/right/top/bottom alignment modes for selected faces.
 - Bake builds a temporary CSG tree from DraftBrushes + CommittedCuts and outputs BakedGeometry. If cordon is enabled, only brushes intersecting the cordon AABB are included. Brush entity classes `func_detail` and `trigger_*` are excluded from structural bake.
@@ -376,7 +377,7 @@ The dock uses 4 tabs with collapsible sections for visual hierarchy:
 | **Entities** | Entity palette with drag-and-drop, Create DraftEntity, Entity Properties, Entity I/O connections (collapsible sections) |
 | **Manage** | Bake, Actions (floor/cuts/clear), File, Presets, History, Settings, Performance, plus Visgroups & Cordon (inserted programmatically) |
 
-- **Brush tab** includes contextual **Selection Tools** section (hollow, clip, move, tie, duplicator) visible when brushes are selected.
+- **Brush tab** includes contextual **Selection Tools** section (hollow, clip, merge, move, tie, duplicator) visible when brushes are selected.
 - Tab contents built by dedicated builder classes: `PaintTabBuilder`, `EntityTabBuilder`, `ManageTabBuilder`, `SelectionToolsBuilder` (in `ui/`). Each is RefCounted with `build()` and `connect_signals()` methods. Dock delegates to builders, reducing `dock.gd` by ~35%.
 - Collapsible sections have HSeparator, 4px indented content, and persisted collapsed state. All 18 sections tracked in `_all_sections` dict.
 - "No LevelRoot" banner and autosave warning defined in dock.tscn.

@@ -5,6 +5,20 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Merge Tool** (Apr 2026): Combine 2+ selected brushes into a single CUSTOM brush before baking.
+  `HFBrushSystem.merge_brushes_by_ids()` collects all faces from source brushes and transforms
+  their `local_verts` and normals through the full `Transform3D` pipeline (source local → world →
+  merged local) using `affine_inverse()`, so rotated and scaled brushes merge correctly. The merged
+  brush inherits the first source brush's full `global_transform` (not just position). Per-brush
+  `material_override` is registered into the MaterialManager via `add_material_to_palette()` and
+  stamped as `material_idx` on faces that relied on the brush-level override (material_idx == -1),
+  so multi-material merges preserve all visual appearances. Metadata (visgroups, group_id,
+  brush_entity_class) inherited from first brush. Pre-validation via `can_merge_brushes()` rejects
+  < 2 brushes, missing IDs, and mixed operation types (add/subtract). Keybinding: **Ctrl+Shift+M**.
+  Context toolbar "Mrg" button, command palette entry, full undo/redo via `HFUndoHelper.commit()`.
+  23 tests in `test_merge_tool.gd` covering validation, face combining, full-transform vertex/normal
+  rotation, multi-material index separation, same-material dedup, and metadata preservation.
+  Total: **1226 tests across 71 files**.
 - **Material Atlasing** (Apr 2026): Packs per-face material albedo textures into a single atlas
   to reduce draw calls on baked levels. `HFMaterialAtlas` class (`hf_material_atlas.gd`) with
   shelf bin-packing, gutter padding (2px edge-pixel extension to prevent mipmap bleed), and
@@ -55,6 +69,14 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   across 69 files**.
 
 ### Fixed
+- **Dialog/timer lambda capture crashes** (Apr 2026): Six unguarded lambda closures connected to
+  `ConfirmationDialog.confirmed/canceled` signals and `SceneTreeTimer.timeout` could fire after the
+  owning node (`dock.gd`, `hf_spawn_system.gd`, `hf_prefab_library.gd`) was freed during plugin
+  reload or scene transitions, producing "Lambda capture at index 0 was freed" errors. Added
+  `is_instance_valid(self)` guards to all six closures: spawn fix dialog confirmed/canceled
+  (dock.gd), paint layer rename dialog confirmed (dock.gd), scatter mesh file dialog file_selected
+  (dock.gd), debug cleanup timer (hf_spawn_system.gd), and prefab variant/tags dialog confirmed
+  (hf_prefab_library.gd).
 - **Inside-out face rendering** (Apr 2026): Manually-defined brush faces (`_build_box_faces()`, polygon
   tool, path tool) used CCW vertex winding, which Godot 4's CW front-face convention treated as
   back-facing. Textures appeared on the inside of brushes. Fixed by reversing vertex order to CW in all

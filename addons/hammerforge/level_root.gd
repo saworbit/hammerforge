@@ -989,6 +989,14 @@ func hollow_brush_by_id(brush_id: String, wall_thickness: float) -> HFOpResult:
 	return brush_system.hollow_brush_by_id(brush_id, wall_thickness)
 
 
+func can_merge_brushes(brush_ids: Array) -> HFOpResult:
+	return brush_system.can_merge_brushes(brush_ids)
+
+
+func merge_brushes_by_ids(brush_ids: Array) -> HFOpResult:
+	return brush_system.merge_brushes_by_ids(brush_ids)
+
+
 func move_brushes_to_floor(brush_ids: Array) -> void:
 	brush_system.move_brushes_to_floor(brush_ids)
 

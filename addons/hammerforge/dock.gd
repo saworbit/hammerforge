@@ -3925,6 +3925,9 @@ func _show_spawn_fix_dialog(spawn: Node3D, validation: Dictionary, mask: int) ->
 	dialog.add_cancel_button("Cancel")
 	dialog.confirmed.connect(
 		func():
+			if not is_instance_valid(self):
+				dialog.queue_free()
+				return
 			if is_instance_valid(spawn) and level_root and level_root.spawn_system:
 				var old_pos := spawn.global_position
 				level_root.spawn_system.auto_fix_spawn(spawn, validation)
@@ -3938,7 +3941,8 @@ func _show_spawn_fix_dialog(spawn: Node3D, validation: Dictionary, mask: int) ->
 	)
 	dialog.canceled.connect(
 		func():
-			show_toast("Quick Play cancelled", 0)
+			if is_instance_valid(self):
+				show_toast("Quick Play cancelled", 0)
 			dialog.queue_free()
 	)
 	add_child(dialog)
@@ -4487,6 +4491,8 @@ func _on_paint_layer_rename() -> void:
 	dialog.add_child(line_edit)
 	dialog.confirmed.connect(
 		func():
+			if not is_instance_valid(self):
+				return
 			var new_name = line_edit.text.strip_edges()
 			if new_name != "" and new_name != current_name:
 				level_root.rename_paint_layer(idx, new_name)
@@ -4596,10 +4602,11 @@ func _on_scatter_mesh_pick() -> void:
 	dialog.add_filter("*.tres,*.res,*.obj,*.glb,*.gltf", "Mesh Resources")
 	dialog.file_selected.connect(
 		func(path: String) -> void:
-			_scatter_mesh_path = path
-			if scatter_mesh_btn:
-				var fname := path.get_file()
-				scatter_mesh_btn.text = fname if fname != "" else "Pick Mesh..."
+			if is_instance_valid(self):
+				_scatter_mesh_path = path
+				if scatter_mesh_btn:
+					var fname := path.get_file()
+					scatter_mesh_btn.text = fname if fname != "" else "Pick Mesh..."
 			dialog.queue_free()
 	)
 	dialog.canceled.connect(func() -> void: dialog.queue_free())

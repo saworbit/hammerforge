@@ -329,9 +329,10 @@ func _show_variant_dialog(prefab_path: String) -> void:
 	dialog.add_child(input)
 	dialog.confirmed.connect(
 		func():
-			var vname: String = input.text.strip_edges()
-			if vname != "":
-				variant_add_requested.emit(prefab_path, vname)
+			if is_instance_valid(self):
+				var vname: String = input.text.strip_edges()
+				if vname != "":
+					variant_add_requested.emit(prefab_path, vname)
 			dialog.queue_free()
 	)
 	dialog.canceled.connect(func(): dialog.queue_free())
@@ -351,6 +352,9 @@ func _show_tags_dialog(prefab_path: String) -> void:
 	dialog.add_child(input)
 	dialog.confirmed.connect(
 		func():
+			if not is_instance_valid(self):
+				dialog.queue_free()
+				return
 			var raw: String = input.text.strip_edges()
 			var new_tags: PackedStringArray = []
 			for part in raw.split(","):

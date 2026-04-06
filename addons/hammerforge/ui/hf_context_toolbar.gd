@@ -136,6 +136,7 @@ func _build_brush_section() -> void:
 	_add_tool_button(section, "Hol", "Hollow (Ctrl+H)", "hollow")
 	_add_tool_button(section, "Clip", "Clip (Shift+X)", "clip")
 	_add_tool_button(section, "Carve", "Carve (Ctrl+Shift+R)", "carve")
+	_add_tool_button(section, "Mrg", "Merge Brushes (Ctrl+Shift+M)", "merge")
 	_add_sep(section)
 	_add_tool_button(section, "Dup", "Duplicate (Ctrl+D)", "duplicate")
 	_add_tool_button(section, "Del", "Delete (Del)", "delete")

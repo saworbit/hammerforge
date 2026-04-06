@@ -427,6 +427,7 @@ func _schedule_debug_cleanup(duration: float) -> void:
 	var timer := tree.create_timer(duration)
 	timer.timeout.connect(
 		func():
-			_debug_cleanup_timer_active = false
-			cleanup_debug()
+			if is_instance_valid(self):
+				_debug_cleanup_timer_active = false
+				cleanup_debug()
 	)

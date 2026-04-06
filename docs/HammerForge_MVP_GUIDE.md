@@ -103,6 +103,7 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 ### Brush Operations (`HFBrushSystem` extended)
 - **Hollow** (Ctrl+H): creates 6 wall brushes, deletes original. Configurable wall thickness.
 - **Clip** (Shift+X): splits a brush along an axis-aligned plane. Preserves material, entity class, visgroups, group ID.
+- **Merge** (Ctrl+Shift+M): combines 2+ selected brushes into a single brush. Applies full transform (rotation/scale) to face vertices, preserves per-brush materials via per-face material indices.
 - **Tie/Untie**: tag brushes as brush entity classes (`func_detail`, `func_wall`, `trigger_once`, `trigger_multiple`). Tagged brushes get color-coded overlays and may be excluded from structural bake.
 - **Move to Floor/Ceiling** (Ctrl+Shift+F/C): raycasts against other brush AABBs to snap vertically.
 - **UV Justify**: fit/center/left/right/top/bottom/stretch/tile alignment for selected faces.

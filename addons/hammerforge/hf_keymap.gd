@@ -39,6 +39,7 @@ static func _default_bindings() -> Dictionary:
 		"hollow": {"keycode": KEY_H, "ctrl": true},
 		"clip": {"keycode": KEY_X, "shift": true},
 		"carve": {"keycode": KEY_R, "shift": true, "ctrl": true},
+		"merge": {"keycode": KEY_M, "ctrl": true, "shift": true},
 		"move_to_floor": {"keycode": KEY_F, "ctrl": true, "shift": true},
 		"move_to_ceiling": {"keycode": KEY_C, "ctrl": true, "shift": true},
 		# Paint tools
@@ -175,6 +176,7 @@ static func get_action_label(action: String) -> String:
 		"hollow": "Hollow",
 		"clip": "Clip",
 		"carve": "Carve",
+		"merge": "Merge Brushes",
 		"move_to_floor": "Move to Floor",
 		"move_to_ceiling": "Move to Ceiling",
 		"paint_bucket": "Paint Brush",

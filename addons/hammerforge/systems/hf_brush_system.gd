@@ -1022,6 +1022,138 @@ func hollow_brush_by_id(brush_id: String, wall_thickness: float) -> HFOpResult:
 
 
 # ---------------------------------------------------------------------------
+# Merge Brushes
+# ---------------------------------------------------------------------------
+
+
+func can_merge_brushes(brush_ids: Array) -> HFOpResult:
+	if brush_ids.size() < 2:
+		return HFOpResult.fail(
+			"Merge: select at least 2 brushes", "Select multiple brushes before merging"
+		)
+	var first_op: int = -1
+	for brush_id in brush_ids:
+		var brush = _find_brush_by_id(str(brush_id))
+		if not brush or not (brush is DraftBrush):
+			return HFOpResult.fail("Merge: brush '%s' not found" % str(brush_id))
+		var draft := brush as DraftBrush
+		if first_op < 0:
+			first_op = draft.operation
+		elif draft.operation != first_op:
+			return HFOpResult.fail(
+				"Merge: all brushes must have the same operation type",
+				"Cannot merge additive and subtractive brushes together"
+			)
+	return HFOpResult.success()
+
+
+func merge_brushes_by_ids(brush_ids: Array) -> HFOpResult:
+	if brush_ids.size() < 2:
+		return _op_fail("Merge: select at least 2 brushes")
+	if root.has_method("tag_full_reconcile"):
+		root.tag_full_reconcile()
+
+	# Collect all valid brushes
+	var brushes: Array = []  # Array of DraftBrush
+	for brush_id in brush_ids:
+		var brush = _find_brush_by_id(str(brush_id))
+		if brush and brush is DraftBrush:
+			brushes.append(brush as DraftBrush)
+	if brushes.size() < 2:
+		return _op_fail("Merge: need at least 2 valid brushes")
+
+	var first: DraftBrush = brushes[0]
+	var operation: int = first.operation
+
+	# Use first brush's full transform as the merged brush's transform.
+	# All source face verts will be mapped: source local → world → merged local.
+	var merged_xform: Transform3D = first.global_transform
+	var merged_xform_inv: Transform3D = merged_xform.affine_inverse()
+
+	# Build a mapping from material_override → material_idx so faces from
+	# brushes with different overrides keep their visual appearance.
+	# Faces that already have a per-face material_idx are left unchanged.
+	var mat_idx_cache: Dictionary = {}  # Material -> int
+
+	# Collect faces from all brushes, transforming local_verts from
+	# each brush's local space through world space into merged local space.
+	var serialized_faces: Array = []
+	for brush in brushes:
+		var draft := brush as DraftBrush
+		# Ensure faces exist (auto-generate for box shapes)
+		if draft.faces.is_empty():
+			draft.rebuild_preview()
+		# Full transform: source local → world → merged local
+		var to_merged: Transform3D = merged_xform_inv * draft.global_transform
+		var to_merged_basis: Basis = to_merged.basis
+		var to_merged_origin: Vector3 = to_merged.origin
+		# Resolve material_idx for faces that rely on brush material_override
+		var brush_mat_idx: int = -1
+		if draft.material_override:
+			if mat_idx_cache.has(draft.material_override):
+				brush_mat_idx = mat_idx_cache[draft.material_override]
+			elif root.has_method("add_material_to_palette"):
+				brush_mat_idx = root.add_material_to_palette(draft.material_override)
+				mat_idx_cache[draft.material_override] = brush_mat_idx
+		for face in draft.faces:
+			if face == null:
+				continue
+			var fd: Dictionary = face.to_dict()
+			# Transform local_verts through the full basis + origin
+			if fd.has("local_verts") and fd["local_verts"] is Array:
+				var transformed: Array = []
+				for v in fd["local_verts"]:
+					if v is Array and v.size() >= 3:
+						var src := Vector3(v[0], v[1], v[2])
+						var dst: Vector3 = to_merged_basis * src + to_merged_origin
+						transformed.append([dst.x, dst.y, dst.z])
+					else:
+						transformed.append(v)
+				fd["local_verts"] = transformed
+			# Transform the face normal through the basis (no translation)
+			if fd.has("normal") and fd["normal"] is Array and fd["normal"].size() >= 3:
+				var src_n := Vector3(fd["normal"][0], fd["normal"][1], fd["normal"][2])
+				var dst_n: Vector3 = (to_merged_basis * src_n).normalized()
+				fd["normal"] = [dst_n.x, dst_n.y, dst_n.z]
+			# Stamp per-face material_idx for faces that relied on brush override
+			if int(fd.get("material_idx", -1)) < 0 and brush_mat_idx >= 0:
+				fd["material_idx"] = brush_mat_idx
+			serialized_faces.append(fd)
+
+	# Capture metadata from first brush
+	var src_visgroups: PackedStringArray = first.get_meta("visgroups", PackedStringArray())
+	var src_group_id: String = str(first.get_meta("group_id", ""))
+	var src_bec: String = str(first.get_meta("brush_entity_class", ""))
+
+	# Delete all original brushes
+	for brush in brushes:
+		delete_brush(brush)
+
+	# Create merged brush with full transform (not just center position)
+	var merged_info: Dictionary = {
+		"shape": root.BrushShape.CUSTOM,
+		"size": Vector3(32, 32, 32),
+		"transform": merged_xform,
+		"operation": operation,
+		"brush_id": _next_brush_id(),
+		"faces": serialized_faces,
+	}
+
+	var merged = create_brush_from_info(merged_info)
+	if merged:
+		if src_visgroups.size() > 0:
+			merged.set_meta("visgroups", src_visgroups.duplicate())
+		if src_group_id != "":
+			merged.set_meta("group_id", src_group_id)
+		if src_bec != "":
+			merged.set_meta("brush_entity_class", src_bec)
+
+	var count: int = brushes.size()
+	root._log("Merge: combined %d brushes into one" % count)
+	return HFOpResult.success("Merged %d brushes" % count)
+
+
+# ---------------------------------------------------------------------------
 # Move to Floor / Ceiling
 # ---------------------------------------------------------------------------
 

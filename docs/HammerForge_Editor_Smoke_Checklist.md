@@ -105,7 +105,17 @@ Enable the HammerForge plugin if it is not already enabled.
 - Inspect each surviving slice: confirm the grid texture is aligned with the original — no visible seams or jumps at slice boundaries.
 - Undo the carve; confirm the original brush and carver are restored.
 
-### 7c. Face Winding Migration (Old Saves)
+### 7c. Merge Brushes
+- Create two box brushes with different materials, side by side.
+- Select both brushes (Shift+click or marquee). Press **Ctrl+Shift+M** (or click "Mrg" in context toolbar).
+- Confirm: originals deleted, one merged brush appears at the first brush's position with faces from both.
+- Select the merged brush and bake; confirm both materials are visible on the baked mesh (no material loss).
+- Undo; confirm both original brushes are restored with their materials.
+- Create two brushes, rotate one 90 degrees, then merge. Confirm the rotated brush's geometry is correctly oriented in the merged result.
+- Try merging a single brush; confirm an error toast appears ("Select at least 2 brushes").
+- Try merging an additive brush with a subtractive brush; confirm rejection ("all brushes must have the same operation type").
+
+### 7d. Face Winding Migration (Old Saves)
 - Open a `.hflevel` file saved before the CW winding fix (April 6, 2026 or earlier).
 - Confirm all brush faces render with textures visible from outside (not inside-out).
 - Select a brush, enable Face Select Mode, and click each face — confirm the face normal gizmo (if visible) points outward.
@@ -199,7 +209,7 @@ Enable the HammerForge plugin if it is not already enabled.
 - With cordon disabled, click **Play Selected Area**, then stop. Confirm cordon is still disabled afterward.
 
 ### 13. Context Toolbar + Command Palette
-- Select a brush in the viewport. Confirm the floating context toolbar appears at the top of the 3D viewport showing "1 brush" with Extrude/Hollow/Clip/Carve/Duplicate/Delete buttons.
+- Select a brush in the viewport. Confirm the floating context toolbar appears at the top of the 3D viewport showing "1 brush" with Extrude/Hollow/Clip/Carve/Merge/Duplicate/Delete buttons.
 - Select multiple brushes; confirm the label updates to "N brushes".
 - Click the "Hol" button in the toolbar; confirm hollow executes on the selected brush.
 - Click "Dup"; confirm a duplicate brush is created.

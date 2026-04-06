@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/Godot-4.6%2B-478cbf?logo=godot-engine&logoColor=white" alt="Godot 4.6+">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
   <img src="https://img.shields.io/badge/Status-Early%20Alpha-red" alt="Early Alpha">
-  <img src="https://img.shields.io/badge/Tests-1203%20passing-brightgreen" alt="1203 tests passing">
+  <img src="https://img.shields.io/badge/Tests-1226%20passing-brightgreen" alt="1226 tests passing">
   <img src="https://img.shields.io/badge/GDScript-25k%2B%20lines-blueviolet" alt="25k+ lines">
 </p>
 
@@ -40,7 +40,7 @@ HammerForge is a single `addons/` folder. No external tools, no custom builds, n
 
 | | |
 |---|---|
-| **21 subsystems** + coordinator architecture | **1203 unit + integration tests** with CI on every push |
+| **21 subsystems** + coordinator architecture | **1226 unit + integration tests** with CI on every push |
 | **15 brush shapes** (box through dodecahedron) | **150 built-in prototype textures** for instant greyboxing |
 | **Quake `.map`** + **glTF `.glb`** export | **.hflevel** native format with threaded I/O |
 | **Customizable keymaps** (JSON) | **Plugin API** for custom tools |
@@ -59,6 +59,7 @@ Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Su
 - **Hollow** (Ctrl+H) -- convert a solid brush to a room with configurable wall thickness
 - **Clip** (Shift+X) -- split a brush along an axis-aligned plane
 - **Carve** (Ctrl+Shift+R) -- boolean-subtract one brush from all intersecting brushes
+- **Merge** (Ctrl+Shift+M) -- combine 2+ selected brushes into one, preserving per-brush materials and full transforms (rotation/scale)
 - **Bevel** -- round off sharp edges with configurable segments and radius (vertex/edge mode)
 - **Face Inset** -- shrink a face inward and optionally extrude along its normal
 - **Numeric input** -- type exact dimensions during any drag or extrude

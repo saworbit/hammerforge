@@ -1,6 +1,6 @@
 # Development Guide
 
-Last updated: April 6, 2026
+Last updated: April 7, 2026
 
 This document covers local setup, codebase structure, and how to test features.
 
@@ -89,7 +89,7 @@ addons/hammerforge/
   systems/               Subsystem classes (RefCounted)
     hf_grid_system.gd      Editor grid management
     hf_entity_system.gd    Entity definitions, placement, Entity I/O connections
-    hf_brush_system.gd     Brush CRUD, cuts, materials, picking, hollow, clip, tie/untie
+    hf_brush_system.gd     Brush CRUD, cuts, materials, picking, hollow, clip, merge, tie/untie
     hf_drag_system.gd      Drag lifecycle, preview, axis locking
     hf_bake_system.gd      Bake orchestration (single/chunked/selected/dirty), preview modes (Full/Wireframe/Proxy), time estimate
     hf_paint_system.gd     Floor + surface paint, layer CRUD

@@ -211,7 +211,7 @@ func _is_action_available(action: String) -> bool:
 		# Selection-dependent editing actions
 		"delete", "duplicate":
 			return has_selection
-		"hollow", "clip", "carve", "move_to_floor", "move_to_ceiling":
+		"hollow", "clip", "carve", "merge", "move_to_floor", "move_to_ceiling":
 			return has_brush_sel
 		"group", "ungroup":
 			return has_brush_sel
