@@ -634,15 +634,14 @@ func _handle_disp_paint_input(event: InputEvent, root: Node, cam: Camera3D, pos:
 				_disp_paint_face_idx = info["face_index"]
 				_do_disp_paint_stroke(root, cam, pos)
 				return EditorPlugin.AFTER_GUI_INPUT_STOP
-			else:
-				# Commit the entire stroke as one undo action.
-				if _disp_paint_active and not _disp_paint_pre_state.is_empty():
-					_commit_disp_paint_undo(root)
-				_disp_paint_active = false
-				_disp_paint_brush_id = ""
-				_disp_paint_face_idx = -1
-				_disp_paint_pre_state = {}
-				return EditorPlugin.AFTER_GUI_INPUT_STOP
+			# Commit the entire stroke as one undo action.
+			if _disp_paint_active and not _disp_paint_pre_state.is_empty():
+				_commit_disp_paint_undo(root)
+			_disp_paint_active = false
+			_disp_paint_brush_id = ""
+			_disp_paint_face_idx = -1
+			_disp_paint_pre_state = {}
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
 	if event is InputEventMouseMotion and _disp_paint_active:
 		_do_disp_paint_stroke(root, cam, pos)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
