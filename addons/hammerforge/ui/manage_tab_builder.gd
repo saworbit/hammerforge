@@ -133,9 +133,7 @@ func build(parent: Control) -> void:
 
 	# -- Material Atlas --
 	dock.bake_use_atlas_check = dock._make_check("Material Atlas")
-	dock.bake_use_atlas_check.tooltip_text = (
-		"Pack material textures into a single atlas to reduce draw calls (requires Face Materials)"
-	)
+	dock.bake_use_atlas_check.tooltip_text = ("Pack material textures into a single atlas to reduce draw calls (requires Face Materials)")
 	bk.add_child(dock.bake_use_atlas_check)
 
 	# -- Bake time estimate --
