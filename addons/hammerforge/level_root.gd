@@ -43,6 +43,8 @@ const HFSpawnSystemType = preload("systems/hf_spawn_system.gd")
 const HFPrefabSystemType = preload("systems/hf_prefab_system.gd")
 const HFPrefabOverlayType = preload("ui/hf_prefab_overlay.gd")
 const HFIOPresetsType = preload("systems/hf_io_presets.gd")
+const HFDisplacementSystemType = preload("systems/hf_displacement_system.gd")
+const HFBevelSystemType = preload("systems/hf_bevel_system.gd")
 const HFPrototypeTextures = preload("hf_prototype_textures.gd")
 
 const RELOAD_LOCK_PATH := "res://.hammerforge/reload.lock"
@@ -217,6 +219,8 @@ var spawn_system: HFSpawnSystemType
 var prefab_system: HFPrefabSystemType
 var prefab_overlay: HFPrefabOverlayType
 var io_presets: HFIOPresetsType
+var displacement_system: HFDisplacementSystemType
+var bevel_system: HFBevelSystemType
 
 @export var show_subtract_preview: bool = false:
 	set(value):
@@ -502,6 +506,8 @@ func _ready():
 	prefab_overlay = HFPrefabOverlayType.new(self)
 	io_presets = HFIOPresetsType.new(self)
 	io_presets.load_presets()
+	displacement_system = HFDisplacementSystemType.new(self)
+	bevel_system = HFBevelSystemType.new(self)
 	if show_subtract_preview:
 		subtract_preview.set_enabled(true)
 	entity_system.load_entity_definitions()
@@ -1008,6 +1014,91 @@ func tie_brushes_to_entity(brush_ids: Array, entity_class: String) -> void:
 
 func untie_brushes_from_entity(brush_ids: Array) -> void:
 	brush_system.untie_brushes_from_entity(brush_ids)
+
+
+# ===========================================================================
+# Displacement API (delegates to displacement_system)
+# ===========================================================================
+
+
+func create_displacement(brush_id: String, face_index: int, power: int = 3) -> bool:
+	var ok: bool = displacement_system.create_displacement(brush_id, face_index, power)
+	if ok:
+		tag_brush_dirty(brush_id)
+	return ok
+
+
+func destroy_displacement(brush_id: String, face_index: int) -> bool:
+	var ok: bool = displacement_system.destroy_displacement(brush_id, face_index)
+	if ok:
+		tag_brush_dirty(brush_id)
+	return ok
+
+
+func set_displacement_elevation(brush_id: String, face_index: int, elevation: float) -> bool:
+	return displacement_system.set_elevation(brush_id, face_index, elevation)
+
+
+func set_displacement_power(brush_id: String, face_index: int, power: int) -> bool:
+	var ok: bool = displacement_system.set_power(brush_id, face_index, power)
+	if ok:
+		tag_brush_dirty(brush_id)
+	return ok
+
+
+func smooth_displacement(brush_id: String, face_index: int, strength: float) -> bool:
+	return displacement_system.smooth_all(brush_id, face_index, strength)
+
+
+func noise_displacement(brush_id: String, face_index: int, scale: float) -> bool:
+	var noise = FastNoiseLite.new()
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	noise.frequency = 0.1
+	return displacement_system.apply_noise(brush_id, face_index, noise, scale)
+
+
+func set_displacement_sew_group(brush_id: String, face_index: int, sew_group_id: int) -> bool:
+	var brush: Node3D = find_brush_by_id(brush_id)
+	if not brush:
+		return false
+	var faces: Array = brush.faces
+	if face_index < 0 or face_index >= faces.size():
+		return false
+	if faces[face_index].displacement == null:
+		return false
+	faces[face_index].displacement.sew_group = sew_group_id
+	tag_brush_dirty(brush_id)
+	return true
+
+
+func sew_all_displacements() -> int:
+	return displacement_system.sew_all()
+
+
+func paint_displacement(
+	brush_id: String, face_index: int,
+	world_pos: Vector3, radius: float, strength: float, mode: int
+) -> bool:
+	return displacement_system.paint(brush_id, face_index, world_pos, radius, strength, mode)
+
+
+# ===========================================================================
+# Bevel API (delegates to bevel_system)
+# ===========================================================================
+
+
+func bevel_edge(brush_id: String, edge: Array, segments: int, radius: float) -> bool:
+	var ok: bool = bevel_system.bevel_edge(brush_id, edge, segments, radius)
+	if ok:
+		tag_brush_dirty(brush_id)
+	return ok
+
+
+func inset_face(brush_id: String, face_index: int, inset_distance: float, height: float) -> bool:
+	var ok: bool = bevel_system.inset_face(brush_id, face_index, inset_distance, height)
+	if ok:
+		tag_brush_dirty(brush_id)
+	return ok
 
 
 func justify_selected_faces(mode: String, treat_as_one: bool) -> void:

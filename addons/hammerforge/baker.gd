@@ -149,11 +149,15 @@ func bake_from_faces(
 					"normals": PackedVector3Array()
 				}
 			var group = groups[key]
+			var tri_normals: PackedVector3Array = tri.get("normals", PackedVector3Array())
 			for i in range(verts.size()):
 				var v = origin + basis * verts[i]
 				group["verts"].append(v)
 				group["uvs"].append(uvs[i] if uvs.size() > i else Vector2.ZERO)
-				group["normals"].append((basis * face.normal).normalized())
+				if tri_normals.size() > i:
+					group["normals"].append((basis * tri_normals[i]).normalized())
+				else:
+					group["normals"].append((basis * face.normal).normalized())
 
 	# Build one ArrayMesh with one surface per material group.
 	var combined_mesh = ArrayMesh.new()

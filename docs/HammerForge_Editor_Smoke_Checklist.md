@@ -324,11 +324,36 @@ Enable the HammerForge plugin if it is not already enabled.
 - Confirm the level bakes and a playtest scene launches.
 - Stop the playtest. Undo; confirm the auto-created spawn is removed.
 
-### 26. Cleanup / Persistence
+### 26. Displacement Surfaces
+- Draw a box brush. Enter Face Select Mode, select a top face (quad).
+- Open **Brush tab → Displacement** section. Set Power = 3. Click **Create**.
+- Confirm the face becomes a subdivided grid (toast: "Displacement created (power 3)").
+- Enable Paint Mode. Choose Paint Mode = Raise, Radius = 4, Strength = 1.
+- Click and drag on the face. Confirm vertices rise under the brush.
+- Switch to Paint Mode = Smooth. Paint over the raised area. Confirm it smooths out.
+- Click **Noise**. Confirm the surface gets noisy (toast: "Noise applied to displacement").
+- Click **Smooth**. Confirm the surface smooths out (toast: "Displacement smoothed").
+- Change **Elevation** via the spinbox. Confirm the grid height changes.
+- Click **Destroy**. Confirm the face reverts to a flat quad (toast: "Displacement removed").
+- Undo (Ctrl+Z) and confirm the displacement reappears.
+
+### 27. Edge Bevel and Face Inset
+- Draw a box brush. Press V for Vertex mode, then E for Edge sub-mode.
+- Click an edge to select it (should highlight orange).
+- Open **Brush tab → Bevel** section. Set Segments = 3, Radius = 2.
+- Click **Bevel Edge**. Confirm the sharp edge is replaced with 3 intermediate faces (toast: "Beveled 1 edge(s)").
+- Undo; confirm the edge returns to normal.
+- Switch to Face Select Mode. Select a face.
+- In the **Bevel** section, set Inset = 2, Height = 0.
+- Click **Inset Face**. Confirm the face shrinks inward with connecting side quads (toast: "Face inset applied").
+- Set Inset to a very large value (larger than the face). Click **Inset Face**. Confirm error toast.
+- Undo; confirm the face returns to normal.
+
+### 28. Cleanup / Persistence
 - Dismiss the tutorial with and without `Don't show again` checked.
 - Restart Godot and confirm the `show_welcome` preference behaves as expected.
 - Reopen the dock and confirm no layout corruption remains after closing the tutorial and shortcut dialog.
 
 ## Expected Outcome
 
-If all steps pass, the remaining risk on the tutorial/prefab/shortcut/subtract-preview/vertex-editing/polygon/path/material-browser/spawn-system/context-toolbar/command-palette/terrain-scatter/measure-tool/history-browser/performance-monitor/theme-sync/export-playtest feature set is low and limited mainly to edge cases outside this smoke path.
+If all steps pass, the remaining risk on the tutorial/prefab/shortcut/subtract-preview/vertex-editing/polygon/path/material-browser/spawn-system/context-toolbar/command-palette/terrain-scatter/measure-tool/history-browser/performance-monitor/theme-sync/export-playtest/displacement/bevel feature set is low and limited mainly to edge cases outside this smoke path.

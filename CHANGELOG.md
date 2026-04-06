@@ -4,6 +4,42 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Added
+- **Displacement surfaces** (Apr 2026): Source Engine-style displacement surfaces on quad brush faces.
+  `HFDisplacementData` resource stores a subdivided grid (power 2-4, producing 5x5 to 17x17 vertices)
+  with per-vertex distance offsets along the face normal. `HFDisplacementSystem` subsystem provides
+  create/destroy, paint (Raise/Lower/Smooth/Noise/Alpha modes with quadratic falloff), sew adjacent
+  displacements along shared edges, elevation scale, and power resampling via bilinear interpolation.
+  `FaceData.displacement` property integrates with the existing `triangulate()` → `baker.bake_from_faces()`
+  pipeline, generating subdivided grid meshes with per-vertex normals and CW winding. Baker supports
+  per-vertex normals for displacement faces. Dock UI includes a collapsible Displacement section in the
+  Brush tab with create/destroy, power/elevation spinboxes, paint mode dropdown, radius/strength controls,
+  smooth/noise/sew buttons, and sew group spinbox. Plugin handles displacement paint input with raycast
+  plane intersection, convex polygon bounds check, and quadratic falloff brush. All operations are fully
+  undoable via `_try_undoable_action()` with return-value checking. Continuous paint strokes capture
+  pre-state on mouse-down and commit a single undo action on mouse-up. Displacement data serializes
+  in `.hflevel` saves via `to_dict()`/`from_dict()`.
+- **Edge bevel (chamfer)** (Apr 2026): `HFBevelSystem` subsystem replaces a sharp edge shared by two
+  faces with configurable bevel segments (1-16) approximating a rounded profile. Uses slerp arc
+  interpolation between face pull-back directions. Generates bevel strip quads, corner cap triangle fans
+  at both endpoints, and updates all neighboring faces' shared vertices based on face-normal side
+  assignment to maintain manifold topology. Dock UI includes a collapsible Bevel section with segments
+  and radius spinboxes. Requires vertex/edge mode (V key) with an edge selected.
+- **Face inset** (Apr 2026): `HFBevelSystem.inset_face()` shrinks a face inward by a configurable
+  distance and creates connecting side quads between the original boundary and the inset boundary.
+  Optional height parameter extrudes the inset face along its normal. Collapse guard rejects inset
+  distances that would degenerate the face. Dock UI provides inset distance and height spinboxes.
+- **LevelRoot displacement/bevel API** (Apr 2026): 11 delegate methods on LevelRoot for undo system
+  compatibility: `create_displacement`, `destroy_displacement`, `set_displacement_elevation`,
+  `set_displacement_power`, `set_displacement_sew_group`, `smooth_displacement`, `noise_displacement`,
+  `sew_all_displacements`, `paint_displacement`, `bevel_edge`, `inset_face`. All call through to
+  subsystems and `tag_brush_dirty()` on success.
+- **`_try_undoable_action()` dock helper** (Apr 2026): Generic helper that captures pre-state, calls a
+  LevelRoot method, checks the bool return value, and only commits undo + records history on success.
+  Used by all displacement/bevel dock callbacks to ensure no false success toasts or empty undo entries.
+- 55 new tests across 2 files (`test_displacement.gd` 40, `test_bevel.gd` 15). Total: **1172 tests
+  across 69 files**.
+
 ### Fixed
 - **Inside-out face rendering** (Apr 2026): Manually-defined brush faces (`_build_box_faces()`, polygon
   tool, path tool) used CCW vertex winding, which Godot 4's CW front-face convention treated as

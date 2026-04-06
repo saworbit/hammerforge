@@ -28,6 +28,10 @@ var _vertex_overlay_mesh: MeshInstance3D = null
 var _vertex_overlay_imesh: ImmediateMesh = null
 var _texture_picker_active := false
 var _last_picked_material_index := -1
+var _disp_paint_active := false
+var _disp_paint_brush_id := ""
+var _disp_paint_face_idx := -1
+var _disp_paint_pre_state: Dictionary = {}
 var _context_toolbar: Control = null
 var _hotkey_palette: Control = null
 var _selection_filter: Window = null
@@ -497,6 +501,15 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 	var paint_mode = dock.is_paint_mode_enabled()
 	root.grid_snap = dock.get_grid_snap()
 
+	# Displacement paint intercept — must come before regular paint so that
+	# displacement surfaces get the stroke when paint mode is active.
+	# Only activates when: paint mode ON + Displacement section expanded +
+	# a displaced face is selected.
+	if _disp_paint_active or _should_start_disp_paint(event, root):
+		var dr = _handle_disp_paint_input(event, root, target_camera, target_pos)
+		if dr != EditorPlugin.AFTER_GUI_INPUT_PASS:
+			return dr
+
 	# Paint mode intercept
 	if paint_mode:
 		var r = _handle_paint_input(event, root, target_camera, target_pos)
@@ -575,6 +588,142 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 
 	_update_hud_context()
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
+
+
+func _should_start_disp_paint(event: InputEvent, root: Node) -> bool:
+	if not event is InputEventMouseButton or not event.pressed:
+		return false
+	if event.button_index != MOUSE_BUTTON_LEFT:
+		return false
+	if not root or not root.displacement_system:
+		return false
+	if not dock or not dock._disp_section:
+		return false
+	# Require paint mode to be active — displacement paint reuses the paint toggle.
+	if not dock.is_paint_mode_enabled():
+		return false
+	if not dock._disp_section.is_expanded():
+		return false
+	# Check if a displaced face is selected.
+	var info: Dictionary = dock._get_selected_face_info()
+	if info.is_empty():
+		return false
+	var brush: Node3D = root.find_brush_by_id(info["brush_id"]) if root.has_method("find_brush_by_id") else null
+	if not brush:
+		return false
+	var fi: int = info["face_index"]
+	if fi < 0 or fi >= brush.faces.size():
+		return false
+	return brush.faces[fi].displacement != null
+
+
+func _handle_disp_paint_input(
+	event: InputEvent, root: Node, cam: Camera3D, pos: Vector2
+) -> int:
+	if event is InputEventMouseButton:
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			if event.pressed:
+				var info: Dictionary = dock._get_selected_face_info()
+				if info.is_empty():
+					return EditorPlugin.AFTER_GUI_INPUT_PASS
+				# Capture pre-stroke state for undo.
+				if root.has_method("capture_state"):
+					_disp_paint_pre_state = root.capture_state()
+				_disp_paint_active = true
+				_disp_paint_brush_id = info["brush_id"]
+				_disp_paint_face_idx = info["face_index"]
+				_do_disp_paint_stroke(root, cam, pos)
+				return EditorPlugin.AFTER_GUI_INPUT_STOP
+			else:
+				# Commit the entire stroke as one undo action.
+				if _disp_paint_active and not _disp_paint_pre_state.is_empty():
+					_commit_disp_paint_undo(root)
+				_disp_paint_active = false
+				_disp_paint_brush_id = ""
+				_disp_paint_face_idx = -1
+				_disp_paint_pre_state = {}
+				return EditorPlugin.AFTER_GUI_INPUT_STOP
+	if event is InputEventMouseMotion and _disp_paint_active:
+		_do_disp_paint_stroke(root, cam, pos)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	return EditorPlugin.AFTER_GUI_INPUT_PASS
+
+
+func _commit_disp_paint_undo(root: Node) -> void:
+	if not undo_redo_manager or _disp_paint_pre_state.is_empty():
+		return
+	if not root.has_method("restore_state") or not root.has_method("capture_state"):
+		return
+	var post_state: Dictionary = root.capture_state()
+	undo_redo_manager.create_action("Paint Displacement", 0, null, false)
+	undo_redo_manager.add_do_method(root, "restore_state", post_state)
+	undo_redo_manager.add_undo_method(root, "restore_state", _disp_paint_pre_state)
+	undo_redo_manager.commit_action(false)  # false = don't execute do (already applied)
+	_record_history("Paint Displacement")
+
+
+func _do_disp_paint_stroke(root: Node, cam: Camera3D, pos: Vector2) -> void:
+	if not root.displacement_system:
+		return
+	if _disp_paint_brush_id == "" or _disp_paint_face_idx < 0:
+		return
+	var brush: Node3D = root.find_brush_by_id(_disp_paint_brush_id) if root.has_method("find_brush_by_id") else null
+	if not brush:
+		return
+	var faces: Array = brush.faces
+	if _disp_paint_face_idx >= faces.size():
+		return
+	var face = faces[_disp_paint_face_idx]
+	if face.local_verts.size() < 3:
+		return
+	var basis: Basis = brush.global_transform.basis
+	var origin: Vector3 = brush.global_transform.origin
+	var world_normal: Vector3 = (basis * face.normal).normalized()
+	# Build world-space polygon for the face.
+	var world_verts := PackedVector3Array()
+	for lv in face.local_verts:
+		world_verts.append(origin + basis * lv)
+	# Raycast: intersect with face plane.
+	var from: Vector3 = cam.project_ray_origin(pos)
+	var dir: Vector3 = cam.project_ray_normal(pos)
+	var denom: float = world_normal.dot(dir)
+	if abs(denom) < 0.0001:
+		return
+	var t: float = world_normal.dot(world_verts[0] - from) / denom
+	if t < 0:
+		return
+	var hit_pos: Vector3 = from + dir * t
+	# Reject hits outside the face polygon (with brush-radius margin).
+	var radius: float = dock._disp_radius_spin.value if dock and dock._disp_radius_spin else 4.0
+	if not _point_near_polygon_3d(hit_pos, world_verts, world_normal, radius):
+		return
+	var strength: float = dock._disp_strength_spin.value if dock and dock._disp_strength_spin else 0.5
+	var mode: int = 0
+	if dock and dock._disp_paint_mode_opt:
+		mode = dock._disp_paint_mode_opt.get_selected_id()
+	root.displacement_system.paint(
+		_disp_paint_brush_id, _disp_paint_face_idx,
+		hit_pos, radius, strength, mode
+	)
+
+
+## Check if a point (on the polygon plane) is inside or within margin of a
+## convex polygon defined by world_verts with the given outward normal.
+func _point_near_polygon_3d(
+	point: Vector3, verts: PackedVector3Array, normal: Vector3, margin: float
+) -> bool:
+	var count: int = verts.size()
+	if count < 3:
+		return false
+	for i in range(count):
+		var a: Vector3 = verts[i]
+		var b: Vector3 = verts[(i + 1) % count]
+		var edge: Vector3 = b - a
+		var inward: Vector3 = normal.cross(edge).normalized()
+		var dist: float = inward.dot(point - a)
+		if dist < -margin:
+			return false
+	return true
 
 
 func _handle_paint_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vector2) -> int:

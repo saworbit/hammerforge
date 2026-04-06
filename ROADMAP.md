@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: April 5, 2026
+Last updated: April 6, 2026
 
 This roadmap is a directional plan. Items may change based on user feedback.
 Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md for details.
@@ -224,8 +224,16 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - **One-Click Export Playtest Build**: Validates spawn, bakes, packs scene (baked + entities + default lighting), launches via `play_custom_scene()`. Auto-created spawns are undoable. New `level_root.export_playtest_scene()`.
 - 117 new tests across 7 files. Total: **1091 tests across 62 files**.
 
+## Done (Displacement & Bevel — Source-Style Terrain Sculpting)
+- **Displacement surfaces** (`HFDisplacementData` + `HFDisplacementSystem`): Source Engine-style subdivided face grids on quad brush faces. Power 2-4 (5x5 to 17x17 vertices). Per-vertex distance offsets along face normal. Paint modes: Raise, Lower, Smooth, Noise, Alpha with quadratic falloff brush. Sew adjacent displacements along shared boundary vertices. Elevation scale and power resampling via bilinear interpolation. Integrates into `face.triangulate()` → `baker.bake_from_faces()` pipeline with per-vertex normals. Serializes in `.hflevel` via `to_dict()`/`from_dict()`.
+- **Edge bevel (chamfer)** (`HFBevelSystem`): replace sharp edges with configurable segments (1-16) approximating a rounded profile. Slerp arc interpolation between face pull-back directions. Generates bevel strip quads, corner cap triangle fans at endpoints, and updates all neighboring face vertices for manifold topology. Requires vertex/edge mode with an edge selected.
+- **Face inset** (`HFBevelSystem`): shrink a face inward by configurable distance, create connecting side quads. Optional height extrude along normal. Collapse guard rejects degenerate insets.
+- **Dock UI**: Displacement collapsible section (create/destroy, power/elevation, paint mode dropdown, radius/strength, smooth/noise/sew, sew group). Bevel collapsible section (segments/radius for edge bevel, distance/height for face inset).
+- **Full undo/redo**: all operations use `_try_undoable_action()` with return-value checking and `record_history()`. Continuous paint strokes capture pre-state on mouse-down and commit single undo action on mouse-up.
+- **Plugin displacement paint input**: raycast plane intersection constrained by convex polygon bounds check. Paint gated behind paint mode enabled + Displacement section expanded.
+- 55 new tests across 2 files (test_displacement 40, test_bevel 15). Total: **1172 tests across 69 files**.
+
 ## Next (Wave 2c remaining)
-- Displacement sewing (stitch adjacent heightmap edges to share vertices).
 - Material atlasing for large scenes.
 
 ## Future (Wave 3 -- Polish)

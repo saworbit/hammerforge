@@ -30,6 +30,10 @@ class PaintLayer:
 @export var local_verts: PackedVector3Array = PackedVector3Array()
 @export var normal: Vector3 = Vector3.UP
 
+## Optional displacement data. When non-null the face is a displacement surface
+## and triangulate() produces a subdivided grid mesh instead of a flat fan.
+var displacement: Resource = null  # HFDisplacementData (avoid preload cycle)
+
 
 func ensure_geometry() -> void:
 	_compute_normal()
@@ -84,6 +88,20 @@ func triangulate() -> Dictionary:
 	var source_uvs = custom_uvs
 	if source_uvs.size() != count:
 		source_uvs = _project_uvs_for_vertices(local_verts)
+	# Displacement path: delegate to HFDisplacementData for subdivided mesh.
+	if displacement != null and count == 4:
+		var corners: Array[Vector3] = [
+			local_verts[0], local_verts[1],
+			local_verts[3], local_verts[2]
+		]
+		var uv_corners: Array[Vector2] = [
+			source_uvs[0], source_uvs[1],
+			source_uvs[3], source_uvs[2]
+		]
+		var result: Dictionary = displacement.triangulate_displaced(
+			corners, normal, uv_corners
+		)
+		return {"verts": result.get("verts", tri_verts), "uvs": result.get("uvs", tri_uvs), "normals": result.get("normals", PackedVector3Array())}
 	for i in range(1, count - 1):
 		tri_verts.append(local_verts[0])
 		tri_verts.append(local_verts[i])
@@ -183,7 +201,8 @@ func to_dict() -> Dictionary:
 		"custom_uvs": _encode_vec2_array(custom_uvs),
 		"local_verts": _encode_vec3_array(local_verts),
 		"normal": _encode_vec3(normal),
-		"paint_layers": layer_data
+		"paint_layers": layer_data,
+		"displacement": displacement.to_dict() if displacement != null else null
 	}
 
 
@@ -244,6 +263,10 @@ static func from_dict(data: Dictionary) -> FaceData:
 			face.uv_rotation = 0.0
 			face.uv_scale = Vector2.ONE
 			face.uv_offset = Vector2.ZERO
+	# Displacement data
+	var disp_data: Variant = data.get("displacement", null)
+	if disp_data is Dictionary:
+		face.displacement = HFDisplacementData.from_dict(disp_data)
 	return face
 
 

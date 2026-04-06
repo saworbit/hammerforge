@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/Godot-4.6%2B-478cbf?logo=godot-engine&logoColor=white" alt="Godot 4.6+">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
   <img src="https://img.shields.io/badge/Status-Early%20Alpha-red" alt="Early Alpha">
-  <img src="https://img.shields.io/badge/Tests-1120%20passing-brightgreen" alt="1120 tests passing">
+  <img src="https://img.shields.io/badge/Tests-1172%20passing-brightgreen" alt="1172 tests passing">
   <img src="https://img.shields.io/badge/GDScript-25k%2B%20lines-blueviolet" alt="25k+ lines">
 </p>
 
@@ -40,7 +40,7 @@ HammerForge is a single `addons/` folder. No external tools, no custom builds, n
 
 | | |
 |---|---|
-| **19 subsystems** + coordinator architecture | **1120 unit + integration tests** with CI on every push |
+| **21 subsystems** + coordinator architecture | **1172 unit + integration tests** with CI on every push |
 | **15 brush shapes** (box through dodecahedron) | **150 built-in prototype textures** for instant greyboxing |
 | **Quake `.map`** + **glTF `.glb`** export | **.hflevel** native format with threaded I/O |
 | **Customizable keymaps** (JSON) | **Plugin API** for custom tools |
@@ -59,6 +59,8 @@ Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Su
 - **Hollow** (Ctrl+H) -- convert a solid brush to a room with configurable wall thickness
 - **Clip** (Shift+X) -- split a brush along an axis-aligned plane
 - **Carve** (Ctrl+Shift+R) -- boolean-subtract one brush from all intersecting brushes
+- **Bevel** -- round off sharp edges with configurable segments and radius (vertex/edge mode)
+- **Face Inset** -- shrink a face inward and optionally extrude along its normal
 - **Numeric input** -- type exact dimensions during any drag or extrude
 - **Resize gizmo** with full undo/redo
 
@@ -114,6 +116,7 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Sculpting:** Raise, Lower, Smooth, Flatten brushes for interactive terrain editing with configurable strength, radius, and falloff
 - **Shapes:** Square, Circle with adjustable radius
 - **Heightmaps:** import PNG/EXR or generate procedural noise -- per-vertex displacement via SurfaceTool
+- **Displacement surfaces:** Source-style subdivided face grids (power 2-4) with Raise/Lower/Smooth/Noise/Alpha paint modes, sew adjacent displacements, elevation scale
 - **Convert Selection to Heightmap:** select brushes → rasterize top faces → create sculptable terrain layer
 - **Material blending:** four-slot shader with per-cell blend weights painted directly on the grid
 - **Auto-connectors:** ramp and stair mesh generation between layers at different heights
@@ -243,6 +246,8 @@ plugin.gd            EditorPlugin — input routing, toolbar, viewport overlay
        ├─ HFVertexSystem    Vertex/edge selection, move, split, merge with convexity validation
        ├─ HFSpawnSystem     Player spawn lookup, validation, auto-fix, debug visualisation
        ├─ HFPrefabSystem    Instance registry, variant cycling, live-linked propagation
+       ├─ HFDisplacementSystem  Displacement surface create/destroy/paint/sew/elevation
+       ├─ HFBevelSystem     Edge bevel (chamfer) and face inset
        └─ HFToolRegistry    External tool loading and dispatch
             ├─ HFMeasureTool   Multi-ruler measurement + snap reference (tool_id=100)
             ├─ HFDecalTool     Decal placement with live preview (tool_id=101)
@@ -319,7 +324,7 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 
 ## Testing
 
-1091 tests across 62 files using the [GUT](https://github.com/bitwes/Gut) framework, including unit tests and end-to-end integration tests. All checks run on every push via GitHub Actions.
+1172 tests across 69 files using the [GUT](https://github.com/bitwes/Gut) framework, including unit tests and end-to-end integration tests. All checks run on every push via GitHub Actions.
 
 ```bash
 # Run all tests headless
@@ -366,6 +371,7 @@ gdlint addons/hammerforge/
 See [ROADMAP.md](ROADMAP.md) for the full plan.
 
 **Recently shipped:**
+- Displacement & Bevel (Source-style displacement surfaces with paint/sew/elevation, edge bevel with slerp arc, face inset)
 - Quality-of-Life & Polish (theme sync, undo history browser, multi-ruler measure tool, performance monitor, export playtest)
 - Terrain & Organic Enhancements (brush-to-heightmap, foliage scatter, path tool extras)
 - Learning & Discovery Aids (coach marks, operation replay timeline, fuzzy command palette, example library)
@@ -376,7 +382,6 @@ See [ROADMAP.md](ROADMAP.md) for the full plan.
 - Smart contextual toolbar + command palette with fuzzy search
 
 **Next up:**
-- Displacement sewing (stitch adjacent heightmap edges)
 - Material atlasing for large scenes
 - Merge tool (combine two adjacent brushes)
 

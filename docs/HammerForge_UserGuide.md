@@ -839,6 +839,62 @@ Notes:
 - Surface paint is separate from floor paint layers.
 - If paint affects the floor, set `Paint Target = Surface` in the Surface Paint section.
 
+## Displacement Surfaces
+
+Displacement surfaces turn a flat quad face into a subdivided terrain grid that you can sculpt interactively, similar to Source Engine displacements.
+
+### Creating a Displacement
+1. Select a brush and enter **Face Select Mode**.
+2. Click a **quad face** (exactly 4 vertices).
+3. Open the **Brush** tab → **Displacement** section.
+4. Set **Power** (2 = 5x5, 3 = 9x9, 4 = 17x17 vertices).
+5. Click **Create**. The face becomes a subdivided grid.
+
+### Painting (Sculpting)
+1. Enable **Paint Mode** in the dock and ensure the **Displacement** section is expanded.
+2. Select a displaced face.
+3. Choose a **Paint Mode**: Raise, Lower, Smooth, Noise, or Alpha.
+4. Set **Radius** and **Strength**.
+5. Click and drag on the face in the viewport to sculpt.
+
+Paint uses a circular brush with quadratic falloff. Strokes are continuous — the entire stroke commits as a single undo action when you release the mouse button.
+
+### Settings
+- **Elevation**: global height scale multiplier for the displacement grid.
+- **Power**: subdivision level (changing power resamples existing data via bilinear interpolation).
+- **Sew Group**: integer group ID. Click **Sew** to snap shared boundary vertices between adjacent displacements in the same sew group.
+
+### Destroying a Displacement
+Click **Destroy** to revert a displaced face back to a flat quad.
+
+Notes:
+- Displacement requires a quad face (4 vertices). Triangles and N-gons are not supported.
+- Displacement data is serialized in `.hflevel` saves.
+- The baker generates per-vertex normals for displaced faces (smooth shading).
+
+## Bevel and Face Inset
+
+### Edge Bevel (Chamfer)
+Replace a sharp edge with a rounded profile:
+1. Enter **Vertex mode** (V key) and switch to **Edge sub-mode** (E key).
+2. Select one or more edges.
+3. Open the **Brush** tab → **Bevel** section.
+4. Set **Segments** (1-16) and **Radius** (distance the bevel cuts into the brush).
+5. Click **Bevel Edge**.
+
+The selected edges are replaced with bevel strip faces. Higher segment counts produce smoother curves.
+
+### Face Inset
+Shrink a face inward and create connecting side faces:
+1. Select a face in **Face Select Mode**.
+2. Open the **Brush** tab → **Bevel** section.
+3. Set **Inset** (distance to shrink inward) and optional **Height** (extrude along normal).
+4. Click **Inset Face**.
+
+Notes:
+- Inset distance cannot exceed the face's corner-to-centroid distance (the operation is rejected with a toast if too large).
+- Both bevel and inset operations are fully undoable.
+
 ## Entities (early)
 - Place nodes under `LevelRoot/Entities` or set meta `is_entity = true`.
 - Entities are selectable and excluded from bake.
@@ -923,4 +979,20 @@ Heightmap mesh not appearing
 Blend shader shows only one slot
 - Paint blend weights using the Blend tool on already-filled cells.
 - Set a Blend Slot (B/C/D) and assign textures to Slot A-D.
+
+Displacement create fails
+- The face must be a quad (exactly 4 vertices). Triangles and N-gons are not supported.
+- Ensure a face is selected in Face Select Mode.
+
+Displacement paint does nothing
+- Enable Paint Mode in the dock.
+- Expand the Displacement section (it must be visible, not collapsed).
+- Ensure the face has a displacement (click Create first).
+
+Bevel edge fails
+- Enter Vertex mode (V), then Edge sub-mode (E). Select an edge.
+- The edge must be shared by exactly 2 faces.
+
+Inset face fails
+- The inset distance is too large relative to the face size. Use a smaller value.
 - Verify the blend_map texture is generated (requires cells with non-zero blend weights).

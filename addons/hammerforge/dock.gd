@@ -419,6 +419,27 @@ var _entity_props_section: VBoxContainer = null
 var _entity_props_controls: Array = []
 var _entity_props_entity: Node3D = null
 
+# Displacement / Bevel UI controls
+var _disp_section: HFCollapsibleSection = null
+var _disp_power_spin: SpinBox = null
+var _disp_elevation_spin: SpinBox = null
+var _disp_create_btn: Button = null
+var _disp_destroy_btn: Button = null
+var _disp_smooth_btn: Button = null
+var _disp_noise_btn: Button = null
+var _disp_sew_btn: Button = null
+var _disp_sew_group_spin: SpinBox = null
+var _disp_paint_mode_opt: OptionButton = null
+var _disp_radius_spin: SpinBox = null
+var _disp_strength_spin: SpinBox = null
+var _bevel_section: HFCollapsibleSection = null
+var _bevel_edge_btn: Button = null
+var _bevel_inset_btn: Button = null
+var _bevel_segments_spin: SpinBox = null
+var _bevel_radius_spin: SpinBox = null
+var _bevel_inset_dist_spin: SpinBox = null
+var _bevel_inset_height_spin: SpinBox = null
+
 
 func _is_level_root(node: Node) -> bool:
 	return node != null and node is LevelRootType
@@ -1649,12 +1670,435 @@ func _build_selection_tools_section() -> void:
 	builder.build(brush_vbox)
 
 
+func _build_displacement_bevel_section() -> void:
+	var brush_vbox = $Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox
+	if not brush_vbox:
+		return
+	# --- Displacement Section ---
+	_disp_section = HFCollapsibleSection.create("Displacement", false)
+	brush_vbox.add_child(_disp_section)
+	var dbox: VBoxContainer = _disp_section.get_content()
+	# Create / Destroy row
+	var cd_row = HBoxContainer.new()
+	_disp_create_btn = Button.new()
+	_disp_create_btn.text = "Create"
+	_disp_create_btn.tooltip_text = "Create displacement on selected quad face"
+	_disp_create_btn.pressed.connect(_on_disp_create)
+	cd_row.add_child(_disp_create_btn)
+	_disp_destroy_btn = Button.new()
+	_disp_destroy_btn.text = "Destroy"
+	_disp_destroy_btn.tooltip_text = "Remove displacement from selected face"
+	_disp_destroy_btn.pressed.connect(_on_disp_destroy)
+	cd_row.add_child(_disp_destroy_btn)
+	dbox.add_child(cd_row)
+	# Power
+	var pow_row = HBoxContainer.new()
+	pow_row.add_child(_make_label("Power:"))
+	_disp_power_spin = SpinBox.new()
+	_disp_power_spin.min_value = 2
+	_disp_power_spin.max_value = 4
+	_disp_power_spin.step = 1
+	_disp_power_spin.value = 3
+	_disp_power_spin.tooltip_text = "Subdivision: 2=5x5, 3=9x9, 4=17x17"
+	pow_row.add_child(_disp_power_spin)
+	dbox.add_child(pow_row)
+	# Elevation
+	var elev_row = HBoxContainer.new()
+	elev_row.add_child(_make_label("Elevation:"))
+	_disp_elevation_spin = SpinBox.new()
+	_disp_elevation_spin.min_value = 0.01
+	_disp_elevation_spin.max_value = 100.0
+	_disp_elevation_spin.step = 0.1
+	_disp_elevation_spin.value = 1.0
+	_disp_elevation_spin.tooltip_text = "Scale multiplier for displacement heights"
+	_disp_elevation_spin.value_changed.connect(_on_disp_elevation_changed)
+	elev_row.add_child(_disp_elevation_spin)
+	dbox.add_child(elev_row)
+	# Paint mode
+	var pm_row = HBoxContainer.new()
+	pm_row.add_child(_make_label("Paint:"))
+	_disp_paint_mode_opt = OptionButton.new()
+	_disp_paint_mode_opt.add_item("Raise", 0)
+	_disp_paint_mode_opt.add_item("Lower", 1)
+	_disp_paint_mode_opt.add_item("Smooth", 2)
+	_disp_paint_mode_opt.add_item("Noise", 3)
+	_disp_paint_mode_opt.add_item("Alpha", 4)
+	_disp_paint_mode_opt.tooltip_text = "Displacement paint brush mode"
+	pm_row.add_child(_disp_paint_mode_opt)
+	dbox.add_child(pm_row)
+	# Radius / Strength
+	var rs_row = HBoxContainer.new()
+	rs_row.add_child(_make_label("R:"))
+	_disp_radius_spin = SpinBox.new()
+	_disp_radius_spin.min_value = 0.5
+	_disp_radius_spin.max_value = 64.0
+	_disp_radius_spin.step = 0.5
+	_disp_radius_spin.value = 4.0
+	_disp_radius_spin.tooltip_text = "Displacement paint brush radius"
+	rs_row.add_child(_disp_radius_spin)
+	rs_row.add_child(_make_label("S:"))
+	_disp_strength_spin = SpinBox.new()
+	_disp_strength_spin.min_value = 0.01
+	_disp_strength_spin.max_value = 10.0
+	_disp_strength_spin.step = 0.05
+	_disp_strength_spin.value = 0.5
+	_disp_strength_spin.tooltip_text = "Displacement paint brush strength"
+	rs_row.add_child(_disp_strength_spin)
+	dbox.add_child(rs_row)
+	# Smooth / Noise / Sew buttons
+	var ops_row = HBoxContainer.new()
+	_disp_smooth_btn = Button.new()
+	_disp_smooth_btn.text = "Smooth"
+	_disp_smooth_btn.tooltip_text = "Smooth entire displacement surface"
+	_disp_smooth_btn.pressed.connect(_on_disp_smooth)
+	ops_row.add_child(_disp_smooth_btn)
+	_disp_noise_btn = Button.new()
+	_disp_noise_btn.text = "Noise"
+	_disp_noise_btn.tooltip_text = "Apply noise to displacement"
+	_disp_noise_btn.pressed.connect(_on_disp_noise)
+	ops_row.add_child(_disp_noise_btn)
+	_disp_sew_btn = Button.new()
+	_disp_sew_btn.text = "Sew"
+	_disp_sew_btn.tooltip_text = "Sew adjacent displacements sharing a sew group"
+	_disp_sew_btn.pressed.connect(_on_disp_sew)
+	ops_row.add_child(_disp_sew_btn)
+	dbox.add_child(ops_row)
+	# Sew group
+	var sg_row = HBoxContainer.new()
+	sg_row.add_child(_make_label("Sew Group:"))
+	_disp_sew_group_spin = SpinBox.new()
+	_disp_sew_group_spin.min_value = -1
+	_disp_sew_group_spin.max_value = 99
+	_disp_sew_group_spin.step = 1
+	_disp_sew_group_spin.value = -1
+	_disp_sew_group_spin.tooltip_text = "Sew group ID (-1 = none)"
+	_disp_sew_group_spin.value_changed.connect(_on_disp_sew_group_changed)
+	sg_row.add_child(_disp_sew_group_spin)
+	dbox.add_child(sg_row)
+	_register_section(_disp_section, "Displacement")
+	# --- Bevel Section ---
+	_bevel_section = HFCollapsibleSection.create("Bevel", false)
+	brush_vbox.add_child(_bevel_section)
+	var bbox: VBoxContainer = _bevel_section.get_content()
+	# Edge Bevel
+	var eb_row = HBoxContainer.new()
+	_bevel_edge_btn = Button.new()
+	_bevel_edge_btn.text = "Bevel Edge"
+	_bevel_edge_btn.tooltip_text = "Bevel the selected edge (vertex mode, edge sub-mode)"
+	_bevel_edge_btn.pressed.connect(_on_bevel_edge)
+	eb_row.add_child(_bevel_edge_btn)
+	bbox.add_child(eb_row)
+	# Segments / Radius
+	var sr_row = HBoxContainer.new()
+	sr_row.add_child(_make_label("Segments:"))
+	_bevel_segments_spin = SpinBox.new()
+	_bevel_segments_spin.min_value = 1
+	_bevel_segments_spin.max_value = 16
+	_bevel_segments_spin.step = 1
+	_bevel_segments_spin.value = 2
+	_bevel_segments_spin.tooltip_text = "Number of bevel segments (1 = chamfer)"
+	sr_row.add_child(_bevel_segments_spin)
+	sr_row.add_child(_make_label("Radius:"))
+	_bevel_radius_spin = SpinBox.new()
+	_bevel_radius_spin.min_value = 0.1
+	_bevel_radius_spin.max_value = 64.0
+	_bevel_radius_spin.step = 0.1
+	_bevel_radius_spin.value = 2.0
+	_bevel_radius_spin.tooltip_text = "Bevel radius (how far the bevel extends)"
+	sr_row.add_child(_bevel_radius_spin)
+	bbox.add_child(sr_row)
+	# Face Inset
+	var fi_lbl = Label.new()
+	fi_lbl.text = "Face Inset"
+	bbox.add_child(fi_lbl)
+	var fi_row = HBoxContainer.new()
+	fi_row.add_child(_make_label("Inset:"))
+	_bevel_inset_dist_spin = SpinBox.new()
+	_bevel_inset_dist_spin.min_value = 0.1
+	_bevel_inset_dist_spin.max_value = 64.0
+	_bevel_inset_dist_spin.step = 0.1
+	_bevel_inset_dist_spin.value = 2.0
+	_bevel_inset_dist_spin.tooltip_text = "Distance to inset the face boundary"
+	fi_row.add_child(_bevel_inset_dist_spin)
+	fi_row.add_child(_make_label("Height:"))
+	_bevel_inset_height_spin = SpinBox.new()
+	_bevel_inset_height_spin.min_value = -64.0
+	_bevel_inset_height_spin.max_value = 64.0
+	_bevel_inset_height_spin.step = 0.1
+	_bevel_inset_height_spin.value = 0.0
+	_bevel_inset_height_spin.tooltip_text = "Extrude the inset face along its normal (0 = flat inset)"
+	fi_row.add_child(_bevel_inset_height_spin)
+	bbox.add_child(fi_row)
+	_bevel_inset_btn = Button.new()
+	_bevel_inset_btn.text = "Inset Face"
+	_bevel_inset_btn.tooltip_text = "Inset the selected face and create connecting side faces"
+	_bevel_inset_btn.pressed.connect(_on_bevel_inset)
+	bbox.add_child(_bevel_inset_btn)
+	_register_section(_bevel_section, "Bevel")
+
+
+func _make_label(text: String) -> Label:
+	var lbl = Label.new()
+	lbl.text = text
+	return lbl
+
+
+# --- Displacement callbacks ---
+
+
+func _get_selected_face_info() -> Dictionary:
+	# Returns {brush_id, face_index} for the first selected face, or empty dict.
+	# Face selection lives in level_root.face_selection: {brush_key: [face_indices]}.
+	if not level_root:
+		return {}
+	if not level_root.get("face_selection") is Dictionary:
+		return {}
+	var fs: Dictionary = level_root.face_selection
+	for key in fs.keys():
+		var indices: Array = fs.get(key, [])
+		if indices.is_empty():
+			continue
+		var brush_id: String = str(key)
+		var brush: Node3D = level_root._find_brush_by_key(brush_id) if level_root.has_method("_find_brush_by_key") else null
+		if not brush:
+			continue
+		var fi: int = int(indices[0])
+		if fi >= 0 and fi < brush.faces.size():
+			return {"brush_id": brush.brush_id, "face_index": fi}
+	return {}
+
+
+func _selected_face_has_displacement(info: Dictionary) -> bool:
+	if info.is_empty() or not level_root:
+		return false
+	var brush: Node3D = level_root.find_brush_by_id(info["brush_id"]) if level_root.has_method("find_brush_by_id") else null
+	if not brush:
+		return false
+	var fi: int = info["face_index"]
+	if fi < 0 or fi >= brush.faces.size():
+		return false
+	return brush.faces[fi].displacement != null
+
+
+## Execute a LevelRoot method that returns bool, wrapping in undo + history
+## only when the call succeeds. Returns the bool result.
+func _try_undoable_action(action_name: String, method_name: String, args: Array = []) -> bool:
+	if not level_root or not level_root.has_method(method_name):
+		return false
+	var pre_state: Dictionary = level_root.capture_state() if level_root.has_method("capture_state") else {}
+	var ok: bool = level_root.callv(method_name, args)
+	if ok and undo_redo and not pre_state.is_empty():
+		var post_state: Dictionary = level_root.capture_state()
+		undo_redo.create_action(action_name, 0, null, false)
+		undo_redo.add_do_method(level_root, "restore_state", post_state)
+		undo_redo.add_undo_method(level_root, "restore_state", pre_state)
+		undo_redo.commit_action(false)
+		record_history(action_name)
+	return ok
+
+
+func _on_disp_create() -> void:
+	if not level_root:
+		return
+	var info: Dictionary = _get_selected_face_info()
+	if info.is_empty():
+		show_toast("Select a quad face first", 1)
+		return
+	var power: int = int(_disp_power_spin.value) if _disp_power_spin else 3
+	var ok: bool = _try_undoable_action(
+		"Create Displacement", "create_displacement",
+		[info["brush_id"], info["face_index"], power]
+	)
+	if ok:
+		show_toast("Displacement created (power %d)" % power, 0)
+	else:
+		show_toast("Failed — face must be a quad (4 vertices)", 2)
+
+
+func _on_disp_destroy() -> void:
+	if not level_root:
+		return
+	var info: Dictionary = _get_selected_face_info()
+	if info.is_empty():
+		show_toast("Select a displaced face first", 1)
+		return
+	var ok: bool = _try_undoable_action(
+		"Destroy Displacement", "destroy_displacement",
+		[info["brush_id"], info["face_index"]]
+	)
+	if ok:
+		show_toast("Displacement removed", 0)
+	else:
+		show_toast("Face has no displacement to remove", 2)
+
+
+func _on_disp_elevation_changed(value: float) -> void:
+	if not level_root:
+		return
+	var info: Dictionary = _get_selected_face_info()
+	if info.is_empty():
+		return
+	if not _selected_face_has_displacement(info):
+		return
+	var brush_id: String = info["brush_id"]
+	var face_idx: int = info["face_index"]
+	HFUndoHelper.commit(
+		undo_redo,
+		level_root,
+		"Set Displacement Elevation",
+		"set_displacement_elevation",
+		[brush_id, face_idx, value],
+		false,
+		Callable(self, "record_history"),
+		"disp_elevation_%s_%d" % [brush_id, face_idx]
+	)
+
+
+func _on_disp_smooth() -> void:
+	if not level_root:
+		return
+	var info: Dictionary = _get_selected_face_info()
+	if info.is_empty():
+		show_toast("Select a displaced face first", 1)
+		return
+	var strength: float = _disp_strength_spin.value if _disp_strength_spin else 0.5
+	var ok: bool = _try_undoable_action(
+		"Smooth Displacement", "smooth_displacement",
+		[info["brush_id"], info["face_index"], strength]
+	)
+	if ok:
+		show_toast("Displacement smoothed", 0)
+	else:
+		show_toast("Smooth failed — face has no displacement", 2)
+
+
+func _on_disp_noise() -> void:
+	if not level_root:
+		return
+	var info: Dictionary = _get_selected_face_info()
+	if info.is_empty():
+		show_toast("Select a displaced face first", 1)
+		return
+	var scale: float = _disp_strength_spin.value if _disp_strength_spin else 1.0
+	var ok: bool = _try_undoable_action(
+		"Noise Displacement", "noise_displacement",
+		[info["brush_id"], info["face_index"], scale]
+	)
+	if ok:
+		show_toast("Noise applied to displacement", 0)
+	else:
+		show_toast("Noise failed — face has no displacement", 2)
+
+
+func _on_disp_sew() -> void:
+	if not level_root:
+		return
+	# Capture state, execute, then commit undo only if vertices were actually sewn.
+	var pre_state: Dictionary = level_root.capture_state() if level_root.has_method("capture_state") else {}
+	var count: int = level_root.sew_all_displacements()
+	if count > 0 and undo_redo and not pre_state.is_empty():
+		var post_state: Dictionary = level_root.capture_state()
+		undo_redo.create_action("Sew Displacements", 0, null, false)
+		undo_redo.add_do_method(level_root, "restore_state", post_state)
+		undo_redo.add_undo_method(level_root, "restore_state", pre_state)
+		undo_redo.commit_action(false)
+		record_history("Sew Displacements")
+	show_toast("Sewn %d boundary vertices" % count, 0)
+
+
+func _on_disp_sew_group_changed(value: float) -> void:
+	if not level_root:
+		return
+	var info: Dictionary = _get_selected_face_info()
+	if info.is_empty():
+		return
+	if not _selected_face_has_displacement(info):
+		return
+	var brush_id: String = info["brush_id"]
+	var face_idx: int = info["face_index"]
+	HFUndoHelper.commit(
+		undo_redo,
+		level_root,
+		"Set Sew Group",
+		"set_displacement_sew_group",
+		[brush_id, face_idx, int(value)],
+		false,
+		Callable(self, "record_history"),
+		"disp_sew_group_%s_%d" % [brush_id, face_idx]
+	)
+
+
+# --- Bevel callbacks ---
+
+
+func _on_bevel_edge() -> void:
+	if not level_root:
+		return
+	var plugin_ref = level_root.get_meta("_hf_plugin", null)
+	if not plugin_ref:
+		show_toast("No plugin reference", 2)
+		return
+	if not plugin_ref.get("_vertex_mode") or not level_root.vertex_system:
+		show_toast("Enter vertex/edge mode first (V key)", 1)
+		return
+	var vs = level_root.vertex_system
+	if vs.selected_edges.is_empty():
+		show_toast("Select an edge first (edge sub-mode)", 1)
+		return
+	var segments: int = int(_bevel_segments_spin.value) if _bevel_segments_spin else 2
+	var radius: float = _bevel_radius_spin.value if _bevel_radius_spin else 2.0
+	# Capture state once before the batch, call each bevel, track actual successes.
+	var pre_state: Dictionary = level_root.capture_state() if level_root.has_method("capture_state") else {}
+	var count := 0
+	for brush_id in vs.selected_edges:
+		var edges: Array = vs.selected_edges[brush_id]
+		for edge in edges:
+			if level_root.bevel_edge(brush_id, edge, segments, radius):
+				count += 1
+	if count > 0:
+		if undo_redo and not pre_state.is_empty():
+			var post_state: Dictionary = level_root.capture_state()
+			undo_redo.create_action("Bevel Edge", 0, null, false)
+			undo_redo.add_do_method(level_root, "restore_state", post_state)
+			undo_redo.add_undo_method(level_root, "restore_state", pre_state)
+			undo_redo.commit_action(false)
+			record_history("Bevel Edge")
+		show_toast("Beveled %d edge(s)" % count, 0)
+	else:
+		show_toast("Bevel failed — check edge selection", 2)
+
+
+func _on_bevel_inset() -> void:
+	if not level_root:
+		return
+	var info: Dictionary = _get_selected_face_info()
+	if info.is_empty():
+		show_toast("Select a face first", 1)
+		return
+	var inset_dist: float = _bevel_inset_dist_spin.value if _bevel_inset_dist_spin else 2.0
+	var height: float = _bevel_inset_height_spin.value if _bevel_inset_height_spin else 0.0
+	var pre_state: Dictionary = level_root.capture_state() if level_root.has_method("capture_state") else {}
+	var ok: bool = level_root.inset_face(info["brush_id"], info["face_index"], inset_dist, height)
+	if ok:
+		if undo_redo and not pre_state.is_empty():
+			var post_state: Dictionary = level_root.capture_state()
+			undo_redo.create_action("Inset Face", 0, null, false)
+			undo_redo.add_do_method(level_root, "restore_state", post_state)
+			undo_redo.add_undo_method(level_root, "restore_state", pre_state)
+			undo_redo.commit_action(false)
+			record_history("Inset Face")
+		show_toast("Face inset applied", 0)
+	else:
+		show_toast("Inset failed — distance too large or face too small", 2)
+
+
 func _ready():
 	# --- Build programmatic tabs first ---
 	_build_paint_tab()
 	_build_manage_tab()
 	_build_entity_io_section()
 	_build_selection_tools_section()
+	_build_displacement_bevel_section()
 
 	# --- Toolbar setup ---
 	var tool_group = ButtonGroup.new()
