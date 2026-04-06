@@ -231,6 +231,7 @@ func capture_hflevel_settings() -> Dictionary:
 		"bake_chunk_size": root.bake_chunk_size,
 		"bake_visible_only": root.bake_visible_only,
 		"bake_use_multimesh": root.bake_use_multimesh,
+		"bake_use_atlas": root.bake_use_atlas,
 		"bake_collision_layer_index": root.bake_collision_layer_index,
 		"bake_material_override": root.bake_material_override,
 		"bake_use_face_materials": root.bake_use_face_materials,
@@ -290,6 +291,8 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 		root.bake_visible_only = bool(settings.get("bake_visible_only", root.bake_visible_only))
 	if settings.has("bake_use_multimesh"):
 		root.bake_use_multimesh = bool(settings.get("bake_use_multimesh", root.bake_use_multimesh))
+	if settings.has("bake_use_atlas"):
+		root.bake_use_atlas = bool(settings.get("bake_use_atlas", root.bake_use_atlas))
 	if settings.has("bake_collision_layer_index"):
 		root.bake_collision_layer_index = int(
 			settings.get("bake_collision_layer_index", root.bake_collision_layer_index)

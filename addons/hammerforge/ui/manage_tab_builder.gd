@@ -131,6 +131,13 @@ func build(parent: Control) -> void:
 	dock.bake_use_multimesh_check.tooltip_text = "Consolidate repeated identical meshes into MultiMeshInstance3D"
 	bk.add_child(dock.bake_use_multimesh_check)
 
+	# -- Material Atlas --
+	dock.bake_use_atlas_check = dock._make_check("Material Atlas")
+	dock.bake_use_atlas_check.tooltip_text = (
+		"Pack material textures into a single atlas to reduce draw calls (requires Face Materials)"
+	)
+	bk.add_child(dock.bake_use_atlas_check)
+
 	# -- Bake time estimate --
 	dock.bake_estimate_label = Label.new()
 	dock.bake_estimate_label.text = "Est: — "

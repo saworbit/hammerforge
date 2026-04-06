@@ -97,6 +97,7 @@ var _grid_snap: float = 16.0
 @export var bake_navmesh_agent_radius: float = 0.4
 @export var bake_visible_only: bool = false
 @export var bake_use_multimesh: bool = false
+@export var bake_use_atlas: bool = false
 @export var bake_use_thread_pool: bool = true
 var _hflevel_autosave_enabled: bool = true
 @export var hflevel_autosave_enabled: bool = true:

@@ -136,6 +136,7 @@ var bake_use_face_materials: bool = false
 var bake_chunk_size: float = 0.0
 var bake_visible_only: bool = false
 var bake_use_multimesh: bool = false
+var bake_use_atlas: bool = false
 var commit_freeze: bool = false
 var baker = null
 

@@ -308,7 +308,8 @@ func build_bake_options() -> Dictionary:
 		"unwrap_uv2": root.bake_lightmap_uv2,
 		"uv2_texel_size": root.bake_lightmap_texel_size,
 		"use_thread_pool": root.bake_use_thread_pool,
-		"use_face_materials": root.bake_use_face_materials
+		"use_face_materials": root.bake_use_face_materials,
+		"use_atlas": root.bake_use_atlas
 	}
 
 

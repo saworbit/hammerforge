@@ -162,6 +162,7 @@ var bake_estimate_label: Label = null
 var bake_chunk_size_spin: SpinBox = null
 var bake_visible_only_check: CheckBox = null
 var bake_use_multimesh_check: CheckBox = null
+var bake_use_atlas_check: CheckBox = null
 # -- Quick Play mode controls --
 var quick_play_camera_btn: Button = null
 var quick_play_area_btn: Button = null
@@ -519,6 +520,7 @@ func _connect_setting_signals() -> void:
 		[bake_navmesh, "bake_navmesh"],
 		[bake_visible_only_check, "bake_visible_only"],
 		[bake_use_multimesh_check, "bake_use_multimesh"],
+		[bake_use_atlas_check, "bake_use_atlas"],
 		[commit_freeze, "commit_freeze"],
 		[autosave_enabled, "hflevel_autosave_enabled"],
 		[show_grid, "grid_visible"],
@@ -570,6 +572,7 @@ func _apply_ui_state_to_root() -> void:
 		[bake_navmesh, "bake_navmesh"],
 		[bake_visible_only_check, "bake_visible_only"],
 		[bake_use_multimesh_check, "bake_use_multimesh"],
+		[bake_use_atlas_check, "bake_use_atlas"],
 		[commit_freeze, "commit_freeze"],
 		[autosave_enabled, "hflevel_autosave_enabled"],
 		[show_grid, "grid_visible"],
@@ -979,6 +982,13 @@ func _apply_all_tooltips() -> void:
 		(
 			"Bake per-face materials into the final mesh"
 			+ "\nTurn off to ignore face assignments and use brush-level materials instead"
+		)
+	)
+	_set_tooltip(
+		bake_use_atlas_check,
+		(
+			"Pack albedo textures into a single atlas to reduce draw calls"
+			+ "\nRequires Face Materials enabled; non-textured materials stay separate"
 		)
 	)
 	_set_tooltip(bake_navmesh, "Generate navigation mesh during bake")
@@ -3543,6 +3553,8 @@ func _sync_grid_settings_from_root() -> void:
 		bake_visible_only_check.button_pressed = bool(connected_root.get("bake_visible_only"))
 	if bake_use_multimesh_check and _root_has_property("bake_use_multimesh"):
 		bake_use_multimesh_check.button_pressed = bool(connected_root.get("bake_use_multimesh"))
+	if bake_use_atlas_check and _root_has_property("bake_use_atlas"):
+		bake_use_atlas_check.button_pressed = bool(connected_root.get("bake_use_atlas"))
 	if bake_chunk_size_spin and _root_has_property("bake_chunk_size"):
 		bake_chunk_size_spin.value = float(connected_root.get("bake_chunk_size"))
 	if bake_navmesh and _root_has_property("bake_navmesh"):
@@ -5751,6 +5763,8 @@ func _collect_editor_settings() -> Dictionary:
 		bake_settings["visible_only"] = bake_visible_only_check.button_pressed
 	if bake_use_multimesh_check:
 		bake_settings["use_multimesh"] = bake_use_multimesh_check.button_pressed
+	if bake_use_atlas_check:
+		bake_settings["use_atlas"] = bake_use_atlas_check.button_pressed
 	return {
 		"version": 1,
 		"saved_at": Time.get_datetime_string_from_system(),
@@ -5831,6 +5845,8 @@ func _apply_editor_settings(data: Dictionary) -> void:
 			bake_visible_only_check.button_pressed = bool(bake.get("visible_only", false))
 		if bake_use_multimesh_check and bake.has("use_multimesh"):
 			bake_use_multimesh_check.button_pressed = bool(bake.get("use_multimesh", false))
+		if bake_use_atlas_check and bake.has("use_atlas"):
+			bake_use_atlas_check.button_pressed = bool(bake.get("use_atlas", false))
 		_sync_bake_option_visibility()
 
 

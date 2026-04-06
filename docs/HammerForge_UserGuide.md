@@ -233,6 +233,7 @@ The Manage tab Bake section exposes additional controls:
 - **Chunk Size** (SpinBox, 0-256, default 32): spatial chunk size for bake grouping. Set to 0 to disable chunking.
 - **Bake Visible Only** (checkbox): skips hidden visgroups and invisible brushes during bake.
 - **Use MultiMesh** (checkbox): after baking, consolidates repeated identical meshes into `MultiMeshInstance3D` nodes. Useful for levels with many copies of the same brush shape — reduces draw calls.
+- **Material Atlas** (checkbox): packs per-face albedo textures into a single atlas image so all atlased geometry renders in one draw call. Requires **Use Face Materials** to be enabled. Faces with tiling UVs (scale > 1) are automatically excluded and rendered as separate surfaces with their original material so texture repeat works correctly. Best for levels with many small non-tiling textures. Textures with painted layers or ShaderMaterials are not atlased.
 - **Unwrap UV0** (checkbox): applies per-vertex planar UV projection during bake for surfaces that lack explicit UVs.
 
 The main **Bake** button is smart: if only specific brushes have been modified since the last bake, it automatically uses incremental bake (`Bake Changed`) instead of a full re-bake.

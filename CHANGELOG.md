@@ -5,6 +5,20 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Material Atlasing** (Apr 2026): Packs per-face material albedo textures into a single atlas
+  to reduce draw calls on baked levels. `HFMaterialAtlas` class (`hf_material_atlas.gd`) with
+  shelf bin-packing, gutter padding (2px edge-pixel extension to prevent mipmap bleed), and
+  half-texel UV inset (clamped for small tiles so 1px textures never collapse to zero-size rects).
+  Baker integration in `bake_from_faces()`: when `use_atlas` is enabled, faces are split per-material
+  into tiling vs non-tiling sub-groups — faces with UVs outside [0,1] (e.g. `uv_scale > 1`) are
+  excluded from the atlas and rendered as separate surfaces with their original material so hardware
+  texture repeat works correctly, while non-tiling faces of the same material are still atlased.
+  Dock UI: "Material Atlas" checkbox in Manage tab Bake section (requires Face Materials enabled).
+  `bake_use_atlas` property on LevelRoot, persisted in `.hflevel` state via `hf_state_system.gd`,
+  synced in dock settings export/import, and wired through `build_bake_options()`.
+  26 new tests in `test_material_atlas.gd` covering atlas building, UV remapping, shelf packing,
+  gutter fill, small-tile inset clamping, tiling exclusion, per-face tiling split, and full baker
+  integration. Total: **1203 tests across 70 files**.
 - **Displacement surfaces** (Apr 2026): Source Engine-style displacement surfaces on quad brush faces.
   `HFDisplacementData` resource stores a subdivided grid (power 2-4, producing 5x5 to 17x17 vertices)
   with per-vertex distance offsets along the face normal. `HFDisplacementSystem` subsystem provides
