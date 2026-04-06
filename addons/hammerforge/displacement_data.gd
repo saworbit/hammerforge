@@ -131,8 +131,7 @@ func get_displaced_position(
 ## Returns {"verts": PackedVector3Array, "uvs": PackedVector2Array,
 ##          "normals": PackedVector3Array}.
 func triangulate_displaced(
-	corners: Array[Vector3], face_normal: Vector3,
-	uv_corners: Array[Vector2]
+	corners: Array[Vector3], face_normal: Vector3, uv_corners: Array[Vector2]
 ) -> Dictionary:
 	var d: int = get_dim()
 	var verts := PackedVector3Array()
@@ -146,9 +145,7 @@ func triangulate_displaced(
 	grid_uv.resize(d * d)
 	for row in range(d):
 		for col in range(d):
-			grid_pos[row * d + col] = get_displaced_position(
-				row, col, corners, face_normal
-			)
+			grid_pos[row * d + col] = get_displaced_position(row, col, corners, face_normal)
 			var u: float = float(col) / float(d - 1)
 			var v: float = float(row) / float(d - 1)
 			var top_uv: Vector2 = uv_corners[0].lerp(uv_corners[1], u)

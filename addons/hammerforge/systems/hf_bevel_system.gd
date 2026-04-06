@@ -25,9 +25,7 @@ func _init(p_root: Node3D = null) -> void:
 ## with `segments` intermediate faces approximating a rounded profile.
 ## `radius` controls how far the bevel cuts into the brush.
 ## Returns true on success.
-func bevel_edge(
-	brush_id: String, edge: Array, segments: int = 2, radius: float = 2.0
-) -> bool:
+func bevel_edge(brush_id: String, edge: Array, segments: int = 2, radius: float = 2.0) -> bool:
 	if edge.size() < 2:
 		push_warning("HFBevelSystem: edge needs 2 vertex indices")
 		return false
@@ -50,7 +48,9 @@ func bevel_edge(
 	# Find the two faces sharing this edge.
 	var adjacent: Array = _find_faces_sharing_edge(faces, va, vb)
 	if adjacent.size() < 2:
-		push_warning("HFBevelSystem: edge must be shared by exactly 2 faces, found %d" % adjacent.size())
+		push_warning(
+			"HFBevelSystem: edge must be shared by exactly 2 faces, found %d" % adjacent.size()
+		)
 		return false
 	var face_idx_0: int = adjacent[0]
 	var face_idx_1: int = adjacent[1]
@@ -114,9 +114,9 @@ func bevel_edge(
 				var cap = FaceData.new()
 				# Fan from the first arc point through the intermediate arc points.
 				# CW winding from outside: arc[0] → arc[i+2] → arc[i+1]
-				cap.local_verts = PackedVector3Array([
-					endpoint_arc[0], endpoint_arc[i + 2], endpoint_arc[i + 1]
-				])
+				cap.local_verts = PackedVector3Array(
+					[endpoint_arc[0], endpoint_arc[i + 2], endpoint_arc[i + 1]]
+				)
 				cap.material_idx = face0.material_idx
 				cap.uv_projection = face0.uv_projection
 				cap.uv_scale = face0.uv_scale
@@ -157,8 +157,7 @@ func bevel_edge(
 ## If `height` != 0, the inset face is also extruded along its normal.
 ## Returns true on success.
 func inset_face(
-	brush_id: String, face_index: int,
-	inset_distance: float = 2.0, height: float = 0.0
+	brush_id: String, face_index: int, inset_distance: float = 2.0, height: float = 0.0
 ) -> bool:
 	inset_distance = maxf(inset_distance, 0.01)
 	var brush: Node3D = _find_brush(brush_id)
@@ -198,9 +197,9 @@ func inset_face(
 		var next: int = (i + 1) % count
 		var side_face = FaceData.new()
 		# CW winding from outside: orig[i] → orig[next] → inset[next] → inset[i]
-		side_face.local_verts = PackedVector3Array([
-			verts[i], verts[next], inset_verts[next], inset_verts[i]
-		])
+		side_face.local_verts = PackedVector3Array(
+			[verts[i], verts[next], inset_verts[next], inset_verts[i]]
+		)
 		side_face.material_idx = face.material_idx
 		side_face.uv_projection = face.uv_projection
 		side_face.uv_scale = face.uv_scale
@@ -246,9 +245,7 @@ func _get_unique_verts(faces: Array) -> PackedVector3Array:
 	return verts
 
 
-func _find_faces_sharing_edge(
-	faces: Array, va: Vector3, vb: Vector3, tol: float = 0.01
-) -> Array:
+func _find_faces_sharing_edge(faces: Array, va: Vector3, vb: Vector3, tol: float = 0.01) -> Array:
 	var result: Array = []
 	for fi in range(faces.size()):
 		var face: FaceData = faces[fi]
@@ -266,7 +263,9 @@ func _find_faces_sharing_edge(
 	return result
 
 
-func _replace_vertex_in_face(face: FaceData, old_v: Vector3, new_v: Vector3, tol: float = 0.01) -> void:
+func _replace_vertex_in_face(
+	face: FaceData, old_v: Vector3, new_v: Vector3, tol: float = 0.01
+) -> void:
 	var new_verts := PackedVector3Array()
 	for v in face.local_verts:
 		if v.distance_to(old_v) < tol:
@@ -288,8 +287,7 @@ func _compute_centroid(verts: PackedVector3Array) -> Vector3:
 ## Compute arc vertices from `origin` sweeping from `dir0` to `dir1`
 ## at the given `radius` with `segments` steps. Returns segments+1 points.
 func _compute_arc(
-	origin: Vector3, dir0: Vector3, dir1: Vector3,
-	radius: float, segments: int
+	origin: Vector3, dir0: Vector3, dir1: Vector3, radius: float, segments: int
 ) -> PackedVector3Array:
 	var points := PackedVector3Array()
 	for i in range(segments + 1):

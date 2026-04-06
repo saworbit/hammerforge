@@ -608,7 +608,9 @@ func _should_start_disp_paint(event: InputEvent, root: Node) -> bool:
 	var info: Dictionary = dock._get_selected_face_info()
 	if info.is_empty():
 		return false
-	var brush: Node3D = root.find_brush_by_id(info["brush_id"]) if root.has_method("find_brush_by_id") else null
+	var brush: Node3D = (
+		root.find_brush_by_id(info["brush_id"]) if root.has_method("find_brush_by_id") else null
+	)
 	if not brush:
 		return false
 	var fi: int = info["face_index"]
@@ -617,9 +619,7 @@ func _should_start_disp_paint(event: InputEvent, root: Node) -> bool:
 	return brush.faces[fi].displacement != null
 
 
-func _handle_disp_paint_input(
-	event: InputEvent, root: Node, cam: Camera3D, pos: Vector2
-) -> int:
+func _handle_disp_paint_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vector2) -> int:
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			if event.pressed:
@@ -667,7 +667,9 @@ func _do_disp_paint_stroke(root: Node, cam: Camera3D, pos: Vector2) -> void:
 		return
 	if _disp_paint_brush_id == "" or _disp_paint_face_idx < 0:
 		return
-	var brush: Node3D = root.find_brush_by_id(_disp_paint_brush_id) if root.has_method("find_brush_by_id") else null
+	var brush: Node3D = (
+		root.find_brush_by_id(_disp_paint_brush_id) if root.has_method("find_brush_by_id") else null
+	)
 	if not brush:
 		return
 	var faces: Array = brush.faces
@@ -697,13 +699,14 @@ func _do_disp_paint_stroke(root: Node, cam: Camera3D, pos: Vector2) -> void:
 	var radius: float = dock._disp_radius_spin.value if dock and dock._disp_radius_spin else 4.0
 	if not _point_near_polygon_3d(hit_pos, world_verts, world_normal, radius):
 		return
-	var strength: float = dock._disp_strength_spin.value if dock and dock._disp_strength_spin else 0.5
+	var strength: float = (
+		dock._disp_strength_spin.value if dock and dock._disp_strength_spin else 0.5
+	)
 	var mode: int = 0
 	if dock and dock._disp_paint_mode_opt:
 		mode = dock._disp_paint_mode_opt.get_selected_id()
 	root.displacement_system.paint(
-		_disp_paint_brush_id, _disp_paint_face_idx,
-		hit_pos, radius, strength, mode
+		_disp_paint_brush_id, _disp_paint_face_idx, hit_pos, radius, strength, mode
 	)
 
 

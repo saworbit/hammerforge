@@ -91,17 +91,17 @@ func triangulate() -> Dictionary:
 	# Displacement path: delegate to HFDisplacementData for subdivided mesh.
 	if displacement != null and count == 4:
 		var corners: Array[Vector3] = [
-			local_verts[0], local_verts[1],
-			local_verts[3], local_verts[2]
+			local_verts[0], local_verts[1], local_verts[3], local_verts[2]
 		]
 		var uv_corners: Array[Vector2] = [
-			source_uvs[0], source_uvs[1],
-			source_uvs[3], source_uvs[2]
+			source_uvs[0], source_uvs[1], source_uvs[3], source_uvs[2]
 		]
-		var result: Dictionary = displacement.triangulate_displaced(
-			corners, normal, uv_corners
-		)
-		return {"verts": result.get("verts", tri_verts), "uvs": result.get("uvs", tri_uvs), "normals": result.get("normals", PackedVector3Array())}
+		var result: Dictionary = displacement.triangulate_displaced(corners, normal, uv_corners)
+		return {
+			"verts": result.get("verts", tri_verts),
+			"uvs": result.get("uvs", tri_uvs),
+			"normals": result.get("normals", PackedVector3Array())
+		}
 	for i in range(1, count - 1):
 		tri_verts.append(local_verts[0])
 		tri_verts.append(local_verts[i])

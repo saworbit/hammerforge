@@ -36,7 +36,12 @@ func create_displacement(brush_id: String, face_index: int, power: int = 3) -> b
 		return false
 	var face: FaceData = faces[face_index]
 	if face.local_verts.size() != 4:
-		push_warning("HFDisplacementSystem: displacement requires a quad face (4 verts), got %d" % face.local_verts.size())
+		push_warning(
+			(
+				"HFDisplacementSystem: displacement requires a quad face (4 verts), got %d"
+				% face.local_verts.size()
+			)
+		)
 		return false
 	var disp = HFDisplacementData.new()
 	disp.init_flat(power)
@@ -122,8 +127,11 @@ func set_power(brush_id: String, face_index: int, power: int) -> bool:
 ## Paint displacement at a world-space position. Uses a circular brush.
 ## Returns true if any vertex was modified.
 func paint(
-	brush_id: String, face_index: int,
-	world_pos: Vector3, radius: float, strength: float,
+	brush_id: String,
+	face_index: int,
+	world_pos: Vector3,
+	radius: float,
+	strength: float,
 	mode: int = PaintMode.RAISE  # PaintMode enum
 ) -> bool:
 	var brush: Node3D = _find_brush(brush_id)
@@ -140,17 +148,14 @@ func paint(
 	if face.local_verts.size() != 4:
 		return false
 	var corners: Array[Vector3] = [
-		face.local_verts[0], face.local_verts[1],
-		face.local_verts[3], face.local_verts[2]
+		face.local_verts[0], face.local_verts[1], face.local_verts[3], face.local_verts[2]
 	]
 	var basis: Basis = brush.global_transform.basis
 	var origin: Vector3 = brush.global_transform.origin
 	var modified := false
 	for row in range(d):
 		for col in range(d):
-			var local_pos: Vector3 = disp.get_displaced_position(
-				row, col, corners, face.normal
-			)
+			var local_pos: Vector3 = disp.get_displaced_position(row, col, corners, face.normal)
 			var global_pos: Vector3 = origin + basis * local_pos
 			var dist_sq: float = global_pos.distance_squared_to(world_pos)
 			if dist_sq > radius * radius:
@@ -171,7 +176,9 @@ func paint(
 					break  # smooth operates on entire grid
 				PaintMode.NOISE:
 					# Per-vertex noise seeded by grid position for deterministic strokes.
-					var noise_val: float = sin(float(row) * 12.9898 + float(col) * 78.233) * 43758.5453
+					var noise_val: float = (
+						sin(float(row) * 12.9898 + float(col) * 78.233) * 43758.5453
+					)
 					noise_val = noise_val - floor(noise_val)  # fract → [0,1)
 					noise_val = (noise_val - 0.5) * 2.0  # remap to [-1, 1]
 					disp.set_distance(row, col, disp.get_distance(row, col) + noise_val * amount)
@@ -187,8 +194,7 @@ func paint(
 
 ## Apply noise to a displacement surface.
 func apply_noise(
-	brush_id: String, face_index: int,
-	noise: FastNoiseLite, scale: float = 1.0
+	brush_id: String, face_index: int, noise: FastNoiseLite, scale: float = 1.0
 ) -> bool:
 	var brush: Node3D = _find_brush(brush_id)
 	if not brush:
@@ -341,12 +347,10 @@ func _sew_pair(entry_a: Dictionary, entry_b: Dictionary, tolerance: float) -> in
 	if face_a.local_verts.size() != 4 or face_b.local_verts.size() != 4:
 		return 0
 	var corners_a: Array[Vector3] = [
-		face_a.local_verts[0], face_a.local_verts[1],
-		face_a.local_verts[3], face_a.local_verts[2]
+		face_a.local_verts[0], face_a.local_verts[1], face_a.local_verts[3], face_a.local_verts[2]
 	]
 	var corners_b: Array[Vector3] = [
-		face_b.local_verts[0], face_b.local_verts[1],
-		face_b.local_verts[3], face_b.local_verts[2]
+		face_b.local_verts[0], face_b.local_verts[1], face_b.local_verts[3], face_b.local_verts[2]
 	]
 	var da: int = disp_a.get_dim()
 	var db: int = disp_b.get_dim()
@@ -370,11 +374,15 @@ func _sew_pair(entry_a: Dictionary, entry_b: Dictionary, tolerance: float) -> in
 				var new_local_a: Vector3 = basis_a.inverse() * (mid - origin_a)
 				var base_a: Vector3 = _get_base_position(ra, ca, da, corners_a)
 				var diff_a: float = (new_local_a - base_a).dot(face_a.normal)
-				disp_a.set_distance(ra, ca, diff_a / disp_a.elevation if disp_a.elevation != 0.0 else 0.0)
+				disp_a.set_distance(
+					ra, ca, diff_a / disp_a.elevation if disp_a.elevation != 0.0 else 0.0
+				)
 				var new_local_b: Vector3 = basis_b.inverse() * (mid - origin_b)
 				var base_b: Vector3 = _get_base_position(rb, cb, db, corners_b)
 				var diff_b: float = (new_local_b - base_b).dot(face_b.normal)
-				disp_b.set_distance(rb, cb, diff_b / disp_b.elevation if disp_b.elevation != 0.0 else 0.0)
+				disp_b.set_distance(
+					rb, cb, diff_b / disp_b.elevation if disp_b.elevation != 0.0 else 0.0
+				)
 				sewn += 1
 	if sewn > 0:
 		_mark_brush_dirty(brush_a)
@@ -393,9 +401,9 @@ func _get_base_position(row: int, col: int, dim: int, corners: Array[Vector3]) -
 func _get_boundary_indices(dim: int) -> Array:
 	var indices: Array = []
 	for i in range(dim):
-		indices.append(i)                      # top row
-		indices.append((dim - 1) * dim + i)    # bottom row
+		indices.append(i)  # top row
+		indices.append((dim - 1) * dim + i)  # bottom row
 		if i > 0 and i < dim - 1:
-			indices.append(i * dim)            # left column
+			indices.append(i * dim)  # left column
 			indices.append(i * dim + dim - 1)  # right column
 	return indices

@@ -1076,8 +1076,7 @@ func sew_all_displacements() -> int:
 
 
 func paint_displacement(
-	brush_id: String, face_index: int,
-	world_pos: Vector3, radius: float, strength: float, mode: int
+	brush_id: String, face_index: int, world_pos: Vector3, radius: float, strength: float, mode: int
 ) -> bool:
 	return displacement_system.paint(brush_id, face_index, world_pos, radius, strength, mode)
 

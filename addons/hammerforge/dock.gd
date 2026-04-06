@@ -1859,7 +1859,11 @@ func _get_selected_face_info() -> Dictionary:
 		if indices.is_empty():
 			continue
 		var brush_id: String = str(key)
-		var brush: Node3D = level_root._find_brush_by_key(brush_id) if level_root.has_method("_find_brush_by_key") else null
+		var brush: Node3D = (
+			level_root._find_brush_by_key(brush_id)
+			if level_root.has_method("_find_brush_by_key")
+			else null
+		)
 		if not brush:
 			continue
 		var fi: int = int(indices[0])
@@ -1871,7 +1875,11 @@ func _get_selected_face_info() -> Dictionary:
 func _selected_face_has_displacement(info: Dictionary) -> bool:
 	if info.is_empty() or not level_root:
 		return false
-	var brush: Node3D = level_root.find_brush_by_id(info["brush_id"]) if level_root.has_method("find_brush_by_id") else null
+	var brush: Node3D = (
+		level_root.find_brush_by_id(info["brush_id"])
+		if level_root.has_method("find_brush_by_id")
+		else null
+	)
 	if not brush:
 		return false
 	var fi: int = info["face_index"]
@@ -1885,7 +1893,9 @@ func _selected_face_has_displacement(info: Dictionary) -> bool:
 func _try_undoable_action(action_name: String, method_name: String, args: Array = []) -> bool:
 	if not level_root or not level_root.has_method(method_name):
 		return false
-	var pre_state: Dictionary = level_root.capture_state() if level_root.has_method("capture_state") else {}
+	var pre_state: Dictionary = (
+		level_root.capture_state() if level_root.has_method("capture_state") else {}
+	)
 	var ok: bool = level_root.callv(method_name, args)
 	if ok and undo_redo and not pre_state.is_empty():
 		var post_state: Dictionary = level_root.capture_state()
@@ -1906,8 +1916,7 @@ func _on_disp_create() -> void:
 		return
 	var power: int = int(_disp_power_spin.value) if _disp_power_spin else 3
 	var ok: bool = _try_undoable_action(
-		"Create Displacement", "create_displacement",
-		[info["brush_id"], info["face_index"], power]
+		"Create Displacement", "create_displacement", [info["brush_id"], info["face_index"], power]
 	)
 	if ok:
 		show_toast("Displacement created (power %d)" % power, 0)
@@ -1923,8 +1932,7 @@ func _on_disp_destroy() -> void:
 		show_toast("Select a displaced face first", 1)
 		return
 	var ok: bool = _try_undoable_action(
-		"Destroy Displacement", "destroy_displacement",
-		[info["brush_id"], info["face_index"]]
+		"Destroy Displacement", "destroy_displacement", [info["brush_id"], info["face_index"]]
 	)
 	if ok:
 		show_toast("Displacement removed", 0)
@@ -1963,7 +1971,8 @@ func _on_disp_smooth() -> void:
 		return
 	var strength: float = _disp_strength_spin.value if _disp_strength_spin else 0.5
 	var ok: bool = _try_undoable_action(
-		"Smooth Displacement", "smooth_displacement",
+		"Smooth Displacement",
+		"smooth_displacement",
 		[info["brush_id"], info["face_index"], strength]
 	)
 	if ok:
@@ -1981,8 +1990,7 @@ func _on_disp_noise() -> void:
 		return
 	var scale: float = _disp_strength_spin.value if _disp_strength_spin else 1.0
 	var ok: bool = _try_undoable_action(
-		"Noise Displacement", "noise_displacement",
-		[info["brush_id"], info["face_index"], scale]
+		"Noise Displacement", "noise_displacement", [info["brush_id"], info["face_index"], scale]
 	)
 	if ok:
 		show_toast("Noise applied to displacement", 0)
@@ -1994,7 +2002,9 @@ func _on_disp_sew() -> void:
 	if not level_root:
 		return
 	# Capture state, execute, then commit undo only if vertices were actually sewn.
-	var pre_state: Dictionary = level_root.capture_state() if level_root.has_method("capture_state") else {}
+	var pre_state: Dictionary = (
+		level_root.capture_state() if level_root.has_method("capture_state") else {}
+	)
 	var count: int = level_root.sew_all_displacements()
 	if count > 0 and undo_redo and not pre_state.is_empty():
 		var post_state: Dictionary = level_root.capture_state()
@@ -2048,7 +2058,9 @@ func _on_bevel_edge() -> void:
 	var segments: int = int(_bevel_segments_spin.value) if _bevel_segments_spin else 2
 	var radius: float = _bevel_radius_spin.value if _bevel_radius_spin else 2.0
 	# Capture state once before the batch, call each bevel, track actual successes.
-	var pre_state: Dictionary = level_root.capture_state() if level_root.has_method("capture_state") else {}
+	var pre_state: Dictionary = (
+		level_root.capture_state() if level_root.has_method("capture_state") else {}
+	)
 	var count := 0
 	for brush_id in vs.selected_edges:
 		var edges: Array = vs.selected_edges[brush_id]
@@ -2077,7 +2089,9 @@ func _on_bevel_inset() -> void:
 		return
 	var inset_dist: float = _bevel_inset_dist_spin.value if _bevel_inset_dist_spin else 2.0
 	var height: float = _bevel_inset_height_spin.value if _bevel_inset_height_spin else 0.0
-	var pre_state: Dictionary = level_root.capture_state() if level_root.has_method("capture_state") else {}
+	var pre_state: Dictionary = (
+		level_root.capture_state() if level_root.has_method("capture_state") else {}
+	)
 	var ok: bool = level_root.inset_face(info["brush_id"], info["face_index"], inset_dist, height)
 	if ok:
 		if undo_redo and not pre_state.is_empty():
