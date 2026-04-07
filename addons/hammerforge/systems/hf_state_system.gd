@@ -298,13 +298,21 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 	if settings.has("bake_use_atlas"):
 		root.bake_use_atlas = bool(settings.get("bake_use_atlas", root.bake_use_atlas))
 	if settings.has("bake_auto_connectors"):
-		root.bake_auto_connectors = bool(settings.get("bake_auto_connectors", root.bake_auto_connectors))
+		root.bake_auto_connectors = bool(
+			settings.get("bake_auto_connectors", root.bake_auto_connectors)
+		)
 	if settings.has("bake_connector_mode"):
-		root.bake_connector_mode = int(settings.get("bake_connector_mode", root.bake_connector_mode))
+		root.bake_connector_mode = int(
+			settings.get("bake_connector_mode", root.bake_connector_mode)
+		)
 	if settings.has("bake_connector_stair_height"):
-		root.bake_connector_stair_height = float(settings.get("bake_connector_stair_height", root.bake_connector_stair_height))
+		root.bake_connector_stair_height = float(
+			settings.get("bake_connector_stair_height", root.bake_connector_stair_height)
+		)
 	if settings.has("bake_connector_width"):
-		root.bake_connector_width = int(settings.get("bake_connector_width", root.bake_connector_width))
+		root.bake_connector_width = int(
+			settings.get("bake_connector_width", root.bake_connector_width)
+		)
 	if settings.has("bake_collision_layer_index"):
 		root.bake_collision_layer_index = int(
 			settings.get("bake_collision_layer_index", root.bake_collision_layer_index)

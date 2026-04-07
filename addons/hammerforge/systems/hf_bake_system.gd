@@ -737,7 +737,9 @@ static func _set_parsed_geometry_type(target: Object, value: int) -> bool:
 	if "parsed_geometry_type" in target:
 		target.set("parsed_geometry_type", value)
 		return true
-	push_warning("NavigationMesh has neither geometry_parsed_geometry_type nor parsed_geometry_type")
+	push_warning(
+		"NavigationMesh has neither geometry_parsed_geometry_type nor parsed_geometry_type"
+	)
 	return false
 
 

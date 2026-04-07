@@ -157,9 +157,7 @@ func build(parent: Control) -> void:
 	dock.bake_connector_mode_opt.add_item("Ramp", 0)
 	dock.bake_connector_mode_opt.add_item("Stairs", 1)
 	dock.bake_connector_mode_opt.add_item("Auto", 2)
-	dock.bake_connector_mode_opt.tooltip_text = (
-		"Ramp: smooth slope; Stairs: stepped; Auto: stairs when height > threshold"
-	)
+	dock.bake_connector_mode_opt.tooltip_text = ("Ramp: smooth slope; Stairs: stepped; Auto: stairs when height > threshold")
 	dock.bake_connector_mode_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	conn_row.add_child(dock.bake_connector_mode_opt)
 

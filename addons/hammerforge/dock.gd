@@ -3586,7 +3586,9 @@ func _sync_grid_settings_from_root() -> void:
 	if bake_connector_mode_opt and _root_has_property("bake_connector_mode"):
 		bake_connector_mode_opt.select(int(connected_root.get("bake_connector_mode")))
 	if bake_connector_stair_height_spin and _root_has_property("bake_connector_stair_height"):
-		bake_connector_stair_height_spin.value = float(connected_root.get("bake_connector_stair_height"))
+		bake_connector_stair_height_spin.value = float(
+			connected_root.get("bake_connector_stair_height")
+		)
 	if bake_connector_width_spin and _root_has_property("bake_connector_width"):
 		bake_connector_width_spin.value = int(connected_root.get("bake_connector_width"))
 	if bake_chunk_size_spin and _root_has_property("bake_chunk_size"):

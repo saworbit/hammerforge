@@ -13,6 +13,7 @@ enum ConnectorMode { RAMP, STAIRS, AUTO }
 ## needing a connector.  Anything below this is treated as co-planar.
 const MIN_HEIGHT_DIFF := 0.1
 
+
 ## Result returned for each detected connector segment.
 class ConnectorSegment:
 	var from_layer_index: int
@@ -117,10 +118,10 @@ func group_segments(segments: Array[ConnectorSegment]) -> Array:
 	# Key: "fromLayer_toLayer_dirX_dirY" → Array[ConnectorSegment]
 	var buckets: Dictionary = {}
 	for seg in segments:
-		var k := "%d_%d_%d_%d" % [
-			seg.from_layer_index, seg.to_layer_index,
-			seg.direction.x, seg.direction.y
-		]
+		var k := (
+			"%d_%d_%d_%d"
+			% [seg.from_layer_index, seg.to_layer_index, seg.direction.x, seg.direction.y]
+		)
 		if not buckets.has(k):
 			buckets[k] = []
 		buckets[k].append(seg)
@@ -164,9 +165,7 @@ func group_segments(segments: Array[ConnectorSegment]) -> Array:
 
 ## Generate connector meshes for all detected boundaries.
 ## Returns an array of dictionaries: {"mesh": ArrayMesh, "transform": Transform3D}.
-func generate_connectors(
-	layers: HFPaintLayerManager, settings: Settings = null
-) -> Array:
+func generate_connectors(layers: HFPaintLayerManager, settings: Settings = null) -> Array:
 	if not settings:
 		settings = Settings.new()
 	var tool := HFConnectorTool.new()
