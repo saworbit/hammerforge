@@ -32,7 +32,13 @@ func _ready() -> void:
 
 	var steps := [
 		["1.", "Add a LevelRoot node to your scene (or one will be created automatically)."],
-		["2.", "Use Draw (D) to click + drag brushes in the viewport."],
+		[
+			"2.",
+			(
+				"Use Draw (D) to click + drag brushes in the viewport. "
+				+ "If the scene is empty, use Manage > Create Floor first."
+			),
+		],
 		["3.", "Switch to Select (S) to move, resize, and modify brushes."],
 		["4.", "Open the Paint tab to texture your surfaces."],
 		["5.", "Go to Manage > Bake to convert brushes into final geometry."],

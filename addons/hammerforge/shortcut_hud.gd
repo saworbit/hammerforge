@@ -10,7 +10,11 @@ var _hint_tween: Tween
 var _current_hint_key := ""
 
 const MODE_HINTS := {
-	"draw_idle": "Click to place corner \u2192 drag to set size \u2192 release for height",
+	"draw_idle":
+		(
+			"Click to place corner \u2192 drag to set size \u2192 release for height\n"
+			+ "Empty scene? Use Manage > Create Floor for a stable draw surface"
+		),
 	"select": "Click brush to select, Shift+click to multi-select, drag to move",
 	"extrude_up_idle": "Click a face to start extruding upward",
 	"extrude_down_idle": "Click a face to start extruding downward",
@@ -180,6 +184,7 @@ func _build_shortcuts_text(ctx: Dictionary) -> String:
 func _draw_idle_shortcuts(axis_lock: int) -> String:
 	var lines := PackedStringArray()
 	lines.append("Click + Drag: Draw Base")
+	lines.append("Manage > Create Floor: Stable Surface")
 	lines.append("Shift: Square | Alt+Shift: Cube")
 	lines.append("X / Y / Z: Lock Axis%s" % _axis_suffix(axis_lock))
 	lines.append("Ctrl+Scroll: Brush Size")
