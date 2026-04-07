@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/Godot-4.6%2B-478cbf?logo=godot-engine&logoColor=white" alt="Godot 4.6+">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
   <img src="https://img.shields.io/badge/Status-Early%20Alpha-red" alt="Early Alpha">
-  <img src="https://img.shields.io/badge/Tests-1226%20passing-brightgreen" alt="1226 tests passing">
+  <img src="https://img.shields.io/badge/Tests-1270%20passing-brightgreen" alt="1270 tests passing">
   <img src="https://img.shields.io/badge/GDScript-25k%2B%20lines-blueviolet" alt="25k+ lines">
 </p>
 
@@ -40,7 +40,7 @@ HammerForge is a single `addons/` folder. No external tools, no custom builds, n
 
 | | |
 |---|---|
-| **21 subsystems** + coordinator architecture | **1226 unit + integration tests** with CI on every push |
+| **21 subsystems** + coordinator architecture | **1270 unit + integration tests** with CI on every push |
 | **15 brush shapes** (box through dodecahedron) | **150 built-in prototype textures** for instant greyboxing |
 | **Quake `.map`** + **glTF `.glb`** export | **.hflevel** native format with threaded I/O |
 | **Customizable keymaps** (JSON) | **Plugin API** for custom tools |
@@ -120,7 +120,7 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Displacement surfaces:** Source-style subdivided face grids (power 2-4) with Raise/Lower/Smooth/Noise/Alpha paint modes, sew adjacent displacements, elevation scale
 - **Convert Selection to Heightmap:** select brushes → rasterize top faces → create sculptable terrain layer
 - **Material blending:** four-slot shader with per-cell blend weights painted directly on the grid
-- **Auto-connectors:** ramp and stair mesh generation between layers at different heights
+- **Auto-connectors:** ramp and stair mesh generation between layers at different heights, auto-generated during bake with mode selection (Ramp/Stairs/Auto), configurable step height and width
 - **Foliage & Scatter brush:** circle/spline shapes, density preview via MultiMesh (Dots/Wireframe/Full), slope/height filtering, align-to-normal, commit as permanent MultiMeshInstance3D
 - **Region streaming:** sparse chunk loading for open worlds
 

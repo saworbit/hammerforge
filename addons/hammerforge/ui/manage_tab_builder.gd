@@ -136,6 +136,65 @@ func build(parent: Control) -> void:
 	dock.bake_use_atlas_check.tooltip_text = ("Pack material textures into a single atlas to reduce draw calls (requires Face Materials)")
 	bk.add_child(dock.bake_use_atlas_check)
 
+	# -- Auto Connectors --
+	dock.bake_auto_connectors_check = dock._make_check("Auto Connectors")
+	dock.bake_auto_connectors_check.tooltip_text = (
+		"Auto-generate ramps or stairs between height levels during bake"
+		+ "\nRequires at least 2 paint layers at different heights"
+	)
+	bk.add_child(dock.bake_auto_connectors_check)
+
+	var conn_row := HBoxContainer.new()
+	conn_row.add_theme_constant_override("separation", 4)
+	bk.add_child(conn_row)
+
+	var conn_mode_label := Label.new()
+	conn_mode_label.text = "Mode:"
+	conn_mode_label.add_theme_font_size_override("font_size", 11)
+	conn_row.add_child(conn_mode_label)
+
+	dock.bake_connector_mode_opt = OptionButton.new()
+	dock.bake_connector_mode_opt.add_item("Ramp", 0)
+	dock.bake_connector_mode_opt.add_item("Stairs", 1)
+	dock.bake_connector_mode_opt.add_item("Auto", 2)
+	dock.bake_connector_mode_opt.tooltip_text = (
+		"Ramp: smooth slope; Stairs: stepped; Auto: stairs when height > threshold"
+	)
+	dock.bake_connector_mode_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	conn_row.add_child(dock.bake_connector_mode_opt)
+
+	var conn_settings_row := HBoxContainer.new()
+	conn_settings_row.add_theme_constant_override("separation", 4)
+	bk.add_child(conn_settings_row)
+
+	var step_label := Label.new()
+	step_label.text = "Step H:"
+	step_label.add_theme_font_size_override("font_size", 11)
+	conn_settings_row.add_child(step_label)
+
+	dock.bake_connector_stair_height_spin = SpinBox.new()
+	dock.bake_connector_stair_height_spin.min_value = 0.05
+	dock.bake_connector_stair_height_spin.max_value = 2.0
+	dock.bake_connector_stair_height_spin.step = 0.05
+	dock.bake_connector_stair_height_spin.value = 0.25
+	dock.bake_connector_stair_height_spin.tooltip_text = "Stair step height (world units)"
+	dock.bake_connector_stair_height_spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	conn_settings_row.add_child(dock.bake_connector_stair_height_spin)
+
+	var width_label := Label.new()
+	width_label.text = "Width:"
+	width_label.add_theme_font_size_override("font_size", 11)
+	conn_settings_row.add_child(width_label)
+
+	dock.bake_connector_width_spin = SpinBox.new()
+	dock.bake_connector_width_spin.min_value = 1
+	dock.bake_connector_width_spin.max_value = 8
+	dock.bake_connector_width_spin.step = 1
+	dock.bake_connector_width_spin.value = 2
+	dock.bake_connector_width_spin.tooltip_text = "Connector width in cells"
+	dock.bake_connector_width_spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	conn_settings_row.add_child(dock.bake_connector_width_spin)
+
 	# -- Bake time estimate --
 	dock.bake_estimate_label = Label.new()
 	dock.bake_estimate_label.text = "Est: — "

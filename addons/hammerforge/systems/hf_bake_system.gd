@@ -4,6 +4,7 @@ class_name HFBakeSystem
 
 const PrefabFactory = preload("../prefab_factory.gd")
 const DraftBrush = preload("../brush_instance.gd")
+const HFAutoConnector = preload("../paint/hf_auto_connector.gd")
 
 ## Bake preview mode: FULL produces final geometry, WIREFRAME skips materials
 ## and generates unshaded wireframe, PROXY uses simplified box meshes.
@@ -118,7 +119,7 @@ func bake_selected(
 		else:
 			root.baked_container = baked
 			root.add_child(root.baked_container)
-		postprocess_bake(baked)
+		postprocess_bake(baked, true)
 		root._assign_owner_recursive(root.baked_container)
 		_last_bake_success = true
 		root._log("Selection bake finished (success=true)")
@@ -313,9 +314,11 @@ func build_bake_options() -> Dictionary:
 	}
 
 
-func postprocess_bake(container: Node3D) -> void:
+func postprocess_bake(container: Node3D, selection_only: bool = false) -> void:
 	if not container:
 		return
+	if root.bake_auto_connectors and not selection_only:
+		_append_auto_connectors(container)
 	if root.bake_navmesh:
 		bake_navmesh(container)
 
@@ -654,6 +657,43 @@ func _append_heightmap_meshes_to_baked(container: Node3D, layer: int) -> void:
 			body.add_child(col)
 
 
+func _append_auto_connectors(container: Node3D) -> void:
+	if not root.paint_layers:
+		return
+	if root.paint_layers.layers.size() < 2:
+		return
+	var gen := HFAutoConnector.new()
+	var settings := HFAutoConnector.Settings.new()
+	settings.mode = root.bake_connector_mode
+	settings.stair_step_height = root.bake_connector_stair_height
+	settings.width_cells = root.bake_connector_width
+	var results: Array = gen.generate_connectors(root.paint_layers, settings)
+	if results.is_empty():
+		return
+	var body := container.get_node_or_null("FloorCollision") as StaticBody3D
+	if not body:
+		body = StaticBody3D.new()
+		body.name = "FloorCollision"
+		container.add_child(body)
+	var idx := 0
+	for entry: Dictionary in results:
+		var mesh: ArrayMesh = entry.get("mesh")
+		if not mesh:
+			continue
+		var xform: Transform3D = entry.get("transform", Transform3D.IDENTITY)
+		var mi := MeshInstance3D.new()
+		mi.name = "AutoConnector_%d" % idx
+		mi.mesh = mesh
+		mi.transform = xform
+		container.add_child(mi)
+		var col := CollisionShape3D.new()
+		col.shape = mesh.create_trimesh_shape()
+		body.add_child(col)
+		idx += 1
+	if idx > 0:
+		root._log("Auto-connectors: generated %d connector(s)" % idx)
+
+
 func bake_navmesh(container: Node3D) -> void:
 	if not container:
 		return
@@ -672,8 +712,8 @@ func bake_navmesh(container: Node3D) -> void:
 	# Ceil agent_radius to cell_size units to avoid precision warning
 	var cs: float = root.bake_navmesh_cell_size
 	nav_mesh.agent_radius = ceil(root.bake_navmesh_agent_radius / cs) * cs
-	# Parse collision shapes instead of visual meshes (avoids GPU readback stall)
-	nav_mesh.parsed_geometry_type = NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS
+	# Parse collision shapes instead of visual meshes (avoids GPU readback stall).
+	_set_parsed_geometry_type(nav_mesh, NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS)
 	if (
 		ClassDB.class_has_method("NavigationServer3D", "parse_source_geometry_data")
 		and ClassDB.class_has_method("NavigationServer3D", "bake_from_source_geometry_data")
@@ -684,6 +724,21 @@ func bake_navmesh(container: Node3D) -> void:
 		NavigationServer3D.bake_from_source_geometry_data(nav_mesh, source)
 	elif nav_region.has_method("bake_navigation_mesh"):
 		nav_region.call("bake_navigation_mesh")
+
+
+## Set the parsed-geometry-type on a NavigationMesh (or any Object with the
+## expected property), handling the property rename between Godot versions
+## (parsed_geometry_type → geometry_parsed_geometry_type).
+## Returns true if the property was set, false if neither name was found.
+static func _set_parsed_geometry_type(target: Object, value: int) -> bool:
+	if "geometry_parsed_geometry_type" in target:
+		target.set("geometry_parsed_geometry_type", value)
+		return true
+	if "parsed_geometry_type" in target:
+		target.set("parsed_geometry_type", value)
+		return true
+	push_warning("NavigationMesh has neither geometry_parsed_geometry_type nor parsed_geometry_type")
+	return false
 
 
 func _brush_in_cordon(brush: DraftBrush) -> bool:

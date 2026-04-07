@@ -2,6 +2,8 @@ extends GutTest
 
 const HFBakeSystem = preload("res://addons/hammerforge/systems/hf_bake_system.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
+const HFPaintLayerManagerScript = preload("res://addons/hammerforge/paint/hf_paint_layer_manager.gd")
+const HFPaintGridScript = preload("res://addons/hammerforge/paint/hf_paint_grid.gd")
 
 var root: Node3D
 var bake_sys: HFBakeSystem
@@ -74,6 +76,16 @@ var bake_chunk_size: float = 0.0
 var bake_visible_only: bool = false
 var bake_use_multimesh: bool = false
 var bake_use_atlas: bool = false
+var bake_auto_connectors: bool = false
+var bake_connector_mode: int = 0
+var bake_connector_stair_height: float = 0.25
+var bake_connector_width: int = 2
+var bake_navmesh: bool = false
+var bake_navmesh_cell_size: float = 0.3
+var bake_navmesh_cell_height: float = 0.25
+var bake_navmesh_agent_height: float = 2.0
+var bake_navmesh_agent_radius: float = 0.4
+var paint_layers = null
 var commit_freeze: bool = false
 var baker = null
 var _last_bake_duration_ms: int = 0
@@ -657,3 +669,318 @@ func test_dirty_tags_cleared_on_successful_bake():
 	if bake_sys._last_bake_success:
 		root._dirty_brush_ids.clear()
 	assert_eq(root._dirty_brush_ids.size(), 0, "Dirty tags should be cleared on successful bake")
+
+
+# ===========================================================================
+# Auto-connector integration with bake pipeline
+# ===========================================================================
+
+
+func _make_paint_layers_with_boundary() -> HFPaintLayerManagerScript:
+	var mgr := HFPaintLayerManagerScript.new()
+	mgr.chunk_size = 8
+	mgr.base_grid = HFPaintGridScript.new()
+	mgr.base_grid.cell_size = 1.0
+	root.add_child(mgr)
+	mgr.clear_layers()
+	var lo := mgr.create_layer(&"lo", 0.0)
+	var hi := mgr.create_layer(&"hi", 3.0)
+	lo.set_cell(Vector2i(0, 0), true)
+	hi.set_cell(Vector2i(1, 0), true)
+	return mgr
+
+
+func test_postprocess_bake_generates_connectors_when_enabled():
+	var mgr := _make_paint_layers_with_boundary()
+	root.paint_layers = mgr
+	root.bake_auto_connectors = true
+	var container := Node3D.new()
+	root.add_child(container)
+	bake_sys.postprocess_bake(container, false)
+	var connector_count := 0
+	for child in container.get_children():
+		if child.name.begins_with("AutoConnector"):
+			connector_count += 1
+	assert_gt(connector_count, 0, "Full bake with auto_connectors=true must produce connectors")
+	container.free()
+
+
+func test_postprocess_bake_skips_connectors_when_disabled():
+	var mgr := _make_paint_layers_with_boundary()
+	root.paint_layers = mgr
+	root.bake_auto_connectors = false
+	var container := Node3D.new()
+	root.add_child(container)
+	bake_sys.postprocess_bake(container, false)
+	var connector_count := 0
+	for child in container.get_children():
+		if child.name.begins_with("AutoConnector"):
+			connector_count += 1
+	assert_eq(connector_count, 0, "auto_connectors=false must not produce connectors")
+	container.free()
+
+
+func test_postprocess_bake_selection_only_skips_connectors():
+	var mgr := _make_paint_layers_with_boundary()
+	root.paint_layers = mgr
+	root.bake_auto_connectors = true
+	var container := Node3D.new()
+	root.add_child(container)
+	bake_sys.postprocess_bake(container, true)
+	var connector_count := 0
+	for child in container.get_children():
+		if child.name.begins_with("AutoConnector"):
+			connector_count += 1
+	assert_eq(connector_count, 0, "selection_only=true must suppress auto-connectors")
+	container.free()
+
+
+func test_postprocess_bake_no_paint_layers_safe():
+	root.paint_layers = null
+	root.bake_auto_connectors = true
+	var container := Node3D.new()
+	root.add_child(container)
+	bake_sys.postprocess_bake(container, false)
+	# Should be a safe no-op
+	var connector_count := 0
+	for child in container.get_children():
+		if child.name.begins_with("AutoConnector"):
+			connector_count += 1
+	assert_eq(connector_count, 0, "null paint_layers must not crash")
+	container.free()
+
+
+func test_postprocess_bake_single_layer_no_connectors():
+	var mgr := HFPaintLayerManagerScript.new()
+	mgr.chunk_size = 8
+	mgr.base_grid = HFPaintGridScript.new()
+	mgr.base_grid.cell_size = 1.0
+	root.add_child(mgr)
+	mgr.clear_layers()
+	var lo := mgr.create_layer(&"only", 0.0)
+	lo.set_cell(Vector2i(0, 0), true)
+	root.paint_layers = mgr
+	root.bake_auto_connectors = true
+	var container := Node3D.new()
+	root.add_child(container)
+	bake_sys.postprocess_bake(container, false)
+	var connector_count := 0
+	for child in container.get_children():
+		if child.name.begins_with("AutoConnector"):
+			connector_count += 1
+	assert_eq(connector_count, 0, "Single layer can't produce cross-layer connectors")
+	container.free()
+
+
+func test_postprocess_bake_connector_has_collision():
+	var mgr := _make_paint_layers_with_boundary()
+	root.paint_layers = mgr
+	root.bake_auto_connectors = true
+	var container := Node3D.new()
+	root.add_child(container)
+	bake_sys.postprocess_bake(container, false)
+	var body: StaticBody3D = container.get_node_or_null("FloorCollision") as StaticBody3D
+	assert_not_null(body, "Connectors should create FloorCollision body")
+	var col_count := 0
+	for child in body.get_children():
+		if child is CollisionShape3D:
+			col_count += 1
+	assert_gt(col_count, 0, "Connectors should add collision shapes")
+	container.free()
+
+
+# ===========================================================================
+# Navmesh integration with postprocess_bake
+# ===========================================================================
+
+
+func test_postprocess_bake_navmesh_when_enabled():
+	root.bake_navmesh = true
+	var container := Node3D.new()
+	root.add_child(container)
+	bake_sys.postprocess_bake(container, false)
+	var nav_region: NavigationRegion3D = container.get_node_or_null("BakedNavmesh") as NavigationRegion3D
+	assert_not_null(nav_region, "bake_navmesh=true must create BakedNavmesh region")
+	assert_not_null(nav_region.navigation_mesh, "Region must have a NavigationMesh assigned")
+	container.free()
+
+
+func test_postprocess_bake_navmesh_when_disabled():
+	root.bake_navmesh = false
+	var container := Node3D.new()
+	root.add_child(container)
+	bake_sys.postprocess_bake(container, false)
+	var nav_region = container.get_node_or_null("BakedNavmesh")
+	assert_null(nav_region, "bake_navmesh=false must not create nav region")
+	container.free()
+
+
+func test_postprocess_bake_navmesh_settings_propagate():
+	root.bake_navmesh = true
+	root.bake_navmesh_cell_size = 0.5
+	root.bake_navmesh_cell_height = 0.4
+	root.bake_navmesh_agent_height = 1.8
+	root.bake_navmesh_agent_radius = 0.6
+	var container := Node3D.new()
+	root.add_child(container)
+	bake_sys.postprocess_bake(container, false)
+	var nav_region: NavigationRegion3D = container.get_node_or_null("BakedNavmesh") as NavigationRegion3D
+	assert_not_null(nav_region)
+	var nav_mesh: NavigationMesh = nav_region.navigation_mesh
+	assert_not_null(nav_mesh)
+	assert_almost_eq(nav_mesh.cell_size, 0.5, 0.001, "cell_size should propagate")
+	assert_almost_eq(nav_mesh.cell_height, 0.4, 0.001, "cell_height should propagate")
+	assert_almost_eq(nav_mesh.agent_height, 1.8, 0.001, "agent_height should propagate")
+	# agent_radius is ceiled to cell_size units: ceil(0.6/0.5)*0.5 = 1.0
+	assert_almost_eq(nav_mesh.agent_radius, 1.0, 0.001, "agent_radius should be ceiled to cell_size units")
+	container.free()
+
+
+func test_postprocess_bake_navmesh_parsed_geometry_type():
+	root.bake_navmesh = true
+	var container := Node3D.new()
+	root.add_child(container)
+	bake_sys.postprocess_bake(container, false)
+	var nav_region: NavigationRegion3D = container.get_node_or_null("BakedNavmesh") as NavigationRegion3D
+	assert_not_null(nav_region)
+	var nav_mesh: NavigationMesh = nav_region.navigation_mesh
+	assert_not_null(nav_mesh)
+	# Verify collider-only parse mode was applied (property name varies by Godot version)
+	var geo_type = nav_mesh.get("geometry_parsed_geometry_type")
+	if geo_type == null:
+		geo_type = nav_mesh.get("parsed_geometry_type")
+	assert_not_null(geo_type, "One of the parsed_geometry_type properties must exist")
+	assert_eq(
+		int(geo_type),
+		NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS,
+		"Navmesh should be set to parse static colliders only"
+	)
+	container.free()
+
+
+func test_postprocess_bake_navmesh_reuses_existing_region():
+	root.bake_navmesh = true
+	var container := Node3D.new()
+	root.add_child(container)
+	# Pre-create a region to verify it's reused, not duplicated
+	var existing := NavigationRegion3D.new()
+	existing.name = "BakedNavmesh"
+	container.add_child(existing)
+	bake_sys.postprocess_bake(container, false)
+	var count := 0
+	for child in container.get_children():
+		if child is NavigationRegion3D and child.name == "BakedNavmesh":
+			count += 1
+	assert_eq(count, 1, "Should reuse existing BakedNavmesh, not create a second")
+	assert_not_null(existing.navigation_mesh, "Existing region should get a NavigationMesh")
+	container.free()
+
+
+func test_postprocess_bake_navmesh_with_connectors():
+	# Both navmesh and connectors enabled — navmesh should parse connector collision
+	var mgr := _make_paint_layers_with_boundary()
+	root.paint_layers = mgr
+	root.bake_auto_connectors = true
+	root.bake_navmesh = true
+	var container := Node3D.new()
+	root.add_child(container)
+	bake_sys.postprocess_bake(container, false)
+	# Connectors should produce collision shapes in FloorCollision
+	var body: StaticBody3D = container.get_node_or_null("FloorCollision") as StaticBody3D
+	assert_not_null(body, "Connectors must create FloorCollision body")
+	var col_shapes_before_nav := 0
+	for child in body.get_children():
+		if child is CollisionShape3D:
+			col_shapes_before_nav += 1
+	assert_gt(col_shapes_before_nav, 0, "Connectors must add collision shapes before navmesh bake")
+	# Navmesh should exist and be set to parse static colliders (which includes
+	# the FloorCollision body that connectors just populated)
+	var nav_region: NavigationRegion3D = container.get_node_or_null("BakedNavmesh") as NavigationRegion3D
+	assert_not_null(nav_region, "Navmesh should be baked after connectors")
+	var nav_mesh: NavigationMesh = nav_region.navigation_mesh
+	assert_not_null(nav_mesh)
+	var geo_type = nav_mesh.get("geometry_parsed_geometry_type")
+	if geo_type == null:
+		geo_type = nav_mesh.get("parsed_geometry_type")
+	assert_eq(
+		int(geo_type),
+		NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS,
+		"Navmesh must use STATIC_COLLIDERS so it consumes connector collision"
+	)
+	container.free()
+
+
+func test_postprocess_bake_selection_still_bakes_navmesh():
+	# selection_only suppresses connectors but should still bake navmesh
+	root.bake_navmesh = true
+	root.bake_auto_connectors = true
+	var mgr := _make_paint_layers_with_boundary()
+	root.paint_layers = mgr
+	var container := Node3D.new()
+	root.add_child(container)
+	bake_sys.postprocess_bake(container, true)
+	# No connectors
+	var connector_count := 0
+	for child in container.get_children():
+		if child.name.begins_with("AutoConnector"):
+			connector_count += 1
+	assert_eq(connector_count, 0, "selection_only must skip connectors")
+	# But navmesh should still be created
+	var nav_region = container.get_node_or_null("BakedNavmesh")
+	assert_not_null(nav_region, "selection_only should still bake navmesh")
+	container.free()
+
+
+# ===========================================================================
+# _set_parsed_geometry_type version-compat helper
+# ===========================================================================
+
+
+func test_set_parsed_geometry_type_real_navmesh():
+	# On this runtime (Godot 4.6), geometry_parsed_geometry_type exists
+	var nm := NavigationMesh.new()
+	var ok: bool = HFBakeSystem._set_parsed_geometry_type(nm, NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS)
+	assert_true(ok, "Should succeed on real NavigationMesh")
+	assert_eq(
+		int(nm.get("geometry_parsed_geometry_type")),
+		NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS
+	)
+
+
+func _make_mock_with_props(props: Array) -> Object:
+	var lines: Array = ["extends RefCounted"]
+	for p: String in props:
+		lines.append("var %s: int = 0" % p)
+	var script := GDScript.new()
+	script.source_code = "\n".join(lines) + "\n"
+	script.reload()
+	var obj := RefCounted.new()
+	obj.set_script(script)
+	return obj
+
+
+func test_set_parsed_geometry_type_legacy_property():
+	# Simulate an older Godot where only parsed_geometry_type exists
+	var mock: Object = _make_mock_with_props(["parsed_geometry_type"])
+	assert_false("geometry_parsed_geometry_type" in mock, "Mock must not have new property name")
+	assert_true("parsed_geometry_type" in mock, "Mock must have legacy property name")
+	var ok: bool = HFBakeSystem._set_parsed_geometry_type(mock, 1)
+	assert_true(ok, "Should succeed via legacy property fallback")
+	assert_eq(int(mock.get("parsed_geometry_type")), 1, "Legacy property should be set to 1")
+
+
+func test_set_parsed_geometry_type_prefers_new_name():
+	# If both properties exist, the new name should be used
+	var mock: Object = _make_mock_with_props(["geometry_parsed_geometry_type", "parsed_geometry_type"])
+	var ok: bool = HFBakeSystem._set_parsed_geometry_type(mock, 42)
+	assert_true(ok)
+	assert_eq(int(mock.get("geometry_parsed_geometry_type")), 42, "New-name property should be set")
+	assert_eq(int(mock.get("parsed_geometry_type")), 0, "Old-name property should be untouched")
+
+
+func test_set_parsed_geometry_type_neither_property():
+	# Neither property exists → should return false and push_warning
+	var mock: Object = _make_mock_with_props([])
+	var ok: bool = HFBakeSystem._set_parsed_geometry_type(mock, 1)
+	assert_false(ok, "Should return false when neither property exists")
+	assert_push_error_count(0)  # It's a warning, not an error

@@ -163,6 +163,10 @@ var bake_chunk_size_spin: SpinBox = null
 var bake_visible_only_check: CheckBox = null
 var bake_use_multimesh_check: CheckBox = null
 var bake_use_atlas_check: CheckBox = null
+var bake_auto_connectors_check: CheckBox = null
+var bake_connector_mode_opt: OptionButton = null
+var bake_connector_stair_height_spin: SpinBox = null
+var bake_connector_width_spin: SpinBox = null
 # -- Quick Play mode controls --
 var quick_play_camera_btn: Button = null
 var quick_play_area_btn: Button = null
@@ -521,6 +525,7 @@ func _connect_setting_signals() -> void:
 		[bake_visible_only_check, "bake_visible_only"],
 		[bake_use_multimesh_check, "bake_use_multimesh"],
 		[bake_use_atlas_check, "bake_use_atlas"],
+		[bake_auto_connectors_check, "bake_auto_connectors"],
 		[commit_freeze, "commit_freeze"],
 		[autosave_enabled, "hflevel_autosave_enabled"],
 		[show_grid, "grid_visible"],
@@ -539,6 +544,7 @@ func _connect_setting_signals() -> void:
 		[bake_navmesh_cell_height, "bake_navmesh_cell_height"],
 		[bake_navmesh_agent_height, "bake_navmesh_agent_height"],
 		[bake_navmesh_agent_radius, "bake_navmesh_agent_radius"],
+		[bake_connector_stair_height_spin, "bake_connector_stair_height"],
 	]
 	for binding in float_bindings:
 		var ctrl: SpinBox = binding[0] as SpinBox
@@ -549,12 +555,20 @@ func _connect_setting_signals() -> void:
 	var int_bindings: Array = [
 		[autosave_minutes, "hflevel_autosave_minutes"],
 		[autosave_keep, "hflevel_autosave_keep"],
+		[bake_connector_width_spin, "bake_connector_width"],
 	]
 	for binding in int_bindings:
 		var ctrl: SpinBox = binding[0] as SpinBox
 		var prop: String = binding[1]
 		if ctrl:
 			ctrl.value_changed.connect(_on_setting_int_changed.bind(prop))
+	# OptionButton → int property
+	if bake_connector_mode_opt:
+		bake_connector_mode_opt.item_selected.connect(
+			func(idx: int) -> void:
+				if level_root and _root_has_property("bake_connector_mode"):
+					level_root.set("bake_connector_mode", idx)
+		)
 	# Debug checkbox (special — also sets local debug_enabled bool)
 	if debug_logs:
 		debug_logs.toggled.connect(_on_debug_toggled)
@@ -573,6 +587,7 @@ func _apply_ui_state_to_root() -> void:
 		[bake_visible_only_check, "bake_visible_only"],
 		[bake_use_multimesh_check, "bake_use_multimesh"],
 		[bake_use_atlas_check, "bake_use_atlas"],
+		[bake_auto_connectors_check, "bake_auto_connectors"],
 		[commit_freeze, "commit_freeze"],
 		[autosave_enabled, "hflevel_autosave_enabled"],
 		[show_grid, "grid_visible"],
@@ -590,6 +605,7 @@ func _apply_ui_state_to_root() -> void:
 		[bake_navmesh_cell_height, "bake_navmesh_cell_height"],
 		[bake_navmesh_agent_height, "bake_navmesh_agent_height"],
 		[bake_navmesh_agent_radius, "bake_navmesh_agent_radius"],
+		[bake_connector_stair_height_spin, "bake_connector_stair_height"],
 	]
 	for pair in float_pairs:
 		var ctrl: SpinBox = pair[0] as SpinBox
@@ -599,12 +615,15 @@ func _apply_ui_state_to_root() -> void:
 	var int_pairs: Array = [
 		[autosave_minutes, "hflevel_autosave_minutes"],
 		[autosave_keep, "hflevel_autosave_keep"],
+		[bake_connector_width_spin, "bake_connector_width"],
 	]
 	for pair in int_pairs:
 		var ctrl: SpinBox = pair[0] as SpinBox
 		var prop: String = pair[1]
 		if ctrl and _root_has_property(prop):
 			level_root.set(prop, int(ctrl.value))
+	if bake_connector_mode_opt and _root_has_property("bake_connector_mode"):
+		level_root.set("bake_connector_mode", bake_connector_mode_opt.get_selected_id())
 	if _root_has_property("debug_logging"):
 		level_root.set("debug_logging", debug_enabled)
 
@@ -997,6 +1016,13 @@ func _apply_all_tooltips() -> void:
 	_set_tooltip(bake_navmesh_cell_height, "Navigation mesh cell height (Y)")
 	_set_tooltip(bake_navmesh_agent_height, "Navigation agent height")
 	_set_tooltip(bake_navmesh_agent_radius, "Navigation agent radius")
+	_set_tooltip(
+		bake_auto_connectors_check,
+		(
+			"Auto-generate ramps or stairs between height levels during bake"
+			+ "\nRequires at least 2 paint layers at different heights"
+		)
+	)
 	# FloorPaint tab
 	_set_tooltip(
 		paint_tool_select,
@@ -3555,6 +3581,14 @@ func _sync_grid_settings_from_root() -> void:
 		bake_use_multimesh_check.button_pressed = bool(connected_root.get("bake_use_multimesh"))
 	if bake_use_atlas_check and _root_has_property("bake_use_atlas"):
 		bake_use_atlas_check.button_pressed = bool(connected_root.get("bake_use_atlas"))
+	if bake_auto_connectors_check and _root_has_property("bake_auto_connectors"):
+		bake_auto_connectors_check.button_pressed = bool(connected_root.get("bake_auto_connectors"))
+	if bake_connector_mode_opt and _root_has_property("bake_connector_mode"):
+		bake_connector_mode_opt.select(int(connected_root.get("bake_connector_mode")))
+	if bake_connector_stair_height_spin and _root_has_property("bake_connector_stair_height"):
+		bake_connector_stair_height_spin.value = float(connected_root.get("bake_connector_stair_height"))
+	if bake_connector_width_spin and _root_has_property("bake_connector_width"):
+		bake_connector_width_spin.value = int(connected_root.get("bake_connector_width"))
 	if bake_chunk_size_spin and _root_has_property("bake_chunk_size"):
 		bake_chunk_size_spin.value = float(connected_root.get("bake_chunk_size"))
 	if bake_navmesh and _root_has_property("bake_navmesh"):
@@ -5772,6 +5806,14 @@ func _collect_editor_settings() -> Dictionary:
 		bake_settings["use_multimesh"] = bake_use_multimesh_check.button_pressed
 	if bake_use_atlas_check:
 		bake_settings["use_atlas"] = bake_use_atlas_check.button_pressed
+	if bake_auto_connectors_check:
+		bake_settings["auto_connectors"] = bake_auto_connectors_check.button_pressed
+	if bake_connector_mode_opt:
+		bake_settings["connector_mode"] = bake_connector_mode_opt.get_selected_id()
+	if bake_connector_stair_height_spin:
+		bake_settings["connector_stair_height"] = float(bake_connector_stair_height_spin.value)
+	if bake_connector_width_spin:
+		bake_settings["connector_width"] = int(bake_connector_width_spin.value)
 	return {
 		"version": 1,
 		"saved_at": Time.get_datetime_string_from_system(),
@@ -5854,6 +5896,14 @@ func _apply_editor_settings(data: Dictionary) -> void:
 			bake_use_multimesh_check.button_pressed = bool(bake.get("use_multimesh", false))
 		if bake_use_atlas_check and bake.has("use_atlas"):
 			bake_use_atlas_check.button_pressed = bool(bake.get("use_atlas", false))
+		if bake_auto_connectors_check and bake.has("auto_connectors"):
+			bake_auto_connectors_check.button_pressed = bool(bake.get("auto_connectors", false))
+		if bake_connector_mode_opt and bake.has("connector_mode"):
+			bake_connector_mode_opt.select(int(bake.get("connector_mode", 0)))
+		if bake_connector_stair_height_spin and bake.has("connector_stair_height"):
+			bake_connector_stair_height_spin.value = float(bake.get("connector_stair_height", 0.25))
+		if bake_connector_width_spin and bake.has("connector_width"):
+			bake_connector_width_spin.value = int(bake.get("connector_width", 2))
 		_sync_bake_option_visibility()
 
 

@@ -163,11 +163,12 @@ The blend system uses a four-slot spatial shader (`hf_blend.gdshader`):
 - Per-chunk blend images are built from cell-level blend weights during mesh generation.
 - The blend material is always applied to heightmap floor MeshInstance3D nodes (even without explicit blend textures).
 
-## Auto-Connectors (`hf_connector_tool.gd`)
+## Auto-Connectors (`hf_connector_tool.gd` + `hf_auto_connector.gd`)
 Generates transition geometry between layers at different Y heights:
 - **Ramp**: SurfaceTool sloped quad strip from one cell to another.
 - **Stairs**: horizontal treads + vertical risers when height difference exceeds step threshold.
 - `ConnectorDef` specifies from/to layer indices, cells, width, and step height.
+- **Auto-detection during bake** (`hf_auto_connector.gd`): When "Auto Connectors" is enabled in Bake settings, the bake pipeline automatically scans paint layers for cross-layer height boundaries (N/S/E/W neighbors), groups adjacent boundary edges, and generates ramp or stair geometry. Mode can be Ramp, Stairs, or Auto (auto selects stairs when height difference exceeds stair step threshold). Connectors include collision shapes for navmesh parsing. Skipped during selection-only bakes.
 
 ## Foliage Populator (`hf_foliage_populator.gd`)
 Procedural scatter using MultiMeshInstance3D:
@@ -190,4 +191,4 @@ Procedural scatter using MultiMeshInstance3D:
 - Walls are more stable because they follow boundary edges.
 - Heightmap displacement is per-cell corner (4 vertices per cell); sub-cell terrain detail requires a denser grid.
 - Blend shader supports four slots (A-D); more slots would require a different approach (texture arrays or atlasing).
-- Connectors generate geometry but do not automatically detect optimal placement.
+- Auto-connectors use axis-aligned 4-directional scanning; diagonal height transitions are not detected.

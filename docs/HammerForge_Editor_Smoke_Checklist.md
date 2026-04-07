@@ -1,6 +1,6 @@
 # HammerForge Editor Smoke Checklist
 
-Last updated: April 6, 2026
+Last updated: April 8, 2026
 
 This checklist covers the editor-only flows that are hard to validate in headless tests:
 - tutorial banner startup before `LevelRoot` exists
@@ -208,6 +208,17 @@ Enable the HammerForge plugin if it is not already enabled.
 - Select a subset of brushes. Click **Play Selected Area**; confirm only the selected area is baked. Stop playtest; confirm the cordon returns to its previous state (enabled/disabled, original AABB).
 - With cordon disabled, click **Play Selected Area**, then stop. Confirm cordon is still disabled afterward.
 
+### 12b. Auto-Connectors (Terrain Bake)
+- Create two paint layers at different Y heights (e.g. layer 0 at Y=0, layer 1 at Y=4). Paint adjacent cells so at least one cell in each layer borders the other.
+- Open **Manage → Bake** section. Check **Auto Connectors**.
+- Set Mode to **Ramp**. Click **Bake**. Confirm `AutoConnector_*` MeshInstance3D nodes appear in the baked output connecting the two height levels with sloped geometry.
+- Undo the bake. Set Mode to **Stairs**, Step H to 0.5. Bake again. Confirm stair-step geometry appears instead of a smooth ramp.
+- Set Mode to **Auto**. Bake. Confirm the system chooses ramps for small height differences and stairs for larger ones (threshold = step height).
+- Set Width to 3. Bake. Confirm connectors are wider (3 cells).
+- Uncheck **Auto Connectors**. Bake. Confirm no `AutoConnector_*` nodes appear.
+- Select a subset of brushes. Click **Bake Selected**. Confirm no auto-connectors are generated (selection-only bakes skip connectors).
+- With Auto Connectors enabled + NavMesh enabled, bake. Confirm both `AutoConnector_*` collision shapes and `BakedNavmesh` region exist, and navmesh uses STATIC_COLLIDERS parsed geometry type.
+
 ### 13. Context Toolbar + Command Palette
 - Select a brush in the viewport. Confirm the floating context toolbar appears at the top of the 3D viewport showing "1 brush" with Extrude/Hollow/Clip/Carve/Merge/Duplicate/Delete buttons.
 - Select multiple brushes; confirm the label updates to "N brushes".
@@ -366,4 +377,4 @@ Enable the HammerForge plugin if it is not already enabled.
 
 ## Expected Outcome
 
-If all steps pass, the remaining risk on the tutorial/prefab/shortcut/subtract-preview/vertex-editing/polygon/path/material-browser/spawn-system/context-toolbar/command-palette/terrain-scatter/measure-tool/history-browser/performance-monitor/theme-sync/export-playtest/displacement/bevel feature set is low and limited mainly to edge cases outside this smoke path.
+If all steps pass, the remaining risk on the tutorial/prefab/shortcut/subtract-preview/vertex-editing/polygon/path/material-browser/spawn-system/context-toolbar/command-palette/terrain-scatter/measure-tool/history-browser/performance-monitor/theme-sync/export-playtest/displacement/bevel/auto-connectors feature set is low and limited mainly to edge cases outside this smoke path.

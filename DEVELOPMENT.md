@@ -91,7 +91,7 @@ addons/hammerforge/
     hf_entity_system.gd    Entity definitions, placement, Entity I/O connections
     hf_brush_system.gd     Brush CRUD, cuts, materials, picking, hollow, clip, merge, tie/untie
     hf_drag_system.gd      Drag lifecycle, preview, axis locking
-    hf_bake_system.gd      Bake orchestration (single/chunked/selected/dirty), preview modes (Full/Wireframe/Proxy), time estimate
+    hf_bake_system.gd      Bake orchestration (single/chunked/selected/dirty), preview modes (Full/Wireframe/Proxy), time estimate, auto-connectors
     hf_paint_system.gd     Floor + surface paint, layer CRUD
     hf_state_system.gd     State capture/restore, settings, transactions
     hf_file_system.gd      .hflevel/.map/.glTF I/O, threaded writes, autosave failure reporting
@@ -119,7 +119,8 @@ addons/hammerforge/
     hf_reconciler.gd       Stable-ID reconciliation (floors, walls, heightmap floors)
     hf_generated_model.gd  Data model (FloorRect, WallSeg, HeightmapFloor)
     hf_stroke.gd           Stroke types (brush/erase/rect/line/bucket/blend/sculpt_raise/lower/smooth/flatten)
-    hf_connector_tool.gd   Ramp/stair mesh generation between layers
+    hf_connector_tool.gd   Ramp/stair mesh generation between layers (manual connector defs)
+    hf_auto_connector.gd   Auto-detect height boundaries + generate connectors during bake
     hf_foliage_populator.gd MultiMeshInstance3D procedural scatter (height/slope filtering)
     hf_brush_to_heightmap.gd Convert selected brushes to heightmap paint layer (rasterize top faces)
     hf_scatter_brush.gd    Interactive scatter/foliage brush (circle/spline, density preview, commit)

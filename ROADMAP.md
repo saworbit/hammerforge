@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: April 6, 2026
+Last updated: April 8, 2026
 
 This roadmap is a directional plan. Items may change based on user feedback.
 Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md for details.
@@ -233,11 +233,21 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - **Plugin displacement paint input**: raycast plane intersection constrained by convex polygon bounds check. Paint gated behind paint mode enabled + Displacement section expanded.
 - 55 new tests across 2 files (test_displacement 40, test_bevel 15). Total: **1172 tests across 69 files**.
 
-## Next (Wave 2c remaining)
-- Material atlasing for large scenes.
+## Done (Material Atlasing — Draw-Call Reduction)
+- **Material atlas** (`HFMaterialAtlas`): shelf bin-packing of albedo textures into single atlas (up to 4096x4096). 2px gutter padding with edge-pixel extension. Half-texel UV inset. Per-face tiling detection splits hardware-repeat faces into separate surfaces. Baker `bake_from_faces()` integration with `remap_uv()`. `bake_use_atlas` LevelRoot property + dock checkbox + state persistence.
+- 26 new tests. Total: **1203 tests across 70 files**.
+
+## Done (Merge Tool — Brush Combination)
+- **Merge brushes** (`HFBrushSystem.merge_brushes_by_ids()`): combine 2+ selected brushes into one CUSTOM brush. Full Transform3D pipeline (local→world→merged local), per-brush material_override as per-face material_idx. Ctrl+Shift+M keybinding, context toolbar Mrg button, command palette entry.
+- 23 new tests. Total: **1226 tests across 71 files**.
+
+## Done (Better Terrain Integration — Auto-Connectors)
+- **Auto-connector system** (`hf_auto_connector.gd`): auto-detect cross-layer height boundaries during bake. 4-directional neighbor scan, 6-part canonical dedupe key (handles corners/T-junctions), flood-fill grouping, ramp/stairs/auto mode selection. Connectors include CollisionShape3D for navmesh parsing. Selection-only bakes skip connectors.
+- **Bake pipeline integration**: `postprocess_bake()` with `selection_only` flag. `_append_auto_connectors()` creates meshes + collision shapes. Version-safe `_set_parsed_geometry_type()` static helper for Godot 4.6 navmesh property rename.
+- **Dock UI**: Auto Connectors checkbox, Mode dropdown (Ramp/Stairs/Auto), Step H and Width spinboxes in Manage tab Bake section.
+- 44 new tests (27 auto_connector + 17 bake_system integration). Total: **1270 tests across 73 files**.
 
 ## Future (Wave 3 -- Polish)
-- Merge tool (combine two adjacent brushes into one convex brush).
 - Multiple simultaneous cordons.
 - Multi-tool presets for common workflows.
 - Additional bake pipelines (merge strategies, export helpers).

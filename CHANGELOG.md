@@ -5,6 +5,31 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Better Terrain Integration — Auto Connectors** (Apr 2026): Auto-generate ramps or stairs between
+  height levels during bake. `HFAutoConnector` class (`paint/hf_auto_connector.gd`) scans all paint
+  layer pairs, detects cross-layer height boundaries (adjacent cells where one layer's filled cell
+  neighbours another layer's filled cell at a different height, threshold ≥0.1 world units), groups
+  contiguous boundary edges by direction, and generates connector meshes via the existing
+  `HFConnectorTool`. Three modes: **Ramp** (smooth slope), **Stairs** (stepped with configurable step
+  height), and **Auto** (picks stairs when height diff ≥ threshold, ramp otherwise). Connector width
+  configurable in cells. Deduplication uses canonical 6-part key (both layer indices + both cell coords)
+  so corner and T-junction edges are never dropped. Integrated into `HFBakeSystem.postprocess_bake()` —
+  connectors generate before navmesh bake so `PARSED_GEOMETRY_STATIC_COLLIDERS` mode picks up connector
+  collision shapes. Selection bakes (`bake_selected`) skip auto-connectors to avoid pulling in
+  unrelated geometry. 4 new export properties on LevelRoot: `bake_auto_connectors`, `bake_connector_mode`,
+  `bake_connector_stair_height`, `bake_connector_width`. Dock UI: "Auto Connectors" checkbox, Mode
+  dropdown (Ramp/Stairs/Auto), Step Height and Width spinboxes in Manage tab Bake section. Full state
+  persistence in `.hflevel` via `hf_state_system.gd` and dock settings export/import.
+  27 tests in `test_auto_connector.gd` + 13 integration tests in `test_bake_system.gd`.
+  Total: **1270 tests across 72 files**.
+### Fixed
+- **NavigationMesh parsed_geometry_type property name** (Apr 2026): `bake_navmesh()` unconditionally
+  assigned `nav_mesh.parsed_geometry_type`, which was renamed to `geometry_parsed_geometry_type` in
+  Godot 4.6. Every navmesh bake logged `Invalid assignment of property or key 'parsed_geometry_type'`
+  and silently failed to set collider-only parse mode. Extracted to version-safe
+  `_set_parsed_geometry_type(target, value)` static helper that probes both property names via `in`.
+  4 unit tests exercise both branches (new-name, legacy-name via mock, both-names priority, neither-name
+  fallback).
 - **Merge Tool** (Apr 2026): Combine 2+ selected brushes into a single CUSTOM brush before baking.
   `HFBrushSystem.merge_brushes_by_ids()` collects all faces from source brushes and transforms
   their `local_verts` and normals through the full `Transform3D` pipeline (source local → world →
