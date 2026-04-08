@@ -544,6 +544,13 @@ func _exit_tree() -> void:
 			_reload_timer.timeout.disconnect(_check_remote_reload)
 		_reload_timer.queue_free()
 		_reload_timer = null
+	if subtract_preview:
+		subtract_preview.destroy()
+	# Cancel any in-flight tool previews so their nodes don't outlive the tree
+	if extrude_tool:
+		extrude_tool.cancel_extrude()
+	if drag_system:
+		drag_system._clear_preview()
 
 
 func _process(_delta: float) -> void:

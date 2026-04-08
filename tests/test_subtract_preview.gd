@@ -92,3 +92,34 @@ func test_debounce_rebuilds_after_elapsed():
 	preview.process(0.2)
 	# Should have rebuilt (no crash, container created)
 	assert_true(true, "Rebuild after debounce should succeed")
+
+
+# -- Destroy / cleanup tests ---------------------------------------------------
+
+
+func test_destroy_frees_pool_and_container():
+	var root = Node3D.new()
+	var draft = Node3D.new()
+	draft.name = "DraftBrushes"
+	root.add_child(draft)
+	add_child_autofree(root)
+	var preview = HFSubtractPreview.new(root)
+	preview.set_enabled(true)
+	# Force a rebuild so the container and pool are created
+	preview.request_update()
+	preview.process(0.2)
+	# Destroy should free everything without errors
+	preview.destroy()
+	assert_false(preview.is_enabled(), "Should be disabled after destroy")
+	assert_eq(preview._mesh_pool.size(), 0, "Pool should be empty after destroy")
+	assert_null(preview._preview_container, "Container ref should be null after destroy")
+
+
+func test_destroy_when_never_enabled():
+	var root = Node3D.new()
+	add_child_autofree(root)
+	var preview = HFSubtractPreview.new(root)
+	# destroy on a never-enabled preview should not crash
+	preview.destroy()
+	assert_false(preview.is_enabled(), "Should remain disabled")
+	assert_eq(preview._mesh_pool.size(), 0, "Pool should be empty")

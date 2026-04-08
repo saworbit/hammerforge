@@ -152,6 +152,17 @@ func is_vertex_editing() -> bool:
 	return mode == Mode.VERTEX_EDIT
 
 
+## Returns true for modes that own transient preview scene nodes (drag
+## preview brush, extrude preview, etc.) and should be force-reset when
+## the undo/redo version changes.  Persistent modes like VERTEX_EDIT —
+## where commit_action() fires version_changed after every operation —
+## must NOT be included or the mode will desync from the plugin UI flag.
+static func is_transient_preview_mode(m: int) -> bool:
+	return (
+		m == Mode.DRAG_BASE or m == Mode.DRAG_HEIGHT or m == Mode.EXTRUDE or m == Mode.SURFACE_PAINT
+	)
+
+
 func get_drag_dimensions() -> Vector3:
 	if mode == Mode.DRAG_BASE:
 		var delta = drag_end - drag_origin

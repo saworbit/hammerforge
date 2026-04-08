@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Fixed
+- **Preview node memory leaks during undo/redo** (Apr 2026): Editor preview geometry (drag preview
+  brushes, extrude preview brushes, subtract preview wireframes) could leak MeshInstance3D nodes during
+  rapid undo/redo cycles. Three fixes:
+  1. `plugin.gd` now connects to `EditorUndoRedoManager.version_changed` and force-resets transient
+     input modes (DRAG_BASE, DRAG_HEIGHT, EXTRUDE, SURFACE_PAINT) via `HFInputState._force_reset()`,
+     which cascades through `_on_input_state_force_reset` to free drag/extrude preview nodes.
+     Persistent modes (VERTEX_EDIT) are explicitly excluded — `commit_action()` fires
+     `version_changed` after every vertex operation, so resetting it would desynchronize
+     `_vertex_mode` in plugin.gd from `input_state.mode`. The transient-mode predicate is extracted
+     to `HFInputState.is_transient_preview_mode()` (shared between plugin.gd and tests).
+  2. `HFSubtractPreview` gains a `destroy()` method that immediately frees all pooled MeshInstance3D
+     nodes and the container Node3D (via `free()`, not `queue_free()`, to prevent orphans during
+     tree teardown where the next frame may never arrive).
+  3. `level_root.gd _exit_tree()` now calls `subtract_preview.destroy()`,
+     `extrude_tool.cancel_extrude()`, and `drag_system._clear_preview()` to clean up all preview
+     nodes when the LevelRoot leaves the scene tree.
+  8 new tests: 6 in `test_drag_dimensions.gd` (version_changed predicate for all 6 input modes),
+  2 in `test_subtract_preview.gd` (destroy with/without prior enable).
+  Total: **1278 tests across 73 files**.
+
 ### Added
 - **Better Terrain Integration — Auto Connectors** (Apr 2026): Auto-generate ramps or stairs between
   height levels during bake. `HFAutoConnector` class (`paint/hf_auto_connector.gd`) scans all paint

@@ -151,12 +151,29 @@ func _enter_tree():
 		if dock and hf_selection.size() > 0:
 			dock.set_selection_count(hf_selection.size())
 			dock.set_selection_nodes(hf_selection)
+	# Listen for undo/redo to cancel in-flight tool previews and avoid orphaned nodes
+	if undo_redo_manager and undo_redo_manager.has_signal("version_changed"):
+		if not undo_redo_manager.is_connected(
+			"version_changed", Callable(self, "_on_undo_redo_version_changed")
+		):
+			undo_redo_manager.connect(
+				"version_changed", Callable(self, "_on_undo_redo_version_changed")
+			)
 	set_process(false)
 
 
 func _exit_tree():
 	remove_custom_type("LevelRoot")
 	remove_custom_type("DraftEntity")
+	if (
+		undo_redo_manager
+		and undo_redo_manager.is_connected(
+			"version_changed", Callable(self, "_on_undo_redo_version_changed")
+		)
+	):
+		undo_redo_manager.disconnect(
+			"version_changed", Callable(self, "_on_undo_redo_version_changed")
+		)
 	undo_redo_manager = null
 	if brush_gizmo_plugin:
 		remove_node_3d_gizmo_plugin(brush_gizmo_plugin)
@@ -3090,6 +3107,29 @@ func _show_coach_mark_for_tool_id(tool_id: int) -> void:
 
 func _on_coach_mark_dismissed(_tool_key: String, _dont_show: bool) -> void:
 	pass  # Persistence is handled internally by HFCoachMarks
+
+
+func _on_undo_redo_version_changed() -> void:
+	## Cancel any in-flight *transient* tool preview (drag, extrude) when the
+	## undo/redo version changes.  Without this, preview MeshInstance3D nodes
+	## created mid-operation become orphaned because the scene state they
+	## reference no longer matches.
+	##
+	## VERTEX_EDIT is a persistent mode — commit_action() fires
+	## version_changed after every merge/split/move, so resetting it here
+	## would desynchronize the plugin's _vertex_mode flag from input_state.
+	var root: LevelRoot = active_root if active_root else _get_level_root()
+	if not root or not is_instance_valid(root):
+		return
+	if root.drag_system and root.drag_system.input_state:
+		var ist: HFInputStateType = root.drag_system.input_state
+		# Only reset transient preview modes that own temporary scene nodes.
+		# VERTEX_EDIT and IDLE are left alone — see HFInputState.is_transient_preview_mode().
+		if HFInputStateType.is_transient_preview_mode(ist.mode):
+			ist._force_reset()
+	# Subtract preview may reference stale brush data — rebuild
+	if root.subtract_preview and root.subtract_preview.is_enabled():
+		root.subtract_preview.request_update()
 
 
 func _on_replay_requested(entry_index: int) -> void:

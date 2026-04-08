@@ -69,6 +69,25 @@ func clear() -> void:
 		_preview_container.visible = false
 
 
+## Free all pooled meshes and the container node.  Call when the preview
+## system is no longer needed (plugin unload, scene change, etc.).
+## Uses immediate free() rather than queue_free() so that nodes are not
+## orphaned during tree teardown where the next frame may never arrive.
+func destroy() -> void:
+	_disconnect_signals()
+	# Free pool children via the container (they are parented to it), then
+	# free the container itself.  No need to remove_child individually —
+	# freeing the container takes its children with it.
+	_mesh_pool.clear()
+	_active_count = 0
+	if _preview_container and is_instance_valid(_preview_container):
+		if _preview_container.get_parent():
+			_preview_container.get_parent().remove_child(_preview_container)
+		_preview_container.free()
+	_preview_container = null
+	_enabled = false
+
+
 func _ensure_container() -> void:
 	if _preview_container and is_instance_valid(_preview_container):
 		_preview_container.visible = true
