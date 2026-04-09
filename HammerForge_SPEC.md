@@ -94,7 +94,7 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `hf_paint_system.gd` | `HFPaintSystem` | Floor paint input, surface paint, paint layer CRUD, face selection |
 | `hf_state_system.gd` | `HFStateSystem` | State capture/restore, settings, paint layer serialization, transactions (begin/commit/rollback) |
 | `hf_file_system.gd` | `HFFileSystem` | .hflevel save/load, .map import/export, glTF export, threaded I/O, autosave failure reporting |
-| `hf_validation_system.gd` | `HFValidationSystem` | Validation, dependency checks, auto-fix helpers, bake issue detection (degenerate/floating/overlapping) |
+| `hf_validation_system.gd` | `HFValidationSystem` | Validation, dependency checks, auto-fix helpers (vertex weld, planarity fix), bake issue detection (degenerate/floating/overlapping/non-planar/micro-gap). Configurable `weld_tolerance` and `planarity_tolerance`. Edge-key topology hashing intentionally decoupled from weld knob |
 | `hf_visgroup_system.gd` | `HFVisgroupSystem` | Visgroups (visibility groups), brush/entity grouping |
 | `hf_carve_system.gd` | `HFCarveSystem` | Boolean-subtract carve (progressive-remainder box slicing) |
 | `hf_io_visualizer.gd` | `HFIOVisualizer` | Entity I/O connection lines in viewport (ImmediateMesh) |
@@ -326,7 +326,8 @@ Foliage Populator
 - **Bake Changed** (`bake_dirty()`): bakes only brushes with dirty tags (`_dirty_brush_ids`). Tags are cleared only when `_last_bake_success` is true; failed bakes retain all dirty tags.
 - **Preview modes** (`PreviewMode` enum: FULL, WIREFRAME, PROXY): `_apply_preview_visuals()` overrides material on baked meshes. Wireframe uses inline `ShaderMaterial` with `render_mode wireframe`. Proxy uses unshaded semi-transparent `StandardMaterial3D`.
 - **Bake time estimate** (`estimate_bake_time()`): ratio-based extrapolation from `_last_bake_duration_ms` and brush count.
-- **Bake issue detection** (`HFValidationSystem.check_bake_issues()`): returns Array of `{type, severity, message, node}` dicts. Checks: degenerate brush (sev=2), oversized (sev=1), floating subtract (sev=1), overlapping subtracts (sev=1).
+- **Bake issue detection** (`HFValidationSystem.check_bake_issues()`): returns Array of `{type, severity, message, node}` dicts. Checks: degenerate brush (sev=2), oversized (sev=1), floating subtract (sev=1), overlapping subtracts (sev=1), non-manifold edges (sev=2), open edges (sev=1), non-planar faces (sev=1), micro-gaps between brushes (sev=1). Non-planar detection uses `planarity_tolerance` (default 0.01). Micro-gap detection uses `weld_tolerance` (default 0.001). Both use 27-cell spatial hash neighbor lookup for boundary-safe distance checks. `_edge_key()` for topology (non-manifold/open-edge) uses fixed 0.001 precision, intentionally decoupled from `weld_tolerance`.
+- **Auto-fix helpers**: `weld_brush_vertices(brush)` snaps near-coincident vertices within `weld_tolerance` via BFS grouping + `ensure_geometry()` refresh. `fix_non_planar_faces(brush)` projects drifting vertices onto the best-fit plane from each face's first 3 vertices.
 
 ## Face Materials + Surface Paint
 Face data is stored per DraftBrush face with material assignment, UV projection, and optional paint layers.
@@ -479,6 +480,7 @@ Unit tests use the [GUT](https://github.com/bitwes/Gut) framework and run headle
 | `test_reference_cleanup.gd` | 9 | Delete cleans group/visgroup membership, entity I/O cleanup_dangling_connections |
 | `test_bake_system.gd` | 38 | build_bake_options, structural/trigger filtering, chunk_coord, bake_dry_run, warn_bake_failure, estimate_bake_time, preview modes, _last_bake_success, dirty tag retention, wireframe ShaderMaterial |
 | `test_bake_issues.gd` | 10 | check_bake_issues: degenerate, oversized, floating subtract, overlapping subtracts, clean level, entity skip |
+| `test_weld_and_planarity.gd` | 21 | Non-planar detection, vertex welding + ensure_geometry refresh, planarity auto-fix, micro-gap detection, edge-key independence, boundary-straddling coverage, MapIO integration + unit |
 | `test_quick_play_modes.gd` | 12 | Severity blocking (0/1/2), cordon save/restore, dirty tag retention, camera yaw via entity_data, spawn restore |
 | `test_integration.gd` | 22 | End-to-end: brush lifecycle, paint + heightmap, entity workflow, visgroup cross-system, snap, bake, I/O cleanup, info round-trip |
 | `test_shortcut_dialog.gd` | 8 | Category assignment (tools, paint, axis lock, editing), action labels, get_all_bindings copy safety |

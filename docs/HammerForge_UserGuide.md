@@ -252,6 +252,15 @@ Click **Check Bake Issues** to scan for potential problems before baking:
 - **Overlapping subtracts** (severity 1): two subtractive brushes with intersecting AABBs.
 - **Open edges** (severity 1): edges shared by only one face — geometry is not watertight.
 - **Non-manifold edges** (severity 2): edges shared by 3+ faces — may cause bake artifacts.
+- **Non-planar faces** (severity 1): faces with 4+ vertices where a vertex drifts off the face plane beyond `planarity_tolerance` (default 0.01 units). Common in imported .map geometry with floating-point drift.
+- **Micro-gaps** (severity 1): near-coincident but not-exactly-equal vertices across different brushes that would cause seam tearing after bake. Detected within `weld_tolerance` (default 0.001 units).
+
+**Auto-fix helpers** (available via GDScript API on `level_root.validation_system`):
+- `weld_brush_vertices(brush)` — snaps near-coincident vertices to their average. Refreshes face normals and bounds automatically.
+- `fix_non_planar_faces(brush)` — projects drifting vertices back onto the face plane.
+
+Both tolerances (`weld_tolerance`, `planarity_tolerance`) are configurable per-instance for noisy imported geometry.
+
 Issues appear as color-coded toast notifications.
 
 ### Non-Blocking Face Bakes

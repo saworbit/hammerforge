@@ -11,6 +11,11 @@ const HFMapQuakeType = preload("map_adapters/hf_map_quake.gd")
 const DEFAULT_TEXTURE := "__default"
 const AXIS_THRESHOLD := 0.98
 
+## Vertex snapping tolerance for imported .map geometry.  Vertices closer than
+## this distance are welded to their average position to eliminate floating-point
+## drift from legacy editors.  Set to 0.0 to disable.
+static var import_weld_tolerance: float = 0.01
+
 
 static func load_map(path: String) -> Dictionary:
 	if path == "" or not FileAccess.file_exists(path):
@@ -70,6 +75,12 @@ static func parse_map_text(text: String) -> Dictionary:
 			if kv.size() == 2:
 				current_entity["properties"][kv[0]] = kv[1]
 			continue
+	# Weld near-coincident vertices across all parsed faces to close micro-gaps
+	if import_weld_tolerance > 0.0:
+		for entity in entities:
+			for brush in entity.get("brushes", []):
+				_snap_parsed_vertices(brush.get("faces", []), import_weld_tolerance)
+
 	var brushes: Array = []
 	var entity_points: Array = []
 	for entity in entities:
@@ -354,3 +365,85 @@ static func _format_vec3(v: Vector3) -> String:
 
 static func _snapped(value: float) -> String:
 	return String.num(value, 3)
+
+
+## Snap near-coincident vertices within a single parsed brush's face list.
+## Uses BFS over a spatial hash with 27-cell neighbor lookup so pairs straddling
+## a bucket boundary are never missed.  Averages each cluster and writes
+## the canonical position back.
+static func _snap_parsed_vertices(faces: Array, tolerance: float) -> void:
+	if tolerance <= 0.0:
+		return
+	# Collect all vertex references into a flat list + spatial hash
+	var entries: Array = []  # Array of {fi: int, pi: int, pos: Vector3}
+	var cells: Dictionary = {}  # cell_key -> Array[int]
+	for fi in range(faces.size()):
+		var points: Array = faces[fi].get("points", [])
+		for pi in range(points.size()):
+			var idx: int = entries.size()
+			var pos: Vector3 = points[pi]
+			entries.append({"fi": fi, "pi": pi, "pos": pos})
+			var key: String = _snap_cell_key(pos, tolerance)
+			if not cells.has(key):
+				cells[key] = []
+			(cells[key] as Array).append(idx)
+	# BFS grouping
+	var group_of: PackedInt32Array = PackedInt32Array()
+	group_of.resize(entries.size())
+	group_of.fill(-1)
+	var groups: Array = []  # Array of Array[int]
+	for seed_idx in range(entries.size()):
+		if group_of[seed_idx] >= 0:
+			continue
+		var gid: int = groups.size()
+		var members: Array = [seed_idx]
+		group_of[seed_idx] = gid
+		var queue: Array = [seed_idx]
+		while not queue.is_empty():
+			var cur: int = queue.pop_front()
+			var cur_pos: Vector3 = entries[cur]["pos"]
+			for cell_key: String in _snap_cell_keys(cur_pos, tolerance):
+				for neighbor_idx: int in cells.get(cell_key, []):
+					if group_of[neighbor_idx] >= 0:
+						continue
+					if cur_pos.distance_to(entries[neighbor_idx]["pos"]) <= tolerance:
+						group_of[neighbor_idx] = gid
+						members.append(neighbor_idx)
+						queue.append(neighbor_idx)
+		groups.append(members)
+	# Average each group and write back
+	for members: Array in groups:
+		if members.size() < 2:
+			continue
+		var avg := Vector3.ZERO
+		for idx: int in members:
+			avg += entries[idx]["pos"]
+		avg /= float(members.size())
+		var any_moved := false
+		for idx: int in members:
+			if (entries[idx]["pos"] as Vector3).distance_to(avg) > 0.0:
+				any_moved = true
+				break
+		if not any_moved:
+			continue
+		for idx: int in members:
+			var fi: int = entries[idx]["fi"]
+			var pi: int = entries[idx]["pi"]
+			faces[fi]["points"][pi] = avg
+
+
+static func _snap_cell_key(v: Vector3, tol: float) -> String:
+	return "%s,%s,%s" % [snapped(v.x, tol), snapped(v.y, tol), snapped(v.z, tol)]
+
+
+## Return all 27 cell keys (self + 26 neighbors) for spatial hash lookup.
+static func _snap_cell_keys(v: Vector3, cell_size: float) -> Array:
+	var cx: float = snapped(v.x, cell_size)
+	var cy: float = snapped(v.y, cell_size)
+	var cz: float = snapped(v.z, cell_size)
+	var keys: Array = []
+	for dx in [-cell_size, 0.0, cell_size]:
+		for dy in [-cell_size, 0.0, cell_size]:
+			for dz in [-cell_size, 0.0, cell_size]:
+				keys.append("%s,%s,%s" % [cx + dx, cy + dy, cz + dz])
+	return keys

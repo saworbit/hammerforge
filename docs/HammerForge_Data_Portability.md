@@ -1,6 +1,6 @@
 ﻿# HammerForge Data Portability
 
-Last updated: April 6, 2026
+Last updated: April 9, 2026
 
 This document describes how to move data in and out of HammerForge safely.
 
@@ -29,6 +29,19 @@ This document describes how to move data in and out of HammerForge safely.
 - Export writes box and cylinder primitives only and does not preserve per-face materials or paint data.
 - Treat `.map` as a blockout exchange format, not a full fidelity export.
 - Multi-format export: **Classic Quake** and **Valve 220** format adapters are available via the format selector in the dock File section. Valve 220 includes UV texture axes from FaceData.
+
+### Import Vertex Welding
+Legacy .map files from Hammer, TrenchBroom, and other editors often carry floating-point representation drift in vertex coordinates. Two vertices that should be coincident may differ by a fraction of a unit, producing micro-gaps or non-planar faces after import.
+
+`MapIO.parse_map_text()` automatically welds near-coincident parsed vertices before constructing brush geometry. The tolerance is controlled by `MapIO.import_weld_tolerance` (default **0.01 units**). Vertices within this distance are averaged to a shared position via BFS grouping over a spatial hash with 27-cell neighbor lookup, so pairs that straddle a snap-grid boundary are still caught.
+
+To adjust the tolerance:
+```gdscript
+MapIO.import_weld_tolerance = 0.05  # increase for very noisy legacy files
+MapIO.import_weld_tolerance = 0.0   # disable welding entirely
+```
+
+After import, run **Check Bake Issues** (Manage tab) to detect any remaining non-planar faces or micro-gaps between brushes. The validation system offers auto-fix methods (`weld_brush_vertices`, `fix_non_planar_faces`) for post-import cleanup.
 
 ## `.glb` Export
 - `.glb` export writes the baked geometry only.

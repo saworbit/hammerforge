@@ -7,6 +7,14 @@ const HFPaintGrid = preload("../paint/hf_paint_grid.gd")
 
 var root: Node3D
 
+## Vertex welding tolerance — vertices closer than this are considered coincident.
+## Increase for legacy .map imports with floating-point drift (e.g. 0.01–0.1).
+var weld_tolerance: float = 0.001
+
+## Maximum allowed distance a vertex may deviate from its face plane before
+## the face is flagged as non-planar. Increase for imported geometry.
+var planarity_tolerance: float = 0.01
+
 
 func _init(level_root: Node3D) -> void:
 	root = level_root
@@ -178,8 +186,10 @@ func check_bake_issues() -> Array:
 		_check_degenerate_brush(brush, issues)
 		_check_floating_subtract(brush, brush_nodes, issues)
 		_check_non_manifold(brush, issues)
+		_check_non_planar_faces(brush, issues)
 
 	_check_overlapping_subtracts(brush_nodes, issues)
+	_check_micro_gaps(brush_nodes, issues)
 	return issues
 
 
@@ -319,6 +329,8 @@ func _check_non_manifold(brush: DraftBrush, issues: Array) -> void:
 
 
 ## Create a canonical edge key from two vertices (order-independent, rounded to 0.001).
+## This tolerance is intentionally fixed — it must NOT vary with weld_tolerance,
+## because non-manifold/open-edge detection depends on stable topology hashing.
 func _edge_key(a: Vector3, b: Vector3) -> String:
 	var ax := snapped(a.x, 0.001)
 	var ay := snapped(a.y, 0.001)
@@ -330,3 +342,233 @@ func _edge_key(a: Vector3, b: Vector3) -> String:
 	if ax < bx or (ax == bx and ay < by) or (ax == bx and ay == by and az < bz):
 		return "%s,%s,%s-%s,%s,%s" % [ax, ay, az, bx, by, bz]
 	return "%s,%s,%s-%s,%s,%s" % [bx, by, bz, ax, ay, az]
+
+
+# ---------------------------------------------------------------------------
+# Non-planar face detection
+# ---------------------------------------------------------------------------
+
+
+## Check whether any face has vertices that deviate from the face plane beyond
+## planarity_tolerance.  Returns issues appended to the provided array.
+func _check_non_planar_faces(brush: DraftBrush, issues: Array) -> void:
+	for face_idx in range(brush.faces.size()):
+		var face = brush.faces[face_idx]
+		if not face or face.local_verts.size() < 4:
+			continue  # triangles are always planar
+		var verts: PackedVector3Array = face.local_verts
+		var normal: Vector3 = face.normal
+		if normal.length_squared() < 0.0001:
+			# Compute from first 3 verts
+			normal = (verts[2] - verts[0]).cross(verts[1] - verts[0]).normalized()
+		if normal.length_squared() < 0.0001:
+			continue
+		var plane_d: float = normal.dot(verts[0])
+		var max_deviation := 0.0
+		for i in range(1, verts.size()):
+			var dev: float = absf(normal.dot(verts[i]) - plane_d)
+			if dev > max_deviation:
+				max_deviation = dev
+		if max_deviation > planarity_tolerance:
+			issues.append({
+				"type": "non_planar",
+				"severity": 1,
+				"message": (
+					"Brush '%s' face %d has %.4f unit vertex drift (tolerance %.4f)"
+					% [brush.name, face_idx, max_deviation, planarity_tolerance]
+				),
+				"node": brush
+			})
+
+
+# ---------------------------------------------------------------------------
+# Micro-gap detection (near-coincident but not welded vertices between brushes)
+# ---------------------------------------------------------------------------
+
+
+## Detect vertices across different brushes that are within weld_tolerance of each
+## other but not exactly coincident.  These cause micro-gaps after bake.
+## Uses spatial hashing with 27-cell neighbor lookup so pairs straddling a bucket
+## boundary are never missed.
+func _check_micro_gaps(all_brushes: Array, issues: Array) -> void:
+	var tol: float = weld_tolerance
+	# Collect all world-space vertices into spatial hash
+	var entries: Array = []  # Array of {brush: DraftBrush, pos: Vector3}
+	var cells: Dictionary = {}  # cell_key -> Array[int] (indices into entries)
+	for node in all_brushes:
+		if not (node is DraftBrush):
+			continue
+		var brush := node as DraftBrush
+		if root.is_entity_node(brush):
+			continue
+		for face in brush.faces:
+			if not face or face.local_verts.size() < 3:
+				continue
+			for vi in range(face.local_verts.size()):
+				var world_v: Vector3 = brush.global_transform * face.local_verts[vi]
+				var idx: int = entries.size()
+				entries.append({"brush": brush, "pos": world_v})
+				var key: String = _snap_key(world_v, tol)
+				if not cells.has(key):
+					cells[key] = []
+				(cells[key] as Array).append(idx)
+	# For each vertex, search own cell + 26 neighbors for cross-brush near-pairs
+	var flagged_pairs: Dictionary = {}  # avoid duplicate warnings
+	for i in range(entries.size()):
+		var pos_i: Vector3 = entries[i]["pos"]
+		for cell_key: String in _cell_keys(pos_i, tol):
+			for j: int in cells.get(cell_key, []):
+				if j <= i:
+					continue  # ordered pair dedup
+				if entries[i]["brush"] == entries[j]["brush"]:
+					continue
+				var dist: float = pos_i.distance_to(entries[j]["pos"])
+				if dist > 0.0 and dist <= tol:
+					var pair_key: String = _brush_pair_key(entries[i]["brush"], entries[j]["brush"])
+					flagged_pairs[pair_key] = flagged_pairs.get(pair_key, 0) + 1
+	for pair_key: String in flagged_pairs:
+		var count: int = flagged_pairs[pair_key]
+		issues.append({
+			"type": "micro_gap",
+			"severity": 1,
+			"message": (
+				"Micro-gap: %d near-coincident vertex pair(s) between %s (weld tolerance %.4f)"
+				% [count, pair_key, weld_tolerance]
+			),
+			"node": null
+		})
+
+
+func _brush_pair_key(a: DraftBrush, b: DraftBrush) -> String:
+	var na: String = a.name if a.name <= b.name else b.name
+	var nb: String = b.name if a.name <= b.name else a.name
+	return "'%s' and '%s'" % [na, nb]
+
+
+# ---------------------------------------------------------------------------
+# Auto-fix: weld near-coincident vertices within a brush
+# ---------------------------------------------------------------------------
+
+
+## Snap vertices that are within weld_tolerance of each other to a shared position.
+## Operates on face local_verts in local space.  Uses BFS over a spatial hash with
+## 27-cell neighbor lookup so pairs straddling a bucket boundary are never missed.
+## Returns number of vertices welded.
+func weld_brush_vertices(brush: DraftBrush) -> int:
+	if not brush or brush.faces.is_empty():
+		return 0
+	var tol: float = weld_tolerance
+	# Collect every vertex reference into a flat list + spatial hash
+	var entries: Array = []  # Array of {fi: int, vi: int, pos: Vector3}
+	var cells: Dictionary = {}  # cell_key -> Array[int]
+	for fi in range(brush.faces.size()):
+		var face = brush.faces[fi]
+		if not face:
+			continue
+		for vi in range(face.local_verts.size()):
+			var idx: int = entries.size()
+			var pos: Vector3 = face.local_verts[vi]
+			entries.append({"fi": fi, "vi": vi, "pos": pos})
+			var key: String = _snap_key(pos, tol)
+			if not cells.has(key):
+				cells[key] = []
+			(cells[key] as Array).append(idx)
+	# BFS grouping: vertices within tolerance are transitively merged
+	var group_of: PackedInt32Array = PackedInt32Array()
+	group_of.resize(entries.size())
+	group_of.fill(-1)
+	var groups: Array = []  # Array of Array[int]
+	for seed_idx in range(entries.size()):
+		if group_of[seed_idx] >= 0:
+			continue
+		var gid: int = groups.size()
+		var members: Array = [seed_idx]
+		group_of[seed_idx] = gid
+		var queue: Array = [seed_idx]
+		while not queue.is_empty():
+			var cur: int = queue.pop_front()
+			var cur_pos: Vector3 = entries[cur]["pos"]
+			for cell_key: String in _cell_keys(cur_pos, tol):
+				for neighbor_idx: int in cells.get(cell_key, []):
+					if group_of[neighbor_idx] >= 0:
+						continue
+					if cur_pos.distance_to(entries[neighbor_idx]["pos"]) <= tol:
+						group_of[neighbor_idx] = gid
+						members.append(neighbor_idx)
+						queue.append(neighbor_idx)
+		groups.append(members)
+	# Compute group averages and write back
+	var welded := 0
+	var dirty_faces: Dictionary = {}  # fi -> true
+	for members: Array in groups:
+		if members.size() < 2:
+			continue
+		var avg := Vector3.ZERO
+		for idx: int in members:
+			avg += entries[idx]["pos"]
+		avg /= float(members.size())
+		for idx: int in members:
+			var fi: int = entries[idx]["fi"]
+			var vi: int = entries[idx]["vi"]
+			var face = brush.faces[fi]
+			var verts: PackedVector3Array = face.local_verts
+			if verts[vi].distance_to(avg) > 0.0:
+				verts[vi] = avg
+				face.local_verts = verts
+				welded += 1
+				dirty_faces[fi] = true
+	# Refresh derived state (normal, bounds) on every modified face
+	for fi: int in dirty_faces:
+		brush.faces[fi].ensure_geometry()
+	return welded
+
+
+# ---------------------------------------------------------------------------
+# Auto-fix: project drifting vertices back onto their face plane
+# ---------------------------------------------------------------------------
+
+
+## For each face with >3 vertices, compute the best-fit plane from the first 3
+## vertices and project any drifting vertices back onto it.  Returns number of
+## vertices corrected.
+func fix_non_planar_faces(brush: DraftBrush) -> int:
+	if not brush or brush.faces.is_empty():
+		return 0
+	var fixed := 0
+	for face in brush.faces:
+		if not face or face.local_verts.size() < 4:
+			continue
+		var verts: PackedVector3Array = face.local_verts
+		var normal: Vector3 = (verts[2] - verts[0]).cross(verts[1] - verts[0]).normalized()
+		if normal.length_squared() < 0.0001:
+			continue
+		var plane_d: float = normal.dot(verts[0])
+		for i in range(1, verts.size()):
+			var dev: float = normal.dot(verts[i]) - plane_d
+			if absf(dev) > planarity_tolerance:
+				verts[i] = verts[i] - normal * dev
+				fixed += 1
+		face.local_verts = verts
+		if fixed > 0:
+			face.ensure_geometry()
+	return fixed
+
+
+func _snap_key(v: Vector3, tol: float) -> String:
+	return "%s,%s,%s" % [snapped(v.x, tol), snapped(v.y, tol), snapped(v.z, tol)]
+
+
+## Return all 27 cell keys (self + 26 neighbors) for a spatial hash lookup.
+## Guarantees that any point within `cell_size` distance shares at least one cell.
+func _cell_keys(v: Vector3, cell_size: float) -> Array:
+	var cx: float = snapped(v.x, cell_size)
+	var cy: float = snapped(v.y, cell_size)
+	var cz: float = snapped(v.z, cell_size)
+	var keys: Array = []
+	for dx in [-cell_size, 0.0, cell_size]:
+		for dy in [-cell_size, 0.0, cell_size]:
+			for dz in [-cell_size, 0.0, cell_size]:
+				keys.append(
+					"%s,%s,%s" % [cx + dx, cy + dy, cz + dz]
+				)
+	return keys

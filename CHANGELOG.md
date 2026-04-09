@@ -4,6 +4,46 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Added
+- **Map import vertex welding** (Apr 2026): `MapIO.parse_map_text()` now runs a post-parse
+  vertex welding pass on all parsed brush face points before constructing brush geometry.
+  Near-coincident vertices (within `import_weld_tolerance`, default 0.01 units) are averaged
+  to a shared position, closing micro-gaps caused by floating-point representation drift in
+  legacy .map editors. Uses BFS over a spatial hash with 27-cell neighbor lookup so pairs
+  straddling a snap-grid boundary are never missed. The tolerance is configurable via the
+  static `MapIO.import_weld_tolerance` property; set to 0.0 to disable.
+
+- **Non-planar face detection** (Apr 2026): `HFValidationSystem.check_bake_issues()` now
+  flags faces with 4+ vertices where any vertex deviates from the face plane beyond
+  `planarity_tolerance` (default 0.01 units). Reported as `type: "non_planar"`, severity 1.
+  Adjustable per-instance via `val_sys.planarity_tolerance`.
+
+- **Micro-gap detection** (Apr 2026): `check_bake_issues()` now detects near-coincident
+  but not-exactly-equal vertices across different brushes that would cause seam tearing
+  after bake. Reported as `type: "micro_gap"`, severity 1. Tolerance controlled by
+  `val_sys.weld_tolerance` (default 0.001 units).
+
+- **Vertex welding auto-fix** (Apr 2026): `HFValidationSystem.weld_brush_vertices(brush)`
+  snaps all vertices within `weld_tolerance` of each other to their averaged position using
+  BFS grouping over a 27-cell spatial hash. Calls `ensure_geometry()` on every modified face
+  to refresh normals and bounds. Returns the count of welded vertices.
+
+- **Planarity auto-fix** (Apr 2026): `HFValidationSystem.fix_non_planar_faces(brush)`
+  projects drifting vertices back onto the best-fit plane defined by each face's first three
+  vertices. Calls `ensure_geometry()` after correction. Returns the count of vertices fixed.
+
+- **Configurable validation tolerances** (Apr 2026): `HFValidationSystem` gains two public
+  properties — `weld_tolerance` (default 0.001) for vertex coincidence and `planarity_tolerance`
+  (default 0.01) for face-plane deviation. These control the new checks and auto-fix methods.
+  The `_edge_key()` function used by non-manifold/open-edge detection retains its fixed 0.001
+  precision — it is intentionally decoupled from `weld_tolerance` so topology checks remain
+  stable regardless of the weld knob setting.
+
+  21 new tests in `test_weld_and_planarity.gd`: non-planar detection (5), vertex welding (3),
+  planarity fix (3), micro-gap detection (2), edge-key independence (1), boundary-straddling
+  coverage (3), MapIO integration (2), MapIO unit (2).
+  Total: **1299 tests across 73 files**.
+
 ### Changed
 - **Non-blocking face-mode bakes** (Apr 2026): Full bakes using the face-material path
   (`bake_use_face_materials = true`) no longer freeze the editor. The bake system now operates in two
