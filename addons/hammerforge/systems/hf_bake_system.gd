@@ -14,6 +14,10 @@ var root: Node3D
 var _last_dirty_brush_ids: Dictionary = {}  # brush_id -> true; captured at bake start
 var _last_bake_success: bool = false
 
+## Number of brushes to process per frame during face-based bake collection.
+## Lower values yield more often (smoother editor), higher values bake faster.
+const _FACE_BAKE_BATCH := 8
+
 
 func _init(level_root: Node3D) -> void:
 	root = level_root
@@ -73,6 +77,7 @@ func bake_selected(
 		root.emit_signal("user_message", "No brushes selected to bake", 1)
 		return
 	var started = Time.get_ticks_msec()
+	var yield_overhead_ms := 0  # Idle time spent in frame yields — excluded from estimator
 	root._log("Selection Bake Started (%d brushes)" % brush_nodes.size())
 	root.bake_started.emit()
 	root.bake_progress.emit(0.0, "Preparing selection")
@@ -94,8 +99,10 @@ func bake_selected(
 	append_brush_list_to_csg(brush_nodes, temp_csg)
 	append_brush_list_to_csg(brush_nodes, collision_csg, false, true)
 	root.bake_progress.emit(0.5, "Baking selection")
+	var yield_start_ms := Time.get_ticks_msec()
 	await root.get_tree().process_frame
 	await root.get_tree().process_frame
+	yield_overhead_ms += Time.get_ticks_msec() - yield_start_ms
 	var baked = root.baker.bake_from_csg(
 		temp_csg, root.bake_material_override, layer, layer, bake_options
 	)
@@ -110,7 +117,7 @@ func bake_selected(
 	temp_csg.queue_free()
 	collision_csg.queue_free()
 	if baked:
-		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started)
+		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started - yield_overhead_ms)
 		root.bake_progress.emit(1.0, "Finalizing")
 		# Merge into existing baked container rather than replacing it
 		if root.baked_container and is_instance_valid(root.baked_container):
@@ -125,7 +132,7 @@ func bake_selected(
 		root._log("Selection bake finished (success=true)")
 		root.bake_finished.emit(true)
 	else:
-		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started)
+		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started - yield_overhead_ms)
 		_last_bake_success = false
 		root._log("Selection bake failed")
 		root.bake_finished.emit(false)
@@ -223,6 +230,7 @@ func bake(
 		root.emit_signal("user_message", "Bake failed — baker not initialized", 2)
 		return
 	var started = Time.get_ticks_msec()
+	var yield_overhead_ms := 0  # Idle time spent in frame yields — excluded from estimator
 	if apply_cuts:
 		root.apply_pending_cuts()
 	root._log("Virtual Bake Started (apply_cuts=%s, hide_live=%s)" % [apply_cuts, hide_live])
@@ -237,16 +245,35 @@ func bake(
 	var bake_options = build_bake_options()
 	_apply_preview_mode(bake_options, preview_mode)
 	if root.bake_use_face_materials:
-		root.bake_progress.emit(0.5, "Baking faces")
+		# --- Synchronous snapshot: triangulate + resolve materials before yields ---
 		var face_brushes = collect_face_bake_brushes()
-		baked = root.baker.bake_from_faces(
-			face_brushes,
-			root.material_manager,
-			root.bake_material_override,
-			layer,
-			layer,
-			bake_options
-		)
+		var use_atlas: bool = bool(bake_options.get("use_atlas", false))
+		var snapshots: Array = []
+		for brush in face_brushes:
+			if is_instance_valid(brush) and brush is DraftBrush:
+				snapshots.append(
+					root.baker.snapshot_brush_faces(
+						brush, root.material_manager, root.bake_material_override, use_atlas
+					)
+				)
+		# --- Yielding pass: world-space transform + grouping from frozen data ---
+		var groups: Dictionary = {}
+		var snap_total: int = snapshots.size()
+		for _bi in range(snap_total):
+			root.baker.collect_snapshot_groups(snapshots[_bi], use_atlas, groups)
+			if (_bi + 1) % _FACE_BAKE_BATCH == 0 or _bi == snap_total - 1:
+				root.bake_progress.emit(
+					float(_bi + 1) / float(max(1, snap_total)) * 0.7,
+					"Collecting faces %d/%d" % [_bi + 1, snap_total]
+				)
+				var yield_start_ms := Time.get_ticks_msec()
+				await root.get_tree().process_frame
+				yield_overhead_ms += Time.get_ticks_msec() - yield_start_ms
+		root.bake_progress.emit(0.75, "Building mesh")
+		var build_yield_start_ms := Time.get_ticks_msec()
+		await root.get_tree().process_frame
+		yield_overhead_ms += Time.get_ticks_msec() - build_yield_start_ms
+		baked = root.baker.build_mesh_from_groups(groups, layer, layer, bake_options)
 	else:
 		if root.bake_chunk_size > 0.0:
 			baked = await bake_chunked(root.bake_chunk_size, layer, bake_options)
@@ -254,7 +281,7 @@ func bake(
 			root.bake_progress.emit(0.5, "Baking")
 			baked = await bake_single(layer, bake_options)
 	if baked:
-		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started)
+		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started - yield_overhead_ms)
 		root.bake_progress.emit(1.0, "Finalizing")
 		if root.baked_container and is_instance_valid(root.baked_container):
 			root.baked_container.queue_free()
@@ -274,7 +301,7 @@ func bake(
 		_last_bake_success = true
 		root.bake_finished.emit(true)
 	else:
-		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started)
+		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started - yield_overhead_ms)
 		root._log("Bake failed")
 		_last_bake_success = false
 		warn_bake_failure()

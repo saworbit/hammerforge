@@ -110,6 +110,196 @@ func bake_from_faces(
 ) -> Node3D:
 	if brushes.is_empty():
 		return null
+	var use_atlas: bool = bool(options.get("use_atlas", false))
+	var groups: Dictionary = {}
+	for brush in brushes:
+		if brush is DraftBrush:
+			collect_brush_face_groups(brush, material_manager, material_override, use_atlas, groups)
+	return build_mesh_from_groups(groups, collision_layer, collision_mask, options)
+
+
+func _add_group_surface(
+	combined_mesh: ArrayMesh, surface_materials: Array[Material], group: Dictionary
+) -> void:
+	var st = SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var mat: Material = group.get("material", null)
+	var verts: PackedVector3Array = group.get("verts", PackedVector3Array())
+	var uvs: PackedVector2Array = group.get("uvs", PackedVector2Array())
+	var normals: PackedVector3Array = group.get("normals", PackedVector3Array())
+	for i in range(verts.size()):
+		if normals.size() > i:
+			st.set_normal(normals[i])
+		if uvs.size() > i:
+			st.set_uv(uvs[i])
+		st.add_vertex(verts[i])
+	var surface_mesh = st.commit()
+	if not surface_mesh or surface_mesh.get_surface_count() == 0:
+		return
+	var arrays = surface_mesh.surface_get_arrays(0)
+	combined_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	surface_materials.append(mat)
+
+
+## Collect triangulated face geometry from a single brush into material groups.
+## Call once per brush; pass the same [param groups] dictionary across all brushes
+## so that faces sharing a material key are merged into a single group.
+func collect_brush_face_groups(
+	brush: DraftBrush,
+	material_manager: MaterialManager,
+	material_override: Material,
+	use_atlas: bool,
+	groups: Dictionary
+) -> void:
+	var faces: Array = brush.get_faces()
+	if faces.is_empty():
+		return
+	_collect_face_groups(
+		faces,
+		brush.global_transform.basis,
+		brush.global_transform.origin,
+		brush.material_override,
+		material_manager,
+		material_override,
+		use_atlas,
+		groups
+	)
+
+
+## Low-level face-group collector that operates on already-extracted data rather
+## than a live brush node.  Used by [method collect_brush_face_groups] and by
+## [code]HFBakeSystem[/code] when processing pre-snapshotted brush state.
+func _collect_face_groups(
+	faces: Array,
+	basis: Basis,
+	origin: Vector3,
+	brush_material: Material,
+	material_manager: MaterialManager,
+	material_override: Material,
+	use_atlas: bool,
+	groups: Dictionary
+) -> void:
+	for face in faces:
+		if face == null:
+			continue
+		face.ensure_geometry()
+		var tri = face.triangulate()
+		var verts: PackedVector3Array = tri.get("verts", PackedVector3Array())
+		var uvs: PackedVector2Array = tri.get("uvs", PackedVector2Array())
+		if verts.is_empty():
+			continue
+		var mat = _resolve_face_material(face, material_manager, brush_material, material_override)
+		var face_tiles: bool = use_atlas and HFMaterialAtlasScript.group_has_tiling_uvs(uvs)
+		var key = mat if mat != null else "_default"
+		if face_tiles:
+			key = [key, "_tiling"]
+		if not groups.has(key):
+			groups[key] = {
+				"material": mat,
+				"verts": PackedVector3Array(),
+				"uvs": PackedVector2Array(),
+				"normals": PackedVector3Array(),
+				"tiling": face_tiles,
+			}
+		var group = groups[key]
+		var tri_normals: PackedVector3Array = tri.get("normals", PackedVector3Array())
+		for i in range(verts.size()):
+			var v = origin + basis * verts[i]
+			group["verts"].append(v)
+			group["uvs"].append(uvs[i] if uvs.size() > i else Vector2.ZERO)
+			if tri_normals.size() > i:
+				group["normals"].append((basis * tri_normals[i]).normalized())
+			else:
+				group["normals"].append((basis * face.normal).normalized())
+
+
+## Synchronously capture a brush's face geometry and resolved materials into plain
+## data (PackedArrays and Materials) that is fully independent of live nodes.
+## Returns a dictionary with "records" (per-face tri results), "basis", and "origin".
+func snapshot_brush_faces(
+	brush: DraftBrush,
+	material_manager: MaterialManager,
+	material_override: Material,
+	use_atlas: bool
+) -> Dictionary:
+	var faces: Array = brush.get_faces()
+	var records: Array = []
+	var brush_material: Material = brush.material_override
+	for face in faces:
+		if face == null:
+			continue
+		face.ensure_geometry()
+		var tri = face.triangulate()
+		var verts: PackedVector3Array = tri.get("verts", PackedVector3Array())
+		var uvs: PackedVector2Array = tri.get("uvs", PackedVector2Array())
+		if verts.is_empty():
+			continue
+		var mat = _resolve_face_material(face, material_manager, brush_material, material_override)
+		var face_tiles: bool = use_atlas and HFMaterialAtlasScript.group_has_tiling_uvs(uvs)
+		var tri_normals: PackedVector3Array = tri.get("normals", PackedVector3Array())
+		(
+			records
+			. append(
+				{
+					"verts": verts,
+					"uvs": uvs,
+					"normals": tri_normals,
+					"face_normal": face.normal,
+					"material": mat,
+					"tiling": face_tiles,
+				}
+			)
+		)
+	return {
+		"records": records,
+		"basis": brush.global_transform.basis,
+		"origin": brush.global_transform.origin,
+	}
+
+
+## Append pre-snapshotted face records (from [method snapshot_brush_faces]) into
+## material groups.  Performs only world-space transforms and array appends — no
+## live node or FaceData access, safe to call between frame yields.
+func collect_snapshot_groups(snapshot: Dictionary, use_atlas: bool, groups: Dictionary) -> void:
+	var records: Array = snapshot.get("records", [])
+	var basis: Basis = snapshot.get("basis", Basis.IDENTITY)
+	var origin: Vector3 = snapshot.get("origin", Vector3.ZERO)
+	for rec in records:
+		var mat: Material = rec["material"]
+		var face_tiles: bool = rec["tiling"]
+		var key = mat if mat != null else "_default"
+		if face_tiles:
+			key = [key, "_tiling"]
+		if not groups.has(key):
+			groups[key] = {
+				"material": mat,
+				"verts": PackedVector3Array(),
+				"uvs": PackedVector2Array(),
+				"normals": PackedVector3Array(),
+				"tiling": face_tiles,
+			}
+		var group = groups[key]
+		var verts: PackedVector3Array = rec["verts"]
+		var uvs: PackedVector2Array = rec["uvs"]
+		var tri_normals: PackedVector3Array = rec["normals"]
+		var face_normal: Vector3 = rec["face_normal"]
+		for i in range(verts.size()):
+			group["verts"].append(origin + basis * verts[i])
+			group["uvs"].append(uvs[i] if uvs.size() > i else Vector2.ZERO)
+			if tri_normals.size() > i:
+				group["normals"].append((basis * tri_normals[i]).normalized())
+			else:
+				group["normals"].append((basis * face_normal).normalized())
+
+
+## Build final baked geometry (atlas pass, ArrayMesh, collision) from pre-collected
+## material groups.  This is the second phase of a face-based bake — call after
+## [method collect_brush_face_groups] has populated [param groups].
+func build_mesh_from_groups(
+	groups: Dictionary, collision_layer: int = 1, collision_mask: int = 1, options: Dictionary = {}
+) -> Node3D:
+	if groups.is_empty():
+		return null
 	var result = Node3D.new()
 	result.name = "BakedGeometry"
 
@@ -121,74 +311,22 @@ func bake_from_faces(
 
 	var use_atlas: bool = bool(options.get("use_atlas", false))
 
-	var groups: Dictionary = {}
-	for brush in brushes:
-		if not brush is DraftBrush:
-			continue
-		var faces: Array = brush.get_faces()
-		if faces.is_empty():
-			continue
-		var basis: Basis = brush.global_transform.basis
-		var origin: Vector3 = brush.global_transform.origin
-		var brush_material: Material = brush.material_override
-		for face in faces:
-			if face == null:
-				continue
-			face.ensure_geometry()
-			var tri = face.triangulate()
-			var verts: PackedVector3Array = tri.get("verts", PackedVector3Array())
-			var uvs: PackedVector2Array = tri.get("uvs", PackedVector2Array())
-			if verts.is_empty():
-				continue
-			var mat = _resolve_face_material(
-				face, material_manager, brush_material, material_override
-			)
-			# When atlasing, split tiling faces into a separate group so
-			# non-tiling faces of the same material can still be atlased.
-			var face_tiles: bool = use_atlas and HFMaterialAtlasScript.group_has_tiling_uvs(uvs)
-			var key = mat if mat != null else "_default"
-			if face_tiles:
-				key = [key, "_tiling"]
-			if not groups.has(key):
-				groups[key] = {
-					"material": mat,
-					"verts": PackedVector3Array(),
-					"uvs": PackedVector2Array(),
-					"normals": PackedVector3Array(),
-					"tiling": face_tiles,
-				}
-			var group = groups[key]
-			var tri_normals: PackedVector3Array = tri.get("normals", PackedVector3Array())
-			for i in range(verts.size()):
-				var v = origin + basis * verts[i]
-				group["verts"].append(v)
-				group["uvs"].append(uvs[i] if uvs.size() > i else Vector2.ZERO)
-				if tri_normals.size() > i:
-					group["normals"].append((basis * tri_normals[i]).normalized())
-				else:
-					group["normals"].append((basis * face.normal).normalized())
-
 	# --- Material atlasing pass ---
 	var atlas_result: HFMaterialAtlasScript.AtlasResult = null
 	if use_atlas and groups.size() > 1:
-		# Exclude groups flagged as tiling — hardware texture repeat cannot
-		# work within an atlas sub-rect.
 		var tiling_keys: Dictionary = {}
 		for key in groups:
 			if groups[key].get("tiling", false):
 				tiling_keys[key] = true
 		atlas_result = HFMaterialAtlasScript.build_atlas(groups.keys(), tiling_keys)
 		if atlas_result and atlas_result.atlased_keys.size() < 2:
-			# Not worth atlasing a single material.
 			atlas_result = null
 
 	# Build one ArrayMesh with one surface per material group.
-	# When atlasing, all atlased groups merge into one surface; fallbacks stay separate.
 	var combined_mesh = ArrayMesh.new()
 	var surface_materials: Array[Material] = []
 
 	if atlas_result and atlas_result.atlas_material:
-		# Merge all atlased groups into a single surface with remapped UVs.
 		var all_verts := PackedVector3Array()
 		var all_uvs := PackedVector2Array()
 		var all_normals := PackedVector3Array()
@@ -215,7 +353,6 @@ func bake_from_faces(
 				var arrays = surface_mesh.surface_get_arrays(0)
 				combined_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 				surface_materials.append(atlas_result.atlas_material)
-		# Add fallback groups as separate surfaces.
 		for fb_key in atlas_result.fallback_keys:
 			if not groups.has(fb_key):
 				continue
@@ -244,29 +381,6 @@ func bake_from_faces(
 	static_body.add_child(collision)
 
 	return result
-
-
-func _add_group_surface(
-	combined_mesh: ArrayMesh, surface_materials: Array[Material], group: Dictionary
-) -> void:
-	var st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var mat: Material = group.get("material", null)
-	var verts: PackedVector3Array = group.get("verts", PackedVector3Array())
-	var uvs: PackedVector2Array = group.get("uvs", PackedVector2Array())
-	var normals: PackedVector3Array = group.get("normals", PackedVector3Array())
-	for i in range(verts.size()):
-		if normals.size() > i:
-			st.set_normal(normals[i])
-		if uvs.size() > i:
-			st.set_uv(uvs[i])
-		st.add_vertex(verts[i])
-	var surface_mesh = st.commit()
-	if not surface_mesh or surface_mesh.get_surface_count() == 0:
-		return
-	var arrays = surface_mesh.surface_get_arrays(0)
-	combined_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	surface_materials.append(mat)
 
 
 func _resolve_face_material(

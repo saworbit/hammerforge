@@ -1,6 +1,6 @@
 # HammerForge User Guide
 
-Last updated: April 5, 2026
+Last updated: April 9, 2026
 
 This guide covers the current HammerForge workflow in Godot 4.6: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs.
 
@@ -254,8 +254,11 @@ Click **Check Bake Issues** to scan for potential problems before baking:
 - **Non-manifold edges** (severity 2): edges shared by 3+ faces — may cause bake artifacts.
 Issues appear as color-coded toast notifications.
 
+### Non-Blocking Face Bakes
+When **Use Face Materials** is enabled, full bakes yield back to the editor every 8 brushes so the UI stays responsive during large bakes. A progress label shows "Collecting faces N/M" as geometry is processed. The bake operates on a snapshot of brush state taken at the start, so editing brushes while a bake is running will not produce mixed results — changes are picked up on the next bake.
+
 ### Bake Time Estimate
-The Manage tab shows an estimated bake time based on the last bake duration and current brush count. If the level has more than 500 brushes, a "Chunking recommended" tip appears.
+The Manage tab shows an estimated bake time based on the last bake duration and current brush count. Frame-yield idle time during face bakes is excluded from the estimate so it reflects actual work, not editor frame pacing. If the level has more than 500 brushes, a "Chunking recommended" tip appears.
 
 **player_start properties** (set in the Entity Properties panel):
 - `primary` (bool) -- preferred spawn when multiple exist.
@@ -938,6 +941,7 @@ Generated flat floor paint brushes are included in the CSG bake. Heightmap floor
 Use Face Materials (optional):
 - Enables per-face material baking without CSG.
 - Subtract brushes are ignored in this mode.
+- Bakes cooperatively (yields every 8 brushes) so the editor stays responsive on large levels.
 
 ## Save/Load (.hflevel)
 - Save .hflevel stores brushes, entities, settings, materials palette, face data, and paint layers.

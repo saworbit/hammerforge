@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: April 8, 2026
+Last updated: April 9, 2026
 
 This roadmap is a directional plan. Items may change based on user feedback.
 Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md for details.

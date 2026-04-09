@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Changed
+- **Non-blocking face-mode bakes** (Apr 2026): Full bakes using the face-material path
+  (`bake_use_face_materials = true`) no longer freeze the editor. The bake system now operates in two
+  phases:
+  1. **Synchronous snapshot**: captures each brush's triangulated face geometry, resolved materials,
+     and world transform into plain data (PackedArrays + Material refs) before any yields. This
+     ensures the bake operates on a single coherent scene state regardless of edits during the bake.
+  2. **Cooperative yield pass**: iterates the frozen snapshots in batches of 8 brushes, yielding
+     `process_frame` between batches so the editor remains responsive. Progress is reported via
+     `bake_progress` signals ("Collecting faces N/M").
+
+  `baker.gd` gains four new public methods: `snapshot_brush_faces()` (pre-triangulate + resolve
+  materials for one brush), `collect_snapshot_groups()` (world-space transform + grouping from frozen
+  data), `collect_brush_face_groups()` (convenience wrapper for sync callers), and
+  `build_mesh_from_groups()` (atlas pass + ArrayMesh + collision from pre-collected groups). The
+  existing `bake_from_faces()` remains as a thin synchronous wrapper for backward compatibility.
+
+  Bake time estimation (`estimate_bake_time()`) is also corrected: frame-yield idle time is tracked
+  via `_yield_overhead_ms` and subtracted from `_last_bake_duration_ms` in both `bake()` and
+  `bake_selected()`, so the ms-per-brush ratio reflects actual CPU work rather than wall-clock time
+  inflated by editor frame pacing.
+
+  **Note**: Material *resources* referenced in the snapshot are not deep-cloned. If a
+  `StandardMaterial3D` property is mutated in-place during the yield window, the baked output will
+  reflect the new property value. This is an accepted trade-off — the window is narrow and the
+  material identity is correct.
+
 ### Fixed
 - **Preview node memory leaks during undo/redo** (Apr 2026): Editor preview geometry (drag preview
   brushes, extrude preview brushes, subtract preview wireframes) could leak MeshInstance3D nodes during
