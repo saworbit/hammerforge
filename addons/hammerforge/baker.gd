@@ -154,7 +154,9 @@ func bake_from_faces(
 		if brush is DraftBrush:
 			collect_brush_face_groups(brush, material_manager, material_override, use_atlas, groups)
 			if collision_mode >= 1:
-				var snap = snapshot_brush_faces(brush, material_manager, material_override, use_atlas)
+				var snap = snapshot_brush_faces(
+					brush, material_manager, material_override, use_atlas
+				)
 				per_brush_verts.append(snap.get("hull_verts", PackedVector3Array()))
 	if collision_mode >= 1 and not per_brush_verts.is_empty():
 		options["per_brush_verts"] = per_brush_verts
@@ -475,9 +477,7 @@ static func build_convex_collision_shapes(
 		var seen: Dictionary = {}
 		for v in pva:
 			var key := Vector3i(
-				int(round(v.x * 1000.0)),
-				int(round(v.y * 1000.0)),
-				int(round(v.z * 1000.0))
+				int(round(v.x * 1000.0)), int(round(v.y * 1000.0)), int(round(v.z * 1000.0))
 			)
 			if not seen.has(key):
 				seen[key] = true
@@ -498,9 +498,7 @@ static func build_convex_collision_shapes(
 				var grid: Dictionary = {}
 				for v in working:
 					var key := Vector3i(
-						int(floor(v.x / cell)),
-						int(floor(v.y / cell)),
-						int(floor(v.z / cell))
+						int(floor(v.x / cell)), int(floor(v.y / cell)), int(floor(v.z / cell))
 					)
 					if not grid.has(key):
 						grid[key] = true
@@ -605,7 +603,9 @@ func _merge_entries(entries: Array, _use_thread_pool: bool) -> ArrayMesh:
 
 
 ## Extract world-space vertices from a Mesh, applying the given transform.
-static func _extract_mesh_verts(mesh: Mesh, xform: Transform3D = Transform3D.IDENTITY) -> PackedVector3Array:
+static func _extract_mesh_verts(
+	mesh: Mesh, xform: Transform3D = Transform3D.IDENTITY
+) -> PackedVector3Array:
 	var out := PackedVector3Array()
 	if not mesh:
 		return out

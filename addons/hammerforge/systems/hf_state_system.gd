@@ -381,9 +381,7 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 			settings.get("bake_collision_mode", root.bake_collision_mode)
 		)
 	if settings.has("bake_convex_clean"):
-		root.bake_convex_clean = bool(
-			settings.get("bake_convex_clean", root.bake_convex_clean)
-		)
+		root.bake_convex_clean = bool(settings.get("bake_convex_clean", root.bake_convex_clean))
 	if settings.has("bake_convex_simplify"):
 		root.bake_convex_simplify = float(
 			settings.get("bake_convex_simplify", root.bake_convex_simplify)

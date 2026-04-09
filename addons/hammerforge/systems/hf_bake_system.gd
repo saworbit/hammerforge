@@ -260,9 +260,7 @@ func bake(
 					)
 				)
 				if collision_mode >= 2 and root.visgroup_system:
-					brush_visgroups.append(
-						root.visgroup_system.get_visgroups_of(brush)
-					)
+					brush_visgroups.append(root.visgroup_system.get_visgroups_of(brush))
 				else:
 					brush_visgroups.append(PackedStringArray())
 		# --- Yielding pass: world-space transform + grouping from frozen data ---
@@ -421,7 +419,9 @@ func bake_single(layer: int, options: Dictionary) -> Node3D:
 		# the brush-generated FloorCollision body, not heightmap collision.
 		var collision_mode: int = int(options.get("collision_mode", 0))
 		if collision_mode >= 2:
-			var containers: Array = [root.draft_brushes_node, root.generated_floors, root.generated_walls]
+			var containers: Array = [
+				root.draft_brushes_node, root.generated_floors, root.generated_walls
+			]
 			if root.commit_freeze and root.committed_node:
 				containers.append(root.committed_node)
 			var coll_data: Dictionary = _collect_brush_collision_data(containers)
@@ -612,8 +612,9 @@ func _collect_brush_collision_data(brush_sources: Array) -> Dictionary:
 		var mesh_verts := PackedVector3Array()
 		if draft.mesh_instance and draft.mesh_instance.mesh:
 			var local_scale: Vector3 = draft.mesh_instance.scale
-			var mesh_xform: Transform3D = draft.global_transform * Transform3D(
-				Basis.IDENTITY.scaled(local_scale), Vector3.ZERO
+			var mesh_xform: Transform3D = (
+				draft.global_transform
+				* Transform3D(Basis.IDENTITY.scaled(local_scale), Vector3.ZERO)
 			)
 			mesh_verts = Baker._extract_mesh_verts(draft.mesh_instance.mesh, mesh_xform)
 		if mesh_verts.is_empty():
@@ -747,10 +748,7 @@ func append_brush_list_to_csg(
 ## [param brush_visgroups] is a parallel Array[PackedStringArray].
 ## Brushes with no visgroup go into a "_default" body.
 func _partition_collision_by_visgroup(
-	baked: Node3D,
-	hull_verts: Array,
-	brush_visgroups: Array,
-	options: Dictionary
+	baked: Node3D, hull_verts: Array, brush_visgroups: Array, options: Dictionary
 ) -> void:
 	var convex_clean: bool = bool(options.get("convex_clean", true))
 	var convex_simplify: float = float(options.get("convex_simplify", 0.0))
@@ -768,10 +766,14 @@ func _partition_collision_by_visgroup(
 	# Group per-brush hull verts by visgroup name
 	var vg_buckets: Dictionary = {}  # visgroup_name -> Array[PackedVector3Array]
 	for i in range(hull_verts.size()):
-		var hull: PackedVector3Array = hull_verts[i] if hull_verts[i] is PackedVector3Array else PackedVector3Array()
+		var hull: PackedVector3Array = (
+			hull_verts[i] if hull_verts[i] is PackedVector3Array else PackedVector3Array()
+		)
 		if hull.is_empty():
 			continue
-		var vgs: PackedStringArray = brush_visgroups[i] if i < brush_visgroups.size() else PackedStringArray()
+		var vgs: PackedStringArray = (
+			brush_visgroups[i] if i < brush_visgroups.size() else PackedStringArray()
+		)
 		if vgs.is_empty():
 			if not vg_buckets.has("_default"):
 				vg_buckets["_default"] = []
