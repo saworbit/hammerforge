@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+
+## [0.2.0] - 2026-04-09
 ### Added
 - **Map import vertex welding** (Apr 2026): `MapIO.parse_map_text()` now runs a post-parse
   vertex welding pass on all parsed brush face points before constructing brush geometry.
