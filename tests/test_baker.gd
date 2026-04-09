@@ -333,3 +333,188 @@ func test_concat_both_nonindexed_stays_nonindexed():
 	var verts: PackedVector3Array = result[Mesh.ARRAY_VERTEX]
 	assert_eq(verts.size(), 6, "3+3 = 6 verts merged")
 	assert_null(result[Mesh.ARRAY_INDEX], "Both non-indexed → output should have no indices")
+
+
+# ===========================================================================
+# build_convex_collision_shapes
+# ===========================================================================
+
+
+func _make_box_verts(center: Vector3 = Vector3.ZERO, half: float = 1.0) -> PackedVector3Array:
+	return PackedVector3Array([
+		center + Vector3(-half, -half, -half),
+		center + Vector3( half, -half, -half),
+		center + Vector3( half,  half, -half),
+		center + Vector3(-half,  half, -half),
+		center + Vector3(-half, -half,  half),
+		center + Vector3( half, -half,  half),
+		center + Vector3( half,  half,  half),
+		center + Vector3(-half,  half,  half),
+	])
+
+
+func test_convex_shapes_single_brush():
+	var verts = _make_box_verts()
+	var shapes: Array = Baker.build_convex_collision_shapes([verts])
+	assert_eq(shapes.size(), 1, "One brush → one convex shape")
+	assert_true(shapes[0] is ConvexPolygonShape3D, "Shape should be ConvexPolygonShape3D")
+	assert_gte(
+		(shapes[0] as ConvexPolygonShape3D).points.size(), 4,
+		"Convex hull should have at least 4 points"
+	)
+
+
+func test_convex_shapes_multiple_brushes():
+	var verts_a = _make_box_verts(Vector3.ZERO)
+	var verts_b = _make_box_verts(Vector3(10, 0, 0))
+	var shapes: Array = Baker.build_convex_collision_shapes([verts_a, verts_b])
+	assert_eq(shapes.size(), 2, "Two brushes → two convex shapes")
+
+
+func test_convex_shapes_skip_degenerate():
+	# Fewer than 4 unique verts should be skipped
+	var flat := PackedVector3Array([Vector3.ZERO, Vector3.RIGHT, Vector3.UP])
+	var shapes: Array = Baker.build_convex_collision_shapes([flat])
+	assert_eq(shapes.size(), 0, "Degenerate brush with <4 verts should be skipped")
+
+
+func test_convex_shapes_dedup_vertices():
+	# Duplicate vertices should be collapsed
+	var verts := PackedVector3Array()
+	for i in range(20):
+		verts.append(Vector3.ZERO)
+	var shapes: Array = Baker.build_convex_collision_shapes([verts])
+	assert_eq(shapes.size(), 0, "All-duplicate verts collapse to 1 unique → skipped")
+
+
+func test_convex_shapes_degenerate_rejected_even_without_clean():
+	# convex_clean=false must still reject fully-degenerate input
+	var verts := PackedVector3Array()
+	for i in range(20):
+		verts.append(Vector3.ZERO)
+	var shapes: Array = Baker.build_convex_collision_shapes([verts], false, 0.0)
+	assert_eq(shapes.size(), 0, "Degenerate input rejected even with convex_clean=false")
+
+
+func test_convex_shapes_empty_input():
+	var shapes: Array = Baker.build_convex_collision_shapes([])
+	assert_eq(shapes.size(), 0, "Empty input → no shapes")
+
+
+# ===========================================================================
+# build_mesh_from_groups: collision_mode option
+# ===========================================================================
+
+
+func test_build_mesh_from_groups_trimesh_default():
+	var mat_mgr = MaterialManager.new()
+	add_child_autoqfree(mat_mgr)
+	var parent = Node3D.new()
+	add_child_autoqfree(parent)
+	var face = _make_face(Vector3.UP, 0)
+	var brush = _make_brush_with_faces(parent, [face])
+	var result = baker.bake_from_faces([brush], mat_mgr, null, 1, 1, {})
+	assert_not_null(result)
+	add_child_autoqfree(result)
+	var body: StaticBody3D = result.get_node_or_null("FaceCollision")
+	assert_not_null(body, "Should have FaceCollision body")
+	var shape_count := 0
+	for child in body.get_children():
+		if child is CollisionShape3D:
+			assert_true(
+				child.shape is ConcavePolygonShape3D,
+				"Default mode should use ConcavePolygonShape3D"
+			)
+			shape_count += 1
+	assert_eq(shape_count, 1, "Trimesh mode should produce exactly 1 collision shape")
+
+
+func test_bake_from_faces_convex_mode():
+	# Exercise the public bake_from_faces() API with collision_mode=1.
+	# bake_from_faces should auto-collect per-brush hull verts internally.
+	var mat_mgr = MaterialManager.new()
+	add_child_autoqfree(mat_mgr)
+	var parent = Node3D.new()
+	add_child_autoqfree(parent)
+	# Use box verts so the brush has enough geometry for a valid convex hull
+	var face_top = _make_face(Vector3.UP, 0)
+	var face_bot = _make_face(Vector3.DOWN, 0)
+	face_bot.local_verts = PackedVector3Array([
+		Vector3(0, -2, 0), Vector3(1, -2, 0),
+		Vector3(1, -2, 1), Vector3(0, -2, 1)
+	])
+	var face_front = _make_face(Vector3.FORWARD, 0)
+	face_front.local_verts = PackedVector3Array([
+		Vector3(0, 0, 0), Vector3(1, 0, 0),
+		Vector3(1, -2, 0), Vector3(0, -2, 0)
+	])
+	var face_back = _make_face(Vector3.BACK, 0)
+	face_back.local_verts = PackedVector3Array([
+		Vector3(0, 0, 1), Vector3(1, 0, 1),
+		Vector3(1, -2, 1), Vector3(0, -2, 1)
+	])
+	var brush = _make_brush_with_faces(parent, [face_top, face_bot, face_front, face_back])
+	var options: Dictionary = {"collision_mode": 1}
+	var result = baker.bake_from_faces([brush], mat_mgr, null, 1, 1, options)
+	assert_not_null(result, "bake_from_faces with collision_mode=1 should produce result")
+	add_child_autoqfree(result)
+	var body: StaticBody3D = result.get_node_or_null("FaceCollision")
+	assert_not_null(body, "Should have FaceCollision body")
+	var has_convex := false
+	for child in body.get_children():
+		if child is CollisionShape3D and child.shape is ConvexPolygonShape3D:
+			has_convex = true
+	assert_true(has_convex, "bake_from_faces collision_mode=1 should produce ConvexPolygonShape3D")
+
+
+# ===========================================================================
+# snapshot_brush_faces: hull_verts field
+# ===========================================================================
+
+
+func test_snapshot_includes_hull_verts():
+	var mat_mgr = MaterialManager.new()
+	add_child_autoqfree(mat_mgr)
+	var parent = Node3D.new()
+	add_child_autoqfree(parent)
+	var face = _make_face(Vector3.UP, 0)
+	var brush = _make_brush_with_faces(parent, [face])
+	var snap = baker.snapshot_brush_faces(brush, mat_mgr, null, false)
+	assert_true(snap.has("hull_verts"), "Snapshot should include hull_verts key")
+	var hull: PackedVector3Array = snap["hull_verts"]
+	assert_gt(hull.size(), 0, "hull_verts should contain vertices")
+
+
+# ===========================================================================
+# convex_clean and convex_simplify parameters
+# ===========================================================================
+
+
+func test_convex_clean_false_keeps_duplicates():
+	# With convex_clean=false, duplicate vertices are kept in the shape
+	var verts := PackedVector3Array()
+	for _i in range(3):
+		verts.append_array(_make_box_verts())  # 8 verts × 3 = 24 total, many dupes
+	var shapes_clean: Array = Baker.build_convex_collision_shapes([verts], true, 0.0)
+	var shapes_raw: Array = Baker.build_convex_collision_shapes([verts], false, 0.0)
+	assert_eq(shapes_clean.size(), 1)
+	assert_eq(shapes_raw.size(), 1)
+	var clean_pts: int = (shapes_clean[0] as ConvexPolygonShape3D).points.size()
+	var raw_pts: int = (shapes_raw[0] as ConvexPolygonShape3D).points.size()
+	assert_lt(clean_pts, raw_pts, "convex_clean=true should produce fewer points than false")
+
+
+func test_convex_simplify_reduces_points():
+	# Build a dense point cloud around a box — simplify should reduce it
+	var dense := PackedVector3Array()
+	for x in range(10):
+		for y in range(10):
+			for z in range(10):
+				dense.append(Vector3(float(x) * 0.1, float(y) * 0.1, float(z) * 0.1))
+	var shapes_none: Array = Baker.build_convex_collision_shapes([dense], true, 0.0)
+	var shapes_half: Array = Baker.build_convex_collision_shapes([dense], true, 0.5)
+	assert_eq(shapes_none.size(), 1)
+	assert_eq(shapes_half.size(), 1)
+	var pts_none: int = (shapes_none[0] as ConvexPolygonShape3D).points.size()
+	var pts_half: int = (shapes_half[0] as ConvexPolygonShape3D).points.size()
+	assert_lt(pts_half, pts_none, "convex_simplify=0.5 should produce fewer points than 0.0")

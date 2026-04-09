@@ -39,6 +39,10 @@ func bake_from_csg(
 	static_body.collision_mask = collision_mask
 	result.add_child(static_body)
 
+	var collision_mode: int = int(options.get("collision_mode", 0))
+	var convex_clean: bool = bool(options.get("convex_clean", true))
+	var convex_simplify: float = float(options.get("convex_simplify", 0.0))
+
 	if merge_meshes:
 		var merged = _merge_entries(entries, use_thread_pool)
 		if merged:
@@ -53,9 +57,25 @@ func bake_from_csg(
 				if material_override:
 					mesh_inst.material_override = material_override
 				result.add_child(mesh_inst)
-				var collision = CollisionShape3D.new()
-				collision.shape = merged.create_trimesh_shape()
-				static_body.add_child(collision)
+				if collision_mode >= 1:
+					# Build per-entry convex hulls even when visual meshes are merged
+					var per_entry_verts: Array = _collect_entry_verts(entries)
+					var shapes: Array = build_convex_collision_shapes(
+						per_entry_verts, convex_clean, convex_simplify
+					)
+					if shapes.is_empty():
+						var col := CollisionShape3D.new()
+						col.shape = merged.create_trimesh_shape()
+						static_body.add_child(col)
+					else:
+						for shape in shapes:
+							var col := CollisionShape3D.new()
+							col.shape = shape
+							static_body.add_child(col)
+				else:
+					var col := CollisionShape3D.new()
+					col.shape = merged.create_trimesh_shape()
+					static_body.add_child(col)
 				return result
 
 	var mesh_count := 0
@@ -87,10 +107,26 @@ func bake_from_csg(
 			mesh_inst.material_override = material_override
 		result.add_child(mesh_inst)
 
-		var collision = CollisionShape3D.new()
-		collision.shape = processed.create_trimesh_shape()
-		collision.transform = mesh_xform
-		static_body.add_child(collision)
+		if collision_mode >= 1:
+			var mesh_verts: PackedVector3Array = _extract_mesh_verts(processed, mesh_xform)
+			var shapes: Array = build_convex_collision_shapes(
+				[mesh_verts], convex_clean, convex_simplify
+			)
+			if shapes.is_empty():
+				var col := CollisionShape3D.new()
+				col.shape = processed.create_trimesh_shape()
+				col.transform = mesh_xform
+				static_body.add_child(col)
+			else:
+				for shape in shapes:
+					var col := CollisionShape3D.new()
+					col.shape = shape
+					static_body.add_child(col)
+		else:
+			var col := CollisionShape3D.new()
+			col.shape = processed.create_trimesh_shape()
+			col.transform = mesh_xform
+			static_body.add_child(col)
 
 		mesh_count += 1
 
@@ -111,10 +147,17 @@ func bake_from_faces(
 	if brushes.is_empty():
 		return null
 	var use_atlas: bool = bool(options.get("use_atlas", false))
+	var collision_mode: int = int(options.get("collision_mode", 0))
 	var groups: Dictionary = {}
+	var per_brush_verts: Array = []
 	for brush in brushes:
 		if brush is DraftBrush:
 			collect_brush_face_groups(brush, material_manager, material_override, use_atlas, groups)
+			if collision_mode >= 1:
+				var snap = snapshot_brush_faces(brush, material_manager, material_override, use_atlas)
+				per_brush_verts.append(snap.get("hull_verts", PackedVector3Array()))
+	if collision_mode >= 1 and not per_brush_verts.is_empty():
+		options["per_brush_verts"] = per_brush_verts
 	return build_mesh_from_groups(groups, collision_layer, collision_mask, options)
 
 
@@ -250,10 +293,19 @@ func snapshot_brush_faces(
 				}
 			)
 		)
+	# Collect all unique world-space vertices for convex hull collision
+	var basis: Basis = brush.global_transform.basis
+	var origin: Vector3 = brush.global_transform.origin
+	var hull_verts := PackedVector3Array()
+	for rec in records:
+		var verts: PackedVector3Array = rec["verts"]
+		for v in verts:
+			hull_verts.append(origin + basis * v)
 	return {
 		"records": records,
-		"basis": brush.global_transform.basis,
-		"origin": brush.global_transform.origin,
+		"basis": basis,
+		"origin": origin,
+		"hull_verts": hull_verts,
 	}
 
 
@@ -376,11 +428,89 @@ func build_mesh_from_groups(
 	mesh_inst.mesh = combined_mesh
 	mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	result.add_child(mesh_inst)
-	var collision = CollisionShape3D.new()
-	collision.shape = combined_mesh.create_trimesh_shape()
-	static_body.add_child(collision)
+
+	var collision_mode: int = int(options.get("collision_mode", 0))
+	var per_brush_verts: Array = options.get("per_brush_verts", [])
+	var convex_clean: bool = bool(options.get("convex_clean", true))
+	var convex_simplify: float = float(options.get("convex_simplify", 0.0))
+
+	if collision_mode >= 1 and not per_brush_verts.is_empty():
+		var convex_shapes: Array = build_convex_collision_shapes(
+			per_brush_verts, convex_clean, convex_simplify
+		)
+		if convex_shapes.is_empty():
+			var col := CollisionShape3D.new()
+			col.shape = combined_mesh.create_trimesh_shape()
+			static_body.add_child(col)
+		else:
+			for shape in convex_shapes:
+				var col := CollisionShape3D.new()
+				col.shape = shape
+				static_body.add_child(col)
+	else:
+		var col := CollisionShape3D.new()
+		col.shape = combined_mesh.create_trimesh_shape()
+		static_body.add_child(col)
 
 	return result
+
+
+## Build convex collision shapes from per-brush vertex clusters.
+## [param brush_verts] is an Array of PackedVector3Array, one entry per brush.
+## Returns an Array of ConvexPolygonShape3D (one per brush with ≥4 verts).
+static func build_convex_collision_shapes(
+	brush_verts: Array, convex_clean: bool = true, convex_simplify: float = 0.0
+) -> Array:
+	var shapes: Array = []
+	for verts in brush_verts:
+		if not (verts is PackedVector3Array):
+			continue
+		var pva: PackedVector3Array = verts
+		if pva.size() < 4:
+			continue
+		# Always deduplicate to count truly unique positions — this is the
+		# degeneracy guard.  convex_clean controls whether the deduplicated
+		# result replaces the working set sent to the shape.
+		var unique := PackedVector3Array()
+		var seen: Dictionary = {}
+		for v in pva:
+			var key := Vector3i(
+				int(round(v.x * 1000.0)),
+				int(round(v.y * 1000.0)),
+				int(round(v.z * 1000.0))
+			)
+			if not seen.has(key):
+				seen[key] = true
+				unique.append(v)
+		if unique.size() < 4:
+			continue
+		var working: PackedVector3Array = unique if convex_clean else pva
+		# convex_simplify: reduce point count by merging nearby vertices into a
+		# coarser grid.  A value of 0.0 skips simplification; higher values use
+		# a proportionally larger grid cell derived from the AABB diagonal.
+		if convex_simplify > 0.0 and working.size() > 4:
+			var aabb := AABB(working[0], Vector3.ZERO)
+			for v in working:
+				aabb = aabb.expand(v)
+			var cell: float = aabb.get_longest_axis_size() * convex_simplify
+			if cell > 0.001:
+				var simplified := PackedVector3Array()
+				var grid: Dictionary = {}
+				for v in working:
+					var key := Vector3i(
+						int(floor(v.x / cell)),
+						int(floor(v.y / cell)),
+						int(floor(v.z / cell))
+					)
+					if not grid.has(key):
+						grid[key] = true
+						simplified.append(v)
+				if simplified.size() >= 4:
+					working = simplified
+		var shape := ConvexPolygonShape3D.new()
+		shape.points = working
+		shapes.append(shape)
+	return shapes
 
 
 func _resolve_face_material(
@@ -472,6 +602,39 @@ func _merge_entries(entries: Array, _use_thread_pool: bool) -> ArrayMesh:
 	if mesh_entries.is_empty():
 		return null
 	return _merge_entries_worker(mesh_entries)
+
+
+## Extract world-space vertices from a Mesh, applying the given transform.
+static func _extract_mesh_verts(mesh: Mesh, xform: Transform3D = Transform3D.IDENTITY) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	if not mesh:
+		return out
+	for s_idx in range(mesh.get_surface_count()):
+		var arrays = mesh.surface_get_arrays(s_idx)
+		if arrays.is_empty():
+			continue
+		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		for v in verts:
+			out.append(xform * v)
+	return out
+
+
+## Collect per-entry vertex arrays from CSG output entries for convex hull generation.
+func _collect_entry_verts(entries: Array) -> Array:
+	var result: Array = []
+	for entry in entries:
+		var mesh: Mesh = null
+		var mesh_xform := Transform3D.IDENTITY
+		if entry is Mesh:
+			mesh = entry
+		elif entry is Array:
+			if entry.size() > 0 and entry[0] is Mesh:
+				mesh = entry[0]
+			if entry.size() > 1 and entry[1] is Transform3D:
+				mesh_xform = entry[1]
+		if mesh:
+			result.append(_extract_mesh_verts(mesh, mesh_xform))
+	return result
 
 
 func _collect_mesh_entries(entries: Array) -> Array:

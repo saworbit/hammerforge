@@ -172,7 +172,7 @@ The compact toolbar shows icon + text labels (Draw, Select, Add, Sub, Paint, Ext
   - **Highlight Connected**: when enabled, all entities wired to the selected entity display a pulsing overlay. The context toolbar shows an "HL" toggle and an I/O summary label ("Triggers 2 targets (door1, light1)"). The highlight state stays in sync between the context toolbar and the wiring panel.
 
 ### Manage tab (collapsible sections)
-- **Bake**: Bake button, Bake Selected, Bake Changed, Check Bake Issues, Dry Run, Validate Level/Fix. Options: Merge Meshes, Generate LODs, Lightmap UV2, Texel Size, Navmesh (cell size, agent height), Use Face Materials, Preview Mode (Full/Wireframe/Proxy), Bake Estimate label, Quick Play, Play from Camera, Play Selected Area.
+- **Bake**: Bake button, Bake Selected, Bake Changed, Check Bake Issues, Dry Run, Validate Level/Fix. Options: Merge Meshes, Generate LODs, Lightmap UV2, Texel Size, Navmesh (cell size, agent height), Use Face Materials, Preview Mode (Full/Wireframe/Proxy), Collision Mode (Trimesh/Convex/Visgroup), Convex Clean, Convex Simplify, Bake Estimate label, Quick Play, Play from Camera, Play Selected Area.
 - **Actions**: Create Floor, Apply/Clear/Commit/Restore Cuts, Clear Brushes.
 - **Spawn**: Validate Spawn (bakes, then runs physics-based checks and shows debug overlay), Create Default Spawn (auto-places a `player_start` at brush centroid), Preview Spawn Debug (bakes, then shows persistent capsule/ray overlay toggle).
 - **File**: Save/Load .hflevel, Import/Export .map (Classic Quake / Valve 220), Export .glb.
@@ -235,6 +235,12 @@ The Manage tab Bake section exposes additional controls:
 - **Bake Visible Only** (checkbox): skips hidden visgroups and invisible brushes during bake.
 - **Use MultiMesh** (checkbox): after baking, consolidates repeated identical meshes into `MultiMeshInstance3D` nodes. Useful for levels with many copies of the same brush shape — reduces draw calls.
 - **Material Atlas** (checkbox): packs per-face albedo textures into a single atlas image so all atlased geometry renders in one draw call. Requires **Use Face Materials** to be enabled. Faces with tiling UVs (scale > 1) are automatically excluded and rendered as separate surfaces with their original material so texture repeat works correctly. Best for levels with many small non-tiling textures. Textures with painted layers or ShaderMaterials are not atlased.
+- **Collision Mode** (0/1/2, default 0): controls how baked collision shapes are generated.
+  - **0 — Trimesh** (default): single ConcavePolygonShape3D per chunk. Simple but worst-case for physics broadphase.
+  - **1 — Per-brush convex**: each brush gets a ConvexPolygonShape3D (convex hull). Much better for physics queries and bot navigation.
+  - **2 — Per-visgroup partitioned**: separate StaticBody3D per visgroup, each containing convex hulls for its member brushes. Best for navigation mesh generation and room-based broadphase.
+- **Convex Clean** (checkbox, default on): deduplicate vertices before building convex hulls. Disable to keep raw vertex data (degeneracy guard still runs).
+- **Convex Simplify** (slider, 0.0–1.0, default 0.0): reduce convex hull complexity by merging nearby vertices into an AABB-proportional grid. Higher values = fewer vertices = simpler collision.
 - **Unwrap UV0** (checkbox): applies per-vertex planar UV projection during bake for surfaces that lack explicit UVs.
 - **Auto Connectors** (checkbox): auto-generates ramps or stairs between paint layers at different heights during bake. Requires at least 2 paint layers with filled cells at adjacent grid positions and a height difference ≥ 0.1 world units. Sub-controls:
   - **Mode** dropdown: *Ramp* (smooth slope), *Stairs* (stepped), *Auto* (stairs when height diff ≥ 2.0, ramp otherwise).
@@ -943,9 +949,12 @@ Example (billboard preview):
 ## Bake Output
 Bake creates `BakedGeometry`:
 - If chunked baking is enabled, it adds `BakedChunk_x_y_z` nodes.
-- Each chunk has a MeshInstance3D and StaticBody3D (trimesh) for collision.
+- Collision shape type depends on **Collision Mode** (Inspector property on LevelRoot):
+  - **Mode 0** (default): Each chunk has a MeshInstance3D and StaticBody3D with a single ConcavePolygonShape3D (trimesh).
+  - **Mode 1**: Each chunk has a StaticBody3D containing one ConvexPolygonShape3D per brush (convex hulls). Better for physics broadphase and navmesh generation.
+  - **Mode 2**: Each visgroup gets its own StaticBody3D with convex hulls for all its member brushes. Ungrouped brushes share a default body. Best for room-based physics partitioning and bot navigation.
 
-Generated flat floor paint brushes are included in the CSG bake. Heightmap floor meshes are duplicated directly into the baked output with trimesh collision shapes (they bypass CSG since they are already ArrayMesh).
+Generated flat floor paint brushes are included in the CSG bake. Heightmap floor meshes are duplicated directly into the baked output with trimesh collision shapes (they bypass CSG since they are already ArrayMesh). Heightmap collision is appended after visgroup partitioning (mode 2), so heightmap shapes are always preserved.
 
 Use Face Materials (optional):
 - Enables per-face material baking without CSG.

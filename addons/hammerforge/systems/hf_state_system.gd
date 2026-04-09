@@ -252,6 +252,9 @@ func capture_hflevel_settings() -> Dictionary:
 		"bake_navmesh_agent_height": root.bake_navmesh_agent_height,
 		"bake_navmesh_agent_radius": root.bake_navmesh_agent_radius,
 		"bake_use_thread_pool": root.bake_use_thread_pool,
+		"bake_collision_mode": root.bake_collision_mode,
+		"bake_convex_clean": root.bake_convex_clean,
+		"bake_convex_simplify": root.bake_convex_simplify,
 		"bake_auto_connectors": root.bake_auto_connectors,
 		"bake_connector_mode": root.bake_connector_mode,
 		"bake_connector_stair_height": root.bake_connector_stair_height,
@@ -372,6 +375,18 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 	if settings.has("bake_use_thread_pool"):
 		root.bake_use_thread_pool = bool(
 			settings.get("bake_use_thread_pool", root.bake_use_thread_pool)
+		)
+	if settings.has("bake_collision_mode"):
+		root.bake_collision_mode = int(
+			settings.get("bake_collision_mode", root.bake_collision_mode)
+		)
+	if settings.has("bake_convex_clean"):
+		root.bake_convex_clean = bool(
+			settings.get("bake_convex_clean", root.bake_convex_clean)
+		)
+	if settings.has("bake_convex_simplify"):
+		root.bake_convex_simplify = float(
+			settings.get("bake_convex_simplify", root.bake_convex_simplify)
 		)
 	if settings.has("hflevel_autosave_keep"):
 		root.hflevel_autosave_keep = int(

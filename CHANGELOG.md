@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Added
+- **Collision chunking for bot navigation** (Apr 2026): Replaced monolithic ConcavePolygonShape3D
+  collision with a 3-tier collision mode system for better physics broadphase and navigation mesh
+  generation. Configured via `bake_collision_mode` on LevelRoot (Inspector export):
+  - **Mode 0** (default): Legacy trimesh — single ConcavePolygonShape3D (backward compatible).
+  - **Mode 1**: Per-brush convex hulls — each brush gets a ConvexPolygonShape3D via
+    `Baker.build_convex_collision_shapes()`. Supports `bake_convex_clean` (deduplicate vertices,
+    default true) and `bake_convex_simplify` (AABB-proportional grid merge, 0.0–1.0).
+  - **Mode 2**: Per-visgroup partitioned collision — separate StaticBody3D per visgroup, each
+    containing convex hulls for its member brushes. Ungrouped brushes fall into a default body.
+
+  Works across all bake paths: face-material (`bake_from_faces`), CSG single (`bake_single`),
+  and CSG chunked (`bake_chunked`). Subtractive brushes are excluded from convex hull generation.
+  Real mesh vertices are extracted (not AABB corners) so non-box shapes get accurate collision.
+  Visgroup partitioning runs before heightmap collision append to prevent heightmap shape loss.
+  Degeneracy guard always runs (vertex dedup for unique count ≥ 4) regardless of `convex_clean`
+  setting. Settings persist in `.hflevel` via `capture_hflevel_settings()`/`apply_hflevel_settings()`.
+
+  22 new tests: 11 in `test_baker.gd` (convex shape generation, dedup, simplification, clean
+  flag, trimesh default, face bake convex mode, snapshot hull verts) and 11 in `test_bake_system.gd`
+  (collision data collection, subtractive filtering, real mesh verts, entity brush skip, 6 async
+  integration tests for mode 2 single/chunked/heightmap/trimesh preservation).
+  Total: **1321 tests across 73 files**.
 
 ## [0.2.0] - 2026-04-09
 ### Added

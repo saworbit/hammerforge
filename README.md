@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/Godot-4.6%2B-478cbf?logo=godot-engine&logoColor=white" alt="Godot 4.6+">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
   <img src="https://img.shields.io/badge/Status-Early%20Alpha-red" alt="Early Alpha">
-  <img src="https://img.shields.io/badge/Tests-1299%20passing-brightgreen" alt="1299 tests passing">
+  <img src="https://img.shields.io/badge/Tests-1321%20passing-brightgreen" alt="1321 tests passing">
   <img src="https://img.shields.io/badge/GDScript-25k%2B%20lines-blueviolet" alt="25k+ lines">
 </p>
 
@@ -30,7 +30,7 @@ Level editors like Hammer and TrenchBroom proved that **brush-based workflows** 
 - **No live CSG** -- brushes are lightweight preview nodes; CSG runs only at bake time, keeping the editor snappy even with hundreds of brushes.
 - **Two-click geometry** -- drag a base rectangle, click to set height. Extrude faces to extend rooms. Type exact numbers any time.
 - **Paint floors and terrain** -- grid-based floor paint with heightmaps, multi-material blending, auto-connectors (ramps/stairs), and foliage scatter.
-- **Bake when ready** -- one click produces merged meshes, collision shapes, lightmap UVs, navmeshes, and LODs.
+- **Bake when ready** -- one click produces merged meshes, collision shapes (trimesh, per-brush convex, or per-visgroup partitioned), lightmap UVs, navmeshes, and LODs.
 
 HammerForge is a single `addons/` folder. No external tools, no custom builds, no export plugins. Drop it in, enable, draw.
 
@@ -40,7 +40,7 @@ HammerForge is a single `addons/` folder. No external tools, no custom builds, n
 
 | | |
 |---|---|
-| **21 subsystems** + coordinator architecture | **1299 unit + integration tests** with CI on every push |
+| **21 subsystems** + coordinator architecture | **1321 unit + integration tests** with CI on every push |
 | **15 brush shapes** (box through dodecahedron) | **150 built-in prototype textures** for instant greyboxing |
 | **Quake `.map`** + **glTF `.glb`** export | **.hflevel** native format with threaded I/O |
 | **Customizable keymaps** (JSON) | **Plugin API** for custom tools |
@@ -164,7 +164,7 @@ Grid-based paint layers with chunked storage for large worlds:
 
 | Option | What it does |
 |--------|--------------|
-| **Bake** | CSG assembly to merged meshes + trimesh collision |
+| **Bake** | CSG assembly to merged meshes + collision (trimesh, per-brush convex, or per-visgroup partitioned) |
 | **Chunked bake** | Split output by spatial chunks |
 | **Cordon bake** | Restrict to AABB region |
 | **Face materials** | Bake per-face materials without CSG |
@@ -178,6 +178,7 @@ Grid-based paint layers with chunked storage for large worlds:
 | **Preview modes** | Full / Wireframe / Proxy toggle for ultra-fast iteration |
 | **MultiMesh** | Consolidate repeated identical meshes into MultiMeshInstance3D |
 | **Material Atlas** | Pack albedo textures into a single atlas to reduce draw calls (face materials mode) |
+| **Collision Mode** | Trimesh (legacy), per-brush convex hulls, or per-visgroup partitioned convex bodies |
 | **Bake Visible Only** | Skip hidden visgroups and invisible brushes |
 | **Unwrap UV0** | Per-vertex planar UV projection for surfaces without UVs |
 | **Check Issues** | Flag degenerate, floating, overlapping, non-manifold, open-edge, non-planar, and micro-gap brushes. Auto-fix: vertex weld + planarity correction |

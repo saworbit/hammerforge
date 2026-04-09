@@ -104,6 +104,15 @@ var _grid_snap: float = 16.0
 @export var bake_connector_stair_height: float = 0.25
 @export var bake_connector_width: int = 2
 @export var bake_use_thread_pool: bool = true
+## Collision shape strategy: 0 = single trimesh (legacy), 1 = per-brush convex hulls,
+## 2 = per-visgroup partitioned bodies.
+@export_range(0, 2, 1) var bake_collision_mode: int = 0
+## When bake_collision_mode >= 1, generate a convex hull per brush instead of one
+## monolithic ConcavePolygonShape3D.  Per-brush convex shapes are faster for physics
+## broadphase and produce better navigation meshes.
+@export var bake_convex_clean: bool = true
+## Simplification threshold for convex hull generation (0 = no simplification).
+@export_range(0.0, 1.0, 0.01) var bake_convex_simplify: float = 0.0
 var _hflevel_autosave_enabled: bool = true
 @export var hflevel_autosave_enabled: bool = true:
 	set(value):

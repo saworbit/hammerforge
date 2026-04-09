@@ -1,6 +1,6 @@
 # Development Guide
 
-Last updated: April 9, 2026
+Last updated: April 10, 2026
 
 This document covers local setup, codebase structure, and how to test features.
 
@@ -23,7 +23,7 @@ addons/hammerforge/
   dock.gd + dock.tscn    UI dock (4 tabs: Brush, Paint, Entities, Manage), collapsible sections with persisted state
   shortcut_hud.gd        Context-sensitive shortcut overlay (dynamic per mode)
   brush_instance.gd      DraftBrush node
-  baker.gd               CSG -> mesh bake pipeline (per-face materials, atlas integration, snapshot-based non-blocking face bakes)
+  baker.gd               CSG -> mesh bake pipeline (per-face materials, atlas integration, snapshot-based non-blocking face bakes, convex collision shapes)
   hf_material_atlas.gd   HFMaterialAtlas: texture atlas packing for draw-call reduction
   face_data.gd           Per-face materials, UVs, paint layers, displacement
   displacement_data.gd   HFDisplacementData resource (subdivided grid, distances/offsets/alphas, sew groups)
@@ -91,7 +91,7 @@ addons/hammerforge/
     hf_entity_system.gd    Entity definitions, placement, Entity I/O connections
     hf_brush_system.gd     Brush CRUD, cuts, materials, picking, hollow, clip, merge, tie/untie
     hf_drag_system.gd      Drag lifecycle, preview, axis locking
-    hf_bake_system.gd      Bake orchestration (single/chunked/selected/dirty), cooperative face-bake yielding, preview modes (Full/Wireframe/Proxy), time estimate (yield-overhead-corrected), auto-connectors
+    hf_bake_system.gd      Bake orchestration (single/chunked/selected/dirty), cooperative face-bake yielding, preview modes (Full/Wireframe/Proxy), time estimate (yield-overhead-corrected), auto-connectors, collision mode partitioning (trimesh/convex/visgroup)
     hf_paint_system.gd     Floor + surface paint, layer CRUD
     hf_state_system.gd     State capture/restore, settings, transactions
     hf_file_system.gd      .hflevel/.map/.glTF I/O, threaded writes, autosave failure reporting
@@ -175,6 +175,7 @@ addons/hammerforge/
 - **Carve UV preservation.** `HFCarveSystem._copy_uv_settings_to_piece()` copies UV parameters from the original target brush to each carved slice and compensates the UV offset for the position difference. The compensation formula is `O_new = O_old + delta_2d.rotated(R) * S` where `delta_2d` is the projected position delta between the original and slice centers.
 - **Non-blocking face bakes.** Face-material bakes use a two-phase snapshot-then-yield pattern. Phase 1 (synchronous): `baker.snapshot_brush_faces()` calls `ensure_geometry()`, `triangulate()`, and `_resolve_face_material()` on each brush, capturing the results as plain PackedArrays and Material refs. Phase 2 (cooperative): `baker.collect_snapshot_groups()` iterates frozen snapshots, doing world-space transforms and group appends with `process_frame` yields every `_FACE_BAKE_BATCH` (8) brushes. This guarantees a consistent scene snapshot while keeping the editor responsive. `_yield_overhead_ms` tracks idle time in yields and is subtracted from `_last_bake_duration_ms` so `estimate_bake_time()` reflects CPU work only. Material resources are referenced, not deep-cloned — in-place property mutations during the yield window will be visible in the output.
 - **Material atlasing.** `HFMaterialAtlas` (`hf_material_atlas.gd`) packs `StandardMaterial3D` albedo textures into a single atlas image via shelf bin-packing. Baker integration in `bake_from_faces()`: when `use_atlas` is enabled, face UVs are checked per-face during grouping — faces with UVs outside [0,1] (tiling) go into a separate `[mat, "_tiling"]` sub-group that stays as a separate surface with hardware texture repeat, while non-tiling faces are atlased and UV-remapped. Atlas tiles have a 2px gutter (edge-pixel extension) to prevent mipmap bleed, and UV rects are inset by half a texel (clamped to 25% of tile extent so 1px textures never collapse to zero size). Only fires when 2+ materials are atlasable; single-material or all-fallback scenarios skip the atlas path entirely.
+- **Collision modes.** `bake_collision_mode` on LevelRoot controls collision shape generation: 0 = legacy trimesh (ConcavePolygonShape3D), 1 = per-brush convex hulls (ConvexPolygonShape3D via `Baker.build_convex_collision_shapes()`), 2 = per-visgroup partitioned StaticBody3D nodes with convex hulls. `bake_convex_clean` deduplicates vertices (default true); `bake_convex_simplify` (0.0–1.0) applies AABB-proportional grid merge. Degeneracy guard (unique vertex count ≥ 4) always runs regardless of `convex_clean`. Mode 2 partitioning via `_partition_collision_by_visgroup()` must run *before* heightmap collision append. `_collect_brush_collision_data()` extracts real mesh vertices (not AABB corners) and filters subtractive brushes. All three settings persist in `.hflevel`.
 - **Bake owner assignment.** Use `_assign_owner_recursive()` (not `_assign_owner()`) for baked geometry so all descendants get proper editor ownership. Always call it *after* the container is added to the scene tree.
 - **Shader files.** Prefer standalone `.gdshader` files over inline GLSL strings in GDScript (e.g. `highlight.gdshader` for the selection wireframe shader). Use `preload("file.gdshader")` to load them.
 - **Customizable keymaps.** All keyboard shortcuts go through `_keymap.matches("action_name", event)` instead of hardcoded `event.keycode == KEY_*` checks. Default bindings are defined in `HFKeymap._default_bindings()`. Users can override via `user://hammerforge_keymap.json`. Toolbar labels pull display strings from the keymap.
@@ -202,7 +203,7 @@ addons/hammerforge/
 The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on push and PR to `main`:
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
-- **GUT unit + integration tests** -- 1278 tests across 72 test files (runs Godot headless)
+- **GUT unit + integration tests** -- 1321 tests across 73 test files (runs Godot headless)
 
 Run locally before pushing:
 ```
@@ -244,7 +245,7 @@ Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framewor
 | `test_snap_system.gd` | 12 | Grid/Vertex/Center snap modes, threshold, exclude list, priority (closer geometry beats grid), empty scene fallback |
 | `test_drag_dimensions.gd` | 8 | get_drag_dimensions() in all modes, format_dimensions() whole/fractional/zero |
 | `test_reference_cleanup.gd` | 9 | Delete cleans group/visgroup membership, entity I/O cleanup_dangling_connections, preserves unrelated, no-crash on clean node |
-| `test_bake_system.gd` | 43 | build_bake_options, structural/trigger filtering, chunk_coord, bake_dry_run, warn_bake_failure, estimate_bake_time, preview mode helpers (+ recursive chunk wireframe/proxy/multimesh/full), _last_bake_success, dirty tag retention, wireframe ShaderMaterial |
+| `test_bake_system.gd` | 84 | build_bake_options, structural/trigger filtering, chunk_coord, bake_dry_run, warn_bake_failure, estimate_bake_time, preview mode helpers (+ recursive chunk wireframe/proxy/multimesh/full), _last_bake_success, dirty tag retention, wireframe ShaderMaterial, postprocess connectors/navmesh, collision data collection (subtractive filter, real mesh verts, entity skip), mode 2 integration (single/chunked visgroup bodies, heightmap survival, trimesh preservation) |
 | `test_bake_issues.gd` | 10 | check_bake_issues: degenerate, oversized, floating subtract, overlapping subtracts, non-manifold/open-edge, clean level, entity skip |
 | `test_weld_and_planarity.gd` | 21 | Non-planar face detection (5), vertex welding + ensure_geometry refresh (3), planarity auto-fix (3), micro-gap detection (2), edge-key independence (1), boundary-straddling weld/gap/parse (3), MapIO integration (2), MapIO snap unit (2) |
 | `test_quick_play_modes.gd` | 12 | Severity blocking (0/1/2), cordon save/restore, dirty tag retention patterns, camera yaw via entity_data, spawn restore after camera play, spawn restore on error path |
@@ -276,7 +277,7 @@ Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framewor
 | `test_history_browser.gd` | 10 | Record entry, max 30 cap, clear, undo/redo button exposure, icon/color for action types, navigate signal on double-click |
 | `test_export_playtest.gd` | 3 | Export empty level, includes DirectionalLight3D, includes WorldEnvironment |
 | `test_dock_history_and_playtest.gd` | 7 | history_list null by default, refresh doesn't crash when null, update_history_buttons called when null, version_changed updates buttons, spawn creation, state capture before/after spawn |
-| `test_baker.gd` | 14 | Material preservation in merge (single, group-by, null-material, transform), bake_from_faces via collect_brush_face_groups + build_mesh_from_groups (single/multiple materials), _concat_surface_arrays (single, two, empty, indexed rebasing, non-indexed first + indexed second, indexed first + non-indexed second, both non-indexed stays non-indexed) |
+| `test_baker.gd` | 25 | Material preservation in merge (single, group-by, null-material, transform), bake_from_faces via collect_brush_face_groups + build_mesh_from_groups (single/multiple materials), _concat_surface_arrays (single, two, empty, indexed rebasing, non-indexed first + indexed second, indexed first + non-indexed second, both non-indexed stays non-indexed), convex collision shapes (single/multiple brush, degenerate skip/reject, dedup, empty input, trimesh default, face bake convex mode, snapshot hull verts, clean false, simplify) |
 | `test_undo_helper.gd` | 9 | HFUndoHelper.commit without collation (fires history each time), collation first-commit fires + subsequent suppressed, different tags each fire, tag-switch resets collation, 5-arg + 6-arg collation suppression, null history callback safety |
 | `test_displacement.gd` | 40 | HFDisplacementData unit (init, get/set distance, dim, displaced position, smooth, noise, dict roundtrip, alpha, sew group, offset, elevation), FaceData integration (triangulate displaced, dict roundtrip, null displacement), HFDisplacementSystem (create/destroy, has_displacement, paint raise/lower/smooth/noise/alpha, set_power resample, set_elevation, sew_all) |
 | `test_bevel.gd` | 15 | Face inset (basic, height extrude, collapse guard, material inheritance, connecting sides winding), edge bevel (basic, segments, neighbor update, small radius, material inheritance), slerp utility (endpoints, midpoint, parallel, anti-parallel, quarter turn) |

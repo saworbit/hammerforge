@@ -248,7 +248,10 @@ func bake(
 		# --- Synchronous snapshot: triangulate + resolve materials before yields ---
 		var face_brushes = collect_face_bake_brushes()
 		var use_atlas: bool = bool(bake_options.get("use_atlas", false))
+		var collision_mode: int = int(bake_options.get("collision_mode", 0))
 		var snapshots: Array = []
+		# Track per-brush visgroup assignments for partitioned collision (mode 2)
+		var brush_visgroups: Array = []  # parallel to snapshots: PackedStringArray per brush
 		for brush in face_brushes:
 			if is_instance_valid(brush) and brush is DraftBrush:
 				snapshots.append(
@@ -256,6 +259,12 @@ func bake(
 						brush, root.material_manager, root.bake_material_override, use_atlas
 					)
 				)
+				if collision_mode >= 2 and root.visgroup_system:
+					brush_visgroups.append(
+						root.visgroup_system.get_visgroups_of(brush)
+					)
+				else:
+					brush_visgroups.append(PackedStringArray())
 		# --- Yielding pass: world-space transform + grouping from frozen data ---
 		var groups: Dictionary = {}
 		var snap_total: int = snapshots.size()
@@ -273,7 +282,22 @@ func bake(
 		var build_yield_start_ms := Time.get_ticks_msec()
 		await root.get_tree().process_frame
 		yield_overhead_ms += Time.get_ticks_msec() - build_yield_start_ms
+		# Collect per-brush world-space hull verts for convex collision (mode >= 1)
+		if collision_mode >= 1:
+			var per_brush_verts: Array = []
+			for snap in snapshots:
+				per_brush_verts.append(snap.get("hull_verts", PackedVector3Array()))
+			bake_options["per_brush_verts"] = per_brush_verts
+		# Visgroup partitioning (mode 2): separate collision bodies per visgroup
+		if collision_mode >= 2:
+			bake_options["brush_visgroups"] = brush_visgroups
 		baked = root.baker.build_mesh_from_groups(groups, layer, layer, bake_options)
+		# Apply visgroup-partitioned collision bodies after initial build
+		if baked and collision_mode >= 2:
+			var face_hull_verts: Array = []
+			for snap in snapshots:
+				face_hull_verts.append(snap.get("hull_verts", PackedVector3Array()))
+			_partition_collision_by_visgroup(baked, face_hull_verts, brush_visgroups, bake_options)
 	else:
 		if root.bake_chunk_size > 0.0:
 			baked = await bake_chunked(root.bake_chunk_size, layer, bake_options)
@@ -337,7 +361,10 @@ func build_bake_options() -> Dictionary:
 		"uv2_texel_size": root.bake_lightmap_texel_size,
 		"use_thread_pool": root.bake_use_thread_pool,
 		"use_face_materials": root.bake_use_face_materials,
-		"use_atlas": root.bake_use_atlas
+		"use_atlas": root.bake_use_atlas,
+		"collision_mode": root.bake_collision_mode,
+		"convex_clean": root.bake_convex_clean,
+		"convex_simplify": root.bake_convex_simplify,
 	}
 
 
@@ -389,6 +416,21 @@ func bake_single(layer: int, options: Dictionary) -> Node3D:
 	if collision_baked:
 		collision_baked.free()
 	if baked:
+		# Visgroup-partitioned collision (mode 2) for CSG path.
+		# Must run BEFORE heightmap append so that partitioning only removes
+		# the brush-generated FloorCollision body, not heightmap collision.
+		var collision_mode: int = int(options.get("collision_mode", 0))
+		if collision_mode >= 2:
+			var containers: Array = [root.draft_brushes_node, root.generated_floors, root.generated_walls]
+			if root.commit_freeze and root.committed_node:
+				containers.append(root.committed_node)
+			var coll_data: Dictionary = _collect_brush_collision_data(containers)
+			_partition_collision_by_visgroup(
+				baked, coll_data["hull_verts"], coll_data["visgroups"], options
+			)
+		# Heightmap collision is appended after partitioning.  If FloorCollision
+		# was removed by partitioning, _append_heightmap_meshes_to_baked creates
+		# a fresh one for heightmap-only collision shapes.
 		_append_heightmap_meshes_to_baked(baked, layer)
 	return baked
 
@@ -444,6 +486,18 @@ func bake_chunked(chunk_size: float, layer: int, options: Dictionary) -> Node3D:
 				collision_csg, null, layer, layer, options
 			)
 			apply_collision_from_bake(baked_chunk, collision_baked, layer)
+			# Visgroup-partitioned collision (mode 2) for this chunk
+			var chunk_collision_mode: int = int(options.get("collision_mode", 0))
+			if chunk_collision_mode >= 2:
+				var chunk_brushes: Array = []
+				chunk_brushes.append_array(brushes)
+				chunk_brushes.append_array(generated)
+				if root.commit_freeze:
+					chunk_brushes.append_array(committed)
+				var coll_data: Dictionary = _collect_brush_collision_data(chunk_brushes)
+				_partition_collision_by_visgroup(
+					baked_chunk, coll_data["hull_verts"], coll_data["visgroups"], options
+				)
 			baked_chunk.name = "BakedChunk_%s_%s_%s" % [coord.x, coord.y, coord.z]
 			container.add_child(baked_chunk)
 			chunk_count += 1
@@ -513,6 +567,63 @@ func bake_dry_run() -> Dictionary:
 		"use_face_materials": root.bake_use_face_materials,
 		"chunk_size": root.bake_chunk_size
 	}
+
+
+## Collect hull verts and visgroup assignments from live additive brushes.
+## Skips subtractive brushes (matching the only_additive filter used by the
+## collision CSG path) and extracts real mesh vertices instead of AABB corners
+## so that non-box shapes (cylinders, spheres, etc.) get accurate hulls.
+## [param brush_sources] is an Array of Node3D parents whose children are scanned,
+## OR an Array of DraftBrush nodes directly (detected by first element type).
+## Returns {"hull_verts": Array[PackedVector3Array], "visgroups": Array[PackedStringArray]}.
+func _collect_brush_collision_data(brush_sources: Array) -> Dictionary:
+	var hull_verts: Array = []
+	var vis_groups: Array = []
+	# Detect whether we were given containers (Node3D parents) or flat brush lists
+	var flat_list: bool = false
+	if not brush_sources.is_empty() and brush_sources[0] is DraftBrush:
+		flat_list = true
+	var brush_list: Array = []
+	if flat_list:
+		brush_list = brush_sources
+	else:
+		for container in brush_sources:
+			if not container:
+				continue
+			for child in container.get_children():
+				brush_list.append(child)
+	for child in brush_list:
+		if not (child is DraftBrush):
+			continue
+		var draft: DraftBrush = child
+		# Skip subtractive brushes — they carve voids, not solid collision.
+		# This matches the only_additive filter in append_brush_list_to_csg().
+		if draft.operation == CSGShape3D.OPERATION_SUBTRACTION:
+			continue
+		if root.is_entity_node(draft):
+			continue
+		if not _is_structural_brush(draft):
+			continue
+		if root.bake_visible_only and not draft.visible:
+			continue
+		if root.cordon_enabled and not _brush_in_cordon(draft):
+			continue
+		# Extract real mesh vertices for accurate hull geometry on all shapes.
+		var mesh_verts := PackedVector3Array()
+		if draft.mesh_instance and draft.mesh_instance.mesh:
+			var local_scale: Vector3 = draft.mesh_instance.scale
+			var mesh_xform: Transform3D = draft.global_transform * Transform3D(
+				Basis.IDENTITY.scaled(local_scale), Vector3.ZERO
+			)
+			mesh_verts = Baker._extract_mesh_verts(draft.mesh_instance.mesh, mesh_xform)
+		if mesh_verts.is_empty():
+			continue
+		hull_verts.append(mesh_verts)
+		if root.visgroup_system:
+			vis_groups.append(root.visgroup_system.get_visgroups_of(draft))
+		else:
+			vis_groups.append(PackedStringArray())
+	return {"hull_verts": hull_verts, "visgroups": vis_groups}
 
 
 func _is_trigger_brush(brush: DraftBrush) -> bool:
@@ -629,6 +740,65 @@ func append_brush_list_to_csg(
 				csg_shape.set("material", mat)
 				csg_shape.set("material_override", mat)
 		target.add_child(csg_shape)
+
+
+## Replace existing collision bodies with per-visgroup StaticBody3D nodes.
+## [param hull_verts] is an Array[PackedVector3Array], one per brush.
+## [param brush_visgroups] is a parallel Array[PackedStringArray].
+## Brushes with no visgroup go into a "_default" body.
+func _partition_collision_by_visgroup(
+	baked: Node3D,
+	hull_verts: Array,
+	brush_visgroups: Array,
+	options: Dictionary
+) -> void:
+	var convex_clean: bool = bool(options.get("convex_clean", true))
+	var convex_simplify: float = float(options.get("convex_simplify", 0.0))
+	var layer: int = 0
+	var mask: int = 0
+	# Remove existing collision bodies (FaceCollision from face-bake, FloorCollision from CSG)
+	for body_name in ["FaceCollision", "FloorCollision"]:
+		var old_body: Node = baked.get_node_or_null(body_name)
+		if old_body:
+			if old_body is StaticBody3D:
+				layer = old_body.collision_layer
+				mask = old_body.collision_mask
+			old_body.get_parent().remove_child(old_body)
+			old_body.free()
+	# Group per-brush hull verts by visgroup name
+	var vg_buckets: Dictionary = {}  # visgroup_name -> Array[PackedVector3Array]
+	for i in range(hull_verts.size()):
+		var hull: PackedVector3Array = hull_verts[i] if hull_verts[i] is PackedVector3Array else PackedVector3Array()
+		if hull.is_empty():
+			continue
+		var vgs: PackedStringArray = brush_visgroups[i] if i < brush_visgroups.size() else PackedStringArray()
+		if vgs.is_empty():
+			if not vg_buckets.has("_default"):
+				vg_buckets["_default"] = []
+			vg_buckets["_default"].append(hull)
+		else:
+			for vg_name in vgs:
+				if not vg_buckets.has(vg_name):
+					vg_buckets[vg_name] = []
+				vg_buckets[vg_name].append(hull)
+	# Create one StaticBody3D per visgroup
+	for vg_name in vg_buckets:
+		var verts_list: Array = vg_buckets[vg_name]
+		var shapes: Array = Baker.build_convex_collision_shapes(
+			verts_list, convex_clean, convex_simplify
+		)
+		if shapes.is_empty():
+			continue
+		var body := StaticBody3D.new()
+		var safe_name: String = vg_name.replace(" ", "_").replace("/", "_")
+		body.name = "Collision_%s" % safe_name
+		body.collision_layer = layer
+		body.collision_mask = mask
+		for shape in shapes:
+			var col := CollisionShape3D.new()
+			col.shape = shape
+			body.add_child(col)
+		baked.add_child(body)
 
 
 func apply_collision_from_bake(target: Node3D, source: Node3D, layer: int) -> void:

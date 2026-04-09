@@ -55,6 +55,9 @@ func _root_shim_script() -> GDScript:
 extends Node3D
 
 signal user_message(text, level)
+signal bake_started()
+signal bake_progress(progress, message)
+signal bake_finished(success)
 
 var draft_brushes_node: Node3D
 var pending_node: Node3D
@@ -88,8 +91,14 @@ var bake_navmesh_agent_radius: float = 0.4
 var paint_layers = null
 var commit_freeze: bool = false
 var baker = null
+var bake_material_override: Material = null
 var _last_bake_duration_ms: int = 0
 var _dirty_brush_ids: Dictionary = {}
+var bake_collision_mode: int = 0
+var bake_convex_clean: bool = true
+var bake_convex_simplify: float = 0.0
+var visgroup_system = null
+var paint_system = null
 
 func is_entity_node(node: Node) -> bool:
 	return node.has_meta("entity_type")
@@ -103,6 +112,9 @@ func _find_brush_by_key(key: String) -> Node:
 
 func _log(_msg: String) -> void:
 	pass
+
+func _make_brush_material(_op: int) -> Material:
+	return null
 """
 	s.reload()
 	return s
@@ -139,6 +151,9 @@ func test_build_bake_options_returns_all_keys():
 	assert_has(opts, "uv2_texel_size")
 	assert_has(opts, "use_thread_pool")
 	assert_has(opts, "use_face_materials")
+	assert_has(opts, "collision_mode")
+	assert_has(opts, "convex_clean")
+	assert_has(opts, "convex_simplify")
 
 
 func test_build_bake_options_reflects_root_defaults():
@@ -984,3 +999,309 @@ func test_set_parsed_geometry_type_neither_property():
 	var ok: bool = HFBakeSystem._set_parsed_geometry_type(mock, 1)
 	assert_false(ok, "Should return false when neither property exists")
 	assert_push_error_count(0)  # It's a warning, not an error
+
+
+# ===========================================================================
+# _collect_brush_collision_data
+# ===========================================================================
+
+
+func test_collect_collision_data_skips_subtractive_brushes():
+	var additive = _make_brush(root.draft_brushes_node, Vector3.ZERO)
+	additive.operation = CSGShape3D.OPERATION_UNION
+	var subtractive = _make_brush(root.draft_brushes_node, Vector3(10, 0, 0))
+	subtractive.operation = CSGShape3D.OPERATION_SUBTRACTION
+	var data: Dictionary = bake_sys._collect_brush_collision_data(
+		[root.draft_brushes_node]
+	)
+	assert_eq(
+		data["hull_verts"].size(), 1,
+		"Only additive brush should contribute hull verts"
+	)
+
+
+func test_collect_collision_data_uses_real_mesh_verts():
+	# A cylinder brush should not produce 8 AABB-corner verts;
+	# it should have more points from the actual cylinder mesh.
+	var cyl = _make_brush(root.draft_brushes_node, Vector3.ZERO)
+	cyl.shape = 1  # BrushShape.CYLINDER — has radial segments
+	cyl.size = Vector3(4, 4, 4)
+	# Force visual rebuild so mesh_instance is populated
+	cyl._update_visuals()
+	var data: Dictionary = bake_sys._collect_brush_collision_data(
+		[root.draft_brushes_node]
+	)
+	assert_eq(data["hull_verts"].size(), 1, "Should collect one brush")
+	var verts: PackedVector3Array = data["hull_verts"][0]
+	assert_gt(
+		verts.size(), 8,
+		"Cylinder mesh should produce more than 8 box-corner verts"
+	)
+
+
+func test_collect_collision_data_flat_brush_list():
+	var b1 = _make_brush(root.draft_brushes_node, Vector3.ZERO)
+	var b2 = _make_brush(root.draft_brushes_node, Vector3(10, 0, 0))
+	var data: Dictionary = bake_sys._collect_brush_collision_data([b1, b2])
+	assert_eq(
+		data["hull_verts"].size(), 2,
+		"Flat brush list should collect both brushes"
+	)
+
+
+func test_collect_collision_data_skips_entity_brushes():
+	var entity_brush = _make_brush(root.draft_brushes_node, Vector3.ZERO)
+	entity_brush.set_meta("entity_type", "point")
+	var data: Dictionary = bake_sys._collect_brush_collision_data(
+		[root.draft_brushes_node]
+	)
+	assert_eq(
+		data["hull_verts"].size(), 0,
+		"Entity brushes should be excluded"
+	)
+
+
+func test_collect_collision_data_empty_with_no_brushes():
+	var data: Dictionary = bake_sys._collect_brush_collision_data(
+		[root.draft_brushes_node]
+	)
+	assert_eq(data["hull_verts"].size(), 0)
+	assert_eq(data["visgroups"].size(), 0)
+
+
+# ===========================================================================
+# Integration: bake_single / bake_chunked with collision_mode 2
+# ===========================================================================
+
+
+## Minimal mock baker that returns a pre-built BakedGeometry with a
+## FloorCollision body and one trimesh CollisionShape3D, avoiding real CSG.
+class MockBaker:
+	var call_count: int = 0
+	func bake_from_csg(
+		_csg: CSGCombiner3D, _mat_override, _layer: int, _mask: int, _options: Dictionary
+	) -> Node3D:
+		call_count += 1
+		var result = Node3D.new()
+		result.name = "BakedGeometry"
+		var body = StaticBody3D.new()
+		body.name = "FloorCollision"
+		body.collision_layer = _layer
+		body.collision_mask = _mask
+		result.add_child(body)
+		# Add a dummy trimesh collision shape
+		var col = CollisionShape3D.new()
+		col.shape = ConcavePolygonShape3D.new()
+		body.add_child(col)
+		# Add a dummy mesh instance (visual)
+		var mi = MeshInstance3D.new()
+		mi.name = "BakedMesh_0"
+		var box = BoxMesh.new()
+		box.size = Vector3(4, 4, 4)
+		mi.mesh = box
+		result.add_child(mi)
+		return result
+
+
+## Minimal mock visgroup system with assignable per-node visgroups.
+class MockVisgroupSystem:
+	## node_name -> PackedStringArray of visgroup names
+	var assignments: Dictionary = {}
+	func get_visgroups_of(node: Node) -> PackedStringArray:
+		return assignments.get(node.name, PackedStringArray())
+
+
+func _setup_mock_baker() -> MockBaker:
+	var mb = MockBaker.new()
+	root.baker = mb
+	return mb
+
+
+func _setup_mock_visgroups(mapping: Dictionary) -> MockVisgroupSystem:
+	var mvs = MockVisgroupSystem.new()
+	mvs.assignments = mapping
+	root.visgroup_system = mvs
+	return mvs
+
+
+func test_bake_single_mode2_creates_visgroup_bodies():
+	_setup_mock_baker()
+	var b1 = _make_brush(root.draft_brushes_node, Vector3.ZERO)
+	b1.name = "brush_a"
+	var b2 = _make_brush(root.draft_brushes_node, Vector3(10, 0, 0))
+	b2.name = "brush_b"
+	_setup_mock_visgroups({
+		"brush_a": PackedStringArray(["room_1"]),
+		"brush_b": PackedStringArray(["room_2"]),
+	})
+	var options: Dictionary = bake_sys.build_bake_options()
+	options["collision_mode"] = 2
+	var baked: Node3D = await bake_sys.bake_single(1, options)
+	assert_not_null(baked, "bake_single should return a baked node")
+	add_child_autoqfree(baked)
+	# FloorCollision should have been removed by partitioning
+	assert_null(
+		baked.get_node_or_null("FloorCollision"),
+		"Original FloorCollision should be removed after visgroup partitioning"
+	)
+	# Should have per-visgroup collision bodies
+	var collision_room1: StaticBody3D = baked.get_node_or_null("Collision_room_1") as StaticBody3D
+	var collision_room2: StaticBody3D = baked.get_node_or_null("Collision_room_2") as StaticBody3D
+	assert_not_null(collision_room1, "Should have Collision_room_1 body")
+	assert_not_null(collision_room2, "Should have Collision_room_2 body")
+	# Each body should have ConvexPolygonShape3D children
+	if collision_room1:
+		var has_convex := false
+		for child in collision_room1.get_children():
+			if child is CollisionShape3D and child.shape is ConvexPolygonShape3D:
+				has_convex = true
+		assert_true(has_convex, "room_1 body should contain ConvexPolygonShape3D")
+	if collision_room2:
+		var has_convex := false
+		for child in collision_room2.get_children():
+			if child is CollisionShape3D and child.shape is ConvexPolygonShape3D:
+				has_convex = true
+		assert_true(has_convex, "room_2 body should contain ConvexPolygonShape3D")
+
+
+func test_bake_single_mode2_heightmap_collision_survives():
+	_setup_mock_baker()
+	_make_brush(root.draft_brushes_node, Vector3.ZERO)
+	_setup_mock_visgroups({})
+	# Set up a heightmap mesh that _append_heightmap_meshes_to_baked will find
+	var hm_container = Node3D.new()
+	hm_container.name = "GeneratedHeightmapFloors"
+	root.add_child(hm_container)
+	root.generated_heightmap_floors = hm_container
+	var hm_mesh = MeshInstance3D.new()
+	hm_mesh.name = "HeightmapFloor_0"
+	var plane = PlaneMesh.new()
+	plane.size = Vector2(10, 10)
+	hm_mesh.mesh = plane
+	hm_container.add_child(hm_mesh)
+	var options: Dictionary = bake_sys.build_bake_options()
+	options["collision_mode"] = 2
+	var baked: Node3D = await bake_sys.bake_single(1, options)
+	assert_not_null(baked, "bake_single should return a baked node")
+	add_child_autoqfree(baked)
+	# Visgroup partitioning should have removed the original FloorCollision,
+	# but heightmap append should have created a new one.
+	var hm_body: StaticBody3D = baked.get_node_or_null("FloorCollision") as StaticBody3D
+	assert_not_null(
+		hm_body,
+		"FloorCollision should be re-created by heightmap append after partitioning"
+	)
+	# The heightmap body should contain a trimesh collision from the plane mesh
+	if hm_body:
+		var has_trimesh := false
+		for child in hm_body.get_children():
+			if child is CollisionShape3D and child.shape is ConcavePolygonShape3D:
+				has_trimesh = true
+		assert_true(has_trimesh, "Heightmap FloorCollision should have ConcavePolygonShape3D")
+
+
+func test_bake_single_mode2_subtractive_brushes_excluded():
+	_setup_mock_baker()
+	var additive = _make_brush(root.draft_brushes_node, Vector3.ZERO)
+	additive.name = "add_brush"
+	additive.operation = CSGShape3D.OPERATION_UNION
+	var subtractive = _make_brush(root.draft_brushes_node, Vector3(10, 0, 0))
+	subtractive.name = "sub_brush"
+	subtractive.operation = CSGShape3D.OPERATION_SUBTRACTION
+	_setup_mock_visgroups({
+		"add_brush": PackedStringArray(["room_a"]),
+		"sub_brush": PackedStringArray(["room_b"]),
+	})
+	var options: Dictionary = bake_sys.build_bake_options()
+	options["collision_mode"] = 2
+	var baked: Node3D = await bake_sys.bake_single(1, options)
+	assert_not_null(baked)
+	add_child_autoqfree(baked)
+	# The additive brush should have a visgroup body
+	assert_not_null(
+		baked.get_node_or_null("Collision_room_a"),
+		"Additive brush visgroup body should exist"
+	)
+	# The subtractive brush should NOT have a visgroup body
+	assert_null(
+		baked.get_node_or_null("Collision_room_b"),
+		"Subtractive brush should not produce a collision body"
+	)
+
+
+func test_bake_single_mode2_preserves_collision_layer():
+	_setup_mock_baker()
+	_make_brush(root.draft_brushes_node, Vector3.ZERO)
+	_setup_mock_visgroups({})
+	var options: Dictionary = bake_sys.build_bake_options()
+	options["collision_mode"] = 2
+	var target_layer: int = 7
+	var baked: Node3D = await bake_sys.bake_single(target_layer, options)
+	assert_not_null(baked)
+	add_child_autoqfree(baked)
+	# Find the partitioned collision body (default visgroup)
+	var default_body: StaticBody3D = baked.get_node_or_null("Collision__default") as StaticBody3D
+	assert_not_null(default_body, "Default visgroup body should exist")
+	if default_body:
+		assert_eq(
+			default_body.collision_layer, target_layer,
+			"Partitioned body should inherit collision layer from original"
+		)
+
+
+func test_bake_chunked_mode2_creates_per_chunk_visgroup_bodies():
+	_setup_mock_baker()
+	# Place brushes far apart so they land in different chunks at chunk_size=8
+	var b1 = _make_brush(root.draft_brushes_node, Vector3.ZERO)
+	b1.name = "chunk0_brush"
+	var b2 = _make_brush(root.draft_brushes_node, Vector3(100, 0, 0))
+	b2.name = "chunk1_brush"
+	_setup_mock_visgroups({
+		"chunk0_brush": PackedStringArray(["lobby"]),
+		"chunk1_brush": PackedStringArray(["arena"]),
+	})
+	var options: Dictionary = bake_sys.build_bake_options()
+	options["collision_mode"] = 2
+	var baked: Node3D = await bake_sys.bake_chunked(8.0, 1, options)
+	assert_not_null(baked, "bake_chunked should return a container")
+	add_child_autoqfree(baked)
+	# Should have BakedChunk_* children
+	var chunk_nodes: Array = []
+	for child in baked.get_children():
+		if child.name.begins_with("BakedChunk_"):
+			chunk_nodes.append(child)
+	assert_gte(chunk_nodes.size(), 2, "Should have at least 2 chunks for distant brushes")
+	# Each chunk should have its own visgroup collision body, not FloorCollision
+	var found_lobby := false
+	var found_arena := false
+	for chunk in chunk_nodes:
+		assert_null(
+			chunk.get_node_or_null("FloorCollision"),
+			"FloorCollision should be removed by visgroup partitioning in chunk %s" % chunk.name
+		)
+		if chunk.get_node_or_null("Collision_lobby"):
+			found_lobby = true
+		if chunk.get_node_or_null("Collision_arena"):
+			found_arena = true
+	assert_true(found_lobby, "One chunk should have Collision_lobby body")
+	assert_true(found_arena, "One chunk should have Collision_arena body")
+
+
+func test_bake_single_mode0_preserves_trimesh():
+	# Mode 0 should leave FloorCollision intact with original trimesh
+	_setup_mock_baker()
+	_make_brush(root.draft_brushes_node, Vector3.ZERO)
+	_setup_mock_visgroups({})
+	var options: Dictionary = bake_sys.build_bake_options()
+	options["collision_mode"] = 0
+	var baked: Node3D = await bake_sys.bake_single(1, options)
+	assert_not_null(baked)
+	add_child_autoqfree(baked)
+	var body: StaticBody3D = baked.get_node_or_null("FloorCollision") as StaticBody3D
+	assert_not_null(body, "Mode 0 should preserve FloorCollision")
+	if body:
+		var has_concave := false
+		for child in body.get_children():
+			if child is CollisionShape3D and child.shape is ConcavePolygonShape3D:
+				has_concave = true
+		assert_true(has_concave, "Mode 0 should keep ConcavePolygonShape3D from mock baker")
