@@ -370,15 +370,18 @@ func _check_non_planar_faces(brush: DraftBrush, issues: Array) -> void:
 			if dev > max_deviation:
 				max_deviation = dev
 		if max_deviation > planarity_tolerance:
-			issues.append({
-				"type": "non_planar",
-				"severity": 1,
-				"message": (
-					"Brush '%s' face %d has %.4f unit vertex drift (tolerance %.4f)"
-					% [brush.name, face_idx, max_deviation, planarity_tolerance]
-				),
-				"node": brush
-			})
+			issues.append(
+				{
+					"type": "non_planar",
+					"severity": 1,
+					"message":
+					(
+						"Brush '%s' face %d has %.4f unit vertex drift (tolerance %.4f)"
+						% [brush.name, face_idx, max_deviation, planarity_tolerance]
+					),
+					"node": brush
+				}
+			)
 
 
 # ---------------------------------------------------------------------------
@@ -428,15 +431,18 @@ func _check_micro_gaps(all_brushes: Array, issues: Array) -> void:
 					flagged_pairs[pair_key] = flagged_pairs.get(pair_key, 0) + 1
 	for pair_key: String in flagged_pairs:
 		var count: int = flagged_pairs[pair_key]
-		issues.append({
-			"type": "micro_gap",
-			"severity": 1,
-			"message": (
-				"Micro-gap: %d near-coincident vertex pair(s) between %s (weld tolerance %.4f)"
-				% [count, pair_key, weld_tolerance]
-			),
-			"node": null
-		})
+		issues.append(
+			{
+				"type": "micro_gap",
+				"severity": 1,
+				"message":
+				(
+					"Micro-gap: %d near-coincident vertex pair(s) between %s (weld tolerance %.4f)"
+					% [count, pair_key, weld_tolerance]
+				),
+				"node": null
+			}
+		)
 
 
 func _brush_pair_key(a: DraftBrush, b: DraftBrush) -> String:
@@ -568,7 +574,5 @@ func _cell_keys(v: Vector3, cell_size: float) -> Array:
 	for dx in [-cell_size, 0.0, cell_size]:
 		for dy in [-cell_size, 0.0, cell_size]:
 			for dz in [-cell_size, 0.0, cell_size]:
-				keys.append(
-					"%s,%s,%s" % [cx + dx, cy + dy, cz + dz]
-				)
+				keys.append("%s,%s,%s" % [cx + dx, cy + dy, cz + dz])
 	return keys
