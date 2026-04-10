@@ -47,6 +47,7 @@ const HFIOPresetsType = preload("systems/hf_io_presets.gd")
 const HFDisplacementSystemType = preload("systems/hf_displacement_system.gd")
 const HFBevelSystemType = preload("systems/hf_bevel_system.gd")
 const HFPrototypeTextures = preload("hf_prototype_textures.gd")
+const HFIORuntime = preload("hf_io_runtime.gd")
 
 const RELOAD_LOCK_PATH := "res://.hammerforge/reload.lock"
 const RELOAD_POLL_SECONDS := 0.5
@@ -100,6 +101,7 @@ var _grid_snap: float = 16.0
 @export var bake_use_multimesh: bool = false
 @export var bake_use_atlas: bool = false
 @export var bake_auto_connectors: bool = false
+@export var bake_wire_io: bool = false
 @export var bake_connector_mode: int = 0  # HFAutoConnector.ConnectorMode (RAMP=0, STAIRS=1, AUTO=2)
 @export var bake_connector_stair_height: float = 0.25
 @export var bake_connector_width: int = 2
@@ -1814,6 +1816,18 @@ func export_playtest_scene(path: String) -> bool:
 	env.environment = environment
 	scene_root.add_child(env)
 	env.owner = scene_root
+
+	# Wire entity I/O connections into Godot signals
+	var has_io := false
+	for child in scene_root.get_children():
+		if not child.get_meta("entity_io_outputs", []).is_empty():
+			has_io = true
+			break
+	if has_io:
+		var io_dispatcher := HFIORuntime.new()
+		io_dispatcher.name = "HFIODispatcher"
+		scene_root.add_child(io_dispatcher)
+		io_dispatcher.owner = scene_root
 
 	# Pack and save
 	var packed := PackedScene.new()

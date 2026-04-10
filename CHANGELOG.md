@@ -5,6 +5,51 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **I/O-to-Signal runtime bridge** (Apr 2026): Entity I/O connections now automatically translate
+  into live Godot signals at bake and export time, eliminating the need for manual runtime wiring.
+
+  New `HFIORuntime` dispatcher node (`hf_io_runtime.gd`, `class_name HFIORuntime`) scans entities
+  for `entity_io_outputs` metadata and builds a runtime connection table keyed by node instance ID.
+  On output fire, the dispatcher delivers to target entities via a 4-tier resolution cascade:
+  1. Direct method call (e.g. `target.Open()`)
+  2. Snake-case variant (e.g. `target.turn_on()` for input name `TurnOn`)
+  3. Generic handler (`target._on_io_input(input_name, parameter)`)
+  4. User signal emission (`io_Open` signal on target)
+
+  Source entities receive `io_<OutputName>` user signals so game scripts can use standard
+  `emit_signal("io_OnTrigger", "")` / `connect()` patterns. Delay and fire-once semantics are
+  handled automatically. Debug signals `io_fired` and `io_received` emit per-delivery for
+  accurate fan-out reporting.
+
+  **Integration points:**
+  - `export_playtest_scene()` auto-injects an `HFIODispatcher` child when entities have I/O
+    connections — exported scenes are play-ready with no additional setup.
+  - New `bake_wire_io` export on LevelRoot (Inspector toggle, default off): when enabled,
+    `postprocess_bake()` attaches a dispatcher to the baked container with `extra_scan_roots`
+    pointing to the sibling `entities_node`.
+  - `HFEntitySystem.fire_output(entity, output_name, parameter)` delegates to the dispatcher
+    when present, falls back to direct multi-target resolution otherwise.
+
+  **Robustness:**
+  - Connections keyed by node instance ID — duplicate source names are isolated per-instance.
+    `fire_from(entity)` dispatches only that entity's connections; `fire("name")` fans out to
+    all sources sharing the name.
+  - `extra_scan_root_paths: Array[NodePath]` (@export) persists across scene save/reload.
+    Transient `extra_scan_roots: Array[Node]` covers live-session bake paths.
+  - `wire()` is safe to call repeatedly: `_disconnect_all_signals()` tears down stale lambdas
+    before reconnecting; `_prune_overlapping_roots()` deduplicates by instance ID and removes
+    descendant roots covered by an ancestor, preventing double-registration.
+  - `_find_dispatcher()` walks up to tree root as fallback when `current_scene` is null
+    (editor context, GUT tests).
+
+  36 new tests in `test_io_runtime.gd`: wiring, method dispatch (direct/snake-case/generic/signal
+  fallback), parameter passing/override, fire-once, user signal creation and emission, multi-target
+  fan-out, chain reactions, debug signal accuracy (per-target `io_fired`/`io_received`), missing
+  target safety, rewire idempotency (no duplicate handlers), duplicate source isolation
+  (`fire_from` vs `fire`), extra scan roots (transient, NodePath, overlap dedup, descendant
+  pruning), `fire_on()` static helper, `HFEntitySystem.fire_output()` fallback.
+  Total: **1357 tests across 74 files**.
+
 - **Collision chunking for bot navigation** (Apr 2026): Replaced monolithic ConcavePolygonShape3D
   collision with a 3-tier collision mode system for better physics broadphase and navigation mesh
   generation. Configured via `bake_collision_mode` on LevelRoot (Inspector export):

@@ -171,6 +171,31 @@ The compact toolbar shows icon + text labels (Draw, Select, Add, Sub, Paint, Ext
   - **I/O connection lines**: Bézier curves with arrowheads, color-coded by output type (cyan=OnTrigger, red=OnDamage, yellow=OnUse, green=OnOpen, magenta=OnBreak, orange=OnTimer). Fire-once connections pulse brighter; delayed connections dim proportionally. Parallel connections between the same pair offset laterally.
   - **Highlight Connected**: when enabled, all entities wired to the selected entity display a pulsing overlay. The context toolbar shows an "HL" toggle and an I/O summary label ("Triggers 2 targets (door1, light1)"). The highlight state stays in sync between the context toolbar and the wiring panel.
 
+### I/O Runtime Signal Translation
+
+Entity I/O connections are automatically translated into live Godot signals when you bake or export a playtest scene. No manual signal wiring is required.
+
+**How it works**: An `HFIODispatcher` node is injected into the exported/baked scene. On `_ready()`, it scans all entities for `entity_io_outputs` metadata and builds a connection table. When a source entity fires an output, the dispatcher delivers to each target via:
+1. Direct method call (e.g. `Open()`, `Kill()`)
+2. Snake-case variant (e.g. `turn_on()` for `TurnOn`)
+3. Generic handler (`_on_io_input(input_name, parameter)`)
+4. User signal (`io_Open` emitted on the target)
+
+**Firing outputs from game scripts**:
+```gdscript
+# From any entity script at runtime:
+HFIORuntime.fire_on(self, "OnTrigger")
+
+# Or via the dispatcher directly:
+var dispatcher = $HFIODispatcher
+dispatcher.fire("my_button", "OnPressed", "fast")
+```
+
+**Configuration**:
+- **Export Playtest**: always auto-injects the dispatcher when entities have I/O connections.
+- **Bake Wire I/O**: enable the `bake_wire_io` checkbox on LevelRoot (Inspector) to attach the dispatcher to the baked container during regular bakes.
+- Source entities receive `io_<OutputName>` user signals (e.g. `io_OnTrigger`) so you can also use standard `connect()` / `emit_signal()` patterns.
+
 ### Manage tab (collapsible sections)
 - **Bake**: Bake button, Bake Selected, Bake Changed, Check Bake Issues, Dry Run, Validate Level/Fix. Options: Merge Meshes, Generate LODs, Lightmap UV2, Texel Size, Navmesh (cell size, agent height), Use Face Materials, Preview Mode (Full/Wireframe/Proxy), Collision Mode (Trimesh/Convex/Visgroup), Convex Clean, Convex Simplify, Bake Estimate label, Quick Play, Play from Camera, Play Selected Area.
 - **Actions**: Create Floor, Apply/Clear/Commit/Restore Cuts, Clear Brushes.

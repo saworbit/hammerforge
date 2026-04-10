@@ -100,6 +100,8 @@ addons/hammerforge/
     hf_carve_system.gd     Boolean-subtract carve (progressive-remainder box slicing)
     hf_io_visualizer.gd    Entity I/O connection lines (Bézier curves, color-coded, highlight pulse)
     hf_io_presets.gd       Reusable I/O connection presets (built-in + user-saved, target tag mapping)
+
+  hf_io_runtime.gd        Runtime I/O-to-Signal dispatcher (auto-wires entity_io_outputs to Godot signals on bake/export)
     hf_subtract_preview.gd Wireframe AABB intersection overlay for subtract brushes (debounced, pooled)
     hf_vertex_system.gd    Vertex/edge selection, move, split, merge with convexity validation
     hf_spawn_system.gd     Player spawn lookup, validation, auto-fix, debug visualisation
@@ -164,6 +166,7 @@ addons/hammerforge/
 - **Scatter brush.** `HFScatterBrush` (`paint/hf_scatter_brush.gd`) generates scatter transforms for circle or spline shapes with height/slope filtering. `build_preview()` creates a MultiMesh for preview. `commit()` creates a permanent `MultiMeshInstance3D`. Dock wires UI controls → `_build_scatter_settings()` → preview/commit. Spline mode populates control points from `_selection_nodes` positions.
 - **I/O connection presets.** `systems/hf_io_presets.gd` manages built-in and user-saved connection presets. 6 built-in presets (Door+Light+Sound, Button→Toggle, etc.) are always available. User presets persist to `EditorInterface.get_editor_paths().get_config_dir()` in editor, `user://` fallback for tests. `apply_preset(source, preset, target_map)` maps target tags to actual entity names ("self" → source name). `save_entity_as_preset()` captures existing connections. Tests use explicit temp paths with cleanup in `after_each()`.
 - **I/O wiring panel.** `ui/hf_io_wiring_panel.gd` is a `VBoxContainer` embedded in the Entities tab via `entity_tab_builder.gd`. Shows connection summary, outputs list, quick-wire form, and preset picker with target tag mapping. Emits `connection_added`, `preset_applied`, `highlight_toggled`. `_sync_highlight_button()` reads `_io_visualizer.highlight_connected` and uses `set_pressed_no_signal()` to avoid signal loops. Called from `set_source_entity()` and `dock.sync_wiring_highlight_state()`.
+- **I/O runtime dispatcher.** `hf_io_runtime.gd` (`HFIORuntime`) translates entity I/O metadata into live Godot signals. Injected automatically by `export_playtest_scene()` and optionally by `postprocess_bake()` (when `bake_wire_io = true`). Connections are keyed by source node instance ID (not name) so duplicate source names stay isolated. Target delivery iterates all nodes sharing a name (matching `find_entities_by_name()` semantics). `wire()` is idempotent: `_disconnect_all_signals()` tears down stale lambdas; `_prune_overlapping_roots()` deduplicates scan roots by instance ID and removes descendants covered by an ancestor. `extra_scan_root_paths: Array[NodePath]` (@export) persists across scene save/reload for the bake path where the dispatcher lives under `baked_container` but entities are under a sibling node. `HFEntitySystem.fire_output()` delegates to the dispatcher via `fire_from()` when present, falls back to direct multi-target resolution otherwise.
 - **Highlight Connected sync.** `hf_io_visualizer.highlight_connected` is the single source of truth. Context toolbar reads it from `state["highlight_connected"]` via `set_pressed_no_signal()`. Wiring panel syncs via `_sync_highlight_button()`. Plugin.gd handles `"highlight_connected"` action from toolbar, calls `root.set_highlight_connected()` then `dock.sync_wiring_highlight_state()`. Panel's `highlight_toggled` signal flows through dock to visualizer then toolbar state push.
 - **Context hints.** Per-tab hint labels at the bottom of each dock tab update via `_update_context_hints()` in `dock.gd`. Driven by `_hints_dirty` flag alongside `_update_disabled_hints()`.
 - **Face hover highlight.** `level_root.highlight_hovered_face(camera, mouse_pos, color)` performs a FaceSelector raycast and renders a semi-transparent overlay on the hit face. Used by `plugin.gd` in extrude mode when idle. Call `clear_face_hover_highlight()` when switching tools.
@@ -203,7 +206,7 @@ addons/hammerforge/
 The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on push and PR to `main`:
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
-- **GUT unit + integration tests** -- 1321 tests across 73 test files (runs Godot headless)
+- **GUT unit + integration tests** -- 1357 tests across 74 test files (runs Godot headless)
 
 Run locally before pushing:
 ```
@@ -266,6 +269,7 @@ Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framewor
 | `test_io_presets.gd` | 21 | Builtin preset structure, user preset CRUD, apply with target mapping/self/delay/fire_once, save entity as preset, get target tags |
 | `test_io_visualizer_enhanced.gd` | 20 | Color logic (selected/fire_once/type/default/delay), Bézier math (endpoints/midpoint/tangent), connection summary, highlight connected toggle/clear |
 | `test_io_highlight_sync.gd` | 16 | Panel/toolbar sync from visualizer, set_pressed_no_signal contracts, signal emission, signal-driven integration (toolbar↔panel propagation, alternating sources) |
+| `test_io_runtime.gd` | 36 | I/O-to-Signal dispatcher: wiring, method dispatch (direct/snake-case/generic/signal fallback), parameters, fire-once, user signals, multi-target fan-out, chain reactions, debug signal accuracy, rewire idempotency, duplicate source isolation, extra scan roots (transient/NodePath/overlap/descendant pruning), fire_on() static helper, HFEntitySystem.fire_output() fallback |
 | `test_brush_to_heightmap.gd` | 11 | Default settings, empty input, single/multi brush conversion, height scale, cell bounds, target layer reuse, grid properties, display name, height roundtrip at non-zero origin |
 | `test_scatter_brush.gd` | 14 | Default settings, circle scatter (transforms, empty/null layer, deterministic), height/slope filtering, spline scatter (basic, too few points), preview (dots, empty, wireframe), commit (creates MMI, no mesh), scale variation |
 | `test_path_tool_extras.gd` | 22 | Extended schema, PathExtra defaults/options, stairs (flat/slope/step count/group id/faces), railings (basic/both sides/post count/group id), trim (basic/material/both sides/multi segment/group id), HUD lines, vertical placement, edge cases |

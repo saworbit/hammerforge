@@ -5,6 +5,7 @@ class_name HFBakeSystem
 const PrefabFactory = preload("../prefab_factory.gd")
 const DraftBrush = preload("../brush_instance.gd")
 const HFAutoConnector = preload("../paint/hf_auto_connector.gd")
+const HFIORuntime = preload("../hf_io_runtime.gd")
 
 ## Bake preview mode: FULL produces final geometry, WIREFRAME skips materials
 ## and generates unshaded wireframe, PROXY uses simplified box meshes.
@@ -373,6 +374,44 @@ func postprocess_bake(container: Node3D, selection_only: bool = false) -> void:
 		_append_auto_connectors(container)
 	if root.bake_navmesh:
 		bake_navmesh(container)
+	var bake_wire_io := false
+	if "bake_wire_io" in root:
+		bake_wire_io = bool(root.get("bake_wire_io"))
+	if bake_wire_io and not selection_only:
+		_attach_io_dispatcher(container)
+
+
+## Attach an HFIORuntime dispatcher to the baked container so that entity I/O
+## connections are wired as live Godot signals at runtime.  The dispatcher is
+## parented under the baked container but also scans entities_node (a sibling
+## subtree) via extra_scan_roots.
+func _attach_io_dispatcher(container: Node3D) -> void:
+	# Only attach if there are entities with I/O connections
+	if not root.entities_node:
+		return
+	var has_io := false
+	for child in root.entities_node.get_children():
+		if not child.get_meta("entity_io_outputs", []).is_empty():
+			has_io = true
+			break
+	if not has_io:
+		return
+	# Remove any existing dispatcher
+	var existing: Node = container.find_child("HFIODispatcher", false)
+	if existing:
+		container.remove_child(existing)
+		existing.free()
+	var dispatcher := HFIORuntime.new()
+	dispatcher.name = "HFIODispatcher"
+	# The dispatcher lives under the baked container, but entities live under
+	# root.entities_node (a sibling).  Tell it to scan both subtrees.
+	# Set the transient ref for the live session:
+	dispatcher.extra_scan_roots.append(root.entities_node)
+	container.add_child(dispatcher)
+	# Also store the serializable NodePath so the scan survives scene save/reload:
+	var entities_path: NodePath = dispatcher.get_path_to(root.entities_node)
+	dispatcher.extra_scan_root_paths.append(entities_path)
+	root._assign_owner_recursive(dispatcher)
 
 
 func count_brushes_in(container: Node3D) -> int:

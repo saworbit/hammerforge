@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/Godot-4.6%2B-478cbf?logo=godot-engine&logoColor=white" alt="Godot 4.6+">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
   <img src="https://img.shields.io/badge/Status-Early%20Alpha-red" alt="Early Alpha">
-  <img src="https://img.shields.io/badge/Tests-1321%20passing-brightgreen" alt="1321 tests passing">
+  <img src="https://img.shields.io/badge/Tests-1357%20passing-brightgreen" alt="1357 tests passing">
   <img src="https://img.shields.io/badge/GDScript-25k%2B%20lines-blueviolet" alt="25k+ lines">
 </p>
 
@@ -139,7 +139,7 @@ Grid-based paint layers with chunked storage for large worlds:
 ### Entities and I/O
 
 - **Data-driven entity types** from `entities.json` (point entities, brush entities like func_detail, func_wall, trigger volumes)
-- **Source-style I/O connections** -- wire output events to target inputs with parameter, delay, and fire-once options
+- **Source-style I/O connections** -- wire output events to target inputs with parameter, delay, and fire-once options; automatically translated to Godot signals on bake/export via `HFIORuntime` dispatcher (direct method calls, snake_case fallback, generic handler, or user signal emission)
 - **Smart auto-routed connection lines** -- quadratic Bezier curves with arrowheads, parallel route offset, color-coded by output type (cyan=OnTrigger, red=OnDamage, yellow=OnUse, etc.) and dimmed by delay
 - **I/O wiring panel** -- quick-wire form (output/target/input/param/delay/once), connection summary, and preset picker embedded in the Entities tab
 - **Connection presets** -- 6 built-in patterns (Door+Light+Sound, Button→Toggle, Alarm Sequence, etc.) plus user-saved presets with target tag mapping
@@ -189,7 +189,8 @@ Grid-based paint layers with chunked storage for large worlds:
 | **Quick Play** | Bake + validate spawn + run with FPS controller |
 | **Play from Camera** | Quick Play from the editor camera position and yaw |
 | **Play Selected Area** | Auto-cordon to selection, bake + play that region only |
-| **Export Playtest** | Bake + pack scene + launch as standalone playable scene |
+| **Export Playtest** | Bake + pack scene + launch as standalone playable scene (I/O auto-wired) |
+| **Wire I/O** | Auto-translate entity I/O connections to Godot signals in baked output |
 
 ---
 
@@ -235,7 +236,8 @@ plugin.gd            EditorPlugin — input routing, toolbar, viewport overlay
        ├─ HFExtrudeTool     Face extrusion (Up/Down) via FaceSelector
        ├─ HFPaintSystem     Floor paint layers, heightmaps, blend, surface paint
        ├─ HFBakeSystem      CSG assembly, mesh merge, LOD, navmesh, collision, incremental/selection bake, preview modes
-       ├─ HFEntitySystem    Entity CRUD, I/O connections, definition loading
+       ├─ HFEntitySystem    Entity CRUD, I/O connections, definition loading, fire_output()
+       ├─ HFIORuntime       Runtime I/O-to-Signal dispatcher (auto-injected on bake/export)
        ├─ HFStateSystem     Undo/redo snapshots, transactions, autosave
        ├─ HFFileSystem      Threaded .hflevel / .map / .glb I/O
        ├─ HFValidationSystem Level integrity checks, bake issue detection
@@ -329,7 +331,7 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 
 ## Testing
 
-1172 tests across 69 files using the [GUT](https://github.com/bitwes/Gut) framework, including unit tests and end-to-end integration tests. All checks run on every push via GitHub Actions.
+1357 tests across 74 files using the [GUT](https://github.com/bitwes/Gut) framework, including unit tests and end-to-end integration tests. All checks run on every push via GitHub Actions.
 
 ```bash
 # Run all tests headless
@@ -380,6 +382,7 @@ See [ROADMAP.md](ROADMAP.md) for the full plan.
 - Quality-of-Life & Polish (theme sync, undo history browser, multi-ruler measure tool, performance monitor, export playtest)
 - Terrain & Organic Enhancements (brush-to-heightmap, foliage scatter, path tool extras)
 - Learning & Discovery Aids (coach marks, operation replay timeline, fuzzy command palette, example library)
+- I/O-to-Signal runtime bridge (auto-wire entity I/O connections to Godot signals on bake/export)
 - I/O Connections & Entity Polish (curved auto-routed lines, connection presets, wiring panel, Highlight Connected)
 - Bake & Quick Play optimizations (Bake Selected, Bake Changed, preview modes, Play from Camera, Play Selected Area)
 - Prefab & Group Enhancements (variants, live-linked, tags/search, quick group-to-prefab)

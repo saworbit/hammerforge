@@ -87,7 +87,7 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | Subsystem | class_name | Responsibility |
 |-----------|------------|----------------|
 | `hf_grid_system.gd` | `HFGridSystem` | Editor grid setup, visibility, transform, axis-plane intersection |
-| `hf_entity_system.gd` | `HFEntitySystem` | Entity definitions, placement, capture/restore, Entity I/O connections, dangling connection cleanup |
+| `hf_entity_system.gd` | `HFEntitySystem` | Entity definitions, placement, capture/restore, Entity I/O connections, dangling connection cleanup, `fire_output()` |
 | `hf_brush_system.gd` | `HFBrushSystem` | Brush CRUD, picking, pending/committed cuts, materials, face selection, hollow, clip, merge, tie/untie. O(1) brush ID cache. Returns `HFOpResult` on failable ops. Auto-cleans references on deletion |
 | `hf_drag_system.gd` | `HFDragSystem` | Drag lifecycle, preview management, axis locking, height computation. Owns `HFInputState` |
 | `hf_bake_system.gd` | `HFBakeSystem` | Bake orchestration (single/chunked/selected/dirty), CSG assembly, navmesh, collision, preview modes (Full/Wireframe/Proxy), time estimate |
@@ -292,11 +292,13 @@ Foliage Populator
 - Source-style trigger/target system modeled after Hammer/Source entity I/O.
 - Connections stored as `entity_io_outputs` meta (Array of Dictionaries) on entity nodes.
 - Each connection: `{output_name, target_name, input_name, parameter, delay, fire_once}`.
-- `HFEntitySystem` provides: `add_entity_output()`, `remove_entity_output()`, `get_entity_outputs()`, `find_entities_by_name()`, `get_all_connections()`.
+- `HFEntitySystem` provides: `add_entity_output()`, `remove_entity_output()`, `get_entity_outputs()`, `find_entities_by_name()`, `get_all_connections()`, `fire_output()`.
 - `find_entities_by_name()` searches both `entities_node` and `draft_brushes_node` for target resolution.
+- `fire_output(entity, output_name, parameter)` delegates to `HFIORuntime` dispatcher if present in the scene, falls back to direct multi-target resolution otherwise.
 - I/O connections are serialized with entity info in `.hflevel` saves and undo/redo state via `capture_entity_info()` / `restore_entity_from_info()`.
 - Dock UI: collapsible "Entity I/O" section in Entities tab with fields for Output, Target, Input, Parameter, Delay, Fire Once. Add/Remove buttons and connection ItemList. Auto-refreshes on entity selection change.
 - **Viewport visualization**: `HFIOVisualizer` draws ImmediateMesh lines between connected entities. Color-coded: green=standard, orange=fire_once, yellow=selected entity connections. Throttled refresh (10 frames). "Show I/O Lines" checkbox in Entities tab.
+- **Runtime signal translation**: `HFIORuntime` (`hf_io_runtime.gd`) auto-wires `entity_io_outputs` metadata into Godot signals on bake/export. Auto-injected by `export_playtest_scene()` and optionally by `postprocess_bake()` (`bake_wire_io` export). Connections keyed by node instance ID; targets resolved to all matching nodes. Delivery cascade: direct method → snake_case → `_on_io_input()` → user signal. Source entities receive `io_<OutputName>` user signals. Delay via `SceneTreeTimer`, fire-once tracked per-connection. `extra_scan_root_paths: Array[NodePath]` (@export) persists scan roots across scene save/reload. `_prune_overlapping_roots()` deduplicates by instance ID and ancestor/descendant relationship.
 
 ### Brush Entity Classes
 - Brushes can be tagged with a `brush_entity_class` meta: `func_detail`, `func_wall`, `trigger_once`, `trigger_multiple`.

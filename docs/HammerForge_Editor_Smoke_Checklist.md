@@ -345,6 +345,7 @@ Enable the HammerForge plugin if it is not already enabled.
 - Open **Manage → Bake** section. Click **Export Playtest Build**.
 - If no spawn exists, confirm a toast about auto-creating a default spawn, and confirm the spawn creation is undoable.
 - Confirm the level bakes and a playtest scene launches.
+- If entities have I/O connections, confirm the exported scene contains an `HFIODispatcher` child node.
 - Stop the playtest. Undo; confirm the auto-created spawn is removed.
 
 ### 26. Displacement Surfaces
@@ -372,11 +373,18 @@ Enable the HammerForge plugin if it is not already enabled.
 - Set Inset to a very large value (larger than the face). Click **Inset Face**. Confirm error toast.
 - Undo; confirm the face returns to normal.
 
-### 28. Cleanup / Persistence
+### 28. I/O Runtime Signal Translation
+- Create two entities (e.g. `button1` and `door1`).
+- Wire an I/O connection: button1 output `OnPressed` → door1 input `Open`.
+- Enable **Bake Wire I/O** in LevelRoot Inspector.
+- Bake the level. Confirm the baked container has an `HFIODispatcher` child in the scene tree.
+- Export a Playtest Build. Confirm the exported scene also contains an `HFIODispatcher` node.
+
+### 29. Cleanup / Persistence
 - Dismiss the tutorial with and without `Don't show again` checked.
 - Restart Godot and confirm the `show_welcome` preference behaves as expected.
 - Reopen the dock and confirm no layout corruption remains after closing the tutorial and shortcut dialog.
 
 ## Expected Outcome
 
-If all steps pass, the remaining risk on the tutorial/prefab/shortcut/subtract-preview/vertex-editing/polygon/path/material-browser/spawn-system/context-toolbar/command-palette/terrain-scatter/measure-tool/history-browser/performance-monitor/theme-sync/export-playtest/displacement/bevel/auto-connectors/validation-weld-planarity feature set is low and limited mainly to edge cases outside this smoke path.
+If all steps pass, the remaining risk on the tutorial/prefab/shortcut/subtract-preview/vertex-editing/polygon/path/material-browser/spawn-system/context-toolbar/command-palette/terrain-scatter/measure-tool/history-browser/performance-monitor/theme-sync/export-playtest/displacement/bevel/auto-connectors/validation-weld-planarity/io-runtime feature set is low and limited mainly to edge cases outside this smoke path.

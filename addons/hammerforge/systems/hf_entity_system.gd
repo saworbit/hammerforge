@@ -301,3 +301,41 @@ func get_all_connections() -> Array:
 				)
 			)
 	return connections
+
+
+## Fire an output on an entity at runtime.  Delegates to the scene's
+## HFIORuntime dispatcher if one exists; otherwise resolves targets and calls
+## input methods directly (single-shot, no delay/fire_once support).
+func fire_output(entity: Node, output_name: String, parameter: String = "") -> void:
+	if not is_instance_valid(entity):
+		return
+	# Prefer the runtime dispatcher if present in the tree
+	if entity.is_inside_tree():
+		var dispatcher: Node = null
+		var scene_root: Node = entity.get_tree().current_scene if entity.get_tree() else null
+		if scene_root:
+			dispatcher = scene_root.find_child("HFIODispatcher", true, false)
+		if dispatcher and dispatcher.has_method("fire_from"):
+			dispatcher.fire_from(entity, output_name, parameter)
+			return
+	# Fallback: resolve targets manually from our connection data
+	var outputs: Array = get_entity_outputs(entity)
+	for conn in outputs:
+		if not (conn is Dictionary):
+			continue
+		if str(conn.get("output_name", "")) != output_name:
+			continue
+		var target_name: String = str(conn.get("target_name", ""))
+		var input_name: String = str(conn.get("input_name", ""))
+		var param: String = parameter if parameter != "" else str(conn.get("parameter", ""))
+		var targets: Array = find_entities_by_name(target_name)
+		for target in targets:
+			if not is_instance_valid(target):
+				continue
+			if target.has_method(input_name):
+				if param != "":
+					target.call(input_name, param)
+				else:
+					target.call(input_name)
+			elif target.has_method("_on_io_input"):
+				target.call("_on_io_input", input_name, param)
