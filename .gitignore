@@ -21,7 +21,9 @@ Desktop.ini
 nul
 
 # IDEs/editors
-.vscode/
+.vscode/*
+!.vscode/tasks.json
+!.vscode/extensions.json
 .idea/
 .claude/
 .hammerforge/

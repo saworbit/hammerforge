@@ -1,0 +1,218 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "GUT: Run All Tests",
+            "type": "shell",
+            "command": "${env:GODOT}",
+            "args": [
+                "--headless",
+                "-s", "res://addons/gut/gut_cmdln.gd",
+                "--path", "."
+            ],
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                {
+                    "owner": "gut",
+                    "fileLocation": ["autoDetect", "${workspaceFolder}"],
+                    "pattern": [
+                        {
+                            "regexp": "^\\s*\\[\\d+\\]\\s+\\w+\\s+\\(res://(.+\\.gd):(\\d+)\\)",
+                            "file": 1,
+                            "line": 2,
+                            "message": 0
+                        }
+                    ],
+                    "severity": "error"
+                },
+                {
+                    "owner": "gut-fail",
+                    "fileLocation": ["autoDetect", "${workspaceFolder}"],
+                    "pattern": [
+                        {
+                            "regexp": "^\\s*FAILED:\\s*(.+)",
+                            "message": 1
+                        },
+                        {
+                            "regexp": "^\\s*at line\\s+(\\d+)",
+                            "line": 1
+                        }
+                    ],
+                    "severity": "error"
+                },
+                {
+                    "owner": "godot-error",
+                    "fileLocation": ["autoDetect", "${workspaceFolder}"],
+                    "pattern": [
+                        {
+                            "regexp": "^ERROR:\\s+(.+)",
+                            "message": 1
+                        },
+                        {
+                            "regexp": "^\\s+at:\\s+\\w+\\s+\\((.+\\.(?:gd|cpp)):(\\d+)\\)",
+                            "file": 1,
+                            "line": 2
+                        }
+                    ],
+                    "severity": "error"
+                }
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "clear": true
+            }
+        },
+        {
+            "label": "GUT: Run Current File",
+            "type": "shell",
+            "command": "${env:GODOT}",
+            "args": [
+                "--headless",
+                "-s", "res://addons/gut/gut_cmdln.gd",
+                "-gtest=res://${relativeFile}",
+                "--path", "."
+            ],
+            "group": "test",
+            "problemMatcher": [
+                {
+                    "owner": "gut",
+                    "fileLocation": ["autoDetect", "${workspaceFolder}"],
+                    "pattern": [
+                        {
+                            "regexp": "^\\s*\\[\\d+\\]\\s+\\w+\\s+\\(res://(.+\\.gd):(\\d+)\\)",
+                            "file": 1,
+                            "line": 2,
+                            "message": 0
+                        }
+                    ],
+                    "severity": "error"
+                },
+                {
+                    "owner": "gut-fail",
+                    "fileLocation": ["autoDetect", "${workspaceFolder}"],
+                    "pattern": [
+                        {
+                            "regexp": "^\\s*FAILED:\\s*(.+)",
+                            "message": 1
+                        },
+                        {
+                            "regexp": "^\\s*at line\\s+(\\d+)",
+                            "line": 1
+                        }
+                    ],
+                    "severity": "error"
+                },
+                {
+                    "owner": "godot-error",
+                    "fileLocation": ["autoDetect", "${workspaceFolder}"],
+                    "pattern": [
+                        {
+                            "regexp": "^ERROR:\\s+(.+)",
+                            "message": 1
+                        },
+                        {
+                            "regexp": "^\\s+at:\\s+\\w+\\s+\\((.+\\.(?:gd|cpp)):(\\d+)\\)",
+                            "file": 1,
+                            "line": 2
+                        }
+                    ],
+                    "severity": "error"
+                }
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "clear": true
+            }
+        },
+        {
+            "label": "GUT: Run Current Test Method",
+            "type": "shell",
+            "command": "${env:GODOT}",
+            "args": [
+                "--headless",
+                "-s", "res://addons/gut/gut_cmdln.gd",
+                "-gtest=res://${relativeFile}",
+                "-gunit_test_name=${selectedText}",
+                "--path", "."
+            ],
+            "group": "test",
+            "problemMatcher": [
+                {
+                    "owner": "gut",
+                    "fileLocation": ["autoDetect", "${workspaceFolder}"],
+                    "pattern": [
+                        {
+                            "regexp": "^\\s*\\[\\d+\\]\\s+\\w+\\s+\\(res://(.+\\.gd):(\\d+)\\)",
+                            "file": 1,
+                            "line": 2,
+                            "message": 0
+                        }
+                    ],
+                    "severity": "error"
+                },
+                {
+                    "owner": "gut-fail",
+                    "fileLocation": ["autoDetect", "${workspaceFolder}"],
+                    "pattern": [
+                        {
+                            "regexp": "^\\s*FAILED:\\s*(.+)",
+                            "message": 1
+                        },
+                        {
+                            "regexp": "^\\s*at line\\s+(\\d+)",
+                            "line": 1
+                        }
+                    ],
+                    "severity": "error"
+                },
+                {
+                    "owner": "godot-error",
+                    "fileLocation": ["autoDetect", "${workspaceFolder}"],
+                    "pattern": [
+                        {
+                            "regexp": "^ERROR:\\s+(.+)",
+                            "message": 1
+                        },
+                        {
+                            "regexp": "^\\s+at:\\s+\\w+\\s+\\((.+\\.(?:gd|cpp)):(\\d+)\\)",
+                            "file": 1,
+                            "line": 2
+                        }
+                    ],
+                    "severity": "error"
+                }
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "clear": true
+            }
+        },
+        {
+            "label": "Godot: Import Project",
+            "type": "shell",
+            "command": "${env:GODOT}",
+            "args": [
+                "--headless",
+                "--import",
+                "--path", "."
+            ],
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared"
+            }
+        }
+    ]
+}

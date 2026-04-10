@@ -215,6 +215,27 @@ gdlint addons/hammerforge/
 godot --headless -s res://addons/gut/gut_cmdln.gd --path .
 ```
 
+### VS Code Integration
+
+The repo includes `.vscode/tasks.json` with pre-configured GUT test tasks and problem matchers that surface failures as clickable file:line links in the Problems panel.
+
+**Setup:** Set a `GODOT` environment variable pointing to your Godot binary:
+```bash
+# Linux / macOS
+export GODOT=/usr/local/bin/godot
+
+# Windows (PowerShell)
+$env:GODOT = "C:\Godot\Godot_v4.6-stable_win64.exe"
+```
+
+**Available tasks** (`Ctrl+Shift+P` → "Tasks: Run Test Task"):
+| Task | Description |
+|------|-------------|
+| GUT: Run All Tests | Full headless suite (default test task) |
+| GUT: Run Current File | Runs only the open test file |
+| GUT: Run Current Test Method | Runs a single method (select name first) |
+| Godot: Import Project | Re-imports (fixes class_name errors) |
+
 ### Unit Tests (GUT)
 
 Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framework (installed in `addons/gut/`).
