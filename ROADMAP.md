@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: April 9, 2026
+Last updated: April 10, 2026
 
 This roadmap is a directional plan. Items may change based on user feedback.
 Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md for details.
@@ -246,6 +246,12 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - **Bake pipeline integration**: `postprocess_bake()` with `selection_only` flag. `_append_auto_connectors()` creates meshes + collision shapes. Version-safe `_set_parsed_geometry_type()` static helper for Godot 4.6 navmesh property rename.
 - **Dock UI**: Auto Connectors checkbox, Mode dropdown (Ramp/Stairs/Auto), Step H and Width spinboxes in Manage tab Bake section.
 - 44 new tests (27 auto_connector + 17 bake_system integration). Total: **1270 tests across 73 files**.
+
+## Done (Automated Culling — Runtime Occlusion from Brush Geometry)
+- **Occluder generation bake pass** (`hf_bake_system.gd`): scans baked `MeshInstance3D` nodes (including inside `BakedChunk_*` intermediary nodes), groups coplanar triangles by normal (5° threshold) and plane distance (0.1 unit threshold), emits `OccluderInstance3D` with `ArrayOccluder3D` per group exceeding minimum area. Idempotent — re-bake replaces previous occluders.
+- **Configurable thresholds**: `bake_generate_occluders` toggle and `bake_occluder_min_area` (default 4.0 world units²) on LevelRoot. Dock checkbox + SpinBox in Manage tab → Bake section. Settings persist in `.hflevel`.
+- **Validation integration**: `check_occlusion_coverage()` runs inside `check_bake_issues()`. Reports missing-occluder warnings (enabled but empty) and coverage stats (occluder count + % of baked AABB surface).
+- 13 new tests (`test_occluder_generation.gd`): flat mesh, chunked hierarchy, coplanar merge, plane separation, min-area filter, idempotency, postprocess toggle, validation. Total: **1283 tests across 75 files**.
 
 ## Future (Wave 3 -- Polish)
 - Multiple simultaneous cordons.

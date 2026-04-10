@@ -193,6 +193,32 @@ func build(parent: Control) -> void:
 	dock.bake_connector_width_spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	conn_settings_row.add_child(dock.bake_connector_width_spin)
 
+	# -- Occluder generation --
+	dock.bake_generate_occluders_check = dock._make_check("Generate Occluders")
+	dock.bake_generate_occluders_check.tooltip_text = (
+		"Auto-generate OccluderInstance3D nodes from large flat surfaces"
+		+ "\nReduces draw calls via occlusion culling without manual placement"
+	)
+	bk.add_child(dock.bake_generate_occluders_check)
+
+	var occl_row := HBoxContainer.new()
+	occl_row.add_theme_constant_override("separation", 4)
+	bk.add_child(occl_row)
+
+	var occl_area_label := Label.new()
+	occl_area_label.text = "Min Area:"
+	occl_area_label.add_theme_font_size_override("font_size", 11)
+	occl_row.add_child(occl_area_label)
+
+	dock.bake_occluder_min_area_spin = SpinBox.new()
+	dock.bake_occluder_min_area_spin.min_value = 0.5
+	dock.bake_occluder_min_area_spin.max_value = 100.0
+	dock.bake_occluder_min_area_spin.step = 0.5
+	dock.bake_occluder_min_area_spin.value = 4.0
+	dock.bake_occluder_min_area_spin.tooltip_text = "Minimum coplanar face group area (world units²) to generate an occluder"
+	dock.bake_occluder_min_area_spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	occl_row.add_child(dock.bake_occluder_min_area_spin)
+
 	# -- Bake time estimate --
 	dock.bake_estimate_label = Label.new()
 	dock.bake_estimate_label.text = "Est: — "

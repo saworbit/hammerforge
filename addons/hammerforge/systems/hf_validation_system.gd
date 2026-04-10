@@ -190,6 +190,7 @@ func check_bake_issues() -> Array:
 
 	_check_overlapping_subtracts(brush_nodes, issues)
 	_check_micro_gaps(brush_nodes, issues)
+	issues.append_array(check_occlusion_coverage())
 	return issues
 
 
@@ -576,3 +577,128 @@ func _cell_keys(v: Vector3, cell_size: float) -> Array:
 			for dz in [-cell_size, 0.0, cell_size]:
 				keys.append("%s,%s,%s" % [cx + dx, cy + dy, cz + dz])
 	return keys
+
+
+# ---------------------------------------------------------------------------
+# Occlusion coverage analysis
+# ---------------------------------------------------------------------------
+
+
+## Estimate how much of the baked geometry AABB is covered by OccluderInstance3D
+## nodes.  Returns an array of validation issues (severity 0 = info, 1 = warn).
+func check_occlusion_coverage() -> Array:
+	var issues: Array = []
+	if not root:
+		return issues
+	if not _object_has_property(root, "baked_container"):
+		return issues
+	var container: Node3D = root.get("baked_container") as Node3D
+	if not container or not is_instance_valid(container):
+		return issues
+
+	# Compute total baked mesh AABB (recurse into BakedChunk_* nodes).
+	var baked_aabb := AABB()
+	var has_mesh := false
+	var all_meshes: Array = _collect_mesh_instances_recursive(container)
+	for mi: MeshInstance3D in all_meshes:
+		if mi.mesh:
+			var mi_aabb: AABB = (
+				(container.global_transform.affine_inverse() * mi.global_transform)
+				* mi.mesh.get_aabb()
+			)
+			if has_mesh:
+				baked_aabb = baked_aabb.merge(mi_aabb)
+			else:
+				baked_aabb = mi_aabb
+				has_mesh = true
+	if not has_mesh:
+		return issues
+
+	# Compute total occluder area vs baked surface area estimate.
+	var occluder_node: Node = container.find_child("Occluders", false, false)
+	var occluder_area := 0.0
+	var occluder_count := 0
+	if occluder_node:
+		for child in occluder_node.get_children():
+			if child is OccluderInstance3D:
+				var inst: OccluderInstance3D = child as OccluderInstance3D
+				occluder_count += 1
+				var occ = inst.occluder
+				if occ is ArrayOccluder3D:
+					occluder_area += _array_occluder_area(occ)
+
+	# Estimate baked surface area from AABB (2 * (xy + xz + yz)).
+	var s: Vector3 = baked_aabb.size
+	var baked_surface: float = 2.0 * (s.x * s.y + s.x * s.z + s.y * s.z)
+	if baked_surface < 0.01:
+		return issues
+
+	var coverage: float = occluder_area / baked_surface
+	if occluder_count == 0 and _object_property_as_bool(root, "bake_generate_occluders", false):
+		(
+			issues
+			. append(
+				{
+					"type": "OcclusionMissing",
+					"severity": 1,
+					"message":
+					"Occluder generation enabled but no occluders were created (surfaces may be too small)",
+					"node": container
+				}
+			)
+		)
+	elif occluder_count > 0:
+		issues.append(
+			{
+				"type": "OcclusionCoverage",
+				"severity": 0,
+				"message":
+				(
+					"Occlusion: %d occluders covering ~%.0f%% of baked AABB surface"
+					% [occluder_count, coverage * 100.0]
+				),
+				"node": occluder_node
+			}
+		)
+	return issues
+
+
+func _array_occluder_area(occ: ArrayOccluder3D) -> float:
+	var verts: PackedVector3Array = occ.vertices
+	var indices: PackedInt32Array = occ.indices
+	var area := 0.0
+	var i := 0
+	while i + 2 < indices.size():
+		var a: Vector3 = verts[indices[i]]
+		var b: Vector3 = verts[indices[i + 1]]
+		var c: Vector3 = verts[indices[i + 2]]
+		area += (c - a).cross(b - a).length() * 0.5
+		i += 3
+	return area
+
+
+static func _collect_mesh_instances_recursive(node: Node) -> Array:
+	var result: Array = []
+	for child in node.get_children():
+		if child is MeshInstance3D:
+			result.append(child)
+		elif child is Node3D and child.name != "Occluders":
+			result.append_array(_collect_mesh_instances_recursive(child))
+	return result
+
+
+static func _object_has_property(obj: Object, property_name: String) -> bool:
+	if not obj or property_name == "":
+		return false
+	for prop in obj.get_property_list():
+		if prop.get("name", "") == property_name:
+			return true
+	return false
+
+
+static func _object_property_as_bool(
+	obj: Object, property_name: String, default_value: bool
+) -> bool:
+	if not _object_has_property(obj, property_name):
+		return default_value
+	return bool(obj.get(property_name))

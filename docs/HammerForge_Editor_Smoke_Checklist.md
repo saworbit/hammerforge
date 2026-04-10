@@ -221,6 +221,15 @@ Enable the HammerForge plugin if it is not already enabled.
 - Select a subset of brushes. Click **Bake Selected**. Confirm no auto-connectors are generated (selection-only bakes skip connectors).
 - With Auto Connectors enabled + NavMesh enabled, bake. Confirm both `AutoConnector_*` collision shapes and `BakedNavmesh` region exist, and navmesh uses STATIC_COLLIDERS parsed geometry type.
 
+### 12c. Occluder Generation (Automated Culling)
+- Draw 3-4 large brushes forming walls and a floor (total visible surface > 4 units²).
+- Open **Manage → Bake** section. Check **Generate Occluders**. Leave Min Area at 4.0.
+- Click **Bake**. In the Scene tree, expand `BakedGeometry` → confirm an `Occluders` node exists containing `Occluder_0`, `Occluder_1`, etc. (OccluderInstance3D nodes).
+- Set Min Area to 10000. Bake again. Confirm the `Occluders` node is gone (all surfaces below threshold).
+- Set Min Area back to 4.0 and bake with Chunk Size > 0 (default 32). Confirm occluders are still generated despite meshes being nested inside `BakedChunk_*` intermediary nodes.
+- Uncheck **Generate Occluders**. Bake. Confirm no `Occluders` node appears.
+- Re-enable Generate Occluders. Click **Check Bake Issues**. Confirm an "Occlusion: N occluders covering ~X%" info entry appears in the results.
+
 ### 13. Context Toolbar + Command Palette
 - Select a brush in the viewport. Confirm the floating context toolbar appears at the top of the 3D viewport showing "1 brush" with Extrude/Hollow/Clip/Carve/Merge/Duplicate/Delete buttons.
 - Select multiple brushes; confirm the label updates to "N brushes".

@@ -91,11 +91,11 @@ addons/hammerforge/
     hf_entity_system.gd    Entity definitions, placement, Entity I/O connections
     hf_brush_system.gd     Brush CRUD, cuts, materials, picking, hollow, clip, merge, tie/untie
     hf_drag_system.gd      Drag lifecycle, preview, axis locking
-    hf_bake_system.gd      Bake orchestration (single/chunked/selected/dirty), cooperative face-bake yielding, preview modes (Full/Wireframe/Proxy), time estimate (yield-overhead-corrected), auto-connectors, collision mode partitioning (trimesh/convex/visgroup)
+    hf_bake_system.gd      Bake orchestration (single/chunked/selected/dirty), cooperative face-bake yielding, preview modes (Full/Wireframe/Proxy), time estimate (yield-overhead-corrected), auto-connectors, collision mode partitioning (trimesh/convex/visgroup), automated occluder generation (coplanar grouping → OccluderInstance3D)
     hf_paint_system.gd     Floor + surface paint, layer CRUD
     hf_state_system.gd     State capture/restore, settings, transactions
     hf_file_system.gd      .hflevel/.map/.glTF I/O, threaded writes, autosave failure reporting
-    hf_validation_system.gd Validation, dependency checks, bake issue detection (degenerate/floating/overlapping/non-planar/micro-gap), vertex welding + planarity auto-fix
+    hf_validation_system.gd Validation, dependency checks, bake issue detection (degenerate/floating/overlapping/non-planar/micro-gap/occlusion-coverage), vertex welding + planarity auto-fix
     hf_visgroup_system.gd  Visgroups (visibility groups) + brush/entity grouping
     hf_carve_system.gd     Boolean-subtract carve (progressive-remainder box slicing)
     hf_io_visualizer.gd    Entity I/O connection lines (Bézier curves, color-coded, highlight pulse)
@@ -285,6 +285,7 @@ Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framewor
 | `test_undo_helper.gd` | 9 | HFUndoHelper.commit without collation (fires history each time), collation first-commit fires + subsequent suppressed, different tags each fire, tag-switch resets collation, 5-arg + 6-arg collation suppression, null history callback safety |
 | `test_displacement.gd` | 40 | HFDisplacementData unit (init, get/set distance, dim, displaced position, smooth, noise, dict roundtrip, alpha, sew group, offset, elevation), FaceData integration (triangulate displaced, dict roundtrip, null displacement), HFDisplacementSystem (create/destroy, has_displacement, paint raise/lower/smooth/noise/alpha, set_power resample, set_elevation, sew_all) |
 | `test_bevel.gd` | 15 | Face inset (basic, height extrude, collapse guard, material inheritance, connecting sides winding), edge bevel (basic, segments, neighbor update, small radius, material inheritance), slerp utility (endpoints, midpoint, parallel, anti-parallel, quarter turn) |
+| `test_occluder_generation.gd` | 13 | Occluder generation: flat mesh, chunked hierarchy (BakedChunk_* nodes), coplanar merge across chunks, plane separation, min-area filtering, idempotent re-generation, postprocess toggle (enabled/disabled), validation coverage + missing-occluder warnings |
 
 Run all tests:
 ```

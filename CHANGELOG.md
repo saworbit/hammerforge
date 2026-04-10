@@ -5,6 +5,30 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Automated occluder generation** (Apr 2026): New bake pass that analyzes baked mesh geometry
+  to automatically generate `OccluderInstance3D` nodes for runtime occlusion culling.
+
+  Coplanar triangles from baked meshes (including chunked `BakedChunk_*` hierarchies) are grouped
+  by normal direction (5° threshold) and plane distance (0.1 unit threshold). Groups exceeding a
+  configurable minimum area produce `ArrayOccluder3D` resources parented under a single `Occluders`
+  container node. Re-baking is idempotent — previous occluders are replaced, not duplicated.
+
+  **Configuration (LevelRoot exports):**
+  - `bake_generate_occluders` (bool, default off): master toggle.
+  - `bake_occluder_min_area` (float, default 4.0): minimum coplanar face-group area (world units²)
+    to emit an occluder. Smaller surfaces rarely block enough pixels to justify culling overhead.
+
+  **Dock UI:** "Generate Occluders" checkbox and "Min Area" SpinBox in Manage tab → Bake section.
+  Settings persist in `.hflevel` save/load and sync bidirectionally with LevelRoot exports.
+
+  **Validation:** `check_occlusion_coverage()` now runs as part of `check_bake_issues()`:
+  - Warns when occluder generation is enabled but produced no occluders (surfaces too small).
+  - Reports info-level coverage stats (occluder count + estimated % of baked AABB surface).
+
+  13 new tests in `test_occluder_generation.gd`: direct-child meshes, chunked hierarchy
+  (`BakedChunk_*` intermediary nodes), coplanar merging, plane separation, min-area filtering,
+  idempotent re-generation, postprocess toggle, validation coverage and missing-occluder warnings.
+
 - **I/O-to-Signal runtime bridge** (Apr 2026): Entity I/O connections now automatically translate
   into live Godot signals at bake and export time, eliminating the need for manual runtime wiring.
 

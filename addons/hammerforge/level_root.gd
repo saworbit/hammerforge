@@ -102,6 +102,10 @@ var _grid_snap: float = 16.0
 @export var bake_use_atlas: bool = false
 @export var bake_auto_connectors: bool = false
 @export var bake_wire_io: bool = false
+@export var bake_generate_occluders: bool = false
+## Minimum face-group area (world units²) to generate an occluder.  Smaller
+## surfaces rarely block enough pixels to justify the culling overhead.
+@export var bake_occluder_min_area: float = 4.0
 @export var bake_connector_mode: int = 0  # HFAutoConnector.ConnectorMode (RAMP=0, STAIRS=1, AUTO=2)
 @export var bake_connector_stair_height: float = 0.25
 @export var bake_connector_width: int = 2

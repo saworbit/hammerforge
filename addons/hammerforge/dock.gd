@@ -164,6 +164,8 @@ var bake_visible_only_check: CheckBox = null
 var bake_use_multimesh_check: CheckBox = null
 var bake_use_atlas_check: CheckBox = null
 var bake_auto_connectors_check: CheckBox = null
+var bake_generate_occluders_check: CheckBox = null
+var bake_occluder_min_area_spin: SpinBox = null
 var bake_connector_mode_opt: OptionButton = null
 var bake_connector_stair_height_spin: SpinBox = null
 var bake_connector_width_spin: SpinBox = null
@@ -526,6 +528,7 @@ func _connect_setting_signals() -> void:
 		[bake_use_multimesh_check, "bake_use_multimesh"],
 		[bake_use_atlas_check, "bake_use_atlas"],
 		[bake_auto_connectors_check, "bake_auto_connectors"],
+		[bake_generate_occluders_check, "bake_generate_occluders"],
 		[commit_freeze, "commit_freeze"],
 		[autosave_enabled, "hflevel_autosave_enabled"],
 		[show_grid, "grid_visible"],
@@ -545,6 +548,7 @@ func _connect_setting_signals() -> void:
 		[bake_navmesh_agent_height, "bake_navmesh_agent_height"],
 		[bake_navmesh_agent_radius, "bake_navmesh_agent_radius"],
 		[bake_connector_stair_height_spin, "bake_connector_stair_height"],
+		[bake_occluder_min_area_spin, "bake_occluder_min_area"],
 	]
 	for binding in float_bindings:
 		var ctrl: SpinBox = binding[0] as SpinBox
@@ -588,6 +592,7 @@ func _apply_ui_state_to_root() -> void:
 		[bake_use_multimesh_check, "bake_use_multimesh"],
 		[bake_use_atlas_check, "bake_use_atlas"],
 		[bake_auto_connectors_check, "bake_auto_connectors"],
+		[bake_generate_occluders_check, "bake_generate_occluders"],
 		[commit_freeze, "commit_freeze"],
 		[autosave_enabled, "hflevel_autosave_enabled"],
 		[show_grid, "grid_visible"],
@@ -606,6 +611,7 @@ func _apply_ui_state_to_root() -> void:
 		[bake_navmesh_agent_height, "bake_navmesh_agent_height"],
 		[bake_navmesh_agent_radius, "bake_navmesh_agent_radius"],
 		[bake_connector_stair_height_spin, "bake_connector_stair_height"],
+		[bake_occluder_min_area_spin, "bake_occluder_min_area"],
 	]
 	for pair in float_pairs:
 		var ctrl: SpinBox = pair[0] as SpinBox
@@ -3583,6 +3589,12 @@ func _sync_grid_settings_from_root() -> void:
 		bake_use_atlas_check.button_pressed = bool(connected_root.get("bake_use_atlas"))
 	if bake_auto_connectors_check and _root_has_property("bake_auto_connectors"):
 		bake_auto_connectors_check.button_pressed = bool(connected_root.get("bake_auto_connectors"))
+	if bake_generate_occluders_check and _root_has_property("bake_generate_occluders"):
+		bake_generate_occluders_check.button_pressed = bool(
+			connected_root.get("bake_generate_occluders")
+		)
+	if bake_occluder_min_area_spin and _root_has_property("bake_occluder_min_area"):
+		bake_occluder_min_area_spin.value = float(connected_root.get("bake_occluder_min_area"))
 	if bake_connector_mode_opt and _root_has_property("bake_connector_mode"):
 		bake_connector_mode_opt.select(int(connected_root.get("bake_connector_mode")))
 	if bake_connector_stair_height_spin and _root_has_property("bake_connector_stair_height"):
@@ -5810,6 +5822,10 @@ func _collect_editor_settings() -> Dictionary:
 		bake_settings["use_atlas"] = bake_use_atlas_check.button_pressed
 	if bake_auto_connectors_check:
 		bake_settings["auto_connectors"] = bake_auto_connectors_check.button_pressed
+	if bake_generate_occluders_check:
+		bake_settings["generate_occluders"] = bake_generate_occluders_check.button_pressed
+	if bake_occluder_min_area_spin:
+		bake_settings["occluder_min_area"] = float(bake_occluder_min_area_spin.value)
 	if bake_connector_mode_opt:
 		bake_settings["connector_mode"] = bake_connector_mode_opt.get_selected_id()
 	if bake_connector_stair_height_spin:
@@ -5900,6 +5916,12 @@ func _apply_editor_settings(data: Dictionary) -> void:
 			bake_use_atlas_check.button_pressed = bool(bake.get("use_atlas", false))
 		if bake_auto_connectors_check and bake.has("auto_connectors"):
 			bake_auto_connectors_check.button_pressed = bool(bake.get("auto_connectors", false))
+		if bake_generate_occluders_check and bake.has("generate_occluders"):
+			bake_generate_occluders_check.button_pressed = bool(
+				bake.get("generate_occluders", false)
+			)
+		if bake_occluder_min_area_spin and bake.has("occluder_min_area"):
+			bake_occluder_min_area_spin.value = float(bake.get("occluder_min_area", 4.0))
 		if bake_connector_mode_opt and bake.has("connector_mode"):
 			bake_connector_mode_opt.select(int(bake.get("connector_mode", 0)))
 		if bake_connector_stair_height_spin and bake.has("connector_stair_height"):

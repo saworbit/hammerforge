@@ -2,7 +2,9 @@ extends GutTest
 
 const HFBakeSystem = preload("res://addons/hammerforge/systems/hf_bake_system.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
-const HFPaintLayerManagerScript = preload("res://addons/hammerforge/paint/hf_paint_layer_manager.gd")
+const HFPaintLayerManagerScript = preload(
+	"res://addons/hammerforge/paint/hf_paint_layer_manager.gd"
+)
 const HFPaintGridScript = preload("res://addons/hammerforge/paint/hf_paint_grid.gd")
 
 var root: Node3D
@@ -80,6 +82,8 @@ var bake_visible_only: bool = false
 var bake_use_multimesh: bool = false
 var bake_use_atlas: bool = false
 var bake_auto_connectors: bool = false
+var bake_generate_occluders: bool = false
+var bake_occluder_min_area: float = 4.0
 var bake_connector_mode: int = 0
 var bake_connector_stair_height: float = 0.25
 var bake_connector_width: int = 2
@@ -577,12 +581,10 @@ func test_apply_preview_visuals_wireframe_recurses_into_chunks():
 	container.add_child(direct_mesh)
 	bake_sys._apply_preview_visuals(container, HFBakeSystem.PreviewMode.WIREFRAME)
 	assert_not_null(
-		mesh.material_override,
-		"Nested MeshInstance3D inside chunk should get wireframe override"
+		mesh.material_override, "Nested MeshInstance3D inside chunk should get wireframe override"
 	)
 	assert_not_null(
-		direct_mesh.material_override,
-		"Direct child MeshInstance3D should also get override"
+		direct_mesh.material_override, "Direct child MeshInstance3D should also get override"
 	)
 
 
@@ -609,8 +611,7 @@ func test_apply_preview_visuals_multimesh_in_chunk():
 	chunk.add_child(mmi)
 	bake_sys._apply_preview_visuals(container, HFBakeSystem.PreviewMode.WIREFRAME)
 	assert_not_null(
-		mmi.material_override,
-		"MultiMeshInstance3D nested in chunk should get wireframe override"
+		mmi.material_override, "MultiMeshInstance3D nested in chunk should get wireframe override"
 	)
 
 
@@ -814,7 +815,9 @@ func test_postprocess_bake_navmesh_when_enabled():
 	var container := Node3D.new()
 	root.add_child(container)
 	bake_sys.postprocess_bake(container, false)
-	var nav_region: NavigationRegion3D = container.get_node_or_null("BakedNavmesh") as NavigationRegion3D
+	var nav_region: NavigationRegion3D = (
+		container.get_node_or_null("BakedNavmesh") as NavigationRegion3D
+	)
 	assert_not_null(nav_region, "bake_navmesh=true must create BakedNavmesh region")
 	assert_not_null(nav_region.navigation_mesh, "Region must have a NavigationMesh assigned")
 	container.free()
@@ -839,7 +842,9 @@ func test_postprocess_bake_navmesh_settings_propagate():
 	var container := Node3D.new()
 	root.add_child(container)
 	bake_sys.postprocess_bake(container, false)
-	var nav_region: NavigationRegion3D = container.get_node_or_null("BakedNavmesh") as NavigationRegion3D
+	var nav_region: NavigationRegion3D = (
+		container.get_node_or_null("BakedNavmesh") as NavigationRegion3D
+	)
 	assert_not_null(nav_region)
 	var nav_mesh: NavigationMesh = nav_region.navigation_mesh
 	assert_not_null(nav_mesh)
@@ -847,7 +852,9 @@ func test_postprocess_bake_navmesh_settings_propagate():
 	assert_almost_eq(nav_mesh.cell_height, 0.4, 0.001, "cell_height should propagate")
 	assert_almost_eq(nav_mesh.agent_height, 1.8, 0.001, "agent_height should propagate")
 	# agent_radius is ceiled to cell_size units: ceil(0.6/0.5)*0.5 = 1.0
-	assert_almost_eq(nav_mesh.agent_radius, 1.0, 0.001, "agent_radius should be ceiled to cell_size units")
+	assert_almost_eq(
+		nav_mesh.agent_radius, 1.0, 0.001, "agent_radius should be ceiled to cell_size units"
+	)
 	container.free()
 
 
@@ -856,7 +863,9 @@ func test_postprocess_bake_navmesh_parsed_geometry_type():
 	var container := Node3D.new()
 	root.add_child(container)
 	bake_sys.postprocess_bake(container, false)
-	var nav_region: NavigationRegion3D = container.get_node_or_null("BakedNavmesh") as NavigationRegion3D
+	var nav_region: NavigationRegion3D = (
+		container.get_node_or_null("BakedNavmesh") as NavigationRegion3D
+	)
 	assert_not_null(nav_region)
 	var nav_mesh: NavigationMesh = nav_region.navigation_mesh
 	assert_not_null(nav_mesh)
@@ -910,7 +919,9 @@ func test_postprocess_bake_navmesh_with_connectors():
 	assert_gt(col_shapes_before_nav, 0, "Connectors must add collision shapes before navmesh bake")
 	# Navmesh should exist and be set to parse static colliders (which includes
 	# the FloorCollision body that connectors just populated)
-	var nav_region: NavigationRegion3D = container.get_node_or_null("BakedNavmesh") as NavigationRegion3D
+	var nav_region: NavigationRegion3D = (
+		container.get_node_or_null("BakedNavmesh") as NavigationRegion3D
+	)
 	assert_not_null(nav_region, "Navmesh should be baked after connectors")
 	var nav_mesh: NavigationMesh = nav_region.navigation_mesh
 	assert_not_null(nav_mesh)
@@ -954,7 +965,9 @@ func test_postprocess_bake_selection_still_bakes_navmesh():
 func test_set_parsed_geometry_type_real_navmesh():
 	# On this runtime (Godot 4.6), geometry_parsed_geometry_type exists
 	var nm := NavigationMesh.new()
-	var ok: bool = HFBakeSystem._set_parsed_geometry_type(nm, NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS)
+	var ok: bool = HFBakeSystem._set_parsed_geometry_type(
+		nm, NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS
+	)
 	assert_true(ok, "Should succeed on real NavigationMesh")
 	assert_eq(
 		int(nm.get("geometry_parsed_geometry_type")),
@@ -986,7 +999,9 @@ func test_set_parsed_geometry_type_legacy_property():
 
 func test_set_parsed_geometry_type_prefers_new_name():
 	# If both properties exist, the new name should be used
-	var mock: Object = _make_mock_with_props(["geometry_parsed_geometry_type", "parsed_geometry_type"])
+	var mock: Object = _make_mock_with_props(
+		["geometry_parsed_geometry_type", "parsed_geometry_type"]
+	)
 	var ok: bool = HFBakeSystem._set_parsed_geometry_type(mock, 42)
 	assert_true(ok)
 	assert_eq(int(mock.get("geometry_parsed_geometry_type")), 42, "New-name property should be set")
@@ -1011,13 +1026,8 @@ func test_collect_collision_data_skips_subtractive_brushes():
 	additive.operation = CSGShape3D.OPERATION_UNION
 	var subtractive = _make_brush(root.draft_brushes_node, Vector3(10, 0, 0))
 	subtractive.operation = CSGShape3D.OPERATION_SUBTRACTION
-	var data: Dictionary = bake_sys._collect_brush_collision_data(
-		[root.draft_brushes_node]
-	)
-	assert_eq(
-		data["hull_verts"].size(), 1,
-		"Only additive brush should contribute hull verts"
-	)
+	var data: Dictionary = bake_sys._collect_brush_collision_data([root.draft_brushes_node])
+	assert_eq(data["hull_verts"].size(), 1, "Only additive brush should contribute hull verts")
 
 
 func test_collect_collision_data_uses_real_mesh_verts():
@@ -1028,43 +1038,28 @@ func test_collect_collision_data_uses_real_mesh_verts():
 	cyl.size = Vector3(4, 4, 4)
 	# Force visual rebuild so mesh_instance is populated
 	cyl._update_visuals()
-	var data: Dictionary = bake_sys._collect_brush_collision_data(
-		[root.draft_brushes_node]
-	)
+	var data: Dictionary = bake_sys._collect_brush_collision_data([root.draft_brushes_node])
 	assert_eq(data["hull_verts"].size(), 1, "Should collect one brush")
 	var verts: PackedVector3Array = data["hull_verts"][0]
-	assert_gt(
-		verts.size(), 8,
-		"Cylinder mesh should produce more than 8 box-corner verts"
-	)
+	assert_gt(verts.size(), 8, "Cylinder mesh should produce more than 8 box-corner verts")
 
 
 func test_collect_collision_data_flat_brush_list():
 	var b1 = _make_brush(root.draft_brushes_node, Vector3.ZERO)
 	var b2 = _make_brush(root.draft_brushes_node, Vector3(10, 0, 0))
 	var data: Dictionary = bake_sys._collect_brush_collision_data([b1, b2])
-	assert_eq(
-		data["hull_verts"].size(), 2,
-		"Flat brush list should collect both brushes"
-	)
+	assert_eq(data["hull_verts"].size(), 2, "Flat brush list should collect both brushes")
 
 
 func test_collect_collision_data_skips_entity_brushes():
 	var entity_brush = _make_brush(root.draft_brushes_node, Vector3.ZERO)
 	entity_brush.set_meta("entity_type", "point")
-	var data: Dictionary = bake_sys._collect_brush_collision_data(
-		[root.draft_brushes_node]
-	)
-	assert_eq(
-		data["hull_verts"].size(), 0,
-		"Entity brushes should be excluded"
-	)
+	var data: Dictionary = bake_sys._collect_brush_collision_data([root.draft_brushes_node])
+	assert_eq(data["hull_verts"].size(), 0, "Entity brushes should be excluded")
 
 
 func test_collect_collision_data_empty_with_no_brushes():
-	var data: Dictionary = bake_sys._collect_brush_collision_data(
-		[root.draft_brushes_node]
-	)
+	var data: Dictionary = bake_sys._collect_brush_collision_data([root.draft_brushes_node])
 	assert_eq(data["hull_verts"].size(), 0)
 	assert_eq(data["visgroups"].size(), 0)
 
@@ -1078,6 +1073,7 @@ func test_collect_collision_data_empty_with_no_brushes():
 ## FloorCollision body and one trimesh CollisionShape3D, avoiding real CSG.
 class MockBaker:
 	var call_count: int = 0
+
 	func bake_from_csg(
 		_csg: CSGCombiner3D, _mat_override, _layer: int, _mask: int, _options: Dictionary
 	) -> Node3D:
@@ -1107,6 +1103,7 @@ class MockBaker:
 class MockVisgroupSystem:
 	## node_name -> PackedStringArray of visgroup names
 	var assignments: Dictionary = {}
+
 	func get_visgroups_of(node: Node) -> PackedStringArray:
 		return assignments.get(node.name, PackedStringArray())
 
@@ -1130,10 +1127,12 @@ func test_bake_single_mode2_creates_visgroup_bodies():
 	b1.name = "brush_a"
 	var b2 = _make_brush(root.draft_brushes_node, Vector3(10, 0, 0))
 	b2.name = "brush_b"
-	_setup_mock_visgroups({
-		"brush_a": PackedStringArray(["room_1"]),
-		"brush_b": PackedStringArray(["room_2"]),
-	})
+	_setup_mock_visgroups(
+		{
+			"brush_a": PackedStringArray(["room_1"]),
+			"brush_b": PackedStringArray(["room_2"]),
+		}
+	)
 	var options: Dictionary = bake_sys.build_bake_options()
 	options["collision_mode"] = 2
 	var baked: Node3D = await bake_sys.bake_single(1, options)
@@ -1188,8 +1187,7 @@ func test_bake_single_mode2_heightmap_collision_survives():
 	# but heightmap append should have created a new one.
 	var hm_body: StaticBody3D = baked.get_node_or_null("FloorCollision") as StaticBody3D
 	assert_not_null(
-		hm_body,
-		"FloorCollision should be re-created by heightmap append after partitioning"
+		hm_body, "FloorCollision should be re-created by heightmap append after partitioning"
 	)
 	# The heightmap body should contain a trimesh collision from the plane mesh
 	if hm_body:
@@ -1208,10 +1206,12 @@ func test_bake_single_mode2_subtractive_brushes_excluded():
 	var subtractive = _make_brush(root.draft_brushes_node, Vector3(10, 0, 0))
 	subtractive.name = "sub_brush"
 	subtractive.operation = CSGShape3D.OPERATION_SUBTRACTION
-	_setup_mock_visgroups({
-		"add_brush": PackedStringArray(["room_a"]),
-		"sub_brush": PackedStringArray(["room_b"]),
-	})
+	_setup_mock_visgroups(
+		{
+			"add_brush": PackedStringArray(["room_a"]),
+			"sub_brush": PackedStringArray(["room_b"]),
+		}
+	)
 	var options: Dictionary = bake_sys.build_bake_options()
 	options["collision_mode"] = 2
 	var baked: Node3D = await bake_sys.bake_single(1, options)
@@ -1219,8 +1219,7 @@ func test_bake_single_mode2_subtractive_brushes_excluded():
 	add_child_autoqfree(baked)
 	# The additive brush should have a visgroup body
 	assert_not_null(
-		baked.get_node_or_null("Collision_room_a"),
-		"Additive brush visgroup body should exist"
+		baked.get_node_or_null("Collision_room_a"), "Additive brush visgroup body should exist"
 	)
 	# The subtractive brush should NOT have a visgroup body
 	assert_null(
@@ -1244,7 +1243,8 @@ func test_bake_single_mode2_preserves_collision_layer():
 	assert_not_null(default_body, "Default visgroup body should exist")
 	if default_body:
 		assert_eq(
-			default_body.collision_layer, target_layer,
+			default_body.collision_layer,
+			target_layer,
 			"Partitioned body should inherit collision layer from original"
 		)
 
@@ -1256,10 +1256,12 @@ func test_bake_chunked_mode2_creates_per_chunk_visgroup_bodies():
 	b1.name = "chunk0_brush"
 	var b2 = _make_brush(root.draft_brushes_node, Vector3(100, 0, 0))
 	b2.name = "chunk1_brush"
-	_setup_mock_visgroups({
-		"chunk0_brush": PackedStringArray(["lobby"]),
-		"chunk1_brush": PackedStringArray(["arena"]),
-	})
+	_setup_mock_visgroups(
+		{
+			"chunk0_brush": PackedStringArray(["lobby"]),
+			"chunk1_brush": PackedStringArray(["arena"]),
+		}
+	)
 	var options: Dictionary = bake_sys.build_bake_options()
 	options["collision_mode"] = 2
 	var baked: Node3D = await bake_sys.bake_chunked(8.0, 1, options)

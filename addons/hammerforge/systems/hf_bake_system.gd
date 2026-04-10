@@ -370,6 +370,8 @@ func build_bake_options() -> Dictionary:
 func postprocess_bake(container: Node3D, selection_only: bool = false) -> void:
 	if not container:
 		return
+	if _root_bool("bake_generate_occluders", false) and not selection_only:
+		_generate_occluders(container)
 	if root.bake_auto_connectors and not selection_only:
 		_append_auto_connectors(container)
 	if root.bake_navmesh:
@@ -1037,3 +1039,173 @@ func _consolidate_to_multimesh(container: Node3D) -> void:
 		consolidated += 1
 	if consolidated > 0:
 		root._log("MultiMesh: consolidated %d groups" % consolidated)
+
+
+# ---------------------------------------------------------------------------
+# Automated occluder generation
+# ---------------------------------------------------------------------------
+
+## Angle threshold (radians) for grouping coplanar triangles.
+const _OCCLUDER_NORMAL_THRESHOLD := 0.087  # ~5 degrees
+## Distance threshold for plane membership.
+const _OCCLUDER_PLANE_DIST_THRESHOLD := 0.1
+
+
+## Scan baked MeshInstance3D children, identify large coplanar face groups, and
+## create OccluderInstance3D nodes with ArrayOccluder3D resources.
+func _generate_occluders(container: Node3D) -> void:
+	# Remove previously generated occluders so re-bake is idempotent.
+	var existing: Node = container.find_child("Occluders", false, false)
+	if existing:
+		container.remove_child(existing)
+		existing.free()
+
+	var min_area: float = _root_float("bake_occluder_min_area", 4.0)
+	var planes: Array = []  # Array of {normal, dist, verts, indices, area}
+
+	# Collect triangles from all baked meshes (recurse into BakedChunk_* nodes).
+	var mesh_instances: Array = _collect_mesh_instances(container)
+	for mi: MeshInstance3D in mesh_instances:
+		var mesh: Mesh = mi.mesh
+		if not mesh:
+			continue
+		# Transform relative to container so occluders are in container-local space.
+		var xform: Transform3D = container.global_transform.affine_inverse() * mi.global_transform
+		for surf_idx in mesh.get_surface_count():
+			var arrays: Array = mesh.surface_get_arrays(surf_idx)
+			if arrays.is_empty():
+				continue
+			var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+			var normals_arr: PackedVector3Array = (
+				arrays[Mesh.ARRAY_NORMAL]
+				if (
+					arrays.size() > Mesh.ARRAY_NORMAL
+					and arrays[Mesh.ARRAY_NORMAL] is PackedVector3Array
+				)
+				else PackedVector3Array()
+			)
+			var indices: PackedInt32Array = (
+				arrays[Mesh.ARRAY_INDEX]
+				if (
+					arrays.size() > Mesh.ARRAY_INDEX
+					and arrays[Mesh.ARRAY_INDEX] is PackedInt32Array
+				)
+				else PackedInt32Array()
+			)
+			if verts.is_empty():
+				continue
+			# Build triangle list.
+			var tri_list: Array = []
+			if indices.size() >= 3:
+				var i := 0
+				while i + 2 < indices.size():
+					tri_list.append([indices[i], indices[i + 1], indices[i + 2]])
+					i += 3
+			else:
+				var i := 0
+				while i + 2 < verts.size():
+					tri_list.append([i, i + 1, i + 2])
+					i += 3
+
+			for tri in tri_list:
+				var a: Vector3 = xform * verts[tri[0]]
+				var b: Vector3 = xform * verts[tri[1]]
+				var c: Vector3 = xform * verts[tri[2]]
+				var edge1: Vector3 = b - a
+				var edge2: Vector3 = c - a
+				var n: Vector3 = edge2.cross(edge1)
+				var area: float = n.length() * 0.5
+				if area < 0.001:
+					continue
+				n = n.normalized()
+				# Use normal from mesh data if available.
+				if normals_arr.size() > tri[0]:
+					var mesh_n: Vector3 = (xform.basis * normals_arr[tri[0]]).normalized()
+					if mesh_n.length_squared() > 0.5:
+						n = mesh_n
+				var dist: float = n.dot(a)
+				# Try to merge into an existing coplanar group.
+				var merged := false
+				for plane in planes:
+					if (
+						n.dot(plane["normal"]) >= cos(_OCCLUDER_NORMAL_THRESHOLD)
+						and absf(dist - plane["dist"]) < _OCCLUDER_PLANE_DIST_THRESHOLD
+					):
+						var base_idx: int = plane["verts"].size()
+						plane["verts"].append(a)
+						plane["verts"].append(b)
+						plane["verts"].append(c)
+						plane["indices"].append(base_idx)
+						plane["indices"].append(base_idx + 1)
+						plane["indices"].append(base_idx + 2)
+						plane["area"] += area
+						merged = true
+						break
+				if not merged:
+					var pv := PackedVector3Array()
+					pv.append(a)
+					pv.append(b)
+					pv.append(c)
+					var pi := PackedInt32Array()
+					pi.append(0)
+					pi.append(1)
+					pi.append(2)
+					planes.append(
+						{"normal": n, "dist": dist, "verts": pv, "indices": pi, "area": area}
+					)
+
+	# Filter by minimum area and build occluder nodes.
+	var occluder_container := Node3D.new()
+	occluder_container.name = "Occluders"
+	var count := 0
+	for plane in planes:
+		if plane["area"] < min_area:
+			continue
+		var occ := ArrayOccluder3D.new()
+		occ.vertices = plane["verts"]
+		occ.indices = plane["indices"]
+		var inst := OccluderInstance3D.new()
+		inst.occluder = occ
+		inst.name = "Occluder_%d" % count
+		occluder_container.add_child(inst)
+		count += 1
+
+	if count > 0:
+		container.add_child(occluder_container)
+		root._assign_owner_recursive(occluder_container)
+		root._log("Occluders: generated %d from %d coplanar groups" % [count, planes.size()])
+	else:
+		occluder_container.free()
+
+
+## Recursively collect all MeshInstance3D nodes under a container, walking into
+## intermediary nodes like BakedChunk_* without picking up non-mesh children.
+static func _collect_mesh_instances(node: Node) -> Array:
+	var result: Array = []
+	for child in node.get_children():
+		if child is MeshInstance3D:
+			result.append(child)
+		elif child is Node3D and child.name != "Occluders":
+			result.append_array(_collect_mesh_instances(child))
+	return result
+
+
+func _root_bool(property_name: String, default_value: bool) -> bool:
+	if not root or not _root_has_property(property_name):
+		return default_value
+	return bool(root.get(property_name))
+
+
+func _root_float(property_name: String, default_value: float) -> float:
+	if not root or not _root_has_property(property_name):
+		return default_value
+	return float(root.get(property_name))
+
+
+func _root_has_property(property_name: String) -> bool:
+	if not root or property_name == "":
+		return false
+	for prop in root.get_property_list():
+		if prop.get("name", "") == property_name:
+			return true
+	return false

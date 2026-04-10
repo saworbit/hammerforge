@@ -1,6 +1,6 @@
 # HammerForge User Guide
 
-Last updated: April 9, 2026
+Last updated: April 10, 2026
 
 This guide covers the current HammerForge workflow in Godot 4.6: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs.
 
@@ -267,6 +267,8 @@ The Manage tab Bake section exposes additional controls:
 - **Convex Clean** (checkbox, default on): deduplicate vertices before building convex hulls. Disable to keep raw vertex data (degeneracy guard still runs).
 - **Convex Simplify** (slider, 0.0–1.0, default 0.0): reduce convex hull complexity by merging nearby vertices into an AABB-proportional grid. Higher values = fewer vertices = simpler collision.
 - **Unwrap UV0** (checkbox): applies per-vertex planar UV projection during bake for surfaces that lack explicit UVs.
+- **Generate Occluders** (checkbox): automatically generates `OccluderInstance3D` nodes from large flat surfaces during bake. The bake pass groups coplanar triangles across the entire baked hierarchy (including chunked bakes) and emits occluders for groups exceeding the minimum area threshold. This enables Godot's built-in occlusion culling at runtime without manual occluder placement. Sub-controls:
+  - **Min Area** (SpinBox, 0.5–100.0, default 4.0): minimum coplanar face-group area in world units² to emit an occluder. Raise this value to reduce occluder count (fewer culling tests); lower it to increase coverage (more surfaces act as occluders). Surfaces smaller than this threshold are skipped.
 - **Auto Connectors** (checkbox): auto-generates ramps or stairs between paint layers at different heights during bake. Requires at least 2 paint layers with filled cells at adjacent grid positions and a height difference ≥ 0.1 world units. Sub-controls:
   - **Mode** dropdown: *Ramp* (smooth slope), *Stairs* (stepped), *Auto* (stairs when height diff ≥ 2.0, ramp otherwise).
   - **Step H** (SpinBox, 0.05–2.0): stair step height in world units (only affects Stairs/Auto modes).
@@ -284,6 +286,8 @@ Click **Check Bake Issues** to scan for potential problems before baking:
 - **Open edges** (severity 1): edges shared by only one face — geometry is not watertight.
 - **Non-manifold edges** (severity 2): edges shared by 3+ faces — may cause bake artifacts.
 - **Non-planar faces** (severity 1): faces with 4+ vertices where a vertex drifts off the face plane beyond `planarity_tolerance` (default 0.01 units). Common in imported .map geometry with floating-point drift.
+- **Occlusion missing** (severity 1): occluder generation is enabled but no occluders were created (all surfaces below the minimum area threshold).
+- **Occlusion coverage** (severity 0, info): reports occluder count and estimated coverage as a percentage of baked AABB surface area. Appears when occluders exist.
 - **Micro-gaps** (severity 1): near-coincident but not-exactly-equal vertices across different brushes that would cause seam tearing after bake. Detected within `weld_tolerance` (default 0.001 units).
 
 **Auto-fix helpers** (available via GDScript API on `level_root.validation_system`):
