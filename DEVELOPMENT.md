@@ -1,6 +1,6 @@
 # Development Guide
 
-Last updated: April 10, 2026
+Last updated: April 11, 2026
 
 This document covers local setup, codebase structure, and how to test features.
 
@@ -74,6 +74,9 @@ addons/hammerforge/
     hf_prefab_overlay.gd   Prefab ghost overlay (wireframe bounding box + override markers)
     hf_context_toolbar.gd  Floating contextual mini-toolbar (context-sensitive actions in 3D viewport)
     hf_hotkey_palette.gd   Searchable command palette with fuzzy search and live gray-out (Shift+?/F1/Ctrl+K)
+    hf_viewport_context_menu.gd  Context menu (Space key) with context-sensitive sections and submenus
+    hf_radial_menu.gd      Radial/pie menu (backtick key) with 8 tool sectors drawn via _draw()
+    hf_quick_property.gd   Double-tap popup (G G/B B/R R) for grid snap, brush size, paint radius
     hf_theme_utils.gd      Static dark/light theme detection and color helpers for custom UI
     hf_history_browser.gd  Undo history browser with thumbnails, icons, and double-click navigation
     hf_coach_marks.gd      First-use tool guides (10 tools, per-tool dismissal, auto-trigger on activation)

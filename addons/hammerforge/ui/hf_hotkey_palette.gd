@@ -206,6 +206,9 @@ func _is_action_available(action: String) -> bool:
 	var is_vertex: bool = _state.get("vertex_mode", false)
 	var is_dragging: bool = _state.get("input_mode", 0) in [1, 2]
 	var tool_id: int = _state.get("tool", 0)
+	var is_idle: bool = (
+		_state.get("input_mode", 0) == 0 and not _state.get("has_active_external_tool", false)
+	)
 
 	match action:
 		# Selection-dependent editing actions
@@ -236,6 +239,9 @@ func _is_action_available(action: String) -> bool:
 		# Tool switches always available
 		"tool_draw", "tool_select", "tool_extrude_up", "tool_extrude_down", "vertex_edit", "texture_picker":
 			return true
+		# Viewport menus only when idle (no active operation or external tool)
+		"context_menu", "radial_menu":
+			return is_idle
 
 	return true
 

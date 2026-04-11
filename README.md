@@ -207,6 +207,9 @@ HammerForge's dock is designed to stay out of your way while keeping everything 
 - **Searchable shortcut dialog** -- "?" button opens a filterable, categorized shortcut reference (replaces static popup)
 - **Smart contextual toolbar** -- floating mini-toolbar in the 3D viewport shows context-sensitive actions (brush ops when brushes selected, UV tools when faces selected, shape picker in draw mode, axis locks while dragging)
 - **Command palette** (Shift+? or F1 or Ctrl+K) -- searchable action palette with fuzzy search, "Did you mean" suggestions, and live gray-out for unavailable actions
+- **Viewport context menu** (Space) -- context-sensitive right-click-style menu with grid snap presets, UV operations, draw shapes, and toggle items; sections adapt to current selection
+- **Radial menu** (`` ` ``) -- 8-sector pie menu for quick tool switching (Box, Cylinder, Select, Paint, Vertex, Tex Pick, Measure, Clip) drawn as an overlay in the 3D viewport
+- **Quick property popups** (double-tap G G / B B / R R) -- inline numeric entry for grid snap, brush size, and paint radius without leaving the viewport
 - **Coach marks** -- first-use step-by-step guides for advanced tools (Polygon, Path, Carve, Vertex, Extrude, etc.) with "Don't show again" persistence
 - **Undo history browser** -- thumbnail-equipped history panel (Manage tab) with double-click navigation to any undo point
 - **Operation replay timeline** (Ctrl+Shift+T) -- visual timeline of recent operations with undo/redo replay to any recorded point

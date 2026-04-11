@@ -1,6 +1,6 @@
 # HammerForge User Guide
 
-Last updated: April 10, 2026
+Last updated: April 11, 2026
 
 This guide covers the current HammerForge workflow in Godot 4.6: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs.
 
@@ -368,6 +368,52 @@ An **auto-mode hint bar** appears during brush drawing, showing the current oper
 
 ### Command Palette
 Press **Shift+?** or **F1** to open the command palette — a searchable list of all HammerForge actions with key bindings. Actions that cannot run in the current state are grayed out (e.g. Hollow is disabled when nothing is selected, paint tools are disabled outside paint mode). Type to filter, press **Enter** to execute the first matching action, **Esc** to close.
+
+### Viewport Context Menu
+Press **Space** to open a context-sensitive popup menu at the cursor position in the 3D viewport. The menu adapts to your current selection and tool state:
+
+- **Brush selected** → Extrude Up/Down, Hollow, Clip, Carve, Duplicate, Delete, grid snap presets, draw shapes
+- **Face selected** → UV operations (Fit, Center, Stretch, Tile, Left/Right/Top/Bottom justify), texture tools
+- **Entity selected** → I/O Connect, Properties, Duplicate, Delete
+- **Draw mode (idle)** → Shape selector, Add/Subtract toggle, grid snap presets
+- **Vertex mode** → Merge, Split, sub-mode toggle
+
+**Grid Snap submenu** lets you quickly switch snap resolution (1, 2, 4, 8, 16, 32, 64) without touching the dock.
+
+**Highlight Connected** appears as a check item — it reads the current state and toggles it.
+
+The menu only activates when idle (no active drag, paint, or external tool operation). The keybinding is configurable via `hf_keymap.gd`.
+
+### Radial Menu
+Press **`` ` ``** (backtick) to open an 8-sector pie menu centered on the cursor. Move the mouse to highlight a sector, then left-click to select:
+
+| Sector | Action |
+|--------|--------|
+| Box | Switch to Box shape |
+| Cylinder | Switch to Cylinder shape |
+| Select | Switch to Select tool |
+| Paint | Switch to Surface Paint |
+| Vertex | Enter Vertex Edit mode |
+| Tex Pick | Activate Texture Picker |
+| Measure | Activate Measure tool |
+| Clip | Activate Clip tool |
+
+**Dead zone:** Moving inside the inner ring (center area) deselects all sectors. Moving outside the outer ring also clears the selection — the cursor must be within the ring to select.
+
+**Dismiss:** Press Escape, backtick, or right-click to close without selecting.
+
+While the radial menu is open, it intercepts all viewport input. The keybinding is configurable via `hf_keymap.gd`.
+
+### Quick Property Popups
+Double-tap a key to open a small inline editor for a numeric property:
+
+| Keys | Property | Controls |
+|------|----------|----------|
+| **G G** | Grid Snap | 1 SpinBox (snap size) |
+| **B B** | Brush Size | 3 SpinBoxes (X, Y, Z dimensions) |
+| **R R** | Paint Radius | 1 SpinBox (radius) |
+
+The popup appears at the cursor position. Type a value and press **Enter** to apply, or **Escape** to cancel. Clicking outside the popup dismisses it (the click is consumed and does not pass through to the scene).
 
 ### Viewport Contextual Hints
 When you switch tools, a brief instruction hint appears in the viewport overlay:

@@ -5,6 +5,44 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Viewport-centric UI** (Apr 2026): Three Fitts's-Law-driven viewport overlays that keep the
+  cursor in the 3D viewport instead of traveling to the dock panel.
+
+  **Context Menu** (Space key): A `PopupMenu` with context-sensitive sections based on the current
+  selection state (brush/face/entity/draw/vertex). Sections include grid snap presets (1/2/4/8/16/32/64),
+  UV operations submenu, draw shapes submenu, and toggle items like Highlight Connected (check item
+  that reads and inverts current state). Position is converted from SubViewport to window coordinates
+  via `DisplayServer.mouse_get_position() - get_window().position`. Only activates when idle (no
+  active drag, paint, or external tool).
+
+  **Radial Menu** (`` ` `` backtick key): A custom `Control` overlay drawing 8 pie sectors via
+  `_draw()` — Box, Cylinder, Select, Paint, Vertex, Tex Pick, Measure, Clip. Added to
+  `CONTAINER_SPATIAL_EDITOR_MENU` with `PRESET_FULL_RECT`. Center position uses `event.position`
+  from `_forward_3d_gui_input` directly (same coordinate space as the overlay canvas — proven by
+  marquee overlay). Hover detection via `_segment_at_position()` helper with inner dead zone
+  (`INNER_RADIUS = 30`) and outer ring boundary (`OUTER_RADIUS = 120`). Click recomputes segment
+  from `event.position` at click time instead of trusting stale hover state. Dismiss via
+  Escape / backtick / RMB. While active, the radial intercepts all input at the top of
+  `_forward_3d_gui_input` before paint/vertex/external tool handlers.
+
+  **Quick Property Popups** (double-tap G G / B B / R R): `PanelContainer` with labeled SpinBoxes
+  for rapid numeric entry without leaving the viewport. Three property types: Grid Snap (1 spinbox),
+  Brush Size (3 XYZ spinboxes), Paint Radius (1 spinbox). Positioned in overlay space with bounds
+  clamping. Auto-dismiss on Enter/Escape; click-away dismiss handled by plugin.gd (checks
+  `get_rect()` against `event.position`, consumes the dismissing click).
+
+  **Integration:**
+  - Unified `_dispatch_viewport_action()` in plugin.gd handles all action strings from context menu,
+    radial, context toolbar, and command palette.
+  - Keybindings configurable via `hf_keymap.gd` (`context_menu`, `radial_menu` actions in "Tools"
+    category). `load_or_default()` merges missing default bindings into existing user JSON files.
+  - Command palette gains `context_menu` and `radial_menu` actions with idle-state gray-out.
+  - Theme-aware colors via `HFThemeUtils`.
+
+  Files: `ui/hf_viewport_context_menu.gd` (new), `ui/hf_radial_menu.gd` (new),
+  `ui/hf_quick_property.gd` (new), plugin.gd (modified), hf_keymap.gd (modified),
+  `ui/hf_hotkey_palette.gd` (modified).
+
 - **Automated occluder generation** (Apr 2026): New bake pass that analyzes baked mesh geometry
   to automatically generate `OccluderInstance3D` nodes for runtime occlusion culling.
 

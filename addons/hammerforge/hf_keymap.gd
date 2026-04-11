@@ -12,15 +12,21 @@ var _bindings: Dictionary = {}
 
 static func load_or_default(path: String = "") -> HFKeymap:
 	var km = HFKeymap.new()
+	var defaults := _default_bindings()
 	if path != "" and FileAccess.file_exists(path):
 		var file = FileAccess.open(path, FileAccess.READ)
 		if file:
 			var text = file.get_as_text()
 			var data = JSON.parse_string(text)
 			if data is Dictionary:
+				# Merge: user overrides take priority, but new default
+				# actions are added so new features work out of the box.
+				for action in defaults:
+					if not data.has(action):
+						data[action] = defaults[action]
 				km._bindings = data
 				return km
-	km._bindings = _default_bindings()
+	km._bindings = defaults
 	return km
 
 
@@ -63,6 +69,9 @@ static func _default_bindings() -> Dictionary:
 		"axis_x": {"keycode": KEY_X},
 		"axis_y": {"keycode": KEY_Y},
 		"axis_z": {"keycode": KEY_Z},
+		# Viewport menus
+		"context_menu": {"keycode": KEY_SPACE},
+		"radial_menu": {"keycode": KEY_QUOTELEFT},
 	}
 
 
@@ -155,6 +164,8 @@ static func get_category(action: String) -> String:
 		return "Tools"
 	if action in ["select_similar", "selection_filter"]:
 		return "Selection"
+	if action in ["context_menu", "radial_menu"]:
+		return "Tools"
 	return "Editing"
 
 
@@ -191,6 +202,8 @@ static func get_action_label(action: String) -> String:
 		"axis_x": "Lock X",
 		"axis_y": "Lock Y",
 		"axis_z": "Lock Z",
+		"context_menu": "Context Menu",
+		"radial_menu": "Radial Menu",
 	}
 	return LABELS.get(action, action.capitalize().replace("_", " "))
 
@@ -221,6 +234,8 @@ static func _keycode_to_label(keycode: int) -> String:
 			return "PgUp"
 		KEY_PAGEDOWN:
 			return "PgDn"
+		KEY_QUOTELEFT:
+			return "`"
 	# Single letter keys
 	if keycode >= KEY_A and keycode <= KEY_Z:
 		return char(keycode)

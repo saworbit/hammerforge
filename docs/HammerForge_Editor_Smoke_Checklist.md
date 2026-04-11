@@ -389,11 +389,43 @@ Enable the HammerForge plugin if it is not already enabled.
 - Bake the level. Confirm the baked container has an `HFIODispatcher` child in the scene tree.
 - Export a Playtest Build. Confirm the exported scene also contains an `HFIODispatcher` node.
 
-### 29. Cleanup / Persistence
+### 29. Viewport Context Menu
+- Select a brush. Press **Space**; confirm a context menu appears at the cursor with brush-specific items (Extrude Up, Extrude Down, Hollow, Clip, Carve, Duplicate, Delete).
+- Hover over **Grid Snap**; confirm a submenu appears with snap values (1, 2, 4, 8, 16, 32, 64).
+- Click a grid snap value (e.g. 8); confirm the dock's grid snap updates to 8.
+- Enable Face Select Mode. Select a face. Press **Space**; confirm the menu shows UV operations instead of brush operations.
+- Hover over **UV Operations**; confirm a submenu with Fit, Center, Stretch, Tile, etc.
+- Deselect all. Switch to Draw tool. Press **Space**; confirm the menu shows shape and Add/Subtract items.
+- Begin a drag (click+hold). Press **Space**; confirm the menu does NOT open (idle guard).
+- Select an entity. Press **Space**; confirm entity-specific items appear (I/O Connect, Properties, etc.).
+- Confirm **Highlight Connected** appears as a check item and toggles state when clicked.
+
+### 30. Radial Menu
+- Press **`` ` ``** (backtick) in the 3D viewport; confirm a radial pie menu appears centered at the cursor with 8 labeled sectors.
+- Move the mouse into the "Box" sector; confirm it highlights.
+- Move the mouse to a different sector; confirm the highlight follows.
+- Move the mouse into the center dead zone; confirm no sector is highlighted.
+- Move the mouse outside the outer ring; confirm no sector is highlighted.
+- Left-click on a highlighted sector (e.g. "Measure"); confirm the action executes and the menu closes.
+- Press **`` ` ``** again; confirm the menu reopens (reopen test).
+- Press **Escape** while the menu is open; confirm it closes without executing.
+- Press **`` ` ``** to open, then press **`` ` ``** again; confirm it toggles closed.
+- Right-click while the menu is open; confirm it closes without executing.
+- Open the radial while a drag is in progress; confirm it does NOT open (idle guard).
+
+### 31. Quick Property Popups
+- In the viewport, tap **G** twice quickly (G G); confirm a small popup appears at the cursor with a "Grid Snap" SpinBox showing the current snap value.
+- Type a new value (e.g. 4) and press **Enter**; confirm the grid snap updates and the popup closes.
+- Tap **G G** again; press **Escape**; confirm the popup closes without changing the value.
+- Tap **G G** again; click somewhere outside the popup; confirm it dismisses (click consumed, no brush placed).
+- Select a brush. Tap **B** twice (B B); confirm a popup appears with 3 SpinBoxes (X, Y, Z).
+- Enable paint mode. Tap **R** twice (R R); confirm a popup appears with a "Paint Radius" SpinBox.
+
+### 32. Cleanup / Persistence
 - Dismiss the tutorial with and without `Don't show again` checked.
 - Restart Godot and confirm the `show_welcome` preference behaves as expected.
 - Reopen the dock and confirm no layout corruption remains after closing the tutorial and shortcut dialog.
 
 ## Expected Outcome
 
-If all steps pass, the remaining risk on the tutorial/prefab/shortcut/subtract-preview/vertex-editing/polygon/path/material-browser/spawn-system/context-toolbar/command-palette/terrain-scatter/measure-tool/history-browser/performance-monitor/theme-sync/export-playtest/displacement/bevel/auto-connectors/validation-weld-planarity/io-runtime feature set is low and limited mainly to edge cases outside this smoke path.
+If all steps pass, the remaining risk on the tutorial/prefab/shortcut/subtract-preview/vertex-editing/polygon/path/material-browser/spawn-system/context-toolbar/command-palette/terrain-scatter/measure-tool/history-browser/performance-monitor/theme-sync/export-playtest/displacement/bevel/auto-connectors/validation-weld-planarity/io-runtime/viewport-context-menu/radial-menu/quick-property feature set is low and limited mainly to edge cases outside this smoke path.

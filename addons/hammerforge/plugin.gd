@@ -38,12 +38,22 @@ var _selection_filter: Window = null
 var _marquee_overlay: Control = null
 var _coach_marks: Control = null
 var _operation_replay: Control = null
+var _viewport_context_menu: PopupMenu = null
+var _radial_menu: Control = null
+var _quick_property: Control = null
+# Double-tap detection for quick property popups
+var _last_tap_keycode := 0
+var _last_tap_time := 0
+const _DOUBLE_TAP_MS := 350
 const LevelRootType = preload("level_root.gd")
 const HFContextToolbar = preload("ui/hf_context_toolbar.gd")
 const HFHotkeyPalette = preload("ui/hf_hotkey_palette.gd")
 const HFSelectionFilter = preload("ui/hf_selection_filter.gd")
 const HFCoachMarks = preload("ui/hf_coach_marks.gd")
 const HFOperationReplay = preload("ui/hf_operation_replay.gd")
+const HFViewportContextMenu = preload("ui/hf_viewport_context_menu.gd")
+const HFRadialMenu = preload("ui/hf_radial_menu.gd")
+const HFQuickProperty = preload("ui/hf_quick_property.gd")
 const DraftEntityType = preload("draft_entity.gd")
 const IconRes = preload("icon.png")
 const HFUndoHelper = preload("undo_helper.gd")
@@ -141,6 +151,25 @@ func _enter_tree():
 	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, _operation_replay)
 	if dock:
 		dock.set_operation_replay(_operation_replay)
+	# Right-click context menu (PopupMenu — added as child of base_control, not container)
+	_viewport_context_menu = HFViewportContextMenu.new()
+	if base_control:
+		_viewport_context_menu.theme = base_control.theme
+	_viewport_context_menu.action_requested.connect(_on_viewport_action)
+	if base_control:
+		base_control.add_child(_viewport_context_menu)
+	# Radial menu (long-press RMB pie menu)
+	_radial_menu = HFRadialMenu.new()
+	if base_control:
+		_radial_menu.theme = base_control.theme
+	_radial_menu.action_selected.connect(_on_radial_action)
+	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, _radial_menu)
+	# Quick property popup (double-tap G/B/R)
+	_quick_property = HFQuickProperty.new()
+	if base_control:
+		_quick_property.theme = base_control.theme
+	_quick_property.value_committed.connect(_on_quick_property_committed)
+	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, _quick_property)
 	var selection = get_editor_interface().get_selection()
 	if selection:
 		if not selection.is_connected(
@@ -249,6 +278,27 @@ func _exit_tree():
 		if is_instance_valid(_operation_replay):
 			_operation_replay.queue_free()
 		_operation_replay = null
+	if _viewport_context_menu:
+		if is_instance_valid(_viewport_context_menu):
+			_viewport_context_menu.action_requested.disconnect(_on_viewport_action)
+			if _viewport_context_menu.get_parent():
+				_viewport_context_menu.get_parent().remove_child(_viewport_context_menu)
+			_viewport_context_menu.queue_free()
+		_viewport_context_menu = null
+	if _radial_menu:
+		if is_instance_valid(_radial_menu):
+			_radial_menu.action_selected.disconnect(_on_radial_action)
+		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _radial_menu)
+		if is_instance_valid(_radial_menu):
+			_radial_menu.queue_free()
+		_radial_menu = null
+	if _quick_property:
+		if is_instance_valid(_quick_property):
+			_quick_property.value_committed.disconnect(_on_quick_property_committed)
+		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _quick_property)
+		if is_instance_valid(_quick_property):
+			_quick_property.queue_free()
+		_quick_property = null
 	var selection = get_editor_interface().get_selection()
 	if (
 		selection
@@ -285,6 +335,14 @@ func _on_editor_theme_changed() -> void:
 		_operation_replay.theme = base_control.theme
 		if _operation_replay.has_method("refresh_theme_colors"):
 			_operation_replay.refresh_theme_colors()
+	if _viewport_context_menu:
+		_viewport_context_menu.theme = base_control.theme
+	if _radial_menu:
+		_radial_menu.theme = base_control.theme
+	if _quick_property:
+		_quick_property.theme = base_control.theme
+		if _quick_property.has_method("refresh_theme_colors"):
+			_quick_property.refresh_theme_colors()
 
 
 func _on_hud_visibility_changed(visible: bool) -> void:
@@ -363,6 +421,9 @@ func _update_context_toolbar_state(root: Node, tool_id: int) -> void:
 	state["paint_mode"] = dock.is_paint_mode_enabled() if dock else false
 	state["vertex_mode"] = _vertex_mode
 	state["is_subtract"] = dock.get_operation() != 0 if dock else false  # 0 = UNION
+	state["has_active_external_tool"] = (
+		_tool_registry.has_active_external_tool() if _tool_registry else false
+	)
 
 	# Input mode
 	var input_mode := 0
@@ -517,6 +578,23 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 	var tool_id = dock.get_tool()
 	var paint_mode = dock.is_paint_mode_enabled()
 	root.grid_snap = dock.get_grid_snap()
+
+	# Radial menu intercept — must be FIRST. While radial is active, it owns
+	# all input. No other intercept (paint, vertex, external tool) should run.
+	if _radial_menu and _radial_menu.is_active():
+		_radial_menu._gui_input(event)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+
+	# Quick property popup intercept — Escape or click-away dismisses (consuming the event)
+	if _quick_property and _quick_property.is_active():
+		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+			_quick_property.hide_popup()
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+		if event is InputEventMouseButton and event.pressed:
+			var popup_rect := _quick_property.get_rect()
+			if not popup_rect.has_point(event.position):
+				_quick_property.hide_popup()
+				return EditorPlugin.AFTER_GUI_INPUT_STOP
 
 	# Displacement paint intercept — must come before regular paint so that
 	# displacement surfaces get the stroke when paint mode is active.
@@ -936,6 +1014,35 @@ func _handle_keyboard_input(
 		if ext_result == EditorPlugin.AFTER_GUI_INPUT_STOP:
 			return ext_result
 
+	# Viewport context menu — only when idle (no active operation, no active external tool)
+	if _keymap.matches("context_menu", event):
+		var has_active_ext := _tool_registry and _tool_registry.has_active_external_tool()
+		if root.input_state.is_idle() and not has_active_ext:
+			_show_viewport_context_menu(root, tool_id)
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+	# Radial menu toggle — same idle guard
+	if _keymap.matches("radial_menu", event):
+		if _radial_menu and is_instance_valid(_radial_menu):
+			if _radial_menu.is_active():
+				_radial_menu.hide_menu()
+				return EditorPlugin.AFTER_GUI_INPUT_STOP
+			var has_active_ext := _tool_registry and _tool_registry.has_active_external_tool()
+			if root.input_state.is_idle() and not has_active_ext:
+				_radial_menu.show_at(_get_current_overlay_mouse_pos())
+				return EditorPlugin.AFTER_GUI_INPUT_STOP
+
+	# Double-tap detection for quick property popups (G G, B B, R R)
+	# Must come before keymap matches so the second tap is intercepted.
+	var tap_now := Time.get_ticks_msec()
+	if not event.ctrl_pressed and not event.shift_pressed and not event.alt_pressed:
+		if event.keycode == _last_tap_keycode and (tap_now - _last_tap_time) < _DOUBLE_TAP_MS:
+			var handled := _handle_double_tap(event.keycode, root, paint_mode)
+			if handled:
+				_last_tap_keycode = 0
+				return EditorPlugin.AFTER_GUI_INPUT_STOP
+		_last_tap_keycode = event.keycode
+		_last_tap_time = tap_now
+
 	if _keymap.matches("delete", event):
 		var deleted = _delete_selected(root)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP if deleted else EditorPlugin.AFTER_GUI_INPUT_PASS
@@ -1097,6 +1204,61 @@ func _handle_rmb_cancel(root: Node, tool_id: int) -> int:
 	_update_marquee_overlay(Vector2.ZERO, Vector2.ZERO, false)
 	_update_hud_context()
 	return EditorPlugin.AFTER_GUI_INPUT_STOP
+
+
+## Show the viewport context menu at the current mouse position.
+## Triggered by Space key (no modifiers). Converts screen coords to window-local
+## for PopupMenu.popup() — the only reliable coordinate source since the 3D
+## SubViewport's event.position space doesn't match window space.
+func _show_viewport_context_menu(root: Node, tool_id: int) -> void:
+	if not _viewport_context_menu or not is_instance_valid(_viewport_context_menu):
+		return
+	var state := {}
+	_build_viewport_state(state, root, tool_id)
+	var screen_pos := DisplayServer.mouse_get_position()
+	var win := get_window()
+	var window_pos := Vector2(screen_pos)
+	if win:
+		window_pos = Vector2(screen_pos - win.position)
+	_viewport_context_menu.show_at(window_pos, state)
+
+
+func _get_current_overlay_mouse_pos() -> Vector2:
+	var screen_pos := DisplayServer.mouse_get_position()
+	var win := get_window()
+	var window_pos := Vector2(screen_pos)
+	if win:
+		window_pos = Vector2(screen_pos - win.position)
+	if _marquee_overlay and is_instance_valid(_marquee_overlay):
+		return _marquee_overlay.get_global_transform().affine_inverse() * window_pos
+	return last_3d_mouse_pos
+
+
+func _build_viewport_state(state: Dictionary, root: Node, tool_id: int) -> void:
+	state["has_root"] = root != null
+	state["tool"] = tool_id
+	state["paint_mode"] = dock.is_paint_mode_enabled() if dock else false
+	state["vertex_mode"] = _vertex_mode
+	state["is_subtract"] = dock.get_operation() != 0 if dock else false
+	var input_mode := 0
+	if root and root.input_state:
+		input_mode = root.input_state.mode
+	state["input_mode"] = input_mode
+	var brush_count := 0
+	var entity_count := 0
+	for node in hf_selection:
+		if node is DraftBrush:
+			brush_count += 1
+		elif root and root.has_method("is_entity_node") and root.is_entity_node(node):
+			entity_count += 1
+	state["brush_count"] = brush_count
+	state["entity_count"] = entity_count
+	var face_count := 0
+	if root and root.get("face_selection") is Dictionary:
+		for key in root.face_selection.keys():
+			var indices = root.face_selection.get(key, [])
+			face_count += indices.size()
+	state["face_count"] = face_count
 
 
 func _handle_select_mouse(
@@ -3059,8 +3221,268 @@ func _on_hotkey_palette_action(action: String) -> void:
 			_apply_last_texture(root)
 		"selection_filter":
 			_show_selection_filter()
+		"context_menu":
+			var tool_id_now: int = dock.get_tool() if dock else 0
+			_show_viewport_context_menu(root, tool_id_now)
+		"radial_menu":
+			if _radial_menu and is_instance_valid(_radial_menu):
+				if _radial_menu.is_active():
+					_radial_menu.hide_menu()
+				else:
+					_radial_menu.show_at(_get_current_overlay_mouse_pos())
 	_show_coach_mark_for_action(action)
 	_update_hud_context()
+
+
+## Unified action dispatch for viewport context menu and radial menu.
+## Routes actions to the same handlers used by context toolbar and hotkey palette.
+func _dispatch_viewport_action(action: String, args: Array = []) -> void:
+	var root = active_root if active_root else _get_level_root()
+	if not root:
+		return
+	match action:
+		# Tool switching
+		"tool_draw":
+			_deactivate_external_tool()
+			if dock and dock.tool_draw:
+				dock.tool_draw.button_pressed = true
+		"tool_select":
+			_deactivate_external_tool()
+			if dock and dock.tool_select:
+				dock.tool_select.button_pressed = true
+		"extrude_up", "tool_extrude_up":
+			_deactivate_external_tool()
+			if dock:
+				dock.set_extrude_tool(1)
+		"extrude_down", "tool_extrude_down":
+			_deactivate_external_tool()
+			if dock:
+				dock.set_extrude_tool(-1)
+		# Editing operations
+		"hollow":
+			_hollow_selected(root)
+		"clip":
+			_clip_selected(root)
+		"carve":
+			_carve_selected(root)
+		"merge":
+			_merge_selected(root)
+		"duplicate":
+			_duplicate_selected(root)
+		"delete":
+			_delete_selected(root)
+		"group":
+			_group_selected(root)
+		"ungroup":
+			_ungroup_selected(root)
+		"move_to_floor":
+			_move_selected_to_floor(root)
+		"move_to_ceiling":
+			_move_selected_to_ceiling(root)
+		# Shapes
+		"shape_box":
+			if dock and dock.shape_select:
+				dock.shape_select.select(0)
+				dock._on_shape_selected(0)
+		"shape_cylinder":
+			if dock and dock.shape_select:
+				dock.shape_select.select(1)
+				dock._on_shape_selected(1)
+		"shape_sphere":
+			if dock and dock.shape_select:
+				dock.shape_select.select(2)
+				dock._on_shape_selected(2)
+		"shape_cone":
+			if dock and dock.shape_select:
+				dock.shape_select.select(3)
+				dock._on_shape_selected(3)
+		# UV/Material
+		"justify_fit":
+			if dock:
+				dock._on_justify("fit")
+		"justify_center":
+			if dock:
+				dock._on_justify("center")
+		"justify_left":
+			if dock:
+				dock._on_justify("left")
+		"justify_right":
+			if dock:
+				dock._on_justify("right")
+		"justify_top":
+			if dock:
+				dock._on_justify("top")
+		"justify_bottom":
+			if dock:
+				dock._on_justify("bottom")
+		"apply_to_brush":
+			if dock:
+				dock._apply_material_to_whole_brush()
+		"apply_last_texture":
+			_apply_last_texture(root)
+		# Entity
+		"entity_io":
+			if dock:
+				dock.main_tabs.current_tab = 2
+		"entity_props":
+			if dock:
+				dock.main_tabs.current_tab = 2
+		"highlight_connected":
+			if root and root.has_method("set_highlight_connected"):
+				var pressed: bool = args[0] if not args.is_empty() else false
+				root.set_highlight_connected(pressed)
+			if dock:
+				dock.sync_wiring_highlight_state()
+		# Axis lock
+		"axis_x":
+			root.set_axis_lock(LevelRootType.AxisLock.X, true)
+			if dock:
+				dock.update_axis_lock_buttons(LevelRootType.AxisLock.X)
+		"axis_y":
+			root.set_axis_lock(LevelRootType.AxisLock.Y, true)
+			if dock:
+				dock.update_axis_lock_buttons(LevelRootType.AxisLock.Y)
+		"axis_z":
+			root.set_axis_lock(LevelRootType.AxisLock.Z, true)
+			if dock:
+				dock.update_axis_lock_buttons(LevelRootType.AxisLock.Z)
+		# Vertex
+		"vertex_edit":
+			_toggle_vertex_mode(root)
+		"vertex_submode":
+			if root.vertex_system:
+				root.vertex_system.sub_mode = 0
+		"edge_submode":
+			if root.vertex_system:
+				root.vertex_system.sub_mode = 1
+		"vertex_merge":
+			if root.vertex_system:
+				_vertex_merge_selected(root)
+		"vertex_split":
+			if root.vertex_system:
+				_vertex_split_selected_edge(root)
+		"vertex_clip_convex":
+			if root.vertex_system:
+				_vertex_clip_to_convex(root)
+		"vertex_exit":
+			_toggle_vertex_mode(root)
+		# Selection
+		"select_similar":
+			_select_similar(root)
+		"selection_filter":
+			_show_selection_filter()
+		# Spawn
+		"set_player_start":
+			if dock:
+				dock._on_spawn_set_primary()
+		# Prefab
+		"quick_save_prefab":
+			_quick_save_prefab(root, false)
+		"quick_save_linked_prefab":
+			_quick_save_prefab(root, true)
+		"cycle_variant":
+			_cycle_prefab_variant(root)
+		"push_to_source":
+			_push_prefab_to_source(root)
+		"propagate_prefab":
+			_propagate_prefab(root)
+		# Texture picker
+		"texture_picker":
+			_texture_picker_active = true
+			if dock:
+				dock.show_toast("Texture Picker: click a face to sample its material", 0)
+		# Paint
+		"surface_paint":
+			if dock and dock.paint_mode:
+				dock.paint_mode.button_pressed = true
+		# Misc
+		"toggle_grid":
+			if dock and dock.show_grid:
+				dock.show_grid.button_pressed = not dock.show_grid.button_pressed
+		"quick_bake":
+			if dock and dock.has_method("_on_bake_pressed"):
+				dock._on_bake_pressed()
+		"undo":
+			if undo_redo_manager:
+				undo_redo_manager.undo()
+		"redo":
+			if undo_redo_manager:
+				undo_redo_manager.redo()
+		# Grid snap
+		"set_grid_snap":
+			if dock and not args.is_empty():
+				dock._apply_grid_snap(float(args[0]))
+		# Measure
+		"measure":
+			if _tool_registry and active_root:
+				_tool_registry.activate_tool(
+					100, active_root, last_3d_camera, undo_redo_manager, _record_history
+				)
+		"cancel_drag":
+			root.cancel_drag()
+			numeric_buffer = ""
+	_show_coach_mark_for_action(action)
+	_update_hud_context()
+
+
+func _on_viewport_action(action: String, args: Array) -> void:
+	_dispatch_viewport_action(action, args)
+
+
+func _on_radial_action(action: String) -> void:
+	_dispatch_viewport_action(action)
+
+
+## Double-tap handler for quick property popups.
+func _handle_double_tap(keycode: int, root: Node, paint_mode: bool) -> bool:
+	match keycode:
+		KEY_G:
+			var snap_val: float = root.grid_snap if root else 16.0
+			_show_quick_property_at_cursor(HFQuickProperty.PropertyType.GRID_SNAP, [snap_val])
+			return true
+		KEY_B:
+			if paint_mode:
+				return false  # Let paint_bucket handle it
+			var sz: Vector3 = (
+				root.input_state.drag_size_default
+				if root and root.input_state
+				else Vector3(4, 4, 4)
+			)
+			_show_quick_property_at_cursor(
+				HFQuickProperty.PropertyType.BRUSH_SIZE, [sz.x, sz.y, sz.z]
+			)
+			return true
+		KEY_R:
+			if paint_mode:
+				var radius: float = dock.get_surface_paint_radius() if dock else 5.0
+				_show_quick_property_at_cursor(HFQuickProperty.PropertyType.PAINT_RADIUS, [radius])
+				return true
+	return false
+
+
+func _show_quick_property_at_cursor(prop_type: int, values: Array) -> void:
+	if not _quick_property or not is_instance_valid(_quick_property):
+		return
+	_quick_property.show_property(prop_type, _get_current_overlay_mouse_pos(), values)
+
+
+func _on_quick_property_committed(property_type: int, values: Array) -> void:
+	var root = active_root if active_root else _get_level_root()
+	match property_type:
+		HFQuickProperty.PropertyType.GRID_SNAP:
+			if dock and not values.is_empty():
+				dock._apply_grid_snap(float(values[0]))
+		HFQuickProperty.PropertyType.BRUSH_SIZE:
+			if root and root.input_state and values.size() >= 3:
+				root.input_state.drag_size_default = Vector3(values[0], values[1], values[2])
+				if dock:
+					dock.size_x.value = values[0]
+					dock.size_y.value = values[1]
+					dock.size_z.value = values[2]
+		HFQuickProperty.PropertyType.PAINT_RADIUS:
+			if dock and not values.is_empty():
+				if dock.surface_paint_radius:
+					dock.surface_paint_radius.value = float(values[0])
 
 
 func _show_coach_mark_for_action(action: String) -> void:
