@@ -422,6 +422,9 @@ var io_add_btn: Button = null
 var io_list: ItemList = null
 var io_remove_btn: Button = null
 var _io_wiring_panel = null  # HFIOWiringPanel
+# Entity I/O sections (context-hidden when no entity selected)
+var _entity_io_section: VBoxContainer = null
+var _io_wiring_section: VBoxContainer = null
 # Entity Properties controls
 var _entity_props_section: VBoxContainer = null
 var _entity_props_controls: Array = []
@@ -2727,12 +2730,20 @@ func set_selection_nodes(nodes: Array) -> void:
 	if not nodes.is_empty() and level_root and level_root.is_entity_node(nodes[0]):
 		_refresh_io_list(nodes[0])
 		_rebuild_entity_props(nodes[0])
+		if _entity_io_section:
+			_entity_io_section.visible = true
+		if _io_wiring_section:
+			_io_wiring_section.visible = true
 		if _io_wiring_panel:
 			_io_wiring_panel.set_source_entity(nodes[0])
 	else:
 		if io_list:
 			io_list.clear()
 		_clear_entity_props()
+		if _entity_io_section:
+			_entity_io_section.visible = false
+		if _io_wiring_section:
+			_io_wiring_section.visible = false
 		if _io_wiring_panel:
 			_io_wiring_panel.set_source_entity(null)
 

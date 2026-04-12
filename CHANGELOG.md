@@ -5,6 +5,14 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Progressive disclosure for Entity I/O** (Apr 2026): Entity I/O and I/O Wiring sections in
+  the Entities tab are now context-hidden — they only appear when an entity is selected, matching
+  the existing Entity Properties behavior. I/O Wiring also defaults to collapsed. This keeps the
+  Entities tab clean during greyboxing and reveals wiring complexity only when you're actively
+  editing an entity.
+
+  Files: `dock.gd` (modified), `ui/entity_tab_builder.gd` (modified).
+
 - **Visual system status feedback** (Apr 2026): Classic editor-style visual feedback for brush
   operations, grid awareness, and system state.
 

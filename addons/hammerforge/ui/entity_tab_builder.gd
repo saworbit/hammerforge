@@ -26,10 +26,12 @@ func build(parent: Control) -> void:
 	prop_sec.visible = false
 	dock._entity_props_section = prop_sec
 
-	# --- Entity I/O section ---
+	# --- Entity I/O section (hidden until entity selected) ---
 	var io_sec = hf_collapsible_section.create("Entity I/O", false)
 	entities_vbox.add_child(io_sec)
 	dock._register_section(io_sec, "Entity I/O")
+	io_sec.visible = false
+	dock._entity_io_section = io_sec
 	var ioc = io_sec.get_content()
 
 	# Output Name
@@ -118,10 +120,12 @@ func build(parent: Control) -> void:
 	dock.io_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	ioc.add_child(dock.io_list)
 
-	# --- I/O Wiring Panel section ---
-	var wire_sec = hf_collapsible_section.create("I/O Wiring", true)
+	# --- I/O Wiring Panel section (collapsed & hidden until entity selected) ---
+	var wire_sec = hf_collapsible_section.create("I/O Wiring", false)
 	entities_vbox.add_child(wire_sec)
 	dock._register_section(wire_sec, "I/O Wiring")
+	wire_sec.visible = false
+	dock._io_wiring_section = wire_sec
 	var wire_content = wire_sec.get_content()
 
 	dock._io_wiring_panel = HFIOWiringPanelType.new()

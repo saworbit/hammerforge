@@ -198,7 +198,7 @@ Grid-based paint layers with chunked storage for large worlds:
 
 HammerForge's dock is designed to stay out of your way while keeping everything reachable:
 
-- **4-tab dock** (Brush, Paint, Entities, Manage) with **collapsible sections** -- persisted state, separators, indented content
+- **4-tab dock** (Brush, Paint, Entities, Manage) with **collapsible sections** -- persisted state, separators, indented content, context-hidden panels (Entity I/O sections appear only when an entity is selected)
 - **Dark/light theme sync** -- all custom panels adapt to Godot's theme setting automatically
 - **Mode indicator banner** -- color-coded strip shows current tool, gesture stage ("Step 1/2: Draw base -- 64 x 32"), and numeric input buffer
 - **Toast notifications** -- transient messages for save/load/bake/error results

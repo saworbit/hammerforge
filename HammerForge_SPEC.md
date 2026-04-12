@@ -78,7 +78,7 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `hf_toast.gd` | Toast notification system (auto-fading stacked messages) |
 | `hf_material_browser.gd` | Visual material browser (thumbnail grid, search, filters, favorites, drag-drop) |
 | `paint_tab_builder.gd` | Builds Paint tab sections + signal connections |
-| `entity_tab_builder.gd` | Builds Entity Properties + Entity I/O sections |
+| `entity_tab_builder.gd` | Builds Entity Properties + Entity I/O + I/O Wiring sections (all context-hidden until entity selected) |
 | `manage_tab_builder.gd` | Builds Manage tab sections (Bake, File, Settings, Prefabs, etc.) |
 | `selection_tools_builder.gd` | Builds Selection Tools section (hollow, clip, merge, move, tie, duplicator) |
 
@@ -296,7 +296,7 @@ Foliage Populator
 - `find_entities_by_name()` searches both `entities_node` and `draft_brushes_node` for target resolution.
 - `fire_output(entity, output_name, parameter)` delegates to `HFIORuntime` dispatcher if present in the scene, falls back to direct multi-target resolution otherwise.
 - I/O connections are serialized with entity info in `.hflevel` saves and undo/redo state via `capture_entity_info()` / `restore_entity_from_info()`.
-- Dock UI: collapsible "Entity I/O" section in Entities tab with fields for Output, Target, Input, Parameter, Delay, Fire Once. Add/Remove buttons and connection ItemList. Auto-refreshes on entity selection change.
+- Dock UI: collapsible "Entity I/O" section in Entities tab with fields for Output, Target, Input, Parameter, Delay, Fire Once. Add/Remove buttons and connection ItemList. Context-hidden (only visible when an entity is selected); auto-refreshes on selection change.
 - **Viewport visualization**: `HFIOVisualizer` draws ImmediateMesh lines between connected entities. Color-coded: green=standard, orange=fire_once, yellow=selected entity connections. Throttled refresh (10 frames). "Show I/O Lines" checkbox in Entities tab.
 - **Runtime signal translation**: `HFIORuntime` (`hf_io_runtime.gd`) auto-wires `entity_io_outputs` metadata into Godot signals on bake/export. Auto-injected by `export_playtest_scene()` and optionally by `postprocess_bake()` (`bake_wire_io` export). Connections keyed by node instance ID; targets resolved to all matching nodes. Delivery cascade: direct method → snake_case → `_on_io_input()` → user signal. Source entities receive `io_<OutputName>` user signals. Delay via `SceneTreeTimer`, fire-once tracked per-connection. `extra_scan_root_paths: Array[NodePath]` (@export) persists scan roots across scene save/reload. `_prune_overlapping_roots()` deduplicates by instance ID and ancestor/descendant relationship.
 
@@ -378,7 +378,7 @@ The dock uses 4 tabs with collapsible sections for visual hierarchy:
 |-----|----------|
 | **Brush** | Shape, size, grid snap, quick snap presets, material picker, operation mode (Add/Sub), texture lock |
 | **Paint** | 7 collapsible sections: Floor Paint, Heightmap, Blend & Terrain, Regions, Materials (with Refresh Prototypes), UV Editor, Surface Paint |
-| **Entities** | Entity palette with drag-and-drop, Create DraftEntity, Entity Properties, Entity I/O connections (collapsible sections) |
+| **Entities** | Entity palette with drag-and-drop, Create DraftEntity, Entity Properties + Entity I/O + I/O Wiring (context-hidden collapsible sections, visible only when entity selected) |
 | **Manage** | Bake, Actions (floor/cuts/clear), File, Presets, History, Settings, Performance, plus Visgroups & Cordon (inserted programmatically) |
 
 - **Brush tab** includes contextual **Selection Tools** section (hollow, clip, merge, move, tie, duplicator) visible when brushes are selected.
