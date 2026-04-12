@@ -55,7 +55,7 @@ HammerForge is a single `addons/` folder. No external tools, no custom builds, n
 Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Subtract** operations with pending cut staging, so you can preview subtractions before committing.
 
 - **15 shapes** -- box, cylinder, sphere, cone, wedge, pyramid, prisms, ellipsoid, capsule, torus, and platonic solids
-- **Extrude Up/Down** (U / J) -- click any face and drag to extend
+- **Extrude Up/Down** (E / U or Shift+E / J) -- click any face and drag to extend
 - **Hollow** (Ctrl+H) -- convert a solid brush to a room with configurable wall thickness
 - **Clip** (Shift+X) -- split a brush along an axis-aligned plane
 - **Carve** (Ctrl+Shift+R) -- boolean-subtract one brush from all intersecting brushes
@@ -219,6 +219,7 @@ HammerForge's dock is designed to stay out of your way while keeping everything 
 - **Auto-mode hints** -- "Drawing in Add mode" bar appears during drag with one-click Add/Subtract toggle
 - **Tool poll system** -- buttons gray out with inline hints when an action can't run ("Select a brush to use these tools")
 - **Marquee selection** -- drag-to-select brushes, entities, and faces with selection filter popover (by normal, material, similar, visgroup, type)
+- **Select All / Deselect All** (A / Shift+A) -- Blender-convention quick selection; clears face selection and transitions to object context
 - **Performance monitor** -- health summary, brush/entity/vertex counts, chunk recommendations, color-coded ProgressBar
 - **Contextual selection tools** -- hollow, clip, move, tie, duplicator appear in Brush tab only when brushes are selected
 - **Live dimensions** -- real-time W x H x D display during drag gestures

@@ -130,9 +130,11 @@ func _build_brush_section() -> void:
 	_content.add_child(section)
 	_sections[Context.BRUSH_SELECTED] = section
 
-	_add_tool_button(section, "Ext\u25b2", "Extrude Up (U)", "extrude_up")
-	_add_tool_button(section, "Ext\u25bc", "Extrude Down (J)", "extrude_down")
+	_add_group_label(section, "Extrude")
+	_add_tool_button(section, "Ext\u25b2", "Extrude Up (E / U)", "extrude_up")
+	_add_tool_button(section, "Ext\u25bc", "Extrude Down (Shift+E / J)", "extrude_down")
 	_add_sep(section)
+	_add_group_label(section, "Modify")
 	_add_tool_button(section, "Hol", "Hollow (Ctrl+H)", "hollow")
 	_add_tool_button(section, "Clip", "Clip (Shift+X)", "clip")
 	_add_tool_button(section, "Carve", "Carve (Ctrl+Shift+R)", "carve")
@@ -141,6 +143,8 @@ func _build_brush_section() -> void:
 	_add_tool_button(section, "Dup", "Duplicate (Ctrl+D)", "duplicate")
 	_add_tool_button(section, "Del", "Delete (Del)", "delete")
 	_add_sep(section)
+	_add_group_label(section, "Select")
+	_add_tool_button(section, "All", "Select All (A)", "select_all")
 	_add_tool_button(section, "\u2302", "Set as Player Start", "set_player_start")
 	_add_tool_button(section, "Sim", "Select Similar brushes (Shift+S)", "select_similar")
 	_add_tool_button(section, "Flt", "Selection Filters (Shift+F)", "selection_filter")
@@ -175,7 +179,7 @@ func _build_face_section() -> void:
 		_material_thumbs.append(btn)
 
 	_add_sep(section)
-	# UV justify buttons
+	_add_group_label(section, "UV")
 	_add_tool_button(section, "Fit", "UV Fit", "justify_fit")
 	_add_tool_button(section, "Ctr", "UV Center", "justify_center")
 	_add_tool_button(section, "\u2190", "UV Left", "justify_left")
@@ -183,10 +187,11 @@ func _build_face_section() -> void:
 	_add_tool_button(section, "\u2191", "UV Top", "justify_top")
 	_add_tool_button(section, "\u2193", "UV Bottom", "justify_bottom")
 	_add_sep(section)
+	_add_group_label(section, "Apply")
 	_add_tool_button(section, "All", "Apply to Whole Brush", "apply_to_brush")
+	_add_tool_button(section, "Last", "Apply Last Texture (Shift+T)", "apply_last_texture")
 	_add_sep(section)
 	_add_tool_button(section, "Sim", "Select Similar faces (Shift+S)", "select_similar")
-	_add_tool_button(section, "Last", "Apply Last Texture (Shift+T)", "apply_last_texture")
 
 
 func _build_entity_section() -> void:
@@ -196,6 +201,7 @@ func _build_entity_section() -> void:
 	_content.add_child(section)
 	_sections[Context.ENTITY_SELECTED] = section
 
+	_add_group_label(section, "Entity")
 	_add_tool_button(section, "I/O", "Edit I/O Connections", "entity_io")
 	_add_tool_button(section, "Props", "Quick-Edit Properties", "entity_props")
 	_add_sep(section)
@@ -238,6 +244,7 @@ func _build_draw_section() -> void:
 	_content.add_child(section)
 	_sections[Context.DRAW_IDLE] = section
 
+	_add_group_label(section, "Shape")
 	_add_tool_button(section, "Box", "Box brush", "shape_box")
 	_add_tool_button(section, "Cyl", "Cylinder brush", "shape_cylinder")
 	_add_tool_button(section, "Sph", "Sphere brush", "shape_sphere")
@@ -290,9 +297,11 @@ func _build_vertex_section() -> void:
 	_content.add_child(section)
 	_sections[Context.VERTEX_EDIT] = section
 
+	_add_group_label(section, "Mode")
 	_add_tool_button(section, "Vtx", "Vertex sub-mode", "vertex_submode")
 	_add_tool_button(section, "Edge", "Edge sub-mode (E)", "edge_submode")
 	_add_sep(section)
+	_add_group_label(section, "Edit")
 	_add_tool_button(section, "Merge", "Merge vertices (Ctrl+W)", "vertex_merge")
 	_add_tool_button(section, "Split", "Split edge (Ctrl+E)", "vertex_split")
 	_add_tool_button(section, "Convex", "Clip to convex hull", "vertex_clip_convex")
@@ -301,6 +310,16 @@ func _build_vertex_section() -> void:
 
 
 # --- Helpers ---
+
+
+func _add_group_label(parent: Control, text: String) -> Label:
+	var lbl = Label.new()
+	lbl.text = text
+	lbl.add_theme_font_size_override("font_size", 9)
+	lbl.add_theme_color_override("font_color", HFThemeUtils.muted_text())
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	parent.add_child(lbl)
+	return lbl
 
 
 func _add_tool_button(parent: Control, text: String, tooltip: String, action: String) -> Button:

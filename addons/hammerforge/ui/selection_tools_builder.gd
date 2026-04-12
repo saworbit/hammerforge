@@ -31,7 +31,9 @@ func build(parent: Control) -> void:
 	dock._sel_tools_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sc.add_child(dock._sel_tools_hint_label)
 
-	# --- Hollow ---
+	# ── Brush Modification ──
+	_add_sub_header(sc, "Brush Modification")
+
 	var hollow_row = HBoxContainer.new()
 	sc.add_child(hollow_row)
 	var hollow_label = Label.new()
@@ -48,7 +50,12 @@ func build(parent: Control) -> void:
 	dock.hollow_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hollow_row.add_child(dock.hollow_btn)
 
-	# --- Move to Floor / Ceiling ---
+	dock.clip_btn = dock._make_button("Clip Selected (Shift+X)")
+	sc.add_child(dock.clip_btn)
+
+	# ── Positioning ──
+	_add_sub_header(sc, "Positioning")
+
 	var move_row = HBoxContainer.new()
 	sc.add_child(move_row)
 	dock.move_floor_btn = dock._make_button("To Floor (Ctrl+Shift+F)")
@@ -58,7 +65,9 @@ func build(parent: Control) -> void:
 	dock.move_ceiling_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	move_row.add_child(dock.move_ceiling_btn)
 
-	# --- Brush Entity (Tie to Entity) ---
+	# ── Entity Binding ──
+	_add_sub_header(sc, "Entity Binding")
+
 	var tie_row = HBoxContainer.new()
 	sc.add_child(tie_row)
 	dock.brush_entity_class_opt = OptionButton.new()
@@ -70,14 +79,8 @@ func build(parent: Control) -> void:
 	dock.untie_entity_btn = dock._make_button("Untie")
 	tie_row.add_child(dock.untie_entity_btn)
 
-	# --- Clip ---
-	dock.clip_btn = dock._make_button("Clip Selected (Shift+X)")
-	sc.add_child(dock.clip_btn)
-
-	# --- Duplicate Array ---
-	var dup_label = Label.new()
-	dup_label.text = "Duplicate Array"
-	sc.add_child(dup_label)
+	# ── Duplicate Array ──
+	_add_sub_header(sc, "Duplicate Array")
 
 	var dup_row1 = HBoxContainer.new()
 	sc.add_child(dup_row1)
@@ -133,6 +136,23 @@ func build(parent: Control) -> void:
 	remove_dup_btn.tooltip_text = "Remove duplicate array for selected brushes"
 	remove_dup_btn.pressed.connect(dock._on_remove_duplicate_array)
 	dup_btns.add_child(remove_dup_btn)
+
+
+func _add_sub_header(parent: Control, text: String) -> void:
+	var hbox = HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 6)
+	parent.add_child(hbox)
+	var sep_left = HSeparator.new()
+	sep_left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hbox.add_child(sep_left)
+	var lbl = Label.new()
+	lbl.text = text
+	lbl.add_theme_font_size_override("font_size", 10)
+	lbl.add_theme_color_override("font_color", Color(1, 1, 1, 0.4))
+	hbox.add_child(lbl)
+	var sep_right = HSeparator.new()
+	sep_right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hbox.add_child(sep_right)
 
 
 func connect_signals() -> void:

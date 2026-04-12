@@ -37,6 +37,8 @@ static func _default_bindings() -> Dictionary:
 		"tool_select": {"keycode": KEY_S},
 		"tool_extrude_up": {"keycode": KEY_U},
 		"tool_extrude_down": {"keycode": KEY_J},
+		"tool_extrude": {"keycode": KEY_E},
+		"tool_extrude_down_alt": {"keycode": KEY_E, "shift": true},
 		# Editing
 		"delete": {"keycode": KEY_DELETE},
 		"duplicate": {"keycode": KEY_D, "ctrl": true},
@@ -63,6 +65,8 @@ static func _default_bindings() -> Dictionary:
 		"texture_picker": {"keycode": KEY_T},
 		"apply_last_texture": {"keycode": KEY_T, "shift": true},
 		# Selection
+		"select_all": {"keycode": KEY_A},
+		"deselect_all": {"keycode": KEY_A, "shift": true},
 		"select_similar": {"keycode": KEY_S, "shift": true},
 		"selection_filter": {"keycode": KEY_F, "shift": true},
 		# Axis lock
@@ -165,7 +169,7 @@ static func get_category(action: String) -> String:
 		]
 	):
 		return "Tools"
-	if action in ["select_similar", "selection_filter"]:
+	if action in ["select_all", "deselect_all", "select_similar", "selection_filter"]:
 		return "Selection"
 	if action in ["context_menu", "radial_menu"]:
 		return "Tools"
@@ -179,6 +183,8 @@ static func get_action_label(action: String) -> String:
 		"tool_select": "Select",
 		"tool_extrude_up": "Extrude Up",
 		"tool_extrude_down": "Extrude Down",
+		"tool_extrude": "Extrude Up",
+		"tool_extrude_down_alt": "Extrude Down",
 		"vertex_edit": "Vertex Edit",
 		"vertex_edge_mode": "Edge Mode",
 		"vertex_merge": "Merge Vertices",
@@ -200,6 +206,8 @@ static func get_action_label(action: String) -> String:
 		"paint_blend": "Bucket Fill",
 		"texture_picker": "Texture Picker",
 		"apply_last_texture": "Apply Last Texture",
+		"select_all": "Select All",
+		"deselect_all": "Deselect All",
 		"select_similar": "Select Similar",
 		"selection_filter": "Selection Filters",
 		"axis_x": "Lock X",

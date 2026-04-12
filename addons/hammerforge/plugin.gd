@@ -1135,6 +1135,18 @@ func _handle_keyboard_input(
 		dock.set_extrude_tool(-1)
 		_update_hud_context()
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	# E / Shift+E for extrude (Blender convention) — skip in paint and vertex modes
+	if not paint_mode and not _vertex_mode:
+		if _keymap.matches("tool_extrude", event):
+			_deactivate_external_tool()
+			dock.set_extrude_tool(1)
+			_update_hud_context()
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+		if _keymap.matches("tool_extrude_down_alt", event):
+			_deactivate_external_tool()
+			dock.set_extrude_tool(-1)
+			_update_hud_context()
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
 	# Texture picker (eyedropper) — T key activates click-to-sample mode
 	if _keymap.matches("texture_picker", event):
 		_texture_picker_active = true
@@ -1152,6 +1164,13 @@ func _handle_keyboard_input(
 	# Selection Filter popup — Shift+F opens the filter popover
 	if _keymap.matches("selection_filter", event):
 		_show_selection_filter()
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	# Select All / Deselect All — A / Shift+A (Blender convention)
+	if _keymap.matches("select_all", event):
+		_select_all_nodes(root)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	if _keymap.matches("deselect_all", event):
+		_deselect_all_nodes(root)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	# Quick Save as Prefab — Ctrl+Shift+P
 	if event.keycode == KEY_P and event.ctrl_pressed and event.shift_pressed:
@@ -2246,6 +2265,54 @@ func _apply_last_texture(root: Node) -> void:
 
 
 # ---------------------------------------------------------------------------
+# Select All / Deselect All
+# ---------------------------------------------------------------------------
+
+
+func _select_all_nodes(root: Node) -> void:
+	if not root:
+		return
+	var selection = get_editor_interface().get_selection()
+	if not selection:
+		return
+	# Clear face selection first so context toolbar switches to object context
+	if root.has_method("clear_face_selection"):
+		root.clear_face_selection()
+	var all_nodes: Array = root._iter_pick_nodes()
+	hf_selection.clear()
+	for node in all_nodes:
+		if is_instance_valid(node):
+			hf_selection.append(node)
+	_apply_hf_selection(selection)
+	_update_hud_context()
+	if dock:
+		dock.set_selection_count(hf_selection.size())
+		dock.set_selection_nodes(hf_selection)
+		dock.show_toast("Selected %d objects" % hf_selection.size(), 0)
+
+
+func _deselect_all_nodes(root: Node) -> void:
+	if not root:
+		return
+	var selection = get_editor_interface().get_selection()
+	if not selection:
+		return
+	if dock:
+		dock.emit_signal("selection_clear_requested")
+	hf_selection.clear()
+	selection.clear()
+	# Also clear face selection
+	if root.has_method("clear_face_selection"):
+		root.clear_face_selection()
+	elif root.get("face_selection") is Dictionary:
+		root.face_selection.clear()
+	_update_hud_context()
+	if dock:
+		dock.set_selection_count(0)
+		dock.set_selection_nodes([])
+
+
+# ---------------------------------------------------------------------------
 # Select Similar
 # ---------------------------------------------------------------------------
 
@@ -3232,6 +3299,10 @@ func _on_context_toolbar_action(action: String, args: Array) -> void:
 				_vertex_clip_to_convex(root)
 		"vertex_exit":
 			_toggle_vertex_mode(root)
+		"select_all":
+			_select_all_nodes(root)
+		"deselect_all":
+			_deselect_all_nodes(root)
 		"select_similar":
 			_select_similar(root)
 		"apply_last_texture":
@@ -3314,14 +3385,18 @@ func _on_hotkey_palette_action(action: String) -> void:
 			_deactivate_external_tool()
 			if dock and dock.tool_select:
 				dock.tool_select.button_pressed = true
-		"tool_extrude_up":
+		"tool_extrude_up", "tool_extrude":
 			_deactivate_external_tool()
 			if dock:
 				dock.set_extrude_tool(1)
-		"tool_extrude_down":
+		"tool_extrude_down", "tool_extrude_down_alt":
 			_deactivate_external_tool()
 			if dock:
 				dock.set_extrude_tool(-1)
+		"select_all":
+			_select_all_nodes(root)
+		"deselect_all":
+			_deselect_all_nodes(root)
 		"delete":
 			_delete_selected(root)
 		"duplicate":
@@ -3388,6 +3463,10 @@ func _on_hotkey_palette_action(action: String) -> void:
 			root.set_axis_lock(LevelRootType.AxisLock.Z, true)
 			if dock:
 				dock.update_axis_lock_buttons(LevelRootType.AxisLock.Z)
+		"select_all":
+			_select_all_nodes(root)
+		"deselect_all":
+			_deselect_all_nodes(root)
 		"select_similar":
 			_select_similar(root)
 		"apply_last_texture":
@@ -3423,11 +3502,11 @@ func _dispatch_viewport_action(action: String, args: Array = []) -> void:
 			_deactivate_external_tool()
 			if dock and dock.tool_select:
 				dock.tool_select.button_pressed = true
-		"extrude_up", "tool_extrude_up":
+		"extrude_up", "tool_extrude_up", "tool_extrude":
 			_deactivate_external_tool()
 			if dock:
 				dock.set_extrude_tool(1)
-		"extrude_down", "tool_extrude_down":
+		"extrude_down", "tool_extrude_down", "tool_extrude_down_alt":
 			_deactivate_external_tool()
 			if dock:
 				dock.set_extrude_tool(-1)
@@ -3540,6 +3619,10 @@ func _dispatch_viewport_action(action: String, args: Array = []) -> void:
 		"vertex_exit":
 			_toggle_vertex_mode(root)
 		# Selection
+		"select_all":
+			_select_all_nodes(root)
+		"deselect_all":
+			_deselect_all_nodes(root)
 		"select_similar":
 			_select_similar(root)
 		"selection_filter":
@@ -3672,7 +3755,7 @@ func _show_coach_mark_for_action(action: String) -> void:
 			coach_key = "clip"
 		"carve":
 			coach_key = "carve"
-		"tool_extrude_up", "tool_extrude_down":
+		"tool_extrude_up", "tool_extrude_down", "tool_extrude", "tool_extrude_down_alt":
 			coach_key = "extrude"
 		"paint_bucket", "paint_erase", "paint_ramp", "paint_line", "paint_blend":
 			coach_key = "surface_paint"

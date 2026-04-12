@@ -1,6 +1,6 @@
 # HammerForge User Guide
 
-Last updated: April 12, 2026
+Last updated: April 13, 2026
 
 This guide covers the current HammerForge workflow in Godot 4.6: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs.
 
@@ -44,7 +44,7 @@ When you activate an advanced tool for the first time, a floating overlay appear
 | Polygon | P key | Click vertices → close loop → set height → confirm |
 | Path | ; key | Place waypoints → Enter → set height → confirm |
 | Vertex Edit | V key | Select → multi-select → edge mode → merge/split |
-| Extrude | U/J keys | Select brush → click face → drag → confirm |
+| Extrude | E/U/J keys | Select brush → click face → drag → confirm |
 | Carve | Ctrl+Shift+R | Select brushes → preview (green wireframe) → confirm → delete fragments |
 | Clip | Shift+X | Select → preview (cyan wireframe + orange plane) → confirm → split |
 | Hollow | Ctrl+H | Select solid → preview (yellow wireframe walls) → confirm → hollow |
@@ -169,14 +169,11 @@ The compact toolbar shows icon + text labels (Draw, Select, Add, Sub, Paint, Ext
 - **Material**: active material picker.
 - **Physics Layer**: collision layer for baked output.
 - **Texture Lock**: UV alignment preserved on move/resize (enabled by default).
-- **Selection Tools** (visible when brushes are selected):
-  - Hollow (wall thickness spinner + button, Ctrl+H). Shows yellow wireframe preview of resulting walls before committing. Shows actionable error toast if thickness is too large.
-  - Move to Floor (Ctrl+Shift+F) / Ceiling (Ctrl+Shift+C).
-  - Tie/Untie brush entity class (populated from entity definitions).
-  - Clip Selected (Shift+X). Shows cyan wireframe preview of resulting halves + orange split plane before committing. Shows actionable error toast if split position is invalid.
-  - Carve (Ctrl+Shift+R): boolean-subtract from intersecting brushes. Shows green wireframe preview of resulting slice pieces before committing.
-  - Merge (Ctrl+Shift+M): combine 2+ selected brushes into one. Preserves per-brush materials (registered as per-face material indices) and full transforms (rotation/scale). All brushes must share the same operation type (add or subtract).
-  - Duplicate Array: count, X/Y/Z offset, Create/Remove Array buttons.
+- **Selection Tools** (visible when brushes are selected, grouped by domain):
+  - **Brush Modification**: Hollow (wall thickness spinner + button, Ctrl+H) with yellow wireframe preview; Clip Selected (Shift+X) with cyan wireframe preview + orange split plane. Carve (Ctrl+Shift+R) with green wireframe preview. Merge (Ctrl+Shift+M) combining 2+ brushes.
+  - **Positioning**: Move to Floor (Ctrl+Shift+F) / Ceiling (Ctrl+Shift+C).
+  - **Entity Binding**: Tie/Untie brush entity class (populated from entity definitions).
+  - **Duplicate Array**: count, X/Y/Z offset, Create/Remove Array buttons.
   - **Bulk delete**: deleting 3+ brushes shows a confirmation dialog (undo reminder). Single/dual deletes remain instant.
 
 ### Paint tab (collapsible sections)
@@ -386,12 +383,14 @@ Press **Shift+T** to apply the last texture you sampled with the Texture Picker 
 ### Smart Contextual Toolbar
 A floating mini-toolbar appears in the 3D viewport showing context-sensitive actions based on your current selection and tool state. It eliminates the need to switch dock tabs for common operations:
 
-- **Brushes selected** → Extrude Up/Down, Hollow, Clip, Carve, Merge (Mrg), Select Similar (Sim), Selection Filters (Flt), Duplicate, Delete. Shows "N brush(es) selected" count.
-- **Faces selected** → Material thumbnails (favorites strip), UV Justify (Fit/Center/L/R/T/B), Select Similar (Sim), Apply Last Texture (Last), Apply to Whole Brush. Shows "N faces on M brush(es)" count.
-- **Entities selected** → I/O connect, Properties quick-edit (jumps to Entities tab), Duplicate, Delete. Shows "N entities selected" count.
-- **Draw mode (idle)** → Quick shape selector (Box/Cyl/Sph/Cone), Add/Subtract toggle.
-- **Dragging** → Live dimensions display, Axis Lock buttons (X/Y/Z), Cancel.
-- **Vertex mode** → Vertex/Edge sub-mode toggle, Merge, Split, Exit.
+Each section uses small muted **group labels** (e.g. "Extrude", "Modify", "Select") to visually cluster related tools following Gestalt proximity principles.
+
+- **Brushes selected** → [Extrude] Ext▲/Ext▼ | [Modify] Hollow, Clip, Carve, Merge | Duplicate, Delete | [Select] All, ⌂, Similar, Filters. Prefab buttons appear for instances. Shows "N brush(es) selected" count.
+- **Faces selected** → Material thumbnails (favorites strip) | [UV] Fit/Center/L/R/T/B | [Apply] All, Last | Select Similar. Shows "N faces on M brush(es)" count.
+- **Entities selected** → [Entity] I/O, Properties | Highlight toggle + I/O summary | Duplicate, Delete. Shows "N entities selected" count.
+- **Draw mode (idle)** → [Shape] Box/Cyl/Sph/Cone | Add/Subtract toggle.
+- **Dragging** → Live dimensions display | Axis Lock (X/Y/Z) | Cancel.
+- **Vertex mode** → [Mode] Vertex/Edge toggle | [Edit] Merge, Split, Convex | Exit.
 
 An **auto-mode hint bar** appears during brush drawing, showing the current operation mode (e.g. "Drawing in Add mode — press Subtract to toggle") with a one-click toggle button.
 
@@ -407,7 +406,7 @@ Press **Space** to open a context-sensitive popup menu at the cursor position in
 - **Draw mode (idle)** → Shape selector, Add/Subtract toggle, grid snap presets
 - **Vertex mode** → Merge, Split, sub-mode toggle
 
-**Grid Snap submenu** lets you quickly switch snap resolution (1, 2, 4, 8, 16, 32, 64) without touching the dock.
+**Common footer** (in every context): Select All, Deselect All, Grid Snap submenu (1/2/4/8/16/32/64), Quick Bake, Undo, Redo.
 
 **Highlight Connected** appears as a check item — it reads the current state and toggles it.
 
@@ -573,8 +572,8 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 |--------|-------------|-------------|
 | Draw tool | D | Switch to Draw mode |
 | Select tool | S | Switch to Select mode |
-| Extrude Up | U | Switch to Extrude Up mode |
-| Extrude Down | J | Switch to Extrude Down mode |
+| Extrude Up | E / U | Switch to Extrude Up mode (E skipped in paint/vertex modes) |
+| Extrude Down | Shift+E / J | Switch to Extrude Down mode (Shift+E skipped in paint/vertex modes) |
 | Delete | Delete | Delete selected brushes |
 | Duplicate | Ctrl+D | Duplicate selection |
 | Group | Ctrl+G | Group selected brushes |
@@ -593,6 +592,8 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Merge vertices | Ctrl+W | Merge selected vertices to centroid |
 | Texture Picker | T | Eyedropper — sample face material |
 | Apply Last Texture | Shift+T | Apply last picked texture to selection |
+| Select All | A | Select all brushes and entities (clears face selection) |
+| Deselect All | Shift+A | Deselect everything (brushes, entities, faces) |
 | Select Similar | Shift+S | Select faces/brushes similar to current selection |
 | Selection Filters | Shift+F | Open selection filter popover |
 | Grid Size Down | [ | Halve grid snap (min 0.125) |
@@ -604,7 +605,7 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 
 **Rebinding:** Edit `user://hammerforge_keymap.json` (created on first run). Each entry maps an action name to `{"keycode": KEY_*, "ctrl": bool, "shift": bool, "alt": bool}`. Restart the plugin after editing.
 
-**Toolbar labels** and **tooltips** update automatically from the keymap, so custom bindings are always reflected in the UI. Press the **?** button on the toolbar to open a searchable shortcut dialog showing all current keybindings grouped by category (Tools, Editing, Paint, Axis Lock).
+**Toolbar labels** and **tooltips** update automatically from the keymap, so custom bindings are always reflected in the UI. Press the **?** button on the toolbar to open a searchable shortcut dialog showing all current keybindings grouped by category (Tools, Editing, Selection, Paint, Axis Lock).
 
 ## User Preferences
 

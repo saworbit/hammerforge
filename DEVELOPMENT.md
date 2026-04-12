@@ -1,6 +1,6 @@
 # Development Guide
 
-Last updated: April 12, 2026
+Last updated: April 13, 2026
 
 This document covers local setup, codebase structure, and how to test features.
 
@@ -40,7 +40,7 @@ addons/hammerforge/
   hf_decal_tool.gd       Decal placement tool (raycast + surface-normal aligned Decal nodes)
   hf_polygon_tool.gd     Polygon tool (click convex verts → extrude to brush, tool_id=102)
   hf_path_tool.gd        Path tool (waypoints → corridor brushes with miter joints, stairs, railings, trim, tool_id=103)
-  hf_keymap.gd           Customizable keyboard shortcuts (JSON load/save, action matching)
+  hf_keymap.gd           Customizable keyboard shortcuts (JSON load/save, action matching, 5 categories: Tools/Editing/Selection/Paint/Axis Lock)
   hf_user_prefs.gd       Cross-session user preferences (user://hammerforge_prefs.json)
   hf_snap_system.gd      Centralized snap (Grid/Vertex/Center modes + custom snap lines, threshold-based candidates)
   hf_prefab.gd           Reusable brush+entity groups (variants, tags, save/load .hfprefab)
@@ -72,7 +72,8 @@ addons/hammerforge/
     hf_material_browser.gd Visual material browser (thumbnail grid, search, filters, favorites, drag-drop)
     hf_prefab_library.gd   Prefab library dock section (search, tags, variants, drag-drop, context menu)
     hf_prefab_overlay.gd   Prefab ghost overlay (wireframe bounding box + override markers)
-    hf_context_toolbar.gd  Floating contextual mini-toolbar (context-sensitive actions in 3D viewport)
+    hf_context_toolbar.gd  Floating contextual mini-toolbar (context-sensitive actions, group labels per tool cluster)
+    selection_tools_builder.gd  Builds Selection Tools section with domain sub-headers (Brush Modification, Positioning, Entity Binding, Duplicate Array)
     hf_hotkey_palette.gd   Searchable command palette with fuzzy search and live gray-out (Shift+?/F1/Ctrl+K)
     hf_viewport_context_menu.gd  Context menu (Space key) with context-sensitive sections and submenus
     hf_radial_menu.gd      Radial/pie menu (backtick key) with 8 tool sectors drawn via _draw()

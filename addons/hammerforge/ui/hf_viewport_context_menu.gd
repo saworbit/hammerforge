@@ -42,6 +42,8 @@ const _ID_VERTEX_CONVEX := 162
 const _ID_VERTEX_EXIT := 163
 const _ID_VERTEX_SUBMODE := 164
 const _ID_EDGE_SUBMODE := 165
+const _ID_SELECT_ALL := 170
+const _ID_DESELECT_ALL := 171
 const _ID_QUICK_BAKE := 200
 const _ID_UNDO := 201
 const _ID_REDO := 202
@@ -138,6 +140,9 @@ func show_at(pos: Vector2, state: Dictionary) -> void:
 			add_submenu_node_item("Draw Shape", _shape_submenu)
 			add_item("Toggle Grid", _ID_TOGGLE_GRID)
 	# Common footer
+	add_separator()
+	add_item("Select All", _ID_SELECT_ALL)
+	add_item("Deselect All", _ID_DESELECT_ALL)
 	add_separator()
 	add_submenu_node_item("Grid Snap", _grid_submenu)
 	add_item("Quick Bake", _ID_QUICK_BAKE)
@@ -240,6 +245,10 @@ func _on_id_pressed(id: int) -> void:
 			action = "vertex_submode"
 		_ID_EDGE_SUBMODE:
 			action = "edge_submode"
+		_ID_SELECT_ALL:
+			action = "select_all"
+		_ID_DESELECT_ALL:
+			action = "deselect_all"
 		_ID_QUICK_BAKE:
 			action = "quick_bake"
 		_ID_UNDO:

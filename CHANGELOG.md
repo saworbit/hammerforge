@@ -5,6 +5,38 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Gestalt UI grouping & industry-standard keybindings** (Apr 2026): Keybinding alignment with
+  Blender/Hammer conventions and visual tool grouping following Gestalt proximity principles.
+
+  **New keybindings (Blender convention):**
+  - **E** — Extrude Up (matches Blender's E for extrude). Context-aware: skipped in paint mode
+    (E = Erase) and vertex mode (E = edge toggle). U still works as an alternative.
+  - **Shift+E** — Extrude Down. Same context guards. J still works as an alternative.
+  - **A** — Select All brushes and entities. Clears face selection first to ensure context
+    toolbar transitions to object mode.
+  - **Shift+A** — Deselect All (brushes, entities, and faces). Uses `clear_face_selection()`
+    for proper visual cleanup and signal emission.
+
+  **Context toolbar group labels:** Small muted category headers before each tool cluster
+  (Extrude, Modify, Select, UV, Apply, Entity, Mode, Edit, Shape) make it immediately clear
+  which tools belong together, following Gestalt proximity/similarity principles.
+
+  **Dock Selection Tools sub-headers:** The flat tool list in the Brush tab's Selection Tools
+  section is now organized into labeled sub-groups with centered separator lines: Brush
+  Modification (Hollow + Clip), Positioning (Floor/Ceiling), Entity Binding (Tie/Untie),
+  and Duplicate Array.
+
+  **Viewport context menu:** Select All / Deselect All added to the common footer (available
+  in every context).
+
+  **Command palette:** New "Selection" category header groups Select All, Deselect All, Select
+  Similar, and Selection Filters together. Previously these actions were uncategorized and
+  invisible in the palette.
+
+  Files: `hf_keymap.gd` (modified), `plugin.gd` (modified), `ui/hf_context_toolbar.gd`
+  (modified), `ui/hf_viewport_context_menu.gd` (modified), `ui/selection_tools_builder.gd`
+  (modified), `ui/hf_hotkey_palette.gd` (modified).
+
 - **Error prevention & forgiveness** (Apr 2026): Geometry preview overlays and confirmation
   dialogs for destructive operations, reducing accidental mistakes.
 
