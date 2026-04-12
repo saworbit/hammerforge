@@ -106,6 +106,9 @@ addons/hammerforge/
 
   hf_io_runtime.gd        Runtime I/O-to-Signal dispatcher (auto-wires entity_io_outputs to Godot signals on bake/export)
     hf_subtract_preview.gd Wireframe AABB intersection overlay for subtract brushes (debounced, pooled)
+    hf_carve_preview.gd    Green wireframe preview of carve slice pieces (confirmation before commit)
+    hf_clip_preview.gd     Cyan wireframe + orange plane preview of clip halves (confirmation before commit)
+    hf_hollow_preview.gd   Yellow wireframe preview of hollow wall pieces (confirmation before commit)
     hf_vertex_system.gd    Vertex/edge selection, move, split, merge with convexity validation
     hf_spawn_system.gd     Player spawn lookup, validation, auto-fix, debug visualisation
     hf_prefab_system.gd    Prefab instance registry, variant cycling, live-linked propagation, overrides

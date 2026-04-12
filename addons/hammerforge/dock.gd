@@ -3264,7 +3264,33 @@ func _on_hollow() -> void:
 	if not check.ok:
 		show_toast(check.user_text(), 1)
 		return
-	_commit_state_action("Hollow", "hollow_brush_by_id", [brush_id, thickness])
+	# Show geometry preview and confirm
+	level_root.hollow_preview.show_preview(brush_id, thickness)
+	var dlg = ConfirmationDialog.new()
+	dlg.title = "Hollow Brush"
+	dlg.dialog_text = (
+		"Hollow with wall thickness %.1f?\n(Yellow wireframe shows resulting walls)" % thickness
+	)
+	dlg.min_size = Vector2i(300, 100)
+	add_child(dlg)
+	dlg.confirmed.connect(
+		func():
+			if not is_instance_valid(self):
+				return
+			if level_root and level_root.hollow_preview:
+				level_root.hollow_preview.clear()
+			_commit_state_action("Hollow", "hollow_brush_by_id", [brush_id, thickness])
+			dlg.queue_free()
+	)
+	dlg.canceled.connect(
+		func():
+			if not is_instance_valid(self):
+				return
+			if level_root and level_root.hollow_preview:
+				level_root.hollow_preview.clear()
+			dlg.queue_free()
+	)
+	dlg.popup_centered()
 
 
 func _on_move_to_floor() -> void:
@@ -6747,7 +6773,33 @@ func _on_clip() -> void:
 	if not check.ok:
 		show_toast(check.user_text(), 1)
 		return
-	_commit_state_action("Clip Brush", "clip_brush_by_id", [brush_id, 1, split_pos])
+	# Show geometry preview and confirm
+	level_root.clip_preview.show_preview(brush_id, 1, split_pos)
+	var dlg = ConfirmationDialog.new()
+	dlg.title = "Clip Brush"
+	dlg.dialog_text = (
+		"Split brush along Y axis at %.1f?\n(Cyan wireframe shows resulting pieces)" % split_pos
+	)
+	dlg.min_size = Vector2i(300, 100)
+	add_child(dlg)
+	dlg.confirmed.connect(
+		func():
+			if not is_instance_valid(self):
+				return
+			if level_root and level_root.clip_preview:
+				level_root.clip_preview.clear()
+			_commit_state_action("Clip Brush", "clip_brush_by_id", [brush_id, 1, split_pos])
+			dlg.queue_free()
+	)
+	dlg.canceled.connect(
+		func():
+			if not is_instance_valid(self):
+				return
+			if level_root and level_root.clip_preview:
+				level_root.clip_preview.clear()
+			dlg.queue_free()
+	)
+	dlg.popup_centered()
 
 
 func _on_io_add() -> void:

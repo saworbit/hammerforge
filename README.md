@@ -159,6 +159,7 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Measurement** (M key) -- persistent multi-ruler with angle display, Shift+Click chaining, and snap reference alignment
 - **Decal placement** (N key) -- raycast decals onto brush surfaces with live preview
 - **Real-time subtract preview** -- toggle wireframe AABB intersection overlays between additive and subtractive brushes
+- **Geometry previews before commit** -- carve (green), clip (cyan + orange plane), and hollow (yellow) show wireframe overlay of resulting pieces with confirmation dialog before executing
 
 ### Bake and Export
 

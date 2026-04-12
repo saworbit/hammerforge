@@ -98,10 +98,33 @@ Enable the HammerForge plugin if it is not already enabled.
 - Move or resize either brush; confirm the preview updates.
 - Toggle `Subtract Preview` off; confirm the wireframe is removed.
 
-### 7b. Carve UV Preservation
+### 7b. Geometry Previews (Carve/Clip/Hollow)
+- Select an additive brush overlapping another. Press Ctrl+Shift+R (Carve).
+- Confirm **green wireframe** overlay appears showing the resulting slice pieces.
+- Confirm a **confirmation dialog** appears ("Carve N brush(es)?").
+- Click **Cancel**; confirm the preview disappears and no geometry changes.
+- Repeat and click **OK**; confirm the carve executes and preview clears.
+- Select a brush and press Shift+X (Clip).
+- Confirm **cyan wireframe** for both halves and an **orange semi-transparent plane** at the split.
+- Confirm a confirmation dialog appears. Cancel and verify nothing changes. OK and verify the split.
+- Select a brush and press Ctrl+H (Hollow).
+- Confirm **yellow wireframe** shows 6 wall pieces overlaid on the original brush.
+- Confirm a confirmation dialog appears. Cancel and verify the original is unchanged.
+- OK and confirm the brush is replaced by 6 wall brushes.
+
+### 7b-2. Bulk Delete Confirmation
+- Select 3+ brushes (marquee or Shift+click).
+- Press Delete.
+- Confirm a **confirmation dialog** appears ("Delete N brushes? This can be undone with Ctrl+Z.").
+- Cancel; confirm nothing is deleted.
+- Repeat and OK; confirm all selected brushes are deleted.
+- Ctrl+Z; confirm all brushes are restored.
+- Select 1-2 brushes and press Delete; confirm immediate deletion (no dialog).
+
+### 7b-3. Carve UV Preservation
 - Apply a distinct grid texture to a large additive brush.
 - Place a smaller brush overlapping the textured brush.
-- Carve (Ctrl+Shift+R) the small brush. Confirm the carver is deleted and the target splits into slice pieces.
+- Carve (Ctrl+Shift+R) the small brush. Confirm in the dialog, then confirm the carver is deleted and the target splits into slice pieces.
 - Inspect each surviving slice: confirm the grid texture is aligned with the original — no visible seams or jumps at slice boundaries.
 - Undo the carve; confirm the original brush and carver are restored.
 

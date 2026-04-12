@@ -45,9 +45,9 @@ When you activate an advanced tool for the first time, a floating overlay appear
 | Path | ; key | Place waypoints → Enter → set height → confirm |
 | Vertex Edit | V key | Select → multi-select → edge mode → merge/split |
 | Extrude | U/J keys | Select brush → click face → drag → confirm |
-| Carve | Ctrl+Shift+R | Select brushes → execute → delete fragments |
-| Clip | Shift+X | Select → execute → delete unwanted half |
-| Hollow | Ctrl+H | Select solid → execute → set thickness |
+| Carve | Ctrl+Shift+R | Select brushes → preview (green wireframe) → confirm → delete fragments |
+| Clip | Shift+X | Select → preview (cyan wireframe + orange plane) → confirm → split |
+| Hollow | Ctrl+H | Select solid → preview (yellow wireframe walls) → confirm → hollow |
 | Measure | M key | Click start → click end → Shift+Click to chain → RMB for snap ref |
 | Decal | N key | Click surface → resize/rotate → assign material |
 | Surface Paint | P toggle | Toggle paint → select tool → click cells |
@@ -78,6 +78,32 @@ The **Manage** tab → **History** section contains a visual undo history browse
 - **Double-click** an entry to navigate the undo/redo system to that point in history.
 - **Undo/Redo buttons** are integrated into the browser header, with disabled state automatically tracking the undo/redo manager.
 - Action icons reuse the same color scheme as the Operation Replay Timeline (blue=draw, red=delete, etc.).
+
+## Error Prevention & Forgiveness
+
+HammerForge prioritizes non-destructive workflows so you can experiment freely:
+
+### Geometry Previews (Preview Before Commit)
+
+Destructive geometry operations show a wireframe preview overlay before permanently modifying brushes:
+
+| Operation | Preview Color | What It Shows |
+|-----------|--------------|---------------|
+| Carve (Ctrl+Shift+R) | Green wireframe | All resulting slice pieces |
+| Clip (Shift+X) | Cyan wireframe + orange plane | Two resulting halves + the cut surface |
+| Hollow (Ctrl+H) | Yellow wireframe | 6 wall pieces at the chosen thickness |
+| Extrude (U/J) | Semi-transparent brush | New brush being extruded from the face |
+| Subtract (toggle) | Red wireframe | AABB intersection volumes |
+
+Each preview appears immediately, then a confirmation dialog gives you the option to **Cancel** and abort without changing anything.
+
+### Bulk Delete Safeguard
+
+Deleting 3 or more brushes at once prompts a confirmation dialog. The dialog reminds you that Ctrl+Z can undo the deletion. Deleting 1-2 brushes remains instant (no friction for common operations).
+
+### Undo Everything
+
+All brush operations (draw, delete, carve, clip, hollow, extrude, move, resize, merge, material assignment, UV changes) are fully undoable via Ctrl+Z. The Undo History Browser (Manage tab) provides visual navigation with thumbnails.
 
 ## Measure Tool (Multi-Ruler)
 
@@ -144,13 +170,14 @@ The compact toolbar shows icon + text labels (Draw, Select, Add, Sub, Paint, Ext
 - **Physics Layer**: collision layer for baked output.
 - **Texture Lock**: UV alignment preserved on move/resize (enabled by default).
 - **Selection Tools** (visible when brushes are selected):
-  - Hollow (wall thickness spinner + button, Ctrl+H). Shows actionable error toast if thickness is too large.
+  - Hollow (wall thickness spinner + button, Ctrl+H). Shows yellow wireframe preview of resulting walls before committing. Shows actionable error toast if thickness is too large.
   - Move to Floor (Ctrl+Shift+F) / Ceiling (Ctrl+Shift+C).
   - Tie/Untie brush entity class (populated from entity definitions).
-  - Clip Selected (Shift+X). Shows actionable error toast if split position is invalid.
-  - Carve (Ctrl+Shift+R): boolean-subtract from intersecting brushes.
+  - Clip Selected (Shift+X). Shows cyan wireframe preview of resulting halves + orange split plane before committing. Shows actionable error toast if split position is invalid.
+  - Carve (Ctrl+Shift+R): boolean-subtract from intersecting brushes. Shows green wireframe preview of resulting slice pieces before committing.
   - Merge (Ctrl+Shift+M): combine 2+ selected brushes into one. Preserves per-brush materials (registered as per-face material indices) and full transforms (rotation/scale). All brushes must share the same operation type (add or subtract).
   - Duplicate Array: count, X/Y/Z offset, Create/Remove Array buttons.
+  - **Bulk delete**: deleting 3+ brushes shows a confirmation dialog (undo reminder). Single/dual deletes remain instant.
 
 ### Paint tab (collapsible sections)
 - **Floor Paint**: Brush, Erase, Rect, Line, Bucket, Blend tools. Brush shape (Square/Circle), radius, and layer picker. Rename button ("R") for custom layer display names.

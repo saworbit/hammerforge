@@ -2,6 +2,7 @@
 extends EditorPlugin
 
 const DockType = preload("dock.gd")
+const HFPathToolType = preload("hf_path_tool.gd")
 var dock: DockType
 var hud: Control
 var base_control: Control
@@ -41,6 +42,7 @@ var _operation_replay: Control = null
 var _viewport_context_menu: PopupMenu = null
 var _radial_menu: Control = null
 var _quick_property: Control = null
+var _pending_dialogs: Array = []  # Confirmation dialogs awaiting user response
 # Double-tap detection for quick property popups
 var _last_tap_keycode := 0
 var _last_tap_time := 0
@@ -82,7 +84,7 @@ func _enter_tree():
 	_tool_registry.register_tool(HFMeasureTool.new())
 	_tool_registry.register_tool(HFDecalTool.new())
 	_tool_registry.register_tool(HFPolygonTool.new())
-	_tool_registry.register_tool(HFPathTool.new())
+	_tool_registry.register_tool(HFPathToolType.new())
 	_tool_registry.load_external_tools("res://addons/hammerforge/tools/")
 	_keymap = HFKeymap.load_or_default("user://hammerforge_keymap.json")
 	_user_prefs = HFUserPrefs.load_prefs()
@@ -194,6 +196,7 @@ func _enter_tree():
 
 
 func _exit_tree():
+	_cleanup_pending_dialogs()
 	remove_custom_type("LevelRoot")
 	remove_custom_type("DraftEntity")
 	if (
@@ -2428,6 +2431,22 @@ class _MarqueeOverlay:
 		draw_rect(rect, Color(0.3, 0.6, 1.0, 0.7), false, 1.5)
 
 
+## Parent a confirmation dialog to the editor base control, track it for cleanup
+## on plugin teardown.  Connects tree_exiting to auto-free if plugin unloads.
+func _add_confirmable_dialog(dlg: ConfirmationDialog) -> void:
+	get_editor_interface().get_base_control().add_child(dlg)
+	_pending_dialogs.append(dlg)
+	dlg.tree_exiting.connect(func(): _pending_dialogs.erase(dlg))
+
+
+## Free all pending confirmation dialogs (called during plugin _exit_tree).
+func _cleanup_pending_dialogs() -> void:
+	for dlg in _pending_dialogs.duplicate():
+		if is_instance_valid(dlg):
+			dlg.queue_free()
+	_pending_dialogs.clear()
+
+
 func _delete_selected(root: Node) -> bool:
 	var selection = get_editor_interface().get_selection()
 	var nodes = _current_selection_nodes()
@@ -2442,6 +2461,39 @@ func _delete_selected(root: Node) -> bool:
 				brush_ids.append(brush_id)
 	if brush_ids.is_empty():
 		return false
+	# Confirm bulk delete (3+ brushes) to prevent accidental mass deletion
+	if brush_ids.size() >= 3:
+		var dlg = ConfirmationDialog.new()
+		dlg.title = "Delete Brushes"
+		dlg.dialog_text = "Delete %d brushes? This can be undone with Ctrl+Z." % brush_ids.size()
+		dlg.min_size = Vector2i(280, 80)
+		_add_confirmable_dialog(dlg)
+		dlg.confirmed.connect(
+			func():
+				if not is_instance_valid(self) or not is_instance_valid(root):
+					dlg.queue_free()
+					return
+				hf_selection.clear()
+				selection.clear()
+				HFUndoHelper.commit(
+					_get_undo_redo(),
+					root,
+					"Delete Brushes",
+					"delete_brushes_by_id",
+					[brush_ids],
+					false,
+					Callable(self, "_record_history")
+				)
+				dlg.queue_free()
+		)
+		dlg.canceled.connect(
+			func():
+				if not is_instance_valid(self):
+					return
+				dlg.queue_free()
+		)
+		dlg.popup_centered()
+		return true
 	hf_selection.clear()
 	selection.clear()
 	HFUndoHelper.commit(
@@ -2562,15 +2614,43 @@ func _hollow_selected(root: Node) -> void:
 	if not check.ok:
 		root.user_message.emit(check.user_text(), 1)
 		return
-	HFUndoHelper.commit(
-		_get_undo_redo(),
-		root,
-		"Hollow",
-		"hollow_brush_by_id",
-		[brush_id, thickness],
-		false,
-		Callable(self, "_record_history")
+	# Show geometry preview and confirm
+	if root.hollow_preview:
+		root.hollow_preview.show_preview(brush_id, thickness)
+	var dlg = ConfirmationDialog.new()
+	dlg.title = "Hollow Brush"
+	dlg.dialog_text = (
+		"Hollow with wall thickness %.1f?\n(Yellow wireframe shows resulting walls)" % thickness
 	)
+	dlg.min_size = Vector2i(300, 100)
+	_add_confirmable_dialog(dlg)
+	dlg.confirmed.connect(
+		func():
+			if not is_instance_valid(self) or not is_instance_valid(root):
+				dlg.queue_free()
+				return
+			if root.hollow_preview:
+				root.hollow_preview.clear()
+			HFUndoHelper.commit(
+				_get_undo_redo(),
+				root,
+				"Hollow",
+				"hollow_brush_by_id",
+				[brush_id, thickness],
+				false,
+				Callable(self, "_record_history")
+			)
+			dlg.queue_free()
+	)
+	dlg.canceled.connect(
+		func():
+			if not is_instance_valid(self):
+				return
+			if root and is_instance_valid(root) and root.hollow_preview:
+				root.hollow_preview.clear()
+			dlg.queue_free()
+	)
+	dlg.popup_centered()
 
 
 func _merge_selected(root: Node) -> void:
@@ -2649,37 +2729,99 @@ func _clip_selected(root: Node) -> void:
 	if not check.ok:
 		root.user_message.emit(check.user_text(), 1)
 		return
-	HFUndoHelper.commit(
-		_get_undo_redo(),
-		root,
-		"Clip Brush",
-		"clip_brush_by_id",
-		[brush_id, 1, split_pos],
-		false,
-		Callable(self, "_record_history")
+	# Show geometry preview and confirm
+	if root.clip_preview:
+		root.clip_preview.show_preview(brush_id, 1, split_pos)
+	var dlg = ConfirmationDialog.new()
+	dlg.title = "Clip Brush"
+	dlg.dialog_text = (
+		"Split brush along Y axis at %.1f?\n(Cyan wireframe shows resulting pieces)" % split_pos
 	)
+	dlg.min_size = Vector2i(300, 100)
+	_add_confirmable_dialog(dlg)
+	dlg.confirmed.connect(
+		func():
+			if not is_instance_valid(self) or not is_instance_valid(root):
+				dlg.queue_free()
+				return
+			if root.clip_preview:
+				root.clip_preview.clear()
+			HFUndoHelper.commit(
+				_get_undo_redo(),
+				root,
+				"Clip Brush",
+				"clip_brush_by_id",
+				[brush_id, 1, split_pos],
+				false,
+				Callable(self, "_record_history")
+			)
+			dlg.queue_free()
+	)
+	dlg.canceled.connect(
+		func():
+			if not is_instance_valid(self):
+				return
+			if root and is_instance_valid(root) and root.clip_preview:
+				root.clip_preview.clear()
+			dlg.queue_free()
+	)
+	dlg.popup_centered()
 
 
 func _carve_selected(root: Node) -> void:
 	var nodes = _current_selection_nodes()
 	if nodes.is_empty():
 		return
+	# Collect valid carver brush IDs
+	var carve_ids: Array = []
 	for node in nodes:
 		if not root.is_brush_node(node):
 			continue
 		var info = root.get_brush_info_from_node(node)
 		var brush_id = str(info.get("brush_id", ""))
-		if brush_id == "":
-			continue
-		HFUndoHelper.commit(
-			_get_undo_redo(),
-			root,
-			"Carve",
-			"carve_with_brush",
-			[brush_id],
-			false,
-			Callable(self, "_record_history")
-		)
+		if brush_id != "":
+			carve_ids.append(brush_id)
+	if carve_ids.is_empty():
+		return
+	# Show preview for the first carver (multi-carve shows first only)
+	if root.carve_preview:
+		root.carve_preview.show_preview(carve_ids[0])
+	# Confirm before committing destructive carve
+	var dlg = ConfirmationDialog.new()
+	dlg.title = "Carve"
+	dlg.dialog_text = (
+		"Carve %d brush(es)?\n(Green wireframe shows resulting pieces)" % carve_ids.size()
+	)
+	dlg.min_size = Vector2i(300, 100)
+	_add_confirmable_dialog(dlg)
+	dlg.confirmed.connect(
+		func():
+			if not is_instance_valid(self) or not is_instance_valid(root):
+				dlg.queue_free()
+				return
+			if root.carve_preview:
+				root.carve_preview.clear()
+			for bid in carve_ids:
+				HFUndoHelper.commit(
+					_get_undo_redo(),
+					root,
+					"Carve",
+					"carve_with_brush",
+					[bid],
+					false,
+					Callable(self, "_record_history")
+				)
+			dlg.queue_free()
+	)
+	dlg.canceled.connect(
+		func():
+			if not is_instance_valid(self):
+				return
+			if root and is_instance_valid(root) and root.carve_preview:
+				root.carve_preview.clear()
+			dlg.queue_free()
+	)
+	dlg.popup_centered()
 
 
 func _can_drop_data(_position: Vector2, data: Variant) -> bool:

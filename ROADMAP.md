@@ -261,6 +261,13 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - **Test cleanup fixes**: resource leak fixes in test_brush_to_heightmap, test_context_toolbar, test_selection_features. Orphan/leak shutdown errors eliminated.
 - Total: **1370 tests**, full suite passes in 91.7s.
 
+## Done (Error Prevention & Forgiveness — Non-Destructive Defaults)
+- **Carve geometry preview** (`HFCarvePreview`): green wireframe overlay shows resulting slice pieces before committing. Confirmation dialog with Cancel to abort. Both hotkey and context toolbar paths covered.
+- **Clip geometry preview** (`HFClipPreview`): cyan wireframe for resulting halves + semi-transparent orange split plane quad. Confirmation dialog before commit.
+- **Hollow geometry preview** (`HFHollowPreview`): yellow wireframe shows 6 wall pieces before commit. Supports real-time thickness updates. Confirmation dialog on both dock button and hotkey paths.
+- **Bulk delete confirmation**: 3+ brush deletes prompt confirmation ("Delete N brushes? This can be undone with Ctrl+Z"). Single/dual brush deletes remain instant.
+- **Dialog lifecycle safety**: `_pending_dialogs` tracking in plugin.gd with auto-free on teardown. All confirmed callbacks guard `is_instance_valid(root)` against scene-change invalidation.
+
 ## Future (Wave 3 -- Polish)
 - Multiple simultaneous cordons.
 - Multi-tool presets for common workflows.

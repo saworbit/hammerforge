@@ -5,6 +5,31 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Error prevention & forgiveness** (Apr 2026): Geometry preview overlays and confirmation
+  dialogs for destructive operations, reducing accidental mistakes.
+
+  **Carve preview** (`HFCarvePreview`): green wireframe overlay shows the resulting slice pieces
+  before committing a carve. Confirmation dialog with Cancel to abort. Covers both hotkey
+  (Ctrl+Shift+R) and context toolbar paths.
+
+  **Clip preview** (`HFClipPreview`): cyan wireframe shows the two resulting halves plus a
+  semi-transparent orange quad for the split plane. Confirmation dialog before committing.
+
+  **Hollow preview** (`HFHollowPreview`): yellow wireframe shows all 6 wall pieces that would
+  result from hollowing. Supports real-time `update_thickness()` for interactive preview.
+  Confirmation dialog before committing. Covers both dock button and hotkey (Ctrl+H) paths.
+
+  **Bulk delete confirmation**: deleting 3+ brushes at once shows a confirmation dialog
+  reassuring users that Ctrl+Z can undo. Single/dual brush deletes remain instant.
+
+  **Dialog lifecycle safety**: all confirmation dialogs are tracked in `_pending_dialogs` and
+  auto-freed on plugin teardown. Confirmed callbacks guard `is_instance_valid(root)` to prevent
+  operating on a dead LevelRoot after scene change.
+
+  Files: `systems/hf_carve_preview.gd` (new), `systems/hf_clip_preview.gd` (new),
+  `systems/hf_hollow_preview.gd` (new), `level_root.gd` (modified), `plugin.gd` (modified),
+  `dock.gd` (modified).
+
 - **Progressive disclosure for Entity I/O** (Apr 2026): Entity I/O and I/O Wiring sections in
   the Entities tab are now context-hidden — they only appear when an entity is selected, matching
   the existing Entity Properties behavior. I/O Wiring also defaults to collapsed. This keeps the

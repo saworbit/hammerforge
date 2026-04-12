@@ -40,6 +40,9 @@ const HFIOVisualizerType = preload("systems/hf_io_visualizer.gd")
 const HFVertexSystemType = preload("systems/hf_vertex_system.gd")
 const HFCarveSystemType = preload("systems/hf_carve_system.gd")
 const HFSubtractPreviewType = preload("systems/hf_subtract_preview.gd")
+const HFCarvePreviewType = preload("systems/hf_carve_preview.gd")
+const HFClipPreviewType = preload("systems/hf_clip_preview.gd")
+const HFHollowPreviewType = preload("systems/hf_hollow_preview.gd")
 const HFSpawnSystemType = preload("systems/hf_spawn_system.gd")
 const HFPrefabSystemType = preload("systems/hf_prefab_system.gd")
 const HFPrefabOverlayType = preload("ui/hf_prefab_overlay.gd")
@@ -236,6 +239,9 @@ var io_visualizer: HFIOVisualizerType
 var vertex_system: HFVertexSystemType
 var carve_system: HFCarveSystemType
 var subtract_preview: HFSubtractPreviewType
+var carve_preview: HFCarvePreviewType
+var clip_preview: HFClipPreviewType
+var hollow_preview: HFHollowPreviewType
 var spawn_system: HFSpawnSystemType
 var prefab_system: HFPrefabSystemType
 var prefab_overlay: HFPrefabOverlayType
@@ -522,6 +528,9 @@ func _ready():
 	vertex_system = HFVertexSystemType.new(self)
 	carve_system = HFCarveSystemType.new(self)
 	subtract_preview = HFSubtractPreviewType.new(self)
+	carve_preview = HFCarvePreviewType.new(self)
+	clip_preview = HFClipPreviewType.new(self)
+	hollow_preview = HFHollowPreviewType.new(self)
 	spawn_system = HFSpawnSystemType.new(self)
 	prefab_system = HFPrefabSystemType.new(self)
 	prefab_overlay = HFPrefabOverlayType.new(self)
@@ -561,6 +570,12 @@ func _exit_tree() -> void:
 		_reload_timer = null
 	if subtract_preview:
 		subtract_preview.destroy()
+	if carve_preview:
+		carve_preview.destroy()
+	if clip_preview:
+		clip_preview.destroy()
+	if hollow_preview:
+		hollow_preview.destroy()
 	# Cancel any in-flight tool previews so their nodes don't outlive the tree
 	if extrude_tool:
 		extrude_tool.cancel_extrude()
