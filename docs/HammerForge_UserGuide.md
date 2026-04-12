@@ -1,6 +1,6 @@
 # HammerForge User Guide
 
-Last updated: April 11, 2026
+Last updated: April 12, 2026
 
 This guide covers the current HammerForge workflow in Godot 4.6: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs.
 
@@ -425,6 +425,29 @@ When you switch tools, a brief instruction hint appears in the viewport overlay:
 
 Hints auto-fade after 4 seconds. Once you dismiss a hint (by switching away), it won't appear again. Hint dismissal persists across sessions. To reset all hints, delete `user://hammerforge_prefs.json` or clear the `hints_dismissed` key.
 
+### Brush Color Coding
+
+Brushes use distinct wireframe overlay colors so you can identify their operation type at a glance:
+
+| Operation | Wireframe Color | Fill Color |
+|-----------|----------------|------------|
+| **Additive** (Union) | Green | Green tint |
+| **Subtractive** | Red | Red tint with emission |
+| **func_detail** entity | Blue | Bright blue tint |
+| **trigger_*** entity | Blue | Medium blue tint |
+| **func_wall** entity | Blue | Muted blue tint |
+| **Other** brush entity | Blue | Slate blue tint |
+
+This follows the classic level editor convention (Hammer, TrenchBroom): green = additive, red = subtractive, blue = entity.
+
+### Grid Size Indicator
+
+The viewport HUD shows the current grid snap value (e.g. "Grid: 16") persistently in the top-right panel. When the grid size changes — via the dock SpinBox, quick-property popup (G G), or the `[` / `]` hotkeys — the indicator briefly flashes bright yellow-white and fades back, providing instant feedback without leaving the viewport.
+
+**Grid size hotkeys:**
+- **`[`** — halve grid snap (e.g. 16 → 8), minimum 0.125
+- **`]`** — double grid snap (e.g. 16 → 32), maximum 512
+
 ### Subtract Preview
 Enable **Subtract Preview** in Manage tab → Settings to see real-time wireframe overlays at the AABB intersection of additive and subtractive brushes. Red wireframe boxes show exactly where subtractive brushes will cut into additive geometry. The preview updates automatically when brushes are added, removed, or moved (with a 0.15s debounce for performance). This helps visualize the effect of subtract operations before baking.
 
@@ -543,6 +566,8 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Apply Last Texture | Shift+T | Apply last picked texture to selection |
 | Select Similar | Shift+S | Select faces/brushes similar to current selection |
 | Selection Filters | Shift+F | Open selection filter popover |
+| Grid Size Down | [ | Halve grid snap (min 0.125) |
+| Grid Size Up | ] | Double grid snap (max 512) |
 | Axis Lock X/Y/Z | X / Y / Z | Constrain to axis |
 | Paint tools | B / E / R / L / K | Bucket / Erase / Ramp / Line / Blend |
 | Command palette | Shift+? / F1 / Ctrl+K | Searchable action palette with fuzzy search |
@@ -648,6 +673,7 @@ General keyboard shortcuts
 - PageUp/PageDown: nudge selected brushes (Y axis).
 - Escape: clear selection.
 - Ctrl+Scroll: adjust brush size.
+- `[` / `]`: halve / double grid snap size.
 
 Extrude shortcuts
 - U: Extrude Up tool.

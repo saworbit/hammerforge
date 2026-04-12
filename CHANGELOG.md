@@ -5,6 +5,46 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Visual system status feedback** (Apr 2026): Classic editor-style visual feedback for brush
+  operations, grid awareness, and system state.
+
+  **Operation-coded wireframe colors:** Brushes now use distinct wireframe overlay colors by
+  operation type, matching the convention established by Hammer and TrenchBroom:
+  - **Green** wireframe + fill for additive (union) brushes.
+  - **Red** wireframe + fill for subtractive brushes (unchanged).
+  - **Blue** spectrum for brush entities — bright blue for `func_detail`, medium blue for
+    `trigger_*`, muted blue for `func_wall`, slate blue for other entity classes.
+  - New `_apply_additive_wireframe_overlay()` in `brush_instance.gd` creates a green wireframe
+    overlay for additive brushes (mirroring the existing subtract wireframe overlay). Both
+    overlays now refresh on face-preview mesh rebuilds to prevent geometry drift.
+
+  **Grid size viewport indicator:** The shortcut HUD (`shortcut_hud.gd`) now displays the
+  current grid snap value persistently (e.g. "Grid: 16") in the top-right viewport panel.
+  Uses `%g` formatting for exact display at all snap values (including fractional like 0.125).
+
+  **Grid change flash:** When the grid snap value changes, the indicator briefly flashes
+  bright yellow-white and fades back over 0.6 seconds, providing immediate visual confirmation
+  without requiring the user to look away from the viewport.
+
+  **Grid size hotkeys** (`[` / `]`): Halve or double the grid snap with a single keypress.
+  Clamped to 0.125–512 range. Registered as `grid_decrease` / `grid_increase` in `hf_keymap.gd`
+  (user-remappable). Shortcut hint added to draw-idle HUD display.
+
+  **Signal-driven HUD sync:** `dock.gd` emits `grid_snap_applied(value)` from both
+  `_apply_grid_snap()` and `_on_root_grid_snap_changed()`, ensuring the HUD updates for all
+  grid change origins — dock SpinBox, snap buttons, quick-property popup, `[`/`]` hotkeys,
+  state restore, or any direct `root.grid_snap` assignment.
+
+  Files: `brush_instance.gd` (modified), `shortcut_hud.gd` (modified), `plugin.gd` (modified),
+  `dock.gd` (modified), `hf_keymap.gd` (modified).
+
+### Fixed
+- **Test cleanup leaks** (Apr 2026): Fixed test-owned resource leaks in
+  `test_brush_to_heightmap.gd`, `test_context_toolbar.gd`, and `test_selection_features.gd`.
+  Heightmap tests now register detached converted layers for cleanup; toolbar tests use GUT's
+  auto-queue-free path. Orphan/resource leak shutdown errors eliminated.
+  Total: **1370 tests across all files**, full suite passes cleanly in 91.7s.
+
 - **Viewport-centric UI** (Apr 2026): Three Fitts's-Law-driven viewport overlays that keep the
   cursor in the 3D viewport instead of traveling to the dock panel.
 

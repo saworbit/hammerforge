@@ -80,9 +80,9 @@ func _set_faces(brush: DraftBrush, face_list: Array) -> void:
 
 func test_planar_quad_no_issue():
 	var b = _make_brush(root.draft_brushes_node)
-	var verts := PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 0, 4), Vector3(0, 0, 4)
-	])
+	var verts := PackedVector3Array(
+		[Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 0, 4), Vector3(0, 0, 4)]
+	)
 	_set_faces(b, [_make_quad_face(verts)])
 	var issues = val_sys.check_bake_issues()
 	var found := false
@@ -95,9 +95,9 @@ func test_planar_quad_no_issue():
 func test_non_planar_quad_detected():
 	var b = _make_brush(root.draft_brushes_node)
 	# Fourth vertex drifts 0.05 units off the XZ plane
-	var verts := PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 0, 4), Vector3(0, 0.05, 4)
-	])
+	var verts := PackedVector3Array(
+		[Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 0, 4), Vector3(0, 0.05, 4)]
+	)
 	_set_faces(b, [_make_quad_face(verts)])
 	var issues = val_sys.check_bake_issues()
 	var found := false
@@ -110,9 +110,9 @@ func test_non_planar_quad_detected():
 func test_non_planar_respects_tolerance():
 	var b = _make_brush(root.draft_brushes_node)
 	# Drift within default tolerance (0.01)
-	var verts := PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 0, 4), Vector3(0, 0.005, 4)
-	])
+	var verts := PackedVector3Array(
+		[Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 0, 4), Vector3(0, 0.005, 4)]
+	)
 	_set_faces(b, [_make_quad_face(verts)])
 	var issues = val_sys.check_bake_issues()
 	var found := false
@@ -124,9 +124,9 @@ func test_non_planar_respects_tolerance():
 
 func test_non_planar_custom_tolerance():
 	var b = _make_brush(root.draft_brushes_node)
-	var verts := PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 0, 4), Vector3(0, 0.05, 4)
-	])
+	var verts := PackedVector3Array(
+		[Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 0, 4), Vector3(0, 0.05, 4)]
+	)
 	_set_faces(b, [_make_quad_face(verts)])
 	# Increase tolerance so 0.05 drift is accepted
 	val_sys.planarity_tolerance = 0.1
@@ -140,9 +140,7 @@ func test_non_planar_custom_tolerance():
 
 func test_triangle_always_planar():
 	var b = _make_brush(root.draft_brushes_node)
-	var verts := PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(4, 2, 0), Vector3(2, 5, 3)
-	])
+	var verts := PackedVector3Array([Vector3(0, 0, 0), Vector3(4, 2, 0), Vector3(2, 5, 3)])
 	_set_faces(b, [_make_quad_face(verts)])
 	var issues = val_sys.check_bake_issues()
 	var found := false
@@ -161,12 +159,14 @@ func test_weld_snaps_near_vertices():
 	var b = _make_brush(root.draft_brushes_node)
 	val_sys.weld_tolerance = 0.01
 	# Two faces sharing an edge where vertices are offset by ~0.005
-	var f1 = _make_quad_face(PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 4, 0), Vector3(0, 4, 0)
-	]))
-	var f2 = _make_quad_face(PackedVector3Array([
-		Vector3(4.005, 0, 0), Vector3(8, 0, 0), Vector3(8, 4, 0), Vector3(4.005, 4, 0)
-	]))
+	var f1 = _make_quad_face(
+		PackedVector3Array([Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 4, 0), Vector3(0, 4, 0)])
+	)
+	var f2 = _make_quad_face(
+		PackedVector3Array(
+			[Vector3(4.005, 0, 0), Vector3(8, 0, 0), Vector3(8, 4, 0), Vector3(4.005, 4, 0)]
+		)
+	)
 	_set_faces(b, [f1, f2])
 	var count = val_sys.weld_brush_vertices(b)
 	assert_gt(count, 0, "Should weld near-coincident vertices")
@@ -182,9 +182,9 @@ func test_weld_snaps_near_vertices():
 func test_weld_no_change_when_exact():
 	var b = _make_brush(root.draft_brushes_node)
 	val_sys.weld_tolerance = 0.01
-	var f1 = _make_quad_face(PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 4, 0), Vector3(0, 4, 0)
-	]))
+	var f1 = _make_quad_face(
+		PackedVector3Array([Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 4, 0), Vector3(0, 4, 0)])
+	)
 	_set_faces(b, [f1])
 	var count = val_sys.weld_brush_vertices(b)
 	assert_eq(count, 0, "Already-exact vertices should not be modified")
@@ -193,12 +193,14 @@ func test_weld_no_change_when_exact():
 func test_weld_refreshes_face_geometry():
 	var b = _make_brush(root.draft_brushes_node)
 	val_sys.weld_tolerance = 0.01
-	var f1 = _make_quad_face(PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 4, 0), Vector3(0, 4, 0)
-	]))
-	var f2 = _make_quad_face(PackedVector3Array([
-		Vector3(4.005, 0, 0), Vector3(8, 0, 0), Vector3(8, 4, 0), Vector3(4.005, 4, 0)
-	]))
+	var f1 = _make_quad_face(
+		PackedVector3Array([Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 4, 0), Vector3(0, 4, 0)])
+	)
+	var f2 = _make_quad_face(
+		PackedVector3Array(
+			[Vector3(4.005, 0, 0), Vector3(8, 0, 0), Vector3(8, 4, 0), Vector3(4.005, 4, 0)]
+		)
+	)
 	_set_faces(b, [f1, f2])
 	# Corrupt f2's bounds AFTER _set_faces so only a post-weld ensure_geometry()
 	# call can restore them.  If the refresh loop at hf_validation_system.gd:520
@@ -210,8 +212,11 @@ func test_weld_refreshes_face_geometry():
 	# modified local_verts.  f2 spans x=[~4.0025, 8] y=[0, 4] z=0, so bounds
 	# size must be non-zero on at least two axes.
 	var bounds_after: AABB = b.faces[1].bounds
-	assert_gt(bounds_after.size.length(), 0.0,
-		"Post-weld bounds must be recomputed — proves ensure_geometry() was called")
+	assert_gt(
+		bounds_after.size.length(),
+		0.0,
+		"Post-weld bounds must be recomputed — proves ensure_geometry() was called"
+	)
 
 
 # ===========================================================================
@@ -222,9 +227,9 @@ func test_weld_refreshes_face_geometry():
 func test_fix_non_planar_projects_vertex():
 	var b = _make_brush(root.draft_brushes_node)
 	val_sys.planarity_tolerance = 0.01
-	var verts := PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 0, 4), Vector3(0, 0.05, 4)
-	])
+	var verts := PackedVector3Array(
+		[Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 0, 4), Vector3(0, 0.05, 4)]
+	)
 	_set_faces(b, [_make_quad_face(verts)])
 	var fixed = val_sys.fix_non_planar_faces(b)
 	assert_gt(fixed, 0, "Should fix drifting vertex")
@@ -235,9 +240,9 @@ func test_fix_non_planar_projects_vertex():
 func test_fix_non_planar_preserves_xy():
 	var b = _make_brush(root.draft_brushes_node)
 	val_sys.planarity_tolerance = 0.01
-	var verts := PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 0, 4), Vector3(0, 0.05, 4)
-	])
+	var verts := PackedVector3Array(
+		[Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 0, 4), Vector3(0, 0.05, 4)]
+	)
 	_set_faces(b, [_make_quad_face(verts)])
 	val_sys.fix_non_planar_faces(b)
 	# X and Z should be unchanged
@@ -248,9 +253,9 @@ func test_fix_non_planar_preserves_xy():
 func test_fix_non_planar_no_change_when_ok():
 	var b = _make_brush(root.draft_brushes_node)
 	val_sys.planarity_tolerance = 0.01
-	var verts := PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 0, 4), Vector3(0, 0, 4)
-	])
+	var verts := PackedVector3Array(
+		[Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 0, 4), Vector3(0, 0, 4)]
+	)
 	_set_faces(b, [_make_quad_face(verts)])
 	var fixed = val_sys.fix_non_planar_faces(b)
 	assert_eq(fixed, 0, "Already-planar face should not be modified")
@@ -266,12 +271,26 @@ func test_micro_gap_detected():
 	var b1 = _make_brush(root.draft_brushes_node)
 	var b2 = _make_brush(root.draft_brushes_node)
 	# b1 has a face edge at x=4, b2 at x=4.005 — within tolerance
-	_set_faces(b1, [_make_quad_face(PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 4, 0), Vector3(0, 4, 0)
-	]))])
-	_set_faces(b2, [_make_quad_face(PackedVector3Array([
-		Vector3(4.005, 0, 0), Vector3(8, 0, 0), Vector3(8, 4, 0), Vector3(4.005, 4, 0)
-	]))])
+	_set_faces(
+		b1,
+		[
+			_make_quad_face(
+				PackedVector3Array(
+					[Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 4, 0), Vector3(0, 4, 0)]
+				)
+			)
+		]
+	)
+	_set_faces(
+		b2,
+		[
+			_make_quad_face(
+				PackedVector3Array(
+					[Vector3(4.005, 0, 0), Vector3(8, 0, 0), Vector3(8, 4, 0), Vector3(4.005, 4, 0)]
+				)
+			)
+		]
+	)
 	var issues = val_sys.check_bake_issues()
 	var found := false
 	for issue in issues:
@@ -284,12 +303,26 @@ func test_no_micro_gap_when_exact():
 	val_sys.weld_tolerance = 0.01
 	var b1 = _make_brush(root.draft_brushes_node)
 	var b2 = _make_brush(root.draft_brushes_node)
-	_set_faces(b1, [_make_quad_face(PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 4, 0), Vector3(0, 4, 0)
-	]))])
-	_set_faces(b2, [_make_quad_face(PackedVector3Array([
-		Vector3(4, 0, 0), Vector3(8, 0, 0), Vector3(8, 4, 0), Vector3(4, 4, 0)
-	]))])
+	_set_faces(
+		b1,
+		[
+			_make_quad_face(
+				PackedVector3Array(
+					[Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 4, 0), Vector3(0, 4, 0)]
+				)
+			)
+		]
+	)
+	_set_faces(
+		b2,
+		[
+			_make_quad_face(
+				PackedVector3Array(
+					[Vector3(4, 0, 0), Vector3(8, 0, 0), Vector3(8, 4, 0), Vector3(4, 4, 0)]
+				)
+			)
+		]
+	)
 	var issues = val_sys.check_bake_issues()
 	var found := false
 	for issue in issues:
@@ -323,12 +356,26 @@ func test_micro_gap_across_bucket_boundary():
 	val_sys.weld_tolerance = 0.01
 	var b1 = _make_brush(root.draft_brushes_node)
 	var b2 = _make_brush(root.draft_brushes_node)
-	_set_faces(b1, [_make_quad_face(PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(4.004, 0, 0), Vector3(4.004, 4, 0), Vector3(0, 4, 0)
-	]))])
-	_set_faces(b2, [_make_quad_face(PackedVector3Array([
-		Vector3(4.011, 0, 0), Vector3(8, 0, 0), Vector3(8, 4, 0), Vector3(4.011, 4, 0)
-	]))])
+	_set_faces(
+		b1,
+		[
+			_make_quad_face(
+				PackedVector3Array(
+					[Vector3(0, 0, 0), Vector3(4.004, 0, 0), Vector3(4.004, 4, 0), Vector3(0, 4, 0)]
+				)
+			)
+		]
+	)
+	_set_faces(
+		b2,
+		[
+			_make_quad_face(
+				PackedVector3Array(
+					[Vector3(4.011, 0, 0), Vector3(8, 0, 0), Vector3(8, 4, 0), Vector3(4.011, 4, 0)]
+				)
+			)
+		]
+	)
 	var issues = val_sys.check_bake_issues()
 	var found := false
 	for issue in issues:
@@ -341,12 +388,16 @@ func test_weld_across_bucket_boundary():
 	# Same boundary-straddling scenario but for the weld auto-fix
 	val_sys.weld_tolerance = 0.01
 	var b = _make_brush(root.draft_brushes_node)
-	var f1 = _make_quad_face(PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(4.004, 0, 0), Vector3(4.004, 4, 0), Vector3(0, 4, 0)
-	]))
-	var f2 = _make_quad_face(PackedVector3Array([
-		Vector3(4.011, 0, 0), Vector3(8, 0, 0), Vector3(8, 4, 0), Vector3(4.011, 4, 0)
-	]))
+	var f1 = _make_quad_face(
+		PackedVector3Array(
+			[Vector3(0, 0, 0), Vector3(4.004, 0, 0), Vector3(4.004, 4, 0), Vector3(0, 4, 0)]
+		)
+	)
+	var f2 = _make_quad_face(
+		PackedVector3Array(
+			[Vector3(4.011, 0, 0), Vector3(8, 0, 0), Vector3(8, 4, 0), Vector3(4.011, 4, 0)]
+		)
+	)
 	_set_faces(b, [f1, f2])
 	var count = val_sys.weld_brush_vertices(b)
 	assert_gt(count, 0, "Should weld vertices that straddle a bucket boundary")
@@ -409,8 +460,11 @@ func test_parse_map_text_welding_changes_brush_center():
 	# Without welding: min_x = 1.992, center_x = (1.992 + 6) / 2 = 3.996
 	# With welding:    min_x ~ 1.996, center_x = (1.996 + 6) / 2 = 3.998
 	# The x-components must differ, proving the weld hook ran.
-	assert_ne(center_on, center_off,
-		"Brush center must differ between weld-on and weld-off, proving welding ran")
+	assert_ne(
+		center_on,
+		center_off,
+		"Brush center must differ between weld-on and weld-off, proving welding ran"
+	)
 
 
 func test_parse_map_text_no_weld_when_disabled():

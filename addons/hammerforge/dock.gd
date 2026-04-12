@@ -6,6 +6,7 @@ signal hud_visibility_changed(visible: bool)
 signal builtin_tool_changed
 signal vertex_mode_toggled(enabled: bool)
 signal selection_clear_requested
+signal grid_snap_applied(value: float)
 
 const LevelRootType = preload("level_root.gd")
 const BrushPreset = preload("brush_preset.gd")
@@ -2859,6 +2860,7 @@ func _apply_grid_snap(value: float) -> void:
 	if level_root and _root_has_property("grid_snap"):
 		level_root.set("grid_snap", value)
 	_save_user_pref("grid_snap", value)
+	grid_snap_applied.emit(value)
 
 
 func _sync_snap_buttons(value: float) -> void:
@@ -3539,6 +3541,7 @@ func _on_root_grid_snap_changed(value: float) -> void:
 	grid_snap.value = value
 	syncing_snap = false
 	_sync_snap_buttons(value)
+	grid_snap_applied.emit(value)
 
 
 func _on_root_paint_layer_changed(_index: int) -> void:

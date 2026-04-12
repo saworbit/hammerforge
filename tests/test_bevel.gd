@@ -54,44 +54,44 @@ func _make_box_brush(brush_id: String = "box_brush") -> Node3D:
 	var faces: Array[FaceData] = []
 	# Top (Y+)
 	var top = FaceData.new()
-	top.local_verts = PackedVector3Array([
-		Vector3(0, s, 0), Vector3(s, s, 0), Vector3(s, s, s), Vector3(0, s, s)
-	])
+	top.local_verts = PackedVector3Array(
+		[Vector3(0, s, 0), Vector3(s, s, 0), Vector3(s, s, s), Vector3(0, s, s)]
+	)
 	top.ensure_geometry()
 	faces.append(top)
 	# Bottom (Y-)
 	var bot = FaceData.new()
-	bot.local_verts = PackedVector3Array([
-		Vector3(0, 0, s), Vector3(s, 0, s), Vector3(s, 0, 0), Vector3(0, 0, 0)
-	])
+	bot.local_verts = PackedVector3Array(
+		[Vector3(0, 0, s), Vector3(s, 0, s), Vector3(s, 0, 0), Vector3(0, 0, 0)]
+	)
 	bot.ensure_geometry()
 	faces.append(bot)
 	# Front (Z-)
 	var front = FaceData.new()
-	front.local_verts = PackedVector3Array([
-		Vector3(0, s, 0), Vector3(0, 0, 0), Vector3(s, 0, 0), Vector3(s, s, 0)
-	])
+	front.local_verts = PackedVector3Array(
+		[Vector3(0, s, 0), Vector3(0, 0, 0), Vector3(s, 0, 0), Vector3(s, s, 0)]
+	)
 	front.ensure_geometry()
 	faces.append(front)
 	# Back (Z+)
 	var back = FaceData.new()
-	back.local_verts = PackedVector3Array([
-		Vector3(s, s, s), Vector3(s, 0, s), Vector3(0, 0, s), Vector3(0, s, s)
-	])
+	back.local_verts = PackedVector3Array(
+		[Vector3(s, s, s), Vector3(s, 0, s), Vector3(0, 0, s), Vector3(0, s, s)]
+	)
 	back.ensure_geometry()
 	faces.append(back)
 	# Left (X-)
 	var left = FaceData.new()
-	left.local_verts = PackedVector3Array([
-		Vector3(0, s, s), Vector3(0, 0, s), Vector3(0, 0, 0), Vector3(0, s, 0)
-	])
+	left.local_verts = PackedVector3Array(
+		[Vector3(0, s, s), Vector3(0, 0, s), Vector3(0, 0, 0), Vector3(0, s, 0)]
+	)
 	left.ensure_geometry()
 	faces.append(left)
 	# Right (X+)
 	var right = FaceData.new()
-	right.local_verts = PackedVector3Array([
-		Vector3(s, s, 0), Vector3(s, 0, 0), Vector3(s, 0, s), Vector3(s, s, s)
-	])
+	right.local_verts = PackedVector3Array(
+		[Vector3(s, s, 0), Vector3(s, 0, 0), Vector3(s, 0, s), Vector3(s, s, s)]
+	)
 	right.ensure_geometry()
 	faces.append(right)
 	brush.faces = faces

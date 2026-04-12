@@ -3,7 +3,6 @@ extends GutTest
 
 # HFUndoHelper is a class_name — use it directly, no preload needed.
 
-
 # ---------------------------------------------------------------------------
 # Minimal root shim that HFUndoHelper.commit() can call methods on.
 # ---------------------------------------------------------------------------
@@ -85,8 +84,14 @@ func test_commit_without_collation_fires_each_time():
 	## Two separate non-collated commits should each fire the callback.
 	for i in range(3):
 		HFUndoHelper.commit(
-			null, root, "Action%d" % i, "set_value", ["k", float(i)],
-			false, Callable(self, "_record_history"), ""
+			null,
+			root,
+			"Action%d" % i,
+			"set_value",
+			["k", float(i)],
+			false,
+			Callable(self, "_record_history"),
+			""
 		)
 	assert_eq(history_log.size(), 3, "Each non-collated commit records history")
 
@@ -99,8 +104,14 @@ func test_commit_without_collation_fires_each_time():
 func test_collation_first_commit_fires_history():
 	## The first commit in a collation window should fire the history callback.
 	HFUndoHelper.commit(
-		null, root, "UV Edit", "set_value", ["s", 1.0],
-		false, Callable(self, "_record_history"), "uv_brush1_0"
+		null,
+		root,
+		"UV Edit",
+		"set_value",
+		["s", 1.0],
+		false,
+		Callable(self, "_record_history"),
+		"uv_brush1_0"
 	)
 	assert_eq(history_log.size(), 1, "First collated commit should fire history")
 	assert_eq(history_log[0], "UV Edit")
@@ -111,32 +122,61 @@ func test_collation_subsequent_commits_suppress_history():
 	## should NOT fire the history callback again.
 	var tag := "uv_brush1_0"
 	HFUndoHelper.commit(
-		null, root, "UV Edit", "set_value", ["s", 1.0],
-		false, Callable(self, "_record_history"), tag
+		null,
+		root,
+		"UV Edit",
+		"set_value",
+		["s", 1.0],
+		false,
+		Callable(self, "_record_history"),
+		tag
 	)
 	HFUndoHelper.commit(
-		null, root, "UV Edit", "set_value", ["s", 1.5],
-		false, Callable(self, "_record_history"), tag
+		null,
+		root,
+		"UV Edit",
+		"set_value",
+		["s", 1.5],
+		false,
+		Callable(self, "_record_history"),
+		tag
 	)
 	HFUndoHelper.commit(
-		null, root, "UV Edit", "set_value", ["s", 2.0],
-		false, Callable(self, "_record_history"), tag
+		null,
+		root,
+		"UV Edit",
+		"set_value",
+		["s", 2.0],
+		false,
+		Callable(self, "_record_history"),
+		tag
 	)
 	assert_eq(
-		history_log.size(), 1,
-		"Only the first commit in a collation run should record history"
+		history_log.size(), 1, "Only the first commit in a collation run should record history"
 	)
 
 
 func test_different_collation_tags_each_fire_history():
 	## Different tags should each start their own collation window.
 	HFUndoHelper.commit(
-		null, root, "UV A", "set_value", ["a", 1.0],
-		false, Callable(self, "_record_history"), "uv_brushA_0"
+		null,
+		root,
+		"UV A",
+		"set_value",
+		["a", 1.0],
+		false,
+		Callable(self, "_record_history"),
+		"uv_brushA_0"
 	)
 	HFUndoHelper.commit(
-		null, root, "UV B", "set_value", ["b", 1.0],
-		false, Callable(self, "_record_history"), "uv_brushB_0"
+		null,
+		root,
+		"UV B",
+		"set_value",
+		["b", 1.0],
+		false,
+		Callable(self, "_record_history"),
+		"uv_brushB_0"
 	)
 	assert_eq(history_log.size(), 2, "Different collation tags each fire history")
 
@@ -146,22 +186,18 @@ func test_collation_resets_after_tag_change():
 	var tag_a := "uv_a"
 	var tag_b := "uv_b"
 	HFUndoHelper.commit(
-		null, root, "A1", "set_value", ["x", 1.0],
-		false, Callable(self, "_record_history"), tag_a
+		null, root, "A1", "set_value", ["x", 1.0], false, Callable(self, "_record_history"), tag_a
 	)
 	HFUndoHelper.commit(
-		null, root, "A2", "set_value", ["x", 2.0],
-		false, Callable(self, "_record_history"), tag_a
+		null, root, "A2", "set_value", ["x", 2.0], false, Callable(self, "_record_history"), tag_a
 	)
 	# Switch to different tag
 	HFUndoHelper.commit(
-		null, root, "B1", "set_value", ["y", 1.0],
-		false, Callable(self, "_record_history"), tag_b
+		null, root, "B1", "set_value", ["y", 1.0], false, Callable(self, "_record_history"), tag_b
 	)
 	# Go back to first tag — should start fresh collation
 	HFUndoHelper.commit(
-		null, root, "A3", "set_value", ["x", 3.0],
-		false, Callable(self, "_record_history"), tag_a
+		null, root, "A3", "set_value", ["x", 3.0], false, Callable(self, "_record_history"), tag_a
 	)
 	# A1 fires, A2 suppressed, B1 fires, A3 fires = 3 total
 	assert_eq(history_log.size(), 3, "Tag switch resets collation")
@@ -178,9 +214,14 @@ func test_collation_resets_after_tag_change():
 func test_five_arg_method_executes():
 	## Verify that 5-arg methods are called via callv (since no undo_redo).
 	HFUndoHelper.commit(
-		null, root, "Set UV", "set_uv_params",
+		null,
+		root,
+		"Set UV",
+		"set_uv_params",
 		["brush_1", 0, 2.0, 2.0, 0.5],
-		false, Callable(self, "_record_history"), ""
+		false,
+		Callable(self, "_record_history"),
+		""
 	)
 	var log: Array = root.call_log
 	assert_eq(log.size(), 1, "Method should be called once")
@@ -193,23 +234,37 @@ func test_five_arg_with_collation_suppresses_history():
 	## Even with 5 args, collation should suppress duplicate history entries.
 	var tag := "uv_b1_0"
 	HFUndoHelper.commit(
-		null, root, "UV", "set_uv_params",
+		null,
+		root,
+		"UV",
+		"set_uv_params",
 		["b1", 0, 1.0, 1.0, 0.0],
-		false, Callable(self, "_record_history"), tag
+		false,
+		Callable(self, "_record_history"),
+		tag
 	)
 	HFUndoHelper.commit(
-		null, root, "UV", "set_uv_params",
+		null,
+		root,
+		"UV",
+		"set_uv_params",
 		["b1", 0, 1.5, 1.0, 0.0],
-		false, Callable(self, "_record_history"), tag
+		false,
+		Callable(self, "_record_history"),
+		tag
 	)
 	HFUndoHelper.commit(
-		null, root, "UV", "set_uv_params",
+		null,
+		root,
+		"UV",
+		"set_uv_params",
 		["b1", 0, 2.0, 1.0, 0.0],
-		false, Callable(self, "_record_history"), tag
+		false,
+		Callable(self, "_record_history"),
+		tag
 	)
 	assert_eq(
-		history_log.size(), 1,
-		"5-arg collated commits should produce exactly 1 history entry"
+		history_log.size(), 1, "5-arg collated commits should produce exactly 1 history entry"
 	)
 
 
@@ -220,10 +275,7 @@ func test_five_arg_with_collation_suppresses_history():
 
 func test_null_history_cb_does_not_crash():
 	## Passing no history callback should be safe.
-	HFUndoHelper.commit(
-		null, root, "NoCb", "set_value", ["k", 1.0],
-		false, Callable(), ""
-	)
+	HFUndoHelper.commit(null, root, "NoCb", "set_value", ["k", 1.0], false, Callable(), "")
 	# Just verify no crash and method was called
 	assert_eq(root.call_log.size(), 1)
 
@@ -238,23 +290,37 @@ func test_six_arg_collation_suppresses_history():
 	## consecutive same-tag calls produce only one history entry.
 	var tag := "big_tag"
 	HFUndoHelper.commit(
-		null, root, "BigCall", "big_call",
+		null,
+		root,
+		"BigCall",
+		"big_call",
 		["x", 0, 1.0, 2.0, 3.0, 4.0],
-		false, Callable(self, "_record_history"), tag
+		false,
+		Callable(self, "_record_history"),
+		tag
 	)
 	HFUndoHelper.commit(
-		null, root, "BigCall", "big_call",
+		null,
+		root,
+		"BigCall",
+		"big_call",
 		["x", 0, 1.5, 2.0, 3.0, 4.0],
-		false, Callable(self, "_record_history"), tag
+		false,
+		Callable(self, "_record_history"),
+		tag
 	)
 	HFUndoHelper.commit(
-		null, root, "BigCall", "big_call",
+		null,
+		root,
+		"BigCall",
+		"big_call",
 		["x", 0, 2.0, 2.0, 3.0, 4.0],
-		false, Callable(self, "_record_history"), tag
+		false,
+		Callable(self, "_record_history"),
+		tag
 	)
 	assert_eq(
-		history_log.size(), 1,
-		">5-arg collated commits should produce exactly 1 history entry"
+		history_log.size(), 1, ">5-arg collated commits should produce exactly 1 history entry"
 	)
 	# All three calls should have been executed
 	var big_calls := 0

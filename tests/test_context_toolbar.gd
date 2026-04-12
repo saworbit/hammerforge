@@ -7,11 +7,10 @@ var toolbar: HFContextToolbar
 
 func before_each():
 	toolbar = HFContextToolbar.new()
-	add_child(toolbar)
+	add_child_autoqfree(toolbar)
 
 
 func after_each():
-	toolbar.queue_free()
 	toolbar = null
 
 

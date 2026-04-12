@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/Godot-4.6%2B-478cbf?logo=godot-engine&logoColor=white" alt="Godot 4.6+">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
   <img src="https://img.shields.io/badge/Status-Early%20Alpha-red" alt="Early Alpha">
-  <img src="https://img.shields.io/badge/Tests-1357%20passing-brightgreen" alt="1357 tests passing">
+  <img src="https://img.shields.io/badge/Tests-1370%20passing-brightgreen" alt="1370 tests passing">
   <img src="https://img.shields.io/badge/GDScript-25k%2B%20lines-blueviolet" alt="25k+ lines">
 </p>
 
@@ -40,7 +40,7 @@ HammerForge is a single `addons/` folder. No external tools, no custom builds, n
 
 | | |
 |---|---|
-| **21 subsystems** + coordinator architecture | **1321 unit + integration tests** with CI on every push |
+| **21 subsystems** + coordinator architecture | **1370 unit + integration tests** with CI on every push |
 | **15 brush shapes** (box through dodecahedron) | **150 built-in prototype textures** for instant greyboxing |
 | **Quake `.map`** + **glTF `.glb`** export | **.hflevel** native format with threaded I/O |
 | **Customizable keymaps** (JSON) | **Plugin API** for custom tools |
@@ -146,7 +146,7 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Highlight Connected** -- toggle to pulse-highlight all entities linked to the selected one, with summary counts in the context toolbar
 - **Declarative property forms** -- dock auto-generates typed controls (string, int, float, bool, enum, color, vector3) from entity definitions
 - **Drag-and-drop placement** from the entity palette
-- **Color-coded overlays** -- cyan for func_detail, orange for triggers
+- **Color-coded wireframe overlays** -- green for additive, red for subtractive, blue spectrum for brush entities (func_detail, triggers, func_wall)
 
 ### Organize Your Level
 
@@ -210,6 +210,7 @@ HammerForge's dock is designed to stay out of your way while keeping everything 
 - **Viewport context menu** (Space) -- context-sensitive right-click-style menu with grid snap presets, UV operations, draw shapes, and toggle items; sections adapt to current selection
 - **Radial menu** (`` ` ``) -- 8-sector pie menu for quick tool switching (Box, Cylinder, Select, Paint, Vertex, Tex Pick, Measure, Clip) drawn as an overlay in the 3D viewport
 - **Quick property popups** (double-tap G G / B B / R R) -- inline numeric entry for grid snap, brush size, and paint radius without leaving the viewport
+- **Grid size indicator** -- persistent "Grid: N" display in viewport HUD with flash-on-change feedback; `[` / `]` keys halve/double grid snap instantly
 - **Coach marks** -- first-use step-by-step guides for advanced tools (Polygon, Path, Carve, Vertex, Extrude, etc.) with "Don't show again" persistence
 - **Undo history browser** -- thumbnail-equipped history panel (Manage tab) with double-click navigation to any undo point
 - **Operation replay timeline** (Ctrl+Shift+T) -- visual timeline of recent operations with undo/redo replay to any recorded point

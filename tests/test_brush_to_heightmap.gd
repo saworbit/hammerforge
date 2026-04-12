@@ -4,7 +4,6 @@ const HFBrushToHeightmapScript = preload("res://addons/hammerforge/paint/hf_brus
 const HFPaintLayerScript = preload("res://addons/hammerforge/paint/hf_paint_layer.gd")
 const HFPaintGridScript = preload("res://addons/hammerforge/paint/hf_paint_grid.gd")
 
-
 # ===========================================================================
 # Helper: create a brush node with position and size
 # ===========================================================================
@@ -16,6 +15,13 @@ func _make_brush(pos: Vector3, sz: Vector3) -> DraftBrush:
 	add_child_autoqfree(b)
 	b.global_position = pos
 	return b
+
+
+func _track_result_layer(result) -> void:
+	if result == null or result.layer == null:
+		return
+	if result.layer.get_parent() == null:
+		add_child_autoqfree(result.layer)
 
 
 # ===========================================================================
@@ -57,6 +63,7 @@ func test_convert_single_brush():
 	settings.cell_size = 1.0
 	settings.height_scale = 10.0
 	var result := converter.convert([brush], settings)
+	_track_result_layer(result)
 	assert_eq(result.error, "")
 	assert_not_null(result.layer)
 	assert_not_null(result.heightmap)
@@ -71,6 +78,7 @@ func test_convert_produces_filled_cells():
 	var settings := HFBrushToHeightmapScript.ConvertSettings.new()
 	settings.cell_size = 1.0
 	var result := converter.convert([brush], settings)
+	_track_result_layer(result)
 	assert_eq(result.error, "")
 	var filled := 0
 	for cid in result.layer.get_chunk_ids():
@@ -94,6 +102,7 @@ func test_convert_multiple_brushes():
 	var converter := HFBrushToHeightmapScript.new()
 	var settings := HFBrushToHeightmapScript.ConvertSettings.new()
 	var result := converter.convert([b1, b2], settings)
+	_track_result_layer(result)
 	assert_eq(result.error, "")
 	assert_eq(result.brush_count, 2)
 	assert_not_null(result.heightmap)
@@ -110,6 +119,7 @@ func test_height_scale_applied():
 	var settings := HFBrushToHeightmapScript.ConvertSettings.new()
 	settings.height_scale = 20.0
 	var result := converter.convert([brush], settings)
+	_track_result_layer(result)
 	assert_eq(result.error, "")
 	assert_eq(result.layer.height_scale, 20.0)
 
@@ -125,6 +135,7 @@ func test_result_cell_bounds():
 	var settings := HFBrushToHeightmapScript.ConvertSettings.new()
 	settings.margin_cells = 3
 	var result := converter.convert([brush], settings)
+	_track_result_layer(result)
 	assert_eq(result.error, "")
 	assert_lt(result.cell_min.x, 10, "Min X should be before brush center")
 	assert_gt(result.cell_max.x, 10, "Max X should be after brush center")
@@ -147,6 +158,7 @@ func test_target_layer_reuse():
 	var settings := HFBrushToHeightmapScript.ConvertSettings.new()
 	settings.target_layer = layer
 	var result := converter.convert([brush], settings)
+	_track_result_layer(result)
 	assert_eq(result.error, "")
 	assert_eq(result.layer, layer, "Should reuse the target layer")
 	assert_eq(result.layer.layer_id, &"existing")
@@ -162,6 +174,7 @@ func test_new_layer_has_grid():
 	var converter := HFBrushToHeightmapScript.new()
 	var settings := HFBrushToHeightmapScript.ConvertSettings.new()
 	var result := converter.convert([brush], settings)
+	_track_result_layer(result)
 	assert_not_null(result.layer.grid, "New layer should have a grid")
 	assert_eq(result.layer.grid.cell_size, settings.cell_size)
 
@@ -171,6 +184,7 @@ func test_new_layer_display_name():
 	var converter := HFBrushToHeightmapScript.new()
 	var settings := HFBrushToHeightmapScript.ConvertSettings.new()
 	var result := converter.convert([brush], settings)
+	_track_result_layer(result)
 	assert_eq(result.layer.display_name, "Converted Terrain")
 
 
@@ -188,6 +202,7 @@ func test_height_roundtrip_nonzero_origin():
 	settings.height_scale = 10.0
 	settings.margin_cells = 1
 	var result := converter.convert([brush], settings)
+	_track_result_layer(result)
 	assert_eq(result.error, "")
 	# The layer should read back non-zero height for cells under the brush
 	var layer := result.layer

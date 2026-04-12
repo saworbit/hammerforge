@@ -215,18 +215,42 @@ func test_v0_ccw_faces_migrated_to_cw_outward_normals():
 	var half := brush.size * 0.5
 	# Old CCW quads (the original _build_box_faces winding)
 	var old_quads := [
-		[Vector3(half.x, -half.y, -half.z), Vector3(half.x, half.y, -half.z),
-		 Vector3(half.x, half.y, half.z), Vector3(half.x, -half.y, half.z)],
-		[Vector3(-half.x, -half.y, half.z), Vector3(-half.x, half.y, half.z),
-		 Vector3(-half.x, half.y, -half.z), Vector3(-half.x, -half.y, -half.z)],
-		[Vector3(-half.x, half.y, -half.z), Vector3(-half.x, half.y, half.z),
-		 Vector3(half.x, half.y, half.z), Vector3(half.x, half.y, -half.z)],
-		[Vector3(-half.x, -half.y, half.z), Vector3(-half.x, -half.y, -half.z),
-		 Vector3(half.x, -half.y, -half.z), Vector3(half.x, -half.y, half.z)],
-		[Vector3(-half.x, -half.y, half.z), Vector3(half.x, -half.y, half.z),
-		 Vector3(half.x, half.y, half.z), Vector3(-half.x, half.y, half.z)],
-		[Vector3(-half.x, half.y, -half.z), Vector3(half.x, half.y, -half.z),
-		 Vector3(half.x, -half.y, -half.z), Vector3(-half.x, -half.y, -half.z)]
+		[
+			Vector3(half.x, -half.y, -half.z),
+			Vector3(half.x, half.y, -half.z),
+			Vector3(half.x, half.y, half.z),
+			Vector3(half.x, -half.y, half.z)
+		],
+		[
+			Vector3(-half.x, -half.y, half.z),
+			Vector3(-half.x, half.y, half.z),
+			Vector3(-half.x, half.y, -half.z),
+			Vector3(-half.x, -half.y, -half.z)
+		],
+		[
+			Vector3(-half.x, half.y, -half.z),
+			Vector3(-half.x, half.y, half.z),
+			Vector3(half.x, half.y, half.z),
+			Vector3(half.x, half.y, -half.z)
+		],
+		[
+			Vector3(-half.x, -half.y, half.z),
+			Vector3(-half.x, -half.y, -half.z),
+			Vector3(half.x, -half.y, -half.z),
+			Vector3(half.x, -half.y, half.z)
+		],
+		[
+			Vector3(-half.x, -half.y, half.z),
+			Vector3(half.x, -half.y, half.z),
+			Vector3(half.x, half.y, half.z),
+			Vector3(-half.x, half.y, half.z)
+		],
+		[
+			Vector3(-half.x, half.y, -half.z),
+			Vector3(half.x, half.y, -half.z),
+			Vector3(half.x, -half.y, -half.z),
+			Vector3(-half.x, -half.y, -half.z)
+		]
 	]
 	# Build old-format dicts (no winding_version)
 	var old_data: Array = []
@@ -239,7 +263,9 @@ func test_v0_ccw_faces_migrated_to_cw_outward_normals():
 	brush.apply_serialized_faces(old_data)
 	assert_eq(brush.faces.size(), 6, "Should load 6 faces")
 	# All normals should point outward (away from origin for a centered box)
-	var expected_dirs := [Vector3.RIGHT, Vector3.LEFT, Vector3.UP, Vector3.DOWN, Vector3.BACK, Vector3.FORWARD]
+	var expected_dirs := [
+		Vector3.RIGHT, Vector3.LEFT, Vector3.UP, Vector3.DOWN, Vector3.BACK, Vector3.FORWARD
+	]
 	for i in range(brush.faces.size()):
 		var face: FaceData = brush.faces[i]
 		var face_center := Vector3.ZERO
@@ -249,7 +275,10 @@ func test_v0_ccw_faces_migrated_to_cw_outward_normals():
 		var outward := face_center.normalized()
 		assert_true(
 			face.normal.dot(outward) > 0.5,
-			"Face %d normal should point outward, got %s vs expected ~%s" % [i, face.normal, outward]
+			(
+				"Face %d normal should point outward, got %s vs expected ~%s"
+				% [i, face.normal, outward]
+			)
 		)
 
 

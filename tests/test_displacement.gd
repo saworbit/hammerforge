@@ -57,10 +57,9 @@ func _make_quad_brush(brush_id: String = "test_brush") -> Node3D:
 	var brush = DraftBrush.new()
 	brush.brush_id = brush_id
 	var face = FaceData.new()
-	face.local_verts = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(16, 0, 0),
-		Vector3(16, 0, 16), Vector3(0, 0, 16)
-	])
+	face.local_verts = PackedVector3Array(
+		[Vector3(0, 0, 0), Vector3(16, 0, 0), Vector3(16, 0, 16), Vector3(0, 0, 16)]
+	)
 	face.normal = Vector3.UP
 	face.ensure_geometry()
 	var face_arr: Array[FaceData] = [face]
@@ -74,9 +73,7 @@ func _make_tri_brush(brush_id: String = "tri_brush") -> Node3D:
 	var brush = DraftBrush.new()
 	brush.brush_id = brush_id
 	var face = FaceData.new()
-	face.local_verts = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(16, 0, 0), Vector3(8, 0, 16)
-	])
+	face.local_verts = PackedVector3Array([Vector3(0, 0, 0), Vector3(16, 0, 0), Vector3(8, 0, 16)])
 	face.normal = Vector3.UP
 	face.ensure_geometry()
 	var face_arr: Array[FaceData] = [face]
@@ -146,8 +143,7 @@ func test_get_displaced_position_flat():
 	var disp = HFDisplacementData.new()
 	disp.init_flat(2)
 	var corners: Array[Vector3] = [
-		Vector3(0, 0, 0), Vector3(16, 0, 0),
-		Vector3(0, 0, 16), Vector3(16, 0, 16)
+		Vector3(0, 0, 0), Vector3(16, 0, 0), Vector3(0, 0, 16), Vector3(16, 0, 16)
 	]
 	# Center vertex at (2,2) out of 5x5 → u=0.5, v=0.5
 	var pos: Vector3 = disp.get_displaced_position(2, 2, corners, Vector3.UP)
@@ -161,8 +157,7 @@ func test_get_displaced_position_with_offset():
 	disp.init_flat(2)
 	disp.set_distance(2, 2, 3.0)
 	var corners: Array[Vector3] = [
-		Vector3(0, 0, 0), Vector3(16, 0, 0),
-		Vector3(0, 0, 16), Vector3(16, 0, 16)
+		Vector3(0, 0, 0), Vector3(16, 0, 0), Vector3(0, 0, 16), Vector3(16, 0, 16)
 	]
 	var pos: Vector3 = disp.get_displaced_position(2, 2, corners, Vector3.UP)
 	assert_almost_eq(pos.x, 8.0, 0.01)
@@ -176,8 +171,7 @@ func test_get_displaced_position_with_elevation():
 	disp.set_distance(0, 0, 1.0)
 	disp.elevation = 5.0
 	var corners: Array[Vector3] = [
-		Vector3(0, 0, 0), Vector3(16, 0, 0),
-		Vector3(0, 0, 16), Vector3(16, 0, 16)
+		Vector3(0, 0, 0), Vector3(16, 0, 0), Vector3(0, 0, 16), Vector3(16, 0, 16)
 	]
 	var pos: Vector3 = disp.get_displaced_position(0, 0, corners, Vector3.UP)
 	assert_almost_eq(pos.y, 5.0, 0.01)
@@ -187,13 +181,9 @@ func test_triangulate_displaced_flat():
 	var disp = HFDisplacementData.new()
 	disp.init_flat(2)
 	var corners: Array[Vector3] = [
-		Vector3(0, 0, 0), Vector3(16, 0, 0),
-		Vector3(0, 0, 16), Vector3(16, 0, 16)
+		Vector3(0, 0, 0), Vector3(16, 0, 0), Vector3(0, 0, 16), Vector3(16, 0, 16)
 	]
-	var uv_corners: Array[Vector2] = [
-		Vector2(0, 0), Vector2(1, 0),
-		Vector2(0, 1), Vector2(1, 1)
-	]
+	var uv_corners: Array[Vector2] = [Vector2(0, 0), Vector2(1, 0), Vector2(0, 1), Vector2(1, 1)]
 	var result: Dictionary = disp.triangulate_displaced(corners, Vector3.UP, uv_corners)
 	var verts: PackedVector3Array = result["verts"]
 	var uvs: PackedVector2Array = result["uvs"]
@@ -208,13 +198,9 @@ func test_triangulate_displaced_power_3():
 	var disp = HFDisplacementData.new()
 	disp.init_flat(3)
 	var corners: Array[Vector3] = [
-		Vector3(0, 0, 0), Vector3(16, 0, 0),
-		Vector3(0, 0, 16), Vector3(16, 0, 16)
+		Vector3(0, 0, 0), Vector3(16, 0, 0), Vector3(0, 0, 16), Vector3(16, 0, 16)
 	]
-	var uv_corners: Array[Vector2] = [
-		Vector2(0, 0), Vector2(1, 0),
-		Vector2(0, 1), Vector2(1, 1)
-	]
+	var uv_corners: Array[Vector2] = [Vector2(0, 0), Vector2(1, 0), Vector2(0, 1), Vector2(1, 1)]
 	var result: Dictionary = disp.triangulate_displaced(corners, Vector3.UP, uv_corners)
 	# 8x8 grid → 64 cells → 128 triangles → 384 vertices
 	assert_eq(result["verts"].size(), 384)
@@ -287,8 +273,7 @@ func test_custom_offset_direction():
 	disp.set_distance(0, 0, 5.0)
 	disp.set_offset(0, 0, Vector3(1, 0, 0))  # Displace along X instead of normal
 	var corners: Array[Vector3] = [
-		Vector3(0, 0, 0), Vector3(16, 0, 0),
-		Vector3(0, 0, 16), Vector3(16, 0, 16)
+		Vector3(0, 0, 0), Vector3(16, 0, 0), Vector3(0, 0, 16), Vector3(16, 0, 16)
 	]
 	var pos: Vector3 = disp.get_displaced_position(0, 0, corners, Vector3.UP)
 	assert_almost_eq(pos.x, 5.0, 0.01)  # Displaced along X
@@ -302,10 +287,9 @@ func test_custom_offset_direction():
 
 func test_face_triangulate_with_displacement():
 	var face = FaceData.new()
-	face.local_verts = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(16, 0, 0),
-		Vector3(16, 0, 16), Vector3(0, 0, 16)
-	])
+	face.local_verts = PackedVector3Array(
+		[Vector3(0, 0, 0), Vector3(16, 0, 0), Vector3(16, 0, 16), Vector3(0, 0, 16)]
+	)
 	face.normal = Vector3.UP
 	face.ensure_geometry()
 	var disp = HFDisplacementData.new()
@@ -319,10 +303,9 @@ func test_face_triangulate_with_displacement():
 
 func test_face_triangulate_without_displacement():
 	var face = FaceData.new()
-	face.local_verts = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(16, 0, 0),
-		Vector3(16, 0, 16), Vector3(0, 0, 16)
-	])
+	face.local_verts = PackedVector3Array(
+		[Vector3(0, 0, 0), Vector3(16, 0, 0), Vector3(16, 0, 16), Vector3(0, 0, 16)]
+	)
 	face.normal = Vector3.UP
 	face.ensure_geometry()
 	var tri: Dictionary = face.triangulate()
@@ -332,9 +315,7 @@ func test_face_triangulate_without_displacement():
 
 func test_face_displacement_only_on_quads():
 	var face = FaceData.new()
-	face.local_verts = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(16, 0, 0), Vector3(8, 0, 16)
-	])
+	face.local_verts = PackedVector3Array([Vector3(0, 0, 0), Vector3(16, 0, 0), Vector3(8, 0, 16)])
 	face.normal = Vector3.UP
 	face.ensure_geometry()
 	var disp = HFDisplacementData.new()
@@ -347,10 +328,9 @@ func test_face_displacement_only_on_quads():
 
 func test_face_displacement_serialization_roundtrip():
 	var face = FaceData.new()
-	face.local_verts = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(16, 0, 0),
-		Vector3(16, 0, 16), Vector3(0, 0, 16)
-	])
+	face.local_verts = PackedVector3Array(
+		[Vector3(0, 0, 0), Vector3(16, 0, 0), Vector3(16, 0, 16), Vector3(0, 0, 16)]
+	)
 	face.normal = Vector3.UP
 	face.ensure_geometry()
 	var disp = HFDisplacementData.new()
@@ -367,10 +347,9 @@ func test_face_displacement_serialization_roundtrip():
 
 func test_face_null_displacement_serialization():
 	var face = FaceData.new()
-	face.local_verts = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(16, 0, 0),
-		Vector3(16, 0, 16), Vector3(0, 0, 16)
-	])
+	face.local_verts = PackedVector3Array(
+		[Vector3(0, 0, 0), Vector3(16, 0, 0), Vector3(16, 0, 16), Vector3(0, 0, 16)]
+	)
 	face.normal = Vector3.UP
 	face.ensure_geometry()
 	var data: Dictionary = face.to_dict()
@@ -465,9 +444,7 @@ func test_paint_raise():
 	sys.create_displacement("test_brush", 0, 2)
 	# Paint at the center of the face (world pos = face center since brush at origin)
 	var ok: bool = sys.paint(
-		"test_brush", 0,
-		Vector3(8, 0, 8), 10.0, 1.0,
-		HFDisplacementSystem.PaintMode.RAISE
+		"test_brush", 0, Vector3(8, 0, 8), 10.0, 1.0, HFDisplacementSystem.PaintMode.RAISE
 	)
 	assert_true(ok)
 	# Center vertex should be raised
@@ -479,11 +456,7 @@ func test_paint_lower():
 	var brush = _make_quad_brush()
 	sys.create_displacement("test_brush", 0, 2)
 	brush.faces[0].displacement.set_distance(2, 2, 5.0)
-	sys.paint(
-		"test_brush", 0,
-		Vector3(8, 0, 8), 10.0, 1.0,
-		HFDisplacementSystem.PaintMode.LOWER
-	)
+	sys.paint("test_brush", 0, Vector3(8, 0, 8), 10.0, 1.0, HFDisplacementSystem.PaintMode.LOWER)
 	var val: float = brush.faces[0].displacement.get_distance(2, 2)
 	assert_true(val < 5.0, "Center should be lowered")
 
@@ -493,9 +466,7 @@ func test_paint_outside_radius():
 	sys.create_displacement("test_brush", 0, 2)
 	# Paint far away from the face
 	var ok: bool = sys.paint(
-		"test_brush", 0,
-		Vector3(1000, 0, 1000), 1.0, 1.0,
-		HFDisplacementSystem.PaintMode.RAISE
+		"test_brush", 0, Vector3(1000, 0, 1000), 1.0, 1.0, HFDisplacementSystem.PaintMode.RAISE
 	)
 	assert_false(ok, "Paint outside radius should not modify anything")
 

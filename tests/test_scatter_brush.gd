@@ -84,7 +84,11 @@ func test_scatter_circle_deterministic():
 	var r2 := brush.scatter_circle(Vector3(5, 0, 5), layer, settings)
 	assert_eq(r1.transforms.size(), r2.transforms.size(), "Same seed should produce same count")
 	if r1.transforms.size() > 0:
-		assert_eq(r1.transforms[0].origin, r2.transforms[0].origin, "Same seed should produce same positions")
+		assert_eq(
+			r1.transforms[0].origin,
+			r2.transforms[0].origin,
+			"Same seed should produce same positions"
+		)
 
 
 # ===========================================================================
@@ -149,9 +153,9 @@ func test_scatter_spline_basic():
 	settings.density = 1.0
 	settings.spline_width = 2.0
 	settings.seed = 42
-	settings.spline_points = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(5, 0, 0), Vector3(5, 0, 5)
-	])
+	settings.spline_points = PackedVector3Array(
+		[Vector3(0, 0, 0), Vector3(5, 0, 0), Vector3(5, 0, 5)]
+	)
 	var result := brush.scatter_spline(layer, settings)
 	assert_gt(result.transforms.size(), 0, "Spline scatter should produce instances")
 

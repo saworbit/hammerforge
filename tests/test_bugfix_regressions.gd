@@ -68,18 +68,42 @@ func _make_box_brush(pos: Vector3, sz: Vector3, id: String) -> DraftBrush:
 	var half = sz * 0.5
 	# CW winding from outside (matches _build_box_faces in production code)
 	var quads = [
-		[Vector3(half.x, -half.y, half.z), Vector3(half.x, half.y, half.z),
-		 Vector3(half.x, half.y, -half.z), Vector3(half.x, -half.y, -half.z)],
-		[Vector3(-half.x, -half.y, -half.z), Vector3(-half.x, half.y, -half.z),
-		 Vector3(-half.x, half.y, half.z), Vector3(-half.x, -half.y, half.z)],
-		[Vector3(half.x, half.y, -half.z), Vector3(half.x, half.y, half.z),
-		 Vector3(-half.x, half.y, half.z), Vector3(-half.x, half.y, -half.z)],
-		[Vector3(half.x, -half.y, half.z), Vector3(half.x, -half.y, -half.z),
-		 Vector3(-half.x, -half.y, -half.z), Vector3(-half.x, -half.y, half.z)],
-		[Vector3(-half.x, half.y, half.z), Vector3(half.x, half.y, half.z),
-		 Vector3(half.x, -half.y, half.z), Vector3(-half.x, -half.y, half.z)],
-		[Vector3(-half.x, -half.y, -half.z), Vector3(half.x, -half.y, -half.z),
-		 Vector3(half.x, half.y, -half.z), Vector3(-half.x, half.y, -half.z)]
+		[
+			Vector3(half.x, -half.y, half.z),
+			Vector3(half.x, half.y, half.z),
+			Vector3(half.x, half.y, -half.z),
+			Vector3(half.x, -half.y, -half.z)
+		],
+		[
+			Vector3(-half.x, -half.y, -half.z),
+			Vector3(-half.x, half.y, -half.z),
+			Vector3(-half.x, half.y, half.z),
+			Vector3(-half.x, -half.y, half.z)
+		],
+		[
+			Vector3(half.x, half.y, -half.z),
+			Vector3(half.x, half.y, half.z),
+			Vector3(-half.x, half.y, half.z),
+			Vector3(-half.x, half.y, -half.z)
+		],
+		[
+			Vector3(half.x, -half.y, half.z),
+			Vector3(half.x, -half.y, -half.z),
+			Vector3(-half.x, -half.y, -half.z),
+			Vector3(-half.x, -half.y, half.z)
+		],
+		[
+			Vector3(-half.x, half.y, half.z),
+			Vector3(half.x, half.y, half.z),
+			Vector3(half.x, -half.y, half.z),
+			Vector3(-half.x, -half.y, half.z)
+		],
+		[
+			Vector3(-half.x, -half.y, -half.z),
+			Vector3(half.x, -half.y, -half.z),
+			Vector3(half.x, half.y, -half.z),
+			Vector3(-half.x, half.y, -half.z)
+		]
 	]
 	var faces: Array[FaceData] = []
 	for quad in quads:
@@ -94,6 +118,7 @@ func _make_box_brush(pos: Vector3, sz: Vector3, id: String) -> DraftBrush:
 # ===========================================================================
 # Bug 1: Vertex undo captures pre-drag state, not post-move state
 # ===========================================================================
+
 
 func test_end_drag_returns_pre_drag_face_data():
 	var vs = HFVertexSystem.new(root)
@@ -184,6 +209,7 @@ func test_cancel_drag_restores_pre_drag_geometry():
 # Bug 2: Z-axis lock constant matches AxisLock.Z = 3
 # ===========================================================================
 
+
 func test_axis_lock_z_equals_3():
 	# The AxisLock enum on LevelRoot should define Z = 3
 	# Vertex drag code must use 3, not 4
@@ -198,6 +224,7 @@ func test_axis_lock_z_equals_3():
 # ===========================================================================
 # Bug 3: Carve rejects face/edge-only contact
 # ===========================================================================
+
 
 func test_carve_face_contact_does_not_destroy():
 	# Two brushes touching on one face (no volumetric overlap)
@@ -276,6 +303,7 @@ func test_carve_thin_overlap_single_axis_produces_no_pieces():
 #   b) The production source code actually wires ref_y from the picked vertex
 #      and passes it through to the projection function (source-code assertion)
 
+
 func test_intersect_y_plane_at_zero():
 	var origin = Vector3(0, 10, 0)
 	var dir = Vector3(0, -1, 0).normalized()
@@ -331,9 +359,7 @@ func test_plugin_stores_ref_y_from_picked_vertex():
 	# Read the production plugin.gd and verify the wiring:
 	# 1. _vertex_drag_ref_y is assigned from pick.world_pos.y
 	# 2. _vertex_drag_ref_y is passed to _vertex_screen_to_world_delta
-	var source = FileAccess.get_file_as_string(
-		"res://addons/hammerforge/plugin.gd"
-	)
+	var source = FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
 	assert_true(source.length() > 0, "plugin.gd should be readable")
 
 	# Verify ref_y is captured from pick.world_pos.y at drag start
@@ -343,7 +369,9 @@ func test_plugin_stores_ref_y_from_picked_vertex():
 	)
 
 	# Verify the actual call site passes _vertex_drag_ref_y to the projection fn
-	var compact_source = source.replace("\r", "").replace("\n", "").replace("\t", "").replace(" ", "")
+	var compact_source = source.replace("\r", "").replace("\n", "").replace("\t", "").replace(
+		" ", ""
+	)
 	assert_true(
 		compact_source.contains(
 			"_vertex_screen_to_world_delta(cam,_vertex_drag_start,pos,root,_vertex_drag_ref_y)"
@@ -353,8 +381,7 @@ func test_plugin_stores_ref_y_from_picked_vertex():
 
 	# Verify the projection function accepts ref_y (not hardcoded 0.0)
 	assert_true(
-		source.contains("ref_y: float"),
-		"_vertex_screen_to_world_delta must accept ref_y parameter"
+		source.contains("ref_y: float"), "_vertex_screen_to_world_delta must accept ref_y parameter"
 	)
 
 	# Verify BOTH _intersect_y_plane calls use ref_y, not literal 0.0
@@ -370,22 +397,17 @@ func test_plugin_stores_ref_y_from_picked_vertex():
 
 func test_plugin_axis_lock_z_uses_3_not_4():
 	# Verify the production code uses axis_lock == 3 for Z, not 4
-	var source = FileAccess.get_file_as_string(
-		"res://addons/hammerforge/plugin.gd"
-	)
-	assert_true(
-		source.contains("axis_lock == 3"),
-		"Z-axis lock must check == 3 (AxisLock.Z)"
-	)
+	var source = FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
+	assert_true(source.contains("axis_lock == 3"), "Z-axis lock must check == 3 (AxisLock.Z)")
 	assert_false(
-		source.contains("axis_lock == 4"),
-		"Must not check axis_lock == 4 anywhere (old bug)"
+		source.contains("axis_lock == 4"), "Must not check axis_lock == 4 anywhere (old bug)"
 	)
 
 
 # ===========================================================================
 # Helpers (math identical to plugin's _intersect_y_plane for unit testing)
 # ===========================================================================
+
 
 func _intersect_y_plane(origin: Vector3, dir: Vector3, y: float) -> Variant:
 	if abs(dir.y) < 0.0001:
@@ -400,7 +422,9 @@ func _intersect_y_plane(origin: Vector3, dir: Vector3, y: float) -> Variant:
 # Fake brush system for carve tests
 # ===========================================================================
 
-class _FakeBrushSystem extends RefCounted:
+
+class _FakeBrushSystem:
+	extends RefCounted
 	var _root: Node3D
 	var _draft_node: Node3D
 	var _next_id := 1000
@@ -431,7 +455,7 @@ class _FakeBrushSystem extends RefCounted:
 		return "carved_%d" % _next_id
 
 	func create_brush_from_info(info: Dictionary):
-		var b = preload("res://addons/hammerforge/brush_instance.gd").new()
+		var b = DraftBrush.new()
 		b.size = info.get("size", Vector3(1, 1, 1))
 		b.brush_id = info.get("brush_id", _next_brush_id())
 		_draft_node.add_child(b)

@@ -46,9 +46,7 @@ func test_project_onto_line_on_x_axis():
 
 func test_project_onto_line_diagonal():
 	var dir := Vector3(1, 1, 0).normalized()
-	var result: Vector3 = snap._project_onto_line(
-		Vector3(2, 0, 0), Vector3(0, 0, 0), dir
-	)
+	var result: Vector3 = snap._project_onto_line(Vector3(2, 0, 0), Vector3(0, 0, 0), dir)
 	# Projection of (2,0,0) onto (1,1,0) normalized
 	assert_almost_eq(result.x, 1.0, 0.01)
 	assert_almost_eq(result.y, 1.0, 0.01)

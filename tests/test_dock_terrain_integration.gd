@@ -34,7 +34,10 @@ func before_each():
 
 
 func after_each():
-	if is_instance_valid(root) and root.paint_layer_changed.is_connected(_on_paint_layer_changed_test):
+	if (
+		is_instance_valid(root)
+		and root.paint_layer_changed.is_connected(_on_paint_layer_changed_test)
+	):
 		root.paint_layer_changed.disconnect(_on_paint_layer_changed_test)
 	if dock and is_instance_valid(dock):
 		dock.free()
@@ -172,8 +175,11 @@ func test_heightmap_convert_inherits_base_grid():
 
 	var converted: HFPaintLayer = mgr.layers[initial_count]
 	assert_not_null(converted.grid, "Converted layer should have a grid")
-	assert_eq(converted.grid.origin, Vector3(42, 0, 42),
-		"Converted grid origin should match base_grid origin")
+	assert_eq(
+		converted.grid.origin,
+		Vector3(42, 0, 42),
+		"Converted grid origin should match base_grid origin"
+	)
 
 
 func test_heightmap_convert_inherits_chunk_size():
@@ -186,8 +192,9 @@ func test_heightmap_convert_inherits_chunk_size():
 	dock._on_heightmap_convert()
 
 	var converted: HFPaintLayer = mgr.layers[initial_count]
-	assert_eq(converted.chunk_size, 64,
-		"Converted layer chunk_size should match manager chunk_size")
+	assert_eq(
+		converted.chunk_size, 64, "Converted layer chunk_size should match manager chunk_size"
+	)
 
 
 func test_heightmap_convert_emits_paint_layer_changed():
@@ -195,8 +202,7 @@ func test_heightmap_convert_emits_paint_layer_changed():
 	dock._selection_nodes = [b]
 	dock._on_heightmap_convert()
 
-	assert_gt(_paint_layer_changed_idx, -1,
-		"Should emit paint_layer_changed signal")
+	assert_gt(_paint_layer_changed_idx, -1, "Should emit paint_layer_changed signal")
 
 
 func test_heightmap_convert_sets_active_layer():
@@ -207,8 +213,11 @@ func test_heightmap_convert_sets_active_layer():
 	dock._selection_nodes = [b]
 	dock._on_heightmap_convert()
 
-	assert_eq(mgr.active_layer_index, initial_count,
-		"Active layer should be set to the newly converted layer")
+	assert_eq(
+		mgr.active_layer_index,
+		initial_count,
+		"Active layer should be set to the newly converted layer"
+	)
 
 
 func test_heightmap_convert_multiple_brushes():
@@ -234,8 +243,7 @@ func test_heightmap_convert_with_grid_snap():
 	dock._on_heightmap_convert()
 
 	var converted: HFPaintLayer = mgr.layers[initial_count]
-	assert_eq(converted.grid.cell_size, 2.0,
-		"cell_size should match grid_snap when > 0")
+	assert_eq(converted.grid.cell_size, 2.0, "cell_size should match grid_snap when > 0")
 
 
 func test_heightmap_convert_with_height_scale_spin():
@@ -251,8 +259,7 @@ func test_heightmap_convert_with_height_scale_spin():
 	dock._on_heightmap_convert()
 
 	var converted: HFPaintLayer = mgr.layers[initial_count]
-	assert_eq(converted.height_scale, 25.0,
-		"height_scale should come from height_scale_spin")
+	assert_eq(converted.height_scale, 25.0, "height_scale should come from height_scale_spin")
 
 
 func test_heightmap_convert_layer_is_child_of_manager():
@@ -264,8 +271,9 @@ func test_heightmap_convert_layer_is_child_of_manager():
 	dock._on_heightmap_convert()
 
 	var converted: HFPaintLayer = mgr.layers[initial_count]
-	assert_eq(converted.get_parent(), mgr,
-		"Converted layer should be a child of the paint layer manager")
+	assert_eq(
+		converted.get_parent(), mgr, "Converted layer should be a child of the paint layer manager"
+	)
 
 
 func test_heightmap_convert_produces_readable_height():
@@ -362,8 +370,7 @@ func test_build_scatter_settings_circle_no_spline_points():
 	dock._selection_nodes = [n1]
 
 	var s: HFScatterBrush.ScatterSettings = dock._build_scatter_settings()
-	assert_eq(s.spline_points.size(), 0,
-		"Circle mode should not populate spline_points")
+	assert_eq(s.spline_points.size(), 0, "Circle mode should not populate spline_points")
 
 
 func test_build_scatter_settings_null_controls():
@@ -416,10 +423,10 @@ func test_scatter_preview_spline_too_few_points():
 
 	dock._on_scatter_preview()
 
-	assert_null(dock._scatter_preview_node,
-		"Should clear preview on insufficient spline points")
-	assert_eq(dock._scatter_last_result.size(), 0,
-		"Should reset _scatter_last_result on invalid spline")
+	assert_null(dock._scatter_preview_node, "Should clear preview on insufficient spline points")
+	assert_eq(
+		dock._scatter_last_result.size(), 0, "Should reset _scatter_last_result on invalid spline"
+	)
 
 
 func test_scatter_preview_spline_clears_stale_state():
@@ -438,10 +445,8 @@ func test_scatter_preview_spline_clears_stale_state():
 
 	dock._on_scatter_preview()
 
-	assert_null(dock._scatter_preview_node,
-		"Should clear stale preview on invalid spline")
-	assert_eq(dock._scatter_last_result.size(), 0,
-		"Should clear stale result on invalid spline")
+	assert_null(dock._scatter_preview_node, "Should clear stale preview on invalid spline")
+	assert_eq(dock._scatter_last_result.size(), 0, "Should clear stale result on invalid spline")
 
 
 func test_scatter_preview_spline_valid():
@@ -458,8 +463,9 @@ func test_scatter_preview_spline_valid():
 
 	dock._on_scatter_preview()
 
-	assert_true(dock._scatter_last_result is Array,
-		"Should produce scatter result for valid spline")
+	assert_true(
+		dock._scatter_last_result is Array, "Should produce scatter result for valid spline"
+	)
 
 
 # ===========================================================================
@@ -498,8 +504,7 @@ func test_scatter_commit_no_mesh_returns_early():
 	dock._on_scatter_commit()
 
 	# Production code: no mesh → emit warning → return (preview not cleared)
-	assert_not_null(dock._scatter_preview_node,
-		"No-mesh early return should leave preview intact")
+	assert_not_null(dock._scatter_preview_node, "No-mesh early return should leave preview intact")
 	# Clean up manually since the test owns this node
 	dock._scatter_clear_preview()
 
@@ -514,8 +519,11 @@ func test_scatter_commit_no_mesh_preserves_last_result():
 
 	dock._on_scatter_commit()
 
-	assert_eq(dock._scatter_last_result.size(), 2,
-		"No-mesh early return should not clear _scatter_last_result")
+	assert_eq(
+		dock._scatter_last_result.size(),
+		2,
+		"No-mesh early return should not clear _scatter_last_result"
+	)
 
 
 # ===========================================================================
@@ -557,10 +565,8 @@ func test_scatter_clear_preview_removes_from_tree():
 
 	dock._scatter_clear_preview()
 
-	assert_null(dock._scatter_preview_node,
-		"Should null the reference after clearing")
-	assert_false(preview.is_inside_tree(),
-		"Preview should be removed from tree")
+	assert_null(dock._scatter_preview_node, "Should null the reference after clearing")
+	assert_false(preview.is_inside_tree(), "Preview should be removed from tree")
 
 
 func test_scatter_clear_preview_already_freed():

@@ -69,6 +69,9 @@ static func _default_bindings() -> Dictionary:
 		"axis_x": {"keycode": KEY_X},
 		"axis_y": {"keycode": KEY_Y},
 		"axis_z": {"keycode": KEY_Z},
+		# Grid snap
+		"grid_increase": {"keycode": KEY_BRACKETRIGHT},
+		"grid_decrease": {"keycode": KEY_BRACKETLEFT},
 		# Viewport menus
 		"context_menu": {"keycode": KEY_SPACE},
 		"radial_menu": {"keycode": KEY_QUOTELEFT},

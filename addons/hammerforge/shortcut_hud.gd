@@ -8,6 +8,10 @@ var _user_prefs = null  # HFUserPrefs — untyped to avoid preload
 var _hint_label: Label
 var _hint_tween: Tween
 var _current_hint_key := ""
+# Grid size indicator
+var _grid_label: Label
+var _grid_flash_tween: Tween
+var _last_grid_snap := -1.0
 
 const MODE_HINTS := {
 	"draw_idle":
@@ -28,6 +32,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_apply_layout()
 	_setup_hint_label()
+	_setup_grid_label()
 	update_context({})
 
 
@@ -54,6 +59,53 @@ func _setup_hint_label() -> void:
 	_hint_label.visible = false
 	_hint_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	$Panel/Margin.add_child(_hint_label)
+
+
+func _setup_grid_label() -> void:
+	if not has_node("Panel/Margin/Label"):
+		return
+	_grid_label = Label.new()
+	_grid_label.name = "GridLabel"
+	_grid_label.add_theme_font_size_override("font_size", 12)
+	_grid_label.add_theme_color_override("font_color", Color(0.7, 0.85, 1.0, 0.8))
+	_grid_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_grid_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	$Panel/Margin.add_child(_grid_label)
+
+
+func update_grid_snap(value: float) -> void:
+	if not _grid_label:
+		return
+	# Format: display exact value, strip trailing zeros
+	var text: String
+	if is_equal_approx(value, roundf(value)):
+		text = "Grid: %d" % int(value)
+	else:
+		# Use enough precision to represent small snaps like 0.125 exactly
+		var s := "%g" % value
+		text = "Grid: %s" % s
+	_grid_label.text = text
+	# Flash on change (skip initial set)
+	if _last_grid_snap >= 0.0 and not is_equal_approx(_last_grid_snap, value):
+		_flash_grid_label()
+	_last_grid_snap = value
+
+
+func _flash_grid_label() -> void:
+	if not _grid_label:
+		return
+	if _grid_flash_tween and _grid_flash_tween.is_valid():
+		_grid_flash_tween.kill()
+	# Bright flash then fade back to normal
+	_grid_label.add_theme_color_override("font_color", Color(1.0, 1.0, 0.6, 1.0))
+	_grid_flash_tween = create_tween()
+	(
+		_grid_flash_tween
+		. tween_property(
+			_grid_label, "theme_override_colors/font_color", Color(0.7, 0.85, 1.0, 0.8), 0.6
+		)
+		. set_ease(Tween.EASE_OUT)
+	)
 
 
 func update_context(ctx: Dictionary) -> void:
@@ -188,6 +240,7 @@ func _draw_idle_shortcuts(axis_lock: int) -> String:
 	lines.append("Shift: Square | Alt+Shift: Cube")
 	lines.append("X / Y / Z: Lock Axis%s" % _axis_suffix(axis_lock))
 	lines.append("Ctrl+Scroll: Brush Size")
+	lines.append("[ / ]: Grid Size Down/Up")
 	lines.append("Ctrl+D: Duplicate | Del: Remove")
 	return "\n".join(lines)
 

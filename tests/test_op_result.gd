@@ -285,13 +285,9 @@ func test_hollow_handler_gates_undo_and_surfaces_hint():
 	assert_false(undo_committed, "Failed validation must not reach undo commit")
 	assert_eq(received.size(), 1, "Should emit exactly one user_message")
 	assert_eq(received[0]["level"], 1, "Should be WARNING level")
+	assert_true(received[0]["text"].find("thickness") >= 0, "Message should mention the problem")
 	assert_true(
-		received[0]["text"].find("thickness") >= 0,
-		"Message should mention the problem"
-	)
-	assert_true(
-		received[0]["text"].find("less than") >= 0,
-		"Message should include the fix_hint guidance"
+		received[0]["text"].find("less than") >= 0, "Message should include the fix_hint guidance"
 	)
 	# Brush still exists (no mutation)
 	var still_exists = sys.delete_brush_by_id("ih1")
@@ -313,10 +309,7 @@ func test_clip_handler_gates_undo_and_surfaces_hint():
 
 	assert_false(undo_committed, "Failed validation must not reach undo commit")
 	assert_eq(received.size(), 1, "Should emit exactly one user_message")
-	assert_true(
-		received[0]["text"].find("outside") >= 0,
-		"Message should mention the problem"
-	)
+	assert_true(received[0]["text"].find("outside") >= 0, "Message should mention the problem")
 	assert_true(
 		received[0]["text"].find("Click inside") >= 0,
 		"Message should include the fix_hint guidance"
@@ -364,10 +357,7 @@ func test_handler_no_hint_suffix_when_hint_empty():
 	var check: HFOpResult = sys.can_hollow_brush("nonexistent", 2.0)
 	assert_false(check.ok)
 	assert_eq(check.fix_hint, "")
-	assert_true(
-		check.user_text().find(" — ") < 0,
-		"No hint suffix when fix_hint is empty"
-	)
+	assert_true(check.user_text().find(" — ") < 0, "No hint suffix when fix_hint is empty")
 
 
 ## user_text() unit test: message + hint.

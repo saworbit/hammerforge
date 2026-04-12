@@ -477,7 +477,8 @@ func test_count_selected_faces_zero_when_empty():
 	_setup_dock_with_real_root()
 	_real_root.face_selection = {}
 	assert_eq(
-		_dock_for_root._count_selected_faces(), 0,
+		_dock_for_root._count_selected_faces(),
+		0,
 		"Production _count_selected_faces must return 0 with empty face_selection"
 	)
 	_teardown_dock_with_real_root()
@@ -490,7 +491,8 @@ func test_count_selected_faces_counts_valid_entries():
 	# Select two faces via face_selection
 	_real_root.face_selection = {brush.brush_id: [0, 2]}
 	assert_eq(
-		_dock_for_root._count_selected_faces(), 2,
+		_dock_for_root._count_selected_faces(),
+		2,
 		"Production _count_selected_faces must count valid face entries"
 	)
 	_teardown_dock_with_real_root()
@@ -514,12 +516,14 @@ func test_resolve_assign_falls_back_to_whole_brush():
 	_real_root.face_selection = {}
 	_dock_for_root._selection_nodes = [brush]
 	var decision: Dictionary = _dock_for_root.resolve_material_assign_action(0)
-	assert_eq(decision.action, "Assign Brush Material",
-		"Must fall back to whole-brush when no faces selected")
+	assert_eq(
+		decision.action,
+		"Assign Brush Material",
+		"Must fall back to whole-brush when no faces selected"
+	)
 	assert_eq(decision.method, "assign_material_to_whole_brushes")
 	assert_eq(decision.args[0], 0, "Material index must match")
-	assert_true(decision.args[1].has(brush.brush_id),
-		"Brush id must appear in args")
+	assert_true(decision.args[1].has(brush.brush_id), "Brush id must appear in args")
 	_teardown_dock_with_real_root()
 
 
@@ -528,10 +532,8 @@ func test_resolve_assign_returns_error_when_nothing_selected():
 	_real_root.face_selection = {}
 	_dock_for_root._selection_nodes = []
 	var decision: Dictionary = _dock_for_root.resolve_material_assign_action(0)
-	assert_eq(decision.action, "",
-		"Empty action signals an error when nothing is selected")
-	assert_true(decision.toast.find("No brushes") >= 0,
-		"Toast must mention no brushes selected")
+	assert_eq(decision.action, "", "Empty action signals an error when nothing is selected")
+	assert_true(decision.toast.find("No brushes") >= 0, "Toast must mention no brushes selected")
 	_teardown_dock_with_real_root()
 
 
@@ -631,8 +633,7 @@ func test_dock_signal_clears_cache_before_guard_runs():
 	dock._on_clear_selection_pressed()
 	# Verify the signal fired and cleared the cache BEFORE we check the guard
 	assert_true(
-		hf_sel.is_empty(),
-		"Signal handler must clear cache before editor selection.clear()"
+		hf_sel.is_empty(), "Signal handler must clear cache before editor selection.clear()"
 	)
 	# Now the guard should allow the empty selection through
 	var incoming: Array = []

@@ -3,7 +3,6 @@ extends GutTest
 const HFPathTool = preload("res://addons/hammerforge/hf_path_tool.gd")
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
 
-
 # ===========================================================================
 # Extended settings schema
 # ===========================================================================
@@ -54,9 +53,7 @@ func test_path_extra_enum_options():
 
 func test_build_stairs_flat_segment():
 	var tool = HFPathTool.new()
-	tool._waypoints = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(10, 0, 0)  # Flat — no height diff
-	])
+	tool._waypoints = PackedVector3Array([Vector3(0, 0, 0), Vector3(10, 0, 0)])  # Flat — no height diff
 	tool.set_setting("stair_step_height", 0.25)
 	var result = tool._build_stairs(4.0, 4.0, "grp", 99)
 	assert_eq(result.size(), 0, "Flat segment should produce no stairs")
@@ -64,9 +61,7 @@ func test_build_stairs_flat_segment():
 
 func test_build_stairs_slope_segment():
 	var tool = HFPathTool.new()
-	tool._waypoints = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(10, 2, 0)  # 2m height diff
-	])
+	tool._waypoints = PackedVector3Array([Vector3(0, 0, 0), Vector3(10, 2, 0)])  # 2m height diff
 	tool.set_setting("stair_step_height", 0.25)
 	tool._ground_y = 0.0
 	var result = tool._build_stairs(4.0, 4.0, "grp", 99)
@@ -77,9 +72,7 @@ func test_build_stairs_slope_segment():
 
 func test_build_stairs_step_count():
 	var tool = HFPathTool.new()
-	tool._waypoints = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(5, 1, 0)
-	])
+	tool._waypoints = PackedVector3Array([Vector3(0, 0, 0), Vector3(5, 1, 0)])
 	tool.set_setting("stair_step_height", 0.5)
 	tool._ground_y = 0.0
 	var result = tool._build_stairs(4.0, 4.0, "grp", 99)
@@ -89,9 +82,7 @@ func test_build_stairs_step_count():
 
 func test_build_stairs_group_id():
 	var tool = HFPathTool.new()
-	tool._waypoints = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(10, 2, 0)
-	])
+	tool._waypoints = PackedVector3Array([Vector3(0, 0, 0), Vector3(10, 2, 0)])
 	tool.set_setting("stair_step_height", 0.5)
 	tool._ground_y = 0.0
 	var result = tool._build_stairs(4.0, 4.0, "mygroup", 99)
@@ -101,9 +92,7 @@ func test_build_stairs_group_id():
 
 func test_build_stairs_has_faces():
 	var tool = HFPathTool.new()
-	tool._waypoints = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(10, 3, 0)
-	])
+	tool._waypoints = PackedVector3Array([Vector3(0, 0, 0), Vector3(10, 3, 0)])
 	tool.set_setting("stair_step_height", 1.0)
 	tool._ground_y = 0.0
 	var result = tool._build_stairs(4.0, 4.0, "grp", 99)
@@ -119,9 +108,7 @@ func test_build_stairs_has_faces():
 
 func test_build_railings_basic():
 	var tool = HFPathTool.new()
-	tool._waypoints = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(10, 0, 0)
-	])
+	tool._waypoints = PackedVector3Array([Vector3(0, 0, 0), Vector3(10, 0, 0)])
 	tool.set_setting("railing_height", 1.0)
 	tool.set_setting("railing_thickness", 0.1)
 	tool.set_setting("railing_post_spacing", 2.0)
@@ -132,9 +119,7 @@ func test_build_railings_basic():
 
 func test_build_railings_both_sides():
 	var tool = HFPathTool.new()
-	tool._waypoints = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(10, 0, 0)
-	])
+	tool._waypoints = PackedVector3Array([Vector3(0, 0, 0), Vector3(10, 0, 0)])
 	tool.set_setting("railing_height", 1.0)
 	tool.set_setting("railing_thickness", 0.1)
 	tool.set_setting("railing_post_spacing", 100.0)  # Large spacing = fewer posts
@@ -146,9 +131,7 @@ func test_build_railings_both_sides():
 
 func test_build_railings_post_count():
 	var tool = HFPathTool.new()
-	tool._waypoints = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(10, 0, 0)
-	])
+	tool._waypoints = PackedVector3Array([Vector3(0, 0, 0), Vector3(10, 0, 0)])
 	tool.set_setting("railing_height", 1.0)
 	tool.set_setting("railing_thickness", 0.1)
 	tool.set_setting("railing_post_spacing", 5.0)
@@ -161,9 +144,7 @@ func test_build_railings_post_count():
 
 func test_build_railings_group_id():
 	var tool = HFPathTool.new()
-	tool._waypoints = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(5, 0, 0)
-	])
+	tool._waypoints = PackedVector3Array([Vector3(0, 0, 0), Vector3(5, 0, 0)])
 	tool.set_setting("railing_height", 1.0)
 	tool.set_setting("railing_thickness", 0.1)
 	tool.set_setting("railing_post_spacing", 2.0)
@@ -180,9 +161,7 @@ func test_build_railings_group_id():
 
 func test_build_trim_basic():
 	var tool = HFPathTool.new()
-	tool._waypoints = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(10, 0, 0)
-	])
+	tool._waypoints = PackedVector3Array([Vector3(0, 0, 0), Vector3(10, 0, 0)])
 	tool.set_setting("trim_width", 0.3)
 	tool.set_setting("trim_height", 0.15)
 	tool.set_setting("trim_material_idx", 0)
@@ -193,9 +172,7 @@ func test_build_trim_basic():
 
 func test_build_trim_material_assignment():
 	var tool = HFPathTool.new()
-	tool._waypoints = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(10, 0, 0)
-	])
+	tool._waypoints = PackedVector3Array([Vector3(0, 0, 0), Vector3(10, 0, 0)])
 	tool.set_setting("trim_width", 0.3)
 	tool.set_setting("trim_height", 0.15)
 	tool.set_setting("trim_material_idx", 5)
@@ -208,9 +185,7 @@ func test_build_trim_material_assignment():
 
 func test_build_trim_both_sides():
 	var tool = HFPathTool.new()
-	tool._waypoints = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(5, 0, 5)
-	])
+	tool._waypoints = PackedVector3Array([Vector3(0, 0, 0), Vector3(5, 0, 5)])
 	tool.set_setting("trim_width", 0.5)
 	tool.set_setting("trim_height", 0.1)
 	tool.set_setting("trim_material_idx", 0)
@@ -221,9 +196,7 @@ func test_build_trim_both_sides():
 
 func test_build_trim_multi_segment():
 	var tool = HFPathTool.new()
-	tool._waypoints = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(5, 0, 0), Vector3(5, 0, 5)
-	])
+	tool._waypoints = PackedVector3Array([Vector3(0, 0, 0), Vector3(5, 0, 0), Vector3(5, 0, 5)])
 	tool.set_setting("trim_width", 0.3)
 	tool.set_setting("trim_height", 0.15)
 	tool.set_setting("trim_material_idx", 0)
@@ -234,9 +207,7 @@ func test_build_trim_multi_segment():
 
 func test_build_trim_group_id():
 	var tool = HFPathTool.new()
-	tool._waypoints = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(10, 0, 0)
-	])
+	tool._waypoints = PackedVector3Array([Vector3(0, 0, 0), Vector3(10, 0, 0)])
 	tool.set_setting("trim_width", 0.3)
 	tool.set_setting("trim_height", 0.15)
 	tool.set_setting("trim_material_idx", 0)
@@ -282,9 +253,7 @@ func test_hud_lines_no_auto_when_none():
 
 func test_build_stairs_zero_step_height():
 	var tool = HFPathTool.new()
-	tool._waypoints = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(10, 5, 0)
-	])
+	tool._waypoints = PackedVector3Array([Vector3(0, 0, 0), Vector3(10, 5, 0)])
 	tool.set_setting("stair_step_height", 0.0)
 	tool._ground_y = 0.0
 	# Should not crash; step_h clamped
@@ -295,9 +264,7 @@ func test_build_stairs_zero_step_height():
 
 func test_stairs_preserve_vertical_placement():
 	var tool = HFPathTool.new()
-	tool._waypoints = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(10, 4, 0)  # 4m rise
-	])
+	tool._waypoints = PackedVector3Array([Vector3(0, 0, 0), Vector3(10, 4, 0)])  # 4m rise
 	tool.set_setting("stair_step_height", 1.0)
 	tool._ground_y = 0.0
 	var result = tool._build_stairs(4.0, 4.0, "grp", 99)
@@ -308,16 +275,19 @@ func test_stairs_preserve_vertical_placement():
 		centers_y.append(info["center"].y)
 	# Steps should be at increasing Y values
 	for i in range(1, centers_y.size()):
-		assert_gt(centers_y[i], centers_y[i - 1],
-			"Step %d center Y (%.2f) should be above step %d (%.2f)" % [
-				i, centers_y[i], i - 1, centers_y[i - 1]])
+		assert_gt(
+			centers_y[i],
+			centers_y[i - 1],
+			(
+				"Step %d center Y (%.2f) should be above step %d (%.2f)"
+				% [i, centers_y[i], i - 1, centers_y[i - 1]]
+			)
+		)
 
 
 func test_railings_preserve_slope():
 	var tool = HFPathTool.new()
-	tool._waypoints = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(10, 5, 0)  # 5m rise
-	])
+	tool._waypoints = PackedVector3Array([Vector3(0, 0, 0), Vector3(10, 5, 0)])  # 5m rise
 	tool.set_setting("railing_height", 1.0)
 	tool.set_setting("railing_thickness", 0.1)
 	tool.set_setting("railing_post_spacing", 100.0)  # just top rails
@@ -336,9 +306,7 @@ func test_railings_preserve_slope():
 
 func test_trim_short_segment():
 	var tool = HFPathTool.new()
-	tool._waypoints = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(0.005, 0, 0)  # Too short
-	])
+	tool._waypoints = PackedVector3Array([Vector3(0, 0, 0), Vector3(0.005, 0, 0)])  # Too short
 	tool.set_setting("trim_width", 0.3)
 	tool.set_setting("trim_height", 0.15)
 	tool.set_setting("trim_material_idx", 0)

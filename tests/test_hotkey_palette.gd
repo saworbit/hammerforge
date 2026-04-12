@@ -82,14 +82,19 @@ func test_search_by_binding():
 
 
 func test_hollow_disabled_without_selection():
-	palette.update_state({
-		"brush_count": 0,
-		"entity_count": 0,
-		"paint_mode": false,
-		"vertex_mode": false,
-		"input_mode": 0,
-		"tool": 0,
-	})
+	(
+		palette
+		. update_state(
+			{
+				"brush_count": 0,
+				"entity_count": 0,
+				"paint_mode": false,
+				"vertex_mode": false,
+				"input_mode": 0,
+				"tool": 0,
+			}
+		)
+	)
 	var hollow_entry = null
 	for entry in palette._entries:
 		if entry["action"] == "hollow":
@@ -100,14 +105,19 @@ func test_hollow_disabled_without_selection():
 
 
 func test_hollow_enabled_with_brush_selection():
-	palette.update_state({
-		"brush_count": 1,
-		"entity_count": 0,
-		"paint_mode": false,
-		"vertex_mode": false,
-		"input_mode": 0,
-		"tool": 0,
-	})
+	(
+		palette
+		. update_state(
+			{
+				"brush_count": 1,
+				"entity_count": 0,
+				"paint_mode": false,
+				"vertex_mode": false,
+				"input_mode": 0,
+				"tool": 0,
+			}
+		)
+	)
 	var hollow_entry = null
 	for entry in palette._entries:
 		if entry["action"] == "hollow":
@@ -118,14 +128,19 @@ func test_hollow_enabled_with_brush_selection():
 
 
 func test_paint_tools_disabled_outside_paint():
-	palette.update_state({
-		"brush_count": 0,
-		"entity_count": 0,
-		"paint_mode": false,
-		"vertex_mode": false,
-		"input_mode": 0,
-		"tool": 0,
-	})
+	(
+		palette
+		. update_state(
+			{
+				"brush_count": 0,
+				"entity_count": 0,
+				"paint_mode": false,
+				"vertex_mode": false,
+				"input_mode": 0,
+				"tool": 0,
+			}
+		)
+	)
 	for entry in palette._entries:
 		if entry["action"] == "paint_bucket":
 			assert_true(entry["button"].disabled)
@@ -134,14 +149,19 @@ func test_paint_tools_disabled_outside_paint():
 
 
 func test_paint_tools_enabled_in_paint_mode():
-	palette.update_state({
-		"brush_count": 0,
-		"entity_count": 0,
-		"paint_mode": true,
-		"vertex_mode": false,
-		"input_mode": 0,
-		"tool": 0,
-	})
+	(
+		palette
+		. update_state(
+			{
+				"brush_count": 0,
+				"entity_count": 0,
+				"paint_mode": true,
+				"vertex_mode": false,
+				"input_mode": 0,
+				"tool": 0,
+			}
+		)
+	)
 	for entry in palette._entries:
 		if entry["action"] == "paint_bucket":
 			assert_false(entry["button"].disabled)
@@ -150,14 +170,19 @@ func test_paint_tools_enabled_in_paint_mode():
 
 
 func test_tool_switches_always_enabled():
-	palette.update_state({
-		"brush_count": 0,
-		"entity_count": 0,
-		"paint_mode": false,
-		"vertex_mode": false,
-		"input_mode": 0,
-		"tool": 0,
-	})
+	(
+		palette
+		. update_state(
+			{
+				"brush_count": 0,
+				"entity_count": 0,
+				"paint_mode": false,
+				"vertex_mode": false,
+				"input_mode": 0,
+				"tool": 0,
+			}
+		)
+	)
 	for entry in palette._entries:
 		if entry["action"] == "tool_draw":
 			assert_false(entry["button"].disabled)
@@ -166,14 +191,19 @@ func test_tool_switches_always_enabled():
 
 
 func test_vertex_tools_disabled_outside_vertex_mode():
-	palette.update_state({
-		"brush_count": 0,
-		"entity_count": 0,
-		"paint_mode": false,
-		"vertex_mode": false,
-		"input_mode": 0,
-		"tool": 0,
-	})
+	(
+		palette
+		. update_state(
+			{
+				"brush_count": 0,
+				"entity_count": 0,
+				"paint_mode": false,
+				"vertex_mode": false,
+				"input_mode": 0,
+				"tool": 0,
+			}
+		)
+	)
 	for entry in palette._entries:
 		if entry["action"] == "vertex_merge":
 			assert_true(entry["button"].disabled)
@@ -182,14 +212,19 @@ func test_vertex_tools_disabled_outside_vertex_mode():
 
 
 func test_vertex_tools_enabled_in_vertex_mode():
-	palette.update_state({
-		"brush_count": 0,
-		"entity_count": 0,
-		"paint_mode": false,
-		"vertex_mode": true,
-		"input_mode": 0,
-		"tool": 0,
-	})
+	(
+		palette
+		. update_state(
+			{
+				"brush_count": 0,
+				"entity_count": 0,
+				"paint_mode": false,
+				"vertex_mode": true,
+				"input_mode": 0,
+				"tool": 0,
+			}
+		)
+	)
 	for entry in palette._entries:
 		if entry["action"] == "vertex_merge":
 			assert_false(entry["button"].disabled)

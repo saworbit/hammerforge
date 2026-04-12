@@ -177,6 +177,10 @@ func rebuild_preview(base_mesh: Mesh = null, mesh_scale: Vector3 = Vector3.ONE) 
 		surface_count += 1
 	mesh_instance.mesh = mesh if surface_count > 0 else base_mesh
 	mesh_instance.material_override = null
+	# Refresh wireframe overlays so they track the rebuilt mesh
+	_apply_brush_entity_overlay()
+	_apply_subtract_wireframe_overlay()
+	_apply_additive_wireframe_overlay()
 
 
 func _rebuild_faces(base_mesh: Mesh, mesh_scale: Vector3) -> void:
@@ -505,7 +509,9 @@ func _make_default_material() -> Material:
 		base.emission = Color(1.0, 0.2, 0.2)
 		base.emission_energy = 0.2
 	else:
-		base.albedo_color = Color(0.3, 0.6, 1.0, 0.35)
+		base.albedo_color = Color(0.2, 0.8, 0.2, 0.35)
+		base.emission = Color(0.2, 0.7, 0.2)
+		base.emission_energy = 0.1
 	base.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	base.roughness = 0.6
 	return base
@@ -731,6 +737,7 @@ func _apply_material(force: bool = false) -> void:
 		mesh_instance.material_override = null
 		_apply_brush_entity_overlay()
 		_apply_subtract_wireframe_overlay()
+		_apply_additive_wireframe_overlay()
 		return
 	var mat: Material = null
 	if material_override:
@@ -744,23 +751,34 @@ func _apply_material(force: bool = false) -> void:
 			base.emission = Color(1.0, 0.2, 0.2)
 			base.emission_energy = 0.2
 		else:
-			base.albedo_color = Color(0.3, 0.6, 1.0, 0.35)
-		# Apply brush entity class tint
+			base.albedo_color = Color(0.2, 0.8, 0.2, 0.35)
+			base.emission = Color(0.2, 0.7, 0.2)
+			base.emission_energy = 0.1
+		# Apply brush entity class tint — blue for entities
 		var bec = str(get_meta("brush_entity_class", ""))
 		if bec == "func_detail":
-			base.albedo_color = Color(0.3, 0.9, 0.9, 0.35)
-			base.emission = Color(0.3, 0.8, 0.8)
+			base.albedo_color = Color(0.3, 0.5, 1.0, 0.35)
+			base.emission = Color(0.3, 0.5, 0.9)
 			base.emission_energy = 0.15
 		elif bec.begins_with("trigger_"):
-			base.albedo_color = Color(1.0, 0.6, 0.1, 0.3)
-			base.emission = Color(1.0, 0.5, 0.1)
+			base.albedo_color = Color(0.4, 0.55, 1.0, 0.3)
+			base.emission = Color(0.4, 0.5, 0.9)
 			base.emission_energy = 0.3
+		elif bec == "func_wall":
+			base.albedo_color = Color(0.25, 0.45, 0.9, 0.25)
+			base.emission = Color(0.25, 0.4, 0.8)
+			base.emission_energy = 0.1
+		elif bec != "":
+			base.albedo_color = Color(0.35, 0.5, 0.85, 0.2)
+			base.emission = Color(0.3, 0.45, 0.8)
+			base.emission_energy = 0.1
 		base.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		base.roughness = 0.6
 		mat = base
 	mesh_instance.material_override = mat
 	_apply_brush_entity_overlay()
 	_apply_subtract_wireframe_overlay()
+	_apply_additive_wireframe_overlay()
 
 
 func _apply_brush_entity_overlay() -> void:
@@ -784,13 +802,13 @@ func _apply_brush_entity_overlay() -> void:
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.no_depth_test = true
 	if bec == "func_detail":
-		mat.albedo_color = Color(0.2, 0.9, 0.9, 0.12)
+		mat.albedo_color = Color(0.2, 0.4, 1.0, 0.12)
 	elif bec == "func_wall":
-		mat.albedo_color = Color(0.4, 0.7, 0.4, 0.08)
+		mat.albedo_color = Color(0.2, 0.35, 0.85, 0.08)
 	elif bec.begins_with("trigger_"):
-		mat.albedo_color = Color(1.0, 0.5, 0.0, 0.15)
+		mat.albedo_color = Color(0.3, 0.45, 1.0, 0.15)
 	else:
-		mat.albedo_color = Color(0.5, 0.5, 0.5, 0.1)
+		mat.albedo_color = Color(0.3, 0.4, 0.8, 0.1)
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	overlay.material_override = mat
@@ -827,6 +845,44 @@ func _apply_subtract_wireframe_overlay() -> void:
 	overlay.transform = mesh_instance.transform
 	var smat = ShaderMaterial.new()
 	smat.shader = _subtract_wireframe_shader
+	overlay.material_override = smat
+	overlay.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(overlay)
+	overlay.owner = null
+
+
+static var _additive_wireframe_shader: Shader = null
+
+
+func _apply_additive_wireframe_overlay() -> void:
+	var existing = get_node_or_null("_AdditiveWireOverlay")
+	if existing:
+		existing.queue_free()
+
+	if operation == CSGShape3D.OPERATION_SUBTRACTION:
+		return
+	# Skip if this brush has a brush entity class (entity overlay is sufficient)
+	var bec = str(get_meta("brush_entity_class", ""))
+	if bec != "":
+		return
+	if not mesh_instance or not mesh_instance.mesh:
+		return
+
+	if _additive_wireframe_shader == null:
+		_additive_wireframe_shader = Shader.new()
+		_additive_wireframe_shader.code = (
+			"shader_type spatial;\n"
+			+ "render_mode unshaded, cull_disabled, wireframe, depth_draw_never;\n"
+			+ "uniform vec4 color : source_color = vec4(0.2, 0.8, 0.2, 0.5);\n"
+			+ "void fragment() { ALBEDO = color.rgb; ALPHA = color.a; }\n"
+		)
+
+	var overlay = MeshInstance3D.new()
+	overlay.name = "_AdditiveWireOverlay"
+	overlay.mesh = mesh_instance.mesh
+	overlay.transform = mesh_instance.transform
+	var smat = ShaderMaterial.new()
+	smat.shader = _additive_wireframe_shader
 	overlay.material_override = smat
 	overlay.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(overlay)

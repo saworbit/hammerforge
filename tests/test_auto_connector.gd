@@ -2,7 +2,9 @@ extends GutTest
 
 const HFAutoConnectorScript = preload("res://addons/hammerforge/paint/hf_auto_connector.gd")
 const HFConnectorToolScript = preload("res://addons/hammerforge/paint/hf_connector_tool.gd")
-const HFPaintLayerManagerScript = preload("res://addons/hammerforge/paint/hf_paint_layer_manager.gd")
+const HFPaintLayerManagerScript = preload(
+	"res://addons/hammerforge/paint/hf_paint_layer_manager.gd"
+)
 const HFPaintLayerScript = preload("res://addons/hammerforge/paint/hf_paint_layer.gd")
 const HFPaintGridScript = preload("res://addons/hammerforge/paint/hf_paint_grid.gd")
 
@@ -100,7 +102,9 @@ func test_detect_boundaries_no_duplicates():
 	for seg in segs:
 		var lo: int = mini(seg.from_layer_index, seg.to_layer_index)
 		var hi: int = maxi(seg.from_layer_index, seg.to_layer_index)
-		var c_lo: Vector2i = seg.from_cell if seg.from_layer_index < seg.to_layer_index else seg.to_cell
+		var c_lo: Vector2i = (
+			seg.from_cell if seg.from_layer_index < seg.to_layer_index else seg.to_cell
+		)
 		var k := "%d_%d_%d_%d" % [lo, hi, c_lo.x, c_lo.y]
 		keys[k] = true
 	assert_eq(keys.size(), segs.size(), "No duplicate segments")
@@ -365,12 +369,10 @@ func test_corner_cell_two_edges_not_deduplicated():
 	for seg in segs:
 		to_cells[seg.to_cell] = true
 	assert_true(
-		to_cells.has(Vector2i(1, 0)) or to_cells.has(Vector2i(0, 0)),
-		"Edge toward (1,0) present"
+		to_cells.has(Vector2i(1, 0)) or to_cells.has(Vector2i(0, 0)), "Edge toward (1,0) present"
 	)
 	assert_true(
-		to_cells.has(Vector2i(0, 1)) or to_cells.has(Vector2i(0, 0)),
-		"Edge toward (0,1) present"
+		to_cells.has(Vector2i(0, 1)) or to_cells.has(Vector2i(0, 0)), "Edge toward (0,1) present"
 	)
 
 

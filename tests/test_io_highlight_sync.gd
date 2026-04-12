@@ -300,7 +300,8 @@ func _entity_state(v: HFIOVisualizer) -> Dictionary:
 
 func test_integration_toolbar_click_propagates_to_panel():
 	# Wire up the coordinator so signals flow through the production chain
-	var _coord = _make_coordinator()
+	var coord = _make_coordinator()
+	assert_not_null(coord)
 	# Ensure entity context
 	toolbar.update_state(_entity_state(viz))
 	var tb_btn = _get_toolbar_highlight_btn()
@@ -315,7 +316,8 @@ func test_integration_toolbar_click_propagates_to_panel():
 
 
 func test_integration_panel_click_propagates_to_toolbar():
-	var _coord = _make_coordinator()
+	var coord = _make_coordinator()
+	assert_not_null(coord)
 	toolbar.update_state(_entity_state(viz))
 
 	# User clicks panel HL button
@@ -328,7 +330,8 @@ func test_integration_panel_click_propagates_to_toolbar():
 
 
 func test_integration_toolbar_off_propagates_to_panel():
-	var _coord = _make_coordinator()
+	var coord = _make_coordinator()
+	assert_not_null(coord)
 	toolbar.update_state(_entity_state(viz))
 	var tb_btn = _get_toolbar_highlight_btn()
 
@@ -342,7 +345,8 @@ func test_integration_toolbar_off_propagates_to_panel():
 
 
 func test_integration_panel_off_propagates_to_toolbar():
-	var _coord = _make_coordinator()
+	var coord = _make_coordinator()
+	assert_not_null(coord)
 	toolbar.update_state(_entity_state(viz))
 
 	_click_toggle(panel._highlight_btn, true)
@@ -355,7 +359,8 @@ func test_integration_panel_off_propagates_to_toolbar():
 
 
 func test_integration_alternating_sources_stay_in_sync():
-	var _coord = _make_coordinator()
+	var coord = _make_coordinator()
+	assert_not_null(coord)
 	toolbar.update_state(_entity_state(viz))
 	var tb_btn = _get_toolbar_highlight_btn()
 

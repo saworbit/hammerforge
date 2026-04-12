@@ -188,9 +188,7 @@ func _emit_or_batch(signal_name: String, args: Array) -> void:
 
 
 func _make_brush(
-	pos: Vector3 = Vector3.ZERO,
-	sz: Vector3 = Vector3(32, 32, 32),
-	brush_id: String = ""
+	pos: Vector3 = Vector3.ZERO, sz: Vector3 = Vector3(32, 32, 32), brush_id: String = ""
 ) -> DraftBrush:
 	var b = DraftBrush.new()
 	b.size = sz
@@ -372,7 +370,9 @@ func test_entity_io_lifecycle():
 	# Clean up dangling connections targeting "door_1"
 	var removed = entity_sys.cleanup_dangling_connections("door_1")
 	assert_eq(removed, 1, "Should remove 1 connection targeting door_1")
-	assert_eq(entity_sys.get_entity_outputs(trigger).size(), 0, "Outputs should be empty after cleanup")
+	assert_eq(
+		entity_sys.get_entity_outputs(trigger).size(), 0, "Outputs should be empty after cleanup"
+	)
 
 
 func test_entity_properties_persist_through_capture_restore():
@@ -399,8 +399,16 @@ func test_entity_properties_persist_through_capture_restore():
 	assert_not_null(restored, "Restored entity should not be null")
 	assert_eq(restored.entity_type, "logic_relay", "Entity type should be preserved")
 	assert_eq(restored.entity_data.get("delay"), 2.5, "Custom property 'delay' should be preserved")
-	assert_eq(restored.entity_data.get("fire_once"), true, "Custom property 'fire_once' should be preserved")
-	assert_eq(restored.entity_data.get("filter_class"), "npc_zombie", "Custom property 'filter_class' should be preserved")
+	assert_eq(
+		restored.entity_data.get("fire_once"),
+		true,
+		"Custom property 'fire_once' should be preserved"
+	)
+	assert_eq(
+		restored.entity_data.get("filter_class"),
+		"npc_zombie",
+		"Custom property 'filter_class' should be preserved"
+	)
 
 	# Verify I/O outputs were restored
 	var io = restored.get_meta("entity_io_outputs", [])
@@ -456,7 +464,11 @@ func test_brush_group_cleanup_on_delete():
 	assert_eq(visgroup_sys.get_group_members("test_group").size(), 2, "Group should have 2 members")
 
 	brush_sys.delete_brush(b1)
-	assert_eq(visgroup_sys.get_group_members("test_group").size(), 1, "Group should have 1 member after deletion")
+	assert_eq(
+		visgroup_sys.get_group_members("test_group").size(),
+		1,
+		"Group should have 1 member after deletion"
+	)
 
 
 func test_hollow_preserves_visgroups_and_group():
@@ -485,7 +497,9 @@ func test_hollow_preserves_visgroups_and_group():
 
 func test_snap_grid_basic():
 	# Set grid snap mode and verify snapping works.
-	assert_true(snap_sys.is_mode_on(HFSnapSystem.SnapMode.GRID), "Grid mode should be on by default")
+	assert_true(
+		snap_sys.is_mode_on(HFSnapSystem.SnapMode.GRID), "Grid mode should be on by default"
+	)
 	var result = snap_sys.snap_point(Vector3(17, 5, 23), 16.0)
 	assert_eq(result, Vector3(16, 0, 16), "Should snap to nearest grid point")
 
@@ -628,12 +642,14 @@ func test_clip_preserves_all_metadata():
 	for child in children:
 		if child is DraftBrush:
 			assert_eq(
-				str(child.get_meta("brush_entity_class", "")), "func_wall",
+				str(child.get_meta("brush_entity_class", "")),
+				"func_wall",
 				"Clipped piece should preserve brush_entity_class"
 			)
 			var vgs = child.get_meta("visgroups", PackedStringArray())
 			assert_true(vgs.has("walls"), "Clipped piece should preserve visgroups")
 			assert_eq(
-				str(child.get_meta("group_id", "")), "corridor_1",
+				str(child.get_meta("group_id", "")),
+				"corridor_1",
 				"Clipped piece should preserve group_id"
 			)

@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: April 10, 2026
+Last updated: April 12, 2026
 
 This roadmap is a directional plan. Items may change based on user feedback.
 Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md for details.
@@ -252,6 +252,14 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - **Configurable thresholds**: `bake_generate_occluders` toggle and `bake_occluder_min_area` (default 4.0 world units²) on LevelRoot. Dock checkbox + SpinBox in Manage tab → Bake section. Settings persist in `.hflevel`.
 - **Validation integration**: `check_occlusion_coverage()` runs inside `check_bake_issues()`. Reports missing-occluder warnings (enabled but empty) and coverage stats (occluder count + % of baked AABB surface).
 - 13 new tests (`test_occluder_generation.gd`): flat mesh, chunked hierarchy, coplanar merge, plane separation, min-area filter, idempotency, postprocess toggle, validation. Total: **1283 tests across 75 files**.
+
+## Done (Visual System Status — Classic Editor Feedback)
+- **Operation-coded wireframe colors**: green wireframe overlay for additive brushes, red for subtractive (existing), blue spectrum for brush entities (func_detail/trigger/func_wall/other). New `_apply_additive_wireframe_overlay()` mirrors subtract overlay. Both overlays refresh on face-preview mesh rebuilds.
+- **Grid size viewport indicator**: persistent "Grid: N" label in shortcut HUD with `%g` exact formatting. Flash-on-change (bright yellow-white → fade 0.6s) via tween.
+- **Grid size hotkeys** (`[` / `]`): halve/double grid snap. Registered as `grid_decrease` / `grid_increase` in keymap (user-remappable). Clamped 0.125–512.
+- **Signal-driven HUD sync**: `grid_snap_applied` signal on dock ensures all grid change origins (SpinBox, snap buttons, quick-property, hotkeys, state restore) update the HUD.
+- **Test cleanup fixes**: resource leak fixes in test_brush_to_heightmap, test_context_toolbar, test_selection_features. Orphan/leak shutdown errors eliminated.
+- Total: **1370 tests**, full suite passes in 91.7s.
 
 ## Future (Wave 3 -- Polish)
 - Multiple simultaneous cordons.

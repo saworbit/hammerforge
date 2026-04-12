@@ -3,30 +3,34 @@ extends GutTest
 const HFPolygonTool = preload("res://addons/hammerforge/hf_polygon_tool.gd")
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
 
-
 # ===========================================================================
 # Convexity validation
 # ===========================================================================
 
+
 func test_convex_square():
-	var pts = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 0, 4), Vector3(0, 0, 4)
-	])
+	var pts = PackedVector3Array(
+		[Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 0, 4), Vector3(0, 0, 4)]
+	)
 	assert_true(HFPolygonTool._is_convex_xz(pts), "Square should be convex")
 
 
 func test_convex_triangle():
-	var pts = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(2, 0, 3)
-	])
+	var pts = PackedVector3Array([Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(2, 0, 3)])
 	assert_true(HFPolygonTool._is_convex_xz(pts), "Triangle is always convex")
 
 
-func test_concave_L_shape():
-	var pts = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 0, 2),
-		Vector3(2, 0, 2), Vector3(2, 0, 4), Vector3(0, 0, 4)
-	])
+func test_concave_l_shape():
+	var pts = PackedVector3Array(
+		[
+			Vector3(0, 0, 0),
+			Vector3(4, 0, 0),
+			Vector3(4, 0, 2),
+			Vector3(2, 0, 2),
+			Vector3(2, 0, 4),
+			Vector3(0, 0, 4)
+		]
+	)
 	assert_false(HFPolygonTool._is_convex_xz(pts), "L-shape should be concave")
 
 
@@ -45,9 +49,7 @@ func test_degenerate_two_points():
 
 
 func test_collinear_points():
-	var pts = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(2, 0, 0), Vector3(4, 0, 0)
-	])
+	var pts = PackedVector3Array([Vector3(0, 0, 0), Vector3(2, 0, 0), Vector3(4, 0, 0)])
 	assert_true(HFPolygonTool._is_convex_xz(pts), "Collinear points should pass")
 
 
@@ -55,11 +57,12 @@ func test_collinear_points():
 # Face data construction
 # ===========================================================================
 
+
 func test_face_data_construction():
 	var tool = HFPolygonTool.new()
-	tool._polygon_points = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(8, 0, 0), Vector3(8, 0, 8), Vector3(0, 0, 8)
-	])
+	tool._polygon_points = PackedVector3Array(
+		[Vector3(0, 0, 0), Vector3(8, 0, 0), Vector3(8, 0, 8), Vector3(0, 0, 8)]
+	)
 	tool._ground_y = 0.0
 	tool._height = 4.0
 	var faces = tool._build_face_data()
@@ -69,9 +72,9 @@ func test_face_data_construction():
 
 func test_face_data_triangle():
 	var tool = HFPolygonTool.new()
-	tool._polygon_points = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(6, 0, 0), Vector3(3, 0, 5)
-	])
+	tool._polygon_points = PackedVector3Array(
+		[Vector3(0, 0, 0), Vector3(6, 0, 0), Vector3(3, 0, 5)]
+	)
 	tool._ground_y = 0.0
 	tool._height = 3.0
 	var faces = tool._build_face_data()
@@ -81,9 +84,9 @@ func test_face_data_triangle():
 
 func test_face_data_vertices_are_local():
 	var tool = HFPolygonTool.new()
-	tool._polygon_points = PackedVector3Array([
-		Vector3(10, 0, 10), Vector3(14, 0, 10), Vector3(14, 0, 14), Vector3(10, 0, 14)
-	])
+	tool._polygon_points = PackedVector3Array(
+		[Vector3(10, 0, 10), Vector3(14, 0, 10), Vector3(14, 0, 14), Vector3(10, 0, 14)]
+	)
 	tool._ground_y = 0.0
 	tool._height = 4.0
 	var faces = tool._build_face_data()
@@ -99,9 +102,9 @@ func test_face_data_vertices_are_local():
 
 func test_face_data_top_face_normal_points_up():
 	var tool = HFPolygonTool.new()
-	tool._polygon_points = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 0, 4), Vector3(0, 0, 4)
-	])
+	tool._polygon_points = PackedVector3Array(
+		[Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 0, 4), Vector3(0, 0, 4)]
+	)
 	tool._ground_y = 0.0
 	tool._height = 4.0
 	var faces = tool._build_face_data()
@@ -133,6 +136,7 @@ func test_two_points_returns_empty():
 # ===========================================================================
 # Tool metadata
 # ===========================================================================
+
 
 func test_tool_id():
 	var tool = HFPolygonTool.new()

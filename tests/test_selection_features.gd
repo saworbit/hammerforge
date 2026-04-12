@@ -114,7 +114,7 @@ func test_display_strings():
 
 func test_toolbar_brush_label_count():
 	var tb = HFContextToolbar.new()
-	add_child(tb)
+	add_child_autoqfree(tb)
 	(
 		tb
 		. update_state(
@@ -132,12 +132,11 @@ func test_toolbar_brush_label_count():
 	)
 	assert_true(tb._label.text.contains("3"), "Label should show brush count")
 	assert_true(tb._label.text.contains("selected"), "Label should say 'selected'")
-	tb.queue_free()
 
 
 func test_toolbar_face_label_shows_brush_count():
 	var tb = HFContextToolbar.new()
-	add_child(tb)
+	add_child_autoqfree(tb)
 	(
 		tb
 		. update_state(
@@ -155,12 +154,11 @@ func test_toolbar_face_label_shows_brush_count():
 	)
 	assert_true(tb._label.text.contains("5"), "Label should show face count")
 	assert_true(tb._label.text.contains("2"), "Label should show brush count in face context")
-	tb.queue_free()
 
 
 func test_toolbar_entity_selected_label():
 	var tb = HFContextToolbar.new()
-	add_child(tb)
+	add_child_autoqfree(tb)
 	(
 		tb
 		. update_state(
@@ -178,7 +176,6 @@ func test_toolbar_entity_selected_label():
 	)
 	assert_true(tb._label.text.contains("2"), "Label should show entity count")
 	assert_true(tb._label.text.contains("selected"), "Label should say selected")
-	tb.queue_free()
 
 
 # ===========================================================================

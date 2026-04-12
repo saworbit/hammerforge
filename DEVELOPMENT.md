@@ -1,6 +1,6 @@
 # Development Guide
 
-Last updated: April 11, 2026
+Last updated: April 12, 2026
 
 This document covers local setup, codebase structure, and how to test features.
 
@@ -21,7 +21,7 @@ addons/hammerforge/
   level_root.gd          Thin coordinator (~1,100 lines), delegates to subsystems
   input_state.gd         Drag/paint state machine (HFInputState)
   dock.gd + dock.tscn    UI dock (4 tabs: Brush, Paint, Entities, Manage), collapsible sections with persisted state
-  shortcut_hud.gd        Context-sensitive shortcut overlay (dynamic per mode)
+  shortcut_hud.gd        Context-sensitive shortcut overlay (dynamic per mode) + persistent grid size indicator with flash-on-change
   brush_instance.gd      DraftBrush node
   baker.gd               CSG -> mesh bake pipeline (per-face materials, atlas integration, snapshot-based non-blocking face bakes, convex collision shapes)
   hf_material_atlas.gd   HFMaterialAtlas: texture atlas packing for draw-call reduction
@@ -139,6 +139,8 @@ addons/hammerforge/
 - **LevelRoot is the public API.** Its methods are thin one-line delegates to subsystems. External callers (`plugin.gd`, `dock.gd`) always go through `LevelRoot`.
 - **Input state machine.** `HFDragSystem` owns the `HFInputState` instance. Drag state transitions are explicit (`begin_drag` -> `advance_to_height` -> `end_drag`). Extrude uses `begin_extrude` -> `end_extrude`. Modes are classified as *transient* (DRAG_BASE, DRAG_HEIGHT, EXTRUDE, SURFACE_PAINT — own temporary preview nodes) or *persistent* (VERTEX_EDIT — user-toggled, survives undo/redo). `HFInputState.is_transient_preview_mode()` encodes this distinction; plugin.gd's `version_changed` handler uses it to force-reset only transient modes.
 - **Direct typed calls.** `plugin.gd` and `dock.gd` use typed references (`LevelRoot`, `DockType`) with direct method calls instead of `has_method`/`call`.
+- **Wireframe color convention.** Brushes use operation-coded wireframe overlays: green for additive, red for subtractive, blue spectrum for brush entities. `_apply_additive_wireframe_overlay()` and `_apply_subtract_wireframe_overlay()` in `brush_instance.gd` must be called after any `mesh_instance.mesh` replacement (including face-preview rebuilds) to keep overlays in sync with geometry.
+- **Grid snap HUD sync.** `dock.gd` emits `grid_snap_applied(value)` from both `_apply_grid_snap()` and `_on_root_grid_snap_changed()`. `plugin.gd` connects this to `_on_dock_grid_snap_applied()` which updates the HUD indicator. All grid change origins (dock UI, hotkeys, quick-property, state restore) flow through this path.
 - **Sticky LevelRoot discovery.** `plugin.gd` keeps `active_root` sticky: `_edit()` does not null it when non-LevelRoot nodes are selected. `_handles()` returns true for any node when a LevelRoot exists (deep recursive search). `dock.gd` mirrors this pattern.
 - **Sticky brush selection.** `plugin.gd` suppresses spurious empty `selection_changed` signals (e.g. from texture reimport) via `should_suppress_empty_selection()`. When the editor selection goes empty but `hf_selection` is still populated, the event is ignored. Intentional deselects must clear `hf_selection` *before* calling `editor_selection.clear()`. Dock paths that clear editor selection emit `selection_clear_requested` first so the plugin can clear its cache.
 - **Material assignment fallback.** `dock.resolve_material_assign_action(mat_index)` is a pure helper returning `{action, method, args, toast}`. Both `_on_material_assign()` and `_on_browser_material_double_clicked()` delegate to it. When faces are selected → face assignment. When no faces but brushes are selected → whole-brush fallback. When nothing is selected → error toast. Context menu options (Apply to Faces, Apply to Whole Brush) remain explicit and do not use the fallback.

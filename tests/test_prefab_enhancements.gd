@@ -2,7 +2,7 @@ extends GutTest
 
 const HFPrefabType = preload("res://addons/hammerforge/hf_prefab.gd")
 const HFLevelIO = preload("res://addons/hammerforge/hflevel_io.gd")
-
+const HFPrefabSystemType = preload("res://addons/hammerforge/systems/hf_prefab_system.gd")
 
 # -- Helper data ----------------------------------------------------------------
 
@@ -110,9 +110,7 @@ func test_variants_roundtrip():
 	prefab.brush_infos = [_make_brush_info(Vector3.ZERO)]
 	prefab.set_variant_data("wooden", [_make_brush_info(Vector3(10, 0, 0))], [])
 	prefab.set_variant_data(
-		"metal",
-		[_make_brush_info(Vector3(20, 0, 0))],
-		[_make_entity_info(Vector3(25, 0, 0))]
+		"metal", [_make_brush_info(Vector3(20, 0, 0))], [_make_entity_info(Vector3(25, 0, 0))]
 	)
 	var data := prefab.to_dict()
 	var restored := HFPrefabType.from_dict(data)
@@ -212,30 +210,24 @@ func test_prefab_system_suggest_name_single_brush():
 
 func test_prefab_system_capture_restore_state():
 	# Validate PrefabSystem serialization round-trip with a minimal shim
-	var HFPrefabSystemType = preload("res://addons/hammerforge/systems/hf_prefab_system.gd")
-
 	# Create a minimal entity system shim
 	var entity_script = GDScript.new()
-	entity_script.source_code = (
-		"""
+	entity_script.source_code = ("""
 extends RefCounted
 func find_entities_by_name(_name: String) -> Array:
 	return []
-"""
-	)
+""")
 	entity_script.reload()
 
 	# Create a minimal root shim
 	var root_script = GDScript.new()
-	root_script.source_code = (
-		"""
+	root_script.source_code = ("""
 extends Node3D
 var draft_brushes_node: Node3D
 var entities_node: Node3D
 var entity_system
 var prefab_system
-"""
-	)
+""")
 	root_script.reload()
 	var root = root_script.new()
 	root.draft_brushes_node = Node3D.new()
@@ -255,9 +247,7 @@ var prefab_system
 	var iid1 := system.register_instance(
 		"res://prefabs/test.hfprefab", ["b1", "b2"], [fake_entity], true, "base"
 	)
-	var iid2 := system.register_instance(
-		"res://prefabs/other.hfprefab", ["b3"], [], false, "metal"
-	)
+	var iid2 := system.register_instance("res://prefabs/other.hfprefab", ["b3"], [], false, "metal")
 	assert_ne(iid1, "", "Instance 1 should have an ID")
 	assert_ne(iid2, "", "Instance 2 should have an ID")
 	assert_ne(iid1, iid2, "Instance IDs should be unique")
@@ -289,23 +279,19 @@ var prefab_system
 
 func _make_root_shim():
 	var entity_script = GDScript.new()
-	entity_script.source_code = (
-		"""
+	entity_script.source_code = ("""
 extends RefCounted
 func find_entities_by_name(_name: String) -> Array:
 	return []
-"""
-	)
+""")
 	entity_script.reload()
 	var root_script = GDScript.new()
-	root_script.source_code = (
-		"""
+	root_script.source_code = ("""
 extends Node3D
 var draft_brushes_node: Node3D
 var entities_node: Node3D
 var entity_system
-"""
-	)
+""")
 	root_script.reload()
 	var root = root_script.new()
 	root.draft_brushes_node = Node3D.new()
@@ -317,7 +303,6 @@ var entity_system
 
 
 func test_prefab_system_unregister():
-	var HFPrefabSystemType = preload("res://addons/hammerforge/systems/hf_prefab_system.gd")
 	var root = _make_root_shim()
 
 	var system = HFPrefabSystemType.new(root)
@@ -329,7 +314,6 @@ func test_prefab_system_unregister():
 
 
 func test_prefab_system_get_instances_for_source():
-	var HFPrefabSystemType = preload("res://addons/hammerforge/systems/hf_prefab_system.gd")
 	var root = _make_root_shim()
 
 	var system = HFPrefabSystemType.new(root)
@@ -347,7 +331,6 @@ func test_prefab_system_get_instances_for_source():
 
 
 func test_prefab_system_override_tracking():
-	var HFPrefabSystemType = preload("res://addons/hammerforge/systems/hf_prefab_system.gd")
 	var root = _make_root_shim()
 
 	var system = HFPrefabSystemType.new(root)
@@ -366,7 +349,6 @@ func test_prefab_system_override_tracking():
 
 
 func test_prefab_system_suggest_name():
-	var HFPrefabSystemType = preload("res://addons/hammerforge/systems/hf_prefab_system.gd")
 	var root = _make_root_shim()
 
 	var system = HFPrefabSystemType.new(root)

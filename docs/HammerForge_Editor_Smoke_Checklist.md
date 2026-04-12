@@ -1,6 +1,6 @@
 # HammerForge Editor Smoke Checklist
 
-Last updated: April 9, 2026
+Last updated: April 12, 2026
 
 This checklist covers the editor-only flows that are hard to validate in headless tests:
 - tutorial banner startup before `LevelRoot` exists
@@ -421,11 +421,30 @@ Enable the HammerForge plugin if it is not already enabled.
 - Select a brush. Tap **B** twice (B B); confirm a popup appears with 3 SpinBoxes (X, Y, Z).
 - Enable paint mode. Tap **R** twice (R R); confirm a popup appears with a "Paint Radius" SpinBox.
 
-### 32. Cleanup / Persistence
+### 32. Brush Wireframe Color Coding
+- Draw a new additive brush; confirm it has a **green** wireframe overlay and green-tinted fill.
+- Change the brush operation to Subtract; confirm the wireframe changes to **red**.
+- Tie the brush to `func_detail` (brush entity); confirm the wireframe/overlay shifts to **bright blue**.
+- Tie to `trigger_once`; confirm **medium blue** overlay.
+- Tie to `func_wall`; confirm **muted blue** overlay.
+- Untie the brush; confirm it returns to green (additive) wireframe.
+- Draw a brush with per-face materials; confirm the green wireframe tracks the geometry after face preview rebuild.
+
+### 33. Grid Size Indicator and Hotkeys
+- With LevelRoot active, confirm the shortcut HUD (top-right) shows "Grid: 16" (or current snap value).
+- Change the grid snap via the dock SpinBox; confirm the HUD label updates and **flashes** briefly (yellow-white → fade).
+- Press **`]`**; confirm the grid doubles (e.g. 16 → 32) and the HUD flashes.
+- Press **`[`**; confirm the grid halves (e.g. 32 → 16) and the HUD flashes.
+- Press **`[`** repeatedly until minimum (0.125); confirm it stops halving and displays "Grid: 0.125" exactly (not "0.13").
+- Press **`]`** repeatedly until maximum (512); confirm it stops doubling.
+- Double-tap **G G** to open quick-property popup; change value; confirm HUD updates with flash.
+- Perform a state restore (undo a bulk operation); confirm the HUD picks up the restored grid snap.
+
+### 34. Cleanup / Persistence
 - Dismiss the tutorial with and without `Don't show again` checked.
 - Restart Godot and confirm the `show_welcome` preference behaves as expected.
 - Reopen the dock and confirm no layout corruption remains after closing the tutorial and shortcut dialog.
 
 ## Expected Outcome
 
-If all steps pass, the remaining risk on the tutorial/prefab/shortcut/subtract-preview/vertex-editing/polygon/path/material-browser/spawn-system/context-toolbar/command-palette/terrain-scatter/measure-tool/history-browser/performance-monitor/theme-sync/export-playtest/displacement/bevel/auto-connectors/validation-weld-planarity/io-runtime/viewport-context-menu/radial-menu/quick-property feature set is low and limited mainly to edge cases outside this smoke path.
+If all steps pass, the remaining risk on the tutorial/prefab/shortcut/subtract-preview/vertex-editing/polygon/path/material-browser/spawn-system/context-toolbar/command-palette/terrain-scatter/measure-tool/history-browser/performance-monitor/theme-sync/export-playtest/displacement/bevel/auto-connectors/validation-weld-planarity/io-runtime/viewport-context-menu/radial-menu/quick-property/wireframe-colors/grid-indicator feature set is low and limited mainly to edge cases outside this smoke path.

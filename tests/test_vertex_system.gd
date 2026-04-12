@@ -51,18 +51,42 @@ func _make_box_brush(pos: Vector3, sz: Vector3, id: String) -> DraftBrush:
 	var half = sz * 0.5
 	# CW winding from outside (matches _build_box_faces in production code)
 	var quads = [
-		[Vector3(half.x, -half.y, half.z), Vector3(half.x, half.y, half.z),
-		 Vector3(half.x, half.y, -half.z), Vector3(half.x, -half.y, -half.z)],
-		[Vector3(-half.x, -half.y, -half.z), Vector3(-half.x, half.y, -half.z),
-		 Vector3(-half.x, half.y, half.z), Vector3(-half.x, -half.y, half.z)],
-		[Vector3(half.x, half.y, -half.z), Vector3(half.x, half.y, half.z),
-		 Vector3(-half.x, half.y, half.z), Vector3(-half.x, half.y, -half.z)],
-		[Vector3(half.x, -half.y, half.z), Vector3(half.x, -half.y, -half.z),
-		 Vector3(-half.x, -half.y, -half.z), Vector3(-half.x, -half.y, half.z)],
-		[Vector3(-half.x, half.y, half.z), Vector3(half.x, half.y, half.z),
-		 Vector3(half.x, -half.y, half.z), Vector3(-half.x, -half.y, half.z)],
-		[Vector3(-half.x, -half.y, -half.z), Vector3(half.x, -half.y, -half.z),
-		 Vector3(half.x, half.y, -half.z), Vector3(-half.x, half.y, -half.z)]
+		[
+			Vector3(half.x, -half.y, half.z),
+			Vector3(half.x, half.y, half.z),
+			Vector3(half.x, half.y, -half.z),
+			Vector3(half.x, -half.y, -half.z)
+		],
+		[
+			Vector3(-half.x, -half.y, -half.z),
+			Vector3(-half.x, half.y, -half.z),
+			Vector3(-half.x, half.y, half.z),
+			Vector3(-half.x, -half.y, half.z)
+		],
+		[
+			Vector3(half.x, half.y, -half.z),
+			Vector3(half.x, half.y, half.z),
+			Vector3(-half.x, half.y, half.z),
+			Vector3(-half.x, half.y, -half.z)
+		],
+		[
+			Vector3(half.x, -half.y, half.z),
+			Vector3(half.x, -half.y, -half.z),
+			Vector3(-half.x, -half.y, -half.z),
+			Vector3(-half.x, -half.y, half.z)
+		],
+		[
+			Vector3(-half.x, half.y, half.z),
+			Vector3(half.x, half.y, half.z),
+			Vector3(half.x, -half.y, half.z),
+			Vector3(-half.x, -half.y, half.z)
+		],
+		[
+			Vector3(-half.x, -half.y, -half.z),
+			Vector3(half.x, -half.y, -half.z),
+			Vector3(half.x, half.y, -half.z),
+			Vector3(-half.x, half.y, -half.z)
+		]
 	]
 	var faces: Array[FaceData] = []
 	for quad in quads:
@@ -77,6 +101,7 @@ func _make_box_brush(pos: Vector3, sz: Vector3, id: String) -> DraftBrush:
 # ===========================================================================
 # Vertex extraction
 # ===========================================================================
+
 
 func test_box_brush_has_8_unique_vertices():
 	var b = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
@@ -110,6 +135,7 @@ func test_null_brush_returns_empty():
 # ===========================================================================
 # Selection
 # ===========================================================================
+
 
 func test_select_vertex_adds_to_selection():
 	vs.select_vertex("b1", 0, false)
@@ -158,6 +184,7 @@ func test_multi_brush_selection():
 # Convexity validation
 # ===========================================================================
 
+
 func test_valid_box_is_convex():
 	var b = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "cv1")
 	assert_true(vs.validate_convexity(b))
@@ -183,6 +210,7 @@ func test_null_brush_passes_validation():
 # ===========================================================================
 # Vertex movement
 # ===========================================================================
+
 
 func test_move_vertices_updates_face_data():
 	var b = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "mv1")
@@ -212,6 +240,7 @@ func test_move_with_no_selection_returns_false():
 # Drag lifecycle
 # ===========================================================================
 
+
 func test_begin_end_drag():
 	vs.begin_drag(Vector3.ZERO)
 	assert_true(vs.is_dragging())
@@ -235,6 +264,7 @@ func test_cancel_drag():
 # ===========================================================================
 # World positions
 # ===========================================================================
+
 
 func test_get_all_vertex_world_positions():
 	var b = _make_box_brush(Vector3(10, 0, 0), Vector3(32, 32, 32), "wp1")
@@ -269,6 +299,7 @@ func test_get_selected_world_positions_marked():
 # ===========================================================================
 # Vertex key uniqueness
 # ===========================================================================
+
 
 func test_vertex_key_different_for_distinct_points():
 	var k1 = vs._vertex_key(Vector3(1.0, 2.0, 3.0))

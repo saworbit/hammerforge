@@ -101,6 +101,8 @@ func _enter_tree():
 			dock.connect("vertex_mode_toggled", Callable(self, "_on_vertex_mode_toggled"))
 		if dock.has_signal("selection_clear_requested"):
 			dock.connect("selection_clear_requested", Callable(self, "_on_dock_selection_clear"))
+		if dock.has_signal("grid_snap_applied"):
+			dock.connect("grid_snap_applied", Callable(self, "_on_dock_grid_snap_applied"))
 
 	hud = preload("shortcut_hud.tscn").instantiate()
 	if base_control:
@@ -225,6 +227,8 @@ func _exit_tree():
 			"selection_clear_requested", Callable(self, "_on_dock_selection_clear")
 		):
 			dock.disconnect("selection_clear_requested", Callable(self, "_on_dock_selection_clear"))
+		if dock.is_connected("grid_snap_applied", Callable(self, "_on_dock_grid_snap_applied")):
+			dock.disconnect("grid_snap_applied", Callable(self, "_on_dock_grid_snap_applied"))
 		remove_control_from_docks(dock)
 		if is_instance_valid(dock):
 			dock.queue_free()
@@ -408,6 +412,9 @@ func _update_hud_context() -> void:
 	if numeric_buffer.length() > 0:
 		ctx["numeric"] = numeric_buffer
 	hud.update_context(ctx)
+	# Feed grid snap to HUD indicator
+	if root and hud.has_method("update_grid_snap"):
+		hud.update_grid_snap(root.grid_snap)
 	# Update context toolbar and hotkey palette state
 	_update_context_toolbar_state(root, tool_id_ctx)
 
@@ -982,6 +989,11 @@ func _on_dock_selection_clear() -> void:
 	hf_selection.clear()
 
 
+func _on_dock_grid_snap_applied(value: float) -> void:
+	if hud and hud.has_method("update_grid_snap"):
+		hud.update_grid_snap(value)
+
+
 func _handle_keyboard_input(
 	event: InputEventKey, root: Node, tool_id: int, paint_mode: bool
 ) -> int:
@@ -1089,6 +1101,13 @@ func _handle_keyboard_input(
 	var nudge = _get_nudge_direction(event.keycode)
 	if nudge != Vector3.ZERO:
 		_nudge_selected(root, nudge)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	# Grid snap size shortcuts ([ = halve, ] = double)
+	if _keymap.matches("grid_decrease", event):
+		_adjust_grid_snap(root, 0.5)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	if _keymap.matches("grid_increase", event):
+		_adjust_grid_snap(root, 2.0)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	# Tool switch shortcuts
 	if _keymap.matches("tool_draw", event):
@@ -2492,6 +2511,18 @@ func _nudge_selected(root: Node, dir: Vector3) -> void:
 		Callable(self, "_record_history"),
 		"nudge"
 	)
+
+
+func _adjust_grid_snap(root: Node, factor: float) -> void:
+	if not root:
+		return
+	var current: float = root.grid_snap if root.grid_snap > 0.0 else 16.0
+	var new_val: float = clampf(current * factor, 0.125, 512.0)
+	if dock:
+		dock._apply_grid_snap(new_val)
+	else:
+		root.grid_snap = new_val
+	_update_hud_context()
 
 
 func _group_selected(root: Node) -> void:

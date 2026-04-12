@@ -49,9 +49,7 @@ func test_merge_preserves_single_material():
 	var result_mat = merged.surface_get_material(0)
 	assert_not_null(result_mat, "Material should be preserved on merged surface")
 	assert_eq(
-		(result_mat as StandardMaterial3D).albedo_color,
-		Color.RED,
-		"Material color should match"
+		(result_mat as StandardMaterial3D).albedo_color, Color.RED, "Material color should match"
 	)
 
 
@@ -106,10 +104,9 @@ func _make_face(norm: Vector3 = Vector3.UP, mat_idx: int = 0) -> FaceData:
 	var face = FaceData.new()
 	face.normal = norm
 	face.material_idx = mat_idx
-	face.local_verts = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(1, 0, 0),
-		Vector3(1, 0, 1), Vector3(0, 0, 1)
-	])
+	face.local_verts = PackedVector3Array(
+		[Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(1, 0, 1), Vector3(0, 0, 1)]
+	)
 	return face
 
 
@@ -186,7 +183,8 @@ func test_bake_from_faces_multiple_materials_multiple_surfaces():
 	if mesh_instances.size() > 0:
 		var mesh: Mesh = mesh_instances[0].mesh
 		assert_eq(
-			mesh.get_surface_count(), 2,
+			mesh.get_surface_count(),
+			2,
 			"Two different materials should produce two surfaces on single mesh"
 		)
 		# Both surfaces should have materials
@@ -235,12 +233,14 @@ func test_concat_surface_arrays_empty():
 
 func _make_indexed_arrays(offset: Vector3 = Vector3.ZERO) -> Array:
 	## Build a surface arrays Array with explicit ARRAY_INDEX.
-	var verts := PackedVector3Array([
-		Vector3(0, 0, 0) + offset,
-		Vector3(1, 0, 0) + offset,
-		Vector3(0, 0, 1) + offset,
-		Vector3(1, 0, 1) + offset,
-	])
+	var verts := PackedVector3Array(
+		[
+			Vector3(0, 0, 0) + offset,
+			Vector3(1, 0, 0) + offset,
+			Vector3(0, 0, 1) + offset,
+			Vector3(1, 0, 1) + offset,
+		]
+	)
 	var normals := PackedVector3Array([Vector3.UP, Vector3.UP, Vector3.UP, Vector3.UP])
 	var indices := PackedInt32Array([0, 1, 2, 2, 1, 3])
 	var arrays: Array = []
@@ -253,11 +253,13 @@ func _make_indexed_arrays(offset: Vector3 = Vector3.ZERO) -> Array:
 
 func _make_non_indexed_arrays(offset: Vector3 = Vector3.ZERO) -> Array:
 	## Build a surface arrays Array without ARRAY_INDEX (null).
-	var verts := PackedVector3Array([
-		Vector3(0, 0, 0) + offset,
-		Vector3(1, 0, 0) + offset,
-		Vector3(0, 0, 1) + offset,
-	])
+	var verts := PackedVector3Array(
+		[
+			Vector3(0, 0, 0) + offset,
+			Vector3(1, 0, 0) + offset,
+			Vector3(0, 0, 1) + offset,
+		]
+	)
 	var normals := PackedVector3Array([Vector3.UP, Vector3.UP, Vector3.UP])
 	var arrays: Array = []
 	arrays.resize(Mesh.ARRAY_MAX)
@@ -341,16 +343,18 @@ func test_concat_both_nonindexed_stays_nonindexed():
 
 
 func _make_box_verts(center: Vector3 = Vector3.ZERO, half: float = 1.0) -> PackedVector3Array:
-	return PackedVector3Array([
-		center + Vector3(-half, -half, -half),
-		center + Vector3( half, -half, -half),
-		center + Vector3( half,  half, -half),
-		center + Vector3(-half,  half, -half),
-		center + Vector3(-half, -half,  half),
-		center + Vector3( half, -half,  half),
-		center + Vector3( half,  half,  half),
-		center + Vector3(-half,  half,  half),
-	])
+	return PackedVector3Array(
+		[
+			center + Vector3(-half, -half, -half),
+			center + Vector3(half, -half, -half),
+			center + Vector3(half, half, -half),
+			center + Vector3(-half, half, -half),
+			center + Vector3(-half, -half, half),
+			center + Vector3(half, -half, half),
+			center + Vector3(half, half, half),
+			center + Vector3(-half, half, half),
+		]
+	)
 
 
 func test_convex_shapes_single_brush():
@@ -359,7 +363,8 @@ func test_convex_shapes_single_brush():
 	assert_eq(shapes.size(), 1, "One brush → one convex shape")
 	assert_true(shapes[0] is ConvexPolygonShape3D, "Shape should be ConvexPolygonShape3D")
 	assert_gte(
-		(shapes[0] as ConvexPolygonShape3D).points.size(), 4,
+		(shapes[0] as ConvexPolygonShape3D).points.size(),
+		4,
 		"Convex hull should have at least 4 points"
 	)
 
@@ -439,20 +444,17 @@ func test_bake_from_faces_convex_mode():
 	# Use box verts so the brush has enough geometry for a valid convex hull
 	var face_top = _make_face(Vector3.UP, 0)
 	var face_bot = _make_face(Vector3.DOWN, 0)
-	face_bot.local_verts = PackedVector3Array([
-		Vector3(0, -2, 0), Vector3(1, -2, 0),
-		Vector3(1, -2, 1), Vector3(0, -2, 1)
-	])
+	face_bot.local_verts = PackedVector3Array(
+		[Vector3(0, -2, 0), Vector3(1, -2, 0), Vector3(1, -2, 1), Vector3(0, -2, 1)]
+	)
 	var face_front = _make_face(Vector3.FORWARD, 0)
-	face_front.local_verts = PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(1, 0, 0),
-		Vector3(1, -2, 0), Vector3(0, -2, 0)
-	])
+	face_front.local_verts = PackedVector3Array(
+		[Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(1, -2, 0), Vector3(0, -2, 0)]
+	)
 	var face_back = _make_face(Vector3.BACK, 0)
-	face_back.local_verts = PackedVector3Array([
-		Vector3(0, 0, 1), Vector3(1, 0, 1),
-		Vector3(1, -2, 1), Vector3(0, -2, 1)
-	])
+	face_back.local_verts = PackedVector3Array(
+		[Vector3(0, 0, 1), Vector3(1, 0, 1), Vector3(1, -2, 1), Vector3(0, -2, 1)]
+	)
 	var brush = _make_brush_with_faces(parent, [face_top, face_bot, face_front, face_back])
 	var options: Dictionary = {"collision_mode": 1}
 	var result = baker.bake_from_faces([brush], mat_mgr, null, 1, 1, options)

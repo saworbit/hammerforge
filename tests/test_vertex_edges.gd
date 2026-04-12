@@ -50,18 +50,42 @@ func _make_box_brush(pos: Vector3, sz: Vector3, id: String) -> DraftBrush:
 	var half = sz * 0.5
 	# CW winding from outside (matches _build_box_faces in production code)
 	var quads = [
-		[Vector3(half.x, -half.y, half.z), Vector3(half.x, half.y, half.z),
-		 Vector3(half.x, half.y, -half.z), Vector3(half.x, -half.y, -half.z)],
-		[Vector3(-half.x, -half.y, -half.z), Vector3(-half.x, half.y, -half.z),
-		 Vector3(-half.x, half.y, half.z), Vector3(-half.x, -half.y, half.z)],
-		[Vector3(half.x, half.y, -half.z), Vector3(half.x, half.y, half.z),
-		 Vector3(-half.x, half.y, half.z), Vector3(-half.x, half.y, -half.z)],
-		[Vector3(half.x, -half.y, half.z), Vector3(half.x, -half.y, -half.z),
-		 Vector3(-half.x, -half.y, -half.z), Vector3(-half.x, -half.y, half.z)],
-		[Vector3(-half.x, half.y, half.z), Vector3(half.x, half.y, half.z),
-		 Vector3(half.x, -half.y, half.z), Vector3(-half.x, -half.y, half.z)],
-		[Vector3(-half.x, -half.y, -half.z), Vector3(half.x, -half.y, -half.z),
-		 Vector3(half.x, half.y, -half.z), Vector3(-half.x, half.y, -half.z)]
+		[
+			Vector3(half.x, -half.y, half.z),
+			Vector3(half.x, half.y, half.z),
+			Vector3(half.x, half.y, -half.z),
+			Vector3(half.x, -half.y, -half.z)
+		],
+		[
+			Vector3(-half.x, -half.y, -half.z),
+			Vector3(-half.x, half.y, -half.z),
+			Vector3(-half.x, half.y, half.z),
+			Vector3(-half.x, -half.y, half.z)
+		],
+		[
+			Vector3(half.x, half.y, -half.z),
+			Vector3(half.x, half.y, half.z),
+			Vector3(-half.x, half.y, half.z),
+			Vector3(-half.x, half.y, -half.z)
+		],
+		[
+			Vector3(half.x, -half.y, half.z),
+			Vector3(half.x, -half.y, -half.z),
+			Vector3(-half.x, -half.y, -half.z),
+			Vector3(-half.x, -half.y, half.z)
+		],
+		[
+			Vector3(-half.x, half.y, half.z),
+			Vector3(half.x, half.y, half.z),
+			Vector3(half.x, -half.y, half.z),
+			Vector3(-half.x, -half.y, half.z)
+		],
+		[
+			Vector3(-half.x, -half.y, -half.z),
+			Vector3(half.x, -half.y, -half.z),
+			Vector3(half.x, half.y, -half.z),
+			Vector3(-half.x, half.y, -half.z)
+		]
 	]
 	var faces: Array[FaceData] = []
 	for quad in quads:
@@ -76,6 +100,7 @@ func _make_box_brush(pos: Vector3, sz: Vector3, id: String) -> DraftBrush:
 # ===========================================================================
 # Edge extraction
 # ===========================================================================
+
 
 func test_box_has_12_edges():
 	var brush = _make_box_brush(Vector3.ZERO, Vector3(4, 4, 4), "b1")
@@ -107,6 +132,7 @@ func test_edge_deduplication():
 # Edge selection
 # ===========================================================================
 
+
 func test_select_edge_populates_vertex_selection():
 	var brush = _make_box_brush(Vector3.ZERO, Vector3(4, 4, 4), "b1")
 	vs.set_selection([brush])
@@ -114,10 +140,7 @@ func test_select_edge_populates_vertex_selection():
 	assert_true(edges.size() > 0)
 	vs.select_edge("b1", edges[0], false)
 	assert_true(vs.has_selection(), "Should have vertex selection after edge select")
-	assert_true(
-		vs.selected_vertices.has("b1"),
-		"Vertex selection should include brush_id"
-	)
+	assert_true(vs.selected_vertices.has("b1"), "Vertex selection should include brush_id")
 	var sel: PackedInt32Array = vs.selected_vertices["b1"]
 	assert_true(sel.has(edges[0][0]), "Should select edge endpoint a")
 	assert_true(sel.has(edges[0][1]), "Should select edge endpoint b")
@@ -156,6 +179,7 @@ func test_clear_edge_selection():
 # Edge world positions
 # ===========================================================================
 
+
 func test_edge_world_positions():
 	var brush = _make_box_brush(Vector3(10, 0, 0), Vector3(4, 4, 4), "b1")
 	vs.set_selection([brush])
@@ -171,6 +195,7 @@ func test_edge_world_positions():
 # ===========================================================================
 # Edge splitting
 # ===========================================================================
+
 
 func test_split_edge_increases_vertex_count():
 	var brush = _make_box_brush(Vector3.ZERO, Vector3(4, 4, 4), "b1")
@@ -210,6 +235,7 @@ func test_split_edge_preserves_convexity():
 # Vertex merging
 # ===========================================================================
 
+
 func test_merge_two_vertices():
 	var brush = _make_box_brush(Vector3.ZERO, Vector3(4, 4, 4), "b1")
 	vs.set_selection([brush])
@@ -237,6 +263,7 @@ func test_merge_requires_at_least_two():
 # Sub-mode
 # ===========================================================================
 
+
 func test_sub_mode_default_is_vertex():
 	assert_eq(vs.sub_mode, vs.VertexSubMode.VERTEX)
 
@@ -261,6 +288,7 @@ func test_clear_selection_resets_edges():
 # ===========================================================================
 # get_single_selected_edge
 # ===========================================================================
+
 
 func test_get_single_selected_edge():
 	var brush = _make_box_brush(Vector3.ZERO, Vector3(4, 4, 4), "b1")
@@ -290,6 +318,7 @@ func test_get_single_selected_edge_multiple():
 # ===========================================================================
 # Point to segment distance
 # ===========================================================================
+
 
 func test_point_to_segment_dist_2d():
 	var dist = HFVertexSystem._point_to_segment_dist_2d(
