@@ -105,6 +105,8 @@ func _enter_tree():
 			dock.connect("selection_clear_requested", Callable(self, "_on_dock_selection_clear"))
 		if dock.has_signal("grid_snap_applied"):
 			dock.connect("grid_snap_applied", Callable(self, "_on_dock_grid_snap_applied"))
+		if dock.has_signal("bake_state_changed"):
+			dock.connect("bake_state_changed", Callable(self, "_on_dock_bake_state_changed"))
 
 	hud = preload("shortcut_hud.tscn").instantiate()
 	if base_control:
@@ -232,6 +234,8 @@ func _exit_tree():
 			dock.disconnect("selection_clear_requested", Callable(self, "_on_dock_selection_clear"))
 		if dock.is_connected("grid_snap_applied", Callable(self, "_on_dock_grid_snap_applied")):
 			dock.disconnect("grid_snap_applied", Callable(self, "_on_dock_grid_snap_applied"))
+		if dock.is_connected("bake_state_changed", Callable(self, "_on_dock_bake_state_changed")):
+			dock.disconnect("bake_state_changed", Callable(self, "_on_dock_bake_state_changed"))
 		remove_control_from_docks(dock)
 		if is_instance_valid(dock):
 			dock.queue_free()
@@ -485,6 +489,16 @@ func _update_context_toolbar_state(root: Node, tool_id: int) -> void:
 			var indices = root.face_selection.get(key, [])
 			face_count += indices.size()
 	state["face_count"] = face_count
+
+	# Pending cut count for "Apply Cuts" button visibility
+	var pending_cut_count := 0
+	if root and root.pending_node:
+		for child in root.pending_node.get_children():
+			if child is DraftBrush:
+				pending_cut_count += 1
+	state["pending_cut_count"] = pending_cut_count
+	state["bake_preview_active"] = _bake_preview_active
+	state["bake_disabled"] = dock._bake_disabled if dock else false
 
 	# Prefab instance info for context toolbar badge
 	if root and root.prefab_system and not hf_selection.is_empty():
@@ -3319,6 +3333,21 @@ func _on_context_toolbar_action(action: String, args: Array) -> void:
 			_push_prefab_to_source(root)
 		"propagate_prefab":
 			_propagate_prefab(root)
+		"apply_pending_cuts":
+			if dock:
+				dock._on_apply_cuts()
+				_update_hud_context()
+		"commit_cuts":
+			if dock:
+				dock._on_commit_cuts()
+				_update_hud_context()
+		"clear_pending_cuts":
+			if dock:
+				dock._on_clear_cuts()
+				_update_hud_context()
+		"bake_preview_toggle":
+			var pressed: bool = args[0] if not args.is_empty() else false
+			_toggle_bake_preview(root, pressed)
 
 
 func _on_context_toggle_operation() -> void:
@@ -3328,6 +3357,53 @@ func _on_context_toggle_operation() -> void:
 		else:
 			dock.mode_add.button_pressed = true
 		_update_hud_context()
+
+
+var _bake_preview_active := false
+var _bake_preview_in_flight := false
+
+
+func _on_dock_bake_state_changed(baking: bool, success: bool) -> void:
+	if not baking:
+		if _bake_preview_in_flight:
+			_bake_preview_in_flight = false
+			if not success:
+				# The preview toggle speculatively set _bake_preview_active
+				# before dispatching. Bake failed so baked_container is
+				# unchanged — flip the flag back to match the actual scene.
+				_bake_preview_active = not _bake_preview_active
+			# On success the speculative value is correct — keep it.
+		elif success:
+			# A non-preview bake replaced baked_container.  Derive the toggle
+			# from the actual preview mode that was baked — the dock dropdown
+			# may have been set to Wireframe for a normal bake.
+			var root = active_root if active_root else _get_level_root()
+			if root:
+				_bake_preview_active = root._last_bake_preview_mode == 1
+			else:
+				_bake_preview_active = false
+		# Non-preview bake failed: baked_container untouched, keep current flag.
+	_update_hud_context()
+
+
+func _toggle_bake_preview(root: Node, pressed: bool) -> void:
+	if not root or not root.bake_system:
+		return
+	# Guard against overlapping bakes
+	if dock and dock._bake_disabled:
+		return
+	if pressed:
+		_bake_preview_active = true
+		_bake_preview_in_flight = true
+		# Wireframe preview bake — route through undo so it's reversible
+		if dock:
+			dock._commit_state_action("Bake Preview", "bake", [false, false, 0, 1])  # 1 = PreviewMode.WIREFRAME
+	else:
+		_bake_preview_active = false
+		_bake_preview_in_flight = true
+		# Re-bake full quality to replace the wireframe preview
+		if dock:
+			dock._commit_state_action("Bake Preview Off", "bake", [false, false, 0, 0])  # 0 = PreviewMode.FULL
 
 
 func _on_context_tool_switch(tool_id: int) -> void:
@@ -3808,6 +3884,14 @@ func _on_undo_redo_version_changed() -> void:
 	# Subtract preview may reference stale brush data — rebuild
 	if root.subtract_preview and root.subtract_preview.is_enabled():
 		root.subtract_preview.request_update()
+	# Sync preview toggle with the restored scene state.  Skip if a preview
+	# bake is in flight — that version_changed came from our own commit, not
+	# from the user pressing Ctrl+Z.
+	if not _bake_preview_in_flight:
+		var restored_preview: bool = root._last_bake_preview_mode == 1  # WIREFRAME only
+		if _bake_preview_active != restored_preview:
+			_bake_preview_active = restored_preview
+			_update_hud_context()
 
 
 func _on_replay_requested(entry_index: int) -> void:

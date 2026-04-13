@@ -280,6 +280,11 @@ Use the **Preview Mode** dropdown in the Manage tab → Bake section to choose h
 - **Wireframe**: cyan wireframe overlay using a custom shader — useful for inspecting geometry topology.
 - **Proxy**: semi-transparent grey unshaded material — ultra-fast rendering for layout testing.
 
+**Quick Wireframe Preview**: When brushes are selected, the context toolbar shows a **Bake▷** toggle button. Click it to instantly bake with wireframe preview — you can see the final mesh topology before committing to a full bake. Click again to re-bake at full quality. This toggle:
+- Is fully **undoable** (Ctrl+Z reverts both the bake and the toggle state).
+- Stays **in sync** with the dock's Preview Mode dropdown — if you bake from the dock with Wireframe mode, the toolbar toggle reflects that.
+- Is **disabled** while a bake is in progress to prevent overlapping operations.
+
 ### Bake Options
 The Manage tab Bake section exposes additional controls:
 - **Chunk Size** (SpinBox, 0-256, default 32): spatial chunk size for bake grouping. Set to 0 to disable chunking.
@@ -385,10 +390,10 @@ A floating mini-toolbar appears in the 3D viewport showing context-sensitive act
 
 Each section uses small muted **group labels** (e.g. "Extrude", "Modify", "Select") to visually cluster related tools following Gestalt proximity principles.
 
-- **Brushes selected** → [Extrude] Ext▲/Ext▼ | [Modify] Hollow, Clip, Carve, Merge | Duplicate, Delete | [Select] All, ⌂, Similar, Filters. Prefab buttons appear for instances. Shows "N brush(es) selected" count.
+- **Brushes selected** → [Extrude] Ext▲/Ext▼ | [Modify] Hollow, Clip, Carve, Merge | Duplicate, Delete | [Select] All, ⌂, Similar, Filters | [Preview] Bake▷ toggle. Prefab buttons appear for instances. Shows "N brush(es) selected" count.
 - **Faces selected** → Material thumbnails (favorites strip) | [UV] Fit/Center/L/R/T/B | [Apply] All, Last | Select Similar. Shows "N faces on M brush(es)" count.
 - **Entities selected** → [Entity] I/O, Properties | Highlight toggle + I/O summary | Duplicate, Delete. Shows "N entities selected" count.
-- **Draw mode (idle)** → [Shape] Box/Cyl/Sph/Cone | Add/Subtract toggle.
+- **Draw mode (idle)** → [Shape] Box/Cyl/Sph/Cone | Add/Subtract toggle. When pending cuts exist: Apply, Commit, Clear buttons + "N pending" badge.
 - **Dragging** → Live dimensions display | Axis Lock (X/Y/Z) | Cancel.
 - **Vertex mode** → [Mode] Vertex/Edge toggle | [Edit] Merge, Split, Convex | Exit.
 
@@ -524,6 +529,23 @@ The material palette can be saved and loaded as a JSON library file:
 HammerForge includes 150 built-in SVG prototype textures organized as 15 patterns in 10 color variations. Click **Refresh Prototypes** in the Paint tab → Materials section to add them all to the palette. The **Material Browser** displays them as a visual thumbnail grid with search and pattern/color filters — no need to memorize names. Patterns include solid, brick, checker, cross, diamond, dots, hex, stripes (diagonal/horizontal), triangles, zigzag, and directional arrows (up/down/left/right).
 
 For GDScript API usage, see `docs/HammerForge_Prototype_Textures.md`.
+
+## Pending Cuts Workflow
+
+Subtractive brushes are staged as **Pending Cuts** until explicitly applied. This gives you a chance to preview, adjust, and batch your subtract operations before committing.
+
+**Applying cuts** (three methods, all equivalent):
+1. **Context toolbar** (recommended): When in Draw mode with pending cuts, the toolbar shows **Apply** / **Commit** / **Clear** buttons with a count badge. This is the fastest path — no tab switching needed.
+2. **Manage tab → Actions**: The Apply Cuts, Clear Pending Cuts, and Commit Cuts (Bake) buttons are always available.
+3. **Viewport context menu**: Space → Apply Cuts (when in subtract context).
+
+| Button | Action |
+|--------|--------|
+| **Apply** | Move pending cuts to draft brushes (keeps them, doesn't bake) |
+| **Commit** | Apply + Bake in one step |
+| **Clear** | Discard all pending cuts without applying |
+
+All cut buttons are disabled during active bakes to prevent race conditions.
 
 ## Design Constraints (Summary)
 - DraftBrush previews are lightweight. Final geometry comes from bake.

@@ -72,7 +72,7 @@ addons/hammerforge/
     hf_material_browser.gd Visual material browser (thumbnail grid, search, filters, favorites, drag-drop)
     hf_prefab_library.gd   Prefab library dock section (search, tags, variants, drag-drop, context menu)
     hf_prefab_overlay.gd   Prefab ghost overlay (wireframe bounding box + override markers)
-    hf_context_toolbar.gd  Floating contextual mini-toolbar (context-sensitive actions, group labels per tool cluster)
+    hf_context_toolbar.gd  Floating contextual mini-toolbar (context-sensitive actions, group labels per tool cluster, pending-cuts buttons, bake preview toggle)
     selection_tools_builder.gd  Builds Selection Tools section with domain sub-headers (Brush Modification, Positioning, Entity Binding, Duplicate Array)
     hf_hotkey_palette.gd   Searchable command palette with fuzzy search and live gray-out (Shift+?/F1/Ctrl+K)
     hf_viewport_context_menu.gd  Context menu (Space key) with context-sensitive sections and submenus
@@ -97,7 +97,7 @@ addons/hammerforge/
     hf_drag_system.gd      Drag lifecycle, preview, axis locking
     hf_bake_system.gd      Bake orchestration (single/chunked/selected/dirty), cooperative face-bake yielding, preview modes (Full/Wireframe/Proxy), time estimate (yield-overhead-corrected), auto-connectors, collision mode partitioning (trimesh/convex/visgroup), automated occluder generation (coplanar grouping → OccluderInstance3D)
     hf_paint_system.gd     Floor + surface paint, layer CRUD
-    hf_state_system.gd     State capture/restore (brushes, entities, floor, sun, paint), settings, transactions
+    hf_state_system.gd     State capture/restore (brushes, entities, floor, sun, paint, bake_preview_mode), settings, transactions
     hf_file_system.gd      .hflevel/.map/.glTF I/O, threaded writes, autosave failure reporting
     hf_validation_system.gd Validation, dependency checks, bake issue detection (degenerate/floating/overlapping/non-planar/micro-gap/occlusion-coverage), vertex welding + planarity auto-fix
     hf_visgroup_system.gd  Visgroups (visibility groups) + brush/entity grouping
@@ -146,6 +146,7 @@ addons/hammerforge/
 - **Direct typed calls.** `plugin.gd` and `dock.gd` use typed references (`LevelRoot`, `DockType`) with direct method calls instead of `has_method`/`call`.
 - **Wireframe color convention.** Brushes use operation-coded wireframe overlays: green for additive, red for subtractive, blue spectrum for brush entities. `_apply_additive_wireframe_overlay()` and `_apply_subtract_wireframe_overlay()` in `brush_instance.gd` must be called after any `mesh_instance.mesh` replacement (including face-preview rebuilds) to keep overlays in sync with geometry.
 - **Grid snap HUD sync.** `dock.gd` emits `grid_snap_applied(value)` from both `_apply_grid_snap()` and `_on_root_grid_snap_changed()`. `plugin.gd` connects this to `_on_dock_grid_snap_applied()` which updates the HUD indicator. All grid change origins (dock UI, hotkeys, quick-property, state restore) flow through this path.
+- **Bake state sync.** `dock.gd` emits `bake_state_changed(baking, success)` from `_on_bake_started()` and `_on_bake_finished()`. `plugin.gd` connects this to `_on_dock_bake_state_changed()` which refreshes the context toolbar immediately — ensuring `bake_disabled` propagates to the Bake Preview toggle and pending-cuts buttons without waiting for unrelated HUD updates. The bake preview toggle uses `_bake_preview_in_flight` to distinguish its own bake completions from external ones, and derives state from `root._last_bake_preview_mode` (persisted in undo snapshots) on undo/redo.
 - **Sticky LevelRoot discovery.** `plugin.gd` keeps `active_root` sticky: `_edit()` does not null it when non-LevelRoot nodes are selected. `_handles()` returns true for any node when a LevelRoot exists (deep recursive search). `dock.gd` mirrors this pattern.
 - **Sticky brush selection.** `plugin.gd` suppresses spurious empty `selection_changed` signals (e.g. from texture reimport) via `should_suppress_empty_selection()`. When the editor selection goes empty but `hf_selection` is still populated, the event is ignored. Intentional deselects must clear `hf_selection` *before* calling `editor_selection.clear()`. Dock paths that clear editor selection emit `selection_clear_requested` first so the plugin can clear its cache.
 - **Material assignment fallback.** `dock.resolve_material_assign_action(mat_index)` is a pure helper returning `{action, method, args, toast}`. Both `_on_material_assign()` and `_on_browser_material_double_clicked()` delegate to it. When faces are selected → face assignment. When no faces but brushes are selected → whole-brush fallback. When nothing is selected → error toast. Context menu options (Apply to Faces, Apply to Whole Brush) remain explicit and do not use the fallback.

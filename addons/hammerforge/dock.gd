@@ -7,6 +7,7 @@ signal builtin_tool_changed
 signal vertex_mode_toggled(enabled: bool)
 signal selection_clear_requested
 signal grid_snap_applied(value: float)
+signal bake_state_changed(baking: bool, success: bool)
 
 const LevelRootType = preload("level_root.gd")
 const BrushPreset = preload("brush_preset.gd")
@@ -3700,6 +3701,7 @@ func _on_bake_started() -> void:
 		progress_bar.show()
 	_set_bake_buttons_disabled(true)
 	_hints_dirty = true
+	bake_state_changed.emit(true, false)
 
 
 func _on_bake_progress(value: float, label: String) -> void:
@@ -3749,6 +3751,7 @@ func _on_bake_finished(success: bool) -> void:
 	_update_bake_estimate()
 	_set_bake_buttons_disabled(false)
 	_hints_dirty = true
+	bake_state_changed.emit(false, success)
 
 
 func _set_bake_buttons_disabled(disabled: bool) -> void:

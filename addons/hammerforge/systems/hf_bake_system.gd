@@ -130,6 +130,7 @@ func bake_selected(
 			root.add_child(root.baked_container)
 		postprocess_bake(baked, true)
 		root._assign_owner_recursive(root.baked_container)
+		root._last_bake_preview_mode = preview_mode
 		_last_bake_success = true
 		root._log("Selection bake finished (success=true)")
 		root.bake_finished.emit(true)
@@ -322,6 +323,7 @@ func bake(
 			if root.pending_node:
 				root.pending_node.visible = false
 		root._log("Bake finished (success=true)")
+		root._last_bake_preview_mode = preview_mode
 		_last_bake_success = true
 		root.bake_finished.emit(true)
 	else:

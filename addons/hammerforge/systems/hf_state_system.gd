@@ -82,6 +82,7 @@ func capture_state(include_transient: bool = true) -> Dictionary:
 	state["csg_visible"] = root.draft_brushes_node.visible if root.draft_brushes_node else true
 	state["pending_visible"] = root.pending_node.visible if root.pending_node else true
 	state["baked_present"] = root.baked_container != null
+	state["bake_preview_mode"] = root._last_bake_preview_mode
 	state["paint_layers"] = capture_paint_layers(true)
 	state["paint_active_layer"] = root.paint_layers.active_layer_index if root.paint_layers else 0
 	if include_transient:
@@ -196,6 +197,13 @@ func restore_state(state: Dictionary) -> void:
 	if not bool(state.get("baked_present", false)) and root.baked_container:
 		root.baked_container.queue_free()
 		root.baked_container = null
+	# Only restore preview mode when a baked container exists — a stale mode
+	# with no baked mesh would cause the toolbar toggle to show wireframe
+	# active when there is nothing baked.
+	if bool(state.get("baked_present", false)):
+		root._last_bake_preview_mode = int(state.get("bake_preview_mode", 0))
+	else:
+		root._last_bake_preview_mode = 0
 	if root.prefab_system and state.has("prefab_instances"):
 		root.prefab_system.restore_state(state["prefab_instances"])
 

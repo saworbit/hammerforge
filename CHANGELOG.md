@@ -5,6 +5,37 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Toolbar Pending Cuts buttons** (Apr 2026): When subtractive brushes are staged in the
+  PendingCuts node, the Draw-mode context toolbar now shows **Apply**, **Commit** (apply + bake),
+  and **Clear** buttons alongside a count badge ("N pending"). Previously these actions were
+  only available in the Manage tab dock, requiring users to leave the 3D viewport. All three
+  buttons are disabled during active bakes and refresh immediately after execution.
+
+  Files: `plugin.gd` (modified), `ui/hf_context_toolbar.gd` (modified).
+
+- **Bake Preview toggle** (Apr 2026): A **Bake▷** toggle button in the Brush-selected context
+  toolbar triggers an instant wireframe preview bake, showing the final mesh as a cyan wireframe
+  overlay before committing. Toggle off to re-bake at full quality. The toggle is:
+  - **Undoable**: routes through `HFUndoHelper.commit()` like all other bake paths.
+  - **Race-safe**: disabled during active bakes via `dock._bake_disabled` propagation.
+  - **State-tracked**: `LevelRoot._last_bake_preview_mode` is persisted in undo snapshots
+    (`capture_state` / `restore_state`), so undo/redo correctly restores the toggle state.
+  - **Consistent with dock**: a normal dock bake using the Wireframe dropdown also activates
+    the toggle; only WIREFRAME (mode 1) maps to the toggle, not Proxy (mode 2).
+
+  Files: `plugin.gd` (modified), `ui/hf_context_toolbar.gd` (modified),
+  `level_root.gd` (modified), `systems/hf_bake_system.gd` (modified),
+  `systems/hf_state_system.gd` (modified), `systems/hf_brush_system.gd` (modified),
+  `dock.gd` (modified).
+
+- **`bake_state_changed` dock signal** (Apr 2026): New `bake_state_changed(baking: bool,
+  success: bool)` signal on `dock.gd`, emitted from `_on_bake_started()` and
+  `_on_bake_finished()`. Plugin.gd connects to this signal to immediately refresh the context
+  toolbar when bake state transitions occur, ensuring `bake_disabled` propagates to all toolbar
+  buttons without waiting for an unrelated HUD update.
+
+  Files: `dock.gd` (modified), `plugin.gd` (modified).
+
 - **New HammerForge Level template** (Apr 2026): One-click starter level creation from the
   Manage tab. Creates a floor (CSGBox3D), directional sun light (DefaultSun), and player spawn
   in a single undoable action. Aimed at eliminating the "where do I start?" moment for new users.

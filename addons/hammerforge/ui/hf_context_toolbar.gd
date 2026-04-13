@@ -151,6 +151,21 @@ func _build_brush_section() -> void:
 	_add_sep(section)
 	_add_tool_button(section, "Pfb", "Save selection as Prefab (Ctrl+Shift+P)", "quick_save_prefab")
 	_add_tool_button(section, "Lnk", "Save as Live-Linked Prefab", "quick_save_linked_prefab")
+	_add_sep(section)
+	_add_group_label(section, "Preview")
+	var preview_btn = Button.new()
+	preview_btn.text = "Bake\u25b7"
+	preview_btn.tooltip_text = "Bake Preview — show wireframe of final mesh before committing"
+	preview_btn.toggle_mode = true
+	preview_btn.flat = true
+	preview_btn.focus_mode = Control.FOCUS_NONE
+	preview_btn.add_theme_font_size_override("font_size", 11)
+	preview_btn.custom_minimum_size = Vector2(42, 0)
+	preview_btn.toggled.connect(
+		func(pressed: bool): action_requested.emit("bake_preview_toggle", [pressed])
+	)
+	preview_btn.name = "BakePreviewBtn"
+	section.add_child(preview_btn)
 	# Prefab instance buttons — hidden by default, shown when prefab instance selected
 	_add_sep(section).name = "PfbSep"
 	_add_tool_button(section, "Var\u25b6", "Cycle Variant (Ctrl+Shift+V)", "cycle_variant").name = "PfbVarBtn"
@@ -260,6 +275,27 @@ func _build_draw_section() -> void:
 	toggle.pressed.connect(func(): operation_toggle_requested.emit())
 	toggle.name = "OpToggle"
 	section.add_child(toggle)
+	# Pending cuts actions — hidden by default, shown when pending cuts exist
+	var cuts_sep = _add_sep(section)
+	cuts_sep.name = "CutsSep"
+	cuts_sep.visible = false
+	var apply_btn = _add_tool_button(section, "Apply", "Apply Pending Cuts", "apply_pending_cuts")
+	apply_btn.name = "ApplyCutsBtn"
+	apply_btn.visible = false
+	var commit_btn = _add_tool_button(
+		section, "Commit", "Commit Cuts (Apply + Bake)", "commit_cuts"
+	)
+	commit_btn.name = "CommitCutsBtn"
+	commit_btn.visible = false
+	var clear_btn = _add_tool_button(section, "Clear", "Discard Pending Cuts", "clear_pending_cuts")
+	clear_btn.name = "ClearCutsBtn"
+	clear_btn.visible = false
+	var cuts_label = Label.new()
+	cuts_label.name = "CutsCountLabel"
+	cuts_label.add_theme_font_size_override("font_size", 10)
+	cuts_label.add_theme_color_override("font_color", Color(0.9, 0.5, 0.4, 0.8))
+	cuts_label.visible = false
+	section.add_child(cuts_label)
 
 
 func _build_drag_section() -> void:
@@ -498,7 +534,19 @@ func _update_dynamic_content(state: Dictionary) -> void:
 				if hl_btn.button_pressed != hl_state:
 					hl_btn.set_pressed_no_signal(hl_state)
 
-	# Update operation toggle label
+	# Sync bake preview toggle button and disable during active bake
+	if _context == Context.BRUSH_SELECTED:
+		var section = _sections.get(Context.BRUSH_SELECTED)
+		if section:
+			var preview_btn = section.get_node_or_null("BakePreviewBtn") as Button
+			if preview_btn:
+				if state.has("bake_preview_active"):
+					var active: bool = state["bake_preview_active"]
+					if preview_btn.button_pressed != active:
+						preview_btn.set_pressed_no_signal(active)
+				preview_btn.disabled = state.get("bake_disabled", false)
+
+	# Update operation toggle label and pending cuts buttons
 	if _context == Context.DRAW_IDLE:
 		var section = _sections.get(Context.DRAW_IDLE)
 		if section:
@@ -508,6 +556,23 @@ func _update_dynamic_content(state: Dictionary) -> void:
 				toggle.text = "Sub" if is_sub else "Add"
 				var c = Color(0.9, 0.5, 0.4) if is_sub else Color(0.5, 0.9, 0.5)
 				toggle.add_theme_color_override("font_color", c)
+			# Show/hide pending cuts actions
+			var pcount: int = state.get("pending_cut_count", 0)
+			var show_cuts: bool = pcount > 0
+			for n in ["CutsSep", "ApplyCutsBtn", "CommitCutsBtn", "ClearCutsBtn", "CutsCountLabel"]:
+				var child = section.get_node_or_null(n)
+				if child:
+					child.visible = show_cuts
+			if show_cuts:
+				var cuts_label = section.get_node_or_null("CutsCountLabel")
+				if cuts_label:
+					cuts_label.text = "%d pending" % pcount
+				# Disable cut buttons during active bake
+				var bake_dis: bool = state.get("bake_disabled", false)
+				for n2 in ["ApplyCutsBtn", "CommitCutsBtn", "ClearCutsBtn"]:
+					var btn = section.get_node_or_null(n2)
+					if btn:
+						btn.disabled = bake_dis
 
 	# Update drag dimensions
 	if _context == Context.DRAGGING:

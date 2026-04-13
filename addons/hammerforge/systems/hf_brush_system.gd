@@ -489,6 +489,7 @@ func clear_brushes() -> void:
 	if root.baked_container:
 		root.baked_container.queue_free()
 		root.baked_container = null
+		root._last_bake_preview_mode = 0
 
 
 func _clear_generated() -> void:

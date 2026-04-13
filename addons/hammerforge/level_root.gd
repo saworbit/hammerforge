@@ -493,6 +493,7 @@ var _reload_timer: Timer = null
 var _autosave_timer: Timer = null
 var face_selection: Dictionary = {}
 var _last_bake_duration_ms: int = 0
+var _last_bake_preview_mode: int = 0  # 0 = FULL, 1 = WIREFRAME, 2 = PROXY
 
 # ===========================================================================
 # Lifecycle
