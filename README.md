@@ -2,6 +2,7 @@
 
 <p align="center">
   <strong>Brush-based level editor for Godot 4.6+</strong><br>
+  Requires Godot 4.6+ (tested on 4.6.stable). Works in both editor and exported games via HFIORuntime.<br>
   Draw rooms, carve doors, paint terrain, and bake to optimized meshes — all inside the Godot editor.
 </p>
 
@@ -290,17 +291,24 @@ Key design choices:
 4. Verify: dock appears with 4 tabs (Brush, Paint, Entities, Manage), toolbar shows D/S/+/-/P/▲/▼, snap buttons show G/V/C
 ```
 
-If drawing feels inconsistent in an empty scene, use `Manage -> Create Floor` first so placement has a predictable surface.
+For a brand-new scene, click `Manage -> New HammerForge Level` to create a floor, sun light, and player spawn in one step. Or use `Manage -> Create Floor` if you only need a surface.
 
-See [Install + Upgrade](docs/HammerForge_Install_Upgrade.md) for upgrade steps and cache reset.
+**Upgrading?** See [Install + Upgrade](docs/HammerForge_Install_Upgrade.md) for upgrade steps and cache reset.
 
 ---
 
 ## Quick Start
 
+<!--
+  TODO: Record a ~15-second screen capture of the 6-step workflow below,
+  save as docs/demos/quickstart_walkthrough.gif (720px wide, looping),
+  then uncomment the img tag.
+-->
+<!-- <img src="docs/demos/quickstart_walkthrough.gif" alt="Quick Start walkthrough — draw, extrude, subtract, material, paint, bake" width="720"> -->
+
 | Step | Action |
 |------|--------|
-| **1. Draw** | Tool = Draw, Mode = Add, Shape = Box -> if the scene is empty click `Manage -> Create Floor` first -> drag base -> click height |
+| **1. Draw** | Tool = Draw, Mode = Add, Shape = Box -> if the scene is empty click `Manage -> New HammerForge Level` first (creates floor + sun + spawn) -> drag base -> click height |
 | **2. Extrude** | Press U (Extrude Up) -> click a face -> drag -> release |
 | **3. Subtract** | Mode = Subtract -> draw a brush through a wall -> Apply Cuts -> Bake |
 | **4. Material** | Paint tab -> Materials -> **Refresh Prototypes** -> browse thumbnails -> Face Select Mode -> click faces -> Assign |
@@ -455,5 +463,5 @@ Run `godot --headless --import --path .` first, then re-run the test command.
 
 <p align="center">
   <strong>MIT License</strong><br>
-  <sub>Built for Godot 4.6+ | Last updated April 9, 2026</sub>
+  <sub>Built for Godot 4.6+ | Last updated April 13, 2026</sub>
 </p>

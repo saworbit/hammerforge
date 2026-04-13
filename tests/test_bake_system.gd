@@ -1,6 +1,7 @@
 extends GutTest
 
 const HFBakeSystem = preload("res://addons/hammerforge/systems/hf_bake_system.gd")
+const HFLog = preload("res://addons/hammerforge/hf_log.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 const HFPaintLayerManagerScript = preload(
 	"res://addons/hammerforge/paint/hf_paint_layer_manager.gd"
@@ -12,6 +13,7 @@ var bake_sys: HFBakeSystem
 
 
 func before_each():
+	HFLog.end_test_capture()
 	root = Node3D.new()
 	root.set_script(_root_shim_script())
 	add_child_autoqfree(root)
@@ -47,8 +49,21 @@ func before_each():
 
 
 func after_each():
+	HFLog.end_test_capture()
 	root = null
 	bake_sys = null
+
+
+func _capture_warning(pattern: String) -> void:
+	HFLog.begin_test_capture([pattern])
+
+
+func _assert_captured_warning(pattern: String) -> void:
+	var warnings := HFLog.get_captured_warnings()
+	HFLog.end_test_capture()
+	assert_eq(warnings.size(), 1, "Should capture exactly one warning")
+	if warnings.size() > 0:
+		assert_string_contains(warnings[0], pattern, "Should capture expected warning text")
 
 
 func _root_shim_script() -> GDScript:
@@ -374,7 +389,9 @@ func test_warn_bake_failure_emits_user_message():
 	root.user_message.connect(
 		func(text, level): received_messages.append({"text": text, "level": level})
 	)
+	_capture_warning("Bake failed: no baked geometry")
 	bake_sys.warn_bake_failure()
+	_assert_captured_warning("Bake failed: no baked geometry")
 	assert_eq(received_messages.size(), 1, "Should emit exactly one user_message")
 	assert_eq(received_messages[0]["level"], 2, "Should emit at warning level (2)")
 
@@ -382,7 +399,9 @@ func test_warn_bake_failure_emits_user_message():
 func test_warn_bake_failure_no_brushes_hint():
 	var msgs := []
 	root.user_message.connect(func(text, _level): msgs.append(text))
+	_capture_warning("Bake failed: no baked geometry")
 	bake_sys.warn_bake_failure()
+	_assert_captured_warning("Bake failed: no baked geometry")
 	assert_eq(msgs.size(), 1, "Should emit one message")
 	if msgs.size() > 0:
 		assert_string_contains(
@@ -395,7 +414,9 @@ func test_warn_bake_failure_pending_cuts_hint():
 	_make_brush(root.pending_node)
 	var msgs := []
 	root.user_message.connect(func(text, _level): msgs.append(text))
+	_capture_warning("Bake failed: no baked geometry")
 	bake_sys.warn_bake_failure()
+	_assert_captured_warning("Bake failed: no baked geometry")
 	assert_eq(msgs.size(), 1, "Should emit one message")
 	if msgs.size() > 0:
 		assert_string_contains(msgs[0], "pending cuts", "Should hint about pending cuts")
@@ -405,7 +426,9 @@ func test_warn_bake_failure_csg_fallback_hint():
 	_make_brush(root.draft_brushes_node)
 	var msgs := []
 	root.user_message.connect(func(text, _level): msgs.append(text))
+	_capture_warning("Bake failed: no baked geometry")
 	bake_sys.warn_bake_failure()
+	_assert_captured_warning("Bake failed: no baked geometry")
 	assert_eq(msgs.size(), 1, "Should emit one message")
 	if msgs.size() > 0:
 		assert_string_contains(
@@ -1011,9 +1034,10 @@ func test_set_parsed_geometry_type_prefers_new_name():
 func test_set_parsed_geometry_type_neither_property():
 	# Neither property exists → should return false and push_warning
 	var mock: Object = _make_mock_with_props([])
+	_capture_warning("NavigationMesh has neither geometry_parsed_geometry_type")
 	var ok: bool = HFBakeSystem._set_parsed_geometry_type(mock, 1)
 	assert_false(ok, "Should return false when neither property exists")
-	assert_push_error_count(0)  # It's a warning, not an error
+	_assert_captured_warning("NavigationMesh has neither geometry_parsed_geometry_type")
 
 
 # ===========================================================================

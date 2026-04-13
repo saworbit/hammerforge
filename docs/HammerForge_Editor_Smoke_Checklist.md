@@ -52,6 +52,15 @@ Enable the HammerForge plugin if it is not already enabled.
 - Confirm the four dock tabs remain visible and clickable while the tutorial is shown.
 - Switch between `Brush`, `Paint`, `Entities`, and `Manage`; confirm the tutorial banner remains visible and the dock does not collapse or blank.
 
+### 1b. New HammerForge Level Template
+- With a `LevelRoot` present, switch to the Manage tab.
+- Click **New HammerForge Level** in the Actions section.
+- Confirm a TempFloor (CSGBox3D), DefaultSun (DirectionalLight3D), and player_start entity appear in the scene tree.
+- Confirm the toast reads "New level created — floor, sun, and player spawn added".
+- Press Ctrl+Z to undo; confirm all three nodes are removed.
+- Press Ctrl+Shift+Z to redo; confirm all three nodes reappear.
+- Run Quick Play; confirm the playtest scene uses the same sun angle as the editor (shadows match).
+
 ### 2. Late `LevelRoot` Hookup
 - In the 3D viewport, create or trigger creation of `LevelRoot` using the normal plugin workflow.
 - Confirm the tutorial remains on step 1 rather than resetting or disappearing.

@@ -77,6 +77,7 @@ func capture_state(include_transient: bool = true) -> Dictionary:
 	state["committed"] = []
 	state["entities"] = []
 	state["floor"] = capture_floor_info()
+	state["sun"] = capture_sun_info()
 	state["id_counter"] = root._brush_id_counter
 	state["csg_visible"] = root.draft_brushes_node.visible if root.draft_brushes_node else true
 	state["pending_visible"] = root.pending_node.visible if root.pending_node else true
@@ -187,6 +188,7 @@ func restore_state(state: Dictionary) -> void:
 			if is_instance_valid(src_brush):
 				src_brush.set_meta("duplicator_id", dup.duplicator_id)
 	restore_floor_info(state.get("floor", {}))
+	restore_sun_info(state.get("sun", {}))
 	if root.draft_brushes_node:
 		root.draft_brushes_node.visible = bool(state.get("csg_visible", true))
 	if root.pending_node:
@@ -471,6 +473,37 @@ func restore_floor_info(info: Dictionary) -> void:
 	if info.has("transform"):
 		floor.global_transform = info["transform"]
 	floor.use_collision = bool(info.get("use_collision", true))
+
+
+func capture_sun_info() -> Dictionary:
+	var sun = root.get_node_or_null("DefaultSun") as DirectionalLight3D
+	if not sun:
+		return {"exists": false}
+	return {
+		"exists": true,
+		"rotation_degrees": sun.rotation_degrees,
+		"shadow_enabled": sun.shadow_enabled,
+		"light_energy": sun.light_energy,
+	}
+
+
+func restore_sun_info(info: Dictionary) -> void:
+	if info.is_empty():
+		return
+	var should_exist = bool(info.get("exists", false))
+	var sun = root.get_node_or_null("DefaultSun") as DirectionalLight3D
+	if not should_exist:
+		if sun:
+			sun.queue_free()
+		return
+	if not sun:
+		sun = DirectionalLight3D.new()
+		sun.name = "DefaultSun"
+		root.add_child(sun)
+		root._assign_owner(sun)
+	sun.rotation_degrees = info.get("rotation_degrees", Vector3(-45, 30, 0))
+	sun.shadow_enabled = bool(info.get("shadow_enabled", true))
+	sun.light_energy = info.get("light_energy", 1.0)
 
 
 func capture_paint_layers(include_chunks: bool = true) -> Array:

@@ -8,7 +8,7 @@ This guide covers the current HammerForge workflow in Godot 4.6: brush-based gre
 1. Enable the plugin: Project -> Project Settings -> Plugins -> HammerForge.
 2. Open any 3D scene.
 3. Click in the 3D viewport to auto-create `LevelRoot`.
-4. Optional: Click Create Floor for a temporary collidable surface.
+4. Click **New HammerForge Level** in the Manage tab to create a floor, sun light, and player spawn in one step. (Or use **Create Floor** for just the floor.)
 5. Draw brushes, then Bake for output geometry.
 
 ## LevelRoot
@@ -224,7 +224,7 @@ dispatcher.fire("my_button", "OnPressed", "fast")
 
 ### Manage tab (collapsible sections)
 - **Bake**: Bake button, Bake Selected, Bake Changed, Check Bake Issues, Dry Run, Validate Level/Fix. Options: Merge Meshes, Generate LODs, Lightmap UV2, Texel Size, Navmesh (cell size, agent height), Use Face Materials, Preview Mode (Full/Wireframe/Proxy), Collision Mode (Trimesh/Convex/Visgroup), Convex Clean, Convex Simplify, Bake Estimate label, Quick Play, Play from Camera, Play Selected Area.
-- **Actions**: Create Floor, Apply/Clear/Commit/Restore Cuts, Clear Brushes.
+- **Actions**: New HammerForge Level (creates floor + sun + player spawn, fully undoable), Create Floor, Apply/Clear/Commit/Restore Cuts, Clear Brushes.
 - **Spawn**: Validate Spawn (bakes, then runs physics-based checks and shows debug overlay), Create Default Spawn (auto-places a `player_start` at brush centroid), Preview Spawn Debug (bakes, then shows persistent capsule/ray overlay toggle).
 - **File**: Save/Load .hflevel, Import/Export .map (Classic Quake / Valve 220), Export .glb.
 - **Presets**: Save/rename presets grid.
@@ -265,7 +265,7 @@ Click **Export Playtest Build** in the Manage tab → Bake section to create a s
 - Validates spawn (severity ≥ 2 blocks the export).
 - If no spawn exists, auto-creates a default (fully undoable with state capture).
 - Bakes the level in Full mode.
-- Packs baked geometry, entities, and default lighting (DirectionalLight3D + WorldEnvironment if none exists) into a temporary scene at `user://hammerforge_playtest.tscn`.
+- Packs baked geometry, entities, DefaultSun (if present), and fallback lighting (DirectionalLight3D + WorldEnvironment if no light exists) into a temporary scene at `user://hammerforge_playtest.tscn`.
 - Launches the scene via `EditorInterface.play_custom_scene()`.
 - A toast confirms "Playtest launched" on success.
 
@@ -1113,7 +1113,7 @@ Start-Process -FilePath "C:\Godot\Godot_v4.6-stable_win64.exe" `
 No brushes appear
 - Ensure HammerForge is enabled.
 - Select LevelRoot.
-- Use Create Floor so raycasts hit something.
+- Use **New HammerForge Level** (or Create Floor) so raycasts hit something.
 
 Subtract does nothing
 - Subtract only affects Add brushes and is visible after Bake.

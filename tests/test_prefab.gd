@@ -1,7 +1,28 @@
 extends GutTest
 
 const HFPrefabType = preload("res://addons/hammerforge/hf_prefab.gd")
+const HFLog = preload("res://addons/hammerforge/hf_log.gd")
 const HFLevelIO = preload("res://addons/hammerforge/hflevel_io.gd")
+
+
+func before_each():
+	HFLog.end_test_capture()
+
+
+func after_each():
+	HFLog.end_test_capture()
+
+
+func _capture_warning(pattern: String) -> void:
+	HFLog.begin_test_capture([pattern])
+
+
+func _assert_captured_warning(pattern: String) -> void:
+	var warnings := HFLog.get_captured_warnings()
+	HFLog.end_test_capture()
+	assert_eq(warnings.size(), 1, "Should capture exactly one warning")
+	if warnings.size() > 0:
+		assert_string_contains(warnings[0], pattern, "Should capture expected warning text")
 
 # -- Helper data ----------------------------------------------------------------
 
@@ -77,8 +98,10 @@ func test_save_and_load_file():
 
 
 func test_load_nonexistent_returns_null():
+	_capture_warning("HFPrefab: file not found")
 	var loaded = HFPrefabType.load_from_file("user://no_such_file.hfprefab")
 	assert_null(loaded, "Loading nonexistent file should return null")
+	_assert_captured_warning("HFPrefab: file not found")
 
 
 func test_from_dict_empty_data():

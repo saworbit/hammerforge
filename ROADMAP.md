@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: April 12, 2026
+Last updated: April 13, 2026
 
 This roadmap is a directional plan. Items may change based on user feedback.
 Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md for details.
@@ -21,7 +21,7 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - UV Justify 3×2 grid layout. Standardized 70px label widths, 32px +/- buttons.
 - "No LevelRoot" banner and autosave warning defined in dock.tscn.
 - Sticky LevelRoot discovery (deep recursive search, no re-selection needed).
-- Manage tab trimmed: Actions has only floor/cuts/clear.
+- Manage tab trimmed: Actions has New Level/floor/cuts/clear.
 
 ## Done (Code Quality Audit)
 - Comprehensive duck-typing removal across baker, file system, plugin, and dock (~30 sites total).
@@ -267,6 +267,11 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - **Hollow geometry preview** (`HFHollowPreview`): yellow wireframe shows 6 wall pieces before commit. Supports real-time thickness updates. Confirmation dialog on both dock button and hotkey paths.
 - **Bulk delete confirmation**: 3+ brush deletes prompt confirmation ("Delete N brushes? This can be undone with Ctrl+Z"). Single/dual brush deletes remain instant.
 - **Dialog lifecycle safety**: `_pending_dialogs` tracking in plugin.gd with auto-free on teardown. All confirmed callbacks guard `is_instance_valid(root)` against scene-change invalidation.
+
+## Done (Onboarding & Test Quality)
+- **New HammerForge Level** template button in Manage tab → Actions. One-click creation of floor + DefaultSun (DirectionalLight3D) + player spawn. Fully undoable via `capture_sun_info()` / `restore_sun_info()` in state system. DefaultSun is duplicated into Quick Play / Export Playtest scenes; fallback PlaytestSun yaw corrected from -30 to +30.
+- **HFLog test-aware warning wrapper** (`hf_log.gd`): `HFLog.warn()` replaces `push_warning()` at 15 negative-path sites. Tests use `begin_test_capture()` / `end_test_capture()` / `get_captured_warnings()` to suppress expected warnings and assert they were emitted. Eliminates trailing WARNING noise from the test suite.
+- **README onboarding**: Godot version requirement line, Quick Start GIF placeholder, bolded upgrade link.
 
 ## Future (Wave 3 -- Polish)
 - Multiple simultaneous cordons.

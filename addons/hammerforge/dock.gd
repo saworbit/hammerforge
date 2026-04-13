@@ -181,6 +181,7 @@ var show_grid: CheckBox = null
 var follow_grid: CheckBox = null
 var debug_logs: CheckBox = null
 # -- Manage tab action buttons (built programmatically) --
+var new_level_btn: Button = null
 var floor_btn: Button = null
 var apply_cuts_btn: Button = null
 var clear_cuts_btn: Button = null
@@ -3214,6 +3215,12 @@ func _on_validate_fix() -> void:
 func _on_clear():
 	_log("Clear brushes requested")
 	_commit_state_action("Clear Brushes", "clear_brushes")
+
+
+func _on_new_level():
+	_log("New HammerForge Level requested")
+	_commit_state_action("New HammerForge Level", "create_new_level")
+	show_toast("New level created — floor, sun, and player spawn added", 0)
 
 
 func _on_floor():

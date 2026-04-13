@@ -97,7 +97,7 @@ addons/hammerforge/
     hf_drag_system.gd      Drag lifecycle, preview, axis locking
     hf_bake_system.gd      Bake orchestration (single/chunked/selected/dirty), cooperative face-bake yielding, preview modes (Full/Wireframe/Proxy), time estimate (yield-overhead-corrected), auto-connectors, collision mode partitioning (trimesh/convex/visgroup), automated occluder generation (coplanar grouping → OccluderInstance3D)
     hf_paint_system.gd     Floor + surface paint, layer CRUD
-    hf_state_system.gd     State capture/restore, settings, transactions
+    hf_state_system.gd     State capture/restore (brushes, entities, floor, sun, paint), settings, transactions
     hf_file_system.gd      .hflevel/.map/.glTF I/O, threaded writes, autosave failure reporting
     hf_validation_system.gd Validation, dependency checks, bake issue detection (degenerate/floating/overlapping/non-planar/micro-gap/occlusion-coverage), vertex welding + planarity auto-fix
     hf_visgroup_system.gd  Visgroups (visibility groups) + brush/entity grouping
@@ -105,6 +105,7 @@ addons/hammerforge/
     hf_io_visualizer.gd    Entity I/O connection lines (Bézier curves, color-coded, highlight pulse)
     hf_io_presets.gd       Reusable I/O connection presets (built-in + user-saved, target tag mapping)
 
+  hf_log.gd               HFLog: test-aware warning wrapper (capture/suppress expected warnings in tests)
   hf_io_runtime.gd        Runtime I/O-to-Signal dispatcher (auto-wires entity_io_outputs to Godot signals on bake/export)
     hf_subtract_preview.gd Wireframe AABB intersection overlay for subtract brushes (debounced, pooled)
     hf_carve_preview.gd    Green wireframe preview of carve slice pieces (confirmation before commit)
@@ -341,6 +342,7 @@ Configuration is in `.gutconfig.json` (test directory, prefix, exit behavior).
 - Extend `GutTest`. Use `before_each()` / `after_each()` for setup/teardown.
 - Use root shim scripts (dynamically created GDScript) to provide the LevelRoot interface without circular preload. See existing tests for the pattern.
 - Keep tests focused: one behavior per test function.
+- **Warning suppression**: For negative-path tests that intentionally trigger runtime warnings, use `HFLog` instead of `push_warning()` in production code. In tests, wrap the triggering call with `HFLog.begin_test_capture(["expected pattern"])` / `HFLog.end_test_capture()` and assert with `HFLog.get_captured_warnings()`. This keeps the test output clean while still verifying the warning was emitted. See `test_bevel.gd` or `test_hflevel_io.gd` for the pattern.
 
 ## Materials Resources
 HammerForge expects Godot material resources (`.tres` or `.material`) in the palette.

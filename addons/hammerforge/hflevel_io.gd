@@ -5,6 +5,7 @@ class_name HFLevelIO
 const MAGIC := "HFLEVEL1"
 const TYPE_KEY := "__hf_type"
 const MAX_RECURSION_DEPTH := 64
+const HFLog = preload("res://addons/hammerforge/hf_log.gd")
 
 
 static func _is_vec3_arr(v: Variant) -> bool:
@@ -164,16 +165,16 @@ static func parse_payload(payload: PackedByteArray) -> Dictionary:
 	var header_bytes = payload.slice(0, newline)
 	var header = header_bytes.get_string_from_utf8()
 	if not header.begins_with(MAGIC):
-		push_warning("HFLevelIO: Invalid header, expected %s" % MAGIC)
+		HFLog.warn("HFLevelIO: Invalid header, expected %s" % MAGIC)
 		return {}
 	var body = payload.slice(newline + 1, payload.size())
 	var json = body.get_string_from_utf8()
 	if json == "":
-		push_warning("HFLevelIO: Empty JSON body in payload")
+		HFLog.warn("HFLevelIO: Empty JSON body in payload")
 		return {}
 	var data = JSON.parse_string(json)
 	if data == null:
-		push_warning("HFLevelIO: JSON parse failed")
+		HFLog.warn("HFLevelIO: JSON parse failed")
 		return {}
 	return data if data is Dictionary else {}
 

@@ -248,6 +248,10 @@ func build(parent: Control) -> void:
 	dock._register_section(act_sec, "Actions")
 	var ac = act_sec.get_content()
 
+	dock.new_level_btn = dock._make_button("New HammerForge Level")
+	dock.new_level_btn.tooltip_text = "Create a starter level with floor, sun light, and player spawn"
+	ac.add_child(dock.new_level_btn)
+
 	dock.floor_btn = dock._make_button("Create Floor")
 	ac.add_child(dock.floor_btn)
 
@@ -477,6 +481,8 @@ func connect_signals() -> void:
 		dock.export_settings_btn.pressed.connect(dock._on_export_settings)
 	if dock.import_settings_btn:
 		dock.import_settings_btn.pressed.connect(dock._on_import_settings)
+	if dock.new_level_btn:
+		dock.new_level_btn.pressed.connect(dock._on_new_level)
 	if dock.floor_btn:
 		dock.floor_btn.pressed.connect(dock._on_floor)
 	if dock.apply_cuts_btn:

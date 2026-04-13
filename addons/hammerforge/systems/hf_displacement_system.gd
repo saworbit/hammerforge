@@ -8,6 +8,7 @@ extends RefCounted
 
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
+const HFLog = preload("res://addons/hammerforge/hf_log.gd")
 
 enum PaintMode { RAISE, LOWER, SMOOTH, NOISE, ALPHA }
 
@@ -28,15 +29,15 @@ func _init(p_root: Node3D = null) -> void:
 func create_displacement(brush_id: String, face_index: int, power: int = 3) -> bool:
 	var brush: Node3D = _find_brush(brush_id)
 	if not brush:
-		push_warning("HFDisplacementSystem: brush not found: %s" % brush_id)
+		HFLog.warn("HFDisplacementSystem: brush not found: %s" % brush_id)
 		return false
 	var faces: Array = brush.faces
 	if face_index < 0 or face_index >= faces.size():
-		push_warning("HFDisplacementSystem: face index out of range: %d" % face_index)
+		HFLog.warn("HFDisplacementSystem: face index out of range: %d" % face_index)
 		return false
 	var face: FaceData = faces[face_index]
 	if face.local_verts.size() != 4:
-		push_warning(
+		HFLog.warn(
 			(
 				"HFDisplacementSystem: displacement requires a quad face (4 verts), got %d"
 				% face.local_verts.size()

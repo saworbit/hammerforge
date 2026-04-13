@@ -1,6 +1,27 @@
 extends GutTest
 
 const HFLevelIO = preload("res://addons/hammerforge/hflevel_io.gd")
+const HFLog = preload("res://addons/hammerforge/hf_log.gd")
+
+
+func before_each():
+	HFLog.end_test_capture()
+
+
+func after_each():
+	HFLog.end_test_capture()
+
+
+func _capture_warning(pattern: String) -> void:
+	HFLog.begin_test_capture([pattern])
+
+
+func _assert_captured_warning(pattern: String) -> void:
+	var warnings := HFLog.get_captured_warnings()
+	HFLog.end_test_capture()
+	assert_eq(warnings.size(), 1, "Should capture exactly one warning")
+	if warnings.size() > 0:
+		assert_string_contains(warnings[0], pattern, "Should capture expected warning text")
 
 # ===========================================================================
 # encode / decode: Vector2
@@ -265,8 +286,10 @@ func test_parse_empty_payload_returns_empty():
 
 func test_parse_invalid_header_returns_empty():
 	var bad = 'BADHEADER\n{"key":"value"}'.to_utf8_buffer()
+	_capture_warning("HFLevelIO: Invalid header")
 	var parsed = HFLevelIO.parse_payload(bad)
 	assert_eq(parsed.size(), 0, "Invalid header returns empty dict")
+	_assert_captured_warning("HFLevelIO: Invalid header")
 
 
 func test_parse_no_newline_returns_empty():
@@ -277,8 +300,10 @@ func test_parse_no_newline_returns_empty():
 
 func test_parse_empty_body_returns_empty():
 	var empty_body = "HFLEVEL1\n".to_utf8_buffer()
+	_capture_warning("HFLevelIO: Empty JSON body in payload")
 	var parsed = HFLevelIO.parse_payload(empty_body)
 	assert_eq(parsed.size(), 0, "Empty JSON body returns empty dict")
+	_assert_captured_warning("HFLevelIO: Empty JSON body in payload")
 
 
 func test_build_parse_complex_payload():

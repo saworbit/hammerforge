@@ -11,6 +11,8 @@ extends RefCounted
 ## the base data, tags for browser filtering, and linked-instance
 ## metadata for propagation workflows.
 
+const HFLog = preload("res://addons/hammerforge/hf_log.gd")
+
 var prefab_name: String = ""
 var brush_infos: Array = []  # Array[Dictionary]  — from get_brush_info_from_node()
 var entity_infos: Array = []  # Array[Dictionary] — from capture_entity_info()
@@ -297,15 +299,15 @@ func save_to_file(path: String) -> int:
 ## Load prefab from a .hfprefab JSON file.
 static func load_from_file(path: String) -> HFPrefab:
 	if not FileAccess.file_exists(path):
-		push_warning("HFPrefab: file not found: %s" % path)
+		HFLog.warn("HFPrefab: file not found: %s" % path)
 		return null
 	var file = FileAccess.open(path, FileAccess.READ)
 	if not file:
-		push_warning("HFPrefab: cannot open: %s" % path)
+		HFLog.warn("HFPrefab: cannot open: %s" % path)
 		return null
 	var text := file.get_as_text()
 	var parsed = JSON.parse_string(text)
 	if not parsed is Dictionary:
-		push_warning("HFPrefab: invalid JSON in %s" % path)
+		HFLog.warn("HFPrefab: invalid JSON in %s" % path)
 		return null
 	return from_dict(parsed)

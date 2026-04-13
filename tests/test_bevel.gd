@@ -1,6 +1,7 @@
 extends GutTest
 
 const HFBevelSystem = preload("res://addons/hammerforge/systems/hf_bevel_system.gd")
+const HFLog = preload("res://addons/hammerforge/hf_log.gd")
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 
@@ -9,6 +10,7 @@ var sys: HFBevelSystem
 
 
 func before_each():
+	HFLog.end_test_capture()
 	root = Node3D.new()
 	root.set_script(_root_shim_script())
 	add_child_autoqfree(root)
@@ -20,8 +22,21 @@ func before_each():
 
 
 func after_each():
+	HFLog.end_test_capture()
 	root = null
 	sys = null
+
+
+func _capture_warning(pattern: String) -> void:
+	HFLog.begin_test_capture([pattern])
+
+
+func _assert_captured_warning(pattern: String) -> void:
+	var warnings := HFLog.get_captured_warnings()
+	HFLog.end_test_capture()
+	assert_eq(warnings.size(), 1, "Should capture exactly one warning")
+	if warnings.size() > 0:
+		assert_string_contains(warnings[0], pattern, "Should capture expected warning text")
 
 
 func _root_shim_script() -> GDScript:
@@ -155,8 +170,10 @@ func test_inset_face_creates_valid_side_faces():
 func test_inset_face_too_large_distance():
 	_make_box_brush()
 	# A 16x16 face — inset of 100 should cause collapse
+	_capture_warning("HFBevelSystem: inset distance too large")
 	var ok: bool = sys.inset_face("box_brush", 0, 100.0)
 	assert_false(ok, "Inset distance too large should fail")
+	_assert_captured_warning("HFBevelSystem: inset distance too large")
 
 
 # ---------------------------------------------------------------------------
@@ -186,14 +203,18 @@ func test_bevel_edge_bad_brush():
 
 func test_bevel_edge_bad_indices():
 	_make_box_brush()
+	_capture_warning("HFBevelSystem: vertex index out of range")
 	var ok: bool = sys.bevel_edge("box_brush", [99, 100])
 	assert_false(ok)
+	_assert_captured_warning("HFBevelSystem: vertex index out of range")
 
 
 func test_bevel_edge_needs_two_indices():
 	_make_box_brush()
+	_capture_warning("HFBevelSystem: edge needs 2 vertex indices")
 	var ok: bool = sys.bevel_edge("box_brush", [0])
 	assert_false(ok)
+	_assert_captured_warning("HFBevelSystem: edge needs 2 vertex indices")
 
 
 func test_bevel_edge_segments_clamped():

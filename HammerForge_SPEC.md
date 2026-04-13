@@ -92,7 +92,7 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `hf_drag_system.gd` | `HFDragSystem` | Drag lifecycle, preview management, axis locking, height computation. Owns `HFInputState` |
 | `hf_bake_system.gd` | `HFBakeSystem` | Bake orchestration (single/chunked/selected/dirty), CSG assembly, navmesh, collision, preview modes (Full/Wireframe/Proxy), time estimate |
 | `hf_paint_system.gd` | `HFPaintSystem` | Floor paint input, surface paint, paint layer CRUD, face selection |
-| `hf_state_system.gd` | `HFStateSystem` | State capture/restore, settings, paint layer serialization, transactions (begin/commit/rollback) |
+| `hf_state_system.gd` | `HFStateSystem` | State capture/restore (brushes, entities, floor, sun, paint), settings, transactions (begin/commit/rollback) |
 | `hf_file_system.gd` | `HFFileSystem` | .hflevel save/load, .map import/export, glTF export, threaded I/O, autosave failure reporting |
 | `hf_validation_system.gd` | `HFValidationSystem` | Validation, dependency checks, auto-fix helpers (vertex weld, planarity fix), bake issue detection (degenerate/floating/overlapping/non-planar/micro-gap). Configurable `weld_tolerance` and `planarity_tolerance`. Edge-key topology hashing intentionally decoupled from weld knob |
 | `hf_visgroup_system.gd` | `HFVisgroupSystem` | Visgroups (visibility groups), brush/entity grouping |
@@ -156,6 +156,8 @@ LevelRoot (Node3D)
   - HeightmapFloors
 - Entities
 - BakedGeometry
+- TempFloor (CSGBox3D, optional — created by Create Floor / New Level)
+- DefaultSun (DirectionalLight3D, optional — created by New Level, state-tracked)
 ```
 
 ## Visgroups + Grouping

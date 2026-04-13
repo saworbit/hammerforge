@@ -6,6 +6,7 @@ const PrefabFactory = preload("../prefab_factory.gd")
 const DraftBrush = preload("../brush_instance.gd")
 const HFAutoConnector = preload("../paint/hf_auto_connector.gd")
 const HFIORuntime = preload("../hf_io_runtime.gd")
+const HFLog = preload("../hf_log.gd")
 
 ## Bake preview mode: FULL produces final geometry, WIREFRAME skips materials
 ## and generates unshaded wireframe, PROXY uses simplified box meshes.
@@ -340,7 +341,7 @@ func warn_bake_failure() -> void:
 		"Bake failed: no baked geometry (draft=%s, pending=%s, committed=%s, entities=%s)"
 		% [draft_count, pending_count, committed_count, entities_count]
 	)
-	push_warning(detail)
+	HFLog.warn(detail)
 	var hint := ""
 	if draft_count == 0:
 		hint = "No draft brushes found — draw some brushes first"
@@ -977,9 +978,7 @@ static func _set_parsed_geometry_type(target: Object, value: int) -> bool:
 	if "parsed_geometry_type" in target:
 		target.set("parsed_geometry_type", value)
 		return true
-	push_warning(
-		"NavigationMesh has neither geometry_parsed_geometry_type nor parsed_geometry_type"
-	)
+	HFLog.warn("NavigationMesh has neither geometry_parsed_geometry_type nor parsed_geometry_type")
 	return false
 
 

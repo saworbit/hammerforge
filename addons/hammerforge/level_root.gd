@@ -1811,7 +1811,14 @@ func export_playtest_scene(path: String) -> bool:
 				scene_root.add_child(dup)
 				dup.owner = scene_root
 
-	# Add basic environment if none exists
+	# Copy DefaultSun if it exists (created by New HammerForge Level)
+	var default_sun = get_node_or_null("DefaultSun") as DirectionalLight3D
+	if default_sun:
+		var sun_dup = default_sun.duplicate()
+		scene_root.add_child(sun_dup)
+		sun_dup.owner = scene_root
+
+	# Add fallback light only if nothing provides one
 	var has_light := false
 	for child in scene_root.get_children():
 		if child is Light3D:
@@ -1820,7 +1827,7 @@ func export_playtest_scene(path: String) -> bool:
 	if not has_light:
 		var light := DirectionalLight3D.new()
 		light.name = "PlaytestSun"
-		light.rotation_degrees = Vector3(-45, -30, 0)
+		light.rotation_degrees = Vector3(-45, 30, 0)
 		scene_root.add_child(light)
 		light.owner = scene_root
 
@@ -2369,6 +2376,30 @@ func create_floor() -> void:
 	floor.size = Vector3(1024, 16, 1024)
 	floor.position = Vector3(0, -8, 0)
 	floor.use_collision = true
+
+
+## Create a starter level with floor, directional light, and player spawn.
+## Intended for brand-new scenes so users can immediately draw.
+func create_new_level() -> void:
+	# Floor
+	create_floor()
+
+	# Directional light (sun-like, angled down)
+	var light = get_node_or_null("DefaultSun") as DirectionalLight3D
+	if not light:
+		light = DirectionalLight3D.new()
+		light.name = "DefaultSun"
+		add_child(light)
+		_assign_owner(light)
+	light.rotation_degrees = Vector3(-45, 30, 0)
+	light.shadow_enabled = true
+	light.light_energy = 1.0
+
+	# Player spawn
+	if spawn_system:
+		var existing := spawn_system.get_active_spawn()
+		if not existing:
+			spawn_system.create_default_spawn()
 
 
 # ===========================================================================

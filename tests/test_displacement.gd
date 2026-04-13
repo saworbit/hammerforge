@@ -2,6 +2,7 @@ extends GutTest
 
 const HFDisplacementData = preload("res://addons/hammerforge/displacement_data.gd")
 const HFDisplacementSystem = preload("res://addons/hammerforge/systems/hf_displacement_system.gd")
+const HFLog = preload("res://addons/hammerforge/hf_log.gd")
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 
@@ -10,6 +11,7 @@ var sys: HFDisplacementSystem
 
 
 func before_each():
+	HFLog.end_test_capture()
 	root = Node3D.new()
 	root.set_script(_root_shim_script())
 	add_child_autoqfree(root)
@@ -21,8 +23,21 @@ func before_each():
 
 
 func after_each():
+	HFLog.end_test_capture()
 	root = null
 	sys = null
+
+
+func _capture_warning(pattern: String) -> void:
+	HFLog.begin_test_capture([pattern])
+
+
+func _assert_captured_warning(pattern: String) -> void:
+	var warnings := HFLog.get_captured_warnings()
+	HFLog.end_test_capture()
+	assert_eq(warnings.size(), 1, "Should capture exactly one warning")
+	if warnings.size() > 0:
+		assert_string_contains(warnings[0], pattern, "Should capture expected warning text")
 
 
 func _root_shim_script() -> GDScript:
@@ -373,19 +388,25 @@ func test_create_displacement_on_quad():
 
 func test_create_displacement_fails_on_triangle():
 	_make_tri_brush()
+	_capture_warning("HFDisplacementSystem: displacement requires a quad face")
 	var ok: bool = sys.create_displacement("tri_brush", 0, 3)
 	assert_false(ok, "Should fail on non-quad face")
+	_assert_captured_warning("HFDisplacementSystem: displacement requires a quad face")
 
 
 func test_create_displacement_fails_on_bad_brush():
+	_capture_warning("HFDisplacementSystem: brush not found")
 	var ok: bool = sys.create_displacement("nonexistent", 0, 3)
 	assert_false(ok)
+	_assert_captured_warning("HFDisplacementSystem: brush not found")
 
 
 func test_create_displacement_fails_on_bad_face_index():
 	_make_quad_brush()
+	_capture_warning("HFDisplacementSystem: face index out of range")
 	var ok: bool = sys.create_displacement("test_brush", 5, 3)
 	assert_false(ok)
+	_assert_captured_warning("HFDisplacementSystem: face index out of range")
 
 
 func test_destroy_displacement():

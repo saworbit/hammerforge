@@ -5,6 +5,36 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **New HammerForge Level template** (Apr 2026): One-click starter level creation from the
+  Manage tab. Creates a floor (CSGBox3D), directional sun light (DefaultSun), and player spawn
+  in a single undoable action. Aimed at eliminating the "where do I start?" moment for new users.
+
+  **DefaultSun** is a DirectionalLight3D at (-45, 30, 0) with shadows enabled. It is fully
+  tracked by the state system (capture/restore round-trips correctly through undo/redo) and
+  is duplicated into Quick Play and Export Playtest scenes so editor and playtest lighting match.
+
+  Files: `level_root.gd` (modified), `systems/hf_state_system.gd` (modified),
+  `dock.gd` (modified), `ui/manage_tab_builder.gd` (modified).
+
+- **HFLog test-aware warning wrapper** (Apr 2026): New `hf_log.gd` (`HFLog`) utility class
+  that routes runtime warnings through a testable channel. Tests can capture and suppress
+  expected warnings via `begin_test_capture()` / `end_test_capture()` / `get_captured_warnings()`
+  without polluting the test output. 15 production call sites converted across 5 files
+  (hflevel_io, hf_prefab, hf_bake_system, hf_bevel_system, hf_displacement_system).
+  5 test files updated with symmetric capture/assert helpers.
+
+  Files: `hf_log.gd` (new), `hflevel_io.gd` (modified), `hf_prefab.gd` (modified),
+  `systems/hf_bake_system.gd` (modified), `systems/hf_bevel_system.gd` (modified),
+  `systems/hf_displacement_system.gd` (modified), `tests/test_hflevel_io.gd` (modified),
+  `tests/test_prefab.gd` (modified), `tests/test_bake_system.gd` (modified),
+  `tests/test_bevel.gd` (modified), `tests/test_displacement.gd` (modified).
+
+### Fixed
+- **Playtest sun yaw divergence**: The fallback PlaytestSun in `export_playtest_scene()` used
+  yaw -30 while the editor convention is +30, causing lighting to flip between editor and
+  playtest. Fixed to use consistent (+30) yaw. DefaultSun (from New Level) is now duplicated
+  into the playtest scene, so the fallback is only used when no sun exists at all.
+
 - **Gestalt UI grouping & industry-standard keybindings** (Apr 2026): Keybinding alignment with
   Blender/Hammer conventions and visual tool grouping following Gestalt proximity principles.
 

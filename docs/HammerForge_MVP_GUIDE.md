@@ -55,6 +55,7 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 - `HFUndoHelper.commit()` wraps all editor actions with state snapshot restore on undo.
 - **Command collation**: pass a `collation_tag` for rapid operations (nudge, resize, paint). Consecutive actions with the same tag and same `full_state` scope within 1 second merge into one undo entry via `MERGE_ENDS`.
 - **Transactions**: `state_system.begin_transaction()` / `commit_transaction()` / `rollback_transaction()` for atomic multi-step operations.
+- **State-tracked scaffolding**: `capture_state()` / `restore_state()` covers brushes, entities, paint layers, TempFloor, and DefaultSun. All scaffolding created by "New HammerForge Level" round-trips through undo/redo.
 
 ### Entity Definitions (`HFEntityDef`)
 - Entity types and brush entity classes are data-driven via `hf_entity_def.gd`.
@@ -156,6 +157,8 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 - Verify tooltips appear on all dock controls.
 - Verify selection count appears in status bar.
 - Trigger a bake failure and confirm red error message with auto-clear.
+- Click **New HammerForge Level** in Manage tab; confirm floor, sun, and spawn appear. Undo/redo and verify all three round-trip.
+- Run Quick Play after New Level; confirm playtest lighting matches editor sun angle.
 
 ## CI
 Run `gdformat --check addons/hammerforge/` and `gdlint addons/hammerforge/` locally. These same checks run automatically on push/PR via `.github/workflows/ci.yml`.

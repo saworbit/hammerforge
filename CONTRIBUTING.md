@@ -72,6 +72,7 @@ If you get "class_names not imported", run `godot --headless --import --path .` 
 - Extend `GutTest` and use `assert_eq`, `assert_true`, `assert_almost_eq`, etc.
 - Use root shim scripts (dynamically created GDScript) to avoid circular dependency with LevelRoot. See existing tests for the pattern.
 - Keep tests focused: one behavior per test function.
+- For negative-path tests that trigger runtime warnings, use `HFLog.warn()` in production code and `HFLog.begin_test_capture()` / `end_test_capture()` in tests. This prevents expected warnings from polluting the test output. See `test_bevel.gd` for the pattern.
 
 ### CI
 All checks (format, lint, unit tests) run automatically on push/PR to `main` via GitHub Actions.

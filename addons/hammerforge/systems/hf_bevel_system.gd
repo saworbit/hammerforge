@@ -8,6 +8,7 @@ extends RefCounted
 
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
+const HFLog = preload("res://addons/hammerforge/hf_log.gd")
 
 var root: Node3D  # LevelRoot
 
@@ -27,7 +28,7 @@ func _init(p_root: Node3D = null) -> void:
 ## Returns true on success.
 func bevel_edge(brush_id: String, edge: Array, segments: int = 2, radius: float = 2.0) -> bool:
 	if edge.size() < 2:
-		push_warning("HFBevelSystem: edge needs 2 vertex indices")
+		HFLog.warn("HFBevelSystem: edge needs 2 vertex indices")
 		return false
 	segments = clampi(segments, 1, 16)
 	radius = maxf(radius, 0.01)
@@ -41,14 +42,14 @@ func bevel_edge(brush_id: String, edge: Array, segments: int = 2, radius: float 
 	var vi_b: int = edge[1]
 	var all_verts: PackedVector3Array = _get_unique_verts(faces)
 	if vi_a < 0 or vi_a >= all_verts.size() or vi_b < 0 or vi_b >= all_verts.size():
-		push_warning("HFBevelSystem: vertex index out of range")
+		HFLog.warn("HFBevelSystem: vertex index out of range")
 		return false
 	var va: Vector3 = all_verts[vi_a]
 	var vb: Vector3 = all_verts[vi_b]
 	# Find the two faces sharing this edge.
 	var adjacent: Array = _find_faces_sharing_edge(faces, va, vb)
 	if adjacent.size() < 2:
-		push_warning(
+		HFLog.warn(
 			"HFBevelSystem: edge must be shared by exactly 2 faces, found %d" % adjacent.size()
 		)
 		return false
@@ -181,7 +182,7 @@ func inset_face(
 		var to_center: Vector3 = centroid - v
 		var max_dist: float = to_center.length()
 		if inset_distance >= max_dist - 0.01:
-			push_warning("HFBevelSystem: inset distance too large, face collapsed")
+			HFLog.warn("HFBevelSystem: inset distance too large, face collapsed")
 			return false
 		var dir: Vector3 = to_center.normalized()
 		var inset_v: Vector3 = v + dir * inset_distance
