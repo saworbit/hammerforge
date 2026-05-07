@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: April 13, 2026
+Last updated: May 7, 2026
 
 This roadmap is a directional plan. Items may change based on user feedback.
 Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md for details.
@@ -273,6 +273,19 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - **HFLog test-aware warning wrapper** (`hf_log.gd`): `HFLog.warn()` replaces `push_warning()` at 15 negative-path sites. Tests use `begin_test_capture()` / `end_test_capture()` / `get_captured_warnings()` to suppress expected warnings and assert they were emitted. Eliminates trailing WARNING noise from the test suite.
 - **README onboarding**: Godot version requirement line, Quick Start GIF placeholder, bolded upgrade link.
 
+## Done (Code-Quality Utilities — Simplification Phase 1)
+- **Eight shared utility classes extracted** from the dock + plugin monoliths to reduce duplication and improve testability. None change runtime behavior; all existing call sites delegate. Parse-clean throughout (`godot --check-only` exit 0).
+  - `HFSystem` (`systems/hf_system.gd`): base lifecycle class for subsystems (`_init(root)`, `destroy`, `clear`, `set_enabled`, `is_enabled`, `_has_nodes`). Four preview systems migrated.
+  - `HFUIFactory` (`ui/hf_ui_factory.gd`): UI control factory — `make_label_row/spin/check/button/option/separator/spin_row/section_header`. Dock `_make_*` helpers delegate; 100+ call sites flow through it. Two tab builders migrated to call directly.
+  - `HFValidation` (`hf_validation.gd`): null/structure guards for LevelRoot containers (`is_valid_root`, `has_draft_containers`, `has_entity_container`, `has_baked_container`, `has_node`, `has_nodes`, `require_nodes`).
+  - `HFEditorTheme` (`ui/hf_editor_theme.gd`): editor icon/color/stylebox lookup with graceful fallbacks (`find_editor_icon`, `has_editor_icon`, `get_editor_icon`, `get_editor_color`, `resolve_stylebox`, `style_toolbar_button`).
+  - `HFUndoNav` (`ui/hf_undo_nav.gd`): per-scene `EditorUndoRedoManager` navigation (`get_scene_history_id`, `get_scene_undo_redo`, `navigate_to_version`).
+  - `HFEntityPropUtils` (`ui/hf_entity_prop_utils.gd`): collapses `DraftEntity.entity_data` vs `Node3D.meta` dual-write (`get_entity_data`, `get_entity_type`, `set_entity_property`, `set_entity_vec3_axis`, `coerce_default`, `find_definition`).
+  - `HFTooltipText` (`ui/hf_tooltip_text.gd`): static catalog of 100+ tooltip strings keyed by dock control-property name. `dock._apply_all_tooltips` reduced from ~200 lines to 3.
+  - `HFDialogManager` (`plugin_dialogs.gd`): tracks confirmation dialogs with auto-removal on `tree_exiting` and bulk `cleanup()` on plugin teardown.
+- **dock.gd reduction**: 7,001 → 6,692 lines (–309, –4.4%). plugin.gd: –4 lines (responsibility separation rather than LOC).
+- **75+ new test cases across 8 files**: `test_ui_factory`, `test_hf_validation`, `test_hf_system`, `test_hf_undo_nav`, `test_entity_prop_utils`, `test_hf_tooltip_text`, `test_hf_dialog_manager`, `test_hf_editor_theme`.
+
 ## Future (Wave 3 -- Polish)
 - Multiple simultaneous cordons.
 - Multi-tool presets for common workflows.
@@ -282,6 +295,50 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - Formalized plugin API (`HFEditorPlugin` base class for custom tool scripts with menu/toolbar hooks).
 - Per-project entity definition files (game pak separation — different entity sets per project).
 - Bezier patch editing (control-point-grid surfaces as first-class brush type).
+
+## Future (Simplification Phase 2 — Continued Code-Quality Work)
+The May 2026 simplification phase 1 landed shared utilities and migrated low-risk call sites. The following items continue that initiative but each requires a dedicated session with interactive UI/bake validation, or a profiling pass, before landing safely.
+
+### Continued dock.gd decomposition
+The remaining 6,692 lines are dominated by ~180 `_on_*` signal handlers wired to dock-internal state.
+- Split into per-tab handler files: `dock_brush_handler.gd`, `dock_paint_handler.gd`, `dock_entity_handler.gd`, `dock_manage_handler.gd`. Target dock.gd shell at ~1,500 lines.
+- Extract signal-wiring into `dock_connections.gd`.
+- Consolidate the entity-properties UI builder and the external-tool-settings UI builder (both schema-driven; share ~100 lines of dispatch logic).
+- Migrate `paint_tab_builder.gd` (50 call sites) and `manage_tab_builder.gd` (58 call sites) from `dock._make_*` to direct `HFUIFactory` calls. Mechanical churn — wait until shared with another tab-builder change.
+
+### plugin.gd decomposition (Phase 3b)
+Current 3,987 lines. Largest functions are tightly coupled to viewport input flow and plugin state:
+- `_handle_keyboard_input` (237 lines) → `plugin_input_router.gd` keymap dispatch.
+- `_dispatch_viewport_action` (193 lines) → action-mode dispatch table.
+- `_on_context_toolbar_action` (150 lines) and `_on_hotkey_palette_action` (116 lines) → shared command-execution module.
+- `_handle_vertex_input` (146 lines) → vertex/edge mode handler module.
+- `_update_context_toolbar_state` (106 lines), `_update_hud_context` (65 lines), HUD overlays → `plugin_hud.gd`.
+
+### Lazy system loading in level_root.gd (Phase 3a)
+- Replace 54 upfront `const X = preload(...)` statements with on-demand `_get_system(name)` accessor.
+- Systems instantiate on first access — reduces startup cost for simple scenes; fixes circular-preload risks as new systems are added.
+- Estimated reduction: level_root.gd 2,578 → ~1,800 lines.
+- Blocked on baseline test coverage (see below) so regressions in untested systems would be caught.
+
+### Backfill core system tests (Phase 2)
+Seven systems are individually >800 lines and currently untested:
+- `HFBrushSystem` (1,612 lines) — brush CRUD, grouping, selection, pending/committed cuts.
+- `HFBakeSystem` (1,212) — incremental bake, chunking, preview modes, occluder generation.
+- `HFPaintSystem` (926) — multi-layer paint, blend modes, heightmap sync, region streaming.
+- `HFVertexSystem` (876) — vertex/edge sub-modes, merge, split, transitions.
+- `Baker` (828) — snapshot phases, atlas integration, collision output.
+- `BrushInstance` (889) — serialization roundtrip, face-winding migration.
+- `MapIO` (449) — Valve220/Quake export fidelity.
+
+Each needs a dedicated harness because the dependencies (`LevelRoot`, `EditorUndoRedoManager`, `EditorInterface`) require careful stubbing. Backfilling under time pressure produces brittle tests that mask real issues.
+
+### Apply HFValidation broadly
+Currently applied to two `HFBrushSystem` methods as demonstration. Roughly 300 inline `if not root.<container>:` patterns remain across `hf_brush_system`, `hf_paint_system`, `hf_bake_system`, `hf_entity_system`, `baker`. Single-property guards are 1-line either way; the win is centralization. Apply opportunistically when touching each system, not as a bulk sweep.
+
+### Performance enhancements (Phase 4) — needs profiling first
+- **Signal batching**: `state_system` fires multiple signals per frame during bulk operations. Add `begin_batch()` / `end_batch()` to coalesce UI updates. Picking batch boundaries blindly may regress; needs telemetry on which signals actually fire in storms.
+- **Mesh pooling**: `SubtractPreview`, bake preview, extrude preview, and now Carve/Clip/Hollow previews all create/destroy `MeshInstance3D` nodes frequently. A shared pool with `acquire()`/`release()` could reduce GC pressure. Needs profiling to confirm allocation hotspots.
+- **Preload graph audit**: `level_root.gd` preloads 54 system types upfront. As new systems land, circular-preload risks grow. Move non-critical paths (UI panels, map adapters) to string-based `load()`.
 
 ## Out of Scope (for now)
 - Real-time CSG of full scenes.

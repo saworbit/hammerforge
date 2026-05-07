@@ -1,13 +1,11 @@
 @tool
 class_name HFClipPreview
-extends RefCounted
+extends "hf_system.gd"
 ## Real-time preview showing the two resulting pieces from a clip operation,
 ## plus a translucent split plane.  Wireframe boxes show the two halves;
 ## a quad mesh shows the cut plane itself.
 
 const DraftBrush = preload("../brush_instance.gd")
-
-var root: Node3D  # LevelRoot — untyped to avoid circular preload
 
 var _preview_container: Node3D
 var _piece_a_mesh: MeshInstance3D
@@ -15,7 +13,6 @@ var _piece_b_mesh: MeshInstance3D
 var _plane_mesh: MeshInstance3D
 var _wire_material: StandardMaterial3D
 var _plane_material: StandardMaterial3D
-var _enabled: bool = false
 
 ## Current preview parameters
 var _brush_id: String = ""
@@ -23,8 +20,9 @@ var _axis: int = 1  # 0=X, 1=Y, 2=Z
 var _split_pos: float = 0.0
 
 
-func _init(p_root: Node3D) -> void:
-	root = p_root
+func _init(p_root: Node3D = null) -> void:
+	super(p_root)
+	_enabled = false
 	# Wireframe for the two resulting pieces — cyan
 	_wire_material = StandardMaterial3D.new()
 	_wire_material.albedo_color = Color(0.2, 0.8, 1.0, 0.7)

@@ -1,26 +1,24 @@
 @tool
 class_name HFHollowPreview
-extends RefCounted
+extends "hf_system.gd"
 ## Real-time wireframe preview showing the 6 wall pieces that would result
 ## from a hollow operation.  Drawn in yellow wireframe over the original brush.
 
 const DraftBrush = preload("../brush_instance.gd")
 
-var root: Node3D  # LevelRoot — untyped to avoid circular preload
-
 var _preview_container: Node3D
 var _mesh_pool: Array = []  # Array[MeshInstance3D] — 6 walls max
 var _active_count: int = 0
 var _material: StandardMaterial3D
-var _enabled: bool = false
 
 ## Current preview parameters
 var _brush_id: String = ""
 var _wall_thickness: float = 4.0
 
 
-func _init(p_root: Node3D) -> void:
-	root = p_root
+func _init(p_root: Node3D = null) -> void:
+	super(p_root)
+	_enabled = false
 	_material = StandardMaterial3D.new()
 	_material.albedo_color = Color(1.0, 0.85, 0.2, 0.6)
 	_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED

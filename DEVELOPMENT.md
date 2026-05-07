@@ -52,6 +52,8 @@ addons/hammerforge/
   hflevel_io.gd          Variant encoding/decoding for .hflevel
   map_io.gd              .map import/export (uses adapter pattern for multi-format support)
   prefab_factory.gd      Advanced shape generation
+  hf_validation.gd       HFValidation: static guards for LevelRoot containers (has_draft_containers, has_node, has_nodes, require_nodes)
+  plugin_dialogs.gd      HFDialogManager: tracks ConfirmationDialogs for cleanup on plugin teardown
 
   data/
     example_levels.json    Built-in demo level definitions (5 levels with annotations)
@@ -89,8 +91,14 @@ addons/hammerforge/
     hf_io_wiring_panel.gd  I/O wiring panel (quick wire, presets, highlight toggle, connection summary)
     manage_tab_builder.gd  Builds Manage tab sections (Bake, File, Settings, etc.)
     selection_tools_builder.gd  Builds Selection Tools section (hollow, clip, move, tie, duplicator)
+    hf_ui_factory.gd       HFUIFactory: static factory for repeated UI patterns (make_label_row/spin/check/button/option/separator)
+    hf_editor_theme.gd     HFEditorTheme: editor icon/color/stylebox lookup with graceful fallbacks
+    hf_undo_nav.gd         HFUndoNav: per-scene EditorUndoRedoManager navigation (history_id, scene_undo_redo, navigate_to_version)
+    hf_entity_prop_utils.gd HFEntityPropUtils: collapses DraftEntity.entity_data vs Node3D meta dual-write pattern
+    hf_tooltip_text.gd     HFTooltipText: static catalog of dock tooltip strings (apply_all walks the catalog)
 
   systems/               Subsystem classes (RefCounted)
+    hf_system.gd           HFSystem: base lifecycle class (_init/destroy/clear/set_enabled/_has_nodes). Preview systems extend this.
     hf_grid_system.gd      Editor grid management
     hf_entity_system.gd    Entity definitions, placement, Entity I/O connections
     hf_brush_system.gd     Brush CRUD, cuts, materials, picking, hollow, clip, merge, tie/untie
@@ -139,7 +147,10 @@ addons/hammerforge/
 
 ### Architecture Conventions
 
-- **Subsystems are RefCounted.** Each receives a `LevelRoot` reference in `_init()` and accesses container nodes and properties through `root.*`.
+- **Subsystems are RefCounted.** Each receives a `LevelRoot` reference in `_init()` and accesses container nodes and properties through `root.*`. New subsystems should `extends "hf_system.gd"` (path-based — `extends HFSystem` fails before the editor scans `class_name` registrations) to inherit the standard lifecycle (`destroy`, `clear`, `set_enabled`, `is_enabled`, `_has_nodes`).
+- **Shared UI utilities.** Use the static helpers in `ui/` instead of inlining boilerplate: `HFUIFactory.make_*` for repeated control patterns; `HFEditorTheme.find_editor_icon` / `get_editor_color` / `style_toolbar_button` for editor-themed visuals; `HFUndoNav.get_scene_undo_redo` / `navigate_to_version` for per-scene undo navigation; `HFEntityPropUtils.get_entity_data` / `set_entity_property` to paper over `DraftEntity` vs meta dual-write; `HFTooltipText.apply_all(dock)` to drive the tooltip catalog. Dock helpers like `_make_label_row` are kept as thin pass-through delegates for backwards compatibility.
+- **Validation guards.** Use `HFValidation.has_draft_containers(root)`, `has_baked_container(root)`, `has_nodes(root, [...])` for compound container guards in subsystems. Single-property checks (`if not root.entities_node:`) can stay inline — same line count, less import noise.
+- **Dialog tracking.** Plugin-spawned `ConfirmationDialog`/`AcceptDialog` instances must be registered with `_dialog_manager.add(dlg, base_control)` (`HFDialogManager` instance held by `plugin.gd`). It auto-removes from tracking when the dialog leaves the tree, and frees all live dialogs on plugin teardown via `_cleanup_pending_dialogs()`.
 - **No circular preloads.** Subsystem files must not `preload("../level_root.gd")`. Use raw ints for default parameters and `root.EnumName.*` at runtime.
 - **LevelRoot is the public API.** Its methods are thin one-line delegates to subsystems. External callers (`plugin.gd`, `dock.gd`) always go through `LevelRoot`.
 - **Input state machine.** `HFDragSystem` owns the `HFInputState` instance. Drag state transitions are explicit (`begin_drag` -> `advance_to_height` -> `end_drag`). Extrude uses `begin_extrude` -> `end_extrude`. Modes are classified as *transient* (DRAG_BASE, DRAG_HEIGHT, EXTRUDE, SURFACE_PAINT — own temporary preview nodes) or *persistent* (VERTEX_EDIT — user-toggled, survives undo/redo). `HFInputState.is_transient_preview_mode()` encodes this distinction; plugin.gd's `version_changed` handler uses it to force-reset only transient modes.

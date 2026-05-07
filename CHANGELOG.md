@@ -5,6 +5,93 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Code-quality utilities — simplification phase 1** (May 2026): Eight new shared utility
+  classes extracted from the dock + plugin monoliths to reduce duplication and improve
+  testability. None change runtime behavior; all existing call sites delegate.
+
+  - `systems/hf_system.gd` — `HFSystem` base class (lifecycle: `_init(root)`, `destroy()`,
+    `clear()`, `set_enabled()`, `is_enabled()`, `_has_nodes(names)`). The four preview systems
+    (`HFSubtractPreview`, `HFCarvePreview`, `HFClipPreview`, `HFHollowPreview`) now extend this
+    base. New subclasses must use `extends "hf_system.gd"` (path-based) rather than
+    `extends HFSystem`, because `class_name` registration isn't resolved before the editor
+    has scanned scripts.
+  - `ui/hf_ui_factory.gd` — `HFUIFactory` static factory with `make_label_row`, `make_spin`,
+    `make_check`, `make_button`, `make_option`, `make_separator`, `make_spin_row`,
+    `make_section_header`. `dock.gd`'s `_make_*` helpers now delegate; 100+ existing call
+    sites in tab builders flow through it transparently. `selection_tools_builder.gd` and
+    `entity_tab_builder.gd` migrated to call HFUIFactory directly.
+  - `hf_validation.gd` — `HFValidation` static guards: `is_valid_root`, `has_draft_containers`,
+    `has_entity_container`, `has_baked_container`, `has_node`, `has_nodes`, `require_nodes`.
+    Applied to `HFBrushSystem.apply_pending_cuts` and `restore_committed_cuts` as
+    demonstration; broader application deferred (single-property guards are 1-line either way).
+  - `ui/hf_editor_theme.gd` — `HFEditorTheme` static helpers for editor icons/colors/styleboxes:
+    `find_editor_icon`, `has_editor_icon`, `get_editor_icon`, `get_editor_color`,
+    `resolve_stylebox`, `style_toolbar_button`. Six dock helpers now delegate.
+  - `ui/hf_undo_nav.gd` — `HFUndoNav` per-scene UndoRedo navigation: `get_scene_history_id`,
+    `get_scene_undo_redo`, `navigate_to_version`. Three dock helpers delegate.
+  - `ui/hf_entity_prop_utils.gd` — `HFEntityPropUtils` collapses the
+    `DraftEntity.entity_data` vs `Node3D.set_meta("entity_data", ...)` dual-write pattern.
+    Four dock entity-prop handlers and the entity_type lookup at the top of
+    `_rebuild_entity_props` reduced from ~85 lines to ~16 lines of delegates.
+  - `ui/hf_tooltip_text.gd` — `HFTooltipText` static catalog of 100+ tooltip strings keyed by
+    dock control-property name. `dock._apply_all_tooltips` reduced from ~200 lines to
+    3 lines (`HFTooltipText.apply_all(self)` + `apply_snap_buttons(snap_buttons)`).
+  - `plugin_dialogs.gd` — `HFDialogManager` instance class. Tracks `ConfirmationDialog` /
+    `AcceptDialog` instances with auto-removal on `tree_exiting`, frees all on
+    `cleanup()`. `plugin._add_confirmable_dialog` and `_cleanup_pending_dialogs` delegate.
+
+  **Eight new test files, 75+ cases:** `test_ui_factory.gd`, `test_hf_validation.gd`,
+  `test_hf_system.gd`, `test_hf_undo_nav.gd`, `test_entity_prop_utils.gd`,
+  `test_hf_tooltip_text.gd`, `test_hf_dialog_manager.gd`, `test_hf_editor_theme.gd`.
+
+  **LOC impact:** dock.gd 7,001 → 6,692 (–309, –4.4%); plugin.gd 3,991 → 3,987 (–4;
+  responsibility separation rather than line reduction).
+
+  **Two regressions caught in review and fixed:**
+  - Mojibake in `dock.gd` (49 sites) caused by a PowerShell `Set-Content -Encoding utf8`
+    step used to splice the tooltip-block delegate. Re-encoded existing UTF-8 bytes via
+    cp1252 → UTF-8, turning `—`/`→`/`▲`/`•`/`…` into `â€"`/`â†'`/`â–²`/`â€¢`/`â€¦`. One
+    case was **behavioral**: the extrude-up color branch at `dock.gd:2302` checks
+    `if "▲" in mode_key`; the corrupted `"â–²"` literal would never match. Fixed via
+    Python pass that decoded the file as UTF-8 and substituted each known mojibake
+    sequence with the correct codepoint.
+  - `tests/test_hf_undo_nav.gd` used the Godot 3 `UndoRedo.add_do_method(obj, method,
+    args...)` signature. Godot 4 expects a `Callable`. GUT silently skipped the file,
+    leaving `HFUndoNav.navigate_to_version` untested. Fixed by switching to closures
+    (`func(): counter.append(v)`) and extracting a `_make_ur(steps)` helper. After the
+    API fix 3 tests still failed because `UndoRedo.get_version()` starts at 1 in
+    Godot 4 (not 0) and increments on each commit, so 3 commits gives version 4 not
+    3. Final fix captures `v_top := ur.get_version()` dynamically and asserts relative
+    offsets (`v_top - 2`, `v_top + 999`) instead of hard-coding numbers. Added a
+    clamp-at-bounds test case (target far below / above the history range) since the
+    navigate loop has no explicit cap.
+
+  Files: `addons/hammerforge/systems/hf_system.gd` (new),
+  `addons/hammerforge/systems/hf_subtract_preview.gd` (modified),
+  `addons/hammerforge/systems/hf_carve_preview.gd` (modified),
+  `addons/hammerforge/systems/hf_clip_preview.gd` (modified),
+  `addons/hammerforge/systems/hf_hollow_preview.gd` (modified),
+  `addons/hammerforge/systems/hf_brush_system.gd` (modified),
+  `addons/hammerforge/ui/hf_ui_factory.gd` (new),
+  `addons/hammerforge/ui/hf_editor_theme.gd` (new),
+  `addons/hammerforge/ui/hf_undo_nav.gd` (new),
+  `addons/hammerforge/ui/hf_entity_prop_utils.gd` (new),
+  `addons/hammerforge/ui/hf_tooltip_text.gd` (new),
+  `addons/hammerforge/ui/selection_tools_builder.gd` (modified),
+  `addons/hammerforge/ui/entity_tab_builder.gd` (modified),
+  `addons/hammerforge/hf_validation.gd` (new),
+  `addons/hammerforge/plugin_dialogs.gd` (new),
+  `addons/hammerforge/dock.gd` (modified),
+  `addons/hammerforge/plugin.gd` (modified),
+  `tests/test_ui_factory.gd` (new),
+  `tests/test_hf_validation.gd` (new),
+  `tests/test_hf_system.gd` (new),
+  `tests/test_hf_undo_nav.gd` (new),
+  `tests/test_entity_prop_utils.gd` (new),
+  `tests/test_hf_tooltip_text.gd` (new),
+  `tests/test_hf_dialog_manager.gd` (new),
+  `tests/test_hf_editor_theme.gd` (new).
+
 - **Toolbar Pending Cuts buttons** (Apr 2026): When subtractive brushes are staged in the
   PendingCuts node, the Draw-mode context toolbar now shows **Apply**, **Commit** (apply + bake),
   and **Clear** buttons alongside a count badge ("N pending"). Previously these actions were

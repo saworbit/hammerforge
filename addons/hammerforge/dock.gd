@@ -16,6 +16,11 @@ const DraftBrush = preload("brush_instance.gd")
 const FaceData = preload("face_data.gd")
 const HFUndoHelper = preload("undo_helper.gd")
 const HFCollapsibleSection = preload("ui/collapsible_section.gd")
+const HFUIFactory = preload("ui/hf_ui_factory.gd")
+const HFEditorTheme = preload("ui/hf_editor_theme.gd")
+const HFUndoNav = preload("ui/hf_undo_nav.gd")
+const HFEntityPropUtils = preload("ui/hf_entity_prop_utils.gd")
+const HFTooltipText = preload("ui/hf_tooltip_text.gd")
 const HFToast = preload("ui/hf_toast.gd")
 const HFWelcomePanel = preload("ui/hf_welcome_panel.gd")
 const HFTutorialWizard = preload("ui/hf_tutorial_wizard.gd")
@@ -923,11 +928,7 @@ func apply_editor_styles(base_control: Control) -> void:
 
 
 func _resolve_stylebox(base_control: Control, name: String, type_name: String) -> StyleBox:
-	if base_control.has_theme_stylebox(name, type_name):
-		return base_control.get_theme_stylebox(name, type_name)
-	if base_control.theme and base_control.theme.has_stylebox(name, type_name):
-		return base_control.theme.get_stylebox(name, type_name)
-	return null
+	return HFEditorTheme.resolve_stylebox(base_control, name, type_name)
 
 
 func _apply_pro_styles() -> void:
@@ -970,225 +971,16 @@ func _apply_toolbar_tooltips() -> void:
 
 
 func _set_tooltip(control: Control, text: String) -> void:
-	if not control:
-		return
-	if not control.has_meta("default_tooltip"):
-		control.set_meta("default_tooltip", text)
-	control.tooltip_text = text
+	HFTooltipText.set_tooltip(control, text)
 
 
 func _apply_all_tooltips() -> void:
-	# Build tab - Grid
-	_set_tooltip(grid_snap, "Grid snap size in units\nControls brush placement and nudge step")
-	for button in snap_buttons:
-		if button and button.has_meta("snap_value"):
-			_set_tooltip(button, "Quick snap: %s units" % str(button.get_meta("snap_value")))
-	# Build tab - Toggles
-	_set_tooltip(show_grid, "Show editor grid in 3D viewport")
-	_set_tooltip(follow_grid, "Grid follows last placed brush position")
-	_set_tooltip(show_hud, "Show keyboard shortcut overlay in viewport")
-	_set_tooltip(debug_logs, "Print debug info to Output panel")
-	# Build tab - Brush size & shape
-	_set_tooltip(size_x, "Brush width (X axis) in units")
-	_set_tooltip(size_y, "Brush height (Y axis) in units")
-	_set_tooltip(size_z, "Brush depth (Z axis) in units")
-	_set_tooltip(shape_select, "Brush shape for new brushes")
-	_set_tooltip(sides_spin, "Side count for polygon shapes (Pyramid, Prism)")
-	_set_tooltip(commit_freeze, "Keep committed cuts frozen (restorable)\ninstead of deleting them")
-	_set_tooltip(collision_layer_opt, "Physics collision layer for baked geometry")
-	_set_tooltip(
-		active_material_button,
-		(
-			"Brush-level material override for whole brushes"
-			+ "\nThis is separate from per-face materials in the Materials tab"
-		)
-	)
-	# Build tab - Bake options
-	_set_tooltip(bake_merge_meshes, "Merge meshes during bake for better performance")
-	_set_tooltip(bake_generate_lods, "Generate LOD meshes during bake")
-	_set_tooltip(bake_unwrap_uv0, "Run Godot UV unwrap on baked meshes (UV0) for complex geometry")
-	_set_tooltip(bake_lightmap_uv2, "Generate UV2 for lightmap baking")
-	_set_tooltip(
-		bake_use_face_materials,
-		(
-			"Bake per-face materials into the final mesh"
-			+ "\nTurn off to ignore face assignments and use brush-level materials instead"
-		)
-	)
-	_set_tooltip(
-		bake_use_atlas_check,
-		(
-			"Pack albedo textures into a single atlas to reduce draw calls"
-			+ "\nRequires Face Materials enabled; non-textured materials stay separate"
-		)
-	)
-	_set_tooltip(bake_navmesh, "Generate navigation mesh during bake")
-	_set_tooltip(bake_lightmap_texel, "Lightmap texel density (smaller = higher quality)")
-	_set_tooltip(bake_navmesh_cell_size, "Navigation mesh cell size (XZ)")
-	_set_tooltip(bake_navmesh_cell_height, "Navigation mesh cell height (Y)")
-	_set_tooltip(bake_navmesh_agent_height, "Navigation agent height")
-	_set_tooltip(bake_navmesh_agent_radius, "Navigation agent radius")
-	_set_tooltip(
-		bake_auto_connectors_check,
-		(
-			"Auto-generate ramps or stairs between height levels during bake"
-			+ "\nRequires at least 2 paint layers at different heights"
-		)
-	)
-	# FloorPaint tab
-	_set_tooltip(
-		paint_tool_select,
-		"Floor paint tool\nB: Brush | E: Erase | R: Rect | L: Line | K: Bucket | N: Blend"
-	)
-	_set_tooltip(paint_radius, "Floor paint brush radius in grid cells")
-	_set_tooltip(brush_shape_select, "Brush shape: Square or Circle")
-	_set_tooltip(paint_layer_select, "Active floor paint layer")
-	_set_tooltip(paint_layer_add, "Add a new floor paint layer")
-	_set_tooltip(paint_layer_remove, "Remove the selected floor paint layer")
-	_set_tooltip(paint_layer_rename, "Rename the selected floor paint layer")
-	_set_tooltip(region_enable, "Enable region streaming for floor paint data")
-	_set_tooltip(region_size_spin, "Region size in grid cells (power of two recommended)")
-	_set_tooltip(region_radius_spin, "Streaming radius in regions around the cursor")
-	_set_tooltip(region_memory_spin, "Memory budget for loaded regions (MB)")
-	_set_tooltip(region_grid_toggle, "Show region boundaries in the viewport")
-	_set_tooltip(heightmap_import, "Import a heightmap image (PNG/EXR) for the active layer")
-	_set_tooltip(heightmap_generate, "Generate a procedural noise heightmap for the active layer")
-	_set_tooltip(height_scale_spin, "Height scale multiplier for the heightmap")
-	_set_tooltip(layer_y_spin, "Vertical Y offset for the active paint layer")
-	_set_tooltip(blend_strength_spin, "Blend strength when using the Blend paint tool")
-	_set_tooltip(blend_slot_select, "Blend target slot (B, C, or D)")
-	_set_tooltip(
-		terrain_slot_a_button,
-		"Choose terrain texture for Slot A (base layer)\nBlend between slots with the Blend paint tool"
-	)
-	_set_tooltip(terrain_slot_a_scale, "UV scale for Slot A texture")
-	_set_tooltip(
-		terrain_slot_b_button,
-		"Choose terrain texture for Slot B\nBlend between slots with the Blend paint tool"
-	)
-	_set_tooltip(terrain_slot_b_scale, "UV scale for Slot B texture")
-	_set_tooltip(
-		terrain_slot_c_button,
-		"Choose terrain texture for Slot C\nBlend between slots with the Blend paint tool"
-	)
-	_set_tooltip(terrain_slot_c_scale, "UV scale for Slot C texture")
-	_set_tooltip(
-		terrain_slot_d_button,
-		"Choose terrain texture for Slot D\nBlend between slots with the Blend paint tool"
-	)
-	_set_tooltip(terrain_slot_d_scale, "UV scale for Slot D texture")
-	# SurfacePaint tab
-	_set_tooltip(paint_target_select, "Paint target: Floor (grid) or Surface (UV)")
-	_set_tooltip(surface_paint_radius, "Surface paint radius in UV space (0.0 - 1.0)")
-	_set_tooltip(surface_paint_strength, "Surface paint opacity/strength (0.0 - 1.0)")
-	_set_tooltip(surface_paint_layer_select, "Active surface paint layer")
-	_set_tooltip(surface_paint_layer_add, "Add a new surface paint layer")
-	_set_tooltip(surface_paint_layer_remove, "Remove the selected surface paint layer")
-	_set_tooltip(
-		surface_paint_texture,
-		(
-			"Choose the texture for the selected surface-paint layer"
-			+ "\nRequires a selected face and an existing paint layer"
-		)
-	)
-	# Materials tab
-	_set_tooltip(
-		face_select_mode,
-		(
-			"Enable per-face texturing"
-			+ "\nClick faces in the viewport to select them"
-			+ "\nShift+Click adds more faces"
-			+ "\nRequired for per-face assign, UV edit, and surface paint"
-		)
-	)
-	_set_tooltip(material_add, "Add a material to the palette")
-	_set_tooltip(material_remove, "Remove selected material from palette")
-	_set_tooltip(
-		material_load_prototypes,
-		(
-			"Load built-in prototype textures into the palette"
-			+ "\nUse this first if the browser looks empty"
-		)
-	)
-	_set_tooltip(
-		material_assign,
-		(
-			"Apply the selected material to all selected faces"
-			+ "\nTip: choose a texture in the browser, then click faces in Face Select Mode"
-		)
-	)
-	_set_tooltip(face_clear, "Clear face selection")
-	# UV tab
-	_set_tooltip(
-		uv_reset,
-		(
-			"Reset this face to default projected UVs"
-			+ "\nUse after stretching or before Fit/Center/Left/Right justify"
-		)
-	)
-	# Manage tab
-	_set_tooltip(floor_btn, "Create a default floor brush")
-	_set_tooltip(apply_cuts_btn, "Move pending cuts into the draft brush tree")
-	_set_tooltip(clear_cuts_btn, "Remove all pending cuts without applying")
-	_set_tooltip(commit_cuts_btn, "Apply pending cuts, bake, then freeze/remove cut geometry")
-	_set_tooltip(restore_cuts_btn, "Restore frozen committed cuts back to draft tree")
-	_set_tooltip(hollow_btn, "Convert selected solid brush into a hollow room (Ctrl+H)")
-	_set_tooltip(hollow_thickness, "Wall thickness for the hollow operation")
-	_set_tooltip(
-		move_floor_btn, "Snap selected brushes to the nearest surface below (Ctrl+Shift+F)"
-	)
-	_set_tooltip(
-		move_ceiling_btn, "Snap selected brushes to the nearest surface above (Ctrl+Shift+C)"
-	)
-	_set_tooltip(tie_entity_btn, "Tag selected brushes as a brush entity class")
-	_set_tooltip(untie_entity_btn, "Remove brush entity tag from selected brushes")
-	_set_tooltip(brush_entity_class_opt, "Choose brush entity class (func_detail, trigger, etc.)")
-	_set_tooltip(justify_fit_btn, "Scale UVs to fit the face exactly")
-	_set_tooltip(justify_center_btn, "Center UVs on the face")
-	_set_tooltip(justify_left_btn, "Align UVs to the left edge")
-	_set_tooltip(justify_right_btn, "Align UVs to the right edge")
-	_set_tooltip(justify_top_btn, "Align UVs to the top edge")
-	_set_tooltip(justify_bottom_btn, "Align UVs to the bottom edge")
-	_set_tooltip(bake_btn, "Bake draft brushes into optimized static meshes")
-	_set_tooltip(bake_dry_run_btn, "Report what will be baked without generating geometry")
-	_set_tooltip(validate_btn, "Scan the level for common issues")
-	_set_tooltip(validate_fix_btn, "Scan and auto-fix common issues")
-	_set_tooltip(clear_btn, "Remove all brushes and baked geometry")
-	_set_tooltip(save_hflevel_btn, "Save level to .hflevel file")
-	_set_tooltip(load_hflevel_btn, "Load level from .hflevel file")
-	_set_tooltip(import_map_btn, "Import a Quake-style .map file")
-	_set_tooltip(export_map_btn, "Export level as .map file")
-	_set_tooltip(export_glb_btn, "Export baked geometry as .glb file")
-	_set_tooltip(autosave_enabled, "Enable automatic saving at regular intervals")
-	_set_tooltip(autosave_minutes, "Autosave interval in minutes")
-	_set_tooltip(autosave_path_btn, "Set the autosave file path")
-	_set_tooltip(autosave_keep, "Keep the last N autosave history files")
-	_set_tooltip(export_settings_btn, "Export editor preferences to a settings file")
-	_set_tooltip(import_settings_btn, "Import editor preferences from a settings file")
-	_set_tooltip(save_preset_btn, "Save current brush settings as a reusable preset")
-	_set_tooltip(quick_play_btn, "Bake and play the current scene")
-	_set_tooltip(clip_btn, "Split selected brush along nearest axis plane (Shift+X)")
-	# Entities tab
-	_set_tooltip(create_entity_btn, "Create a new entity at the cursor position")
-	_set_tooltip(io_output_name, "Output event name (e.g. OnTrigger, OnDamaged)")
-	_set_tooltip(io_target_name, "Target entity name to fire the input on")
-	_set_tooltip(io_input_name, "Input action on target entity (e.g. Open, Kill)")
-	_set_tooltip(io_parameter, "Optional parameter string passed to the input")
-	_set_tooltip(io_delay, "Delay in seconds before firing the input")
-	_set_tooltip(io_fire_once, "If checked, connection fires only once then auto-removes")
-	_set_tooltip(io_add_btn, "Add an output connection to the selected entity")
-	_set_tooltip(io_remove_btn, "Remove the selected output connection")
+	HFTooltipText.apply_all(self)
+	HFTooltipText.apply_snap_buttons(snap_buttons)
 
 
 func _set_toolbar_button_icon(button: Button, icon_names: Array, fallback_text: String) -> void:
-	if not button:
-		return
-	var icon = _find_editor_icon(icon_names)
-	if icon:
-		button.icon = icon
-	button.text = fallback_text
-	button.flat = true
-	button.focus_mode = Control.FOCUS_NONE
+	HFEditorTheme.style_toolbar_button(editor_base_control, self, button, icon_names, fallback_text)
 
 
 func _refresh_shape_palette_icons() -> void:
@@ -1212,44 +1004,27 @@ func _resolve_shape_icon(shape_key: String) -> Texture2D:
 
 
 func _find_editor_icon(icon_names: Array) -> Texture2D:
-	for icon_name in icon_names:
-		if _has_editor_icon(icon_name):
-			return _get_editor_icon(icon_name)
-	return null
+	return HFEditorTheme.find_editor_icon(editor_base_control, self, icon_names)
 
 
 func _has_editor_icon(icon_name: String) -> bool:
-	if editor_base_control and editor_base_control.has_theme_icon(icon_name, "EditorIcons"):
-		return true
-	return has_theme_icon(icon_name, "EditorIcons")
+	return HFEditorTheme.has_editor_icon(editor_base_control, self, icon_name)
 
 
 func _get_editor_icon(icon_name: String) -> Texture2D:
-	if editor_base_control and editor_base_control.has_theme_icon(icon_name, "EditorIcons"):
-		return editor_base_control.get_theme_icon(icon_name, "EditorIcons")
-	return get_theme_icon(icon_name, "EditorIcons")
+	return HFEditorTheme.get_editor_icon(editor_base_control, self, icon_name)
 
 
 func _get_editor_color(color_name: String, fallback: Color) -> Color:
-	if editor_base_control and editor_base_control.has_theme_color(color_name, "Editor"):
-		return editor_base_control.get_theme_color(color_name, "Editor")
-	if editor_base_control and editor_base_control.has_theme_color(color_name, "EditorStyles"):
-		return editor_base_control.get_theme_color(color_name, "EditorStyles")
-	if has_theme_color(color_name, "Editor"):
-		return get_theme_color(color_name, "Editor")
-	return fallback
+	return HFEditorTheme.get_editor_color(editor_base_control, self, color_name, fallback)
 
 
 func _get_scene_history_id() -> int:
-	if undo_redo and level_root and is_instance_valid(level_root):
-		return undo_redo.get_object_history_id(level_root)
-	return EditorUndoRedoManager.GLOBAL_HISTORY
+	return HFUndoNav.get_scene_history_id(undo_redo, level_root)
 
 
 func _get_scene_undo_redo() -> UndoRedo:
-	if not undo_redo:
-		return null
-	return undo_redo.get_history_undo_redo(_get_scene_history_id())
+	return HFUndoNav.get_scene_undo_redo(undo_redo, level_root)
 
 
 func _get_undo_version() -> int:
@@ -1300,18 +1075,7 @@ func _on_history_redo() -> void:
 
 
 func _on_history_navigate(version: int) -> void:
-	var ur := _get_scene_undo_redo()
-	if not ur:
-		return
-	var current := ur.get_version()
-	if version < current:
-		# Undo to target version
-		while ur.get_version() > version and ur.has_undo():
-			ur.undo()
-	elif version > current:
-		# Redo to target version
-		while ur.get_version() < version and ur.has_redo():
-			ur.redo()
+	HFUndoNav.navigate_to_version(_get_scene_undo_redo(), version)
 
 
 # ===========================================================================
@@ -1320,36 +1084,19 @@ func _on_history_navigate(version: int) -> void:
 
 
 func _make_label_row(label_text: String, control: Control) -> HBoxContainer:
-	var row = HBoxContainer.new()
-	var label = Label.new()
-	label.text = label_text
-	row.add_child(label)
-	control.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(control)
-	return row
+	return HFUIFactory.make_label_row(label_text, control)
 
 
 func _make_spin(min_val: float, max_val: float, step_val: float, default_val: float) -> SpinBox:
-	var spin = SpinBox.new()
-	spin.min_value = min_val
-	spin.max_value = max_val
-	spin.step = step_val
-	spin.value = default_val
-	spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	return spin
+	return HFUIFactory.make_spin(min_val, max_val, step_val, default_val)
 
 
 func _make_check(label_text: String, default_on: bool = false) -> CheckBox:
-	var check = CheckBox.new()
-	check.text = label_text
-	check.button_pressed = default_on
-	return check
+	return HFUIFactory.make_check(label_text, default_on)
 
 
 func _make_button(label_text: String) -> Button:
-	var btn = Button.new()
-	btn.text = label_text
-	return btn
+	return HFUIFactory.make_button(label_text)
 
 
 func _build_paint_tab() -> void:
@@ -1371,24 +1118,11 @@ func _rebuild_entity_props(entity: Node3D) -> void:
 	if not level_root or not level_root.is_entity_node(entity):
 		return
 
-	# Look up entity definition from dock entity_defs
-	var entity_type_key := ""
-	if entity is DraftEntity:
-		entity_type_key = entity.entity_type
-	elif entity.has_meta("entity_type"):
-		entity_type_key = str(entity.get_meta("entity_type"))
+	var entity_type_key := HFEntityPropUtils.get_entity_type(entity)
 	if entity_type_key == "":
 		return
 
-	var definition: Dictionary = {}
-	for entry in entity_defs:
-		if not (entry is Dictionary):
-			continue
-		var eid = str(entry.get("id", entry.get("class", "")))
-		if eid == entity_type_key:
-			definition = entry
-			break
-
+	var definition := HFEntityPropUtils.find_definition(entity_defs, entity_type_key)
 	var props: Array = definition.get("properties", [])
 	if props.is_empty():
 		return
@@ -1397,11 +1131,7 @@ func _rebuild_entity_props(entity: Node3D) -> void:
 	_entity_props_entity = entity
 	var content = _entity_props_section.get_content()
 
-	var e_data: Dictionary = {}
-	if entity is DraftEntity:
-		e_data = entity.entity_data
-	elif entity.has_meta("entity_data"):
-		e_data = entity.get_meta("entity_data")
+	var e_data := HFEntityPropUtils.get_entity_data(entity)
 
 	for prop in props:
 		if not (prop is Dictionary):
@@ -1516,79 +1246,24 @@ func _clear_entity_props() -> void:
 
 
 func _on_entity_prop_changed(value: Variant, entity: Node3D, prop_name: String) -> void:
-	if not is_instance_valid(entity):
-		return
-	if entity is DraftEntity:
-		entity.entity_data[prop_name] = value
-		entity.notify_property_list_changed()
-	elif entity.has_meta("entity_data"):
-		var d: Dictionary = entity.get_meta("entity_data")
-		d[prop_name] = value
-		entity.set_meta("entity_data", d)
+	HFEntityPropUtils.set_entity_property(entity, prop_name, value)
 
 
 func _on_entity_prop_enum_changed(
 	index: int, entity: Node3D, prop_name: String, enum_vals: Array
 ) -> void:
-	if not is_instance_valid(entity):
-		return
 	var value: Variant = enum_vals[index] if index < enum_vals.size() else ""
-	if entity is DraftEntity:
-		entity.entity_data[prop_name] = value
-		entity.notify_property_list_changed()
-	elif entity.has_meta("entity_data"):
-		var d: Dictionary = entity.get_meta("entity_data")
-		d[prop_name] = value
-		entity.set_meta("entity_data", d)
+	HFEntityPropUtils.set_entity_property(entity, prop_name, value)
 
 
 func _on_entity_prop_vec3_changed(
 	value: float, entity: Node3D, prop_name: String, axis_index: int
 ) -> void:
-	if not is_instance_valid(entity):
-		return
-	var vec: Vector3 = Vector3.ZERO
-	if entity is DraftEntity:
-		var cur = entity.entity_data.get(prop_name, Vector3.ZERO)
-		if cur is Vector3:
-			vec = cur
-		vec[axis_index] = value
-		entity.entity_data[prop_name] = vec
-		entity.notify_property_list_changed()
-	elif entity.has_meta("entity_data"):
-		var d: Dictionary = entity.get_meta("entity_data")
-		var cur = d.get(prop_name, Vector3.ZERO)
-		if cur is Vector3:
-			vec = cur
-		vec[axis_index] = value
-		d[prop_name] = vec
-		entity.set_meta("entity_data", d)
+	HFEntityPropUtils.set_entity_vec3_axis(entity, prop_name, axis_index, value)
 
 
 func _entity_prop_default(type_name: String, value: Variant) -> Variant:
-	match type_name:
-		"float":
-			return float(value) if value != null else 0.0
-		"int":
-			return int(value) if value != null else 0
-		"bool":
-			return bool(value) if value != null else false
-		"color":
-			if value is Color:
-				return value
-			if value is String:
-				return Color(value)
-			return Color.WHITE
-		"vector3":
-			if value is Vector3:
-				return value
-			if value is Array and value.size() == 3:
-				return Vector3(value[0], value[1], value[2])
-			return Vector3.ZERO
-		"string":
-			return str(value) if value != null else ""
-		_:
-			return value
+	return HFEntityPropUtils.coerce_default(type_name, value)
 
 
 # ---------------------------------------------------------------------------
@@ -5077,7 +4752,7 @@ func _on_material_assign() -> void:
 
 
 ## Pure decision helper for material assignment.  Returns a Dictionary with
-## keys: action (String – empty on error), method (String), args (Array),
+## keys: action (String — empty on error), method (String), args (Array),
 ## toast (String).  Separated from side-effects so tests can exercise the
 ## face-vs-brush fallback without undo/redo infrastructure.
 func resolve_material_assign_action(mat_index: int) -> Dictionary:

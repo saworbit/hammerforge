@@ -7,6 +7,7 @@ const DraftBrush = preload("../brush_instance.gd")
 const DraftEntity = preload("../draft_entity.gd")
 const FaceSelector = preload("../face_selector.gd")
 const FaceData = preload("../face_data.gd")
+const HFValidation = preload("../hf_validation.gd")
 
 var root: Node3D
 var _brush_cache: Dictionary = {}  # brush_id (String) -> Node
@@ -376,7 +377,7 @@ func _add_pending_cut(brush: DraftBrush) -> void:
 
 
 func apply_pending_cuts() -> void:
-	if not root.pending_node or not root.draft_brushes_node:
+	if not HFValidation.has_draft_containers(root):
 		return
 	var pending_count = root.pending_node.get_child_count()
 	for child in root.pending_node.get_children():
@@ -446,7 +447,7 @@ func _stash_committed_cut(brush: DraftBrush) -> void:
 
 
 func restore_committed_cuts() -> void:
-	if not root.committed_node or not root.draft_brushes_node:
+	if not HFValidation.has_nodes(root, ["committed_node", "draft_brushes_node"]):
 		return
 	var restored = 0
 	for child in root.committed_node.get_children():

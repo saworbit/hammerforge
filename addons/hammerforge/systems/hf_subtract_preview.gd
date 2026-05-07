@@ -1,26 +1,24 @@
 @tool
 class_name HFSubtractPreview
-extends RefCounted
+extends "hf_system.gd"
 ## Real-time wireframe overlay showing AABB intersections between
 ## subtractive and additive brushes.  Reuses the cordon-wireframe
 ## ImmediateMesh pattern from level_root.gd.
-
-var root: Node3D  # LevelRoot — untyped to avoid circular preload
 
 var _preview_container: Node3D
 var _mesh_pool: Array = []  # Array[MeshInstance3D]
 var _active_count: int = 0
 var _needs_rebuild: bool = false
 var _debounce: float = 0.0
-var _enabled: bool = false
 var _material: StandardMaterial3D
 
 const DEBOUNCE_SEC := 0.15
 const MAX_PREVIEWS := 50
 
 
-func _init(p_root: Node3D) -> void:
-	root = p_root
+func _init(p_root: Node3D = null) -> void:
+	super(p_root)
+	_enabled = false
 	_material = StandardMaterial3D.new()
 	_material.albedo_color = Color(1.0, 0.3, 0.3, 0.7)
 	_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED

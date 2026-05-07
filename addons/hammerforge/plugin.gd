@@ -42,12 +42,13 @@ var _operation_replay: Control = null
 var _viewport_context_menu: PopupMenu = null
 var _radial_menu: Control = null
 var _quick_property: Control = null
-var _pending_dialogs: Array = []  # Confirmation dialogs awaiting user response
+var _dialog_manager  # HFDialogManager — tracks confirmation dialogs for cleanup
 # Double-tap detection for quick property popups
 var _last_tap_keycode := 0
 var _last_tap_time := 0
 const _DOUBLE_TAP_MS := 350
 const LevelRootType = preload("level_root.gd")
+const HFDialogManagerType = preload("plugin_dialogs.gd")
 const HFContextToolbar = preload("ui/hf_context_toolbar.gd")
 const HFHotkeyPalette = preload("ui/hf_hotkey_palette.gd")
 const HFSelectionFilter = preload("ui/hf_selection_filter.gd")
@@ -65,6 +66,7 @@ const HFInputStateType = preload("input_state.gd")
 func _enter_tree():
 	add_custom_type("LevelRoot", "Node3D", LevelRootType, IconRes)
 	add_custom_type("DraftEntity", "Node3D", DraftEntityType, IconRes)
+	_dialog_manager = HFDialogManagerType.new()
 	dock = preload("dock.tscn").instantiate()
 	undo_redo_manager = get_undo_redo()
 	brush_gizmo_plugin = preload("brush_gizmo_plugin.gd").new()
@@ -2512,20 +2514,14 @@ class _MarqueeOverlay:
 		draw_rect(rect, Color(0.3, 0.6, 1.0, 0.7), false, 1.5)
 
 
-## Parent a confirmation dialog to the editor base control, track it for cleanup
-## on plugin teardown.  Connects tree_exiting to auto-free if plugin unloads.
 func _add_confirmable_dialog(dlg: ConfirmationDialog) -> void:
-	get_editor_interface().get_base_control().add_child(dlg)
-	_pending_dialogs.append(dlg)
-	dlg.tree_exiting.connect(func(): _pending_dialogs.erase(dlg))
+	if _dialog_manager:
+		_dialog_manager.add(dlg, get_editor_interface().get_base_control())
 
 
-## Free all pending confirmation dialogs (called during plugin _exit_tree).
 func _cleanup_pending_dialogs() -> void:
-	for dlg in _pending_dialogs.duplicate():
-		if is_instance_valid(dlg):
-			dlg.queue_free()
-	_pending_dialogs.clear()
+	if _dialog_manager:
+		_dialog_manager.cleanup()
 
 
 func _delete_selected(root: Node) -> bool:

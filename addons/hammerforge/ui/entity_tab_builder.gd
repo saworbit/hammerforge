@@ -4,6 +4,22 @@ extends RefCounted
 ## Extracted from dock.gd — purely organizational, no behavior changes.
 
 const HFIOWiringPanelType = preload("hf_io_wiring_panel.gd")
+const HFUIFactoryType = preload("hf_ui_factory.gd")
+
+
+# Helper: build a labeled-LineEdit row used by the I/O fields.
+static func _make_lineedit_row(label_text: String, placeholder: String) -> Array:
+	var row := HBoxContainer.new()
+	var lbl := Label.new()
+	lbl.text = label_text
+	lbl.custom_minimum_size.x = 70
+	row.add_child(lbl)
+	var edit := LineEdit.new()
+	edit.placeholder_text = placeholder
+	edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(edit)
+	return [row, edit]
+
 
 var dock  # HammerForgeDock reference
 
@@ -34,53 +50,21 @@ func build(parent: Control) -> void:
 	dock._entity_io_section = io_sec
 	var ioc = io_sec.get_content()
 
-	# Output Name
-	var out_row = HBoxContainer.new()
-	ioc.add_child(out_row)
-	var out_lbl = Label.new()
-	out_lbl.text = "Output:"
-	out_lbl.custom_minimum_size.x = 70
-	out_row.add_child(out_lbl)
-	dock.io_output_name = LineEdit.new()
-	dock.io_output_name.placeholder_text = "OnTrigger"
-	dock.io_output_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	out_row.add_child(dock.io_output_name)
+	var out_pair = _make_lineedit_row("Output:", "OnTrigger")
+	ioc.add_child(out_pair[0])
+	dock.io_output_name = out_pair[1]
 
-	# Target Name
-	var tgt_row = HBoxContainer.new()
-	ioc.add_child(tgt_row)
-	var tgt_lbl = Label.new()
-	tgt_lbl.text = "Target:"
-	tgt_lbl.custom_minimum_size.x = 70
-	tgt_row.add_child(tgt_lbl)
-	dock.io_target_name = LineEdit.new()
-	dock.io_target_name.placeholder_text = "door_1"
-	dock.io_target_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	tgt_row.add_child(dock.io_target_name)
+	var tgt_pair = _make_lineedit_row("Target:", "door_1")
+	ioc.add_child(tgt_pair[0])
+	dock.io_target_name = tgt_pair[1]
 
-	# Input Name
-	var inp_row = HBoxContainer.new()
-	ioc.add_child(inp_row)
-	var inp_lbl = Label.new()
-	inp_lbl.text = "Input:"
-	inp_lbl.custom_minimum_size.x = 70
-	inp_row.add_child(inp_lbl)
-	dock.io_input_name = LineEdit.new()
-	dock.io_input_name.placeholder_text = "Open"
-	dock.io_input_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	inp_row.add_child(dock.io_input_name)
+	var inp_pair = _make_lineedit_row("Input:", "Open")
+	ioc.add_child(inp_pair[0])
+	dock.io_input_name = inp_pair[1]
 
-	# Parameter
-	var param_row = HBoxContainer.new()
-	ioc.add_child(param_row)
-	var param_lbl = Label.new()
-	param_lbl.text = "Param:"
-	param_lbl.custom_minimum_size.x = 70
-	param_row.add_child(param_lbl)
-	dock.io_parameter = LineEdit.new()
-	dock.io_parameter.placeholder_text = "(optional)"
-	dock.io_parameter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	param_row.add_child(dock.io_parameter)
+	var param_pair = _make_lineedit_row("Param:", "(optional)")
+	ioc.add_child(param_pair[0])
+	dock.io_parameter = param_pair[1]
 
 	# Delay + Fire Once row
 	var delay_row = HBoxContainer.new()
@@ -89,25 +73,19 @@ func build(parent: Control) -> void:
 	delay_lbl.text = "Delay:"
 	delay_lbl.custom_minimum_size.x = 70
 	delay_row.add_child(delay_lbl)
-	dock.io_delay = SpinBox.new()
-	dock.io_delay.min_value = 0.0
-	dock.io_delay.max_value = 999.0
-	dock.io_delay.step = 0.1
-	dock.io_delay.value = 0.0
+	dock.io_delay = HFUIFactoryType.make_spin(0.0, 999.0, 0.1, 0.0)
 	dock.io_delay.suffix = "s"
-	dock.io_delay.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	delay_row.add_child(dock.io_delay)
-	dock.io_fire_once = CheckBox.new()
-	dock.io_fire_once.text = "Once"
+	dock.io_fire_once = HFUIFactoryType.make_check("Once")
 	delay_row.add_child(dock.io_fire_once)
 
 	# Add / Remove buttons
 	var io_btn_row = HBoxContainer.new()
 	ioc.add_child(io_btn_row)
-	dock.io_add_btn = dock._make_button("Add Output")
+	dock.io_add_btn = HFUIFactoryType.make_button("Add Output")
 	dock.io_add_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	io_btn_row.add_child(dock.io_add_btn)
-	dock.io_remove_btn = dock._make_button("Remove")
+	dock.io_remove_btn = HFUIFactoryType.make_button("Remove")
 	io_btn_row.add_child(dock.io_remove_btn)
 
 	# Connection list

@@ -1,6 +1,6 @@
 @tool
 class_name HFCarvePreview
-extends RefCounted
+extends "hf_system.gd"
 ## Real-time wireframe preview showing the resulting slice pieces that would
 ## be created by a carve operation.  Uses the same ImmediateMesh wireframe
 ## pattern as HFSubtractPreview, but draws the 1-6 remaining pieces in green
@@ -8,13 +8,10 @@ extends RefCounted
 
 const DraftBrush = preload("../brush_instance.gd")
 
-var root: Node3D  # LevelRoot — untyped to avoid circular preload
-
 var _preview_container: Node3D
 var _mesh_pool: Array = []  # Array[MeshInstance3D]
 var _active_count: int = 0
 var _material: StandardMaterial3D
-var _enabled: bool = false
 
 ## Currently previewing carve for this brush ID. Empty string = inactive.
 var _carver_id: String = ""
@@ -22,8 +19,9 @@ var _carver_id: String = ""
 const MAX_PREVIEWS := 50
 
 
-func _init(p_root: Node3D) -> void:
-	root = p_root
+func _init(p_root: Node3D = null) -> void:
+	super(p_root)
+	_enabled = false
 	_material = StandardMaterial3D.new()
 	_material.albedo_color = Color(0.3, 0.9, 0.3, 0.6)
 	_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
