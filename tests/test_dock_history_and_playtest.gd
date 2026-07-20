@@ -91,6 +91,19 @@ func test_refresh_history_list_after_version_changed_updates_buttons():
 	redo_btn.free()
 
 
+func test_selection_counts_keep_non_brush_nodes_typed():
+	var brush := DraftBrush.new()
+	var entity := DraftEntity.new()
+	var camera := Camera3D.new()
+	var counts := dock._get_selection_counts([brush, entity, camera])
+	assert_eq(counts["brushes"], 1)
+	assert_eq(counts["entities"], 1)
+	assert_eq(counts["other"], 1)
+	brush.free()
+	entity.free()
+	camera.free()
+
+
 # ===========================================================================
 # Export playtest spawn undo — verify create_default_spawn is undoable
 # ===========================================================================

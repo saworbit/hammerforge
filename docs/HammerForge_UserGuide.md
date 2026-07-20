@@ -1,15 +1,15 @@
 # HammerForge User Guide
 
-Last updated: April 13, 2026
+Last updated: July 21, 2026
 
-This guide covers the current HammerForge workflow in Godot 4.6: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs.
+This guide covers the current HammerForge workflow in Godot 4.7: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs.
 
 ## Quick Start
 1. Enable the plugin: Project -> Project Settings -> Plugins -> HammerForge.
 2. Open any 3D scene.
-3. Click in the 3D viewport to auto-create `LevelRoot`.
-4. Click **New HammerForge Level** in the Manage tab to create a floor, sun light, and player spawn in one step. (Or use **Create Floor** for just the floor.)
-5. Draw brushes, then Bake for output geometry.
+3. In the empty-state banner, click **Create Starter** to add a `LevelRoot`, floor, sunlight, and player spawn. Use **Create Empty** when you want only the root.
+4. In **Build**, choose **Draw** and drag in the viewport to set the base; click again to set the height.
+5. Open **Test** and click **Test Level (Bake + Play)**. HammerForge checks the spawn, bakes, and launches the playtest.
 
 ## LevelRoot
 `LevelRoot` is required because it owns the containers and systems HammerForge uses:
@@ -18,22 +18,19 @@ This guide covers the current HammerForge workflow in Godot 4.6: brush-based gre
 - Entities
 - Baker and paint systems
 
-If missing, HammerForge creates it automatically on first viewport click. LevelRoot stays active even when you select other scene nodes (sticky root discovery) -- you do not need to re-select it after clicking a camera, light, or other node.
+The empty-state banner is the clearest way to create it. An intentional left-click while the Draw tool is active can also create an empty root; camera navigation, right-clicks, and other passive viewport input never mutate the scene. LevelRoot stays active even when you select other scene nodes (sticky root discovery) -- you do not need to re-select it after clicking a camera, light, or other node.
 
 ## First-Run Tutorial
-On first launch, an interactive tutorial wizard appears guiding you through 5 steps:
+On first launch, a short tutorial guides you through the essential two-step loop:
 
 | Step | Goal | Trigger |
 |------|------|---------|
-| 1 | Draw your first room | Place any brush |
-| 2 | Subtract a window | Place a brush with Subtract operation |
-| 3 | Paint a floor | Paint cells on any layer |
-| 4 | Place an entity | Drag or create an entity |
-| 5 | Bake & preview | Run a bake |
+| 1 | Draw something | Place any brush |
+| 2 | Test your level | Complete a successful bake with **Test Level Now** |
 
-Each step auto-advances when you complete the required action. A progress bar shows your position. You can skip individual steps or dismiss the entire tutorial. Progress persists across sessions — if you close the editor at step 3, it resumes there next time.
+Each step auto-advances when you complete the required action. You can go back, skip, or hide the guide. Progress persists across sessions if you close and reopen the editor.
 
-Check "Don't show again" when dismissing to hide it permanently. Reset by editing `user://hammerforge_prefs.json` and setting `"show_welcome": true` and `"tutorial_step": 0`.
+Use **Don't show at startup** to hide it on future launches. Reopen or restart the guide from **Help**; you do not need to edit preference files.
 
 ## Coach Marks (First-Use Tool Guides)
 
@@ -50,7 +47,7 @@ When you activate an advanced tool for the first time, a floating overlay appear
 | Hollow | Ctrl+H | Select solid → preview (yellow wireframe walls) → confirm → hollow |
 | Measure | M key | Click start → click end → Shift+Click to chain → RMB for snap ref |
 | Decal | N key | Click surface → resize/rotate → assign material |
-| Surface Paint | P toggle | Toggle paint → select tool → click cells |
+| Surface Paint | Shift+P toggle | Toggle paint → select tool → click cells |
 
 Each guide has a "Don't show again" checkbox. Dismissed guides are persisted in user prefs. Guides trigger from keyboard shortcuts, the command palette, and context toolbar actions.
 
@@ -71,7 +68,7 @@ Hover an entry to see its name and elapsed time. Click an entry, then click **Re
 
 ## Undo History Browser
 
-The **Manage** tab → **History** section contains a visual undo history browser with viewport thumbnails. It replaces the plain text history list:
+The **Test** tab → **History** section contains a visual undo history browser with viewport thumbnails. It replaces the plain text history list:
 
 - Up to **30 entries** are recorded, each with a color-coded action icon and an 80x48 viewport thumbnail captured at the time of the action.
 - **Hover** an entry to see an enlarged thumbnail preview.
@@ -103,7 +100,7 @@ Deleting 3 or more brushes at once prompts a confirmation dialog. The dialog rem
 
 ### Undo Everything
 
-All brush operations (draw, delete, carve, clip, hollow, extrude, move, resize, merge, material assignment, UV changes) are fully undoable via Ctrl+Z. The Undo History Browser (Manage tab) provides visual navigation with thumbnails.
+All brush operations (draw, delete, carve, clip, hollow, extrude, move, resize, merge, material assignment, UV changes) are fully undoable via Ctrl+Z. The Undo History Browser (**Test** tab) provides visual navigation with thumbnails.
 
 ## Measure Tool (Multi-Ruler)
 
@@ -131,7 +128,7 @@ The command palette is a searchable action list. Open it with **Shift+?**, **F1*
 
 ## Example Library
 
-The **Manage** tab contains an **Examples** section (collapsed by default) with 5 built-in demo levels:
+The **Test** tab contains an **Examples** section (collapsed by default) with 5 built-in demo levels:
 
 | Example | Difficulty | Key Concepts |
 |---------|------------|--------------|
@@ -158,11 +155,11 @@ A colored banner between the toolbar and tabs always shows your current tool and
 When typing numeric input during a gesture, the value appears in brackets (e.g. "[64]").
 
 ### Toolbar
-The compact toolbar shows icon + text labels (Draw, Select, Add, Sub, Paint, Ext Up, Ext Dn) with full descriptions in tooltips. A **?** button at the right end opens a searchable shortcut reference dialog where you can filter by action name or key binding. Press **Shift+?** or **F1** in the 3D viewport to open the command palette for executing any action by name.
+The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Paint**, **More**, and **Help**. Operation and advanced geometry commands live in Build sections, the context toolbar, or **More**. **Help** opens the guide and shortcut discovery; **Shift+?**, **F1**, or **Ctrl+K** opens the command palette.
 
-### Brush tab
-- **Toolbar**: Draw, Select, Add, Sub, Paint, Ext Up, Ext Dn (icon + text labels). Press **?** for searchable shortcuts dialog.
-- **Shape**: choose from the palette. Sides for pyramids/prisms.
+### Build tab
+- **Tools**: Draw and Select are always available in the primary toolbar. Use **More**, contextual actions, or the sections below for advanced operations.
+- **Shape**: choose from 15 built-in shapes with recognizable icons (plus Custom). Sides appears only for compatible pyramid/prism shapes.
 - **Size** X/Y/Z: defaults for new brushes.
 - **Grid Snap**: snap increment with quick preset buttons (1, 2, 4, 8, 16, 32, 64).
 - **Snap Modes**: G (Grid), V (Vertex — snap to brush corners), C (Center — snap to brush centers). Toggle independently; closest geometry within threshold beats grid snap.
@@ -186,14 +183,14 @@ The compact toolbar shows icon + text labels (Draw, Select, Add, Sub, Paint, Ext
 - **UV Editor**: Per-face UV editing with drag handles, Reset Projected UVs, and Justify grid (Fit, Center, Left, Right, Top, Bottom in 3×2 layout).
 - **Surface Paint**: Paint Target (Floor/Surface), layers, texture picker, radius/strength.
 
-### Entities tab
+### Objects tab
 - Create DraftEntity button.
 - Entity palette with drag-and-drop placement.
 - **Entity Properties** (collapsible, context-hidden): auto-generated typed controls based on entity definition. Only visible when an entity is selected.
 - **Entity I/O** (collapsible, context-hidden): Output, Target, Input, Parameter fields. Delay (seconds) and Fire Once checkbox. Add Output / Remove buttons and connection ItemList. Only visible when an entity is selected; connections auto-refresh on selection change. **Show I/O Lines** checkbox to visualize connections in the viewport.
 - **I/O Wiring** (collapsible, context-hidden, collapsed by default): Quick-wire form (output name, target dropdown, input name, parameter, delay, fire-once). Only visible when an entity is selected. Connection summary shows triggers and triggered-by counts. **Highlight** toggle button pulses all linked entities in the viewport. **Connection Presets** picker with 6 built-in patterns (Door+Light+Sound, Button→Toggle, Alarm Sequence, Pickup+Remove, Damage+Break, Timer Lights) plus user-saved presets. Target tag mapping lets you assign preset target placeholders to actual entity names.
 
-> **Progressive disclosure:** During greyboxing, the Entities tab shows only the entity palette and create button. Entity Properties, Entity I/O, and I/O Wiring sections appear automatically when you select an entity, keeping the UI clean when you're focused on shapes and layout.
+> **Progressive disclosure:** During greyboxing, the Objects tab shows only the entity palette and create button. Entity Properties, Entity I/O, and I/O Wiring sections appear automatically when you select an entity, keeping the UI clean when you're focused on shapes and layout.
   - **I/O connection lines**: Bézier curves with arrowheads, color-coded by output type (cyan=OnTrigger, red=OnDamage, yellow=OnUse, green=OnOpen, magenta=OnBreak, orange=OnTimer). Fire-once connections pulse brighter; delayed connections dim proportionally. Parallel connections between the same pair offset laterally.
   - **Highlight Connected**: when enabled, all entities wired to the selected entity display a pulsing overlay. The context toolbar shows an "HL" toggle and an I/O summary label ("Triggers 2 targets (door1, light1)"). The highlight state stays in sync between the context toolbar and the wiring panel.
 
@@ -222,9 +219,10 @@ dispatcher.fire("my_button", "OnPressed", "fast")
 - **Bake Wire I/O**: enable the `bake_wire_io` checkbox on LevelRoot (Inspector) to attach the dispatcher to the baked container during regular bakes.
 - Source entities receive `io_<OutputName>` user signals (e.g. `io_OnTrigger`) so you can also use standard `connect()` / `emit_signal()` patterns.
 
-### Manage tab (collapsible sections)
-- **Bake**: Bake button, Bake Selected, Bake Changed, Check Bake Issues, Dry Run, Validate Level/Fix. Options: Merge Meshes, Generate LODs, Lightmap UV2, Texel Size, Navmesh (cell size, agent height), Use Face Materials, Preview Mode (Full/Wireframe/Proxy), Collision Mode (Trimesh/Convex/Visgroup), Convex Clean, Convex Simplify, Bake Estimate label, Quick Play, Play from Camera, Play Selected Area.
-- **Actions**: New HammerForge Level (creates floor + sun + player spawn, fully undoable), Create Floor, Apply/Clear/Commit/Restore Cuts, Clear Brushes.
+### Test tab (collapsible sections)
+- **Test Level**: **Test Level (Bake + Play)** is the one-click default. **Check Only** validates without baking and **Bake Only** produces geometry without launching. **Play from Camera** and **Play Selected Area** remain available for focused testing.
+- **Advanced Bake**: Bake Selected/Changed, dry run, mesh, LOD, lightmap, navmesh, face material, preview, collision, chunking, occluder, and connector controls are collapsed until needed.
+- **Actions**: Create Starter, Create Empty/Create Floor, Apply/Clear/Commit/Restore Cuts, and Clear Brushes.
 - **Spawn**: Validate Spawn (bakes, then runs physics-based checks and shows debug overlay), Create Default Spawn (auto-places a `player_start` at brush centroid), Preview Spawn Debug (bakes, then shows persistent capsule/ray overlay toggle).
 - **File**: Save/Load .hflevel, Import/Export .map (Classic Quake / Valve 220), Export .glb.
 - **Presets**: Save/rename presets grid.
@@ -235,8 +233,8 @@ dispatcher.fire("my_button", "OnPressed", "fast")
 - **Cordon**: Enable checkbox, min/max spinboxes, Set from Selection.
 - **Prefabs**: Save/search/filter/delete prefabs. Browse with tag filtering and variant indicators. Drag-from the library to instantiate. Save Linked for live propagation. Right-click for variant/tag editing.
 
-### Quick Play and Spawn Validation
-Quick Play (footer button) bakes the level and launches it with a first-person controller. Before every Quick Play:
+### Test Level and Spawn Validation
+**Test Level (Bake + Play)** bakes the level and launches it with a first-person controller. Before every test:
 
 1. **Spawn lookup**: finds the active `player_start` entity (primary-flagged first, then first found).
 2. **Auto-create**: if no `player_start` exists, a safe default is created at the centroid of all brushes + 5 m height.
@@ -245,7 +243,7 @@ Quick Play (footer button) bakes the level and launches it with a first-person c
 5. **Launch**: bakes geometry + collision, then runs the scene with the FPS controller spawned at the validated position and yaw rotation.
 
 #### Play from Camera
-Click **Play from Camera** in the Manage tab to playtest from your current editor camera position:
+Click **Play from Camera** in the Test tab to playtest from your current editor camera position:
 - The spawn entity is temporarily moved to the camera position; camera yaw is written to `entity_data["angle"]`.
 - The level bakes, spawn is validated, and the playtest launches.
 - After launch, the spawn is automatically restored to its original position and angle.
@@ -261,7 +259,7 @@ Click **Play Selected Area** to bake and playtest only the region around your cu
 - On validation failure (severity ≥ 2), the cordon is restored before showing the fix dialog.
 
 #### Export Playtest Build
-Click **Export Playtest Build** in the Manage tab → Bake section to create a standalone playable scene:
+Click **Export Playtest Build** in **Test → Advanced Bake** to create a standalone playable scene:
 - Validates spawn (severity ≥ 2 blocks the export).
 - If no spawn exists, auto-creates a default (fully undoable with state capture).
 - Bakes the level in Full mode.
@@ -275,7 +273,7 @@ For faster iteration on large levels:
 - **Bake Changed**: bakes only brushes that have been modified (dirty-tagged) since the last successful bake. Dirty tags survive failed bakes and accumulate until the next success.
 
 ### Bake Preview Modes
-Use the **Preview Mode** dropdown in the Manage tab → Bake section to choose how baked geometry renders:
+Use the **Preview Mode** dropdown in **Test → Advanced Bake** to choose how baked geometry renders:
 - **Full**: standard material rendering (default).
 - **Wireframe**: cyan wireframe overlay using a custom shader — useful for inspecting geometry topology.
 - **Proxy**: semi-transparent grey unshaded material — ultra-fast rendering for layout testing.
@@ -286,7 +284,7 @@ Use the **Preview Mode** dropdown in the Manage tab → Bake section to choose h
 - Is **disabled** while a bake is in progress to prevent overlapping operations.
 
 ### Bake Options
-The Manage tab Bake section exposes additional controls:
+The **Test → Advanced Bake** section exposes additional controls:
 - **Chunk Size** (SpinBox, 0-256, default 32): spatial chunk size for bake grouping. Set to 0 to disable chunking.
 - **Bake Visible Only** (checkbox): skips hidden visgroups and invisible brushes during bake.
 - **Use MultiMesh** (checkbox): after baking, consolidates repeated identical meshes into `MultiMeshInstance3D` nodes. Useful for levels with many copies of the same brush shape — reduces draw calls.
@@ -333,14 +331,14 @@ Issues appear as color-coded toast notifications.
 When **Use Face Materials** is enabled, full bakes yield back to the editor every 8 brushes so the UI stays responsive during large bakes. A progress label shows "Collecting faces N/M" as geometry is processed. The bake operates on a snapshot of brush state taken at the start, so editing brushes while a bake is running will not produce mixed results — changes are picked up on the next bake.
 
 ### Bake Time Estimate
-The Manage tab shows an estimated bake time based on the last bake duration and current brush count. Frame-yield idle time during face bakes is excluded from the estimate so it reflects actual work, not editor frame pacing. If the level has more than 500 brushes, a "Chunking recommended" tip appears.
+The Test tab shows an estimated bake time based on the last bake duration and current brush count. Frame-yield idle time during face bakes is excluded from the estimate so it reflects actual work, not editor frame pacing. If the level has more than 500 brushes, a "Chunking recommended" tip appears.
 
 **player_start properties** (set in the Entity Properties panel):
 - `primary` (bool) -- preferred spawn when multiple exist.
 - `angle` (float, degrees) -- initial yaw rotation for the player.
 - `height_offset` (float) -- extra height above floor for safety.
 
-**Manage tab → Spawn section**:
+**Test tab → Spawn section**:
 - **Validate Spawn** -- triggers a bake, then runs validation against real collision geometry and shows debug overlay (green/red capsule, floor ray, ceiling ray) for 10 seconds.
 - **Create Default Spawn** -- places a `player_start` at brush centroid if none exists. Fully undoable and redoable.
 - **Preview Spawn Debug** -- triggers a bake, then shows persistent overlay toggle (stays visible until unchecked).
@@ -356,10 +354,10 @@ Transient notifications appear in the dock for important events:
 
 ### Context Hints
 Each tab shows a contextual hint at the bottom guiding you through the workflow:
-- Brush tab: "Click and drag in the viewport to draw your first brush" → "Try: Hollow, Clip, or Extrude"
+- Build tab: start with **Create Starter**, then draw; selection reveals Hollow, Clip, and Extrude actions
 - Paint tab: "Draw some brushes first, then paint them here"
-- Entities tab: "Drag an entity from the palette into the viewport"
-- Manage tab: "When ready, use Bake to convert brushes into final geometry"
+- Objects tab: drag an object from the palette into the viewport
+- Test tab: use **Test Level** for the one-click path; check or bake separately only when needed
 
 ### Marquee Selection
 Click and drag in the 3D viewport while in **Select mode** to draw a selection rectangle. All brushes and entities whose screen-space center falls within the rectangle are selected. Hold **Shift** to add to the existing selection.
@@ -482,7 +480,7 @@ The viewport HUD shows the current grid snap value (e.g. "Grid: 16") persistentl
 - **`]`** — double grid snap (e.g. 16 → 32), maximum 512
 
 ### Subtract Preview
-Enable **Subtract Preview** in Manage tab → Settings to see real-time wireframe overlays at the AABB intersection of additive and subtractive brushes. Red wireframe boxes show exactly where subtractive brushes will cut into additive geometry. The preview updates automatically when brushes are added, removed, or moved (with a 0.15s debounce for performance). This helps visualize the effect of subtract operations before baking.
+Enable **Subtract Preview** in Test tab → Settings to see real-time wireframe overlays at the AABB intersection of additive and subtractive brushes. Red wireframe boxes show exactly where subtractive brushes will cut into additive geometry. The preview updates automatically when brushes are added, removed, or moved (with a 0.15s debounce for performance). This helps visualize the effect of subtract operations before baking.
 
 ### Status bar
 - Shows current status ("Ready", "Baking...", errors in red, warnings in yellow).
@@ -502,7 +500,7 @@ HammerForge supports three snap modes that can be combined:
 | **Vertex** | V | Snap to the 8 corners of existing brushes |
 | **Center** | C | Snap to the center point of existing brushes |
 
-Toggle modes independently using the G/V/C buttons below the Grid Snap row in the Brush tab. When multiple modes are enabled, the closest candidate wins — a nearby brush corner will beat a farther grid point. The snap threshold (default 2.0 world units) determines how close you need to be to a geometry candidate for it to take effect.
+Toggle modes independently using the G/V/C buttons below the Grid Snap row in the Build tab. When multiple modes are enabled, the closest candidate wins — a nearby brush corner will beat a farther grid point. The snap threshold (default 2.0 world units) determines how close you need to be to a geometry candidate for it to take effect.
 
 **Tip:** Enable Vertex snap when aligning brushes edge-to-edge. Enable Center snap when centering a brush inside another.
 
@@ -536,7 +534,7 @@ Subtractive brushes are staged as **Pending Cuts** until explicitly applied. Thi
 
 **Applying cuts** (three methods, all equivalent):
 1. **Context toolbar** (recommended): When in Draw mode with pending cuts, the toolbar shows **Apply** / **Commit** / **Clear** buttons with a count badge. This is the fastest path — no tab switching needed.
-2. **Manage tab → Actions**: The Apply Cuts, Clear Pending Cuts, and Commit Cuts (Bake) buttons are always available.
+2. **Test tab → Actions**: The Apply Cuts, Clear Pending Cuts, and Commit Cuts (Bake) buttons are always available.
 3. **Viewport context menu**: Space → Apply Cuts (when in subtract context).
 
 | Button | Action |
@@ -566,7 +564,7 @@ For full details, see `docs/HammerForge_Data_Portability.md`.
 For install steps, upgrade guidance, and cache reset help, see `docs/HammerForge_Install_Upgrade.md`.
 
 ## Shortcut HUD
-The on-screen shortcut overlay updates dynamically based on your current tool and mode. Toggle it via the Show HUD checkbox in the Manage tab → Settings section. It shows:
+The on-screen shortcut overlay updates dynamically based on your current tool and mode. Toggle it via the Show HUD checkbox in the Test tab → Settings section. It shows:
 
 | Context | Shortcuts Shown |
 |---------|----------------|
@@ -649,7 +647,7 @@ Prefabs let you save a selection of brushes and entities as a reusable group and
 
 ### Saving a Prefab
 1. Select the brushes and/or entities you want to save.
-2. Open Manage tab → Prefabs section.
+2. Open Test tab → Prefabs section.
 3. Enter a name and click **Save** (or **Save Linked** to enable live propagation).
 4. The prefab is saved as a `.hfprefab` JSON file in `res://prefabs/`.
 
@@ -853,7 +851,7 @@ Preview lines during placement: green ticks for stairs, yellow for railings, ora
 ## Visgroups (Visibility Groups)
 Visgroups let you organize your map into logical groups and toggle their visibility.
 
-1. Open the **Manage** tab in the dock.
+1. Open the **Test** tab in the dock.
 2. Type a name in the Visgroup field and click **New** to create a visgroup.
 3. Select brushes/entities in the viewport, then click **Add Sel** to add them to the visgroup.
 4. Click the visgroup name in the list to toggle between **[V]** (visible) and **[H]** (hidden).
@@ -868,7 +866,7 @@ Notes:
 Groups let you persistently link brushes/entities so they select and move together.
 
 1. Select the brushes/entities you want to group.
-2. Press **Ctrl+G** (or click **Group Sel** in the Manage tab → Visgroups & Groups section).
+2. Press **Ctrl+G** (or click **Group Sel** in the Test tab → Visgroups & Groups section).
 3. Click any member of the group -- all members are selected automatically.
 4. Press **Ctrl+U** (or click **Ungroup**) to dissolve the group.
 
@@ -902,7 +900,7 @@ Right-click a material thumbnail in the Material Browser and choose **Apply + Re
 ## Texture Lock
 When Texture Lock is enabled, moving or resizing a brush automatically adjusts its face UVs so textures stay aligned.
 
-1. Check **Texture Lock** in the Brush tab (enabled by default).
+1. Check **Texture Lock** in the Build tab (enabled by default).
 2. Move or resize brushes normally -- UV alignment is preserved.
 3. Uncheck to disable (UVs will shift with transforms as before).
 
@@ -914,7 +912,7 @@ Notes:
 ## Cordon (Partial Bake)
 The cordon restricts bake output to an AABB region, useful for iterating on a specific area of a large map.
 
-1. Open the **Manage** tab in the dock.
+1. Open the **Test** tab in the dock.
 2. Check **Enable Cordon** to activate.
 3. Set the min/max coordinates with the spinboxes, or select brushes and click **Set from Selection**.
 4. A yellow wireframe shows the cordon bounds in the viewport.
@@ -1124,7 +1122,7 @@ Use Face Materials (optional):
 PowerShell command:
 
 ```powershell
-Start-Process -FilePath "C:\Godot\Godot_v4.6-stable_win64.exe" `
+Start-Process -FilePath "C:\Godot\Godot_v4.7-stable_win64.exe" `
   -ArgumentList '--editor','--path','C:\hammerforge' `
   -RedirectStandardOutput "C:\Godot\godot_stdout.log" `
   -RedirectStandardError "C:\Godot\godot_stderr.log" `
@@ -1135,7 +1133,7 @@ Start-Process -FilePath "C:\Godot\Godot_v4.6-stable_win64.exe" `
 No brushes appear
 - Ensure HammerForge is enabled.
 - Select LevelRoot.
-- Use **New HammerForge Level** (or Create Floor) so raycasts hit something.
+- Use **Create Starter** (or Create Floor) so raycasts hit something.
 
 Subtract does nothing
 - Subtract only affects Add brushes and is visible after Bake.

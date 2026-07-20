@@ -1,7 +1,8 @@
 @tool
 extends RefCounted
 ## Builds the Manage tab UI and connects its signals.
-## Extracted from dock.gd — purely organizational, no behavior changes.
+## Keeps the common build-and-play workflow obvious while grouping specialist
+## controls into collapsed sections.
 
 var dock  # HammerForgeDock reference
 
@@ -17,38 +18,67 @@ func build(parent: Control) -> void:
 
 	var hf_collapsible_section = dock.HFCollapsibleSection
 
-	# --- Bake section ---
-	var bake_sec = hf_collapsible_section.create("Bake", true)
+	# --- Primary one-click test workflow ---
+	var bake_sec = hf_collapsible_section.create("Test Level", true)
 	root_vbox.add_child(bake_sec)
 	dock._register_section(bake_sec, "Bake")
 	var bk = bake_sec.get_content()
 
-	dock.bake_btn = dock._make_button("Bake")
-	bk.add_child(dock.bake_btn)
+	dock.primary_quick_play_btn = dock._make_button("Test Level  (Bake + Play)")
+	dock.primary_quick_play_btn.name = "PrimaryQuickPlay"
+	dock.primary_quick_play_btn.custom_minimum_size.y = 36
+	dock._set_tooltip(dock.primary_quick_play_btn, "Bake and run the current level in one step")
+	var has_root = dock.level_root != null
+	var disabled_hint = (
+		"Wait for the current bake to finish"
+		if has_root and dock._bake_disabled
+		else "Requires a LevelRoot — use Create Starter or Create Empty above"
+	)
+	dock._set_control_disabled_hint(
+		dock.primary_quick_play_btn, not has_root or dock._bake_disabled, disabled_hint
+	)
+	dock.primary_quick_play_btn.pressed.connect(dock._on_quick_play)
+	bk.add_child(dock.primary_quick_play_btn)
 
-	dock.bake_dry_run_btn = dock._make_button("Bake Dry Run")
-	bk.add_child(dock.bake_dry_run_btn)
+	var manual_actions := HBoxContainer.new()
+	manual_actions.name = "ManualActions"
+	manual_actions.add_theme_constant_override("separation", 4)
+	bk.add_child(manual_actions)
+	dock.validate_btn = dock._make_button("Check Only")
+	dock.validate_btn.tooltip_text = "Check the level without baking or running it"
+	dock.validate_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	manual_actions.add_child(dock.validate_btn)
+	dock.bake_btn = dock._make_button("Bake Only")
+	dock.bake_btn.tooltip_text = "Bake the level without starting play mode"
+	dock.bake_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	manual_actions.add_child(dock.bake_btn)
 
-	dock.validate_btn = dock._make_button("Validate Level")
-	bk.add_child(dock.validate_btn)
+	# --- Advanced bake controls ---
+	var advanced_bake_sec = hf_collapsible_section.create("Advanced Bake", false)
+	root_vbox.add_child(advanced_bake_sec)
+	dock._register_section(advanced_bake_sec, "Advanced Bake")
+	var adv = advanced_bake_sec.get_content()
 
 	dock.validate_fix_btn = dock._make_button("Validate + Fix")
-	bk.add_child(dock.validate_fix_btn)
+	adv.add_child(dock.validate_fix_btn)
+
+	dock.bake_dry_run_btn = dock._make_button("Bake Dry Run")
+	adv.add_child(dock.bake_dry_run_btn)
 
 	dock.bake_merge_meshes = dock._make_check("Merge Meshes")
-	bk.add_child(dock.bake_merge_meshes)
+	adv.add_child(dock.bake_merge_meshes)
 
 	dock.bake_generate_lods = dock._make_check("Generate LODs")
-	bk.add_child(dock.bake_generate_lods)
+	adv.add_child(dock.bake_generate_lods)
 
 	dock.bake_unwrap_uv0 = dock._make_check("Unwrap UV0")
-	bk.add_child(dock.bake_unwrap_uv0)
+	adv.add_child(dock.bake_unwrap_uv0)
 
 	dock.bake_lightmap_uv2 = dock._make_check("Lightmap UV2")
-	bk.add_child(dock.bake_lightmap_uv2)
+	adv.add_child(dock.bake_lightmap_uv2)
 
 	dock.bake_use_face_materials = dock._make_check("Use Face Materials")
-	bk.add_child(dock.bake_use_face_materials)
+	adv.add_child(dock.bake_use_face_materials)
 
 	dock.bake_lightmap_texel_row = HBoxContainer.new()
 	var texel_label = Label.new()
@@ -56,10 +86,10 @@ func build(parent: Control) -> void:
 	dock.bake_lightmap_texel_row.add_child(texel_label)
 	dock.bake_lightmap_texel = dock._make_spin(0.01, 4.0, 0.01, 0.1)
 	dock.bake_lightmap_texel_row.add_child(dock.bake_lightmap_texel)
-	bk.add_child(dock.bake_lightmap_texel_row)
+	adv.add_child(dock.bake_lightmap_texel_row)
 
 	dock.bake_navmesh = dock._make_check("Bake Navmesh")
-	bk.add_child(dock.bake_navmesh)
+	adv.add_child(dock.bake_navmesh)
 
 	dock.bake_navmesh_cell_row = HBoxContainer.new()
 	var nav_cell_label = Label.new()
@@ -69,7 +99,7 @@ func build(parent: Control) -> void:
 	dock.bake_navmesh_cell_row.add_child(dock.bake_navmesh_cell_size)
 	dock.bake_navmesh_cell_height = dock._make_spin(0.05, 2.0, 0.01, 0.2)
 	dock.bake_navmesh_cell_row.add_child(dock.bake_navmesh_cell_height)
-	bk.add_child(dock.bake_navmesh_cell_row)
+	adv.add_child(dock.bake_navmesh_cell_row)
 
 	dock.bake_navmesh_agent_row = HBoxContainer.new()
 	var nav_agent_label = Label.new()
@@ -79,23 +109,23 @@ func build(parent: Control) -> void:
 	dock.bake_navmesh_agent_row.add_child(dock.bake_navmesh_agent_height)
 	dock.bake_navmesh_agent_radius = dock._make_spin(0.1, 2.0, 0.05, 0.4)
 	dock.bake_navmesh_agent_row.add_child(dock.bake_navmesh_agent_radius)
-	bk.add_child(dock.bake_navmesh_agent_row)
+	adv.add_child(dock.bake_navmesh_agent_row)
 
 	# -- Incremental / selection bake --
 	var bake_opt_sep = HSeparator.new()
-	bk.add_child(bake_opt_sep)
+	adv.add_child(bake_opt_sep)
 
 	dock.bake_selected_btn = dock._make_button("Bake Selected")
 	dock.bake_selected_btn.tooltip_text = "Bake only the currently selected brushes"
-	bk.add_child(dock.bake_selected_btn)
+	adv.add_child(dock.bake_selected_btn)
 
 	dock.bake_changed_btn = dock._make_button("Bake Changed")
 	dock.bake_changed_btn.tooltip_text = "Bake only brushes modified since last bake"
-	bk.add_child(dock.bake_changed_btn)
+	adv.add_child(dock.bake_changed_btn)
 
 	dock.bake_check_issues_btn = dock._make_button("Check Bake Issues")
 	dock.bake_check_issues_btn.tooltip_text = ("Scan for bake problems: degenerate brushes, floating subtracts, overlapping cuts")
-	bk.add_child(dock.bake_check_issues_btn)
+	adv.add_child(dock.bake_check_issues_btn)
 
 	# -- Preview mode --
 	var preview_row = HBoxContainer.new()
@@ -109,7 +139,7 @@ func build(parent: Control) -> void:
 	dock.bake_preview_mode_opt.tooltip_text = ("Full: final quality. Wireframe: fast unshaded outline. Proxy: low-res solid.")
 	dock.bake_preview_mode_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	preview_row.add_child(dock.bake_preview_mode_opt)
-	bk.add_child(preview_row)
+	adv.add_child(preview_row)
 
 	# -- Chunk size --
 	var chunk_row = HBoxContainer.new()
@@ -119,22 +149,22 @@ func build(parent: Control) -> void:
 	dock.bake_chunk_size_spin = dock._make_spin(0.0, 256.0, 1.0, 32.0)
 	dock.bake_chunk_size_spin.tooltip_text = "Spatial chunk size for bake grouping (0 = no chunking)"
 	chunk_row.add_child(dock.bake_chunk_size_spin)
-	bk.add_child(chunk_row)
+	adv.add_child(chunk_row)
 
 	# -- Bake Visible Only --
 	dock.bake_visible_only_check = dock._make_check("Bake Visible Only")
 	dock.bake_visible_only_check.tooltip_text = "Skip hidden visgroups and invisible brushes during bake"
-	bk.add_child(dock.bake_visible_only_check)
+	adv.add_child(dock.bake_visible_only_check)
 
 	# -- MultiMesh consolidation --
 	dock.bake_use_multimesh_check = dock._make_check("Use MultiMesh")
 	dock.bake_use_multimesh_check.tooltip_text = "Consolidate repeated identical meshes into MultiMeshInstance3D"
-	bk.add_child(dock.bake_use_multimesh_check)
+	adv.add_child(dock.bake_use_multimesh_check)
 
 	# -- Material Atlas --
 	dock.bake_use_atlas_check = dock._make_check("Material Atlas")
 	dock.bake_use_atlas_check.tooltip_text = ("Pack material textures into a single atlas to reduce draw calls (requires Face Materials)")
-	bk.add_child(dock.bake_use_atlas_check)
+	adv.add_child(dock.bake_use_atlas_check)
 
 	# -- Auto Connectors --
 	dock.bake_auto_connectors_check = dock._make_check("Auto Connectors")
@@ -142,11 +172,11 @@ func build(parent: Control) -> void:
 		"Auto-generate ramps or stairs between height levels during bake"
 		+ "\nRequires at least 2 paint layers at different heights"
 	)
-	bk.add_child(dock.bake_auto_connectors_check)
+	adv.add_child(dock.bake_auto_connectors_check)
 
 	var conn_row := HBoxContainer.new()
 	conn_row.add_theme_constant_override("separation", 4)
-	bk.add_child(conn_row)
+	adv.add_child(conn_row)
 
 	var conn_mode_label := Label.new()
 	conn_mode_label.text = "Mode:"
@@ -163,7 +193,7 @@ func build(parent: Control) -> void:
 
 	var conn_settings_row := HBoxContainer.new()
 	conn_settings_row.add_theme_constant_override("separation", 4)
-	bk.add_child(conn_settings_row)
+	adv.add_child(conn_settings_row)
 
 	var step_label := Label.new()
 	step_label.text = "Step H:"
@@ -199,11 +229,11 @@ func build(parent: Control) -> void:
 		"Auto-generate OccluderInstance3D nodes from large flat surfaces"
 		+ "\nReduces draw calls via occlusion culling without manual placement"
 	)
-	bk.add_child(dock.bake_generate_occluders_check)
+	adv.add_child(dock.bake_generate_occluders_check)
 
 	var occl_row := HBoxContainer.new()
 	occl_row.add_theme_constant_override("separation", 4)
-	bk.add_child(occl_row)
+	adv.add_child(occl_row)
 
 	var occl_area_label := Label.new()
 	occl_area_label.text = "Min Area:"
@@ -224,26 +254,26 @@ func build(parent: Control) -> void:
 	dock.bake_estimate_label.text = "Est: — "
 	dock.bake_estimate_label.add_theme_font_size_override("font_size", 11)
 	dock.bake_estimate_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 1.0))
-	bk.add_child(dock.bake_estimate_label)
+	adv.add_child(dock.bake_estimate_label)
 
 	# -- Quick Play modes --
 	var qp_sep = HSeparator.new()
-	bk.add_child(qp_sep)
+	adv.add_child(qp_sep)
 
 	dock.quick_play_camera_btn = dock._make_button("Play from Camera")
 	dock.quick_play_camera_btn.tooltip_text = ("Teleport spawn to current editor camera position and play")
-	bk.add_child(dock.quick_play_camera_btn)
+	adv.add_child(dock.quick_play_camera_btn)
 
 	dock.quick_play_area_btn = dock._make_button("Play Selected Area")
 	dock.quick_play_area_btn.tooltip_text = ("Auto-cordon to selection, bake only that area, and play")
-	bk.add_child(dock.quick_play_area_btn)
+	adv.add_child(dock.quick_play_area_btn)
 
 	dock.export_playtest_btn = dock._make_button("Export Playtest Build")
 	dock.export_playtest_btn.tooltip_text = ("Validate, bake optimized, and launch as playable scene")
-	bk.add_child(dock.export_playtest_btn)
+	adv.add_child(dock.export_playtest_btn)
 
 	# --- Actions section ---
-	var act_sec = hf_collapsible_section.create("Actions", true)
+	var act_sec = hf_collapsible_section.create("Actions", false)
 	root_vbox.add_child(act_sec)
 	dock._register_section(act_sec, "Actions")
 	var ac = act_sec.get_content()
@@ -271,7 +301,7 @@ func build(parent: Control) -> void:
 	ac.add_child(dock.clear_btn)
 
 	# --- File section ---
-	var file_sec = hf_collapsible_section.create("File", true)
+	var file_sec = hf_collapsible_section.create("File", false)
 	root_vbox.add_child(file_sec)
 	dock._register_section(file_sec, "File")
 	var flc = file_sec.get_content()

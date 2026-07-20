@@ -57,7 +57,7 @@ func populate(keymap) -> void:
 	var root_item = _tree.create_item()
 
 	# Ordered categories
-	var category_order := ["Tools", "Editing", "Paint", "Axis Lock"]
+	var category_order := ["Workflow", "Tools", "Editing", "Selection", "Paint", "Axis Lock"]
 	var categorized: Dictionary = {}
 	for cat in category_order:
 		categorized[cat] = []

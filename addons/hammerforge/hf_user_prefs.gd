@@ -11,6 +11,8 @@ extends RefCounted
 const PREFS_PATH := "user://hammerforge_prefs.json"
 
 var data: Dictionary = {}
+## Tests and temporary previews can disable disk writes without changing runtime behavior.
+var persistence_enabled := true
 
 
 static func load_prefs() -> HFUserPrefs:
@@ -42,6 +44,8 @@ static func _defaults() -> Dictionary:
 
 ## Save preferences to disk.
 func save() -> void:
+	if not persistence_enabled:
+		return
 	var file = FileAccess.open(PREFS_PATH, FileAccess.WRITE)
 	if file:
 		file.store_string(JSON.stringify(data, "\t"))

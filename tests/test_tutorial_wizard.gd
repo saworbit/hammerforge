@@ -9,6 +9,7 @@ var prefs: HFUserPrefsType
 
 func before_each():
 	prefs = HFUserPrefsType.new()
+	prefs.persistence_enabled = false
 	prefs.data = HFUserPrefsType._defaults()
 	wizard = HFTutorialWizard.new()
 	wizard.set_user_prefs(prefs)
@@ -24,7 +25,7 @@ func after_each():
 
 
 func test_step_count():
-	assert_eq(HFTutorialWizard.get_step_count(), 5, "Tutorial should have 5 steps")
+	assert_eq(HFTutorialWizard.get_step_count(), 2, "Tutorial should teach one short workflow")
 
 
 func test_initial_step_zero():
@@ -32,9 +33,36 @@ func test_initial_step_zero():
 
 
 func test_start_at_custom_step():
-	# Start at step 2 (simulating resume)
-	wizard.start(null, null, 2)
-	assert_eq(wizard.get_current_step(), 2, "Should resume at step 2")
+	# Start at the final step (simulating resume)
+	wizard.start(null, null, 1)
+	assert_eq(wizard.get_current_step(), 1, "Should resume at the final step")
+
+
+func test_primary_action_emits_step_setup_action():
+	var received: Array[String] = []
+	wizard.action_requested.connect(func(action: String): received.append(action))
+	wizard.start(null, null, 0)
+	wizard._on_primary_action()
+	assert_eq(received, ["setup_draw"])
+
+
+func test_back_returns_to_previous_step():
+	wizard.start(null, null, 0)
+	wizard._on_skip()
+	wizard._on_back()
+	assert_eq(wizard.get_current_step(), 0)
+
+
+func test_first_step_progress_is_visible():
+	wizard.start(null, null, 0)
+	assert_eq(int(wizard._progress.value), 1)
+	assert_eq(wizard._step_counter.text, "Step 1 of 2")
+
+
+func test_final_step_is_one_click_test_level():
+	assert_eq(HFTutorialWizard.STEPS[1]["signal_name"], "bake_finished")
+	assert_eq(HFTutorialWizard.STEPS[1]["action"], "quick_play")
+	assert_eq(HFTutorialWizard.STEPS[1]["action_label"], "Test Level Now")
 
 
 func test_start_step_clamped():
@@ -57,8 +85,6 @@ func test_skip_advances_step():
 	wizard.start(null, null, 0)
 	wizard._on_skip()
 	assert_eq(wizard.get_current_step(), 1, "Skip should advance to step 1")
-	wizard._on_skip()
-	assert_eq(wizard.get_current_step(), 2, "Skip should advance to step 2")
 
 
 func test_dismiss_emits_signal():
@@ -119,12 +145,12 @@ func test_set_root_deferred_start():
 
 
 func test_set_root_deferred_resumes_saved_step():
-	# Simulate resume: prefs say we were on step 3, and start() was never called
-	prefs.set_pref("tutorial_step", 3)
+	# Simulate resume: prefs say we were on the final step, and start() was never called
+	prefs.set_pref("tutorial_step", 1)
 	var late_wizard = HFTutorialWizard.new()
 	late_wizard.set_user_prefs(prefs)
 	add_child_autofree(late_wizard)
 	var mock_root = Node3D.new()
 	add_child_autofree(mock_root)
 	late_wizard.set_root(mock_root, null)
-	assert_eq(late_wizard.get_current_step(), 3, "Should resume at saved step 3")
+	assert_eq(late_wizard.get_current_step(), 1, "Should resume at the saved final step")

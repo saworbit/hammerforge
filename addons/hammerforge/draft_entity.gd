@@ -187,8 +187,8 @@ func _parse_default_value(type_name: String, value: Variant) -> Variant:
 			return value
 
 
-func _get_property_list() -> Array:
-	var properties: Array = []
+func _get_property_list() -> Array[Dictionary]:
+	var properties: Array[Dictionary] = []
 	var type_hints = _get_entity_type_hints()
 	if not type_hints.is_empty():
 		properties.append(

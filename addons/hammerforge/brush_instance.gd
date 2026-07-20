@@ -234,16 +234,20 @@ func _build_base_mesh() -> Dictionary:
 			cone.bottom_radius = max(size.x, size.z) * 0.5
 			cone.top_radius = 0.0
 			mesh = cone
+		BrushShape.WEDGE:
+			mesh = _build_wedge_mesh()
 		BrushShape.SPHERE:
 			var sphere = SphereMesh.new()
 			sphere.radius = max(size.x, size.z) * 0.5
+			sphere.height = sphere.radius * 2.0
 			mesh = sphere
 		BrushShape.ELLIPSOID:
 			var ellipsoid = SphereMesh.new()
 			var base_radius = max(size.x, size.z) * 0.5
 			ellipsoid.radius = max(0.1, base_radius)
+			ellipsoid.height = ellipsoid.radius * 2.0
 			mesh = ellipsoid
-			var denom = max(0.1, base_radius * 2.0)
+			var denom = max(0.1, ellipsoid.radius * 2.0)
 			mesh_scale = Vector3(size.x / denom, size.y / denom, size.z / denom)
 		BrushShape.CAPSULE:
 			var capsule = CapsuleMesh.new()
@@ -252,10 +256,17 @@ func _build_base_mesh() -> Dictionary:
 			mesh = capsule
 		BrushShape.TORUS:
 			var torus = TorusMesh.new()
-			var ring = max(size.x, size.z) * 0.25
-			torus.ring_radius = max(0.1, ring)
-			torus.pipe_radius = max(0.05, ring * 0.5)
+			# Godot 4 exposes inner/outer radii. Fit a stable canonical torus to
+			# the requested brush bounds so X/Y/Z dimensions remain predictable.
+			torus.outer_radius = 1.0
+			torus.inner_radius = 0.5
 			mesh = torus
+			var torus_size := torus.get_aabb().size
+			mesh_scale = Vector3(
+				size.x / max(0.1, torus_size.x),
+				size.y / max(0.1, torus_size.y),
+				size.z / max(0.1, torus_size.z)
+			)
 		BrushShape.PYRAMID:
 			mesh = PrefabFactory._pyramid_mesh(size, sides)
 		BrushShape.PRISM_TRI:
@@ -275,6 +286,27 @@ func _build_base_mesh() -> Dictionary:
 			fallback.size = size
 			mesh = fallback
 	return {"mesh": mesh, "scale": mesh_scale}
+
+
+func _build_wedge_mesh() -> ArrayMesh:
+	var half := size * 0.5
+	var vertices := [
+		Vector3(-half.x, -half.y, -half.z),
+		Vector3(half.x, -half.y, -half.z),
+		Vector3(-half.x, half.y, -half.z),
+		Vector3(-half.x, -half.y, half.z),
+		Vector3(half.x, -half.y, half.z),
+		Vector3(-half.x, half.y, half.z),
+	]
+	# Clockwise winding as seen from outside, matching FaceData's convention.
+	var faces := [
+		PackedInt32Array([0, 1, 2]),
+		PackedInt32Array([3, 5, 4]),
+		PackedInt32Array([0, 3, 4, 1]),
+		PackedInt32Array([0, 2, 5, 3]),
+		PackedInt32Array([2, 1, 4, 5]),
+	]
+	return PrefabFactory._mesh_from_faces(vertices, faces)
 
 
 func _build_prism_mesh(edge_count: int) -> ArrayMesh:
@@ -625,6 +657,8 @@ func _generate_wire_mesh() -> ArrayMesh:
 	var st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_LINES)
 	match shape:
+		BrushShape.WEDGE:
+			_build_wedge_lines(st, size)
 		BrushShape.PYRAMID:
 			_build_pyramid_lines(st, size, sides)
 		BrushShape.PRISM_TRI:
@@ -642,6 +676,25 @@ func _generate_wire_mesh() -> ArrayMesh:
 		_:
 			return null
 	return st.commit()
+
+
+func _build_wedge_lines(st: SurfaceTool, target_size: Vector3) -> void:
+	var half := target_size * 0.5
+	var back := [
+		Vector3(-half.x, -half.y, -half.z),
+		Vector3(half.x, -half.y, -half.z),
+		Vector3(-half.x, half.y, -half.z),
+	]
+	var front := [
+		Vector3(-half.x, -half.y, half.z),
+		Vector3(half.x, -half.y, half.z),
+		Vector3(-half.x, half.y, half.z),
+	]
+	for index in range(3):
+		var next := (index + 1) % 3
+		_add_line(st, back[index], back[next])
+		_add_line(st, front[index], front[next])
+		_add_line(st, back[index], front[index])
 
 
 func _build_pyramid_lines(st: SurfaceTool, target_size: Vector3, edge_count: int) -> void:

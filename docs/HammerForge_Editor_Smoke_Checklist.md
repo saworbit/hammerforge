@@ -1,6 +1,6 @@
 # HammerForge Editor Smoke Checklist
 
-Last updated: April 12, 2026
+Last updated: July 21, 2026
 
 This checklist covers the editor-only flows that are hard to validate in headless tests:
 - tutorial banner startup before `LevelRoot` exists
@@ -13,7 +13,7 @@ This checklist covers the editor-only flows that are hard to validate in headles
 - path tool: place waypoints, finalize, corridor + miter joint brushes, auto-stairs/railings/trim extras
 - material browser: thumbnail grid, search, filters, favorites, hover preview, context menu
 - texture picker: T key eyedropper for sampling face materials
-- spawn system: validation debug overlay, Quick Play with missing/invalid spawn, Manage tab spawn controls
+- spawn system: validation debug overlay, Test Level with missing/invalid spawn, Test tab spawn controls
 - context toolbar: floating toolbar shows/hides per selection, correct buttons per context
 - command palette: search, fuzzy search, gray-out, action execution, Shift+?/F1/Ctrl+K toggle
 - coach marks: first-use tool guides appear on tool activation, dismissal persistence
@@ -33,7 +33,7 @@ godot --headless -s res://tools/prepare_editor_smoke.gd --path .
 To verify tutorial resume behavior instead of a fresh start:
 
 ```bash
-godot --headless -s res://tools/prepare_editor_smoke.gd --path . -- --tutorial-step=3
+godot --headless -s res://tools/prepare_editor_smoke.gd --path . -- --tutorial-step=1
 ```
 
 Then open:
@@ -50,35 +50,31 @@ Enable the HammerForge plugin if it is not already enabled.
 - Confirm the HammerForge dock shows the tutorial immediately.
 - Confirm the tutorial title, body text, and progress bar are populated.
 - Confirm the four dock tabs remain visible and clickable while the tutorial is shown.
-- Switch between `Brush`, `Paint`, `Entities`, and `Manage`; confirm the tutorial banner remains visible and the dock does not collapse or blank.
+- Switch between `Build`, `Paint`, `Objects`, and `Test`; confirm the tutorial banner remains visible and the dock does not collapse or blank.
 
-### 1b. New HammerForge Level Template
-- With a `LevelRoot` present, switch to the Manage tab.
-- Click **New HammerForge Level** in the Actions section.
+### 1b. Starter Level Template
+- With no `LevelRoot`, click **Create Starter** in the empty-state banner.
 - Confirm a TempFloor (CSGBox3D), DefaultSun (DirectionalLight3D), and player_start entity appear in the scene tree.
-- Confirm the toast reads "New level created — floor, sun, and player spawn added".
+- Confirm the toast reports that the starter level was created.
 - Press Ctrl+Z to undo; confirm all three nodes are removed.
 - Press Ctrl+Shift+Z to redo; confirm all three nodes reappear.
-- Run Quick Play; confirm the playtest scene uses the same sun angle as the editor (shadows match).
+- Run **Test Level**; confirm the playtest scene uses the same sun angle as the editor (shadows match).
 
 ### 2. Late `LevelRoot` Hookup
-- In the 3D viewport, create or trigger creation of `LevelRoot` using the normal plugin workflow.
+- In the 3D viewport, create `LevelRoot` using **Create Empty** or an intentional left-click with Draw active.
 - Confirm the tutorial remains on step 1 rather than resetting or disappearing.
 - Confirm step 1 advances only after adding a brush, not merely because `LevelRoot` appeared.
 
 ### 3. Guided Step Flow
 - Step 1: draw an additive room brush; confirm the tutorial advances.
-- Step 2: draw a subtractive brush overlapping the room; confirm the tutorial advances only for subtraction.
-- Step 3: switch to `Paint`, enable Paint Mode, and paint floor cells; confirm the tutorial advances.
-- Step 4: switch to `Entities` and drag an entity into the viewport; confirm the tutorial advances.
-- Step 5: switch to `Manage` and run Bake.
+- Step 2: click **Test Level Now**; confirm the guide starts the normal check, bake, spawn-validation, and play flow.
 - Confirm `bake_finished(false)` does not complete the tutorial.
 - Confirm only a successful bake completes the tutorial.
 - Confirm the completion state auto-closes after the short delay.
 
 ### 4. Tutorial Resume
 - Close Godot.
-- Run `prepare_editor_smoke.gd` with `--tutorial-step=3`.
+- Run `prepare_editor_smoke.gd` with `--tutorial-step=1`.
 - Reopen `hf_editor_smoke_start.tscn`.
 - Confirm the tutorial resumes at the saved step instead of restarting from step 1.
 
@@ -91,7 +87,7 @@ Enable the HammerForge plugin if it is not already enabled.
 
 ### 6. Prefab Save + Drag/Drop
 - Select at least one brush or entity.
-- In `Manage -> Prefabs`, save a prefab with a unique test name.
+- In `Test -> Prefabs`, save a prefab with a unique test name.
 - Confirm the prefab list refreshes and the new item appears.
 - Drag the prefab from the list into the 3D viewport.
 - Confirm the prefab instances at the snapped placement point.
@@ -100,7 +96,7 @@ Enable the HammerForge plugin if it is not already enabled.
 - Redo the placement; confirm it is restored.
 
 ### 7. Subtract Preview
-- Open `Manage -> Settings`.
+- Open `Test -> Settings`.
 - Toggle `Subtract Preview` on.
 - Create an additive brush and a subtractive brush with real overlap.
 - Confirm the red wireframe preview appears on the overlap volume.
@@ -207,25 +203,25 @@ Enable the HammerForge plugin if it is not already enabled.
 - Press **T** on a face with no material; confirm a toast message appears ("Face has no material assigned").
 - **Reimport resilience**: select a brush, switch to the Paint tab, scroll through thumbnails (triggering any lazy texture reimport). Confirm the brush selection label in the dock footer still shows "Sel: 1 brush" — the selection must not be cleared by reimport.
 
-### 12. Spawn System + Quick Play Validation
+### 12. Spawn System + Test Level Validation
 - Delete all `player_start` entities (or start with a fresh scene).
-- Click **Quick Play**; confirm a toast warns "No player_start found — auto-creating default spawn".
+- Click **Test Level**; confirm a toast warns "No player_start found — auto-creating default spawn".
 - Confirm the playtest launches and the player spawns above the brush centroid.
 - Stop the playtest. Move the auto-created `player_start` inside a solid brush.
-- Click **Quick Play**; confirm a dialog appears listing "Spawn inside solid geometry".
+- Click **Test Level**; confirm a dialog appears listing "Spawn inside solid geometry".
 - Click **Fix & Play**; confirm the spawn snaps to a valid floor position and playtest launches.
 - Stop the playtest. Place `player_start` high above geometry (floating in space).
-- Click **Quick Play**; confirm a warning dialog about floating/no floor.
-- Click **Cancel**; confirm playtest does not launch and a "Quick Play cancelled" toast appears.
-- Open **Manage → Spawn** section.
+- Click **Test Level**; confirm a warning dialog about floating/no floor.
+- Click **Cancel**; confirm the playtest does not launch and cancellation feedback appears.
+- Open **Test → Spawn** section.
 - Click **Validate Spawn**; confirm the debug overlay appears (capsule, floor ray, markers) for ~10 seconds.
 - Check **Preview Spawn Debug**; confirm the overlay stays persistent.
 - Uncheck **Preview Spawn Debug**; confirm the overlay is cleaned up.
 - Place two `player_start` entities. Set `primary = true` on the second one via Entity Properties.
-- Click **Quick Play**; confirm the player spawns at the primary-flagged entity (not the first one).
+- Click **Test Level**; confirm the player spawns at the primary-flagged entity (not the first one).
 - Set `angle = 90` on the primary spawn; playtest and confirm the player faces 90 degrees rotated.
 
-### 12a. Bake Optimizations + Quick Play Modes
+### 12a. Bake Optimizations + Test Modes
 - Select 2-3 brushes. Click **Bake Selected**; confirm only those brushes are baked and previously baked geometry is preserved (not replaced).
 - Modify a brush (move/resize). Click **Bake Changed**; confirm only the modified brush is rebaked. Unmodified geometry stays intact.
 - Set Preview Mode to **Wireframe**; click Bake. Confirm baked output renders as cyan wireframe overlay.
@@ -244,7 +240,7 @@ Enable the HammerForge plugin if it is not already enabled.
 
 ### 12b. Auto-Connectors (Terrain Bake)
 - Create two paint layers at different Y heights (e.g. layer 0 at Y=0, layer 1 at Y=4). Paint adjacent cells so at least one cell in each layer borders the other.
-- Open **Manage → Bake** section. Check **Auto Connectors**.
+- Open **Test → Advanced Bake**. Check **Auto Connectors**.
 - Set Mode to **Ramp**. Click **Bake**. Confirm `AutoConnector_*` MeshInstance3D nodes appear in the baked output connecting the two height levels with sloped geometry.
 - Undo the bake. Set Mode to **Stairs**, Step H to 0.5. Bake again. Confirm stair-step geometry appears instead of a smooth ramp.
 - Set Mode to **Auto**. Bake. Confirm the system chooses ramps for small height differences and stairs for larger ones (threshold = step height).
@@ -255,7 +251,7 @@ Enable the HammerForge plugin if it is not already enabled.
 
 ### 12c. Occluder Generation (Automated Culling)
 - Draw 3-4 large brushes forming walls and a floor (total visible surface > 4 units²).
-- Open **Manage → Bake** section. Check **Generate Occluders**. Leave Min Area at 4.0.
+- Open **Test → Advanced Bake**. Check **Generate Occluders**. Leave Min Area at 4.0.
 - Click **Bake**. In the Scene tree, expand `BakedGeometry` → confirm an `Occluders` node exists containing `Occluder_0`, `Occluder_1`, etc. (OccluderInstance3D nodes).
 - Set Min Area to 10000. Bake again. Confirm the `Occluders` node is gone (all surfaces below threshold).
 - Set Min Area back to 4.0 and bake with Chunk Size > 0 (default 32). Confirm occluders are still generated despite meshes being nested inside `BakedChunk_*` intermediary nodes.
@@ -319,7 +315,7 @@ Enable the HammerForge plugin if it is not already enabled.
 - Press **Ctrl+K** again; type "zzzqq" (no match at all); confirm no entries and no suggestion shown.
 
 ### 17. Example Library
-- Open **Manage** tab. Expand the **Examples** section (collapsed by default).
+- Open **Test** tab. Expand the **Examples** section (collapsed by default).
 - Confirm 5 example cards are visible with titles, difficulty badges, and descriptions.
 - Type "corridor" in the search bar; confirm only the "Corridor with Doorway" card is visible.
 - Clear the search. Type "advanced"; confirm only the "Simple Arena" card is visible.
@@ -363,7 +359,7 @@ Enable the HammerForge plugin if it is not already enabled.
 - Press **Escape**; confirm all rulers are cleared.
 
 ### 22. Undo History Browser
-- Open **Manage → History** section.
+- Open **Test → History** section.
 - Perform 3-4 operations (draw, delete, move). Confirm entries appear in the history browser with color-coded icons.
 - Hover an entry; confirm an enlarged thumbnail preview appears.
 - Double-click an older entry; confirm the editor undoes to that point in history.
@@ -371,7 +367,7 @@ Enable the HammerForge plugin if it is not already enabled.
 - With nothing to undo, confirm the Undo button is disabled. With nothing to redo, confirm Redo is disabled.
 
 ### 23. Performance Monitor
-- Open **Manage → Performance** section.
+- Open **Test → Performance** section.
 - Confirm it shows: Health label, Active Brushes (with ProgressBar), Entities, Vertices (est), Paint Memory, Bake Chunks, Last Bake, Rec. Chunk Size.
 - Draw 5+ brushes; confirm the brush count and vertex estimate update.
 - Create entities; confirm the entity count updates.
@@ -383,7 +379,7 @@ Enable the HammerForge plugin if it is not already enabled.
 - Switch back to dark theme; confirm panels revert to dark colors.
 
 ### 25. Export Playtest Build
-- Open **Manage → Bake** section. Click **Export Playtest Build**.
+- Open **Test → Advanced Bake**. Click **Export Playtest Build**.
 - If no spawn exists, confirm a toast about auto-creating a default spawn, and confirm the spawn creation is undoable.
 - Confirm the level bakes and a playtest scene launches.
 - If entities have I/O connections, confirm the exported scene contains an `HFIODispatcher` child node.
@@ -391,7 +387,7 @@ Enable the HammerForge plugin if it is not already enabled.
 
 ### 26. Displacement Surfaces
 - Draw a box brush. Enter Face Select Mode, select a top face (quad).
-- Open **Brush tab → Displacement** section. Set Power = 3. Click **Create**.
+- Open **Build → Displacement**. Set Power = 3. Click **Create**.
 - Confirm the face becomes a subdivided grid (toast: "Displacement created (power 3)").
 - Enable Paint Mode. Choose Paint Mode = Raise, Radius = 4, Strength = 1.
 - Click and drag on the face. Confirm vertices rise under the brush.
@@ -405,7 +401,7 @@ Enable the HammerForge plugin if it is not already enabled.
 ### 27. Edge Bevel and Face Inset
 - Draw a box brush. Press V for Vertex mode, then E for Edge sub-mode.
 - Click an edge to select it (should highlight orange).
-- Open **Brush tab → Bevel** section. Set Segments = 3, Radius = 2.
+- Open **Build → Bevel**. Set Segments = 3, Radius = 2.
 - Click **Bevel Edge**. Confirm the sharp edge is replaced with 3 intermediate faces (toast: "Beveled 1 edge(s)").
 - Undo; confirm the edge returns to normal.
 - Switch to Face Select Mode. Select a face.

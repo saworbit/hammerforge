@@ -12,12 +12,12 @@ config_version=5
 
 config/name="hammerforge"
 run/main_scene="uid://be36ud0gihbpm"
-config/features=PackedStringArray("4.6", "Forward Plus")
+config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.svg"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/hammerforge/plugin.cfg")
+enabled=PackedStringArray("res://addons/hammerforge/plugin.cfg", "res://addons/godot_mcp/plugin.cfg")
 
 [physics]
 

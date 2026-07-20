@@ -1,6 +1,6 @@
 # HammerForge MVP Guide
 
-Last updated: March 27, 2026
+Last updated: July 21, 2026
 
 This guide is for contributors implementing or extending the MVP.
 
@@ -18,7 +18,7 @@ HammerForge uses a **coordinator + subsystems** pattern:
 - **`level_root.gd`** is a thin coordinator (~1,100 lines) that owns containers, exports, and signals. All public methods delegate to one of 13 subsystem classes.
 - **Subsystems** (`systems/*.gd`) are `RefCounted` classes that do the real work. Each receives a `LevelRoot` reference in its constructor.
 - **`input_state.gd`** is a state machine managing drag/paint modes.
-- **`dock.gd`** uses 4 tabs (Brush, Paint, Entities, Manage) with collapsible sections (persisted state, separators, indented content) built programmatically. Selection tools appear contextually in Brush tab when brushes are selected. Compact toolbar with single-char labels.
+- **`dock.gd`** presents 4 tabs (Build, Paint, Objects, Test) with programmatic, persisted collapsible sections. Selection tools appear contextually in Build when brushes are selected. The primary toolbar exposes Draw, Select, Paint, More, and Help.
 
 See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture conventions.
 
@@ -55,7 +55,7 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 - `HFUndoHelper.commit()` wraps all editor actions with state snapshot restore on undo.
 - **Command collation**: pass a `collation_tag` for rapid operations (nudge, resize, paint). Consecutive actions with the same tag and same `full_state` scope within 1 second merge into one undo entry via `MERGE_ENDS`.
 - **Transactions**: `state_system.begin_transaction()` / `commit_transaction()` / `rollback_transaction()` for atomic multi-step operations.
-- **State-tracked scaffolding**: `capture_state()` / `restore_state()` covers brushes, entities, paint layers, TempFloor, and DefaultSun. All scaffolding created by "New HammerForge Level" round-trips through undo/redo.
+- **State-tracked scaffolding**: `capture_state()` / `restore_state()` covers brushes, entities, paint layers, TempFloor, and DefaultSun. All scaffolding created by **Create Starter** round-trips through undo/redo.
 
 ### Entity Definitions (`HFEntityDef`)
 - Entity types and brush entity classes are data-driven via `hf_entity_def.gd`.
@@ -95,7 +95,7 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 - Plugin handles `"hammerforge_prefab"` drop type with raycast + snap + undo/redo.
 
 ### Tutorial Wizard (`HFTutorialWizard`)
-- 5-step interactive tutorial replacing the static welcome panel.
+- 2-step Draw → Test Level guide replacing the static welcome panel.
 - Each step listens for a specific LevelRoot signal (brush_added, paint_layer_changed, entity_added, bake_finished).
 - Optional validation (e.g. step 2 checks that the brush operation is SUBTRACTION).
 - Progress persisted via `tutorial_step` in user prefs; resumes on editor restart.
@@ -157,18 +157,18 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 - Verify tooltips appear on all dock controls.
 - Verify selection count appears in status bar.
 - Trigger a bake failure and confirm red error message with auto-clear.
-- Click **New HammerForge Level** in Manage tab; confirm floor, sun, and spawn appear. Undo/redo and verify all three round-trip.
-- Run Quick Play after New Level; confirm playtest lighting matches editor sun angle.
+- Click **Create Starter** in the empty-state banner; confirm floor, sun, and spawn appear. Undo/redo and verify all three round-trip.
+- Run **Test Level** after Create Starter; confirm playtest lighting matches editor sun angle.
 
 ## CI
 Run `gdformat --check addons/hammerforge/` and `gdlint addons/hammerforge/` locally. These same checks run automatically on push/PR via `.github/workflows/ci.yml`.
 
 ## Diagnostics
-- Enable Debug Logs in the Manage tab → Settings section for runtime tracing.
+- Enable Debug Logs in the Test tab → Settings section for runtime tracing.
 - Capture exit-time errors with:
 
 ```powershell
-Start-Process -FilePath "C:\Godot\Godot_v4.6-stable_win64.exe" `
+Start-Process -FilePath "C:\Godot\Godot_v4.7-stable_win64.exe" `
   -ArgumentList '--editor','--path','C:\hammerforge' `
   -RedirectStandardOutput "C:\Godot\godot_stdout.log" `
   -RedirectStandardError "C:\Godot\godot_stderr.log" `

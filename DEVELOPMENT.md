@@ -1,17 +1,23 @@
 # Development Guide
 
-Last updated: April 13, 2026
+Last updated: July 21, 2026
 
 This document covers local setup, codebase structure, and how to test features.
 
 ## Requirements
-- Godot Engine 4.6 (stable).
+- Godot Engine 4.7 (stable).
 - A 3D scene to host `LevelRoot`.
 
 ## Local Setup
 1. Open the project in Godot.
 2. Enable the plugin: Project -> Project Settings -> Plugins -> HammerForge.
-3. Open any 3D scene and click in the viewport to auto-create `LevelRoot`.
+3. Open any 3D scene and choose **Create Starter** or **Create Empty** from the dock's empty state.
+
+## Godot MCP Development Setup
+
+The repository vendors `addons/godot_mcp` and tracks `.codex/config.toml`. The client reads authentication from `HAMMERFORGE_GODOT_MCP_TOKEN`; keep the token and all `user://` MCP settings outside version control. The server should remain loopback-only on port `9080` with authentication enabled. See [Install + Upgrade](docs/HammerForge_Install_Upgrade.md#project-scoped-godot-mcp-repository-contributors) for configuration and verification.
+
+Treat `addons/godot_mcp` as vendored code: HammerForge formatting and lint commands target `addons/hammerforge` only. When deliberately updating the vendor snapshot, review it separately and record the upstream revision in the change description.
 
 ## Codebase Structure
 
@@ -20,7 +26,7 @@ addons/hammerforge/
   plugin.gd              EditorPlugin entry point, input routing, sticky LevelRoot discovery
   level_root.gd          Thin coordinator (~1,100 lines), delegates to subsystems
   input_state.gd         Drag/paint state machine (HFInputState)
-  dock.gd + dock.tscn    UI dock (4 tabs: Brush, Paint, Entities, Manage), collapsible sections with persisted state
+  dock.gd + dock.tscn    UI dock (displayed as Build, Paint, Objects, Test), collapsible sections with persisted state
   shortcut_hud.gd        Context-sensitive shortcut overlay (dynamic per mode) + persistent grid size indicator with flash-on-change
   brush_instance.gd      DraftBrush node
   baker.gd               CSG -> mesh bake pipeline (per-face materials, atlas integration, snapshot-based non-blocking face bakes, convex collision shapes)
@@ -69,7 +75,7 @@ addons/hammerforge/
     collapsible_section.gd HFCollapsibleSection: toggle-header VBoxContainer for dock sections
     hf_toast.gd            Toast notification system (auto-fading stacked messages)
     hf_welcome_panel.gd    First-run welcome panel (legacy, replaced by tutorial wizard)
-    hf_tutorial_wizard.gd  Interactive 5-step tutorial wizard (signal-driven auto-advance)
+    hf_tutorial_wizard.gd  Focused 2-step Draw → Test Level guide (signal-driven auto-advance)
     hf_shortcut_dialog.gd  Searchable shortcut reference dialog (filterable Tree with categories)
     hf_material_browser.gd Visual material browser (thumbnail grid, search, filters, favorites, drag-drop)
     hf_prefab_library.gd   Prefab library dock section (search, tags, variants, drag-drop, context menu)
@@ -89,7 +95,7 @@ addons/hammerforge/
     paint_tab_builder.gd   Builds Paint tab sections + signal connections
     entity_tab_builder.gd  Builds Entity Properties + Entity I/O + I/O Wiring sections (all context-hidden until entity selected)
     hf_io_wiring_panel.gd  I/O wiring panel (quick wire, presets, highlight toggle, connection summary)
-    manage_tab_builder.gd  Builds Manage tab sections (Bake, File, Settings, etc.)
+    manage_tab_builder.gd  Builds the displayed Test tab (legacy internal name retained for compatibility)
     selection_tools_builder.gd  Builds Selection Tools section (hollow, clip, move, tie, duplicator)
     hf_ui_factory.gd       HFUIFactory: static factory for repeated UI patterns (make_label_row/spin/check/button/option/separator)
     hf_editor_theme.gd     HFEditorTheme: editor icon/color/stylebox lookup with graceful fallbacks
@@ -175,7 +181,7 @@ addons/hammerforge/
 - **Autosave failure.** The `autosave_failed(error_message)` signal on LevelRoot fires when a threaded write fails. Connect to it in the dock to show user-facing warnings.
 - **Toast notifications.** Use `dock.show_toast(message, level)` (0=INFO, 1=WARNING, 2=ERROR) for user-facing messages. Subsystems can also emit `root.user_message.emit(text, level)` which the dock auto-routes to the toast system.
 - **Mode indicator.** Call `dock.set_mode_indicator(mode_name, stage_hint, numeric)` from `plugin.gd` to update the colored mode banner. `stage_hint` shows gesture progress (e.g. "Step 1/2: Draw base"), `numeric` shows typed input.
-- **Tutorial wizard.** The interactive tutorial (`ui/hf_tutorial_wizard.gd`) replaces the static welcome panel when `show_welcome` is true. 5 steps, each listening for a LevelRoot signal (brush_added, paint_layer_changed, entity_added, bake_finished). Progress persists via `tutorial_step` in user prefs. Dock `highlight_tab()` flashes the relevant tab on each step.
+- **First-run guide.** `ui/hf_tutorial_wizard.gd` presents the two-step Draw → Test Level path when `show_welcome` is true. It advances on `brush_added` and a successful `bake_finished`, persists `tutorial_step`, and can be reopened from Help. Dock `highlight_tab()` uses displayed tab aliases.
 - **Dynamic contextual hints.** `shortcut_hud.gd` shows per-mode viewport hints (e.g. "Click to place corner → drag to set size → release for height"). Hints auto-dismiss after 4s fade tween and persist dismissal via `is_hint_dismissed()`/`dismiss_hint()` on `hf_user_prefs.gd`. Mode key is computed from HUD context dict.
 - **Searchable shortcut dialog.** `ui/hf_shortcut_dialog.gd` extends `AcceptDialog` with a search `LineEdit` and `Tree`. Categories populated from `HFKeymap.get_category()`. Replaces the static shortcuts popup.
 - **Subtract preview.** `systems/hf_subtract_preview.gd` is a `RefCounted` subsystem that renders wireframe AABB intersections between additive and subtractive brushes using `ImmediateMesh` (same 12-edge box pattern as cordon). Debounced (0.15s), pooled `MeshInstance3D` (max 50). Toggle via `show_subtract_preview` on LevelRoot. Persisted in state settings. Call `destroy()` (not `clear()`) when the subsystem is no longer needed — `destroy()` immediately frees all pool nodes and the container; `clear()` only hides them.
@@ -187,7 +193,7 @@ addons/hammerforge/
 - **Convert to heightmap.** `HFBrushToHeightmap` (`paint/hf_brush_to_heightmap.gd`) rasterizes brush top faces onto a grid, creating a heightmap paint layer. Dock handler `_on_heightmap_convert()` inherits `base_grid` (origin/basis) and `chunk_size` from the paint layer manager, emits `paint_layer_changed`, and calls `regenerate_paint_layers()`. Uses `level_root.grid_snap` as cell size when > 0.
 - **Scatter brush.** `HFScatterBrush` (`paint/hf_scatter_brush.gd`) generates scatter transforms for circle or spline shapes with height/slope filtering. `build_preview()` creates a MultiMesh for preview. `commit()` creates a permanent `MultiMeshInstance3D`. Dock wires UI controls → `_build_scatter_settings()` → preview/commit. Spline mode populates control points from `_selection_nodes` positions.
 - **I/O connection presets.** `systems/hf_io_presets.gd` manages built-in and user-saved connection presets. 6 built-in presets (Door+Light+Sound, Button→Toggle, etc.) are always available. User presets persist to `EditorInterface.get_editor_paths().get_config_dir()` in editor, `user://` fallback for tests. `apply_preset(source, preset, target_map)` maps target tags to actual entity names ("self" → source name). `save_entity_as_preset()` captures existing connections. Tests use explicit temp paths with cleanup in `after_each()`.
-- **I/O wiring panel.** `ui/hf_io_wiring_panel.gd` is a `VBoxContainer` embedded in the Entities tab via `entity_tab_builder.gd`. Context-hidden (only visible when an entity is selected) and collapsed by default for progressive disclosure. Shows connection summary, outputs list, quick-wire form, and preset picker with target tag mapping. Emits `connection_added`, `preset_applied`, `highlight_toggled`. `_sync_highlight_button()` reads `_io_visualizer.highlight_connected` and uses `set_pressed_no_signal()` to avoid signal loops. Called from `set_source_entity()` and `dock.sync_wiring_highlight_state()`.
+- **I/O wiring panel.** `ui/hf_io_wiring_panel.gd` is a `VBoxContainer` embedded in the displayed Objects tab via `entity_tab_builder.gd`. Context-hidden (only visible when an entity is selected) and collapsed by default for progressive disclosure. Shows connection summary, outputs list, quick-wire form, and preset picker with target tag mapping. Emits `connection_added`, `preset_applied`, `highlight_toggled`. `_sync_highlight_button()` reads `_io_visualizer.highlight_connected` and uses `set_pressed_no_signal()` to avoid signal loops. Called from `set_source_entity()` and `dock.sync_wiring_highlight_state()`.
 - **I/O runtime dispatcher.** `hf_io_runtime.gd` (`HFIORuntime`) translates entity I/O metadata into live Godot signals. Injected automatically by `export_playtest_scene()` and optionally by `postprocess_bake()` (when `bake_wire_io = true`). Connections are keyed by source node instance ID (not name) so duplicate source names stay isolated. Target delivery iterates all nodes sharing a name (matching `find_entities_by_name()` semantics). `wire()` is idempotent: `_disconnect_all_signals()` tears down stale lambdas; `_prune_overlapping_roots()` deduplicates scan roots by instance ID and removes descendants covered by an ancestor. `extra_scan_root_paths: Array[NodePath]` (@export) persists across scene save/reload for the bake path where the dispatcher lives under `baked_container` but entities are under a sibling node. `HFEntitySystem.fire_output()` delegates to the dispatcher via `fire_from()` when present, falls back to direct multi-target resolution otherwise.
 - **Highlight Connected sync.** `hf_io_visualizer.highlight_connected` is the single source of truth. Context toolbar reads it from `state["highlight_connected"]` via `set_pressed_no_signal()`. Wiring panel syncs via `_sync_highlight_button()`. Plugin.gd handles `"highlight_connected"` action from toolbar, calls `root.set_highlight_connected()` then `dock.sync_wiring_highlight_state()`. Panel's `highlight_toggled` signal flows through dock to visualizer then toolbar state push.
 - **Context hints.** Per-tab hint labels at the bottom of each dock tab update via `_update_context_hints()` in `dock.gd`. Driven by `_hints_dirty` flag alongside `_update_disabled_hints()`.
@@ -211,7 +217,7 @@ addons/hammerforge/
 - **Signal batching.** Wrap multi-brush operations in `root.begin_signal_batch()` / `root.end_signal_batch()`. Transactions do this automatically. On rollback, call `root.discard_signal_batch()` to drop queued signals without emission.
 - **Operation results.** Methods that can fail (hollow, clip, delete) return `HFOpResult` with `ok`, `message`, and `fix_hint`. Use `_op_fail(msg, hint)` in brush_system to both emit `user_message` and return a fail result. Callers can check `result.ok` programmatically, but failures also auto-toast via the `user_message` signal.
 - **Theme-aware UI.** All custom panels (context toolbar, coach marks, hotkey palette, operation replay, toasts, selection filter) use `HFThemeUtils` static methods (`panel_bg()`, `muted_text()`, `accent()`, etc.) instead of hardcoded colors. Each component provides a `refresh_theme_colors()` method called from `plugin.gd:_on_editor_theme_changed()`. `HFThemeUtils.is_dark_theme()` reads `interface/theme/base_color` luminance from `EditorInterface.get_editor_settings()`.
-- **History browser.** `ui/hf_history_browser.gd` replaces the plain ItemList in the Manage tab History section. Records entries via `record_entry(name, version, undo_redo)` with viewport thumbnail capture. Double-click emits `navigate_requested(version)` which `dock._on_history_navigate()` handles by looping undo/redo to the target version. Undo/redo buttons are exposed via `get_undo_button()`/`get_redo_button()`. `dock._refresh_history_list()` wraps ItemList code in `if history_list:` and always calls `_update_history_buttons()`.
+- **History browser.** `ui/hf_history_browser.gd` replaces the plain ItemList in the displayed Test tab History section. Records entries via `record_entry(name, version, undo_redo)` with viewport thumbnail capture. Double-click emits `navigate_requested(version)` which `dock._on_history_navigate()` handles by looping undo/redo to the target version. Undo/redo buttons are exposed via `get_undo_button()`/`get_redo_button()`. `dock._refresh_history_list()` wraps ItemList code in `if history_list:` and always calls `_update_history_buttons()`.
 - **Multi-ruler measure tool.** `hf_measure_tool.gd` stores up to 20 rulers in `_measurements: Array[Dictionary]`. Shift+Click chains from last endpoint. Angles computed at shared vertices via `dir_a.angle_to(dir_b)`. Right-click sets snap reference via `HFSnapSystem.set_custom_snap_line()`. `_finish_ruler()` adjusts `_snap_ref_index` on rollover (decrement if after evicted, clear if evicted).
 - **Export playtest.** `dock._on_export_playtest()` validates spawn, auto-creates if missing (with full undo via state capture before `create_default_spawn()`), bakes, calls `level_root.export_playtest_scene()` to pack baked + entities + default lighting into a `.tscn`, then launches via `play_custom_scene()`.
 - **Geometry-aware snapping.** `_snap_point()` delegates to `HFSnapSystem`. Three modes (Grid=1, Vertex=2, Center=4) as a bitmask. Custom snap lines (set via `set_custom_snap_line()`) are checked alongside grid/geometry candidates. Vertex mode collects 8 box corners from all brushes; Center mode collects brush centers. Closest candidate within `snap_threshold` beats grid snap. Pass `exclude_ids` to skip the brush being dragged.
@@ -247,7 +253,7 @@ The repo includes `.vscode/tasks.json` with pre-configured GUT test tasks and pr
 export GODOT=/usr/local/bin/godot
 
 # Windows (PowerShell)
-$env:GODOT = "C:\Godot\Godot_v4.6-stable_win64.exe"
+$env:GODOT = "C:\Godot\Godot_v4.7-stable_win64.exe"
 ```
 
 **Available tasks** (`Ctrl+Shift+P` → "Tasks: Run Test Task"):
@@ -338,7 +344,7 @@ godot --headless -s res://addons/gut/gut_cmdln.gd --path .
 Reset user prefs for a repeatable editor smoke run:
 ```
 godot --headless -s res://tools/prepare_editor_smoke.gd --path .
-godot --headless -s res://tools/prepare_editor_smoke.gd --path . -- --tutorial-step=3
+godot --headless -s res://tools/prepare_editor_smoke.gd --path . -- --tutorial-step=1
 ```
 
 For editor-only coverage that headless tests cannot exercise, use:
@@ -372,7 +378,7 @@ Then click `Add` in the Paint tab → Materials section and choose that resource
 ## Manual Test Checklist
 
 Visgroups
-- Create a visgroup "walls" from the Manage tab.
+- Create a visgroup "walls" from the Test tab.
 - Add 2 brushes to the visgroup and toggle visibility off -- confirm those 2 brushes hide.
 - Toggle visibility on -- confirm brushes reappear.
 - Create a second visgroup, add a brush to both, hide one -- confirm brush is hidden.
@@ -385,7 +391,7 @@ Grouping
 - Save and reload -- confirm group persists.
 
 Texture Lock
-- Place a textured brush with Texture Lock enabled (Brush tab checkbox).
+- Place a textured brush with Texture Lock enabled (Build tab checkbox).
 - Resize the brush via gizmo -- confirm UV alignment stays consistent.
 - Move the brush -- confirm UVs track the movement.
 - Disable Texture Lock and resize -- confirm UVs shift with the resize.
@@ -397,13 +403,13 @@ Carve UV Preservation
 - Undo -- confirm original state restored.
 
 Cordon (Partial Bake)
-- Enable cordon in the Manage tab.
+- Enable cordon in the Test tab.
 - Set a small AABB around 1 of 3 brushes (or use "Set from Selection").
 - Confirm yellow wireframe appears in the viewport.
 - Bake -- confirm only the brush inside the cordon appears in baked output.
 - Disable cordon and bake -- confirm all brushes appear.
 
-Selection Tools (Brush tab — visible when brushes are selected)
+Selection Tools (Build tab — visible when brushes are selected)
 - Select a brush and press Ctrl+H -- confirm it converts to 6 wall brushes (hollow).
 - Adjust wall thickness spinner in Selection Tools before hollowing and confirm different thicknesses.
 - Select a brush and press Shift+X -- confirm it splits into two brushes along the Y axis.
@@ -422,7 +428,7 @@ Selection Tools (Brush tab — visible when brushes are selected)
 - Save .hflevel with entity I/O connections, reload, and confirm connections persist.
 
 Snap Modes
-- In Brush tab, click V (Vertex) toggle next to Grid Snap presets.
+- In Build tab, click V (Vertex) toggle next to Grid Snap presets.
 - Place a brush, then start drawing another near a corner of the first brush -- confirm it snaps to the exact corner.
 - Click C (Center) toggle. Draw a brush near the center of an existing brush -- confirm it snaps to the center.
 - Disable G (Grid) and both V and C -- confirm brush placement is unsnapped.
@@ -440,7 +446,7 @@ Operation Feedback
 
 Reference Cleanup
 - Place a brush, add it to a group (Ctrl+G), then delete it. Confirm the group is automatically cleaned up.
-- Place a brush, add it to a visgroup in the Manage tab, then delete the brush. Confirm the visgroup no longer lists the deleted brush.
+- Place a brush, add it to a visgroup in the Test tab, then delete the brush. Confirm the visgroup no longer lists the deleted brush.
 - Create two entities with an I/O connection between them. Delete the target entity. Confirm a toast reports the removed connection count.
 
 Carve Tool
@@ -461,7 +467,7 @@ Decal Tool
 - Press Escape to exit decal mode and confirm preview is cleaned up.
 
 Entity I/O Visualization
-- Create two entities with an I/O connection. Enable "Show I/O Lines" in the Entities tab. Confirm colored lines appear between connected entities in the viewport.
+- Create two entities with an I/O connection. Enable "Show I/O Lines" in the Objects tab. Confirm colored lines appear between connected entities in the viewport.
 - Select one entity and confirm its connections highlight in yellow.
 - Disable "Show I/O Lines" and confirm lines disappear.
 
@@ -482,13 +488,10 @@ Axis Lock Visual
 
 Tutorial Wizard
 - Delete `user://hammerforge_prefs.json` and reopen editor -- confirm tutorial wizard appears (not static welcome panel).
-- Draw a brush (step 1) -- confirm tutorial auto-advances to step 2.
-- Draw a Subtract brush -- confirm step 2 validates operation and advances.
-- Paint floor cells -- confirm step 3 advances.
-- Place an entity -- confirm step 4 advances.
-- Bake -- confirm step 5 completes and tutorial shows "Complete!" message.
+- Draw a brush (step 1) -- confirm the guide auto-advances to step 2.
+- Run Test Level -- confirm a successful bake completes step 2 and the guide shows its completion state.
 - Click "Dismiss Tutorial" at step 2 -- confirm wizard closes and prefs are saved.
-- Reopen editor at step 3 -- confirm tutorial resumes at step 3.
+- Reopen the editor at step 1 -- confirm the guide resumes at step 2 rather than restarting.
 
 Contextual Hints
 - Switch to Draw tool -- confirm "Click to place corner → drag to set size → release for height" hint appears in viewport.
@@ -505,14 +508,14 @@ Searchable Shortcut Dialog
 
 Subtract Preview
 - Place an additive brush and a subtractive brush overlapping it.
-- Enable "Subtract Preview" checkbox in Manage tab → Settings.
+- Enable "Subtract Preview" checkbox in Test tab → Settings.
 - Confirm a red wireframe appears at the AABB intersection of the two brushes.
 - Move one brush -- confirm wireframe updates (with slight debounce).
 - Disable the checkbox -- confirm wireframe disappears.
 - Save and reload `.hflevel` -- confirm the toggle state persists.
 
 Prefabs
-- Select 2 brushes + 1 entity. In Manage tab → Prefabs, enter a name and click Save.
+- Select 2 brushes + 1 entity. In Test tab → Prefabs, enter a name and click Save.
 - Confirm `.hfprefab` file appears in `res://prefabs/`.
 - Confirm the file appears in the Prefab Library list.
 - Drag a prefab from the library into the viewport -- confirm brushes and entity are placed at the drop position with new IDs.
@@ -591,7 +594,7 @@ Editor UX
 - With no brushes selected, confirm "Select a brush to use these tools" hint appears in Selection Tools section.
 - Delete `user://hammerforge_prefs.json` and reopen editor -- confirm tutorial wizard appears.
 - Click "Dismiss Tutorial" with "Don't show again" checked -- confirm tutorial doesn't reappear.
-- Confirm per-tab context hints show appropriate guidance (e.g. "Click and drag..." in Brush tab).
+- Confirm per-tab context hints use the displayed Build/Paint/Objects/Test names and recommend the Draw → Test Level path.
 - Press X/Y/Z and confirm HUD shows axis lock state.
 - Enable Paint Mode and verify HUD shows paint shortcuts (B/E/R/L/K).
 - Press B/E/R/L/K in Paint Mode and confirm paint tool selector updates.

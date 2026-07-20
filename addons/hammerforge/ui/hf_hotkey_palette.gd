@@ -106,7 +106,7 @@ func populate(keymap) -> void:
 	for child in _list.get_children():
 		child.queue_free()
 
-	var category_order := ["Tools", "Editing", "Selection", "Paint", "Axis Lock"]
+	var category_order := ["Workflow", "Tools", "Editing", "Selection", "Paint", "Axis Lock"]
 	var categorized: Dictionary = {}
 	for cat in category_order:
 		categorized[cat] = []
@@ -219,7 +219,7 @@ func _is_action_available(action: String) -> bool:
 		"group", "ungroup":
 			return has_brush_sel
 		# Paint tools only in paint mode
-		"paint_bucket", "paint_erase", "paint_ramp", "paint_line", "paint_blend":
+		"paint_bucket", "paint_erase", "paint_ramp", "paint_line", "paint_fill", "paint_blend":
 			return is_paint
 		# Vertex tools only in vertex mode
 		"vertex_edge_mode", "vertex_merge", "vertex_split_edge":

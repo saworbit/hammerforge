@@ -267,6 +267,90 @@ func test_brush_label_plural():
 	assert_eq(toolbar._label.text, "5 brushes selected")
 
 
+func test_brush_label_refreshes_without_context_change():
+	var state = {
+		"has_root": true,
+		"brush_count": 1,
+		"entity_count": 0,
+		"face_count": 0,
+		"input_mode": 0,
+		"tool": 1,
+		"vertex_mode": false,
+		"is_subtract": false,
+	}
+	toolbar.update_state(state)
+	state["brush_count"] = 4
+	toolbar.update_state(state)
+	assert_eq(toolbar._label.text, "4 brushes selected")
+
+
+func test_prefab_badge_and_buttons_refresh_without_context_change():
+	var state = {
+		"has_root": true,
+		"brush_count": 1,
+		"entity_count": 0,
+		"face_count": 0,
+		"input_mode": 0,
+		"tool": 1,
+		"vertex_mode": false,
+	}
+	toolbar.update_state(state)
+	var section = toolbar._sections[HFContextToolbar.Context.BRUSH_SELECTED]
+	assert_false(section.get_node("PfbVarBtn").visible)
+
+	state["prefab_source"] = "res://prefabs/door.tres"
+	state["prefab_variant"] = "damaged"
+	state["prefab_linked"] = true
+	toolbar.update_state(state)
+
+	assert_eq(toolbar._label.text, "door (damaged) [linked]")
+	for child_name in ["PfbSep", "PfbVarBtn", "PfbPushBtn", "PfbPullBtn"]:
+		assert_true(section.get_node(child_name).visible, "%s should be visible" % child_name)
+
+	state.erase("prefab_source")
+	state.erase("prefab_variant")
+	state.erase("prefab_linked")
+	toolbar.update_state(state)
+
+	assert_eq(toolbar._label.text, "1 brush selected")
+	for child_name in ["PfbSep", "PfbVarBtn", "PfbPushBtn", "PfbPullBtn"]:
+		assert_false(section.get_node(child_name).visible, "%s should be hidden" % child_name)
+
+
+func test_brush_buttons_refresh_without_context_change():
+	var state = {
+		"has_root": true,
+		"brush_count": 1,
+		"entity_count": 0,
+		"face_count": 0,
+		"input_mode": 0,
+		"tool": 1,
+		"vertex_mode": false,
+		"bake_preview_active": false,
+		"bake_disabled": false,
+	}
+	toolbar.update_state(state)
+	var section = toolbar._sections[HFContextToolbar.Context.BRUSH_SELECTED]
+	var preview_btn = section.get_node("BakePreviewBtn") as Button
+	assert_false(preview_btn.button_pressed)
+	assert_false(preview_btn.disabled)
+
+	state["bake_preview_active"] = true
+	state["bake_disabled"] = true
+	toolbar.update_state(state)
+
+	assert_true(preview_btn.button_pressed)
+	assert_true(preview_btn.disabled)
+
+
+func test_hint_bar_and_content_share_vertical_layout():
+	assert_true(toolbar._layout is VBoxContainer)
+	assert_eq(toolbar._content.get_parent(), toolbar._layout)
+	assert_eq(toolbar._auto_hint_bar.get_parent(), toolbar._layout)
+	assert_eq(toolbar._layout.get_child(0), toolbar._content)
+	assert_eq(toolbar._layout.get_child(1), toolbar._auto_hint_bar)
+
+
 func test_face_label():
 	(
 		toolbar

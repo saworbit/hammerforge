@@ -188,6 +188,7 @@ signal selection_changed(brush_ids: Array)
 
 # Paint
 signal paint_layer_changed(layer_index: int)
+signal paint_stroke_committed(changed_cell_count: int)
 signal material_list_changed
 signal face_selection_changed
 
@@ -2067,6 +2068,8 @@ func _setup_paint_system() -> void:
 		add_child(paint_tool)
 		_assign_owner(paint_tool)
 	paint_tool.layer_manager = paint_layers
+	if not paint_tool.stroke_committed.is_connected(_on_paint_stroke_committed):
+		paint_tool.stroke_committed.connect(_on_paint_stroke_committed)
 	if not paint_tool.inference:
 		paint_tool.inference = HFInferenceEngine.new()
 	if not paint_tool.geometry:
@@ -2079,6 +2082,10 @@ func _setup_paint_system() -> void:
 	paint_tool.reconciler.walls_root = generated_walls
 	paint_tool.reconciler.heightmap_floors_root = generated_heightmap_floors
 	paint_tool.reconciler.owner = _get_editor_owner()
+
+
+func _on_paint_stroke_committed(changed_cell_count: int) -> void:
+	paint_stroke_committed.emit(changed_cell_count)
 
 
 func _sync_paint_grid_from_root() -> void:
