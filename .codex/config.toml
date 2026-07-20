@@ -1,9 +1,0 @@
-# HammerForge's Godot editor exposes this project-scoped MCP endpoint while the
-# Godot MCP Native editor plug-in is enabled and the project is open.
-[mcp_servers.godot_mcp]
-enabled = true
-required = false
-url = "http://127.0.0.1:9080/mcp"
-bearer_token_env_var = "HAMMERFORGE_GODOT_MCP_TOKEN"
-startup_timeout_sec = 15.0
-tool_timeout_sec = 300.0

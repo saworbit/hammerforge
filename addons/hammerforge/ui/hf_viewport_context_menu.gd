@@ -1,6 +1,6 @@
 @tool
 extends PopupMenu
-## Right-click context menu that appears at cursor position in the 3D viewport.
+## Space-key context menu that appears at cursor position in the 3D viewport.
 ## Context-sensitive: shows different actions based on current selection and mode.
 
 signal action_requested(action: String, args: Array)

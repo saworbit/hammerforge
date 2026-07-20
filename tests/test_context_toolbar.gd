@@ -1,5 +1,7 @@
 extends GutTest
 
+const HFViewportContextMenu = preload("res://addons/hammerforge/ui/hf_viewport_context_menu.gd")
+
 const HFContextToolbar = preload("res://addons/hammerforge/ui/hf_context_toolbar.gd")
 
 var toolbar: HFContextToolbar
@@ -403,3 +405,14 @@ func test_material_quick_apply_signal():
 	)
 	toolbar._on_material_thumb(0)
 	assert_eq(received, [5])
+
+
+func test_viewport_menu_context_matches_selection_state():
+	var menu = HFViewportContextMenu.new()
+	assert_eq(menu._determine_context({"vertex_mode": true}), menu.Context.VERTEX_EDIT)
+	assert_eq(menu._determine_context({"face_count": 2}), menu.Context.FACE_SELECTED)
+	assert_eq(menu._determine_context({"entity_count": 1}), menu.Context.ENTITY_SELECTED)
+	assert_eq(menu._determine_context({"brush_count": 1}), menu.Context.BRUSH_SELECTED)
+	assert_eq(menu._determine_context({"tool": 0, "input_mode": 0}), menu.Context.DRAW_IDLE)
+	assert_eq(menu._determine_context({"tool": 1, "input_mode": 0}), menu.Context.NONE)
+	menu.free()

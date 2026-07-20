@@ -11,6 +11,12 @@ This guide covers the current HammerForge workflow in Godot 4.7: brush-based gre
 4. In **Build**, choose **Draw** and drag in the viewport to set the base; click again to set the height.
 5. Open **Test** and click **Test Level (Bake + Play)**. HammerForge checks the spawn, bakes, and launches the playtest.
 
+## Viewport Mouse Controls
+
+Plain **RMB** uses Godot's native 3D camera look whenever HammerForge is idle. It works the same whether nothing, a brush, a face, an entity, a camera, or another scene node is selected, and persistent tool modes do not claim it just by being enabled. While RMB is held, native W/A/S/D camera flight and mixed mouse input stay with Godot and cannot accidentally switch tools, draw, or change selection. **MMB** and the mouse wheel also remain available to Godot for camera navigation.
+
+During an interaction that already owns the pointer, RMB keeps its local meaning: it cancels an active draw, extrusion, marquee, or vertex gesture, and steps back one point while Polygon or Path placement is active. An active paint stroke keeps pointer ownership until LMB is released. In the Measure tool, use **Ctrl+Click** (or **Cmd+Click** on macOS) to set a snap reference. Press **Space** for HammerForge's contextual viewport menu.
+
 ## LevelRoot
 `LevelRoot` is required because it owns the containers and systems HammerForge uses:
 - DraftBrushes, PendingCuts, CommittedCuts
@@ -45,7 +51,7 @@ When you activate an advanced tool for the first time, a floating overlay appear
 | Carve | Ctrl+Shift+R | Select brushes → preview (green wireframe) → confirm → delete fragments |
 | Clip | Shift+X | Select → preview (cyan wireframe + orange plane) → confirm → split |
 | Hollow | Ctrl+H | Select solid → preview (yellow wireframe walls) → confirm → hollow |
-| Measure | M key | Click start → click end → Shift+Click to chain → RMB for snap ref |
+| Measure | M key | Click start → click end → Shift+Click to chain → Ctrl+Click for snap ref |
 | Decal | N key | Click surface → resize/rotate → assign material |
 | Surface Paint | Shift+P toggle | Toggle paint → select tool → click cells |
 
@@ -109,7 +115,7 @@ Press **M** to activate the Measure tool. It supports persistent multi-ruler mea
 - **Click** to set point A, click again to set point B — a ruler line appears with distance, dX/dY/dZ decomposition.
 - **Shift+Click** chains a new ruler from the last ruler's endpoint. Consecutive chained rulers that share a vertex display the **angle** between them in degrees.
 - Up to **20 rulers** can be active simultaneously, each drawn in a cycling color palette.
-- **Right-click** near a ruler to set it as a **snap reference line**. The snap system will project nearby points onto that line.
+- **Ctrl+Click** near a ruler to set it as a **snap reference line**. The snap system will project nearby points onto that line.
 - Press **A** to toggle align mode on/off.
 - Press **Delete/Backspace** to remove the last ruler.
 - Press **Escape** to clear all rulers.

@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Fixed
+- **Issue #5 — RMB camera navigation:** HammerForge now keeps native RMB look available regardless of brush, object, face, or unrelated scene-node selection. After an idle RMB press is passed to Godot, the complete session—including motion, WASD flight, mixed mouse input, and release—bypasses HammerForge actions and raycasts. Active draw, extrude, marquee, vertex, polygon, and path interactions can still consume the initial RMB press to cancel or step back.
+- Viewport input forwarding is now enabled explicitly instead of making `_handles()` claim unrelated selected nodes. Measure snap-reference assignment moved from plain RMB to Ctrl+Click, and quick-property popups dismiss without swallowing RMB/MMB/wheel navigation.
+- Project-local Codex client state under `.codex/` is now ignored; the authenticated Godot MCP setup is documented as machine-local contributor configuration.
+
 ### Added
 - **Code-quality utilities — simplification phase 1** (May 2026): Eight new shared utility
   classes extracted from the dock + plugin monoliths to reduce duplication and improve

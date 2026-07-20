@@ -1,6 +1,40 @@
 @tool
 extends EditorPlugin
 
+
+## Tracks the native camera's RMB press/motion/release ownership without
+## depending on editor selection or HammerForge's persistent tool mode.
+class RmbCameraNavigationSession:
+	extends RefCounted
+
+	var active := false
+
+	func begin() -> void:
+		active = true
+
+	func handle_followup(event: InputEvent) -> bool:
+		if not active:
+			return false
+		if event is InputEventMouseMotion:
+			if event.button_mask & MOUSE_BUTTON_MASK_RIGHT != 0:
+				return true
+			# Recover after a focus change that hid the release event.
+			active = false
+			return false
+		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
+			if event.pressed:
+				# A fresh press supersedes stale state and must be classified by
+				# the current gesture owner.
+				active = false
+				return false
+			active = false
+			return true
+		# While Godot owns RMB camera navigation, all other viewport input
+		# belongs to that native session too (notably WASD flight and mixed
+		# mouse buttons). HammerForge resumes only after RMB release/recovery.
+		return true
+
+
 const DockType = preload("dock.gd")
 const HFPathToolType = preload("hf_path_tool.gd")
 var dock: DockType
@@ -17,6 +51,7 @@ var select_additive := false
 var select_drag_threshold := 6.0
 var last_3d_camera: Camera3D = null
 var last_3d_mouse_pos := Vector2.ZERO
+var _rmb_camera_navigation := RmbCameraNavigationSession.new()
 var numeric_buffer := ""
 var _tool_registry: HFToolRegistry = null
 var _keymap: HFKeymap = null
@@ -61,9 +96,14 @@ const DraftEntityType = preload("draft_entity.gd")
 const IconRes = preload("icon.png")
 const HFUndoHelper = preload("undo_helper.gd")
 const HFInputStateType = preload("input_state.gd")
+const QUICK_PROPERTY_DISMISS_CONTINUE := -1
 
 
 func _enter_tree():
+	# HammerForge raycasts in the 3D viewport regardless of which editor object
+	# is selected. Keep that input forwarding independent from _handles(), which
+	# should describe only the object types this plugin actually edits.
+	set_input_event_forwarding_always_enabled()
 	add_custom_type("LevelRoot", "Node3D", LevelRootType, IconRes)
 	add_custom_type("DraftEntity", "Node3D", DraftEntityType, IconRes)
 	_dialog_manager = HFDialogManagerType.new()
@@ -161,14 +201,14 @@ func _enter_tree():
 	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, _operation_replay)
 	if dock:
 		dock.set_operation_replay(_operation_replay)
-	# Right-click context menu (PopupMenu — added as child of base_control, not container)
+	# Space-key context menu (PopupMenu — added as child of base_control, not container)
 	_viewport_context_menu = HFViewportContextMenu.new()
 	if base_control:
 		_viewport_context_menu.theme = base_control.theme
 	_viewport_context_menu.action_requested.connect(_on_viewport_action)
 	if base_control:
 		base_control.add_child(_viewport_context_menu)
-	# Radial menu (long-press RMB pie menu)
+	# Backtick-triggered radial menu
 	_radial_menu = HFRadialMenu.new()
 	if base_control:
 		_radial_menu.theme = base_control.theme
@@ -564,17 +604,21 @@ func _on_editor_selection_changed() -> void:
 			root.vertex_system.set_selection(brushes)
 
 
-func _handles(object: Object) -> bool:
+static func should_handle_editor_object(object: Object) -> bool:
 	if not object or not (object is Node):
 		return false
-	# Accept if the node is under a LevelRoot, OR if a LevelRoot exists anywhere
-	# in the scene. This keeps _forward_3d_gui_input() active so the user can
-	# draw/select without having to re-click the LevelRoot node.
-	if _get_level_root_from_node(object as Node) != null:
+	if object is LevelRootType or object is DraftBrush or object is DraftEntityType:
 		return true
-	if active_root and is_instance_valid(active_root) and active_root.is_inside_tree():
-		return true
-	return _get_level_root() != null
+	var current := (object as Node).get_parent()
+	while current:
+		if current is LevelRootType:
+			return current.has_method("is_entity_node") and current.is_entity_node(object)
+		current = current.get_parent()
+	return false
+
+
+func _handles(object: Object) -> bool:
+	return should_handle_editor_object(object)
 
 
 func _edit(object: Object) -> void:
@@ -605,6 +649,27 @@ static func should_create_root_for_viewport_input(
 	)
 
 
+## Clicking outside a quick-property editor protects against accidental LMB
+## edits. RMB continues to the active gesture owner; other navigation passes.
+static func classify_quick_property_dismiss(event: InputEventMouseButton) -> int:
+	if event.button_index == MOUSE_BUTTON_LEFT:
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	if event.button_index == MOUSE_BUTTON_RIGHT:
+		return QUICK_PROPERTY_DISMISS_CONTINUE
+	return EditorPlugin.AFTER_GUI_INPUT_PASS
+
+
+## A live LMB paint stroke keeps pointer ownership until LMB release. Starting
+## native camera look midway through the stroke would paint while the view moves.
+static func should_block_rmb_during_paint_stroke(
+	surface_painting: bool,
+	floor_painting: bool,
+	displacement_painting: bool,
+	left_button_held: bool
+) -> bool:
+	return left_button_held and (surface_painting or floor_painting or displacement_painting)
+
+
 func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 	if not dock:
 		return EditorPlugin.AFTER_GUI_INPUT_PASS
@@ -612,6 +677,12 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 		last_3d_camera = camera
 	if event is InputEventMouse:
 		last_3d_mouse_pos = event.position
+
+	# Once an idle RMB press has been passed to Godot, its motion and release
+	# belong to the same native camera-navigation session. Bypass all HammerForge
+	# raycasts and hover work until the button is released.
+	if _rmb_camera_navigation.handle_followup(event):
+		return EditorPlugin.AFTER_GUI_INPUT_PASS
 
 	var root = active_root if active_root else _get_level_root()
 	if not root:
@@ -642,7 +713,8 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 		_radial_menu._gui_input(event)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 
-	# Quick property popup intercept — Escape or click-away dismisses (consuming the event)
+	# Quick property popup intercept. LMB click-away is consumed to avoid editing
+	# through the popup; native navigation buttons dismiss and continue through.
 	if _quick_property and _quick_property.is_active():
 		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 			_quick_property.hide_popup()
@@ -651,7 +723,11 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			var popup_rect := _quick_property.get_rect()
 			if not popup_rect.has_point(event.position):
 				_quick_property.hide_popup()
-				return EditorPlugin.AFTER_GUI_INPUT_STOP
+				var dismiss_result := classify_quick_property_dismiss(event)
+				if dismiss_result != QUICK_PROPERTY_DISMISS_CONTINUE:
+					return dismiss_result
+				# RMB continues through the normal ownership path so an active
+				# gesture can still cancel instead of being abandoned mid-drag.
 
 	# Displacement paint intercept — must come before regular paint so that
 	# displacement surfaces get the stroke when paint mode is active.
@@ -724,7 +800,7 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			root.set_shift_pressed(event.shift_pressed)
 			root.set_alt_pressed(event.alt_pressed)
 		if event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
-			return _handle_rmb_cancel(root, tool_id)
+			return _handle_rmb_cancel(root, tool_id, event)
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			match tool_id:
 				0:
@@ -1358,11 +1434,45 @@ static func has_cancelable_rmb_gesture(input_state: Variant, marquee_active: boo
 	return input_state != null and (input_state.is_dragging() or input_state.is_extruding())
 
 
-func _handle_rmb_cancel(root: Node, _tool_id: int) -> int:
+func _finish_stale_paint_strokes(root: Node, input_state: Variant, paint_tool: Variant) -> void:
+	if paint_tool != null and paint_tool.has_method("finish_stroke_if_active"):
+		paint_tool.finish_stroke_if_active()
+	if input_state != null and input_state.is_surface_painting():
+		input_state.end_surface_paint()
+	if _disp_paint_active:
+		if not _disp_paint_pre_state.is_empty():
+			_commit_disp_paint_undo(root)
+		_disp_paint_active = false
+		_disp_paint_brush_id = ""
+		_disp_paint_face_idx = -1
+		_disp_paint_pre_state = {}
+
+
+func _handle_rmb_cancel(root: Node, _tool_id: int, event: InputEventMouseButton) -> int:
 	var input_state = root.input_state if root else null
 	var has_marquee := select_drag_active or select_dragging
+	var paint_tool = root.get("paint_tool") if root else null
+	var surface_painting: bool = input_state != null and input_state.is_surface_painting()
+	var floor_painting: bool = (
+		paint_tool != null
+		and paint_tool.has_method("is_stroke_active")
+		and paint_tool.is_stroke_active()
+	)
+	var any_painting := surface_painting or floor_painting or _disp_paint_active
+	if should_block_rmb_during_paint_stroke(
+		surface_painting,
+		floor_painting,
+		_disp_paint_active,
+		event.button_mask & MOUSE_BUTTON_MASK_LEFT != 0,
+	):
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	if any_painting:
+		# If Godot lost the LMB release during a focus/viewport transition,
+		# finalize that stale stroke instead of blocking every future RMB press.
+		_finish_stale_paint_strokes(root, input_state, paint_tool)
 	if not has_cancelable_rmb_gesture(input_state, has_marquee):
 		# Idle RMB belongs to Godot's native camera controls.
+		_rmb_camera_navigation.begin()
 		return EditorPlugin.AFTER_GUI_INPUT_PASS
 	if input_state and input_state.is_extruding():
 		root.cancel_extrude()

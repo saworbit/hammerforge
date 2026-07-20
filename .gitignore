@@ -30,13 +30,12 @@ nul
 .appdata/
 .localappdata/
 
-# Local environment and Codex client state. Keep only the safe project MCP
-# definition; authentication is supplied through the process environment.
+# Local environment and Codex client state. MCP client configuration and
+# authentication are machine-local and must not be committed.
 .env
 .env.*
 !.env.example
-.codex/*
-!.codex/config.toml
+.codex/
 
 # HammerForge user state (should live in editor config, not repo)
 io_presets.json

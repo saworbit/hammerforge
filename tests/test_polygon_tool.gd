@@ -158,3 +158,29 @@ func test_settings_schema():
 	var schema = tool.get_settings_schema()
 	assert_true(schema.size() > 0, "Should have settings")
 	assert_eq(schema[0].name, "auto_close_threshold")
+
+
+func test_rmb_passes_when_idle_and_only_cancels_active_polygon_work():
+	var tool = HFPolygonTool.new()
+	var root := Node3D.new()
+	var camera := Camera3D.new()
+	tool.root = root
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_RIGHT
+	press.pressed = true
+	var motion := InputEventMouseMotion.new()
+	motion.button_mask = MOUSE_BUTTON_MASK_RIGHT
+	var release := InputEventMouseButton.new()
+	release.button_index = MOUSE_BUTTON_RIGHT
+	release.pressed = false
+	assert_eq(tool.handle_input(press, camera, Vector2.ZERO), EditorPlugin.AFTER_GUI_INPUT_PASS)
+	assert_eq(tool.handle_input(motion, camera, Vector2.ZERO), EditorPlugin.AFTER_GUI_INPUT_PASS)
+	assert_eq(tool.handle_input(release, camera, Vector2.ZERO), EditorPlugin.AFTER_GUI_INPUT_PASS)
+
+	tool._phase = tool.Phase.PLACING_VERTS
+	tool._polygon_points = PackedVector3Array([Vector3.ZERO, Vector3.RIGHT])
+	assert_eq(tool.handle_input(press, camera, Vector2.ZERO), EditorPlugin.AFTER_GUI_INPUT_STOP)
+	assert_eq(tool._polygon_points.size(), 1, "Active RMB should remove exactly one vertex")
+	assert_eq(tool.handle_input(release, camera, Vector2.ZERO), EditorPlugin.AFTER_GUI_INPUT_PASS)
+	root.free()
+	camera.free()

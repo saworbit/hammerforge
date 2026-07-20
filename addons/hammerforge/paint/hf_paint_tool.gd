@@ -39,6 +39,15 @@ var _stroke_dirty: Dictionary = {}  # Dictionary[Vector2i, bool]
 var _preview_dirty: Dictionary = {}  # Dictionary[Vector2i, bool]
 
 
+func is_stroke_active() -> bool:
+	return _painting
+
+
+func finish_stroke_if_active() -> void:
+	if _painting:
+		_end_stroke()
+
+
 func handle_input(camera: Camera3D, event: InputEvent, screen_pos: Vector2) -> bool:
 	if not camera or not layer_manager:
 		if not layer_manager:

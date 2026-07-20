@@ -65,6 +65,17 @@ Enable the HammerForge plugin if it is not already enabled.
 - Confirm the tutorial remains on step 1 rather than resetting or disappearing.
 - Confirm step 1 advances only after adding a brush, not merely because `LevelRoot` appeared.
 
+### 2a. RMB Camera Navigation Ownership
+- Hold RMB and move the mouse with each of these selected: nothing, `LevelRoot`, a brush, an object/entity, a face, a `Camera3D`, and a light. Confirm Godot's camera looks around immediately in every case and selection remains unchanged.
+- While holding RMB, use W/A/S/D camera flight and press LMB/MMB or the wheel. Confirm no HammerForge tool switches, selection changes, drawing, or other edit action occurs before RMB is released.
+- Repeat in Draw, Select, Paint, Vertex, Measure, Polygon, Path, and Decal modes. Persistent modes must not claim plain RMB while idle.
+- Open a G G/B B/R R quick-property popup, then begin RMB camera navigation outside it. Confirm the popup closes and the same press moves the camera; repeat with MMB pan and mouse-wheel zoom.
+- Start a Draw, Extrude, marquee, or vertex-drag interaction, then press RMB. Confirm only the active interaction is cancelled and a second RMB press starts normal camera navigation.
+- During an active LMB paint stroke, press RMB and confirm the stroke retains pointer ownership rather than painting while the camera moves. Release LMB and RMB, then press RMB again and confirm camera navigation resumes.
+- While Polygon or Path has points in progress, confirm RMB steps back that active interaction. Once the tool is idle, confirm RMB navigates the camera.
+- In Measure mode, confirm plain RMB always navigates and **Ctrl+Click** near a ruler sets its snap reference.
+- Press Space and confirm it opens the HammerForge context menu. Plain RMB must never open that menu.
+
 ### 3. Guided Step Flow
 - Step 1: draw an additive room brush; confirm the tutorial advances.
 - Step 2: click **Test Level Now**; confirm the guide starts the normal check, bake, spawn-validation, and play flow.
@@ -353,7 +364,7 @@ Enable the HammerForge plugin if it is not already enabled.
 - Click two points in the viewport; confirm a ruler line appears with distance and dX/dY/dZ labels.
 - Hold **Shift** and click a third point; confirm a second ruler chains from the last endpoint and an angle label appears at the shared vertex.
 - Confirm up to 20 rulers can exist (draw several). Older rulers are evicted when the cap is reached.
-- Right-click near a ruler; confirm it is set as snap reference (line turns white, HUD shows "Align: ON").
+- Ctrl+Click near a ruler; confirm it is set as snap reference (line turns white, HUD shows "Align: ON").
 - Press **A**; confirm align mode toggles off.
 - Press **Delete**; confirm the last ruler is removed.
 - Press **Escape**; confirm all rulers are cleared.

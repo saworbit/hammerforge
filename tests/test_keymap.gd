@@ -84,6 +84,16 @@ func test_workflow_shortcuts():
 	assert_true(keymap.matches("validate_level", _make_key(KEY_ENTER, true, true)))
 
 
+func test_context_menu_is_unmodified_space_only():
+	assert_true(keymap.matches("context_menu", _make_key(KEY_SPACE)))
+	assert_false(keymap.matches("context_menu", _make_key(KEY_SPACE, true)))
+	assert_false(keymap.matches("context_menu", _make_key(KEY_SPACE, false, true)))
+	assert_false(keymap.matches("context_menu", _make_key(KEY_SPACE, false, false, true)))
+	var meta_space := _make_key(KEY_SPACE)
+	meta_space.meta_pressed = true
+	assert_false(keymap.matches("context_menu", meta_space))
+
+
 func test_bucket_and_blend_have_distinct_shortcuts():
 	assert_true(keymap.matches("paint_fill", _make_key(KEY_K)))
 	assert_true(keymap.matches("paint_blend", _make_key(KEY_N)))

@@ -29,19 +29,31 @@ An intentional left-click with Draw active can create an empty root. Camera navi
 
 ## Project-Scoped Godot MCP (Repository Contributors)
 
-This repository vendors the Godot MCP addon in `addons/godot_mcp`, enables it in `project.godot`, and tracks a safe client definition in `.codex/config.toml`. The server binds to loopback port `9080`, rejects unauthenticated requests, and does not allow remote clients.
+This repository vendors the Godot MCP addon in `addons/godot_mcp` and enables it in `project.godot`. The server binds to loopback port `9080`, rejects unauthenticated requests, and does not allow remote clients. Codex client state under `.codex/` is deliberately ignored so machine-specific settings never enter version control.
 
 The authentication token is local user state. Never place it in `.codex/config.toml`, documentation, a shell script, or any committed file.
 
 1. In Godot, open the Godot MCP panel and ensure the server is running on `127.0.0.1:9080` with authentication enabled.
-2. Copy the configured token into a user-scoped environment variable from PowerShell:
+2. Create a local `.codex/config.toml` with the following client definition:
+
+   ```toml
+   [mcp_servers.godot_mcp]
+   enabled = true
+   required = false
+   url = "http://127.0.0.1:9080/mcp"
+   bearer_token_env_var = "HAMMERFORGE_GODOT_MCP_TOKEN"
+   startup_timeout_sec = 15.0
+   tool_timeout_sec = 300.0
+   ```
+
+3. Copy the configured token into a user-scoped environment variable from PowerShell:
 
    ```powershell
    [Environment]::SetEnvironmentVariable("HAMMERFORGE_GODOT_MCP_TOKEN", "<same token configured in Godot MCP>", "User")
    ```
 
-3. Restart Codex so it inherits the new environment variable.
-4. Confirm the project MCP client connects. A request without the token should return HTTP 401; an authenticated MCP `initialize` request should succeed.
+4. Restart Codex so it inherits the new environment variable.
+5. Confirm the project MCP client connects. A request without the token should return HTTP 401; an authenticated MCP `initialize` request should succeed.
 
 Godot stores MCP preferences and verification state under `user://`; these files and screenshots are intentionally ignored at the repository root. If port `9080` is already occupied, stop the other Godot MCP instance or assign a different port consistently in both Godot and your local client configuration.
 

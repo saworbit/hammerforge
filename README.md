@@ -108,7 +108,7 @@ Geometry-aware snapping goes beyond a simple grid:
 | Vertex | V | Corners of existing brushes (8 per box) |
 | Center | C | Center points of existing brushes |
 
-Closest candidate within threshold wins. Modes combine freely. The Measure tool can set a **custom snap reference line** (right-click a ruler) for alignment along arbitrary axes. **Texture Lock** preserves UV alignment when moving or resizing. **Move to Floor/Ceiling** (Ctrl+Shift+F/C) raycasts to snap brushes vertically. **UV Justify** offers fit/center/left/right/top/bottom/stretch/tile alignment for selected faces.
+Closest candidate within threshold wins. Modes combine freely. The Measure tool can set a **custom snap reference line** with Ctrl+Click for alignment along arbitrary axes. **Texture Lock** preserves UV alignment when moving or resizing. **Move to Floor/Ceiling** (Ctrl+Shift+F/C) raycasts to snap brushes vertically. **UV Justify** offers fit/center/left/right/top/bottom/stretch/tile alignment for selected faces.
 
 ### Paint Floors and Terrain
 
@@ -210,6 +210,7 @@ HammerForge's dock is designed to stay out of your way while keeping everything 
 - **Smart contextual toolbar** -- floating mini-toolbar in the 3D viewport shows context-sensitive actions (brush ops when brushes selected, UV tools when faces selected, shape picker in draw mode, axis locks while dragging)
 - **Command palette** (Shift+? or F1 or Ctrl+K) -- searchable action palette with fuzzy search, "Did you mean" suggestions, and live gray-out for unavailable actions
 - **Viewport context menu** (Space) -- context-sensitive right-click-style menu with grid snap presets, UV operations, draw shapes, and toggle items; sections adapt to current selection
+- **Predictable camera navigation** -- plain RMB always controls Godot's 3D camera while HammerForge is idle, regardless of selection or persistent tool mode; while held, native WASD flight and mixed mouse input cannot trigger HammerForge actions. Only an active gesture or modal interaction may consume the initial press
 - **Radial menu** (`` ` ``) -- 8-sector pie menu for quick tool switching (Box, Cylinder, Select, Paint, Vertex, Tex Pick, Measure, Clip) drawn as an overlay in the 3D viewport
 - **Quick property popups** (double-tap G G / B B / R R) -- inline numeric entry for grid snap, brush size, and paint radius without leaving the viewport
 - **Grid size indicator** -- persistent "Grid: N" display in viewport HUD with flash-on-change feedback; `[` / `]` keys halve/double grid snap instantly
@@ -297,7 +298,7 @@ Create Starter adds `LevelRoot`, a floor, sunlight, and a player spawn. Create E
 
 ### Project MCP for contributors
 
-This repository also vendors a project-scoped Godot MCP server in `addons/godot_mcp`. Its safe client definition is tracked in `.codex/config.toml`; authentication comes from the user-scoped `HAMMERFORGE_GODOT_MCP_TOKEN` environment variable. Tokens and Godot `user://` MCP state must never be committed. See [Install + Upgrade](docs/HammerForge_Install_Upgrade.md#project-scoped-godot-mcp-repository-contributors) for setup and verification.
+This repository also vendors a project-scoped Godot MCP server in `addons/godot_mcp`. Each contributor creates an ignored, machine-local `.codex/config.toml`; authentication comes from the user-scoped `HAMMERFORGE_GODOT_MCP_TOKEN` environment variable. Codex configuration, tokens, and Godot `user://` MCP state must never be committed. See [Install + Upgrade](docs/HammerForge_Install_Upgrade.md#project-scoped-godot-mcp-repository-contributors) for the configuration and verification steps.
 
 ---
 
@@ -351,7 +352,7 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 
 ## Testing
 
-1,489 tests across 87 scripts use the [GUT](https://github.com/bitwes/Gut) framework, including unit and integration coverage. The current suite has 1,482 passing tests plus seven intentional no-assert safety tests. All checks run on every push via GitHub Actions.
+1,501 tests across 87 scripts use the [GUT](https://github.com/bitwes/Gut) framework, including unit and integration coverage. The current suite has 1,494 passing tests plus seven intentional no-assert safety tests. All checks run on every push via GitHub Actions.
 
 ```bash
 # Run all tests headless

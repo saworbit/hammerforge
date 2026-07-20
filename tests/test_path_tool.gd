@@ -151,3 +151,29 @@ func test_segment_faces_reconstruct_as_face_data():
 		var face = FaceData.from_dict(face_dict)
 		assert_not_null(face, "Face should deserialize")
 		assert_true(face.local_verts.size() >= 3, "Face should have 3+ verts")
+
+
+func test_rmb_passes_when_idle_and_only_steps_back_active_path_work():
+	var tool = HFPathTool.new()
+	var root := Node3D.new()
+	var camera := Camera3D.new()
+	tool.root = root
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_RIGHT
+	press.pressed = true
+	var motion := InputEventMouseMotion.new()
+	motion.button_mask = MOUSE_BUTTON_MASK_RIGHT
+	var release := InputEventMouseButton.new()
+	release.button_index = MOUSE_BUTTON_RIGHT
+	release.pressed = false
+	assert_eq(tool.handle_input(press, camera, Vector2.ZERO), EditorPlugin.AFTER_GUI_INPUT_PASS)
+	assert_eq(tool.handle_input(motion, camera, Vector2.ZERO), EditorPlugin.AFTER_GUI_INPUT_PASS)
+	assert_eq(tool.handle_input(release, camera, Vector2.ZERO), EditorPlugin.AFTER_GUI_INPUT_PASS)
+
+	tool._phase = tool.Phase.PLACING_WAYPOINTS
+	tool._waypoints = PackedVector3Array([Vector3.ZERO, Vector3.RIGHT])
+	assert_eq(tool.handle_input(press, camera, Vector2.ZERO), EditorPlugin.AFTER_GUI_INPUT_STOP)
+	assert_eq(tool._waypoints.size(), 1, "Active RMB should remove exactly one waypoint")
+	assert_eq(tool.handle_input(release, camera, Vector2.ZERO), EditorPlugin.AFTER_GUI_INPUT_PASS)
+	root.free()
+	camera.free()

@@ -5,6 +5,23 @@ const HFMeasureToolScript = preload("res://addons/hammerforge/hf_measure_tool.gd
 var tool: HFMeasureTool
 
 
+class MeasureInputSpy:
+	extends HFMeasureTool
+
+	var snap_calls := 0
+	var regular_left_calls := 0
+
+	func _handle_snap_reference(_camera: Camera3D, _mouse_pos: Vector2) -> int:
+		snap_calls += 1
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+
+	func _handle_left_click(
+		_event: InputEventMouseButton, _camera: Camera3D, _mouse_pos: Vector2
+	) -> int:
+		regular_left_calls += 1
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+
+
 func before_each():
 	tool = HFMeasureToolScript.new()
 
@@ -156,6 +173,76 @@ func test_hud_lines_empty():
 	var lines: PackedStringArray = tool.get_shortcut_hud_lines()
 	assert_true(lines.size() > 0)
 	assert_true(lines[0].contains("Measure"))
+	var joined := "\n".join(lines)
+	assert_true(joined.contains("Ctrl+Click: Set snap ref"))
+	assert_false(joined.contains("RMB: Set snap ref"))
+
+
+func test_plain_rmb_is_reserved_for_native_camera_navigation():
+	var root := Node3D.new()
+	var camera := Camera3D.new()
+	tool.root = root
+	var event := InputEventMouseButton.new()
+	event.button_index = MOUSE_BUTTON_RIGHT
+	event.pressed = true
+	assert_eq(
+		tool.handle_input(event, camera, Vector2.ZERO),
+		EditorPlugin.AFTER_GUI_INPUT_PASS,
+		"Measure must never conditionally steal plain RMB near a ruler",
+	)
+	root.free()
+	camera.free()
+
+
+func test_ctrl_and_cmd_click_route_only_to_snap_reference():
+	var spy := MeasureInputSpy.new()
+	var root := Node3D.new()
+	var camera := Camera3D.new()
+	spy.root = root
+
+	var right := InputEventMouseButton.new()
+	right.button_index = MOUSE_BUTTON_RIGHT
+	right.pressed = true
+	assert_eq(spy.handle_input(right, camera, Vector2.ZERO), EditorPlugin.AFTER_GUI_INPUT_PASS)
+	assert_eq(spy.snap_calls, 0)
+
+	var ctrl_left := InputEventMouseButton.new()
+	ctrl_left.button_index = MOUSE_BUTTON_LEFT
+	ctrl_left.pressed = true
+	ctrl_left.ctrl_pressed = true
+	assert_eq(spy.handle_input(ctrl_left, camera, Vector2.ZERO), EditorPlugin.AFTER_GUI_INPUT_STOP)
+	assert_eq(spy.snap_calls, 1)
+	assert_eq(spy.regular_left_calls, 0)
+
+	var cmd_left := InputEventMouseButton.new()
+	cmd_left.button_index = MOUSE_BUTTON_LEFT
+	cmd_left.pressed = true
+	cmd_left.meta_pressed = true
+	assert_eq(spy.handle_input(cmd_left, camera, Vector2.ZERO), EditorPlugin.AFTER_GUI_INPUT_STOP)
+	assert_eq(spy.snap_calls, 2)
+	assert_eq(spy.regular_left_calls, 0)
+
+	var plain_left := InputEventMouseButton.new()
+	plain_left.button_index = MOUSE_BUTTON_LEFT
+	plain_left.pressed = true
+	assert_eq(spy.handle_input(plain_left, camera, Vector2.ZERO), EditorPlugin.AFTER_GUI_INPUT_STOP)
+	assert_eq(spy.snap_calls, 2)
+	assert_eq(spy.regular_left_calls, 1)
+	root.free()
+	camera.free()
+
+
+func test_snap_reference_miss_is_consumed():
+	var root := Node3D.new()
+	var camera := Camera3D.new()
+	tool.root = root
+	assert_eq(
+		tool._handle_snap_reference(camera, Vector2.ZERO),
+		EditorPlugin.AFTER_GUI_INPUT_STOP,
+		"A missed Ctrl+Click must not fall through into Draw or Select",
+	)
+	root.free()
+	camera.free()
 
 
 func test_hud_lines_with_measurement():

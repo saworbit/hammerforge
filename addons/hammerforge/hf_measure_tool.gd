@@ -5,7 +5,8 @@ extends "hf_editor_tool.gd"
 ## Measure distance between two points in the viewport.
 ## Shift+Click starts a new ruler without clearing existing ones.
 ## Consecutive rulers that share endpoints show angle between segments.
-## Right-click a ruler to set it as a snap reference line.
+## Ctrl+click a ruler to set it as a snap reference line. Plain RMB remains
+## reserved for Godot's 3D camera navigation.
 ## Delete/Backspace removes the last ruler. Escape clears all.
 
 const MAX_RULERS := 20
@@ -65,9 +66,9 @@ func handle_input(event: InputEvent, camera: Camera3D, mouse_pos: Vector2) -> in
 
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
+			if event.ctrl_pressed or event.meta_pressed:
+				return _handle_snap_reference(camera, mouse_pos)
 			return _handle_left_click(event, camera, mouse_pos)
-		if event.button_index == MOUSE_BUTTON_RIGHT:
-			return _handle_right_click(camera, mouse_pos)
 
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
 
@@ -105,7 +106,7 @@ func get_shortcut_hud_lines() -> PackedStringArray:
 	if _align_active and _snap_ref_index >= 0:
 		lines.append("Align: ON (ruler #%d)" % (_snap_ref_index + 1))
 	else:
-		lines.append("A: Toggle align  |  RMB: Set snap ref")
+		lines.append("A: Toggle align  |  Ctrl+Click: Set snap ref")
 	lines.append("Shift+Click: Chain ruler")
 	lines.append("Del: Remove last  |  Esc: Clear all  |  M: Exit")
 	return lines
@@ -143,13 +144,13 @@ func _handle_left_click(event: InputEventMouseButton, camera: Camera3D, mouse_po
 	return EditorPlugin.AFTER_GUI_INPUT_STOP
 
 
-func _handle_right_click(camera: Camera3D, mouse_pos: Vector2) -> int:
+func _handle_snap_reference(camera: Camera3D, mouse_pos: Vector2) -> int:
 	if _measurements.is_empty():
-		return EditorPlugin.AFTER_GUI_INPUT_PASS
+		return _snap_reference_miss("Draw a ruler before setting a snap reference")
 	# Set nearest ruler as snap reference
 	var hit_pos = _raycast_world(camera, mouse_pos)
 	if hit_pos == null:
-		return EditorPlugin.AFTER_GUI_INPUT_PASS
+		return _snap_reference_miss("Ctrl+Click closer to a ruler to set the snap reference")
 	var best_idx := -1
 	var best_dist := 999999.0
 	for i in range(_measurements.size()):
@@ -164,7 +165,14 @@ func _handle_right_click(camera: Camera3D, mouse_pos: Vector2) -> int:
 		_apply_snap_reference()
 		_update_visuals()
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
-	return EditorPlugin.AFTER_GUI_INPUT_PASS
+	return _snap_reference_miss("Ctrl+Click closer to a ruler to set the snap reference")
+
+
+func _snap_reference_miss(message: String) -> int:
+	if root and root.has_signal("user_message"):
+		root.emit_signal("user_message", message, 0)
+	# A recognized Measure command must never fall through into Draw/Select.
+	return EditorPlugin.AFTER_GUI_INPUT_STOP
 
 
 func _finish_ruler(point_b: Vector3) -> void:

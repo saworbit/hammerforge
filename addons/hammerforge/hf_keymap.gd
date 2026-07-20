@@ -101,6 +101,8 @@ func matches(action: String, event: InputEventKey) -> bool:
 		return false
 	if bool(b.get("alt", false)) != event.alt_pressed:
 		return false
+	if bool(b.get("meta", false)) != event.meta_pressed:
+		return false
 	return true
 
 
@@ -116,6 +118,8 @@ func get_display_string(action: String) -> String:
 		parts.append("Shift")
 	if bool(b.get("alt", false)):
 		parts.append("Alt")
+	if bool(b.get("meta", false)):
+		parts.append("Meta")
 	var keycode := int(b.get("keycode", 0))
 	parts.append(_keycode_to_label(keycode))
 	return "+".join(parts)
@@ -130,7 +134,12 @@ func save(path: String) -> void:
 
 ## Update a single binding.
 func set_binding(
-	action: String, keycode: int, ctrl: bool = false, shift: bool = false, alt: bool = false
+	action: String,
+	keycode: int,
+	ctrl: bool = false,
+	shift: bool = false,
+	alt: bool = false,
+	meta: bool = false
 ) -> void:
 	var b := {"keycode": keycode}
 	if ctrl:
@@ -139,6 +148,8 @@ func set_binding(
 		b["shift"] = true
 	if alt:
 		b["alt"] = true
+	if meta:
+		b["meta"] = true
 	_bindings[action] = b
 
 

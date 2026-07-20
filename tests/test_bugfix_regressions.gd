@@ -10,7 +10,10 @@ const HFCarveSystem = preload("res://addons/hammerforge/systems/hf_carve_system.
 const HFInputState = preload("res://addons/hammerforge/input_state.gd")
 const HammerForgePlugin = preload("res://addons/hammerforge/plugin.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
+const DraftEntity = preload("res://addons/hammerforge/draft_entity.gd")
+const LevelRoot = preload("res://addons/hammerforge/level_root.gd")
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
+const HFPaintTool = preload("res://addons/hammerforge/paint/hf_paint_tool.gd")
 
 var root: Node3D
 var draft_node: Node3D
@@ -215,7 +218,7 @@ func test_cancel_drag_restores_pre_drag_geometry():
 func test_axis_lock_z_equals_3():
 	# The AxisLock enum on LevelRoot should define Z = 3
 	# Vertex drag code must use 3, not 4
-	var lr_script = load("res://addons/hammerforge/level_root.gd")
+	var lr_script = LevelRoot
 	# AxisLock is: { NONE=0, X=1, Y=2, Z=3 }
 	assert_eq(lr_script.AxisLock.NONE, 0, "AxisLock.NONE should be 0")
 	assert_eq(lr_script.AxisLock.X, 1, "AxisLock.X should be 1")
@@ -533,6 +536,148 @@ func test_idle_rmb_passes_but_transient_gestures_are_cancelable():
 	assert_true(
 		HammerForgePlugin.has_cancelable_rmb_gesture(null, true),
 		"An active selection marquee remains cancelable",
+	)
+
+
+func test_native_rmb_camera_session_owns_all_input_until_release():
+	var session := HammerForgePlugin.RmbCameraNavigationSession.new()
+	var motion := InputEventMouseMotion.new()
+	motion.button_mask = MOUSE_BUTTON_MASK_RIGHT
+	assert_false(session.handle_followup(motion))
+	session.begin()
+	assert_true(session.active)
+	assert_true(session.handle_followup(motion))
+	assert_true(session.active)
+
+	var buttonless_motion := InputEventMouseMotion.new()
+	assert_false(session.handle_followup(buttonless_motion))
+	assert_false(session.active, "A missed release must clear the camera session")
+
+	var right_release := InputEventMouseButton.new()
+	right_release.button_index = MOUSE_BUTTON_RIGHT
+	right_release.pressed = false
+	session.begin()
+	assert_true(session.handle_followup(right_release))
+	assert_false(session.active, "RMB release must close the camera session")
+
+	var right_press := InputEventMouseButton.new()
+	right_press.button_index = MOUSE_BUTTON_RIGHT
+	right_press.pressed = true
+	session.begin()
+	assert_false(session.handle_followup(right_press))
+	assert_false(session.active, "A fresh press must replace stale session state")
+
+	var left_release := InputEventMouseButton.new()
+	left_release.button_index = MOUSE_BUTTON_LEFT
+	left_release.pressed = false
+	session.begin()
+	assert_true(session.handle_followup(left_release))
+	assert_true(session.active, "Mixed mouse buttons must remain inside RMB camera ownership")
+
+	for keycode in [KEY_W, KEY_A, KEY_S, KEY_D]:
+		var key := InputEventKey.new()
+		key.keycode = keycode
+		key.pressed = true
+		assert_true(session.handle_followup(key), "RMB+%s must stay native" % keycode)
+		assert_true(session.active)
+
+	for button in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_MIDDLE, MOUSE_BUTTON_WHEEL_UP]:
+		var mixed_button := InputEventMouseButton.new()
+		mixed_button.button_index = button
+		mixed_button.pressed = true
+		assert_true(
+			session.handle_followup(mixed_button),
+			"RMB camera ownership must contain button %s" % button,
+		)
+		assert_true(session.active)
+
+
+func test_editor_object_ownership_is_narrow_and_selection_safe():
+	var level_root = LevelRoot.new()
+	var brush = DraftBrush.new()
+	var entity = DraftEntity.new()
+	var unrelated = Node3D.new()
+	var camera = Camera3D.new()
+	var light = DirectionalLight3D.new()
+	assert_true(HammerForgePlugin.should_handle_editor_object(level_root))
+	assert_true(HammerForgePlugin.should_handle_editor_object(brush))
+	assert_true(HammerForgePlugin.should_handle_editor_object(entity))
+	assert_false(HammerForgePlugin.should_handle_editor_object(unrelated))
+	assert_false(HammerForgePlugin.should_handle_editor_object(camera))
+	assert_false(HammerForgePlugin.should_handle_editor_object(light))
+	level_root.free()
+	brush.free()
+	entity.free()
+	unrelated.free()
+	camera.free()
+	light.free()
+
+
+func test_quick_property_dismiss_preserves_native_navigation_buttons():
+	var right_event := InputEventMouseButton.new()
+	right_event.button_index = MOUSE_BUTTON_RIGHT
+	assert_eq(
+		HammerForgePlugin.classify_quick_property_dismiss(right_event),
+		HammerForgePlugin.QUICK_PROPERTY_DISMISS_CONTINUE,
+		"RMB must continue to the current gesture owner before native navigation",
+	)
+	for button in [MOUSE_BUTTON_MIDDLE, MOUSE_BUTTON_WHEEL_UP]:
+		var event := InputEventMouseButton.new()
+		event.button_index = button
+		assert_eq(
+			HammerForgePlugin.classify_quick_property_dismiss(event),
+			EditorPlugin.AFTER_GUI_INPUT_PASS,
+			"Navigation button %d must dismiss and pass through" % button,
+		)
+	var left_event := InputEventMouseButton.new()
+	left_event.button_index = MOUSE_BUTTON_LEFT
+	assert_eq(
+		HammerForgePlugin.classify_quick_property_dismiss(left_event),
+		EditorPlugin.AFTER_GUI_INPUT_STOP,
+		"LMB dismiss must be consumed to prevent editing through the popup",
+	)
+
+
+func test_active_paint_stroke_keeps_pointer_capture_until_lmb_release():
+	assert_false(HammerForgePlugin.should_block_rmb_during_paint_stroke(false, false, false, true))
+	assert_true(HammerForgePlugin.should_block_rmb_during_paint_stroke(true, false, false, true))
+	assert_true(HammerForgePlugin.should_block_rmb_during_paint_stroke(false, true, false, true))
+	assert_true(HammerForgePlugin.should_block_rmb_during_paint_stroke(false, false, true, true))
+	assert_false(
+		HammerForgePlugin.should_block_rmb_during_paint_stroke(true, true, true, false),
+		"A stale paint flag must not permanently block RMB after LMB is no longer held",
+	)
+	var floor_paint := HFPaintTool.new()
+	floor_paint._painting = true
+	floor_paint.finish_stroke_if_active()
+	assert_false(floor_paint.is_stroke_active(), "Stale floor-paint capture must be recoverable")
+	floor_paint.free()
+
+
+func test_viewport_forwarding_is_selection_independent_and_rmb_followups_bypass_tool_work():
+	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
+	var enter_start := source.find("func _enter_tree")
+	var exit_start := source.find("func _exit_tree", enter_start)
+	var enter_body := source.substr(enter_start, exit_start - enter_start)
+	assert_true(
+		enter_body.contains("set_input_event_forwarding_always_enabled()"),
+		"Viewport forwarding must not depend on whichever editor object is selected",
+	)
+
+	var forward_start := source.find("func _forward_3d_gui_input")
+	var root_create_start := source.find("func _should_start_disp_paint", forward_start)
+	var forward_body := source.substr(forward_start, root_create_start - forward_start)
+	var camera_bypass := forward_body.find("_rmb_camera_navigation.handle_followup")
+	assert_gte(camera_bypass, 0)
+	assert_lt(
+		camera_bypass,
+		forward_body.find("root.update_editor_grid"),
+		"RMB camera motion must bypass grid and raycast work",
+	)
+	assert_lt(
+		camera_bypass,
+		forward_body.find("_tool_registry.dispatch_input"),
+		"RMB camera motion must bypass external tool dispatch",
 	)
 
 
