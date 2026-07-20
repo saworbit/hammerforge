@@ -28,6 +28,7 @@ enum Context {
 
 var _context := Context.NONE
 var _style: StyleBoxFlat
+var _layout: VBoxContainer
 var _content: HBoxContainer
 var _label: Label
 var _auto_hint_bar: PanelContainer
@@ -48,6 +49,9 @@ var _keymap = null  # HFKeymap
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	_build_style()
+	_layout = VBoxContainer.new()
+	_layout.add_theme_constant_override("separation", 4)
+	add_child(_layout)
 	_build_content()
 	_build_auto_hint_bar()
 	visible = false
@@ -66,7 +70,7 @@ func _build_style() -> void:
 func _build_content() -> void:
 	_content = HBoxContainer.new()
 	_content.add_theme_constant_override("separation", 4)
-	add_child(_content)
+	_layout.add_child(_content)
 
 	# Context label (left side)
 	_label = Label.new()
@@ -117,7 +121,7 @@ func _build_auto_hint_bar() -> void:
 	hbox.add_child(_auto_hint_btn)
 
 	_auto_hint_bar.visible = false
-	add_child(_auto_hint_bar)
+	_layout.add_child(_auto_hint_bar)
 
 
 # --- Section Builders ---
@@ -394,9 +398,11 @@ func update_state(state: Dictionary) -> void:
 	var new_context := _determine_context(state)
 	var should_show: bool = new_context != Context.NONE and state.get("has_root", false)
 
-	if new_context != _context:
-		_context = new_context
-		_apply_context(state)
+	# Counts and prefab badges can change without changing the context enum.
+	# Refresh the full context presentation every time; section switching is tiny
+	# compared with the viewport work that produced this state update.
+	_context = new_context
+	_apply_context(state)
 
 	# Update dynamic content even if context didn't change
 	_update_dynamic_content(state)

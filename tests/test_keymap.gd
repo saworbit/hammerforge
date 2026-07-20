@@ -36,6 +36,8 @@ func test_default_bindings_loaded():
 	assert_true(actions.size() > 0, "Should have default bindings")
 	assert_true("tool_draw" in actions, "Should have tool_draw action")
 	assert_true("hollow" in actions, "Should have hollow action")
+	assert_true("quick_play" in actions, "Should expose the primary preview workflow")
+	assert_true("paint_fill" in actions, "Bucket fill should be a distinct action")
 
 
 func test_matches_simple_key():
@@ -75,6 +77,19 @@ func test_matches_ctrl_shift_key():
 	assert_true(keymap.matches("move_to_floor", ev), "Ctrl+Shift+F should match move_to_floor")
 
 
+func test_workflow_shortcuts():
+	assert_true(keymap.matches("toggle_operation", _make_key(KEY_Q)))
+	assert_true(keymap.matches("toggle_paint_mode", _make_key(KEY_P, false, true)))
+	assert_true(keymap.matches("quick_play", _make_key(KEY_ENTER, true)))
+	assert_true(keymap.matches("validate_level", _make_key(KEY_ENTER, true, true)))
+
+
+func test_bucket_and_blend_have_distinct_shortcuts():
+	assert_true(keymap.matches("paint_fill", _make_key(KEY_K)))
+	assert_true(keymap.matches("paint_blend", _make_key(KEY_N)))
+	assert_false(keymap.matches("paint_blend", _make_key(KEY_K)))
+
+
 func test_display_string_simple():
 	var display = keymap.get_display_string("tool_draw")
 	assert_eq(display, "D", "tool_draw display should be 'D'")
@@ -93,6 +108,12 @@ func test_display_string_shift():
 func test_display_string_ctrl_shift():
 	var display = keymap.get_display_string("move_to_floor")
 	assert_eq(display, "Ctrl+Shift+F", "move_to_floor display should be 'Ctrl+Shift+F'")
+
+
+func test_workflow_category_and_labels():
+	assert_eq(HFKeymapType.get_category("quick_play"), "Workflow")
+	assert_eq(HFKeymapType.get_action_label("paint_fill"), "Bucket Fill")
+	assert_eq(HFKeymapType.get_action_label("paint_blend"), "Blend")
 
 
 func test_display_string_unknown():

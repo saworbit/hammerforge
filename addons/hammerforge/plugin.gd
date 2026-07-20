@@ -109,6 +109,8 @@ func _enter_tree():
 			dock.connect("grid_snap_applied", Callable(self, "_on_dock_grid_snap_applied"))
 		if dock.has_signal("bake_state_changed"):
 			dock.connect("bake_state_changed", Callable(self, "_on_dock_bake_state_changed"))
+		if dock.has_signal("command_palette_requested"):
+			dock.connect("command_palette_requested", Callable(self, "_on_toggle_hotkey_palette"))
 
 	hud = preload("shortcut_hud.tscn").instantiate()
 	if base_control:
@@ -238,6 +240,12 @@ func _exit_tree():
 			dock.disconnect("grid_snap_applied", Callable(self, "_on_dock_grid_snap_applied"))
 		if dock.is_connected("bake_state_changed", Callable(self, "_on_dock_bake_state_changed")):
 			dock.disconnect("bake_state_changed", Callable(self, "_on_dock_bake_state_changed"))
+		if dock.is_connected(
+			"command_palette_requested", Callable(self, "_on_toggle_hotkey_palette")
+		):
+			dock.disconnect(
+				"command_palette_requested", Callable(self, "_on_toggle_hotkey_palette")
+			)
 		remove_control_from_docks(dock)
 		if is_instance_valid(dock):
 			dock.queue_free()
@@ -583,17 +591,40 @@ func _edit(object: Object) -> void:
 	active_root = null
 
 
-func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
-	var root = active_root if active_root else _get_level_root()
-	if not root:
-		root = _create_level_root()
-	if not root or not dock:
-		return EditorPlugin.AFTER_GUI_INPUT_PASS
+## Passive viewport input must not create scene content.  Keep this predicate
+## side-effect free so its input-ownership contract can be regression tested.
+static func should_create_root_for_viewport_input(
+	event: InputEvent, tool_id: int, paint_mode: bool
+) -> bool:
+	return (
+		event is InputEventMouseButton
+		and event.button_index == MOUSE_BUTTON_LEFT
+		and event.pressed
+		and tool_id == 0
+		and not paint_mode
+	)
 
+
+func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
+	if not dock:
+		return EditorPlugin.AFTER_GUI_INPUT_PASS
 	if camera:
 		last_3d_camera = camera
 	if event is InputEventMouse:
 		last_3d_mouse_pos = event.position
+
+	var root = active_root if active_root else _get_level_root()
+	if not root:
+		# Native viewport motion/navigation must never dirty the edited scene.
+		# Preserve draw-first convenience only for an intentional primary click.
+		var intentional_draw_click := should_create_root_for_viewport_input(
+			event, dock.get_tool(), dock.is_paint_mode_enabled()
+		)
+		if not intentional_draw_click:
+			return EditorPlugin.AFTER_GUI_INPUT_PASS
+		root = _create_level_root()
+		if not root:
+			return EditorPlugin.AFTER_GUI_INPUT_PASS
 
 	var target_camera = camera
 	var target_pos = event.position if event is InputEventMouse else last_3d_mouse_pos
@@ -978,15 +1009,48 @@ func _apply_numeric_value(root: Node) -> void:
 		_update_hud_context()
 
 
+func _prepare_tool_transition(root: Node) -> void:
+	if not root or not root.input_state:
+		return
+	var cancelled := false
+	if _disp_paint_active:
+		if not _disp_paint_pre_state.is_empty():
+			_commit_disp_paint_undo(root)
+		_disp_paint_active = false
+		_disp_paint_brush_id = ""
+		_disp_paint_face_idx = -1
+		_disp_paint_pre_state = {}
+		cancelled = true
+	if root.input_state.is_surface_painting():
+		root.input_state.end_surface_paint()
+		cancelled = true
+	if root.input_state.is_extruding():
+		root.cancel_extrude()
+		cancelled = true
+	elif root.input_state.is_dragging():
+		root.cancel_drag()
+		cancelled = true
+	if select_drag_active or select_dragging:
+		select_drag_active = false
+		select_dragging = false
+		_update_marquee_overlay(Vector2.ZERO, Vector2.ZERO, false)
+		cancelled = true
+	if cancelled:
+		numeric_buffer = ""
+		if dock:
+			dock.show_toast("In-progress gesture cancelled for tool switch", 1)
+
+
 func _deactivate_external_tool() -> void:
 	if _tool_registry and _tool_registry.has_active_external_tool():
 		_tool_registry.deactivate_current()
 
 
 func _on_builtin_tool_changed() -> void:
+	var root = active_root if active_root else _get_level_root()
+	_prepare_tool_transition(root)
 	_deactivate_external_tool()
 	if _vertex_mode:
-		var root = active_root if active_root else _get_level_root()
 		_toggle_vertex_mode(root)
 	# Show coach marks for extrude tools on first use
 	if dock:
@@ -1033,6 +1097,28 @@ func _handle_keyboard_input(
 		if event.keycode == KEY_K and event.ctrl_pressed:
 			_on_toggle_hotkey_palette()
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
+	if event.keycode == KEY_ESCAPE:
+		return (
+			EditorPlugin.AFTER_GUI_INPUT_STOP
+			if _cancel_escape_step(root)
+			else EditorPlugin.AFTER_GUI_INPUT_PASS
+		)
+	# High-level workflow shortcuts stay together so they remain predictable
+	# regardless of the currently active draw/select/paint tool.
+	if _keymap.matches("toggle_operation", event):
+		_on_context_toggle_operation()
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	if _keymap.matches("toggle_paint_mode", event):
+		_toggle_paint_mode()
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	if _keymap.matches("quick_play", event):
+		if dock:
+			dock._on_quick_play()
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	if _keymap.matches("validate_level", event):
+		if dock:
+			dock._on_validate_level()
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	# Operation replay toggle (Ctrl+Shift+T)
 	if event.keycode == KEY_T and event.ctrl_pressed and event.shift_pressed:
 		if _operation_replay and is_instance_valid(_operation_replay):
@@ -1118,9 +1204,9 @@ func _handle_keyboard_input(
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	# Nudge keys
 	var nudge = _get_nudge_direction(event.keycode)
-	if nudge != Vector3.ZERO:
-		_nudge_selected(root, nudge)
-		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	if nudge != Vector3.ZERO and not event.ctrl_pressed and not event.alt_pressed:
+		if _nudge_selected(root, nudge):
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
 	# Grid snap size shortcuts ([ = halve, ] = double)
 	if _keymap.matches("grid_decrease", event):
 		_adjust_grid_snap(root, 0.5)
@@ -1130,23 +1216,31 @@ func _handle_keyboard_input(
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	# Tool switch shortcuts
 	if _keymap.matches("tool_draw", event):
+		_prepare_tool_transition(root)
+		dock.highlight_tab("Brush")
 		_deactivate_external_tool()
 		if dock.tool_draw:
 			dock.tool_draw.button_pressed = true
 		_update_hud_context()
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	if _keymap.matches("tool_select", event):
+		_prepare_tool_transition(root)
+		dock.highlight_tab("Brush")
 		_deactivate_external_tool()
 		if dock.tool_select:
 			dock.tool_select.button_pressed = true
 		_update_hud_context()
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	if _keymap.matches("tool_extrude_up", event):
+		_prepare_tool_transition(root)
+		dock.highlight_tab("Brush")
 		_deactivate_external_tool()
 		dock.set_extrude_tool(1)
 		_update_hud_context()
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	if _keymap.matches("tool_extrude_down", event):
+		_prepare_tool_transition(root)
+		dock.highlight_tab("Brush")
 		_deactivate_external_tool()
 		dock.set_extrude_tool(-1)
 		_update_hud_context()
@@ -1154,11 +1248,15 @@ func _handle_keyboard_input(
 	# E / Shift+E for extrude (Blender convention) — skip in paint and vertex modes
 	if not paint_mode and not _vertex_mode:
 		if _keymap.matches("tool_extrude", event):
+			_prepare_tool_transition(root)
+			dock.highlight_tab("Brush")
 			_deactivate_external_tool()
 			dock.set_extrude_tool(1)
 			_update_hud_context()
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 		if _keymap.matches("tool_extrude_down_alt", event):
+			_prepare_tool_transition(root)
+			dock.highlight_tab("Brush")
 			_deactivate_external_tool()
 			dock.set_extrude_tool(-1)
 			_update_hud_context()
@@ -1207,8 +1305,10 @@ func _handle_keyboard_input(
 			paint_key = 2
 		elif _keymap.matches("paint_line", event):
 			paint_key = 3
-		elif _keymap.matches("paint_blend", event):
+		elif _keymap.matches("paint_fill", event):
 			paint_key = 4
+		elif _keymap.matches("paint_blend", event):
+			paint_key = 5
 		if paint_key >= 0:
 			dock.set_paint_tool(paint_key)
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
@@ -1250,10 +1350,23 @@ func _handle_keyboard_input(
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
 
 
-func _handle_rmb_cancel(root: Node, tool_id: int) -> int:
-	if tool_id == 2 or tool_id == 3:
+## RMB belongs to Godot camera navigation unless HammerForge currently owns a
+## transient gesture.  Persistent modes such as vertex editing are not enough.
+static func has_cancelable_rmb_gesture(input_state: Variant, marquee_active: bool) -> bool:
+	if marquee_active:
+		return true
+	return input_state != null and (input_state.is_dragging() or input_state.is_extruding())
+
+
+func _handle_rmb_cancel(root: Node, _tool_id: int) -> int:
+	var input_state = root.input_state if root else null
+	var has_marquee := select_drag_active or select_dragging
+	if not has_cancelable_rmb_gesture(input_state, has_marquee):
+		# Idle RMB belongs to Godot's native camera controls.
+		return EditorPlugin.AFTER_GUI_INPUT_PASS
+	if input_state and input_state.is_extruding():
 		root.cancel_extrude()
-	else:
+	elif input_state and input_state.is_dragging():
 		root.cancel_drag()
 	numeric_buffer = ""
 	select_drag_active = false
@@ -1409,6 +1522,10 @@ func _handle_draw_mouse(
 	var shape = dock.get_shape()
 	var sides = dock.get_sides()
 	if event.pressed:
+		# DRAG_HEIGHT follows buttonless motion. This next click confirms it;
+		# do not restart the base gesture on the confirmation press.
+		if root.input_state.is_drag_height():
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
 		numeric_buffer = ""
 		var started = root.begin_drag(cam, pos, op, size, shape, sides)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP if started else EditorPlugin.AFTER_GUI_INPUT_PASS
@@ -1441,7 +1558,13 @@ func _handle_mouse_motion(
 		root.update_extrude(cam, pos)
 		_update_hud_context()
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
-	if tool_id == 0 and event.button_mask & MOUSE_BUTTON_MASK_LEFT != 0:
+	if (
+		tool_id == 0
+		and (
+			root.input_state.is_drag_height()
+			or (root.input_state.is_drag_base() and event.button_mask & MOUSE_BUTTON_MASK_LEFT != 0)
+		)
+	):
 		root.update_drag(cam, pos)
 		_update_hud_context()
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
@@ -1499,7 +1622,11 @@ func _update_prefab_hover_overlay(root, cam: Camera3D, pos: Vector2) -> void:
 
 
 func _toggle_vertex_mode(root: Node) -> void:
-	_vertex_mode = not _vertex_mode
+	_prepare_tool_transition(root)
+	var enabling := not _vertex_mode
+	if enabling and dock and dock.paint_mode and dock.paint_mode.button_pressed:
+		dock.highlight_tab("Brush")
+	_vertex_mode = enabling
 	if _vertex_mode:
 		_deactivate_external_tool()
 		if root and root.vertex_system:
@@ -1853,18 +1980,9 @@ func _shortcut_input(event: InputEvent) -> void:
 	if not event.pressed or event.echo:
 		return
 	if event.keycode == KEY_ESCAPE:
-		if select_drag_active:
-			select_drag_active = false
-			select_dragging = false
-		hf_selection.clear()
-		var selection = get_editor_interface().get_selection()
-		if selection:
-			selection.clear()
-		if dock:
-			dock.set_selection_count(0)
-			dock.set_selection_nodes([])
-		_update_hud_context()
-		event.accept()
+		var root = active_root if active_root else _get_level_root()
+		if _cancel_escape_step(root):
+			event.accept()
 		return
 	if not event.ctrl_pressed:
 		return
@@ -1873,8 +1991,71 @@ func _shortcut_input(event: InputEvent) -> void:
 		return
 	var nudge = _get_nudge_direction(event.keycode)
 	if nudge != Vector3.ZERO:
-		_nudge_selected(root, nudge)
-		event.accept()
+		if _nudge_selected(root, nudge):
+			event.accept()
+
+
+func _cancel_escape_step(root: Node) -> bool:
+	# Escape is a predictable ladder: dismiss the most local interaction first.
+	if _hotkey_palette and _hotkey_palette.visible:
+		_hotkey_palette.visible = false
+		return true
+	if _radial_menu and _radial_menu.is_active():
+		_radial_menu.hide_menu()
+		return true
+	if _quick_property and _quick_property.is_active():
+		_quick_property.hide_popup()
+		return true
+	if _texture_picker_active:
+		_texture_picker_active = false
+		if dock:
+			dock.show_toast("Texture Picker cancelled", 1)
+		return true
+	if _disp_paint_active:
+		if root and not _disp_paint_pre_state.is_empty() and root.has_method("restore_state"):
+			root.restore_state(_disp_paint_pre_state)
+		_disp_paint_active = false
+		_disp_paint_brush_id = ""
+		_disp_paint_face_idx = -1
+		_disp_paint_pre_state = {}
+		return true
+	if select_drag_active or select_dragging:
+		select_drag_active = false
+		select_dragging = false
+		_update_marquee_overlay(Vector2.ZERO, Vector2.ZERO, false)
+		return true
+	if root and root.input_state:
+		if root.input_state.is_extruding():
+			root.cancel_extrude()
+			numeric_buffer = ""
+			_update_hud_context()
+			return true
+		if root.input_state.is_dragging():
+			root.cancel_drag()
+			numeric_buffer = ""
+			_update_hud_context()
+			return true
+	if _tool_registry and _tool_registry.has_active_external_tool():
+		_tool_registry.deactivate_current()
+		_update_hud_context()
+		return true
+	if _vertex_mode:
+		_toggle_vertex_mode(root)
+		return true
+	if root and root.get("face_selection") is Dictionary and not root.face_selection.is_empty():
+		root.clear_face_selection()
+		_update_hud_context()
+		return true
+	if not hf_selection.is_empty():
+		hf_selection.clear()
+		var selection = get_editor_interface().get_selection()
+		if selection:
+			selection.clear()
+		if dock:
+			dock.set_selection_nodes([])
+		_update_hud_context()
+		return true
+	return false
 
 
 func _select_node(node: Node, additive: bool = false) -> void:
@@ -2616,9 +2797,8 @@ func _duplicate_selected(root: Node) -> void:
 				selection.add_node(dup)
 
 
-func _nudge_selected(root: Node, dir: Vector3) -> void:
+func _nudge_selected(root: Node, dir: Vector3) -> bool:
 	var step = root.grid_snap if root.grid_snap > 0.0 else 1.0
-	var selection = get_editor_interface().get_selection()
 	var nodes = _current_selection_nodes()
 	var brush_ids: Array = []
 	for node in nodes:
@@ -2628,7 +2808,7 @@ func _nudge_selected(root: Node, dir: Vector3) -> void:
 			if brush_id != "":
 				brush_ids.append(brush_id)
 	if brush_ids.is_empty():
-		return
+		return false
 	var offset = dir * step
 	HFUndoHelper.commit(
 		_get_undo_redo(),
@@ -2640,6 +2820,7 @@ func _nudge_selected(root: Node, dir: Vector3) -> void:
 		Callable(self, "_record_history"),
 		"nudge"
 	)
+	return true
 
 
 func _adjust_grid_snap(root: Node, factor: float) -> void:
@@ -3355,6 +3536,18 @@ func _on_context_toggle_operation() -> void:
 		_update_hud_context()
 
 
+func _toggle_paint_mode() -> void:
+	if not dock or not dock.paint_mode:
+		return
+	var root = active_root if active_root else _get_level_root()
+	_prepare_tool_transition(root)
+	dock.paint_mode.button_pressed = not dock.paint_mode.button_pressed
+	dock.show_toast(
+		"Paint mode enabled" if dock.paint_mode.button_pressed else "Build mode enabled", 0
+	)
+	_update_hud_context()
+
+
 var _bake_preview_active := false
 var _bake_preview_in_flight := false
 
@@ -3403,6 +3596,10 @@ func _toggle_bake_preview(root: Node, pressed: bool) -> void:
 
 
 func _on_context_tool_switch(tool_id: int) -> void:
+	var root = active_root if active_root else _get_level_root()
+	_prepare_tool_transition(root)
+	if dock:
+		dock.highlight_tab("Brush")
 	_deactivate_external_tool()
 	if dock:
 		match tool_id:
@@ -3444,11 +3641,80 @@ func _on_toggle_hotkey_palette() -> void:
 			_update_context_toolbar_state(root, tool_id)
 
 
+## Actions in this list operate on LevelRoot-owned state or scene content. They
+## require an existing level, but must not create one as a side effect of using
+## the command palette. Level creation is reserved for explicit setup actions
+## and the first intentional Draw press in the viewport.
+static func hotkey_palette_action_requires_existing_root(action: String) -> bool:
+	return (
+		action
+		in [
+			"quick_play",
+			"validate_level",
+			"select_all",
+			"deselect_all",
+			"delete",
+			"duplicate",
+			"group",
+			"ungroup",
+			"hollow",
+			"clip",
+			"carve",
+			"merge",
+			"move_to_floor",
+			"move_to_ceiling",
+			"vertex_edit",
+			"texture_picker",
+			"grid_decrease",
+			"grid_increase",
+			"vertex_edge_mode",
+			"vertex_merge",
+			"vertex_split_edge",
+			"vertex_clip_convex",
+			"axis_x",
+			"axis_y",
+			"axis_z",
+			"select_similar",
+			"apply_last_texture",
+			"context_menu",
+		]
+	)
+
+
 func _on_hotkey_palette_action(action: String) -> void:
 	var root = active_root if active_root else _get_level_root()
-	if not root:
+	if hotkey_palette_action_requires_existing_root(action) and not root:
+		if dock:
+			dock.show_toast("Create a HammerForge level first", 1)
 		return
+	if (
+		root
+		and (
+			action
+			in [
+				"tool_draw",
+				"tool_select",
+				"tool_extrude_up",
+				"tool_extrude_down",
+				"tool_extrude",
+				"tool_extrude_down_alt"
+			]
+		)
+	):
+		_prepare_tool_transition(root)
+		if dock:
+			dock.highlight_tab("Brush")
 	match action:
+		"toggle_operation":
+			_on_context_toggle_operation()
+		"toggle_paint_mode":
+			_toggle_paint_mode()
+		"quick_play":
+			if dock:
+				dock._on_quick_play()
+		"validate_level":
+			if dock:
+				dock._on_validate_level()
 		"tool_draw":
 			_deactivate_external_tool()
 			if dock and dock.tool_draw:
@@ -3507,9 +3773,16 @@ func _on_hotkey_palette_action(action: String) -> void:
 		"paint_line":
 			if dock:
 				dock.set_paint_tool(3)
+		"paint_fill":
+			if dock:
+				dock.set_paint_tool(4)
 		"paint_blend":
 			if dock:
-				dock.set_paint_tool(4)  # K key = Bucket Fill tool
+				dock.set_paint_tool(5)
+		"grid_decrease":
+			_adjust_grid_snap(root, 0.5)
+		"grid_increase":
+			_adjust_grid_snap(root, 2.0)
 		"vertex_edge_mode":
 			if root.vertex_system:
 				var current: int = root.vertex_system.sub_mode
@@ -3564,6 +3837,22 @@ func _dispatch_viewport_action(action: String, args: Array = []) -> void:
 	var root = active_root if active_root else _get_level_root()
 	if not root:
 		return
+	if (
+		action
+		in [
+			"tool_draw",
+			"tool_select",
+			"extrude_up",
+			"extrude_down",
+			"tool_extrude_up",
+			"tool_extrude_down",
+			"tool_extrude",
+			"tool_extrude_down_alt"
+		]
+	):
+		_prepare_tool_transition(root)
+		if dock:
+			dock.highlight_tab("Brush")
 	match action:
 		# Tool switching
 		"tool_draw":
@@ -3728,8 +4017,8 @@ func _dispatch_viewport_action(action: String, args: Array = []) -> void:
 			if dock and dock.show_grid:
 				dock.show_grid.button_pressed = not dock.show_grid.button_pressed
 		"quick_bake":
-			if dock and dock.has_method("_on_bake_pressed"):
-				dock._on_bake_pressed()
+			if dock:
+				dock._on_bake()
 		"undo":
 			if undo_redo_manager:
 				undo_redo_manager.undo()
@@ -3829,7 +4118,7 @@ func _show_coach_mark_for_action(action: String) -> void:
 			coach_key = "carve"
 		"tool_extrude_up", "tool_extrude_down", "tool_extrude", "tool_extrude_down_alt":
 			coach_key = "extrude"
-		"paint_bucket", "paint_erase", "paint_ramp", "paint_line", "paint_blend":
+		"paint_bucket", "paint_erase", "paint_ramp", "paint_line", "paint_fill", "paint_blend":
 			coach_key = "surface_paint"
 	if not coach_key.is_empty():
 		_coach_marks.show_guide(coach_key)
@@ -3970,18 +4259,50 @@ func _get_level_root_from_node(node: Node) -> Node:
 	return null
 
 
+## Return the current LevelRoot, creating one in the edited scene when needed.
+## This is the public, dock-safe path for explicit empty-state actions.
+func ensure_level_root() -> Node:
+	var root = active_root if active_root else _get_level_root()
+	if root:
+		return root
+	return _create_level_root()
+
+
 func _create_level_root() -> Node:
 	var scene = get_editor_interface().get_edited_scene_root()
 	if not scene:
 		return null
 	var root = LevelRootType.new()
 	root.name = "LevelRoot"
-	scene.add_child(root)
-	root.owner = scene
+	if undo_redo_manager:
+		undo_redo_manager.create_action("Create HammerForge Level")
+		undo_redo_manager.add_do_method(scene, "add_child", root)
+		undo_redo_manager.add_do_method(root, "set_owner", scene)
+		undo_redo_manager.add_do_method(self, "_activate_created_level_root", root)
+		undo_redo_manager.add_do_reference(root)
+		undo_redo_manager.add_undo_method(self, "_deactivate_created_level_root", root)
+		undo_redo_manager.add_undo_method(scene, "remove_child", root)
+		undo_redo_manager.commit_action()
+	else:
+		scene.add_child(root)
+		root.owner = scene
+		_activate_created_level_root(root)
+	return root
+
+
+func _activate_created_level_root(root: Node) -> void:
 	active_root = root
 	var selection = get_editor_interface().get_selection()
 	selection.clear()
 	selection.add_node(root)
 	hf_selection.clear()
 	hf_selection.append(root)
-	return root
+
+
+func _deactivate_created_level_root(root: Node) -> void:
+	if active_root == root:
+		active_root = null
+	hf_selection.erase(root)
+	var selection = get_editor_interface().get_selection()
+	if selection and root in selection.get_selected_nodes():
+		selection.remove_node(root)

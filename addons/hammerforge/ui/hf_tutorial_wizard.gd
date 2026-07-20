@@ -2,52 +2,32 @@
 extends PanelContainer
 ## Interactive step-by-step tutorial wizard for first-time HammerForge users.
 ##
-## Walks through 5 core actions (draw, subtract, paint, entity, bake),
-## detecting completion via LevelRoot signals.  Progress persists across
-## editor restarts via user prefs.
+## Teaches one short success loop: draw geometry, then test it. Optional systems
+## stay out of onboarding and remain discoverable from their contextual tabs.
 
 signal completed
 signal dismissed(dont_show_again: bool)
+signal action_requested(action: String)
 
 const STEPS: Array[Dictionary] = [
 	{
-		"title": "Step 1 — Draw your first room",
+		"title": "1. Draw something",
 		"text":
-		"Make sure the Brush tab is active and Operation is set to Add.\nClick and drag in the 3D viewport to draw a box brush.",
+		"Click Set Up Draw, then drag in the 3D viewport. HammerForge will create a starter level if you need one.",
 		"signal_name": "brush_added",
 		"validate": "",
 		"highlight_tab": "Brush",
+		"action": "setup_draw",
+		"action_label": "Set Up Draw",
 	},
 	{
-		"title": "Step 2 — Subtract a window",
-		"text":
-		'Set the Operation to Subtract (the "-" button in the toolbar).\nDraw a smaller brush overlapping your room to carve an opening.',
-		"signal_name": "brush_added",
-		"validate": "_validate_subtract",
-		"highlight_tab": "Brush",
-	},
-	{
-		"title": "Step 3 — Paint a floor",
-		"text":
-		"Switch to the Paint tab and click on floor cells to paint them.\nToggle Paint Mode (P) in the toolbar first.",
-		"signal_name": "paint_layer_changed",
-		"validate": "",
-		"highlight_tab": "Paint",
-	},
-	{
-		"title": "Step 4 — Place an entity",
-		"text": "Go to the Entities tab and drag an entity from the palette\ninto the 3D viewport.",
-		"signal_name": "entity_added",
-		"validate": "",
-		"highlight_tab": "Entities",
-	},
-	{
-		"title": "Step 5 — Bake & Preview",
-		"text":
-		"Open the Manage tab and click Bake.\nThis converts your brushes into final playable geometry.",
+		"title": "2. Test your level",
+		"text": "Click Test Level. HammerForge checks, bakes, and runs the level for you.",
 		"signal_name": "bake_finished",
 		"validate": "_validate_bake_success",
 		"highlight_tab": "Manage",
+		"action": "quick_play",
+		"action_label": "Test Level Now",
 	},
 ]
 
@@ -60,6 +40,8 @@ var _title_label: Label
 var _text_label: RichTextLabel
 var _progress: ProgressBar
 var _step_counter: Label
+var _back_btn: Button
+var _action_btn: Button
 var _skip_btn: Button
 var _dismiss_btn: Button
 var _dont_show: CheckBox
@@ -112,6 +94,20 @@ func _build_ui() -> void:
 	_step_counter.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(_step_counter)
 
+	var actions = HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 8)
+	vbox.add_child(actions)
+
+	_back_btn = Button.new()
+	_back_btn.text = "Back"
+	_back_btn.pressed.connect(_on_back)
+	actions.add_child(_back_btn)
+
+	_action_btn = Button.new()
+	_action_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_action_btn.pressed.connect(_on_primary_action)
+	actions.add_child(_action_btn)
+
 	var sep2 = HSeparator.new()
 	vbox.add_child(sep2)
 
@@ -120,7 +116,7 @@ func _build_ui() -> void:
 	vbox.add_child(bottom)
 
 	_dont_show = CheckBox.new()
-	_dont_show.text = "Don't show again"
+	_dont_show.text = "Don't show at startup"
 	_dont_show.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bottom.add_child(_dont_show)
 
@@ -130,7 +126,7 @@ func _build_ui() -> void:
 	bottom.add_child(_skip_btn)
 
 	_dismiss_btn = Button.new()
-	_dismiss_btn.text = "Dismiss"
+	_dismiss_btn.text = "Hide Guide"
 	_dismiss_btn.pressed.connect(_on_dismiss)
 	bottom.add_child(_dismiss_btn)
 
@@ -176,8 +172,13 @@ func _apply_step() -> void:
 	var step: Dictionary = STEPS[_current_step]
 	_title_label.text = step["title"]
 	_text_label.text = step["text"]
-	_progress.value = _current_step
-	_step_counter.text = "%d / %d" % [_current_step + 1, STEPS.size()]
+	_progress.value = _current_step + 1
+	_step_counter.text = "Step %d of %d" % [_current_step + 1, STEPS.size()]
+	_back_btn.visible = _current_step > 0
+	_action_btn.visible = true
+	_action_btn.text = str(step.get("action_label", "Set Up This Step"))
+	_skip_btn.visible = _current_step < STEPS.size() - 1
+	_dismiss_btn.text = "Hide Guide"
 	_highlight_tab(step.get("highlight_tab", ""))
 	_connect_step_signal()
 	_persist_step()
@@ -255,6 +256,22 @@ func _on_skip() -> void:
 	_advance_step()
 
 
+func _on_back() -> void:
+	if _current_step <= 0:
+		return
+	_disconnect_current()
+	_current_step -= 1
+	_apply_step()
+
+
+func _on_primary_action() -> void:
+	if _current_step >= STEPS.size():
+		return
+	var action: String = str(STEPS[_current_step].get("action", ""))
+	if not action.is_empty():
+		action_requested.emit(action)
+
+
 func _on_dismiss() -> void:
 	_disconnect_current()
 	dismissed.emit(_dont_show.button_pressed)
@@ -264,8 +281,13 @@ func _on_complete() -> void:
 	_disconnect_current()
 	_progress.value = STEPS.size()
 	_step_counter.text = "Done!"
-	_title_label.text = "Tutorial Complete"
-	_text_label.text = "You've learned the basics of HammerForge!\nPress ? in the toolbar anytime to see all shortcuts."
+	_title_label.text = "You're ready"
+	_text_label.text = (
+		"The core loop is Draw -> Test Level. Paint and Objects are optional; "
+		+ "open Learn or Actions whenever you want more."
+	)
+	_back_btn.visible = false
+	_action_btn.visible = false
 	_skip_btn.visible = false
 	_dismiss_btn.text = "Close"
 	if _user_prefs:

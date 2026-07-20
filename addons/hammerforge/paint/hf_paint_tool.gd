@@ -2,6 +2,8 @@
 class_name HFPaintTool
 extends Node
 
+signal stroke_committed(changed_cell_count: int)
+
 const HFStroke = preload("hf_stroke.gd")
 const HFHeightmapSynth = preload("hf_heightmap_synth.gd")
 const HFGeneratedModel = preload("hf_generated_model.gd")
@@ -112,6 +114,12 @@ func _continue_stroke(camera: Camera3D, screen_pos: Vector2) -> void:
 
 func _end_stroke() -> void:
 	_painting = false
+	if _is_sculpt_tool():
+		var sculpt_changed := _stroke_dirty.size()
+		_stroke_dirty.clear()
+		if sculpt_changed > 0:
+			stroke_committed.emit(sculpt_changed)
+		return
 	if not _active_stroke:
 		return
 	if tool == HFStroke.Tool.LINE:
@@ -126,6 +134,7 @@ func _end_stroke() -> void:
 		push_warning("HammerForge: paint stroke ended with no active layer — changes lost")
 		_active_stroke = null
 		return
+	var changed_cell_count := _active_stroke.cells.size()
 	var dirty: Array[Vector2i] = []
 	for cid in _stroke_dirty.keys():
 		dirty.append(cid)
@@ -149,6 +158,7 @@ func _end_stroke() -> void:
 			var model = geometry.build_for_chunks(layer, dirty, synth_settings)
 			reconciler.reconcile(model, layer.grid, synth_settings, dirty)
 	_active_stroke = null
+	stroke_committed.emit(changed_cell_count)
 
 
 func _screen_to_cell(camera: Camera3D, screen_pos: Vector2) -> Variant:

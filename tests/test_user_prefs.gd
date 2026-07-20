@@ -7,6 +7,7 @@ var prefs: HFUserPrefsType
 
 func before_each():
 	prefs = HFUserPrefsType.new()
+	prefs.persistence_enabled = false
 	prefs.data = HFUserPrefsType._defaults()
 
 

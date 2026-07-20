@@ -7,6 +7,8 @@ extends GutTest
 
 const HFVertexSystem = preload("res://addons/hammerforge/systems/hf_vertex_system.gd")
 const HFCarveSystem = preload("res://addons/hammerforge/systems/hf_carve_system.gd")
+const HFInputState = preload("res://addons/hammerforge/input_state.gd")
+const HammerForgePlugin = preload("res://addons/hammerforge/plugin.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
 
@@ -402,6 +404,177 @@ func test_plugin_axis_lock_z_uses_3_not_4():
 	assert_false(
 		source.contains("axis_lock == 4"), "Must not check axis_lock == 4 anywhere (old bug)"
 	)
+
+
+# ===========================================================================
+# Viewport input ownership regressions
+# ===========================================================================
+
+
+func test_passive_viewport_input_does_not_request_a_level_root():
+	var motion := InputEventMouseMotion.new()
+	assert_false(HammerForgePlugin.should_create_root_for_viewport_input(motion, 0, false))
+
+	var right_press := InputEventMouseButton.new()
+	right_press.button_index = MOUSE_BUTTON_RIGHT
+	right_press.pressed = true
+	assert_false(HammerForgePlugin.should_create_root_for_viewport_input(right_press, 0, false))
+
+
+func test_only_an_intentional_draw_press_requests_a_level_root():
+	var left_event := InputEventMouseButton.new()
+	left_event.button_index = MOUSE_BUTTON_LEFT
+	left_event.pressed = true
+	assert_true(HammerForgePlugin.should_create_root_for_viewport_input(left_event, 0, false))
+	assert_false(
+		HammerForgePlugin.should_create_root_for_viewport_input(left_event, 1, false),
+		"Select clicks must not create a LevelRoot",
+	)
+	assert_false(
+		HammerForgePlugin.should_create_root_for_viewport_input(left_event, 0, true),
+		"Paint clicks must not create a LevelRoot through the Draw path",
+	)
+	left_event.pressed = false
+	assert_false(
+		HammerForgePlugin.should_create_root_for_viewport_input(left_event, 0, false),
+		"A release without a matching HammerForge press is passive",
+	)
+
+
+func test_command_palette_ui_actions_do_not_require_or_create_a_level_root():
+	for action in [
+		"toggle_operation",
+		"toggle_paint_mode",
+		"tool_draw",
+		"tool_select",
+		"tool_extrude_up",
+		"paint_bucket",
+		"paint_fill",
+		"selection_filter",
+		"radial_menu",
+		"unknown_action",
+	]:
+		assert_false(
+			HammerForgePlugin.hotkey_palette_action_requires_existing_root(action),
+			"%s should remain root-independent" % action,
+		)
+
+	# EditorPlugin cannot be instantiated by headless GUT, so also audit the
+	# production dispatcher and prevent a future unconditional ensure call.
+	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
+	var handler_start := source.find("func _on_hotkey_palette_action")
+	var handler_end := source.find("## Unified action dispatch", handler_start)
+	assert_gte(handler_start, 0)
+	assert_gt(handler_end, handler_start)
+	var handler := source.substr(handler_start, handler_end - handler_start)
+	assert_false(
+		handler.contains("ensure_level_root()"),
+		"Opening or using the command palette must not mutate an empty scene",
+	)
+	assert_true(
+		handler.contains('dock.show_toast("Create a HammerForge level first", 1)'),
+		"Root-dependent palette commands must explain why they cannot run",
+	)
+
+
+func test_command_palette_content_actions_require_an_existing_level_root():
+	for action in [
+		"quick_play",
+		"validate_level",
+		"select_all",
+		"delete",
+		"duplicate",
+		"hollow",
+		"grid_increase",
+		"vertex_edit",
+		"texture_picker",
+		"axis_x",
+		"select_similar",
+		"apply_last_texture",
+		"context_menu",
+	]:
+		assert_true(
+			HammerForgePlugin.hotkey_palette_action_requires_existing_root(action),
+			"%s must be guarded when no level exists" % action,
+		)
+
+
+func test_undoable_level_root_creation_registers_node_lifetime():
+	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
+	var create_start := source.find("func _create_level_root")
+	var create_end := source.find("func _activate_created_level_root", create_start)
+	assert_gte(create_start, 0)
+	assert_gt(create_end, create_start)
+	var create_body := source.substr(create_start, create_end - create_start)
+	assert_true(
+		create_body.contains("undo_redo_manager.add_do_reference(root)"),
+		"UndoRedo must own a reference to a newly created LevelRoot",
+	)
+
+
+func test_idle_rmb_passes_but_transient_gestures_are_cancelable():
+	var input_state := HFInputState.new()
+	assert_false(
+		HammerForgePlugin.has_cancelable_rmb_gesture(input_state, false),
+		"Idle RMB must remain available for Godot camera navigation",
+	)
+
+	input_state.begin_drag(Vector3.ZERO, 0, 0, 4, 16.0, Vector3(16, 16, 16), Vector2.ZERO)
+	assert_true(HammerForgePlugin.has_cancelable_rmb_gesture(input_state, false))
+	input_state.cancel()
+	input_state.begin_extrude()
+	assert_true(HammerForgePlugin.has_cancelable_rmb_gesture(input_state, false))
+	input_state.end_extrude()
+	input_state.begin_vertex_edit()
+	assert_false(
+		HammerForgePlugin.has_cancelable_rmb_gesture(input_state, false),
+		"Persistent vertex mode alone must not steal RMB",
+	)
+	assert_true(
+		HammerForgePlugin.has_cancelable_rmb_gesture(null, true),
+		"An active selection marquee remains cancelable",
+	)
+
+
+func test_quick_bake_dispatch_calls_the_real_dock_callback():
+	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
+	var branch_start := source.find('\"quick_bake\":')
+	var branch_end := source.find('\"undo\":', branch_start)
+	assert_gte(branch_start, 0, "Quick Bake dispatch branch must exist")
+	assert_gt(branch_end, branch_start, "Quick Bake branch must end before Undo")
+	var branch := source.substr(branch_start, branch_end - branch_start)
+	assert_true(branch.contains("dock._on_bake()"), "Quick Bake must call the real bake callback")
+	assert_false(
+		branch.contains("_on_bake_pressed"), "Quick Bake must not call the removed callback"
+	)
+
+
+func test_nudge_keys_are_consumed_only_after_a_valid_move():
+	# EditorPlugin cannot be instantiated by headless GUT, so audit the two
+	# production event paths and the validity guard they share.
+	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
+	var keyboard_start := source.find("# Nudge keys")
+	var keyboard_end := source.find("# Grid snap size shortcuts", keyboard_start)
+	var keyboard_branch := source.substr(keyboard_start, keyboard_end - keyboard_start)
+	assert_true(
+		keyboard_branch.contains("if _nudge_selected(root, nudge):"),
+		"Viewport input should stop only after _nudge_selected succeeds",
+	)
+
+	var shortcut_start := source.find("func _shortcut_input")
+	var shortcut_end := source.find("func _cancel_escape_step", shortcut_start)
+	var shortcut_branch := source.substr(shortcut_start, shortcut_end - shortcut_start)
+	assert_true(
+		shortcut_branch.contains("if _nudge_selected(root, nudge):"),
+		"Global Ctrl+nudge should be accepted only after a valid move",
+	)
+
+	var nudge_start := source.find("func _nudge_selected")
+	var nudge_end := source.find("func _adjust_grid_snap", nudge_start)
+	var nudge_body := source.substr(nudge_start, nudge_end - nudge_start)
+	assert_true(nudge_body.contains("root.is_brush_node(node)"))
+	assert_true(nudge_body.contains("if brush_ids.is_empty():"))
+	assert_true(nudge_body.contains("return false"))
 
 
 # ===========================================================================

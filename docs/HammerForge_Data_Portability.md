@@ -1,6 +1,6 @@
 ﻿# HammerForge Data Portability
 
-Last updated: April 9, 2026
+Last updated: July 21, 2026
 
 This document describes how to move data in and out of HammerForge safely.
 
@@ -41,7 +41,7 @@ MapIO.import_weld_tolerance = 0.05  # increase for very noisy legacy files
 MapIO.import_weld_tolerance = 0.0   # disable welding entirely
 ```
 
-After import, run **Check Bake Issues** (Manage tab) to detect any remaining non-planar faces or micro-gaps between brushes. The validation system offers auto-fix methods (`weld_brush_vertices`, `fix_non_planar_faces`) for post-import cleanup.
+After import, run **Check Only** (Test tab) to detect any remaining non-planar faces or micro-gaps between brushes. The validation system offers auto-fix methods (`weld_brush_vertices`, `fix_non_planar_faces`) for post-import cleanup.
 
 ## `.glb` Export
 - `.glb` export writes the baked geometry only.
@@ -77,7 +77,7 @@ After import, run **Check Bake Issues** (Manage tab) to detect any remaining non
 - Autosave writes happen on a background thread.
 - If a write fails (e.g., disk full, permissions), the `autosave_failed` signal fires and the dock shows a red warning label.
 - The next autosave interval retries automatically.
-- Manual save is always available via Manage tab → File section.
+- Manual save is always available via Test tab → File section.
 
 ## Recommended Pipeline
 1. Design and iterate in HammerForge.

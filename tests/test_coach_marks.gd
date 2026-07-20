@@ -10,6 +10,7 @@ var prefs: HFUserPrefs
 func before_each():
 	coach = HFCoachMarks.new()
 	prefs = HFUserPrefs.new()
+	prefs.persistence_enabled = false
 	prefs.data = HFUserPrefs._defaults()
 	coach.set_user_prefs(prefs)
 	add_child(coach)

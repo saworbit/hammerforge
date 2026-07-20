@@ -59,7 +59,7 @@ res://addons/hammerforge/textures/prototypes/{pattern}_{color}.svg
 
 For example: `res://addons/hammerforge/textures/prototypes/checker_red.svg`
 
-Godot 4.6 automatically imports SVGs as `CompressedTexture2D` resources.
+Godot 4.7 automatically imports SVGs as `CompressedTexture2D` resources.
 
 ## Usage via Editor UI
 

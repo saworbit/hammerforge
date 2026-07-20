@@ -39,6 +39,11 @@ static func _default_bindings() -> Dictionary:
 		"tool_extrude_down": {"keycode": KEY_J},
 		"tool_extrude": {"keycode": KEY_E},
 		"tool_extrude_down_alt": {"keycode": KEY_E, "shift": true},
+		# Workflow accelerators
+		"toggle_operation": {"keycode": KEY_Q},
+		"toggle_paint_mode": {"keycode": KEY_P, "shift": true},
+		"quick_play": {"keycode": KEY_ENTER, "ctrl": true},
+		"validate_level": {"keycode": KEY_ENTER, "ctrl": true, "shift": true},
 		# Editing
 		"delete": {"keycode": KEY_DELETE},
 		"duplicate": {"keycode": KEY_D, "ctrl": true},
@@ -55,7 +60,8 @@ static func _default_bindings() -> Dictionary:
 		"paint_erase": {"keycode": KEY_E},
 		"paint_ramp": {"keycode": KEY_R},
 		"paint_line": {"keycode": KEY_L},
-		"paint_blend": {"keycode": KEY_K},
+		"paint_fill": {"keycode": KEY_K},
+		"paint_blend": {"keycode": KEY_N},
 		# Vertex editing
 		"vertex_edit": {"keycode": KEY_V},
 		"vertex_edge_mode": {"keycode": KEY_E},
@@ -151,6 +157,8 @@ func get_all_bindings() -> Dictionary:
 
 ## Map an action name to its UI category.
 static func get_category(action: String) -> String:
+	if action in ["toggle_operation", "toggle_paint_mode", "quick_play", "validate_level"]:
+		return "Workflow"
 	if action.begins_with("tool_"):
 		return "Tools"
 	if action.begins_with("paint_"):
@@ -185,6 +193,10 @@ static func get_action_label(action: String) -> String:
 		"tool_extrude_down": "Extrude Down",
 		"tool_extrude": "Extrude Up",
 		"tool_extrude_down_alt": "Extrude Down",
+		"toggle_operation": "Toggle Add / Cut",
+		"toggle_paint_mode": "Toggle Paint Mode",
+		"quick_play": "Quick Play",
+		"validate_level": "Validate Level",
 		"vertex_edit": "Vertex Edit",
 		"vertex_edge_mode": "Edge Mode",
 		"vertex_merge": "Merge Vertices",
@@ -203,7 +215,8 @@ static func get_action_label(action: String) -> String:
 		"paint_erase": "Erase",
 		"paint_ramp": "Ramp / Rect",
 		"paint_line": "Line",
-		"paint_blend": "Bucket Fill",
+		"paint_fill": "Bucket Fill",
+		"paint_blend": "Blend",
 		"texture_picker": "Texture Picker",
 		"apply_last_texture": "Apply Last Texture",
 		"select_all": "Select All",

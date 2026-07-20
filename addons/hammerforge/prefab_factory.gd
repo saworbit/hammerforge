@@ -43,8 +43,13 @@ static func create_prefab(type: int, size: Vector3, sides: int = 4) -> CSGShape3
 			brush = pyramid
 		LevelRootType.BrushShape.WEDGE:
 			var wedge = CSGPolygon3D.new()
+			var half := size * 0.5
 			wedge.polygon = PackedVector2Array(
-				[Vector2(0.0, 0.0), Vector2(size.x, 0.0), Vector2(0.0, size.y)]
+				[
+					Vector2(-half.x, -half.y),
+					Vector2(half.x, -half.y),
+					Vector2(-half.x, half.y),
+				]
 			)
 			wedge.depth = size.z
 			brush = wedge
@@ -70,8 +75,8 @@ static func create_prefab(type: int, size: Vector3, sides: int = 4) -> CSGShape3
 			brush = capsule
 		LevelRootType.BrushShape.TORUS:
 			var torus_mesh = TorusMesh.new()
-			_set_mesh_property(torus_mesh, "ring_radius", 1.0)
-			_set_mesh_property(torus_mesh, "pipe_radius", 0.25)
+			_set_mesh_property(torus_mesh, "outer_radius", 1.0)
+			_set_mesh_property(torus_mesh, "inner_radius", 0.5)
 			var torus = CSGMesh3D.new()
 			torus.mesh = torus_mesh
 			_apply_mesh_scale(torus, size)

@@ -2,6 +2,7 @@ extends GutTest
 
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
+const PrefabFactory = preload("res://addons/hammerforge/prefab_factory.gd")
 
 var brush: DraftBrush
 
@@ -13,6 +14,22 @@ func before_each():
 
 func after_each():
 	brush = null
+
+
+func _assert_base_mesh_matches_size(shape: int, requested_size: Vector3, tolerance := 0.05) -> void:
+	brush.shape = shape
+	brush.size = requested_size
+	var build: Dictionary = brush._build_base_mesh()
+	var mesh := build.get("mesh", null) as Mesh
+	assert_not_null(mesh, "Shape %d should build a non-null mesh" % shape)
+	if mesh == null:
+		return
+
+	var mesh_scale: Vector3 = build.get("scale", Vector3.ONE)
+	var actual_size := mesh.get_aabb().size * mesh_scale.abs()
+	assert_almost_eq(actual_size.x, requested_size.x, tolerance, "Mesh bounds should match size.x")
+	assert_almost_eq(actual_size.y, requested_size.y, tolerance, "Mesh bounds should match size.y")
+	assert_almost_eq(actual_size.z, requested_size.z, tolerance, "Mesh bounds should match size.z")
 
 
 # ===========================================================================
@@ -326,3 +343,88 @@ func test_build_prism_mesh_clamps_sides():
 	# Even with 1 side requested, should clamp to 3
 	var mesh = brush._build_prism_mesh(1)
 	assert_not_null(mesh, "Clamped prism mesh should not be null")
+
+
+# ===========================================================================
+# Wedge mesh generation
+# ===========================================================================
+
+
+func test_wedge_builds_a_centered_triangular_prism_instead_of_a_box():
+	brush.shape = brush.BrushShape.WEDGE
+	brush.size = Vector3(10, 20, 30)
+	var build := brush._build_base_mesh()
+	var mesh: Mesh = build.get("mesh")
+	assert_true(mesh is ArrayMesh, "Wedge should use its own generated mesh")
+	assert_eq(mesh.get_aabb().size, brush.size, "Wedge bounds should match the requested size")
+	assert_eq(mesh.get_aabb().get_center(), Vector3.ZERO, "Wedge should be centered on the brush")
+
+	var arrays := mesh.surface_get_arrays(0)
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var unique_vertices: Dictionary = {}
+	for vertex in vertices:
+		unique_vertices[vertex] = true
+	assert_eq(unique_vertices.size(), 6, "A wedge should have six unique corners")
+	assert_eq(vertices.size(), 24, "A wedge should triangulate its five faces into eight triangles")
+
+
+func test_wedge_wireframe_contains_all_nine_edges():
+	brush.shape = brush.BrushShape.WEDGE
+	brush.size = Vector3(10, 20, 30)
+	var wire := brush._generate_wire_mesh()
+	assert_not_null(wire, "Wedge should provide a selection wireframe")
+	var arrays := wire.surface_get_arrays(0)
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	assert_eq(vertices.size(), 18, "Nine wedge edges should produce eighteen line vertices")
+
+
+# ===========================================================================
+# Curved primitive base-mesh bounds
+# ===========================================================================
+
+
+func test_sphere_base_mesh_matches_requested_uniform_bounds():
+	_assert_base_mesh_matches_size(brush.BrushShape.SPHERE, Vector3(18, 18, 18))
+
+
+func test_ellipsoid_base_mesh_matches_requested_nonuniform_bounds():
+	_assert_base_mesh_matches_size(brush.BrushShape.ELLIPSOID, Vector3(10, 24, 30))
+
+
+func test_torus_base_mesh_matches_requested_nonuniform_bounds_without_property_errors():
+	_assert_base_mesh_matches_size(brush.BrushShape.TORUS, Vector3(30, 8, 18))
+
+
+func test_bake_factory_wedge_uses_the_same_centered_bounds_as_preview():
+	var requested_size := Vector3(10, 20, 30)
+	var wedge := PrefabFactory.create_prefab(brush.BrushShape.WEDGE, requested_size) as CSGPolygon3D
+	assert_not_null(wedge, "Wedge should bake through a CSGPolygon3D")
+	if wedge == null:
+		return
+	autofree(wedge)
+
+	var bounds := Rect2(wedge.polygon[0], Vector2.ZERO)
+	for point in wedge.polygon:
+		bounds = bounds.expand(point)
+	assert_eq(bounds.get_center(), Vector2.ZERO, "Baked wedge should remain brush-centered")
+	assert_eq(bounds.size, Vector2(requested_size.x, requested_size.y))
+	assert_almost_eq(wedge.depth, requested_size.z, 0.001)
+
+
+func test_bake_factory_torus_uses_godot_4_radius_properties_and_requested_bounds():
+	var requested_size := Vector3(30, 8, 18)
+	var torus_shape := (
+		PrefabFactory.create_prefab(brush.BrushShape.TORUS, requested_size) as CSGMesh3D
+	)
+	assert_not_null(torus_shape, "Torus should bake through a CSGMesh3D")
+	if torus_shape == null:
+		return
+	autofree(torus_shape)
+	assert_true(torus_shape.mesh is TorusMesh)
+	var torus := torus_shape.mesh as TorusMesh
+	assert_almost_eq(torus.outer_radius, 1.0, 0.001)
+	assert_almost_eq(torus.inner_radius, 0.5, 0.001)
+	var actual_size := torus.get_aabb().size * torus_shape.scale.abs()
+	assert_almost_eq(actual_size.x, requested_size.x, 0.05)
+	assert_almost_eq(actual_size.y, requested_size.y, 0.05)
+	assert_almost_eq(actual_size.z, requested_size.z, 0.05)

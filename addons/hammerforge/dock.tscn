@@ -18,38 +18,24 @@ theme_override_constants/margin_bottom = 6
 [node name="VBox" type="VBoxContainer" parent="Margin"]
 custom_minimum_size = Vector2(260, 260)
 
-[node name="Toolbar" type="HBoxContainer" parent="Margin/VBox"]
+[node name="Toolbar" type="HFlowContainer" parent="Margin/VBox"]
+theme_override_constants/h_separation = 2
+theme_override_constants/v_separation = 2
 
 [node name="ToolDraw" type="Button" parent="Margin/VBox/Toolbar"]
-text = "D"
+text = "Draw"
 tooltip_text = "Draw"
 toggle_mode = true
 flat = true
 
 [node name="ToolSelect" type="Button" parent="Margin/VBox/Toolbar"]
-text = "S"
+text = "Select"
 tooltip_text = "Select"
 toggle_mode = true
 flat = true
 
-[node name="ToolbarSep1" type="VSeparator" parent="Margin/VBox/Toolbar"]
-
-[node name="ModeAdd" type="Button" parent="Margin/VBox/Toolbar"]
-text = "+"
-tooltip_text = "Add (additive brush)"
-toggle_mode = true
-flat = true
-
-[node name="ModeSubtract" type="Button" parent="Margin/VBox/Toolbar"]
-text = "-"
-tooltip_text = "Subtract (subtractive brush)"
-toggle_mode = true
-flat = true
-
-[node name="ToolbarSep2" type="VSeparator" parent="Margin/VBox/Toolbar"]
-
 [node name="PaintMode" type="Button" parent="Margin/VBox/Toolbar"]
-text = "P"
+text = "Paint"
 tooltip_text = "Paint Mode"
 toggle_mode = true
 flat = true
@@ -57,9 +43,27 @@ flat = true
 [node name="NoRootBanner" type="PanelContainer" parent="Margin/VBox"]
 visible = false
 
-[node name="BannerLabel" type="Label" parent="Margin/VBox/NoRootBanner"]
-text = "Select a LevelRoot node to begin"
+[node name="BannerContent" type="VBoxContainer" parent="Margin/VBox/NoRootBanner"]
+theme_override_constants/separation = 6
+
+[node name="BannerLabel" type="Label" parent="Margin/VBox/NoRootBanner/BannerContent"]
+text = "Start building with HammerForge"
 horizontal_alignment = 1
+
+[node name="BannerHint" type="Label" parent="Margin/VBox/NoRootBanner/BannerContent"]
+text = "Create a ready-to-use level, or add an empty LevelRoot."
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="BannerActions" type="HBoxContainer" parent="Margin/VBox/NoRootBanner/BannerContent"]
+theme_override_constants/separation = 6
+
+[node name="CreateStarter" type="Button" parent="Margin/VBox/NoRootBanner/BannerContent/BannerActions"]
+text = "Create Starter Level"
+size_flags_horizontal = 3
+
+[node name="CreateEmpty" type="Button" parent="Margin/VBox/NoRootBanner/BannerContent/BannerActions"]
+text = "Empty Root"
 
 [node name="AutosaveWarning" type="Label" parent="Margin/VBox"]
 visible = false
@@ -73,7 +77,7 @@ theme_override_colors/font_color = Color(1, 0.3, 0.3, 1)
 custom_minimum_size = Vector2(0, 24)
 
 [node name="ModeLabel" type="Label" parent="Margin/VBox/ModeIndicator"]
-text = "Draw"
+text = "Draw - drag in the 3D viewport"
 horizontal_alignment = 1
 
 [node name="MainTabs" type="TabContainer" parent="Margin/VBox"]
@@ -91,6 +95,25 @@ theme_override_constants/margin_right = 4
 theme_override_constants/margin_bottom = 4
 
 [node name="BrushVBox" type="VBoxContainer" parent="Margin/VBox/MainTabs/Brush/BrushMargin"]
+
+[node name="OperationRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox"]
+theme_override_constants/separation = 4
+
+[node name="OperationLabel" type="Label" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/OperationRow"]
+custom_minimum_size = Vector2(52, 0)
+text = "Create"
+
+[node name="ModeAdd" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/OperationRow"]
+size_flags_horizontal = 3
+text = "Solid"
+tooltip_text = "Create solid geometry"
+toggle_mode = true
+
+[node name="ModeSubtract" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/OperationRow"]
+size_flags_horizontal = 3
+text = "Cutout"
+tooltip_text = "Draw a volume that cuts through solid geometry"
+toggle_mode = true
 
 [node name="ShapeRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox"]
 
@@ -241,7 +264,7 @@ theme_override_constants/margin_bottom = 4
 [node name="Footer" type="VBoxContainer" parent="Margin/VBox"]
 
 [node name="QuickPlay" type="Button" parent="Margin/VBox/Footer"]
-text = "Quick Play"
+text = "Test Level  (Bake + Play)"
 size_flags_horizontal = 3
 
 [node name="StatusFooter" type="HBoxContainer" parent="Margin/VBox/Footer"]

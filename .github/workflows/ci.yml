@@ -40,7 +40,7 @@ jobs:
     name: GUT Unit Tests
     runs-on: ubuntu-latest
     env:
-      GODOT_VERSION: "4.6-stable"
+      GODOT_VERSION: "4.7-stable"
     steps:
       - uses: actions/checkout@v6
 
@@ -52,7 +52,7 @@ jobs:
           chmod +x /usr/local/bin/godot
 
       - name: Import project
-        run: godot --headless --import --path . 2>&1 || true
+        run: godot --headless --import --path . 2>&1
 
       - name: Run GUT tests
         run: |

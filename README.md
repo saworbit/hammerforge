@@ -1,13 +1,13 @@
 <h1 align="center">HammerForge</h1>
 
 <p align="center">
-  <strong>Brush-based level editor for Godot 4.6+</strong><br>
-  Requires Godot 4.6+ (tested on 4.6.stable). Works in both editor and exported games via HFIORuntime.<br>
+  <strong>Brush-based level editor for Godot 4.7+</strong><br>
+  Requires Godot 4.7+ (tested on 4.7.stable). Works in both editor and exported games via HFIORuntime.<br>
   Draw rooms, carve doors, paint terrain, and bake to optimized meshes — all inside the Godot editor.
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Godot-4.6%2B-478cbf?logo=godot-engine&logoColor=white" alt="Godot 4.6+">
+  <img src="https://img.shields.io/badge/Godot-4.7%2B-478cbf?logo=godot-engine&logoColor=white" alt="Godot 4.7+">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
   <img src="https://img.shields.io/badge/Status-Early%20Alpha-red" alt="Early Alpha">
   <img src="https://img.shields.io/badge/Tests-1370%20passing-brightgreen" alt="1370 tests passing">
@@ -142,7 +142,7 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Data-driven entity types** from `entities.json` (point entities, brush entities like func_detail, func_wall, trigger volumes)
 - **Source-style I/O connections** -- wire output events to target inputs with parameter, delay, and fire-once options; automatically translated to Godot signals on bake/export via `HFIORuntime` dispatcher (direct method calls, snake_case fallback, generic handler, or user signal emission)
 - **Smart auto-routed connection lines** -- quadratic Bezier curves with arrowheads, parallel route offset, color-coded by output type (cyan=OnTrigger, red=OnDamage, yellow=OnUse, etc.) and dimmed by delay
-- **I/O wiring panel** -- quick-wire form (output/target/input/param/delay/once), connection summary, and preset picker embedded in the Entities tab
+- **I/O wiring panel** -- quick-wire form (output/target/input/param/delay/once), connection summary, and preset picker embedded in the Objects tab
 - **Connection presets** -- 6 built-in patterns (Door+Light+Sound, Button→Toggle, Alarm Sequence, etc.) plus user-saved presets with target tag mapping
 - **Highlight Connected** -- toggle to pulse-highlight all entities linked to the selected one, with summary counts in the context toolbar
 - **Declarative property forms** -- dock auto-generates typed controls (string, int, float, bool, enum, color, vector3) from entity definitions
@@ -188,8 +188,8 @@ Grid-based paint layers with chunked storage for large worlds:
 | **Validate** | Check level integrity before bake |
 | **.map export** | Classic Quake or Valve 220 format |
 | **.glb export** | glTF binary for external tools |
-| **Quick Play** | Bake + validate spawn + run with FPS controller |
-| **Play from Camera** | Quick Play from the editor camera position and yaw |
+| **Test Level** | Check, bake, validate spawn, and run with the FPS controller |
+| **Play from Camera** | Test from the editor camera position and yaw |
 | **Play Selected Area** | Auto-cordon to selection, bake + play that region only |
 | **Export Playtest** | Bake + pack scene + launch as standalone playable scene (I/O auto-wired) |
 | **Wire I/O** | Auto-translate entity I/O connections to Godot signals in baked output |
@@ -200,11 +200,11 @@ Grid-based paint layers with chunked storage for large worlds:
 
 HammerForge's dock is designed to stay out of your way while keeping everything reachable:
 
-- **4-tab dock** (Brush, Paint, Entities, Manage) with **collapsible sections** -- persisted state, separators, indented content, context-hidden panels (Entity I/O sections appear only when an entity is selected)
+- **4-tab dock** (**Build, Paint, Objects, Test**) with **collapsible sections** -- persisted state, separators, indented content, context-hidden panels (entity I/O sections appear only when an object is selected)
 - **Dark/light theme sync** -- all custom panels adapt to Godot's theme setting automatically
 - **Mode indicator banner** -- color-coded strip shows current tool, gesture stage ("Step 1/2: Draw base -- 64 x 32"), and numeric input buffer
 - **Toast notifications** -- transient messages for save/load/bake/error results
-- **Interactive tutorial wizard** -- 5-step guided walkthrough (Draw → Subtract → Paint → Entity → Bake) with signal-driven auto-advance, progress bar, and persistent resume across sessions
+- **Focused first-run guide** -- two-step **Draw → Test Level** walkthrough with signal-driven auto-advance and persistent progress
 - **Dynamic contextual hints** -- viewport overlay hints that appear when switching tools (e.g. "Click to place corner → drag to set size → release for height"), auto-dismiss after 4s with per-hint persistence
 - **Searchable shortcut dialog** -- "?" button opens a filterable, categorized shortcut reference (replaces static popup)
 - **Smart contextual toolbar** -- floating mini-toolbar in the 3D viewport shows context-sensitive actions (brush ops when brushes selected, UV tools when faces selected, shape picker in draw mode, axis locks while dragging)
@@ -214,15 +214,15 @@ HammerForge's dock is designed to stay out of your way while keeping everything 
 - **Quick property popups** (double-tap G G / B B / R R) -- inline numeric entry for grid snap, brush size, and paint radius without leaving the viewport
 - **Grid size indicator** -- persistent "Grid: N" display in viewport HUD with flash-on-change feedback; `[` / `]` keys halve/double grid snap instantly
 - **Coach marks** -- first-use step-by-step guides for advanced tools (Polygon, Path, Carve, Vertex, Extrude, etc.) with "Don't show again" persistence
-- **Undo history browser** -- thumbnail-equipped history panel (Manage tab) with double-click navigation to any undo point
+- **Undo history browser** -- thumbnail-equipped history panel (Test tab) with double-click navigation to any undo point
 - **Operation replay timeline** (Ctrl+Shift+T) -- visual timeline of recent operations with undo/redo replay to any recorded point
-- **Example library** -- 5 built-in demo levels (Manage tab) with difficulty ratings, annotations, and one-click loading for learning
+- **Example library** -- 5 built-in demo levels (Test tab) with difficulty ratings, annotations, and one-click loading for learning
 - **Auto-mode hints** -- "Drawing in Add mode" bar appears during drag with one-click Add/Subtract toggle
 - **Tool poll system** -- buttons gray out with inline hints when an action can't run ("Select a brush to use these tools")
 - **Marquee selection** -- drag-to-select brushes, entities, and faces with selection filter popover (by normal, material, similar, visgroup, type)
 - **Select All / Deselect All** (A / Shift+A) -- Blender-convention quick selection; clears face selection and transitions to object context
 - **Performance monitor** -- health summary, brush/entity/vertex counts, chunk recommendations, color-coded ProgressBar
-- **Contextual selection tools** -- hollow, clip, move, tie, duplicator appear in Brush tab only when brushes are selected
+- **Contextual selection tools** -- hollow, clip, move, tie, and duplicator appear in Build only when brushes are selected
 - **Live dimensions** -- real-time W x H x D display during drag gestures
 - **Operation feedback** -- actionable error toasts with fix hints ("Wall thickness 6 is too large -- Use a thickness less than 5")
 - **Instant sync** -- paint, material, and surface paint changes reflected immediately via signals (no polling)
@@ -287,47 +287,53 @@ Key design choices:
 ```
 1. Copy addons/hammerforge into your project
 2. Enable the plugin: Project -> Project Settings -> Plugins -> HammerForge
-3. Open a 3D scene and click in the viewport to auto-create LevelRoot
-4. Verify: dock appears with 4 tabs (Brush, Paint, Entities, Manage), toolbar shows D/S/+/-/P/▲/▼, snap buttons show G/V/C
+3. Open a 3D scene and use Create Starter in the empty-state banner
+4. Verify: the dock shows Build, Paint, Objects, and Test; the primary toolbar shows Draw, Select, Paint, More, and Help
 ```
 
-For a brand-new scene, click `Manage -> New HammerForge Level` to create a floor, sun light, and player spawn in one step. Or use `Manage -> Create Floor` if you only need a surface.
+Create Starter adds `LevelRoot`, a floor, sunlight, and a player spawn. Create Empty adds only `LevelRoot`. An intentional Draw-tool left-click can also create an empty root; navigation, selection, and other passive input never modify the scene.
 
 **Upgrading?** See [Install + Upgrade](docs/HammerForge_Install_Upgrade.md) for upgrade steps and cache reset.
+
+### Project MCP for contributors
+
+This repository also vendors a project-scoped Godot MCP server in `addons/godot_mcp`. Its safe client definition is tracked in `.codex/config.toml`; authentication comes from the user-scoped `HAMMERFORGE_GODOT_MCP_TOKEN` environment variable. Tokens and Godot `user://` MCP state must never be committed. See [Install + Upgrade](docs/HammerForge_Install_Upgrade.md#project-scoped-godot-mcp-repository-contributors) for setup and verification.
 
 ---
 
 ## Quick Start
 
 <!--
-  TODO: Record a ~15-second screen capture of the 6-step workflow below,
+  TODO: Record a ~15-second screen capture of the core workflow below,
   save as docs/demos/quickstart_walkthrough.gif (720px wide, looping),
   then uncomment the img tag.
 -->
-<!-- <img src="docs/demos/quickstart_walkthrough.gif" alt="Quick Start walkthrough — draw, extrude, subtract, material, paint, bake" width="720"> -->
+<!-- <img src="docs/demos/quickstart_walkthrough.gif" alt="Quick Start walkthrough — create, draw, and test" width="720"> -->
 
 | Step | Action |
 |------|--------|
-| **1. Draw** | Tool = Draw, Mode = Add, Shape = Box -> if the scene is empty click `Manage -> New HammerForge Level` first (creates floor + sun + spawn) -> drag base -> click height |
-| **2. Extrude** | Press U (Extrude Up) -> click a face -> drag -> release |
-| **3. Subtract** | Mode = Subtract -> draw a brush through a wall -> Apply Cuts -> Bake |
-| **4. Material** | Paint tab -> Materials -> **Refresh Prototypes** -> browse thumbnails -> Face Select Mode -> click faces -> Assign |
-| **5. Paint floor** | Paint Mode -> Brush tool (B) -> paint grid cells -> switch layers for different heights |
-| **6. Bake** | Manage tab -> Bake -> click Bake (or Quick Play to bake + run) |
+| **1. Create** | In a 3D scene, click **Create Starter**. Choose **Create Empty** only when you do not want the floor, sunlight, and spawn. |
+| **2. Draw** | In **Build**, choose Draw + Solid + Box, drag the base in the viewport, then click to set height. |
+| **3. Test** | Click **Test Level (Bake + Play)** in **Test**, or press **Ctrl+Enter**. HammerForge checks, bakes, validates the spawn, and runs the scene. |
+| **Optional: Cut** | Press **Q** to switch Solid/Cutout, draw through existing geometry, then apply or commit cuts. |
+| **Optional: Material** | Open **Paint → Materials**, select faces, and assign a prototype or project material. |
+| **Optional: Floor paint** | Press **Shift+P**, choose Paint/Erase/Rect/Line/Bucket/Blend, and paint cells or surfaces. |
 
 ---
 
 ## Keyboard Shortcuts
 
-Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`. Tool-specific keys (M, N, P, ;, A, Ctrl+Shift+P) are defined by their respective tools and not yet keymap-backed.
+Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`. Tool-specific keys (M, N, P, ;, A, Ctrl+Shift+P) are defined by their respective tools and are not yet keymap-backed.
 
 | Key | Action | | Key | Action |
 |-----|--------|-|-----|--------|
+| Q * | Toggle Solid / Cutout | | Shift+P * | Toggle Paint mode |
+| Ctrl+Enter * | Test Level | | Ctrl+Shift+Enter * | Check level |
 | D * | Draw tool | | B * | Brush (paint) |
 | S * | Select tool | | E * | Erase (paint) |
 | U * | Extrude Up | | R * | Rect (paint) |
 | J * | Extrude Down | | L * | Line (paint) |
-| Ctrl+H * | Hollow | | K * | Bucket (paint) |
+| Ctrl+H * | Hollow | | K * / N * | Bucket / Blend (paint) |
 | Shift+X * | Clip | | Ctrl+G * | Group selection |
 | Ctrl+Shift+R * | Carve | | Ctrl+U * | Ungroup |
 | Ctrl+Shift+F * | Move to Floor | | M | Measure tool (multi-ruler) |
@@ -345,7 +351,7 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 
 ## Testing
 
-1357 tests across 74 files using the [GUT](https://github.com/bitwes/Gut) framework, including unit tests and end-to-end integration tests. All checks run on every push via GitHub Actions.
+1,489 tests across 87 scripts use the [GUT](https://github.com/bitwes/Gut) framework, including unit and integration coverage. The current suite has 1,482 passing tests plus seven intentional no-assert safety tests. All checks run on every push via GitHub Actions.
 
 ```bash
 # Run all tests headless
@@ -398,7 +404,7 @@ See [ROADMAP.md](ROADMAP.md) for the full plan.
 - Learning & Discovery Aids (coach marks, operation replay timeline, fuzzy command palette, example library)
 - I/O-to-Signal runtime bridge (auto-wire entity I/O connections to Godot signals on bake/export)
 - I/O Connections & Entity Polish (curved auto-routed lines, connection presets, wiring panel, Highlight Connected)
-- Bake & Quick Play optimizations (Bake Selected, Bake Changed, preview modes, Play from Camera, Play Selected Area)
+- Bake & Test Level optimizations (Bake Selected, Bake Changed, preview modes, Play from Camera, Play Selected Area)
 - Prefab & Group Enhancements (variants, live-linked, tags/search, quick group-to-prefab)
 - Improved selection & multi-select (marquee, selection filters, Select Similar, Apply Last Texture)
 - Smart contextual toolbar + command palette with fuzzy search
@@ -443,7 +449,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for how to get started.
 <summary>Capture exit-time errors (PowerShell)</summary>
 
 ```powershell
-Start-Process -FilePath "C:\Godot\Godot_v4.6-stable_win64.exe" `
+Start-Process -FilePath "C:\Godot\Godot_v4.7-stable_win64.exe" `
   -ArgumentList '--editor','--path','C:\hammerforge' `
   -RedirectStandardOutput "C:\Godot\godot_stdout.log" `
   -RedirectStandardError "C:\Godot\godot_stderr.log" `
@@ -463,5 +469,5 @@ Run `godot --headless --import --path .` first, then re-run the test command.
 
 <p align="center">
   <strong>MIT License</strong><br>
-  <sub>Built for Godot 4.6+ | Last updated April 13, 2026</sub>
+  <sub>Built for Godot 4.7+ | Last updated July 21, 2026</sub>
 </p>

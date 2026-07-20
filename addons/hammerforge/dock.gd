@@ -8,6 +8,7 @@ signal vertex_mode_toggled(enabled: bool)
 signal selection_clear_requested
 signal grid_snap_applied(value: float)
 signal bake_state_changed(baking: bool, success: bool)
+signal command_palette_requested
 
 const LevelRootType = preload("level_root.gd")
 const BrushPreset = preload("brush_preset.gd")
@@ -18,6 +19,7 @@ const HFUndoHelper = preload("undo_helper.gd")
 const HFCollapsibleSection = preload("ui/collapsible_section.gd")
 const HFUIFactory = preload("ui/hf_ui_factory.gd")
 const HFEditorTheme = preload("ui/hf_editor_theme.gd")
+const HFShapeIcons = preload("ui/hf_shape_icons.gd")
 const HFUndoNav = preload("ui/hf_undo_nav.gd")
 const HFEntityPropUtils = preload("ui/hf_entity_prop_utils.gd")
 const HFTooltipText = preload("ui/hf_tooltip_text.gd")
@@ -34,6 +36,7 @@ const SelectionToolsBuilder = preload("ui/selection_tools_builder.gd")
 
 const PRESET_MENU_RENAME := 0
 const PRESET_MENU_DELETE := 1
+const TAB_ALIASES := {"Brush": "Build", "Entities": "Objects", "Manage": "Test"}
 
 
 class EntityPaletteButton:
@@ -65,14 +68,20 @@ class BrushPresetButton:
 @onready var entity_tab: ScrollContainer = $Margin/VBox/MainTabs/Entities
 @onready var manage_tab: ScrollContainer = $Margin/VBox/MainTabs/Manage
 @onready var no_root_banner: PanelContainer = $Margin/VBox/NoRootBanner
+@onready
+var create_starter_btn: Button = $Margin/VBox/NoRootBanner/BannerContent/BannerActions/CreateStarter
+@onready
+var create_empty_root_btn: Button = $Margin/VBox/NoRootBanner/BannerContent/BannerActions/CreateEmpty
 @onready var status_bar: HBoxContainer = $Margin/VBox/Footer/StatusFooter
 @onready var progress_bar: ProgressBar = $Margin/VBox/Footer/StatusFooter/ProgressBar
 
 @onready var tool_draw: Button = $Margin/VBox/Toolbar/ToolDraw
 @onready var tool_select: Button = $Margin/VBox/Toolbar/ToolSelect
 @onready var paint_mode: Button = $Margin/VBox/Toolbar/PaintMode
-@onready var mode_add: Button = $Margin/VBox/Toolbar/ModeAdd
-@onready var mode_subtract: Button = $Margin/VBox/Toolbar/ModeSubtract
+@onready
+var mode_add: Button = $Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/OperationRow/ModeAdd
+@onready
+var mode_subtract: Button = $Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/OperationRow/ModeSubtract
 @onready
 var shape_select: OptionButton = $Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/ShapeRow/ShapeSelect
 @onready var sides_row: HBoxContainer = $Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/SidesRow
@@ -177,6 +186,7 @@ var bake_connector_mode_opt: OptionButton = null
 var bake_connector_stair_height_spin: SpinBox = null
 var bake_connector_width_spin: SpinBox = null
 # -- Quick Play mode controls --
+var primary_quick_play_btn: Button = null
 var quick_play_camera_btn: Button = null
 var quick_play_area_btn: Button = null
 var export_playtest_btn: Button = null
@@ -360,10 +370,16 @@ var _region_settings_refreshing := false
 var _bake_disabled := false
 var _perf_frame_counter: int = 0
 var _hints_dirty: bool = true
+var _syncing_paint_tab: bool = false
 var _prop_cache: Dictionary = {}
 var tool_extrude_up: Button = null
 var tool_extrude_down: Button = null
 var tool_vertex: Button = null
+var _edit_tools_separator: VSeparator = null
+var _vertex_tool_separator: VSeparator = null
+var _snap_mode_row: HBoxContainer = null
+var _axis_lock_row: HBoxContainer = null
+var _advanced_build_section: HFCollapsibleSection = null
 
 # Wave 1 UI controls
 var _selection_nodes: Array = []
@@ -373,6 +389,8 @@ var _sel_tools_hint_label: Label = null
 var _uv_hint_label: Label = null
 var _toast_container: VBoxContainer = null
 var _clear_sel_btn: Button = null
+var _command_palette_btn: Button = null
+var _guide_btn: Button = null
 var _welcome_panel: PanelContainer = null
 var _tutorial_wizard = null
 var _brush_hint: Label = null
@@ -672,16 +690,17 @@ func _apply_user_prefs() -> void:
 		if collapsed != null:
 			_all_sections[sec_name].set_expanded(not bool(collapsed))
 	# Show welcome panel on first launch
-	if _user_prefs.get_pref("show_welcome", true) and not _welcome_panel:
+	if _user_prefs.get_pref("show_welcome", true) and not is_instance_valid(_tutorial_wizard):
 		_show_welcome_panel()
 
 
 func _make_context_hint() -> Label:
 	var label = Label.new()
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD
-	label.add_theme_font_size_override("font_size", 11)
-	label.add_theme_color_override("font_color", Color(0.7, 0.8, 1.0, 0.55))
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 12)
+	label.add_theme_color_override("font_color", Color(0.72, 0.84, 1.0, 0.9))
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	label.custom_minimum_size = Vector2(0, 34)
 	return label
 
 
@@ -690,23 +709,105 @@ func _setup_context_hints() -> void:
 	if brush_vbox:
 		_brush_hint = _make_context_hint()
 		brush_vbox.add_child(_brush_hint)
+		brush_vbox.move_child(_brush_hint, 0)
 
 	var paint_vbox = $Margin/VBox/MainTabs/Paint/PaintMargin/PaintVBox
 	if paint_vbox:
 		_paint_hint = _make_context_hint()
 		paint_vbox.add_child(_paint_hint)
+		paint_vbox.move_child(_paint_hint, 0)
 
 	var ent_vbox = $Margin/VBox/MainTabs/Entities/EntitiesMargin/EntitiesVBox
 	if ent_vbox:
 		_entity_hint = _make_context_hint()
 		ent_vbox.add_child(_entity_hint)
+		ent_vbox.move_child(_entity_hint, 0)
 
 	var manage_vbox = $Margin/VBox/MainTabs/Manage/ManageMargin/ManageVBox
 	if manage_vbox:
 		_manage_hint = _make_context_hint()
 		manage_vbox.add_child(_manage_hint)
+		manage_vbox.move_child(_manage_hint, 0)
 
 	_update_context_hints()
+
+
+func _setup_simplified_workflow() -> void:
+	# Keep the dock's primary path legible: Build -> Paint/Objects -> Test.
+	if main_tabs:
+		main_tabs.set_tab_title(brush_tab.get_index(), "Build")
+		main_tabs.set_tab_title(paint_tab.get_index(), "Paint")
+		main_tabs.set_tab_title(entity_tab.get_index(), "Objects")
+		main_tabs.set_tab_title(manage_tab.get_index(), "Test")
+
+	if quick_play_btn:
+		quick_play_btn.text = "Test Level  (Bake + Play)"
+		quick_play_btn.custom_minimum_size.y = 34
+		quick_play_btn.tooltip_text = "Bake the level and run it in one step"
+
+	if tool_draw:
+		tool_draw.custom_minimum_size.x = 52
+	if tool_select:
+		tool_select.custom_minimum_size.x = 52
+	if paint_mode:
+		paint_mode.custom_minimum_size.x = 52
+
+	if size_x:
+		size_x.suffix = " X"
+		size_x.tooltip_text = "Brush width (X)"
+	if size_y:
+		size_y.suffix = " Y"
+		size_y.tooltip_text = "Brush height (Y)"
+	if size_z:
+		size_z.suffix = " Z"
+		size_z.tooltip_text = "Brush depth (Z)"
+	if grid_snap:
+		grid_snap.suffix = " units"
+		grid_snap.tooltip_text = "Movement and drawing grid size"
+
+	# Put infrequent snapping and collision choices behind one collapsed disclosure.
+	var brush_vbox := brush_tab.get_node_or_null("BrushMargin/BrushVBox") as VBoxContainer
+	if not brush_vbox or _advanced_build_section:
+		return
+	_advanced_build_section = HFCollapsibleSection.create("More build settings", false)
+	brush_vbox.add_child(_advanced_build_section)
+	_register_section(_advanced_build_section, "More build settings")
+	var advanced_content := _advanced_build_section.get_content()
+	if not advanced_content:
+		return
+
+	var note := Label.new()
+	note.text = "Snap presets, snap targets, axis locks, and collision layer."
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD
+	note.add_theme_font_size_override("font_size", 11)
+	note.add_theme_color_override("font_color", Color(1, 1, 1, 0.58))
+	advanced_content.add_child(note)
+
+	var quick_snaps := brush_vbox.get_node_or_null("QuickSnapGrid")
+	if quick_snaps:
+		quick_snaps.reparent(advanced_content)
+	if _snap_mode_row:
+		_snap_mode_row.reparent(advanced_content)
+	if _axis_lock_row:
+		_axis_lock_row.reparent(advanced_content)
+	var physics_row := brush_vbox.get_node_or_null("PhysicsLayerRow")
+	if physics_row:
+		physics_row.reparent(advanced_content)
+	if _disp_section:
+		_disp_section.reparent(advanced_content)
+	if _bevel_section:
+		_bevel_section.reparent(advanced_content)
+
+	var material_row := brush_vbox.get_node_or_null("MaterialRow")
+	if material_row:
+		brush_vbox.move_child(_advanced_build_section, material_row.get_index() + 1)
+
+	if snap_grid_btn:
+		snap_grid_btn.text = "Grid"
+	if snap_vertex_btn:
+		snap_vertex_btn.text = "Corners"
+	if snap_center_btn:
+		snap_center_btn.text = "Centers"
 
 
 func _update_context_hints() -> void:
@@ -714,40 +815,45 @@ func _update_context_hints() -> void:
 	var has_brushes = (
 		has_root and level_root.has_method("get_brush_count") and level_root.get_brush_count() > 0
 	)
-	var has_selection = _selection_nodes.size() > 0
+	var selection_counts := _get_selection_counts(_selection_nodes)
+	var has_selection: bool = int(selection_counts["brushes"]) > 0
 
 	if _brush_hint:
 		if not has_root:
-			_brush_hint.text = "Add a LevelRoot node to your scene to begin"
+			_brush_hint.text = "Start here: create the Starter Level above."
 		elif not has_brushes:
-			_brush_hint.text = "Click and drag in the viewport to draw your first brush"
+			_brush_hint.text = "Drag in the 3D viewport to create a solid brush."
 		elif has_selection:
-			_brush_hint.text = "Try: Hollow (Ctrl+H), Clip (Shift+X), or Extrude (U)"
+			_brush_hint.text = "Brush selected. Edit tools are now available above."
 		else:
-			_brush_hint.text = "Click a brush in the viewport to select it"
+			_brush_hint.text = "Draw another brush, or choose Select to edit one."
 
 	if _paint_hint:
 		if not has_root:
 			_paint_hint.text = ""
 		elif has_brushes:
-			_paint_hint.text = ""
+			_paint_hint.text = "Choose a paint tool, then drag across the level."
 		else:
-			_paint_hint.text = "Draw some brushes first, then paint them here"
+			_paint_hint.text = "Draw a brush first, then return here to texture and paint it."
 
 	if _entity_hint:
 		if has_root:
-			_entity_hint.text = "Drag an entity from the palette into the viewport"
+			_entity_hint.text = "Drag an object into the viewport, then select it to edit."
 		else:
 			_entity_hint.text = ""
 
 	if _manage_hint:
-		if has_root and has_brushes:
-			_manage_hint.text = "When ready, use Bake to convert brushes into final geometry"
-		else:
-			_manage_hint.text = ""
+		_manage_hint.text = (
+			"Use Test Level for the one-click path. Check or Bake separately only when needed."
+			if has_root
+			else ""
+		)
 
 
 func _show_welcome_panel() -> void:
+	if is_instance_valid(_tutorial_wizard):
+		return
+	_tutorial_wizard = null
 	var start_step: int = 0
 	if _user_prefs:
 		start_step = int(_user_prefs.get_pref("tutorial_step", 0))
@@ -758,6 +864,7 @@ func _show_welcome_panel() -> void:
 	_tutorial_wizard.set_user_prefs(_user_prefs)
 	_tutorial_wizard.dismissed.connect(_on_tutorial_dismissed)
 	_tutorial_wizard.completed.connect(_on_tutorial_completed)
+	_tutorial_wizard.action_requested.connect(_on_tutorial_action_requested)
 	var vbox = $Margin/VBox
 	var tabs = $Margin/VBox/MainTabs
 	var idx = tabs.get_index()
@@ -767,6 +874,52 @@ func _show_welcome_panel() -> void:
 	# If level_root is null, the wizard shows text but can't auto-advance
 	# until set_root() connects signals later.
 	_tutorial_wizard.start(level_root, self, start_step)
+
+
+func _restart_tutorial() -> void:
+	_close_tutorial()
+	if _user_prefs:
+		_user_prefs.set_pref("show_welcome", true)
+		_user_prefs.set_pref("tutorial_step", 0)
+		_user_prefs.save()
+	_show_welcome_panel()
+
+
+func _on_tutorial_action_requested(action: String) -> void:
+	match action:
+		"setup_draw":
+			if not level_root:
+				_on_create_level_root(true)
+			highlight_tab("Brush")
+			paint_mode.button_pressed = false
+			mode_add.button_pressed = true
+			tool_draw.button_pressed = true
+			builtin_tool_changed.emit()
+			show_toast("Draw is ready - drag in the 3D viewport", 0)
+		"setup_subtract":
+			highlight_tab("Brush")
+			paint_mode.button_pressed = false
+			mode_subtract.button_pressed = true
+			tool_draw.button_pressed = true
+			builtin_tool_changed.emit()
+			show_toast("Cut mode is ready - draw through existing geometry", 0)
+		"setup_paint":
+			highlight_tab("Paint")
+			paint_mode.button_pressed = true
+			show_toast("Paint mode enabled", 0)
+		"setup_entities":
+			highlight_tab("Entities")
+			show_toast("Drag an entity into the viewport", 0)
+		"setup_bake":
+			highlight_tab("Manage")
+			var bake_section = _all_sections.get("Bake")
+			if bake_section:
+				bake_section.set_expanded(true)
+			show_toast("Validate first, then Bake or Quick Play", 0)
+		"quick_play":
+			highlight_tab("Manage")
+			show_toast("Checking, baking, and starting the level", 0)
+			call_deferred("_on_quick_play")
 
 
 func _on_tutorial_dismissed(dont_show_again: bool) -> void:
@@ -800,13 +953,36 @@ func _close_tutorial() -> void:
 
 ## Highlight a dock tab by name (brief flash effect for tutorial).
 func highlight_tab(tab_name: String) -> void:
-	var tabs_node = $Margin/VBox/MainTabs
+	var tabs_node = main_tabs
 	if not tabs_node:
 		return
+	var display_name: String = str(TAB_ALIASES.get(tab_name, tab_name))
 	for i in tabs_node.get_tab_count():
-		if tabs_node.get_tab_title(i) == tab_name:
+		if tabs_node.get_tab_title(i) == display_name:
 			tabs_node.current_tab = i
 			break
+
+
+func _on_main_tab_changed(tab_index: int) -> void:
+	if _syncing_paint_tab or not paint_mode or not main_tabs:
+		return
+	var paint_tab_active := main_tabs.get_tab_title(tab_index) == "Paint"
+	if paint_mode.button_pressed == paint_tab_active:
+		return
+	_syncing_paint_tab = true
+	paint_mode.set_pressed_no_signal(paint_tab_active)
+	_syncing_paint_tab = false
+	builtin_tool_changed.emit()
+	show_toast("Paint mode enabled" if paint_tab_active else "Build mode enabled", 0)
+
+
+func _on_paint_mode_toggled(enabled: bool) -> void:
+	if _syncing_paint_tab:
+		return
+	_syncing_paint_tab = true
+	highlight_tab("Paint" if enabled else "Brush")
+	_syncing_paint_tab = false
+	builtin_tool_changed.emit()
 
 
 func _on_welcome_dismissed(dont_show_again: bool) -> void:
@@ -850,22 +1026,36 @@ func _update_toolbar_shortcut_labels() -> void:
 		return
 	if tool_draw:
 		var key = _keymap.get_display_string("tool_draw")
-		tool_draw.text = key
-		tool_draw.tooltip_text = "Draw (%s)" % key
+		tool_draw.text = "Draw"
+		tool_draw.tooltip_text = "Draw (%s)\nDrag in the viewport to create a brush" % key
 	if tool_select:
 		var key = _keymap.get_display_string("tool_select")
-		tool_select.text = key
-		tool_select.tooltip_text = "Select (%s)" % key
+		tool_select.text = "Select"
+		tool_select.tooltip_text = "Select (%s)\nClick a brush; Shift adds to selection" % key
 	if tool_extrude_up:
 		var key = _keymap.get_display_string("tool_extrude_up")
-		tool_extrude_up.text = "\u25b2"
+		tool_extrude_up.text = "Up"
 		tool_extrude_up.tooltip_text = "Extrude Up (%s)\nClick face + drag to extrude upward" % key
 	if tool_extrude_down:
 		var key = _keymap.get_display_string("tool_extrude_down")
-		tool_extrude_down.text = "\u25bc"
+		tool_extrude_down.text = "Down"
 		tool_extrude_down.tooltip_text = (
 			"Extrude Down (%s)\nClick face + drag to extrude downward" % key
 		)
+	if tool_vertex:
+		var key = _keymap.get_display_string("vertex_edit")
+		tool_vertex.text = "Vertex"
+		tool_vertex.tooltip_text = "Vertex Edit (%s)\nSelect and drag brush vertices" % key
+	if mode_add and mode_subtract:
+		var key = _keymap.get_display_string("toggle_operation")
+		mode_add.tooltip_text = "Solid brush | Toggle Solid/Cutout: %s" % key
+		mode_subtract.tooltip_text = "Cutout brush | Toggle Solid/Cutout: %s" % key
+	if paint_mode:
+		var key = _keymap.get_display_string("toggle_paint_mode")
+		paint_mode.tooltip_text = "Toggle Paint Mode (%s)" % key
+	if quick_play_btn:
+		var key = _keymap.get_display_string("quick_play")
+		quick_play_btn.tooltip_text = "Bake the level and run it (%s)" % key
 
 
 func set_editor_interface(iface: EditorInterface) -> void:
@@ -950,24 +1140,40 @@ func _style_snap_buttons() -> void:
 func _setup_toolbar_icons() -> void:
 	_set_toolbar_button_icon(tool_draw, ["Edit", "ToolEdit"], "Draw")
 	_set_toolbar_button_icon(tool_select, ["ToolSelect", "Select"], "Select")
-	_set_toolbar_button_icon(mode_add, ["Add", "AddNode"], "Add")
-	_set_toolbar_button_icon(mode_subtract, ["Remove", "RemoveNode"], "Sub")
 	if paint_mode:
 		_set_toolbar_button_icon(paint_mode, ["Paint", "Brush", "ToolPaint"], "Paint")
 	if tool_extrude_up:
-		_set_toolbar_button_icon(tool_extrude_up, ["MoveUp", "ArrowUp", "ToolMove"], "Ext Up")
+		_set_toolbar_button_icon(tool_extrude_up, ["MoveUp", "ArrowUp", "ToolMove"], "Up")
 	if tool_extrude_down:
-		_set_toolbar_button_icon(tool_extrude_down, ["MoveDown", "ArrowDown", "ToolMove"], "Ext Dn")
+		_set_toolbar_button_icon(tool_extrude_down, ["MoveDown", "ArrowDown", "ToolMove"], "Down")
+	if tool_vertex:
+		_set_toolbar_button_icon(tool_vertex, ["EditPivot", "ToolMove"], "Vertex")
+	if _command_palette_btn:
+		_set_toolbar_button_icon(_command_palette_btn, ["Search", "Zoom"], "More")
+	if _guide_btn:
+		_set_toolbar_button_icon(_guide_btn, ["Info", "Help"], "Help")
 	_apply_toolbar_tooltips()
 
 
 func _apply_toolbar_tooltips() -> void:
-	_set_tooltip(tool_draw, "Draw Tool\nShift+Click: Place brush\nAlt: Height-only drag")
-	_set_tooltip(tool_select, "Select Tool\nClick: Select | Shift+Click: Add\nCtrl+Click: Toggle")
-	_set_tooltip(mode_add, "Additive Mode\nBrushes add geometry (union)")
-	_set_tooltip(mode_subtract, "Subtractive Mode\nBrushes cut geometry (pending cuts)")
+	var draw_key := _keymap.get_display_string("tool_draw") if _keymap else "D"
+	var select_key := _keymap.get_display_string("tool_select") if _keymap else "S"
+	var operation_key := _keymap.get_display_string("toggle_operation") if _keymap else "Q"
+	var paint_key := _keymap.get_display_string("toggle_paint_mode") if _keymap else "Shift+P"
+	_set_tooltip(tool_draw, "Draw (%s)\nDrag: create brush | Alt: height-only" % draw_key)
+	_set_tooltip(tool_select, "Select (%s)\nClick: select | Shift: add | Ctrl: toggle" % select_key)
+	_set_tooltip(mode_add, "Solid brush\nDrag to add geometry | Toggle: %s" % operation_key)
+	_set_tooltip(
+		mode_subtract, "Cutout brush\nDrag through solids to carve | Toggle: %s" % operation_key
+	)
 	if paint_mode:
-		_set_tooltip(paint_mode, "Paint Mode\nToggle between building and painting")
+		_set_tooltip(
+			paint_mode, "Paint Mode (%s)\nToggle between building and painting" % paint_key
+		)
+	if _command_palette_btn:
+		_set_tooltip(_command_palette_btn, "Find any HammerForge action (Ctrl+K)")
+	if _guide_btn:
+		_set_tooltip(_guide_btn, "Restart the interactive getting-started guide")
 
 
 func _set_tooltip(control: Control, text: String) -> void:
@@ -999,6 +1205,9 @@ func _refresh_shape_palette_icons() -> void:
 
 
 func _resolve_shape_icon(shape_key: String) -> Texture2D:
+	var hammerforge_icon := HFShapeIcons.get_icon(shape_key)
+	if hammerforge_icon:
+		return hammerforge_icon
 	var candidates = shape_icon_candidates.get(shape_key, [])
 	return _find_editor_icon(candidates)
 
@@ -1845,27 +2054,32 @@ func _ready():
 	tool_draw.button_group = tool_group
 	tool_select.button_group = tool_group
 	tool_draw.button_pressed = true
-	tool_draw.text = "D"
+	tool_draw.text = "Draw"
 	tool_draw.tooltip_text = "Draw (D)"
-	tool_select.text = "S"
+	tool_select.text = "Select"
 	tool_select.tooltip_text = "Select (S)"
 	if paint_mode:
 		paint_mode.toggle_mode = true
 		paint_mode.button_pressed = false
+		paint_mode.toggled.connect(_on_paint_mode_toggled)
+	if main_tabs:
+		main_tabs.tab_changed.connect(_on_main_tab_changed)
 
 	# Extrude tool buttons (added programmatically to toolbar)
 	var toolbar = tool_draw.get_parent()
 	if toolbar:
-		var ext_sep = VSeparator.new()
-		toolbar.add_child(ext_sep)
+		_edit_tools_separator = VSeparator.new()
+		_edit_tools_separator.visible = false
+		toolbar.add_child(_edit_tools_separator)
 
 		tool_extrude_up = Button.new()
 		tool_extrude_up.toggle_mode = true
 		tool_extrude_up.button_group = tool_group
 		tool_extrude_up.flat = true
 		tool_extrude_up.focus_mode = Control.FOCUS_NONE
-		tool_extrude_up.text = "\u25b2"
+		tool_extrude_up.text = "Up"
 		tool_extrude_up.tooltip_text = "Extrude Up (U)\nClick face + drag to extrude upward"
+		tool_extrude_up.visible = false
 		toolbar.add_child(tool_extrude_up)
 
 		tool_extrude_down = Button.new()
@@ -1873,33 +2087,45 @@ func _ready():
 		tool_extrude_down.button_group = tool_group
 		tool_extrude_down.flat = true
 		tool_extrude_down.focus_mode = Control.FOCUS_NONE
-		tool_extrude_down.text = "\u25bc"
+		tool_extrude_down.text = "Down"
 		tool_extrude_down.tooltip_text = "Extrude Down (J)\nClick face + drag to extrude downward"
+		tool_extrude_down.visible = false
 		toolbar.add_child(tool_extrude_down)
 
-		var vert_sep = VSeparator.new()
-		toolbar.add_child(vert_sep)
+		_vertex_tool_separator = VSeparator.new()
+		_vertex_tool_separator.visible = false
+		toolbar.add_child(_vertex_tool_separator)
 
 		tool_vertex = Button.new()
 		tool_vertex.toggle_mode = true
 		tool_vertex.flat = true
 		tool_vertex.focus_mode = Control.FOCUS_NONE
-		tool_vertex.text = "V"
+		tool_vertex.text = "Vertex"
 		tool_vertex.tooltip_text = "Vertex Edit (V)\nSelect and drag brush vertices"
+		tool_vertex.visible = false
 		tool_vertex.toggled.connect(_on_vertex_tool_toggled)
 		toolbar.add_child(tool_vertex)
 
-	# --- Shortcuts help button ---
+	# --- Discoverability buttons ---
 	if toolbar:
 		var help_sep = VSeparator.new()
 		toolbar.add_child(help_sep)
-		var help_btn = Button.new()
-		help_btn.text = "?"
-		help_btn.tooltip_text = "Show keyboard shortcuts"
-		help_btn.flat = true
-		help_btn.focus_mode = Control.FOCUS_NONE
-		help_btn.pressed.connect(_on_shortcuts_help)
-		toolbar.add_child(help_btn)
+
+		_command_palette_btn = Button.new()
+		_command_palette_btn.text = "More"
+		_command_palette_btn.tooltip_text = "Find any HammerForge action (Ctrl+K)"
+		_command_palette_btn.flat = true
+		_command_palette_btn.focus_mode = Control.FOCUS_NONE
+		_command_palette_btn.pressed.connect(func(): command_palette_requested.emit())
+		toolbar.add_child(_command_palette_btn)
+
+		_guide_btn = Button.new()
+		_guide_btn.text = "Help"
+		_guide_btn.tooltip_text = "Restart the interactive getting-started guide"
+		_guide_btn.flat = true
+		_guide_btn.focus_mode = Control.FOCUS_NONE
+		_guide_btn.pressed.connect(_restart_tutorial)
+		toolbar.add_child(_guide_btn)
 
 	var mode_group = ButtonGroup.new()
 	mode_add.toggle_mode = true
@@ -1940,6 +2166,7 @@ func _ready():
 
 	# --- Snap mode buttons (Grid / Vertex / Center) ---
 	_build_snap_mode_buttons()
+	_setup_simplified_workflow()
 
 	# --- Connect builder signals ---
 	PaintTabBuilder.new(self).connect_signals()
@@ -1951,6 +2178,10 @@ func _ready():
 	grid_snap.value_changed.connect(_on_grid_snap_value_changed)
 	if create_entity_btn:
 		create_entity_btn.pressed.connect(_on_create_entity)
+	if create_starter_btn:
+		create_starter_btn.pressed.connect(_on_create_level_root.bind(true))
+	if create_empty_root_btn:
+		create_empty_root_btn.pressed.connect(_on_create_level_root.bind(false))
 	if quick_play_btn:
 		quick_play_btn.pressed.connect(_on_quick_play)
 	if preset_menu:
@@ -2130,6 +2361,11 @@ func get_operation() -> int:
 
 
 func _on_builtin_tool_pressed(_button: BaseButton) -> void:
+	if paint_mode and paint_mode.button_pressed:
+		_syncing_paint_tab = true
+		paint_mode.set_pressed_no_signal(false)
+		highlight_tab("Brush")
+		_syncing_paint_tab = false
 	builtin_tool_changed.emit()
 
 
@@ -2267,16 +2503,12 @@ func set_paint_tool(tool_id: int) -> void:
 
 ## Update the mode indicator banner and status bar.
 func set_status_mode(mode_name: String) -> void:
-	if status_label:
-		status_label.text = mode_name
 	_update_mode_indicator(mode_name)
 
 
 ## Update the prominent mode indicator with structured info.
 ## stage_hint: e.g. "Step 1/2: Draw base", numeric: e.g. "64"
 func set_mode_indicator(mode_name: String, stage_hint: String = "", numeric: String = "") -> void:
-	if status_label:
-		status_label.text = mode_name
 	var display = mode_name
 	if stage_hint != "":
 		display += "  —  " + stage_hint
@@ -2286,7 +2518,18 @@ func set_mode_indicator(mode_name: String, stage_hint: String = "", numeric: Str
 
 
 func _update_mode_indicator(mode_name: String) -> void:
-	_update_mode_indicator_text(mode_name, mode_name)
+	var instruction := mode_name
+	if mode_name.begins_with("Draw"):
+		instruction = "Draw - drag in the 3D viewport"
+	elif mode_name.begins_with("Select"):
+		instruction = "Select - click geometry to edit"
+	elif mode_name.begins_with("Extrude"):
+		instruction = "Extrude - click a face, then drag"
+	elif mode_name.begins_with("Paint"):
+		instruction = "Paint - drag across the level"
+	elif mode_name.begins_with("Vertex"):
+		instruction = "Vertex - drag a highlighted point"
+	_update_mode_indicator_text(instruction, mode_name)
 
 
 func _update_mode_indicator_text(display_text: String, mode_key: String) -> void:
@@ -2377,42 +2620,84 @@ func set_status_grid(snap_value: float) -> void:
 func set_selection_count(count: int) -> void:
 	if not selection_label:
 		return
+	# `count` is kept for API compatibility; selection labels are derived from
+	# actual node types so cameras, entities, and LevelRoot are never called brushes.
+	var counts := _get_selection_counts(_selection_nodes)
+	var brush_count: int = counts["brushes"]
+	var entity_count: int = counts["entities"]
+	var other_count: int = counts["other"]
 	var face_count := _count_selected_faces()
-	if count <= 0 and face_count <= 0:
+	var parts: PackedStringArray = []
+	if brush_count > 0:
+		parts.append("%d brush%s" % [brush_count, "" if brush_count == 1 else "es"])
+	if entity_count > 0:
+		parts.append("%d entit%s" % [entity_count, "y" if entity_count == 1 else "ies"])
+	if other_count > 0:
+		parts.append("%d other" % other_count)
+	if face_count > 0:
+		parts.append("%d face%s" % [face_count, "" if face_count == 1 else "s"])
+	if parts.is_empty():
 		selection_label.text = ""
-	elif face_count > 0 and count > 0:
-		selection_label.text = (
-			"Sel: %d brush%s, %d face%s"
-			% [count, "" if count == 1 else "es", face_count, "" if face_count == 1 else "s"]
-		)
-	elif face_count > 0:
-		selection_label.text = "Sel: %d face%s" % [face_count, "" if face_count == 1 else "s"]
-	elif count == 1:
-		selection_label.text = "Sel: 1 brush"
 	else:
-		selection_label.text = "Sel: %d brushes" % count
+		selection_label.text = "Sel: " + ", ".join(parts)
 	if _clear_sel_btn:
-		_clear_sel_btn.visible = count > 0 or face_count > 0
+		_clear_sel_btn.visible = not parts.is_empty()
+
+
+func _get_selection_counts(nodes: Array) -> Dictionary:
+	var brushes := 0
+	var entities := 0
+	var other := 0
+	for node in nodes:
+		if not is_instance_valid(node):
+			continue
+		if node is DraftBrush:
+			brushes += 1
+		elif node is DraftEntity or (level_root and level_root.is_entity_node(node)):
+			entities += 1
+		else:
+			other += 1
+	return {"brushes": brushes, "entities": entities, "other": other}
 
 
 func set_selection_nodes(nodes: Array) -> void:
 	_selection_nodes = nodes
+	var counts := _get_selection_counts(_selection_nodes)
+	var has_brush_selection: bool = int(counts["brushes"]) > 0
 	# Show/hide selection tools in Brush tab
 	if _selection_tools_section:
-		_selection_tools_section.visible = _selection_nodes.size() > 0
+		_selection_tools_section.visible = has_brush_selection
+	# Keep specialist edit modes out of the primary toolbar until they can be used.
+	if _edit_tools_separator:
+		_edit_tools_separator.visible = has_brush_selection
+	if tool_extrude_up:
+		tool_extrude_up.visible = has_brush_selection
+	if tool_extrude_down:
+		tool_extrude_down.visible = has_brush_selection
+	if _vertex_tool_separator:
+		_vertex_tool_separator.visible = has_brush_selection
+	if tool_vertex:
+		tool_vertex.visible = has_brush_selection
+	set_selection_count(nodes.size())
 	# Mark hints dirty so selection-dependent buttons update
 	_hints_dirty = true
 	_update_context_hints()
 	# Refresh Entity I/O list and property form when selection changes
-	if not nodes.is_empty() and level_root and level_root.is_entity_node(nodes[0]):
-		_refresh_io_list(nodes[0])
-		_rebuild_entity_props(nodes[0])
+	var selected_entity: Node = null
+	if level_root:
+		for node in nodes:
+			if level_root.is_entity_node(node):
+				selected_entity = node
+				break
+	if selected_entity:
+		_refresh_io_list(selected_entity)
+		_rebuild_entity_props(selected_entity)
 		if _entity_io_section:
 			_entity_io_section.visible = true
 		if _io_wiring_section:
 			_io_wiring_section.visible = true
 		if _io_wiring_panel:
-			_io_wiring_panel.set_source_entity(nodes[0])
+			_io_wiring_panel.set_source_entity(selected_entity)
 	else:
 		if io_list:
 			io_list.clear()
@@ -2433,6 +2718,8 @@ func _build_snap_mode_buttons() -> void:
 	var parent = grid_row.get_parent()
 	var idx = grid_row.get_index() + 1
 	var row = HBoxContainer.new()
+	row.name = "SnapTargets"
+	_snap_mode_row = row
 	var lbl = Label.new()
 	lbl.text = "Snap:"
 	lbl.custom_minimum_size.x = 70
@@ -2463,6 +2750,8 @@ func _build_snap_mode_buttons() -> void:
 	parent.move_child(row, idx)
 	# Axis Lock row
 	var axis_row = HBoxContainer.new()
+	axis_row.name = "AxisLocks"
+	_axis_lock_row = axis_row
 	var axis_lbl = Label.new()
 	axis_lbl.text = "Axis:"
 	axis_lbl.custom_minimum_size.x = 70
@@ -2899,6 +3188,22 @@ func _on_new_level():
 	show_toast("New level created — floor, sun, and player spawn added", 0)
 
 
+func _on_create_level_root(create_starter: bool) -> void:
+	if not _plugin or not _plugin.has_method("ensure_level_root"):
+		show_toast("Open or create a 3D scene first", 2)
+		return
+	var root = _plugin.call("ensure_level_root")
+	if not root:
+		show_toast("Open or create a 3D scene first", 2)
+		return
+	level_root = root
+	if create_starter:
+		_on_new_level()
+	else:
+		show_toast("Empty LevelRoot created - Draw + Solid is ready", 0)
+	_hints_dirty = true
+
+
 func _on_floor():
 	_log("Create floor requested")
 	_commit_state_action("Create Floor", "create_floor")
@@ -3278,6 +3583,7 @@ func _on_root_selection_for_surface(_brush_ids: Array) -> void:
 
 func _on_root_face_selection_changed() -> void:
 	_sync_surface_paint_from_root()
+	set_selection_count(_selection_nodes.size())
 	_hints_dirty = true
 
 
@@ -3444,6 +3750,7 @@ func _set_bake_buttons_disabled(disabled: bool) -> void:
 		quick_play_camera_btn.disabled = disabled
 	if quick_play_area_btn:
 		quick_play_area_btn.disabled = disabled
+	_update_disabled_hints()
 
 
 func _on_quick_play() -> void:
@@ -3991,7 +4298,14 @@ func _format_bytes(count: int) -> String:
 
 func _update_disabled_hints() -> void:
 	var has_root = level_root != null
-	var need_root_hint = "Requires LevelRoot (click viewport to create)"
+	var need_root_hint = "Requires a LevelRoot — use Create Starter or Create Empty above"
+	var quick_play_hint = (
+		"Wait for the current bake to finish" if has_root and _bake_disabled else need_root_hint
+	)
+	_set_control_disabled_hint(
+		primary_quick_play_btn, not has_root or _bake_disabled, quick_play_hint
+	)
+	_set_control_disabled_hint(quick_play_btn, not has_root or _bake_disabled, quick_play_hint)
 	_set_control_disabled_hint(bake_btn, not has_root or _bake_disabled, need_root_hint)
 	_set_control_disabled_hint(bake_dry_run_btn, not has_root or _bake_disabled, need_root_hint)
 	_set_control_disabled_hint(validate_btn, not has_root, need_root_hint)
@@ -4018,7 +4332,7 @@ func _update_disabled_hints() -> void:
 	var baked_ready = has_root and level_root.baked_container != null
 	_set_control_disabled_hint(export_glb_btn, not baked_ready, "Requires a successful bake")
 	# Selection-dependent tools: gray out when nothing is selected
-	var has_selection = _selection_nodes.size() > 0
+	var has_selection: bool = int(_get_selection_counts(_selection_nodes)["brushes"]) > 0
 	var need_sel_hint = "Requires a selected brush"
 	_set_control_disabled_hint(hollow_btn, not has_root or not has_selection, need_sel_hint)
 	_set_control_disabled_hint(clip_btn, not has_root or not has_selection, need_sel_hint)
@@ -4079,6 +4393,9 @@ func _populate_shape_palette() -> void:
 	shape_select.clear()
 	shape_id_to_key.clear()
 	for shape_key in LevelRootType.BrushShape.keys():
+		# CUSTOM is generated by polygon/path tools, not a drawable primitive.
+		if shape_key == "CUSTOM":
+			continue
 		var shape_value = LevelRootType.BrushShape[shape_key]
 		shape_id_to_key[shape_value] = shape_key
 		var label = _shape_label(shape_key)
@@ -5219,11 +5536,8 @@ func _set_active_shape(shape_value: int) -> void:
 
 
 func _shape_requires_sides(shape_value: int) -> bool:
-	return (
-		shape_value == LevelRootType.BrushShape.PYRAMID
-		or shape_value == LevelRootType.BrushShape.PRISM_TRI
-		or shape_value == LevelRootType.BrushShape.PRISM_PENT
-	)
+	# Tri/Pent are intentionally fixed prism variants; only Pyramid is adjustable.
+	return shape_value == LevelRootType.BrushShape.PYRAMID
 
 
 func _update_sides_visibility() -> void:
@@ -6133,7 +6447,10 @@ func _setup_texture_lock_ui() -> void:
 	texture_lock_check.button_pressed = true
 	texture_lock_check.tooltip_text = "Keep texture alignment while moving, resizing, hollowing, or clipping brushes"
 	texture_lock_check.toggled.connect(_on_texture_lock_toggled)
-	brush_vbox.add_child(texture_lock_check)
+	var target: Control = brush_vbox
+	if _advanced_build_section and _advanced_build_section.get_content():
+		target = _advanced_build_section.get_content()
+	target.add_child(texture_lock_check)
 
 
 func _on_texture_lock_toggled(pressed: bool) -> void:
@@ -6154,10 +6471,10 @@ func _setup_visgroup_ui() -> void:
 		return
 
 	# --- Visgroups & Groups section (collapsible, placed after Bake) ---
-	var vg_sec = HFCollapsibleSection.create("Visgroups & Groups", true)
-	# Insert after the Bake section (index 0) for visibility
+	var vg_sec = HFCollapsibleSection.create("Visgroups & Groups", false)
+	# Keep this specialist organizer below the primary and advanced bake sections.
 	manage_vbox.add_child(vg_sec)
-	manage_vbox.move_child(vg_sec, 1)
+	manage_vbox.move_child(vg_sec, mini(2, manage_vbox.get_child_count() - 1))
 	_register_section(vg_sec, "Visgroups & Groups")
 	var vgc = vg_sec.get_content()
 
