@@ -3,6 +3,8 @@
 Last updated: July 21, 2026
 
 This checklist covers the editor-only flows that are hard to validate in headless tests:
+- viewport input ownership: native Object Select clicks/marquees and filled hit targets, modal HammerForge Face Select, native navigation/gizmos, shortcut scope, and lost-release recovery
+- picking correctness: exact non-box faces and placement, hidden visgroups, internal/geometry-less entity previews, nearest brush/entity ordering, and scaled transforms
 - tutorial banner startup before `LevelRoot` exists
 - live dock/tab interaction while the tutorial is visible
 - shortcut dialog behavior in the real dock
@@ -67,14 +69,51 @@ Enable the HammerForge plugin if it is not already enabled.
 
 ### 2a. RMB Camera Navigation Ownership
 - Hold RMB and move the mouse with each of these selected: nothing, `LevelRoot`, a brush, an object/entity, a face, a `Camera3D`, and a light. Confirm Godot's camera looks around immediately in every case and selection remains unchanged.
-- While holding RMB, use W/A/S/D camera flight and press LMB/MMB or the wheel. Confirm no HammerForge tool switches, selection changes, drawing, or other edit action occurs before RMB is released.
+- While holding RMB, use W/A/S/D camera flight, Ctrl+Arrow, Escape, and LMB/MMB/wheel input. Confirm no HammerForge nudge, cancel step, tool switch, selection change, drawing, or other edit action occurs before RMB is released.
 - Repeat in Draw, Select, Paint, Vertex, Measure, Polygon, Path, and Decal modes. Persistent modes must not claim plain RMB while idle.
 - Open a G G/B B/R R quick-property popup, then begin RMB camera navigation outside it. Confirm the popup closes and the same press moves the camera; repeat with MMB pan and mouse-wheel zoom.
-- Start a Draw, Extrude, marquee, or vertex-drag interaction, then press RMB. Confirm only the active interaction is cancelled and a second RMB press starts normal camera navigation.
+- Start a Draw, Extrude, Face Select marquee, or vertex-drag interaction, then press RMB. Confirm only the active interaction is cancelled and a second RMB press starts normal camera navigation.
 - During an active LMB paint stroke, press RMB and confirm the stroke retains pointer ownership rather than painting while the camera moves. Release LMB and RMB, then press RMB again and confirm camera navigation resumes.
 - While Polygon or Path has points in progress, confirm RMB steps back that active interaction. Once the tool is idle, confirm RMB navigates the camera.
 - In Measure mode, confirm plain RMB always navigates and **Ctrl+Click** near a ruler sets its snap reference.
 - Press Space and confirm it opens the HammerForge context menu. Plain RMB must never open that menu.
+
+### 2b. Select, Gizmo, and Native Object Ownership
+- Select a brush, then click empty viewport space. Confirm Godot's visible Scene-tree selection becomes empty, the HammerForge selection count becomes zero, and a later dock refresh or texture import does not resurrect the brush.
+- Create a box, wedge, pyramid, cone, cylinder, sphere, and one custom/merged brush. In Object Select, click the visible interior of each shape. Confirm Godot's native selection outline and Scene-tree selection update from the filled face target—not only when clicking a thin wire edge—and HammerForge reports the same selection.
+- Aim through empty space inside a wedge/cone/custom brush's bounding box with another object behind it. Confirm the empty bounds do not select or occlude the near brush and the real visible surface behind can be selected.
+- Begin on empty viewport space and drag an object marquee. Confirm Godot's native region rectangle and hit rules are used, the Scene tree and HammerForge selection count agree after release, and no second HammerForge rectangle/result is applied.
+- Start the same native object marquee while holding **Shift** and confirm the new results are added using Godot's normal native behavior. Shift-click selected and unselected objects and confirm Godot's native additive/active-selection result is preserved after HammerForge owner/group normalization.
+- Group two brushes, then use the native object marquee to include one member. Confirm both group members appear selected after the native result is normalized. Repeat the relevant Shift selection/removal interaction and confirm normalization never leaves only half the group selected.
+- Hold Ctrl/Cmd during an Object Select click and drag. Confirm HammerForge neither performs a custom toggle nor consumes the modifier; Godot's configured transform/navigation behavior remains authoritative.
+- Begin in Draw or another Paint tool with Paint enabled, select two brushes, then enable Face Select. Confirm HammerForge switches to Select, turns Paint off, temporarily clears the object selection, and removes Godot's transform widget plus HammerForge's yellow resize handles. Drag at least 6 pixels across several visible faces; confirm one HammerForge rectangle appears and only projected-center candidates whose canonical ray pick identifies that exact face as frontmost are selected. Put a face behind another brush and confirm the occluded/back-facing face is excluded. Shift adds and Ctrl/Cmd toggles.
+- Press Escape with faces selected; confirm only the face selection clears. Press Escape again and confirm Face Select exits and both still-valid brushes return to Godot's visible object selection. Re-enter with no face selected and confirm one Escape exits. Also confirm leaving Paint, choosing an incompatible built-in/external tool, or entering Vertex Edit exits through the same clean restore path. Re-enter once more, then select a different object in the Scene tree; confirm Face Select turns off and keeps that new object rather than restoring the old snapshot.
+- Select a box brush, then drag each yellow HammerForge resize handle well beyond the normal marquee threshold, across empty space and another brush. Confirm the handle owns the full press/motion/release, the box resizes without any region rectangle or selection change, and each completed drag creates exactly one undo step. Repeat with Godot's move/rotate/scale widget. A click/no-op and a cancelled handle action must create no undo entry.
+- Select a sphere and drag an X, Y, then Z handle; confirm every resize keeps X/Y/Z equal. Repeat with a cylinder, cone, and capsule: X or Z must update both radial dimensions together, while Y changes height without changing the radius. Try to shorten the capsule below its diameter; confirm it clamps at the diameter and the opposite face stays fixed.
+- Parent a box below a rotated `Node3D` with non-uniform scale (for example `2, 3, 0.5`). Drag all six handles with grid snap enabled. Confirm each grabbed face moves in snapped **world** units along its transformed local axis, the opposite face remains stationary in world space, and the brush does not jump on first motion. Temporarily collapse one parent scale axis near zero (for example `0.000001`) and confirm its corresponding handle is ignored without NaN/invalid geometry.
+- With a brush selected, drag Godot's move/rotate/scale widget. While still dragging, press Ctrl+Arrow and then test Escape in a separate drag. Confirm Godot owns the complete mouse/keyboard gesture and no HammerForge click, marquee, nudge, paint, or external-tool action also fires. Complete a move, run **Bake Changed**, then Undo/Redo the native move and confirm each transition makes that exact brush eligible for Bake Changed again.
+- Select a `Camera3D` and a light, then use their native viewport gizmos. Confirm they remain selectable/editable by Godot while the HammerForge dock stays connected to the existing `LevelRoot`; no brush behind the native object is selected through the gizmo.
+- Shift-select one HammerForge brush and one ordinary Godot `Node3D`. Try Delete, duplicate, group, nudge, hollow, clip, carve, merge, apply texture, quick prefab, and variant actions through the keyboard, context toolbar, viewport context menu, hotkey palette, and any applicable radial sector. Confirm managed choices are hidden/disabled where appropriate; every invoked path leaves all nodes unchanged, shows **“Edit HammerForge and Godot nodes separately”**, and performs no partial edit. With only the native node selected, confirm keyboard shortcuts pass through; with only the brush selected, confirm HammerForge owns its managed action.
+- Give keyboard focus to an unrelated editor `Tree`, `ItemList`, `GraphEdit`, text field, or dialog and press Delete/Ctrl+D plus a HammerForge tool shortcut. Confirm the focused editor surface keeps the keys and no level node is deleted, duplicated, nudged, or switched into a tool. Repeat from the 3D viewport, the actual Scene tree, and a HammerForge surface to confirm their intended shortcuts still work.
+- Hold **Alt** and drag with LMB over empty space, a selected brush, and a native object. Confirm the gesture stays with Godot's configured alternate navigation/transform behavior and never begins HammerForge selection.
+
+### 2c. Recovery, Picking, and Tool Exclusivity
+- Start a native object marquee, then Alt+Tab or release LMB outside the viewport. Return and move the mouse with no buttons held. Confirm Godot's rectangle and HammerForge's native-session bookkeeping both clear, the visible `EditorSelection` remains authoritative, and the next click/drag works normally.
+- Repeat with a HammerForge Face Select marquee. Confirm its blue rectangle clears without applying a stale face selection.
+- Start a yellow resize-handle drag, move outside the viewport, and lose LMB-up. On the first buttonless motion, confirm the brush restores its captured size/position and creates no undo entry. Continue moving and confirm the preview stays frozen rather than reappearing. After the recovery turn, verify a fresh handle drag works even if Godot never delivered the old release; if the old release arrives late, confirm it neither mutates the brush nor creates undo.
+- Repeat the lost-release scenario during a vertex drag. Confirm the unfinished move is cancelled back to the captured geometry and the next vertex gesture works.
+- While a Godot transform/property gizmo or HammerForge resize handle is active, change application/window focus. Confirm Godot settles its own gizmo exactly once, HammerForge does not race it with a second restore/commit, and the next widget gesture works with one owner and one undo result.
+- Start native RMB look, change focus, and release RMB outside the viewport. Return and move with no buttons held, then begin a fresh RMB look. Confirm HammerForge does not leave navigation or editing latched.
+- Start a floor/surface/displacement paint stroke, lose its LMB release, then press RMB with LMB physically up. Confirm the stale stroke is safely finished and the following RMB starts normal camera navigation.
+- Close a Polygon and begin its height drag, then release LMB outside the viewport and return with no button held. Confirm the height commits once on recovery and a later unrelated click/release cannot commit it again. Repeat by changing application focus during height placement; confirm the tool returns to its editable point loop instead of leaving a hidden active drag.
+- Put a brush and an entity preview on the same camera ray at different depths. Confirm clicking chooses whichever visible surface is actually nearest; swap their depths and repeat. Non-uniformly scale one visual and confirm ordering remains based on world distance.
+- Select several normal DraftEntity types whose preview mesh/icon is an internal editor child. Confirm clicking the visible preview selects the entity rather than requiring a click near its origin.
+- Select one or more `DraftEntity` nodes. Press Ctrl+D, nudge with Arrow/PageUp/PageDown, undo/redo, then Delete. Confirm duplication uses unique names and preserves entity data plus group/visgroup membership, nudging moves the entities through one managed action, and deletion removes group/visgroup membership plus dangling I/O targets. Repeat with a mixed brush/entity HammerForge selection and confirm both domains edit together without leaving stale selection entries.
+- Create a truly geometry-less `DraftEntity`. Click its one-unit origin area and include it in a native marquee; confirm native selection works, the selected gizmo is only a quiet box marker, and no resize handles appear. Add a valid preview mesh beside a null or line-only preview child and confirm both visible components contribute to the entity's pick/outline bounds. Mark a preview child top-level below a transformed entity and confirm its target remains at the visible world position. Then hide the preview or an ancestor of the entity and confirm no invisible marker remains clickable.
+- Put a near brush/entity in a hidden visgroup with visible geometry behind it. Confirm object click, Select-mode hover, entity selection, face selection, and extrude face hover ignore the hidden item and reach the nearest visible candidate. A hidden entity preview must not leave an invisible clickable sphere.
+- Place a wedge or cone above the construction plane and aim at both a real sloped/curved surface and empty space inside its bounds. Drop an entity/prefab or start a surface-based placement at each point. Confirm the first lands on the exact visible face, while the empty-bounds ray continues to real geometry behind or the forward construction plane rather than landing on an AABB wall.
+- Activate Polygon, Path, Measure, and Decal in turn. For each, click once where the tool intentionally misses or passes; confirm the same physical event does not also select, draw, paint, or move a vertex. Switch to a built-in tool and confirm the external tool deactivates and any unfinished preview is cancelled.
+- While an external tool is idle and deliberately passes RMB/MMB/wheel input, confirm native camera navigation remains available without another HammerForge tool receiving the event.
 
 ### 3. Guided Step Flow
 - Step 1: draw an additive room brush; confirm the tutorial advances.
@@ -166,6 +205,10 @@ Enable the HammerForge plugin if it is not already enabled.
 - Select a brush and enter vertex mode (V key or the V toggle button in the toolbar).
 - Confirm vertex crosses and edge wireframe lines appear on the brush.
 - Click a vertex to select it (orange cross). Shift+click to multi-select.
+- In a perspective view, drag a vertex horizontally and vertically. Confirm it follows the cursor on a view-facing plane through the picked vertex instead of being forced onto world Y.
+- Repeat in front and side orthographic views, then drag a selected edge. Confirm each gesture uses the picked vertex or edge midpoint as its stable anchor with no first-motion jump.
+- During separate drags, press X, Y, and Z to lock movement. Confirm only the chosen world axis changes and grid snapping remains consistent.
+- Aim the camera directly along the locked axis and drag. Confirm the degenerate projection is ignored—geometry must not jump, accumulate a stale prior delta, or become non-convex.
 - Drag to move vertices; confirm convexity enforcement (invalid moves revert).
 - Press E to toggle to edge sub-mode; confirm edges become clickable.
 - Click an edge; confirm it highlights orange and both endpoints are selected.
@@ -180,6 +223,7 @@ Enable the HammerForge plugin if it is not already enabled.
 - Confirm concave vertex placements are rejected (e.g. try to create an L-shape).
 - Press Enter (or click near the first point) to close the polygon.
 - Move mouse up/down to set height; confirm green vertical edges + top outline preview.
+- During height placement, release LMB outside the viewport and return with no buttons held; confirm recovery creates at most one brush. Start again and Alt+Tab during height placement; confirm the polygon returns to editable points and no later unrelated release commits it.
 - Click to confirm; confirm a brush appears in DraftBrushes.
 - Undo; confirm the brush is removed.
 - Redo; confirm the brush returns.
@@ -212,7 +256,7 @@ Enable the HammerForge plugin if it is not already enabled.
 - Right-click a thumbnail → "Copy Name"; paste elsewhere to confirm clipboard content.
 - Press **T** (Texture Picker); click a face in the viewport. Confirm the browser selection updates to match that face's material.
 - Press **T** on a face with no material; confirm a toast message appears ("Face has no material assigned").
-- **Reimport resilience**: select a brush, switch to the Paint tab, scroll through thumbnails (triggering any lazy texture reimport). Confirm the brush selection label in the dock footer still shows "Sel: 1 brush" — the selection must not be cleared by reimport.
+- **Reimport synchronization**: select a brush, switch to the Paint tab, and scroll through thumbnails (triggering any lazy texture reimport). Confirm the dock and Godot's visible Scene/viewport selection always agree. If the visible selection remains, the dock stays at "Sel: 1 brush"; an intentional visible deselect must immediately show zero rather than retaining a hidden HammerForge selection.
 
 ### 12. Spawn System + Test Level Validation
 - Delete all `player_start` entities (or start with a fresh scene).
@@ -235,9 +279,12 @@ Enable the HammerForge plugin if it is not already enabled.
 ### 12a. Bake Optimizations + Test Modes
 - Select 2-3 brushes. Click **Bake Selected**; confirm only those brushes are baked and previously baked geometry is preserved (not replaced).
 - Modify a brush (move/resize). Click **Bake Changed**; confirm only the modified brush is rebaked. Unmodified geometry stays intact.
+- Expand a brush's exported `faces` resource in the Inspector and change a face material/UV value (and, where available, a paint/displacement value). Confirm **Bake Changed** includes that exact brush. Undo/Redo the Inspector edit and confirm each transition is detected once; reapply an identical/no-op value and confirm it does not create a false dirty brush.
 - Set Preview Mode to **Wireframe**; click Bake. Confirm baked output renders as cyan wireframe overlay.
 - Set Preview Mode to **Proxy**; click Bake. Confirm baked output renders as semi-transparent grey.
 - Set Preview Mode back to **Full**; click Bake. Confirm normal material rendering resumes.
+- Create a subtract brush that cuts a doorway through a solid wall. Enable **Use Face Materials**, then test ordinary Bake with the cut pending/applied and again after a frozen Commit Cuts. Confirm every bake visibly keeps the opening and collision permits movement/raycasting through it; the face-material fast path must yield to CSG while structural cuts exist.
+- With an existing Wireframe or Proxy bake, Commit Cuts and then Undo/Redo. Confirm the exact pre/post baked geometry and its preview mode return on each transition, with no extra bake, consumed cutter, or stale solid collision.
 - Click **Check Bake Issues** on a clean level; confirm no issues reported.
 - Create a brush with near-zero thickness (e.g. 0.01 on Y axis). Click **Check Bake Issues**; confirm a severity-2 "degenerate brush" issue appears.
 - Create a subtract brush floating in empty space (not intersecting any additive). Click **Check Bake Issues**; confirm a severity-1 "floating subtract" warning.
@@ -285,6 +332,7 @@ Enable the HammerForge plugin if it is not already enabled.
 - Enter Vertex mode (V key). Confirm the toolbar shows Vtx/Edge/Merge/Split/Exit buttons.
 - Click "Exit"; confirm vertex mode is deactivated.
 - Select an entity (if available). Confirm the toolbar shows "1 entity" with I/O and Props buttons.
+- Add an ordinary Godot node to the entity/brush selection. Confirm the context toolbar no longer advertises a managed selection context and the command palette grays out selection-dependent HammerForge actions. Invoke a previously open/stale action if possible and confirm the final guard blocks it with no partial change.
 - Deselect all (Esc); confirm the toolbar hides when no context applies.
 - Press **Shift+?** (or F1) in the 3D viewport. Confirm the command palette appears with a search field and categorized action list.
 - Type "hollow" in the search; confirm only the Hollow action is visible.
@@ -438,6 +486,7 @@ Enable the HammerForge plugin if it is not already enabled.
 - Begin a drag (click+hold). Press **Space**; confirm the menu does NOT open (idle guard).
 - Select an entity. Press **Space**; confirm entity-specific items appear (I/O Connect, Properties, etc.).
 - Confirm **Highlight Connected** appears as a check item and toggles state when clicked.
+- Add an ordinary Godot node to the HammerForge selection, reopen the menu, and confirm managed selection commands are unavailable. If a stale menu item can still be invoked, confirm it is blocked with the mixed-selection warning and no partial edit.
 
 ### 30. Radial Menu
 - Press **`` ` ``** (backtick) in the 3D viewport; confirm a radial pie menu appears centered at the cursor with 8 labeled sectors.
@@ -451,6 +500,7 @@ Enable the HammerForge plugin if it is not already enabled.
 - Press **`` ` ``** to open, then press **`` ` ``** again; confirm it toggles closed.
 - Right-click while the menu is open; confirm it closes without executing.
 - Open the radial while a drag is in progress; confirm it does NOT open (idle guard).
+- With a mixed HammerForge/Godot selection, choose a selection-dependent sector such as Clip or Vertex. Confirm it is blocked with no selected node changed; choose a general non-mutating tool sector and confirm normal tool switching still works.
 
 ### 31. Quick Property Popups
 - In the viewport, tap **G** twice quickly (G G); confirm a small popup appears at the cursor with a "Grid Snap" SpinBox showing the current snap value.
@@ -460,14 +510,19 @@ Enable the HammerForge plugin if it is not already enabled.
 - Select a brush. Tap **B** twice (B B); confirm a popup appears with 3 SpinBoxes (X, Y, Z).
 - Enable paint mode. Tap **R** twice (R R); confirm a popup appears with a "Paint Radius" SpinBox.
 
-### 32. Brush Wireframe Color Coding
-- Draw a new additive brush; confirm it has a **green** wireframe overlay and green-tinted fill.
-- Change the brush operation to Subtract; confirm the wireframe changes to **red**.
-- Tie the brush to `func_detail` (brush entity); confirm the wireframe/overlay shifts to **bright blue**.
-- Tie to `trigger_once`; confirm **medium blue** overlay.
-- Tie to `func_wall`; confirm **muted blue** overlay.
-- Untie the brush; confirm it returns to green (additive) wireframe.
-- Draw a brush with per-face materials; confirm the green wireframe tracks the geometry after face preview rebuild.
+### 32. Clean Brush Visuals and Lifecycle
+- Draw a new additive box; confirm it has a clean green-tinted surface with **no always-on triangle wireframe**.
+- Resize continuously while drawing; confirm only the current box is visible and no nested outlines or drag-history trail remains.
+- Hover the box in Select mode; confirm the highlight contains only the 12 structural box edges, with no diagonal across any face.
+- Select the box; confirm one concise structural outline and six resize handles appear only for that selection.
+- Hover/select wedges, pyramids, prisms, merged/custom brushes, and polyhedra; confirm only true boundaries and creases appear, with no coplanar triangulation fans or old flat merge diagonals. Set adjustable pyramids/prisms to 3 and 5 sides and confirm their centered visible bounds touch the same six handle planes. Repeat with cylinder, cone, sphere, ellipsoid, capsule, and torus; confirm each uses a restrained, recognizable curved profile rather than every render triangle or a fallback box.
+- Move the pointer over a selected brush. Confirm hover and selection share one outline source and never stack a second coincident highlight.
+- Change box, ellipsoid, and torus brushes to Subtract; confirm exactly one depth-aware **red semantic outline** appears for each. The box must have only 12 structural edges and curved shapes must use their sparse profiles, not a dense render-triangle cage. Resize repeatedly and confirm the overlay neither duplicates, double-scales, nor leaves a trail.
+- Tie the brush to `func_detail`, `trigger_once`, and `func_wall`; confirm one appropriately tinted blue overlay for each type, without accumulating prior overlays.
+- Untie the brush; confirm it returns to the clean additive surface with no topology overlay.
+- Paint floor/wall geometry and confirm generated helper brushes do not fill the viewport with green topology lines.
+- Bake the same level three times; confirm the scene tree contains exactly one top-level `BakedGeometry` node and no anonymous baked-container copies.
+- Reopen a legacy scene that contains duplicated anonymous `BakedChunk_*` roots; confirm HammerForge retains the newest populated bake, removes only recognized duplicates, and leaves unrelated anonymous nodes untouched.
 
 ### 33. Grid Size Indicator and Hotkeys
 - With LevelRoot active, confirm the shortcut HUD (top-right) shows "Grid: 16" (or current snap value).

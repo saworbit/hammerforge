@@ -35,7 +35,11 @@ var draft_brushes_node: Node3D
 var brush_system: RefCounted
 var grid_snap := 8.0
 var drag_size_default := Vector3(32, 32, 32)
+var dirty_brush_ids: Array[String] = []
 signal user_message(msg, level)
+
+func tag_brush_dirty(brush_id: String) -> void:
+	dirty_brush_ids.append(brush_id)
 """
 	s.reload()
 	return s
@@ -96,6 +100,31 @@ func _make_box_brush(pos: Vector3, sz: Vector3, id: String) -> DraftBrush:
 		faces.append(face)
 	b.faces = faces
 	return b
+
+
+func _dent_box_corner(brush: DraftBrush, corner: Vector3, replacement: Vector3) -> void:
+	for face in brush.faces:
+		var updated := PackedVector3Array()
+		for vertex in face.local_verts:
+			updated.append(replacement if vertex.is_equal_approx(corner) else vertex)
+		face.local_verts = updated
+		face.ensure_geometry()
+
+
+func _make_test_camera(position: Vector3, orthogonal := false) -> Camera3D:
+	var camera := Camera3D.new()
+	root.add_child(camera)
+	camera.global_position = position
+	camera.look_at(Vector3.ZERO, Vector3.UP)
+	if orthogonal:
+		camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+		camera.size = 20.0
+	camera.force_update_transform()
+	return camera
+
+
+func _assert_vector_near(actual: Vector3, expected: Vector3, message: String) -> void:
+	assert_lt(actual.distance_to(expected), 0.01, message)
 
 
 # ===========================================================================
@@ -207,6 +236,32 @@ func test_null_brush_passes_validation():
 	assert_true(vs.validate_convexity(null))
 
 
+func test_clip_to_convex_tags_only_the_mutated_brush():
+	var brush := _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "concave")
+	var untouched := _make_box_brush(Vector3(64, 0, 0), Vector3(32, 32, 32), "untouched")
+	vs.set_selection([brush, untouched])
+	_dent_box_corner(brush, Vector3(16, 16, 16), Vector3.ZERO)
+	assert_false(vs.validate_convexity(brush), "The fixture must start non-convex")
+	var vertices_before := vs.get_brush_vertices(brush).size()
+
+	assert_true(vs.clip_to_convex("concave"), "A concave brush should be replaced by its hull")
+	assert_lt(
+		vs.get_brush_vertices(brush).size(),
+		vertices_before,
+		"The interior dent vertex should be removed by the hull mutation"
+	)
+	assert_eq(root.dirty_brush_ids, ["concave"], "Only the changed brush should be tagged once")
+
+
+func test_clip_to_convex_no_op_and_failure_do_not_tag_dirty():
+	var convex := _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "convex")
+	vs.set_selection([convex])
+
+	assert_false(vs.clip_to_convex("convex"), "An already-convex brush is a no-op")
+	assert_false(vs.clip_to_convex("missing"), "A missing brush cannot be clipped")
+	assert_true(root.dirty_brush_ids.is_empty(), "No-op and failure paths must not tag a brush")
+
+
 # ===========================================================================
 # Vertex movement
 # ===========================================================================
@@ -246,6 +301,91 @@ func test_begin_end_drag():
 	assert_true(vs.is_dragging())
 	var snapshots = vs.end_drag()
 	assert_false(vs.is_dragging())
+	assert_true(snapshots.is_empty(), "A click without movement should not create undo data")
+
+
+func test_absolute_drag_updates_do_not_accumulate():
+	var b = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "abs1")
+	vs.set_selection([b])
+	var original_vertex: Vector3 = vs.get_brush_vertices(b)[0]
+	vs.select_vertex("abs1", 0, false)
+	vs.begin_drag(b.to_global(original_vertex))
+
+	assert_true(vs.update_drag_absolute(Vector3(2, 0, 0)))
+	assert_true(vs.update_drag_absolute(Vector3(4, 0, 0)))
+	var selected_world: Vector3 = vs.get_selected_world_positions()[0]
+	_assert_vector_near(
+		selected_world,
+		b.to_global(original_vertex) + Vector3(4, 0, 0),
+		"The latest start-relative delta should replace, not accumulate with, the prior delta"
+	)
+
+
+func test_zero_absolute_drag_restores_origin_and_suppresses_undo():
+	var b = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "zero1")
+	vs.set_selection([b])
+	var vertices_before := vs.get_brush_vertices(b).duplicate()
+	vs.select_vertex("zero1", 0, false)
+	vs.begin_drag(b.to_global(vertices_before[0]))
+
+	assert_true(vs.update_drag_absolute(Vector3(4, 0, 0)))
+	assert_true(vs.update_drag_absolute(Vector3.ZERO))
+	var vertices_after := vs.get_brush_vertices(b)
+	assert_eq(vertices_after.size(), vertices_before.size())
+	for vertex_index in range(vertices_before.size()):
+		_assert_vector_near(
+			vertices_after[vertex_index],
+			vertices_before[vertex_index],
+			"Returning the cursor to its start should restore every vertex"
+		)
+	assert_true(vs.end_drag().is_empty(), "A returned-to-origin drag should not create undo data")
+
+
+func test_changed_absolute_drag_returns_undo_snapshots():
+	var b = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "undo1")
+	vs.set_selection([b])
+	var original_vertex: Vector3 = vs.get_brush_vertices(b)[0]
+	vs.select_vertex("undo1", 0, false)
+	vs.begin_drag(b.to_global(original_vertex))
+	assert_true(vs.update_drag_absolute(Vector3(2, 0, 0)))
+	assert_false(vs.end_drag().is_empty(), "A real geometry change should retain undo data")
+
+
+func test_rejected_absolute_drag_restores_origin_and_suppresses_undo():
+	var b = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "reject1")
+	vs.set_selection([b])
+	var vertices_before := vs.get_brush_vertices(b).duplicate()
+	vs.select_vertex("reject1", 0, false)
+	vs.begin_drag(b.to_global(vertices_before[0]))
+
+	assert_false(vs.update_drag_absolute(Vector3(-40, 0, 0)))
+	var vertices_after := vs.get_brush_vertices(b)
+	for vertex_index in range(vertices_before.size()):
+		_assert_vector_near(
+			vertices_after[vertex_index],
+			vertices_before[vertex_index],
+			"A rejected non-convex update should restore the drag origin"
+		)
+	assert_true(vs.end_drag().is_empty(), "A rejected update should not create undo data")
+
+
+func test_absolute_drag_world_delta_handles_rotated_brushes():
+	var b = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "rot1")
+	b.rotation = Vector3(0, deg_to_rad(90.0), 0)
+	b.force_update_transform()
+	vs.set_selection([b])
+	var original_vertex: Vector3 = vs.get_brush_vertices(b)[0]
+	var original_world := b.to_global(original_vertex)
+	vs.select_vertex("rot1", 0, false)
+	vs.begin_drag(original_world)
+
+	assert_true(vs.update_drag_absolute(Vector3(2, 0, 0)))
+	var selected_world: Vector3 = vs.get_selected_world_positions()[0]
+	_assert_vector_near(
+		selected_world,
+		original_world + Vector3(2, 0, 0),
+		"World-space input should remain world-aligned for a rotated brush"
+	)
 
 
 func test_cancel_drag():
@@ -254,11 +394,125 @@ func test_cancel_drag():
 	vs.select_vertex("cd1", 0, false)
 	var verts_before = vs.get_brush_vertices(b).duplicate()
 	vs.begin_drag(Vector3.ZERO)
-	vs.move_vertices(Vector3(100, 0, 0))
+	assert_true(vs.update_drag_absolute(Vector3(4, 0, 0)))
+	assert_false(
+		vs.get_selected_world_positions()[0].is_equal_approx(verts_before[0]),
+		"The fixture must contain a real change before cancellation"
+	)
 	vs.cancel_drag()
 	var verts_after = vs.get_brush_vertices(b)
 	# After cancel, vertices should be restored
 	assert_eq(verts_after.size(), verts_before.size())
+	for vertex_index in range(verts_before.size()):
+		_assert_vector_near(
+			verts_after[vertex_index],
+			verts_before[vertex_index],
+			"Cancel should restore the original vertex positions"
+		)
+
+
+# ===========================================================================
+# Screen-to-world drag projection
+# ===========================================================================
+
+
+func test_screen_drag_projects_on_perspective_view_plane():
+	var camera := _make_test_camera(Vector3(0, 0, 10))
+	var anchor := Vector3.ZERO
+	var expected := Vector3(2, 1, 0)
+	var result := HFVertexSystem.screen_to_world_drag_delta(
+		camera,
+		camera.unproject_position(anchor),
+		camera.unproject_position(anchor + expected),
+		anchor
+	)
+	assert_true(result.valid)
+	_assert_vector_near(result.delta, expected, "Perspective movement should follow the view plane")
+
+
+func test_screen_drag_projects_on_front_orthographic_view_plane():
+	var camera := _make_test_camera(Vector3(0, 0, 10), true)
+	var anchor := Vector3.ZERO
+	var expected := Vector3(-3, 2, 0)
+	var result := HFVertexSystem.screen_to_world_drag_delta(
+		camera,
+		camera.unproject_position(anchor),
+		camera.unproject_position(anchor + expected),
+		anchor
+	)
+	assert_true(result.valid)
+	_assert_vector_near(result.delta, expected, "Front orthographic movement should preserve X/Y")
+
+
+func test_screen_drag_projects_on_side_orthographic_view_plane():
+	var camera := _make_test_camera(Vector3(10, 0, 0), true)
+	var anchor := Vector3.ZERO
+	var expected := Vector3(0, 2, -3)
+	var result := HFVertexSystem.screen_to_world_drag_delta(
+		camera,
+		camera.unproject_position(anchor),
+		camera.unproject_position(anchor + expected),
+		anchor
+	)
+	assert_true(result.valid)
+	_assert_vector_near(result.delta, expected, "Side orthographic movement should preserve Y/Z")
+
+
+func test_screen_drag_axis_locks_follow_visible_world_axes():
+	var front_camera := _make_test_camera(Vector3(0, 0, 10))
+	var side_camera := _make_test_camera(Vector3(10, 0, 0), true)
+	var anchor := Vector3.ZERO
+	var cases := [
+		[front_camera, Vector3(3, 2, 0), HFVertexSystem.DragAxisLock.X, Vector3(3, 0, 0)],
+		[front_camera, Vector3(3, -2, 0), HFVertexSystem.DragAxisLock.Y, Vector3(0, -2, 0)],
+		[side_camera, Vector3(0, 2, -3), HFVertexSystem.DragAxisLock.Z, Vector3(0, 0, -3)],
+	]
+	for test_case in cases:
+		var camera: Camera3D = test_case[0]
+		var cursor_target: Vector3 = test_case[1]
+		var result := HFVertexSystem.screen_to_world_drag_delta(
+			camera,
+			camera.unproject_position(anchor),
+			camera.unproject_position(anchor + cursor_target),
+			anchor,
+			test_case[2]
+		)
+		assert_true(result.valid)
+		_assert_vector_near(result.delta, test_case[3], "Axis lock should remove off-axis motion")
+
+
+func test_perspective_axis_projection_uses_off_center_anchor_direction():
+	var camera := _make_test_camera(Vector3(0, 0, 10))
+	var anchor := Vector3(3, 0, 0)
+	var expected := Vector3(0, 0, -2)
+	var result := HFVertexSystem.screen_to_world_drag_delta(
+		camera,
+		camera.unproject_position(anchor),
+		camera.unproject_position(anchor + expected),
+		anchor,
+		HFVertexSystem.DragAxisLock.Z
+	)
+	assert_true(result.valid)
+	_assert_vector_near(
+		result.delta,
+		expected,
+		"Perspective axis projection should remain usable away from the view center"
+	)
+
+
+func test_screen_drag_rejects_axis_that_is_head_on_to_view():
+	var camera := _make_test_camera(Vector3(0, 0, 10), true)
+	var anchor_screen := camera.unproject_position(Vector3.ZERO)
+	var result := HFVertexSystem.screen_to_world_drag_delta(
+		camera,
+		anchor_screen,
+		anchor_screen + Vector2(20, 0),
+		Vector3.ZERO,
+		HFVertexSystem.DragAxisLock.Z
+	)
+	assert_false(result.valid)
+	assert_eq(result.reason, "axis_parallel_to_view")
+	assert_eq(result.delta, Vector3.ZERO)
 
 
 # ===========================================================================

@@ -4,11 +4,17 @@ class_name DraftEntity
 
 @export var entity_type: String = "":
 	set = _set_entity_type
-@export var entity_class: String = "":
-	set = _set_entity_class
+# Compatibility alias for older scenes and callers. It is deliberately not an
+# exported second field: one visible Entity Type is enough.
+var entity_class: String:
+	get:
+		return entity_type
+	set(value):
+		_set_entity_type(value)
 
 var entity_data: Dictionary = {}
 var preview_node: Node3D = null
+var _gizmo_update_queued := false
 var entity_properties: Dictionary:
 	get:
 		return entity_data
@@ -21,22 +27,22 @@ func _set_entity_type(val: String) -> void:
 	if entity_type == val:
 		return
 	entity_type = val
-	if entity_class != val:
-		entity_class = val
 	_update_preview()
 	_apply_entity_defaults()
 	notify_property_list_changed()
 
 
-func _set_entity_class(val: String) -> void:
-	if entity_class == val:
-		return
-	entity_class = val
-	if entity_type != val:
-		entity_type = val
-	_update_preview()
-	_apply_entity_defaults()
-	notify_property_list_changed()
+func _validate_property(property: Dictionary) -> void:
+	var property_name := str(property.get("name", ""))
+	if property_name == "entity_type":
+		var type_hints := _get_entity_type_hints()
+		if not type_hints.is_empty():
+			property["hint"] = PROPERTY_HINT_ENUM
+			property["hint_string"] = ",".join(type_hints)
+	elif property_name == "entity_class":
+		# Loadable through the declared compatibility alias, but neither visible
+		# nor saved again. A resave therefore migrates old duplicate scene data.
+		property["usage"] = PROPERTY_USAGE_NONE
 
 
 func _ready() -> void:
@@ -53,6 +59,7 @@ func _exit_tree() -> void:
 func _update_preview() -> void:
 	if not is_inside_tree() or not Engine.is_editor_hint():
 		return
+	_queue_gizmo_update()
 	_clear_preview()
 	var definition = _get_entity_definition()
 	if definition.is_empty() or not definition.has("preview"):
@@ -121,15 +128,47 @@ func _assign_preview(node: Node3D) -> void:
 	if not node:
 		return
 	node.name = "_EditorPreview"
-	add_child(node)
+	add_child(node, false, Node.INTERNAL_MODE_BACK)
 	node.owner = null
 	preview_node = node
+	_queue_gizmo_update()
 
 
 func _clear_preview() -> void:
+	var removed_preview := preview_node != null and is_instance_valid(preview_node)
 	if preview_node and is_instance_valid(preview_node):
-		preview_node.queue_free()
+		# Detaching immediately prevents a same-frame class switch from keeping
+		# the fixed name reserved or rendering both previews at once.
+		if preview_node.get_parent() == self:
+			remove_child(preview_node)
+		if not preview_node.is_queued_for_deletion():
+			preview_node.queue_free()
 	preview_node = null
+	if removed_preview:
+		_queue_gizmo_update()
+
+
+## Preview aliases can rebuild several internal nodes in one setter cascade.
+## Defer one gizmo refresh so native collision and bounds see the final tree.
+func _queue_gizmo_update() -> void:
+	if _gizmo_update_queued or not is_inside_tree() or not Engine.is_editor_hint():
+		return
+	_gizmo_update_queued = true
+	call_deferred("_flush_gizmo_update")
+
+
+func _flush_gizmo_update() -> void:
+	if not _gizmo_update_queued:
+		return
+	_gizmo_update_queued = false
+	if is_inside_tree() and Engine.is_editor_hint():
+		update_gizmos()
+
+
+func _refresh_editor_gizmo_now() -> void:
+	_gizmo_update_queued = false
+	if is_inside_tree() and Engine.is_editor_hint():
+		update_gizmos()
 
 
 func _get_entity_definition() -> Dictionary:
@@ -189,17 +228,6 @@ func _parse_default_value(type_name: String, value: Variant) -> Variant:
 
 func _get_property_list() -> Array[Dictionary]:
 	var properties: Array[Dictionary] = []
-	var type_hints = _get_entity_type_hints()
-	if not type_hints.is_empty():
-		properties.append(
-			{
-				"name": "entity_type",
-				"type": TYPE_STRING,
-				"hint": PROPERTY_HINT_ENUM,
-				"hint_string": ",".join(type_hints),
-				"usage": PROPERTY_USAGE_DEFAULT
-			}
-		)
 	var schema: Array = _get_entity_schema()
 	if schema.is_empty():
 		return properties
@@ -210,18 +238,7 @@ func _get_property_list() -> Array[Dictionary]:
 			continue
 		var prop_type = _type_from_schema(prop.get("type", ""))
 		properties.append(
-			{
-				"name": "data/" + p_name,
-				"type": prop_type,
-				"usage": PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_STORAGE
-			}
-		)
-		properties.append(
-			{
-				"name": "entity_data/" + p_name,
-				"type": prop_type,
-				"usage": PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_STORAGE
-			}
+			{"name": "data/" + p_name, "type": prop_type, "usage": PROPERTY_USAGE_DEFAULT}
 		)
 	return properties
 

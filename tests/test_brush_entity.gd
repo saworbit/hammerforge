@@ -23,10 +23,13 @@ func before_each():
 	root.grid_snap = 0.0
 	root.face_selection = {}
 	root.brush_manager = null
+	root.bake_system = null
+	root.commit_freeze = false
 	root.cordon_enabled = false
 	root.cordon_aabb = AABB(Vector3(-1000, -1000, -1000), Vector3(2000, 2000, 2000))
 	brush_sys = HFBrushSystem.new(root)
 	bake_sys = HFBakeSystem.new(root)
+	root.bake_system = bake_sys
 
 
 func after_each():
@@ -40,6 +43,8 @@ func _root_shim_script() -> GDScript:
 	s.source_code = """
 extends Node3D
 
+signal user_message(text, level)
+
 var draft_brushes_node: Node3D
 var pending_node: Node3D
 var committed_node: Node3D
@@ -47,6 +52,9 @@ var _brush_id_counter: int = 0
 var grid_snap: float = 0.0
 var face_selection: Dictionary = {}
 var brush_manager = null
+var bake_system = null
+var last_force_csg: bool = false
+var commit_freeze: bool = false
 var texture_lock: bool = false
 var drag_size_default: Vector3 = Vector3(32, 32, 32)
 var cordon_enabled: bool = false
@@ -71,6 +79,17 @@ func _assign_owner(node: Node) -> void:
 
 func _record_last_brush(_pos: Vector3) -> void:
 	pass
+
+func bake(
+	_apply_cuts: bool = true,
+	_hide_live: bool = false,
+	_collision_layer_mask: int = 0,
+	_preview_mode: int = 0,
+	_force_csg: bool = false
+) -> bool:
+	last_force_csg = _force_csg
+	await get_tree().process_frame
+	return bake_system != null and bool(bake_system.get("_last_bake_success"))
 """
 	s.reload()
 	return s
@@ -92,6 +111,77 @@ func _make_brush(
 	return b
 
 
+func test_commit_cuts_preserves_cutters_on_failure_and_stashes_only_after_success():
+	var pending := Node3D.new()
+	pending.name = "PendingCuts"
+	root.add_child(pending)
+	root.pending_node = pending
+	var committed := Node3D.new()
+	committed.name = "CommittedCuts"
+	root.add_child(committed)
+	root.committed_node = committed
+
+	var cutter := DraftBrush.new()
+	cutter.brush_id = "commit_guard"
+	cutter.set_meta("brush_id", "commit_guard")
+	brush_sys._add_pending_cut(cutter)
+	brush_sys._register_brush_id(cutter.brush_id, cutter)
+	bake_sys._last_bake_success = false
+	assert_false(await brush_sys.commit_cuts())
+	assert_same(cutter.get_parent(), root.pending_node)
+	assert_true(cutter.visible, "Failed commit must leave its cutter editable")
+	assert_eq(brush_sys.get_live_brush_count(), 1)
+	assert_same(brush_sys.find_brush_by_id(cutter.brush_id), cutter)
+
+	root.commit_freeze = true
+	bake_sys._last_bake_success = true
+	assert_true(await brush_sys.commit_cuts())
+	assert_true(root.last_force_csg, "Commit Cuts must force subtraction-aware CSG output")
+	assert_same(cutter.get_parent(), committed)
+	assert_false(cutter.visible)
+	assert_eq(brush_sys.get_live_brush_count(), 0)
+	assert_null(brush_sys.find_brush_by_id(cutter.brush_id))
+
+
+func test_commit_cuts_without_freeze_detaches_cutters_before_returning():
+	var pending := Node3D.new()
+	pending.name = "PendingCuts"
+	root.add_child(pending)
+	root.pending_node = pending
+	var committed := Node3D.new()
+	committed.name = "CommittedCuts"
+	root.add_child(committed)
+	root.committed_node = committed
+	var cutter := DraftBrush.new()
+	cutter.brush_id = "commit_remove_now"
+	cutter.set_meta("brush_id", cutter.brush_id)
+	brush_sys._add_pending_cut(cutter)
+	brush_sys._register_brush_id(cutter.brush_id, cutter)
+	bake_sys._last_bake_success = true
+
+	assert_true(await brush_sys.commit_cuts())
+
+	assert_null(cutter.get_parent(), "Committed cutter must leave source tree synchronously")
+	assert_true(cutter.is_queued_for_deletion())
+	assert_eq(root.draft_brushes_node.get_child_count(), 0)
+	assert_eq(root.pending_node.get_child_count(), 0)
+
+
+func test_commit_cuts_without_cutters_is_a_safe_noop():
+	var pending := Node3D.new()
+	pending.name = "PendingCuts"
+	root.add_child(pending)
+	root.pending_node = pending
+	var committed := Node3D.new()
+	committed.name = "CommittedCuts"
+	root.add_child(committed)
+	root.committed_node = committed
+
+	assert_false(await brush_sys.commit_cuts())
+
+	assert_false(root.last_force_csg, "An empty commit must not start a bake")
+
+
 # ===========================================================================
 # Tie / Untie
 # ===========================================================================
@@ -99,9 +189,29 @@ func _make_brush(
 
 func test_tie_sets_brush_entity_class():
 	var b = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
+	var initial_material := b.mesh_instance.material_override as StandardMaterial3D
+	assert_not_null(initial_material)
 	brush_sys.tie_brushes_to_entity(["b1"], "func_detail")
 	var bec = str(b.get_meta("brush_entity_class", ""))
 	assert_eq(bec, "func_detail", "Tie should set brush_entity_class meta")
+	var overlay := b.get_node_or_null("_BrushEntityOverlay") as MeshInstance3D
+	assert_not_null(
+		overlay,
+		"Tie should show the entity cue immediately without waiting for a rebuild",
+	)
+	var tied_material := b.mesh_instance.material_override as StandardMaterial3D
+	assert_not_null(tied_material, "Tie should keep the base brush visibly styled")
+	if overlay:
+		var overlay_id := overlay.get_instance_id()
+		brush_sys.tie_brushes_to_entity(["b1"], "trigger_once")
+		var retied := b.get_node_or_null("_BrushEntityOverlay") as MeshInstance3D
+		assert_not_null(retied)
+		if retied:
+			assert_eq(
+				retied.get_instance_id(),
+				overlay_id,
+				"Changing entity class should update the existing overlay in place",
+			)
 
 
 func test_tie_multiple_brushes():
@@ -115,8 +225,17 @@ func test_tie_multiple_brushes():
 func test_untie_removes_brush_entity_class():
 	var b = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
 	brush_sys.tie_brushes_to_entity(["b1"], "func_detail")
+	assert_not_null(b.get_node_or_null("_BrushEntityOverlay"))
 	brush_sys.untie_brushes_from_entity(["b1"])
 	assert_false(b.has_meta("brush_entity_class"), "Untie should remove brush_entity_class meta")
+	assert_null(
+		b.get_node_or_null("_BrushEntityOverlay"),
+		"Untie should remove the entity cue synchronously",
+	)
+	var restored_material := b.mesh_instance.material_override as StandardMaterial3D
+	assert_not_null(restored_material, "Untie should restore the normal additive styling")
+	if restored_material:
+		assert_eq(restored_material.albedo_color, Color(0.2, 0.8, 0.2, 0.35))
 
 
 func test_untie_only_affects_specified_brushes():
@@ -247,4 +366,8 @@ func test_create_brush_from_info_restores_entity_class():
 		str(brush.get_meta("brush_entity_class", "")),
 		"trigger_once",
 		"Restored brush should have brush_entity_class"
+	)
+	assert_not_null(
+		brush.get_node_or_null("_BrushEntityOverlay"),
+		"Restored entity brushes should render their semantic cue immediately",
 	)

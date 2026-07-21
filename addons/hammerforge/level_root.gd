@@ -51,6 +51,7 @@ const HFDisplacementSystemType = preload("systems/hf_displacement_system.gd")
 const HFBevelSystemType = preload("systems/hf_bevel_system.gd")
 const HFPrototypeTextures = preload("hf_prototype_textures.gd")
 const HFIORuntime = preload("hf_io_runtime.gd")
+const HFOutlineUtil = preload("hf_outline_util.gd")
 
 const RELOAD_LOCK_PATH := "res://.hammerforge/reload.lock"
 const RELOAD_POLL_SECONDS := 0.5
@@ -516,9 +517,24 @@ func _ready():
 	grid_system = HFGridSystemType.new(self)
 	entity_system = HFEntitySystemType.new(self)
 	brush_system = HFBrushSystemType.new(self)
+	# Serialized scenes already contain brushes before subsystem construction.
+	# Build the live index once so counts, lookups, and the manager are correct
+	# immediately rather than only after the first HammerForge-created brush.
+	var repaired_brush_index := brush_system.reconcile_external_structure()
+	# Dirty tags are intentionally transient. A reopened scene may therefore
+	# contain source edits newer than its serialized BakedGeometry even when all
+	# IDs are valid. Conservatively offer Bake Changed whenever editable source
+	# or an existing bake is present; the first successful bake clears the flag.
+	if (
+		repaired_brush_index
+		or brush_system.get_live_brush_count() > 0
+		or get_node_or_null("BakedGeometry") != null
+	):
+		tag_full_reconcile()
 	drag_system = HFDragSystemType.new(self)
 	drag_system.input_state.on_force_reset = _on_input_state_force_reset
 	bake_system = HFBakeSystemType.new(self)
+	bake_system.reconcile_baked_containers()
 	paint_system = HFPaintSystemType.new(self)
 	state_system = HFStateSystemType.new(self)
 	file_system = HFFileSystemType.new(self)
@@ -723,10 +739,13 @@ func set_cordon_from_selection(nodes: Array) -> void:
 		if not (node is Node3D):
 			continue
 		var n3d := node as Node3D
-		var half = Vector3.ONE
+		var brush_aabb := AABB(n3d.global_position - Vector3.ONE, Vector3.ONE * 2.0)
 		if n3d is DraftBrush:
-			half = (n3d as DraftBrush).size * 0.5
-		var brush_aabb = AABB(n3d.global_position - half, half * 2.0)
+			var brush := n3d as DraftBrush
+			if brush.mesh_instance and brush.mesh_instance.mesh:
+				brush_aabb = (
+					brush.mesh_instance.global_transform * brush.mesh_instance.mesh.get_aabb()
+				)
 		if first:
 			combined = brush_aabb
 			first = false
@@ -736,6 +755,7 @@ func set_cordon_from_selection(nodes: Array) -> void:
 		combined = combined.grow(1.0)
 		cordon_aabb = combined
 		cordon_enabled = true
+		tag_full_reconcile()
 		update_cordon_visual()
 
 
@@ -845,6 +865,22 @@ func _restore_entity_from_info(info: Dictionary) -> DraftEntity:
 	return entity_system.restore_entity_from_info(info)
 
 
+func build_duplicate_entity_info(entity: DraftEntity, offset: Vector3) -> Dictionary:
+	return entity_system.build_duplicate_info(entity, offset)
+
+
+func create_entities_from_infos(infos: Array) -> void:
+	entity_system.create_entities_from_infos(infos)
+
+
+func delete_entities_by_paths(entity_paths: Array) -> void:
+	entity_system.delete_entities_by_paths(entity_paths)
+
+
+func nudge_entities_by_paths(entity_paths: Array, offset: Vector3) -> void:
+	entity_system.nudge_entities_by_paths(entity_paths, offset)
+
+
 func _clear_entities() -> void:
 	entity_system.clear_entities()
 
@@ -886,6 +922,11 @@ func get_all_entity_connections() -> Array:
 func set_highlight_connected(value: bool) -> void:
 	if io_visualizer:
 		io_visualizer.set_highlight_connected(value)
+
+
+func set_io_visualizer_selection(nodes: Array) -> void:
+	if io_visualizer:
+		io_visualizer.set_selected_entities(nodes)
 
 
 func get_connection_summary(entity_name: String) -> Dictionary:
@@ -945,6 +986,21 @@ func nudge_brushes_by_id(brush_ids: Array, offset: Vector3) -> void:
 	brush_system.nudge_brushes_by_id(brush_ids, offset)
 
 
+func delete_managed_nodes(brush_ids: Array, entity_paths: Array) -> void:
+	delete_brushes_by_id(brush_ids)
+	delete_entities_by_paths(entity_paths)
+
+
+func create_managed_duplicates(brush_infos: Array, entity_infos: Array) -> void:
+	create_brushes_from_infos(brush_infos)
+	create_entities_from_infos(entity_infos)
+
+
+func nudge_managed_nodes(brush_ids: Array, entity_paths: Array, offset: Vector3) -> void:
+	nudge_brushes_by_id(brush_ids, offset)
+	nudge_entities_by_paths(entity_paths, offset)
+
+
 func apply_material_to_brush_by_id(brush_id: String, mat: Material) -> void:
 	brush_system.apply_material_to_brush_by_id(brush_id, mat)
 
@@ -985,6 +1041,17 @@ func get_live_brush_count() -> int:
 	return brush_system.get_live_brush_count()
 
 
+func reconcile_external_brush_structure() -> bool:
+	if brush_system:
+		return brush_system.reconcile_external_structure()
+	return false
+
+
+func reconcile_external_entity_names(previous_names: Dictionary, current_names: Dictionary) -> void:
+	if entity_system:
+		entity_system.reconcile_external_names(previous_names, current_names)
+
+
 func _next_brush_id() -> String:
 	return brush_system._next_brush_id()
 
@@ -1005,8 +1072,16 @@ func clear_pending_cuts() -> void:
 	brush_system.clear_pending_cuts()
 
 
-func commit_cuts() -> void:
-	await brush_system.commit_cuts()
+func prepare_commit_cuts() -> bool:
+	return await brush_system.prepare_commit_cuts()
+
+
+func finalize_commit_cuts() -> void:
+	brush_system.finalize_commit_cuts()
+
+
+func commit_cuts() -> bool:
+	return await brush_system.commit_cuts()
 
 
 func restore_committed_cuts() -> void:
@@ -1197,9 +1272,12 @@ func reset_uv_on_face(brush_id: String, face_idx: int) -> void:
 	if face_idx < 0 or face_idx >= draft.faces.size():
 		return
 	var face: FaceData = draft.faces[face_idx]
+	var before := face.to_dict()
 	face.custom_uvs = PackedVector2Array()
 	face.ensure_custom_uvs()
 	draft.rebuild_preview()
+	if face.to_dict() != before:
+		tag_brush_dirty(brush_id)
 
 
 func reproject_face_uvs(brush_id: String, face_idx: int, projection: int) -> void:
@@ -1210,6 +1288,7 @@ func reproject_face_uvs(brush_id: String, face_idx: int, projection: int) -> voi
 	if face_idx < 0 or face_idx >= draft.faces.size():
 		return
 	var face: FaceData = draft.faces[face_idx]
+	var before := face.to_dict()
 	face.uv_projection = projection
 	face.uv_scale = Vector2.ONE
 	face.uv_offset = Vector2.ZERO
@@ -1217,6 +1296,8 @@ func reproject_face_uvs(brush_id: String, face_idx: int, projection: int) -> voi
 	face.custom_uvs = PackedVector2Array()
 	face.ensure_custom_uvs()
 	draft.rebuild_preview()
+	if face.to_dict() != before:
+		tag_brush_dirty(brush_id)
 
 
 ## Set UV transform params on a specific face. Used by undo-capable state actions.
@@ -1230,12 +1311,15 @@ func set_face_uv_params(
 	if face_idx < 0 or face_idx >= draft.faces.size():
 		return
 	var face: FaceData = draft.faces[face_idx]
+	var before := face.to_dict()
 	face.uv_scale = scale
 	face.uv_offset = offset
 	face.uv_rotation = rotation
 	face.custom_uvs = PackedVector2Array()
 	face.ensure_custom_uvs()
 	draft.rebuild_preview()
+	if face.to_dict() != before:
+		tag_brush_dirty(brush_id)
 
 
 func clip_brush_to_convex(brush_id: String) -> bool:
@@ -1253,6 +1337,7 @@ func add_surface_paint_layer(brush_id: String, face_idx: int) -> void:
 		return
 	draft.faces[face_idx].paint_layers.append(FaceData.PaintLayer.new())
 	draft.rebuild_preview()
+	tag_brush_dirty(brush_id)
 
 
 func remove_surface_paint_layer(brush_id: String, face_idx: int, layer_idx: int) -> void:
@@ -1267,6 +1352,7 @@ func remove_surface_paint_layer(brush_id: String, face_idx: int, layer_idx: int)
 		return
 	layers.remove_at(layer_idx)
 	draft.rebuild_preview()
+	tag_brush_dirty(brush_id)
 
 
 func set_surface_paint_layer_texture(
@@ -1283,8 +1369,11 @@ func set_surface_paint_layer_texture(
 	var layers = draft.faces[face_idx].paint_layers
 	if layer_idx < 0 or layer_idx >= layers.size():
 		return
+	if layers[layer_idx].texture == texture:
+		return
 	layers[layer_idx].texture = texture
 	draft.rebuild_preview()
+	tag_brush_dirty(brush_id)
 
 
 func _clear_preview() -> void:
@@ -1295,8 +1384,8 @@ func pick_brush(camera: Camera3D, mouse_pos: Vector2, include_entities: bool = t
 	return brush_system.pick_brush(camera, mouse_pos, include_entities)
 
 
-func update_hover(camera: Camera3D, mouse_pos: Vector2) -> void:
-	brush_system.update_hover(camera, mouse_pos)
+func update_hover(camera: Camera3D, mouse_pos: Vector2, selected_nodes: Array = []) -> void:
+	brush_system.update_hover(camera, mouse_pos, selected_nodes)
 
 
 func clear_hover() -> void:
@@ -1307,16 +1396,20 @@ func pick_face(camera: Camera3D, mouse_pos: Vector2) -> Dictionary:
 	return brush_system.pick_face(camera, mouse_pos)
 
 
-func select_face_at_screen(camera: Camera3D, mouse_pos: Vector2, additive: bool) -> bool:
+func select_face_at_screen(
+	camera: Camera3D, mouse_pos: Vector2, additive: bool, toggle: bool = false
+) -> bool:
 	var old_sel := face_selection.duplicate(true)
-	var result := brush_system.select_face_at_screen(camera, mouse_pos, additive)
+	var result := brush_system.select_face_at_screen(camera, mouse_pos, additive, toggle)
 	if face_selection != old_sel:
 		face_selection_changed.emit()
 	return result
 
 
-func toggle_face_selection(brush: DraftBrush, face_idx: int, additive: bool) -> void:
-	brush_system.toggle_face_selection(brush, face_idx, additive)
+func toggle_face_selection(
+	brush: DraftBrush, face_idx: int, additive: bool, toggle: bool = true
+) -> void:
+	brush_system.toggle_face_selection(brush, face_idx, additive, toggle)
 	face_selection_changed.emit()
 
 
@@ -1344,9 +1437,19 @@ func assign_material_to_faces_by_id(
 	if not brush or not is_instance_valid(brush):
 		return
 	var typed_indices: Array[int] = []
+	var changed := false
 	for fi in face_indices:
-		typed_indices.append(int(fi))
+		var face_idx := int(fi)
+		typed_indices.append(face_idx)
+		if (
+			face_idx >= 0
+			and face_idx < brush.faces.size()
+			and brush.faces[face_idx].material_idx != material_index
+		):
+			changed = true
 	brush.assign_material_to_faces(material_index, typed_indices)
+	if changed:
+		tag_brush_dirty(brush_key)
 
 
 func assign_material_to_whole_brushes(material_index: int, brush_ids: Array) -> int:
@@ -1356,9 +1459,14 @@ func assign_material_to_whole_brushes(material_index: int, brush_ids: Array) -> 
 		if not brush or not is_instance_valid(brush):
 			continue
 		var all_indices: Array[int] = []
+		var changed := false
 		for i in range(brush.faces.size()):
 			all_indices.append(i)
+			if brush.faces[i].material_idx != material_index:
+				changed = true
 		brush.assign_material_to_faces(material_index, all_indices)
+		if changed:
+			tag_brush_dirty(str(bid))
 		count += all_indices.size()
 	return count
 
@@ -1372,8 +1480,12 @@ func assign_material_and_reproject(material_index: int, projection: int) -> int:
 			continue
 		var face_indices: Array = sel[brush_key]
 		var typed_indices: Array[int] = []
+		var before_by_index: Dictionary = {}
 		for fi in face_indices:
-			typed_indices.append(int(fi))
+			var face_idx := int(fi)
+			typed_indices.append(face_idx)
+			if face_idx >= 0 and face_idx < brush.faces.size():
+				before_by_index[face_idx] = brush.faces[face_idx].to_dict()
 		brush.assign_material_to_faces(material_index, typed_indices)
 		for fi in typed_indices:
 			if fi >= 0 and fi < brush.faces.size():
@@ -1385,6 +1497,13 @@ func assign_material_and_reproject(material_index: int, projection: int) -> int:
 				face.custom_uvs = PackedVector2Array()
 				face.ensure_custom_uvs()
 		brush.rebuild_preview()
+		var changed := false
+		for fi in before_by_index:
+			if brush.faces[int(fi)].to_dict() != before_by_index[fi]:
+				changed = true
+				break
+		if changed:
+			tag_brush_dirty(str(brush_key))
 		count += typed_indices.size()
 	return count
 
@@ -1494,21 +1613,34 @@ func bake(
 	apply_cuts: bool = true,
 	hide_live: bool = false,
 	collision_layer_mask: int = 0,
-	preview_mode: int = 0
-) -> void:
-	await bake_system.bake(apply_cuts, hide_live, collision_layer_mask, preview_mode)
+	preview_mode: int = 0,
+	force_csg: bool = false
+) -> bool:
+	return await bake_system.bake(
+		apply_cuts, hide_live, collision_layer_mask, preview_mode, force_csg
+	)
 
 
 func bake_selected(
 	brush_nodes: Array, collision_layer_mask: int = 0, preview_mode: int = 0
-) -> void:
+) -> bool:
 	if bake_system:
-		await bake_system.bake_selected(brush_nodes, collision_layer_mask, preview_mode)
+		return await bake_system.bake_selected(brush_nodes, collision_layer_mask, preview_mode)
+	return false
 
 
-func bake_dirty(collision_layer_mask: int = 0, preview_mode: int = 0) -> void:
+func bake_dirty(collision_layer_mask: int = 0, preview_mode: int = 0) -> bool:
 	if bake_system:
-		await bake_system.bake_dirty(collision_layer_mask, preview_mode)
+		return await bake_system.bake_dirty(collision_layer_mask, preview_mode)
+	return false
+
+
+func is_bake_in_flight() -> bool:
+	return bake_system != null and bake_system.is_bake_in_flight()
+
+
+func was_last_bake_successful() -> bool:
+	return bake_system != null and bake_system._last_bake_success
 
 
 func estimate_bake_time(brush_ids: Array = []) -> Dictionary:
@@ -1517,6 +1649,24 @@ func estimate_bake_time(brush_ids: Array = []) -> Dictionary:
 
 func bake_dry_run() -> Dictionary:
 	return bake_system.bake_dry_run() if bake_system else {}
+
+
+func clear_baked_geometry() -> void:
+	if bake_system:
+		bake_system.clear_baked_containers()
+
+
+func capture_baked_geometry_snapshot() -> PackedScene:
+	return bake_system.capture_baked_geometry_snapshot() if bake_system else null
+
+
+func restore_state_with_baked_snapshot(state: Dictionary, baked_snapshot: PackedScene) -> void:
+	var preview_mode := int(state.get("bake_preview_mode", 0))
+	restore_state(state)
+	if bake_system:
+		# Snapshot metadata is authoritative for current actions. The state value
+		# keeps snapshots created before preview-mode metadata backward compatible.
+		bake_system.restore_baked_geometry_snapshot(baked_snapshot, preview_mode)
 
 
 # ===========================================================================
@@ -1580,6 +1730,7 @@ func _apply_vertex_faces(face_map: Dictionary) -> void:
 		var brush = brush_system.find_brush_by_id(brush_id)
 		if brush and brush.has_method("apply_serialized_faces"):
 			brush.apply_serialized_faces(face_map[brush_id])
+			tag_brush_dirty(str(brush_id))
 
 
 func handle_surface_paint_input(
@@ -2106,13 +2257,17 @@ func _setup_highlight() -> void:
 	if not hover_highlight:
 		hover_highlight = MeshInstance3D.new()
 		hover_highlight.name = "SelectionHighlight"
-		add_child(hover_highlight)
+		add_child(hover_highlight, false, Node.INTERNAL_MODE_BACK)
 	hover_highlight.owner = null
 	hover_highlight.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var mesh := BoxMesh.new()
-	hover_highlight.mesh = mesh
-	var mat := ShaderMaterial.new()
-	mat.shader = preload("highlight.gdshader")
+	# A wireframe BoxMesh reveals the two render triangles on every quad. Draw
+	# the twelve semantic box edges explicitly so hover remains a quiet outline.
+	hover_highlight.mesh = HFOutlineUtil.line_mesh(HFOutlineUtil.box_lines())
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(1.0, 1.0, 0.0, 0.5)
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.no_depth_test = true
 	hover_highlight.material_override = mat
 	hover_highlight.visible = false
 
@@ -2123,13 +2278,9 @@ func highlight_hovered_face(camera: Camera3D, mouse_pos: Vector2, color: Color) 
 	if not camera:
 		clear_face_hover_highlight()
 		return false
-	var ray_origin := camera.project_ray_origin(mouse_pos)
-	var ray_dir := camera.project_ray_normal(mouse_pos).normalized()
-	var brushes: Array = []
-	for node in _iter_pick_nodes():
-		if node is DraftBrush:
-			brushes.append(node)
-	var hit := FaceSelector.intersect_brushes(brushes, ray_origin, ray_dir)
+	# Use the same eligibility, visibility, broad phase, and exact face test as
+	# click selection so hover never promises a face that cannot be selected.
+	var hit := brush_system.pick_face(camera, mouse_pos) if brush_system else {}
 	if hit.is_empty():
 		clear_face_hover_highlight()
 		return false
@@ -2150,7 +2301,7 @@ func highlight_hovered_face(camera: Camera3D, mouse_pos: Vector2, color: Color) 
 		_face_hover_highlight = MeshInstance3D.new()
 		_face_hover_highlight.name = "_FaceHoverHighlight"
 		_face_hover_highlight.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		add_child(_face_hover_highlight)
+		add_child(_face_hover_highlight, false, Node.INTERNAL_MODE_BACK)
 		_face_hover_highlight.owner = null
 
 	# Reuse cached material — only update color if changed
@@ -2452,13 +2603,67 @@ func _iter_pick_nodes() -> Array:
 	return nodes
 
 
+## Authoritative managed-brush traversal for identity/index integrity. Unlike
+## picking, this intentionally includes hidden committed cutters.
+func _iter_managed_brush_nodes() -> Array:
+	var nodes: Array = []
+	for container in [draft_brushes_node, pending_node, committed_node]:
+		if container:
+			for child in container.get_children():
+				if child is DraftBrush:
+					nodes.append(child)
+	return nodes
+
+
+## Editable displacement sources exclude frozen committed cutters.
+func get_all_draft_brushes() -> Array:
+	var nodes: Array = []
+	for container in [draft_brushes_node, pending_node]:
+		if container:
+			for child in container.get_children():
+				if child is DraftBrush:
+					nodes.append(child)
+	return nodes
+
+
 func _gather_visual_instances(node: Node, out: Array) -> void:
 	if not node:
 		return
 	if node is VisualInstance3D:
 		out.append(node)
-	for child in node.get_children():
+	# Entity previews are intentionally internal editor children. The default
+	# get_children() view excludes them, which made otherwise visible entities
+	# fall back to an imprecise point-sized pick sphere.
+	for child in node.get_children(true):
 		_gather_visual_instances(child, out)
+
+
+## Whether a 3D node is actually visible to the editor camera. Visgroups hide
+## their members through Node3D.visible, so `is_visible_in_tree()` also catches
+## a hidden managed parent while still respecting a visual's own visibility.
+func _is_pick_visible(node: Node) -> bool:
+	return (
+		node != null
+		and is_instance_valid(node)
+		and node is Node3D
+		and (node as Node3D).is_visible_in_tree()
+	)
+
+
+## Intersect a normalized world-space ray with a visual's local AABB and return
+## the ray parameter in world units. Do not normalize the transformed direction:
+## keeping its scale makes `t` invariant across non-uniform local transforms.
+func _visual_pick_distance(
+	visual: VisualInstance3D, ray_origin: Vector3, ray_dir: Vector3
+) -> float:
+	if not _is_pick_visible(visual):
+		return -1.0
+	var inv := visual.global_transform.affine_inverse()
+	var local_origin := inv * ray_origin
+	var local_dir := inv.basis * ray_dir
+	if local_dir.length_squared() <= 0.0000000001:
+		return -1.0
+	return _ray_intersect_aabb(local_origin, local_dir, visual.get_aabb())
 
 
 func _snap_point(point: Vector3, exclude_ids: Array = []) -> Vector3:
@@ -2487,54 +2692,68 @@ func _raycast(camera: Camera3D, mouse_pos: Vector2) -> Dictionary:
 	var hit = get_world_3d().direct_space_state.intersect_ray(query)
 	if hit:
 		return hit
-	var best_t = INF
-	var best_hit: Dictionary = {}
-	for node in _iter_pick_nodes():
-		if not (node is DraftBrush):
-			continue
-		var mesh_inst: MeshInstance3D = node.mesh_instance
-		if not mesh_inst:
-			continue
-		var inv = mesh_inst.global_transform.affine_inverse()
-		var local_origin = inv * from
-		var local_dir = (inv.basis * ray_dir).normalized()
-		var aabb = mesh_inst.get_aabb()
-		var t = _ray_intersect_aabb(local_origin, local_dir, aabb)
-		if t >= 0.0 and t < best_t:
-			best_t = t
-			best_hit = {"position": from + ray_dir * t}
-	if not best_hit.is_empty():
-		return best_hit
-	var plane = Plane(Vector3.UP, 0.0)
-	var denom = plane.normal.dot(to - from)
-	if abs(denom) > 0.0001:
-		var t = plane.distance_to(from) / denom
-		if t >= 0.0 and t <= 1.0:
-			return {"position": from.lerp(to, t)}
+	# Draft brushes do not always have physics bodies in the editor. Use their
+	# actual face triangles, never the empty portion of a cone/wedge/custom AABB,
+	# for surface placement and drag/drop fallback hits.
+	if brush_system:
+		var face_hit: Dictionary = brush_system.pick_face_from_ray(from, ray_dir)
+		if not face_hit.is_empty():
+			return face_hit
+	var plane_hit := construction_plane_intersection(from, to)
+	if plane_hit is Vector3:
+		return {"position": plane_hit}
 	return {}
 
 
+static func construction_plane_intersection(from: Vector3, to: Vector3) -> Variant:
+	return Plane(Vector3.UP, 0.0).intersects_segment(from, to)
+
+
 func _entity_pick_distance(entity: Node3D, ray_origin: Vector3, ray_dir: Vector3) -> float:
-	if not entity:
+	if not _is_pick_visible(entity):
 		return -1.0
-	var visuals: Array = []
-	_gather_visual_instances(entity, visuals)
-	var best_t = INF
-	for visual in visuals:
-		var vis = visual as VisualInstance3D
-		if not vis:
-			continue
-		var inv = vis.global_transform.affine_inverse()
-		var local_origin = inv * ray_origin
-		var local_dir = (inv.basis * ray_dir).normalized()
-		var aabb = vis.get_aabb()
-		var t = _ray_intersect_aabb(local_origin, local_dir, aabb)
+	# Use the same exact preview triangles as the native gizmo. AABB picking lets
+	# empty cone/custom/concave bounds steal clicks from real geometry behind it.
+	var triangles := HFOutlineUtil.visible_preview_collision_triangle_vertices(entity, Vector3.ONE)
+	if not triangles.is_empty():
+		return _local_triangle_pick_distance(
+			triangles, entity.global_transform, ray_origin, ray_dir
+		)
+	# A deliberately hidden preview must not leave an invisible target. Truly
+	# geometry-less entities keep the same small marker used by the native gizmo.
+	if HFOutlineUtil.has_preview_geometry_descendant(entity):
+		return -1.0
+	return _local_triangle_pick_distance(
+		HFOutlineUtil.box_triangle_vertices(Vector3.ONE),
+		entity.global_transform,
+		ray_origin,
+		ray_dir
+	)
+
+
+static func _local_triangle_pick_distance(
+	triangles: PackedVector3Array,
+	local_to_world: Transform3D,
+	ray_origin: Vector3,
+	ray_dir: Vector3,
+) -> float:
+	if triangles.size() < 3 or ray_dir.is_zero_approx():
+		return -1.0
+	var world_to_local := local_to_world.affine_inverse()
+	var local_origin := world_to_local * ray_origin
+	# Do not normalize after transforming: preserving the scale keeps t in the
+	# normalized world ray's distance units under non-uniform transforms.
+	var local_dir := world_to_local.basis * ray_dir.normalized()
+	if local_dir.length_squared() <= 0.0000000001:
+		return -1.0
+	var best_t := INF
+	for index in range(0, triangles.size() - 2, 3):
+		var t := FaceSelector._ray_triangle(
+			local_origin, local_dir, triangles[index], triangles[index + 1], triangles[index + 2]
+		)
 		if t >= 0.0 and t < best_t:
 			best_t = t
-	if best_t < INF:
-		return best_t
-	var radius = max(0.5, grid_snap * 0.25)
-	return _ray_intersect_sphere(ray_origin, ray_dir, entity.global_position, radius)
+	return best_t if best_t < INF else -1.0
 
 
 func _ray_intersect_sphere(origin: Vector3, dir: Vector3, center: Vector3, radius: float) -> float:

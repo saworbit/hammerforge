@@ -15,7 +15,26 @@ This guide covers the current HammerForge workflow in Godot 4.7: brush-based gre
 
 Plain **RMB** uses Godot's native 3D camera look whenever HammerForge is idle. It works the same whether nothing, a brush, a face, an entity, a camera, or another scene node is selected, and persistent tool modes do not claim it just by being enabled. While RMB is held, native W/A/S/D camera flight and mixed mouse input stay with Godot and cannot accidentally switch tools, draw, or change selection. **MMB** and the mouse wheel also remain available to Godot for camera navigation.
 
-During an interaction that already owns the pointer, RMB keeps its local meaning: it cancels an active draw, extrusion, marquee, or vertex gesture, and steps back one point while Polygon or Path placement is active. An active paint stroke keeps pointer ownership until LMB is released. In the Measure tool, use **Ctrl+Click** (or **Cmd+Click** on macOS) to set a snap reference. Press **Space** for HammerForge's contextual viewport menu.
+**Alt+LMB** is also reserved for Godot's alternate viewport navigation and transform schemes. HammerForge does not begin a selection or box-select gesture from that press.
+
+In **Select** mode, every ordinary LMB click or drag uses Godot's native Object Select pipeline. HammerForge contributes accurate filled gizmo hit targets for brush faces and visible entity preview meshes; it does not draw a second object rectangle or guess whether the press was on a transform/property widget.
+
+| Press starts on | Result |
+|-----------------|--------|
+| Empty viewport space | Godot handles the empty click or its native object box selection |
+| A visible HammerForge brush/entity surface | Godot selects it through the filled face/preview hit target, then HammerForge normalizes its owner or group |
+| A selected brush, resize handle, or transform/property widget | Godot or the custom brush gizmo owns the complete drag; no competing HammerForge selection appears |
+| A native Godot object or gizmo, such as a camera or light | Godot owns the click and drag; HammerForge remains available for the level but does not edit through it |
+
+Object selection follows Godot's modifiers, not a second HammerForge rule set. **Shift** keeps Godot's native additive/active-selection behavior for clicks and adds native box-selection results. **Ctrl/Cmd are left to Godot's configured viewport transform and navigation behavior**; HammerForge does not turn them into an Object Select toggle.
+
+Once a transform/property widget or yellow resize handle claims a press, it owns the whole gesture—including Escape and keyboard modifiers—until release or recovery. HammerForge will not start a box selection, nudge with Ctrl+Arrow, paint, or trigger another tool underneath it.
+
+Godot's visible `EditorSelection` is authoritative. HammerForge reads native click and region results after Godot finishes them, maps internal entity-preview children back to their object, and expands brush groups as one selection unit. Clearing the Scene tree or clicking empty space remains a real empty selection; HammerForge does not preserve a hidden stale selection behind it.
+
+**Face Select Mode** is a focused modal state rather than a second object-selection layer. Enabling it switches to the Select tool, turns Paint off, saves the current object selection, and temporarily clears it. That hides Godot's transform widget and HammerForge's resize handles so they cannot overlap a face click or marquee. Face Select has its own deliberate modifiers: **Shift adds faces; Ctrl/Cmd toggles faces**. Turning the mode off manually clears the face selection and restores still-valid objects from the snapshot. Leaving the Paint tab, choosing an incompatible built-in or external tool, or entering Vertex Edit closes Face Select through the same restore path. Selecting an object in the Scene tree exits immediately and keeps that newly selected object instead of restoring the old snapshot. Escape clears selected faces first; press it again to exit and restore objects, or press it once to exit when no faces are selected.
+
+During an interaction that already owns the pointer, RMB keeps its local meaning: it cancels an active draw, extrusion, Face Select marquee, or vertex drag, and steps back one point while Polygon or Path placement is active. An active paint stroke keeps pointer ownership until LMB is released. Explicitly cancelled releases and buttonless motion restore or settle HammerForge-owned transient edits. On application/window focus loss, HammerForge clears its transient owners while Godot settles any native or custom gizmo it owns, so one gesture is never committed and restored by two systems. In the Measure tool, use **Ctrl+Click** (or **Cmd+Click** on macOS) to set a snap reference. Press **Space** for HammerForge's contextual viewport menu.
 
 ## LevelRoot
 `LevelRoot` is required because it owns the containers and systems HammerForge uses:
@@ -192,6 +211,7 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
 ### Objects tab
 - Create DraftEntity button.
 - Entity palette with drag-and-drop placement.
+- Selected `DraftEntity` nodes use the same managed **Delete**, **Ctrl+D Duplicate**, arrow-key X/Z nudge, and PageUp/PageDown Y nudge workflow as brushes, including HammerForge undo/state cleanup.
 - **Entity Properties** (collapsible, context-hidden): auto-generated typed controls based on entity definition. Only visible when an entity is selected.
 - **Entity I/O** (collapsible, context-hidden): Output, Target, Input, Parameter fields. Delay (seconds) and Fire Once checkbox. Add Output / Remove buttons and connection ItemList. Only visible when an entity is selected; connections auto-refresh on selection change. **Show I/O Lines** checkbox to visualize connections in the viewport.
 - **I/O Wiring** (collapsible, context-hidden, collapsed by default): Quick-wire form (output name, target dropdown, input name, parameter, delay, fire-once). Only visible when an entity is selected. Connection summary shows triggers and triggered-by counts. **Highlight** toggle button pulses all linked entities in the viewport. **Connection Presets** picker with 6 built-in patterns (Door+Light+Sound, Button→Toggle, Alarm Sequence, Pickup+Remove, Damage+Break, Timer Lights) plus user-saved presets. Target tag mapping lets you assign preset target placeholders to actual entity names.
@@ -365,10 +385,23 @@ Each tab shows a contextual hint at the bottom guiding you through the workflow:
 - Objects tab: drag an object from the palette into the viewport
 - Test tab: use **Test Level** for the one-click path; check or bake separately only when needed
 
-### Marquee Selection
-Click and drag in the 3D viewport while in **Select mode** to draw a selection rectangle. All brushes and entities whose screen-space center falls within the rectangle are selected. Hold **Shift** to add to the existing selection.
+### Object and Face Marquee Selection
 
-In **Face Select mode**, marquee selection works on individual faces — drag a box across multiple brushes to select all faces whose screen-projected center is within the rectangle.
+In **Select mode**, click a visible surface or begin on empty viewport space and drag. Godot decides the click target, drag threshold, region hits, modifier meaning, transform/property-widget hits, and resulting `EditorSelection`; HammerForge does not approximate those private shapes with a circular dead zone. Brush gizmos register filled triangles from the real brush faces. Entity gizmos combine visible nested preview triangles with restrained local markers for any broken or line-only sibling, including top-level preview children, so one healthy component cannot hide an incomplete one. A truly geometry-less entity gets a one-unit marker at its origin; hidden previews and hidden parents leave no invisible target. Hold **Shift** for Godot's native additive/active-selection behavior. Ctrl/Cmd remain Godot-owned rather than acting as a HammerForge object toggle. Grouped HammerForge brushes are normalized as one unit after Godot finishes.
+
+In **Face Select mode**, the saved object selection and its transform/resize gizmos are hidden, and HammerForge owns face click and marquee selection. Drag at least 6 pixels across one or more brushes. A candidate face must be on a canonical, visible brush and have its screen-projected center inside the rectangle; HammerForge then ray-picks that center and accepts the face only when the same brush/face is the frontmost visible hit. Hidden, back-facing, or occluded faces do not come along merely because their centers overlap the rectangle. Shift adds and Ctrl/Cmd toggles using the modifier state captured at LMB-down. Disable the mode to return to the prior object selection, leave Paint or choose an incompatible tool to close it cleanly, or select an object in the Scene tree to edit that object directly.
+
+### Resize Handles and Widget Protection
+
+Selected non-custom brushes show six yellow face handles; custom face-defined shapes keep their truthful boundary outline without misleading box handles. A handle drag owns its full press/motion/release sequence, so it cannot also click an object, start a marquee, paint, or activate another tool. Godot's move/rotate/scale widget and native property gizmos receive the same protection and remain responsible for their own exact hit-testing.
+
+Resize distances and grid snap are measured in world units. If a brush is below a rotated or non-uniformly scaled parent, the grabbed face follows the transformed local axis, the opposite face stays fixed in world space, and the local brush size is adjusted to produce the requested world extent. Sphere handles keep X/Y/Z equal. On cylinders, cones, and capsules, either X or Z handle changes the shared X/Z radius; Y changes height, but a capsule can never become shorter than its diameter. Odd-sided prisms and adjustable pyramids now fill their centered stored bounds, so their visible faces and handle planes agree. Other supported shapes keep independent axes. A collapsed or invalid transform axis is ignored instead of causing a jump. One completed resize creates one undo step; a click with no change, an explicit cancel, or a recovered lost release creates none. During lost-release recovery the original preview is restored and frozen; if Godot never sends its matching release callback, HammerForge releases the local input latch after the recovery turn and ignores a late callback, so the next handle gesture cannot remain blocked.
+
+### Picking Visibility and Depth
+
+Click and hover picking ignores brushes, entities, and preview visuals hidden by a visgroup. Brush bounds are only a fast candidate check: the final hit uses the actual face triangles, so a ray through empty space inside a wedge, cone, pyramid, curved, or custom brush does not select or hide geometry behind it. Entity previews are picked from their visible geometry even when that geometry is stored as an internal editor child. When geometry overlaps in screen space, HammerForge compares brush and entity hits in the same world-space ray and chooses the genuinely nearest visible result, including when either object is scaled.
+
+Surface placement uses the same exact brush-face fallback when editor draft brushes do not yet have physics bodies. Draw placement, entity/prefab drops, and other callers of the shared editor raycast land on the visible non-box surface rather than an AABB wall; when no geometry is hit, the forward ray falls back to the construction plane.
 
 ### Selection Filters
 Press **Shift+F** or click the **Flt** button on the context toolbar to open the Selection Filter popover. It provides bulk selection tools organized by category:
@@ -401,10 +434,14 @@ Each section uses small muted **group labels** (e.g. "Extrude", "Modify", "Selec
 - **Dragging** → Live dimensions display | Axis Lock (X/Y/Z) | Cancel.
 - **Vertex mode** → [Mode] Vertex/Edge toggle | [Edit] Merge, Split, Convex | Exit.
 
+If Godot's visible selection mixes HammerForge objects with ordinary Godot nodes, selection-dependent HammerForge sections are unavailable. Finish the edit on one domain at a time; this prevents a toolbar action from changing only the HammerForge subset.
+
 An **auto-mode hint bar** appears during brush drawing, showing the current operation mode (e.g. "Drawing in Add mode — press Subtract to toggle") with a one-click toggle button.
 
 ### Command Palette
 Press **Shift+?** or **F1** to open the command palette — a searchable list of all HammerForge actions with key bindings. Actions that cannot run in the current state are grayed out (e.g. Hollow is disabled when nothing is selected, paint tools are disabled outside paint mode). Type to filter, press **Enter** to execute the first matching action, **Esc** to close.
+
+Selection-dependent managed actions are also grayed out for a mixed HammerForge/Godot selection. If selection changes between opening and invoking the palette, the final dispatcher repeats the same safety check.
 
 ### Viewport Context Menu
 Press **Space** to open a context-sensitive popup menu at the cursor position in the 3D viewport. The menu adapts to your current selection and tool state:
@@ -420,6 +457,8 @@ Press **Space** to open a context-sensitive popup menu at the cursor position in
 **Highlight Connected** appears as a check item — it reads the current state and toggles it.
 
 The menu only activates when idle (no active drag, paint, or external tool operation). The keybinding is configurable via `hf_keymap.gd`.
+
+With a mixed HammerForge/Godot selection, managed selection commands are unavailable. The final context-menu action handler also checks again before editing, so stale menu state cannot produce a partial change.
 
 ### Radial Menu
 Press **`` ` ``** (backtick) to open an 8-sector pie menu centered on the cursor. Move the mouse to highlight a sector, then left-click to select:
@@ -441,6 +480,8 @@ Press **`` ` ``** (backtick) to open an 8-sector pie menu centered on the cursor
 
 While the radial menu is open, it intercepts all viewport input. The keybinding is configurable via `hf_keymap.gd`.
 
+Radial sectors that start a selection-dependent managed action, such as Clip or Vertex Edit, use the same mixed-selection guard as keyboard and contextual UI. General tool switches remain available when they do not mutate the selected subset.
+
 ### Quick Property Popups
 Double-tap a key to open a small inline editor for a numeric property:
 
@@ -455,27 +496,29 @@ The popup appears at the cursor position. Type a value and press **Enter** to ap
 ### Viewport Contextual Hints
 When you switch tools, a brief instruction hint appears in the viewport overlay:
 - **Draw**: "Click to place corner → drag to set size → release for height"
-- **Select**: "Click brush to select, Shift+click to multi-select, drag to move"
+- **Select**: "Click to select; drag empty space for a box; drag widgets to edit"
 - **Extrude Up/Down**: "Click a face to start extruding upward/downward"
 - **Paint Floor**: "Click cells to paint, Shift+click to erase"
 - **Paint Surface**: "Click brush faces to apply material"
 
 Hints auto-fade after 4 seconds. Once you dismiss a hint (by switching away), it won't appear again. Hint dismissal persists across sessions. To reset all hints, delete `user://hammerforge_prefs.json` or clear the `hints_dismissed` key.
 
-### Brush Color Coding
+### Brush Visual Coding
 
-Brushes use distinct wireframe overlay colors so you can identify their operation type at a glance:
+HammerForge keeps operation types recognizable without covering ordinary geometry in triangle topology:
 
-| Operation | Wireframe Color | Fill Color |
-|-----------|----------------|------------|
-| **Additive** (Union) | Green | Green tint |
-| **Subtractive** | Red | Red tint with emission |
-| **func_detail** entity | Blue | Bright blue tint |
-| **trigger_*** entity | Blue | Medium blue tint |
-| **func_wall** entity | Blue | Muted blue tint |
-| **Other** brush entity | Blue | Slate blue tint |
+| Operation | Default Appearance |
+|-----------|--------------------|
+| **Additive** (Union) | Clean green-tinted surface; no always-on wireframe |
+| **Subtractive** | Red tint with one red semantic wireframe |
+| **func_detail** entity | Bright blue tint |
+| **trigger_*** entity | Medium blue tint |
+| **func_wall** entity | Muted blue tint |
+| **Other** brush entity | Slate blue tint |
 
-This follows the classic level editor convention (Hammer, TrenchBroom): green = additive, red = subtractive, blue = entity.
+Hovering or selecting a brush adds one concise semantic outline. A box shows its 12 actual boundary edges, and wedges, pyramids, prisms, and polyhedra keep only true boundaries and creases—not diagonals introduced when faces are triangulated. Cylinder, cone, sphere, ellipsoid, capsule, and torus shapes use sparse profiles that communicate their silhouette without reproducing every render triangle or falling back to a box. Hover and the selected gizmo share this source, and a selected brush does not receive a second overlapping hover outline. Polygon, path, merged, and imported custom brushes follow their real face boundaries and do not show misleading box-resize handles. Full triangle topology remains available deliberately through **Test → Advanced Bake → Preview Mode → Wireframe** and the dedicated geometry-editing modes.
+
+Rapid drawing or resizing should never leave nested outlines or a visual trail. HammerForge reuses its transient semantic overlays and cleans legacy duplicates automatically when affected brushes are rebuilt.
 
 ### Grid Size Indicator
 
@@ -546,10 +589,10 @@ Subtractive brushes are staged as **Pending Cuts** until explicitly applied. Thi
 | Button | Action |
 |--------|--------|
 | **Apply** | Move pending cuts to draft brushes (keeps them, doesn't bake) |
-| **Commit** | Apply + Bake in one step |
+| **Commit** | Apply + Bake as one undoable transaction |
 | **Clear** | Discard all pending cuts without applying |
 
-All cut buttons are disabled during active bakes to prevent race conditions.
+All cut buttons are disabled during active bakes to prevent race conditions. Commit does not consume a cut until its bake succeeds, and Undo/Redo restores both the editable brushes and the exact baked output, including its Full/Wireframe/Proxy preview mode.
 
 ## Design Constraints (Summary)
 - DraftBrush previews are lightweight. Final geometry comes from bake.
@@ -577,7 +620,7 @@ The on-screen shortcut overlay updates dynamically based on your current tool an
 | Draw (idle) | Click+Drag, Shift/Alt modifiers, X/Y/Z axis lock, Ctrl+Scroll size, Ctrl+D, Delete |
 | Draw (dragging base) | Shift: Square, Alt+Shift: Cube, Click: Height stage, Right-click: Cancel. Live dimensions shown in banner |
 | Draw (adjusting height) | Mouse: Change height, Click: Confirm, Right-click: Cancel. Live dimensions shown in banner |
-| Select | Click/Shift/Ctrl selection, Escape, Delete, Ctrl+D, Arrow nudge, Ctrl+H Hollow, Shift+X Clip, Ctrl+Shift+F/C Floor/Ceiling |
+| Select | Native click/Shift object selection; Face Select Shift-add/Ctrl-toggle; Escape, Delete, Ctrl+D, Arrow nudge, Ctrl+H Hollow, Shift+X Clip, Ctrl+Shift+F/C Floor/Ceiling |
 | Extrude Up/Down (idle) | Click face + drag, U/J tool switch, Right-click cancel |
 | Extrude Up/Down (active) | Move mouse to set height, Release to confirm, Right-click cancel |
 | Floor Paint | Click+Drag, B/E/R/L/K tool shortcuts |
@@ -600,8 +643,8 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Select tool | S | Switch to Select mode |
 | Extrude Up | E / U | Switch to Extrude Up mode (E skipped in paint/vertex modes) |
 | Extrude Down | Shift+E / J | Switch to Extrude Down mode (Shift+E skipped in paint/vertex modes) |
-| Delete | Delete | Delete selected brushes |
-| Duplicate | Ctrl+D | Duplicate selection |
+| Delete | Delete | Delete selected brushes and DraftEntities |
+| Duplicate | Ctrl+D | Duplicate selected brushes and DraftEntities |
 | Group | Ctrl+G | Group selected brushes |
 | Ungroup | Ctrl+U | Ungroup selection |
 | Hollow | Ctrl+H | Convert brush to hollow room |
@@ -709,6 +752,10 @@ Some actions require specific conditions to run:
 - **Extrude** requires a LevelRoot in the scene. In extrude mode, a semi-transparent face highlight (green for up, red for down) previews which face you'll select before clicking.
 - **External tools** can define their own requirements via `can_activate()`.
 
+HammerForge managed edits are scoped to the visible selection. With only native Godot nodes selected, a keyboard shortcut passes through to Godot. With only HammerForge brushes/entities selected, HammerForge owns it. If the selection mixes both domains, HammerForge stops managed operations such as duplicate, delete, group, hollow, nudge, clip, carve, merge, texture, prefab, and variant actions and shows **“Edit HammerForge and Godot nodes separately”**. The same rule is enforced by the context toolbar, viewport context menu, hotkey palette, and selection-dependent radial actions; their managed commands are hidden or disabled where possible and checked again when invoked. Deselect one domain before retrying. This prevents generic editor commands or stale UI state from bypassing HammerForge IDs, caches, or undo state.
+
+Only one HammerForge editing tool owns mouse input at a time. Activating an external tool such as Polygon, Path, Measure, or Decal cancels an unfinished built-in gesture, exits conflicting vertex/paint state, and gives that tool exclusive HammerForge pointer handling until it is completed, cancelled, or another tool is chosen. A missed surface does not leak the same click into Draw, Select, Paint, or Vertex mode. Native viewport navigation still works whenever the active tool deliberately passes the event through.
+
 The mode indicator banner always shows the current tool and gesture stage. The status bar shows selection count with a clear button.
 
 ## Brush Creation (CAD style)
@@ -723,10 +770,10 @@ Modifier keys
 - Right-click: cancel.
 
 General keyboard shortcuts
-- Delete: remove selected brushes.
-- Ctrl+D: duplicate selected brushes.
-- Arrow keys: nudge selected brushes (XZ plane).
-- PageUp/PageDown: nudge selected brushes (Y axis).
+- Delete: remove selected brushes and DraftEntities.
+- Ctrl+D: duplicate selected brushes and DraftEntities.
+- Arrow keys: nudge selected brushes and DraftEntities (XZ plane).
+- PageUp/PageDown: nudge selected brushes and DraftEntities (Y axis).
 - Escape: clear selection.
 - Ctrl+Scroll: adjust brush size.
 - `[` / `]`: halve / double grid snap size.
@@ -756,6 +803,11 @@ Press **V** (keyboard shortcut or the **V** toggle button in the toolbar) to ent
 ### Vertex Sub-Mode
 - **Vertex mode** (default): click vertices to select them, drag to move.
 - **Edge mode** (press **E** to toggle): click edges to select them. Selected edges highlight orange; hovered edges highlight yellow.
+
+### Dragging Vertices and Edges
+An unlocked drag follows a view-facing plane through the vertex or edge midpoint you grabbed. This makes the point track the cursor predictably in perspective and in front, side, and top orthographic views instead of forcing every drag onto world Y. Grid snap is applied to the resulting world-space movement.
+
+Use **X**, **Y**, or **Z** to constrain the drag to that world axis. HammerForge chooses a camera-facing projection plane that contains the locked axis. If the camera is looking exactly along that axis and the cursor cannot express a stable movement, the update is ignored rather than making the geometry jump. Losing LMB during a focus change cancels the unfinished drag and restores its captured geometry.
 
 ### Edge Operations
 - **Split edge** (Ctrl+E): select exactly one edge, then press Ctrl+E to insert a midpoint vertex. The two faces sharing the edge each gain the new vertex. Convexity is mathematically guaranteed.
@@ -913,6 +965,7 @@ When Texture Lock is enabled, moving or resizing a brush automatically adjusts i
 Notes:
 - Works with PLANAR_X, PLANAR_Y, PLANAR_Z, and BOX_UV projections.
 - CYLINDRICAL projection is not compensated (complex; future enhancement).
+- Applies to HammerForge move, nudge, floor/ceiling, and resize actions. Godot's native Node3D transform widget leaves the brush's face UV resources unchanged so native undo/redo remains truthful.
 - Persists in `.hflevel` settings.
 
 ## Cordon (Partial Bake)
@@ -1114,8 +1167,8 @@ Bake creates `BakedGeometry`:
 Generated flat floor paint brushes are included in the CSG bake. Heightmap floor meshes are duplicated directly into the baked output with trimesh collision shapes (they bypass CSG since they are already ArrayMesh). Heightmap collision is appended after visgroup partitioning (mode 2), so heightmap shapes are always preserved.
 
 Use Face Materials (optional):
-- Enables per-face material baking without CSG.
-- Subtract brushes are ignored in this mode.
+- Enables the faster per-face material path when the level has no effective structural cuts.
+- Pending, applied, or frozen subtract brushes automatically use the CSG-safe path instead, preserving the cut in both rendered geometry and collision.
 - Bakes cooperatively (yields every 8 brushes) so the editor stays responsive on large levels.
 
 ## Save/Load (.hflevel)

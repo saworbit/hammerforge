@@ -263,7 +263,7 @@ func _refresh_target_dropdown() -> void:
 	var brushes_node = _entity_system.root.draft_brushes_node
 	if brushes_node:
 		for child in brushes_node.get_children():
-			if is_instance_valid(child):
+			if is_instance_valid(child) and _entity_system.is_brush_io_target(child):
 				_wire_target.add_item(child.name)
 
 

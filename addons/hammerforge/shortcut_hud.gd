@@ -19,7 +19,7 @@ const MODE_HINTS := {
 		"Click to place corner \u2192 drag to set size \u2192 release for height\n"
 		+ "Empty scene? Use Manage > Create Floor for a stable draw surface"
 	),
-	"select": "Click brush to select, Shift+click to multi-select, drag to move",
+	"select": "Click to select; drag empty space for a box; drag widgets to edit",
 	"extrude_up_idle": "Click a face to start extruding upward",
 	"extrude_down_idle": "Click a face to start extruding downward",
 	"paint_floor": "Click cells to paint, Shift+click to erase",
@@ -138,6 +138,8 @@ func _check_mode_hint(ctx: Dictionary) -> void:
 
 
 func _compute_hint_key(ctx: Dictionary) -> String:
+	if not str(ctx.get("external_tool_name", "")).is_empty():
+		return ""
 	var tool_id: int = ctx.get("tool", 0)
 	var mode: int = ctx.get("mode", 0)
 	var is_paint: bool = ctx.get("paint_mode", false)
@@ -203,18 +205,26 @@ func _build_shortcuts_text(ctx: Dictionary) -> String:
 	var text := ""
 	if numeric.length() > 0:
 		text = "[Size: %s] Type digits, Enter to apply\n" % numeric
+	var external_name := str(ctx.get("external_tool_name", ""))
+	var external_shortcuts: PackedStringArray = ctx.get("external_shortcuts", PackedStringArray())
+	if not external_name.is_empty():
+		var lines := PackedStringArray(["-- %s --" % external_name])
+		lines.append_array(external_shortcuts)
+		if external_shortcuts.is_empty():
+			lines.append("Esc: Exit tool")
+		return text + "\n".join(lines)
 
 	if is_paint:
 		if paint_target == 1:
 			return text + _surface_paint_shortcuts()
 		return text + _floor_paint_shortcuts()
 
-	if tool_id == 1:
-		return text + _select_mode_shortcuts()
-
 	# mode 5 = VERTEX_EDIT
 	if mode == 5:
 		return text + _vertex_edit_shortcuts()
+
+	if tool_id == 1:
+		return text + _select_mode_shortcuts()
 
 	if tool_id == 2 or tool_id == 3:
 		var dir_label := "Up" if tool_id == 2 else "Down"
@@ -269,6 +279,8 @@ func _select_mode_shortcuts() -> String:
 	var lines := PackedStringArray()
 	lines.append("Click: Select | Shift: Add")
 	lines.append("Ctrl+Click: Toggle Selection")
+	lines.append("Drag Empty Space: Box Select")
+	lines.append("Drag Brush Widgets: Resize/Move")
 	lines.append("Escape: Clear Selection")
 	lines.append("Del: Remove | Ctrl+D: Duplicate")
 	lines.append("Arrows: Nudge | PgUp/Dn: Y-Nudge")

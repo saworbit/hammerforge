@@ -127,12 +127,35 @@ static func _apply_mesh_scale(node: CSGMesh3D, target_size: Vector3) -> void:
 	node.set_meta("prefab_size", base_size)
 
 
-static func _regular_polygon_points(sides: int, radius: Vector2) -> PackedVector2Array:
+## Return an affine regular polygon whose AABB is centered on the origin and
+## exactly spans `half_extents`. Raw circle samples do not have symmetric AABBs
+## for odd side counts (a triangle with a +X vertex only reaches -0.5 on X), so
+## using their radius directly makes the visible brush disagree with its stored
+## size and resize handles.
+static func _regular_polygon_points(sides: int, half_extents: Vector2) -> PackedVector2Array:
+	var raw_points := PackedVector2Array()
+	var count := maxi(3, sides)
+	for index in range(count):
+		var angle := TAU * float(index) / float(count)
+		raw_points.append(Vector2(cos(angle), sin(angle)))
+
+	var minimum := raw_points[0]
+	var maximum := raw_points[0]
+	for point in raw_points:
+		minimum = minimum.min(point)
+		maximum = maximum.max(point)
+	var raw_center := (minimum + maximum) * 0.5
+	var raw_half_extents := (maximum - minimum) * 0.5
+	var target := half_extents.abs()
+
 	var points := PackedVector2Array()
-	var count = max(3, sides)
-	for i in range(count):
-		var angle = TAU * float(i) / float(count)
-		points.append(Vector2(cos(angle) * radius.x, sin(angle) * radius.y))
+	for point in raw_points:
+		var centered := point - raw_center
+		var normalized := Vector2(
+			centered.x * target.x / maxf(raw_half_extents.x, 0.000001),
+			centered.y * target.y / maxf(raw_half_extents.y, 0.000001),
+		)
+		points.append(normalized)
 	return points
 
 
@@ -163,14 +186,13 @@ static func _pyramid_mesh(size: Vector3, sides: int) -> ArrayMesh:
 	var st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var count = max(3, sides)
-	var rx = size.x * 0.5
-	var rz = size.z * 0.5
-	var apex = Vector3(0.0, size.y, 0.0)
-	var base_center = Vector3.ZERO
+	var half_y = size.y * 0.5
+	var apex = Vector3(0.0, half_y, 0.0)
+	var base_center = Vector3(0.0, -half_y, 0.0)
 	var base: Array = []
-	for i in range(count):
-		var angle = TAU * float(i) / float(count)
-		base.append(Vector3(cos(angle) * rx, 0.0, sin(angle) * rz))
+	var base_points := _regular_polygon_points(count, Vector2(size.x, size.z) * 0.5)
+	for point in base_points:
+		base.append(Vector3(point.x, -half_y, point.y))
 	# side faces
 	for i in range(count):
 		var v0: Vector3 = base[i]
@@ -179,9 +201,9 @@ static func _pyramid_mesh(size: Vector3, sides: int) -> ArrayMesh:
 		st.add_vertex(v1)
 		st.add_vertex(apex)
 	# base faces (clockwise to face down)
-	for i in range(1, count - 1):
+	for i in range(count):
 		st.add_vertex(base_center)
-		st.add_vertex(base[i + 1])
+		st.add_vertex(base[(i + 1) % count])
 		st.add_vertex(base[i])
 	st.generate_normals()
 	return st.commit()

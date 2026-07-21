@@ -87,6 +87,11 @@ func test_advanced_bake_keeps_all_secondary_controls_collapsed() -> void:
 			_is_descendant_of(control, advanced),
 			"%s should live under Advanced Bake" % control.name,
 		)
+	assert_eq(
+		dock.bake_preview_mode_opt.get_selected_id(),
+		0,
+		"Advanced wireframe preview must remain opt-in",
+	)
 
 
 func test_actions_and_file_are_collapsed_by_default() -> void:

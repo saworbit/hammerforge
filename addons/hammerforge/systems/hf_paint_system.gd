@@ -4,7 +4,6 @@ class_name HFPaintSystem
 
 const DraftBrush = preload("../brush_instance.gd")
 const FaceData = preload("../face_data.gd")
-const FaceSelector = preload("../face_selector.gd")
 const SurfacePaint = preload("../surface_paint.gd")
 const HFPaintGrid = preload("../paint/hf_paint_grid.gd")
 const HFPaintLayerManager = preload("../paint/hf_paint_layer_manager.gd")
@@ -241,13 +240,7 @@ func paint_surface_at(
 func pick_face(camera: Camera3D, mouse_pos: Vector2) -> Dictionary:
 	if not camera:
 		return {}
-	var ray_origin = camera.project_ray_origin(mouse_pos)
-	var ray_dir = camera.project_ray_normal(mouse_pos).normalized()
-	var brushes: Array = []
-	for node in root._iter_pick_nodes():
-		if node is DraftBrush and root.is_brush_node(node):
-			brushes.append(node)
-	return FaceSelector.intersect_brushes(brushes, ray_origin, ray_dir)
+	return root.pick_face(camera, mouse_pos)
 
 
 func select_face_at_screen(camera: Camera3D, mouse_pos: Vector2, additive: bool) -> bool:

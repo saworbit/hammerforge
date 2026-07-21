@@ -16,6 +16,7 @@ var _ground_y: float = 0.0
 var _height: float = 32.0
 var _height_start_mouse: Vector2 = Vector2.ZERO
 var _height_start_value: float = 32.0
+var _height_pointer_capture := false
 var _cursor_pos: Vector3 = Vector3.ZERO  # Current mouse world pos for preview
 var _mesh_instance: MeshInstance3D = null
 var _immediate_mesh: ImmediateMesh = null
@@ -89,6 +90,13 @@ func handle_input(event: InputEvent, camera: Camera3D, mouse_pos: Vector2) -> in
 
 	# Mouse motion
 	if event is InputEventMouseMotion:
+		if (
+			_phase == Phase.SETTING_HEIGHT
+			and _height_pointer_capture
+			and event.button_mask & MOUSE_BUTTON_MASK_LEFT == 0
+		):
+			recover_lost_pointer_capture()
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
 		if _phase == Phase.PLACING_VERTS:
 			_cursor_pos = _raycast_to_y_plane(camera, mouse_pos, _ground_y)
 			_cursor_pos = _snap(_cursor_pos)
@@ -113,6 +121,22 @@ func handle_keyboard(event: InputEventKey) -> int:
 		if event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER:
 			return _handle_enter(null, Vector2.ZERO)
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
+
+
+func recover_lost_pointer_capture() -> bool:
+	if _phase != Phase.SETTING_HEIGHT or not _height_pointer_capture:
+		return false
+	_finalize_brush()
+	return true
+
+
+func cancel_pointer_capture() -> bool:
+	if _phase != Phase.SETTING_HEIGHT:
+		return false
+	_height_pointer_capture = false
+	_phase = Phase.PLACING_VERTS
+	_update_preview()
+	return true
 
 
 func get_shortcut_hud_lines() -> PackedStringArray:
@@ -160,7 +184,7 @@ func _handle_click(camera: Camera3D, mouse_pos: Vector2) -> int:
 			if _polygon_points.size() >= 3:
 				var first: Vector3 = _polygon_points[0]
 				if hit.distance_to(first) <= threshold:
-					_begin_height_stage(mouse_pos)
+					_begin_height_stage(mouse_pos, true)
 					return EditorPlugin.AFTER_GUI_INPUT_STOP
 			# Validate convexity
 			if not _validate_convex(_polygon_points, hit):
@@ -178,7 +202,7 @@ func _handle_click(camera: Camera3D, mouse_pos: Vector2) -> int:
 
 func _handle_enter(camera: Camera3D, mouse_pos: Vector2) -> int:
 	if _phase == Phase.PLACING_VERTS and _polygon_points.size() >= 3:
-		_begin_height_stage(mouse_pos)
+		_begin_height_stage(mouse_pos, false)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	if _phase == Phase.SETTING_HEIGHT:
 		_finalize_brush()
@@ -188,6 +212,7 @@ func _handle_enter(camera: Camera3D, mouse_pos: Vector2) -> int:
 
 func _handle_escape() -> int:
 	if _phase == Phase.SETTING_HEIGHT:
+		_height_pointer_capture = false
 		_phase = Phase.PLACING_VERTS
 		_update_preview()
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
@@ -209,8 +234,9 @@ func _handle_escape() -> int:
 # ---------------------------------------------------------------------------
 
 
-func _begin_height_stage(mouse_pos: Vector2) -> void:
+func _begin_height_stage(mouse_pos: Vector2, pointer_capture: bool = false) -> void:
 	_phase = Phase.SETTING_HEIGHT
+	_height_pointer_capture = pointer_capture
 	_height_start_mouse = mouse_pos
 	_height = 32.0
 	_height_start_value = _height
@@ -450,6 +476,7 @@ func _update_preview() -> void:
 
 func _reset() -> void:
 	_phase = Phase.IDLE
+	_height_pointer_capture = false
 	_polygon_points = PackedVector3Array()
 	_height = 32.0
 	_cursor_pos = Vector3.ZERO

@@ -111,13 +111,18 @@ var paint_layers = null
 var commit_freeze: bool = false
 var baker = null
 var bake_material_override: Material = null
+var material_manager = null
+var bake_collision_layer_index: int = 0
 var _last_bake_duration_ms: int = 0
 var _dirty_brush_ids: Dictionary = {}
+var _full_reconcile_needed: bool = false
 var bake_collision_mode: int = 0
 var bake_convex_clean: bool = true
 var bake_convex_simplify: float = 0.0
 var visgroup_system = null
 var paint_system = null
+var baked_container: Node3D = null
+var _last_bake_preview_mode: int = 0
 
 func is_entity_node(node: Node) -> bool:
 	return node.has_meta("entity_type")
@@ -130,6 +135,21 @@ func _find_brush_by_key(key: String) -> Node:
 	return null
 
 func _log(_msg: String) -> void:
+	pass
+
+func apply_pending_cuts() -> void:
+	if not pending_node or not draft_brushes_node:
+		return
+	for child in pending_node.get_children():
+		if child is Node3D and "operation" in child:
+			pending_node.remove_child(child)
+			draft_brushes_node.add_child(child)
+			child.operation = CSGShape3D.OPERATION_SUBTRACTION
+
+func _layer_from_index(index: int) -> int:
+	return 1 << index
+
+func _assign_owner_recursive(_node: Node) -> void:
 	pass
 
 func _make_brush_material(_op: int) -> Material:
@@ -154,6 +174,230 @@ func _make_entity(parent: Node3D) -> Node3D:
 	e.set_meta("entity_type", "point")
 	parent.add_child(e)
 	return e
+
+
+func _make_legacy_baked_root(chunk_name: String) -> Node3D:
+	var container := Node3D.new()
+	root.add_child(container)
+	var chunk := Node3D.new()
+	chunk.name = chunk_name
+	container.add_child(chunk)
+	return container
+
+
+# ===========================================================================
+# Baked container lifecycle
+# ===========================================================================
+
+
+func test_reconcile_adopts_persisted_named_container():
+	var persisted := Node3D.new()
+	persisted.name = "BakedGeometry"
+	root.add_child(persisted)
+
+	var adopted := bake_sys.reconcile_baked_containers()
+
+	assert_eq(adopted, persisted)
+	assert_eq(root.baked_container, persisted)
+	assert_eq(str(persisted.name), "BakedGeometry")
+	assert_eq(
+		int(persisted.get_meta(HFBakeSystem.BAKED_CONTAINER_META, 0)),
+		HFBakeSystem.BAKED_CONTAINER_SCHEMA
+	)
+
+
+func test_reconcile_migrates_latest_legacy_bake_without_touching_unrelated_nodes():
+	var empty_canonical := Node3D.new()
+	empty_canonical.name = "BakedGeometry"
+	root.add_child(empty_canonical)
+	var old_bake := _make_legacy_baked_root("BakedChunk_0_0_0")
+
+	# Anonymous user nodes, including an empty one and one with a mixed child
+	# set, must not be inferred to be HammerForge bake output.
+	var empty_unrelated := Node3D.new()
+	root.add_child(empty_unrelated)
+	var mixed_unrelated := Node3D.new()
+	root.add_child(mixed_unrelated)
+	var misleading_child := Node3D.new()
+	misleading_child.name = "BakedChunk_user_data"
+	mixed_unrelated.add_child(misleading_child)
+	var user_child := Node3D.new()
+	user_child.name = "GameplayData"
+	mixed_unrelated.add_child(user_child)
+
+	var latest_bake := _make_legacy_baked_root("BakedChunk_1_0_0")
+	var adopted := bake_sys.reconcile_baked_containers()
+
+	assert_eq(adopted, latest_bake, "Newest populated legacy bake should survive")
+	assert_eq(root.baked_container, latest_bake)
+	assert_eq(str(latest_bake.name), "BakedGeometry")
+	assert_null(
+		empty_canonical.get_parent(), "Empty stale canonical root should detach immediately"
+	)
+	assert_true(empty_canonical.is_queued_for_deletion())
+	assert_null(old_bake.get_parent(), "Older legacy bake should detach immediately")
+	assert_true(old_bake.is_queued_for_deletion())
+	assert_true(is_instance_valid(empty_unrelated), "Empty anonymous user node must survive")
+	assert_true(is_instance_valid(mixed_unrelated), "Mixed anonymous user node must survive")
+	assert_eq(bake_sys._managed_baked_containers().size(), 1)
+
+
+func test_replace_baked_container_is_immediate_and_keeps_canonical_name():
+	var existing := Node3D.new()
+	existing.name = "BakedGeometry"
+	root.add_child(existing)
+	root.baked_container = existing
+	var replacement := Node3D.new()
+	replacement.name = "BakedGeometry"
+	var mesh := MeshInstance3D.new()
+	mesh.name = "BakedMesh_0"
+	replacement.add_child(mesh)
+
+	var installed := bake_sys.replace_baked_container(replacement)
+
+	assert_eq(installed, replacement)
+	assert_null(existing.get_parent(), "Old bake must detach before replacement is added")
+	assert_true(
+		existing.is_queued_for_deletion(), "Old bake should be deleted safely after detaching"
+	)
+	assert_true(replacement.get_parent() == root)
+	assert_eq(str(replacement.name), "BakedGeometry")
+	assert_true(root.get_node_or_null("BakedGeometry") == replacement)
+	assert_eq(bake_sys._managed_baked_containers().size(), 1)
+
+
+func test_clear_baked_containers_removes_managed_roots_synchronously():
+	var canonical := Node3D.new()
+	canonical.name = "BakedGeometry"
+	root.add_child(canonical)
+	root.baked_container = canonical
+	var duplicate := _make_legacy_baked_root("BakedChunk_2_0_0")
+	var unrelated := Node3D.new()
+	root.add_child(unrelated)
+	root._last_bake_preview_mode = HFBakeSystem.PreviewMode.WIREFRAME
+
+	bake_sys.clear_baked_containers()
+
+	assert_null(canonical.get_parent())
+	assert_true(canonical.is_queued_for_deletion())
+	assert_null(duplicate.get_parent())
+	assert_true(duplicate.is_queued_for_deletion())
+	assert_true(is_instance_valid(unrelated))
+	assert_null(root.baked_container)
+	assert_eq(root._last_bake_preview_mode, HFBakeSystem.PreviewMode.FULL)
+
+
+func test_baked_geometry_snapshot_restores_exact_visual_and_collision_tree():
+	var container := Node3D.new()
+	var visual := MeshInstance3D.new()
+	visual.name = "BakedMesh_snapshot"
+	visual.mesh = BoxMesh.new()
+	visual.transform = Transform3D(Basis.from_scale(Vector3(2, 1, 3)), Vector3(5, 2, -4))
+	container.add_child(visual)
+	var body := StaticBody3D.new()
+	body.name = "FloorCollision"
+	container.add_child(body)
+	var shape := CollisionShape3D.new()
+	shape.name = "SnapshotShape"
+	shape.shape = BoxShape3D.new()
+	shape.transform = visual.transform
+	body.add_child(shape)
+	bake_sys.replace_baked_container(container)
+
+	var snapshot := bake_sys.capture_baked_geometry_snapshot()
+	assert_not_null(snapshot)
+	bake_sys.clear_baked_containers()
+	assert_null(root.baked_container)
+
+	bake_sys.restore_baked_geometry_snapshot(snapshot)
+
+	assert_not_null(root.baked_container)
+	var restored_visual := (
+		root.baked_container.get_node_or_null("BakedMesh_snapshot") as MeshInstance3D
+	)
+	var restored_shape := (
+		root.baked_container.get_node_or_null("FloorCollision/SnapshotShape") as CollisionShape3D
+	)
+	assert_not_null(restored_visual)
+	assert_not_null(restored_shape)
+	if restored_visual and restored_shape:
+		assert_eq(restored_visual.transform, visual.transform)
+		assert_eq(restored_shape.transform, shape.transform)
+		assert_true(restored_visual.mesh is BoxMesh)
+		assert_true(restored_shape.shape is BoxShape3D)
+
+
+func test_baked_geometry_snapshot_restores_exact_preview_mode():
+	var container := Node3D.new()
+	var visual := MeshInstance3D.new()
+	visual.name = "BakedMesh_preview_mode"
+	visual.mesh = BoxMesh.new()
+	container.add_child(visual)
+	bake_sys.replace_baked_container(container)
+
+	for preview_mode in [
+		HFBakeSystem.PreviewMode.FULL,
+		HFBakeSystem.PreviewMode.WIREFRAME,
+		HFBakeSystem.PreviewMode.PROXY,
+	]:
+		root._last_bake_preview_mode = preview_mode
+		var snapshot := bake_sys.capture_baked_geometry_snapshot()
+		assert_not_null(snapshot)
+		root._last_bake_preview_mode = (preview_mode + 1) % 3
+
+		bake_sys.restore_baked_geometry_snapshot(snapshot)
+
+		assert_eq(
+			root._last_bake_preview_mode,
+			preview_mode,
+			"Snapshot should restore preview mode %d exactly" % preview_mode,
+		)
+
+
+func test_legacy_baked_snapshot_uses_state_preview_mode_fallback():
+	var container := Node3D.new()
+	var visual := MeshInstance3D.new()
+	visual.name = "BakedMesh_legacy_preview_mode"
+	visual.mesh = BoxMesh.new()
+	container.add_child(visual)
+	var snapshot := PackedScene.new()
+	assert_eq(snapshot.pack(container), OK)
+	container.free()
+
+	bake_sys.restore_baked_geometry_snapshot(snapshot, HFBakeSystem.PreviewMode.PROXY)
+
+	assert_eq(root._last_bake_preview_mode, HFBakeSystem.PreviewMode.PROXY)
+
+
+func test_empty_baked_snapshot_uses_state_preview_mode_fallback():
+	root._last_bake_preview_mode = HFBakeSystem.PreviewMode.FULL
+
+	bake_sys.restore_baked_geometry_snapshot(null, HFBakeSystem.PreviewMode.WIREFRAME)
+
+	assert_null(root.baked_container)
+	assert_eq(root._last_bake_preview_mode, HFBakeSystem.PreviewMode.WIREFRAME)
+
+
+func test_legacy_face_material_bake_artifacts_are_recognized():
+	var container := _make_legacy_baked_root("BakedMesh_0")
+	var collision := StaticBody3D.new()
+	collision.name = "FaceCollision"
+	container.add_child(collision)
+
+	assert_true(HFBakeSystem._is_legacy_anonymous_bake(container))
+
+
+func test_legacy_heightmap_only_bake_artifacts_are_recognized():
+	var container := Node3D.new()
+	root.add_child(container)
+	var heightmap := MeshInstance3D.new()
+	heightmap.name = "HMFloor__terrain"
+	container.add_child(heightmap)
+	var collision := StaticBody3D.new()
+	collision.name = "FloorCollision"
+	container.add_child(collision)
+
+	assert_true(HFBakeSystem._is_legacy_anonymous_bake(container))
 
 
 # ===========================================================================
@@ -688,26 +932,439 @@ func test_last_bake_success_default_false():
 # ===========================================================================
 
 
-func test_dirty_tags_preserved_when_bake_fails():
-	# Simulate dirty tags on root
+func test_dirty_bake_success_preserves_same_and_different_id_retags():
 	root._dirty_brush_ids = {"brush_a": true, "brush_b": true}
-	# bake_dirty with no baker (will fail) — dirty tags should survive
-	# We can't call bake_dirty directly since it awaits, but we can verify
-	# the conditional logic: _last_bake_success = false means tags stay
-	bake_sys._last_bake_success = false
-	# Simulate what bake_dirty does after bake() returns
-	if bake_sys._last_bake_success:
-		root._dirty_brush_ids.clear()
-	assert_eq(root._dirty_brush_ids.size(), 2, "Dirty tags should be preserved on failed bake")
+	root._full_reconcile_needed = true
+	var started_tags: Dictionary = root._dirty_brush_ids.duplicate()
+
+	bake_sys._claim_dirty_tags(started_tags, true)
+	assert_true(root._dirty_brush_ids.is_empty(), "Started tags should be claimed before await")
+	assert_false(root._full_reconcile_needed, "Started full reconcile should be claimed")
+
+	# These edits occur while the bake is in flight. brush_a is deliberately
+	# the same ID as a claimed tag, which a blanket clear cannot distinguish.
+	root._dirty_brush_ids["brush_a"] = true
+	root._dirty_brush_ids["brush_c"] = true
+	root._full_reconcile_needed = true
+	bake_sys._finish_dirty_tag_claim(started_tags, true, true)
+
+	assert_true(root._dirty_brush_ids.has("brush_a"), "Same-ID retag must survive success")
+	assert_true(root._dirty_brush_ids.has("brush_c"), "Different-ID tag must survive success")
+	assert_false(root._dirty_brush_ids.has("brush_b"), "Unchanged started tag should stay cleared")
+	assert_true(root._full_reconcile_needed, "Repeated full reconcile must survive success")
 
 
-func test_dirty_tags_cleared_on_successful_bake():
+func test_dirty_bake_failure_merges_started_and_concurrent_tags():
 	root._dirty_brush_ids = {"brush_a": true, "brush_b": true}
-	bake_sys._last_bake_success = true
-	# Simulate what bake_dirty does after bake() returns
-	if bake_sys._last_bake_success:
-		root._dirty_brush_ids.clear()
-	assert_eq(root._dirty_brush_ids.size(), 0, "Dirty tags should be cleared on successful bake")
+	root._full_reconcile_needed = true
+	var started_tags: Dictionary = root._dirty_brush_ids.duplicate()
+
+	bake_sys._claim_dirty_tags(started_tags, true)
+	root._dirty_brush_ids["brush_a"] = true
+	root._dirty_brush_ids["brush_c"] = true
+	bake_sys._finish_dirty_tag_claim(started_tags, false, true)
+
+	assert_eq(root._dirty_brush_ids.size(), 3)
+	assert_true(root._dirty_brush_ids.has("brush_a"), "Same-ID concurrent tag must survive failure")
+	assert_true(root._dirty_brush_ids.has("brush_b"), "Failed bake must restore claimed tag")
+	assert_true(
+		root._dirty_brush_ids.has("brush_c"), "Different-ID concurrent tag must survive failure"
+	)
+	assert_true(root._full_reconcile_needed, "Failed bake must restore full reconcile")
+
+
+func test_deleted_only_dirty_id_clears_stale_bake_and_consumes_tag():
+	root._dirty_brush_ids = {"deleted_brush": true}
+	var stale_bake := Node3D.new()
+	stale_bake.name = "BakedGeometry"
+	root.add_child(stale_bake)
+	root.baked_container = stale_bake
+
+	await bake_sys.bake_dirty()
+
+	assert_true(bake_sys._last_bake_success, "Empty source level should reconcile successfully")
+	assert_true(root._dirty_brush_ids.is_empty(), "Successful deletion bake should consume tag")
+	assert_null(root.baked_container, "Empty reconciliation should clear baked output")
+	assert_null(stale_bake.get_parent(), "Stale baked output should detach immediately")
+
+
+func test_deleted_dirty_id_rebuilds_when_other_source_brushes_remain():
+	_setup_mock_baker()
+	var remaining := _make_brush(root.draft_brushes_node)
+	remaining.name = "remaining_brush"
+	root._dirty_brush_ids = {"deleted_brush": true}
+
+	await bake_sys.bake_dirty()
+
+	assert_true(bake_sys._last_bake_success)
+	assert_true(root._dirty_brush_ids.is_empty())
+	assert_not_null(root.baked_container, "Deletion should rebuild remaining baked geometry")
+
+
+func _install_stale_baked_geometry() -> Node3D:
+	var stale := Node3D.new()
+	stale.name = "BakedGeometry"
+	root.add_child(stale)
+	root.baked_container = stale
+	return stale
+
+
+func test_only_subtractive_sources_clear_stale_baked_geometry():
+	var subtract := _make_brush(root.draft_brushes_node)
+	subtract.operation = CSGShape3D.OPERATION_SUBTRACTION
+	root._dirty_brush_ids = {"deleted_additive": true}
+	var stale := _install_stale_baked_geometry()
+
+	await bake_sys.bake_dirty()
+
+	assert_true(bake_sys._last_bake_success)
+	assert_null(root.baked_container)
+	assert_null(stale.get_parent())
+
+
+func test_only_nonstructural_brush_entities_clear_stale_baked_geometry():
+	var detail := _make_brush(root.draft_brushes_node)
+	detail.set_meta("brush_entity_class", "func_detail")
+	var trigger := _make_brush(root.draft_brushes_node)
+	trigger.set_meta("brush_entity_class", "trigger_once")
+	root._dirty_brush_ids = {"deleted_additive": true}
+	var stale := _install_stale_baked_geometry()
+
+	await bake_sys.bake_dirty()
+
+	assert_true(bake_sys._last_bake_success)
+	assert_null(root.baked_container)
+	assert_null(stale.get_parent())
+
+
+func test_visible_only_hidden_sources_clear_stale_baked_geometry():
+	var hidden_brush := _make_brush(root.draft_brushes_node)
+	hidden_brush.hide()
+	root.bake_visible_only = true
+	root._dirty_brush_ids = {"deleted_additive": true}
+	var stale := _install_stale_baked_geometry()
+
+	await bake_sys.bake_dirty()
+
+	assert_true(bake_sys._last_bake_success)
+	assert_null(root.baked_container)
+	assert_null(stale.get_parent())
+
+
+func test_out_of_cordon_sources_clear_stale_baked_geometry():
+	_make_brush(root.draft_brushes_node, Vector3(100, 100, 100))
+	root.cordon_enabled = true
+	root.cordon_aabb = AABB(Vector3(-4, -4, -4), Vector3(8, 8, 8))
+	root._dirty_brush_ids = {"deleted_additive": true}
+	var stale := _install_stale_baked_geometry()
+
+	await bake_sys.bake_dirty()
+
+	assert_true(bake_sys._last_bake_success)
+	assert_null(root.baked_container)
+	assert_null(stale.get_parent())
+
+
+func test_cordon_uses_transformed_mesh_bounds_for_parented_custom_geometry():
+	var parent := Node3D.new()
+	parent.transform = Transform3D(
+		Basis.from_euler(Vector3(deg_to_rad(10.0), deg_to_rad(55.0), deg_to_rad(20.0))).scaled(
+			Vector3(1.75, 0.8, 1.25)
+		),
+		Vector3(30.0, 4.0, -12.0)
+	)
+	root.draft_brushes_node.add_child(parent)
+	var brush := _make_brush(parent, Vector3(1.0, 2.0, -1.0), Vector3(2.0, 2.0, 2.0))
+	var custom_mesh := BoxMesh.new()
+	custom_mesh.size = Vector3(20.0, 2.0, 2.0)
+	brush.mesh_instance.mesh = custom_mesh
+	brush.mesh_instance.position = Vector3(12.0, 0.0, 0.0)
+	var point_inside_custom_mesh: Vector3 = (
+		brush.mesh_instance.global_transform * Vector3(9.5, 0.0, 0.0)
+	)
+	root.cordon_enabled = true
+	root.cordon_aabb = AABB(
+		point_inside_custom_mesh - Vector3(0.25, 0.25, 0.25), Vector3(0.5, 0.5, 0.5)
+	)
+
+	assert_true(
+		bake_sys._brush_in_cordon(brush),
+		"Cordon filtering must use actual world mesh bounds, not unscaled brush size"
+	)
+
+
+func test_heightmap_only_replaces_stale_bake_with_visual_and_collision_in_all_modes():
+	var heightmaps := Node3D.new()
+	heightmaps.name = "GeneratedHeightmapFloors"
+	root.add_child(heightmaps)
+	root.generated_heightmap_floors = heightmaps
+	var heightmap := MeshInstance3D.new()
+	heightmap.name = "HeightmapFloor_0"
+	heightmap.mesh = PlaneMesh.new()
+	heightmaps.add_child(heightmap)
+	var stale := _install_stale_baked_geometry()
+
+	for mode in [
+		HFBakeSystem.PreviewMode.FULL,
+		HFBakeSystem.PreviewMode.WIREFRAME,
+		HFBakeSystem.PreviewMode.PROXY,
+	]:
+		root._dirty_brush_ids = {"heightmap_changed": true}
+		await bake_sys.bake_dirty(0, mode)
+
+		assert_true(bake_sys._last_bake_success, "Heightmap-only bake should succeed")
+		assert_not_null(root.baked_container)
+		var baked_heightmap := (
+			root.baked_container.get_node_or_null("HeightmapFloor_0") as MeshInstance3D
+		)
+		assert_not_null(baked_heightmap, "Heightmap visual should be installed")
+		var collision := root.baked_container.get_node_or_null("FloorCollision") as StaticBody3D
+		assert_not_null(collision, "Heightmap collision body should be installed")
+		if collision:
+			assert_gt(
+				collision.get_child_count(), 0, "Heightmap collision shape should be installed"
+			)
+		if baked_heightmap:
+			if mode == HFBakeSystem.PreviewMode.FULL:
+				assert_null(baked_heightmap.material_override)
+			else:
+				assert_not_null(baked_heightmap.material_override)
+
+	assert_null(stale.get_parent(), "Stale bake should be replaced on first heightmap bake")
+
+
+func test_face_material_bake_keeps_mixed_heightmap_visual_and_collision():
+	_setup_face_material_baker()
+	root.bake_use_face_materials = true
+	_make_brush(root.draft_brushes_node)
+	var heightmaps := Node3D.new()
+	heightmaps.name = "GeneratedHeightmapFloors"
+	root.add_child(heightmaps)
+	root.generated_heightmap_floors = heightmaps
+	var heightmap := MeshInstance3D.new()
+	heightmap.name = "HeightmapFloor_0"
+	heightmap.mesh = PlaneMesh.new()
+	heightmaps.add_child(heightmap)
+
+	await bake_sys.bake()
+
+	assert_true(bake_sys._last_bake_success)
+	assert_not_null(
+		root.baked_container.get_node_or_null("BakedFaceMesh_0"),
+		"Face-material structural visual should remain present"
+	)
+	assert_not_null(
+		root.baked_container.get_node_or_null("HeightmapFloor_0"),
+		"Mixed heightmap visual should be appended"
+	)
+	var collision := root.baked_container.get_node_or_null("FloorCollision") as StaticBody3D
+	assert_not_null(collision, "Mixed heightmap collision body should be appended")
+	if collision:
+		assert_gt(collision.get_child_count(), 0, "Mixed heightmap should include collision shape")
+
+
+func test_face_material_null_structural_result_falls_back_to_valid_heightmap():
+	var face_baker := _setup_face_material_baker()
+	face_baker.return_null = true
+	root.bake_use_face_materials = true
+	_make_brush(root.draft_brushes_node)
+	var heightmaps := Node3D.new()
+	heightmaps.name = "GeneratedHeightmapFloors"
+	root.add_child(heightmaps)
+	root.generated_heightmap_floors = heightmaps
+	var heightmap := MeshInstance3D.new()
+	heightmap.name = "HeightmapFloor_fallback"
+	heightmap.mesh = PlaneMesh.new()
+	heightmaps.add_child(heightmap)
+
+	assert_true(await bake_sys.bake())
+
+	assert_true(bake_sys._last_bake_success)
+	assert_not_null(root.baked_container.get_node_or_null("HeightmapFloor_fallback"))
+	var collision := root.baked_container.get_node_or_null("FloorCollision") as StaticBody3D
+	assert_not_null(collision)
+	if collision:
+		assert_gt(collision.get_child_count(), 0)
+
+
+func test_force_csg_bypasses_face_material_path_for_commit_semantics():
+	var csg_baker := _setup_mock_baker()
+	root.bake_use_face_materials = true
+	_make_brush(root.draft_brushes_node)
+
+	assert_true(await bake_sys.bake(false, false, 0, HFBakeSystem.PreviewMode.FULL, true))
+
+	assert_gt(csg_baker.call_count, 0)
+	assert_eq(csg_baker.face_snapshot_count, 0)
+	assert_eq(csg_baker.face_build_count, 0)
+	assert_not_null(root.baked_container.get_node_or_null("BakedMesh_0"))
+
+
+func test_ordinary_face_material_bake_applies_and_preserves_pending_cut_via_csg():
+	var tracking_baker := _setup_mock_baker()
+	root.bake_use_face_materials = true
+	_make_brush(root.draft_brushes_node, Vector3.ZERO, Vector3(8.0, 8.0, 8.0))
+	var cutter := _make_brush(root.pending_node, Vector3.ZERO, Vector3(2.0, 2.0, 2.0))
+
+	assert_true(await bake_sys.bake())
+
+	assert_eq(cutter.get_parent(), root.draft_brushes_node)
+	assert_eq(cutter.operation, CSGShape3D.OPERATION_SUBTRACTION)
+	assert_eq(tracking_baker.face_snapshot_count, 0)
+	assert_eq(tracking_baker.face_build_count, 0)
+	assert_gt(tracking_baker.csg_operations.size(), 0)
+	if not tracking_baker.csg_operations.is_empty():
+		assert_has(
+			tracking_baker.csg_operations[0],
+			CSGShape3D.OPERATION_SUBTRACTION,
+			"Applied pending cutter must enter the authoritative visual CSG tree"
+		)
+	assert_not_null(root.baked_container.get_node_or_null("BakedMesh_0"))
+
+
+func test_ordinary_face_material_bake_preserves_frozen_committed_cut_via_csg():
+	var tracking_baker := _setup_mock_baker()
+	root.bake_use_face_materials = true
+	root.commit_freeze = true
+	_make_brush(root.draft_brushes_node, Vector3.ZERO, Vector3(8.0, 8.0, 8.0))
+	var committed := _make_brush(root.committed_node, Vector3.ZERO, Vector3(2.0, 2.0, 2.0))
+	# Committed children are forced to subtract by the CSG bake, even when this
+	# compatibility field was serialized as union in an older scene.
+	committed.operation = CSGShape3D.OPERATION_UNION
+
+	assert_true(await bake_sys.bake())
+
+	assert_eq(committed.get_parent(), root.committed_node)
+	assert_eq(committed.operation, CSGShape3D.OPERATION_UNION)
+	assert_eq(tracking_baker.face_snapshot_count, 0)
+	assert_eq(tracking_baker.face_build_count, 0)
+	assert_gt(tracking_baker.csg_operations.size(), 0)
+	if not tracking_baker.csg_operations.is_empty():
+		assert_has(
+			tracking_baker.csg_operations[0],
+			CSGShape3D.OPERATION_SUBTRACTION,
+			"Frozen committed cutter must enter the authoritative visual CSG tree"
+		)
+	assert_not_null(root.baked_container.get_node_or_null("BakedMesh_0"))
+
+
+func test_heightmap_visual_and_collision_preserve_the_same_container_space_transform():
+	root.transform = Transform3D(
+		Basis.from_euler(Vector3(0.0, deg_to_rad(15.0), 0.0)), Vector3(4.0, 1.0, -3.0)
+	)
+	var heightmaps := Node3D.new()
+	heightmaps.transform = Transform3D(
+		Basis.from_euler(Vector3(deg_to_rad(20.0), deg_to_rad(35.0), 0.0)), Vector3(7.0, 2.0, -5.0)
+	)
+	root.add_child(heightmaps)
+	root.generated_heightmap_floors = heightmaps
+	var heightmap := MeshInstance3D.new()
+	heightmap.name = "HeightmapFloor_transformed"
+	heightmap.mesh = PlaneMesh.new()
+	heightmap.transform = Transform3D(
+		Basis.from_euler(Vector3(0.0, 0.0, deg_to_rad(12.0))).scaled(Vector3(1.5, 1.0, 0.75)),
+		Vector3(3.0, 0.5, 2.0)
+	)
+	heightmaps.add_child(heightmap)
+	var baked := Node3D.new()
+	var body := StaticBody3D.new()
+	body.name = "FloorCollision"
+	body.transform = Transform3D(Basis.IDENTITY, Vector3(2.0, -1.0, 4.0))
+	baked.add_child(body)
+
+	bake_sys._append_heightmap_meshes_to_baked(baked, 1)
+
+	var visual := baked.get_node_or_null("HeightmapFloor_transformed") as MeshInstance3D
+	assert_not_null(visual)
+	var collision := body.get_child(0) as CollisionShape3D
+	assert_not_null(collision)
+	if visual and collision:
+		var expected_visual := root.global_transform.affine_inverse() * heightmap.global_transform
+		assert_true(visual.transform.is_equal_approx(expected_visual))
+		assert_true(
+			(body.transform * collision.transform).is_equal_approx(visual.transform),
+			"Heightmap collision must occupy the same baked-container space as its visual"
+		)
+	baked.free()
+
+
+func test_full_reconcile_without_dirty_brushes_runs_full_bake():
+	root._full_reconcile_needed = true
+
+	await bake_sys.bake_dirty()
+
+	assert_true(bake_sys._last_bake_success, "Full reconcile alone must start a full bake")
+	assert_false(root._full_reconcile_needed, "Successful full reconcile should consume its flag")
+
+
+func _retag_dirty_and_full_during_bake() -> void:
+	root._dirty_brush_ids["brush_a"] = true
+	root._dirty_brush_ids["brush_c"] = true
+	root._full_reconcile_needed = true
+
+
+func _retag_dirty_during_bake() -> void:
+	root._dirty_brush_ids["brush_a"] = true
+	root._dirty_brush_ids["brush_c"] = true
+
+
+func test_full_bake_success_consumes_started_state_but_preserves_concurrent_retags():
+	_setup_mock_baker()
+	var brush := _make_brush(root.draft_brushes_node)
+	brush.name = "brush_a"
+	root._dirty_brush_ids = {"brush_a": true, "brush_b": true}
+	root._full_reconcile_needed = true
+	Callable(self, "_retag_dirty_and_full_during_bake").call_deferred()
+
+	await bake_sys.bake()
+
+	assert_true(bake_sys._last_bake_success)
+	assert_true(root._dirty_brush_ids.has("brush_a"), "Same-ID retag must survive full bake")
+	assert_true(root._dirty_brush_ids.has("brush_c"), "Different-ID retag must survive full bake")
+	assert_false(root._dirty_brush_ids.has("brush_b"), "Started-only tag should be consumed")
+	assert_true(root._full_reconcile_needed, "Repeated full flag must survive full bake")
+
+
+func test_overlapping_bake_is_rejected_without_overwriting_or_consuming_midflight_edits():
+	_setup_mock_baker()
+	var brush := _make_brush(root.draft_brushes_node)
+	brush.name = "brush_a"
+	root._dirty_brush_ids = {"brush_a": true}
+	watch_signals(root)
+
+	# Intentionally leave the first coroutine running at its frame yield.
+	bake_sys.bake()
+	assert_true(bake_sys.is_bake_in_flight())
+	root._dirty_brush_ids["midflight_edit"] = true
+	assert_false(await bake_sys.bake(), "A second request must not race the active bake")
+	assert_true(bake_sys.is_bake_in_flight())
+	while bake_sys.is_bake_in_flight():
+		await get_tree().process_frame
+
+	assert_true(bake_sys._last_bake_success)
+	assert_true(root._dirty_brush_ids.has("midflight_edit"))
+	assert_signal_emit_count(root, "bake_started", 1)
+	assert_signal_emit_count(root, "bake_finished", 1)
+
+
+func test_full_bake_failure_restores_started_state_and_preserves_concurrent_retags():
+	_setup_null_baker()
+	var brush := _make_brush(root.draft_brushes_node)
+	brush.name = "brush_a"
+	root._dirty_brush_ids = {"brush_a": true, "brush_b": true}
+	root._full_reconcile_needed = true
+	Callable(self, "_retag_dirty_during_bake").call_deferred()
+	_capture_warning("Bake failed")
+
+	await bake_sys.bake()
+
+	_assert_captured_warning("Bake failed")
+	assert_false(bake_sys._last_bake_success)
+	assert_eq(root._dirty_brush_ids.size(), 3)
+	assert_true(root._dirty_brush_ids.has("brush_a"))
+	assert_true(root._dirty_brush_ids.has("brush_b"), "Failure must restore started tag")
+	assert_true(root._dirty_brush_ids.has("brush_c"), "Failure must preserve concurrent tag")
+	assert_true(root._full_reconcile_needed, "Failure must restore started full flag")
 
 
 # ===========================================================================
@@ -825,6 +1482,41 @@ func test_postprocess_bake_connector_has_collision():
 		if child is CollisionShape3D:
 			col_count += 1
 	assert_gt(col_count, 0, "Connectors should add collision shapes")
+	container.free()
+
+
+func test_auto_connector_collision_matches_visual_in_container_space():
+	var mgr := _make_paint_layers_with_boundary()
+	root.paint_layers = mgr
+	root.bake_auto_connectors = true
+	var container := Node3D.new()
+	root.add_child(container)
+	var body := StaticBody3D.new()
+	body.name = "FloorCollision"
+	body.transform = Transform3D(
+		Basis.from_euler(Vector3(0.0, deg_to_rad(25.0), 0.0)), Vector3(3.0, 1.0, -2.0)
+	)
+	container.add_child(body)
+
+	bake_sys.postprocess_bake(container, false)
+
+	var visual: MeshInstance3D = null
+	for child in container.get_children():
+		if child is MeshInstance3D and child.name.begins_with("AutoConnector"):
+			visual = child
+			break
+	var collision: CollisionShape3D = null
+	for child in body.get_children():
+		if child is CollisionShape3D:
+			collision = child
+			break
+	assert_not_null(visual)
+	assert_not_null(collision)
+	if visual and collision:
+		assert_true(
+			(body.transform * collision.transform).is_equal_approx(visual.transform),
+			"Connector collision must occupy the same baked-container space as its visual"
+		)
 	container.free()
 
 
@@ -1097,11 +1789,19 @@ func test_collect_collision_data_empty_with_no_brushes():
 ## FloorCollision body and one trimesh CollisionShape3D, avoiding real CSG.
 class MockBaker:
 	var call_count: int = 0
+	var face_snapshot_count: int = 0
+	var face_build_count: int = 0
+	var csg_operations: Array = []
 
 	func bake_from_csg(
 		_csg: CSGCombiner3D, _mat_override, _layer: int, _mask: int, _options: Dictionary
 	) -> Node3D:
 		call_count += 1
+		var operations: Array[int] = []
+		for child in _csg.get_children():
+			if child is CSGShape3D:
+				operations.append((child as CSGShape3D).operation)
+		csg_operations.append(operations)
 		var result = Node3D.new()
 		result.name = "BakedGeometry"
 		var body = StaticBody3D.new()
@@ -1122,6 +1822,73 @@ class MockBaker:
 		result.add_child(mi)
 		return result
 
+	func snapshot_brush_faces(
+		_brush: DraftBrush, _manager, _override: Material, _use_atlas: bool
+	) -> Dictionary:
+		face_snapshot_count += 1
+		return {"hull_verts": PackedVector3Array()}
+
+	func collect_snapshot_groups(
+		_snapshot: Dictionary, _use_atlas: bool, groups: Dictionary
+	) -> void:
+		groups["mock"] = true
+
+	func build_mesh_from_groups(
+		_groups: Dictionary, layer: int, mask: int, _options: Dictionary
+	) -> Node3D:
+		face_build_count += 1
+		var result := Node3D.new()
+		result.name = "BakedGeometry"
+		var visual := MeshInstance3D.new()
+		visual.name = "BakedFaceMesh_0"
+		visual.mesh = BoxMesh.new()
+		result.add_child(visual)
+		var collision := StaticBody3D.new()
+		collision.name = "FaceCollision"
+		collision.collision_layer = layer
+		collision.collision_mask = mask
+		result.add_child(collision)
+		return result
+
+
+class MockFaceMaterialBaker:
+	var return_null := false
+
+	func snapshot_brush_faces(
+		_brush: DraftBrush, _manager, _override: Material, _use_atlas: bool
+	) -> Dictionary:
+		return {"hull_verts": PackedVector3Array()}
+
+	func collect_snapshot_groups(
+		_snapshot: Dictionary, _use_atlas: bool, groups: Dictionary
+	) -> void:
+		groups["mock"] = true
+
+	func build_mesh_from_groups(
+		_groups: Dictionary, layer: int, mask: int, _options: Dictionary
+	) -> Node3D:
+		if return_null:
+			return null
+		var result := Node3D.new()
+		result.name = "BakedGeometry"
+		var visual := MeshInstance3D.new()
+		visual.name = "BakedFaceMesh_0"
+		visual.mesh = BoxMesh.new()
+		result.add_child(visual)
+		var collision := StaticBody3D.new()
+		collision.name = "FaceCollision"
+		collision.collision_layer = layer
+		collision.collision_mask = mask
+		result.add_child(collision)
+		return result
+
+
+class NullBaker:
+	func bake_from_csg(
+		_csg: CSGCombiner3D, _mat_override, _layer: int, _mask: int, _options: Dictionary
+	) -> Node3D:
+		return null
+
 
 ## Minimal mock visgroup system with assignable per-node visgroups.
 class MockVisgroupSystem:
@@ -1136,6 +1903,18 @@ func _setup_mock_baker() -> MockBaker:
 	var mb = MockBaker.new()
 	root.baker = mb
 	return mb
+
+
+func _setup_face_material_baker() -> MockFaceMaterialBaker:
+	var mb := MockFaceMaterialBaker.new()
+	root.baker = mb
+	return mb
+
+
+func _setup_null_baker() -> NullBaker:
+	var nb = NullBaker.new()
+	root.baker = nb
+	return nb
 
 
 func _setup_mock_visgroups(mapping: Dictionary) -> MockVisgroupSystem:
@@ -1313,6 +2092,45 @@ func test_bake_chunked_mode2_creates_per_chunk_visgroup_bodies():
 	assert_true(found_arena, "One chunk should have Collision_arena body")
 
 
+func test_chunked_bake_falls_back_to_single_csg_for_cross_boundary_overlap():
+	var mock_baker := _setup_mock_baker()
+	_make_brush(root.draft_brushes_node, Vector3(7.0, 0.0, 0.0), Vector3(4.0, 4.0, 4.0))
+	_make_brush(root.draft_brushes_node, Vector3(9.0, 0.0, 0.0), Vector3(4.0, 4.0, 4.0))
+	var options: Dictionary = bake_sys.build_bake_options()
+
+	var baked: Node3D = await bake_sys.bake_chunked(8.0, 1, options)
+
+	assert_not_null(baked)
+	add_child_autoqfree(baked)
+	assert_eq(mock_baker.call_count, 1, "Single CSG path should bake the final result once")
+	assert_eq(
+		baked.find_children("BakedChunk_*", "Node", false, false).size(),
+		0,
+		"Overlapping brushes must not be isolated into independent chunk CSG trees"
+	)
+
+
+func test_chunked_bake_keeps_cross_boundary_subtractor_with_its_target():
+	var mock_baker := _setup_mock_baker()
+	_make_brush(root.draft_brushes_node, Vector3(7.0, 0.0, 0.0), Vector3(4.0, 4.0, 4.0))
+	var cutter := _make_brush(
+		root.draft_brushes_node, Vector3(9.0, 0.0, 0.0), Vector3(4.0, 4.0, 4.0)
+	)
+	cutter.operation = CSGShape3D.OPERATION_SUBTRACTION
+	var options: Dictionary = bake_sys.build_bake_options()
+
+	var baked: Node3D = await bake_sys.bake_chunked(8.0, 1, options)
+
+	assert_not_null(baked)
+	add_child_autoqfree(baked)
+	assert_eq(mock_baker.call_count, 1, "Cut interaction should bake the final CSG result once")
+	assert_eq(
+		baked.find_children("BakedChunk_*", "Node", false, false).size(),
+		0,
+		"A cutter must never be baked independently from an overlapping target"
+	)
+
+
 func test_bake_single_mode0_preserves_trimesh():
 	# Mode 0 should leave FloorCollision intact with original trimesh
 	_setup_mock_baker()
@@ -1331,3 +2149,112 @@ func test_bake_single_mode0_preserves_trimesh():
 			if child is CollisionShape3D and child.shape is ConcavePolygonShape3D:
 				has_concave = true
 		assert_true(has_concave, "Mode 0 should keep ConcavePolygonShape3D from mock baker")
+
+
+func test_selected_and_chunked_csg_bake_final_boolean_only_once():
+	var selected_baker := _setup_mock_baker()
+	var additive := _make_brush(root.draft_brushes_node, Vector3.ZERO, Vector3(8, 8, 8))
+	var cutter := _make_brush(root.draft_brushes_node, Vector3.ZERO, Vector3(2, 10, 10))
+	cutter.operation = CSGShape3D.OPERATION_SUBTRACTION
+
+	assert_true(await bake_sys.bake_selected([additive, cutter], 1))
+	assert_eq(
+		selected_baker.call_count,
+		1,
+		"Selection collision must come from its final boolean, not an additive-only rebake",
+	)
+
+	# Use a fresh root-owned mock count. Both brushes occupy one chunk, exercising
+	# the actual chunk path instead of its cross-boundary single-bake fallback.
+	var chunk_baker := MockBaker.new()
+	root.baker = chunk_baker
+	var options := bake_sys.build_bake_options()
+	var chunked: Node3D = await bake_sys.bake_chunked(32.0, 1, options)
+	assert_not_null(chunked)
+	if chunked:
+		add_child_autoqfree(chunked)
+	assert_eq(
+		chunk_baker.call_count,
+		1,
+		"Each chunk must derive visual and collision from one final boolean result",
+	)
+
+
+func test_exact_csg_collision_triangles_match_visible_doorway_cut():
+	var real_baker := load("res://addons/hammerforge/baker.gd").new() as Node
+	root.add_child(real_baker)
+	root.baker = real_baker
+	root.bake_merge_meshes = true
+	_make_brush(root.draft_brushes_node, Vector3.ZERO, Vector3(8, 8, 8))
+	var doorway := _make_brush(root.draft_brushes_node, Vector3(0, -2, 0), Vector3(3, 6, 10))
+	doorway.operation = CSGShape3D.OPERATION_SUBTRACTION
+	var options := bake_sys.build_bake_options()
+	options["collision_mode"] = 0
+
+	var baked: Node3D = await bake_sys.bake_single(1, options)
+	assert_not_null(baked)
+	if not baked:
+		return
+	add_child_autoqfree(baked)
+	var visual_triangles := _baked_visual_triangle_signature(baked)
+	var collision_triangles := _baked_collision_triangle_signature(baked)
+	assert_gt(
+		visual_triangles.size(),
+		12,
+		"The visible mesh must contain the doorway's carved boundary, not a plain box",
+	)
+	assert_false(collision_triangles.is_empty())
+	assert_eq(
+		collision_triangles,
+		visual_triangles,
+		"Exact collision must contain precisely the final visible cut triangles",
+	)
+
+
+func _baked_visual_triangle_signature(baked: Node3D) -> Dictionary:
+	var signature: Dictionary = {}
+	for candidate in baked.find_children("*", "MeshInstance3D", true, false):
+		var mesh_instance := candidate as MeshInstance3D
+		if mesh_instance == null or mesh_instance.mesh == null:
+			continue
+		var relative_transform := (
+			baked.global_transform.affine_inverse() * mesh_instance.global_transform
+		)
+		_append_triangle_signature(signature, mesh_instance.mesh.get_faces(), relative_transform)
+	return signature
+
+
+func _baked_collision_triangle_signature(baked: Node3D) -> Dictionary:
+	var signature: Dictionary = {}
+	for candidate in baked.find_children("*", "CollisionShape3D", true, false):
+		var collision := candidate as CollisionShape3D
+		if collision == null or not collision.shape is ConcavePolygonShape3D:
+			continue
+		var relative_transform := (
+			baked.global_transform.affine_inverse() * collision.global_transform
+		)
+		var concave := collision.shape as ConcavePolygonShape3D
+		_append_triangle_signature(signature, concave.get_faces(), relative_transform)
+	return signature
+
+
+func _append_triangle_signature(
+	signature: Dictionary, faces: PackedVector3Array, transform: Transform3D
+) -> void:
+	for index in range(0, faces.size() - 2, 3):
+		var points: Array[String] = []
+		for offset in range(3):
+			var point := transform * faces[index + offset]
+			points.append(
+				(
+					"%d,%d,%d"
+					% [
+						roundi(point.x * 10000.0),
+						roundi(point.y * 10000.0),
+						roundi(point.z * 10000.0)
+					]
+				)
+			)
+		points.sort()
+		var key := "|".join(points)
+		signature[key] = int(signature.get(key, 0)) + 1

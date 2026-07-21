@@ -99,7 +99,7 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 				if target_group_id != "":
 					piece.set_meta("group_id", target_group_id)
 				if target_bec != "":
-					piece.set_meta("brush_entity_class", target_bec)
+					piece.set_brush_entity_class(target_bec)
 				var slice_center: Vector3 = slice_info.get("center", Vector3.ZERO)
 				_copy_uv_settings_to_piece(piece, target_faces, target_pos, slice_center)
 				total_pieces += 1

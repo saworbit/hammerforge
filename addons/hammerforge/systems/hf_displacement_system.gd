@@ -316,6 +316,9 @@ func _get_all_brushes() -> Array:
 		return []
 	if root.has_method("get_all_draft_brushes"):
 		return root.get_all_draft_brushes()
+	# Lightweight consumers may expose only the shared authoritative iterator.
+	if root.has_method("_iter_managed_brush_nodes"):
+		return root._iter_managed_brush_nodes()
 	return []
 
 

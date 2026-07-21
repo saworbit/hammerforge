@@ -502,8 +502,18 @@ func test_apply_noise_via_system():
 
 
 func test_sew_all_no_crash():
-	_make_quad_brush()
+	var first := _make_quad_brush()
 	sys.create_displacement("test_brush", 0)
-	# No sew groups set, should return 0
+	# No sew groups set, should return 0.
 	var count: int = sys.sew_all()
 	assert_eq(count, 0)
+	var second := _make_quad_brush("test_brush_b")
+	sys.create_displacement("test_brush_b", 0)
+	first.faces[0].displacement.sew_group = 4
+	second.faces[0].displacement.sew_group = 4
+	assert_gt(sys.sew_all(), 0, "Sew All must collect both editable brushes")
+	var level_root_source := FileAccess.get_file_as_string("res://addons/hammerforge/level_root.gd")
+	assert_true(
+		level_root_source.contains("func get_all_draft_brushes() -> Array:"),
+		"Production LevelRoot must expose the same editable brush collection",
+	)

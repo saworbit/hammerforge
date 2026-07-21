@@ -1,6 +1,17 @@
 extends GutTest
 
 const HFInputState = preload("res://addons/hammerforge/input_state.gd")
+const HFDragSystem = preload("res://addons/hammerforge/systems/hf_drag_system.gd")
+const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
+
+
+class DragRoot:
+	extends Node3D
+
+	enum AxisLock { NONE, X, Y, Z }
+
+	var grid_snap := 1.0
+
 
 var state: HFInputState
 
@@ -70,6 +81,87 @@ func test_format_fractional():
 func test_format_zero_returns_empty():
 	var s = HFInputState.format_dimensions(Vector3.ZERO)
 	assert_eq(s, "")
+
+
+# ===========================================================================
+# Primitive draw bounds
+# ===========================================================================
+
+
+func test_radial_draw_expands_the_short_axis_without_moving_the_drag_origin():
+	var drag := _new_drag_system()
+	var cone := (
+		drag
+		. _compute_brush_info(
+			Vector3.ZERO,
+			Vector3(6, 0, 8),
+			4.0,
+			DraftBrush.BrushShape.CONE,
+			Vector3(32, 32, 32),
+			DragRoot.AxisLock.NONE,
+			false,
+			false,
+		)
+	)
+	assert_eq(cone["size"], Vector3(8, 4, 8))
+	assert_eq(cone["center"], Vector3(4, 2, 4))
+
+	var negative := (
+		drag
+		. _compute_brush_info(
+			Vector3.ZERO,
+			Vector3(-6, 0, -8),
+			4.0,
+			DraftBrush.BrushShape.CYLINDER,
+			Vector3(32, 32, 32),
+			DragRoot.AxisLock.NONE,
+			false,
+			false,
+		)
+	)
+	assert_eq(negative["size"], Vector3(8, 4, 8))
+	assert_eq(negative["center"], Vector3(-4, 2, -4))
+
+
+func test_capsule_and_sphere_draw_normalization_stays_on_the_construction_plane():
+	var drag := _new_drag_system()
+	var capsule := (
+		drag
+		. _compute_brush_info(
+			Vector3.ZERO,
+			Vector3(6, 0, 8),
+			4.0,
+			DraftBrush.BrushShape.CAPSULE,
+			Vector3(32, 32, 32),
+			DragRoot.AxisLock.NONE,
+			false,
+			false,
+		)
+	)
+	assert_eq(capsule["size"], Vector3(8, 8, 8))
+	assert_eq(capsule["center"], Vector3(4, 4, 4))
+
+	var sphere := (
+		drag
+		. _compute_brush_info(
+			Vector3.ZERO,
+			Vector3(6, 0, 8),
+			32.0,
+			DraftBrush.BrushShape.SPHERE,
+			Vector3(32, 32, 32),
+			DragRoot.AxisLock.NONE,
+			false,
+			false,
+		)
+	)
+	assert_eq(sphere["size"], Vector3(8, 8, 8))
+	assert_eq(sphere["center"], Vector3(4, 4, 4))
+
+
+func _new_drag_system() -> HFDragSystem:
+	var fake_root := DragRoot.new()
+	add_child_autoqfree(fake_root)
+	return HFDragSystem.new(fake_root)
 
 
 # ===========================================================================

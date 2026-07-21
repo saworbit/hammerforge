@@ -15,6 +15,7 @@ var highlight_connected: bool = false
 var _frame_counter: int = 0
 var _pulse_phase: float = 0.0
 var _highlight_overlays: Array = []  # MeshInstance3D nodes for pulse effect
+var _selected_entity_refs: Array[WeakRef] = []
 const REFRESH_INTERVAL := 10  # Update every N frames
 const CURVE_SEGMENTS := 12  # Segments per Bézier curve
 const ARROW_SIZE := 0.18
@@ -58,6 +59,29 @@ func set_highlight_connected(value: bool) -> void:
 		refresh()
 
 
+## Receive the editor's authoritative selection. References are deliberately
+## weak so a native Scene-tree delete cannot keep an entity alive or leave a
+## stale selection object behind. Descendant selections normalize to the owning
+## point entity or tied brush entity.
+func set_selected_entities(nodes: Array) -> void:
+	var selected_refs: Array[WeakRef] = []
+	var seen_ids: Dictionary = {}
+	for candidate in nodes:
+		if not (candidate is Node) or not is_instance_valid(candidate):
+			continue
+		var entity := _find_io_entity_owner(candidate)
+		if not entity:
+			continue
+		var instance_id := entity.get_instance_id()
+		if seen_ids.has(instance_id):
+			continue
+		seen_ids[instance_id] = true
+		selected_refs.append(weakref(entity))
+	_selected_entity_refs = selected_refs
+	if enabled:
+		refresh()
+
+
 func process() -> void:
 	if not enabled:
 		return
@@ -87,13 +111,9 @@ func refresh() -> void:
 		_clear_highlight_overlays()
 		return
 	_mesh_instance.visible = true
-	# Determine which entity (if any) is selected
-	var selected_names: Dictionary = {}
-	if root.has_method("get_selected_entities"):
-		var sel = root.get_selected_entities()
-		for e in sel:
-			if e is Node:
-				selected_names[e.name] = true
+	# Resolve weak references on every refresh so native rename, alias edits, and
+	# deletion are reflected without depending on a nonexistent root getter.
+	var selected_names := _get_selected_names()
 
 	# Group connections by source→target pair to offset overlapping routes
 	var route_counts: Dictionary = {}  # "src→tgt" -> count
@@ -126,11 +146,6 @@ func refresh() -> void:
 		var delay = float(conn.get("delay", 0.0))
 		var is_selected = selected_names.has(source_name) or selected_names.has(target_name)
 
-		# Track connections for highlight mode
-		if is_selected and highlight_connected:
-			connected_names[source_name] = true
-			connected_names[target_name] = true
-
 		# Pick color
 		var color: Color = _get_connection_color(output_name, fire_once, delay, is_selected)
 
@@ -143,6 +158,11 @@ func refresh() -> void:
 		for target in targets:
 			if not (target is Node3D) or not is_instance_valid(target):
 				continue
+			# Track the real nodes as well as the literal connection spelling. This
+			# keeps pulse overlays working when a target resolves through its alias.
+			if is_selected and highlight_connected:
+				_add_node_names(connected_names, source)
+				_add_node_names(connected_names, target)
 			var start_pos = source.global_position + Vector3(0, 0.3, 0)
 			var end_pos = target.global_position + Vector3(0, 0.3, 0)
 			_draw_curved_connection(start_pos, end_pos, color, route_idx, total_routes)
@@ -254,7 +274,7 @@ func _draw_arrowhead(pos: Vector3, dir: Vector3, color: Color) -> void:
 # ---------------------------------------------------------------------------
 
 
-func _update_highlight_overlays(connected_names: Dictionary, selected_names: Dictionary) -> void:
+func _update_highlight_overlays(connected_names: Dictionary, _selected_names: Dictionary) -> void:
 	_clear_highlight_overlays()
 	# Gather candidate nodes from both entities and brush entities
 	var candidates: Array = []
@@ -265,12 +285,64 @@ func _update_highlight_overlays(connected_names: Dictionary, selected_names: Dic
 	for child in candidates:
 		if not is_instance_valid(child) or not (child is Node3D):
 			continue
-		var cname = child.name
 		# Highlight connected entities but NOT the selected one itself
-		if connected_names.has(cname) and not selected_names.has(cname):
+		if _node_has_any_name(child, connected_names) and not _is_selected_entity(child):
 			var overlay = _create_pulse_overlay(child)
 			if overlay:
 				_highlight_overlays.append(overlay)
+
+
+func _find_io_entity_owner(candidate: Node) -> Node3D:
+	var current: Node = candidate
+	while current and current != root:
+		if current is Node3D:
+			if root.entities_node and current.get_parent() == root.entities_node:
+				return current
+			if not str(current.get_meta("brush_entity_class", "")).is_empty():
+				return current
+		current = current.get_parent()
+	return null
+
+
+func _get_selected_names() -> Dictionary:
+	var names: Dictionary = {}
+	var live_refs: Array[WeakRef] = []
+	for entity_ref in _selected_entity_refs:
+		var entity := entity_ref.get_ref() as Node
+		if not entity or not is_instance_valid(entity):
+			continue
+		live_refs.append(entity_ref)
+		_add_node_names(names, entity)
+	_selected_entity_refs = live_refs
+	return names
+
+
+func _is_selected_entity(candidate: Node) -> bool:
+	for entity_ref in _selected_entity_refs:
+		if entity_ref.get_ref() == candidate:
+			return true
+	return false
+
+
+static func _add_node_names(names: Dictionary, entity: Node) -> void:
+	if not entity:
+		return
+	var node_name := str(entity.name)
+	if not node_name.is_empty():
+		names[node_name] = true
+	var alias := str(entity.get_meta("entity_name", ""))
+	if not alias.is_empty():
+		names[alias] = true
+
+
+static func _node_has_any_name(entity: Node, names: Dictionary) -> bool:
+	return (
+		names.has(str(entity.name))
+		or (
+			not str(entity.get_meta("entity_name", "")).is_empty()
+			and names.has(str(entity.get_meta("entity_name", "")))
+		)
+	)
 
 
 func _create_pulse_overlay(entity: Node3D) -> MeshInstance3D:
@@ -366,6 +438,7 @@ func _ensure_mesh_instance() -> void:
 
 func cleanup() -> void:
 	_clear_highlight_overlays()
+	_selected_entity_refs.clear()
 	if _mesh_instance and is_instance_valid(_mesh_instance):
 		var parent: Node = _mesh_instance.get_parent()
 		if parent:

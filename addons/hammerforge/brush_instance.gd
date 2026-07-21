@@ -7,6 +7,7 @@ const BrushShape = LevelRootType.BrushShape
 const PrefabFactory = preload("prefab_factory.gd")
 const FaceData = preload("face_data.gd")
 const MaterialManager = preload("material_manager.gd")
+const HFOutlineUtil = preload("hf_outline_util.gd")
 
 @export var shape: int = BrushShape.BOX:
 	set = set_shape
@@ -16,16 +17,30 @@ const MaterialManager = preload("material_manager.gd")
 	set = set_operation
 @export var sides: int = 4:
 	set = set_sides
-@export var brush_id: String = ""
+# Internal persistent identity. Users should never need to understand or edit
+# this in the Inspector; native duplication is reconciled to a fresh ID.
+@export_storage var brush_id: String = ""
 @export var material_override: Material = null:
 	set = set_material_override
-@export var faces: Array[FaceData] = []
+@export var faces: Array[FaceData] = []:
+	set(value):
+		faces = value
+		_queue_gizmo_update()
 
 var editor_material: Material = null
 var mesh_instance: MeshInstance3D = null
 var selected_faces: PackedInt32Array = PackedInt32Array()
 var geometry_dirty := true
+var _gizmo_update_queued := false
 const MAX_PREVIEW_SURFACES := 200
+const BASE_MESH_MARKER_META := &"_hammerforge_base_mesh"
+const OVERLAY_MARKER_META := &"_hammerforge_visual_overlay"
+const OVERLAY_KIND_ADDITIVE := &"additive"
+const OVERLAY_KIND_SUBTRACT := &"subtract"
+const OVERLAY_KIND_ENTITY := &"entity"
+const ADDITIVE_OVERLAY_NAME := &"_AdditiveWireOverlay"
+const SUBTRACT_OVERLAY_NAME := &"_SubtractWireOverlay"
+const ENTITY_OVERLAY_NAME := &"_BrushEntityOverlay"
 
 
 func _ready() -> void:
@@ -34,10 +49,47 @@ func _ready() -> void:
 
 
 func _ensure_mesh_instance() -> void:
-	if not mesh_instance:
-		mesh_instance = MeshInstance3D.new()
+	# Node.duplicate() copies children but does not reliably restore this runtime
+	# reference. Adopt the copied private base mesh instead of creating a second
+	# overlapping MeshInstance3D, then discard only explicitly HammerForge-owned
+	# duplicates left by older versions.
+	if (
+		mesh_instance == null
+		or not is_instance_valid(mesh_instance)
+		or mesh_instance.get_parent() != self
+		or mesh_instance.is_queued_for_deletion()
+	):
+		mesh_instance = null
+
+	var private_base_meshes: Array[MeshInstance3D] = []
+	var legacy_base_mesh: MeshInstance3D = null
+	for child in get_children(true):
+		if not child is MeshInstance3D or child.is_queued_for_deletion():
+			continue
+		var candidate := child as MeshInstance3D
+		if bool(candidate.get_meta(BASE_MESH_MARKER_META, false)):
+			private_base_meshes.append(candidate)
+		elif candidate.name == &"Mesh" and legacy_base_mesh == null:
+			legacy_base_mesh = candidate
+
+	if mesh_instance == null:
+		if not private_base_meshes.is_empty():
+			mesh_instance = private_base_meshes[0]
+		elif legacy_base_mesh != null:
+			mesh_instance = legacy_base_mesh
+		else:
+			mesh_instance = MeshInstance3D.new()
+			mesh_instance.name = "Mesh"
+			add_child(mesh_instance)
+
+	mesh_instance.set_meta(BASE_MESH_MARKER_META, true)
+	for candidate in private_base_meshes:
+		if candidate != mesh_instance:
+			_discard_private_visual(candidate)
+	if legacy_base_mesh != null and legacy_base_mesh != mesh_instance:
+		_discard_private_visual(legacy_base_mesh)
+	if mesh_instance.name != &"Mesh":
 		mesh_instance.name = "Mesh"
-		add_child(mesh_instance)
 
 
 func get_faces() -> Array:
@@ -60,14 +112,31 @@ func assign_material_to_faces(mat_idx: int, face_indices: Array[int]) -> void:
 
 func set_shape(val: int) -> void:
 	shape = val
-	geometry_dirty = true
-	_update_visuals()
+	# Primitive meshes with a circular cross-section have fewer independent
+	# dimensions than Vector3 exposes. Normalize immediately so stored bounds,
+	# visible geometry, selection collision, and resize handles all agree.
+	set_size(size)
+	_queue_gizmo_update()
 
 
 func set_size(val: Vector3) -> void:
-	size = val
+	size = normalized_size_for_shape(shape, val)
 	geometry_dirty = true
+	_queue_gizmo_update()
 	_update_visuals()
+
+
+static func normalized_size_for_shape(shape_value: int, requested: Vector3) -> Vector3:
+	if shape_value == BrushShape.SPHERE:
+		var diameter := maxf(0.1, maxf(requested.x, requested.z))
+		return Vector3(diameter, diameter, diameter)
+	if shape_value in [BrushShape.CYLINDER, BrushShape.CONE, BrushShape.CAPSULE]:
+		var diameter := maxf(0.1, maxf(requested.x, requested.z))
+		var height := maxf(0.1, requested.y)
+		if shape_value == BrushShape.CAPSULE:
+			height = maxf(height, diameter)
+		return Vector3(diameter, height, diameter)
+	return requested
 
 
 func set_operation(val: int) -> void:
@@ -78,22 +147,50 @@ func set_operation(val: int) -> void:
 func set_sides(val: int) -> void:
 	sides = max(3, val)
 	geometry_dirty = true
+	_queue_gizmo_update()
 	_update_visuals()
 
 
 func set_material_override(val: Material) -> void:
 	material_override = val
-	_apply_material()
+	_refresh_preview_visuals()
 
 
 func set_editor_material(val: Material) -> void:
 	editor_material = val
-	_apply_material()
+	_refresh_preview_visuals()
+
+
+## Update the semantic brush-entity classification and refresh its visual cue
+## immediately. Production code should use this instead of mutating the
+## metadata directly so tie/untie, restore, and geometry operations cannot
+## leave a stale tint or overlay behind.
+func set_brush_entity_class(entity_class: String) -> void:
+	var normalized := entity_class.strip_edges()
+	if normalized.is_empty():
+		if has_meta("brush_entity_class"):
+			remove_meta("brush_entity_class")
+	else:
+		set_meta("brush_entity_class", normalized)
+	_refresh_preview_visuals()
 
 
 func clear_editor_material() -> void:
 	editor_material = null
-	_apply_material()
+	_refresh_preview_visuals()
+
+
+func _refresh_preview_visuals() -> void:
+	if not is_inside_tree():
+		return
+	_ensure_mesh_instance()
+	# Custom/painted geometry needs its surfaces rebuilt so material changes are
+	# reflected per face. Primitive previews can keep their mesh and only refresh
+	# the override, avoiding unnecessary geometry churn.
+	if _should_use_face_preview():
+		rebuild_preview()
+	else:
+		_apply_material(true)
 
 
 func _update_visuals() -> void:
@@ -103,13 +200,18 @@ func _update_visuals() -> void:
 	var build = _build_base_mesh()
 	var base_mesh: Mesh = build.get("mesh", null)
 	var mesh_scale: Vector3 = build.get("scale", Vector3.ONE)
-	if geometry_dirty or faces.is_empty():
+	# CUSTOM faces loaded from a scene are already the authoritative geometry.
+	# geometry_dirty is transient and defaults true on every reload; rebuilding
+	# here would replace a saved polygon/merge/path brush with the fallback box.
+	var preserve_custom_faces := shape == BrushShape.CUSTOM and not faces.is_empty()
+	if (geometry_dirty and not preserve_custom_faces) or faces.is_empty():
 		_rebuild_faces(base_mesh, mesh_scale)
 		geometry_dirty = false
 	rebuild_preview(base_mesh, mesh_scale)
 
 
 func rebuild_preview(base_mesh: Mesh = null, mesh_scale: Vector3 = Vector3.ONE) -> void:
+	_queue_gizmo_update()
 	if not mesh_instance:
 		return
 	if faces.is_empty():
@@ -177,10 +279,33 @@ func rebuild_preview(base_mesh: Mesh = null, mesh_scale: Vector3 = Vector3.ONE) 
 		surface_count += 1
 	mesh_instance.mesh = mesh if surface_count > 0 else base_mesh
 	mesh_instance.material_override = null
-	# Refresh wireframe overlays so they track the rebuilt mesh
-	_apply_brush_entity_overlay()
-	_apply_subtract_wireframe_overlay()
-	_apply_additive_wireframe_overlay()
+	_sync_visual_overlays()
+
+
+## Geometry setters and face rebuilds often cascade through several preview
+## methods in one frame. Coalesce them into one editor gizmo invalidation so
+## outlines, filled collision and handles refresh without redraw storms.
+func _queue_gizmo_update() -> void:
+	if _gizmo_update_queued or not is_inside_tree() or not Engine.is_editor_hint():
+		return
+	_gizmo_update_queued = true
+	call_deferred("_flush_gizmo_update")
+
+
+func _flush_gizmo_update() -> void:
+	if not _gizmo_update_queued:
+		return
+	_gizmo_update_queued = false
+	if is_inside_tree() and Engine.is_editor_hint():
+		update_gizmos()
+
+
+## Handle drags need immediate feedback. Let the gizmo plugin consume a queued
+## deferred refresh so the same geometry change is not redrawn twice.
+func _refresh_editor_gizmo_now() -> void:
+	_gizmo_update_queued = false
+	if is_inside_tree() and Engine.is_editor_hint():
+		update_gizmos()
 
 
 func _rebuild_faces(base_mesh: Mesh, mesh_scale: Vector3) -> void:
@@ -309,19 +434,47 @@ func _build_wedge_mesh() -> ArrayMesh:
 	return PrefabFactory._mesh_from_faces(vertices, faces)
 
 
+## Single semantic outline source shared by idle hover and the native selection
+## gizmo. Curved primitives use a few readable profiles; generated polyhedra
+## keep real creases while dropping coplanar triangulation diagonals.
+func get_editor_outline_lines() -> PackedVector3Array:
+	var outline_size := normalized_size_for_shape(shape, size)
+	match shape:
+		BrushShape.BOX:
+			return HFOutlineUtil.box_lines(outline_size)
+		BrushShape.CYLINDER:
+			return HFOutlineUtil.cylinder_lines(outline_size)
+		BrushShape.SPHERE:
+			return HFOutlineUtil.sphere_lines(outline_size)
+		BrushShape.CONE:
+			return HFOutlineUtil.cone_lines(outline_size)
+		BrushShape.ELLIPSOID:
+			return HFOutlineUtil.ellipsoid_lines(outline_size)
+		BrushShape.CAPSULE:
+			return HFOutlineUtil.capsule_lines(outline_size)
+		BrushShape.TORUS:
+			return HFOutlineUtil.torus_lines(outline_size)
+		BrushShape.PYRAMID:
+			return HFOutlineUtil.mesh_line_vertices(_generate_wire_mesh())
+		BrushShape.CUSTOM:
+			var custom_lines := HFOutlineUtil.semantic_face_lines(faces)
+			return custom_lines if not custom_lines.is_empty() else HFOutlineUtil.box_lines(size)
+		_:
+			var semantic_lines := HFOutlineUtil.semantic_face_lines(faces)
+			if not semantic_lines.is_empty():
+				return semantic_lines
+			return HFOutlineUtil.mesh_line_vertices(_generate_wire_mesh())
+
+
 func _build_prism_mesh(edge_count: int) -> ArrayMesh:
 	var count = max(3, edge_count)
-	var rx = size.x * 0.5
-	var ry = size.y * 0.5
 	var half_z = size.z * 0.5
 	var base: Array = []
 	var top: Array = []
-	for i in range(count):
-		var angle = TAU * float(i) / float(count)
-		var x = cos(angle) * rx
-		var y = sin(angle) * ry
-		base.append(Vector3(x, y, -half_z))
-		top.append(Vector3(x, y, half_z))
+	var profile := PrefabFactory._regular_polygon_points(count, Vector2(size.x, size.y) * 0.5)
+	for point in profile:
+		base.append(Vector3(point.x, point.y, -half_z))
+		top.append(Vector3(point.x, point.y, half_z))
 	var st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	for i in range(count):
@@ -391,8 +544,14 @@ func _faces_from_mesh(mesh: Mesh, mesh_scale: Vector3) -> Array[FaceData]:
 		if arrays.is_empty():
 			continue
 		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-		var uvs: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV]
-		var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+		var uvs := PackedVector2Array()
+		var uv_data = arrays[Mesh.ARRAY_TEX_UV]
+		if uv_data is PackedVector2Array:
+			uvs = uv_data
+		var indices := PackedInt32Array()
+		var index_data = arrays[Mesh.ARRAY_INDEX]
+		if index_data is PackedInt32Array:
+			indices = index_data
 		if indices.is_empty():
 			for i in range(0, verts.size(), 3):
 				if i + 2 >= verts.size():
@@ -581,6 +740,11 @@ func _can_use_paint_preview() -> bool:
 
 
 func _should_use_face_preview() -> bool:
+	# CUSTOM is the authoritative face representation produced by polygon/path,
+	# merge, and imported geometry. Falling back to _build_base_mesh() would show
+	# a misleading box whenever those faces have no explicit material assigned.
+	if shape == BrushShape.CUSTOM and not faces.is_empty():
+		return true
 	for face in faces:
 		if face == null:
 			continue
@@ -610,6 +774,44 @@ func apply_serialized_faces(data: Array) -> void:
 			faces.append(FaceData.from_dict(entry))
 	if needs_winding_migration:
 		_migrate_face_winding()
+	geometry_dirty = false
+	rebuild_preview()
+
+
+## Godot's native Scene-tree Duplicate copies exported Resource references.
+## Give the new brush an independent mutable face graph before either copy can
+## be edited through the Inspector, paint tools, or displacement tools.
+func make_face_resources_unique() -> void:
+	var unique_faces: Array[FaceData] = []
+	for source_face in faces:
+		if source_face == null:
+			continue
+		var face_copy := FaceData.new()
+		face_copy.material_idx = source_face.material_idx
+		face_copy.uv_projection = source_face.uv_projection
+		face_copy.uv_scale = source_face.uv_scale
+		face_copy.uv_offset = source_face.uv_offset
+		face_copy.uv_rotation = source_face.uv_rotation
+		face_copy.custom_uvs = source_face.custom_uvs.duplicate()
+		face_copy.local_verts = source_face.local_verts.duplicate()
+		face_copy.ensure_geometry()
+		var unique_layers: Array[FaceData.PaintLayer] = []
+		for source_layer in source_face.paint_layers:
+			if source_layer == null:
+				continue
+			var layer_copy := FaceData.PaintLayer.new()
+			layer_copy.texture = source_layer.texture
+			layer_copy.weight_image = (
+				source_layer.weight_image.duplicate() if source_layer.weight_image != null else null
+			)
+			layer_copy.blend_mode = source_layer.blend_mode
+			layer_copy.opacity = source_layer.opacity
+			unique_layers.append(layer_copy)
+		face_copy.paint_layers = unique_layers
+		if source_face.displacement != null:
+			face_copy.displacement = source_face.displacement.duplicate(true)
+		unique_faces.append(face_copy)
+	faces = unique_faces
 	geometry_dirty = false
 	rebuild_preview()
 
@@ -699,14 +901,15 @@ func _build_wedge_lines(st: SurfaceTool, target_size: Vector3) -> void:
 
 func _build_pyramid_lines(st: SurfaceTool, target_size: Vector3, edge_count: int) -> void:
 	var count = max(3, edge_count)
-	var rx = target_size.x * 0.5
-	var rz = target_size.z * 0.5
-	var apex = Vector3(0.0, target_size.y, 0.0)
-	var base_y = 0.0
+	var half_y = target_size.y * 0.5
+	var apex = Vector3(0.0, half_y, 0.0)
+	var base_y = -half_y
 	var base: Array = []
-	for i in range(count):
-		var angle = TAU * float(i) / float(count)
-		base.append(Vector3(cos(angle) * rx, base_y, sin(angle) * rz))
+	var profile := PrefabFactory._regular_polygon_points(
+		count, Vector2(target_size.x, target_size.z) * 0.5
+	)
+	for point in profile:
+		base.append(Vector3(point.x, base_y, point.y))
 	for i in range(count):
 		var v0: Vector3 = base[i]
 		var v1: Vector3 = base[(i + 1) % count]
@@ -716,17 +919,15 @@ func _build_pyramid_lines(st: SurfaceTool, target_size: Vector3, edge_count: int
 
 func _build_prism_lines(st: SurfaceTool, target_size: Vector3, edge_count: int) -> void:
 	var count = max(3, edge_count)
-	var rx = target_size.x * 0.5
-	var ry = target_size.y * 0.5
 	var half_z = target_size.z * 0.5
 	var base: Array = []
 	var top: Array = []
-	for i in range(count):
-		var angle = TAU * float(i) / float(count)
-		var x = cos(angle) * rx
-		var y = sin(angle) * ry
-		base.append(Vector3(x, y, -half_z))
-		top.append(Vector3(x, y, half_z))
+	var profile := PrefabFactory._regular_polygon_points(
+		count, Vector2(target_size.x, target_size.y) * 0.5
+	)
+	for point in profile:
+		base.append(Vector3(point.x, point.y, -half_z))
+		top.append(Vector3(point.x, point.y, half_z))
 	for i in range(count):
 		var b0: Vector3 = base[i]
 		var b1: Vector3 = base[(i + 1) % count]
@@ -788,9 +989,7 @@ func _apply_material(force: bool = false) -> void:
 		return
 	if not force and faces.size() > 0:
 		mesh_instance.material_override = null
-		_apply_brush_entity_overlay()
-		_apply_subtract_wireframe_overlay()
-		_apply_additive_wireframe_overlay()
+		_sync_visual_overlays()
 		return
 	var mat: Material = null
 	if material_override:
@@ -829,114 +1028,172 @@ func _apply_material(force: bool = false) -> void:
 		base.roughness = 0.6
 		mat = base
 	mesh_instance.material_override = mat
-	_apply_brush_entity_overlay()
-	_apply_subtract_wireframe_overlay()
-	_apply_additive_wireframe_overlay()
+	_sync_visual_overlays()
 
 
-func _apply_brush_entity_overlay() -> void:
-	# Remove existing overlay
-	var existing = get_node_or_null("_BrushEntityOverlay")
-	if existing:
-		existing.queue_free()
+func _sync_visual_overlays() -> void:
+	# Overlay nodes used to be queue_free()'d and immediately recreated. During
+	# rapid drag rebuilds the queued node kept its name until the frame ended,
+	# so Godot auto-renamed every replacement and rendered all of them together.
+	# Reuse one live node per semantic overlay and detach stale nodes immediately.
+	var has_mesh := mesh_instance != null and mesh_instance.mesh != null
+	var brush_entity_class := str(get_meta("brush_entity_class", ""))
+	var desired := {
+		OVERLAY_KIND_ENTITY: has_mesh and brush_entity_class != "",
+		OVERLAY_KIND_SUBTRACT: has_mesh and operation == CSGShape3D.OPERATION_SUBTRACTION,
+	}
+	var retained: Dictionary = {}
 
-	var bec = str(get_meta("brush_entity_class", ""))
-	if bec == "":
-		return
-	if not mesh_instance or not mesh_instance.mesh:
-		return
+	for child in get_children(true):
+		var kind := _visual_overlay_kind(child)
+		if kind == &"":
+			continue
+		var can_reuse := (
+			bool(desired.get(kind, false))
+			and child is MeshInstance3D
+			and not child.is_queued_for_deletion()
+			and not retained.has(kind)
+		)
+		if can_reuse:
+			retained[kind] = child
+		else:
+			_discard_visual_overlay(child)
 
-	# Create a wireframe overlay for brush entities
-	var overlay = MeshInstance3D.new()
-	overlay.name = "_BrushEntityOverlay"
+	# Ordinary additive brushes deliberately have no topology overlay. Godot's
+	# editor gizmo already provides a concise selection outline when it is useful.
+	if bool(desired[OVERLAY_KIND_ENTITY]):
+		var entity_overlay := _ensure_visual_overlay(
+			retained, OVERLAY_KIND_ENTITY, ENTITY_OVERLAY_NAME
+		)
+		_configure_entity_overlay(entity_overlay, brush_entity_class)
+	if bool(desired[OVERLAY_KIND_SUBTRACT]):
+		var subtract_overlay := _ensure_visual_overlay(
+			retained, OVERLAY_KIND_SUBTRACT, SUBTRACT_OVERLAY_NAME
+		)
+		_configure_subtract_overlay(subtract_overlay)
+
+
+func _ensure_visual_overlay(
+	retained: Dictionary, kind: StringName, canonical_name: StringName
+) -> MeshInstance3D:
+	var overlay := retained.get(kind, null) as MeshInstance3D
+	if overlay == null:
+		overlay = MeshInstance3D.new()
+		overlay.name = canonical_name
+		add_child(overlay, false, Node.INTERNAL_MODE_BACK)
+	elif overlay.name != canonical_name:
+		overlay.name = canonical_name
+	overlay.set_meta(OVERLAY_MARKER_META, kind)
 	overlay.mesh = mesh_instance.mesh
 	overlay.transform = mesh_instance.transform
-	var mat = StandardMaterial3D.new()
+	overlay.visible = true
+	overlay.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	overlay.owner = null
+	return overlay
+
+
+func _configure_entity_overlay(overlay: MeshInstance3D, brush_entity_class: String) -> void:
+	var mat := overlay.material_override as StandardMaterial3D
+	if mat == null:
+		mat = StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.no_depth_test = true
-	if bec == "func_detail":
+	if brush_entity_class == "func_detail":
 		mat.albedo_color = Color(0.2, 0.4, 1.0, 0.12)
-	elif bec == "func_wall":
+	elif brush_entity_class == "func_wall":
 		mat.albedo_color = Color(0.2, 0.35, 0.85, 0.08)
-	elif bec.begins_with("trigger_"):
+	elif brush_entity_class.begins_with("trigger_"):
 		mat.albedo_color = Color(0.3, 0.45, 1.0, 0.15)
 	else:
 		mat.albedo_color = Color(0.3, 0.4, 0.8, 0.1)
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	overlay.material_override = mat
-	overlay.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(overlay)
-	overlay.owner = null
 
 
-static var _subtract_wireframe_shader: Shader = null
+func _configure_subtract_overlay(overlay: MeshInstance3D) -> void:
+	# Subtraction is a semantic state, not a request to expose render topology.
+	# Reuse the same restrained outline as hover/selection and keep it depth-aware
+	# so boxes have twelve edges and curved brushes do not become dense cages.
+	overlay.mesh = HFOutlineUtil.line_mesh(get_editor_outline_lines())
+	overlay.transform = Transform3D.IDENTITY
+	var mat := overlay.material_override as StandardMaterial3D
+	if mat == null:
+		mat = StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.no_depth_test = false
+	mat.albedo_color = Color(1.0, 0.25, 0.2, 0.7)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	overlay.material_override = mat
+
+
+func _visual_overlay_kind(node: Node) -> StringName:
+	if node.has_meta(OVERLAY_MARKER_META):
+		var marked_kind := StringName(str(node.get_meta(OVERLAY_MARKER_META)))
+		if marked_kind in [OVERLAY_KIND_ADDITIVE, OVERLAY_KIND_SUBTRACT, OVERLAY_KIND_ENTITY]:
+			return marked_kind
+
+	var node_name := str(node.name)
+	if node_name.begins_with(str(ADDITIVE_OVERLAY_NAME)):
+		return OVERLAY_KIND_ADDITIVE
+	if node_name.begins_with(str(SUBTRACT_OVERLAY_NAME)):
+		return OVERLAY_KIND_SUBTRACT
+	if node_name.begins_with(str(ENTITY_OVERLAY_NAME)):
+		return OVERLAY_KIND_ENTITY
+
+	# Old add_child() collisions can be assigned an unreadable generated name.
+	# Identify only the private, shadowless overlay material signatures so normal
+	# MeshInstance3D children are never mistaken for HammerForge overlays.
+	if not (node is MeshInstance3D) or node == mesh_instance:
+		return &""
+	if not node_name.begins_with("@MeshInstance3D@") or node.owner != null:
+		return &""
+	var overlay := node as MeshInstance3D
+	if overlay.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF:
+		return &""
+	var material := overlay.material_override
+	if material is ShaderMaterial:
+		var shader := (material as ShaderMaterial).shader
+		var shader_code := shader.code if shader != null else ""
+		if "vec4(0.2, 0.8, 0.2, 0.5)" in shader_code:
+			return OVERLAY_KIND_ADDITIVE
+		if "vec4(1.0, 0.25, 0.2, 0.7)" in shader_code:
+			return OVERLAY_KIND_SUBTRACT
+	elif material is StandardMaterial3D:
+		var standard := material as StandardMaterial3D
+		if (
+			standard.shading_mode == BaseMaterial3D.SHADING_MODE_UNSHADED
+			and standard.no_depth_test
+			and standard.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA
+			and standard.cull_mode == BaseMaterial3D.CULL_DISABLED
+		):
+			return OVERLAY_KIND_ENTITY
+	return &""
+
+
+func _discard_visual_overlay(node: Node) -> void:
+	# remove_child() stops rendering now; queue_free() alone leaves the duplicate
+	# visible and name-reserved until the end of the frame.
+	_discard_private_visual(node)
+
+
+func _discard_private_visual(node: Node) -> void:
+	if node.get_parent() == self:
+		remove_child(node)
+	if not node.is_queued_for_deletion():
+		node.queue_free()
+
+
+# Compatibility entry points for editor code or third-party tools that called
+# the previous private helpers directly.
+func _apply_brush_entity_overlay() -> void:
+	_sync_visual_overlays()
 
 
 func _apply_subtract_wireframe_overlay() -> void:
-	var existing = get_node_or_null("_SubtractWireOverlay")
-	if existing:
-		existing.queue_free()
-
-	if operation != CSGShape3D.OPERATION_SUBTRACTION:
-		return
-	if not mesh_instance or not mesh_instance.mesh:
-		return
-
-	if _subtract_wireframe_shader == null:
-		_subtract_wireframe_shader = Shader.new()
-		_subtract_wireframe_shader.code = (
-			"shader_type spatial;\n"
-			+ "render_mode unshaded, cull_disabled, wireframe, depth_draw_never;\n"
-			+ "uniform vec4 color : source_color = vec4(1.0, 0.25, 0.2, 0.7);\n"
-			+ "void fragment() { ALBEDO = color.rgb; ALPHA = color.a; }\n"
-		)
-
-	var overlay = MeshInstance3D.new()
-	overlay.name = "_SubtractWireOverlay"
-	overlay.mesh = mesh_instance.mesh
-	overlay.transform = mesh_instance.transform
-	var smat = ShaderMaterial.new()
-	smat.shader = _subtract_wireframe_shader
-	overlay.material_override = smat
-	overlay.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(overlay)
-	overlay.owner = null
-
-
-static var _additive_wireframe_shader: Shader = null
+	_sync_visual_overlays()
 
 
 func _apply_additive_wireframe_overlay() -> void:
-	var existing = get_node_or_null("_AdditiveWireOverlay")
-	if existing:
-		existing.queue_free()
-
-	if operation == CSGShape3D.OPERATION_SUBTRACTION:
-		return
-	# Skip if this brush has a brush entity class (entity overlay is sufficient)
-	var bec = str(get_meta("brush_entity_class", ""))
-	if bec != "":
-		return
-	if not mesh_instance or not mesh_instance.mesh:
-		return
-
-	if _additive_wireframe_shader == null:
-		_additive_wireframe_shader = Shader.new()
-		_additive_wireframe_shader.code = (
-			"shader_type spatial;\n"
-			+ "render_mode unshaded, cull_disabled, wireframe, depth_draw_never;\n"
-			+ "uniform vec4 color : source_color = vec4(0.2, 0.8, 0.2, 0.5);\n"
-			+ "void fragment() { ALBEDO = color.rgb; ALPHA = color.a; }\n"
-		)
-
-	var overlay = MeshInstance3D.new()
-	overlay.name = "_AdditiveWireOverlay"
-	overlay.mesh = mesh_instance.mesh
-	overlay.transform = mesh_instance.transform
-	var smat = ShaderMaterial.new()
-	smat.shader = _additive_wireframe_shader
-	overlay.material_override = smat
-	overlay.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(overlay)
-	overlay.owner = null
+	_sync_visual_overlays()

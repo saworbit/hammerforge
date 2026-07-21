@@ -47,9 +47,6 @@ var entity_system = null
 
 func _assign_owner(node: Node) -> void:
 	pass
-
-func get_selected_entities() -> Array:
-	return []
 """
 	s.reload()
 	return s
@@ -201,6 +198,52 @@ func test_set_highlight_connected():
 	assert_true(viz.highlight_connected)
 	viz.set_highlight_connected(false)
 	assert_false(viz.highlight_connected)
+
+
+func test_live_selection_colors_connection_and_pulses_connected_alias_target():
+	var source := _make_entity("trigger_1", Vector3.ZERO)
+	var target := _make_entity("light_node", Vector3(2, 0, 0))
+	target.set_meta("entity_name", "door_1")
+	sys.add_entity_output(source, "OnTrigger", "door_1", "Open")
+
+	viz.set_enabled(true)
+	viz.set_highlight_connected(true)
+	viz.set_selected_entities([target])
+
+	assert_eq(viz._get_selected_names(), {"light_node": true, "door_1": true})
+	assert_eq(viz._immediate_mesh.get_surface_count(), 1)
+	var arrays := viz._immediate_mesh.surface_get_arrays(0)
+	var colors: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
+	assert_false(colors.is_empty(), "The live connection mesh should contain vertex colors")
+	if not colors.is_empty():
+		assert_almost_eq(colors[0].r, HFIOVisualizer.SELECTED_COLOR.r, 0.005)
+		assert_almost_eq(colors[0].g, HFIOVisualizer.SELECTED_COLOR.g, 0.005)
+		assert_almost_eq(colors[0].b, HFIOVisualizer.SELECTED_COLOR.b, 0.005)
+		assert_almost_eq(colors[0].a, HFIOVisualizer.SELECTED_COLOR.a, 0.005)
+	assert_eq(viz._highlight_overlays.size(), 1, "The connected source should pulse")
+	if not viz._highlight_overlays.is_empty():
+		assert_eq(viz._highlight_overlays[0].global_position, Vector3(0, 0.3, 0))
+
+	# Names are derived from the weakly referenced object during refresh, not
+	# cached when selection changes.
+	target.name = "renamed_light"
+	viz.refresh()
+	assert_eq(viz._get_selected_names(), {"renamed_light": true, "door_1": true})
+
+
+func test_selection_normalizes_descendants_and_releases_deleted_entities():
+	var entity := _make_entity("relay")
+	var preview := Node3D.new()
+	entity.add_child(preview)
+	viz.set_selected_entities([preview, entity])
+	assert_eq(viz._selected_entity_refs.size(), 1)
+	assert_eq(viz._get_selected_names(), {"relay": true})
+
+	root.entities_node.remove_child(entity)
+	entity.queue_free()
+	await wait_process_frames(2)
+	assert_true(viz._get_selected_names().is_empty())
+	assert_true(viz._selected_entity_refs.is_empty())
 
 
 func test_highlight_off_clears_overlays():

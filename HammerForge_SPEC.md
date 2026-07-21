@@ -1,6 +1,6 @@
 # HammerForge Spec
 
-Last updated: April 3, 2026
+Last updated: July 21, 2026
 
 This document describes HammerForge's architecture and data flow.
 
@@ -36,7 +36,7 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `user_message(text, level)` | Subsystem-to-dock notification routing (0=INFO, 1=WARNING, 2=ERROR) |
 | `material_list_changed()` | Material palette updated (add/remove) |
 | `face_selection_changed()` | Face selection changed (snapshot comparison) |
-| `selection_clear_requested()` | Dock requests plugin clear `hf_selection` before `editor_selection.clear()` (reimport guard) |
+| `selection_clear_requested()` | Dock requests that the plugin clear its mirrored selection before clearing Godot's authoritative `EditorSelection` |
 
 ### Core Scripts
 
@@ -47,6 +47,9 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `dock.gd` + `dock.tscn` | UI dock (4 tabs: Brush, Paint, Entities, Manage), collapsible sections, tool state |
 | `ui/collapsible_section.gd` | Reusable `HFCollapsibleSection` toggle-header VBoxContainer |
 | `input_state.gd` | Drag/paint/extrude state machine (`Mode` enum: IDLE, DRAG_BASE, DRAG_HEIGHT, SURFACE_PAINT, EXTRUDE) |
+| `hf_selection_gesture.gd` | Native Object Select / modal Face Select gesture ownership and recovery state |
+| `hf_brush_change_tracker.gd` | Stable-ID reconciliation for Godot-owned gizmo, Inspector, and undo/redo brush changes |
+| `brush_gizmo_plugin.gd` | Semantic brush/entity gizmos, filled native hit targets, and shape-aware resize handles |
 | `hf_extrude_tool.gd` | Extrude Up/Down tool (face pick + drag to extend brushes) |
 | `brush_instance.gd` | DraftBrush node (authored geometry) |
 | `baker.gd` | CSG -> mesh bake pipeline |
@@ -106,7 +109,7 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 ### Other Modules
 
 - `addons/hammerforge/ui/collapsible_section.gd`: `HFCollapsibleSection` -- reusable collapsible section with toggle-header button
-- `addons/hammerforge/highlight.gdshader`: selection highlight shader (wireframe, unshaded, alpha)
+- `addons/hammerforge/hf_outline_util.gd`: semantic hover/gizmo lines, exact face/entity collision triangles, geometry-less entity markers, and line-mesh helpers
 - `addons/hammerforge/hf_prototype_textures.gd`: `HFPrototypeTextures` -- 150 built-in SVG textures (15 patterns x 10 colors) with static catalog API
 - `addons/hammerforge/textures/prototypes/`: embedded SVG texture library for greyboxing
 - `addons/hammerforge/hf_measure_tool.gd`: `HFMeasureTool` -- multi-ruler measurement tool (tool_id=100, persistent rulers, angle display, snap reference)
@@ -185,6 +188,7 @@ LevelRoot (Node3D)
 - Position compensation: `uv_offset -= projected_delta * uv_scale`.
 - Size compensation: `uv_scale *= inverse_size_ratio` per projection axis.
 - Hook in `hf_brush_system.gd:set_brush_transform_by_id()` captures old transform, applies new, then adjusts UVs.
+- HammerForge move, nudge, floor/ceiling, and resize paths use that boundary. Godot's native Node3D transform widget intentionally leaves face UV resources unchanged because its native undo action does not capture those nested Resource edits.
 
 ## Cordon (Partial Bake)
 - Restricts bake to an AABB region. Brushes outside the cordon are skipped.
@@ -206,7 +210,7 @@ LevelRoot (Node3D)
 - **Merge** (Ctrl+Shift+M): combines 2+ selected brushes into a single CUSTOM brush. Transforms all face `local_verts` and normals through the full `Transform3D` pipeline (source local → world → merged local via `affine_inverse()`), so rotated/scaled brushes merge correctly. Per-brush `material_override` is registered into MaterialManager and stamped as per-face `material_idx`. Validates same operation type. Inherits metadata from first brush.
 - **Numeric input**: type exact dimensions during drag or extrude (Enter applies, Backspace edits).
 - **UV Justify**: fit/center/left/right/top/bottom alignment modes for selected faces.
-- Bake builds a temporary CSG tree from DraftBrushes + CommittedCuts and outputs BakedGeometry. If cordon is enabled, only brushes intersecting the cordon AABB are included. Brush entity classes `func_detail` and `trigger_*` are excluded from structural bake.
+- Bake builds a temporary CSG tree from DraftBrushes + CommittedCuts and outputs BakedGeometry. If cordon is enabled, transformed geometry bounds—not an untranslated local AABB—determine inclusion. Brush entity classes `func_detail` and `trigger_*` are excluded from structural bake. Commit Cuts prepares and bakes outside UndoRedo, then stores exact source and baked snapshots for synchronous undo/redo; failed preparation leaves its cutters pending.
 - Undo/redo actions prefer brush IDs and state snapshots over long-lived Node references.
 - **Command collation**: `HFUndoHelper` supports a `collation_tag` parameter. Consecutive actions with the same tag and same `full_state` scope within 1 second merge into one undo entry via `MERGE_ENDS` (nudge, resize, paint). Mismatched `full_state` breaks the collation window.
 - **Transactions**: `HFStateSystem` provides `begin_transaction()` / `commit_transaction()` / `rollback_transaction()` for atomic multi-step operations. The transaction captures a state snapshot on begin and restores it on rollback.
@@ -323,12 +327,12 @@ Foliage Populator
 - Chunked baking (default `bake_chunk_size = 32`): groups brushes by grid coordinate, bakes each chunk independently.
 - Owner assignment uses `_assign_owner_recursive()` after the baked container is added to the tree (avoids premature owner errors during chunked bake).
 - Optional mesh merging, LODs, lightmap UV2, navmesh.
-- Optional face-material bake (per-face materials, no CSG).
+- Optional face-material bake (per-face materials without CSG) only when no effective structural subtractor exists; any pending/applied/frozen cut forces CSG so rendered geometry and collision preserve the boolean result.
 - **Automated occluder generation** (`bake_generate_occluders`): `postprocess_bake()` scans all baked `MeshInstance3D` nodes (recursing into `BakedChunk_*` intermediary nodes), groups coplanar triangles by normal (5° threshold) and plane distance (0.1 unit threshold), and creates `OccluderInstance3D` with `ArrayOccluder3D` per group exceeding `bake_occluder_min_area` (default 4.0 world units²). Occluders are parented under an `Occluders` Node3D child of the baked container. Idempotent — re-bake replaces previous occluders.
 - Collision uses Add brushes only.
 - Navmesh defaults: `cell_height = 0.25` (matches Godot NavigationServer3D map default).
 - **Bake Selected** (`bake_selected()`): bakes only selected brushes and merges output into the existing `baked_container` (does not replace it).
-- **Bake Changed** (`bake_dirty()`): bakes only brushes with dirty tags (`_dirty_brush_ids`). Tags are cleared only when `_last_bake_success` is true; failed bakes retain all dirty tags.
+- **Bake Changed** (`bake_dirty()`): bakes only brushes with dirty tags (`_dirty_brush_ids`). A run claims its starting tags; failure restores them, while edits tagged during the asynchronous run remain queued for the next bake.
 - **Preview modes** (`PreviewMode` enum: FULL, WIREFRAME, PROXY): `_apply_preview_visuals()` overrides material on baked meshes. Wireframe uses inline `ShaderMaterial` with `render_mode wireframe`. Proxy uses unshaded semi-transparent `StandardMaterial3D`.
 - **Bake time estimate** (`estimate_bake_time()`): ratio-based extrapolation from `_last_bake_duration_ms` and brush count.
 - **Bake issue detection** (`HFValidationSystem.check_bake_issues()`): returns Array of `{type, severity, message, node}` dicts. Checks: degenerate brush (sev=2), oversized (sev=1), floating subtract (sev=1), overlapping subtracts (sev=1), non-manifold edges (sev=2), open edges (sev=1), non-planar faces (sev=1), micro-gaps between brushes (sev=1), occlusion coverage (sev=0 info or sev=1 warning). Non-planar detection uses `planarity_tolerance` (default 0.01). Micro-gap detection uses `weld_tolerance` (default 0.001). Both use 27-cell spatial hash neighbor lookup for boundary-safe distance checks. `_edge_key()` for topology (non-manifold/open-edge) uses fixed 0.001 precision, intentionally decoupled from `weld_tolerance`.
@@ -392,13 +396,21 @@ The dock uses 4 tabs with collapsible sections for visual hierarchy:
 
 ## LevelRoot Discovery
 - `plugin.gd` uses sticky `active_root`: selecting non-LevelRoot nodes does not null the reference.
-- `_handles()` returns true for any node when a LevelRoot exists in the scene (deep recursive search).
+- `_handles()` claims only `LevelRoot`, HammerForge brushes/entities, and managed entity subtrees. Cameras, lights, controls, and other native nodes remain owned by Godot.
 - `_edit()` only nulls `active_root` when the root node is removed from the tree.
 - `dock.gd` mirrors the sticky pattern and uses `_find_level_root_in()` for deep tree search.
 
-## Selection Guard (Reimport Resilience)
-- `plugin.gd` suppresses spurious empty `selection_changed` signals via `should_suppress_empty_selection()` (static method). Texture reimport can trigger Godot's EditorSelection to emit empty selections; the guard ignores these when `hf_selection` is non-empty.
-- **Intentional deselect protocol**: clear `hf_selection` *before* calling `editor_selection.clear()`. Plugin deselect paths (Escape, delete, duplicate) do this directly. Dock deselect paths (`_on_clear_selection_pressed`, `_on_commit_cuts`) emit `selection_clear_requested` signal; plugin's `_on_dock_selection_clear` handler clears `hf_selection` in response.
+## Selection and Gizmo Arbitration
+- Godot's visible `EditorSelection` is authoritative, including an empty selection. HammerForge mirrors it instead of retaining a hidden stale cache; the deprecated `should_suppress_empty_selection()` compatibility helper always returns `false`.
+- Every ordinary Object Select LMB press uses Godot's native viewport pipeline for click, empty-space marquee, modifiers, gesture threshold, and complete transform/property-widget ownership, including keys such as Escape and Ctrl+Arrow while the claim is active or opaque. Shift retains Godot's native additive/active-selection behavior; Ctrl/Cmd stay Godot-owned and are not reinterpreted as a HammerForge Object Select toggle. Brush gizmos contribute exact filled face triangles plus semantic collision segments; entity gizmos combine every healthy preview triangle with restrained null/line-only sibling markers, preserve top-level child transforms in entity-local space, and respect hidden ancestors. A truly geometry-less `DraftEntity` gets a quiet one-unit box target, while a deliberately hidden/empty preview gets no invisible fallback.
+- Face Select is modal. Entry selects the built-in Select tool, disables Paint, snapshots and clears the object `EditorSelection`, and hides Godot transform plus HammerForge resize gizmos before any face press can overlap them. Manual exit clears faces and restores valid snapshot nodes. Leaving Paint, switching to an incompatible built-in/external tool, or entering vertex edit closes the mode through the same restore path. A new native/Scene-tree object selection exits Face Select and keeps that new object instead of restoring the snapshot. Escape clears selected faces first, then exits/restores on the next press, or exits immediately when there are no selected faces.
+- Face clicks and marquees use HammerForge's visible-face logic with `AFTER_GUI_INPUT_CUSTOM`, which suppresses competing node/region selection but still lets Godot finish custom gizmo cleanup. Shift adds and Ctrl/Cmd toggles. Marquee candidates must be canonical visible brush faces with projected centers in the rectangle, and the canonical ray pick at each center must identify that same brush/face as the frontmost visible hit.
+- Deferred normalization maps internal preview hits to their HammerForge owner and expands grouped nodes as a unit. `classify_selection_scope()` passes native-only keyboard actions through, applies managed commands only to HammerForge-only selections, and blocks mixed selections with a warning. The same mixed-selection guard applies to context-toolbar, viewport-context-menu, hotkey-palette, and radial dispatch, with selection-dependent UI unavailable instead of offering a partial HammerForge edit.
+- Delete, Duplicate, and nudge treat canonical `DraftEntity` nodes as managed selections alongside brushes. `LevelRoot` delegates each domain to its owning system under one undo action; entity duplication retains entity data and group/visgroup membership, while deletion cleans group/visgroup membership and dangling I/O connections.
+- Brush AABBs are broad-phase only for HammerForge pickers. The final object, hover, face-tool, and editor-placement fallback uses actual visible face triangles, so empty space inside a wedge, cone, pyramid, curved, or custom brush cannot select, occlude, or receive a dropped item. Brush/entity candidates share one world-ray distance comparison, including under non-uniform scale.
+- Hover, selected gizmos, and subtract operation styling share `DraftBrush.get_editor_outline_lines()`: angular/custom shapes retain boundaries and true creases without coplanar triangulation diagonals, curved primitives use sparse semantic profiles rather than render cages or fallback boxes, and degenerate planar/linear bounds emit no duplicate or zero-length lines.
+- Resize handles are shape-aware as well as transform-aware. Spheres couple X/Y/Z, cylinder/cone/capsule X/Z handles couple the radial axes, capsule Y stays at least its diameter, and all shapes snap world extents while anchoring the opposite face under rotated/non-uniformly scaled parents. Odd-sided prisms and adjustable pyramids use one centered AABB-normalized polygon contract across preview, outline, bake, and handle bounds.
+- Buttonless motion and application/window focus loss recover stale native selection, RMB, paint, vertex, and handle ownership. A lost custom-handle release restores/freezes its preview, releases the local latch after a bounded deferred turn if Godot never commits, and suppresses any late callback so it cannot mutate geometry or create undo.
 
 ## Material Assignment Fallback
 - `dock.resolve_material_assign_action(mat_index)` returns `{action, method, args, toast}`. Used by `_on_material_assign()` and `_on_browser_material_double_clicked()`.
@@ -457,7 +469,7 @@ External tools expose `get_settings_schema()` → Array of `{name, type, label, 
 - O(1) brush ID lookup and brush count via `_brush_cache` / `_brush_count` in `HFBrushSystem`.
 - Material instance caching in `HFBrushSystem` (composite key: operation/solid/unshaded).
 - Persistent cordon `ImmediateMesh` reused via `clear_surfaces()` (no per-call allocation).
-- Selection highlight uses external `highlight.gdshader` (no inline GLSL strings).
+- Hover and selection highlights use semantic line meshes from `hf_outline_util.gd`; angular shapes expose only boundaries and real creases, curved primitives use sparse recognizable profiles, and custom brushes use their real deduplicated face boundaries. Selected brushes suppress a second coincident hover outline.
 
 ## Validation + Diagnostics
 - Validate Level scans for missing materials, zero-size brushes, invalid face indices, and paint layers without grids.
@@ -475,24 +487,26 @@ Unit tests use the [GUT](https://github.com/bitwes/Gut) framework and run headle
 | `test_grouping.gd` | 9 | Group creation, meta storage, ungroup, regroup, serialization |
 | `test_texture_lock.gd` | 10 | UV offset/scale compensation for PLANAR_X/Y/Z, BOX_UV, CYLINDRICAL |
 | `test_cordon_filter.gd` | 10 | AABB intersection, cordon-filtered collection, chunk_coord utility |
-| `test_keymap.gd` | 16 | Default bindings, key matching (simple/ctrl/shift/ctrl+shift), modifier rejection, display strings, rebinding, JSON roundtrip |
-| `test_user_prefs.gd` | 12 | Default values, get/set prefs, section collapse state, recent files (add/dedup/max 10), JSON roundtrip, hint dismissed/dismiss/roundtrip |
-| `test_dirty_tags.gd` | 11 | Brush dirty tags, paint chunk tags, full reconcile flag, consume-clears, signal batch queue/flush/discard/nesting |
+| `test_keymap.gd` | 20 | Default bindings, modifier matching, display strings, rebinding, JSON roundtrip, current action coverage |
+| `test_user_prefs.gd` | 13 | Defaults, get/set prefs, section state, recent files, JSON roundtrip, dismissed hints |
+| `test_dirty_tags.gd` | 17 | Exact transform/material/UV/paint/vertex tags, no-op suppression, paint/full tags, and batching |
 | `test_prototype_textures.gd` | 27 | Catalog constants, path generation, texture existence, material persistence (resource_path), batch loading into MaterialManager |
-| `test_op_result.gd` | 15 | HFOpResult constructors, hollow/clip/delete return values, fail emits user_message, fix_hint population |
-| `test_snap_system.gd` | 12 | Grid/Vertex/Center snap modes, threshold, exclude list, priority, empty scene fallback |
-| `test_drag_dimensions.gd` | 8 | get_drag_dimensions() in all modes, format_dimensions() whole/fractional/zero |
-| `test_reference_cleanup.gd` | 9 | Delete cleans group/visgroup membership, entity I/O cleanup_dangling_connections |
-| `test_bake_system.gd` | 38 | build_bake_options, structural/trigger filtering, chunk_coord, bake_dry_run, warn_bake_failure, estimate_bake_time, preview modes, _last_bake_success, dirty tag retention, wireframe ShaderMaterial |
+| `test_op_result.gd` | 30 | HFOpResult constructors and operation result/failure/fix-hint contracts |
+| `test_snap_system.gd` | 14 | Grid/Vertex/Center snap modes, preview exclusion, threshold, priority, fallback |
+| `test_drag_dimensions.gd` | 16 | Drag dimensions/formatting and normalized radial primitive placement |
+| `test_reference_cleanup.gd` | 8 | Delete cleans group/visgroup membership and dangling entity I/O safely |
+| `test_bake_system.gd` | 117 | Baked lifecycle/migration/snapshots, cut-safe face-material fallback, one-pass CSG visual/collision equivalence, options, collection, previews, dirty concurrency, connectors/navmesh, and mode integration |
 | `test_bake_issues.gd` | 10 | check_bake_issues: degenerate, oversized, floating subtract, overlapping subtracts, clean level, entity skip |
 | `test_weld_and_planarity.gd` | 21 | Non-planar detection, vertex welding + ensure_geometry refresh, planarity auto-fix, micro-gap detection, edge-key independence, boundary-straddling coverage, MapIO integration + unit |
-| `test_quick_play_modes.gd` | 12 | Severity blocking (0/1/2), cordon save/restore, dirty tag retention, camera yaw via entity_data, spawn restore |
+| `test_quick_play_modes.gd` | 13 | Severity blocking, cordon save/restore, dirty retention, camera yaw, spawn restore |
 | `test_integration.gd` | 22 | End-to-end: brush lifecycle, paint + heightmap, entity workflow, visgroup cross-system, snap, bake, I/O cleanup, info round-trip |
 | `test_shortcut_dialog.gd` | 8 | Category assignment (tools, paint, axis lock, editing), action labels, get_all_bindings copy safety |
-| `test_tutorial_wizard.gd` | 7 | Step advancement, persistence, skip/dismiss, validate_subtract, no-root safety |
-| `test_subtract_preview.gd` | 8 | AABB intersection math (overlapping, no-overlap, contained, partial axis), enable/disable, debounce |
-| `test_prefab.gd` | 11 | Empty prefab, to_dict/from_dict roundtrip, transform preservation, file save/load, invalid data, entity I/O |
+| `test_tutorial_wizard.gd` | 18 | Step advancement, persistence/resume, completion, bake validation, no-root safety |
+| `test_subtract_preview.gd` | 10 | AABB intersection, enable/disable, debounce, safe destroy lifecycle |
+| `test_prefab.gd` | 10 | Empty prefab, roundtrip, transforms, file I/O, invalid data, entity I/O |
+| `test_selection_gesture.gd` | 38 | Native widget/Object Select ownership, modal Face Select, recovery, focus/scope guards, native duplicate/reparent repair, and Inspector/undo change tracking |
+| `test_viewport_outlines.gd` | 39 | Sparse semantic outlines, exact/composite entity collision, visibility/transforms, and shape-aware resize recovery |
 
-Total: **807 tests** across **47 files**.
+Full suite: **1,687 tests** across **90 files** (**1,680 passing** plus seven intentional no-assert safety tests; **7,502 assertions**).
 
 Tests use root shim scripts (dynamically created GDScript) to provide the LevelRoot interface without circular preload dependencies. Configuration in `.gutconfig.json`.

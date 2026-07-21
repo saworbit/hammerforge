@@ -133,6 +133,12 @@ func capture_entity_info(entity: DraftEntity) -> Dictionary:
 	var outputs = entity.get_meta("entity_io_outputs", [])
 	if not outputs.is_empty():
 		info["io_outputs"] = outputs.duplicate(true)
+	var visgroups: PackedStringArray = entity.get_meta("visgroups", PackedStringArray())
+	if not visgroups.is_empty():
+		info["visgroups"] = Array(visgroups)
+	var group_id := str(entity.get_meta("group_id", ""))
+	if group_id != "":
+		info["group_id"] = group_id
 	return info
 
 
@@ -154,10 +160,89 @@ func restore_entity_from_info(info: Dictionary) -> DraftEntity:
 	var io_outputs = info.get("io_outputs", [])
 	if not io_outputs.is_empty():
 		entity.set_meta("entity_io_outputs", io_outputs.duplicate(true))
+	if info.has("visgroups"):
+		var visgroups := PackedStringArray()
+		for visgroup in info.get("visgroups", []):
+			visgroups.append(str(visgroup))
+		entity.set_meta("visgroups", visgroups)
+	var group_id := str(info.get("group_id", ""))
+	if group_id != "":
+		entity.set_meta("group_id", group_id)
 	entity.set_meta("is_entity", true)
 	root.entities_node.add_child(entity)
 	root._assign_owner(entity)
 	return entity
+
+
+func build_duplicate_info(entity: DraftEntity, offset: Vector3) -> Dictionary:
+	var info := capture_entity_info(entity)
+	if info.is_empty():
+		return {}
+	var transform: Transform3D = info.get("transform", Transform3D.IDENTITY)
+	transform.origin += offset
+	info["transform"] = transform
+	info["name"] = _unique_entity_copy_name(str(entity.name))
+	return info
+
+
+func create_entities_from_infos(infos: Array) -> void:
+	for info in infos:
+		if info is Dictionary:
+			restore_entity_from_info(info)
+
+
+func delete_entities_by_paths(entity_paths: Array) -> void:
+	for entity_path in entity_paths:
+		var entity := _entity_at_path(entity_path)
+		if not entity:
+			continue
+		var entity_name := str(entity.name)
+		var group_id := str(entity.get_meta("group_id", ""))
+		entity.set_meta("group_id", "")
+		entity.set_meta("visgroups", PackedStringArray())
+		if group_id != "" and root.get("visgroup_system"):
+			root.visgroup_system._cleanup_empty_group(group_id)
+		var removed_count := cleanup_dangling_connections(entity_name)
+		if removed_count > 0 and root.has_signal("user_message"):
+			root.user_message.emit(
+				(
+					"Removed %d I/O connection(s) targeting deleted entity '%s'"
+					% [removed_count, entity_name]
+				),
+				1
+			)
+		var parent := entity.get_parent()
+		if parent:
+			parent.remove_child(entity)
+		entity.queue_free()
+
+
+func nudge_entities_by_paths(entity_paths: Array, offset: Vector3) -> void:
+	for entity_path in entity_paths:
+		var entity := _entity_at_path(entity_path)
+		if entity:
+			entity.global_position += offset
+
+
+func _entity_at_path(entity_path: Variant) -> DraftEntity:
+	if not root or not root.entities_node:
+		return null
+	var node := root.get_node_or_null(NodePath(str(entity_path)))
+	return node as DraftEntity if node is DraftEntity and is_entity_node(node) else null
+
+
+func _unique_entity_copy_name(source_name: String) -> String:
+	var base := "%s Copy" % (source_name if source_name != "" else "Entity")
+	var used := {}
+	if root.entities_node:
+		for child in root.entities_node.get_children():
+			used[str(child.name)] = true
+	if not used.has(base):
+		return base
+	var suffix := 2
+	while used.has("%s %d" % [base, suffix]):
+		suffix += 1
+	return "%s %d" % [base, suffix]
 
 
 func clear_entities() -> void:
@@ -259,6 +344,58 @@ func remap_io_connections(entity: Node, name_map: Dictionary) -> void:
 		entity.set_meta("entity_io_outputs", outputs)
 
 
+## Native Scene-tree rename bypasses HammerForge's managed actions. Preserve
+## literal I/O targets by following the same object instance from its old name
+## to its new one; Undo naturally supplies the reverse map on the next pass.
+func reconcile_external_names(previous_names: Dictionary, current_names: Dictionary) -> int:
+	var name_map: Dictionary = {}
+	# A literal target may resolve through either a node's old Scene-tree name or
+	# a point entity's current compatibility alias. Track the owning instances,
+	# not raw occurrences: a node can legitimately own the same spelling through
+	# both fields, while a second owner makes an automatic rewrite unsafe.
+	var previous_name_owners: Dictionary = {}
+	for instance_id in previous_names:
+		_add_name_owner(previous_name_owners, str(previous_names[instance_id]), instance_id)
+	if root.entities_node:
+		for entity in root.entities_node.get_children():
+			_add_name_owner(
+				previous_name_owners,
+				str(entity.get_meta("entity_name", "")),
+				entity.get_instance_id(),
+			)
+	for instance_id in current_names:
+		if not previous_names.has(instance_id):
+			continue
+		var old_name := str(previous_names[instance_id])
+		var new_name := str(current_names[instance_id])
+		var owners: Dictionary = previous_name_owners.get(old_name, {})
+		if (
+			not old_name.is_empty()
+			and old_name != new_name
+			and owners.size() == 1
+			and owners.has(instance_id)
+		):
+			name_map[old_name] = new_name
+	if name_map.is_empty() or not root.entities_node:
+		return 0
+	var remapped := 0
+	for source in root.entities_node.get_children():
+		var outputs: Array = source.get_meta("entity_io_outputs", [])
+		for connection in outputs:
+			if connection is Dictionary and name_map.has(str(connection.get("target_name", ""))):
+				remapped += 1
+		remap_io_connections(source, name_map)
+	return remapped
+
+
+static func _add_name_owner(owners_by_name: Dictionary, name: String, instance_id: Variant) -> void:
+	if name.is_empty():
+		return
+	var owners: Dictionary = owners_by_name.get(name, {})
+	owners[instance_id] = true
+	owners_by_name[name] = owners
+
+
 ## Find all entities by name (used for resolving target_name references).
 func find_entities_by_name(entity_name: String) -> Array:
 	var result: Array = []
@@ -270,9 +407,17 @@ func find_entities_by_name(entity_name: String) -> Array:
 	# Also check brush entities
 	if root.draft_brushes_node:
 		for child in root.draft_brushes_node.get_children():
-			if child.name == entity_name:
+			if is_brush_io_target(child) and child.name == entity_name:
 				result.append(child)
 	return result
+
+
+static func is_brush_io_target(node: Node) -> bool:
+	return (
+		node != null
+		and is_instance_valid(node)
+		and not str(node.get_meta("brush_entity_class", "")).is_empty()
+	)
 
 
 ## Get all I/O connections in the scene (for visualization).

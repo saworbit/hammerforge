@@ -553,28 +553,26 @@ func test_clear_selection_emits_signal():
 
 
 # ---------------------------------------------------------------------------
-# 8. Empty-selection suppression guard (reimport resilience)
+# 8. Editor selection remains authoritative
 # ---------------------------------------------------------------------------
 
 const PluginScript = preload("res://addons/hammerforge/plugin.gd")
 
 
-func test_suppress_empty_selection_blocks_spurious_reimport():
-	# Simulates the reimport scenario: editor fires selection_changed with
-	# an empty node list while the plugin still has brushes cached.
+func test_empty_editor_selection_is_never_hidden_by_a_stale_plugin_cache():
+	# A visible native deselect remains authoritative even if an older plugin
+	# instance still has brushes cached while synchronizing.
 	var dummy_node := Node3D.new()
 	add_child_autoqfree(dummy_node)
 	var hf_sel: Array = [dummy_node]
-	var incoming: Array = []  # empty — as during texture reimport
-	assert_true(
+	var incoming: Array = []
+	assert_false(
 		PluginScript.should_suppress_empty_selection(incoming, hf_sel),
-		"Empty incoming + non-empty hf_selection must be suppressed"
+		"EditorSelection must remain the single authoritative selection"
 	)
 
 
-func test_suppress_empty_selection_allows_intentional_deselect():
-	# When the dock/plugin clears hf_selection before calling
-	# selection.clear(), the guard must NOT suppress the event.
+func test_compatibility_helper_allows_intentional_deselect():
 	var hf_sel: Array = []  # already cleared by _on_dock_selection_clear
 	var incoming: Array = []
 	assert_false(
@@ -583,7 +581,7 @@ func test_suppress_empty_selection_allows_intentional_deselect():
 	)
 
 
-func test_suppress_empty_selection_allows_new_selection():
+func test_compatibility_helper_allows_new_selection():
 	# When the user clicks a different node, incoming is non-empty.
 	var old := Node3D.new()
 	var new_node := Node3D.new()
@@ -597,7 +595,7 @@ func test_suppress_empty_selection_allows_new_selection():
 	)
 
 
-func test_suppress_empty_selection_allows_first_select():
+func test_compatibility_helper_allows_first_select():
 	# Plugin starts with no selection; user selects a brush.
 	var new_node := Node3D.new()
 	add_child_autoqfree(new_node)
@@ -609,35 +607,18 @@ func test_suppress_empty_selection_allows_first_select():
 	)
 
 
-func test_dock_signal_clears_cache_before_guard_runs():
-	# Verifies the PROTOCOL that makes dock-driven deselection work:
-	# 1. Dock._on_clear_selection_pressed emits selection_clear_requested
-	# 2. A handler connected to that signal clears the selection cache
-	# 3. should_suppress_empty_selection then sees an empty cache → allows
-	#
-	# This does NOT verify the actual plugin.gd wiring (line 79 → line 611)
-	# because EditorPlugin cannot be instantiated in headless tests.  What
-	# it does verify:
-	# - The dock emits the signal at the right time (before editor clear)
-	# - The guard produces the correct result given the expected cache state
-	# - The two pieces compose correctly when wired together
-	#
-	# The real plugin.gd connection is a single signal→method hookup that
-	# is straightforward to audit visually.
+func test_dock_signal_clears_mirrored_selection_cache():
+	# Dock-driven deselection clears the mirror promptly; EditorSelection remains
+	# authoritative either way, so the compatibility helper cannot hide empty.
 	var dummy := Node3D.new()
 	add_child_autoqfree(dummy)
 	var hf_sel: Array = [dummy]  # stands in for plugin.hf_selection
-	# Wire up the protocol: signal → clear cache (mirrors _on_dock_selection_clear)
+	# Signal → clear cache mirrors _on_dock_selection_clear.
 	dock.selection_clear_requested.connect(func(): hf_sel.clear())
-	# Trigger the production dock method
 	dock._on_clear_selection_pressed()
-	# Verify the signal fired and cleared the cache BEFORE we check the guard
-	assert_true(
-		hf_sel.is_empty(), "Signal handler must clear cache before editor selection.clear()"
-	)
-	# Now the guard should allow the empty selection through
+	assert_true(hf_sel.is_empty(), "Signal handler must promptly clear the mirrored selection")
 	var incoming: Array = []
 	assert_false(
 		PluginScript.should_suppress_empty_selection(incoming, hf_sel),
-		"Guard must allow empty selection after cache was cleared by signal"
+		"Compatibility helper must never hide an empty native selection"
 	)

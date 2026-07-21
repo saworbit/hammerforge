@@ -200,8 +200,12 @@ func _apply_gray_out() -> void:
 
 
 func _is_action_available(action: String) -> bool:
-	var has_selection: bool = _state.get("brush_count", 0) > 0 or _state.get("entity_count", 0) > 0
-	var has_brush_sel: bool = _state.get("brush_count", 0) > 0
+	var mixed_selection: bool = _state.get("mixed_selection", false)
+	var has_selection: bool = (
+		not mixed_selection
+		and (_state.get("brush_count", 0) > 0 or _state.get("entity_count", 0) > 0)
+	)
+	var has_brush_sel: bool = not mixed_selection and _state.get("brush_count", 0) > 0
 	var is_paint: bool = _state.get("paint_mode", false)
 	var is_vertex: bool = _state.get("vertex_mode", false)
 	var is_dragging: bool = _state.get("input_mode", 0) in [1, 2]
@@ -217,27 +221,29 @@ func _is_action_available(action: String) -> bool:
 		"hollow", "clip", "carve", "merge", "move_to_floor", "move_to_ceiling":
 			return has_brush_sel
 		"group", "ungroup":
-			return has_brush_sel
+			return has_selection
 		# Paint tools only in paint mode
 		"paint_bucket", "paint_erase", "paint_ramp", "paint_line", "paint_fill", "paint_blend":
 			return is_paint
 		# Vertex tools only in vertex mode
 		"vertex_edge_mode", "vertex_merge", "vertex_split_edge":
-			return is_vertex
+			return is_vertex and not mixed_selection
 		# Axis lock not in select mode
 		"axis_x", "axis_y", "axis_z":
 			return tool_id != 1
 		# Select similar needs a selection or face selection
 		"select_similar":
-			return has_selection or _state.get("face_count", 0) > 0
+			return not mixed_selection and (has_selection or _state.get("face_count", 0) > 0)
 		# Apply last texture needs a selection
 		"apply_last_texture":
-			return has_selection or _state.get("face_count", 0) > 0
+			return not mixed_selection and (has_selection or _state.get("face_count", 0) > 0)
 		# Selection filter always available
 		"selection_filter":
-			return true
+			return not mixed_selection
 		# Tool switches always available
-		"tool_draw", "tool_select", "tool_extrude_up", "tool_extrude_down", "vertex_edit", "texture_picker":
+		"vertex_edit":
+			return has_brush_sel
+		"tool_draw", "tool_select", "tool_extrude_up", "tool_extrude_down", "texture_picker":
 			return true
 		# Viewport menus only when idle (no active operation or external tool)
 		"context_menu", "radial_menu":

@@ -280,17 +280,58 @@ func _compute_brush_info(
 	var extent = max(size_x, size_z)
 	var min_extent = max(0.1, root.grid_snap * 0.5)
 	var final_size = Vector3(size_x, height, size_z)
+	var used_default_base := false
 	if extent < min_extent:
+		used_default_base = true
 		final_size = Vector3(size_default.x, height, size_default.z)
 		min_x = origin.x - final_size.x * 0.5
 		max_x = origin.x + final_size.x * 0.5
 		min_z = origin.z - final_size.z * 0.5
 		max_z = origin.z + final_size.z * 0.5
-	var center = Vector3((min_x + max_x) * 0.5, origin.y + height * 0.5, (min_z + max_z) * 0.5)
-	if shape == root.BrushShape.CYLINDER:
-		var radius = max(final_size.x, final_size.z) * 0.5
-		final_size = Vector3(radius * 2.0, height, radius * 2.0)
+	final_size = DraftBrush.normalized_size_for_shape(shape, final_size)
+	if (
+		shape
+		in [
+			DraftBrush.BrushShape.CYLINDER,
+			DraftBrush.BrushShape.CONE,
+			DraftBrush.BrushShape.SPHERE,
+			DraftBrush.BrushShape.CAPSULE,
+		]
+	):
+		var center_x := (
+			equal_base
+			or equal_all
+			or used_default_base
+			or lock_axis in [root.AxisLock.Z, root.AxisLock.Y]
+		)
+		var center_z := (
+			equal_base
+			or equal_all
+			or used_default_base
+			or lock_axis in [root.AxisLock.X, root.AxisLock.Y]
+		)
+		var x_bounds := _normalized_radial_axis_bounds(origin.x, current.x, final_size.x, center_x)
+		var z_bounds := _normalized_radial_axis_bounds(origin.z, current.z, final_size.z, center_z)
+		min_x = x_bounds.x
+		max_x = x_bounds.y
+		min_z = z_bounds.x
+		max_z = z_bounds.y
+	var center = Vector3(
+		(min_x + max_x) * 0.5,
+		origin.y + final_size.y * 0.5,
+		(min_z + max_z) * 0.5,
+	)
 	return {"center": center, "size": final_size}
+
+
+static func _normalized_radial_axis_bounds(
+	origin: float, current: float, extent: float, centered: bool
+) -> Vector2:
+	if centered or is_equal_approx(origin, current):
+		return Vector2(origin - extent * 0.5, origin + extent * 0.5)
+	if current > origin:
+		return Vector2(origin, origin + extent)
+	return Vector2(origin - extent, origin)
 
 
 # ---------------------------------------------------------------------------

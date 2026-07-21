@@ -10,7 +10,7 @@
   <img src="https://img.shields.io/badge/Godot-4.7%2B-478cbf?logo=godot-engine&logoColor=white" alt="Godot 4.7+">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
   <img src="https://img.shields.io/badge/Status-Early%20Alpha-red" alt="Early Alpha">
-  <img src="https://img.shields.io/badge/Tests-1370%20passing-brightgreen" alt="1370 tests passing">
+  <img src="https://img.shields.io/badge/Tests-1680%20passing-brightgreen" alt="1680 tests passing">
   <img src="https://img.shields.io/badge/GDScript-25k%2B%20lines-blueviolet" alt="25k+ lines">
 </p>
 
@@ -41,7 +41,7 @@ HammerForge is a single `addons/` folder. No external tools, no custom builds, n
 
 | | |
 |---|---|
-| **21 subsystems** + coordinator architecture | **1370 unit + integration tests** with CI on every push |
+| **21 subsystems** + coordinator architecture | **1,687 unit + integration tests** with CI on every push |
 | **15 brush shapes** (box through dodecahedron) | **150 built-in prototype textures** for instant greyboxing |
 | **Quake `.map`** + **glTF `.glb`** export | **.hflevel** native format with threaded I/O |
 | **Customizable keymaps** (JSON) | **Plugin API** for custom tools |
@@ -64,7 +64,7 @@ Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Su
 - **Bevel** -- round off sharp edges with configurable segments and radius (vertex/edge mode)
 - **Face Inset** -- shrink a face inward and optionally extrude along its normal
 - **Numeric input** -- type exact dimensions during any drag or extrude
-- **Resize gizmo** with full undo/redo
+- **Resize gizmo** with world-space grid snap, opposite-face anchoring under rotated/non-uniformly scaled parents, and shape-aware sizing: spheres stay uniform, cylinder/cone/capsule X/Z handles change one shared radius, and capsules can never be resized shorter than their diameter
 
 ### Vertex Editing
 
@@ -108,7 +108,7 @@ Geometry-aware snapping goes beyond a simple grid:
 | Vertex | V | Corners of existing brushes (8 per box) |
 | Center | C | Center points of existing brushes |
 
-Closest candidate within threshold wins. Modes combine freely. The Measure tool can set a **custom snap reference line** with Ctrl+Click for alignment along arbitrary axes. **Texture Lock** preserves UV alignment when moving or resizing. **Move to Floor/Ceiling** (Ctrl+Shift+F/C) raycasts to snap brushes vertically. **UV Justify** offers fit/center/left/right/top/bottom/stretch/tile alignment for selected faces.
+Closest candidate within threshold wins. Modes combine freely. The Measure tool can set a **custom snap reference line** with Ctrl+Click for alignment along arbitrary axes. **Texture Lock** preserves UV alignment for HammerForge move and resize actions, including nudge and Move to Floor/Ceiling. Godot's native Node3D transform widget keeps brush-local UV data unchanged. **Move to Floor/Ceiling** (Ctrl+Shift+F/C) raycasts to snap brushes vertically. **UV Justify** offers fit/center/left/right/top/bottom/stretch/tile alignment for selected faces.
 
 ### Paint Floors and Terrain
 
@@ -132,7 +132,7 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Texture Picker** (T key) -- eyedropper tool samples material from any face
 - **Hover preview** -- hovering a thumbnail temporarily previews it on selected faces
 - **Right-click context menu** -- Apply to Faces, Apply to Whole Brush, Toggle Favorite, Copy Name
-- **Face select mode** for painting materials onto individual brush faces
+- **Modal Face Select mode** for painting individual faces; entering hides object transform/resize gizmos, manual exit restores the prior object selection, and selecting an object in the Scene tree returns directly to object editing
 - **Surface paint** with per-face splat layers, weight images, and live preview
 - **UV editor** with per-vertex drag handles and reset-to-projection
 - **Material library persistence** -- save/load palettes as JSON with usage tracking
@@ -147,7 +147,7 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Highlight Connected** -- toggle to pulse-highlight all entities linked to the selected one, with summary counts in the context toolbar
 - **Declarative property forms** -- dock auto-generates typed controls (string, int, float, bool, enum, color, vector3) from entity definitions
 - **Drag-and-drop placement** from the entity palette
-- **Color-coded wireframe overlays** -- green for additive, red for subtractive, blue spectrum for brush entities (func_detail, triggers, func_wall)
+- **Clean operation styling** -- additive brushes use an uncluttered green-tinted surface, subtractors retain a clear red semantic outline, and brush entities use an understated blue tint. Hover and selection use sparse, shape-specific structural profiles; render-triangle topology is reserved for explicit editing and bake-preview modes
 
 ### Organize Your Level
 
@@ -220,7 +220,11 @@ HammerForge's dock is designed to stay out of your way while keeping everything 
 - **Example library** -- 5 built-in demo levels (Test tab) with difficulty ratings, annotations, and one-click loading for learning
 - **Auto-mode hints** -- "Drawing in Add mode" bar appears during drag with one-click Add/Subtract toggle
 - **Tool poll system** -- buttons gray out with inline hints when an action can't run ("Select a brush to use these tools")
-- **Marquee selection** -- drag-to-select brushes, entities, and faces with selection filter popover (by normal, material, similar, visgroup, type)
+- **Native Object Select** -- Godot owns ordinary object clicks, empty-space box selection, modifiers, and transform/property widgets. A widget claim wins the complete mouse and keyboard gesture before HammerForge can start a marquee or nudge; buttonless motion and focus recovery clear stale ownership. Shift keeps Godot's native additive/active-selection behavior; Ctrl/Cmd remain available to Godot instead of becoming a HammerForge toggle. Filled face-triangle gizmo targets make brush and visible entity surfaces easy to select; geometry-less or visibly broken preview assets receive a restrained local pick marker, while hidden previews leave no invisible target
+- **Focused Face Select** -- face click/marquee is a separate modal state that switches to Select, turns Paint off, and temporarily hides object transform/resize gizmos. Shift adds faces and Ctrl/Cmd toggles them; leaving Paint or choosing an incompatible tool exits cleanly
+- **Exact non-box picking** -- hover, face tools, and surface-placement fallbacks hit the real cone, wedge, pyramid, curved, or custom mesh instead of empty space inside its AABB
+- **Managed brush/entity editing** -- Delete, Duplicate, and keyboard nudge operate consistently on both brushes and `DraftEntity` nodes through HammerForge undo/state handling
+- **Mixed-selection action safety** -- selection-dependent HammerForge edits pass through for native-only selections and stop with a clear warning for mixed HammerForge + Godot selections across keyboard, context toolbar, viewport menu, command palette, and radial entry points
 - **Select All / Deselect All** (A / Shift+A) -- Blender-convention quick selection; clears face selection and transitions to object context
 - **Performance monitor** -- health summary, brush/entity/vertex counts, chunk recommendations, color-coded ProgressBar
 - **Contextual selection tools** -- hollow, clip, move, tie, and duplicator appear in Build only when brushes are selected
@@ -273,7 +277,7 @@ Key design choices:
 - **No live CSG** -- brushes are Node3D with box metadata; CSG runs only during bake
 - **RefCounted subsystems** -- each receives a LevelRoot reference; no circular preloads
 - **Signal-driven UI** -- signals on LevelRoot replace polling; batched emission prevents UI thrash
-- **Tag-based invalidation** -- dirty tags on brushes/paint for selective reconciliation
+- **Tag-based invalidation** -- exact dirty tags on transform, material, UV, paint, and vertex mutations; an ID-keyed change tracker reconciles Godot-owned Inspector/gizmo commits and native undo/redo for selective Bake Changed output
 - **Command collation** -- rapid operations merge into single undo entries within a 1-second window
 - **Transactions** -- atomic multi-step operations (hollow, clip) with rollback on failure
 - **HFOpResult** -- failable operations return structured results with actionable fix hints
@@ -352,7 +356,7 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 
 ## Testing
 
-1,501 tests across 87 scripts use the [GUT](https://github.com/bitwes/Gut) framework, including unit and integration coverage. The current suite has 1,494 passing tests plus seven intentional no-assert safety tests. All checks run on every push via GitHub Actions.
+1,687 tests across 90 scripts use the [GUT](https://github.com/bitwes/Gut) framework, including unit and integration coverage. The current suite has 1,680 passing tests plus seven intentional no-assert safety tests, with 7,502 assertions. All checks run on every push via GitHub Actions.
 
 ```bash
 # Run all tests headless

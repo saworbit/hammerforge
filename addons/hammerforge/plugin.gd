@@ -37,6 +37,8 @@ class RmbCameraNavigationSession:
 
 const DockType = preload("dock.gd")
 const HFPathToolType = preload("hf_path_tool.gd")
+const HFSelectionGestureType = preload("hf_selection_gesture.gd")
+const HFBrushChangeTrackerType = preload("hf_brush_change_tracker.gd")
 var dock: DockType
 var hud: Control
 var base_control: Control
@@ -44,11 +46,20 @@ var active_root: LevelRoot = null
 var undo_redo_manager: EditorUndoRedoManager = null
 var brush_gizmo_plugin: EditorNode3DGizmoPlugin = null
 var hf_selection: Array = []
-var select_drag_origin := Vector2.ZERO
-var select_drag_active := false
-var select_dragging := false
-var select_additive := false
-var select_drag_threshold := 6.0
+var _selection_gesture := HFSelectionGestureType.new()
+var _brush_change_tracker := HFBrushChangeTrackerType.new()
+var _brush_reconcile_queued := false
+var _marquee_overlay_origin := Vector2.ZERO
+var _marquee_overlay_current := Vector2.ZERO
+var _marquee_overlay_active := false
+var _native_selection_active := false
+var _native_selection_before: Array = []
+var _native_selection_additive := false
+var _native_selection_toggle := false
+var _focus_recovery_queued := false
+var _applying_hf_selection := false
+var _face_mode_saved_object_selection: Array = []
+const SELECT_DRAG_THRESHOLD := 6.0
 var last_3d_camera: Camera3D = null
 var last_3d_mouse_pos := Vector2.ZERO
 var _rmb_camera_navigation := RmbCameraNavigationSession.new()
@@ -59,7 +70,6 @@ var _user_prefs: HFUserPrefs = null
 var _vertex_mode := false
 var _vertex_drag_active := false
 var _vertex_drag_start := Vector2.ZERO
-var _vertex_drag_ref_y := 0.0  # World Y of the picked vertex for projection plane
 var _vertex_overlay_mesh: MeshInstance3D = null
 var _vertex_overlay_imesh: ImmediateMesh = null
 var _texture_picker_active := false
@@ -71,7 +81,6 @@ var _disp_paint_pre_state: Dictionary = {}
 var _context_toolbar: Control = null
 var _hotkey_palette: Control = null
 var _selection_filter: Window = null
-var _marquee_overlay: Control = null
 var _coach_marks: Control = null
 var _operation_replay: Control = null
 var _viewport_context_menu: PopupMenu = null
@@ -97,6 +106,39 @@ const IconRes = preload("icon.png")
 const HFUndoHelper = preload("undo_helper.gd")
 const HFInputStateType = preload("input_state.gd")
 const QUICK_PROPERTY_DISMISS_CONTINUE := -1
+const SELECT_INPUT_CONTINUE := -2
+const HF_SHORTCUT_APPLY := -3
+
+enum SelectionScope { EMPTY, NATIVE_ONLY, HAMMERFORGE_ONLY, MIXED }
+
+
+func _notification(what: int) -> void:
+	if (
+		what in [NOTIFICATION_APPLICATION_FOCUS_OUT, NOTIFICATION_WM_WINDOW_FOCUS_OUT]
+		and is_inside_tree()
+		and not _focus_recovery_queued
+	):
+		_focus_recovery_queued = true
+		call_deferred("_recover_after_application_focus_loss")
+
+
+func _recover_after_application_focus_loss() -> void:
+	_focus_recovery_queued = false
+	_rmb_camera_navigation.active = false
+	# Godot's 3D viewport owns native/custom gizmo focus-loss commit and clears
+	# its private edit reference itself. Cancelling the local lifecycle here can
+	# race that callback and restore a preview Godot has just committed.
+	_cancel_selection_gesture()
+	if _tool_registry:
+		_tool_registry.cancel_active_pointer_capture()
+	_queue_managed_brush_reconcile()
+	var root := active_root if active_root else _get_level_root()
+	if not root:
+		return
+	_prepare_tool_transition(root, false, false)
+	root.clear_hover()
+	if root.has_method("clear_face_hover_highlight"):
+		root.clear_face_hover_highlight()
 
 
 func _enter_tree():
@@ -104,6 +146,8 @@ func _enter_tree():
 	# is selected. Keep that input forwarding independent from _handles(), which
 	# should describe only the object types this plugin actually edits.
 	set_input_event_forwarding_always_enabled()
+	set_force_draw_over_forwarding_enabled()
+	call_deferred("_prime_managed_brush_tracker")
 	add_custom_type("LevelRoot", "Node3D", LevelRootType, IconRes)
 	add_custom_type("DraftEntity", "Node3D", DraftEntityType, IconRes)
 	_dialog_manager = HFDialogManagerType.new()
@@ -112,6 +156,14 @@ func _enter_tree():
 	brush_gizmo_plugin = preload("brush_gizmo_plugin.gd").new()
 	if brush_gizmo_plugin:
 		brush_gizmo_plugin.set_undo_redo(undo_redo_manager)
+		if brush_gizmo_plugin.has_signal("handle_action_started"):
+			brush_gizmo_plugin.connect(
+				"handle_action_started", Callable(self, "_on_brush_gizmo_action_started")
+			)
+		if brush_gizmo_plugin.has_signal("handle_action_finished"):
+			brush_gizmo_plugin.connect(
+				"handle_action_finished", Callable(self, "_on_brush_gizmo_action_finished")
+			)
 		add_node_3d_gizmo_plugin(brush_gizmo_plugin)
 	base_control = get_editor_interface().get_base_control()
 	if base_control:
@@ -143,6 +195,8 @@ func _enter_tree():
 			dock.connect("builtin_tool_changed", Callable(self, "_on_builtin_tool_changed"))
 		if dock.has_signal("vertex_mode_toggled"):
 			dock.connect("vertex_mode_toggled", Callable(self, "_on_vertex_mode_toggled"))
+		if dock.has_signal("face_select_mode_toggled"):
+			dock.connect("face_select_mode_toggled", Callable(self, "_on_face_select_mode_toggled"))
 		if dock.has_signal("selection_clear_requested"):
 			dock.connect("selection_clear_requested", Callable(self, "_on_dock_selection_clear"))
 		if dock.has_signal("grid_snap_applied"):
@@ -182,10 +236,6 @@ func _enter_tree():
 	_selection_filter = HFSelectionFilter.new()
 	_selection_filter.filter_applied.connect(_on_selection_filter_applied)
 	get_editor_interface().get_base_control().add_child(_selection_filter)
-	# Marquee overlay (2D rect drawn over 3D viewport during drag-select)
-	_marquee_overlay = _MarqueeOverlay.new()
-	_marquee_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, _marquee_overlay)
 	# Coach marks (first-use tool guides)
 	_coach_marks = HFCoachMarks.new()
 	if base_control:
@@ -242,6 +292,11 @@ func _enter_tree():
 
 
 func _exit_tree():
+	_cancel_selection_gesture()
+	_brush_reconcile_queued = false
+	_ensure_brush_change_tracker().reset()
+	if _tool_registry and _tool_registry.has_active_external_tool():
+		_tool_registry.deactivate_current()
 	_cleanup_pending_dialogs()
 	remove_custom_type("LevelRoot")
 	remove_custom_type("DraftEntity")
@@ -256,6 +311,23 @@ func _exit_tree():
 		)
 	undo_redo_manager = null
 	if brush_gizmo_plugin:
+		if (
+			_brush_gizmo_action_active()
+			and brush_gizmo_plugin.has_method("cancel_active_handle_action")
+		):
+			brush_gizmo_plugin.call("cancel_active_handle_action")
+		if brush_gizmo_plugin.is_connected(
+			"handle_action_started", Callable(self, "_on_brush_gizmo_action_started")
+		):
+			brush_gizmo_plugin.disconnect(
+				"handle_action_started", Callable(self, "_on_brush_gizmo_action_started")
+			)
+		if brush_gizmo_plugin.is_connected(
+			"handle_action_finished", Callable(self, "_on_brush_gizmo_action_finished")
+		):
+			brush_gizmo_plugin.disconnect(
+				"handle_action_finished", Callable(self, "_on_brush_gizmo_action_finished")
+			)
 		remove_node_3d_gizmo_plugin(brush_gizmo_plugin)
 		brush_gizmo_plugin = null
 	if (
@@ -320,11 +392,6 @@ func _exit_tree():
 				_selection_filter.get_parent().remove_child(_selection_filter)
 			_selection_filter.queue_free()
 		_selection_filter = null
-	if _marquee_overlay:
-		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _marquee_overlay)
-		if is_instance_valid(_marquee_overlay):
-			_marquee_overlay.queue_free()
-		_marquee_overlay = null
 	if _coach_marks:
 		if is_instance_valid(_coach_marks):
 			_coach_marks.guide_dismissed.disconnect(_on_coach_mark_dismissed)
@@ -421,6 +488,8 @@ func _update_hud_context() -> void:
 	ctx["paint_target"] = dock.get_paint_target() if dock else 0
 	ctx["mode"] = 0
 	ctx["axis_lock"] = 0
+	ctx["external_tool_name"] = ""
+	ctx["external_shortcuts"] = PackedStringArray()
 	var root = active_root if active_root else _get_level_root()
 	if root and root.input_state:
 		ctx["mode"] = root.input_state.mode
@@ -428,7 +497,12 @@ func _update_hud_context() -> void:
 	# Update dock mode indicator banner
 	if dock:
 		var mode_name := "Draw"
-		if _vertex_mode:
+		var active_external = _tool_registry.get_active_tool() if _tool_registry else null
+		if active_external and _tool_registry.has_active_external_tool():
+			mode_name = active_external.tool_name()
+			ctx["external_tool_name"] = mode_name
+			ctx["external_shortcuts"] = active_external.get_shortcut_hud_lines()
+		elif _vertex_mode:
 			mode_name = "Vertex"
 		elif ctx.get("paint_mode", false):
 			mode_name = "Paint"
@@ -497,10 +571,16 @@ func _update_context_toolbar_state(root: Node, tool_id: int) -> void:
 		state["dimensions"] = HFInputStateType.format_dimensions(dims)
 	state["input_mode"] = input_mode
 
-	# Count brushes, entities, faces in selection
+	# Count from the authoritative editor selection. Mixed native/HammerForge
+	# selections must remain visible to every action surface so none of them can
+	# silently mutate only the managed subset.
+	var selection_nodes := _current_selection_nodes()
+	state["mixed_selection"] = (
+		classify_selection_scope(selection_nodes, root) == SelectionScope.MIXED if root else false
+	)
 	var brush_count := 0
 	var entity_count := 0
-	for node in hf_selection:
+	for node in selection_nodes:
 		if node is DraftBrush:
 			brush_count += 1
 		elif root and root.has_method("is_entity_node") and root.is_entity_node(node):
@@ -511,7 +591,7 @@ func _update_context_toolbar_state(root: Node, tool_id: int) -> void:
 	# I/O connection summary for entity context toolbar
 	if entity_count > 0 and root and root.has_method("get_connection_summary"):
 		var first_entity: Node = null
-		for node in hf_selection:
+		for node in selection_nodes:
 			if root.has_method("is_entity_node") and root.is_entity_node(node):
 				first_entity = node
 				break
@@ -552,9 +632,13 @@ func _update_context_toolbar_state(root: Node, tool_id: int) -> void:
 
 	# Prefab instance info for context toolbar badge
 	if root and root.prefab_system and not hf_selection.is_empty():
-		var first_node: Node3D = hf_selection[0]
-		var pfb_iid: String = str(first_node.get_meta("hf_prefab_instance", ""))
-		if pfb_iid != "":
+		var first_node = hf_selection[0]
+		var pfb_iid := (
+			str(first_node.get_meta("hf_prefab_instance", ""))
+			if is_instance_valid(first_node) and first_node is Node
+			else ""
+		)
+		if not pfb_iid.is_empty():
 			var pfb_rec = root.prefab_system.get_instance(pfb_iid)
 			if pfb_rec:
 				state["prefab_source"] = pfb_rec.source_path
@@ -567,35 +651,76 @@ func _update_context_toolbar_state(root: Node, tool_id: int) -> void:
 		if face_count > 0 and dock and dock.material_browser:
 			_context_toolbar.set_favorite_materials(dock.material_browser.get_favorite_infos(5))
 	if _hotkey_palette and _hotkey_palette.visible:
-		_hotkey_palette.update_state(state)
+		var palette_state := state.duplicate()
+		palette_state["tool"] = hotkey_palette_tool_context(tool_id, _vertex_mode)
+		_hotkey_palette.update_state(palette_state)
 
 
-## Returns true when an incoming (empty) editor selection should be ignored
-## because hf_selection still holds brushes — i.e. the empty signal is
-## likely a spurious side-effect (texture reimport, resource scan) rather
-## than an intentional user deselect.  Intentional deselects clear
-## hf_selection *before* the editor selection, so the guard lets them
-## through.
+## Deprecated compatibility seam retained for older source-contract tests and
+## downstream integrations. Visible EditorSelection state is authoritative;
+## an empty native selection must never leave a hidden HammerForge selection.
 static func should_suppress_empty_selection(
-	incoming_nodes: Array, current_hf_selection: Array
+	_incoming_nodes: Array, _current_hf_selection: Array
 ) -> bool:
-	return incoming_nodes.is_empty() and not current_hf_selection.is_empty()
+	# Deprecated compatibility helper. EditorSelection is now authoritative;
+	# retaining a hidden cache after a visible deselect is unsafe and surprising.
+	return false
 
 
 func _on_editor_selection_changed() -> void:
+	if _applying_hf_selection:
+		return
 	var selection = get_editor_interface().get_selection()
 	if not selection:
 		return
 	var nodes = selection.get_selected_nodes()
-	if should_suppress_empty_selection(nodes, hf_selection):
+	var root := active_root if active_root else _get_level_root()
+	var selection_before := _normalize_editor_selection(hf_selection, root)
+	if dock and dock.is_face_select_mode_enabled() and not nodes.is_empty():
+		# Scene-tree/native object selection is an explicit request to leave the
+		# face-edit modal state. Settle any in-flight face marquee/widget ownership
+		# before closing so a lost release cannot apply stale faces afterwards.
+		# Keep the newly selected object; do not restore the snapshot captured when
+		# Face Select was entered.
+		_prepare_tool_transition(root, false)
+		if dock.face_select_mode:
+			dock.face_select_mode.set_pressed_no_signal(false)
+		_face_mode_saved_object_selection.clear()
+		if root and root.has_method("clear_face_selection"):
+			root.clear_face_selection()
+		if dock:
+			dock.show_toast("Face Select closed for object editing", 0)
+	# Scene-tree selection must honor the same managed-owner and visgroup
+	# normalization as viewport selection. Treat removal of any group member as
+	# removal of the complete group, and selection of one as selection of all.
+	var normalized_nodes := _normalize_editor_selection(nodes, root)
+	var remove_group := group_removal_requested(
+		_native_selection_active,
+		_native_selection_additive,
+		_native_selection_toggle,
+		Input.is_key_pressed(KEY_SHIFT),
+		Input.is_key_pressed(KEY_CTRL),
+		Input.is_key_pressed(KEY_META)
+	)
+	var expanded_nodes := _expand_native_group_selection(
+		root, selection_before, normalized_nodes, remove_group
+	)
+	if not _same_node_selection(nodes, expanded_nodes):
+		hf_selection = expanded_nodes
+		_apply_hf_selection(selection)
 		return
-	hf_selection = nodes
+	hf_selection = expanded_nodes
+	if root:
+		# Selection has its own gizmo outline. Clear any hover left under the
+		# click immediately; subsequent motion suppresses hover on selected nodes.
+		root.clear_hover()
+		if root.has_method("set_io_visualizer_selection"):
+			root.call("set_io_visualizer_selection", hf_selection)
 	if dock:
 		dock.set_selection_count(hf_selection.size())
 		dock.set_selection_nodes(hf_selection)
 	# Update vertex system with current brush selection
 	if _vertex_mode:
-		var root = active_root if active_root else _get_level_root()
 		if root and root.vertex_system:
 			var brushes: Array = []
 			for node in hf_selection:
@@ -617,6 +742,24 @@ static func should_handle_editor_object(object: Object) -> bool:
 	return false
 
 
+## Viewport Select captures its modifier contract at LMB-down. Scene-tree
+## selection has no equivalent callback payload, so sample its standard
+## multi-selection modifiers while the synchronous selection_changed signal is
+## being delivered. An ambient Ctrl key must never reinterpret a native
+## viewport press that HammerForge already recorded as unmodified.
+static func group_removal_requested(
+	native_session_active: bool,
+	native_additive: bool,
+	native_toggle: bool,
+	shift_pressed: bool,
+	ctrl_pressed: bool,
+	meta_pressed: bool,
+) -> bool:
+	if native_session_active:
+		return native_additive or native_toggle
+	return shift_pressed or ctrl_pressed or meta_pressed
+
+
 func _handles(object: Object) -> bool:
 	return should_handle_editor_object(object)
 
@@ -626,6 +769,7 @@ func _edit(object: Object) -> void:
 		var root = _get_level_root_from_node(object as Node)
 		if root:
 			active_root = root
+			_ensure_brush_change_tracker().ensure_root(root)
 			return
 	# Don't null active_root — keep the previous root alive as long as it still
 	# exists in the scene. This prevents losing the dock/3D connection when the
@@ -633,6 +777,7 @@ func _edit(object: Object) -> void:
 	if active_root and is_instance_valid(active_root) and active_root.is_inside_tree():
 		return
 	active_root = null
+	_ensure_brush_change_tracker().reset()
 
 
 ## Passive viewport input must not create scene content.  Keep this predicate
@@ -670,9 +815,18 @@ static func should_block_rmb_during_paint_stroke(
 	return left_button_held and (surface_painting or floor_painting or displacement_painting)
 
 
+static func is_lmb_release_recovery_motion(event: InputEvent) -> bool:
+	return (
+		event is InputEventMouseMotion
+		and (event as InputEventMouseMotion).button_mask & MOUSE_BUTTON_MASK_LEFT == 0
+	)
+
+
 func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 	if not dock:
 		return EditorPlugin.AFTER_GUI_INPUT_PASS
+	_ensure_selection_runtime_state()
+	var face_select_mode := dock.is_face_select_mode_enabled()
 	if camera:
 		last_3d_camera = camera
 	if event is InputEventMouse:
@@ -689,9 +843,20 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 		# Native viewport motion/navigation must never dirty the edited scene.
 		# Preserve draw-first convenience only for an intentional primary click.
 		var intentional_draw_click := should_create_root_for_viewport_input(
-			event, dock.get_tool(), dock.is_paint_mode_enabled()
+			event,
+			1 if face_select_mode else dock.get_tool(),
+			dock.is_paint_mode_enabled() and not face_select_mode
 		)
 		if not intentional_draw_click:
+			# Empty levels still use Godot's native RMB camera navigation. Record
+			# ownership before passing the press through so global shortcuts stay
+			# native until the matching release.
+			if (
+				event is InputEventMouseButton
+				and event.button_index == MOUSE_BUTTON_RIGHT
+				and event.pressed
+			):
+				_rmb_camera_navigation.begin()
 			return EditorPlugin.AFTER_GUI_INPUT_PASS
 		root = _create_level_root()
 		if not root:
@@ -699,12 +864,11 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 
 	var target_camera = camera
 	var target_pos = event.position if event is InputEventMouse else last_3d_mouse_pos
-
-	if event is InputEventMouseMotion or event is InputEventMouseButton:
-		root.update_editor_grid(target_camera, target_pos)
-
-	var tool_id = dock.get_tool()
-	var paint_mode = dock.is_paint_mode_enabled()
+	# Face Select is a true modal editing state. Its checkbox lives beside the
+	# paint controls for discoverability, but while active it must route exactly
+	# like Select and must never share a click with paint, vertex, or plug-in tools.
+	var tool_id = 1 if face_select_mode else dock.get_tool()
+	var paint_mode = dock.is_paint_mode_enabled() and not face_select_mode
 	root.grid_snap = dock.get_grid_snap()
 
 	# Radial menu intercept — must be FIRST. While radial is active, it owns
@@ -729,11 +893,43 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 				# RMB continues through the normal ownership path so an active
 				# gesture can still cancel instead of being abandoned mid-drag.
 
+	# A Godot gizmo action has exclusive pointer ownership. Its press was passed
+	# through deliberately; do no raycasts, hover, or tool dispatch until Godot
+	# finishes or cancels it.
+	if _brush_gizmo_action_active():
+		if is_lmb_release_recovery_motion(event):
+			brush_gizmo_plugin.call("cancel_active_handle_action")
+		# The custom gizmo remains the exclusive owner until Godot receives a
+		# release/RMB/Escape and calls _commit_handle(). A recovered action is
+		# frozen locally, so forwarding motion cannot resurrect its preview.
+		return EditorPlugin.AFTER_GUI_INPUT_PASS
+
+	# Buttonless motion is the only reliable recovery signal when the editor or
+	# application swallowed LMB-up. Close every stale LMB owner before any tool
+	# can mutate from that motion as if the button were still held.
+	if is_lmb_release_recovery_motion(event):
+		_recover_stale_lmb_gestures(root)
+
+	# Once Select has seen LMB-down, route all follow-ups before other tools. This
+	# prevents one physical drag from becoming both a marquee and a widget edit.
+	if _selection_gesture and _selection_gesture.is_active():
+		if tool_id != 1:
+			_cancel_selection_gesture()
+		else:
+			var select_result := _handle_active_selection_input(
+				event, root, target_camera, target_pos
+			)
+			if select_result != SELECT_INPUT_CONTINUE:
+				return select_result
+
+	if event is InputEventMouseMotion or event is InputEventMouseButton:
+		root.update_editor_grid(target_camera, target_pos)
+
 	# Displacement paint intercept — must come before regular paint so that
 	# displacement surfaces get the stroke when paint mode is active.
 	# Only activates when: paint mode ON + Displacement section expanded +
 	# a displaced face is selected.
-	if _disp_paint_active or _should_start_disp_paint(event, root):
+	if not face_select_mode and (_disp_paint_active or _should_start_disp_paint(event, root)):
 		var dr = _handle_disp_paint_input(event, root, target_camera, target_pos)
 		if dr != EditorPlugin.AFTER_GUI_INPUT_PASS:
 			return dr
@@ -745,13 +941,32 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 			return r
 
 	# External tool dispatch
-	if _tool_registry:
+	if _tool_registry and not face_select_mode:
 		var ext_result = _tool_registry.dispatch_input(event, target_camera, target_pos)
 		if ext_result == EditorPlugin.AFTER_GUI_INPUT_STOP:
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
+		if (
+			_tool_registry.has_active_external_tool()
+			and (event is InputEventMouseButton or event is InputEventMouseMotion)
+		):
+			# An active external tool stays the sole HammerForge mouse owner even
+			# when this particular ray misses. If its idle RMB press was not
+			# consumed, record the same native camera session as the common RMB path
+			# so follow-up mouse and keyboard events cannot trigger HammerForge tools.
+			if (
+				event is InputEventMouseButton
+				and event.button_index == MOUSE_BUTTON_RIGHT
+				and event.pressed
+			):
+				root.clear_hover()
+				if root.has_method("clear_face_hover_highlight"):
+					root.clear_face_hover_highlight()
+				_rmb_camera_navigation.begin()
+			# PASS still preserves Godot camera UI.
+			return EditorPlugin.AFTER_GUI_INPUT_PASS
 
 	# Vertex editing mode intercept
-	if _vertex_mode and root.vertex_system:
+	if _vertex_mode and root.vertex_system and not face_select_mode:
 		var vr = _handle_vertex_input(event, root, target_camera, target_pos)
 		if vr != EditorPlugin.AFTER_GUI_INPUT_PASS:
 			return vr
@@ -788,9 +1003,11 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 		if r != EditorPlugin.AFTER_GUI_INPUT_PASS:
 			return r
 
-	# Hover update
-	if tool_id == 1 and event is InputEventMouseMotion:
-		root.update_hover(target_camera, target_pos)
+	# Hover is an idle affordance, never a second pointer owner during a drag.
+	if tool_id == 1 and event is InputEventMouseMotion and event.button_mask == 0:
+		root.update_hover(target_camera, target_pos, hf_selection)
+	elif tool_id == 1 and event is InputEventMouseMotion:
+		root.clear_hover()
 	elif tool_id != 1:
 		root.clear_hover()
 
@@ -840,6 +1057,14 @@ func _should_start_disp_paint(event: InputEvent, root: Node) -> bool:
 		root.find_brush_by_id(info["brush_id"]) if root.has_method("find_brush_by_id") else null
 	)
 	if not brush:
+		return false
+	if root.has_method("_is_pick_visible") and not root._is_pick_visible(brush):
+		return false
+	if (
+		brush.get("mesh_instance") is Node3D
+		and root.has_method("_is_pick_visible")
+		and not root._is_pick_visible(brush.get("mesh_instance"))
+	):
 		return false
 	var fi: int = info["face_index"]
 	if fi < 0 or fi >= brush.faces.size():
@@ -898,6 +1123,14 @@ func _do_disp_paint_stroke(root: Node, cam: Camera3D, pos: Vector2) -> void:
 		root.find_brush_by_id(_disp_paint_brush_id) if root.has_method("find_brush_by_id") else null
 	)
 	if not brush:
+		return
+	if root.has_method("_is_pick_visible") and not root._is_pick_visible(brush):
+		return
+	if (
+		brush.get("mesh_instance") is Node3D
+		and root.has_method("_is_pick_visible")
+		and not root._is_pick_visible(brush.get("mesh_instance"))
+	):
 		return
 	var faces: Array = brush.faces
 	if _disp_paint_face_idx >= faces.size():
@@ -1085,20 +1318,121 @@ func _apply_numeric_value(root: Node) -> void:
 		_update_hud_context()
 
 
-func _prepare_tool_transition(root: Node) -> void:
-	if not root or not root.input_state:
+func _cancel_selection_gesture() -> bool:
+	var gesture = _ensure_selection_runtime_state()
+	var was_active: bool = bool(gesture.is_active())
+	gesture.reset()
+	_reset_native_selection_session()
+	_marquee_overlay_origin = Vector2.ZERO
+	_update_marquee_overlay(Vector2.ZERO, Vector2.ZERO, false)
+	return was_active
+
+
+## Tool scripts can be hot-reloaded onto the existing EditorPlugin instance.
+## Godot does not guarantee that newly-added object initializers have run on
+## that instance, so selection ownership repairs itself before every entry
+## point rather than failing halfway through a pointer gesture.
+func _ensure_selection_runtime_state():
+	if _selection_gesture == null:
+		_selection_gesture = HFSelectionGestureType.new()
+	if _native_selection_before == null:
+		_native_selection_before = []
+	if _face_mode_saved_object_selection == null:
+		_face_mode_saved_object_selection = []
+	_ensure_brush_change_tracker()
+	return _selection_gesture
+
+
+func _ensure_brush_change_tracker():
+	if _brush_change_tracker == null:
+		_brush_change_tracker = HFBrushChangeTrackerType.new()
+	return _brush_change_tracker
+
+
+func _prime_managed_brush_tracker(root: Node = null) -> void:
+	var target := root if root else (active_root if active_root else _get_level_root())
+	if target:
+		_ensure_brush_change_tracker().ensure_root(target)
+
+
+func _queue_managed_brush_reconcile() -> void:
+	if _brush_reconcile_queued:
 		return
+	_brush_reconcile_queued = true
+	call_deferred("_reconcile_managed_brush_changes")
+
+
+func _reconcile_managed_brush_changes() -> void:
+	_brush_reconcile_queued = false
+	var root := active_root if active_root else _get_level_root()
+	if root:
+		_ensure_brush_change_tracker().reconcile(root)
+	else:
+		_ensure_brush_change_tracker().reset()
+
+
+func _begin_native_selection_session(selected_nodes: Array, additive: bool, toggle: bool) -> void:
+	_ensure_selection_runtime_state()
+	_prime_managed_brush_tracker()
+	_native_selection_active = true
+	_native_selection_before = selected_nodes.duplicate()
+	_native_selection_additive = additive
+	_native_selection_toggle = toggle
+
+
+func _reset_native_selection_session() -> void:
+	_ensure_selection_runtime_state()
+	_native_selection_active = false
+	_native_selection_before.clear()
+	_native_selection_additive = false
+	_native_selection_toggle = false
+
+
+func _brush_gizmo_action_active() -> bool:
+	return (
+		brush_gizmo_plugin != null
+		and brush_gizmo_plugin.has_method("is_handle_action_active")
+		and bool(brush_gizmo_plugin.call("is_handle_action_active"))
+	)
+
+
+func _on_brush_gizmo_action_started(
+	_gizmo: Variant = null, _handle_id: int = -1, _secondary: bool = false
+) -> void:
+	_ensure_selection_runtime_state().claim_native_gizmo()
+	_update_marquee_overlay(Vector2.ZERO, Vector2.ZERO, false)
+	var root := active_root if active_root else _get_level_root()
+	if root:
+		root.clear_hover()
+
+
+func _on_brush_gizmo_action_finished(_cancelled: bool = false) -> void:
+	_cancel_selection_gesture()
+
+
+func _prepare_tool_transition(
+	root: Node, notify_user: bool = true, settle_custom_gizmo: bool = true
+) -> void:
 	var cancelled := false
-	if _disp_paint_active:
-		if not _disp_paint_pre_state.is_empty():
-			_commit_disp_paint_undo(root)
-		_disp_paint_active = false
-		_disp_paint_brush_id = ""
-		_disp_paint_face_idx = -1
-		_disp_paint_pre_state = {}
+	if (
+		settle_custom_gizmo
+		and _brush_gizmo_action_active()
+		and brush_gizmo_plugin.has_method("cancel_active_handle_action")
+	):
+		# Restore and freeze locally; keep yielding until Godot delivers the
+		# matching commit/cancel callback and releases its private gizmo owner.
+		brush_gizmo_plugin.call("cancel_active_handle_action")
 		cancelled = true
-	if root.input_state.is_surface_painting():
-		root.input_state.end_surface_paint()
+	if not root or not root.input_state:
+		if cancelled and notify_user and dock:
+			dock.show_toast("In-progress brush resize closed for tool switch", 1)
+		return
+	var paint_tool = root.get("paint_tool")
+	if _finish_stale_paint_strokes(root, root.input_state, paint_tool):
+		cancelled = true
+	if _vertex_drag_active and root.vertex_system:
+		root.vertex_system.cancel_drag()
+		_vertex_drag_active = false
 		cancelled = true
 	if root.input_state.is_extruding():
 		root.cancel_extrude()
@@ -1106,15 +1440,12 @@ func _prepare_tool_transition(root: Node) -> void:
 	elif root.input_state.is_dragging():
 		root.cancel_drag()
 		cancelled = true
-	if select_drag_active or select_dragging:
-		select_drag_active = false
-		select_dragging = false
-		_update_marquee_overlay(Vector2.ZERO, Vector2.ZERO, false)
+	if _cancel_selection_gesture():
 		cancelled = true
 	if cancelled:
 		numeric_buffer = ""
-		if dock:
-			dock.show_toast("In-progress gesture cancelled for tool switch", 1)
+		if notify_user and dock:
+			dock.show_toast("In-progress gesture closed for tool switch", 1)
 
 
 func _deactivate_external_tool() -> void:
@@ -1122,7 +1453,21 @@ func _deactivate_external_tool() -> void:
 		_tool_registry.deactivate_current()
 
 
+func _activate_external_tool(tool_id: int, root: Node) -> void:
+	if not _tool_registry or not root:
+		return
+	_close_face_select_mode("Face Select closed for tool change")
+	_prepare_tool_transition(root)
+	if _vertex_mode:
+		_toggle_vertex_mode(root)
+	if dock and dock.paint_mode and dock.paint_mode.button_pressed:
+		dock.paint_mode.set_pressed_no_signal(false)
+		dock.highlight_tab("Brush")
+	_tool_registry.activate_tool(tool_id, root, last_3d_camera, undo_redo_manager, _record_history)
+
+
 func _on_builtin_tool_changed() -> void:
+	_close_face_select_mode("Face Select closed for tool change")
 	var root = active_root if active_root else _get_level_root()
 	_prepare_tool_transition(root)
 	_deactivate_external_tool()
@@ -1144,6 +1489,60 @@ func _on_vertex_mode_toggled(enabled: bool) -> void:
 		_toggle_vertex_mode(root)
 
 
+func _on_face_select_mode_toggled(enabled: bool) -> void:
+	_ensure_selection_runtime_state()
+	var root := active_root if active_root else _get_level_root()
+	_prepare_tool_transition(root)
+	var selection := get_editor_interface().get_selection()
+	if enabled:
+		# Establish one unambiguous pointer owner before hiding object selection.
+		# Keep the Paint tab visible, but turn painting itself off; Face Select is
+		# an editing mode, not a paint stroke layered over Select.
+		_deactivate_external_tool()
+		if _vertex_mode:
+			_toggle_vertex_mode(root)
+		_texture_picker_active = false
+		if _radial_menu and _radial_menu.is_active():
+			_radial_menu.hide_menu()
+		if dock:
+			if dock.tool_select:
+				dock.tool_select.set_pressed_no_signal(true)
+			if dock.paint_mode:
+				dock.paint_mode.set_pressed_no_signal(false)
+		_face_mode_saved_object_selection.clear()
+		for node in _current_selection_nodes():
+			if is_instance_valid(node) and node is Node:
+				_face_mode_saved_object_selection.append(node)
+		# Face editing is intentionally modal. Hiding object gizmos removes the
+		# otherwise-opaque zero-motion overlap between a face and transform handle.
+		hf_selection.clear()
+		if selection:
+			_apply_hf_selection(selection)
+		if dock:
+			dock.show_toast("Face Select: object transform handles hidden", 0)
+		return
+	if root and root.has_method("clear_face_selection"):
+		root.clear_face_selection()
+	if selection:
+		hf_selection.clear()
+		for node in _face_mode_saved_object_selection:
+			if is_instance_valid(node) and node is Node:
+				hf_selection.append(node)
+		_apply_hf_selection(selection)
+	_face_mode_saved_object_selection.clear()
+
+
+func _close_face_select_mode(message: String = "") -> bool:
+	if not dock or not dock.is_face_select_mode_enabled() or not dock.face_select_mode:
+		return false
+	# Use the real toggle signal so face selection is cleared and the saved
+	# object selection is restored through the same path as a manual exit.
+	dock.face_select_mode.button_pressed = false
+	if message != "":
+		dock.show_toast(message, 0)
+	return true
+
+
 func _on_dock_selection_clear() -> void:
 	hf_selection.clear()
 
@@ -1151,6 +1550,30 @@ func _on_dock_selection_clear() -> void:
 func _on_dock_grid_snap_applied(value: float) -> void:
 	if hud and hud.has_method("update_grid_snap"):
 		hud.update_grid_snap(value)
+
+
+## Vertex editing is entered from Select, but its move operation still needs the
+## same X/Y/Z constraints as the construction tools.
+static func axis_lock_shortcuts_available(tool_id: int, vertex_mode: bool) -> bool:
+	return tool_id != 1 or vertex_mode
+
+
+## The palette currently derives axis availability from its tool context. Use a
+## distinct modal context for vertex editing without misreporting Select to the
+## context toolbar or changing the user's selected tool.
+static func hotkey_palette_tool_context(tool_id: int, vertex_mode: bool) -> int:
+	return -1 if tool_id == 1 and vertex_mode else tool_id
+
+
+static func is_canceled_vertex_drag_release(event: InputEvent) -> bool:
+	if not event is InputEventMouseButton:
+		return false
+	var mouse_event := event as InputEventMouseButton
+	return (
+		mouse_event.button_index == MOUSE_BUTTON_LEFT
+		and not mouse_event.pressed
+		and mouse_event.canceled
+	)
 
 
 func _handle_keyboard_input(
@@ -1237,52 +1660,73 @@ func _handle_keyboard_input(
 		_last_tap_time = tap_now
 
 	if _keymap.matches("delete", event):
-		var deleted = _delete_selected(root)
-		return EditorPlugin.AFTER_GUI_INPUT_STOP if deleted else EditorPlugin.AFTER_GUI_INPUT_PASS
+		var delete_guard := _guard_hammerforge_shortcut(root, false, 1, "Delete")
+		if delete_guard != HF_SHORTCUT_APPLY:
+			return delete_guard
+		_delete_selected(root)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	if _keymap.matches("duplicate", event):
+		var duplicate_guard := _guard_hammerforge_shortcut(root, false, 1, "Duplicate")
+		if duplicate_guard != HF_SHORTCUT_APPLY:
+			return duplicate_guard
 		_duplicate_selected(root)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	if _keymap.matches("group", event):
+		var group_guard := _guard_hammerforge_shortcut(root, false, 2, "Group")
+		if group_guard != HF_SHORTCUT_APPLY:
+			return group_guard
 		_group_selected(root)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	if _keymap.matches("ungroup", event):
+		var ungroup_guard := _guard_hammerforge_shortcut(root, false, 1, "Ungroup")
+		if ungroup_guard != HF_SHORTCUT_APPLY:
+			return ungroup_guard
 		_ungroup_selected(root)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	if _keymap.matches("hollow", event):
-		if hf_selection.is_empty():
-			return EditorPlugin.AFTER_GUI_INPUT_PASS
+		var hollow_guard := _guard_hammerforge_shortcut(root, true, 1, "Hollow")
+		if hollow_guard != HF_SHORTCUT_APPLY:
+			return hollow_guard
 		_hollow_selected(root)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	if _keymap.matches("move_to_floor", event):
-		if hf_selection.is_empty():
-			return EditorPlugin.AFTER_GUI_INPUT_PASS
+		var floor_guard := _guard_hammerforge_shortcut(root, true, 1, "Move to Floor")
+		if floor_guard != HF_SHORTCUT_APPLY:
+			return floor_guard
 		_move_selected_to_floor(root)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	if _keymap.matches("move_to_ceiling", event):
-		if hf_selection.is_empty():
-			return EditorPlugin.AFTER_GUI_INPUT_PASS
+		var ceiling_guard := _guard_hammerforge_shortcut(root, true, 1, "Move to Ceiling")
+		if ceiling_guard != HF_SHORTCUT_APPLY:
+			return ceiling_guard
 		_move_selected_to_ceiling(root)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	if _keymap.matches("clip", event):
-		if hf_selection.is_empty():
-			return EditorPlugin.AFTER_GUI_INPUT_PASS
+		var clip_guard := _guard_hammerforge_shortcut(root, true, 1, "Clip")
+		if clip_guard != HF_SHORTCUT_APPLY:
+			return clip_guard
 		_clip_selected(root)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	if _keymap.matches("carve", event):
-		if hf_selection.is_empty():
-			return EditorPlugin.AFTER_GUI_INPUT_PASS
+		var carve_guard := _guard_hammerforge_shortcut(root, true, 1, "Carve")
+		if carve_guard != HF_SHORTCUT_APPLY:
+			return carve_guard
 		_carve_selected(root)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	if _keymap.matches("merge", event):
-		if hf_selection.size() < 2:
-			return EditorPlugin.AFTER_GUI_INPUT_PASS
+		var merge_guard := _guard_hammerforge_shortcut(root, true, 2, "Merge")
+		if merge_guard != HF_SHORTCUT_APPLY:
+			return merge_guard
 		_merge_selected(root)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	# Nudge keys
 	var nudge = _get_nudge_direction(event.keycode)
 	if nudge != Vector3.ZERO and not event.ctrl_pressed and not event.alt_pressed:
-		if _nudge_selected(root, nudge):
-			return EditorPlugin.AFTER_GUI_INPUT_STOP
+		var nudge_guard := _guard_hammerforge_shortcut(root, false, 1, "Nudge")
+		if nudge_guard != HF_SHORTCUT_APPLY:
+			return nudge_guard
+		_nudge_selected(root, nudge)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	# Grid snap size shortcuts ([ = halve, ] = double)
 	if _keymap.matches("grid_decrease", event):
 		_adjust_grid_snap(root, 0.5)
@@ -1345,14 +1789,35 @@ func _handle_keyboard_input(
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	# Apply Last Texture — Shift+T reapplies the last picked material
 	if _keymap.matches("apply_last_texture", event):
+		var has_selected_faces: bool = (
+			root.face_selection is Dictionary and not root.face_selection.is_empty()
+		)
+		if not has_selected_faces:
+			var texture_guard := _guard_hammerforge_shortcut(root, true, 1, "Apply Texture")
+			if texture_guard != HF_SHORTCUT_APPLY:
+				return texture_guard
 		_apply_last_texture(root)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	# Select Similar — Shift+S selects matching faces/brushes
 	if _keymap.matches("select_similar", event):
+		var has_similar_face_source: bool = (
+			root.face_selection is Dictionary and not root.face_selection.is_empty()
+		)
+		if not has_similar_face_source:
+			var similar_guard := _guard_hammerforge_shortcut(root, true, 1, "Select Similar")
+			if similar_guard != HF_SHORTCUT_APPLY:
+				return similar_guard
 		_select_similar(root)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	# Selection Filter popup — Shift+F opens the filter popover
 	if _keymap.matches("selection_filter", event):
+		var filter_scope := classify_selection_scope(_current_selection_nodes(), root)
+		if filter_scope == SelectionScope.NATIVE_ONLY:
+			return EditorPlugin.AFTER_GUI_INPUT_PASS
+		if filter_scope == SelectionScope.MIXED:
+			if dock:
+				dock.show_toast("Edit HammerForge and Godot nodes separately", 1)
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
 		_show_selection_filter()
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	# Select All / Deselect All — A / Shift+A (Blender convention)
@@ -1364,10 +1829,16 @@ func _handle_keyboard_input(
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	# Quick Save as Prefab — Ctrl+Shift+P
 	if event.keycode == KEY_P and event.ctrl_pressed and event.shift_pressed:
+		var save_prefab_guard := _guard_hammerforge_shortcut(root, false, 1, "Save Prefab")
+		if save_prefab_guard != HF_SHORTCUT_APPLY:
+			return save_prefab_guard
 		_quick_save_prefab(root, false)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	# Cycle Prefab Variant — Ctrl+Shift+V
 	if event.keycode == KEY_V and event.ctrl_pressed and event.shift_pressed:
+		var variant_guard := _guard_hammerforge_shortcut(root, false, 1, "Cycle Variant")
+		if variant_guard != HF_SHORTCUT_APPLY:
+			return variant_guard
 		_cycle_prefab_variant(root)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	# Paint tool shortcuts
@@ -1388,8 +1859,8 @@ func _handle_keyboard_input(
 		if paint_key >= 0:
 			dock.set_paint_tool(paint_key)
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
-	# Axis lock (non-select tools only)
-	if tool_id != 1:
+	# Axis lock for construction tools and Select's vertex-edit operation.
+	if axis_lock_shortcuts_available(tool_id, _vertex_mode):
 		if _keymap.matches("axis_x", event):
 			root.set_axis_lock(LevelRootType.AxisLock.X, true)
 			_update_hud_context()
@@ -1410,6 +1881,9 @@ func _handle_keyboard_input(
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 	# Vertex edit toggle (V key)
 	if _keymap.matches("vertex_edit", event):
+		var vertex_guard := _guard_hammerforge_shortcut(root, true, 1, "Vertex Edit")
+		if vertex_guard != HF_SHORTCUT_APPLY:
+			return vertex_guard
 		_toggle_vertex_mode(root)
 		_show_coach_mark_for_action("vertex_edit")
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
@@ -1417,9 +1891,7 @@ func _handle_keyboard_input(
 	if _tool_registry:
 		var ext_id = _tool_registry.check_shortcut(event.keycode)
 		if ext_id >= 0 and active_root:
-			_tool_registry.activate_tool(
-				ext_id, active_root, last_3d_camera, undo_redo_manager, _record_history
-			)
+			_activate_external_tool(ext_id, active_root)
 			_show_coach_mark_for_tool_id(ext_id)
 			_update_hud_context()
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
@@ -1434,11 +1906,19 @@ static func has_cancelable_rmb_gesture(input_state: Variant, marquee_active: boo
 	return input_state != null and (input_state.is_dragging() or input_state.is_extruding())
 
 
-func _finish_stale_paint_strokes(root: Node, input_state: Variant, paint_tool: Variant) -> void:
-	if paint_tool != null and paint_tool.has_method("finish_stroke_if_active"):
+func _finish_stale_paint_strokes(root: Node, input_state: Variant, paint_tool: Variant) -> bool:
+	var finished := false
+	if (
+		paint_tool != null
+		and paint_tool.has_method("is_stroke_active")
+		and paint_tool.is_stroke_active()
+		and paint_tool.has_method("finish_stroke_if_active")
+	):
 		paint_tool.finish_stroke_if_active()
+		finished = true
 	if input_state != null and input_state.is_surface_painting():
 		input_state.end_surface_paint()
+		finished = true
 	if _disp_paint_active:
 		if not _disp_paint_pre_state.is_empty():
 			_commit_disp_paint_undo(root)
@@ -1446,11 +1926,42 @@ func _finish_stale_paint_strokes(root: Node, input_state: Variant, paint_tool: V
 		_disp_paint_brush_id = ""
 		_disp_paint_face_idx = -1
 		_disp_paint_pre_state = {}
+		finished = true
+	return finished
+
+
+func _recover_stale_lmb_gestures(root: Node) -> void:
+	if not root:
+		return
+	var recovered := false
+	var input_state = root.input_state if root.get("input_state") != null else null
+	var paint_tool = root.get("paint_tool")
+	if _tool_registry and _tool_registry.recover_active_pointer_capture():
+		recovered = true
+	if _finish_stale_paint_strokes(root, input_state, paint_tool):
+		recovered = true
+	if _vertex_drag_active and root.vertex_system:
+		root.vertex_system.cancel_drag()
+		_vertex_drag_active = false
+		recovered = true
+	if input_state:
+		if input_state.is_extruding():
+			root.cancel_extrude()
+			recovered = true
+		elif input_state.is_drag_base():
+			root.cancel_drag()
+			recovered = true
+	if recovered:
+		numeric_buffer = ""
+		root.clear_hover()
+		if root.has_method("clear_face_hover_highlight"):
+			root.clear_face_hover_highlight()
+		_update_hud_context()
 
 
 func _handle_rmb_cancel(root: Node, _tool_id: int, event: InputEventMouseButton) -> int:
 	var input_state = root.input_state if root else null
-	var has_marquee := select_drag_active or select_dragging
+	var has_marquee := _selection_gesture != null and _selection_gesture.is_active()
 	var paint_tool = root.get("paint_tool") if root else null
 	var surface_painting: bool = input_state != null and input_state.is_surface_painting()
 	var floor_painting: bool = (
@@ -1472,6 +1983,10 @@ func _handle_rmb_cancel(root: Node, _tool_id: int, event: InputEventMouseButton)
 		_finish_stale_paint_strokes(root, input_state, paint_tool)
 	if not has_cancelable_rmb_gesture(input_state, has_marquee):
 		# Idle RMB belongs to Godot's native camera controls.
+		if root:
+			root.clear_hover()
+			if root.has_method("clear_face_hover_highlight"):
+				root.clear_face_hover_highlight()
 		_rmb_camera_navigation.begin()
 		return EditorPlugin.AFTER_GUI_INPUT_PASS
 	if input_state and input_state.is_extruding():
@@ -1479,9 +1994,7 @@ func _handle_rmb_cancel(root: Node, _tool_id: int, event: InputEventMouseButton)
 	elif input_state and input_state.is_dragging():
 		root.cancel_drag()
 	numeric_buffer = ""
-	select_drag_active = false
-	select_dragging = false
-	_update_marquee_overlay(Vector2.ZERO, Vector2.ZERO, false)
+	_cancel_selection_gesture()
 	_update_hud_context()
 	return EditorPlugin.AFTER_GUI_INPUT_STOP
 
@@ -1504,13 +2017,6 @@ func _show_viewport_context_menu(root: Node, tool_id: int) -> void:
 
 
 func _get_current_overlay_mouse_pos() -> Vector2:
-	var screen_pos := DisplayServer.mouse_get_position()
-	var win := get_window()
-	var window_pos := Vector2(screen_pos)
-	if win:
-		window_pos = Vector2(screen_pos - win.position)
-	if _marquee_overlay and is_instance_valid(_marquee_overlay):
-		return _marquee_overlay.get_global_transform().affine_inverse() * window_pos
 	return last_3d_mouse_pos
 
 
@@ -1524,9 +2030,13 @@ func _build_viewport_state(state: Dictionary, root: Node, tool_id: int) -> void:
 	if root and root.input_state:
 		input_mode = root.input_state.mode
 	state["input_mode"] = input_mode
+	var selection_nodes := _current_selection_nodes()
+	state["mixed_selection"] = (
+		classify_selection_scope(selection_nodes, root) == SelectionScope.MIXED if root else false
+	)
 	var brush_count := 0
 	var entity_count := 0
-	for node in hf_selection:
+	for node in selection_nodes:
 		if node is DraftBrush:
 			brush_count += 1
 		elif root and root.has_method("is_entity_node") and root.is_entity_node(node):
@@ -1548,65 +2058,201 @@ func _handle_select_mouse(
 	pos: Vector2,
 	paint_mode: bool,
 ) -> int:
-	var face_select = dock.is_face_select_mode_enabled()
-	if event.pressed:
-		if face_select:
-			# Start drag tracking for possible marquee face selection
-			select_drag_origin = pos
-			select_drag_active = true
-			select_dragging = false
-			select_additive = (
-				event.shift_pressed
-				or event.ctrl_pressed
-				or event.meta_pressed
-				or Input.is_key_pressed(KEY_SHIFT)
-				or Input.is_key_pressed(KEY_CTRL)
-				or Input.is_key_pressed(KEY_META)
-			)
-			return EditorPlugin.AFTER_GUI_INPUT_PASS
-		var active_mat = dock.get_active_material()
-		if paint_mode and active_mat:
-			var painted = root.pick_brush(cam, pos, false)
-			if painted:
-				_paint_brush_with_undo(root, painted, active_mat)
-				return EditorPlugin.AFTER_GUI_INPUT_STOP
-		select_drag_origin = pos
-		select_drag_active = true
-		select_dragging = false
-		select_additive = (
-			event.shift_pressed
-			or event.ctrl_pressed
+	if not event.pressed:
+		# Releases for owned Select gestures are routed before all other tools.
+		return EditorPlugin.AFTER_GUI_INPUT_PASS
+	var face_select := dock.is_face_select_mode_enabled()
+	# Alt+LMB belongs to Godot's alternate navigation/transform schemes.
+	if event.alt_pressed or Input.is_key_pressed(KEY_ALT):
+		_cancel_selection_gesture()
+		return EditorPlugin.AFTER_GUI_INPUT_PASS
+	var active_mat = dock.get_active_material()
+	if not face_select and paint_mode and active_mat:
+		var painted = root.pick_brush(cam, pos, false)
+		if painted:
+			_paint_brush_with_undo(root, painted, active_mat)
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+
+	var shift_selection := event.shift_pressed or Input.is_key_pressed(KEY_SHIFT)
+	# Object Select is deliberately native: Shift keeps Godot's own additive /
+	# active-selection semantics, while Ctrl/Cmd remain available to the editor's
+	# configured transform and navigation behavior. Face Select is HammerForge's
+	# custom domain, so Ctrl/Cmd can safely mean toggle there.
+	var toggle := (
+		face_select
+		and (
+			event.ctrl_pressed
 			or event.meta_pressed
-			or Input.is_key_pressed(KEY_SHIFT)
 			or Input.is_key_pressed(KEY_CTRL)
 			or Input.is_key_pressed(KEY_META)
 		)
-		return EditorPlugin.AFTER_GUI_INPUT_PASS
-	# Mouse release
-	var selection_action := false
-	if select_drag_active:
-		if select_dragging:
-			# Marquee box selection
-			if face_select:
-				_select_faces_in_rect(root, cam, select_drag_origin, pos, select_additive)
-			else:
-				_select_nodes_in_rect(root, cam, select_drag_origin, pos, select_additive)
-			selection_action = true
-		elif face_select:
-			# Single click — select individual face
-			var face_handled = root.select_face_at_screen(cam, pos, select_additive)
-			if face_handled:
-				selection_action = true
-		else:
-			var picked = root.pick_brush(cam, pos)
-			_select_node(picked, select_additive)
-			selection_action = true
-	select_drag_active = false
-	select_dragging = false
-	_update_marquee_overlay(Vector2.ZERO, Vector2.ZERO, false)
-	return (
-		EditorPlugin.AFTER_GUI_INPUT_STOP if selection_action else EditorPlugin.AFTER_GUI_INPUT_PASS
 	)
+	var additive := shift_selection or toggle
+	var selection_at_press := _current_selection_nodes()
+	var native_selection_present := _selection_contains_native_node(selection_at_press, root)
+
+	# Godot already owns exact hit-testing for its transform gizmo, every
+	# built-in property gizmo, and object-region selection. Filled brush gizmo
+	# triangles make every Object Select press native too, eliminating ambiguous
+	# overlaps between a brush surface, marquee origin, and opaque editor widget.
+	# Face Select remains custom only while the visible selection is HF-owned.
+	var pass_to_native := not face_select or native_selection_present
+	if pass_to_native:
+		_begin_native_selection_session(selection_at_press, additive, toggle)
+		_selection_gesture.begin(
+			pos, additive, toggle, face_select, false, false, true, selection_at_press, true
+		)
+		root.clear_hover()
+		return EditorPlugin.AFTER_GUI_INPUT_PASS
+
+	# Face Select retains HammerForge's visible-face click/marquee behavior while
+	# CUSTOM forwarding keeps transform and custom gizmos in Godot's pipeline.
+	var allow_marquee := face_select
+	var allow_click := true
+	var may_be_native_gizmo := face_select and not selection_at_press.is_empty()
+	_marquee_overlay_origin = pos
+	_selection_gesture.begin(
+		pos,
+		additive,
+		toggle,
+		face_select,
+		allow_marquee,
+		allow_click,
+		false,
+		selection_at_press,
+		may_be_native_gizmo
+	)
+	root.clear_hover()
+	# CUSTOM suppresses Godot's competing node/region selection but still lets
+	# its custom and transform gizmos inspect face-selection presses.
+	return EditorPlugin.AFTER_GUI_INPUT_CUSTOM
+
+
+## CUSTOM lets Godot finish transform/property/custom gizmos while suppressing
+## only its competing node selection. Object selection is fully native.
+static func custom_selection_release_result(face_selection: bool) -> int:
+	return (
+		EditorPlugin.AFTER_GUI_INPUT_CUSTOM if face_selection else EditorPlugin.AFTER_GUI_INPUT_PASS
+	)
+
+
+func _selection_contains_native_node(nodes: Array, root: Node) -> bool:
+	for candidate in nodes:
+		if not is_instance_valid(candidate) or not (candidate is Node):
+			continue
+		var owner := _hammerforge_selection_owner(candidate as Node, root)
+		if owner is DraftBrush or owner is DraftEntityType:
+			continue
+		if root and root.has_method("is_entity_node") and root.is_entity_node(owner):
+			continue
+		return true
+	return false
+
+
+func _handle_active_selection_input(
+	event: InputEvent, root: Node, cam: Camera3D, pos: Vector2
+) -> int:
+	if not _selection_gesture or not _selection_gesture.is_active():
+		return SELECT_INPUT_CONTINUE
+	# A native transform/property gizmo owns the complete interaction, not just
+	# mouse motion. Let Godot see every key while that ownership is active or
+	# still opaque; otherwise Delete/Nudge/tool shortcuts can mutate the object
+	# underneath its unfinished drag. Escape also clears only our bookkeeping so
+	# Godot can perform the authoritative cancel.
+	if event is InputEventKey and _selection_gesture.should_yield_cancel_to_native():
+		if event.pressed and event.keycode == KEY_ESCAPE:
+			_cancel_selection_gesture()
+		return EditorPlugin.AFTER_GUI_INPUT_PASS
+	if event is InputEventMouseMotion:
+		var motion := event as InputEventMouseMotion
+		var decision := _selection_gesture.update_motion(
+			pos, motion.button_mask & MOUSE_BUTTON_MASK_LEFT != 0, SELECT_DRAG_THRESHOLD
+		)
+		match decision:
+			HFSelectionGestureType.MotionDecision.RECOVERED:
+				_cancel_selection_gesture()
+				_queue_managed_brush_reconcile()
+				return EditorPlugin.AFTER_GUI_INPUT_PASS
+			HFSelectionGestureType.MotionDecision.NATIVE_GIZMO:
+				_update_marquee_overlay(Vector2.ZERO, Vector2.ZERO, false)
+				return EditorPlugin.AFTER_GUI_INPUT_PASS
+			HFSelectionGestureType.MotionDecision.DRAW_MARQUEE:
+				root.clear_hover()
+				_update_marquee_overlay(_marquee_overlay_origin, pos, true)
+				return EditorPlugin.AFTER_GUI_INPUT_CUSTOM
+			_:
+				root.clear_hover()
+				return (
+					EditorPlugin.AFTER_GUI_INPUT_PASS
+					if _selection_gesture.native_passthrough
+					else EditorPlugin.AFTER_GUI_INPUT_CUSTOM
+				)
+	if not (event is InputEventMouseButton):
+		return SELECT_INPUT_CONTINUE
+	var button := event as InputEventMouseButton
+	if button.button_index == MOUSE_BUTTON_RIGHT and button.pressed:
+		var yield_cancel := _selection_gesture.should_yield_cancel_to_native()
+		_cancel_selection_gesture()
+		return (
+			EditorPlugin.AFTER_GUI_INPUT_PASS if yield_cancel else EditorPlugin.AFTER_GUI_INPUT_STOP
+		)
+	if button.button_index != MOUSE_BUTTON_LEFT or button.pressed:
+		return SELECT_INPUT_CONTINUE
+	if button.canceled:
+		var yield_cancel := _selection_gesture.should_yield_cancel_to_native()
+		_cancel_selection_gesture()
+		return (
+			EditorPlugin.AFTER_GUI_INPUT_PASS if yield_cancel else EditorPlugin.AFTER_GUI_INPUT_STOP
+		)
+	var native_session := _native_selection_active
+	var native_before := _native_selection_before.duplicate()
+	var native_additive := _native_selection_additive
+	var native_toggle := _native_selection_toggle
+	var result := _selection_gesture.finish(pos, SELECT_DRAG_THRESHOLD)
+	_reset_native_selection_session()
+	_update_marquee_overlay(Vector2.ZERO, Vector2.ZERO, false)
+	var release_decision := int(
+		result.get("decision", HFSelectionGestureType.ReleaseDecision.PASS_THROUGH)
+	)
+	if (
+		release_decision
+		in [
+			HFSelectionGestureType.ReleaseDecision.NATIVE_GIZMO,
+			HFSelectionGestureType.ReleaseDecision.PASS_THROUGH,
+		]
+	):
+		if native_session:
+			_queue_managed_brush_reconcile()
+			call_deferred(
+				"_finalize_native_selection", native_before, native_additive, native_toggle
+			)
+		return EditorPlugin.AFTER_GUI_INPUT_PASS
+	match release_decision:
+		HFSelectionGestureType.ReleaseDecision.MARQUEE:
+			if not bool(result.get("face_select", false)):
+				return EditorPlugin.AFTER_GUI_INPUT_PASS
+			_select_faces_in_rect(
+				root,
+				cam,
+				result.get("origin", pos),
+				pos,
+				bool(result.get("additive", false)),
+				bool(result.get("toggle", false))
+			)
+			# CUSTOM keeps native gizmo release/commit handling alive while
+			# still blocking Godot's competing node-region selection.
+			return custom_selection_release_result(true)
+		HFSelectionGestureType.ReleaseDecision.CLICK:
+			if not bool(result.get("face_select", false)):
+				return EditorPlugin.AFTER_GUI_INPUT_PASS
+			root.select_face_at_screen(
+				cam,
+				result.get("origin", pos),
+				bool(result.get("additive", false)),
+				bool(result.get("toggle", false))
+			)
+			return custom_selection_release_result(true)
+	return EditorPlugin.AFTER_GUI_INPUT_PASS
 
 
 func _handle_extrude_mouse(
@@ -1657,13 +2303,6 @@ func _handle_mouse_motion(
 	if tool_id != 1:
 		root.set_shift_pressed(event.shift_pressed)
 		root.set_alt_pressed(event.alt_pressed)
-	var face_select = dock.is_face_select_mode_enabled()
-	if tool_id == 1 and select_drag_active and event.button_mask & MOUSE_BUTTON_MASK_LEFT != 0:
-		if not select_dragging and select_drag_origin.distance_to(pos) >= select_drag_threshold:
-			select_dragging = true
-		if select_dragging:
-			_update_marquee_overlay(select_drag_origin, pos, true)
-		return EditorPlugin.AFTER_GUI_INPUT_PASS
 	if (tool_id == 2 or tool_id == 3) and event.button_mask & MOUSE_BUTTON_MASK_LEFT != 0:
 		root.update_extrude(cam, pos)
 		_update_hud_context()
@@ -1732,8 +2371,10 @@ func _update_prefab_hover_overlay(root, cam: Camera3D, pos: Vector2) -> void:
 
 
 func _toggle_vertex_mode(root: Node) -> void:
-	_prepare_tool_transition(root)
 	var enabling := not _vertex_mode
+	if enabling:
+		_close_face_select_mode("Face Select closed for vertex editing")
+	_prepare_tool_transition(root)
 	if enabling and dock and dock.paint_mode and dock.paint_mode.button_pressed:
 		dock.highlight_tab("Brush")
 	_vertex_mode = enabling
@@ -1750,6 +2391,9 @@ func _toggle_vertex_mode(root: Node) -> void:
 			root.input_state.begin_vertex_edit()
 	else:
 		if root and root.vertex_system:
+			if _vertex_drag_active:
+				root.vertex_system.cancel_drag()
+				_vertex_drag_active = false
 			root.vertex_system.clear_selection()
 			root.input_state.end_vertex_edit()
 		_clear_vertex_overlay()
@@ -1800,6 +2444,11 @@ func _handle_vertex_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vec
 	if event is InputEventKey and event.pressed:
 		# Escape exits vertex mode
 		if event.keycode == KEY_ESCAPE:
+			if _vertex_drag_active:
+				_vertex_drag_active = false
+				vs.cancel_drag()
+				_update_vertex_overlay(root, cam)
+				return EditorPlugin.AFTER_GUI_INPUT_STOP
 			if vs.has_selection():
 				vs.clear_selection()
 				_update_vertex_overlay(root, cam)
@@ -1861,7 +2510,6 @@ func _handle_vertex_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vec
 				# Begin drag using edge midpoint
 				_vertex_drag_active = true
 				_vertex_drag_start = pos
-				_vertex_drag_ref_y = pick.world_midpoint.y
 				vs.begin_drag(pick.world_midpoint)
 				_update_vertex_overlay(root, cam)
 				return EditorPlugin.AFTER_GUI_INPUT_STOP
@@ -1876,8 +2524,14 @@ func _handle_vertex_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vec
 			# Begin drag
 			_vertex_drag_active = true
 			_vertex_drag_start = pos
-			_vertex_drag_ref_y = pick.world_pos.y
 			vs.begin_drag(pick.world_pos)
+			_update_vertex_overlay(root, cam)
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+		# A canceled release means the OS/editor broke pointer capture. Restore the
+		# pre-drag geometry instead of recording a partial move.
+		if is_canceled_vertex_drag_release(event) and _vertex_drag_active:
+			_vertex_drag_active = false
+			vs.cancel_drag()
 			_update_vertex_overlay(root, cam)
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 		# Mouse release — end drag
@@ -1904,28 +2558,23 @@ func _handle_vertex_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vec
 	# Mouse motion — update drag or hover
 	if event is InputEventMouseMotion:
 		if _vertex_drag_active and vs.is_dragging():
-			# Project mouse delta to world-space movement
-			var delta = _vertex_screen_to_world_delta(
-				cam, _vertex_drag_start, pos, root, _vertex_drag_ref_y
-			)
-			if delta.length() > 0.001:
-				# Snap delta
-				if root.grid_snap > 0.0:
-					delta = Vector3(
-						snappedf(delta.x, root.grid_snap),
-						snappedf(delta.y, root.grid_snap),
-						snappedf(delta.z, root.grid_snap)
-					)
-				# Apply axis lock (AxisLock enum: NONE=0, X=1, Y=2, Z=3)
-				if root.input_state.axis_lock == 1:  # X
-					delta = Vector3(delta.x, 0, 0)
-				elif root.input_state.axis_lock == 2:  # Y
-					delta = Vector3(0, delta.y, 0)
-				elif root.input_state.axis_lock == 3:  # Z
-					delta = Vector3(0, 0, delta.z)
+			if event.button_mask & MOUSE_BUTTON_MASK_LEFT == 0:
+				_vertex_drag_active = false
 				vs.cancel_drag()
-				vs.begin_drag(Vector3.ZERO)
-				vs.move_vertices(delta)
+				_update_vertex_overlay(root, cam)
+				return EditorPlugin.AFTER_GUI_INPUT_PASS
+			var projection: Dictionary = vs.project_drag_screen_delta(
+				cam, _vertex_drag_start, pos, root.input_state.axis_lock
+			)
+			if bool(projection.get("valid", false)):
+				var delta: Vector3 = projection.get("delta", Vector3.ZERO)
+				if root.grid_snap > 0.0:
+					delta = delta.snapped(Vector3.ONE * root.grid_snap)
+				# Absolute updates include Vector3.ZERO so returning to the origin
+				# or the same snap cell cannot leave a stale prior movement applied.
+				vs.update_drag_absolute(delta)
+			else:
+				vs.update_drag_absolute(Vector3.ZERO)
 			_update_vertex_overlay(root, cam)
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 		if vs.sub_mode == vs.VertexSubMode.EDGE:
@@ -1935,31 +2584,6 @@ func _handle_vertex_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vec
 		_update_vertex_overlay(root, cam)
 
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
-
-
-func _vertex_screen_to_world_delta(
-	cam: Camera3D, start_screen: Vector2, end_screen: Vector2, root: Node, ref_y: float = 0.0
-) -> Vector3:
-	# Project screen movement onto a horizontal plane at the picked vertex's Y
-	# height, so dragging works correctly for elevated geometry and all view angles.
-	var start_origin = cam.project_ray_origin(start_screen)
-	var start_dir = cam.project_ray_normal(start_screen)
-	var end_origin = cam.project_ray_origin(end_screen)
-	var end_dir = cam.project_ray_normal(end_screen)
-	var start_pos = _intersect_y_plane(start_origin, start_dir, ref_y)
-	var end_pos = _intersect_y_plane(end_origin, end_dir, ref_y)
-	if start_pos == null or end_pos == null:
-		return Vector3.ZERO
-	return end_pos - start_pos
-
-
-func _intersect_y_plane(origin: Vector3, dir: Vector3, y: float) -> Variant:
-	if abs(dir.y) < 0.0001:
-		return null
-	var t = (y - origin.y) / dir.y
-	if t < 0.0:
-		return null
-	return origin + dir * t
 
 
 func _commit_vertex_op(root: Node, pre_op_snapshots: Dictionary, action_name: String) -> void:
@@ -2087,22 +2711,92 @@ func _clear_vertex_overlay() -> void:
 func _shortcut_input(event: InputEvent) -> void:
 	if not (event is InputEventKey):
 		return
+	_ensure_selection_runtime_state()
+	# The 3D viewport receives RMB navigation through the forwarded input hook,
+	# but editor shortcuts arrive through this separate hook as well. Keep the
+	# complete keyboard stream native until RMB release so Ctrl+Arrow/Escape cannot
+	# nudge or cancel HammerForge state during camera flight.
+	if _rmb_camera_navigation.active:
+		return
+	# Native transform/property/custom gizmos own their complete keyboard stream.
+	# In particular, Ctrl+Arrow must not become a simultaneous HF nudge while a
+	# Godot widget is dragging the same brush.
+	if _brush_gizmo_action_active() or _selection_gesture.should_yield_cancel_to_native():
+		return
 	if not event.pressed or event.echo:
 		return
+	if should_yield_global_shortcut_to_focus(get_viewport().gui_get_focus_owner()):
+		return
+	var root = active_root if active_root else _get_level_root()
 	if event.keycode == KEY_ESCAPE:
-		var root = active_root if active_root else _get_level_root()
 		if _cancel_escape_step(root):
-			event.accept()
+			_mark_shortcut_input_handled()
+		return
+	if not root:
+		return
+	# Delete and Duplicate are global editor shortcuts: Godot can deliver them
+	# here while focus is in the Scene tree, without ever forwarding them through
+	# the 3D viewport. Claim managed selections here as well so every entry point
+	# uses HammerForge's undo, stable-ID, and reference-cleanup boundaries.
+	if _keymap.matches("delete", event):
+		var delete_guard := _guard_hammerforge_shortcut(root, false, 1, "Delete")
+		if delete_guard == HF_SHORTCUT_APPLY:
+			_delete_selected(root)
+			_mark_shortcut_input_handled()
+		elif delete_guard == EditorPlugin.AFTER_GUI_INPUT_STOP:
+			_mark_shortcut_input_handled()
+		return
+	if _keymap.matches("duplicate", event):
+		var duplicate_guard := _guard_hammerforge_shortcut(root, false, 1, "Duplicate")
+		if duplicate_guard == HF_SHORTCUT_APPLY:
+			_duplicate_selected(root)
+			_mark_shortcut_input_handled()
+		elif duplicate_guard == EditorPlugin.AFTER_GUI_INPUT_STOP:
+			_mark_shortcut_input_handled()
 		return
 	if not event.ctrl_pressed:
 		return
-	var root = active_root if active_root else _get_level_root()
-	if not root:
-		return
 	var nudge = _get_nudge_direction(event.keycode)
 	if nudge != Vector3.ZERO:
-		if _nudge_selected(root, nudge):
-			event.accept()
+		var nudge_guard := _guard_hammerforge_shortcut(root, false, 1, "Nudge")
+		if nudge_guard == HF_SHORTCUT_APPLY:
+			_nudge_selected(root, nudge)
+			_mark_shortcut_input_handled()
+		elif nudge_guard == EditorPlugin.AFTER_GUI_INPUT_STOP:
+			_mark_shortcut_input_handled()
+
+
+func _mark_shortcut_input_handled() -> void:
+	# InputEvent has no accept() API. _shortcut_input() consumes through the
+	# viewport so Godot cannot execute the same global command afterwards.
+	var viewport := get_viewport()
+	if viewport:
+		viewport.set_input_as_handled()
+
+
+## Only the 3D viewport, the real Scene tree, and explicitly marked HammerForge
+## command surfaces may route managed global shortcuts. Unknown editor panels
+## keep ownership of their own Delete, Duplicate, arrows, and Escape commands.
+static func should_yield_global_shortcut_to_focus(focus_owner: Control) -> bool:
+	if focus_owner == null:
+		# The 3D viewport normally has no GUI focus owner.
+		return false
+	var current: Control = focus_owner
+	while current:
+		if bool(current.get_meta("_hammerforge_managed_shortcut_surface", false)):
+			return false
+		var control_class := current.get_class()
+		var node_name := str(current.name)
+		if control_class in ["SceneTreeDock", "SceneTreeEditor"]:
+			return false
+		if node_name in ["SceneTree", "SceneTreeDock", "SceneTreeEditor"]:
+			return false
+		if control_class in ["Node3DEditor", "Node3DEditorViewport"]:
+			return false
+		if node_name in ["Node3DEditor", "Node3DEditorViewport"]:
+			return false
+		current = current.get_parent() as Control
+	return true
 
 
 func _cancel_escape_step(root: Node) -> bool:
@@ -2129,10 +2823,15 @@ func _cancel_escape_step(root: Node) -> bool:
 		_disp_paint_face_idx = -1
 		_disp_paint_pre_state = {}
 		return true
-	if select_drag_active or select_dragging:
-		select_drag_active = false
-		select_dragging = false
-		_update_marquee_overlay(Vector2.ZERO, Vector2.ZERO, false)
+	# Godot must see Escape while one of its transform/property/custom gizmos
+	# owns LMB so it can restore the exact engine-side value and clear its private
+	# drag reference. Only discard HammerForge's parallel bookkeeping here.
+	if _brush_gizmo_action_active():
+		return false
+	if _selection_gesture and _selection_gesture.should_yield_cancel_to_native():
+		_cancel_selection_gesture()
+		return false
+	if _cancel_selection_gesture():
 		return true
 	if root and root.input_state:
 		if root.input_state.is_extruding():
@@ -2156,6 +2855,11 @@ func _cancel_escape_step(root: Node) -> bool:
 		root.clear_face_selection()
 		_update_hud_context()
 		return true
+	# Face Select remains modal after its local face selection is cleared. A
+	# second Escape (or the first when no face is selected) exits the mode and
+	# restores the object selection hidden on entry.
+	if _close_face_select_mode("Face Select closed"):
+		return true
 	if not hf_selection.is_empty():
 		hf_selection.clear()
 		var selection = get_editor_interface().get_selection()
@@ -2168,74 +2872,126 @@ func _cancel_escape_step(root: Node) -> bool:
 	return false
 
 
-func _select_node(node: Node, additive: bool = false) -> void:
-	var selection = get_editor_interface().get_selection()
+## Godot finishes native selection after _forward_3d_gui_input() returns. Do
+## group normalization one deferred tick later so its exact gizmo and region
+## hit-testing remains authoritative, then map internal visual children back to
+## their HammerForge owner and apply grouped brushes as one selection unit.
+func _finalize_native_selection(selection_before: Array, additive: bool, toggle: bool) -> void:
+	if not is_inside_tree():
+		return
+	var selection := get_editor_interface().get_selection()
 	if not selection:
 		return
-	var toggle = Input.is_key_pressed(KEY_CTRL) or Input.is_key_pressed(KEY_META)
-	# Expand grouped nodes
-	var expanded: Array = [node] if node else []
-	var root = active_root if active_root else _get_level_root()
-	if node and root and root.visgroup_system:
-		var group_id = root.visgroup_system.get_group_of(node)
-		if group_id != "":
-			expanded = root.visgroup_system.get_group_members(group_id)
-	if not additive:
-		hf_selection.clear()
-		for n in expanded:
-			if n and not hf_selection.has(n):
-				hf_selection.append(n)
-	else:
-		_sync_hf_selection_if_empty()
-		for n in expanded:
-			if n:
-				if toggle and hf_selection.has(n):
-					hf_selection.erase(n)
-				elif not hf_selection.has(n):
-					hf_selection.append(n)
-	if not additive and node == null:
-		hf_selection.clear()
+	var root := active_root if active_root else _get_level_root()
+	var before := _normalize_editor_selection(selection_before, root)
+	var editor_nodes := selection.get_selected_nodes()
+	var current := _normalize_editor_selection(editor_nodes, root)
+	# Native Shift is additive for new hits and removes an already-selected hit.
+	# In the latter case, remove the full visgroup instead of re-adding the member
+	# Godot just removed. Custom Face Select may additionally request toggle.
+	var expanded := _expand_native_group_selection(root, before, current, toggle or additive)
+	if _same_node_selection(editor_nodes, expanded):
+		hf_selection = expanded
+		_on_editor_selection_changed()
+		return
+	hf_selection = expanded
 	_apply_hf_selection(selection)
 
 
-func _select_nodes_in_rect(
-	root: Node, camera: Camera3D, from: Vector2, to: Vector2, additive: bool
-) -> void:
-	if not root or not camera:
-		return
-	var rect = Rect2(from, to - from).abs()
-	var nodes: Array = []
-	if root:
-		nodes = root._iter_pick_nodes()
-	var picked: Array = []
-	for node in nodes:
-		if not (node is Node3D):
+func _normalize_editor_selection(nodes: Array, root: Node) -> Array:
+	var normalized: Array = []
+	for candidate in nodes:
+		if not is_instance_valid(candidate) or not (candidate is Node):
 			continue
-		if root and root.is_brush_node(node):
-			pass
-		elif root and root.is_entity_node(node):
-			pass
-		else:
-			continue
-		var bounds = _node_screen_bounds(camera, node as Node3D, root)
-		if bounds.size == Vector2.ZERO:
-			continue
+		var node := _hammerforge_selection_owner(candidate as Node, root)
+		if node and not normalized.has(node):
+			normalized.append(node)
+	return normalized
+
+
+func _hammerforge_selection_owner(node: Node, root: Node) -> Node:
+	return normalize_managed_selection_owner(node, root)
+
+
+static func normalize_managed_selection_owner(node: Node, root: Node) -> Node:
+	var current := node
+	var entities_root: Node = root.get("entities_node") as Node if root else null
+	while current:
+		if current is DraftBrush or current is DraftEntityType:
+			return current
+		# is_entity_node() deliberately accepts descendants for interaction tests.
+		# Selection ownership is narrower: climb to the DraftEntity or the direct
+		# managed child used by legacy/custom entity nodes before returning.
 		if (
-			rect.intersects(bounds)
-			or bounds.has_point(rect.position)
-			or bounds.has_point(rect.position + rect.size)
+			entities_root
+			and current.get_parent() == entities_root
+			and root.has_method("is_entity_node")
+			and root.is_entity_node(current)
 		):
-			picked.append(node)
-	if not additive and picked.is_empty():
-		hf_selection.clear()
-		var selection = get_editor_interface().get_selection()
-		if selection:
-			selection.clear()
-		return
-	_apply_selection_list(picked, additive)
+			return current
+		if current == root:
+			break
+		current = current.get_parent()
+	return node
 
 
-func _apply_selection_list(nodes: Array, additive: bool) -> void:
+func _expand_native_group_selection(
+	root: Node, selection_before: Array, current_selection: Array, toggle: bool
+) -> Array:
+	if not root or not root.visgroup_system:
+		return current_selection.duplicate()
+	var groups := {}
+	for node in selection_before + current_selection:
+		if not is_instance_valid(node):
+			continue
+		var group_id: String = str(root.visgroup_system.get_group_of(node))
+		if group_id != "" and not groups.has(group_id):
+			groups[group_id] = root.visgroup_system.get_group_members(group_id)
+	return expand_native_group_members(selection_before, current_selection, toggle, groups)
+
+
+static func expand_native_group_members(
+	selection_before: Array, current_selection: Array, toggle: bool, groups: Dictionary
+) -> Array:
+	var result := current_selection.duplicate()
+	for group_id in groups:
+		var members: Array = groups.get(group_id, [])
+		if members.is_empty():
+			continue
+		var before_members: Array = []
+		var current_members: Array = []
+		for member in members:
+			if selection_before.has(member):
+				before_members.append(member)
+			if current_selection.has(member):
+				current_members.append(member)
+		if _same_node_selection(before_members, current_members):
+			continue
+		var removed_member := false
+		for member in before_members:
+			if not current_members.has(member):
+				removed_member = true
+				break
+		if toggle and removed_member:
+			for member in members:
+				result.erase(member)
+		elif not current_members.is_empty():
+			for member in members:
+				if is_instance_valid(member) and not result.has(member):
+					result.append(member)
+	return result
+
+
+static func _same_node_selection(first: Array, second: Array) -> bool:
+	if first.size() != second.size():
+		return false
+	for node in first:
+		if not second.has(node):
+			return false
+	return true
+
+
+func _apply_selection_list(nodes: Array, additive: bool, toggle: bool = false) -> void:
 	var selection = get_editor_interface().get_selection()
 	if not selection:
 		return
@@ -2244,16 +3000,23 @@ func _apply_selection_list(nodes: Array, additive: bool) -> void:
 	else:
 		_sync_hf_selection_if_empty()
 	for node in nodes:
-		if node and not hf_selection.has(node):
+		if not node:
+			continue
+		if additive and toggle and hf_selection.has(node):
+			hf_selection.erase(node)
+		elif not hf_selection.has(node):
 			hf_selection.append(node)
 	_apply_hf_selection(selection)
 
 
 func _apply_hf_selection(selection: EditorSelection) -> void:
+	_applying_hf_selection = true
 	selection.clear()
 	for node in hf_selection:
 		if is_instance_valid(node):
 			selection.add_node(node)
+	_applying_hf_selection = false
+	_on_editor_selection_changed()
 
 
 func _sync_hf_selection_if_empty() -> void:
@@ -2262,78 +3025,6 @@ func _sync_hf_selection_if_empty() -> void:
 	var selection = get_editor_interface().get_selection()
 	if selection:
 		hf_selection = selection.get_selected_nodes()
-
-
-func _project_to_screen(camera: Camera3D, position: Vector3) -> Variant:
-	if camera.is_position_behind(position):
-		return null
-	return camera.unproject_position(position)
-
-
-func _node_screen_bounds(camera: Camera3D, node: Node3D, root: Node) -> Rect2:
-	if not camera or not node:
-		return Rect2()
-	var visuals: Array = []
-	if root:
-		root._gather_visual_instances(node, visuals)
-	else:
-		_gather_visual_instances_local(node, visuals)
-	if visuals.is_empty():
-		var fallback = _project_to_screen(camera, node.global_transform.origin)
-		return Rect2(fallback - Vector2.ONE, Vector2.ONE * 2.0) if fallback != null else Rect2()
-	var min_pt = Vector2(INF, INF)
-	var max_pt = Vector2(-INF, -INF)
-	var had_point = false
-	for visual in visuals:
-		if not (visual is VisualInstance3D):
-			continue
-		var vis := visual as VisualInstance3D
-		var aabb = vis.get_aabb()
-		var corners = [
-			aabb.position,
-			aabb.position + Vector3(aabb.size.x, 0.0, 0.0),
-			aabb.position + Vector3(0.0, aabb.size.y, 0.0),
-			aabb.position + Vector3(0.0, 0.0, aabb.size.z),
-			aabb.position + Vector3(aabb.size.x, aabb.size.y, 0.0),
-			aabb.position + Vector3(aabb.size.x, 0.0, aabb.size.z),
-			aabb.position + Vector3(0.0, aabb.size.y, aabb.size.z),
-			aabb.position + aabb.size
-		]
-		var center_world = vis.global_transform * aabb.get_center()
-		if camera.is_position_behind(center_world):
-			var all_behind = true
-			for corner in corners:
-				if not camera.is_position_behind(vis.global_transform * corner):
-					all_behind = false
-					break
-			if all_behind:
-				continue
-		for corner in corners:
-			var world_pos = vis.global_transform * corner
-			var screen = _project_to_screen(camera, world_pos)
-			if screen == null:
-				continue
-			had_point = true
-			min_pt.x = min(min_pt.x, screen.x)
-			min_pt.y = min(min_pt.y, screen.y)
-			max_pt.x = max(max_pt.x, screen.x)
-			max_pt.y = max(max_pt.y, screen.y)
-	if not had_point:
-		return Rect2()
-	var size = max_pt - min_pt
-	if size == Vector2.ZERO:
-		size = Vector2.ONE * 2.0
-		min_pt -= Vector2.ONE
-	return Rect2(min_pt, size)
-
-
-func _gather_visual_instances_local(node: Node, out: Array) -> void:
-	if not node:
-		return
-	if node is VisualInstance3D:
-		out.append(node)
-	for child in node.get_children():
-		_gather_visual_instances_local(child, out)
 
 
 func _selection_has_brush(nodes: Array, root: Node) -> bool:
@@ -2352,6 +3043,185 @@ func _selection_has_entity(nodes: Array, root: Node) -> bool:
 		if root.is_entity_node(node):
 			return true
 	return false
+
+
+## Input forwarding is global, but HammerForge edit commands are not. Native
+## selections pass through to Godot; mixed selections are blocked from both
+## command paths because generic duplicate/delete can corrupt managed IDs.
+static func classify_selection_scope(nodes: Array, root: Node) -> int:
+	if nodes.is_empty() or not root:
+		return SelectionScope.EMPTY
+	var has_hammerforge := false
+	var has_native := false
+	for node in nodes:
+		if not is_instance_valid(node) or not (node is Node):
+			has_native = true
+		elif root.is_brush_node(node) or root.is_entity_node(node):
+			has_hammerforge = true
+		else:
+			has_native = true
+	if has_hammerforge and has_native:
+		return SelectionScope.MIXED
+	return SelectionScope.HAMMERFORGE_ONLY if has_hammerforge else SelectionScope.NATIVE_ONLY
+
+
+func _guard_hammerforge_shortcut(
+	root: Node, brushes_only: bool, minimum_count: int, action_label: String
+) -> int:
+	var nodes := _current_selection_nodes()
+	var scope := classify_selection_scope(nodes, root)
+	if scope in [SelectionScope.EMPTY, SelectionScope.NATIVE_ONLY]:
+		return EditorPlugin.AFTER_GUI_INPUT_PASS
+	if scope == SelectionScope.MIXED:
+		if dock:
+			dock.show_toast("Edit HammerForge and Godot nodes separately", 1)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	if brushes_only:
+		for node in nodes:
+			if not root.is_brush_node(node):
+				if dock:
+					dock.show_toast("%s works on brushes only" % action_label, 1)
+				return EditorPlugin.AFTER_GUI_INPUT_STOP
+	if nodes.size() < minimum_count:
+		if dock:
+			dock.show_toast("%s needs at least %d selected" % [action_label, minimum_count], 1)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	return HF_SHORTCUT_APPLY
+
+
+## Selection-dependent commands enter through keyboard shortcuts, the context
+## toolbar, the command palette, the viewport menu, and the radial menu. Keep
+## one requirement table so every surface either applies the complete managed
+## selection or applies nothing; a mixed native/HammerForge selection must
+## never be partially edited.
+static func managed_surface_action_requirement(action: String) -> Dictionary:
+	if action in ["delete", "duplicate"]:
+		return {"brushes_only": false, "minimum": 1, "label": action.capitalize()}
+	if action == "group":
+		return {"brushes_only": false, "minimum": 2, "label": "Group"}
+	if action == "ungroup":
+		return {"brushes_only": false, "minimum": 1, "label": "Ungroup"}
+	if action == "merge":
+		return {"brushes_only": true, "minimum": 2, "label": "Merge"}
+	if (
+		action
+		in [
+			"hollow",
+			"clip",
+			"carve",
+			"move_to_floor",
+			"move_to_ceiling",
+			"vertex_edit",
+			"vertex_submode",
+			"edge_submode",
+			"vertex_merge",
+			"vertex_split",
+			"vertex_split_edge",
+			"vertex_clip_convex",
+		]
+	):
+		return {
+			"brushes_only": true,
+			"minimum": 1,
+			"label": action.replace("_", " ").capitalize(),
+		}
+	if (
+		action
+		in ["apply_to_brush", "apply_context_material", "apply_last_texture", "select_similar"]
+	):
+		return {
+			"brushes_only": true,
+			"minimum": 1,
+			"label": action.replace("_", " ").capitalize(),
+			"allow_faces": true,
+		}
+	if (
+		action
+		in [
+			"justify_fit",
+			"justify_center",
+			"justify_left",
+			"justify_right",
+			"justify_top",
+			"justify_bottom",
+		]
+	):
+		return {
+			"brushes_only": true,
+			"minimum": 1,
+			"label": "UV Justify",
+			"allow_faces": true,
+		}
+	if (
+		action
+		in [
+			"quick_save_prefab",
+			"quick_save_linked_prefab",
+			"cycle_variant",
+			"push_to_source",
+			"propagate_prefab",
+			"entity_io",
+			"entity_props",
+			"highlight_connected",
+		]
+	):
+		return {
+			"brushes_only": false,
+			"minimum": 1,
+			"label": action.replace("_", " ").capitalize(),
+		}
+	if action == "selection_filter":
+		# Filters may start from an empty selection, but never from a mixed one.
+		return {"mixed_only": true, "label": "Selection Filters"}
+	return {}
+
+
+func _managed_action_surface_allowed(root: Node, action: String) -> bool:
+	var requirement := managed_surface_action_requirement(action)
+	if requirement.is_empty():
+		return true
+	var nodes := _current_selection_nodes()
+	var scope := classify_selection_scope(nodes, root)
+	if scope == SelectionScope.MIXED:
+		if dock:
+			dock.show_toast("Edit HammerForge and Godot nodes separately", 1)
+		return false
+	if bool(requirement.get("mixed_only", false)):
+		return true
+	if bool(requirement.get("allow_faces", false)) and root:
+		var faces = root.get("face_selection")
+		if faces is Dictionary and not faces.is_empty():
+			return true
+	var guard := _guard_hammerforge_shortcut(
+		root,
+		bool(requirement.get("brushes_only", false)),
+		int(requirement.get("minimum", 1)),
+		str(requirement.get("label", "Action"))
+	)
+	if guard == HF_SHORTCUT_APPLY:
+		return true
+	if guard == EditorPlugin.AFTER_GUI_INPUT_PASS and dock:
+		dock.show_toast("Select a HammerForge object first", 1)
+	return false
+
+
+func _hammerforge_selection_nodes(root: Node, brushes_only: bool = false) -> Array:
+	var eligible: Array = []
+	if not root:
+		return eligible
+	for node in _current_selection_nodes():
+		if not is_instance_valid(node) or not (node is Node):
+			continue
+		if root.is_brush_node(node) or (not brushes_only and root.is_entity_node(node)):
+			eligible.append(node)
+	return eligible
+
+
+func _managed_entity_owner(root: Node, node: Node) -> Node:
+	if not root or not node or not root.is_entity_node(node):
+		return null
+	var owner := _hammerforge_selection_owner(node, root)
+	return owner if owner is DraftEntityType else null
 
 
 func _current_selection_nodes() -> Array:
@@ -2425,26 +3295,12 @@ func _commit_brush_placement(root: Node, info: Dictionary) -> void:
 	)
 
 
-func _collect_brushes(root: Node) -> Array:
-	var brushes: Array = []
-	var nodes: Array = (
-		root._iter_pick_nodes() if root.has_method("_iter_pick_nodes") else root.get_children()
-	)
-	for node in nodes:
-		if node is DraftBrush:
-			brushes.append(node)
-	return brushes
-
-
 func _pick_face_material(root: Node) -> void:
 	if not last_3d_camera or not dock:
 		return
 	var cam = last_3d_camera
 	var pos = last_3d_mouse_pos
-	var ray_origin = cam.project_ray_origin(pos)
-	var ray_dir = cam.project_ray_normal(pos)
-	var brushes: Array = _collect_brushes(root)
-	var hit = FaceSelector.intersect_brushes(brushes, ray_origin, ray_dir)
+	var hit: Dictionary = root.pick_face(cam, pos)
 	if hit.is_empty():
 		if dock:
 			dock.show_toast("No face under cursor", 1)
@@ -2474,7 +3330,7 @@ func _pick_face_material(root: Node) -> void:
 
 
 func _select_faces_in_rect(
-	root: Node, camera: Camera3D, from: Vector2, to: Vector2, additive: bool
+	root: Node, camera: Camera3D, from: Vector2, to: Vector2, additive: bool, toggle: bool = false
 ) -> void:
 	if not root or not camera:
 		return
@@ -2485,19 +3341,34 @@ func _select_faces_in_rect(
 		if not (node is DraftBrush):
 			continue
 		var brush := node as DraftBrush
+		# Match the canonical click picker: tied brush-entity geometry and hidden
+		# candidates are not editable as standalone faces.
+		if not root.is_brush_node(brush) or not brush.is_visible_in_tree():
+			continue
 		var faces: Array = brush.get_faces() if brush.has_method("get_faces") else []
 		var key: String = _face_key_for(brush)
-		var indices: Array = face_sel.get(key, []) if additive else []
+		var indices: Array = face_sel.get(key, []).duplicate() if additive else []
 		for i in range(faces.size()):
 			var face = faces[i]
 			if not face:
 				continue
 			var center := _face_screen_center(camera, brush, face)
-			if center != Vector2(-1, -1) and rect.has_point(center):
-				if not indices.has(i):
-					indices.append(i)
+			if center == Vector2(-1, -1) or not rect.has_point(center):
+				continue
+			# Projected centers alone select backfaces and faces hidden behind other
+			# brushes. Reuse the exact depth-aware picker at that screen point and
+			# accept only the face that is actually visible to the camera.
+			var visible_hit: Dictionary = root.pick_face(camera, center)
+			if visible_hit.get("brush") != brush or int(visible_hit.get("face_idx", -1)) != i:
+				continue
+			if additive and toggle and indices.has(i):
+				indices.erase(i)
+			elif not indices.has(i):
+				indices.append(i)
 		if not indices.is_empty():
 			face_sel[key] = indices
+		else:
+			face_sel.erase(key)
 	_apply_face_selection(root, face_sel)
 
 
@@ -2773,36 +3644,26 @@ func _on_selection_filter_applied(nodes: Array, faces: Dictionary) -> void:
 
 
 func _update_marquee_overlay(from: Vector2, to: Vector2, active: bool) -> void:
-	if _marquee_overlay and is_instance_valid(_marquee_overlay):
-		_marquee_overlay.set_rect(from, to, active)
+	_marquee_overlay_origin = from
+	_marquee_overlay_current = to
+	_marquee_overlay_active = active
+	if is_inside_tree():
+		update_overlays()
 
 
-## Lightweight Control that draws a semi-transparent selection rectangle.
-class _MarqueeOverlay:
-	extends Control
-
-	var _from := Vector2.ZERO
-	var _to := Vector2.ZERO
-	var _active := false
-
-	func _ready() -> void:
-		set_anchors_preset(Control.PRESET_FULL_RECT)
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	func set_rect(from: Vector2, to: Vector2, active: bool) -> void:
-		_from = from
-		_to = to
-		_active = active
-		queue_redraw()
-
-	func _draw() -> void:
-		if not _active:
-			return
-		var rect = Rect2(_from, _to - _from).abs()
-		# Fill
-		draw_rect(rect, Color(0.3, 0.6, 1.0, 0.12))
-		# Border
-		draw_rect(rect, Color(0.3, 0.6, 1.0, 0.7), false, 1.5)
+## Draw through Godot's real 3D overlay so viewport-local event coordinates
+## remain correct under split views, editor scaling, and dock rearrangement.
+func _forward_3d_force_draw_over_viewport(viewport_control: Control) -> void:
+	if not _marquee_overlay_active or not viewport_control:
+		return
+	var local_mouse := viewport_control.get_local_mouse_position()
+	if not Rect2(Vector2.ZERO, viewport_control.size).has_point(local_mouse):
+		return
+	var rect := (
+		Rect2(_marquee_overlay_origin, _marquee_overlay_current - _marquee_overlay_origin).abs()
+	)
+	viewport_control.draw_rect(rect, Color(0.3, 0.6, 1.0, 0.12))
+	viewport_control.draw_rect(rect, Color(0.3, 0.6, 1.0, 0.7), false, 1.5)
 
 
 func _add_confirmable_dialog(dlg: ConfirmationDialog) -> void:
@@ -2819,6 +3680,7 @@ func _delete_selected(root: Node) -> bool:
 	var selection = get_editor_interface().get_selection()
 	var nodes = _current_selection_nodes()
 	var brush_ids: Array = []
+	var entity_paths: Array = []
 	for node in nodes:
 		if root.is_brush_node(node):
 			var info = root.get_brush_info_from_node(node)
@@ -2827,13 +3689,25 @@ func _delete_selected(root: Node) -> bool:
 			var brush_id = str(info.get("brush_id", ""))
 			if brush_id != "":
 				brush_ids.append(brush_id)
-	if brush_ids.is_empty():
+		elif root.is_entity_node(node):
+			var entity := _managed_entity_owner(root, node)
+			if entity:
+				entity_paths.append(root.get_path_to(entity))
+	var object_count := brush_ids.size() + entity_paths.size()
+	if object_count == 0:
 		return false
-	# Confirm bulk delete (3+ brushes) to prevent accidental mass deletion
-	if brush_ids.size() >= 3:
+	var action_name := (
+		"Delete Brushes"
+		if entity_paths.is_empty()
+		else ("Delete Entities" if brush_ids.is_empty() else "Delete HammerForge Objects")
+	)
+	# Confirm bulk delete (3+ managed objects) to prevent accidental mass deletion.
+	if object_count >= 3:
 		var dlg = ConfirmationDialog.new()
-		dlg.title = "Delete Brushes"
-		dlg.dialog_text = "Delete %d brushes? This can be undone with Ctrl+Z." % brush_ids.size()
+		dlg.title = action_name
+		dlg.dialog_text = (
+			"Delete %d HammerForge objects? This can be undone with Ctrl+Z." % object_count
+		)
 		dlg.min_size = Vector2i(280, 80)
 		_add_confirmable_dialog(dlg)
 		dlg.confirmed.connect(
@@ -2846,9 +3720,9 @@ func _delete_selected(root: Node) -> bool:
 				HFUndoHelper.commit(
 					_get_undo_redo(),
 					root,
-					"Delete Brushes",
-					"delete_brushes_by_id",
-					[brush_ids],
+					action_name,
+					"delete_managed_nodes",
+					[brush_ids, entity_paths],
 					false,
 					Callable(self, "_record_history")
 				)
@@ -2867,65 +3741,89 @@ func _delete_selected(root: Node) -> bool:
 	HFUndoHelper.commit(
 		_get_undo_redo(),
 		root,
-		"Delete Brushes",
-		"delete_brushes_by_id",
-		[brush_ids],
+		action_name,
+		"delete_managed_nodes",
+		[brush_ids, entity_paths],
 		false,
 		Callable(self, "_record_history")
 	)
 	return true
 
 
-func _duplicate_selected(root: Node) -> void:
+func _duplicate_selected(root: Node) -> bool:
 	var selection = get_editor_interface().get_selection()
 	var nodes = _current_selection_nodes()
-	var infos: Array = []
+	var brush_infos: Array = []
+	var entity_infos: Array = []
 	var step = root.grid_snap if root.grid_snap > 0.0 else 1.0
 	for node in nodes:
 		if root.is_brush_node(node):
 			var info = root.build_duplicate_info(node, Vector3(step, 0.0, 0.0))
 			if not info.is_empty():
-				infos.append(info)
-	if infos.is_empty():
-		return
+				brush_infos.append(info)
+		elif root.is_entity_node(node):
+			var entity := _managed_entity_owner(root, node)
+			if entity:
+				var info: Dictionary = root.build_duplicate_entity_info(
+					entity, Vector3(step, 0.0, 0.0)
+				)
+				if not info.is_empty():
+					entity_infos.append(info)
+	if brush_infos.is_empty() and entity_infos.is_empty():
+		return false
+	var action_name := (
+		"Duplicate Brushes"
+		if entity_infos.is_empty()
+		else ("Duplicate Entities" if brush_infos.is_empty() else "Duplicate HammerForge Objects")
+	)
 	HFUndoHelper.commit(
 		_get_undo_redo(),
 		root,
-		"Duplicate Brushes",
-		"create_brushes_from_infos",
-		[infos],
+		action_name,
+		"create_managed_duplicates",
+		[brush_infos, entity_infos],
 		false,
 		Callable(self, "_record_history")
 	)
 	hf_selection.clear()
-	selection.clear()
-	if root:
-		for info in infos:
-			var dup = root.find_brush_by_id(info.get("brush_id", ""))
-			if dup:
-				hf_selection.append(dup)
-				selection.add_node(dup)
+	for info in brush_infos:
+		var duplicate_brush = root.find_brush_by_id(info.get("brush_id", ""))
+		if duplicate_brush:
+			hf_selection.append(duplicate_brush)
+	for info in entity_infos:
+		var duplicate_entity: Node = root.entities_node.get_node_or_null(
+			NodePath(str(info.get("name", "")))
+		)
+		if duplicate_entity:
+			hf_selection.append(duplicate_entity)
+	_apply_hf_selection(selection)
+	return true
 
 
 func _nudge_selected(root: Node, dir: Vector3) -> bool:
 	var step = root.grid_snap if root.grid_snap > 0.0 else 1.0
 	var nodes = _current_selection_nodes()
 	var brush_ids: Array = []
+	var entity_paths: Array = []
 	for node in nodes:
 		if node and node is Node3D and root.is_brush_node(node):
 			var info = root.get_brush_info_from_node(node)
 			var brush_id = str(info.get("brush_id", ""))
 			if brush_id != "":
 				brush_ids.append(brush_id)
-	if brush_ids.is_empty():
+		elif node and node is Node3D and root.is_entity_node(node):
+			var entity := _managed_entity_owner(root, node)
+			if entity:
+				entity_paths.append(root.get_path_to(entity))
+	if brush_ids.is_empty() and entity_paths.is_empty():
 		return false
 	var offset = dir * step
 	HFUndoHelper.commit(
 		_get_undo_redo(),
 		root,
-		"Nudge Brushes",
-		"nudge_brushes_by_id",
-		[brush_ids, offset],
+		"Nudge HammerForge Objects",
+		"nudge_managed_nodes",
+		[brush_ids, entity_paths, offset],
 		false,
 		Callable(self, "_record_history"),
 		"nudge"
@@ -2945,43 +3843,51 @@ func _adjust_grid_snap(root: Node, factor: float) -> void:
 	_update_hud_context()
 
 
-func _group_selected(root: Node) -> void:
-	var nodes = _current_selection_nodes()
+func _group_selected(root: Node) -> bool:
+	var nodes = _hammerforge_selection_nodes(root)
 	if nodes.size() < 2 or not root or not root.visgroup_system:
-		return
+		return false
 	var group_name = "group_%d" % Time.get_ticks_usec()
 	root.visgroup_system.group_selection(group_name, nodes)
 	_record_history("Group Selection")
 	if dock:
 		dock.refresh_visgroup_ui()
+	return true
 
 
-func _ungroup_selected(root: Node) -> void:
-	var nodes = _current_selection_nodes()
+func _ungroup_selected(root: Node) -> bool:
+	var nodes = _hammerforge_selection_nodes(root)
 	if nodes.is_empty() or not root or not root.visgroup_system:
-		return
-	root.visgroup_system.ungroup_nodes(nodes)
+		return false
+	var grouped: Array = []
+	for node in nodes:
+		if str(root.visgroup_system.get_group_of(node)) != "":
+			grouped.append(node)
+	if grouped.is_empty():
+		return false
+	root.visgroup_system.ungroup_nodes(grouped)
 	_record_history("Ungroup Selection")
 	if dock:
 		dock.refresh_visgroup_ui()
+	return true
 
 
-func _hollow_selected(root: Node) -> void:
+func _hollow_selected(root: Node) -> bool:
 	var nodes = _current_selection_nodes()
 	if nodes.is_empty():
-		return
+		return false
 	var brush = nodes[0]
 	if not root.is_brush_node(brush):
-		return
+		return false
 	var info = root.get_brush_info_from_node(brush)
 	var brush_id = str(info.get("brush_id", ""))
 	if brush_id == "":
-		return
+		return false
 	var thickness = dock.get_hollow_thickness() if dock else 4.0
 	var check: HFOpResult = root.can_hollow_brush(brush_id, thickness)
 	if not check.ok:
 		root.user_message.emit(check.user_text(), 1)
-		return
+		return true
 	# Show geometry preview and confirm
 	if root.hollow_preview:
 		root.hollow_preview.show_preview(brush_id, thickness)
@@ -3019,9 +3925,10 @@ func _hollow_selected(root: Node) -> void:
 			dlg.queue_free()
 	)
 	dlg.popup_centered()
+	return true
 
 
-func _merge_selected(root: Node) -> void:
+func _merge_selected(root: Node) -> bool:
 	var nodes = _current_selection_nodes()
 	var brush_ids: Array = []
 	for node in nodes:
@@ -3033,11 +3940,11 @@ func _merge_selected(root: Node) -> void:
 	if brush_ids.size() < 2:
 		if dock:
 			dock.show_toast("Select at least 2 brushes to merge", 1)
-		return
+		return false
 	var check: HFOpResult = root.can_merge_brushes(brush_ids)
 	if not check.ok:
 		root.user_message.emit(check.user_text(), 1)
-		return
+		return true
 	HFUndoHelper.commit(
 		_get_undo_redo(),
 		root,
@@ -3047,17 +3954,18 @@ func _merge_selected(root: Node) -> void:
 		false,
 		Callable(self, "_record_history")
 	)
+	return true
 
 
-func _move_selected_to_floor(root: Node) -> void:
-	_move_selected_vertical(root, "Move to Floor", "move_brushes_to_floor")
+func _move_selected_to_floor(root: Node) -> bool:
+	return _move_selected_vertical(root, "Move to Floor", "move_brushes_to_floor")
 
 
-func _move_selected_to_ceiling(root: Node) -> void:
-	_move_selected_vertical(root, "Move to Ceiling", "move_brushes_to_ceiling")
+func _move_selected_to_ceiling(root: Node) -> bool:
+	return _move_selected_vertical(root, "Move to Ceiling", "move_brushes_to_ceiling")
 
 
-func _move_selected_vertical(root: Node, action_name: String, method_name: String) -> void:
+func _move_selected_vertical(root: Node, action_name: String, method_name: String) -> bool:
 	var nodes = _current_selection_nodes()
 	var brush_ids: Array = []
 	for node in nodes:
@@ -3067,7 +3975,7 @@ func _move_selected_vertical(root: Node, action_name: String, method_name: Strin
 			if bid != "":
 				brush_ids.append(bid)
 	if brush_ids.is_empty():
-		return
+		return false
 	HFUndoHelper.commit(
 		_get_undo_redo(),
 		root,
@@ -3077,26 +3985,27 @@ func _move_selected_vertical(root: Node, action_name: String, method_name: Strin
 		false,
 		Callable(self, "_record_history")
 	)
+	return true
 
 
-func _clip_selected(root: Node) -> void:
+func _clip_selected(root: Node) -> bool:
 	var nodes = _current_selection_nodes()
 	if nodes.is_empty():
-		return
+		return false
 	var brush = nodes[0]
 	if not root.is_brush_node(brush):
-		return
+		return false
 	var info = root.get_brush_info_from_node(brush)
 	var brush_id = str(info.get("brush_id", ""))
 	if brush_id == "":
-		return
+		return false
 	# Default clip: split along Y axis at center
 	var center = info.get("center", Vector3.ZERO)
 	var split_pos = center.y if center is Vector3 else 0.0
 	var check: HFOpResult = root.can_clip_brush(brush_id, 1, split_pos)
 	if not check.ok:
 		root.user_message.emit(check.user_text(), 1)
-		return
+		return true
 	# Show geometry preview and confirm
 	if root.clip_preview:
 		root.clip_preview.show_preview(brush_id, 1, split_pos)
@@ -3134,12 +4043,13 @@ func _clip_selected(root: Node) -> void:
 			dlg.queue_free()
 	)
 	dlg.popup_centered()
+	return true
 
 
-func _carve_selected(root: Node) -> void:
+func _carve_selected(root: Node) -> bool:
 	var nodes = _current_selection_nodes()
 	if nodes.is_empty():
-		return
+		return false
 	# Collect valid carver brush IDs
 	var carve_ids: Array = []
 	for node in nodes:
@@ -3150,7 +4060,7 @@ func _carve_selected(root: Node) -> void:
 		if brush_id != "":
 			carve_ids.append(brush_id)
 	if carve_ids.is_empty():
-		return
+		return false
 	# Show preview for the first carver (multi-carve shows first only)
 	if root.carve_preview:
 		root.carve_preview.show_preview(carve_ids[0])
@@ -3190,6 +4100,7 @@ func _carve_selected(root: Node) -> void:
 			dlg.queue_free()
 	)
 	dlg.popup_centered()
+	return true
 
 
 func _can_drop_data(_position: Vector2, data: Variant) -> bool:
@@ -3343,9 +4254,9 @@ func _quick_save_prefab(root, linked: bool) -> void:
 	var brush_nodes: Array = []
 	var entity_nodes: Array = []
 	for node in hf_selection:
-		if node is CSGShape3D:
+		if root.is_brush_node(node):
 			brush_nodes.append(node)
-		elif node.has_meta("is_entity"):
+		elif root.is_entity_node(node):
 			entity_nodes.append(node)
 	if brush_nodes.is_empty() and entity_nodes.is_empty():
 		return
@@ -3363,7 +4274,9 @@ func _quick_save_prefab(root, linked: bool) -> void:
 func _cycle_prefab_variant(root) -> void:
 	if hf_selection.is_empty():
 		return
-	var node: Node3D = hf_selection[0]
+	var node = hf_selection[0]
+	if not is_instance_valid(node) or not (node is Node):
+		return
 	var iid: String = str(node.get_meta("hf_prefab_instance", ""))
 	if iid == "":
 		if dock:
@@ -3388,7 +4301,9 @@ func _cycle_prefab_variant(root) -> void:
 func _push_prefab_to_source(root) -> void:
 	if hf_selection.is_empty():
 		return
-	var node: Node3D = hf_selection[0]
+	var node = hf_selection[0]
+	if not is_instance_valid(node) or not (node is Node):
+		return
 	var iid: String = str(node.get_meta("hf_prefab_instance", ""))
 	if iid == "":
 		if dock:
@@ -3408,7 +4323,9 @@ func _push_prefab_to_source(root) -> void:
 func _propagate_prefab(root) -> void:
 	if hf_selection.is_empty():
 		return
-	var node: Node3D = hf_selection[0]
+	var node = hf_selection[0]
+	if not is_instance_valid(node) or not (node is Node):
+		return
 	var source: String = str(node.get_meta("hf_prefab_source", ""))
 	if source == "":
 		if dock:
@@ -3451,11 +4368,8 @@ func _handle_material_drop(position: Vector2, data: Variant) -> void:
 	var mouse_pos = position if position != null else last_3d_mouse_pos
 	if not camera:
 		return
-	# Raycast to find the face under the drop position.
-	var brushes: Array = _collect_brushes(root)
-	var hit = FaceSelector.intersect_brushes(
-		brushes, camera.project_ray_origin(mouse_pos), camera.project_ray_normal(mouse_pos)
-	)
+	# Use the same visibility-aware face picker as Select, Extrude, and Paint.
+	var hit: Dictionary = root.pick_face(camera, mouse_pos)
 	if hit.is_empty():
 		if dock:
 			dock.show_toast("No face under drop position", 1)
@@ -3491,6 +4405,8 @@ func _on_context_toolbar_action(action: String, args: Array) -> void:
 	var root = active_root if active_root else _get_level_root()
 	if not root:
 		return
+	if not _managed_action_surface_allowed(root, action):
+		return
 	match action:
 		"extrude_up":
 			_deactivate_external_tool()
@@ -3512,9 +4428,6 @@ func _on_context_toolbar_action(action: String, args: Array) -> void:
 			_duplicate_selected(root)
 		"delete":
 			_delete_selected(root)
-		"set_player_start":
-			if dock:
-				dock._on_spawn_set_primary()
 		"justify_fit":
 			if dock:
 				dock._on_justify("fit")
@@ -3688,21 +4601,41 @@ func _on_dock_bake_state_changed(baking: bool, success: bool) -> void:
 func _toggle_bake_preview(root: Node, pressed: bool) -> void:
 	if not root or not root.bake_system:
 		return
-	# Guard against overlapping bakes
-	if dock and dock._bake_disabled:
+	# Guard against overlapping bakes.
+	if (
+		(dock and dock._bake_disabled)
+		or (root.has_method("is_bake_in_flight") and root.call("is_bake_in_flight"))
+	):
+		_update_hud_context()
 		return
 	if pressed:
 		_bake_preview_active = true
 		_bake_preview_in_flight = true
 		# Wireframe preview bake — route through undo so it's reversible
 		if dock:
-			dock._commit_state_action("Bake Preview", "bake", [false, false, 0, 1])  # 1 = PreviewMode.WIREFRAME
+			dock._set_bake_buttons_disabled(true)
+		var succeeded: bool = await root.bake(false, false, 0, 1)
+		if dock:
+			dock._set_bake_buttons_disabled(false)
+		if _bake_preview_in_flight:
+			_bake_preview_in_flight = false
+			if not succeeded:
+				_bake_preview_active = false
+		_update_hud_context()
 	else:
 		_bake_preview_active = false
 		_bake_preview_in_flight = true
 		# Re-bake full quality to replace the wireframe preview
 		if dock:
-			dock._commit_state_action("Bake Preview Off", "bake", [false, false, 0, 0])  # 0 = PreviewMode.FULL
+			dock._set_bake_buttons_disabled(true)
+		var succeeded: bool = await root.bake(false, false, 0, 0)
+		if dock:
+			dock._set_bake_buttons_disabled(false)
+		if _bake_preview_in_flight:
+			_bake_preview_in_flight = false
+			if not succeeded:
+				_bake_preview_active = true
+		_update_hud_context()
 
 
 func _on_context_tool_switch(tool_id: int) -> void:
@@ -3727,6 +4660,8 @@ func _on_context_tool_switch(tool_id: int) -> void:
 func _on_context_material_apply(mat_index: int) -> void:
 	var root = active_root if active_root else _get_level_root()
 	if not root or not dock:
+		return
+	if not _managed_action_surface_allowed(root, "apply_context_material"):
 		return
 	dock._selected_material_index = mat_index
 	# Apply to selected faces if any
@@ -3796,6 +4731,8 @@ func _on_hotkey_palette_action(action: String) -> void:
 	if hotkey_palette_action_requires_existing_root(action) and not root:
 		if dock:
 			dock.show_toast("Create a HammerForge level first", 1)
+		return
+	if root and not _managed_action_surface_allowed(root, action):
 		return
 	if (
 		root
@@ -3946,6 +4883,8 @@ func _on_hotkey_palette_action(action: String) -> void:
 func _dispatch_viewport_action(action: String, args: Array = []) -> void:
 	var root = active_root if active_root else _get_level_root()
 	if not root:
+		return
+	if not _managed_action_surface_allowed(root, action):
 		return
 	if (
 		action
@@ -4098,10 +5037,6 @@ func _dispatch_viewport_action(action: String, args: Array = []) -> void:
 			_select_similar(root)
 		"selection_filter":
 			_show_selection_filter()
-		# Spawn
-		"set_player_start":
-			if dock:
-				dock._on_spawn_set_primary()
 		# Prefab
 		"quick_save_prefab":
 			_quick_save_prefab(root, false)
@@ -4142,9 +5077,7 @@ func _dispatch_viewport_action(action: String, args: Array = []) -> void:
 		# Measure
 		"measure":
 			if _tool_registry and active_root:
-				_tool_registry.activate_tool(
-					100, active_root, last_3d_camera, undo_redo_manager, _record_history
-				)
+				_activate_external_tool(100, active_root)
 		"cancel_drag":
 			root.cancel_drag()
 			numeric_buffer = ""
@@ -4270,6 +5203,9 @@ func _on_undo_redo_version_changed() -> void:
 	var root: LevelRoot = active_root if active_root else _get_level_root()
 	if not root or not is_instance_valid(root):
 		return
+	# Native Inspector/gizmo commits and their Undo/Redo are owned by Godot, so
+	# reconcile their final brush signature after the editor finishes the action.
+	_queue_managed_brush_reconcile()
 	if root.drag_system and root.drag_system.input_state:
 		var ist: HFInputStateType = root.drag_system.input_state
 		# Only reset transient preview modes that own temporary scene nodes.
@@ -4402,6 +5338,7 @@ func _create_level_root() -> Node:
 
 func _activate_created_level_root(root: Node) -> void:
 	active_root = root
+	_ensure_brush_change_tracker().prime(root)
 	var selection = get_editor_interface().get_selection()
 	selection.clear()
 	selection.add_node(root)
@@ -4412,6 +5349,7 @@ func _activate_created_level_root(root: Node) -> void:
 func _deactivate_created_level_root(root: Node) -> void:
 	if active_root == root:
 		active_root = null
+		_ensure_brush_change_tracker().reset()
 	hf_selection.erase(root)
 	var selection = get_editor_interface().get_selection()
 	if selection and root in selection.get_selected_nodes():

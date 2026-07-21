@@ -25,6 +25,8 @@ class MockTool:
 	var activated := false
 	var deactivated := false
 	var last_event: InputEvent = null
+	var recovered_pointer := false
+	var cancelled_pointer := false
 
 	func _init(id: int = 100, key: int = 0):
 		_id = id
@@ -54,6 +56,14 @@ class MockTool:
 	func handle_keyboard(event: InputEventKey) -> int:
 		last_event = event
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
+
+	func recover_lost_pointer_capture() -> bool:
+		recovered_pointer = true
+		return true
+
+	func cancel_pointer_capture() -> bool:
+		cancelled_pointer = true
+		return true
 
 
 # -- Tests -------------------------------------------------------------------
@@ -173,6 +183,28 @@ func test_dispatch_keyboard_passes_for_builtin():
 	var ev = InputEventKey.new()
 	var result = registry.dispatch_keyboard(ev)
 	assert_eq(result, EditorPlugin.AFTER_GUI_INPUT_PASS)
+
+
+func test_pointer_recovery_routes_to_active_external_tool_without_deactivating_it():
+	var tool = MockTool.new(100)
+	registry.register_tool(tool)
+	registry.activate_tool(100, null, null)
+	assert_true(registry.recover_active_pointer_capture())
+	assert_true(tool.recovered_pointer)
+	assert_true(registry.cancel_active_pointer_capture())
+	assert_true(tool.cancelled_pointer)
+	assert_true(tool.is_active)
+	assert_eq(registry.get_active_tool(), tool)
+
+
+func test_pointer_recovery_ignores_builtin_and_inactive_tools():
+	assert_false(registry.recover_active_pointer_capture())
+	assert_false(registry.cancel_active_pointer_capture())
+	var tool = MockTool.new(1)
+	registry.register_tool(tool)
+	registry.activate_tool(1, null, null)
+	assert_false(registry.recover_active_pointer_capture())
+	assert_false(registry.cancel_active_pointer_capture())
 
 
 func test_check_shortcut_finds_external():

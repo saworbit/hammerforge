@@ -1,8 +1,16 @@
 # Roadmap
 
-Last updated: May 7, 2026
+Last updated: July 21, 2026
 
 This roadmap is a directional plan. Items may change based on user feedback.
+
+## Done (Viewport Visual Clarity and Lifecycle Safety)
+
+- Removed the always-on additive triangle wireframe; normal brushes now read as simple solid forms.
+- Replaced topology-based hover boxes with concise structural edges, centralized box-selection outlines, and added accurate face-boundary selection for custom brushes.
+- Made subtract/entity overlays reusable and cleaned leaked drag-history visuals from older sessions.
+- Reconciled persisted baked geometry and prevented repeated bakes from accumulating anonymous duplicate containers.
+
 Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md for details.
 
 ## Done (Wave 1 -- Hammer-Inspired Quick Wins)
@@ -254,7 +262,7 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - 13 new tests (`test_occluder_generation.gd`): flat mesh, chunked hierarchy, coplanar merge, plane separation, min-area filter, idempotency, postprocess toggle, validation. Total: **1283 tests across 75 files**.
 
 ## Done (Visual System Status — Classic Editor Feedback)
-- **Operation-coded wireframe colors**: green wireframe overlay for additive brushes, red for subtractive (existing), blue spectrum for brush entities (func_detail/trigger/func_wall/other). New `_apply_additive_wireframe_overlay()` mirrors subtract overlay. Both overlays refresh on face-preview mesh rebuilds.
+- **Operation-coded wireframe colors (superseded by the July 2026 clarity pass)**: this release originally added green wireframe to additive brushes plus red/blue semantic overlays. Additive wireframe was later removed after user feedback; subtract/entity cues remain, and hover/selection now use structural edges only.
 - **Grid size viewport indicator**: persistent "Grid: N" label in shortcut HUD with `%g` exact formatting. Flash-on-change (bright yellow-white → fade 0.6s) via tween.
 - **Grid size hotkeys** (`[` / `]`): halve/double grid snap. Registered as `grid_decrease` / `grid_increase` in keymap (user-remappable). Clamped 0.125–512.
 - **Signal-driven HUD sync**: `grid_snap_applied` signal on dock ensures all grid change origins (SpinBox, snap buttons, quick-property, hotkeys, state restore) update the HUD.

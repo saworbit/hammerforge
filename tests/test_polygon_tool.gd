@@ -184,3 +184,42 @@ func test_rmb_passes_when_idle_and_only_cancels_active_polygon_work():
 	assert_eq(tool.handle_input(release, camera, Vector2.ZERO), EditorPlugin.AFTER_GUI_INPUT_PASS)
 	root.free()
 	camera.free()
+
+
+func test_lost_height_release_finalizes_once_before_buttonless_motion_mutates_height():
+	var tool = HFPolygonTool.new()
+	var root := Node3D.new()
+	var camera := Camera3D.new()
+	tool.root = root
+	tool._polygon_points = PackedVector3Array(
+		[Vector3.ZERO, Vector3.RIGHT * 4.0, Vector3(4, 0, 4), Vector3.BACK * 4.0]
+	)
+	tool._ground_y = 0.0
+	tool._height = 8.0
+	tool._height_start_value = 8.0
+	tool._height_start_mouse = Vector2.ZERO
+	tool._phase = tool.Phase.SETTING_HEIGHT
+	tool._height_pointer_capture = true
+	var motion := InputEventMouseMotion.new()
+	motion.button_mask = 0
+	assert_eq(
+		tool.handle_input(motion, camera, Vector2(0, 100)),
+		EditorPlugin.AFTER_GUI_INPUT_STOP,
+	)
+	assert_eq(tool._phase, tool.Phase.IDLE)
+	assert_false(tool._height_pointer_capture)
+	assert_eq(tool._height, 32.0, "Finalization should reset instead of applying stale motion")
+	root.free()
+	camera.free()
+
+
+func test_focus_loss_cancels_height_pointer_capture_but_keeps_polygon_editable():
+	var tool = HFPolygonTool.new()
+	tool._polygon_points = PackedVector3Array([Vector3.ZERO, Vector3.RIGHT, Vector3(1, 0, 1)])
+	tool._phase = tool.Phase.SETTING_HEIGHT
+	tool._height_pointer_capture = true
+	assert_true(tool.cancel_pointer_capture())
+	assert_eq(tool._phase, tool.Phase.PLACING_VERTS)
+	assert_false(tool._height_pointer_capture)
+	assert_eq(tool._polygon_points.size(), 3)
+	assert_false(tool.cancel_pointer_capture(), "A settled polygon should not be cancelled twice")

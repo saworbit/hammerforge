@@ -224,6 +224,7 @@ func build(parent: Control) -> void:
 	dock.scatter_preview_select.add_item("Dots", 0)
 	dock.scatter_preview_select.add_item("Wireframe", 1)
 	dock.scatter_preview_select.add_item("Full", 2)
+	dock.scatter_preview_select.select(0)
 	dock.scatter_preview_select.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	preview_row.add_child(dock.scatter_preview_select)
 	flc.add_child(preview_row)
@@ -554,6 +555,8 @@ func connect_signals() -> void:
 		dock.material_assign.pressed.connect(dock._on_material_assign)
 	if dock.face_clear:
 		dock.face_clear.pressed.connect(dock._on_face_clear)
+	if dock.face_select_mode:
+		dock.face_select_mode.toggled.connect(dock._on_face_select_mode_toggled)
 	if dock.uv_reset:
 		dock.uv_reset.pressed.connect(dock._on_uv_reset)
 	if dock.uv_reproject_btn:

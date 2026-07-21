@@ -10,6 +10,13 @@ const FaceData = preload("res://addons/hammerforge/face_data.gd")
 
 enum VertexSubMode { VERTEX, EDGE }
 
+## Mirrors LevelRoot.AxisLock without coupling this system to LevelRoot's script.
+## Keeping these values aligned lets the editor input router pass its lock through
+## directly when projecting a screen-space drag.
+enum DragAxisLock { NONE, X, Y, Z }
+
+const _DRAG_EPSILON := 0.000001
+
 var root: Node3D  # LevelRoot
 var sub_mode: int = VertexSubMode.VERTEX
 var selected_vertices: Dictionary = {}  # {brush_id: PackedInt32Array}
@@ -19,6 +26,10 @@ var _hovered_brush_id: String = ""
 var _hovered_edge: Array = []  # [brush_id, idx_a, idx_b] or empty
 var _drag_active := false
 var _drag_start_pos := Vector3.ZERO
+var _drag_face_vertices: Dictionary = {}  # {brush_id: Array[PackedVector3Array]}
+var _drag_selected_vertex_keys: Dictionary = {}  # {brush_id: Dictionary[String, bool]}
+var _drag_last_world_delta := Vector3.ZERO
+var _drag_has_valid_update := false
 var _pre_drag_faces: Dictionary = {}  # {brush_id: Array[Dict]} — face snapshots before drag
 
 
@@ -161,6 +172,8 @@ func clip_to_convex(brush_id: String) -> bool:
 
 	if brush.has_method("rebuild_preview"):
 		brush.rebuild_preview()
+	if root and root.has_method("tag_brush_dirty"):
+		root.tag_brush_dirty(brush_id)
 	return true
 
 
@@ -403,16 +416,120 @@ func update_hover(camera: Camera3D, screen_pos: Vector2) -> void:
 
 ## Begin a vertex drag operation.
 func begin_drag(start_world_pos: Vector3) -> void:
+	if _drag_active:
+		cancel_drag()
 	_drag_active = true
 	_drag_start_pos = start_world_pos
 	_capture_face_snapshots()
+	_capture_drag_geometry()
+	_drag_last_world_delta = Vector3.ZERO
+	_drag_has_valid_update = false
+
+
+## Apply an absolute world-space drag delta relative to the geometry captured by
+## begin_drag(). Calling this repeatedly does not accumulate movement, and passing
+## Vector3.ZERO restores the exact starting vertex positions.
+func update_drag_absolute(world_delta: Vector3) -> bool:
+	if not _drag_active or _pre_drag_faces.is_empty():
+		return false
+	if _drag_has_valid_update and world_delta.is_equal_approx(_drag_last_world_delta):
+		return true
+
+	var touched := _write_drag_geometry(world_delta)
+	var convex := touched
+	if convex:
+		for brush_id in _drag_face_vertices:
+			var brush = _find_brush(brush_id)
+			if brush and not validate_convexity(brush):
+				convex = false
+				break
+
+	if not convex:
+		_write_drag_geometry(Vector3.ZERO)
+		_rebuild_drag_previews()
+		_drag_last_world_delta = Vector3.ZERO
+		_drag_has_valid_update = true
+		if touched and root and root.has_signal("user_message"):
+			root.emit_signal("user_message", "Move rejected: would create non-convex brush", 1)
+		return false
+
+	_rebuild_drag_previews()
+	_drag_last_world_delta = world_delta
+	_drag_has_valid_update = true
+	return true
+
+
+## Convert the current screen-space drag to an absolute world-space delta using
+## this drag's anchor. The result contains `valid`, `delta`, and `reason` keys.
+func project_drag_screen_delta(
+	camera: Camera3D, start_screen: Vector2, current_screen: Vector2, axis_lock: int = 0
+) -> Dictionary:
+	if not _drag_active:
+		return _invalid_drag_projection("drag_not_active")
+	return screen_to_world_drag_delta(
+		camera, start_screen, current_screen, _drag_start_pos, axis_lock
+	)
+
+
+## Project a screen-space drag onto a view-facing plane through anchor_world. If
+## an axis is locked, a plane containing that world axis is used and the result is
+## constrained to it. A head-on axis is deliberately reported as invalid because
+## a 2D cursor cannot express motion along an axis with no screen-space extent.
+static func screen_to_world_drag_delta(
+	camera: Camera3D,
+	start_screen: Vector2,
+	current_screen: Vector2,
+	anchor_world: Vector3,
+	axis_lock: int = 0
+) -> Dictionary:
+	if not is_instance_valid(camera):
+		return _invalid_drag_projection("camera_unavailable")
+
+	var view_forward := -camera.global_transform.basis.z.normalized()
+	if view_forward.length_squared() < _DRAG_EPSILON:
+		return _invalid_drag_projection("camera_direction_unavailable")
+
+	var drag_axis := _axis_lock_vector(axis_lock)
+	var plane_normal := view_forward
+	if axis_lock != DragAxisLock.NONE:
+		if drag_axis == Vector3.ZERO:
+			return _invalid_drag_projection("unknown_axis_lock")
+		var view_direction := view_forward
+		if camera.projection != Camera3D.PROJECTION_ORTHOGONAL:
+			var camera_to_anchor := anchor_world - camera.global_position
+			if camera_to_anchor.length_squared() < _DRAG_EPSILON:
+				return _invalid_drag_projection("anchor_at_camera")
+			view_direction = camera_to_anchor.normalized()
+		# Remove the component parallel to the axis. The remaining vector is the
+		# most camera-facing normal for a plane that still contains the axis.
+		plane_normal = view_direction - drag_axis * view_direction.dot(drag_axis)
+		if plane_normal.length_squared() < _DRAG_EPSILON:
+			return _invalid_drag_projection("axis_parallel_to_view")
+		plane_normal = plane_normal.normalized()
+
+	var start_world = _screen_ray_plane_intersection(
+		camera, start_screen, anchor_world, plane_normal
+	)
+	var current_world = _screen_ray_plane_intersection(
+		camera, current_screen, anchor_world, plane_normal
+	)
+	if start_world == null or current_world == null:
+		return _invalid_drag_projection("drag_plane_parallel_to_view")
+
+	var world_delta: Vector3 = current_world - start_world
+	if axis_lock != DragAxisLock.NONE:
+		world_delta = drag_axis * world_delta.dot(drag_axis)
+	return {"valid": true, "delta": world_delta, "reason": ""}
 
 
 ## End drag and return the face snapshots for undo.
 func end_drag() -> Dictionary:
+	if not _drag_active:
+		return {}
+	var changed := _drag_geometry_differs_from_origin()
 	_drag_active = false
-	var snapshots = _pre_drag_faces.duplicate(true)
-	_pre_drag_faces.clear()
+	var snapshots := _pre_drag_faces.duplicate(true) if changed else {}
+	_clear_drag_state()
 	return snapshots
 
 
@@ -421,11 +538,15 @@ func cancel_drag() -> void:
 	if _drag_active:
 		_restore_face_snapshots()
 	_drag_active = false
-	_pre_drag_faces.clear()
+	_clear_drag_state()
 
 
 func is_dragging() -> bool:
 	return _drag_active
+
+
+func get_drag_anchor_world() -> Vector3:
+	return _drag_start_pos
 
 
 ## Get total number of selected vertices across all brushes.
@@ -776,6 +897,144 @@ func get_pre_op_snapshots() -> Dictionary:
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+
+static func _invalid_drag_projection(reason: String) -> Dictionary:
+	return {"valid": false, "delta": Vector3.ZERO, "reason": reason}
+
+
+static func _axis_lock_vector(axis_lock: int) -> Vector3:
+	match axis_lock:
+		DragAxisLock.X:
+			return Vector3.RIGHT
+		DragAxisLock.Y:
+			return Vector3.UP
+		DragAxisLock.Z:
+			return Vector3.BACK
+		_:
+			return Vector3.ZERO
+
+
+static func _screen_ray_plane_intersection(
+	camera: Camera3D, screen_pos: Vector2, plane_point: Vector3, plane_normal: Vector3
+) -> Variant:
+	var ray_origin := camera.project_ray_origin(screen_pos)
+	var ray_direction := camera.project_ray_normal(screen_pos).normalized()
+	var denominator := plane_normal.dot(ray_direction)
+	if absf(denominator) < _DRAG_EPSILON:
+		return null
+	var distance := plane_normal.dot(plane_point - ray_origin) / denominator
+	return ray_origin + ray_direction * distance
+
+
+func _capture_drag_geometry() -> void:
+	_drag_face_vertices.clear()
+	_drag_selected_vertex_keys.clear()
+	for brush_id in selected_vertices:
+		var brush = _find_brush(brush_id)
+		if not brush or not brush.get("faces"):
+			continue
+
+		var face_vertices: Array = []
+		for face in brush.faces:
+			if face:
+				face_vertices.append(face.local_verts.duplicate())
+		_drag_face_vertices[brush_id] = face_vertices
+
+		var selected_keys: Dictionary = {}
+		var unique_verts := get_brush_vertices(brush)
+		var indices: PackedInt32Array = selected_vertices[brush_id]
+		for vertex_index in indices:
+			if vertex_index >= 0 and vertex_index < unique_verts.size():
+				selected_keys[_vertex_key(unique_verts[vertex_index])] = true
+		_drag_selected_vertex_keys[brush_id] = selected_keys
+
+
+## Rewrite every dragged face from its stable starting geometry. This makes a
+## cursor delta absolute and also lets a zero delta restore the start precisely.
+func _write_drag_geometry(world_delta: Vector3) -> bool:
+	var is_zero_delta := world_delta.is_zero_approx()
+	for brush_id in _drag_face_vertices:
+		var brush = _find_brush(brush_id)
+		var selected_keys: Dictionary = _drag_selected_vertex_keys.get(brush_id, {})
+		if (
+			brush
+			and not is_zero_delta
+			and not selected_keys.is_empty()
+			and absf(brush.global_transform.basis.determinant()) < _DRAG_EPSILON
+		):
+			return false
+
+	var touched := false
+	for brush_id in _drag_face_vertices:
+		var brush = _find_brush(brush_id)
+		if not brush or not brush.get("faces"):
+			continue
+		var selected_keys: Dictionary = _drag_selected_vertex_keys.get(brush_id, {})
+		var local_delta := Vector3.ZERO
+		if not is_zero_delta:
+			local_delta = brush.global_transform.basis.inverse() * world_delta
+		var original_faces: Array = _drag_face_vertices[brush_id]
+		var original_face_index := 0
+		for face in brush.faces:
+			if face == null:
+				continue
+			if original_face_index >= original_faces.size():
+				break
+			var original_vertices: PackedVector3Array = original_faces[original_face_index]
+			original_face_index += 1
+			var updated_vertices := PackedVector3Array()
+			for original_vertex in original_vertices:
+				if selected_keys.has(_vertex_key(original_vertex)):
+					updated_vertices.append(original_vertex + local_delta)
+					touched = true
+				else:
+					updated_vertices.append(original_vertex)
+			face.local_verts = updated_vertices
+			face.ensure_geometry()
+	return touched
+
+
+func _rebuild_drag_previews() -> void:
+	for brush_id in _drag_face_vertices:
+		var brush = _find_brush(brush_id)
+		if brush and brush.has_method("rebuild_preview"):
+			brush.rebuild_preview()
+
+
+func _drag_geometry_differs_from_origin() -> bool:
+	for brush_id in _drag_face_vertices:
+		var brush = _find_brush(brush_id)
+		if not brush or not brush.get("faces"):
+			continue
+		var original_faces: Array = _drag_face_vertices[brush_id]
+		var original_face_index := 0
+		for face in brush.faces:
+			if face == null:
+				continue
+			if original_face_index >= original_faces.size():
+				return true
+			var original_vertices: PackedVector3Array = original_faces[original_face_index]
+			original_face_index += 1
+			if face.local_verts.size() != original_vertices.size():
+				return true
+			for vertex_index in range(original_vertices.size()):
+				if not face.local_verts[vertex_index].is_equal_approx(
+					original_vertices[vertex_index]
+				):
+					return true
+		if original_face_index != original_faces.size():
+			return true
+	return false
+
+
+func _clear_drag_state() -> void:
+	_pre_drag_faces.clear()
+	_drag_face_vertices.clear()
+	_drag_selected_vertex_keys.clear()
+	_drag_start_pos = Vector3.ZERO
+	_drag_last_world_delta = Vector3.ZERO
+	_drag_has_valid_update = false
 
 
 func _sync_vertices_from_edges() -> void:

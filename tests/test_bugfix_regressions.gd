@@ -3,7 +3,7 @@ extends GutTest
 ## 1. Vertex undo uses pre-drag snapshots (not post-move state)
 ## 2. Z-axis lock uses correct enum value (3, not 4)
 ## 3. Carve rejects face/edge-only contact (OR, not AND)
-## 4. Vertex projection uses picked vertex Y (not hardcoded Y=0)
+## 4. Vertex drags use view-aware projection and absolute start-relative updates
 
 const HFVertexSystem = preload("res://addons/hammerforge/systems/hf_vertex_system.gd")
 const HFCarveSystem = preload("res://addons/hammerforge/systems/hf_carve_system.gd")
@@ -14,6 +14,9 @@ const DraftEntity = preload("res://addons/hammerforge/draft_entity.gd")
 const LevelRoot = preload("res://addons/hammerforge/level_root.gd")
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
 const HFPaintTool = preload("res://addons/hammerforge/paint/hf_paint_tool.gd")
+const HFStateSystem = preload("res://addons/hammerforge/systems/hf_state_system.gd")
+const ShortcutHUD = preload("res://addons/hammerforge/shortcut_hud.gd")
+const HFHotkeyPalette = preload("res://addons/hammerforge/ui/hf_hotkey_palette.gd")
 
 var root: Node3D
 var draft_node: Node3D
@@ -51,6 +54,9 @@ func _log(msg: String) -> void:
 	pass
 
 func tag_full_reconcile() -> void:
+	pass
+
+func _assign_owner(_node: Node) -> void:
 	pass
 
 func _iter_pick_nodes() -> Array:
@@ -226,6 +232,71 @@ func test_axis_lock_z_equals_3():
 	assert_eq(lr_script.AxisLock.Z, 3, "AxisLock.Z should be 3")
 
 
+func test_axis_lock_shortcuts_are_available_during_select_vertex_editing():
+	assert_false(
+		HammerForgePlugin.axis_lock_shortcuts_available(1, false),
+		"Plain Select should leave X/Y/Z available to the editor",
+	)
+	assert_true(
+		HammerForgePlugin.axis_lock_shortcuts_available(1, true),
+		"Select + Vertex Edit should expose X/Y/Z axis constraints",
+	)
+	assert_true(
+		HammerForgePlugin.axis_lock_shortcuts_available(0, false),
+		"Construction tools should retain their existing axis constraints",
+	)
+
+
+func test_hotkey_palette_exposes_axis_locks_in_select_vertex_context():
+	var palette := HFHotkeyPalette.new()
+	autofree(palette)
+
+	var select_tool_context := HammerForgePlugin.hotkey_palette_tool_context(1, false)
+	palette.update_state({"tool": select_tool_context, "vertex_mode": false})
+	assert_false(palette._is_action_available("axis_x"))
+
+	var vertex_tool_context := HammerForgePlugin.hotkey_palette_tool_context(1, true)
+	palette.update_state({"tool": vertex_tool_context, "vertex_mode": true})
+	for action in ["axis_x", "axis_y", "axis_z"]:
+		assert_true(
+			palette._is_action_available(action),
+			"%s should be enabled in the Select + Vertex Edit palette" % action,
+		)
+
+
+func test_canceled_vertex_release_is_classified_separately_from_commit_release():
+	var release := InputEventMouseButton.new()
+	release.button_index = MOUSE_BUTTON_LEFT
+	release.pressed = false
+	release.canceled = true
+	assert_true(HammerForgePlugin.is_canceled_vertex_drag_release(release))
+
+	release.canceled = false
+	assert_false(HammerForgePlugin.is_canceled_vertex_drag_release(release))
+	release.pressed = true
+	assert_false(HammerForgePlugin.is_canceled_vertex_drag_release(release))
+	release.pressed = false
+	release.canceled = true
+	release.button_index = MOUSE_BUTTON_RIGHT
+	assert_false(HammerForgePlugin.is_canceled_vertex_drag_release(release))
+	assert_false(HammerForgePlugin.is_canceled_vertex_drag_release(InputEventMouseMotion.new()))
+
+
+func test_canceled_vertex_release_restores_before_the_normal_commit_path():
+	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
+	var handler_start := source.find("func _handle_vertex_input")
+	var handler_end := source.find("func _commit_vertex_move", handler_start)
+	assert_true(handler_start >= 0 and handler_end > handler_start)
+	var handler := source.substr(handler_start, handler_end - handler_start)
+	var canceled_gate := handler.find("if is_canceled_vertex_drag_release(event)")
+	var cancel_call := handler.find("vs.cancel_drag()", canceled_gate)
+	var normal_end := handler.find("var snapshots = vs.end_drag()", canceled_gate)
+	assert_true(
+		canceled_gate >= 0 and cancel_call > canceled_gate and normal_end > cancel_call,
+		"Canceled releases must restore their snapshot before the normal commit branch",
+	)
+
+
 # ===========================================================================
 # Bug 3: Carve rejects face/edge-only contact
 # ===========================================================================
@@ -301,111 +372,77 @@ func test_carve_thin_overlap_single_axis_produces_no_pieces():
 
 
 # ===========================================================================
-# Bug 4: Vertex projection plane uses picked vertex Y
+# Bug 4: Vertex input uses the view-aware, start-relative drag contract
 # ===========================================================================
-# EditorPlugin can't be instantiated headless, so we verify:
-#   a) The math (_intersect_y_plane) is correct for non-zero Y
-#   b) The production source code actually wires ref_y from the picked vertex
-#      and passes it through to the projection function (source-code assertion)
 
 
-func test_intersect_y_plane_at_zero():
-	var origin = Vector3(0, 10, 0)
-	var dir = Vector3(0, -1, 0).normalized()
-	var result = _intersect_y_plane(origin, dir, 0.0)
-	assert_not_null(result)
-	assert_almost_eq(result.y, 0.0, 0.001, "Should hit Y=0 plane")
-
-
-func test_intersect_y_plane_at_elevated():
-	var origin = Vector3(10, 100, 5)
-	var dir = Vector3(0, -1, 0).normalized()
-	var result = _intersect_y_plane(origin, dir, 50.0)
-	assert_not_null(result)
-	assert_almost_eq(result.y, 50.0, 0.001, "Should hit Y=50 plane")
-	assert_almost_eq(result.x, 10.0, 0.001, "X should be preserved")
-	assert_almost_eq(result.z, 5.0, 0.001, "Z should be preserved")
-
-
-func test_intersect_y_plane_angled_ray():
-	var origin = Vector3(0, 40, 0)
-	var dir = Vector3(1, -1, 0).normalized()
-	var result = _intersect_y_plane(origin, dir, 20.0)
-	assert_not_null(result)
-	assert_almost_eq(result.y, 20.0, 0.001, "Should hit Y=20")
-	assert_almost_eq(result.x, 20.0, 0.001, "X should advance proportionally")
-
-
-func test_intersect_y_plane_parallel_ray_returns_null():
-	var origin = Vector3(0, 10, 0)
-	var dir = Vector3(1, 0, 0).normalized()
-	var result = _intersect_y_plane(origin, dir, 10.0)
-	assert_null(result, "Parallel ray should return null")
-
-
-func test_intersect_y_plane_behind_camera_returns_null():
-	var origin = Vector3(0, 10, 0)
-	var dir = Vector3(0, 1, 0).normalized()
-	var result = _intersect_y_plane(origin, dir, 0.0)
-	assert_null(result, "Ray pointing away from plane should return null")
-
-
-func test_projection_delta_differs_at_different_heights():
-	var origin = Vector3(0, 100, -100)
-	var dir = Vector3(0, -0.707, 0.707).normalized()
-	var hit_y0 = _intersect_y_plane(origin, dir, 0.0)
-	var hit_y50 = _intersect_y_plane(origin, dir, 50.0)
-	assert_not_null(hit_y0)
-	assert_not_null(hit_y50)
-	assert_true(hit_y0.z > hit_y50.z, "Hit at Y=0 should be further in Z than hit at Y=50")
-
-
-func test_plugin_stores_ref_y_from_picked_vertex():
-	# Read the production plugin.gd and verify the wiring:
-	# 1. _vertex_drag_ref_y is assigned from pick.world_pos.y
-	# 2. _vertex_drag_ref_y is passed to _vertex_screen_to_world_delta
-	var source = FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
+func test_plugin_uses_vertex_system_projection_and_absolute_updates():
+	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
 	assert_true(source.length() > 0, "plugin.gd should be readable")
+	var motion_block := _vertex_motion_source_block(source)
+	var compact_block := _compact_source(motion_block)
 
-	# Verify ref_y is captured from pick.world_pos.y at drag start
 	assert_true(
-		source.contains("_vertex_drag_ref_y = pick.world_pos.y"),
-		"plugin.gd must store ref_y from picked vertex world Y"
-	)
-
-	# Verify the actual call site passes _vertex_drag_ref_y to the projection fn
-	var compact_source = source.replace("\r", "").replace("\n", "").replace("\t", "").replace(
-		" ", ""
-	)
-	assert_true(
-		compact_source.contains(
-			"_vertex_screen_to_world_delta(cam,_vertex_drag_start,pos,root,_vertex_drag_ref_y)"
+		compact_block.contains(
+			"vs.project_drag_screen_delta(cam,_vertex_drag_start,pos,root.input_state.axis_lock)"
 		),
-		"Call site must pass _vertex_drag_ref_y as the ref_y argument"
-	)
-
-	# Verify the projection function accepts ref_y (not hardcoded 0.0)
-	assert_true(
-		source.contains("ref_y: float"), "_vertex_screen_to_world_delta must accept ref_y parameter"
-	)
-
-	# Verify BOTH _intersect_y_plane calls use ref_y, not literal 0.0
-	assert_true(
-		source.contains("_intersect_y_plane(start_origin, start_dir, ref_y)"),
-		"Start ray must use ref_y, not hardcoded 0.0"
+		"Vertex motion must delegate view and axis projection to HFVertexSystem"
 	)
 	assert_true(
-		source.contains("_intersect_y_plane(end_origin, end_dir, ref_y)"),
-		"End ray must use ref_y, not hardcoded 0.0"
+		compact_block.contains("vs.update_drag_absolute(delta)"),
+		"Projected movement must use a stable start-relative update"
 	)
-
-
-func test_plugin_axis_lock_z_uses_3_not_4():
-	# Verify the production code uses axis_lock == 3 for Z, not 4
-	var source = FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
-	assert_true(source.contains("axis_lock == 3"), "Z-axis lock must check == 3 (AxisLock.Z)")
 	assert_false(
-		source.contains("axis_lock == 4"), "Must not check axis_lock == 4 anywhere (old bug)"
+		motion_block.contains("_vertex_screen_to_world_delta"),
+		"The obsolete horizontal-plane projection must not return"
+	)
+	assert_false(
+		motion_block.contains("vs.cancel_drag()") or motion_block.contains("vs.move_vertices("),
+		"Mouse motion must not rebuild the drag snapshot or apply cumulative deltas"
+	)
+
+
+func test_plugin_resets_absolute_drag_when_projection_is_invalid():
+	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
+	var compact_block := _compact_source(_vertex_motion_source_block(source))
+	var valid_update := compact_block.find("vs.update_drag_absolute(delta)")
+	var invalid_else := compact_block.find("else:", valid_update)
+	var zero_reset := compact_block.find("vs.update_drag_absolute(Vector3.ZERO)", valid_update)
+	assert_true(
+		valid_update >= 0 and invalid_else > valid_update and zero_reset > invalid_else,
+		(
+			"An unprojectable head-on axis must restore the drag origin instead of "
+			+ "leaving a stale prior delta"
+		)
+	)
+
+
+func test_vertex_projection_uses_picked_world_anchor_for_vertices_and_edges():
+	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
+	assert_true(
+		source.contains("vs.begin_drag(pick.world_pos)"),
+		"Vertex drags must capture the picked vertex as their projection anchor"
+	)
+	assert_true(
+		source.contains("vs.begin_drag(pick.world_midpoint)"),
+		"Edge drags must capture the picked edge midpoint as their projection anchor"
+	)
+	assert_false(
+		source.contains("_vertex_drag_ref_y"), "The obsolete Y-only anchor must be removed"
+	)
+
+
+func test_vertex_hud_shortcuts_override_select_tool_context():
+	var shortcut_hud = ShortcutHUD.new()
+	autofree(shortcut_hud)
+
+	var shortcuts: String = shortcut_hud._build_shortcuts_text({"tool": 1, "mode": 5})
+
+	assert_string_contains(shortcuts, "-- Vertex Edit --")
+	assert_string_contains(shortcuts, "E: Toggle edge mode")
+	assert_false(
+		shortcuts.contains("Drag Empty Space: Box Select"),
+		"Vertex mode must not be masked by the underlying Select tool",
 	)
 
 
@@ -591,6 +628,23 @@ func test_native_rmb_camera_session_owns_all_input_until_release():
 		)
 		assert_true(session.active)
 
+	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
+	var shortcut_start := source.find("func _shortcut_input")
+	var shortcut_end := source.find("func _cancel_escape_step", shortcut_start)
+	var shortcut := source.substr(shortcut_start, shortcut_end - shortcut_start)
+	var camera_guard := shortcut.find("if _rmb_camera_navigation.active:")
+	assert_gte(camera_guard, 0)
+	assert_lt(
+		camera_guard,
+		shortcut.find("if event.keycode == KEY_ESCAPE:"),
+		"RMB camera ownership must preempt HammerForge Escape handling",
+	)
+	assert_lt(
+		camera_guard,
+		shortcut.find("var nudge_guard"),
+		"RMB camera ownership must preempt HammerForge Ctrl+Arrow nudge",
+	)
+
 
 func test_editor_object_ownership_is_narrow_and_selection_safe():
 	var level_root = LevelRoot.new()
@@ -679,6 +733,14 @@ func test_viewport_forwarding_is_selection_independent_and_rmb_followups_bypass_
 		forward_body.find("_tool_registry.dispatch_input"),
 		"RMB camera motion must bypass external tool dispatch",
 	)
+	var no_root_start := forward_body.find("if not root:")
+	var no_root_end := forward_body.find("var target_camera", no_root_start)
+	var no_root_branch := forward_body.substr(no_root_start, no_root_end - no_root_start)
+	assert_true(no_root_branch.contains("MOUSE_BUTTON_RIGHT"))
+	assert_true(
+		no_root_branch.contains("_rmb_camera_navigation.begin()"),
+		"Rootless idle RMB must still own the complete native camera session",
+	)
 
 
 func test_quick_bake_dispatch_calls_the_real_dock_callback():
@@ -694,46 +756,212 @@ func test_quick_bake_dispatch_calls_the_real_dock_callback():
 	)
 
 
-func test_nudge_keys_are_consumed_only_after_a_valid_move():
+func test_nudge_keys_respect_selection_ownership_before_being_consumed():
 	# EditorPlugin cannot be instantiated by headless GUT, so audit the two
-	# production event paths and the validity guard they share.
+	# production event paths and the ownership guard they share. Native-only
+	# selections must pass through to Godot; HammerForge-owned shortcuts stay
+	# consumed even when a move becomes a no-op, so Godot cannot mutate them.
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
 	var keyboard_start := source.find("# Nudge keys")
 	var keyboard_end := source.find("# Grid snap size shortcuts", keyboard_start)
 	var keyboard_branch := source.substr(keyboard_start, keyboard_end - keyboard_start)
 	assert_true(
-		keyboard_branch.contains("if _nudge_selected(root, nudge):"),
-		"Viewport input should stop only after _nudge_selected succeeds",
+		keyboard_branch.contains('_guard_hammerforge_shortcut(root, false, 1, "Nudge")'),
+		"Viewport nudge must classify selection ownership first",
 	)
+	assert_true(keyboard_branch.contains("if nudge_guard != HF_SHORTCUT_APPLY:"))
+	assert_lt(
+		keyboard_branch.find("nudge_guard"), keyboard_branch.find("_nudge_selected(root, nudge)")
+	)
+	assert_true(keyboard_branch.contains("return EditorPlugin.AFTER_GUI_INPUT_STOP"))
 
 	var shortcut_start := source.find("func _shortcut_input")
 	var shortcut_end := source.find("func _cancel_escape_step", shortcut_start)
 	var shortcut_branch := source.substr(shortcut_start, shortcut_end - shortcut_start)
+	assert_true(shortcut_branch.contains("should_yield_global_shortcut_to_focus"))
+	assert_false(shortcut_branch.contains("event.accept()"))
+	assert_true(shortcut_branch.contains("_mark_shortcut_input_handled()"))
+	assert_true(source.contains("viewport.set_input_as_handled()"))
+	assert_true(shortcut_branch.contains('_keymap.matches("delete", event)'))
+	assert_true(shortcut_branch.contains('_keymap.matches("duplicate", event)'))
 	assert_true(
-		shortcut_branch.contains("if _nudge_selected(root, nudge):"),
-		"Global Ctrl+nudge should be accepted only after a valid move",
+		shortcut_branch.contains('_guard_hammerforge_shortcut(root, false, 1, "Nudge")'),
+		"Global Ctrl+nudge must use the same ownership guard",
 	)
+	assert_lt(
+		shortcut_branch.find("nudge_guard"), shortcut_branch.find("_nudge_selected(root, nudge)")
+	)
+	assert_true(shortcut_branch.contains("elif nudge_guard == EditorPlugin.AFTER_GUI_INPUT_STOP:"))
 
 	var nudge_start := source.find("func _nudge_selected")
 	var nudge_end := source.find("func _adjust_grid_snap", nudge_start)
 	var nudge_body := source.substr(nudge_start, nudge_end - nudge_start)
 	assert_true(nudge_body.contains("root.is_brush_node(node)"))
-	assert_true(nudge_body.contains("if brush_ids.is_empty():"))
+	assert_true(nudge_body.contains("root.is_entity_node(node)"))
+	assert_true(nudge_body.contains("entity_paths"))
+	assert_true(nudge_body.contains("if brush_ids.is_empty() and entity_paths.is_empty():"))
 	assert_true(nudge_body.contains("return false"))
 
+	var line_edit := LineEdit.new()
+	add_child_autoqfree(line_edit)
+	assert_true(HammerForgePlugin.should_yield_global_shortcut_to_focus(line_edit))
+	var text_edit := TextEdit.new()
+	add_child_autoqfree(text_edit)
+	assert_true(HammerForgePlugin.should_yield_global_shortcut_to_focus(text_edit))
+	var spin_box := SpinBox.new()
+	add_child_autoqfree(spin_box)
+	assert_true(
+		HammerForgePlugin.should_yield_global_shortcut_to_focus(spin_box.get_line_edit()),
+		"A SpinBox's internal LineEdit keeps editor shortcut ownership",
+	)
+	var generic_tree := Tree.new()
+	add_child_autoqfree(generic_tree)
+	assert_true(
+		HammerForgePlugin.should_yield_global_shortcut_to_focus(generic_tree),
+		"An unrelated editor Tree must keep Delete/Duplicate ownership",
+	)
+	var item_list := ItemList.new()
+	add_child_autoqfree(item_list)
+	assert_true(HammerForgePlugin.should_yield_global_shortcut_to_focus(item_list))
+	var graph_edit := GraphEdit.new()
+	add_child_autoqfree(graph_edit)
+	assert_true(HammerForgePlugin.should_yield_global_shortcut_to_focus(graph_edit))
+	var scene_tree := Tree.new()
+	scene_tree.name = "SceneTree"
+	add_child_autoqfree(scene_tree)
+	assert_false(
+		HammerForgePlugin.should_yield_global_shortcut_to_focus(scene_tree),
+		"Scene-tree focus must still route managed Delete/Duplicate",
+	)
+	var hf_surface := Control.new()
+	hf_surface.set_meta("_hammerforge_managed_shortcut_surface", true)
+	add_child_autoqfree(hf_surface)
+	assert_false(HammerForgePlugin.should_yield_global_shortcut_to_focus(hf_surface))
+	assert_false(HammerForgePlugin.should_yield_global_shortcut_to_focus(null))
+
+	var preview_start := source.find("func _toggle_bake_preview")
+	var preview_end := source.find("func _on_context_tool_switch", preview_start)
+	var preview_branch := source.substr(preview_start, preview_end - preview_start)
+	assert_true(preview_branch.contains("await root.bake"))
+	assert_false(
+		preview_branch.contains("_commit_state_action"),
+		"Async preview bake must never be dispatched through UndoRedo",
+	)
+
+
+func test_entity_alias_change_refreshes_preview_once_and_detaches_old_preview():
+	var script := GDScript.new()
+	script.source_code = """
+extends \"res://addons/hammerforge/draft_entity.gd\"
+var preview_update_count := 0
+func _update_preview() -> void:
+	preview_update_count += 1
+func _get_entity_type_hints() -> PackedStringArray:
+	return PackedStringArray(["light_point", "player_start"])
+func _get_entity_schema() -> Array:
+	return [{"name": "intensity", "type": "float", "default": 1.0}]
+"""
+	assert_eq(script.reload(), OK)
+	var entity = script.new()
+	add_child_autoqfree(entity)
+	var ready_updates: int = entity.preview_update_count
+
+	entity.entity_type = "light_point"
+	assert_eq(entity.entity_class, "light_point")
+	assert_eq(
+		entity.preview_update_count,
+		ready_updates + 1,
+		"Mirroring type to class should rebuild the preview only once",
+	)
+	entity.entity_class = "player_start"
+	assert_eq(entity.entity_type, "player_start")
+	assert_eq(entity.preview_update_count, ready_updates + 2)
+	var visible_type_properties := 0
+	var entity_class_usage := -1
+	for property in entity.get_property_list():
+		if str(property.get("name", "")) == "entity_type":
+			visible_type_properties += 1
+			assert_eq(int(property.get("hint", PROPERTY_HINT_NONE)), PROPERTY_HINT_ENUM)
+		if str(property.get("name", "")) == "entity_class":
+			entity_class_usage = int(property.get("usage", PROPERTY_USAGE_DEFAULT))
+	assert_eq(visible_type_properties, 1, "Inspector must expose one canonical Entity Type")
+	if entity_class_usage >= 0:
+		assert_eq(entity_class_usage, PROPERTY_USAGE_NONE, "Legacy class alias stays hidden")
+	var dynamic_names: Array[String] = []
+	for property in entity._get_property_list():
+		dynamic_names.append(str(property.get("name", "")))
+	assert_true("data/intensity" in dynamic_names)
+	assert_false("entity_data/intensity" in dynamic_names, "Legacy data alias must not duplicate")
+	assert_true(entity._set(&"entity_data/intensity", 2.5), "Old scenes still migrate on load")
+	assert_eq(entity._get(&"data/intensity"), 2.5)
+
+	for index in range(20):
+		var preview := MeshInstance3D.new()
+		entity._assign_preview(preview)
+		assert_eq(str(preview.name), "_EditorPreview")
+		entity._clear_preview()
+		assert_null(preview.get_parent(), "Preview %d should detach immediately" % index)
+		assert_true(preview.is_queued_for_deletion())
+		assert_eq(entity.get_children(true).size(), 0)
+
+	var current := MeshInstance3D.new()
+	entity._assign_preview(current)
+	assert_eq(entity.get_children(true).size(), 1)
+	assert_same(entity.preview_node, current)
+
+
+func test_floor_and_sun_restore_can_toggle_twice_in_the_same_frame():
+	var state := HFStateSystem.new(root)
+	var floor_info := {
+		"exists": true,
+		"size": Vector3(128, 8, 128),
+		"transform": Transform3D(Basis.IDENTITY, Vector3(0, -4, 0)),
+		"use_collision": true,
+	}
+	state.restore_floor_info(floor_info)
+	var old_floor := root.get_node("TempFloor") as CSGBox3D
+	state.restore_floor_info({"exists": false})
+	assert_null(old_floor.get_parent())
+	assert_true(old_floor.is_queued_for_deletion())
+	state.restore_floor_info(floor_info)
+	var new_floor := root.get_node("TempFloor") as CSGBox3D
+	assert_ne(new_floor.get_instance_id(), old_floor.get_instance_id())
+	assert_false(new_floor.is_queued_for_deletion())
+
+	var sun_info := {
+		"exists": true,
+		"rotation_degrees": Vector3(-45, 30, 0),
+		"shadow_enabled": true,
+		"light_energy": 1.0,
+	}
+	state.restore_sun_info(sun_info)
+	var old_sun := root.get_node("DefaultSun") as DirectionalLight3D
+	state.restore_sun_info({"exists": false})
+	assert_null(old_sun.get_parent())
+	assert_true(old_sun.is_queued_for_deletion())
+	state.restore_sun_info(sun_info)
+	var new_sun := root.get_node("DefaultSun") as DirectionalLight3D
+	assert_ne(new_sun.get_instance_id(), old_sun.get_instance_id())
+	assert_false(new_sun.is_queued_for_deletion())
+
 
 # ===========================================================================
-# Helpers (math identical to plugin's _intersect_y_plane for unit testing)
+# Source-integration helpers
 # ===========================================================================
 
 
-func _intersect_y_plane(origin: Vector3, dir: Vector3, y: float) -> Variant:
-	if abs(dir.y) < 0.0001:
-		return null
-	var t = (y - origin.y) / dir.y
-	if t < 0.0:
-		return null
-	return origin + dir * t
+func _compact_source(source: String) -> String:
+	return source.replace("\r", "").replace("\n", "").replace("\t", "").replace(" ", "")
+
+
+func _vertex_motion_source_block(source: String) -> String:
+	var block_start := source.find("var projection: Dictionary = vs.project_drag_screen_delta")
+	if block_start < 0:
+		return ""
+	var block_end := source.find("\n\t\t_update_vertex_overlay(root, cam)", block_start)
+	if block_end < 0:
+		return source.substr(block_start)
+	return source.substr(block_start, block_end - block_start)
 
 
 # ===========================================================================

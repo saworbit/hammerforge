@@ -16,7 +16,6 @@ const _ID_CARVE := 104
 const _ID_MERGE := 105
 const _ID_DUPLICATE := 110
 const _ID_DELETE := 111
-const _ID_SET_PLAYER_START := 112
 const _ID_SELECT_SIMILAR := 113
 const _ID_APPLY_LAST_TEX := 114
 const _ID_SELECTION_FILTER := 115
@@ -93,6 +92,25 @@ func show_at(pos: Vector2, state: Dictionary) -> void:
 	clear()
 	_state = state
 	var ctx := _determine_context(state)
+	if state.get("mixed_selection", false):
+		add_item("Edit HammerForge and Godot nodes separately")
+		set_item_disabled(0, true)
+	else:
+		_build_context_items(ctx)
+	# Common footer
+	add_separator()
+	add_item("Select All", _ID_SELECT_ALL)
+	add_item("Deselect All", _ID_DESELECT_ALL)
+	add_separator()
+	add_submenu_node_item("Grid Snap", _grid_submenu)
+	add_item("Quick Bake", _ID_QUICK_BAKE)
+	add_separator()
+	add_item("Undo", _ID_UNDO)
+	add_item("Redo", _ID_REDO)
+	popup(Rect2i(int(pos.x), int(pos.y), 0, 0))
+
+
+func _build_context_items(ctx: Context) -> void:
 	match ctx:
 		Context.VERTEX_EDIT:
 			add_item("Vertex Sub-mode", _ID_VERTEX_SUBMODE)
@@ -132,27 +150,17 @@ func show_at(pos: Vector2, state: Dictionary) -> void:
 			add_separator()
 			add_item("Select Similar", _ID_SELECT_SIMILAR)
 			add_item("Selection Filters...", _ID_SELECTION_FILTER)
-			add_item("Set Player Start", _ID_SET_PLAYER_START)
 			add_separator()
 			add_item("Duplicate", _ID_DUPLICATE)
 			add_item("Delete", _ID_DELETE)
 		Context.DRAW_IDLE, Context.NONE:
 			add_submenu_node_item("Draw Shape", _shape_submenu)
 			add_item("Toggle Grid", _ID_TOGGLE_GRID)
-	# Common footer
-	add_separator()
-	add_item("Select All", _ID_SELECT_ALL)
-	add_item("Deselect All", _ID_DESELECT_ALL)
-	add_separator()
-	add_submenu_node_item("Grid Snap", _grid_submenu)
-	add_item("Quick Bake", _ID_QUICK_BAKE)
-	add_separator()
-	add_item("Undo", _ID_UNDO)
-	add_item("Redo", _ID_REDO)
-	popup(Rect2i(int(pos.x), int(pos.y), 0, 0))
 
 
 func _determine_context(state: Dictionary) -> Context:
+	if state.get("mixed_selection", false):
+		return Context.NONE
 	var input_mode: int = state.get("input_mode", 0)
 	if state.get("vertex_mode", false):
 		return Context.VERTEX_EDIT
@@ -191,8 +199,6 @@ func _on_id_pressed(id: int) -> void:
 			action = "duplicate"
 		_ID_DELETE:
 			action = "delete"
-		_ID_SET_PLAYER_START:
-			action = "set_player_start"
 		_ID_SELECT_SIMILAR:
 			action = "select_similar"
 		_ID_APPLY_LAST_TEX:

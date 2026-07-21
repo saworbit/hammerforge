@@ -136,7 +136,8 @@ func build(parent: Control) -> void:
 	dock.bake_preview_mode_opt.add_item("Full", 0)
 	dock.bake_preview_mode_opt.add_item("Wireframe", 1)
 	dock.bake_preview_mode_opt.add_item("Proxy", 2)
-	dock.bake_preview_mode_opt.tooltip_text = ("Full: final quality. Wireframe: fast unshaded outline. Proxy: low-res solid.")
+	dock.bake_preview_mode_opt.select(0)
+	dock.bake_preview_mode_opt.tooltip_text = ("Full: normal solid result (default). Wireframe: diagnostic topology view. Proxy: low-res solid.")
 	dock.bake_preview_mode_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	preview_row.add_child(dock.bake_preview_mode_opt)
 	adv.add_child(preview_row)

@@ -151,6 +151,22 @@ func test_hidden_when_no_context():
 	assert_false(toolbar.visible)
 
 
+func test_mixed_native_and_hammerforge_selection_hides_managed_toolbar():
+	var state = {
+		"has_root": true,
+		"brush_count": 1,
+		"entity_count": 0,
+		"face_count": 0,
+		"input_mode": 0,
+		"tool": 1,
+		"vertex_mode": false,
+		"mixed_selection": true,
+	}
+	toolbar.update_state(state)
+	assert_eq(toolbar._context, HFContextToolbar.Context.NONE)
+	assert_false(toolbar.visible)
+
+
 # ===========================================================================
 # Action signals
 # ===========================================================================
@@ -409,10 +425,30 @@ func test_material_quick_apply_signal():
 
 func test_viewport_menu_context_matches_selection_state():
 	var menu = HFViewportContextMenu.new()
+	add_child(menu)
 	assert_eq(menu._determine_context({"vertex_mode": true}), menu.Context.VERTEX_EDIT)
 	assert_eq(menu._determine_context({"face_count": 2}), menu.Context.FACE_SELECTED)
 	assert_eq(menu._determine_context({"entity_count": 1}), menu.Context.ENTITY_SELECTED)
 	assert_eq(menu._determine_context({"brush_count": 1}), menu.Context.BRUSH_SELECTED)
 	assert_eq(menu._determine_context({"tool": 0, "input_mode": 0}), menu.Context.DRAW_IDLE)
 	assert_eq(menu._determine_context({"tool": 1, "input_mode": 0}), menu.Context.NONE)
+	assert_eq(
+		menu._determine_context({"mixed_selection": true, "brush_count": 1}),
+		menu.Context.NONE,
+	)
+	(
+		menu
+		. show_at(
+			Vector2.ZERO,
+			{
+				"mixed_selection": true,
+				"brush_count": 1,
+				"tool": 1,
+				"input_mode": 0,
+			},
+		)
+	)
+	assert_eq(menu.get_item_text(0), "Edit HammerForge and Godot nodes separately")
+	assert_true(menu.is_item_disabled(0))
+	menu.hide()
 	menu.free()

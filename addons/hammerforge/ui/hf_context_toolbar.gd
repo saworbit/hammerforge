@@ -149,7 +149,6 @@ func _build_brush_section() -> void:
 	_add_sep(section)
 	_add_group_label(section, "Select")
 	_add_tool_button(section, "All", "Select All (A)", "select_all")
-	_add_tool_button(section, "\u2302", "Set as Player Start", "set_player_start")
 	_add_tool_button(section, "Sim", "Select Similar brushes (Shift+S)", "select_similar")
 	_add_tool_button(section, "Flt", "Selection Filters (Shift+F)", "selection_filter")
 	_add_sep(section)
@@ -423,6 +422,10 @@ func set_favorite_materials(materials: Array) -> void:
 
 func _determine_context(state: Dictionary) -> Context:
 	if not state.get("has_root", false):
+		return Context.NONE
+	if state.get("mixed_selection", false):
+		# Managed buttons are intentionally unavailable when native Godot nodes
+		# share the selection; applying only the HammerForge subset is surprising.
 		return Context.NONE
 
 	var mode: int = state.get("input_mode", 0)

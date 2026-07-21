@@ -6,7 +6,6 @@ class_name HFExtrudeTool
 ## Click a face to begin, drag mouse vertically to set extrude height, release to commit.
 
 const DraftBrush = preload("brush_instance.gd")
-const FaceSelector = preload("face_selector.gd")
 const FaceData = preload("face_data.gd")
 
 enum Direction { UP = 1, DOWN = -1 }
@@ -43,14 +42,9 @@ func begin_extrude(camera: Camera3D, mouse_pos: Vector2, extrude_direction: int)
 	direction = extrude_direction
 	_snap = root.grid_snap if root.grid_snap > 0.0 else 1.0
 
-	# Raycast to find a brush face
-	var ray_origin := camera.project_ray_origin(mouse_pos)
-	var ray_dir := camera.project_ray_normal(mouse_pos).normalized()
-	var brushes: Array = []
-	for node in root._iter_pick_nodes():
-		if node is DraftBrush:
-			brushes.append(node)
-	var hit := FaceSelector.intersect_brushes(brushes, ray_origin, ray_dir)
+	# Use LevelRoot's canonical visible-face picker so a hidden visgroup can
+	# never start an extrusion through geometry the user cannot see.
+	var hit: Dictionary = root.pick_face(camera, mouse_pos)
 	if hit.is_empty():
 		return false
 

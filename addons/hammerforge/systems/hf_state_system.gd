@@ -81,7 +81,9 @@ func capture_state(include_transient: bool = true) -> Dictionary:
 	state["id_counter"] = root._brush_id_counter
 	state["csg_visible"] = root.draft_brushes_node.visible if root.draft_brushes_node else true
 	state["pending_visible"] = root.pending_node.visible if root.pending_node else true
-	state["baked_present"] = root.baked_container != null
+	state["baked_present"] = (
+		root.baked_container != null and is_instance_valid(root.baked_container)
+	)
 	state["bake_preview_mode"] = root._last_bake_preview_mode
 	state["paint_layers"] = capture_paint_layers(true)
 	state["paint_active_layer"] = root.paint_layers.active_layer_index if root.paint_layers else 0
@@ -195,12 +197,11 @@ func restore_state(state: Dictionary) -> void:
 	if root.pending_node:
 		root.pending_node.visible = bool(state.get("pending_visible", true))
 	if not bool(state.get("baked_present", false)) and root.baked_container:
-		root.baked_container.queue_free()
-		root.baked_container = null
+		root.clear_baked_geometry()
 	# Only restore preview mode when a baked container exists — a stale mode
 	# with no baked mesh would cause the toolbar toggle to show wireframe
 	# active when there is nothing baked.
-	if bool(state.get("baked_present", false)):
+	if root.baked_container and is_instance_valid(root.baked_container):
 		root._last_bake_preview_mode = int(state.get("bake_preview_mode", 0))
 	else:
 		root._last_bake_preview_mode = 0
@@ -470,8 +471,12 @@ func restore_floor_info(info: Dictionary) -> void:
 	var floor = root.get_node_or_null("TempFloor") as CSGBox3D
 	if not should_exist:
 		if floor:
+			root.remove_child(floor)
 			floor.queue_free()
 		return
+	if floor and floor.is_queued_for_deletion():
+		root.remove_child(floor)
+		floor = null
 	if not floor:
 		floor = CSGBox3D.new()
 		floor.name = "TempFloor"
@@ -502,8 +507,12 @@ func restore_sun_info(info: Dictionary) -> void:
 	var sun = root.get_node_or_null("DefaultSun") as DirectionalLight3D
 	if not should_exist:
 		if sun:
+			root.remove_child(sun)
 			sun.queue_free()
 		return
+	if sun and sun.is_queued_for_deletion():
+		root.remove_child(sun)
+		sun = null
 	if not sun:
 		sun = DirectionalLight3D.new()
 		sun.name = "DefaultSun"

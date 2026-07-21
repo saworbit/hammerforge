@@ -74,6 +74,18 @@ func handle_keyboard(event: InputEventKey) -> int:
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
 
 
+## Settle a pointer gesture when buttonless motion proves that LMB-up was lost.
+## Return true when the tool closed an active capture.
+func recover_lost_pointer_capture() -> bool:
+	return false
+
+
+## Cancel a transient pointer gesture after application/viewport focus loss.
+## Return true when the tool closed an active capture.
+func cancel_pointer_capture() -> bool:
+	return false
+
+
 ## Lines for the shortcut HUD overlay.
 func get_shortcut_hud_lines() -> PackedStringArray:
 	return PackedStringArray()

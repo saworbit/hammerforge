@@ -94,6 +94,20 @@ func dispatch_keyboard(event: InputEventKey) -> int:
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
 
 
+## Settle a stale LMB gesture without deactivating the selected tool.
+func recover_active_pointer_capture() -> bool:
+	if _active_tool and _active_tool.tool_id() >= 100:
+		return _active_tool.recover_lost_pointer_capture()
+	return false
+
+
+## Cancel transient pointer ownership after focus loss without changing tools.
+func cancel_active_pointer_capture() -> bool:
+	if _active_tool and _active_tool.tool_id() >= 100:
+		return _active_tool.cancel_pointer_capture()
+	return false
+
+
 ## Check if any external tool wants this shortcut key.
 func check_shortcut(keycode: int) -> int:
 	for t in _tools:

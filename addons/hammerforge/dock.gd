@@ -5,6 +5,7 @@ class_name HammerForgeDock
 signal hud_visibility_changed(visible: bool)
 signal builtin_tool_changed
 signal vertex_mode_toggled(enabled: bool)
+signal face_select_mode_toggled(enabled: bool)
 signal selection_clear_requested
 signal grid_snap_applied(value: float)
 signal bake_state_changed(baking: bool, success: bool)
@@ -37,6 +38,13 @@ const SelectionToolsBuilder = preload("ui/selection_tools_builder.gd")
 const PRESET_MENU_RENAME := 0
 const PRESET_MENU_DELETE := 1
 const TAB_ALIASES := {"Brush": "Build", "Entities": "Objects", "Manage": "Test"}
+const MIXED_SELECTION_MESSAGE := (
+	"This action is unavailable for a mixed selection of HammerForge objects and ordinary Godot "
+	+ "nodes. Use one selection type at a time; no nodes were changed."
+)
+
+enum DockSelectionScope { EMPTY, MANAGED, NATIVE, MIXED }
+enum DockSelectionRequirement { MANAGED, BRUSHES_ONLY, ENTITIES_ONLY, NATIVE_ALLOWED }
 
 
 class EntityPaletteButton:
@@ -526,16 +534,28 @@ func _root_has_property(name: String) -> bool:
 func _on_setting_toggled(pressed: bool, prop: String) -> void:
 	if level_root and _root_has_property(prop):
 		level_root.set(prop, pressed)
+		_tag_bake_setting_change(prop)
 
 
 func _on_setting_float_changed(value: float, prop: String) -> void:
 	if level_root and _root_has_property(prop):
 		level_root.set(prop, value)
+		_tag_bake_setting_change(prop)
 
 
 func _on_setting_int_changed(value: float, prop: String) -> void:
 	if level_root and _root_has_property(prop):
 		level_root.set(prop, int(value))
+		_tag_bake_setting_change(prop)
+
+
+func _tag_bake_setting_change(prop: String) -> void:
+	if (
+		level_root
+		and (prop.begins_with("bake_") or prop in ["cordon_enabled", "cordon_aabb"])
+		and level_root.has_method("tag_full_reconcile")
+	):
+		level_root.tag_full_reconcile()
 
 
 func _on_debug_toggled(pressed: bool) -> void:
@@ -601,6 +621,7 @@ func _connect_setting_signals() -> void:
 			func(idx: int) -> void:
 				if level_root and _root_has_property("bake_connector_mode"):
 					level_root.set("bake_connector_mode", idx)
+					_tag_bake_setting_change("bake_connector_mode")
 		)
 	# Debug checkbox (special — also sets local debug_enabled bool)
 	if debug_logs:
@@ -813,16 +834,33 @@ func _setup_simplified_workflow() -> void:
 func _update_context_hints() -> void:
 	var has_root = level_root != null
 	var has_brushes = (
-		has_root and level_root.has_method("get_brush_count") and level_root.get_brush_count() > 0
+		has_root
+		and level_root.has_method("get_live_brush_count")
+		and level_root.get_live_brush_count() > 0
 	)
-	var selection_counts := _get_selection_counts(_selection_nodes)
-	var has_selection: bool = int(selection_counts["brushes"]) > 0
+	var selection_scope := _current_selection_scope()
+	var managed_counts := _get_managed_selection_counts(_selection_nodes)
+	var has_selection: bool = (
+		selection_scope == DockSelectionScope.MANAGED
+		and int(managed_counts["brushes"]) > 0
+		and int(managed_counts["entities"]) == 0
+	)
+	var mixed_selection := selection_scope == DockSelectionScope.MIXED
+	var heterogeneous_selection := (
+		selection_scope == DockSelectionScope.MANAGED
+		and int(managed_counts["brushes"]) > 0
+		and int(managed_counts["entities"]) > 0
+	)
 
 	if _brush_hint:
 		if not has_root:
 			_brush_hint.text = "Start here: create the Starter Level above."
 		elif not has_brushes:
 			_brush_hint.text = "Drag in the 3D viewport to create a solid brush."
+		elif mixed_selection:
+			_brush_hint.text = "Mixed selection: select only HammerForge objects to edit brushes."
+		elif heterogeneous_selection:
+			_brush_hint.text = "Select only brushes to use brush editing tools."
 		elif has_selection:
 			_brush_hint.text = "Brush selected. Edit tools are now available above."
 		else:
@@ -967,6 +1005,10 @@ func _on_main_tab_changed(tab_index: int) -> void:
 	if _syncing_paint_tab or not paint_mode or not main_tabs:
 		return
 	var paint_tab_active := main_tabs.get_tab_title(tab_index) == "Paint"
+	# Face Select's controls live on Paint, but its modal state must never remain
+	# hidden after the user moves to another workflow tab.
+	if not paint_tab_active and face_select_mode and face_select_mode.button_pressed:
+		face_select_mode.button_pressed = false
 	if paint_mode.button_pressed == paint_tab_active:
 		return
 	_syncing_paint_tab = true
@@ -1455,12 +1497,16 @@ func _clear_entity_props() -> void:
 
 
 func _on_entity_prop_changed(value: Variant, entity: Node3D, prop_name: String) -> void:
+	if not _can_edit_selected_entity(entity):
+		return
 	HFEntityPropUtils.set_entity_property(entity, prop_name, value)
 
 
 func _on_entity_prop_enum_changed(
 	index: int, entity: Node3D, prop_name: String, enum_vals: Array
 ) -> void:
+	if not _can_edit_selected_entity(entity):
+		return
 	var value: Variant = enum_vals[index] if index < enum_vals.size() else ""
 	HFEntityPropUtils.set_entity_property(entity, prop_name, value)
 
@@ -1468,7 +1514,17 @@ func _on_entity_prop_enum_changed(
 func _on_entity_prop_vec3_changed(
 	value: float, entity: Node3D, prop_name: String, axis_index: int
 ) -> void:
+	if not _can_edit_selected_entity(entity):
+		return
 	HFEntityPropUtils.set_entity_vec3_axis(entity, prop_name, axis_index, value)
+
+
+func _can_edit_selected_entity(entity: Node3D) -> bool:
+	if not level_root or not is_instance_valid(entity):
+		return false
+	if not _guard_selection_action("Edit Entity", DockSelectionRequirement.ENTITIES_ONLY):
+		return false
+	return level_root.is_entity_node(entity) and _selection_nodes.has(entity)
 
 
 func _entity_prop_default(type_name: String, value: Variant) -> Variant:
@@ -1842,6 +1898,8 @@ func _try_undoable_action(action_name: String, method_name: String, args: Array 
 func _on_disp_create() -> void:
 	if not level_root:
 		return
+	if not _guard_selection_action("Create Displacement", DockSelectionRequirement.BRUSHES_ONLY):
+		return
 	var info: Dictionary = _get_selected_face_info()
 	if info.is_empty():
 		show_toast("Select a quad face first", 1)
@@ -1859,6 +1917,8 @@ func _on_disp_create() -> void:
 func _on_disp_destroy() -> void:
 	if not level_root:
 		return
+	if not _guard_selection_action("Destroy Displacement", DockSelectionRequirement.BRUSHES_ONLY):
+		return
 	var info: Dictionary = _get_selected_face_info()
 	if info.is_empty():
 		show_toast("Select a displaced face first", 1)
@@ -1874,6 +1934,8 @@ func _on_disp_destroy() -> void:
 
 func _on_disp_elevation_changed(value: float) -> void:
 	if not level_root:
+		return
+	if not _guard_selection_action("Edit Displacement", DockSelectionRequirement.BRUSHES_ONLY):
 		return
 	var info: Dictionary = _get_selected_face_info()
 	if info.is_empty():
@@ -1897,6 +1959,8 @@ func _on_disp_elevation_changed(value: float) -> void:
 func _on_disp_smooth() -> void:
 	if not level_root:
 		return
+	if not _guard_selection_action("Smooth Displacement", DockSelectionRequirement.BRUSHES_ONLY):
+		return
 	var info: Dictionary = _get_selected_face_info()
 	if info.is_empty():
 		show_toast("Select a displaced face first", 1)
@@ -1915,6 +1979,8 @@ func _on_disp_smooth() -> void:
 
 func _on_disp_noise() -> void:
 	if not level_root:
+		return
+	if not _guard_selection_action("Noise Displacement", DockSelectionRequirement.BRUSHES_ONLY):
 		return
 	var info: Dictionary = _get_selected_face_info()
 	if info.is_empty():
@@ -1951,6 +2017,10 @@ func _on_disp_sew() -> void:
 func _on_disp_sew_group_changed(value: float) -> void:
 	if not level_root:
 		return
+	if not _guard_selection_action(
+		"Edit Displacement Sew Group", DockSelectionRequirement.BRUSHES_ONLY
+	):
+		return
 	var info: Dictionary = _get_selected_face_info()
 	if info.is_empty():
 		return
@@ -1975,6 +2045,8 @@ func _on_disp_sew_group_changed(value: float) -> void:
 
 func _on_bevel_edge() -> void:
 	if not level_root:
+		return
+	if not _guard_selection_action("Bevel Edge", DockSelectionRequirement.BRUSHES_ONLY):
 		return
 	var plugin_ref = level_root.get_meta("_hf_plugin", null)
 	if not plugin_ref:
@@ -2014,6 +2086,8 @@ func _on_bevel_edge() -> void:
 
 func _on_bevel_inset() -> void:
 	if not level_root:
+		return
+	if not _guard_selection_action("Inset Face", DockSelectionRequirement.BRUSHES_ONLY):
 		return
 	var info: Dictionary = _get_selected_face_info()
 	if info.is_empty():
@@ -2401,6 +2475,10 @@ func is_face_select_mode_enabled() -> bool:
 	return face_select_mode and face_select_mode.button_pressed
 
 
+func _on_face_select_mode_toggled(enabled: bool) -> void:
+	face_select_mode_toggled.emit(enabled)
+
+
 func get_paint_target() -> int:
 	if not paint_target_select:
 		return 0
@@ -2660,10 +2738,116 @@ func _get_selection_counts(nodes: Array) -> Dictionary:
 	return {"brushes": brushes, "entities": entities, "other": other}
 
 
+## Classify the editor selection without depending on the editor plugin. A node
+## is managed only when the active LevelRoot recognizes it as one of its own
+## brushes/entities; class names and metadata alone are not sufficient.
+func _classify_selection_scope(nodes: Array) -> int:
+	var has_managed := false
+	var has_native := false
+	for node in nodes:
+		if not is_instance_valid(node):
+			continue
+		var is_managed := false
+		if level_root:
+			is_managed = level_root.is_brush_node(node) or level_root.is_entity_node(node)
+		if is_managed:
+			has_managed = true
+		else:
+			has_native = true
+		if has_managed and has_native:
+			return DockSelectionScope.MIXED
+	if has_managed:
+		return DockSelectionScope.MANAGED
+	if has_native:
+		return DockSelectionScope.NATIVE
+	return DockSelectionScope.EMPTY
+
+
+func _current_selection_scope() -> int:
+	return _classify_selection_scope(_selection_nodes)
+
+
+func _get_managed_selection_counts(nodes: Array) -> Dictionary:
+	var brushes := 0
+	var entities := 0
+	if not level_root:
+		return {"brushes": brushes, "entities": entities, "total": 0}
+	for node in nodes:
+		if not is_instance_valid(node):
+			continue
+		if level_root.is_brush_node(node):
+			brushes += 1
+		elif level_root.is_entity_node(node):
+			entities += 1
+	return {"brushes": brushes, "entities": entities, "total": brushes + entities}
+
+
+func _first_selected_brush() -> Node:
+	if not level_root:
+		return null
+	for node in _selection_nodes:
+		if is_instance_valid(node) and level_root.is_brush_node(node):
+			return node
+	return null
+
+
+func _first_selected_entity() -> Node:
+	if not level_root:
+		return null
+	for node in _selection_nodes:
+		if is_instance_valid(node) and level_root.is_entity_node(node):
+			return node
+	return null
+
+
+## Fail closed before a dock action can silently filter the selection. Most
+## actions accept any all-HammerForge selection, while brush/entity-specific
+## handlers opt into a stricter all-members requirement. Scatter is the one
+## dock workflow that intentionally consumes ordinary Node3D positions.
+func _guard_selection_action(
+	action_name: String,
+	requirement: int = DockSelectionRequirement.MANAGED,
+) -> bool:
+	var scope := _current_selection_scope()
+	if scope == DockSelectionScope.MIXED:
+		var mixed_message := "%s: %s" % [action_name, MIXED_SELECTION_MESSAGE]
+		show_toast(mixed_message, 1)
+		return false
+	if (
+		scope == DockSelectionScope.NATIVE
+		and requirement != DockSelectionRequirement.NATIVE_ALLOWED
+	):
+		var native_message := (
+			"%s requires HammerForge brushes or entities; ordinary Godot nodes were left unchanged."
+			% action_name
+		)
+		show_toast(native_message, 1)
+		return false
+	if scope == DockSelectionScope.MANAGED:
+		var counts := _get_managed_selection_counts(_selection_nodes)
+		if requirement == DockSelectionRequirement.BRUSHES_ONLY and int(counts["entities"]) > 0:
+			show_toast(
+				"%s requires a brush-only selection; entities were left unchanged." % action_name, 1
+			)
+			return false
+		if requirement == DockSelectionRequirement.ENTITIES_ONLY and int(counts["brushes"]) > 0:
+			show_toast(
+				"%s requires an entity-only selection; brushes were left unchanged." % action_name,
+				1
+			)
+			return false
+	return true
+
+
 func set_selection_nodes(nodes: Array) -> void:
 	_selection_nodes = nodes
-	var counts := _get_selection_counts(_selection_nodes)
-	var has_brush_selection: bool = int(counts["brushes"]) > 0
+	var selection_scope := _current_selection_scope()
+	var managed_counts := _get_managed_selection_counts(_selection_nodes)
+	var has_brush_selection := (
+		selection_scope == DockSelectionScope.MANAGED
+		and int(managed_counts["brushes"]) > 0
+		and int(managed_counts["entities"]) == 0
+	)
 	# Show/hide selection tools in Brush tab
 	if _selection_tools_section:
 		_selection_tools_section.visible = has_brush_selection
@@ -2682,9 +2866,15 @@ func set_selection_nodes(nodes: Array) -> void:
 	# Mark hints dirty so selection-dependent buttons update
 	_hints_dirty = true
 	_update_context_hints()
+	_update_disabled_hints()
 	# Refresh Entity I/O list and property form when selection changes
 	var selected_entity: Node = null
-	if level_root:
+	var entity_only_selection := (
+		selection_scope == DockSelectionScope.MANAGED
+		and int(managed_counts["entities"]) > 0
+		and int(managed_counts["brushes"]) == 0
+	)
+	if level_root and entity_only_selection:
 		for node in nodes:
 			if level_root.is_entity_node(node):
 				selected_entity = node
@@ -2893,12 +3083,16 @@ func _on_show_subtract_preview_toggled(pressed: bool) -> void:
 func _on_prefab_save_requested(prefab_name: String) -> void:
 	if not level_root:
 		return
+	if not _guard_selection_action("Save Prefab"):
+		return
 	var brush_nodes: Array = []
 	var entity_nodes: Array = []
 	for node in _selection_nodes:
-		if node is CSGShape3D:
+		if not is_instance_valid(node):
+			continue
+		if level_root.is_brush_node(node):
 			brush_nodes.append(node)
-		elif node.has_meta("is_entity"):
+		elif level_root.is_entity_node(node):
 			entity_nodes.append(node)
 	if brush_nodes.is_empty() and entity_nodes.is_empty():
 		return
@@ -2920,12 +3114,16 @@ func _on_prefab_save_requested(prefab_name: String) -> void:
 func _on_prefab_save_linked_requested(prefab_name: String) -> void:
 	if not level_root:
 		return
+	if not _guard_selection_action("Save Linked Prefab"):
+		return
 	var brush_nodes: Array = []
 	var entity_nodes: Array = []
 	for node in _selection_nodes:
-		if node is CSGShape3D:
+		if not is_instance_valid(node):
+			continue
+		if level_root.is_brush_node(node):
 			brush_nodes.append(node)
-		elif node.has_meta("is_entity"):
+		elif level_root.is_entity_node(node):
 			entity_nodes.append(node)
 	if brush_nodes.is_empty() and entity_nodes.is_empty():
 		return
@@ -2947,15 +3145,19 @@ func _on_prefab_delete_requested(prefab_path: String) -> void:
 func _on_prefab_variant_add_requested(prefab_path: String, variant_name: String) -> void:
 	if not level_root or prefab_path == "" or variant_name == "":
 		return
+	if not _guard_selection_action("Add Prefab Variant"):
+		return
 	var prefab = HFPrefabType.load_from_file(prefab_path)
 	if not prefab:
 		return
 	var brush_nodes: Array = []
 	var entity_nodes: Array = []
 	for node in _selection_nodes:
-		if node is CSGShape3D:
+		if not is_instance_valid(node):
+			continue
+		if level_root.is_brush_node(node):
 			brush_nodes.append(node)
-		elif node.has_meta("is_entity"):
+		elif level_root.is_entity_node(node):
 			entity_nodes.append(node)
 	if brush_nodes.is_empty() and entity_nodes.is_empty():
 		return
@@ -3037,9 +3239,33 @@ func _commit_full_state_action(action_name: String, method_name: String, args: A
 	)
 
 
+func _commit_precomputed_state_action(
+	action_name: String,
+	before_state: Dictionary,
+	after_state: Dictionary,
+	before_baked: PackedScene,
+	after_baked: PackedScene
+) -> void:
+	# Async work has already completed. Register two immutable synchronous
+	# snapshots so Undo and Redo never resume a coroutine or consume transient
+	# cutter references.
+	if undo_redo:
+		undo_redo.create_action(action_name, 0, null, false)
+		undo_redo.add_do_method(
+			level_root, "restore_state_with_baked_snapshot", after_state, after_baked
+		)
+		undo_redo.add_undo_method(
+			level_root, "restore_state_with_baked_snapshot", before_state, before_baked
+		)
+		undo_redo.commit_action(false)
+	record_history(action_name)
+
+
 func _on_bake():
 	_log("Bake requested")
 	_warn_missing_dependencies()
+	if not level_root or not _can_start_bake("Bake"):
+		return
 	# Prefer incremental bake when only specific brushes are dirty
 	if (
 		level_root
@@ -3049,9 +3275,13 @@ func _on_bake():
 		_log("Dirty brushes detected — using incremental bake")
 		_on_bake_changed()
 		return
-	_commit_state_action(
-		"Bake", "bake", [true, false, get_collision_layer_mask(), _get_bake_preview_mode()]
+	_set_bake_buttons_disabled(true)
+	var succeeded: bool = await level_root.bake(
+		true, false, get_collision_layer_mask(), _get_bake_preview_mode()
 	)
+	_set_bake_buttons_disabled(false)
+	if succeeded:
+		record_history("Bake")
 
 
 func _on_bake_dry_run() -> void:
@@ -3085,7 +3315,9 @@ func _get_bake_preview_mode() -> int:
 
 func _on_bake_selected() -> void:
 	_log("Bake selected requested")
-	if not level_root:
+	if not level_root or not _can_start_bake("Bake Selected"):
+		return
+	if not _guard_selection_action("Bake Selected", DockSelectionRequirement.BRUSHES_ONLY):
 		return
 	if _selection_nodes.is_empty():
 		show_toast("Select brushes to bake", 1)
@@ -3100,19 +3332,25 @@ func _on_bake_selected() -> void:
 	_warn_missing_dependencies()
 	var mask := get_collision_layer_mask()
 	_set_bake_buttons_disabled(true)
-	await level_root.bake_selected(brush_nodes, mask, _get_bake_preview_mode())
+	var succeeded: bool = await level_root.bake_selected(
+		brush_nodes, mask, _get_bake_preview_mode()
+	)
 	_set_bake_buttons_disabled(false)
+	if succeeded:
+		record_history("Bake Selected")
 
 
 func _on_bake_changed() -> void:
 	_log("Bake changed requested")
-	if not level_root:
+	if not level_root or not _can_start_bake("Bake Changed"):
 		return
 	_warn_missing_dependencies()
 	var mask := get_collision_layer_mask()
 	_set_bake_buttons_disabled(true)
-	await level_root.bake_dirty(mask, _get_bake_preview_mode())
+	var succeeded: bool = await level_root.bake_dirty(mask, _get_bake_preview_mode())
 	_set_bake_buttons_disabled(false)
+	if succeeded:
+		record_history("Bake Changed")
 
 
 func _on_bake_check_issues() -> void:
@@ -3222,12 +3460,27 @@ func _on_clear_cuts():
 func _on_commit_cuts():
 	_log("Commit cuts requested (freeze=%s)" % (commit_freeze.button_pressed))
 	_warn_missing_dependencies()
+	if not level_root or not _can_start_bake("Commit Cuts"):
+		return
+	var before_state: Dictionary = level_root.capture_state()
+	var before_baked: PackedScene = level_root.capture_baked_geometry_snapshot()
 	selection_clear_requested.emit()
 	if editor_interface:
 		var selection = editor_interface.get_selection()
 		if selection:
 			selection.clear()
-	_commit_state_action("Commit Cuts", "commit_cuts")
+	_set_bake_buttons_disabled(true)
+	var succeeded: bool = await level_root.prepare_commit_cuts()
+	_set_bake_buttons_disabled(false)
+	if succeeded:
+		# Finalize once, then snapshot the exact successful state. Redo restores
+		# this snapshot; it never consumes _prepared_commit_cutters a second time.
+		level_root.finalize_commit_cuts()
+		var after_state: Dictionary = level_root.capture_state()
+		var after_baked: PackedScene = level_root.capture_baked_geometry_snapshot()
+		_commit_precomputed_state_action(
+			"Commit Cuts", before_state, after_state, before_baked, after_baked
+		)
 
 
 func _on_restore_cuts():
@@ -3239,8 +3492,10 @@ func _on_hollow() -> void:
 	if not level_root or _selection_nodes.is_empty():
 		_set_status("Select a brush to hollow", true)
 		return
-	var brush = _selection_nodes[0]
-	if not level_root.is_brush_node(brush):
+	if not _guard_selection_action("Hollow", DockSelectionRequirement.BRUSHES_ONLY):
+		return
+	var brush = _first_selected_brush()
+	if not brush:
 		_set_status("Select a brush to hollow", true)
 		return
 	var info = level_root.get_brush_info_from_node(brush)
@@ -3267,6 +3522,9 @@ func _on_hollow() -> void:
 				return
 			if level_root and level_root.hollow_preview:
 				level_root.hollow_preview.clear()
+			if not _guard_selection_action("Hollow", DockSelectionRequirement.BRUSHES_ONLY):
+				dlg.queue_free()
+				return
 			_commit_state_action("Hollow", "hollow_brush_by_id", [brush_id, thickness])
 			dlg.queue_free()
 	)
@@ -3284,6 +3542,8 @@ func _on_hollow() -> void:
 func _on_move_to_floor() -> void:
 	if not level_root or _selection_nodes.is_empty():
 		return
+	if not _guard_selection_action("Move to Floor", DockSelectionRequirement.BRUSHES_ONLY):
+		return
 	var brush_ids: Array = []
 	for node in _selection_nodes:
 		if level_root.is_brush_node(node):
@@ -3298,6 +3558,8 @@ func _on_move_to_floor() -> void:
 
 func _on_move_to_ceiling() -> void:
 	if not level_root or _selection_nodes.is_empty():
+		return
+	if not _guard_selection_action("Move to Ceiling", DockSelectionRequirement.BRUSHES_ONLY):
 		return
 	var brush_ids: Array = []
 	for node in _selection_nodes:
@@ -3314,6 +3576,8 @@ func _on_move_to_ceiling() -> void:
 func _on_create_duplicate_array() -> void:
 	if not level_root or _selection_nodes.is_empty():
 		_set_status("Select brushes first", true)
+		return
+	if not _guard_selection_action("Create Duplicate Array", DockSelectionRequirement.BRUSHES_ONLY):
 		return
 	var brush_ids = PackedStringArray()
 	for node in _selection_nodes:
@@ -3338,6 +3602,8 @@ func _on_remove_duplicate_array() -> void:
 	if not level_root or _selection_nodes.is_empty():
 		_set_status("Select a duplicator source brush", true)
 		return
+	if not _guard_selection_action("Remove Duplicate Array", DockSelectionRequirement.BRUSHES_ONLY):
+		return
 	for node in _selection_nodes:
 		if not level_root.is_brush_node(node):
 			continue
@@ -3352,6 +3618,8 @@ func _on_remove_duplicate_array() -> void:
 func _on_tie_entity() -> void:
 	if not level_root or _selection_nodes.is_empty():
 		_set_status("Select brushes to tie", true)
+		return
+	if not _guard_selection_action("Tie to Entity", DockSelectionRequirement.BRUSHES_ONLY):
 		return
 	var class_name_str := "func_detail"
 	if (
@@ -3375,6 +3643,8 @@ func _on_tie_entity() -> void:
 func _on_untie_entity() -> void:
 	if not level_root or _selection_nodes.is_empty():
 		return
+	if not _guard_selection_action("Untie Entity", DockSelectionRequirement.BRUSHES_ONLY):
+		return
 	var brush_ids: Array = []
 	for node in _selection_nodes:
 		if level_root.is_brush_node(node):
@@ -3389,6 +3659,8 @@ func _on_untie_entity() -> void:
 
 func _on_justify(mode: String) -> void:
 	if not level_root:
+		return
+	if not _guard_selection_action("Justify UV", DockSelectionRequirement.BRUSHES_ONLY):
 		return
 	var treat_as_one = justify_treat_as_one.button_pressed if justify_treat_as_one else false
 	_commit_state_action("Justify UV (%s)" % mode, "justify_selected_faces", [mode, treat_as_one])
@@ -3753,10 +4025,17 @@ func _set_bake_buttons_disabled(disabled: bool) -> void:
 	_update_disabled_hints()
 
 
+func _can_start_bake(action_label: String) -> bool:
+	if level_root and level_root.has_method("is_bake_in_flight") and level_root.is_bake_in_flight():
+		show_toast("%s will be available when the current bake finishes" % action_label, 1)
+		return false
+	return true
+
+
 func _on_quick_play() -> void:
 	_log("Playtest requested")
 	_warn_missing_dependencies()
-	if not level_root:
+	if not level_root or not _can_start_bake("Test Level"):
 		return
 
 	# --- Ensure a spawn exists (before bake, so it's included in the scene) ---
@@ -3775,7 +4054,9 @@ func _on_quick_play() -> void:
 
 	# --- Bake FIRST so collision bodies exist for validation ---
 	var mask := get_collision_layer_mask()
-	await level_root.bake(true, false, mask)
+	if not await level_root.bake(true, false, mask):
+		show_toast("Test cancelled because the level could not be baked", 2)
+		return
 
 	# --- Validate AFTER bake against real collision geometry ---
 	if spawn and level_root.spawn_system:
@@ -3804,7 +4085,7 @@ func _on_quick_play() -> void:
 func _on_quick_play_from_camera() -> void:
 	_log("Play from Camera requested")
 	_warn_missing_dependencies()
-	if not level_root:
+	if not level_root or not _can_start_bake("Test from Camera"):
 		return
 	# Get the current editor camera from plugin
 	var camera: Camera3D = null
@@ -3850,7 +4131,10 @@ func _on_quick_play_from_camera() -> void:
 
 	# Bake and validate (same error-blocking as _on_quick_play)
 	var mask := get_collision_layer_mask()
-	await level_root.bake(true, false, mask)
+	if not await level_root.bake(true, false, mask):
+		_restore_spawn(spawn, old_pos, old_angle)
+		show_toast("Test cancelled because the level could not be baked", 2)
+		return
 
 	if spawn and level_root.spawn_system:
 		var validation: Dictionary = level_root.spawn_system.validate_spawn(spawn, mask)
@@ -3880,7 +4164,9 @@ func _on_quick_play_from_camera() -> void:
 func _on_quick_play_selected_area() -> void:
 	_log("Play Selected Area requested")
 	_warn_missing_dependencies()
-	if not level_root:
+	if not level_root or not _can_start_bake("Test Selected Area"):
+		return
+	if not _guard_selection_action("Play Selected Area", DockSelectionRequirement.BRUSHES_ONLY):
 		return
 	if _selection_nodes.is_empty():
 		show_toast("Select brushes to define play area", 1)
@@ -3910,7 +4196,10 @@ func _on_quick_play_selected_area() -> void:
 
 	# Bake with cordon active (only selected area geometry)
 	var mask := get_collision_layer_mask()
-	await level_root.bake(true, false, mask)
+	if not await level_root.bake(true, false, mask):
+		_restore_cordon_state(prev_cordon_enabled, prev_cordon_aabb)
+		show_toast("Test cancelled because the selected area could not be baked", 2)
+		return
 
 	# Validate spawn (same error-blocking as _on_quick_play)
 	if spawn and level_root.spawn_system:
@@ -3923,9 +4212,7 @@ func _on_quick_play_selected_area() -> void:
 			show_toast("Spawn issues: %s" % "\n".join(issues), 2)
 			_show_spawn_fix_dialog(spawn, validation, mask)
 			# Restore cordon even on error
-			level_root.cordon_enabled = prev_cordon_enabled
-			level_root.cordon_aabb = prev_cordon_aabb
-			level_root.update_cordon_visual()
+			_restore_cordon_state(prev_cordon_enabled, prev_cordon_aabb)
 			return
 		if severity >= 1:
 			level_root.spawn_system.show_validation_debug(spawn, validation, 6.0)
@@ -3936,14 +4223,21 @@ func _on_quick_play_selected_area() -> void:
 		editor_interface.play_current_scene()
 
 	# Restore original cordon
-	level_root.cordon_enabled = prev_cordon_enabled
-	level_root.cordon_aabb = prev_cordon_aabb
+	_restore_cordon_state(prev_cordon_enabled, prev_cordon_aabb)
+
+
+func _restore_cordon_state(enabled: bool, bounds: AABB) -> void:
+	if not level_root:
+		return
+	level_root.cordon_enabled = enabled
+	level_root.cordon_aabb = bounds
+	level_root.tag_full_reconcile()
 	level_root.update_cordon_visual()
 
 
 func _on_export_playtest() -> void:
 	_log("Export Playtest Build requested")
-	if not level_root:
+	if not level_root or not _can_start_bake("Export Playtest"):
 		show_toast("No LevelRoot active", 2)
 		return
 
@@ -3974,7 +4268,9 @@ func _on_export_playtest() -> void:
 	# Step 2: Bake full (optimized)
 	show_toast("Baking for playtest...", 0)
 	var mask := get_collision_layer_mask()
-	await level_root.bake(true, false, mask)
+	if not await level_root.bake(true, false, mask):
+		show_toast("Export cancelled because the level could not be baked", 2)
+		return
 	show_toast("Bake complete — exporting scene...", 0)
 
 	# Step 3: Export as temporary scene
@@ -4087,7 +4383,7 @@ func _restore_spawn(spawn: Node3D, pos: Vector3, angle_deg: float) -> void:
 
 
 func _on_spawn_validate() -> void:
-	if not level_root or not level_root.spawn_system:
+	if not level_root or not level_root.spawn_system or not _can_start_bake("Validate Spawn"):
 		show_toast("No LevelRoot available", 1)
 		return
 	var spawn := level_root.spawn_system.get_active_spawn()
@@ -4097,7 +4393,9 @@ func _on_spawn_validate() -> void:
 	# Bake first so validation queries real collision geometry, not stale state
 	var mask := get_collision_layer_mask()
 	show_toast("Baking before validation…", 0)
-	await level_root.bake(true, false, mask)
+	if not await level_root.bake(true, false, mask):
+		show_toast("Spawn validation cancelled because the level could not be baked", 2)
+		return
 	# Re-check spawn is still valid after async bake
 	if not is_instance_valid(spawn) or not spawn.is_inside_tree():
 		show_toast("Spawn was removed during bake", 2)
@@ -4132,6 +4430,10 @@ func _on_show_spawn_debug_toggled(enabled: bool) -> void:
 	if not level_root or not level_root.spawn_system:
 		return
 	if enabled:
+		if not _can_start_bake("Show Spawn Preview"):
+			if _show_spawn_debug:
+				_show_spawn_debug.set_pressed_no_signal(false)
+			return
 		var spawn := level_root.spawn_system.get_active_spawn()
 		if not spawn:
 			show_toast("No player_start to preview", 1)
@@ -4140,7 +4442,11 @@ func _on_show_spawn_debug_toggled(enabled: bool) -> void:
 			return
 		# Bake first so the debug overlay reflects real collision state
 		var mask := get_collision_layer_mask()
-		await level_root.bake(true, false, mask)
+		if not await level_root.bake(true, false, mask):
+			show_toast("Spawn preview cancelled because the level could not be baked", 2)
+			if _show_spawn_debug:
+				_show_spawn_debug.set_pressed_no_signal(false)
+			return
 		if not is_instance_valid(spawn) or not spawn.is_inside_tree():
 			show_toast("Spawn was removed during bake", 2)
 			if _show_spawn_debug:
@@ -4325,24 +4631,150 @@ func _update_disabled_hints() -> void:
 	_set_control_disabled_hint(commit_cuts_btn, not has_root or _bake_disabled, need_root_hint)
 	_set_control_disabled_hint(restore_cuts_btn, not has_root, need_root_hint)
 	var has_face = _uv_active_face != null or _surface_active_face != null
-	var face_hint = "Requires a selected face"
-	_set_control_disabled_hint(material_assign, not has_root or not has_face, face_hint)
+	var selection_scope := _current_selection_scope()
+	var mixed_selection := selection_scope == DockSelectionScope.MIXED
+	var native_selection := selection_scope == DockSelectionScope.NATIVE
+	var unsafe_managed_action := mixed_selection or native_selection
+	var managed_counts := _get_managed_selection_counts(_selection_nodes)
+	var managed_brushes := int(managed_counts["brushes"])
+	var managed_entities := int(managed_counts["entities"])
+	var managed_total := int(managed_counts["total"])
+	var mixed_hint := MIXED_SELECTION_MESSAGE
+	var unsafe_hint: String = (
+		mixed_hint
+		if mixed_selection
+		else "Select HammerForge brushes/entities; ordinary Godot nodes are left unchanged."
+	)
+	var brush_scope_hint: String = (
+		"Select only HammerForge brushes for this action." if managed_entities > 0 else unsafe_hint
+	)
+	var unsafe_brush_action := unsafe_managed_action or managed_entities > 0
+	var unsafe_entity_action := unsafe_managed_action or managed_brushes > 0
+	var face_hint: String = brush_scope_hint if unsafe_brush_action else "Requires a selected face"
+	_set_control_disabled_hint(
+		material_assign, not has_root or not has_face or unsafe_brush_action, face_hint
+	)
 	_set_control_disabled_hint(face_clear, not has_root or not has_face, face_hint)
-	_set_control_disabled_hint(uv_reset, not has_root or not has_face, face_hint)
+	for face_control in [
+		uv_reset,
+		uv_reproject_btn,
+		uv_projection_opt,
+		uv_scale_x,
+		uv_scale_y,
+		uv_offset_x,
+		uv_offset_y,
+		uv_rotation_spin,
+		surface_paint_layer_add,
+		surface_paint_layer_remove,
+		surface_paint_texture,
+		justify_fit_btn,
+		justify_center_btn,
+		justify_left_btn,
+		justify_right_btn,
+		justify_top_btn,
+		justify_bottom_btn,
+		_disp_create_btn,
+		_disp_destroy_btn,
+		_disp_smooth_btn,
+		_disp_noise_btn,
+		_disp_elevation_spin,
+		_disp_sew_group_spin,
+		_bevel_inset_btn,
+		_bevel_inset_dist_spin,
+		_bevel_inset_height_spin,
+	]:
+		_set_control_disabled_hint(
+			face_control, not has_root or not has_face or unsafe_brush_action, face_hint
+		)
+	var edge_hint: String = brush_scope_hint if unsafe_brush_action else need_root_hint
+	for edge_control in [_bevel_edge_btn, _bevel_segments_spin, _bevel_radius_spin]:
+		_set_control_disabled_hint(edge_control, not has_root or unsafe_brush_action, edge_hint)
+	# Sewing all displacement boundaries is deliberately selection-independent.
+	_set_control_disabled_hint(_disp_sew_btn, not has_root, need_root_hint)
 	var baked_ready = has_root and level_root.baked_container != null
 	_set_control_disabled_hint(export_glb_btn, not baked_ready, "Requires a successful bake")
-	# Selection-dependent tools: gray out when nothing is selected
-	var has_selection: bool = int(_get_selection_counts(_selection_nodes)["brushes"]) > 0
-	var need_sel_hint = "Requires a selected brush"
-	_set_control_disabled_hint(hollow_btn, not has_root or not has_selection, need_sel_hint)
-	_set_control_disabled_hint(clip_btn, not has_root or not has_selection, need_sel_hint)
-	_set_control_disabled_hint(move_floor_btn, not has_root or not has_selection, need_sel_hint)
-	_set_control_disabled_hint(move_ceiling_btn, not has_root or not has_selection, need_sel_hint)
+	# Selection-dependent tools fail closed when ordinary Godot nodes are mixed
+	# with HammerForge objects. This mirrors the handler guard, so stale button
+	# callbacks cannot partially mutate the managed subset either.
+	var has_selection := (
+		selection_scope == DockSelectionScope.MANAGED
+		and managed_brushes > 0
+		and managed_entities == 0
+	)
+	var need_sel_hint: String = (
+		brush_scope_hint if unsafe_brush_action else "Requires a selected brush"
+	)
+	for brush_control in [
+		hollow_btn,
+		clip_btn,
+		move_floor_btn,
+		move_ceiling_btn,
+		tie_entity_btn,
+		untie_entity_btn,
+		heightmap_convert_btn,
+	]:
+		_set_control_disabled_hint(brush_control, not has_root or not has_selection, need_sel_hint)
+	_set_control_disabled_hint(
+		bake_selected_btn, not has_root or not has_selection or _bake_disabled, need_sel_hint
+	)
+	_set_control_disabled_hint(
+		quick_play_area_btn, not has_root or not has_selection or _bake_disabled, need_sel_hint
+	)
+	var has_managed_selection := selection_scope == DockSelectionScope.MANAGED and managed_total > 0
+	var managed_hint: String = (
+		unsafe_hint if unsafe_managed_action else "Requires selected HammerForge objects"
+	)
+	var entity_scope_hint: String = (
+		"Select only HammerForge entities for this action." if managed_brushes > 0 else managed_hint
+	)
+	_set_control_disabled_hint(
+		visgroup_add_sel_btn, not has_root or not has_managed_selection, managed_hint
+	)
+	_set_control_disabled_hint(
+		visgroup_rem_sel_btn, not has_root or not has_managed_selection, managed_hint
+	)
+	_set_control_disabled_hint(
+		group_sel_btn,
+		not has_root or selection_scope != DockSelectionScope.MANAGED or managed_total < 2,
+		managed_hint
+	)
+	_set_control_disabled_hint(ungroup_btn, not has_root or not has_managed_selection, managed_hint)
+	_set_control_disabled_hint(
+		cordon_from_sel_btn, not has_root or not has_selection, need_sel_hint
+	)
+	_set_control_disabled_hint(
+		io_add_btn,
+		(
+			not has_root
+			or selection_scope != DockSelectionScope.MANAGED
+			or managed_entities < 1
+			or unsafe_entity_action
+		),
+		entity_scope_hint
+	)
+	_set_control_disabled_hint(
+		io_remove_btn,
+		(
+			not has_root
+			or selection_scope != DockSelectionScope.MANAGED
+			or managed_entities < 1
+			or unsafe_entity_action
+		),
+		entity_scope_hint
+	)
+	var scatter_mixed := selection_scope == DockSelectionScope.MIXED
+	var scatter_hint: String = mixed_hint if scatter_mixed else need_root_hint
+	_set_control_disabled_hint(scatter_preview_btn, not has_root or scatter_mixed, scatter_hint)
+	_set_control_disabled_hint(scatter_commit_btn, not has_root or scatter_mixed, scatter_hint)
 	# Inline hint labels
 	if _sel_tools_hint_label:
 		_sel_tools_hint_label.visible = not has_selection
+		if unsafe_brush_action:
+			_sel_tools_hint_label.text = brush_scope_hint
+		else:
+			_sel_tools_hint_label.text = "Select a brush to use these tools"
 	if _uv_hint_label:
-		_uv_hint_label.visible = not has_face
+		_uv_hint_label.visible = not has_face or unsafe_brush_action
 
 
 func _set_control_disabled_hint(control: Control, disabled: bool, hint: String) -> void:
@@ -4622,9 +5054,11 @@ func _on_heightmap_generate() -> void:
 func _on_heightmap_convert() -> void:
 	if not level_root:
 		return
+	if not _guard_selection_action("Convert to Heightmap", DockSelectionRequirement.BRUSHES_ONLY):
+		return
 	var brushes: Array = []
 	for node in _selection_nodes:
-		if node is DraftBrush and is_instance_valid(node):
+		if is_instance_valid(node) and level_root.is_brush_node(node):
 			brushes.append(node)
 	if brushes.is_empty():
 		level_root.emit_signal("user_message", "Select brushes first to convert to heightmap", 1)
@@ -4753,6 +5187,8 @@ func _get_active_paint_layer() -> HFPaintLayer:
 func _on_scatter_preview() -> void:
 	if not level_root:
 		return
+	if not _guard_selection_action("Scatter Preview", DockSelectionRequirement.NATIVE_ALLOWED):
+		return
 	var layer := _get_active_paint_layer()
 	if not layer:
 		level_root.emit_signal("user_message", "No active paint layer — add one first", 1)
@@ -4798,6 +5234,8 @@ func _on_scatter_preview() -> void:
 
 func _on_scatter_commit() -> void:
 	if not level_root:
+		return
+	if not _guard_selection_action("Scatter Commit", DockSelectionRequirement.NATIVE_ALLOWED):
 		return
 	if _scatter_last_result.is_empty():
 		_on_scatter_preview()
@@ -5073,6 +5511,25 @@ func _on_material_assign() -> void:
 ## toast (String).  Separated from side-effects so tests can exercise the
 ## face-vs-brush fallback without undo/redo infrastructure.
 func resolve_material_assign_action(mat_index: int) -> Dictionary:
+	var selection_scope := _current_selection_scope()
+	if selection_scope == DockSelectionScope.MIXED:
+		return {"action": "", "method": "", "args": [], "toast": MIXED_SELECTION_MESSAGE}
+	if selection_scope == DockSelectionScope.NATIVE:
+		return {
+			"action": "",
+			"method": "",
+			"args": [],
+			"toast": "Material assignment requires a HammerForge brush or selected face."
+		}
+	if selection_scope == DockSelectionScope.MANAGED:
+		var managed_counts := _get_managed_selection_counts(_selection_nodes)
+		if int(managed_counts["entities"]) > 0:
+			return {
+				"action": "",
+				"method": "",
+				"args": [],
+				"toast": "Material assignment requires a brush-only selection."
+			}
 	var face_count := _count_selected_faces()
 	if face_count > 0:
 		var mat_name := _material_display_name(mat_index)
@@ -5182,6 +5639,10 @@ func _on_material_context_action(id: int) -> void:
 	var mat_name := _material_display_name(idx)
 	match id:
 		0:  # Apply to Selected Faces
+			if not _guard_selection_action(
+				"Apply Face Material", DockSelectionRequirement.BRUSHES_ONLY
+			):
+				return
 			_selected_material_index = idx
 			var face_count := _count_selected_faces()
 			if face_count == 0:
@@ -5193,6 +5654,10 @@ func _on_material_context_action(id: int) -> void:
 				0
 			)
 		1:  # Apply to Whole Brush — assign material to ALL faces on selected brushes
+			if not _guard_selection_action(
+				"Apply Brush Material", DockSelectionRequirement.BRUSHES_ONLY
+			):
+				return
 			_selected_material_index = idx
 			var brush_ids := _get_selected_brush_ids()
 			if brush_ids.is_empty():
@@ -5226,6 +5691,10 @@ func _on_material_context_action(id: int) -> void:
 				DisplayServer.clipboard_set(label)
 				show_toast("Copied: " + label, 0)
 		4:  # Apply + Re-project (Box UV)
+			if not _guard_selection_action(
+				"Apply and Re-project Material", DockSelectionRequirement.BRUSHES_ONLY
+			):
+				return
 			_selected_material_index = idx
 			var face_count := _count_selected_faces()
 			if face_count == 0:
@@ -5247,8 +5716,12 @@ func _on_material_context_action(id: int) -> void:
 
 func _get_selected_brush_ids() -> Array:
 	var ids: Array = []
+	if not level_root or _current_selection_scope() != DockSelectionScope.MANAGED:
+		return ids
+	if int(_get_managed_selection_counts(_selection_nodes)["entities"]) > 0:
+		return ids
 	for node in _selection_nodes:
-		if node is DraftBrush and is_instance_valid(node):
+		if node is DraftBrush and is_instance_valid(node) and level_root.is_brush_node(node):
 			var bid: String = (node as DraftBrush).brush_id
 			if bid != "":
 				ids.append(bid)
@@ -5348,6 +5821,8 @@ func _on_uv_reset() -> void:
 		return
 	if not level_root:
 		return
+	if not _guard_selection_action("Reset UV", DockSelectionRequirement.BRUSHES_ONLY):
+		return
 	if _uv_active_brush.brush_id == "":
 		level_root.get_brush_info_from_node(_uv_active_brush)
 	var brush_id = _uv_active_brush.brush_id
@@ -5361,6 +5836,8 @@ func _on_uv_reproject() -> void:
 	if _uv_active_face == null or _uv_active_brush == null:
 		return
 	if not level_root:
+		return
+	if not _guard_selection_action("Re-project UV", DockSelectionRequirement.BRUSHES_ONLY):
 		return
 	if _uv_active_brush.brush_id == "":
 		level_root.get_brush_info_from_node(_uv_active_brush)
@@ -5383,6 +5860,8 @@ func _on_uv_param_changed(_value: float, _param: String) -> void:
 	if _uv_active_face == null or _uv_active_brush == null:
 		return
 	if not level_root:
+		return
+	if not _guard_selection_action("Edit UV", DockSelectionRequirement.BRUSHES_ONLY):
 		return
 	if _uv_active_brush.brush_id == "":
 		level_root.get_brush_info_from_node(_uv_active_brush)
@@ -5441,6 +5920,10 @@ func _on_surface_paint_layer_add() -> void:
 		return
 	if not level_root:
 		return
+	if not _guard_selection_action(
+		"Add Surface Paint Layer", DockSelectionRequirement.BRUSHES_ONLY
+	):
+		return
 	if _surface_active_brush.brush_id == "":
 		level_root.get_brush_info_from_node(_surface_active_brush)
 	var brush_id = _surface_active_brush.brush_id
@@ -5459,6 +5942,10 @@ func _on_surface_paint_layer_remove() -> void:
 		return
 	if not level_root:
 		return
+	if not _guard_selection_action(
+		"Remove Surface Paint Layer", DockSelectionRequirement.BRUSHES_ONLY
+	):
+		return
 	if _surface_active_brush.brush_id == "":
 		level_root.get_brush_info_from_node(_surface_active_brush)
 	var brush_id = _surface_active_brush.brush_id
@@ -5472,7 +5959,11 @@ func _on_surface_paint_layer_remove() -> void:
 
 
 func _on_surface_paint_texture() -> void:
-	if _surface_active_face == null or not surface_paint_texture_dialog:
+	if not level_root or _surface_active_face == null or not surface_paint_texture_dialog:
+		return
+	if not _guard_selection_action(
+		"Set Surface Paint Texture", DockSelectionRequirement.BRUSHES_ONLY
+	):
 		return
 	_pending_surface_texture_layer = (
 		surface_paint_layer_select.selected if surface_paint_layer_select else 0
@@ -5493,6 +5984,10 @@ func _on_surface_paint_texture_selected(path: String) -> void:
 	if idx < 0 or idx >= _surface_active_face.paint_layers.size():
 		return
 	if not level_root:
+		return
+	if not _guard_selection_action(
+		"Set Surface Paint Texture", DockSelectionRequirement.BRUSHES_ONLY
+	):
 		return
 	if _surface_active_brush.brush_id == "":
 		level_root.get_brush_info_from_node(_surface_active_brush)
@@ -6603,6 +7098,8 @@ func _on_visgroup_add_selection() -> void:
 	var vg_name = _get_selected_visgroup_name()
 	if vg_name == "" or not level_root:
 		return
+	if not _guard_selection_action("Add to Visgroup"):
+		return
 	level_root.add_selection_to_visgroup(vg_name, _selection_nodes)
 	refresh_visgroup_ui()
 
@@ -6610,6 +7107,8 @@ func _on_visgroup_add_selection() -> void:
 func _on_visgroup_remove_selection() -> void:
 	var vg_name = _get_selected_visgroup_name()
 	if vg_name == "" or not level_root:
+		return
+	if not _guard_selection_action("Remove from Visgroup"):
 		return
 	level_root.remove_selection_from_visgroup(vg_name, _selection_nodes)
 	refresh_visgroup_ui()
@@ -6626,6 +7125,8 @@ func _on_visgroup_delete() -> void:
 func _on_group_selection() -> void:
 	if not level_root or _selection_nodes.size() < 2:
 		return
+	if not _guard_selection_action("Group Selection"):
+		return
 	var group_name = "group_%d" % Time.get_ticks_usec()
 	level_root.group_selection(group_name, _selection_nodes)
 	record_history("Group Selection")
@@ -6633,6 +7134,8 @@ func _on_group_selection() -> void:
 
 func _on_ungroup_selection() -> void:
 	if not level_root or _selection_nodes.is_empty():
+		return
+	if not _guard_selection_action("Ungroup Selection"):
 		return
 	level_root.ungroup_nodes(_selection_nodes)
 	record_history("Ungroup Selection")
@@ -6710,6 +7213,7 @@ func _on_cordon_toggled(pressed: bool) -> void:
 		return
 	if level_root and _root_has_property("cordon_enabled"):
 		level_root.set("cordon_enabled", pressed)
+		_tag_bake_setting_change("cordon_enabled")
 		if level_root.has_method("update_cordon_visual"):
 			level_root.update_cordon_visual()
 
@@ -6730,11 +7234,16 @@ func _on_cordon_value_changed(_value: float) -> void:
 		cordon_max_z.value if cordon_max_z else 128
 	)
 	level_root.set("cordon_aabb", AABB(min_pt, max_pt - min_pt))
+	_tag_bake_setting_change("cordon_aabb")
 	level_root.update_cordon_visual()
 
 
 func _on_cordon_from_selection() -> void:
 	if not level_root or _selection_nodes.is_empty():
+		return
+	if not _guard_selection_action(
+		"Set Cordon from Selection", DockSelectionRequirement.BRUSHES_ONLY
+	):
 		return
 	level_root.set_cordon_from_selection(_selection_nodes)
 	# Sync spinboxes from updated AABB
@@ -6760,8 +7269,10 @@ func _on_clip() -> void:
 	if not level_root or _selection_nodes.is_empty():
 		_set_status("Select a brush to clip", true)
 		return
-	var brush = _selection_nodes[0]
-	if not level_root.is_brush_node(brush):
+	if not _guard_selection_action("Clip", DockSelectionRequirement.BRUSHES_ONLY):
+		return
+	var brush = _first_selected_brush()
+	if not brush:
 		_set_status("Select a brush to clip", true)
 		return
 	var info = level_root.get_brush_info_from_node(brush)
@@ -6790,6 +7301,9 @@ func _on_clip() -> void:
 				return
 			if level_root and level_root.clip_preview:
 				level_root.clip_preview.clear()
+			if not _guard_selection_action("Clip", DockSelectionRequirement.BRUSHES_ONLY):
+				dlg.queue_free()
+				return
 			_commit_state_action("Clip Brush", "clip_brush_by_id", [brush_id, 1, split_pos])
 			dlg.queue_free()
 	)
@@ -6808,8 +7322,10 @@ func _on_io_add() -> void:
 	if not level_root or _selection_nodes.is_empty():
 		_set_status("Select an entity to add output", true)
 		return
-	var entity = _selection_nodes[0]
-	if not level_root.is_entity_node(entity):
+	if not _guard_selection_action("Add Entity Output", DockSelectionRequirement.ENTITIES_ONLY):
+		return
+	var entity = _first_selected_entity()
+	if not entity:
 		_set_status("Select an entity to add output", true)
 		return
 	var output_name = io_output_name.text.strip_edges() if io_output_name else ""
@@ -6831,8 +7347,10 @@ func _on_io_add() -> void:
 func _on_io_remove() -> void:
 	if not level_root or _selection_nodes.is_empty():
 		return
-	var entity = _selection_nodes[0]
-	if not level_root.is_entity_node(entity):
+	if not _guard_selection_action("Remove Entity Output", DockSelectionRequirement.ENTITIES_ONLY):
+		return
+	var entity = _first_selected_entity()
+	if not entity:
 		return
 	if not io_list:
 		return
@@ -6851,9 +7369,11 @@ func _refresh_io_list(entity: Node = null) -> void:
 		return
 	io_list.clear()
 	if not entity:
+		if _current_selection_scope() == DockSelectionScope.MIXED:
+			return
 		if _selection_nodes.is_empty():
 			return
-		entity = _selection_nodes[0]
+		entity = _first_selected_entity()
 	if not level_root or not level_root.is_entity_node(entity):
 		return
 	var outputs = level_root.get_entity_outputs(entity)
@@ -6918,6 +7438,8 @@ func sync_wiring_highlight_state() -> void:
 func _apply_material_to_whole_brush() -> void:
 	if not level_root or _selected_material_index < 0:
 		show_toast("No material selected", 1)
+		return
+	if not _guard_selection_action("Apply Brush Material", DockSelectionRequirement.BRUSHES_ONLY):
 		return
 	var brush_ids := _get_selected_brush_ids()
 	if brush_ids.is_empty():

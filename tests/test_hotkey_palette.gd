@@ -127,6 +127,33 @@ func test_hollow_enabled_with_brush_selection():
 	assert_false(hollow_entry["button"].disabled)
 
 
+func test_mixed_selection_disables_managed_actions_but_keeps_tool_switches():
+	(
+		palette
+		. update_state(
+			{
+				"brush_count": 1,
+				"entity_count": 0,
+				"face_count": 2,
+				"mixed_selection": true,
+				"paint_mode": false,
+				"vertex_mode": false,
+				"input_mode": 0,
+				"tool": 1,
+			}
+		)
+	)
+	for action in ["delete", "hollow", "select_similar", "apply_last_texture", "selection_filter"]:
+		var entry = _entry_for(action)
+		assert_not_null(entry)
+		if entry:
+			assert_true(entry["button"].disabled, "%s must reject a mixed selection" % action)
+	var draw_entry = _entry_for("tool_draw")
+	assert_not_null(draw_entry)
+	if draw_entry:
+		assert_false(draw_entry["button"].disabled)
+
+
 func test_paint_tools_disabled_outside_paint():
 	(
 		palette
@@ -256,3 +283,10 @@ func test_action_invoked_signal():
 	palette._on_entry_pressed("hollow")
 	assert_eq(received, ["hollow"])
 	assert_false(palette.visible)
+
+
+func _entry_for(action: String):
+	for entry in palette._entries:
+		if entry["action"] == action:
+			return entry
+	return null

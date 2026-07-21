@@ -42,8 +42,16 @@ func test_specialist_edit_tools_only_appear_for_brush_selection() -> void:
 	assert_false(dock.tool_extrude_up.visible)
 	assert_false(dock.tool_extrude_down.visible)
 	assert_false(dock.tool_vertex.visible)
-	var brush := DraftBrush.new()
-	autofree(brush)
+	var root := LevelRoot.new()
+	root.auto_spawn_player = false
+	root.commit_freeze = false
+	root.hflevel_autosave_enabled = false
+	add_child_autoqfree(root)
+	dock.level_root = root
+	var brush := (
+		root.create_brush_from_info({"size": Vector3(8, 8, 8), "brush_id": "dock_usability_brush"})
+		as DraftBrush
+	)
 	dock.set_selection_nodes([brush])
 	assert_true(dock.tool_extrude_up.visible)
 	assert_true(dock.tool_extrude_down.visible)
@@ -51,6 +59,30 @@ func test_specialist_edit_tools_only_appear_for_brush_selection() -> void:
 	dock.set_selection_nodes([])
 	assert_false(dock.tool_extrude_up.visible)
 	assert_false(dock.tool_vertex.visible)
+	dock._update_context_hints()
+	assert_eq(
+		dock._brush_hint.text,
+		"Draw another brush, or choose Select to edit one.",
+		"An existing brush must not leave the beginner hint stuck on draw-first",
+	)
+
+
+func test_async_bake_and_commit_cuts_never_enter_undo_as_coroutines() -> void:
+	var source := FileAccess.get_file_as_string("res://addons/hammerforge/dock.gd")
+	var commit_start := source.find("func _on_commit_cuts")
+	var commit_end := source.find("func _on_restore_cuts", commit_start)
+	var commit_body := source.substr(commit_start, commit_end - commit_start)
+	assert_true(commit_body.contains("await level_root.prepare_commit_cuts()"))
+	assert_true(commit_body.contains("level_root.finalize_commit_cuts()"))
+	assert_true(commit_body.contains("_commit_precomputed_state_action("))
+	assert_false(commit_body.contains("_commit_state_action("))
+
+	var helper_start := source.find("func _commit_precomputed_state_action")
+	var helper_end := source.find("func _on_bake", helper_start)
+	var helper_body := source.substr(helper_start, helper_end - helper_start)
+	assert_true(helper_body.contains("restore_state_with_baked_snapshot"))
+	assert_true(helper_body.contains("undo_redo.commit_action(false)"))
+	assert_false(helper_body.contains("await "))
 
 
 func _is_descendant_of(node: Node, ancestor: Node) -> bool:
