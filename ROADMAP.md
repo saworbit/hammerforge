@@ -339,7 +339,7 @@ Current 3,987 lines. Largest functions are tightly coupled to viewport input flo
 - `_dispatch_viewport_action` (193 lines) → action-mode dispatch table.
 - `_on_context_toolbar_action` and `_on_hotkey_palette_action` now route through `plugin_commands.gd` (`HFPluginCommands.execute`).
 - `_handle_vertex_input` now delegates to `plugin_vertex_input.gd` (`HFPluginVertexInput.handle`).
-- `_update_context_toolbar_state` (106 lines), `_update_hud_context` (65 lines), HUD overlays → `plugin_hud.gd`.
+- `_update_hud_context` and `_update_context_toolbar_state` now delegate to `plugin_hud.gd` (`HFPluginHud`).
 
 ### Lazy system loading in level_root.gd (Phase 3a)
 - Replace 54 upfront `const X = preload(...)` statements with on-demand `_get_system(name)` accessor.
