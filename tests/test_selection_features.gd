@@ -514,6 +514,7 @@ func test_all_dock_selection_mutators_share_the_scope_guard() -> void:
 	var handler_sources := [
 		FileAccess.get_file_as_string("res://addons/hammerforge/dock_paint_handler.gd"),
 		FileAccess.get_file_as_string("res://addons/hammerforge/dock_brush_handler.gd"),
+		FileAccess.get_file_as_string("res://addons/hammerforge/dock_entity_handler.gd"),
 	]
 	var guarded_functions := [
 		"_on_prefab_save_requested",
@@ -573,7 +574,7 @@ func test_all_dock_selection_mutators_share_the_scope_guard() -> void:
 		)
 	for function_name in ["_on_io_add", "_on_io_remove"]:
 		assert_true(
-			_function_source(source, function_name).contains(
+			_dock_or_handler_function_source(source, handler_sources, function_name).contains(
 				"DockSelectionRequirement.ENTITIES_ONLY"
 			),
 			"%s must reject brushes instead of filtering them out" % function_name,

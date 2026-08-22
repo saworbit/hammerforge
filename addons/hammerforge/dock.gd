@@ -36,6 +36,7 @@ const ManageTabBuilder = preload("ui/manage_tab_builder.gd")
 const SelectionToolsBuilder = preload("ui/selection_tools_builder.gd")
 const HFDockPaintHandler = preload("dock_paint_handler.gd")
 const HFDockBrushHandler = preload("dock_brush_handler.gd")
+const HFDockEntityHandler = preload("dock_entity_handler.gd")
 
 const PRESET_MENU_RENAME := 0
 const PRESET_MENU_DELETE := 1
@@ -1365,172 +1366,35 @@ func _build_entity_props_section() -> void:
 
 
 func _rebuild_entity_props(entity: Node3D) -> void:
-	_clear_entity_props()
-	if not entity or not is_instance_valid(entity):
-		return
-	if not level_root or not level_root.is_entity_node(entity):
-		return
-
-	var entity_type_key := HFEntityPropUtils.get_entity_type(entity)
-	if entity_type_key == "":
-		return
-
-	var definition := HFEntityPropUtils.find_definition(entity_defs, entity_type_key)
-	var props: Array = definition.get("properties", [])
-	if props.is_empty():
-		return
-
-	_entity_props_section.visible = true
-	_entity_props_entity = entity
-	var content = _entity_props_section.get_content()
-
-	var e_data := HFEntityPropUtils.get_entity_data(entity)
-
-	for prop in props:
-		if not (prop is Dictionary):
-			continue
-		var prop_name: String = str(prop.get("name", ""))
-		if prop_name == "":
-			continue
-		var prop_type: String = str(prop.get("type", "string"))
-		var prop_label: String = str(prop.get("label", prop_name))
-		var prop_default: Variant = prop.get("default", null)
-		var default_val: Variant = _entity_prop_default(prop_type, prop_default)
-		var current_val: Variant = e_data.get(prop_name, default_val)
-
-		var row = HBoxContainer.new()
-		content.add_child(row)
-		_entity_props_controls.append(row)
-
-		var lbl = Label.new()
-		lbl.text = prop_label + ":"
-		lbl.custom_minimum_size.x = 70
-		row.add_child(lbl)
-
-		match prop_type:
-			"string":
-				var le = LineEdit.new()
-				le.text = str(current_val)
-				le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-				le.text_changed.connect(_on_entity_prop_changed.bind(entity, prop_name))
-				row.add_child(le)
-			"int":
-				var sb = SpinBox.new()
-				sb.step = 1
-				sb.allow_greater = true
-				sb.allow_lesser = true
-				sb.value = int(current_val)
-				sb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-				sb.value_changed.connect(_on_entity_prop_changed.bind(entity, prop_name))
-				row.add_child(sb)
-			"float":
-				var sb = SpinBox.new()
-				sb.step = 0.01
-				sb.allow_greater = true
-				sb.allow_lesser = true
-				sb.value = float(current_val)
-				sb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-				sb.value_changed.connect(_on_entity_prop_changed.bind(entity, prop_name))
-				row.add_child(sb)
-			"bool":
-				var cb = CheckBox.new()
-				cb.button_pressed = bool(current_val)
-				cb.toggled.connect(_on_entity_prop_changed.bind(entity, prop_name))
-				row.add_child(cb)
-			"enum":
-				var ob = OptionButton.new()
-				var enum_vals: Array = prop.get("enum_values", [])
-				for ev in enum_vals:
-					ob.add_item(str(ev))
-				var idx = enum_vals.find(current_val)
-				if idx >= 0:
-					ob.select(idx)
-				ob.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-				ob.item_selected.connect(
-					_on_entity_prop_enum_changed.bind(entity, prop_name, enum_vals)
-				)
-				row.add_child(ob)
-			"color":
-				var cpb = ColorPickerButton.new()
-				if current_val is Color:
-					cpb.color = current_val
-				elif current_val is String:
-					cpb.color = Color(current_val)
-				else:
-					cpb.color = Color.WHITE
-				cpb.custom_minimum_size = Vector2(40, 24)
-				cpb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-				cpb.color_changed.connect(_on_entity_prop_changed.bind(entity, prop_name))
-				row.add_child(cpb)
-			"vector3":
-				var vec: Vector3 = Vector3.ZERO
-				if current_val is Vector3:
-					vec = current_val
-				elif current_val is Array and current_val.size() == 3:
-					vec = Vector3(current_val[0], current_val[1], current_val[2])
-				for axis_i in range(3):
-					var sb = SpinBox.new()
-					sb.step = 0.01
-					sb.allow_greater = true
-					sb.allow_lesser = true
-					sb.value = vec[axis_i]
-					sb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-					sb.custom_minimum_size.x = 70
-					sb.value_changed.connect(
-						_on_entity_prop_vec3_changed.bind(entity, prop_name, axis_i)
-					)
-					row.add_child(sb)
-			_:
-				var le = LineEdit.new()
-				le.text = str(current_val)
-				le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-				le.text_changed.connect(_on_entity_prop_changed.bind(entity, prop_name))
-				row.add_child(le)
+	HFDockEntityHandler.rebuild_entity_props(self, entity)
 
 
 func _clear_entity_props() -> void:
-	for ctrl in _entity_props_controls:
-		if is_instance_valid(ctrl):
-			ctrl.queue_free()
-	_entity_props_controls.clear()
-	_entity_props_entity = null
-	if _entity_props_section:
-		_entity_props_section.visible = false
+	HFDockEntityHandler.clear_entity_props(self)
 
 
 func _on_entity_prop_changed(value: Variant, entity: Node3D, prop_name: String) -> void:
-	if not _can_edit_selected_entity(entity):
-		return
-	HFEntityPropUtils.set_entity_property(entity, prop_name, value)
+	HFDockEntityHandler.on_entity_prop_changed(self, value, entity, prop_name)
 
 
 func _on_entity_prop_enum_changed(
 	index: int, entity: Node3D, prop_name: String, enum_vals: Array
 ) -> void:
-	if not _can_edit_selected_entity(entity):
-		return
-	var value: Variant = enum_vals[index] if index < enum_vals.size() else ""
-	HFEntityPropUtils.set_entity_property(entity, prop_name, value)
+	HFDockEntityHandler.on_entity_prop_enum_changed(self, index, entity, prop_name, enum_vals)
 
 
 func _on_entity_prop_vec3_changed(
 	value: float, entity: Node3D, prop_name: String, axis_index: int
 ) -> void:
-	if not _can_edit_selected_entity(entity):
-		return
-	HFEntityPropUtils.set_entity_vec3_axis(entity, prop_name, axis_index, value)
+	HFDockEntityHandler.on_entity_prop_vec3_changed(self, value, entity, prop_name, axis_index)
 
 
 func _can_edit_selected_entity(entity: Node3D) -> bool:
-	if not level_root or not is_instance_valid(entity):
-		return false
-	if not _guard_selection_action("Edit Entity", DockSelectionRequirement.ENTITIES_ONLY):
-		return false
-	return level_root.is_entity_node(entity) and _selection_nodes.has(entity)
+	return HFDockEntityHandler.can_edit_selected_entity(self, entity)
 
 
 func _entity_prop_default(type_name: String, value: Variant) -> Variant:
-	return HFEntityPropUtils.coerce_default(type_name, value)
+	return HFDockEntityHandler.entity_prop_default(type_name, value)
 
 
 # ---------------------------------------------------------------------------
@@ -3364,34 +3228,15 @@ func get_hollow_thickness() -> float:
 
 
 func _on_create_entity() -> void:
-	if not level_root:
-		return
-	var entity = DraftEntity.new()
-	entity.name = "DraftEntity"
-	entity.set_meta("is_entity", true)
-	var def = _get_default_entity_definition()
-	if not def.is_empty():
-		var type_id = str(def.get("id", def.get("class", "")))
-		if type_id != "":
-			entity.entity_type = type_id
-			entity.entity_class = type_id
-	level_root.add_entity(entity)
-	_focus_entity_selection(entity)
+	HFDockEntityHandler.on_create_entity(self)
 
 
 func _focus_entity_selection(entity: Node) -> void:
-	if not editor_interface or not entity:
-		return
-	var selection = editor_interface.get_selection()
-	if selection:
-		selection.clear()
-		selection.add_node(entity)
+	HFDockEntityHandler.focus_entity_selection(self, entity)
 
 
 func _get_default_entity_definition() -> Dictionary:
-	if entity_defs.is_empty():
-		return {}
-	return entity_defs[0] if entity_defs[0] is Dictionary else {}
+	return HFDockEntityHandler.get_default_entity_definition(self)
 
 
 func _connect_root_signals() -> void:
@@ -6631,86 +6476,19 @@ func _on_clip() -> void:
 
 
 func _on_io_add() -> void:
-	if not level_root or _selection_nodes.is_empty():
-		_set_status("Select an entity to add output", true)
-		return
-	if not _guard_selection_action("Add Entity Output", DockSelectionRequirement.ENTITIES_ONLY):
-		return
-	var entity = _first_selected_entity()
-	if not entity:
-		_set_status("Select an entity to add output", true)
-		return
-	var output_name = io_output_name.text.strip_edges() if io_output_name else ""
-	var target_name = io_target_name.text.strip_edges() if io_target_name else ""
-	var input_name = io_input_name.text.strip_edges() if io_input_name else ""
-	if output_name == "" or target_name == "" or input_name == "":
-		_set_status("Fill in Output, Target, and Input fields", true)
-		return
-	var parameter = io_parameter.text.strip_edges() if io_parameter else ""
-	var delay = io_delay.value if io_delay else 0.0
-	var fire_once = io_fire_once.button_pressed if io_fire_once else false
-	level_root.add_entity_output(
-		entity, output_name, target_name, input_name, parameter, delay, fire_once
-	)
-	_refresh_io_list(entity)
-	_set_status("Added output: %s → %s.%s" % [output_name, target_name, input_name])
+	HFDockEntityHandler.on_io_add(self)
 
 
 func _on_io_remove() -> void:
-	if not level_root or _selection_nodes.is_empty():
-		return
-	if not _guard_selection_action("Remove Entity Output", DockSelectionRequirement.ENTITIES_ONLY):
-		return
-	var entity = _first_selected_entity()
-	if not entity:
-		return
-	if not io_list:
-		return
-	var selected_items = io_list.get_selected_items()
-	if selected_items.is_empty():
-		_set_status("Select a connection to remove", true)
-		return
-	var index = selected_items[0]
-	level_root.remove_entity_output(entity, index)
-	_refresh_io_list(entity)
-	_set_status("Removed output connection")
+	HFDockEntityHandler.on_io_remove(self)
 
 
 func _refresh_io_list(entity: Node = null) -> void:
-	if not io_list:
-		return
-	io_list.clear()
-	if not entity:
-		if _current_selection_scope() == DockSelectionScope.MIXED:
-			return
-		if _selection_nodes.is_empty():
-			return
-		entity = _first_selected_entity()
-	if not level_root or not level_root.is_entity_node(entity):
-		return
-	var outputs = level_root.get_entity_outputs(entity)
-	for conn in outputs:
-		if not (conn is Dictionary):
-			continue
-		var out_name = str(conn.get("output_name", ""))
-		var tgt = str(conn.get("target_name", ""))
-		var inp = str(conn.get("input_name", ""))
-		var delay = float(conn.get("delay", 0.0))
-		var once = bool(conn.get("fire_once", false))
-		var label = "%s → %s.%s" % [out_name, tgt, inp]
-		if delay > 0.0:
-			label += " (%.1fs)" % delay
-		if once:
-			label += " [once]"
-		io_list.add_item(label)
+	HFDockEntityHandler.refresh_io_list(self, entity)
 
 
 func _setup_io_wiring_panel() -> void:
-	if not _io_wiring_panel or not level_root:
-		return
-	_io_wiring_panel.setup(
-		level_root.entity_system, level_root.io_presets, level_root.io_visualizer
-	)
+	HFDockEntityHandler.setup_io_wiring_panel(self)
 
 
 func _on_wiring_connection_added(
@@ -6722,23 +6500,21 @@ func _on_wiring_connection_added(
 	_delay: float,
 	_fire_once: bool,
 ) -> void:
-	_refresh_io_list(source)
-	_set_status("Wired: %s → %s.%s" % [output_name, target_name, input_name])
+	HFDockEntityHandler.on_wiring_connection_added(
+		self, source, output_name, target_name, input_name, _parameter, _delay, _fire_once
+	)
 
 
 func _on_wiring_preset_applied(source: Node, preset_name: String, count: int) -> void:
-	_refresh_io_list(source)
-	_set_status("Applied preset '%s' (%d connections)" % [preset_name, count])
+	HFDockEntityHandler.on_wiring_preset_applied(self, source, preset_name, count)
 
 
 func _on_wiring_highlight_toggled(enabled: bool) -> void:
-	if level_root:
-		level_root.set_highlight_connected(enabled)
+	HFDockEntityHandler.on_wiring_highlight_toggled(self, enabled)
 
 
 func sync_wiring_highlight_state() -> void:
-	if _io_wiring_panel and _io_wiring_panel.has_method("_sync_highlight_button"):
-		_io_wiring_panel._sync_highlight_button()
+	HFDockEntityHandler.sync_wiring_highlight_state(self)
 
 
 # ---------------------------------------------------------------------------
