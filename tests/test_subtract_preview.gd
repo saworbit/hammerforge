@@ -43,6 +43,38 @@ func test_intersection_partial_axis():
 # -- Enable/disable tests -------------------------------------------------------
 
 
+func test_collect_cut_groups_pairs_overlapping_brushes():
+	var add: DraftBrush = autoqfree(DraftBrush.new())
+	add.size = Vector3(10, 10, 10)
+	add.operation = CSGShape3D.OPERATION_UNION
+	var sub: DraftBrush = autoqfree(DraftBrush.new())
+	sub.size = Vector3(4, 4, 4)
+	sub.operation = CSGShape3D.OPERATION_SUBTRACTION
+	var groups: Array = HFSubtractPreview.collect_cut_groups([sub], [add])
+	assert_eq(groups.size(), 1)
+	assert_eq(groups[0]["sub"], sub)
+	assert_eq((groups[0]["adds"] as Array).size(), 1)
+	assert_true(HFSubtractPreview.is_valid_aabb(groups[0]["aabb"]))
+
+
+func test_collect_cut_groups_skips_separated_brushes():
+	var add: DraftBrush = autoqfree(DraftBrush.new())
+	add.size = Vector3(2, 2, 2)
+	add.position = Vector3(0, 0, 0)
+	add.operation = CSGShape3D.OPERATION_UNION
+	var sub: DraftBrush = autoqfree(DraftBrush.new())
+	sub.size = Vector3(2, 2, 2)
+	sub.position = Vector3(50, 0, 0)
+	sub.operation = CSGShape3D.OPERATION_SUBTRACTION
+	var groups: Array = HFSubtractPreview.collect_cut_groups([sub], [add])
+	assert_eq(groups.size(), 0)
+
+
+func test_extract_csg_meshes_reads_transform_mesh_pair():
+	var entries: Array = HFSubtractPreview.extract_csg_meshes(null)
+	assert_eq(entries.size(), 0)
+
+
 func test_preview_operation_reads_draft_brushes():
 	var brush = autoqfree(DraftBrush.new())
 	brush.operation = CSGShape3D.OPERATION_SUBTRACTION

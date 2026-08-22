@@ -41,12 +41,16 @@ func convert(brushes: Array, settings: ConvertSettings) -> ConvertResult:
 		result.error = "No brushes provided"
 		return result
 
-	# --- 1. Compute world-space AABB of all brushes ---
+	# --- 1. Compute world-space AABB of additive brushes (mesh bounds, including displacements) ---
 	var aabb := AABB()
 	var first := true
+	var used := 0
 	for brush in brushes:
 		if not is_instance_valid(brush):
 			continue
+		if not _is_additive_brush(brush):
+			continue
+		used += 1
 		var b_aabb := _get_brush_aabb(brush)
 		if first:
 			aabb = b_aabb
@@ -55,7 +59,7 @@ func convert(brushes: Array, settings: ConvertSettings) -> ConvertResult:
 			aabb = aabb.merge(b_aabb)
 
 	if first:
-		result.error = "No valid brushes"
+		result.error = "No additive brushes to convert"
 		return result
 
 	# --- 2. Determine grid extents ---
@@ -84,6 +88,8 @@ func convert(brushes: Array, settings: ConvertSettings) -> ConvertResult:
 
 	for brush in brushes:
 		if not is_instance_valid(brush):
+			continue
+		if not _is_additive_brush(brush):
 			continue
 		_rasterize_brush(brush, raw_heights, width, height, cell_min, cs, y_min)
 
@@ -127,12 +133,25 @@ func convert(brushes: Array, settings: ConvertSettings) -> ConvertResult:
 	result.heightmap = img
 	result.cell_min = cell_min
 	result.cell_max = cell_max
-	result.brush_count = brushes.size()
+	result.brush_count = used
 	return result
 
 
-## Get the world-space AABB for a brush node.
+static func _is_additive_brush(brush: Node3D) -> bool:
+	var op: Variant = brush.get("operation")
+	if op == null:
+		return true
+	return int(op) != CSGShape3D.OPERATION_SUBTRACTION
+
+
+## World AABB from the authored mesh (displacements included) when present.
 func _get_brush_aabb(brush: Node3D) -> AABB:
+	if brush is DraftBrush:
+		var draft := brush as DraftBrush
+		if draft.mesh_instance and is_instance_valid(draft.mesh_instance) and draft.mesh_instance.mesh:
+			return draft.mesh_instance.global_transform * draft.mesh_instance.mesh.get_aabb()
+		var half_size := draft.size * 0.5
+		return AABB(draft.global_position - half_size, draft.size)
 	var size: Vector3 = brush.get("size") if brush.get("size") else Vector3.ONE
 	var half := size * 0.5
 	var pos := brush.global_position

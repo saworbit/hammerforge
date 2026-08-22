@@ -5,6 +5,10 @@ extends RefCounted
 ## Displacement surface management for HammerForge.
 ## Creates, destroys, paints (raise/lower/smooth/noise), and sews
 ## displacement surfaces on brush faces.
+##
+## Displacements stay on brush faces. Heightmap paint layers are a separate
+## terrain path; convert-to-heightmap uses the displaced mesh bounds and skips
+## subtract brushes so the two representations do not double-count.
 
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")

@@ -96,6 +96,46 @@ func test_convert_produces_filled_cells():
 # ===========================================================================
 
 
+func test_convert_skips_subtractive_brushes():
+	var add := _make_brush(Vector3(5, 2, 5), Vector3(4, 4, 4))
+	var sub := _make_brush(Vector3(5, 2, 5), Vector3(4, 4, 4))
+	sub.operation = CSGShape3D.OPERATION_SUBTRACTION
+	var converter := HFBrushToHeightmapScript.new()
+	var settings := HFBrushToHeightmapScript.ConvertSettings.new()
+	var result := converter.convert([add, sub], settings)
+	_track_result_layer(result)
+	assert_eq(result.error, "")
+	assert_eq(result.brush_count, 1)
+
+
+func test_convert_subtract_only_errors():
+	var sub := _make_brush(Vector3(5, 2, 5), Vector3(4, 4, 4))
+	sub.operation = CSGShape3D.OPERATION_SUBTRACTION
+	var converter := HFBrushToHeightmapScript.new()
+	var settings := HFBrushToHeightmapScript.ConvertSettings.new()
+	var result := converter.convert([sub], settings)
+	assert_ne(result.error, "")
+	assert_null(result.layer)
+
+
+func test_convert_uses_mesh_bounds_including_displacement_height():
+	var brush := _make_brush(Vector3(0, 0, 0), Vector3(2, 2, 2))
+	brush._ensure_mesh_instance()
+	var box := BoxMesh.new()
+	box.size = Vector3(2, 20, 2)
+	brush.mesh_instance.mesh = box
+	var converter := HFBrushToHeightmapScript.new()
+	var settings := HFBrushToHeightmapScript.ConvertSettings.new()
+	settings.cell_size = 1.0
+	settings.height_scale = 10.0
+	var result := converter.convert([brush], settings)
+	_track_result_layer(result)
+	assert_eq(result.error, "")
+	assert_true(result.cell_max.y - result.cell_min.y >= 2)
+	var aabb: AABB = converter._get_brush_aabb(brush)
+	assert_gt(aabb.size.y, 10.0, "Mesh AABB should include the taller displacement mesh")
+
+
 func test_convert_multiple_brushes():
 	var b1 := _make_brush(Vector3(2, 1, 2), Vector3(2, 2, 2))
 	var b2 := _make_brush(Vector3(6, 3, 6), Vector3(2, 6, 2))
