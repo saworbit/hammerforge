@@ -36,6 +36,7 @@ addons/hammerforge/
   dock.gd + dock.tscn    UI dock (displayed as Build, Paint, Objects, Test), collapsible sections with persisted state
   dock_brush_handler.gd  Build-tab displacement/bevel/hollow/clip/tie handlers
   dock_entity_handler.gd Objects-tab property/create/I/O handlers
+  dock_manage_handler.gd Test-tab bake/play/spawn/validation handlers
   dock_paint_handler.gd  Paint-tab layer/heightmap/scatter/sculpt handlers
   shortcut_hud.gd        Context-sensitive shortcut overlay (dynamic per mode) + persistent grid size indicator with flash-on-change
   brush_instance.gd      DraftBrush node

@@ -5,6 +5,7 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Changed
+- **Test-tab bake/play handlers live in `dock_manage_handler.gd`:** bake, validate, Test Level, spawn, and playtest dock methods are thin wrappers around `HFDockManageHandler`.
 - **Objects-tab entity handlers live in `dock_entity_handler.gd`:** property rebuild, create-entity, and I/O/wiring dock methods are thin wrappers around `HFDockEntityHandler`.
 - **Build-tab brush handlers live in `dock_brush_handler.gd`:** displacement, bevel, hollow, clip, floor/ceiling, duplicate-array, and tie/untie dock methods are thin wrappers around `HFDockBrushHandler`.
 - **Paint-tab handlers live in `dock_paint_handler.gd`:** layer, heightmap, scatter, sculpt, region, and terrain-slot dock methods are thin wrappers around `HFDockPaintHandler`.
