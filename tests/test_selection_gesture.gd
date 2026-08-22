@@ -560,9 +560,8 @@ func test_shortcut_scope_separates_native_hammerforge_and_mixed_selection() -> v
 
 func test_managed_shortcuts_share_the_native_and_mixed_selection_guard() -> void:
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
-	var keyboard_start := source.find("func _handle_keyboard_input")
-	var keyboard_end := source.find("func has_cancelable_rmb_gesture", keyboard_start)
-	var keyboard := source.substr(keyboard_start, keyboard_end - keyboard_start)
+	var keyboard := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_input_router.gd")
+	assert_true(source.contains("HFPluginInputRouter.handle_keyboard"))
 	for action in [
 		"delete_guard",
 		"duplicate_guard",
