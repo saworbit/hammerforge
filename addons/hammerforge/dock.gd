@@ -34,6 +34,7 @@ const PaintTabBuilder = preload("ui/paint_tab_builder.gd")
 const EntityTabBuilder = preload("ui/entity_tab_builder.gd")
 const ManageTabBuilder = preload("ui/manage_tab_builder.gd")
 const SelectionToolsBuilder = preload("ui/selection_tools_builder.gd")
+const HFDockPaintHandler = preload("dock_paint_handler.gd")
 
 const PRESET_MENU_RENAME := 0
 const PRESET_MENU_DELETE := 1
@@ -4997,471 +4998,139 @@ func _refresh_surface_paint_layers() -> void:
 
 
 func _on_paint_layer_selected(index: int) -> void:
-	if not level_root:
-		return
-	level_root.set_active_paint_layer(index)
-	_refresh_paint_layers()
+	HFDockPaintHandler.on_paint_layer_selected(self, index)
 
 
 func _on_paint_layer_add() -> void:
-	if not level_root:
-		return
-	level_root.add_paint_layer()
-	_refresh_paint_layers()
+	HFDockPaintHandler.on_paint_layer_add(self)
 
 
 func _on_paint_layer_rename() -> void:
-	if not level_root or not paint_layer_select:
-		return
-	var idx = paint_layer_select.selected
-	if idx < 0:
-		return
-	var current_name = paint_layer_select.get_item_text(idx)
-	# Create inline rename dialog
-	var dialog = AcceptDialog.new()
-	dialog.title = "Rename Layer"
-	var line_edit = LineEdit.new()
-	line_edit.text = current_name
-	line_edit.select_all()
-	dialog.add_child(line_edit)
-	dialog.confirmed.connect(
-		func():
-			if not is_instance_valid(self):
-				return
-			var new_name = line_edit.text.strip_edges()
-			if new_name != "" and new_name != current_name:
-				level_root.rename_paint_layer(idx, new_name)
-				_refresh_paint_layers()
-	)
-	dialog.canceled.connect(func(): dialog.queue_free())
-	dialog.confirmed.connect(func(): dialog.queue_free(), CONNECT_DEFERRED)
-	add_child(dialog)
-	dialog.popup_centered(Vector2i(300, 80))
-	line_edit.grab_focus()
+	HFDockPaintHandler.on_paint_layer_rename(self)
 
 
 func _on_paint_layer_remove() -> void:
-	if not level_root:
-		return
-	level_root.remove_active_paint_layer()
-	_refresh_paint_layers()
+	HFDockPaintHandler.on_paint_layer_remove(self)
 
 
 func _on_heightmap_import() -> void:
-	if heightmap_import_dialog:
-		heightmap_import_dialog.popup_centered(Vector2i(600, 400))
+	HFDockPaintHandler.on_heightmap_import(self)
 
 
 func _on_heightmap_import_selected(path: String) -> void:
-	if not level_root:
-		return
-	level_root.import_heightmap(path)
+	HFDockPaintHandler.on_heightmap_import_selected(self, path)
 
 
 func _on_heightmap_generate() -> void:
-	if not level_root:
-		return
-	level_root.generate_heightmap_noise()
+	HFDockPaintHandler.on_heightmap_generate(self)
 
 
 func _on_heightmap_convert() -> void:
-	if not level_root:
-		return
-	if not _guard_selection_action("Convert to Heightmap", DockSelectionRequirement.BRUSHES_ONLY):
-		return
-	var brushes: Array = []
-	for node in _selection_nodes:
-		if is_instance_valid(node) and level_root.is_brush_node(node):
-			brushes.append(node)
-	if brushes.is_empty():
-		level_root.emit_signal("user_message", "Select brushes first to convert to heightmap", 1)
-		return
-	var converter := HFBrushToHeightmap.new()
-	var settings := HFBrushToHeightmap.ConvertSettings.new()
-	if level_root.get("grid_snap") and level_root.grid_snap > 0:
-		settings.cell_size = level_root.grid_snap
-	if height_scale_spin:
-		settings.height_scale = height_scale_spin.value
-	var result := converter.convert(brushes, settings)
-	if result.error != "":
-		level_root.emit_signal("user_message", "Convert failed: " + result.error, 2)
-		return
-	# Attach the converted layer via paint_layers (HFPaintLayerManager)
-	if not level_root.get("paint_layers") or not level_root.paint_layers:
-		level_root.emit_signal("user_message", "Convert failed: no paint layer manager", 2)
-		return
-	var mgr: HFPaintLayerManager = level_root.paint_layers
-	# Inherit base_grid properties (origin, basis) and chunk_size from manager
-	# so the converted layer is spatially consistent with normal paint layers.
-	if mgr.base_grid:
-		var grid := mgr.base_grid.duplicate() as HFPaintGrid
-		if grid:
-			grid.layer_y = result.layer.grid.layer_y if result.layer.grid else 0.0
-			grid.cell_size = result.layer.grid.cell_size if result.layer.grid else grid.cell_size
-			result.layer.grid = grid
-	result.layer.chunk_size = mgr.chunk_size
-	result.layer.name = "Layer_%s" % str(result.layer.layer_id)
-	mgr.add_child(result.layer)
-	mgr.layers.append(result.layer)
-	mgr.active_layer_index = mgr.layers.size() - 1
-	# Notify listeners (tutorial wizard, external UI) of the layer change
-	if level_root.has_signal("paint_layer_changed"):
-		level_root.paint_layer_changed.emit(mgr.active_layer_index)
-	# Regenerate geometry so the new terrain appears immediately
-	if (
-		level_root.get("paint_system")
-		and level_root.paint_system.has_method("regenerate_paint_layers")
-	):
-		level_root.paint_system.regenerate_paint_layers()
-	level_root.emit_signal(
-		"user_message",
-		(
-			"Converted %d brushes to heightmap layer '%s'"
-			% [result.brush_count, result.layer.display_name]
-		),
-		0
-	)
-	_refresh_paint_layers()
-
-
-# ---------------------------------------------------------------------------
-# Scatter / foliage handlers
-# ---------------------------------------------------------------------------
+	HFDockPaintHandler.on_heightmap_convert(self)
 
 
 func _on_scatter_mesh_pick() -> void:
-	if not level_root:
-		return
-	# Reuse the terrain slot texture dialog for mesh picking
-	var dialog := EditorFileDialog.new()
-	dialog.file_mode = EditorFileDialog.FILE_MODE_OPEN_FILE
-	dialog.access = EditorFileDialog.ACCESS_RESOURCES
-	dialog.add_filter("*.tres,*.res,*.obj,*.glb,*.gltf", "Mesh Resources")
-	dialog.file_selected.connect(
-		func(path: String) -> void:
-			if is_instance_valid(self):
-				_scatter_mesh_path = path
-				if scatter_mesh_btn:
-					var fname := path.get_file()
-					scatter_mesh_btn.text = fname if fname != "" else "Pick Mesh..."
-			dialog.queue_free()
-	)
-	dialog.canceled.connect(func() -> void: dialog.queue_free())
-	add_child(dialog)
-	dialog.popup_centered(Vector2i(600, 400))
+	HFDockPaintHandler.on_scatter_mesh_pick(self)
 
 
 func _build_scatter_settings() -> HFScatterBrush.ScatterSettings:
-	var s := HFScatterBrush.ScatterSettings.new()
-	if _scatter_mesh_path != "" and ResourceLoader.exists(_scatter_mesh_path):
-		var res = load(_scatter_mesh_path)
-		if res is Mesh:
-			s.mesh = res
-	if scatter_density_spin:
-		s.density = scatter_density_spin.value
-	if scatter_radius_spin:
-		s.radius = scatter_radius_spin.value
-	if scatter_min_height_spin:
-		s.min_height = scatter_min_height_spin.value
-	if scatter_max_height_spin:
-		s.max_height = scatter_max_height_spin.value
-	if scatter_max_slope_spin:
-		s.max_slope = scatter_max_slope_spin.value
-	if scatter_scale_min_spin and scatter_scale_max_spin:
-		s.scale_range = Vector2(scatter_scale_min_spin.value, scatter_scale_max_spin.value)
-	if scatter_align_normal:
-		s.align_to_normal = scatter_align_normal.button_pressed
-	if scatter_random_rotation:
-		s.random_rotation = scatter_random_rotation.button_pressed
-	if scatter_shape_select:
-		s.shape = scatter_shape_select.get_selected_id()
-	if scatter_spline_width_spin:
-		s.spline_width = scatter_spline_width_spin.value
-	if scatter_preview_select:
-		s.preview_mode = scatter_preview_select.get_selected_id()
-	# Build spline points from selected node positions (in selection order)
-	if s.shape == HFScatterBrush.BrushShape.SPLINE:
-		var pts := PackedVector3Array()
-		for node in _selection_nodes:
-			if is_instance_valid(node) and node is Node3D:
-				pts.append(node.global_position)
-		s.spline_points = pts
-	return s
+	return HFDockPaintHandler.build_scatter_settings(self)
 
 
 func _get_active_paint_layer() -> HFPaintLayer:
-	if not level_root:
-		return null
-	if level_root.get("paint_layers") and level_root.paint_layers:
-		return level_root.paint_layers.get_active_layer()
-	return null
+	return HFDockPaintHandler.get_active_paint_layer(self)
 
 
 func _on_scatter_preview() -> void:
-	if not level_root:
-		return
-	if not _guard_selection_action("Scatter Preview", DockSelectionRequirement.NATIVE_ALLOWED):
-		return
-	var layer := _get_active_paint_layer()
-	if not layer:
-		level_root.emit_signal("user_message", "No active paint layer — add one first", 1)
-		return
-	var settings := _build_scatter_settings()
-	var brush := HFScatterBrush.new()
-	var result: HFScatterBrush.ScatterResult
-	if settings.shape == HFScatterBrush.BrushShape.CIRCLE:
-		# Use camera look-at point or scene center
-		var center := Vector3.ZERO
-		if _selection_nodes.size() > 0 and is_instance_valid(_selection_nodes[0]):
-			center = _selection_nodes[0].global_position
-		result = brush.scatter_circle(center, layer, settings)
-	else:
-		if settings.spline_points.size() < 2:
-			_scatter_clear_preview()
-			_scatter_last_result = []
-			level_root.emit_signal(
-				"user_message", "Spline scatter requires 2+ selected nodes to define the path", 1
-			)
-			return
-		result = brush.scatter_spline(layer, settings)
-
-	_scatter_last_result = result.transforms
-	# Build preview MultiMesh
-	_scatter_clear_preview()
-	var mm := brush.build_preview(result.transforms, settings)
-	if mm:
-		var mmi := MultiMeshInstance3D.new()
-		mmi.multimesh = mm
-		mmi.name = "_ScatterPreview"
-		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		var mat := StandardMaterial3D.new()
-		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		mat.vertex_color_use_as_albedo = true
-		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		mmi.material_override = mat
-		level_root.add_child(mmi)
-		_scatter_preview_node = mmi
-	var msg := "%d instances (%d filtered)" % [result.transforms.size(), result.rejected_count]
-	level_root.emit_signal("user_message", "Scatter preview: " + msg, 0)
+	HFDockPaintHandler.on_scatter_preview(self)
 
 
 func _on_scatter_commit() -> void:
-	if not level_root:
-		return
-	if not _guard_selection_action("Scatter Commit", DockSelectionRequirement.NATIVE_ALLOWED):
-		return
-	if _scatter_last_result.is_empty():
-		_on_scatter_preview()
-		if _scatter_last_result.is_empty():
-			level_root.emit_signal("user_message", "No scatter instances to commit", 1)
-			return
-	var settings := _build_scatter_settings()
-	if not settings.mesh:
-		level_root.emit_signal("user_message", "Pick a mesh first", 1)
-		return
-	var brush := HFScatterBrush.new()
-	_scatter_clear_preview()
-	var parent: Node3D = level_root
-	if level_root.get("generated_floors") and level_root.generated_floors:
-		parent = level_root.generated_floors.get_parent()
-	brush.commit(_scatter_last_result, settings, parent)
-	level_root.emit_signal(
-		"user_message", "Scattered %d instances" % _scatter_last_result.size(), 0
-	)
-	_scatter_last_result = []
+	HFDockPaintHandler.on_scatter_commit(self)
 
 
 func _on_scatter_clear() -> void:
-	_scatter_clear_preview()
-	_scatter_last_result = []
+	HFDockPaintHandler.on_scatter_clear(self)
 
 
 func _scatter_clear_preview() -> void:
-	if _scatter_preview_node and is_instance_valid(_scatter_preview_node):
-		if _scatter_preview_node.get_parent():
-			_scatter_preview_node.get_parent().remove_child(_scatter_preview_node)
-		_scatter_preview_node.queue_free()
-		_scatter_preview_node = null
+	HFDockPaintHandler.scatter_clear_preview(self)
 
 
 func _on_sculpt_tool_toggled(pressed: bool, tool_id: int) -> void:
-	if not level_root or not level_root.paint_tool:
-		return
-	# Unpress other sculpt buttons (radio behavior)
-	var btns = [_sculpt_raise_btn, _sculpt_lower_btn, _sculpt_smooth_btn, _sculpt_flatten_btn]
-	var ids = [
-		HFStroke.Tool.SCULPT_RAISE,
-		HFStroke.Tool.SCULPT_LOWER,
-		HFStroke.Tool.SCULPT_SMOOTH,
-		HFStroke.Tool.SCULPT_FLATTEN
-	]
-	if pressed:
-		for i in range(btns.size()):
-			if ids[i] != tool_id and btns[i]:
-				btns[i].set_pressed_no_signal(false)
-		level_root.paint_tool.tool = tool_id
-	else:
-		# If unpressing active sculpt, revert to PAINT
-		level_root.paint_tool.tool = HFStroke.Tool.PAINT
+	HFDockPaintHandler.on_sculpt_tool_toggled(self, pressed, tool_id)
 
 
 func _on_sculpt_strength_changed(value: float) -> void:
-	if level_root and level_root.paint_tool:
-		level_root.paint_tool.sculpt_strength = value
+	HFDockPaintHandler.on_sculpt_strength_changed(self, value)
 
 
 func _on_sculpt_radius_changed(value: float) -> void:
-	if level_root and level_root.paint_tool:
-		level_root.paint_tool.sculpt_radius = value
+	HFDockPaintHandler.on_sculpt_radius_changed(self, value)
 
 
 func _on_sculpt_falloff_changed(value: float) -> void:
-	if level_root and level_root.paint_tool:
-		level_root.paint_tool.sculpt_falloff = value
+	HFDockPaintHandler.on_sculpt_falloff_changed(self, value)
 
 
 func _on_height_scale_changed(value: float) -> void:
-	if not level_root:
-		return
-	level_root.set_heightmap_scale(value)
+	HFDockPaintHandler.on_height_scale_changed(self, value)
 
 
 func _on_layer_y_changed(value: float) -> void:
-	if not level_root:
-		return
-	level_root.set_layer_y(value)
+	HFDockPaintHandler.on_layer_y_changed(self, value)
 
 
 func _on_blend_strength_changed(value: float) -> void:
-	if not level_root or not level_root.paint_tool:
-		return
-	level_root.paint_tool.blend_strength = value
+	HFDockPaintHandler.on_blend_strength_changed(self, value)
 
 
 func _on_region_enable_toggled(enabled: bool) -> void:
-	if _region_settings_refreshing:
-		return
-	if not level_root:
-		return
-	level_root.set_region_streaming_enabled(enabled)
+	HFDockPaintHandler.on_region_enable_toggled(self, enabled)
 
 
 func _on_region_size_changed(value: float) -> void:
-	if _region_settings_refreshing:
-		return
-	if not level_root:
-		return
-	level_root.set_region_size_cells(int(value))
+	HFDockPaintHandler.on_region_size_changed(self, value)
 
 
 func _on_region_radius_changed(value: float) -> void:
-	if _region_settings_refreshing:
-		return
-	if not level_root:
-		return
-	level_root.set_region_streaming_radius(int(value))
+	HFDockPaintHandler.on_region_radius_changed(self, value)
 
 
 func _on_region_memory_changed(value: float) -> void:
-	if _region_settings_refreshing:
-		return
-	if not level_root:
-		return
-	level_root.set_region_memory_budget_mb(int(value))
+	HFDockPaintHandler.on_region_memory_changed(self, value)
 
 
 func _on_region_grid_toggled(enabled: bool) -> void:
-	if _region_settings_refreshing:
-		return
-	if not level_root:
-		return
-	level_root.set_region_show_grid(enabled)
+	HFDockPaintHandler.on_region_grid_toggled(self, enabled)
 
 
 func _on_blend_slot_selected(index: int) -> void:
-	if not level_root or not level_root.paint_tool or not blend_slot_select:
-		return
-	var slot_id = blend_slot_select.get_item_id(index)
-	level_root.paint_tool.blend_slot = int(slot_id)
+	HFDockPaintHandler.on_blend_slot_selected(self, index)
 
 
 func _on_terrain_slot_pressed(slot: int) -> void:
-	if not terrain_slot_texture_dialog:
-		return
-	_terrain_slot_pick_index = slot
-	terrain_slot_texture_dialog.popup_centered(Vector2i(600, 400))
+	HFDockPaintHandler.on_terrain_slot_pressed(self, slot)
 
 
 func _on_terrain_slot_texture_selected(path: String) -> void:
-	if _terrain_slot_pick_index < 0:
-		return
-	if not level_root or not level_root.paint_layers:
-		return
-	var layer = level_root.paint_layers.get_active_layer()
-	if not layer:
-		return
-	layer._ensure_terrain_slots()
-	layer.terrain_slot_paths[_terrain_slot_pick_index] = path
-	_refresh_terrain_slots()
-	level_root._regenerate_paint_layers()
+	HFDockPaintHandler.on_terrain_slot_texture_selected(self, path)
 
 
 func _on_terrain_slot_scale_changed(value: float, slot: int) -> void:
-	if _terrain_slot_refreshing:
-		return
-	if not level_root or not level_root.paint_layers:
-		return
-	var layer = level_root.paint_layers.get_active_layer()
-	if not layer:
-		return
-	layer._ensure_terrain_slots()
-	var current = float(layer.terrain_slot_uv_scales[slot])
-	if is_equal_approx(current, value):
-		return
-	layer.terrain_slot_uv_scales[slot] = float(value)
-	level_root._regenerate_paint_layers()
+	HFDockPaintHandler.on_terrain_slot_scale_changed(self, value, slot)
 
 
 func _refresh_terrain_slots() -> void:
-	_terrain_slot_refreshing = true
-	if not level_root or not level_root.paint_layers:
-		_set_terrain_slot_controls_enabled(false)
-		_terrain_slot_refreshing = false
-		return
-	var layer = level_root.paint_layers.get_active_layer()
-	if not layer:
-		_set_terrain_slot_controls_enabled(false)
-		_terrain_slot_refreshing = false
-		return
-	layer._ensure_terrain_slots()
-	_set_terrain_slot_controls_enabled(true)
-	for i in range(terrain_slot_buttons.size()):
-		var button = terrain_slot_buttons[i]
-		var scale = terrain_slot_scales[i]
-		if button:
-			var path = layer.terrain_slot_paths[i]
-			button.text = _terrain_slot_label(path)
-		if scale:
-			scale.value = float(layer.terrain_slot_uv_scales[i])
-	if blend_slot_select and level_root.paint_tool:
-		var slot = clamp(level_root.paint_tool.blend_slot, 1, 3)
-		_select_option_by_id(blend_slot_select, slot)
-	_terrain_slot_refreshing = false
+	HFDockPaintHandler.refresh_terrain_slots(self)
 
 
 func _terrain_slot_label(path: String) -> String:
-	if path == "":
-		return "Texture..."
-	return path.get_file()
+	return HFDockPaintHandler.terrain_slot_label(path)
 
 
 func _set_terrain_slot_controls_enabled(enabled: bool) -> void:
-	for button in terrain_slot_buttons:
-		if button:
-			button.disabled = not enabled
-	for spin in terrain_slot_scales:
-		if spin:
-			spin.editable = enabled
+	HFDockPaintHandler.set_terrain_slot_controls_enabled(self, enabled)
 
 
 func _on_material_selected(index: int) -> void:
