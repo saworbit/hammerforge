@@ -762,18 +762,21 @@ func test_nudge_keys_respect_selection_ownership_before_being_consumed():
 	# selections must pass through to Godot; HammerForge-owned shortcuts stay
 	# consumed even when a move becomes a no-op, so Godot cannot mutate them.
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
-	var keyboard_start := source.find("# Nudge keys")
-	var keyboard_end := source.find("# Grid snap size shortcuts", keyboard_start)
-	var keyboard_branch := source.substr(keyboard_start, keyboard_end - keyboard_start)
+	var keyboard_source := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_input_router.gd"
+	)
+	var keyboard_start := keyboard_source.find("# Nudge keys")
+	var keyboard_end := keyboard_source.find("# Grid snap size shortcuts", keyboard_start)
+	var keyboard_branch := keyboard_source.substr(keyboard_start, keyboard_end - keyboard_start)
 	assert_true(
 		keyboard_branch.contains('_guard_hammerforge_shortcut(root, false, 1, "Nudge")'),
 		"Viewport nudge must classify selection ownership first",
 	)
-	assert_true(keyboard_branch.contains("if nudge_guard != HF_SHORTCUT_APPLY:"))
+	assert_true(keyboard_branch.contains("nudge_guard != SHORTCUT_APPLY"))
 	assert_lt(
 		keyboard_branch.find("nudge_guard"), keyboard_branch.find("_nudge_selected(root, nudge)")
 	)
-	assert_true(keyboard_branch.contains("return EditorPlugin.AFTER_GUI_INPUT_STOP"))
+	assert_true(keyboard_branch.contains("return STOP"))
 
 	var shortcut_start := source.find("func _shortcut_input")
 	var shortcut_end := source.find("func _cancel_escape_step", shortcut_start)
