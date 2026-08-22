@@ -28,6 +28,7 @@ addons/hammerforge/
   plugin.gd              EditorPlugin entry point, input routing, sticky LevelRoot discovery
   plugin_commands.gd     Shared toolbar/palette/viewport/radial command dispatch
   plugin_input_router.gd Viewport keymap dispatch (delete/nudge/tools/paint/axis lock)
+  plugin_vertex_input.gd Vertex/edge pick, drag, merge, and split dispatch
   level_root.gd          Coordinator (~2,200 lines), delegates to subsystems
   input_state.gd         Drag/paint state machine (HFInputState)
   hf_selection_gesture.gd Select-mode LMB arbiter (native object selection, face marquee, gizmos)

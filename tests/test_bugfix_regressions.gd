@@ -283,12 +283,10 @@ func test_canceled_vertex_release_is_classified_separately_from_commit_release()
 
 
 func test_canceled_vertex_release_restores_before_the_normal_commit_path():
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
-	var handler_start := source.find("func _handle_vertex_input")
-	var handler_end := source.find("func _commit_vertex_move", handler_start)
-	assert_true(handler_start >= 0 and handler_end > handler_start)
-	var handler := source.substr(handler_start, handler_end - handler_start)
-	var canceled_gate := handler.find("if is_canceled_vertex_drag_release(event)")
+	var plugin_source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
+	assert_true(plugin_source.contains("HFPluginVertexInput.handle"))
+	var handler := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_vertex_input.gd")
+	var canceled_gate := handler.find("if plugin.is_canceled_vertex_drag_release(event)")
 	var cancel_call := handler.find("vs.cancel_drag()", canceled_gate)
 	var normal_end := handler.find("var snapshots = vs.end_drag()", canceled_gate)
 	assert_true(
@@ -377,14 +375,14 @@ func test_carve_thin_overlap_single_axis_produces_no_pieces():
 
 
 func test_plugin_uses_vertex_system_projection_and_absolute_updates():
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
-	assert_true(source.length() > 0, "plugin.gd should be readable")
+	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_vertex_input.gd")
+	assert_true(source.length() > 0, "plugin_vertex_input.gd should be readable")
 	var motion_block := _vertex_motion_source_block(source)
 	var compact_block := _compact_source(motion_block)
 
 	assert_true(
 		compact_block.contains(
-			"vs.project_drag_screen_delta(cam,_vertex_drag_start,pos,root.input_state.axis_lock)"
+			"vs.project_drag_screen_delta(cam,plugin._vertex_drag_start,pos,root.input_state.axis_lock)"
 		),
 		"Vertex motion must delegate view and axis projection to HFVertexSystem"
 	)
@@ -403,7 +401,7 @@ func test_plugin_uses_vertex_system_projection_and_absolute_updates():
 
 
 func test_plugin_resets_absolute_drag_when_projection_is_invalid():
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
+	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_vertex_input.gd")
 	var compact_block := _compact_source(_vertex_motion_source_block(source))
 	var valid_update := compact_block.find("vs.update_drag_absolute(delta)")
 	var invalid_else := compact_block.find("else:", valid_update)
@@ -418,7 +416,7 @@ func test_plugin_resets_absolute_drag_when_projection_is_invalid():
 
 
 func test_vertex_projection_uses_picked_world_anchor_for_vertices_and_edges():
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
+	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_vertex_input.gd")
 	assert_true(
 		source.contains("vs.begin_drag(pick.world_pos)"),
 		"Vertex drags must capture the picked vertex as their projection anchor"
@@ -961,7 +959,7 @@ func _vertex_motion_source_block(source: String) -> String:
 	var block_start := source.find("var projection: Dictionary = vs.project_drag_screen_delta")
 	if block_start < 0:
 		return ""
-	var block_end := source.find("\n\t\t_update_vertex_overlay(root, cam)", block_start)
+	var block_end := source.find("plugin._update_vertex_overlay(root, cam)", block_start)
 	if block_end < 0:
 		return source.substr(block_start)
 	return source.substr(block_start, block_end - block_start)
