@@ -38,6 +38,7 @@ static func _defaults() -> Dictionary:
 		"last_tool_id": 0,
 		"show_hud": true,
 		"show_welcome": true,
+		"power_user_overlays": false,
 		"hints_dismissed": {},
 	}
 
@@ -92,6 +93,11 @@ func add_recent_file(path: String) -> void:
 ## Get the recent files list.
 func get_recent_files() -> Array:
 	return data.get("recent_files", [])
+
+
+## Radial menu, coach marks, and operation replay. Off for the core loop.
+func is_power_user_overlays_enabled() -> bool:
+	return bool(get_pref("power_user_overlays", false))
 
 
 ## Check if a contextual hint has been dismissed.

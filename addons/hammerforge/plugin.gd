@@ -60,6 +60,7 @@ var _focus_recovery_queued := false
 var _applying_hf_selection := false
 var _face_mode_saved_object_selection: Array = []
 const SELECT_DRAG_THRESHOLD := 6.0
+const POWER_USER_OVERLAYS_HINT := "Enable Power-user overlays in Test → Settings"
 var last_3d_camera: Camera3D = null
 var last_3d_mouse_pos := Vector2.ZERO
 var _rmb_camera_navigation := RmbCameraNavigationSession.new()
@@ -205,6 +206,11 @@ func _enter_tree():
 			dock.connect("bake_state_changed", Callable(self, "_on_dock_bake_state_changed"))
 		if dock.has_signal("command_palette_requested"):
 			dock.connect("command_palette_requested", Callable(self, "_on_toggle_hotkey_palette"))
+		if dock.has_signal("power_user_overlays_changed"):
+			dock.connect(
+				"power_user_overlays_changed",
+				Callable(self, "_on_dock_power_user_overlays_changed")
+			)
 
 	hud = preload("shortcut_hud.tscn").instantiate()
 	if base_control:
@@ -236,21 +242,8 @@ func _enter_tree():
 	_selection_filter = HFSelectionFilter.new()
 	_selection_filter.filter_applied.connect(_on_selection_filter_applied)
 	get_editor_interface().get_base_control().add_child(_selection_filter)
-	# Coach marks (first-use tool guides)
-	_coach_marks = HFCoachMarks.new()
-	if base_control:
-		_coach_marks.theme = base_control.theme
-	_coach_marks.set_user_prefs(_user_prefs)
-	_coach_marks.guide_dismissed.connect(_on_coach_mark_dismissed)
-	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, _coach_marks)
-	# Operation replay timeline
-	_operation_replay = HFOperationReplay.new()
-	if base_control:
-		_operation_replay.theme = base_control.theme
-	_operation_replay.replay_requested.connect(_on_replay_requested)
-	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, _operation_replay)
-	if dock:
-		dock.set_operation_replay(_operation_replay)
+	if should_install_power_user_overlays(_user_prefs):
+		_install_power_user_overlays()
 	# Space-key context menu (PopupMenu — added as child of base_control, not container)
 	_viewport_context_menu = HFViewportContextMenu.new()
 	if base_control:
@@ -258,12 +251,6 @@ func _enter_tree():
 	_viewport_context_menu.action_requested.connect(_on_viewport_action)
 	if base_control:
 		base_control.add_child(_viewport_context_menu)
-	# Backtick-triggered radial menu
-	_radial_menu = HFRadialMenu.new()
-	if base_control:
-		_radial_menu.theme = base_control.theme
-	_radial_menu.action_selected.connect(_on_radial_action)
-	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, _radial_menu)
 	# Quick property popup (double-tap G/B/R)
 	_quick_property = HFQuickProperty.new()
 	if base_control:
@@ -357,6 +344,13 @@ func _exit_tree():
 		):
 			dock.disconnect(
 				"command_palette_requested", Callable(self, "_on_toggle_hotkey_palette")
+			)
+		if dock.is_connected(
+			"power_user_overlays_changed", Callable(self, "_on_dock_power_user_overlays_changed")
+		):
+			dock.disconnect(
+				"power_user_overlays_changed",
+				Callable(self, "_on_dock_power_user_overlays_changed")
 			)
 		remove_control_from_docks(dock)
 		if is_instance_valid(dock):
@@ -665,6 +659,80 @@ static func should_suppress_empty_selection(
 	# Deprecated compatibility helper. EditorSelection is now authoritative;
 	# retaining a hidden cache after a visible deselect is unsafe and surprising.
 	return false
+
+
+static func power_user_overlay_unavailable_message() -> String:
+	return POWER_USER_OVERLAYS_HINT
+
+
+static func should_install_power_user_overlays(prefs) -> bool:
+	if prefs == null:
+		return false
+	if prefs.has_method("is_power_user_overlays_enabled"):
+		return bool(prefs.is_power_user_overlays_enabled())
+	return bool(prefs.get_pref("power_user_overlays", false))
+
+
+func _toast_power_user_overlay_hint() -> void:
+	if dock and dock.has_method("show_toast"):
+		dock.show_toast(power_user_overlay_unavailable_message(), 0)
+
+
+func _on_dock_power_user_overlays_changed(enabled: bool) -> void:
+	if enabled:
+		_install_power_user_overlays()
+	else:
+		_teardown_power_user_overlays()
+
+
+func _install_power_user_overlays() -> void:
+	if _coach_marks == null:
+		_coach_marks = HFCoachMarks.new()
+		if base_control:
+			_coach_marks.theme = base_control.theme
+		_coach_marks.set_user_prefs(_user_prefs)
+		_coach_marks.guide_dismissed.connect(_on_coach_mark_dismissed)
+		add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, _coach_marks)
+	if _operation_replay == null:
+		_operation_replay = HFOperationReplay.new()
+		if base_control:
+			_operation_replay.theme = base_control.theme
+		_operation_replay.replay_requested.connect(_on_replay_requested)
+		add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, _operation_replay)
+		if dock:
+			dock.set_operation_replay(_operation_replay)
+	if _radial_menu == null:
+		_radial_menu = HFRadialMenu.new()
+		if base_control:
+			_radial_menu.theme = base_control.theme
+		_radial_menu.action_selected.connect(_on_radial_action)
+		add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, _radial_menu)
+
+
+func _teardown_power_user_overlays() -> void:
+	if _coach_marks:
+		if is_instance_valid(_coach_marks):
+			_coach_marks.guide_dismissed.disconnect(_on_coach_mark_dismissed)
+		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _coach_marks)
+		if is_instance_valid(_coach_marks):
+			_coach_marks.queue_free()
+		_coach_marks = null
+	if _operation_replay:
+		if is_instance_valid(_operation_replay):
+			_operation_replay.replay_requested.disconnect(_on_replay_requested)
+		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _operation_replay)
+		if is_instance_valid(_operation_replay):
+			_operation_replay.queue_free()
+		_operation_replay = null
+		if dock:
+			dock.set_operation_replay(null)
+	if _radial_menu:
+		if is_instance_valid(_radial_menu):
+			_radial_menu.action_selected.disconnect(_on_radial_action)
+		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _radial_menu)
+		if is_instance_valid(_radial_menu):
+			_radial_menu.queue_free()
+		_radial_menu = null
 
 
 func _on_editor_selection_changed() -> void:
@@ -1622,6 +1690,8 @@ func _handle_keyboard_input(
 	if event.keycode == KEY_T and event.ctrl_pressed and event.shift_pressed:
 		if _operation_replay and is_instance_valid(_operation_replay):
 			_operation_replay.toggle_visible()
+		else:
+			_toast_power_user_overlay_hint()
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 
 	# External tool keyboard dispatch first — external tools can override keys
@@ -1646,6 +1716,9 @@ func _handle_keyboard_input(
 			if root.input_state.is_idle() and not has_active_ext:
 				_radial_menu.show_at(_get_current_overlay_mouse_pos())
 				return EditorPlugin.AFTER_GUI_INPUT_STOP
+		else:
+			_toast_power_user_overlay_hint()
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
 
 	# Double-tap detection for quick property popups (G G, B B, R R)
 	# Must come before keymap matches so the second tap is intercepted.

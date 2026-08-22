@@ -70,7 +70,7 @@ func place_brush(
 		_add_pending_cut(brush)
 	else:
 		_add_brush_to_draft(brush)
-	root.brush_manager.add_brush(brush)
+	_legacy_manager_add(brush)
 	root._record_last_brush(brush.global_position)
 	return true
 
@@ -110,8 +110,8 @@ func create_brush_from_info(info: Dictionary) -> Node:
 		and not (operation == CSGShape3D.OPERATION_SUBTRACTION and pending)
 	):
 		brush.material_override = info["material"]
-	if root.brush_manager and not committed:
-		root.brush_manager.add_brush(brush)
+	if not committed:
+		_legacy_manager_add(brush)
 	root._record_last_brush(brush.global_position)
 	var brush_id = info.get("brush_id", _next_brush_id())
 	brush.brush_id = str(brush_id)
@@ -153,8 +153,7 @@ func delete_brush(brush: Node, free: bool = true) -> void:
 			root.face_selection.erase(key)
 			_apply_face_selection()
 	_brush_count = max(0, _brush_count - 1)
-	if root.brush_manager:
-		root.brush_manager.remove_brush(brush)
+	_legacy_manager_remove(brush)
 	if brush.get_parent():
 		brush.get_parent().remove_child(brush)
 	if free:
@@ -208,8 +207,8 @@ func restore_brush(brush: Node, parent: Node, owner: Node, index: int) -> void:
 		parent.move_child(brush, index)
 	if owner:
 		brush.owner = owner
-	if root.brush_manager and brush is Node3D:
-		root.brush_manager.add_brush(brush)
+	if brush is Node3D:
+		_legacy_manager_add(brush)
 
 
 # ---------------------------------------------------------------------------
@@ -238,6 +237,28 @@ func _find_brush_by_id(brush_id: String) -> Node:
 
 func find_brush_by_id(brush_id: String) -> Node:
 	return _find_brush_by_id(brush_id)
+
+
+func get_cached_brushes() -> Array:
+	var out: Array = []
+	for brush in _brush_cache.values():
+		if is_instance_valid(brush):
+			out.append(brush)
+	return out
+
+
+func get_cached_brush_count() -> int:
+	return get_cached_brushes().size()
+
+
+func _legacy_manager_add(brush: Node) -> void:
+	if root and root.brush_manager and brush:
+		root.brush_manager.add_brush(brush)
+
+
+func _legacy_manager_remove(brush: Node) -> void:
+	if root and root.brush_manager and brush:
+		root.brush_manager.remove_brush(brush)
 
 
 func get_brush_info_from_node(brush: Node) -> Dictionary:
@@ -606,8 +627,7 @@ func _clear_applied_cuts(targets: Array) -> void:
 			if root.commit_freeze:
 				_stash_committed_cut(child)
 			else:
-				if root.brush_manager:
-					root.brush_manager.remove_brush(child)
+				_legacy_manager_remove(child)
 				# Detach before returning so post-action snapshots and a scene
 				# save in this frame cannot capture a cutter already committed.
 				root.draft_brushes_node.remove_child(child)
@@ -617,8 +637,7 @@ func _clear_applied_cuts(targets: Array) -> void:
 func _stash_committed_cut(brush: DraftBrush) -> void:
 	if not root.committed_node:
 		return
-	if root.brush_manager:
-		root.brush_manager.remove_brush(brush)
+	_legacy_manager_remove(brush)
 	if brush.get_parent():
 		brush.get_parent().remove_child(brush)
 	root.committed_node.add_child(brush)
@@ -644,8 +663,7 @@ func restore_committed_cuts() -> void:
 			)
 			child.set_meta("committed_cut", false)
 			root._assign_owner(child)
-			if root.brush_manager:
-				root.brush_manager.add_brush(child)
+			_legacy_manager_add(child)
 			restored += 1
 	if root.draft_brushes_node:
 		root.draft_brushes_node.visible = true

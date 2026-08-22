@@ -388,6 +388,9 @@ func build(parent: Control) -> void:
 	dock.show_hud = dock._make_check("Show HUD", true)
 	stc.add_child(dock.show_hud)
 
+	dock.power_user_overlays = dock._make_check("Power-user overlays", false)
+	stc.add_child(dock.power_user_overlays)
+
 	dock.show_grid = dock._make_check("Show Grid", false)
 	stc.add_child(dock.show_grid)
 
@@ -400,7 +403,7 @@ func build(parent: Control) -> void:
 	dock._show_io_lines = dock._make_check("Show I/O Lines", false)
 	stc.add_child(dock._show_io_lines)
 
-	dock._show_subtract_preview = dock._make_check("Subtract Preview", false)
+	dock._show_subtract_preview = dock._make_check("Subtract Preview (AABB approx)", false)
 	stc.add_child(dock._show_subtract_preview)
 
 	dock.autosave_enabled = dock._make_check("Enable Autosave", true)
@@ -534,6 +537,8 @@ func connect_signals() -> void:
 		dock.save_preset_btn.pressed.connect(dock._on_save_preset)
 	if dock.show_hud:
 		dock.show_hud.toggled.connect(dock._on_show_hud_toggled)
+	if dock.power_user_overlays:
+		dock.power_user_overlays.toggled.connect(dock._on_power_user_overlays_toggled)
 	if dock.show_grid:
 		dock.show_grid.toggled.connect(dock._on_show_grid_toggled)
 	if dock.follow_grid:

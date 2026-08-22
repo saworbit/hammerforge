@@ -294,6 +294,15 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - **dock.gd reduction**: 7,001 → 6,692 lines (–309, –4.4%). plugin.gd: –4 lines (responsibility separation rather than LOC).
 - **75+ new test cases across 8 files**: `test_ui_factory`, `test_hf_validation`, `test_hf_system`, `test_hf_undo_nav`, `test_entity_prop_utils`, `test_hf_tooltip_text`, `test_hf_dialog_manager`, `test_hf_editor_theme`.
 
+## Done (Core-Loop Freeze — August 2026)
+- Default product is Draw → material → entity → bake → Test Level.
+- Power-user overlays (radial menu, coach marks, operation replay) are opt-in.
+- Brush cache is the brush-list authority; `BrushManager` writes are null-safe.
+- Dead code removed: welcome panel, unused `BrushPrefab`, `debug_heightmap`, archived quadrant view.
+- Subtract preview labeled as AABB approximation.
+- Core characterization tests added for `HFBrushSystem`, `HFPaintSystem`, overlay prefs, and empty baker merge.
+- Docs and `plugin.cfg` updated to match the code. Wave 3 features stay deferred.
+
 ## Future (Wave 3 -- Polish)
 - Multiple simultaneous cordons.
 - Multi-tool presets for common workflows.

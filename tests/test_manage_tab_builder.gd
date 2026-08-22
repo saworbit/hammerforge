@@ -94,6 +94,17 @@ func test_advanced_bake_keeps_all_secondary_controls_collapsed() -> void:
 	)
 
 
+func test_settings_keep_power_user_overlays_opt_in() -> void:
+	var settings := _get_section("Settings")
+	assert_not_null(settings)
+	assert_false(settings.is_expanded(), "Settings stay collapsed so Test Level leads")
+	assert_not_null(dock.power_user_overlays)
+	assert_eq(dock.power_user_overlays.text, "Power-user overlays")
+	assert_false(dock.power_user_overlays.button_pressed)
+	assert_true(_is_descendant_of(dock.power_user_overlays, settings))
+	assert_string_contains(dock._show_subtract_preview.text, "AABB")
+
+
 func test_actions_and_file_are_collapsed_by_default() -> void:
 	var actions := _get_section("Actions")
 	var file := _get_section("File")
@@ -116,6 +127,7 @@ func test_existing_primary_and_advanced_signals_remain_connected() -> void:
 	assert_true(dock.quick_play_camera_btn.pressed.is_connected(dock._on_quick_play_from_camera))
 	assert_true(dock.quick_play_area_btn.pressed.is_connected(dock._on_quick_play_selected_area))
 	assert_true(dock.export_playtest_btn.pressed.is_connected(dock._on_export_playtest))
+	assert_true(dock.power_user_overlays.toggled.is_connected(dock._on_power_user_overlays_toggled))
 
 
 func test_primary_quick_play_is_disabled_and_explained_without_a_level_root() -> void:

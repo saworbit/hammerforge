@@ -12,7 +12,7 @@ This document describes HammerForge's architecture and data flow.
 
 ## Architecture
 
-HammerForge uses a coordinator + subsystems pattern. `LevelRoot` is a thin coordinator that owns all container nodes, exported properties, and signals, and delegates work to 16 `RefCounted` subsystem classes. Each subsystem receives a reference to `LevelRoot` in its constructor.
+HammerForge uses a coordinator + subsystems pattern. `LevelRoot` is a coordinator (~2,200 lines) that owns all container nodes, exported properties, and signals, and delegates work to subsystem classes. Each subsystem receives a reference to `LevelRoot` in its constructor. Default editor UX is the core loop (Draw → material → entity → bake → Test Level); radial menu, coach marks, and operation replay install only when `power_user_overlays` is enabled.
 
 ### Signals (Central Registry)
 All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.emit(...)`. UI and other consumers subscribe instead of polling.
@@ -73,11 +73,10 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 
 | Script | Role |
 |--------|------|
-| `hf_tutorial_wizard.gd` | Interactive 5-step tutorial with signal-driven auto-advance and persistent progress |
+| `hf_tutorial_wizard.gd` | First-run Draw → Test Level guide with signal-driven auto-advance |
 | `hf_shortcut_dialog.gd` | Searchable shortcut reference dialog (filterable Tree with categories) |
 | `hf_prefab_library.gd` | Prefab library dock section (search, tags, variants, drag-drop, context menu) |
 | `hf_prefab_overlay.gd` | Prefab ghost overlay (wireframe bounding box + override markers on hover) |
-| `hf_welcome_panel.gd` | Legacy welcome panel (replaced by tutorial wizard) |
 | `hf_toast.gd` | Toast notification system (auto-fading stacked messages) |
 | `hf_material_browser.gd` | Visual material browser (thumbnail grid, search, filters, favorites, drag-drop) |
 | `paint_tab_builder.gd` | Builds Paint tab sections + signal connections |

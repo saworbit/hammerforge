@@ -15,7 +15,11 @@ const TEXTS := {
 	"show_grid": "Show editor grid in 3D viewport",
 	"follow_grid": "Grid follows last placed brush position",
 	"show_hud": "Show keyboard shortcut overlay in viewport",
+	"power_user_overlays":
+	"Radial menu, coach marks, and operation replay\nOff by default so Draw → Bake → Test Level stays obvious",
 	"debug_logs": "Print debug info to Output panel",
+	"_show_subtract_preview":
+	"Show AABB overlap between subtract and additive brushes\nThis is an approximation, not live CSG",
 	# --- Build tab: brush size & shape ---
 	"size_x": "Brush width (X axis) in units",
 	"size_y": "Brush height (Y axis) in units",

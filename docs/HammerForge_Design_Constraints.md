@@ -40,7 +40,7 @@ This document makes the current tradeoffs explicit so level designers and develo
 - The subtract preview system does not render intersections for prefab preview — only placed brushes.
 
 ## Subtract Preview
-- Subtract preview shows wireframe AABB intersections, not true CSG geometry. It is an approximation that helps visualize where subtractive brushes overlap with additive ones.
+- Subtract preview shows wireframe AABB intersections, not true CSG geometry. The Test → Settings checkbox is labeled **Subtract Preview (AABB approx)** so this is visible in the editor, not only in this document.
 - The preview is debounced (0.15s) to avoid rebuilding on every frame during rapid edits.
 - Maximum 50 intersection overlays are rendered simultaneously. Beyond that, intersections are silently dropped.
 - The preview uses `ImmediateMesh` with `PRIMITIVE_LINES` — zero GPU memory allocation beyond vertex buffers.
