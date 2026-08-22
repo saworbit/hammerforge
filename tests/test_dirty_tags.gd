@@ -215,6 +215,7 @@ func test_serialized_brushes_bootstrap_unique_ids_live_index_and_committed_resto
 
 	add_child_autoqfree(production_root)
 	assert_eq(production_root.get_live_brush_count(), 2)
+	assert_eq(production_root.brush_system.get_cached_brush_count(), 2)
 	assert_eq(production_root.brush_manager.brushes.size(), 2)
 	assert_ne(first.brush_id, duplicate.brush_id)
 	assert_ne(first.brush_id, frozen.brush_id)
@@ -232,9 +233,22 @@ func test_serialized_brushes_bootstrap_unique_ids_live_index_and_committed_resto
 
 	production_root.restore_committed_cuts()
 	assert_eq(production_root.get_live_brush_count(), 3)
+	assert_eq(production_root.brush_system.get_cached_brush_count(), 3)
 	assert_eq(production_root.brush_manager.brushes.size(), 3)
 	assert_same(production_root.find_brush_by_id(frozen.brush_id), frozen)
 	assert_eq(production_root.displacement_system._get_all_brushes().size(), 3)
+
+
+func test_delete_brushes_by_id_coalesces_selection_changed():
+	var production_root := _make_production_root()
+	_make_production_brush(production_root, "batch_a")
+	_make_production_brush(production_root, "batch_b")
+	var selection_emits: Array = []
+	production_root.selection_changed.connect(func(ids): selection_emits.append(ids))
+	production_root.delete_brushes_by_id(["batch_a", "batch_b"])
+	assert_eq(selection_emits.size(), 1, "Multi-brush delete must not storm the dock")
+	assert_eq(production_root.get_live_brush_count(), 0)
+	assert_eq(production_root.brush_system.get_cached_brush_count(), 0)
 
 
 func test_nudge_and_override_material_tag_only_real_changes():

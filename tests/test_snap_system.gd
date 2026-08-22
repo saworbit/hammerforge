@@ -59,6 +59,7 @@ func test_default_mode_is_grid():
 	assert_true(snap.is_mode_on(HFSnapSystem.SnapMode.GRID))
 	assert_false(snap.is_mode_on(HFSnapSystem.SnapMode.VERTEX))
 	assert_false(snap.is_mode_on(HFSnapSystem.SnapMode.CENTER))
+	assert_false(snap.is_mode_on(HFSnapSystem.SnapMode.EDGE))
 
 
 func test_set_mode_on_off():
@@ -119,6 +120,15 @@ func test_vertex_snap_threshold():
 # ===========================================================================
 # Center snap
 # ===========================================================================
+
+
+func test_edge_snap_to_midpoint():
+	snap.set_mode(HFSnapSystem.SnapMode.EDGE, true)
+	snap.set_mode(HFSnapSystem.SnapMode.GRID, false)
+	# Brush at origin, size 32 — +X face vertical edge midpoint at (16, 0, 16)
+	_make_brush(Vector3.ZERO, Vector3(32, 32, 32), "e1")
+	var result = snap.snap_point(Vector3(16.4, 0.3, 16.2), 0.0)
+	assert_eq(result, Vector3(16, 0, 16))
 
 
 func test_center_snap():

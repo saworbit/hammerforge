@@ -1,5 +1,6 @@
 extends GutTest
 
+const MapIO = preload("res://addons/hammerforge/map_io.gd")
 const HFMapAdapter = preload("res://addons/hammerforge/map_adapters/hf_map_adapter.gd")
 const HFMapQuake = preload("res://addons/hammerforge/map_adapters/hf_map_quake.gd")
 const HFMapValve220 = preload("res://addons/hammerforge/map_adapters/hf_map_valve220.gd")
@@ -197,3 +198,27 @@ func test_valve220_fmt_float_integer():
 func test_valve220_fmt_float_fractional():
 	var result = HFMapValve220._fmt_float(0.333)
 	assert_true(result.begins_with("0.33"))
+
+
+func test_parse_map_text_worldspawn_and_point_entity():
+	var map_text := (
+		"{\n"
+		+ '"classname" "worldspawn"\n'
+		+ "{\n"
+		+ "( 0 0 0 ) ( 64 0 0 ) ( 64 64 0 ) brick 0 0 0 1 1\n"
+		+ "( 0 0 16 ) ( 64 64 16 ) ( 64 0 16 ) brick 0 0 0 1 1\n"
+		+ "}\n"
+		+ "}\n"
+		+ "{\n"
+		+ '"classname" "light"\n'
+		+ '"origin" "32 32 8"\n'
+		+ "}\n"
+	)
+	var parsed: Dictionary = MapIO.parse_map_text(map_text)
+	assert_eq(
+		(parsed.get("brushes", []) as Array).size(), 1, "Worldspawn brush becomes authored geometry"
+	)
+	var entities: Array = parsed.get("entities", [])
+	assert_eq(entities.size(), 1, "Point entities stay in the entity list")
+	assert_eq(entities[0]["classname"], "light")
+	assert_eq(str(entities[0]["properties"]["origin"]), "32 32 8")

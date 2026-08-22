@@ -960,9 +960,11 @@ func create_brush_from_info(info: Dictionary) -> Node:
 
 
 func create_brushes_from_infos(infos: Array) -> void:
+	begin_signal_batch()
 	for info in infos:
 		if info is Dictionary:
 			brush_system.create_brush_from_info(info)
+	end_signal_batch()
 
 
 func delete_brush(brush: Node, free: bool = true) -> void:
@@ -974,8 +976,10 @@ func delete_brush_by_id(brush_id: String) -> HFOpResult:
 
 
 func delete_brushes_by_id(brush_ids: Array) -> void:
+	begin_signal_batch()
 	for brush_id in brush_ids:
 		brush_system.delete_brush_by_id(str(brush_id))
+	end_signal_batch()
 
 
 func duplicate_brush(brush: Node) -> Node:
@@ -983,12 +987,16 @@ func duplicate_brush(brush: Node) -> Node:
 
 
 func nudge_brushes_by_id(brush_ids: Array, offset: Vector3) -> void:
+	begin_signal_batch()
 	brush_system.nudge_brushes_by_id(brush_ids, offset)
+	end_signal_batch()
 
 
 func delete_managed_nodes(brush_ids: Array, entity_paths: Array) -> void:
+	begin_signal_batch()
 	delete_brushes_by_id(brush_ids)
 	delete_entities_by_paths(entity_paths)
+	end_signal_batch()
 
 
 func create_managed_duplicates(brush_infos: Array, entity_infos: Array) -> void:

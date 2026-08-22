@@ -14,9 +14,5 @@ func remove_brush(brush: Node3D) -> void:
 
 
 func clear_brushes() -> void:
-	for brush in brushes:
-		if brush.is_inside_tree():
-			if brush.get_parent():
-				brush.get_parent().remove_child(brush)
-			brush.queue_free()
+	# List mirror only. HFBrushSystem owns node lifetime.
 	brushes.clear()
