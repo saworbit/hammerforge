@@ -35,6 +35,7 @@ const EntityTabBuilder = preload("ui/entity_tab_builder.gd")
 const ManageTabBuilder = preload("ui/manage_tab_builder.gd")
 const SelectionToolsBuilder = preload("ui/selection_tools_builder.gd")
 const HFDockPaintHandler = preload("dock_paint_handler.gd")
+const HFDockBrushHandler = preload("dock_brush_handler.gd")
 
 const PRESET_MENU_RENAME := 0
 const PRESET_MENU_DELETE := 1
@@ -1897,220 +1898,39 @@ func _try_undoable_action(action_name: String, method_name: String, args: Array 
 
 
 func _on_disp_create() -> void:
-	if not level_root:
-		return
-	if not _guard_selection_action("Create Displacement", DockSelectionRequirement.BRUSHES_ONLY):
-		return
-	var info: Dictionary = _get_selected_face_info()
-	if info.is_empty():
-		show_toast("Select a quad face first", 1)
-		return
-	var power: int = int(_disp_power_spin.value) if _disp_power_spin else 3
-	var ok: bool = _try_undoable_action(
-		"Create Displacement", "create_displacement", [info["brush_id"], info["face_index"], power]
-	)
-	if ok:
-		show_toast("Displacement created (power %d)" % power, 0)
-	else:
-		show_toast("Failed — face must be a quad (4 vertices)", 2)
+	HFDockBrushHandler.on_disp_create(self)
 
 
 func _on_disp_destroy() -> void:
-	if not level_root:
-		return
-	if not _guard_selection_action("Destroy Displacement", DockSelectionRequirement.BRUSHES_ONLY):
-		return
-	var info: Dictionary = _get_selected_face_info()
-	if info.is_empty():
-		show_toast("Select a displaced face first", 1)
-		return
-	var ok: bool = _try_undoable_action(
-		"Destroy Displacement", "destroy_displacement", [info["brush_id"], info["face_index"]]
-	)
-	if ok:
-		show_toast("Displacement removed", 0)
-	else:
-		show_toast("Face has no displacement to remove", 2)
+	HFDockBrushHandler.on_disp_destroy(self)
 
 
 func _on_disp_elevation_changed(value: float) -> void:
-	if not level_root:
-		return
-	if not _guard_selection_action("Edit Displacement", DockSelectionRequirement.BRUSHES_ONLY):
-		return
-	var info: Dictionary = _get_selected_face_info()
-	if info.is_empty():
-		return
-	if not _selected_face_has_displacement(info):
-		return
-	var brush_id: String = info["brush_id"]
-	var face_idx: int = info["face_index"]
-	HFUndoHelper.commit(
-		undo_redo,
-		level_root,
-		"Set Displacement Elevation",
-		"set_displacement_elevation",
-		[brush_id, face_idx, value],
-		false,
-		Callable(self, "record_history"),
-		"disp_elevation_%s_%d" % [brush_id, face_idx]
-	)
+	HFDockBrushHandler.on_disp_elevation_changed(self, value)
 
 
 func _on_disp_smooth() -> void:
-	if not level_root:
-		return
-	if not _guard_selection_action("Smooth Displacement", DockSelectionRequirement.BRUSHES_ONLY):
-		return
-	var info: Dictionary = _get_selected_face_info()
-	if info.is_empty():
-		show_toast("Select a displaced face first", 1)
-		return
-	var strength: float = _disp_strength_spin.value if _disp_strength_spin else 0.5
-	var ok: bool = _try_undoable_action(
-		"Smooth Displacement",
-		"smooth_displacement",
-		[info["brush_id"], info["face_index"], strength]
-	)
-	if ok:
-		show_toast("Displacement smoothed", 0)
-	else:
-		show_toast("Smooth failed — face has no displacement", 2)
+	HFDockBrushHandler.on_disp_smooth(self)
 
 
 func _on_disp_noise() -> void:
-	if not level_root:
-		return
-	if not _guard_selection_action("Noise Displacement", DockSelectionRequirement.BRUSHES_ONLY):
-		return
-	var info: Dictionary = _get_selected_face_info()
-	if info.is_empty():
-		show_toast("Select a displaced face first", 1)
-		return
-	var scale: float = _disp_strength_spin.value if _disp_strength_spin else 1.0
-	var ok: bool = _try_undoable_action(
-		"Noise Displacement", "noise_displacement", [info["brush_id"], info["face_index"], scale]
-	)
-	if ok:
-		show_toast("Noise applied to displacement", 0)
-	else:
-		show_toast("Noise failed — face has no displacement", 2)
+	HFDockBrushHandler.on_disp_noise(self)
 
 
 func _on_disp_sew() -> void:
-	if not level_root:
-		return
-	# Capture state, execute, then commit undo only if vertices were actually sewn.
-	var pre_state: Dictionary = (
-		level_root.capture_state() if level_root.has_method("capture_state") else {}
-	)
-	var count: int = level_root.sew_all_displacements()
-	if count > 0 and undo_redo and not pre_state.is_empty():
-		var post_state: Dictionary = level_root.capture_state()
-		undo_redo.create_action("Sew Displacements", 0, null, false)
-		undo_redo.add_do_method(level_root, "restore_state", post_state)
-		undo_redo.add_undo_method(level_root, "restore_state", pre_state)
-		undo_redo.commit_action(false)
-		record_history("Sew Displacements")
-	show_toast("Sewn %d boundary vertices" % count, 0)
+	HFDockBrushHandler.on_disp_sew(self)
 
 
 func _on_disp_sew_group_changed(value: float) -> void:
-	if not level_root:
-		return
-	if not _guard_selection_action(
-		"Edit Displacement Sew Group", DockSelectionRequirement.BRUSHES_ONLY
-	):
-		return
-	var info: Dictionary = _get_selected_face_info()
-	if info.is_empty():
-		return
-	if not _selected_face_has_displacement(info):
-		return
-	var brush_id: String = info["brush_id"]
-	var face_idx: int = info["face_index"]
-	HFUndoHelper.commit(
-		undo_redo,
-		level_root,
-		"Set Sew Group",
-		"set_displacement_sew_group",
-		[brush_id, face_idx, int(value)],
-		false,
-		Callable(self, "record_history"),
-		"disp_sew_group_%s_%d" % [brush_id, face_idx]
-	)
-
-
-# --- Bevel callbacks ---
+	HFDockBrushHandler.on_disp_sew_group_changed(self, value)
 
 
 func _on_bevel_edge() -> void:
-	if not level_root:
-		return
-	if not _guard_selection_action("Bevel Edge", DockSelectionRequirement.BRUSHES_ONLY):
-		return
-	var plugin_ref = level_root.get_meta("_hf_plugin", null)
-	if not plugin_ref:
-		show_toast("No plugin reference", 2)
-		return
-	if not plugin_ref.get("_vertex_mode") or not level_root.vertex_system:
-		show_toast("Enter vertex/edge mode first (V key)", 1)
-		return
-	var vs = level_root.vertex_system
-	if vs.selected_edges.is_empty():
-		show_toast("Select an edge first (edge sub-mode)", 1)
-		return
-	var segments: int = int(_bevel_segments_spin.value) if _bevel_segments_spin else 2
-	var radius: float = _bevel_radius_spin.value if _bevel_radius_spin else 2.0
-	# Capture state once before the batch, call each bevel, track actual successes.
-	var pre_state: Dictionary = (
-		level_root.capture_state() if level_root.has_method("capture_state") else {}
-	)
-	var count := 0
-	for brush_id in vs.selected_edges:
-		var edges: Array = vs.selected_edges[brush_id]
-		for edge in edges:
-			if level_root.bevel_edge(brush_id, edge, segments, radius):
-				count += 1
-	if count > 0:
-		if undo_redo and not pre_state.is_empty():
-			var post_state: Dictionary = level_root.capture_state()
-			undo_redo.create_action("Bevel Edge", 0, null, false)
-			undo_redo.add_do_method(level_root, "restore_state", post_state)
-			undo_redo.add_undo_method(level_root, "restore_state", pre_state)
-			undo_redo.commit_action(false)
-			record_history("Bevel Edge")
-		show_toast("Beveled %d edge(s)" % count, 0)
-	else:
-		show_toast("Bevel failed — check edge selection", 2)
+	HFDockBrushHandler.on_bevel_edge(self)
 
 
 func _on_bevel_inset() -> void:
-	if not level_root:
-		return
-	if not _guard_selection_action("Inset Face", DockSelectionRequirement.BRUSHES_ONLY):
-		return
-	var info: Dictionary = _get_selected_face_info()
-	if info.is_empty():
-		show_toast("Select a face first", 1)
-		return
-	var inset_dist: float = _bevel_inset_dist_spin.value if _bevel_inset_dist_spin else 2.0
-	var height: float = _bevel_inset_height_spin.value if _bevel_inset_height_spin else 0.0
-	var pre_state: Dictionary = (
-		level_root.capture_state() if level_root.has_method("capture_state") else {}
-	)
-	var ok: bool = level_root.inset_face(info["brush_id"], info["face_index"], inset_dist, height)
-	if ok:
-		if undo_redo and not pre_state.is_empty():
-			var post_state: Dictionary = level_root.capture_state()
-			undo_redo.create_action("Inset Face", 0, null, false)
-			undo_redo.add_do_method(level_root, "restore_state", post_state)
-			undo_redo.add_undo_method(level_root, "restore_state", pre_state)
-			undo_redo.commit_action(false)
-			record_history("Inset Face")
-		show_toast("Face inset applied", 0)
-	else:
-		show_toast("Inset failed — distance too large or face too small", 2)
+	HFDockBrushHandler.on_bevel_inset(self)
 
 
 func _ready():
@@ -3503,172 +3323,31 @@ func _on_restore_cuts():
 
 
 func _on_hollow() -> void:
-	if not level_root or _selection_nodes.is_empty():
-		_set_status("Select a brush to hollow", true)
-		return
-	if not _guard_selection_action("Hollow", DockSelectionRequirement.BRUSHES_ONLY):
-		return
-	var brush = _first_selected_brush()
-	if not brush:
-		_set_status("Select a brush to hollow", true)
-		return
-	var info = level_root.get_brush_info_from_node(brush)
-	var brush_id = str(info.get("brush_id", ""))
-	if brush_id == "":
-		return
-	var thickness = hollow_thickness.value if hollow_thickness else 4.0
-	var check: HFOpResult = level_root.can_hollow_brush(brush_id, thickness)
-	if not check.ok:
-		show_toast(check.user_text(), 1)
-		return
-	# Show geometry preview and confirm
-	level_root.hollow_preview.show_preview(brush_id, thickness)
-	var dlg = ConfirmationDialog.new()
-	dlg.title = "Hollow Brush"
-	dlg.dialog_text = (
-		"Hollow with wall thickness %.1f?\n(Yellow wireframe shows resulting walls)" % thickness
-	)
-	dlg.min_size = Vector2i(300, 100)
-	add_child(dlg)
-	dlg.confirmed.connect(
-		func():
-			if not is_instance_valid(self):
-				return
-			if level_root and level_root.hollow_preview:
-				level_root.hollow_preview.clear()
-			if not _guard_selection_action("Hollow", DockSelectionRequirement.BRUSHES_ONLY):
-				dlg.queue_free()
-				return
-			_commit_state_action("Hollow", "hollow_brush_by_id", [brush_id, thickness])
-			dlg.queue_free()
-	)
-	dlg.canceled.connect(
-		func():
-			if not is_instance_valid(self):
-				return
-			if level_root and level_root.hollow_preview:
-				level_root.hollow_preview.clear()
-			dlg.queue_free()
-	)
-	dlg.popup_centered()
+	HFDockBrushHandler.on_hollow(self)
 
 
 func _on_move_to_floor() -> void:
-	if not level_root or _selection_nodes.is_empty():
-		return
-	if not _guard_selection_action("Move to Floor", DockSelectionRequirement.BRUSHES_ONLY):
-		return
-	var brush_ids: Array = []
-	for node in _selection_nodes:
-		if level_root.is_brush_node(node):
-			var info = level_root.get_brush_info_from_node(node)
-			var bid = str(info.get("brush_id", ""))
-			if bid != "":
-				brush_ids.append(bid)
-	if brush_ids.is_empty():
-		return
-	_commit_state_action("Move to Floor", "move_brushes_to_floor", [brush_ids])
+	HFDockBrushHandler.on_move_to_floor(self)
 
 
 func _on_move_to_ceiling() -> void:
-	if not level_root or _selection_nodes.is_empty():
-		return
-	if not _guard_selection_action("Move to Ceiling", DockSelectionRequirement.BRUSHES_ONLY):
-		return
-	var brush_ids: Array = []
-	for node in _selection_nodes:
-		if level_root.is_brush_node(node):
-			var info = level_root.get_brush_info_from_node(node)
-			var bid = str(info.get("brush_id", ""))
-			if bid != "":
-				brush_ids.append(bid)
-	if brush_ids.is_empty():
-		return
-	_commit_state_action("Move to Ceiling", "move_brushes_to_ceiling", [brush_ids])
+	HFDockBrushHandler.on_move_to_ceiling(self)
 
 
 func _on_create_duplicate_array() -> void:
-	if not level_root or _selection_nodes.is_empty():
-		_set_status("Select brushes first", true)
-		return
-	if not _guard_selection_action("Create Duplicate Array", DockSelectionRequirement.BRUSHES_ONLY):
-		return
-	var brush_ids = PackedStringArray()
-	for node in _selection_nodes:
-		if level_root.is_brush_node(node):
-			var info = level_root.get_brush_info_from_node(node)
-			if info and info.has("brush_id"):
-				brush_ids.append(info["brush_id"])
-	if brush_ids.is_empty():
-		_set_status("No brushes selected", true)
-		return
-	var cnt = int(dup_count_spin.value) if dup_count_spin else 3
-	var off = Vector3(
-		dup_offset_x.value if dup_offset_x else 8,
-		dup_offset_y.value if dup_offset_y else 0,
-		dup_offset_z.value if dup_offset_z else 0,
-	)
-	_commit_state_action("Create Duplicate Array", "create_duplicate_array", [brush_ids, cnt, off])
-	_set_status("Created %d copies" % cnt)
+	HFDockBrushHandler.on_create_duplicate_array(self)
 
 
 func _on_remove_duplicate_array() -> void:
-	if not level_root or _selection_nodes.is_empty():
-		_set_status("Select a duplicator source brush", true)
-		return
-	if not _guard_selection_action("Remove Duplicate Array", DockSelectionRequirement.BRUSHES_ONLY):
-		return
-	for node in _selection_nodes:
-		if not level_root.is_brush_node(node):
-			continue
-		var dup_id: String = str(node.get_meta("duplicator_id", ""))
-		if dup_id != "":
-			_commit_state_action("Remove Duplicate Array", "remove_duplicate_array", [dup_id])
-			_set_status("Removed duplicate array")
-			return
-	_set_status("Selected brush is not a duplicator source", true)
+	HFDockBrushHandler.on_remove_duplicate_array(self)
 
 
 func _on_tie_entity() -> void:
-	if not level_root or _selection_nodes.is_empty():
-		_set_status("Select brushes to tie", true)
-		return
-	if not _guard_selection_action("Tie to Entity", DockSelectionRequirement.BRUSHES_ONLY):
-		return
-	var class_name_str := "func_detail"
-	if (
-		brush_entity_class_opt
-		and brush_entity_class_opt.item_count > 0
-		and brush_entity_class_opt.selected >= 0
-	):
-		class_name_str = brush_entity_class_opt.get_item_text(brush_entity_class_opt.selected)
-	var brush_ids: Array = []
-	for node in _selection_nodes:
-		if level_root.is_brush_node(node):
-			var info = level_root.get_brush_info_from_node(node)
-			var bid = str(info.get("brush_id", ""))
-			if bid != "":
-				brush_ids.append(bid)
-	if brush_ids.is_empty():
-		return
-	_commit_state_action("Tie to Entity", "tie_brushes_to_entity", [brush_ids, class_name_str])
+	HFDockBrushHandler.on_tie_entity(self)
 
 
 func _on_untie_entity() -> void:
-	if not level_root or _selection_nodes.is_empty():
-		return
-	if not _guard_selection_action("Untie Entity", DockSelectionRequirement.BRUSHES_ONLY):
-		return
-	var brush_ids: Array = []
-	for node in _selection_nodes:
-		if level_root.is_brush_node(node):
-			var info = level_root.get_brush_info_from_node(node)
-			var bid = str(info.get("brush_id", ""))
-			if bid != "":
-				brush_ids.append(bid)
-	if brush_ids.is_empty():
-		return
-	_commit_state_action("Untie Entity", "untie_brushes_from_entity", [brush_ids])
+	HFDockBrushHandler.on_untie_entity(self)
 
 
 func _on_justify(mode: String) -> void:
@@ -3681,7 +3360,7 @@ func _on_justify(mode: String) -> void:
 
 
 func get_hollow_thickness() -> float:
-	return hollow_thickness.value if hollow_thickness else 4.0
+	return HFDockBrushHandler.get_hollow_thickness(self)
 
 
 func _on_create_entity() -> void:
@@ -6948,56 +6627,7 @@ func _on_cordon_from_selection() -> void:
 
 
 func _on_clip() -> void:
-	if not level_root or _selection_nodes.is_empty():
-		_set_status("Select a brush to clip", true)
-		return
-	if not _guard_selection_action("Clip", DockSelectionRequirement.BRUSHES_ONLY):
-		return
-	var brush = _first_selected_brush()
-	if not brush:
-		_set_status("Select a brush to clip", true)
-		return
-	var info = level_root.get_brush_info_from_node(brush)
-	var brush_id = str(info.get("brush_id", ""))
-	if brush_id == "":
-		return
-	# Default clip: split along Y axis at center
-	var center = info.get("center", Vector3.ZERO)
-	var split_pos: float = center.y if center is Vector3 else 0.0
-	var check: HFOpResult = level_root.can_clip_brush(brush_id, 1, split_pos)
-	if not check.ok:
-		show_toast(check.user_text(), 1)
-		return
-	# Show geometry preview and confirm
-	level_root.clip_preview.show_preview(brush_id, 1, split_pos)
-	var dlg = ConfirmationDialog.new()
-	dlg.title = "Clip Brush"
-	dlg.dialog_text = (
-		"Split brush along Y axis at %.1f?\n(Cyan wireframe shows resulting pieces)" % split_pos
-	)
-	dlg.min_size = Vector2i(300, 100)
-	add_child(dlg)
-	dlg.confirmed.connect(
-		func():
-			if not is_instance_valid(self):
-				return
-			if level_root and level_root.clip_preview:
-				level_root.clip_preview.clear()
-			if not _guard_selection_action("Clip", DockSelectionRequirement.BRUSHES_ONLY):
-				dlg.queue_free()
-				return
-			_commit_state_action("Clip Brush", "clip_brush_by_id", [brush_id, 1, split_pos])
-			dlg.queue_free()
-	)
-	dlg.canceled.connect(
-		func():
-			if not is_instance_valid(self):
-				return
-			if level_root and level_root.clip_preview:
-				level_root.clip_preview.clear()
-			dlg.queue_free()
-	)
-	dlg.popup_centered()
+	HFDockBrushHandler.on_clip(self)
 
 
 func _on_io_add() -> void:

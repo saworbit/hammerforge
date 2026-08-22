@@ -483,16 +483,17 @@ func test_heterogeneous_managed_selection_disables_type_specific_controls() -> v
 	dock.free()
 
 
-func _dock_or_paint_function_source(
-	dock_source: String, paint_source: String, function_name: String
+func _dock_or_handler_function_source(
+	dock_source: String, handler_sources: Array, function_name: String
 ) -> String:
 	var block := _function_source(dock_source, function_name)
 	if block.contains("_guard_selection_action("):
 		return block
 	var handler_name := function_name.trim_prefix("_")
-	var handler_block := _function_source(paint_source, handler_name)
-	if handler_block != "":
-		return handler_block
+	for handler_source in handler_sources:
+		var handler_block := _function_source(str(handler_source), handler_name)
+		if handler_block != "":
+			return handler_block
 	return block
 
 
@@ -500,7 +501,9 @@ func _function_source(source: String, function_name: String) -> String:
 	var start := source.find("func %s(" % function_name)
 	if start < 0:
 		return ""
-	var next_function := source.find("\nfunc ", start + 1)
+	var next_function := source.find("\nstatic func ", start + 1)
+	if next_function < 0:
+		next_function = source.find("\nfunc ", start + 1)
 	return (
 		source.substr(start) if next_function < 0 else source.substr(start, next_function - start)
 	)
@@ -508,9 +511,10 @@ func _function_source(source: String, function_name: String) -> String:
 
 func test_all_dock_selection_mutators_share_the_scope_guard() -> void:
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/dock.gd")
-	var paint_source := FileAccess.get_file_as_string(
-		"res://addons/hammerforge/dock_paint_handler.gd"
-	)
+	var handler_sources := [
+		FileAccess.get_file_as_string("res://addons/hammerforge/dock_paint_handler.gd"),
+		FileAccess.get_file_as_string("res://addons/hammerforge/dock_brush_handler.gd"),
+	]
 	var guarded_functions := [
 		"_on_prefab_save_requested",
 		"_on_prefab_save_linked_requested",
@@ -540,7 +544,7 @@ func test_all_dock_selection_mutators_share_the_scope_guard() -> void:
 		"_apply_material_to_whole_brush",
 	]
 	for function_name in guarded_functions:
-		var block := _dock_or_paint_function_source(source, paint_source, function_name)
+		var block := _dock_or_handler_function_source(source, handler_sources, function_name)
 		assert_ne(block, "", "%s must exist" % function_name)
 		assert_true(
 			block.contains("_guard_selection_action("),
@@ -562,7 +566,7 @@ func test_all_dock_selection_mutators_share_the_scope_guard() -> void:
 		"_apply_material_to_whole_brush",
 	]:
 		assert_true(
-			_dock_or_paint_function_source(source, paint_source, function_name).contains(
+			_dock_or_handler_function_source(source, handler_sources, function_name).contains(
 				"DockSelectionRequirement.BRUSHES_ONLY"
 			),
 			"%s must reject entities instead of filtering them out" % function_name,

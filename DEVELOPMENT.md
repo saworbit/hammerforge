@@ -34,6 +34,7 @@ addons/hammerforge/
   input_state.gd         Drag/paint state machine (HFInputState)
   hf_selection_gesture.gd Select-mode LMB arbiter (native object selection, face marquee, gizmos)
   dock.gd + dock.tscn    UI dock (displayed as Build, Paint, Objects, Test), collapsible sections with persisted state
+  dock_brush_handler.gd  Build-tab displacement/bevel/hollow/clip/tie handlers
   dock_paint_handler.gd  Paint-tab layer/heightmap/scatter/sculpt handlers
   shortcut_hud.gd        Context-sensitive shortcut overlay (dynamic per mode) + persistent grid size indicator with flash-on-change
   brush_instance.gd      DraftBrush node
