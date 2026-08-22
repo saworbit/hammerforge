@@ -5,6 +5,7 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Changed
+- **Vertex/edge input lives in `plugin_vertex_input.gd`:** `plugin._handle_vertex_input()` is a thin wrapper around `HFPluginVertexInput.handle()`.
 - **Viewport keymap lives in `plugin_input_router.gd`:** `plugin._handle_keyboard_input()` is a thin wrapper around `HFPluginInputRouter.handle_keyboard()`.
 - **Plugin command dispatch is one module:** context toolbar, hotkey palette, viewport menu, and radial menu all call `HFPluginCommands.execute()` instead of three copy-pasted match blocks.
 - **Godot MCP Native v1.0.8:** vendor snapshot updated from 1.0.7-pre1 (`2e138ed`). HTTP still binds to `127.0.0.1` unless remote access is enabled.
