@@ -91,7 +91,9 @@ static func on_heightmap_convert(dock: Object) -> void:
 		if is_instance_valid(node) and dock.level_root.is_brush_node(node):
 			brushes.append(node)
 	if brushes.is_empty():
-		dock.level_root.emit_signal("user_message", "Select brushes first to convert to heightmap", 1)
+		dock.level_root.emit_signal(
+			"user_message", "Select brushes first to convert to heightmap", 1
+		)
 		return
 	var converter := HFBrushToHeightmap.new()
 	var settings := HFBrushToHeightmap.ConvertSettings.new()
@@ -176,7 +178,9 @@ static func build_scatter_settings(dock: Object) -> HFScatterBrush.ScatterSettin
 	if dock.scatter_max_slope_spin:
 		s.max_slope = dock.scatter_max_slope_spin.value
 	if dock.scatter_scale_min_spin and dock.scatter_scale_max_spin:
-		s.scale_range = Vector2(dock.scatter_scale_min_spin.value, dock.scatter_scale_max_spin.value)
+		s.scale_range = Vector2(
+			dock.scatter_scale_min_spin.value, dock.scatter_scale_max_spin.value
+		)
 	if dock.scatter_align_normal:
 		s.align_to_normal = dock.scatter_align_normal.button_pressed
 	if dock.scatter_random_rotation:
@@ -402,7 +406,12 @@ static func on_region_grid_toggled(dock: Object, enabled: bool) -> void:
 
 
 static func on_blend_slot_selected(dock: Object, index: int) -> void:
-	if dock == null or not dock.level_root or not dock.level_root.paint_tool or not dock.blend_slot_select:
+	if (
+		dock == null
+		or not dock.level_root
+		or not dock.level_root.paint_tool
+		or not dock.blend_slot_select
+	):
 		return
 	var slot_id = dock.blend_slot_select.get_item_id(index)
 	dock.level_root.paint_tool.blend_slot = int(slot_id)

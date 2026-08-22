@@ -148,7 +148,11 @@ static func _is_additive_brush(brush: Node3D) -> bool:
 func _get_brush_aabb(brush: Node3D) -> AABB:
 	if brush is DraftBrush:
 		var draft := brush as DraftBrush
-		if draft.mesh_instance and is_instance_valid(draft.mesh_instance) and draft.mesh_instance.mesh:
+		if (
+			draft.mesh_instance
+			and is_instance_valid(draft.mesh_instance)
+			and draft.mesh_instance.mesh
+		):
 			return draft.mesh_instance.global_transform * draft.mesh_instance.mesh.get_aabb()
 		var half_size := draft.size * 0.5
 		return AABB(draft.global_position - half_size, draft.size)

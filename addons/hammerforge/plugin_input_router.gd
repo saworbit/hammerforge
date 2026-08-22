@@ -70,7 +70,9 @@ static func handle_keyboard(
 
 	# Viewport context menu — only when idle (no active operation, no active external tool)
 	if keymap.matches("context_menu", event):
-		var has_active_ext = plugin._tool_registry and plugin._tool_registry.has_active_external_tool()
+		var has_active_ext = (
+			plugin._tool_registry and plugin._tool_registry.has_active_external_tool()
+		)
 		if root.input_state.is_idle() and not has_active_ext:
 			plugin._show_viewport_context_menu(root, tool_id)
 			return STOP
@@ -80,7 +82,9 @@ static func handle_keyboard(
 			if plugin._radial_menu.is_active():
 				plugin._radial_menu.hide_menu()
 				return STOP
-			var radial_ext = plugin._tool_registry and plugin._tool_registry.has_active_external_tool()
+			var radial_ext = (
+				plugin._tool_registry and plugin._tool_registry.has_active_external_tool()
+			)
 			if root.input_state.is_idle() and not radial_ext:
 				plugin._radial_menu.show_at(plugin._get_current_overlay_mouse_pos())
 				return STOP
@@ -92,7 +96,10 @@ static func handle_keyboard(
 	# Must come before keymap matches so the second tap is intercepted.
 	var tap_now := Time.get_ticks_msec()
 	if not event.ctrl_pressed and not event.shift_pressed and not event.alt_pressed:
-		if event.keycode == plugin._last_tap_keycode and (tap_now - plugin._last_tap_time) < plugin._DOUBLE_TAP_MS:
+		if (
+			event.keycode == plugin._last_tap_keycode
+			and (tap_now - plugin._last_tap_time) < plugin._DOUBLE_TAP_MS
+		):
 			var handled = plugin._handle_double_tap(event.keycode, root, paint_mode)
 			if handled:
 				plugin._last_tap_keycode = 0
