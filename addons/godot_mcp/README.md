@@ -1,10 +1,10 @@
 # Godot MCP Native (Model Context Protocol)
 
-[中文版本](README.zh.md)
+[中文版本](https://github.com/yurineko73/Godot-MCP-Native/blob/main/README.zh.md)
 
 ![Godot Version](https://img.shields.io/badge/Godot-4.x-blue?logo=godot-engine)
 ![License](https://img.shields.io/badge/License-MIT-green)
-![Version](https://img.shields.io/badge/Version-1.0.7-pre1-orange)
+![Version](https://img.shields.io/badge/Version-1.0.8-brightgreen)
 
 A powerful Godot Engine plugin that integrates AI assistants (Claude, etc.) via the Model Context Protocol (MCP). Enable AI to directly read and modify your Godot projects - scenes, scripts, nodes, and resources - all through natural language.
 
@@ -20,6 +20,15 @@ A powerful Godot Engine plugin that integrates AI assistants (Claude, etc.) via 
   - **Editor Tools** (4 core + 12 advanced): Control editor functionality, screenshot, signal inspection, filesystem reload, node/file selection, export management, property inspector
   - **Debug Tools** (3 core + 68 advanced): Logging, debugger sessions, breakpoints, stack/variable inspection, profilers, runtime probe, animation/audio/shader/tilemap runtime control, debug execution control, await_scene_ready
   - **Project Tools** (3 core + 23 advanced): Access project settings, list resources, create resources, run tests, manage input mappings, inspect autoloads/global classes, resource diagnostics & health audit
+
+## 🖥️ gdmcp CLI
+
+This plugin includes a companion **gdmcp CLI** for coding agents (Codex, Claude Code, etc.)
+that reduces model context usage by ~30,000 tokens compared to MCP. Install it from the
+**CLI Tools** tab in the MCP dock panel, or download from
+[GitHub Releases](https://github.com/yurineko73/Godot-MCP-Native/releases).
+
+See [CLI README](https://github.com/yurineko73/Godot-MCP-Native/blob/main/cli/gdmcp/README.md) for details.
 
 ## 📦 Installation
 
@@ -358,10 +367,10 @@ Implement a day/night cycle system with dynamic lighting
 ## 📖 Documentation
 
 For detailed documentation, see the `docs/current/` folder:
-- [Quick Start Guide](docs/current/quickstart.md)
-- [Architecture Design](docs/current/architecture.md)
-- [Tools Reference](docs/current/tools-reference.md)
-- [Testing Guide](docs/current/testing-guide.md)
+- [Quick Start Guide](https://github.com/yurineko73/Godot-MCP-Native/blob/main/docs/current/quickstart.md)
+- [Architecture Design](https://github.com/yurineko73/Godot-MCP-Native/blob/main/docs/current/architecture.md)
+- [Tools Reference](https://github.com/yurineko73/Godot-MCP-Native/blob/main/docs/current/tools-reference.md)
+- [Testing Guide](https://github.com/yurineko73/Godot-MCP-Native/blob/main/docs/current/testing-guide.md)
 
 ## 🤝 Contributing
 
@@ -369,7 +378,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](https://github.com/yurineko73/Godot-MCP-Native/blob/main/LICENSE) file for details.
 
 ## 👤 Author
 

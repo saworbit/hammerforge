@@ -1,14 +1,13 @@
 key,source,en,zh
 ui.settings,Settings,Settings,设置
-ui.server_log,Server Log,Server Log,服务器日志
 ui.tool_manager,Tool Manager,Tool Manager,工具管理器
 ui.status_unknown,Status: Unknown,Status: Unknown,状态：未知
 ui.status_running,Status: Running,Status: Running,状态：运行中
 ui.status_stopped,Status: Stopped,Status: Stopped,状态：已停止
 ui.start_server,Start Server,Start Server,启动服务器
 ui.stop_server,Stop Server,Stop Server,停止服务器
-ui.clear_log,Clear Log,Clear Log,清除日志
 ui.refresh_tools,Refresh Tools,Refresh Tools,刷新工具
+ui.open_log,Open Server Log,Open Server Log,打开服务器日志
 ui.transport_settings,Transport Settings,Transport Settings,传输设置
 ui.transport_mode,Transport Mode,Transport Mode,传输模式
 ui.http_port,Port,Port,端口
@@ -33,3 +32,18 @@ ui.enabled_format,Enabled: %d / %d,Enabled: %d / %d,已启用：%d / %d
 ui.connection_url,URL: http://localhost:%d/mcp,URL: http://localhost:%d/mcp,地址：http://localhost:%d/mcp
 ui.connection_stdio,Mode: stdio (via stdin/stdout),Mode: stdio (via stdin/stdout),模式：stdio（标准输入/输出）
 ui.tools_init,Tools: 0,Tools: 0,工具：0
+ui.cli_tools,CLI Tools,CLI Tools,CLI 工具
+ui.cli_title,gdmcp CLI,gdmcp CLI,gdmcp CLI
+ui.cli_description,"gdmcp is a companion CLI that lets AI agents control Godot without loading 154 MCP tool schemas into context. Install the binary below, then install the Codex skill from the GitHub repository (skills/gdmcp/).","gdmcp is a companion CLI that lets AI agents control Godot without loading 154 MCP tool schemas into context. Install the binary below, then install the Codex skill from the GitHub repository (skills/gdmcp/).","gdmcp 是一个配套 CLI 工具，让 AI 代理在不加载 154 个 MCP 工具 Schema 的情况下控制 Godot。请在下方安装二进制文件，然后从 GitHub 仓库安装 Codex 技能 (skills/gdmcp/)。"
+ui.cli_status,"Status: ","Status: ","状态："
+ui.cli_installed,"Installed (v%s)","Installed (v%s)","已安装 (v%s)"
+ui.cli_not_installed,Not installed,Not installed,未安装
+ui.cli_install,Install CLI,Install CLI,安装 CLI
+ui.cli_reinstall,Reinstall CLI,Reinstall CLI,重新安装 CLI
+ui.cli_downloading,Downloading...,Downloading...,下载中...
+ui.cli_source_github,GitHub Releases,GitHub Releases,GitHub Releases
+ui.cli_source_quark,Quark Cloud Drive,Quark Cloud Drive,夸克网盘
+ui.cli_install_success,Installation successful:,Installation successful:,安装成功：
+ui.cli_install_failed,Installation failed:,Installation failed:,安装失败：
+
+ui.cli_skill_download,"Open Skill on GitHub","Open Skill on GitHub","在 GitHub 上查看 Skill"

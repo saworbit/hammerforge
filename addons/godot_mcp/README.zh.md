@@ -1,10 +1,10 @@
 # Godot MCP Native (模型上下文协议)
 
-[English Version](README.md)
+[English Version](https://github.com/yurineko73/Godot-MCP-Native/blob/main/README.md)
 
 ![Godot 版本](https://img.shields.io/badge/Godot-4.x-blue?logo=godot-engine)
 ![许可证](https://img.shields.io/badge/License-MIT-green)
-![版本](https://img.shields.io/badge/Version-1.0.7-pre1-orange)
+![版本](https://img.shields.io/badge/Version-1.0.8-brightgreen)
 
 一个强大的 Godot 引擎插件，通过模型上下文协议 (MCP) 集成 AI 助手（如 Claude 等）。让 AI 可以直接通过自然语言读取和修改您的 Godot 项目——场景、脚本、节点和资源。
 
@@ -20,6 +20,14 @@
   - **编辑器工具**（4 核心 + 12 高级）：控制编辑器功能、截图、信号检查、文件系统重载，节点/文件选择，导出管理，属性检查器
   - **调试工具**（3 核心 + 68 高级）：日志、调试会话、断点、栈帧/变量读取、性能分析器、运行时探针，动画/音频/着色器/瓦片地图运行时控制，调试执行控制，场景就绪等待
   - **项目工具**（3 核心 + 23 高级）：访问项目设置、列出资源、创建资源，运行测试、管理输入映射、检查自动加载/全局类，资源诊断与健康审计
+
+## 🖥️ gdmcp CLI
+
+本插件包含配套的 **gdmcp CLI**，供编程代理（Codex、Claude Code 等）使用，
+相比 MCP 可减少约 30,000 tokens 的上下文消耗。在 MCP 停靠面板的 **CLI Tools** 标签页中安装，
+或从 [GitHub Releases](https://github.com/yurineko73/Godot-MCP-Native/releases) 下载。
+
+详见 [CLI README](https://github.com/yurineko73/Godot-MCP-Native/blob/main/cli/gdmcp/README.md)。
 
 ## 📦 安装
 
@@ -360,10 +368,10 @@ url = "http://localhost:9080/mcp"
 ## 📖 文档
 
 详细文档请查看 `docs/current/` 文件夹：
-- [快速开始指南](docs/current/quickstart.md)
-- [架构设计](docs/current/architecture.md)
-- [工具参考](docs/current/tools-reference.md)
-- [测试指南](docs/current/testing-guide.md)
+- [快速开始指南](https://github.com/yurineko73/Godot-MCP-Native/blob/main/docs/current/quickstart.md)
+- [架构设计](https://github.com/yurineko73/Godot-MCP-Native/blob/main/docs/current/architecture.md)
+- [工具参考](https://github.com/yurineko73/Godot-MCP-Native/blob/main/docs/current/tools-reference.md)
+- [测试指南](https://github.com/yurineko73/Godot-MCP-Native/blob/main/docs/current/testing-guide.md)
 
 ## 🤝 贡献
 
@@ -371,7 +379,7 @@ url = "http://localhost:9080/mcp"
 
 ## 📄 许可证
 
-本项目采用 MIT 许可证 - 详见 [LICENSE](LICENSE) 文件。
+本项目采用 MIT 许可证 - 详见 [LICENSE](https://github.com/yurineko73/Godot-MCP-Native/blob/main/LICENSE) 文件。
 
 ## 👤 作者
 

@@ -4,6 +4,10 @@
 @tool
 extends EditorPlugin
 
+const RUNTIME_PROBE_AUTOLOAD_NAME: String = "MCPRuntimeProbe"
+const RUNTIME_PROBE_SCRIPT_PATH: String = "res://addons/godot_mcp/runtime/mcp_runtime_probe.gd"
+const RUNTIME_PROBE_AUTOLOAD_KEY: String = "autoload/" + RUNTIME_PROBE_AUTOLOAD_NAME
+
 # ============================================================================
 # 配置变量（根据godot-dev-guide使用@export）
 # ============================================================================
@@ -233,9 +237,6 @@ func _exit_tree() -> void:
 		_main_panel.queue_free()
 		_main_panel = null
 
-	# Remove MCPRuntimeProbe autoload on plugin exit
-	_remove_runtime_probe_autoload()
-
 	if _debugger_bridge:
 		remove_debugger_plugin(_debugger_bridge)
 		_debugger_bridge = null
@@ -243,6 +244,9 @@ func _exit_tree() -> void:
 	_native_server = null
 	
 	_log_info("Godot Native MCP Plugin shutdown complete")
+
+func _disable_plugin() -> void:
+	_remove_runtime_probe_autoload()
 
 
 ## Parse MCP command-line overrides from user args (the tokens after the `--`
@@ -341,8 +345,8 @@ func get_debugger_bridge() -> MCPDebuggerBridge:
 func _has_settings() -> bool:
 	return true
 
-func _get_property_list() -> Array[Dictionary]:
-	var properties: Array[Dictionary] = []
+func _get_property_list() -> Array:
+	var properties: Array = []
 	
 	properties.append({
 		"name": "MCP Transport Settings",
@@ -515,22 +519,36 @@ func _stop_native_server() -> void:
 	_native_server.stop()
 	_log_info("Native MCP Server stopped")
 
+static func _is_runtime_probe_autoload_value(value: Variant) -> bool:
+	var configured_path: String = str(value)
+	if configured_path.begins_with("*"):
+		configured_path = configured_path.substr(1)
+	if configured_path.begins_with("uid://"):
+		configured_path = ResourceUID.uid_to_path(configured_path)
+	return configured_path == RUNTIME_PROBE_SCRIPT_PATH
+
 func _ensure_runtime_probe_autoload() -> void:
-	# Register MCPRuntimeProbe as an Autoload singleton via ProjectSettings.
-	# The "*" prefix marks it as a global singleton that survives scene changes.
-	var autoload_key: String = "autoload/MCPRuntimeProbe"
-	var autoload_path: String = "*res://addons/godot_mcp/runtime/mcp_runtime_probe.gd"
-	if not ProjectSettings.has_setting(autoload_key):
-		ProjectSettings.set_setting(autoload_key, autoload_path)
-		ProjectSettings.save()
-		_log_info("MCPRuntimeProbe autoload registered")
+	if ProjectSettings.has_setting(RUNTIME_PROBE_AUTOLOAD_KEY):
+		var existing_value: Variant = ProjectSettings.get_setting(RUNTIME_PROBE_AUTOLOAD_KEY)
+		if not _is_runtime_probe_autoload_value(existing_value):
+			_log_error(
+				"Cannot register MCPRuntimeProbe: Autoload name already points to " + str(existing_value)
+			)
+		return
+	add_autoload_singleton(RUNTIME_PROBE_AUTOLOAD_NAME, RUNTIME_PROBE_SCRIPT_PATH)
+	_log_info("MCPRuntimeProbe autoload registered")
 
 func _remove_runtime_probe_autoload() -> void:
-	var autoload_key: String = "autoload/MCPRuntimeProbe"
-	if ProjectSettings.has_setting(autoload_key):
-		ProjectSettings.clear(autoload_key)
-		ProjectSettings.save()
-		_log_info("MCPRuntimeProbe autoload removed")
+	if not ProjectSettings.has_setting(RUNTIME_PROBE_AUTOLOAD_KEY):
+		return
+	var existing_value: Variant = ProjectSettings.get_setting(RUNTIME_PROBE_AUTOLOAD_KEY)
+	if not _is_runtime_probe_autoload_value(existing_value):
+		_log_warn(
+			"Not removing MCPRuntimeProbe: Autoload name points to " + str(existing_value)
+		)
+		return
+	remove_autoload_singleton(RUNTIME_PROBE_AUTOLOAD_NAME)
+	_log_info("MCPRuntimeProbe autoload removed")
 
 func _get_tools_count() -> int:
 	if not _native_server:

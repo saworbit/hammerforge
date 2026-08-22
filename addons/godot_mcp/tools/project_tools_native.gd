@@ -614,9 +614,9 @@ func _register_list_project_tests(server_core: RefCounted) -> void:
 	)
 
 func _tool_list_project_tests(params: Dictionary) -> Dictionary:
-	var search_path: String = str(params.get("search_path", "res://tests")).strip_edges()
+	var search_path: String = str(params.get("search_path", "res://test")).strip_edges()
 	if search_path.is_empty():
-		search_path = "res://tests"
+		search_path = "res://test"
 	var framework_filter: String = str(params.get("framework", "")).strip_edges().to_lower()
 
 	var validation: Dictionary = _validate_test_path(search_path, true)
@@ -653,7 +653,7 @@ func _register_run_project_test(server_core: RefCounted) -> void:
 		{
 			"type": "object",
 			"properties": {
-				"test_path": {"type": "string", "description": "res:// path to a project test file under test/ or tests/."},
+				"test_path": {"type": "string", "description": "res:// path to a project test file under test/."},
 				"timeout_ms": {"type": "integer", "description": "Reserved timeout hint for the caller. The process itself runs synchronously."}
 			},
 			"required": ["test_path"]
@@ -704,7 +704,7 @@ func _register_run_project_tests(server_core: RefCounted) -> void:
 		{
 			"type": "object",
 			"properties": {
-				"search_path": {"type": "string", "description": "Optional res:// path to limit discovery. Default is res://tests."},
+				"search_path": {"type": "string", "description": "Optional res:// path to limit discovery. Default is res://test."},
 				"framework": {"type": "string", "description": "Optional framework filter: python or gut."},
 				"only_runnable": {"type": "boolean", "description": "Whether to skip discovered tests that are not currently runnable. Default is true."}
 			}
@@ -729,7 +729,7 @@ func _register_run_project_tests(server_core: RefCounted) -> void:
 
 func _tool_run_project_tests(params: Dictionary) -> Dictionary:
 	var list_result: Dictionary = _tool_list_project_tests({
-		"search_path": params.get("search_path", "res://tests"),
+		"search_path": params.get("search_path", "res://test"),
 		"framework": params.get("framework", "")
 	})
 	if list_result.has("error"):
@@ -784,10 +784,8 @@ func _validate_test_path(path: String, expect_directory: bool) -> Dictionary:
 		return {"error": "Test path cannot be empty"}
 	if not path.begins_with("res://"):
 		return {"error": "Test path must start with res://"}
-	var is_test_path: bool = path == "res://test" or path.begins_with("res://test/") \
-		or path == "res://tests" or path.begins_with("res://tests/")
-	if not (is_test_path or path.begins_with("res://.tmp_") or path.contains("/.tmp_")):
-		return {"error": "Test path must stay under res://test/, res://tests/, or a temporary test directory"}
+	if not (path.begins_with("res://test/") or path.begins_with("res://.tmp_") or path.contains("/.tmp_")):
+		return {"error": "Test path must stay under res://test/ or a temporary test directory"}
 	var validation: Dictionary = PathValidator.validate_directory_path(path) if expect_directory else PathValidator.validate_path(path)
 	if not validation.get("valid", false):
 		return {"error": "Invalid path: " + str(validation.get("error", "unknown"))}
@@ -2611,22 +2609,25 @@ func _analyze_script_diagnostics(script_path: String, include_warnings: bool) ->
 	var content: String = file.get_as_text()
 	file.close()
 
-	var validation_content: String = _strip_class_names(content)
-	var test_script: GDScript = GDScript.new()
-	test_script.source_code = validation_content
-	var reload_error: Error = test_script.reload()
-
 	var errors: Array = []
 	var warnings: Array = []
 	var autoload_aware: bool = false
+	var loaded: Dictionary = ScriptUtils.load_compiled_script(script_path)
+	var reload_error: Error = OK
+	var validation_content: String = ""
+	if loaded["ok"]:
+		reload_error = OK
+	else:
+		validation_content = _strip_class_names(content)
+		var compiled: Dictionary = ScriptUtils.reload_source_quietly(validation_content, script_path)
+		reload_error = compiled["error"]
 
 	if reload_error != OK:
 		var autoload_decls: String = _build_autoload_declarations()
-		if not autoload_decls.is_empty():
+		if not autoload_decls.is_empty() and not validation_content.is_empty():
 			var retry_content: String = autoload_decls + "\n" + validation_content
-			var retry_script: GDScript = GDScript.new()
-			retry_script.source_code = retry_content
-			var retry_err: Error = retry_script.reload()
+			var retry_compiled: Dictionary = ScriptUtils.reload_source_quietly(retry_content, script_path)
+			var retry_err: Error = retry_compiled["error"]
 			if retry_err == OK:
 				autoload_aware = true
 				if include_warnings:
@@ -2703,8 +2704,6 @@ func _build_autoload_declarations() -> String:
 func _is_likely_script_error_line(line: String) -> bool:
 	var line_lower: String = line.to_lower()
 	if line_lower.contains("unexpected") or line_lower.contains("expected") or line_lower.contains("indent"):
-		return true
-	if line.ends_with("(") or line.ends_with(",") or line.count("\"") % 2 == 1:
 		return true
 	return false
 

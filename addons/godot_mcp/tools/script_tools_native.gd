@@ -2068,7 +2068,8 @@ func _tool_validate_script(params: Dictionary) -> Dictionary:
 	if not content.is_empty():
 		content = _spaces_to_tabs(content)
 
-	if content.is_empty():
+	var from_disk: bool = content.is_empty()
+	if from_disk:
 		var validation: Dictionary = PathValidator.validate_file_path(script_path, [".gd", ".cs"])
 		if not validation["valid"]:
 			return {"error": "Invalid path: " + validation["error"]}
@@ -2083,10 +2084,33 @@ func _tool_validate_script(params: Dictionary) -> Dictionary:
 		content = file.get_as_text()
 		file.close()
 
+	if from_disk and script_path.get_extension() == "gd":
+		var loaded: Dictionary = ScriptUtils.load_compiled_script(script_path)
+		if loaded["ok"]:
+			var disk_warnings: Array = []
+			if check_warnings:
+				var disk_lines: PackedStringArray = content.split("\n")
+				for i in range(disk_lines.size()):
+					var disk_line: String = disk_lines[i].strip_edges()
+					if disk_line.begins_with("var ") and not ":" in disk_line and not "=" in disk_line:
+						disk_warnings.append({
+							"line": i + 1,
+							"column": 0,
+							"message": "Variable lacks type hint"
+						})
+			return {
+				"valid": true,
+				"errors": [],
+				"warnings": disk_warnings,
+				"error_count": 0,
+				"warning_count": disk_warnings.size(),
+				"autoload_aware": false
+			}
+
 	var validation_content: String = _strip_class_names(content)
-	var test_script: GDScript = GDScript.new()
-	test_script.source_code = validation_content
-	var reload_err: Error = test_script.reload()
+	var compiled: Dictionary = ScriptUtils.reload_source_quietly(validation_content, script_path)
+	var test_script: GDScript = compiled["script"]
+	var reload_err: Error = compiled["error"]
 
 	var errors: Array = []
 	var warnings: Array = []
@@ -2096,9 +2120,8 @@ func _tool_validate_script(params: Dictionary) -> Dictionary:
 		var autoload_decls: String = _build_autoload_declarations()
 		if not autoload_decls.is_empty():
 			var retry_content: String = _insert_autoload_decls_after_extends(validation_content, autoload_decls)
-			var retry_script: GDScript = GDScript.new()
-			retry_script.source_code = retry_content
-			var retry_err: Error = retry_script.reload()
+			var retry_compiled: Dictionary = ScriptUtils.reload_source_quietly(retry_content, script_path)
+			var retry_err: Error = retry_compiled["error"]
 			if retry_err == OK:
 				autoload_aware = true
 				warnings.append({

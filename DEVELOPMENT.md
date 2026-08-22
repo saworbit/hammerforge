@@ -19,6 +19,8 @@ The repository vendors `addons/godot_mcp`; each contributor keeps `.codex/config
 
 Treat `addons/godot_mcp` as vendored code: HammerForge formatting and lint commands target `addons/hammerforge` only. When deliberately updating the vendor snapshot, review it separately and record the upstream revision in the change description.
 
+Current vendor: Godot MCP Native v1.0.8 (`2e138ed`). HammerForge keeps two local patches: bind HTTP to `127.0.0.1` unless remote access is enabled, and skip diagnostic `GDScript.reload()` of on-disk scripts (use the editor's compiled resources; rewrite relative `preload()` only when validating unsaved content).
+
 ## Codebase Structure
 
 ```

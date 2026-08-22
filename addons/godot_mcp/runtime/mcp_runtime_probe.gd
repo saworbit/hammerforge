@@ -321,7 +321,7 @@ func _handle_delete_node(data: Array) -> bool:
 	if node == get_tree().current_scene:
 		EngineDebugger.send_message("mcp:error", [{"message": "Cannot delete the active runtime scene root"}])
 		return true
-	if node is MCPRuntimeProbe:
+	if _is_protected_runtime_node(node):
 		EngineDebugger.send_message("mcp:error", [{"message": "Cannot delete the MCPRuntimeProbe node while the runtime session is active"}])
 		return true
 	var deleted_path: String = str(node.get_path())
@@ -335,6 +335,9 @@ func _handle_delete_node(data: Array) -> bool:
 		"node_type": deleted_type
 	}])
 	return true
+
+func _is_protected_runtime_node(node: Node) -> bool:
+	return node == self
 
 func _handle_call_node_method(data: Array) -> bool:
 	if data.size() < 2:
