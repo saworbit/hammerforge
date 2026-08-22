@@ -1,6 +1,6 @@
 # HammerForge Install + Upgrade
 
-Last updated: July 21, 2026
+Last updated: August 22, 2026
 
 This guide covers installing, upgrading, and recovering HammerForge for Godot 4.7+ and configuring the project-scoped Godot MCP used by contributors to this repository.
 
@@ -29,7 +29,7 @@ An intentional left-click with Draw active can create an empty root. Camera navi
 
 ## Project-Scoped Godot MCP (Repository Contributors)
 
-This repository vendors the Godot MCP addon in `addons/godot_mcp` and enables it in `project.godot`. The server binds to loopback port `9080`, rejects unauthenticated requests, and does not allow remote clients. Codex client state under `.codex/` is deliberately ignored so machine-specific settings never enter version control.
+This repository vendors Godot MCP Native v1.0.8 in `addons/godot_mcp` and enables it in `project.godot`. The server binds to loopback port `9080`, rejects unauthenticated requests, and does not allow remote clients. Codex client state under `.codex/` is deliberately ignored so machine-specific settings never enter version control.
 
 The authentication token is local user state. Never place it in `.codex/config.toml`, documentation, a shell script, or any committed file.
 
