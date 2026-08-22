@@ -6,7 +6,7 @@ class_name HFSnapSystem
 
 const DraftBrush = preload("brush_instance.gd")
 
-enum SnapMode { GRID = 1, VERTEX = 2, CENTER = 4 }
+enum SnapMode { GRID = 1, VERTEX = 2, CENTER = 4, EDGE = 8 }
 
 var root: Node3D
 var enabled_modes: int = SnapMode.GRID
@@ -44,8 +44,8 @@ func snap_point(point: Vector3, grid_snap: float, exclude_ids: Array = []) -> Ve
 			best = grid_snapped
 			best_dist = d
 
-	# Geometry snap candidates (vertex / center)
-	if is_mode_on(SnapMode.VERTEX) or is_mode_on(SnapMode.CENTER):
+	# Geometry snap candidates (vertex / center / edge)
+	if is_mode_on(SnapMode.VERTEX) or is_mode_on(SnapMode.CENTER) or is_mode_on(SnapMode.EDGE):
 		var candidates := _collect_candidates(exclude_ids)
 		for c in candidates:
 			var d := point.distance_to(c)
@@ -90,6 +90,7 @@ func _collect_candidates(exclude_ids: Array) -> PackedVector3Array:
 		return out
 	var do_vertex := is_mode_on(SnapMode.VERTEX)
 	var do_center := is_mode_on(SnapMode.CENTER)
+	var do_edge := is_mode_on(SnapMode.EDGE)
 	var preview = root.get("preview_brush")
 	for node in root._iter_pick_nodes():
 		if not (node is DraftBrush):
@@ -103,13 +104,36 @@ func _collect_candidates(exclude_ids: Array) -> PackedVector3Array:
 		var half := brush.size * 0.5
 		if do_center:
 			out.append(pos)
+		var corners := PackedVector3Array(
+			[
+				pos + Vector3(-half.x, -half.y, -half.z),
+				pos + Vector3(-half.x, -half.y, half.z),
+				pos + Vector3(-half.x, half.y, -half.z),
+				pos + Vector3(-half.x, half.y, half.z),
+				pos + Vector3(half.x, -half.y, -half.z),
+				pos + Vector3(half.x, -half.y, half.z),
+				pos + Vector3(half.x, half.y, -half.z),
+				pos + Vector3(half.x, half.y, half.z),
+			]
+		)
 		if do_vertex:
-			out.append(pos + Vector3(-half.x, -half.y, -half.z))
-			out.append(pos + Vector3(-half.x, -half.y, half.z))
-			out.append(pos + Vector3(-half.x, half.y, -half.z))
-			out.append(pos + Vector3(-half.x, half.y, half.z))
-			out.append(pos + Vector3(half.x, -half.y, -half.z))
-			out.append(pos + Vector3(half.x, -half.y, half.z))
-			out.append(pos + Vector3(half.x, half.y, -half.z))
-			out.append(pos + Vector3(half.x, half.y, half.z))
+			out.append_array(corners)
+		if do_edge:
+			# 12 AABB edges, same corner order as vertex snap.
+			var edges := [
+				[0, 1],
+				[0, 2],
+				[0, 4],
+				[1, 3],
+				[1, 5],
+				[2, 3],
+				[2, 6],
+				[3, 7],
+				[4, 5],
+				[4, 6],
+				[5, 7],
+				[6, 7],
+			]
+			for edge in edges:
+				out.append((corners[edge[0]] + corners[edge[1]]) * 0.5)
 	return out

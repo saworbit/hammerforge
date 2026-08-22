@@ -320,6 +320,7 @@ var syncing_snap := false
 var snap_grid_btn: Button = null
 var snap_vertex_btn: Button = null
 var snap_center_btn: Button = null
+var snap_edge_btn: Button = null
 var _axis_lock_x: Button = null
 var _axis_lock_y: Button = null
 var _axis_lock_z: Button = null
@@ -833,6 +834,8 @@ func _setup_simplified_workflow() -> void:
 		snap_vertex_btn.text = "Corners"
 	if snap_center_btn:
 		snap_center_btn.text = "Centers"
+	if snap_edge_btn:
+		snap_edge_btn.text = "Edges"
 
 
 func _update_context_hints() -> void:
@@ -2933,6 +2936,13 @@ func _build_snap_mode_buttons() -> void:
 	snap_center_btn.custom_minimum_size.x = 32
 	snap_center_btn.toggled.connect(_on_snap_mode_toggled.bind(4))
 	row.add_child(snap_center_btn)
+	snap_edge_btn = Button.new()
+	snap_edge_btn.text = "E"
+	snap_edge_btn.tooltip_text = "Edge snap (brush edge midpoints)"
+	snap_edge_btn.toggle_mode = true
+	snap_edge_btn.custom_minimum_size.x = 32
+	snap_edge_btn.toggled.connect(_on_snap_mode_toggled.bind(8))
+	row.add_child(snap_edge_btn)
 	parent.add_child(row)
 	parent.move_child(row, idx)
 	# Axis Lock row

@@ -104,3 +104,30 @@ func test_legacy_manager_mirror_stays_optional():
 	)
 	assert_null(root.brush_manager)
 	assert_eq(sys.get_cached_brushes(), [brush])
+
+
+func test_cache_is_authority_when_legacy_manager_exists():
+	var manager = _FakeManager.new()
+	root.brush_manager = manager
+	var brush = sys.create_brush_from_info(
+		{"size": Vector3(4, 4, 4), "center": Vector3.ZERO, "brush_id": "cached"}
+	)
+	assert_eq(sys.get_cached_brush_count(), 1)
+	assert_eq(sys.find_brush_by_id("cached"), brush)
+	assert_eq(manager.brushes, [brush], "Legacy list is a mirror of the cache")
+	sys.delete_brush_by_id("cached")
+	assert_eq(sys.get_cached_brush_count(), 0)
+	assert_eq(manager.brushes, [])
+
+
+class _FakeManager:
+	var brushes: Array = []
+
+	func add_brush(brush: Node) -> void:
+		brushes.append(brush)
+
+	func remove_brush(brush: Node) -> void:
+		brushes.erase(brush)
+
+	func clear_brushes() -> void:
+		brushes.clear()
