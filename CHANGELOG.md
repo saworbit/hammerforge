@@ -5,6 +5,7 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Changed
+- **Paint-tab handlers live in `dock_paint_handler.gd`:** layer, heightmap, scatter, sculpt, region, and terrain-slot dock methods are thin wrappers around `HFDockPaintHandler`.
 - **HUD and context-toolbar state live in `plugin_hud.gd`:** `_update_hud_context()` and `_update_context_toolbar_state()` are thin wrappers around `HFPluginHud`.
 - **Vertex/edge input lives in `plugin_vertex_input.gd`:** `plugin._handle_vertex_input()` is a thin wrapper around `HFPluginVertexInput.handle()`.
 - **Viewport keymap lives in `plugin_input_router.gd`:** `plugin._handle_keyboard_input()` is a thin wrapper around `HFPluginInputRouter.handle_keyboard()`.

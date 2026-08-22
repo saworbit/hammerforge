@@ -328,7 +328,7 @@ The May 2026 simplification phase 1 landed shared utilities and migrated low-ris
 
 ### Continued dock.gd decomposition
 The remaining 6,692 lines are dominated by ~180 `_on_*` signal handlers wired to dock-internal state.
-- Split into per-tab handler files: `dock_brush_handler.gd`, `dock_paint_handler.gd`, `dock_entity_handler.gd`, `dock_manage_handler.gd`. Target dock.gd shell at ~1,500 lines.
+- Split into per-tab handler files: `dock_brush_handler.gd`, `dock_paint_handler.gd` (done), `dock_entity_handler.gd`, `dock_manage_handler.gd`. Target dock.gd shell at ~1,500 lines.
 - Extract signal-wiring into `dock_connections.gd`.
 - Consolidate the entity-properties UI builder and the external-tool-settings UI builder (both schema-driven; share ~100 lines of dispatch logic).
 - Migrate `paint_tab_builder.gd` (50 call sites) and `manage_tab_builder.gd` (58 call sites) from `dock._make_*` to direct `HFUIFactory` calls. Mechanical churn — wait until shared with another tab-builder change.
