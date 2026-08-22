@@ -26,6 +26,7 @@ Current vendor: Godot MCP Native v1.0.8 (`2e138ed`). HammerForge keeps two local
 ```
 addons/hammerforge/
   plugin.gd              EditorPlugin entry point, input routing, sticky LevelRoot discovery
+  plugin_commands.gd     Shared toolbar/palette/viewport/radial command dispatch
   level_root.gd          Coordinator (~2,200 lines), delegates to subsystems
   input_state.gd         Drag/paint state machine (HFInputState)
   hf_selection_gesture.gd Select-mode LMB arbiter (native object selection, face marquee, gizmos)

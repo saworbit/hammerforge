@@ -5,6 +5,7 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Changed
+- **Plugin command dispatch is one module:** context toolbar, hotkey palette, viewport menu, and radial menu all call `HFPluginCommands.execute()` instead of three copy-pasted match blocks.
 - **Godot MCP Native v1.0.8:** vendor snapshot updated from 1.0.7-pre1 (`2e138ed`). HTTP still binds to `127.0.0.1` unless remote access is enabled.
 - **Live CSG subtract preview:** overlapping additive/subtract DraftBrushes show the actual CSG cut volume after a two-frame bake. Mesh-bound AABB wireframes remain as the immediate fallback. Full-level CSG of every brush is still out of scope.
 - **Heightmap convert uses authored meshes:** conversion rasterizes additive mesh bounds (including displacement height) and skips subtract brushes so heightmaps do not fight Source-style displacements or cutters.
