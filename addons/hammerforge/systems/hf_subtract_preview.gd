@@ -1,9 +1,10 @@
 @tool
 class_name HFSubtractPreview
 extends "hf_system.gd"
-## Real-time wireframe overlay showing AABB intersections between
-## subtractive and additive brushes.  Reuses the cordon-wireframe
-## ImmediateMesh pattern from level_root.gd.
+## Real-time wireframe overlay showing mesh-bound intersections between
+## subtractive and additive DraftBrushes (AABB of each authored mesh).
+
+const DraftBrush = preload("../brush_instance.gd")
 
 var _preview_container: Node3D
 var _mesh_pool: Array = []  # Array[MeshInstance3D]
@@ -129,11 +130,10 @@ func _rebuild() -> void:
 	var subtractive: Array = []
 	var additive: Array = []
 	for child in draft_node.get_children():
-		if not child is CSGShape3D:
-			continue
-		if child.operation == CSGShape3D.OPERATION_SUBTRACTION:
+		var op := preview_operation(child)
+		if op == CSGShape3D.OPERATION_SUBTRACTION:
 			subtractive.append(child)
-		elif child.operation == CSGShape3D.OPERATION_UNION:
+		elif op == CSGShape3D.OPERATION_UNION:
 			additive.append(child)
 
 	var intersections: Array = []  # Array[AABB]
@@ -198,14 +198,29 @@ static func _is_valid_aabb(aabb: AABB) -> bool:
 	return aabb.size.x > 0.001 and aabb.size.y > 0.001 and aabb.size.z > 0.001
 
 
+## Operation used for subtract preview. DraftBrush stores CSG operation ints.
+## Returns -1 when the node is not a previewable brush.
+static func preview_operation(node: Node) -> int:
+	if node is DraftBrush:
+		return int((node as DraftBrush).operation)
+	if node is CSGShape3D:
+		return int((node as CSGShape3D).operation)
+	return -1
+
+
 func _get_world_aabb(node: Node3D) -> AABB:
+	if node is DraftBrush:
+		var draft := node as DraftBrush
+		if draft.mesh_instance and draft.mesh_instance.mesh:
+			return draft.global_transform * draft.mesh_instance.mesh.get_aabb()
+		var half := draft.size * 0.5
+		return AABB(draft.global_position - half, draft.size)
 	if node.has_method("get_aabb"):
 		var local_aabb: AABB = node.get_aabb()
 		return node.global_transform * local_aabb
-	# Fallback: use position ± half scale
 	var pos := node.global_position
-	var half := node.scale * 0.5
-	return AABB(pos - half, node.scale)
+	var half_scale := node.scale * 0.5
+	return AABB(pos - half_scale, node.scale)
 
 
 func _build_wireframe_mesh(aabb: AABB) -> ImmediateMesh:

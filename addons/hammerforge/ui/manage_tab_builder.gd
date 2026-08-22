@@ -403,7 +403,7 @@ func build(parent: Control) -> void:
 	dock._show_io_lines = dock._make_check("Show I/O Lines", false)
 	stc.add_child(dock._show_io_lines)
 
-	dock._show_subtract_preview = dock._make_check("Subtract Preview (AABB approx)", false)
+	dock._show_subtract_preview = dock._make_check("Subtract Preview", false)
 	stc.add_child(dock._show_subtract_preview)
 
 	dock.autosave_enabled = dock._make_check("Enable Autosave", true)

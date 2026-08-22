@@ -1,6 +1,7 @@
 extends GutTest
 
 const HFSubtractPreview = preload("res://addons/hammerforge/systems/hf_subtract_preview.gd")
+const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 
 # -- AABB intersection math tests -----------------------------------------------
 
@@ -40,6 +41,15 @@ func test_intersection_partial_axis():
 
 
 # -- Enable/disable tests -------------------------------------------------------
+
+
+func test_preview_operation_reads_draft_brushes():
+	var brush = autoqfree(DraftBrush.new())
+	brush.operation = CSGShape3D.OPERATION_SUBTRACTION
+	assert_eq(HFSubtractPreview.preview_operation(brush), CSGShape3D.OPERATION_SUBTRACTION)
+	brush.operation = CSGShape3D.OPERATION_UNION
+	assert_eq(HFSubtractPreview.preview_operation(brush), CSGShape3D.OPERATION_UNION)
+	assert_eq(HFSubtractPreview.preview_operation(autoqfree(Node3D.new())), -1)
 
 
 func test_default_disabled():

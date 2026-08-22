@@ -27,9 +27,10 @@ This document makes the current tradeoffs explicit so level designers and develo
 - Region streaming loads only nearby paint data; distant regions are unloaded.
 
 ## Import / Export Limits
-- `.map` import/export preserves basic brush shapes and point entities, not full material or face data.
-- Non-axis-aligned or complex `.map` brushes are approximated (typically as cylinders).
+- `.map` import/export preserves basic brush shapes and point entities. Axis-aligned brushes import as boxes. Rotated or complex brushes import as CUSTOM with face vertices rather than being forced to cylinders.
+- Face materials still do not round-trip as Godot materials; Valve 220 can carry UV axes when FaceData is present.
 - `.glb` export includes only baked geometry.
+- Per-project entity types overlay `res://hammerforge_entities.json` onto the plugin `entities.json` (same classname replaces).
 
 ## Prefabs
 - Prefabs capture brush and entity state as dictionaries — they do not store Node references or scene paths.
@@ -40,7 +41,7 @@ This document makes the current tradeoffs explicit so level designers and develo
 - The subtract preview system does not render intersections for prefab preview — only placed brushes.
 
 ## Subtract Preview
-- Subtract preview shows wireframe AABB intersections, not true CSG geometry. The Test → Settings checkbox is labeled **Subtract Preview (AABB approx)** so this is visible in the editor, not only in this document.
+- Subtract preview includes DraftBrushes (not only leftover CSGShape3D nodes) and uses each brush's mesh bounds. It is still not a live full-level CSG boolean.
 - The preview is debounced (0.15s) to avoid rebuilding on every frame during rapid edits.
 - Maximum 50 intersection overlays are rendered simultaneously. Beyond that, intersections are silently dropped.
 - The preview uses `ImmediateMesh` with `PRIMITIVE_LINES` — zero GPU memory allocation beyond vertex buffers.

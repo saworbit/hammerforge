@@ -15,6 +15,9 @@ var properties: Array[Dictionary] = []
 ## Optional scene path to instantiate instead of a plain DraftEntity.
 var scene_path := ""
 
+## Optional per-project overlay. Entries with the same classname replace plugin defs.
+const PROJECT_DEFINITIONS_PATH := "res://hammerforge_entities.json"
+
 
 static func from_dict(data: Dictionary) -> HFEntityDef:
 	var def := HFEntityDef.new()
@@ -109,6 +112,65 @@ static func load_definitions(path: String) -> Array[HFEntityDef]:
 		)
 		return _built_in_defaults()
 	return defs
+
+
+## Load definitions from a file without falling back to built-ins.
+## Missing or invalid files return an empty array.
+static func load_definitions_from_file(path: String) -> Array[HFEntityDef]:
+	var defs: Array[HFEntityDef] = []
+	if path == "" or not FileAccess.file_exists(path):
+		return defs
+	var file = FileAccess.open(path, FileAccess.READ)
+	if not file:
+		return defs
+	var data = JSON.parse_string(file.get_as_text())
+	if data == null:
+		return defs
+	var entries: Array = []
+	if data is Dictionary:
+		entries = data.get("entities", [])
+		if entries.is_empty():
+			for key in data.keys():
+				var entry = data[key]
+				if entry is Dictionary:
+					var record = entry.duplicate(true)
+					record["id"] = str(key)
+					entries.append(record)
+	elif data is Array:
+		entries = data
+	for entry in entries:
+		if entry is Dictionary:
+			var classname = str(entry.get("id", entry.get("class", entry.get("classname", ""))))
+			if classname != "":
+				defs.append(from_dict(entry))
+	return defs
+
+
+## Overlay project defs onto plugin defs. Same classname replaces the plugin entry.
+static func merge_definitions(
+	base: Array[HFEntityDef], overlay: Array[HFEntityDef]
+) -> Array[HFEntityDef]:
+	var by_name: Dictionary = {}
+	for def in base:
+		if def and def.classname != "":
+			by_name[def.classname] = def
+	for def in overlay:
+		if def and def.classname != "":
+			by_name[def.classname] = def
+	var out: Array[HFEntityDef] = []
+	for key in by_name.keys():
+		out.append(by_name[key])
+	return out
+
+
+static func load_merged_definitions(
+	plugin_path: String, project_path: String = PROJECT_DEFINITIONS_PATH
+) -> Array[HFEntityDef]:
+	var base := load_definitions(plugin_path)
+	var overlay := load_definitions_from_file(project_path)
+	if overlay.is_empty():
+		return base
+	return merge_definitions(base, overlay)
 
 
 ## Built-in brush entity classes — always available even without entities.json.

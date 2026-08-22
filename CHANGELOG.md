@@ -5,6 +5,9 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Changed
+- **Subtract preview sees DraftBrushes** and uses mesh bounds instead of skipping non-CSGShape3D nodes.
+- **Per-project entities:** `res://hammerforge_entities.json` overlays the plugin entity list (same classname wins).
+- **`.map` fidelity:** rotated/complex brushes import and export as CUSTOM face planes instead of cylinders/boxes.
 - **BrushManager is a list mirror:** `clear_brushes()` no longer frees nodes. `HFBrushSystem` owns brush lifetime; multi-brush create/delete/nudge now batch LevelRoot signals.
 - **Snap-to-edge:** new EDGE snap mode (dock **E** / Edges) snaps to AABB edge midpoints of existing brushes.
 - **Core-loop freeze:** the default editor is Draw → material → entity → bake → Test Level. Radial menu, coach marks, and operation replay are gated behind **Test → Settings → Power-user overlays** (off by default). Subtract preview is labeled as an AABB approximation. Unused welcome-panel, BrushPrefab, debug_heightmap, and archived quadrant-view scripts were removed. `BrushManager` is a null-safe legacy mirror of `HFBrushSystem`'s brush cache.
