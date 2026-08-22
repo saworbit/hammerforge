@@ -406,7 +406,11 @@ static func world_aabb(node: Node3D) -> AABB:
 		xform = node.global_transform
 	if node is DraftBrush:
 		var draft := node as DraftBrush
-		if draft.mesh_instance and is_instance_valid(draft.mesh_instance) and draft.mesh_instance.mesh:
+		if (
+			draft.mesh_instance
+			and is_instance_valid(draft.mesh_instance)
+			and draft.mesh_instance.mesh
+		):
 			var mesh_xform := xform * draft.mesh_instance.transform
 			if draft.mesh_instance.is_inside_tree():
 				mesh_xform = draft.mesh_instance.global_transform

@@ -99,9 +99,7 @@ static func update_context_toolbar_state(plugin: Object, root: Node, tool_id: in
 	state["paint_mode"] = dock.is_paint_mode_enabled() if dock else false
 	state["vertex_mode"] = plugin._vertex_mode
 	state["is_subtract"] = dock.get_operation() != 0 if dock else false  # 0 = UNION
-	state["has_active_external_tool"] = (
-		registry.has_active_external_tool() if registry else false
-	)
+	state["has_active_external_tool"] = (registry.has_active_external_tool() if registry else false)
 
 	# Input mode
 	var input_mode := 0
@@ -188,7 +186,9 @@ static func update_context_toolbar_state(plugin: Object, root: Node, tool_id: in
 		plugin._context_toolbar.update_state(state)
 		# Feed favorite materials to the face-context thumbnail strip
 		if face_count > 0 and dock and dock.material_browser:
-			plugin._context_toolbar.set_favorite_materials(dock.material_browser.get_favorite_infos(5))
+			plugin._context_toolbar.set_favorite_materials(
+				dock.material_browser.get_favorite_infos(5)
+			)
 	if plugin._hotkey_palette and plugin._hotkey_palette.visible:
 		var palette_state := state.duplicate()
 		palette_state["tool"] = plugin.hotkey_palette_tool_context(tool_id, plugin._vertex_mode)
