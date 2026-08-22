@@ -37,6 +37,7 @@ const SelectionToolsBuilder = preload("ui/selection_tools_builder.gd")
 const HFDockPaintHandler = preload("dock_paint_handler.gd")
 const HFDockBrushHandler = preload("dock_brush_handler.gd")
 const HFDockEntityHandler = preload("dock_entity_handler.gd")
+const HFDockManageHandler = preload("dock_manage_handler.gd")
 
 const PRESET_MENU_RENAME := 0
 const PRESET_MENU_DELETE := 1
@@ -2960,157 +2961,39 @@ func _commit_precomputed_state_action(
 
 
 func _on_bake():
-	_log("Bake requested")
-	_warn_missing_dependencies()
-	if not level_root or not _can_start_bake("Bake"):
-		return
-	# Prefer incremental bake when only specific brushes are dirty
-	if (
-		level_root
-		and not level_root._dirty_brush_ids.is_empty()
-		and not level_root._full_reconcile_needed
-	):
-		_log("Dirty brushes detected — using incremental bake")
-		_on_bake_changed()
-		return
-	_set_bake_buttons_disabled(true)
-	var succeeded: bool = await level_root.bake(
-		true, false, get_collision_layer_mask(), _get_bake_preview_mode()
-	)
-	_set_bake_buttons_disabled(false)
-	if succeeded:
-		record_history("Bake")
+	await HFDockManageHandler.on_bake(self)
 
 
 func _on_bake_dry_run() -> void:
-	if not level_root:
-		_set_status("No LevelRoot for bake dry run", true)
-		return
-	var info: Dictionary = level_root.bake_dry_run()
-	if info.is_empty():
-		_set_status("Bake dry run failed", true)
-		return
-	var draft = int(info.get("draft", 0))
-	var pending = int(info.get("pending", 0))
-	var committed = int(info.get("committed", 0))
-	var gen_floors = int(info.get("generated_floors", 0))
-	var gen_walls = int(info.get("generated_walls", 0))
-	var hm = int(info.get("heightmap_floors", 0))
-	var chunks = int(info.get("chunk_count", 0))
-	var summary = (
-		"Dry run: draft %d, pending %d, committed %d, floors %d, walls %d, heightmap %d, chunks %d"
-		% [draft, pending, committed, gen_floors, gen_walls, hm, chunks]
-	)
-	_set_status(summary, false, 5.0)
-	_log(summary)
+	HFDockManageHandler.on_bake_dry_run(self)
 
 
 func _get_bake_preview_mode() -> int:
-	if bake_preview_mode_opt:
-		return bake_preview_mode_opt.get_selected_id()
-	return 0  # FULL
+	return HFDockManageHandler.get_bake_preview_mode(self)
 
 
 func _on_bake_selected() -> void:
-	_log("Bake selected requested")
-	if not level_root or not _can_start_bake("Bake Selected"):
-		return
-	if not _guard_selection_action("Bake Selected", DockSelectionRequirement.BRUSHES_ONLY):
-		return
-	if _selection_nodes.is_empty():
-		show_toast("Select brushes to bake", 1)
-		return
-	var brush_nodes: Array = []
-	for node in _selection_nodes:
-		if level_root.is_brush_node(node):
-			brush_nodes.append(node)
-	if brush_nodes.is_empty():
-		show_toast("No brushes in selection", 1)
-		return
-	_warn_missing_dependencies()
-	var mask := get_collision_layer_mask()
-	_set_bake_buttons_disabled(true)
-	var succeeded: bool = await level_root.bake_selected(
-		brush_nodes, mask, _get_bake_preview_mode()
-	)
-	_set_bake_buttons_disabled(false)
-	if succeeded:
-		record_history("Bake Selected")
+	await HFDockManageHandler.on_bake_selected(self)
 
 
 func _on_bake_changed() -> void:
-	_log("Bake changed requested")
-	if not level_root or not _can_start_bake("Bake Changed"):
-		return
-	_warn_missing_dependencies()
-	var mask := get_collision_layer_mask()
-	_set_bake_buttons_disabled(true)
-	var succeeded: bool = await level_root.bake_dirty(mask, _get_bake_preview_mode())
-	_set_bake_buttons_disabled(false)
-	if succeeded:
-		record_history("Bake Changed")
+	await HFDockManageHandler.on_bake_changed(self)
 
 
 func _on_bake_check_issues() -> void:
-	if not level_root or not level_root.validation_system:
-		return
-	var issues: Array = level_root.validation_system.check_bake_issues()
-	if issues.is_empty():
-		show_toast("No bake issues found", 0)
-		_set_status("Bake check: no issues", false, 3.0)
-		return
-	var errors := 0
-	var warnings := 0
-	for issue in issues:
-		var sev: int = issue.get("severity", 0)
-		if sev >= 2:
-			errors += 1
-		elif sev >= 1:
-			warnings += 1
-	var summary := "Bake check: %d errors, %d warnings" % [errors, warnings]
-	_set_status(summary, errors > 0, 5.0)
-	# Show first few issues as toasts
-	var shown := 0
-	for issue in issues:
-		if shown >= 3:
-			break
-		var msg: String = issue.get("message", "")
-		var sev: int = issue.get("severity", 0)
-		show_toast(msg, min(sev, 2))
-		shown += 1
-	if issues.size() > 3:
-		show_toast("...and %d more issues (check Output)" % (issues.size() - 3), 1)
-	# Log all to output
-	for issue in issues:
-		push_warning("HF Bake Issue: %s" % issue.get("message", ""))
+	HFDockManageHandler.on_bake_check_issues(self)
 
 
 func _update_bake_estimate() -> void:
-	if not level_root or not bake_estimate_label:
-		return
-	var est: Dictionary = level_root.estimate_bake_time()
-	var ms: int = est.get("estimated_ms", 0)
-	var count: int = est.get("brush_count", 0)
-	var tip: String = est.get("tip", "")
-	var time_str := ""
-	if ms < 1000:
-		time_str = "%d ms" % ms
-	elif ms < 60000:
-		time_str = "%.1f s" % (float(ms) / 1000.0)
-	else:
-		time_str = "%.1f min" % (float(ms) / 60000.0)
-	var label_text := "Est: %s (%d brushes)" % [time_str, count]
-	if tip != "":
-		label_text += " — %s" % tip
-	bake_estimate_label.text = label_text
+	HFDockManageHandler.update_bake_estimate(self)
 
 
 func _on_validate_level() -> void:
-	_run_validation(false)
+	HFDockManageHandler.on_validate_level(self)
 
 
 func _on_validate_fix() -> void:
-	_run_validation(true)
+	HFDockManageHandler.on_validate_fix(self)
 
 
 func _on_clear():
@@ -3484,30 +3367,11 @@ func _sync_grid_settings_from_root() -> void:
 
 
 func _on_bake_started() -> void:
-	_update_bake_estimate()
-	_set_status("Baking...", false, 0.0)
-	if progress_bar:
-		progress_bar.max_value = 100
-		progress_bar.value = 0
-		progress_bar.show()
-	_set_bake_buttons_disabled(true)
-	_hints_dirty = true
-	bake_state_changed.emit(true, false)
+	HFDockManageHandler.on_bake_started(self)
 
 
 func _on_bake_progress(value: float, label: String) -> void:
-	var clamped = clamp(value, 0.0, 1.0)
-	var pct = int(round(clamped * 100.0))
-	if progress_bar:
-		progress_bar.max_value = 100
-		progress_bar.value = pct
-		if not progress_bar.visible:
-			progress_bar.show()
-	var message = "Baking"
-	if label != "":
-		message = "%s: %s" % [message, label]
-	message += " (%d%%)" % pct
-	_set_status(message, false, 0.0)
+	HFDockManageHandler.on_bake_progress(self, value, label)
 
 
 func _on_autosave_failed(error_message: String) -> void:
@@ -3531,362 +3395,49 @@ func _on_root_user_message(text: String, level: int) -> void:
 
 
 func _on_bake_finished(success: bool) -> void:
-	if success:
-		_set_status("Bake complete", false, 3.0)
-		show_toast("Bake complete", 0)
-	else:
-		_set_status("Bake failed - check Output for details", true)
-		show_toast("Bake failed — check Output for details", 2)
-	if progress_bar:
-		progress_bar.hide()
-	_update_bake_estimate()
-	_set_bake_buttons_disabled(false)
-	_hints_dirty = true
-	bake_state_changed.emit(false, success)
+	HFDockManageHandler.on_bake_finished(self, success)
 
 
 func _set_bake_buttons_disabled(disabled: bool) -> void:
-	_bake_disabled = disabled
-	bake_btn.disabled = disabled
-	commit_cuts_btn.disabled = disabled
-	apply_cuts_btn.disabled = disabled
-	if quick_play_btn:
-		quick_play_btn.disabled = disabled
-	if bake_selected_btn:
-		bake_selected_btn.disabled = disabled
-	if bake_changed_btn:
-		bake_changed_btn.disabled = disabled
-	if quick_play_camera_btn:
-		quick_play_camera_btn.disabled = disabled
-	if quick_play_area_btn:
-		quick_play_area_btn.disabled = disabled
-	_update_disabled_hints()
+	HFDockManageHandler.set_bake_buttons_disabled(self, disabled)
 
 
 func _can_start_bake(action_label: String) -> bool:
-	if level_root and level_root.has_method("is_bake_in_flight") and level_root.is_bake_in_flight():
-		show_toast("%s will be available when the current bake finishes" % action_label, 1)
-		return false
-	return true
+	return HFDockManageHandler.can_start_bake(self, action_label)
 
 
 func _on_quick_play() -> void:
-	_log("Playtest requested")
-	_warn_missing_dependencies()
-	if not level_root or not _can_start_bake("Test Level"):
-		return
-
-	# --- Ensure a spawn exists (before bake, so it's included in the scene) ---
-	var spawn: Node3D = null
-	if level_root.spawn_system:
-		spawn = level_root.spawn_system.get_active_spawn()
-	if not spawn:
-		show_toast("No player_start found — auto-creating default spawn", 1)
-		if level_root.spawn_system:
-			var pre_state: Dictionary = {}
-			if undo_redo and level_root.state_system:
-				pre_state = level_root.state_system.capture_state(true)
-			spawn = level_root.spawn_system.create_default_spawn()
-			if undo_redo and spawn and not pre_state.is_empty():
-				_record_spawn_create_undo(pre_state)
-
-	# --- Bake FIRST so collision bodies exist for validation ---
-	var mask := get_collision_layer_mask()
-	if not await level_root.bake(true, false, mask):
-		show_toast("Test cancelled because the level could not be baked", 2)
-		return
-
-	# --- Validate AFTER bake against real collision geometry ---
-	if spawn and level_root.spawn_system:
-		var validation: Dictionary = level_root.spawn_system.validate_spawn(spawn, mask)
-		var severity: int = validation.get("severity", 0)
-		var issues: PackedStringArray = validation.get("issues", PackedStringArray())
-
-		if severity >= 2:  # ERROR
-			level_root.spawn_system.show_validation_debug(spawn, validation, 10.0)
-			var issue_text := "\n".join(issues)
-			show_toast("Spawn issues: %s" % issue_text, 2)
-			_show_spawn_fix_dialog(spawn, validation, mask)
-			return
-		if severity >= 1:  # WARNING
-			level_root.spawn_system.show_validation_debug(spawn, validation, 6.0)
-			show_toast("Spawn warning: %s" % "\n".join(issues), 1)
-
-	_notify_running_instances()
-	if editor_interface:
-		editor_interface.play_current_scene()
+	await HFDockManageHandler.on_quick_play(self)
 
 
-## Play from the current editor camera position (temporarily teleports spawn).
-## The spawn is restored to its original position/angle after the playtest
-## launches.  An undo entry is recorded as fallback safety.
 func _on_quick_play_from_camera() -> void:
-	_log("Play from Camera requested")
-	_warn_missing_dependencies()
-	if not level_root or not _can_start_bake("Test from Camera"):
-		return
-	# Get the current editor camera from plugin
-	var camera: Camera3D = null
-	if _plugin and _plugin.last_3d_camera:
-		camera = _plugin.last_3d_camera
-	if not camera:
-		show_toast("No editor camera available", 2)
-		return
-
-	# Ensure spawn exists (with undo support, matching _on_quick_play)
-	var spawn: Node3D = null
-	if level_root.spawn_system:
-		spawn = level_root.spawn_system.get_active_spawn()
-	if not spawn:
-		show_toast("No player_start found — auto-creating default spawn", 1)
-		if level_root.spawn_system:
-			var pre_state: Dictionary = {}
-			if undo_redo and level_root.state_system:
-				pre_state = level_root.state_system.capture_state(true)
-			spawn = level_root.spawn_system.create_default_spawn()
-			if undo_redo and spawn and not pre_state.is_empty():
-				_record_spawn_create_undo(pre_state)
-	if not spawn:
-		show_toast("Could not create spawn point", 2)
-		return
-
-	# Save original state for restore after launch
-	var old_pos := spawn.global_position
-	var old_angle: float = 0.0
-	if spawn is DraftEntity:
-		old_angle = float((spawn as DraftEntity).entity_data.get("angle", 0.0))
-
-	# Temporarily move spawn to camera position + yaw
-	spawn.global_position = camera.global_position
-	var camera_yaw_deg: float = rad_to_deg(camera.global_rotation.y)
-	if spawn is DraftEntity:
-		(spawn as DraftEntity).entity_data["angle"] = camera_yaw_deg
-	# Record undo as fallback in case restore fails (e.g. editor crash)
-	_record_spawn_camera_undo(spawn, old_pos, camera.global_position, old_angle, camera_yaw_deg)
-	_log(
-		"Spawn temporarily at camera: %s (yaw %.1f)" % [str(camera.global_position), camera_yaw_deg]
-	)
-
-	# Bake and validate (same error-blocking as _on_quick_play)
-	var mask := get_collision_layer_mask()
-	if not await level_root.bake(true, false, mask):
-		_restore_spawn(spawn, old_pos, old_angle)
-		show_toast("Test cancelled because the level could not be baked", 2)
-		return
-
-	if spawn and level_root.spawn_system:
-		var validation: Dictionary = level_root.spawn_system.validate_spawn(spawn, mask)
-		var severity: int = validation.get("severity", 0)
-		var issues: PackedStringArray = validation.get("issues", PackedStringArray())
-
-		if severity >= 2:
-			level_root.spawn_system.show_validation_debug(spawn, validation, 10.0)
-			show_toast("Spawn issues: %s" % "\n".join(issues), 2)
-			_show_spawn_fix_dialog(spawn, validation, mask)
-			# Restore spawn even on error
-			_restore_spawn(spawn, old_pos, old_angle)
-			return
-		if severity >= 1:
-			level_root.spawn_system.show_validation_debug(spawn, validation, 6.0)
-			show_toast("Camera spawn warning: %s" % "\n".join(issues), 1)
-
-	_notify_running_instances()
-	if editor_interface:
-		editor_interface.play_current_scene()
-
-	# Restore spawn to original position/angle now that the scene is playing
-	_restore_spawn(spawn, old_pos, old_angle)
+	await HFDockManageHandler.on_quick_play_from_camera(self)
 
 
-## Play only the selected area (auto-cordon to selection, bake, play).
 func _on_quick_play_selected_area() -> void:
-	_log("Play Selected Area requested")
-	_warn_missing_dependencies()
-	if not level_root or not _can_start_bake("Test Selected Area"):
-		return
-	if not _guard_selection_action("Play Selected Area", DockSelectionRequirement.BRUSHES_ONLY):
-		return
-	if _selection_nodes.is_empty():
-		show_toast("Select brushes to define play area", 1)
-		return
-
-	# Save original cordon state
-	var prev_cordon_enabled: bool = level_root.cordon_enabled
-	var prev_cordon_aabb: AABB = level_root.cordon_aabb
-
-	# Set cordon from selection
-	level_root.set_cordon_from_selection(_selection_nodes)
-	show_toast("Cordon set to selection — baking area", 0)
-
-	# Ensure spawn exists (with undo support, matching _on_quick_play)
-	var spawn: Node3D = null
-	if level_root.spawn_system:
-		spawn = level_root.spawn_system.get_active_spawn()
-	if not spawn:
-		show_toast("No player_start found — auto-creating default spawn", 1)
-		if level_root.spawn_system:
-			var pre_state: Dictionary = {}
-			if undo_redo and level_root.state_system:
-				pre_state = level_root.state_system.capture_state(true)
-			spawn = level_root.spawn_system.create_default_spawn()
-			if undo_redo and spawn and not pre_state.is_empty():
-				_record_spawn_create_undo(pre_state)
-
-	# Bake with cordon active (only selected area geometry)
-	var mask := get_collision_layer_mask()
-	if not await level_root.bake(true, false, mask):
-		_restore_cordon_state(prev_cordon_enabled, prev_cordon_aabb)
-		show_toast("Test cancelled because the selected area could not be baked", 2)
-		return
-
-	# Validate spawn (same error-blocking as _on_quick_play)
-	if spawn and level_root.spawn_system:
-		var validation: Dictionary = level_root.spawn_system.validate_spawn(spawn, mask)
-		var severity: int = validation.get("severity", 0)
-		var issues: PackedStringArray = validation.get("issues", PackedStringArray())
-
-		if severity >= 2:
-			level_root.spawn_system.show_validation_debug(spawn, validation, 10.0)
-			show_toast("Spawn issues: %s" % "\n".join(issues), 2)
-			_show_spawn_fix_dialog(spawn, validation, mask)
-			# Restore cordon even on error
-			_restore_cordon_state(prev_cordon_enabled, prev_cordon_aabb)
-			return
-		if severity >= 1:
-			level_root.spawn_system.show_validation_debug(spawn, validation, 6.0)
-			show_toast("Spawn warning: %s" % "\n".join(issues), 1)
-
-	_notify_running_instances()
-	if editor_interface:
-		editor_interface.play_current_scene()
-
-	# Restore original cordon
-	_restore_cordon_state(prev_cordon_enabled, prev_cordon_aabb)
+	await HFDockManageHandler.on_quick_play_selected_area(self)
 
 
 func _restore_cordon_state(enabled: bool, bounds: AABB) -> void:
-	if not level_root:
-		return
-	level_root.cordon_enabled = enabled
-	level_root.cordon_aabb = bounds
-	level_root.tag_full_reconcile()
-	level_root.update_cordon_visual()
+	HFDockManageHandler.restore_cordon_state(self, enabled, bounds)
 
 
 func _on_export_playtest() -> void:
-	_log("Export Playtest Build requested")
-	if not level_root or not _can_start_bake("Export Playtest"):
-		show_toast("No LevelRoot active", 2)
-		return
-
-	# Step 1: Validate spawn
-	var spawn: Node3D = null
-	if level_root.spawn_system:
-		spawn = level_root.spawn_system.get_active_spawn()
-	if not spawn:
-		show_toast("No player_start found — creating default spawn", 1)
-		if level_root.spawn_system:
-			var pre_state: Dictionary = {}
-			if undo_redo and level_root.state_system:
-				pre_state = level_root.state_system.capture_state(true)
-			spawn = level_root.spawn_system.create_default_spawn()
-			if undo_redo and spawn and not pre_state.is_empty():
-				_record_spawn_create_undo(pre_state)
-
-	if spawn and level_root.spawn_system:
-		var mask := get_collision_layer_mask()
-		var validation: Dictionary = level_root.spawn_system.validate_spawn(spawn, mask)
-		var severity: int = validation.get("severity", 0)
-		if severity >= 2:
-			var issues: PackedStringArray = validation.get("issues", PackedStringArray())
-			level_root.spawn_system.show_validation_debug(spawn, validation, 10.0)
-			show_toast("Spawn blocked: %s" % "\n".join(issues), 2)
-			return
-
-	# Step 2: Bake full (optimized)
-	show_toast("Baking for playtest...", 0)
-	var mask := get_collision_layer_mask()
-	if not await level_root.bake(true, false, mask):
-		show_toast("Export cancelled because the level could not be baked", 2)
-		return
-	show_toast("Bake complete — exporting scene...", 0)
-
-	# Step 3: Export as temporary scene
-	var export_path := "user://hammerforge_playtest.tscn"
-	var success: bool = level_root.export_playtest_scene(export_path)
-	if not success:
-		show_toast("Export failed — could not pack scene", 2)
-		return
-
-	# Step 4: Launch via editor
-	show_toast("Launching playtest...", 0)
-	if editor_interface:
-		editor_interface.play_custom_scene(export_path)
-	else:
-		show_toast("No EditorInterface — cannot launch", 2)
+	await HFDockManageHandler.on_export_playtest(self)
 
 
 func _show_spawn_fix_dialog(spawn: Node3D, validation: Dictionary, mask: int) -> void:
-	var issues: PackedStringArray = validation.get("issues", PackedStringArray())
-	var dialog := ConfirmationDialog.new()
-	dialog.title = "Quick Play — Spawn Warning"
-	dialog.dialog_text = (
-		"Player spawn may be invalid:\n\n"
-		+ "\n".join(issues)
-		+ "\n\nFix automatically and play, or cancel?"
-	)
-	dialog.ok_button_text = "Fix & Play"
-	dialog.add_cancel_button("Cancel")
-	dialog.confirmed.connect(
-		func():
-			if not is_instance_valid(self):
-				dialog.queue_free()
-				return
-			if is_instance_valid(spawn) and level_root and level_root.spawn_system:
-				var old_pos := spawn.global_position
-				level_root.spawn_system.auto_fix_spawn(spawn, validation)
-				level_root.spawn_system.cleanup_debug()
-				_record_spawn_move_undo(spawn, old_pos, spawn.global_position)
-				show_toast("Spawn fixed — launching playtest", 0)
-			_notify_running_instances()
-			if editor_interface:
-				editor_interface.play_current_scene()
-			dialog.queue_free()
-	)
-	dialog.canceled.connect(
-		func():
-			if is_instance_valid(self):
-				show_toast("Quick Play cancelled", 0)
-			dialog.queue_free()
-	)
-	add_child(dialog)
-	dialog.popup_centered()
+	HFDockManageHandler.show_spawn_fix_dialog(self, spawn, validation, mask)
 
 
-## Record an undo entry for auto-creating a spawn entity.
-## Uses state capture/restore so redo correctly re-creates the entity.
-## [before_state]: captured BEFORE the spawn was added to the tree.
 func _record_spawn_create_undo(before_state: Dictionary) -> void:
-	if not undo_redo or not level_root or not level_root.state_system:
-		return
-	var after_state: Dictionary = level_root.state_system.capture_state(true)
-	undo_redo.create_action("Auto-create player_start")
-	undo_redo.add_do_method(level_root.state_system, "restore_state", after_state)
-	undo_redo.add_undo_method(level_root.state_system, "restore_state", before_state)
-	undo_redo.commit_action(false)
+	HFDockManageHandler.record_spawn_create_undo(self, before_state)
 
 
-## Record an undo entry for auto-fixing spawn position.
 func _record_spawn_move_undo(spawn: Node3D, old_pos: Vector3, new_pos: Vector3) -> void:
-	if not undo_redo or not level_root or old_pos == new_pos:
-		return
-	undo_redo.create_action("Fix player_start position")
-	undo_redo.add_do_property(spawn, "global_position", new_pos)
-	undo_redo.add_undo_property(spawn, "global_position", old_pos)
-	undo_redo.commit_action(false)
+	HFDockManageHandler.record_spawn_move_undo(self, spawn, old_pos, new_pos)
 
 
-## Record undo for Play from Camera: position + yaw angle on entity_data.
 func _record_spawn_camera_undo(
 	spawn: Node3D,
 	old_pos: Vector3,
@@ -3894,166 +3445,37 @@ func _record_spawn_camera_undo(
 	old_angle: float,
 	new_angle: float,
 ) -> void:
-	if not undo_redo or not level_root:
-		return
-	if old_pos == new_pos and is_equal_approx(old_angle, new_angle):
-		return
-	undo_redo.create_action("Play from Camera — move spawn")
-	undo_redo.add_do_property(spawn, "global_position", new_pos)
-	undo_redo.add_undo_property(spawn, "global_position", old_pos)
-	if spawn is DraftEntity:
-		var do_data: Dictionary = (spawn as DraftEntity).entity_data.duplicate()
-		var undo_data: Dictionary = do_data.duplicate()
-		do_data["angle"] = new_angle
-		undo_data["angle"] = old_angle
-		undo_redo.add_do_property(spawn, "entity_data", do_data)
-		undo_redo.add_undo_property(spawn, "entity_data", undo_data)
-	undo_redo.commit_action(false)
+	HFDockManageHandler.record_spawn_camera_undo(
+		self, spawn, old_pos, new_pos, old_angle, new_angle
+	)
 
 
-## Restore spawn to its original position and angle after a temporary move.
 func _restore_spawn(spawn: Node3D, pos: Vector3, angle_deg: float) -> void:
-	if not is_instance_valid(spawn):
-		return
-	spawn.global_position = pos
-	if spawn is DraftEntity:
-		(spawn as DraftEntity).entity_data["angle"] = angle_deg
+	HFDockManageHandler.restore_spawn(spawn, pos, angle_deg)
 
 
 func _on_spawn_validate() -> void:
-	if not level_root or not level_root.spawn_system or not _can_start_bake("Validate Spawn"):
-		show_toast("No LevelRoot available", 1)
-		return
-	var spawn := level_root.spawn_system.get_active_spawn()
-	if not spawn:
-		show_toast("No player_start entity found", 1)
-		return
-	# Bake first so validation queries real collision geometry, not stale state
-	var mask := get_collision_layer_mask()
-	show_toast("Baking before validation…", 0)
-	if not await level_root.bake(true, false, mask):
-		show_toast("Spawn validation cancelled because the level could not be baked", 2)
-		return
-	# Re-check spawn is still valid after async bake
-	if not is_instance_valid(spawn) or not spawn.is_inside_tree():
-		show_toast("Spawn was removed during bake", 2)
-		return
-	var validation: Dictionary = level_root.spawn_system.validate_spawn(spawn, mask)
-	level_root.spawn_system.show_validation_debug(spawn, validation, 10.0)
-	var issues: PackedStringArray = validation.get("issues", PackedStringArray())
-	if validation.get("valid", false):
-		show_toast("Spawn is valid", 0)
-	else:
-		show_toast("Spawn issues: %s" % "\n".join(issues), 2)
+	await HFDockManageHandler.on_spawn_validate(self)
 
 
 func _on_spawn_auto_create() -> void:
-	if not level_root or not level_root.spawn_system:
-		show_toast("No LevelRoot available", 1)
-		return
-	var existing := level_root.spawn_system.get_active_spawn()
-	if existing:
-		show_toast("player_start already exists — select and move it instead", 1)
-		return
-	var pre_state: Dictionary = {}
-	if undo_redo and level_root.state_system:
-		pre_state = level_root.state_system.capture_state(true)
-	var spawn := level_root.spawn_system.create_default_spawn()
-	if spawn and not pre_state.is_empty():
-		_record_spawn_create_undo(pre_state)
-	show_toast("Default player_start created", 0)
+	HFDockManageHandler.on_spawn_auto_create(self)
 
 
 func _on_show_spawn_debug_toggled(enabled: bool) -> void:
-	if not level_root or not level_root.spawn_system:
-		return
-	if enabled:
-		if not _can_start_bake("Show Spawn Preview"):
-			if _show_spawn_debug:
-				_show_spawn_debug.set_pressed_no_signal(false)
-			return
-		var spawn := level_root.spawn_system.get_active_spawn()
-		if not spawn:
-			show_toast("No player_start to preview", 1)
-			if _show_spawn_debug:
-				_show_spawn_debug.set_pressed_no_signal(false)
-			return
-		# Bake first so the debug overlay reflects real collision state
-		var mask := get_collision_layer_mask()
-		if not await level_root.bake(true, false, mask):
-			show_toast("Spawn preview cancelled because the level could not be baked", 2)
-			if _show_spawn_debug:
-				_show_spawn_debug.set_pressed_no_signal(false)
-			return
-		if not is_instance_valid(spawn) or not spawn.is_inside_tree():
-			show_toast("Spawn was removed during bake", 2)
-			if _show_spawn_debug:
-				_show_spawn_debug.set_pressed_no_signal(false)
-			return
-		var validation: Dictionary = level_root.spawn_system.validate_spawn(spawn, mask)
-		level_root.spawn_system.show_validation_debug(spawn, validation, 0.0)
-	else:
-		level_root.spawn_system.cleanup_debug()
+	await HFDockManageHandler.on_show_spawn_debug_toggled(self, enabled)
 
 
 func _notify_running_instances() -> void:
-	var lock_dir = "res://.hammerforge"
-	var abs_lock_dir = ProjectSettings.globalize_path(lock_dir)
-	if not DirAccess.dir_exists_absolute(abs_lock_dir):
-		DirAccess.make_dir_recursive_absolute(abs_lock_dir)
-	var file = FileAccess.open("%s/reload.lock" % lock_dir, FileAccess.WRITE)
-	if not file:
-		_log("Failed to write reload lock file", true)
-		return
-	file.store_string(str(Time.get_ticks_msec()))
+	HFDockManageHandler.notify_running_instances(self)
 
 
 func _warn_missing_dependencies() -> void:
-	if not level_root:
-		return
-	var warnings: Array = level_root.check_missing_dependencies()
-	if warnings.is_empty():
-		return
-	_set_status_warning("Missing dependencies: %d (see Output)" % warnings.size(), 5.0)
-	for warning in warnings:
-		_log("Dependency: %s" % str(warning), true)
+	HFDockManageHandler.warn_missing_dependencies(self)
 
 
 func _run_validation(auto_fix: bool) -> void:
-	if not level_root:
-		_set_status("No LevelRoot for validation", true)
-		return
-	var result: Dictionary = {}
-	var issues: Array = []
-	var fixed := 0
-	if auto_fix:
-		result = level_root.validate_level(false)
-		issues = result.get("issues", [])
-		var before_count = issues.size()
-		HFUndoHelper.commit(
-			undo_redo,
-			level_root,
-			"Validate + Fix",
-			"validate_level",
-			[true],
-			false,
-			Callable(self, "record_history")
-		)
-		var after = level_root.validate_level(false)
-		var after_count = int(after.get("issues", []).size())
-		fixed = max(0, before_count - after_count)
-	else:
-		result = level_root.validate_level(false)
-		issues = result.get("issues", [])
-	if issues.is_empty():
-		_set_status("Validate: no issues found", false, 3.0)
-		return
-	var message = "Validate: %d issue(s)" % issues.size()
-	if auto_fix:
-		message += ", fixed %d" % fixed
-	_set_status_warning(message, 6.0)
-	for issue in issues:
-		_log("[Validate] %s" % str(issue), true)
+	HFDockManageHandler.run_validation(self, auto_fix)
 
 
 func _update_perf_panel() -> void:

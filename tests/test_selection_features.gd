@@ -515,6 +515,7 @@ func test_all_dock_selection_mutators_share_the_scope_guard() -> void:
 		FileAccess.get_file_as_string("res://addons/hammerforge/dock_paint_handler.gd"),
 		FileAccess.get_file_as_string("res://addons/hammerforge/dock_brush_handler.gd"),
 		FileAccess.get_file_as_string("res://addons/hammerforge/dock_entity_handler.gd"),
+		FileAccess.get_file_as_string("res://addons/hammerforge/dock_manage_handler.gd"),
 	]
 	var guarded_functions := [
 		"_on_prefab_save_requested",
