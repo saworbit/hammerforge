@@ -744,7 +744,7 @@ func test_viewport_forwarding_is_selection_independent_and_rmb_followups_bypass_
 
 
 func test_quick_bake_dispatch_calls_the_real_dock_callback():
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
+	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_commands.gd")
 	var branch_start := source.find('\"quick_bake\":')
 	var branch_end := source.find('\"undo\":', branch_start)
 	assert_gte(branch_start, 0, "Quick Bake dispatch branch must exist")

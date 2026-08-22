@@ -337,7 +337,7 @@ The remaining 6,692 lines are dominated by ~180 `_on_*` signal handlers wired to
 Current 3,987 lines. Largest functions are tightly coupled to viewport input flow and plugin state:
 - `_handle_keyboard_input` (237 lines) → `plugin_input_router.gd` keymap dispatch.
 - `_dispatch_viewport_action` (193 lines) → action-mode dispatch table.
-- `_on_context_toolbar_action` (150 lines) and `_on_hotkey_palette_action` (116 lines) → shared command-execution module.
+- `_on_context_toolbar_action` and `_on_hotkey_palette_action` now route through `plugin_commands.gd` (`HFPluginCommands.execute`).
 - `_handle_vertex_input` (146 lines) → vertex/edge mode handler module.
 - `_update_context_toolbar_state` (106 lines), `_update_hud_context` (65 lines), HUD overlays → `plugin_hud.gd`.
 
