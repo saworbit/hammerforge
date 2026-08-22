@@ -294,6 +294,11 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - **dock.gd reduction**: 7,001 → 6,692 lines (–309, –4.4%). plugin.gd: –4 lines (responsibility separation rather than LOC).
 - **75+ new test cases across 8 files**: `test_ui_factory`, `test_hf_validation`, `test_hf_system`, `test_hf_undo_nav`, `test_entity_prop_utils`, `test_hf_tooltip_text`, `test_hf_dialog_manager`, `test_hf_editor_theme`.
 
+## Done (Subtract preview, project entities, map faces — August 2026)
+- Subtract preview iterates DraftBrushes and mesh bounds.
+- `res://hammerforge_entities.json` overlays plugin entity definitions.
+- `.map` import/export of non-axis-aligned brushes uses CUSTOM faces.
+
 ## Done (Registry collapse, signal batching, snap-to-edge — August 2026)
 - `BrushManager` no longer owns or frees brush nodes; the system cache is the live list.
 - `create_brushes_from_infos`, `delete_brushes_by_id`, `nudge_brushes_by_id`, and `delete_managed_nodes` wrap `begin_signal_batch()` / `end_signal_batch()`.

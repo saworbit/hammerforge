@@ -192,10 +192,21 @@ static func _brush_from_faces(faces: Array) -> Dictionary:
 			"center": center,
 			"operation": CSGShape3D.OPERATION_UNION
 		}
+	var serialized_faces: Array = []
+	for face in faces:
+		var face_points: Array = face.get("points", [])
+		if face_points.size() < 3:
+			continue
+		var local_verts: Array = []
+		for p in face_points:
+			var pt: Vector3 = p
+			local_verts.append([pt.x - center.x, pt.y - center.y, pt.z - center.z])
+		serialized_faces.append({"local_verts": local_verts, "winding_version": 1})
 	return {
-		"shape": LevelRoot.BrushShape.CYLINDER,
-		"size": Vector3(max(size.x, size.z), size.y, max(size.x, size.z)),
+		"shape": LevelRoot.BrushShape.CUSTOM,
+		"size": size,
 		"center": center,
+		"faces": serialized_faces,
 		"operation": CSGShape3D.OPERATION_UNION
 	}
 
@@ -277,7 +288,26 @@ static func _brush_to_map_lines(
 		LevelRoot.BrushShape.CYLINDER:
 			lines.append_array(_cylinder_to_map_lines(brush, adapter))
 		_:
-			lines.append_array(_box_to_map_lines(brush, adapter))
+			if not brush.faces.is_empty():
+				lines.append_array(_faces_to_map_lines(brush, adapter))
+			else:
+				lines.append_array(_box_to_map_lines(brush, adapter))
+	return lines
+
+
+static func _faces_to_map_lines(
+	brush: DraftBrush, adapter: HFMapAdapterType = null
+) -> Array[String]:
+	if adapter == null:
+		adapter = HFMapQuakeType.new()
+	var lines: Array[String] = []
+	for face in brush.faces:
+		if face == null or face.local_verts.size() < 3:
+			continue
+		var a: Vector3 = brush.global_transform * face.local_verts[0]
+		var b: Vector3 = brush.global_transform * face.local_verts[1]
+		var c: Vector3 = brush.global_transform * face.local_verts[2]
+		lines.append(adapter.format_face_line(a, b, c, DEFAULT_TEXTURE, face))
 	return lines
 
 

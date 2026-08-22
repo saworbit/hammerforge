@@ -6630,7 +6630,7 @@ func _populate_brush_entity_classes() -> void:
 	if not brush_entity_class_opt:
 		return
 	brush_entity_class_opt.clear()
-	var defs = HFEntityDef.load_definitions(entity_defs_path)
+	var defs = HFEntityDef.load_merged_definitions(entity_defs_path)
 	var brush_defs = HFEntityDef.filter_brush_entities(defs)
 	if brush_defs.is_empty():
 		# Fallback: ensure at least the built-in brush entity classes are available.

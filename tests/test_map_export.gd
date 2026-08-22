@@ -1,10 +1,12 @@
 extends GutTest
 
 const MapIO = preload("res://addons/hammerforge/map_io.gd")
+const LevelRoot = preload("res://addons/hammerforge/level_root.gd")
 const HFMapAdapter = preload("res://addons/hammerforge/map_adapters/hf_map_adapter.gd")
 const HFMapQuake = preload("res://addons/hammerforge/map_adapters/hf_map_quake.gd")
 const HFMapValve220 = preload("res://addons/hammerforge/map_adapters/hf_map_valve220.gd")
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
+const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 
 # ===========================================================================
 # Quake adapter tests
@@ -195,9 +197,46 @@ func test_valve220_fmt_float_integer():
 	assert_eq(result, "5")
 
 
+func test_custom_brush_export_emits_real_face_planes():
+	var brush = DraftBrush.new()
+	add_child_autoqfree(brush)
+	brush.shape = LevelRoot.BrushShape.CUSTOM
+	var face = FaceData.new()
+	face.local_verts = PackedVector3Array([Vector3(0, 0, 0), Vector3(8, 0, 0), Vector3(0, 8, 0)])
+	var faces: Array[FaceData] = []
+	faces.append(face)
+	brush.faces = faces
+	assert_eq(brush.faces.size(), 1)
+	var lines: Array[String] = MapIO._brush_to_map_lines(brush)
+	assert_eq(lines.size(), 1)
+	assert_string_contains(lines[0], "( 0 0 0 )")
+	assert_string_contains(lines[0], "( 8 0 0 )")
+	assert_string_contains(lines[0], "( 0 8 0 )")
+
+
 func test_valve220_fmt_float_fractional():
 	var result = HFMapValve220._fmt_float(0.333)
 	assert_true(result.begins_with("0.33"))
+
+
+func test_parse_tilted_brush_imports_as_custom_faces():
+	var map_text := (
+		"{\n"
+		+ '"classname" "worldspawn"\n'
+		+ "{\n"
+		+ "( 0 0 0 ) ( 10 0 0 ) ( 0 10 0 ) brick 0 0 0 1 1\n"
+		+ "( 0 0 0 ) ( 0 10 0 ) ( 0 0 10 ) brick 0 0 0 1 1\n"
+		+ "( 0 0 0 ) ( 0 0 10 ) ( 10 0 0 ) brick 0 0 0 1 1\n"
+		+ "( 10 0 0 ) ( 0 0 10 ) ( 0 10 0 ) brick 0 0 0 1 1\n"
+		+ "}\n"
+		+ "}\n"
+	)
+	var parsed: Dictionary = MapIO.parse_map_text(map_text)
+	var brushes: Array = parsed.get("brushes", [])
+	assert_eq(brushes.size(), 1)
+	assert_eq(int(brushes[0]["shape"]), LevelRoot.BrushShape.CUSTOM)
+	assert_true(brushes[0].has("faces"))
+	assert_gte((brushes[0]["faces"] as Array).size(), 3)
 
 
 func test_parse_map_text_worldspawn_and_point_entity():

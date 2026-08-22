@@ -3,6 +3,7 @@ extends RefCounted
 class_name HFEntitySystem
 
 const DraftEntity = preload("../draft_entity.gd")
+const HFEntityDef = preload("../hf_entity_def.gd")
 
 var root: Node3D
 
@@ -13,35 +14,12 @@ func _init(level_root: Node3D) -> void:
 
 func load_entity_definitions() -> void:
 	root.entity_definitions.clear()
-	if (
-		root.entity_definitions_path == ""
-		or not ResourceLoader.exists(root.entity_definitions_path)
-	):
-		return
-	var file = FileAccess.open(root.entity_definitions_path, FileAccess.READ)
-	if not file:
-		return
-	var text = file.get_as_text()
-	var data = JSON.parse_string(text)
-	if data == null:
-		return
-	if data is Dictionary:
-		var entries = data.get("entities", null)
-		if entries is Array:
-			for entry in entries:
-				if entry is Dictionary:
-					var key = str(entry.get("id", entry.get("class", "")))
-					if key != "":
-						root.entity_definitions[key] = entry
-			return
-		root.entity_definitions = data
-		return
-	if data is Array:
-		for entry in data:
-			if entry is Dictionary:
-				var key = str(entry.get("class", ""))
-				if key != "":
-					root.entity_definitions[key] = entry
+	var defs = HFEntityDef.load_merged_definitions(
+		str(root.entity_definitions_path), HFEntityDef.PROJECT_DEFINITIONS_PATH
+	)
+	for def in defs:
+		if def and def.classname != "":
+			root.entity_definitions[def.classname] = def.to_dict()
 
 
 func get_entity_definition(entity_type: String) -> Dictionary:
