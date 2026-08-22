@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Changed
+- **Core-loop freeze:** the default editor is Draw → material → entity → bake → Test Level. Radial menu, coach marks, and operation replay are gated behind **Test → Settings → Power-user overlays** (off by default). Subtract preview is labeled as an AABB approximation. Unused welcome-panel, BrushPrefab, debug_heightmap, and archived quadrant-view scripts were removed. `BrushManager` is a null-safe legacy mirror of `HFBrushSystem`'s brush cache.
+
 ### Fixed
 - **Selection/widget arbitration follow-through:** a native transform/property widget or HammerForge resize handle now owns the complete mouse and keyboard stream before marquee or nudge handling can run. Lost native selection releases clear the complete session, application focus recovery settles external pointer captures, and Polygon height drag cannot mutate or commit on an unrelated later release. Mixed Godot/HammerForge and heterogeneous brush/entity selections are guarded all-or-nothing across dock handlers, delayed confirmations, shortcuts, and viewport action surfaces.
 - **Constrained radial primitives and resilient entity targets:** sphere/cylinder/cone/capsule draw bounds are recentered from the final normalized size so they do not drift sideways or float above the construction plane. Capsule height stays at least its diameter while Y-handle resizing retains the opposite-face anchor. Odd-sided pyramids/prisms now fill a centered requested AABB so visible geometry, outlines, bake output, and handles agree. Visible null, broken, and line-only entity previews receive a restrained proxy at their real nested/top-level transform—even beside healthy sibling visuals—while hidden previews and hidden parents leave no invisible target.

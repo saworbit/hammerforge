@@ -10,6 +10,7 @@ signal selection_clear_requested
 signal grid_snap_applied(value: float)
 signal bake_state_changed(baking: bool, success: bool)
 signal command_palette_requested
+signal power_user_overlays_changed(enabled: bool)
 
 const LevelRootType = preload("level_root.gd")
 const BrushPreset = preload("brush_preset.gd")
@@ -25,7 +26,6 @@ const HFUndoNav = preload("ui/hf_undo_nav.gd")
 const HFEntityPropUtils = preload("ui/hf_entity_prop_utils.gd")
 const HFTooltipText = preload("ui/hf_tooltip_text.gd")
 const HFToast = preload("ui/hf_toast.gd")
-const HFWelcomePanel = preload("ui/hf_welcome_panel.gd")
 const HFTutorialWizard = preload("ui/hf_tutorial_wizard.gd")
 const HFEntityDef = preload("hf_entity_def.gd")
 const HFPrefabType = preload("hf_prefab.gd")
@@ -201,6 +201,7 @@ var export_playtest_btn: Button = null
 # -- Editor toggles (built programmatically in _build_manage_tab) --
 var commit_freeze: CheckBox = null
 var show_hud: CheckBox = null
+var power_user_overlays: CheckBox = null
 var show_grid: CheckBox = null
 var follow_grid: CheckBox = null
 var debug_logs: CheckBox = null
@@ -399,7 +400,6 @@ var _toast_container: VBoxContainer = null
 var _clear_sel_btn: Button = null
 var _command_palette_btn: Button = null
 var _guide_btn: Button = null
-var _welcome_panel: PanelContainer = null
 var _tutorial_wizard = null
 var _brush_hint: Label = null
 var _paint_hint: Label = null
@@ -705,6 +705,10 @@ func _apply_user_prefs() -> void:
 	var hud_vis = _user_prefs.get_pref("show_hud", true)
 	if show_hud:
 		show_hud.button_pressed = bool(hud_vis)
+	if power_user_overlays:
+		power_user_overlays.set_pressed_no_signal(
+			bool(_user_prefs.get_pref("power_user_overlays", false))
+		)
 	# Restore collapsed section state
 	for sec_name in _all_sections:
 		var collapsed = _user_prefs.get_section_collapsed(sec_name)
@@ -983,10 +987,6 @@ func _close_tutorial() -> void:
 	if _tutorial_wizard and is_instance_valid(_tutorial_wizard):
 		_tutorial_wizard.queue_free()
 		_tutorial_wizard = null
-	# Legacy compat
-	if _welcome_panel:
-		_welcome_panel.queue_free()
-		_welcome_panel = null
 
 
 ## Highlight a dock tab by name (brief flash effect for tutorial).
@@ -1034,9 +1034,6 @@ func _on_welcome_dismissed(dont_show_again: bool) -> void:
 	var tabs = $Margin/VBox/MainTabs
 	if tabs:
 		tabs.visible = true
-	if _welcome_panel:
-		_welcome_panel.queue_free()
-		_welcome_panel = null
 
 
 ## Persist a pref change to disk.
@@ -3052,6 +3049,12 @@ func _on_show_hud_toggled(pressed: bool) -> void:
 	hud_visibility_changed.emit(pressed)
 	_save_user_pref("show_hud", pressed)
 	_log("HUD visibility: %s" % ("on" if pressed else "off"))
+
+
+func _on_power_user_overlays_toggled(pressed: bool) -> void:
+	_save_user_pref("power_user_overlays", pressed)
+	power_user_overlays_changed.emit(pressed)
+	_log("Power-user overlays: %s" % ("on" if pressed else "off"))
 
 
 func _on_follow_grid_toggled(pressed: bool) -> void:

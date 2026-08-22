@@ -82,6 +82,11 @@ func test_merge_null_material_grouped_separately():
 	assert_eq(merged.get_surface_count(), 2, "Null and non-null materials are separate surfaces")
 
 
+func test_merge_empty_entries_returns_null():
+	var merged = baker._merge_entries_worker([])
+	assert_null(merged, "Empty bake merge should not invent a mesh")
+
+
 func test_merge_applies_transform():
 	var mesh = _make_simple_mesh()
 	var xform = Transform3D.IDENTITY.translated(Vector3(10, 0, 0))

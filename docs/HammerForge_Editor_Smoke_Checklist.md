@@ -46,6 +46,13 @@ Enable the HammerForge plugin if it is not already enabled.
 
 ## Checklist
 
+### 0. Core Loop Default
+- Confirm the dock leads with **Test Level** on the Test tab.
+- Confirm **Test → Settings → Power-user overlays** is unchecked on a fresh prefs file.
+- Press backtick and Ctrl+Shift+T. Confirm a toast tells you to enable Power-user overlays rather than opening the radial menu or replay timeline.
+- Enable the checkbox, then confirm the radial menu and replay timeline work. Disable it again and confirm they disappear.
+- Confirm **Subtract Preview (AABB approx)** is the subtract-preview checkbox label.
+
 ### 1. Fresh Tutorial Startup
 - Open `hf_editor_smoke_start.tscn`.
 - Confirm there is no `LevelRoot` in the scene tree yet.

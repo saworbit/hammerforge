@@ -196,6 +196,18 @@ Grid-based paint layers with chunked storage for large worlds:
 
 ---
 
+## Core Loop
+
+The default editor is the five-step greybox path. Extra overlays stay off until you opt in.
+
+1. **Draw** brushes (Add / Subtract)
+2. **Assign materials** from the Paint tab
+3. **Place entities** and wire I/O
+4. **Bake**
+5. **Test Level**
+
+Turn on **Test → Settings → Power-user overlays** for the radial menu, coach marks, and operation replay timeline. Command palette, context toolbar, tutorial, Space context menu, and HUD stay available either way.
+
 ## Editor UX
 
 HammerForge's dock is designed to stay out of your way while keeping everything reachable:
@@ -211,12 +223,12 @@ HammerForge's dock is designed to stay out of your way while keeping everything 
 - **Command palette** (Shift+? or F1 or Ctrl+K) -- searchable action palette with fuzzy search, "Did you mean" suggestions, and live gray-out for unavailable actions
 - **Viewport context menu** (Space) -- context-sensitive right-click-style menu with grid snap presets, UV operations, draw shapes, and toggle items; sections adapt to current selection
 - **Predictable camera navigation** -- plain RMB always controls Godot's 3D camera while HammerForge is idle, regardless of selection or persistent tool mode; while held, native WASD flight and mixed mouse input cannot trigger HammerForge actions. Only an active gesture or modal interaction may consume the initial press
-- **Radial menu** (`` ` ``) -- 8-sector pie menu for quick tool switching (Box, Cylinder, Select, Paint, Vertex, Tex Pick, Measure, Clip) drawn as an overlay in the 3D viewport
+- **Radial menu** (`` ` ``, opt-in) -- 8-sector pie menu for quick tool switching (Box, Cylinder, Select, Paint, Vertex, Tex Pick, Measure, Clip). Enable **Power-user overlays** in Test → Settings
 - **Quick property popups** (double-tap G G / B B / R R) -- inline numeric entry for grid snap, brush size, and paint radius without leaving the viewport
 - **Grid size indicator** -- persistent "Grid: N" display in viewport HUD with flash-on-change feedback; `[` / `]` keys halve/double grid snap instantly
-- **Coach marks** -- first-use step-by-step guides for advanced tools (Polygon, Path, Carve, Vertex, Extrude, etc.) with "Don't show again" persistence
+- **Coach marks** (opt-in) -- first-use step-by-step guides for advanced tools (Polygon, Path, Carve, Vertex, Extrude, etc.) with "Don't show again" persistence
 - **Undo history browser** -- thumbnail-equipped history panel (Test tab) with double-click navigation to any undo point
-- **Operation replay timeline** (Ctrl+Shift+T) -- visual timeline of recent operations with undo/redo replay to any recorded point
+- **Operation replay timeline** (Ctrl+Shift+T, opt-in) -- visual timeline of recent operations with undo/redo replay to any recorded point
 - **Example library** -- 5 built-in demo levels (Test tab) with difficulty ratings, annotations, and one-click loading for learning
 - **Auto-mode hints** -- "Drawing in Add mode" bar appears during drag with one-click Add/Subtract toggle
 - **Tool poll system** -- buttons gray out with inline hints when an action can't run ("Select a brush to use these tools")

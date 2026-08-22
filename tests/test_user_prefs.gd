@@ -24,9 +24,30 @@ func test_defaults_loaded():
 	assert_eq(prefs.get_pref("show_hud"), true, "Default show_hud should be true")
 	assert_eq(prefs.get_pref("show_welcome"), true, "Default show_welcome should be true")
 	assert_eq(
+		prefs.get_pref("power_user_overlays"),
+		false,
+		"Power-user overlays must stay off until opted in"
+	)
+	assert_eq(
 		prefs.get_pref("hints_dismissed"),
 		{},
 		"Default hints_dismissed should be an empty dictionary"
+	)
+
+
+func test_power_user_overlays_helper_defaults_false():
+	assert_false(
+		prefs.is_power_user_overlays_enabled(),
+		"Core-loop default must hide radial/coach/replay overlays"
+	)
+
+
+func test_power_user_overlays_helper_reads_pref():
+	prefs.set_pref("power_user_overlays", true)
+	assert_true(prefs.is_power_user_overlays_enabled())
+	prefs.data.erase("power_user_overlays")
+	assert_false(
+		prefs.is_power_user_overlays_enabled(), "Missing key must fall back to the false default"
 	)
 
 

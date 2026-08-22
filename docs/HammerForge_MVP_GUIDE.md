@@ -15,7 +15,7 @@ This guide is for contributors implementing or extending the MVP.
 HammerForge uses a **coordinator + subsystems** pattern:
 
 - **`plugin.gd`** handles editor input and routes to `LevelRoot`. Uses sticky `active_root` with deep recursive tree search.
-- **`level_root.gd`** is a thin coordinator (~1,100 lines) that owns containers, exports, and signals. All public methods delegate to one of 13 subsystem classes.
+- **`level_root.gd`** is a coordinator (~2,200 lines) that owns containers, exports, and signals. All public methods delegate to subsystem classes. Default UX is Draw → material → entity → bake → Test Level; power-user overlays are opt-in.
 - **Subsystems** (`systems/*.gd`) are `RefCounted` classes that do the real work. Each receives a `LevelRoot` reference in its constructor.
 - **`input_state.gd`** is a state machine managing drag/paint modes.
 - **`dock.gd`** presents 4 tabs (Build, Paint, Objects, Test) with programmatic, persisted collapsible sections. Selection tools appear contextually in Build when brushes are selected. The primary toolbar exposes Draw, Select, Paint, More, and Help.

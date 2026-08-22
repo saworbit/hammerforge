@@ -24,7 +24,7 @@ Treat `addons/godot_mcp` as vendored code: HammerForge formatting and lint comma
 ```
 addons/hammerforge/
   plugin.gd              EditorPlugin entry point, input routing, sticky LevelRoot discovery
-  level_root.gd          Thin coordinator (~1,100 lines), delegates to subsystems
+  level_root.gd          Coordinator (~2,200 lines), delegates to subsystems
   input_state.gd         Drag/paint state machine (HFInputState)
   hf_selection_gesture.gd Select-mode LMB arbiter (native object selection, face marquee, gizmos)
   dock.gd + dock.tscn    UI dock (displayed as Build, Paint, Objects, Test), collapsible sections with persisted state
@@ -75,7 +75,6 @@ addons/hammerforge/
   ui/                    Reusable UI components
     collapsible_section.gd HFCollapsibleSection: toggle-header VBoxContainer for dock sections
     hf_toast.gd            Toast notification system (auto-fading stacked messages)
-    hf_welcome_panel.gd    First-run welcome panel (legacy, replaced by tutorial wizard)
     hf_tutorial_wizard.gd  Focused 2-step Draw → Test Level guide (signal-driven auto-advance)
     hf_shortcut_dialog.gd  Searchable shortcut reference dialog (filterable Tree with categories)
     hf_material_browser.gd Visual material browser (thumbnail grid, search, filters, favorites, drag-drop)

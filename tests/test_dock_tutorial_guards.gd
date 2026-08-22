@@ -29,17 +29,20 @@ func test_show_welcome_panel_is_idempotent_while_tutorial_is_active() -> void:
 	assert_eq(dock_vbox.get_child_count(), child_count)
 
 
-func test_user_pref_guard_tracks_tutorial_instead_of_legacy_welcome_panel() -> void:
-	var legacy_panel := PanelContainer.new()
-	dock.get_node("Margin/VBox").add_child(legacy_panel)
-	dock._welcome_panel = legacy_panel
-
+func test_user_pref_guard_starts_tutorial_when_show_welcome_true() -> void:
 	var prefs := UserPrefs.new()
 	prefs.persistence_enabled = false
 	prefs.data = UserPrefs._defaults()
 	dock.set_user_prefs(prefs)
-
 	assert_not_null(
-		dock._tutorial_wizard,
-		"A stale legacy welcome panel must not suppress the active tutorial wizard",
+		dock._tutorial_wizard, "show_welcome still starts the Draw → Test Level tutorial"
 	)
+
+
+func test_completed_tutorial_is_not_reshown() -> void:
+	var prefs := UserPrefs.new()
+	prefs.persistence_enabled = false
+	prefs.data = UserPrefs._defaults()
+	prefs.set_pref("tutorial_step", 99)
+	dock.set_user_prefs(prefs)
+	assert_null(dock._tutorial_wizard, "A finished tutorial must stay dismissed")
