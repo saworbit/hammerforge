@@ -127,7 +127,7 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - **Dynamic contextual hints**: viewport overlay hints per tool mode (draw, select, extrude, paint) with auto-fade tween and per-hint dismissal persistence via user prefs.
 - **Searchable shortcut dialog**: `HFShortcutDialog` replaces static popup. Filterable Tree with categories (Tools, Editing, Paint, Axis Lock). Built from keymap data.
 - **Interactive tutorial wizard**: `HFTutorialWizard` 5-step guided walkthrough (Draw → Subtract → Paint → Entity → Bake) with signal-driven auto-advance, validation, progress bar, and persistent resume.
-- **Real-time subtract preview**: `HFSubtractPreview` system shows wireframe AABB intersection overlays between additive and subtractive brushes. Debounced rebuild, pooled MeshInstance3D, toggle in Settings.
+- **Real-time subtract preview**: `HFSubtractPreview` CSG-intersects overlapping additive/subtract DraftBrushes and shows the cut volume; AABB wireframes remain as fallback.
 - **Prefabs / reusable brush groups**: `HFPrefab` captures brush + entity selections as centroid-relative groups. Save/load `.hfprefab` JSON files. `HFPrefabLibrary` dock section with drag-and-drop instantiation. Entity I/O remapping on instantiate.
 - 56 new tests (shortcut_dialog, tutorial_wizard, subtract_preview, prefab, user_prefs additions). Total: **568 tests across 34 files**.
 
@@ -309,7 +309,7 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - Power-user overlays (radial menu, coach marks, operation replay) are opt-in.
 - Brush cache is the brush-list authority; `BrushManager` writes are null-safe.
 - Dead code removed: welcome panel, unused `BrushPrefab`, `debug_heightmap`, archived quadrant view.
-- Subtract preview labeled as AABB approximation.
+- Subtract preview labeled as AABB approximation (superseded by live CSG cut overlay).
 - Core characterization tests added for `HFBrushSystem`, `HFPaintSystem`, overlay prefs, and empty baker merge.
 - Docs and `plugin.cfg` updated to match the code. Wave 3 features stay deferred.
 

@@ -115,7 +115,7 @@ Destructive geometry operations show a wireframe preview overlay before permanen
 | Clip (Shift+X) | Cyan wireframe + orange plane | Two resulting halves + the cut surface |
 | Hollow (Ctrl+H) | Yellow wireframe | 6 wall pieces at the chosen thickness |
 | Extrude (U/J) | Semi-transparent brush | New brush being extruded from the face |
-| Subtract (toggle) | Red wireframe | AABB intersection volumes |
+| Subtract (toggle) | Red CSG cut | Live intersection of overlapping subtract/additive brushes |
 
 Each preview appears immediately, then a confirmation dialog gives you the option to **Cancel** and abort without changing anything.
 
@@ -529,7 +529,7 @@ The viewport HUD shows the current grid snap value (e.g. "Grid: 16") persistentl
 - **`]`** — double grid snap (e.g. 16 → 32), maximum 512
 
 ### Subtract Preview
-Enable **Subtract Preview** in Test tab → Settings to see real-time wireframe overlays at the AABB intersection of additive and subtractive brushes. Red wireframe boxes show exactly where subtractive brushes will cut into additive geometry. The preview updates automatically when brushes are added, removed, or moved (with a 0.15s debounce for performance). This helps visualize the effect of subtract operations before baking.
+Enable **Subtract Preview** in Test tab → Settings to see the live CSG cut between overlapping additive and subtractive DraftBrushes. A translucent red mesh shows the volume that will be removed; a wireframe AABB is used only while CSG is catching up or when too many subtractors are active. The preview updates when brushes are added, removed, or moved (0.15s debounce). It does not CSG the entire level.
 
 ### Status bar
 - Shows current status ("Ready", "Baking...", errors in red, warnings in yellow).

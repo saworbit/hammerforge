@@ -80,7 +80,7 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 - **Entity I/O**: Source-style input/output connections stored as `entity_io_outputs` meta. Fields: output_name, target_name, input_name, parameter, delay, fire_once. Managed via `add_entity_output()`, `remove_entity_output()`, `get_entity_outputs()`. Connections serialize with entity info in `.hflevel`.
 
 ### Subtract Preview (`HFSubtractPreview`)
-- `RefCounted` subsystem showing wireframe AABB intersection overlays between additive and subtractive brushes.
+- `RefCounted` subsystem showing the live CSG cut between overlapping additive and subtractive DraftBrushes.
 - Uses `ImmediateMesh` with `PRIMITIVE_LINES` (same 12-edge box pattern as cordon wireframe).
 - Debounced rebuild (0.15s), MeshInstance3D pool (max 50 entries).
 - Connects to `brush_added`, `brush_removed`, `brush_changed` signals for automatic updates.

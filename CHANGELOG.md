@@ -5,12 +5,14 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Changed
+- **Live CSG subtract preview:** overlapping additive/subtract DraftBrushes show the actual CSG cut volume after a two-frame bake. Mesh-bound AABB wireframes remain as the immediate fallback. Full-level CSG of every brush is still out of scope.
+- **Heightmap convert uses authored meshes:** conversion rasterizes additive mesh bounds (including displacement height) and skips subtract brushes so heightmaps do not fight Source-style displacements or cutters.
 - **Subtract preview sees DraftBrushes** and uses mesh bounds instead of skipping non-CSGShape3D nodes.
 - **Per-project entities:** `res://hammerforge_entities.json` overlays the plugin entity list (same classname wins).
 - **`.map` fidelity:** rotated/complex brushes import and export as CUSTOM face planes instead of cylinders/boxes.
 - **BrushManager is a list mirror:** `clear_brushes()` no longer frees nodes. `HFBrushSystem` owns brush lifetime; multi-brush create/delete/nudge now batch LevelRoot signals.
 - **Snap-to-edge:** new EDGE snap mode (dock **E** / Edges) snaps to AABB edge midpoints of existing brushes.
-- **Core-loop freeze:** the default editor is Draw → material → entity → bake → Test Level. Radial menu, coach marks, and operation replay are gated behind **Test → Settings → Power-user overlays** (off by default). Subtract preview is labeled as an AABB approximation. Unused welcome-panel, BrushPrefab, debug_heightmap, and archived quadrant-view scripts were removed. `BrushManager` is a null-safe legacy mirror of `HFBrushSystem`'s brush cache.
+- **Core-loop freeze:** the default editor is Draw → material → entity → bake → Test Level. Radial menu, coach marks, and operation replay are gated behind **Test → Settings → Power-user overlays** (off by default). Unused welcome-panel, BrushPrefab, debug_heightmap, and archived quadrant-view scripts were removed. `BrushManager` is a null-safe legacy mirror of `HFBrushSystem`'s brush cache.
 
 ### Fixed
 - **Selection/widget arbitration follow-through:** a native transform/property widget or HammerForge resize handle now owns the complete mouse and keyboard stream before marquee or nudge handling can run. Lost native selection releases clear the complete session, application focus recovery settles external pointer captures, and Polygon height drag cannot mutate or commit on an unrelated later release. Mixed Godot/HammerForge and heterogeneous brush/entity selections are guarded all-or-nothing across dock handlers, delayed confirmations, shortcuts, and viewport action surfaces.

@@ -156,7 +156,7 @@ Enable the HammerForge plugin if it is not already enabled.
 - Open `Test -> Settings`.
 - Toggle `Subtract Preview` on.
 - Create an additive brush and a subtractive brush with real overlap.
-- Confirm the red wireframe preview appears on the overlap volume.
+- Confirm a red CSG cut volume (or AABB wireframe fallback) appears on the overlap.
 - Move or resize either brush; confirm the preview updates.
 - Toggle `Subtract Preview` off; confirm the wireframe is removed.
 

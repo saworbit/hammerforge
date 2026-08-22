@@ -19,7 +19,7 @@ const TEXTS := {
 	"Radial menu, coach marks, and operation replay\nOff by default so Draw → Bake → Test Level stays obvious",
 	"debug_logs": "Print debug info to Output panel",
 	"_show_subtract_preview":
-	"Show overlap between subtract and additive DraftBrushes\nUses each brush's mesh bounds (not live CSG of the whole level)",
+	"Show the live CSG cut between subtract and additive DraftBrushes\nOverlapping brushes only — not a full-level bake",
 	# --- Build tab: brush size & shape ---
 	"size_x": "Brush width (X axis) in units",
 	"size_y": "Brush height (Y axis) in units",
