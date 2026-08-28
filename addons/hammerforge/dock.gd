@@ -325,6 +325,7 @@ var snap_grid_btn: Button = null
 var snap_vertex_btn: Button = null
 var snap_center_btn: Button = null
 var snap_edge_btn: Button = null
+var snap_perp_btn: Button = null
 var _axis_lock_x: Button = null
 var _axis_lock_y: Button = null
 var _axis_lock_z: Button = null
@@ -840,6 +841,8 @@ func _setup_simplified_workflow() -> void:
 		snap_center_btn.text = "Centers"
 	if snap_edge_btn:
 		snap_edge_btn.text = "Edges"
+	if snap_perp_btn:
+		snap_perp_btn.text = "Perp"
 
 
 func _update_context_hints() -> void:
@@ -2629,6 +2632,13 @@ func _build_snap_mode_buttons() -> void:
 	snap_edge_btn.custom_minimum_size.x = 32
 	snap_edge_btn.toggled.connect(_on_snap_mode_toggled.bind(8))
 	row.add_child(snap_edge_btn)
+	snap_perp_btn = Button.new()
+	snap_perp_btn.text = "P"
+	snap_perp_btn.tooltip_text = "Perpendicular snap (drop onto brush edges)"
+	snap_perp_btn.toggle_mode = true
+	snap_perp_btn.custom_minimum_size.x = 32
+	snap_perp_btn.toggled.connect(_on_snap_mode_toggled.bind(16))
+	row.add_child(snap_perp_btn)
 	parent.add_child(row)
 	parent.move_child(row, idx)
 	# Axis Lock row

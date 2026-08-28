@@ -60,6 +60,7 @@ func test_default_mode_is_grid():
 	assert_false(snap.is_mode_on(HFSnapSystem.SnapMode.VERTEX))
 	assert_false(snap.is_mode_on(HFSnapSystem.SnapMode.CENTER))
 	assert_false(snap.is_mode_on(HFSnapSystem.SnapMode.EDGE))
+	assert_false(snap.is_mode_on(HFSnapSystem.SnapMode.PERPENDICULAR))
 
 
 func test_set_mode_on_off():
@@ -129,6 +130,28 @@ func test_edge_snap_to_midpoint():
 	_make_brush(Vector3.ZERO, Vector3(32, 32, 32), "e1")
 	var result = snap.snap_point(Vector3(16.4, 0.3, 16.2), 0.0)
 	assert_eq(result, Vector3(16, 0, 16))
+
+
+func test_perp_snaps_onto_edge_segment_not_midpoint():
+	snap.set_mode(HFSnapSystem.SnapMode.PERPENDICULAR, true)
+	snap.set_mode(HFSnapSystem.SnapMode.GRID, false)
+	# Box at origin, size 32. +X/+Y edge runs along Z at (16, 16, -16..16).
+	_make_brush(Vector3.ZERO, Vector3(32, 32, 32), "perp1")
+	# Midpoint of that edge is (16, 16, 0). A point at z=8 should drop onto
+	# the segment at (16, 16, 8), not the midpoint.
+	var result = snap.snap_point(Vector3(16.3, 16.2, 8.0), 0.0)
+	assert_eq(result, Vector3(16, 16, 8))
+
+
+func test_perp_and_grid_perp_wins_inside_threshold():
+	snap.set_mode(HFSnapSystem.SnapMode.GRID, true)
+	snap.set_mode(HFSnapSystem.SnapMode.PERPENDICULAR, true)
+	snap.snap_threshold = 2.0
+	_make_brush(Vector3.ZERO, Vector3(32, 32, 32), "perp2")
+	# Grid-16 would pull (16.4, 16.3, 8) toward (16, 16, 16) or (16, 16, 0).
+	# Perp drop onto the Z-edge is closer.
+	var result = snap.snap_point(Vector3(16.4, 16.3, 8.0), 16.0)
+	assert_eq(result, Vector3(16, 16, 8))
 
 
 func test_center_snap():

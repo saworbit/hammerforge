@@ -317,7 +317,7 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - Multiple simultaneous cordons.
 - Multi-tool presets for common workflows.
 - Additional bake pipelines (merge strategies, export helpers).
-- Snap-to-perpendicular mode for the snap system (edge snap shipped).
+- Snap-to-perpendicular mode for the snap system (shipped: dock **P**).
 - Preference packs (e.g. "Speedrunner", "Precision") for one-click workflow presets.
 - Formalized plugin API (`HFEditorPlugin` base class for custom tool scripts with menu/toolbar hooks).
 - Bezier patch editing (control-point-grid surfaces as first-class brush type).

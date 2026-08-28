@@ -100,6 +100,18 @@ func test_merge_applies_transform():
 		assert_gte(v.x, 9.99, "Vertices should be translated by +10 in X")
 
 
+func test_merge_entries_thread_pool_matches_sync():
+	var mat = _make_colored_material(Color.RED)
+	var mesh = _make_simple_mesh(mat)
+	var entries = [mesh, mesh]
+	var sync_mesh: ArrayMesh = baker._merge_entries(entries, false)
+	var pooled_mesh: ArrayMesh = baker._merge_entries(entries, true)
+	assert_not_null(sync_mesh)
+	assert_not_null(pooled_mesh)
+	assert_eq(sync_mesh.get_surface_count(), pooled_mesh.get_surface_count())
+	assert_eq(sync_mesh.surface_get_array_len(0), pooled_mesh.surface_get_array_len(0))
+
+
 # ===========================================================================
 # bake_from_faces: single mesh with per-surface materials
 # ===========================================================================

@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Added
+- **Snap-to-perpendicular** (dock **P**): drop the cursor onto the closest point on a brush AABB edge, so offsets stay 90° to that edge.
+
 ### Fixed
 - **Tied `func_detail` / trigger brushes bake again:** they stay out of world CSG, then a post-pass emits detail meshes + collision and trigger `Area3D` volumes (including copied I/O metadata).
 - **`.map` brush entities round-trip:** `func_detail` / `func_wall` / triggers export as their own entity blocks and import with `brush_entity_class` set.
@@ -19,6 +22,7 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 - **History thumbnails skip GPU readback** when the History section is hidden, and new rows append instead of rebuilding the list.
 
 ### Changed
+- **Merged-mesh bake uses `WorkerThreadPool`** when `bake_use_thread_pool` is on. Surface grouping/transforms run on a worker; `ArrayMesh` assembly stays on the main thread.
 - **Test-tab bake/play handlers live in `dock_manage_handler.gd`:** bake, validate, Test Level, spawn, and playtest dock methods are thin wrappers around `HFDockManageHandler`.
 - **Objects-tab entity handlers live in `dock_entity_handler.gd`:** property rebuild, create-entity, and I/O/wiring dock methods are thin wrappers around `HFDockEntityHandler`.
 - **Build-tab brush handlers live in `dock_brush_handler.gd`:** displacement, bevel, hollow, clip, floor/ceiling, duplicate-array, and tie/untie dock methods are thin wrappers around `HFDockBrushHandler`.

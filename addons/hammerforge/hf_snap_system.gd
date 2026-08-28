@@ -1,12 +1,11 @@
 @tool
 extends RefCounted
 class_name HFSnapSystem
-## Centralized snap system with grid, vertex (brush corners), and center snap modes.
-## Replaces the simple grid-only snapping with geometry-aware snapping.
+## Centralized snap system with grid, vertex, center, edge, and perpendicular modes.
 
 const DraftBrush = preload("brush_instance.gd")
 
-enum SnapMode { GRID = 1, VERTEX = 2, CENTER = 4, EDGE = 8 }
+enum SnapMode { GRID = 1, VERTEX = 2, CENTER = 4, EDGE = 8, PERPENDICULAR = 16 }
 
 var root: Node3D
 var enabled_modes: int = SnapMode.GRID
@@ -44,9 +43,14 @@ func snap_point(point: Vector3, grid_snap: float, exclude_ids: Array = []) -> Ve
 			best = grid_snapped
 			best_dist = d
 
-	# Geometry snap candidates (vertex / center / edge)
-	if is_mode_on(SnapMode.VERTEX) or is_mode_on(SnapMode.CENTER) or is_mode_on(SnapMode.EDGE):
-		var candidates := _collect_candidates(exclude_ids)
+	# Geometry snap candidates (vertex / center / edge / perpendicular)
+	if (
+		is_mode_on(SnapMode.VERTEX)
+		or is_mode_on(SnapMode.CENTER)
+		or is_mode_on(SnapMode.EDGE)
+		or is_mode_on(SnapMode.PERPENDICULAR)
+	):
+		var candidates := _collect_candidates(exclude_ids, point)
 		for c in candidates:
 			var d := point.distance_to(c)
 			if d < snap_threshold and d < best_dist:
@@ -84,13 +88,14 @@ func _project_onto_line(point: Vector3, line_origin: Vector3, line_dir: Vector3)
 	return line_origin + line_dir * t
 
 
-func _collect_candidates(exclude_ids: Array) -> PackedVector3Array:
+func _collect_candidates(exclude_ids: Array, point: Vector3 = Vector3.ZERO) -> PackedVector3Array:
 	var out := PackedVector3Array()
 	if not root or not root.has_method("_iter_pick_nodes"):
 		return out
 	var do_vertex := is_mode_on(SnapMode.VERTEX)
 	var do_center := is_mode_on(SnapMode.CENTER)
 	var do_edge := is_mode_on(SnapMode.EDGE)
+	var do_perp := is_mode_on(SnapMode.PERPENDICULAR)
 	var preview = root.get("preview_brush")
 	for node in root._iter_pick_nodes():
 		if not (node is DraftBrush):
@@ -118,7 +123,7 @@ func _collect_candidates(exclude_ids: Array) -> PackedVector3Array:
 		)
 		if do_vertex:
 			out.append_array(corners)
-		if do_edge:
+		if do_edge or do_perp:
 			# 12 AABB edges, same corner order as vertex snap.
 			var edges := [
 				[0, 1],
@@ -135,5 +140,17 @@ func _collect_candidates(exclude_ids: Array) -> PackedVector3Array:
 				[6, 7],
 			]
 			for edge in edges:
-				out.append((corners[edge[0]] + corners[edge[1]]) * 0.5)
+				if do_edge:
+					out.append((corners[edge[0]] + corners[edge[1]]) * 0.5)
+				if do_perp:
+					out.append(_closest_point_on_segment(point, corners[edge[0]], corners[edge[1]]))
 	return out
+
+
+func _closest_point_on_segment(point: Vector3, a: Vector3, b: Vector3) -> Vector3:
+	var ab: Vector3 = b - a
+	var len_sq: float = ab.length_squared()
+	if len_sq < 0.000001:
+		return a
+	var t: float = clampf((point - a).dot(ab) / len_sq, 0.0, 1.0)
+	return a + ab * t

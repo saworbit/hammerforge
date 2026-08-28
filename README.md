@@ -428,11 +428,12 @@ See [ROADMAP.md](ROADMAP.md) for the full plan.
 
 **Recently shipped (also):**
 - Material atlas packing and merge-selected-brushes
-- Snap-to-edge (dock **E**)
+- Snap-to-edge (dock **E**) and snap-to-perpendicular (dock **P**)
+- Bake `func_detail` meshes and trigger `Area3D` volumes
 
 **Next up:**
-- Bake `func_detail` / trigger volumes into Test Level ([#31](https://github.com/saworbit/hammerforge/issues/31))
-- Snap-to-perpendicular
+- PBR channels in the material atlas
+- Off-main-thread `.hflevel` JSON encode
 
 **Later:**
 - Bezier patch editing

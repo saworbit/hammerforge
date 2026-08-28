@@ -266,7 +266,7 @@ func estimate_bake_time(brush_ids: Array = []) -> Dictionary:
 	var tip := ""
 	if count > 500:
 		tip = "Chunking recommended for >500 brushes"
-	elif count > 200:
+	elif count > 200 and not bool(root.get("bake_use_thread_pool")):
 		tip = "Consider enabling thread pool for faster bakes"
 	elif count == 0:
 		tip = "No brushes to bake"

@@ -618,11 +618,25 @@ static func _append_transformed_face(
 	group["normals"] = dest_normals
 
 
-func _merge_entries(entries: Array, _use_thread_pool: bool) -> ArrayMesh:
+func _merge_entries(entries: Array, use_thread_pool: bool) -> ArrayMesh:
 	var mesh_entries = _collect_mesh_entries(entries)
 	if mesh_entries.is_empty():
 		return null
-	return _merge_entries_worker(mesh_entries)
+	var payloads: Array = _extract_surface_payloads(mesh_entries)
+	if payloads.is_empty():
+		return null
+	var grouped: Array = []
+	if use_thread_pool:
+		var bucket: Array = []
+		var task_id: int = WorkerThreadPool.add_task(
+			func() -> void: bucket.append(_group_surface_payloads(payloads))
+		)
+		WorkerThreadPool.wait_for_task_completion(task_id)
+		if not bucket.is_empty():
+			grouped = bucket[0]
+	else:
+		grouped = _group_surface_payloads(payloads)
+	return _assemble_merged_mesh(grouped)
 
 
 ## Extract world-space vertices from a Mesh, applying the given transform.
@@ -678,32 +692,61 @@ func _collect_mesh_entries(entries: Array) -> Array:
 
 
 func _merge_entries_worker(mesh_entries: Array) -> ArrayMesh:
-	# Group surfaces by material to minimize surface count on the merged mesh.
-	# Surfaces sharing the same material are concatenated into one surface.
-	var mat_groups: Dictionary = {}  # material_key -> { "material", "arrays_list" }
+	return _assemble_merged_mesh(_group_surface_payloads(_extract_surface_payloads(mesh_entries)))
+
+
+func _extract_surface_payloads(mesh_entries: Array) -> Array:
+	var payloads: Array = []
 	for entry in mesh_entries:
 		var mesh: Mesh = entry.get("mesh", null)
 		var xform: Transform3D = entry.get("transform", Transform3D.IDENTITY)
 		if not mesh:
 			continue
-		var surface_count = mesh.get_surface_count()
-		for surface in range(surface_count):
+		for surface in range(mesh.get_surface_count()):
 			var arrays = mesh.surface_get_arrays(surface)
 			if arrays.is_empty():
 				continue
-			var mat: Material = mesh.surface_get_material(surface)
-			var key = mat if mat != null else "_default"
-			if not mat_groups.has(key):
-				mat_groups[key] = {"material": mat, "arrays_list": []}
-			mat_groups[key]["arrays_list"].append(_transform_arrays(arrays, xform))
+			(
+				payloads
+				. append(
+					{
+						"arrays": arrays,
+						"transform": xform,
+						"material": mesh.surface_get_material(surface),
+					}
+				)
+			)
+	return payloads
 
-	var merged = ArrayMesh.new()
+
+func _group_surface_payloads(payloads: Array) -> Array:
+	var mat_groups: Dictionary = {}
+	for payload in payloads:
+		var arrays: Array = payload.get("arrays", [])
+		if arrays.is_empty():
+			continue
+		var xform: Transform3D = payload.get("transform", Transform3D.IDENTITY)
+		var mat: Material = payload.get("material", null)
+		var key = mat if mat != null else "_default"
+		if not mat_groups.has(key):
+			mat_groups[key] = {"material": mat, "arrays_list": []}
+		mat_groups[key]["arrays_list"].append(_transform_arrays(arrays, xform))
+	var grouped: Array = []
 	for group in mat_groups.values():
-		var combined = _concat_surface_arrays(group["arrays_list"])
+		grouped.append(group)
+	return grouped
+
+
+func _assemble_merged_mesh(grouped: Array) -> ArrayMesh:
+	if grouped.is_empty():
+		return null
+	var merged = ArrayMesh.new()
+	for group in grouped:
+		var combined = _concat_surface_arrays(group.get("arrays_list", []))
 		if combined.is_empty():
 			continue
 		merged.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, combined)
-		var mat: Material = group["material"]
+		var mat: Material = group.get("material", null)
 		if mat:
 			merged.surface_set_material(merged.get_surface_count() - 1, mat)
 	return merged if merged.get_surface_count() > 0 else null
