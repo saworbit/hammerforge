@@ -13,6 +13,8 @@ var _hflevel_pending: Dictionary = {}
 var _hflevel_last_hash: int = 0
 ## Last write error observed on the main thread (thread result is returned from wait_to_finish).
 var _last_write_error := ""
+## Set by process_thread_queue() from the worker result (true when hash matched).
+var last_encode_skipped := false
 
 
 func _init(level_root: Node3D) -> void:
@@ -27,14 +29,14 @@ func save_hflevel(path: String = "", force: bool = false) -> int:
 	if root.paint_system:
 		root.paint_system.set_region_base_path(target)
 		root.paint_system.save_loaded_regions()
-	var encoded = root._capture_hflevel_state()
-	var json = JSON.stringify(encoded)
-	var hash_value = json.hash()
-	if not force and hash_value == _hflevel_last_hash:
-		return OK
-	_hflevel_last_hash = hash_value
-	var payload = HFLevelIO.build_payload_from_json(json, root.hflevel_compress)
-	start_hflevel_thread(target, payload)
+	var encoded: Dictionary = {}
+	var captured: Variant = root._capture_hflevel_state()
+	if captured is Dictionary:
+		encoded = (captured as Dictionary).duplicate(true)
+	var compress := true
+	if root:
+		compress = bool(root.hflevel_compress)
+	start_hflevel_thread(target, encoded, compress, force)
 	return OK
 
 
@@ -123,34 +125,54 @@ func ensure_dir_for_path(path: String) -> void:
 		DirAccess.make_dir_recursive_absolute(dir_path)
 
 
-func start_hflevel_thread(path: String, payload: PackedByteArray) -> void:
-	if path == "" or payload.is_empty():
+func start_hflevel_thread(path: String, encoded: Dictionary, compress: bool, force: bool) -> void:
+	if path == "":
 		return
 	var abs_path = ProjectSettings.globalize_path(path)
-	if _hflevel_thread and _hflevel_thread.is_alive():
-		_hflevel_pending = {"path": abs_path, "payload": payload}
-		return
 	var keep := 0
 	var autosave_abs := ""
 	if root:
 		keep = int(root.hflevel_autosave_keep)
 		autosave_abs = ProjectSettings.globalize_path(str(root.hflevel_autosave_path))
+	var job := {
+		"path": abs_path,
+		"encoded": encoded,
+		"compress": compress,
+		"force": force,
+		"keep": keep,
+		"autosave_abs": autosave_abs,
+		"last_hash": _hflevel_last_hash,
+	}
+	if _hflevel_thread and _hflevel_thread.is_alive():
+		job["force"] = true
+		_hflevel_pending = job
+		return
 	_hflevel_thread = Thread.new()
-	_hflevel_thread.start(
-		Callable(self, "_hflevel_thread_write").bind(abs_path, payload, keep, autosave_abs)
-	)
+	_hflevel_thread.start(Callable(self, "_hflevel_thread_encode_and_write").bind(job))
 
 
-func _hflevel_thread_write(
-	path: String, payload: PackedByteArray, keep: int, autosave_abs: String
-) -> String:
+func _hflevel_thread_encode_and_write(job: Dictionary) -> Dictionary:
+	var path: String = str(job.get("path", ""))
+	var encoded: Dictionary = job.get("encoded", {})
+	var compress: bool = bool(job.get("compress", true))
+	var force: bool = bool(job.get("force", false))
+	var last_hash: int = int(job.get("last_hash", 0))
+	var keep: int = int(job.get("keep", 0))
+	var autosave_abs: String = str(job.get("autosave_abs", ""))
+	var packed: Dictionary = HFLevelIO.encode_payload_job(encoded, compress)
+	var hash_value: int = int(packed.get("hash", 0))
+	if not force and hash_value != 0 and hash_value == last_hash:
+		return {"error": "", "hash": hash_value, "skipped": true}
+	var payload: PackedByteArray = packed.get("payload", PackedByteArray())
+	if payload.is_empty():
+		return {"error": "HFLevel: empty payload", "hash": hash_value, "skipped": true}
 	var err := HFLevelIO.write_bytes_atomic(path, payload)
 	if err != OK:
 		var msg := "HFLevel: Failed to write file: %s (error: %d)" % [path, err]
 		push_error(msg)
-		return msg
+		return {"error": msg, "hash": hash_value, "skipped": false}
 	_write_autosave_rotation(path, payload, keep, autosave_abs)
-	return ""
+	return {"error": "", "hash": hash_value, "skipped": false}
 
 
 func _write_autosave_rotation(
@@ -200,31 +222,67 @@ func _prune_autosave_history(history_dir: String, keep: int) -> void:
 ## most recent write failed, empty string otherwise.
 func process_thread_queue() -> String:
 	if _hflevel_thread and not _hflevel_thread.is_alive():
-		var error := str(_hflevel_thread.wait_to_finish())
+		var result: Variant = _hflevel_thread.wait_to_finish()
 		_hflevel_thread = null
-		_last_write_error = ""
+		var error := _apply_thread_result(result)
 		if not _hflevel_pending.is_empty():
 			var next = _hflevel_pending.duplicate(true)
 			_hflevel_pending.clear()
-			var pending_path: String = next.get("path", "")
-			var pending_payload: PackedByteArray = next.get("payload", PackedByteArray())
-			if pending_path == "" or pending_payload.is_empty():
-				push_warning("HFLevel: Discarding pending write with empty path or payload")
-			else:
-				start_hflevel_thread(pending_path, pending_payload)
+			_start_pending_job(next)
 		return error
 	return ""
 
 
 func shutdown() -> void:
 	if _hflevel_thread:
-		_hflevel_thread.wait_to_finish()
+		_apply_thread_result(_hflevel_thread.wait_to_finish())
 		_hflevel_thread = null
 	if not _hflevel_pending.is_empty():
 		var next = _hflevel_pending.duplicate(true)
 		_hflevel_pending.clear()
-		var pending_path: String = next.get("path", "")
-		var pending_payload: PackedByteArray = next.get("payload", PackedByteArray())
-		if pending_path != "" and not pending_payload.is_empty():
-			HFLevelIO.write_bytes_atomic(pending_path, pending_payload)
+		_flush_job_sync(next)
 	_last_write_error = ""
+
+
+func _apply_thread_result(result: Variant) -> String:
+	_last_write_error = ""
+	if result is Dictionary:
+		var error := str(result.get("error", ""))
+		if result.has("hash"):
+			_hflevel_last_hash = int(result.get("hash", 0))
+		last_encode_skipped = bool(result.get("skipped", false))
+		_last_write_error = error
+		return error
+	if result is String:
+		_last_write_error = result
+		return result
+	return ""
+
+
+func _start_pending_job(job: Dictionary) -> void:
+	var pending_path: String = str(job.get("path", ""))
+	if pending_path == "" or not (job.get("encoded") is Dictionary):
+		push_warning("HFLevel: Discarding pending write with empty path or payload")
+		return
+	_hflevel_thread = Thread.new()
+	job["last_hash"] = _hflevel_last_hash
+	_hflevel_thread.start(Callable(self, "_hflevel_thread_encode_and_write").bind(job))
+
+
+func _flush_job_sync(job: Dictionary) -> void:
+	var pending_path: String = str(job.get("path", ""))
+	if pending_path == "":
+		return
+	if job.get("encoded") is Dictionary:
+		var packed: Dictionary = HFLevelIO.encode_payload_job(
+			job.get("encoded", {}), bool(job.get("compress", true))
+		)
+		var payload: PackedByteArray = packed.get("payload", PackedByteArray())
+		if not payload.is_empty():
+			HFLevelIO.write_bytes_atomic(pending_path, payload)
+		if packed.has("hash"):
+			_hflevel_last_hash = int(packed.get("hash", 0))
+		return
+	var legacy_payload: PackedByteArray = job.get("payload", PackedByteArray())
+	if not legacy_payload.is_empty():
+		HFLevelIO.write_bytes_atomic(pending_path, legacy_payload)

@@ -149,6 +149,17 @@ static func build_payload(data: Dictionary, compress: bool = true) -> PackedByte
 	return build_payload_from_json(json, compress)
 
 
+## Stringify, hash, and pack a captured state dict. Safe to call off the main
+## thread because it only touches primitives / PackedByteArray.
+static func encode_payload_job(data: Dictionary, compress: bool = true) -> Dictionary:
+	var json := JSON.stringify(data)
+	var hash_value := json.hash()
+	return {
+		"hash": hash_value,
+		"payload": build_payload_from_json(json, compress),
+	}
+
+
 static func build_payload_from_json(json: String, compress: bool = true) -> PackedByteArray:
 	var raw: PackedByteArray = json.to_utf8_buffer()
 	var payload := PackedByteArray()

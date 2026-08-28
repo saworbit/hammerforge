@@ -23,6 +23,7 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ### Changed
 - **Merged-mesh bake uses `WorkerThreadPool`** when `bake_use_thread_pool` is on. Surface grouping/transforms run on a worker; `ArrayMesh` assembly stays on the main thread.
+- **`.hflevel` stringify/hash/compress run on the write thread.** Capture stays on the main thread; unchanged captures skip the disk rewrite once the hash settles.
 - **Test-tab bake/play handlers live in `dock_manage_handler.gd`:** bake, validate, Test Level, spawn, and playtest dock methods are thin wrappers around `HFDockManageHandler`.
 - **Objects-tab entity handlers live in `dock_entity_handler.gd`:** property rebuild, create-entity, and I/O/wiring dock methods are thin wrappers around `HFDockEntityHandler`.
 - **Build-tab brush handlers live in `dock_brush_handler.gd`:** displacement, bevel, hollow, clip, floor/ceiling, duplicate-array, and tie/untie dock methods are thin wrappers around `HFDockBrushHandler`.

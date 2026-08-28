@@ -433,7 +433,7 @@ See [ROADMAP.md](ROADMAP.md) for the full plan.
 
 **Next up:**
 - PBR channels in the material atlas
-- Off-main-thread `.hflevel` JSON encode
+- Faster surface-paint / terrain sculpt (avoid per-pixel GDScript loops)
 
 **Later:**
 - Bezier patch editing

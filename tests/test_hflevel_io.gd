@@ -380,3 +380,25 @@ func test_save_to_path_is_atomic_and_leaves_no_writing_sidecar():
 	assert_eq(int(loaded.get("v", 0)), 2)
 	assert_false(FileAccess.file_exists(writing), "Sidecar .writing file should be gone after save")
 	DirAccess.remove_absolute(path)
+
+
+func test_encode_payload_job_returns_hash_and_round_trips():
+	var data := {"name": "offthread", "count": 3}
+	var job: Dictionary = HFLevelIO.encode_payload_job(data, false)
+	assert_true(int(job.get("hash", 0)) != 0, "Job should include a content hash")
+	var parsed: Dictionary = HFLevelIO.parse_payload(job.get("payload", PackedByteArray()))
+	assert_eq(parsed.get("name"), "offthread")
+	assert_eq(int(parsed.get("count", 0)), 3)
+
+
+func test_encode_payload_job_stable_hash_for_same_data():
+	var data := {"a": 1, "b": ["x", "y"]}
+	var first: Dictionary = HFLevelIO.encode_payload_job(data, false)
+	var second: Dictionary = HFLevelIO.encode_payload_job(data, false)
+	assert_eq(int(first.get("hash", 0)), int(second.get("hash", 0)))
+
+
+func test_encode_payload_job_hash_changes_when_data_changes():
+	var a: Dictionary = HFLevelIO.encode_payload_job({"n": 1}, false)
+	var b: Dictionary = HFLevelIO.encode_payload_job({"n": 2}, false)
+	assert_ne(int(a.get("hash", 0)), int(b.get("hash", 0)))
