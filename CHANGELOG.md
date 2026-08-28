@@ -5,6 +5,7 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **Tied `func_detail` / trigger brushes bake again:** they stay out of world CSG, then a post-pass emits detail meshes + collision and trigger `Area3D` volumes (including copied I/O metadata).
 - **`.map` brush entities round-trip:** `func_detail` / `func_wall` / triggers export as their own entity blocks and import with `brush_entity_class` set.
 - **`.map` point entities keep their keys:** export writes `entity_data` (angle, targetname, etc.) alongside classname/origin.
 - **`.hflevel` saves no longer truncate the destination first:** writes go to a `.writing` sidecar and rename into place. The write thread snapshots autosave settings on the main thread and is joined when LevelRoot exits.

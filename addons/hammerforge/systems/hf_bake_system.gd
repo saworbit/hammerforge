@@ -209,6 +209,7 @@ static func _is_known_bake_artifact_name(node_name: String) -> bool:
 		or node_name == "BakedNavmesh"
 		or node_name == "HFIODispatcher"
 		or node_name == "Occluders"
+		or node_name == "Nonstructural"
 		or node_name.begins_with("BakedChunk_")
 		or node_name.begins_with("BakedMesh_")
 		or node_name.begins_with("BakedSelection_")
@@ -229,6 +230,7 @@ static func _has_baked_payload(container: Node3D) -> bool:
 			or child_name.begins_with("BakedChunk_")
 			or child_name.begins_with("BakedSelection_")
 			or child_name.begins_with("HMFloor__")
+			or child_name == "Nonstructural"
 		):
 			return true
 	return false
@@ -361,7 +363,7 @@ func _bake_selected_impl(
 			active_container.add_child(baked)
 		else:
 			active_container = replace_baked_container(baked)
-		postprocess_bake(baked, true)
+		postprocess_bake(baked, true, brush_nodes)
 		root._assign_owner_recursive(active_container)
 		root._last_bake_preview_mode = preview_mode
 		_last_bake_success = true
@@ -398,7 +400,11 @@ func bake_dirty(collision_layer_mask: int = 0, preview_mode: int = 0) -> bool:
 
 
 func _has_bake_sources() -> bool:
-	return _has_positive_structural_sources() or _has_generated_heightmap_source()
+	return (
+		_has_positive_structural_sources()
+		or _has_generated_heightmap_source()
+		or _has_nonstructural_sources()
+	)
 
 
 func _has_positive_structural_sources() -> bool:
@@ -612,6 +618,9 @@ func _bake_impl(
 		root._log("Face-material bake switched to CSG to preserve active cuts")
 	if not _has_positive_structural_sources():
 		baked = _bake_heightmap_only(layer)
+		if baked == null and _has_nonstructural_sources():
+			baked = Node3D.new()
+			baked.name = String(BAKED_CONTAINER_NAME)
 	elif use_face_material_path:
 		# --- Synchronous snapshot: triangulate + resolve materials before yields ---
 		var face_brushes = collect_face_bake_brushes()
@@ -755,9 +764,15 @@ func build_bake_options() -> Dictionary:
 	}
 
 
-func postprocess_bake(container: Node3D, selection_only: bool = false) -> void:
+func postprocess_bake(
+	container: Node3D, selection_only: bool = false, selected_brushes: Array = []
+) -> void:
 	if not container:
 		return
+	if selection_only:
+		_append_nonstructural_brushes(container, selected_brushes)
+	else:
+		_append_nonstructural_brushes(container)
 	if _root_bool("bake_generate_occluders", false) and not selection_only:
 		_generate_occluders(container)
 	if root.bake_auto_connectors and not selection_only:
@@ -1084,6 +1099,115 @@ func _is_trigger_brush(brush: DraftBrush) -> bool:
 func _is_structural_brush(brush: DraftBrush) -> bool:
 	var bec = str(brush.get_meta("brush_entity_class", ""))
 	return bec == "" or bec == "func_wall"
+
+
+func _has_nonstructural_sources() -> bool:
+	return not _collect_nonstructural_brushes().is_empty()
+
+
+func _collect_nonstructural_brushes(filter: Variant = null) -> Array:
+	var out: Array = []
+	var sources: Array = []
+	if filter != null:
+		sources = filter
+	else:
+		for container in [root.draft_brushes_node, root.generated_floors, root.generated_walls]:
+			if container:
+				sources.append_array(container.get_children())
+	for child in sources:
+		if not (child is DraftBrush) or root.is_entity_node(child):
+			continue
+		var draft := child as DraftBrush
+		if draft.operation == CSGShape3D.OPERATION_SUBTRACTION:
+			continue
+		if root.bake_visible_only and not draft.visible:
+			continue
+		if root.cordon_enabled and not _brush_in_cordon(draft):
+			continue
+		if _is_structural_brush(draft):
+			continue
+		out.append(draft)
+	return out
+
+
+func _append_nonstructural_brushes(container: Node3D, filter: Variant = null) -> void:
+	if not container:
+		return
+	var existing: Node = container.get_node_or_null("Nonstructural")
+	if existing:
+		container.remove_child(existing)
+		existing.free()
+	var brushes: Array = _collect_nonstructural_brushes(filter)
+	if brushes.is_empty():
+		return
+	var holder := Node3D.new()
+	holder.name = "Nonstructural"
+	container.add_child(holder)
+	var idx := 0
+	for draft in brushes:
+		if _is_trigger_brush(draft):
+			_append_trigger_volume(holder, draft, idx)
+		else:
+			_append_detail_mesh(holder, draft, idx)
+		idx += 1
+
+
+func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
+	var mesh: Mesh = null
+	var source: Node3D = draft
+	if draft.mesh_instance and draft.mesh_instance.mesh:
+		mesh = draft.mesh_instance.mesh
+		source = draft.mesh_instance
+	var mi := MeshInstance3D.new()
+	mi.name = "FuncDetail_%d" % idx
+	mi.mesh = mesh
+	holder.add_child(mi)
+	mi.transform = _source_transform_in_baked_container(source, holder.get_parent() as Node3D)
+	var body := StaticBody3D.new()
+	body.name = "FuncDetailCollision_%d" % idx
+	var layer := 1
+	if root.has_method("_layer_from_index"):
+		layer = root._layer_from_index(root.bake_collision_layer_index)
+	body.collision_layer = layer
+	body.collision_mask = layer
+	holder.add_child(body)
+	var col := CollisionShape3D.new()
+	col.shape = _shape_for_draft(draft, mesh)
+	col.transform = body.transform.affine_inverse() * mi.transform
+	body.add_child(col)
+
+
+func _append_trigger_volume(holder: Node3D, draft: DraftBrush, idx: int) -> void:
+	var area := Area3D.new()
+	area.name = "Trigger_%d" % idx
+	area.monitoring = true
+	area.monitorable = true
+	var bec := str(draft.get_meta("brush_entity_class", ""))
+	if bec != "":
+		area.set_meta("brush_entity_class", bec)
+	var outputs: Array = draft.get_meta("entity_io_outputs", [])
+	if not outputs.is_empty():
+		area.set_meta("entity_io_outputs", outputs.duplicate(true))
+	holder.add_child(area)
+	var source: Node3D = draft.mesh_instance if draft.mesh_instance else draft
+	area.transform = _source_transform_in_baked_container(source, holder.get_parent() as Node3D)
+	var col := CollisionShape3D.new()
+	var mesh: Mesh = draft.mesh_instance.mesh if draft.mesh_instance else null
+	col.shape = _shape_for_draft(draft, mesh)
+	area.add_child(col)
+
+
+func _shape_for_draft(draft: DraftBrush, mesh: Mesh) -> Shape3D:
+	if mesh:
+		var convex: Shape3D = mesh.create_convex_shape(true, false)
+		if convex:
+			return convex
+		var tri: Shape3D = mesh.create_trimesh_shape()
+		if tri:
+			return tri
+	var box := BoxShape3D.new()
+	box.size = draft.size if draft.size.length() > 0.001 else Vector3.ONE
+	return box
 
 
 func collect_chunk_brushes(

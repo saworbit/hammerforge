@@ -1042,19 +1042,29 @@ func test_only_subtractive_sources_clear_stale_baked_geometry():
 	assert_null(stale.get_parent())
 
 
-func test_only_nonstructural_brush_entities_clear_stale_baked_geometry():
+func test_only_nonstructural_brush_entities_bake_into_container():
 	var detail := _make_brush(root.draft_brushes_node)
 	detail.set_meta("brush_entity_class", "func_detail")
 	var trigger := _make_brush(root.draft_brushes_node)
 	trigger.set_meta("brush_entity_class", "trigger_once")
 	root._dirty_brush_ids = {"deleted_additive": true}
-	var stale := _install_stale_baked_geometry()
+	_install_stale_baked_geometry()
 
 	await bake_sys.bake_dirty()
 
 	assert_true(bake_sys._last_bake_success)
-	assert_null(root.baked_container)
-	assert_null(stale.get_parent())
+	assert_not_null(root.baked_container, "func_detail/trigger-only levels still bake")
+	var holder: Node = root.baked_container.get_node_or_null("Nonstructural")
+	assert_not_null(holder, "Nonstructural holder should exist")
+	var has_mesh := false
+	var has_area := false
+	for child in holder.get_children():
+		if child is MeshInstance3D:
+			has_mesh = true
+		if child is Area3D:
+			has_area = true
+	assert_true(has_mesh, "func_detail should emit a mesh")
+	assert_true(has_area, "trigger should emit an Area3D")
 
 
 func test_visible_only_hidden_sources_clear_stale_baked_geometry():
@@ -2278,3 +2288,71 @@ func _append_triangle_signature(
 		points.sort()
 		var key := "|".join(points)
 		signature[key] = int(signature.get(key, 0)) + 1
+
+
+func test_has_bake_sources_true_for_func_detail_only():
+	var detail := _make_brush(root.draft_brushes_node)
+	detail.set_meta("brush_entity_class", "func_detail")
+	assert_true(bake_sys._has_bake_sources(), "func_detail-only levels are bakeable")
+
+
+func test_has_bake_sources_true_for_trigger_only():
+	var trigger := _make_brush(root.draft_brushes_node)
+	trigger.set_meta("brush_entity_class", "trigger_once")
+	assert_true(bake_sys._has_bake_sources(), "trigger-only levels are bakeable")
+
+
+func test_append_func_detail_creates_mesh_and_collision():
+	var detail := _make_brush(root.draft_brushes_node, Vector3(2, 1, 0), Vector3(4, 4, 4))
+	detail.set_meta("brush_entity_class", "func_detail")
+	var container := Node3D.new()
+	add_child_autoqfree(container)
+	bake_sys._append_nonstructural_brushes(container)
+	var holder: Node = container.get_node_or_null("Nonstructural")
+	assert_not_null(holder)
+	var mesh_n := 0
+	var body_n := 0
+	for child in holder.get_children():
+		if child is MeshInstance3D and (child as MeshInstance3D).mesh:
+			mesh_n += 1
+		if child is StaticBody3D:
+			body_n += 1
+			assert_gt(child.get_child_count(), 0, "Detail collision body needs a shape")
+	assert_eq(mesh_n, 1)
+	assert_eq(body_n, 1)
+
+
+func test_append_trigger_creates_area_volume():
+	var trigger := _make_brush(root.draft_brushes_node)
+	trigger.set_meta("brush_entity_class", "trigger_once")
+	trigger.set_meta(
+		"entity_io_outputs",
+		[{"output_name": "OnTrigger", "target_name": "door", "input_name": "Open"}]
+	)
+	var container := Node3D.new()
+	add_child_autoqfree(container)
+	bake_sys._append_nonstructural_brushes(container)
+	var holder: Node = container.get_node_or_null("Nonstructural")
+	assert_not_null(holder)
+	var area: Area3D = null
+	for child in holder.get_children():
+		if child is Area3D:
+			area = child
+			break
+	assert_not_null(area, "trigger_once should bake to Area3D")
+	assert_gt(area.get_child_count(), 0, "Trigger area needs a CollisionShape3D")
+	var outputs: Array = area.get_meta("entity_io_outputs", [])
+	assert_eq(outputs.size(), 1)
+	assert_eq(str(outputs[0].get("output_name", "")), "OnTrigger")
+
+
+func test_append_skips_worldspawn_brushes():
+	_make_brush(root.draft_brushes_node)
+	var container := Node3D.new()
+	add_child_autoqfree(container)
+	bake_sys._append_nonstructural_brushes(container)
+	var holder: Node = container.get_node_or_null("Nonstructural")
+	assert_true(
+		holder == null or holder.get_child_count() == 0,
+		"World brushes stay on the CSG/face path",
+	)
