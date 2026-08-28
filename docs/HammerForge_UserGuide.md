@@ -242,7 +242,7 @@ dispatcher.fire("my_button", "OnPressed", "fast")
 
 **Configuration**:
 - **Export Playtest**: always auto-injects the dispatcher when entities have I/O connections.
-- **Bake Wire I/O**: enable the `bake_wire_io` checkbox on LevelRoot (Inspector) to attach the dispatcher to the baked container during regular bakes.
+- **Bake Wire I/O**: on by default. Regular bakes and Test Level attach `HFIORuntime` when any entity has I/O connections. Uncheck `bake_wire_io` on LevelRoot (Inspector) to skip dispatcher attach.
 - Source entities receive `io_<OutputName>` user signals (e.g. `io_OnTrigger`) so you can also use standard `connect()` / `emit_signal()` patterns.
 
 ### Test tab (collapsible sections)

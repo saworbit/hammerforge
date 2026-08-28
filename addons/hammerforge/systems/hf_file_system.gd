@@ -11,8 +11,7 @@ var root: Node3D
 var _hflevel_thread: Thread = null
 var _hflevel_pending: Dictionary = {}
 var _hflevel_last_hash: int = 0
-## Set to a non-empty string by the write thread on failure, consumed by
-## process_thread_queue() on the main thread so it can emit a signal.
+## Last write error observed on the main thread (thread result is returned from wait_to_finish).
 var _last_write_error := ""
 
 
@@ -131,37 +130,34 @@ func start_hflevel_thread(path: String, payload: PackedByteArray) -> void:
 	if _hflevel_thread and _hflevel_thread.is_alive():
 		_hflevel_pending = {"path": abs_path, "payload": payload}
 		return
+	var keep := 0
+	var autosave_abs := ""
+	if root:
+		keep = int(root.hflevel_autosave_keep)
+		autosave_abs = ProjectSettings.globalize_path(str(root.hflevel_autosave_path))
 	_hflevel_thread = Thread.new()
-	_hflevel_thread.start(Callable(self, "_hflevel_thread_write").bind(abs_path, payload))
+	_hflevel_thread.start(
+		Callable(self, "_hflevel_thread_write").bind(abs_path, payload, keep, autosave_abs)
+	)
 
 
-func _hflevel_thread_write(path: String, payload: PackedByteArray) -> void:
-	var file = FileAccess.open(path, FileAccess.WRITE)
-	if not file:
-		var msg := (
-			"HFLevel: Failed to open file for write: %s (error: %d)"
-			% [path, FileAccess.get_open_error()]
-		)
-		push_error(msg)
-		_last_write_error = msg
-		return
-	file.store_buffer(payload)
-	var err = file.get_error()
+func _hflevel_thread_write(
+	path: String, payload: PackedByteArray, keep: int, autosave_abs: String
+) -> String:
+	var err := HFLevelIO.write_bytes_atomic(path, payload)
 	if err != OK:
-		var msg := "HFLevel: store_buffer failed for %s (error: %d)" % [path, err]
+		var msg := "HFLevel: Failed to write file: %s (error: %d)" % [path, err]
 		push_error(msg)
-		_last_write_error = msg
-		return
-	_last_write_error = ""
-	_write_autosave_rotation(path, payload)
+		return msg
+	_write_autosave_rotation(path, payload, keep, autosave_abs)
+	return ""
 
 
-func _write_autosave_rotation(path: String, payload: PackedByteArray) -> void:
-	if not root or payload.is_empty():
+func _write_autosave_rotation(
+	path: String, payload: PackedByteArray, keep: int, autosave_abs: String
+) -> void:
+	if payload.is_empty() or keep <= 0:
 		return
-	if root.hflevel_autosave_keep <= 0:
-		return
-	var autosave_abs = ProjectSettings.globalize_path(root.hflevel_autosave_path)
 	if autosave_abs == "" or path != autosave_abs:
 		return
 	var base_dir = autosave_abs.get_base_dir()
@@ -173,12 +169,11 @@ func _write_autosave_rotation(path: String, payload: PackedByteArray) -> void:
 	if base_name == "":
 		base_name = "autosave"
 	var history_path = history_dir.path_join("%s_%s.hflevel" % [base_name, timestamp])
-	var out = FileAccess.open(history_path, FileAccess.WRITE)
-	if not out:
-		push_warning("HFLevel: Failed to open autosave history file: %s" % history_path)
+	var hist_err := HFLevelIO.write_bytes_atomic(history_path, payload)
+	if hist_err != OK:
+		push_warning("HFLevel: Failed to write autosave history file: %s" % history_path)
 		return
-	out.store_buffer(payload)
-	_prune_autosave_history(history_dir, root.hflevel_autosave_keep)
+	_prune_autosave_history(history_dir, keep)
 
 
 func _prune_autosave_history(history_dir: String, keep: int) -> void:
@@ -205,9 +200,8 @@ func _prune_autosave_history(history_dir: String, keep: int) -> void:
 ## most recent write failed, empty string otherwise.
 func process_thread_queue() -> String:
 	if _hflevel_thread and not _hflevel_thread.is_alive():
-		_hflevel_thread.wait_to_finish()
+		var error := str(_hflevel_thread.wait_to_finish())
 		_hflevel_thread = null
-		var error := _last_write_error
 		_last_write_error = ""
 		if not _hflevel_pending.is_empty():
 			var next = _hflevel_pending.duplicate(true)
@@ -220,3 +214,17 @@ func process_thread_queue() -> String:
 				start_hflevel_thread(pending_path, pending_payload)
 		return error
 	return ""
+
+
+func shutdown() -> void:
+	if _hflevel_thread:
+		_hflevel_thread.wait_to_finish()
+		_hflevel_thread = null
+	if not _hflevel_pending.is_empty():
+		var next = _hflevel_pending.duplicate(true)
+		_hflevel_pending.clear()
+		var pending_path: String = next.get("path", "")
+		var pending_payload: PackedByteArray = next.get("payload", PackedByteArray())
+		if pending_path != "" and not pending_payload.is_empty():
+			HFLevelIO.write_bytes_atomic(pending_path, pending_payload)
+	_last_write_error = ""

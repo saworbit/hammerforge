@@ -248,14 +248,7 @@ func _collect_face_groups(
 			}
 		var group = groups[key]
 		var tri_normals: PackedVector3Array = tri.get("normals", PackedVector3Array())
-		for i in range(verts.size()):
-			var v = origin + basis * verts[i]
-			group["verts"].append(v)
-			group["uvs"].append(uvs[i] if uvs.size() > i else Vector2.ZERO)
-			if tri_normals.size() > i:
-				group["normals"].append((basis * tri_normals[i]).normalized())
-			else:
-				group["normals"].append((basis * face.normal).normalized())
+		_append_transformed_face(group, verts, uvs, tri_normals, origin, basis, face.normal)
 
 
 ## Synchronously capture a brush's face geometry and resolved materials into plain
@@ -333,17 +326,15 @@ func collect_snapshot_groups(snapshot: Dictionary, use_atlas: bool, groups: Dict
 				"tiling": face_tiles,
 			}
 		var group = groups[key]
-		var verts: PackedVector3Array = rec["verts"]
-		var uvs: PackedVector2Array = rec["uvs"]
-		var tri_normals: PackedVector3Array = rec["normals"]
-		var face_normal: Vector3 = rec["face_normal"]
-		for i in range(verts.size()):
-			group["verts"].append(origin + basis * verts[i])
-			group["uvs"].append(uvs[i] if uvs.size() > i else Vector2.ZERO)
-			if tri_normals.size() > i:
-				group["normals"].append((basis * tri_normals[i]).normalized())
-			else:
-				group["normals"].append((basis * face_normal).normalized())
+		_append_transformed_face(
+			group,
+			rec["verts"] as PackedVector3Array,
+			rec["uvs"] as PackedVector2Array,
+			rec["normals"] as PackedVector3Array,
+			origin,
+			basis,
+			rec["face_normal"] as Vector3
+		)
 
 
 ## Build final baked geometry (atlas pass, ArrayMesh, collision) from pre-collected
@@ -593,6 +584,38 @@ func _unwrap_uv0(mesh: ArrayMesh) -> ArrayMesh:
 		if mat:
 			out.surface_set_material(out.get_surface_count() - 1, mat)
 	return out
+
+
+static func _append_transformed_face(
+	group: Dictionary,
+	verts: PackedVector3Array,
+	uvs: PackedVector2Array,
+	tri_normals: PackedVector3Array,
+	origin: Vector3,
+	basis: Basis,
+	fallback_normal: Vector3
+) -> void:
+	var count := verts.size()
+	if count <= 0:
+		return
+	var dest_verts: PackedVector3Array = group["verts"]
+	var dest_uvs: PackedVector2Array = group["uvs"]
+	var dest_normals: PackedVector3Array = group["normals"]
+	var start := dest_verts.size()
+	dest_verts.resize(start + count)
+	dest_uvs.resize(start + count)
+	dest_normals.resize(start + count)
+	var fallback := (basis * fallback_normal).normalized()
+	for i in range(count):
+		dest_verts[start + i] = origin + basis * verts[i]
+		dest_uvs[start + i] = uvs[i] if uvs.size() > i else Vector2.ZERO
+		if tri_normals.size() > i:
+			dest_normals[start + i] = (basis * tri_normals[i]).normalized()
+		else:
+			dest_normals[start + i] = fallback
+	group["verts"] = dest_verts
+	group["uvs"] = dest_uvs
+	group["normals"] = dest_normals
 
 
 func _merge_entries(entries: Array, _use_thread_pool: bool) -> ArrayMesh:

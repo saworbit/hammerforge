@@ -825,6 +825,26 @@ func test_apply_preview_visuals_wireframe():
 		)
 
 
+func test_apply_preview_visuals_wireframe_reuses_cached_shader():
+	var container_a = Node3D.new()
+	add_child_autoqfree(container_a)
+	var mesh_a = MeshInstance3D.new()
+	container_a.add_child(mesh_a)
+	var container_b = Node3D.new()
+	add_child_autoqfree(container_b)
+	var mesh_b = MeshInstance3D.new()
+	container_b.add_child(mesh_b)
+	bake_sys._apply_preview_visuals(container_a, HFBakeSystem.PreviewMode.WIREFRAME)
+	bake_sys._apply_preview_visuals(container_b, HFBakeSystem.PreviewMode.WIREFRAME)
+	assert_true(mesh_a.material_override is ShaderMaterial)
+	assert_true(mesh_b.material_override is ShaderMaterial)
+	assert_eq(
+		(mesh_a.material_override as ShaderMaterial).shader,
+		(mesh_b.material_override as ShaderMaterial).shader,
+		"Wireframe preview should reuse one compiled shader",
+	)
+
+
 func test_apply_preview_visuals_proxy():
 	var container = Node3D.new()
 	add_child_autoqfree(container)

@@ -21,6 +21,8 @@ var root: Node3D
 var _last_dirty_brush_ids: Dictionary = {}  # brush_id -> true; captured at bake start
 var _last_bake_success: bool = false
 var _bake_in_flight := false
+static var _wireframe_shader: Shader = null
+static var _wireframe_material: ShaderMaterial = null
 
 ## Number of brushes to process per frame during face-based bake collection.
 ## Lower values yield more often (smoother editor), higher values bake faster.
@@ -504,18 +506,7 @@ func _apply_preview_visuals(container: Node3D, mode: int) -> void:
 		return
 	var mat: Material = null
 	if mode == PreviewMode.WIREFRAME:
-		# Godot 4 has no StandardMaterial3D.wireframe property.
-		# Use a ShaderMaterial with render_mode wireframe instead.
-		var shader := Shader.new()
-		shader.code = (
-			"shader_type spatial;\n"
-			+ "render_mode unshaded, cull_disabled, wireframe, depth_draw_never;\n"
-			+ "uniform vec4 color : source_color = vec4(0.2, 0.8, 1.0, 0.6);\n"
-			+ "void fragment() { ALBEDO = color.rgb; ALPHA = color.a; }\n"
-		)
-		var smat := ShaderMaterial.new()
-		smat.shader = shader
-		mat = smat
+		mat = _get_wireframe_material()
 	elif mode == PreviewMode.PROXY:
 		var std_mat := StandardMaterial3D.new()
 		std_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -524,6 +515,22 @@ func _apply_preview_visuals(container: Node3D, mode: int) -> void:
 		mat = std_mat
 	if mat:
 		_apply_material_recursive(container, mat)
+
+
+static func _get_wireframe_material() -> ShaderMaterial:
+	if _wireframe_material and _wireframe_material.shader:
+		return _wireframe_material
+	if _wireframe_shader == null:
+		_wireframe_shader = Shader.new()
+		_wireframe_shader.code = (
+			"shader_type spatial;\n"
+			+ "render_mode unshaded, cull_disabled, wireframe, depth_draw_never;\n"
+			+ "uniform vec4 color : source_color = vec4(0.2, 0.8, 1.0, 0.6);\n"
+			+ "void fragment() { ALBEDO = color.rgb; ALPHA = color.a; }\n"
+		)
+	_wireframe_material = ShaderMaterial.new()
+	_wireframe_material.shader = _wireframe_shader
+	return _wireframe_material
 
 
 func _apply_material_recursive(node: Node3D, mat: Material) -> void:

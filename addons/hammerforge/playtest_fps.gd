@@ -28,12 +28,15 @@ extends CharacterBody3D
 @export var player_start_rotation_y: float = 0.0
 
 # --- State Variables ---
-var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
+var gravity: float = float(ProjectSettings.get_setting("physics/3d/default_gravity", 9.8))
 var camera_pivot: Node3D
 var camera: Camera3D
 var head_bob_time := 0.0
 var time_since_on_floor := 0.0
 var is_crouching := false
+var _hud: CanvasLayer
+var _reticle: Control
+var _pause_overlay: Control
 
 
 func _ready() -> void:
@@ -61,7 +64,51 @@ func _ready() -> void:
 	if player_start_rotation_y != 0.0:
 		rotation.y = player_start_rotation_y
 
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	_ensure_hud()
+	_set_cursor_captured(true)
+
+
+func _ensure_hud() -> void:
+	if _hud and is_instance_valid(_hud):
+		return
+	_hud = CanvasLayer.new()
+	_hud.name = "PlaytestHUD"
+	_hud.layer = 100
+	add_child(_hud)
+
+	_reticle = Label.new()
+	_reticle.name = "Reticle"
+	_reticle.text = "+"
+	_reticle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_reticle.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_reticle.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_reticle.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_reticle.add_theme_font_size_override("font_size", 22)
+	_reticle.add_theme_color_override("font_color", Color(1, 1, 1, 0.75))
+	_hud.add_child(_reticle)
+
+	_pause_overlay = PanelContainer.new()
+	_pause_overlay.name = "PauseOverlay"
+	_pause_overlay.visible = false
+	_pause_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_pause_overlay.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_pause_overlay.offset_left = -140
+	_pause_overlay.offset_right = 140
+	_pause_overlay.offset_top = 24
+	_pause_overlay.offset_bottom = 160
+	var pause_label := Label.new()
+	pause_label.text = ("WASD move\nShift sprint\nSpace jump\nCtrl crouch\nEsc capture mouse")
+	pause_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_pause_overlay.add_child(pause_label)
+	_hud.add_child(_pause_overlay)
+
+
+func _set_cursor_captured(captured: bool) -> void:
+	Input.mouse_mode = (Input.MOUSE_MODE_CAPTURED if captured else Input.MOUSE_MODE_VISIBLE)
+	if _reticle:
+		_reticle.visible = captured
+	if _pause_overlay:
+		_pause_overlay.visible = not captured
 
 
 func _ensure_collider() -> void:
@@ -113,11 +160,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		camera_pivot.rotation.x = clamp(camera_pivot.rotation.x, -PI * 0.5, PI * 0.5)
 
 	if event.is_action_pressed("ui_cancel"):
-		Input.mouse_mode = (
-			Input.MOUSE_MODE_VISIBLE
-			if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
-			else Input.MOUSE_MODE_CAPTURED
-		)
+		_set_cursor_captured(Input.mouse_mode != Input.MOUSE_MODE_CAPTURED)
 
 
 func _physics_process(delta: float) -> void:

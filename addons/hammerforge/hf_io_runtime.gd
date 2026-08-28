@@ -14,6 +14,8 @@
 extends Node
 class_name HFIORuntime
 
+const DISPATCHER_GROUP := "hf_io_dispatcher"
+
 ## Emitted whenever an I/O output fires (useful for debugging / logging).
 signal io_fired(
 	source_name: String,
@@ -59,6 +61,15 @@ var _signal_connections: Array = []  # [{entity: Node, sig_name: String, callabl
 # ---------------------------------------------------------------------------
 # Lifecycle
 # ---------------------------------------------------------------------------
+
+
+func _enter_tree() -> void:
+	add_to_group(DISPATCHER_GROUP)
+
+
+func _exit_tree() -> void:
+	if is_in_group(DISPATCHER_GROUP):
+		remove_from_group(DISPATCHER_GROUP)
 
 
 func _ready() -> void:
@@ -393,13 +404,15 @@ static func _find_dispatcher(node: Node) -> HFIORuntime:
 	var tree := node.get_tree() if node else null
 	if not tree:
 		return null
-	# Try current_scene first (runtime game context)
+	var grouped: Node = tree.get_first_node_in_group(DISPATCHER_GROUP)
+	if grouped is HFIORuntime:
+		return grouped
+	# Fallback for detached test scenes that never entered the tree group.
 	var scene_root: Node = tree.current_scene
 	if scene_root:
 		var found := _find_dispatcher_recursive(scene_root)
 		if found:
 			return found
-	# Fallback: walk up to the highest ancestor, then search down
 	var top: Node = node
 	while top.get_parent():
 		top = top.get_parent()

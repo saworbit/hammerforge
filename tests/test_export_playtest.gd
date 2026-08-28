@@ -18,6 +18,10 @@ func after_each():
 	root = null
 
 
+func test_bake_wire_io_defaults_on():
+	assert_true(root.bake_wire_io, "Test Level / regular bake should wire I/O by default")
+
+
 func test_export_playtest_scene_empty_level():
 	var path := "user://test_playtest_export.tscn"
 	var success: bool = root.export_playtest_scene(path)

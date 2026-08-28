@@ -426,13 +426,16 @@ See [ROADMAP.md](ROADMAP.md) for the full plan.
 - Improved selection & multi-select (marquee, selection filters, Select Similar, Apply Last Texture)
 - Smart contextual toolbar + command palette with fuzzy search
 
+**Recently shipped (also):**
+- Material atlas packing and merge-selected-brushes
+- Snap-to-edge (dock **E**)
+
 **Next up:**
-- Material atlasing for large scenes
-- Merge tool (combine two adjacent brushes)
+- Bake `func_detail` / trigger volumes into Test Level ([#31](https://github.com/saworbit/hammerforge/issues/31))
+- Snap-to-perpendicular
 
 **Later:**
 - Bezier patch editing
-- Snap-to-edge and snap-to-perpendicular modes
 - Multiple simultaneous cordons
 - Preference packs for one-click workflow presets
 

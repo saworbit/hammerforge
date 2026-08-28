@@ -356,6 +356,20 @@ func test_static_fire_on():
 	assert_eq(door.received_calls.size(), 1)
 
 
+func test_dispatcher_joins_lookup_group():
+	_wire_dispatcher()
+	assert_true(
+		dispatcher.is_in_group("hf_io_dispatcher"),
+		"HFIORuntime should join hf_io_dispatcher for O(1) lookup",
+	)
+
+
+func test_find_dispatcher_uses_group_before_tree_walk():
+	_wire_dispatcher()
+	var found := HFIORuntime._find_dispatcher(scene_root)
+	assert_eq(found, dispatcher, "Group lookup should return the live dispatcher")
+
+
 # ===========================================================================
 # Signal name helper
 # ===========================================================================

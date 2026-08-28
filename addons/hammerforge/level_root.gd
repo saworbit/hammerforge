@@ -105,7 +105,7 @@ var _grid_snap: float = 16.0
 @export var bake_use_multimesh: bool = false
 @export var bake_use_atlas: bool = false
 @export var bake_auto_connectors: bool = false
-@export var bake_wire_io: bool = false
+@export var bake_wire_io: bool = true
 @export var bake_generate_occluders: bool = false
 ## Minimum face-group area (world units²) to generate an occluder.  Smaller
 ## surfaces rarely block enough pixels to justify the culling overhead.
@@ -599,6 +599,8 @@ func _exit_tree() -> void:
 		extrude_tool.cancel_extrude()
 	if drag_system:
 		drag_system._clear_preview()
+	if file_system:
+		file_system.shutdown()
 
 
 func _process(_delta: float) -> void:

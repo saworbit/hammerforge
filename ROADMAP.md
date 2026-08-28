@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: July 21, 2026
+Last updated: August 28, 2026
 
 This roadmap is a directional plan. Items may change based on user feedback.
 
@@ -317,26 +317,25 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - Multiple simultaneous cordons.
 - Multi-tool presets for common workflows.
 - Additional bake pipelines (merge strategies, export helpers).
-- Snap-to-edge and snap-to-perpendicular modes for the snap system.
+- Snap-to-perpendicular mode for the snap system (edge snap shipped).
 - Preference packs (e.g. "Speedrunner", "Precision") for one-click workflow presets.
 - Formalized plugin API (`HFEditorPlugin` base class for custom tool scripts with menu/toolbar hooks).
-- Per-project entity definition files (game pak separation — different entity sets per project).
 - Bezier patch editing (control-point-grid surfaces as first-class brush type).
 
 ## Future (Simplification Phase 2 — Continued Code-Quality Work)
 The May 2026 simplification phase 1 landed shared utilities and migrated low-risk call sites. The following items continue that initiative but each requires a dedicated session with interactive UI/bake validation, or a profiling pass, before landing safely.
 
 ### Continued dock.gd decomposition
-The remaining 6,692 lines are dominated by ~180 `_on_*` signal handlers wired to dock-internal state.
+The remaining ~5,100 lines are dominated by `_on_*` signal handlers wired to dock-internal state.
 - Split into per-tab handler files: `dock_brush_handler.gd` (done), `dock_paint_handler.gd` (done), `dock_entity_handler.gd` (done), `dock_manage_handler.gd` (Test-tab bake/play done). Target dock.gd shell at ~1,500 lines. File I/O, visgroups, and cordon still live on dock.gd.
 - Extract signal-wiring into `dock_connections.gd`.
 - Consolidate the entity-properties UI builder and the external-tool-settings UI builder (both schema-driven; share ~100 lines of dispatch logic).
 - Migrate `paint_tab_builder.gd` (50 call sites) and `manage_tab_builder.gd` (58 call sites) from `dock._make_*` to direct `HFUIFactory` calls. Mechanical churn — wait until shared with another tab-builder change.
 
 ### plugin.gd decomposition (Phase 3b)
-Current 3,987 lines. Largest functions are tightly coupled to viewport input flow and plugin state:
+Current ~3,900 lines. Largest remaining work is viewport input / overlay ownership, not command match blocks:
 - `_handle_keyboard_input` now delegates to `plugin_input_router.gd` (`HFPluginInputRouter.handle_keyboard`).
-- `_dispatch_viewport_action` (193 lines) → action-mode dispatch table.
+- `_dispatch_viewport_action` is a thin wrapper around `HFPluginCommands.execute`.
 - `_on_context_toolbar_action` and `_on_hotkey_palette_action` now route through `plugin_commands.gd` (`HFPluginCommands.execute`).
 - `_handle_vertex_input` now delegates to `plugin_vertex_input.gd` (`HFPluginVertexInput.handle`).
 - `_update_hud_context` and `_update_context_toolbar_state` now delegate to `plugin_hud.gd` (`HFPluginHud`).

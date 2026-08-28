@@ -146,12 +146,23 @@ static func _entity_to_map_lines(
 		return []
 	var lines: Array[String] = []
 	lines.append("{")
-	var props := {"classname": entity_class, "origin": _format_vec3(entity.global_transform.origin)}
+	var props: Dictionary = {}
+	var data: Dictionary = entity.entity_data if entity.entity_data is Dictionary else {}
+	for key in data.keys():
+		var key_name := str(key)
+		if key_name == "classname" or key_name == "origin":
+			continue
+		var value := str(data[key])
+		if value == "":
+			continue
+		props[key_name] = value
+	props["classname"] = entity_class
+	props["origin"] = _format_vec3(entity.global_transform.origin)
 	if adapter:
 		lines.append_array(adapter.format_entity_properties(props))
 	else:
-		lines.append('"classname" "%s"' % entity_class)
-		lines.append('"origin" "%s"' % _format_vec3(entity.global_transform.origin))
+		for key in props:
+			lines.append('"%s" "%s"' % [str(key), str(props[key])])
 	lines.append("}")
 	return lines
 

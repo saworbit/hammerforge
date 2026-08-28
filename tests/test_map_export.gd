@@ -7,6 +7,7 @@ const HFMapQuake = preload("res://addons/hammerforge/map_adapters/hf_map_quake.g
 const HFMapValve220 = preload("res://addons/hammerforge/map_adapters/hf_map_valve220.gd")
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
+const DraftEntity = preload("res://addons/hammerforge/draft_entity.gd")
 
 # ===========================================================================
 # Quake adapter tests
@@ -261,3 +262,37 @@ func test_parse_map_text_worldspawn_and_point_entity():
 	assert_eq(entities.size(), 1, "Point entities stay in the entity list")
 	assert_eq(entities[0]["classname"], "light")
 	assert_eq(str(entities[0]["properties"]["origin"]), "32 32 8")
+
+
+func test_entity_export_includes_entity_data_keys():
+	var entity = DraftEntity.new()
+	add_child_autoqfree(entity)
+	entity.entity_type = "player_start"
+	entity.entity_data = {"angle": 90, "primary": "1", "targetname": "start1"}
+	entity.global_position = Vector3(8, 2, 4)
+	var lines: Array[String] = MapIO._entity_to_map_lines(entity)
+	var text := "\n".join(lines)
+	assert_string_contains(text, '"classname" "player_start"')
+	assert_string_contains(text, '"angle" "90"')
+	assert_string_contains(text, '"primary" "1"')
+	assert_string_contains(text, '"targetname" "start1"')
+	assert_true(
+		text.contains('"origin" "8 2 4"') or text.contains('"origin" "8.0 2.0 4.0"'),
+		"Origin should come from the entity transform",
+	)
+
+
+func test_entity_export_skips_empty_entity_data_and_origin_override():
+	var entity = DraftEntity.new()
+	add_child_autoqfree(entity)
+	entity.entity_type = "light"
+	entity.entity_data = {"origin": "0 0 0", "targetname": "", "brightness": "200"}
+	entity.global_position = Vector3(1, 2, 3)
+	var text := "\n".join(MapIO._entity_to_map_lines(entity))
+	assert_true(
+		text.contains('"origin" "1 2 3"') or text.contains('"origin" "1.0 2.0 3.0"'),
+		"Origin should come from the entity transform",
+	)
+	assert_true(text.find('"origin" "0 0 0"') < 0, "Transform origin wins over entity_data origin")
+	assert_true(text.find("targetname") < 0, "Empty entity_data values are omitted")
+	assert_string_contains(text, '"brightness" "200"')

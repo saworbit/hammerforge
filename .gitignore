@@ -46,6 +46,7 @@ io_presets.json
 /mcp_tool_state.cfg
 /mcp_tool_verification_log.json
 /hammerforge_mcp_editor.png
+/hammerforge_mcp_editor.png.import
 /hammerforge_editor_window.png
 
 # The vendored MCP translation catalog is read directly as CSV. Godot can

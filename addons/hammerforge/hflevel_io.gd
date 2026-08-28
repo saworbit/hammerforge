@@ -3,9 +3,11 @@ extends RefCounted
 class_name HFLevelIO
 
 const MAGIC := "HFLEVEL1"
+const MAGIC_COMPRESSED := "HFLEVEL1C"
 const TYPE_KEY := "__hf_type"
 const MAX_RECURSION_DEPTH := 64
 const HFLog = preload("res://addons/hammerforge/hf_log.gd")
+const COMPRESSION_MODE := FileAccess.COMPRESSION_DEFLATE
 
 
 static func _is_vec3_arr(v: Variant) -> bool:
@@ -142,16 +144,21 @@ static func decode_variant(value: Variant, _depth: int = 0) -> Variant:
 	return value
 
 
-static func build_payload(data: Dictionary, _compress: bool = true) -> PackedByteArray:
+static func build_payload(data: Dictionary, compress: bool = true) -> PackedByteArray:
 	var json = JSON.stringify(data)
-	return build_payload_from_json(json, _compress)
+	return build_payload_from_json(json, compress)
 
 
-static func build_payload_from_json(json: String, _compress: bool = true) -> PackedByteArray:
-	var raw = json.to_utf8_buffer()
-	var header = "%s\n" % MAGIC
-	var payload = PackedByteArray()
-	payload.append_array(header.to_utf8_buffer())
+static func build_payload_from_json(json: String, compress: bool = true) -> PackedByteArray:
+	var raw: PackedByteArray = json.to_utf8_buffer()
+	var payload := PackedByteArray()
+	if compress:
+		var packed: PackedByteArray = raw.compress(COMPRESSION_MODE)
+		var header := "%s %d\n" % [MAGIC_COMPRESSED, raw.size()]
+		payload.append_array(header.to_utf8_buffer())
+		payload.append_array(packed)
+		return payload
+	payload.append_array(("%s\n" % MAGIC).to_utf8_buffer())
 	payload.append_array(raw)
 	return payload
 
@@ -164,10 +171,21 @@ static func parse_payload(payload: PackedByteArray) -> Dictionary:
 		return {}
 	var header_bytes = payload.slice(0, newline)
 	var header = header_bytes.get_string_from_utf8()
-	if not header.begins_with(MAGIC):
+	var compressed := header.begins_with(MAGIC_COMPRESSED)
+	if not compressed and not header.begins_with(MAGIC):
 		HFLog.warn("HFLevelIO: Invalid header, expected %s" % MAGIC)
 		return {}
-	var body = payload.slice(newline + 1, payload.size())
+	var body: PackedByteArray = payload.slice(newline + 1, payload.size())
+	if compressed:
+		var parts: PackedStringArray = header.split(" ")
+		var uncompressed_size: int = int(parts[1]) if parts.size() >= 2 else 0
+		if uncompressed_size <= 0:
+			HFLog.warn("HFLevelIO: Compressed payload missing size")
+			return {}
+		body = body.decompress(uncompressed_size, COMPRESSION_MODE)
+		if body.is_empty():
+			HFLog.warn("HFLevelIO: Decompress failed")
+			return {}
 	var json = body.get_string_from_utf8()
 	if json == "":
 		HFLog.warn("HFLevelIO: Empty JSON body in payload")
@@ -179,19 +197,34 @@ static func parse_payload(payload: PackedByteArray) -> Dictionary:
 	return data if data is Dictionary else {}
 
 
-static func save_to_path(path: String, data: Dictionary, compress: bool = true) -> int:
+static func write_bytes_atomic(path: String, payload: PackedByteArray) -> int:
 	if path == "":
 		return ERR_INVALID_PARAMETER
-	var payload = build_payload(data, compress)
-	var file = FileAccess.open(path, FileAccess.WRITE)
+	var tmp_path := path + ".writing"
+	var file = FileAccess.open(tmp_path, FileAccess.WRITE)
 	if not file:
 		return ERR_CANT_OPEN
 	file.store_buffer(payload)
 	var err = file.get_error()
+	file.close()
 	if err != OK:
-		push_error("HFLevelIO: store_buffer failed for %s (error: %d)" % [path, err])
+		push_error("HFLevelIO: store_buffer failed for %s (error: %d)" % [tmp_path, err])
+		DirAccess.remove_absolute(tmp_path)
 		return err
+	if FileAccess.file_exists(path):
+		DirAccess.remove_absolute(path)
+	var renamed := DirAccess.rename_absolute(tmp_path, path)
+	if renamed != OK:
+		push_error("HFLevelIO: rename failed for %s (error: %d)" % [path, renamed])
+		DirAccess.remove_absolute(tmp_path)
+		return renamed
 	return OK
+
+
+static func save_to_path(path: String, data: Dictionary, compress: bool = true) -> int:
+	if path == "":
+		return ERR_INVALID_PARAMETER
+	return write_bytes_atomic(path, build_payload(data, compress))
 
 
 static func load_from_path(path: String) -> Dictionary:

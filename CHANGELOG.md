@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Fixed
+- **`.map` point entities keep their keys:** export writes `entity_data` (angle, targetname, etc.) alongside classname/origin.
+- **`.hflevel` saves no longer truncate the destination first:** writes go to a `.writing` sidecar and rename into place. The write thread snapshots autosave settings on the main thread and is joined when LevelRoot exits.
+- **`.hflevel` compression works:** `hflevel_compress` now emits an `HFLEVEL1C` deflate payload; uncompressed `HFLEVEL1` files still load.
+- **Test Level wires entity I/O by default:** `bake_wire_io` defaults to true so connections fire without an Inspector toggle.
+- **HFIORuntime lookup is O(1):** dispatchers join the `hf_io_dispatcher` group; tree walks are fallback only.
+- **Wireframe bake preview reuses one compiled shader** instead of parsing GLSL every bake.
+- **PlaytestFPS** reads gravity with a 9.8 fallback and shows a reticle plus an Esc pause/controls overlay.
+
 ### Changed
 - **Test-tab bake/play handlers live in `dock_manage_handler.gd`:** bake, validate, Test Level, spawn, and playtest dock methods are thin wrappers around `HFDockManageHandler`.
 - **Objects-tab entity handlers live in `dock_entity_handler.gd`:** property rebuild, create-entity, and I/O/wiring dock methods are thin wrappers around `HFDockEntityHandler`.

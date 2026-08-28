@@ -23,6 +23,7 @@ func _assert_captured_warning(pattern: String) -> void:
 	if warnings.size() > 0:
 		assert_string_contains(warnings[0], pattern, "Should capture expected warning text")
 
+
 # ===========================================================================
 # encode / decode: Vector2
 # ===========================================================================
@@ -344,3 +345,38 @@ func test_full_pipeline_round_trip():
 	assert_true(decoded["color"] is Color, "Full pipeline: Color survives")
 	assert_eq(decoded["name"], "level_1", "Full pipeline: string survives")
 	assert_eq(int(decoded["count"]), 42, "Full pipeline: integer value survives")
+
+
+func test_compressed_payload_round_trip_and_smaller_than_raw():
+	var blob := ""
+	for _i in range(80):
+		blob += "HammerForge greybox payload padding. "
+	var data := {"name": "packed", "blob": blob}
+	var raw: PackedByteArray = HFLevelIO.build_payload(data, false)
+	var packed: PackedByteArray = HFLevelIO.build_payload(data, true)
+	assert_true(packed.size() < raw.size(), "Compressed payload should be smaller than raw JSON")
+	var header := packed.slice(0, 9).get_string_from_utf8()
+	assert_eq(header, "HFLEVEL1C", "Compressed payload uses HFLEVEL1C header")
+	var parsed: Dictionary = HFLevelIO.parse_payload(packed)
+	assert_eq(parsed.get("name"), "packed")
+	assert_eq(parsed.get("blob"), blob)
+
+
+func test_uncompressed_payload_keeps_legacy_header():
+	var data := {"name": "plain"}
+	var payload: PackedByteArray = HFLevelIO.build_payload(data, false)
+	var header := payload.slice(0, HFLevelIO.MAGIC.length()).get_string_from_utf8()
+	assert_eq(header, HFLevelIO.MAGIC)
+	var parsed: Dictionary = HFLevelIO.parse_payload(payload)
+	assert_eq(parsed.get("name"), "plain")
+
+
+func test_save_to_path_is_atomic_and_leaves_no_writing_sidecar():
+	var path := "user://hflevel_atomic_test.hflevel"
+	var writing := path + ".writing"
+	HFLevelIO.save_to_path(path, {"v": 1}, false)
+	HFLevelIO.save_to_path(path, {"v": 2}, false)
+	var loaded: Dictionary = HFLevelIO.load_from_path(path)
+	assert_eq(int(loaded.get("v", 0)), 2)
+	assert_false(FileAccess.file_exists(writing), "Sidecar .writing file should be gone after save")
+	DirAccess.remove_absolute(path)
