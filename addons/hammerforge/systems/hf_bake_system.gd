@@ -1111,18 +1111,23 @@ func _collect_nonstructural_brushes(filter: Variant = null) -> Array:
 	if filter != null:
 		sources = filter
 	else:
-		for container in [root.draft_brushes_node, root.generated_floors, root.generated_walls]:
+		# postprocess_bake is also called from test shims that omit LevelRoot
+		# containers. Object.get() returns null for missing properties.
+		for prop_name in ["draft_brushes_node", "generated_floors", "generated_walls"]:
+			var container = root.get(prop_name) if root else null
 			if container:
 				sources.append_array(container.get_children())
 	for child in sources:
-		if not (child is DraftBrush) or root.is_entity_node(child):
+		if not (child is DraftBrush):
+			continue
+		if root.has_method("is_entity_node") and root.is_entity_node(child):
 			continue
 		var draft := child as DraftBrush
 		if draft.operation == CSGShape3D.OPERATION_SUBTRACTION:
 			continue
-		if root.bake_visible_only and not draft.visible:
+		if _root_bool("bake_visible_only", false) and not draft.visible:
 			continue
-		if root.cordon_enabled and not _brush_in_cordon(draft):
+		if _root_bool("cordon_enabled", false) and not _brush_in_cordon(draft):
 			continue
 		if _is_structural_brush(draft):
 			continue

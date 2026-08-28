@@ -2356,3 +2356,13 @@ func test_append_skips_worldspawn_brushes():
 		holder == null or holder.get_child_count() == 0,
 		"World brushes stay on the CSG/face path",
 	)
+
+
+func test_collect_nonstructural_brushes_tolerates_incomplete_root():
+	# postprocess_bake is called from suites whose shims omit LevelRoot
+	# containers. Missing properties must not SCRIPT ERROR.
+	var incomplete := Node3D.new()
+	add_child_autoqfree(incomplete)
+	var sys := HFBakeSystem.new(incomplete)
+	var brushes: Array = sys._collect_nonstructural_brushes()
+	assert_eq(brushes.size(), 0)
