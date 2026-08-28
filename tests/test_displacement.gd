@@ -221,6 +221,28 @@ func test_triangulate_displaced_power_3():
 	assert_eq(result["verts"].size(), 384)
 
 
+func test_triangulate_displaced_smooths_shared_vertex_normals():
+	var disp = HFDisplacementData.new()
+	disp.init_flat(2)
+	disp.set_distance(2, 2, 8.0)
+	var corners: Array[Vector3] = [
+		Vector3(0, 0, 0), Vector3(16, 0, 0), Vector3(0, 0, 16), Vector3(16, 0, 16)
+	]
+	var uv_corners: Array[Vector2] = [Vector2(0, 0), Vector2(1, 0), Vector2(0, 1), Vector2(1, 1)]
+	var result: Dictionary = disp.triangulate_displaced(corners, Vector3.UP, uv_corners)
+	var verts: PackedVector3Array = result["verts"]
+	var normals: PackedVector3Array = result["normals"]
+	var peak: Vector3 = disp.get_displaced_position(2, 2, corners, Vector3.UP)
+	var peak_normals: Array[Vector3] = []
+	for i in range(verts.size()):
+		if verts[i].distance_to(peak) < 0.001:
+			peak_normals.append(normals[i])
+	assert_gt(peak_normals.size(), 1, "Center vertex is shared by multiple triangles")
+	var first: Vector3 = peak_normals[0]
+	for n in peak_normals:
+		assert_true(first.dot(n) > 0.99, "Shared vertex should reuse one averaged normal")
+
+
 func test_smooth():
 	var disp = HFDisplacementData.new()
 	disp.init_flat(2)

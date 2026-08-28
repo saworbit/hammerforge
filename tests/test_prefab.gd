@@ -24,6 +24,7 @@ func _assert_captured_warning(pattern: String) -> void:
 	if warnings.size() > 0:
 		assert_string_contains(warnings[0], pattern, "Should capture expected warning text")
 
+
 # -- Helper data ----------------------------------------------------------------
 
 
@@ -160,3 +161,23 @@ func test_entity_io_preserved():
 	var outputs = restored.entity_infos[0].get("io_outputs", [])
 	assert_eq(outputs.size(), 1, "I/O connection should be preserved")
 	assert_eq(str(outputs[0].get("target_name", "")), "door_1", "Target name preserved")
+
+
+func _make_box_node(pos: Vector3, scale: Vector3 = Vector3.ONE) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	mi.mesh = BoxMesh.new()
+	mi.position = pos
+	mi.scale = scale
+	add_child_autoqfree(mi)
+	return mi
+
+
+func test_centroid_uses_combined_aabb_center_not_origin_mean():
+	# Equal origins would also average to 5; unequal visual size makes AABB
+	# center (6) differ from the mean of node origins (5).
+	var a := _make_box_node(Vector3(0, 0, 0), Vector3.ONE)
+	var b := _make_box_node(Vector3(10, 0, 0), Vector3(5, 1, 1))
+	var centroid: Vector3 = HFPrefabType.compute_selection_centroid([a, b], [])
+	assert_almost_eq(centroid.x, 6.0, 0.05, "Centroid should be combined AABB center")
+	assert_almost_eq(centroid.y, 0.0, 0.05)
+	assert_almost_eq(centroid.z, 0.0, 0.05)

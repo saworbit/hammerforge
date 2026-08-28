@@ -86,3 +86,16 @@ func test_thumbnail_is_null_in_headless():
 	var entry: Dictionary = browser._entries[0]
 	# Thumbnail may be null in headless — that's expected
 	assert_has(entry, "thumbnail")
+
+
+func test_hidden_browser_skips_thumbnail_capture():
+	browser.visible = false
+	browser.record_entry("Create Brush", 1)
+	assert_eq(browser.get_entry_count(), 1)
+	assert_null(browser._entries[0]["thumbnail"], "Hidden history should not GPU-readback")
+
+
+func test_record_entry_appends_without_dropping_existing_rows():
+	browser.record_entry("Create Brush", 1)
+	browser.record_entry("Move Brush", 2)
+	assert_eq(browser._list.get_child_count(), 2)

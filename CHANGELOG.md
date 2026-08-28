@@ -5,6 +5,7 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **`.map` brush entities round-trip:** `func_detail` / `func_wall` / triggers export as their own entity blocks and import with `brush_entity_class` set.
 - **`.map` point entities keep their keys:** export writes `entity_data` (angle, targetname, etc.) alongside classname/origin.
 - **`.hflevel` saves no longer truncate the destination first:** writes go to a `.writing` sidecar and rename into place. The write thread snapshots autosave settings on the main thread and is joined when LevelRoot exits.
 - **`.hflevel` compression works:** `hflevel_compress` now emits an `HFLEVEL1C` deflate payload; uncompressed `HFLEVEL1` files still load.
@@ -12,6 +13,9 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 - **HFIORuntime lookup is O(1):** dispatchers join the `hf_io_dispatcher` group; tree walks are fallback only.
 - **Wireframe bake preview reuses one compiled shader** instead of parsing GLSL every bake.
 - **PlaytestFPS** reads gravity with a 9.8 fallback and shows a reticle plus an Esc pause/controls overlay.
+- **Displacement meshes use averaged vertex normals** instead of flat per-triangle shading.
+- **Prefab capture uses the combined visual AABB center** so oversized brushes don't skew the placement origin.
+- **History thumbnails skip GPU readback** when the History section is hidden, and new rows append instead of rebuilding the list.
 
 ### Changed
 - **Test-tab bake/play handlers live in `dock_manage_handler.gd`:** bake, validate, Test Level, spawn, and playtest dock methods are thin wrappers around `HFDockManageHandler`.

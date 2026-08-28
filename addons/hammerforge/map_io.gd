@@ -92,8 +92,11 @@ static func parse_map_text(text: String) -> Dictionary:
 			entity_points.append({"classname": entity_class, "origin": origin, "properties": props})
 		for brush in entity.get("brushes", []):
 			var info = _brush_from_faces(brush.get("faces", []))
-			if not info.is_empty():
-				brushes.append(info)
+			if info.is_empty():
+				continue
+			if entity_class != "" and entity_class != "worldspawn":
+				info["brush_entity_class"] = entity_class
+			brushes.append(info)
 	return {"entities": entity_points, "brushes": brushes}
 
 
@@ -111,6 +114,7 @@ static func export_map_from_level(level_root: Node, adapter: HFMapAdapterType = 
 	var committed = level_root.get_node_or_null("CommittedCuts")
 	if committed:
 		brush_nodes.append_array(committed.get_children())
+	var entity_brush_blocks: Array = []
 	for node in brush_nodes:
 		if not (node is DraftBrush):
 			continue
@@ -121,10 +125,21 @@ static func export_map_from_level(level_root: Node, adapter: HFMapAdapterType = 
 		var brush_lines = _brush_to_map_lines(node, adapter)
 		if brush_lines.is_empty():
 			continue
+		var bec := str(node.get_meta("brush_entity_class", ""))
+		if bec != "":
+			entity_brush_blocks.append({"classname": bec, "lines": brush_lines})
+			continue
 		lines.append("{")
 		lines.append_array(brush_lines)
 		lines.append("}")
 	lines.append("}")
+	for block in entity_brush_blocks:
+		lines.append("{")
+		lines.append('"classname" "%s"' % str(block["classname"]))
+		lines.append("{")
+		lines.append_array(block["lines"])
+		lines.append("}")
+		lines.append("}")
 	if level_root.has_method("_iter_pick_nodes"):
 		for node in level_root.call("_iter_pick_nodes"):
 			if not (node is DraftEntity):

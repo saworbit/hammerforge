@@ -296,3 +296,72 @@ func test_entity_export_skips_empty_entity_data_and_origin_override():
 	assert_true(text.find('"origin" "0 0 0"') < 0, "Transform origin wins over entity_data origin")
 	assert_true(text.find("targetname") < 0, "Empty entity_data values are omitted")
 	assert_string_contains(text, '"brightness" "200"')
+
+
+func _box_faces_map_text() -> String:
+	return (
+		"{\n"
+		+ "( 0 0 0 ) ( 64 0 0 ) ( 64 64 0 ) brick 0 0 0 1 1\n"
+		+ "( 0 0 16 ) ( 64 64 16 ) ( 64 0 16 ) brick 0 0 0 1 1\n"
+		+ "( 0 0 0 ) ( 0 0 16 ) ( 64 0 0 ) brick 0 0 0 1 1\n"
+		+ "( 64 0 0 ) ( 64 0 16 ) ( 64 64 0 ) brick 0 0 0 1 1\n"
+		+ "}\n"
+	)
+
+
+func test_parse_func_detail_sets_brush_entity_class():
+	var map_text := (
+		"{\n"
+		+ '"classname" "worldspawn"\n'
+		+ "}\n"
+		+ "{\n"
+		+ '"classname" "func_detail"\n'
+		+ _box_faces_map_text()
+		+ "}\n"
+	)
+	var parsed: Dictionary = MapIO.parse_map_text(map_text)
+	var brushes: Array = parsed.get("brushes", [])
+	assert_eq(brushes.size(), 1)
+	assert_eq(str(brushes[0].get("brush_entity_class", "")), "func_detail")
+
+
+func test_parse_worldspawn_brush_has_no_entity_class():
+	var map_text := "{\n" + '"classname" "worldspawn"\n' + _box_faces_map_text() + "}\n"
+	var parsed: Dictionary = MapIO.parse_map_text(map_text)
+	var brushes: Array = parsed.get("brushes", [])
+	assert_eq(brushes.size(), 1)
+	assert_eq(str(brushes[0].get("brush_entity_class", "")), "")
+
+
+func _make_export_root(brushes: Array) -> Node3D:
+	var script := GDScript.new()
+	script.source_code = """
+extends Node3D
+func _iter_pick_nodes():
+	return get_children()
+func is_entity_node(_n):
+	return false
+"""
+	script.reload()
+	var root := Node3D.new()
+	root.set_script(script)
+	add_child_autoqfree(root)
+	for brush in brushes:
+		root.add_child(brush)
+	return root
+
+
+func test_export_writes_func_detail_as_own_entity_block():
+	var world := DraftBrush.new()
+	world.shape = LevelRoot.BrushShape.BOX
+	world.size = Vector3(32, 32, 32)
+	var detail := DraftBrush.new()
+	detail.shape = LevelRoot.BrushShape.BOX
+	detail.size = Vector3(16, 16, 16)
+	detail.set_brush_entity_class("func_detail")
+	var text := MapIO.export_map_from_level(_make_export_root([world, detail]))
+	assert_string_contains(text, '"classname" "worldspawn"')
+	assert_string_contains(text, '"classname" "func_detail"')
+	var world_idx := text.find('"classname" "worldspawn"')
+	var detail_idx := text.find('"classname" "func_detail"')
+	assert_gt(detail_idx, world_idx, "Brush entity block comes after worldspawn")

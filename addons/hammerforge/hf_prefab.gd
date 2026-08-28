@@ -36,19 +36,7 @@ static func capture_from_selection(
 	if brush_nodes.is_empty() and entity_nodes.is_empty():
 		return prefab
 
-	# Compute centroid of all nodes
-	var positions: Array = []
-	for b in brush_nodes:
-		if b is Node3D:
-			positions.append(b.global_position)
-	for e in entity_nodes:
-		if e is Node3D:
-			positions.append(e.global_position)
-	var centroid := Vector3.ZERO
-	if not positions.is_empty():
-		for pos in positions:
-			centroid += pos
-		centroid /= float(positions.size())
+	var centroid := compute_selection_centroid(brush_nodes, entity_nodes)
 
 	# Capture brushes
 	for brush in brush_nodes:
@@ -78,6 +66,44 @@ static func capture_from_selection(
 		prefab.entity_infos.append(info)
 
 	return prefab
+
+
+## Combined visual AABB center of the selection. Falls back to origin mean
+## when no mesh bounds are available.
+static func compute_selection_centroid(brush_nodes: Array, entity_nodes: Array) -> Vector3:
+	var merged := AABB()
+	var has_aabb := false
+	for node in brush_nodes + entity_nodes:
+		if not (node is Node3D):
+			continue
+		var aabb := _visual_aabb(node)
+		if aabb.size == Vector3.ZERO and aabb.position == Vector3.ZERO:
+			aabb = AABB((node as Node3D).global_position, Vector3.ZERO)
+		if not has_aabb:
+			merged = aabb
+			has_aabb = true
+		else:
+			merged = merged.merge(aabb)
+	if has_aabb:
+		return merged.get_center()
+	return Vector3.ZERO
+
+
+static func _visual_aabb(node: Node3D) -> AABB:
+	if node == null or not is_instance_valid(node):
+		return AABB()
+	if node is MeshInstance3D:
+		var mi := node as MeshInstance3D
+		if mi.mesh:
+			return mi.global_transform * mi.get_aabb()
+	if "mesh_instance" in node:
+		var nested = node.get("mesh_instance")
+		if nested is MeshInstance3D and nested.mesh:
+			return nested.global_transform * nested.get_aabb()
+	for child in node.get_children():
+		if child is MeshInstance3D and (child as MeshInstance3D).mesh:
+			return child.global_transform * (child as MeshInstance3D).get_aabb()
+	return AABB()
 
 
 ## Instantiate this prefab at a world position.

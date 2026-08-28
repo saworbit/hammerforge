@@ -77,7 +77,9 @@ func get_redo_button() -> Button:
 
 ## Record a new history entry with optional viewport thumbnail.
 func record_entry(action_name: String, version: int = -1) -> void:
-	var thumbnail: ImageTexture = _capture_thumbnail()
+	var thumbnail: ImageTexture = null
+	if _should_capture_thumbnail():
+		thumbnail = _capture_thumbnail()
 	var icon_char: String = HFOperationReplayScript._get_icon_for_action(action_name)
 	var color: Color = HFOperationReplayScript._get_color_for_action(action_name)
 
@@ -91,11 +93,16 @@ func record_entry(action_name: String, version: int = -1) -> void:
 	}
 	_entries.append(entry)
 
-	# Recycle oldest entries
+	var dropped := false
 	while _entries.size() > MAX_ENTRIES:
 		_entries.pop_front()
-
-	_rebuild_list()
+		dropped = true
+	if dropped or not _list:
+		_rebuild_list()
+	else:
+		_list.add_child(_create_entry_row(entry, _entries.size() - 1))
+		if _scroll:
+			_scroll.call_deferred("set_v_scroll", 99999)
 
 
 ## Clear all history entries.
@@ -114,7 +121,7 @@ func _rebuild_list() -> void:
 		return
 	for child in _list.get_children():
 		_list.remove_child(child)
-		child.queue_free()
+		child.free()
 
 	for i in range(_entries.size()):
 		var entry: Dictionary = _entries[i]
@@ -199,8 +206,16 @@ func _on_row_input(event: InputEvent, index: int) -> void:
 				navigate_requested.emit(version)
 
 
-func _capture_thumbnail() -> ImageTexture:
+func _should_capture_thumbnail() -> bool:
+	if not is_inside_tree() or not is_visible_in_tree():
+		return false
 	if not Engine.is_editor_hint():
+		return false
+	return true
+
+
+func _capture_thumbnail() -> ImageTexture:
+	if not _should_capture_thumbnail():
 		return null
 	# Try to capture from the 3D editor viewport
 	var vp = _get_editor_viewport_3d()

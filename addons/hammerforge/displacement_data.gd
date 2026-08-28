@@ -152,7 +152,8 @@ func triangulate_displaced(
 			var bot_uv: Vector2 = uv_corners[2].lerp(uv_corners[3], u)
 			grid_uv[row * d + col] = top_uv.lerp(bot_uv, v)
 
-	# Emit triangles (two per grid cell) in CW winding.
+	var accum: PackedVector3Array = PackedVector3Array()
+	accum.resize(d * d)
 	for row in range(d - 1):
 		for col in range(d - 1):
 			var i00: int = row * d + col
@@ -163,36 +164,53 @@ func triangulate_displaced(
 			var p10: Vector3 = grid_pos[i10]
 			var p01: Vector3 = grid_pos[i01]
 			var p11: Vector3 = grid_pos[i11]
-			# Triangle 1: 00 → 01 → 10 (CW from outside)
 			var n1: Vector3 = (p01 - p00).cross(p10 - p00)
 			if n1.length_squared() > 0.0001:
 				n1 = n1.normalized()
 			else:
 				n1 = face_normal
-			verts.append(p00)
-			verts.append(p01)
-			verts.append(p10)
-			uvs.append(grid_uv[i00])
-			uvs.append(grid_uv[i01])
-			uvs.append(grid_uv[i10])
-			normals.append(n1)
-			normals.append(n1)
-			normals.append(n1)
-			# Triangle 2: 10 → 01 → 11 (CW from outside)
 			var n2: Vector3 = (p01 - p10).cross(p11 - p10)
 			if n2.length_squared() > 0.0001:
 				n2 = n2.normalized()
 			else:
 				n2 = face_normal
-			verts.append(p10)
-			verts.append(p01)
-			verts.append(p11)
+			accum[i00] += n1
+			accum[i01] += n1
+			accum[i10] += n1
+			accum[i10] += n2
+			accum[i01] += n2
+			accum[i11] += n2
+	for i in range(accum.size()):
+		if accum[i].length_squared() > 0.0001:
+			accum[i] = accum[i].normalized()
+		else:
+			accum[i] = face_normal
+
+	# Emit triangles (two per grid cell) in CW winding with smooth vertex normals.
+	for row in range(d - 1):
+		for col in range(d - 1):
+			var i00: int = row * d + col
+			var i10: int = row * d + col + 1
+			var i01: int = (row + 1) * d + col
+			var i11: int = (row + 1) * d + col + 1
+			verts.append(grid_pos[i00])
+			verts.append(grid_pos[i01])
+			verts.append(grid_pos[i10])
+			uvs.append(grid_uv[i00])
+			uvs.append(grid_uv[i01])
+			uvs.append(grid_uv[i10])
+			normals.append(accum[i00])
+			normals.append(accum[i01])
+			normals.append(accum[i10])
+			verts.append(grid_pos[i10])
+			verts.append(grid_pos[i01])
+			verts.append(grid_pos[i11])
 			uvs.append(grid_uv[i10])
 			uvs.append(grid_uv[i01])
 			uvs.append(grid_uv[i11])
-			normals.append(n2)
-			normals.append(n2)
-			normals.append(n2)
+			normals.append(accum[i10])
+			normals.append(accum[i01])
+			normals.append(accum[i11])
 
 	return {"verts": verts, "uvs": uvs, "normals": normals}
 
