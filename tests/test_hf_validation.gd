@@ -27,7 +27,7 @@ func _root_shim_script() -> GDScript:
 		"extends Node3D\n"
 		+ "var draft_brushes_node: Node3D\n"
 		+ "var pending_node: Node3D\n"
-		+ "var draft_entities_node: Node3D\n"
+		+ "var entities_node: Node3D\n"
 		+ "var baked_container: Node3D\n"
 	)
 	s.reload()
@@ -55,7 +55,7 @@ func test_has_entity_container_false_until_set():
 	assert_false(HFValidation.has_entity_container(root))
 	var ent = Node3D.new()
 	root.add_child(ent)
-	root.draft_entities_node = ent
+	root.entities_node = ent
 	assert_true(HFValidation.has_entity_container(root))
 
 
