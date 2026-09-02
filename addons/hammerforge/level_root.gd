@@ -2006,12 +2006,9 @@ func export_playtest_scene(path: String) -> bool:
 	scene_root.add_child(env)
 	env.owner = scene_root
 
-	# Wire entity I/O connections into Godot signals
-	var has_io := false
-	for child in scene_root.get_children():
-		if not child.get_meta("entity_io_outputs", []).is_empty():
-			has_io = true
-			break
+	# Wire entity I/O connections into Godot signals. Trigger volumes sit
+	# under a Nonstructural holder, so scan the packed tree, not only roots.
+	var has_io := _node_tree_has_io(scene_root)
 	if has_io:
 		var io_dispatcher := HFIORuntime.new()
 		io_dispatcher.name = "HFIODispatcher"
@@ -2032,6 +2029,15 @@ func export_playtest_scene(path: String) -> bool:
 		return false
 
 	return true
+
+
+func _node_tree_has_io(node: Node) -> bool:
+	if not node.get_meta("entity_io_outputs", []).is_empty():
+		return true
+	for child in node.get_children():
+		if _node_tree_has_io(child):
+			return true
+	return false
 
 
 # ===========================================================================

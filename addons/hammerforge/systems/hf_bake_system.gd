@@ -790,32 +790,37 @@ func postprocess_bake(
 ## connections are wired as live Godot signals at runtime.  The dispatcher is
 ## parented under the baked container but also scans entities_node (a sibling
 ## subtree) via extra_scan_roots.
-func _attach_io_dispatcher(container: Node3D) -> void:
-	# Only attach if there are entities with I/O connections
-	if not root.entities_node:
-		return
-	var has_io := false
-	for child in root.entities_node.get_children():
+func _direct_child_has_io(parent: Node) -> bool:
+	if not parent:
+		return false
+	for child in parent.get_children():
 		if not child.get_meta("entity_io_outputs", []).is_empty():
-			has_io = true
-			break
+			return true
+	return false
+
+
+func _attach_io_dispatcher(container: Node3D) -> void:
+	# Point entities and brush entities (triggers, buttons) both store outputs.
+	var has_io := (
+		_direct_child_has_io(root.entities_node) or _direct_child_has_io(root.draft_brushes_node)
+	)
 	if not has_io:
 		return
 	# Remove any existing dispatcher
-	var existing: Node = container.find_child("HFIODispatcher", false)
+	var existing: Node = container.get_node_or_null("HFIODispatcher")
 	if existing:
 		container.remove_child(existing)
 		existing.free()
 	var dispatcher := HFIORuntime.new()
 	dispatcher.name = "HFIODispatcher"
-	# The dispatcher lives under the baked container, but entities live under
-	# root.entities_node (a sibling).  Tell it to scan both subtrees.
-	# Set the transient ref for the live session:
-	dispatcher.extra_scan_roots.append(root.entities_node)
+	# The dispatcher lives under the baked container, but point entities live
+	# under root.entities_node (a sibling). Tell it to scan that subtree too.
+	if root.entities_node:
+		dispatcher.extra_scan_roots.append(root.entities_node)
 	container.add_child(dispatcher)
-	# Also store the serializable NodePath so the scan survives scene save/reload:
-	var entities_path: NodePath = dispatcher.get_path_to(root.entities_node)
-	dispatcher.extra_scan_root_paths.append(entities_path)
+	if root.entities_node:
+		var entities_path: NodePath = dispatcher.get_path_to(root.entities_node)
+		dispatcher.extra_scan_root_paths.append(entities_path)
 	root._assign_owner_recursive(dispatcher)
 
 

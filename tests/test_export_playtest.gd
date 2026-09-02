@@ -63,3 +63,29 @@ func test_export_playtest_scene_includes_environment():
 		assert_true(has_env, "Should have a WorldEnvironment")
 		scene.free()
 	DirAccess.remove_absolute(path)
+
+
+func test_export_playtest_scene_wires_nested_brush_io():
+	var baked := Node3D.new()
+	baked.name = "BakedGeometry"
+	root.add_child(baked)
+	root.baked_container = baked
+	var holder := Node3D.new()
+	holder.name = "Nonstructural"
+	baked.add_child(holder)
+	var trigger := Area3D.new()
+	trigger.name = "Trigger_0"
+	trigger.set_meta(
+		"entity_io_outputs",
+		[{"output_name": "OnTrigger", "target_name": "door", "input_name": "Open"}]
+	)
+	holder.add_child(trigger)
+	var path := "user://test_playtest_nested_io.tscn"
+	assert_true(root.export_playtest_scene(path))
+	var packed: PackedScene = ResourceLoader.load(path)
+	assert_not_null(packed)
+	var scene: Node = packed.instantiate()
+	var dispatcher: Node = scene.find_child("HFIODispatcher", true, false)
+	assert_not_null(dispatcher, "Nested trigger I/O should attach HFIORuntime")
+	scene.free()
+	DirAccess.remove_absolute(path)

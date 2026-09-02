@@ -288,9 +288,9 @@ func get_entity_outputs(entity: Node) -> Array:
 ## Returns the number of connections removed.
 func cleanup_dangling_connections(deleted_name: String) -> int:
 	var removed := 0
-	if deleted_name == "" or not root.entities_node:
+	if deleted_name == "":
 		return removed
-	for child in root.entities_node.get_children():
+	for child in _iter_io_sources():
 		var outputs: Array = child.get_meta("entity_io_outputs", [])
 		if outputs.is_empty():
 			continue
@@ -354,10 +354,10 @@ func reconcile_external_names(previous_names: Dictionary, current_names: Diction
 			and owners.has(instance_id)
 		):
 			name_map[old_name] = new_name
-	if name_map.is_empty() or not root.entities_node:
+	if name_map.is_empty():
 		return 0
 	var remapped := 0
-	for source in root.entities_node.get_children():
+	for source in _iter_io_sources():
 		var outputs: Array = source.get_meta("entity_io_outputs", [])
 		for connection in outputs:
 			if connection is Dictionary and name_map.has(str(connection.get("target_name", ""))):
@@ -398,12 +398,19 @@ static func is_brush_io_target(node: Node) -> bool:
 	)
 
 
+func _iter_io_sources() -> Array:
+	var nodes: Array = []
+	if root.entities_node:
+		nodes.append_array(root.entities_node.get_children())
+	if root.draft_brushes_node:
+		nodes.append_array(root.draft_brushes_node.get_children())
+	return nodes
+
+
 ## Get all I/O connections in the scene (for visualization).
 func get_all_connections() -> Array:
 	var connections: Array = []
-	if not root.entities_node:
-		return connections
-	for child in root.entities_node.get_children():
+	for child in _iter_io_sources():
 		var outputs = get_entity_outputs(child)
 		for conn in outputs:
 			if not (conn is Dictionary):
