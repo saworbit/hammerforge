@@ -186,6 +186,36 @@ func test_rmb_passes_when_idle_and_only_cancels_active_polygon_work():
 	camera.free()
 
 
+func test_downward_height_drag_stays_positive():
+	var tool = HFPolygonTool.new()
+	var root := Node3D.new()
+	var camera := Camera3D.new()
+	tool.root = root
+	tool._polygon_points = PackedVector3Array(
+		[Vector3.ZERO, Vector3.RIGHT * 4.0, Vector3(4, 0, 4), Vector3.BACK * 4.0]
+	)
+	tool._ground_y = 0.0
+	tool._height = 32.0
+	tool._height_start_value = 32.0
+	tool._height_start_mouse = Vector2.ZERO
+	tool._phase = tool.Phase.SETTING_HEIGHT
+	tool._height_pointer_capture = true
+	var motion := InputEventMouseMotion.new()
+	motion.button_mask = MOUSE_BUTTON_MASK_LEFT
+	assert_eq(
+		tool.handle_input(motion, camera, Vector2(0, 400)),
+		EditorPlugin.AFTER_GUI_INPUT_STOP,
+	)
+	assert_true(tool._height >= 0.1, "Downward drag must not invert extrusion")
+	var faces = tool._build_face_data()
+	assert_gt(faces.size(), 0)
+	var top = FaceData.from_dict(faces[0])
+	top.ensure_geometry()
+	assert_true(top.normal.y > 0.5, "Top face must still point up")
+	root.free()
+	camera.free()
+
+
 func test_lost_height_release_finalizes_once_before_buttonless_motion_mutates_height():
 	var tool = HFPolygonTool.new()
 	var root := Node3D.new()

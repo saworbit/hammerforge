@@ -106,8 +106,7 @@ func handle_input(event: InputEvent, camera: Camera3D, mouse_pos: Vector2) -> in
 			_height = _height_start_value + delta_y
 			if root.get("grid_snap") and root.grid_snap > 0.0:
 				_height = snappedf(_height, root.grid_snap)
-			if absf(_height) < 0.1:
-				_height = 0.1
+			_height = maxf(0.1, _height)
 			_update_preview()
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 
