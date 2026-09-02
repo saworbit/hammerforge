@@ -1,0 +1,67 @@
+name: Bug report
+description: Something in the HammerForge editor plugin isn't working
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please search existing issues first. Verify the behavior against the current
+        `main` branch where you can.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you observed, including any errors from the Godot Output panel.
+      placeholder: Baking a selection with a subtractive brush leaves the old mesh in place.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps starting from a fresh scene, if possible.
+      placeholder: |
+        1. Add a LevelRoot to an empty 3D scene.
+        2. Draw two overlapping brushes in the Build tab.
+        3. ...
+    validations:
+      required: true
+
+  - type: input
+    id: godot-version
+    attributes:
+      label: Godot version
+      description: CI currently runs 4.7-stable.
+      placeholder: "4.7-stable"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "Windows 11 / Ubuntu 24.04 / macOS 15"
+    validations:
+      required: true
+
+  - type: input
+    id: commit
+    attributes:
+      label: HammerForge commit or version
+      placeholder: "96036bc, or v0.x.y"
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output
+      description: Paste errors from the Godot Output/Debugger panel. Redact any tokens.
+      render: text

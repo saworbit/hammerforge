@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Contributing guide
+    url: https://github.com/saworbit/hammerforge/blob/main/CONTRIBUTING.md
+    about: Architecture conventions, local check commands, and PR expectations.
+  - name: Roadmap
+    url: https://github.com/saworbit/hammerforge/blob/main/ROADMAP.md
+    about: Check whether the change you want is already planned.
