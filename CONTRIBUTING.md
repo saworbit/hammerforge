@@ -13,6 +13,14 @@ Thanks for helping improve HammerForge.
 3. Update docs and tests when behavior changes.
 4. Run formatting, lint, and test checks before submitting (see below).
 
+## Documentation Expectations
+- Use the displayed UI names—**Build**, **Paint**, **Objects**, and **Test**—in user-facing instructions. Legacy `entity_*` and `manage_*` filenames may be named when explaining internals.
+- Verify behavior claims against current code and tests. Do not copy test totals or source line counts from an older document.
+- Update the README, relevant guide/spec, roadmap status, and `[Unreleased]` changelog together when a change affects users or contributors.
+- Only publish aggregate test totals from a successful full CI run; include the verification date so readers can distinguish a measured snapshot from a permanent guarantee.
+- Check relative Markdown links and `git diff --check` before submitting documentation-only changes.
+- Describe known limitations plainly and link the tracking issue instead of implying unfinished safety or fidelity work is complete.
+
 ## Code Expectations
 - Follow the subsystem architecture (LevelRoot is the public API).
 - Prefer undo actions that use stable IDs and state snapshots. Use `collation_tag` for rapid operations.

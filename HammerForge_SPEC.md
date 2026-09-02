@@ -1,6 +1,6 @@
 # HammerForge Spec
 
-Last updated: July 21, 2026
+Last updated: September 2, 2026
 
 This document describes HammerForge's architecture and data flow.
 
@@ -12,7 +12,7 @@ This document describes HammerForge's architecture and data flow.
 
 ## Architecture
 
-HammerForge uses a coordinator + subsystems pattern. `LevelRoot` is a coordinator (~2,200 lines) that owns all container nodes, exported properties, and signals, and delegates work to subsystem classes. Each subsystem receives a reference to `LevelRoot` in its constructor. Default editor UX is the core loop (Draw → material → entity → bake → Test Level); radial menu, coach marks, and operation replay install only when `power_user_overlays` is enabled.
+HammerForge uses a coordinator + subsystems pattern. `LevelRoot` is a 2,844-line coordinator that owns container nodes, exported properties, and signals, and delegates work to subsystem classes. Each subsystem receives a reference to `LevelRoot` in its constructor. Default editor UX is the core loop (Draw → material → entity → bake → Test Level); radial menu, coach marks, and operation replay install only when `power_user_overlays` is enabled.
 
 ### Signals (Central Registry)
 All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.emit(...)`. UI and other consumers subscribe instead of polling.
@@ -44,7 +44,7 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 |--------|------|
 | `plugin.gd` | EditorPlugin entry point, input routing, undo/redo, sticky LevelRoot discovery |
 | `level_root.gd` | Thin coordinator: containers, exports, signals, delegates to subsystems |
-| `dock.gd` + `dock.tscn` | UI dock (4 tabs: Brush, Paint, Entities, Manage), collapsible sections, tool state |
+| `dock.gd` + `dock.tscn` | UI dock (4 tabs: Build, Paint, Objects, Test), collapsible sections, tool state |
 | `ui/collapsible_section.gd` | Reusable `HFCollapsibleSection` toggle-header VBoxContainer |
 | `input_state.gd` | Drag/paint/extrude state machine (`Mode` enum: IDLE, DRAG_BASE, DRAG_HEIGHT, SURFACE_PAINT, EXTRUDE) |
 | `hf_selection_gesture.gd` | Native Object Select / modal Face Select gesture ownership and recovery state |
@@ -63,7 +63,7 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `uv_editor.gd` + `uv_editor.tscn` | UV editing dock control |
 | `hf_keymap.gd` | Customizable keyboard shortcuts (JSON load/save, action → binding mapping) |
 | `hf_user_prefs.gd` | Cross-session user preferences (`user://hammerforge_prefs.json`) |
-| `hf_snap_system.gd` | Centralized snap system (Grid/Vertex/Center modes, threshold-based candidate selection) |
+| `hf_snap_system.gd` | Centralized snap system (Grid/Vertex/Center/Edge/Perpendicular modes, threshold-based candidate selection) |
 | `hf_op_result.gd` | Lightweight operation result (`ok`, `message`, `fix_hint`) returned by brush operations |
 | `hf_prefab.gd` | Reusable brush+entity group with variants, tags, live-linking (save/load `.hfprefab`, I/O remap) |
 | `hf_polygon_tool.gd` | Polygon tool: click convex verts → extrude to brush (tool_id=102, KEY_P) |
@@ -80,8 +80,8 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `hf_toast.gd` | Toast notification system (auto-fading stacked messages) |
 | `hf_material_browser.gd` | Visual material browser (thumbnail grid, search, filters, favorites, drag-drop) |
 | `paint_tab_builder.gd` | Builds Paint tab sections + signal connections |
-| `entity_tab_builder.gd` | Builds Entity Properties + Entity I/O + I/O Wiring sections (all context-hidden until entity selected) |
-| `manage_tab_builder.gd` | Builds Manage tab sections (Bake, File, Settings, Prefabs, etc.) |
+| `entity_tab_builder.gd` | Builds the displayed Objects tab's Entity Properties + Entity I/O + I/O Wiring sections (all context-hidden until entity selected) |
+| `manage_tab_builder.gd` | Builds the displayed Test tab's sections (Bake, File, Settings, Prefabs, etc.; legacy internal filename) |
 | `selection_tools_builder.gd` | Builds Selection Tools section (hollow, clip, merge, move, tie, duplicator) |
 
 ### Subsystems (`addons/hammerforge/systems/`)
@@ -100,7 +100,7 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `hf_visgroup_system.gd` | `HFVisgroupSystem` | Visgroups (visibility groups), brush/entity grouping |
 | `hf_carve_system.gd` | `HFCarveSystem` | Boolean-subtract carve (progressive-remainder box slicing) |
 | `hf_io_visualizer.gd` | `HFIOVisualizer` | Entity I/O connection lines in viewport (ImmediateMesh) |
-| `hf_subtract_preview.gd` | `HFSubtractPreview` | Wireframe AABB intersection overlay between subtract and additive brushes (debounced, pooled) |
+| `hf_subtract_preview.gd` | `HFSubtractPreview` | Live CSG cut overlay between subtract and additive brushes, with a wireframe AABB fallback (debounced, pooled) |
 | `hf_vertex_system.gd` | `HFVertexSystem` | Vertex/edge selection, move, split, merge with convexity validation. Edge sub-mode with wireframe overlay |
 | `hf_spawn_system.gd` | `HFSpawnSystem` | Player spawn lookup, validation (floor/collision/headroom), auto-fix, debug visualisation |
 | `hf_prefab_system.gd` | `HFPrefabSystem` | Prefab instance registry (stable entity UIDs), variant cycling, live-linked propagation, override tracking, push-to-source |
@@ -301,8 +301,8 @@ Foliage Populator
 - `find_entities_by_name()` searches both `entities_node` and `draft_brushes_node` for target resolution.
 - `fire_output(entity, output_name, parameter)` delegates to `HFIORuntime` dispatcher if present in the scene, falls back to direct multi-target resolution otherwise.
 - I/O connections are serialized with entity info in `.hflevel` saves and undo/redo state via `capture_entity_info()` / `restore_entity_from_info()`.
-- Dock UI: collapsible "Entity I/O" section in Entities tab with fields for Output, Target, Input, Parameter, Delay, Fire Once. Add/Remove buttons and connection ItemList. Context-hidden (only visible when an entity is selected); auto-refreshes on selection change.
-- **Viewport visualization**: `HFIOVisualizer` draws ImmediateMesh lines between connected entities. Color-coded: green=standard, orange=fire_once, yellow=selected entity connections. Throttled refresh (10 frames). "Show I/O Lines" checkbox in Entities tab.
+- Dock UI: collapsible "Entity I/O" section in the Objects tab with fields for Output, Target, Input, Parameter, Delay, Fire Once. Add/Remove buttons and connection ItemList. Context-hidden (only visible when an entity is selected); auto-refreshes on selection change.
+- **Viewport visualization**: `HFIOVisualizer` draws ImmediateMesh lines between connected entities. Color-coded: green=standard, orange=fire_once, yellow=selected entity connections. Throttled refresh (10 frames). "Show I/O Lines" checkbox in the Objects tab.
 - **Runtime signal translation**: `HFIORuntime` (`hf_io_runtime.gd`) auto-wires `entity_io_outputs` metadata into Godot signals on bake/export. Auto-injected by `export_playtest_scene()` and optionally by `postprocess_bake()` (`bake_wire_io` export). Connections keyed by node instance ID; targets resolved to all matching nodes. Delivery cascade: direct method → snake_case → `_on_io_input()` → user signal. Source entities receive `io_<OutputName>` user signals. Delay via `SceneTreeTimer`, fire-once tracked per-connection. `extra_scan_root_paths: Array[NodePath]` (@export) persists scan roots across scene save/reload. `_prune_overlapping_roots()` deduplicates by instance ID and ancestor/descendant relationship.
 
 ### Brush Entity Classes
@@ -336,6 +336,7 @@ Foliage Populator
 - **Bake time estimate** (`estimate_bake_time()`): ratio-based extrapolation from `_last_bake_duration_ms` and brush count.
 - **Bake issue detection** (`HFValidationSystem.check_bake_issues()`): returns Array of `{type, severity, message, node}` dicts. Checks: degenerate brush (sev=2), oversized (sev=1), floating subtract (sev=1), overlapping subtracts (sev=1), non-manifold edges (sev=2), open edges (sev=1), non-planar faces (sev=1), micro-gaps between brushes (sev=1), occlusion coverage (sev=0 info or sev=1 warning). Non-planar detection uses `planarity_tolerance` (default 0.01). Micro-gap detection uses `weld_tolerance` (default 0.001). Both use 27-cell spatial hash neighbor lookup for boundary-safe distance checks. `_edge_key()` for topology (non-manifold/open-edge) uses fixed 0.001 precision, intentionally decoupled from `weld_tolerance`.
 - **Auto-fix helpers**: `weld_brush_vertices(brush)` snaps near-coincident vertices within `weld_tolerance` via BFS grouping + `ensure_geometry()` refresh. `fix_non_planar_faces(brush)` projects drifting vertices onto the best-fit plane from each face's first 3 vertices.
+- **Playtest export** (`export_playtest_scene()`): packs baked output, brush entities, point entities, default lighting/environment, and a player controller positioned at the active spawn. Reparented content keeps its world transform, nested geometry/collision receives recursive scene ownership, and `HFIORuntime` is injected when connections exist.
 
 ## Face Materials + Surface Paint
 Face data is stored per DraftBrush face with material assignment, UV projection, and optional paint layers.
@@ -381,12 +382,12 @@ The dock uses 4 tabs with collapsible sections for visual hierarchy:
 
 | Tab | Contents |
 |-----|----------|
-| **Brush** | Shape, size, grid snap, quick snap presets, material picker, operation mode (Add/Sub), texture lock |
+| **Build** | Shape, size, five snap modes, quick snap presets, material picker, operation mode (Add/Sub), texture lock, contextual selection tools |
 | **Paint** | 7 collapsible sections: Floor Paint, Heightmap, Blend & Terrain, Regions, Materials (with Refresh Prototypes), UV Editor, Surface Paint |
-| **Entities** | Entity palette with drag-and-drop, Create DraftEntity, Entity Properties + Entity I/O + I/O Wiring (context-hidden collapsible sections, visible only when entity selected) |
-| **Manage** | Bake, Actions (floor/cuts/clear), File, Presets, History, Settings, Performance, plus Visgroups & Cordon (inserted programmatically) |
+| **Objects** | Entity palette with drag-and-drop, Create DraftEntity, Entity Properties + Entity I/O + I/O Wiring (context-hidden collapsible sections, visible only when entity selected) |
+| **Test** | Test Level, Bake, Actions (floor/cuts/clear), File, Presets, History, Settings, Performance, plus Visgroups & Cordon (inserted programmatically) |
 
-- **Brush tab** includes contextual **Selection Tools** section (hollow, clip, merge, move, tie, duplicator) visible when brushes are selected.
+- **Build tab** includes contextual **Selection Tools** section (hollow, clip, merge, move, tie, duplicator) visible when brushes are selected.
 - Tab contents built by dedicated builder classes: `PaintTabBuilder`, `EntityTabBuilder`, `ManageTabBuilder`, `SelectionToolsBuilder` (in `ui/`). Each is RefCounted with `build()` and `connect_signals()` methods. Dock delegates to builders, reducing `dock.gd` by ~35%.
 - Collapsible sections have HSeparator, 4px indented content, and persisted collapsed state. All 18 sections tracked in `_all_sections` dict.
 - "No LevelRoot" banner and autosave warning defined in dock.tscn.
@@ -487,25 +488,26 @@ Unit tests use the [GUT](https://github.com/bitwes/Gut) framework and run headle
 | `test_texture_lock.gd` | 10 | UV offset/scale compensation for PLANAR_X/Y/Z, BOX_UV, CYLINDRICAL |
 | `test_cordon_filter.gd` | 10 | AABB intersection, cordon-filtered collection, chunk_coord utility |
 | `test_keymap.gd` | 20 | Default bindings, modifier matching, display strings, rebinding, JSON roundtrip, current action coverage |
-| `test_user_prefs.gd` | 13 | Defaults, get/set prefs, section state, recent files, JSON roundtrip, dismissed hints |
-| `test_dirty_tags.gd` | 17 | Exact transform/material/UV/paint/vertex tags, no-op suppression, paint/full tags, and batching |
+| `test_user_prefs.gd` | 15 | Defaults, get/set prefs, section state, recent files, JSON roundtrip, dismissed hints |
+| `test_dirty_tags.gd` | 19 | Exact transform/material/UV/paint/vertex tags, no-op suppression, paint/full tags, and batching |
 | `test_prototype_textures.gd` | 27 | Catalog constants, path generation, texture existence, material persistence (resource_path), batch loading into MaterialManager |
 | `test_op_result.gd` | 30 | HFOpResult constructors and operation result/failure/fix-hint contracts |
-| `test_snap_system.gd` | 14 | Grid/Vertex/Center snap modes, preview exclusion, threshold, priority, fallback |
+| `test_snap_system.gd` | 17 | Grid/Vertex/Center/Edge/Perpendicular snap modes, preview exclusion, threshold, priority, fallback |
 | `test_drag_dimensions.gd` | 16 | Drag dimensions/formatting and normalized radial primitive placement |
 | `test_reference_cleanup.gd` | 8 | Delete cleans group/visgroup membership and dangling entity I/O safely |
-| `test_bake_system.gd` | 117 | Baked lifecycle/migration/snapshots, cut-safe face-material fallback, one-pass CSG visual/collision equivalence, options, collection, previews, dirty concurrency, connectors/navmesh, and mode integration |
+| `test_bake_system.gd` | 127 | Baked lifecycle/migration/snapshots, cut-safe face-material fallback, one-pass CSG visual/collision equivalence, options, collection, previews, dirty concurrency, connectors/navmesh, brush entities, and mode integration |
 | `test_bake_issues.gd` | 10 | check_bake_issues: degenerate, oversized, floating subtract, overlapping subtracts, clean level, entity skip |
 | `test_weld_and_planarity.gd` | 21 | Non-planar detection, vertex welding + ensure_geometry refresh, planarity auto-fix, micro-gap detection, edge-key independence, boundary-straddling coverage, MapIO integration + unit |
 | `test_quick_play_modes.gd` | 13 | Severity blocking, cordon save/restore, dirty retention, camera yaw, spawn restore |
 | `test_integration.gd` | 22 | End-to-end: brush lifecycle, paint + heightmap, entity workflow, visgroup cross-system, snap, bake, I/O cleanup, info round-trip |
 | `test_shortcut_dialog.gd` | 8 | Category assignment (tools, paint, axis lock, editing), action labels, get_all_bindings copy safety |
 | `test_tutorial_wizard.gd` | 18 | Step advancement, persistence/resume, completion, bake validation, no-root safety |
-| `test_subtract_preview.gd` | 10 | AABB intersection, enable/disable, debounce, safe destroy lifecycle |
-| `test_prefab.gd` | 10 | Empty prefab, roundtrip, transforms, file I/O, invalid data, entity I/O |
+| `test_subtract_preview.gd` | 14 | AABB broad-phase, live CSG groups, enable/disable, debounce, safe destroy lifecycle |
+| `test_prefab.gd` | 11 | Empty prefab, roundtrip, transforms, file I/O, invalid data, entity I/O |
+| `test_export_playtest.gd` | 8 | Empty export, lighting/environment, player spawn/controller, nested ownership, and transform preservation |
 | `test_selection_gesture.gd` | 38 | Native widget/Object Select ownership, modal Face Select, recovery, focus/scope guards, native duplicate/reparent repair, and Inspector/undo change tracking |
 | `test_viewport_outlines.gd` | 39 | Sparse semantic outlines, exact/composite entity collision, visibility/transforms, and shape-aware resize recovery |
 
-Full suite: **1,687 tests** across **90 files** (**1,680 passing** plus seven intentional no-assert safety tests; **7,502 assertions**).
+Full suite (verified in CI on September 2, 2026): **1,783 tests** across **104 scripts** (**1,776 passing** plus seven intentional no-assert safety tests; **7,825 assertions**).
 
 Tests use root shim scripts (dynamically created GDScript) to provide the LevelRoot interface without circular preload dependencies. Configuration in `.gutconfig.json`.

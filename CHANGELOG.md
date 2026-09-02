@@ -8,6 +8,11 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 - **Snap-to-perpendicular** (dock **P**): drop the cursor onto the closest point on a brush AABB edge, so offsets stay 90° to that edge.
 
 ### Fixed
+- **Playtest exports are complete and playable:** exported scenes include `PlaytestPlayer` at the active spawn pose, keep nested baked mesh/collision and brush I/O nodes through recursive ownership, and preserve source transforms when moving baked trees, entities, and `DefaultSun` under the packed scene root.
+- **MultiMesh bake keeps instance placement:** source transforms are converted into baked-container space, and `TRANSFORM_3D` is selected before instance allocation.
+- **Brush entity I/O participates everywhere:** bake dispatcher detection, exported-scene detection, connection listing, dangling cleanup, and target rename reconciliation all include tied brush entities.
+- **Entity container validation uses the real LevelRoot property:** `HFValidation.has_entity_container()` now checks `entities_node`.
+- **Polygon height and path trim edge cases:** downward polygon height input stays positive, and auto-trim can assign material palette slot 0.
 - **Tied `func_detail` / trigger brushes bake again:** they stay out of world CSG, then a post-pass emits detail meshes + collision and trigger `Area3D` volumes (including copied I/O metadata).
 - **`.map` brush entities round-trip:** `func_detail` / `func_wall` / triggers export as their own entity blocks and import with `brush_entity_class` set.
 - **`.map` point entities keep their keys:** export writes `entity_data` (angle, targetname, etc.) alongside classname/origin.
@@ -22,6 +27,7 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 - **History thumbnails skip GPU readback** when the History section is hidden, and new rows append instead of rebuilding the list.
 
 ### Changed
+- **Project documentation matches current `main`:** user-facing tab names, snap modes, playtest export behavior, architecture notes, roadmap priorities, and verified CI totals now agree across the README, guides, spec, and checklists.
 - **Merged-mesh bake uses `WorkerThreadPool`** when `bake_use_thread_pool` is on. Surface grouping/transforms run on a worker; `ArrayMesh` assembly stays on the main thread.
 - **`.hflevel` stringify/hash/compress run on the write thread.** Capture stays on the main thread; unchanged captures skip the disk rewrite once the hash settles.
 - **Test-tab bake/play handlers live in `dock_manage_handler.gd`:** bake, validate, Test Level, spawn, and playtest dock methods are thin wrappers around `HFDockManageHandler`.

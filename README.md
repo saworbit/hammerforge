@@ -10,8 +10,8 @@
   <img src="https://img.shields.io/badge/Godot-4.7%2B-478cbf?logo=godot-engine&logoColor=white" alt="Godot 4.7+">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
   <img src="https://img.shields.io/badge/Status-Early%20Alpha-red" alt="Early Alpha">
-  <img src="https://img.shields.io/badge/Tests-1680%20passing-brightgreen" alt="1680 tests passing">
-  <img src="https://img.shields.io/badge/GDScript-25k%2B%20lines-blueviolet" alt="25k+ lines">
+  <img src="https://img.shields.io/badge/Tests-1776%20passing-brightgreen" alt="1776 tests passing">
+  <img src="https://img.shields.io/badge/GDScript-44k%2B%20lines-blueviolet" alt="44k+ lines">
 </p>
 
 > **Fair warning:** This is a solo hobby project in early alpha. I built it to support another project and it grew from there. It's buggy, rough around the edges, and a bit directionless. If any of this looks useful to you, I'd genuinely appreciate help testing and filing issues. Contributions welcome -- just know you're signing up for an adventure, not a polished product.
@@ -28,7 +28,7 @@ The previous AI-generated logo has been retired. If you're a designer or artist 
 
 Level editors like Hammer and TrenchBroom proved that **brush-based workflows** are the fastest way to block out 3D spaces. HammerForge brings that paradigm into Godot so you never have to leave the editor:
 
-- **No live CSG** -- brushes are lightweight preview nodes; CSG runs only at bake time, keeping the editor snappy even with hundreds of brushes.
+- **No full-scene live CSG** -- brushes are lightweight preview nodes; full CSG runs only at bake time. An optional, capped subtract overlay computes only nearby cut previews.
 - **Two-click geometry** -- drag a base rectangle, click to set height. Extrude faces to extend rooms. Type exact numbers any time.
 - **Paint floors and terrain** -- grid-based floor paint with heightmaps, multi-material blending, auto-connectors (ramps/stairs), and foliage scatter.
 - **Bake when ready** -- one click produces merged meshes, collision shapes (trimesh, per-brush convex, or per-visgroup partitioned), lightmap UVs, navmeshes, and LODs.
@@ -41,7 +41,7 @@ HammerForge is a single `addons/` folder. No external tools, no custom builds, n
 
 | | |
 |---|---|
-| **21 subsystems** + coordinator architecture | **1,687 unit + integration tests** with CI on every push |
+| **Subsystem-based coordinator architecture** | **1,783 unit + integration tests** with CI on every push |
 | **15 brush shapes** (box through dodecahedron) | **150 built-in prototype textures** for instant greyboxing |
 | **Quake `.map`** + **glTF `.glb`** export | **.hflevel** native format with threaded I/O |
 | **Customizable keymaps** (JSON) | **Plugin API** for custom tools |
@@ -107,6 +107,8 @@ Geometry-aware snapping goes beyond a simple grid:
 | Grid | G | Regular grid intersections |
 | Vertex | V | Corners of existing brushes (8 per box) |
 | Center | C | Center points of existing brushes |
+| Edge | E | Midpoints of existing brush AABB edges |
+| Perpendicular | P | Closest point on an existing brush AABB edge |
 
 Closest candidate within threshold wins. Modes combine freely. The Measure tool can set a **custom snap reference line** with Ctrl+Click for alignment along arbitrary axes. **Texture Lock** preserves UV alignment for HammerForge move and resize actions, including nudge and Move to Floor/Ceiling. Godot's native Node3D transform widget keeps brush-local UV data unchanged. **Move to Floor/Ceiling** (Ctrl+Shift+F/C) raycasts to snap brushes vertically. **UV Justify** offers fit/center/left/right/top/bottom/stretch/tile alignment for selected faces.
 
@@ -191,7 +193,7 @@ Grid-based paint layers with chunked storage for large worlds:
 | **Test Level** | Check, bake, validate spawn, and run with the FPS controller |
 | **Play from Camera** | Test from the editor camera position and yaw |
 | **Play Selected Area** | Auto-cordon to selection, bake + play that region only |
-| **Export Playtest** | Bake + pack scene + launch as standalone playable scene (I/O auto-wired) |
+| **Export Playtest** | Bake + pack a playable scene with player, spawn pose, nested geometry/collision, lighting, and auto-wired I/O |
 | **Wire I/O** | Auto-translate entity I/O connections to Godot signals in baked output |
 
 ---
@@ -270,8 +272,8 @@ plugin.gd            EditorPlugin — input routing, toolbar, viewport overlay
        ├─ HFCarveSystem     Boolean-subtract carve (progressive-remainder slicing)
        ├─ HFIOVisualizer    Entity I/O connection lines in viewport (curved, color-coded, highlight pulse)
        ├─ HFIOPresets       Reusable I/O connection presets (built-in + user-saved)
-       ├─ HFSnapSystem      Grid / Vertex / Center snap + custom reference lines
-       ├─ HFSubtractPreview Wireframe AABB intersection overlay for subtract brushes
+       ├─ HFSnapSystem      Grid / Vertex / Center / Edge / Perpendicular snap + custom reference lines
+       ├─ HFSubtractPreview Live CSG cut overlay with wireframe AABB fallback
        ├─ HFVertexSystem    Vertex/edge selection, move, split, merge with convexity validation
        ├─ HFSpawnSystem     Player spawn lookup, validation, auto-fix, debug visualisation
        ├─ HFPrefabSystem    Instance registry, variant cycling, live-linked propagation
@@ -368,7 +370,7 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 
 ## Testing
 
-1,687 tests across 90 scripts use the [GUT](https://github.com/bitwes/Gut) framework, including unit and integration coverage. The current suite has 1,680 passing tests plus seven intentional no-assert safety tests, with 7,502 assertions. All checks run on every push via GitHub Actions.
+The verified Godot 4.7 CI run on September 2, 2026 contains **1,783 tests across 104 scripts**: **1,776 passing tests**, seven intentional no-assert safety tests, and **7,825 assertions**. All checks run on every push and pull request via GitHub Actions.
 
 ```bash
 # Run all tests headless
@@ -430,10 +432,15 @@ See [ROADMAP.md](ROADMAP.md) for the full plan.
 - Material atlas packing and merge-selected-brushes
 - Snap-to-edge (dock **E**) and snap-to-perpendicular (dock **P**)
 - Bake `func_detail` meshes and trigger `Area3D` volumes
+- Playtest exports with a spawned FPS player, recursive nested-node ownership, and preserved source transforms
+- MultiMesh consolidation that keeps instance transforms in baked-container space
 
-**Next up:**
-- PBR channels in the material atlas
-- Faster surface-paint / terrain sculpt (avoid per-pixel GDScript loops)
+**Current tracked work:**
+- Save completion and replacement safety ([#33](https://github.com/saworbit/hammerforge/issues/33), [#51](https://github.com/saworbit/hammerforge/issues/51))
+- `.map` entity string round-trip fidelity ([#32](https://github.com/saworbit/hammerforge/issues/32))
+- Non-blocking threaded mesh merge ([#35](https://github.com/saworbit/hammerforge/issues/35))
+- PBR atlas channels and paint hot paths ([#24](https://github.com/saworbit/hammerforge/issues/24), [#39](https://github.com/saworbit/hammerforge/issues/39))
+- Smaller coordinator and dock ownership boundaries ([#21](https://github.com/saworbit/hammerforge/issues/21), [#22](https://github.com/saworbit/hammerforge/issues/22), [#41](https://github.com/saworbit/hammerforge/issues/41))
 
 **Later:**
 - Bezier patch editing
@@ -490,5 +497,5 @@ Run `godot --headless --import --path .` first, then re-run the test command.
 
 <p align="center">
   <strong>MIT License</strong><br>
-  <sub>Built for Godot 4.7+ | Last updated July 21, 2026</sub>
+  <sub>Built for Godot 4.7+ | Last updated September 2, 2026</sub>
 </p>

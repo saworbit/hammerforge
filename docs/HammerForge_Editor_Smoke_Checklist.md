@@ -1,6 +1,6 @@
 # HammerForge Editor Smoke Checklist
 
-Last updated: July 21, 2026
+Last updated: September 2, 2026
 
 This checklist covers the editor-only flows that are hard to validate in headless tests:
 - viewport input ownership: native Object Select clicks/marquees and filled hit targets, modal HammerForge Face Select, native navigation/gizmos, shortcut scope, and lost-release recovery
@@ -23,6 +23,8 @@ This checklist covers the editor-only flows that are hard to validate in headles
 - example library: load examples, study annotations, search/filter
 - convert selection to heightmap: brush selection → heightmap layer with terrain
 - foliage & scatter: circle/spline preview, commit, clear, UI controls in Paint tab
+- snapping: Grid/Vertex/Center/Edge/Perpendicular candidates and dock toggle state
+- playtest export: player/spawn, nested ownership, world transforms, and entity I/O
 
 ## Prep
 
@@ -51,7 +53,7 @@ Enable the HammerForge plugin if it is not already enabled.
 - Confirm **Test → Settings → Power-user overlays** is unchecked on a fresh prefs file.
 - Press backtick and Ctrl+Shift+T. Confirm a toast tells you to enable Power-user overlays rather than opening the radial menu or replay timeline.
 - Enable the checkbox, then confirm the radial menu and replay timeline work. Disable it again and confirm they disappear.
-- Confirm **Subtract Preview (AABB approx)** is the subtract-preview checkbox label.
+- Confirm **Subtract Preview** is the subtract-preview checkbox label.
 
 ### 1. Fresh Tutorial Startup
 - Open `hf_editor_smoke_start.tscn`.
@@ -121,6 +123,11 @@ Enable the HammerForge plugin if it is not already enabled.
 - Place a wedge or cone above the construction plane and aim at both a real sloped/curved surface and empty space inside its bounds. Drop an entity/prefab or start a surface-based placement at each point. Confirm the first lands on the exact visible face, while the empty-bounds ray continues to real geometry behind or the forward construction plane rather than landing on an AABB wall.
 - Activate Polygon, Path, Measure, and Decal in turn. For each, click once where the tool intentionally misses or passes; confirm the same physical event does not also select, draw, paint, or move a vertex. Switch to a built-in tool and confirm the external tool deactivates and any unfinished preview is cancelled.
 - While an external tool is idle and deliberately passes RMB/MMB/wheel input, confirm native camera navigation remains available without another HammerForge tool receiving the event.
+
+### 2d. Geometry Snap Modes
+- Draw two offset brushes and toggle the **G**, **V**, **C**, **E**, and **P** buttons independently in **Build**. Confirm the viewport indicator and dock state agree after each toggle.
+- With Vertex enabled, drag near a brush AABB corner; with Center enabled, drag near its center; with Edge enabled, drag near an AABB-edge midpoint. Confirm each candidate wins only within the snap threshold.
+- With Perpendicular enabled, drag near an AABB edge and confirm the point lands at the closest projection on that edge. Combine modes and confirm the closest eligible geometry candidate wins over a farther grid point.
 
 ### 3. Guided Step Flow
 - Step 1: draw an additive room brush; confirm the tutorial advances.
@@ -403,6 +410,7 @@ Enable the HammerForge plugin if it is not already enabled.
 - Set density to 2.0, radius to 5.0. Click **Preview**. Confirm dot instances appear in the viewport around the center of your selection.
 - Change preview mode to Wireframe; click **Preview** again; confirm wireframe preview replaces dots.
 - Click **Scatter** to commit. Confirm a toast appears ("Scattered N instances") and the preview is replaced by a permanent MultiMeshInstance3D.
+- Move or rotate the committed scatter container (or its parent), rebuild/commit again, and confirm instances retain the intended container-local placement rather than receiving the parent transform twice.
 - Click **Clear**. Confirm the preview node is removed from the viewport.
 - Switch shape to Spline. Select 3+ nodes/brushes. Click **Preview**. Confirm scatter instances follow the path defined by the selected node positions.
 - With only 1 node selected in Spline mode, click **Preview**. Confirm a warning toast appears and no preview is created.
@@ -447,8 +455,11 @@ Enable the HammerForge plugin if it is not already enabled.
 ### 25. Export Playtest Build
 - Open **Test → Advanced Bake**. Click **Export Playtest Build**.
 - If no spawn exists, confirm a toast about auto-creating a default spawn, and confirm the spawn creation is undoable.
-- Confirm the level bakes and a playtest scene launches.
+- Confirm the level bakes and a playtest scene launches with a controllable player at the active spawn and the expected spawn yaw.
+- Put a mesh/collision child below an extra nested Node3D and export again. Confirm the nested geometry and collision are present in the packed scene.
+- Move or rotate the LevelRoot, an entity container, and representative exported content. Confirm the launched scene preserves their visible world transforms without double-applying a parent transform.
 - If entities have I/O connections, confirm the exported scene contains an `HFIODispatcher` child node.
+- Tie a brush as `func_detail` or a trigger, add an I/O connection, export, and confirm both the tied brush and its runtime connection survive.
 - Stop the playtest. Undo; confirm the auto-created spawn is removed.
 
 ### 26. Displacement Surfaces

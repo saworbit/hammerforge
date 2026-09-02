@@ -1,6 +1,6 @@
 ﻿# HammerForge Data Portability
 
-Last updated: July 21, 2026
+Last updated: September 2, 2026
 
 This document describes how to move data in and out of HammerForge safely.
 
@@ -25,10 +25,12 @@ This document describes how to move data in and out of HammerForge safely.
 
 ## `.map` Import / Export
 - Use `.map` to exchange basic brush layouts with other editors.
-- Import supports axis-aligned boxes and simple cylinders.
-- Export writes box and cylinder primitives only and does not preserve per-face materials or paint data.
+- Axis-aligned boxes use the optimized primitive path; tilted, clipped, and other non-axis-aligned convex brushes import and export as CUSTOM face geometry.
+- Point-entity key/value properties and brush entity classes round-trip through the supported Classic Quake and Valve 220 adapters.
+- Per-face materials and HammerForge surface-paint layers are not preserved, so `.hflevel` remains the editable source of truth.
 - Treat `.map` as a blockout exchange format, not a full fidelity export.
 - Multi-format export: **Classic Quake** and **Valve 220** format adapters are available via the format selector in the dock File section. Valve 220 includes UV texture axes from FaceData.
+- Known limitation: quoted entity property values containing escaped quotes or backslashes do not yet round-trip reliably; follow [#32](https://github.com/saworbit/hammerforge/issues/32) for that parser fix.
 
 ### Import Vertex Welding
 Legacy .map files from Hammer, TrenchBroom, and other editors often carry floating-point representation drift in vertex coordinates. Two vertices that should be coincident may differ by a fraction of a unit, producing micro-gaps or non-planar faces after import.
@@ -75,9 +77,11 @@ After import, run **Check Only** (Test tab) to detect any remaining non-planar f
 
 ## Autosave Safety
 - Autosave writes happen on a background thread.
+- Saves first write a `.writing` sidecar, then replace the destination.
 - If a write fails (e.g., disk full, permissions), the `autosave_failed` signal fires and the dock shows a red warning label.
 - The next autosave interval retries automatically.
 - Manual save is always available via Test tab → File section.
+- Current limitation: replacement removes an existing destination before renaming the sidecar, so interruption in that window is not fully crash-atomic ([#33](https://github.com/saworbit/hammerforge/issues/33)). Manual save can also report that work was queued before the background write completes ([#51](https://github.com/saworbit/hammerforge/issues/51)). Keep `.hflevel` files in version control and treat the warning state—not the initial queued message—as the authoritative failure signal.
 
 ## Recommended Pipeline
 1. Design and iterate in HammerForge.

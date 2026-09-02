@@ -1,6 +1,6 @@
 # HammerForge User Guide
 
-Last updated: July 21, 2026
+Last updated: September 2, 2026
 
 This guide covers the current HammerForge workflow in Godot 4.7: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs.
 
@@ -187,7 +187,7 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
 - **Shape**: choose from 15 built-in shapes with recognizable icons (plus Custom). Sides appears only for compatible pyramid/prism shapes.
 - **Size** X/Y/Z: defaults for new brushes.
 - **Grid Snap**: snap increment with quick preset buttons (1, 2, 4, 8, 16, 32, 64).
-- **Snap Modes**: G (Grid), V (Vertex — snap to brush corners), C (Center — snap to brush centers). Toggle independently; closest geometry within threshold beats grid snap.
+- **Snap Modes**: G (Grid), V (Vertex), C (Center), E (Edge midpoint), and P (Perpendicular projection). Toggle independently; the closest eligible geometry candidate within the threshold beats grid snap.
 - **Material**: active material picker.
 - **Physics Layer**: collision layer for baked output.
 - **Texture Lock**: UV alignment preserved on move/resize (enabled by default).
@@ -289,7 +289,10 @@ Click **Export Playtest Build** in **Test → Advanced Bake** to create a standa
 - Validates spawn (severity ≥ 2 blocks the export).
 - If no spawn exists, auto-creates a default (fully undoable with state capture).
 - Bakes the level in Full mode.
-- Packs baked geometry, entities, DefaultSun (if present), and fallback lighting (DirectionalLight3D + WorldEnvironment if no light exists) into a temporary scene at `user://hammerforge_playtest.tscn`.
+- Packs baked geometry, brush entities, point entities, DefaultSun (if present), and fallback lighting (DirectionalLight3D + WorldEnvironment if no light exists) into a temporary scene at `user://hammerforge_playtest.tscn`.
+- Adds the playtest player controller at the active spawn and applies the spawn's yaw.
+- Preserves world transforms while reparenting export content and recursively owns nested geometry/collision so it survives scene packing.
+- Injects the entity I/O runtime automatically when the exported content contains connections.
 - Launches the scene via `EditorInterface.play_custom_scene()`.
 - A toast confirms "Playtest launched" on success.
 
@@ -541,17 +544,19 @@ Enable **Subtract Preview** in Test tab → Settings to see the live CSG cut bet
 - **Autosave warning**: a red "Autosave failed!" label appears if a threaded save fails. Auto-hides after 30 seconds.
 
 ## Snap Modes
-HammerForge supports three snap modes that can be combined:
+HammerForge supports five snap modes that can be combined:
 
 | Mode | Button | Behavior |
 |------|--------|----------|
 | **Grid** | G | Snap to grid increments (default, always-on) |
-| **Vertex** | V | Snap to the 8 corners of existing brushes |
+| **Vertex** | V | Snap to the 8 transformed AABB corners of existing brushes |
 | **Center** | C | Snap to the center point of existing brushes |
+| **Edge** | E | Snap to the midpoint of an existing brush AABB edge |
+| **Perpendicular** | P | Snap to the closest perpendicular projection on a brush AABB edge |
 
-Toggle modes independently using the G/V/C buttons below the Grid Snap row in the Build tab. When multiple modes are enabled, the closest candidate wins — a nearby brush corner will beat a farther grid point. The snap threshold (default 2.0 world units) determines how close you need to be to a geometry candidate for it to take effect.
+Toggle modes independently using the G/V/C/E/P buttons below the Grid Snap row in the Build tab. When multiple modes are enabled, the closest candidate wins — a nearby brush corner will beat a farther grid point. The snap threshold (default 2.0 world units) determines how close you need to be to a geometry candidate for it to take effect.
 
-**Tip:** Enable Vertex snap when aligning brushes edge-to-edge. Enable Center snap when centering a brush inside another.
+**Tip:** Use Vertex for corner alignment, Center for centered placement, Edge for exact midpoints, and Perpendicular for a right-angle projection onto an edge.
 
 ## Undo/Redo
 - All brush operations (draw, delete, nudge, resize, paint, hollow, clip) support undo/redo.

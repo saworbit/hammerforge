@@ -1,6 +1,6 @@
 # Development Guide
 
-Last updated: July 21, 2026
+Last updated: September 2, 2026
 
 This document covers local setup, codebase structure, and how to test features.
 
@@ -30,7 +30,7 @@ addons/hammerforge/
   plugin_input_router.gd Viewport keymap dispatch (delete/nudge/tools/paint/axis lock)
   plugin_vertex_input.gd Vertex/edge pick, drag, merge, and split dispatch
   plugin_hud.gd          HUD context, mode banner, and context-toolbar state
-  level_root.gd          Coordinator (~2,200 lines), delegates to subsystems
+  level_root.gd          Coordinator (2,844 lines), delegates to subsystems
   input_state.gd         Drag/paint state machine (HFInputState)
   hf_selection_gesture.gd Select-mode LMB arbiter (native object selection, face marquee, gizmos)
   dock.gd + dock.tscn    UI dock (displayed as Build, Paint, Objects, Test), collapsible sections with persisted state
@@ -59,7 +59,7 @@ addons/hammerforge/
   hf_path_tool.gd        Path tool (waypoints → corridor brushes with miter joints, stairs, railings, trim, tool_id=103)
   hf_keymap.gd           Customizable keyboard shortcuts (JSON load/save, action matching, 5 categories: Tools/Editing/Selection/Paint/Axis Lock)
   hf_user_prefs.gd       Cross-session user preferences (user://hammerforge_prefs.json)
-  hf_snap_system.gd      Centralized snap (Grid/Vertex/Center modes + custom snap lines, threshold-based candidates)
+  hf_snap_system.gd      Centralized snap (Grid/Vertex/Center/Edge/Perpendicular + custom snap lines, threshold-based candidates)
   hf_prefab.gd           Reusable brush+entity groups (variants, tags, save/load .hfprefab)
   hf_op_result.gd        Lightweight operation result (ok, message, fix_hint)
   undo_helper.gd         HFUndoHelper: state-capture undo with collation (merges rapid edits into one step)
@@ -238,8 +238,8 @@ addons/hammerforge/
 - **Theme-aware UI.** All custom panels (context toolbar, coach marks, hotkey palette, operation replay, toasts, selection filter) use `HFThemeUtils` static methods (`panel_bg()`, `muted_text()`, `accent()`, etc.) instead of hardcoded colors. Each component provides a `refresh_theme_colors()` method called from `plugin.gd:_on_editor_theme_changed()`. `HFThemeUtils.is_dark_theme()` reads `interface/theme/base_color` luminance from `EditorInterface.get_editor_settings()`.
 - **History browser.** `ui/hf_history_browser.gd` replaces the plain ItemList in the displayed Test tab History section. Records entries via `record_entry(name, version, undo_redo)` with viewport thumbnail capture. Double-click emits `navigate_requested(version)` which `dock._on_history_navigate()` handles by looping undo/redo to the target version. Undo/redo buttons are exposed via `get_undo_button()`/`get_redo_button()`. `dock._refresh_history_list()` wraps ItemList code in `if history_list:` and always calls `_update_history_buttons()`.
 - **Multi-ruler measure tool.** `hf_measure_tool.gd` stores up to 20 rulers in `_measurements: Array[Dictionary]`. Shift+Click chains from the last endpoint; Ctrl+Click sets a snap reference through `HFSnapSystem.set_custom_snap_line()`. Plain RMB is reserved for native camera navigation. Angles are computed at shared vertices via `dir_a.angle_to(dir_b)`. `_finish_ruler()` adjusts `_snap_ref_index` on rollover (decrement if after evicted, clear if evicted).
-- **Export playtest.** `dock._on_export_playtest()` validates spawn, auto-creates if missing (with full undo via state capture before `create_default_spawn()`), bakes, calls `level_root.export_playtest_scene()` to pack baked + entities + default lighting into a `.tscn`, then launches via `play_custom_scene()`.
-- **Geometry-aware snapping.** `_snap_point()` delegates to `HFSnapSystem`. Three modes (Grid=1, Vertex=2, Center=4) as a bitmask. Custom snap lines (set via `set_custom_snap_line()`) are checked alongside grid/geometry candidates. Vertex mode collects 8 box corners from all brushes; Center mode collects brush centers. Closest candidate within `snap_threshold` beats grid snap. Pass `exclude_ids` to skip the brush being dragged.
+- **Export playtest.** `dock._on_export_playtest()` validates spawn, auto-creates if missing (with full undo via state capture before `create_default_spawn()`), bakes, calls `level_root.export_playtest_scene()`, then launches via `play_custom_scene()`. The packed scene contains a player controller at the active spawn, baked output, point and brush entities, default lighting/environment, and an I/O dispatcher when needed. Recursive owner assignment preserves nested geometry/collision in the `.tscn`; reparented content preserves its global transform.
+- **Geometry-aware snapping.** `_snap_point()` delegates to `HFSnapSystem`. Five modes (Grid=1, Vertex=2, Center=4, Edge=8, Perpendicular=16) form a bitmask. Custom snap lines (set via `set_custom_snap_line()`) are checked alongside grid/geometry candidates. Vertex mode collects transformed brush-AABB corners, Center collects brush centers, Edge collects AABB-edge midpoints, and Perpendicular projects the current point to the closest point on each AABB edge. The closest eligible geometry candidate within `snap_threshold` beats grid snap. Pass `exclude_ids` to skip the brush being dragged.
 - **Reference cleanup.** `delete_brush()` calls `_cleanup_brush_references()` which strips group_id meta (+ cleans empty groups via `visgroup_system._cleanup_empty_group()`), clears visgroup membership, and calls `entity_system.cleanup_dangling_connections()` to remove I/O connections targeting the deleted node. Always fires before the node is removed from the tree.
 - **Managed brush/entity edits.** `LevelRoot.delete_managed_nodes()`, `create_managed_duplicates()`, and `nudge_managed_nodes()` split canonical brush and `DraftEntity` paths between their owning systems while presenting one undoable editor action. Entity duplication uses captured entity info, preserves entity data plus group/visgroup membership, and assigns a unique copy name. Entity deletion removes group/visgroup membership and dangling I/O references before detaching the node. Do not route a selected `DraftEntity` through a brushes-only shortcut guard.
 - **Live dimensions.** `input_state.get_drag_dimensions()` returns `Vector3(W, H, D)` during DRAG_BASE/DRAG_HEIGHT; `Vector3.ZERO` otherwise. `format_dimensions()` renders as `"64 x 32 x 48"` (whole numbers omit decimals). The mode indicator banner appends dimensions to the stage hint during drag gestures.
@@ -254,7 +254,7 @@ addons/hammerforge/
 The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on push and PR to `main`:
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
-- **GUT unit + integration tests** -- 1,687 tests across 90 test scripts (1,680 passing plus seven intentional no-assert safety tests; 7,502 assertions; runs Godot headless)
+- **GUT unit + integration tests** -- 1,783 tests across 104 test scripts (1,776 passing plus seven intentional no-assert safety tests; 7,825 assertions; verified in CI September 2, 2026; runs Godot headless)
 
 Run locally before pushing:
 ```
@@ -297,42 +297,42 @@ Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framewor
 | `test_hollow_tool.gd` | 10 | Hollow creation (6 walls), thickness validation, material/operation preservation |
 | `test_clip_tool.gd` | 16 | Axis splitting (X/Y/Z), size correctness, property preservation (material, visgroups, group_id, brush_entity_class), edge rejection |
 | `test_brush_entity.gd` | 19 | Tie/untie entity classes, structural brush filtering, bake collection exclusion, brush info round-trip, and exact Commit Cuts preparation/finalization |
-| `test_entity_io.gd` | 24 | Entity I/O CRUD (add/remove/get outputs), find by name, get_all_connections, serialization, default values |
+| `test_entity_io.gd` | 27 | Entity I/O CRUD (add/remove/get outputs), find by name, get_all_connections, serialization, default values |
 | `test_justify_uv.gd` | 10 | UV justify modes (fit/center/left/right/top/bottom/stretch/tile), zero-range safety, offset accumulation |
 | `test_brush_info_roundtrip.gd` | 19 | Brush info capture/restore with visgroups, group_id, brush_entity_class, material, move floor/ceiling argument safety |
 | `test_face_data.gd` | 15 | FaceData to_dict/from_dict round-trip, ensure_geometry, triangulate, box_projection_axis |
 | `test_paint_layer.gd` | 32 | Cell bit storage, chunk management, material IDs, blend weights, dirty tracking, heightmap, memory |
 | `test_heightmap_io.gd` | 12 | Base64 encode/decode round-trip, noise generation (FastNoiseLite), determinism |
-| `test_hflevel_io.gd` | 32 | Variant encode/decode (Vector2/3, Transform3D, Basis, Color), payload build/parse, full pipeline |
+| `test_hflevel_io.gd` | 38 | Variant encode/decode (Vector2/3, Transform3D, Basis, Color), payload build/parse, full pipeline |
 | `test_brush_shapes.gd` | 37 | Box face generation, normals, vertex bounds, triangulation, serialization, centered odd-sided pyramid/prism preview+bake bounds, winding migration, sparse overlay lifecycle, material refresh, and truthful custom-face previews |
 | `test_viewport_outlines.gd` | 39 | Semantic primitive/custom/subtract outlines, combined nested entity targets, top-level/hidden visibility, hover suppression, shape-aware handle sizing, odd-polygon agreement, world-snapped resize, and bounded recovery/cancel/undo behavior |
 | `test_selection_gesture.gd` | 38 | Native Object Select/widget ownership, modal Face Select, scope/focus guards, runtime repair, modifiers, recovery, native duplicate/reparent handling, prefab unlinking, bake-setting invalidation, native overlay drawing, and stable-ID transform/Inspector/FaceData/undo Bake Changed reconciliation |
 | `test_picking_correctness.gd` | 15 | Exact non-box face hits and placement, construction-plane fallback, internal entity preview traversal, nearest brush/entity ordering, scaled world-ray distances, hidden-visgroup exclusion, and canonical visibility-aware picking across tools |
 | `test_entity_props.gd` | 12 | Entity property form defaults (all types), roundtrip capture/restore, empty properties safety |
 | `test_duplicator.gd` | 7 | Instance count, progressive offset, clear cleanup, to_dict/from_dict roundtrip, edge cases |
-| `test_map_export.gd` | 19 | Quake/Valve220 face line format, auto-axes, entity property formatting, fractional coords, projections |
+| `test_map_export.gd` | 27 | Quake/Valve220 face formats, custom-face geometry, entity properties, brush entities, fractional coordinates, and projections |
 | `test_tool_registry.gd` | 27 | Tool registration, activate/deactivate, dispatch routing, shortcut/external ID guards, exclusivity, and pointer capture cancel/recovery |
 | `test_keymap.gd` | 20 | Default bindings loaded, key/modifier matching, display strings, rebinding, JSON roundtrip, and current action coverage |
-| `test_user_prefs.gd` | 13 | Defaults, get/set prefs, section state, recent files, JSON roundtrip, and dismissed hints |
-| `test_dirty_tags.gd` | 17 | Exact transform/material/UV/paint/vertex dirty tags, no-op suppression, floor routing, paint/full tags, consume, and batch queue/flush/discard/nesting |
+| `test_user_prefs.gd` | 15 | Defaults, get/set prefs, section state, recent files, JSON roundtrip, and dismissed hints |
+| `test_dirty_tags.gd` | 19 | Exact transform/material/UV/paint/vertex dirty tags, no-op suppression, floor routing, paint/full tags, consume, and batch queue/flush/discard/nesting |
 | `test_prototype_textures.gd` | 27 | Catalog constants, path generation, texture existence, material persistence (resource_path), batch loading into MaterialManager |
 | `test_op_result.gd` | 30 | HFOpResult constructors and operation result/failure/fix-hint contracts |
-| `test_snap_system.gd` | 14 | Grid/Vertex/Center snap modes, threshold, preview exclusion, priority, and empty-scene fallback |
+| `test_snap_system.gd` | 17 | Grid/Vertex/Center/Edge/Perpendicular snap modes, threshold, preview exclusion, priority, and empty-scene fallback |
 | `test_drag_dimensions.gd` | 16 | Drag dimensions/formatting plus normalized sphere/cylinder/cone/capsule placement bounds |
 | `test_bugfix_regressions.gd` | 32 | Vertex undo/projection/axis constraints, cancelled-release restoration, viewport owner routing, RMB session and lost-release recovery, narrow native-object handling, paint capture, and scene-creation safety |
 | `test_vertex_system.gd` | 35 | Vertex movement/convexity/undo snapshots, exact convex-clip dirty tags, and perspective/orthographic/axis-locked drag projection |
 | `test_reference_cleanup.gd` | 8 | Delete cleans group/visgroup membership and entity I/O while preserving unrelated references |
-| `test_bake_system.gd` | 117 | Baked-container adoption/replacement/clear and exact snapshot restore, conservative legacy migration (chunk, face-material, heightmap), structural-cut fallback, one-pass visual/collision CSG equivalence, transformed cordon/chunk interactions, build options, dry runs, preview modes, dirty-tag concurrency, connectors/navmesh, and mode 2 integration |
+| `test_bake_system.gd` | 127 | Baked-container adoption/replacement/clear and exact snapshot restore, conservative legacy migration (chunk, face-material, heightmap), structural-cut fallback, one-pass visual/collision CSG equivalence, transformed cordon/chunk interactions, build options, dry runs, preview modes, dirty-tag concurrency, connectors/navmesh, brush entities, and mode 2 integration |
 | `test_bake_issues.gd` | 10 | check_bake_issues: degenerate, oversized, floating subtract, overlapping subtracts, non-manifold/open-edge, clean level, entity skip |
 | `test_weld_and_planarity.gd` | 21 | Non-planar face detection (5), vertex welding + ensure_geometry refresh (3), planarity auto-fix (3), micro-gap detection (2), edge-key independence (1), boundary-straddling weld/gap/parse (3), MapIO integration (2), MapIO snap unit (2) |
 | `test_quick_play_modes.gd` | 13 | Severity blocking, cordon save/restore, dirty retention, camera yaw, and spawn restore across play/error paths |
 | `test_integration.gd` | 22 | End-to-end: brush lifecycle, paint + heightmap, entity workflow, visgroup cross-system, snap, bake cross-system, entity I/O cleanup, brush info round-trip |
 | `test_shortcut_dialog.gd` | 8 | Category assignment (tools, paint, axis lock, editing), action labels (known/unknown), get_all_bindings copy safety |
 | `test_tutorial_wizard.gd` | 18 | Step advancement, persistence, deferred start/resume, bake validation, completion, and no-root safety |
-| `test_subtract_preview.gd` | 13 | AABB math, overlapping cut groups, enable/disable, debounce, and safe destroy |
-| `test_prefab.gd` | 10 | Empty prefab, to_dict/from_dict roundtrip, transform preservation, file save/load, invalid data handling, multiple brushes, entity I/O preservation, instantiate empty |
+| `test_subtract_preview.gd` | 14 | AABB math, overlapping live-CSG cut groups, enable/disable, debounce, and safe destroy |
+| `test_prefab.gd` | 11 | Empty prefab, to_dict/from_dict roundtrip, transform preservation, file save/load, invalid data handling, multiple brushes, entity I/O preservation, instantiate empty |
 | `test_vertex_edges.gd` | 19 | Edge extraction (12 edges for box), dedup, edge selection (additive, toggle, clear), edge world positions, edge split (vertex count, face vert count), vertex merge, sub-mode toggle, get_single_selected_edge, point-to-segment-dist-2d |
-| `test_polygon_tool.gd` | 19 | Convexity/face construction, height state, missed-release and focus recovery, tool metadata, and settings schema |
+| `test_polygon_tool.gd` | 20 | Convexity/face construction, bidirectional positive height, missed-release and focus recovery, tool metadata, and settings schema |
 | `test_path_tool.gd` | 16 | Segment/miter construction, face data, reconstruction, pointer lifecycle, and tool metadata |
 | `test_material_browser.gd` | 24 | Thumbnail grid, palette view, null material skip, selection signals, double-click, drag data, search, pattern/color filters, favorites, hover preview, context popup |
 | `test_material_integration.gd` | 28 | Brush search (_iter_pick_nodes), hover overlay mesh (normals, mutation, lifecycle), whole-brush/per-face assignment via root, face selection counting via dock, resolve_material_assign_action fallback (face→brush→error), selection-clear signaling, and the invariant that empty `EditorSelection` is never hidden by a stale plugin cache |
@@ -343,21 +343,21 @@ Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framewor
 | `test_io_presets.gd` | 21 | Builtin preset structure, user preset CRUD, apply with target mapping/self/delay/fire_once, save entity as preset, get target tags |
 | `test_io_visualizer_enhanced.gd` | 22 | Color logic (selected/fire_once/type/default/delay), Bézier math (endpoints/midpoint/tangent), connection summary, live weak selection/rename tracking, highlight connected toggle/clear |
 | `test_io_highlight_sync.gd` | 16 | Panel/toolbar sync from visualizer, set_pressed_no_signal contracts, signal emission, signal-driven integration (toolbar↔panel propagation, alternating sources) |
-| `test_io_runtime.gd` | 36 | I/O-to-Signal dispatcher: wiring, method dispatch (direct/snake-case/generic/signal fallback), parameters, fire-once, user signals, multi-target fan-out, chain reactions, debug signal accuracy, rewire idempotency, duplicate source isolation, extra scan roots (transient/NodePath/overlap/descendant pruning), fire_on() static helper, HFEntitySystem.fire_output() fallback |
+| `test_io_runtime.gd` | 38 | I/O-to-Signal dispatcher: wiring, method dispatch (direct/snake-case/generic/signal fallback), parameters, fire-once, user signals, multi-target fan-out, chain reactions, debug signal accuracy, rewire idempotency, duplicate source isolation, extra scan roots (transient/NodePath/overlap/descendant pruning), fire_on() static helper, HFEntitySystem.fire_output() fallback |
 | `test_brush_to_heightmap.gd` | 14 | Default settings, empty input, single/multi conversion, skip subtract brushes, mesh/displacement bounds, height scale, cell bounds, target layer reuse, grid properties, display name, height roundtrip |
 | `test_scatter_brush.gd` | 15 | Defaults, circle/spline scatter, filters, deterministic transforms, preview, commit, and scale variation |
-| `test_path_tool_extras.gd` | 23 | Extended schema/options, stairs, railings, trim, HUD, placement, and edge cases |
+| `test_path_tool_extras.gd` | 24 | Extended schema/options, stairs, railings, trim including material slot zero, HUD, placement, and edge cases |
 | `test_dock_terrain_integration.gd` | 30 | Dock heightmap convert (selection→convert→grid inheritance→chunk_size→signal→active layer→regenerate→height data), scatter settings (defaults, spline points, circle, null controls), scatter preview (circle, no layer, spline too few/stale/valid), scatter commit (empty, no mesh early return, preserves result), scatter clear (removes preview, safe when null, already-freed) |
 | `test_theme_utils.gd` | 15 | Dark/light detection, panel_bg, panel_border, muted_text, primary_text, accent, success/warning/error colors, toast bg variants, make_panel_stylebox, consistency across dark/light |
 | `test_perf_monitor.gd` | 6 | Entity count, vertex estimate, chunk recommendation, health, AABB, and empty state |
 | `test_measure_tool.gd` | 22 | Tool metadata/state, rulers/distances/chaining, cap/removal, snap references, input ownership, and HUD |
 | `test_snap_system_custom.gd` | 6 | Custom snap line set/clear, projection onto line, snap_point with custom line, threshold, clear restores default |
-| `test_history_browser.gd` | 12 | Record/cap/clear, undo/redo controls, icon/color mapping, navigation, and history refresh |
-| `test_export_playtest.gd` | 3 | Export empty level, includes DirectionalLight3D, includes WorldEnvironment |
+| `test_history_browser.gd` | 14 | Record/cap/clear, undo/redo controls, icon/color mapping, navigation, and history refresh |
+| `test_export_playtest.gd` | 8 | Empty export, lighting/environment, player spawn/controller, nested ownership, and transform preservation |
 | `test_dock_history_and_playtest.gd` | 8 | Null-safe history refresh/buttons, selection typing, version updates, spawn creation, and state capture |
-| `test_baker.gd` | 24 | Material-preserving merge/face bake, indexed/non-indexed concatenation, convex collision generation, snapshots, and simplification |
+| `test_baker.gd` | 26 | Material-preserving merge/face bake, indexed/non-indexed concatenation, convex collision generation, snapshots, and simplification |
 | `test_undo_helper.gd` | 10 | History callbacks, collation tags/windows/scopes, dynamic method arities, and null safety |
-| `test_displacement.gd` | 37 | Displacement data, FaceData triangulation/serialization, create/destroy, painting, power/elevation, noise, and sewing |
+| `test_displacement.gd` | 38 | Displacement data, FaceData triangulation/serialization, create/destroy, painting, power/elevation, noise, and sewing |
 | `test_bevel.gd` | 15 | Face inset (basic, height extrude, collapse guard, material inheritance, connecting sides winding), edge bevel (basic, segments, neighbor update, small radius, material inheritance), slerp utility (endpoints, midpoint, parallel, anti-parallel, quarter turn) |
 | `test_occluder_generation.gd` | 13 | Occluder generation: flat mesh, chunked hierarchy (BakedChunk_* nodes), coplanar merge across chunks, plane separation, min-area filtering, idempotent re-generation, postprocess toggle (enabled/disabled), validation coverage + missing-occluder warnings |
 
