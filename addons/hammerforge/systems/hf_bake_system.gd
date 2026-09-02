@@ -1608,12 +1608,12 @@ func _consolidate_to_multimesh(container: Node3D) -> void:
 			continue
 		# Build MultiMesh
 		var mm = MultiMesh.new()
-		mm.mesh = mesh_key
 		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = mesh_key
 		mm.instance_count = instances.size()
 		for i in range(instances.size()):
 			var mi: MeshInstance3D = instances[i]
-			mm.set_instance_transform(i, mi.global_transform)
+			mm.set_instance_transform(i, _multimesh_transform(mi, container))
 		# Carry material from first instance
 		var mmi = MultiMeshInstance3D.new()
 		mmi.multimesh = mm
@@ -1633,6 +1633,10 @@ func _consolidate_to_multimesh(container: Node3D) -> void:
 		consolidated += 1
 	if consolidated > 0:
 		root._log("MultiMesh: consolidated %d groups" % consolidated)
+
+
+static func _multimesh_transform(instance: Node3D, container: Node3D) -> Transform3D:
+	return container.global_transform.affine_inverse() * instance.global_transform
 
 
 # ---------------------------------------------------------------------------
