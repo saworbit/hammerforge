@@ -65,6 +65,53 @@ func test_export_playtest_scene_includes_environment():
 	DirAccess.remove_absolute(path)
 
 
+func test_export_playtest_scene_includes_player():
+	var path := "user://test_playtest_player.tscn"
+	assert_true(root.export_playtest_scene(path))
+	var packed: PackedScene = ResourceLoader.load(path)
+	assert_not_null(packed)
+	var scene: Node = packed.instantiate()
+	add_child_autoqfree(scene)
+	var player: Node = scene.get_node_or_null("PlaytestPlayer")
+	assert_not_null(player, "Exported scene needs a PlaytestPlayer")
+	if player == null:
+		return
+	assert_true(player is CharacterBody3D)
+	assert_not_null(player.get_script(), "PlaytestPlayer needs PlaytestFPS")
+	var camera: Node = scene.find_child("MainCamera", true, false)
+	assert_not_null(camera, "PlaytestPlayer should create a camera at runtime")
+
+
+func test_export_playtest_scene_keeps_nested_baked_geometry():
+	var baked := Node3D.new()
+	baked.name = "BakedGeometry"
+	root.add_child(baked)
+	root.baked_container = baked
+	var chunk := Node3D.new()
+	chunk.name = "BakedChunk_0"
+	baked.add_child(chunk)
+	var mesh := MeshInstance3D.new()
+	mesh.name = "NestedMesh"
+	mesh.mesh = BoxMesh.new()
+	chunk.add_child(mesh)
+	var body := StaticBody3D.new()
+	body.name = "Collision"
+	chunk.add_child(body)
+	var col := CollisionShape3D.new()
+	col.name = "Shape"
+	col.shape = BoxShape3D.new()
+	body.add_child(col)
+	var path := "user://test_playtest_nested_geo.tscn"
+	assert_true(root.export_playtest_scene(path))
+	var packed: PackedScene = ResourceLoader.load(path)
+	assert_not_null(packed)
+	var scene: Node = packed.instantiate()
+	assert_not_null(scene.find_child("NestedMesh", true, false), "Nested mesh must survive pack")
+	assert_not_null(scene.find_child("Shape", true, false), "Nested collision must survive pack")
+	scene.free()
+	DirAccess.remove_absolute(path)
+
+
 func test_export_playtest_scene_wires_nested_brush_io():
 	var baked := Node3D.new()
 	baked.name = "BakedGeometry"
