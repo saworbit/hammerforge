@@ -183,6 +183,24 @@ func test_build_trim_material_assignment():
 			assert_eq(face_dict.get("material_idx", 0), 5, "Trim faces should have material 5")
 
 
+func test_build_trim_material_slot_zero():
+	var tool = HFPathTool.new()
+	tool._waypoints = PackedVector3Array([Vector3(0, 0, 0), Vector3(10, 0, 0)])
+	tool.set_setting("trim_width", 0.3)
+	tool.set_setting("trim_height", 0.15)
+	tool.set_setting("trim_material_idx", 0)
+	tool._ground_y = 0.0
+	var result = tool._build_trim(4.0, "grp", 99)
+	assert_gt(result.size(), 0)
+	for info in result:
+		for face_dict in info["faces"]:
+			assert_eq(
+				face_dict.get("material_idx", -1),
+				0,
+				"Palette slot 0 must be written, not left unassigned",
+			)
+
+
 func test_build_trim_both_sides():
 	var tool = HFPathTool.new()
 	tool._waypoints = PackedVector3Array([Vector3(0, 0, 0), Vector3(5, 0, 5)])
