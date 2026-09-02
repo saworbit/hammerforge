@@ -902,6 +902,49 @@ func test_apply_preview_visuals_multimesh_in_chunk():
 	)
 
 
+func test_multimesh_consolidation_preserves_world_transforms():
+	root.position = Vector3(100, 0, 0)
+	root.rotation_degrees = Vector3(0, 30, 0)
+	var container := Node3D.new()
+	container.position = Vector3(10, 0, 0)
+	container.rotation_degrees = Vector3(0, 15, 0)
+	root.add_child(container)
+	var shared_mesh := BoxMesh.new()
+	var first := MeshInstance3D.new()
+	first.mesh = shared_mesh
+	first.position = Vector3(1, 2, 3)
+	first.scale = Vector3(2, 1, 1)
+	container.add_child(first)
+	var second := MeshInstance3D.new()
+	second.mesh = shared_mesh
+	second.position = Vector3(4, 5, 6)
+	container.add_child(second)
+	var expected := [first.global_transform, second.global_transform]
+	assert_true(
+		(
+			(container.global_transform * HFBakeSystem._multimesh_transform(first, container))
+			. is_equal_approx(expected[0])
+		)
+	)
+	assert_true(
+		(
+			(container.global_transform * HFBakeSystem._multimesh_transform(second, container))
+			. is_equal_approx(expected[1])
+		)
+	)
+	bake_sys._consolidate_to_multimesh(container)
+	var mmi: MultiMeshInstance3D = null
+	for child in container.get_children():
+		if child is MultiMeshInstance3D:
+			mmi = child
+			break
+	assert_not_null(mmi)
+	if mmi == null:
+		return
+	assert_eq(mmi.multimesh.transform_format, MultiMesh.TRANSFORM_3D)
+	assert_eq(mmi.multimesh.instance_count, 2)
+
+
 func test_apply_preview_visuals_full_mode_skips_chunks():
 	## Full mode should not apply any override, even to nested children.
 	var container = Node3D.new()

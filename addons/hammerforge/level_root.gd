@@ -1964,6 +1964,7 @@ func export_playtest_scene(path: String) -> bool:
 			if child is Node3D:
 				var dup = child.duplicate()
 				scene_root.add_child(dup)
+				dup.transform = child.global_transform
 				_own_tree(dup, scene_root)
 
 	# Copy entities (spawn points, lights, etc.)
@@ -1972,6 +1973,7 @@ func export_playtest_scene(path: String) -> bool:
 			if child is Node3D:
 				var dup = child.duplicate()
 				scene_root.add_child(dup)
+				dup.transform = child.global_transform
 				_own_tree(dup, scene_root)
 
 	# Copy DefaultSun if it exists (created by New HammerForge Level)
@@ -1979,6 +1981,7 @@ func export_playtest_scene(path: String) -> bool:
 	if default_sun:
 		var sun_dup = default_sun.duplicate()
 		scene_root.add_child(sun_dup)
+		sun_dup.transform = default_sun.global_transform
 		_own_tree(sun_dup, scene_root)
 
 	# Add fallback light only if nothing provides one

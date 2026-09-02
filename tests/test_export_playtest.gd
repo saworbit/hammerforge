@@ -112,6 +112,49 @@ func test_export_playtest_scene_keeps_nested_baked_geometry():
 	DirAccess.remove_absolute(path)
 
 
+func test_export_playtest_scene_preserves_source_world_transforms():
+	root.position = Vector3(100, 0, 0)
+	root.rotation_degrees = Vector3(0, 30, 0)
+	root.scale = Vector3(1.5, 1.5, 1.5)
+	var baked := Node3D.new()
+	baked.name = "BakedGeometry"
+	baked.position = Vector3(10, 0, 0)
+	baked.rotation_degrees = Vector3(0, 15, 0)
+	root.add_child(baked)
+	root.baked_container = baked
+	var chunk := Node3D.new()
+	chunk.name = "MovedChunk"
+	chunk.position = Vector3(1, 0, 0)
+	baked.add_child(chunk)
+	var mesh := MeshInstance3D.new()
+	mesh.name = "MovedMesh"
+	mesh.position = Vector3(2, 0, 0)
+	mesh.scale = Vector3(2, 1, 1)
+	mesh.mesh = BoxMesh.new()
+	chunk.add_child(mesh)
+	var entity := Node3D.new()
+	entity.name = "MovedEntity"
+	entity.position = Vector3(3, 0, 0)
+	root.entities_node.position = Vector3(20, 0, 0)
+	root.entities_node.add_child(entity)
+	var expected_mesh_transform := mesh.global_transform
+	var expected_entity_transform := entity.global_transform
+	var path := "user://test_playtest_transforms.tscn"
+	assert_true(root.export_playtest_scene(path))
+	var packed: PackedScene = ResourceLoader.load(path)
+	assert_not_null(packed)
+	var scene: Node = packed.instantiate()
+	add_child_autoqfree(scene)
+	var exported_mesh := scene.find_child("MovedMesh", true, false) as Node3D
+	var exported_entity := scene.find_child("MovedEntity", true, false) as Node3D
+	assert_not_null(exported_mesh)
+	assert_not_null(exported_entity)
+	if exported_mesh and exported_entity:
+		assert_true(exported_mesh.global_transform.is_equal_approx(expected_mesh_transform))
+		assert_true(exported_entity.global_transform.is_equal_approx(expected_entity_transform))
+	DirAccess.remove_absolute(path)
+
+
 func test_export_playtest_scene_wires_nested_brush_io():
 	var baked := Node3D.new()
 	baked.name = "BakedGeometry"
