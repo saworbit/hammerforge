@@ -1964,7 +1964,7 @@ func export_playtest_scene(path: String) -> bool:
 			if child is Node3D:
 				var dup = child.duplicate()
 				scene_root.add_child(dup)
-				dup.owner = scene_root
+				_own_tree(dup, scene_root)
 
 	# Copy entities (spawn points, lights, etc.)
 	if entities_node:
@@ -1972,14 +1972,14 @@ func export_playtest_scene(path: String) -> bool:
 			if child is Node3D:
 				var dup = child.duplicate()
 				scene_root.add_child(dup)
-				dup.owner = scene_root
+				_own_tree(dup, scene_root)
 
 	# Copy DefaultSun if it exists (created by New HammerForge Level)
 	var default_sun = get_node_or_null("DefaultSun") as DirectionalLight3D
 	if default_sun:
 		var sun_dup = default_sun.duplicate()
 		scene_root.add_child(sun_dup)
-		sun_dup.owner = scene_root
+		_own_tree(sun_dup, scene_root)
 
 	# Add fallback light only if nothing provides one
 	var has_light := false
@@ -2013,7 +2013,14 @@ func export_playtest_scene(path: String) -> bool:
 		var io_dispatcher := HFIORuntime.new()
 		io_dispatcher.name = "HFIODispatcher"
 		scene_root.add_child(io_dispatcher)
-		io_dispatcher.owner = scene_root
+		_own_tree(io_dispatcher, scene_root)
+
+	var player := _make_playtest_player()
+	scene_root.add_child(player)
+	var pose := _resolve_playtest_spawn()
+	player.position = pose["position"]
+	player.rotation.y = pose["yaw"]
+	_own_tree(player, scene_root)
 
 	# Pack and save
 	var packed := PackedScene.new()
@@ -2038,6 +2045,48 @@ func _node_tree_has_io(node: Node) -> bool:
 		if _node_tree_has_io(child):
 			return true
 	return false
+
+
+func _own_tree(node: Node, scene_owner: Node) -> void:
+	if not node:
+		return
+	node.owner = scene_owner
+	for child in node.get_children():
+		_own_tree(child, scene_owner)
+
+
+func _resolve_playtest_spawn() -> Dictionary:
+	var spawn: Node3D = null
+	var spawn_yaw := 0.0
+	if spawn_system:
+		spawn = spawn_system.get_active_spawn()
+	if not spawn:
+		for node in _iter_pick_nodes():
+			if node is DraftEntity:
+				var draft_entity := node as DraftEntity
+				var ec := draft_entity.entity_class
+				if ec == "":
+					ec = draft_entity.entity_type
+				if ec == "player_start":
+					spawn = draft_entity
+					break
+	var spawn_pos := Vector3(0, 2, 0)
+	var found_spawn := spawn != null
+	var height_offset := 1.0
+	if found_spawn:
+		spawn_pos = (spawn.global_position if spawn.is_inside_tree() else spawn.position)
+		if spawn is DraftEntity:
+			spawn_yaw = deg_to_rad(float(spawn.entity_data.get("angle", 0.0)))
+			height_offset = float(spawn.entity_data.get("height_offset", 1.0))
+	var offset := Vector3(0, height_offset, 0) if found_spawn else Vector3.ZERO
+	return {"position": spawn_pos + offset, "yaw": spawn_yaw if found_spawn else 0.0}
+
+
+func _make_playtest_player() -> CharacterBody3D:
+	var player := CharacterBody3D.new()
+	player.name = "PlaytestPlayer"
+	player.set_script(PlaytestFPS)
+	return player
 
 
 # ===========================================================================
@@ -2501,39 +2550,11 @@ func _start_playtest() -> void:
 		if pending_node:
 			pending_node.visible = false
 
-	var spawn: Node3D = null
-	var spawn_yaw := 0.0
-	if spawn_system:
-		spawn = spawn_system.get_active_spawn()
-	if not spawn:
-		# Legacy fallback — scan entities directly
-		for node in _iter_pick_nodes():
-			if node is DraftEntity:
-				var draft_entity := node as DraftEntity
-				var ec := draft_entity.entity_class
-				if ec == "":
-					ec = draft_entity.entity_type
-				if ec == "player_start":
-					spawn = draft_entity
-					break
-
-	var spawn_pos := Vector3(0, 2, 0)
-	var found_spawn := spawn != null
-	var height_offset := 1.0
-	if found_spawn:
-		spawn_pos = (spawn.global_position if spawn.is_inside_tree() else spawn.position)
-		if spawn is DraftEntity:
-			spawn_yaw = deg_to_rad(float(spawn.entity_data.get("angle", 0.0)))
-			height_offset = float(spawn.entity_data.get("height_offset", 1.0))
-
-	var player = CharacterBody3D.new()
-	player.name = "PlaytestPlayer"
-	player.set_script(PlaytestFPS)
-	var offset = Vector3(0, height_offset, 0) if found_spawn else Vector3.ZERO
+	var pose := _resolve_playtest_spawn()
+	var player := _make_playtest_player()
 	add_child(player)
-	player.global_position = spawn_pos + offset
-	if found_spawn:
-		player.rotation.y = spawn_yaw
+	player.global_position = pose["position"]
+	player.rotation.y = pose["yaw"]
 
 
 # ===========================================================================
