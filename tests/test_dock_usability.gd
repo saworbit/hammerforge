@@ -85,6 +85,49 @@ func test_async_bake_and_commit_cuts_never_enter_undo_as_coroutines() -> void:
 	assert_false(helper_body.contains("await "))
 
 
+func test_manual_save_reports_completion_after_worker_finishes() -> void:
+	var root := LevelRoot.new()
+	root.auto_spawn_player = false
+	root.commit_freeze = false
+	root.hflevel_autosave_enabled = false
+	add_child_autoqfree(root)
+	dock.level_root = root
+	dock.connected_root = root
+	dock._user_prefs = null
+	dock._connect_root_signals()
+	var path := "user://dock_manual_save_completion_test.hflevel"
+	DirAccess.remove_absolute(path)
+	dock._on_hflevel_save_selected(path)
+	assert_eq(dock.status_label.text, "Saving .hflevel...")
+	var guard := 0
+	while (
+		root.file_system._hflevel_thread
+		and root.file_system._hflevel_thread.is_alive()
+		and guard < 200
+	):
+		await get_tree().process_frame
+		guard += 1
+	root._process_hflevel_saves()
+	assert_eq(dock.status_label.text, "Saved .hflevel")
+	assert_true(FileAccess.file_exists(path))
+	DirAccess.remove_absolute(path)
+
+
+func test_manual_save_failure_names_destination() -> void:
+	var root := LevelRoot.new()
+	root.auto_spawn_player = false
+	root.commit_freeze = false
+	root.hflevel_autosave_enabled = false
+	add_child_autoqfree(root)
+	dock.level_root = root
+	dock.connected_root = root
+	dock._connect_root_signals()
+	var path := "user://blocked/manual.hflevel"
+	root.hflevel_save_failed.emit(path, "permission denied")
+	assert_true(dock.status_label.text.contains(path))
+	assert_true(dock.status_label.text.begins_with("Failed to save"))
+
+
 func _is_descendant_of(node: Node, ancestor: Node) -> bool:
 	var current := node
 	while current:

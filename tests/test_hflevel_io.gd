@@ -374,11 +374,55 @@ func test_uncompressed_payload_keeps_legacy_header():
 func test_save_to_path_is_atomic_and_leaves_no_writing_sidecar():
 	var path := "user://hflevel_atomic_test.hflevel"
 	var writing := path + ".writing"
+	var previous := path + ".previous"
 	HFLevelIO.save_to_path(path, {"v": 1}, false)
 	HFLevelIO.save_to_path(path, {"v": 2}, false)
 	var loaded: Dictionary = HFLevelIO.load_from_path(path)
 	assert_eq(int(loaded.get("v", 0)), 2)
 	assert_false(FileAccess.file_exists(writing), "Sidecar .writing file should be gone after save")
+	assert_false(FileAccess.file_exists(previous), "Successful replacement should remove its backup")
+	DirAccess.remove_absolute(path)
+
+
+func test_failed_replacement_restores_valid_destination():
+	var path := "user://hflevel_atomic_restore_test.hflevel"
+	var missing_tmp := path + ".missing"
+	var backup := path + ".previous"
+	HFLevelIO.save_to_path(path, {"v": 1}, false)
+	var err := HFLevelIO._replace_file_atomic(path, missing_tmp)
+	assert_push_error("rename failed")
+	assert_ne(err, OK)
+	var loaded: Dictionary = HFLevelIO.load_from_path(path)
+	assert_eq(int(loaded.get("v", 0)), 1, "Failed replacement must restore the last good save")
+	assert_false(FileAccess.file_exists(backup), "Restored backup should return to the main path")
+	DirAccess.remove_absolute(path)
+
+
+func test_replacement_recovers_interrupted_backup_before_writing():
+	var path := "user://hflevel_atomic_recovery_test.hflevel"
+	var writing := path + ".writing"
+	var backup := path + ".previous"
+	HFLevelIO.save_to_path(backup, {"v": 1}, false)
+	var next_payload := HFLevelIO.build_payload({"v": 2}, false)
+	var file := FileAccess.open(writing, FileAccess.WRITE)
+	file.store_buffer(next_payload)
+	file.close()
+	assert_eq(HFLevelIO._replace_file_atomic(path, writing), OK)
+	var loaded: Dictionary = HFLevelIO.load_from_path(path)
+	assert_eq(int(loaded.get("v", 0)), 2)
+	assert_false(FileAccess.file_exists(backup))
+	DirAccess.remove_absolute(path)
+
+
+func test_load_recovers_previous_file_after_interrupted_replacement():
+	var path := "user://hflevel_atomic_load_recovery_test.hflevel"
+	var backup := path + ".previous"
+	HFLevelIO.save_to_path(path, {"v": 1}, false)
+	assert_eq(DirAccess.rename_absolute(path, backup), OK)
+	var loaded: Dictionary = HFLevelIO.load_from_path(path)
+	assert_eq(int(loaded.get("v", 0)), 1)
+	assert_true(FileAccess.file_exists(path))
+	assert_false(FileAccess.file_exists(backup))
 	DirAccess.remove_absolute(path)
 
 

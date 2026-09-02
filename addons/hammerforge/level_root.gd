@@ -197,6 +197,8 @@ signal face_selection_changed
 signal state_saved
 signal state_loaded
 signal autosave_failed(error_message: String)
+signal hflevel_save_completed(path: String)
+signal hflevel_save_failed(path: String, error_message: String)
 signal user_message(text: String, level: int)
 
 # ---------------------------------------------------------------------------
@@ -606,13 +608,28 @@ func _exit_tree() -> void:
 func _process(_delta: float) -> void:
 	if not Engine.is_editor_hint():
 		return
-	var write_error := file_system.process_thread_queue()
-	if write_error != "":
-		autosave_failed.emit(write_error)
+	_process_hflevel_saves()
 	if io_visualizer:
 		io_visualizer.process()
 	if subtract_preview and subtract_preview.is_enabled():
 		subtract_preview.process(_delta)
+
+
+func _process_hflevel_saves() -> void:
+	file_system.process_thread_queue()
+	for result in file_system.take_completed_saves():
+		var write_error := str(result.get("error", ""))
+		var save_path := str(result.get("path", ""))
+		var is_autosave := bool(result.get("autosave", false))
+		if write_error != "":
+			if is_autosave:
+				autosave_failed.emit(write_error)
+			else:
+				hflevel_save_failed.emit(save_path, write_error)
+			continue
+		state_saved.emit()
+		if not is_autosave:
+			hflevel_save_completed.emit(save_path)
 
 
 # ===========================================================================
@@ -1847,11 +1864,8 @@ func _apply_hflevel_settings(settings: Dictionary) -> void:
 # ===========================================================================
 
 
-func save_hflevel(path: String = "", force: bool = false) -> int:
-	var err = file_system.save_hflevel(path, force)
-	if err == OK:
-		state_saved.emit()
-	return err
+func save_hflevel(path: String = "", force: bool = false, autosave: bool = false) -> int:
+	return file_system.save_hflevel(path, force, autosave)
 
 
 func load_hflevel(path: String = "") -> bool:
@@ -2466,7 +2480,7 @@ func _setup_autosave() -> void:
 func _on_autosave_timeout() -> void:
 	if not hflevel_autosave_enabled:
 		return
-	save_hflevel(hflevel_autosave_path, true)
+	save_hflevel(hflevel_autosave_path, true, true)
 
 
 func _set_hflevel_autosave_enabled(value: bool) -> void:

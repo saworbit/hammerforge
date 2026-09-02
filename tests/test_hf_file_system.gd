@@ -20,6 +20,8 @@ func after_each():
 		files.shutdown()
 	if FileAccess.file_exists(_save_path):
 		DirAccess.remove_absolute(_save_path)
+	if FileAccess.file_exists(_second_save_path()):
+		DirAccess.remove_absolute(_second_save_path())
 	files = null
 	root = null
 
@@ -42,10 +44,20 @@ func _capture_hflevel_state() -> Dictionary:
 
 func _drain_write() -> String:
 	var guard := 0
-	while files._hflevel_thread and files._hflevel_thread.is_alive() and guard < 200:
-		await get_tree().process_frame
-		guard += 1
-	return files.process_thread_queue()
+	var last_error := ""
+	while guard < 400:
+		if files._hflevel_thread and files._hflevel_thread.is_alive():
+			await get_tree().process_frame
+			guard += 1
+			continue
+		last_error = files.process_thread_queue()
+		if not files._hflevel_thread and files._hflevel_pending.is_empty():
+			return last_error
+	return last_error
+
+
+func _second_save_path() -> String:
+	return "user://hf_encode_thread_test_second.hflevel"
 
 
 func test_save_encodes_on_write_thread_and_round_trips():
@@ -55,6 +67,31 @@ func test_save_encodes_on_write_thread_and_round_trips():
 	assert_true(FileAccess.file_exists(_save_path))
 	var loaded: Dictionary = HFLevelIO.load_from_path(_save_path)
 	assert_eq(loaded.get("name"), "level")
+	var completed := files.take_completed_saves()
+	assert_eq(completed.size(), 1)
+	assert_eq(completed[0].get("path"), _save_path)
+	assert_false(bool(completed[0].get("autosave", true)))
+
+
+func test_autosave_completion_keeps_its_kind():
+	assert_eq(files.save_hflevel(_save_path, true, true), OK)
+	await _drain_write()
+	var completed := files.take_completed_saves()
+	assert_eq(completed.size(), 1)
+	assert_true(bool(completed[0].get("autosave", false)))
+
+
+func test_queued_manual_saves_each_report_their_destination():
+	assert_eq(files.save_hflevel(_save_path, true), OK)
+	root.captured = {"name": "second"}
+	assert_eq(files.save_hflevel(_second_save_path(), true), OK)
+	await _drain_write()
+	var completed := files.take_completed_saves()
+	assert_eq(completed.size(), 2)
+	assert_eq(completed[0].get("path"), _save_path)
+	assert_eq(completed[1].get("path"), _second_save_path())
+	assert_true(FileAccess.file_exists(_save_path))
+	assert_true(FileAccess.file_exists(_second_save_path()))
 
 
 func test_unchanged_save_skips_rewrite_after_hash_settles():

@@ -3157,6 +3157,18 @@ func _connect_root_signals() -> void:
 			"autosave_failed", Callable(self, "_on_autosave_failed")
 		):
 			connected_root.connect("autosave_failed", Callable(self, "_on_autosave_failed"))
+	if connected_root.has_signal("hflevel_save_completed"):
+		if not connected_root.is_connected(
+			"hflevel_save_completed", Callable(self, "_on_hflevel_save_completed")
+		):
+			connected_root.connect(
+				"hflevel_save_completed", Callable(self, "_on_hflevel_save_completed")
+			)
+	if connected_root.has_signal("hflevel_save_failed"):
+		if not connected_root.is_connected(
+			"hflevel_save_failed", Callable(self, "_on_hflevel_save_failed")
+		):
+			connected_root.connect("hflevel_save_failed", Callable(self, "_on_hflevel_save_failed"))
 	if connected_root.has_signal("paint_layer_changed"):
 		if not connected_root.is_connected(
 			"paint_layer_changed", Callable(self, "_on_root_paint_layer_changed")
@@ -3222,6 +3234,20 @@ func _disconnect_root_signals() -> void:
 	if connected_root.has_signal("autosave_failed"):
 		if connected_root.is_connected("autosave_failed", Callable(self, "_on_autosave_failed")):
 			connected_root.disconnect("autosave_failed", Callable(self, "_on_autosave_failed"))
+	if connected_root.has_signal("hflevel_save_completed"):
+		if connected_root.is_connected(
+			"hflevel_save_completed", Callable(self, "_on_hflevel_save_completed")
+		):
+			connected_root.disconnect(
+				"hflevel_save_completed", Callable(self, "_on_hflevel_save_completed")
+			)
+	if connected_root.has_signal("hflevel_save_failed"):
+		if connected_root.is_connected(
+			"hflevel_save_failed", Callable(self, "_on_hflevel_save_failed")
+		):
+			connected_root.disconnect(
+				"hflevel_save_failed", Callable(self, "_on_hflevel_save_failed")
+			)
 	if connected_root.has_signal("paint_layer_changed"):
 		if connected_root.is_connected(
 			"paint_layer_changed", Callable(self, "_on_root_paint_layer_changed")
@@ -3398,6 +3424,20 @@ func _on_autosave_failed(error_message: String) -> void:
 					if is_instance_valid(_autosave_warning):
 						_autosave_warning.visible = false
 			)
+
+
+func _on_hflevel_save_completed(path: String) -> void:
+	_set_status("Saved .hflevel", false, 3.0)
+	show_toast("Saved: %s" % path.get_file(), 0)
+	if _user_prefs:
+		_user_prefs.add_recent_file(path)
+		_user_prefs.save()
+
+
+func _on_hflevel_save_failed(path: String, error_message: String) -> void:
+	push_warning("HammerForge save failed for %s: %s" % [path, error_message])
+	_set_status("Failed to save .hflevel: %s" % path, true, 5.0)
+	show_toast("Save failed: %s" % path, 2)
 
 
 func _on_root_user_message(text: String, level: int) -> void:
@@ -4845,14 +4885,11 @@ func _on_hflevel_save_selected(path: String) -> void:
 		_set_status("No LevelRoot for .hflevel save", true)
 		return
 	var err = int(level_root.save_hflevel(path, true))
-	_set_status("Saved .hflevel" if err == OK else "Failed to save .hflevel", err != OK, 3.0)
 	if err != OK:
+		_set_status("Failed to save .hflevel", true, 3.0)
 		show_toast("Failed to save .hflevel: %s" % path.get_file(), 2)
 	else:
-		show_toast("Saved: %s" % path.get_file(), 0)
-	if err == OK and _user_prefs:
-		_user_prefs.add_recent_file(path)
-		_user_prefs.save()
+		_set_status("Saving .hflevel...", false)
 
 
 func _on_hflevel_load_selected(path: String) -> void:

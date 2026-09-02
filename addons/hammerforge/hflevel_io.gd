@@ -222,13 +222,50 @@ static func write_bytes_atomic(path: String, payload: PackedByteArray) -> int:
 		push_error("HFLevelIO: store_buffer failed for %s (error: %d)" % [tmp_path, err])
 		DirAccess.remove_absolute(tmp_path)
 		return err
-	if FileAccess.file_exists(path):
-		DirAccess.remove_absolute(path)
+	return _replace_file_atomic(path, tmp_path)
+
+
+static func _replace_file_atomic(path: String, tmp_path: String) -> int:
+	var backup_path := path + ".previous"
+	if not FileAccess.file_exists(path):
+		if FileAccess.file_exists(backup_path):
+			var recover_err := DirAccess.rename_absolute(backup_path, path)
+			if recover_err != OK:
+				return recover_err
+		else:
+			var first_rename := DirAccess.rename_absolute(tmp_path, path)
+			if first_rename != OK:
+				push_error("HFLevelIO: rename failed for %s (error: %d)" % [path, first_rename])
+				DirAccess.remove_absolute(tmp_path)
+			return first_rename
+	if FileAccess.file_exists(backup_path):
+		var stale_err := DirAccess.remove_absolute(backup_path)
+		if stale_err != OK:
+			return stale_err
+	var backup_err := DirAccess.copy_absolute(path, backup_path)
+	if backup_err != OK:
+		push_error("HFLevelIO: backup failed for %s (error: %d)" % [path, backup_err])
+		DirAccess.remove_absolute(tmp_path)
+		return backup_err
+	var remove_err := DirAccess.remove_absolute(path)
+	if remove_err != OK:
+		DirAccess.remove_absolute(backup_path)
+		DirAccess.remove_absolute(tmp_path)
+		return remove_err
 	var renamed := DirAccess.rename_absolute(tmp_path, path)
 	if renamed != OK:
 		push_error("HFLevelIO: rename failed for %s (error: %d)" % [path, renamed])
+		var restore_err := DirAccess.rename_absolute(backup_path, path)
+		if restore_err != OK:
+			push_error(
+				(
+					"HFLevelIO: restore failed for %s; previous file remains at %s (error: %d)"
+					% [path, backup_path, restore_err]
+				)
+			)
 		DirAccess.remove_absolute(tmp_path)
 		return renamed
+	DirAccess.remove_absolute(backup_path)
 	return OK
 
 
@@ -241,6 +278,11 @@ static func save_to_path(path: String, data: Dictionary, compress: bool = true) 
 static func load_from_path(path: String) -> Dictionary:
 	if path == "":
 		return {}
+	if not FileAccess.file_exists(path) and FileAccess.file_exists(path + ".previous"):
+		var recover_err := DirAccess.rename_absolute(path + ".previous", path)
+		if recover_err != OK:
+			push_error("HFLevelIO: recovery failed for %s (error: %d)" % [path, recover_err])
+			return {}
 	if not FileAccess.file_exists(path):
 		return {}
 	var file = FileAccess.open(path, FileAccess.READ)

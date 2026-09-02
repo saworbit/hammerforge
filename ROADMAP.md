@@ -352,7 +352,7 @@ Current: 4,318 lines. Largest remaining work is viewport input / overlay ownersh
 - Current: 2,844 lines. Continue only behind focused characterization tests; track the remaining decomposition in [#21](https://github.com/saworbit/hammerforge/issues/21).
 
 ### Risk-focused test gaps
-The current suite covers 1,783 tests across 104 scripts, including the large brush, bake, paint, vertex, baker, brush-instance, and map-I/O systems. Remaining work is concentrated in failure semantics and scale-sensitive paths rather than wholly untested systems:
+The current suite covers 1,790 tests across 104 scripts, including the large brush, bake, paint, vertex, baker, brush-instance, and map-I/O systems. Remaining work is concentrated in failure semantics and scale-sensitive paths rather than wholly untested systems:
 - crash-safe destination replacement and truthful manual-save completion ([#33](https://github.com/saworbit/hammerforge/issues/33), [#51](https://github.com/saworbit/hammerforge/issues/51));
 - quoted `.map` property round-trips ([#32](https://github.com/saworbit/hammerforge/issues/32));
 - non-blocking threaded merge/finalization ([#35](https://github.com/saworbit/hammerforge/issues/35));
