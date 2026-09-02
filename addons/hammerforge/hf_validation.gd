@@ -31,7 +31,7 @@ static func has_draft_containers(root: Object) -> bool:
 static func has_entity_container(root: Object) -> bool:
 	if not is_valid_root(root):
 		return false
-	var v = root.get("draft_entities_node")
+	var v = root.get("entities_node")
 	return v != null and is_instance_valid(v)
 
 
