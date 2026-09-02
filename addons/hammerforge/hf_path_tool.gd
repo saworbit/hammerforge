@@ -670,7 +670,7 @@ func _build_trim(path_width: float, group_id: String, custom_shape: int) -> Arra
 			if not info.is_empty():
 				info["shape"] = custom_shape
 				# Apply material to all faces
-				if trim_mat > 0:
+				if trim_mat >= 0:
 					for f_idx in range(info["faces"].size()):
 						var face_dict: Dictionary = info["faces"][f_idx]
 						face_dict["material_idx"] = trim_mat
