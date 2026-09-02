@@ -1,6 +1,6 @@
 # HammerForge MVP Guide
 
-Last updated: July 21, 2026
+Last updated: September 2, 2026
 
 This guide is for contributors implementing or extending the MVP.
 
@@ -15,7 +15,7 @@ This guide is for contributors implementing or extending the MVP.
 HammerForge uses a **coordinator + subsystems** pattern:
 
 - **`plugin.gd`** handles editor input and routes to `LevelRoot`. Uses sticky `active_root` with deep recursive tree search.
-- **`level_root.gd`** is a coordinator (~2,200 lines) that owns containers, exports, and signals. All public methods delegate to subsystem classes. Default UX is Draw → material → entity → bake → Test Level; power-user overlays are opt-in.
+- **`level_root.gd`** is a 2,844-line coordinator that owns containers, exports, and signals. Public methods delegate to subsystem classes; continued decomposition is tracked in the roadmap. Default UX is Draw → material → entity → bake → Test Level; power-user overlays are opt-in.
 - **Subsystems** (`systems/*.gd`) are `RefCounted` classes that do the real work. Each receives a `LevelRoot` reference in its constructor.
 - **`input_state.gd`** is a state machine managing drag/paint modes.
 - **`dock.gd`** presents 4 tabs (Build, Paint, Objects, Test) with programmatic, persisted collapsible sections. Selection tools appear contextually in Build when brushes are selected. The primary toolbar exposes Draw, Select, Paint, More, and Help.
@@ -29,7 +29,7 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 - `HFDragSystem` manages the two-stage draw lifecycle (base drag -> height click) and owns the `HFInputState` instance.
 - `HFExtrudeTool` handles face extrusion: picks a face via `FaceSelector`, shows a preview, and commits a new DraftBrush on release. Supports Up (along face normal) and Down (opposite).
 - `HFBrushSystem` handles brush CRUD, pending/committed cuts, materials, picking, hollow, clip, tie/untie, move floor/ceiling, and UV justify. Failable operations (hollow, clip, delete) return `HFOpResult` with actionable fix hints.
-- `HFSnapSystem` provides centralized snapping with Grid, Vertex (brush corners), and Center modes. `_snap_point()` delegates to it.
+- `HFSnapSystem` provides centralized Grid, Vertex, Center, Edge-midpoint, and Perpendicular snapping. `_snap_point()` delegates to it.
 - `HFInputState` exposes `get_drag_dimensions()` for live W x H x D display during drag gestures.
 - PendingCuts allow staging subtract operations before applying.
 
@@ -42,7 +42,7 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 - Per-chunk blend images drive a four-slot shader (`hf_blend.gdshader`).
 - Blend tool paints material blend weights (slots B/C/D) on already-filled cells.
 - Auto-connectors (`HFConnectorTool`) generate ramp/stair meshes between layers.
-- Foliage populator (`HFFoliagePopulator`) scatters MultiMeshInstance3D with height/slope filtering.
+- Foliage populator (`HFFoliagePopulator`) scatters `MultiMeshInstance3D` content with height/slope filtering and container-local transforms.
 - Stable IDs are used to reconcile generated nodes without churn.
 
 ### Face Materials + Surface Paint (`HFPaintSystem`)
@@ -72,16 +72,18 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 - Heightmap floor meshes are duplicated directly into baked output (bypass CSG) with trimesh collision.
 - Supports single and chunked baking modes.
 - Optional: mesh merging, LODs, lightmap UV2, navmesh, collision.
+- Post-processing carries tied brush entities (`func_detail`, `func_wall`, and triggers) and their I/O metadata into runtime output without treating them as structural CSG.
+- Playtest export adds a player at the active spawn, preserves reparented world transforms, assigns recursive ownership to nested geometry/collision, and wires entity I/O when present.
 
 ### Entities (`HFEntitySystem`)
 - Entities live under LevelRoot/Entities or `is_entity` meta.
 - Entities are excluded from bake.
 - Definitions are loaded from `addons/hammerforge/entities.json`.
-- **Entity I/O**: Source-style input/output connections stored as `entity_io_outputs` meta. Fields: output_name, target_name, input_name, parameter, delay, fire_once. Managed via `add_entity_output()`, `remove_entity_output()`, `get_entity_outputs()`. Connections serialize with entity info in `.hflevel`.
+- **Entity I/O**: Source-style input/output connections stored as `entity_io_outputs` meta. Fields: output_name, target_name, input_name, parameter, delay, fire_once. Managed via `add_entity_output()`, `remove_entity_output()`, `get_entity_outputs()`. Connections serialize with point and tied-brush entity info in `.hflevel`, bake output, and playtest exports.
 
 ### Subtract Preview (`HFSubtractPreview`)
 - `RefCounted` subsystem showing the live CSG cut between overlapping additive and subtractive DraftBrushes.
-- Uses `ImmediateMesh` with `PRIMITIVE_LINES` (same 12-edge box pattern as cordon wireframe).
+- Uses live CSG intersection meshes when available, with an `ImmediateMesh` AABB wireframe as a fast fallback.
 - Debounced rebuild (0.15s), MeshInstance3D pool (max 50 entries).
 - Connects to `brush_added`, `brush_removed`, `brush_changed` signals for automatic updates.
 - Toggle via `show_subtract_preview` export on LevelRoot. Persisted in state settings.
@@ -112,6 +114,7 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 ### Persistence (`HFFileSystem` + `HFStateSystem`)
 - `HFStateSystem` captures and restores brush/entity/paint/settings state for undo/redo.
 - `HFFileSystem` handles .hflevel save/load, .map import/export, and glTF export with threaded I/O.
+- See [Data Portability](HammerForge_Data_Portability.md) for fidelity boundaries and current save-safety limitations.
 
 ## High-Level Flow
 1. Input is handled by `plugin.gd` (EditorPlugin) with typed references to `LevelRoot` and the dock.
