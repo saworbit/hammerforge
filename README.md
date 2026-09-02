@@ -10,7 +10,7 @@
   <img src="https://img.shields.io/badge/Godot-4.7%2B-478cbf?logo=godot-engine&logoColor=white" alt="Godot 4.7+">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
   <img src="https://img.shields.io/badge/Status-Early%20Alpha-red" alt="Early Alpha">
-  <img src="https://img.shields.io/badge/Tests-1776%20passing-brightgreen" alt="1776 tests passing">
+  <img src="https://img.shields.io/badge/Tests-1783%20passing-brightgreen" alt="1783 tests passing">
   <img src="https://img.shields.io/badge/GDScript-44k%2B%20lines-blueviolet" alt="44k+ lines">
 </p>
 
@@ -41,7 +41,7 @@ HammerForge is a single `addons/` folder. No external tools, no custom builds, n
 
 | | |
 |---|---|
-| **Subsystem-based coordinator architecture** | **1,783 unit + integration tests** with CI on every push |
+| **Subsystem-based coordinator architecture** | **1,790 unit + integration tests** with CI on every push |
 | **15 brush shapes** (box through dodecahedron) | **150 built-in prototype textures** for instant greyboxing |
 | **Quake `.map`** + **glTF `.glb`** export | **.hflevel** native format with threaded I/O |
 | **Customizable keymaps** (JSON) | **Plugin API** for custom tools |
@@ -370,7 +370,7 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 
 ## Testing
 
-The verified Godot 4.7 CI run on September 2, 2026 contains **1,783 tests across 104 scripts**: **1,776 passing tests**, seven intentional no-assert safety tests, and **7,825 assertions**. All checks run on every push and pull request via GitHub Actions.
+The verified Godot 4.7 CI run on September 2, 2026 contains **1,790 tests across 104 scripts**: **1,783 passing tests**, seven intentional no-assert safety tests, and **7,855 assertions**. All checks run on every push and pull request via GitHub Actions.
 
 ```bash
 # Run all tests headless
