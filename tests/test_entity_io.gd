@@ -243,6 +243,53 @@ func test_get_all_connections_includes_source_info():
 	assert_true(conn["fire_once"])
 
 
+func _make_brush_entity(entity_name: String, entity_class: String = "trigger_once") -> DraftBrush:
+	var brush := DraftBrush.new()
+	brush.name = entity_name
+	brush.set_meta("brush_entity_class", entity_class)
+	root.draft_brushes_node.add_child(brush)
+	return brush
+
+
+func test_get_all_connections_includes_brush_entity_outputs():
+	var brush := _make_brush_entity("trigger_once")
+	sys.add_entity_output(brush, "OnTrigger", "door_1", "Open")
+	var conns = sys.get_all_connections()
+	assert_eq(conns.size(), 1, "Brush entity outputs should be listed")
+	assert_eq(conns[0]["source"], brush)
+	assert_eq(conns[0]["source_name"], "trigger_once")
+	assert_eq(conns[0]["target_name"], "door_1")
+
+
+func test_cleanup_dangling_connections_from_brush_entity():
+	var brush := _make_brush_entity("trigger_once")
+	sys.add_entity_output(brush, "OnTrigger", "door_1", "Open")
+	sys.add_entity_output(brush, "OnTrigger", "light_1", "TurnOn")
+	var removed := sys.cleanup_dangling_connections("door_1")
+	assert_eq(removed, 1)
+	var outputs = sys.get_entity_outputs(brush)
+	assert_eq(outputs.size(), 1)
+	assert_eq(outputs[0]["target_name"], "light_1")
+
+
+func test_reconcile_external_names_remaps_brush_entity_outputs():
+	var brush := _make_brush_entity("trigger_once")
+	var target := _make_entity("Door")
+	sys.add_entity_output(brush, "OnTrigger", "Door", "Open")
+	target.name = "MainDoor"
+	assert_eq(
+		(
+			sys
+			. reconcile_external_names(
+				{target.get_instance_id(): "Door"},
+				{target.get_instance_id(): "MainDoor"},
+			)
+		),
+		1,
+	)
+	assert_eq(sys.get_entity_outputs(brush)[0]["target_name"], "MainDoor")
+
+
 # ===========================================================================
 # Serialization round-trip
 # ===========================================================================

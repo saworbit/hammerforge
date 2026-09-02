@@ -2346,6 +2346,28 @@ func test_append_trigger_creates_area_volume():
 	assert_eq(str(outputs[0].get("output_name", "")), "OnTrigger")
 
 
+func test_attach_io_dispatcher_when_only_brush_entity_has_outputs():
+	var trigger := _make_brush(root.draft_brushes_node)
+	trigger.set_meta("brush_entity_class", "trigger_once")
+	trigger.set_meta(
+		"entity_io_outputs",
+		[{"output_name": "OnTrigger", "target_name": "door", "input_name": "Open"}]
+	)
+	var container := Node3D.new()
+	add_child_autoqfree(container)
+	bake_sys._attach_io_dispatcher(container)
+	var dispatcher: Node = container.get_node_or_null("HFIODispatcher")
+	assert_not_null(dispatcher, "Brush-only I/O should still attach HFIORuntime")
+
+
+func test_attach_io_dispatcher_skips_when_no_outputs():
+	_make_brush(root.draft_brushes_node)
+	var container := Node3D.new()
+	add_child_autoqfree(container)
+	bake_sys._attach_io_dispatcher(container)
+	assert_null(container.get_node_or_null("HFIODispatcher"))
+
+
 func test_append_skips_worldspawn_brushes():
 	_make_brush(root.draft_brushes_node)
 	var container := Node3D.new()
