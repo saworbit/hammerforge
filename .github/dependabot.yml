@@ -1,0 +1,16 @@
+version: 2
+updates:
+  # Godot and GDScript tooling are pinned in ci.yml itself, so only the
+  # Actions themselves are tracked here.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"
+    labels:
+      - "enhancement"
+    groups:
+      actions:
+        patterns:
+          - "*"

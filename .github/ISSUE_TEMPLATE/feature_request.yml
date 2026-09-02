@@ -1,0 +1,52 @@
+name: Feature request
+description: Propose a new capability or an improvement to an existing one
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Large changes should start here rather than as a PR. Keep proposals aligned
+        with the current MVP and the subsystem architecture (LevelRoot is the public API).
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do that is awkward or impossible today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: What should the editor do instead? Name the dock tab or tool if it has one.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Build (brushes, drawing, vertex/edge editing)
+        - Paint (surfaces, terrain, materials)
+        - Objects (entities, prefabs, I/O wiring)
+        - Test (bake, validation, quick play)
+        - Architecture / code quality
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Including any existing workaround you're using now.
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional notes
+      description: Tradeoffs, affected subsystems, or related issues.
