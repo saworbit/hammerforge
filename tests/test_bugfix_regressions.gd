@@ -9,6 +9,7 @@ const HFVertexSystem = preload("res://addons/hammerforge/systems/hf_vertex_syste
 const HFCarveSystem = preload("res://addons/hammerforge/systems/hf_carve_system.gd")
 const HFInputState = preload("res://addons/hammerforge/input_state.gd")
 const HammerForgePlugin = preload("res://addons/hammerforge/plugin.gd")
+const HFPluginViewportInput = preload("res://addons/hammerforge/plugin_viewport_input.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 const DraftEntity = preload("res://addons/hammerforge/draft_entity.gd")
 const LevelRoot = preload("res://addons/hammerforge/level_root.gd")
@@ -381,8 +382,11 @@ func test_plugin_uses_vertex_system_projection_and_absolute_updates():
 	var compact_block := _compact_source(motion_block)
 
 	assert_true(
-		compact_block.contains(
-			"vs.project_drag_screen_delta(cam,plugin._vertex_drag_start,pos,root.input_state.axis_lock)"
+		(
+			compact_block
+			. contains(
+				"vs.project_drag_screen_delta(cam,plugin._vertex_drag_start,pos,root.input_state.axis_lock)"
+			)
 		),
 		"Vertex motion must delegate view and axis projection to HFVertexSystem"
 	)
@@ -575,7 +579,7 @@ func test_idle_rmb_passes_but_transient_gestures_are_cancelable():
 
 
 func test_native_rmb_camera_session_owns_all_input_until_release():
-	var session := HammerForgePlugin.RmbCameraNavigationSession.new()
+	var session := HFPluginViewportInput.RmbCameraNavigationSession.new()
 	var motion := InputEventMouseMotion.new()
 	motion.button_mask = MOUSE_BUTTON_MASK_RIGHT
 	assert_false(session.handle_followup(motion))
@@ -708,6 +712,13 @@ func test_active_paint_stroke_keeps_pointer_capture_until_lmb_release():
 
 func test_viewport_forwarding_is_selection_independent_and_rmb_followups_bypass_tool_work():
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
+	var wrapper_start := source.find("func _forward_3d_gui_input")
+	var wrapper_end := source.find("func _should_start_disp_paint", wrapper_start)
+	var wrapper := source.substr(wrapper_start, wrapper_end - wrapper_start)
+	assert_true(
+		wrapper.contains("HFPluginViewportInput.handle(self, camera, event)"),
+		"The engine callback must stay a thin delegate to the viewport module",
+	)
 	var enter_start := source.find("func _enter_tree")
 	var exit_start := source.find("func _exit_tree", enter_start)
 	var enter_body := source.substr(enter_start, exit_start - enter_start)
@@ -716,9 +727,9 @@ func test_viewport_forwarding_is_selection_independent_and_rmb_followups_bypass_
 		"Viewport forwarding must not depend on whichever editor object is selected",
 	)
 
-	var forward_start := source.find("func _forward_3d_gui_input")
-	var root_create_start := source.find("func _should_start_disp_paint", forward_start)
-	var forward_body := source.substr(forward_start, root_create_start - forward_start)
+	var forward_body := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_viewport_input.gd"
+	)
 	var camera_bypass := forward_body.find("_rmb_camera_navigation.handle_followup")
 	assert_gte(camera_bypass, 0)
 	assert_lt(

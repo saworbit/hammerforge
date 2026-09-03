@@ -364,9 +364,9 @@ func test_plugin_routes_owned_selection_before_raycast_and_tool_dispatch() -> vo
 	var compact_source := source.replace("\r", "").replace("\n", "").replace("\t", "").replace(
 		" ", ""
 	)
-	var start := source.find("func _forward_3d_gui_input")
-	var finish := source.find("func _should_start_disp_paint", start)
-	var forward := source.substr(start, finish - start)
+	var forward := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_viewport_input.gd"
+	)
 	var select_route := forward.find("_handle_active_selection_input")
 	assert_gte(select_route, 0)
 	for competing_work in [
@@ -461,16 +461,18 @@ func test_face_select_is_modal_and_hides_ambiguous_object_gizmos() -> void:
 	assert_true(sync_block.contains("_prepare_tool_transition(root, false)"))
 	assert_true(sync_block.contains("_expand_native_group_selection"))
 
-	var forward_start := plugin_source.find("func _forward_3d_gui_input")
-	var forward_end := plugin_source.find("func _should_start_disp_paint", forward_start)
-	var forward := plugin_source.substr(forward_start, forward_end - forward_start)
-	assert_true(forward.contains("var tool_id = 1 if face_select_mode else dock.get_tool()"))
-	assert_true(
-		forward.contains("var paint_mode = dock.is_paint_mode_enabled() and not face_select_mode")
+	var forward := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_viewport_input.gd"
 	)
-	assert_true(forward.contains("if _tool_registry and not face_select_mode:"))
+	assert_true(forward.contains("var tool_id = 1 if face_select_mode else plugin.dock.get_tool()"))
 	assert_true(
-		forward.contains("if _vertex_mode and root.vertex_system and not face_select_mode:")
+		forward.contains(
+			"var paint_mode = plugin.dock.is_paint_mode_enabled() and not face_select_mode"
+		)
+	)
+	assert_true(forward.contains("if plugin._tool_registry and not face_select_mode:"))
+	assert_true(
+		forward.contains("if plugin._vertex_mode and root.vertex_system and not face_select_mode:")
 	)
 
 
@@ -482,9 +484,9 @@ func test_selection_runtime_state_self_heals_after_editor_hot_reload() -> void:
 	assert_true(ensure_block.contains("_selection_gesture = HFSelectionGestureType.new()"))
 	assert_true(ensure_block.contains("_native_selection_before = []"))
 
-	var forward_start := source.find("func _forward_3d_gui_input")
-	var forward_end := source.find("func _should_start_disp_paint", forward_start)
-	var forward_block := source.substr(forward_start, forward_end - forward_start)
+	var forward_block := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_viewport_input.gd"
+	)
 	var repair_pos := forward_block.find("_ensure_selection_runtime_state()")
 	assert_gte(repair_pos, 0)
 	assert_lt(
@@ -628,9 +630,9 @@ func test_every_managed_action_surface_uses_the_shared_scope_guard() -> void:
 
 func test_plugin_recovers_stale_gizmo_and_lmb_owners_before_tool_motion() -> void:
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
-	var start := source.find("func _forward_3d_gui_input")
-	var finish := source.find("func _should_start_disp_paint", start)
-	var forward := source.substr(start, finish - start)
+	var forward := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_viewport_input.gd"
+	)
 	var gizmo_guard := forward.find("_brush_gizmo_action_active()")
 	var recover := forward.find("_recover_stale_lmb_gestures(root)")
 	assert_gte(gizmo_guard, 0)
@@ -700,16 +702,16 @@ func test_face_marquee_honors_toggle_and_visibility_contracts() -> void:
 
 func test_idle_external_tool_rmb_starts_one_native_camera_session() -> void:
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
-	var forward_start := source.find("func _forward_3d_gui_input")
-	var forward_end := source.find("func _should_start_disp_paint", forward_start)
-	var forward := source.substr(forward_start, forward_end - forward_start)
-	var dispatch_pos := forward.find("_tool_registry.dispatch_input")
-	var vertex_pos := forward.find("# Vertex editing mode intercept", dispatch_pos)
+	var forward := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_viewport_input.gd"
+	)
+	var dispatch_pos := forward.find("plugin._tool_registry.dispatch_input")
+	var vertex_pos := forward.find("if plugin._vertex_mode", dispatch_pos)
 	var external_block := forward.substr(dispatch_pos, vertex_pos - dispatch_pos)
 	assert_true(external_block.contains("event.button_index == MOUSE_BUTTON_RIGHT"))
-	assert_true(external_block.contains("_rmb_camera_navigation.begin()"))
+	assert_true(external_block.contains("plugin._rmb_camera_navigation.begin()"))
 	assert_lt(
-		external_block.find("_rmb_camera_navigation.begin()"),
+		external_block.find("plugin._rmb_camera_navigation.begin()"),
 		external_block.find("return EditorPlugin.AFTER_GUI_INPUT_PASS"),
 	)
 

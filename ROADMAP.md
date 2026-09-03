@@ -399,7 +399,9 @@ The current 5,475-line file is still dominated by `_on_*` signal handlers wired 
 - Migrate `paint_tab_builder.gd` (50 call sites) and `manage_tab_builder.gd` (58 call sites) from `dock._make_*` to direct `HFUIFactory` calls. Mechanical churn — wait until shared with another tab-builder change.
 
 ### plugin.gd decomposition (Phase 3b)
-Current: 4,318 lines. Largest remaining work is viewport input / overlay ownership, not command match blocks:
+Current: 3,993 lines. Remaining work is concentrated in selection and tool-specific pointer handlers plus overlay lifecycle:
+- `_forward_3d_gui_input` and native RMB camera ownership now live in `plugin_viewport_input.gd` (`HFPluginViewportInput`).
+- Quick-property and coach-mark behavior now delegates to `plugin_overlays.gd` (`HFPluginOverlays`).
 - `_handle_keyboard_input` now delegates to `plugin_input_router.gd` (`HFPluginInputRouter.handle_keyboard`).
 - `_dispatch_viewport_action` is a thin wrapper around `HFPluginCommands.execute`.
 - `_on_context_toolbar_action` and `_on_hotkey_palette_action` now route through `plugin_commands.gd` (`HFPluginCommands.execute`).
