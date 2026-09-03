@@ -20,7 +20,9 @@
 
 ## Looking for a Logo
 
-The previous AI-generated logo has been retired. If you're a designer or artist and want to contribute a logo for HammerForge, I'd love to use it (with credit). Requirements: free to use under MIT, ideally SVG so it scales. Open an issue or PR if interested.
+The previous AI-generated logo has been retired. If you're a designer or artist and want to contribute a logo for HammerForge, I'd love to use it (with credit). Requirements: free to use under MIT, ideally SVG so it scales.
+
+**[Issue #61](https://github.com/saworbit/hammerforge/issues/61) has the full brief** — comment there with a sketch, or open a PR. No Godot knowledge needed.
 
 ---
 
@@ -407,6 +409,8 @@ gdlint addons/hammerforge/
 | [Changelog](CHANGELOG.md) | Version history |
 | [Roadmap](ROADMAP.md) | Planned features and priorities |
 | [Contributing](CONTRIBUTING.md) | How to contribute |
+| [Code of Conduct](CODE_OF_CONDUCT.md) | Expected behavior and how to report a problem |
+| [Security Policy](SECURITY.md) | What counts as a vulnerability and how to report one privately |
 | [Demo Clips](docs/demos/README.md) | Clip list and naming scheme |
 | [Sample Levels](samples/) | Minimal and stress test scenes |
 
@@ -458,7 +462,16 @@ This is a one-person project and there's more here than one person can properly 
 - **Edge cases** -- large levels, unusual brush shapes, rapid undo/redo, plugin reload cycles
 - **Documentation** -- if something in the user guide doesn't match reality, flag it
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for how to get started.
+### Where to start
+
+- **[Good first issues](https://github.com/saworbit/hammerforge/labels/good%20first%20issue)** — scoped small, no deep architecture knowledge needed
+- **[Help wanted](https://github.com/saworbit/hammerforge/labels/help%20wanted)** — things I can't get to alone
+- **[Browse by area](https://github.com/saworbit/hammerforge/labels)** — `area:` labels map to the dock tabs: Build, Paint, Objects, Test
+- **[Milestones](https://github.com/saworbit/hammerforge/milestones)** — what the open work is grouped under
+- **[Discussions](https://github.com/saworbit/hammerforge/discussions)** — for questions that aren't bug reports
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup and the check commands, and
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for how we treat each other here.
 
 ---
 

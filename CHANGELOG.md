@@ -5,6 +5,7 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Project governance and contributor onboarding:** added `SECURITY.md` (private vulnerability reporting, with level-file parsing, unintended file writes, secret handling, and `HFIORuntime` called out as in-scope) and `CODE_OF_CONDUCT.md` (adapted from Contributor Covenant 2.1). Added GitHub issue forms for bugs and features, a pull request template mirroring the CONTRIBUTING checklist, and Dependabot for GitHub Actions. Open issues are now grouped under milestones and labelled by `area:` matching the dock tabs; README and CONTRIBUTING link to good-first-issue, help-wanted, and Discussions entry points.
 - **Snap-to-perpendicular** (dock **P**): drop the cursor onto the closest point on a brush AABB edge, so offsets stay 90° to that edge.
 
 ### Fixed

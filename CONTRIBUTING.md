@@ -2,6 +2,26 @@
 
 Thanks for helping improve HammerForge.
 
+This project follows a [Code of Conduct](CODE_OF_CONDUCT.md) — the short version
+is: be kind, be specific, and assume good faith. Security problems go through
+the [Security Policy](SECURITY.md) privately, **not** into a public issue.
+
+## New here?
+
+- [Good first issues](https://github.com/saworbit/hammerforge/labels/good%20first%20issue)
+  are scoped so you don't need to understand the whole architecture first.
+- [Help wanted](https://github.com/saworbit/hammerforge/labels/help%20wanted)
+  is the work that most needs another pair of hands.
+- `area:` labels (`build`, `paint`, `objects`, `test`, `architecture`, `docs`)
+  map to the dock tabs, so you can find issues in a part of the editor you
+  already use.
+- [Discussions](https://github.com/saworbit/hammerforge/discussions) is the
+  right place for "am I holding this wrong?" questions that aren't bug reports.
+
+Bug reports and feature requests both have
+[issue forms](https://github.com/saworbit/hammerforge/issues/new/choose) that
+prompt for what's actually needed to act on them.
+
 ## Scope
 - Small, focused changes are preferred.
 - Large changes should start with an issue or discussion before a PR.
@@ -90,3 +110,12 @@ All checks (format, lint, unit tests) run automatically on push/PR to `main` via
 ## Communication
 - Be clear about tradeoffs and known limitations.
 - Include before/after behavior notes in PR descriptions.
+- The PR template lists the checks above; tick what you ran rather than
+  guessing. "I couldn't run GUT locally" is a fine thing to say — CI will.
+- Reviews are on the code, not the person. See the
+  [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Reporting Security Issues
+Do not open a public issue. See [SECURITY.md](SECURITY.md) — level-file
+parsing, unintended file writes, secret handling, and `HFIORuntime` are the
+areas most likely to matter.
