@@ -38,6 +38,9 @@ addons/hammerforge/
   dock_entity_handler.gd Objects-tab property/create/I/O handlers
   dock_manage_handler.gd Test-tab bake/play/spawn/validation handlers
   dock_paint_handler.gd  Paint-tab layer/heightmap/scatter/sculpt handlers
+  dock_visgroup_handler.gd Manage-tab visgroup/group/cordon handlers
+  dock_file_handler.gd   File-dialog and import/export handlers
+  dock_connections.gd    Settings and LevelRoot signal wiring
   shortcut_hud.gd        Context-sensitive shortcut overlay (dynamic per mode) + persistent grid size indicator with flash-on-change
   brush_instance.gd      DraftBrush node
   baker.gd               CSG -> mesh bake pipeline (per-face materials, atlas integration, snapshot-based non-blocking face bakes, convex collision shapes)

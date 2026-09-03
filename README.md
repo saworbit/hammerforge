@@ -260,6 +260,7 @@ HammerForge uses a **coordinator + subsystems** pattern:
 
 ```
 plugin.gd            EditorPlugin — input routing, toolbar, viewport overlay
+  ├─ dock.gd         Four-tab UI coordinator with focused handler modules
   └─ level_root.gd   Thin coordinator — owns containers, exports, signals
        ├─ HFBrushSystem     Brush CRUD, hollow, clip, tie, move, UV justify, caching
        ├─ HFDragSystem      Two-stage draw lifecycle + preview management

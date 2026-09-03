@@ -19,7 +19,7 @@ HammerForge uses a **coordinator + subsystems** pattern:
 - **Subsystems** (`systems/*.gd`) are `RefCounted` classes that do the real work. Each receives a `LevelRoot` reference in its constructor.
 - **Runtime boundary**: `LevelRoot` eagerly initializes only brush, entity, bake, paint, and file systems in export templates. Editor-only systems are loaded dynamically when `Engine.is_editor_hint()` or the `editor` feature is present, keeping the authoring graph out of exported games while preserving headless editor tests.
 - **`input_state.gd`** is a state machine managing drag/paint modes.
-- **`dock.gd`** presents 4 tabs (Build, Paint, Objects, Test) with programmatic, persisted collapsible sections. Selection tools appear contextually in Build when brushes are selected. The primary toolbar exposes Draw, Select, Paint, More, and Help.
+- **`dock.gd`** presents 4 tabs (Build, Paint, Objects, Test) with programmatic, persisted collapsible sections. Tab workflows, file operations, visgroups/cordon, and signal wiring delegate to focused `dock_*_handler.gd` and `dock_connections.gd` modules while compatibility callbacks remain thin. Selection tools appear contextually in Build when brushes are selected. The primary toolbar exposes Draw, Select, Paint, More, and Help.
 
 See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture conventions.
 
