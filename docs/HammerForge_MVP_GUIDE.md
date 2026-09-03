@@ -120,7 +120,7 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 - See [Data Portability](HammerForge_Data_Portability.md) for fidelity boundaries and current save-safety limitations.
 
 ## High-Level Flow
-1. Input is handled by `plugin.gd` (EditorPlugin) with typed references to `LevelRoot` and the dock.
+1. `plugin.gd` owns the EditorPlugin lifecycle and delegates input to focused `plugin_*.gd` adapters. The coordinator keeps typed `LevelRoot` and dock references; the static adapters receive the plugin as `Object` to avoid a circular script dependency.
 2. `LevelRoot` delegates to the appropriate subsystem:
    - Draw tool -> `HFDragSystem` (drag lifecycle + preview)
    - Extrude Up/Down -> `HFExtrudeTool` (face pick + drag + commit)

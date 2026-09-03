@@ -38,8 +38,8 @@ addons/hammerforge/
   plugin_overlays.gd     Power-user lifecycle, vertex/marquee drawing, quick properties, and coach marks
   plugin_vertex_input.gd Vertex/edge pick, drag, merge, and split dispatch
   plugin_hud.gd          HUD context, mode banner, and context-toolbar state
-  level_root.gd          Coordinator (2,844 lines), delegates to subsystems
-  input_state.gd         Drag/paint state machine (HFInputState)
+  level_root.gd          Public level facade and coordinator (2,851 lines)
+  input_state.gd         Drag/paint/extrude/vertex state machine (HFInputState)
   hf_selection_gesture.gd Select-mode LMB arbiter (native object selection, face marquee, gizmos)
   dock.gd + dock.tscn    UI dock (displayed as Build, Paint, Objects, Test), collapsible sections with persisted state
   dock_brush_handler.gd  Build-tab displacement/bevel/hollow/clip/tie handlers
@@ -102,7 +102,7 @@ addons/hammerforge/
     hf_prefab_library.gd   Prefab library dock section (search, tags, variants, drag-drop, context menu)
     hf_prefab_overlay.gd   Prefab ghost overlay (wireframe bounding box + override markers)
     hf_context_toolbar.gd  Floating contextual mini-toolbar (context-sensitive actions, group labels per tool cluster, pending-cuts buttons, bake preview toggle)
-    selection_tools_builder.gd  Builds Selection Tools section with domain sub-headers (Brush Modification, Positioning, Entity Binding, Duplicate Array)
+    selection_tools_builder.gd  Builds Selection Tools with domain sub-headers (Brush Modification, Positioning, Entity Binding, Duplicate Array)
     hf_hotkey_palette.gd   Searchable command palette with fuzzy search and live gray-out (Shift+?/F1/Ctrl+K)
     hf_viewport_context_menu.gd  Context menu (Space key) with context-sensitive sections and submenus
     hf_radial_menu.gd      Radial/pie menu (backtick key) with 8 tool sectors drawn via _draw()
@@ -117,7 +117,6 @@ addons/hammerforge/
     entity_tab_builder.gd  Builds Entity Properties + Entity I/O + I/O Wiring sections (all context-hidden until entity selected)
     hf_io_wiring_panel.gd  I/O wiring panel (quick wire, presets, highlight toggle, connection summary)
     manage_tab_builder.gd  Builds the displayed Test tab (legacy internal name retained for compatibility)
-    selection_tools_builder.gd  Builds Selection Tools section (hollow, clip, move, tie, duplicator)
     hf_ui_factory.gd       HFUIFactory: static factory for repeated UI patterns (make_label_row/spin/check/button/option/separator)
     hf_editor_theme.gd     HFEditorTheme: editor icon/color/stylebox lookup with graceful fallbacks
     hf_undo_nav.gd         HFUndoNav: per-scene EditorUndoRedoManager navigation (history_id, scene_undo_redo, navigate_to_version)
@@ -140,8 +139,6 @@ addons/hammerforge/
     hf_io_visualizer.gd    Entity I/O connection lines (Bézier curves, color-coded, highlight pulse)
     hf_io_presets.gd       Reusable I/O connection presets (built-in + user-saved, target tag mapping)
 
-  hf_log.gd               HFLog: test-aware warning wrapper (capture/suppress expected warnings in tests)
-  hf_io_runtime.gd        Runtime I/O-to-Signal dispatcher (auto-wires entity_io_outputs to Godot signals on bake/export)
     hf_subtract_preview.gd Live CSG cut overlay for overlapping subtract/additive brushes (AABB fallback, debounced, pooled)
     hf_carve_preview.gd    Green wireframe preview of carve slice pieces (confirmation before commit)
     hf_clip_preview.gd     Cyan wireframe + orange plane preview of clip halves (confirmation before commit)
@@ -151,6 +148,9 @@ addons/hammerforge/
     hf_prefab_system.gd    Prefab instance registry, variant cycling, live-linked propagation, overrides
     hf_displacement_system.gd  Displacement surface create/destroy/paint/sew/elevation/power
     hf_bevel_system.gd     Edge bevel (chamfer) and face inset
+
+  hf_log.gd               HFLog: test-aware warning wrapper (capture/suppress expected warnings in tests)
+  hf_io_runtime.gd        Runtime I/O-to-Signal dispatcher (auto-wires entity_io_outputs to Godot signals on bake/export)
 
   paint/                 Floor paint subsystem
     hf_paint_grid.gd       Grid storage
@@ -180,9 +180,9 @@ addons/hammerforge/
 - **Validation guards.** Use `HFValidation.has_draft_containers(root)`, `has_baked_container(root)`, `has_nodes(root, [...])` for compound container guards in subsystems. Single-property checks (`if not root.entities_node:`) can stay inline — same line count, less import noise.
 - **Dialog tracking.** Plugin-spawned `ConfirmationDialog`/`AcceptDialog` instances must be registered with `_dialog_manager.add(dlg, base_control)` (`HFDialogManager` instance held by `plugin.gd`). It auto-removes from tracking when the dialog leaves the tree, and frees all live dialogs on plugin teardown via `_cleanup_pending_dialogs()`.
 - **No circular preloads.** Subsystem files must not `preload("../level_root.gd")`. Use raw ints for default parameters and `root.EnumName.*` at runtime.
-- **LevelRoot is the public API.** Its methods are thin one-line delegates to subsystems. External callers (`plugin.gd`, `dock.gd`) always go through `LevelRoot`.
+- **LevelRoot is the public level API.** It owns containers, exported settings, signals, runtime setup, and cross-system coordination. Operations delegate to focused subsystems where a subsystem owns the behavior; external editor callers use the LevelRoot facade instead of reaching into subsystem internals.
 - **Input state machine.** `HFDragSystem` owns the `HFInputState` instance. Drag state transitions are explicit (`begin_drag` -> `advance_to_height` -> `end_drag`). Extrude uses `begin_extrude` -> `end_extrude`. Modes are classified as *transient* (DRAG_BASE, DRAG_HEIGHT, EXTRUDE, SURFACE_PAINT — own temporary preview nodes) or *persistent* (VERTEX_EDIT — user-toggled, survives undo/redo). `HFInputState.is_transient_preview_mode()` encodes this distinction; plugin.gd's `version_changed` handler uses it to force-reset only transient modes.
-- **Direct typed calls.** `plugin.gd` and `dock.gd` use typed references (`LevelRoot`, `DockType`) with direct method calls instead of `has_method`/`call`.
+- **Typed boundaries with deliberate adapters.** `plugin.gd` and `dock.gd` use typed `LevelRoot`/dock references for their stable public boundary. Focused static `plugin_*.gd` adapters accept the EditorPlugin as `Object` and may use `get`, `has_method`, or `call` to avoid a circular script dependency. Compatibility integrations and undo/redo method-name dispatch are also intentionally dynamic; do not introduce dynamic access inside otherwise typed subsystem APIs without a concrete boundary reason.
 - **Brush visual layers.** Ordinary additive brushes use their material/tinted surface without a topology overlay. Subtract brushes keep one red semantic wireframe; brush entities keep one understated blue overlay. `DraftBrush.get_editor_outline_lines()` is the canonical hover/gizmo outline source: polyhedra keep boundaries and true creases without coplanar triangulation diagonals, while curved primitives use sparse shape-specific profiles instead of render wireframes or fallback boxes. Triangle topology is opt-in through vertex/edit tooling or Bake Preview Wireframe. `DraftBrush._sync_visual_overlays()` updates reusable semantic nodes after mesh changes and removes legacy duplicates.
 - **Transient-node replacement.** Never `queue_free()` a fixed-name visual/container node and add its replacement under the same parent in the same frame. The queued node still reserves its name, so Godot auto-renames the replacement and later lookups lose it. Reuse the existing node when possible; otherwise detach it with `remove_child()` before queueing deletion and adding the replacement. Mark private lifecycle nodes with metadata when they must be recognized across reloads.
 - **Baked-container ownership.** The top-level name `BakedGeometry` is reserved for HammerForge output. `HFBakeSystem.reconcile_baked_containers()` re-adopts that persisted node and conservatively migrates recognized legacy anonymous bake roots while leaving unrelated anonymous nodes untouched. Full-bake replacement and clear paths detach managed containers synchronously, then queue safe deletion, so there is always at most one canonical top-level baked container.
@@ -202,7 +202,7 @@ addons/hammerforge/
 - **Managed selection scope.** Input forwarding is global, but HammerForge edits are not. `classify_selection_scope()` separates empty, native-only, HammerForge-only, and mixed selections. Empty/native-only keyboard commands pass through to Godot; a mixed selection is stopped with “Edit HammerForge and Godot nodes separately” so generic edits cannot bypass HammerForge IDs, caches, or undo. Apply the same guard before selection-dependent actions dispatched by the context toolbar, viewport context menu, hotkey palette, or radial menu, and expose `mixed_selection` in their state so unavailable actions do not advertise a partial edit. Global managed shortcuts also yield whenever an unrelated editor control owns keyboard focus; only the 3D viewport, the real Scene tree, or an explicitly marked HammerForge surface may dispatch them. HammerForge-only commands stay consumed even when their operation reports a no-op.
 - **External-tool exclusivity.** Activating an external `HFEditorTool` calls `_prepare_tool_transition()`, exits conflicting vertex/paint state, and deactivates the previous external tool. While one is active, every mouse event is dispatched to it before built-in vertex/select/draw handling. Even when its handler returns PASS for a miss, `plugin.gd` returns immediately so the same physical event can reach Godot navigation but cannot leak into another HammerForge tool. Switching to a built-in tool or vertex mode deactivates the external tool.
 - **Brush/material caching.** `hf_brush_system.gd` uses `_brush_cache: Dictionary` for O(1) brush ID lookup, `_brush_count: int` for O(1) count, and `_material_cache: Dictionary` for material instance reuse. All CRUD methods maintain these caches.
-- **Undo/redo dynamic dispatch.** The `_commit_state_action` pattern in `dock.gd` intentionally uses string method names for undo/redo -- this is the one exception to the typed-calls rule.
+- **Undo/redo dynamic dispatch.** The `_commit_state_action` pattern in `dock.gd` intentionally uses string method names for undo/redo. This is one of the documented dynamic boundaries alongside focused plugin adapters and compatibility integrations.
 - **Undo/redo helper.** Use `HFUndoHelper` for editor actions to ensure consistent history and state snapshot restores. Pass a `collation_tag` for operations that fire rapidly (nudge, resize, paint) — consecutive actions with the same tag within 1 second are merged into one undo entry. Collation also requires matching `full_state` scope — a `full_state=true` action will not merge with a prior `full_state=false` run.
 - **Undo/redo history binding.** HammerForge actions go into the **scene history** (not global) because `create_action()` passes `null` context and the first do/undo object is a Node (LevelRoot). Dock history UI (`_update_history_buttons`, `_on_history_undo/redo`) resolves the correct history via `_get_scene_history_id()` → `undo_redo.get_object_history_id(level_root)`. Never hard-code `EditorUndoRedoManager.GLOBAL_HISTORY` — use `_get_scene_undo_redo()` to get the `UndoRedo` object for the active scene.
 - **Transactions.** For multi-step operations (hollow, clip, tie), use `state_system.begin_transaction()` / `commit_transaction()` / `rollback_transaction()` to group mutations atomically. If any step fails, `rollback_transaction()` restores the snapshot.

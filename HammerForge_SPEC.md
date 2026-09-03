@@ -1,6 +1,6 @@
 # HammerForge Spec
 
-Last updated: September 2, 2026
+Last updated: September 3, 2026
 
 This document describes HammerForge's architecture and data flow.
 
@@ -12,7 +12,7 @@ This document describes HammerForge's architecture and data flow.
 
 ## Architecture
 
-HammerForge uses a coordinator + subsystems pattern. `LevelRoot` is a 2,844-line coordinator that owns container nodes, exported properties, and signals, and delegates work to subsystem classes. Each subsystem receives a reference to `LevelRoot` in its constructor. Default editor UX is the core loop (Draw → material → entity → bake → Test Level); radial menu, coach marks, and operation replay install only when `power_user_overlays` is enabled.
+HammerForge uses a coordinator + subsystems pattern. `LevelRoot` is a 2,851-line public level facade and coordinator that owns container nodes, exported properties, signals, runtime setup, and cross-system coordination. Concrete subsystems receive a reference to `LevelRoot` in their constructor. Export templates eagerly construct only the brush, entity, bake, paint, and file core; editor builds dynamically load the authoring graph. Default editor UX is the core loop (Draw → material → entity → bake → Test Level); radial menu, coach marks, and operation replay install only when `power_user_overlays` is enabled.
 
 ### Signals (Central Registry)
 All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.emit(...)`. UI and other consumers subscribe instead of polling.
@@ -42,11 +42,12 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 
 | Script | Role |
 |--------|------|
-| `plugin.gd` | EditorPlugin entry point, input routing, undo/redo, sticky LevelRoot discovery |
-| `level_root.gd` | Thin coordinator: containers, exports, signals, delegates to subsystems |
-| `dock.gd` + `dock.tscn` | UI dock (4 tabs: Build, Paint, Objects, Test), collapsible sections, tool state |
+| `plugin.gd` | EditorPlugin lifecycle, composition, undo wiring, sticky LevelRoot discovery, and high-level coordination |
+| `plugin_*.gd` | Focused viewport input, selection, command, HUD, overlay, edit-action, and drag-and-drop adapters |
+| `level_root.gd` | Public level facade: containers, exports, signals, runtime setup, coordination, and subsystem delegation |
+| `dock.gd` + `dock.tscn` | UI coordinator (4 tabs: Build, Paint, Objects, Test) with workflows delegated to `dock_*_handler.gd` and `dock_connections.gd` |
 | `ui/collapsible_section.gd` | Reusable `HFCollapsibleSection` toggle-header VBoxContainer |
-| `input_state.gd` | Drag/paint/extrude state machine (`Mode` enum: IDLE, DRAG_BASE, DRAG_HEIGHT, SURFACE_PAINT, EXTRUDE) |
+| `input_state.gd` | Drag/paint/extrude/vertex state machine (`Mode` enum: IDLE, DRAG_BASE, DRAG_HEIGHT, SURFACE_PAINT, EXTRUDE, VERTEX_EDIT) |
 | `hf_selection_gesture.gd` | Native Object Select / modal Face Select gesture ownership and recovery state |
 | `hf_brush_change_tracker.gd` | Stable-ID reconciliation for Godot-owned gizmo, Inspector, and undo/redo brush changes |
 | `brush_gizmo_plugin.gd` | Semantic brush/entity gizmos, filled native hit targets, and shape-aware resize handles |
@@ -100,10 +101,16 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `hf_visgroup_system.gd` | `HFVisgroupSystem` | Visgroups (visibility groups), brush/entity grouping |
 | `hf_carve_system.gd` | `HFCarveSystem` | Boolean-subtract carve (progressive-remainder box slicing) |
 | `hf_io_visualizer.gd` | `HFIOVisualizer` | Entity I/O connection lines in viewport (ImmediateMesh) |
+| `hf_io_presets.gd` | `HFIOPresets` | Built-in and user-saved I/O connection presets with target-tag mapping |
 | `hf_subtract_preview.gd` | `HFSubtractPreview` | Live CSG cut overlay between subtract and additive brushes, with a wireframe AABB fallback (debounced, pooled) |
+| `hf_carve_preview.gd` | `HFCarvePreview` | Green wireframe preview of carve slice pieces before confirmation |
+| `hf_clip_preview.gd` | `HFClipPreview` | Clip-plane and retained-half preview before confirmation |
+| `hf_hollow_preview.gd` | `HFHollowPreview` | Yellow wireframe preview of hollow wall pieces before confirmation |
 | `hf_vertex_system.gd` | `HFVertexSystem` | Vertex/edge selection, move, split, merge with convexity validation. Edge sub-mode with wireframe overlay |
 | `hf_spawn_system.gd` | `HFSpawnSystem` | Player spawn lookup, validation (floor/collision/headroom), auto-fix, debug visualisation |
 | `hf_prefab_system.gd` | `HFPrefabSystem` | Prefab instance registry (stable entity UIDs), variant cycling, live-linked propagation, override tracking, push-to-source |
+| `hf_displacement_system.gd` | `HFDisplacementSystem` | Displacement surface creation, painting, sewing, elevation, and power changes |
+| `hf_bevel_system.gd` | `HFBevelSystem` | Edge bevel (chamfer) and face inset operations |
 
 ### Other Modules
 
@@ -345,23 +352,20 @@ Surface paint is a per-face splat system. It updates preview materials and can b
 ## Data Flow
 
 ```
-plugin.gd (input)
-  -> level_root.gd (coordinator)
-    -> hf_drag_system.gd    (draw tool: drag lifecycle + preview)
-    -> hf_extrude_tool.gd   (extrude up/down: face pick + drag + commit)
-    -> hf_brush_system.gd   (brush CRUD, pending cuts, materials)
-    -> hf_paint_system.gd   (floor + surface paint)
-    -> hf_bake_system.gd    (CSG assembly + mesh output)
-    -> hf_state_system.gd   (undo/redo state capture)
-    -> hf_file_system.gd    (persistence, threaded I/O)
-    -> hf_grid_system.gd    (editor grid)
-    -> hf_entity_system.gd  (entity placement)
-    -> hf_visgroup_system.gd (visgroups + grouping)
+Godot editor input and UI
+  -> plugin.gd                  (lifecycle, composition, discovery, undo wiring)
+     -> plugin_*.gd             (viewport, selection, commands, HUD, overlays, edits, drops)
+     -> HFToolRegistry          (plugin-owned built-in/external tools)
+     -> dock.gd
+        -> dock_*_handler.gd    (tab workflows, files, visgroups, connections)
+     -> level_root.gd           (public level facade and cross-system coordination)
+        -> runtime core         (brush, entity, bake, paint, file)
+        -> editor-only graph    (drag, grid, snap, state, validation, previews, authoring tools)
 ```
 
-All public methods on `LevelRoot` are thin one-line delegates to the appropriate subsystem. This preserves the existing API so `plugin.gd` and `dock.gd` call `root.bake()`, `root.begin_drag()`, etc. without change.
+`LevelRoot` preserves the public level API used by `plugin.gd` and `dock.gd` (`root.bake()`, `root.begin_drag()`, and similar operations). It delegates cohesive behavior to subsystems while retaining container ownership, exported settings, signals, runtime lifecycle, and cross-system coordination; its methods are therefore not uniformly one-line delegates.
 
-`plugin.gd`'s `_forward_3d_gui_input()` is a ~50-line dispatcher that routes to focused handlers: `_handle_paint_input()`, `_handle_keyboard_input()`, `_handle_rmb_cancel()`, `_handle_select_mouse()`, `_handle_extrude_mouse()`, `_handle_draw_mouse()`, `_handle_mouse_motion()`. A shared `_get_nudge_direction()` helper is used by both `_forward_3d_gui_input()` and `_shortcut_input()`.
+`plugin.gd`'s `_forward_3d_gui_input()` is a two-line boundary that delegates viewport arbitration to `HFPluginViewportInput.handle()`. That module coordinates the focused paint, keyboard, RMB, selection, extrude, draw, motion, vertex, and external-tool paths. Other `plugin_*.gd` modules similarly own selection state, commands, HUD state, overlays, edit actions, and viewport drops.
 
 ## Input State Machine
 
@@ -465,7 +469,7 @@ External tools expose `get_settings_schema()` → Array of `{name, type, label, 
 - Shader-based editor grid with follow mode.
 - Grouping shortcuts: Ctrl+G (group selection), Ctrl+U (ungroup).
 - Brush operations: Ctrl+H (hollow), Shift+X (clip), Ctrl+Shift+F (floor), Ctrl+Shift+C (ceiling).
-- Direct typed calls between plugin/dock/LevelRoot (no duck-typing).
+- Typed `LevelRoot` and dock references at the stable coordinator boundary. Focused static `plugin_*.gd` adapters deliberately receive the EditorPlugin as `Object`; compatibility integrations and undo/redo method-name dispatch are also explicit dynamic boundaries.
 - O(1) brush ID lookup and brush count via `_brush_cache` / `_brush_count` in `HFBrushSystem`.
 - Material instance caching in `HFBrushSystem` (composite key: operation/solid/unshaded).
 - Persistent cordon `ImmediateMesh` reused via `clear_surfaces()` (no per-call allocation).
@@ -508,6 +512,6 @@ Unit tests use the [GUT](https://github.com/bitwes/Gut) framework and run headle
 | `test_selection_gesture.gd` | 38 | Native widget/Object Select ownership, modal Face Select, recovery, focus/scope guards, native duplicate/reparent repair, and Inspector/undo change tracking |
 | `test_viewport_outlines.gd` | 39 | Sparse semantic outlines, exact/composite entity collision, visibility/transforms, and shape-aware resize recovery |
 
-Full suite (verified in CI on September 2, 2026): **1,790 tests** across **104 scripts** (**1,783 passing** plus seven intentional no-assert safety tests; **7,855 assertions**).
+Full suite (verified in CI on September 3, 2026): **1,895 tests** across **111 scripts** (**1,888 passing** plus seven intentional no-assert safety tests; **8,222 assertions**).
 
 Tests use root shim scripts (dynamically created GDScript) to provide the LevelRoot interface without circular preload dependencies. Configuration in `.gutconfig.json`.

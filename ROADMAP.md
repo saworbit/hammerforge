@@ -433,7 +433,6 @@ Currently applied to two `HFBrushSystem` methods as demonstration. Roughly 300 i
 
 ### Performance enhancements (Phase 4) — needs profiling first
 - **Mesh pooling**: `SubtractPreview`, bake preview, extrude preview, and now Carve/Clip/Hollow previews all create/destroy `MeshInstance3D` nodes frequently. A shared pool with `acquire()`/`release()` could reduce GC pressure. Needs profiling to confirm allocation hotspots.
-- **Preload graph audit**: `level_root.gd` preloads 54 system types upfront. As new systems land, circular-preload risks grow. Move non-critical paths (UI panels, map adapters) to string-based `load()`.
 
 ## Out of Scope (for now)
 - Real-time CSG of full scenes.
