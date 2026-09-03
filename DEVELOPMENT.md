@@ -361,6 +361,8 @@ Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framewor
 | `test_bevel.gd` | 15 | Face inset (basic, height extrude, collapse guard, material inheritance, connecting sides winding), edge bevel (basic, segments, neighbor update, small radius, material inheritance), slerp utility (endpoints, midpoint, parallel, anti-parallel, quarter turn) |
 | `test_occluder_generation.gd` | 13 | Occluder generation: flat mesh, chunked hierarchy (BakedChunk_* nodes), coplanar merge across chunks, plane separation, min-area filtering, idempotent re-generation, postprocess toggle (enabled/disabled), validation coverage + missing-occluder warnings |
 | `test_paint_hot_paths.gd` | 39 | `SurfacePaint.paint_at_uv` (write-through, falloff, accumulation, erase, edge clamping, layer creation), `FaceData.get_painted_albedo` (blend modes, opacity, layer stacking, resize, non-RGBA8 sources, cache hits and invalidation), and `HFPaintTool._apply_terrain_brush` (raise/lower/smooth/flatten, falloff, wrapping, clamping, dirty chunks) |
+| `test_material_atlas_pbr.gd` | 32 | PBR slot packing (normal/roughness/metallic/emission), flat tiles for materials without a map, settings carried onto the atlas material, every skip reason, shared layout across channel atlases, resampling, and non-RGBA8 sources |
+| `test_hf_log.gd` | 6 | Warning capture and suppression, buffer lifetime, copy-on-read, and warning outside a capture (no spurious engine error) |
 
 Run all tests:
 ```
@@ -377,6 +379,12 @@ Measure the paint hot paths (per-texel access costs, cold-vs-cached face composi
 ```
 godot --headless -s res://tools/benchmark_paint_hot_paths.gd --path .
 godot --headless -s res://tools/benchmark_paint_hot_paths.gd --path . -- --size=512 --repeats=5
+```
+
+Measure material atlasing (gutter fill, and `build_atlas()` with and without PBR slots):
+```
+godot --headless -s res://tools/benchmark_bake_atlas.gd --path .
+godot --headless -s res://tools/benchmark_bake_atlas.gd --path . -- --tiles=32 --size=256
 ```
 
 Run it before and after any paint performance change and put the numbers in the PR. Note that on Godot 4.7

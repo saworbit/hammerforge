@@ -34,7 +34,13 @@ static func get_captured_warnings() -> Array:
 
 
 static func _capture_warning(message: String) -> void:
-	var captured = Engine.get_meta(CAPTURED_WARNINGS_META, null)
+	# Check has_meta first: Object.get_meta() only honours its default when that
+	# default is not null, and otherwise raises "Method/function failed". Outside
+	# a test capture the key is absent, so passing null here made every warning
+	# print a bogus engine error alongside it.
+	if not Engine.has_meta(CAPTURED_WARNINGS_META):
+		return
+	var captured = Engine.get_meta(CAPTURED_WARNINGS_META)
 	if captured is Array:
 		captured.append(message)
 		Engine.set_meta(CAPTURED_WARNINGS_META, captured)
