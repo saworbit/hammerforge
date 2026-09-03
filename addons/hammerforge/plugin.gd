@@ -10,6 +10,7 @@ const HFPluginViewportInput = preload("plugin_viewport_input.gd")
 const HFPluginOverlays = preload("plugin_overlays.gd")
 const HFPluginPaintInput = preload("plugin_paint_input.gd")
 const HFPluginPointerTools = preload("plugin_pointer_tools.gd")
+const HFPluginSelectionInput = preload("plugin_selection_input.gd")
 const HFPathToolType = preload("hf_path_tool.gd")
 const HFSelectionGestureType = preload("hf_selection_gesture.gd")
 const HFBrushChangeTrackerType = preload("hf_brush_change_tracker.gd")
@@ -1241,82 +1242,11 @@ func _handle_select_mouse(
 	pos: Vector2,
 	paint_mode: bool,
 ) -> int:
-	if not event.pressed:
-		# Releases for owned Select gestures are routed before all other tools.
-		return EditorPlugin.AFTER_GUI_INPUT_PASS
-	var face_select := dock.is_face_select_mode_enabled()
-	# Alt+LMB belongs to Godot's alternate navigation/transform schemes.
-	if event.alt_pressed or Input.is_key_pressed(KEY_ALT):
-		_cancel_selection_gesture()
-		return EditorPlugin.AFTER_GUI_INPUT_PASS
-	var active_mat = dock.get_active_material()
-	if not face_select and paint_mode and active_mat:
-		var painted = root.pick_brush(cam, pos, false)
-		if painted:
-			_paint_brush_with_undo(root, painted, active_mat)
-			return EditorPlugin.AFTER_GUI_INPUT_STOP
-
-	var shift_selection := event.shift_pressed or Input.is_key_pressed(KEY_SHIFT)
-	# Object Select is deliberately native: Shift keeps Godot's own additive /
-	# active-selection semantics, while Ctrl/Cmd remain available to the editor's
-	# configured transform and navigation behavior. Face Select is HammerForge's
-	# custom domain, so Ctrl/Cmd can safely mean toggle there.
-	var toggle := (
-		face_select
-		and (
-			event.ctrl_pressed
-			or event.meta_pressed
-			or Input.is_key_pressed(KEY_CTRL)
-			or Input.is_key_pressed(KEY_META)
-		)
-	)
-	var additive := shift_selection or toggle
-	var selection_at_press := _current_selection_nodes()
-	var native_selection_present := _selection_contains_native_node(selection_at_press, root)
-
-	# Godot already owns exact hit-testing for its transform gizmo, every
-	# built-in property gizmo, and object-region selection. Filled brush gizmo
-	# triangles make every Object Select press native too, eliminating ambiguous
-	# overlaps between a brush surface, marquee origin, and opaque editor widget.
-	# Face Select remains custom only while the visible selection is HF-owned.
-	var pass_to_native := not face_select or native_selection_present
-	if pass_to_native:
-		_begin_native_selection_session(selection_at_press, additive, toggle)
-		_selection_gesture.begin(
-			pos, additive, toggle, face_select, false, false, true, selection_at_press, true
-		)
-		root.clear_hover()
-		return EditorPlugin.AFTER_GUI_INPUT_PASS
-
-	# Face Select retains HammerForge's visible-face click/marquee behavior while
-	# CUSTOM forwarding keeps transform and custom gizmos in Godot's pipeline.
-	var allow_marquee := face_select
-	var allow_click := true
-	var may_be_native_gizmo := face_select and not selection_at_press.is_empty()
-	_marquee_overlay_origin = pos
-	_selection_gesture.begin(
-		pos,
-		additive,
-		toggle,
-		face_select,
-		allow_marquee,
-		allow_click,
-		false,
-		selection_at_press,
-		may_be_native_gizmo
-	)
-	root.clear_hover()
-	# CUSTOM suppresses Godot's competing node/region selection but still lets
-	# its custom and transform gizmos inspect face-selection presses.
-	return EditorPlugin.AFTER_GUI_INPUT_CUSTOM
+	return HFPluginSelectionInput.handle_press(self, event, root, cam, pos, paint_mode)
 
 
-## CUSTOM lets Godot finish transform/property/custom gizmos while suppressing
-## only its competing node selection. Object selection is fully native.
 static func custom_selection_release_result(face_selection: bool) -> int:
-	return (
-		EditorPlugin.AFTER_GUI_INPUT_CUSTOM if face_selection else EditorPlugin.AFTER_GUI_INPUT_PASS
-	)
+	return HFPluginSelectionInput.custom_release_result(face_selection)
 
 
 func _selection_contains_native_node(nodes: Array, root: Node) -> bool:
@@ -1335,107 +1265,7 @@ func _selection_contains_native_node(nodes: Array, root: Node) -> bool:
 func _handle_active_selection_input(
 	event: InputEvent, root: Node, cam: Camera3D, pos: Vector2
 ) -> int:
-	if not _selection_gesture or not _selection_gesture.is_active():
-		return SELECT_INPUT_CONTINUE
-	# A native transform/property gizmo owns the complete interaction, not just
-	# mouse motion. Let Godot see every key while that ownership is active or
-	# still opaque; otherwise Delete/Nudge/tool shortcuts can mutate the object
-	# underneath its unfinished drag. Escape also clears only our bookkeeping so
-	# Godot can perform the authoritative cancel.
-	if event is InputEventKey and _selection_gesture.should_yield_cancel_to_native():
-		if event.pressed and event.keycode == KEY_ESCAPE:
-			_cancel_selection_gesture()
-		return EditorPlugin.AFTER_GUI_INPUT_PASS
-	if event is InputEventMouseMotion:
-		var motion := event as InputEventMouseMotion
-		var decision := _selection_gesture.update_motion(
-			pos, motion.button_mask & MOUSE_BUTTON_MASK_LEFT != 0, SELECT_DRAG_THRESHOLD
-		)
-		match decision:
-			HFSelectionGestureType.MotionDecision.RECOVERED:
-				_cancel_selection_gesture()
-				_queue_managed_brush_reconcile()
-				return EditorPlugin.AFTER_GUI_INPUT_PASS
-			HFSelectionGestureType.MotionDecision.NATIVE_GIZMO:
-				_update_marquee_overlay(Vector2.ZERO, Vector2.ZERO, false)
-				return EditorPlugin.AFTER_GUI_INPUT_PASS
-			HFSelectionGestureType.MotionDecision.DRAW_MARQUEE:
-				root.clear_hover()
-				_update_marquee_overlay(_marquee_overlay_origin, pos, true)
-				return EditorPlugin.AFTER_GUI_INPUT_CUSTOM
-			_:
-				root.clear_hover()
-				return (
-					EditorPlugin.AFTER_GUI_INPUT_PASS
-					if _selection_gesture.native_passthrough
-					else EditorPlugin.AFTER_GUI_INPUT_CUSTOM
-				)
-	if not (event is InputEventMouseButton):
-		return SELECT_INPUT_CONTINUE
-	var button := event as InputEventMouseButton
-	if button.button_index == MOUSE_BUTTON_RIGHT and button.pressed:
-		var yield_cancel := _selection_gesture.should_yield_cancel_to_native()
-		_cancel_selection_gesture()
-		return (
-			EditorPlugin.AFTER_GUI_INPUT_PASS if yield_cancel else EditorPlugin.AFTER_GUI_INPUT_STOP
-		)
-	if button.button_index != MOUSE_BUTTON_LEFT or button.pressed:
-		return SELECT_INPUT_CONTINUE
-	if button.canceled:
-		var yield_cancel := _selection_gesture.should_yield_cancel_to_native()
-		_cancel_selection_gesture()
-		return (
-			EditorPlugin.AFTER_GUI_INPUT_PASS if yield_cancel else EditorPlugin.AFTER_GUI_INPUT_STOP
-		)
-	var native_session := _native_selection_active
-	var native_before := _native_selection_before.duplicate()
-	var native_additive := _native_selection_additive
-	var native_toggle := _native_selection_toggle
-	var result := _selection_gesture.finish(pos, SELECT_DRAG_THRESHOLD)
-	_reset_native_selection_session()
-	_update_marquee_overlay(Vector2.ZERO, Vector2.ZERO, false)
-	var release_decision := int(
-		result.get("decision", HFSelectionGestureType.ReleaseDecision.PASS_THROUGH)
-	)
-	if (
-		release_decision
-		in [
-			HFSelectionGestureType.ReleaseDecision.NATIVE_GIZMO,
-			HFSelectionGestureType.ReleaseDecision.PASS_THROUGH,
-		]
-	):
-		if native_session:
-			_queue_managed_brush_reconcile()
-			call_deferred(
-				"_finalize_native_selection", native_before, native_additive, native_toggle
-			)
-		return EditorPlugin.AFTER_GUI_INPUT_PASS
-	match release_decision:
-		HFSelectionGestureType.ReleaseDecision.MARQUEE:
-			if not bool(result.get("face_select", false)):
-				return EditorPlugin.AFTER_GUI_INPUT_PASS
-			_select_faces_in_rect(
-				root,
-				cam,
-				result.get("origin", pos),
-				pos,
-				bool(result.get("additive", false)),
-				bool(result.get("toggle", false))
-			)
-			# CUSTOM keeps native gizmo release/commit handling alive while
-			# still blocking Godot's competing node-region selection.
-			return custom_selection_release_result(true)
-		HFSelectionGestureType.ReleaseDecision.CLICK:
-			if not bool(result.get("face_select", false)):
-				return EditorPlugin.AFTER_GUI_INPUT_PASS
-			root.select_face_at_screen(
-				cam,
-				result.get("origin", pos),
-				bool(result.get("additive", false)),
-				bool(result.get("toggle", false))
-			)
-			return custom_selection_release_result(true)
-	return EditorPlugin.AFTER_GUI_INPUT_PASS
+	return HFPluginSelectionInput.handle_active(self, event, root, cam, pos)
 
 
 func _handle_extrude_mouse(
@@ -2284,57 +2114,11 @@ func _pick_face_material(root: Node) -> void:
 func _select_faces_in_rect(
 	root: Node, camera: Camera3D, from: Vector2, to: Vector2, additive: bool, toggle: bool = false
 ) -> void:
-	if not root or not camera:
-		return
-	var rect = Rect2(from, to - from).abs()
-	var face_sel: Dictionary = {} if not additive else root.face_selection.duplicate(true)
-	var nodes: Array = root._iter_pick_nodes() if root.has_method("_iter_pick_nodes") else []
-	for node in nodes:
-		if not (node is DraftBrush):
-			continue
-		var brush := node as DraftBrush
-		# Match the canonical click picker: tied brush-entity geometry and hidden
-		# candidates are not editable as standalone faces.
-		if not root.is_brush_node(brush) or not brush.is_visible_in_tree():
-			continue
-		var faces: Array = brush.get_faces() if brush.has_method("get_faces") else []
-		var key: String = _face_key_for(brush)
-		var indices: Array = face_sel.get(key, []).duplicate() if additive else []
-		for i in range(faces.size()):
-			var face = faces[i]
-			if not face:
-				continue
-			var center := _face_screen_center(camera, brush, face)
-			if center == Vector2(-1, -1) or not rect.has_point(center):
-				continue
-			# Projected centers alone select backfaces and faces hidden behind other
-			# brushes. Reuse the exact depth-aware picker at that screen point and
-			# accept only the face that is actually visible to the camera.
-			var visible_hit: Dictionary = root.pick_face(camera, center)
-			if visible_hit.get("brush") != brush or int(visible_hit.get("face_idx", -1)) != i:
-				continue
-			if additive and toggle and indices.has(i):
-				indices.erase(i)
-			elif not indices.has(i):
-				indices.append(i)
-		if not indices.is_empty():
-			face_sel[key] = indices
-		else:
-			face_sel.erase(key)
-	_apply_face_selection(root, face_sel)
+	HFPluginSelectionInput.select_faces_in_rect(self, root, camera, from, to, additive, toggle)
 
 
 func _face_screen_center(camera: Camera3D, brush: DraftBrush, face) -> Vector2:
-	if face.local_verts.is_empty():
-		return Vector2(-1, -1)
-	var center := Vector3.ZERO
-	for v in face.local_verts:
-		center += v
-	center /= float(face.local_verts.size())
-	var world_pos: Vector3 = brush.global_transform * center
-	if camera.is_position_behind(world_pos):
-		return Vector2(-1, -1)
-	return camera.unproject_position(world_pos)
+	return HFPluginSelectionInput.face_screen_center(camera, brush, face)
 
 
 func _face_key_for(brush: DraftBrush) -> String:

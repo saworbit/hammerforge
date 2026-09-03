@@ -14,7 +14,7 @@ This guide is for contributors implementing or extending the MVP.
 
 HammerForge uses a **coordinator + subsystems** pattern:
 
-- **`plugin.gd`** coordinates editor integration and routes to `LevelRoot`. Viewport arbitration, native RMB ownership, paint/draw/extrude pointer handling, keyboard dispatch, vertex input, HUD state, commands, quick properties, and coach marks delegate to focused `plugin_*.gd` modules. It retains sticky `active_root` discovery with deep recursive tree search.
+- **`plugin.gd`** coordinates editor integration and routes to `LevelRoot`. Viewport arbitration, native RMB ownership, native object/Face Select pointer handling, paint/draw/extrude pointer handling, keyboard dispatch, vertex input, HUD state, commands, quick properties, and coach marks delegate to focused `plugin_*.gd` modules. It retains sticky `active_root` discovery with deep recursive tree search.
 - **`level_root.gd`** is a 2,851-line coordinator that owns containers, exports, and signals. Public methods delegate to subsystem classes; continued decomposition is tracked in the roadmap. Default UX is Draw → material → entity → bake → Test Level; power-user overlays are opt-in.
 - **Subsystems** (`systems/*.gd`) are `RefCounted` classes that do the real work. Each receives a `LevelRoot` reference in its constructor.
 - **Runtime boundary**: `LevelRoot` eagerly initializes only brush, entity, bake, paint, and file systems in export templates. Editor-only systems are loaded dynamically when `Engine.is_editor_hint()` or the `editor` feature is present, keeping the authoring graph out of exported games while preserving headless editor tests.
