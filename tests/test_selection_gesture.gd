@@ -478,13 +478,16 @@ func test_face_select_is_modal_and_hides_ambiguous_object_gizmos() -> void:
 	assert_true(handler.contains("dock.paint_mode.set_pressed_no_signal(false)"))
 	assert_true(handler.contains("_deactivate_external_tool()"))
 
-	var sync_start := plugin_source.find("func _on_editor_selection_changed")
-	var sync_end := plugin_source.find("func should_handle_editor_object", sync_start)
-	var sync_block := plugin_source.substr(sync_start, sync_end - sync_start)
+	var state_source := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_selection_state.gd"
+	)
+	var sync_start := state_source.find("static func on_editor_selection_changed")
+	var sync_end := state_source.find("static func finalize_native_selection", sync_start)
+	var sync_block := state_source.substr(sync_start, sync_end - sync_start)
 	assert_true(sync_block.contains("dock.face_select_mode.set_pressed_no_signal(false)"))
 	assert_true(sync_block.contains("Face Select closed for object editing"))
 	assert_true(sync_block.contains("_prepare_tool_transition(root, false)"))
-	assert_true(sync_block.contains("_expand_native_group_selection"))
+	assert_true(sync_block.contains("expand_native_group_selection"))
 
 	var forward := FileAccess.get_file_as_string(
 		"res://addons/hammerforge/plugin_viewport_input.gd"
@@ -587,6 +590,9 @@ func test_shortcut_scope_separates_native_hammerforge_and_mixed_selection() -> v
 
 func test_managed_shortcuts_share_the_native_and_mixed_selection_guard() -> void:
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
+	var state_source := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_selection_state.gd"
+	)
 	var keyboard := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_input_router.gd")
 	assert_true(source.contains("HFPluginInputRouter.handle_keyboard"))
 	for action in [
@@ -605,7 +611,7 @@ func test_managed_shortcuts_share_the_native_and_mixed_selection_guard() -> void
 		"save_prefab_guard",
 	]:
 		assert_true(keyboard.contains(action), "%s must be ownership-gated" % action)
-	assert_true(source.contains("Edit HammerForge and Godot nodes separately"))
+	assert_true(state_source.contains("Edit HammerForge and Godot nodes separately"))
 
 	var shortcut_start := source.find("func _shortcut_input")
 	var shortcut_end := source.find("func _cancel_escape_step", shortcut_start)
@@ -800,16 +806,46 @@ func test_native_marquee_expands_and_toggles_groups_as_units() -> void:
 		"Equal member counts can still represent a native member replacement",
 	)
 
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
-	var finalize_start := source.find("func _finalize_native_selection")
-	var finalize_end := source.find("func _normalize_editor_selection", finalize_start)
+	var source := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_selection_state.gd"
+	)
+	var finalize_start := source.find("static func finalize_native_selection")
+	var finalize_end := source.find("static func normalize_editor_selection", finalize_start)
 	var finalize_block := source.substr(finalize_start, finalize_end - finalize_start)
 	assert_true(finalize_block.contains("toggle or additive"))
-	var sync_start := source.find("func _on_editor_selection_changed")
-	var sync_end := source.find("func should_handle_editor_object", sync_start)
+	var sync_start := source.find("static func on_editor_selection_changed")
+	var sync_end := source.find("static func finalize_native_selection", sync_start)
 	var sync_block := source.substr(sync_start, sync_end - sync_start)
-	assert_true(sync_block.contains("_normalize_editor_selection(nodes, root)"))
-	assert_true(sync_block.contains("_expand_native_group_selection"))
+	assert_true(sync_block.contains("normalize_editor_selection(plugin, nodes, root)"))
+	assert_true(sync_block.contains("expand_native_group_selection"))
+	assert_true(sync_block.contains("dock.set_selection_nodes(plugin.hf_selection)"))
+	assert_true(sync_block.contains("root.vertex_system.set_selection(brushes)"))
+
+
+func test_plugin_selection_state_callbacks_are_thin_delegates() -> void:
+	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
+	for method_name in [
+		"on_editor_selection_changed",
+		"finalize_native_selection",
+		"normalize_editor_selection",
+		"normalize_managed_selection_owner",
+		"expand_native_group_selection",
+		"expand_native_group_members",
+		"same_node_selection",
+		"apply_selection_list",
+		"apply_hf_selection",
+		"sync_hf_selection_if_empty",
+		"selection_has_brush",
+		"selection_has_entity",
+		"classify_selection_scope",
+		"guard_hammerforge_shortcut",
+		"managed_surface_action_requirement",
+		"managed_action_surface_allowed",
+		"hammerforge_selection_nodes",
+		"managed_entity_owner",
+		"current_selection_nodes",
+	]:
+		assert_true(source.contains("HFPluginSelectionState.%s" % method_name))
 
 
 func test_group_removal_uses_the_owner_sessions_actual_modifier_intent() -> void:

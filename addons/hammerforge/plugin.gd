@@ -11,6 +11,7 @@ const HFPluginOverlays = preload("plugin_overlays.gd")
 const HFPluginPaintInput = preload("plugin_paint_input.gd")
 const HFPluginPointerTools = preload("plugin_pointer_tools.gd")
 const HFPluginSelectionInput = preload("plugin_selection_input.gd")
+const HFPluginSelectionState = preload("plugin_selection_state.gd")
 const HFPathToolType = preload("hf_path_tool.gd")
 const HFSelectionGestureType = preload("hf_selection_gesture.gd")
 const HFBrushChangeTrackerType = preload("hf_brush_change_tracker.gd")
@@ -496,65 +497,7 @@ func _teardown_power_user_overlays() -> void:
 
 
 func _on_editor_selection_changed() -> void:
-	if _applying_hf_selection:
-		return
-	var selection = get_editor_interface().get_selection()
-	if not selection:
-		return
-	var nodes = selection.get_selected_nodes()
-	var root := active_root if active_root else _get_level_root()
-	var selection_before := _normalize_editor_selection(hf_selection, root)
-	if dock and dock.is_face_select_mode_enabled() and not nodes.is_empty():
-		# Scene-tree/native object selection is an explicit request to leave the
-		# face-edit modal state. Settle any in-flight face marquee/widget ownership
-		# before closing so a lost release cannot apply stale faces afterwards.
-		# Keep the newly selected object; do not restore the snapshot captured when
-		# Face Select was entered.
-		_prepare_tool_transition(root, false)
-		if dock.face_select_mode:
-			dock.face_select_mode.set_pressed_no_signal(false)
-		_face_mode_saved_object_selection.clear()
-		if root and root.has_method("clear_face_selection"):
-			root.clear_face_selection()
-		if dock:
-			dock.show_toast("Face Select closed for object editing", 0)
-	# Scene-tree selection must honor the same managed-owner and visgroup
-	# normalization as viewport selection. Treat removal of any group member as
-	# removal of the complete group, and selection of one as selection of all.
-	var normalized_nodes := _normalize_editor_selection(nodes, root)
-	var remove_group := group_removal_requested(
-		_native_selection_active,
-		_native_selection_additive,
-		_native_selection_toggle,
-		Input.is_key_pressed(KEY_SHIFT),
-		Input.is_key_pressed(KEY_CTRL),
-		Input.is_key_pressed(KEY_META)
-	)
-	var expanded_nodes := _expand_native_group_selection(
-		root, selection_before, normalized_nodes, remove_group
-	)
-	if not _same_node_selection(nodes, expanded_nodes):
-		hf_selection = expanded_nodes
-		_apply_hf_selection(selection)
-		return
-	hf_selection = expanded_nodes
-	if root:
-		# Selection has its own gizmo outline. Clear any hover left under the
-		# click immediately; subsequent motion suppresses hover on selected nodes.
-		root.clear_hover()
-		if root.has_method("set_io_visualizer_selection"):
-			root.call("set_io_visualizer_selection", hf_selection)
-	if dock:
-		dock.set_selection_count(hf_selection.size())
-		dock.set_selection_nodes(hf_selection)
-	# Update vertex system with current brush selection
-	if _vertex_mode:
-		if root and root.vertex_system:
-			var brushes: Array = []
-			for node in hf_selection:
-				if node is DraftBrush:
-					brushes.append(node)
-			root.vertex_system.set_selection(brushes)
+	HFPluginSelectionState.on_editor_selection_changed(self)
 
 
 static func should_handle_editor_object(object: Object) -> bool:
@@ -1548,360 +1491,91 @@ func _cancel_escape_step(root: Node) -> bool:
 ## hit-testing remains authoritative, then map internal visual children back to
 ## their HammerForge owner and apply grouped brushes as one selection unit.
 func _finalize_native_selection(selection_before: Array, additive: bool, toggle: bool) -> void:
-	if not is_inside_tree():
-		return
-	var selection := get_editor_interface().get_selection()
-	if not selection:
-		return
-	var root := active_root if active_root else _get_level_root()
-	var before := _normalize_editor_selection(selection_before, root)
-	var editor_nodes := selection.get_selected_nodes()
-	var current := _normalize_editor_selection(editor_nodes, root)
-	# Native Shift is additive for new hits and removes an already-selected hit.
-	# In the latter case, remove the full visgroup instead of re-adding the member
-	# Godot just removed. Custom Face Select may additionally request toggle.
-	var expanded := _expand_native_group_selection(root, before, current, toggle or additive)
-	if _same_node_selection(editor_nodes, expanded):
-		hf_selection = expanded
-		_on_editor_selection_changed()
-		return
-	hf_selection = expanded
-	_apply_hf_selection(selection)
+	HFPluginSelectionState.finalize_native_selection(self, selection_before, additive, toggle)
 
 
 func _normalize_editor_selection(nodes: Array, root: Node) -> Array:
-	var normalized: Array = []
-	for candidate in nodes:
-		if not is_instance_valid(candidate) or not (candidate is Node):
-			continue
-		var node := _hammerforge_selection_owner(candidate as Node, root)
-		if node and not normalized.has(node):
-			normalized.append(node)
-	return normalized
+	return HFPluginSelectionState.normalize_editor_selection(self, nodes, root)
 
 
 func _hammerforge_selection_owner(node: Node, root: Node) -> Node:
-	return normalize_managed_selection_owner(node, root)
+	return HFPluginSelectionState.normalize_managed_selection_owner(node, root)
 
 
 static func normalize_managed_selection_owner(node: Node, root: Node) -> Node:
-	var current := node
-	var entities_root: Node = root.get("entities_node") as Node if root else null
-	while current:
-		if current is DraftBrush or current is DraftEntityType:
-			return current
-		# is_entity_node() deliberately accepts descendants for interaction tests.
-		# Selection ownership is narrower: climb to the DraftEntity or the direct
-		# managed child used by legacy/custom entity nodes before returning.
-		if (
-			entities_root
-			and current.get_parent() == entities_root
-			and root.has_method("is_entity_node")
-			and root.is_entity_node(current)
-		):
-			return current
-		if current == root:
-			break
-		current = current.get_parent()
-	return node
+	return HFPluginSelectionState.normalize_managed_selection_owner(node, root)
 
 
 func _expand_native_group_selection(
 	root: Node, selection_before: Array, current_selection: Array, toggle: bool
 ) -> Array:
-	if not root or not root.visgroup_system:
-		return current_selection.duplicate()
-	var groups := {}
-	for node in selection_before + current_selection:
-		if not is_instance_valid(node):
-			continue
-		var group_id: String = str(root.visgroup_system.get_group_of(node))
-		if group_id != "" and not groups.has(group_id):
-			groups[group_id] = root.visgroup_system.get_group_members(group_id)
-	return expand_native_group_members(selection_before, current_selection, toggle, groups)
+	return HFPluginSelectionState.expand_native_group_selection(
+		root, selection_before, current_selection, toggle
+	)
 
 
 static func expand_native_group_members(
 	selection_before: Array, current_selection: Array, toggle: bool, groups: Dictionary
 ) -> Array:
-	var result := current_selection.duplicate()
-	for group_id in groups:
-		var members: Array = groups.get(group_id, [])
-		if members.is_empty():
-			continue
-		var before_members: Array = []
-		var current_members: Array = []
-		for member in members:
-			if selection_before.has(member):
-				before_members.append(member)
-			if current_selection.has(member):
-				current_members.append(member)
-		if _same_node_selection(before_members, current_members):
-			continue
-		var removed_member := false
-		for member in before_members:
-			if not current_members.has(member):
-				removed_member = true
-				break
-		if toggle and removed_member:
-			for member in members:
-				result.erase(member)
-		elif not current_members.is_empty():
-			for member in members:
-				if is_instance_valid(member) and not result.has(member):
-					result.append(member)
-	return result
+	return HFPluginSelectionState.expand_native_group_members(
+		selection_before, current_selection, toggle, groups
+	)
 
 
 static func _same_node_selection(first: Array, second: Array) -> bool:
-	if first.size() != second.size():
-		return false
-	for node in first:
-		if not second.has(node):
-			return false
-	return true
+	return HFPluginSelectionState.same_node_selection(first, second)
 
 
 func _apply_selection_list(nodes: Array, additive: bool, toggle: bool = false) -> void:
-	var selection = get_editor_interface().get_selection()
-	if not selection:
-		return
-	if not additive:
-		hf_selection.clear()
-	else:
-		_sync_hf_selection_if_empty()
-	for node in nodes:
-		if not node:
-			continue
-		if additive and toggle and hf_selection.has(node):
-			hf_selection.erase(node)
-		elif not hf_selection.has(node):
-			hf_selection.append(node)
-	_apply_hf_selection(selection)
+	HFPluginSelectionState.apply_selection_list(self, nodes, additive, toggle)
 
 
 func _apply_hf_selection(selection: EditorSelection) -> void:
-	_applying_hf_selection = true
-	selection.clear()
-	for node in hf_selection:
-		if is_instance_valid(node):
-			selection.add_node(node)
-	_applying_hf_selection = false
-	_on_editor_selection_changed()
+	HFPluginSelectionState.apply_hf_selection(self, selection)
 
 
 func _sync_hf_selection_if_empty() -> void:
-	if not hf_selection.is_empty():
-		return
-	var selection = get_editor_interface().get_selection()
-	if selection:
-		hf_selection = selection.get_selected_nodes()
+	HFPluginSelectionState.sync_hf_selection_if_empty(self)
 
 
 func _selection_has_brush(nodes: Array, root: Node) -> bool:
-	if not root:
-		return false
-	for node in nodes:
-		if root.is_brush_node(node):
-			return true
-	return false
+	return HFPluginSelectionState.selection_has_brush(nodes, root)
 
 
 func _selection_has_entity(nodes: Array, root: Node) -> bool:
-	if not root:
-		return false
-	for node in nodes:
-		if root.is_entity_node(node):
-			return true
-	return false
+	return HFPluginSelectionState.selection_has_entity(nodes, root)
 
 
-## Input forwarding is global, but HammerForge edit commands are not. Native
-## selections pass through to Godot; mixed selections are blocked from both
-## command paths because generic duplicate/delete can corrupt managed IDs.
 static func classify_selection_scope(nodes: Array, root: Node) -> int:
-	if nodes.is_empty() or not root:
-		return SelectionScope.EMPTY
-	var has_hammerforge := false
-	var has_native := false
-	for node in nodes:
-		if not is_instance_valid(node) or not (node is Node):
-			has_native = true
-		elif root.is_brush_node(node) or root.is_entity_node(node):
-			has_hammerforge = true
-		else:
-			has_native = true
-	if has_hammerforge and has_native:
-		return SelectionScope.MIXED
-	return SelectionScope.HAMMERFORGE_ONLY if has_hammerforge else SelectionScope.NATIVE_ONLY
+	return HFPluginSelectionState.classify_selection_scope(nodes, root)
 
 
 func _guard_hammerforge_shortcut(
 	root: Node, brushes_only: bool, minimum_count: int, action_label: String
 ) -> int:
-	var nodes := _current_selection_nodes()
-	var scope := classify_selection_scope(nodes, root)
-	if scope in [SelectionScope.EMPTY, SelectionScope.NATIVE_ONLY]:
-		return EditorPlugin.AFTER_GUI_INPUT_PASS
-	if scope == SelectionScope.MIXED:
-		if dock:
-			dock.show_toast("Edit HammerForge and Godot nodes separately", 1)
-		return EditorPlugin.AFTER_GUI_INPUT_STOP
-	if brushes_only:
-		for node in nodes:
-			if not root.is_brush_node(node):
-				if dock:
-					dock.show_toast("%s works on brushes only" % action_label, 1)
-				return EditorPlugin.AFTER_GUI_INPUT_STOP
-	if nodes.size() < minimum_count:
-		if dock:
-			dock.show_toast("%s needs at least %d selected" % [action_label, minimum_count], 1)
-		return EditorPlugin.AFTER_GUI_INPUT_STOP
-	return HF_SHORTCUT_APPLY
+	return HFPluginSelectionState.guard_hammerforge_shortcut(
+		self, root, brushes_only, minimum_count, action_label
+	)
 
 
-## Selection-dependent commands enter through keyboard shortcuts, the context
-## toolbar, the command palette, the viewport menu, and the radial menu. Keep
-## one requirement table so every surface either applies the complete managed
-## selection or applies nothing; a mixed native/HammerForge selection must
-## never be partially edited.
 static func managed_surface_action_requirement(action: String) -> Dictionary:
-	if action in ["delete", "duplicate"]:
-		return {"brushes_only": false, "minimum": 1, "label": action.capitalize()}
-	if action == "group":
-		return {"brushes_only": false, "minimum": 2, "label": "Group"}
-	if action == "ungroup":
-		return {"brushes_only": false, "minimum": 1, "label": "Ungroup"}
-	if action == "merge":
-		return {"brushes_only": true, "minimum": 2, "label": "Merge"}
-	if (
-		action
-		in [
-			"hollow",
-			"clip",
-			"carve",
-			"move_to_floor",
-			"move_to_ceiling",
-			"vertex_edit",
-			"vertex_submode",
-			"edge_submode",
-			"vertex_merge",
-			"vertex_split",
-			"vertex_split_edge",
-			"vertex_clip_convex",
-		]
-	):
-		return {
-			"brushes_only": true,
-			"minimum": 1,
-			"label": action.replace("_", " ").capitalize(),
-		}
-	if (
-		action
-		in ["apply_to_brush", "apply_context_material", "apply_last_texture", "select_similar"]
-	):
-		return {
-			"brushes_only": true,
-			"minimum": 1,
-			"label": action.replace("_", " ").capitalize(),
-			"allow_faces": true,
-		}
-	if (
-		action
-		in [
-			"justify_fit",
-			"justify_center",
-			"justify_left",
-			"justify_right",
-			"justify_top",
-			"justify_bottom",
-		]
-	):
-		return {
-			"brushes_only": true,
-			"minimum": 1,
-			"label": "UV Justify",
-			"allow_faces": true,
-		}
-	if (
-		action
-		in [
-			"quick_save_prefab",
-			"quick_save_linked_prefab",
-			"cycle_variant",
-			"push_to_source",
-			"propagate_prefab",
-			"entity_io",
-			"entity_props",
-			"highlight_connected",
-		]
-	):
-		return {
-			"brushes_only": false,
-			"minimum": 1,
-			"label": action.replace("_", " ").capitalize(),
-		}
-	if action == "selection_filter":
-		# Filters may start from an empty selection, but never from a mixed one.
-		return {"mixed_only": true, "label": "Selection Filters"}
-	return {}
+	return HFPluginSelectionState.managed_surface_action_requirement(action)
 
 
 func _managed_action_surface_allowed(root: Node, action: String) -> bool:
-	var requirement := managed_surface_action_requirement(action)
-	if requirement.is_empty():
-		return true
-	var nodes := _current_selection_nodes()
-	var scope := classify_selection_scope(nodes, root)
-	if scope == SelectionScope.MIXED:
-		if dock:
-			dock.show_toast("Edit HammerForge and Godot nodes separately", 1)
-		return false
-	if bool(requirement.get("mixed_only", false)):
-		return true
-	if bool(requirement.get("allow_faces", false)) and root:
-		var faces = root.get("face_selection")
-		if faces is Dictionary and not faces.is_empty():
-			return true
-	var guard := _guard_hammerforge_shortcut(
-		root,
-		bool(requirement.get("brushes_only", false)),
-		int(requirement.get("minimum", 1)),
-		str(requirement.get("label", "Action"))
-	)
-	if guard == HF_SHORTCUT_APPLY:
-		return true
-	if guard == EditorPlugin.AFTER_GUI_INPUT_PASS and dock:
-		dock.show_toast("Select a HammerForge object first", 1)
-	return false
+	return HFPluginSelectionState.managed_action_surface_allowed(self, root, action)
 
 
 func _hammerforge_selection_nodes(root: Node, brushes_only: bool = false) -> Array:
-	var eligible: Array = []
-	if not root:
-		return eligible
-	for node in _current_selection_nodes():
-		if not is_instance_valid(node) or not (node is Node):
-			continue
-		if root.is_brush_node(node) or (not brushes_only and root.is_entity_node(node)):
-			eligible.append(node)
-	return eligible
+	return HFPluginSelectionState.hammerforge_selection_nodes(self, root, brushes_only)
 
 
 func _managed_entity_owner(root: Node, node: Node) -> Node:
-	if not root or not node or not root.is_entity_node(node):
-		return null
-	var owner := _hammerforge_selection_owner(node, root)
-	return owner if owner is DraftEntityType else null
+	return HFPluginSelectionState.managed_entity_owner(root, node)
 
 
 func _current_selection_nodes() -> Array:
-	if not hf_selection.is_empty():
-		return hf_selection.duplicate()
-	var selection = get_editor_interface().get_selection()
-	if selection:
-		return selection.get_selected_nodes()
-	return []
+	return HFPluginSelectionState.current_selection_nodes(self)
 
 
 func _get_undo_redo() -> EditorUndoRedoManager:
