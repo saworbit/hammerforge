@@ -320,6 +320,30 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - Core characterization tests added for `HFBrushSystem`, `HFPaintSystem`, overlay prefs, and empty baker merge.
 - Docs and `plugin.cfg` updated to match the code. Wave 3 features stay deferred.
 
+## Done (Paint Hot Paths — September 2026)
+Investigation of [#39](https://github.com/saworbit/hammerforge/issues/39). The issue proposed replacing
+`Image.get_pixel()` / `set_pixel()` loops with `PackedByteArray` indexing. Benchmarking on Godot 4.7
+showed the opposite: over 65,536 texels, `get_pixel` costs 2.20 ms against 6.68 ms for four packed byte
+reads, and `set_pixel` costs 1.85 ms against 4.44 ms for four packed byte writes. A packed rewrite of the
+composite measured ~7x slower, so it was not shipped. What landed instead:
+
+- **Composite memoisation**: `FaceData.get_painted_albedo()` caches its result keyed on `max_size`, layer
+  count, and per layer the texture identity/size, blend mode, opacity, and a content hash of the weight
+  image. Hashing a 256x256 weight image costs 0.071 ms against 61.7 ms for the composite. `rebuild_preview()`
+  fires from 27 call sites, including once per surface-paint sample, and previously recomposited every
+  painted face of the brush each time. `invalidate_painted_albedo()` is the escape hatch.
+- **Surface paint crash fix**: `SurfacePaint.paint_at_uv()` called Godot 3's `Image.lock()` / `unlock()`,
+  aborting the function before writing. Every surface paint stroke was silently discarded.
+- **Composite input safety**: the source texture image is copied (and decompressed when VRAM-compressed)
+  before resize, so `Texture2D.get_image()` results are never mutated in place.
+- **`tools/benchmark_paint_hot_paths.gd`**: reproducible measurements for all three areas.
+- 39 new tests in `tests/test_paint_hot_paths.gd`, covering three paths that had none. Suite total: **1,829 tests across 105 files**.
+
+Still open from #39: a sculpt-smooth stamp scales as the brush area. At 256x256 it costs 0.54 ms at
+radius 8 and 2.2 ms at radius 16 (interactive), but 8.8 ms at radius 32 and 35.0 ms at radius 64. Fixing
+the large-radius case needs a different algorithm (separable blur or a dirty-rect pass), not a faster
+per-texel loop.
+
 ## Future (Wave 3 -- Polish)
 - Multiple simultaneous cordons.
 - Multi-tool presets for common workflows.
@@ -352,7 +376,7 @@ Current: 4,318 lines. Largest remaining work is viewport input / overlay ownersh
 - Current: 2,844 lines. Continue only behind focused characterization tests; track the remaining decomposition in [#21](https://github.com/saworbit/hammerforge/issues/21).
 
 ### Risk-focused test gaps
-The current suite covers 1,790 tests across 104 scripts, including the large brush, bake, paint, vertex, baker, brush-instance, and map-I/O systems. Remaining work is concentrated in failure semantics and scale-sensitive paths rather than wholly untested systems:
+The current suite covers 1,829 tests across 105 scripts, including the large brush, bake, paint, vertex, baker, brush-instance, and map-I/O systems. Remaining work is concentrated in failure semantics and scale-sensitive paths rather than wholly untested systems:
 - crash-safe destination replacement and truthful manual-save completion ([#33](https://github.com/saworbit/hammerforge/issues/33), [#51](https://github.com/saworbit/hammerforge/issues/51));
 - quoted `.map` property round-trips ([#32](https://github.com/saworbit/hammerforge/issues/32));
 - non-blocking threaded merge/finalization ([#35](https://github.com/saworbit/hammerforge/issues/35));

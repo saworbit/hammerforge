@@ -22,7 +22,6 @@ func paint_at_uv(
 	var size = img.get_size()
 	var radius_px = int(max(1.0, radius_uv * float(max(size.x, size.y))))
 	var center = Vector2(uv.x * size.x, uv.y * size.y)
-	img.lock()
 	for y in range(int(center.y) - radius_px, int(center.y) + radius_px + 1):
 		if y < 0 or y >= size.y:
 			continue
@@ -39,7 +38,6 @@ func paint_at_uv(
 			var current = img.get_pixel(x, y)
 			var next = clamp(current.r + weight, 0.0, 1.0)
 			img.set_pixel(x, y, Color(next, current.g, current.b, 1.0))
-	img.unlock()
 
 
 func _ensure_layer(face: FaceData, layer_idx: int) -> FaceData.PaintLayer:

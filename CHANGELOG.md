@@ -5,10 +5,14 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Paint hot-path benchmark** (`tools/benchmark_paint_hot_paths.gd`): reports per-texel access costs, cold-vs-cached `FaceData.get_painted_albedo()`, and how a sculpt-smooth stamp scales with brush radius. Run it before and after any paint performance change so the numbers in a PR are reproducible.
+- **Coverage for the paint hot paths** (`tests/test_paint_hot_paths.gd`, 39 cases): `SurfacePaint.paint_at_uv`, `FaceData.get_painted_albedo` (blend modes, opacity, layer stacking, resizing, cache invalidation), and `HFPaintTool._apply_terrain_brush` (raise/lower/smooth/flatten, falloff, wrapping, clamping, dirty chunks). None of these had direct tests before.
 - **Project governance and contributor onboarding:** added `SECURITY.md` (private vulnerability reporting, with level-file parsing, unintended file writes, secret handling, and `HFIORuntime` called out as in-scope) and `CODE_OF_CONDUCT.md` (adapted from Contributor Covenant 2.1). Added GitHub issue forms for bugs and features, a pull request template mirroring the CONTRIBUTING checklist, and Dependabot for GitHub Actions. Open issues are now grouped under milestones and labelled by `area:` matching the dock tabs; README and CONTRIBUTING link to good-first-issue, help-wanted, and Discussions entry points.
 - **Snap-to-perpendicular** (dock **P**): drop the cursor onto the closest point on a brush AABB edge, so offsets stay 90° to that edge.
 
 ### Fixed
+- **Surface painting works again:** `SurfacePaint.paint_at_uv()` called `Image.lock()` / `Image.unlock()`, which are Godot 3 API removed in Godot 4. The call aborted the function before any texel was written, so every surface paint stroke was silently discarded.
+- **Face composites no longer touch the source texture:** `get_painted_albedo()` resized the image returned by `Texture2D.get_image()` in place when it matched no cached entry, and could not read a VRAM-compressed source. It now copies, decompresses when needed, and then resizes.
 - **Playtest exports are complete and playable:** exported scenes include `PlaytestPlayer` at the active spawn pose, keep nested baked mesh/collision and brush I/O nodes through recursive ownership, and preserve source transforms when moving baked trees, entities, and `DefaultSun` under the packed scene root.
 - **MultiMesh bake keeps instance placement:** source transforms are converted into baked-container space, and `TRANSFORM_3D` is selected before instance allocation.
 - **Brush entity I/O participates everywhere:** bake dispatcher detection, exported-scene detection, connection listing, dangling cleanup, and target rename reconciliation all include tied brush entities.
@@ -28,6 +32,7 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 - **History thumbnails skip GPU readback** when the History section is hidden, and new rows append instead of rebuilding the list.
 
 ### Changed
+- **Face paint composites are memoised** ([#39](https://github.com/saworbit/hammerforge/issues/39)): `FaceData.get_painted_albedo()` caches its result against a key covering `max_size`, layer count, each layer's texture identity/size, blend mode, opacity, and a content hash of its weight image. `rebuild_preview()` runs from 27 call sites — including once per surface-paint sample — and previously recomposited every painted face of the brush each time. Measured on Godot 4.7 at 256x256: 61.7 ms cold, 0.077 ms on a cache hit. Call `invalidate_painted_albedo()` after mutating paint layers through any path the key does not cover.
 - **Project documentation matches current `main`:** user-facing tab names, snap modes, playtest export behavior, architecture notes, roadmap priorities, and verified CI totals now agree across the README, guides, spec, and checklists.
 - **Merged-mesh bake uses `WorkerThreadPool`** when `bake_use_thread_pool` is on. Surface grouping/transforms run on a worker; `ArrayMesh` assembly stays on the main thread.
 - **`.hflevel` stringify/hash/compress run on the write thread.** Capture stays on the main thread; unchanged captures skip the disk rewrite once the hash settles.
