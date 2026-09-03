@@ -411,6 +411,8 @@ Current: 3,418 lines. Remaining work is concentrated in other coordinator respon
 - `_handle_vertex_input` now delegates to `plugin_vertex_input.gd` (`HFPluginVertexInput.handle`).
 - `_update_hud_context` and `_update_context_toolbar_state` now delegate to `plugin_hud.gd` (`HFPluginHud`).
 
+Completion is responsibility-based rather than tied to an arbitrary line count. This phase is done when `plugin.gd` owns EditorPlugin lifecycle, composition, LevelRoot discovery, undo-manager wiring, and short high-level coordination; cohesive input, overlay, command, HUD, selection, dialog, and tool behavior lives in focused modules; remaining large workflows are not hidden behind artificial pass-through layers; and boundary tests protect the extracted responsibilities. The current line count is a progress indicator, not an acceptance threshold.
+
 ### Runtime system boundary in level_root.gd (Phase 3a, complete)
 - Export templates eagerly initialize only the brush, entity, bake, paint, and file core needed to load and run levels.
 - Twenty editor-only services are loaded dynamically only when `Engine.is_editor_hint()` or the `editor` feature is present. This keeps drawing, grid, snap, selection, preview, prefab-authoring, validation, undo, displacement, bevel, and related authoring graphs out of exported games.
