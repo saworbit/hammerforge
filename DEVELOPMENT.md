@@ -30,6 +30,7 @@ addons/hammerforge/
   plugin_drop_handler.gd Viewport entity/brush-preset/prefab/material drag-and-drop handling
   plugin_edit_actions.gd Undoable delete/duplicate/nudge/group and brush geometry actions
   plugin_input_router.gd Viewport keymap dispatch (delete/nudge/tools/paint/axis lock)
+  plugin_numeric_input.gd Numeric dimension parsing, draw/extrude preview, and commit
   plugin_viewport_input.gd Viewport input arbitration and native RMB session
   plugin_paint_input.gd Paint and displacement pointer handling
   plugin_pointer_tools.gd Draw, extrude, motion, and prefab hover handling
@@ -266,7 +267,7 @@ addons/hammerforge/
 The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on push and PR to `main`:
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
-- **GUT unit + integration tests** -- 1,895 tests across 111 test scripts (1,888 passing plus seven intentional no-assert safety tests; 8,222 assertions; verified in CI September 3, 2026; runs Godot headless)
+- **GUT unit + integration tests** -- 1,903 tests across 112 test scripts (1,896 passing plus seven intentional no-assert safety tests; 8,253 assertions; verified locally September 3, 2026; runs Godot headless)
 
 Run locally before pushing:
 ```

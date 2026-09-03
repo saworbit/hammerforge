@@ -43,7 +43,7 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | Script | Role |
 |--------|------|
 | `plugin.gd` | EditorPlugin lifecycle, composition, undo wiring, sticky LevelRoot discovery, and high-level coordination |
-| `plugin_*.gd` | Focused viewport input, selection, command, HUD, overlay, edit-action, and drag-and-drop adapters |
+| `plugin_*.gd` | Focused viewport input, numeric dimension entry, selection, command, HUD, overlay, edit-action, and drag-and-drop adapters |
 | `level_root.gd` | Public level facade: containers, exports, signals, runtime setup, coordination, and subsystem delegation |
 | `dock.gd` + `dock.tscn` | UI coordinator (4 tabs: Build, Paint, Objects, Test) with workflows delegated to `dock_*_handler.gd` and `dock_connections.gd` |
 | `ui/collapsible_section.gd` | Reusable `HFCollapsibleSection` toggle-header VBoxContainer |
@@ -354,7 +354,7 @@ Surface paint is a per-face splat system. It updates preview materials and can b
 ```
 Godot editor input and UI
   -> plugin.gd                  (lifecycle, composition, discovery, undo wiring)
-     -> plugin_*.gd             (viewport, selection, commands, HUD, overlays, edits, drops)
+     -> plugin_*.gd             (viewport, numeric entry, selection, commands, HUD, overlays, edits, drops)
      -> HFToolRegistry          (plugin-owned built-in/external tools)
      -> dock.gd
         -> dock_*_handler.gd    (tab workflows, files, visgroups, connections)
@@ -365,7 +365,7 @@ Godot editor input and UI
 
 `LevelRoot` preserves the public level API used by `plugin.gd` and `dock.gd` (`root.bake()`, `root.begin_drag()`, and similar operations). It delegates cohesive behavior to subsystems while retaining container ownership, exported settings, signals, runtime lifecycle, and cross-system coordination; its methods are therefore not uniformly one-line delegates.
 
-`plugin.gd`'s `_forward_3d_gui_input()` is a two-line boundary that delegates viewport arbitration to `HFPluginViewportInput.handle()`. That module coordinates the focused paint, keyboard, RMB, selection, extrude, draw, motion, vertex, and external-tool paths. Other `plugin_*.gd` modules similarly own selection state, commands, HUD state, overlays, edit actions, and viewport drops.
+`plugin.gd`'s `_forward_3d_gui_input()` is a two-line boundary that delegates viewport arbitration to `HFPluginViewportInput.handle()`. That module coordinates the focused paint, keyboard, RMB, selection, extrude, draw, motion, vertex, and external-tool paths. Numeric dimension parsing, live preview, and draw/extrude commit live in `HFPluginNumericInput`. Other `plugin_*.gd` modules similarly own selection state, commands, HUD state, overlays, edit actions, and viewport drops.
 
 ## Input State Machine
 
@@ -512,6 +512,6 @@ Unit tests use the [GUT](https://github.com/bitwes/Gut) framework and run headle
 | `test_selection_gesture.gd` | 38 | Native widget/Object Select ownership, modal Face Select, recovery, focus/scope guards, native duplicate/reparent repair, and Inspector/undo change tracking |
 | `test_viewport_outlines.gd` | 39 | Sparse semantic outlines, exact/composite entity collision, visibility/transforms, and shape-aware resize recovery |
 
-Full suite (verified in CI on September 3, 2026): **1,895 tests** across **111 scripts** (**1,888 passing** plus seven intentional no-assert safety tests; **8,222 assertions**).
+Full suite (verified locally on September 3, 2026): **1,903 tests** across **112 scripts** (**1,896 passing** plus seven intentional no-assert safety tests; **8,253 assertions**).
 
 Tests use root shim scripts (dynamically created GDScript) to provide the LevelRoot interface without circular preload dependencies. Configuration in `.gutconfig.json`.
