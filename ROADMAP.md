@@ -344,6 +344,42 @@ radius 8 and 2.2 ms at radius 16 (interactive), but 8.8 ms at radius 32 and 35.0
 the large-radius case needs a different algorithm (separable blur or a dirty-rect pass), not a faster
 per-texel loop.
 
+## Done (PBR Material Atlasing — September 2026)
+Closes [#24](https://github.com/saworbit/hammerforge/issues/24). `HFMaterialAtlas` only ever inspected
+`albedo_texture`, so a material's normal, roughness, metallic, and emission maps were dropped during a
+bake with **Material Atlas** on.
+
+- **Parallel channel atlases**: each PBR slot that at least one packed material supplies gets its own
+  atlas built over the *same* placements as albedo, so the existing remapped UVs address all of them.
+  Slots nobody uses are skipped entirely and cost nothing.
+- **Flat tiles for non-suppliers**: a material without a map for a slot contributes a constant tile —
+  its own `roughness` / `metallic` scalar written to every colour channel (so it reads the same through
+  any `TextureChannel` selector), a flat tangent-space normal, or its emission tint. Mixing mapped and
+  unmapped materials in one atlas is safe.
+- **Honest refusal instead of silent corruption**: the atlas material holds one multiplier and one
+  channel selector per slot. When suppliers disagree — on `normal_scale`, on `roughness_texture_channel`,
+  on a multiplier that would distort the constant tiles — the slot is recorded in
+  `AtlasResult.skipped_channels` with a reason and left out. Albedo still atlases.
+- **Emission neutrality follows the operator**: Godot's default `EMISSION_OP_ADD` adds the tint to the
+  map, so black is the identity there; `EMISSION_OP_MULTIPLY` needs white. Getting this backwards was
+  caught by a test before it shipped.
+- **Gutter fill rewritten natively**: `blit_rect` / `fill_rect` over the tile's edge rows and columns
+  replaces the per-texel `get_pixel` / `set_pixel` loop — 11x faster on a 128px tile, and it now runs
+  once per atlas rather than once.
+- `tools/benchmark_bake_atlas.gd` keeps both measurements reproducible.
+- **Skips are reported, not just recorded**: every dropped slot also emits an `HFLog.warn()` naming the
+  slot and the reason, so the editor log says what happened. A supplied texture that cannot be read drops
+  the whole slot rather than substituting a flat tile and shipping a bake that looks subtly wrong.
+- **`HFLog.warn()` fixed along the way**: routing skips through it exposed that `_capture_warning()`
+  passed a null default to `Engine.get_meta()`, which fails rather than defaulting. Every warning in the
+  running editor printed "Method/function failed" beside it.
+- 32 new tests in `tests/test_material_atlas_pbr.gd` plus 6 in `tests/test_hf_log.gd`. Suite total:
+  **1,867 tests across 107 files**.
+
+Not covered: `ORMMaterial3D` is still rejected whole (it was never atlased, so nothing regressed).
+Packing it would mean composing occlusion/roughness/metallic into one texture, which needs per-texel
+channel swizzling — the one operation with no native `Image` equivalent.
+
 ## Future (Wave 3 -- Polish)
 - Multiple simultaneous cordons.
 - Multi-tool presets for common workflows.
@@ -376,7 +412,7 @@ Current: 4,318 lines. Largest remaining work is viewport input / overlay ownersh
 - Current: 2,844 lines. Continue only behind focused characterization tests; track the remaining decomposition in [#21](https://github.com/saworbit/hammerforge/issues/21).
 
 ### Risk-focused test gaps
-The current suite covers 1,829 tests across 105 scripts, including the large brush, bake, paint, vertex, baker, brush-instance, and map-I/O systems. Remaining work is concentrated in failure semantics and scale-sensitive paths rather than wholly untested systems:
+The current suite covers 1,867 tests across 107 scripts, including the large brush, bake, paint, vertex, baker, brush-instance, and map-I/O systems. Remaining work is concentrated in failure semantics and scale-sensitive paths rather than wholly untested systems:
 - crash-safe destination replacement and truthful manual-save completion ([#33](https://github.com/saworbit/hammerforge/issues/33), [#51](https://github.com/saworbit/hammerforge/issues/51));
 - quoted `.map` property round-trips ([#32](https://github.com/saworbit/hammerforge/issues/32));
 - non-blocking threaded merge/finalization ([#35](https://github.com/saworbit/hammerforge/issues/35));
