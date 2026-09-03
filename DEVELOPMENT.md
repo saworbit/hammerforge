@@ -29,6 +29,8 @@ addons/hammerforge/
   plugin_commands.gd     Shared toolbar/palette/viewport/radial command dispatch
   plugin_input_router.gd Viewport keymap dispatch (delete/nudge/tools/paint/axis lock)
   plugin_viewport_input.gd Viewport input arbitration and native RMB session
+  plugin_paint_input.gd Paint and displacement pointer handling
+  plugin_pointer_tools.gd Draw, extrude, motion, and prefab hover handling
   plugin_overlays.gd     Quick-property and coach-mark behavior
   plugin_vertex_input.gd Vertex/edge pick, drag, merge, and split dispatch
   plugin_hud.gd          HUD context, mode banner, and context-toolbar state
