@@ -34,6 +34,19 @@ class PaintLayer:
 ## and triangulate() produces a subdivided grid mesh instead of a flat fan.
 var displacement: Resource = null  # HFDisplacementData (avoid preload cycle)
 
+## Memoised result of `get_painted_albedo()`, keyed by the paint inputs.
+##
+## Every `rebuild_preview()` (27 call sites, including one per surface-paint
+## sample) recomposites every painted face of the brush, even the faces that did
+## not change. Building the key hashes each weight image, which on Godot 4.7
+## measures 0.077 ms for 256x256 against 61.7 ms for the composite itself — see
+## `tools/benchmark_paint_hot_paths.gd`.
+##
+## The cost is one retained image per painted face, sized like that face's weight
+## image (256x256 by default). Faces with no paint layers cache nothing.
+var _albedo_cache: Image = null
+var _albedo_cache_key: String = ""
+
 
 func ensure_geometry() -> void:
 	_compute_normal()
@@ -112,10 +125,18 @@ func triangulate() -> Dictionary:
 	return {"verts": tri_verts, "uvs": tri_uvs}
 
 
+## Composites the face's paint layers into a single albedo image.
+##
+## The returned image is cached and shared — treat it as read-only. Both callers
+## (`Baker` and `BrushInstance`) hand it to `ImageTexture.create_from_image()`,
+## which copies.
 func get_painted_albedo(max_size: int = 512) -> Image:
 	var layers: Array = paint_layers
 	if layers.is_empty():
+		_invalidate_albedo_cache()
 		return null
+	if _albedo_cache != null and _albedo_cache_key_for(max_size) == _albedo_cache_key:
+		return _albedo_cache
 	var target_w = 0
 	var target_h = 0
 	for layer in layers:
@@ -129,6 +150,7 @@ func get_painted_albedo(max_size: int = 512) -> Image:
 			target_w = max(target_w, img.get_width())
 			target_h = max(target_h, img.get_height())
 	if target_w <= 0 or target_h <= 0:
+		_invalidate_albedo_cache()
 		return null
 	if max_size > 0:
 		var scale = min(1.0, float(max_size) / float(max(target_w, target_h)))
@@ -147,11 +169,16 @@ func get_painted_albedo(max_size: int = 512) -> Image:
 		if tex_key != "" and tex_cache.has(tex_key):
 			tex_img = tex_cache[tex_key]
 		else:
-			tex_img = layer.texture.get_image()
-			if tex_img.is_empty():
+			var source_img = layer.texture.get_image()
+			if source_img == null or source_img.is_empty():
 				continue
+			# Always copy: get_image() can hand back the texture's live image, and a
+			# compressed format has to be expanded before get_pixel() can read it.
+			tex_img = source_img.duplicate() as Image
+			if tex_img.is_compressed():
+				if tex_img.decompress() != OK:
+					continue
 			if tex_img.get_width() != target_w or tex_img.get_height() != target_h:
-				tex_img = tex_img.duplicate()
 				tex_img.resize(target_w, target_h, Image.INTERPOLATE_LANCZOS)
 			if tex_key != "":
 				tex_cache[tex_key] = tex_img
@@ -160,7 +187,7 @@ func get_painted_albedo(max_size: int = 512) -> Image:
 			layer.ensure_weight_image(Vector2i(target_w, target_h))
 			paint_img = layer.weight_image
 		if paint_img.get_width() != target_w or paint_img.get_height() != target_h:
-			paint_img = paint_img.duplicate()
+			paint_img = paint_img.duplicate() as Image
 			paint_img.resize(target_w, target_h, Image.INTERPOLATE_LANCZOS)
 		for y in range(target_h):
 			for x in range(target_w):
@@ -171,7 +198,55 @@ func get_painted_albedo(max_size: int = 512) -> Image:
 				var tex = tex_img.get_pixel(x, y)
 				var blended = _blend_color(base, tex, w, layer.blend_mode)
 				out.set_pixel(x, y, blended)
+	_albedo_cache = out
+	# Re-key rather than reusing cache_key: the loop above can call
+	# ensure_weight_image() on a texture-only layer, which changes the signature.
+	_albedo_cache_key = _albedo_cache_key_for(max_size)
 	return out
+
+
+## Drops the memoised composite. Call after mutating paint layers outside
+## `get_painted_albedo()`; the key covers the ordinary edits already.
+func invalidate_painted_albedo() -> void:
+	_invalidate_albedo_cache()
+
+
+func _invalidate_albedo_cache() -> void:
+	_albedo_cache = null
+	_albedo_cache_key = ""
+
+
+## Builds a signature for the current paint inputs.
+##
+## Weight images are hashed by content, so any paint stroke misses the cache.
+## Textures are identified by resource path (falling back to instance id) and
+## size rather than content: palette textures are immutable resources, and
+## swapping one assigns a different texture instance. A texture edited in place
+## under the same path is the gap here — call `invalidate_painted_albedo()`.
+func _albedo_cache_key_for(max_size: int) -> String:
+	var parts: PackedStringArray = [str(max_size), str(paint_layers.size())]
+	for layer in paint_layers:
+		if layer == null:
+			parts.append("-")
+			continue
+		var tex_id := "none"
+		if layer.texture:
+			tex_id = layer.texture.resource_path
+			if tex_id == "":
+				tex_id = "id%d" % layer.texture.get_instance_id()
+			tex_id += "@%s" % layer.texture.get_size()
+		var weight_id := "none"
+		if layer.weight_image and not layer.weight_image.is_empty():
+			weight_id = (
+				"%dx%d#%d"
+				% [
+					layer.weight_image.get_width(),
+					layer.weight_image.get_height(),
+					hash(layer.weight_image.get_data())
+				]
+			)
+		parts.append("%s|%s|%d|%.4f" % [tex_id, weight_id, layer.blend_mode, layer.opacity])
+	return "\n".join(parts)
 
 
 func to_dict() -> Dictionary:

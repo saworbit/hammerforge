@@ -360,6 +360,7 @@ Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framewor
 | `test_displacement.gd` | 38 | Displacement data, FaceData triangulation/serialization, create/destroy, painting, power/elevation, noise, and sewing |
 | `test_bevel.gd` | 15 | Face inset (basic, height extrude, collapse guard, material inheritance, connecting sides winding), edge bevel (basic, segments, neighbor update, small radius, material inheritance), slerp utility (endpoints, midpoint, parallel, anti-parallel, quarter turn) |
 | `test_occluder_generation.gd` | 13 | Occluder generation: flat mesh, chunked hierarchy (BakedChunk_* nodes), coplanar merge across chunks, plane separation, min-area filtering, idempotent re-generation, postprocess toggle (enabled/disabled), validation coverage + missing-occluder warnings |
+| `test_paint_hot_paths.gd` | 39 | `SurfacePaint.paint_at_uv` (write-through, falloff, accumulation, erase, edge clamping, layer creation), `FaceData.get_painted_albedo` (blend modes, opacity, layer stacking, resize, non-RGBA8 sources, cache hits and invalidation), and `HFPaintTool._apply_terrain_brush` (raise/lower/smooth/flatten, falloff, wrapping, clamping, dirty chunks) |
 
 Run all tests:
 ```
@@ -371,6 +372,16 @@ Reset user prefs for a repeatable editor smoke run:
 godot --headless -s res://tools/prepare_editor_smoke.gd --path .
 godot --headless -s res://tools/prepare_editor_smoke.gd --path . -- --tutorial-step=1
 ```
+
+Measure the paint hot paths (per-texel access costs, cold-vs-cached face composite, sculpt scaling):
+```
+godot --headless -s res://tools/benchmark_paint_hot_paths.gd --path .
+godot --headless -s res://tools/benchmark_paint_hot_paths.gd --path . -- --size=512 --repeats=5
+```
+
+Run it before and after any paint performance change and put the numbers in the PR. Note that on Godot 4.7
+`Image.get_pixel()` / `set_pixel()` are *faster* than equivalent `PackedByteArray` indexing in GDScript, so
+"rewrite the loop over the raw buffer" is not a reliable optimisation here — measure first.
 
 For editor-only coverage that headless tests cannot exercise, use:
 - `res://samples/hf_editor_smoke_start.tscn`
