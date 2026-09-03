@@ -3,6 +3,38 @@ extends GutTest
 const HFPolygonTool = preload("res://addons/hammerforge/hf_polygon_tool.gd")
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
 
+
+class PlacementRoot:
+	extends Node3D
+
+	var raycast_result: Dictionary = {}
+	var snap_calls := 0
+	var raycast_calls := 0
+
+	func _snap_point(point: Vector3, _exclude_ids: Array = []) -> Vector3:
+		snap_calls += 1
+		return point.snapped(Vector3(4, 4, 4))
+
+	func _raycast(_camera: Camera3D, _mouse_pos: Vector2) -> Dictionary:
+		raycast_calls += 1
+		return raycast_result
+
+
+func test_placement_uses_level_root_snap_and_raycast():
+	var tool = HFPolygonTool.new()
+	var root := PlacementRoot.new()
+	var camera := Camera3D.new()
+	tool.root = root
+	root.raycast_result = {"position": Vector3(3, 7, 9)}
+	assert_eq(tool._snap(Vector3(3, 7, 9)), Vector3(4, 8, 8))
+	assert_eq(tool._raycast_ground(camera, Vector2(20, 30)), Vector3(3, 7, 9))
+	assert_eq(root.snap_calls, 1, "LevelRoot owns the snap settings")
+	assert_eq(root.raycast_calls, 1, "LevelRoot owns visual and physics picking")
+	root.raycast_result = {}
+	assert_null(tool._raycast_ground(camera, Vector2.ZERO), "a shared raycast miss stays a miss")
+	root.free()
+	camera.free()
+
 # ===========================================================================
 # Convexity validation
 # ===========================================================================
