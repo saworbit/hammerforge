@@ -805,9 +805,12 @@ func test_nudge_keys_respect_selection_ownership_before_being_consumed():
 	)
 	assert_true(shortcut_branch.contains("elif nudge_guard == EditorPlugin.AFTER_GUI_INPUT_STOP:"))
 
-	var nudge_start := source.find("func _nudge_selected")
-	var nudge_end := source.find("func _adjust_grid_snap", nudge_start)
-	var nudge_body := source.substr(nudge_start, nudge_end - nudge_start)
+	var edit_source := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_edit_actions.gd"
+	)
+	var nudge_start := edit_source.find("static func nudge_selected")
+	var nudge_end := edit_source.find("static func group_selected", nudge_start)
+	var nudge_body := edit_source.substr(nudge_start, nudge_end - nudge_start)
 	assert_true(nudge_body.contains("root.is_brush_node(node)"))
 	assert_true(nudge_body.contains("root.is_entity_node(node)"))
 	assert_true(nudge_body.contains("entity_paths"))
