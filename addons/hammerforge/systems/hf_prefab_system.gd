@@ -158,8 +158,8 @@ func _untag_nodes(rec: PrefabInstanceRecord) -> void:
 
 
 func _find_brush_by_id(brush_id: String) -> Node3D:
-	if root.brush_system and root.brush_system.has_method("find_brush_by_id"):
-		return root.brush_system.find_brush_by_id(brush_id) as Node3D
+	if root.brush_system and root.brush_system.has_method("find_managed_brush_by_id"):
+		return root.brush_system.find_managed_brush_by_id(brush_id) as Node3D
 	return null
 
 
