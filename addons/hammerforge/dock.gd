@@ -2836,7 +2836,7 @@ func _on_prefab_save_linked_requested(prefab_name: String) -> void:
 			entity_nodes.append(node)
 	if brush_nodes.is_empty() and entity_nodes.is_empty():
 		return
-	var path := level_root.prefab_system.quick_save_prefab(
+	var path: String = level_root.prefab_system.quick_save_prefab(
 		brush_nodes, entity_nodes, prefab_name, true
 	)
 	if path != "" and _prefab_library:

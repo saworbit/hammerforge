@@ -23,32 +23,12 @@ const HFStroke = preload("paint/hf_stroke.gd")
 const HFHeightmapSynth = preload("paint/hf_heightmap_synth.gd")
 const HFAutoConnectorType = preload("paint/hf_auto_connector.gd")
 const HFHeightmapIO = preload("paint/hf_heightmap_io.gd")
-const HFExtrudeToolType = preload("hf_extrude_tool.gd")
 const HFInputStateType = preload("input_state.gd")
-const HFGridSystemType = preload("systems/hf_grid_system.gd")
 const HFEntitySystemType = preload("systems/hf_entity_system.gd")
 const HFBrushSystemType = preload("systems/hf_brush_system.gd")
-const HFDragSystemType = preload("systems/hf_drag_system.gd")
 const HFBakeSystemType = preload("systems/hf_bake_system.gd")
 const HFPaintSystemType = preload("systems/hf_paint_system.gd")
-const HFStateSystemType = preload("systems/hf_state_system.gd")
 const HFFileSystemType = preload("systems/hf_file_system.gd")
-const HFValidationSystemType = preload("systems/hf_validation_system.gd")
-const HFVisgroupSystemType = preload("systems/hf_visgroup_system.gd")
-const HFSnapSystemType = preload("hf_snap_system.gd")
-const HFIOVisualizerType = preload("systems/hf_io_visualizer.gd")
-const HFVertexSystemType = preload("systems/hf_vertex_system.gd")
-const HFCarveSystemType = preload("systems/hf_carve_system.gd")
-const HFSubtractPreviewType = preload("systems/hf_subtract_preview.gd")
-const HFCarvePreviewType = preload("systems/hf_carve_preview.gd")
-const HFClipPreviewType = preload("systems/hf_clip_preview.gd")
-const HFHollowPreviewType = preload("systems/hf_hollow_preview.gd")
-const HFSpawnSystemType = preload("systems/hf_spawn_system.gd")
-const HFPrefabSystemType = preload("systems/hf_prefab_system.gd")
-const HFPrefabOverlayType = preload("ui/hf_prefab_overlay.gd")
-const HFIOPresetsType = preload("systems/hf_io_presets.gd")
-const HFDisplacementSystemType = preload("systems/hf_displacement_system.gd")
-const HFBevelSystemType = preload("systems/hf_bevel_system.gd")
 const HFPrototypeTextures = preload("hf_prototype_textures.gd")
 const HFIORuntime = preload("hf_io_runtime.gd")
 const HFOutlineUtil = preload("hf_outline_util.gd")
@@ -227,31 +207,31 @@ var preview_brush: DraftBrush = null
 # Subsystem instances
 # ---------------------------------------------------------------------------
 
-var grid_system: HFGridSystemType
+var grid_system
 var entity_system: HFEntitySystemType
 var brush_system: HFBrushSystemType
-var drag_system: HFDragSystemType
+var drag_system
 var bake_system: HFBakeSystemType
 var paint_system: HFPaintSystemType
-var state_system: HFStateSystemType
+var state_system
 var file_system: HFFileSystemType
-var validation_system: HFValidationSystemType
-var visgroup_system: HFVisgroupSystemType
-var snap_system: HFSnapSystemType
-var extrude_tool: HFExtrudeToolType
-var io_visualizer: HFIOVisualizerType
-var vertex_system: HFVertexSystemType
-var carve_system: HFCarveSystemType
-var subtract_preview: HFSubtractPreviewType
-var carve_preview: HFCarvePreviewType
-var clip_preview: HFClipPreviewType
-var hollow_preview: HFHollowPreviewType
-var spawn_system: HFSpawnSystemType
-var prefab_system: HFPrefabSystemType
-var prefab_overlay: HFPrefabOverlayType
-var io_presets: HFIOPresetsType
-var displacement_system: HFDisplacementSystemType
-var bevel_system: HFBevelSystemType
+var validation_system
+var visgroup_system
+var snap_system
+var extrude_tool
+var io_visualizer
+var vertex_system
+var carve_system
+var subtract_preview
+var carve_preview
+var clip_preview
+var hollow_preview
+var spawn_system
+var prefab_system
+var prefab_overlay
+var io_presets
+var displacement_system
+var bevel_system
 
 @export var show_subtract_preview: bool = false:
 	set(value):
@@ -514,9 +494,7 @@ func _ready():
 	_setup_baker()
 	_setup_paint_system()
 	_setup_surface_paint()
-	_setup_highlight()
-	# Instantiate subsystems (order matters: grid before drag, brush before bake)
-	grid_system = HFGridSystemType.new(self)
+	# Runtime baking and reload keep this small core. Editor tools are loaded below.
 	entity_system = HFEntitySystemType.new(self)
 	brush_system = HFBrushSystemType.new(self)
 	# Serialized scenes already contain brushes before subsystem construction.
@@ -533,35 +511,12 @@ func _ready():
 		or get_node_or_null("BakedGeometry") != null
 	):
 		tag_full_reconcile()
-	drag_system = HFDragSystemType.new(self)
-	drag_system.input_state.on_force_reset = _on_input_state_force_reset
 	bake_system = HFBakeSystemType.new(self)
 	bake_system.reconcile_baked_containers()
 	paint_system = HFPaintSystemType.new(self)
-	state_system = HFStateSystemType.new(self)
 	file_system = HFFileSystemType.new(self)
-	validation_system = HFValidationSystemType.new(self)
-	visgroup_system = HFVisgroupSystemType.new(self)
-	snap_system = HFSnapSystemType.new(self)
-	extrude_tool = HFExtrudeToolType.new(self)
-	io_visualizer = HFIOVisualizerType.new(self)
-	vertex_system = HFVertexSystemType.new(self)
-	carve_system = HFCarveSystemType.new(self)
-	subtract_preview = HFSubtractPreviewType.new(self)
-	carve_preview = HFCarvePreviewType.new(self)
-	clip_preview = HFClipPreviewType.new(self)
-	hollow_preview = HFHollowPreviewType.new(self)
-	spawn_system = HFSpawnSystemType.new(self)
-	prefab_system = HFPrefabSystemType.new(self)
-	prefab_overlay = HFPrefabOverlayType.new(self)
-	io_presets = HFIOPresetsType.new(self)
-	io_presets.load_presets()
-	displacement_system = HFDisplacementSystemType.new(self)
-	bevel_system = HFBevelSystemType.new(self)
-	if show_subtract_preview:
-		subtract_preview.set_enabled(true)
-	entity_system.load_entity_definitions()
-	grid_system.setup_editor_grid()
+	if _should_initialize_editor_systems():
+		_initialize_editor_systems()
 	if Engine.is_editor_hint():
 		_set_hflevel_autosave_minutes(hflevel_autosave_minutes)
 		_set_hflevel_autosave_enabled(hflevel_autosave_enabled)
@@ -573,6 +528,44 @@ func _ready():
 		_setup_runtime_reload()
 		if auto_spawn_player:
 			call_deferred("_start_playtest")
+
+
+func _should_initialize_editor_systems() -> bool:
+	# Editor binaries keep these available to headless editor tests and tool scripts.
+	# Export templates do not carry the editor feature and skip the whole graph.
+	return Engine.is_editor_hint() or OS.has_feature("editor")
+
+
+func _initialize_editor_systems() -> void:
+	_setup_highlight()
+	grid_system = load("res://addons/hammerforge/systems/hf_grid_system.gd").new(self)
+	drag_system = load("res://addons/hammerforge/systems/hf_drag_system.gd").new(self)
+	drag_system.input_state.on_force_reset = _on_input_state_force_reset
+	state_system = load("res://addons/hammerforge/systems/hf_state_system.gd").new(self)
+	validation_system = load("res://addons/hammerforge/systems/hf_validation_system.gd").new(self)
+	visgroup_system = load("res://addons/hammerforge/systems/hf_visgroup_system.gd").new(self)
+	snap_system = load("res://addons/hammerforge/hf_snap_system.gd").new(self)
+	extrude_tool = load("res://addons/hammerforge/hf_extrude_tool.gd").new(self)
+	io_visualizer = load("res://addons/hammerforge/systems/hf_io_visualizer.gd").new(self)
+	vertex_system = load("res://addons/hammerforge/systems/hf_vertex_system.gd").new(self)
+	carve_system = load("res://addons/hammerforge/systems/hf_carve_system.gd").new(self)
+	subtract_preview = load("res://addons/hammerforge/systems/hf_subtract_preview.gd").new(self)
+	carve_preview = load("res://addons/hammerforge/systems/hf_carve_preview.gd").new(self)
+	clip_preview = load("res://addons/hammerforge/systems/hf_clip_preview.gd").new(self)
+	hollow_preview = load("res://addons/hammerforge/systems/hf_hollow_preview.gd").new(self)
+	spawn_system = load("res://addons/hammerforge/systems/hf_spawn_system.gd").new(self)
+	prefab_system = load("res://addons/hammerforge/systems/hf_prefab_system.gd").new(self)
+	prefab_overlay = load("res://addons/hammerforge/ui/hf_prefab_overlay.gd").new(self)
+	io_presets = load("res://addons/hammerforge/systems/hf_io_presets.gd").new(self)
+	io_presets.load_presets()
+	displacement_system = load("res://addons/hammerforge/systems/hf_displacement_system.gd").new(
+		self
+	)
+	bevel_system = load("res://addons/hammerforge/systems/hf_bevel_system.gd").new(self)
+	if show_subtract_preview:
+		subtract_preview.set_enabled(true)
+	entity_system.load_entity_definitions()
+	grid_system.setup_editor_grid()
 
 
 func _exit_tree() -> void:
@@ -1605,7 +1598,7 @@ func set_alt_pressed(pressed: bool) -> void:
 
 
 func begin_extrude(camera: Camera3D, mouse_pos: Vector2, extrude_direction: int) -> bool:
-	var started := extrude_tool.begin_extrude(camera, mouse_pos, extrude_direction)
+	var started: bool = extrude_tool.begin_extrude(camera, mouse_pos, extrude_direction)
 	if started and drag_system:
 		drag_system.input_state.begin_extrude()
 	return started
@@ -1619,7 +1612,7 @@ func update_extrude(camera: Camera3D, mouse_pos: Vector2) -> void:
 
 
 func end_extrude_info() -> Dictionary:
-	var info := extrude_tool.end_extrude_info()
+	var info: Dictionary = extrude_tool.end_extrude_info()
 	if drag_system:
 		drag_system.input_state.end_extrude()
 	return info
@@ -2610,7 +2603,7 @@ func create_new_level() -> void:
 
 	# Player spawn
 	if spawn_system:
-		var existing := spawn_system.get_active_spawn()
+		var existing: Node3D = spawn_system.get_active_spawn()
 		if not existing:
 			spawn_system.create_default_spawn()
 

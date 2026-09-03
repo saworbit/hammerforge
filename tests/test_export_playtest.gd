@@ -22,6 +22,48 @@ func test_bake_wire_io_defaults_on():
 	assert_true(root.bake_wire_io, "Test Level / regular bake should wire I/O by default")
 
 
+func test_runtime_level_root_skips_editor_only_systems():
+	var runtime_script := GDScript.new()
+	runtime_script.source_code = """
+extends "res://addons/hammerforge/level_root.gd"
+func _should_initialize_editor_systems() -> bool:
+	return false
+"""
+	assert_eq(runtime_script.reload(), OK)
+	var runtime_root = runtime_script.new()
+	runtime_root.auto_spawn_player = false
+	add_child(runtime_root)
+	assert_not_null(runtime_root.brush_system, "runtime baking keeps brush lookup")
+	assert_not_null(runtime_root.entity_system, "runtime baking keeps entity lookup")
+	assert_not_null(runtime_root.bake_system, "runtime baking stays available")
+	assert_not_null(runtime_root.file_system, "runtime reload support stays available")
+	for property_name in [
+		"grid_system",
+		"drag_system",
+		"validation_system",
+		"snap_system",
+		"vertex_system",
+		"io_visualizer",
+		"prefab_overlay",
+	]:
+		assert_null(runtime_root.get(property_name), "%s stays unloaded at runtime" % property_name)
+	runtime_root.free()
+
+
+func test_editor_only_systems_are_loaded_on_demand():
+	var source := FileAccess.get_file_as_string("res://addons/hammerforge/level_root.gd")
+	for path in [
+		"systems/hf_grid_system.gd",
+		"systems/hf_drag_system.gd",
+		"systems/hf_io_visualizer.gd",
+		"systems/hf_vertex_system.gd",
+		"systems/hf_carve_preview.gd",
+		"ui/hf_prefab_overlay.gd",
+	]:
+		assert_false(source.contains('preload("%s")' % path), "%s is not preloaded" % path)
+		assert_true(source.contains('load("res://addons/hammerforge/%s")' % path))
+
+
 func test_export_playtest_scene_empty_level():
 	var path := "user://test_playtest_export.tscn"
 	var success: bool = root.export_playtest_scene(path)
