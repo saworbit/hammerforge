@@ -10,7 +10,7 @@
   <img src="https://img.shields.io/badge/Godot-4.7%2B-478cbf?logo=godot-engine&logoColor=white" alt="Godot 4.7+">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
   <img src="https://img.shields.io/badge/Status-Early%20Alpha-red" alt="Early Alpha">
-  <img src="https://img.shields.io/badge/Tests-1885%20passing-brightgreen" alt="1885 tests passing">
+  <img src="https://img.shields.io/badge/Tests-1888%20passing-brightgreen" alt="1888 tests passing">
   <img src="https://img.shields.io/badge/GDScript-44k%2B%20lines-blueviolet" alt="44k+ lines">
 </p>
 
@@ -375,7 +375,7 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 
 ## Testing
 
-The verified Godot 4.7 CI run on September 3, 2026 contains **1,892 tests across 110 scripts**: **1,885 passing tests**, seven intentional no-assert safety tests, and **8,195 assertions**. All checks run on every push and pull request via GitHub Actions.
+The verified Godot 4.7 CI run on September 3, 2026 contains **1,895 tests across 111 scripts**: **1,888 passing tests**, seven intentional no-assert safety tests, and **8,222 assertions**. All checks run on every push and pull request via GitHub Actions.
 
 ```bash
 # Run all tests headless

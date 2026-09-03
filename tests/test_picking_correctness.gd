@@ -297,9 +297,11 @@ func test_specialized_face_tools_use_the_canonical_visibility_aware_picker() -> 
 	assert_true(picker_block.contains("root.pick_face(cam, pos)"))
 	assert_false(picker_block.contains("FaceSelector.intersect_brushes"))
 
-	var drop_start := plugin_source.find("func _handle_material_drop")
-	var drop_end := plugin_source.find("func _on_context_toolbar_action", drop_start)
-	var drop_block := plugin_source.substr(drop_start, drop_end - drop_start)
+	var drop_source := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_drop_handler.gd"
+	)
+	var drop_start := drop_source.find("static func handle_material_drop")
+	var drop_block := drop_source.substr(drop_start)
 	assert_true(drop_block.contains("root.pick_face(camera, mouse_pos)"))
 	assert_false(drop_block.contains("FaceSelector.intersect_brushes"))
 

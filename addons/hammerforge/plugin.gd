@@ -3,6 +3,7 @@ extends EditorPlugin
 
 const DockType = preload("dock.gd")
 const HFPluginCommands = preload("plugin_commands.gd")
+const HFPluginDropHandler = preload("plugin_drop_handler.gd")
 const HFPluginEditActions = preload("plugin_edit_actions.gd")
 const HFPluginInputRouter = preload("plugin_input_router.gd")
 const HFPluginVertexInput = preload("plugin_vertex_input.gd")
@@ -2024,145 +2025,35 @@ func _carve_selected(root: Node) -> bool:
 
 
 func _can_drop_data(_position: Vector2, data: Variant) -> bool:
-	return (
-		_is_entity_drag_data(data)
-		or _is_brush_preset_drag_data(data)
-		or _is_prefab_drag_data(data)
-		or _is_material_drag_data(data)
-	)
+	return HFPluginDropHandler.can_drop_data(data)
 
 
 func _drop_data(position: Vector2, data: Variant) -> void:
-	if _is_material_drag_data(data):
-		_handle_material_drop(position, data)
-	elif _is_brush_preset_drag_data(data):
-		_handle_brush_preset_drop(position, data)
-	elif _is_prefab_drag_data(data):
-		_handle_prefab_drop(position, data)
-	else:
-		_handle_entity_drop(position, data)
+	HFPluginDropHandler.drop_data(self, position, data)
 
 
 func _is_entity_drag_data(data: Variant) -> bool:
-	return data is Dictionary and str(data.get("type", "")) == "hammerforge_entity"
+	return HFPluginDropHandler.is_entity_drag_data(data)
 
 
 func _handle_entity_drop(position: Vector2, data: Variant) -> void:
-	if not _is_entity_drag_data(data):
-		return
-	var entity_id = str(data.get("entity_id", ""))
-	if entity_id == "":
-		return
-	var root = active_root if active_root else _get_level_root()
-	if not root:
-		root = _create_level_root()
-	if not root:
-		return
-	var camera = last_3d_camera
-	var mouse_pos = position if position != null else last_3d_mouse_pos
-	if camera and root:
-		var entity = root.place_entity_at_screen(camera, mouse_pos, entity_id)
-		if entity:
-			var selection = get_editor_interface().get_selection()
-			if selection:
-				selection.clear()
-				selection.add_node(entity)
-			hf_selection.clear()
-			hf_selection.append(entity)
+	HFPluginDropHandler.handle_entity_drop(self, position, data)
 
 
 func _is_brush_preset_drag_data(data: Variant) -> bool:
-	return data is Dictionary and str(data.get("type", "")) == "hammerforge_brush_preset"
+	return HFPluginDropHandler.is_brush_preset_drag_data(data)
 
 
 func _handle_brush_preset_drop(position: Vector2, data: Variant) -> void:
-	if not _is_brush_preset_drag_data(data):
-		return
-	var preset_path = str(data.get("preset_path", ""))
-	if preset_path == "":
-		return
-	var preset = load(preset_path)
-	if not preset or not (preset is BrushPreset):
-		return
-	var root = active_root if active_root else _get_level_root()
-	if not root:
-		root = _create_level_root()
-	if not root:
-		return
-	var camera = last_3d_camera
-	var mouse_pos = position if position != null else last_3d_mouse_pos
-	if not camera:
-		return
-	var hit = root._raycast(camera, mouse_pos)
-	if hit.is_empty():
-		return
-	var point = root._snap_point(hit.get("position", Vector3.ZERO))
-	var size = preset.size
-	var center = point + Vector3(0, size.y * 0.5, 0)
-	var operation = preset.operation
-	var info = {
-		"shape": preset.shape,
-		"size": size,
-		"center": center,
-		"operation": operation,
-		"pending": operation == CSGShape3D.OPERATION_SUBTRACTION and root.pending_node != null,
-		"brush_id": root._next_brush_id()
-	}
-	if root._shape_uses_sides(preset.shape):
-		info["sides"] = preset.sides
-	var mat = dock.get_active_material() if dock else null
-	if mat:
-		info["material"] = mat
-	_commit_brush_placement(root, info)
+	HFPluginDropHandler.handle_brush_preset_drop(self, position, data)
 
 
 func _is_prefab_drag_data(data: Variant) -> bool:
-	return data is Dictionary and str(data.get("type", "")) == "hammerforge_prefab"
+	return HFPluginDropHandler.is_prefab_drag_data(data)
 
 
 func _handle_prefab_drop(position: Vector2, data: Variant) -> void:
-	if not _is_prefab_drag_data(data):
-		return
-	var prefab_path = str(data.get("path", ""))
-	if prefab_path == "":
-		return
-	var HFPrefabType = preload("res://addons/hammerforge/hf_prefab.gd")
-	var prefab = HFPrefabType.load_from_file(prefab_path)
-	if not prefab:
-		return
-	var root = active_root if active_root else _get_level_root()
-	if not root:
-		root = _create_level_root()
-	if not root:
-		return
-	var camera = last_3d_camera
-	var mouse_pos = position if position != null else last_3d_mouse_pos
-	if not camera:
-		return
-	var hit = root._raycast(camera, mouse_pos)
-	if hit.is_empty():
-		return
-	var point = root._snap_point(hit.get("position", Vector3.ZERO))
-	# Capture state for undo
-	var full_state = root.state_system.capture_state(true)
-	var result = prefab.instantiate(root.brush_system, root.entity_system, root, point)
-	var placed_anything: bool = (
-		not result.get("brush_ids", []).is_empty() or result.get("entity_count", 0) > 0
-	)
-	if placed_anything:
-		# Register prefab instance for tracking/propagation
-		if root.prefab_system:
-			root.prefab_system.register_instance(
-				prefab_path, result.get("brush_ids", []), result.get("entity_nodes", []), false  # not linked by default on drag-drop
-			)
-		var undo_redo = undo_redo_manager
-		if undo_redo:
-			undo_redo.create_action("Place Prefab: %s" % prefab.prefab_name)
-			undo_redo.add_do_method(
-				root.state_system, "restore_state", root.state_system.capture_state(true)
-			)
-			undo_redo.add_undo_method(root.state_system, "restore_state", full_state)
-			undo_redo.commit_action(false)
+	HFPluginDropHandler.handle_prefab_drop(self, position, data)
 
 
 # ---------------------------------------------------------------------------
@@ -2272,48 +2163,11 @@ func _propagate_prefab(root) -> void:
 
 
 func _is_material_drag_data(data: Variant) -> bool:
-	return data is Dictionary and str(data.get("type", "")) == "hammerforge_material"
+	return HFPluginDropHandler.is_material_drag_data(data)
 
 
 func _handle_material_drop(position: Vector2, data: Variant) -> void:
-	if not _is_material_drag_data(data):
-		return
-	var mat_idx: int = int(data.get("index", -1))
-	if mat_idx < 0:
-		return
-	var root = active_root if active_root else _get_level_root()
-	if not root:
-		return
-	var camera = last_3d_camera
-	var mouse_pos = position if position != null else last_3d_mouse_pos
-	if not camera:
-		return
-	# Use the same visibility-aware face picker as Select, Extrude, and Paint.
-	var hit: Dictionary = root.pick_face(camera, mouse_pos)
-	if hit.is_empty():
-		if dock:
-			dock.show_toast("No face under drop position", 1)
-		return
-	var brush: DraftBrush = hit.get("brush") as DraftBrush
-	var face_idx: int = int(hit.get("face_idx", -1))
-	if brush == null or face_idx < 0:
-		return
-	# Apply material to the hit face via undoable action.
-	var brush_key: String = brush.brush_id if brush.brush_id != "" else str(brush.get_instance_id())
-	HFUndoHelper.commit(
-		_get_undo_redo(),
-		root,
-		"Drop Material on Face",
-		"assign_material_to_faces_by_id",
-		[brush_key, [face_idx], mat_idx],
-		false,
-		Callable(self, "_record_history")
-	)
-	if dock:
-		dock._selected_material_index = mat_idx
-		if dock.material_browser:
-			dock.material_browser.set_selected_index(mat_idx)
-		dock.show_toast("Applied material #%d to face" % mat_idx, 0)
+	HFPluginDropHandler.handle_material_drop(self, position, data)
 
 
 # ---------------------------------------------------------------------------
