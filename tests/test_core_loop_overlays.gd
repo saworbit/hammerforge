@@ -36,6 +36,13 @@ func test_overlay_callbacks_delegate_to_the_overlay_module():
 		"on_quick_property_committed",
 		"show_coach_mark_for_action",
 		"show_coach_mark_for_tool_id",
+		"install_power_user_overlays",
+		"teardown_power_user_overlays",
+		"update_vertex_overlay",
+		"ensure_vertex_overlay",
+		"clear_vertex_overlay",
+		"update_marquee_overlay",
+		"draw_marquee_overlay",
 	]:
 		assert_true(source.contains("HFPluginOverlays.%s" % method_name))
 
@@ -45,4 +52,11 @@ func test_overlay_module_is_null_safe():
 	HFPluginOverlays.on_quick_property_committed(null, 0, [])
 	HFPluginOverlays.show_coach_mark_for_action(null, "clip")
 	HFPluginOverlays.show_coach_mark_for_tool_id(null, 100)
+	HFPluginOverlays.install_power_user_overlays(null)
+	HFPluginOverlays.teardown_power_user_overlays(null)
+	HFPluginOverlays.update_vertex_overlay(null, null)
+	HFPluginOverlays.ensure_vertex_overlay(null, null)
+	HFPluginOverlays.clear_vertex_overlay(null)
+	HFPluginOverlays.update_marquee_overlay(null, Vector2.ZERO, Vector2.ZERO, false)
+	HFPluginOverlays.draw_marquee_overlay(null, null)
 	pass_test("Overlay entry points tolerate a missing coordinator")

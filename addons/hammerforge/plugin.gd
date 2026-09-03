@@ -72,10 +72,7 @@ const HFDialogManagerType = preload("plugin_dialogs.gd")
 const HFContextToolbar = preload("ui/hf_context_toolbar.gd")
 const HFHotkeyPalette = preload("ui/hf_hotkey_palette.gd")
 const HFSelectionFilter = preload("ui/hf_selection_filter.gd")
-const HFCoachMarks = preload("ui/hf_coach_marks.gd")
-const HFOperationReplay = preload("ui/hf_operation_replay.gd")
 const HFViewportContextMenu = preload("ui/hf_viewport_context_menu.gd")
-const HFRadialMenu = preload("ui/hf_radial_menu.gd")
 const HFQuickProperty = preload("ui/hf_quick_property.gd")
 const DraftEntityType = preload("draft_entity.gd")
 const IconRes = preload("icon.png")
@@ -491,53 +488,11 @@ func _on_dock_power_user_overlays_changed(enabled: bool) -> void:
 
 
 func _install_power_user_overlays() -> void:
-	if _coach_marks == null:
-		_coach_marks = HFCoachMarks.new()
-		if base_control:
-			_coach_marks.theme = base_control.theme
-		_coach_marks.set_user_prefs(_user_prefs)
-		_coach_marks.guide_dismissed.connect(_on_coach_mark_dismissed)
-		add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, _coach_marks)
-	if _operation_replay == null:
-		_operation_replay = HFOperationReplay.new()
-		if base_control:
-			_operation_replay.theme = base_control.theme
-		_operation_replay.replay_requested.connect(_on_replay_requested)
-		add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, _operation_replay)
-		if dock:
-			dock.set_operation_replay(_operation_replay)
-	if _radial_menu == null:
-		_radial_menu = HFRadialMenu.new()
-		if base_control:
-			_radial_menu.theme = base_control.theme
-		_radial_menu.action_selected.connect(_on_radial_action)
-		add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, _radial_menu)
+	HFPluginOverlays.install_power_user_overlays(self)
 
 
 func _teardown_power_user_overlays() -> void:
-	if _coach_marks:
-		if is_instance_valid(_coach_marks):
-			_coach_marks.guide_dismissed.disconnect(_on_coach_mark_dismissed)
-		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _coach_marks)
-		if is_instance_valid(_coach_marks):
-			_coach_marks.queue_free()
-		_coach_marks = null
-	if _operation_replay:
-		if is_instance_valid(_operation_replay):
-			_operation_replay.replay_requested.disconnect(_on_replay_requested)
-		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _operation_replay)
-		if is_instance_valid(_operation_replay):
-			_operation_replay.queue_free()
-		_operation_replay = null
-		if dock:
-			dock.set_operation_replay(null)
-	if _radial_menu:
-		if is_instance_valid(_radial_menu):
-			_radial_menu.action_selected.disconnect(_on_radial_action)
-		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _radial_menu)
-		if is_instance_valid(_radial_menu):
-			_radial_menu.queue_free()
-		_radial_menu = null
+	HFPluginOverlays.teardown_power_user_overlays(self)
 
 
 func _on_editor_selection_changed() -> void:
@@ -1412,82 +1367,16 @@ func _commit_vertex_move(root: Node, pre_drag_snapshots: Dictionary) -> void:
 	_record_history("Move Vertices")
 
 
-func _update_vertex_overlay(root: Node, cam: Camera3D) -> void:
-	if not _vertex_mode or not root or not root.vertex_system:
-		_clear_vertex_overlay()
-		return
-	var vs = root.vertex_system
-	var vertex_data = vs.get_all_vertex_world_positions()
-	if vertex_data.is_empty():
-		_clear_vertex_overlay()
-		return
-	_ensure_vertex_overlay(root)
-	_vertex_overlay_imesh.clear_surfaces()
-	# Draw edge wireframe
-	var edge_data = vs.get_all_edge_world_positions()
-	if not edge_data.is_empty():
-		_vertex_overlay_imesh.surface_begin(Mesh.PRIMITIVE_LINES)
-		for e in edge_data:
-			var ecolor := Color(0.5, 0.5, 0.5, 0.5)
-			if e.selected:
-				ecolor = Color.ORANGE
-			elif e.hovered:
-				ecolor = Color.YELLOW
-			_vertex_overlay_imesh.surface_set_color(ecolor)
-			_vertex_overlay_imesh.surface_add_vertex(e.a)
-			_vertex_overlay_imesh.surface_set_color(ecolor)
-			_vertex_overlay_imesh.surface_add_vertex(e.b)
-		_vertex_overlay_imesh.surface_end()
-	# Draw vertex crosses
-	_vertex_overlay_imesh.surface_begin(Mesh.PRIMITIVE_LINES)
-	for entry in vertex_data:
-		var pos: Vector3 = entry.pos
-		var color := Color.WHITE
-		if entry.selected:
-			color = Color.ORANGE
-		elif entry.hovered:
-			color = Color.YELLOW
-		# Draw small cross at each vertex
-		var s := 0.4
-		_vertex_overlay_imesh.surface_set_color(color)
-		_vertex_overlay_imesh.surface_add_vertex(pos + Vector3(-s, 0, 0))
-		_vertex_overlay_imesh.surface_set_color(color)
-		_vertex_overlay_imesh.surface_add_vertex(pos + Vector3(s, 0, 0))
-		_vertex_overlay_imesh.surface_set_color(color)
-		_vertex_overlay_imesh.surface_add_vertex(pos + Vector3(0, -s, 0))
-		_vertex_overlay_imesh.surface_set_color(color)
-		_vertex_overlay_imesh.surface_add_vertex(pos + Vector3(0, s, 0))
-		_vertex_overlay_imesh.surface_set_color(color)
-		_vertex_overlay_imesh.surface_add_vertex(pos + Vector3(0, 0, -s))
-		_vertex_overlay_imesh.surface_set_color(color)
-		_vertex_overlay_imesh.surface_add_vertex(pos + Vector3(0, 0, s))
-	_vertex_overlay_imesh.surface_end()
+func _update_vertex_overlay(root: Node, _cam: Camera3D) -> void:
+	HFPluginOverlays.update_vertex_overlay(self, root)
 
 
 func _ensure_vertex_overlay(root: Node) -> void:
-	if _vertex_overlay_mesh and is_instance_valid(_vertex_overlay_mesh):
-		return
-	_vertex_overlay_mesh = MeshInstance3D.new()
-	_vertex_overlay_mesh.name = "_VertexEditOverlay"
-	_vertex_overlay_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var mat = StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.vertex_color_use_as_albedo = true
-	mat.no_depth_test = true
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_vertex_overlay_mesh.material_override = mat
-	_vertex_overlay_imesh = ImmediateMesh.new()
-	_vertex_overlay_mesh.mesh = _vertex_overlay_imesh
-	root.add_child(_vertex_overlay_mesh)
+	HFPluginOverlays.ensure_vertex_overlay(self, root)
 
 
 func _clear_vertex_overlay() -> void:
-	if _vertex_overlay_mesh and is_instance_valid(_vertex_overlay_mesh):
-		if _vertex_overlay_mesh.get_parent():
-			_vertex_overlay_mesh.get_parent().remove_child(_vertex_overlay_mesh)
-		_vertex_overlay_mesh.queue_free()
-		_vertex_overlay_mesh = null
-	_vertex_overlay_imesh = null
+	HFPluginOverlays.clear_vertex_overlay(self)
 
 
 func _shortcut_input(event: InputEvent) -> void:
@@ -2380,26 +2269,13 @@ func _on_selection_filter_applied(nodes: Array, faces: Dictionary) -> void:
 
 
 func _update_marquee_overlay(from: Vector2, to: Vector2, active: bool) -> void:
-	_marquee_overlay_origin = from
-	_marquee_overlay_current = to
-	_marquee_overlay_active = active
-	if is_inside_tree():
-		update_overlays()
+	HFPluginOverlays.update_marquee_overlay(self, from, to, active)
 
 
 ## Draw through Godot's real 3D overlay so viewport-local event coordinates
 ## remain correct under split views, editor scaling, and dock rearrangement.
 func _forward_3d_force_draw_over_viewport(viewport_control: Control) -> void:
-	if not _marquee_overlay_active or not viewport_control:
-		return
-	var local_mouse := viewport_control.get_local_mouse_position()
-	if not Rect2(Vector2.ZERO, viewport_control.size).has_point(local_mouse):
-		return
-	var rect := (
-		Rect2(_marquee_overlay_origin, _marquee_overlay_current - _marquee_overlay_origin).abs()
-	)
-	viewport_control.draw_rect(rect, Color(0.3, 0.6, 1.0, 0.12))
-	viewport_control.draw_rect(rect, Color(0.3, 0.6, 1.0, 0.7), false, 1.5)
+	HFPluginOverlays.draw_marquee_overlay(self, viewport_control)
 
 
 func _add_confirmable_dialog(dlg: ConfirmationDialog) -> void:

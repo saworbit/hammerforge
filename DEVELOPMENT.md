@@ -32,7 +32,7 @@ addons/hammerforge/
   plugin_paint_input.gd Paint and displacement pointer handling
   plugin_pointer_tools.gd Draw, extrude, motion, and prefab hover handling
   plugin_selection_input.gd Native object/Face Select pointer arbitration and face marquee picking
-  plugin_overlays.gd     Quick-property and coach-mark behavior
+  plugin_overlays.gd     Power-user lifecycle, vertex/marquee drawing, quick properties, and coach marks
   plugin_vertex_input.gd Vertex/edge pick, drag, merge, and split dispatch
   plugin_hud.gd          HUD context, mode banner, and context-toolbar state
   level_root.gd          Coordinator (2,844 lines), delegates to subsystems
@@ -262,7 +262,7 @@ addons/hammerforge/
 The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on push and PR to `main`:
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
-- **GUT unit + integration tests** -- 1,790 tests across 104 test scripts (1,783 passing plus seven intentional no-assert safety tests; 7,855 assertions; verified in CI September 2, 2026; runs Godot headless)
+- **GUT unit + integration tests** -- 1,888 tests across 109 test scripts (1,881 passing plus seven intentional no-assert safety tests; 8,140 assertions; verified in CI September 3, 2026; runs Godot headless)
 
 Run locally before pushing:
 ```

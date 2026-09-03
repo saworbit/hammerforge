@@ -1,9 +1,186 @@
 @tool
 class_name HFPluginOverlays
 extends RefCounted
-## Quick-property and coach-mark behavior extracted from plugin.gd.
+## Overlay lifecycle, viewport drawing, quick-property, and coach-mark behavior.
 
 const HFQuickProperty = preload("ui/hf_quick_property.gd")
+const HFCoachMarks = preload("ui/hf_coach_marks.gd")
+const HFOperationReplay = preload("ui/hf_operation_replay.gd")
+const HFRadialMenu = preload("ui/hf_radial_menu.gd")
+
+
+static func install_power_user_overlays(plugin: Object) -> void:
+	if plugin == null:
+		return
+	if plugin._coach_marks == null:
+		plugin._coach_marks = HFCoachMarks.new()
+		if plugin.base_control:
+			plugin._coach_marks.theme = plugin.base_control.theme
+		plugin._coach_marks.set_user_prefs(plugin._user_prefs)
+		plugin._coach_marks.guide_dismissed.connect(plugin._on_coach_mark_dismissed)
+		plugin.add_control_to_container(
+			EditorPlugin.CONTAINER_SPATIAL_EDITOR_MENU, plugin._coach_marks
+		)
+	if plugin._operation_replay == null:
+		plugin._operation_replay = HFOperationReplay.new()
+		if plugin.base_control:
+			plugin._operation_replay.theme = plugin.base_control.theme
+		plugin._operation_replay.replay_requested.connect(plugin._on_replay_requested)
+		plugin.add_control_to_container(
+			EditorPlugin.CONTAINER_SPATIAL_EDITOR_MENU, plugin._operation_replay
+		)
+		if plugin.dock:
+			plugin.dock.set_operation_replay(plugin._operation_replay)
+	if plugin._radial_menu == null:
+		plugin._radial_menu = HFRadialMenu.new()
+		if plugin.base_control:
+			plugin._radial_menu.theme = plugin.base_control.theme
+		plugin._radial_menu.action_selected.connect(plugin._on_radial_action)
+		plugin.add_control_to_container(
+			EditorPlugin.CONTAINER_SPATIAL_EDITOR_MENU, plugin._radial_menu
+		)
+
+
+static func teardown_power_user_overlays(plugin: Object) -> void:
+	if plugin == null:
+		return
+	if plugin._coach_marks:
+		if is_instance_valid(plugin._coach_marks):
+			plugin._coach_marks.guide_dismissed.disconnect(plugin._on_coach_mark_dismissed)
+		plugin.remove_control_from_container(
+			EditorPlugin.CONTAINER_SPATIAL_EDITOR_MENU, plugin._coach_marks
+		)
+		if is_instance_valid(plugin._coach_marks):
+			plugin._coach_marks.queue_free()
+		plugin._coach_marks = null
+	if plugin._operation_replay:
+		if is_instance_valid(plugin._operation_replay):
+			plugin._operation_replay.replay_requested.disconnect(plugin._on_replay_requested)
+		plugin.remove_control_from_container(
+			EditorPlugin.CONTAINER_SPATIAL_EDITOR_MENU, plugin._operation_replay
+		)
+		if is_instance_valid(plugin._operation_replay):
+			plugin._operation_replay.queue_free()
+		plugin._operation_replay = null
+		if plugin.dock:
+			plugin.dock.set_operation_replay(null)
+	if plugin._radial_menu:
+		if is_instance_valid(plugin._radial_menu):
+			plugin._radial_menu.action_selected.disconnect(plugin._on_radial_action)
+		plugin.remove_control_from_container(
+			EditorPlugin.CONTAINER_SPATIAL_EDITOR_MENU, plugin._radial_menu
+		)
+		if is_instance_valid(plugin._radial_menu):
+			plugin._radial_menu.queue_free()
+		plugin._radial_menu = null
+
+
+static func update_vertex_overlay(plugin: Object, root: Node) -> void:
+	if plugin == null:
+		return
+	if not plugin._vertex_mode or not root or not root.vertex_system:
+		clear_vertex_overlay(plugin)
+		return
+	var vertex_system = root.vertex_system
+	var vertex_data = vertex_system.get_all_vertex_world_positions()
+	if vertex_data.is_empty():
+		clear_vertex_overlay(plugin)
+		return
+	ensure_vertex_overlay(plugin, root)
+	plugin._vertex_overlay_imesh.clear_surfaces()
+	var edge_data = vertex_system.get_all_edge_world_positions()
+	if not edge_data.is_empty():
+		plugin._vertex_overlay_imesh.surface_begin(Mesh.PRIMITIVE_LINES)
+		for edge in edge_data:
+			var edge_color := Color(0.5, 0.5, 0.5, 0.5)
+			if edge.selected:
+				edge_color = Color.ORANGE
+			elif edge.hovered:
+				edge_color = Color.YELLOW
+			plugin._vertex_overlay_imesh.surface_set_color(edge_color)
+			plugin._vertex_overlay_imesh.surface_add_vertex(edge.a)
+			plugin._vertex_overlay_imesh.surface_set_color(edge_color)
+			plugin._vertex_overlay_imesh.surface_add_vertex(edge.b)
+		plugin._vertex_overlay_imesh.surface_end()
+	plugin._vertex_overlay_imesh.surface_begin(Mesh.PRIMITIVE_LINES)
+	for entry in vertex_data:
+		var position: Vector3 = entry.pos
+		var color := Color.WHITE
+		if entry.selected:
+			color = Color.ORANGE
+		elif entry.hovered:
+			color = Color.YELLOW
+		var size := 0.4
+		for offset in [
+			Vector3(-size, 0, 0),
+			Vector3(size, 0, 0),
+			Vector3(0, -size, 0),
+			Vector3(0, size, 0),
+			Vector3(0, 0, -size),
+			Vector3(0, 0, size),
+		]:
+			plugin._vertex_overlay_imesh.surface_set_color(color)
+			plugin._vertex_overlay_imesh.surface_add_vertex(position + offset)
+	plugin._vertex_overlay_imesh.surface_end()
+
+
+static func ensure_vertex_overlay(plugin: Object, root: Node) -> void:
+	if plugin == null or root == null:
+		return
+	if plugin._vertex_overlay_mesh and is_instance_valid(plugin._vertex_overlay_mesh):
+		return
+	plugin._vertex_overlay_mesh = MeshInstance3D.new()
+	plugin._vertex_overlay_mesh.name = "_VertexEditOverlay"
+	plugin._vertex_overlay_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.vertex_color_use_as_albedo = true
+	material.no_depth_test = true
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	plugin._vertex_overlay_mesh.material_override = material
+	plugin._vertex_overlay_imesh = ImmediateMesh.new()
+	plugin._vertex_overlay_mesh.mesh = plugin._vertex_overlay_imesh
+	root.add_child(plugin._vertex_overlay_mesh)
+
+
+static func clear_vertex_overlay(plugin: Object) -> void:
+	if plugin == null:
+		return
+	if plugin._vertex_overlay_mesh and is_instance_valid(plugin._vertex_overlay_mesh):
+		if plugin._vertex_overlay_mesh.get_parent():
+			plugin._vertex_overlay_mesh.get_parent().remove_child(plugin._vertex_overlay_mesh)
+		plugin._vertex_overlay_mesh.queue_free()
+		plugin._vertex_overlay_mesh = null
+	plugin._vertex_overlay_imesh = null
+
+
+static func update_marquee_overlay(
+	plugin: Object, from: Vector2, to: Vector2, active: bool
+) -> void:
+	if plugin == null:
+		return
+	plugin._marquee_overlay_origin = from
+	plugin._marquee_overlay_current = to
+	plugin._marquee_overlay_active = active
+	if plugin.is_inside_tree():
+		plugin.update_overlays()
+
+
+static func draw_marquee_overlay(plugin: Object, viewport_control: Control) -> void:
+	if plugin == null or not plugin._marquee_overlay_active or not viewport_control:
+		return
+	var local_mouse := viewport_control.get_local_mouse_position()
+	if not Rect2(Vector2.ZERO, viewport_control.size).has_point(local_mouse):
+		return
+	var rect := (
+		Rect2(
+			plugin._marquee_overlay_origin,
+			plugin._marquee_overlay_current - plugin._marquee_overlay_origin
+		)
+		. abs()
+	)
+	viewport_control.draw_rect(rect, Color(0.3, 0.6, 1.0, 0.12))
+	viewport_control.draw_rect(rect, Color(0.3, 0.6, 1.0, 0.7), false, 1.5)
 
 
 static func handle_double_tap(plugin: Object, keycode: int, root: Node, paint_mode: bool) -> bool:
