@@ -6,6 +6,7 @@ const HFPluginCommands = preload("plugin_commands.gd")
 const HFPluginDropHandler = preload("plugin_drop_handler.gd")
 const HFPluginEditActions = preload("plugin_edit_actions.gd")
 const HFPluginInputRouter = preload("plugin_input_router.gd")
+const HFPluginNumericInput = preload("plugin_numeric_input.gd")
 const HFPluginVertexInput = preload("plugin_vertex_input.gd")
 const HFPluginHud = preload("plugin_hud.gd")
 const HFPluginViewportInput = preload("plugin_viewport_input.gd")
@@ -632,90 +633,15 @@ func _get_nudge_direction(keycode: int) -> Vector3:
 
 
 func _handle_numeric_input(event: InputEventKey, root: Node) -> int:
-	if not root.input_state.is_dragging() and not root.input_state.is_extruding():
-		return EditorPlugin.AFTER_GUI_INPUT_PASS
-
-	var keycode = event.keycode
-	# Digit keys (0-9)
-	if keycode >= KEY_0 and keycode <= KEY_9:
-		numeric_buffer += str(keycode - KEY_0)
-		_update_numeric_preview(root)
-		return EditorPlugin.AFTER_GUI_INPUT_STOP
-
-	# Decimal point
-	if keycode == KEY_PERIOD and "." not in numeric_buffer:
-		numeric_buffer += "."
-		_update_numeric_preview(root)
-		return EditorPlugin.AFTER_GUI_INPUT_STOP
-
-	# Backspace: remove last character
-	if keycode == KEY_BACKSPACE and numeric_buffer.length() > 0:
-		numeric_buffer = numeric_buffer.substr(0, numeric_buffer.length() - 1)
-		_update_numeric_preview(root)
-		return EditorPlugin.AFTER_GUI_INPUT_STOP
-
-	# Enter: apply the numeric value
-	if keycode == KEY_ENTER or keycode == KEY_KP_ENTER:
-		if numeric_buffer.length() > 0:
-			_apply_numeric_value(root)
-			return EditorPlugin.AFTER_GUI_INPUT_STOP
-
-	# Tab: apply and move to next dimension (base → height)
-	if keycode == KEY_TAB and numeric_buffer.length() > 0:
-		_apply_numeric_value(root)
-		return EditorPlugin.AFTER_GUI_INPUT_STOP
-
-	return EditorPlugin.AFTER_GUI_INPUT_PASS
+	return HFPluginNumericInput.handle(self, event, root)
 
 
 func _update_numeric_preview(root: Node) -> void:
-	if not root.input_state.is_dragging() and not root.input_state.is_extruding():
-		return
-	if numeric_buffer.length() == 0:
-		return
-	var value = float(numeric_buffer) if numeric_buffer.is_valid_float() else 0.0
-	if value <= 0.0:
-		return
-	if root.input_state.is_drag_height() or root.input_state.is_extruding():
-		root.input_state.drag_height = value
-		root.update_drag(last_3d_camera, last_3d_mouse_pos)
-	elif root.input_state.is_drag_base():
-		# Set the base extent from the origin
-		var snap = root.grid_snap if root.grid_snap > 0.0 else 1.0
-		var extent = Vector3(value, 0.0, value)
-		root.input_state.drag_end = root.input_state.drag_origin + extent
-		root.update_drag(last_3d_camera, last_3d_mouse_pos)
-	_update_hud_context()
+	HFPluginNumericInput.update_preview(self, root)
 
 
 func _apply_numeric_value(root: Node) -> void:
-	if numeric_buffer.length() == 0:
-		return
-	var value = float(numeric_buffer) if numeric_buffer.is_valid_float() else 0.0
-	numeric_buffer = ""
-	if value <= 0.0:
-		return
-	if root.input_state.is_drag_height():
-		root.input_state.drag_height = value
-		# Finalize: place the brush
-		var size = dock.get_brush_size()
-		var info_result = root.end_drag_info(last_3d_camera, last_3d_mouse_pos, size)
-		if info_result.get("placed", false):
-			_commit_brush_placement(root, info_result.get("info", {}))
-		_update_hud_context()
-	elif root.input_state.is_drag_base():
-		# Apply base size and advance to height
-		var extent = Vector3(value, 0.0, value)
-		root.input_state.drag_end = root.input_state.drag_origin + extent
-		root.input_state.advance_to_height(last_3d_mouse_pos)
-		root.update_drag(last_3d_camera, last_3d_mouse_pos)
-		_update_hud_context()
-	elif root.input_state.is_extruding():
-		root.input_state.drag_height = value
-		var info = root.end_extrude_info()
-		if not info.is_empty():
-			_commit_brush_placement(root, info)
-		_update_hud_context()
+	HFPluginNumericInput.apply_value(self, root)
 
 
 func _cancel_selection_gesture() -> bool:

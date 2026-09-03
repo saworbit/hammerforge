@@ -43,7 +43,7 @@ HammerForge is a single `addons/` folder. No external tools, no custom builds, n
 
 | | |
 |---|---|
-| **Subsystem-based coordinator architecture** | **1,895 unit + integration tests** with CI on every push |
+| **Subsystem-based coordinator architecture** | **1,903 unit + integration tests** with CI on every push |
 | **15 brush shapes** (box through dodecahedron) | **150 built-in prototype textures** for instant greyboxing |
 | **Quake `.map`** + **glTF `.glb`** export | **.hflevel** native format with threaded I/O |
 | **Customizable keymaps** (JSON) | **Plugin API** for custom tools |
@@ -260,7 +260,7 @@ HammerForge uses a **coordinator + subsystems** pattern:
 
 ```
 plugin.gd            EditorPlugin lifecycle, composition, discovery, and undo wiring
-  ├─ plugin_*.gd     Input, selection, commands, HUD, overlays, edit actions, and drops
+  ├─ plugin_*.gd     Input, numeric entry, selection, commands, HUD, overlays, edits, and drops
   ├─ dock.gd         Four-tab UI coordinator with focused handler modules
   ├─ HFToolRegistry  Plugin-owned external tool loading and dispatch
   └─ level_root.gd   Public level facade; owns containers, exports, and signals
@@ -378,7 +378,7 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 
 ## Testing
 
-The verified Godot 4.7 CI run on September 3, 2026 contains **1,895 tests across 111 scripts**: **1,888 passing tests**, seven intentional no-assert safety tests, and **8,222 assertions**. All checks run on every push and pull request via GitHub Actions.
+The verified Godot 4.7 suite on September 3, 2026 contains **1,903 tests across 112 scripts**: **1,896 passing tests**, seven intentional no-assert safety tests, and **8,253 assertions**. All checks run on every push and pull request via GitHub Actions.
 
 ```bash
 # Run all tests headless
