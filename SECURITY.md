@@ -10,10 +10,11 @@ security issue here.
 | Version | Supported |
 |---|---|
 | `main` | Yes |
+| `0.3.x` prereleases | Yes |
 | Anything older | No |
 
-There are no tagged releases yet. Fixes land on `main`; please reproduce
-against the latest `main` before reporting.
+Security fixes land on `main` and ship in the next prerelease. Please reproduce
+against the latest `main` before reporting when practical.
 
 ## Reporting a Vulnerability
 

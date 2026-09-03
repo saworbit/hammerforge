@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+
+## [0.3.0] - 2026-09-03
 ### Added
 - **PBR channels survive material atlasing** ([#24](https://github.com/saworbit/hammerforge/issues/24)): `HFMaterialAtlas` now packs normal, roughness, metallic, and emission maps into parallel atlases over the albedo layout, so one set of remapped UVs addresses all of them. Materials that supply no map for a slot contribute a flat tile carrying their own scalar. A slot the atlas cannot represent faithfully — suppliers disagreeing on `normal_scale`, on a texture-channel selector, or on a multiplier that would distort untextured tiles — is reported in `AtlasResult.skipped_channels` **and** in the editor log via `HFLog.warn()`, instead of being silently dropped. A supplied texture that cannot be read drops the whole slot rather than substituting a flat tile. Slots nobody uses cost nothing.
 - **`HFLog` capture coverage** (`tests/test_hf_log.gd`, 6 cases): warning capture, suppression, buffer lifetime, and the idle-path regression below.
