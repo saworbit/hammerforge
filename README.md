@@ -259,7 +259,7 @@ HammerForge uses a **coordinator + subsystems** pattern:
 `LevelRoot` always initializes the brush, entity, bake, paint, and file core needed to load and run a level. Grid, drawing, snapping, selection, previews, prefab authoring, validation, undo, and the remaining editor services are loaded only by editor builds. Export templates therefore avoid constructing the editor tool graph.
 
 ```
-plugin.gd            EditorPlugin — input routing, toolbar, viewport overlay
+plugin.gd            EditorPlugin coordinator with focused input/overlay modules
   ├─ dock.gd         Four-tab UI coordinator with focused handler modules
   └─ level_root.gd   Thin coordinator — owns containers, exports, signals
        ├─ HFBrushSystem     Brush CRUD, hollow, clip, tie, move, UV justify, caching

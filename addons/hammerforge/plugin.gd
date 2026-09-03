@@ -1,45 +1,13 @@
 @tool
 extends EditorPlugin
 
-
-## Tracks the native camera's RMB press/motion/release ownership without
-## depending on editor selection or HammerForge's persistent tool mode.
-class RmbCameraNavigationSession:
-	extends RefCounted
-
-	var active := false
-
-	func begin() -> void:
-		active = true
-
-	func handle_followup(event: InputEvent) -> bool:
-		if not active:
-			return false
-		if event is InputEventMouseMotion:
-			if event.button_mask & MOUSE_BUTTON_MASK_RIGHT != 0:
-				return true
-			# Recover after a focus change that hid the release event.
-			active = false
-			return false
-		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
-			if event.pressed:
-				# A fresh press supersedes stale state and must be classified by
-				# the current gesture owner.
-				active = false
-				return false
-			active = false
-			return true
-		# While Godot owns RMB camera navigation, all other viewport input
-		# belongs to that native session too (notably WASD flight and mixed
-		# mouse buttons). HammerForge resumes only after RMB release/recovery.
-		return true
-
-
 const DockType = preload("dock.gd")
 const HFPluginCommands = preload("plugin_commands.gd")
 const HFPluginInputRouter = preload("plugin_input_router.gd")
 const HFPluginVertexInput = preload("plugin_vertex_input.gd")
 const HFPluginHud = preload("plugin_hud.gd")
+const HFPluginViewportInput = preload("plugin_viewport_input.gd")
+const HFPluginOverlays = preload("plugin_overlays.gd")
 const HFPathToolType = preload("hf_path_tool.gd")
 const HFSelectionGestureType = preload("hf_selection_gesture.gd")
 const HFBrushChangeTrackerType = preload("hf_brush_change_tracker.gd")
@@ -67,7 +35,7 @@ const SELECT_DRAG_THRESHOLD := 6.0
 const POWER_USER_OVERLAYS_HINT := "Enable Power-user overlays in Test → Settings"
 var last_3d_camera: Camera3D = null
 var last_3d_mouse_pos := Vector2.ZERO
-var _rmb_camera_navigation := RmbCameraNavigationSession.new()
+var _rmb_camera_navigation := HFPluginViewportInput.RmbCameraNavigationSession.new()
 var numeric_buffer := ""
 var _tool_registry: HFToolRegistry = null
 var _keymap: HFKeymap = null
@@ -687,23 +655,13 @@ func _edit(object: Object) -> void:
 static func should_create_root_for_viewport_input(
 	event: InputEvent, tool_id: int, paint_mode: bool
 ) -> bool:
-	return (
-		event is InputEventMouseButton
-		and event.button_index == MOUSE_BUTTON_LEFT
-		and event.pressed
-		and tool_id == 0
-		and not paint_mode
-	)
+	return HFPluginViewportInput.should_create_root(event, tool_id, paint_mode)
 
 
 ## Clicking outside a quick-property editor protects against accidental LMB
 ## edits. RMB continues to the active gesture owner; other navigation passes.
 static func classify_quick_property_dismiss(event: InputEventMouseButton) -> int:
-	if event.button_index == MOUSE_BUTTON_LEFT:
-		return EditorPlugin.AFTER_GUI_INPUT_STOP
-	if event.button_index == MOUSE_BUTTON_RIGHT:
-		return QUICK_PROPERTY_DISMISS_CONTINUE
-	return EditorPlugin.AFTER_GUI_INPUT_PASS
+	return HFPluginViewportInput.classify_quick_property_dismiss(event)
 
 
 ## A live LMB paint stroke keeps pointer ownership until LMB release. Starting
@@ -714,227 +672,17 @@ static func should_block_rmb_during_paint_stroke(
 	displacement_painting: bool,
 	left_button_held: bool
 ) -> bool:
-	return left_button_held and (surface_painting or floor_painting or displacement_painting)
-
-
-static func is_lmb_release_recovery_motion(event: InputEvent) -> bool:
-	return (
-		event is InputEventMouseMotion
-		and (event as InputEventMouseMotion).button_mask & MOUSE_BUTTON_MASK_LEFT == 0
+	return HFPluginViewportInput.should_block_rmb_during_paint_stroke(
+		surface_painting, floor_painting, displacement_painting, left_button_held
 	)
 
 
+static func is_lmb_release_recovery_motion(event: InputEvent) -> bool:
+	return HFPluginViewportInput.is_lmb_release_recovery_motion(event)
+
+
 func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
-	if not dock:
-		return EditorPlugin.AFTER_GUI_INPUT_PASS
-	_ensure_selection_runtime_state()
-	var face_select_mode := dock.is_face_select_mode_enabled()
-	if camera:
-		last_3d_camera = camera
-	if event is InputEventMouse:
-		last_3d_mouse_pos = event.position
-
-	# Once an idle RMB press has been passed to Godot, its motion and release
-	# belong to the same native camera-navigation session. Bypass all HammerForge
-	# raycasts and hover work until the button is released.
-	if _rmb_camera_navigation.handle_followup(event):
-		return EditorPlugin.AFTER_GUI_INPUT_PASS
-
-	var root = active_root if active_root else _get_level_root()
-	if not root:
-		# Native viewport motion/navigation must never dirty the edited scene.
-		# Preserve draw-first convenience only for an intentional primary click.
-		var intentional_draw_click := should_create_root_for_viewport_input(
-			event,
-			1 if face_select_mode else dock.get_tool(),
-			dock.is_paint_mode_enabled() and not face_select_mode
-		)
-		if not intentional_draw_click:
-			# Empty levels still use Godot's native RMB camera navigation. Record
-			# ownership before passing the press through so global shortcuts stay
-			# native until the matching release.
-			if (
-				event is InputEventMouseButton
-				and event.button_index == MOUSE_BUTTON_RIGHT
-				and event.pressed
-			):
-				_rmb_camera_navigation.begin()
-			return EditorPlugin.AFTER_GUI_INPUT_PASS
-		root = _create_level_root()
-		if not root:
-			return EditorPlugin.AFTER_GUI_INPUT_PASS
-
-	var target_camera = camera
-	var target_pos = event.position if event is InputEventMouse else last_3d_mouse_pos
-	# Face Select is a true modal editing state. Its checkbox lives beside the
-	# paint controls for discoverability, but while active it must route exactly
-	# like Select and must never share a click with paint, vertex, or plug-in tools.
-	var tool_id = 1 if face_select_mode else dock.get_tool()
-	var paint_mode = dock.is_paint_mode_enabled() and not face_select_mode
-	root.grid_snap = dock.get_grid_snap()
-
-	# Radial menu intercept — must be FIRST. While radial is active, it owns
-	# all input. No other intercept (paint, vertex, external tool) should run.
-	if _radial_menu and _radial_menu.is_active():
-		_radial_menu._gui_input(event)
-		return EditorPlugin.AFTER_GUI_INPUT_STOP
-
-	# Quick property popup intercept. LMB click-away is consumed to avoid editing
-	# through the popup; native navigation buttons dismiss and continue through.
-	if _quick_property and _quick_property.is_active():
-		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
-			_quick_property.hide_popup()
-			return EditorPlugin.AFTER_GUI_INPUT_STOP
-		if event is InputEventMouseButton and event.pressed:
-			var popup_rect := _quick_property.get_rect()
-			if not popup_rect.has_point(event.position):
-				_quick_property.hide_popup()
-				var dismiss_result := classify_quick_property_dismiss(event)
-				if dismiss_result != QUICK_PROPERTY_DISMISS_CONTINUE:
-					return dismiss_result
-				# RMB continues through the normal ownership path so an active
-				# gesture can still cancel instead of being abandoned mid-drag.
-
-	# A Godot gizmo action has exclusive pointer ownership. Its press was passed
-	# through deliberately; do no raycasts, hover, or tool dispatch until Godot
-	# finishes or cancels it.
-	if _brush_gizmo_action_active():
-		if is_lmb_release_recovery_motion(event):
-			brush_gizmo_plugin.call("cancel_active_handle_action")
-		# The custom gizmo remains the exclusive owner until Godot receives a
-		# release/RMB/Escape and calls _commit_handle(). A recovered action is
-		# frozen locally, so forwarding motion cannot resurrect its preview.
-		return EditorPlugin.AFTER_GUI_INPUT_PASS
-
-	# Buttonless motion is the only reliable recovery signal when the editor or
-	# application swallowed LMB-up. Close every stale LMB owner before any tool
-	# can mutate from that motion as if the button were still held.
-	if is_lmb_release_recovery_motion(event):
-		_recover_stale_lmb_gestures(root)
-
-	# Once Select has seen LMB-down, route all follow-ups before other tools. This
-	# prevents one physical drag from becoming both a marquee and a widget edit.
-	if _selection_gesture and _selection_gesture.is_active():
-		if tool_id != 1:
-			_cancel_selection_gesture()
-		else:
-			var select_result := _handle_active_selection_input(
-				event, root, target_camera, target_pos
-			)
-			if select_result != SELECT_INPUT_CONTINUE:
-				return select_result
-
-	if event is InputEventMouseMotion or event is InputEventMouseButton:
-		root.update_editor_grid(target_camera, target_pos)
-
-	# Displacement paint intercept — must come before regular paint so that
-	# displacement surfaces get the stroke when paint mode is active.
-	# Only activates when: paint mode ON + Displacement section expanded +
-	# a displaced face is selected.
-	if not face_select_mode and (_disp_paint_active or _should_start_disp_paint(event, root)):
-		var dr = _handle_disp_paint_input(event, root, target_camera, target_pos)
-		if dr != EditorPlugin.AFTER_GUI_INPUT_PASS:
-			return dr
-
-	# Paint mode intercept
-	if paint_mode:
-		var r = _handle_paint_input(event, root, target_camera, target_pos)
-		if r != EditorPlugin.AFTER_GUI_INPUT_PASS:
-			return r
-
-	# External tool dispatch
-	if _tool_registry and not face_select_mode:
-		var ext_result = _tool_registry.dispatch_input(event, target_camera, target_pos)
-		if ext_result == EditorPlugin.AFTER_GUI_INPUT_STOP:
-			return EditorPlugin.AFTER_GUI_INPUT_STOP
-		if (
-			_tool_registry.has_active_external_tool()
-			and (event is InputEventMouseButton or event is InputEventMouseMotion)
-		):
-			# An active external tool stays the sole HammerForge mouse owner even
-			# when this particular ray misses. If its idle RMB press was not
-			# consumed, record the same native camera session as the common RMB path
-			# so follow-up mouse and keyboard events cannot trigger HammerForge tools.
-			if (
-				event is InputEventMouseButton
-				and event.button_index == MOUSE_BUTTON_RIGHT
-				and event.pressed
-			):
-				root.clear_hover()
-				if root.has_method("clear_face_hover_highlight"):
-					root.clear_face_hover_highlight()
-				_rmb_camera_navigation.begin()
-			# PASS still preserves Godot camera UI.
-			return EditorPlugin.AFTER_GUI_INPUT_PASS
-
-	# Vertex editing mode intercept
-	if _vertex_mode and root.vertex_system and not face_select_mode:
-		var vr = _handle_vertex_input(event, root, target_camera, target_pos)
-		if vr != EditorPlugin.AFTER_GUI_INPUT_PASS:
-			return vr
-
-	# Texture picker modal intercept — must be ABOVE keyboard shortcuts so that
-	# tool-switch keys cannot sneak through while picker is armed.
-	if _texture_picker_active:
-		if event is InputEventMouseButton and event.pressed:
-			if event.button_index == MOUSE_BUTTON_LEFT:
-				_texture_picker_active = false
-				_pick_face_material(root)
-				return EditorPlugin.AFTER_GUI_INPUT_STOP
-			if event.button_index == MOUSE_BUTTON_RIGHT:
-				_texture_picker_active = false
-				if dock:
-					dock.show_toast("Texture Picker cancelled", 1)
-				return EditorPlugin.AFTER_GUI_INPUT_STOP
-		if event is InputEventKey and event.pressed:
-			if event.keycode == KEY_ESCAPE:
-				_texture_picker_active = false
-				if dock:
-					dock.show_toast("Texture Picker cancelled", 1)
-				return EditorPlugin.AFTER_GUI_INPUT_STOP
-			# Block all other key events while picker is active.
-			return EditorPlugin.AFTER_GUI_INPUT_STOP
-		# Pass through mouse motion so last_3d_mouse_pos stays current.
-		if event is InputEventMouseMotion:
-			return EditorPlugin.AFTER_GUI_INPUT_PASS
-		return EditorPlugin.AFTER_GUI_INPUT_PASS
-
-	# Keyboard shortcuts
-	if event is InputEventKey and event.pressed and not event.echo:
-		var r = _handle_keyboard_input(event, root, tool_id, paint_mode)
-		if r != EditorPlugin.AFTER_GUI_INPUT_PASS:
-			return r
-
-	# Hover is an idle affordance, never a second pointer owner during a drag.
-	if tool_id == 1 and event is InputEventMouseMotion and event.button_mask == 0:
-		root.update_hover(target_camera, target_pos, hf_selection)
-	elif tool_id == 1 and event is InputEventMouseMotion:
-		root.clear_hover()
-	elif tool_id != 1:
-		root.clear_hover()
-
-	# Mouse button handling
-	if event is InputEventMouseButton:
-		if tool_id != 1:
-			root.set_shift_pressed(event.shift_pressed)
-			root.set_alt_pressed(event.alt_pressed)
-		if event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
-			return _handle_rmb_cancel(root, tool_id, event)
-		if event.button_index == MOUSE_BUTTON_LEFT:
-			match tool_id:
-				0:
-					return _handle_draw_mouse(event, root, target_camera, target_pos)
-				1:
-					return _handle_select_mouse(event, root, target_camera, target_pos, paint_mode)
-				2, 3:
-					return _handle_extrude_mouse(event, root, target_camera, target_pos)
-
-	# Mouse motion handling
-	if event is InputEventMouseMotion:
-		return _handle_mouse_motion(event, root, target_camera, target_pos, tool_id)
-
-	_update_hud_context()
-	return EditorPlugin.AFTER_GUI_INPUT_PASS
+	return HFPluginViewportInput.handle(self, camera, event)
 
 
 func _should_start_disp_paint(event: InputEvent, root: Node) -> bool:
@@ -4057,96 +3805,23 @@ func _on_radial_action(action: String) -> void:
 
 ## Double-tap handler for quick property popups.
 func _handle_double_tap(keycode: int, root: Node, paint_mode: bool) -> bool:
-	match keycode:
-		KEY_G:
-			var snap_val: float = root.grid_snap if root else 16.0
-			_show_quick_property_at_cursor(HFQuickProperty.PropertyType.GRID_SNAP, [snap_val])
-			return true
-		KEY_B:
-			if paint_mode:
-				return false  # Let paint_bucket handle it
-			var sz: Vector3 = (
-				root.input_state.drag_size_default
-				if root and root.input_state
-				else Vector3(4, 4, 4)
-			)
-			_show_quick_property_at_cursor(
-				HFQuickProperty.PropertyType.BRUSH_SIZE, [sz.x, sz.y, sz.z]
-			)
-			return true
-		KEY_R:
-			if paint_mode:
-				var radius: float = dock.get_surface_paint_radius() if dock else 5.0
-				_show_quick_property_at_cursor(HFQuickProperty.PropertyType.PAINT_RADIUS, [radius])
-				return true
-	return false
+	return HFPluginOverlays.handle_double_tap(self, keycode, root, paint_mode)
 
 
 func _show_quick_property_at_cursor(prop_type: int, values: Array) -> void:
-	if not _quick_property or not is_instance_valid(_quick_property):
-		return
-	_quick_property.show_property(prop_type, _get_current_overlay_mouse_pos(), values)
+	HFPluginOverlays.show_quick_property(self, prop_type, values)
 
 
 func _on_quick_property_committed(property_type: int, values: Array) -> void:
-	var root = active_root if active_root else _get_level_root()
-	match property_type:
-		HFQuickProperty.PropertyType.GRID_SNAP:
-			if dock and not values.is_empty():
-				dock._apply_grid_snap(float(values[0]))
-		HFQuickProperty.PropertyType.BRUSH_SIZE:
-			if root and root.input_state and values.size() >= 3:
-				root.input_state.drag_size_default = Vector3(values[0], values[1], values[2])
-				if dock:
-					dock.size_x.value = values[0]
-					dock.size_y.value = values[1]
-					dock.size_z.value = values[2]
-		HFQuickProperty.PropertyType.PAINT_RADIUS:
-			if dock and not values.is_empty():
-				if dock.surface_paint_radius:
-					dock.surface_paint_radius.value = float(values[0])
+	HFPluginOverlays.on_quick_property_committed(self, property_type, values)
 
 
 func _show_coach_mark_for_action(action: String) -> void:
-	if not _coach_marks or not is_instance_valid(_coach_marks):
-		return
-	# Map action names to coach mark tool keys
-	var coach_key := ""
-	match action:
-		"vertex_edit":
-			coach_key = "vertex_edit"
-		"hollow":
-			coach_key = "hollow"
-		"clip":
-			coach_key = "clip"
-		"carve":
-			coach_key = "carve"
-		"tool_extrude_up", "tool_extrude_down", "tool_extrude", "tool_extrude_down_alt":
-			coach_key = "extrude"
-		"paint_bucket", "paint_erase", "paint_ramp", "paint_line", "paint_fill", "paint_blend":
-			coach_key = "surface_paint"
-	if not coach_key.is_empty():
-		_coach_marks.show_guide(coach_key)
+	HFPluginOverlays.show_coach_mark_for_action(self, action)
 
 
 func _show_coach_mark_for_tool_id(tool_id: int) -> void:
-	if not _coach_marks or not is_instance_valid(_coach_marks):
-		return
-	if not _tool_registry:
-		return
-	var tool_obj = _tool_registry.get_tool_by_id(tool_id)
-	if not tool_obj:
-		return
-	var tool_name: String = tool_obj.tool_name().to_lower()
-	# Map tool names to coach mark keys
-	if "polygon" in tool_name:
-		_coach_marks.show_guide("polygon")
-	elif "path" in tool_name:
-		_coach_marks.show_guide("path")
-	elif "measure" in tool_name:
-		_coach_marks.show_guide("measure")
-	elif "decal" in tool_name:
-		_coach_marks.show_guide("decal")
+	HFPluginOverlays.show_coach_mark_for_tool_id(self, tool_id)
 
 
 func _on_coach_mark_dismissed(_tool_key: String, _dont_show: bool) -> void:

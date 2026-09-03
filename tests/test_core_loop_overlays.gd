@@ -2,6 +2,7 @@ extends GutTest
 ## Core-loop freeze: power-user overlays stay off until opted in.
 
 const HammerForgePlugin = preload("res://addons/hammerforge/plugin.gd")
+const HFPluginOverlays = preload("res://addons/hammerforge/plugin_overlays.gd")
 const HFUserPrefsType = preload("res://addons/hammerforge/hf_user_prefs.gd")
 
 
@@ -25,3 +26,23 @@ func test_unavailable_overlay_hint_points_at_settings():
 	var hint := HammerForgePlugin.power_user_overlay_unavailable_message()
 	assert_string_contains(hint, "Power-user overlays")
 	assert_string_contains(hint, "Settings")
+
+
+func test_overlay_callbacks_delegate_to_the_overlay_module():
+	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
+	for method_name in [
+		"handle_double_tap",
+		"show_quick_property",
+		"on_quick_property_committed",
+		"show_coach_mark_for_action",
+		"show_coach_mark_for_tool_id",
+	]:
+		assert_true(source.contains("HFPluginOverlays.%s" % method_name))
+
+
+func test_overlay_module_is_null_safe():
+	HFPluginOverlays.show_quick_property(null, 0, [])
+	HFPluginOverlays.on_quick_property_committed(null, 0, [])
+	HFPluginOverlays.show_coach_mark_for_action(null, "clip")
+	HFPluginOverlays.show_coach_mark_for_tool_id(null, 100)
+	pass_test("Overlay entry points tolerate a missing coordinator")
