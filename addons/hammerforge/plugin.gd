@@ -8,6 +8,8 @@ const HFPluginVertexInput = preload("plugin_vertex_input.gd")
 const HFPluginHud = preload("plugin_hud.gd")
 const HFPluginViewportInput = preload("plugin_viewport_input.gd")
 const HFPluginOverlays = preload("plugin_overlays.gd")
+const HFPluginPaintInput = preload("plugin_paint_input.gd")
+const HFPluginPointerTools = preload("plugin_pointer_tools.gd")
 const HFPathToolType = preload("hf_path_tool.gd")
 const HFSelectionGestureType = preload("hf_selection_gesture.gd")
 const HFBrushChangeTrackerType = preload("hf_brush_change_tracker.gd")
@@ -686,182 +688,29 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 
 
 func _should_start_disp_paint(event: InputEvent, root: Node) -> bool:
-	if not event is InputEventMouseButton or not event.pressed:
-		return false
-	if event.button_index != MOUSE_BUTTON_LEFT:
-		return false
-	if not root or not root.displacement_system:
-		return false
-	if not dock or not dock._disp_section:
-		return false
-	# Require paint mode to be active — displacement paint reuses the paint toggle.
-	if not dock.is_paint_mode_enabled():
-		return false
-	if not dock._disp_section.is_expanded():
-		return false
-	# Check if a displaced face is selected.
-	var info: Dictionary = dock._get_selected_face_info()
-	if info.is_empty():
-		return false
-	var brush: Node3D = (
-		root.find_brush_by_id(info["brush_id"]) if root.has_method("find_brush_by_id") else null
-	)
-	if not brush:
-		return false
-	if root.has_method("_is_pick_visible") and not root._is_pick_visible(brush):
-		return false
-	if (
-		brush.get("mesh_instance") is Node3D
-		and root.has_method("_is_pick_visible")
-		and not root._is_pick_visible(brush.get("mesh_instance"))
-	):
-		return false
-	var fi: int = info["face_index"]
-	if fi < 0 or fi >= brush.faces.size():
-		return false
-	return brush.faces[fi].displacement != null
+	return HFPluginPaintInput.should_start_displacement(self, event, root)
 
 
 func _handle_disp_paint_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vector2) -> int:
-	if event is InputEventMouseButton:
-		if event.button_index == MOUSE_BUTTON_LEFT:
-			if event.pressed:
-				var info: Dictionary = dock._get_selected_face_info()
-				if info.is_empty():
-					return EditorPlugin.AFTER_GUI_INPUT_PASS
-				# Capture pre-stroke state for undo.
-				if root.has_method("capture_state"):
-					_disp_paint_pre_state = root.capture_state()
-				_disp_paint_active = true
-				_disp_paint_brush_id = info["brush_id"]
-				_disp_paint_face_idx = info["face_index"]
-				_do_disp_paint_stroke(root, cam, pos)
-				return EditorPlugin.AFTER_GUI_INPUT_STOP
-			# Commit the entire stroke as one undo action.
-			if _disp_paint_active and not _disp_paint_pre_state.is_empty():
-				_commit_disp_paint_undo(root)
-			_disp_paint_active = false
-			_disp_paint_brush_id = ""
-			_disp_paint_face_idx = -1
-			_disp_paint_pre_state = {}
-			return EditorPlugin.AFTER_GUI_INPUT_STOP
-	if event is InputEventMouseMotion and _disp_paint_active:
-		_do_disp_paint_stroke(root, cam, pos)
-		return EditorPlugin.AFTER_GUI_INPUT_STOP
-	return EditorPlugin.AFTER_GUI_INPUT_PASS
+	return HFPluginPaintInput.handle_displacement(self, event, root, cam, pos)
 
 
 func _commit_disp_paint_undo(root: Node) -> void:
-	if not undo_redo_manager or _disp_paint_pre_state.is_empty():
-		return
-	if not root.has_method("restore_state") or not root.has_method("capture_state"):
-		return
-	var post_state: Dictionary = root.capture_state()
-	undo_redo_manager.create_action("Paint Displacement", 0, null, false)
-	undo_redo_manager.add_do_method(root, "restore_state", post_state)
-	undo_redo_manager.add_undo_method(root, "restore_state", _disp_paint_pre_state)
-	undo_redo_manager.commit_action(false)  # false = don't execute do (already applied)
-	_record_history("Paint Displacement")
+	HFPluginPaintInput.commit_displacement_undo(self, root)
 
 
 func _do_disp_paint_stroke(root: Node, cam: Camera3D, pos: Vector2) -> void:
-	if not root.displacement_system:
-		return
-	if _disp_paint_brush_id == "" or _disp_paint_face_idx < 0:
-		return
-	var brush: Node3D = (
-		root.find_brush_by_id(_disp_paint_brush_id) if root.has_method("find_brush_by_id") else null
-	)
-	if not brush:
-		return
-	if root.has_method("_is_pick_visible") and not root._is_pick_visible(brush):
-		return
-	if (
-		brush.get("mesh_instance") is Node3D
-		and root.has_method("_is_pick_visible")
-		and not root._is_pick_visible(brush.get("mesh_instance"))
-	):
-		return
-	var faces: Array = brush.faces
-	if _disp_paint_face_idx >= faces.size():
-		return
-	var face = faces[_disp_paint_face_idx]
-	if face.local_verts.size() < 3:
-		return
-	var basis: Basis = brush.global_transform.basis
-	var origin: Vector3 = brush.global_transform.origin
-	var world_normal: Vector3 = (basis * face.normal).normalized()
-	# Build world-space polygon for the face.
-	var world_verts := PackedVector3Array()
-	for lv in face.local_verts:
-		world_verts.append(origin + basis * lv)
-	# Raycast: intersect with face plane.
-	var from: Vector3 = cam.project_ray_origin(pos)
-	var dir: Vector3 = cam.project_ray_normal(pos)
-	var denom: float = world_normal.dot(dir)
-	if abs(denom) < 0.0001:
-		return
-	var t: float = world_normal.dot(world_verts[0] - from) / denom
-	if t < 0:
-		return
-	var hit_pos: Vector3 = from + dir * t
-	# Reject hits outside the face polygon (with brush-radius margin).
-	var radius: float = dock._disp_radius_spin.value if dock and dock._disp_radius_spin else 4.0
-	if not _point_near_polygon_3d(hit_pos, world_verts, world_normal, radius):
-		return
-	var strength: float = (
-		dock._disp_strength_spin.value if dock and dock._disp_strength_spin else 0.5
-	)
-	var mode: int = 0
-	if dock and dock._disp_paint_mode_opt:
-		mode = dock._disp_paint_mode_opt.get_selected_id()
-	root.displacement_system.paint(
-		_disp_paint_brush_id, _disp_paint_face_idx, hit_pos, radius, strength, mode
-	)
+	HFPluginPaintInput.do_displacement_stroke(self, root, cam, pos)
 
 
-## Check if a point (on the polygon plane) is inside or within margin of a
-## convex polygon defined by world_verts with the given outward normal.
 func _point_near_polygon_3d(
 	point: Vector3, verts: PackedVector3Array, normal: Vector3, margin: float
 ) -> bool:
-	var count: int = verts.size()
-	if count < 3:
-		return false
-	for i in range(count):
-		var a: Vector3 = verts[i]
-		var b: Vector3 = verts[(i + 1) % count]
-		var edge: Vector3 = b - a
-		var inward: Vector3 = normal.cross(edge).normalized()
-		var dist: float = inward.dot(point - a)
-		if dist < -margin:
-			return false
-	return true
+	return HFPluginPaintInput.point_near_polygon_3d(point, verts, normal, margin)
 
 
 func _handle_paint_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vector2) -> int:
-	var paint_target = dock.get_paint_target()
-	var op = dock.get_operation()
-	var size = dock.get_brush_size()
-	if paint_target == 0:
-		var paint_tool_id = dock.get_paint_tool_id()
-		var paint_radius_cells = dock.get_paint_radius_cells()
-		var paint_brush_shape = dock.get_brush_shape()
-		var handled = root.handle_paint_input(
-			cam, event, pos, op, size, paint_tool_id, paint_radius_cells, paint_brush_shape
-		)
-		if handled:
-			return EditorPlugin.AFTER_GUI_INPUT_STOP
-	elif paint_target == 1:
-		var radius_uv = dock.get_surface_paint_radius()
-		var strength = dock.get_surface_paint_strength()
-		var layer_idx = dock.get_surface_paint_layer()
-		var handled_surface = root.handle_surface_paint_input(
-			cam, event, pos, radius_uv, strength, layer_idx
-		)
-		if handled_surface:
-			return EditorPlugin.AFTER_GUI_INPUT_STOP
-	return EditorPlugin.AFTER_GUI_INPUT_PASS
+	return HFPluginPaintInput.handle_paint(self, event, root, cam, pos)
 
 
 func _get_nudge_direction(keycode: int) -> Vector3:
@@ -1592,39 +1441,13 @@ func _handle_active_selection_input(
 func _handle_extrude_mouse(
 	event: InputEventMouseButton, root: Node, cam: Camera3D, pos: Vector2
 ) -> int:
-	if event.pressed:
-		numeric_buffer = ""
-		var extrude_dir = dock.get_extrude_direction()
-		var started = root.begin_extrude(cam, pos, extrude_dir)
-		return EditorPlugin.AFTER_GUI_INPUT_STOP if started else EditorPlugin.AFTER_GUI_INPUT_PASS
-	var info = root.end_extrude_info()
-	if not info.is_empty():
-		_commit_brush_placement(root, info)
-	_update_hud_context()
-	return EditorPlugin.AFTER_GUI_INPUT_STOP
+	return HFPluginPointerTools.handle_extrude(self, event, root, cam, pos)
 
 
 func _handle_draw_mouse(
 	event: InputEventMouseButton, root: Node, cam: Camera3D, pos: Vector2
 ) -> int:
-	var op = dock.get_operation()
-	var size = dock.get_brush_size()
-	var shape = dock.get_shape()
-	var sides = dock.get_sides()
-	if event.pressed:
-		# DRAG_HEIGHT follows buttonless motion. This next click confirms it;
-		# do not restart the base gesture on the confirmation press.
-		if root.input_state.is_drag_height():
-			return EditorPlugin.AFTER_GUI_INPUT_STOP
-		numeric_buffer = ""
-		var started = root.begin_drag(cam, pos, op, size, shape, sides)
-		return EditorPlugin.AFTER_GUI_INPUT_STOP if started else EditorPlugin.AFTER_GUI_INPUT_PASS
-	var result = root.end_drag_info(cam, pos, size)
-	if result.get("handled", false):
-		if result.get("placed", false):
-			_commit_brush_placement(root, result.get("info", {}))
-		return EditorPlugin.AFTER_GUI_INPUT_STOP
-	return EditorPlugin.AFTER_GUI_INPUT_PASS
+	return HFPluginPointerTools.handle_draw(self, event, root, cam, pos)
 
 
 func _handle_mouse_motion(
@@ -1634,69 +1457,11 @@ func _handle_mouse_motion(
 	pos: Vector2,
 	tool_id: int,
 ) -> int:
-	if tool_id != 1:
-		root.set_shift_pressed(event.shift_pressed)
-		root.set_alt_pressed(event.alt_pressed)
-	if (tool_id == 2 or tool_id == 3) and event.button_mask & MOUSE_BUTTON_MASK_LEFT != 0:
-		root.update_extrude(cam, pos)
-		_update_hud_context()
-		return EditorPlugin.AFTER_GUI_INPUT_STOP
-	if (
-		tool_id == 0
-		and (
-			root.input_state.is_drag_height()
-			or (root.input_state.is_drag_base() and event.button_mask & MOUSE_BUTTON_MASK_LEFT != 0)
-		)
-	):
-		root.update_drag(cam, pos)
-		_update_hud_context()
-		return EditorPlugin.AFTER_GUI_INPUT_STOP
-	# Face hover highlight for extrude tools (when idle, not dragging)
-	if (tool_id == 2 or tool_id == 3) and event.button_mask == 0:
-		var hover_color = Color(0.2, 0.8, 0.3, 0.35) if tool_id == 2 else Color(0.8, 0.2, 0.2, 0.35)
-		if root.has_method("highlight_hovered_face"):
-			root.highlight_hovered_face(cam, pos, hover_color)
-	elif root.has_method("clear_face_hover_highlight"):
-		root.clear_face_hover_highlight()
-
-	# Prefab ghost overlay on hover
-	if root.prefab_overlay and event.button_mask == 0 and cam:
-		_update_prefab_hover_overlay(root, cam, pos)
-
-	_update_hud_context()
-	return EditorPlugin.AFTER_GUI_INPUT_PASS
+	return HFPluginPointerTools.handle_motion(self, event, root, cam, pos, tool_id)
 
 
 func _update_prefab_hover_overlay(root, cam: Camera3D, pos: Vector2) -> void:
-	var from: Vector3 = cam.project_ray_origin(pos)
-	var dir: Vector3 = cam.project_ray_normal(pos)
-	var space: PhysicsDirectSpaceState3D = root.get_world_3d().direct_space_state
-	if not space:
-		root.prefab_overlay.hide_overlay()
-		return
-	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(
-		from, from + dir * 1000.0
-	)
-	var hit: Dictionary = space.intersect_ray(query)
-	if hit.is_empty():
-		root.prefab_overlay.hide_overlay()
-		return
-	var collider = hit.get("collider")
-	if not collider or not (collider is Node3D):
-		root.prefab_overlay.hide_overlay()
-		return
-	# Walk up to find a node with prefab instance meta
-	var node: Node = collider
-	var iid := ""
-	while node and node != root:
-		iid = str(node.get_meta("hf_prefab_instance", ""))
-		if iid != "":
-			break
-		node = node.get_parent()
-	if iid != "":
-		root.prefab_overlay.show_instance_overlay(iid)
-	else:
-		root.prefab_overlay.hide_overlay()
+	HFPluginPointerTools.update_prefab_hover(root, cam, pos)
 
 
 # ---------------------------------------------------------------------------

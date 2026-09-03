@@ -303,25 +303,38 @@ func test_specialized_face_tools_use_the_canonical_visibility_aware_picker() -> 
 	assert_true(drop_block.contains("root.pick_face(camera, mouse_pos)"))
 	assert_false(drop_block.contains("FaceSelector.intersect_brushes"))
 
-	var displacement_start := plugin_source.find("func _should_start_disp_paint")
-	var displacement_handle := plugin_source.find(
-		"func _handle_disp_paint_input", displacement_start
+	var paint_input_source := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_paint_input.gd"
 	)
-	var displacement_start_block := plugin_source.substr(
+	var displacement_start := paint_input_source.find("static func should_start_displacement")
+	var displacement_handle := paint_input_source.find(
+		"static func handle_displacement", displacement_start
+	)
+	var displacement_start_block := paint_input_source.substr(
 		displacement_start, displacement_handle - displacement_start
 	)
-	var displacement_stroke := plugin_source.find("func _do_disp_paint_stroke", displacement_handle)
-	var displacement_stroke_end := plugin_source.find(
-		"func _point_near_polygon_3d", displacement_stroke
+	var displacement_stroke := paint_input_source.find(
+		"static func do_displacement_stroke", displacement_handle
 	)
-	var displacement_stroke_block := plugin_source.substr(
+	var displacement_stroke_end := paint_input_source.find(
+		"static func point_near_polygon_3d", displacement_stroke
+	)
+	var displacement_stroke_block := paint_input_source.substr(
 		displacement_stroke, displacement_stroke_end - displacement_stroke
 	)
 	assert_true(
-		displacement_start_block.contains("root._is_pick_visible"),
+		displacement_start_block.contains("_is_visible_pick(root, brush)"),
 		"A hidden selected face must not start displacement painting",
 	)
 	assert_true(
-		displacement_stroke_block.contains("root._is_pick_visible"),
+		displacement_stroke_block.contains("_is_visible_pick(root, brush)"),
 		"A face hidden during a displacement stroke must stop receiving updates",
+	)
+	var visibility_helper := paint_input_source.substr(
+		paint_input_source.find("static func _is_visible_pick")
+	)
+	assert_eq(
+		visibility_helper.count("root._is_pick_visible"),
+		2,
+		"The shared paint guard must check both the brush and its mesh visibility",
 	)
