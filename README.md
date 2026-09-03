@@ -83,16 +83,16 @@ Precision vertex-level editing for fine-tuning brush geometry:
 
 Draw arbitrary convex polygons and extrude them into brushes:
 
-- **Polygon tool** (P) -- click to place vertices on the ground plane, Enter or auto-close to finish
+- **Polygon tool** (P) -- place the first vertex on an exact visible surface or the forward construction plane, then add vertices from that horizontal placement plane; Enter or auto-close to finish
 - **Convexity enforcement** -- rejects concave vertex placements in real time
 - **Height extrusion** -- drag to set height after closing the polygon
-- **Grid snapping** -- vertices snap to the active grid
+- **Shared snapping** -- placement uses the active Grid, Vertex, Center, Edge, Perpendicular, and reference-line snap modes
 
 ### Path Tool
 
 Create corridors and paths by placing waypoints:
 
-- **Path tool** (;) -- click to place waypoints, Enter to finalize
+- **Path tool** (;) -- place the first waypoint on an exact visible surface or the forward construction plane, then add waypoints from that horizontal placement plane; Enter to finalize
 - **Rectangular cross-section** -- configurable width and height per path
 - **Miter joints** -- automatic gap-filling brushes at corners
 - **Auto-grouping** -- all segment brushes share a group ID
@@ -195,7 +195,7 @@ Grid-based paint layers with chunked storage for large worlds:
 | **Test Level** | Check, bake, validate spawn, and run with the FPS controller |
 | **Play from Camera** | Test from the editor camera position and yaw |
 | **Play Selected Area** | Auto-cordon to selection, bake + play that region only |
-| **Export Playtest** | Bake + pack a playable scene with player, spawn pose, nested geometry/collision, lighting, and auto-wired I/O |
+| **Export Playtest** | Bake + pack a playable scene with player, spawn pose, nested geometry/collision, lighting, and auto-wired I/O; exported levels initialize only the runtime core, not editor tools |
 | **Wire I/O** | Auto-translate entity I/O connections to Godot signals in baked output |
 
 ---
@@ -255,6 +255,8 @@ HammerForge's dock is designed to stay out of your way while keeping everything 
 ## Architecture
 
 HammerForge uses a **coordinator + subsystems** pattern:
+
+`LevelRoot` always initializes the brush, entity, bake, paint, and file core needed to load and run a level. Grid, drawing, snapping, selection, previews, prefab authoring, validation, undo, and the remaining editor services are loaded only by editor builds. Export templates therefore avoid constructing the editor tool graph.
 
 ```
 plugin.gd            EditorPlugin — input routing, toolbar, viewport overlay
@@ -434,6 +436,9 @@ See [ROADMAP.md](ROADMAP.md) for the full plan.
 
 **Recently shipped (also):**
 - Material atlas packing and merge-selected-brushes
+- Exact-surface Polygon and Path placement through the shared snap pipeline
+- Reliable prefab member tracking across Draft, Pending Cuts, Committed Cuts, and entity containers
+- Runtime-only LevelRoot initialization in exported levels
 - Snap-to-edge (dock **E**) and snap-to-perpendicular (dock **P**)
 - Bake `func_detail` meshes and trigger `Area3D` volumes
 - Playtest exports with a spawned FPS player, recursive nested-node ownership, and preserved source transforms
@@ -444,7 +449,7 @@ See [ROADMAP.md](ROADMAP.md) for the full plan.
 - `.map` entity string round-trip fidelity ([#32](https://github.com/saworbit/hammerforge/issues/32))
 - Non-blocking threaded mesh merge ([#35](https://github.com/saworbit/hammerforge/issues/35))
 - PBR atlas channels and paint hot paths ([#24](https://github.com/saworbit/hammerforge/issues/24), [#39](https://github.com/saworbit/hammerforge/issues/39))
-- Smaller coordinator and dock ownership boundaries ([#21](https://github.com/saworbit/hammerforge/issues/21), [#22](https://github.com/saworbit/hammerforge/issues/22), [#41](https://github.com/saworbit/hammerforge/issues/41))
+- Smaller dock and plugin ownership boundaries ([#22](https://github.com/saworbit/hammerforge/issues/22), [#41](https://github.com/saworbit/hammerforge/issues/41))
 
 **Later:**
 - Bezier patch editing

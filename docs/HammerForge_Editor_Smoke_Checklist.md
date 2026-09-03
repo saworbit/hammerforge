@@ -156,6 +156,7 @@ Enable the HammerForge plugin if it is not already enabled.
 - Drag the prefab from the list into the 3D viewport.
 - Confirm the prefab instances at the snapped placement point.
 - If the prefab contains only entities, confirm the placement still succeeds.
+- Create a prefab containing additive, pending subtractive, and committed subtractive brushes plus a tied brush entity. Confirm tagging, source updates, and removal affect every member rather than leaving nodes in PendingCuts or CommittedCuts.
 - Undo the placement; confirm the full prefab placement is reverted.
 - Redo the placement; confirm it is restored.
 
@@ -233,7 +234,8 @@ Enable the HammerForge plugin if it is not already enabled.
 
 ### 9. Polygon Tool
 - Press P to activate the Polygon tool.
-- Click 4+ points on the ground plane; confirm cyan outline preview appears.
+- Aim at the top or sloped face of an elevated brush and place the first point; confirm it lands on the exact visible surface and uses the enabled snap modes. Aim inside the empty bounds of a non-box brush and confirm placement continues to real geometry behind it or the forward construction plane.
+- With only Grid snap enabled, click 3+ more points at different screen heights; confirm they stay on the horizontal plane established by the first point and the cyan outline preview appears. Enable a geometry snap mode and confirm a nearby eligible candidate can win through the shared snap pipeline.
 - Confirm concave vertex placements are rejected (e.g. try to create an L-shape).
 - Press Enter (or click near the first point) to close the polygon.
 - Move mouse up/down to set height; confirm green vertical edges + top outline preview.
@@ -245,7 +247,7 @@ Enable the HammerForge plugin if it is not already enabled.
 
 ### 10. Path Tool
 - Press semicolon (;) to activate the Path tool.
-- Click 3+ waypoints on the ground plane; confirm cyan polyline with width indicators.
+- Place the first waypoint on an elevated visible brush surface, then click 2+ waypoints at different screen heights with only Grid snap enabled. Confirm the first point uses exact-surface picking and active snapping, while later points remain on its horizontal plane with cyan width indicators. Enable a geometry snap mode and confirm a nearby eligible candidate can win.
 - Press Enter to finalize the path.
 - Confirm corridor brushes appear (one per segment + miter joints at corners).
 - Confirm all brushes share a group (click one, all select).

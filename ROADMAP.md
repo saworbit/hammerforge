@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: September 2, 2026
+Last updated: September 3, 2026
 
 This roadmap is a directional plan. Items may change based on user feedback.
 
@@ -136,8 +136,8 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
   - `split_edge()` inserts midpoint vertex (Ctrl+E). `merge_vertices()` merges to centroid (Ctrl+W).
   - Edge wireframe overlay in plugin.gd with ImmediateMesh PRIMITIVE_LINES pass.
   - New keymap bindings: `vertex_edge_mode`, `vertex_merge`, `vertex_split_edge`.
-- **Polygon tool** (`hf_polygon_tool.gd`, tool_id=102, KEY_P): click convex vertices on ground plane, auto-close or Enter, drag height, creates brush with undo/redo. Convexity enforced via 2D cross product.
-- **Path tool** (`hf_path_tool.gd`, tool_id=103, KEY_SEMICOLON): click waypoints, Enter to finalize, builds oriented-box segment brushes with miter joints at corners. Auto-grouped via shared group_id.
+- **Polygon tool** (`hf_polygon_tool.gd`, tool_id=102, KEY_P): place the first convex vertex on an exact visible surface or the forward construction plane, continue from that horizontal placement plane through the shared snap pipeline, auto-close or Enter, drag height, and create a brush with undo/redo. Convexity is enforced via 2D cross product.
+- **Path tool** (`hf_path_tool.gd`, tool_id=103, KEY_SEMICOLON): place the first waypoint through the shared exact-surface raycast and snap pipeline, continue from its horizontal placement plane, then press Enter to build oriented-box segment brushes with miter joints at corners. Brushes are auto-grouped via a shared group_id.
 - Tool registry updated to pass `EditorUndoRedoManager` to tools on activation.
 - `HFEditorTool` base class gains `undo_redo` member for brush-creating tools.
 - 50 new tests (vertex_edges 19, polygon_tool 16, path_tool 15). Total: **622 tests across 38 files**.
@@ -406,10 +406,10 @@ Current: 4,318 lines. Largest remaining work is viewport input / overlay ownersh
 - `_handle_vertex_input` now delegates to `plugin_vertex_input.gd` (`HFPluginVertexInput.handle`).
 - `_update_hud_context` and `_update_context_toolbar_state` now delegate to `plugin_hud.gd` (`HFPluginHud`).
 
-### Lazy system loading in level_root.gd (Phase 3a)
-- Replace 54 upfront `const X = preload(...)` statements with on-demand `_get_system(name)` accessor.
-- Systems instantiate on first access — reduces startup cost for simple scenes; fixes circular-preload risks as new systems are added.
-- Current: 2,844 lines. Continue only behind focused characterization tests; track the remaining decomposition in [#21](https://github.com/saworbit/hammerforge/issues/21).
+### Runtime system boundary in level_root.gd (Phase 3a, complete)
+- Export templates eagerly initialize only the brush, entity, bake, paint, and file core needed to load and run levels.
+- Twenty editor-only services are loaded dynamically only when `Engine.is_editor_hint()` or the `editor` feature is present. This keeps drawing, grid, snap, selection, preview, prefab-authoring, validation, undo, displacement, bevel, and related authoring graphs out of exported games.
+- Headless editor tests retain the complete tool graph, with focused export-playtest coverage guarding the runtime boundary.
 
 ### Risk-focused test gaps
 The current suite covers 1,867 tests across 107 scripts, including the large brush, bake, paint, vertex, baker, brush-instance, and map-I/O systems. Remaining work is concentrated in failure semantics and scale-sensitive paths rather than wholly untested systems:

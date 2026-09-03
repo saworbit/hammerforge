@@ -1,6 +1,6 @@
 ﻿# HammerForge Design Constraints
 
-Last updated: March 27, 2026
+Last updated: September 3, 2026
 
 This document makes the current tradeoffs explicit so level designers and developers know what HammerForge optimizes for.
 
@@ -47,5 +47,6 @@ This document makes the current tradeoffs explicit so level designers and develo
 - The preview uses `ImmediateMesh` with `PRIMITIVE_LINES` — zero GPU memory allocation beyond vertex buffers.
 
 ## Performance Considerations
+- Export templates initialize only the runtime level core: brush, entity, bake, paint, and file systems. Authoring systems such as grid, drag, snap, selection, previews, prefab editing, validation, undo, displacement, and bevel remain editor-only.
 - Chunked baking improves scale but adds bake time per chunk.
 - Very large paint layers should be split to reduce regeneration cost.

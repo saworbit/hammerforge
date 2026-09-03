@@ -1,6 +1,6 @@
 # HammerForge User Guide
 
-Last updated: September 2, 2026
+Last updated: September 3, 2026
 
 This guide covers the current HammerForge workflow in Godot 4.7: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs.
 
@@ -293,6 +293,7 @@ Click **Export Playtest Build** in **Test → Advanced Bake** to create a standa
 - Adds the playtest player controller at the active spawn and applies the spawn's yaw.
 - Preserves world transforms while reparenting export content and recursively owns nested geometry/collision so it survives scene packing.
 - Injects the entity I/O runtime automatically when the exported content contains connections.
+- Initializes only the runtime level core in the exported scene. Grid, drawing, snapping, selection, previews, prefab authoring, validation, undo, and other editor services are not loaded or constructed by export templates.
 - Launches the scene via `EditorInterface.play_custom_scene()`.
 - A toast confirms "Playtest launched" on success.
 
@@ -715,6 +716,7 @@ Prefabs let you save a selection of brushes and entities as a reusable group and
 - The brushes and entities are placed at the drop position with new unique IDs.
 - Entity I/O connections are automatically remapped to the new entity names.
 - Each placed instance is tracked in the prefab system for variant cycling and propagation.
+- Instance tracking covers brushes in DraftBrushes, PendingCuts, and CommittedCuts, plus point and tied brush entities. Source updates and removal warn when a recorded member is missing instead of silently leaving a partial instance.
 - The operation supports undo/redo.
 
 ### Prefab Variants
@@ -846,11 +848,12 @@ The polygon tool lets you draw arbitrary convex shapes and extrude them into bru
 
 ### Workflow
 1. Press **P** to activate the Polygon tool.
-2. Click in the viewport to place vertices on the ground plane (grid-snapped).
-3. Each new vertex is validated for convexity -- concave placements are rejected.
-4. Close the polygon by clicking near the first vertex (within the auto-close threshold) or pressing **Enter** (requires 3+ vertices).
-5. Move the mouse up/down to set the extrusion height, then click to confirm.
-6. The brush is created with full undo/redo support.
+2. Click in the viewport to place the first vertex on the nearest exact visible surface. If no geometry is hit, placement uses the forward construction plane. The point passes through the shared Grid, Vertex, Center, Edge, Perpendicular, and reference-line snap pipeline.
+3. Place more vertices. Each cursor ray starts on the horizontal plane established by the first point, then passes through the shared snap pipeline.
+4. Each new vertex is validated for convexity -- concave placements are rejected.
+5. Close the polygon by clicking near the first vertex (within the auto-close threshold) or pressing **Enter** (requires 3+ vertices).
+6. Move the mouse up/down to set the extrusion height, then click to confirm.
+7. The brush is created with full undo/redo support.
 
 ### Preview
 During placement, a cyan outline shows the polygon shape. During height extrusion, green vertical edges and the top face outline appear.
@@ -874,10 +877,11 @@ The path tool creates corridors by placing waypoints and extruding a rectangular
 
 ### Workflow
 1. Press **;** (semicolon) to activate the Path tool.
-2. Click in the viewport to place waypoints on the ground plane (grid-snapped).
-3. Press **Enter** to finalize the path (requires 2+ waypoints).
-4. For each segment, an oriented-box brush is created. At interior corners, a miter joint brush fills the gap.
-5. All brushes are auto-grouped and created in a single undo action.
+2. Click in the viewport to place the first waypoint on the nearest exact visible surface. If no geometry is hit, placement uses the forward construction plane. The point passes through the shared Grid, Vertex, Center, Edge, Perpendicular, and reference-line snap pipeline.
+3. Place more waypoints. Each cursor ray starts on the horizontal plane established by the first point, then passes through the shared snap pipeline.
+4. Press **Enter** to finalize the path (requires 2+ waypoints).
+5. For each segment, an oriented-box brush is created. At interior corners, a miter joint brush fills the gap.
+6. All brushes are auto-grouped and created in a single undo action.
 
 ### Preview
 During placement, a cyan polyline shows the path with parallel offset lines indicating width and perpendicular ticks at waypoints.

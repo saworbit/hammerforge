@@ -1,6 +1,6 @@
 # HammerForge MVP Guide
 
-Last updated: September 2, 2026
+Last updated: September 3, 2026
 
 This guide is for contributors implementing or extending the MVP.
 
@@ -15,8 +15,9 @@ This guide is for contributors implementing or extending the MVP.
 HammerForge uses a **coordinator + subsystems** pattern:
 
 - **`plugin.gd`** handles editor input and routes to `LevelRoot`. Uses sticky `active_root` with deep recursive tree search.
-- **`level_root.gd`** is a 2,844-line coordinator that owns containers, exports, and signals. Public methods delegate to subsystem classes; continued decomposition is tracked in the roadmap. Default UX is Draw → material → entity → bake → Test Level; power-user overlays are opt-in.
+- **`level_root.gd`** is a 2,851-line coordinator that owns containers, exports, and signals. Public methods delegate to subsystem classes; continued decomposition is tracked in the roadmap. Default UX is Draw → material → entity → bake → Test Level; power-user overlays are opt-in.
 - **Subsystems** (`systems/*.gd`) are `RefCounted` classes that do the real work. Each receives a `LevelRoot` reference in its constructor.
+- **Runtime boundary**: `LevelRoot` eagerly initializes only brush, entity, bake, paint, and file systems in export templates. Editor-only systems are loaded dynamically when `Engine.is_editor_hint()` or the `editor` feature is present, keeping the authoring graph out of exported games while preserving headless editor tests.
 - **`input_state.gd`** is a state machine managing drag/paint modes.
 - **`dock.gd`** presents 4 tabs (Build, Paint, Objects, Test) with programmatic, persisted collapsible sections. Selection tools appear contextually in Build when brushes are selected. The primary toolbar exposes Draw, Select, Paint, More, and Help.
 
@@ -30,6 +31,7 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 - `HFExtrudeTool` handles face extrusion: picks a face via `FaceSelector`, shows a preview, and commits a new DraftBrush on release. Supports Up (along face normal) and Down (opposite).
 - `HFBrushSystem` handles brush CRUD, pending/committed cuts, materials, picking, hollow, clip, tie/untie, move floor/ceiling, and UV justify. Failable operations (hollow, clip, delete) return `HFOpResult` with actionable fix hints.
 - `HFSnapSystem` provides centralized Grid, Vertex, Center, Edge-midpoint, and Perpendicular snapping. `_snap_point()` delegates to it.
+- Polygon and Path send their first point through the shared exact-surface raycast and `_snap_point()` pipeline. Subsequent points intersect the horizontal plane established by the first point before using the same snap pipeline.
 - `HFInputState` exposes `get_drag_dimensions()` for live W x H x D display during drag gestures.
 - PendingCuts allow staging subtract operations before applying.
 
@@ -95,6 +97,7 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 - `save_to_file()` / `load_from_file()` use JSON with `HFLevelIO` encoding for Godot types.
 - `HFPrefabLibrary` (dock section) scans `res://prefabs/` and provides drag-and-drop.
 - Plugin handles `"hammerforge_prefab"` drop type with raycast + snap + undo/redo.
+- Instance bookkeeping resolves brushes across DraftBrushes, PendingCuts, and CommittedCuts without adding frozen cutters to the editable brush cache. Point entities and tied brush entities resolve through `HFEntitySystem`. Missing recorded members produce warnings during removal and source updates.
 
 ### Tutorial Wizard (`HFTutorialWizard`)
 - 2-step Draw → Test Level guide replacing the static welcome panel.
