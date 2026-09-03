@@ -3,6 +3,93 @@ extends GutTest
 const HFPrefabType = preload("res://addons/hammerforge/hf_prefab.gd")
 const HFLevelIO = preload("res://addons/hammerforge/hflevel_io.gd")
 const HFPrefabSystemType = preload("res://addons/hammerforge/systems/hf_prefab_system.gd")
+const HFBrushSystemType = preload("res://addons/hammerforge/systems/hf_brush_system.gd")
+const HFEntitySystemType = preload("res://addons/hammerforge/systems/hf_entity_system.gd")
+const DraftBrushType = preload("res://addons/hammerforge/brush_instance.gd")
+
+
+class PrefabLookupRoot:
+	extends Node3D
+
+	var draft_brushes_node := Node3D.new()
+	var pending_node := Node3D.new()
+	var committed_node := Node3D.new()
+	var entities_node := Node3D.new()
+	var brush_system
+	var entity_system
+
+	func _init() -> void:
+		add_child(draft_brushes_node)
+		add_child(pending_node)
+		add_child(committed_node)
+		add_child(entities_node)
+
+	func _iter_pick_nodes() -> Array:
+		return (
+			draft_brushes_node.get_children()
+			+ pending_node.get_children()
+			+ entities_node.get_children()
+		)
+
+	func _iter_managed_brush_nodes() -> Array:
+		return (
+			draft_brushes_node.get_children()
+			+ pending_node.get_children()
+			+ committed_node.get_children()
+		)
+
+
+func _make_lookup_root() -> PrefabLookupRoot:
+	var root := PrefabLookupRoot.new()
+	root.brush_system = HFBrushSystemType.new(root)
+	root.entity_system = HFEntitySystemType.new(root)
+	return root
+
+
+func test_prefab_removes_property_identified_brushes_from_all_brush_containers():
+	for container_name in [&"pending_node", &"committed_node"]:
+		var root := _make_lookup_root()
+		var brush := DraftBrushType.new()
+		brush.brush_id = "brush_%s" % container_name
+		root.get(container_name).add_child(brush)
+		var system = HFPrefabSystemType.new(root)
+		var iid := system.register_instance("res://prefabs/test.hfprefab", [brush.brush_id], [])
+		assert_eq(brush.get_meta("hf_prefab_instance", ""), iid, "brush was found and tagged")
+		system._remove_instance_nodes(system.get_instance(iid))
+		assert_null(brush.get_parent(), "%s brush was removed" % container_name)
+		if is_instance_valid(brush):
+			brush.free()
+		root.free()
+
+
+func test_prefab_finds_brush_entities_in_the_committed_container():
+	var root := _make_lookup_root()
+	var brush_entity := DraftBrushType.new()
+	root.committed_node.add_child(brush_entity)
+	var system = HFPrefabSystemType.new(root)
+	var iid := system.register_instance("res://prefabs/test.hfprefab", [], [brush_entity])
+	assert_eq(
+		brush_entity.get_meta("hf_prefab_instance", ""), iid, "brush entity was found and tagged"
+	)
+	system._remove_instance_nodes(system.get_instance(iid))
+	assert_null(brush_entity.get_parent(), "committed brush entity was removed")
+	if is_instance_valid(brush_entity):
+		brush_entity.free()
+	root.free()
+
+
+func test_prefab_removal_warns_when_recorded_members_are_missing():
+	var root := _make_lookup_root()
+	var system = HFPrefabSystemType.new(root)
+	var rec = HFPrefabSystemType.PrefabInstanceRecord.new()
+	rec.instance_id = "pfx_missing"
+	rec.brush_ids = ["missing_brush"]
+	rec.entity_uids = ["missing_entity"]
+	system._remove_instance_nodes(rec)
+	assert_push_warning("brush 'missing_brush' was not found during removal")
+	assert_push_warning("entity 'missing_entity' was not found during removal")
+	root.free()
+
 
 # -- Helper data ----------------------------------------------------------------
 
@@ -225,6 +312,7 @@ func find_entities_by_name(_name: String) -> Array:
 extends Node3D
 var draft_brushes_node: Node3D
 var entities_node: Node3D
+var brush_system
 var entity_system
 var prefab_system
 """)
@@ -290,6 +378,7 @@ func find_entities_by_name(_name: String) -> Array:
 extends Node3D
 var draft_brushes_node: Node3D
 var entities_node: Node3D
+var brush_system
 var entity_system
 """)
 	root_script.reload()

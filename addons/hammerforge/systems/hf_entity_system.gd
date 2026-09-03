@@ -32,6 +32,20 @@ func get_entity_definitions() -> Dictionary:
 	return root.entity_definitions
 
 
+func find_entity_by_prefab_uid(uid: String) -> Node3D:
+	if uid == "":
+		return null
+	if root.entities_node:
+		for child in root.entities_node.get_children():
+			if str(child.get_meta("hf_prefab_entity_id", "")) == uid:
+				return child as Node3D
+	if root.has_method("_iter_managed_brush_nodes"):
+		for child in root._iter_managed_brush_nodes():
+			if str(child.get_meta("hf_prefab_entity_id", "")) == uid:
+				return child as Node3D
+	return null
+
+
 func add_entity(entity: Node3D) -> void:
 	if not entity:
 		return

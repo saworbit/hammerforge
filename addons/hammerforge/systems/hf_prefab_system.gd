@@ -47,15 +47,8 @@ func _assign_entity_uid() -> String:
 func _find_entity_by_uid(uid: String) -> Node3D:
 	if uid == "":
 		return null
-	if root.entities_node:
-		for child in root.entities_node.get_children():
-			if str(child.get_meta("hf_prefab_entity_id", "")) == uid:
-				return child
-	# Also check brush entities
-	if root.draft_brushes_node:
-		for child in root.draft_brushes_node.get_children():
-			if str(child.get_meta("hf_prefab_entity_id", "")) == uid:
-				return child
+	if root.entity_system and root.entity_system.has_method("find_entity_by_prefab_uid"):
+		return root.entity_system.find_entity_by_prefab_uid(uid)
 	return null
 
 
@@ -165,11 +158,8 @@ func _untag_nodes(rec: PrefabInstanceRecord) -> void:
 
 
 func _find_brush_by_id(brush_id: String) -> Node3D:
-	if not root.draft_brushes_node:
-		return null
-	for child in root.draft_brushes_node.get_children():
-		if str(child.get_meta("brush_id", "")) == brush_id:
-			return child
+	if root.brush_system and root.brush_system.has_method("find_managed_brush_by_id"):
+		return root.brush_system.find_managed_brush_by_id(brush_id) as Node3D
 	return null
 
 
@@ -300,6 +290,13 @@ func _remove_instance_nodes(rec: PrefabInstanceRecord) -> void:
 			if parent:
 				parent.remove_child(brush)
 			brush.queue_free()
+		else:
+			push_warning(
+				(
+					"Prefab instance '%s': brush '%s' was not found during removal."
+					% [rec.instance_id, bid]
+				)
+			)
 	for uid in rec.entity_uids:
 		var ent = _find_entity_by_uid(uid)
 		if ent:
@@ -307,6 +304,13 @@ func _remove_instance_nodes(rec: PrefabInstanceRecord) -> void:
 			if parent:
 				parent.remove_child(ent)
 			ent.queue_free()
+		else:
+			push_warning(
+				(
+					"Prefab instance '%s': entity '%s' was not found during removal."
+					% [rec.instance_id, uid]
+				)
+			)
 
 
 # ---------------------------------------------------------------------------
@@ -378,11 +382,25 @@ func push_instance_to_source(instance_id: String) -> bool:
 		var brush = _find_brush_by_id(bid)
 		if brush:
 			brush_nodes.append(brush)
+		else:
+			push_warning(
+				(
+					"Prefab instance '%s': brush '%s' was not found while saving the source."
+					% [instance_id, bid]
+				)
+			)
 	var entity_nodes: Array = []
 	for uid in rec.entity_uids:
 		var ent = _find_entity_by_uid(uid)
 		if ent:
 			entity_nodes.append(ent)
+		else:
+			push_warning(
+				(
+					"Prefab instance '%s': entity '%s' was not found while saving the source."
+					% [instance_id, uid]
+				)
+			)
 
 	# Re-capture as the current variant
 	var captured = HFPrefabType.capture_from_selection(
