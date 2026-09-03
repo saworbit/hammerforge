@@ -179,9 +179,11 @@ func test_native_candidates_yield_rmb_and_escape_before_any_value_moves() -> voi
 
 
 func test_native_owned_selection_yields_all_keyboard_shortcuts_to_godot() -> void:
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
-	var start := source.find("func _handle_active_selection_input")
-	var finish := source.find("func _handle_extrude_mouse", start)
+	var source := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_selection_input.gd"
+	)
+	var start := source.find("static func handle_active")
+	var finish := source.find("static func select_faces_in_rect", start)
 	var block := source.substr(start, finish - start)
 	var key_guard := block.find("event is InputEventKey")
 	assert_gte(key_guard, 0)
@@ -361,8 +363,15 @@ func test_buttonless_motion_is_the_only_lmb_capture_recovery_signal() -> void:
 
 func test_plugin_routes_owned_selection_before_raycast_and_tool_dispatch() -> void:
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
-	var compact_source := source.replace("\r", "").replace("\n", "").replace("\t", "").replace(
-		" ", ""
+	var selection_source := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_selection_input.gd"
+	)
+	var compact_source := (
+		(source + selection_source)
+		. replace("\r", "")
+		. replace("\n", "")
+		. replace("\t", "")
+		. replace(" ", "")
 	)
 	var forward := FileAccess.get_file_as_string(
 		"res://addons/hammerforge/plugin_viewport_input.gd"
@@ -381,7 +390,7 @@ func test_plugin_routes_owned_selection_before_raycast_and_tool_dispatch() -> vo
 			forward.find(competing_work),
 			"Owned selection must route before %s" % competing_work,
 		)
-	assert_true(source.contains("EditorPlugin.AFTER_GUI_INPUT_CUSTOM"))
+	assert_true(selection_source.contains("EditorPlugin.AFTER_GUI_INPUT_CUSTOM"))
 	assert_true(
 		compact_source.contains("varpass_to_native:=notface_selectornative_selection_present"),
 		"Every Object Select press and every native-node overlap must stay native",
@@ -392,9 +401,11 @@ func test_plugin_routes_owned_selection_before_raycast_and_tool_dispatch() -> vo
 
 
 func test_object_select_keeps_native_shift_and_leaves_ctrl_cmd_to_godot() -> void:
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
-	var start := source.find("func _handle_select_mouse")
-	var finish := source.find("func custom_selection_release_result", start)
+	var source := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_selection_input.gd"
+	)
+	var start := source.find("static func handle_press")
+	var finish := source.find("static func custom_release_result", start)
 	var block := source.substr(start, finish - start)
 	var compact := block.replace("\r", "").replace("\n", "").replace("\t", "").replace(" ", "")
 	assert_true(
@@ -417,17 +428,31 @@ func test_face_selection_release_keeps_native_gizmo_cleanup_alive() -> void:
 		HammerForgePlugin.custom_selection_release_result(false),
 		EditorPlugin.AFTER_GUI_INPUT_PASS,
 	)
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
-	var start := source.find("func _handle_active_selection_input")
-	var finish := source.find("func _handle_extrude_mouse", start)
+	var source := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_selection_input.gd"
+	)
+	var start := source.find("static func handle_active")
+	var finish := source.find("static func select_faces_in_rect", start)
 	var release_block := source.substr(start, finish - start)
 	assert_true(release_block.contains("root.select_face_at_screen"))
-	assert_true(release_block.contains("_select_faces_in_rect"))
+	assert_true(release_block.contains("select_faces_in_rect"))
 	assert_eq(
-		release_block.count("return custom_selection_release_result(true)"),
+		release_block.count("return custom_release_result(true)"),
 		2,
 		"Face click and marquee releases must reach native gizmo commit/cleanup",
 	)
+
+
+func test_plugin_selection_callbacks_are_thin_delegates() -> void:
+	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
+	for call in [
+		"HFPluginSelectionInput.handle_press",
+		"HFPluginSelectionInput.custom_release_result",
+		"HFPluginSelectionInput.handle_active",
+		"HFPluginSelectionInput.select_faces_in_rect",
+		"HFPluginSelectionInput.face_screen_center",
+	]:
+		assert_true(source.contains(call), "%s must be delegated" % call)
 
 
 func test_face_select_is_modal_and_hides_ambiguous_object_gizmos() -> void:
@@ -671,9 +696,12 @@ func test_focus_loss_cancels_transient_pointer_ownership() -> void:
 	var recovery_block := source.substr(recovery_start, recovery_end - recovery_start)
 	assert_true(recovery_block.contains("_tool_registry.recover_active_pointer_capture()"))
 
-	var active_start := source.find("func _handle_active_selection_input")
-	var active_end := source.find("func _select_faces_in_rect", active_start)
-	var active_block := source.substr(active_start, active_end - active_start)
+	var selection_source := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_selection_input.gd"
+	)
+	var active_start := selection_source.find("static func handle_active")
+	var active_end := selection_source.find("static func select_faces_in_rect", active_start)
+	var active_block := selection_source.substr(active_start, active_end - active_start)
 	var recovered_start := active_block.find("HFSelectionGestureType.MotionDecision.RECOVERED:")
 	var recovered_end := active_block.find(
 		"HFSelectionGestureType.MotionDecision.NATIVE_GIZMO:", recovered_start
@@ -689,15 +717,18 @@ func test_face_marquee_honors_toggle_and_visibility_contracts() -> void:
 		"Object marquee belongs wholly to Godot's native viewport selection",
 	)
 
-	var face_start := source.find("func _select_faces_in_rect")
-	var face_end := source.find("func _face_screen_center", face_start)
-	var face_block := source.substr(face_start, face_end - face_start)
+	var selection_source := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_selection_input.gd"
+	)
+	var face_start := selection_source.find("static func select_faces_in_rect")
+	var face_end := selection_source.find("static func face_screen_center", face_start)
+	var face_block := selection_source.substr(face_start, face_end - face_start)
 	assert_true(face_block.contains("toggle: bool = false"))
 	assert_true(face_block.contains("brush.is_visible_in_tree()"))
 	assert_true(face_block.contains("root.is_brush_node(brush)"))
 	assert_true(face_block.contains("root.pick_face(camera, center)"))
 	assert_true(face_block.contains('visible_hit.get("brush") != brush'))
-	assert_true(face_block.contains("indices.erase(i)"))
+	assert_true(face_block.contains("indices.erase(index)"))
 
 
 func test_idle_external_tool_rmb_starts_one_native_camera_session() -> void:
@@ -1168,10 +1199,13 @@ func test_plugin_defers_one_shared_native_and_inspector_brush_reconcile() -> voi
 			"_queue_managed_brush_reconcile()"
 		)
 	)
-	var release_start := source.find("func _handle_active_selection_input")
-	var release_end := source.find("func _handle_extrude_mouse", release_start)
+	var selection_source := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_selection_input.gd"
+	)
+	var release_start := selection_source.find("static func handle_active")
+	var release_end := selection_source.find("static func select_faces_in_rect", release_start)
 	assert_true(
-		source.substr(release_start, release_end - release_start).contains(
+		selection_source.substr(release_start, release_end - release_start).contains(
 			"_queue_managed_brush_reconcile()"
 		)
 	)
