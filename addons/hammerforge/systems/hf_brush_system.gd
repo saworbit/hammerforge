@@ -223,8 +223,13 @@ func _find_brush_by_id(brush_id: String) -> Node:
 		if is_instance_valid(cached) and cached.is_inside_tree():
 			return cached
 		_brush_cache.erase(brush_id)
-	# Slow path: scan and populate cache
-	for node in root._iter_pick_nodes():
+	# Slow path: scan every managed brush container, including committed cutters.
+	var nodes: Array = (
+		root._iter_managed_brush_nodes()
+		if root.has_method("_iter_managed_brush_nodes")
+		else root._iter_pick_nodes()
+	)
+	for node in nodes:
 		if node and node is DraftBrush:
 			if node.has_meta("brush_id") and str(node.get_meta("brush_id")) == brush_id:
 				_brush_cache[brush_id] = node
