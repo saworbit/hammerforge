@@ -749,10 +749,13 @@ func test_idle_external_tool_rmb_starts_one_native_camera_session() -> void:
 
 func test_marquee_draws_in_the_native_3d_viewport_overlay() -> void:
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
+	var overlay_source := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_overlays.gd"
+	)
 	assert_true(source.contains("set_force_draw_over_forwarding_enabled()"))
 	assert_true(source.contains("func _forward_3d_force_draw_over_viewport"))
-	assert_true(source.contains("viewport_control.draw_rect"))
-	assert_true(source.contains("update_overlays()"))
+	assert_true(overlay_source.contains("viewport_control.draw_rect"))
+	assert_true(overlay_source.contains("update_overlays()"))
 	assert_false(
 		source.contains(
 			"add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, _marquee_overlay)"
