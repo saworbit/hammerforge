@@ -43,7 +43,7 @@ HammerForge is a single `addons/` folder. No external tools, no custom builds, n
 
 | | |
 |---|---|
-| **Subsystem-based coordinator architecture** | **1,790 unit + integration tests** with CI on every push |
+| **Subsystem-based coordinator architecture** | **1,895 unit + integration tests** with CI on every push |
 | **15 brush shapes** (box through dodecahedron) | **150 built-in prototype textures** for instant greyboxing |
 | **Quake `.map`** + **glTF `.glb`** export | **.hflevel** native format with threaded I/O |
 | **Customizable keymaps** (JSON) | **Plugin API** for custom tools |
@@ -259,9 +259,11 @@ HammerForge uses a **coordinator + subsystems** pattern:
 `LevelRoot` always initializes the brush, entity, bake, paint, and file core needed to load and run a level. Grid, drawing, snapping, selection, previews, prefab authoring, validation, undo, and the remaining editor services are loaded only by editor builds. Export templates therefore avoid constructing the editor tool graph.
 
 ```
-plugin.gd            EditorPlugin coordinator with focused input/overlay modules
+plugin.gd            EditorPlugin lifecycle, composition, discovery, and undo wiring
+  ├─ plugin_*.gd     Input, selection, commands, HUD, overlays, edit actions, and drops
   ├─ dock.gd         Four-tab UI coordinator with focused handler modules
-  └─ level_root.gd   Thin coordinator — owns containers, exports, signals
+  ├─ HFToolRegistry  Plugin-owned external tool loading and dispatch
+  └─ level_root.gd   Public level facade; owns containers, exports, and signals
        ├─ HFBrushSystem     Brush CRUD, hollow, clip, tie, move, UV justify, caching
        ├─ HFDragSystem      Two-stage draw lifecycle + preview management
        ├─ HFExtrudeTool     Face extrusion (Up/Down) via FaceSelector
@@ -283,18 +285,19 @@ plugin.gd            EditorPlugin coordinator with focused input/overlay modules
        ├─ HFSpawnSystem     Player spawn lookup, validation, auto-fix, debug visualisation
        ├─ HFPrefabSystem    Instance registry, variant cycling, live-linked propagation
        ├─ HFDisplacementSystem  Displacement surface create/destroy/paint/sew/elevation
-       ├─ HFBevelSystem     Edge bevel (chamfer) and face inset
-       └─ HFToolRegistry    External tool loading and dispatch
-            ├─ HFMeasureTool   Multi-ruler measurement + snap reference (tool_id=100)
-            ├─ HFDecalTool     Decal placement with live preview (tool_id=101)
-            ├─ HFPolygonTool   Convex polygon → extruded brush (tool_id=102)
-            └─ HFPathTool      Waypoint path → corridor brushes (tool_id=103)
+       └─ HFBevelSystem     Edge bevel (chamfer) and face inset
+
+HFToolRegistry
+  ├─ HFMeasureTool   Multi-ruler measurement + snap reference (tool_id=100)
+  ├─ HFDecalTool     Decal placement with live preview (tool_id=101)
+  ├─ HFPolygonTool   Convex polygon → extruded brush (tool_id=102)
+  └─ HFPathTool      Waypoint path → corridor brushes (tool_id=103)
 ```
 
 Key design choices:
 
 - **No live CSG** -- brushes are Node3D with box metadata; CSG runs only during bake
-- **RefCounted subsystems** -- each receives a LevelRoot reference; no circular preloads
+- **RefCounted subsystems** -- concrete systems receive a LevelRoot reference; editor-only systems use dynamic loading so export templates avoid the authoring graph
 - **Signal-driven UI** -- signals on LevelRoot replace polling; batched emission prevents UI thrash
 - **Tag-based invalidation** -- exact dirty tags on transform, material, UV, paint, and vertex mutations; an ID-keyed change tracker reconciles Godot-owned Inspector/gizmo commits and native undo/redo for selective Bake Changed output
 - **Command collation** -- rapid operations merge into single undo entries within a 1-second window
@@ -302,7 +305,7 @@ Key design choices:
 - **HFOpResult** -- failable operations return structured results with actionable fix hints
 - **HFGesture** -- base class for self-contained input tool gestures
 - **Explicit state machine** -- `HFInputState` manages IDLE / DRAG_BASE / DRAG_HEIGHT / SURFACE_PAINT / EXTRUDE / VERTEX_EDIT modes
-- **Type-safe calls** -- no duck-typing between modules (dynamic dispatch only in undo/redo by design)
+- **Stable public facade** -- editor and dock code use LevelRoot's public operations; focused plugin adapters use deliberate dynamic access where GDScript cannot type the EditorPlugin implementation without creating preload cycles
 
 ---
 
@@ -516,5 +519,5 @@ Run `godot --headless --import --path .` first, then re-run the test command.
 
 <p align="center">
   <strong>MIT License</strong><br>
-  <sub>Built for Godot 4.7+ | Last updated September 2, 2026</sub>
+  <sub>Built for Godot 4.7+ | Last updated September 3, 2026</sub>
 </p>
