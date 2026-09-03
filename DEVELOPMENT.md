@@ -32,6 +32,7 @@ addons/hammerforge/
   plugin_paint_input.gd Paint and displacement pointer handling
   plugin_pointer_tools.gd Draw, extrude, motion, and prefab hover handling
   plugin_selection_input.gd Native object/Face Select pointer arbitration and face marquee picking
+  plugin_selection_state.gd EditorSelection sync, owner/group normalization, and action scope guards
   plugin_overlays.gd     Power-user lifecycle, vertex/marquee drawing, quick properties, and coach marks
   plugin_vertex_input.gd Vertex/edge pick, drag, merge, and split dispatch
   plugin_hud.gd          HUD context, mode banner, and context-toolbar state
@@ -263,7 +264,7 @@ addons/hammerforge/
 The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on push and PR to `main`:
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
-- **GUT unit + integration tests** -- 1,888 tests across 109 test scripts (1,881 passing plus seven intentional no-assert safety tests; 8,140 assertions; verified in CI September 3, 2026; runs Godot headless)
+- **GUT unit + integration tests** -- 1,889 tests across 109 test scripts (1,882 passing plus seven intentional no-assert safety tests; 8,161 assertions; verified in CI September 3, 2026; runs Godot headless)
 
 Run locally before pushing:
 ```
@@ -315,7 +316,7 @@ Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framewor
 | `test_hflevel_io.gd` | 38 | Variant encode/decode (Vector2/3, Transform3D, Basis, Color), payload build/parse, full pipeline |
 | `test_brush_shapes.gd` | 37 | Box face generation, normals, vertex bounds, triangulation, serialization, centered odd-sided pyramid/prism preview+bake bounds, winding migration, sparse overlay lifecycle, material refresh, and truthful custom-face previews |
 | `test_viewport_outlines.gd` | 39 | Semantic primitive/custom/subtract outlines, combined nested entity targets, top-level/hidden visibility, hover suppression, shape-aware handle sizing, odd-polygon agreement, world-snapped resize, and bounded recovery/cancel/undo behavior |
-| `test_selection_gesture.gd` | 39 | Native Object Select/widget ownership, modal Face Select, scope/focus guards, runtime repair, modifiers, recovery, native duplicate/reparent handling, prefab unlinking, bake-setting invalidation, native overlay drawing, delegated input boundaries, and stable-ID transform/Inspector/FaceData/undo Bake Changed reconciliation |
+| `test_selection_gesture.gd` | 40 | Native Object Select/widget ownership, modal Face Select, scope/focus guards, runtime repair, modifiers, recovery, native duplicate/reparent handling, prefab unlinking, bake-setting invalidation, native overlay drawing, delegated input/state boundaries, and stable-ID transform/Inspector/FaceData/undo Bake Changed reconciliation |
 | `test_picking_correctness.gd` | 15 | Exact non-box face hits and placement, construction-plane fallback, internal entity preview traversal, nearest brush/entity ordering, scaled world-ray distances, hidden-visgroup exclusion, and canonical visibility-aware picking across tools |
 | `test_entity_props.gd` | 12 | Entity property form defaults (all types), roundtrip capture/restore, empty properties safety |
 | `test_duplicator.gd` | 7 | Instance count, progressive offset, clear cleanup, to_dict/from_dict roundtrip, edge cases |

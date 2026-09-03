@@ -399,11 +399,12 @@ The current 5,475-line file is still dominated by `_on_*` signal handlers wired 
 - Migrate `paint_tab_builder.gd` (50 call sites) and `manage_tab_builder.gd` (58 call sites) from `dock._make_*` to direct `HFUIFactory` calls. Mechanical churn — wait until shared with another tab-builder change.
 
 ### plugin.gd decomposition (Phase 3b)
-Current: 3,418 lines. Remaining work is concentrated in other coordinator responsibilities:
+Current: 3,092 lines. Remaining work is concentrated in other coordinator responsibilities:
 - `_forward_3d_gui_input` and native RMB camera ownership now live in `plugin_viewport_input.gd` (`HFPluginViewportInput`).
 - Floor, surface, and displacement paint input now lives in `plugin_paint_input.gd` (`HFPluginPaintInput`).
 - Draw, extrude, motion, face hover, and prefab hover now live in `plugin_pointer_tools.gd` (`HFPluginPointerTools`).
 - Native object/Face Select pointer arbitration and face marquee picking now live in `plugin_selection_input.gd` (`HFPluginSelectionInput`).
+- EditorSelection synchronization, managed-owner normalization, native group expansion, and mixed-selection action guards now live in `plugin_selection_state.gd` (`HFPluginSelectionState`).
 - Power-user overlay lifecycle, vertex rendering, marquee drawing, quick-property behavior, and coach-mark routing now delegate to `plugin_overlays.gd` (`HFPluginOverlays`).
 - `_handle_keyboard_input` now delegates to `plugin_input_router.gd` (`HFPluginInputRouter.handle_keyboard`).
 - `_dispatch_viewport_action` is a thin wrapper around `HFPluginCommands.execute`.
@@ -419,7 +420,7 @@ Completion is responsibility-based rather than tied to an arbitrary line count. 
 - Headless editor tests retain the complete tool graph, with focused export-playtest coverage guarding the runtime boundary.
 
 ### Risk-focused test gaps
-The current suite covers 1,888 tests across 109 scripts, including the large brush, bake, paint, vertex, baker, brush-instance, and map-I/O systems. Remaining work is concentrated in failure semantics and scale-sensitive paths rather than wholly untested systems:
+The current suite covers 1,889 tests across 109 scripts, including the large brush, bake, paint, vertex, baker, brush-instance, and map-I/O systems. Remaining work is concentrated in failure semantics and scale-sensitive paths rather than wholly untested systems:
 - crash-safe destination replacement and truthful manual-save completion ([#33](https://github.com/saworbit/hammerforge/issues/33), [#51](https://github.com/saworbit/hammerforge/issues/51));
 - quoted `.map` property round-trips ([#32](https://github.com/saworbit/hammerforge/issues/32));
 - non-blocking threaded merge/finalization ([#35](https://github.com/saworbit/hammerforge/issues/35));
