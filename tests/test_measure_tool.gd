@@ -22,6 +22,16 @@ class MeasureInputSpy:
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 
 
+class SnapRoot:
+	extends Node3D
+
+	var snap_calls := 0
+
+	func _snap_point(point: Vector3, _exclude_ids: Array = []) -> Vector3:
+		snap_calls += 1
+		return point.snapped(Vector3(4, 4, 4))
+
+
 func before_each():
 	tool = HFMeasureToolScript.new()
 
@@ -40,6 +50,14 @@ func test_tool_id():
 
 func test_tool_shortcut():
 	assert_eq(tool.tool_shortcut_key(), KEY_M)
+
+
+func test_snap_hit_uses_level_root_snap_settings():
+	var root := SnapRoot.new()
+	tool.root = root
+	assert_eq(tool._snap_hit(Vector3(3, 7, 9)), Vector3(4, 8, 8))
+	assert_eq(root.snap_calls, 1)
+	root.free()
 
 
 func test_initial_state_empty():

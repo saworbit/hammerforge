@@ -874,8 +874,8 @@ func _reset() -> void:
 
 
 func _snap(pos: Vector3) -> Vector3:
-	if root and root.get("snap_system"):
-		return root.snap_system.snap_point(pos)
+	if root and root.has_method("_snap_point"):
+		return root._snap_point(pos)
 	if root and root.get("grid_snap") and root.grid_snap > 0.0:
 		var g: float = root.grid_snap
 		return Vector3(snappedf(pos.x, g), snappedf(pos.y, g), snappedf(pos.z, g))
@@ -883,18 +883,10 @@ func _snap(pos: Vector3) -> Vector3:
 
 
 func _raycast_ground(camera: Camera3D, mouse_pos: Vector2) -> Variant:
-	var ray_origin := camera.project_ray_origin(mouse_pos)
-	var ray_dir := camera.project_ray_normal(mouse_pos)
-	if root:
-		var space_state = root.get_world_3d().direct_space_state if root.get_world_3d() else null
-		if space_state:
-			var query := PhysicsRayQueryParameters3D.new()
-			query.from = ray_origin
-			query.to = ray_origin + ray_dir * 10000.0
-			var result := space_state.intersect_ray(query)
-			if not result.is_empty():
-				return result.position
-	return _raycast_to_y_plane(camera, mouse_pos, 0.0)
+	if not root or not root.has_method("_raycast"):
+		return null
+	var hit: Dictionary = root._raycast(camera, mouse_pos)
+	return hit.get("position")
 
 
 func _raycast_to_y_plane(camera: Camera3D, mouse_pos: Vector2, y: float) -> Vector3:
@@ -902,9 +894,7 @@ func _raycast_to_y_plane(camera: Camera3D, mouse_pos: Vector2, y: float) -> Vect
 	var dir := camera.project_ray_normal(mouse_pos)
 	if absf(dir.y) < 0.0001:
 		return Vector3(origin.x, y, origin.z)
-	var t := (y - origin.y) / dir.y
-	if t < 0.0:
-		t = 0.0
+	var t := maxf((y - origin.y) / dir.y, 0.0)
 	return origin + dir * t
 
 
