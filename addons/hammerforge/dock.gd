@@ -38,6 +38,9 @@ const HFDockPaintHandler = preload("dock_paint_handler.gd")
 const HFDockBrushHandler = preload("dock_brush_handler.gd")
 const HFDockEntityHandler = preload("dock_entity_handler.gd")
 const HFDockManageHandler = preload("dock_manage_handler.gd")
+const HFDockConnections = preload("dock_connections.gd")
+const HFDockVisgroupHandler = preload("dock_visgroup_handler.gd")
+const HFDockFileHandler = preload("dock_file_handler.gd")
 
 const PRESET_MENU_RENAME := 0
 const PRESET_MENU_DELETE := 1
@@ -571,67 +574,7 @@ func _on_debug_toggled(pressed: bool) -> void:
 
 
 func _connect_setting_signals() -> void:
-	# CheckBox → bool property
-	var toggle_bindings: Array = [
-		[bake_merge_meshes, "bake_merge_meshes"],
-		[bake_generate_lods, "bake_generate_lods"],
-		[bake_unwrap_uv0, "bake_unwrap_uv0"],
-		[bake_lightmap_uv2, "bake_lightmap_uv2"],
-		[bake_use_face_materials, "bake_use_face_materials"],
-		[bake_navmesh, "bake_navmesh"],
-		[bake_visible_only_check, "bake_visible_only"],
-		[bake_use_multimesh_check, "bake_use_multimesh"],
-		[bake_use_atlas_check, "bake_use_atlas"],
-		[bake_auto_connectors_check, "bake_auto_connectors"],
-		[bake_generate_occluders_check, "bake_generate_occluders"],
-		[commit_freeze, "commit_freeze"],
-		[autosave_enabled, "hflevel_autosave_enabled"],
-		[show_grid, "grid_visible"],
-		[follow_grid, "grid_follow_brush"],
-	]
-	for binding in toggle_bindings:
-		var ctrl: CheckBox = binding[0] as CheckBox
-		var prop: String = binding[1]
-		if ctrl:
-			ctrl.toggled.connect(_on_setting_toggled.bind(prop))
-	# SpinBox → float property
-	var float_bindings: Array = [
-		[bake_chunk_size_spin, "bake_chunk_size"],
-		[bake_lightmap_texel, "bake_lightmap_texel_size"],
-		[bake_navmesh_cell_size, "bake_navmesh_cell_size"],
-		[bake_navmesh_cell_height, "bake_navmesh_cell_height"],
-		[bake_navmesh_agent_height, "bake_navmesh_agent_height"],
-		[bake_navmesh_agent_radius, "bake_navmesh_agent_radius"],
-		[bake_connector_stair_height_spin, "bake_connector_stair_height"],
-		[bake_occluder_min_area_spin, "bake_occluder_min_area"],
-	]
-	for binding in float_bindings:
-		var ctrl: SpinBox = binding[0] as SpinBox
-		var prop: String = binding[1]
-		if ctrl:
-			ctrl.value_changed.connect(_on_setting_float_changed.bind(prop))
-	# SpinBox → int property
-	var int_bindings: Array = [
-		[autosave_minutes, "hflevel_autosave_minutes"],
-		[autosave_keep, "hflevel_autosave_keep"],
-		[bake_connector_width_spin, "bake_connector_width"],
-	]
-	for binding in int_bindings:
-		var ctrl: SpinBox = binding[0] as SpinBox
-		var prop: String = binding[1]
-		if ctrl:
-			ctrl.value_changed.connect(_on_setting_int_changed.bind(prop))
-	# OptionButton → int property
-	if bake_connector_mode_opt:
-		bake_connector_mode_opt.item_selected.connect(
-			func(idx: int) -> void:
-				if level_root and _root_has_property("bake_connector_mode"):
-					level_root.set("bake_connector_mode", idx)
-					_tag_bake_setting_change("bake_connector_mode")
-		)
-	# Debug checkbox (special — also sets local debug_enabled bool)
-	if debug_logs:
-		debug_logs.toggled.connect(_on_debug_toggled)
+	HFDockConnections.connect_settings(self)
 
 
 func _apply_ui_state_to_root() -> void:
@@ -1956,11 +1899,6 @@ func _ready():
 		preset_rename_dialog.confirmed.connect(_on_preset_rename_confirmed)
 	if active_material_button:
 		active_material_button.pressed.connect(_on_active_material_pressed)
-	if material_dialog:
-		material_dialog.access = FileDialog.ACCESS_RESOURCES
-		material_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
-		material_dialog.filters = PackedStringArray(["*.tres ; Material", "*.material ; Material"])
-		material_dialog.file_selected.connect(_on_material_file_selected)
 	_setup_storage_dialogs()
 	if collision_layer_opt:
 		collision_layer_opt.clear()
@@ -3133,152 +3071,11 @@ func _get_default_entity_definition() -> Dictionary:
 
 
 func _connect_root_signals() -> void:
-	if not connected_root:
-		return
-	_cache_root_properties()
-	if connected_root.has_signal("bake_started"):
-		if not connected_root.is_connected("bake_started", Callable(self, "_on_bake_started")):
-			connected_root.connect("bake_started", Callable(self, "_on_bake_started"))
-	if connected_root.has_signal("bake_progress"):
-		if not connected_root.is_connected("bake_progress", Callable(self, "_on_bake_progress")):
-			connected_root.connect("bake_progress", Callable(self, "_on_bake_progress"))
-	if connected_root.has_signal("bake_finished"):
-		if not connected_root.is_connected("bake_finished", Callable(self, "_on_bake_finished")):
-			connected_root.connect("bake_finished", Callable(self, "_on_bake_finished"))
-	if connected_root.has_signal("grid_snap_changed"):
-		if not connected_root.is_connected(
-			"grid_snap_changed", Callable(self, "_on_root_grid_snap_changed")
-		):
-			connected_root.connect(
-				"grid_snap_changed", Callable(self, "_on_root_grid_snap_changed")
-			)
-	if connected_root.has_signal("autosave_failed"):
-		if not connected_root.is_connected(
-			"autosave_failed", Callable(self, "_on_autosave_failed")
-		):
-			connected_root.connect("autosave_failed", Callable(self, "_on_autosave_failed"))
-	if connected_root.has_signal("hflevel_save_completed"):
-		if not connected_root.is_connected(
-			"hflevel_save_completed", Callable(self, "_on_hflevel_save_completed")
-		):
-			connected_root.connect(
-				"hflevel_save_completed", Callable(self, "_on_hflevel_save_completed")
-			)
-	if connected_root.has_signal("hflevel_save_failed"):
-		if not connected_root.is_connected(
-			"hflevel_save_failed", Callable(self, "_on_hflevel_save_failed")
-		):
-			connected_root.connect("hflevel_save_failed", Callable(self, "_on_hflevel_save_failed"))
-	if connected_root.has_signal("paint_layer_changed"):
-		if not connected_root.is_connected(
-			"paint_layer_changed", Callable(self, "_on_root_paint_layer_changed")
-		):
-			connected_root.connect(
-				"paint_layer_changed", Callable(self, "_on_root_paint_layer_changed")
-			)
-	if connected_root.has_signal("material_list_changed"):
-		if not connected_root.is_connected(
-			"material_list_changed", Callable(self, "_on_root_material_list_changed")
-		):
-			connected_root.connect(
-				"material_list_changed", Callable(self, "_on_root_material_list_changed")
-			)
-	if connected_root.has_signal("selection_changed"):
-		if not connected_root.is_connected(
-			"selection_changed", Callable(self, "_on_root_selection_for_surface")
-		):
-			connected_root.connect(
-				"selection_changed", Callable(self, "_on_root_selection_for_surface")
-			)
-	if connected_root.has_signal("face_selection_changed"):
-		if not connected_root.is_connected(
-			"face_selection_changed", Callable(self, "_on_root_face_selection_changed")
-		):
-			connected_root.connect(
-				"face_selection_changed", Callable(self, "_on_root_face_selection_changed")
-			)
-	if connected_root.has_signal("user_message"):
-		if not connected_root.is_connected("user_message", Callable(self, "_on_root_user_message")):
-			connected_root.connect("user_message", Callable(self, "_on_root_user_message"))
-	_sync_grid_snap_from_root()
-	_sync_grid_settings_from_root()
-	_refresh_paint_layers()
-	_sync_materials_from_root()
-	_sync_surface_paint_from_root()
-	_apply_ui_state_to_root()
-	_setup_io_wiring_panel()
-	_hints_dirty = true
+	HFDockConnections.connect_root(self)
 
 
 func _disconnect_root_signals() -> void:
-	if not connected_root:
-		return
-	root_properties.clear()
-	_hints_dirty = true
-	if connected_root.has_signal("bake_started"):
-		if connected_root.is_connected("bake_started", Callable(self, "_on_bake_started")):
-			connected_root.disconnect("bake_started", Callable(self, "_on_bake_started"))
-	if connected_root.has_signal("bake_progress"):
-		if connected_root.is_connected("bake_progress", Callable(self, "_on_bake_progress")):
-			connected_root.disconnect("bake_progress", Callable(self, "_on_bake_progress"))
-	if connected_root.has_signal("bake_finished"):
-		if connected_root.is_connected("bake_finished", Callable(self, "_on_bake_finished")):
-			connected_root.disconnect("bake_finished", Callable(self, "_on_bake_finished"))
-	if connected_root.has_signal("grid_snap_changed"):
-		if connected_root.is_connected(
-			"grid_snap_changed", Callable(self, "_on_root_grid_snap_changed")
-		):
-			connected_root.disconnect(
-				"grid_snap_changed", Callable(self, "_on_root_grid_snap_changed")
-			)
-	if connected_root.has_signal("autosave_failed"):
-		if connected_root.is_connected("autosave_failed", Callable(self, "_on_autosave_failed")):
-			connected_root.disconnect("autosave_failed", Callable(self, "_on_autosave_failed"))
-	if connected_root.has_signal("hflevel_save_completed"):
-		if connected_root.is_connected(
-			"hflevel_save_completed", Callable(self, "_on_hflevel_save_completed")
-		):
-			connected_root.disconnect(
-				"hflevel_save_completed", Callable(self, "_on_hflevel_save_completed")
-			)
-	if connected_root.has_signal("hflevel_save_failed"):
-		if connected_root.is_connected(
-			"hflevel_save_failed", Callable(self, "_on_hflevel_save_failed")
-		):
-			connected_root.disconnect(
-				"hflevel_save_failed", Callable(self, "_on_hflevel_save_failed")
-			)
-	if connected_root.has_signal("paint_layer_changed"):
-		if connected_root.is_connected(
-			"paint_layer_changed", Callable(self, "_on_root_paint_layer_changed")
-		):
-			connected_root.disconnect(
-				"paint_layer_changed", Callable(self, "_on_root_paint_layer_changed")
-			)
-	if connected_root.has_signal("material_list_changed"):
-		if connected_root.is_connected(
-			"material_list_changed", Callable(self, "_on_root_material_list_changed")
-		):
-			connected_root.disconnect(
-				"material_list_changed", Callable(self, "_on_root_material_list_changed")
-			)
-	if connected_root.has_signal("selection_changed"):
-		if connected_root.is_connected(
-			"selection_changed", Callable(self, "_on_root_selection_for_surface")
-		):
-			connected_root.disconnect(
-				"selection_changed", Callable(self, "_on_root_selection_for_surface")
-			)
-	if connected_root.has_signal("face_selection_changed"):
-		if connected_root.is_connected(
-			"face_selection_changed", Callable(self, "_on_root_face_selection_changed")
-		):
-			connected_root.disconnect(
-				"face_selection_changed", Callable(self, "_on_root_face_selection_changed")
-			)
-	if connected_root.has_signal("user_message"):
-		if connected_root.is_connected("user_message", Callable(self, "_on_root_user_message")):
-			connected_root.disconnect("user_message", Callable(self, "_on_root_user_message"))
+	HFDockConnections.disconnect_root(self)
 
 
 func _sync_grid_snap_from_root() -> void:
@@ -4760,241 +4557,71 @@ func _on_material_file_selected(path: String) -> void:
 
 
 func _setup_storage_dialogs() -> void:
-	if hflevel_save_dialog:
-		hflevel_save_dialog.access = FileDialog.ACCESS_FILESYSTEM
-		hflevel_save_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
-		hflevel_save_dialog.filters = PackedStringArray(["*.hflevel ; HammerForge Level"])
-		if not hflevel_save_dialog.file_selected.is_connected(
-			Callable(self, "_on_hflevel_save_selected")
-		):
-			hflevel_save_dialog.file_selected.connect(_on_hflevel_save_selected)
-	if material_palette_dialog:
-		material_palette_dialog.access = FileDialog.ACCESS_FILESYSTEM
-		material_palette_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
-		material_palette_dialog.filters = PackedStringArray(
-			["*.tres, *.res ; Material", "*.material ; Material", "*.tres ; Resource"]
-		)
-		if not material_palette_dialog.file_selected.is_connected(
-			Callable(self, "_on_material_palette_selected")
-		):
-			material_palette_dialog.file_selected.connect(_on_material_palette_selected)
-	if surface_paint_texture_dialog:
-		surface_paint_texture_dialog.access = FileDialog.ACCESS_FILESYSTEM
-		surface_paint_texture_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
-		surface_paint_texture_dialog.filters = PackedStringArray(
-			["*.png, *.jpg, *.tres, *.res ; Texture"]
-		)
-		if not surface_paint_texture_dialog.file_selected.is_connected(
-			Callable(self, "_on_surface_paint_texture_selected")
-		):
-			surface_paint_texture_dialog.file_selected.connect(_on_surface_paint_texture_selected)
-	if hflevel_load_dialog:
-		hflevel_load_dialog.access = FileDialog.ACCESS_FILESYSTEM
-		hflevel_load_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
-		hflevel_load_dialog.filters = PackedStringArray(["*.hflevel ; HammerForge Level"])
-		if not hflevel_load_dialog.file_selected.is_connected(
-			Callable(self, "_on_hflevel_load_selected")
-		):
-			hflevel_load_dialog.file_selected.connect(_on_hflevel_load_selected)
-	if map_import_dialog:
-		map_import_dialog.access = FileDialog.ACCESS_FILESYSTEM
-		map_import_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
-		map_import_dialog.filters = PackedStringArray(["*.map ; Quake Map"])
-		if not map_import_dialog.file_selected.is_connected(
-			Callable(self, "_on_map_import_selected")
-		):
-			map_import_dialog.file_selected.connect(_on_map_import_selected)
-	if map_export_dialog:
-		map_export_dialog.access = FileDialog.ACCESS_FILESYSTEM
-		map_export_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
-		map_export_dialog.filters = PackedStringArray(["*.map ; Quake Map"])
-		if not map_export_dialog.file_selected.is_connected(
-			Callable(self, "_on_map_export_selected")
-		):
-			map_export_dialog.file_selected.connect(_on_map_export_selected)
-	if glb_export_dialog:
-		glb_export_dialog.access = FileDialog.ACCESS_FILESYSTEM
-		glb_export_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
-		glb_export_dialog.filters = PackedStringArray(["*.glb ; GLB"])
-		if not glb_export_dialog.file_selected.is_connected(
-			Callable(self, "_on_glb_export_selected")
-		):
-			glb_export_dialog.file_selected.connect(_on_glb_export_selected)
-	if autosave_path_dialog:
-		autosave_path_dialog.access = FileDialog.ACCESS_FILESYSTEM
-		autosave_path_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
-		autosave_path_dialog.filters = PackedStringArray(["*.hflevel ; HammerForge Level"])
-		if not autosave_path_dialog.file_selected.is_connected(
-			Callable(self, "_on_autosave_path_selected")
-		):
-			autosave_path_dialog.file_selected.connect(_on_autosave_path_selected)
-	if settings_export_dialog:
-		settings_export_dialog.access = FileDialog.ACCESS_FILESYSTEM
-		settings_export_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
-		settings_export_dialog.filters = PackedStringArray(
-			["*.hfsettings ; HammerForge Settings", "*.json ; JSON"]
-		)
-		if not settings_export_dialog.file_selected.is_connected(
-			Callable(self, "_on_settings_export_selected")
-		):
-			settings_export_dialog.file_selected.connect(_on_settings_export_selected)
-	if settings_import_dialog:
-		settings_import_dialog.access = FileDialog.ACCESS_FILESYSTEM
-		settings_import_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
-		settings_import_dialog.filters = PackedStringArray(
-			["*.hfsettings ; HammerForge Settings", "*.json ; JSON"]
-		)
-		if not settings_import_dialog.file_selected.is_connected(
-			Callable(self, "_on_settings_import_selected")
-		):
-			settings_import_dialog.file_selected.connect(_on_settings_import_selected)
+	HFDockFileHandler.setup_storage_dialogs(self)
 
 
 func _on_save_hflevel() -> void:
-	if hflevel_save_dialog:
-		hflevel_save_dialog.popup_centered_ratio(0.6)
+	HFDockFileHandler.show_dialog(hflevel_save_dialog)
 
 
 func _on_load_hflevel() -> void:
-	if hflevel_load_dialog:
-		hflevel_load_dialog.popup_centered_ratio(0.6)
+	HFDockFileHandler.show_dialog(hflevel_load_dialog)
 
 
 func _on_import_map() -> void:
-	if map_import_dialog:
-		map_import_dialog.popup_centered_ratio(0.6)
+	HFDockFileHandler.show_dialog(map_import_dialog)
 
 
 func _on_export_map() -> void:
-	if map_export_dialog:
-		map_export_dialog.popup_centered_ratio(0.6)
+	HFDockFileHandler.show_dialog(map_export_dialog)
 
 
 func _on_export_glb() -> void:
-	if glb_export_dialog:
-		glb_export_dialog.popup_centered_ratio(0.6)
+	HFDockFileHandler.show_dialog(glb_export_dialog)
 
 
 func _on_set_autosave_path() -> void:
-	if autosave_path_dialog:
-		autosave_path_dialog.popup_centered_ratio(0.6)
+	HFDockFileHandler.show_dialog(autosave_path_dialog)
 
 
 func _on_hflevel_save_selected(path: String) -> void:
-	if not level_root:
-		_set_status("No LevelRoot for .hflevel save", true)
-		return
-	var err = int(level_root.save_hflevel(path, true))
-	if err != OK:
-		_set_status("Failed to save .hflevel", true, 3.0)
-		show_toast("Failed to save .hflevel: %s" % path.get_file(), 2)
-	else:
-		_set_status("Saving .hflevel...", false)
+	HFDockFileHandler.on_hflevel_save_selected(self, path)
 
 
 func _on_hflevel_load_selected(path: String) -> void:
-	if path == "" or not FileAccess.file_exists(path):
-		_set_status("Invalid .hflevel path", true)
-		return
-	if not level_root:
-		_set_status("No LevelRoot for .hflevel load", true)
-		return
-	_commit_full_state_action("Load .hflevel", "load_hflevel", [path])
-	_set_status("Loaded .hflevel", false, 3.0)
-	if _user_prefs:
-		_user_prefs.add_recent_file(path)
-		_user_prefs.save()
+	HFDockFileHandler.on_hflevel_load_selected(self, path)
 
 
 func _on_map_import_selected(path: String) -> void:
-	if path == "" or not FileAccess.file_exists(path):
-		_set_status("Invalid .map path", true)
-		return
-	if not level_root:
-		_set_status("No LevelRoot for .map import", true)
-		return
-	_commit_full_state_action("Import .map", "import_map", [path])
-	_set_status("Imported .map", false, 3.0)
+	HFDockFileHandler.on_map_import_selected(self, path)
 
 
 func _on_map_export_selected(path: String) -> void:
-	if not level_root:
-		_set_status("No LevelRoot for .map export", true)
-		return
-	var format = "valve220" if map_format_select and map_format_select.selected == 1 else "quake"
-	var err = int(level_root.export_map(path, format))
-	var fmt_name = "Valve 220" if format == "valve220" else "Classic Quake"
-	var msg = "Exported .map (%s)" % fmt_name if err == OK else "Failed to export .map"
-	_set_status(msg, err != OK, 3.0)
-	if err != OK:
-		show_toast("Failed to export .map", 2)
-	else:
-		show_toast("Exported .map (%s)" % fmt_name, 0)
+	HFDockFileHandler.on_map_export_selected(self, path)
 
 
 func _on_glb_export_selected(path: String) -> void:
-	if not level_root:
-		_set_status("No LevelRoot for .glb export", true)
-		return
-	_warn_missing_dependencies()
-	var err = int(level_root.export_baked_gltf(path))
-	_set_status("Exported .glb" if err == OK else "Failed to export .glb", err != OK, 3.0)
-	if err != OK:
-		show_toast("Failed to export .glb", 2)
-	else:
-		show_toast("Exported .glb", 0)
+	HFDockFileHandler.on_glb_export_selected(self, path)
 
 
 func _on_autosave_path_selected(path: String) -> void:
-	if not level_root or not _root_has_property("hflevel_autosave_path"):
-		_set_status("No LevelRoot for autosave path", true)
-		return
-	level_root.set("hflevel_autosave_path", path)
-	_set_status("Autosave path set", false, 3.0)
+	HFDockFileHandler.on_autosave_path_selected(self, path)
 
 
 func _on_export_settings() -> void:
-	if settings_export_dialog:
-		settings_export_dialog.popup_centered_ratio(0.6)
+	HFDockFileHandler.show_dialog(settings_export_dialog)
 
 
 func _on_import_settings() -> void:
-	if settings_import_dialog:
-		settings_import_dialog.popup_centered_ratio(0.6)
+	HFDockFileHandler.show_dialog(settings_import_dialog)
 
 
 func _on_settings_export_selected(path: String) -> void:
-	if path == "":
-		_set_status("Invalid settings path", true)
-		return
-	var data = _collect_editor_settings()
-	var json = JSON.stringify(data, "\t")
-	var file = FileAccess.open(path, FileAccess.WRITE)
-	if not file:
-		_set_status("Failed to export settings", true)
-		return
-	file.store_string(json)
-	_set_status("Exported settings", false, 3.0)
+	HFDockFileHandler.on_settings_export_selected(self, path)
 
 
 func _on_settings_import_selected(path: String) -> void:
-	if path == "":
-		_set_status("Invalid settings path", true)
-		return
-	if not FileAccess.file_exists(path):
-		_set_status("Settings file not found", true)
-		return
-	var file = FileAccess.open(path, FileAccess.READ)
-	if not file:
-		_set_status("Failed to open settings file", true)
-		return
-	var text = file.get_as_text()
-	var parsed = JSON.parse_string(text)
-	if not (parsed is Dictionary):
-		_set_status("Invalid settings file", true)
-		return
-	_apply_editor_settings(parsed)
-	_set_status("Imported settings", false, 3.0)
+	HFDockFileHandler.on_settings_import_selected(self, path)
 
 
 func _collect_editor_settings() -> Dictionary:
@@ -5636,184 +5263,43 @@ func _on_texture_lock_toggled(pressed: bool) -> void:
 
 
 func _setup_visgroup_ui() -> void:
-	var manage_vbox = manage_tab.get_node_or_null("ManageMargin/ManageVBox")
-	if not manage_vbox:
-		return
-
-	# --- Visgroups & Groups section (collapsible, placed after Bake) ---
-	var vg_sec = HFCollapsibleSection.create("Visgroups & Groups", false)
-	# Keep this specialist organizer below the primary and advanced bake sections.
-	manage_vbox.add_child(vg_sec)
-	manage_vbox.move_child(vg_sec, mini(2, manage_vbox.get_child_count() - 1))
-	_register_section(vg_sec, "Visgroups & Groups")
-	var vgc = vg_sec.get_content()
-
-	visgroup_list = ItemList.new()
-	visgroup_list.custom_minimum_size.y = 80
-	visgroup_list.select_mode = ItemList.SELECT_SINGLE
-	visgroup_list.allow_reselect = true
-	vgc.add_child(visgroup_list)
-	visgroup_list.item_clicked.connect(_on_visgroup_item_clicked)
-
-	var name_row = HBoxContainer.new()
-	visgroup_name_input = LineEdit.new()
-	visgroup_name_input.placeholder_text = "Visgroup name"
-	visgroup_name_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_row.add_child(visgroup_name_input)
-	visgroup_add_btn = Button.new()
-	visgroup_add_btn.text = "New"
-	visgroup_add_btn.tooltip_text = "Create a new visgroup"
-	visgroup_add_btn.pressed.connect(_on_visgroup_add)
-	name_row.add_child(visgroup_add_btn)
-	vgc.add_child(name_row)
-
-	var vg_btn_row = HBoxContainer.new()
-	visgroup_add_sel_btn = Button.new()
-	visgroup_add_sel_btn.text = "Add Sel"
-	visgroup_add_sel_btn.tooltip_text = "Add selected brushes/entities to the highlighted visgroup"
-	visgroup_add_sel_btn.pressed.connect(_on_visgroup_add_selection)
-	vg_btn_row.add_child(visgroup_add_sel_btn)
-	visgroup_rem_sel_btn = Button.new()
-	visgroup_rem_sel_btn.text = "Rem Sel"
-	visgroup_rem_sel_btn.tooltip_text = ("Remove selected brushes/entities from the highlighted visgroup")
-	visgroup_rem_sel_btn.pressed.connect(_on_visgroup_remove_selection)
-	vg_btn_row.add_child(visgroup_rem_sel_btn)
-	visgroup_delete_btn = Button.new()
-	visgroup_delete_btn.text = "Delete"
-	visgroup_delete_btn.tooltip_text = "Delete the highlighted visgroup"
-	visgroup_delete_btn.pressed.connect(_on_visgroup_delete)
-	vg_btn_row.add_child(visgroup_delete_btn)
-	vgc.add_child(vg_btn_row)
-
-	# --- Groups subsection ---
-	var grp_sep = HSeparator.new()
-	vgc.add_child(grp_sep)
-
-	var grp_btn_row = HBoxContainer.new()
-	group_sel_btn = Button.new()
-	group_sel_btn.text = "Group Sel (Ctrl+G)"
-	group_sel_btn.tooltip_text = "Group the current selection"
-	group_sel_btn.pressed.connect(_on_group_selection)
-	grp_btn_row.add_child(group_sel_btn)
-	ungroup_btn = Button.new()
-	ungroup_btn.text = "Ungroup (Ctrl+U)"
-	ungroup_btn.tooltip_text = "Remove selected brushes/entities from their group"
-	ungroup_btn.pressed.connect(_on_ungroup_selection)
-	grp_btn_row.add_child(ungroup_btn)
-	vgc.add_child(grp_btn_row)
+	HFDockVisgroupHandler.setup_visgroup_ui(self)
 
 
 func refresh_visgroup_ui() -> void:
-	if not visgroup_list:
-		return
-	visgroup_list.clear()
-	if not level_root or not level_root.get("visgroup_system"):
-		return
-	var sys = level_root.get("visgroup_system")
-	if not sys:
-		return
-	var names: PackedStringArray = sys.get_visgroup_names()
-	for vg_name in names:
-		var visible = sys.is_visgroup_visible(vg_name)
-		var icon_text = "[V] " if visible else "[H] "
-		visgroup_list.add_item(icon_text + vg_name)
+	HFDockVisgroupHandler.refresh_visgroup_ui(self)
 
 
 func _get_selected_visgroup_name() -> String:
-	if not visgroup_list:
-		return ""
-	var selected = visgroup_list.get_selected_items()
-	if selected.is_empty():
-		return ""
-	var text = visgroup_list.get_item_text(selected[0])
-	# Strip the [V]/[H] prefix
-	if text.begins_with("[V] "):
-		return text.substr(4)
-	if text.begins_with("[H] "):
-		return text.substr(4)
-	return text
+	return HFDockVisgroupHandler.get_selected_visgroup_name(self)
 
 
 func _on_visgroup_add() -> void:
-	if not visgroup_name_input:
-		return
-	var vg_name = visgroup_name_input.text.strip_edges()
-	if vg_name == "" or not level_root:
-		return
-	level_root.create_visgroup(vg_name)
-	visgroup_name_input.text = ""
-	refresh_visgroup_ui()
+	HFDockVisgroupHandler.on_visgroup_add(self)
 
 
 func _on_visgroup_item_clicked(index: int, _at_position: Vector2, mouse_button_index: int) -> void:
-	if mouse_button_index != MOUSE_BUTTON_LEFT:
-		return
-	# Double-click or single click toggles visibility
-	var text = visgroup_list.get_item_text(index)
-	var vg_name = ""
-	var was_visible = true
-	if text.begins_with("[V] "):
-		vg_name = text.substr(4)
-		was_visible = true
-	elif text.begins_with("[H] "):
-		vg_name = text.substr(4)
-		was_visible = false
-	else:
-		return
-	if vg_name == "" or not level_root:
-		return
-	level_root.set_visgroup_visible(vg_name, not was_visible)
-	refresh_visgroup_ui()
-	# Reselect same index
-	if index < visgroup_list.item_count:
-		visgroup_list.select(index)
+	HFDockVisgroupHandler.on_visgroup_item_clicked(self, index, _at_position, mouse_button_index)
 
 
 func _on_visgroup_add_selection() -> void:
-	var vg_name = _get_selected_visgroup_name()
-	if vg_name == "" or not level_root:
-		return
-	if not _guard_selection_action("Add to Visgroup"):
-		return
-	level_root.add_selection_to_visgroup(vg_name, _selection_nodes)
-	refresh_visgroup_ui()
+	HFDockVisgroupHandler.on_visgroup_add_selection(self)
 
 
 func _on_visgroup_remove_selection() -> void:
-	var vg_name = _get_selected_visgroup_name()
-	if vg_name == "" or not level_root:
-		return
-	if not _guard_selection_action("Remove from Visgroup"):
-		return
-	level_root.remove_selection_from_visgroup(vg_name, _selection_nodes)
-	refresh_visgroup_ui()
+	HFDockVisgroupHandler.on_visgroup_remove_selection(self)
 
 
 func _on_visgroup_delete() -> void:
-	var vg_name = _get_selected_visgroup_name()
-	if vg_name == "" or not level_root:
-		return
-	level_root.remove_visgroup(vg_name)
-	refresh_visgroup_ui()
+	HFDockVisgroupHandler.on_visgroup_delete(self)
 
 
 func _on_group_selection() -> void:
-	if not level_root or _selection_nodes.size() < 2:
-		return
-	if not _guard_selection_action("Group Selection"):
-		return
-	var group_name = "group_%d" % Time.get_ticks_usec()
-	level_root.group_selection(group_name, _selection_nodes)
-	record_history("Group Selection")
+	HFDockVisgroupHandler.on_group_selection(self)
 
 
 func _on_ungroup_selection() -> void:
-	if not level_root or _selection_nodes.is_empty():
-		return
-	if not _guard_selection_action("Ungroup Selection"):
-		return
-	level_root.ungroup_nodes(_selection_nodes)
-	record_history("Ungroup Selection")
+	HFDockVisgroupHandler.on_ungroup_selection(self)
 
 
 # ===========================================================================
@@ -5822,122 +5308,23 @@ func _on_ungroup_selection() -> void:
 
 
 func _setup_cordon_ui() -> void:
-	var manage_vbox = manage_tab.get_node_or_null("ManageMargin/ManageVBox")
-	if not manage_vbox:
-		return
-
-	var cordon_sec = HFCollapsibleSection.create("Cordon (Partial Bake)", false)
-	# Insert after Visgroups section (index 2)
-	manage_vbox.add_child(cordon_sec)
-	manage_vbox.move_child(cordon_sec, 2)
-	_register_section(cordon_sec, "Cordon (Partial Bake)")
-	var cc = cordon_sec.get_content()
-
-	cordon_enabled_check = CheckBox.new()
-	cordon_enabled_check.text = "Enable Cordon"
-	cordon_enabled_check.tooltip_text = "Only bake geometry inside the cordon AABB"
-	cordon_enabled_check.toggled.connect(_on_cordon_toggled)
-	cc.add_child(cordon_enabled_check)
-
-	var min_label = Label.new()
-	min_label.text = "Min (X, Y, Z):"
-	cc.add_child(min_label)
-
-	var min_row = HBoxContainer.new()
-	cordon_min_x = _make_cordon_spin(-9999, 9999, -128)
-	cordon_min_y = _make_cordon_spin(-9999, 9999, -128)
-	cordon_min_z = _make_cordon_spin(-9999, 9999, -128)
-	min_row.add_child(cordon_min_x)
-	min_row.add_child(cordon_min_y)
-	min_row.add_child(cordon_min_z)
-	cc.add_child(min_row)
-
-	var max_label = Label.new()
-	max_label.text = "Max (X, Y, Z):"
-	cc.add_child(max_label)
-
-	var max_row = HBoxContainer.new()
-	cordon_max_x = _make_cordon_spin(-9999, 9999, 128)
-	cordon_max_y = _make_cordon_spin(-9999, 9999, 128)
-	cordon_max_z = _make_cordon_spin(-9999, 9999, 128)
-	max_row.add_child(cordon_max_x)
-	max_row.add_child(cordon_max_y)
-	max_row.add_child(cordon_max_z)
-	cc.add_child(max_row)
-
-	cordon_from_sel_btn = Button.new()
-	cordon_from_sel_btn.text = "Set from Selection"
-	cordon_from_sel_btn.tooltip_text = "Set cordon bounds to encompass the selected brushes"
-	cordon_from_sel_btn.pressed.connect(_on_cordon_from_selection)
-	cc.add_child(cordon_from_sel_btn)
+	HFDockVisgroupHandler.setup_cordon_ui(self)
 
 
 func _make_cordon_spin(min_val: float, max_val: float, default_val: float) -> SpinBox:
-	var spin = SpinBox.new()
-	spin.min_value = min_val
-	spin.max_value = max_val
-	spin.value = default_val
-	spin.step = 1.0
-	spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	spin.value_changed.connect(_on_cordon_value_changed)
-	return spin
+	return HFDockVisgroupHandler.make_cordon_spin(self, min_val, max_val, default_val)
 
 
 func _on_cordon_toggled(pressed: bool) -> void:
-	if syncing_grid:
-		return
-	if level_root and _root_has_property("cordon_enabled"):
-		level_root.set("cordon_enabled", pressed)
-		_tag_bake_setting_change("cordon_enabled")
-		if level_root.has_method("update_cordon_visual"):
-			level_root.update_cordon_visual()
+	HFDockVisgroupHandler.on_cordon_toggled(self, pressed)
 
 
 func _on_cordon_value_changed(_value: float) -> void:
-	if syncing_grid:
-		return
-	if not level_root or not _root_has_property("cordon_aabb"):
-		return
-	var min_pt = Vector3(
-		cordon_min_x.value if cordon_min_x else -128,
-		cordon_min_y.value if cordon_min_y else -128,
-		cordon_min_z.value if cordon_min_z else -128
-	)
-	var max_pt = Vector3(
-		cordon_max_x.value if cordon_max_x else 128,
-		cordon_max_y.value if cordon_max_y else 128,
-		cordon_max_z.value if cordon_max_z else 128
-	)
-	level_root.set("cordon_aabb", AABB(min_pt, max_pt - min_pt))
-	_tag_bake_setting_change("cordon_aabb")
-	level_root.update_cordon_visual()
+	HFDockVisgroupHandler.on_cordon_value_changed(self, _value)
 
 
 func _on_cordon_from_selection() -> void:
-	if not level_root or _selection_nodes.is_empty():
-		return
-	if not _guard_selection_action(
-		"Set Cordon from Selection", DockSelectionRequirement.BRUSHES_ONLY
-	):
-		return
-	level_root.set_cordon_from_selection(_selection_nodes)
-	# Sync spinboxes from updated AABB
-	if _root_has_property("cordon_aabb"):
-		var aabb: AABB = level_root.get("cordon_aabb")
-		if cordon_min_x:
-			cordon_min_x.value = aabb.position.x
-		if cordon_min_y:
-			cordon_min_y.value = aabb.position.y
-		if cordon_min_z:
-			cordon_min_z.value = aabb.position.z
-		if cordon_max_x:
-			cordon_max_x.value = aabb.position.x + aabb.size.x
-		if cordon_max_y:
-			cordon_max_y.value = aabb.position.y + aabb.size.y
-		if cordon_max_z:
-			cordon_max_z.value = aabb.position.z + aabb.size.z
-	if cordon_enabled_check:
-		cordon_enabled_check.button_pressed = true
+	HFDockVisgroupHandler.on_cordon_from_selection(self)
 
 
 func _on_clip() -> void:
