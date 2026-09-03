@@ -1,8 +1,17 @@
 blank_issues_enabled: true
 contact_links:
+  - name: Questions and discussion
+    url: https://github.com/saworbit/hammerforge/discussions
+    about: Not sure it's a bug? Ask here — workflow questions are welcome.
   - name: Contributing guide
     url: https://github.com/saworbit/hammerforge/blob/main/CONTRIBUTING.md
     about: Architecture conventions, local check commands, and PR expectations.
   - name: Roadmap
     url: https://github.com/saworbit/hammerforge/blob/main/ROADMAP.md
     about: Check whether the change you want is already planned.
+  - name: Code of Conduct
+    url: https://github.com/saworbit/hammerforge/blob/main/CODE_OF_CONDUCT.md
+    about: Expected behavior, and how to report a problem privately.
+  - name: Report a security vulnerability
+    url: https://github.com/saworbit/hammerforge/security/advisories/new
+    about: Please do not file security issues publicly. Use private reporting.
