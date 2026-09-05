@@ -50,6 +50,33 @@ func _should_initialize_editor_systems() -> bool:
 	runtime_root.free()
 
 
+func test_runtime_brush_creation_survives_missing_grid_system():
+	# HFBrushSystem stays alive at runtime and calls back into _record_last_brush,
+	# which used to dereference the unloaded grid_system.
+	var runtime_script := GDScript.new()
+	runtime_script.source_code = """
+extends "res://addons/hammerforge/level_root.gd"
+func _should_initialize_editor_systems() -> bool:
+	return false
+"""
+	assert_eq(runtime_script.reload(), OK)
+	var runtime_root = runtime_script.new()
+	runtime_root.auto_spawn_player = false
+	runtime_root.commit_freeze = false
+	add_child(runtime_root)
+	assert_null(runtime_root.grid_system, "grid_system stays unloaded at runtime")
+
+	var brush = runtime_root.brush_system.create_brush_from_info(
+		{"shape": 0, "size": Vector3.ONE, "center": Vector3.ZERO}
+	)
+	assert_not_null(brush, "Runtime brush creation should succeed without a grid")
+
+	# The other two grid delegates take the same unguarded shape, so pin them too.
+	runtime_root.update_editor_grid(null, Vector2.ZERO)
+	runtime_root._refresh_grid_plane()
+	runtime_root.free()
+
+
 func test_editor_only_systems_are_loaded_on_demand():
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/level_root.gd")
 	for path in [
