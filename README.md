@@ -1,4 +1,10 @@
-<h1 align="center">HammerForge</h1>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/png/readme-banner.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/brand/png/readme-banner-light.png">
+    <img alt="HammerForge — brush-based level editor for Godot 4.7+" src="docs/brand/png/readme-banner.png" width="820">
+  </picture>
+</p>
 
 <p align="center">
   <strong>Brush-based level editor for Godot 4.7+</strong><br>
@@ -18,11 +24,15 @@
 
 ---
 
-## Looking for a Logo
+## The Mark
 
-The previous AI-generated logo has been retired. If you're a designer or artist and want to contribute a logo for HammerForge, I'd love to use it (with credit). Requirements: free to use under MIT, ideally SVG so it scales.
+HammerForge has a mark of its own: a box brush, and the subtract brush that
+shaped it. Filled against outlined is also baked against preview — the two
+states an unbaked brush moves between.
 
-**[Issue #61](https://github.com/saworbit/hammerforge/issues/61) has the full brief** — comment there with a sketch, or open a PR. No Godot knowledge needed.
+Everything derives from one parametric source. See
+**[docs/brand/BRAND.md](docs/brand/BRAND.md)** for the geometry, the palette and
+its contrast test, the two weights, and the usage rules.
 
 ---
 
