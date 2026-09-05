@@ -30,6 +30,10 @@ const BOX_EDGE_INDICES: Array = [
 	[6, 7],
 ]
 
+## Millimetre precision for _vertex_key. Two vertices closer than 1/1000 of a
+## unit are the same snap target.
+const VERTEX_KEY_SCALE := 1000.0
+
 var root: Node3D
 var enabled_modes: int = SnapMode.GRID
 var snap_threshold: float = 2.0
@@ -204,7 +208,7 @@ static func _face_snap_geometry(faces: Array) -> Dictionary:
 				continue
 			var lo := mini(ia, ib)
 			var hi := maxi(ia, ib)
-			var edge_key := "%d|%d" % [lo, hi]
+			var edge_key := Vector2i(lo, hi)
 			if seen_edges.has(edge_key):
 				continue
 			seen_edges[edge_key] = true
@@ -212,8 +216,15 @@ static func _face_snap_geometry(faces: Array) -> Dictionary:
 	return {"verts": verts, "edges": edges}
 
 
-static func _vertex_key(v: Vector3) -> String:
-	return "%.3f,%.3f,%.3f" % [v.x, v.y, v.z]
+## Vertices dedupe at millimetre precision. Keying by Vector3i holds that
+## tolerance without formatting a string per vertex, which matters because this
+## runs for every vertex of every non box brush on every mouse motion event.
+static func _vertex_key(v: Vector3) -> Vector3i:
+	return Vector3i(
+		roundi(v.x * VERTEX_KEY_SCALE),
+		roundi(v.y * VERTEX_KEY_SCALE),
+		roundi(v.z * VERTEX_KEY_SCALE)
+	)
 
 
 ## The 8 corners of a box, in the order BOX_EDGE_INDICES expects.
