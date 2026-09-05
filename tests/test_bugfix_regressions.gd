@@ -382,14 +382,22 @@ func _make_cylinder_brush(pos: Vector3, sz: Vector3, id: String) -> DraftBrush:
 	return b
 
 
+func _record_user_messages() -> Array:
+	var seen: Array = []
+	root.user_message.connect(func(msg, _level): seen.append(str(msg)))
+	return seen
+
+
 func test_carve_rejects_non_box_carver():
 	var carver = _make_cylinder_brush(Vector3.ZERO, Vector3(32, 32, 32), "cyl_carver")
 	var target = _make_box_brush(Vector3(16, 0, 0), Vector3(32, 32, 32), "box_target")
 	var child_count_before = draft_node.get_child_count()
 
+	var warnings := _record_user_messages()
 	var result = HFCarveSystem.new(root).carve_with_brush("cyl_carver")
 
 	assert_false(result.ok, "A cylinder carver has no axis-aligned volume to cut with")
+	assert_eq(warnings.size(), 1, "A refused carve has to say so, not look like a no-op")
 	assert_true(is_instance_valid(carver), "The carver must survive a refused carve")
 	assert_true(is_instance_valid(target), "The target must survive a refused carve")
 	assert_eq(draft_node.get_child_count(), child_count_before, "Nothing should be replaced")
@@ -414,9 +422,11 @@ func test_carve_rejects_non_box_target():
 	var target = _make_cylinder_brush(Vector3(16, 0, 0), Vector3(32, 32, 32), "cyl_target")
 	var child_count_before = draft_node.get_child_count()
 
+	var warnings := _record_user_messages()
 	var result = HFCarveSystem.new(root).carve_with_brush("box_carver")
 
 	assert_false(result.ok, "Carve cannot rebuild a cylinder as boxes")
+	assert_eq(warnings.size(), 1, "A refused carve has to say so, not look like a no-op")
 	assert_true(is_instance_valid(target), "The cylinder must not be deleted")
 	assert_true(is_instance_valid(carver), "The carver must survive a refused carve")
 	assert_eq(draft_node.get_child_count(), child_count_before, "Nothing should be replaced")

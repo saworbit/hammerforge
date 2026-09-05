@@ -40,7 +40,9 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 	# owner as Hollow and Clip.
 	var carver_check: HFOpResult = HFBrushSystem._check_axis_aligned_box(carver_draft, "Carve")
 	if not carver_check.ok:
-		return carver_check
+		# Through _op_fail, not straight back: every other refusal in here warns
+		# the user, and a silent one just looks like the carve did nothing.
+		return _op_fail(carver_check.message, carver_check.fix_hint)
 
 	var carver_pos: Vector3 = carver_draft.global_position
 	var carver_size: Vector3 = carver_draft.size
