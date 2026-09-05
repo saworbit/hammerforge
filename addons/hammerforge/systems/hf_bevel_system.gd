@@ -226,6 +226,10 @@ func _find_brush(brush_id: String) -> Node3D:
 
 
 func _mark_brush_dirty(brush: Node3D) -> void:
+	# Bevel and inset add faces a primitive cannot express. Claim the face array
+	# first, or the next resize or reload rebuilds the box over the result.
+	if brush.has_method("mark_faces_authoritative"):
+		brush.mark_faces_authoritative()
 	if brush.has_method("rebuild_preview"):
 		brush.rebuild_preview()
 	if root and brush.get("brush_id") and root.has_method("tag_brush_dirty"):

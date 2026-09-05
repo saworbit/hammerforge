@@ -184,16 +184,12 @@ func test_inset_face_too_large_distance():
 func test_bevel_edge_basic():
 	var brush = _make_box_brush()
 	var face_count_before: int = brush.faces.size()
-	# Edge between vertex 0 and 1 of the box (shared by top and front faces)
-	# Vertex 0 = (0,16,0), Vertex 1 = (16,16,0)
+	# Unique vertex 0 = (0,16,0), 3 = (0,16,16). That edge is shared by the top
+	# and left faces, so the bevel has the two adjacent faces it needs.
 	var ok: bool = sys.bevel_edge("box_brush", [0, 3], 2, 2.0)
-	# The edge [0,3] maps to unique vertices — let's use a known shared edge
-	# Top face has (0,16,0), (16,16,0) and Front face has (0,16,0), (16,16,0)
-	# These are indices in the unique vertex list
-	assert_true(ok or not ok, "Bevel should not crash")
-	# If ok, we should have new bevel faces
-	if ok:
-		assert_true(brush.faces.size() > face_count_before, "Bevel should add faces")
+	assert_true(ok, "Bevel should succeed on an edge shared by two faces")
+	# 2 segments = 2 strip quads, plus one corner cap per endpoint.
+	assert_eq(brush.faces.size(), face_count_before + 4, "Two-segment bevel should add 4 faces")
 
 
 func test_bevel_edge_bad_brush():
@@ -219,10 +215,12 @@ func test_bevel_edge_needs_two_indices():
 
 func test_bevel_edge_segments_clamped():
 	var brush = _make_box_brush()
-	# Even with segments=0, it should clamp to 1
+	var face_count_before: int = brush.faces.size()
+	# Unique vertices 0 = (0,16,0) and 1 = (16,16,0), shared by top and front.
+	# segments=0 clamps to 1, which is a chamfer: one strip quad, no caps.
 	var ok: bool = sys.bevel_edge("box_brush", [0, 1], 0, 2.0)
-	# May fail due to edge not being shared, but should not crash
-	assert_true(ok or not ok, "Should not crash with clamped segments")
+	assert_true(ok, "Bevel should succeed with segments clamped up to 1")
+	assert_eq(brush.faces.size(), face_count_before + 1, "Clamped segments should add 1 face")
 
 
 func test_bevel_edge_single_segment_is_chamfer():
@@ -235,9 +233,45 @@ func test_bevel_edge_single_segment_is_chamfer():
 	# Front: (0,16,0), (0,0,0), (16,0,0), (16,16,0)
 	# Shared edge: (0,16,0)-(16,16,0) = unique indices 0 and 1
 	var ok: bool = sys.bevel_edge("box_brush", [0, 1], 1, 2.0)
-	if ok:
-		# 1 segment = 1 new face (chamfer)
-		assert_eq(brush.faces.size(), face_count_before + 1, "Chamfer should add 1 face")
+	assert_true(ok, "Chamfer should succeed on a shared edge")
+	# 1 segment = 1 new face (chamfer)
+	assert_eq(brush.faces.size(), face_count_before + 1, "Chamfer should add 1 face")
+
+
+# ---------------------------------------------------------------------------
+# Edited faces survive a resize
+# ---------------------------------------------------------------------------
+
+
+func test_bevel_edge_promotes_brush_to_custom_shape():
+	var brush = _make_box_brush()
+	assert_eq(brush.shape, DraftBrush.BrushShape.BOX, "Fixture starts as a box")
+	assert_true(sys.bevel_edge("box_brush", [0, 1], 1, 2.0))
+	assert_eq(
+		brush.shape,
+		DraftBrush.BrushShape.CUSTOM,
+		"Bevel must claim the face array so a rebuild cannot overwrite it"
+	)
+
+
+func test_beveled_faces_survive_resize():
+	var brush = _make_box_brush()
+	var face_count_before: int = brush.faces.size()
+	assert_true(sys.bevel_edge("box_brush", [0, 1], 2, 2.0))
+	var beveled_count: int = brush.faces.size()
+	assert_eq(beveled_count, face_count_before + 4)
+	brush.set_size(Vector3(48, 48, 48))
+	assert_eq(brush.faces.size(), beveled_count, "Resize must not rebuild the box over a bevel")
+
+
+func test_inset_faces_survive_resize():
+	var brush = _make_box_brush()
+	var face_count_before: int = brush.faces.size()
+	assert_true(sys.inset_face("box_brush", 0, 2.0, 0.0))
+	var inset_count: int = brush.faces.size()
+	assert_eq(inset_count, face_count_before + 4)
+	brush.set_size(Vector3(48, 48, 48))
+	assert_eq(brush.faces.size(), inset_count, "Resize must not rebuild the box over an inset")
 
 
 # ---------------------------------------------------------------------------

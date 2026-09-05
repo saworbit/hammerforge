@@ -96,6 +96,19 @@ func get_faces() -> Array:
 	return faces
 
 
+## Declare `faces` the authoritative geometry for this brush.
+##
+## Bevel, inset, and vertex edits change face topology or vertex positions that
+## no primitive can reproduce. Until the brush is CUSTOM, the next set_size(),
+## sides change, or scene reload runs _rebuild_faces() and replaces the edit
+## with a plain primitive. Promoting also drops the box resize handles, which is
+## the point: those handles call set_size() and would wipe the edit.
+func mark_faces_authoritative() -> void:
+	if faces.is_empty() or shape == BrushShape.CUSTOM:
+		return
+	shape = BrushShape.CUSTOM
+
+
 func set_selected_faces(indices: PackedInt32Array) -> void:
 	selected_faces = indices
 	rebuild_preview()
@@ -336,6 +349,10 @@ func _transfer_face_data(old_faces: Array, new_faces: Array) -> void:
 			new_face.custom_uvs = old_face.custom_uvs
 		if old_face.paint_layers.size() > 0:
 			new_face.paint_layers = old_face.paint_layers.duplicate(true)
+		# Displacement stores per-vertex offsets against the face corners, not
+		# absolute positions, so it survives a resize unchanged. The old face is
+		# discarded right after this, so hand the resource over rather than copy.
+		new_face.displacement = old_face.displacement
 
 
 func _build_base_mesh() -> Dictionary:
