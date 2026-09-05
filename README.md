@@ -24,18 +24,6 @@
 
 ---
 
-## The Mark
-
-HammerForge has a mark of its own: a box brush, and the subtract brush that
-shaped it. Filled against outlined is also baked against preview — the two
-states an unbaked brush moves between.
-
-Everything derives from one parametric source. See
-**[docs/brand/BRAND.md](docs/brand/BRAND.md)** for the geometry, the palette and
-its contrast test, the two weights, and the usage rules.
-
----
-
 ## Why HammerForge?
 
 Level editors like Hammer and TrenchBroom proved that **brush-based workflows** are the fastest way to block out 3D spaces. HammerForge brings that paradigm into Godot so you never have to leave the editor:
@@ -424,6 +412,7 @@ gdlint addons/hammerforge/
 | [Spec](HammerForge_SPEC.md) | Technical specification |
 | [Changelog](CHANGELOG.md) | Version history |
 | [Roadmap](ROADMAP.md) | Planned features and priorities |
+| [Brand](docs/brand/BRAND.md) | The mark, palette, and asset generators |
 | [Contributing](CONTRIBUTING.md) | How to contribute |
 | [Code of Conduct](CODE_OF_CONDUCT.md) | Expected behavior and how to report a problem |
 | [Security Policy](SECURITY.md) | What counts as a vulnerability and how to report one privately |

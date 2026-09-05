@@ -111,10 +111,14 @@ for n, g in [("hammerforge-mark.svg", MONO),
 
 write("favicon.svg", svg(64, 64, fit(C_ALLRED, 64, 64, 3)[0]))
 write("icon.svg", svg(128, 128, fit(C_ALLRED, 128, 128, 7)[0]))
-# The Godot project icon (project.godot -> config/icon) derives from the same
-# source, so the repo root copy can never drift from the brand set.
+# The two icons Godot actually shows derive from the same source, so neither can
+# drift from the brand set: the project icon (project.godot -> config/icon), and
+# the addon icon plugin.gd hands to add_custom_type() for LevelRoot and
+# DraftEntity, which the Scene tree draws at ~16px.
 open("../../icon.svg", "w", encoding="utf-8").write(
     svg(128, 128, fit(C_ALLRED, 128, 128, 7)[0]))
+open("../../addons/hammerforge/icon.svg", "w", encoding="utf-8").write(
+    svg(64, 64, fit(C_ALLRED, 64, 64, 4)[0]))
 
 write("hammerforge-icon-tile.svg",
       svg(512, 512, '<rect width="512" height="512" rx="114" fill="#14171C"/>'

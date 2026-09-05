@@ -36,4 +36,9 @@ png(ink(read('hammerforge-wordmark.svg'), INK), 2000, 'wordmark-ink-2000.png');
 png(read('hammerforge-wordmark-two-tone.svg'), 2000, 'wordmark-two-tone-2000.png');
 for (const f of ['readme-banner', 'readme-banner-light', 'social-preview'])
   png(read(f + '.svg'), 1280, f + '.png');
-console.log(`${out.length} PNGs written to ${OUT}/`);
+// plugin.gd preloads this one; Godot draws it in the Scene tree at ~16px
+fs.writeFileSync('../../addons/hammerforge/icon.png',
+  new Resvg(read('hammerforge-mark-compact-red.svg'),
+    { fitTo: { mode: 'width', value: 64 } }).render().asPng());
+
+console.log(`${out.length} PNGs written to ${OUT}/, plus the addon icon`);
