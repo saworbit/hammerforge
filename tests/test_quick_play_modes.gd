@@ -1,33 +1,62 @@
 extends GutTest
-## Tests for Quick Play mode validation logic patterns.
-## These verify the severity-blocking and undo patterns match _on_quick_play().
-## Full integration requires editor UI; these test the spawn/validation flow.
+## Drives the real HFDockManageHandler quick-play entry points through a dock
+## and level-root stand-in, so the severity blocking, the temporary spawn and
+## cordon moves, and the undo stack are all observed on the production code.
 
-const HFSpawnSystem = preload("res://addons/hammerforge/systems/hf_spawn_system.gd")
-const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
+const HFDockManageHandler = preload("res://addons/hammerforge/dock_manage_handler.gd")
 const DraftEntityScript = preload("res://addons/hammerforge/draft_entity.gd")
 
+var dock: Node
 var root: Node3D
-var spawn_sys
+var spawn: DraftEntity
 
 
 func before_each():
 	root = Node3D.new()
 	root.set_script(_root_shim_script())
 	add_child_autoqfree(root)
-	var draft = Node3D.new()
-	draft.name = "DraftBrushes"
-	root.add_child(draft)
-	root.draft_brushes_node = draft
-	var entities = Node3D.new()
-	entities.name = "Entities"
-	root.add_child(entities)
-	root.entities_node = entities
+	spawn = DraftEntityScript.new()
+	spawn.entity_data = {"angle": 30.0}
+	root.add_child(spawn)
+	spawn.global_position = Vector3(10, 0, 5)
+	root.spawn_system.active_spawn = spawn
+	dock = Node.new()
+	dock.set_script(_dock_shim_script())
+	add_child_autoqfree(dock)
+	dock.level_root = root
+	dock._plugin = _make_camera_holder()
 
 
 func after_each():
+	# UndoRedo is an Object, so the shim's copy has to be freed by hand.
+	if is_instance_valid(dock) and dock.undo_redo:
+		dock.undo_redo.free()
+	dock = null
 	root = null
-	spawn_sys = null
+	spawn = null
+
+
+func _make_camera_holder() -> Node:
+	var holder := Node.new()
+	holder.set_script(_camera_holder_shim_script())
+	add_child_autoqfree(holder)
+	var camera := Camera3D.new()
+	holder.add_child(camera)
+	camera.global_position = Vector3(100, 50, 200)
+	camera.global_rotation = Vector3(0, deg_to_rad(90.0), 0)
+	holder.last_3d_camera = camera
+	return holder
+
+
+func _camera_holder_shim_script() -> GDScript:
+	var s = GDScript.new()
+	s.source_code = """
+extends Node
+
+var last_3d_camera: Camera3D
+"""
+	s.reload()
+	return s
 
 
 func _root_shim_script() -> GDScript:
@@ -35,256 +64,265 @@ func _root_shim_script() -> GDScript:
 	s.source_code = """
 extends Node3D
 
-signal user_message(text, level)
-
-var draft_brushes_node: Node3D
-var entities_node: Node3D
+var spawn_system = SpawnSystemStub.new()
+var state_system = StateSystemStub.new()
 var cordon_enabled: bool = false
 var cordon_aabb: AABB = AABB(Vector3(-128, -128, -128), Vector3(256, 256, 256))
-var _dirty_brush_ids: Dictionary = {}
+var bake_result: bool = true
+var bake_calls: int = 0
+var reconcile_calls: int = 0
+var cordon_visual_calls: int = 0
+var cordon_from_selection_calls: int = 0
 
-func is_entity_node(node: Node) -> bool:
-	return node.has_meta("entity_type")
+class SpawnSystemStub:
+	extends RefCounted
+	var active_spawn: Node3D
+	var validation: Dictionary = {"valid": true, "severity": 0, "issues": PackedStringArray()}
+	var created_spawns: int = 0
+	var debug_calls: int = 0
 
-func _log(_msg: String) -> void:
-	pass
+	func get_active_spawn() -> Node3D:
+		return active_spawn
+
+	func create_default_spawn() -> Node3D:
+		created_spawns += 1
+		return active_spawn
+
+	func validate_spawn(_spawn, _mask) -> Dictionary:
+		return validation
+
+	func show_validation_debug(_spawn, _validation, _seconds) -> void:
+		debug_calls += 1
+
+	func cleanup_debug() -> void:
+		pass
+
+class StateSystemStub:
+	extends RefCounted
+	func capture_state(_include_all: bool = false) -> Dictionary:
+		return {"snapshot": true}
+
+	func restore_state(_state: Dictionary) -> void:
+		pass
+
+func bake(_visual: bool, _selection_only: bool, _mask: int, _preview: int = 0) -> bool:
+	bake_calls += 1
+	return bake_result
+
+func is_bake_in_flight() -> bool:
+	return false
+
+func check_missing_dependencies() -> Array:
+	return []
+
+func set_cordon_from_selection(_nodes: Array) -> void:
+	cordon_from_selection_calls += 1
+	cordon_enabled = true
+	cordon_aabb = AABB(Vector3.ZERO, Vector3(64, 64, 64))
+
+func tag_full_reconcile() -> void:
+	reconcile_calls += 1
+
+func update_cordon_visual() -> void:
+	cordon_visual_calls += 1
 """
 	s.reload()
 	return s
 
 
+func _dock_shim_script() -> GDScript:
+	var s = GDScript.new()
+	s.source_code = """
+extends Node
+
+enum DockSelectionRequirement { MANAGED, BRUSHES_ONLY, ENTITIES_ONLY, NATIVE_ALLOWED }
+
+var level_root
+var _plugin
+var undo_redo = UndoRedo.new()
+var editor_interface = null
+var _selection_nodes: Array = []
+var selection_guard_passes: bool = true
+var toasts: Array = []
+var logs: Array = []
+var guarded_actions: Array = []
+
+func _log(msg: String, _is_error: bool = false) -> void:
+	logs.append(msg)
+
+func show_toast(message: String, level: int = 0) -> void:
+	toasts.append({"message": message, "level": level})
+
+func get_collision_layer_mask() -> int:
+	return 1
+
+func _warn_missing_dependencies() -> void:
+	pass
+
+func _set_status_warning(_text: String, _seconds: float) -> void:
+	pass
+
+func _guard_selection_action(action_name: String, _requirement: int = 0) -> bool:
+	guarded_actions.append(action_name)
+	return selection_guard_passes
+
+func toast_messages() -> Array:
+	var out: Array = []
+	for t in toasts:
+		out.append(t["message"])
+	return out
+
+func worst_toast_level() -> int:
+	var worst := -1
+	for t in toasts:
+		worst = max(worst, int(t["level"]))
+	return worst
+"""
+	s.reload()
+	return s
+
+
+func _spawn_angle() -> float:
+	return float(spawn.entity_data.get("angle", 0.0))
+
+
+func _assert_spawn_untouched(context: String) -> void:
+	assert_eq(spawn.global_position, Vector3(10, 0, 5), "%s: spawn position restored" % context)
+	assert_almost_eq(_spawn_angle(), 30.0, 0.001, "%s: spawn angle restored" % context)
+
+
 # ===========================================================================
-# Severity-blocking: severity >= 2 must prevent play
+# Play from Camera: the temporary spawn move
 # ===========================================================================
 
 
-func test_severity_2_blocks_play():
-	# Simulates the validation check pattern used by all three quick-play paths
-	var validation := {
+func test_play_from_camera_moves_the_spawn_and_puts_it_back():
+	await HFDockManageHandler.on_quick_play_from_camera(dock)
+	assert_eq(root.bake_calls, 1, "The handler bakes once before launching")
+	_assert_spawn_untouched("After a clean launch")
+
+
+func test_play_from_camera_leaves_no_undo_step_behind():
+	# The spawn is always put back, so an undo action recording the move would
+	# describe a position the scene does not have. Redo used to move the spawn
+	# to the camera for good.
+	await HFDockManageHandler.on_quick_play_from_camera(dock)
+	assert_false(dock.undo_redo.has_undo(), "A temporary spawn move must not enter undo")
+	assert_false(dock.undo_redo.has_redo(), "and must not leave a redo step either")
+
+
+func test_play_from_camera_restores_the_spawn_when_the_bake_fails():
+	root.bake_result = false
+	await HFDockManageHandler.on_quick_play_from_camera(dock)
+	_assert_spawn_untouched("After a failed bake")
+	assert_true(
+		"Test cancelled because the level could not be baked" in dock.toast_messages(),
+		"A failed bake must say so"
+	)
+
+
+func test_play_from_camera_blocks_and_restores_on_severity_2():
+	root.spawn_system.validation = {
 		"valid": false,
 		"severity": 2,
 		"issues": PackedStringArray(["No floor beneath spawn"]),
 	}
-	var severity: int = validation.get("severity", 0)
-	var should_block: bool = severity >= 2
-	assert_true(should_block, "Severity 2 must block play launch")
+	await HFDockManageHandler.on_quick_play_from_camera(dock)
+	_assert_spawn_untouched("After a blocking validation")
+	assert_eq(dock.worst_toast_level(), 2, "Severity 2 reports at error level")
+	assert_false(dock.undo_redo.has_undo(), "The blocked path leaves no undo step either")
 
 
-func test_severity_1_allows_play():
-	var validation := {
+func test_play_from_camera_warns_but_launches_on_severity_1():
+	root.spawn_system.validation = {
 		"valid": true,
 		"severity": 1,
 		"issues": PackedStringArray(["Low clearance"]),
 	}
-	var severity: int = validation.get("severity", 0)
-	var should_block: bool = severity >= 2
-	assert_false(should_block, "Severity 1 should warn but not block")
+	await HFDockManageHandler.on_quick_play_from_camera(dock)
+	assert_eq(root.bake_calls, 1, "Severity 1 still bakes")
+	assert_eq(dock.worst_toast_level(), 1, "Severity 1 warns rather than blocking")
+	_assert_spawn_untouched("After a warning launch")
 
 
-func test_severity_0_allows_play():
-	var validation := {"valid": true, "severity": 0, "issues": PackedStringArray()}
-	var severity: int = validation.get("severity", 0)
-	var should_block: bool = severity >= 2
-	assert_false(should_block, "Severity 0 should not block")
+func test_play_from_camera_reports_a_missing_camera():
+	dock._plugin.last_3d_camera = null
+	await HFDockManageHandler.on_quick_play_from_camera(dock)
+	assert_true("No editor camera available" in dock.toast_messages())
+	assert_eq(root.bake_calls, 0, "No camera means no bake")
+	_assert_spawn_untouched("Without a camera")
 
 
 # ===========================================================================
-# Cordon save/restore for Play Selected Area
+# Play Selected Area: the temporary cordon
 # ===========================================================================
 
 
-func test_cordon_state_preserved_after_play_area():
-	# Simulate the cordon save/restore pattern
-	var prev_enabled := true
-	var prev_aabb := AABB(Vector3(10, 10, 10), Vector3(50, 50, 50))
-
-	# Save state
-	root.cordon_enabled = prev_enabled
-	root.cordon_aabb = prev_aabb
-
-	# Simulate set_cordon_from_selection changing it
+func test_play_selected_area_restores_the_cordon():
+	dock._selection_nodes = [autofree(Node3D.new())]
 	root.cordon_enabled = true
-	root.cordon_aabb = AABB(Vector3.ZERO, Vector3(100, 100, 100))
-
-	# Restore (as done at end of _on_quick_play_selected_area)
-	root.cordon_enabled = prev_enabled
-	root.cordon_aabb = prev_aabb
-
-	assert_true(root.cordon_enabled, "Cordon enabled should be restored")
-	assert_eq(root.cordon_aabb.position, Vector3(10, 10, 10), "Cordon AABB position restored")
-	assert_eq(root.cordon_aabb.size, Vector3(50, 50, 50), "Cordon AABB size restored")
+	root.cordon_aabb = AABB(Vector3(10, 10, 10), Vector3(50, 50, 50))
+	await HFDockManageHandler.on_quick_play_selected_area(dock)
+	assert_eq(root.cordon_from_selection_calls, 1, "The selection defines the play area")
+	assert_true(root.cordon_enabled, "Cordon enabled flag restored")
+	assert_eq(root.cordon_aabb, AABB(Vector3(10, 10, 10), Vector3(50, 50, 50)), "Cordon restored")
 
 
-func test_cordon_restored_on_error_path():
-	# Same pattern but simulating the severity >= 2 early return
-	var prev_enabled := false
-	var prev_aabb := AABB(Vector3(-5, -5, -5), Vector3(10, 10, 10))
+func test_play_selected_area_restores_the_cordon_when_the_bake_fails():
+	dock._selection_nodes = [autofree(Node3D.new())]
+	root.cordon_enabled = false
+	root.cordon_aabb = AABB(Vector3(-5, -5, -5), Vector3(10, 10, 10))
+	root.bake_result = false
+	await HFDockManageHandler.on_quick_play_selected_area(dock)
+	assert_false(root.cordon_enabled, "Cordon disabled flag restored on the error path")
+	assert_eq(root.cordon_aabb, AABB(Vector3(-5, -5, -5), Vector3(10, 10, 10)), "Bounds restored")
 
+
+func test_play_selected_area_restores_the_cordon_when_validation_blocks():
+	dock._selection_nodes = [autofree(Node3D.new())]
 	root.cordon_enabled = true
-	root.cordon_aabb = AABB(Vector3.ZERO, Vector3(200, 200, 200))
-
-	# Simulate error path restoring cordon before returning
-	root.cordon_enabled = prev_enabled
-	root.cordon_aabb = prev_aabb
-
-	assert_false(root.cordon_enabled, "Cordon should be restored to disabled on error")
-	assert_eq(root.cordon_aabb.position, Vector3(-5, -5, -5), "Cordon restored on error")
-
-
-# ===========================================================================
-# Dirty tag retention across failed bakes
-# ===========================================================================
+	root.cordon_aabb = AABB(Vector3(1, 2, 3), Vector3(8, 8, 8))
+	root.spawn_system.validation = {
+		"valid": false,
+		"severity": 2,
+		"issues": PackedStringArray(["No floor beneath spawn"]),
+	}
+	await HFDockManageHandler.on_quick_play_selected_area(dock)
+	assert_eq(root.cordon_aabb, AABB(Vector3(1, 2, 3), Vector3(8, 8, 8)), "Bounds restored")
+	assert_eq(dock.worst_toast_level(), 2, "Severity 2 reports at error level")
 
 
-func test_dirty_tags_survive_failed_incremental():
-	root._dirty_brush_ids = {"b1": true, "b2": true, "b3": true}
-
-	# Simulate failed bake — _last_bake_success stays false
-	var bake_succeeded := false
-
-	# The conditional clear pattern from bake_dirty
-	if bake_succeeded:
-		root._dirty_brush_ids.clear()
-
-	assert_eq(
-		root._dirty_brush_ids.size(),
-		3,
-		"All 3 dirty tags should survive a failed bake",
-	)
+func test_play_selected_area_needs_a_selection():
+	dock._selection_nodes = []
+	await HFDockManageHandler.on_quick_play_selected_area(dock)
+	assert_true("Select brushes to define play area" in dock.toast_messages())
+	assert_eq(root.cordon_from_selection_calls, 0, "Nothing selected means no cordon change")
+	assert_eq(root.bake_calls, 0, "and no bake")
 
 
-func test_dirty_tags_cleared_after_successful_incremental():
-	root._dirty_brush_ids = {"b1": true, "b2": true}
-
-	var bake_succeeded := true
-
-	if bake_succeeded:
-		root._dirty_brush_ids.clear()
-
-	assert_eq(
-		root._dirty_brush_ids.size(),
-		0,
-		"Dirty tags should be cleared after successful bake",
-	)
-
-
-func test_dirty_tags_can_accumulate_after_failed_retry():
-	root._dirty_brush_ids = {"b1": true}
-
-	# First bake fails
-	var bake_succeeded := false
-	if bake_succeeded:
-		root._dirty_brush_ids.clear()
-
-	# User modifies another brush
-	root._dirty_brush_ids["b2"] = true
-
-	assert_eq(
-		root._dirty_brush_ids.size(),
-		2,
-		"New dirty tags should accumulate with retained ones after failure",
-	)
+func test_play_selected_area_respects_the_selection_guard():
+	dock._selection_nodes = [autofree(Node3D.new())]
+	dock.selection_guard_passes = false
+	await HFDockManageHandler.on_quick_play_selected_area(dock)
+	assert_true("Play Selected Area" in dock.guarded_actions, "The guard is asked first")
+	assert_eq(root.cordon_from_selection_calls, 0, "A refused guard stops before the cordon moves")
 
 
 # ===========================================================================
-# Camera yaw propagation to entity_data (not set_meta)
+# Shared restore helpers
 # ===========================================================================
 
 
-func test_camera_yaw_written_to_entity_data():
-	# Simulate what _on_quick_play_from_camera does with the spawn
-	var spawn = DraftEntityScript.new()
-	spawn.entity_data = {"angle": 0.0}
-	add_child_autoqfree(spawn)
-
-	# Simulate camera yaw of 90 degrees
-	var camera_yaw_deg: float = 90.0
-	if spawn is DraftEntity:
-		(spawn as DraftEntity).entity_data["angle"] = camera_yaw_deg
-
-	assert_eq(
-		spawn.entity_data["angle"],
-		90.0,
-		"Camera yaw should be written to entity_data['angle']",
-	)
-
-
-func test_camera_yaw_not_written_to_meta():
-	# Verify the fix: yaw should NOT go to set_meta("angle", ...)
-	var spawn = DraftEntityScript.new()
-	spawn.entity_data = {"angle": 0.0}
-	add_child_autoqfree(spawn)
-
-	# Simulate the corrected code path
-	var camera_yaw_deg: float = 45.0
-	if spawn is DraftEntity:
-		(spawn as DraftEntity).entity_data["angle"] = camera_yaw_deg
-
-	assert_false(spawn.has_meta("angle"), "Yaw should not be stored as meta")
-	assert_eq(spawn.entity_data["angle"], 45.0, "Yaw should be in entity_data")
-
-
-func test_playtest_reads_angle_from_entity_data():
-	# The playtest runtime reads deg_to_rad(entity_data.get("angle", 0.0))
-	var spawn = DraftEntityScript.new()
-	spawn.entity_data = {"angle": 180.0}
-	add_child_autoqfree(spawn)
-
-	var spawn_yaw: float = deg_to_rad(float(spawn.entity_data.get("angle", 0.0)))
-	assert_almost_eq(spawn_yaw, PI, 0.001, "180 degrees should convert to PI radians")
-
-
-# ===========================================================================
-# Spawn restore after Play from Camera
-# ===========================================================================
-
-
-func test_spawn_restored_after_camera_play():
-	# Simulate the full temporary-move + restore flow
-	var spawn = DraftEntityScript.new()
-	spawn.entity_data = {"angle": 30.0}
-	add_child_autoqfree(spawn)
-	spawn.global_position = Vector3(10, 0, 5)
-
-	# Save originals — explicit type because spawn is untyped GDScript instance
-	var old_pos: Vector3 = spawn.global_position
-	var old_angle: float = float(spawn.entity_data.get("angle", 0.0))
-
-	# Temporarily move to camera
-	spawn.global_position = Vector3(100, 50, 200)
-	(spawn as DraftEntity).entity_data["angle"] = 270.0
-
-	assert_eq(spawn.global_position, Vector3(100, 50, 200), "Should be at camera pos")
-	assert_eq(spawn.entity_data["angle"], 270.0, "Should have camera yaw")
-
-	# Restore (as _restore_spawn does)
-	spawn.global_position = old_pos
-	(spawn as DraftEntity).entity_data["angle"] = old_angle
-
-	assert_eq(spawn.global_position, Vector3(10, 0, 5), "Position should be restored")
-	assert_eq(spawn.entity_data["angle"], 30.0, "Angle should be restored")
-
-
-func test_spawn_restored_on_error_path():
-	# Even when validation blocks play, spawn must be restored
-	var spawn = DraftEntityScript.new()
-	spawn.entity_data = {"angle": 45.0}
-	add_child_autoqfree(spawn)
-	spawn.global_position = Vector3(5, 5, 5)
-
-	var old_pos: Vector3 = spawn.global_position
-	var old_angle: float = float(spawn.entity_data.get("angle", 0.0))
-
-	# Temporarily move
+func test_restore_spawn_puts_back_position_and_angle():
 	spawn.global_position = Vector3(999, 999, 999)
-	(spawn as DraftEntity).entity_data["angle"] = 180.0
+	spawn.entity_data["angle"] = 180.0
+	HFDockManageHandler.restore_spawn(spawn, Vector3(10, 0, 5), 30.0)
+	_assert_spawn_untouched("restore_spawn")
 
-	# Simulate severity >= 2 error path — restore before return
-	var severity := 2
-	if severity >= 2:
-		spawn.global_position = old_pos
-		if spawn is DraftEntity:
-			(spawn as DraftEntity).entity_data["angle"] = old_angle
 
-	assert_eq(spawn.global_position, Vector3(5, 5, 5), "Restored on error")
-	assert_eq(spawn.entity_data["angle"], 45.0, "Angle restored on error")
+func test_restore_cordon_state_refreshes_the_level():
+	HFDockManageHandler.restore_cordon_state(dock, true, AABB(Vector3(2, 2, 2), Vector3(4, 4, 4)))
+	assert_true(root.cordon_enabled)
+	assert_eq(root.cordon_aabb, AABB(Vector3(2, 2, 2), Vector3(4, 4, 4)))
+	assert_eq(root.reconcile_calls, 1, "Restoring the cordon must retag a full reconcile")
+	assert_eq(root.cordon_visual_calls, 1, "and redraw the cordon volume")
