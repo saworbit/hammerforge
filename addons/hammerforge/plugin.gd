@@ -14,6 +14,7 @@ const HFPluginViewportInput = preload("plugin_viewport_input.gd")
 const HFPluginOverlays = preload("plugin_overlays.gd")
 const HFPluginPaintInput = preload("plugin_paint_input.gd")
 const HFPluginPointerTools = preload("plugin_pointer_tools.gd")
+const HFPluginPrefabCommands = preload("plugin_prefab_commands.gd")
 const HFPluginSelectionInput = preload("plugin_selection_input.gd")
 const HFPluginSelectionCommands = preload("plugin_selection_commands.gd")
 const HFPluginSelectionState = preload("plugin_selection_state.gd")
@@ -1708,104 +1709,19 @@ func _handle_prefab_drop(position: Vector2, data: Variant) -> void:
 
 
 func _quick_save_prefab(root, linked: bool) -> void:
-	var brush_nodes: Array = []
-	var entity_nodes: Array = []
-	for node in hf_selection:
-		if root.is_brush_node(node):
-			brush_nodes.append(node)
-		elif root.is_entity_node(node):
-			entity_nodes.append(node)
-	if brush_nodes.is_empty() and entity_nodes.is_empty():
-		return
-	var suggested: String = root.prefab_system.suggest_prefab_name(brush_nodes, entity_nodes)
-	var path: String = root.prefab_system.quick_save_prefab(
-		brush_nodes, entity_nodes, suggested, linked
-	)
-	if path != "":
-		if dock and dock._prefab_library:
-			dock._prefab_library.on_prefab_saved()
-		if dock:
-			dock.show_toast("Saved prefab: %s%s" % [suggested, " (linked)" if linked else ""], 0)
+	HFPluginPrefabCommands.quick_save(self, root, linked)
 
 
 func _cycle_prefab_variant(root) -> void:
-	if hf_selection.is_empty():
-		return
-	var node = hf_selection[0]
-	if not is_instance_valid(node) or not (node is Node):
-		return
-	var iid: String = str(node.get_meta("hf_prefab_instance", ""))
-	if iid == "":
-		if dock:
-			dock.show_toast("Not a prefab instance", 1)
-		return
-	var full_state: Dictionary = root.state_system.capture_state(true)
-	var new_variant: String = root.prefab_system.cycle_variant(iid)
-	if new_variant != "":
-		if dock:
-			dock.show_toast("Variant: %s" % new_variant, 0)
-		var undo_redo = undo_redo_manager
-		if undo_redo:
-			undo_redo.create_action("Cycle Prefab Variant")
-			undo_redo.add_do_method(
-				root.state_system, "restore_state", root.state_system.capture_state(true)
-			)
-			undo_redo.add_undo_method(root.state_system, "restore_state", full_state)
-			undo_redo.commit_action(false)
-		_update_hud_context()
+	HFPluginPrefabCommands.cycle_variant(self, root)
 
 
 func _push_prefab_to_source(root) -> void:
-	if hf_selection.is_empty():
-		return
-	var node = hf_selection[0]
-	if not is_instance_valid(node) or not (node is Node):
-		return
-	var iid: String = str(node.get_meta("hf_prefab_instance", ""))
-	if iid == "":
-		if dock:
-			dock.show_toast("Not a prefab instance", 1)
-		return
-	var ok: bool = root.prefab_system.push_instance_to_source(iid)
-	if ok:
-		if dock:
-			dock.show_toast("Pushed changes to prefab source", 0)
-		if dock and dock._prefab_library:
-			dock._prefab_library.on_prefab_saved()
-	else:
-		if dock:
-			dock.show_toast("Failed to push to source", 1)
+	HFPluginPrefabCommands.push_to_source(self, root)
 
 
 func _propagate_prefab(root) -> void:
-	if hf_selection.is_empty():
-		return
-	var node = hf_selection[0]
-	if not is_instance_valid(node) or not (node is Node):
-		return
-	var source: String = str(node.get_meta("hf_prefab_source", ""))
-	if source == "":
-		if dock:
-			dock.show_toast("Not a prefab instance", 1)
-		return
-	var full_state: Dictionary = root.state_system.capture_state(true)
-	var count: int = root.prefab_system.propagate_from_source(source)
-	if count > 0:
-		if dock:
-			dock.show_toast(
-				"Propagated to %d linked instance%s" % [count, "" if count == 1 else "s"], 0
-			)
-		var undo_redo = undo_redo_manager
-		if undo_redo:
-			undo_redo.create_action("Propagate Prefab")
-			undo_redo.add_do_method(
-				root.state_system, "restore_state", root.state_system.capture_state(true)
-			)
-			undo_redo.add_undo_method(root.state_system, "restore_state", full_state)
-			undo_redo.commit_action(false)
-	else:
-		if dock:
-			dock.show_toast("No linked instances to propagate", 1)
+	HFPluginPrefabCommands.propagate(self, root)
 
 
 func _is_material_drag_data(data: Variant) -> bool:
