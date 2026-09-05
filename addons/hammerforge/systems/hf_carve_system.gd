@@ -106,6 +106,15 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 
 		targets_carved += 1
 
+	# Every overlapping brush was skipped (contact too shallow, or the carver
+	# swallows the target whole and leaves no slices).  Nothing was cut, so the
+	# carver has to stay where it is instead of being consumed for free.
+	if targets_carved == 0:
+		return _op_fail(
+			"Carve: overlap is too shallow to carve",
+			"Push the carver further into the brush you want to cut"
+		)
+
 	# Delete the carver brush
 	root.brush_system.delete_brush_by_id(brush_id)
 

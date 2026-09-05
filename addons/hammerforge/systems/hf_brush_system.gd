@@ -1112,6 +1112,41 @@ func _find_brush_by_key(key: String) -> DraftBrush:
 
 
 # ---------------------------------------------------------------------------
+# Shape guards for box-only operations
+# ---------------------------------------------------------------------------
+
+
+## Hollow and clip both compute world-space extents from `global_position` and
+## `size`, then rebuild the brush as axis-aligned BOX pieces.  That is only
+## truthful for an unrotated box, so anything else has to be rejected before the
+## original brush is deleted.
+func _check_axis_aligned_box(draft: DraftBrush, op_name: String) -> HFOpResult:
+	if draft.shape != root.BrushShape.BOX:
+		return HFOpResult.fail(
+			"%s: only works on box brushes" % op_name,
+			"Select a box brush, or convert this shape to a box first"
+		)
+	if not _is_axis_aligned(draft.global_transform.basis):
+		return HFOpResult.fail(
+			"%s: only works on unrotated box brushes" % op_name,
+			"Clear the brush rotation before running this operation"
+		)
+	return HFOpResult.success()
+
+
+## True when the basis leaves each axis pointing down its own world axis, so the
+## brush's world bounds really are `global_position` +/- `size * 0.5`.
+static func _is_axis_aligned(basis: Basis) -> bool:
+	var b := basis.orthonormalized()
+	const TOLERANCE := 0.9999
+	return (
+		absf(b.x.dot(Vector3.RIGHT)) >= TOLERANCE
+		and absf(b.y.dot(Vector3.UP)) >= TOLERANCE
+		and absf(b.z.dot(Vector3.BACK)) >= TOLERANCE
+	)
+
+
+# ---------------------------------------------------------------------------
 # Pre-validation (check preconditions without performing the operation)
 # ---------------------------------------------------------------------------
 
@@ -1123,6 +1158,9 @@ func can_hollow_brush(brush_id: String, wall_thickness: float) -> HFOpResult:
 	if not brush or not (brush is DraftBrush):
 		return HFOpResult.fail("Hollow: brush not found")
 	var draft := brush as DraftBrush
+	var shape_check := _check_axis_aligned_box(draft, "Hollow")
+	if not shape_check.ok:
+		return shape_check
 	var min_dim = min(draft.size.x, min(draft.size.y, draft.size.z))
 	if wall_thickness * 2.0 >= min_dim:
 		return HFOpResult.fail(
@@ -1142,6 +1180,9 @@ func can_clip_brush(brush_id: String, axis: int, split_pos: float) -> HFOpResult
 	if not brush or not (brush is DraftBrush):
 		return HFOpResult.fail("Clip: brush not found")
 	var draft := brush as DraftBrush
+	var shape_check := _check_axis_aligned_box(draft, "Clip")
+	if not shape_check.ok:
+		return shape_check
 	var pos = draft.global_position
 	var half = draft.size * 0.5
 	var brush_min: float
@@ -1183,12 +1224,11 @@ func hollow_brush_by_id(brush_id: String, wall_thickness: float) -> HFOpResult:
 	if not brush or not (brush is DraftBrush):
 		return _op_fail("Hollow: brush not found")
 	var draft := brush as DraftBrush
-	# Hollow only works on axis-aligned box brushes — reject custom geometry
-	if draft.shape == root.BrushShape.CUSTOM:
-		return _op_fail(
-			"Hollow: not supported on polygon/path brushes",
-			"Hollow only works on axis-aligned box brushes"
-		)
+	# Hollow rebuilds the brush as axis-aligned box slabs, so anything that is
+	# not an unrotated box would be silently replaced with the wrong geometry.
+	var shape_check := _check_axis_aligned_box(draft, "Hollow")
+	if not shape_check.ok:
+		return _op_fail(shape_check.message, shape_check.fix_hint)
 	var size = draft.size
 	var pos = draft.global_position
 	var mat = draft.material_override
@@ -1528,12 +1568,11 @@ func clip_brush_by_id(brush_id: String, axis: int, split_pos: float) -> HFOpResu
 	if not brush or not (brush is DraftBrush):
 		return _op_fail("Clip: brush not found")
 	var draft := brush as DraftBrush
-	# Clip only works on axis-aligned box brushes — reject custom geometry
-	if draft.shape == root.BrushShape.CUSTOM:
-		return _op_fail(
-			"Clip: not supported on polygon/path brushes",
-			"Clip only works on axis-aligned box brushes"
-		)
+	# Clip rebuilds the brush as two axis-aligned box pieces, so anything that is
+	# not an unrotated box would be silently replaced with the wrong geometry.
+	var shape_check := _check_axis_aligned_box(draft, "Clip")
+	if not shape_check.ok:
+		return _op_fail(shape_check.message, shape_check.fix_hint)
 	var pos = draft.global_position
 	var half = draft.size * 0.5
 
