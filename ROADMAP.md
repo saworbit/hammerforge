@@ -263,7 +263,7 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 
 ## Done (Visual System Status — Classic Editor Feedback)
 - **Operation-coded wireframe colors (superseded by the July 2026 clarity pass)**: this release originally added green wireframe to additive brushes plus red/blue semantic overlays. Additive wireframe was later removed after user feedback; subtract/entity cues remain, and hover/selection now use structural edges only.
-- **Grid size viewport indicator**: persistent "Grid: N" label in shortcut HUD with `%g` exact formatting. Flash-on-change (bright yellow-white → fade 0.6s) via tween.
+- **Grid size viewport indicator**: persistent "Grid: N" label in the shortcut HUD. Whole numbers print as integers; fractional snaps print through `String.num()` with the padding zeros trimmed, since GDScript has no `%g`. Flash-on-change (bright yellow-white → fade 0.6s) via tween.
 - **Grid size hotkeys** (`[` / `]`): halve/double grid snap. Registered as `grid_decrease` / `grid_increase` in keymap (user-remappable). Clamped 0.125–512.
 - **Signal-driven HUD sync**: `grid_snap_applied` signal on dock ensures all grid change origins (SpinBox, snap buttons, quick-property, hotkeys, state restore) update the HUD.
 - **Test cleanup fixes**: resource leak fixes in test_brush_to_heightmap, test_context_toolbar, test_selection_features. Orphan/leak shutdown errors eliminated.
@@ -380,6 +380,41 @@ Not covered: `ORMMaterial3D` is still rejected whole (it was never atlased, so n
 Packing it would mean composing occlusion/roughness/metallic into one texture, which needs per-texel
 channel swizzling — the one operation with no native `Image` equivalent.
 
+## Done (HammerForge Console — September 2026)
+Nothing in the editor named HammerForge. The left dock's tab read **"Dock"** and carried no icon, the
+settings were split between a collapsed *Settings* section and an *Advanced Bake* section, and warnings
+went only to Godot's shared Output panel. There was nowhere to ask "is this level in a state I can bake
+and run".
+
+- **A main screen**, in the switcher beside 2D / 3D / Script, wearing the mark. That row is the only
+  part of the editor chrome that draws a plugin icon: Godot 4.7's bottom panel is text-only, and a
+  docked control's icon lives on the `EditorDock` wrapper behind `force_show_icon`. The switcher draws
+  the icon at its texture size, so `docs/brand/build.py` emits a 32px `hf_mark_editor.svg` for it.
+- **Status board** (`hf_status_board.gd`): eight checks as red / amber / green lamps — level root,
+  geometry budget, bake freshness, level check, material palette, player spawn, autosave, session log.
+  Each names what was measured, the threshold it is measured against, and the one action that resolves
+  it. Grey means "not measured", never a fault. `evaluate()` is pure, so every threshold is tested
+  without an editor. Lamps carry a drawn glyph as well as a hue.
+- **Controls tab** (`ui/hf_console_controls.gd`): every switch on one screen, grouped Viewport / Bake /
+  Safety net, captioned, and searchable by caption as well as by name. Written *through* the dock's own
+  controls, so the dock's handlers stay in charge of side effects and the two surfaces cannot disagree.
+- **Log tab** (`hf_console_log.gd`, `ui/hf_console_log_view.gd`): HammerForge's own messages, capped at
+  600 entries with repeat collapsing, BBCode escaping, and a deferred append from the bake thread pool.
+  `HFLog.warn()` and `LevelRoot`'s `user_message` signal both feed it. Level counts double as the filter.
+- **Viewport lamp** (`ui/hf_status_strip.gd`): the overall severity and summary in the 3D toolbar, on a
+  slower beat, reading the Console's own evaluation. A main screen is not visible while you build.
+- **Costs nothing idle**: the poll stops when the Console is off screen, only the visible tab is redrawn,
+  and the two reads that walk every brush and face run on a slower beat or on **Re-check**.
+- **Shortcut HUD layout faults found alongside**: it had never been laid out — a zero-minimum `Control`
+  in a `BoxContainer` toolbar, drawing seven lines out of a zero-width slot with six painted over by the
+  viewport and the seventh across the context toolbar; three labels sharing one `MarginContainer` rect;
+  and `%g`, which GDScript does not have, printing `Grid: %g` for every fractional snap.
+- 129 new tests across `test_console_log.gd`, `test_status_board.gd`, `test_console_panel.gd`, and
+  `test_shortcut_hud_layout.gd`, including drift guards that fail if a Controls switch stops addressing a
+  property `dock.gd` or `level_root.gd` declares. Total: **2,200 tests across 125 scripts**.
+- `tools/hf_console_preview.gd` renders the three tabs to PNGs so a layout change can be judged without
+  opening the editor.
+
 ## Future (Wave 3 -- Polish)
 - Multiple simultaneous cordons.
 - Multi-tool presets for common workflows.
@@ -423,7 +458,7 @@ Completion is responsibility-based rather than tied to an arbitrary line count. 
 - Headless editor tests retain the complete tool graph, with focused export-playtest coverage guarding the runtime boundary.
 
 ### Risk-focused test gaps
-The current suite covers 1,903 tests across 112 scripts, including the large brush, bake, paint, vertex, baker, brush-instance, and map-I/O systems. Remaining work is concentrated in failure semantics and scale-sensitive paths rather than wholly untested systems:
+The current suite covers 2,200 tests across 125 scripts, including the large brush, bake, paint, vertex, baker, brush-instance, and map-I/O systems. Remaining work is concentrated in failure semantics and scale-sensitive paths rather than wholly untested systems:
 - crash-safe destination replacement and truthful manual-save completion ([#33](https://github.com/saworbit/hammerforge/issues/33), [#51](https://github.com/saworbit/hammerforge/issues/51));
 - quoted `.map` property round-trips ([#32](https://github.com/saworbit/hammerforge/issues/32));
 - non-blocking threaded merge/finalization ([#35](https://github.com/saworbit/hammerforge/issues/35));

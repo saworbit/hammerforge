@@ -457,7 +457,8 @@ External tools expose `get_settings_schema()` → Array of `{name, type, label, 
 
 ## Editor UX
 - Theme-aware dock styling with comprehensive tooltips on all controls.
-- Context-sensitive shortcut HUD overlay (8 views: draw idle, dragging base, adjusting height, select, extrude idle, extruding active, floor paint, surface paint). Displays current axis lock. Updated via `plugin.gd` -> `shortcut_hud.gd:update_context()`.
+- **HammerForge Console** on its own main screen, reached from the switcher beside 2D / 3D / Script. Status (eight red/amber/green checks, each naming what was measured, the threshold, and the one action that resolves it), Controls (every switch, grouped and captioned, written through the dock's own controls), Log (HammerForge's own messages, level counts doubling as the filter). Severities come from `hf_status_board.gd`, whose `evaluate()` is pure. The overall lamp is repeated in the 3D viewport toolbar.
+- Context-sensitive shortcut HUD in the 3D viewport toolbar (8 contexts: draw idle, dragging base, adjusting height, select, extrude idle, extruding active, floor paint, surface paint). Shows the primary line for the context plus the current axis lock, with the full list on its tooltip. Updated via `plugin.gd` -> `shortcut_hud.gd:update_context()`.
 - **Customizable keyboard shortcuts** -- all bindings data-driven via `HFKeymap` JSON.
 - **Status bar mode indicator** -- shows active mode (Draw/Select/Extrude/Paint) with live state updates.
 - **Tool poll** -- buttons gray out with tooltip when action can't run (e.g. Hollow with no selection).
@@ -512,6 +513,6 @@ Unit tests use the [GUT](https://github.com/bitwes/Gut) framework and run headle
 | `test_selection_gesture.gd` | 38 | Native widget/Object Select ownership, modal Face Select, recovery, focus/scope guards, native duplicate/reparent repair, and Inspector/undo change tracking |
 | `test_viewport_outlines.gd` | 39 | Sparse semantic outlines, exact/composite entity collision, visibility/transforms, and shape-aware resize recovery |
 
-Full suite (verified locally on September 3, 2026): **1,903 tests** across **112 scripts** (**1,896 passing** plus seven intentional no-assert safety tests; **8,253 assertions**).
+Full suite (verified locally on September 5, 2026): **2,200 tests** across **125 scripts** (**2,193 passing** plus seven intentional no-assert safety tests; **9,184 assertions**).
 
 Tests use root shim scripts (dynamically created GDScript) to provide the LevelRoot interface without circular preload dependencies. Configuration in `.gutconfig.json`.

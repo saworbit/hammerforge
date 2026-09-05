@@ -50,7 +50,16 @@ addons/hammerforge/
   dock_visgroup_handler.gd Manage-tab visgroup/group/cordon handlers
   dock_file_handler.gd   File-dialog and import/export handlers
   dock_connections.gd    Settings and LevelRoot signal wiring
-  shortcut_hud.gd        Context-sensitive shortcut overlay (dynamic per mode) + persistent grid size indicator with flash-on-change
+  plugin_console.gd      Console main screen, dock tab icon, viewport lamp, and status-row action routing
+  hf_console_log.gd      HFConsoleLog: capped session log with levels, repeat collapsing, and a thread-safe append
+  hf_status_board.gd     HFStatusBoard: pure red/amber/green evaluation of eight level checks
+  ui/hf_console_panel.gd The Console itself (Status / Controls / Log) with tiered refresh
+  ui/hf_console_controls.gd  Every HammerForge switch, grouped, captioned, and written through the dock's own controls
+  ui/hf_console_log_view.gd  Log tab: level counts as filters, search, copy, save
+  ui/hf_status_row.gd    One board row: lamp, measurement, consequence, and the button that resolves it
+  ui/hf_status_lamp.gd   The lamp itself; the glyph is drawn, not set in a font
+  ui/hf_status_strip.gd  The same lamp in the 3D viewport toolbar, on a slower beat
+  shortcut_hud.gd        Single-row shortcut strip in the 3D toolbar (primary line per mode, full list on the tooltip) + grid size indicator with flash-on-change
   brush_instance.gd      DraftBrush node
   baker.gd               CSG -> mesh bake pipeline (per-face materials, atlas integration, snapshot-based non-blocking face bakes, convex collision shapes)
   hf_material_atlas.gd   HFMaterialAtlas: texture atlas packing for draw-call reduction
@@ -214,7 +223,8 @@ addons/hammerforge/
 - **Toast notifications.** Use `dock.show_toast(message, level)` (0=INFO, 1=WARNING, 2=ERROR) for user-facing messages. Subsystems can also emit `root.user_message.emit(text, level)` which the dock auto-routes to the toast system.
 - **Mode indicator.** Call `dock.set_mode_indicator(mode_name, stage_hint, numeric)` from `plugin.gd` to update the colored mode banner. `stage_hint` shows gesture progress (e.g. "Step 1/2: Draw base"), `numeric` shows typed input.
 - **First-run guide.** `ui/hf_tutorial_wizard.gd` presents the two-step Draw → Test Level path when `show_welcome` is true. It advances on `brush_added` and a successful `bake_finished`, persists `tutorial_step`, and can be reopened from Help. Dock `highlight_tab()` uses displayed tab aliases.
-- **Dynamic contextual hints.** `shortcut_hud.gd` shows per-mode viewport hints (e.g. "Click to place corner → drag to set size → release for height"). Hints auto-dismiss after 4s fade tween and persist dismissal via `is_hint_dismissed()`/`dismiss_hint()` on `hf_user_prefs.gd`. Mode key is computed from HUD context dict.
+- **Dynamic contextual hints.** `shortcut_hud.gd` shows per-mode viewport hints (e.g. "Click to place corner → drag to set size → release for height"). A hint replaces the shortcut line for the 4s of its fade tween rather than stacking under it, because the HUD is one row inside the 3D toolbar. Dismissal persists via `is_hint_dismissed()`/`dismiss_hint()` on `hf_user_prefs.gd`. Mode key is computed from HUD context dict.
+- **Toolbar layout.** Anything added to `CONTAINER_SPATIAL_EDITOR_MENU` is a child of a `BoxContainer`: it is positioned by the container, sized to its minimum, and its own anchors are ignored. A plain `Control` reports a minimum of zero, so it will be given a zero-width slot and draw over its neighbour. Report `_get_minimum_size()`. Overlays that need to cover the viewport instead set `z_index` (see `hf_radial_menu.gd`), because the 3D viewport is a later sibling and paints over anything that does not.
 - **Searchable shortcut dialog.** `ui/hf_shortcut_dialog.gd` extends `AcceptDialog` with a search `LineEdit` and `Tree`. Categories populated from `HFKeymap.get_category()`. Replaces the static shortcuts popup.
 - **Subtract preview.** `systems/hf_subtract_preview.gd` is a `RefCounted` subsystem. After a 0.15s debounce it CSG-intersects each subtract DraftBrush with overlapping additives (max 8 subtractors) and shows the cut volume as a translucent mesh. Mesh AABBs are the broad-phase and the immediate wireframe fallback. Toggle via `show_subtract_preview` on LevelRoot. Call `destroy()` (not `clear()`) when the subsystem is no longer needed.
 - **Undo/redo preview cleanup.** `plugin.gd` connects to `EditorUndoRedoManager.version_changed` and calls `HFInputState._force_reset()` for transient preview modes (drag, extrude, surface paint). This cascades through `_on_input_state_force_reset` to free preview nodes. VERTEX_EDIT is excluded because `commit_action()` fires `version_changed` after every vertex operation — resetting it would desync `_vertex_mode` from `input_state.mode`. `level_root.gd _exit_tree()` also calls `subtract_preview.destroy()`, `extrude_tool.cancel_extrude()`, and `drag_system._clear_preview()` to ensure preview nodes don't outlive the tree.
@@ -267,7 +277,7 @@ addons/hammerforge/
 The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on push and PR to `main`:
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
-- **GUT unit + integration tests** -- 1,903 tests across 112 test scripts (1,896 passing plus seven intentional no-assert safety tests; 8,253 assertions; verified locally September 3, 2026; runs Godot headless)
+- **GUT unit + integration tests** -- 2,200 tests across 125 test scripts (2,193 passing plus seven intentional no-assert safety tests; 9,184 assertions; verified locally September 5, 2026; runs Godot headless)
 
 Run locally before pushing:
 ```

@@ -14,8 +14,9 @@ This guide covers installing, upgrading, and recovering HammerForge for Godot 4.
 1. Copy `addons/hammerforge` into your project.
 2. Enable **HammerForge** in **Project → Project Settings → Plugins**.
 3. Open any 3D scene. In the empty-state banner, choose **Create Starter** for a floor, sunlight, and player spawn, or **Create Empty** for only `LevelRoot`.
-4. Verify the dock shows **Build**, **Paint**, **Objects**, and **Test**, with **Draw**, **Select**, **Paint**, **More**, and **Help** in the primary toolbar.
-5. Draw a brush, then use **Test → Test Level (Bake + Play)** to verify the complete workflow.
+4. Verify **HammerForge** appears in the main-screen switcher at the top of the editor, beside **2D**, **3D** and **Script**, wearing the HammerForge mark. Opening it shows the Console.
+5. Verify the left dock is titled **HammerForge** and shows **Build**, **Paint**, **Objects**, and **Test**, with **Draw**, **Select**, **Paint**, **More**, and **Help** in the primary toolbar.
+6. Draw a brush, then use **Test → Test Level (Bake + Play)** to verify the complete workflow.
 
 An intentional left-click with Draw active can create an empty root. Camera navigation, right-clicks, and other passive viewport input do not modify the scene.
 
