@@ -7,6 +7,29 @@ const DraftBrush = preload("brush_instance.gd")
 
 enum SnapMode { GRID = 1, VERTEX = 2, CENTER = 4, EDGE = 8, PERPENDICULAR = 16 }
 
+## Past this many faces a brush's `faces` array is engine tessellation rather
+## than geometry anyone could aim at: a cylinder brush is one FaceData per
+## triangle, a sphere is thousands. Those brushes keep the bounding box they
+## always had, now oriented by the brush transform. Hand built geometry
+## (polygon, path, merged, bevelled, vertex edited) sits well under this.
+const MAX_SNAP_FACES := 64
+
+## Corner order for _box_corners(), and the 12 box edges as index pairs into it.
+const BOX_EDGE_INDICES: Array = [
+	[0, 1],
+	[0, 2],
+	[0, 4],
+	[1, 3],
+	[1, 5],
+	[2, 3],
+	[2, 6],
+	[3, 7],
+	[4, 5],
+	[4, 6],
+	[5, 7],
+	[6, 7],
+]
+
 var root: Node3D
 var enabled_modes: int = SnapMode.GRID
 var snap_threshold: float = 2.0
@@ -105,46 +128,108 @@ func _collect_candidates(exclude_ids: Array, point: Vector3 = Vector3.ZERO) -> P
 		var brush := node as DraftBrush
 		if exclude_ids.has(str(brush.brush_id)):
 			continue
-		var pos := brush.global_position
-		var half := brush.size * 0.5
 		if do_center:
-			out.append(pos)
-		var corners := PackedVector3Array(
-			[
-				pos + Vector3(-half.x, -half.y, -half.z),
-				pos + Vector3(-half.x, -half.y, half.z),
-				pos + Vector3(-half.x, half.y, -half.z),
-				pos + Vector3(-half.x, half.y, half.z),
-				pos + Vector3(half.x, -half.y, -half.z),
-				pos + Vector3(half.x, -half.y, half.z),
-				pos + Vector3(half.x, half.y, -half.z),
-				pos + Vector3(half.x, half.y, half.z),
-			]
-		)
+			out.append(brush.global_position)
+		if not (do_vertex or do_edge or do_perp):
+			continue
+		# Snap points live in brush space. Going through the transform is what
+		# carries the rotation and scale that world axis offsets threw away.
+		var xform := brush.global_transform
+		var geometry := _snap_geometry_local(brush)
+		var local_verts: PackedVector3Array = geometry["verts"]
+		var verts := PackedVector3Array()
+		for local_vert in local_verts:
+			verts.append(xform * local_vert)
 		if do_vertex:
-			out.append_array(corners)
+			out.append_array(verts)
 		if do_edge or do_perp:
-			# 12 AABB edges, same corner order as vertex snap.
-			var edges := [
-				[0, 1],
-				[0, 2],
-				[0, 4],
-				[1, 3],
-				[1, 5],
-				[2, 3],
-				[2, 6],
-				[3, 7],
-				[4, 5],
-				[4, 6],
-				[5, 7],
-				[6, 7],
-			]
-			for edge in edges:
+			for edge in geometry["edges"]:
+				var a: Vector3 = verts[edge[0]]
+				var b: Vector3 = verts[edge[1]]
 				if do_edge:
-					out.append((corners[edge[0]] + corners[edge[1]]) * 0.5)
+					out.append((a + b) * 0.5)
 				if do_perp:
-					out.append(_closest_point_on_segment(point, corners[edge[0]], corners[edge[1]]))
+					out.append(_closest_point_on_segment(point, a, b))
 	return out
+
+
+## Snap targets for one brush in brush-local space: unique vertices, plus the
+## unique edges between them as index pairs into that vertex list.
+##
+## A brush that carries its own faces is described by them, so a wedge, prism,
+## polygon, path or merged brush snaps to real corners instead of the corners of
+## a box it does not fill. Everything else falls back to its bounding box.
+func _snap_geometry_local(brush: DraftBrush) -> Dictionary:
+	# A BOX brush is defined by its size: _rebuild_faces regenerates its faces
+	# from size alone, so its corners are the size corners. Boxes are most of a
+	# level, so take them straight rather than deduping six faces every query.
+	if brush.shape == DraftBrush.BrushShape.BOX:
+		return {"verts": _box_corners(brush.size * 0.5), "edges": BOX_EDGE_INDICES}
+	var faces: Array = brush.faces
+	if not faces.is_empty() and faces.size() <= MAX_SNAP_FACES:
+		var face_geometry := _face_snap_geometry(faces)
+		var face_verts: PackedVector3Array = face_geometry["verts"]
+		if face_verts.size() >= 2:
+			return face_geometry
+	return {"verts": _box_corners(brush.size * 0.5), "edges": BOX_EDGE_INDICES}
+
+
+## Unique vertices and unique edges read off a brush's faces. A hull corner
+## belongs to three or more faces and an edge to two, so both are deduped by
+## rounded position.
+static func _face_snap_geometry(faces: Array) -> Dictionary:
+	var verts := PackedVector3Array()
+	var index_by_key: Dictionary = {}
+	for face in faces:
+		if face == null:
+			continue
+		for v in face.local_verts:
+			var key := _vertex_key(v)
+			if not index_by_key.has(key):
+				index_by_key[key] = verts.size()
+				verts.append(v)
+	var edges: Array = []
+	var seen_edges: Dictionary = {}
+	for face in faces:
+		if face == null:
+			continue
+		var ring: PackedVector3Array = face.local_verts
+		var count := ring.size()
+		if count < 2:
+			continue
+		for i in range(count):
+			var ia: int = index_by_key.get(_vertex_key(ring[i]), -1)
+			var ib: int = index_by_key.get(_vertex_key(ring[(i + 1) % count]), -1)
+			if ia < 0 or ib < 0 or ia == ib:
+				continue
+			var lo := mini(ia, ib)
+			var hi := maxi(ia, ib)
+			var edge_key := "%d|%d" % [lo, hi]
+			if seen_edges.has(edge_key):
+				continue
+			seen_edges[edge_key] = true
+			edges.append([lo, hi])
+	return {"verts": verts, "edges": edges}
+
+
+static func _vertex_key(v: Vector3) -> String:
+	return "%.3f,%.3f,%.3f" % [v.x, v.y, v.z]
+
+
+## The 8 corners of a box, in the order BOX_EDGE_INDICES expects.
+static func _box_corners(half: Vector3) -> PackedVector3Array:
+	return PackedVector3Array(
+		[
+			Vector3(-half.x, -half.y, -half.z),
+			Vector3(-half.x, -half.y, half.z),
+			Vector3(-half.x, half.y, -half.z),
+			Vector3(-half.x, half.y, half.z),
+			Vector3(half.x, -half.y, -half.z),
+			Vector3(half.x, -half.y, half.z),
+			Vector3(half.x, half.y, -half.z),
+			Vector3(half.x, half.y, half.z),
+		]
+	)
 
 
 func _closest_point_on_segment(point: Vector3, a: Vector3, b: Vector3) -> Vector3:

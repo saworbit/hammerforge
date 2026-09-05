@@ -240,3 +240,112 @@ func test_non_preview_brush_still_snaps_with_preview_present():
 	_make_brush(Vector3(10, 0, 10), Vector3(4, 4, 4), "real1")
 	var result = snap.snap_point(Vector3(10.5, 0.5, 10.5), 0.0)
 	assert_eq(result, Vector3(10, 0, 10), "Should still snap to non-preview brushes")
+
+
+# ===========================================================================
+# Brush rotation and brush shape
+# ===========================================================================
+
+
+func _assert_vector_near(actual: Vector3, expected: Vector3, msg: String) -> void:
+	assert_almost_eq(actual.x, expected.x, 0.01, msg)
+	assert_almost_eq(actual.y, expected.y, 0.01, msg)
+	assert_almost_eq(actual.z, expected.z, 0.01, msg)
+
+
+func test_vertex_snap_follows_brush_rotation():
+	snap.set_mode(HFSnapSystem.SnapMode.VERTEX, true)
+	snap.set_mode(HFSnapSystem.SnapMode.GRID, false)
+	var b := _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "rot")
+	b.rotation = Vector3(0, deg_to_rad(45.0), 0)
+	# The (16, 16, 16) corner turns 45 degrees about Y onto the X axis.
+	var rotated_corner: Vector3 = b.global_transform * Vector3(16, 16, 16)
+	_assert_vector_near(rotated_corner, Vector3(22.627, 16, 0), "Fixture sanity")
+
+	var result: Vector3 = snap.snap_point(rotated_corner + Vector3(0.4, 0, 0.3), 0.0)
+
+	_assert_vector_near(result, rotated_corner, "Vertex snap should track the rotated corner")
+
+
+func test_vertex_snap_ignores_the_unrotated_corner_position():
+	snap.set_mode(HFSnapSystem.SnapMode.VERTEX, true)
+	snap.set_mode(HFSnapSystem.SnapMode.GRID, false)
+	var b := _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "rot2")
+	b.rotation = Vector3(0, deg_to_rad(45.0), 0)
+	# Nothing sits near (16, 16, 16) once the brush is turned. A query just off
+	# that spot used to be pulled onto a corner in empty air.
+	var query := Vector3(15.5, 15.5, 15.5)
+
+	assert_eq(snap.snap_point(query, 0.0), query, "There is no corner left at the world offset")
+
+
+func test_edge_snap_follows_brush_rotation():
+	snap.set_mode(HFSnapSystem.SnapMode.EDGE, true)
+	snap.set_mode(HFSnapSystem.SnapMode.GRID, false)
+	var b := _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "rot3")
+	b.rotation = Vector3(0, deg_to_rad(45.0), 0)
+	var midpoint: Vector3 = b.global_transform * Vector3(16, 0, 16)
+
+	var result: Vector3 = snap.snap_point(midpoint + Vector3(0.3, 0.2, 0.1), 0.0)
+
+	_assert_vector_near(result, midpoint, "Edge midpoints should turn with the brush")
+
+
+func test_vertex_snap_uses_face_vertices_not_the_size_box():
+	snap.set_mode(HFSnapSystem.SnapMode.VERTEX, true)
+	snap.set_mode(HFSnapSystem.SnapMode.GRID, false)
+	var b := _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "dented")
+	# A CUSTOM brush is described by its faces, the way a polygon, path or merged
+	# brush is. Pull one corner in: the brush still reports size 32, but no
+	# geometry reaches the old corner any more.
+	b.shape = DraftBrush.BrushShape.CUSTOM
+	for face in b.faces:
+		var updated := PackedVector3Array()
+		for v in face.local_verts:
+			updated.append(Vector3(4, 4, 4) if v.is_equal_approx(Vector3(16, 16, 16)) else v)
+		face.local_verts = updated
+		face.ensure_geometry()
+
+	_assert_vector_near(
+		snap.snap_point(Vector3(4.4, 4.2, 4.1), 0.0),
+		Vector3(4, 4, 4),
+		"The moved corner is a real vertex and should be a snap target"
+	)
+	assert_eq(
+		snap.snap_point(Vector3(16, 16, 16), 0.0),
+		Vector3(16, 16, 16),
+		"The corner the brush no longer has should not be a snap target"
+	)
+
+
+func test_tessellated_primitive_falls_back_to_its_bounding_box():
+	snap.set_mode(HFSnapSystem.SnapMode.VERTEX, true)
+	snap.set_mode(HFSnapSystem.SnapMode.GRID, false)
+	var b := _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "cyl")
+	b.shape = DraftBrush.BrushShape.CYLINDER
+	assert_gt(
+		b.faces.size(),
+		HFSnapSystem.MAX_SNAP_FACES,
+		"A cylinder carries one face per triangle, which is what the cap is for"
+	)
+
+	assert_eq(
+		snap.snap_point(Vector3(15.6, 15.6, 15.6), 0.0),
+		Vector3(16, 16, 16),
+		"Tessellated primitives keep the bounding box corners they always had"
+	)
+
+
+func test_bounding_box_fallback_still_follows_rotation():
+	snap.set_mode(HFSnapSystem.SnapMode.VERTEX, true)
+	snap.set_mode(HFSnapSystem.SnapMode.GRID, false)
+	var b := _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "cyl_rot")
+	b.shape = DraftBrush.BrushShape.CYLINDER
+	b.rotation = Vector3(0, deg_to_rad(45.0), 0)
+	var rotated_corner: Vector3 = b.global_transform * Vector3(16, 16, 16)
+
+	_assert_vector_near(
+		snap.snap_point(rotated_corner + Vector3(0.3, 0, 0.2), 0.0),
+		rotated_corner,
+		"The fallback box should be oriented, not world aligned"
+	)

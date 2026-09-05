@@ -376,6 +376,79 @@ func test_carve_thin_overlap_single_axis_produces_no_pieces():
 	)
 
 
+func _make_cylinder_brush(pos: Vector3, sz: Vector3, id: String) -> DraftBrush:
+	var b = _make_box_brush(pos, sz, id)
+	b.shape = DraftBrush.BrushShape.CYLINDER
+	return b
+
+
+func test_carve_rejects_non_box_carver():
+	var carver = _make_cylinder_brush(Vector3.ZERO, Vector3(32, 32, 32), "cyl_carver")
+	var target = _make_box_brush(Vector3(16, 0, 0), Vector3(32, 32, 32), "box_target")
+	var child_count_before = draft_node.get_child_count()
+
+	var result = HFCarveSystem.new(root).carve_with_brush("cyl_carver")
+
+	assert_false(result.ok, "A cylinder carver has no axis-aligned volume to cut with")
+	assert_true(is_instance_valid(carver), "The carver must survive a refused carve")
+	assert_true(is_instance_valid(target), "The target must survive a refused carve")
+	assert_eq(draft_node.get_child_count(), child_count_before, "Nothing should be replaced")
+
+
+func test_carve_rejects_rotated_carver():
+	var carver = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "rot_carver")
+	carver.rotation = Vector3(0, deg_to_rad(45.0), 0)
+	var target = _make_box_brush(Vector3(16, 0, 0), Vector3(32, 32, 32), "rot_target")
+	var child_count_before = draft_node.get_child_count()
+
+	var result = HFCarveSystem.new(root).carve_with_brush("rot_carver")
+
+	assert_false(result.ok, "A rotated carver's world bounds are not its size")
+	assert_true(is_instance_valid(carver), "The carver must survive a refused carve")
+	assert_true(is_instance_valid(target), "The target must survive a refused carve")
+	assert_eq(draft_node.get_child_count(), child_count_before, "Nothing should be replaced")
+
+
+func test_carve_rejects_non_box_target():
+	var carver = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "box_carver")
+	var target = _make_cylinder_brush(Vector3(16, 0, 0), Vector3(32, 32, 32), "cyl_target")
+	var child_count_before = draft_node.get_child_count()
+
+	var result = HFCarveSystem.new(root).carve_with_brush("box_carver")
+
+	assert_false(result.ok, "Carve cannot rebuild a cylinder as boxes")
+	assert_true(is_instance_valid(target), "The cylinder must not be deleted")
+	assert_true(is_instance_valid(carver), "The carver must survive a refused carve")
+	assert_eq(draft_node.get_child_count(), child_count_before, "Nothing should be replaced")
+
+
+func test_carve_rejects_rotated_target():
+	var carver = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "rt_carver")
+	var target = _make_box_brush(Vector3(16, 0, 0), Vector3(32, 32, 32), "rt_target")
+	target.rotation = Vector3(0, deg_to_rad(45.0), 0)
+	var child_count_before = draft_node.get_child_count()
+
+	var result = HFCarveSystem.new(root).carve_with_brush("rt_carver")
+
+	assert_false(result.ok, "Carve would replace a rotated box with world-aligned pieces")
+	assert_true(is_instance_valid(target), "The rotated box must not be deleted")
+	assert_eq(draft_node.get_child_count(), child_count_before, "Nothing should be replaced")
+
+
+func test_carve_refuses_before_carving_any_of_a_mixed_target_set():
+	var carver = _make_box_brush(Vector3.ZERO, Vector3(64, 32, 32), "mixed_carver")
+	var plain = _make_box_brush(Vector3(24, 0, 0), Vector3(32, 32, 32), "mixed_box")
+	var awkward = _make_cylinder_brush(Vector3(-24, 0, 0), Vector3(32, 32, 32), "mixed_cyl")
+	var child_count_before = draft_node.get_child_count()
+
+	var result = HFCarveSystem.new(root).carve_with_brush("mixed_carver")
+
+	assert_false(result.ok, "One unsuitable target refuses the whole carve")
+	assert_true(is_instance_valid(plain), "The box target must not be half carved")
+	assert_true(is_instance_valid(awkward), "The cylinder target must not be deleted")
+	assert_eq(draft_node.get_child_count(), child_count_before, "Nothing should be replaced")
+
+
 # ===========================================================================
 # Bug 4: Vertex input uses the view-aware, start-relative drag contract
 # ===========================================================================

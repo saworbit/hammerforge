@@ -1120,8 +1120,12 @@ func _find_brush_by_key(key: String) -> DraftBrush:
 ## `size`, then rebuild the brush as axis-aligned BOX pieces.  That is only
 ## truthful for an unrotated box, so anything else has to be rejected before the
 ## original brush is deleted.
-func _check_axis_aligned_box(draft: DraftBrush, op_name: String) -> HFOpResult:
-	if draft.shape != root.BrushShape.BOX:
+## Shared by Hollow, Clip and Carve. All three read world bounds off
+## global_position and size and write axis-aligned boxes back, so all three need
+## the same brush. Static so a system that has no HFBrushSystem to hand can
+## still ask, instead of keeping a second copy of the rule.
+static func _check_axis_aligned_box(draft: DraftBrush, op_name: String) -> HFOpResult:
+	if draft.shape != DraftBrush.BrushShape.BOX:
 		return HFOpResult.fail(
 			"%s: only works on box brushes" % op_name,
 			"Select a box brush, or convert this shape to a box first"
