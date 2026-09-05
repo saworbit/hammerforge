@@ -259,6 +259,33 @@ func test_merge_requires_at_least_two():
 	assert_false(ok, "Merge should fail with only 1 vertex")
 
 
+func test_split_edge_promotes_brush_to_custom_shape():
+	var brush = _make_box_brush(Vector3.ZERO, Vector3(4, 4, 4), "b1")
+	assert_eq(brush.shape, DraftBrush.BrushShape.BOX, "Fixture starts as a box")
+	vs.set_selection([brush])
+	var edges = vs.get_brush_edges(brush)
+	assert_true(vs.split_edge("b1", edges[0]), "Split should succeed on a convex box")
+	assert_eq(
+		brush.shape,
+		DraftBrush.BrushShape.CUSTOM,
+		"A split edge must claim the face array so a rebuild cannot overwrite it"
+	)
+
+
+func test_split_edge_survives_resize():
+	var brush = _make_box_brush(Vector3.ZERO, Vector3(4, 4, 4), "b1")
+	vs.set_selection([brush])
+	var edges = vs.get_brush_edges(brush)
+	assert_true(vs.split_edge("b1", edges[0]))
+	assert_eq(vs.get_brush_vertices(brush).size(), 9)
+
+	brush.set_size(Vector3(8, 8, 8))
+
+	assert_eq(
+		vs.get_brush_vertices(brush).size(), 9, "Resize must not rebuild the box over a split edge"
+	)
+
+
 # ===========================================================================
 # Sub-mode
 # ===========================================================================

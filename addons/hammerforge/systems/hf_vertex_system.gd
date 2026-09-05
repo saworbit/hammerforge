@@ -105,8 +105,8 @@ func move_vertices(delta: Vector3) -> bool:
 	# Rebuild previews
 	for brush_id in selected_vertices:
 		var brush = _find_brush(brush_id)
-		if brush and brush.has_method("rebuild_preview"):
-			brush.rebuild_preview()
+		if brush:
+			_commit_geometry(brush)
 	return true
 
 
@@ -170,8 +170,7 @@ func clip_to_convex(brush_id: String) -> bool:
 	for f in new_faces:
 		brush.faces.append(f)
 
-	if brush.has_method("rebuild_preview"):
-		brush.rebuild_preview()
+	_commit_geometry(brush)
 	if root and root.has_method("tag_brush_dirty"):
 		root.tag_brush_dirty(brush_id)
 	return true
@@ -529,6 +528,13 @@ func end_drag() -> Dictionary:
 	var changed := _drag_geometry_differs_from_origin()
 	_drag_active = false
 	var snapshots := _pre_drag_faces.duplicate(true) if changed else {}
+	if changed:
+		# Only on commit. Promoting mid-drag would leave a canceled drag with a
+		# CUSTOM brush and no resize handles even though nothing moved.
+		for brush_id in _drag_face_vertices:
+			var brush = _find_brush(brush_id)
+			if brush and brush.has_method("mark_faces_authoritative"):
+				brush.mark_faces_authoritative()
 	_clear_drag_state()
 	return snapshots
 
@@ -764,8 +770,7 @@ func split_edge(brush_id: String, edge: Array) -> bool:
 	# exactly on the surface.  Skip the heavy convexity check here; the standard
 	# validate_convexity (0.01 tolerance) is used for vertex moves where the user
 	# can break convexity.  For splits we only need to verify face integrity.
-	if brush.has_method("rebuild_preview"):
-		brush.rebuild_preview()
+	_commit_geometry(brush)
 	return true
 
 
@@ -826,8 +831,7 @@ func merge_vertices(brush_id: String, vert_indices: PackedInt32Array) -> bool:
 	if not validate_convexity(brush):
 		_restore_face_snapshots()
 		return false
-	if brush.has_method("rebuild_preview"):
-		brush.rebuild_preview()
+	_commit_geometry(brush)
 	return true
 
 
@@ -993,6 +997,16 @@ func _write_drag_geometry(world_delta: Vector3) -> bool:
 			face.local_verts = updated_vertices
 			face.ensure_geometry()
 	return touched
+
+
+## Vertex edits move geometry no primitive can reproduce. Claim the face array
+## before refreshing, or the next resize or reload rebuilds the primitive over
+## the edit. Cheap to repeat: promotion is a no-op once the brush is CUSTOM.
+func _commit_geometry(brush: Node3D) -> void:
+	if brush.has_method("mark_faces_authoritative"):
+		brush.mark_faces_authoritative()
+	if brush.has_method("rebuild_preview"):
+		brush.rebuild_preview()
 
 
 func _rebuild_drag_previews() -> void:

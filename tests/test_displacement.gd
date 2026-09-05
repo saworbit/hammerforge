@@ -84,6 +84,16 @@ func _make_quad_brush(brush_id: String = "test_brush") -> Node3D:
 	return brush
 
 
+## A real six-face box, built by DraftBrush itself, so a later set_size() takes
+## the production _rebuild_faces() path with matching old and new face counts.
+func _make_solid_box_brush(brush_id: String = "box_brush") -> DraftBrush:
+	var brush = DraftBrush.new()
+	brush.brush_id = brush_id
+	root.draft_brushes_node.add_child(brush)
+	brush.size = Vector3(32, 32, 32)
+	return brush
+
+
 func _make_tri_brush(brush_id: String = "tri_brush") -> Node3D:
 	var brush = DraftBrush.new()
 	brush.brush_id = brush_id
@@ -539,3 +549,42 @@ func test_sew_all_no_crash():
 		level_root_source.contains("func get_all_draft_brushes() -> Array:"),
 		"Production LevelRoot must expose the same editable brush collection",
 	)
+
+
+# ---------------------------------------------------------------------------
+# Displacement survives a face rebuild
+# ---------------------------------------------------------------------------
+
+
+func test_displacement_survives_brush_resize():
+	var brush := _make_solid_box_brush()
+	assert_eq(brush.faces.size(), 6, "The fixture must be a real six-face box")
+	assert_true(sys.create_displacement("box_brush", 0, 3), "Displacement should be created")
+	var disp = brush.faces[0].displacement
+	assert_not_null(disp)
+	disp.set_distance(1, 1, 12.0)
+
+	brush.set_size(Vector3(64, 64, 64))
+
+	assert_eq(brush.faces.size(), 6, "Resize still rebuilds a box")
+	assert_not_null(
+		brush.faces[0].displacement, "Resize must not drop the displacement on a rebuilt face"
+	)
+	assert_eq(
+		brush.faces[0].displacement.get_distance(1, 1),
+		12.0,
+		"The sculpted elevation must come across with the resource"
+	)
+
+
+func test_displacement_is_not_smeared_onto_other_faces_by_resize():
+	var brush := _make_solid_box_brush()
+	assert_true(sys.create_displacement("box_brush", 0, 3))
+
+	brush.set_size(Vector3(64, 64, 64))
+
+	var carrying := 0
+	for face in brush.faces:
+		if face.displacement != null:
+			carrying += 1
+	assert_eq(carrying, 1, "Only the displaced face should carry displacement after a rebuild")

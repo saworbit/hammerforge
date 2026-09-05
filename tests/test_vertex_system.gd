@@ -292,6 +292,77 @@ func test_move_with_no_selection_returns_false():
 
 
 # ===========================================================================
+# Edited geometry survives a rebuild
+# ===========================================================================
+
+
+func test_move_vertices_promotes_brush_to_custom_shape():
+	var b = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "promote1")
+	assert_eq(b.shape, DraftBrush.BrushShape.BOX, "Fixture starts as a box")
+	vs.set_selection([b])
+	vs.select_vertex("promote1", 0, false)
+	assert_true(vs.move_vertices(Vector3(4, 0, 0)))
+	assert_eq(
+		b.shape,
+		DraftBrush.BrushShape.CUSTOM,
+		"A moved vertex must claim the face array so a rebuild cannot overwrite it"
+	)
+
+
+func test_moved_vertices_survive_resize():
+	var b = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "survive1")
+	vs.set_selection([b])
+	var original_vertex: Vector3 = vs.get_brush_vertices(b)[0]
+	vs.select_vertex("survive1", 0, false)
+	assert_true(vs.move_vertices(Vector3(4, 0, 0)))
+	var moved_vertex := original_vertex + Vector3(4, 0, 0)
+
+	b.set_size(Vector3(48, 48, 48))
+
+	var found := false
+	for v in vs.get_brush_vertices(b):
+		if v.is_equal_approx(moved_vertex):
+			found = true
+			break
+	assert_true(found, "Resize must not rebuild the box over a moved vertex")
+
+
+func test_clip_to_convex_promotes_brush_to_custom_shape():
+	var b = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "clipped")
+	vs.set_selection([b])
+	_dent_box_corner(b, Vector3(16, 16, 16), Vector3.ZERO)
+	assert_false(vs.validate_convexity(b), "The fixture must start non-convex")
+	assert_true(vs.clip_to_convex("clipped"))
+	assert_eq(b.shape, DraftBrush.BrushShape.CUSTOM, "A hull rebuild is not a box any more")
+
+
+func test_committed_vertex_drag_promotes_brush_to_custom_shape():
+	var b = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "dragged")
+	vs.set_selection([b])
+	var original_vertex: Vector3 = vs.get_brush_vertices(b)[0]
+	vs.select_vertex("dragged", 0, false)
+	vs.begin_drag(b.to_global(original_vertex))
+	assert_true(vs.update_drag_absolute(Vector3(2, 0, 0)))
+	assert_false(vs.end_drag().is_empty(), "A real geometry change should retain undo data")
+	assert_eq(b.shape, DraftBrush.BrushShape.CUSTOM, "A committed drag claims the face array")
+
+
+func test_canceled_vertex_drag_leaves_brush_as_box():
+	var b = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "canceled")
+	vs.set_selection([b])
+	var original_vertex: Vector3 = vs.get_brush_vertices(b)[0]
+	vs.select_vertex("canceled", 0, false)
+	vs.begin_drag(b.to_global(original_vertex))
+	assert_true(vs.update_drag_absolute(Vector3(2, 0, 0)))
+	vs.cancel_drag()
+	assert_eq(
+		b.shape,
+		DraftBrush.BrushShape.BOX,
+		"A canceled drag changed nothing, so it must not cost the brush its resize handles"
+	)
+
+
+# ===========================================================================
 # Drag lifecycle
 # ===========================================================================
 
