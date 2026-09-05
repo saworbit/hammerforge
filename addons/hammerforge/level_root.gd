@@ -631,15 +631,20 @@ func _process_hflevel_saves() -> void:
 
 
 func update_editor_grid(camera: Camera3D, mouse_pos: Vector2) -> void:
-	grid_system.update_editor_grid(camera, mouse_pos)
+	if grid_system:
+		grid_system.update_editor_grid(camera, mouse_pos)
 
 
 func _refresh_grid_plane() -> void:
-	grid_system.refresh_grid_plane()
+	if grid_system:
+		grid_system.refresh_grid_plane()
 
 
+# Reached from HFBrushSystem, which stays alive at runtime while grid_system does
+# not, so this one has to tolerate a missing grid.
 func _record_last_brush(center: Vector3) -> void:
-	grid_system.record_last_brush(center)
+	if grid_system:
+		grid_system.record_last_brush(center)
 
 
 func _set_grid_visible(value: bool) -> void:
