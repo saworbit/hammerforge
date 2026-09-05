@@ -34,6 +34,16 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 		return _op_fail("Carve: brush '%s' not found" % brush_id)
 
 	var carver_draft := carver as DraftBrush
+	# Carve reads world bounds off global_position and size, and rebuilds every
+	# target as axis-aligned boxes. Neither holds for a rotated brush or a shape
+	# that is not a box, so refuse before anything is deleted. Same rule and same
+	# owner as Hollow and Clip.
+	var carver_check: HFOpResult = HFBrushSystem._check_axis_aligned_box(carver_draft, "Carve")
+	if not carver_check.ok:
+		# Through _op_fail, not straight back: every other refusal in here warns
+		# the user, and a silent one just looks like the carve did nothing.
+		return _op_fail(carver_check.message, carver_check.fix_hint)
+
 	var carver_pos: Vector3 = carver_draft.global_position
 	var carver_size: Vector3 = carver_draft.size
 	var carver_aabb := AABB(carver_pos - carver_size * 0.5, carver_size)
@@ -45,14 +55,24 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 			"Carve: no overlapping brushes found", "Move the carver so it overlaps other brushes"
 		)
 
+	# Check every target up front. Carving some and refusing the rest would leave
+	# the user with a half applied cut and no way to tell which brushes moved.
+	for target in targets:
+		var target_check: HFOpResult = HFBrushSystem._check_axis_aligned_box(
+			target as DraftBrush, "Carve"
+		)
+		if not target_check.ok:
+			return _op_fail(
+				"Carve: overlapping brush '%s' is not an unrotated box" % _brush_id_of(target),
+				"Carve rebuilds what it cuts as axis-aligned boxes. Move the carver clear of that brush."
+			)
+
 	var total_pieces := 0
 	var targets_carved := 0
 
 	for target in targets:
 		var target_draft := target as DraftBrush
-		var target_id := str(target_draft.brush_id)
-		if target_id == "" and target_draft.has_meta("brush_id"):
-			target_id = str(target_draft.get_meta("brush_id"))
+		var target_id := _brush_id_of(target_draft)
 		var target_pos: Vector3 = target_draft.global_position
 		var target_size: Vector3 = target_draft.size
 		var target_aabb := AABB(target_pos - target_size * 0.5, target_size)
@@ -226,6 +246,15 @@ func _compute_slices(
 	return slices
 
 
+## Brush ids normally live on the property, but brushes restored from a scene can
+## still carry only the metadata copy.
+static func _brush_id_of(brush: Node) -> String:
+	var bid := str(brush.get("brush_id"))
+	if bid == "" and brush.has_meta("brush_id"):
+		bid = str(brush.get_meta("brush_id"))
+	return bid
+
+
 func _make_slice(size: Vector3, center: Vector3) -> Dictionary:
 	return {
 		"shape": root.BrushShape.BOX,
@@ -242,10 +271,7 @@ func _find_overlapping_brushes(exclude_id: String, aabb: AABB) -> Array:
 		if not (node is DraftBrush):
 			continue
 		var draft := node as DraftBrush
-		var bid := str(draft.brush_id)
-		if bid == "" and draft.has_meta("brush_id"):
-			bid = str(draft.get_meta("brush_id"))
-		if bid == exclude_id:
+		if _brush_id_of(draft) == exclude_id:
 			continue
 		var node_pos: Vector3 = draft.global_position
 		var node_size: Vector3 = draft.size

@@ -85,6 +85,13 @@ func _rebuild() -> void:
 		return
 
 	var carver_draft := carver as DraftBrush
+	# Preview what carve will actually do. It refuses anything that is not an
+	# unrotated box, so drawing slice pieces for one would promise a cut the
+	# operation is going to turn down.
+	if not HFBrushSystem._check_axis_aligned_box(carver_draft, "Carve").ok:
+		clear()
+		return
+
 	var carver_pos: Vector3 = carver_draft.global_position
 	var carver_size: Vector3 = carver_draft.size
 	var carver_aabb := AABB(carver_pos - carver_size * 0.5, carver_size)
@@ -96,6 +103,10 @@ func _rebuild() -> void:
 
 	for target in targets:
 		var target_draft := target as DraftBrush
+		# One unsuitable target refuses the whole carve, so preview nothing.
+		if not HFBrushSystem._check_axis_aligned_box(target_draft, "Carve").ok:
+			clear()
+			return
 		var target_pos: Vector3 = target_draft.global_position
 		var target_size: Vector3 = target_draft.size
 		var target_aabb := AABB(target_pos - target_size * 0.5, target_size)
