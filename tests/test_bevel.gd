@@ -192,6 +192,41 @@ func test_bevel_edge_basic():
 	assert_eq(brush.faces.size(), face_count_before + 4, "Two-segment bevel should add 4 faces")
 
 
+func test_bevel_edge_corner_caps_face_outward():
+	var brush = _make_box_brush()
+	var face_count_before: int = brush.faces.size()
+	# Unique vertex 0 = (0,16,0), 3 = (0,16,16). The edge runs along Z, so the
+	# cap at (0,16,0) must face -Z and the cap at (0,16,16) must face +Z.
+	assert_true(sys.bevel_edge("box_brush", [0, 3], 2, 2.0))
+	assert_eq(brush.faces.size(), face_count_before + 4)
+	var cap_a: FaceData = brush.faces[face_count_before + 2]
+	var cap_b: FaceData = brush.faces[face_count_before + 3]
+	assert_almost_eq(cap_a.normal.z, -1.0, 0.001, "Cap at Z=0 must face -Z")
+	assert_almost_eq(cap_b.normal.z, 1.0, 0.001, "Cap at Z=16 must face +Z")
+	assert_almost_eq(
+		cap_a.normal.dot(cap_b.normal), -1.0, 0.001, "Endpoint caps must oppose each other"
+	)
+
+
+func test_bevel_edge_corner_caps_point_away_from_edge_centre():
+	# Same check on an X-aligned edge, so a fix that only hard-codes the Z case
+	# cannot pass. Unique vertices 0 = (0,16,0) and 1 = (16,16,0).
+	var brush = _make_box_brush()
+	var face_count_before: int = brush.faces.size()
+	assert_true(sys.bevel_edge("box_brush", [0, 1], 3, 2.0))
+	var caps: Array[FaceData] = []
+	for i in range(face_count_before + 3, brush.faces.size()):
+		caps.append(brush.faces[i])
+	assert_eq(caps.size(), 4, "Three segments produce two caps per endpoint")
+	for cap in caps:
+		var away: Vector3 = cap.local_verts[0] - Vector3(8, 16, 0)
+		assert_gt(
+			cap.normal.dot(away.normalized()),
+			0.0,
+			"Every cap normal must point away from the edge midpoint"
+		)
+
+
 func test_bevel_edge_bad_brush():
 	var ok: bool = sys.bevel_edge("nonexistent", [0, 1])
 	assert_false(ok)
