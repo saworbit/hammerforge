@@ -330,13 +330,14 @@ static func on_quick_play_from_camera(dock: Object) -> void:
 	if spawn is DraftEntity:
 		old_angle = float((spawn as DraftEntity).entity_data.get("angle", 0.0))
 
+	# The spawn only sits at the camera long enough to bake and launch, and every
+	# path below puts it back. Recording the move as an undo action left the undo
+	# stack claiming a position the scene no longer had: Undo consumed a step
+	# without changing anything, and Redo moved the spawn to the camera for good.
 	spawn.global_position = camera.global_position
 	var camera_yaw_deg: float = rad_to_deg(camera.global_rotation.y)
 	if spawn is DraftEntity:
 		(spawn as DraftEntity).entity_data["angle"] = camera_yaw_deg
-	record_spawn_camera_undo(
-		dock, spawn, old_pos, camera.global_position, old_angle, camera_yaw_deg
-	)
 	dock._log(
 		"Spawn temporarily at camera: %s (yaw %.1f)" % [str(camera.global_position), camera_yaw_deg]
 	)
@@ -555,31 +556,6 @@ static func record_spawn_move_undo(
 	dock.undo_redo.create_action("Fix player_start position")
 	dock.undo_redo.add_do_property(spawn, "global_position", new_pos)
 	dock.undo_redo.add_undo_property(spawn, "global_position", old_pos)
-	dock.undo_redo.commit_action(false)
-
-
-static func record_spawn_camera_undo(
-	dock: Object,
-	spawn: Node3D,
-	old_pos: Vector3,
-	new_pos: Vector3,
-	old_angle: float,
-	new_angle: float,
-) -> void:
-	if dock == null or not dock.undo_redo or not dock.level_root:
-		return
-	if old_pos == new_pos and is_equal_approx(old_angle, new_angle):
-		return
-	dock.undo_redo.create_action("Play from Camera — move spawn")
-	dock.undo_redo.add_do_property(spawn, "global_position", new_pos)
-	dock.undo_redo.add_undo_property(spawn, "global_position", old_pos)
-	if spawn is DraftEntity:
-		var do_data: Dictionary = (spawn as DraftEntity).entity_data.duplicate()
-		var undo_data: Dictionary = do_data.duplicate()
-		do_data["angle"] = new_angle
-		undo_data["angle"] = old_angle
-		dock.undo_redo.add_do_property(spawn, "entity_data", do_data)
-		dock.undo_redo.add_undo_property(spawn, "entity_data", undo_data)
 	dock.undo_redo.commit_action(false)
 
 

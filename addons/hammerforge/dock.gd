@@ -3291,18 +3291,6 @@ func _record_spawn_move_undo(spawn: Node3D, old_pos: Vector3, new_pos: Vector3) 
 	HFDockManageHandler.record_spawn_move_undo(self, spawn, old_pos, new_pos)
 
 
-func _record_spawn_camera_undo(
-	spawn: Node3D,
-	old_pos: Vector3,
-	new_pos: Vector3,
-	old_angle: float,
-	new_angle: float,
-) -> void:
-	HFDockManageHandler.record_spawn_camera_undo(
-		self, spawn, old_pos, new_pos, old_angle, new_angle
-	)
-
-
 func _restore_spawn(spawn: Node3D, pos: Vector3, angle_deg: float) -> void:
 	HFDockManageHandler.restore_spawn(spawn, pos, angle_deg)
 
