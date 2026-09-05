@@ -354,7 +354,10 @@ static func _box_to_map_lines(brush: DraftBrush, adapter: HFMapAdapterType = nul
 	]
 	for i in range(corners.size()):
 		corners[i] = brush.global_transform * corners[i]
-	var face_indices = [[0, 3, 2], [5, 6, 7], [1, 2, 6], [0, 4, 7], [3, 7, 6], [0, 1, 5]]
+	# Same order as DraftBrush._build_box_faces: Right, Left, Top, Bottom, Front, Back.
+	# brush.faces is indexed with the same counter below, so the two must agree or
+	# every plane is written with another face's texture and UV settings.
+	var face_indices = [[1, 2, 6], [0, 4, 7], [3, 7, 6], [0, 1, 5], [5, 6, 7], [0, 3, 2]]
 	var brush_faces = brush.faces
 	for fi in range(face_indices.size()):
 		var face = face_indices[fi]
