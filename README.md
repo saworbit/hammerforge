@@ -209,7 +209,7 @@ The default editor is the five-step greybox path. Extra overlays stay off until 
 4. **Bake**
 5. **Test Level**
 
-Turn on **Test → Settings → Power-user overlays** for the radial menu, coach marks, and operation replay timeline. Command palette, context toolbar, tutorial, Space context menu, and HUD stay available either way.
+Turn on **Power-user overlays** for the radial menu, coach marks, and operation replay timeline — in the Console's **Controls** tab, or in the dock under **Test → Settings**. Command palette, context toolbar, tutorial, Space context menu, and HUD stay available either way.
 
 ## Editor UX
 
@@ -262,7 +262,7 @@ HammerForge's dock is designed to stay out of your way while keeping everything 
 - **Command palette** (Shift+? or F1 or Ctrl+K) -- searchable action palette with fuzzy search, "Did you mean" suggestions, and live gray-out for unavailable actions
 - **Viewport context menu** (Space) -- context-sensitive right-click-style menu with grid snap presets, UV operations, draw shapes, and toggle items; sections adapt to current selection
 - **Predictable camera navigation** -- plain RMB always controls Godot's 3D camera while HammerForge is idle, regardless of selection or persistent tool mode; while held, native WASD flight and mixed mouse input cannot trigger HammerForge actions. Only an active gesture or modal interaction may consume the initial press
-- **Radial menu** (`` ` ``, opt-in) -- 8-sector pie menu for quick tool switching (Box, Cylinder, Select, Paint, Vertex, Tex Pick, Measure, Clip). Enable **Power-user overlays** in Test → Settings
+- **Radial menu** (`` ` ``, opt-in) -- 8-sector pie menu for quick tool switching (Box, Cylinder, Select, Paint, Vertex, Tex Pick, Measure, Clip). Enable **Power-user overlays** in the Console's Controls tab or Test → Settings
 - **Quick property popups** (double-tap G G / B B / R R) -- inline numeric entry for grid snap, brush size, and paint radius without leaving the viewport
 - **Grid size indicator** -- persistent "Grid: N" display in viewport HUD with flash-on-change feedback; `[` / `]` keys halve/double grid snap instantly
 - **Coach marks** (opt-in) -- first-use step-by-step guides for advanced tools (Polygon, Path, Carve, Vertex, Extrude, etc.) with "Don't show again" persistence
