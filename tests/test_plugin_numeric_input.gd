@@ -83,9 +83,7 @@ func _key(keycode: Key) -> InputEventKey:
 
 
 func test_null_inputs_pass_through() -> void:
-	assert_eq(
-		HFPluginNumericInput.handle(null, null, null), EditorPlugin.AFTER_GUI_INPUT_PASS
-	)
+	assert_eq(HFPluginNumericInput.handle(null, null, null), EditorPlugin.AFTER_GUI_INPUT_PASS)
 
 
 func test_inactive_input_passes_without_changing_buffer() -> void:
@@ -93,8 +91,7 @@ func test_inactive_input_passes_without_changing_buffer() -> void:
 	var root := FakeRoot.new()
 	plugin.numeric_buffer = "4"
 	assert_eq(
-		HFPluginNumericInput.handle(plugin, _key(KEY_2), root),
-		EditorPlugin.AFTER_GUI_INPUT_PASS
+		HFPluginNumericInput.handle(plugin, _key(KEY_2), root), EditorPlugin.AFTER_GUI_INPUT_PASS
 	)
 	assert_eq(plugin.numeric_buffer, "4")
 	root.free()
@@ -106,8 +103,7 @@ func test_digits_and_decimal_update_the_active_preview() -> void:
 	root.input_state.dragging = true
 	root.input_state.drag_base = true
 	assert_eq(
-		HFPluginNumericInput.handle(plugin, _key(KEY_1), root),
-		EditorPlugin.AFTER_GUI_INPUT_STOP
+		HFPluginNumericInput.handle(plugin, _key(KEY_1), root), EditorPlugin.AFTER_GUI_INPUT_STOP
 	)
 	HFPluginNumericInput.handle(plugin, _key(KEY_PERIOD), root)
 	HFPluginNumericInput.handle(plugin, _key(KEY_PERIOD), root)
@@ -158,8 +154,7 @@ func test_tab_applies_base_dimension_and_advances_to_height() -> void:
 	root.input_state.drag_base = true
 	plugin.numeric_buffer = "4"
 	assert_eq(
-		HFPluginNumericInput.handle(plugin, _key(KEY_TAB), root),
-		EditorPlugin.AFTER_GUI_INPUT_STOP
+		HFPluginNumericInput.handle(plugin, _key(KEY_TAB), root), EditorPlugin.AFTER_GUI_INPUT_STOP
 	)
 	assert_eq(plugin.numeric_buffer, "")
 	assert_false(root.input_state.drag_base)

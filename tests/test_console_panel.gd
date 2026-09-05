@@ -115,9 +115,7 @@ func test_a_recorded_result_stays_grey_while_no_level_is_open():
 	# nothing to have scanned, and a green light there would be a lie.
 	var panel := _panel()
 	panel.record_validation([])
-	assert_eq(
-		_row_with_id(panel, "validation")._lamp.severity, HFStatusBoardType.Severity.UNKNOWN
-	)
+	assert_eq(_row_with_id(panel, "validation")._lamp.severity, HFStatusBoardType.Severity.UNKNOWN)
 
 
 func test_panel_survives_a_freed_level_root():
@@ -154,18 +152,17 @@ func test_row_hides_its_button_when_a_check_has_no_action():
 func test_row_tooltip_names_the_severity_so_colour_is_not_the_only_signal():
 	var row = HFStatusRowType.new()
 	add_child_autofree(row)
-	row.apply_check(
-		{
-			"id": "x",
-			"title": "T",
-			"severity": HFStatusBoardType.Severity.PROBLEM,
-			"value": "v",
-			"detail": "d",
-			"help": "why this matters",
-			"action_id": "",
-			"action_label": "",
-		}
-	)
+	var check := {
+		"id": "x",
+		"title": "T",
+		"severity": HFStatusBoardType.Severity.PROBLEM,
+		"value": "v",
+		"detail": "d",
+		"help": "why this matters",
+		"action_id": "",
+		"action_label": "",
+	}
+	row.apply_check(check)
 	assert_string_contains(row.tooltip_text, "Problem")
 	assert_string_contains(row.tooltip_text, "why this matters")
 
@@ -217,9 +214,7 @@ func test_every_control_addresses_a_level_root_property_that_exists():
 func test_every_control_has_a_caption_explaining_it():
 	for spec in _all_control_specs():
 		assert_true(spec.has("help"), "%s has no explanation" % spec.get("label", "?"))
-		assert_gt(
-			str(spec["help"]).length(), 20, "%s's explanation says nothing" % spec["label"]
-		)
+		assert_gt(str(spec["help"]).length(), 20, "%s's explanation says nothing" % spec["label"])
 
 
 func test_every_control_reaches_somewhere():
@@ -279,7 +274,7 @@ func test_search_hides_controls_that_do_not_match():
 	for entry in controls._rows:
 		if entry["container"].visible:
 			visible += 1
-	assert_gt(visible, 0, "\"navmesh\" must still find the navmesh switch")
+	assert_gt(visible, 0, '"navmesh" must still find the navmesh switch')
 	assert_lt(visible, controls._rows.size(), "and must hide the ones that do not match")
 
 

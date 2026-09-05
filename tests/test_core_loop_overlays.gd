@@ -45,9 +45,7 @@ func test_the_console_really_does_carry_the_switch_the_hint_points_at():
 
 
 func test_the_dock_really_does_carry_the_switch_the_hint_points_at():
-	var source := FileAccess.get_file_as_string(
-		"res://addons/hammerforge/ui/manage_tab_builder.gd"
-	)
+	var source := FileAccess.get_file_as_string("res://addons/hammerforge/ui/manage_tab_builder.gd")
 	assert_string_contains(
 		source,
 		'_make_check("Power-user overlays"',

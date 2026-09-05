@@ -21,7 +21,9 @@ func test_plugin_wrappers_delegate_to_hud_module():
 	var toolbar_end := source.find("func should_suppress_empty_selection", toolbar_start)
 	var toolbar_block := source.substr(toolbar_start, toolbar_end - toolbar_start)
 	assert_true(toolbar_block.contains("HFPluginHud.update_context_toolbar_state"))
-	assert_false(toolbar_block.contains("pending_cut_count"), "Toolbar counts live in plugin_hud.gd")
+	assert_false(
+		toolbar_block.contains("pending_cut_count"), "Toolbar counts live in plugin_hud.gd"
+	)
 
 
 func test_hud_module_tracks_mixed_selection_and_pending_cuts():

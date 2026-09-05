@@ -35,6 +35,7 @@ func test_placement_uses_level_root_snap_and_raycast():
 	root.free()
 	camera.free()
 
+
 # ===========================================================================
 # Convexity validation
 # ===========================================================================

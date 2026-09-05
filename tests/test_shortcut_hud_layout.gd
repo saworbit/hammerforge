@@ -36,9 +36,7 @@ func test_hud_reserves_a_fixed_width():
 func test_hud_minimum_height_covers_its_panel():
 	var hud := _hud()
 	var panel: Control = hud.get_node("Panel")
-	assert_almost_eq(
-		hud.get_combined_minimum_size().y, panel.get_combined_minimum_size().y, 0.5
-	)
+	assert_almost_eq(hud.get_combined_minimum_size().y, panel.get_combined_minimum_size().y, 0.5)
 
 
 func test_labels_share_a_row_rather_than_one_margin_rect():
