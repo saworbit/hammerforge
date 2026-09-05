@@ -105,6 +105,14 @@ func _rebuild() -> void:
 		clear()
 		return
 
+	# The preview must not promise a cut the tool will refuse. Ask the same
+	# validator clip_brush_by_id uses instead of keeping a second copy of the
+	# shape, rotation and bounds rules here.
+	var check: HFOpResult = root.brush_system.can_clip_brush(_brush_id, _axis, _split_pos)
+	if not check.ok:
+		clear()
+		return
+
 	var draft := brush as DraftBrush
 	var pos: Vector3 = draft.global_position
 	var half: Vector3 = draft.size * 0.5
@@ -123,16 +131,11 @@ func _rebuild() -> void:
 			brush_min = pos.z - half.z
 			brush_max = pos.z + half.z
 
-	# Snap split position
+	# Snap split position the same way the validator above did.
 	var snap: float = root.grid_snap if root.grid_snap > 0.0 else 0.0
 	var split: float = _split_pos
 	if snap > 0.0:
 		split = snapped(split, snap)
-
-	var margin: float = snap if snap > 0.0 else 0.01
-	if split <= brush_min + margin or split >= brush_max - margin:
-		clear()
-		return
 
 	# Compute the two piece AABBs
 	var size_a: Vector3 = draft.size.abs()

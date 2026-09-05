@@ -88,20 +88,18 @@ func _rebuild() -> void:
 		clear()
 		return
 
-	var draft := brush as DraftBrush
-	if draft.shape == root.BrushShape.CUSTOM:
+	# The walls below are axis-aligned slabs, so the preview only holds for the
+	# same brushes hollow_brush_by_id accepts. Ask its validator rather than
+	# keeping a second, looser copy of the shape and thickness rules here.
+	var check: HFOpResult = root.brush_system.can_hollow_brush(_brush_id, _wall_thickness)
+	if not check.ok:
 		clear()
 		return
 
+	var draft := brush as DraftBrush
 	var size: Vector3 = draft.size
 	var pos: Vector3 = draft.global_position
 	var t: float = _wall_thickness
-
-	# Validate thickness
-	var min_dim: float = min(size.x, min(size.y, size.z))
-	if t * 2.0 >= min_dim:
-		clear()
-		return
 
 	# Compute 6 wall AABBs (same logic as brush_system.hollow_brush_by_id)
 	var walls: Array = []  # Array[AABB]
