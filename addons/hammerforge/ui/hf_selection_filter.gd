@@ -202,7 +202,7 @@ func _select_faces_by_normal(predicate: Callable) -> void:
 	var brushes := _get_all_brushes()
 	for brush in brushes:
 		var faces: Array = brush.get_faces() if brush.has_method("get_faces") else []
-		var key: String = _face_key(brush)
+		var key: String = HFBrushSystem.face_key(brush)
 		var basis: Basis = brush.global_transform.basis if brush is Node3D else Basis.IDENTITY
 		var indices: Array = []
 		for i in range(faces.size()):
@@ -228,7 +228,7 @@ func _filter_same_material() -> void:
 	var brushes := _get_all_brushes()
 	for brush in brushes:
 		var faces: Array = brush.get_faces() if brush.has_method("get_faces") else []
-		var key: String = _face_key(brush)
+		var key: String = HFBrushSystem.face_key(brush)
 		var indices: Array = []
 		for i in range(faces.size()):
 			var face = faces[i]
@@ -252,7 +252,7 @@ func _filter_similar_faces() -> void:
 	var brushes := _get_all_brushes()
 	for brush in brushes:
 		var faces: Array = brush.get_faces() if brush.has_method("get_faces") else []
-		var key: String = _face_key(brush)
+		var key: String = HFBrushSystem.face_key(brush)
 		var basis: Basis = brush.global_transform.basis if brush is Node3D else Basis.IDENTITY
 		var indices: Array = []
 		for i in range(faces.size()):
@@ -331,16 +331,6 @@ func _filter_structural() -> void:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-func _face_key(brush: Node) -> String:
-	if brush == null:
-		return ""
-	if brush is DraftBrush:
-		var b := brush as DraftBrush
-		if b.brush_id != "":
-			return b.brush_id
-	return str(brush.get_instance_id())
 
 
 func _get_selected_material_indices() -> Array:

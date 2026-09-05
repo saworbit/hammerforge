@@ -19,9 +19,7 @@ const SIMILAR_SIZE_TOLERANCE := 0.2
 
 
 static func face_key_for(brush: DraftBrush) -> String:
-	if brush.brush_id != "":
-		return brush.brush_id
-	return str(brush.get_instance_id())
+	return HFBrushSystem.face_key(brush)
 
 
 static func apply_face_selection(plugin: Object, root: Node, face_sel: Dictionary) -> void:

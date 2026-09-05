@@ -210,6 +210,18 @@ func test_face_key_falls_back_to_instance_id():
 	assert_eq(HFPluginSelectionCommands.face_key_for(brush), str(brush.get_instance_id()))
 
 
+func test_face_key_is_null_safe_now_that_it_routes_through_the_owner():
+	# face_key_for had no null guard of its own. It shares HFBrushSystem's now.
+	assert_eq(HFPluginSelectionCommands.face_key_for(null), "")
+
+
+func test_face_key_agrees_with_the_brush_system():
+	var brush := DraftBrush.new()
+	brush.brush_id = "brush_9"
+	assert_eq(HFPluginSelectionCommands.face_key_for(brush), HFBrushSystem.face_key(brush))
+	brush.free()
+
+
 # ---------------------------------------------------------------------------
 # Select Similar routing
 # ---------------------------------------------------------------------------

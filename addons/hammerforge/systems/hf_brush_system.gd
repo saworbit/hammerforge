@@ -148,7 +148,7 @@ func delete_brush(brush: Node, free: bool = true) -> void:
 		removed_id = bid
 		if bid != "":
 			_brush_cache.erase(bid)
-		var key = _face_key(brush as DraftBrush)
+		var key = face_key(brush as DraftBrush)
 		if root.face_selection.has(key):
 			root.face_selection.erase(key)
 			_apply_face_selection()
@@ -1019,7 +1019,7 @@ func toggle_face_selection(
 		return
 	if not additive:
 		root.face_selection.clear()
-	var key = _face_key(brush)
+	var key = face_key(brush)
 	var indices: Array = root.face_selection.get(key, [])
 	var idx = indices.find(face_idx)
 	if idx >= 0 and toggle:
@@ -1083,16 +1083,18 @@ func _apply_face_selection() -> void:
 		if not (node is DraftBrush):
 			continue
 		var brush := node as DraftBrush
-		var key = _face_key(brush)
+		var key = face_key(brush)
 		var indices: Array = root.face_selection.get(key, [])
 		brush.set_selected_faces(PackedInt32Array(indices))
 
 
-func _face_key(brush: DraftBrush) -> String:
+## The key a brush is filed under in face_selection. Takes Node rather than
+## DraftBrush because selection filters see whatever the editor hands them.
+static func face_key(brush: Node) -> String:
 	if brush == null:
 		return ""
-	if brush.brush_id != "":
-		return brush.brush_id
+	if brush is DraftBrush and (brush as DraftBrush).brush_id != "":
+		return (brush as DraftBrush).brush_id
 	return str(brush.get_instance_id())
 
 

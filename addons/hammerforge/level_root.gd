@@ -1537,10 +1537,6 @@ func _apply_face_selection() -> void:
 	brush_system._apply_face_selection()
 
 
-func _face_key(brush: DraftBrush) -> String:
-	return brush_system._face_key(brush)
-
-
 func _find_brush_by_key(key: String) -> DraftBrush:
 	return brush_system._find_brush_by_key(key)
 
