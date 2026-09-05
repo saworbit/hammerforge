@@ -860,9 +860,12 @@ func test_nudge_keys_respect_selection_ownership_before_being_consumed():
 	assert_false(HammerForgePlugin.should_yield_global_shortcut_to_focus(hf_surface))
 	assert_false(HammerForgePlugin.should_yield_global_shortcut_to_focus(null))
 
-	var preview_start := source.find("func _toggle_bake_preview")
-	var preview_end := source.find("func _on_context_tool_switch", preview_start)
-	var preview_branch := source.substr(preview_start, preview_end - preview_start)
+	var bake_preview_source := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_bake_preview.gd"
+	)
+	var preview_start := bake_preview_source.find("static func toggle")
+	var preview_end := bake_preview_source.find("static func sync_after_undo", preview_start)
+	var preview_branch := bake_preview_source.substr(preview_start, preview_end - preview_start)
 	assert_true(preview_branch.contains("await root.bake"))
 	assert_false(
 		preview_branch.contains("_commit_state_action"),

@@ -1231,10 +1231,13 @@ func test_plugin_defers_one_shared_native_and_inspector_brush_reconcile() -> voi
 	assert_true(source.contains("func _queue_managed_brush_reconcile"))
 	assert_true(source.contains("func _reconcile_managed_brush_changes"))
 	assert_true(source.contains("_ensure_brush_change_tracker().reconcile(root)"))
-	var version_start := source.find("func _on_undo_redo_version_changed")
-	var version_end := source.find("func _on_replay_requested", version_start)
+	var undo_events_source := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_undo_events.gd"
+	)
+	var version_start := undo_events_source.find("static func on_version_changed")
+	var version_end := undo_events_source.find("static func on_replay_requested", version_start)
 	assert_true(
-		source.substr(version_start, version_end - version_start).contains(
+		undo_events_source.substr(version_start, version_end - version_start).contains(
 			"_queue_managed_brush_reconcile()"
 		)
 	)

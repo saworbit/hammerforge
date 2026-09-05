@@ -2,6 +2,7 @@
 extends EditorPlugin
 
 const DockType = preload("dock.gd")
+const HFPluginBakePreview = preload("plugin_bake_preview.gd")
 const HFPluginCommands = preload("plugin_commands.gd")
 const HFPluginDropHandler = preload("plugin_drop_handler.gd")
 const HFPluginEditActions = preload("plugin_edit_actions.gd")
@@ -18,6 +19,7 @@ const HFPluginPrefabCommands = preload("plugin_prefab_commands.gd")
 const HFPluginSelectionInput = preload("plugin_selection_input.gd")
 const HFPluginSelectionCommands = preload("plugin_selection_commands.gd")
 const HFPluginSelectionState = preload("plugin_selection_state.gd")
+const HFPluginUndoEvents = preload("plugin_undo_events.gd")
 const HFPathToolType = preload("hf_path_tool.gd")
 const HFSelectionGestureType = preload("hf_selection_gesture.gd")
 const HFBrushChangeTrackerType = preload("hf_brush_change_tracker.gd")
@@ -1772,66 +1774,11 @@ var _bake_preview_in_flight := false
 
 
 func _on_dock_bake_state_changed(baking: bool, success: bool) -> void:
-	if not baking:
-		if _bake_preview_in_flight:
-			_bake_preview_in_flight = false
-			if not success:
-				# The preview toggle speculatively set _bake_preview_active
-				# before dispatching. Bake failed so baked_container is
-				# unchanged — flip the flag back to match the actual scene.
-				_bake_preview_active = not _bake_preview_active
-			# On success the speculative value is correct — keep it.
-		elif success:
-			# A non-preview bake replaced baked_container.  Derive the toggle
-			# from the actual preview mode that was baked — the dock dropdown
-			# may have been set to Wireframe for a normal bake.
-			var root = active_root if active_root else _get_level_root()
-			if root:
-				_bake_preview_active = root._last_bake_preview_mode == 1
-			else:
-				_bake_preview_active = false
-		# Non-preview bake failed: baked_container untouched, keep current flag.
-	_update_hud_context()
+	HFPluginBakePreview.on_bake_state_changed(self, baking, success)
 
 
 func _toggle_bake_preview(root: Node, pressed: bool) -> void:
-	if not root or not root.bake_system:
-		return
-	# Guard against overlapping bakes.
-	if (
-		(dock and dock._bake_disabled)
-		or (root.has_method("is_bake_in_flight") and root.call("is_bake_in_flight"))
-	):
-		_update_hud_context()
-		return
-	if pressed:
-		_bake_preview_active = true
-		_bake_preview_in_flight = true
-		# Wireframe preview bake — route through undo so it's reversible
-		if dock:
-			dock._set_bake_buttons_disabled(true)
-		var succeeded: bool = await root.bake(false, false, 0, 1)
-		if dock:
-			dock._set_bake_buttons_disabled(false)
-		if _bake_preview_in_flight:
-			_bake_preview_in_flight = false
-			if not succeeded:
-				_bake_preview_active = false
-		_update_hud_context()
-	else:
-		_bake_preview_active = false
-		_bake_preview_in_flight = true
-		# Re-bake full quality to replace the wireframe preview
-		if dock:
-			dock._set_bake_buttons_disabled(true)
-		var succeeded: bool = await root.bake(false, false, 0, 0)
-		if dock:
-			dock._set_bake_buttons_disabled(false)
-		if _bake_preview_in_flight:
-			_bake_preview_in_flight = false
-			if not succeeded:
-				_bake_preview_active = true
-		_update_hud_context()
+	await HFPluginBakePreview.toggle(self, root, pressed)
 
 
 func _on_context_tool_switch(tool_id: int) -> void:
@@ -1978,76 +1925,11 @@ func _on_coach_mark_dismissed(_tool_key: String, _dont_show: bool) -> void:
 
 
 func _on_undo_redo_version_changed() -> void:
-	## Cancel any in-flight *transient* tool preview (drag, extrude) when the
-	## undo/redo version changes.  Without this, preview MeshInstance3D nodes
-	## created mid-operation become orphaned because the scene state they
-	## reference no longer matches.
-	##
-	## VERTEX_EDIT is a persistent mode — commit_action() fires
-	## version_changed after every merge/split/move, so resetting it here
-	## would desynchronize the plugin's _vertex_mode flag from input_state.
-	var root: LevelRoot = active_root if active_root else _get_level_root()
-	if not root or not is_instance_valid(root):
-		return
-	# Native Inspector/gizmo commits and their Undo/Redo are owned by Godot, so
-	# reconcile their final brush signature after the editor finishes the action.
-	_queue_managed_brush_reconcile()
-	if root.drag_system and root.drag_system.input_state:
-		var ist: HFInputStateType = root.drag_system.input_state
-		# Only reset transient preview modes that own temporary scene nodes.
-		# VERTEX_EDIT and IDLE are left alone — see HFInputState.is_transient_preview_mode().
-		if HFInputStateType.is_transient_preview_mode(ist.mode):
-			ist._force_reset()
-	# Subtract preview may reference stale brush data — rebuild
-	if root.subtract_preview and root.subtract_preview.is_enabled():
-		root.subtract_preview.request_update()
-	# Sync preview toggle with the restored scene state.  Skip if a preview
-	# bake is in flight — that version_changed came from our own commit, not
-	# from the user pressing Ctrl+Z.
-	if not _bake_preview_in_flight:
-		var restored_preview: bool = root._last_bake_preview_mode == 1  # WIREFRAME only
-		if _bake_preview_active != restored_preview:
-			_bake_preview_active = restored_preview
-			_update_hud_context()
+	HFPluginUndoEvents.on_version_changed(self)
 
 
 func _on_replay_requested(entry_index: int) -> void:
-	if not _operation_replay or not is_instance_valid(_operation_replay):
-		return
-	var target_version: int = _operation_replay.get_entry_version(entry_index)
-	if target_version < 0:
-		if dock:
-			dock.show_toast("Replay: no undo version recorded for this operation", 1)
-		return
-	if not undo_redo_manager or not active_root:
-		if dock:
-			dock.show_toast("Replay: no undo history available", 1)
-		return
-	var history_id: int = undo_redo_manager.get_object_history_id(active_root)
-	var ur: UndoRedo = undo_redo_manager.get_history_undo_redo(history_id)
-	if not ur:
-		if dock:
-			dock.show_toast("Replay: no undo history available", 1)
-		return
-	var current_version: int = ur.get_version()
-	if target_version == current_version:
-		if dock:
-			dock.show_toast("Already at this operation", 0)
-		return
-	# Undo or redo to reach the target version
-	var steps := 0
-	if target_version < current_version:
-		while ur.get_version() > target_version and ur.has_undo():
-			ur.undo()
-			steps += 1
-		if dock:
-			dock.show_toast("Replay: undid %d step%s" % [steps, "" if steps == 1 else "s"], 0)
-	else:
-		while ur.get_version() < target_version and ur.has_redo():
-			ur.redo()
-			steps += 1
-		if dock:
-			dock.show_toast("Replay: redid %d step%s" % [steps, "" if steps == 1 else "s"], 0)
+	HFPluginUndoEvents.on_replay_requested(self, entry_index)
 
 
 func _get_level_root() -> Node:
