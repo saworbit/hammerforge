@@ -51,9 +51,11 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 - **The power-user overlay toast names both places that can turn them on.** The
   switch lives in the Console's Controls tab and in the dock under
   Test -> Settings; the toast pointed only at the dock, which was the whole
-  story before the Console existed. The user guide documented the radial menu,
-  coach marks and the replay timeline without mentioning they are opt-in at all,
-  so pressing the documented key produced a toast instead of the feature.
+  story before the Console existed. The menu path inside it is joined with
+  non-breaking spaces so the toast never wraps between "Test" and "Settings" and
+  leaves the arrow dangling at a line end. The user guide documented the radial
+  menu, coach marks and the replay timeline without mentioning they are opt-in at
+  all, so pressing the documented key produced a toast instead of the feature.
 - **HammerForge is findable in the editor.** It now takes a place in the
   main-screen switcher with its own mark — the one row of the editor chrome that
   draws a plugin icon at all. Godot 4.7's bottom panel is text-only, and a docked
