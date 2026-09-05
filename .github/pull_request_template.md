@@ -15,7 +15,7 @@
 
 ## Checks
 
-- [ ] `gdformat --check addons/hammerforge/` passes
+- [ ] `gdformat --check addons/hammerforge/ tests/` passes
 - [ ] `gdlint addons/hammerforge/` passes
 - [ ] `godot --headless -s res://addons/gut/gut_cmdln.gd --path .` passes
 - [ ] Docs updated together where behavior changed (README, guide/spec, ROADMAP status, `[Unreleased]` in CHANGELOG)

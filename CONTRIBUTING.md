@@ -83,7 +83,7 @@ prompt for what's actually needed to act on them.
 
 ### Format + Lint
 ```
-gdformat --check addons/hammerforge/
+gdformat --check addons/hammerforge/ tests/
 gdlint addons/hammerforge/
 ```
 

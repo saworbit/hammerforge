@@ -85,7 +85,7 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 
 ### Subtract Preview (`HFSubtractPreview`)
 - `RefCounted` subsystem showing the live CSG cut between overlapping additive and subtractive DraftBrushes.
-- Uses live CSG intersection meshes when available, with an `ImmediateMesh` AABB wireframe as a fast fallback.
+- Uses live CSG intersection meshes when available, with an AABB wireframe as a fast fallback. The wireframe is one shared unit-box outline from `HFOutlineUtil`, placed per box with `aabb_box_transform()`.
 - Debounced rebuild (0.15s), MeshInstance3D pool (max 50 entries).
 - Connects to `brush_added`, `brush_removed`, `brush_changed` signals for automatic updates.
 - Toggle via `show_subtract_preview` export on LevelRoot. Persisted in state settings.
@@ -167,7 +167,7 @@ See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture 
 - Run **Test Level** after Create Starter; confirm playtest lighting matches editor sun angle.
 
 ## CI
-Run `gdformat --check addons/hammerforge/` and `gdlint addons/hammerforge/` locally. These same checks run automatically on push/PR via `.github/workflows/ci.yml`.
+Run `gdformat --check addons/hammerforge/ tests/` and `gdlint addons/hammerforge/` locally. These same checks run automatically on push/PR via `.github/workflows/ci.yml`.
 
 ## Diagnostics
 - Enable Debug Logs in the Test tab → Settings section for runtime tracing.

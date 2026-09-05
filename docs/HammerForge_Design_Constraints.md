@@ -1,4 +1,4 @@
-﻿# HammerForge Design Constraints
+# HammerForge Design Constraints
 
 Last updated: September 3, 2026
 
