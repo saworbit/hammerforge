@@ -61,3 +61,10 @@ __pycache__/
 docs/brand/node_modules/
 docs/brand/package.json
 docs/brand/package-lock.json
+
+# Godot writes an .import beside every brand asset the moment the project is
+# imported. They are cache, they reappear on every machine, and they are not
+# what the docs site or the README serve. The addon's own branding/ imports are
+# tracked, because those are resources the plugin loads at runtime.
+docs/brand/png/*.import
+docs/brand/svg/*.import

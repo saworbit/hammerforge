@@ -4,6 +4,66 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Added
+- **The HammerForge Console** — a dashboard on its own main screen, opened from
+  the switcher at the top of the editor beside 2D, 3D and Script, and the
+  addon's front door. Three tabs: **Status**, a red / amber / green board of eight checks
+  (level root, geometry budget, bake freshness, level check, material palette,
+  player spawn, autosave, session log) where each lamp is accompanied by what was
+  measured, the threshold it is measured against, and the one button that
+  resolves it; **Controls**, every HammerForge switch on one screen grouped into
+  Viewport / Bake / Safety net, captioned and searchable by description as well
+  as by name; and **Log**, HammerForge's own messages lifted out of Godot's
+  shared Output panel, with the level counts doubling as the filter.
+  New modules: `hf_console_log.gd`, `hf_status_board.gd`, `plugin_console.gd`,
+  and `ui/hf_console_panel.gd`, `ui/hf_console_controls.gd`,
+  `ui/hf_console_log_view.gd`, `ui/hf_status_row.gd`, `ui/hf_status_lamp.gd`.
+- **Console coverage** (`tests/test_console_log.gd`, `tests/test_status_board.gd`,
+  `tests/test_console_panel.gd`, 64 cases): every severity threshold, the log
+  buffer's cap / repeat collapsing / BBCode escaping / re-entrancy guard, and two
+  drift guards asserting that every switch on the Controls tab still addresses a
+  property `dock.gd` and `level_root.gd` actually declare.
+- **Console preview harness** (`tools/hf_console_preview.gd`): renders the three
+  tabs to PNGs so a layout change can be judged without opening the editor.
+
+- **A status lamp in the 3D viewport toolbar** (`ui/hf_status_strip.gd`): the
+  Console's overall severity and one-line summary, beside the work rather than
+  on the screen you switched away from, and a click away from the board that
+  explains it. It reads the Console's own evaluation, so the two cannot disagree.
+
+### Fixed
+- **The shortcut HUD stopped overlapping the viewport context toolbar.** It is
+  parented into the 3D toolbar, which is a `BoxContainer`: it lays its children
+  out itself, sizes them to their minimum, and ignores the anchors a floating
+  overlay sets. A plain `Control` reports a minimum of zero, so the HUD was
+  handed a zero-width slot, drew its seven lines out of it, and had six painted
+  over by the viewport while the seventh landed on top of the context toolbar.
+  It now claims the space it draws into and spends its one row on the line that
+  changes — the active hint, or the primary action for the current tool — with
+  the full list on the tooltip. Its three labels also shared a single
+  `MarginContainer` rect, which gives every child the same rectangle; they are a
+  row now, rather than being kept apart by right-alignment and a leading newline.
+- **Fractional grid snaps displayed as `Grid: %g`.** GDScript has no `%g`
+  specifier, so every non-integer snap printed the specifier verbatim and raised
+  an engine error alongside it.
+
+### Changed
+- **HammerForge is findable in the editor.** It now takes a place in the
+  main-screen switcher with its own mark — the one row of the editor chrome that
+  draws a plugin icon at all. Godot 4.7's bottom panel is text-only, and a docked
+  control's icon lives on the `EditorDock` wrapper, which needs `force_show_icon`
+  before it will draw. The left dock tab said "Dock" and carried no icon; it now
+  says **HammerForge** and wears the mark.
+- **`HFLog.warn()` mirrors to the Console** through an optional sink, and
+  `LevelRoot`'s `user_message` signal now reaches the Log tab as well as a toast
+  — toasts fade, and a failed bake could not be reconstructed afterwards.
+- **The brand build emits the addon's lockups.** `docs/brand/build.py` now writes
+  `addons/hammerforge/branding/hf_lockup_{dark,light}.svg` and the 32px
+  `hf_mark_editor.svg` the switcher draws, alongside the rest, so nothing the
+  editor shows can drift from the brand set. The switcher renders a plugin icon
+  at its texture size, so a 64px mark lifted the whole top bar. `docs/brand/png/*.import`
+  is now ignored rather than reappearing untracked after every project import.
+
 
 ## [0.3.0] - 2026-09-03
 ### Added

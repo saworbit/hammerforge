@@ -2855,6 +2855,7 @@ func _sync_bake_option_visibility() -> void:
 func _log(message: String, force: bool = false) -> void:
 	if not debug_enabled and not force:
 		return
+	HFConsoleLog.shared().debug(message, "dock")
 	print("[HammerForge Dock] %s" % message)
 
 
@@ -3239,6 +3240,11 @@ func _on_hflevel_save_failed(path: String, error_message: String) -> void:
 
 func _on_root_user_message(text: String, level: int) -> void:
 	show_toast(text, level)
+	# Toasts fade. The Console's log is where the same message stays readable
+	# after the fact, which is the only place a failed bake can be reconstructed
+	# from. LevelRoot's levels are 0 info / 1 warning / 2 error, matching
+	# HFConsoleLog's first three.
+	HFConsoleLog.shared().append(clampi(level, 0, 2), text, "level")
 
 
 func _on_bake_finished(success: bool) -> void:

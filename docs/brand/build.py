@@ -240,6 +240,23 @@ for n, mk, col in [("hammerforge-lockup.svg", MONO, MONO_W),
                    ("hammerforge-lockup-dark-two-tone.svg", DARK, DARK_W)]:
     write(n, svg(1200, 200, fit(lockup(mk, col), 1200, 200, 14)[0]))
 
+# The console panel's header wears the lockup, and the editor theme behind it is
+# either light or dark, so both grounds ship inside the addon itself. Written
+# from here rather than copied by hand so neither can drift from the brand set.
+ADDON = "../../addons/hammerforge/branding"
+os.makedirs(ADDON, exist_ok=True)
+for n, mk, col in [("hf_lockup_light.svg", LIGHT, TWO),
+                   ("hf_lockup_dark.svg", DARK, DARK_W)]:
+    open(f"{ADDON}/{n}", "w", encoding="utf-8").write(
+        svg(1200, 200, fit(lockup(mk, col), 1200, 200, 14)[0]))
+
+# The main-screen switcher draws a plugin icon at its own texture size, so this
+# one is authored at 32 to sit level with 2D / 3D / Script rather than towering
+# over them. Master weight: it is displayed well above the 20px where the
+# compact weight belongs.
+open(f"{ADDON}/hf_mark_editor.svg", "w", encoding="utf-8").write(
+    svg(32, 32, fit(ALLRED, 32, 32, 2)[0]))
+
 sc = 3.2
 stacked = scale_group(MONO, sc, dx=(WMW - 100 * sc) / 2) + \
     scale_group(wm_mono, 1.0, dy=MARK_H * sc + 14)

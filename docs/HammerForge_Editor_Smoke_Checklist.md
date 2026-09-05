@@ -48,6 +48,35 @@ Enable the HammerForge plugin if it is not already enabled.
 
 ## Checklist
 
+### 0a. HammerForge Console (main screen)
+- Confirm **HammerForge** sits in the main-screen switcher at the top, beside 2D / 3D / Script, wearing the HammerForge mark, and that the mark is the same height as the other entries rather than lifting the toolbar.
+- Confirm the left dock's tab reads **HammerForge**, not "Dock", and wears the same mark.
+- Confirm a lamp and a one-line summary sit in the 3D viewport toolbar, and that clicking it opens the Console.
+- Open the Console. Confirm the header shows the HammerForge lockup, the version, one lamp, and a summary line, and that the status board fills the screen rather than collapsing to a strip.
+- With no `LevelRoot` in the scene: confirm **Level root** is red and offers **Create Starter Level**; confirm the other level checks are grey ("Not measured yet"), not red.
+- Press **Create Starter Level**. Confirm the row turns green, names the node, and the scope line fills in with brush and entity counts.
+- Confirm each amber and red row carries a coloured left edge and a sentence naming the consequence, and that hovering any part of a row shows a tooltip naming the severity and the threshold.
+- Toggle **Needs attention only**. Confirm green and grey rows disappear and nothing reorders.
+- Switch to **Controls**. Confirm three groups, every switch captioned, and that a switch flipped here also flips in the dock's Test → Settings or Advanced Bake section.
+- Type `pathfinding` into **Find a setting**. Confirm **Bake navmesh** survives the filter. Clear it and confirm everything returns.
+- Turn **Descriptions** off. Confirm captions collapse and the tooltips still carry the same text.
+- Start typing in **Autosave every (min)** and wait two seconds. Confirm the value is not reset under the cursor.
+- Switch to **Log**. Confirm HammerForge's own messages appear with timestamps, levels and categories, and that the level buttons show counts.
+- Bake, then confirm the bake messages arrive in the Log and the **Bake** status row goes from amber to green.
+- Click a level count button to filter, then use the text filter. Confirm **Showing N of M retained** tracks both.
+- Press **Copy**, paste elsewhere, and confirm only the visible lines came across. Press **Save…** and confirm the file matches.
+- Switch the editor between light and dark themes. Confirm the lockup swaps, the lamps stay legible, and the mark stays on both the panel button and the dock tab.
+- Switch to the 3D screen and leave the editor idle. Confirm the profiler shows no per-second Console work while it is off screen, and that the viewport lamp still tracks the level on its own slower beat.
+- Disable and re-enable the plugin. Confirm the switcher entry, the viewport lamp and the dock tab icon all come back, and nothing is left behind.
+
+To judge a Console layout change without opening the editor:
+
+```bash
+godot --path . -s res://tools/hf_console_preview.gd --resolution 1280x430
+```
+
+It writes one PNG per tab under `user://console_preview/`.
+
 ### 0. Core Loop Default
 - Confirm the dock leads with **Test Level** on the Test tab.
 - Confirm **Test → Settings → Power-user overlays** is unchecked on a fresh prefs file.

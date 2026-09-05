@@ -4,6 +4,7 @@ extends EditorPlugin
 const DockType = preload("dock.gd")
 const HFPluginBakePreview = preload("plugin_bake_preview.gd")
 const HFPluginCommands = preload("plugin_commands.gd")
+const HFPluginConsoleType = preload("plugin_console.gd")
 const HFPluginDropHandler = preload("plugin_drop_handler.gd")
 const HFPluginEditActions = preload("plugin_edit_actions.gd")
 const HFPluginInputRouter = preload("plugin_input_router.gd")
@@ -28,6 +29,11 @@ const HFPathToolType = preload("hf_path_tool.gd")
 const HFSelectionGestureType = preload("hf_selection_gesture.gd")
 const HFBrushChangeTrackerType = preload("hf_brush_change_tracker.gd")
 var dock: DockType
+## The Console main screen and the lamp that opens it from the 3D toolbar.
+## Optional surface: if the editor refuses either, the rest of the plugin
+## carries on without them.
+var console_panel: Control = null
+var console_strip: Control = null
 var hud: Control
 var base_control: Control
 var active_root: LevelRoot = null
@@ -182,6 +188,11 @@ func _enter_tree():
 				Callable(self, "_on_dock_power_user_overlays_changed")
 			)
 
+	HFPluginConsoleType.setup(self)
+	# The dock lands in its TabContainer during this frame, so the tab icon is
+	# stamped again once the editor has finished parenting it.
+	call_deferred("_reapply_console_icons")
+
 	hud = preload("shortcut_hud.tscn").instantiate()
 	if base_control:
 		hud.theme = base_control.theme
@@ -249,6 +260,7 @@ func _enter_tree():
 
 
 func _exit_tree():
+	HFPluginConsoleType.teardown(self)
 	_cancel_selection_gesture()
 	_brush_reconcile_queued = false
 	_ensure_brush_change_tracker().reset()
@@ -403,9 +415,52 @@ func _exit_tree():
 	set_process(false)
 
 
+## Routed from the Console's status rows and header buttons. Every action is
+## carried out by a handler that already exists on the dock — see
+## HFPluginConsole.handle_action.
+func _on_console_action(action_id: String) -> void:
+	HFPluginConsoleType.handle_action(self, action_id)
+
+
+## The viewport lamp was clicked.
+func _on_console_requested() -> void:
+	HFPluginConsoleType.open_console()
+
+
+# HammerForge takes a place in the main-screen switcher beside 2D, 3D and
+# Script. That row is the one part of the editor chrome that draws a plugin's
+# own icon, and it is where a Godot user looks for an installed addon.
+
+
+func _has_main_screen() -> bool:
+	return true
+
+
+func _get_plugin_name() -> String:
+	return "HammerForge"
+
+
+func _get_plugin_icon() -> Texture2D:
+	return HFPluginConsoleType.plugin_icon()
+
+
+func _make_visible(visible: bool) -> void:
+	HFPluginConsoleType.set_console_visible(self, visible)
+
+
+func _reapply_console_icons() -> void:
+	if is_inside_tree():
+		HFPluginConsoleType.apply_icons(self)
+
+
 func _on_editor_theme_changed() -> void:
 	if not base_control:
 		return
+	if console_panel and is_instance_valid(console_panel):
+		console_panel.set_theme_source(base_control)
+	# The editor rebuilds its tab bars around a theme change, dropping icons
+	# that were set from outside it.
+	HFPluginConsoleType.apply_icons(self)
 	if dock:
 		dock.theme = base_control.theme
 		dock.apply_editor_styles(base_control)
