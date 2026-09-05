@@ -19,6 +19,8 @@ const HFPluginPrefabCommands = preload("plugin_prefab_commands.gd")
 const HFPluginSelectionInput = preload("plugin_selection_input.gd")
 const HFPluginSelectionCommands = preload("plugin_selection_commands.gd")
 const HFPluginSelectionState = preload("plugin_selection_state.gd")
+const HFPluginShortcuts = preload("plugin_shortcuts.gd")
+const HFPluginToolModes = preload("plugin_tool_modes.gd")
 const HFPluginUndoEvents = preload("plugin_undo_events.gd")
 const HFPathToolType = preload("hf_path_tool.gd")
 const HFSelectionGestureType = preload("hf_selection_gesture.gd")
@@ -744,134 +746,31 @@ func _on_brush_gizmo_action_finished(_cancelled: bool = false) -> void:
 func _prepare_tool_transition(
 	root: Node, notify_user: bool = true, settle_custom_gizmo: bool = true
 ) -> void:
-	var cancelled := false
-	if (
-		settle_custom_gizmo
-		and _brush_gizmo_action_active()
-		and brush_gizmo_plugin.has_method("cancel_active_handle_action")
-	):
-		# Restore and freeze locally; keep yielding until Godot delivers the
-		# matching commit/cancel callback and releases its private gizmo owner.
-		brush_gizmo_plugin.call("cancel_active_handle_action")
-		cancelled = true
-	if not root or not root.input_state:
-		if cancelled and notify_user and dock:
-			dock.show_toast("In-progress brush resize closed for tool switch", 1)
-		return
-	var paint_tool = root.get("paint_tool")
-	if _finish_stale_paint_strokes(root, root.input_state, paint_tool):
-		cancelled = true
-	if _vertex_drag_active and root.vertex_system:
-		root.vertex_system.cancel_drag()
-		_vertex_drag_active = false
-		cancelled = true
-	if root.input_state.is_extruding():
-		root.cancel_extrude()
-		cancelled = true
-	elif root.input_state.is_dragging():
-		root.cancel_drag()
-		cancelled = true
-	if _cancel_selection_gesture():
-		cancelled = true
-	if cancelled:
-		numeric_buffer = ""
-		if notify_user and dock:
-			dock.show_toast("In-progress gesture closed for tool switch", 1)
+	HFPluginToolModes.prepare_transition(self, root, notify_user, settle_custom_gizmo)
 
 
 func _deactivate_external_tool() -> void:
-	if _tool_registry and _tool_registry.has_active_external_tool():
-		_tool_registry.deactivate_current()
+	HFPluginToolModes.deactivate_external(self)
 
 
 func _activate_external_tool(tool_id: int, root: Node) -> void:
-	if not _tool_registry or not root:
-		return
-	_close_face_select_mode("Face Select closed for tool change")
-	_prepare_tool_transition(root)
-	if _vertex_mode:
-		_toggle_vertex_mode(root)
-	if dock and dock.paint_mode and dock.paint_mode.button_pressed:
-		dock.paint_mode.set_pressed_no_signal(false)
-		dock.highlight_tab("Brush")
-	_tool_registry.activate_tool(tool_id, root, last_3d_camera, undo_redo_manager, _record_history)
+	HFPluginToolModes.activate_external(self, tool_id, root)
 
 
 func _on_builtin_tool_changed() -> void:
-	_close_face_select_mode("Face Select closed for tool change")
-	var root = active_root if active_root else _get_level_root()
-	_prepare_tool_transition(root)
-	_deactivate_external_tool()
-	if _vertex_mode:
-		_toggle_vertex_mode(root)
-	# Show coach marks for extrude tools on first use
-	if dock:
-		var tool_id: int = dock.get_tool()
-		if tool_id == 2 or tool_id == 3:
-			_show_coach_mark_for_action("tool_extrude_up")
-	_update_hud_context()
+	HFPluginToolModes.on_builtin_tool_changed(self)
 
 
 func _on_vertex_mode_toggled(enabled: bool) -> void:
-	var root = active_root if active_root else _get_level_root()
-	if enabled and not _vertex_mode:
-		_toggle_vertex_mode(root)
-	elif not enabled and _vertex_mode:
-		_toggle_vertex_mode(root)
+	HFPluginToolModes.on_vertex_mode_toggled(self, enabled)
 
 
 func _on_face_select_mode_toggled(enabled: bool) -> void:
-	_ensure_selection_runtime_state()
-	var root := active_root if active_root else _get_level_root()
-	_prepare_tool_transition(root)
-	var selection := get_editor_interface().get_selection()
-	if enabled:
-		# Establish one unambiguous pointer owner before hiding object selection.
-		# Keep the Paint tab visible, but turn painting itself off; Face Select is
-		# an editing mode, not a paint stroke layered over Select.
-		_deactivate_external_tool()
-		if _vertex_mode:
-			_toggle_vertex_mode(root)
-		_texture_picker_active = false
-		if _radial_menu and _radial_menu.is_active():
-			_radial_menu.hide_menu()
-		if dock:
-			if dock.tool_select:
-				dock.tool_select.set_pressed_no_signal(true)
-			if dock.paint_mode:
-				dock.paint_mode.set_pressed_no_signal(false)
-		_face_mode_saved_object_selection.clear()
-		for node in _current_selection_nodes():
-			if is_instance_valid(node) and node is Node:
-				_face_mode_saved_object_selection.append(node)
-		# Face editing is intentionally modal. Hiding object gizmos removes the
-		# otherwise-opaque zero-motion overlap between a face and transform handle.
-		hf_selection.clear()
-		if selection:
-			_apply_hf_selection(selection)
-		if dock:
-			dock.show_toast("Face Select: object transform handles hidden", 0)
-		return
-	if root and root.has_method("clear_face_selection"):
-		root.clear_face_selection()
-	if selection:
-		hf_selection.clear()
-		for node in _face_mode_saved_object_selection:
-			if is_instance_valid(node) and node is Node:
-				hf_selection.append(node)
-		_apply_hf_selection(selection)
-	_face_mode_saved_object_selection.clear()
+	HFPluginToolModes.on_face_select_mode_toggled(self, enabled)
 
 
 func _close_face_select_mode(message: String = "") -> bool:
-	if not dock or not dock.is_face_select_mode_enabled() or not dock.face_select_mode:
-		return false
-	# Use the real toggle signal so face selection is cleared and the saved
-	# object selection is restored through the same path as a manual exit.
-	dock.face_select_mode.button_pressed = false
-	if message != "":
-		dock.show_toast(message, 0)
-	return true
+	return HFPluginToolModes.close_face_select(self, message)
 
 
 func _on_dock_selection_clear() -> void:
@@ -1171,167 +1070,20 @@ func _clear_vertex_overlay() -> void:
 
 
 func _shortcut_input(event: InputEvent) -> void:
-	if not (event is InputEventKey):
-		return
-	_ensure_selection_runtime_state()
-	# The 3D viewport receives RMB navigation through the forwarded input hook,
-	# but editor shortcuts arrive through this separate hook as well. Keep the
-	# complete keyboard stream native until RMB release so Ctrl+Arrow/Escape cannot
-	# nudge or cancel HammerForge state during camera flight.
-	if _rmb_camera_navigation.active:
-		return
-	# Native transform/property/custom gizmos own their complete keyboard stream.
-	# In particular, Ctrl+Arrow must not become a simultaneous HF nudge while a
-	# Godot widget is dragging the same brush.
-	if _brush_gizmo_action_active() or _selection_gesture.should_yield_cancel_to_native():
-		return
-	if not event.pressed or event.echo:
-		return
-	if should_yield_global_shortcut_to_focus(get_viewport().gui_get_focus_owner()):
-		return
-	var root = active_root if active_root else _get_level_root()
-	if event.keycode == KEY_ESCAPE:
-		if _cancel_escape_step(root):
-			_mark_shortcut_input_handled()
-		return
-	if not root:
-		return
-	# Delete and Duplicate are global editor shortcuts: Godot can deliver them
-	# here while focus is in the Scene tree, without ever forwarding them through
-	# the 3D viewport. Claim managed selections here as well so every entry point
-	# uses HammerForge's undo, stable-ID, and reference-cleanup boundaries.
-	if _keymap.matches("delete", event):
-		var delete_guard := _guard_hammerforge_shortcut(root, false, 1, "Delete")
-		if delete_guard == HF_SHORTCUT_APPLY:
-			_delete_selected(root)
-			_mark_shortcut_input_handled()
-		elif delete_guard == EditorPlugin.AFTER_GUI_INPUT_STOP:
-			_mark_shortcut_input_handled()
-		return
-	if _keymap.matches("duplicate", event):
-		var duplicate_guard := _guard_hammerforge_shortcut(root, false, 1, "Duplicate")
-		if duplicate_guard == HF_SHORTCUT_APPLY:
-			_duplicate_selected(root)
-			_mark_shortcut_input_handled()
-		elif duplicate_guard == EditorPlugin.AFTER_GUI_INPUT_STOP:
-			_mark_shortcut_input_handled()
-		return
-	if not event.ctrl_pressed:
-		return
-	var nudge = _get_nudge_direction(event.keycode)
-	if nudge != Vector3.ZERO:
-		var nudge_guard := _guard_hammerforge_shortcut(root, false, 1, "Nudge")
-		if nudge_guard == HF_SHORTCUT_APPLY:
-			_nudge_selected(root, nudge)
-			_mark_shortcut_input_handled()
-		elif nudge_guard == EditorPlugin.AFTER_GUI_INPUT_STOP:
-			_mark_shortcut_input_handled()
+	HFPluginShortcuts.handle(self, event)
 
 
 func _mark_shortcut_input_handled() -> void:
-	# InputEvent has no accept() API. _shortcut_input() consumes through the
-	# viewport so Godot cannot execute the same global command afterwards.
-	var viewport := get_viewport()
-	if viewport:
-		viewport.set_input_as_handled()
+	HFPluginShortcuts.mark_handled(self)
 
 
-## Only the 3D viewport, the real Scene tree, and explicitly marked HammerForge
-## command surfaces may route managed global shortcuts. Unknown editor panels
-## keep ownership of their own Delete, Duplicate, arrows, and Escape commands.
+## Retained because tests and downstream integrations call this by name.
 static func should_yield_global_shortcut_to_focus(focus_owner: Control) -> bool:
-	if focus_owner == null:
-		# The 3D viewport normally has no GUI focus owner.
-		return false
-	var current: Control = focus_owner
-	while current:
-		if bool(current.get_meta("_hammerforge_managed_shortcut_surface", false)):
-			return false
-		var control_class := current.get_class()
-		var node_name := str(current.name)
-		if control_class in ["SceneTreeDock", "SceneTreeEditor"]:
-			return false
-		if node_name in ["SceneTree", "SceneTreeDock", "SceneTreeEditor"]:
-			return false
-		if control_class in ["Node3DEditor", "Node3DEditorViewport"]:
-			return false
-		if node_name in ["Node3DEditor", "Node3DEditorViewport"]:
-			return false
-		current = current.get_parent() as Control
-	return true
+	return HFPluginShortcuts.should_yield_to_focus(focus_owner)
 
 
 func _cancel_escape_step(root: Node) -> bool:
-	# Escape is a predictable ladder: dismiss the most local interaction first.
-	if _hotkey_palette and _hotkey_palette.visible:
-		_hotkey_palette.visible = false
-		return true
-	if _radial_menu and _radial_menu.is_active():
-		_radial_menu.hide_menu()
-		return true
-	if _quick_property and _quick_property.is_active():
-		_quick_property.hide_popup()
-		return true
-	if _texture_picker_active:
-		_texture_picker_active = false
-		if dock:
-			dock.show_toast("Texture Picker cancelled", 1)
-		return true
-	if _disp_paint_active:
-		if root and not _disp_paint_pre_state.is_empty() and root.has_method("restore_state"):
-			root.restore_state(_disp_paint_pre_state)
-		_disp_paint_active = false
-		_disp_paint_brush_id = ""
-		_disp_paint_face_idx = -1
-		_disp_paint_pre_state = {}
-		return true
-	# Godot must see Escape while one of its transform/property/custom gizmos
-	# owns LMB so it can restore the exact engine-side value and clear its private
-	# drag reference. Only discard HammerForge's parallel bookkeeping here.
-	if _brush_gizmo_action_active():
-		return false
-	if _selection_gesture and _selection_gesture.should_yield_cancel_to_native():
-		_cancel_selection_gesture()
-		return false
-	if _cancel_selection_gesture():
-		return true
-	if root and root.input_state:
-		if root.input_state.is_extruding():
-			root.cancel_extrude()
-			numeric_buffer = ""
-			_update_hud_context()
-			return true
-		if root.input_state.is_dragging():
-			root.cancel_drag()
-			numeric_buffer = ""
-			_update_hud_context()
-			return true
-	if _tool_registry and _tool_registry.has_active_external_tool():
-		_tool_registry.deactivate_current()
-		_update_hud_context()
-		return true
-	if _vertex_mode:
-		_toggle_vertex_mode(root)
-		return true
-	if root and root.get("face_selection") is Dictionary and not root.face_selection.is_empty():
-		root.clear_face_selection()
-		_update_hud_context()
-		return true
-	# Face Select remains modal after its local face selection is cleared. A
-	# second Escape (or the first when no face is selected) exits the mode and
-	# restores the object selection hidden on entry.
-	if _close_face_select_mode("Face Select closed"):
-		return true
-	if not hf_selection.is_empty():
-		hf_selection.clear()
-		var selection = get_editor_interface().get_selection()
-		if selection:
-			selection.clear()
-		if dock:
-			dock.set_selection_nodes([])
-		_update_hud_context()
-		return true
-	return false
+	return HFPluginShortcuts.cancel_escape_step(self, root)
 
 
 ## Godot finishes native selection after _forward_3d_gui_input() returns. Do
@@ -1758,15 +1510,7 @@ func _on_context_toggle_operation() -> void:
 
 
 func _toggle_paint_mode() -> void:
-	if not dock or not dock.paint_mode:
-		return
-	var root = active_root if active_root else _get_level_root()
-	_prepare_tool_transition(root)
-	dock.paint_mode.button_pressed = not dock.paint_mode.button_pressed
-	dock.show_toast(
-		"Paint mode enabled" if dock.paint_mode.button_pressed else "Build mode enabled", 0
-	)
-	_update_hud_context()
+	HFPluginToolModes.toggle_paint_mode(self)
 
 
 var _bake_preview_active := false
@@ -1782,22 +1526,7 @@ func _toggle_bake_preview(root: Node, pressed: bool) -> void:
 
 
 func _on_context_tool_switch(tool_id: int) -> void:
-	var root = active_root if active_root else _get_level_root()
-	_prepare_tool_transition(root)
-	if dock:
-		dock.highlight_tab("Brush")
-	_deactivate_external_tool()
-	if dock:
-		match tool_id:
-			0:
-				dock.tool_draw.button_pressed = true
-			1:
-				dock.tool_select.button_pressed = true
-			2:
-				dock.set_extrude_tool(1)
-			3:
-				dock.set_extrude_tool(-1)
-	_update_hud_context()
+	HFPluginToolModes.switch_to_tool(self, tool_id)
 
 
 func _on_context_material_apply(mat_index: int) -> void:

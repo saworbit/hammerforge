@@ -468,15 +468,22 @@ func test_face_select_is_modal_and_hides_ambiguous_object_gizmos() -> void:
 		)
 	)
 
-	var handler_start := plugin_source.find("func _on_face_select_mode_toggled")
-	var handler_end := plugin_source.find("func _on_dock_selection_clear", handler_start)
-	var handler := plugin_source.substr(handler_start, handler_end - handler_start)
+	var modes_source := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_tool_modes.gd"
+	)
+	var handler_start := modes_source.find("static func on_face_select_mode_toggled")
+	var handler_end := modes_source.find("static func close_face_select", handler_start)
+	var handler := modes_source.substr(handler_start, handler_end - handler_start)
 	assert_true(handler.contains("_face_mode_saved_object_selection"))
 	assert_true(handler.contains("hf_selection.clear()"))
 	assert_true(handler.contains("_apply_hf_selection(selection)"))
 	assert_true(handler.contains("dock.tool_select.set_pressed_no_signal(true)"))
 	assert_true(handler.contains("dock.paint_mode.set_pressed_no_signal(false)"))
-	assert_true(handler.contains("_deactivate_external_tool()"))
+	assert_true(handler.contains("deactivate_external(plugin)"))
+	assert_true(
+		plugin_source.contains("HFPluginToolModes.on_face_select_mode_toggled(self, enabled)"),
+		"The dock signal must still reach the mode owner",
+	)
 
 	var state_source := FileAccess.get_file_as_string(
 		"res://addons/hammerforge/plugin_selection_state.gd"
@@ -613,10 +620,17 @@ func test_managed_shortcuts_share_the_native_and_mixed_selection_guard() -> void
 		assert_true(keyboard.contains(action), "%s must be ownership-gated" % action)
 	assert_true(state_source.contains("Edit HammerForge and Godot nodes separately"))
 
-	var shortcut_start := source.find("func _shortcut_input")
-	var shortcut_end := source.find("func _cancel_escape_step", shortcut_start)
-	var shortcut := source.substr(shortcut_start, shortcut_end - shortcut_start)
-	assert_true(shortcut.contains('_guard_hammerforge_shortcut(root, false, 1, "Nudge")'))
+	var shortcut_source := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_shortcuts.gd"
+	)
+	var shortcut_start := shortcut_source.find("static func handle")
+	var shortcut_end := shortcut_source.find("static func _claim", shortcut_start)
+	var shortcut := shortcut_source.substr(shortcut_start, shortcut_end - shortcut_start)
+	assert_true(shortcut.contains('_claim(plugin, root, "Nudge")'))
+	assert_true(
+		shortcut_source.contains("_guard_hammerforge_shortcut(root, false, 1, action)"),
+		"The shared scope guard still gates the global shortcuts",
+	)
 	assert_true(shortcut.contains("_brush_gizmo_action_active()"))
 	assert_true(shortcut.contains("_selection_gesture.should_yield_cancel_to_native()"))
 	assert_lt(
