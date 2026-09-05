@@ -1584,28 +1584,32 @@ static func _transform_aabb(local_bounds: AABB, world_transform: Transform3D) ->
 
 
 ## Consolidate identical meshes in the baked container into MultiMeshInstance3D nodes.
-## Groups MeshInstance3D children by mesh resource identity (same Mesh = same group).
-## Groups with 2+ instances are replaced with a single MultiMeshInstance3D.
+## Walks the whole container, since chunked bakes nest their meshes under
+## BakedChunk_* nodes and detail brushes sit under Nonstructural.
+## Instances are grouped by mesh resource identity and material, so a group only
+## ever collapses into something that draws the same way.  Groups with 2+
+## instances are replaced with a single MultiMeshInstance3D on the container.
 func _consolidate_to_multimesh(container: Node3D) -> void:
 	if not container:
 		return
-	# Group MeshInstance3D children by mesh resource
-	var mesh_groups: Dictionary = {}  # Mesh -> Array[MeshInstance3D]
-	for child in container.get_children():
-		if not (child is MeshInstance3D):
-			continue
-		var mi: MeshInstance3D = child
+	var mesh_groups: Dictionary = {}  # [Mesh, Material] -> Array[MeshInstance3D]
+	var group_order: Array = []
+	for node in _collect_mesh_instances(container):
+		var mi: MeshInstance3D = node
 		if not mi.mesh:
 			continue
-		var key: Mesh = mi.mesh
+		var key: Array = [mi.mesh, _instance_material(mi)]
 		if not mesh_groups.has(key):
 			mesh_groups[key] = []
+			group_order.append(key)
 		mesh_groups[key].append(mi)
 	var consolidated := 0
-	for mesh_key: Mesh in mesh_groups:
-		var instances: Array = mesh_groups[mesh_key]
+	var emptied: Array = []
+	for key: Array in group_order:
+		var instances: Array = mesh_groups[key]
 		if instances.size() < 2:
 			continue
+		var mesh_key: Mesh = key[0]
 		# Build MultiMesh
 		var mm = MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
@@ -1614,25 +1618,39 @@ func _consolidate_to_multimesh(container: Node3D) -> void:
 		for i in range(instances.size()):
 			var mi: MeshInstance3D = instances[i]
 			mm.set_instance_transform(i, _multimesh_transform(mi, container))
-		# Carry material from first instance
+		# Carry the material the whole group shares
 		var mmi = MultiMeshInstance3D.new()
 		mmi.multimesh = mm
 		mmi.name = (
 			"MMI_%s" % mesh_key.resource_name if mesh_key.resource_name else "MMI_%d" % consolidated
 		)
-		var first_mi: MeshInstance3D = instances[0]
-		if first_mi.get_surface_override_material(0):
-			mmi.material_override = first_mi.get_surface_override_material(0)
-		elif first_mi.material_override:
-			mmi.material_override = first_mi.material_override
+		mmi.material_override = key[1]
 		container.add_child(mmi)
-		# Remove originals
+		# Remove originals, remembering the holders they came out of
 		for mi: MeshInstance3D in instances:
-			mi.get_parent().remove_child(mi)
+			var parent: Node = mi.get_parent()
+			if parent:
+				parent.remove_child(mi)
+				if parent != container and not emptied.has(parent):
+					emptied.append(parent)
 			mi.queue_free()
 		consolidated += 1
+	# Drop chunk/detail holders that gave up every child to a MultiMesh.
+	for holder: Node in emptied:
+		if holder.get_child_count() == 0 and holder.get_parent():
+			holder.get_parent().remove_child(holder)
+			holder.queue_free()
 	if consolidated > 0:
 		root._log("MultiMesh: consolidated %d groups" % consolidated)
+
+
+## The material a MeshInstance3D actually draws with, so two instances are only
+## merged when the merged node can reproduce both.
+static func _instance_material(mi: MeshInstance3D) -> Material:
+	var surface := mi.get_surface_override_material(0)
+	if surface:
+		return surface
+	return mi.material_override
 
 
 static func _multimesh_transform(instance: Node3D, container: Node3D) -> Transform3D:
