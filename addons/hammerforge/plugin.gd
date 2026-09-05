@@ -57,9 +57,11 @@ const SELECT_DRAG_THRESHOLD := 6.0
 ## Two places carry this switch, and the toast names both. The dock is the
 ## shorter trip from the viewport the reader just pressed a key in; the
 ## Console is where every other HammerForge setting now lives.
+## The menu path is joined with non-breaking spaces so the toast never wraps
+## between "Test" and "Settings" and leaves the arrow dangling at a line end.
 const POWER_USER_OVERLAYS_HINT := (
-	"Power-user overlays are off \u2014 turn them on in Test \u2192 Settings,"
-	+ " or the Console's Controls tab"
+	"Power-user overlays are off \u2014 turn them on in"
+	+ " Test\u00a0\u2192\u00a0Settings, or the Console's Controls tab"
 )
 var last_3d_camera: Camera3D = null
 var last_3d_mouse_pos := Vector2.ZERO
