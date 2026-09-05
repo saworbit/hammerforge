@@ -380,7 +380,9 @@ func test_save_to_path_is_atomic_and_leaves_no_writing_sidecar():
 	var loaded: Dictionary = HFLevelIO.load_from_path(path)
 	assert_eq(int(loaded.get("v", 0)), 2)
 	assert_false(FileAccess.file_exists(writing), "Sidecar .writing file should be gone after save")
-	assert_false(FileAccess.file_exists(previous), "Successful replacement should remove its backup")
+	assert_false(
+		FileAccess.file_exists(previous), "Successful replacement should remove its backup"
+	)
 	DirAccess.remove_absolute(path)
 
 
