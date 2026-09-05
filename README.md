@@ -413,7 +413,7 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 
 ## Testing
 
-The verified Godot 4.7 suite on September 6, 2026 contains **2,226 tests across 126 scripts**: **2,219 passing tests**, seven intentional no-assert safety tests, and **9,279 assertions**. All checks run on every push and pull request via GitHub Actions.
+The verified Godot 4.7 suite on September 6, 2026 contains **2,230 tests across 126 scripts**: **2,223 passing tests**, seven intentional no-assert safety tests, and **9,285 assertions**. All checks run on every push and pull request via GitHub Actions.
 
 ```bash
 # Run all tests headless

@@ -277,7 +277,7 @@ addons/hammerforge/
 The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on push and PR to `main`:
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
-- **GUT unit + integration tests** -- 2,226 tests across 126 test scripts (2,219 passing plus seven intentional no-assert safety tests; 9,279 assertions; verified locally September 6, 2026; runs Godot headless)
+- **GUT unit + integration tests** -- 2,230 tests across 126 test scripts (2,223 passing plus seven intentional no-assert safety tests; 9,285 assertions; verified locally September 6, 2026; runs Godot headless)
 
 Run locally before pushing:
 ```

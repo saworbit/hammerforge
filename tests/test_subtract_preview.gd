@@ -165,3 +165,51 @@ func test_destroy_when_never_enabled():
 	preview.destroy()
 	assert_false(preview.is_enabled(), "Should remain disabled")
 	assert_eq(preview._mesh_pool.size(), 0, "Pool should be empty")
+
+
+# -- brush_changed wiring --------------------------------------------------------
+
+
+func _signal_root() -> Node3D:
+	var script := GDScript.new()
+	script.source_code = """
+extends Node3D
+
+signal brush_added(brush_id: String)
+signal brush_removed(brush_id: String)
+signal brush_changed(brush_id: String)
+
+var draft_brushes_node: Node3D
+"""
+	script.reload()
+	var root := Node3D.new()
+	root.set_script(script)
+	var draft := Node3D.new()
+	draft.name = "DraftBrushes"
+	root.add_child(draft)
+	root.draft_brushes_node = draft
+	add_child_autofree(root)
+	return root
+
+
+func test_enabled_preview_rebuilds_when_a_brush_changes():
+	var root := _signal_root()
+	var preview = HFSubtractPreview.new(root)
+	preview.set_enabled(true)
+	# Clear the update set_enabled itself asked for.
+	preview.process(1.0)
+	assert_false(preview._needs_rebuild, "Starting state is settled")
+	root.brush_changed.emit("b1")
+	assert_true(preview._needs_rebuild, "A changed brush must schedule a rebuild")
+	preview.destroy()
+
+
+func test_disabled_preview_ignores_a_changed_brush():
+	var root := _signal_root()
+	var preview = HFSubtractPreview.new(root)
+	preview.set_enabled(true)
+	preview.set_enabled(false)
+	preview.process(1.0)
+	root.brush_changed.emit("b1")
+	assert_false(preview._needs_rebuild, "A disabled preview stays disconnected")
+	preview.destroy()

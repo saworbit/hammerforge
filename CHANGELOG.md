@@ -32,6 +32,15 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   explains it. It reads the Console's own evaluation, so the two cannot disagree.
 
 ### Fixed
+- **`brush_changed` never fired.** The signal was declared on `LevelRoot` and
+  emitted nowhere, while `HFSubtractPreview` connected to it, so the live
+  subtract overlay listened to a signal that could not arrive and only refreshed
+  when a brush was added or removed. `tag_brush_dirty()` emits it now, which is
+  the one call every transform, material, UV, paint and vertex mutation already
+  makes. It fires on every tag rather than only the first, because the dirty set
+  is not cleared until a bake and a preview following a drag needs each step.
+  The preview connects only while enabled and `show_subtract_preview` defaults
+  off, so nothing is emitted into an empty room by default.
 - **Box faces exported to `.map` carried another face's texture and UV settings**
   ([#113](https://github.com/saworbit/hammerforge/issues/113)): `MapIO._box_to_map_lines`
   walked its plane table with the same counter it used to index `brush.faces`, but the
