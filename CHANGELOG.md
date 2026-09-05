@@ -31,6 +31,22 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   on the screen you switched away from, and a click away from the board that
   explains it. It reads the Console's own evaluation, so the two cannot disagree.
 
+### Fixed
+- **The shortcut HUD stopped overlapping the viewport context toolbar.** It is
+  parented into the 3D toolbar, which is a `BoxContainer`: it lays its children
+  out itself, sizes them to their minimum, and ignores the anchors a floating
+  overlay sets. A plain `Control` reports a minimum of zero, so the HUD was
+  handed a zero-width slot, drew its seven lines out of it, and had six painted
+  over by the viewport while the seventh landed on top of the context toolbar.
+  It now claims the space it draws into and spends its one row on the line that
+  changes — the active hint, or the primary action for the current tool — with
+  the full list on the tooltip. Its three labels also shared a single
+  `MarginContainer` rect, which gives every child the same rectangle; they are a
+  row now, rather than being kept apart by right-alignment and a leading newline.
+- **Fractional grid snaps displayed as `Grid: %g`.** GDScript has no `%g`
+  specifier, so every non-integer snap printed the specifier verbatim and raised
+  an engine error alongside it.
+
 ### Changed
 - **HammerForge is findable in the editor.** It now takes a place in the
   main-screen switcher with its own mark — the one row of the editor chrome that
