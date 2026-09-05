@@ -318,6 +318,50 @@ func test_vertex_snap_uses_face_vertices_not_the_size_box():
 	)
 
 
+func test_face_vertices_dedupe_across_the_faces_that_share_them():
+	# Every corner of a cube belongs to three faces. The snap geometry keys
+	# vertices to collapse those into one candidate, so a key change that loses
+	# the tolerance would show up here as 24 candidates instead of 8.
+	snap.set_mode(HFSnapSystem.SnapMode.VERTEX, true)
+	snap.set_mode(HFSnapSystem.SnapMode.GRID, false)
+	var b := _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "cube")
+	b.shape = DraftBrush.BrushShape.CUSTOM
+	var candidates: PackedVector3Array = snap._collect_candidates([])
+	assert_eq(candidates.size(), 8, "A cube has 8 unique corners")
+
+
+func test_face_edges_dedupe_across_the_two_faces_that_share_them():
+	snap.set_mode(HFSnapSystem.SnapMode.EDGE, true)
+	snap.set_mode(HFSnapSystem.SnapMode.GRID, false)
+	var b := _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "cube")
+	b.shape = DraftBrush.BrushShape.CUSTOM
+	var candidates: PackedVector3Array = snap._collect_candidates([])
+	assert_eq(candidates.size(), 12, "A cube has 12 unique edges, each shared by two faces")
+
+
+func test_vertices_inside_the_key_tolerance_collapse():
+	# The key rounds to a thousandth of a unit. Nudging one corner by less than
+	# that must not split it into a second candidate.
+	snap.set_mode(HFSnapSystem.SnapMode.VERTEX, true)
+	snap.set_mode(HFSnapSystem.SnapMode.GRID, false)
+	var b := _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "cube")
+	b.shape = DraftBrush.BrushShape.CUSTOM
+	var moved := 0
+	for face in b.faces:
+		var updated := PackedVector3Array()
+		for v in face.local_verts:
+			if v.is_equal_approx(Vector3(16, 16, 16)) and moved < 2:
+				moved += 1
+				updated.append(Vector3(16.0001, 16.0001, 16.0001))
+			else:
+				updated.append(v)
+		face.local_verts = updated
+		face.ensure_geometry()
+	assert_eq(moved, 2, "Two of the three faces at that corner were nudged")
+	var candidates: PackedVector3Array = snap._collect_candidates([])
+	assert_eq(candidates.size(), 8, "A sub tolerance nudge is still the same corner")
+
+
 func test_tessellated_primitive_falls_back_to_its_bounding_box():
 	snap.set_mode(HFSnapSystem.SnapMode.VERTEX, true)
 	snap.set_mode(HFSnapSystem.SnapMode.GRID, false)
