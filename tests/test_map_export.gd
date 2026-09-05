@@ -351,6 +351,66 @@ func is_entity_node(_n):
 	return root
 
 
+func _plane_lines(text: String) -> Array[String]:
+	var out: Array[String] = []
+	for line in text.split("\n"):
+		var trimmed := line.strip_edges()
+		if trimmed.begins_with("( "):
+			out.append(trimmed)
+	return out
+
+
+func _plane_axis_key(line: String) -> String:
+	var points: Array[Vector3] = []
+	var rest := line
+	for _i in range(3):
+		var open_at := rest.find("(")
+		var close_at := rest.find(")", open_at)
+		var body := rest.substr(open_at + 1, close_at - open_at - 1).strip_edges()
+		var parts := body.split(" ", false)
+		points.append(Vector3(float(parts[0]), float(parts[1]), float(parts[2])))
+		rest = rest.substr(close_at + 1)
+	if is_equal_approx(points[0].x, points[1].x) and is_equal_approx(points[1].x, points[2].x):
+		return "+x" if points[0].x > 0.0 else "-x"
+	if is_equal_approx(points[0].y, points[1].y) and is_equal_approx(points[1].y, points[2].y):
+		return "+y" if points[0].y > 0.0 else "-y"
+	return "+z" if points[0].z > 0.0 else "-z"
+
+
+func _plane_u_offset(line: String) -> float:
+	var open_at := line.find("[")
+	var close_at := line.find("]", open_at)
+	var body := line.substr(open_at + 1, close_at - open_at - 1).strip_edges()
+	return float(body.split(" ", false)[3])
+
+
+func test_box_face_data_exports_onto_its_own_plane():
+	var brush := DraftBrush.new()
+	brush.shape = LevelRoot.BrushShape.BOX
+	brush.size = Vector3(32, 32, 32)
+	var root := _make_export_root([brush])
+	assert_eq(brush.faces.size(), 6, "Adding the box to the tree builds its six faces")
+	# One recognisable U offset per face, in _build_box_faces order.
+	for i in range(brush.faces.size()):
+		brush.faces[i].uv_offset = Vector2(float(i + 1) * 8.0, 0.0)
+	var text := MapIO.export_map_from_level(root, HFMapValve220.new())
+	var lines := _plane_lines(text)
+	assert_eq(lines.size(), 6, "A box exports six planes")
+	# _build_box_faces order: Right, Left, Top, Bottom, Front, Back.
+	var expected := {"+x": 8.0, "-x": 16.0, "+y": 24.0, "-y": 32.0, "+z": 40.0, "-z": 48.0}
+	var seen := {}
+	for line in lines:
+		var key := _plane_axis_key(line)
+		seen[key] = true
+		assert_almost_eq(
+			_plane_u_offset(line),
+			float(expected[key]),
+			0.001,
+			"Plane %s must carry the UV offset of the face with that normal" % key
+		)
+	assert_eq(seen.size(), 6, "Every box plane must be exported exactly once")
+
+
 func test_export_writes_func_detail_as_own_entity_block():
 	var world := DraftBrush.new()
 	world.shape = LevelRoot.BrushShape.BOX

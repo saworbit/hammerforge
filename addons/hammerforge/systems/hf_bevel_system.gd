@@ -104,25 +104,15 @@ func bevel_edge(brush_id: String, edge: Array, segments: int = 2, radius: float 
 		bevel_face.uv_rotation = face0.uv_rotation
 		bevel_face.ensure_geometry()
 		new_faces.append(bevel_face)
-	# Build corner cap triangle fans at each endpoint to close the gap
-	# between the two pulled-back positions and the bevel arc.
-	# At endpoint va: the arc goes from new_va0 (= arc_verts_a[0]) to
-	# new_va1 (= arc_verts_a[segments]). We fan from the original corner
-	# toward the center to fill the hole.
+	# Build corner cap triangle fans at each endpoint to close the gap between
+	# the two pulled-back positions and the bevel arc. The endpoints sit at
+	# opposite ends of the edge, so their caps face opposite ways. The arcs are
+	# translated copies of each other, so one fixed winding would point both
+	# caps the same way and turn the vb cap inward. Wind each cap against the
+	# direction that leads away from the edge instead.
 	if segments >= 1:
-		for endpoint_arc in [arc_verts_a, arc_verts_b]:
-			for i in range(segments - 1):
-				var cap = FaceData.new()
-				# Fan from the first arc point through the intermediate arc points.
-				# CW winding from outside: arc[0] → arc[i+2] → arc[i+1]
-				cap.local_verts = PackedVector3Array(
-					[endpoint_arc[0], endpoint_arc[i + 2], endpoint_arc[i + 1]]
-				)
-				cap.material_idx = face0.material_idx
-				cap.uv_projection = face0.uv_projection
-				cap.uv_scale = face0.uv_scale
-				cap.ensure_geometry()
-				new_faces.append(cap)
+		_append_endpoint_caps(new_faces, arc_verts_a, -edge_dir, face0, segments)
+		_append_endpoint_caps(new_faces, arc_verts_b, edge_dir, face0, segments)
 	# Update neighboring faces that share va or vb but are not face0/face1.
 	# Each neighbor is assigned to the side (face0 or face1) whose normal it
 	# is closer to, and its copy of va/vb is replaced with the corresponding
@@ -287,6 +277,35 @@ func _compute_centroid(verts: PackedVector3Array) -> Vector3:
 	if verts.size() > 0:
 		c /= float(verts.size())
 	return c
+
+
+## Fan the arc at one edge endpoint into triangles that face `outward`.
+## All arc points lie in a plane perpendicular to the edge, so the fan normal is
+## parallel to the edge axis and a single dot product settles the winding.
+func _append_endpoint_caps(
+	out_faces: Array[FaceData],
+	arc: PackedVector3Array,
+	outward: Vector3,
+	source_face: FaceData,
+	segments: int
+) -> void:
+	for i in range(segments - 1):
+		var a: Vector3 = arc[0]
+		var b: Vector3 = arc[i + 2]
+		var c: Vector3 = arc[i + 1]
+		# FaceData computes its normal as (c - a) x (b - a). Swapping b and c
+		# flips it, which is all a cap fan needs to change sides.
+		if (c - a).cross(b - a).dot(outward) < 0.0:
+			var swap: Vector3 = b
+			b = c
+			c = swap
+		var cap = FaceData.new()
+		cap.local_verts = PackedVector3Array([a, b, c])
+		cap.material_idx = source_face.material_idx
+		cap.uv_projection = source_face.uv_projection
+		cap.uv_scale = source_face.uv_scale
+		cap.ensure_geometry()
+		out_faces.append(cap)
 
 
 ## Compute arc vertices from `origin` sweeping from `dir0` to `dir1`
