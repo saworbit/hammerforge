@@ -14,6 +14,7 @@ const HFPluginOverlays = preload("plugin_overlays.gd")
 const HFPluginPaintInput = preload("plugin_paint_input.gd")
 const HFPluginPointerTools = preload("plugin_pointer_tools.gd")
 const HFPluginSelectionInput = preload("plugin_selection_input.gd")
+const HFPluginSelectionCommands = preload("plugin_selection_commands.gd")
 const HFPluginSelectionState = preload("plugin_selection_state.gd")
 const HFPathToolType = preload("hf_path_tool.gd")
 const HFSelectionGestureType = preload("hf_selection_gesture.gd")
@@ -1613,17 +1614,11 @@ func _face_screen_center(camera: Camera3D, brush: DraftBrush, face) -> Vector2:
 
 
 func _face_key_for(brush: DraftBrush) -> String:
-	if brush.brush_id != "":
-		return brush.brush_id
-	return str(brush.get_instance_id())
+	return HFPluginSelectionCommands.face_key_for(brush)
 
 
 func _apply_face_selection(root: Node, face_sel: Dictionary) -> void:
-	root.face_selection = face_sel
-	if root.brush_system:
-		root.brush_system._apply_face_selection()
-	root.face_selection_changed.emit()
-	_update_hud_context()
+	HFPluginSelectionCommands.apply_face_selection(self, root, face_sel)
 
 
 # ---------------------------------------------------------------------------
@@ -1632,41 +1627,7 @@ func _apply_face_selection(root: Node, face_sel: Dictionary) -> void:
 
 
 func _apply_last_texture(root: Node) -> void:
-	if _last_picked_material_index < 0:
-		if dock:
-			dock.show_toast("No texture picked yet — use T to pick first", 1)
-		return
-	if not dock:
-		return
-	dock._selected_material_index = _last_picked_material_index
-	var face_count = dock._count_selected_faces()
-	if face_count > 0:
-		dock._on_face_assign_material()
-		dock.show_toast(
-			"Applied last texture to %d face%s" % [face_count, "" if face_count == 1 else "s"], 0
-		)
-	else:
-		var applied_count := 0
-		var mat = (
-			root.material_manager.get_material(_last_picked_material_index)
-			if root.material_manager
-			else null
-		)
-		if mat:
-			for node in hf_selection:
-				if node is DraftBrush:
-					_paint_brush_with_undo(root, node, mat)
-					applied_count += 1
-		if applied_count > 0:
-			dock.show_toast(
-				(
-					"Applied last texture to %d brush%s"
-					% [applied_count, "" if applied_count == 1 else "es"]
-				),
-				0
-			)
-		else:
-			dock.show_toast("No brushes or faces selected", 1)
+	HFPluginSelectionCommands.apply_last_texture(self, root)
 
 
 # ---------------------------------------------------------------------------
@@ -1675,46 +1636,11 @@ func _apply_last_texture(root: Node) -> void:
 
 
 func _select_all_nodes(root: Node) -> void:
-	if not root:
-		return
-	var selection = get_editor_interface().get_selection()
-	if not selection:
-		return
-	# Clear face selection first so context toolbar switches to object context
-	if root.has_method("clear_face_selection"):
-		root.clear_face_selection()
-	var all_nodes: Array = root._iter_pick_nodes()
-	hf_selection.clear()
-	for node in all_nodes:
-		if is_instance_valid(node):
-			hf_selection.append(node)
-	_apply_hf_selection(selection)
-	_update_hud_context()
-	if dock:
-		dock.set_selection_count(hf_selection.size())
-		dock.set_selection_nodes(hf_selection)
-		dock.show_toast("Selected %d objects" % hf_selection.size(), 0)
+	HFPluginSelectionCommands.select_all(self, root)
 
 
 func _deselect_all_nodes(root: Node) -> void:
-	if not root:
-		return
-	var selection = get_editor_interface().get_selection()
-	if not selection:
-		return
-	if dock:
-		dock.emit_signal("selection_clear_requested")
-	hf_selection.clear()
-	selection.clear()
-	# Also clear face selection
-	if root.has_method("clear_face_selection"):
-		root.clear_face_selection()
-	elif root.get("face_selection") is Dictionary:
-		root.face_selection.clear()
-	_update_hud_context()
-	if dock:
-		dock.set_selection_count(0)
-		dock.set_selection_nodes([])
+	HFPluginSelectionCommands.deselect_all(self, root)
 
 
 # ---------------------------------------------------------------------------
@@ -1723,109 +1649,11 @@ func _deselect_all_nodes(root: Node) -> void:
 
 
 func _select_similar(root: Node) -> void:
-	if not root:
-		return
-	# If faces are selected, find similar faces across all brushes
-	var face_count := 0
-	for key in root.face_selection.keys():
-		face_count += root.face_selection.get(key, []).size()
-	if face_count > 0:
-		_select_similar_faces(root)
-		return
-	# Otherwise match similar brushes by size
-	if not hf_selection.is_empty():
-		_select_similar_brushes(root)
-		return
-	if dock:
-		dock.show_toast("Select a face or brush first", 1)
-
-
-func _select_similar_faces(root: Node) -> void:
-	# Gather reference face properties with world-space normals
-	var ref_faces: Array = []
-	var ref_world_normals: Array = []
-	for key in root.face_selection.keys():
-		var brush = root._find_brush_by_key(str(key))
-		if not brush:
-			continue
-		var basis: Basis = brush.global_transform.basis if brush is Node3D else Basis.IDENTITY
-		var faces: Array = brush.get_faces() if brush.has_method("get_faces") else []
-		for fi in root.face_selection.get(key, []):
-			if int(fi) >= 0 and int(fi) < faces.size():
-				ref_faces.append(faces[int(fi)])
-				ref_world_normals.append((basis * faces[int(fi)].normal).normalized())
-	if ref_faces.is_empty():
-		return
-	# Find all matching faces (same material AND similar world-space normal within ~15 degrees)
-	var face_sel: Dictionary = {}
-	var nodes: Array = root._iter_pick_nodes() if root.has_method("_iter_pick_nodes") else []
-	var total := 0
-	for node in nodes:
-		if not (node is DraftBrush):
-			continue
-		var brush := node as DraftBrush
-		var basis: Basis = brush.global_transform.basis
-		var faces: Array = brush.get_faces() if brush.has_method("get_faces") else []
-		var key: String = _face_key_for(brush)
-		var indices: Array = []
-		for i in range(faces.size()):
-			var face = faces[i]
-			if not face:
-				continue
-			var world_normal: Vector3 = (basis * face.normal).normalized()
-			for ri in range(ref_faces.size()):
-				var ref = ref_faces[ri]
-				var ref_wn: Vector3 = ref_world_normals[ri]
-				if face.material_idx == ref.material_idx and world_normal.dot(ref_wn) > 0.966:
-					indices.append(i)
-					total += 1
-					break
-		if not indices.is_empty():
-			face_sel[key] = indices
-	_apply_face_selection(root, face_sel)
-	if dock:
-		dock.show_toast("Selected %d similar face%s" % [total, "" if total == 1 else "s"], 0)
-
-
-func _select_similar_brushes(root: Node) -> void:
-	var ref_sizes: Array = []
-	for node in hf_selection:
-		if node is DraftBrush and is_instance_valid(node):
-			ref_sizes.append((node as DraftBrush).size)
-	if ref_sizes.is_empty():
-		return
-	var tolerance := 0.2
-	var picked: Array = []
-	var nodes: Array = root._iter_pick_nodes() if root.has_method("_iter_pick_nodes") else []
-	for node in nodes:
-		if not (node is DraftBrush):
-			continue
-		var sz: Vector3 = (node as DraftBrush).size
-		for ref_sz in ref_sizes:
-			if _size_similar(sz, ref_sz, tolerance):
-				picked.append(node)
-				break
-	_apply_selection_list(picked, false)
-	if dock:
-		dock.show_toast(
-			"Selected %d similar brush%s" % [picked.size(), "" if picked.size() == 1 else "es"], 0
-		)
+	HFPluginSelectionCommands.select_similar(self, root)
 
 
 func _size_similar(a: Vector3, b: Vector3, tolerance: float) -> bool:
-	var sa := _sorted_vec(a)
-	var sb := _sorted_vec(b)
-	for i in range(3):
-		var ref_val: float = maxf(sb[i], 0.01)
-		if absf(sa[i] - sb[i]) / ref_val > tolerance:
-			return false
-	return true
-
-
-func _sorted_vec(v: Vector3) -> Array:
-	var arr := [v.x, v.y, v.z]
-	arr.sort()
-	return arr
+	return HFPluginSelectionCommands.size_similar(a, b, tolerance)
 
 
 # ---------------------------------------------------------------------------
@@ -1834,35 +1662,11 @@ func _sorted_vec(v: Vector3) -> Array:
 
 
 func _show_selection_filter() -> void:
-	if not _selection_filter:
-		return
-	var root = active_root if active_root else _get_level_root()
-	_selection_filter.show_for(root, hf_selection)
-	# Position near the mouse
-	var popup_pos := Vector2i(int(last_3d_mouse_pos.x), int(last_3d_mouse_pos.y))
-	_selection_filter.popup(Rect2i(popup_pos, Vector2i.ZERO))
+	HFPluginSelectionCommands.show_selection_filter(self)
 
 
 func _on_selection_filter_applied(nodes: Array, faces: Dictionary) -> void:
-	var root = active_root if active_root else _get_level_root()
-	if not root:
-		return
-	# Apply face selection if provided
-	if not faces.is_empty():
-		_apply_face_selection(root, faces)
-		var total := 0
-		for key in faces.keys():
-			total += faces[key].size()
-		if dock:
-			dock.show_toast("Selected %d face%s" % [total, "" if total == 1 else "s"], 0)
-	elif not nodes.is_empty():
-		# Node-only filter — clear any stale face selection first
-		_apply_face_selection(root, {})
-		_apply_selection_list(nodes, false)
-		if dock:
-			dock.show_toast(
-				"Selected %d node%s" % [nodes.size(), "" if nodes.size() == 1 else "s"], 0
-			)
+	HFPluginSelectionCommands.on_filter_applied(self, nodes, faces)
 
 
 # ---------------------------------------------------------------------------
