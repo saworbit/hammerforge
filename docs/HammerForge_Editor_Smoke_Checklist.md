@@ -79,8 +79,9 @@ It writes one PNG per tab under `user://console_preview/`.
 
 ### 0. Core Loop Default
 - Confirm the dock leads with **Test Level** on the Test tab.
-- Confirm **Test → Settings → Power-user overlays** is unchecked on a fresh prefs file.
-- Press backtick and Ctrl+Shift+T. Confirm a toast tells you to enable Power-user overlays rather than opening the radial menu or replay timeline.
+- Confirm **Power-user overlays** is unchecked on a fresh prefs file, both in **Test → Settings** and in the Console's **Controls** tab.
+- Press backtick and Ctrl+Shift+T. Confirm a toast names **both** places to turn them on, rather than opening the radial menu or replay timeline.
+- Turn them on from the Console's Controls tab and confirm the dock checkbox follows, then confirm the radial menu opens.
 - Enable the checkbox, then confirm the radial menu and replay timeline work. Disable it again and confirm they disappear.
 - Confirm **Subtract Preview** is the subtract-preview checkbox label.
 

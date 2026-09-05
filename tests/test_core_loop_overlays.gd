@@ -4,6 +4,7 @@ extends GutTest
 const HammerForgePlugin = preload("res://addons/hammerforge/plugin.gd")
 const HFPluginOverlays = preload("res://addons/hammerforge/plugin_overlays.gd")
 const HFUserPrefsType = preload("res://addons/hammerforge/hf_user_prefs.gd")
+const HFConsoleControlsType = preload("res://addons/hammerforge/ui/hf_console_controls.gd")
 
 
 func test_should_install_overlays_false_without_prefs():
@@ -22,10 +23,36 @@ func test_should_install_overlays_follows_pref():
 	assert_true(HammerForgePlugin.should_install_power_user_overlays(prefs))
 
 
-func test_unavailable_overlay_hint_points_at_settings():
+func test_unavailable_overlay_hint_names_both_places_that_carry_the_switch():
+	# The toast is the only thing the reader has to go on after a key press did
+	# nothing, so it names the dock — the shorter trip from the viewport — and
+	# the Console, where every other HammerForge setting now lives.
 	var hint := HammerForgePlugin.power_user_overlay_unavailable_message()
 	assert_string_contains(hint, "Power-user overlays")
 	assert_string_contains(hint, "Settings")
+	assert_string_contains(hint, "Console")
+
+
+func test_the_console_really_does_carry_the_switch_the_hint_points_at():
+	# If the toggle is ever dropped from the Controls tab, the toast starts
+	# sending people somewhere it is not.
+	var found := false
+	for group in HFConsoleControlsType.GROUPS:
+		for spec in group["rows"]:
+			if str(spec.get("pref", "")) == "power_user_overlays":
+				found = true
+	assert_true(found, "The hint points at the Console's Controls tab")
+
+
+func test_the_dock_really_does_carry_the_switch_the_hint_points_at():
+	var source := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/ui/manage_tab_builder.gd"
+	)
+	assert_string_contains(
+		source,
+		'_make_check("Power-user overlays"',
+		"The hint points at Test -> Settings in the dock"
+	)
 
 
 func test_overlay_callbacks_delegate_to_the_overlay_module():

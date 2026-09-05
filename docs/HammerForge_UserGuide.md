@@ -106,6 +106,8 @@ Use **Don't show at startup** to hide it on future launches. Reopen or restart t
 
 ## Coach Marks (First-Use Tool Guides)
 
+**Opt-in.** This is one of the power-user overlays, off by default so the core loop stays quiet. Turn on **Power-user overlays** in the Console's **Controls** tab, or in the dock under **Test -> Settings**.
+
 When you activate an advanced tool for the first time, a floating overlay appears with step-by-step instructions. Coach marks are available for 10 tools:
 
 | Tool | Trigger | Steps shown |
@@ -124,6 +126,8 @@ When you activate an advanced tool for the first time, a floating overlay appear
 Each guide has a "Don't show again" checkbox. Dismissed guides are persisted in user prefs. Guides trigger from keyboard shortcuts, the command palette, and context toolbar actions.
 
 ## Operation Replay Timeline
+
+**Opt-in.** This is one of the power-user overlays, off by default so the core loop stays quiet. Turn on **Power-user overlays** in the Console's **Controls** tab, or in the dock under **Test -> Settings**.
 
 Press **Ctrl+Shift+T** to toggle a compact timeline showing your recent operations (up to 20). Each operation appears as a color-coded icon:
 
@@ -515,6 +519,9 @@ The menu only activates when idle (no active drag, paint, or external tool opera
 With a mixed HammerForge/Godot selection, managed selection commands are unavailable. The final context-menu action handler also checks again before editing, so stale menu state cannot produce a partial change.
 
 ### Radial Menu
+
+**Opt-in.** This is one of the power-user overlays, off by default so the core loop stays quiet. Turn on **Power-user overlays** in the Console's **Controls** tab, or in the dock under **Test -> Settings**.
+
 Press **`` ` ``** (backtick) to open an 8-sector pie menu centered on the cursor. Move the mouse to highlight a sector, then left-click to select:
 
 | Sector | Action |
