@@ -46,6 +46,7 @@ HammerForge is a single `addons/` folder. No external tools, no custom builds, n
 | **Quake `.map`** + **glTF `.glb`** export | **.hflevel** native format with threaded I/O |
 | **Customizable keymaps** (JSON) | **Plugin API** for custom tools |
 | **Dark/light theme sync** across all custom UI | **Performance health monitor** with recommendations |
+| **Bottom-panel Console** -- RAG status board, every toggle, live log | **Branded** -- the mark on the panel button and the dock tab |
 
 ---
 
@@ -211,6 +212,36 @@ The default editor is the five-step greybox path. Extra overlays stay off until 
 Turn on **Test → Settings → Power-user overlays** for the radial menu, coach marks, and operation replay timeline. Command palette, context toolbar, tutorial, Space context menu, and HUD stay available either way.
 
 ## Editor UX
+
+### The HammerForge Console
+
+Open it from the **HammerForge** button in Godot's bottom panel — the one wearing
+the HammerForge mark, beside Output and Debugger. It is the addon's front door,
+and it answers three questions without you having to go looking:
+
+- **Status** — a red / amber / green board of eight checks, each one saying what
+  was measured, what the threshold is, and offering the single button that
+  resolves it: *Create Starter Level*, *Bake Now*, *Check + Fix*, *Load Palette*,
+  *Add Spawn Point*, *Set chunk size 64*. Green is "nothing to do", amber is
+  "works, but will cost you later", red is "will not do what you expect", and
+  grey is "not measured yet" — never a fault. Every lamp carries a shape as well
+  as a colour, so the board reads the same with a red/green deficiency. A legend
+  sits under the board, and **Needs attention only** hides what is already fine.
+- **Controls** — every HammerForge switch on one screen, grouped into *Viewport*,
+  *Bake* and *Safety net*, each captioned with what it actually does. Search by
+  name or by description ("pathfinding" finds *Bake navmesh*). Switches with
+  nowhere to write are disabled rather than shown at a made-up default. The
+  Console writes through the dock's own controls, so both surfaces always agree.
+- **Log** — HammerForge's own messages, out of the Output panel's shared stream.
+  Level counts double as the filter, repeats collapse to `(x4)`, a text filter
+  narrows further, and **Copy** / **Save…** take what is on screen.
+
+The header carries the overall lamp, the live scope line
+(`Arena · 74 brushes · 9 entities · ~3120 verts · 256 KiB paint`) and when the
+board was last checked. Counts refresh once a second while the panel is open;
+the two reads that walk the whole level go on a slower beat, or on **Re-check**.
+
+### The dock
 
 HammerForge's dock is designed to stay out of your way while keeping everything reachable:
 

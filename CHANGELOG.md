@@ -4,6 +4,39 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Added
+- **The HammerForge Console** — a bottom-panel dashboard, and the addon's front
+  door. Three tabs: **Status**, a red / amber / green board of eight checks
+  (level root, geometry budget, bake freshness, level check, material palette,
+  player spawn, autosave, session log) where each lamp is accompanied by what was
+  measured, the threshold it is measured against, and the one button that
+  resolves it; **Controls**, every HammerForge switch on one screen grouped into
+  Viewport / Bake / Safety net, captioned and searchable by description as well
+  as by name; and **Log**, HammerForge's own messages lifted out of Godot's
+  shared Output panel, with the level counts doubling as the filter.
+  New modules: `hf_console_log.gd`, `hf_status_board.gd`, `plugin_console.gd`,
+  and `ui/hf_console_panel.gd`, `ui/hf_console_controls.gd`,
+  `ui/hf_console_log_view.gd`, `ui/hf_status_row.gd`, `ui/hf_status_lamp.gd`.
+- **Console coverage** (`tests/test_console_log.gd`, `tests/test_status_board.gd`,
+  `tests/test_console_panel.gd`, 64 cases): every severity threshold, the log
+  buffer's cap / repeat collapsing / BBCode escaping / re-entrancy guard, and two
+  drift guards asserting that every switch on the Controls tab still addresses a
+  property `dock.gd` and `level_root.gd` actually declare.
+- **Console preview harness** (`tools/hf_console_preview.gd`): renders the three
+  tabs to PNGs so a layout change can be judged without opening the editor.
+
+### Changed
+- **HammerForge is findable in the editor.** The left dock's tab said "Dock" and
+  carried no icon; it now says **HammerForge** and wears the mark, via
+  `EditorPlugin.set_dock_tab_icon()`. The bottom-panel button wears it too.
+- **`HFLog.warn()` mirrors to the Console** through an optional sink, and
+  `LevelRoot`'s `user_message` signal now reaches the Log tab as well as a toast
+  — toasts fade, and a failed bake could not be reconstructed afterwards.
+- **The brand build emits the addon's lockups.** `docs/brand/build.py` now writes
+  `addons/hammerforge/branding/hf_lockup_{dark,light}.svg` alongside the rest, so
+  the Console's header cannot drift from the brand set. `docs/brand/png/*.import`
+  is now ignored rather than reappearing untracked after every project import.
+
 
 ## [0.3.0] - 2026-09-03
 ### Added

@@ -5,9 +5,23 @@ class_name HFLog
 const SUPPRESSED_WARNING_PATTERNS_META := "_hf_suppressed_warning_patterns"
 const CAPTURED_WARNINGS_META := "_hf_captured_warnings"
 
+## Optional mirror for everything HammerForge warns about. The Console sets
+## this to its session log so a HammerForge warning is findable on its own,
+## rather than only in Godot's Output panel among every other addon's.
+## Null outside the editor and in tests, where push_warning is the whole story.
+static var _sink = null
+
+
+## Set by the Console on install and cleared on teardown. Anything with a
+## warn(message, category) method works.
+static func set_sink(sink) -> void:
+	_sink = sink
+
 
 static func warn(message: String) -> void:
 	_capture_warning(message)
+	if _sink != null and is_instance_valid(_sink):
+		_sink.warn(message, "warning")
 	if _is_suppressed(message):
 		return
 	push_warning(message)

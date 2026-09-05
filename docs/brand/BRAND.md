@@ -128,11 +128,18 @@ stretch; solid and cutter share one module grid. Do not close the kerf.
 ```
 docs/brand/svg/   20 sources — currentColor where one-colour use applies
 docs/brand/png/   92 raster exports, 16 → 1024, plus banners
+addons/hammerforge/branding/   2 lockups the Console header wears
 ```
 
 `icon.svg` at the repo root is the Godot project icon (`project.godot` →
 `config/icon`). It is written by `build.py` alongside the rest, so it cannot
 drift from the brand set — do not hand-edit it.
+
+`addons/hammerforge/branding/hf_lockup_dark.svg` and `-light.svg` are the same
+lockup for the two editor themes, and the HammerForge Console's header swaps
+between them on `theme_changed`. They ship inside the addon because an addon
+distributed on its own does not carry `docs/`. `build.py` writes them too, for
+the same reason it writes the two icons: nothing in the identity is hand-placed.
 
 `png/readme-banner.png` / `-light.png` — 1280×300, top of README.md.
 `png/social-preview.png` — 1280×640, GitHub social preview (Settings → Social preview).
