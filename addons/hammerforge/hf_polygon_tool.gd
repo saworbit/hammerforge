@@ -98,7 +98,7 @@ func handle_input(event: InputEvent, camera: Camera3D, mouse_pos: Vector2) -> in
 			recover_lost_pointer_capture()
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 		if _phase == Phase.PLACING_VERTS:
-			_cursor_pos = _raycast_to_y_plane(camera, mouse_pos, _ground_y)
+			_cursor_pos = root.screen_ray_to_y_plane(camera, mouse_pos, _ground_y)
 			_cursor_pos = _snap(_cursor_pos)
 			_update_preview()
 		elif _phase == Phase.SETTING_HEIGHT:
@@ -164,7 +164,7 @@ func get_shortcut_hud_lines() -> PackedStringArray:
 func _handle_click(camera: Camera3D, mouse_pos: Vector2) -> int:
 	match _phase:
 		Phase.IDLE:
-			var world_pos := _raycast_ground(camera, mouse_pos)
+			var world_pos = root._raycast(camera, mouse_pos).get("position")
 			if world_pos == null:
 				return EditorPlugin.AFTER_GUI_INPUT_PASS
 			_ground_y = world_pos.y
@@ -176,7 +176,7 @@ func _handle_click(camera: Camera3D, mouse_pos: Vector2) -> int:
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 
 		Phase.PLACING_VERTS:
-			var hit := _raycast_to_y_plane(camera, mouse_pos, _ground_y)
+			var hit: Vector3 = root.screen_ray_to_y_plane(camera, mouse_pos, _ground_y)
 			hit = _snap(hit)
 			# Check auto-close
 			var threshold: float = get_setting("auto_close_threshold")
@@ -489,22 +489,6 @@ func _snap(pos: Vector3) -> Vector3:
 		var g: float = root.grid_snap
 		return Vector3(snappedf(pos.x, g), snappedf(pos.y, g), snappedf(pos.z, g))
 	return pos
-
-
-func _raycast_ground(camera: Camera3D, mouse_pos: Vector2) -> Variant:
-	if not root or not root.has_method("_raycast"):
-		return null
-	var hit: Dictionary = root._raycast(camera, mouse_pos)
-	return hit.get("position")
-
-
-func _raycast_to_y_plane(camera: Camera3D, mouse_pos: Vector2, y: float) -> Vector3:
-	var origin := camera.project_ray_origin(mouse_pos)
-	var dir := camera.project_ray_normal(mouse_pos)
-	if absf(dir.y) < 0.0001:
-		return Vector3(origin.x, y, origin.z)
-	var t := maxf((y - origin.y) / dir.y, 0.0)
-	return origin + dir * t
 
 
 func _ensure_mesh() -> void:

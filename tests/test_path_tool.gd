@@ -10,6 +10,7 @@ class PlacementRoot:
 	var raycast_result: Dictionary = {}
 	var snap_calls := 0
 	var raycast_calls := 0
+	var y_plane_calls := 0
 
 	func _snap_point(point: Vector3, _exclude_ids: Array = []) -> Vector3:
 		snap_calls += 1
@@ -19,19 +20,51 @@ class PlacementRoot:
 		raycast_calls += 1
 		return raycast_result
 
+	func screen_ray_to_y_plane(_camera: Camera3D, _mouse_pos: Vector2, y: float) -> Vector3:
+		y_plane_calls += 1
+		return Vector3(0, y, 0)
+
 
 func test_placement_uses_level_root_snap_and_raycast():
+	# The tool has no raycast of its own any more. A click has to reach
+	# LevelRoot for picking, and LevelRoot for snapping.
 	var tool = HFPathTool.new()
 	var root := PlacementRoot.new()
 	var camera := Camera3D.new()
 	tool.root = root
 	root.raycast_result = {"position": Vector3(3, 7, 9)}
 	assert_eq(tool._snap(Vector3(3, 7, 9)), Vector3(4, 8, 8))
-	assert_eq(tool._raycast_ground(camera, Vector2(20, 30)), Vector3(3, 7, 9))
-	assert_eq(root.snap_calls, 1, "LevelRoot owns the snap settings")
+	assert_eq(tool._handle_click(camera, Vector2(20, 30)), EditorPlugin.AFTER_GUI_INPUT_STOP)
 	assert_eq(root.raycast_calls, 1, "LevelRoot owns visual and physics picking")
+	assert_eq(tool._waypoints.size(), 1, "The picked point becomes the first point")
+	assert_eq(tool._waypoints[0], Vector3(4, 8, 8), "and it is snapped by LevelRoot")
+	root.free()
+	camera.free()
+
+
+func test_a_raycast_miss_places_nothing():
+	var tool = HFPathTool.new()
+	var root := PlacementRoot.new()
+	var camera := Camera3D.new()
+	tool.root = root
 	root.raycast_result = {}
-	assert_null(tool._raycast_ground(camera, Vector2.ZERO), "a shared raycast miss stays a miss")
+	assert_eq(tool._handle_click(camera, Vector2.ZERO), EditorPlugin.AFTER_GUI_INPUT_PASS)
+	assert_eq(root.raycast_calls, 1, "a shared raycast miss stays a miss")
+	assert_eq(tool._waypoints.size(), 0, "and nothing is placed")
+	root.free()
+	camera.free()
+
+
+func test_later_points_come_off_the_shared_y_plane_projection():
+	var tool = HFPathTool.new()
+	var root := PlacementRoot.new()
+	var camera := Camera3D.new()
+	tool.root = root
+	root.raycast_result = {"position": Vector3(3, 7, 9)}
+	tool._handle_click(camera, Vector2(20, 30))
+	tool._handle_click(camera, Vector2(40, 50))
+	assert_eq(root.raycast_calls, 1, "Only the first point is picked against geometry")
+	assert_eq(root.y_plane_calls, 1, "The rest come off LevelRoot's y plane projection")
 	root.free()
 	camera.free()
 
