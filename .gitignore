@@ -56,3 +56,8 @@ addons/godot_mcp/translations/tool_descriptions.*.translation
 # Python cache (if used for scripts/tools)
 __pycache__/
 *.pyc
+
+# Brand asset generators — npm writes these when raster.js is run locally
+docs/brand/node_modules/
+docs/brand/package.json
+docs/brand/package-lock.json
