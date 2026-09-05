@@ -7,6 +7,7 @@ extends "hf_system.gd"
 ## rather than the intersection volume in red.
 
 const DraftBrush = preload("../brush_instance.gd")
+const HFOutlineUtil = preload("../hf_outline_util.gd")
 
 var _preview_container: Node3D
 var _mesh_pool: Array = []  # Array[MeshInstance3D]
@@ -144,7 +145,8 @@ func _rebuild() -> void:
 	# Update active wireframes
 	for i in all_slices.size():
 		var mi: MeshInstance3D = _mesh_pool[i]
-		mi.mesh = _build_wireframe_mesh(all_slices[i])
+		mi.mesh = HFOutlineUtil.unit_box_line_mesh()
+		mi.transform = HFOutlineUtil.aabb_box_transform(all_slices[i])
 		mi.visible = true
 
 	# Hide unused
@@ -163,39 +165,3 @@ func _ensure_container() -> void:
 	_preview_container = Node3D.new()
 	_preview_container.name = "CarvePreview"
 	root.add_child(_preview_container)
-
-
-func _build_wireframe_mesh(aabb: AABB) -> ImmediateMesh:
-	var im = ImmediateMesh.new()
-	var min_pt = aabb.position
-	var max_pt = aabb.position + aabb.size
-	im.surface_begin(Mesh.PRIMITIVE_LINES)
-	var corners = [
-		Vector3(min_pt.x, min_pt.y, min_pt.z),
-		Vector3(max_pt.x, min_pt.y, min_pt.z),
-		Vector3(max_pt.x, max_pt.y, min_pt.z),
-		Vector3(min_pt.x, max_pt.y, min_pt.z),
-		Vector3(min_pt.x, min_pt.y, max_pt.z),
-		Vector3(max_pt.x, min_pt.y, max_pt.z),
-		Vector3(max_pt.x, max_pt.y, max_pt.z),
-		Vector3(min_pt.x, max_pt.y, max_pt.z),
-	]
-	var edges = [
-		[0, 1],
-		[1, 2],
-		[2, 3],
-		[3, 0],
-		[4, 5],
-		[5, 6],
-		[6, 7],
-		[7, 4],
-		[0, 4],
-		[1, 5],
-		[2, 6],
-		[3, 7],
-	]
-	for edge in edges:
-		im.surface_add_vertex(corners[edge[0]])
-		im.surface_add_vertex(corners[edge[1]])
-	im.surface_end()
-	return im
