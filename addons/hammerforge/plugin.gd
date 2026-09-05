@@ -827,10 +827,6 @@ func _get_current_overlay_mouse_pos() -> Vector2:
 	return last_3d_mouse_pos
 
 
-func _build_viewport_state(state: Dictionary, root: Node, tool_id: int) -> void:
-	HFPluginOverlays.build_viewport_state(self, state, root, tool_id)
-
-
 func _handle_select_mouse(
 	event: InputEventMouseButton,
 	root: Node,
@@ -937,10 +933,6 @@ func _clear_vertex_overlay() -> void:
 
 func _shortcut_input(event: InputEvent) -> void:
 	HFPluginShortcuts.handle(self, event)
-
-
-func _mark_shortcut_input_handled() -> void:
-	HFPluginShortcuts.mark_handled(self)
 
 
 ## Retained because tests and downstream integrations call this by name.
