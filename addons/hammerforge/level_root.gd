@@ -2761,6 +2761,19 @@ static func construction_plane_intersection(from: Vector3, to: Vector3) -> Varia
 	return Plane(Vector3.UP, 0.0).intersects_segment(from, to)
 
 
+## Where a screen ray meets the horizontal plane at `y`. Unlike a plane
+## intersection this always answers: a ray parallel to the plane drops straight
+## down from the camera, and the hit is clamped in front of it. Viewport tools
+## place points with this, so a null would leave the cursor with nowhere to go.
+static func screen_ray_to_y_plane(camera: Camera3D, mouse_pos: Vector2, y: float) -> Vector3:
+	var origin := camera.project_ray_origin(mouse_pos)
+	var dir := camera.project_ray_normal(mouse_pos)
+	if absf(dir.y) < 0.0001:
+		return Vector3(origin.x, y, origin.z)
+	var t := maxf((y - origin.y) / dir.y, 0.0)
+	return origin + dir * t
+
+
 func _entity_pick_distance(entity: Node3D, ray_origin: Vector3, ray_dir: Vector3) -> float:
 	if not _is_pick_visible(entity):
 		return -1.0
