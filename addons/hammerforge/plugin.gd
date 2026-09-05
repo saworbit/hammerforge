@@ -20,6 +20,8 @@ const HFPluginSelectionInput = preload("plugin_selection_input.gd")
 const HFPluginSelectionCommands = preload("plugin_selection_commands.gd")
 const HFPluginSelectionState = preload("plugin_selection_state.gd")
 const HFPluginShortcuts = preload("plugin_shortcuts.gd")
+const HFPluginGestureRecovery = preload("plugin_gesture_recovery.gd")
+const HFPluginMaterialCommands = preload("plugin_material_commands.gd")
 const HFPluginToolModes = preload("plugin_tool_modes.gd")
 const HFPluginUndoEvents = preload("plugin_undo_events.gd")
 const HFPathToolType = preload("hf_path_tool.gd")
@@ -107,22 +109,7 @@ func _notification(what: int) -> void:
 
 
 func _recover_after_application_focus_loss() -> void:
-	_focus_recovery_queued = false
-	_rmb_camera_navigation.active = false
-	# Godot's 3D viewport owns native/custom gizmo focus-loss commit and clears
-	# its private edit reference itself. Cancelling the local lifecycle here can
-	# race that callback and restore a preview Godot has just committed.
-	_cancel_selection_gesture()
-	if _tool_registry:
-		_tool_registry.cancel_active_pointer_capture()
-	_queue_managed_brush_reconcile()
-	var root := active_root if active_root else _get_level_root()
-	if not root:
-		return
-	_prepare_tool_transition(root, false, false)
-	root.clear_hover()
-	if root.has_method("clear_face_hover_highlight"):
-		root.clear_face_hover_highlight()
+	HFPluginGestureRecovery.after_application_focus_loss(self)
 
 
 func _enter_tree():
@@ -821,113 +808,19 @@ static func has_cancelable_rmb_gesture(input_state: Variant, marquee_active: boo
 
 
 func _finish_stale_paint_strokes(root: Node, input_state: Variant, paint_tool: Variant) -> bool:
-	var finished := false
-	if (
-		paint_tool != null
-		and paint_tool.has_method("is_stroke_active")
-		and paint_tool.is_stroke_active()
-		and paint_tool.has_method("finish_stroke_if_active")
-	):
-		paint_tool.finish_stroke_if_active()
-		finished = true
-	if input_state != null and input_state.is_surface_painting():
-		input_state.end_surface_paint()
-		finished = true
-	if _disp_paint_active:
-		if not _disp_paint_pre_state.is_empty():
-			_commit_disp_paint_undo(root)
-		_disp_paint_active = false
-		_disp_paint_brush_id = ""
-		_disp_paint_face_idx = -1
-		_disp_paint_pre_state = {}
-		finished = true
-	return finished
+	return HFPluginGestureRecovery.finish_stale_paint_strokes(self, root, input_state, paint_tool)
 
 
 func _recover_stale_lmb_gestures(root: Node) -> void:
-	if not root:
-		return
-	var recovered := false
-	var input_state = root.input_state if root.get("input_state") != null else null
-	var paint_tool = root.get("paint_tool")
-	if _tool_registry and _tool_registry.recover_active_pointer_capture():
-		recovered = true
-	if _finish_stale_paint_strokes(root, input_state, paint_tool):
-		recovered = true
-	if _vertex_drag_active and root.vertex_system:
-		root.vertex_system.cancel_drag()
-		_vertex_drag_active = false
-		recovered = true
-	if input_state:
-		if input_state.is_extruding():
-			root.cancel_extrude()
-			recovered = true
-		elif input_state.is_drag_base():
-			root.cancel_drag()
-			recovered = true
-	if recovered:
-		numeric_buffer = ""
-		root.clear_hover()
-		if root.has_method("clear_face_hover_highlight"):
-			root.clear_face_hover_highlight()
-		_update_hud_context()
+	HFPluginGestureRecovery.recover_stale_lmb_gestures(self, root)
 
 
 func _handle_rmb_cancel(root: Node, _tool_id: int, event: InputEventMouseButton) -> int:
-	var input_state = root.input_state if root else null
-	var has_marquee := _selection_gesture != null and _selection_gesture.is_active()
-	var paint_tool = root.get("paint_tool") if root else null
-	var surface_painting: bool = input_state != null and input_state.is_surface_painting()
-	var floor_painting: bool = (
-		paint_tool != null
-		and paint_tool.has_method("is_stroke_active")
-		and paint_tool.is_stroke_active()
-	)
-	var any_painting := surface_painting or floor_painting or _disp_paint_active
-	if should_block_rmb_during_paint_stroke(
-		surface_painting,
-		floor_painting,
-		_disp_paint_active,
-		event.button_mask & MOUSE_BUTTON_MASK_LEFT != 0,
-	):
-		return EditorPlugin.AFTER_GUI_INPUT_STOP
-	if any_painting:
-		# If Godot lost the LMB release during a focus/viewport transition,
-		# finalize that stale stroke instead of blocking every future RMB press.
-		_finish_stale_paint_strokes(root, input_state, paint_tool)
-	if not has_cancelable_rmb_gesture(input_state, has_marquee):
-		# Idle RMB belongs to Godot's native camera controls.
-		if root:
-			root.clear_hover()
-			if root.has_method("clear_face_hover_highlight"):
-				root.clear_face_hover_highlight()
-		_rmb_camera_navigation.begin()
-		return EditorPlugin.AFTER_GUI_INPUT_PASS
-	if input_state and input_state.is_extruding():
-		root.cancel_extrude()
-	elif input_state and input_state.is_dragging():
-		root.cancel_drag()
-	numeric_buffer = ""
-	_cancel_selection_gesture()
-	_update_hud_context()
-	return EditorPlugin.AFTER_GUI_INPUT_STOP
+	return HFPluginGestureRecovery.handle_rmb_cancel(self, root, event)
 
 
-## Show the viewport context menu at the current mouse position.
-## Triggered by Space key (no modifiers). Converts screen coords to window-local
-## for PopupMenu.popup() — the only reliable coordinate source since the 3D
-## SubViewport's event.position space doesn't match window space.
 func _show_viewport_context_menu(root: Node, tool_id: int) -> void:
-	if not _viewport_context_menu or not is_instance_valid(_viewport_context_menu):
-		return
-	var state := {}
-	_build_viewport_state(state, root, tool_id)
-	var screen_pos := DisplayServer.mouse_get_position()
-	var win := get_window()
-	var window_pos := Vector2(screen_pos)
-	if win:
-		window_pos = Vector2(screen_pos - win.position)
-	_viewport_context_menu.show_at(window_pos, state)
+	HFPluginOverlays.show_viewport_context_menu(self, root, tool_id)
 
 
 func _get_current_overlay_mouse_pos() -> Vector2:
@@ -935,34 +828,7 @@ func _get_current_overlay_mouse_pos() -> Vector2:
 
 
 func _build_viewport_state(state: Dictionary, root: Node, tool_id: int) -> void:
-	state["has_root"] = root != null
-	state["tool"] = tool_id
-	state["paint_mode"] = dock.is_paint_mode_enabled() if dock else false
-	state["vertex_mode"] = _vertex_mode
-	state["is_subtract"] = dock.get_operation() != 0 if dock else false
-	var input_mode := 0
-	if root and root.input_state:
-		input_mode = root.input_state.mode
-	state["input_mode"] = input_mode
-	var selection_nodes := _current_selection_nodes()
-	state["mixed_selection"] = (
-		classify_selection_scope(selection_nodes, root) == SelectionScope.MIXED if root else false
-	)
-	var brush_count := 0
-	var entity_count := 0
-	for node in selection_nodes:
-		if node is DraftBrush:
-			brush_count += 1
-		elif root and root.has_method("is_entity_node") and root.is_entity_node(node):
-			entity_count += 1
-	state["brush_count"] = brush_count
-	state["entity_count"] = entity_count
-	var face_count := 0
-	if root and root.get("face_selection") is Dictionary:
-		for key in root.face_selection.keys():
-			var indices = root.face_selection.get(key, [])
-			face_count += indices.size()
-	state["face_count"] = face_count
+	HFPluginOverlays.build_viewport_state(self, state, root, tool_id)
 
 
 func _handle_select_mouse(
@@ -1198,32 +1064,7 @@ func _record_history(action_name: String) -> void:
 
 
 func _paint_brush_with_undo(root: Node, brush: Node, mat: Material) -> void:
-	if not root or not brush:
-		return
-	var prev = (
-		brush.get("material_override") if brush.get("material_override") else brush.get("material")
-	)
-	if prev == mat:
-		return
-	var brush_id := ""
-	if root.has_method("get_brush_info_from_node"):
-		var info = root.get_brush_info_from_node(brush)
-		brush_id = str(info.get("brush_id", ""))
-	var method_name = "apply_material_to_brush"
-	var args: Array = [brush, mat]
-	if brush_id != "":
-		method_name = "apply_material_to_brush_by_id"
-		args = [brush_id, mat]
-	HFUndoHelper.commit(
-		_get_undo_redo(),
-		root,
-		"Paint Brush",
-		method_name,
-		args,
-		false,
-		Callable(self, "_record_history"),
-		"paint_brush"
-	)
+	HFPluginMaterialCommands.paint_brush_with_undo(self, root, brush, mat)
 
 
 func _commit_brush_placement(root: Node, info: Dictionary) -> void:
@@ -1241,32 +1082,7 @@ func _commit_brush_placement(root: Node, info: Dictionary) -> void:
 
 
 func _pick_face_material(root: Node) -> void:
-	if not last_3d_camera or not dock:
-		return
-	var cam = last_3d_camera
-	var pos = last_3d_mouse_pos
-	var hit: Dictionary = root.pick_face(cam, pos)
-	if hit.is_empty():
-		if dock:
-			dock.show_toast("No face under cursor", 1)
-		return
-	var brush: DraftBrush = hit.get("brush") as DraftBrush
-	var face_idx: int = int(hit.get("face_idx", -1))
-	if brush == null or face_idx < 0:
-		return
-	if face_idx >= brush.faces.size():
-		return
-	var face: FaceData = brush.faces[face_idx]
-	var mat_idx: int = face.material_idx if face else -1
-	if mat_idx < 0:
-		if dock:
-			dock.show_toast("Face has no material assigned", 1)
-		return
-	dock._selected_material_index = mat_idx
-	_last_picked_material_index = mat_idx
-	if dock.material_browser:
-		dock.material_browser.set_selected_index(mat_idx)
-	dock.show_toast("Picked material #%d" % mat_idx, 0)
+	HFPluginMaterialCommands.pick_face_material(self, root)
 
 
 # ---------------------------------------------------------------------------
@@ -1530,23 +1346,7 @@ func _on_context_tool_switch(tool_id: int) -> void:
 
 
 func _on_context_material_apply(mat_index: int) -> void:
-	var root = active_root if active_root else _get_level_root()
-	if not root or not dock:
-		return
-	if not _managed_action_surface_allowed(root, "apply_context_material"):
-		return
-	dock._selected_material_index = mat_index
-	# Apply to selected faces if any
-	var face_count = dock._count_selected_faces()
-	if face_count > 0:
-		dock._on_face_assign_material()
-	else:
-		# Apply to all selected brushes
-		var mat = root.material_manager.get_material(mat_index) if root.material_manager else null
-		if mat:
-			for node in hf_selection:
-				if node is DraftBrush:
-					_paint_brush_with_undo(root, node, mat)
+	HFPluginMaterialCommands.apply_context_material(self, mat_index)
 
 
 func _on_toggle_hotkey_palette() -> void:
@@ -1558,44 +1358,9 @@ func _on_toggle_hotkey_palette() -> void:
 			_update_context_toolbar_state(root, tool_id)
 
 
-## Actions in this list operate on LevelRoot-owned state or scene content. They
-## require an existing level, but must not create one as a side effect of using
-## the command palette. Level creation is reserved for explicit setup actions
-## and the first intentional Draw press in the viewport.
+## Retained because tests and downstream integrations call this by name.
 static func hotkey_palette_action_requires_existing_root(action: String) -> bool:
-	return (
-		action
-		in [
-			"quick_play",
-			"validate_level",
-			"select_all",
-			"deselect_all",
-			"delete",
-			"duplicate",
-			"group",
-			"ungroup",
-			"hollow",
-			"clip",
-			"carve",
-			"merge",
-			"move_to_floor",
-			"move_to_ceiling",
-			"vertex_edit",
-			"texture_picker",
-			"grid_decrease",
-			"grid_increase",
-			"vertex_edge_mode",
-			"vertex_merge",
-			"vertex_split_edge",
-			"vertex_clip_convex",
-			"axis_x",
-			"axis_y",
-			"axis_z",
-			"select_similar",
-			"apply_last_texture",
-			"context_menu",
-		]
-	)
+	return HFPluginCommands.requires_existing_root(action)
 
 
 func _on_hotkey_palette_action(action: String) -> void:

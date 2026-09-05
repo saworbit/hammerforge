@@ -665,11 +665,14 @@ func test_every_managed_action_surface_uses_the_shared_scope_guard() -> void:
 			block.contains("_managed_action_surface_allowed(root, action)"),
 			"%s must reject mixed selection before dispatch" % method_name,
 		)
-	var material_start := source.find("func _on_context_material_apply")
-	var material_end := source.find("\nfunc ", material_start + 1)
-	var material_block := source.substr(material_start, material_end - material_start)
+	var material_source := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_material_commands.gd"
+	)
+	var material_start := material_source.find("static func apply_context_material")
+	var material_block := material_source.substr(material_start)
 	assert_true(
-		material_block.contains('_managed_action_surface_allowed(root, "apply_context_material")')
+		material_block.contains('_managed_action_surface_allowed(root, "apply_context_material")'),
+		"The context toolbar swatches go through the same scope guard",
 	)
 
 
@@ -699,9 +702,16 @@ func test_focus_loss_cancels_transient_pointer_ownership() -> void:
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
 	var notify_start := source.find("func _notification")
 	var enter_start := source.find("func _enter_tree", notify_start)
-	var focus_block := source.substr(notify_start, enter_start - notify_start)
-	assert_true(focus_block.contains("NOTIFICATION_APPLICATION_FOCUS_OUT"))
-	assert_true(focus_block.contains("NOTIFICATION_WM_WINDOW_FOCUS_OUT"))
+	var notify_block := source.substr(notify_start, enter_start - notify_start)
+	assert_true(notify_block.contains("NOTIFICATION_APPLICATION_FOCUS_OUT"))
+	assert_true(notify_block.contains("NOTIFICATION_WM_WINDOW_FOCUS_OUT"))
+
+	var recovery_source := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_gesture_recovery.gd"
+	)
+	var focus_start := recovery_source.find("static func after_application_focus_loss")
+	var focus_end := recovery_source.find("static func finish_stale_paint_strokes", focus_start)
+	var focus_block := recovery_source.substr(focus_start, focus_end - focus_start)
 	assert_true(focus_block.contains("_rmb_camera_navigation.active = false"))
 	assert_false(
 		focus_block.contains("cancel_active_handle_action"),
@@ -711,9 +721,9 @@ func test_focus_loss_cancels_transient_pointer_ownership() -> void:
 	assert_true(focus_block.contains("_tool_registry.cancel_active_pointer_capture()"))
 	assert_true(focus_block.contains("_prepare_tool_transition(root, false, false)"))
 
-	var recovery_start := source.find("func _recover_stale_lmb_gestures")
-	var recovery_end := source.find("func _handle_rmb_cancel", recovery_start)
-	var recovery_block := source.substr(recovery_start, recovery_end - recovery_start)
+	var recovery_start := recovery_source.find("static func recover_stale_lmb_gestures")
+	var recovery_end := recovery_source.find("static func handle_rmb_cancel", recovery_start)
+	var recovery_block := recovery_source.substr(recovery_start, recovery_end - recovery_start)
 	assert_true(recovery_block.contains("_tool_registry.recover_active_pointer_capture()"))
 
 	var selection_source := FileAccess.get_file_as_string(
