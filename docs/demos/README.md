@@ -1,4 +1,4 @@
-﻿# Demo Clips
+# Demo Clips
 
 Last updated: February 15, 2026
 

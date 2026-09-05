@@ -1,4 +1,4 @@
-﻿# HammerForge Data Portability
+# HammerForge Data Portability
 
 Last updated: September 2, 2026
 

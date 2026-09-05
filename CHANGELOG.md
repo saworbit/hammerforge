@@ -32,6 +32,46 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   explains it. It reads the Console's own evaluation, so the two cannot disagree.
 
 ### Fixed
+- **Box faces exported to `.map` carried another face's texture and UV settings**
+  ([#113](https://github.com/saworbit/hammerforge/issues/113)): `MapIO._box_to_map_lines`
+  walked its plane table with the same counter it used to index `brush.faces`, but the
+  two tables were in different orders. The plane table now runs Right, Left, Top, Bottom,
+  Front, Back, the order `DraftBrush._build_box_faces` builds them in. The exported plane
+  points are unchanged; only the face data paired with each one moves.
+- **The far corner cap of a bevel faced into the brush**
+  ([#112](https://github.com/saworbit/hammerforge/issues/112)): `HFBevelSystem.bevel_edge`
+  wound both endpoint caps the same way. The two arcs are translated copies of each other,
+  so both normals pointed the same direction and backface culling hid one of them, which
+  also broke CSG and collision. Each cap is wound against the direction leading away from
+  the edge now, so it holds for any edge orientation.
+- **Clip and Hollow previews drew for brushes the tools refuse**
+  ([#116](https://github.com/saworbit/hammerforge/issues/116)): a cylinder or a rotated box
+  showed a valid-looking wireframe and then failed with an error toast on click, and rotated
+  boxes drew their wireframes unrotated in global space. Both previews ask `can_clip_brush`
+  and `can_hollow_brush` now, the same validators the tools run, so the preview and the
+  operation cannot disagree. That also removed the second copy of the split-bounds and
+  wall-thickness rules the previews were carrying.
+- **Play from Camera left a bogus step on the undo stack**
+  ([#114](https://github.com/saworbit/hammerforge/issues/114)): the spawn is parked at the
+  editor camera only long enough to bake and launch, and every exit path puts it back, but
+  the move was also recorded as an undo action. Undo consumed a step without changing
+  anything and Redo moved the spawn to the camera for good. `record_spawn_camera_undo` and
+  its `dock.gd` wrapper are gone with the call. The spawn-create and spawn-fix undo actions
+  stay, because those changes persist.
+- **`gdformat` could not parse the test suite, and CI never asked it to**
+  ([#115](https://github.com/saworbit/hammerforge/issues/115)): a raw newline sat inside a
+  double-quoted string in `tests/test_bugfix_regressions.gd`, which GDScript does not allow.
+  The format step only covered `addons/hammerforge/`, which is why it went unnoticed. It
+  covers `tests/` as well now, and the eight files that surfaced once the check was widened
+  are formatted.
+- **Snap candidate rebuilds formatted a string per vertex on every mouse move**
+  ([#122](https://github.com/saworbit/hammerforge/issues/122)): `_face_snap_geometry` runs
+  for every non-box brush on every motion event during a drag and keyed vertices and edges
+  by formatted string. Keys are `Vector3i` and `Vector2i` now, which hold the same
+  millimetre tolerance without formatting anything. Measured over 300 brushes and 200 motion
+  events with Vertex, Edge and Perpendicular on: a mix with one brush in ten non-box went
+  from 10.33 ms to 3.97 ms per event, and an all-non-box level from 77.46 ms to 14.52 ms.
+
 - **The shortcut HUD stopped overlapping the viewport context toolbar.** It is
   parented into the 3D toolbar, which is a `BoxContainer`: it lays its children
   out itself, sizes them to their minimum, and ignores the anchors a floating
@@ -48,6 +88,27 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   an engine error alongside it.
 
 ### Changed
+
+- **Preview box outlines go through `HFOutlineUtil`**
+  ([#121](https://github.com/saworbit/hammerforge/issues/121)): `_build_wireframe_mesh` was
+  written four times, byte identical, in the carve, clip, hollow and subtract previews, each
+  baking world coordinates into a fresh `ImmediateMesh` per box per rebuild. They share one
+  unit-box outline now and place it with `aabb_box_transform()`, so box previews render
+  through the same path as the gizmo outlines.
+- **The path and polygon tools have one raycast each**
+  ([#124](https://github.com/saworbit/hammerforge/issues/124)): both carried byte-identical
+  copies of `_raycast_ground` and `_raycast_to_y_plane`. The first was a `has_method` wrapper
+  around `root._raycast` and is gone. The second had no shared equivalent, so it moves to
+  `LevelRoot.screen_ray_to_y_plane` beside `construction_plane_intersection`, unchanged.
+- **Brush lookup and face keys call their owner**
+  ([#123](https://github.com/saworbit/hammerforge/issues/123)): the bevel and displacement
+  systems wrapped `root.find_brush_by_id` in a `has_method` guard, and the paint input, dock
+  and tutorial wizard did the same inline. `LevelRoot` always has that method, so the guard
+  only hid a null root the callers already check. Face keys had three implementations that
+  agreed on the answer; `HFBrushSystem.face_key` is static and takes `Node` now, and the
+  other two call it. `HFPluginSelectionCommands.face_key_for` gains the null guard it never
+  had.
+
 - **The power-user overlay toast names both places that can turn them on.** The
   switch lives in the Console's Controls tab and in the dock under
   Test -> Settings; the toast pointed only at the dock, which was the whole
