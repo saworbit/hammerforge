@@ -900,8 +900,8 @@ func test_nudge_keys_respect_selection_ownership_before_being_consumed():
 		"The guard must be asked before the command runs",
 	)
 	var claim_start := shortcut_source.find("static func _claim")
-	var claim := shortcut_source.substr(claim_start, shortcut_source.find("
-static func mark_handled") - claim_start)
+	var claim_end := shortcut_source.find("\nstatic func mark_handled")
+	var claim := shortcut_source.substr(claim_start, claim_end - claim_start)
 	assert_true(claim.contains("_guard_hammerforge_shortcut(root, false, 1, action)"))
 	assert_true(
 		claim.contains("guard == SHORTCUT_APPLY or guard == STOP"),
