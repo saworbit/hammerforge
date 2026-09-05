@@ -6,10 +6,12 @@
 
 ## The mark
 
-```
-  ██▛▀▜
-  ███▄▟
-```
+<p>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="png/mark-dark-256.png">
+    <img alt="The HammerForge mark" src="png/mark-light-256.png" width="132">
+  </picture>
+</p>
 
 A filled solid with a corner bitten out, and an outlined square overhanging that
 corner.
