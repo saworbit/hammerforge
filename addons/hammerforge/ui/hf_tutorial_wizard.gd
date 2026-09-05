@@ -229,7 +229,7 @@ func _validate_bake_success(success) -> bool:
 
 
 func _validate_subtract(brush_id) -> bool:
-	if not _root or not _root.has_method("find_brush_by_id"):
+	if not _root:
 		return true
 	var brush = _root.find_brush_by_id(str(brush_id))
 	if not brush:

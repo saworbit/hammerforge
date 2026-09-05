@@ -18,9 +18,7 @@ static func should_start_displacement(plugin: Object, event: InputEvent, root: N
 	var info: Dictionary = plugin.dock._get_selected_face_info()
 	if info.is_empty():
 		return false
-	var brush: Node3D = (
-		root.find_brush_by_id(info["brush_id"]) if root.has_method("find_brush_by_id") else null
-	)
+	var brush: Node3D = root.find_brush_by_id(info["brush_id"])
 	if not brush or not _is_visible_pick(root, brush):
 		return false
 	var face_index: int = info["face_index"]
@@ -79,11 +77,7 @@ static func do_displacement_stroke(
 		return
 	if plugin._disp_paint_brush_id == "" or plugin._disp_paint_face_idx < 0:
 		return
-	var brush: Node3D = (
-		root.find_brush_by_id(plugin._disp_paint_brush_id)
-		if root.has_method("find_brush_by_id")
-		else null
-	)
+	var brush: Node3D = root.find_brush_by_id(plugin._disp_paint_brush_id)
 	if not brush or not _is_visible_pick(root, brush):
 		return
 	var faces: Array = brush.faces

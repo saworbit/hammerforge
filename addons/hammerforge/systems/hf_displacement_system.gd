@@ -31,7 +31,7 @@ func _init(p_root: Node3D = null) -> void:
 ## Create a displacement surface on the given face of a brush.
 ## The face must be a quad (4 vertices). Returns true on success.
 func create_displacement(brush_id: String, face_index: int, power: int = 3) -> bool:
-	var brush: Node3D = _find_brush(brush_id)
+	var brush: Node3D = root.find_brush_by_id(brush_id)
 	if not brush:
 		HFLog.warn("HFDisplacementSystem: brush not found: %s" % brush_id)
 		return false
@@ -57,7 +57,7 @@ func create_displacement(brush_id: String, face_index: int, power: int = 3) -> b
 
 ## Remove displacement from a face, reverting it to a flat quad.
 func destroy_displacement(brush_id: String, face_index: int) -> bool:
-	var brush: Node3D = _find_brush(brush_id)
+	var brush: Node3D = root.find_brush_by_id(brush_id)
 	if not brush:
 		return false
 	var faces: Array = brush.faces
@@ -73,7 +73,7 @@ func destroy_displacement(brush_id: String, face_index: int) -> bool:
 
 ## Check if a face has displacement data.
 func has_displacement(brush_id: String, face_index: int) -> bool:
-	var brush: Node3D = _find_brush(brush_id)
+	var brush: Node3D = root.find_brush_by_id(brush_id)
 	if not brush:
 		return false
 	var faces: Array = brush.faces
@@ -84,7 +84,7 @@ func has_displacement(brush_id: String, face_index: int) -> bool:
 
 ## Change the subdivision power of an existing displacement.
 func set_power(brush_id: String, face_index: int, power: int) -> bool:
-	var brush: Node3D = _find_brush(brush_id)
+	var brush: Node3D = root.find_brush_by_id(brush_id)
 	if not brush:
 		return false
 	var faces: Array = brush.faces
@@ -139,7 +139,7 @@ func paint(
 	strength: float,
 	mode: int = PaintMode.RAISE  # PaintMode enum
 ) -> bool:
-	var brush: Node3D = _find_brush(brush_id)
+	var brush: Node3D = root.find_brush_by_id(brush_id)
 	if not brush:
 		return false
 	var faces: Array = brush.faces
@@ -201,7 +201,7 @@ func paint(
 func apply_noise(
 	brush_id: String, face_index: int, noise: FastNoiseLite, scale: float = 1.0
 ) -> bool:
-	var brush: Node3D = _find_brush(brush_id)
+	var brush: Node3D = root.find_brush_by_id(brush_id)
 	if not brush:
 		return false
 	var faces: Array = brush.faces
@@ -217,7 +217,7 @@ func apply_noise(
 
 ## Smooth the entire displacement surface.
 func smooth_all(brush_id: String, face_index: int, strength: float = 0.5) -> bool:
-	var brush: Node3D = _find_brush(brush_id)
+	var brush: Node3D = root.find_brush_by_id(brush_id)
 	if not brush:
 		return false
 	var faces: Array = brush.faces
@@ -233,7 +233,7 @@ func smooth_all(brush_id: String, face_index: int, strength: float = 0.5) -> boo
 
 ## Set elevation scale for the displacement.
 func set_elevation(brush_id: String, face_index: int, elevation: float) -> bool:
-	var brush: Node3D = _find_brush(brush_id)
+	var brush: Node3D = root.find_brush_by_id(brush_id)
 	if not brush:
 		return false
 	var faces: Array = brush.faces
@@ -298,14 +298,6 @@ func sew_all(tolerance: float = 0.5) -> int:
 # ---------------------------------------------------------------------------
 # Internals
 # ---------------------------------------------------------------------------
-
-
-func _find_brush(brush_id: String) -> Node3D:
-	if not root:
-		return null
-	if root.has_method("find_brush_by_id"):
-		return root.find_brush_by_id(brush_id)
-	return null
 
 
 func _mark_brush_dirty(brush: Node3D) -> void:

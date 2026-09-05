@@ -1676,11 +1676,7 @@ func _get_selected_face_info() -> Dictionary:
 func _selected_face_has_displacement(info: Dictionary) -> bool:
 	if info.is_empty() or not level_root:
 		return false
-	var brush: Node3D = (
-		level_root.find_brush_by_id(info["brush_id"])
-		if level_root.has_method("find_brush_by_id")
-		else null
-	)
+	var brush: Node3D = level_root.find_brush_by_id(info["brush_id"])
 	if not brush:
 		return false
 	var fi: int = info["face_index"]

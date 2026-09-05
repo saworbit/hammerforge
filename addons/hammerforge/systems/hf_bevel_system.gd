@@ -32,7 +32,7 @@ func bevel_edge(brush_id: String, edge: Array, segments: int = 2, radius: float 
 		return false
 	segments = clampi(segments, 1, 16)
 	radius = maxf(radius, 0.01)
-	var brush: Node3D = _find_brush(brush_id)
+	var brush: Node3D = root.find_brush_by_id(brush_id)
 	if not brush:
 		return false
 	var faces: Array = brush.faces
@@ -151,7 +151,7 @@ func inset_face(
 	brush_id: String, face_index: int, inset_distance: float = 2.0, height: float = 0.0
 ) -> bool:
 	inset_distance = maxf(inset_distance, 0.01)
-	var brush: Node3D = _find_brush(brush_id)
+	var brush: Node3D = root.find_brush_by_id(brush_id)
 	if not brush:
 		return false
 	var faces: Array = brush.faces
@@ -205,14 +205,6 @@ func inset_face(
 # ---------------------------------------------------------------------------
 # Internals
 # ---------------------------------------------------------------------------
-
-
-func _find_brush(brush_id: String) -> Node3D:
-	if not root:
-		return null
-	if root.has_method("find_brush_by_id"):
-		return root.find_brush_by_id(brush_id)
-	return null
 
 
 func _mark_brush_dirty(brush: Node3D) -> void:
