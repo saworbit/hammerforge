@@ -6,6 +6,7 @@ extends "hf_system.gd"
 ## a quad mesh shows the cut plane itself.
 
 const DraftBrush = preload("../brush_instance.gd")
+const HFOutlineUtil = preload("../hf_outline_util.gd")
 
 var _preview_container: Node3D
 var _piece_a_mesh: MeshInstance3D
@@ -166,9 +167,11 @@ func _rebuild() -> void:
 	_ensure_container()
 
 	# Update piece wireframes
-	_piece_a_mesh.mesh = _build_wireframe_mesh(aabb_a)
+	_piece_a_mesh.mesh = HFOutlineUtil.unit_box_line_mesh()
+	_piece_a_mesh.transform = HFOutlineUtil.aabb_box_transform(aabb_a)
 	_piece_a_mesh.visible = true
-	_piece_b_mesh.mesh = _build_wireframe_mesh(aabb_b)
+	_piece_b_mesh.mesh = HFOutlineUtil.unit_box_line_mesh()
+	_piece_b_mesh.transform = HFOutlineUtil.aabb_box_transform(aabb_b)
 	_piece_b_mesh.visible = true
 
 	# Update split plane quad
@@ -199,42 +202,6 @@ func _ensure_container() -> void:
 	_plane_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_plane_mesh.material_override = _plane_material
 	_preview_container.add_child(_plane_mesh)
-
-
-func _build_wireframe_mesh(aabb: AABB) -> ImmediateMesh:
-	var im = ImmediateMesh.new()
-	var min_pt = aabb.position
-	var max_pt = aabb.position + aabb.size
-	im.surface_begin(Mesh.PRIMITIVE_LINES)
-	var corners = [
-		Vector3(min_pt.x, min_pt.y, min_pt.z),
-		Vector3(max_pt.x, min_pt.y, min_pt.z),
-		Vector3(max_pt.x, max_pt.y, min_pt.z),
-		Vector3(min_pt.x, max_pt.y, min_pt.z),
-		Vector3(min_pt.x, min_pt.y, max_pt.z),
-		Vector3(max_pt.x, min_pt.y, max_pt.z),
-		Vector3(max_pt.x, max_pt.y, max_pt.z),
-		Vector3(min_pt.x, max_pt.y, max_pt.z),
-	]
-	var edges = [
-		[0, 1],
-		[1, 2],
-		[2, 3],
-		[3, 0],
-		[4, 5],
-		[5, 6],
-		[6, 7],
-		[7, 4],
-		[0, 4],
-		[1, 5],
-		[2, 6],
-		[3, 7],
-	]
-	for edge in edges:
-		im.surface_add_vertex(corners[edge[0]])
-		im.surface_add_vertex(corners[edge[1]])
-	im.surface_end()
-	return im
 
 
 ## Build a translucent quad representing the split plane.

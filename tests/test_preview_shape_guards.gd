@@ -183,3 +183,43 @@ func test_hollow_preview_clears_when_the_brush_is_rotated_mid_drag():
 	b.rotation_degrees = Vector3(0, 45, 0)
 	hollow_preview.update_thickness(6.0)
 	_assert_no_hollow_wireframes("Rotated box after update_thickness")
+
+
+# ===========================================================================
+# Wireframe placement
+# ===========================================================================
+
+
+func test_clip_preview_places_each_piece_wireframe_on_its_own_bounds():
+	# The box outline is one shared unit mesh now, positioned by the mesh
+	# instance transform. Getting that transform wrong draws the piece in the
+	# wrong place, which the visibility checks above would not notice.
+	_make_brush()
+	clip_preview.show_preview("brush_1", 1, 0.0)
+	var a: Transform3D = clip_preview._piece_a_mesh.transform
+	var b: Transform3D = clip_preview._piece_b_mesh.transform
+	assert_almost_eq(a.origin, Vector3(0, -16, 0), Vector3.ONE * 0.001, "Lower piece centre")
+	assert_almost_eq(a.basis.get_scale(), Vector3(64, 32, 64), Vector3.ONE * 0.001, "Lower size")
+	assert_almost_eq(b.origin, Vector3(0, 16, 0), Vector3.ONE * 0.001, "Upper piece centre")
+	assert_almost_eq(b.basis.get_scale(), Vector3(64, 32, 64), Vector3.ONE * 0.001, "Upper size")
+	assert_not_null(clip_preview._piece_a_mesh.mesh, "The shared outline mesh must be assigned")
+
+
+func test_hollow_preview_places_the_top_wall_wireframe_on_the_wall_bounds():
+	_make_brush()
+	hollow_preview.show_preview("brush_1", 4.0)
+	# Wall 0 is the top slab: full width and depth, thickness tall, pushed up.
+	var t: Transform3D = hollow_preview._mesh_pool[0].transform
+	assert_almost_eq(t.origin, Vector3(0, 30, 0), Vector3.ONE * 0.001, "Top wall centre")
+	assert_almost_eq(t.basis.get_scale(), Vector3(64, 4, 64), Vector3.ONE * 0.001, "Top wall size")
+
+
+func test_preview_wireframes_share_one_outline_mesh():
+	_make_brush()
+	clip_preview.show_preview("brush_1", 1, 0.0)
+	hollow_preview.show_preview("brush_1", 4.0)
+	assert_same(
+		clip_preview._piece_a_mesh.mesh,
+		hollow_preview._mesh_pool[0].mesh,
+		"Every box outline is the same unit mesh, scaled by the instance transform"
+	)

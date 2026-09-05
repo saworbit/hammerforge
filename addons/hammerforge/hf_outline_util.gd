@@ -60,6 +60,17 @@ static func aabb_box_transform(aabb: AABB) -> Transform3D:
 	return Transform3D(Basis.from_scale(aabb.size), aabb.get_center())
 
 
+## One shared unit box outline. Callers scale it onto an AABB with
+## aabb_box_transform() rather than rebuilding a line mesh per box.
+static var _unit_box_mesh: ArrayMesh
+
+
+static func unit_box_line_mesh() -> ArrayMesh:
+	if _unit_box_mesh == null:
+		_unit_box_mesh = line_mesh(box_lines(Vector3.ONE))
+	return _unit_box_mesh
+
+
 static func face_boundary_lines(faces: Array) -> PackedVector3Array:
 	var lines := PackedVector3Array()
 	var seen_edges: Dictionary = {}
