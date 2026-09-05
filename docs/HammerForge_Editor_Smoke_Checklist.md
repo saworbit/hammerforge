@@ -574,9 +574,10 @@ It writes one PNG per tab under `user://console_preview/`.
 - Reopen a legacy scene that contains duplicated anonymous `BakedChunk_*` roots; confirm HammerForge retains the newest populated bake, removes only recognized duplicates, and leaves unrelated anonymous nodes untouched.
 
 ### 33. Grid Size Indicator and Hotkeys
-- With LevelRoot active, confirm the shortcut HUD (top-right) shows "Grid: 16" (or current snap value).
+- With LevelRoot active, confirm the shortcut HUD in the 3D viewport toolbar shows "Grid: 16" (or current snap value).
 - Change the grid snap via the dock SpinBox; confirm the HUD label updates and **flashes** briefly (yellow-white → fade).
 - Press **`]`**; confirm the grid doubles (e.g. 16 → 32) and the HUD flashes.
+- Set the snap to a fractional value (e.g. 0.125 via the dock SpinBox) and confirm the label reads "Grid: 0.125" rather than a format specifier.
 - Press **`[`**; confirm the grid halves (e.g. 32 → 16) and the HUD flashes.
 - Press **`[`** repeatedly until minimum (0.125); confirm it stops halving and displays "Grid: 0.125" exactly (not "0.13").
 - Press **`]`** repeatedly until maximum (512); confirm it stops doubling.

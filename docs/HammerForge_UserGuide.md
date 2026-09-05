@@ -1,15 +1,62 @@
 # HammerForge User Guide
 
-Last updated: September 3, 2026
+Last updated: September 5, 2026
 
 This guide covers the current HammerForge workflow in Godot 4.7: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs.
 
 ## Quick Start
 1. Enable the plugin: Project -> Project Settings -> Plugins -> HammerForge.
-2. Open any 3D scene.
+2. Open any 3D scene. **HammerForge** now appears in the main-screen switcher at the top of the editor, beside 2D, 3D and Script, and the left dock is titled **HammerForge**.
 3. In the empty-state banner, click **Create Starter** to add a `LevelRoot`, floor, sunlight, and player spawn. Use **Create Empty** when you want only the root.
 4. In **Build**, choose **Draw** and drag in the viewport to set the base; click again to set the height.
 5. Open **Test** and click **Test Level (Bake + Play)**. HammerForge checks the spawn, bakes, and launches the playtest.
+
+If anything is not behaving, open the **Console** (the HammerForge entry in the switcher) and read the Status board. It is the fastest way to find out what is wrong and what fixes it.
+
+## HammerForge Console
+
+Open it from **HammerForge** in the main-screen switcher. The overall lamp also sits in the 3D viewport toolbar while you build; clicking it opens the Console.
+
+Three tabs.
+
+### Status
+
+Eight checks, each a red / amber / green lamp with what was measured, what it means, and the one button that resolves it.
+
+| Check | Green | Amber | Red |
+|---|---|---|---|
+| **Level root** | A `LevelRoot` is in the open scene | — | No `LevelRoot`, so every tool is inert — *Create Starter Level* |
+| **Geometry budget** | 50 brushes + entities or fewer | Above 50; bakes get slower | Above 100; dragging starts to stutter |
+| **Bake** | Baked meshes match the drafts | Never baked, or brushes edited since — *Bake Now* | — |
+| **Level check** | Scanned, no faults | 1–5 issues — *Check + Fix* | 6 or more |
+| **Material palette** | Materials loaded | Empty (fine for greyboxing) — *Load Palette* | Empty **and** face-material bake is on |
+| **Player spawn** | At least one spawn point | None, but auto-spawn is on — *Add Spawn Point* | None and auto-spawn is off |
+| **Autosave** | On, and a snapshot exists | Off, or nothing written yet — *Turn On* | — |
+| **Session log** | No warnings | Warnings this session — *Open Log* | Errors this session |
+
+A grey lamp means **not measured yet** — usually because no level is open. It is not a fault.
+
+Every lamp carries a shape as well as a colour (tick, exclamation, cross, dash), so the board reads the same with a red/green colour deficiency. Hover any row for the thresholds behind it. **Needs attention only** hides the checks that are already fine.
+
+The header carries the overall lamp, the live scope line (`Arena · 74 brushes · 9 entities · ~3120 verts · 256 KiB paint`), and when the board was last checked. Counts refresh once a second while the Console is open; the two measurements that walk the whole level refresh on a slower beat or when you press **Re-check**.
+
+### Controls
+
+Every HammerForge switch on one screen, grouped by what it affects:
+
+- **Viewport** — show grid, grid follows brush, shortcut HUD, power-user overlays, I/O connection lines, subtract preview, spawn debug, texture lock, cordon
+- **Bake** — merge meshes, LODs, unwrap UV0, lightmap UV2, face materials, navmesh, visible only, MultiMesh, material atlas, auto connectors, wire I/O, occluders, worker threads, freeze on commit, chunk size
+- **Safety net** — autosave (with interval and backups kept), compress saves, auto-spawn player, debug logging
+
+Each switch is captioned with what it does, and **Find a setting** searches those captions as well as the names, so "pathfinding" finds *Bake navmesh*. Turn **Descriptions** off to fit more on screen; the text stays on the tooltips. A switch with nowhere to write — no level open — is disabled rather than shown at a made-up default.
+
+These are the same settings as **Test → Settings** and **Test → Advanced Bake** in the dock. The Console writes through the dock's own controls, so the two always agree.
+
+### Log
+
+HammerForge's own messages, separate from Godot's Output panel where every addon's output is mixed together. The level buttons show how many of each arrived this session and double as the filter — click **Errors 2** to see just those two. **Follow** keeps the newest line in view, and **Copy** / **Save…** take whatever is currently shown.
+
+A message that repeats collapses to one row with a count (`(x4)`) rather than filling the buffer. The buffer holds the most recent 600 entries; the footer says how many older ones were dropped.
 
 ## Viewport Mouse Controls
 
@@ -622,7 +669,11 @@ For full details, see `docs/HammerForge_Data_Portability.md`.
 For install steps, upgrade guidance, and cache reset help, see `docs/HammerForge_Install_Upgrade.md`.
 
 ## Shortcut HUD
-The on-screen shortcut overlay updates dynamically based on your current tool and mode. Toggle it via the Show HUD checkbox in the Test tab → Settings section. It shows:
+A single-row strip in the 3D viewport toolbar, next to the Console lamp. It updates with your current tool and mode, and shows the **primary line** for that context plus the grid size indicator; the full list for the context is on its tooltip. When a contextual hint is active it takes the row for the four seconds of its fade, because the toolbar is one row high.
+
+Toggle it with **Show HUD** — in the Console's Controls tab, or in the dock under Test → Settings.
+
+The contexts and what their full lists cover:
 
 | Context | Shortcuts Shown |
 |---------|----------------|
@@ -638,7 +689,9 @@ The on-screen shortcut overlay updates dynamically based on your current tool an
 | Polygon Tool | Click to place verts, Enter: close, Escape: remove last |
 | Path Tool | Click to place waypoints, Enter: finalize, Escape: remove last |
 
-The HUD also shows current axis lock state (e.g. "[X Locked]").
+The HUD also shows current axis lock state (e.g. "[X Locked]"), and a **Grid: N** indicator that flashes when the snap changes. Fractional snaps display exactly (`Grid: 0.125`).
+
+The full list is also available two other ways: the searchable shortcut dialog (**?** button in the dock toolbar) and the command palette (**Ctrl+K**).
 
 ## Customizable Keyboard Shortcuts
 
