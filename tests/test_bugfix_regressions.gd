@@ -719,11 +719,11 @@ func test_native_rmb_camera_session_owns_all_input_until_release():
 		)
 		assert_true(session.active)
 
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
-	var shortcut_start := source.find("func _shortcut_input")
-	var shortcut_end := source.find("func _cancel_escape_step", shortcut_start)
+	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_shortcuts.gd")
+	var shortcut_start := source.find("static func handle")
+	var shortcut_end := source.find("static func _claim", shortcut_start)
 	var shortcut := source.substr(shortcut_start, shortcut_end - shortcut_start)
-	var camera_guard := shortcut.find("if _rmb_camera_navigation.active:")
+	var camera_guard := shortcut.find("if plugin._rmb_camera_navigation.active:")
 	assert_gte(camera_guard, 0)
 	assert_lt(
 		camera_guard,
@@ -732,7 +732,7 @@ func test_native_rmb_camera_session_owns_all_input_until_release():
 	)
 	assert_lt(
 		camera_guard,
-		shortcut.find("var nudge_guard"),
+		shortcut.find('_claim(plugin, root, "Nudge")'),
 		"RMB camera ownership must preempt HammerForge Ctrl+Arrow nudge",
 	)
 
@@ -876,23 +876,37 @@ func test_nudge_keys_respect_selection_ownership_before_being_consumed():
 	)
 	assert_true(keyboard_branch.contains("return STOP"))
 
-	var shortcut_start := source.find("func _shortcut_input")
-	var shortcut_end := source.find("func _cancel_escape_step", shortcut_start)
-	var shortcut_branch := source.substr(shortcut_start, shortcut_end - shortcut_start)
-	assert_true(shortcut_branch.contains("should_yield_global_shortcut_to_focus"))
+	var shortcut_source := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_shortcuts.gd"
+	)
+	var shortcut_start := shortcut_source.find("static func handle")
+	var shortcut_end := shortcut_source.find("static func _claim", shortcut_start)
+	var shortcut_branch := shortcut_source.substr(shortcut_start, shortcut_end - shortcut_start)
+	assert_true(shortcut_branch.contains("should_yield_to_focus"))
 	assert_false(shortcut_branch.contains("event.accept()"))
-	assert_true(shortcut_branch.contains("_mark_shortcut_input_handled()"))
-	assert_true(source.contains("viewport.set_input_as_handled()"))
+	assert_true(shortcut_source.contains("viewport.set_input_as_handled()"))
 	assert_true(shortcut_branch.contains('_keymap.matches("delete", event)'))
 	assert_true(shortcut_branch.contains('_keymap.matches("duplicate", event)'))
-	assert_true(
-		shortcut_branch.contains('_guard_hammerforge_shortcut(root, false, 1, "Nudge")'),
-		"Global Ctrl+nudge must use the same ownership guard",
-	)
+	# Delete, Duplicate and Nudge share one guard helper, so the ownership check
+	# and the consume-either-way rule are asserted once, where they now live.
+	for action in ["Delete", "Duplicate", "Nudge"]:
+		assert_true(
+			shortcut_branch.contains('_claim(plugin, root, "%s")' % action),
+			"%s must classify selection ownership before running" % action,
+		)
 	assert_lt(
-		shortcut_branch.find("nudge_guard"), shortcut_branch.find("_nudge_selected(root, nudge)")
+		shortcut_branch.find('_claim(plugin, root, "Nudge")'),
+		shortcut_branch.find("plugin._nudge_selected(root, nudge)"),
+		"The guard must be asked before the command runs",
 	)
-	assert_true(shortcut_branch.contains("elif nudge_guard == EditorPlugin.AFTER_GUI_INPUT_STOP:"))
+	var claim_start := shortcut_source.find("static func _claim")
+	var claim := shortcut_source.substr(claim_start, shortcut_source.find("
+static func mark_handled") - claim_start)
+	assert_true(claim.contains("_guard_hammerforge_shortcut(root, false, 1, action)"))
+	assert_true(
+		claim.contains("guard == SHORTCUT_APPLY or guard == STOP"),
+		"A claimed shortcut must be consumed even when the command does not run",
+	)
 
 	var edit_source := FileAccess.get_file_as_string(
 		"res://addons/hammerforge/plugin_edit_actions.gd"

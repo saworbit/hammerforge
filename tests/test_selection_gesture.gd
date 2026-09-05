@@ -468,15 +468,22 @@ func test_face_select_is_modal_and_hides_ambiguous_object_gizmos() -> void:
 		)
 	)
 
-	var handler_start := plugin_source.find("func _on_face_select_mode_toggled")
-	var handler_end := plugin_source.find("func _on_dock_selection_clear", handler_start)
-	var handler := plugin_source.substr(handler_start, handler_end - handler_start)
+	var modes_source := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_tool_modes.gd"
+	)
+	var handler_start := modes_source.find("static func on_face_select_mode_toggled")
+	var handler_end := modes_source.find("static func close_face_select", handler_start)
+	var handler := modes_source.substr(handler_start, handler_end - handler_start)
 	assert_true(handler.contains("_face_mode_saved_object_selection"))
 	assert_true(handler.contains("hf_selection.clear()"))
 	assert_true(handler.contains("_apply_hf_selection(selection)"))
 	assert_true(handler.contains("dock.tool_select.set_pressed_no_signal(true)"))
 	assert_true(handler.contains("dock.paint_mode.set_pressed_no_signal(false)"))
-	assert_true(handler.contains("_deactivate_external_tool()"))
+	assert_true(handler.contains("deactivate_external(plugin)"))
+	assert_true(
+		plugin_source.contains("HFPluginToolModes.on_face_select_mode_toggled(self, enabled)"),
+		"The dock signal must still reach the mode owner",
+	)
 
 	var state_source := FileAccess.get_file_as_string(
 		"res://addons/hammerforge/plugin_selection_state.gd"
@@ -613,10 +620,17 @@ func test_managed_shortcuts_share_the_native_and_mixed_selection_guard() -> void
 		assert_true(keyboard.contains(action), "%s must be ownership-gated" % action)
 	assert_true(state_source.contains("Edit HammerForge and Godot nodes separately"))
 
-	var shortcut_start := source.find("func _shortcut_input")
-	var shortcut_end := source.find("func _cancel_escape_step", shortcut_start)
-	var shortcut := source.substr(shortcut_start, shortcut_end - shortcut_start)
-	assert_true(shortcut.contains('_guard_hammerforge_shortcut(root, false, 1, "Nudge")'))
+	var shortcut_source := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_shortcuts.gd"
+	)
+	var shortcut_start := shortcut_source.find("static func handle")
+	var shortcut_end := shortcut_source.find("static func _claim", shortcut_start)
+	var shortcut := shortcut_source.substr(shortcut_start, shortcut_end - shortcut_start)
+	assert_true(shortcut.contains('_claim(plugin, root, "Nudge")'))
+	assert_true(
+		shortcut_source.contains("_guard_hammerforge_shortcut(root, false, 1, action)"),
+		"The shared scope guard still gates the global shortcuts",
+	)
 	assert_true(shortcut.contains("_brush_gizmo_action_active()"))
 	assert_true(shortcut.contains("_selection_gesture.should_yield_cancel_to_native()"))
 	assert_lt(
@@ -651,11 +665,14 @@ func test_every_managed_action_surface_uses_the_shared_scope_guard() -> void:
 			block.contains("_managed_action_surface_allowed(root, action)"),
 			"%s must reject mixed selection before dispatch" % method_name,
 		)
-	var material_start := source.find("func _on_context_material_apply")
-	var material_end := source.find("\nfunc ", material_start + 1)
-	var material_block := source.substr(material_start, material_end - material_start)
+	var material_source := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_material_commands.gd"
+	)
+	var material_start := material_source.find("static func apply_context_material")
+	var material_block := material_source.substr(material_start)
 	assert_true(
-		material_block.contains('_managed_action_surface_allowed(root, "apply_context_material")')
+		material_block.contains('_managed_action_surface_allowed(root, "apply_context_material")'),
+		"The context toolbar swatches go through the same scope guard",
 	)
 
 
@@ -685,9 +702,16 @@ func test_focus_loss_cancels_transient_pointer_ownership() -> void:
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
 	var notify_start := source.find("func _notification")
 	var enter_start := source.find("func _enter_tree", notify_start)
-	var focus_block := source.substr(notify_start, enter_start - notify_start)
-	assert_true(focus_block.contains("NOTIFICATION_APPLICATION_FOCUS_OUT"))
-	assert_true(focus_block.contains("NOTIFICATION_WM_WINDOW_FOCUS_OUT"))
+	var notify_block := source.substr(notify_start, enter_start - notify_start)
+	assert_true(notify_block.contains("NOTIFICATION_APPLICATION_FOCUS_OUT"))
+	assert_true(notify_block.contains("NOTIFICATION_WM_WINDOW_FOCUS_OUT"))
+
+	var recovery_source := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_gesture_recovery.gd"
+	)
+	var focus_start := recovery_source.find("static func after_application_focus_loss")
+	var focus_end := recovery_source.find("static func finish_stale_paint_strokes", focus_start)
+	var focus_block := recovery_source.substr(focus_start, focus_end - focus_start)
 	assert_true(focus_block.contains("_rmb_camera_navigation.active = false"))
 	assert_false(
 		focus_block.contains("cancel_active_handle_action"),
@@ -697,9 +721,9 @@ func test_focus_loss_cancels_transient_pointer_ownership() -> void:
 	assert_true(focus_block.contains("_tool_registry.cancel_active_pointer_capture()"))
 	assert_true(focus_block.contains("_prepare_tool_transition(root, false, false)"))
 
-	var recovery_start := source.find("func _recover_stale_lmb_gestures")
-	var recovery_end := source.find("func _handle_rmb_cancel", recovery_start)
-	var recovery_block := source.substr(recovery_start, recovery_end - recovery_start)
+	var recovery_start := recovery_source.find("static func recover_stale_lmb_gestures")
+	var recovery_end := recovery_source.find("static func handle_rmb_cancel", recovery_start)
+	var recovery_block := recovery_source.substr(recovery_start, recovery_end - recovery_start)
 	assert_true(recovery_block.contains("_tool_registry.recover_active_pointer_capture()"))
 
 	var selection_source := FileAccess.get_file_as_string(

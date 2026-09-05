@@ -291,11 +291,20 @@ func test_specialized_face_tools_use_the_canonical_visibility_aware_picker() -> 
 	assert_true(object_hover_block.contains("brush.global_transform"))
 	assert_false(object_hover_block.contains("aabb_box_transform"))
 
-	var picker_start := plugin_source.find("func _pick_face_material")
-	var picker_end := plugin_source.find("func _apply_last_texture", picker_start)
-	var picker_block := plugin_source.substr(picker_start, picker_end - picker_start)
-	assert_true(picker_block.contains("root.pick_face(cam, pos)"))
+	var material_source := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_material_commands.gd"
+	)
+	var picker_start := material_source.find("static func pick_face_material")
+	var picker_end := material_source.find("static func apply_context_material", picker_start)
+	var picker_block := material_source.substr(picker_start, picker_end - picker_start)
+	assert_true(
+		picker_block.contains("root.pick_face(plugin.last_3d_camera, plugin.last_3d_mouse_pos)")
+	)
 	assert_false(picker_block.contains("FaceSelector.intersect_brushes"))
+	assert_true(
+		plugin_source.contains("HFPluginMaterialCommands.pick_face_material(self, root)"),
+		"The viewport still reaches the picker through the plugin",
+	)
 
 	var drop_source := FileAccess.get_file_as_string(
 		"res://addons/hammerforge/plugin_drop_handler.gd"

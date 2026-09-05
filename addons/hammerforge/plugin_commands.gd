@@ -6,6 +6,47 @@ extends RefCounted
 
 const LevelRootType = preload("level_root.gd")
 
+
+## Actions in this list operate on LevelRoot-owned state or scene content. They
+## require an existing level, but must not create one as a side effect of using
+## the command palette. Level creation is reserved for explicit setup actions
+## and the first intentional Draw press in the viewport.
+static func requires_existing_root(action: String) -> bool:
+	return (
+		action
+		in [
+			"quick_play",
+			"validate_level",
+			"select_all",
+			"deselect_all",
+			"delete",
+			"duplicate",
+			"group",
+			"ungroup",
+			"hollow",
+			"clip",
+			"carve",
+			"merge",
+			"move_to_floor",
+			"move_to_ceiling",
+			"vertex_edit",
+			"texture_picker",
+			"grid_decrease",
+			"grid_increase",
+			"vertex_edge_mode",
+			"vertex_merge",
+			"vertex_split_edge",
+			"vertex_clip_convex",
+			"axis_x",
+			"axis_y",
+			"axis_z",
+			"select_similar",
+			"apply_last_texture",
+			"context_menu",
+		]
+	)
+
+
 const TOOL_SWITCH_ACTIONS := [
 	"tool_draw",
 	"tool_select",
