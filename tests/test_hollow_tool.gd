@@ -155,6 +155,32 @@ func test_hollow_accepts_valid_thickness():
 	assert_eq(children.size(), 6, "Should accept valid thickness")
 
 
+func test_hollow_rejects_non_box_shape():
+	# Hollow builds 6 axis-aligned slabs. A cylinder must not be swapped for them.
+	var b = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
+	b.shape = root.BrushShape.CYLINDER
+	var result = sys.hollow_brush_by_id("brush_1", 4.0)
+	assert_false(result.ok, "Hollow should reject a cylinder")
+	assert_true(is_instance_valid(b), "The cylinder must survive a rejected hollow")
+	assert_eq(root.draft_brushes_node.get_child_count(), 1, "No wall brushes should be created")
+
+
+func test_can_hollow_brush_rejects_non_box_shape():
+	var b = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
+	b.shape = root.BrushShape.SPHERE
+	assert_false(sys.can_hollow_brush("brush_1", 4.0).ok, "Pre-check should reject a sphere")
+
+
+func test_hollow_rejects_rotated_box():
+	# Bounds are read straight off global_position and size, which is a lie once
+	# the brush is turned.
+	var b = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
+	b.rotation_degrees = Vector3(0, 45, 0)
+	var result = sys.hollow_brush_by_id("brush_1", 4.0)
+	assert_false(result.ok, "Hollow should reject a rotated box")
+	assert_true(is_instance_valid(b), "The rotated box must survive a rejected hollow")
+
+
 func test_hollow_empty_id_noop():
 	_make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
 	sys.hollow_brush_by_id("", 2.0)

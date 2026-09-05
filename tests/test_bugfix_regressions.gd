@@ -368,6 +368,12 @@ func test_carve_thin_overlap_single_axis_produces_no_pieces():
 
 	# The target survives (thin overlap is rejected via OR guard)
 	assert_true(is_instance_valid(b), "Target should survive thin overlap")
+	# Nothing was cut, so the carver must not be eaten either.
+	assert_false(result.ok, "Carving nothing should report failure")
+	assert_true(is_instance_valid(a), "Carver should survive when nothing is carved")
+	assert_eq(
+		draft_node.get_child_count(), child_count_before, "No brushes should be added or removed"
+	)
 
 
 # ===========================================================================

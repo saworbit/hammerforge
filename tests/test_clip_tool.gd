@@ -182,6 +182,32 @@ func test_clip_on_edge_is_rejected():
 	assert_not_null(sys.find_brush_by_id("brush_1"), "Clip on brush edge should be rejected")
 
 
+func test_clip_rejects_non_box_shape():
+	# Clip builds two axis-aligned boxes. A wedge must not be swapped for them.
+	var b = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
+	b.shape = root.BrushShape.WEDGE
+	var result = sys.clip_brush_by_id("brush_1", 1, 0.0)
+	assert_false(result.ok, "Clip should reject a wedge")
+	assert_true(is_instance_valid(b), "The wedge must survive a rejected clip")
+	assert_eq(root.draft_brushes_node.get_child_count(), 1, "No clip pieces should be created")
+
+
+func test_can_clip_brush_rejects_non_box_shape():
+	var b = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
+	b.shape = root.BrushShape.CAPSULE
+	assert_false(sys.can_clip_brush("brush_1", 1, 0.0).ok, "Pre-check should reject a capsule")
+
+
+func test_clip_rejects_rotated_box():
+	# The split plane is computed in world space, so a turned box would come back
+	# as two unrotated pieces that do not match what the user had.
+	var b = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
+	b.rotation_degrees = Vector3(0, 30, 0)
+	var result = sys.clip_brush_by_id("brush_1", 1, 0.0)
+	assert_false(result.ok, "Clip should reject a rotated box")
+	assert_true(is_instance_valid(b), "The rotated box must survive a rejected clip")
+
+
 func test_clip_empty_id_noop():
 	_make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
 	sys.clip_brush_by_id("", 1, 0.0)
