@@ -8,6 +8,7 @@ const HFPluginEditActions = preload("plugin_edit_actions.gd")
 const HFPluginInputRouter = preload("plugin_input_router.gd")
 const HFPluginNumericInput = preload("plugin_numeric_input.gd")
 const HFPluginVertexInput = preload("plugin_vertex_input.gd")
+const HFPluginVertexOps = preload("plugin_vertex_ops.gd")
 const HFPluginHud = preload("plugin_hud.gd")
 const HFPluginViewportInput = preload("plugin_viewport_input.gd")
 const HFPluginOverlays = preload("plugin_overlays.gd")
@@ -1127,68 +1128,19 @@ func _update_prefab_hover_overlay(root, cam: Camera3D, pos: Vector2) -> void:
 
 
 func _toggle_vertex_mode(root: Node) -> void:
-	var enabling := not _vertex_mode
-	if enabling:
-		_close_face_select_mode("Face Select closed for vertex editing")
-	_prepare_tool_transition(root)
-	if enabling and dock and dock.paint_mode and dock.paint_mode.button_pressed:
-		dock.highlight_tab("Brush")
-	_vertex_mode = enabling
-	if _vertex_mode:
-		_deactivate_external_tool()
-		if root and root.vertex_system:
-			root.vertex_system.clear_selection()
-			# Pass current brush selection
-			var brushes: Array = []
-			for node in hf_selection:
-				if node is DraftBrush:
-					brushes.append(node)
-			root.vertex_system.set_selection(brushes)
-			root.input_state.begin_vertex_edit()
-	else:
-		if root and root.vertex_system:
-			if _vertex_drag_active:
-				root.vertex_system.cancel_drag()
-				_vertex_drag_active = false
-			root.vertex_system.clear_selection()
-			root.input_state.end_vertex_edit()
-		_clear_vertex_overlay()
-	if dock:
-		dock.set_vertex_mode(_vertex_mode)
-	_update_hud_context()
+	HFPluginVertexOps.toggle_mode(self, root)
 
 
 func _vertex_merge_selected(root: Node) -> void:
-	var vs = root.vertex_system
-	if not vs:
-		return
-	for brush_id in vs.selected_vertices:
-		var indices: PackedInt32Array = vs.selected_vertices[brush_id]
-		if indices.size() >= 2:
-			vs.merge_vertices(brush_id, indices)
+	HFPluginVertexOps.merge_selected(root)
 
 
 func _vertex_split_selected_edge(root: Node) -> void:
-	var vs = root.vertex_system
-	if not vs:
-		return
-	var sel: Array = vs.get_single_selected_edge()
-	if sel.size() == 2:
-		vs.split_edge(sel[0], sel[1])
+	HFPluginVertexOps.split_selected_edge(root)
 
 
 func _vertex_clip_to_convex(root: Node) -> void:
-	var vs = root.vertex_system
-	if not vs:
-		return
-	var clipped := false
-	for brush_id in vs.selected_vertices:
-		if vs.clip_to_convex(brush_id):
-			clipped = true
-	if clipped:
-		root.emit_signal("user_message", "Clipped to convex hull", 0)
-	else:
-		root.emit_signal("user_message", "Brush is already convex", 0)
+	HFPluginVertexOps.clip_to_convex(root)
 
 
 func _handle_vertex_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vector2) -> int:
@@ -1196,47 +1148,11 @@ func _handle_vertex_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vec
 
 
 func _commit_vertex_op(root: Node, pre_op_snapshots: Dictionary, action_name: String) -> void:
-	if not undo_redo_manager:
-		return
-	var post_state: Dictionary = {}
-	for brush_id in pre_op_snapshots:
-		var brush = root.brush_system.find_brush_by_id(brush_id) if root.brush_system else null
-		if brush and brush.get("faces"):
-			var current: Array = []
-			for face in brush.faces:
-				if face:
-					current.append(face.to_dict())
-			post_state[brush_id] = current
-	undo_redo_manager.create_action(action_name, 0, null, false)
-	undo_redo_manager.add_do_method(root, "_apply_vertex_faces", post_state)
-	undo_redo_manager.add_undo_method(root, "_apply_vertex_faces", pre_op_snapshots)
-	undo_redo_manager.commit_action()
-	_record_history(action_name)
+	HFPluginVertexOps.commit_op(self, root, pre_op_snapshots, action_name)
 
 
 func _commit_vertex_move(root: Node, pre_drag_snapshots: Dictionary) -> void:
-	if not undo_redo_manager:
-		return
-	# Capture current (post-move) face state as the "do" state
-	var post_state: Dictionary = {}
-	for brush_id in pre_drag_snapshots:
-		var brush = root.brush_system.find_brush_by_id(brush_id) if root.brush_system else null
-		if brush and brush.get("faces"):
-			var current: Array = []
-			for face in brush.faces:
-				if face:
-					current.append(face.to_dict())
-			post_state[brush_id] = current
-
-	# We must NOT use HFUndoHelper.commit() here because it captures undo
-	# state at commit time (post-move), which would replay the move on undo
-	# instead of reverting it.  Instead, wire undo/redo manually using the
-	# pre-drag snapshots we saved before the drag began.
-	undo_redo_manager.create_action("Move Vertices", 0, null, false)
-	undo_redo_manager.add_do_method(root, "_apply_vertex_faces", post_state)
-	undo_redo_manager.add_undo_method(root, "_apply_vertex_faces", pre_drag_snapshots)
-	undo_redo_manager.commit_action()
-	_record_history("Move Vertices")
+	HFPluginVertexOps.commit_move(self, root, pre_drag_snapshots)
 
 
 func _update_vertex_overlay(root: Node, _cam: Camera3D) -> void:
