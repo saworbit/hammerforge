@@ -338,6 +338,16 @@ func record_validation(issues: Array) -> void:
 	refresh(false)
 
 
+## The board's headline without drawing anything, for the viewport strip. Kept
+## here rather than in the strip so both read the same evaluation.
+func compute_summary() -> Dictionary:
+	var root = _dock.get("level_root") if _dock != null and is_instance_valid(_dock) else null
+	if root != null and not is_instance_valid(root):
+		root = null
+	var ctx := HFStatusBoardType.collect_context(root, _log, _cached, false)
+	return HFStatusBoardType.summarise(HFStatusBoardType.evaluate(ctx))
+
+
 func show_tab(tab: int) -> void:
 	if _tabs and tab >= 0 and tab < _tabs.get_tab_count():
 		_tabs.current_tab = tab

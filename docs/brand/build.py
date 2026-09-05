@@ -250,6 +250,13 @@ for n, mk, col in [("hf_lockup_light.svg", LIGHT, TWO),
     open(f"{ADDON}/{n}", "w", encoding="utf-8").write(
         svg(1200, 200, fit(lockup(mk, col), 1200, 200, 14)[0]))
 
+# The main-screen switcher draws a plugin icon at its own texture size, so this
+# one is authored at 32 to sit level with 2D / 3D / Script rather than towering
+# over them. Master weight: it is displayed well above the 20px where the
+# compact weight belongs.
+open(f"{ADDON}/hf_mark_editor.svg", "w", encoding="utf-8").write(
+    svg(32, 32, fit(ALLRED, 32, 32, 2)[0]))
+
 sc = 3.2
 stacked = scale_group(MONO, sc, dx=(WMW - 100 * sc) / 2) + \
     scale_group(wm_mono, 1.0, dy=MARK_H * sc + 14)

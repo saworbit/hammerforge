@@ -29,10 +29,11 @@ const HFPathToolType = preload("hf_path_tool.gd")
 const HFSelectionGestureType = preload("hf_selection_gesture.gd")
 const HFBrushChangeTrackerType = preload("hf_brush_change_tracker.gd")
 var dock: DockType
-## The editor bottom panel and the button that opens it. Optional surface: if
-## the editor refuses either, the rest of the plugin carries on without them.
+## The Console main screen and the lamp that opens it from the 3D toolbar.
+## Optional surface: if the editor refuses either, the rest of the plugin
+## carries on without them.
 var console_panel: Control = null
-var console_button: Button = null
+var console_strip: Control = null
 var hud: Control
 var base_control: Control
 var active_root: LevelRoot = null
@@ -419,6 +420,32 @@ func _exit_tree():
 ## HFPluginConsole.handle_action.
 func _on_console_action(action_id: String) -> void:
 	HFPluginConsoleType.handle_action(self, action_id)
+
+
+## The viewport lamp was clicked.
+func _on_console_requested() -> void:
+	HFPluginConsoleType.open_console()
+
+
+# HammerForge takes a place in the main-screen switcher beside 2D, 3D and
+# Script. That row is the one part of the editor chrome that draws a plugin's
+# own icon, and it is where a Godot user looks for an installed addon.
+
+
+func _has_main_screen() -> bool:
+	return true
+
+
+func _get_plugin_name() -> String:
+	return "HammerForge"
+
+
+func _get_plugin_icon() -> Texture2D:
+	return HFPluginConsoleType.plugin_icon()
+
+
+func _make_visible(visible: bool) -> void:
+	HFPluginConsoleType.set_console_visible(self, visible)
 
 
 func _reapply_console_icons() -> void:

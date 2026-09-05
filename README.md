@@ -46,7 +46,7 @@ HammerForge is a single `addons/` folder. No external tools, no custom builds, n
 | **Quake `.map`** + **glTF `.glb`** export | **.hflevel** native format with threaded I/O |
 | **Customizable keymaps** (JSON) | **Plugin API** for custom tools |
 | **Dark/light theme sync** across all custom UI | **Performance health monitor** with recommendations |
-| **Bottom-panel Console** -- RAG status board, every toggle, live log | **Branded** -- the mark on the panel button and the dock tab |
+| **HammerForge Console** -- RAG status board, every toggle, live log | **Main-screen entry** -- the mark beside 2D, 3D and Script |
 
 ---
 
@@ -215,9 +215,10 @@ Turn on **Test → Settings → Power-user overlays** for the radial menu, coach
 
 ### The HammerForge Console
 
-Open it from the **HammerForge** button in Godot's bottom panel — the one wearing
-the HammerForge mark, beside Output and Debugger. It is the addon's front door,
-and it answers three questions without you having to go looking:
+Open it from **HammerForge** in the main-screen switcher at the top of the
+editor, beside 2D, 3D and Script, wearing the HammerForge mark. It is the
+addon's front door, and it answers three questions without you having to go
+looking:
 
 - **Status** — a red / amber / green board of eight checks, each one saying what
   was measured, what the threshold is, and offering the single button that
@@ -240,6 +241,11 @@ The header carries the overall lamp, the live scope line
 (`Arena · 74 brushes · 9 entities · ~3120 verts · 256 KiB paint`) and when the
 board was last checked. Counts refresh once a second while the panel is open;
 the two reads that walk the whole level go on a slower beat, or on **Re-check**.
+
+Because the Console is a screen of its own, the same lamp also sits in the **3D
+viewport toolbar** with the one-line summary beside it — so the answer to "is
+anything wrong" is visible while you are building, and clicking it opens the
+board that explains why.
 
 ### The dock
 

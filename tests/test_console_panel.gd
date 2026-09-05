@@ -14,6 +14,7 @@ const HFStatusLampType = preload("res://addons/hammerforge/ui/hf_status_lamp.gd"
 const HFStatusBoardType = preload("res://addons/hammerforge/hf_status_board.gd")
 const HFConsoleLogType = preload("res://addons/hammerforge/hf_console_log.gd")
 const HFPluginConsoleType = preload("res://addons/hammerforge/plugin_console.gd")
+const HFStatusStripType = preload("res://addons/hammerforge/ui/hf_status_strip.gd")
 
 
 func after_each():
@@ -427,7 +428,7 @@ func test_console_uses_the_repo_brand_assets():
 	assert_true(ResourceLoader.exists(HFConsolePanelType.LOCKUP_LIGHT))
 	assert_true(
 		ResourceLoader.exists(HFPluginConsoleType.ICON_PATH),
-		"The bottom-panel button wears the HammerForge mark"
+		"The dock tab and the custom node types wear the HammerForge mark"
 	)
 
 
@@ -548,8 +549,69 @@ func test_open_log_from_a_quiet_row_leaves_the_filter_alone():
 	)
 
 
-func test_bottom_panel_button_is_labelled_as_well_as_iconed():
-	# Godot hands the button back with no text of its own, and an icon-only
-	# button in a row of named panels is the one nobody finds.
+func test_plugin_declares_a_main_screen():
+	# The main-screen switcher is the one row of the editor chrome that draws a
+	# plugin icon at all. Godot 4.7 bottom panel is text-only, and a docked
+	# control icon lives on the EditorDock wrapper.
+	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
+	assert_string_contains(source, "func _has_main_screen()")
+	assert_string_contains(source, "func _get_plugin_icon()")
+	assert_string_contains(source, "func _get_plugin_name()")
+	assert_string_contains(source, "func _make_visible(")
+
+
+func test_console_fills_the_main_screen():
+	# The main screen is a box container, so a child without expand flags gets
+	# its minimum height and the status board collapses to a strip.
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_console.gd")
-	assert_string_contains(source, "button.text = PANEL_TITLE")
+	assert_string_contains(source, "panel.size_flags_vertical = Control.SIZE_EXPAND_FILL")
+
+
+func test_dock_tab_icon_is_forced_on_the_editor_dock_wrapper():
+	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_console.gd")
+	assert_string_contains(source, "force_show_icon = true")
+
+
+func test_switcher_icon_is_authored_at_the_size_the_switcher_draws():
+	# A 64px source renders at 64px in that row and lifts the whole top bar.
+	assert_true(ResourceLoader.exists(HFPluginConsoleType.EDITOR_ICON_PATH))
+	var texture: Texture2D = load(HFPluginConsoleType.EDITOR_ICON_PATH)
+	assert_eq(texture.get_width(), 32, "The other addons in this editor use 32")
+	assert_eq(texture.get_height(), 32)
+
+
+# --- viewport strip ------------------------------------------------------
+
+
+func test_strip_reads_its_summary_from_the_console():
+	var panel := _panel()
+	var strip = HFStatusStripType.new()
+	add_child_autofree(strip)
+	strip.set_source(panel)
+	assert_eq(strip._lamp.severity, panel.compute_summary()["severity"])
+	assert_eq(strip._button.text, str(panel.compute_summary()["label"]))
+
+
+func test_strip_is_safe_without_a_source():
+	var strip = HFStatusStripType.new()
+	add_child_autofree(strip)
+	strip.refresh()
+	strip.set_source(null)
+	strip.refresh()
+	pass_test("The lamp is built before the Console it reads from")
+
+
+func test_strip_asks_for_the_console_when_pressed():
+	var strip = HFStatusStripType.new()
+	add_child_autofree(strip)
+	watch_signals(strip)
+	strip._button.pressed.emit()
+	assert_signal_emitted(strip, "console_requested")
+
+
+func test_strip_tooltip_breaks_the_summary_down():
+	var panel := _panel()
+	var strip = HFStatusStripType.new()
+	add_child_autofree(strip)
+	strip.set_source(panel)
+	assert_string_contains(strip._button.tooltip_text, "Click to open the Console")

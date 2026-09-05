@@ -48,10 +48,11 @@ Enable the HammerForge plugin if it is not already enabled.
 
 ## Checklist
 
-### 0a. HammerForge Console (bottom panel)
-- Confirm a **HammerForge** button sits in the bottom panel beside Output and Debugger, wearing the HammerForge mark.
+### 0a. HammerForge Console (main screen)
+- Confirm **HammerForge** sits in the main-screen switcher at the top, beside 2D / 3D / Script, wearing the HammerForge mark, and that the mark is the same height as the other entries rather than lifting the toolbar.
 - Confirm the left dock's tab reads **HammerForge**, not "Dock", and wears the same mark.
-- Open the Console. Confirm the header shows the HammerForge lockup, the version, one lamp, and a summary line.
+- Confirm a lamp and a one-line summary sit in the 3D viewport toolbar, and that clicking it opens the Console.
+- Open the Console. Confirm the header shows the HammerForge lockup, the version, one lamp, and a summary line, and that the status board fills the screen rather than collapsing to a strip.
 - With no `LevelRoot` in the scene: confirm **Level root** is red and offers **Create Starter Level**; confirm the other level checks are grey ("Not measured yet"), not red.
 - Press **Create Starter Level**. Confirm the row turns green, names the node, and the scope line fills in with brush and entity counts.
 - Confirm each amber and red row carries a coloured left edge and a sentence naming the consequence, and that hovering any part of a row shows a tooltip naming the severity and the threshold.
@@ -65,8 +66,8 @@ Enable the HammerForge plugin if it is not already enabled.
 - Click a level count button to filter, then use the text filter. Confirm **Showing N of M retained** tracks both.
 - Press **Copy**, paste elsewhere, and confirm only the visible lines came across. Press **Save…** and confirm the file matches.
 - Switch the editor between light and dark themes. Confirm the lockup swaps, the lamps stay legible, and the mark stays on both the panel button and the dock tab.
-- Collapse the bottom panel and leave the editor idle. Confirm the profiler shows no per-second HammerForge work while it is closed.
-- Disable and re-enable the plugin. Confirm the button and the dock tab icon come back, and nothing is left behind.
+- Switch to the 3D screen and leave the editor idle. Confirm the profiler shows no per-second Console work while it is off screen, and that the viewport lamp still tracks the level on its own slower beat.
+- Disable and re-enable the plugin. Confirm the switcher entry, the viewport lamp and the dock tab icon all come back, and nothing is left behind.
 
 To judge a Console layout change without opening the editor:
 

@@ -5,8 +5,9 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
-- **The HammerForge Console** — a bottom-panel dashboard, and the addon's front
-  door. Three tabs: **Status**, a red / amber / green board of eight checks
+- **The HammerForge Console** — a dashboard on its own main screen, opened from
+  the switcher at the top of the editor beside 2D, 3D and Script, and the
+  addon's front door. Three tabs: **Status**, a red / amber / green board of eight checks
   (level root, geometry budget, bake freshness, level check, material palette,
   player spawn, autosave, session log) where each lamp is accompanied by what was
   measured, the threshold it is measured against, and the one button that
@@ -25,16 +26,26 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 - **Console preview harness** (`tools/hf_console_preview.gd`): renders the three
   tabs to PNGs so a layout change can be judged without opening the editor.
 
+- **A status lamp in the 3D viewport toolbar** (`ui/hf_status_strip.gd`): the
+  Console's overall severity and one-line summary, beside the work rather than
+  on the screen you switched away from, and a click away from the board that
+  explains it. It reads the Console's own evaluation, so the two cannot disagree.
+
 ### Changed
-- **HammerForge is findable in the editor.** The left dock's tab said "Dock" and
-  carried no icon; it now says **HammerForge** and wears the mark, via
-  `EditorPlugin.set_dock_tab_icon()`. The bottom-panel button wears it too.
+- **HammerForge is findable in the editor.** It now takes a place in the
+  main-screen switcher with its own mark — the one row of the editor chrome that
+  draws a plugin icon at all. Godot 4.7's bottom panel is text-only, and a docked
+  control's icon lives on the `EditorDock` wrapper, which needs `force_show_icon`
+  before it will draw. The left dock tab said "Dock" and carried no icon; it now
+  says **HammerForge** and wears the mark.
 - **`HFLog.warn()` mirrors to the Console** through an optional sink, and
   `LevelRoot`'s `user_message` signal now reaches the Log tab as well as a toast
   — toasts fade, and a failed bake could not be reconstructed afterwards.
 - **The brand build emits the addon's lockups.** `docs/brand/build.py` now writes
-  `addons/hammerforge/branding/hf_lockup_{dark,light}.svg` alongside the rest, so
-  the Console's header cannot drift from the brand set. `docs/brand/png/*.import`
+  `addons/hammerforge/branding/hf_lockup_{dark,light}.svg` and the 32px
+  `hf_mark_editor.svg` the switcher draws, alongside the rest, so nothing the
+  editor shows can drift from the brand set. The switcher renders a plugin icon
+  at its texture size, so a 64px mark lifted the whole top bar. `docs/brand/png/*.import`
   is now ignored rather than reappearing untracked after every project import.
 
 
