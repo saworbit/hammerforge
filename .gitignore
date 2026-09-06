@@ -71,3 +71,4 @@ docs/brand/svg/*.import
 
 # MkDocs build output
 .site/
+.docshot-backup/

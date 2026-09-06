@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{#
+  Link-preview metadata.
+
+  Without this, pasting a docs link into Reddit, Discord or Slack renders a bare
+  URL: no image, no description. The brand already ships a social preview, so
+  the only thing missing was pointing at it.
+
+  Material's own `social` plugin generates per-page cards but needs Cairo and
+  Pillow in CI; a static card is enough here and costs nothing to build.
+#}
+{% block extrahead %}
+  {% set page_title = config.site_name %}
+  {% if page and page.title and not page.is_homepage %}
+    {% set page_title = page.title ~ " · " ~ config.site_name %}
+  {% endif %}
+  {% set page_desc = config.site_description %}
+  {% if page and page.meta and page.meta.description %}
+    {% set page_desc = page.meta.description %}
+  {% endif %}
+  {% set preview = config.site_url ~ "brand/png/social-preview.png" %}
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="{{ config.site_name }}">
+  <meta property="og:title" content="{{ page_title }}">
+  <meta property="og:description" content="{{ page_desc }}">
+  <meta property="og:image" content="{{ preview }}">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta property="og:url" content="{{ page.canonical_url }}">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ page_title }}">
+  <meta name="twitter:description" content="{{ page_desc }}">
+  <meta name="twitter:image" content="{{ preview }}">
+{% endblock %}

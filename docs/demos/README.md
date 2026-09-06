@@ -64,17 +64,24 @@ capturing, the plugin composes the editor:
   the project main scene can reclaim the tab, so the capture retries until
   `get_edited_scene_root().scene_file_path` matches.
 
-Before capturing for publication, strip the contributor MCP server from the
-environment so it does not appear in the editor's main-screen bar, and clear the
-open-scene list so the tab bar is not cluttered. Back both files up first:
+Use the wrapper rather than editing anything by hand:
 
-- `project.godot` — remove `res://addons/godot_mcp/plugin.cfg` from
-  `[editor_plugins] enabled` and the `MCPRuntimeProbe` autoload.
-- `.godot/editor/editor_layout.cfg` — set `open_scenes=PackedStringArray()` and
-  `current_scene=""`.
+```bash
+python tools/capture_ui.py
+```
 
-Restore both afterwards. The MCP server is build tooling for contributors; it is
-not part of HammerForge and must not appear in user-facing screenshots.
+It suppresses the onboarding card, removes the contributor MCP server from
+`project.godot` so it does not appear in the editor's main-screen bar, resets
+the open-scene list so the tab bar is not cluttered, runs the capture, and puts
+both files back.
+
+The swap is recoverable, not merely careful. It refuses to start if either
+tracked file already has uncommitted changes, so it never backs up an
+already-mutated file; backups carry a marker, so a run that dies before
+restoring is healed by the next invocation instead of stacking a second swap on
+top; and restoration runs from a `finally` block, so it survives exceptions and
+Ctrl-C. The MCP server is build tooling for contributors, not part of
+HammerForge, and must not appear in user-facing screenshots.
 
 Output:
 
