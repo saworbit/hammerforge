@@ -79,6 +79,26 @@ func _run() -> void:
 		stray.queue_free()
 	await process_frame
 
+	# LevelRoot starts its own bake when the level loads. Calling bake() while
+	# that is still running is rejected by _try_begin_bake(), which reports the
+	# refusal through the user_message signal -- silent outside the editor. Wait
+	# for it to settle, then bake explicitly so the shot shows baked output with
+	# the draft brushes hidden.
+	var settled := false
+	for _i in range(600):
+		await process_frame
+		if not level.is_bake_in_flight():
+			settled = true
+			break
+	if not settled:
+		printerr("Bake still in flight after 600 frames; capturing draft geometry.")
+	else:
+		var baked: bool = await level.bake(true, true)
+		if not baked:
+			printerr("Bake failed; capturing draft geometry instead.")
+		for _i in range(4):
+			await process_frame
+
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT_DIR))
 
 	var written := 0

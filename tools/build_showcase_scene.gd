@@ -44,8 +44,8 @@ const LAYOUT := [
 		Vector2(6, 2.5)
 	],
 	# East wall is split around a 5x6 doorway opening rather than carved with a
-	# subtract brush: the render is identical and the capture stays independent
-	# of a runtime bake.
+	# subtract brush. Both render identically; the split keeps the staged
+	# sequence scenes readable as plain additive geometry.
 	[
 		"HallWallEastNorth",
 		"BOX",
