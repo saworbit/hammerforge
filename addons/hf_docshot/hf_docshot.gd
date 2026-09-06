@@ -43,6 +43,12 @@ func _enter_tree() -> void:
 	if mode == "probe":
 		_probe_synthetic_input()
 		return
+	if mode == "demo":
+		_demo()
+		return
+	if mode == "demo_live":
+		_demo_live()
+		return
 	if mode != "1":
 		return
 	_run()
@@ -429,3 +435,308 @@ func _capture(shot_name: String, crop: Rect2i = Rect2i()) -> bool:
 		return false
 	print("[docshot] wrote ", path, " ", image.get_width(), "x", image.get_height())
 	return true
+
+
+# ---------------------------------------------------------------------------
+# Demo recording
+#
+# Drives HammerForge through its real editor input path while warping the OS
+# cursor to match, so a screen recording shows the tool genuinely being used
+# rather than geometry appearing under a stationary pointer.
+# ---------------------------------------------------------------------------
+
+const FRAME_DIR := "user://demo_frames"
+const GO_MARKER := "user://docshot_go"
+const DONE_MARKER := "user://docshot_done"
+const READY_MARKER := "user://docshot_ready"
+
+var _frame_idx := 0
+var _cursor_pos := Vector2.ZERO
+var _cam_from := Vector3.ZERO
+var _cam_to := Vector3.ZERO
+var _cam_locked := false
+var _pointer_down := false
+var _ripples: Array[Dictionary] = []
+
+
+func _demo() -> void:
+	for _i in range(240):
+		await get_tree().process_frame
+	_compose_editor(true)
+	for _i in range(20):
+		await get_tree().process_frame
+	if not await _ensure_scene_open("res://samples/hf_demo_empty.tscn"):
+		get_tree().quit(1)
+		return
+	await _show_main_screen("3D")
+	# The editor's own camera controller reclaims the transform over time, so the
+	# demo pins it and re-applies every frame instead of placing it once.
+	_cam_from = Vector3(-24, 20, 26)
+	_cam_to = Vector3(0, 0, 0)
+	_cam_locked = true
+	_place_editor_camera(_cam_from, _cam_to)
+	EditorInterface.get_selection().clear()
+	for _i in range(20):
+		await get_tree().process_frame
+
+	var plugin: Node = _find_hammerforge_plugin()
+	var dock := _find_dock()
+	if plugin == null or dock == null:
+		printerr("[demo] plugin or dock missing")
+		get_tree().quit(1)
+		return
+	dock.tool_draw.button_pressed = true
+
+	var abs_dir := ProjectSettings.globalize_path(FRAME_DIR)
+	if DirAccess.dir_exists_absolute(abs_dir):
+		for f in DirAccess.get_files_at(abs_dir):
+			DirAccess.remove_absolute(abs_dir.path_join(f))
+	DirAccess.make_dir_recursive_absolute(abs_dir)
+
+	var vp := EditorInterface.get_editor_viewport_3d(0)
+	var cam := vp.get_camera_3d()
+	var size := Vector2(vp.size)
+	var a := size * Vector2(0.34, 0.56)
+	var b := size * Vector2(0.68, 0.74)
+
+	print("[demo] recording frames to ", abs_dir)
+	await _move_cursor_to(a, 0.0)
+	await _hold(0.7)
+	await _demo_drag(plugin, cam, a, b, 0.9)
+	await _hold(0.45)
+	await _demo_click(plugin, cam, b + Vector2(0, -45), 0.7)
+	await _hold(1.5)
+
+	var marker := FileAccess.open(READY_MARKER, FileAccess.WRITE)
+	marker.store_string(str(_frame_idx))
+	marker.close()
+	var check := EditorInterface.get_editor_viewport_3d(0).get_camera_3d()
+	print("[demo] final camera=", check.global_position, " wanted=", _cam_from)
+	print("[demo] done; frames=", _frame_idx)
+	get_tree().quit(0)
+
+
+## One frame of the clip: advance, grab the editor, draw the pointer, save.
+##
+## Frames are rendered from inside the editor rather than screen-recorded.
+## Screen capture depends on nothing ever covering the window, and silently
+## records whatever is in front of it when that fails.
+func _tick() -> void:
+	await get_tree().process_frame
+	for r in _ripples:
+		r["age"] = float(r["age"]) + 1.0 / 30.0
+	if _cam_locked:
+		_place_editor_camera(_cam_from, _cam_to)
+	var base: Control = EditorInterface.get_base_control()
+	if base == null:
+		return
+	await RenderingServer.frame_post_draw
+	var image: Image = base.get_viewport().get_texture().get_image()
+	if image == null:
+		return
+	_draw_ripples(image)
+	_draw_pointer(image, _cursor_pos)
+	image.save_png("%s/frame_%05d.png" % [FRAME_DIR, _frame_idx])
+	_frame_idx += 1
+
+
+## Composite a pointer at the synthetic input position. The input is real, so
+## this marks where it actually is -- it is not a decorative fake.
+func _draw_pointer(image: Image, pos: Vector2) -> void:
+	var ox := int(pos.x)
+	var oy := int(pos.y)
+	# Inverted while the button is held, so a press reads as a state change and
+	# not just a ripple that could be missed between frames.
+	var fill := Color.BLACK if _pointer_down else Color.WHITE
+	var edge_col := Color.WHITE if _pointer_down else Color.BLACK
+	for y in range(0, 22):
+		for x in range(0, 15):
+			if x > y * 0.68:
+				continue
+			var px := ox + x
+			var py := oy + y
+			if px < 1 or py < 1 or px >= image.get_width() - 1 or py >= image.get_height() - 1:
+				continue
+			var is_edge: bool = x == 0 or y == 21 or x > (y * 0.68) - 1.6
+			image.set_pixel(px, py, edge_col if is_edge else fill)
+
+
+## Expanding ring at each click, so presses are visible in motion.
+func _draw_ripples(image: Image) -> void:
+	var w := image.get_width()
+	var h := image.get_height()
+	for r in _ripples:
+		var age: float = r["age"]
+		var life := 0.45
+		if age > life:
+			continue
+		var t: float = age / life
+		var radius: int = int(8.0 + 46.0 * t)
+		var strength: float = 1.0 - t
+		var centre: Vector2 = r["pos"]
+		var steps: int = maxi(24, radius * 6)
+		for i in range(steps):
+			var ang: float = TAU * float(i) / float(steps)
+			for thick in range(2):
+				var px := int(centre.x + cos(ang) * (radius + thick))
+				var py := int(centre.y + sin(ang) * (radius + thick))
+				if px < 0 or py < 0 or px >= w or py >= h:
+					continue
+				var base := image.get_pixel(px, py)
+				image.set_pixel(px, py, base.lerp(Color(1, 0.85, 0.2), strength))
+
+
+func _press(plugin: Node, cam: Camera3D, pos: Vector2) -> void:
+	_pointer_down = true
+	_ripples.append({"pos": _cursor_pos, "age": 0.0})
+	plugin._forward_3d_gui_input(cam, _mouse_button(pos, true))
+
+
+func _release(plugin: Node, cam: Camera3D, pos: Vector2) -> void:
+	_pointer_down = false
+	plugin._forward_3d_gui_input(cam, _mouse_button(pos, false))
+
+
+func _hold(seconds: float) -> void:
+	for _i in range(int(seconds * 30.0)):
+		await _tick()
+
+
+func _ease(t: float) -> float:
+	return t * t * (3.0 - 2.0 * t)
+
+
+## Convert a viewport-local point into editor-window space and record it.
+func _move_cursor_to(viewport_pos: Vector2, _unused: float) -> void:
+	var vp := EditorInterface.get_editor_viewport_3d(0)
+	var container := vp.get_parent() as Control
+	var origin := container.global_position if container else Vector2.ZERO
+	_cursor_pos = origin + viewport_pos
+	await _tick()
+
+
+func _demo_drag(plugin: Node, cam: Camera3D, from: Vector2, to: Vector2, seconds: float) -> void:
+	plugin._forward_3d_gui_input(cam, _mouse_motion(from, Vector2.ZERO, false))
+	await _move_cursor_to(from, 0.0)
+	_press(plugin, cam, from)
+	var steps := maxi(2, int(seconds * 30.0))
+	var prev := from
+	for i in range(1, steps + 1):
+		var pos: Vector2 = from.lerp(to, _ease(float(i) / float(steps)))
+		plugin._forward_3d_gui_input(cam, _mouse_motion(pos, pos - prev, true))
+		await _move_cursor_to(pos, 0.0)
+		prev = pos
+	_release(plugin, cam, to)
+	await _tick()
+
+
+func _demo_click(plugin: Node, cam: Camera3D, pos: Vector2, seconds: float) -> void:
+	var from := Vector2(plugin.last_3d_mouse_pos)
+	var steps := maxi(2, int(seconds * 30.0))
+	var prev := from
+	for i in range(1, steps + 1):
+		var p: Vector2 = from.lerp(pos, _ease(float(i) / float(steps)))
+		plugin._forward_3d_gui_input(cam, _mouse_motion(p, p - prev, false))
+		await _move_cursor_to(p, 0.0)
+		prev = p
+	await _hold(0.2)
+	_press(plugin, cam, pos)
+	await _hold(0.12)
+	_release(plugin, cam, pos)
+	await _tick()
+
+
+## Real-time variant of the demo beat, for when an external recorder (OBS) is
+## capturing the window. Warps the real cursor instead of drawing one, and
+## paces in wall-clock time rather than rendering frames.
+func _demo_live() -> void:
+	for _i in range(240):
+		await get_tree().process_frame
+	_compose_editor(true)
+	for _i in range(20):
+		await get_tree().process_frame
+	if not await _ensure_scene_open("res://samples/hf_demo_empty.tscn"):
+		get_tree().quit(1)
+		return
+	await _show_main_screen("3D")
+	_cam_from = Vector3(-24, 20, 26)
+	_cam_to = Vector3(0, 0, 0)
+	_place_editor_camera(_cam_from, _cam_to)
+	EditorInterface.get_selection().clear()
+	for _i in range(30):
+		await get_tree().process_frame
+
+	var dock := _find_dock()
+	if dock == null:
+		printerr("[live] dock missing")
+		get_tree().quit(1)
+		return
+	dock.tool_draw.button_pressed = true
+
+	# The harness drives the real mouse, so hand it the viewport rect in screen
+	# coordinates. No synthetic input here: mixing the two cancels drags.
+	var vp := EditorInterface.get_editor_viewport_3d(0)
+	var container := vp.get_parent() as Control
+	var win_pos := Vector2(DisplayServer.window_get_position())
+	var origin := win_pos + (container.global_position if container else Vector2.ZERO)
+	var rect := "%d,%d,%d,%d" % [origin.x, origin.y, vp.size.x, vp.size.y]
+
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(GO_MARKER))
+	var marker := FileAccess.open(READY_MARKER, FileAccess.WRITE)
+	marker.store_string(rect)
+	marker.close()
+	print("[live] ready; viewport screen rect=", rect)
+
+	var waited := 0
+	while not FileAccess.file_exists(GO_MARKER):
+		await get_tree().process_frame
+		waited += 1
+		if waited > 7200:
+			printerr("[live] never told to finish")
+			get_tree().quit(1)
+			return
+	print("[live] done")
+	get_tree().quit(0)
+
+
+func _live_cursor(viewport_pos: Vector2) -> void:
+	var vp := EditorInterface.get_editor_viewport_3d(0)
+	var container := vp.get_parent() as Control
+	var origin := container.global_position if container else Vector2.ZERO
+	Input.warp_mouse(origin + viewport_pos)
+	await get_tree().process_frame
+
+
+func _live_wait(seconds: float) -> void:
+	await get_tree().create_timer(seconds).timeout
+
+
+func _live_drag(plugin: Node, cam: Camera3D, from: Vector2, to: Vector2, seconds: float) -> void:
+	plugin._forward_3d_gui_input(cam, _mouse_motion(from, Vector2.ZERO, false))
+	await _live_cursor(from)
+	plugin._forward_3d_gui_input(cam, _mouse_button(from, true))
+	var steps := 48
+	var prev := from
+	for i in range(1, steps + 1):
+		var pos: Vector2 = from.lerp(to, _ease(float(i) / float(steps)))
+		plugin._forward_3d_gui_input(cam, _mouse_motion(pos, pos - prev, true))
+		await _live_cursor(pos)
+		await get_tree().create_timer(seconds / float(steps)).timeout
+		prev = pos
+	plugin._forward_3d_gui_input(cam, _mouse_button(to, false))
+
+
+func _live_click(plugin: Node, cam: Camera3D, pos: Vector2, seconds: float) -> void:
+	var from := Vector2(plugin.last_3d_mouse_pos)
+	var steps := 36
+	var prev := from
+	for i in range(1, steps + 1):
+		var p: Vector2 = from.lerp(pos, _ease(float(i) / float(steps)))
+		plugin._forward_3d_gui_input(cam, _mouse_motion(p, p - prev, false))
+		await _live_cursor(p)
+		await get_tree().create_timer(seconds / float(steps)).timeout
+		prev = p
+	await _live_wait(0.25)
+	plugin._forward_3d_gui_input(cam, _mouse_button(pos, true))
+	await _live_wait(0.1)
+	plugin._forward_3d_gui_input(cam, _mouse_button(pos, false))
