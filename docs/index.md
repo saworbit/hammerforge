@@ -5,7 +5,7 @@
 Draw rooms, carve doors, paint terrain, and bake to optimized meshes — all
 inside the Godot editor.
 
-![A HammerForge block-out viewed from above](images/showcase_hero.png)
+![Interior of a HammerForge level: a colonnaded hall leading to a raised dais, with a galleried upper level](images/showcase_hero.png)
 
 HammerForge is a single `addons/` folder. No external tools, no custom builds,
 no export plugins. Drop it in, enable, draw.
@@ -50,6 +50,30 @@ A status board for the level: geometry budget, bake state, material palette,
 spawn points, autosave and session log.
 
 ![The HammerForge Console status board](images/ui_console.png)
+
+## Everything is configurable, and every switch says why
+
+The Console's **Controls** tab is the whole settings surface in one place —
+grouped by what a setting actually affects, with a one-line reason under each
+switch rather than a bare label. There is a search box, and descriptions can be
+turned off once you know your way around.
+
+![The HammerForge Console Controls tab, showing the Viewport, Bake and Safety net groups](images/ui_console_controls.png)
+
+Three groups, because there are only three questions worth separating:
+
+- **Viewport** — *what you see while building. None of these change the level.*
+  Grid and snapping, the shortcut HUD, subtract preview, texture lock, cordon.
+  Safe to change mid-build; nothing here touches what ships.
+- **Bake** — *how drafts become the meshes and collision that ship.* Mesh
+  merging, LODs, UV unwrapping, lightmap UV2, navmesh, MultiMesh instancing.
+  These are the trade-offs between bake time and frame time, and each one says
+  which way it costs you.
+- **Safety net** — *what survives a crash, and what tells you why one happened.*
+  Autosave interval, how many backups to keep, save compression, debug logging.
+
+The header line above the tabs is live: brush count, entity count and vertex
+total for the open level, re-checked on demand.
 
 ## Next steps
 

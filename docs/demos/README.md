@@ -22,9 +22,9 @@ Current output, all 1920x1080 and referenced from `README.md`:
 
 | File | Shot |
 |------|------|
-| `docs/images/showcase_hero.png` | Elevated three-quarter view of the whole block-out |
-| `docs/images/showcase_doorway.png` | Interior view through the doorway into the corridor |
-| `docs/images/showcase_materials.png` | Platform and ramp with four prototype materials |
+| `docs/images/showcase_hero.png` | Interior down the colonnade toward the dais |
+| `docs/images/showcase_overview.png` | The level from above, showing the window bays and towers |
+| `docs/images/showcase_gallery.png` | Low view up through the columns to the gallery |
 
 Edit `LAYOUT` in `tools/build_showcase_scene.gd` to change the level, or `SHOTS`
 in `tools/capture_showcase.gd` to change framing. The level AABB is
@@ -83,6 +83,7 @@ Output:
 | `ui_editor_3d.png` | Dock, viewport toolbar, scene tree and inspector |
 | `ui_dock_build.png` / `ui_dock_paint.png` / `ui_dock_objects.png` / `ui_dock_test.png` | Each dock mode |
 | `ui_console.png` | The Console status board |
+| `ui_console_controls.png` | The Console Controls tab: every setting, grouped |
 | `seq_1_draw.png` … `seq_4_test.png` | The four-step how-it-works strip (cropped) |
 
 Three editor behaviours the plugin has to work around, all commented in the

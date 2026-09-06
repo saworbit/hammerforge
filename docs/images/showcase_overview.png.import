@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://db66n1h7guvxr"
-path="res://.godot/imported/showcase_doorway.png-685c683fbaffafd692c85107d95f3073.ctex"
+uid="uid://htnd1drwm3s8"
+path="res://.godot/imported/showcase_overview.png-9d94495577d3466c82da7d25b624934f.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://docs/images/showcase_doorway.png"
-dest_files=["res://.godot/imported/showcase_doorway.png-685c683fbaffafd692c85107d95f3073.ctex"]
+source_file="res://docs/images/showcase_overview.png"
+dest_files=["res://.godot/imported/showcase_overview.png-9d94495577d3466c82da7d25b624934f.ctex"]
 
 [params]
 

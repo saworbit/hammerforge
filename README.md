@@ -21,11 +21,12 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/showcase_hero.png" alt="A HammerForge block-out viewed from above: a walled hall with a raised platform, a striped ramp, three pillars, and a doorway opening onto a corridor" width="880">
+  <img src="docs/images/showcase_hero.png" alt="Interior of a HammerForge level: a colonnaded hall with two rows of columns receding toward a raised circular dais, a galleried upper level above the side aisles, and flagstone flooring" width="880">
 </p>
 
 <p align="center">
-  <em>A block-out made entirely from HammerForge brushes and built-in prototype materials.</em>
+  <em>81 brushes. Every column, wall bay and gallery drawn with the tools below,
+  textured with the built-in prototype materials.</em>
 </p>
 
 > **Fair warning:** This is a solo hobby project in early alpha. I built it to support another project and it grew from there. It's buggy, rough around the edges, and a bit directionless. If any of this looks useful to you, I'd genuinely appreciate help testing and filing issues. Contributions welcome -- just know you're signing up for an adventure, not a polished product.
@@ -171,6 +172,20 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup and the check commands, a
 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for how we treat each other here.
 
 ---
+
+---
+
+## Every Switch, With a Reason
+
+The Console's **Controls** tab collects every HammerForge setting in one place,
+grouped by what it affects — *Viewport* (what you see while building, none of it
+changes the level), *Bake* (how drafts become the meshes that ship), and *Safety
+net* (autosave, backups, logging). Each switch carries a one-line reason, not
+just a label.
+
+<p align="center">
+  <img src="docs/images/ui_console_controls.png" alt="The HammerForge Console Controls tab, showing the Viewport, Bake and Safety net setting groups with a description under each switch" width="880">
+</p>
 
 ---
 
