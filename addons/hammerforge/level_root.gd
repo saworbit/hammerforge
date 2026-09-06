@@ -27,6 +27,7 @@ const HFInputStateType = preload("input_state.gd")
 const HFEntitySystemType = preload("systems/hf_entity_system.gd")
 const HFBrushSystemType = preload("systems/hf_brush_system.gd")
 const HFBakeSystemType = preload("systems/hf_bake_system.gd")
+const BakeStatus = HFBakeSystemType.BakeStatus
 const HFPaintSystemType = preload("systems/hf_paint_system.gd")
 const HFFileSystemType = preload("systems/hf_file_system.gd")
 const HFPrototypeTextures = preload("hf_prototype_textures.gd")
@@ -1636,6 +1637,12 @@ func cancel_extrude() -> void:
 # ===========================================================================
 
 
+## Bake the level. Returns true only when geometry was produced.
+##
+## false is ambiguous on its own: the bake may have been refused because one was
+## already running (LevelRoot starts its own when a level loads), or it may have
+## genuinely failed. Call get_last_bake_status() immediately afterwards to tell
+## them apart, or wait for is_bake_in_flight() to clear before calling.
 func bake(
 	apply_cuts: bool = true,
 	hide_live: bool = false,
@@ -1668,6 +1675,14 @@ func is_bake_in_flight() -> bool:
 
 func was_last_bake_successful() -> bool:
 	return bake_system != null and bake_system._last_bake_success
+
+
+## Why the most recent bake call returned what it did, as a BakeStatus. Read it
+## immediately after the call: the next one overwrites it.
+func get_last_bake_status() -> int:
+	if bake_system == null:
+		return BakeStatus.NOT_RUN
+	return bake_system.get_last_bake_status()
 
 
 func estimate_bake_time(brush_ids: Array = []) -> Dictionary:

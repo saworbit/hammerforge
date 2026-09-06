@@ -17,9 +17,18 @@ const BAKED_PREVIEW_MODE_META := &"_hammerforge_bake_preview_mode"
 ## and generates unshaded wireframe, PROXY uses simplified box meshes.
 enum PreviewMode { FULL, WIREFRAME, PROXY }
 
+## Why the last bake call returned what it did.
+##
+## Every bake entry point returns a plain bool, and false alone is ambiguous:
+## a refused bake, a bake with nothing to do, and a bake that genuinely failed
+## all look identical. Callers that need the difference read
+## get_last_bake_status() immediately after the call.
+enum BakeStatus { NOT_RUN, SUCCESS, FAILED, BUSY, NOTHING_TO_DO }
+
 var root: Node3D
 var _last_dirty_brush_ids: Dictionary = {}  # brush_id -> true; captured at bake start
 var _last_bake_success: bool = false
+var _last_bake_status: int = BakeStatus.NOT_RUN
 var _bake_in_flight := false
 static var _wireframe_shader: Shader = null
 static var _wireframe_material: ShaderMaterial = null
@@ -287,12 +296,19 @@ func _total_bakeable_brush_count() -> int:
 # ---------------------------------------------------------------------------
 
 
+## Why the most recent bake call returned what it did. Read it immediately
+## after the call: it is overwritten by the next one.
+func get_last_bake_status() -> int:
+	return _last_bake_status
+
+
 func is_bake_in_flight() -> bool:
 	return _bake_in_flight
 
 
 func _try_begin_bake() -> bool:
 	if _bake_in_flight:
+		_last_bake_status = BakeStatus.BUSY
 		root.emit_signal("user_message", "A bake is already running", 1)
 		return false
 	_bake_in_flight = true
@@ -308,6 +324,7 @@ func bake_selected(
 		return false
 	await _bake_selected_impl(brush_nodes, collision_layer_mask, preview_mode)
 	_bake_in_flight = false
+	_last_bake_status = BakeStatus.SUCCESS if _last_bake_success else BakeStatus.FAILED
 	return _last_bake_success
 
 
@@ -380,11 +397,13 @@ func _bake_selected_impl(
 ## Missing dirty IDs represent deletions and therefore still require a bake.
 func bake_dirty(collision_layer_mask: int = 0, preview_mode: int = 0) -> bool:
 	if _bake_in_flight:
+		_last_bake_status = BakeStatus.BUSY
 		root.emit_signal("user_message", "A bake is already running", 1)
 		return false
 	var dirty_ids: Array = root._dirty_brush_ids.keys()
 	var full_reconcile_started: bool = root._full_reconcile_needed
 	if dirty_ids.is_empty() and not full_reconcile_started:
+		_last_bake_status = BakeStatus.NOTHING_TO_DO
 		root.emit_signal("user_message", "No changed brushes since last bake", 1)
 		return false
 	var dirty_snapshot: Dictionary = root._dirty_brush_ids.duplicate()
@@ -565,6 +584,7 @@ func bake(
 		return false
 	await _bake_impl(apply_cuts, hide_live, collision_layer_mask, preview_mode, force_csg)
 	_bake_in_flight = false
+	_last_bake_status = BakeStatus.SUCCESS if _last_bake_success else BakeStatus.FAILED
 	return _last_bake_success
 
 
