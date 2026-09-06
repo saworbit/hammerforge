@@ -3,6 +3,9 @@ site_description: Brush-based level editor for Godot 4.7+
 repo_url: https://github.com/saworbit/hammerforge
 repo_name: saworbit/hammerforge
 docs_dir: docs
+# Dot-prefixed so Godot skips it: a plain site/ inside the project makes the
+# editor report a UID collision for every image against its copy in docs/.
+site_dir: .site
 
 exclude_docs: |
   superpowers/

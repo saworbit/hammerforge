@@ -70,4 +70,4 @@ docs/brand/png/*.import
 docs/brand/svg/*.import
 
 # MkDocs build output
-site/
+.site/

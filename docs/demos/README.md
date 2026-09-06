@@ -45,6 +45,25 @@ HF_DOCSHOT=1 godot --editor --path .
 The plugin is inert unless `HF_DOCSHOT=1`, so leaving it enabled costs nothing
 during normal editing.
 
+### Composing the shot
+
+Screenshots are product shots, not screenshots of a dev checkout. Before
+capturing, the plugin composes the editor:
+
+- **The onboarding guide card is suppressed.** It otherwise fills the top ~40%
+  of the dock with "Step 1 of 2" tutorial chrome. Turn it off first:
+  `godot --headless -s res://tools/prepare_editor_smoke.gd --path . -- --show-welcome=false`
+- **Godot's own docks are hidden** (Scene, FileSystem, Inspector). They are not
+  HammerForge UI: the Inspector shows a column of truncated bake property
+  labels, and the FileSystem shows repository files. Hiding them roughly
+  doubles the viewport width. This is done live, because Godot clamps dock
+  splitter offsets written into `editor_layout.cfg`.
+- **The selection is cleared** after the camera is placed, so the transform
+  gizmo does not sit in the middle of the level.
+- **The scene is verified active.** `open_scene_from_path` alone is not enough;
+  the project main scene can reclaim the tab, so the capture retries until
+  `get_edited_scene_root().scene_file_path` matches.
+
 Before capturing for publication, strip the contributor MCP server from the
 environment so it does not appear in the editor's main-screen bar, and clear the
 open-scene list so the tab bar is not cluttered. Back both files up first:
