@@ -39,9 +39,115 @@ const SEQUENCE := [
 
 
 func _enter_tree() -> void:
-	if OS.get_environment("HF_DOCSHOT") != "1":
+	var mode := OS.get_environment("HF_DOCSHOT")
+	if mode == "probe":
+		_probe_synthetic_input()
+		return
+	if mode != "1":
 		return
 	_run()
+
+
+## Feasibility probe: can HammerForge be driven through its real editor input
+## path with synthesised events? If so, an automated screen-recorded demo needs
+## no OS-level mouse control at all.
+func _probe_synthetic_input() -> void:
+	for _i in range(240):
+		await get_tree().process_frame
+	EditorInterface.open_scene_from_path("res://samples/hf_demo_step1.tscn")
+	for _i in range(120):
+		await get_tree().process_frame
+	await _show_main_screen("3D")
+	_place_editor_camera(Vector3(-20, 26, 30), Vector3(7, 0, -1))
+	await get_tree().process_frame
+
+	var plugin: Node = _find_hammerforge_plugin()
+	print("[probe] plugin=", plugin)
+	if plugin == null:
+		get_tree().quit(1)
+		return
+	var dock := _find_dock()
+	print("[probe] dock=", dock)
+	if dock == null:
+		get_tree().quit(1)
+		return
+
+	# Arm the draw tool the same way clicking the dock button would.
+	dock.tool_draw.button_pressed = true
+	print("[probe] tool=", dock.get_tool(), " paint=", dock.is_paint_mode_enabled())
+
+	var vp := EditorInterface.get_editor_viewport_3d(0)
+	var cam := vp.get_camera_3d()
+	print("[probe] viewport_size=", vp.size, " camera=", cam)
+
+	var level: Node = EditorInterface.get_edited_scene_root()
+	var draft: Node = level.draft_brushes_node
+	var before: int = draft.get_child_count()
+	print("[probe] brushes_before=", before)
+
+	var a := Vector2(vp.size) * Vector2(0.40, 0.55)
+	var b := Vector2(vp.size) * Vector2(0.62, 0.70)
+	await _drag(plugin, cam, a, b)
+	# Second stage of the two-click draw: move up, then click to set height.
+	await _click(plugin, cam, b + Vector2(0, -60))
+
+	for _i in range(30):
+		await get_tree().process_frame
+	var after: int = draft.get_child_count()
+	print("[probe] brushes_after=", after)
+	print("[probe] RESULT synthetic_input_creates_brush=", after > before)
+	get_tree().quit(0)
+
+
+func _find_hammerforge_plugin() -> Node:
+	var stack: Array = [get_tree().root]
+	while not stack.is_empty():
+		var node: Node = stack.pop_back()
+		if node != self and node.has_method("_forward_3d_gui_input") and node.get("dock") != null:
+			return node
+		for child in node.get_children():
+			stack.append(child)
+	return null
+
+
+func _mouse_button(pos: Vector2, pressed: bool) -> InputEventMouseButton:
+	var ev := InputEventMouseButton.new()
+	ev.button_index = MOUSE_BUTTON_LEFT
+	ev.pressed = pressed
+	ev.position = pos
+	ev.button_mask = MOUSE_BUTTON_MASK_LEFT if pressed else 0
+	return ev
+
+
+func _mouse_motion(pos: Vector2, relative: Vector2, dragging: bool) -> InputEventMouseMotion:
+	var ev := InputEventMouseMotion.new()
+	ev.position = pos
+	ev.relative = relative
+	ev.button_mask = MOUSE_BUTTON_MASK_LEFT if dragging else 0
+	return ev
+
+
+func _drag(plugin: Node, cam: Camera3D, from: Vector2, to: Vector2) -> void:
+	plugin._forward_3d_gui_input(cam, _mouse_motion(from, Vector2.ZERO, false))
+	plugin._forward_3d_gui_input(cam, _mouse_button(from, true))
+	await get_tree().process_frame
+	var steps := 12
+	var prev := from
+	for i in range(1, steps + 1):
+		var pos: Vector2 = from.lerp(to, float(i) / float(steps))
+		plugin._forward_3d_gui_input(cam, _mouse_motion(pos, pos - prev, true))
+		prev = pos
+		await get_tree().process_frame
+	plugin._forward_3d_gui_input(cam, _mouse_button(to, false))
+	await get_tree().process_frame
+
+
+func _click(plugin: Node, cam: Camera3D, pos: Vector2) -> void:
+	plugin._forward_3d_gui_input(cam, _mouse_motion(pos, Vector2.ZERO, false))
+	await get_tree().process_frame
+	plugin._forward_3d_gui_input(cam, _mouse_button(pos, true))
+	plugin._forward_3d_gui_input(cam, _mouse_button(pos, false))
+	await get_tree().process_frame
 
 
 func _run() -> void:
@@ -57,9 +163,7 @@ func _run() -> void:
 		return
 
 	# Opened after the session restore so it wins the active tab.
-	EditorInterface.open_scene_from_path(SCENE)
-	for _i in range(120):
-		await get_tree().process_frame
+	await _ensure_scene_open(SCENE)
 
 	EditorInterface.set_main_screen_editor("3D")
 	for _i in range(30):
@@ -74,6 +178,9 @@ func _run() -> void:
 			await get_tree().process_frame
 
 	var shots := 0
+	_compose_editor(true)
+	for _i in range(20):
+		await get_tree().process_frame
 
 	# The plugin steals the main screen when a level is opened, so each main
 	# screen has to be re-selected immediately before its own capture.
@@ -81,8 +188,10 @@ func _run() -> void:
 		_frame_selection()
 		for _i in range(30):
 			await get_tree().process_frame
-		_place_editor_camera(Vector3(-20, 26, 30), Vector3(7, 0, -1))
-		await get_tree().process_frame
+		_place_editor_camera(Vector3(-17, 22, 27), Vector3(8, 1, -1))
+		EditorInterface.get_selection().clear()
+		for _i in range(10):
+			await get_tree().process_frame
 		if await _capture("ui_editor_3d"):
 			shots += 1
 
@@ -123,9 +232,8 @@ func _capture_sequence() -> int:
 		if not ResourceLoader.exists(scene_path):
 			push_warning("[docshot] missing sequence scene " + scene_path)
 			continue
-		EditorInterface.open_scene_from_path(scene_path)
-		for _i in range(60):
-			await get_tree().process_frame
+		if not await _ensure_scene_open(scene_path):
+			continue
 		if dock != null:
 			_select_tab(dock, str(step[1]))
 			for _i in range(20):
@@ -133,11 +241,69 @@ func _capture_sequence() -> int:
 		# Opening a scene hands the main screen back to the plugin, so 3D has to
 		# be re-selected for every step or the panels are inconsistent.
 		await _show_main_screen("3D")
-		_place_editor_camera(Vector3(-20, 26, 30), Vector3(7, 0, -1))
-		await get_tree().process_frame
+		_place_editor_camera(Vector3(-17, 22, 27), Vector3(8, 1, -1))
+		EditorInterface.get_selection().clear()
+		for _i in range(10):
+			await get_tree().process_frame
 		if await _capture(str(step[2]), SEQUENCE_CROP):
 			captured += 1
 	return captured
+
+
+## Compose the editor for a product shot.
+##
+## Godot clamps dock splitter offsets written into editor_layout.cfg, so the
+## layout is set live instead. The Inspector and FileSystem are Godot's own
+## docks, not HammerForge's: they fill the frame with truncated bake property
+## labels and repo files, so they are hidden and the space goes to the viewport.
+func _compose_editor(hide_godot_docks: bool) -> void:
+	var base: Control = EditorInterface.get_base_control()
+	if base == null:
+		return
+	var wanted := ["Scene", "Inspector", "FileSystem", "Import", "History", "Signals", "Groups"]
+	for node in base.find_children("*", "TabContainer", true, false):
+		var tabs := node as TabContainer
+		var titles: Array = []
+		for i in range(tabs.get_tab_count()):
+			titles.append(tabs.get_tab_title(i))
+		if titles.is_empty():
+			continue
+		# A dock is Godot's own if every tab it carries is one of theirs.
+		var is_godot_dock := true
+		for t in titles:
+			if not wanted.has(t):
+				is_godot_dock = false
+				break
+		if is_godot_dock:
+			tabs.visible = not hide_godot_docks
+			print("[docshot] dock ", titles, " visible=", tabs.visible)
+
+
+## Widen the scene tree column so brush names are not clipped.
+func _set_tree_column_width(width: int) -> void:
+	var base: Control = EditorInterface.get_base_control()
+	if base == null:
+		return
+	for node in base.find_children("*", "HSplitContainer", true, false):
+		var split := node as HSplitContainer
+		if split.split_offset > 100 and split.split_offset < 900:
+			split.split_offset = width
+
+
+## Open a scene and confirm it actually became the edited one. The editor
+## restores its previous session asynchronously and the project main scene can
+## reclaim the active tab, so a single open_scene_from_path is not enough.
+func _ensure_scene_open(path: String) -> bool:
+	for attempt in range(4):
+		EditorInterface.open_scene_from_path(path)
+		for _i in range(90):
+			await get_tree().process_frame
+			var edited := EditorInterface.get_edited_scene_root()
+			if edited != null and edited.scene_file_path == path:
+				print("[docshot] active scene=", path, " (attempt ", attempt + 1, ")")
+				return true
+	printerr("[docshot] could not make ", path, " the active scene")
+	return false
 
 
 ## Select an editor main screen and give it time to lay out.
