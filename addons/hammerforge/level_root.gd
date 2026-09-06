@@ -251,6 +251,12 @@ var _full_reconcile_needed := false
 ## Mark a specific brush as needing reconciliation.
 func tag_brush_dirty(brush_id: String) -> void:
 	_dirty_brush_ids[brush_id] = true
+	# This is the one call every transform, material, UV, paint and vertex
+	# mutation already makes, so it is where brush_changed belongs. Emit on
+	# every tag rather than only the first: the dirty set is not cleared until
+	# a bake, and a listener watching a drag needs each step, not just the one
+	# that happened to arrive first.
+	brush_changed.emit(brush_id)
 
 
 ## Mark a specific paint chunk as needing reconciliation.

@@ -27,6 +27,7 @@ var _full_reconcile_needed := false
 
 func tag_brush_dirty(brush_id: String) -> void:
 	_dirty_brush_ids[brush_id] = true
+	brush_changed.emit(brush_id)
 
 func tag_paint_dirty(chunk_coord: Vector2i) -> void:
 	if not _dirty_paint_chunks.has(chunk_coord):
@@ -126,6 +127,40 @@ func test_tag_brush_dirty_dedup():
 	root.tag_brush_dirty("brush_1")
 	var tags = root.consume_dirty_tags()
 	assert_eq(tags["brush_ids"].size(), 1, "Duplicate tag should not add twice")
+
+
+## The shim above stands in for LevelRoot everywhere else in this file. These
+## two build the real one, because a signal the shim emits proves nothing about
+## whether production does.
+func _real_level_root() -> Node3D:
+	var level_root = LevelRootType.new()
+	level_root.name = "RealLevelRoot"
+	return level_root
+
+
+func test_tag_brush_dirty_emits_brush_changed():
+	# brush_changed was declared and never emitted. HFSubtractPreview connects
+	# to it, so the preview listened to a signal that could not fire.
+	var level_root := _real_level_root()
+	var seen: Array = []
+	level_root.brush_changed.connect(func(brush_id: String): seen.append(brush_id))
+	level_root.tag_brush_dirty("b1")
+	assert_eq(seen, ["b1"], "Tagging a brush dirty announces that brush changed")
+	level_root.free()
+
+
+func test_repeat_tags_keep_announcing():
+	# The dirty set is not cleared until a bake, so a drag tags the same id on
+	# every step. Announcing only the first would freeze a live preview.
+	var level_root := _real_level_root()
+	var seen: Array = []
+	level_root.brush_changed.connect(func(brush_id: String): seen.append(brush_id))
+	level_root.tag_brush_dirty("b1")
+	level_root.tag_brush_dirty("b1")
+	level_root.tag_brush_dirty("b2")
+	assert_eq(seen, ["b1", "b1", "b2"], "Every tag is announced, not just new ids")
+	assert_eq(level_root._dirty_brush_ids.size(), 2, "The dirty set still dedupes")
+	level_root.free()
 
 
 func test_tag_paint_dirty():
