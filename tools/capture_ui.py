@@ -75,12 +75,26 @@ def prepare() -> None:
         if src.exists():
             shutil.copy2(src, BACKUP_DIR / rel.name)
 
+    import re
+
     proj = REPO / "project.godot"
     text = proj.read_text(encoding="utf-8")
     text = text.replace(', "res://addons/godot_mcp/plugin.cfg"', "")
     text = "\n".join(
         l for l in text.split("\n") if not l.startswith("MCPRuntimeProbe=")
     )
+    # Enable the capture plugin for this run only. It is deliberately not
+    # shipped enabled: an EditorPlugin that reads an environment variable and
+    # can call get_tree().quit() should not load during a contributor's normal
+    # session, where a stray HF_DOCSHOT=1 would close their editor mid-work.
+    text, enabled_count = re.subn(
+        r'(?m)^(enabled=PackedStringArray\((?!.*hf_docshot).*?)\)$',
+        r'\1, "res://addons/hf_docshot/plugin.cfg")',
+        text,
+        count=1,
+    )
+    if enabled_count != 1:
+        raise SystemExit("could not enable hf_docshot in project.godot")
     proj.write_text(text, encoding="utf-8", newline="\n")
 
     layout = REPO / ".godot/editor/editor_layout.cfg"

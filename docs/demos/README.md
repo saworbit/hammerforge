@@ -39,11 +39,15 @@ drives the editor's own 3D camera, cycles the dock tabs, switches main screens,
 and writes the images before quitting.
 
 ```bash
-HF_DOCSHOT=1 godot --editor --path .
+python tools/capture_ui.py
 ```
 
-The plugin is inert unless `HF_DOCSHOT=1`, so leaving it enabled costs nothing
-during normal editing.
+The plugin is **not** enabled in `project.godot`. The wrapper enables it for the
+duration of the run and removes it again, because an `EditorPlugin` that reads
+an environment variable and can call `get_tree().quit()` should not load during
+normal editing -- a stray `HF_DOCSHOT=1` would otherwise close your editor
+mid-work. The env var remains as a second gate for anyone enabling the plugin
+by hand.
 
 ### Composing the shot
 
@@ -99,6 +103,15 @@ showcase must be opened late or it loses the active tab; opening a level hands
 the main screen back to the HammerForge plugin, so each screen is re-selected
 immediately before its own capture; and `F`-to-frame never reaches the viewport,
 so the editor camera is positioned directly.
+
+## Captures are not byte-stable
+
+Re-running a capture with no changes still produces slightly different PNGs.
+The Console header carries a live `Checked HH:MM:SS` timestamp, and antialiasing
+around dock text varies with layout timing, so a few kilobytes shift each run.
+
+Only commit regenerated images when something actually changed. `git restore
+docs/images/` discards a no-op run.
 
 ## Not covered by the stills
 

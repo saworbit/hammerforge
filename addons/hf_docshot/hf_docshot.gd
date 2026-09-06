@@ -6,8 +6,14 @@ extends EditorPlugin
 ## viewport that owns the editor base control. This is what makes UI screenshots
 ## regenerable instead of hand-grabbed.
 ##
-## Inert unless the HF_DOCSHOT environment variable is "1", so leaving the plugin
-## enabled costs nothing during normal editing.
+## Deliberately NOT enabled in project.godot. tools/capture_ui.py enables it for
+## the duration of a capture run and removes it again afterwards. An
+## EditorPlugin that reads an environment variable and can call
+## get_tree().quit() should not load in a contributor's normal session, where a
+## stray HF_DOCSHOT=1 would close their editor mid-work.
+##
+## The HF_DOCSHOT check below is a second gate, for anyone who enables the
+## plugin by hand.
 ##
 ## Usage:
 ##   HF_DOCSHOT=1 godot --editor --path .
