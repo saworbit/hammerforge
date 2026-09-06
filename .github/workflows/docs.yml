@@ -31,7 +31,9 @@ jobs:
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: site
+          # Must track site_dir in mkdocs.yml, which is .site so Godot does not
+          # scan the built site and report UID collisions against docs/.
+          path: .site
 
   deploy:
     needs: build
