@@ -2498,3 +2498,53 @@ func test_collect_nonstructural_brushes_tolerates_incomplete_root():
 	var sys := HFBakeSystem.new(incomplete)
 	var brushes: Array = sys._collect_nonstructural_brushes()
 	assert_eq(brushes.size(), 0)
+
+
+# ---------------------------------------------------------------------------
+# Bake status
+#
+# Every bake entry point returns a plain bool. false alone cannot distinguish a
+# refused bake from a failed one, which is how a correctly-refused bake gets
+# misread as a broken bake pipeline.
+# ---------------------------------------------------------------------------
+
+
+func test_bake_status_starts_not_run():
+	assert_eq(bake_sys.get_last_bake_status(), HFBakeSystem.BakeStatus.NOT_RUN)
+
+
+func test_refused_bake_reports_busy_not_failure():
+	bake_sys._bake_in_flight = true
+	var ok: bool = await bake_sys.bake()
+	assert_false(ok, "A bake already in flight refuses the call")
+	assert_eq(
+		bake_sys.get_last_bake_status(),
+		HFBakeSystem.BakeStatus.BUSY,
+		"Refusal must be distinguishable from failure",
+	)
+
+
+func test_refused_selection_bake_reports_busy():
+	bake_sys._bake_in_flight = true
+	var ok: bool = await bake_sys.bake_selected([])
+	assert_false(ok)
+	assert_eq(bake_sys.get_last_bake_status(), HFBakeSystem.BakeStatus.BUSY)
+
+
+func test_bake_dirty_while_in_flight_reports_busy():
+	bake_sys._bake_in_flight = true
+	var ok: bool = await bake_sys.bake_dirty()
+	assert_false(ok)
+	assert_eq(bake_sys.get_last_bake_status(), HFBakeSystem.BakeStatus.BUSY)
+
+
+func test_bake_dirty_with_no_changes_reports_nothing_to_do():
+	root._dirty_brush_ids = {}
+	root._full_reconcile_needed = false
+	var ok: bool = await bake_sys.bake_dirty()
+	assert_false(ok, "Nothing to bake returns false")
+	assert_eq(
+		bake_sys.get_last_bake_status(),
+		HFBakeSystem.BakeStatus.NOTHING_TO_DO,
+		"Nothing to do must be distinguishable from failure",
+	)
