@@ -68,3 +68,6 @@ docs/brand/package-lock.json
 # tracked, because those are resources the plugin loads at runtime.
 docs/brand/png/*.import
 docs/brand/svg/*.import
+
+# MkDocs build output
+site/

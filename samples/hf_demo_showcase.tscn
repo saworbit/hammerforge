@@ -1,0 +1,230 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://addons/hammerforge/level_root.gd" id="1_sc2uy"]
+[ext_resource type="Script" path="res://addons/hammerforge/brush_instance.gd" id="2_ulbe8"]
+[ext_resource type="Texture2D" path="res://addons/hammerforge/textures/prototypes/checker_grey.svg" id="3_nkft7"]
+[ext_resource type="Texture2D" path="res://addons/hammerforge/textures/prototypes/brick_grey.svg" id="4_o58fb"]
+[ext_resource type="Texture2D" path="res://addons/hammerforge/textures/prototypes/brick_blue.svg" id="5_maymp"]
+[ext_resource type="Texture2D" path="res://addons/hammerforge/textures/prototypes/brick_orange.svg" id="6_jkge5"]
+[ext_resource type="Texture2D" path="res://addons/hammerforge/textures/prototypes/stripes_diagonal_yellow.svg" id="7_7wmnw"]
+[ext_resource type="Texture2D" path="res://addons/hammerforge/textures/prototypes/dots_grey.svg" id="8_hp4yy"]
+[ext_resource type="Texture2D" path="res://addons/hammerforge/textures/prototypes/checker_brown.svg" id="9_kwcmv"]
+[ext_resource type="Texture2D" path="res://addons/hammerforge/textures/prototypes/brick_brown.svg" id="10_7gcic"]
+[ext_resource type="Texture2D" path="res://addons/hammerforge/textures/prototypes/brick_red.svg" id="11_im8ch"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_gthth"]
+albedo_texture = ExtResource("3_nkft7")
+roughness = 0.9
+uv1_scale = Vector3(8, 6, 1)
+texture_filter = 2
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_w0a4b"]
+albedo_texture = ExtResource("4_o58fb")
+roughness = 0.9
+uv1_scale = Vector3(8, 2.5, 1)
+texture_filter = 2
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_3wihg"]
+albedo_texture = ExtResource("4_o58fb")
+roughness = 0.9
+uv1_scale = Vector3(8, 2.5, 1)
+texture_filter = 2
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_qk0fa"]
+albedo_texture = ExtResource("5_maymp")
+roughness = 0.9
+uv1_scale = Vector3(6, 2.5, 1)
+texture_filter = 2
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_6a3wf"]
+albedo_texture = ExtResource("4_o58fb")
+roughness = 0.9
+uv1_scale = Vector3(3, 2.5, 1)
+texture_filter = 2
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_j12s7"]
+albedo_texture = ExtResource("4_o58fb")
+roughness = 0.9
+uv1_scale = Vector3(3, 2.5, 1)
+texture_filter = 2
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_muyf0"]
+albedo_texture = ExtResource("4_o58fb")
+roughness = 0.9
+uv1_scale = Vector3(2, 1, 1)
+texture_filter = 2
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_qjlfx"]
+albedo_texture = ExtResource("6_jkge5")
+roughness = 0.9
+uv1_scale = Vector3(3, 1, 1)
+texture_filter = 2
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_vx5y8"]
+albedo_texture = ExtResource("7_7wmnw")
+roughness = 0.9
+uv1_scale = Vector3(2, 1, 1)
+texture_filter = 2
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_4pbxa"]
+albedo_texture = ExtResource("8_hp4yy")
+roughness = 0.9
+uv1_scale = Vector3(2, 3, 1)
+texture_filter = 2
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_jt3pw"]
+albedo_texture = ExtResource("8_hp4yy")
+roughness = 0.9
+uv1_scale = Vector3(2, 3, 1)
+texture_filter = 2
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_rswnb"]
+albedo_texture = ExtResource("8_hp4yy")
+roughness = 0.9
+uv1_scale = Vector3(2, 3, 1)
+texture_filter = 2
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_j7yxi"]
+albedo_texture = ExtResource("9_kwcmv")
+roughness = 0.9
+uv1_scale = Vector3(4, 2, 1)
+texture_filter = 2
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_kaohb"]
+albedo_texture = ExtResource("10_7gcic")
+roughness = 0.9
+uv1_scale = Vector3(4, 2.5, 1)
+texture_filter = 2
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_f6ple"]
+albedo_texture = ExtResource("10_7gcic")
+roughness = 0.9
+uv1_scale = Vector3(4, 2.5, 1)
+texture_filter = 2
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_x1o3j"]
+albedo_texture = ExtResource("11_im8ch")
+roughness = 0.9
+uv1_scale = Vector3(2, 2.5, 1)
+texture_filter = 2
+
+[node name="LevelRoot" type="Node3D" unique_id=484438769]
+script = ExtResource("1_sc2uy")
+
+[node name="DraftBrushes" type="Node3D" parent="." unique_id=517945744]
+
+[node name="HallFloor" type="Node3D" parent="DraftBrushes" unique_id=1531250078]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
+script = ExtResource("2_ulbe8")
+size = Vector3(32, 1, 24)
+brush_id = "hall_floor"
+material_override = SubResource("StandardMaterial3D_gthth")
+
+[node name="HallWallNorth" type="Node3D" parent="DraftBrushes" unique_id=1876944782]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, -12.5)
+script = ExtResource("2_ulbe8")
+size = Vector3(32, 10, 1)
+brush_id = "hall_wall_north"
+material_override = SubResource("StandardMaterial3D_w0a4b")
+
+[node name="HallWallSouth" type="Node3D" parent="DraftBrushes" unique_id=275531508]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 12.5)
+script = ExtResource("2_ulbe8")
+size = Vector3(32, 10, 1)
+brush_id = "hall_wall_south"
+material_override = SubResource("StandardMaterial3D_3wihg")
+
+[node name="HallWallWest" type="Node3D" parent="DraftBrushes" unique_id=1266940418]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16.5, 5, 0)
+script = ExtResource("2_ulbe8")
+size = Vector3(1, 10, 24)
+brush_id = "hall_wall_west"
+material_override = SubResource("StandardMaterial3D_qk0fa")
+
+[node name="HallWallEastNorth" type="Node3D" parent="DraftBrushes" unique_id=1543332415]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16.5, 5, -7.25)
+script = ExtResource("2_ulbe8")
+size = Vector3(1, 10, 9.5)
+brush_id = "hall_wall_east_north"
+material_override = SubResource("StandardMaterial3D_6a3wf")
+
+[node name="HallWallEastSouth" type="Node3D" parent="DraftBrushes" unique_id=1145647359]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16.5, 5, 7.25)
+script = ExtResource("2_ulbe8")
+size = Vector3(1, 10, 9.5)
+brush_id = "hall_wall_east_south"
+material_override = SubResource("StandardMaterial3D_j12s7")
+
+[node name="HallWallEastLintel" type="Node3D" parent="DraftBrushes" unique_id=55022416]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16.5, 8, 0)
+script = ExtResource("2_ulbe8")
+size = Vector3(1, 4, 5)
+brush_id = "hall_wall_east_lintel"
+material_override = SubResource("StandardMaterial3D_muyf0")
+
+[node name="Platform" type="Node3D" parent="DraftBrushes" unique_id=872568437]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 1.5, -7)
+script = ExtResource("2_ulbe8")
+size = Vector3(10, 3, 8)
+brush_id = "platform"
+material_override = SubResource("StandardMaterial3D_qjlfx")
+
+[node name="Ramp" type="Node3D" parent="DraftBrushes" unique_id=696844870]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 1.5, -7)
+script = ExtResource("2_ulbe8")
+shape = 4
+size = Vector3(6, 3, 8)
+brush_id = "ramp"
+material_override = SubResource("StandardMaterial3D_vx5y8")
+
+[node name="PillarA" type="Node3D" parent="DraftBrushes" unique_id=1271199053]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 5, -7)
+script = ExtResource("2_ulbe8")
+shape = 1
+size = Vector3(2, 10, 2)
+brush_id = "pillar_a"
+material_override = SubResource("StandardMaterial3D_4pbxa")
+
+[node name="PillarB" type="Node3D" parent="DraftBrushes" unique_id=1884139362]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 5, 7)
+script = ExtResource("2_ulbe8")
+shape = 1
+size = Vector3(2, 10, 2)
+brush_id = "pillar_b"
+material_override = SubResource("StandardMaterial3D_jt3pw")
+
+[node name="PillarC" type="Node3D" parent="DraftBrushes" unique_id=2006806903]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7, 5, 7)
+script = ExtResource("2_ulbe8")
+shape = 1
+size = Vector3(2, 10, 2)
+brush_id = "pillar_c"
+material_override = SubResource("StandardMaterial3D_rswnb")
+
+[node name="CorridorFloor" type="Node3D" parent="DraftBrushes" unique_id=207241053]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 23.5, -0.5, 0)
+script = ExtResource("2_ulbe8")
+size = Vector3(14, 1, 6)
+brush_id = "corridor_floor"
+material_override = SubResource("StandardMaterial3D_j7yxi")
+
+[node name="CorridorWallNorth" type="Node3D" parent="DraftBrushes" unique_id=1354579732]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 23.5, 5, -3.5)
+script = ExtResource("2_ulbe8")
+size = Vector3(14, 10, 1)
+brush_id = "corridor_wall_north"
+material_override = SubResource("StandardMaterial3D_kaohb")
+
+[node name="CorridorWallSouth" type="Node3D" parent="DraftBrushes" unique_id=1724150908]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 23.5, 5, 3.5)
+script = ExtResource("2_ulbe8")
+size = Vector3(14, 10, 1)
+brush_id = "corridor_wall_south"
+material_override = SubResource("StandardMaterial3D_f6ple")
+
+[node name="CorridorWallEnd" type="Node3D" parent="DraftBrushes" unique_id=1113914309]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30.5, 5, 0)
+script = ExtResource("2_ulbe8")
+size = Vector3(1, 10, 6)
+brush_id = "corridor_wall_end"
+material_override = SubResource("StandardMaterial3D_x1o3j")

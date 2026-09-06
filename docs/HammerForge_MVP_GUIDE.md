@@ -21,7 +21,7 @@ HammerForge uses a **coordinator + subsystems** pattern:
 - **`input_state.gd`** is a state machine managing drag/paint modes.
 - **`dock.gd`** presents 4 tabs (Build, Paint, Objects, Test) with programmatic, persisted collapsible sections. Tab workflows, file operations, visgroups/cordon, and signal wiring delegate to focused `dock_*_handler.gd` and `dock_connections.gd` modules while compatibility callbacks remain thin. Selection tools appear contextually in Build when brushes are selected. The primary toolbar exposes Draw, Select, Paint, More, and Help.
 
-See [DEVELOPMENT.md](../DEVELOPMENT.md) for the full file tree and architecture conventions.
+See [DEVELOPMENT.md](https://github.com/saworbit/hammerforge/blob/main/DEVELOPMENT.md) for the full file tree and architecture conventions.
 
 ## Core Systems
 

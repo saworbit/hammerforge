@@ -21,7 +21,7 @@ MCPRuntimeProbe="*uid://bsg12huaf1u5i"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/hammerforge/plugin.cfg", "res://addons/godot_mcp/plugin.cfg")
+enabled=PackedStringArray("res://addons/hammerforge/plugin.cfg", "res://addons/godot_mcp/plugin.cfg", "res://addons/hf_docshot/plugin.cfg")
 
 [physics]
 
