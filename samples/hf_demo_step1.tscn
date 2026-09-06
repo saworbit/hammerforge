@@ -1,0 +1,23 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://addons/hammerforge/level_root.gd" id="1_gy1qt"]
+[ext_resource type="Script" path="res://addons/hammerforge/brush_instance.gd" id="2_8btoe"]
+[ext_resource type="Texture2D" path="res://addons/hammerforge/textures/prototypes/checker_grey.svg" id="3_xd7t7"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_odxks"]
+albedo_texture = ExtResource("3_xd7t7")
+roughness = 0.9
+uv1_scale = Vector3(8, 6, 1)
+texture_filter = 2
+
+[node name="LevelRoot" type="Node3D" unique_id=314498453]
+script = ExtResource("1_gy1qt")
+
+[node name="DraftBrushes" type="Node3D" parent="." unique_id=527974715]
+
+[node name="HallFloor" type="Node3D" parent="DraftBrushes" unique_id=492187979]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
+script = ExtResource("2_8btoe")
+size = Vector3(32, 1, 24)
+brush_id = "hall_floor"
+material_override = SubResource("StandardMaterial3D_odxks")

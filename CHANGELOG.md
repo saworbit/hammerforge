@@ -97,6 +97,18 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   an engine error alongside it.
 
 ### Changed
+- **Snap geometry is cached per brush**
+  ([#122](https://github.com/saworbit/hammerforge/issues/122)): deduping a brush's
+  faces was the remaining cost in a snap query, and it ran for every non-box brush
+  on every mouse motion event. The result lives in brush space, so it survives
+  every drag, rotate and resize of everything around it. Entries are keyed by
+  brush id, stamped with the node instance, face count and size, and dropped on
+  `brush_changed` or `brush_removed`. A brush with no id is never cached, since
+  nothing would name it to invalidate it. Measured over 300 brushes and 200 motion
+  events with Vertex, Edge and Perpendicular on: a mix with one brush in ten
+  non-box went from 4.13 ms to 3.00 ms per event, and an all-non-box level from
+  15.41 ms to 3.49 ms. Against the original string-keyed version those levels
+  started at 10.33 ms and 77.46 ms.
 
 - **Preview box outlines go through `HFOutlineUtil`**
   ([#121](https://github.com/saworbit/hammerforge/issues/121)): `_build_wireframe_mesh` was

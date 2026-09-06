@@ -1,0 +1,65 @@
+site_name: HammerForge
+site_description: Brush-based level editor for Godot 4.7+
+repo_url: https://github.com/saworbit/hammerforge
+repo_name: saworbit/hammerforge
+docs_dir: docs
+
+exclude_docs: |
+  superpowers/
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: red
+      accent: red
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: red
+      accent: red
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+plugins:
+  - search
+
+nav:
+  - Home: index.md
+  - Features and Reference: features.md
+  - Getting Started:
+      - Install and Upgrade: HammerForge_Install_Upgrade.md
+      - MVP Guide: HammerForge_MVP_GUIDE.md
+      - User Guide: HammerForge_UserGuide.md
+  - Guides:
+      - Floor Paint and Greyboxing: HammerForge_FloorPaint_Greyboxing.md
+      - Texture Materials: HammerForge_Texture_Materials.md
+      - Prototype Textures: HammerForge_Prototype_Textures.md
+      - Data Portability: HammerForge_Data_Portability.md
+  - Reference:
+      - Design Constraints: HammerForge_Design_Constraints.md
+      - Editor Smoke Checklist: HammerForge_Editor_Smoke_Checklist.md
+      - Regenerating Screenshots: demos/README.md

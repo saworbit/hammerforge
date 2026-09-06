@@ -28,6 +28,9 @@ func _root_shim_script() -> GDScript:
 	s.source_code = """
 extends Node3D
 
+signal brush_changed(brush_id: String)
+signal brush_removed(brush_id: String)
+
 var draft_brushes_node: Node3D
 var preview_brush: Node3D
 
@@ -360,6 +363,112 @@ func test_vertices_inside_the_key_tolerance_collapse():
 	assert_eq(moved, 2, "Two of the three faces at that corner were nudged")
 	var candidates: PackedVector3Array = snap._collect_candidates([])
 	assert_eq(candidates.size(), 8, "A sub tolerance nudge is still the same corner")
+
+
+func _dent_corner(brush, from_corner: Vector3, to_corner: Vector3) -> void:
+	for face in brush.faces:
+		var updated := PackedVector3Array()
+		for v in face.local_verts:
+			updated.append(to_corner if v.is_equal_approx(from_corner) else v)
+		face.local_verts = updated
+		face.ensure_geometry()
+
+
+func test_face_geometry_is_cached_between_queries():
+	snap.set_mode(HFSnapSystem.SnapMode.VERTEX, true)
+	snap.set_mode(HFSnapSystem.SnapMode.GRID, false)
+	var b := _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "cube")
+	b.shape = DraftBrush.BrushShape.CUSTOM
+	assert_eq(snap._face_geometry_cache.size(), 0, "Nothing is cached before the first query")
+	snap._collect_candidates([])
+	assert_eq(snap._face_geometry_cache.size(), 1, "The first query files the brush's geometry")
+	assert_eq(
+		snap.snap_point(Vector3(15.6, 15.6, 15.6), 0.0),
+		Vector3(16, 16, 16),
+		"A cached brush still answers with its own corners"
+	)
+
+
+func test_brush_changed_drops_the_cached_geometry():
+	snap.set_mode(HFSnapSystem.SnapMode.VERTEX, true)
+	snap.set_mode(HFSnapSystem.SnapMode.GRID, false)
+	var b := _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "cube")
+	b.shape = DraftBrush.BrushShape.CUSTOM
+	snap._collect_candidates([])
+	# Move a corner in place. Face count is unchanged, so only the signal can
+	# tell the cache that this brush is no longer what it was.
+	_dent_corner(b, Vector3(16, 16, 16), Vector3(4, 4, 4))
+	root.brush_changed.emit("cube")
+	_assert_vector_near(
+		snap.snap_point(Vector3(4.4, 4.2, 4.1), 0.0),
+		Vector3(4, 4, 4),
+		"The moved corner is a snap target once the change is announced"
+	)
+	assert_eq(
+		snap.snap_point(Vector3(16, 16, 16), 0.0),
+		Vector3(16, 16, 16),
+		"and the corner the brush no longer has is not"
+	)
+
+
+func test_a_replaced_node_under_the_same_id_is_not_served_stale_geometry():
+	# An undo can swap a new node in under the same brush id without announcing
+	# a change. The cached entry remembers which instance it came from.
+	snap.set_mode(HFSnapSystem.SnapMode.VERTEX, true)
+	snap.set_mode(HFSnapSystem.SnapMode.GRID, false)
+	var first := _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "cube")
+	first.shape = DraftBrush.BrushShape.CUSTOM
+	snap._collect_candidates([])
+	root.draft_brushes_node.remove_child(first)
+	first.free()
+	var second := _make_brush(Vector3.ZERO, Vector3(8, 8, 8), "cube")
+	second.shape = DraftBrush.BrushShape.CUSTOM
+	_assert_vector_near(
+		snap.snap_point(Vector3(3.6, 3.6, 3.6), 0.0),
+		Vector3(4, 4, 4),
+		"The replacement's own corners answer, not the corners it inherited"
+	)
+
+
+func test_a_resize_is_not_served_stale_geometry():
+	# Resizing a wedge rebuilds its faces to the same count on the same node,
+	# and the change tracker only notices on its next scan.
+	snap.set_mode(HFSnapSystem.SnapMode.VERTEX, true)
+	snap.set_mode(HFSnapSystem.SnapMode.GRID, false)
+	var b := _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "wedge")
+	b.shape = DraftBrush.BrushShape.WEDGE
+	snap._collect_candidates([])
+	b.set_size(Vector3(8, 8, 8))
+	var corners: PackedVector3Array = snap._collect_candidates([])
+	for c in corners:
+		assert_lt(absf(c.x), 8.0, "Every corner must come from the resized wedge, not the old one")
+
+
+func test_brush_removed_evicts_the_entry():
+	snap.set_mode(HFSnapSystem.SnapMode.VERTEX, true)
+	var b := _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "cube")
+	b.shape = DraftBrush.BrushShape.CUSTOM
+	snap._collect_candidates([])
+	assert_eq(snap._face_geometry_cache.size(), 1)
+	root.brush_removed.emit("cube")
+	assert_eq(snap._face_geometry_cache.size(), 0, "A deleted brush leaves nothing behind")
+
+
+func test_a_brush_without_an_id_is_never_cached():
+	# Nothing would name it to invalidate it, so it recomputes every query.
+	snap.set_mode(HFSnapSystem.SnapMode.VERTEX, true)
+	snap.set_mode(HFSnapSystem.SnapMode.GRID, false)
+	var b := _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "")
+	b.brush_id = ""
+	b.shape = DraftBrush.BrushShape.CUSTOM
+	snap._collect_candidates([])
+	assert_eq(snap._face_geometry_cache.size(), 0, "An id-less brush files nothing")
+	_dent_corner(b, Vector3(16, 16, 16), Vector3(4, 4, 4))
+	_assert_vector_near(
+		snap.snap_point(Vector3(4.4, 4.2, 4.1), 0.0),
+		Vector3(4, 4, 4),
+		"and it picks up an edit with no announcement at all"
+	)
 
 
 func test_tessellated_primitive_falls_back_to_its_bounding_box():
