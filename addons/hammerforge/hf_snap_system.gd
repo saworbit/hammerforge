@@ -41,9 +41,29 @@ var _custom_snap_origin: Vector3 = Vector3.ZERO
 var _custom_snap_dir: Vector3 = Vector3.ZERO
 var _has_custom_snap := false
 
+## Face snap geometry per brush id. Brush space does not move with the brush,
+## so an entry survives every drag, rotate and resize of everything around it
+## and only goes stale when a brush's own faces change.
+var _face_geometry_cache: Dictionary = {}
+
 
 func _init(level_root: Node3D) -> void:
 	root = level_root
+	if root == null:
+		return
+	for sig in ["brush_changed", "brush_removed"]:
+		if root.has_signal(sig):
+			root.connect(sig, Callable(self, "_on_brush_geometry_invalidated"))
+
+
+## Drop one brush's cached geometry. Both signals carry the id that changed.
+func _on_brush_geometry_invalidated(brush_id: String) -> void:
+	_face_geometry_cache.erase(brush_id)
+
+
+## Drop every cached entry. For callers that rebuild the level wholesale.
+func clear_geometry_cache() -> void:
+	_face_geometry_cache.clear()
 
 
 func set_mode(mode: int, on: bool) -> void:
@@ -171,11 +191,45 @@ func _snap_geometry_local(brush: DraftBrush) -> Dictionary:
 		return {"verts": _box_corners(brush.size * 0.5), "edges": BOX_EDGE_INDICES}
 	var faces: Array = brush.faces
 	if not faces.is_empty() and faces.size() <= MAX_SNAP_FACES:
-		var face_geometry := _face_snap_geometry(faces)
+		var face_geometry := _cached_face_geometry(brush, faces)
 		var face_verts: PackedVector3Array = face_geometry["verts"]
 		if face_verts.size() >= 2:
 			return face_geometry
 	return {"verts": _box_corners(brush.size * 0.5), "edges": BOX_EDGE_INDICES}
+
+
+## Deduping a brush's faces is the expensive half of a snap query and it runs
+## per brush per mouse motion event. The result is in brush space, so it only
+## depends on the faces themselves.
+##
+## `brush_changed` is what says those faces moved. The stamp covers the paths
+## that change geometry without announcing it first: a node swapped in under the
+## same id by an undo, a face array replaced outright, and a resize, which
+## rebuilds a wedge or prism's faces to the same count on the same node. A brush
+## with no id is never cached, because nothing would name it to invalidate it.
+func _cached_face_geometry(brush: DraftBrush, faces: Array) -> Dictionary:
+	var brush_id := str(brush.brush_id)
+	if brush_id == "":
+		return _face_snap_geometry(faces)
+	var instance_id := brush.get_instance_id()
+	var face_count := faces.size()
+	var size: Vector3 = brush.size
+	var entry = _face_geometry_cache.get(brush_id)
+	if (
+		entry != null
+		and entry["instance_id"] == instance_id
+		and entry["face_count"] == face_count
+		and entry["size"] == size
+	):
+		return entry["geometry"]
+	var geometry := _face_snap_geometry(faces)
+	_face_geometry_cache[brush_id] = {
+		"instance_id": instance_id,
+		"face_count": face_count,
+		"size": size,
+		"geometry": geometry,
+	}
+	return geometry
 
 
 ## Unique vertices and unique edges read off a brush's faces. A hull corner
