@@ -13,12 +13,14 @@ const SHOWCASE := "res://samples/hf_demo_showcase.tscn"
 const OUT_DIR := "res://docs/images/"
 
 # name, camera position, look-at target, fov
-# Framing notes: the level AABB is x -17..31, y -1..10, z -15..13. Elevated
-# shots must clear the 10-unit walls or the near corner fills the frame.
 const SHOTS := [
-	["showcase_hero", Vector3(-18, 30, 30), Vector3(6, 0, -1), 45.0],
-	["showcase_doorway", Vector3(0, 3.5, 0), Vector3(30, 3, 0), 60.0],
-	["showcase_materials", Vector3(6, 6, 4), Vector3(-9, 2, -7), 60.0],
+	# Level spans x +/-27, y 0..32, z +/-36. Framing has to clear the towers.
+	# The hero is the interior: the colonnade is what makes this read as a level
+	# rather than a walled box. An aerial from a corner puts a tower in front of
+	# everything worth seeing.
+	["showcase_hero", Vector3(0, 7, 28), Vector3(0, 8, -30), 72.0],
+	["showcase_overview", Vector3(-7, 56, 64), Vector3(0, 3, -6), 48.0],
+	["showcase_gallery", Vector3(14, 5, 13), Vector3(-7, 17, -12), 72.0],
 ]
 
 var _width := 1920

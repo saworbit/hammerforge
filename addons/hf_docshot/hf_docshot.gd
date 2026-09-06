@@ -188,7 +188,7 @@ func _run() -> void:
 		_frame_selection()
 		for _i in range(30):
 			await get_tree().process_frame
-		_place_editor_camera(Vector3(-17, 22, 27), Vector3(8, 1, -1))
+		_place_editor_camera(Vector3(-44, 40, 56), Vector3(2, 6, -2))
 		EditorInterface.get_selection().clear()
 		for _i in range(10):
 			await get_tree().process_frame
@@ -211,6 +211,14 @@ func _run() -> void:
 	if await _show_main_screen("HammerForge"):
 		if await _capture("ui_console"):
 			shots += 1
+		# The Controls tab is the settings surface: every switch, grouped and
+		# captioned. Worth its own shot -- it answers "what can I configure".
+		if _select_console_tab("Controls"):
+			for _i in range(20):
+				await get_tree().process_frame
+			if await _capture("ui_console_controls"):
+				shots += 1
+			_select_console_tab("Status")
 
 	shots += await _capture_sequence()
 
@@ -241,7 +249,7 @@ func _capture_sequence() -> int:
 		# Opening a scene hands the main screen back to the plugin, so 3D has to
 		# be re-selected for every step or the panels are inconsistent.
 		await _show_main_screen("3D")
-		_place_editor_camera(Vector3(-17, 22, 27), Vector3(8, 1, -1))
+		_place_editor_camera(Vector3(-44, 40, 56), Vector3(2, 6, -2))
 		EditorInterface.get_selection().clear()
 		for _i in range(10):
 			await get_tree().process_frame
@@ -306,6 +314,27 @@ func _ensure_scene_open(path: String) -> bool:
 	return false
 
 
+## Select a tab on the HammerForge Console by title. The console is found by
+## its tab set rather than by type, so this does not depend on the panel script.
+func _select_console_tab(title: String) -> bool:
+	var base: Control = EditorInterface.get_base_control()
+	if base == null:
+		return false
+	for node in base.find_children("*", "TabContainer", true, false):
+		var tabs := node as TabContainer
+		var titles: Array = []
+		for i in range(tabs.get_tab_count()):
+			titles.append(tabs.get_tab_title(i))
+		if titles.has("Status") and titles.has("Controls") and titles.has("Log"):
+			for i in range(tabs.get_tab_count()):
+				if tabs.get_tab_title(i) == title:
+					tabs.current_tab = i
+					print("[docshot] console tab -> ", title)
+					return true
+	push_warning("[docshot] console tab not found: " + title)
+	return false
+
+
 ## Select an editor main screen and give it time to lay out.
 func _show_main_screen(screen: String) -> bool:
 	EditorInterface.set_main_screen_editor(screen)
@@ -328,7 +357,6 @@ func _place_editor_camera(from: Vector3, target: Vector3) -> void:
 		return
 	cam.global_position = from
 	cam.look_at(target, Vector3.UP)
-	print("[docshot] editor camera placed at ", cam.global_position)
 
 
 ## Ask the 3D viewport to frame the current selection (the editor's "F" action).

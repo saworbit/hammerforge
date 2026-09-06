@@ -7,17 +7,17 @@
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_odxks"]
 albedo_texture = ExtResource("3_xd7t7")
 roughness = 0.9
-uv1_scale = Vector3(8, 6, 1)
+uv1_scale = Vector3(12, 16, 1)
 texture_filter = 2
 
-[node name="LevelRoot" type="Node3D" unique_id=314498453]
+[node name="LevelRoot" type="Node3D" unique_id=344274864]
 script = ExtResource("1_gy1qt")
 
-[node name="DraftBrushes" type="Node3D" parent="." unique_id=527974715]
+[node name="DraftBrushes" type="Node3D" parent="." unique_id=1770331938]
 
-[node name="HallFloor" type="Node3D" parent="DraftBrushes" unique_id=492187979]
+[node name="Floor" type="Node3D" parent="DraftBrushes" unique_id=243107146]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
 script = ExtResource("2_8btoe")
-size = Vector3(32, 1, 24)
-brush_id = "hall_floor"
+size = Vector3(48, 1, 64)
+brush_id = "floor"
 material_override = SubResource("StandardMaterial3D_odxks")

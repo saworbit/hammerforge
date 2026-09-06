@@ -9,7 +9,7 @@ overview and installation, see the [home page](index.md).
 
 ### Draw and Shape Brushes
 
-<img src="images/showcase_doorway.png" alt="Interior view of a HammerForge hall looking through a doorway opening into a corridor beyond" width="820">
+<img src="images/showcase_overview.png" alt="A HammerForge level seen from above: a rectangular hall with window bays along both side walls, corner towers, a colonnade and a galleried upper level" width="820">
 
 Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Subtract** operations with pending cut staging, so you can preview subtractions before committing.
 
@@ -87,7 +87,7 @@ Grid-based paint layers with chunked storage for large worlds:
 
 ### Materials and Surface Paint
 
-<img src="images/showcase_materials.png" alt="A raised platform and striped ramp textured with four different built-in prototype materials" width="820">
+<img src="images/showcase_gallery.png" alt="Low view up through a HammerForge colonnade toward the gallery overhead, lit by sunlight" width="820">
 
 - **Visual material browser** -- thumbnail grid with search, pattern/color filters, and Prototypes/Palette/Favorites views
 - **150 built-in prototype textures** (15 patterns x 10 colors) -- click **Refresh Prototypes** for instant greyboxing with visual browsing

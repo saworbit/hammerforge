@@ -1,162 +1,43 @@
 extends SceneTree
 ## Generate the HammerForge showcase level used for README and docs screenshots.
 ##
-## The scene is authored as data below so the shot can be regenerated whenever
-## brush defaults or the prototype texture set change. Brushes are built
-## detached and packed directly, so _ready() never runs and no private mesh
-## children leak into the saved scene (matching samples/hf_sample_minimal.tscn).
+## Built procedurally rather than as a flat table so the level can carry real
+## architecture -- a colonnade, a galleried upper level, window bays -- instead
+## of the handful of boxes a literal list encourages.
+##
+## The palette is deliberately restrained: greys carry the structure and a
+## single warm accent marks the surfaces people walk on. A colour per brush
+## reads as a texture swatch rather than a designed space.
+##
+## Openings are modelled as gaps between segments, never as subtract brushes.
+## The editor screenshots show draft geometry, and an unbaked subtract renders
+## as a solid box sitting in the hole it is meant to cut.
 ##
 ## Usage:
 ##   godot --headless -s res://tools/build_showcase_scene.gd --path .
-##   godot --headless -s res://tools/build_showcase_scene.gd --path . -- --out=res://samples/other.tscn
 
 const LevelRootScript = preload("res://addons/hammerforge/level_root.gd")
 const BrushScript = preload("res://addons/hammerforge/brush_instance.gd")
 const PROTO_DIR := "res://addons/hammerforge/textures/prototypes/"
 const DEFAULT_OUT := "res://samples/hf_demo_showcase.tscn"
 
-# name, shape, size, position, texture, uv scale, subtract
-const LAYOUT := [
-	# --- main hall ---
-	["HallFloor", "BOX", Vector3(32, 1, 24), Vector3(0, -0.5, 0), "checker_grey", Vector2(8, 6)],
-	[
-		"HallWallNorth",
-		"BOX",
-		Vector3(32, 10, 1),
-		Vector3(0, 5, -12.5),
-		"brick_grey",
-		Vector2(8, 2.5)
-	],
-	[
-		"HallWallSouth",
-		"BOX",
-		Vector3(32, 10, 1),
-		Vector3(0, 5, 12.5),
-		"brick_grey",
-		Vector2(8, 2.5)
-	],
-	[
-		"HallWallWest",
-		"BOX",
-		Vector3(1, 10, 24),
-		Vector3(-16.5, 5, 0),
-		"brick_blue",
-		Vector2(6, 2.5)
-	],
-	# East wall is split around a 5x6 doorway opening rather than carved with a
-	# subtract brush. Both render identically; the split keeps the staged
-	# sequence scenes readable as plain additive geometry.
-	[
-		"HallWallEastNorth",
-		"BOX",
-		Vector3(1, 10, 9.5),
-		Vector3(16.5, 5, -7.25),
-		"brick_grey",
-		Vector2(3, 2.5)
-	],
-	[
-		"HallWallEastSouth",
-		"BOX",
-		Vector3(1, 10, 9.5),
-		Vector3(16.5, 5, 7.25),
-		"brick_grey",
-		Vector2(3, 2.5)
-	],
-	[
-		"HallWallEastLintel",
-		"BOX",
-		Vector3(1, 4, 5),
-		Vector3(16.5, 8, 0),
-		"brick_grey",
-		Vector2(2, 1)
-	],
-	# --- raised platform and ramp (north-west) ---
-	["Platform", "BOX", Vector3(10, 3, 8), Vector3(-10, 1.5, -7), "brick_orange", Vector2(3, 1)],
-	[
-		"Ramp",
-		"WEDGE",
-		Vector3(6, 3, 8),
-		Vector3(-2, 1.5, -7),
-		"stripes_diagonal_yellow",
-		Vector2(2, 1)
-	],
-	# --- pillars ---
-	["PillarA", "CYLINDER", Vector3(2, 10, 2), Vector3(7, 5, -7), "dots_grey", Vector2(2, 3)],
-	["PillarB", "CYLINDER", Vector3(2, 10, 2), Vector3(7, 5, 7), "dots_grey", Vector2(2, 3)],
-	["PillarC", "CYLINDER", Vector3(2, 10, 2), Vector3(-7, 5, 7), "dots_grey", Vector2(2, 3)],
-	# --- corridor east through the carved doorway ---
-	[
-		"CorridorFloor",
-		"BOX",
-		Vector3(14, 1, 6),
-		Vector3(23.5, -0.5, 0),
-		"checker_brown",
-		Vector2(4, 2)
-	],
-	[
-		"CorridorWallNorth",
-		"BOX",
-		Vector3(14, 10, 1),
-		Vector3(23.5, 5, -3.5),
-		"brick_brown",
-		Vector2(4, 2.5)
-	],
-	[
-		"CorridorWallSouth",
-		"BOX",
-		Vector3(14, 10, 1),
-		Vector3(23.5, 5, 3.5),
-		"brick_brown",
-		Vector2(4, 2.5)
-	],
-	[
-		"CorridorWallEnd",
-		"BOX",
-		Vector3(1, 10, 6),
-		Vector3(30.5, 5, 0),
-		"brick_red",
-		Vector2(2, 2.5)
-	],
-]
+# Hall dimensions. Everything else derives from these.
+const HALF_W := 24.0
+const HALF_D := 32.0
+const WALL_H := 26.0
+const WALL_T := 2.0
+const SILL := 8.0
+const HEAD := 20.0
+const COL_X := 14.0
+const GALLERY_Y := 18.0
 
-# Subtract brushes carve the doorway. Kept separate so the cut reads clearly.
-const CUTS := []
+const STONE := "brick_grey"
+const FLOOR := "checker_grey"
+const SHAFT := "solid_grey"
+const TRIM := "hex_grey"
+const ACCENT := "brick_orange"
 
-# Cumulative build stages for the how-it-works sequence. Each entry names the
-# brushes present at that step, so the strip shows one level being built up
-# rather than four unrelated screenshots.
-const STAGES := [
-	["hf_demo_step1", ["HallFloor"]],
-	[
-		"hf_demo_step2",
-		[
-			"HallFloor",
-			"HallWallNorth",
-			"HallWallSouth",
-			"HallWallWest",
-			"HallWallEastNorth",
-			"HallWallEastSouth",
-			"HallWallEastLintel",
-		]
-	],
-	[
-		"hf_demo_step3",
-		[
-			"HallFloor",
-			"HallWallNorth",
-			"HallWallSouth",
-			"HallWallWest",
-			"HallWallEastNorth",
-			"HallWallEastSouth",
-			"HallWallEastLintel",
-			"Platform",
-			"Ramp",
-			"PillarA",
-			"PillarB",
-			"PillarC",
-		]
-	],
-]
+var _out: Array = []
 
 
 func _init() -> void:
@@ -169,71 +50,230 @@ func _init() -> void:
 		if arg.begins_with("--out="):
 			out_path = arg.trim_prefix("--out=")
 
-	var root := Node3D.new()
-	root.name = "LevelRoot"
-	root.set_script(LevelRootScript)
-
-	var draft := Node3D.new()
-	draft.name = "DraftBrushes"
-	root.add_child(draft)
-	draft.owner = root
-
-	var built := 0
-	for entry in LAYOUT:
-		var brush := _make_brush(entry[0], entry[1], entry[2], entry[3], CSGShape3D.OPERATION_UNION)
-		brush.material_override = _make_material(entry[4], entry[5])
-		draft.add_child(brush)
-		brush.owner = root
-		built += 1
-
-	for cut in CUTS:
-		var brush := _make_brush(cut[0], cut[1], cut[2], cut[3], CSGShape3D.OPERATION_SUBTRACTION)
-		draft.add_child(brush)
-		brush.owner = root
-		built += 1
-
-	var packed := PackedScene.new()
-	var pack_err := packed.pack(root)
-	if pack_err != OK:
-		printerr("Failed to pack showcase scene: error ", pack_err)
-		quit(1)
-		return
-
-	var save_err := ResourceSaver.save(packed, out_path)
-	if save_err != OK:
-		printerr("Failed to save ", out_path, ": error ", save_err)
-		quit(1)
-		return
-
-	root.free()
+	# Stages double as the how-it-works strip: floor, walls, columns, detail.
+	var stages := [
+		["hf_demo_empty", []],
+		["hf_demo_step1", ["floor"]],
+		["hf_demo_step2", ["floor", "walls"]],
+		["hf_demo_step3", ["floor", "walls", "colonnade"]],
+	]
 	var staged := 0
-	for stage in STAGES:
-		if _write_scene(str(stage[0]), stage[1]) == OK:
+	for stage in stages:
+		if _write_scene(str(stage[0]), _layout(stage[1])) == OK:
 			staged += 1
+
+	var full := _layout(["floor", "walls", "colonnade", "gallery", "dais", "towers"])
+	if _write_scene_at(out_path, full) != OK:
+		quit(1)
+		return
 
 	print("HammerForge showcase scene written")
 	print("out=", out_path)
-	print("brushes=", built, " (", LAYOUT.size(), " solid, ", CUTS.size(), " subtract)")
-	print("stages=", staged, "/", STAGES.size())
+	print("brushes=", full.size())
+	print("stages=", staged, "/", stages.size())
 	quit(0)
 
 
-## Write a subset of LAYOUT as its own scene, used for the sequence strip.
-## Returns an Error so the caller can count successes.
-func _write_scene(scene_name: String, include: Array) -> Error:
+## Assemble the brush list for the named parts, in build order.
+func _layout(parts: Array) -> Array:
+	_out = []
+	if parts.has("floor"):
+		_add(
+			"Floor",
+			"BOX",
+			Vector3(HALF_W * 2.0, 1.0, HALF_D * 2.0),
+			Vector3(0, -0.5, 0),
+			FLOOR,
+			Vector2(12, 16)
+		)
+	if parts.has("walls"):
+		_build_side_wall(-HALF_W, "West")
+		_build_side_wall(HALF_W, "East")
+		_add(
+			"WallNorth",
+			"BOX",
+			Vector3(HALF_W * 2.0, WALL_H, WALL_T),
+			Vector3(0, WALL_H * 0.5, -HALF_D),
+			STONE,
+			Vector2(12, 6)
+		)
+		_build_entrance_wall()
+	if parts.has("colonnade"):
+		_build_colonnade()
+	if parts.has("gallery"):
+		_build_gallery(-1.0)
+		_build_gallery(1.0)
+	if parts.has("dais"):
+		_build_dais()
+	if parts.has("towers"):
+		_build_towers()
+	return _out
+
+
+func _add(
+	brush_name: String, shape: String, size: Vector3, pos: Vector3, tex: String, uv: Vector2
+) -> void:
+	_out.append([brush_name, shape, size, pos, tex, uv])
+
+
+## A side wall as a solid base, a run of piers and a lintel above. The gaps
+## between piers are the window bays.
+func _build_side_wall(x: float, side: String) -> void:
+	_add(
+		"Wall%sBase" % side,
+		"BOX",
+		Vector3(WALL_T, SILL, HALF_D * 2.0),
+		Vector3(x, SILL * 0.5, 0),
+		STONE,
+		Vector2(16, 2)
+	)
+	_add(
+		"Wall%sLintel" % side,
+		"BOX",
+		Vector3(WALL_T, WALL_H - HEAD, HALF_D * 2.0),
+		Vector3(x, (WALL_H + HEAD) * 0.5, 0),
+		STONE,
+		Vector2(16, 1.5)
+	)
+	var bays := 8
+	for i in range(bays + 1):
+		var z: float = -HALF_D + (HALF_D * 2.0) * float(i) / float(bays)
+		_add(
+			"Wall%sPier%d" % [side, i],
+			"BOX",
+			Vector3(WALL_T, HEAD - SILL, 4.0),
+			Vector3(x, (SILL + HEAD) * 0.5, z),
+			STONE,
+			Vector2(1, 3)
+		)
+
+
+## South wall, split around a tall central entrance.
+func _build_entrance_wall() -> void:
+	var opening := 10.0
+	var seg: float = (HALF_W * 2.0 - opening) * 0.5
+	for s in [-1.0, 1.0]:
+		var label := "West" if s < 0.0 else "East"
+		_add(
+			"Entrance%s" % label,
+			"BOX",
+			Vector3(seg, WALL_H, WALL_T),
+			Vector3(s * (opening + seg) * 0.5, WALL_H * 0.5, HALF_D),
+			STONE,
+			Vector2(5, 6)
+		)
+	_add(
+		"EntranceLintel",
+		"BOX",
+		Vector3(opening, WALL_H - 16.0, WALL_T),
+		Vector3(0, (WALL_H + 16.0) * 0.5, HALF_D),
+		TRIM,
+		Vector2(3, 2)
+	)
+
+
+## Two rows of columns: base, shaft, capital. This is what makes the space read
+## as architecture rather than as a room.
+func _build_colonnade() -> void:
+	for side in [-1.0, 1.0]:
+		var label := "W" if side < 0.0 else "E"
+		for i in range(7):
+			var z: float = -24.0 + 8.0 * float(i)
+			var x: float = side * COL_X
+			_add(
+				"Col%s%dBase" % [label, i],
+				"BOX",
+				Vector3(3.6, 1.0, 3.6),
+				Vector3(x, 0.5, z),
+				TRIM,
+				Vector2(1, 1)
+			)
+			_add(
+				"Col%s%dShaft" % [label, i],
+				"CYLINDER",
+				Vector3(2.6, 16.0, 2.6),
+				Vector3(x, 9.0, z),
+				SHAFT,
+				Vector2(2, 4)
+			)
+			_add(
+				"Col%s%dCap" % [label, i],
+				"BOX",
+				Vector3(3.9, 1.4, 3.9),
+				Vector3(x, 17.7, z),
+				TRIM,
+				Vector2(1, 1)
+			)
+
+
+## Upper walkway over each aisle, with a balustrade on the open edge.
+func _build_gallery(side: float) -> void:
+	var label := "West" if side < 0.0 else "East"
+	var width := 8.0
+	var cx: float = side * (HALF_W - WALL_T * 0.5 - width * 0.5)
+	_add(
+		"Gallery%sFloor" % label,
+		"BOX",
+		Vector3(width, 1.0, HALF_D * 2.0),
+		Vector3(cx, GALLERY_Y, 0),
+		ACCENT,
+		Vector2(2, 16)
+	)
+	_add(
+		"Gallery%sRail" % label,
+		"BOX",
+		Vector3(0.8, 3.0, HALF_D * 2.0),
+		Vector3(cx - side * (width * 0.5), GALLERY_Y + 2.0, 0),
+		STONE,
+		Vector2(16, 1)
+	)
+
+
+## Raised circular platform at the north end, approached by broad steps.
+func _build_dais() -> void:
+	_add("Dais", "CYLINDER", Vector3(18, 2, 18), Vector3(0, 1, -20), ACCENT, Vector2(3, 1))
+	for i in range(3):
+		_add(
+			"DaisStep%d" % i,
+			"BOX",
+			Vector3(22.0 - 2.0 * float(i), 0.7, 2.0),
+			Vector3(0, 0.35 + 0.7 * float(i), -10.0 - 2.0 * float(i)),
+			TRIM,
+			Vector2(6, 1)
+		)
+
+
+## Corner towers, for silhouette from outside.
+func _build_towers() -> void:
+	for sx in [-1.0, 1.0]:
+		for sz in [-1.0, 1.0]:
+			var nx := "W" if sx < 0.0 else "E"
+			var nz := "N" if sz < 0.0 else "S"
+			_add(
+				"Tower%s%s" % [nz, nx],
+				"CYLINDER",
+				Vector3(7, WALL_H + 6.0, 7),
+				Vector3(sx * HALF_W, (WALL_H + 6.0) * 0.5, sz * HALF_D),
+				STONE,
+				Vector2(4, 6)
+			)
+
+
+func _write_scene(scene_name: String, entries: Array) -> Error:
+	return _write_scene_at("res://samples/" + scene_name + ".tscn", entries)
+
+
+func _write_scene_at(path: String, entries: Array) -> Error:
 	var root := Node3D.new()
 	root.name = "LevelRoot"
 	root.set_script(LevelRootScript)
-
 	var draft := Node3D.new()
 	draft.name = "DraftBrushes"
 	root.add_child(draft)
 	draft.owner = root
 
-	for entry in LAYOUT:
-		if not include.has(entry[0]):
-			continue
-		var brush := _make_brush(entry[0], entry[1], entry[2], entry[3], CSGShape3D.OPERATION_UNION)
+	for entry in entries:
+		var brush := _make_brush(entry[0], entry[1], entry[2], entry[3])
 		brush.material_override = _make_material(entry[4], entry[5])
 		draft.add_child(brush)
 		brush.owner = root
@@ -242,29 +282,25 @@ func _write_scene(scene_name: String, include: Array) -> Error:
 	var pack_err := packed.pack(root)
 	if pack_err != OK:
 		root.free()
-		printerr("Failed to pack ", scene_name, ": error ", pack_err)
+		printerr("Failed to pack ", path, ": error ", pack_err)
 		return pack_err
-
-	var path := "res://samples/" + scene_name + ".tscn"
 	var save_err := ResourceSaver.save(packed, path)
 	root.free()
 	if save_err != OK:
 		printerr("Failed to save ", path, ": error ", save_err)
 		return save_err
-	print("stage=", path)
+	print("scene=", path, " brushes=", entries.size())
 	return OK
 
 
-func _make_brush(
-	node_name: String, shape_name: String, size: Vector3, pos: Vector3, operation: int
-) -> Node3D:
+func _make_brush(brush_name: String, shape_name: String, size: Vector3, pos: Vector3) -> Node3D:
 	var brush := Node3D.new()
-	brush.name = node_name
+	brush.name = brush_name
 	brush.set_script(BrushScript)
 	brush.shape = LevelRootScript.BrushShape[shape_name]
 	brush.size = size
-	brush.operation = operation
-	brush.brush_id = node_name.to_snake_case()
+	brush.operation = CSGShape3D.OPERATION_UNION
+	brush.brush_id = brush_name.to_snake_case()
 	brush.position = pos
 	return brush
 
@@ -286,5 +322,3 @@ func _make_material(texture_name: String, uv_scale: Vector2) -> StandardMaterial
 func _print_usage() -> void:
 	print("HammerForge showcase scene generator")
 	print("  --out=PATH   Destination .tscn (default ", DEFAULT_OUT, ")")
-	print("Example:")
-	print("  godot --headless -s res://tools/build_showcase_scene.gd --path .")
