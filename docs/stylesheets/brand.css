@@ -1,0 +1,43 @@
+/* HammerForge brand palette. See docs/brand/BRAND.md.
+ *
+ * Red is the only accent, and it is not decorative: it is the colour the
+ * viewport already uses to outline subtract brushes. Godot blue is absent by
+ * design -- an addon wearing the engine's colour reads as first-party. */
+:root {
+  --hf-red: #e03131;
+  --hf-ink: #14171c;
+  --hf-paper: #f2f4f7;
+  --hf-slate: #79818f;
+}
+
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: var(--hf-red);
+  --md-primary-fg-color--light: #e85d5d;
+  --md-primary-fg-color--dark: #b82626;
+  --md-primary-bg-color: var(--hf-paper);
+  --md-accent-fg-color: var(--hf-red);
+  --md-typeset-a-color: #c22a2a;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: var(--hf-ink);
+  --md-primary-fg-color--light: #2a2f38;
+  --md-primary-fg-color--dark: #0d1015;
+  --md-primary-bg-color: var(--hf-paper);
+  --md-accent-fg-color: var(--hf-red);
+  --md-typeset-a-color: #ff6b6b;
+  --md-default-bg-color: var(--hf-ink);
+}
+
+/* Slate is for annotation and rules, with no accent role. */
+.md-typeset hr {
+  border-bottom-color: var(--hf-slate);
+  opacity: 0.35;
+}
+
+/* Screenshots carry their own frame badly against a flat page; a hairline and
+ * soft corners stop them bleeding into the background in either theme. */
+.md-typeset img[src*="/images/"] {
+  border-radius: 6px;
+  border: 1px solid rgba(121, 129, 143, 0.35);
+}

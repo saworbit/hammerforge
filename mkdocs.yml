@@ -12,18 +12,20 @@ exclude_docs: |
 
 theme:
   name: material
+  logo: brand/svg/hammerforge-mark-dark.svg
+  favicon: brand/svg/favicon.svg
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: red
-      accent: red
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-night
         name: Switch to dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: red
-      accent: red
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-sunny
         name: Switch to light mode
@@ -34,6 +36,9 @@ theme:
     - navigation.top
     - content.code.copy
     - search.suggest
+
+extra_css:
+  - stylesheets/brand.css
 
 markdown_extensions:
   - admonition
@@ -65,4 +70,5 @@ nav:
   - Reference:
       - Design Constraints: HammerForge_Design_Constraints.md
       - Editor Smoke Checklist: HammerForge_Editor_Smoke_Checklist.md
+      - Brand: brand/BRAND.md
       - Regenerating Screenshots: demos/README.md
