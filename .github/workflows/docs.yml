@@ -6,6 +6,11 @@ on:
     paths:
       - "docs/**"
       - "mkdocs.yml"
+      # The theme override is part of the site: it carries the link-preview
+      # metadata, the structured data and the Search Console proof. Leaving it
+      # out meant a change to it built locally, merged cleanly, and never
+      # deployed -- with nothing anywhere reporting a failure.
+      - "overrides/**"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
 
