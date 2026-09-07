@@ -158,6 +158,12 @@ func delete_brush(brush: Node, free: bool = true) -> void:
 		if root.face_selection.has(key):
 			root.face_selection.erase(key)
 			_apply_face_selection()
+			# The dock's surface panel is still pointed at a face that just went
+			# away. Batched deletes coalesce this down to one emission.
+			if root.has_method("_emit_or_batch"):
+				root._emit_or_batch("face_selection_changed", [])
+			elif root.has_signal("face_selection_changed"):
+				root.face_selection_changed.emit()
 	_brush_count = max(0, _brush_count - 1)
 	_legacy_manager_remove(brush)
 	if brush.get_parent():

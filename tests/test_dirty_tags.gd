@@ -5,6 +5,7 @@ extends GutTest
 const LevelRootType = preload("res://addons/hammerforge/level_root.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 const FaceDataType = preload("res://addons/hammerforge/face_data.gd")
+const DraftEntity = preload("res://addons/hammerforge/draft_entity.gd")
 
 # Use a lightweight shim to avoid full LevelRoot initialization
 var root_script: GDScript
@@ -72,21 +73,19 @@ func _emit_or_batch(signal_name: String, args: Array = []) -> void:
 		_emit_signal_by_name(signal_name, args)
 
 func _flush_batched_signals() -> void:
-	var brush_ids_changed: Array = []
-	var other_signals: Array = []
-	for entry in _batched_signals:
+	var pending: Array = _batched_signals
+	_batched_signals = []
+	var seen: Dictionary = {}
+	for entry in pending:
 		var sname: String = entry.get("name", "")
-		if sname in ["brush_added", "brush_removed", "brush_changed"]:
-			var bid = entry.get("args", [])
-			if not bid.is_empty():
-				brush_ids_changed.append(bid[0])
-		else:
-			other_signals.append(entry)
-	_batched_signals.clear()
-	if not brush_ids_changed.is_empty():
-		selection_changed.emit(brush_ids_changed)
-	for entry in other_signals:
-		_emit_signal_by_name(entry.get("name", ""), entry.get("args", []))
+		if sname == "":
+			continue
+		var args: Array = entry.get("args", [])
+		var key: Array = [sname, args]
+		if seen.has(key):
+			continue
+		seen[key] = true
+		_emit_signal_by_name(sname, args)
 
 func discard_signal_batch() -> void:
 	_batched_signals.clear()
@@ -274,16 +273,44 @@ func test_serialized_brushes_bootstrap_unique_ids_live_index_and_committed_resto
 	assert_eq(production_root.displacement_system._get_all_brushes().size(), 3)
 
 
-func test_delete_brushes_by_id_coalesces_selection_changed():
+func test_delete_brushes_by_id_emits_brush_removed_per_brush():
 	var production_root := _make_production_root()
 	_make_production_brush(production_root, "batch_a")
 	_make_production_brush(production_root, "batch_b")
+	var removed: Array = []
 	var selection_emits: Array = []
+	production_root.brush_removed.connect(func(bid): removed.append(bid))
 	production_root.selection_changed.connect(func(ids): selection_emits.append(ids))
 	production_root.delete_brushes_by_id(["batch_a", "batch_b"])
-	assert_eq(selection_emits.size(), 1, "Multi-brush delete must not storm the dock")
+	assert_eq(removed, ["batch_a", "batch_b"], "Caches must be told which brushes went away")
+	assert_eq(selection_emits.size(), 0, "Deleted ids are not a selection")
 	assert_eq(production_root.get_live_brush_count(), 0)
 	assert_eq(production_root.brush_system.get_cached_brush_count(), 0)
+
+
+func test_batched_flush_drops_exact_repeats():
+	var production_root := _make_production_root()
+	var changed: Array = []
+	production_root.brush_changed.connect(func(bid): changed.append(bid))
+	production_root.begin_signal_batch()
+	production_root._emit_or_batch("brush_changed", ["a"])
+	production_root._emit_or_batch("brush_changed", ["a"])
+	production_root._emit_or_batch("brush_changed", ["b"])
+	production_root.end_signal_batch()
+	assert_eq(changed, ["a", "b"], "Repeat events for one brush collapse to one")
+
+
+func test_batched_flush_keeps_signal_order():
+	var production_root := _make_production_root()
+	var seen: Array = []
+	production_root.brush_added.connect(func(bid): seen.append("add:%s" % bid))
+	production_root.brush_removed.connect(func(bid): seen.append("remove:%s" % bid))
+	production_root.begin_signal_batch()
+	production_root._emit_or_batch("brush_added", ["a"])
+	production_root._emit_or_batch("brush_removed", ["a"])
+	production_root._emit_or_batch("brush_added", ["b"])
+	production_root.end_signal_batch()
+	assert_eq(seen, ["add:a", "remove:a", "add:b"])
 
 
 func test_nudge_and_override_material_tag_only_real_changes():
@@ -485,3 +512,99 @@ func test_nested_batch_depth():
 	root.end_signal_batch()
 	assert_eq(root._signal_batch_depth, 0, "Depth should be 0 after outer end")
 	assert_eq(root._batched_signals.size(), 0, "Should be flushed after outer end")
+
+
+# ===========================================================================
+# Entity lifecycle signals (#150)
+# ===========================================================================
+
+
+func test_add_entity_emits_entity_added():
+	var production_root := _make_production_root()
+	var added: Array = []
+	production_root.entity_added.connect(func(node): added.append(node))
+	var entity := DraftEntity.new()
+	production_root.entity_system.add_entity(entity)
+	assert_eq(added.size(), 1, "Placing an entity has to announce it")
+	assert_same(added[0], entity)
+
+
+func test_restore_entity_from_info_emits_entity_added():
+	var production_root := _make_production_root()
+	var added: Array = []
+	production_root.entity_added.connect(func(node): added.append(node))
+	var restored := production_root.entity_system.restore_entity_from_info(
+		{"name": "Light", "entity_type": "light_point"}
+	)
+	assert_not_null(restored)
+	assert_eq(added.size(), 1, "Undo and load restore entities through the same contract")
+
+
+func test_delete_entities_by_paths_emits_entity_removed():
+	var production_root := _make_production_root()
+	var entity := DraftEntity.new()
+	entity.name = "Doomed"
+	production_root.entity_system.add_entity(entity)
+	var removed: Array = []
+	production_root.entity_removed.connect(func(node): removed.append(node))
+	production_root.entity_system.delete_entities_by_paths([entity.get_path()])
+	assert_eq(removed.size(), 1, "Deleting an entity has to announce it")
+	assert_same(removed[0], entity)
+
+
+func test_clear_entities_emits_entity_removed_for_each():
+	var production_root := _make_production_root()
+	var first := DraftEntity.new()
+	var second := DraftEntity.new()
+	production_root.entity_system.add_entity(first)
+	production_root.entity_system.add_entity(second)
+	var removed: Array = []
+	production_root.entity_removed.connect(func(node): removed.append(node))
+	production_root.entity_system.clear_entities()
+	assert_eq(removed.size(), 2)
+
+
+func test_entity_removed_fires_while_the_node_is_still_valid():
+	var production_root := _make_production_root()
+	var entity := DraftEntity.new()
+	entity.name = "StillHere"
+	production_root.entity_system.add_entity(entity)
+	var names: Array = []
+	production_root.entity_removed.connect(
+		func(node): names.append(str(node.name) if is_instance_valid(node) else "<freed>")
+	)
+	production_root.entity_system.delete_entities_by_paths([entity.get_path()])
+	assert_eq(names, ["StillHere"], "Listeners need a live node to clean up against")
+
+
+func test_batched_entity_signals_flush_on_batch_end():
+	var production_root := _make_production_root()
+	var added: Array = []
+	production_root.entity_added.connect(func(node): added.append(node))
+	production_root.begin_signal_batch()
+	production_root.entity_system.add_entity(DraftEntity.new())
+	production_root.entity_system.add_entity(DraftEntity.new())
+	assert_eq(added.size(), 0, "Batched adds wait for the flush")
+	production_root.end_signal_batch()
+	assert_eq(added.size(), 2, "Two distinct entities are two events")
+
+
+func test_deleting_a_brush_with_a_selected_face_reports_face_selection_changed():
+	var production_root := _make_production_root()
+	var brush := _make_production_brush(production_root, "faced")
+	production_root.face_selection[production_root.brush_system.face_key(brush)] = [0]
+	var face_emits: Array = []
+	production_root.face_selection_changed.connect(func(): face_emits.append(true))
+	production_root.delete_brushes_by_id(["faced"])
+	assert_eq(
+		face_emits.size(), 1, "The surface panel is still pointed at a face that just went away"
+	)
+
+
+func test_deleting_a_brush_with_no_selected_face_stays_quiet():
+	var production_root := _make_production_root()
+	_make_production_brush(production_root, "plain")
+	var face_emits: Array = []
+	production_root.face_selection_changed.connect(func(): face_emits.append(true))
+	production_root.delete_brushes_by_id(["plain"])
+	assert_eq(face_emits.size(), 0, "Nothing the surface panel cares about changed")
