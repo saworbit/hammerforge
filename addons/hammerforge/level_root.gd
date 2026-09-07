@@ -1889,6 +1889,10 @@ func load_hflevel(path: String = "") -> bool:
 	return ok
 
 
+func validate_map(path: String) -> Dictionary:
+	return file_system.validate_map(path)
+
+
 func import_map(path: String) -> int:
 	return file_system.import_map(path)
 

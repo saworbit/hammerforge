@@ -425,3 +425,182 @@ func test_export_writes_func_detail_as_own_entity_block():
 	var world_idx := text.find('"classname" "worldspawn"')
 	var detail_idx := text.find('"classname" "func_detail"')
 	assert_gt(detail_idx, world_idx, "Brush entity block comes after worldspawn")
+
+
+# ===========================================================================
+# Face plane winding (#148)
+# ===========================================================================
+
+
+## Pull the three plane points out of a face line without a regex, so this
+## helper stays readable next to the winding it is checking.
+func _plane_points(line: String) -> Array:
+	var points: Array = []
+	for part in line.split("(", false):
+		var close := part.find(")")
+		if close < 0:
+			continue
+		var nums := part.substr(0, close).strip_edges().split(" ", false)
+		if nums.size() < 3:
+			continue
+		points.append(Vector3(float(nums[0]), float(nums[1]), float(nums[2])))
+		if points.size() == 3:
+			break
+	return points
+
+
+func _first_plane_normal(line: String) -> Vector3:
+	return MapIO._face_normal(_plane_points(line))
+
+
+func _wrap_worldspawn(face_lines: Array) -> String:
+	var text := "{\n" + '"classname" "worldspawn"' + "\n{\n"
+	for line in face_lines:
+		text += str(line) + "\n"
+	return text + "}\n}\n"
+
+
+func test_custom_face_planes_point_outward_like_box_planes():
+	var brush := DraftBrush.new()
+	add_child_autoqfree(brush)
+	brush.shape = LevelRoot.BrushShape.BOX
+	brush.size = Vector3(2, 2, 2)
+	var box_lines: Array[String] = MapIO._box_to_map_lines(brush)
+	brush.shape = LevelRoot.BrushShape.CUSTOM
+	brush.faces = brush._build_box_faces()
+	var face_lines: Array[String] = MapIO._faces_to_map_lines(brush)
+
+	assert_eq(face_lines.size(), box_lines.size(), "Both paths write six planes")
+	for i in range(box_lines.size()):
+		var box_n := _first_plane_normal(box_lines[i])
+		var face_n := _first_plane_normal(face_lines[i])
+		assert_almost_eq(
+			face_n.dot(box_n),
+			1.0,
+			0.001,
+			"Face plane %d must point the same way as the box plane" % i
+		)
+
+
+func test_custom_face_plane_normal_matches_the_face_it_came_from():
+	var brush := DraftBrush.new()
+	add_child_autoqfree(brush)
+	brush.shape = LevelRoot.BrushShape.CUSTOM
+	brush.size = Vector3(2, 2, 2)
+	brush.faces = brush._build_box_faces()
+	var lines: Array[String] = MapIO._faces_to_map_lines(brush)
+	# _build_box_faces order starts with Right (+X).
+	assert_almost_eq(_first_plane_normal(lines[0]).x, 1.0, 0.001)
+
+
+func _face_outward(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
+	# FaceData is clockwise from outside, so its normal is (c - a) x (b - a).
+	return (c - a).cross(b - a).normalized()
+
+
+func test_exported_plane_normal_matches_the_source_face_normal():
+	var source := [Vector3(0, 0, 0), Vector3(10, 0, 0), Vector3(0, 10, 0)]
+	var brush := DraftBrush.new()
+	add_child_autoqfree(brush)
+	brush.shape = LevelRoot.BrushShape.CUSTOM
+	var face := FaceData.new()
+	face.local_verts = PackedVector3Array(source)
+	var faces: Array[FaceData] = []
+	faces.append(face)
+	brush.faces = faces
+	var line: String = MapIO._faces_to_map_lines(brush)[0]
+	var expected := _face_outward(source[0], source[1], source[2])
+	assert_almost_eq(
+		MapIO._face_normal(_plane_points(line)).dot(expected),
+		1.0,
+		0.001,
+		"The written plane must face the same way as the face it came from"
+	)
+
+
+func test_tilted_hull_round_trip_keeps_face_winding():
+	var brush := DraftBrush.new()
+	add_child_autoqfree(brush)
+	brush.shape = LevelRoot.BrushShape.CUSTOM
+	var source := [
+		[Vector3(0, 0, 0), Vector3(10, 0, 0), Vector3(0, 10, 0)],
+		[Vector3(0, 0, 0), Vector3(0, 10, 0), Vector3(0, 0, 10)],
+		[Vector3(0, 0, 0), Vector3(0, 0, 10), Vector3(10, 0, 0)],
+		[Vector3(10, 0, 0), Vector3(0, 0, 10), Vector3(0, 10, 0)],
+	]
+	var faces: Array[FaceData] = []
+	for verts in source:
+		var fd := FaceData.new()
+		fd.local_verts = PackedVector3Array(verts)
+		faces.append(fd)
+	brush.faces = faces
+	var parsed: Dictionary = MapIO.parse_map_text(
+		_wrap_worldspawn(MapIO._faces_to_map_lines(brush))
+	)
+	assert_eq(parsed.get("errors", []), [], "Our own export has to parse clean")
+	var brushes: Array = parsed.get("brushes", [])
+	assert_eq(brushes.size(), 1)
+	assert_eq(int(brushes[0]["shape"]), LevelRoot.BrushShape.CUSTOM)
+	var imported: Array = brushes[0]["faces"]
+	assert_eq(imported.size(), source.size())
+	for i in range(source.size()):
+		var v: Array = imported[i]["local_verts"]
+		var got := _face_outward(
+			Vector3(v[0][0], v[0][1], v[0][2]),
+			Vector3(v[1][0], v[1][1], v[1][2]),
+			Vector3(v[2][0], v[2][1], v[2][2])
+		)
+		var want := _face_outward(source[i][0], source[i][1], source[i][2])
+		assert_almost_eq(got.dot(want), 1.0, 0.001, "Face %d came back inside out" % i)
+
+
+# ===========================================================================
+# Malformed map input (#174)
+# ===========================================================================
+
+
+func test_parse_arbitrary_text_reports_an_error():
+	var parsed: Dictionary = MapIO.parse_map_text("not a map")
+	assert_gt((parsed.get("errors", []) as Array).size(), 0, "Garbage is not a valid map")
+	assert_eq(parsed.get("brushes", []), [])
+
+
+func test_parse_empty_text_is_not_an_error():
+	var parsed: Dictionary = MapIO.parse_map_text("")
+	assert_eq(parsed.get("errors", []), [], "An empty file has nothing wrong with it")
+
+
+func test_parse_unbalanced_braces_reports_an_error():
+	var parsed: Dictionary = MapIO.parse_map_text("{\n" + '"classname" "worldspawn"' + "\n")
+	assert_gt((parsed.get("errors", []) as Array).size(), 0)
+
+
+func test_parse_stray_closing_brace_reports_an_error():
+	var text := "{\n" + '"classname" "worldspawn"' + "\n}\n}\n"
+	var parsed: Dictionary = MapIO.parse_map_text(text)
+	assert_gt((parsed.get("errors", []) as Array).size(), 0)
+
+
+func test_parse_invalid_face_line_reports_an_error():
+	var parsed: Dictionary = MapIO.parse_map_text(
+		_wrap_worldspawn(["( 0 0 0 ) ( 10 0 0 ) brick 0 0 0 1 1"])
+	)
+	assert_gt((parsed.get("errors", []) as Array).size(), 0, "Two points do not define a plane")
+
+
+func test_parse_well_formed_map_reports_no_errors():
+	var parsed: Dictionary = (
+		MapIO
+		. parse_map_text(
+			_wrap_worldspawn(
+				[
+					"( 0 0 0 ) ( 10 0 0 ) ( 0 10 0 ) brick 0 0 0 1 1",
+					"( 0 0 0 ) ( 0 10 0 ) ( 0 0 10 ) brick 0 0 0 1 1",
+					"( 0 0 0 ) ( 0 0 10 ) ( 10 0 0 ) brick 0 0 0 1 1",
+					"( 10 0 0 ) ( 0 0 10 ) ( 0 10 0 ) brick 0 0 0 1 1",
+				]
+			)
+		)
+	)
+	assert_eq(parsed.get("errors", []), [], "A good map must not raise a false alarm")
+	assert_eq((parsed.get("brushes", []) as Array).size(), 1)
