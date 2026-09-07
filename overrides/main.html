@@ -34,4 +34,30 @@
   <meta name="twitter:title" content="{{ page_title }}">
   <meta name="twitter:description" content="{{ page_desc }}">
   <meta name="twitter:image" content="{{ preview }}">
+
+  {#
+    Structured data, home page only. Tells a search engine this is a free
+    developer tool rather than an article, which is what decides whether it can
+    appear as software rather than as a page of text.
+  #}
+  {% if page and page.is_homepage %}
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "{{ config.site_name }}",
+      "description": "{{ config.site_description }}",
+      "applicationCategory": "DeveloperApplication",
+      "applicationSubCategory": "Level editor",
+      "operatingSystem": "Windows, macOS, Linux",
+      "url": "{{ config.site_url }}",
+      "image": "{{ preview }}",
+      "codeRepository": "{{ config.repo_url }}",
+      "programmingLanguage": "GDScript",
+      "license": "https://opensource.org/licenses/MIT",
+      "isAccessibleForFree": true,
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+    }
+  </script>
+  {% endif %}
 {% endblock %}

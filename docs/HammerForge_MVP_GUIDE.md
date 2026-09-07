@@ -1,3 +1,7 @@
+---
+description: "The shortest path from an empty Godot scene to a playable blockout: draw brushes, cut openings, paint surfaces, bake and test."
+---
+
 # HammerForge MVP Guide
 
 Last updated: September 3, 2026

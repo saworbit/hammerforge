@@ -1,3 +1,7 @@
+---
+description: "Brush-based level editor for Godot 4.7+. Draw rooms, carve doorways, paint terrain and bake to optimised meshes without leaving the Godot editor."
+---
+
 ![HammerForge](brand/svg/hammerforge-lockup-light.svg#only-light){ width="460" }
 ![HammerForge](brand/svg/hammerforge-lockup-dark.svg#only-dark){ width="460" }
 

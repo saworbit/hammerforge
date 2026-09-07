@@ -1,3 +1,7 @@
+---
+description: "How HammerForge's screenshots and demo video are generated, and the harness that records the editor being driven by a real mouse."
+---
+
 # Demo Media
 
 Last updated: September 7, 2026

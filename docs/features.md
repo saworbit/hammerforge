@@ -1,3 +1,7 @@
+---
+description: "Complete feature and reference material for HammerForge: brush drawing, pending cuts, floor paint, entities, baking, collision and the Console."
+---
+
 # Features and Reference
 
 The complete feature and reference material for HammerForge. For a quick
