@@ -67,7 +67,11 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   (800, 46) at rest and (1136, **380**) the instant the palette opened. They now
   parent to the `Control` Godot passes to `_forward_3d_force_draw_over_viewport`
   — the viewport's own rect, which reserves nothing and positions nothing — with
-  placement in one table, `HFPluginOverlays.VIEWPORT_OVERLAY_ANCHORS`. That rect
+  placement in one table, `HFPluginOverlays.VIEWPORT_OVERLAY_ANCHORS`, centred
+  against the size each overlay reports and re-anchored when that size moves —
+  the contextual toolbar is 41px wide with nothing selected and 940px with a
+  brush selected, so anchoring it once while empty left it running off the side
+  of the viewport. That rect
   is also the space `event.position` is measured in, so `hf_quick_property`'s
   `position` and `hf_radial_menu`'s `PRESET_FULL_RECT` are no longer overwritten
   by the container on its next re-sort. Toolbar minimum is now (458, 46) and

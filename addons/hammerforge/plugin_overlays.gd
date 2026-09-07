@@ -27,10 +27,10 @@ const VIEWPORT_OVERLAY_PROPERTIES := [
 ## around one, and now that neither is inside a layout container the geometry
 ## they set for themselves is no longer overwritten on the next re-sort.
 const VIEWPORT_OVERLAY_ANCHORS := {
-	"_context_toolbar": [Control.PRESET_CENTER_TOP, 8],
-	"_hotkey_palette": [Control.PRESET_CENTER, 0],
-	"_coach_marks": [Control.PRESET_CENTER_BOTTOM, 12],
-	"_operation_replay": [Control.PRESET_BOTTOM_LEFT, 12],
+	"_context_toolbar": ["top_center", 8.0],
+	"_hotkey_palette": ["center", 0.0],
+	"_coach_marks": ["bottom_center", 12.0],
+	"_operation_replay": ["bottom_left", 12.0],
 }
 
 
@@ -96,6 +96,11 @@ static func _rehome_viewport_overlay(control: Control, host: Control) -> void:
 	host.add_child(control)
 
 
+## The minimum size an overlay was last anchored against, so a change in it can
+## be noticed without polling every anchor every frame.
+const OVERLAY_PLACED_SIZE_META := &"hf_overlay_placed_size"
+
+
 ## Anchor an overlay inside the viewport. Anything not named in the table places
 ## itself, so leave it alone: overwriting a cursor-anchored popup with a corner
 ## preset is how it ends up in the wrong half of the screen.
@@ -105,10 +110,82 @@ static func place_viewport_overlay(plugin: Object, control: Control) -> void:
 	var property := _overlay_property_for(plugin, control)
 	if not VIEWPORT_OVERLAY_ANCHORS.has(property):
 		return
-	var placement: Array = VIEWPORT_OVERLAY_ANCHORS[property]
-	control.set_anchors_and_offsets_preset(
-		int(placement[0]), Control.PRESET_MODE_MINSIZE, int(placement[1])
-	)
+	_anchor_overlay(control, VIEWPORT_OVERLAY_ANCHORS[property])
+
+
+## Re-anchor any overlay whose minimum size has moved under it.
+##
+## `set_anchors_and_offsets_preset` bakes its offsets from the minimum size it
+## can see at the time, and neither anchored overlay is its final size when it is
+## first placed: the contextual toolbar grows and shrinks with what is selected,
+## and the palette finishes measuring its own rows after it is parented. Left
+## alone, the toolbar keeps the left edge it was centred on while empty and a
+## real selection grows it off the right side of the viewport.
+##
+## Anchors are fractions, so the host resizing is already handled; only a change
+## of minimum size needs re-baking, and comparing two Vector2s is cheap enough to
+## do on the draw hook.
+static func refresh_viewport_overlay_placement(plugin: Object) -> void:
+	if plugin == null:
+		return
+	var host = plugin._viewport_overlay_host
+	if host == null or not is_instance_valid(host):
+		return
+	for property in VIEWPORT_OVERLAY_ANCHORS:
+		var control = plugin.get(property)
+		if not (control is Control) or not is_instance_valid(control):
+			continue
+		if control.get_parent() != host:
+			continue
+		var minimum: Vector2 = control.get_combined_minimum_size()
+		if control.has_meta(OVERLAY_PLACED_SIZE_META):
+			if control.get_meta(OVERLAY_PLACED_SIZE_META) == minimum:
+				continue
+		_anchor_overlay(control, VIEWPORT_OVERLAY_ANCHORS[property])
+
+
+## Godot's own PRESET_CENTER_TOP puts the control's top-left corner on the
+## centre-top point rather than centring the control there — it leaves both
+## horizontal offsets at zero — so a 940px toolbar anchored that way starts at
+## the middle of the viewport and runs off the right of it. The anchors and
+## offsets are set out longhand instead, against the minimum size the overlay
+## reports now.
+static func _anchor_overlay(control: Control, placement: Array) -> void:
+	var minimum := control.get_combined_minimum_size()
+	var half := minimum * 0.5
+	var margin := float(placement[1])
+	match str(placement[0]):
+		"top_center":
+			_set_anchors(control, 0.5, 0.0, 0.5, 0.0)
+			_set_offsets(control, -half.x, margin, half.x, margin + minimum.y)
+		"center":
+			_set_anchors(control, 0.5, 0.5, 0.5, 0.5)
+			_set_offsets(control, -half.x, -half.y, half.x, half.y)
+		"bottom_center":
+			_set_anchors(control, 0.5, 1.0, 0.5, 1.0)
+			_set_offsets(control, -half.x, -margin - minimum.y, half.x, -margin)
+		"bottom_left":
+			_set_anchors(control, 0.0, 1.0, 0.0, 1.0)
+			_set_offsets(control, margin, -margin - minimum.y, margin + minimum.x, -margin)
+	control.set_meta(OVERLAY_PLACED_SIZE_META, minimum)
+
+
+static func _set_anchors(
+	control: Control, left: float, top: float, right: float, bottom: float
+) -> void:
+	control.anchor_left = left
+	control.anchor_top = top
+	control.anchor_right = right
+	control.anchor_bottom = bottom
+
+
+static func _set_offsets(
+	control: Control, left: float, top: float, right: float, bottom: float
+) -> void:
+	control.offset_left = left
+	control.offset_top = top
+	control.offset_right = right
+	control.offset_bottom = bottom
 
 
 static func _overlay_property_for(plugin: Object, control: Control) -> String:
