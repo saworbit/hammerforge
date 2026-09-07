@@ -151,9 +151,9 @@ static func refresh_viewport_overlay_placement(plugin: Object) -> void:
 ## offsets are set out longhand instead, against the minimum size the overlay
 ## reports now.
 static func _anchor_overlay(control: Control, placement: Array) -> void:
-	var minimum := control.get_combined_minimum_size()
-	var half := minimum * 0.5
 	var margin := float(placement[1])
+	var minimum := _overlay_size(control, margin)
+	var half := minimum * 0.5
 	match str(placement[0]):
 		"top_center":
 			_set_anchors(control, 0.5, 0.0, 0.5, 0.0)
@@ -167,7 +167,29 @@ static func _anchor_overlay(control: Control, placement: Array) -> void:
 		"bottom_left":
 			_set_anchors(control, 0.0, 1.0, 0.0, 1.0)
 			_set_offsets(control, margin, -margin - minimum.y, margin + minimum.x, -margin)
-	control.set_meta(OVERLAY_PLACED_SIZE_META, minimum)
+	control.set_meta(OVERLAY_PLACED_SIZE_META, control.get_combined_minimum_size())
+
+
+## What the overlay should be laid out at, never wider or taller than the
+## viewport it floats over. An overlay bigger than the viewport cannot be centred
+## into it: centring just hangs it off both sides, with the buttons at each end
+## unreachable. The contextual toolbar measures 940px with a brush selected and
+## the viewport is narrower than that with a dock open, so it is capped here and
+## wraps to a second row inside the cap.
+##
+## `natural_row_width()` is asked for rather than the combined minimum, because a
+## wrapping container reports only its widest child and would otherwise cap
+## itself to a single button.
+static func _overlay_size(control: Control, margin: float) -> Vector2:
+	var minimum := control.get_combined_minimum_size()
+	if control.has_method("natural_row_width"):
+		minimum.x = maxf(minimum.x, float(control.call("natural_row_width")))
+	var area := control.get_parent_area_size()
+	if area.x > 0.0:
+		minimum.x = minf(minimum.x, maxf(0.0, area.x - margin * 2.0))
+	if area.y > 0.0:
+		minimum.y = minf(minimum.y, maxf(0.0, area.y - margin * 2.0))
+	return minimum
 
 
 static func _set_anchors(

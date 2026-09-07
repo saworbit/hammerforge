@@ -90,6 +90,44 @@ func _build_content() -> void:
 	_build_vertex_section()
 
 
+## The width this toolbar would need laid out as one row.
+##
+## The sections wrap now, and an HFlowContainer reports only its widest child as
+## a minimum width — so nothing in the tree can answer "how wide is the content
+## really", which is exactly what the placement code needs in order to choose
+## between the natural width and the width of the viewport.
+func natural_row_width() -> float:
+	var total := 0.0
+	var panel_style := get_theme_stylebox("panel")
+	if panel_style:
+		total += panel_style.get_margin(SIDE_LEFT) + panel_style.get_margin(SIDE_RIGHT)
+	if _content == null:
+		return total
+	var shown := 0
+	for child in _content.get_children():
+		var c := child as Control
+		if c == null or not c.visible:
+			continue
+		shown += 1
+		total += _unwrapped_width(c)
+	return total + maxf(0.0, float(shown - 1)) * float(_content.get_theme_constant("separation"))
+
+
+static func _unwrapped_width(control: Control) -> float:
+	if not (control is FlowContainer):
+		return control.get_combined_minimum_size().x
+	var total := 0.0
+	var shown := 0
+	for child in control.get_children():
+		var c := child as Control
+		if c == null or not c.visible:
+			continue
+		shown += 1
+		total += c.get_combined_minimum_size().x
+	var gap := float(control.get_theme_constant("h_separation"))
+	return total + maxf(0.0, float(shown - 1)) * gap
+
+
 func _build_auto_hint_bar() -> void:
 	_auto_hint_bar = PanelContainer.new()
 	var hint_style = StyleBoxFlat.new()
@@ -128,8 +166,13 @@ func _build_auto_hint_bar() -> void:
 
 
 func _build_brush_section() -> void:
-	var section = HBoxContainer.new()
-	section.add_theme_constant_override("separation", 2)
+	var section = HFlowContainer.new()
+	# Wraps to a second row rather than running off the sides of the viewport.
+	# The brush section alone measures 940px, and the viewport is narrower than
+	# that as soon as a dock is open.
+	section.add_theme_constant_override("h_separation", 2)
+	section.add_theme_constant_override("v_separation", 2)
+	section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	section.visible = false
 	_content.add_child(section)
 	_sections[Context.BRUSH_SELECTED] = section
@@ -178,8 +221,13 @@ func _build_brush_section() -> void:
 
 
 func _build_face_section() -> void:
-	var section = HBoxContainer.new()
-	section.add_theme_constant_override("separation", 2)
+	var section = HFlowContainer.new()
+	# Wraps to a second row rather than running off the sides of the viewport.
+	# The brush section alone measures 940px, and the viewport is narrower than
+	# that as soon as a dock is open.
+	section.add_theme_constant_override("h_separation", 2)
+	section.add_theme_constant_override("v_separation", 2)
+	section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	section.visible = false
 	_content.add_child(section)
 	_sections[Context.FACE_SELECTED] = section
@@ -213,8 +261,13 @@ func _build_face_section() -> void:
 
 
 func _build_entity_section() -> void:
-	var section = HBoxContainer.new()
-	section.add_theme_constant_override("separation", 2)
+	var section = HFlowContainer.new()
+	# Wraps to a second row rather than running off the sides of the viewport.
+	# The brush section alone measures 940px, and the viewport is narrower than
+	# that as soon as a dock is open.
+	section.add_theme_constant_override("h_separation", 2)
+	section.add_theme_constant_override("v_separation", 2)
+	section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	section.visible = false
 	_content.add_child(section)
 	_sections[Context.ENTITY_SELECTED] = section
@@ -256,8 +309,13 @@ func _build_entity_section() -> void:
 
 
 func _build_draw_section() -> void:
-	var section = HBoxContainer.new()
-	section.add_theme_constant_override("separation", 2)
+	var section = HFlowContainer.new()
+	# Wraps to a second row rather than running off the sides of the viewport.
+	# The brush section alone measures 940px, and the viewport is narrower than
+	# that as soon as a dock is open.
+	section.add_theme_constant_override("h_separation", 2)
+	section.add_theme_constant_override("v_separation", 2)
+	section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	section.visible = false
 	_content.add_child(section)
 	_sections[Context.DRAW_IDLE] = section
@@ -302,8 +360,13 @@ func _build_draw_section() -> void:
 
 
 func _build_drag_section() -> void:
-	var section = HBoxContainer.new()
-	section.add_theme_constant_override("separation", 2)
+	var section = HFlowContainer.new()
+	# Wraps to a second row rather than running off the sides of the viewport.
+	# The brush section alone measures 940px, and the viewport is narrower than
+	# that as soon as a dock is open.
+	section.add_theme_constant_override("h_separation", 2)
+	section.add_theme_constant_override("v_separation", 2)
+	section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	section.visible = false
 	_content.add_child(section)
 	_sections[Context.DRAGGING] = section
@@ -330,8 +393,13 @@ func _build_drag_section() -> void:
 
 
 func _build_vertex_section() -> void:
-	var section = HBoxContainer.new()
-	section.add_theme_constant_override("separation", 2)
+	var section = HFlowContainer.new()
+	# Wraps to a second row rather than running off the sides of the viewport.
+	# The brush section alone measures 940px, and the viewport is narrower than
+	# that as soon as a dock is open.
+	section.add_theme_constant_override("h_separation", 2)
+	section.add_theme_constant_override("v_separation", 2)
+	section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	section.visible = false
 	_content.add_child(section)
 	_sections[Context.VERTEX_EDIT] = section
