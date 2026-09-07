@@ -32,6 +32,14 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   explains it. It reads the Console's own evaluation, so the two cannot disagree.
 
 ### Fixed
+- **Every keybinding in the command palette was clipped to its first character
+  or two** — `Ctrl+Shift+Enter` rendered as `Ctr`, `Shift+P` as `Sh`. The binding
+  label was anchored with `PRESET_CENTER_RIGHT`, which puts a control's top-left
+  *corner* on that point rather than aligning its right edge to it, so each label
+  began at the row's right edge and ran past it for the scroll container to clip.
+  Only the single-key bindings looked right, and then only just: `Q` overflowed
+  its 300px row by one pixel. The label now stretches the row with its text
+  right-aligned and an 8px inset, so it holds that inset at any palette width.
 - **The 3D toolbar resized itself, and the viewport moved with it.**
   `CONTAINER_SPATIAL_EDITOR_MENU` is a plain `HBoxContainer` and the 3D viewport
   gets whatever height is left under it. Every control Godot puts in that row is
