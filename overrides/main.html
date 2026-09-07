@@ -21,6 +21,14 @@
   {% endif %}
   {% set preview = config.site_url ~ "brand/png/social-preview.png" %}
 
+  {#
+    Second Search Console ownership proof, independent of
+    docs/googlef8407c6985aae961.html. Google re-checks whichever methods are
+    registered, so two of them means deleting one file cannot un-verify the
+    property and lose the indexing history with it.
+  #}
+  <meta name="google-site-verification" content="z8XeBvPGq6hzuC8M7io7XDFFRBNV0vzJQDLqJ_0LFoQ">
+
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="{{ config.site_name }}">
   <meta property="og:title" content="{{ page_title }}">
