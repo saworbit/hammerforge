@@ -626,12 +626,14 @@ Toggle modes independently using the G/V/C/E/P buttons below the Grid Snap row i
 - Multi-step operations (hollow, clip) use transactions for atomicity.
 
 ## Entity Definitions
-Brush entity classes (func_detail, func_wall, trigger_once, trigger_multiple) and point entities are data-driven. Definitions are loaded from `entities.json` (if present) or fall back to built-in defaults.
+Brush entity classes (func_detail, func_wall, trigger_once, trigger_multiple) and point entities are data-driven. Definitions are loaded from the plugin's `entities.json` (if present) or fall back to built-in defaults, then overlaid with your project's own file.
 
 To add custom entity types:
-1. Create `res://addons/hammerforge/entities.json`.
-2. Add entries with `classname`, `description`, `is_brush_entity`, and optional `color` and `properties`.
-3. The dock entity palette and brush entity class dropdown will auto-populate from these definitions.
+1. Create `res://hammerforge_entities.json`. This overlays the plugin file, so your entries survive a plugin upgrade. An entry with the same classname replaces the plugin one.
+2. Add entries with `classname`, `description`, `is_brush_entity`, and optional `color` and `properties`. The palette also reads `label`, `preview` and `category` if you set them.
+3. The Objects tab entity palette and the brush entity class dropdown both auto-populate from the merged result, so a point entity is placeable and a brush class is assignable with no further setup.
+
+A `LevelRoot` can read from somewhere else instead through its `entity_definitions_path` export. Both pickers follow it.
 
 ## Material Library
 The material palette can be saved and loaded as a JSON library file:
@@ -1211,7 +1213,7 @@ Notes:
 - Entities are selectable and excluded from bake.
 - Entity palette supports drag-and-drop placement.
 
-Entity definitions live in `res://addons/hammerforge/entities.json`.
+Entity definitions live in `res://addons/hammerforge/entities.json`, overlaid by `res://hammerforge_entities.json` when present.
 Example (billboard preview):
 
 ```json

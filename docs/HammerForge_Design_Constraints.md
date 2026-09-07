@@ -28,11 +28,13 @@ This document makes the current tradeoffs explicit so level designers and develo
 - Floor paint is grid-based and produces axis-aligned floors and walls.
 - Heightmaps displace floors only. Walls remain flat.
 - Heightmap blending uses four slots (A-D) with per-cell blend weights for B/C/D.
-- Region streaming loads only nearby paint data; distant regions are unloaded.
+- Region streaming loads only nearby paint data; distant regions are written to their `.hfr` sidecar and then unloaded. A region whose write fails stays loaded rather than losing the paint.
 
 ## Import / Export Limits
 - `.map` import/export preserves basic brush shapes and point entities. Axis-aligned brushes import as boxes. Rotated or complex brushes import as CUSTOM with face vertices rather than being forced to cylinders.
 - Face materials still do not round-trip as Godot materials; Valve 220 can carry UV axes when FaceData is present.
+- Face planes are converted between `FaceData` winding and `.map` plane winding in both directions, so exported hulls are not inside out and imported ones are not either.
+- Input that does not parse is refused before the level is modified.
 - `.glb` export includes only baked geometry.
 - Per-project entity types overlay `res://hammerforge_entities.json` onto the plugin `entities.json` (same classname replaces).
 

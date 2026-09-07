@@ -458,11 +458,12 @@ Completion is responsibility-based rather than tied to an arbitrary line count. 
 - Headless editor tests retain the complete tool graph, with focused export-playtest coverage guarding the runtime boundary.
 
 ### Risk-focused test gaps
-The current suite covers 2,236 tests across 126 scripts, including the large brush, bake, paint, vertex, baker, brush-instance, and map-I/O systems. Remaining work is concentrated in failure semantics and scale-sensitive paths rather than wholly untested systems:
-- crash-safe destination replacement and truthful manual-save completion ([#33](https://github.com/saworbit/hammerforge/issues/33), [#51](https://github.com/saworbit/hammerforge/issues/51));
-- quoted `.map` property round-trips ([#32](https://github.com/saworbit/hammerforge/issues/32));
-- non-blocking threaded merge/finalization ([#35](https://github.com/saworbit/hammerforge/issues/35));
-- PBR material fidelity and paint export coverage ([#24](https://github.com/saworbit/hammerforge/issues/24), [#39](https://github.com/saworbit/hammerforge/issues/39)).
+The current suite covers 2,364 tests across 129 scripts, including the large brush, bake, paint, vertex, baker, brush-instance, and map-I/O systems. The issue tracker is clear as of September 7, 2026. One known limitation is not
+tracked as an issue and has no coverage:
+- A `.map` entity property value containing a quote or a backslash does not round
+  trip. `MapIO._parse_key_value()` splits on unescaped quote positions and
+  `HFMapAdapter.format_entity_properties()` writes values verbatim, so neither
+  side escapes.
 
 ### Apply HFValidation broadly
 Currently applied to two `HFBrushSystem` methods as demonstration. Roughly 300 inline `if not root.<container>:` patterns remain across `hf_brush_system`, `hf_paint_system`, `hf_bake_system`, `hf_entity_system`, `baker`. Single-property guards are 1-line either way; the win is centralization. Apply opportunistically when touching each system, not as a bulk sweep.

@@ -10,7 +10,9 @@ This document describes how to move data in and out of HammerForge safely.
 
 ## Source of Truth: `.hflevel`
 - `.hflevel` files are the canonical save format for brushes, paint layers, materials, entities, and settings.
-- When region streaming is enabled, per-region paint data is stored in a sibling `<level>.hfregions/` folder.
+- When region streaming is enabled, per-region paint data is stored in a sibling `<level>.hfregions/` folder as one `.hfr` file per region.
+- A region is written before its chunks are streamed out of memory. If that write fails the region stays loaded and you are told, so unsaved paint is not dropped by moving the cursor.
+- A region is only listed in the `.hflevel` index once its `.hfr` file exists on disk.
 - Files include a version field and default missing keys on load for backward compatibility.
 - Per-face UV data includes `uv_format_version` (current: 1). Legacy data (version 0, pre-April 2026) used a different UV transform order (scale+offset before rotation). On load, legacy faces are auto-migrated: uniform-scale faces get their offset adjusted; non-uniform-scale faces with rotation are baked to `custom_uvs`. No manual intervention is needed.
 - Per-face vertex winding includes `winding_version` (current: 1). Legacy data (version 0, pre-April 2026) used CCW vertex winding for manually-created faces, which rendered inside-out under Godot 4's CW front-face convention. On load, `apply_serialized_faces()` detects v0 faces and runs a centroid-based migration: each face's normal is checked against the outward direction from the brush center, and faces pointing inward have their vertices reversed to CW. Mesh-extracted faces (already CW) are left unchanged. No manual intervention is needed.
@@ -33,8 +35,10 @@ This document describes how to move data in and out of HammerForge safely.
 - Point-entity key/value properties and brush entity classes round-trip through the supported Classic Quake and Valve 220 adapters.
 - Per-face materials and HammerForge surface-paint layers are not preserved, so `.hflevel` remains the editable source of truth.
 - Treat `.map` as a blockout exchange format, not a full fidelity export.
+- Face planes are written in `.map` winding, which is the reverse of the clockwise-from-outside order `FaceData` stores, so exported hulls are the right way out for compilers and other editors. Import applies the same conversion in reverse.
+- A file that does not parse is refused before the level is touched. Unbalanced braces, face lines that are not three points, and text outside any block are reported, the current level is left alone, and no undo entry is created.
 - Multi-format export: **Classic Quake** and **Valve 220** format adapters are available via the format selector in the dock File section. Valve 220 includes UV texture axes from FaceData.
-- Known limitation: quoted entity property values containing escaped quotes or backslashes do not yet round-trip reliably; follow [#32](https://github.com/saworbit/hammerforge/issues/32) for that parser fix.
+- Known limitation: an entity property value containing a quote or a backslash does not round-trip. `_parse_key_value()` splits on unescaped quote positions and the adapters write values verbatim, so neither side escapes. Keep such characters out of entity property values you intend to export.
 
 ### Import Vertex Welding
 Legacy .map files from Hammer, TrenchBroom, and other editors often carry floating-point representation drift in vertex coordinates. Two vertices that should be coincident may differ by a fraction of a unit, producing micro-gaps or non-planar faces after import.
@@ -67,8 +71,9 @@ After import, run **Check Only** (Test tab) to detect any remaining non-planar f
 
 ## Entity Definitions
 - Entity types and brush entity classes are loaded from `entities.json` (data-driven, not hardcoded).
-- Custom entity definitions can be added by creating or editing `res://addons/hammerforge/entities.json`.
-- Definitions include `classname`, `description`, `color`, `is_brush_entity`, `properties`, and optional `scene_path`.
+- Add your own in `res://hammerforge_entities.json`. That file overlays the plugin's `entities.json`, and an entry with the same classname replaces the plugin one. Prefer it over editing `res://addons/hammerforge/entities.json`, which is overwritten when the plugin is upgraded.
+- A `LevelRoot` can point somewhere else through its `entity_definitions_path` export. The point entity palette and the brush entity dropdown both read the same merged result, so a custom point entity is placeable and a custom brush class is assignable without further setup.
+- Definitions include `classname`, `description`, `color`, `is_brush_entity`, `properties`, and optional `scene_path`. The dock also reads presentation keys straight from the JSON: `label`, `preview`, and `category`.
 
 ## Prefabs: `.hfprefab`
 - `.hfprefab` files store reusable brush + entity groups as JSON.
@@ -82,10 +87,13 @@ After import, run **Check Only** (Test tab) to detect any remaining non-planar f
 ## Autosave Safety
 - Autosave writes happen on a background thread.
 - Saves first write a `.writing` sidecar, then replace the destination.
-- If a write fails (e.g., disk full, permissions), the `autosave_failed` signal fires and the dock shows a red warning label.
+- The existing file is copied to `<level>.hflevel.previous` before it is replaced, and that copy is restored if the rename fails. On load, a missing destination with a `.previous` beside it is promoted automatically.
+- If a write fails (e.g., disk full, permissions), `autosave_failed` fires for autosaves and `hflevel_save_failed` for manual saves, and the dock shows a red warning label.
 - The next autosave interval retries automatically.
-- Manual save is always available via Test tab → File section.
-- Current limitation: replacement removes an existing destination before renaming the sidecar, so interruption in that window is not fully crash-atomic ([#33](https://github.com/saworbit/hammerforge/issues/33)). Manual save can also report that work was queued before the background write completes ([#51](https://github.com/saworbit/hammerforge/issues/51)). Keep `.hflevel` files in version control and treat the warning state—not the initial queued message—as the authoritative failure signal.
+- Manual save is always available via Test tab → File section. Success is reported only after the matching background write finishes, not when the work is queued.
+- Queued writes run in the order they were requested, so two saves to the same path in quick succession leave the newer one on disk.
+- When region streaming is on, a failed `.hfregions` sidecar fails the whole save rather than writing a `.hflevel` whose index points at region files that are missing or stale.
+- Keep `.hflevel` files in version control and treat the warning state as the authoritative failure signal.
 
 ## Recommended Pipeline
 1. Design and iterate in HammerForge.
