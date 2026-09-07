@@ -628,3 +628,28 @@ func test_atlas_bake_all_tiling_same_material_no_atlas():
 			mi = child
 	assert_not_null(mi)
 	assert_eq(mi.mesh.get_surface_count(), 2, "All tiling: no atlas possible, 2 separate surfaces")
+
+
+# ===========================================================================
+# Atlas mipmaps (#157)
+# ===========================================================================
+
+
+func test_atlas_texture_has_the_mipmaps_its_filter_asks_for():
+	var result = HFMaterialAtlasScript.build_atlas(
+		[_make_textured_material(Color.RED), _make_textured_material(Color.BLUE)]
+	)
+	assert_not_null(result.atlas_material)
+	assert_eq(
+		result.atlas_material.texture_filter,
+		BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS,
+		"The material still asks for mipmapped filtering"
+	)
+	var img: Image = result.atlas_material.albedo_texture.get_image()
+	assert_true(img.has_mipmaps(), "The sampler needs mip levels to sample")
+	assert_gt(img.get_mipmap_count(), 0)
+
+
+func test_single_material_atlas_also_gets_mipmaps():
+	var result = HFMaterialAtlasScript.build_atlas([_make_textured_material(Color.GREEN)])
+	assert_true(result.atlas_material.albedo_texture.get_image().has_mipmaps())

@@ -3,6 +3,9 @@ extends Node
 class_name Baker
 
 const DEFAULT_UV2_TEXEL_SIZE := 0.1
+const HFLog = preload("hf_log.gd")
+const LOD_NORMAL_MERGE_ANGLE := 25.0
+const LOD_NORMAL_SPLIT_ANGLE := 60.0
 const DraftBrush = preload("brush_instance.gd")
 const FaceData = preload("face_data.gd")
 const MaterialManager = preload("material_manager.gd")
@@ -548,8 +551,26 @@ func _postprocess_mesh(
 			if unwrapped is Mesh:
 				result = unwrapped
 		if generate_lods and result is ArrayMesh:
-			(result as ArrayMesh).generate_lods()
+			result = _mesh_with_lods(result as ArrayMesh)
 	return result
+
+
+## LOD generation lives on ImporterMesh, not ArrayMesh. Round trip through one
+## and hand back the original mesh if the engine cannot build any levels.
+## The angles are the values Godot uses for its own scene imports.
+func _mesh_with_lods(mesh: ArrayMesh) -> ArrayMesh:
+	if mesh.get_surface_count() == 0:
+		return mesh
+	var importer := ImporterMesh.from_mesh(mesh)
+	if importer == null:
+		HFLog.warn("Bake: could not build an ImporterMesh, skipping LOD generation")
+		return mesh
+	importer.generate_lods(LOD_NORMAL_MERGE_ANGLE, LOD_NORMAL_SPLIT_ANGLE, [])
+	var out := importer.get_mesh()
+	if out == null:
+		HFLog.warn("Bake: LOD generation produced no mesh, keeping the original")
+		return mesh
+	return out
 
 
 func _unwrap_uv0(mesh: ArrayMesh) -> ArrayMesh:

@@ -537,3 +537,58 @@ func test_convex_simplify_reduces_points():
 	var pts_none: int = (shapes_none[0] as ConvexPolygonShape3D).points.size()
 	var pts_half: int = (shapes_half[0] as ConvexPolygonShape3D).points.size()
 	assert_lt(pts_half, pts_none, "convex_simplify=0.5 should produce fewer points than 0.0")
+
+
+# ===========================================================================
+# LOD generation (#138)
+# ===========================================================================
+
+
+func _make_dense_mesh() -> ArrayMesh:
+	var sphere := SphereMesh.new()
+	sphere.radial_segments = 64
+	sphere.rings = 32
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, sphere.get_mesh_arrays())
+	return mesh
+
+
+func test_postprocess_with_lods_does_not_error():
+	var mesh := _make_dense_mesh()
+	var out: Mesh = baker._postprocess_mesh(mesh, true, false, 0.1)
+	assert_not_null(out, "Turning on Generate LODs must not abort the bake")
+	assert_true(out is ArrayMesh)
+	assert_eq((out as ArrayMesh).get_surface_count(), 1)
+
+
+func test_array_mesh_has_no_generate_lods():
+	# The reason the bake used to abort. If a future Godot adds it, revisit
+	# _mesh_with_lods rather than leaving the ImporterMesh detour in place.
+	assert_false(ClassDB.class_has_method("ArrayMesh", "generate_lods", true))
+	assert_true(ClassDB.class_has_method("ImporterMesh", "generate_lods", true))
+
+
+func test_postprocess_with_lods_produces_lod_levels():
+	var out: Mesh = baker._postprocess_mesh(_make_dense_mesh(), true, false, 0.1)
+	var importer := ImporterMesh.from_mesh(out)
+	assert_gt(importer.get_surface_lod_count(0), 0, "A dense mesh should come back simplified")
+
+
+func test_postprocess_with_lods_keeps_surface_materials():
+	var mat := _make_colored_material(Color.RED)
+	var mesh := _make_dense_mesh()
+	mesh.surface_set_material(0, mat)
+	var out: Mesh = baker._postprocess_mesh(mesh, true, false, 0.1)
+	assert_eq(out.surface_get_material(0), mat, "LOD generation must not drop materials")
+
+
+func test_postprocess_with_lods_tolerates_an_empty_mesh():
+	var out: Mesh = baker._postprocess_mesh(ArrayMesh.new(), true, false, 0.1)
+	assert_not_null(out)
+	assert_eq((out as ArrayMesh).get_surface_count(), 0)
+
+
+func test_postprocess_without_lods_returns_the_same_mesh():
+	var mesh := _make_dense_mesh()
+	var out: Mesh = baker._postprocess_mesh(mesh, false, false, 0.1)
+	assert_eq(out, mesh, "Leaving the option off must not rebuild the mesh")

@@ -155,6 +155,9 @@ static func build_atlas(material_keys: Array, exclude_keys: Dictionary = {}) -> 
 		result.atlased_keys.append(tile["key"])
 
 	# Create atlas material.
+	# The material asks for mipmapped filtering and the gutter padding exists to
+	# stop tiles bleeding across mip levels, so the levels have to be built.
+	_build_mipmaps(atlas_img, "albedo")
 	var atlas_tex = ImageTexture.create_from_image(atlas_img)
 	var mat = StandardMaterial3D.new()
 	mat.albedo_texture = atlas_tex
@@ -194,9 +197,27 @@ static func _build_pbr_channels(
 		if channel_img == null:
 			_record_skip(result, channel, "a supplied texture could not be read")
 			continue
+		_build_mipmaps(channel_img, channel)
 		var channel_tex := ImageTexture.create_from_image(channel_img)
 		_apply_channel(result.atlas_material, channel, channel_tex, suppliers[0])
 		result.atlased_channels.append(channel)
+
+
+## Build the mip chain the atlas material asks for. A failure here is silent at
+## runtime: the sampler just has nothing to fall back on, so say something.
+static func _build_mipmaps(img: Image, label: String) -> void:
+	if img == null:
+		return
+	if img.generate_mipmaps() != OK:
+		(
+			HFLog
+			. warn(
+				(
+					"HammerForge: material atlas could not build mipmaps for the %s texture. Distant surfaces will shimmer."
+					% label
+				)
+			)
+		)
 
 
 ## Record a slot the atlas cannot carry, and say so in the editor log. The whole
