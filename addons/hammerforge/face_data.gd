@@ -80,7 +80,12 @@ func adjust_uvs_for_transform(pos_delta: Vector3, size_ratio: Vector3) -> void:
 			offset_delta = Vector2(pos_delta.x, pos_delta.y)
 			if size_ratio.x > 0.001 and size_ratio.y > 0.001:
 				inv_size = Vector2(1.0 / size_ratio.x, 1.0 / size_ratio.y)
-	uv_offset -= offset_delta * uv_scale
+	# Rotation is applied before scale and offset in _apply_uv_transform, so the
+	# projected move has to be rotated the same way before it is subtracted.
+	var rotated_delta: Vector2 = offset_delta
+	if uv_rotation != 0.0:
+		rotated_delta = offset_delta.rotated(uv_rotation)
+	uv_offset -= rotated_delta * uv_scale
 	if not inv_size.is_equal_approx(Vector2.ONE):
 		uv_scale *= inv_size
 
