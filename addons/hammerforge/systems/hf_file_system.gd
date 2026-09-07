@@ -29,7 +29,20 @@ func save_hflevel(path: String = "", force: bool = false, autosave: bool = false
 	ensure_dir_for_path(target)
 	if root.paint_system:
 		root.paint_system.set_region_base_path(target)
-		root.paint_system.save_loaded_regions()
+		var regions: Dictionary = root.paint_system.save_loaded_regions()
+		if not bool(regions.get("ok", true)):
+			# The index would claim region data that is missing or stale, and the
+			# level write would still report success. Stop here instead.
+			var message := str(regions.get("error", "region write failed"))
+			push_error("HFLevel: %s" % message)
+			# Report it as the kind of save it actually was, the way the worker
+			# results are reported in _process_hflevel_saves.
+			if autosave:
+				if root.has_signal("autosave_failed"):
+					root.autosave_failed.emit(message)
+			elif root.has_signal("hflevel_save_failed"):
+				root.hflevel_save_failed.emit(target, message)
+			return ERR_FILE_CANT_WRITE
 	var encoded: Dictionary = {}
 	var captured: Variant = root._capture_hflevel_state()
 	if captured is Dictionary:
@@ -180,6 +193,13 @@ func start_hflevel_thread(
 			return
 		_apply_thread_result(_hflevel_thread.wait_to_finish())
 		_hflevel_thread = null
+		# Collecting a finished worker does not entitle this job to run next.
+		# Anything already queued was asked for first and still owns its slot.
+		if not _hflevel_pending.is_empty():
+			job["force"] = true
+			_hflevel_pending.append(job)
+			_start_next_pending()
+			return
 	_hflevel_thread = Thread.new()
 	_hflevel_thread.start(Callable(self, "_hflevel_thread_encode_and_write").bind(job))
 
@@ -284,9 +304,7 @@ func process_thread_queue() -> String:
 		var result: Variant = _hflevel_thread.wait_to_finish()
 		_hflevel_thread = null
 		var error := _apply_thread_result(result)
-		if not _hflevel_pending.is_empty():
-			var next: Dictionary = _hflevel_pending.pop_front()
-			_start_pending_job(next)
+		_start_next_pending()
 		return error
 	return ""
 
@@ -323,14 +341,23 @@ func _apply_thread_result(result: Variant) -> String:
 	return ""
 
 
-func _start_pending_job(job: Dictionary) -> void:
+func _start_pending_job(job: Dictionary) -> bool:
 	var pending_path: String = str(job.get("path", ""))
 	if pending_path == "" or not (job.get("encoded") is Dictionary):
 		push_warning("HFLevel: Discarding pending write with empty path or payload")
-		return
+		return false
 	_hflevel_thread = Thread.new()
 	job["last_hash"] = _hflevel_last_hash
 	_hflevel_thread.start(Callable(self, "_hflevel_thread_encode_and_write").bind(job))
+	return true
+
+
+## Start the oldest queued write, skipping any that cannot run. Without the
+## loop a discarded job would leave the queue stalled with no live thread.
+func _start_next_pending() -> void:
+	while not _hflevel_pending.is_empty():
+		if _start_pending_job(_hflevel_pending.pop_front()):
+			return
 
 
 func _flush_job_sync(job: Dictionary) -> void:
