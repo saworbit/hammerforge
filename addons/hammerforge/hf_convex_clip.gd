@@ -242,17 +242,51 @@ static func sort_coplanar_cw(
 static func cap_polygon(
 	cut_points: PackedVector3Array, outward_normal: Vector3, epsilon: float = DEFAULT_EPSILON
 ) -> PackedVector3Array:
+	# Deduplicate by distance, not by grid cell. Two crossings a hair apart can
+	# land either side of a cell boundary and both survive, and a cut ring with a
+	# near-duplicate in it fans into a zero-area sliver whose normal is noise.
+	# Cut rings have tens of points at most, so the quadratic scan is free.
 	var unique := PackedVector3Array()
-	var seen := {}
+	var threshold := maxf(epsilon, 0.000001)
+	var threshold_squared := threshold * threshold
 	for point in cut_points:
-		var key := _quantize(point, epsilon)
-		if seen.has(key):
-			continue
-		seen[key] = true
-		unique.append(point)
+		var duplicate := false
+		for kept in unique:
+			if kept.distance_squared_to(point) <= threshold_squared:
+				duplicate = true
+				break
+		if not duplicate:
+			unique.append(point)
 	if unique.size() < 3:
 		return PackedVector3Array()
-	return sort_coplanar_cw(unique, outward_normal)
+	return _drop_collinear(sort_coplanar_cw(unique, outward_normal), threshold)
+
+
+## Remove ring vertices that add nothing but a sliver triangle.
+##
+## A vertex lying on the straight line between its neighbours contributes a
+## degenerate triangle when `FaceData.triangulate()` fans the polygon, and a
+## degenerate triangle has no reliable normal.
+static func _drop_collinear(ring: PackedVector3Array, threshold: float) -> PackedVector3Array:
+	var count := ring.size()
+	if count < 4:
+		return ring
+	var kept := PackedVector3Array()
+	for i in count:
+		var previous: Vector3 = ring[(i - 1 + count) % count]
+		var current: Vector3 = ring[i]
+		var next: Vector3 = ring[(i + 1) % count]
+		var edge_a := current - previous
+		var edge_b := next - current
+		if edge_a.length() < threshold or edge_b.length() < threshold:
+			continue
+		# Twice the triangle area, compared against the longer edge: the distance
+		# this vertex stands off the line through its neighbours.
+		var offset := edge_a.cross(edge_b).length() / maxf(edge_a.length(), edge_b.length())
+		if offset < threshold:
+			continue
+		kept.append(current)
+	return kept if kept.size() >= 3 else ring
 
 
 ## Describe a face set as an axis-aligned box, or return an empty dictionary.
