@@ -452,3 +452,32 @@ func test_viewport_menu_context_matches_selection_state():
 	assert_true(menu.is_item_disabled(0))
 	menu.hide()
 	menu.free()
+
+
+# --- the row wraps rather than running off the viewport -------------------
+
+
+func test_sections_wrap_instead_of_overflowing():
+	# An HBoxContainer section runs off the sides of the viewport once the
+	# buttons no longer fit. Measured before this: 940px of brush tools with the
+	# viewport at 975px, and narrower than that with a dock open.
+	for ctx_key in toolbar._sections:
+		var section: Control = toolbar._sections[ctx_key]
+		assert_true(
+			section is FlowContainer,
+			"Section %s cannot wrap, so it overflows instead" % str(ctx_key)
+		)
+		assert_eq(section.size_flags_horizontal, Control.SIZE_EXPAND_FILL)
+
+
+func test_natural_row_width_reports_the_unwrapped_content():
+	# A wrapping container reports only its widest child as a minimum, so the
+	# placement code cannot ask it how wide the content really is.
+	toolbar.update_state({"has_root": true, "brush_count": 1, "tool": 1})
+	var natural: float = toolbar.natural_row_width()
+	assert_gt(natural, 0.0)
+	assert_gt(
+		natural,
+		toolbar.get_combined_minimum_size().x,
+		"A wrapped row's minimum is one button wide; the natural width is the whole row"
+	)

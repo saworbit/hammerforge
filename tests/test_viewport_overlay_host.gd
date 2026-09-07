@@ -281,3 +281,76 @@ func test_refresh_is_safe_before_a_host_exists() -> void:
 	Overlays.attach_viewport_overlay(plugin, plugin._context_toolbar)
 	Overlays.refresh_viewport_overlay_placement(plugin)
 	assert_same(plugin._context_toolbar.get_parent(), plugin.toolbar)
+
+
+# --- an overlay wider than the viewport ----------------------------------
+
+
+## A panel whose width comes from wrappable content, like the real contextual
+## toolbar: a control pinned by `custom_minimum_size` cannot be capped, because
+## Godot will not lay a control out smaller than its own minimum.
+func _wrappable_overlay(name: String, buttons: int, button_width: float) -> Control:
+	var panel := PanelContainer.new()
+	panel.name = name
+	var flow := HFlowContainer.new()
+	flow.add_theme_constant_override("h_separation", 0)
+	flow.add_theme_constant_override("v_separation", 0)
+	flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(flow)
+	for i in range(buttons):
+		var b := Button.new()
+		b.custom_minimum_size = Vector2(button_width, 30)
+		flow.add_child(b)
+	return panel
+
+
+func test_an_overlay_wider_than_the_viewport_is_capped_to_it() -> void:
+	# Centring cannot help something wider than what it is centred in: it just
+	# hangs off both sides with the controls at each end unreachable. Measured in
+	# the editor before this: a 940px toolbar in a 975px viewport, which a single
+	# open dock is enough to push over.
+	host.size = Vector2(600, 400)
+	plugin._context_toolbar = _wrappable_overlay("ContextToolbar", 10, 94.0)
+	Overlays.attach_viewport_overlay(plugin, plugin._context_toolbar)
+	Overlays.adopt_viewport_overlay_host(plugin, host)
+
+	var rect: Rect2 = plugin._context_toolbar.get_rect()
+	assert_lte(rect.size.x, host.size.x, "Wider than the viewport it floats over")
+	assert_gte(rect.position.x, 0.0, "Hangs off the left")
+	assert_lte(rect.position.x + rect.size.x, host.size.x, "Hangs off the right")
+
+
+func test_a_capped_overlay_wraps_rather_than_losing_its_controls() -> void:
+	host.size = Vector2(600, 400)
+	plugin._context_toolbar = _wrappable_overlay("ContextToolbar", 10, 94.0)
+	Overlays.attach_viewport_overlay(plugin, plugin._context_toolbar)
+	Overlays.adopt_viewport_overlay_host(plugin, host)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var flow: Control = plugin._context_toolbar.get_child(0)
+	var rows := {}
+	for b in flow.get_children():
+		rows[(b as Control).position.y] = true
+	assert_gt(rows.size(), 1, "940px of buttons in a 600px viewport has to take more than one row")
+	for b in flow.get_children():
+		var r: Rect2 = (b as Control).get_global_rect()
+		assert_lte(
+			r.position.x + r.size.x,
+			host.get_global_rect().position.x + host.size.x + 0.01,
+			"A button ended up outside the viewport"
+		)
+
+
+func test_an_overlay_that_fits_keeps_its_natural_width() -> void:
+	# The cap must not shrink a toolbar that had room, or every selection would
+	# get a full-width bar instead of a compact one.
+	host.size = Vector2(1486, 820)
+	plugin._context_toolbar = _overlay("ContextToolbar")
+	plugin._context_toolbar.custom_minimum_size = Vector2(420, 36)
+	Overlays.attach_viewport_overlay(plugin, plugin._context_toolbar)
+	Overlays.adopt_viewport_overlay_host(plugin, host)
+
+	var rect: Rect2 = plugin._context_toolbar.get_rect()
+	assert_almost_eq(rect.size.x, 420.0, 0.01, "Kept its own width")
+	assert_almost_eq(rect.position.x + rect.size.x * 0.5, 743.0, 1.0, "Still centred")

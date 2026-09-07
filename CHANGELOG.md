@@ -32,6 +32,15 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   explains it. It reads the Console's own evaluation, so the two cannot disagree.
 
 ### Fixed
+- **The contextual toolbar ran off both sides of the viewport when it did not
+  fit.** With a brush selected it measures 940px unwrapped, and the 3D viewport
+  is narrower than that as soon as a dock is open — centring something wider
+  than what it is centred in just hangs it off both ends, with the controls at
+  each end unreachable. Its sections wrap now, and placement caps an overlay to
+  the viewport it floats over. Measured at a 709px viewport: laid out at 693px
+  across four rows, with every button inside the viewport instead of 115px of
+  toolbar hanging off each side. A toolbar that fits still keeps its own width
+  rather than stretching to fill.
 - **Every keybinding in the command palette was clipped to its first character
   or two** — `Ctrl+Shift+Enter` rendered as `Ctr`, `Shift+P` as `Sh`. The binding
   label was anchored with `PRESET_CENTER_RIGHT`, which puts a control's top-left
