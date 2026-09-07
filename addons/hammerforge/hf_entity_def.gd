@@ -146,6 +146,70 @@ static func load_definitions_from_file(path: String) -> Array[HFEntityDef]:
 	return defs
 
 
+## Read the raw JSON entries from a definitions file, normalising the classname
+## onto an "id" key. Unlike load_definitions() this keeps every key the file
+## carries, so the dock palette still gets its labels, previews and categories.
+static func load_raw_entries(path: String) -> Array[Dictionary]:
+	var entries: Array[Dictionary] = []
+	if path == "" or not FileAccess.file_exists(path):
+		return entries
+	var file := FileAccess.open(path, FileAccess.READ)
+	if not file:
+		return entries
+	var data = JSON.parse_string(file.get_as_text())
+	if data == null:
+		return entries
+	var raw: Array = []
+	if data is Dictionary:
+		var listed = data.get("entities", [])
+		if listed is Array and not listed.is_empty():
+			raw = listed
+		else:
+			for key in data.keys():
+				var entry = data[key]
+				if entry is Dictionary:
+					var record: Dictionary = entry.duplicate(true)
+					record["id"] = str(key)
+					raw.append(record)
+	elif data is Array:
+		raw = data
+	for entry in raw:
+		if not (entry is Dictionary):
+			continue
+		var record: Dictionary = (entry as Dictionary).duplicate(true)
+		var classname_value := str(
+			record.get("id", record.get("classname", record.get("class", "")))
+		)
+		if classname_value == "":
+			continue
+		record["id"] = classname_value
+		entries.append(record)
+	return entries
+
+
+## The raw entries a project actually sees: plugin file overlaid with the
+## project file, same classname replacing the plugin entry.
+static func load_merged_raw_entries(
+	plugin_path: String, project_path: String = PROJECT_DEFINITIONS_PATH
+) -> Array[Dictionary]:
+	var by_name: Dictionary = {}
+	var order: Array[String] = []
+	for entry in load_raw_entries(plugin_path):
+		var key := str(entry.get("id", ""))
+		if not by_name.has(key):
+			order.append(key)
+		by_name[key] = entry
+	for entry in load_raw_entries(project_path):
+		var key := str(entry.get("id", ""))
+		if not by_name.has(key):
+			order.append(key)
+		by_name[key] = entry
+	var out: Array[Dictionary] = []
+	for key in order:
+		out.append(by_name[key])
+	return out
+
+
 ## Overlay project defs onto plugin defs. Same classname replaces the plugin entry.
 static func merge_definitions(
 	base: Array[HFEntityDef], overlay: Array[HFEntityDef]
