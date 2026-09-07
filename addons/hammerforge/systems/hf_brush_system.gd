@@ -978,12 +978,24 @@ func pick_face(camera: Camera3D, mouse_pos: Vector2) -> Dictionary:
 
 
 ## Ray-based face picker that applies the same visibility rules as object picks.
+##
+## The in-progress drag preview is deliberately not a target. It is parented
+## under draft_brushes_node the moment a drag starts and stands a full grid step
+## tall, and draft brushes carry no physics body, so `_raycast` reaches this
+## fallback for every placement ray. Left in, a drag heading away from the
+## camera meets the preview's own roof before the construction plane: the hit
+## sits nearer the eye, the box pulls back off the cursor, the next ray misses
+## it and the box springs out again — one edge twitching for as long as the
+## mouse moves. The snap system excludes it for the same reason.
 func pick_face_from_ray(ray_origin: Vector3, ray_direction: Vector3) -> Dictionary:
 	if ray_direction.is_zero_approx():
 		return {}
 	var ray_dir := ray_direction.normalized()
+	var preview = root.preview_brush
 	var brushes: Array = []
 	for node in root._iter_pick_nodes():
+		if node == preview:
+			continue
 		if (
 			node is DraftBrush
 			and is_brush_node(node)
