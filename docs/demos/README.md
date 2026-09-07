@@ -1,6 +1,6 @@
 # Demo Media
 
-Last updated: September 6, 2026
+Last updated: September 7, 2026
 
 ## Current approach: generated stills
 
@@ -115,13 +115,59 @@ docs/images/` discards a no-op run.
 
 ## Not covered by the stills
 
-Nothing currently captures the bake pipeline running, or any interaction that
-only makes sense in motion (dragging a brush out, extruding a face). Those still
-need a screen recording.
+Stills cannot show a gesture. Drawing a brush, dragging a cut through a wall and
+extruding a face only make sense in motion, which is what the clip below covers.
+The bake pipeline running is still not captured anywhere.
 
-## Video clips (deferred)
+## Video clips
 
-Screen-recorded clips were planned in February 2026 and never produced. They are
-deferred rather than dropped; stills cover the immediate "what does this look
-like" gap. If clips are revisited, keep them at 1280x720 or 1920x1080 and name
-them `demo_<topic>_vX.Y.Z.mp4` in this directory.
+| File | Shows |
+|------|-------|
+| `carve_a_doorway.mp4` | An empty grid to a played level: three walls drawn, a cut brush dragged through the far one, the cut applied, then Test Level and a first-person walk up to the doorway. 55s, 1280x720, no audio. |
+
+Derived assets, both committed and both regenerated from the clip:
+
+| File | Use |
+|------|-----|
+| `../images/demo_carve_a_doorway.gif` | The README. GitHub does not play a repository MP4 inline, so the README carries a 19-second GIF of the cut and the playtest, linking to the full clip on the docs site. |
+| `../images/demo_carve_a_doorway_poster.png` | The `poster` frame for the `<video>` element on the docs home page. Without it the browser shows frame one, which is an empty grid. |
+
+```bash
+# GIF for the README: the cut, the apply, and the playtest.
+ffmpeg -ss 36 -t 19.4 -i docs/demos/carve_a_doorway.mp4   -vf "fps=12,scale=640:-1:flags=lanczos,palettegen=max_colors=128:stats_mode=diff" palette.png
+ffmpeg -ss 36 -t 19.4 -i docs/demos/carve_a_doorway.mp4 -i palette.png   -lavfi "fps=12,scale=640:-1:flags=lanczos[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=3:diff_mode=rectangle"   docs/images/demo_carve_a_doorway.gif
+
+# Poster frame.
+ffmpeg -ss 43.5 -i docs/demos/carve_a_doorway.mp4 -frames:v 1   docs/images/demo_carve_a_doorway_poster.png
+```
+
+### Recording harness
+
+The clip is produced by a harness that drives the real editor with the real OS
+mouse while OBS captures the editor window. **That harness is not in the tree
+yet** -- it lives locally alongside `tools/capture_ui.py`, which it reuses for
+the crash-safe environment swap. The committed artefacts above are its output.
+
+Two constraints from it are worth recording even while it is parked, because
+they are properties of HammerForge rather than of the harness:
+
+- **The draw tool raycasts existing brush faces before the grid plane.** Ground
+  hidden behind a wall cannot be clicked; the click lands on the wall instead.
+  Anything scripted against the viewport has to be laid out so no drag point
+  falls in an existing brush's shadow.
+- **Cuts extrude upward from the grid plane.** A doorway cut through a wall also
+  cuts any floor brush beneath it, which leaves a pit at the threshold. The
+  demo room has no floor brush for that reason; its walls stand on the ground
+  plane that New Level provides.
+
+Recording also has to account for two Godot behaviours: the editor window stops
+presenting frames the moment a playtest launches, so a capture left pointing at
+it goes black; and the playtest window is owned by the editor for about twelve
+seconds before the game's own process takes it over, which destroys the window
+being captured.
+
+## Audio
+
+Clips are encoded with `-an`. A window-scoped screen capture says nothing about
+what the machine's speakers were playing, and these demos have no narration, so
+the track is dropped rather than shipped silent-by-luck.
