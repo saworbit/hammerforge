@@ -83,7 +83,7 @@ before capturing so it does not show up in the editor's main-screen bar, and
 puts it back afterwards. If you add tooling that is visible in the editor,
 extend that swap rather than cropping it out of the image.
 
-### Do not delete docs/googlea10fdf23f3cd65ee.html
+### Do not delete docs/googlef8407c6985aae961.html
 
 It is the Google Search Console ownership proof for
 `https://saworbit.github.io/hammerforge/`. The filename is the token and the
@@ -93,6 +93,12 @@ verbatim.
 Google re-checks it periodically, so removing it un-verifies the property and
 loses the indexing reports with it. It looks exactly like the kind of
 unexplained stray a tidy-up deletes, which is why it is written down here.
+
+The property belongs to the personal Google account that owns the repository.
+An earlier file, `googlea10fdf23f3cd65ee.html`, was issued to a different
+account by mistake and has been removed; a verification token is per-account,
+so re-verifying under a different one means a new file rather than reusing the
+old.
 
 ## Godot MCP Development Setup
 
