@@ -1182,15 +1182,33 @@ func _append_nonstructural_brushes(container: Node3D, filter: Variant = null) ->
 		idx += 1
 
 
+## The authored name an entity is wired to. Brushes get a Godot generated node
+## name unless the author renamed them, so fall back to the node name only when
+## it is not one of those generated names.
+static func authored_entity_name(draft: Node) -> String:
+	if not draft:
+		return ""
+	var meta_name := str(draft.get_meta("entity_name", ""))
+	if meta_name != "":
+		return meta_name
+	var node_name := str(draft.name)
+	if node_name == "" or node_name.begins_with("@") or node_name == "DraftBrush":
+		return ""
+	return node_name
+
+
 func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 	var mesh: Mesh = null
 	var source: Node3D = draft
 	if draft.mesh_instance and draft.mesh_instance.mesh:
 		mesh = draft.mesh_instance.mesh
 		source = draft.mesh_instance
+	var authored := authored_entity_name(draft)
 	var mi := MeshInstance3D.new()
-	mi.name = "FuncDetail_%d" % idx
+	mi.name = authored if authored != "" else "FuncDetail_%d" % idx
 	mi.mesh = mesh
+	if authored != "":
+		mi.set_meta("entity_name", authored)
 	holder.add_child(mi)
 	mi.transform = _source_transform_in_baked_container(source, holder.get_parent() as Node3D)
 	var body := StaticBody3D.new()
@@ -1201,6 +1219,7 @@ func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 	body.collision_layer = layer
 	body.collision_mask = layer
 	holder.add_child(body)
+	body.transform = mi.transform
 	var col := CollisionShape3D.new()
 	col.shape = _shape_for_draft(draft, mesh)
 	col.transform = body.transform.affine_inverse() * mi.transform
@@ -1208,10 +1227,13 @@ func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 
 
 func _append_trigger_volume(holder: Node3D, draft: DraftBrush, idx: int) -> void:
+	var authored := authored_entity_name(draft)
 	var area := Area3D.new()
-	area.name = "Trigger_%d" % idx
+	area.name = authored if authored != "" else "Trigger_%d" % idx
 	area.monitoring = true
 	area.monitorable = true
+	if authored != "":
+		area.set_meta("entity_name", authored)
 	var bec := str(draft.get_meta("brush_entity_class", ""))
 	if bec != "":
 		area.set_meta("brush_entity_class", bec)

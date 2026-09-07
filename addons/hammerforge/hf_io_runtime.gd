@@ -358,13 +358,22 @@ func _collect_connections(node: Node) -> void:
 				entry["_fired"] = false
 				_connections[id].append(entry)
 		# Reverse lookup: name -> [instance_id, ...]
-		if not _source_name_to_ids.has(source_name):
-			_source_name_to_ids[source_name] = []
-		var id_list: Array = _source_name_to_ids[source_name]
-		if id not in id_list:
-			id_list.append(id)
+		_index_source_name(source_name, id)
+		# Authors fire by the logical entity name, which can differ from the
+		# generated node name on baked triggers and meshes.
+		var meta_name := str(node.get_meta("entity_name", ""))
+		if meta_name != "" and meta_name != source_name:
+			_index_source_name(meta_name, id)
 	for child in node.get_children():
 		_collect_connections(child)
+
+
+func _index_source_name(key: String, id: int) -> void:
+	if not _source_name_to_ids.has(key):
+		_source_name_to_ids[key] = []
+	var id_list: Array = _source_name_to_ids[key]
+	if id not in id_list:
+		id_list.append(id)
 
 
 # ---------------------------------------------------------------------------

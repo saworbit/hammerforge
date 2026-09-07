@@ -2548,3 +2548,114 @@ func test_bake_dirty_with_no_changes_reports_nothing_to_do():
 		HFBakeSystem.BakeStatus.NOTHING_TO_DO,
 		"Nothing to do must be distinguishable from failure",
 	)
+
+
+# ===========================================================================
+# Nonstructural bake keeps authored names and places its collision body
+# (#140, #158)
+# ===========================================================================
+
+
+func _nonstructural_holder(container: Node3D) -> Node:
+	bake_sys._append_nonstructural_brushes(container)
+	return container.get_node_or_null("Nonstructural")
+
+
+func test_trigger_bake_keeps_authored_node_name():
+	var trigger := _make_brush(root.draft_brushes_node)
+	trigger.name = "door_sensor"
+	trigger.set_meta("brush_entity_class", "trigger_once")
+	var container := Node3D.new()
+	add_child_autoqfree(container)
+
+	var holder := _nonstructural_holder(container)
+	var area: Area3D = null
+	for child in holder.get_children():
+		if child is Area3D:
+			area = child
+			break
+	assert_not_null(area)
+	assert_eq(area.name, &"door_sensor", "Baked trigger keeps the authored node name")
+	assert_eq(str(area.get_meta("entity_name", "")), "door_sensor")
+
+
+func test_trigger_bake_prefers_entity_name_meta():
+	var trigger := _make_brush(root.draft_brushes_node)
+	trigger.name = "SomeBrush"
+	trigger.set_meta("entity_name", "secret_trigger")
+	trigger.set_meta("brush_entity_class", "trigger_multiple")
+	var container := Node3D.new()
+	add_child_autoqfree(container)
+
+	var holder := _nonstructural_holder(container)
+	var area: Area3D = null
+	for child in holder.get_children():
+		if child is Area3D:
+			area = child
+			break
+	assert_not_null(area)
+	assert_eq(str(area.get_meta("entity_name", "")), "secret_trigger")
+
+
+func test_trigger_bake_falls_back_to_indexed_name():
+	var trigger := _make_brush(root.draft_brushes_node)
+	trigger.name = "DraftBrush"
+	trigger.set_meta("brush_entity_class", "trigger_once")
+	var container := Node3D.new()
+	add_child_autoqfree(container)
+
+	var holder := _nonstructural_holder(container)
+	var area: Area3D = null
+	for child in holder.get_children():
+		if child is Area3D:
+			area = child
+			break
+	assert_not_null(area)
+	assert_eq(area.name, &"Trigger_0", "Generated brush names do not become entity names")
+	assert_false(area.has_meta("entity_name"))
+
+
+func test_func_detail_bake_keeps_authored_node_name():
+	var detail := _make_brush(root.draft_brushes_node)
+	detail.name = "crate_a"
+	detail.set_meta("brush_entity_class", "func_detail")
+	var container := Node3D.new()
+	add_child_autoqfree(container)
+
+	var holder := _nonstructural_holder(container)
+	var mi: MeshInstance3D = null
+	for child in holder.get_children():
+		if child is MeshInstance3D:
+			mi = child
+			break
+	assert_not_null(mi)
+	assert_eq(mi.name, &"crate_a")
+	assert_eq(str(mi.get_meta("entity_name", "")), "crate_a")
+
+
+func test_func_detail_collision_body_sits_at_the_brush():
+	var detail := _make_brush(root.draft_brushes_node, Vector3(10, 5, 20))
+	detail.set_meta("brush_entity_class", "func_detail")
+	var container := Node3D.new()
+	add_child_autoqfree(container)
+
+	var holder := _nonstructural_holder(container)
+	var mi: MeshInstance3D = null
+	var body: StaticBody3D = null
+	for child in holder.get_children():
+		if child is MeshInstance3D:
+			mi = child
+		elif child is StaticBody3D:
+			body = child
+	assert_not_null(mi)
+	assert_not_null(body)
+	assert_almost_eq(body.position.x, mi.position.x, 0.001)
+	assert_almost_eq(body.position.y, mi.position.y, 0.001)
+	assert_almost_eq(body.position.z, mi.position.z, 0.001)
+	var col := body.get_child(0) as CollisionShape3D
+	assert_not_null(col)
+	# The shape still lands where the mesh does, now relative to a placed body.
+	var shape_pos: Vector3 = (body.transform * col.transform).origin
+	assert_almost_eq(shape_pos.x, mi.position.x, 0.001)
+	assert_almost_eq(shape_pos.y, mi.position.y, 0.001)
+	assert_almost_eq(shape_pos.z, mi.position.z, 0.001)
