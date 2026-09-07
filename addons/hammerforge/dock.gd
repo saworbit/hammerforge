@@ -353,6 +353,8 @@ var syncing_grid := false
 var presets_dir := "res://addons/hammerforge/presets"
 var entity_defs_path := "res://addons/hammerforge/entities.json"
 var entity_defs: Array = []
+## Path the palette was last built from, so a root swap can rebuild it.
+var _loaded_entity_defs_path := ""
 var preset_buttons: Array[Button] = []
 var entity_palette_buttons: Array[Button] = []
 var preset_context_button: Button = null
@@ -1943,6 +1945,10 @@ func _process(_delta):
 		_disconnect_root_signals()
 		connected_root = level_root
 		_connect_root_signals()
+		# A root can point at its own definitions file, so rebuild both entity
+		# pickers when the one we loaded from is no longer the active one.
+		if _effective_entity_defs_path() != _loaded_entity_defs_path:
+			_load_entity_definitions()
 		# Pass root to tutorial wizard if active
 		if _tutorial_wizard and is_instance_valid(_tutorial_wizard) and level_root:
 			_tutorial_wizard.set_root(level_root, self)
@@ -4871,34 +4877,21 @@ func _load_presets() -> void:
 			_create_preset_button(preset, path)
 
 
+## The definitions file this dock should read. The active LevelRoot owns the
+## path, so a project pointing its root somewhere custom is honoured here too.
+func _effective_entity_defs_path() -> String:
+	if level_root and is_instance_valid(level_root):
+		var root_path := str(level_root.get("entity_definitions_path"))
+		if root_path != "":
+			return root_path
+	return entity_defs_path
+
+
 func _load_entity_definitions() -> void:
-	entity_defs.clear()
-	_clear_entity_palette()
-	if not ResourceLoader.exists(entity_defs_path):
-		return
-	var file = FileAccess.open(entity_defs_path, FileAccess.READ)
-	if not file:
-		_log("Failed to open entity definitions: %s" % entity_defs_path, true)
-		return
-	var text = file.get_as_text()
-	var data = JSON.parse_string(text)
-	if data == null:
-		_log("Failed to parse entity definitions: %s" % entity_defs_path, true)
-		return
-	if data is Dictionary:
-		var entries = data.get("entities", [])
-		if entries is Array and entries.size() > 0:
-			entity_defs = entries
-			return
-		for key in data.keys():
-			var entry = data[key]
-			if entry is Dictionary:
-				var record = entry.duplicate(true)
-				record["id"] = str(key)
-				entity_defs.append(record)
-	elif data is Array:
-		entity_defs = data
+	entity_defs = HFEntityDef.load_merged_raw_entries(_effective_entity_defs_path())
+	_loaded_entity_defs_path = _effective_entity_defs_path()
 	_populate_entity_palette()
+	_populate_brush_entity_classes()
 
 
 func get_entity_definitions() -> Array:
@@ -4909,7 +4902,7 @@ func _populate_brush_entity_classes() -> void:
 	if not brush_entity_class_opt:
 		return
 	brush_entity_class_opt.clear()
-	var defs = HFEntityDef.load_merged_definitions(entity_defs_path)
+	var defs = HFEntityDef.load_merged_definitions(_effective_entity_defs_path())
 	var brush_defs = HFEntityDef.filter_brush_entities(defs)
 	if brush_defs.is_empty():
 		# Fallback: ensure at least the built-in brush entity classes are available.
@@ -4930,6 +4923,10 @@ func _populate_entity_palette() -> void:
 		return
 	for entry in entity_defs:
 		if not (entry is Dictionary):
+			continue
+		# Brush entities are placed by assigning a class to a brush, not from
+		# this palette. They belong to the brush entity dropdown.
+		if bool(entry.get("is_brush_entity", false)):
 			continue
 		var entity_id = str(entry.get("id", entry.get("class", "")))
 		if entity_id == "":
