@@ -303,3 +303,90 @@ func test_move_to_ceiling_nonexistent_id_noop():
 	# Should not crash
 	sys.move_brushes_to_ceiling(["nonexistent"])
 	assert_true(true, "Nonexistent ID should not crash")
+
+
+# ===========================================================================
+# Entity I/O wiring survives capture/restore (#149)
+# ===========================================================================
+
+
+func test_round_trip_preserves_entity_io_outputs_and_name():
+	var b = sys.create_brush_from_info({"shape": root.BrushShape.BOX, "size": Vector3(8, 8, 8)})
+	b.set_meta("brush_entity_class", "trigger_once")
+	b.set_meta("entity_name", "entry_trigger")
+	(
+		b
+		. set_meta(
+			"entity_io_outputs",
+			[
+				{
+					"output_name": "OnTrigger",
+					"target_name": "door1",
+					"input_name": "Open",
+					"parameter": "",
+					"delay": 0.5,
+					"fire_once": true,
+				}
+			]
+		)
+	)
+
+	var info = sys.get_brush_info_from_node(b)
+	sys.delete_brush(b)
+
+	info["brush_id"] = "io_restored"
+	var restored = sys.create_brush_from_info(info)
+
+	assert_not_null(restored)
+	assert_eq(str(restored.get_meta("entity_name", "")), "entry_trigger")
+	var outputs: Array = restored.get_meta("entity_io_outputs", [])
+	assert_eq(outputs.size(), 1, "Output connection should survive the round trip")
+	assert_eq(str(outputs[0].get("target_name", "")), "door1")
+	assert_eq(str(outputs[0].get("input_name", "")), "Open")
+	assert_almost_eq(float(outputs[0].get("delay", 0.0)), 0.5, 0.001)
+	assert_true(bool(outputs[0].get("fire_once", false)))
+
+
+func test_round_trip_copies_outputs_instead_of_sharing_them():
+	var b = sys.create_brush_from_info({"shape": root.BrushShape.BOX, "size": Vector3(8, 8, 8)})
+	b.set_meta(
+		"entity_io_outputs",
+		[{"output_name": "OnTrigger", "target_name": "door1", "input_name": "Open"}]
+	)
+
+	var info = sys.get_brush_info_from_node(b)
+	info["brush_id"] = "io_copy"
+	var restored = sys.create_brush_from_info(info)
+
+	var restored_outputs: Array = restored.get_meta("entity_io_outputs", [])
+	restored_outputs[0]["target_name"] = "door2"
+	var original_outputs: Array = b.get_meta("entity_io_outputs", [])
+	assert_eq(
+		str(original_outputs[0].get("target_name", "")),
+		"door1",
+		"Restored brush must not share output dictionaries with the source",
+	)
+
+
+func test_duplicate_info_keeps_entity_wiring():
+	var b = sys.create_brush_from_info({"shape": root.BrushShape.BOX, "size": Vector3(8, 8, 8)})
+	b.set_meta("entity_name", "entry_trigger")
+	b.set_meta(
+		"entity_io_outputs",
+		[{"output_name": "OnTrigger", "target_name": "door1", "input_name": "Open"}]
+	)
+
+	var dup_info = sys.build_duplicate_info(b, Vector3(4, 0, 0))
+	var dup = sys.create_brush_from_info(dup_info)
+
+	assert_eq(str(dup.get_meta("entity_name", "")), "entry_trigger")
+	assert_eq((dup.get_meta("entity_io_outputs", []) as Array).size(), 1)
+
+
+func test_round_trip_without_entity_wiring_sets_no_meta():
+	var b = sys.create_brush_from_info({"shape": root.BrushShape.BOX, "size": Vector3(8, 8, 8)})
+	var info = sys.get_brush_info_from_node(b)
+	assert_false(info.has("entity_io_outputs"))
+	assert_false(info.has("entity_name"))
+	var restored = sys.create_brush_from_info(info)
+	assert_false(restored.has_meta("entity_name"), "Plain brushes stay free of entity metadata")

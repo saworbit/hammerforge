@@ -56,9 +56,12 @@ func _build_ui() -> void:
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_scroll.add_child(_list)
 
-	# Thumbnail preview (shown on hover, floats above)
+	# Thumbnail preview (shown on hover, floats above). top_level keeps it out of
+	# this VBoxContainer's layout, so showing it cannot push the dock around.
 	_preview_rect = TextureRect.new()
+	_preview_rect.top_level = true
 	_preview_rect.custom_minimum_size = Vector2(THUMB_WIDTH * 2, THUMB_HEIGHT * 2)
+	_preview_rect.size = Vector2(THUMB_WIDTH * 2, THUMB_HEIGHT * 2)
 	_preview_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_preview_rect.visible = false
 	_preview_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -190,7 +193,36 @@ func _on_row_hovered(index: int) -> void:
 	var entry: Dictionary = _entries[index]
 	if entry["thumbnail"] and _preview_rect:
 		_preview_rect.texture = entry["thumbnail"]
+		_preview_rect.global_position = _preview_position_for_row(index)
 		_preview_rect.visible = true
+
+
+## Park the floating preview beside its row, pulled back inside the window when
+## the row sits near an edge.
+func _preview_position_for_row(index: int) -> Vector2:
+	return _clamp_preview_position(_preview_anchor_for_row(index), get_viewport_rect().size)
+
+
+## Where the preview wants to sit: just right of the panel, level with the row.
+func _preview_anchor_for_row(index: int) -> Vector2:
+	var anchor := global_position
+	if _list and index >= 0 and index < _list.get_child_count():
+		var row := _list.get_child(index) as Control
+		if row:
+			anchor = row.global_position
+	return Vector2(global_position.x + size.x + 4.0, anchor.y)
+
+
+## Pull the preview back inside `bounds`. A viewport too small to hold it at all
+## pins it to the origin rather than pushing it off the other edge.
+func _clamp_preview_position(target: Vector2, bounds: Vector2) -> Vector2:
+	var preview_size := Vector2(THUMB_WIDTH * 2, THUMB_HEIGHT * 2)
+	var out := target
+	if bounds.x > 0.0:
+		out.x = clampf(out.x, 0.0, maxf(0.0, bounds.x - preview_size.x))
+	if bounds.y > 0.0:
+		out.y = clampf(out.y, 0.0, maxf(0.0, bounds.y - preview_size.y))
+	return out
 
 
 func _on_row_unhovered() -> void:

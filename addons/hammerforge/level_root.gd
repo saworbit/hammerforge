@@ -314,24 +314,23 @@ func _emit_or_batch(signal_name: String, args: Array = []) -> void:
 		_emit_signal_by_name(signal_name, args)
 
 
-## Flush all queued signals, coalescing brush add/remove/change into a single
-## selection_changed emission.
+## Flush all queued signals in order, dropping exact repeats. Lifecycle events
+## are emitted as themselves: a batch that removes brushes has to say so, and it
+## has no business reporting dead ids as a selection.
 func _flush_batched_signals() -> void:
-	var brush_ids_changed: Array = []
-	var other_signals: Array = []
-	for entry in _batched_signals:
+	var pending: Array = _batched_signals
+	_batched_signals = []
+	var seen: Dictionary = {}
+	for entry in pending:
 		var sname: String = entry.get("name", "")
-		if sname in ["brush_added", "brush_removed", "brush_changed"]:
-			var bid = entry.get("args", [])
-			if not bid.is_empty():
-				brush_ids_changed.append(bid[0])
-		else:
-			other_signals.append(entry)
-	_batched_signals.clear()
-	if not brush_ids_changed.is_empty():
-		selection_changed.emit(brush_ids_changed)
-	for entry in other_signals:
-		_emit_signal_by_name(entry.get("name", ""), entry.get("args", []))
+		if sname == "":
+			continue
+		var args: Array = entry.get("args", [])
+		var key: Array = [sname, args]
+		if seen.has(key):
+			continue
+		seen[key] = true
+		_emit_signal_by_name(sname, args)
 
 
 ## Discard all queued signals without emitting (used on rollback).
@@ -1888,6 +1887,10 @@ func load_hflevel(path: String = "") -> bool:
 	if ok:
 		state_loaded.emit()
 	return ok
+
+
+func validate_map(path: String) -> Dictionary:
+	return file_system.validate_map(path)
 
 
 func import_map(path: String) -> int:

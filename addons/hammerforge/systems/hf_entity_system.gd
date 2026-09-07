@@ -46,6 +46,17 @@ func find_entity_by_prefab_uid(uid: String) -> Node3D:
 	return null
 
 
+## Entity lifecycle signals live on LevelRoot. Route through the batcher so a
+## multi-entity operation flushes them together with everything else it queued.
+func _emit_entity_signal(signal_name: String, entity: Node) -> void:
+	if not root:
+		return
+	if root.has_method("_emit_or_batch"):
+		root._emit_or_batch(signal_name, [entity])
+	elif root.has_signal(signal_name):
+		root.emit_signal(signal_name, entity)
+
+
 func add_entity(entity: Node3D) -> void:
 	if not entity:
 		return
@@ -54,6 +65,7 @@ func add_entity(entity: Node3D) -> void:
 	entity.set_meta("is_entity", true)
 	root.entities_node.add_child(entity)
 	root._assign_owner(entity)
+	_emit_entity_signal("entity_added", entity)
 
 
 func place_entity_at_screen(
@@ -163,6 +175,7 @@ func restore_entity_from_info(info: Dictionary) -> DraftEntity:
 	entity.set_meta("is_entity", true)
 	root.entities_node.add_child(entity)
 	root._assign_owner(entity)
+	_emit_entity_signal("entity_added", entity)
 	return entity
 
 
@@ -203,6 +216,7 @@ func delete_entities_by_paths(entity_paths: Array) -> void:
 				),
 				1
 			)
+		_emit_entity_signal("entity_removed", entity)
 		var parent := entity.get_parent()
 		if parent:
 			parent.remove_child(entity)
@@ -241,6 +255,7 @@ func clear_entities() -> void:
 	if not root.entities_node:
 		return
 	for child in root.entities_node.get_children():
+		_emit_entity_signal("entity_removed", child)
 		root.entities_node.remove_child(child)
 		child.queue_free()
 

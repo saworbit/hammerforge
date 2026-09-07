@@ -730,3 +730,52 @@ func test_prune_overlapping_roots_disjoint():
 	var roots: Array[Node] = [a, b]
 	var pruned: Array[Node] = HFIORuntime._prune_overlapping_roots(roots)
 	assert_eq(pruned.size(), 2, "disjoint roots should both survive")
+
+
+# ===========================================================================
+# Firing by authored entity name (#151)
+# ===========================================================================
+
+
+func test_fire_resolves_source_by_entity_name_meta():
+	var button := _make_entity(scene_root, "Area3D_Baked_1")
+	button.set_meta("entity_name", "secret_button")
+	var door := _make_target_entity(scene_root, "Door1")
+	_add_connection(button, "OnPressed", "Door1", "Open")
+	_wire_dispatcher()
+
+	dispatcher.fire("secret_button", "OnPressed")
+	assert_eq(door.received_calls.size(), 1, "fire() should resolve the authored entity name")
+
+
+func test_fire_still_resolves_source_by_node_name():
+	var button := _make_entity(scene_root, "Area3D_Baked_1")
+	button.set_meta("entity_name", "secret_button")
+	var door := _make_target_entity(scene_root, "Door1")
+	_add_connection(button, "OnPressed", "Door1", "Open")
+	_wire_dispatcher()
+
+	dispatcher.fire("Area3D_Baked_1", "OnPressed")
+	assert_eq(door.received_calls.size(), 1, "Node name lookup must keep working")
+
+
+func test_fire_by_both_names_does_not_double_dispatch():
+	var button := _make_entity(scene_root, "Trigger_0")
+	button.set_meta("entity_name", "secret_button")
+	var door := _make_target_entity(scene_root, "Door1")
+	_add_connection(button, "OnPressed", "Door1", "Open")
+	_wire_dispatcher()
+
+	dispatcher.fire("secret_button", "OnPressed")
+	assert_eq(door.received_calls.size(), 1, "One alias fires the source exactly once")
+
+
+func test_fire_ignores_empty_entity_name_meta():
+	var button := _make_entity(scene_root, "Button1")
+	button.set_meta("entity_name", "")
+	var door := _make_target_entity(scene_root, "Door1")
+	_add_connection(button, "OnPressed", "Door1", "Open")
+	_wire_dispatcher()
+
+	dispatcher.fire("", "OnPressed")
+	assert_eq(door.received_calls.size(), 0, "An empty alias must not become a lookup key")

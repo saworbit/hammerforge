@@ -151,8 +151,15 @@ static func on_map_import_selected(dock: Object, path: String) -> void:
 	if not dock.level_root:
 		dock._set_status("No LevelRoot for .map import", true)
 		return
+	var check: Dictionary = dock.level_root.validate_map(path)
+	if not bool(check.get("ok", false)):
+		var reason := str(check.get("error", "unreadable file"))
+		dock._set_status("Failed to import .map: %s" % reason, true)
+		dock.show_toast("Failed to import .map", 2)
+		return
 	dock._commit_full_state_action("Import .map", "import_map", [path])
 	dock._set_status("Imported .map", false, 3.0)
+	dock.show_toast("Imported .map", 0)
 
 
 static func on_map_export_selected(dock: Object, path: String) -> void:

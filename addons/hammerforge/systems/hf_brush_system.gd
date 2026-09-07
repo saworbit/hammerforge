@@ -128,6 +128,12 @@ func create_brush_from_info(info: Dictionary) -> Node:
 		brush.set_meta("group_id", str(info["group_id"]))
 	if info.has("brush_entity_class") and str(info["brush_entity_class"]) != "":
 		brush.set_brush_entity_class(str(info["brush_entity_class"]))
+	if info.has("entity_io_outputs"):
+		var outputs: Array = info.get("entity_io_outputs", [])
+		if not outputs.is_empty():
+			brush.set_meta("entity_io_outputs", outputs.duplicate(true))
+	if info.has("entity_name") and str(info["entity_name"]) != "":
+		brush.set_meta("entity_name", str(info["entity_name"]))
 	if root.has_method("tag_brush_dirty"):
 		root.tag_brush_dirty(str(brush_id))
 	if root.has_method("_emit_or_batch"):
@@ -152,6 +158,12 @@ func delete_brush(brush: Node, free: bool = true) -> void:
 		if root.face_selection.has(key):
 			root.face_selection.erase(key)
 			_apply_face_selection()
+			# The dock's surface panel is still pointed at a face that just went
+			# away. Batched deletes coalesce this down to one emission.
+			if root.has_method("_emit_or_batch"):
+				root._emit_or_batch("face_selection_changed", [])
+			elif root.has_signal("face_selection_changed"):
+				root.face_selection_changed.emit()
 	_brush_count = max(0, _brush_count - 1)
 	_legacy_manager_remove(brush)
 	if brush.get_parent():
@@ -322,6 +334,12 @@ func get_brush_info_from_node(brush: Node) -> Dictionary:
 	var bec: String = str(draft.get_meta("brush_entity_class", ""))
 	if bec != "":
 		info["brush_entity_class"] = bec
+	var outputs: Array = draft.get_meta("entity_io_outputs", [])
+	if not outputs.is_empty():
+		info["entity_io_outputs"] = outputs.duplicate(true)
+	var ename: String = str(draft.get_meta("entity_name", ""))
+	if ename != "":
+		info["entity_name"] = ename
 	return info
 
 

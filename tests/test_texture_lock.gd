@@ -149,3 +149,80 @@ func test_combined_move_and_resize():
 	# Scale: 1.0 * (1/2) = 0.5
 	assert_almost_eq(face.uv_offset.x, -5.0, 0.001)
 	assert_almost_eq(face.uv_scale.x, 0.5, 0.001)
+
+
+# ===========================================================================
+# adjust_uvs_for_transform — rotated faces (#141)
+# ===========================================================================
+
+
+func _planar_z_face(rotation: float, scale: Vector2 = Vector2.ONE) -> FaceData:
+	var face = FaceData.new()
+	face.uv_projection = FaceData.UVProjection.PLANAR_Z
+	face.uv_scale = scale
+	face.uv_offset = Vector2.ZERO
+	face.uv_rotation = rotation
+	face.normal = Vector3.BACK
+	return face
+
+
+## Texture lock means a world point keeps its texel. After moving the brush by
+## d, the vertex now at projected q must get the UV the vertex at q - d had.
+func _assert_texture_stays_pinned(
+	face: FaceData, pos_delta: Vector3, probe: Vector2, msg: String
+) -> void:
+	var delta_2d := Vector2(pos_delta.x, pos_delta.y)
+	var before: Vector2 = face._apply_uv_transform(probe - delta_2d)
+	face.adjust_uvs_for_transform(pos_delta, Vector3.ONE)
+	var after: Vector2 = face._apply_uv_transform(probe)
+	assert_almost_eq(after.x, before.x, 0.001, "%s (u)" % msg)
+	assert_almost_eq(after.y, before.y, 0.001, "%s (v)" % msg)
+
+
+func test_rotated_face_keeps_its_texture_pinned():
+	_assert_texture_stays_pinned(
+		_planar_z_face(PI / 2.0), Vector3(2, 0, 0), Vector2(3, 1), "90 degree face"
+	)
+
+
+func test_rotated_and_scaled_face_keeps_its_texture_pinned():
+	_assert_texture_stays_pinned(
+		_planar_z_face(PI / 3.0, Vector2(2.0, 0.5)),
+		Vector3(5, -3, 0),
+		Vector2(-1, 4),
+		"60 degree face with non-uniform scale"
+	)
+
+
+func test_unrotated_face_keeps_its_texture_pinned():
+	_assert_texture_stays_pinned(
+		_planar_z_face(0.0), Vector3(2, 0, 0), Vector2(3, 1), "unrotated face"
+	)
+
+
+func test_quarter_turn_moves_the_offset_onto_the_other_axis():
+	var face = _planar_z_face(PI / 2.0)
+	face.adjust_uvs_for_transform(Vector3(2, 0, 0), Vector3.ONE)
+	# (2, 0) rotated a quarter turn is (0, 2), so the compensation lands on v.
+	assert_almost_eq(face.uv_offset.x, 0.0, 0.001, "A rotated move must not stay on u")
+	assert_almost_eq(face.uv_offset.y, -2.0, 0.001)
+
+
+func test_rotated_compensation_matches_the_carve_system_math():
+	# hf_carve_system.gd already rotates the delta before scaling. The two must
+	# agree or a carved face drifts away from the brush it came from.
+	var rotation := PI / 5.0
+	var scale := Vector2(1.5, 0.75)
+	var pos_delta := Vector3(4, -2, 0)
+	var face = _planar_z_face(rotation, scale)
+	face.adjust_uvs_for_transform(pos_delta, Vector3.ONE)
+	var carve_delta := Vector2(pos_delta.x, pos_delta.y).rotated(rotation) * scale
+	assert_almost_eq(face.uv_offset.x, -carve_delta.x, 0.001)
+	assert_almost_eq(face.uv_offset.y, -carve_delta.y, 0.001)
+
+
+func test_rotation_does_not_disturb_size_compensation():
+	var face = _planar_z_face(PI / 2.0)
+	face.adjust_uvs_for_transform(Vector3.ZERO, Vector3(2.0, 0.5, 1.0))
+	assert_almost_eq(face.uv_scale.x, 0.5, 0.001)
+	assert_almost_eq(face.uv_scale.y, 2.0, 0.001)

@@ -73,11 +73,36 @@ func load_hflevel(path: String = "") -> bool:
 	return true
 
 
+## Parse a .map without touching the level. The dock preflights with this so a
+## malformed file never clears the current work.
+func validate_map(path: String) -> Dictionary:
+	if path == "" or not FileAccess.file_exists(path):
+		return {"ok": false, "error": "File not found: %s" % path}
+	var map_data = MapIO.load_map(path)
+	if map_data.is_empty():
+		return {"ok": false, "error": "Could not read %s" % path.get_file()}
+	var errors: Array = map_data.get("errors", [])
+	if not errors.is_empty():
+		return {"ok": false, "error": str(errors[0])}
+	return {"ok": true, "error": ""}
+
+
+func _report_map_error(path: String, message: String) -> void:
+	var text := "Map import failed (%s): %s" % [path.get_file(), message]
+	push_error(text)
+	if root and root.has_signal("user_message"):
+		root.user_message.emit(text, 2)
+
+
 func import_map(path: String) -> int:
 	if path == "":
 		return ERR_INVALID_PARAMETER
 	var map_data = MapIO.load_map(path)
 	if map_data.is_empty():
+		return ERR_INVALID_DATA
+	var errors: Array = map_data.get("errors", [])
+	if not errors.is_empty():
+		_report_map_error(path, str(errors[0]))
 		return ERR_INVALID_DATA
 	root.clear_brushes()
 	root._clear_entities()

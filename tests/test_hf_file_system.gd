@@ -254,3 +254,111 @@ func test_region_write_success_lets_the_level_save_proceed():
 	await _drain_write()
 	assert_true(FileAccess.file_exists(_save_path))
 	assert_eq(root.paint_system.save_calls, 1)
+
+
+# ===========================================================================
+# Malformed .map import (#174)
+# ===========================================================================
+
+
+func _import_root() -> Node3D:
+	var s := GDScript.new()
+	s.source_code = """
+extends Node3D
+
+var cleared: int = 0
+var created: Array = []
+
+signal user_message(text: String, level: int)
+
+func clear_brushes() -> void:
+	cleared += 1
+
+func _clear_entities() -> void:
+	cleared += 1
+
+func create_brush_from_info(info: Dictionary) -> Node:
+	created.append(info)
+	return null
+
+func _create_entity_from_map(_info: Dictionary) -> Node:
+	return null
+"""
+	s.reload()
+	var node := Node3D.new()
+	node.set_script(s)
+	add_child_autoqfree(node)
+	return node
+
+
+func _write_map(path: String, text: String) -> String:
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_string(text)
+	f = null
+	return path
+
+
+func _good_map_text() -> String:
+	return (
+		"{\n"
+		+ '"classname" "worldspawn"'
+		+ "\n{\n"
+		+ "( 0 0 0 ) ( 10 0 0 ) ( 0 10 0 ) brick 0 0 0 1 1\n"
+		+ "( 0 0 0 ) ( 0 10 0 ) ( 0 0 10 ) brick 0 0 0 1 1\n"
+		+ "( 0 0 0 ) ( 0 0 10 ) ( 10 0 0 ) brick 0 0 0 1 1\n"
+		+ "( 10 0 0 ) ( 0 0 10 ) ( 0 10 0 ) brick 0 0 0 1 1\n"
+		+ "}\n}\n"
+	)
+
+
+func test_malformed_map_import_is_refused_and_leaves_the_level_alone():
+	var import_root := _import_root()
+	var fs := HFFileSystemType.new(import_root)
+	var path := _write_map("user://hf_broken_import_test.map", "not a map")
+	assert_eq(fs.import_map(path), ERR_INVALID_DATA)
+	assert_push_error("Map import failed")
+	assert_eq(import_root.cleared, 0, "A rejected import must not clear the level")
+	assert_eq(import_root.created.size(), 0)
+	DirAccess.remove_absolute(path)
+
+
+func test_unbalanced_map_import_is_refused():
+	var import_root := _import_root()
+	var fs := HFFileSystemType.new(import_root)
+	var text := "{\n" + '"classname" "worldspawn"' + "\n{\n"
+	var path := _write_map("user://hf_unbalanced_import_test.map", text)
+	assert_eq(fs.import_map(path), ERR_INVALID_DATA)
+	assert_push_error("Map import failed")
+	assert_eq(import_root.cleared, 0)
+	DirAccess.remove_absolute(path)
+
+
+func test_well_formed_map_import_still_replaces_the_level():
+	var import_root := _import_root()
+	var fs := HFFileSystemType.new(import_root)
+	var path := _write_map("user://hf_good_import_test.map", _good_map_text())
+	assert_eq(fs.import_map(path), OK)
+	assert_eq(import_root.cleared, 2, "A good import clears brushes and entities")
+	assert_eq(import_root.created.size(), 1)
+	DirAccess.remove_absolute(path)
+
+
+func test_validate_map_reports_the_first_problem():
+	var fs := HFFileSystemType.new(_import_root())
+	var path := _write_map("user://hf_validate_import_test.map", "not a map")
+	var result: Dictionary = fs.validate_map(path)
+	assert_false(bool(result.get("ok", true)))
+	assert_ne(str(result.get("error", "")), "", "The dock needs something to show the user")
+	DirAccess.remove_absolute(path)
+
+
+func test_validate_map_passes_a_good_file():
+	var fs := HFFileSystemType.new(_import_root())
+	var path := _write_map("user://hf_validate_good_test.map", _good_map_text())
+	assert_true(bool(fs.validate_map(path).get("ok", false)))
+	DirAccess.remove_absolute(path)
+
+
+func test_validate_map_rejects_a_missing_file():
+	var fs := HFFileSystemType.new(_import_root())
+	assert_false(bool(fs.validate_map("user://hf_does_not_exist.map").get("ok", true)))

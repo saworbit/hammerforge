@@ -30,13 +30,16 @@ static func load_map(path: String) -> Dictionary:
 static func parse_map_text(text: String) -> Dictionary:
 	var lines = text.replace("\r", "").split("\n")
 	var entities: Array = []
+	var errors: Array[String] = []
 	var current_entity: Dictionary = {}
 	var current_brush: Dictionary = {}
 	var in_entity = false
 	var in_brush = false
 	var face_re = RegEx.new()
 	face_re.compile("\\(([^\\)]+)\\)")
+	var line_no = 0
 	for raw_line in lines:
+		line_no += 1
 		var line = raw_line.strip_edges()
 		if line == "" or line.begins_with("//"):
 			continue
@@ -54,6 +57,8 @@ static func parse_map_text(text: String) -> Dictionary:
 				in_brush = true
 				current_brush = {"faces": []}
 				continue
+			errors.append("Line %d: brush inside a brush" % line_no)
+			continue
 		if line == "}":
 			if in_brush:
 				current_entity["brushes"].append(current_brush)
@@ -65,16 +70,25 @@ static func parse_map_text(text: String) -> Dictionary:
 				current_entity = {}
 				in_entity = false
 				continue
+			errors.append("Line %d: closing brace with nothing open" % line_no)
+			continue
 		if in_brush:
 			var face = _parse_face_line(line, face_re)
-			if not face.is_empty():
+			if face.is_empty():
+				errors.append("Line %d: face is not three planar points" % line_no)
+			else:
 				current_brush["faces"].append(face)
 			continue
 		if in_entity:
 			var kv = _parse_key_value(line)
 			if kv.size() == 2:
 				current_entity["properties"][kv[0]] = kv[1]
+			else:
+				errors.append("Line %d: not a key value pair" % line_no)
 			continue
+		errors.append("Line %d: text outside any block" % line_no)
+	if in_brush or in_entity:
+		errors.append("Unclosed block at end of file")
 	# Weld near-coincident vertices across all parsed faces to close micro-gaps
 	if import_weld_tolerance > 0.0:
 		for entity in entities:
@@ -93,11 +107,14 @@ static func parse_map_text(text: String) -> Dictionary:
 		for brush in entity.get("brushes", []):
 			var info = _brush_from_faces(brush.get("faces", []))
 			if info.is_empty():
+				errors.append("A brush in '%s' has no usable geometry" % entity_class)
 				continue
 			if entity_class != "" and entity_class != "worldspawn":
 				info["brush_entity_class"] = entity_class
 			brushes.append(info)
-	return {"entities": entity_points, "brushes": brushes}
+	if entities.is_empty() and text.strip_edges() != "":
+		errors.append("No map blocks found")
+	return {"entities": entity_points, "brushes": brushes, "errors": errors}
 
 
 static func export_map_from_level(level_root: Node, adapter: HFMapAdapterType = null) -> String:
@@ -224,7 +241,11 @@ static func _brush_from_faces(faces: Array) -> Dictionary:
 		if face_points.size() < 3:
 			continue
 		var local_verts: Array = []
-		for p in face_points:
+		# Mirror of the export: undo the .map plane order so the stored face keeps
+		# FaceData's clockwise-from-outside winding.
+		var wound: Array = face_points.duplicate()
+		wound.reverse()
+		for p in wound:
 			var pt: Vector3 = p
 			local_verts.append([pt.x - center.x, pt.y - center.y, pt.z - center.z])
 		serialized_faces.append({"local_verts": local_verts, "winding_version": 1})
@@ -333,7 +354,10 @@ static func _faces_to_map_lines(
 		var a: Vector3 = brush.global_transform * face.local_verts[0]
 		var b: Vector3 = brush.global_transform * face.local_verts[1]
 		var c: Vector3 = brush.global_transform * face.local_verts[2]
-		lines.append(adapter.format_face_line(a, b, c, DEFAULT_TEXTURE, face))
+		# FaceData winds clockwise seen from outside. A .map plane is read as
+		# (b - a) x (c - a), so the points go out in the reverse order or every
+		# hull comes out inside out.
+		lines.append(adapter.format_face_line(a, c, b, DEFAULT_TEXTURE, face))
 	return lines
 
 
