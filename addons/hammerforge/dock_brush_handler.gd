@@ -348,15 +348,149 @@ static func on_create_duplicate_array(dock: Object) -> void:
 		dock._set_status("No brushes selected", true)
 		return
 	var cnt = int(dock.dup_count_spin.value) if dock.dup_count_spin else 3
-	var off = Vector3(
-		dock.dup_offset_x.value if dock.dup_offset_x else 8,
-		dock.dup_offset_y.value if dock.dup_offset_y else 0,
-		dock.dup_offset_z.value if dock.dup_offset_z else 0,
-	)
+	var mode: int = dock.dup_mode_opt.selected if dock.dup_mode_opt else 0
+	match mode:
+		1:
+			_create_radial_array(dock, brush_ids, cnt)
+		2:
+			_create_grid_array(dock, brush_ids)
+		_:
+			var off = Vector3(
+				dock.dup_offset_x.value if dock.dup_offset_x else 8,
+				dock.dup_offset_y.value if dock.dup_offset_y else 0,
+				dock.dup_offset_z.value if dock.dup_offset_z else 0,
+			)
+			dock._commit_state_action(
+				"Create Duplicate Array", "create_duplicate_array", [brush_ids, cnt, off]
+			)
+			dock._set_status("Created %d copies" % cnt)
+
+
+static func _create_radial_array(dock: Object, brush_ids: PackedStringArray, cnt: int) -> void:
+	var axis_index: int = dock.dup_axis_opt.selected if dock.dup_axis_opt else 1
+	var step: float = dock.dup_step_spin.value if dock.dup_step_spin else 90.0
+	# "Fill 360" spaces the copies and the source evenly around a closed ring, so
+	# the last copy stops one step short of the source rather than on top of it.
+	if dock.dup_fill_check and dock.dup_fill_check.button_pressed:
+		step = 360.0 / float(cnt + 1)
+	var pivot: Vector3 = dock.level_root.resolve_transform_pivot(Array(brush_ids), [])
 	dock._commit_state_action(
-		"Create Duplicate Array", "create_duplicate_array", [brush_ids, cnt, off]
+		"Create Radial Array", "create_radial_array", [brush_ids, cnt, axis_index, step, pivot]
 	)
-	dock._set_status("Created %d copies" % cnt)
+	dock._set_status("Created %d copies %.1f° apart" % [cnt, step])
+
+
+static func _create_grid_array(dock: Object, brush_ids: PackedStringArray) -> void:
+	var counts := Vector3i(
+		int(dock.dup_grid_x.value) if dock.dup_grid_x else 2,
+		int(dock.dup_grid_y.value) if dock.dup_grid_y else 1,
+		int(dock.dup_grid_z.value) if dock.dup_grid_z else 2
+	)
+	var spacing = Vector3(
+		dock.dup_offset_x.value if dock.dup_offset_x else 64,
+		dock.dup_offset_y.value if dock.dup_offset_y else 64,
+		dock.dup_offset_z.value if dock.dup_offset_z else 64,
+	)
+	var total: int = counts.x * counts.y * counts.z - 1
+	if total < 1:
+		dock._set_status("Grid array needs more than one cell", true)
+		return
+	dock._commit_state_action(
+		"Create Grid Array", "create_grid_array", [brush_ids, counts, spacing]
+	)
+	dock._set_status("Created %d copies" % total)
+
+
+## Only the row that belongs to the chosen layout stays on screen.
+static func on_duplicate_array_mode_changed(dock: Object, index: int) -> void:
+	if dock.dup_linear_row:
+		dock.dup_linear_row.visible = index != 1
+	if dock.dup_radial_row:
+		dock.dup_radial_row.visible = index == 1
+	if dock.dup_grid_row:
+		dock.dup_grid_row.visible = index == 2
+
+
+# ---------------------------------------------------------------------------
+# Free transform
+# ---------------------------------------------------------------------------
+
+
+## Brush ids and entity paths for the dock's current selection, in the shape the
+## LevelRoot managed-node methods take.
+static func _transform_targets(dock: Object) -> Dictionary:
+	var brush_ids: Array = []
+	var entity_paths: Array = []
+	for node in dock._selection_nodes:
+		if not is_instance_valid(node):
+			continue
+		if dock.level_root.is_brush_node(node):
+			var info = dock.level_root.get_brush_info_from_node(node)
+			var brush_id := str(info.get("brush_id", ""))
+			if brush_id != "":
+				brush_ids.append(brush_id)
+		elif dock.level_root.is_entity_node(node):
+			entity_paths.append(dock.level_root.get_path_to(node))
+	return {"brush_ids": brush_ids, "entity_paths": entity_paths}
+
+
+static func on_rotate_selection(dock: Object, direction: int) -> void:
+	if dock == null or not dock.level_root:
+		return
+	var targets := _transform_targets(dock)
+	var brush_ids: Array = targets["brush_ids"]
+	var entity_paths: Array = targets["entity_paths"]
+	if brush_ids.is_empty() and entity_paths.is_empty():
+		dock._set_status("Select a brush or entity first", true)
+		return
+	var step := absf(float(dock.level_root.rotate_snap_degrees))
+	if is_zero_approx(step):
+		dock._set_status("Rotate step is zero", true)
+		return
+	var angle := step if direction >= 0 else -step
+	var axis_index: int = dock.level_root.transform_axis_index(1)
+	var pivot: Vector3 = dock.level_root.resolve_transform_pivot(brush_ids, entity_paths)
+	dock._commit_state_action(
+		"Rotate HammerForge Objects",
+		"rotate_managed_nodes",
+		[brush_ids, entity_paths, axis_index, angle, pivot]
+	)
+	dock._set_status("Rotated %.1f°" % angle)
+
+
+static func on_flip_selection(dock: Object) -> void:
+	if dock == null or not dock.level_root:
+		return
+	var targets := _transform_targets(dock)
+	var brush_ids: Array = targets["brush_ids"]
+	var entity_paths: Array = targets["entity_paths"]
+	if brush_ids.is_empty() and entity_paths.is_empty():
+		dock._set_status("Select a brush or entity first", true)
+		return
+	var check = dock.level_root.can_flip_brushes(brush_ids)
+	if not check.ok:
+		dock._set_status(check.user_text(), true)
+		return
+	var axis_index: int = dock.level_root.transform_axis_index(0)
+	var pivot: Vector3 = dock.level_root.resolve_transform_pivot(brush_ids, entity_paths)
+	dock._commit_state_action(
+		"Flip HammerForge Objects",
+		"flip_managed_nodes",
+		[brush_ids, entity_paths, axis_index, pivot]
+	)
+	dock._set_status("Flipped across %s" % ["X", "Y", "Z"][clampi(axis_index, 0, 2)])
+
+
+static func on_reset_rotation(dock: Object) -> void:
+	if dock == null or not dock.level_root:
+		return
+	var targets := _transform_targets(dock)
+	var brush_ids: Array = targets["brush_ids"]
+	if brush_ids.is_empty():
+		dock._set_status("Select a brush first", true)
+		return
+	dock._commit_state_action("Reset HammerForge Rotation", "reset_managed_rotation", [brush_ids])
+	dock._set_status("Rotation cleared")
 
 
 static func on_remove_duplicate_array(dock: Object) -> void:

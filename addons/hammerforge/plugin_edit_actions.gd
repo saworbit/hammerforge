@@ -130,8 +130,9 @@ static func duplicate_selected(plugin: Object, root: Node) -> bool:
 	return true
 
 
-static func nudge_selected(plugin: Object, root: Node, direction: Vector3) -> bool:
-	var step = root.grid_snap if root.grid_snap > 0.0 else 1.0
+## Brush ids and entity paths for the current selection, shaped the way the
+## `*_managed_nodes` methods on LevelRoot take them.
+static func collect_managed_targets(plugin: Object, root: Node) -> Dictionary:
 	var nodes = plugin._current_selection_nodes()
 	var brush_ids: Array = []
 	var entity_paths: Array = []
@@ -145,6 +146,14 @@ static func nudge_selected(plugin: Object, root: Node, direction: Vector3) -> bo
 			var entity: Node = plugin._managed_entity_owner(root, node)
 			if entity:
 				entity_paths.append(root.get_path_to(entity))
+	return {"brush_ids": brush_ids, "entity_paths": entity_paths}
+
+
+static func nudge_selected(plugin: Object, root: Node, direction: Vector3) -> bool:
+	var step = root.grid_snap if root.grid_snap > 0.0 else 1.0
+	var targets := collect_managed_targets(plugin, root)
+	var brush_ids: Array = targets["brush_ids"]
+	var entity_paths: Array = targets["entity_paths"]
 	if brush_ids.is_empty() and entity_paths.is_empty():
 		return false
 	var offset = direction * step
@@ -465,4 +474,85 @@ static func carve_selected(plugin: Object, root: Node) -> bool:
 			dlg.queue_free()
 	)
 	dlg.popup_centered()
+	return true
+
+
+# ---------------------------------------------------------------------------
+# Free transform
+# ---------------------------------------------------------------------------
+
+
+static func rotate_selected(plugin: Object, root: Node, direction: int) -> bool:
+	if not root:
+		return false
+	var targets := collect_managed_targets(plugin, root)
+	var brush_ids: Array = targets["brush_ids"]
+	var entity_paths: Array = targets["entity_paths"]
+	if brush_ids.is_empty() and entity_paths.is_empty():
+		return false
+	var step := absf(float(root.rotate_snap_degrees))
+	if is_zero_approx(step):
+		return false
+	var angle_degrees := step if direction >= 0 else -step
+	var axis_index: int = root.transform_axis_index(1)
+	var pivot: Vector3 = root.resolve_transform_pivot(brush_ids, entity_paths)
+	HFUndoHelper.commit(
+		plugin._get_undo_redo(),
+		root,
+		"Rotate HammerForge Objects",
+		"rotate_managed_nodes",
+		[brush_ids, entity_paths, axis_index, angle_degrees, pivot],
+		false,
+		Callable(plugin, "_record_history"),
+		"rotate"
+	)
+	return true
+
+
+static func flip_selected(plugin: Object, root: Node) -> bool:
+	if not root:
+		return false
+	var targets := collect_managed_targets(plugin, root)
+	var brush_ids: Array = targets["brush_ids"]
+	var entity_paths: Array = targets["entity_paths"]
+	if brush_ids.is_empty() and entity_paths.is_empty():
+		return false
+	var check: HFOpResult = root.can_flip_brushes(brush_ids)
+	if not check.ok:
+		root.user_message.emit(check.user_text(), 1)
+		return false
+	var axis_index: int = root.transform_axis_index(0)
+	var pivot: Vector3 = root.resolve_transform_pivot(brush_ids, entity_paths)
+	HFUndoHelper.commit(
+		plugin._get_undo_redo(),
+		root,
+		"Flip HammerForge Objects",
+		"flip_managed_nodes",
+		[brush_ids, entity_paths, axis_index, pivot],
+		false,
+		Callable(plugin, "_record_history"),
+		""
+	)
+	return true
+
+
+## Clear rotation on the selected brushes. This is the way back to hollow, clip,
+## and carve, all three of which refuse a rotated brush.
+static func reset_rotation_selected(plugin: Object, root: Node) -> bool:
+	if not root:
+		return false
+	var targets := collect_managed_targets(plugin, root)
+	var brush_ids: Array = targets["brush_ids"]
+	if brush_ids.is_empty():
+		return false
+	HFUndoHelper.commit(
+		plugin._get_undo_redo(),
+		root,
+		"Reset HammerForge Rotation",
+		"reset_managed_rotation",
+		[brush_ids],
+		false,
+		Callable(plugin, "_record_history"),
+		""
+	)
 	return true

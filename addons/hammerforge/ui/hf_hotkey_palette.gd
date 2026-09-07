@@ -110,7 +110,9 @@ func populate(keymap) -> void:
 	for child in _list.get_children():
 		child.queue_free()
 
-	var category_order := ["Workflow", "Tools", "Editing", "Selection", "Paint", "Axis Lock"]
+	var category_order := [
+		"Workflow", "Tools", "Editing", "Transform", "Selection", "Paint", "Axis Lock"
+	]
 	var categorized: Dictionary = {}
 	for cat in category_order:
 		categorized[cat] = []

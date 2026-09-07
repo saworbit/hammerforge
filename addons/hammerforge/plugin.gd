@@ -1286,6 +1286,18 @@ func _merge_selected(root: Node) -> bool:
 	return HFPluginEditActions.merge_selected(self, root)
 
 
+func _rotate_selected(root: Node, direction: int) -> bool:
+	return HFPluginEditActions.rotate_selected(self, root, direction)
+
+
+func _flip_selected(root: Node) -> bool:
+	return HFPluginEditActions.flip_selected(self, root)
+
+
+func _reset_rotation_selected(root: Node) -> bool:
+	return HFPluginEditActions.reset_rotation_selected(self, root)
+
+
 func _move_selected_to_floor(root: Node) -> bool:
 	return HFPluginEditActions.move_selected_to_floor(self, root)
 

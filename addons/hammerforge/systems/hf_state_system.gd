@@ -289,6 +289,8 @@ func capture_hflevel_settings() -> Dictionary:
 		root.paint_system.region_memory_budget_mb if root.paint_system else 256,
 		"region_show_grid": root.paint_system.region_show_grid if root.paint_system else false,
 		"texture_lock": root.texture_lock,
+		"rotate_snap_degrees": root.rotate_snap_degrees,
+		"transform_pivot_mode": root.transform_pivot_mode,
 		"show_subtract_preview": root.show_subtract_preview,
 		"cordon_enabled": root.cordon_enabled,
 		"cordon_aabb_pos":
@@ -436,6 +438,10 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 			)
 	if settings.has("texture_lock"):
 		root.texture_lock = bool(settings.get("texture_lock", true))
+	if settings.has("rotate_snap_degrees"):
+		root.rotate_snap_degrees = float(settings.get("rotate_snap_degrees", 15.0))
+	if settings.has("transform_pivot_mode"):
+		root.transform_pivot_mode = int(settings.get("transform_pivot_mode", 0))
 	if settings.has("show_subtract_preview"):
 		root.show_subtract_preview = bool(settings.get("show_subtract_preview", false))
 	if settings.has("cordon_enabled"):

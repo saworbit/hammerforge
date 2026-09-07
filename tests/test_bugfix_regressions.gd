@@ -931,14 +931,31 @@ func test_nudge_keys_respect_selection_ownership_before_being_consumed():
 	var edit_source := FileAccess.get_file_as_string(
 		"res://addons/hammerforge/plugin_edit_actions.gd"
 	)
-	var nudge_start := edit_source.find("static func nudge_selected")
-	var nudge_end := edit_source.find("static func group_selected", nudge_start)
-	var nudge_body := edit_source.substr(nudge_start, nudge_end - nudge_start)
-	assert_true(nudge_body.contains("root.is_brush_node(node)"))
-	assert_true(nudge_body.contains("root.is_entity_node(node)"))
-	assert_true(nudge_body.contains("entity_paths"))
-	assert_true(nudge_body.contains("if brush_ids.is_empty() and entity_paths.is_empty():"))
-	assert_true(nudge_body.contains("return false"))
+	# Nudge and the free-transform commands all classify the selection through one
+	# shared collector, so the ownership contract is asserted where it now lives.
+	var collect_start := edit_source.find("static func collect_managed_targets")
+	var collect_end := edit_source.find("static func nudge_selected", collect_start)
+	var collect_body := edit_source.substr(collect_start, collect_end - collect_start)
+	assert_true(collect_body.contains("root.is_brush_node(node)"))
+	assert_true(collect_body.contains("root.is_entity_node(node)"))
+	assert_true(collect_body.contains("entity_paths"))
+	for action in [
+		"static func nudge_selected",
+		"static func rotate_selected",
+		"static func flip_selected",
+	]:
+		var action_start := edit_source.find(action)
+		assert_gt(action_start, -1, "%s must exist" % action)
+		var action_body := edit_source.substr(action_start, 900)
+		assert_true(
+			action_body.contains("collect_managed_targets(plugin, root)"),
+			"%s must classify selection ownership through the shared collector" % action,
+		)
+		assert_true(
+			action_body.contains("if brush_ids.is_empty() and entity_paths.is_empty():"),
+			"%s must bail out on an empty selection" % action,
+		)
+		assert_true(action_body.contains("return false"))
 
 	var line_edit := LineEdit.new()
 	add_child_autoqfree(line_edit)

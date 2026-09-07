@@ -28,6 +28,10 @@ static func requires_existing_root(action: String) -> bool:
 			"clip_to_face",
 			"carve",
 			"merge",
+			"rotate_ccw",
+			"rotate_cw",
+			"flip_selection",
+			"reset_rotation",
 			"move_to_floor",
 			"move_to_ceiling",
 			"vertex_edit",
@@ -108,6 +112,14 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			plugin._carve_selected(root)
 		"merge":
 			plugin._merge_selected(root)
+		"rotate_ccw":
+			plugin._rotate_selected(root, 1)
+		"rotate_cw":
+			plugin._rotate_selected(root, -1)
+		"flip_selection":
+			plugin._flip_selected(root)
+		"reset_rotation":
+			plugin._reset_rotation_selected(root)
 		"duplicate":
 			plugin._duplicate_selected(root)
 		"delete":

@@ -23,6 +23,10 @@ Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Su
 - **Clip** (Shift+X) -- split a brush along an axis-aligned plane
 - **Carve** (Ctrl+Shift+R) -- boolean-subtract one brush from all intersecting brushes
 - **Merge** (Ctrl+Shift+M) -- combine 2+ selected brushes into one, preserving per-brush materials and full transforms (rotation/scale)
+- **Rotate** (R / Shift+R) -- turn the selection by a configurable step about the locked axis, or Y. Texture Lock keeps the texture pinned in world space
+- **Flip** (Shift+M) -- mirror the selection across the locked axis, or X. Winding is preserved, so a mirrored brush never bakes inside out
+- **Reset Rotation** (Alt+R) -- clear a rotation and keep the geometry. A quarter turn folds into the brush size losslessly, which hands the brush back to Hollow, Clip and Carve
+- **Arrays** -- Linear, Radial (copies around an axis) and Grid (a 3D lattice) layouts in the Duplicate Array section
 - **Bevel** -- round off sharp edges with configurable segments and radius (vertex/edge mode)
 - **Face Inset** -- shrink a face inward and optionally extrude along its normal
 - **Numeric input** -- type exact dimensions during any drag or extrude
@@ -281,6 +285,7 @@ plugin.gd            EditorPlugin lifecycle, composition, discovery, and undo wi
        ├─ HFGridSystem      Grid rendering and follow mode
        ├─ HFVisgroupSystem  Named visibility groups + brush grouping
        ├─ HFCarveSystem     Boolean-subtract carve (progressive-remainder slicing)
+       ├─ HFTransformSystem Rotate, flip and reset rotation, with winding-safe mirroring and stable pivots
        ├─ HFIOVisualizer    Entity I/O connection lines in viewport (curved, color-coded, highlight pulse)
        ├─ HFIOPresets       Reusable I/O connection presets (built-in + user-saved)
        ├─ HFSnapSystem      Grid / Vertex / Center / Edge / Perpendicular snap + custom reference lines
@@ -340,6 +345,12 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 | Shift+S * | Select Similar | | Shift+T * | Apply Last Texture |
 | Shift+F * | Selection Filters | | Ctrl+Shift+P | Quick group-to-prefab |
 | X / Y / Z * | Axis lock | | A | Align mode (measure) |
+| R * | Rotate CCW | | Shift+R * | Rotate CW |
+| Shift+M * | Flip selection | | Alt+R * | Reset rotation |
+
+R appears twice on purpose. Paint mode claims it for Rect; everywhere else it
+rotates. The viewport dispatches the paint tools first and skips the whole
+transform group while paint mode is on, so only one of the two is ever live.
 
 ---
 
@@ -347,7 +358,7 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 
 ## Testing
 
-The verified Godot 4.7 suite on September 7, 2026 contains **2,364 tests across 129 scripts**: **2,357 passing tests**, seven intentional no-assert safety tests, and **9,821 assertions**. All checks run on every push and pull request via GitHub Actions.
+The verified Godot 4.7 suite on September 7, 2026 contains **2,486 tests across 133 scripts**: **2,479 passing tests**, seven intentional no-assert safety tests, and **10,436 assertions**. All checks run on every push and pull request via GitHub Actions.
 
 ```bash
 # Run all tests headless

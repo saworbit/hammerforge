@@ -308,6 +308,35 @@ static func handle_keyboard(
 		if paint_key >= 0:
 			dock.set_paint_tool(paint_key)
 			return STOP
+	# Free transform. The whole block sits below the paint shortcuts and is gated
+	# on paint mode being off, because R is bound to both `rotate_ccw` and
+	# `paint_ramp`. Gating the group rather than just R keeps the family
+	# consistent: in paint mode none of the four fire.
+	if not paint_mode:
+		if keymap.matches("rotate_ccw", event):
+			var rotate_ccw_guard = plugin._guard_hammerforge_shortcut(root, false, 1, "Rotate")
+			if rotate_ccw_guard != SHORTCUT_APPLY:
+				return rotate_ccw_guard
+			plugin._rotate_selected(root, 1)
+			return STOP
+		if keymap.matches("rotate_cw", event):
+			var rotate_cw_guard = plugin._guard_hammerforge_shortcut(root, false, 1, "Rotate")
+			if rotate_cw_guard != SHORTCUT_APPLY:
+				return rotate_cw_guard
+			plugin._rotate_selected(root, -1)
+			return STOP
+		if keymap.matches("flip_selection", event):
+			var flip_guard = plugin._guard_hammerforge_shortcut(root, false, 1, "Flip")
+			if flip_guard != SHORTCUT_APPLY:
+				return flip_guard
+			plugin._flip_selected(root)
+			return STOP
+		if keymap.matches("reset_rotation", event):
+			var reset_guard = plugin._guard_hammerforge_shortcut(root, true, 1, "Reset Rotation")
+			if reset_guard != SHORTCUT_APPLY:
+				return reset_guard
+			plugin._reset_rotation_selected(root)
+			return STOP
 	# Axis lock for construction tools and Select's vertex-edit operation.
 	if plugin.axis_lock_shortcuts_available(tool_id, plugin._vertex_mode):
 		if keymap.matches("axis_x", event):
