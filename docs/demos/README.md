@@ -215,6 +215,50 @@ other Godot processes and stops; `HF_ALLOW_STRAY_EDITOR=1` overrides it.
   gone -- class hands back any other Godot window, executable hands back the
   editor. Neither is what you want, so the default is left alone.
 
+## Planned clips
+
+Ranked by what they prove rather than by how impressive they look. Each is one
+beat file and one run -- the work is designing the beats, not recording.
+
+| | Clip | What it answers |
+|---|---|---|
+| 1 | **Entities and I/O** -- a trigger wired to a door: place both, connect them, playtest, walk into the trigger, the door opens | "Why not just use CSG boxes?" It is the only clip that proves HammerForge makes a *playable level* rather than geometry |
+| 2 | **Paint floors and terrain** -- paint a heightmap floor, blend a second material in, drop an auto-connector ramp, then walk it | "Is this just grey boxes?" Painting is a gesture; a still cannot show it, which is the whole argument for video |
+| 3 | **Reshaping** -- vertex editing and face extrude: drag a vertex, pull a wall out, make a wedge | "Am I locked into boxes?" Answered in about twenty seconds, and cheap to script |
+| 4 | **Texturing a blockout** -- palette, eyedropper, surface paint | The biggest visual before/after available, and the best thumbnail of the set |
+| 5 | **Bake: what you actually get** -- collision modes, navmesh, the Console's geometry budget | The question a serious adopter asks. Better as documentation than as a video |
+
+### The playtest ceiling
+
+The playtest window lives about **nine seconds** before Godot hands it back to
+the editor and destroys the window being captured. `carve_a_doorway` therefore
+ends on roughly five usable seconds of gameplay, and the walk had to be cut
+short to fit. Every "...and then play it" ending hits the same limit.
+
+The fix is to stop treating a clip as one take: **record the editor work and the
+playtest as two captures and concatenate them.** The harness already knows how
+to drive the editor, wait for the playtest window and record either one, so this
+is plumbing rather than new capability. Worth building before clips 1 and 2,
+both of which want a long look at the running level.
+
+### Publishing
+
+Clips go on the HammerForge YouTube channel (a brand account, so it can be
+handed over without moving the videos) and are linked from `docs/index.md`.
+
+Keep them in one playlist with consistent titles -- `HammerForge: <verb> <thing>`.
+YouTube weights playlists and session watch-time, so four related sixty-second
+clips outperform four unrelated ones.
+
+### Also outstanding
+
+- The Apply step does not land in the published `carve_a_doorway` take: the
+  toolbar still reads "1 to review" at 44s. The doorway appears anyway because
+  Test Level applies pending cuts at bake, so the clip is honest, but the beat
+  is missing. One line in the beat file and a re-record.
+- The YouTube channel needs phone verification before description links become
+  clickable.
+
 ## Audio
 
 Clips are encoded with `-an`. A window-scoped screen capture says nothing about
