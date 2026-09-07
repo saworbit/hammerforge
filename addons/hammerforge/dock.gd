@@ -455,6 +455,22 @@ var dup_count_spin: SpinBox = null
 var dup_offset_x: SpinBox = null
 var dup_offset_y: SpinBox = null
 var dup_offset_z: SpinBox = null
+var dup_mode_opt: OptionButton = null
+var dup_linear_row: HBoxContainer = null
+var dup_radial_row: HBoxContainer = null
+var dup_grid_row: HBoxContainer = null
+var dup_axis_opt: OptionButton = null
+var dup_step_spin: SpinBox = null
+var dup_fill_check: CheckBox = null
+var dup_grid_x: SpinBox = null
+var dup_grid_y: SpinBox = null
+var dup_grid_z: SpinBox = null
+var rotate_snap_spin: SpinBox = null
+var rotate_ccw_btn: Button = null
+var rotate_cw_btn: Button = null
+var flip_btn: Button = null
+var reset_rotation_btn: Button = null
+var transform_pivot_opt: OptionButton = null
 # Entity I/O controls
 var io_output_name: LineEdit = null
 var io_target_name: LineEdit = null
@@ -3036,6 +3052,32 @@ func _on_create_duplicate_array() -> void:
 	HFDockBrushHandler.on_create_duplicate_array(self)
 
 
+func _on_duplicate_array_mode_changed(index: int) -> void:
+	HFDockBrushHandler.on_duplicate_array_mode_changed(self, index)
+
+
+func _on_rotate_selection(direction: int) -> void:
+	HFDockBrushHandler.on_rotate_selection(self, direction)
+
+
+func _on_flip_selection() -> void:
+	HFDockBrushHandler.on_flip_selection(self)
+
+
+func _on_reset_rotation() -> void:
+	HFDockBrushHandler.on_reset_rotation(self)
+
+
+func _on_rotate_snap_changed(value: float) -> void:
+	if level_root:
+		level_root.rotate_snap_degrees = value
+
+
+func _on_transform_pivot_changed(index: int) -> void:
+	if level_root:
+		level_root.transform_pivot_mode = index
+
+
 func _on_remove_duplicate_array() -> void:
 	HFDockBrushHandler.on_remove_duplicate_array(self)
 
@@ -3181,6 +3223,10 @@ func _sync_grid_settings_from_root() -> void:
 		autosave_keep.value = float(connected_root.get("hflevel_autosave_keep"))
 	if texture_lock_check and _root_has_property("texture_lock"):
 		texture_lock_check.button_pressed = bool(connected_root.get("texture_lock"))
+	if rotate_snap_spin and _root_has_property("rotate_snap_degrees"):
+		rotate_snap_spin.value = float(connected_root.get("rotate_snap_degrees"))
+	if transform_pivot_opt and _root_has_property("transform_pivot_mode"):
+		transform_pivot_opt.select(int(connected_root.get("transform_pivot_mode")))
 	if cordon_enabled_check and _root_has_property("cordon_enabled"):
 		cordon_enabled_check.button_pressed = bool(connected_root.get("cordon_enabled"))
 	if _root_has_property("cordon_aabb"):

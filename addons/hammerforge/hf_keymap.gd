@@ -55,6 +55,12 @@ static func _default_bindings() -> Dictionary:
 		"merge": {"keycode": KEY_M, "ctrl": true, "shift": true},
 		"move_to_floor": {"keycode": KEY_F, "ctrl": true, "shift": true},
 		"move_to_ceiling": {"keycode": KEY_C, "ctrl": true, "shift": true},
+		# Free transform. R is also paint_ramp, which plugin_input_router only
+		# dispatches while paint mode is active, so the two never both fire.
+		"rotate_ccw": {"keycode": KEY_R},
+		"rotate_cw": {"keycode": KEY_R, "shift": true},
+		"flip_selection": {"keycode": KEY_M, "shift": true},
+		"reset_rotation": {"keycode": KEY_R, "alt": true},
 		# Paint tools
 		"paint_bucket": {"keycode": KEY_B},
 		"paint_erase": {"keycode": KEY_E},
@@ -190,6 +196,8 @@ static func get_category(action: String) -> String:
 		return "Tools"
 	if action in ["select_all", "deselect_all", "select_similar", "selection_filter"]:
 		return "Selection"
+	if action in ["rotate_ccw", "rotate_cw", "flip_selection", "reset_rotation"]:
+		return "Transform"
 	if action in ["context_menu", "radial_menu"]:
 		return "Tools"
 	return "Editing"
@@ -222,6 +230,10 @@ static func get_action_label(action: String) -> String:
 		"merge": "Merge Brushes",
 		"move_to_floor": "Move to Floor",
 		"move_to_ceiling": "Move to Ceiling",
+		"rotate_ccw": "Rotate CCW",
+		"rotate_cw": "Rotate CW",
+		"flip_selection": "Flip Selection",
+		"reset_rotation": "Reset Rotation",
 		"paint_bucket": "Paint Brush",
 		"paint_erase": "Erase",
 		"paint_ramp": "Ramp / Rect",

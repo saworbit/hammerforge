@@ -140,6 +140,10 @@ var _grid_visible: bool = false
 @export var grid_color: Color = Color(0.85, 0.95, 1.0, 0.15)
 @export_range(1, 16, 1) var grid_major_line_frequency: int = 4
 @export var texture_lock: bool = true
+## Step, in degrees, used by the rotate hotkeys and the dock's rotate buttons.
+@export_range(1.0, 180.0, 1.0) var rotate_snap_degrees: float = 15.0
+## Where rotate and flip pivot: 0 selection centre, 1 world origin, 2 active object.
+@export_enum("Selection Center", "World Origin", "Active Object") var transform_pivot_mode: int = 0
 @export var cordon_enabled: bool = false
 @export var cordon_aabb: AABB = AABB(Vector3(-128, -128, -128), Vector3(256, 256, 256))
 
@@ -233,6 +237,7 @@ var prefab_overlay
 var io_presets
 var displacement_system
 var bevel_system
+var transform_system
 
 @export var show_subtract_preview: bool = false:
 	set(value):
@@ -568,6 +573,7 @@ func _initialize_editor_systems() -> void:
 		self
 	)
 	bevel_system = load("res://addons/hammerforge/systems/hf_bevel_system.gd").new(self)
+	transform_system = load("res://addons/hammerforge/systems/hf_transform_system.gd").new(self)
 	if show_subtract_preview:
 		subtract_preview.set_enabled(true)
 	entity_system.load_entity_definitions()
@@ -1032,6 +1038,63 @@ func nudge_managed_nodes(brush_ids: Array, entity_paths: Array, offset: Vector3)
 	nudge_entities_by_paths(entity_paths, offset)
 
 
+# ---------------------------------------------------------------------------
+# Transform API (delegates to transform_system)
+#
+# These are the method names HFUndoHelper dispatches by, so their signatures are
+# what undo replays. Each stays at five arguments or fewer to keep off the
+# helper's direct-call fallback path.
+# ---------------------------------------------------------------------------
+
+
+func rotate_managed_nodes(
+	brush_ids: Array, entity_paths: Array, axis_index: int, angle_degrees: float, pivot: Vector3
+) -> void:
+	if not transform_system:
+		return
+	begin_signal_batch()
+	transform_system.rotate(brush_ids, entity_paths, axis_index, deg_to_rad(angle_degrees), pivot)
+	end_signal_batch()
+
+
+func flip_managed_nodes(
+	brush_ids: Array, entity_paths: Array, axis_index: int, pivot: Vector3
+) -> void:
+	if not transform_system:
+		return
+	begin_signal_batch()
+	transform_system.flip(brush_ids, entity_paths, axis_index, pivot)
+	end_signal_batch()
+
+
+func reset_managed_rotation(brush_ids: Array) -> void:
+	if not transform_system:
+		return
+	begin_signal_batch()
+	transform_system.reset_rotation(brush_ids)
+	end_signal_batch()
+
+
+## Axis the transform commands act on: the active axis lock when the user has set
+## one, and otherwise the caller's default — yaw for rotate, left-right for flip.
+func transform_axis_index(fallback: int) -> int:
+	var lock: int = int(axis_lock)
+	return lock - 1 if lock >= 1 and lock <= 3 else fallback
+
+
+## Pivot for a selection under the current `transform_pivot_mode`.
+func resolve_transform_pivot(brush_ids: Array, entity_paths: Array) -> Vector3:
+	if not transform_system:
+		return Vector3.ZERO
+	return transform_system.resolve_pivot(brush_ids, entity_paths, transform_pivot_mode)
+
+
+func can_flip_brushes(brush_ids: Array) -> HFOpResult:
+	if not transform_system:
+		return HFOpResult.fail("Flip: transform system unavailable")
+	return transform_system.can_flip_brushes(brush_ids)
+
+
 func apply_material_to_brush_by_id(brush_id: String, mat: Material) -> void:
 	brush_system.apply_material_to_brush_by_id(brush_id, mat)
 
@@ -1265,6 +1328,16 @@ func justify_selected_faces(mode: String, treat_as_one: bool) -> void:
 
 func create_duplicate_array(brush_ids: PackedStringArray, count: int, p_offset: Vector3) -> Variant:
 	return brush_system.create_duplicate_array(brush_ids, count, p_offset)
+
+
+func create_radial_array(
+	brush_ids: PackedStringArray, count: int, axis_index: int, step_degrees: float, pivot: Vector3
+) -> Variant:
+	return brush_system.create_radial_array(brush_ids, count, axis_index, step_degrees, pivot)
+
+
+func create_grid_array(brush_ids: PackedStringArray, counts: Vector3i, spacing: Vector3) -> Variant:
+	return brush_system.create_grid_array(brush_ids, counts, spacing)
 
 
 func remove_duplicate_array(duplicator_id: String) -> void:

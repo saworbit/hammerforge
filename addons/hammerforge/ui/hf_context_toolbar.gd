@@ -187,6 +187,23 @@ func _build_brush_section() -> void:
 	_add_tool_button(section, "Carve", "Carve (Ctrl+Shift+R)", "carve")
 	_add_tool_button(section, "Mrg", "Merge Brushes (Ctrl+Shift+M)", "merge")
 	_add_sep(section)
+	_add_group_label(section, "Transform")
+	_add_tool_button(
+		section, "↺", "Rotate counter-clockwise (R) — about the locked axis, or Y", "rotate_ccw"
+	)
+	_add_tool_button(
+		section, "↻", "Rotate clockwise (Shift+R) — about the locked axis, or Y", "rotate_cw"
+	)
+	_add_tool_button(
+		section, "Flip", "Flip across the locked axis, or X (Shift+M)", "flip_selection"
+	)
+	_add_tool_button(
+		section,
+		"Rst",
+		"Reset Rotation (Alt+R) — re-enables Hollow, Clip and Carve",
+		"reset_rotation"
+	)
+	_add_sep(section)
 	_add_tool_button(section, "Dup", "Duplicate (Ctrl+D)", "duplicate")
 	_add_tool_button(section, "Del", "Delete (Del)", "delete")
 	_add_sep(section)
