@@ -26,13 +26,15 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `brush_added(brush_id)` | A brush was created |
 | `brush_removed(brush_id)` | A brush was deleted |
 | `brush_changed(brush_id)` | A brush was modified (transform, material, etc.) |
-| `entity_added(node)` | An entity was added |
-| `entity_removed(node)` | An entity was removed |
-| `selection_changed(brush_ids)` | Brush selection changed |
+| `entity_added(node)` | An entity was added (place, restore, duplicate) |
+| `entity_removed(node)` | An entity is about to be removed, emitted while the node is still valid |
+| `selection_changed(brush_ids)` | Reserved. LevelRoot holds no brush selection of its own and never emits this. Object selection is owned by Godot's `EditorSelection` |
 | `paint_layer_changed(layer_index)` | A paint layer was modified |
 | `state_saved()` | `.hflevel` save completed |
 | `state_loaded()` | `.hflevel` load completed |
-| `autosave_failed(error_message)` | Threaded autosave write failed |
+| `autosave_failed(error_message)` | An autosave failed, either the threaded write or a region sidecar |
+| `hflevel_save_completed(path)` | A manual `.hflevel` save finished successfully |
+| `hflevel_save_failed(path, error_message)` | A manual `.hflevel` save failed |
 | `user_message(text, level)` | Subsystem-to-dock notification routing (0=INFO, 1=WARNING, 2=ERROR) |
 | `material_list_changed()` | Material palette updated (add/remove) |
 | `face_selection_changed()` | Face selection changed (snapshot comparison) |
@@ -96,7 +98,7 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `hf_bake_system.gd` | `HFBakeSystem` | Bake orchestration (single/chunked/selected/dirty), CSG assembly, navmesh, collision, preview modes (Full/Wireframe/Proxy), time estimate |
 | `hf_paint_system.gd` | `HFPaintSystem` | Floor paint input, surface paint, paint layer CRUD, face selection |
 | `hf_state_system.gd` | `HFStateSystem` | State capture/restore (brushes, entities, floor, sun, paint), settings, transactions (begin/commit/rollback) |
-| `hf_file_system.gd` | `HFFileSystem` | .hflevel save/load, .map import/export, glTF export, threaded I/O, autosave failure reporting |
+| `hf_file_system.gd` | `HFFileSystem` | .hflevel save/load, .map import/export with validation, glTF export, FIFO threaded writes, save failure reporting |
 | `hf_validation_system.gd` | `HFValidationSystem` | Validation, dependency checks, auto-fix helpers (vertex weld, planarity fix), bake issue detection (degenerate/floating/overlapping/non-planar/micro-gap). Configurable `weld_tolerance` and `planarity_tolerance`. Edge-key topology hashing intentionally decoupled from weld knob |
 | `hf_visgroup_system.gd` | `HFVisgroupSystem` | Visgroups (visibility groups), brush/entity grouping |
 | `hf_carve_system.gd` | `HFCarveSystem` | Boolean-subtract carve (progressive-remainder box slicing) |
@@ -191,7 +193,7 @@ LevelRoot (Node3D)
   - PLANAR_X: projects (z, y), PLANAR_Y: projects (x, z), PLANAR_Z: projects (x, y).
   - BOX_UV resolves to the planar axis matching the face normal.
   - CYLINDRICAL is skipped (complex, future enhancement).
-- Position compensation: `uv_offset -= projected_delta * uv_scale`.
+- Position compensation: `uv_offset -= projected_delta.rotated(uv_rotation) * uv_scale`. The UV transform rotates before it scales and offsets, so the projected move is rotated the same way. `hf_carve_system.gd` uses the same expression.
 - Size compensation: `uv_scale *= inverse_size_ratio` per projection axis.
 - Hook in `hf_brush_system.gd:set_brush_transform_by_id()` captures old transform, applies new, then adjusts UVs.
 - HammerForge move, nudge, floor/ceiling, and resize paths use that boundary. Godot's native Node3D transform widget intentionally leaves face UV resources unchanged because its native undo action does not capture those nested Resource edits.
@@ -224,10 +226,11 @@ LevelRoot (Node3D)
 ## Entity Definitions
 
 Entity types and brush entity classes are data-driven via `HFEntityDef` (`hf_entity_def.gd`):
-- Loaded from `entities.json` at `entity_defs_path` (default: `res://addons/hammerforge/entities.json`).
+- Loaded from `entities.json` at `entity_defs_path` (default: `res://addons/hammerforge/entities.json`), overlaid with `res://hammerforge_entities.json` when present. Same classname replaces the plugin entry.
 - Falls back to built-in defaults (func_detail, func_wall, trigger_once, trigger_multiple).
 - Each definition has: `classname`, `description`, `color`, `is_brush_entity`, `properties`, `scene_path`.
-- `HFEntityDef.load_definitions(path)` returns `Array[HFEntityDef]`.
+- `HFEntityDef.load_definitions(path)` returns `Array[HFEntityDef]`. `load_merged_definitions(plugin_path, project_path)` applies the project overlay.
+- `load_raw_entries(path)` and `load_merged_raw_entries(...)` return the untouched JSON dictionaries. The dock palette uses these because `to_dict()` drops the `label`, `preview` and `category` keys it renders from. Both entity pickers read the same merged set so they cannot disagree about what exists.
 - `filter_brush_entities()` / `filter_point_entities()` for filtering by type.
 - Dock brush entity class dropdown is populated from definitions, not hardcoded.
 - **Declarative property forms**: the `properties` array on each definition supports typed entries (`{name, type, default, label}`) that auto-generate dock controls (LineEdit, SpinBox, CheckBox, OptionButton, ColorPickerButton, Vector3 spinboxes) when an entity is selected. Changes write to `entity.entity_data` and sync the Inspector. Inspired by QuArK's `:form` system.
@@ -294,11 +297,13 @@ Foliage Populator
 - Streaming loads regions within a radius of the cursor and unloads distant regions.
 - Region files (`.hfr`) store per-region chunk data to keep `.hflevel` small.
 - Region index is stored in the `.hflevel` state under `terrain_regions`.
+- A region is written before its chunks are dropped. If that write fails the region stays loaded and the user is told, rather than losing unsaved paint.
+- A region is only recorded as having data once its `.hfr` file is actually written. A failed sidecar aborts the `.hflevel` save instead of shipping an index that points at missing files.
 
 ## Entities
 - Entities live under LevelRoot/Entities or are tagged `is_entity`.
 - Entities are selectable but excluded from bake.
-- Definitions come from `addons/hammerforge/entities.json`.
+- Definitions come from `addons/hammerforge/entities.json`, overlaid with `res://hammerforge_entities.json` when present. The point entity palette and the brush entity dropdown both read that merged set, and the path comes from the active LevelRoot's `entity_definitions_path`.
 
 ### Entity I/O (Input/Output Connections)
 - Source-style trigger/target system modeled after Hammer/Source entity I/O.
@@ -396,7 +401,7 @@ The dock uses 4 tabs with collapsible sections for visual hierarchy:
 - Collapsible sections have HSeparator, 4px indented content, and persisted collapsed state. All 18 sections tracked in `_all_sections` dict.
 - "No LevelRoot" banner and autosave warning defined in dock.tscn.
 - Compact toolbar: single-char labels (D, S, +, -, P, ▲, ▼) with descriptive tooltips. VSeparator before extrude buttons.
-- **Signal-driven sync**: Setting controls push values via `toggled`/`value_changed` signals. Paint layers, materials, surface paint, and face selection sync instantly via `paint_layer_changed`, `material_list_changed`, `face_selection_changed`, `selection_changed` signals. Initial sync on root connect populates materials and surface paint. Perf panel throttled to every 30 frames; disabled hints are flag-driven. Form label widths standardized to 70px.
+- **Signal-driven sync**: Setting controls push values via `toggled`/`value_changed` signals. Paint layers, materials, surface paint, and face selection sync instantly via `paint_layer_changed`, `material_list_changed`, and `face_selection_changed` signals. Deleting a brush that owned a selected face emits `face_selection_changed`, which is what resyncs the surface panel after a batched delete. Initial sync on root connect populates materials and surface paint. Perf panel throttled to every 30 frames; disabled hints are flag-driven. Form label widths standardized to 70px.
 
 ## LevelRoot Discovery
 - `plugin.gd` uses sticky `active_root`: selecting non-LevelRoot nodes does not null the reference.
@@ -443,7 +448,7 @@ Brush system calls these on create/delete/transform/hollow/clip. Tags are guarde
 
 LevelRoot supports batched signal emission for multi-brush operations:
 - `begin_signal_batch()` / `end_signal_batch()` with depth-counted nesting.
-- During batch, signals are queued. On flush, brush add/remove/change signals coalesce into a single `selection_changed` emission.
+- During batch, signals are queued. On flush they are emitted in order, with exact repeats of the same signal and argument dropped. Lifecycle events are emitted as themselves: a batch that removes brushes emits `brush_removed`, so caches and spatial trees hear about it.
 - Transactions auto-batch: `begin_transaction()` calls `begin_signal_batch()`; `commit_transaction()` calls `end_signal_batch()`.
 - `discard_signal_batch()` drops queued signals on rollback.
 
@@ -490,17 +495,17 @@ Unit tests use the [GUT](https://github.com/bitwes/Gut) framework and run headle
 |-----------|-------|----------|
 | `test_visgroup_system.gd` | 18 | Visgroup CRUD, visibility toggle, membership, round-trip serialization |
 | `test_grouping.gd` | 9 | Group creation, meta storage, ungroup, regroup, serialization |
-| `test_texture_lock.gd` | 10 | UV offset/scale compensation for PLANAR_X/Y/Z, BOX_UV, CYLINDRICAL |
+| `test_texture_lock.gd` | 16 | UV offset/scale compensation for PLANAR_X/Y/Z, BOX_UV, CYLINDRICAL |
 | `test_cordon_filter.gd` | 10 | AABB intersection, cordon-filtered collection, chunk_coord utility |
 | `test_keymap.gd` | 20 | Default bindings, modifier matching, display strings, rebinding, JSON roundtrip, current action coverage |
 | `test_user_prefs.gd` | 15 | Defaults, get/set prefs, section state, recent files, JSON roundtrip, dismissed hints |
-| `test_dirty_tags.gd` | 19 | Exact transform/material/UV/paint/vertex tags, no-op suppression, paint/full tags, and batching |
+| `test_dirty_tags.gd` | 31 | Exact transform/material/UV/paint/vertex tags, no-op suppression, paint/full tags, and batching |
 | `test_prototype_textures.gd` | 27 | Catalog constants, path generation, texture existence, material persistence (resource_path), batch loading into MaterialManager |
 | `test_op_result.gd` | 30 | HFOpResult constructors and operation result/failure/fix-hint contracts |
 | `test_snap_system.gd` | 17 | Grid/Vertex/Center/Edge/Perpendicular snap modes, preview exclusion, threshold, priority, fallback |
 | `test_drag_dimensions.gd` | 16 | Drag dimensions/formatting and normalized radial primitive placement |
 | `test_reference_cleanup.gd` | 8 | Delete cleans group/visgroup membership and dangling entity I/O safely |
-| `test_bake_system.gd` | 127 | Baked lifecycle/migration/snapshots, cut-safe face-material fallback, one-pass CSG visual/collision equivalence, options, collection, previews, dirty concurrency, connectors/navmesh, brush entities, and mode integration |
+| `test_bake_system.gd` | 139 | Baked lifecycle/migration/snapshots, cut-safe face-material fallback, one-pass CSG visual/collision equivalence, options, collection, previews, dirty concurrency, connectors/navmesh, brush entities, and mode integration |
 | `test_bake_issues.gd` | 10 | check_bake_issues: degenerate, oversized, floating subtract, overlapping subtracts, clean level, entity skip |
 | `test_weld_and_planarity.gd` | 21 | Non-planar detection, vertex welding + ensure_geometry refresh, planarity auto-fix, micro-gap detection, edge-key independence, boundary-straddling coverage, MapIO integration + unit |
 | `test_quick_play_modes.gd` | 13 | Severity blocking, cordon save/restore, dirty retention, camera yaw, spawn restore |
@@ -513,6 +518,6 @@ Unit tests use the [GUT](https://github.com/bitwes/Gut) framework and run headle
 | `test_selection_gesture.gd` | 38 | Native widget/Object Select ownership, modal Face Select, recovery, focus/scope guards, native duplicate/reparent repair, and Inspector/undo change tracking |
 | `test_viewport_outlines.gd` | 39 | Sparse semantic outlines, exact/composite entity collision, visibility/transforms, and shape-aware resize recovery |
 
-Full suite (verified locally on September 6, 2026): **2,236 tests** across **126 scripts** (**2,229 passing** plus seven intentional no-assert safety tests; **9,307 assertions**).
+Full suite (verified locally on September 7, 2026): **2,364 tests** across **129 scripts** (**2,357 passing** plus seven intentional no-assert safety tests; **9,821 assertions**).
 
 Tests use root shim scripts (dynamically created GDScript) to provide the LevelRoot interface without circular preload dependencies. Configuration in `.gutconfig.json`.

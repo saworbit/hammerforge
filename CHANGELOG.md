@@ -32,6 +32,142 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   explains it. It reads the Console's own evaluation, so the two cannot disagree.
 
 ### Fixed
+- **Every entity I/O connection on a brush was silently deleted by saving,
+  autosaving, undoing, or duplicating it.** `get_brush_info_from_node()`
+  captured `visgroups`, `group_id` and `brush_entity_class` but not
+  `entity_io_outputs` or `entity_name`, and `create_brush_from_info()` could not
+  restore what was never captured. Everything that round trips a brush goes
+  through those two functions, so a trigger kept its class and lost its wiring.
+  Both fields are captured and restored now, and outputs are deep copied so a
+  restored or duplicated brush does not share dictionaries with its source
+  ([#149](https://github.com/saworbit/hammerforge/issues/149)).
+- **Baking renamed every trigger and detail brush, which broke the runtime I/O
+  it was wired into.** `_append_trigger_volume()` and `_append_detail_mesh()`
+  named their output `Trigger_0` and `FuncDetail_0` and set no `entity_name`, so
+  a connection aimed at `door_sensor` had nothing to find and the dispatcher
+  dropped the event. The baked node takes the authored name and carries it as
+  `entity_name`. A brush still sitting on a Godot generated name keeps the
+  indexed fallback rather than handing every unnamed trigger the same alias
+  ([#140](https://github.com/saworbit/hammerforge/issues/140)).
+- **Every baked `func_detail` collision body sat at the world origin.**
+  `_append_detail_mesh()` never assigned `body.transform`, so the `StaticBody3D`
+  stayed at (0, 0, 0) with only its child shape placed at the brush. Anything
+  reading `collider.global_position` got the origin, and rotating the body at
+  runtime swung the shape across the scene. The body takes the mesh transform;
+  the shape lands in the same world position it always did
+  ([#158](https://github.com/saworbit/hammerforge/issues/158)).
+- **`HFIORuntime.fire()` silently dropped events fired by an entity's authored
+  name.** Delivery resolved `entity_name`, but the reverse lookup that finds a
+  source indexed `node.name` only, so firing `secret_button` on a node Godot had
+  named `Area3D_Baked_1` found nothing. Sources are indexed under both names,
+  and firing by either dispatches exactly once
+  ([#151](https://github.com/saworbit/hammerforge/issues/151)).
+- **A batched operation told listeners that deleted brushes were selected, and
+  never told them the brushes were gone.** `_flush_batched_signals()` filtered
+  `brush_added`, `brush_removed` and `brush_changed` out of the queue, harvested
+  their ids, and emitted `selection_changed` with them instead. Caches and
+  spatial trees never heard about removals while the dock was handed a list of
+  dead ids. The flush emits the queued signals in order now, dropping only exact
+  repeats. `selection_changed` is emitted by nothing: `LevelRoot` holds no brush
+  selection to report, Godot's `EditorSelection` does. Its one consumer was the
+  dock resyncing its surface panel, so `delete_brush()` emits
+  `face_selection_changed` when it actually clears a selected face, which
+  batching collapses to one emission per delete
+  ([#139](https://github.com/saworbit/hammerforge/issues/139)).
+- **`entity_added` and `entity_removed` were declared on `LevelRoot` and emitted
+  nowhere.** The spec and the MVP guide both promise them to docks and
+  integrations, and a search of the tree found the two `signal` lines and
+  nothing else. They fire now from the four places entities enter and leave a
+  level: `add_entity()`, `restore_entity_from_info()`,
+  `delete_entities_by_paths()` and `clear_entities()`, routed through the
+  batcher. `entity_removed` fires while the node is still in the tree, so a
+  listener has something valid to clean up against
+  ([#150](https://github.com/saworbit/hammerforge/issues/150)).
+- **Every custom, beveled, carved, polygon and prism brush exported to `.map`
+  came out inside out.** `FaceData` winds clockwise seen from outside, and a
+  `.map` plane is read as `(b - a) x (c - a)`, which is the opposite order.
+  `_faces_to_map_lines()` wrote the vertices straight through, so a Right face
+  that should have written `(1, 0, 0)` wrote `(-1, 0, 0)` and compilers rejected
+  the brush. The box path had always agreed with the format; the face path does
+  now. The same conversion was missing on import, so a correct `.map` file from
+  another editor was read inside out too, and it is applied in reverse there
+  ([#148](https://github.com/saworbit/hammerforge/issues/148)).
+- **Importing a file that was not a map cleared the level and said it worked.**
+  `parse_map_text()` returned `{"entities": [], "brushes": []}` for any text at
+  all, `import_map()` only rejected a completely empty dictionary, and the dock
+  ignored the return value and printed `Imported .map` regardless. The parser
+  reports unbalanced braces, braces with nothing open, face lines that are not
+  three points, key/value lines that are not, text outside any block, and
+  brushes that produce no geometry. `import_map()` refuses before it clears
+  anything, and the dock validates the file before it opens an undo action, so a
+  bad import leaves nothing to step back over
+  ([#174](https://github.com/saworbit/hammerforge/issues/174)).
+- **Ticking Generate LODs killed the bake.** `_postprocess_mesh()` called
+  `generate_lods()` on an `ArrayMesh`, which has no such method in Godot 4; it
+  lives on `ImporterMesh`. Every bake with the option on stopped at
+  `Invalid call. Nonexistent function 'generate_lods' in base 'ArrayMesh'`. The
+  mesh round trips through `ImporterMesh.from_mesh()` and `get_mesh()` with
+  Godot's own import angles, keeping surface materials. An empty mesh or a
+  failed conversion returns the original with a warning instead of aborting
+  ([#138](https://github.com/saworbit/hammerforge/issues/138)).
+- **The material atlas asked for mipmapped filtering and never built any
+  mipmaps.** The atlas material sets `TEXTURE_FILTER_LINEAR_WITH_MIPMAPS` and
+  the tiles carry a 2px gutter for the express purpose of stopping bleed across
+  mip levels, but `Image.create()` was called with mipmaps off and
+  `generate_mipmaps()` was never called, so the sampler had exactly one level
+  and distant surfaces shimmered. The albedo atlas and every PBR channel atlas
+  generate them now, and a refusal is logged rather than leaving the sampler
+  with nothing ([#157](https://github.com/saworbit/hammerforge/issues/157)).
+- **Two saves to the same file could finish in the wrong order and leave the
+  older one on disk.** `start_hflevel_thread()` collected a finished worker and
+  then started the incoming job immediately, jumping over anything already
+  queued behind that worker. With save B pending and save C arriving, the order
+  ran A, C, B. A collected worker hands its slot to the oldest queued job and
+  the new one goes to the back. Draining also skips a job it cannot start, so a
+  discarded entry no longer strands the writes behind it
+  ([#51](https://github.com/saworbit/hammerforge/issues/51)).
+- **Painting across a large level threw away work before you saved it.**
+  `_unload_region()` removed every chunk in a streamed out region and never
+  wrote them; `_save_region_file()` only ran during an `.hflevel` save. Moving
+  the cursor into the next region discarded the one behind it, and coming back
+  loaded either nothing or an older sidecar. A region is written before its
+  chunks are dropped, and a failed write keeps it loaded and says so once rather
+  than every frame ([#172](https://github.com/saworbit/hammerforge/issues/172)).
+- **A level save reported success while its region files were missing.**
+  `_save_region_file()` ignored the result of `save_to_path()` and marked the
+  region as having data either way, and `save_loaded_regions()` returned
+  nothing, so the main write went ahead and the dock said the save worked. Both
+  report now, a region is only recorded once its file exists, and
+  `save_hflevel()` stops before the level write instead of shipping an index
+  pointing at absent sidecars. The failure is reported as an autosave or a
+  manual save to match what it actually was
+  ([#173](https://github.com/saworbit/hammerforge/issues/173)).
+- **A project could define a custom point entity and never be able to place
+  it.** `HFDock._load_entity_definitions()` opened its own hard coded file
+  directly while `_populate_brush_entity_classes()` used the merged loader, so
+  `res://hammerforge_entities.json` reached the brush dropdown and
+  `level_root.entity_definitions` but not the Objects palette. Both pickers read
+  the same merged set now, through `HFEntityDef.load_merged_raw_entries()`,
+  which keeps the `label`, `preview` and `category` keys the palette renders
+  from and the typed loader drops. The path follows the active `LevelRoot`'s
+  `entity_definitions_path`. Two things fell out of the same function: the
+  `{"entities": [...]}` form of the file returned before the palette was ever
+  built, and brush entities were being listed in the point palette where they
+  cannot be placed ([#175](https://github.com/saworbit/hammerforge/issues/175)).
+- **Texture lock drifted the texture off a rotated face instead of holding it.**
+  `_apply_uv_transform()` rotates before it scales and offsets, so a brush move
+  has to be rotated the same way before it compensates `uv_offset`.
+  `adjust_uvs_for_transform()` subtracted the raw delta, so a face at a quarter
+  turn moved 2 along X shifted its texture vertically. `hf_carve_system.gd`
+  already had this right and the two now produce the same value
+  ([#141](https://github.com/saworbit/hammerforge/issues/141)).
+- **Running the mouse down the undo history pumped the dock layout.** The hover
+  preview was an in flow child of the browser's `VBoxContainer`, so showing it
+  reserved 160 by 96 pixels at the bottom of the list and hiding it took them
+  back: the panel's minimum height went 175px to 275px and back on every row.
+  It is `top_level` now, outside the box layout, parked beside the hovered row
+  and pulled back inside the window near an edge
+  ([#142](https://github.com/saworbit/hammerforge/issues/142)).
 - **The contextual toolbar ran off both sides of the viewport when it did not
   fit.** With a brush selected it measures 940px unwrapped, and the 3D viewport
   is narrower than that as soon as a dock is open — centring something wider

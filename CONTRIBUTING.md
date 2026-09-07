@@ -45,7 +45,7 @@ prompt for what's actually needed to act on them.
 - Follow the subsystem architecture (LevelRoot is the public API).
 - Prefer undo actions that use stable IDs and state snapshots. Use `collation_tag` for rapid operations.
 - Use transactions (`begin_transaction` / `commit_transaction`) for multi-step brush operations.
-- New entity types go in `entities.json`, not hardcoded in GDScript.
+- New entity types go in `entities.json`, not hardcoded in GDScript. Project-side additions belong in `res://hammerforge_entities.json`, which overlays it. Both dock pickers read the merged result, so do not add a second load path for one of them.
 - New input tools should subclass `HFGesture` for self-contained state management.
 - Subscribe to LevelRoot signals instead of polling in `_process()`.
 - **Keyboard shortcuts** go through `_keymap.matches("action_name", event)`, never hardcoded `KEY_*` checks. Add new default bindings in `HFKeymap._default_bindings()`. Keep the primary toolbar limited to clear, user-facing Draw/Select/Paint/More/Help actions.

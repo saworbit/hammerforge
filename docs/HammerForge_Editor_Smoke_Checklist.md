@@ -340,6 +340,8 @@ It writes one PNG per tab under `user://console_preview/`.
 - Create a subtract brush floating in empty space (not intersecting any additive). Click **Check Bake Issues**; confirm a severity-1 "floating subtract" warning.
 - Import a legacy .map file with known vertex drift (or create two adjacent brushes with edges offset by ~0.005 units). Click **Check Bake Issues**; confirm a severity-1 "micro-gap" warning appears for the near-coincident cross-brush vertices.
 - Enter vertex mode on a brush and drag a vertex slightly off-plane (quad with 4th vertex drifted ~0.05 on the normal axis). Click **Check Bake Issues**; confirm a severity-1 "non-planar" warning appears for that face.
+- Enable **Generate LODs** and bake. Confirm the bake completes without a script error and the baked meshes carry LOD levels.
+- Enable the **material atlas** with two or more textured materials and bake. Confirm the atlas texture reports mipmaps and distant surfaces do not shimmer.
 - Check the **bake estimate label** updates after each bake (shows estimated time for next bake).
 - Click **Play from Camera**; confirm the player spawns at the editor camera position with matching yaw. Stop playtest; confirm the spawn entity is back in its original position.
 - Move the camera to an invalid position (inside geometry). Click **Play from Camera**; confirm the fix dialog appears and spawn is restored on cancel.
@@ -471,7 +473,7 @@ It writes one PNG per tab under `user://console_preview/`.
 ### 22. Undo History Browser
 - Open **Test → History** section.
 - Perform 3-4 operations (draw, delete, move). Confirm entries appear in the history browser with color-coded icons.
-- Hover an entry; confirm an enlarged thumbnail preview appears.
+- Hover an entry; confirm an enlarged thumbnail preview appears beside the row and that the dock panel does not grow, shrink, or jump as you move the cursor down the list.
 - Double-click an older entry; confirm the editor undoes to that point in history.
 - Click the **Undo** button in the history header; confirm it undoes one step. Click **Redo**; confirm it redoes.
 - With nothing to undo, confirm the Undo button is disabled. With nothing to redo, confirm Redo is disabled.
@@ -529,6 +531,8 @@ It writes one PNG per tab under `user://console_preview/`.
 - Enable **Bake Wire I/O** in LevelRoot Inspector.
 - Bake the level. Confirm the baked container has an `HFIODispatcher` child in the scene tree.
 - Export a Playtest Build. Confirm the exported scene also contains an `HFIODispatcher` node.
+- Rename a trigger brush to `door_sensor` and wire an entity output at it. Bake, then confirm the baked `Area3D` is named `door_sensor` and carries an `entity_name` meta, and that firing the connection reaches the target.
+- Configure an output on a brush entity, save to `.hflevel` and reload. Confirm the connection is still there. Repeat with an undo/redo cycle and with a duplicate.
 
 ### 29. Viewport Context Menu
 - Select a brush. Press **Space**; confirm a context menu appears at the cursor with brush-specific items (Extrude Up, Extrude Down, Hollow, Clip, Carve, Duplicate, Delete).
@@ -588,6 +592,13 @@ It writes one PNG per tab under `user://console_preview/`.
 - Press **`]`** repeatedly until maximum (512); confirm it stops doubling.
 - Double-tap **G G** to open quick-property popup; change value; confirm HUD updates with flash.
 - Perform a state restore (undo a bulk operation); confirm the HUD picks up the restored grid snap.
+
+### 33b. File I/O Refusals and Durability
+- Create a file named `broken.map` containing only `not a map`. Import it from the dock. Confirm the current level is untouched, the status line reports a failed import naming the reason, and no undo entry was added.
+- Export a level containing a carved or beveled brush to `.map` and reimport it. Confirm the brushes come back the right way out rather than inside out.
+- Enable region streaming with a small radius. Paint in one region, move the cursor into another so the first unloads, then return. Confirm the paint is still there.
+- Make the `<level>.hfregions` directory unwritable (for example put a regular file at that path) and save. Confirm the save is reported as failed rather than succeeding with missing region data.
+- Save twice in quick succession to the same path while the first write is still running. Confirm the file ends up holding the newer of the two.
 
 ### 34. Cleanup / Persistence
 - Dismiss the tutorial with and without `Don't show again` checked.

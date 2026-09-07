@@ -105,7 +105,7 @@ Grid-based paint layers with chunked storage for large worlds:
 
 ### Entities and I/O
 
-- **Data-driven entity types** from `entities.json` (point entities, brush entities like func_detail, func_wall, trigger volumes)
+- **Data-driven entity types** from `entities.json` plus a per-project `res://hammerforge_entities.json` overlay (point entities, brush entities like func_detail, func_wall, trigger volumes)
 - **Source-style I/O connections** -- wire output events to target inputs with parameter, delay, and fire-once options; automatically translated to Godot signals on bake/export via `HFIORuntime` dispatcher (direct method calls, snake_case fallback, generic handler, or user signal emission)
 - **Smart auto-routed connection lines** -- quadratic Bezier curves with arrowheads, parallel route offset, color-coded by output type (cyan=OnTrigger, red=OnDamage, yellow=OnUse, etc.) and dimmed by delay
 - **I/O wiring panel** -- quick-wire form (output/target/input/param/delay/once), connection summary, and preset picker embedded in the Objects tab
@@ -347,7 +347,7 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 
 ## Testing
 
-The verified Godot 4.7 suite on September 6, 2026 contains **2,236 tests across 126 scripts**: **2,229 passing tests**, seven intentional no-assert safety tests, and **9,307 assertions**. All checks run on every push and pull request via GitHub Actions.
+The verified Godot 4.7 suite on September 7, 2026 contains **2,364 tests across 129 scripts**: **2,357 passing tests**, seven intentional no-assert safety tests, and **9,821 assertions**. All checks run on every push and pull request via GitHub Actions.
 
 ```bash
 # Run all tests headless
@@ -395,11 +395,8 @@ See [ROADMAP.md](https://github.com/saworbit/hammerforge/blob/main/ROADMAP.md) f
 - MultiMesh consolidation that keeps instance transforms in baked-container space
 
 **Current tracked work:**
-- Save completion and replacement safety ([#33](https://github.com/saworbit/hammerforge/issues/33), [#51](https://github.com/saworbit/hammerforge/issues/51))
-- `.map` entity string round-trip fidelity ([#32](https://github.com/saworbit/hammerforge/issues/32))
-- Non-blocking threaded mesh merge ([#35](https://github.com/saworbit/hammerforge/issues/35))
-- PBR atlas channels and paint hot paths ([#24](https://github.com/saworbit/hammerforge/issues/24), [#39](https://github.com/saworbit/hammerforge/issues/39))
-- Smaller dock and plugin ownership boundaries ([#22](https://github.com/saworbit/hammerforge/issues/22), [#41](https://github.com/saworbit/hammerforge/issues/41))
+- The issue tracker is clear as of September 7, 2026.
+- One untracked limitation remains: a `.map` entity property value containing a quote or a backslash does not round trip, because neither the parser nor the writer escapes them.
 
 **Later:**
 - Bezier patch editing

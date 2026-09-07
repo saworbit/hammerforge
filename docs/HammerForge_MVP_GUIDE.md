@@ -65,8 +65,8 @@ See [DEVELOPMENT.md](https://github.com/saworbit/hammerforge/blob/main/DEVELOPME
 
 ### Entity Definitions (`HFEntityDef`)
 - Entity types and brush entity classes are data-driven via `hf_entity_def.gd`.
-- Loaded from `entities.json` or built-in defaults (func_detail, func_wall, trigger_once, trigger_multiple).
-- Dock brush entity class dropdown populated from definitions, not hardcoded.
+- Loaded from `entities.json` or built-in defaults (func_detail, func_wall, trigger_once, trigger_multiple), overlaid with `res://hammerforge_entities.json` when present.
+- The dock brush entity dropdown and the point entity palette are both populated from that merged set, not hardcoded and not from separate files.
 
 ### Gesture Tracker (`HFGesture`)
 - Base class for encapsulated input gestures (`hf_gesture.gd`).
@@ -120,8 +120,8 @@ See [DEVELOPMENT.md](https://github.com/saworbit/hammerforge/blob/main/DEVELOPME
 
 ### Persistence (`HFFileSystem` + `HFStateSystem`)
 - `HFStateSystem` captures and restores brush/entity/paint/settings state for undo/redo.
-- `HFFileSystem` handles .hflevel save/load, .map import/export, and glTF export with threaded I/O.
-- See [Data Portability](HammerForge_Data_Portability.md) for fidelity boundaries and current save-safety limitations.
+- `HFFileSystem` handles .hflevel save/load, .map import/export, and glTF export with threaded I/O. Queued writes run in request order, a malformed `.map` is refused before the level is touched, and a failed region sidecar fails the save.
+- See [Data Portability](HammerForge_Data_Portability.md) for fidelity boundaries and save-safety behaviour.
 
 ## High-Level Flow
 1. `plugin.gd` owns the EditorPlugin lifecycle and delegates input to focused `plugin_*.gd` adapters. The coordinator keeps typed `LevelRoot` and dock references; the static adapters receive the plugin as `Object` to avoid a circular script dependency.
