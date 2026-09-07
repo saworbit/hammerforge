@@ -415,6 +415,37 @@ and run".
 - `tools/hf_console_preview.gd` renders the three tabs to PNGs so a layout change can be judged without
   opening the editor.
 
+## Done (Free Transform — Rotate, Flip and Arrays — September 2026)
+- Rotate the selection in snapped steps (R / Shift+R) about the locked axis or Y,
+  pivoting on the selection's median point, the world origin, or the active object.
+  Texture Lock compensates the UVs, which finally gives
+  `FaceData.adjust_uvs_for_rotation()` a caller.
+- Flip the selection across an axis-aligned plane (Shift+M). The reflection is
+  folded back through a local-axis reflection so the basis keeps a positive
+  determinant — a mirrored brush cannot bake inside out. Symmetric primitives keep
+  their shape and resize handles; asymmetric ones get the mirror baked into their
+  faces.
+- Reset Rotation (Alt+R) clears a rotation without moving geometry, folding a
+  quarter turn into the brush size. It is the way back to Hollow, Clip and Carve,
+  which all read world extents off `size` and refuse a rotated brush.
+- Radial and grid array layouts in `HFDuplicator`, sharing the rotation code and
+  the existing instance bookkeeping. Old serialized duplicators load as linear.
+- New `HFTransformSystem` subsystem, `rotate_snap_degrees` and
+  `transform_pivot_mode` settings saved with the level, and command wiring across
+  the hotkeys, context toolbar, viewport context menu, command palette and dock.
+- 129 new tests, including bake-level winding proofs with untouched controls.
+
+### Known limits of the current transform pass
+- Flip refuses a brush carrying displacement faces. The displacement grid is
+  indexed against its face's corner order and mirroring reverses that order, so
+  the operation is refused rather than silently corrupting sculpted terrain.
+  Mirroring the grid itself is future work.
+- Hollow, Clip and Carve still require an unrotated box. Making them work in a
+  rotated brush's own frame is a larger job than this pass; Reset Rotation is the
+  supported answer, and it is now lossless for quarter turns.
+- Rotation is stepped, not a modal mouse drag. A drag gesture belongs with the
+  drag system and needs interactive validation this pass could not give it.
+
 ## Future (Wave 3 -- Polish)
 - Multiple simultaneous cordons.
 - Multi-tool presets for common workflows.
@@ -458,7 +489,7 @@ Completion is responsibility-based rather than tied to an arbitrary line count. 
 - Headless editor tests retain the complete tool graph, with focused export-playtest coverage guarding the runtime boundary.
 
 ### Risk-focused test gaps
-The current suite covers 2,364 tests across 129 scripts, including the large brush, bake, paint, vertex, baker, brush-instance, and map-I/O systems. The issue tracker is clear as of September 7, 2026. One known limitation is not
+The current suite covers 2,486 tests across 133 scripts, including the large brush, bake, paint, vertex, transform, baker, brush-instance, and map-I/O systems. The issue tracker is clear as of September 7, 2026. One known limitation is not
 tracked as an issue and has no coverage:
 - A `.map` entity property value containing a quote or a backslash does not round
   trip. `MapIO._parse_key_value()` splits on unescaped quote positions and

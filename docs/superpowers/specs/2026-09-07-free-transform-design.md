@@ -52,9 +52,18 @@ nodes only through the brush and entity systems it is given.
 rotate(brush_ids, entity_paths, axis_index, angle_rad, pivot) -> int
 flip(brush_ids, entity_paths, axis_index, pivot) -> int
 reset_rotation(brush_ids) -> int
+can_flip_brushes(brush_ids) -> HFOpResult
 resolve_pivot(brush_ids, entity_paths, mode, custom) -> Vector3
+selection_origin_centroid(brush_ids, entity_paths) -> Vector3
 selection_bounds(brush_ids, entity_paths) -> AABB
 ```
+
+The geometry itself is exposed as statics, so it can be tested and reused without
+a level in the scene: `rotation_basis`, `reflection_basis`, `rotated_transform`,
+`flipped_transform`, `local_mirror_axis`, `mirror_face`, `axis_permutation`,
+`permuted_size`, `with_scale`, `rotated_angle`, and `mirrored_angle`.
+`HFDuplicator`'s radial layout composes its copies through `rotated_transform`,
+so there is one rotation implementation in the plugin rather than two.
 
 Each mutating call returns the number of objects it changed, so callers can skip
 an undo entry for a no-op.
@@ -97,25 +106,59 @@ codebase depends on.
 mirror normal. For a brush that is already axis-aligned this makes `H` the
 identity-preserving choice that leaves a box a box.
 
-Face data follows the geometry in one of two ways:
+Whether local face data has to change at all is decided per brush, by testing
+whether reflecting the brush's generated vertex set through `H` reproduces the
+same set:
 
-- **Authoritative faces** (`shape == CUSTOM`): `local_verts` are reflected by `H`
-  and reversed in place, then `ensure_geometry()` recomputes normals and bounds.
-  Per-face material, UV, paint, and displacement data stay attached to the same
-  `FaceData` object, which is exactly right — that face moved, it did not swap.
-- **Parametric shapes**: the face list regenerates from the primitive, so per-face
-  data is re-attached by matching world-space face centroids before and after
-  through the same mirror. A box keeps its resize handles and its per-face
-  materials still land on the faces they were painted on.
+- **The primitive survives the mirror** (a box, a sphere, a cylinder): nothing
+  local changes. The fold-back reflection lands every generated vertex on another
+  vertex of the same shape, so the world geometry is already exactly mirrored, and
+  each face's data rides along to where that face went — the +X wall's material
+  ends up on the wall the +X wall mirrored into, which is what mirroring a room
+  should do. The brush stays parametric and keeps its resize handles.
+- **It does not** (a wedge, a tetrahedron, anything already `CUSTOM`): the faces
+  are promoted to authoritative, their `local_verts` reflected by `H`, and their
+  vertex order reversed, then `ensure_geometry()` recomputes normals and bounds.
+  Per-face material, UV and paint data stay attached to the same `FaceData`
+  object, which is exactly right — that face moved, it did not swap.
 
-**Reset rotation** snaps a brush's basis back to identity while keeping its
-origin. It is the escape hatch that makes hollow, clip, and carve reachable again
-after a rotation, and it is the honest answer to the guards those operations
-already carry.
+The symmetry test is empirical rather than a hardcoded table of which shapes are
+symmetric, so it stays correct if a shape generator changes. Its failure mode is
+one-sided: misjudging can only send a brush down the exact path, never produce
+wrong geometry.
+
+**Displacement is refused, not mirrored.** A displacement grid is indexed against
+its face's corner order and mirroring reverses that order, so `can_flip_brushes()`
+refuses a brush carrying one rather than silently corrupting sculpted terrain.
+
+**Reset rotation** returns a brush's basis to identity while keeping its origin.
+It is the escape hatch that makes hollow, clip, and carve reachable again after a
+rotation, and it is the honest answer to the guards those operations already
+carry.
+
+It is lossless for the rotation people will use most. A basis that only swaps and
+flips whole axes — a quarter turn — describes a box that is *already* axis
+aligned, just bookkept oddly. Clearing such a basis without touching `size` would
+snap a non-cube box back to its old footprint, so the swap is folded into `size`
+first and the geometry does not move. A general rotation has nowhere to fold, and
+clears as the user asked.
 
 **Pivot** resolution is a pure function of the selection with four modes:
 selection centre, world origin, active (first) object, and a caller-supplied
 point.
+
+The selection centre is the **centroid of the objects' origins**, not the centre
+of their bounding box. Rotating a point set about its own centroid leaves that
+centroid fixed, and mirroring it about a plane through the centroid does too; a
+bounding-box centre has neither property, so with one an asymmetric selection
+would drift a little further across the level on every press of the rotate key.
+This is the same choice Blender's "median point" pivot makes.
+
+Rotation also re-orthonormalises its result. A brush accumulates one composition
+per key press, and the float error in each would otherwise compound into a basis
+that is no longer a pure rotation. Any scale the node already carried is taken off
+first and restored afterwards, so cleaning up drift never silently resizes a brush
+somebody scaled with Godot's own gizmo.
 
 ### `LevelRoot` surface
 
@@ -187,7 +230,6 @@ an edit action, wired the same way `merge` and `clip` are:
   `HFUndoHelper`.
 - `plugin_commands.gd`: dispatch entries so the toolbar, palette, context menu,
   and radial menu all reach the same code.
-- `plugin_shortcuts.gd`: the new actions join the scope-guard claim ladder.
 - `ui/hf_context_toolbar.gd`: a Transform group in the brush-selected context.
 - `ui/hf_viewport_context_menu.gd`: entries in the brush section.
 - `ui/selection_tools_builder.gd`: a Transform sub-header with axis, pivot, and
@@ -195,7 +237,14 @@ an edit action, wired the same way `merge` and `clip` are:
 
 The rotation axis comes from the existing `axis_lock` when one is set and
 defaults to Y otherwise, which is the axis a level designer wants in almost every
-case and reuses a concept the editor already teaches.
+case and reuses a concept the editor already teaches. Resolving it lives on
+`LevelRoot`, which owns `axis_lock`, so the dock does not have to reach into an
+editor-side module to ask.
+
+`plugin_shortcuts.gd` is deliberately left alone. It exists because Godot delivers
+Delete, Duplicate and Ctrl+Arrow globally regardless of which panel has focus. The
+transform keys are viewport-local, so consuming them in the forwarded-input ladder
+is enough — the same way `E` and `Q` already override Godot's own gizmo-mode keys.
 
 ## Error handling
 
@@ -284,3 +333,45 @@ Yellow, red, and purple passes over the finished work:
   assumes axis alignment. Failures become tests before they become fixes.
 - **Purple** — fold the red findings back in, re-run everything, and update the
   changelog, roadmap, and user documentation to match what actually shipped.
+
+## What the verification passes found
+
+**Yellow** — built test-first against the design above; the suite, `gdformat`
+and `gdlint` all came back clean.
+
+**Red** — the adversarial pass found two real defects, both now fixed and both
+covered by tests:
+
+1. **Reset Rotation silently changed a box's footprint.** Clearing the basis of a
+   brush turned by exactly 90° snapped a non-cube box back to its old dimensions,
+   because `size` still described the pre-rotation axes. Quarter turns are now
+   folded into `size` first, so the geometry does not move — and this is the
+   common case, since 90° is the rotation people will reach for most.
+2. **Orthonormalising stripped node scale.** The drift fix added during the yellow
+   pass discarded any scale a user had applied with Godot's own gizmo. Scale is
+   now taken off before orthonormalising and put back afterwards.
+
+It also produced two findings that turned out to be wrong, and both are worth
+recording because the controls are what settled them:
+
+- A flipped wedge measured 7 of 8 baked triangles facing outward, which looked
+  exactly like a winding bug. It was the measurement: the test used the brush
+  *origin* as the interior reference, and a wedge's origin sits on its own sloped
+  face. Measuring against the mesh's vertex centroid — which is strictly interior
+  for a convex solid — gives 8 of 8, and an untouched-wedge control now stands
+  beside every flipped-wedge assertion so the two explanations can never again be
+  confused.
+- `rotate_snap_degrees` appeared not to survive a state round trip. It does; it is
+  an editor *setting*, so it travels in the settings bundle written to the
+  `.hflevel` file alongside `texture_lock`, not in the per-action undo snapshot.
+  The test was asserting the wrong path.
+
+**Purple** — the findings above were folded back in, the command surfaces were
+pinned with boundary tests (keymap chords, shared dispatch, the input ladder's
+paint-mode gate, menu ids, and the LevelRoot method names undo dispatches by, a
+typo in any of which would leave the command working and its undo entry silently
+missing), and the documentation was brought in line with what actually shipped —
+including the three places this document originally described differently.
+
+Final state: **2,486 tests across 133 scripts, 2,479 passing, none failing**,
+with `gdformat` and `gdlint` clean.
