@@ -1141,41 +1141,6 @@ func _find_brush_by_key(key: String) -> DraftBrush:
 # Shape guards for box-only operations
 # ---------------------------------------------------------------------------
 
-
-## Hollow and clip both compute world-space extents from `global_position` and
-## `size`, then rebuild the brush as axis-aligned BOX pieces.  That is only
-## truthful for an unrotated box, so anything else has to be rejected before the
-## original brush is deleted.
-## Shared by Hollow, Clip and Carve. All three read world bounds off
-## global_position and size and write axis-aligned boxes back, so all three need
-## the same brush. Static so a system that has no HFBrushSystem to hand can
-## still ask, instead of keeping a second copy of the rule.
-static func _check_axis_aligned_box(draft: DraftBrush, op_name: String) -> HFOpResult:
-	if draft.shape != DraftBrush.BrushShape.BOX:
-		return HFOpResult.fail(
-			"%s: only works on box brushes" % op_name,
-			"Select a box brush, or convert this shape to a box first"
-		)
-	if not _is_axis_aligned(draft.global_transform.basis):
-		return HFOpResult.fail(
-			"%s: only works on unrotated box brushes" % op_name,
-			"Clear the brush rotation before running this operation"
-		)
-	return HFOpResult.success()
-
-
-## True when the basis leaves each axis pointing down its own world axis, so the
-## brush's world bounds really are `global_position` +/- `size * 0.5`.
-static func _is_axis_aligned(basis: Basis) -> bool:
-	var b := basis.orthonormalized()
-	const TOLERANCE := 0.9999
-	return (
-		absf(b.x.dot(Vector3.RIGHT)) >= TOLERANCE
-		and absf(b.y.dot(Vector3.UP)) >= TOLERANCE
-		and absf(b.z.dot(Vector3.BACK)) >= TOLERANCE
-	)
-
-
 # ---------------------------------------------------------------------------
 # Pre-validation (check preconditions without performing the operation)
 # ---------------------------------------------------------------------------
@@ -1187,20 +1152,7 @@ func can_hollow_brush(brush_id: String, wall_thickness: float) -> HFOpResult:
 	var brush = _find_brush_by_id(brush_id)
 	if not brush or not (brush is DraftBrush):
 		return HFOpResult.fail("Hollow: brush not found")
-	var draft := brush as DraftBrush
-	var shape_check := _check_axis_aligned_box(draft, "Hollow")
-	if not shape_check.ok:
-		return shape_check
-	var min_dim = min(draft.size.x, min(draft.size.y, draft.size.z))
-	if wall_thickness * 2.0 >= min_dim:
-		return HFOpResult.fail(
-			(
-				"Wall thickness %.0f is too large for brush (smallest dim %.0f)"
-				% [wall_thickness, min_dim]
-			),
-			"Use a thickness less than %.0f" % (min_dim / 2.0)
-		)
-	return HFOpResult.success()
+	return _plan_hollow(brush as DraftBrush, wall_thickness)["result"]
 
 
 func can_clip_brush(brush_id: String, axis: int, split_pos: float) -> HFOpResult:
@@ -1232,6 +1184,12 @@ func can_clip_brush(brush_id: String, axis: int, split_pos: float) -> HFOpResult
 # ---------------------------------------------------------------------------
 
 
+## Hollow a brush into walls of the given thickness.
+##
+## A hollow brush is the original with its own faces pushed inward carved out of
+## it, so this is the same progressive remainder carve uses, with the brush
+## supplying its own planes. One face gives one wall, which means a box gives six
+## and a cylinder gives a tube.
 func hollow_brush_by_id(brush_id: String, wall_thickness: float) -> HFOpResult:
 	if brush_id == "":
 		return _op_fail("Hollow: no brush ID provided")
@@ -1241,132 +1199,77 @@ func hollow_brush_by_id(brush_id: String, wall_thickness: float) -> HFOpResult:
 	if not brush or not (brush is DraftBrush):
 		return _op_fail("Hollow: brush not found")
 	var draft := brush as DraftBrush
-	# Hollow rebuilds the brush as axis-aligned box slabs, so anything that is
-	# not an unrotated box would be silently replaced with the wrong geometry.
-	var shape_check := _check_axis_aligned_box(draft, "Hollow")
-	if not shape_check.ok:
-		return _op_fail(shape_check.message, shape_check.fix_hint)
-	var size = draft.size
-	var pos = draft.global_position
-	var mat = draft.material_override
-	var t = wall_thickness
-
-	# Wall thickness must be less than half the smallest dimension
-	var min_dim = min(size.x, min(size.y, size.z))
-	if t * 2.0 >= min_dim:
-		return _op_fail(
-			"Wall thickness %.0f is too large for brush (smallest dim %.0f)" % [t, min_dim],
-			"Use a thickness less than %.0f" % (min_dim / 2.0)
-		)
+	var plan: Dictionary = _plan_hollow(draft, wall_thickness)
+	var check: HFOpResult = plan["result"]
+	if not check.ok:
+		return _op_fail(check.message, check.fix_hint)
 
 	var infos: Array = []
-	# Top wall
-	(
-		infos
-		. append(
-			{
-				"shape": root.BrushShape.BOX,
-				"size": Vector3(size.x, t, size.z),
-				"center": Vector3(pos.x, pos.y + (size.y - t) / 2.0, pos.z),
-				"operation": CSGShape3D.OPERATION_UNION,
-				"brush_id": _next_brush_id(),
-			}
-		)
-	)
-	# Bottom wall
-	(
-		infos
-		. append(
-			{
-				"shape": root.BrushShape.BOX,
-				"size": Vector3(size.x, t, size.z),
-				"center": Vector3(pos.x, pos.y - (size.y - t) / 2.0, pos.z),
-				"operation": CSGShape3D.OPERATION_UNION,
-				"brush_id": _next_brush_id(),
-			}
-		)
-	)
-	# Left wall (X-)
-	(
-		infos
-		. append(
-			{
-				"shape": root.BrushShape.BOX,
-				"size": Vector3(t, size.y - 2.0 * t, size.z),
-				"center": Vector3(pos.x - (size.x - t) / 2.0, pos.y, pos.z),
-				"operation": CSGShape3D.OPERATION_UNION,
-				"brush_id": _next_brush_id(),
-			}
-		)
-	)
-	# Right wall (X+)
-	(
-		infos
-		. append(
-			{
-				"shape": root.BrushShape.BOX,
-				"size": Vector3(t, size.y - 2.0 * t, size.z),
-				"center": Vector3(pos.x + (size.x - t) / 2.0, pos.y, pos.z),
-				"operation": CSGShape3D.OPERATION_UNION,
-				"brush_id": _next_brush_id(),
-			}
-		)
-	)
-	# Front wall (Z+)
-	(
-		infos
-		. append(
-			{
-				"shape": root.BrushShape.BOX,
-				"size": Vector3(size.x - 2.0 * t, size.y - 2.0 * t, t),
-				"center": Vector3(pos.x, pos.y, pos.z + (size.z - t) / 2.0),
-				"operation": CSGShape3D.OPERATION_UNION,
-				"brush_id": _next_brush_id(),
-			}
-		)
-	)
-	# Back wall (Z-)
-	(
-		infos
-		. append(
-			{
-				"shape": root.BrushShape.BOX,
-				"size": Vector3(size.x - 2.0 * t, size.y - 2.0 * t, t),
-				"center": Vector3(pos.x, pos.y, pos.z - (size.z - t) / 2.0),
-				"operation": CSGShape3D.OPERATION_UNION,
-				"brush_id": _next_brush_id(),
-			}
-		)
-	)
+	for wall_faces in plan["walls"]:
+		infos.append(_piece_info_from_faces(draft, wall_faces))
+	return _replace_brush_with_pieces(draft, brush_id, infos, "Hollow", "walls")
 
-	# Copy material to all wall infos
-	if mat:
-		for info in infos:
-			info["material"] = mat
 
-	# Capture metadata to copy to walls
-	var src_visgroups = draft.get_meta("visgroups", PackedStringArray())
-	var src_group_id = draft.get_meta("group_id", "")
-	var src_bec = draft.get_meta("brush_entity_class", "")
+## Work out the walls a hollow would produce, and whether it can happen at all.
+##
+## Returns `{"result": HFOpResult, "walls": Array}`. Validation falls out of the
+## geometry: if the inset planes leave no interior, they crossed each other and the
+## wall thickness is too large for this brush. That is exact for any shape, where
+## comparing twice the thickness against the smallest dimension only ever meant
+## anything for a box.
+func _plan_hollow(draft: DraftBrush, wall_thickness: float) -> Dictionary:
+	var empty: Array = []
+	if wall_thickness <= 0.0:
+		return {
+			"result":
+			HFOpResult.fail(
+				"Hollow: wall thickness must be greater than zero",
+				"Enter a positive wall thickness"
+			),
+			"walls": empty
+		}
+	_ensure_faces(draft)
+	var faces: Array = draft.get_faces()
+	if faces.size() < 4:
+		return {
+			"result":
+			HFOpResult.fail(
+				"Hollow: brush has no usable geometry", "Rebuild or redraw the brush and try again"
+			),
+			"walls": empty
+		}
 
-	# Delete original brush
-	delete_brush(brush)
+	var interior: Vector3 = HFConvexClip.interior_point(faces)
+	var inset_planes: Array = []
+	for plane in HFConvexClip.outward_planes(faces, interior):
+		inset_planes.append(HFConvexClip.offset_plane(plane, -wall_thickness))
+	if inset_planes.is_empty():
+		return {"result": HFOpResult.fail("Hollow: brush has no usable geometry"), "walls": empty}
 
-	# Create wall brushes
-	var count := 0
-	for info in infos:
-		var wall = create_brush_from_info(info)
-		if wall:
-			if src_visgroups.size() > 0:
-				wall.set_meta("visgroups", src_visgroups.duplicate())
-			if src_group_id != "":
-				wall.set_meta("group_id", src_group_id)
-			if src_bec != "":
-				wall.set_brush_entity_class(str(src_bec))
-			count += 1
+	var shelled: Dictionary = HFConvexClip.progressive_remainder(faces, inset_planes)
+	var walls: Array = shelled["pieces"]
+	var void_faces: Array = shelled["remainder"]
+	if not shelled["separated"] or void_faces.is_empty() or walls.is_empty():
+		var largest := _largest_inradius(faces)
+		return {
+			"result":
+			HFOpResult.fail(
+				"Wall thickness %.1f leaves no room inside the brush" % wall_thickness,
+				"Use a thickness less than %.1f" % largest
+			),
+			"walls": empty
+		}
+	return {"result": HFOpResult.success("%d walls" % walls.size()), "walls": walls}
 
-	root._log("Hollow: created %d walls (thickness %.1f)" % [count, t])
-	return HFOpResult.success("Hollow: created %d walls" % count)
+
+## The largest wall thickness that still leaves an interior: the distance from the
+## brush's own centre to its nearest face.
+func _largest_inradius(faces: Array) -> float:
+	var centre: Vector3 = HFConvexClip.interior_point(faces)
+	var nearest := INF
+	for plane in HFConvexClip.outward_planes(faces, centre):
+		nearest = minf(nearest, absf(plane.distance_to(centre)))
+	return 0.0 if is_inf(nearest) else nearest
 
 
 # ---------------------------------------------------------------------------
@@ -1779,7 +1682,11 @@ func _piece_info_from_faces(draft: DraftBrush, faces: Array) -> Dictionary:
 ## entity name and I/O wiring; the others are new geometry of the same class.
 ## Entity names have to stay unique, so they cannot simply be copied to both.
 func _replace_brush_with_pieces(
-	draft: DraftBrush, brush_id: String, infos: Array, op_name: String
+	draft: DraftBrush,
+	brush_id: String,
+	infos: Array,
+	op_name: String,
+	piece_noun: String = "pieces"
 ) -> HFOpResult:
 	var entity_name := str(draft.get_meta("entity_name", ""))
 	var io_outputs: Array = draft.get_meta("entity_io_outputs", [])
@@ -1796,7 +1703,7 @@ func _replace_brush_with_pieces(
 			created += 1
 	if created == 0:
 		return _op_fail("%s: produced no geometry" % op_name)
-	var message := "%s: split into %d pieces" % [op_name, created]
+	var message := "%s: %d %s" % [op_name, created, piece_noun]
 	root._log(message)
 	return HFOpResult.success(message)
 

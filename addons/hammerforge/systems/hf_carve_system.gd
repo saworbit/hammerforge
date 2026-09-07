@@ -124,20 +124,13 @@ func _carve_pieces(carver: DraftBrush, target: DraftBrush) -> Array:
 	var planes: Array = HFConvexClip.face_planes_in_space(carver.get_faces(), into_target)
 	if planes.is_empty():
 		return []
-
-	var remainder: Array = target.get_faces()
+	var result: Dictionary = HFConvexClip.progressive_remainder(target.get_faces(), planes)
+	if not result["separated"]:
+		return []
 	var pieces: Array = []
-	for plane in planes:
-		var halves: Dictionary = HFConvexClip.split(remainder, plane)
-		var outside: Array = halves["front"]
-		var inside: Array = halves["back"]
-		if inside.is_empty():
-			# The remainder lies entirely outside this plane, so it lies entirely
-			# outside the carver. There is nothing here to carve.
-			return []
-		if not outside.is_empty() and _is_thick_enough(outside):
-			pieces.append(outside)
-		remainder = inside
+	for piece_faces in result["pieces"]:
+		if _is_thick_enough(piece_faces):
+			pieces.append(piece_faces)
 	return pieces
 
 

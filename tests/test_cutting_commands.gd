@@ -131,25 +131,33 @@ func test_the_ring_sorter_has_one_home():
 	assert_true(vertex_system.contains("HFConvexClip.sort_coplanar_cw"))
 
 
-func test_the_axis_aligned_guard_is_down_to_hollow_alone():
-	# Clip and carve split real geometry now. Hollow still insets every face
-	# inward, which is a different algorithm and keeps the restriction.
-	var brush_system := FileAccess.get_file_as_string(
-		"res://addons/hammerforge/systems/hf_brush_system.gd"
-	)
-	var guard_uses := brush_system.count("_check_axis_aligned_box(draft,")
-	assert_eq(guard_uses, 2, "only can_hollow_brush and hollow_brush_by_id should still guard")
-	assert_false(
-		brush_system.contains('_check_axis_aligned_box(draft, "Clip")'),
-		"clip no longer needs an unrotated box"
-	)
+func test_the_axis_aligned_guard_is_gone_entirely():
+	# Clip, carve and hollow all work on real geometry now, so the guard that
+	# required an unrotated box has no callers left and has been deleted.
+	for path in [
+		"res://addons/hammerforge/systems/hf_brush_system.gd",
+		"res://addons/hammerforge/systems/hf_carve_system.gd",
+		"res://addons/hammerforge/systems/hf_carve_preview.gd",
+		"res://addons/hammerforge/systems/hf_clip_preview.gd",
+		"res://addons/hammerforge/systems/hf_hollow_preview.gd",
+	]:
+		assert_false(
+			FileAccess.get_file_as_string(path).contains("_check_axis_aligned_box"),
+			"%s should not need an unrotated box" % path
+		)
+
+
+func test_the_two_boolean_operations_share_one_loop():
+	# Carve subtracts another brush; hollow subtracts the brush from itself. Same
+	# progressive remainder, different planes — and one implementation.
 	var carve_system := FileAccess.get_file_as_string(
 		"res://addons/hammerforge/systems/hf_carve_system.gd"
 	)
-	assert_false(
-		carve_system.contains("_check_axis_aligned_box"),
-		"carve no longer needs an unrotated box either"
+	assert_true(carve_system.contains("HFConvexClip.progressive_remainder"))
+	var brush_system := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/systems/hf_brush_system.gd"
 	)
+	assert_true(brush_system.contains("HFConvexClip.progressive_remainder"))
 
 
 func test_the_split_names_its_halves_after_the_plane():
