@@ -122,3 +122,84 @@ func test_fractional_grid_snaps_render_as_numbers():
 	for pair in [[0.125, "Grid: 0.125"], [0.5, "Grid: 0.5"], [2.5, "Grid: 2.5"]]:
 		hud.update_grid_snap(pair[0])
 		assert_eq(hud._grid_label.text, pair[1])
+
+
+# --- a constant height, because the toolbar is what sizes the viewport ---
+#
+# CONTAINER_SPATIAL_EDITOR_MENU is a plain HBoxContainer inside a PanelContainer,
+# and the 3D viewport gets whatever height is left under it. Every other child in
+# that bar — Godot's own transform, view and snap controls — is 29px tall and
+# stays there. The HUD is the tallest thing in the bar, so the bar's height is
+# the HUD's height, and the HUD renegotiating it mid-edit slid the viewport under
+# the cursor. Measured before this was pinned: 46px with a one-line hint, 49px
+# with none, 63px with the two-line draw hint.
+
+
+func _hud_heights_across_contexts() -> Dictionary:
+	var hud := _hud()
+	var seen := {}
+	var contexts := {
+		"draw idle": {"tool": 0, "mode": 0},
+		"select": {"tool": 1, "mode": 0},
+		"drag base": {"tool": 0, "mode": 1},
+		"drag height": {"tool": 0, "mode": 2},
+		"extrude up": {"tool": 2, "mode": 0},
+		"extrude active": {"tool": 2, "mode": 4},
+		"vertex edit": {"tool": 0, "mode": 5},
+		"floor paint": {"tool": 0, "mode": 0, "paint_mode": true},
+		"surface paint": {"tool": 0, "mode": 0, "paint_mode": true, "paint_target": 1},
+		"external tool": {"tool": 0, "mode": 0, "external_tool_name": "Measure"},
+	}
+	for tag in contexts:
+		hud.update_context(contexts[tag])
+		seen[tag] = hud.get_combined_minimum_size().y
+	return seen
+
+
+func test_hud_height_is_the_same_in_every_mode():
+	var seen := _hud_heights_across_contexts()
+	var heights := seen.values()
+	for tag in seen:
+		assert_eq(
+			seen[tag],
+			heights[0],
+			"Mode '%s' resized the toolbar and moved the viewport. Heights: %s" % [tag, str(seen)]
+		)
+
+
+func test_hud_height_is_the_same_with_and_without_a_hint():
+	var hud := _hud()
+	hud.update_context({"tool": 1, "mode": 0})
+	hud._hide_hint()
+	var without: float = hud.get_combined_minimum_size().y
+	for key in ShortcutHUD.MODE_HINTS:
+		hud._show_hint(ShortcutHUD.MODE_HINTS[key])
+		assert_eq(
+			hud.get_combined_minimum_size().y,
+			without,
+			(
+				"Hint '%s' resized the toolbar. A hint appears and expires on a timer, so this moves the viewport twice on its own."
+				% key
+			)
+		)
+
+
+func test_no_mode_hint_wraps_to_a_second_line():
+	# The row is one line high by design; a newline in the data quietly made it
+	# two and grew the whole toolbar by a line.
+	for key in ShortcutHUD.MODE_HINTS:
+		assert_false(
+			str(ShortcutHUD.MODE_HINTS[key]).contains("\n"),
+			"Hint '%s' carries a newline; the second line has to live on the tooltip" % key
+		)
+
+
+func test_a_long_hint_does_not_grow_the_row():
+	var hud := _hud()
+	hud.update_context({"tool": 1, "mode": 0})
+	hud._hide_hint()
+	var without: float = hud.get_combined_minimum_size().y
+	hud._show_hint(
+		"a hint far longer than the two hundred and sixty pixels the row is given, on and on"
+	)
+	assert_eq(hud.get_combined_minimum_size().y, without, "Long text ellipsizes, it does not wrap")

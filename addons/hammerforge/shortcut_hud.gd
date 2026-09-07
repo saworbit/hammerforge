@@ -14,6 +14,13 @@ extends Control
 ## that actually changes — the active hint, or the primary action for the
 ## current tool — and keeps the full list one hover away.
 const HUD_WIDTH := 260.0
+## Every label in the row is drawn at this size, so the row is the same height
+## whichever of them is showing. CONTAINER_SPATIAL_EDITOR_MENU is a plain
+## HBoxContainer and the 3D viewport gets whatever height is left under it, so a
+## HUD that renegotiated its height with each mode or hint slid the viewport
+## under the cursor mid-edit. Godot's own controls in that bar are a fixed 29px
+## and never move; this one holds still the same way.
+const ROW_FONT_SIZE := 12
 
 var _last_context := {}
 var _user_prefs = null  # HFUserPrefs — untyped to avoid preload
@@ -27,11 +34,10 @@ var _grid_flash_tween: Tween
 var _last_grid_snap := -1.0
 
 const MODE_HINTS := {
-	"draw_idle":
-	(
-		"Click to place corner \u2192 drag to set size \u2192 release for height\n"
-		+ "Empty scene? Use Manage > Create Floor for a stable draw surface"
-	),
+	# One line. The row is one line high, and the toolbar takes its height from
+	# this HUD, so a second line here moves the whole 3D viewport down. The rest
+	# of the advice is on the tooltip with the full shortcut list.
+	"draw_idle": "Click to place corner → drag to set size → release for height",
 	"select": "Click to select; drag empty space for a box; drag widgets to edit",
 	"extrude_up_idle": "Click a face to start extruding upward",
 	"extrude_down_idle": "Click a face to start extruding downward",
@@ -80,9 +86,24 @@ func _setup_row() -> void:
 	margin.add_child(_row)
 	margin.remove_child(label)
 	_row.add_child(label)
+	label.add_theme_font_size_override("font_size", ROW_FONT_SIZE)
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_pin_row_height()
+
+
+## One line, measured from the theme rather than from whatever text happens to
+## be in the row. Without a floor the row still collapses when every label in it
+## is hidden, and the toolbar shrinks with it.
+func _pin_row_height() -> void:
+	if _row == null or label == null:
+		return
+	var font := label.get_theme_font("font")
+	var line := float(ROW_FONT_SIZE)
+	if font:
+		line = font.get_height(ROW_FONT_SIZE)
+	_row.custom_minimum_size.y = line
 
 
 func set_user_prefs(prefs) -> void:
@@ -94,7 +115,7 @@ func _setup_hint_label() -> void:
 		return
 	_hint_label = Label.new()
 	_hint_label.name = "HintLabel"
-	_hint_label.add_theme_font_size_override("font_size", 11)
+	_hint_label.add_theme_font_size_override("font_size", ROW_FONT_SIZE)
 	_hint_label.add_theme_color_override("font_color", Color(0.8, 0.9, 1.0, 0.7))
 	_hint_label.visible = false
 	_hint_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -110,7 +131,7 @@ func _setup_grid_label() -> void:
 		return
 	_grid_label = Label.new()
 	_grid_label.name = "GridLabel"
-	_grid_label.add_theme_font_size_override("font_size", 12)
+	_grid_label.add_theme_font_size_override("font_size", ROW_FONT_SIZE)
 	_grid_label.add_theme_color_override("font_color", Color(0.7, 0.85, 1.0, 0.8))
 	_grid_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_grid_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -239,7 +260,9 @@ func _compute_hint_key(ctx: Dictionary) -> String:
 func _show_hint(text: String) -> void:
 	# The hint replaces the shortcut line rather than stacking under it: the row
 	# is one line high, and while a hint is up it is the more useful of the two.
-	_hint_label.text = text
+	# A newline here would quietly make the row two lines high and grow the whole
+	# toolbar by a line. Anything past the first sentence belongs on the tooltip.
+	_hint_label.text = " ".join(text.split("\n", false))
 	_hint_label.modulate = Color(1, 1, 1, 1)
 	_hint_label.visible = true
 	if label:

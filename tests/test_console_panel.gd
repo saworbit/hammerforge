@@ -610,3 +610,24 @@ func test_strip_tooltip_breaks_the_summary_down():
 	add_child_autofree(strip)
 	strip.set_source(panel)
 	assert_string_contains(strip._button.tooltip_text, "Click to open the Console")
+
+
+func test_strip_keeps_one_width_whatever_the_summary_says():
+	# The strip sits in the 3D viewport toolbar, which is a plain HBoxContainer.
+	# A label that sized to its text moved everything to its right along the bar
+	# every time the summary changed — and it changes on a two-second poll while
+	# you build. Measured before this was pinned: 76px for "All good", 155px for
+	# "3 problems, 2 to review".
+	var strip = HFStatusStripType.new()
+	add_child_autofree(strip)
+	var widths := {}
+	for text in ["All good", "Nothing to check yet", "3 problems, 2 to review", ""]:
+		strip._button.text = text
+		widths[text] = strip.get_combined_minimum_size().x
+	var first: float = widths.values()[0]
+	for text in widths:
+		assert_eq(
+			widths[text],
+			first,
+			"Summary '%s' resized the strip and shifted the toolbar. Widths: %s" % [text, widths]
+		)
