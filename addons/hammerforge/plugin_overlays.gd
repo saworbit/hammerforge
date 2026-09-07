@@ -9,6 +9,114 @@ const HFOperationReplay = preload("ui/hf_operation_replay.gd")
 const HFRadialMenu = preload("ui/hf_radial_menu.gd")
 const DraftBrush = preload("brush_instance.gd")
 
+## The overlays that belong over the 3D viewport rather than in the toolbar row.
+## Named by property so host adoption can re-home whichever of them exist.
+const VIEWPORT_OVERLAY_PROPERTIES := [
+	"_context_toolbar",
+	"_hotkey_palette",
+	"_quick_property",
+	"_coach_marks",
+	"_operation_replay",
+	"_radial_menu",
+]
+
+## Where each overlay sits once it is over the viewport. Anchors rather than
+## positions: the host is the viewport's own rect, so these follow it as the
+## window is resized or the docks are dragged. Two are deliberately absent —
+## the quick property puts itself at the cursor and the radial menu draws itself
+## around one, and now that neither is inside a layout container the geometry
+## they set for themselves is no longer overwritten on the next re-sort.
+const VIEWPORT_OVERLAY_ANCHORS := {
+	"_context_toolbar": [Control.PRESET_CENTER_TOP, 8],
+	"_hotkey_palette": [Control.PRESET_CENTER, 0],
+	"_coach_marks": [Control.PRESET_CENTER_BOTTOM, 12],
+	"_operation_replay": [Control.PRESET_BOTTOM_LEFT, 12],
+}
+
+
+## Park a viewport overlay on the Control the 3D viewport draws through.
+##
+## CONTAINER_SPATIAL_EDITOR_MENU is a layout container: it reserves every child's
+## full minimum size in the toolbar row, and the 3D viewport gets whatever height
+## is left under that row. A 320x380 command palette parked there takes the row
+## to 380px tall and squeezes the viewport it is supposed to float over; the
+## contextual toolbar and the cursor popup do the same to its width. None of them
+## are toolbar items — only the shortcut HUD and the status strip are.
+##
+## The viewport's draw-over Control is a plain Control, so it positions nothing
+## and reserves nothing, and it is the space `event.position` from
+## _forward_3d_gui_input is measured in — so the positions these overlays already
+## set for themselves finally land where they say. The toolbar stays the fallback
+## for the frames before the 3D editor has drawn once and handed us that Control.
+static func attach_viewport_overlay(plugin: Object, control: Control) -> void:
+	if plugin == null or control == null:
+		return
+	var host = plugin._viewport_overlay_host
+	if host != null and is_instance_valid(host):
+		host.add_child(control)
+		place_viewport_overlay(plugin, control)
+		return
+	plugin.add_control_to_container(EditorPlugin.CONTAINER_SPATIAL_EDITOR_MENU, control)
+
+
+## Take the overlay off whichever of the two parents it landed on.
+static func detach_viewport_overlay(plugin: Object, control: Control) -> void:
+	if plugin == null or control == null or not is_instance_valid(control):
+		return
+	var host = plugin._viewport_overlay_host
+	if host != null and is_instance_valid(host) and control.get_parent() == host:
+		host.remove_child(control)
+		return
+	plugin.remove_control_from_container(EditorPlugin.CONTAINER_SPATIAL_EDITOR_MENU, control)
+
+
+## Godot hands the draw-over Control to every viewport of a split layout on every
+## draw. Keep the first live one: adopting each call in turn would drag the
+## overlays between viewports every frame.
+static func adopt_viewport_overlay_host(plugin: Object, host: Control) -> void:
+	if plugin == null or host == null or not is_instance_valid(host):
+		return
+	var current = plugin._viewport_overlay_host
+	if current != null and is_instance_valid(current) and current.is_inside_tree():
+		return
+	plugin._viewport_overlay_host = host
+	for property in VIEWPORT_OVERLAY_PROPERTIES:
+		var control = plugin.get(property)
+		if control is Control and is_instance_valid(control):
+			_rehome_viewport_overlay(control, host)
+			place_viewport_overlay(plugin, control)
+
+
+static func _rehome_viewport_overlay(control: Control, host: Control) -> void:
+	var parent := control.get_parent()
+	if parent == host:
+		return
+	if parent != null:
+		parent.remove_child(control)
+	host.add_child(control)
+
+
+## Anchor an overlay inside the viewport. Anything not named in the table places
+## itself, so leave it alone: overwriting a cursor-anchored popup with a corner
+## preset is how it ends up in the wrong half of the screen.
+static func place_viewport_overlay(plugin: Object, control: Control) -> void:
+	if plugin == null or control == null or not is_instance_valid(control):
+		return
+	var property := _overlay_property_for(plugin, control)
+	if not VIEWPORT_OVERLAY_ANCHORS.has(property):
+		return
+	var placement: Array = VIEWPORT_OVERLAY_ANCHORS[property]
+	control.set_anchors_and_offsets_preset(
+		int(placement[0]), Control.PRESET_MODE_MINSIZE, int(placement[1])
+	)
+
+
+static func _overlay_property_for(plugin: Object, control: Control) -> String:
+	for property in VIEWPORT_OVERLAY_PROPERTIES:
+		if plugin.get(property) == control:
+			return property
+	return ""
+
 
 static func install_power_user_overlays(plugin: Object) -> void:
 	if plugin == null:
@@ -19,17 +127,13 @@ static func install_power_user_overlays(plugin: Object) -> void:
 			plugin._coach_marks.theme = plugin.base_control.theme
 		plugin._coach_marks.set_user_prefs(plugin._user_prefs)
 		plugin._coach_marks.guide_dismissed.connect(plugin._on_coach_mark_dismissed)
-		plugin.add_control_to_container(
-			EditorPlugin.CONTAINER_SPATIAL_EDITOR_MENU, plugin._coach_marks
-		)
+		attach_viewport_overlay(plugin, plugin._coach_marks)
 	if plugin._operation_replay == null:
 		plugin._operation_replay = HFOperationReplay.new()
 		if plugin.base_control:
 			plugin._operation_replay.theme = plugin.base_control.theme
 		plugin._operation_replay.replay_requested.connect(plugin._on_replay_requested)
-		plugin.add_control_to_container(
-			EditorPlugin.CONTAINER_SPATIAL_EDITOR_MENU, plugin._operation_replay
-		)
+		attach_viewport_overlay(plugin, plugin._operation_replay)
 		if plugin.dock:
 			plugin.dock.set_operation_replay(plugin._operation_replay)
 	if plugin._radial_menu == null:
@@ -37,9 +141,7 @@ static func install_power_user_overlays(plugin: Object) -> void:
 		if plugin.base_control:
 			plugin._radial_menu.theme = plugin.base_control.theme
 		plugin._radial_menu.action_selected.connect(plugin._on_radial_action)
-		plugin.add_control_to_container(
-			EditorPlugin.CONTAINER_SPATIAL_EDITOR_MENU, plugin._radial_menu
-		)
+		attach_viewport_overlay(plugin, plugin._radial_menu)
 
 
 static func teardown_power_user_overlays(plugin: Object) -> void:
@@ -48,18 +150,14 @@ static func teardown_power_user_overlays(plugin: Object) -> void:
 	if plugin._coach_marks:
 		if is_instance_valid(plugin._coach_marks):
 			plugin._coach_marks.guide_dismissed.disconnect(plugin._on_coach_mark_dismissed)
-		plugin.remove_control_from_container(
-			EditorPlugin.CONTAINER_SPATIAL_EDITOR_MENU, plugin._coach_marks
-		)
+		detach_viewport_overlay(plugin, plugin._coach_marks)
 		if is_instance_valid(plugin._coach_marks):
 			plugin._coach_marks.queue_free()
 		plugin._coach_marks = null
 	if plugin._operation_replay:
 		if is_instance_valid(plugin._operation_replay):
 			plugin._operation_replay.replay_requested.disconnect(plugin._on_replay_requested)
-		plugin.remove_control_from_container(
-			EditorPlugin.CONTAINER_SPATIAL_EDITOR_MENU, plugin._operation_replay
-		)
+		detach_viewport_overlay(plugin, plugin._operation_replay)
 		if is_instance_valid(plugin._operation_replay):
 			plugin._operation_replay.queue_free()
 		plugin._operation_replay = null
@@ -68,9 +166,7 @@ static func teardown_power_user_overlays(plugin: Object) -> void:
 	if plugin._radial_menu:
 		if is_instance_valid(plugin._radial_menu):
 			plugin._radial_menu.action_selected.disconnect(plugin._on_radial_action)
-		plugin.remove_control_from_container(
-			EditorPlugin.CONTAINER_SPATIAL_EDITOR_MENU, plugin._radial_menu
-		)
+		detach_viewport_overlay(plugin, plugin._radial_menu)
 		if is_instance_valid(plugin._radial_menu):
 			plugin._radial_menu.queue_free()
 		plugin._radial_menu = null

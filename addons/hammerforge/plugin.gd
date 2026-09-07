@@ -43,6 +43,11 @@ var hf_selection: Array = []
 var _selection_gesture := HFSelectionGestureType.new()
 var _brush_change_tracker := HFBrushChangeTrackerType.new()
 var _brush_reconcile_queued := false
+## The Control Godot draws the 3D viewport overlay through, captured the first
+## time _forward_3d_force_draw_over_viewport runs. Viewport overlays are
+## parented here rather than into the toolbar row, which is a layout container
+## that reserved each of them a slot the width of its whole panel.
+var _viewport_overlay_host: Control = null
 var _marquee_overlay_origin := Vector2.ZERO
 var _marquee_overlay_current := Vector2.ZERO
 var _marquee_overlay_active := false
@@ -219,14 +224,14 @@ func _enter_tree():
 	_context_toolbar.tool_switch_requested.connect(_on_context_tool_switch)
 	_context_toolbar.material_quick_apply.connect(_on_context_material_apply)
 	_context_toolbar.hotkey_palette_requested.connect(_on_toggle_hotkey_palette)
-	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, _context_toolbar)
+	HFPluginOverlays.attach_viewport_overlay(self, _context_toolbar)
 	# Hotkey palette (command palette overlay)
 	_hotkey_palette = HFHotkeyPalette.new()
 	if base_control:
 		_hotkey_palette.theme = base_control.theme
 	_hotkey_palette.populate(_keymap)
 	_hotkey_palette.action_invoked.connect(_on_hotkey_palette_action)
-	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, _hotkey_palette)
+	HFPluginOverlays.attach_viewport_overlay(self, _hotkey_palette)
 	# Selection filter popover (Window-based — not a Control, so managed manually)
 	_selection_filter = HFSelectionFilter.new()
 	_selection_filter.filter_applied.connect(_on_selection_filter_applied)
@@ -245,7 +250,7 @@ func _enter_tree():
 	if base_control:
 		_quick_property.theme = base_control.theme
 	_quick_property.value_committed.connect(_on_quick_property_committed)
-	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, _quick_property)
+	HFPluginOverlays.attach_viewport_overlay(self, _quick_property)
 	var selection = get_editor_interface().get_selection()
 	if selection:
 		if not selection.is_connected(
@@ -358,14 +363,14 @@ func _exit_tree():
 			_context_toolbar.tool_switch_requested.disconnect(_on_context_tool_switch)
 			_context_toolbar.material_quick_apply.disconnect(_on_context_material_apply)
 			_context_toolbar.hotkey_palette_requested.disconnect(_on_toggle_hotkey_palette)
-		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _context_toolbar)
+		HFPluginOverlays.detach_viewport_overlay(self, _context_toolbar)
 		if is_instance_valid(_context_toolbar):
 			_context_toolbar.queue_free()
 		_context_toolbar = null
 	if _hotkey_palette:
 		if is_instance_valid(_hotkey_palette):
 			_hotkey_palette.action_invoked.disconnect(_on_hotkey_palette_action)
-		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _hotkey_palette)
+		HFPluginOverlays.detach_viewport_overlay(self, _hotkey_palette)
 		if is_instance_valid(_hotkey_palette):
 			_hotkey_palette.queue_free()
 		_hotkey_palette = null
@@ -379,14 +384,14 @@ func _exit_tree():
 	if _coach_marks:
 		if is_instance_valid(_coach_marks):
 			_coach_marks.guide_dismissed.disconnect(_on_coach_mark_dismissed)
-		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _coach_marks)
+		HFPluginOverlays.detach_viewport_overlay(self, _coach_marks)
 		if is_instance_valid(_coach_marks):
 			_coach_marks.queue_free()
 		_coach_marks = null
 	if _operation_replay:
 		if is_instance_valid(_operation_replay):
 			_operation_replay.replay_requested.disconnect(_on_replay_requested)
-		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _operation_replay)
+		HFPluginOverlays.detach_viewport_overlay(self, _operation_replay)
 		if is_instance_valid(_operation_replay):
 			_operation_replay.queue_free()
 		_operation_replay = null
@@ -400,17 +405,20 @@ func _exit_tree():
 	if _radial_menu:
 		if is_instance_valid(_radial_menu):
 			_radial_menu.action_selected.disconnect(_on_radial_action)
-		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _radial_menu)
+		HFPluginOverlays.detach_viewport_overlay(self, _radial_menu)
 		if is_instance_valid(_radial_menu):
 			_radial_menu.queue_free()
 		_radial_menu = null
 	if _quick_property:
 		if is_instance_valid(_quick_property):
 			_quick_property.value_committed.disconnect(_on_quick_property_committed)
-		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _quick_property)
+		HFPluginOverlays.detach_viewport_overlay(self, _quick_property)
 		if is_instance_valid(_quick_property):
 			_quick_property.queue_free()
 		_quick_property = null
+	# Dropped last: detach_viewport_overlay reads it to know which of the two
+	# parents each overlay went onto.
+	_viewport_overlay_host = null
 	var selection = get_editor_interface().get_selection()
 	if (
 		selection
@@ -1223,6 +1231,7 @@ func _update_marquee_overlay(from: Vector2, to: Vector2, active: bool) -> void:
 ## Draw through Godot's real 3D overlay so viewport-local event coordinates
 ## remain correct under split views, editor scaling, and dock rearrangement.
 func _forward_3d_force_draw_over_viewport(viewport_control: Control) -> void:
+	HFPluginOverlays.adopt_viewport_overlay_host(self, viewport_control)
 	HFPluginOverlays.draw_marquee_overlay(self, viewport_control)
 
 
