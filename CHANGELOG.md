@@ -60,6 +60,18 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   8.0 to 7.5. The same chokepoint feeds hover and object picking, so during a
   drag those were latching onto the preview instead of real geometry too. The
   snap system already skipped the preview; picking now does the same.
+- **Viewport overlays were laid out as toolbar items.** The contextual toolbar,
+  the command palette and the cursor property popup were added to the 3D toolbar
+  row, which is a layout container, so it reserved each one's full minimum size
+  out of the space the viewport was going to get: the toolbar's minimum was
+  (800, 46) at rest and (1136, **380**) the instant the palette opened. They now
+  parent to the `Control` Godot passes to `_forward_3d_force_draw_over_viewport`
+  — the viewport's own rect, which reserves nothing and positions nothing — with
+  placement in one table, `HFPluginOverlays.VIEWPORT_OVERLAY_ANCHORS`. That rect
+  is also the space `event.position` is measured in, so `hf_quick_property`'s
+  `position` and `hf_radial_menu`'s `PRESET_FULL_RECT` are no longer overwritten
+  by the container on its next re-sort. Toolbar minimum is now (458, 46) and
+  stays there with every overlay open.
 - **`brush_changed` never fired.** The signal was declared on `LevelRoot` and
   emitted nowhere, while `HFSubtractPreview` connected to it, so the live
   subtract overlay listened to a signal that could not arrive and only refreshed
