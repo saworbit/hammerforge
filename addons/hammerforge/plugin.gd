@@ -1232,6 +1232,7 @@ func _update_marquee_overlay(from: Vector2, to: Vector2, active: bool) -> void:
 ## remain correct under split views, editor scaling, and dock rearrangement.
 func _forward_3d_force_draw_over_viewport(viewport_control: Control) -> void:
 	HFPluginOverlays.adopt_viewport_overlay_host(self, viewport_control)
+	HFPluginOverlays.refresh_viewport_overlay_placement(self)
 	HFPluginOverlays.draw_marquee_overlay(self, viewport_control)
 
 

@@ -233,3 +233,51 @@ func test_self_positioning_overlays_are_left_alone() -> void:
 	plugin._quick_property.position = Vector2(123, 456)
 	Overlays.place_viewport_overlay(plugin, plugin._quick_property)
 	assert_eq(plugin._quick_property.position, Vector2(123, 456))
+
+
+# --- re-anchoring when the overlay's own size moves ----------------------
+
+
+func test_a_grown_overlay_is_recentred_rather_than_left_hanging_off_the_edge() -> void:
+	# `set_anchors_and_offsets_preset` bakes its offsets from the minimum size it
+	# can see at the time. The contextual toolbar is 41px wide with nothing
+	# selected and 940px with a brush selected, so the left edge it was centred
+	# on while empty put most of it past the right side of the viewport. Caught
+	# in the editor, not by the first round of these tests.
+	host.size = Vector2(1486, 820)
+	plugin._context_toolbar = _overlay("ContextToolbar")
+	plugin._context_toolbar.custom_minimum_size = Vector2(41, 36)
+	Overlays.attach_viewport_overlay(plugin, plugin._context_toolbar)
+	Overlays.adopt_viewport_overlay_host(plugin, host)
+
+	plugin._context_toolbar.custom_minimum_size = Vector2(940, 36)
+	Overlays.refresh_viewport_overlay_placement(plugin)
+
+	var rect: Rect2 = plugin._context_toolbar.get_rect()
+	assert_almost_eq(rect.position.x + rect.size.x * 0.5, host.size.x * 0.5, 1.0, "Still centred")
+	assert_gte(rect.position.x, 0.0, "Runs off the left of the viewport")
+	assert_lte(rect.position.x + rect.size.x, host.size.x, "Runs off the right of the viewport")
+
+
+func test_placement_is_not_rebaked_while_the_size_holds_still() -> void:
+	# The draw hook runs this every frame, so it has to be a cheap no-op in the
+	# common case rather than re-anchoring continuously.
+	host.size = Vector2(1486, 820)
+	plugin._hotkey_palette = _overlay("Palette")
+	Overlays.attach_viewport_overlay(plugin, plugin._hotkey_palette)
+	Overlays.adopt_viewport_overlay_host(plugin, host)
+	var before: Rect2 = plugin._hotkey_palette.get_rect()
+	plugin._hotkey_palette.position += Vector2(11, 13)
+	Overlays.refresh_viewport_overlay_placement(plugin)
+	assert_eq(
+		plugin._hotkey_palette.position,
+		before.position + Vector2(11, 13),
+		"An unchanged minimum size must not trigger a re-anchor"
+	)
+
+
+func test_refresh_is_safe_before_a_host_exists() -> void:
+	plugin._context_toolbar = _overlay("ContextToolbar")
+	Overlays.attach_viewport_overlay(plugin, plugin._context_toolbar)
+	Overlays.refresh_viewport_overlay_placement(plugin)
+	assert_same(plugin._context_toolbar.get_parent(), plugin.toolbar)
