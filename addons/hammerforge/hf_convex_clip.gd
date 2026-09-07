@@ -32,6 +32,16 @@ const DEFAULT_EPSILON := 0.001
 ## sliver, not a brush.
 const MIN_SOLID_FACES := 4
 
+## The most bounding planes a boolean operation will work through.
+##
+## Every plane is a split of an ever-growing face set, so the cost climbs steeply
+## with the count, and so does the number of pieces that come out. A box has six
+## planes and a cylinder sixty-six — a tube, which is a reasonable thing to ask
+## for. A sphere has thousands, because every one of its triangles is its own
+## plane: shelling one takes a minute and produces two thousand brushes, which is
+## never what anybody meant. Past this many, the operation says so instead.
+const MAX_BOOLEAN_PLANES := 128
+
 
 ## World axis for an index: 0 = X, 1 = Y, anything else = Z.
 static func axis_normal(axis_index: int) -> Vector3:
@@ -223,6 +233,14 @@ static func progressive_remainder(
 			pieces.append(outside)
 		remainder = inside
 	return {"pieces": pieces, "remainder": remainder, "separated": true}
+
+
+## Whether a solid has few enough distinct planes to run a boolean against.
+##
+## Returns `{"ok": bool, "planes": int}` so a caller can report the real number.
+static func boolean_plane_budget(faces: Array, interior: Vector3) -> Dictionary:
+	var count: int = outward_planes(faces, interior).size()
+	return {"ok": count <= MAX_BOOLEAN_PLANES, "planes": count}
 
 
 ## Drop planes that repeat one already in the list.

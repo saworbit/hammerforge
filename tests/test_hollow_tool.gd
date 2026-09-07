@@ -198,10 +198,20 @@ func test_hollowing_a_cylinder_makes_a_tube():
 
 func test_can_hollow_brush_accepts_a_non_box_shape():
 	var b = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
+	b.shape = root.BrushShape.PRISM_TRI
+	b.rebuild_preview()
+	var check = sys.can_hollow_brush("brush_1", 2.0)
+	assert_true(check.ok, "Pre-check should accept a prism: %s" % check.user_text())
+
+
+func test_can_hollow_brush_refuses_a_shape_with_too_many_faces():
+	# A sphere would shell into thousands of walls, which is never what was meant.
+	var b = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
 	b.shape = root.BrushShape.SPHERE
 	b.rebuild_preview()
 	var check = sys.can_hollow_brush("brush_1", 2.0)
-	assert_true(check.ok, "Pre-check should accept a sphere: %s" % check.user_text())
+	assert_false(check.ok, "a sphere has thousands of distinct planes")
+	assert_true(check.fix_hint.contains("128"), check.fix_hint)
 
 
 func test_hollowing_a_rotated_box_keeps_the_rotation():

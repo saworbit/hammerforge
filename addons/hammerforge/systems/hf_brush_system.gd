@@ -1240,6 +1240,25 @@ func _plan_hollow(draft: DraftBrush, wall_thickness: float) -> Dictionary:
 		}
 
 	var interior: Vector3 = HFConvexClip.interior_point(faces)
+	var budget: Dictionary = HFConvexClip.boolean_plane_budget(faces, interior)
+	if not budget["ok"]:
+		return {
+			"result":
+			(
+				HFOpResult
+				. fail(
+					(
+						"Hollow: this brush has %d distinct faces, so it would become %d walls"
+						% [budget["planes"], budget["planes"]]
+					),
+					(
+						"Hollow works on brushes with up to %d faces. A sphere or capsule has thousands."
+						% HFConvexClip.MAX_BOOLEAN_PLANES
+					)
+				)
+			),
+			"walls": empty
+		}
 	var inset_planes: Array = []
 	for plane in HFConvexClip.outward_planes(faces, interior):
 		inset_planes.append(HFConvexClip.offset_plane(plane, -wall_thickness))

@@ -43,6 +43,21 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 			"Carve: the carver has no usable geometry",
 			"Rebuild or redraw the carving brush and try again"
 		)
+	var carver_faces: Array = carver_draft.get_faces()
+	var carver_budget: Dictionary = HFConvexClip.boolean_plane_budget(
+		carver_faces, HFConvexClip.interior_point(carver_faces)
+	)
+	if not carver_budget["ok"]:
+		return _op_fail(
+			(
+				"Carve: this carver has %d distinct faces, which would shatter every brush it touches"
+				% carver_budget["planes"]
+			),
+			(
+				"Carve works with carvers of up to %d faces. A sphere or capsule has thousands."
+				% HFConvexClip.MAX_BOOLEAN_PLANES
+			)
+		)
 	var carver_aabb: AABB = root.brush_system.world_bounds_of(carver_draft)
 
 	# Find all overlapping brushes (excluding the carver itself)
