@@ -83,6 +83,17 @@ before capturing so it does not show up in the editor's main-screen bar, and
 puts it back afterwards. If you add tooling that is visible in the editor,
 extend that swap rather than cropping it out of the image.
 
+### Do not delete docs/googlea10fdf23f3cd65ee.html
+
+It is the Google Search Console ownership proof for
+`https://saworbit.github.io/hammerforge/`. The filename is the token and the
+single line inside has to match it; MkDocs copies the file to the site root
+verbatim.
+
+Google re-checks it periodically, so removing it un-verifies the property and
+loses the indexing reports with it. It looks exactly like the kind of
+unexplained stray a tidy-up deletes, which is why it is written down here.
+
 ## Godot MCP Development Setup
 
 The repository vendors `addons/godot_mcp`; each contributor keeps `.codex/config.toml` as ignored, machine-local configuration. The client reads authentication from `HAMMERFORGE_GODOT_MCP_TOKEN`; keep Codex configuration, the token, and all `user://` MCP settings outside version control. The server should remain loopback-only on port `9080` with authentication enabled. See [Install + Upgrade](docs/HammerForge_Install_Upgrade.md#project-scoped-godot-mcp-repository-contributors) for configuration and verification.
