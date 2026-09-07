@@ -49,6 +49,9 @@ func _enter_tree() -> void:
 	if mode == "probe":
 		_probe_synthetic_input()
 		return
+	if mode == "demo_live":
+		_demo_live()
+		return
 	if mode != "1":
 		return
 	_run()
@@ -435,3 +438,122 @@ func _capture(shot_name: String, crop: Rect2i = Rect2i()) -> bool:
 		return false
 	print("[docshot] wrote ", path, " ", image.get_width(), "x", image.get_height())
 	return true
+
+
+# ---------------------------------------------------------------------------
+# Demo video support
+#
+# This mode is passive on purpose. It composes the editor, reports where the 3D
+# viewport is in screen coordinates, and waits. The harness drives the real OS
+# mouse from outside.
+#
+# Synthetic input forwarded to _forward_3d_gui_input cannot be combined with
+# cursor movement: Input.warp_mouse emits a genuine motion event with no button
+# held, which cancels the drag in progress. So the demo sends nothing synthetic
+# at all, and a viewer sees exactly what happened.
+# ---------------------------------------------------------------------------
+
+const GO_MARKER := "user://docshot_go"
+const READY_MARKER := "user://docshot_ready"
+## World points the harness wants in viewport pixels, one "x,y,z" per line.
+## Beats written against screen fractions cannot say where a brush lands in the
+## level, so a room drawn that way is only ever as good as the guess. The
+## editor camera is the one thing that can answer it exactly, so it does.
+const PROJECT_REQUEST := "user://docshot_project"
+
+
+func _demo_live() -> void:
+	for _i in range(240):
+		await get_tree().process_frame
+	_compose_editor(true)
+	for _i in range(20):
+		await get_tree().process_frame
+	if not await _ensure_scene_open("res://samples/hf_demo_empty.tscn"):
+		get_tree().quit(1)
+		return
+	await _show_main_screen("3D")
+
+	# Start from what HammerForge's own New Level gives you: ground plane, sun
+	# and player start. The ground matters for more than lighting -- cuts
+	# extrude from the grid plane upward, so a doorway cut through a wall also
+	# cuts any floor brush beneath it, leaving a pit at the threshold. Walls
+	# standing on this ground have their doorways flush with it.
+	var level: Node = EditorInterface.get_edited_scene_root()
+	level.create_new_level()
+	for _i in range(20):
+		await get_tree().process_frame
+
+	# Steep three-quarter view, about 50 degrees down.
+	#
+	# The angle is not taste, it is a constraint. The draw tool raycasts against
+	# existing brush faces before falling back to the grid plane, so any ground
+	# a wall hides cannot be clicked -- the click lands on the wall instead.
+	# A camera only a little taller than the walls casts a very long shadow
+	# behind each one; at this height and distance the shadow behind the 48-unit
+	# far wall ends about 60 units back, which the cut brush can reach past.
+	_place_editor_camera(Vector3(-36, 156, 84), Vector3(0, 8, -24))
+	EditorInterface.get_selection().clear()
+	for _i in range(30):
+		await get_tree().process_frame
+
+	var dock := _find_dock()
+	if dock == null:
+		printerr("[live] dock missing")
+		get_tree().quit(1)
+		return
+	dock.tool_draw.button_pressed = true
+
+	# Report the viewport RELATIVE to the window. Absolute screen position is the
+	# harness's job via Win32: Godot's window_get_position and window_set_position
+	# are relative to the current screen, so on a second monitor they disagree
+	# with the desktop coordinates the mouse actually uses.
+	var vp := EditorInterface.get_editor_viewport_3d(0)
+	# The viewport's own screen transform, not its container's position: the
+	# container sits a little above the rendered viewport, and that gap put
+	# every projected point 14px out.
+	var origin: Vector2 = vp.get_screen_transform().origin
+	var lines := PackedStringArray(["%d,%d,%d,%d" % [origin.x, origin.y, vp.size.x, vp.size.y]])
+
+	# The drag tool derives height from mouse pixels, not from the grid plane:
+	# height = grid_snap + pixels_up / height_pixels_per_unit, snapped. The
+	# harness needs both numbers to turn "a wall 48 units tall" into a gesture.
+	lines.append("%f,%f" % [level.grid_snap, level.height_pixels_per_unit])
+	lines.append_array(_project_requested_points(vp.get_camera_3d()))
+
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(GO_MARKER))
+	var marker := FileAccess.open(READY_MARKER, FileAccess.WRITE)
+	marker.store_string("\n".join(lines))
+	marker.close()
+	print("[live] ready; viewport rect=", lines[0])
+
+	var waited := 0
+	while not FileAccess.file_exists(GO_MARKER):
+		await get_tree().process_frame
+		waited += 1
+		if waited > 7200:
+			printerr("[live] never told to finish")
+			get_tree().quit(1)
+			return
+	print("[live] done")
+	get_tree().quit(0)
+
+
+## Project each world point the harness asked about into viewport pixels.
+##
+## unproject_position is used rather than reimplementing the projection in the
+## harness: it is the same call the editor's own gizmos use, so the answer
+## matches what the drag tool will see for that pixel exactly, including any
+## projection setting the editor camera happens to be on.
+func _project_requested_points(camera: Camera3D) -> PackedStringArray:
+	var out := PackedStringArray()
+	if camera == null or not FileAccess.file_exists(PROJECT_REQUEST):
+		return out
+	var text := FileAccess.get_file_as_string(PROJECT_REQUEST)
+	for line in text.split("\n", false):
+		var parts := line.strip_edges().split(",")
+		if parts.size() != 3:
+			continue
+		var world := Vector3(float(parts[0]), float(parts[1]), float(parts[2]))
+		var screen := camera.unproject_position(world)
+		out.append("%d,%d" % [roundi(screen.x), roundi(screen.y)])
+	return out

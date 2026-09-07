@@ -1,0 +1,145 @@
+# Build a three-walled room, carve a doorway through the far wall, apply the
+# cut, then play the level and walk out through the hole.
+#
+# Coordinates:
+#   w(x,y,z)  a point in the level, projected by the editor's own camera
+#   up(h)     extrude the brush being drawn to h units tall
+#   cx()/cy() pixel offsets from the window's client origin, for dock buttons
+#             and the viewport toolbar -- neither lives inside the 3D viewport,
+#             so a viewport fraction cannot address them
+#
+# HammerForge draws in two stages: drag the base footprint across the grid
+# plane, then move up and click to set the height. Every drag/click pair below
+# is one brush.
+#
+# Two constraints shape the layout, and both come from the draw tool rather
+# than from taste:
+#
+# 1. The tool raycasts against existing brush faces before falling back to the
+#    grid plane, so ground hidden behind a wall cannot be clicked -- the click
+#    lands on the wall. Wall footprints are therefore disjoint, and each is
+#    drawn before anything that would shadow it.
+# 2. There is no floor brush. Cuts extrude upward from the grid plane, so a
+#    doorway cut through a wall also cuts any floor brush beneath it and leaves
+#    a pit at the threshold. The walls stand on the ground plane that New Level
+#    provides, which puts the doorway flush with it.
+#
+# The near side is left open so the camera can see into the room.
+
+# Open on the empty grid so the first action reads clearly.
+move w(0,0,0) 500
+dwell 1300
+
+# --- Far wall, the one the doorway goes through --------------------------
+move w(-48,0,-48) 800
+dwell 450
+press
+move w(48,0,-32) 1300
+dwell 500
+release
+dwell 700
+move up(48) 700
+dwell 700
+click
+dwell 1200
+
+# --- Left wall ------------------------------------------------------------
+# Starts at the far wall's near face rather than its far corner: the far
+# corner's ground is now inside the wall's shadow.
+move w(-48,0,-32) 700
+dwell 350
+press
+move w(-32,0,48) 1000
+dwell 500
+release
+dwell 700
+move up(48) 700
+dwell 700
+click
+dwell 1000
+
+# --- Right wall -----------------------------------------------------------
+move w(32,0,-32) 700
+dwell 350
+press
+move w(48,0,48) 1000
+dwell 500
+release
+dwell 700
+move up(48) 700
+dwell 700
+click
+dwell 1500
+
+# --- Switch to Cutout -----------------------------------------------------
+# Deliberately slow: this is the point of the clip, and the mode change needs
+# to register before the geometry changes.
+move cx(295) cy(317) 1100
+dwell 800
+click
+dwell 1100
+
+# --- Carve the doorway ----------------------------------------------------
+# The cut brush runs from inside the room out past the back of the wall. It has
+# to overshoot: the ground immediately behind the wall is in the wall's shadow
+# and cannot be clicked, so the far end is placed beyond where the shadow ends.
+# Overshooting costs nothing -- the parts outside the wall have nothing to
+# subtract from -- and it guarantees the cut goes cleanly through rather than
+# leaving a skin. It stops at 32 of the wall's 48 units so what is left reads
+# as a doorway rather than a missing section.
+move w(-16,0,-16) 900
+dwell 400
+press
+move w(16,0,-128) 1200
+dwell 500
+release
+dwell 700
+move up(32) 700
+dwell 700
+click
+dwell 1700
+
+# --- Apply the cut --------------------------------------------------------
+# Until this lands the cut is only staged: the toolbar counts it as pending and
+# the wall is still whole.
+move cx(1147) cy(141) 1000
+dwell 800
+click
+dwell 1600
+
+# --- Test the level -------------------------------------------------------
+# HammerForge does not run full CSG live -- brushes stay lightweight preview
+# nodes and the boolean only resolves at bake. Test Level bakes, hides the
+# drafts and drops a first-person player in, which is the only path that shows
+# the doorway as a hole rather than as a staged cut.
+move cx(267) cy(239) 900
+dwell 600
+click
+dwell 900
+move cx(125) cy(425) 800
+dwell 700
+click
+
+# --- Cut to the playtest window -------------------------------------------
+# The playtest opens as its own window, "hammerforge (DEBUG)", in its own
+# process, and the editor's window stops presenting frames the moment it does
+# -- a capture left pointing at the editor goes black, so the cut is not
+# optional.
+#
+# The timing is tight on both sides. The window does not exist for the first
+# few seconds after the click, and about twelve seconds in the editor hands the
+# game's window over to the game's own process, which destroys the one being
+# captured. Everything worth showing has to happen in between.
+dwell 4200
+obs capture --scene HammerForgeGame (debug) 4.7
+dwell 500
+
+# --- Walk out through the doorway -----------------------------------------
+# The spawn sits at the centre of the room facing -Z, which is the wall the
+# doorway was cut through. Sprint: at HammerForge's default grid the player is
+# small next to the room, and a walk would not clear the wall before the
+# handover above takes the window away.
+keydown shift
+key W 2500
+keyup shift
+dwell 1600
