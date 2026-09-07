@@ -1,0 +1,105 @@
+name: Release
+
+# What users install is not what this repository contains. The repository is a
+# development workspace -- test framework, contributor tooling, documentation
+# build -- and the Godot Asset Library installs whatever it finds at the commit
+# it is pointed at. So a release is a separate, smaller tree.
+#
+# tools/build_release_tree.py decides what is in it. This workflow only moves
+# the result into the two places it needs to be:
+#
+#   the `release` branch   what the Asset Library downloads, by commit hash
+#   the GitHub Release     a zip, for anyone installing by hand
+#
+# The `release` branch must already exist; it is created once, by hand, and
+# never merged into or from.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Build the release tree
+        run: python tools/build_release_tree.py "$RUNNER_TEMP/release"
+
+      - name: Refuse to ship development tooling
+        # The script excludes these, but this is the check that matters: it runs
+        # against the built output rather than against the list that was meant
+        # to produce it.
+        run: |
+          cd "$RUNNER_TEMP/release"
+          for unwanted in addons/gut addons/godot_mcp addons/hf_docshot tests tools docs samples project.godot; do
+            if [ -e "$unwanted" ]; then
+              echo "::error::$unwanted reached the release tree" && exit 1
+            fi
+          done
+          test -f addons/hammerforge/plugin.cfg || { echo "::error::no plugin"; exit 1; }
+          test -f addons/hammerforge/LICENSE   || { echo "::error::no licence"; exit 1; }
+          echo "release tree: $(find . -type f | wc -l) files"
+
+      - name: Package
+        run: |
+          VERSION="$(python -c "import sys; sys.path.insert(0,'tools'); \
+            import build_release_tree as b; print(b.plugin_version())")"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          cd "$RUNNER_TEMP/release"
+          zip -qr "$RUNNER_TEMP/hammerforge-$VERSION.zip" .
+
+      - name: Update the release branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          WORK="$RUNNER_TEMP/relbranch"
+          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if ! git clone --depth 1 --branch release "$REMOTE" "$WORK" 2>/dev/null; then
+            echo "::error::the 'release' branch does not exist; create it once by hand"
+            exit 1
+          fi
+          # Replace the contents wholesale rather than copying over the top, so
+          # a file dropped from the ship list disappears instead of lingering.
+          find "$WORK" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -a "$RUNNER_TEMP/release/." "$WORK/"
+          cd "$WORK"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "release branch already matches; nothing to push"
+          else
+            git -c user.name="github-actions[bot]" \
+                -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+                commit -m "HammerForge $VERSION" \
+                       -m "Built from ${GITHUB_SHA} by .github/workflows/release.yml."
+            git push origin release
+          fi
+          echo "RELEASE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Attach the zip to the GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${GITHUB_REF_NAME}" \
+            "$RUNNER_TEMP/hammerforge-$VERSION.zip" --clobber
+
+      - name: Asset Library commit
+        # Printed rather than submitted: the Asset Library has no API for
+        # updating an entry, so the hash has to be pasted into the form by hand.
+        run: |
+          echo "### Asset Library" >> "$GITHUB_STEP_SUMMARY"
+          echo "Update the Download Commit to \`$RELEASE_COMMIT\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "at https://godotengine.org/asset-library/asset/edit" >> "$GITHUB_STEP_SUMMARY"

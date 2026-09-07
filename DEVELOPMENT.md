@@ -49,26 +49,31 @@ downloads, by commit hash. It is a build artefact: never merge it into `main`
 or `main` into it, and expect its contents to be replaced wholesale each time.
 
 1. Bump `version=` in `addons/hammerforge/plugin.cfg` and update `CHANGELOG.md`.
-2. Build the tree and replace the branch contents with it:
+2. Tag `main`: `git tag v0.3.1 && git push origin v0.3.1`.
+3. `.github/workflows/release.yml` builds the tree, checks the built output for
+   the excluded paths rather than trusting the list that produced it, replaces
+   the contents of `release` with it, and attaches a zip to the GitHub Release.
+4. The run summary prints the new `release` commit hash. Paste it into the
+   Asset Library entry's **Download Commit** field. There is no API for that,
+   so it stays the one manual step.
 
-   ```bash
-   python tools/build_release_tree.py /tmp/release
-   git worktree add --detach /tmp/relwt && cd /tmp/relwt
-   git checkout release
-   find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-   cp -a /tmp/release/. .
-   git add -A && git commit -m "HammerForge 0.3.0" && git push origin release
-   ```
+To see what a release would contain before tagging anything:
 
-   Removing the contents first matters: copying over the top would leave behind
-   anything dropped from the ship list.
-3. Tag `main`: `git tag v0.3.0 && git push origin v0.3.0`.
-4. Paste the new `release` commit hash into the Asset Library entry's
-   **Download Commit** field. There is no API for that, so it stays manual.
+```bash
+python tools/build_release_tree.py /tmp/release
+```
 
-Steps 2 and 4's first half are worth automating on tag; a workflow to do it is
-drafted but not yet committed, because pushing `.github/workflows/` needs a
-token with the `workflow` scope.
+Replacing the branch contents by hand, if the workflow is ever unavailable.
+Removing them first matters -- copying over the top would leave behind anything
+dropped from the ship list:
+
+```bash
+git worktree add --detach /tmp/relwt && cd /tmp/relwt
+git checkout release
+find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+cp -a /tmp/release/. .
+git add -A && git commit -m "HammerForge 0.3.1" && git push origin release
+```
 
 ### The same rule applies to screenshots and demos
 
