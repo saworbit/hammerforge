@@ -39,7 +39,8 @@
 
 <p align="center">
   <em>Drag a cut brush through the wall, apply it, then Test Level and walk up to the hole.<br>
-  <a href="https://saworbit.github.io/hammerforge/#see-it-in-motion">Watch the full 55-second clip</a> — it starts from an empty grid and builds the room first.</em>
+  <a href="https://saworbit.github.io/hammerforge/#see-it-in-motion">Watch the full 55-second clip</a>
+  or <a href="https://youtu.be/Nilou2q8SjE">on YouTube</a> — it starts from an empty grid and builds the room first.</em>
 </p>
 
 > **Fair warning:** This is a solo hobby project in early alpha. I built it to support another project and it grew from there. It's buggy, rough around the edges, and a bit directionless. If any of this looks useful to you, I'd genuinely appreciate help testing and filing issues. Contributions welcome -- just know you're signing up for an adventure, not a polished product.

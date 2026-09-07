@@ -33,6 +33,8 @@ nothing is sped up, cut together, or mocked up.
   <a href="demos/carve_a_doorway.mp4">Download it instead</a> (MP4, 55 seconds, no audio).
 </video>
 
+Also on [YouTube](https://youtu.be/Nilou2q8SjE), with chapters.
+
 ## How it works
 
 | Step | | |
