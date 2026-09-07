@@ -75,14 +75,30 @@ static func basis_axis(basis: Basis, index: int) -> Vector3:
 
 ## `xform` rotated by `rot` about `pivot`.
 ##
-## The product is re-orthonormalised because a brush accumulates one of these per
-## key press. Each composition carries a little float error, and left alone that
-## error compounds into a basis that is no longer a pure rotation — which would
-## show up as a sheared brush and as scale creeping into the bake.
+## The rotation part is re-orthonormalised because a brush accumulates one of
+## these per key press. Each composition carries a little float error, and left
+## alone that error compounds into a basis that is no longer a pure rotation —
+## a sheared brush, with scale creeping into the bake. Any scale the node already
+## carried is taken off first and put back afterwards, so orthonormalising cleans
+## up drift without quietly resizing a brush somebody scaled with Godot's own
+## gizmo.
 static func rotated_transform(xform: Transform3D, rot: Basis, pivot: Vector3) -> Transform3D:
+	var scale := xform.basis.get_scale()
 	var out := Transform3D()
-	out.basis = (rot * xform.basis).orthonormalized()
+	out.basis = with_scale((rot * xform.basis).orthonormalized(), scale)
 	out.origin = pivot + rot * (xform.origin - pivot)
+	return out
+
+
+## Apply a per-local-axis scale to an orthonormal basis.
+##
+## `Basis.scaled()` scales the rows, which is a world-space scale; a brush's scale
+## belongs to its own axes, so each column is scaled instead.
+static func with_scale(rotation: Basis, scale: Vector3) -> Basis:
+	var out := rotation
+	out.x = rotation.x * scale.x
+	out.y = rotation.y * scale.y
+	out.z = rotation.z * scale.z
 	return out
 
 
@@ -272,10 +288,47 @@ func reset_rotation(brush_ids: Array) -> int:
 		var xform := draft.global_transform
 		if xform.basis.is_equal_approx(Basis.IDENTITY):
 			continue
+		# A basis that only swaps and flips whole axes is describing a box that is
+		# already axis-aligned, just bookkept oddly. Fold the swap into `size` so
+		# clearing the basis leaves the geometry exactly where it was — otherwise a
+		# quarter turn would snap a non-cube box back to its old footprint.
+		var permutation := axis_permutation(xform.basis)
+		if not permutation.is_empty() and draft.shape == DraftBrush.BrushShape.BOX:
+			draft.size = permuted_size(draft.size, permutation)
 		draft.global_transform = Transform3D(Basis.IDENTITY, xform.origin)
 		_tag_dirty(draft)
 		changed += 1
 	return changed
+
+
+## For a basis whose columns each lie along a distinct world axis, the world axis
+## that each local axis maps to. Empty for a general rotation.
+static func axis_permutation(basis: Basis) -> PackedInt32Array:
+	const TOLERANCE := 0.9999
+	var mapping := PackedInt32Array()
+	var used := {}
+	for local_axis in 3:
+		var direction := basis_axis(basis, local_axis).normalized()
+		var matched := -1
+		for world_axis in 3:
+			if absf(direction.dot(axis_vector(world_axis))) >= TOLERANCE:
+				matched = world_axis
+				break
+		if matched < 0 or used.has(matched):
+			return PackedInt32Array()
+		used[matched] = true
+		mapping.append(matched)
+	return mapping
+
+
+## Rewrite a size so each local extent lands on the world axis it now points down.
+static func permuted_size(size: Vector3, mapping: PackedInt32Array) -> Vector3:
+	if mapping.size() < 3:
+		return size
+	var out := size
+	for local_axis in 3:
+		out[mapping[local_axis]] = size[local_axis]
+	return out
 
 
 # ---------------------------------------------------------------------------
