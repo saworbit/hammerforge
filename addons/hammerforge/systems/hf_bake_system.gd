@@ -1,0 +1,1847 @@
+@tool
+extends RefCounted
+class_name HFBakeSystem
+
+const PrefabFactory = preload("../prefab_factory.gd")
+const DraftBrush = preload("../brush_instance.gd")
+const HFAutoConnector = preload("../paint/hf_auto_connector.gd")
+const HFIORuntime = preload("../hf_io_runtime.gd")
+const HFLog = preload("../hf_log.gd")
+
+const BAKED_CONTAINER_NAME := &"BakedGeometry"
+const BAKED_CONTAINER_META := &"_hammerforge_baked_container"
+const BAKED_CONTAINER_SCHEMA := 1
+const BAKED_PREVIEW_MODE_META := &"_hammerforge_bake_preview_mode"
+
+## Bake preview mode: FULL produces final geometry, WIREFRAME skips materials
+## and generates unshaded wireframe, PROXY uses simplified box meshes.
+enum PreviewMode { FULL, WIREFRAME, PROXY }
+
+## Why the last bake call returned what it did.
+##
+## Every bake entry point returns a plain bool, and false alone is ambiguous:
+## a refused bake, a bake with nothing to do, and a bake that genuinely failed
+## all look identical. Callers that need the difference read
+## get_last_bake_status() immediately after the call.
+enum BakeStatus { NOT_RUN, SUCCESS, FAILED, BUSY, NOTHING_TO_DO }
+
+var root: Node3D
+var _last_dirty_brush_ids: Dictionary = {}  # brush_id -> true; captured at bake start
+var _last_bake_success: bool = false
+var _last_bake_status: int = BakeStatus.NOT_RUN
+var _bake_in_flight := false
+static var _wireframe_shader: Shader = null
+static var _wireframe_material: ShaderMaterial = null
+
+## Number of brushes to process per frame during face-based bake collection.
+## Lower values yield more often (smoother editor), higher values bake faster.
+const _FACE_BAKE_BATCH := 8
+
+
+func _init(level_root: Node3D) -> void:
+	root = level_root
+
+
+# ---------------------------------------------------------------------------
+# Baked container lifecycle
+# ---------------------------------------------------------------------------
+
+
+## Re-adopt baked geometry persisted in the scene and collapse legacy duplicate
+## roots created by the old queue_free-then-replace flow. Legacy anonymous
+## nodes are only considered when every direct child is a known bake artifact
+## and at least one child has an unmistakable baked-mesh signature.
+func reconcile_baked_containers() -> Node3D:
+	var candidates := _managed_baked_containers()
+	if candidates.is_empty():
+		root.baked_container = null
+		return null
+
+	# Child order is persistence order. The last populated candidate is the
+	# newest legacy bake, which matters when the canonical node is an older or
+	# empty container left behind by the duplication bug.
+	var survivor: Node3D = null
+	for candidate: Node3D in candidates:
+		if _has_baked_payload(candidate):
+			survivor = candidate
+	if not survivor:
+		for candidate: Node3D in candidates:
+			if candidate.has_meta(BAKED_CONTAINER_META):
+				survivor = candidate
+	if not survivor:
+		survivor = candidates[0]
+
+	var removed := 0
+	for candidate: Node3D in candidates:
+		if candidate == survivor:
+			continue
+		_destroy_baked_container(candidate)
+		removed += 1
+
+	if survivor.get_parent() and survivor.get_parent() != root:
+		survivor.get_parent().remove_child(survivor)
+	survivor.name = BAKED_CONTAINER_NAME
+	survivor.set_meta(BAKED_CONTAINER_META, BAKED_CONTAINER_SCHEMA)
+	if survivor.get_parent() != root:
+		root.add_child(survivor)
+	root.baked_container = survivor
+	if removed > 0 and root.has_method("_log"):
+		root.call("_log", "Removed %d duplicate baked container(s)" % removed)
+	return survivor
+
+
+## Install a complete bake as the only managed container. Existing containers
+## are detached synchronously so the canonical name is available before the
+## replacement enters the tree, then queued for safe editor-aware deletion.
+func replace_baked_container(container: Node3D) -> Node3D:
+	if not container or not is_instance_valid(container):
+		return null
+	for candidate: Node3D in _managed_baked_containers():
+		if candidate != container:
+			_destroy_baked_container(candidate)
+	if container.get_parent() and container.get_parent() != root:
+		container.get_parent().remove_child(container)
+	container.name = BAKED_CONTAINER_NAME
+	container.set_meta(BAKED_CONTAINER_META, BAKED_CONTAINER_SCHEMA)
+	if container.get_parent() != root:
+		root.add_child(container)
+	root.baked_container = container
+	return container
+
+
+## Remove all HammerForge-owned baked roots immediately. This is also used by
+## clear/restore flows so a scene saved in the same frame cannot retain ghosts.
+func clear_baked_containers() -> void:
+	for candidate: Node3D in _managed_baked_containers():
+		_destroy_baked_container(candidate)
+	root.baked_container = null
+	root._last_bake_preview_mode = PreviewMode.FULL
+
+
+## Capture derived bake output for the small number of actions (notably Commit
+## Cuts) whose Undo/Redo must restore the exact prior visual/collision result.
+## Ordinary edit snapshots intentionally remain source-only to avoid bloating
+## every undo entry with baked meshes.
+func capture_baked_geometry_snapshot() -> PackedScene:
+	var container := reconcile_baked_containers()
+	if not container:
+		return null
+	var copy := container.duplicate() as Node3D
+	if not copy:
+		return null
+	_assign_packed_snapshot_owners(copy, copy)
+	var snapshot := PackedScene.new()
+	var result := snapshot.pack(copy)
+	copy.free()
+	if result != OK:
+		push_warning("Could not capture baked geometry for Undo/Redo (error %d)" % result)
+		return null
+	var preview_mode := clampi(root._last_bake_preview_mode, PreviewMode.FULL, PreviewMode.PROXY)
+	snapshot.set_meta(BAKED_PREVIEW_MODE_META, preview_mode)
+	return snapshot
+
+
+func restore_baked_geometry_snapshot(
+	snapshot: PackedScene, fallback_preview_mode: int = PreviewMode.FULL
+) -> void:
+	var preview_mode := clampi(fallback_preview_mode, PreviewMode.FULL, PreviewMode.PROXY)
+	if snapshot != null:
+		preview_mode = clampi(
+			int(snapshot.get_meta(BAKED_PREVIEW_MODE_META, preview_mode)),
+			PreviewMode.FULL,
+			PreviewMode.PROXY,
+		)
+	clear_baked_containers()
+	# Even an intentionally empty snapshot represents exact derived state. Keep
+	# its state-level preview choice instead of inheriting clear()'s FULL reset.
+	root._last_bake_preview_mode = preview_mode
+	if snapshot == null or not snapshot.can_instantiate():
+		return
+	var restored := snapshot.instantiate() as Node3D
+	if not restored:
+		push_warning("Could not restore baked geometry snapshot")
+		return
+	replace_baked_container(restored)
+	root._assign_owner_recursive(restored)
+
+
+static func _assign_packed_snapshot_owners(node: Node, snapshot_root: Node) -> void:
+	for child in node.get_children():
+		child.owner = snapshot_root
+		_assign_packed_snapshot_owners(child, snapshot_root)
+
+
+func _managed_baked_containers() -> Array[Node3D]:
+	var candidates: Array[Node3D] = []
+	for child in root.get_children():
+		if not (child is Node3D):
+			continue
+		var node := child as Node3D
+		if (
+			node == root.baked_container
+			or node.name == BAKED_CONTAINER_NAME
+			or node.has_meta(BAKED_CONTAINER_META)
+			or _is_legacy_anonymous_bake(node)
+		):
+			candidates.append(node)
+	if (
+		root.baked_container
+		and is_instance_valid(root.baked_container)
+		and not candidates.has(root.baked_container)
+	):
+		candidates.append(root.baked_container)
+	return candidates
+
+
+static func _is_legacy_anonymous_bake(node: Node3D) -> bool:
+	if not str(node.name).begins_with("@Node3D@") or node.get_child_count() == 0:
+		return false
+	var has_payload_signature := false
+	for child in node.get_children():
+		var child_name := str(child.name)
+		if not _is_known_bake_artifact_name(child_name):
+			return false
+		if (
+			child_name.begins_with("BakedChunk_")
+			or child_name.begins_with("BakedMesh_")
+			or child_name.begins_with("BakedSelection_")
+			or child_name.begins_with("HMFloor__")
+		):
+			has_payload_signature = true
+	return has_payload_signature
+
+
+static func _is_known_bake_artifact_name(node_name: String) -> bool:
+	return (
+		node_name == "FloorCollision"
+		or node_name == "FaceCollision"
+		or node_name == "BakedNavmesh"
+		or node_name == "HFIODispatcher"
+		or node_name == "Occluders"
+		or node_name == "Nonstructural"
+		or node_name.begins_with("BakedChunk_")
+		or node_name.begins_with("BakedMesh_")
+		or node_name.begins_with("BakedSelection_")
+		or node_name.begins_with("AutoConnector_")
+		or node_name.begins_with("Collision_")
+		or node_name.begins_with("HeightmapFloor_")
+		or node_name.begins_with("HMFloor__")
+		or node_name.begins_with("MMI_")
+	)
+
+
+static func _has_baked_payload(container: Node3D) -> bool:
+	for child in container.get_children():
+		var child_name := str(child.name)
+		if (
+			child is MeshInstance3D
+			or child is MultiMeshInstance3D
+			or child_name.begins_with("BakedChunk_")
+			or child_name.begins_with("BakedSelection_")
+			or child_name.begins_with("HMFloor__")
+			or child_name == "Nonstructural"
+		):
+			return true
+	return false
+
+
+static func _destroy_baked_container(container: Node3D) -> void:
+	if not container or not is_instance_valid(container):
+		return
+	if container.get_parent():
+		container.get_parent().remove_child(container)
+	if not container.is_queued_for_deletion():
+		container.queue_free()
+
+
+# ---------------------------------------------------------------------------
+# Bake time estimation
+# ---------------------------------------------------------------------------
+
+
+## Returns an estimate dict: {estimated_ms, brush_count, tip}.
+## Uses the ratio from the last real bake if available.
+func estimate_bake_time(brush_ids: Array = []) -> Dictionary:
+	var count := 0
+	if brush_ids.is_empty():
+		count = _total_bakeable_brush_count()
+	else:
+		count = brush_ids.size()
+	var ms_per_brush := 2.0  # default fallback
+	var last_count := _total_bakeable_brush_count()
+	if root._last_bake_duration_ms > 0 and last_count > 0:
+		ms_per_brush = float(root._last_bake_duration_ms) / float(last_count)
+	var estimated_ms: int = int(ceil(ms_per_brush * count))
+	var tip := ""
+	if count > 500:
+		tip = "Chunking recommended for >500 brushes"
+	elif count > 200 and not bool(root.get("bake_use_thread_pool")):
+		tip = "Consider enabling thread pool for faster bakes"
+	elif count == 0:
+		tip = "No brushes to bake"
+	return {"estimated_ms": estimated_ms, "brush_count": count, "tip": tip}
+
+
+func _total_bakeable_brush_count() -> int:
+	var total := count_brushes_in(root.draft_brushes_node)
+	total += count_brushes_in(root.generated_floors)
+	total += count_brushes_in(root.generated_walls)
+	if root.commit_freeze:
+		total += count_brushes_in(root.committed_node)
+	return total
+
+
+# ---------------------------------------------------------------------------
+# Selection / incremental bake
+# ---------------------------------------------------------------------------
+
+
+## Why the most recent bake call returned what it did. Read it immediately
+## after the call: it is overwritten by the next one.
+func get_last_bake_status() -> int:
+	return _last_bake_status
+
+
+func is_bake_in_flight() -> bool:
+	return _bake_in_flight
+
+
+func _try_begin_bake() -> bool:
+	if _bake_in_flight:
+		_last_bake_status = BakeStatus.BUSY
+		root.emit_signal("user_message", "A bake is already running", 1)
+		return false
+	_bake_in_flight = true
+	_last_bake_success = false
+	return true
+
+
+## Bake only the given brush nodes (selection bake).
+func bake_selected(
+	brush_nodes: Array, collision_layer_mask: int = 0, preview_mode: int = 0  # PreviewMode.FULL
+) -> bool:
+	if not _try_begin_bake():
+		return false
+	await _bake_selected_impl(brush_nodes, collision_layer_mask, preview_mode)
+	_bake_in_flight = false
+	_last_bake_status = BakeStatus.SUCCESS if _last_bake_success else BakeStatus.FAILED
+	return _last_bake_success
+
+
+func _bake_selected_impl(
+	brush_nodes: Array, collision_layer_mask: int = 0, preview_mode: int = 0
+) -> void:
+	if not root.baker:
+		push_warning("Bake skipped: baker not initialized")
+		root.bake_finished.emit(false)
+		root.emit_signal("user_message", "Bake failed — baker not initialized", 2)
+		return
+	if brush_nodes.is_empty():
+		root.bake_finished.emit(false)
+		root.emit_signal("user_message", "No brushes selected to bake", 1)
+		return
+	var started = Time.get_ticks_msec()
+	var yield_overhead_ms := 0  # Idle time spent in frame yields — excluded from estimator
+	root._log("Selection Bake Started (%d brushes)" % brush_nodes.size())
+	root.bake_started.emit()
+	root.bake_progress.emit(0.0, "Preparing selection")
+	var layer = (
+		collision_layer_mask
+		if collision_layer_mask > 0
+		else root._layer_from_index(root.bake_collision_layer_index)
+	)
+	var bake_options = build_bake_options()
+	_apply_preview_mode(bake_options, preview_mode)
+	var temp_csg = CSGCombiner3D.new()
+	temp_csg.hide()
+	temp_csg.use_collision = false
+	root.add_child(temp_csg)
+	append_brush_list_to_csg(brush_nodes, temp_csg)
+	root.bake_progress.emit(0.5, "Baking selection")
+	var yield_start_ms := Time.get_ticks_msec()
+	await root.get_tree().process_frame
+	await root.get_tree().process_frame
+	yield_overhead_ms += Time.get_ticks_msec() - yield_start_ms
+	var baked = root.baker.bake_from_csg(
+		temp_csg, root.bake_material_override, layer, layer, bake_options
+	)
+	if baked:
+		# Baker derives both the visual mesh and collision from this final boolean
+		# result. Re-baking additive brushes alone would fill every doorway/cutout.
+		_apply_preview_visuals(baked, preview_mode)
+	temp_csg.queue_free()
+	if baked:
+		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started - yield_overhead_ms)
+		root.bake_progress.emit(1.0, "Finalizing")
+		# Merge into existing baked container rather than replacing it
+		var active_container := reconcile_baked_containers()
+		if active_container:
+			baked.name = "BakedSelection_%d" % Time.get_ticks_msec()
+			active_container.add_child(baked)
+		else:
+			active_container = replace_baked_container(baked)
+		postprocess_bake(baked, true, brush_nodes)
+		root._assign_owner_recursive(active_container)
+		root._last_bake_preview_mode = preview_mode
+		_last_bake_success = true
+		root._log("Selection bake finished (success=true)")
+		root.bake_finished.emit(true)
+	else:
+		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started - yield_overhead_ms)
+		_last_bake_success = false
+		root._log("Selection bake failed")
+		root.bake_finished.emit(false)
+
+
+## Rebuild from authoritative source when brush or structural dirty state exists.
+## Missing dirty IDs represent deletions and therefore still require a bake.
+func bake_dirty(collision_layer_mask: int = 0, preview_mode: int = 0) -> bool:
+	if _bake_in_flight:
+		_last_bake_status = BakeStatus.BUSY
+		root.emit_signal("user_message", "A bake is already running", 1)
+		return false
+	var dirty_ids: Array = root._dirty_brush_ids.keys()
+	var full_reconcile_started: bool = root._full_reconcile_needed
+	if dirty_ids.is_empty() and not full_reconcile_started:
+		_last_bake_status = BakeStatus.NOTHING_TO_DO
+		root.emit_signal("user_message", "No changed brushes since last bake", 1)
+		return false
+	var dirty_snapshot: Dictionary = root._dirty_brush_ids.duplicate()
+	_last_dirty_brush_ids = dirty_snapshot.duplicate()
+	var brush_nodes: Array = []
+	for bid in dirty_ids:
+		var brush = root._find_brush_by_key(str(bid))
+		if brush:
+			brush_nodes.append(brush)
+	root._log("Incremental bake: %d dirty brushes" % brush_nodes.size())
+	# Full context needed for correct CSG — bake everything but track dirty set
+	return await bake(true, false, collision_layer_mask, preview_mode)
+
+
+func _has_bake_sources() -> bool:
+	return (
+		_has_positive_structural_sources()
+		or _has_generated_heightmap_source()
+		or _has_nonstructural_sources()
+	)
+
+
+func _has_positive_structural_sources() -> bool:
+	for container in [root.draft_brushes_node, root.generated_floors, root.generated_walls]:
+		if _has_positive_structural_brush(container):
+			return true
+	return false
+
+
+func _has_generated_heightmap_source() -> bool:
+	for heightmap in collect_generated_heightmap_meshes():
+		if heightmap is MeshInstance3D and heightmap.mesh:
+			return true
+	return false
+
+
+func _has_positive_structural_brush(container: Node3D) -> bool:
+	if not container:
+		return false
+	for child in container.get_children():
+		if not (child is DraftBrush) or root.is_entity_node(child):
+			continue
+		var brush := child as DraftBrush
+		if brush.operation == CSGShape3D.OPERATION_SUBTRACTION:
+			continue
+		if root.bake_visible_only and not brush.visible:
+			continue
+		if root.cordon_enabled and not _brush_in_cordon(brush):
+			continue
+		if not _is_structural_brush(brush):
+			continue
+		return true
+	return false
+
+
+func _has_effective_structural_subtractors() -> bool:
+	for container in [root.draft_brushes_node, root.generated_floors, root.generated_walls]:
+		if _container_has_effective_subtractor(container):
+			return true
+	# Frozen committed cutters are forced to subtraction by the CSG path even
+	# when their serialized operation still says union.
+	return root.commit_freeze and _container_has_effective_subtractor(root.committed_node, true)
+
+
+func _container_has_effective_subtractor(container: Node3D, force_subtract: bool = false) -> bool:
+	if not container:
+		return false
+	for child in container.get_children():
+		if not (child is DraftBrush) or root.is_entity_node(child):
+			continue
+		var brush := child as DraftBrush
+		if root.bake_visible_only and not brush.visible:
+			continue
+		if root.cordon_enabled and not _brush_in_cordon(brush):
+			continue
+		if not _is_structural_brush(brush):
+			continue
+		if force_subtract or brush.operation == CSGShape3D.OPERATION_SUBTRACTION:
+			return true
+	return false
+
+
+## Remove the exact set of dirty tags represented by a started bake.
+## Clearing before the first await gives later edits a distinct live entry,
+## even though the public dirty-tag dictionary stores only boolean values.
+func _claim_dirty_tags(dirty_snapshot: Dictionary, full_reconcile_started: bool = false) -> void:
+	for brush_id in dirty_snapshot:
+		root._dirty_brush_ids.erase(brush_id)
+	if full_reconcile_started:
+		root._full_reconcile_needed = false
+
+
+## A successful bake leaves only tags created while it was running. On
+## failure, merge the claimed snapshot back without replacing concurrent tags.
+func _finish_dirty_tag_claim(
+	dirty_snapshot: Dictionary, succeeded: bool, full_reconcile_started: bool = false
+) -> void:
+	if succeeded:
+		return
+	for brush_id in dirty_snapshot:
+		if not root._dirty_brush_ids.has(brush_id):
+			root._dirty_brush_ids[brush_id] = dirty_snapshot[brush_id]
+	if full_reconcile_started:
+		root._full_reconcile_needed = true
+
+
+# ---------------------------------------------------------------------------
+# Preview mode helpers
+# ---------------------------------------------------------------------------
+
+
+func _apply_preview_mode(options: Dictionary, mode: int) -> void:
+	if mode == PreviewMode.WIREFRAME:
+		options["merge_meshes"] = false
+		options["generate_lods"] = false
+		options["unwrap_uv2"] = false
+	elif mode == PreviewMode.PROXY:
+		options["merge_meshes"] = false
+		options["generate_lods"] = false
+		options["unwrap_uv2"] = false
+
+
+func _apply_preview_visuals(container: Node3D, mode: int) -> void:
+	if mode == PreviewMode.FULL:
+		return
+	var mat: Material = null
+	if mode == PreviewMode.WIREFRAME:
+		mat = _get_wireframe_material()
+	elif mode == PreviewMode.PROXY:
+		var std_mat := StandardMaterial3D.new()
+		std_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		std_mat.albedo_color = Color(0.5, 0.5, 0.5, 0.4)
+		std_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat = std_mat
+	if mat:
+		_apply_material_recursive(container, mat)
+
+
+static func _get_wireframe_material() -> ShaderMaterial:
+	if _wireframe_material and _wireframe_material.shader:
+		return _wireframe_material
+	if _wireframe_shader == null:
+		_wireframe_shader = Shader.new()
+		_wireframe_shader.code = (
+			"shader_type spatial;\n"
+			+ "render_mode unshaded, cull_disabled, wireframe, depth_draw_never;\n"
+			+ "uniform vec4 color : source_color = vec4(0.2, 0.8, 1.0, 0.6);\n"
+			+ "void fragment() { ALBEDO = color.rgb; ALPHA = color.a; }\n"
+		)
+	_wireframe_material = ShaderMaterial.new()
+	_wireframe_material.shader = _wireframe_shader
+	return _wireframe_material
+
+
+func _apply_material_recursive(node: Node3D, mat: Material) -> void:
+	for child in node.get_children():
+		if child is MeshInstance3D:
+			child.material_override = mat
+		elif child is MultiMeshInstance3D:
+			child.material_override = mat
+		elif child is Node3D:
+			_apply_material_recursive(child, mat)
+
+
+# ---------------------------------------------------------------------------
+# Main bake
+# ---------------------------------------------------------------------------
+
+
+func bake(
+	apply_cuts: bool = true,
+	hide_live: bool = false,
+	collision_layer_mask: int = 0,
+	preview_mode: int = 0,  # PreviewMode.FULL
+	force_csg: bool = false
+) -> bool:
+	if not _try_begin_bake():
+		return false
+	await _bake_impl(apply_cuts, hide_live, collision_layer_mask, preview_mode, force_csg)
+	_bake_in_flight = false
+	_last_bake_status = BakeStatus.SUCCESS if _last_bake_success else BakeStatus.FAILED
+	return _last_bake_success
+
+
+func _bake_impl(
+	apply_cuts: bool = true,
+	hide_live: bool = false,
+	collision_layer_mask: int = 0,
+	preview_mode: int = 0,
+	force_csg: bool = false
+) -> void:
+	var dirty_snapshot: Dictionary = root._dirty_brush_ids.duplicate()
+	var full_reconcile_started: bool = root._full_reconcile_needed
+	_claim_dirty_tags(dirty_snapshot, full_reconcile_started)
+	_last_bake_success = false
+	var started = Time.get_ticks_msec()
+	var yield_overhead_ms := 0  # Idle time spent in frame yields — excluded from estimator
+	if not _has_bake_sources():
+		_complete_empty_bake(dirty_snapshot, full_reconcile_started, started)
+		return
+	if _has_positive_structural_sources() and not root.baker:
+		_finish_dirty_tag_claim(dirty_snapshot, false, full_reconcile_started)
+		push_warning("Bake skipped: baker not initialized")
+		root.bake_finished.emit(false)
+		root.emit_signal("user_message", "Bake failed — baker not initialized", 2)
+		return
+	if apply_cuts:
+		root.apply_pending_cuts()
+	if not _has_bake_sources():
+		_complete_empty_bake(dirty_snapshot, full_reconcile_started, started)
+		return
+	root._log("Virtual Bake Started (apply_cuts=%s, hide_live=%s)" % [apply_cuts, hide_live])
+	root.bake_started.emit()
+	root.bake_progress.emit(0.0, "Preparing")
+	var layer = (
+		collision_layer_mask
+		if collision_layer_mask > 0
+		else root._layer_from_index(root.bake_collision_layer_index)
+	)
+	var baked: Node3D = null
+	var bake_options = build_bake_options()
+	_apply_preview_mode(bake_options, preview_mode)
+	var use_face_material_path: bool = (
+		bool(root.bake_use_face_materials)
+		and not force_csg
+		and not _has_effective_structural_subtractors()
+	)
+	if root.bake_use_face_materials and not use_face_material_path:
+		# Independent face triangulation has no boolean subtraction stage.
+		# Keep every effective cutter by switching this bake to CSG.
+		bake_options["use_face_materials"] = false
+		root._log("Face-material bake switched to CSG to preserve active cuts")
+	if not _has_positive_structural_sources():
+		baked = _bake_heightmap_only(layer)
+		if baked == null and _has_nonstructural_sources():
+			baked = Node3D.new()
+			baked.name = String(BAKED_CONTAINER_NAME)
+	elif use_face_material_path:
+		# --- Synchronous snapshot: triangulate + resolve materials before yields ---
+		var face_brushes = collect_face_bake_brushes()
+		var use_atlas: bool = bool(bake_options.get("use_atlas", false))
+		var collision_mode: int = int(bake_options.get("collision_mode", 0))
+		var snapshots: Array = []
+		# Track per-brush visgroup assignments for partitioned collision (mode 2)
+		var brush_visgroups: Array = []  # parallel to snapshots: PackedStringArray per brush
+		for brush in face_brushes:
+			if is_instance_valid(brush) and brush is DraftBrush:
+				snapshots.append(
+					root.baker.snapshot_brush_faces(
+						brush, root.material_manager, root.bake_material_override, use_atlas
+					)
+				)
+				if collision_mode >= 2 and root.visgroup_system:
+					brush_visgroups.append(root.visgroup_system.get_visgroups_of(brush))
+				else:
+					brush_visgroups.append(PackedStringArray())
+		# --- Yielding pass: world-space transform + grouping from frozen data ---
+		var groups: Dictionary = {}
+		var snap_total: int = snapshots.size()
+		for _bi in range(snap_total):
+			root.baker.collect_snapshot_groups(snapshots[_bi], use_atlas, groups)
+			if (_bi + 1) % _FACE_BAKE_BATCH == 0 or _bi == snap_total - 1:
+				root.bake_progress.emit(
+					float(_bi + 1) / float(max(1, snap_total)) * 0.7,
+					"Collecting faces %d/%d" % [_bi + 1, snap_total]
+				)
+				var yield_start_ms := Time.get_ticks_msec()
+				await root.get_tree().process_frame
+				yield_overhead_ms += Time.get_ticks_msec() - yield_start_ms
+		root.bake_progress.emit(0.75, "Building mesh")
+		var build_yield_start_ms := Time.get_ticks_msec()
+		await root.get_tree().process_frame
+		yield_overhead_ms += Time.get_ticks_msec() - build_yield_start_ms
+		# Collect per-brush world-space hull verts for convex collision (mode >= 1)
+		if collision_mode >= 1:
+			var per_brush_verts: Array = []
+			for snap in snapshots:
+				per_brush_verts.append(snap.get("hull_verts", PackedVector3Array()))
+			bake_options["per_brush_verts"] = per_brush_verts
+		# Visgroup partitioning (mode 2): separate collision bodies per visgroup
+		if collision_mode >= 2:
+			bake_options["brush_visgroups"] = brush_visgroups
+		baked = root.baker.build_mesh_from_groups(groups, layer, layer, bake_options)
+		# Apply visgroup-partitioned collision bodies after initial build
+		if baked and collision_mode >= 2:
+			var face_hull_verts: Array = []
+			for snap in snapshots:
+				face_hull_verts.append(snap.get("hull_verts", PackedVector3Array()))
+			_partition_collision_by_visgroup(baked, face_hull_verts, brush_visgroups, bake_options)
+		# Match the CSG path: append heightmaps after collision partitioning so
+		# partition cleanup cannot remove the heightmap collision body.
+		if baked:
+			_append_heightmap_meshes_to_baked(baked, layer)
+		elif _has_generated_heightmap_source():
+			# A valid heightmap is still authoritative output when structural
+			# face collection produces no mesh (for example, empty/invalid faces).
+			baked = _bake_heightmap_only(layer)
+	else:
+		if root.bake_chunk_size > 0.0:
+			baked = await bake_chunked(root.bake_chunk_size, layer, bake_options)
+		else:
+			root.bake_progress.emit(0.5, "Baking")
+			baked = await bake_single(layer, bake_options)
+	if baked:
+		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started - yield_overhead_ms)
+		root.bake_progress.emit(1.0, "Finalizing")
+		replace_baked_container(baked)
+		postprocess_bake(root.baked_container)
+		if root.bake_use_multimesh:
+			_consolidate_to_multimesh(root.baked_container)
+		_apply_preview_visuals(root.baked_container, preview_mode)
+		root._assign_owner_recursive(root.baked_container)
+		if hide_live:
+			if root.draft_brushes_node:
+				root.draft_brushes_node.visible = false
+			if root.pending_node:
+				root.pending_node.visible = false
+		root._log("Bake finished (success=true)")
+		root._last_bake_preview_mode = preview_mode
+		_last_bake_success = true
+	else:
+		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started - yield_overhead_ms)
+		root._log("Bake failed")
+		_last_bake_success = false
+		warn_bake_failure()
+	_finish_dirty_tag_claim(dirty_snapshot, _last_bake_success, full_reconcile_started)
+	root.bake_finished.emit(_last_bake_success)
+
+
+func _complete_empty_bake(
+	dirty_snapshot: Dictionary, full_reconcile_started: bool, started: int
+) -> void:
+	root._log("Virtual Bake Started (empty authoritative source)")
+	root.bake_started.emit()
+	root.bake_progress.emit(0.0, "Preparing")
+	clear_baked_containers()
+	root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started)
+	root.bake_progress.emit(1.0, "Clearing baked geometry")
+	root._log("Bake finished (success=true, scene is empty)")
+	_last_bake_success = true
+	_finish_dirty_tag_claim(dirty_snapshot, true, full_reconcile_started)
+	root.bake_finished.emit(true)
+
+
+func warn_bake_failure() -> void:
+	var draft_count = count_brushes_in(root.draft_brushes_node)
+	var pending_count = count_brushes_in(root.pending_node)
+	var committed_count = count_brushes_in(root.committed_node)
+	var entities_count = root.entities_node.get_child_count() if root.entities_node else 0
+	var detail := (
+		"Bake failed: no baked geometry (draft=%s, pending=%s, committed=%s, entities=%s)"
+		% [draft_count, pending_count, committed_count, entities_count]
+	)
+	HFLog.warn(detail)
+	var hint := ""
+	if draft_count == 0:
+		hint = "No draft brushes found — draw some brushes first"
+	elif pending_count > 0:
+		hint = "You have %d pending cuts — try 'Commit Cuts' before baking" % pending_count
+	else:
+		hint = "CSG produced no geometry — check brush operations and overlaps"
+	root.emit_signal("user_message", hint, 2)
+
+
+func build_bake_options() -> Dictionary:
+	return {
+		"merge_meshes": root.bake_merge_meshes,
+		"generate_lods": root.bake_generate_lods,
+		"unwrap_uv0": root.bake_unwrap_uv0,
+		"unwrap_uv2": root.bake_lightmap_uv2,
+		"uv2_texel_size": root.bake_lightmap_texel_size,
+		"use_thread_pool": root.bake_use_thread_pool,
+		"use_face_materials": root.bake_use_face_materials,
+		"use_atlas": root.bake_use_atlas,
+		"collision_mode": root.bake_collision_mode,
+		"convex_clean": root.bake_convex_clean,
+		"convex_simplify": root.bake_convex_simplify,
+	}
+
+
+func postprocess_bake(
+	container: Node3D, selection_only: bool = false, selected_brushes: Array = []
+) -> void:
+	if not container:
+		return
+	if selection_only:
+		_append_nonstructural_brushes(container, selected_brushes)
+	else:
+		_append_nonstructural_brushes(container)
+	if _root_bool("bake_generate_occluders", false) and not selection_only:
+		_generate_occluders(container)
+	if root.bake_auto_connectors and not selection_only:
+		_append_auto_connectors(container)
+	if root.bake_navmesh:
+		bake_navmesh(container)
+	var bake_wire_io := false
+	if "bake_wire_io" in root:
+		bake_wire_io = bool(root.get("bake_wire_io"))
+	if bake_wire_io and not selection_only:
+		_attach_io_dispatcher(container)
+
+
+## Attach an HFIORuntime dispatcher to the baked container so that entity I/O
+## connections are wired as live Godot signals at runtime.  The dispatcher is
+## parented under the baked container but also scans entities_node (a sibling
+## subtree) via extra_scan_roots.
+func _direct_child_has_io(parent: Node) -> bool:
+	if not parent:
+		return false
+	for child in parent.get_children():
+		if not child.get_meta("entity_io_outputs", []).is_empty():
+			return true
+	return false
+
+
+func _attach_io_dispatcher(container: Node3D) -> void:
+	# Point entities and brush entities (triggers, buttons) both store outputs.
+	var has_io := (
+		_direct_child_has_io(root.entities_node) or _direct_child_has_io(root.draft_brushes_node)
+	)
+	if not has_io:
+		return
+	# Remove any existing dispatcher
+	var existing: Node = container.get_node_or_null("HFIODispatcher")
+	if existing:
+		container.remove_child(existing)
+		existing.free()
+	var dispatcher := HFIORuntime.new()
+	dispatcher.name = "HFIODispatcher"
+	# The dispatcher lives under the baked container, but point entities live
+	# under root.entities_node (a sibling). Tell it to scan that subtree too.
+	if root.entities_node:
+		dispatcher.extra_scan_roots.append(root.entities_node)
+	container.add_child(dispatcher)
+	if root.entities_node:
+		var entities_path: NodePath = dispatcher.get_path_to(root.entities_node)
+		dispatcher.extra_scan_root_paths.append(entities_path)
+	root._assign_owner_recursive(dispatcher)
+
+
+func count_brushes_in(container: Node3D) -> int:
+	if not container:
+		return 0
+	var count := 0
+	for child in container.get_children():
+		if child is DraftBrush and not root.is_entity_node(child):
+			count += 1
+	return count
+
+
+func bake_single(layer: int, options: Dictionary) -> Node3D:
+	var temp_csg = CSGCombiner3D.new()
+	temp_csg.hide()
+	temp_csg.use_collision = false
+	root.add_child(temp_csg)
+	append_draft_brushes_to_csg(root.draft_brushes_node, temp_csg)
+	if root.commit_freeze and root.committed_node:
+		append_draft_brushes_to_csg(root.committed_node, temp_csg, true)
+	append_generated_brushes_to_csg(temp_csg)
+	await root.get_tree().process_frame
+	await root.get_tree().process_frame
+	var baked = root.baker.bake_from_csg(
+		temp_csg, root.bake_material_override, layer, layer, options
+	)
+	temp_csg.queue_free()
+	if baked:
+		# FloorCollision already came from the same final CSG mesh as the visual.
+		# A subtractor therefore carves collision instead of becoming a solid or
+		# being omitted from a second, additive-only collision tree.
+		# Visgroup-partitioned collision (mode 2) for CSG path.
+		# Must run BEFORE heightmap append so that partitioning only removes
+		# the brush-generated FloorCollision body, not heightmap collision.
+		var collision_mode: int = int(options.get("collision_mode", 0))
+		if collision_mode >= 2:
+			var containers: Array = [
+				root.draft_brushes_node, root.generated_floors, root.generated_walls
+			]
+			if root.commit_freeze and root.committed_node:
+				containers.append(root.committed_node)
+			var coll_data: Dictionary = _collect_brush_collision_data(containers)
+			_partition_collision_by_visgroup(
+				baked, coll_data["hull_verts"], coll_data["visgroups"], options
+			)
+		# Heightmap collision is appended after partitioning.  If FloorCollision
+		# was removed by partitioning, _append_heightmap_meshes_to_baked creates
+		# a fresh one for heightmap-only collision shapes.
+		_append_heightmap_meshes_to_baked(baked, layer)
+	return baked
+
+
+func bake_chunked(chunk_size: float, layer: int, options: Dictionary) -> Node3D:
+	var size = max(0.001, chunk_size)
+	var chunks = _collect_all_chunks(size)
+	if chunks.is_empty():
+		return null
+	# Independent CSG combiners cannot reproduce boolean interactions across
+	# chunk boundaries. Preserve correctness by using one CSG tree whenever
+	# brushes assigned to different chunks overlap (especially cutters).
+	if _chunking_has_cross_boundary_interactions(chunks):
+		return await bake_single(layer, options)
+	var container = Node3D.new()
+	container.name = BAKED_CONTAINER_NAME
+	var chunk_count = 0
+	var total_chunks = 0
+	for coord in chunks:
+		var entry: Dictionary = chunks[coord]
+		var brushes: Array = entry.get("brushes", [])
+		var committed: Array = entry.get("committed", [])
+		var generated: Array = entry.get("generated", [])
+		if brushes.is_empty() and committed.is_empty() and generated.is_empty():
+			continue
+		total_chunks += 1
+	if total_chunks == 0:
+		return null
+	var processed = 0
+	for coord in chunks:
+		var entry: Dictionary = chunks[coord]
+		var brushes: Array = entry.get("brushes", [])
+		var committed: Array = entry.get("committed", [])
+		var generated: Array = entry.get("generated", [])
+		if brushes.is_empty() and committed.is_empty() and generated.is_empty():
+			continue
+		var temp_csg = CSGCombiner3D.new()
+		temp_csg.hide()
+		temp_csg.use_collision = false
+		root.add_child(temp_csg)
+		append_brush_list_to_csg(brushes, temp_csg)
+		append_brush_list_to_csg(generated, temp_csg)
+		if root.commit_freeze:
+			append_brush_list_to_csg(committed, temp_csg, true)
+		await root.get_tree().process_frame
+		await root.get_tree().process_frame
+		var baked_chunk = root.baker.bake_from_csg(
+			temp_csg, root.bake_material_override, layer, layer, options
+		)
+		if baked_chunk:
+			# Visgroup-partitioned collision (mode 2) for this chunk
+			var chunk_collision_mode: int = int(options.get("collision_mode", 0))
+			if chunk_collision_mode >= 2:
+				var chunk_brushes: Array = []
+				chunk_brushes.append_array(brushes)
+				chunk_brushes.append_array(generated)
+				if root.commit_freeze:
+					chunk_brushes.append_array(committed)
+				var coll_data: Dictionary = _collect_brush_collision_data(chunk_brushes)
+				_partition_collision_by_visgroup(
+					baked_chunk, coll_data["hull_verts"], coll_data["visgroups"], options
+				)
+			baked_chunk.name = "BakedChunk_%s_%s_%s" % [coord.x, coord.y, coord.z]
+			container.add_child(baked_chunk)
+			chunk_count += 1
+		temp_csg.queue_free()
+		processed += 1
+		if total_chunks > 0:
+			var progress = float(processed) / float(total_chunks)
+			root.bake_progress.emit(progress, "Chunk %d/%d" % [processed, total_chunks])
+	if container and chunk_count > 0:
+		_append_heightmap_meshes_to_baked(container, layer)
+	return container if chunk_count > 0 else null
+
+
+func get_bake_chunk_count() -> int:
+	if root.bake_chunk_size <= 0.0:
+		var total = count_brushes_in(root.draft_brushes_node)
+		total += count_brushes_in(root.generated_floors)
+		total += count_brushes_in(root.generated_walls)
+		if root.commit_freeze:
+			total += count_brushes_in(root.committed_node)
+		return 1 if total > 0 else 0
+	var size = max(0.001, root.bake_chunk_size)
+	var chunks = _collect_all_chunks(size)
+	if _chunking_has_cross_boundary_interactions(chunks):
+		return 1
+	var count := 0
+	for coord in chunks:
+		var entry: Dictionary = chunks[coord]
+		var brushes: Array = entry.get("brushes", [])
+		var committed: Array = entry.get("committed", [])
+		var generated: Array = entry.get("generated", [])
+		if brushes.is_empty() and committed.is_empty() and generated.is_empty():
+			continue
+		count += 1
+	return count
+
+
+func _collect_all_chunks(chunk_size: float) -> Dictionary:
+	var chunks: Dictionary = {}
+	collect_chunk_brushes(root.draft_brushes_node, chunk_size, chunks, "brushes")
+	if root.commit_freeze and root.committed_node:
+		collect_chunk_brushes(root.committed_node, chunk_size, chunks, "committed")
+	collect_chunk_brushes(root.generated_floors, chunk_size, chunks, "generated")
+	collect_chunk_brushes(root.generated_walls, chunk_size, chunks, "generated")
+	return chunks
+
+
+func _chunking_has_cross_boundary_interactions(chunks: Dictionary) -> bool:
+	if chunks.size() < 2:
+		return false
+	var assigned: Array[Dictionary] = []
+	for coord in chunks:
+		var entry: Dictionary = chunks[coord]
+		for key in [&"brushes", &"committed", &"generated"]:
+			for candidate in entry.get(key, []):
+				if not (candidate is DraftBrush) or not is_instance_valid(candidate):
+					continue
+				var brush := candidate as DraftBrush
+				if root.bake_visible_only and not brush.visible:
+					continue
+				assigned.append({"coord": coord, "bounds": _brush_world_aabb(brush)})
+	# Sweep on X so ordinary separated chunks remain close to O(n log n), while
+	# still handling very large brushes that span many chunk coordinates.
+	assigned.sort_custom(
+		func(left: Dictionary, right: Dictionary) -> bool:
+			return (left["bounds"] as AABB).position.x < (right["bounds"] as AABB).position.x
+	)
+	for index in range(assigned.size()):
+		var left: Dictionary = assigned[index]
+		var left_bounds: AABB = left["bounds"]
+		for other_index in range(index + 1, assigned.size()):
+			var right: Dictionary = assigned[other_index]
+			var right_bounds: AABB = right["bounds"]
+			if right_bounds.position.x >= left_bounds.end.x:
+				break
+			if left["coord"] == right["coord"]:
+				continue
+			if left_bounds.intersects(right_bounds):
+				return true
+	return false
+
+
+func bake_dry_run() -> Dictionary:
+	var draft_count = count_brushes_in(root.draft_brushes_node)
+	var pending_count = count_brushes_in(root.pending_node)
+	var committed_count = count_brushes_in(root.committed_node)
+	var generated_floors = count_brushes_in(root.generated_floors)
+	var generated_walls = count_brushes_in(root.generated_walls)
+	var heightmap_floors := 0
+	if root.generated_heightmap_floors:
+		heightmap_floors = root.generated_heightmap_floors.get_child_count()
+	var chunk_count = get_bake_chunk_count()
+	return {
+		"draft": draft_count,
+		"pending": pending_count,
+		"committed": committed_count,
+		"generated_floors": generated_floors,
+		"generated_walls": generated_walls,
+		"heightmap_floors": heightmap_floors,
+		"chunk_count": chunk_count,
+		"use_face_materials": root.bake_use_face_materials,
+		"chunk_size": root.bake_chunk_size
+	}
+
+
+## Collect hull verts and visgroup assignments from live additive brushes.
+## This is used only by the optional per-visgroup convex partitioner. Exact
+## collision comes directly from the final CSG boolean mesh. Subtractive brushes
+## are skipped here because they carve voids and must never become convex solids.
+## Real mesh vertices replace AABB corners so non-box shapes get accurate hulls.
+## [param brush_sources] is an Array of Node3D parents whose children are scanned,
+## OR an Array of DraftBrush nodes directly (detected by first element type).
+## Returns {"hull_verts": Array[PackedVector3Array], "visgroups": Array[PackedStringArray]}.
+func _collect_brush_collision_data(brush_sources: Array) -> Dictionary:
+	var hull_verts: Array = []
+	var vis_groups: Array = []
+	# Detect whether we were given containers (Node3D parents) or flat brush lists
+	var flat_list: bool = false
+	if not brush_sources.is_empty() and brush_sources[0] is DraftBrush:
+		flat_list = true
+	var brush_list: Array = []
+	if flat_list:
+		brush_list = brush_sources
+	else:
+		for container in brush_sources:
+			if not container:
+				continue
+			for child in container.get_children():
+				brush_list.append(child)
+	for child in brush_list:
+		if not (child is DraftBrush):
+			continue
+		var draft: DraftBrush = child
+		# Skip subtractive brushes — they carve voids, not solid collision.
+		# Exact collision handles the carved result before this optional partition.
+		if draft.operation == CSGShape3D.OPERATION_SUBTRACTION:
+			continue
+		if root.is_entity_node(draft):
+			continue
+		if not _is_structural_brush(draft):
+			continue
+		if root.bake_visible_only and not draft.visible:
+			continue
+		if root.cordon_enabled and not _brush_in_cordon(draft):
+			continue
+		# Extract real mesh vertices for accurate hull geometry on all shapes.
+		var mesh_verts := PackedVector3Array()
+		if draft.mesh_instance and draft.mesh_instance.mesh:
+			var local_scale: Vector3 = draft.mesh_instance.scale
+			var mesh_xform: Transform3D = (
+				draft.global_transform
+				* Transform3D(Basis.IDENTITY.scaled(local_scale), Vector3.ZERO)
+			)
+			mesh_verts = Baker._extract_mesh_verts(draft.mesh_instance.mesh, mesh_xform)
+		if mesh_verts.is_empty():
+			continue
+		hull_verts.append(mesh_verts)
+		if root.visgroup_system:
+			vis_groups.append(root.visgroup_system.get_visgroups_of(draft))
+		else:
+			vis_groups.append(PackedStringArray())
+	return {"hull_verts": hull_verts, "visgroups": vis_groups}
+
+
+func _is_trigger_brush(brush: DraftBrush) -> bool:
+	var bec = str(brush.get_meta("brush_entity_class", ""))
+	return bec.begins_with("trigger_")
+
+
+func _is_structural_brush(brush: DraftBrush) -> bool:
+	var bec = str(brush.get_meta("brush_entity_class", ""))
+	return bec == "" or bec == "func_wall"
+
+
+func _has_nonstructural_sources() -> bool:
+	return not _collect_nonstructural_brushes().is_empty()
+
+
+func _collect_nonstructural_brushes(filter: Variant = null) -> Array:
+	var out: Array = []
+	var sources: Array = []
+	if filter != null:
+		sources = filter
+	else:
+		# postprocess_bake is also called from test shims that omit LevelRoot
+		# containers. Object.get() returns null for missing properties.
+		for prop_name in ["draft_brushes_node", "generated_floors", "generated_walls"]:
+			var container = root.get(prop_name) if root else null
+			if container:
+				sources.append_array(container.get_children())
+	for child in sources:
+		if not (child is DraftBrush):
+			continue
+		if root.has_method("is_entity_node") and root.is_entity_node(child):
+			continue
+		var draft := child as DraftBrush
+		if draft.operation == CSGShape3D.OPERATION_SUBTRACTION:
+			continue
+		if _root_bool("bake_visible_only", false) and not draft.visible:
+			continue
+		if _root_bool("cordon_enabled", false) and not _brush_in_cordon(draft):
+			continue
+		if _is_structural_brush(draft):
+			continue
+		out.append(draft)
+	return out
+
+
+func _append_nonstructural_brushes(container: Node3D, filter: Variant = null) -> void:
+	if not container:
+		return
+	var existing: Node = container.get_node_or_null("Nonstructural")
+	if existing:
+		container.remove_child(existing)
+		existing.free()
+	var brushes: Array = _collect_nonstructural_brushes(filter)
+	if brushes.is_empty():
+		return
+	var holder := Node3D.new()
+	holder.name = "Nonstructural"
+	container.add_child(holder)
+	var idx := 0
+	for draft in brushes:
+		if _is_trigger_brush(draft):
+			_append_trigger_volume(holder, draft, idx)
+		else:
+			_append_detail_mesh(holder, draft, idx)
+		idx += 1
+
+
+func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
+	var mesh: Mesh = null
+	var source: Node3D = draft
+	if draft.mesh_instance and draft.mesh_instance.mesh:
+		mesh = draft.mesh_instance.mesh
+		source = draft.mesh_instance
+	var mi := MeshInstance3D.new()
+	mi.name = "FuncDetail_%d" % idx
+	mi.mesh = mesh
+	holder.add_child(mi)
+	mi.transform = _source_transform_in_baked_container(source, holder.get_parent() as Node3D)
+	var body := StaticBody3D.new()
+	body.name = "FuncDetailCollision_%d" % idx
+	var layer := 1
+	if root.has_method("_layer_from_index"):
+		layer = root._layer_from_index(root.bake_collision_layer_index)
+	body.collision_layer = layer
+	body.collision_mask = layer
+	holder.add_child(body)
+	var col := CollisionShape3D.new()
+	col.shape = _shape_for_draft(draft, mesh)
+	col.transform = body.transform.affine_inverse() * mi.transform
+	body.add_child(col)
+
+
+func _append_trigger_volume(holder: Node3D, draft: DraftBrush, idx: int) -> void:
+	var area := Area3D.new()
+	area.name = "Trigger_%d" % idx
+	area.monitoring = true
+	area.monitorable = true
+	var bec := str(draft.get_meta("brush_entity_class", ""))
+	if bec != "":
+		area.set_meta("brush_entity_class", bec)
+	var outputs: Array = draft.get_meta("entity_io_outputs", [])
+	if not outputs.is_empty():
+		area.set_meta("entity_io_outputs", outputs.duplicate(true))
+	holder.add_child(area)
+	var source: Node3D = draft.mesh_instance if draft.mesh_instance else draft
+	area.transform = _source_transform_in_baked_container(source, holder.get_parent() as Node3D)
+	var col := CollisionShape3D.new()
+	var mesh: Mesh = draft.mesh_instance.mesh if draft.mesh_instance else null
+	col.shape = _shape_for_draft(draft, mesh)
+	area.add_child(col)
+
+
+func _shape_for_draft(draft: DraftBrush, mesh: Mesh) -> Shape3D:
+	if mesh:
+		var convex: Shape3D = mesh.create_convex_shape(true, false)
+		if convex:
+			return convex
+		var tri: Shape3D = mesh.create_trimesh_shape()
+		if tri:
+			return tri
+	var box := BoxShape3D.new()
+	box.size = draft.size if draft.size.length() > 0.001 else Vector3.ONE
+	return box
+
+
+func collect_chunk_brushes(
+	source: Node3D, chunk_size: float, chunks: Dictionary, key: String
+) -> void:
+	if not source:
+		return
+	for child in source.get_children():
+		if not (child is DraftBrush):
+			continue
+		if root.is_entity_node(child):
+			continue
+		if root.cordon_enabled and not _brush_in_cordon(child as DraftBrush):
+			continue
+		# func_detail and trigger brushes skip structural CSG
+		if not _is_structural_brush(child as DraftBrush):
+			continue
+		var coord = chunk_coord((child as Node3D).global_position, chunk_size)
+		if not chunks.has(coord):
+			chunks[coord] = {"brushes": [], "committed": [], "generated": []}
+		if not chunks[coord].has(key):
+			chunks[coord][key] = []
+		chunks[coord][key].append(child)
+
+
+func chunk_coord(position: Vector3, chunk_size: float) -> Vector3i:
+	var s = max(0.001, chunk_size)
+	return Vector3i(
+		int(floor(position.x / s)), int(floor(position.y / s)), int(floor(position.z / s))
+	)
+
+
+func append_draft_brushes_to_csg(
+	source: Node3D, target: CSGCombiner3D, force_subtract: bool = false, only_additive: bool = false
+) -> void:
+	if not source or not target:
+		return
+	append_brush_list_to_csg(source.get_children(), target, force_subtract, only_additive)
+
+
+func append_generated_brushes_to_csg(target: CSGCombiner3D, only_additive: bool = false) -> void:
+	if not target:
+		return
+	if root.generated_floors:
+		append_brush_list_to_csg(root.generated_floors.get_children(), target, false, only_additive)
+	if root.generated_walls:
+		append_brush_list_to_csg(root.generated_walls.get_children(), target, false, only_additive)
+
+
+func collect_face_bake_brushes() -> Array:
+	var out: Array = []
+	_append_face_bake_container(root.draft_brushes_node, out)
+	_append_face_bake_container(root.generated_floors, out)
+	_append_face_bake_container(root.generated_walls, out)
+	return out
+
+
+func _append_face_bake_container(container: Node3D, out: Array) -> void:
+	if not container:
+		return
+	for child in container.get_children():
+		if child is DraftBrush and child.operation != CSGShape3D.OPERATION_SUBTRACTION:
+			if root.bake_visible_only and not child.visible:
+				continue
+			if root.cordon_enabled and not _brush_in_cordon(child as DraftBrush):
+				continue
+			if not _is_structural_brush(child as DraftBrush):
+				continue
+			out.append(child)
+
+
+func append_brush_list_to_csg(
+	brushes: Array, target: CSGCombiner3D, force_subtract: bool = false, only_additive: bool = false
+) -> void:
+	if not target:
+		return
+	for child in brushes:
+		if not (child is DraftBrush):
+			continue
+		if root.is_entity_node(child):
+			continue
+		if root.bake_visible_only and not child.visible:
+			continue
+		if root.cordon_enabled and not _brush_in_cordon(child as DraftBrush):
+			continue
+		if not _is_structural_brush(child as DraftBrush):
+			continue
+		var draft: DraftBrush = child
+		if (
+			only_additive
+			and (force_subtract or draft.operation == CSGShape3D.OPERATION_SUBTRACTION)
+		):
+			continue
+		var csg_shape = PrefabFactory.create_prefab(draft.shape, draft.size, max(3, draft.sides))
+		csg_shape.operation = (
+			CSGShape3D.OPERATION_SUBTRACTION if force_subtract else draft.operation
+		)
+		csg_shape.global_transform = draft.global_transform
+		if csg_shape.operation != CSGShape3D.OPERATION_SUBTRACTION:
+			var mat = draft.material_override
+			if not mat:
+				mat = root._make_brush_material(csg_shape.operation)
+			if mat:
+				csg_shape.set("material", mat)
+				csg_shape.set("material_override", mat)
+		target.add_child(csg_shape)
+
+
+## Replace existing collision bodies with per-visgroup StaticBody3D nodes.
+## [param hull_verts] is an Array[PackedVector3Array], one per brush.
+## [param brush_visgroups] is a parallel Array[PackedStringArray].
+## Brushes with no visgroup go into a "_default" body.
+func _partition_collision_by_visgroup(
+	baked: Node3D, hull_verts: Array, brush_visgroups: Array, options: Dictionary
+) -> void:
+	var convex_clean: bool = bool(options.get("convex_clean", true))
+	var convex_simplify: float = float(options.get("convex_simplify", 0.0))
+	var layer: int = 0
+	var mask: int = 0
+	# Remove existing collision bodies (FaceCollision from face-bake, FloorCollision from CSG)
+	for body_name in ["FaceCollision", "FloorCollision"]:
+		var old_body: Node = baked.get_node_or_null(body_name)
+		if old_body:
+			if old_body is StaticBody3D:
+				layer = old_body.collision_layer
+				mask = old_body.collision_mask
+			old_body.get_parent().remove_child(old_body)
+			old_body.free()
+	# Group per-brush hull verts by visgroup name
+	var vg_buckets: Dictionary = {}  # visgroup_name -> Array[PackedVector3Array]
+	for i in range(hull_verts.size()):
+		var hull: PackedVector3Array = (
+			hull_verts[i] if hull_verts[i] is PackedVector3Array else PackedVector3Array()
+		)
+		if hull.is_empty():
+			continue
+		var vgs: PackedStringArray = (
+			brush_visgroups[i] if i < brush_visgroups.size() else PackedStringArray()
+		)
+		if vgs.is_empty():
+			if not vg_buckets.has("_default"):
+				vg_buckets["_default"] = []
+			vg_buckets["_default"].append(hull)
+		else:
+			for vg_name in vgs:
+				if not vg_buckets.has(vg_name):
+					vg_buckets[vg_name] = []
+				vg_buckets[vg_name].append(hull)
+	# Create one StaticBody3D per visgroup
+	for vg_name in vg_buckets:
+		var verts_list: Array = vg_buckets[vg_name]
+		var shapes: Array = Baker.build_convex_collision_shapes(
+			verts_list, convex_clean, convex_simplify
+		)
+		if shapes.is_empty():
+			continue
+		var body := StaticBody3D.new()
+		var safe_name: String = vg_name.replace(" ", "_").replace("/", "_")
+		body.name = "Collision_%s" % safe_name
+		body.collision_layer = layer
+		body.collision_mask = mask
+		for shape in shapes:
+			var col := CollisionShape3D.new()
+			col.shape = shape
+			body.add_child(col)
+		baked.add_child(body)
+
+
+func apply_collision_from_bake(target: Node3D, source: Node3D, layer: int) -> void:
+	if not target:
+		return
+	var target_body = target.get_node_or_null("FloorCollision") as StaticBody3D
+	if not target_body:
+		target_body = StaticBody3D.new()
+		target_body.name = "FloorCollision"
+		target.add_child(target_body)
+	target_body.collision_layer = layer
+	target_body.collision_mask = layer
+	for child in target_body.get_children():
+		child.queue_free()
+	if not source:
+		return
+	var source_body = source.get_node_or_null("FloorCollision") as StaticBody3D
+	if not source_body:
+		return
+	for child in source_body.get_children():
+		if child is CollisionShape3D:
+			var dup = child.duplicate()
+			target_body.add_child(dup)
+
+
+func collect_generated_heightmap_meshes() -> Array:
+	var out: Array = []
+	if not root.generated_heightmap_floors:
+		return out
+	for child in root.generated_heightmap_floors.get_children():
+		if child is MeshInstance3D:
+			out.append(child)
+	return out
+
+
+func _bake_heightmap_only(layer: int) -> Node3D:
+	var container := Node3D.new()
+	container.name = BAKED_CONTAINER_NAME
+	_append_heightmap_meshes_to_baked(container, layer)
+	if container.get_child_count() == 0:
+		container.free()
+		return null
+	return container
+
+
+func _append_heightmap_meshes_to_baked(container: Node3D, layer: int) -> void:
+	var hm_meshes := collect_generated_heightmap_meshes()
+	if hm_meshes.is_empty():
+		return
+	var body := container.get_node_or_null("FloorCollision") as StaticBody3D
+	if not body:
+		body = StaticBody3D.new()
+		body.name = "FloorCollision"
+		body.collision_layer = layer
+		body.collision_mask = layer
+		container.add_child(body)
+	for hm in hm_meshes:
+		var dup: MeshInstance3D = hm.duplicate()
+		container.add_child(dup)
+		dup.transform = _source_transform_in_baked_container(hm, container)
+		if dup.mesh:
+			var col := CollisionShape3D.new()
+			col.shape = dup.mesh.create_trimesh_shape()
+			col.transform = body.transform.affine_inverse() * dup.transform
+			body.add_child(col)
+
+
+func _source_transform_in_baked_container(source: Node3D, container: Node3D) -> Transform3D:
+	# Unparented bake products are installed directly under LevelRoot.
+	var eventual_container_world := root.global_transform * container.transform
+	if container.is_inside_tree():
+		eventual_container_world = container.global_transform
+	return eventual_container_world.affine_inverse() * source.global_transform
+
+
+func _append_auto_connectors(container: Node3D) -> void:
+	if not root.paint_layers:
+		return
+	if root.paint_layers.layers.size() < 2:
+		return
+	var gen := HFAutoConnector.new()
+	var settings := HFAutoConnector.Settings.new()
+	settings.mode = root.bake_connector_mode
+	settings.stair_step_height = root.bake_connector_stair_height
+	settings.width_cells = root.bake_connector_width
+	var results: Array = gen.generate_connectors(root.paint_layers, settings)
+	if results.is_empty():
+		return
+	var body := container.get_node_or_null("FloorCollision") as StaticBody3D
+	if not body:
+		body = StaticBody3D.new()
+		body.name = "FloorCollision"
+		container.add_child(body)
+	var idx := 0
+	for entry: Dictionary in results:
+		var mesh: ArrayMesh = entry.get("mesh")
+		if not mesh:
+			continue
+		var xform: Transform3D = entry.get("transform", Transform3D.IDENTITY)
+		var mi := MeshInstance3D.new()
+		mi.name = "AutoConnector_%d" % idx
+		mi.mesh = mesh
+		mi.transform = xform
+		container.add_child(mi)
+		var col := CollisionShape3D.new()
+		col.shape = mesh.create_trimesh_shape()
+		col.transform = body.transform.affine_inverse() * mi.transform
+		body.add_child(col)
+		idx += 1
+	if idx > 0:
+		root._log("Auto-connectors: generated %d connector(s)" % idx)
+
+
+func bake_navmesh(container: Node3D) -> void:
+	if not container:
+		return
+	var nav_region = container.get_node_or_null("BakedNavmesh") as NavigationRegion3D
+	if not nav_region:
+		nav_region = NavigationRegion3D.new()
+		nav_region.name = "BakedNavmesh"
+		container.add_child(nav_region)
+	var nav_mesh = nav_region.navigation_mesh
+	if not nav_mesh:
+		nav_mesh = NavigationMesh.new()
+		nav_region.navigation_mesh = nav_mesh
+	nav_mesh.cell_size = root.bake_navmesh_cell_size
+	nav_mesh.cell_height = root.bake_navmesh_cell_height
+	nav_mesh.agent_height = root.bake_navmesh_agent_height
+	# Ceil agent_radius to cell_size units to avoid precision warning
+	var cs: float = root.bake_navmesh_cell_size
+	nav_mesh.agent_radius = ceil(root.bake_navmesh_agent_radius / cs) * cs
+	# Parse collision shapes instead of visual meshes (avoids GPU readback stall).
+	_set_parsed_geometry_type(nav_mesh, NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS)
+	if (
+		ClassDB.class_has_method("NavigationServer3D", "parse_source_geometry_data")
+		and ClassDB.class_has_method("NavigationServer3D", "bake_from_source_geometry_data")
+		and ClassDB.class_exists("NavigationMeshSourceGeometryData3D")
+	):
+		var source = NavigationMeshSourceGeometryData3D.new()
+		NavigationServer3D.parse_source_geometry_data(nav_mesh, source, container)
+		NavigationServer3D.bake_from_source_geometry_data(nav_mesh, source)
+	elif nav_region.has_method("bake_navigation_mesh"):
+		nav_region.call("bake_navigation_mesh")
+
+
+## Set the parsed-geometry-type on a NavigationMesh (or any Object with the
+## expected property), handling the property rename between Godot versions
+## (parsed_geometry_type → geometry_parsed_geometry_type).
+## Returns true if the property was set, false if neither name was found.
+static func _set_parsed_geometry_type(target: Object, value: int) -> bool:
+	if "geometry_parsed_geometry_type" in target:
+		target.set("geometry_parsed_geometry_type", value)
+		return true
+	if "parsed_geometry_type" in target:
+		target.set("parsed_geometry_type", value)
+		return true
+	HFLog.warn("NavigationMesh has neither geometry_parsed_geometry_type nor parsed_geometry_type")
+	return false
+
+
+func _brush_in_cordon(brush: DraftBrush) -> bool:
+	return root.cordon_aabb.intersects(_brush_world_aabb(brush))
+
+
+func _brush_world_aabb(brush: DraftBrush) -> AABB:
+	if brush.mesh_instance and brush.mesh_instance.mesh:
+		return _transform_aabb(
+			brush.mesh_instance.mesh.get_aabb(), brush.mesh_instance.global_transform
+		)
+	if not brush.faces.is_empty():
+		var has_vertex := false
+		var face_bounds := AABB()
+		for face in brush.faces:
+			if not face:
+				continue
+			for local_vertex in face.local_verts:
+				var world_vertex: Vector3 = brush.global_transform * local_vertex
+				if has_vertex:
+					face_bounds = face_bounds.expand(world_vertex)
+				else:
+					face_bounds = AABB(world_vertex, Vector3.ZERO)
+					has_vertex = true
+		if has_vertex:
+			return face_bounds
+	return _transform_aabb(AABB(-brush.size * 0.5, brush.size), brush.global_transform)
+
+
+static func _transform_aabb(local_bounds: AABB, world_transform: Transform3D) -> AABB:
+	var minimum := local_bounds.position
+	var maximum := local_bounds.end
+	var first: Vector3 = world_transform * minimum
+	var result := AABB(first, Vector3.ZERO)
+	for x in [minimum.x, maximum.x]:
+		for y in [minimum.y, maximum.y]:
+			for z in [minimum.z, maximum.z]:
+				result = result.expand(world_transform * Vector3(x, y, z))
+	return result
+
+
+## Consolidate identical meshes in the baked container into MultiMeshInstance3D nodes.
+## Walks the whole container, since chunked bakes nest their meshes under
+## BakedChunk_* nodes and detail brushes sit under Nonstructural.
+## Instances are grouped by mesh resource identity and material, so a group only
+## ever collapses into something that draws the same way.  Groups with 2+
+## instances are replaced with a single MultiMeshInstance3D on the container.
+func _consolidate_to_multimesh(container: Node3D) -> void:
+	if not container:
+		return
+	var mesh_groups: Dictionary = {}  # [Mesh, Material] -> Array[MeshInstance3D]
+	var group_order: Array = []
+	for node in _collect_mesh_instances(container):
+		var mi: MeshInstance3D = node
+		if not mi.mesh:
+			continue
+		var key: Array = [mi.mesh, _instance_material(mi)]
+		if not mesh_groups.has(key):
+			mesh_groups[key] = []
+			group_order.append(key)
+		mesh_groups[key].append(mi)
+	var consolidated := 0
+	var emptied: Array = []
+	for key: Array in group_order:
+		var instances: Array = mesh_groups[key]
+		if instances.size() < 2:
+			continue
+		var mesh_key: Mesh = key[0]
+		# Build MultiMesh
+		var mm = MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = mesh_key
+		mm.instance_count = instances.size()
+		for i in range(instances.size()):
+			var mi: MeshInstance3D = instances[i]
+			mm.set_instance_transform(i, _multimesh_transform(mi, container))
+		# Carry the material the whole group shares
+		var mmi = MultiMeshInstance3D.new()
+		mmi.multimesh = mm
+		mmi.name = (
+			"MMI_%s" % mesh_key.resource_name if mesh_key.resource_name else "MMI_%d" % consolidated
+		)
+		mmi.material_override = key[1]
+		container.add_child(mmi)
+		# Remove originals, remembering the holders they came out of
+		for mi: MeshInstance3D in instances:
+			var parent: Node = mi.get_parent()
+			if parent:
+				parent.remove_child(mi)
+				if parent != container and not emptied.has(parent):
+					emptied.append(parent)
+			mi.queue_free()
+		consolidated += 1
+	# Drop chunk/detail holders that gave up every child to a MultiMesh.
+	for holder: Node in emptied:
+		if holder.get_child_count() == 0 and holder.get_parent():
+			holder.get_parent().remove_child(holder)
+			holder.queue_free()
+	if consolidated > 0:
+		root._log("MultiMesh: consolidated %d groups" % consolidated)
+
+
+## The material a MeshInstance3D actually draws with, so two instances are only
+## merged when the merged node can reproduce both.
+static func _instance_material(mi: MeshInstance3D) -> Material:
+	var surface := mi.get_surface_override_material(0)
+	if surface:
+		return surface
+	return mi.material_override
+
+
+static func _multimesh_transform(instance: Node3D, container: Node3D) -> Transform3D:
+	return container.global_transform.affine_inverse() * instance.global_transform
+
+
+# ---------------------------------------------------------------------------
+# Automated occluder generation
+# ---------------------------------------------------------------------------
+
+## Angle threshold (radians) for grouping coplanar triangles.
+const _OCCLUDER_NORMAL_THRESHOLD := 0.087  # ~5 degrees
+## Distance threshold for plane membership.
+const _OCCLUDER_PLANE_DIST_THRESHOLD := 0.1
+
+
+## Scan baked MeshInstance3D children, identify large coplanar face groups, and
+## create OccluderInstance3D nodes with ArrayOccluder3D resources.
+func _generate_occluders(container: Node3D) -> void:
+	# Remove previously generated occluders so re-bake is idempotent.
+	var existing: Node = container.find_child("Occluders", false, false)
+	if existing:
+		container.remove_child(existing)
+		existing.free()
+
+	var min_area: float = _root_float("bake_occluder_min_area", 4.0)
+	var planes: Array = []  # Array of {normal, dist, verts, indices, area}
+
+	# Collect triangles from all baked meshes (recurse into BakedChunk_* nodes).
+	var mesh_instances: Array = _collect_mesh_instances(container)
+	for mi: MeshInstance3D in mesh_instances:
+		var mesh: Mesh = mi.mesh
+		if not mesh:
+			continue
+		# Transform relative to container so occluders are in container-local space.
+		var xform: Transform3D = container.global_transform.affine_inverse() * mi.global_transform
+		for surf_idx in mesh.get_surface_count():
+			var arrays: Array = mesh.surface_get_arrays(surf_idx)
+			if arrays.is_empty():
+				continue
+			var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+			var normals_arr: PackedVector3Array = (
+				arrays[Mesh.ARRAY_NORMAL]
+				if (
+					arrays.size() > Mesh.ARRAY_NORMAL
+					and arrays[Mesh.ARRAY_NORMAL] is PackedVector3Array
+				)
+				else PackedVector3Array()
+			)
+			var indices: PackedInt32Array = (
+				arrays[Mesh.ARRAY_INDEX]
+				if (
+					arrays.size() > Mesh.ARRAY_INDEX
+					and arrays[Mesh.ARRAY_INDEX] is PackedInt32Array
+				)
+				else PackedInt32Array()
+			)
+			if verts.is_empty():
+				continue
+			# Build triangle list.
+			var tri_list: Array = []
+			if indices.size() >= 3:
+				var i := 0
+				while i + 2 < indices.size():
+					tri_list.append([indices[i], indices[i + 1], indices[i + 2]])
+					i += 3
+			else:
+				var i := 0
+				while i + 2 < verts.size():
+					tri_list.append([i, i + 1, i + 2])
+					i += 3
+
+			for tri in tri_list:
+				var a: Vector3 = xform * verts[tri[0]]
+				var b: Vector3 = xform * verts[tri[1]]
+				var c: Vector3 = xform * verts[tri[2]]
+				var edge1: Vector3 = b - a
+				var edge2: Vector3 = c - a
+				var n: Vector3 = edge2.cross(edge1)
+				var area: float = n.length() * 0.5
+				if area < 0.001:
+					continue
+				n = n.normalized()
+				# Use normal from mesh data if available.
+				if normals_arr.size() > tri[0]:
+					var mesh_n: Vector3 = (xform.basis * normals_arr[tri[0]]).normalized()
+					if mesh_n.length_squared() > 0.5:
+						n = mesh_n
+				var dist: float = n.dot(a)
+				# Try to merge into an existing coplanar group.
+				var merged := false
+				for plane in planes:
+					if (
+						n.dot(plane["normal"]) >= cos(_OCCLUDER_NORMAL_THRESHOLD)
+						and absf(dist - plane["dist"]) < _OCCLUDER_PLANE_DIST_THRESHOLD
+					):
+						var base_idx: int = plane["verts"].size()
+						plane["verts"].append(a)
+						plane["verts"].append(b)
+						plane["verts"].append(c)
+						plane["indices"].append(base_idx)
+						plane["indices"].append(base_idx + 1)
+						plane["indices"].append(base_idx + 2)
+						plane["area"] += area
+						merged = true
+						break
+				if not merged:
+					var pv := PackedVector3Array()
+					pv.append(a)
+					pv.append(b)
+					pv.append(c)
+					var pi := PackedInt32Array()
+					pi.append(0)
+					pi.append(1)
+					pi.append(2)
+					planes.append(
+						{"normal": n, "dist": dist, "verts": pv, "indices": pi, "area": area}
+					)
+
+	# Filter by minimum area and build occluder nodes.
+	var occluder_container := Node3D.new()
+	occluder_container.name = "Occluders"
+	var count := 0
+	for plane in planes:
+		if plane["area"] < min_area:
+			continue
+		var occ := ArrayOccluder3D.new()
+		occ.vertices = plane["verts"]
+		occ.indices = plane["indices"]
+		var inst := OccluderInstance3D.new()
+		inst.occluder = occ
+		inst.name = "Occluder_%d" % count
+		occluder_container.add_child(inst)
+		count += 1
+
+	if count > 0:
+		container.add_child(occluder_container)
+		root._assign_owner_recursive(occluder_container)
+		root._log("Occluders: generated %d from %d coplanar groups" % [count, planes.size()])
+	else:
+		occluder_container.free()
+
+
+## Recursively collect all MeshInstance3D nodes under a container, walking into
+## intermediary nodes like BakedChunk_* without picking up non-mesh children.
+static func _collect_mesh_instances(node: Node) -> Array:
+	var result: Array = []
+	for child in node.get_children():
+		if child is MeshInstance3D:
+			result.append(child)
+		elif child is Node3D and child.name != "Occluders":
+			result.append_array(_collect_mesh_instances(child))
+	return result
+
+
+func _root_bool(property_name: String, default_value: bool) -> bool:
+	if not root or not _root_has_property(property_name):
+		return default_value
+	return bool(root.get(property_name))
+
+
+func _root_float(property_name: String, default_value: float) -> float:
+	if not root or not _root_has_property(property_name):
+		return default_value
+	return float(root.get(property_name))
+
+
+func _root_has_property(property_name: String) -> bool:
+	if not root or property_name == "":
+		return false
+	for prop in root.get_property_list():
+		if prop.get("name", "") == property_name:
+			return true
+	return false

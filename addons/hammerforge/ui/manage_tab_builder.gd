@@ -1,0 +1,583 @@
+@tool
+extends RefCounted
+## Builds the Manage tab UI and connects its signals.
+## Keeps the common build-and-play workflow obvious while grouping specialist
+## controls into collapsed sections.
+
+var dock  # HammerForgeDock reference
+
+
+func _init(p_dock) -> void:
+	dock = p_dock
+
+
+func build(parent: Control) -> void:
+	var root_vbox = parent
+	if not root_vbox:
+		return
+
+	var hf_collapsible_section = dock.HFCollapsibleSection
+
+	# --- Primary one-click test workflow ---
+	var bake_sec = hf_collapsible_section.create("Test Level", true)
+	root_vbox.add_child(bake_sec)
+	dock._register_section(bake_sec, "Bake")
+	var bk = bake_sec.get_content()
+
+	dock.primary_quick_play_btn = dock._make_button("Test Level  (Bake + Play)")
+	dock.primary_quick_play_btn.name = "PrimaryQuickPlay"
+	dock.primary_quick_play_btn.custom_minimum_size.y = 36
+	dock._set_tooltip(dock.primary_quick_play_btn, "Bake and run the current level in one step")
+	var has_root = dock.level_root != null
+	var disabled_hint = (
+		"Wait for the current bake to finish"
+		if has_root and dock._bake_disabled
+		else "Requires a LevelRoot — use Create Starter or Create Empty above"
+	)
+	dock._set_control_disabled_hint(
+		dock.primary_quick_play_btn, not has_root or dock._bake_disabled, disabled_hint
+	)
+	dock.primary_quick_play_btn.pressed.connect(dock._on_quick_play)
+	bk.add_child(dock.primary_quick_play_btn)
+
+	var manual_actions := HBoxContainer.new()
+	manual_actions.name = "ManualActions"
+	manual_actions.add_theme_constant_override("separation", 4)
+	bk.add_child(manual_actions)
+	dock.validate_btn = dock._make_button("Check Only")
+	dock.validate_btn.tooltip_text = "Check the level without baking or running it"
+	dock.validate_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	manual_actions.add_child(dock.validate_btn)
+	dock.bake_btn = dock._make_button("Bake Only")
+	dock.bake_btn.tooltip_text = "Bake the level without starting play mode"
+	dock.bake_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	manual_actions.add_child(dock.bake_btn)
+
+	# --- Advanced bake controls ---
+	var advanced_bake_sec = hf_collapsible_section.create("Advanced Bake", false)
+	root_vbox.add_child(advanced_bake_sec)
+	dock._register_section(advanced_bake_sec, "Advanced Bake")
+	var adv = advanced_bake_sec.get_content()
+
+	dock.validate_fix_btn = dock._make_button("Validate + Fix")
+	adv.add_child(dock.validate_fix_btn)
+
+	dock.bake_dry_run_btn = dock._make_button("Bake Dry Run")
+	adv.add_child(dock.bake_dry_run_btn)
+
+	dock.bake_merge_meshes = dock._make_check("Merge Meshes")
+	adv.add_child(dock.bake_merge_meshes)
+
+	dock.bake_generate_lods = dock._make_check("Generate LODs")
+	adv.add_child(dock.bake_generate_lods)
+
+	dock.bake_unwrap_uv0 = dock._make_check("Unwrap UV0")
+	adv.add_child(dock.bake_unwrap_uv0)
+
+	dock.bake_lightmap_uv2 = dock._make_check("Lightmap UV2")
+	adv.add_child(dock.bake_lightmap_uv2)
+
+	dock.bake_use_face_materials = dock._make_check("Use Face Materials")
+	adv.add_child(dock.bake_use_face_materials)
+
+	dock.bake_lightmap_texel_row = HBoxContainer.new()
+	var texel_label = Label.new()
+	texel_label.text = "Texel Size"
+	dock.bake_lightmap_texel_row.add_child(texel_label)
+	dock.bake_lightmap_texel = dock._make_spin(0.01, 4.0, 0.01, 0.1)
+	dock.bake_lightmap_texel_row.add_child(dock.bake_lightmap_texel)
+	adv.add_child(dock.bake_lightmap_texel_row)
+
+	dock.bake_navmesh = dock._make_check("Bake Navmesh")
+	adv.add_child(dock.bake_navmesh)
+
+	dock.bake_navmesh_cell_row = HBoxContainer.new()
+	var nav_cell_label = Label.new()
+	nav_cell_label.text = "Navmesh Cell"
+	dock.bake_navmesh_cell_row.add_child(nav_cell_label)
+	dock.bake_navmesh_cell_size = dock._make_spin(0.05, 2.0, 0.01, 0.3)
+	dock.bake_navmesh_cell_row.add_child(dock.bake_navmesh_cell_size)
+	dock.bake_navmesh_cell_height = dock._make_spin(0.05, 2.0, 0.01, 0.2)
+	dock.bake_navmesh_cell_row.add_child(dock.bake_navmesh_cell_height)
+	adv.add_child(dock.bake_navmesh_cell_row)
+
+	dock.bake_navmesh_agent_row = HBoxContainer.new()
+	var nav_agent_label = Label.new()
+	nav_agent_label.text = "Agent Size"
+	dock.bake_navmesh_agent_row.add_child(nav_agent_label)
+	dock.bake_navmesh_agent_height = dock._make_spin(0.5, 5.0, 0.1, 2.0)
+	dock.bake_navmesh_agent_row.add_child(dock.bake_navmesh_agent_height)
+	dock.bake_navmesh_agent_radius = dock._make_spin(0.1, 2.0, 0.05, 0.4)
+	dock.bake_navmesh_agent_row.add_child(dock.bake_navmesh_agent_radius)
+	adv.add_child(dock.bake_navmesh_agent_row)
+
+	# -- Incremental / selection bake --
+	var bake_opt_sep = HSeparator.new()
+	adv.add_child(bake_opt_sep)
+
+	dock.bake_selected_btn = dock._make_button("Bake Selected")
+	dock.bake_selected_btn.tooltip_text = "Bake only the currently selected brushes"
+	adv.add_child(dock.bake_selected_btn)
+
+	dock.bake_changed_btn = dock._make_button("Bake Changed")
+	dock.bake_changed_btn.tooltip_text = "Bake only brushes modified since last bake"
+	adv.add_child(dock.bake_changed_btn)
+
+	dock.bake_check_issues_btn = dock._make_button("Check Bake Issues")
+	dock.bake_check_issues_btn.tooltip_text = ("Scan for bake problems: degenerate brushes, floating subtracts, overlapping cuts")
+	adv.add_child(dock.bake_check_issues_btn)
+
+	# -- Preview mode --
+	var preview_row = HBoxContainer.new()
+	var preview_label = Label.new()
+	preview_label.text = "Preview"
+	preview_row.add_child(preview_label)
+	dock.bake_preview_mode_opt = OptionButton.new()
+	dock.bake_preview_mode_opt.add_item("Full", 0)
+	dock.bake_preview_mode_opt.add_item("Wireframe", 1)
+	dock.bake_preview_mode_opt.add_item("Proxy", 2)
+	dock.bake_preview_mode_opt.select(0)
+	dock.bake_preview_mode_opt.tooltip_text = ("Full: normal solid result (default). Wireframe: diagnostic topology view. Proxy: low-res solid.")
+	dock.bake_preview_mode_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	preview_row.add_child(dock.bake_preview_mode_opt)
+	adv.add_child(preview_row)
+
+	# -- Chunk size --
+	var chunk_row = HBoxContainer.new()
+	var chunk_label = Label.new()
+	chunk_label.text = "Chunk Size"
+	chunk_row.add_child(chunk_label)
+	dock.bake_chunk_size_spin = dock._make_spin(0.0, 256.0, 1.0, 32.0)
+	dock.bake_chunk_size_spin.tooltip_text = "Spatial chunk size for bake grouping (0 = no chunking)"
+	chunk_row.add_child(dock.bake_chunk_size_spin)
+	adv.add_child(chunk_row)
+
+	# -- Bake Visible Only --
+	dock.bake_visible_only_check = dock._make_check("Bake Visible Only")
+	dock.bake_visible_only_check.tooltip_text = "Skip hidden visgroups and invisible brushes during bake"
+	adv.add_child(dock.bake_visible_only_check)
+
+	# -- MultiMesh consolidation --
+	dock.bake_use_multimesh_check = dock._make_check("Use MultiMesh")
+	dock.bake_use_multimesh_check.tooltip_text = "Consolidate repeated identical meshes into MultiMeshInstance3D"
+	adv.add_child(dock.bake_use_multimesh_check)
+
+	# -- Material Atlas --
+	dock.bake_use_atlas_check = dock._make_check("Material Atlas")
+	dock.bake_use_atlas_check.tooltip_text = ("Pack material textures into a single atlas to reduce draw calls (requires Face Materials)")
+	adv.add_child(dock.bake_use_atlas_check)
+
+	# -- Auto Connectors --
+	dock.bake_auto_connectors_check = dock._make_check("Auto Connectors")
+	dock.bake_auto_connectors_check.tooltip_text = (
+		"Auto-generate ramps or stairs between height levels during bake"
+		+ "\nRequires at least 2 paint layers at different heights"
+	)
+	adv.add_child(dock.bake_auto_connectors_check)
+
+	var conn_row := HBoxContainer.new()
+	conn_row.add_theme_constant_override("separation", 4)
+	adv.add_child(conn_row)
+
+	var conn_mode_label := Label.new()
+	conn_mode_label.text = "Mode:"
+	conn_mode_label.add_theme_font_size_override("font_size", 11)
+	conn_row.add_child(conn_mode_label)
+
+	dock.bake_connector_mode_opt = OptionButton.new()
+	dock.bake_connector_mode_opt.add_item("Ramp", 0)
+	dock.bake_connector_mode_opt.add_item("Stairs", 1)
+	dock.bake_connector_mode_opt.add_item("Auto", 2)
+	dock.bake_connector_mode_opt.tooltip_text = ("Ramp: smooth slope; Stairs: stepped; Auto: stairs when height > threshold")
+	dock.bake_connector_mode_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	conn_row.add_child(dock.bake_connector_mode_opt)
+
+	var conn_settings_row := HBoxContainer.new()
+	conn_settings_row.add_theme_constant_override("separation", 4)
+	adv.add_child(conn_settings_row)
+
+	var step_label := Label.new()
+	step_label.text = "Step H:"
+	step_label.add_theme_font_size_override("font_size", 11)
+	conn_settings_row.add_child(step_label)
+
+	dock.bake_connector_stair_height_spin = SpinBox.new()
+	dock.bake_connector_stair_height_spin.min_value = 0.05
+	dock.bake_connector_stair_height_spin.max_value = 2.0
+	dock.bake_connector_stair_height_spin.step = 0.05
+	dock.bake_connector_stair_height_spin.value = 0.25
+	dock.bake_connector_stair_height_spin.tooltip_text = "Stair step height (world units)"
+	dock.bake_connector_stair_height_spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	conn_settings_row.add_child(dock.bake_connector_stair_height_spin)
+
+	var width_label := Label.new()
+	width_label.text = "Width:"
+	width_label.add_theme_font_size_override("font_size", 11)
+	conn_settings_row.add_child(width_label)
+
+	dock.bake_connector_width_spin = SpinBox.new()
+	dock.bake_connector_width_spin.min_value = 1
+	dock.bake_connector_width_spin.max_value = 8
+	dock.bake_connector_width_spin.step = 1
+	dock.bake_connector_width_spin.value = 2
+	dock.bake_connector_width_spin.tooltip_text = "Connector width in cells"
+	dock.bake_connector_width_spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	conn_settings_row.add_child(dock.bake_connector_width_spin)
+
+	# -- Occluder generation --
+	dock.bake_generate_occluders_check = dock._make_check("Generate Occluders")
+	dock.bake_generate_occluders_check.tooltip_text = (
+		"Auto-generate OccluderInstance3D nodes from large flat surfaces"
+		+ "\nReduces draw calls via occlusion culling without manual placement"
+	)
+	adv.add_child(dock.bake_generate_occluders_check)
+
+	var occl_row := HBoxContainer.new()
+	occl_row.add_theme_constant_override("separation", 4)
+	adv.add_child(occl_row)
+
+	var occl_area_label := Label.new()
+	occl_area_label.text = "Min Area:"
+	occl_area_label.add_theme_font_size_override("font_size", 11)
+	occl_row.add_child(occl_area_label)
+
+	dock.bake_occluder_min_area_spin = SpinBox.new()
+	dock.bake_occluder_min_area_spin.min_value = 0.5
+	dock.bake_occluder_min_area_spin.max_value = 100.0
+	dock.bake_occluder_min_area_spin.step = 0.5
+	dock.bake_occluder_min_area_spin.value = 4.0
+	dock.bake_occluder_min_area_spin.tooltip_text = "Minimum coplanar face group area (world units²) to generate an occluder"
+	dock.bake_occluder_min_area_spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	occl_row.add_child(dock.bake_occluder_min_area_spin)
+
+	# -- Bake time estimate --
+	dock.bake_estimate_label = Label.new()
+	dock.bake_estimate_label.text = "Est: — "
+	dock.bake_estimate_label.add_theme_font_size_override("font_size", 11)
+	dock.bake_estimate_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 1.0))
+	adv.add_child(dock.bake_estimate_label)
+
+	# -- Quick Play modes --
+	var qp_sep = HSeparator.new()
+	adv.add_child(qp_sep)
+
+	dock.quick_play_camera_btn = dock._make_button("Play from Camera")
+	dock.quick_play_camera_btn.tooltip_text = ("Teleport spawn to current editor camera position and play")
+	adv.add_child(dock.quick_play_camera_btn)
+
+	dock.quick_play_area_btn = dock._make_button("Play Selected Area")
+	dock.quick_play_area_btn.tooltip_text = ("Auto-cordon to selection, bake only that area, and play")
+	adv.add_child(dock.quick_play_area_btn)
+
+	dock.export_playtest_btn = dock._make_button("Export Playtest Build")
+	dock.export_playtest_btn.tooltip_text = ("Validate, bake optimized, and launch as playable scene")
+	adv.add_child(dock.export_playtest_btn)
+
+	# --- Actions section ---
+	var act_sec = hf_collapsible_section.create("Actions", false)
+	root_vbox.add_child(act_sec)
+	dock._register_section(act_sec, "Actions")
+	var ac = act_sec.get_content()
+
+	dock.new_level_btn = dock._make_button("New HammerForge Level")
+	dock.new_level_btn.tooltip_text = "Create a starter level with floor, sun light, and player spawn"
+	ac.add_child(dock.new_level_btn)
+
+	dock.floor_btn = dock._make_button("Create Floor")
+	ac.add_child(dock.floor_btn)
+
+	dock.apply_cuts_btn = dock._make_button("Apply Cuts")
+	ac.add_child(dock.apply_cuts_btn)
+
+	dock.clear_cuts_btn = dock._make_button("Clear Pending Cuts")
+	ac.add_child(dock.clear_cuts_btn)
+
+	dock.commit_cuts_btn = dock._make_button("Commit Cuts (Bake)")
+	ac.add_child(dock.commit_cuts_btn)
+
+	dock.restore_cuts_btn = dock._make_button("Restore Committed Cuts")
+	ac.add_child(dock.restore_cuts_btn)
+
+	dock.clear_btn = dock._make_button("Clear Brushes")
+	ac.add_child(dock.clear_btn)
+
+	# --- File section ---
+	var file_sec = hf_collapsible_section.create("File", false)
+	root_vbox.add_child(file_sec)
+	dock._register_section(file_sec, "File")
+	var flc = file_sec.get_content()
+
+	dock.save_hflevel_btn = dock._make_button("Save .hflevel")
+	flc.add_child(dock.save_hflevel_btn)
+
+	dock.load_hflevel_btn = dock._make_button("Load .hflevel")
+	flc.add_child(dock.load_hflevel_btn)
+
+	dock.import_map_btn = dock._make_button("Import .map")
+	flc.add_child(dock.import_map_btn)
+
+	dock.map_format_select = OptionButton.new()
+	dock.map_format_select.add_item("Classic Quake", 0)
+	dock.map_format_select.add_item("Valve 220", 1)
+	dock.map_format_select.tooltip_text = "Map export format"
+	flc.add_child(dock.map_format_select)
+
+	dock.export_map_btn = dock._make_button("Export .map")
+	flc.add_child(dock.export_map_btn)
+
+	dock.export_glb_btn = dock._make_button("Export .glb")
+	flc.add_child(dock.export_glb_btn)
+
+	# --- Presets section ---
+	var preset_sec = hf_collapsible_section.create("Presets", false)
+	root_vbox.add_child(preset_sec)
+	dock._register_section(preset_sec, "Presets")
+	var pc = preset_sec.get_content()
+
+	dock.save_preset_btn = dock._make_button("Save Current")
+	pc.add_child(dock.save_preset_btn)
+
+	dock.preset_grid = GridContainer.new()
+	dock.preset_grid.columns = 2
+	pc.add_child(dock.preset_grid)
+
+	# --- Prefabs section ---
+	var prefab_sec = hf_collapsible_section.create("Prefabs", false)
+	root_vbox.add_child(prefab_sec)
+	dock._register_section(prefab_sec, "Prefabs")
+	var HFPrefabLibrary = preload("res://addons/hammerforge/ui/hf_prefab_library.gd")
+	dock._prefab_library = HFPrefabLibrary.new()
+	prefab_sec.get_content().add_child(dock._prefab_library)
+
+	# --- Spawn section ---
+	var spawn_sec = hf_collapsible_section.create("Spawn", false)
+	root_vbox.add_child(spawn_sec)
+	dock._register_section(spawn_sec, "Spawn")
+	var spc = spawn_sec.get_content()
+
+	dock._spawn_validate_btn = dock._make_button("Validate Spawn")
+	spc.add_child(dock._spawn_validate_btn)
+
+	dock._spawn_auto_create_btn = dock._make_button("Create Default Spawn")
+	spc.add_child(dock._spawn_auto_create_btn)
+
+	dock._show_spawn_debug = dock._make_check("Preview Spawn Debug", false)
+	spc.add_child(dock._show_spawn_debug)
+
+	# --- History section (collapsed by default) ---
+	var hist_sec = hf_collapsible_section.create("History", false)
+	root_vbox.add_child(hist_sec)
+	dock._register_section(hist_sec, "History")
+	var hc = hist_sec.get_content()
+
+	var HFHistoryBrowserScript = preload("res://addons/hammerforge/ui/hf_history_browser.gd")
+	dock.history_browser = HFHistoryBrowserScript.new()
+	hc.add_child(dock.history_browser)
+	dock.undo_btn = dock.history_browser.get_undo_button()
+	dock.redo_btn = dock.history_browser.get_redo_button()
+
+	# --- Settings section (collapsed by default) ---
+	var set_sec = hf_collapsible_section.create("Settings", false)
+	root_vbox.add_child(set_sec)
+	dock._register_section(set_sec, "Settings")
+	var stc = set_sec.get_content()
+
+	dock.commit_freeze = dock._make_check("Freeze Commit (keep CSG hidden)", true)
+	stc.add_child(dock.commit_freeze)
+
+	dock.show_hud = dock._make_check("Show HUD", true)
+	stc.add_child(dock.show_hud)
+
+	dock.power_user_overlays = dock._make_check("Power-user overlays", false)
+	stc.add_child(dock.power_user_overlays)
+
+	dock.show_grid = dock._make_check("Show Grid", false)
+	stc.add_child(dock.show_grid)
+
+	dock.follow_grid = dock._make_check("Follow Grid", false)
+	stc.add_child(dock.follow_grid)
+
+	dock.debug_logs = dock._make_check("Debug Logs", false)
+	stc.add_child(dock.debug_logs)
+
+	dock._show_io_lines = dock._make_check("Show I/O Lines", false)
+	stc.add_child(dock._show_io_lines)
+
+	dock._show_subtract_preview = dock._make_check("Subtract Preview", false)
+	stc.add_child(dock._show_subtract_preview)
+
+	dock.autosave_enabled = dock._make_check("Enable Autosave", true)
+	stc.add_child(dock.autosave_enabled)
+
+	dock.autosave_minutes = dock._make_spin(1, 60, 1, 5)
+	stc.add_child(dock._make_label_row("Autosave Minutes", dock.autosave_minutes))
+
+	dock.autosave_keep = dock._make_spin(1, 50, 1, 5)
+	stc.add_child(dock._make_label_row("Keep Backups", dock.autosave_keep))
+
+	dock.autosave_path_btn = dock._make_button("Set Autosave Path")
+	stc.add_child(dock.autosave_path_btn)
+
+	dock.export_settings_btn = dock._make_button("Export Settings")
+	stc.add_child(dock.export_settings_btn)
+
+	dock.import_settings_btn = dock._make_button("Import Settings")
+	stc.add_child(dock.import_settings_btn)
+
+	# --- Examples section (collapsed by default) ---
+	var ex_sec = hf_collapsible_section.create("Examples", false)
+	root_vbox.add_child(ex_sec)
+	dock._register_section(ex_sec, "Examples")
+	var HFExampleLibrary = preload("res://addons/hammerforge/ui/hf_example_library.gd")
+	dock._example_library = HFExampleLibrary.new()
+	ex_sec.get_content().add_child(dock._example_library)
+
+	# --- Performance section (collapsed by default) ---
+	var perf_sec = hf_collapsible_section.create("Performance", false)
+	root_vbox.add_child(perf_sec)
+	dock._register_section(perf_sec, "Performance")
+	var pfc = perf_sec.get_content()
+
+	# Health summary
+	dock.perf_health_label = Label.new()
+	dock.perf_health_label.text = "Healthy"
+	dock.perf_health_label.add_theme_font_size_override("font_size", 13)
+	dock.perf_health_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	pfc.add_child(dock.perf_health_label)
+
+	# Brush count progress bar
+	dock.perf_brush_bar = ProgressBar.new()
+	dock.perf_brush_bar.min_value = 0
+	dock.perf_brush_bar.max_value = 200
+	dock.perf_brush_bar.value = 0
+	dock.perf_brush_bar.show_percentage = false
+	dock.perf_brush_bar.custom_minimum_size = Vector2(0, 14)
+	dock.perf_brush_bar.tooltip_text = "Brush count relative to recommended max (200)"
+	pfc.add_child(dock.perf_brush_bar)
+
+	var perf_grid = GridContainer.new()
+	perf_grid.columns = 2
+	pfc.add_child(perf_grid)
+
+	var perf_labels = [
+		["Active Brushes", "0"],
+		["Entities", "0"],
+		["Vertices (est)", "0"],
+		["Paint Memory", "0 KB"],
+		["Bake Chunks", "0"],
+		["Last Bake", "0 ms"],
+		["Rec. Chunk Size", "-"],
+	]
+	var perf_value_nodes: Array[Label] = []
+	for pair in perf_labels:
+		var key_label = Label.new()
+		key_label.text = pair[0]
+		key_label.add_theme_font_size_override("font_size", 11)
+		perf_grid.add_child(key_label)
+		var val_label = Label.new()
+		val_label.text = pair[1]
+		val_label.add_theme_font_size_override("font_size", 11)
+		perf_grid.add_child(val_label)
+		perf_value_nodes.append(val_label)
+	dock.perf_brushes_value = perf_value_nodes[0]
+	dock.perf_entity_value = perf_value_nodes[1]
+	dock.perf_vertex_value = perf_value_nodes[2]
+	dock.perf_paint_mem_value = perf_value_nodes[3]
+	dock.perf_bake_chunks_value = perf_value_nodes[4]
+	dock.perf_bake_time_value = perf_value_nodes[5]
+	dock.perf_chunk_rec_value = perf_value_nodes[6]
+
+
+func connect_signals() -> void:
+	if dock.bake_btn:
+		dock.bake_btn.pressed.connect(dock._on_bake)
+	if dock.bake_dry_run_btn:
+		dock.bake_dry_run_btn.pressed.connect(dock._on_bake_dry_run)
+	if dock.validate_btn:
+		dock.validate_btn.pressed.connect(dock._on_validate_level)
+	if dock.validate_fix_btn:
+		dock.validate_fix_btn.pressed.connect(dock._on_validate_fix)
+	if dock.clear_btn:
+		dock.clear_btn.pressed.connect(dock._on_clear)
+	if dock.save_hflevel_btn:
+		dock.save_hflevel_btn.pressed.connect(dock._on_save_hflevel)
+	if dock.load_hflevel_btn:
+		dock.load_hflevel_btn.pressed.connect(dock._on_load_hflevel)
+	if dock.import_map_btn:
+		dock.import_map_btn.pressed.connect(dock._on_import_map)
+	if dock.export_map_btn:
+		dock.export_map_btn.pressed.connect(dock._on_export_map)
+	if dock.export_glb_btn:
+		dock.export_glb_btn.pressed.connect(dock._on_export_glb)
+	if dock.autosave_path_btn:
+		dock.autosave_path_btn.pressed.connect(dock._on_set_autosave_path)
+	if dock.export_settings_btn:
+		dock.export_settings_btn.pressed.connect(dock._on_export_settings)
+	if dock.import_settings_btn:
+		dock.import_settings_btn.pressed.connect(dock._on_import_settings)
+	if dock.new_level_btn:
+		dock.new_level_btn.pressed.connect(dock._on_new_level)
+	if dock.floor_btn:
+		dock.floor_btn.pressed.connect(dock._on_floor)
+	if dock.apply_cuts_btn:
+		dock.apply_cuts_btn.pressed.connect(dock._on_apply_cuts)
+	if dock.clear_cuts_btn:
+		dock.clear_cuts_btn.pressed.connect(dock._on_clear_cuts)
+	if dock.commit_cuts_btn:
+		dock.commit_cuts_btn.pressed.connect(dock._on_commit_cuts)
+	if dock.restore_cuts_btn:
+		dock.restore_cuts_btn.pressed.connect(dock._on_restore_cuts)
+	if dock.undo_btn:
+		dock.undo_btn.pressed.connect(dock._on_history_undo)
+	if dock.redo_btn:
+		dock.redo_btn.pressed.connect(dock._on_history_redo)
+	if dock.history_browser:
+		dock.history_browser.navigate_requested.connect(dock._on_history_navigate)
+	if dock.save_preset_btn:
+		dock.save_preset_btn.pressed.connect(dock._on_save_preset)
+	if dock.show_hud:
+		dock.show_hud.toggled.connect(dock._on_show_hud_toggled)
+	if dock.power_user_overlays:
+		dock.power_user_overlays.toggled.connect(dock._on_power_user_overlays_toggled)
+	if dock.show_grid:
+		dock.show_grid.toggled.connect(dock._on_show_grid_toggled)
+	if dock.follow_grid:
+		dock.follow_grid.toggled.connect(dock._on_follow_grid_toggled)
+	if dock.debug_logs:
+		dock.debug_logs.toggled.connect(dock._on_debug_logs_toggled)
+	if dock._show_io_lines:
+		dock._show_io_lines.toggled.connect(dock._on_show_io_lines_toggled)
+	if dock._show_subtract_preview:
+		dock._show_subtract_preview.toggled.connect(dock._on_show_subtract_preview_toggled)
+	if dock._prefab_library and dock._prefab_library.has_signal("save_requested"):
+		dock._prefab_library.save_requested.connect(dock._on_prefab_save_requested)
+	if dock._prefab_library and dock._prefab_library.has_signal("save_linked_requested"):
+		dock._prefab_library.save_linked_requested.connect(dock._on_prefab_save_linked_requested)
+	if dock._prefab_library and dock._prefab_library.has_signal("delete_requested"):
+		dock._prefab_library.delete_requested.connect(dock._on_prefab_delete_requested)
+	if dock._prefab_library and dock._prefab_library.has_signal("variant_add_requested"):
+		dock._prefab_library.variant_add_requested.connect(dock._on_prefab_variant_add_requested)
+	if dock.bake_lightmap_uv2:
+		dock.bake_lightmap_uv2.toggled.connect(dock._on_bake_lightmap_uv2_toggled)
+	if dock.bake_navmesh:
+		dock.bake_navmesh.toggled.connect(dock._on_bake_navmesh_toggled)
+	if dock.bake_selected_btn:
+		dock.bake_selected_btn.pressed.connect(dock._on_bake_selected)
+	if dock.bake_changed_btn:
+		dock.bake_changed_btn.pressed.connect(dock._on_bake_changed)
+	if dock.bake_check_issues_btn:
+		dock.bake_check_issues_btn.pressed.connect(dock._on_bake_check_issues)
+	if dock.quick_play_camera_btn:
+		dock.quick_play_camera_btn.pressed.connect(dock._on_quick_play_from_camera)
+	if dock.quick_play_area_btn:
+		dock.quick_play_area_btn.pressed.connect(dock._on_quick_play_selected_area)
+	if dock.export_playtest_btn:
+		dock.export_playtest_btn.pressed.connect(dock._on_export_playtest)
+	if dock._spawn_validate_btn:
+		dock._spawn_validate_btn.pressed.connect(dock._on_spawn_validate)
+	if dock._spawn_auto_create_btn:
+		dock._spawn_auto_create_btn.pressed.connect(dock._on_spawn_auto_create)
+	if dock._show_spawn_debug:
+		dock._show_spawn_debug.toggled.connect(dock._on_show_spawn_debug_toggled)
+	if dock._example_library and dock._example_library.has_signal("load_requested"):
+		dock._example_library.load_requested.connect(dock._on_example_load_requested)

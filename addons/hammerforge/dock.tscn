@@ -1,0 +1,360 @@
+[gd_scene load_steps=3 format=3]
+[ext_resource path="res://addons/hammerforge/dock.gd" type="Script" id=1]
+[ext_resource path="res://addons/hammerforge/uv_editor.tscn" type="PackedScene" id=2]
+
+[node name="HammerForge" type="PanelContainer"]
+script = ExtResource( 1 )
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_right = 320.0
+offset_bottom = 560.0
+
+[node name="Margin" type="MarginContainer" parent="."]
+theme_override_constants/margin_left = 6
+theme_override_constants/margin_top = 6
+theme_override_constants/margin_right = 6
+theme_override_constants/margin_bottom = 6
+
+[node name="VBox" type="VBoxContainer" parent="Margin"]
+custom_minimum_size = Vector2(260, 260)
+
+[node name="Toolbar" type="HFlowContainer" parent="Margin/VBox"]
+theme_override_constants/h_separation = 2
+theme_override_constants/v_separation = 2
+
+[node name="ToolDraw" type="Button" parent="Margin/VBox/Toolbar"]
+text = "Draw"
+tooltip_text = "Draw"
+toggle_mode = true
+flat = true
+
+[node name="ToolSelect" type="Button" parent="Margin/VBox/Toolbar"]
+text = "Select"
+tooltip_text = "Select"
+toggle_mode = true
+flat = true
+
+[node name="PaintMode" type="Button" parent="Margin/VBox/Toolbar"]
+text = "Paint"
+tooltip_text = "Paint Mode"
+toggle_mode = true
+flat = true
+
+[node name="NoRootBanner" type="PanelContainer" parent="Margin/VBox"]
+visible = false
+
+[node name="BannerContent" type="VBoxContainer" parent="Margin/VBox/NoRootBanner"]
+theme_override_constants/separation = 6
+
+[node name="BannerLabel" type="Label" parent="Margin/VBox/NoRootBanner/BannerContent"]
+text = "Start building with HammerForge"
+horizontal_alignment = 1
+
+[node name="BannerHint" type="Label" parent="Margin/VBox/NoRootBanner/BannerContent"]
+text = "Create a ready-to-use level, or add an empty LevelRoot."
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="BannerActions" type="HBoxContainer" parent="Margin/VBox/NoRootBanner/BannerContent"]
+theme_override_constants/separation = 6
+
+[node name="CreateStarter" type="Button" parent="Margin/VBox/NoRootBanner/BannerContent/BannerActions"]
+text = "Create Starter Level"
+size_flags_horizontal = 3
+
+[node name="CreateEmpty" type="Button" parent="Margin/VBox/NoRootBanner/BannerContent/BannerActions"]
+text = "Empty Root"
+
+[node name="AutosaveWarning" type="Label" parent="Margin/VBox"]
+visible = false
+text = "Autosave failed!"
+horizontal_alignment = 1
+theme_override_colors/font_color = Color(1, 0.3, 0.3, 1)
+
+[node name="TopSeparator" type="HSeparator" parent="Margin/VBox"]
+
+[node name="ModeIndicator" type="PanelContainer" parent="Margin/VBox"]
+custom_minimum_size = Vector2(0, 24)
+
+[node name="ModeLabel" type="Label" parent="Margin/VBox/ModeIndicator"]
+text = "Draw - drag in the 3D viewport"
+horizontal_alignment = 1
+
+[node name="MainTabs" type="TabContainer" parent="Margin/VBox"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="Brush" type="ScrollContainer" parent="Margin/VBox/MainTabs"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="BrushMargin" type="MarginContainer" parent="Margin/VBox/MainTabs/Brush"]
+theme_override_constants/margin_left = 4
+theme_override_constants/margin_top = 4
+theme_override_constants/margin_right = 4
+theme_override_constants/margin_bottom = 4
+
+[node name="BrushVBox" type="VBoxContainer" parent="Margin/VBox/MainTabs/Brush/BrushMargin"]
+
+[node name="OperationRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox"]
+theme_override_constants/separation = 4
+
+[node name="OperationLabel" type="Label" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/OperationRow"]
+custom_minimum_size = Vector2(52, 0)
+text = "Create"
+
+[node name="ModeAdd" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/OperationRow"]
+size_flags_horizontal = 3
+text = "Solid"
+tooltip_text = "Create solid geometry"
+toggle_mode = true
+
+[node name="ModeSubtract" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/OperationRow"]
+size_flags_horizontal = 3
+text = "Cutout"
+tooltip_text = "Draw a volume that cuts through solid geometry"
+toggle_mode = true
+
+[node name="ShapeRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox"]
+
+[node name="ShapeLabel" type="Label" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/ShapeRow"]
+text = "Shape"
+
+[node name="ShapeSelect" type="OptionButton" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/ShapeRow"]
+size_flags_horizontal = 3
+
+[node name="SidesRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox"]
+
+[node name="SidesLabel" type="Label" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/SidesRow"]
+text = "Sides"
+
+[node name="SidesSpin" type="SpinBox" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/SidesRow"]
+min_value = 3.0
+max_value = 16.0
+step = 1.0
+value = 4.0
+size_flags_horizontal = 3
+
+[node name="SizeRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox"]
+
+[node name="SizeLabel" type="Label" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/SizeRow"]
+text = "Size"
+
+[node name="SizeX" type="SpinBox" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/SizeRow"]
+min_value = 1.0
+max_value = 256.0
+step = 1.0
+value = 32.0
+size_flags_horizontal = 3
+
+[node name="SizeY" type="SpinBox" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/SizeRow"]
+min_value = 1.0
+max_value = 256.0
+step = 1.0
+value = 24.0
+size_flags_horizontal = 3
+
+[node name="SizeZ" type="SpinBox" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/SizeRow"]
+min_value = 1.0
+max_value = 256.0
+step = 1.0
+value = 24.0
+size_flags_horizontal = 3
+
+[node name="GridRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox"]
+
+[node name="GridLabel" type="Label" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/GridRow"]
+text = "Grid Snap"
+
+[node name="GridSnap" type="SpinBox" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/GridRow"]
+min_value = 0.0
+max_value = 128.0
+step = 1.0
+value = 16.0
+size_flags_horizontal = 3
+
+[node name="QuickSnapGrid" type="GridContainer" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox"]
+columns = 7
+
+[node name="Snap1" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid"]
+text = "1"
+
+[node name="Snap2" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid"]
+text = "2"
+
+[node name="Snap4" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid"]
+text = "4"
+
+[node name="Snap8" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid"]
+text = "8"
+
+[node name="Snap16" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid"]
+text = "16"
+
+[node name="Snap32" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid"]
+text = "32"
+
+[node name="Snap64" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid"]
+text = "64"
+
+[node name="MaterialRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox"]
+
+[node name="MaterialLabel" type="Label" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/MaterialRow"]
+text = "Material"
+
+[node name="ActiveMaterial" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/MaterialRow"]
+text = "Active Material"
+size_flags_horizontal = 3
+
+[node name="PhysicsLayerRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox"]
+
+[node name="PhysicsLayerLabel" type="Label" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/PhysicsLayerRow"]
+text = "Physics Layer"
+
+[node name="PhysicsLayerOption" type="OptionButton" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/PhysicsLayerRow"]
+size_flags_horizontal = 3
+
+[node name="Paint" type="ScrollContainer" parent="Margin/VBox/MainTabs"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="PaintMargin" type="MarginContainer" parent="Margin/VBox/MainTabs/Paint"]
+theme_override_constants/margin_left = 4
+theme_override_constants/margin_top = 4
+theme_override_constants/margin_right = 4
+theme_override_constants/margin_bottom = 4
+
+[node name="PaintVBox" type="VBoxContainer" parent="Margin/VBox/MainTabs/Paint/PaintMargin"]
+
+[node name="Entities" type="ScrollContainer" parent="Margin/VBox/MainTabs"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="EntitiesMargin" type="MarginContainer" parent="Margin/VBox/MainTabs/Entities"]
+theme_override_constants/margin_left = 4
+theme_override_constants/margin_top = 4
+theme_override_constants/margin_right = 4
+theme_override_constants/margin_bottom = 4
+
+[node name="EntitiesVBox" type="VBoxContainer" parent="Margin/VBox/MainTabs/Entities/EntitiesMargin"]
+
+[node name="CreateEntity" type="Button" parent="Margin/VBox/MainTabs/Entities/EntitiesMargin/EntitiesVBox"]
+text = "Create DraftEntity"
+
+[node name="PaletteLabel" type="Label" parent="Margin/VBox/MainTabs/Entities/EntitiesMargin/EntitiesVBox"]
+text = "Palette"
+
+[node name="EntityPalette" type="GridContainer" parent="Margin/VBox/MainTabs/Entities/EntitiesMargin/EntitiesVBox"]
+columns = 3
+
+[node name="Manage" type="ScrollContainer" parent="Margin/VBox/MainTabs"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="ManageMargin" type="MarginContainer" parent="Margin/VBox/MainTabs/Manage"]
+theme_override_constants/margin_left = 4
+theme_override_constants/margin_top = 4
+theme_override_constants/margin_right = 4
+theme_override_constants/margin_bottom = 4
+
+[node name="ManageVBox" type="VBoxContainer" parent="Margin/VBox/MainTabs/Manage/ManageMargin"]
+
+[node name="BottomSeparator" type="HSeparator" parent="Margin/VBox"]
+
+[node name="Footer" type="VBoxContainer" parent="Margin/VBox"]
+
+[node name="QuickPlay" type="Button" parent="Margin/VBox/Footer"]
+text = "Test Level  (Bake + Play)"
+size_flags_horizontal = 3
+
+[node name="StatusFooter" type="HBoxContainer" parent="Margin/VBox/Footer"]
+
+[node name="StatusLabel" type="Label" parent="Margin/VBox/Footer/StatusFooter"]
+text = "Ready"
+
+[node name="SelectionLabel" type="Label" parent="Margin/VBox/Footer/StatusFooter"]
+text = ""
+
+[node name="ProgressBar" type="ProgressBar" parent="Margin/VBox/Footer/StatusFooter"]
+size_flags_horizontal = 3
+min_value = 0.0
+max_value = 100.0
+value = 0.0
+
+[node name="BrushCountLabel" type="Label" parent="Margin/VBox/Footer/StatusFooter"]
+text = "Brushes: 0"
+
+[node name="PresetMenu" type="PopupMenu" parent="."]
+
+[node name="PresetRenameDialog" type="AcceptDialog" parent="."]
+title = "Rename Preset"
+
+[node name="PresetRenameLine" type="LineEdit" parent="PresetRenameDialog"]
+size_flags_horizontal = 3
+
+[node name="MaterialDialog" type="FileDialog" parent="."]
+title = "Pick Material"
+access = 2
+file_mode = 0
+
+[node name="MaterialPaletteDialog" type="FileDialog" parent="."]
+title = "Add Material"
+access = 2
+file_mode = 0
+
+[node name="SurfacePaintTextureDialog" type="FileDialog" parent="."]
+title = "Pick Layer Texture"
+access = 2
+file_mode = 0
+
+[node name="HFLevelSaveDialog" type="FileDialog" parent="."]
+title = "Save .hflevel"
+access = 2
+file_mode = 4
+
+[node name="HFLevelLoadDialog" type="FileDialog" parent="."]
+title = "Load .hflevel"
+access = 2
+file_mode = 0
+
+[node name="MapImportDialog" type="FileDialog" parent="."]
+title = "Import .map"
+access = 2
+file_mode = 0
+
+[node name="MapExportDialog" type="FileDialog" parent="."]
+title = "Export .map"
+access = 2
+file_mode = 4
+
+[node name="GLBExportDialog" type="FileDialog" parent="."]
+title = "Export .glb"
+access = 2
+file_mode = 4
+
+[node name="AutosavePathDialog" type="FileDialog" parent="."]
+title = "Set Autosave Path"
+access = 2
+file_mode = 4
+
+[node name="SettingsExportDialog" type="FileDialog" parent="."]
+title = "Export Settings"
+access = 2
+file_mode = 4
+
+[node name="SettingsImportDialog" type="FileDialog" parent="."]
+title = "Import Settings"
+access = 2
+file_mode = 0
+
+[node name="HeightmapImportDialog" type="FileDialog" parent="."]
+title = "Import Heightmap"
+access = 2
+filters = PackedStringArray("*.png ; PNG Image", "*.exr ; EXR Image")
+size = Vector2i(600, 400)
+
+[node name="TerrainSlotTextureDialog" type="FileDialog" parent="."]
+title = "Select Terrain Texture"
+access = 2
+filters = PackedStringArray("*.png ; PNG Image", "*.jpg ; JPEG Image", "*.jpeg ; JPEG Image", "*.tga ; TGA Image", "*.webp ; WebP Image", "*.exr ; EXR Image")
+size = Vector2i(600, 400)

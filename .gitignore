@@ -1,0 +1,74 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+
+# Godot export presets
+export.cfg
+export_presets.cfg
+
+# Mono (if ever enabled)
+.mono/
+
+# Build outputs
+*.tmp
+*.log
+gut-results*.xml
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+nul
+
+# IDEs/editors
+.vscode/*
+!.vscode/tasks.json
+!.vscode/extensions.json
+.idea/
+.claude/
+.hammerforge/
+.appdata/
+.localappdata/
+
+# Local environment and Codex client state. MCP client configuration and
+# authentication are machine-local and must not be committed.
+.env
+.env.*
+!.env.example
+.codex/
+
+# HammerForge user state (should live in editor config, not repo)
+io_presets.json
+
+# Godot MCP user state and diagnostic captures accidentally written at res://.
+# Canonical settings belong under Godot's user:// directory, never in source.
+/mcp_settings.cfg
+/mcp_tool_state.cfg
+/mcp_tool_verification_log.json
+/hammerforge_mcp_editor.png
+/hammerforge_mcp_editor.png.import
+/hammerforge_editor_window.png
+
+# The vendored MCP translation catalog is read directly as CSV. Godot can
+# generate compiled translations locally, but they are cache artifacts.
+addons/godot_mcp/translations/tool_descriptions.*.translation
+
+# Python cache (if used for scripts/tools)
+__pycache__/
+*.pyc
+
+# Brand asset generators — npm writes these when raster.js is run locally
+docs/brand/node_modules/
+docs/brand/package.json
+docs/brand/package-lock.json
+
+# Godot writes an .import beside every brand asset the moment the project is
+# imported. They are cache, they reappear on every machine, and they are not
+# what the docs site or the README serve. The addon's own branding/ imports are
+# tracked, because those are resources the plugin loads at runtime.
+docs/brand/png/*.import
+docs/brand/svg/*.import
+
+# MkDocs build output
+.site/
+.docshot-backup/

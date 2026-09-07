@@ -1,0 +1,45 @@
+{
+  "player_start": {
+    "class": "Node3D",
+    "category": "Player",
+    "preview": {
+      "type": "capsule",
+      "color": "#00ffff",
+      "radius": 0.5,
+      "height": 2.0,
+      "alpha": 0.7,
+      "unshaded": true,
+      "no_depth_test": true
+    },
+    "properties": [
+      {"name": "primary", "type": "bool", "label": "Primary Spawn", "default": false},
+      {"name": "angle", "type": "float", "label": "Yaw Angle (deg)", "default": 0.0},
+      {"name": "height_offset", "type": "float", "label": "Height Offset", "default": 1.0}
+    ]
+  },
+  "light_point": {
+    "class": "OmniLight3D",
+    "preview": {
+      "type": "billboard",
+      "path": "res://addons/hammerforge/icon.png",
+      "color": "#ffff00"
+    },
+    "properties": [
+      {"name": "range", "type": "float", "label": "Range", "default": 10.0},
+      {"name": "energy", "type": "float", "label": "Energy", "default": 1.0},
+      {"name": "color", "type": "color", "label": "Color", "default": "#ffffff"}
+    ]
+  },
+  "door_basic": {
+    "class": "Node3D",
+    "preview": {
+      "type": "mesh",
+      "path": "res://addons/hammerforge/meshes/light_bulb_proxy.obj",
+      "color": "#8888ff"
+    },
+    "properties": [
+      {"name": "speed", "type": "float", "label": "Speed", "default": 200.0},
+      {"name": "locked", "type": "bool", "label": "Locked", "default": false}
+    ]
+  }
+}
