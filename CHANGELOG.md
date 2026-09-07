@@ -32,6 +32,34 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   explains it. It reads the Console's own evaluation, so the two cannot disagree.
 
 ### Fixed
+- **The 3D toolbar resized itself, and the viewport moved with it.**
+  `CONTAINER_SPATIAL_EDITOR_MENU` is a plain `HBoxContainer` and the 3D viewport
+  gets whatever height is left under it. Every control Godot puts in that row is
+  a fixed 29px; the shortcut HUD was the tallest child, so the row's height was
+  the HUD's height — and the HUD renegotiated it on every mode change and every
+  mode hint. Measured in the editor: 46px with a one-line hint, 49px with none,
+  63px with the two-line draw hint, and hints appear and expire on a timer, so
+  the viewport slid under the cursor with nobody touching anything. The three
+  labels ran at three different font sizes, `MODE_HINTS["draw_idle"]` carried a
+  newline that quietly made the row two lines, and the row had no height floor.
+  One `ROW_FONT_SIZE` for every label, `_pin_row_height()` measuring a single
+  line from the theme, and `_show_hint` collapsing newlines. Now 46.0px in every
+  mode and hint state. The status strip had the same fault sideways — its
+  summary rewrites on a two-second poll, swinging 76px to 155px and dragging
+  everything to its right along the row — and is now a fixed width with the
+  numbers still on its tooltip.
+- **One side of a box flickered while you dragged it.** The preview brush is
+  parented under `draft_brushes_node` for the whole drag and stands a full grid
+  step tall, and draft brushes carry no physics body, so `_raycast` always falls
+  through to `pick_face_from_ray` for the placement ray. The preview was not
+  excluded there, so a drag heading *away* from the camera met the preview's own
+  roof before the construction plane: the hit sits nearer the eye, the box pulls
+  back off the cursor, the next ray misses it and the box springs out again.
+  Drag towards the camera and nothing is in the way, which is why it only bit
+  sometimes. Pinned by a test in which a still cursor moved the box's Z edge from
+  8.0 to 7.5. The same chokepoint feeds hover and object picking, so during a
+  drag those were latching onto the preview instead of real geometry too. The
+  snap system already skipped the preview; picking now does the same.
 - **`brush_changed` never fired.** The signal was declared on `LevelRoot` and
   emitted nowhere, while `HFSubtractPreview` connected to it, so the live
   subtract overlay listened to a signal that could not arrive and only refreshed
