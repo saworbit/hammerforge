@@ -34,6 +34,9 @@ var hflevel_autosave_path: String = "user://hf_encode_thread_test.hflevel"
 var hflevel_compress: bool = false
 var hflevel_autosave_keep: int = 0
 var paint_system = null
+
+signal hflevel_save_failed(path: String, error_message: String)
+signal autosave_failed(error_message: String)
 var captured: Dictionary = {"name": "level", "n": 1}
 func _capture_hflevel_state() -> Dictionary:
 	return captured
@@ -111,3 +114,143 @@ func test_changed_save_rewrites_file():
 	await _drain_write()
 	var loaded: Dictionary = HFLevelIO.load_from_path(_save_path)
 	assert_eq(int(loaded.get("n", 0)), 2)
+
+
+# ===========================================================================
+# Save queue ordering (#51)
+# ===========================================================================
+
+
+func _third_save_path() -> String:
+	return "user://hf_encode_thread_test_third.hflevel"
+
+
+func _big_capture(tag: String) -> Dictionary:
+	# Big enough that the write thread is still running when the next save
+	# arrives, which is what puts a job in the pending queue.
+	var filler: Array = []
+	for i in range(60000):
+		filler.append(i)
+	return {"name": tag, "filler": filler}
+
+
+func _queue_a_save_behind_a_running_one() -> void:
+	root.captured = _big_capture("A")
+	assert_eq(files.save_hflevel(_save_path, true), OK)
+	root.captured = {"name": "B"}
+	assert_eq(files.save_hflevel(_second_save_path(), true), OK)
+	assert_eq(files._hflevel_pending.size(), 1, "B has to be queued behind a running A")
+	while files._hflevel_thread and files._hflevel_thread.is_alive():
+		await get_tree().process_frame
+
+
+func test_a_finished_worker_does_not_let_a_new_save_jump_the_queue():
+	# A has finished but has not been collected, B is queued behind it, and C
+	# arrives now. B and C share a path, so whichever runs last owns the file.
+	await _queue_a_save_behind_a_running_one()
+	root.captured = {"name": "C"}
+	assert_eq(files.save_hflevel(_second_save_path(), true), OK)
+	await _drain_write()
+
+	var order: Array = []
+	for entry in files.take_completed_saves():
+		order.append(str(entry.get("path", "")))
+	assert_eq(
+		order,
+		[_save_path, _second_save_path(), _second_save_path()],
+		"Completion has to follow the order the saves were asked for"
+	)
+	var loaded: Dictionary = HFLevelIO.load_from_path(_second_save_path())
+	assert_eq(str(loaded.get("name", "")), "C", "The newest save owns the file")
+
+
+func test_three_distinct_paths_complete_in_order():
+	await _queue_a_save_behind_a_running_one()
+	root.captured = {"name": "C"}
+	assert_eq(files.save_hflevel(_third_save_path(), true), OK)
+	await _drain_write()
+
+	var order: Array = []
+	for entry in files.take_completed_saves():
+		order.append(str(entry.get("path", "")))
+	assert_eq(order, [_save_path, _second_save_path(), _third_save_path()])
+	assert_eq(str(HFLevelIO.load_from_path(_second_save_path()).get("name", "")), "B")
+	assert_eq(str(HFLevelIO.load_from_path(_third_save_path()).get("name", "")), "C")
+	DirAccess.remove_absolute(_third_save_path())
+
+
+func test_a_discarded_pending_job_does_not_stall_the_queue():
+	assert_eq(files.save_hflevel(_save_path, true), OK)
+	while files._hflevel_thread and files._hflevel_thread.is_alive():
+		await get_tree().process_frame
+	files._hflevel_pending.append({"path": "", "encoded": {}})
+	root.captured = {"name": "after"}
+	assert_eq(files.save_hflevel(_second_save_path(), true), OK)
+	await _drain_write()
+	assert_true(
+		FileAccess.file_exists(_second_save_path()),
+		"A junk entry must not strand the writes behind it"
+	)
+
+
+# ===========================================================================
+# Region sidecar failures block the level save (#173)
+# ===========================================================================
+
+
+func _paint_shim(ok: bool) -> Node:
+	var s := GDScript.new()
+	s.source_code = (
+		"""
+extends Node
+
+var base_paths: Array = []
+var save_calls: int = 0
+
+func set_region_base_path(path: String) -> void:
+	base_paths.append(path)
+
+func save_loaded_regions() -> Dictionary:
+	save_calls += 1
+	return {"ok": %s, "failed": [], "error": "sidecar directory is not writable"}
+"""
+		% ("true" if ok else "false")
+	)
+	s.reload()
+	var node := Node.new()
+	node.set_script(s)
+	add_child_autoqfree(node)
+	return node
+
+
+func test_region_write_failure_blocks_the_level_save():
+	root.paint_system = _paint_shim(false)
+	var failures: Array = []
+	root.hflevel_save_failed.connect(func(p, m): failures.append([p, m]))
+	assert_ne(files.save_hflevel(_save_path, true), OK)
+	assert_push_error("sidecar directory is not writable")
+	assert_eq(failures.size(), 1, "The dock has to hear that the save failed")
+	assert_eq(str(failures[0][0]), _save_path)
+	assert_false(
+		FileAccess.file_exists(_save_path), "No level file may claim region data that is missing"
+	)
+
+
+func test_region_write_failure_on_autosave_reports_as_an_autosave():
+	root.paint_system = _paint_shim(false)
+	var manual: Array = []
+	var auto: Array = []
+	root.hflevel_save_failed.connect(func(_p, _m): manual.append(true))
+	root.autosave_failed.connect(func(m): auto.append(m))
+	assert_ne(files.save_hflevel(_save_path, true, true), OK)
+	assert_push_error("sidecar directory is not writable")
+	assert_eq(auto.size(), 1, "An autosave failure is not a manual save failure")
+	assert_eq(manual.size(), 0)
+
+
+func test_region_write_success_lets_the_level_save_proceed():
+	root.paint_system = _paint_shim(true)
+	assert_eq(files.save_hflevel(_save_path, true), OK)
+	await _drain_write()
+	assert_true(FileAccess.file_exists(_save_path))
+	assert_eq(root.paint_system.save_calls, 1)

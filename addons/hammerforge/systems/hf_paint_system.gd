@@ -20,6 +20,8 @@ const HFLevelIO = preload("../hflevel_io.gd")
 
 var root: Node3D
 var region_manager: HFTerrainRegionManager
+## Regions whose write already failed, so the warning is not repeated every frame.
+var _region_save_warned: Dictionary = {}
 var region_streaming_enabled: bool = false
 var region_memory_budget_mb: int = 256
 var region_show_grid: bool = false
@@ -545,16 +547,25 @@ func _region_file_path(region_id: Vector2i) -> String:
 	return dir.path_join(file_name)
 
 
-func save_loaded_regions() -> void:
+func save_loaded_regions() -> Dictionary:
 	if not region_streaming_enabled:
-		return
+		return {"ok": true, "failed": [], "error": ""}
 	if region_manager.region_base_path == "":
-		return
+		return {"ok": true, "failed": [], "error": ""}
 	var dir = _region_dir_for_base_path(region_manager.region_base_path)
 	if not DirAccess.dir_exists_absolute(dir):
 		DirAccess.make_dir_recursive_absolute(dir)
+	var failed: Array[Vector2i] = []
 	for rid in region_manager.loaded_regions.keys():
-		_save_region_file(rid)
+		if _save_region_file(rid) != OK:
+			failed.append(rid)
+	if failed.is_empty():
+		return {"ok": true, "failed": [], "error": ""}
+	return {
+		"ok": false,
+		"failed": failed,
+		"error": "Could not write %d region file(s) next to the level" % failed.size(),
+	}
 
 
 func load_region_index(index_data: Dictionary, hflevel_path: String = "") -> void:
@@ -760,9 +771,21 @@ func _load_region(region_id: Vector2i) -> void:
 	_reconcile_dirty_chunks(dirty_list)
 
 
-func _unload_region(region_id: Vector2i) -> void:
+## Streaming a region out throws away its chunks, so the paint has to reach
+## disk first. A failed write keeps the region loaded rather than losing it.
+func _unload_region(region_id: Vector2i) -> bool:
 	if not root.paint_layers:
-		return
+		return false
+	# An empty region has nothing to lose, so it always streams out.
+	if _region_has_data(region_id) and _save_region_file(region_id) != OK:
+		if not _region_save_warned.has(region_id):
+			_region_save_warned[region_id] = true
+			if root.has_signal("user_message"):
+				root.user_message.emit(
+					"Kept region %s loaded: its paint could not be written" % str(region_id), 2
+				)
+		return false
+	_region_save_warned.erase(region_id)
 	var chunk_bounds = _region_chunk_bounds(region_id)
 	var min_chunk = chunk_bounds.position
 	var max_chunk = chunk_bounds.position + chunk_bounds.size - Vector2i.ONE
@@ -773,6 +796,7 @@ func _unload_region(region_id: Vector2i) -> void:
 		if not removed.is_empty():
 			_reconcile_dirty_chunks(removed, layer)
 	region_manager.mark_unloaded(region_id)
+	return true
 
 
 func _reconcile_dirty_chunks(dirty: Array[Vector2i], layer_override: HFPaintLayer = null) -> void:
@@ -813,9 +837,9 @@ func _get_layer_by_id(layer_id: StringName) -> HFPaintLayer:
 	return null
 
 
-func _save_region_file(region_id: Vector2i) -> void:
+func _save_region_file(region_id: Vector2i) -> int:
 	if not root.paint_layers:
-		return
+		return OK
 	var data: Dictionary = {"version": 1, "region_id": [region_id.x, region_id.y], "layers": []}
 	var chunk_bounds = _region_chunk_bounds(region_id)
 	var min_chunk = chunk_bounds.position
@@ -866,16 +890,21 @@ func _save_region_file(region_id: Vector2i) -> void:
 		var path = _region_file_path(region_id)
 		if path != "" and FileAccess.file_exists(path):
 			DirAccess.remove_absolute(path)
-		return
+		return OK
 	var encoded = HFLevelIO.encode_variant(data)
 	var path = _region_file_path(region_id)
 	if path == "":
-		return
+		return ERR_INVALID_PARAMETER
 	var dir = path.get_base_dir()
 	if not DirAccess.dir_exists_absolute(dir):
 		DirAccess.make_dir_recursive_absolute(dir)
-	HFLevelIO.save_to_path(path, encoded, root.hflevel_compress)
+	var err := HFLevelIO.save_to_path(path, encoded, root.hflevel_compress)
+	if err != OK:
+		push_error("HFPaint: could not write region %s (error: %d)" % [str(region_id), err])
+		return err
+	# Only claim the sidecar exists once it really does.
 	region_manager.region_index[region_id] = {"has_data": true}
+	return OK
 
 
 func _update_region_overlay() -> void:
