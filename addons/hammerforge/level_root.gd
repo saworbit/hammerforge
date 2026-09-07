@@ -10,6 +10,7 @@ const PlaytestFPS = preload("playtest_fps.gd")
 const HFLevelIO = preload("hflevel_io.gd")
 const MapIO = preload("map_io.gd")
 const FaceData = preload("face_data.gd")
+const HFArchBuilderType = preload("hf_arch_builder.gd")
 const MaterialManager = preload("material_manager.gd")
 const SurfacePaint = preload("surface_paint.gd")
 const FaceSelector = preload("face_selector.gd")
@@ -1218,6 +1219,29 @@ func move_brushes_to_ceiling(brush_ids: Array) -> void:
 	brush_system.move_brushes_to_ceiling(brush_ids)
 
 
+## Build an arch centred on `centre`, one brush per segment.
+##
+## Undo dispatches by this name, so its signature is what undo replays.
+func create_arch(settings: Dictionary, centre: Vector3) -> HFOpResult:
+	var check: HFOpResult = HFArchBuilderType.validate(settings)
+	if not check.ok:
+		user_message.emit(check.user_text(), 1)
+		return check
+	var face_sets: Array = HFArchBuilderType.build(settings)
+	if face_sets.is_empty():
+		return HFOpResult.fail("Arch: produced no geometry")
+	begin_signal_batch()
+	var created: PackedStringArray = brush_system.create_brushes_from_face_sets(
+		face_sets, Transform3D(Basis.IDENTITY, centre)
+	)
+	end_signal_batch()
+	if created.is_empty():
+		return HFOpResult.fail("Arch: produced no geometry")
+	var message := "Arch: created %d segments" % created.size()
+	_log(message)
+	return HFOpResult.success(message)
+
+
 func clip_brush_by_plane(brush_id: String, plane: Plane) -> HFOpResult:
 	return brush_system.clip_brush_by_plane(brush_id, plane)
 
@@ -1341,9 +1365,14 @@ func create_duplicate_array(brush_ids: PackedStringArray, count: int, p_offset: 
 
 
 func create_radial_array(
-	brush_ids: PackedStringArray, count: int, axis_index: int, step_degrees: float, pivot: Vector3
+	brush_ids: PackedStringArray,
+	count: int,
+	axis_index: int,
+	step_degrees: float,
+	pivot: Vector3,
+	rise: float = 0.0
 ) -> Variant:
-	return brush_system.create_radial_array(brush_ids, count, axis_index, step_degrees, pivot)
+	return brush_system.create_radial_array(brush_ids, count, axis_index, step_degrees, pivot, rise)
 
 
 func create_grid_array(brush_ids: PackedStringArray, counts: Vector3i, spacing: Vector3) -> Variant:

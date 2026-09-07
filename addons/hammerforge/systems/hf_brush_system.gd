@@ -1649,19 +1649,45 @@ static func _serialize_shifted_faces(faces: Array, offset: Vector3) -> Array:
 ## A piece that is still an axis-aligned box in the brush's own frame is emitted
 ## as a BOX so it keeps its resize handles; anything else becomes CUSTOM with the
 ## split faces as its authoritative geometry.
-func _piece_info_from_faces(draft: DraftBrush, faces: Array) -> Dictionary:
-	var xform := draft.global_transform
+## Describe one face set as brush info, placed by `placement` and centred on its
+## own geometry.
+##
+## A piece that is still an axis-aligned box in the placing frame is emitted as a
+## BOX so it keeps its resize handles; anything else becomes CUSTOM with the faces
+## as its authoritative geometry.
+func _face_set_info(faces: Array, placement: Transform3D) -> Dictionary:
 	var described: Dictionary = HFConvexClip.is_axis_aligned_box(faces)
 	var bounds := _local_bounds_of_faces(faces)
 	var centre: Vector3 = described["center"] if not described.is_empty() else bounds.get_center()
-	var info: Dictionary = {
+	return {
 		"shape": root.BrushShape.BOX if not described.is_empty() else root.BrushShape.CUSTOM,
 		"size": described["size"] if not described.is_empty() else bounds.size,
-		"operation": draft.operation,
+		"operation": CSGShape3D.OPERATION_UNION,
 		"brush_id": _next_brush_id(),
-		"transform": Transform3D(xform.basis, xform * centre),
+		"transform": Transform3D(placement.basis, placement * centre),
 		"faces": _serialize_shifted_faces(faces, -centre),
 	}
+
+
+## Create one brush per generated face set. The entry point every generator uses.
+func create_brushes_from_face_sets(
+	face_sets: Array, placement: Transform3D, material: Material = null
+) -> PackedStringArray:
+	var created := PackedStringArray()
+	for faces in face_sets:
+		if (faces as Array).is_empty():
+			continue
+		var info := _face_set_info(faces, placement)
+		if material:
+			info["material"] = material
+		if create_brush_from_info(info):
+			created.append(str(info["brush_id"]))
+	return created
+
+
+func _piece_info_from_faces(draft: DraftBrush, faces: Array) -> Dictionary:
+	var info := _face_set_info(faces, draft.global_transform)
+	info["operation"] = draft.operation
 	if draft.material_override:
 		info["material"] = draft.material_override
 	var entity_class := str(draft.get_meta("brush_entity_class", ""))
@@ -1868,12 +1894,17 @@ func create_duplicate_array(
 ## Ring of copies rotated `step_degrees` apart about `pivot`. Pass
 ## `360.0 / (count + 1)` as the step to close a full circle.
 func create_radial_array(
-	brush_ids: PackedStringArray, p_count: int, axis_index: int, step_degrees: float, pivot: Vector3
+	brush_ids: PackedStringArray,
+	p_count: int,
+	axis_index: int,
+	step_degrees: float,
+	pivot: Vector3,
+	rise: float = 0.0
 ) -> Variant:
 	if brush_ids.is_empty() or p_count < 1:
 		return null
 	var dup := _new_duplicator_for(brush_ids)
-	if not dup.generate_radial(self, p_count, axis_index, step_degrees, pivot):
+	if not dup.generate_radial(self, p_count, axis_index, step_degrees, pivot, rise):
 		return null
 	_duplicators[dup.duplicator_id] = dup
 	return dup
