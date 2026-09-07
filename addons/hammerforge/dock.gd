@@ -466,6 +466,15 @@ var dup_grid_x: SpinBox = null
 var dup_grid_y: SpinBox = null
 var dup_grid_z: SpinBox = null
 var rotate_snap_spin: SpinBox = null
+var _arch_section: HFCollapsibleSection = null
+var arch_radius_spin: SpinBox = null
+var arch_thickness_spin: SpinBox = null
+var arch_depth_spin: SpinBox = null
+var arch_arc_spin: SpinBox = null
+var arch_segments_spin: SpinBox = null
+var arch_start_spin: SpinBox = null
+var arch_create_btn: Button = null
+var dup_rise_spin: SpinBox = null
 var rotate_ccw_btn: Button = null
 var rotate_cw_btn: Button = null
 var flip_btn: Button = null
@@ -1654,6 +1663,55 @@ func _build_displacement_bevel_section() -> void:
 	_bevel_inset_btn.pressed.connect(_on_bevel_inset)
 	bbox.add_child(_bevel_inset_btn)
 	_register_section(_bevel_section, "Bevel")
+	_build_arch_section(brush_vbox)
+
+
+## An arch is described rather than drawn, so it gets a section of parameters and
+## a button rather than a viewport tool.
+func _build_arch_section(brush_vbox: VBoxContainer) -> void:
+	_arch_section = HFCollapsibleSection.create("Arch", false)
+	brush_vbox.add_child(_arch_section)
+	var box: VBoxContainer = _arch_section.get_content()
+
+	var size_row = HBoxContainer.new()
+	size_row.add_child(_make_label("Radius:"))
+	arch_radius_spin = HFUIFactory.make_spin(1.0, 4096.0, 1.0, 128.0)
+	arch_radius_spin.tooltip_text = "Outer radius of the arch"
+	size_row.add_child(arch_radius_spin)
+	size_row.add_child(_make_label("Wall:"))
+	arch_thickness_spin = HFUIFactory.make_spin(1.0, 2048.0, 1.0, 32.0)
+	arch_thickness_spin.tooltip_text = "How thick the arch ring is; the opening is the rest"
+	size_row.add_child(arch_thickness_spin)
+	box.add_child(size_row)
+
+	var shape_row = HBoxContainer.new()
+	shape_row.add_child(_make_label("Depth:"))
+	arch_depth_spin = HFUIFactory.make_spin(1.0, 2048.0, 1.0, 64.0)
+	arch_depth_spin.tooltip_text = "How far the arch extends along its own axis"
+	shape_row.add_child(arch_depth_spin)
+	shape_row.add_child(_make_label("Arc:"))
+	arch_arc_spin = HFUIFactory.make_spin(-360.0, 360.0, 5.0, 180.0)
+	arch_arc_spin.tooltip_text = "Degrees the arch sweeps. 180 is a half arch, 360 a full ring"
+	shape_row.add_child(arch_arc_spin)
+	box.add_child(shape_row)
+
+	var count_row = HBoxContainer.new()
+	count_row.add_child(_make_label("Segments:"))
+	arch_segments_spin = HFUIFactory.make_spin(1, 128, 1, 8)
+	arch_segments_spin.tooltip_text = "One brush per segment. More segments, smoother curve"
+	count_row.add_child(arch_segments_spin)
+	count_row.add_child(_make_label("Start:"))
+	arch_start_spin = HFUIFactory.make_spin(-360.0, 360.0, 5.0, 0.0)
+	arch_start_spin.tooltip_text = "Angle the arch begins at"
+	count_row.add_child(arch_start_spin)
+	box.add_child(count_row)
+
+	arch_create_btn = HFUIFactory.make_button(
+		"Create Arch", "Build the arch centred on the selection, or on the world origin"
+	)
+	arch_create_btn.pressed.connect(_on_create_arch)
+	box.add_child(arch_create_btn)
+	_register_section(_arch_section, "Arch")
 
 
 func _make_label(text: String) -> Label:
@@ -3054,6 +3112,10 @@ func _on_create_duplicate_array() -> void:
 
 func _on_duplicate_array_mode_changed(index: int) -> void:
 	HFDockBrushHandler.on_duplicate_array_mode_changed(self, index)
+
+
+func _on_create_arch() -> void:
+	HFDockBrushHandler.on_create_arch(self)
 
 
 func _on_rotate_selection(direction: int) -> void:

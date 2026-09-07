@@ -26,6 +26,7 @@ static func requires_existing_root(action: String) -> bool:
 			"hollow",
 			"clip",
 			"clip_to_face",
+			"create_arch",
 			"carve",
 			"merge",
 			"rotate_ccw",
@@ -108,6 +109,9 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			plugin._clip_selected(root)
 		"clip_to_face":
 			plugin._clip_to_face_plane_selected(root)
+		"create_arch":
+			if dock:
+				dock._on_create_arch()
 		"carve":
 			plugin._carve_selected(root)
 		"merge":
