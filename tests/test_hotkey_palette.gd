@@ -290,3 +290,71 @@ func _entry_for(action: String):
 		if entry["action"] == action:
 			return entry
 	return null
+
+
+# ===========================================================================
+# Row layout
+#
+# The binding used to be anchored with PRESET_CENTER_RIGHT, which puts a
+# control's top-left corner on that point rather than aligning its right edge
+# to it. Every binding therefore began at the row's right edge and ran past it,
+# and the scroll container clipped all but the first character or two: "Ctrl+K"
+# rendered as "Ctr". Caught by looking at the editor, not by these tests.
+# ===========================================================================
+
+
+func _binding_label(btn: Button) -> Label:
+	for child in btn.get_children():
+		if child is Label:
+			return child
+	return null
+
+
+func test_binding_label_stays_inside_its_row():
+	# Rows sit at their own minimum width until the palette gets a real layout
+	# pass, and a binding trivially "fits" a row narrower than itself. Give each
+	# row the width it has in the palette and measure against that.
+	for entry in palette._entries:
+		var btn: Button = entry["button"]
+		btn.size = Vector2(300, 26)
+		var bind := _binding_label(btn)
+		assert_not_null(bind, "Every row carries its binding")
+		assert_lte(
+			bind.position.x + bind.size.x,
+			btn.size.x,
+			"Binding '%s' runs off the right of its row and gets clipped" % entry["binding"]
+		)
+		assert_gte(bind.position.x, 0.0, "Binding '%s' starts left of its row" % entry["binding"])
+
+
+func test_binding_label_follows_a_row_that_changes_width():
+	var btn: Button = palette._entries[0]["button"]
+	var bind := _binding_label(btn)
+	for width in [200.0, 320.0, 640.0]:
+		btn.size = Vector2(width, 26)
+		assert_almost_eq(
+			bind.position.x + bind.size.x,
+			width - HFHotkeyPalette.BIND_INSET,
+			0.01,
+			"The binding should hold its inset from the right edge at width %s" % width
+		)
+
+
+func test_binding_label_is_right_aligned_with_an_inset():
+	var entry = palette._entries[0]
+	var btn: Button = entry["button"]
+	var bind: Label = null
+	for child in btn.get_children():
+		if child is Label:
+			bind = child
+			break
+	assert_eq(bind.horizontal_alignment, HORIZONTAL_ALIGNMENT_RIGHT)
+	assert_eq(bind.anchor_right, 1.0, "Follows the row's right edge as the palette resizes")
+	assert_almost_eq(bind.offset_right, -HFHotkeyPalette.BIND_INSET, 0.01)
+
+
+func test_binding_label_does_not_swallow_the_row_click():
+	for entry in palette._entries:
+		for child in entry["button"].get_children():
+			if child is Label:
+				assert_eq(child.mouse_filter, Control.MOUSE_FILTER_IGNORE)
