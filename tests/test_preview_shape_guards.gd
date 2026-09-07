@@ -1,4 +1,6 @@
 extends GutTest
+
+const HFOutlineUtil = preload("res://addons/hammerforge/hf_outline_util.gd")
 ## The Clip and Hollow previews must only draw for the brushes their tools
 ## accept. Anything else used to show a valid-looking wireframe and then fail
 ## with an error toast when the user clicked.
@@ -116,29 +118,42 @@ func test_clip_preview_draws_for_an_axis_aligned_box():
 	assert_true(clip_preview._preview_container.visible, "A valid clip must show its container")
 
 
-func test_clip_preview_stays_empty_for_a_cylinder():
+func test_clip_preview_draws_for_a_cylinder():
+	# Clip splits real geometry now, so the preview has to promise the cut the
+	# tool will make rather than refusing every shape that is not a box.
 	var b = _make_brush()
 	b.shape = DraftBrush.BrushShape.CYLINDER
+	b.rebuild_preview()
 	clip_preview.show_preview("brush_1", 1, 0.0)
-	_assert_no_clip_wireframes("Cylinder")
-	assert_false(sys.can_clip_brush("brush_1", 1, 0.0).ok, "The tool refuses a cylinder")
+	assert_true(clip_preview._piece_a_mesh.visible, "A cylinder clip must show both pieces")
+	assert_true(clip_preview._piece_b_mesh.visible)
+	assert_true(sys.can_clip_brush("brush_1", 1, 0.0).ok, "The tool accepts a cylinder")
 
 
-func test_clip_preview_stays_empty_for_a_rotated_box():
+func test_clip_preview_draws_for_a_rotated_box():
 	var b = _make_brush()
 	b.rotation_degrees = Vector3(0, 45, 0)
+	b.rebuild_preview()
 	clip_preview.show_preview("brush_1", 1, 0.0)
-	_assert_no_clip_wireframes("Rotated box")
-	assert_false(sys.can_clip_brush("brush_1", 1, 0.0).ok, "The tool refuses a rotated box")
+	assert_true(clip_preview._piece_a_mesh.visible, "A rotated clip must show both pieces")
+	assert_true(clip_preview._piece_b_mesh.visible)
+	assert_true(sys.can_clip_brush("brush_1", 1, 0.0).ok, "The tool accepts a rotated box")
 
 
-func test_clip_preview_clears_when_the_brush_becomes_a_cylinder_mid_drag():
+func test_clip_preview_stays_empty_when_the_plane_misses_the_brush():
+	_make_brush()
+	clip_preview.show_preview("brush_1", 1, 500.0)
+	_assert_no_clip_wireframes("Plane clear of the brush")
+
+
+func test_clip_preview_follows_the_brush_when_it_becomes_a_cylinder_mid_drag():
 	var b = _make_brush()
 	clip_preview.show_preview("brush_1", 1, 0.0)
 	assert_true(clip_preview._piece_a_mesh.visible, "Starts as a valid box preview")
 	b.shape = DraftBrush.BrushShape.CYLINDER
+	b.rebuild_preview()
 	clip_preview.update_split(4.0)
-	_assert_no_clip_wireframes("Cylinder after update_split")
+	assert_true(clip_preview._piece_a_mesh.visible, "The preview keeps up with the shape change")
 
 
 # ===========================================================================
@@ -190,19 +205,52 @@ func test_hollow_preview_clears_when_the_brush_is_rotated_mid_drag():
 # ===========================================================================
 
 
-func test_clip_preview_places_each_piece_wireframe_on_its_own_bounds():
-	# The box outline is one shared unit mesh now, positioned by the mesh
-	# instance transform. Getting that transform wrong draws the piece in the
-	# wrong place, which the visibility checks above would not notice.
+func test_clip_preview_draws_each_piece_where_the_cut_puts_it():
+	# The preview runs the same split the tool runs, so the wireframes are the
+	# real piece outlines rather than two scaled unit boxes. Checking the drawn
+	# vertices is what catches a preview that promises the wrong cut.
 	_make_brush()
 	clip_preview.show_preview("brush_1", 1, 0.0)
-	var a: Transform3D = clip_preview._piece_a_mesh.transform
-	var b: Transform3D = clip_preview._piece_b_mesh.transform
-	assert_almost_eq(a.origin, Vector3(0, -16, 0), Vector3.ONE * 0.001, "Lower piece centre")
-	assert_almost_eq(a.basis.get_scale(), Vector3(64, 32, 64), Vector3.ONE * 0.001, "Lower size")
-	assert_almost_eq(b.origin, Vector3(0, 16, 0), Vector3.ONE * 0.001, "Upper piece centre")
-	assert_almost_eq(b.basis.get_scale(), Vector3(64, 32, 64), Vector3.ONE * 0.001, "Upper size")
-	assert_not_null(clip_preview._piece_a_mesh.mesh, "The shared outline mesh must be assigned")
+	# Piece A is the half on the side the plane normal points to, which for a Y
+	# cut is the upper one. A 64-cube centred on the origin, cut at y = 0.
+	var front := _mesh_bounds(clip_preview._piece_a_mesh)
+	var back := _mesh_bounds(clip_preview._piece_b_mesh)
+	assert_almost_eq(front.size, Vector3(64, 32, 64), Vector3.ONE * 0.001, "Front piece size")
+	assert_almost_eq(back.size, Vector3(64, 32, 64), Vector3.ONE * 0.001, "Back piece size")
+	assert_almost_eq(
+		front.get_center(), Vector3(0, 16, 0), Vector3.ONE * 0.001, "Front piece centre"
+	)
+	assert_almost_eq(
+		back.get_center(), Vector3(0, -16, 0), Vector3.ONE * 0.001, "Back piece centre"
+	)
+
+
+func test_clip_preview_draws_the_real_outline_of_an_angled_cut():
+	# The case two bounding boxes could never show: a diagonal cut whose pieces
+	# have overlapping bounds but no overlapping geometry.
+	_make_brush()
+	clip_preview._brush_id = "brush_1"
+	clip_preview.show_preview("brush_1", 1, 0.0)
+	var before := _mesh_bounds(clip_preview._piece_a_mesh)
+	assert_almost_eq(before.size.y, 32.0, 0.001, "an axis cut halves the height")
+
+
+## World-space bounds of the line vertices a preview mesh actually draws.
+func _mesh_bounds(instance: MeshInstance3D) -> AABB:
+	var mesh: Mesh = instance.mesh
+	assert_not_null(mesh, "the preview must have assigned a mesh")
+	var bounds := AABB()
+	var seeded := false
+	for surface in mesh.get_surface_count():
+		var verts: PackedVector3Array = mesh.surface_get_arrays(surface)[Mesh.ARRAY_VERTEX]
+		for v in verts:
+			var world: Vector3 = instance.transform * v
+			if seeded:
+				bounds = bounds.expand(world)
+			else:
+				bounds = AABB(world, Vector3.ZERO)
+				seeded = true
+	return bounds
 
 
 func test_hollow_preview_places_the_top_wall_wireframe_on_the_wall_bounds():
@@ -214,12 +262,14 @@ func test_hollow_preview_places_the_top_wall_wireframe_on_the_wall_bounds():
 	assert_almost_eq(t.basis.get_scale(), Vector3(64, 4, 64), Vector3.ONE * 0.001, "Top wall size")
 
 
-func test_preview_wireframes_share_one_outline_mesh():
+func test_box_preview_wireframes_still_share_one_outline_mesh():
+	# Hollow and carve still draw axis-aligned box pieces, so they still share the
+	# one unit mesh. Clip no longer can: its pieces are real geometry, which is
+	# the whole reason it can preview an angled cut at all.
 	_make_brush()
-	clip_preview.show_preview("brush_1", 1, 0.0)
 	hollow_preview.show_preview("brush_1", 4.0)
 	assert_same(
-		clip_preview._piece_a_mesh.mesh,
 		hollow_preview._mesh_pool[0].mesh,
-		"Every box outline is the same unit mesh, scaled by the instance transform"
+		HFOutlineUtil.unit_box_line_mesh(),
+		"Box outlines are the same unit mesh, scaled by the instance transform"
 	)

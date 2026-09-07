@@ -7,6 +7,7 @@ extends "hf_system.gd"
 
 const DraftBrush = preload("../brush_instance.gd")
 const HFOutlineUtil = preload("../hf_outline_util.gd")
+const HFConvexClip = preload("../hf_convex_clip.gd")
 
 var _preview_container: Node3D
 var _piece_a_mesh: MeshInstance3D
@@ -115,69 +116,52 @@ func _rebuild() -> void:
 		return
 
 	var draft := brush as DraftBrush
-	var pos: Vector3 = draft.global_position
-	var half: Vector3 = draft.size * 0.5
-
-	# Compute brush min/max along clip axis
-	var brush_min: float
-	var brush_max: float
-	match _axis:
-		0:
-			brush_min = pos.x - half.x
-			brush_max = pos.x + half.x
-		1:
-			brush_min = pos.y - half.y
-			brush_max = pos.y + half.y
-		_:
-			brush_min = pos.z - half.z
-			brush_max = pos.z + half.z
-
-	# Snap split position the same way the validator above did.
+	# Snap the split position the same way the validator above did.
 	var snap: float = root.grid_snap if root.grid_snap > 0.0 else 0.0
 	var split: float = _split_pos
 	if snap > 0.0:
 		split = snapped(split, snap)
 
-	# Compute the two piece AABBs
-	var size_a: Vector3 = draft.size.abs()
-	var size_b: Vector3 = draft.size.abs()
-	var center_a: Vector3 = pos
-	var center_b: Vector3 = pos
-
-	match _axis:
-		0:
-			size_a.x = split - brush_min
-			size_b.x = brush_max - split
-			center_a.x = (brush_min + split) / 2.0
-			center_b.x = (split + brush_max) / 2.0
-		1:
-			size_a.y = split - brush_min
-			size_b.y = brush_max - split
-			center_a.y = (brush_min + split) / 2.0
-			center_b.y = (split + brush_max) / 2.0
-		_:
-			size_a.z = split - brush_min
-			size_b.z = brush_max - split
-			center_a.z = (brush_min + split) / 2.0
-			center_b.z = (split + brush_max) / 2.0
-
-	var aabb_a := AABB(center_a - size_a * 0.5, size_a)
-	var aabb_b := AABB(center_b - size_b * 0.5, size_b)
+	# Preview the cut the tool will actually make, by running the same split.
+	# Drawing two bounding boxes instead would be a lie for every angled cut and
+	# for every brush that is not a box.
+	var xform := draft.global_transform
+	var world_plane := Plane(HFConvexClip.axis_normal(_axis), split)
+	var halves: Dictionary = HFConvexClip.split(
+		draft.get_faces(), xform.affine_inverse() * world_plane
+	)
+	var front: Array = halves["front"]
+	var back: Array = halves["back"]
+	if front.is_empty() or back.is_empty():
+		clear()
+		return
 
 	_ensure_container()
 
-	# Update piece wireframes
-	_piece_a_mesh.mesh = HFOutlineUtil.unit_box_line_mesh()
-	_piece_a_mesh.transform = HFOutlineUtil.aabb_box_transform(aabb_a)
+	_piece_a_mesh.mesh = _lines_mesh(HFOutlineUtil.face_boundary_lines(front))
+	_piece_a_mesh.transform = xform
 	_piece_a_mesh.visible = true
-	_piece_b_mesh.mesh = HFOutlineUtil.unit_box_line_mesh()
-	_piece_b_mesh.transform = HFOutlineUtil.aabb_box_transform(aabb_b)
+	_piece_b_mesh.mesh = _lines_mesh(HFOutlineUtil.face_boundary_lines(back))
+	_piece_b_mesh.transform = xform
 	_piece_b_mesh.visible = true
 
-	# Update split plane quad
-	_plane_mesh.mesh = _build_plane_mesh(pos, draft.size, _axis, split)
+	var bounds: AABB = root.brush_system.world_bounds_of(draft)
+	_plane_mesh.mesh = _build_plane_mesh(bounds.get_center(), bounds.size, _axis, split)
+	_plane_mesh.transform = Transform3D.IDENTITY
 	_plane_mesh.visible = true
 	_preview_container.visible = true
+
+
+## Wrap a flat list of line-segment endpoints into a drawable mesh.
+static func _lines_mesh(points: PackedVector3Array) -> ArrayMesh:
+	var mesh := ArrayMesh.new()
+	if points.size() < 2:
+		return mesh
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = points
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_LINES, arrays)
+	return mesh
 
 
 func _ensure_container() -> void:

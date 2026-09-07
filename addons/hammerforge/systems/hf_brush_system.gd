@@ -9,6 +9,7 @@ const FaceSelector = preload("../face_selector.gd")
 const FaceData = preload("../face_data.gd")
 const HFValidation = preload("../hf_validation.gd")
 const HFOutlineUtil = preload("../hf_outline_util.gd")
+const HFConvexClip = preload("../hf_convex_clip.gd")
 const CONTAINER_ROLE_META := &"hf_container_role"
 const ROLE_DRAFT := "draft"
 const ROLE_PENDING := "pending"
@@ -1216,23 +1217,10 @@ func can_clip_brush(brush_id: String, axis: int, split_pos: float) -> HFOpResult
 	if not brush or not (brush is DraftBrush):
 		return HFOpResult.fail("Clip: brush not found")
 	var draft := brush as DraftBrush
-	var shape_check := _check_axis_aligned_box(draft, "Clip")
-	if not shape_check.ok:
-		return shape_check
-	var pos = draft.global_position
-	var half = draft.size * 0.5
-	var brush_min: float
-	var brush_max: float
-	match axis:
-		0:
-			brush_min = pos.x - half.x
-			brush_max = pos.x + half.x
-		1:
-			brush_min = pos.y - half.y
-			brush_max = pos.y + half.y
-		_:
-			brush_min = pos.z - half.z
-			brush_max = pos.z + half.z
+	var bounds := world_bounds_of(draft)
+	var axis_index := clampi(axis, 0, 2)
+	var brush_min: float = bounds.position[axis_index]
+	var brush_max: float = bounds.position[axis_index] + bounds.size[axis_index]
 	var snap = root.grid_snap if root.grid_snap > 0.0 else 0.0
 	if snap > 0.0:
 		split_pos = snapped(split_pos, snap)
@@ -1593,9 +1581,12 @@ func _move_brushes_vertical(brush_ids: Array, direction: float) -> void:
 # ---------------------------------------------------------------------------
 
 
-## Split a brush along an axis-aligned plane.
-## axis: 0=X, 1=Y, 2=Z.  split_pos: world coordinate on that axis.
-func clip_brush_by_id(brush_id: String, axis: int, split_pos: float) -> HFOpResult:
+## Split a brush along a world-space plane.
+##
+## Works on any convex brush at any rotation: the plane is taken into the brush's
+## own frame and the split runs there, so both pieces inherit the original
+## transform untouched and rotation is carried rather than handled.
+func clip_brush_by_plane(brush_id: String, plane: Plane) -> HFOpResult:
 	if brush_id == "":
 		return _op_fail("Clip: no brush ID provided")
 	if root.has_method("tag_full_reconcile"):
@@ -1604,27 +1595,43 @@ func clip_brush_by_id(brush_id: String, axis: int, split_pos: float) -> HFOpResu
 	if not brush or not (brush is DraftBrush):
 		return _op_fail("Clip: brush not found")
 	var draft := brush as DraftBrush
-	# Clip rebuilds the brush as two axis-aligned box pieces, so anything that is
-	# not an unrotated box would be silently replaced with the wrong geometry.
-	var shape_check := _check_axis_aligned_box(draft, "Clip")
-	if not shape_check.ok:
-		return _op_fail(shape_check.message, shape_check.fix_hint)
-	var pos = draft.global_position
-	var half = draft.size * 0.5
+	if plane.normal.length_squared() < 0.5:
+		return _op_fail("Clip: the cut plane has no direction")
+	_ensure_faces(draft)
+	var faces: Array = draft.get_faces()
+	if faces.size() < 4:
+		return _op_fail(
+			"Clip: brush has no usable geometry", "Rebuild or redraw the brush and try again"
+		)
 
-	# Compute brush min/max along the clip axis
-	var brush_min: float
-	var brush_max: float
-	match axis:
-		0:
-			brush_min = pos.x - half.x
-			brush_max = pos.x + half.x
-		1:
-			brush_min = pos.y - half.y
-			brush_max = pos.y + half.y
-		_:
-			brush_min = pos.z - half.z
-			brush_max = pos.z + half.z
+	var xform := draft.global_transform
+	var local_plane := xform.affine_inverse() * plane
+	var halves: Dictionary = HFConvexClip.split(faces, local_plane)
+	var front: Array = halves["front"]
+	var back: Array = halves["back"]
+	if front.is_empty() or back.is_empty():
+		return _op_fail(
+			"Clip: the cut plane does not pass through the brush",
+			"Move the split point inside the brush"
+		)
+
+	var infos: Array = [_piece_info_from_faces(draft, front), _piece_info_from_faces(draft, back)]
+	return _replace_brush_with_pieces(draft, brush_id, infos, "Clip")
+
+
+## Split a brush along an axis-aligned plane.
+## axis: 0=X, 1=Y, 2=Z.  split_pos: world coordinate on that axis.
+func clip_brush_by_id(brush_id: String, axis: int, split_pos: float) -> HFOpResult:
+	if brush_id == "":
+		return _op_fail("Clip: no brush ID provided")
+	var brush = _find_brush_by_id(brush_id)
+	if not brush or not (brush is DraftBrush):
+		return _op_fail("Clip: brush not found")
+	var draft := brush as DraftBrush
+	var axis_index := clampi(axis, 0, 2)
+	var bounds := world_bounds_of(draft)
+	var brush_min: float = bounds.position[axis_index]
+	var brush_max: float = bounds.position[axis_index] + bounds.size[axis_index]
 
 	# Snap the split position to the grid
 	var snap = root.grid_snap if root.grid_snap > 0.0 else 0.0
@@ -1634,125 +1641,171 @@ func clip_brush_by_id(brush_id: String, axis: int, split_pos: float) -> HFOpResu
 	# Reject if split is outside or on the edge of the brush
 	var margin = snap if snap > 0.0 else 0.01
 	if split_pos <= brush_min + margin or split_pos >= brush_max - margin:
-		var axis_name = ["X", "Y", "Z"][clampi(axis, 0, 2)]
+		var axis_name = ["X", "Y", "Z"][axis_index]
 		return _op_fail(
 			"Clip: split position %.1f is outside brush bounds on %s axis" % [split_pos, axis_name],
 			"Click inside the brush face to pick a valid split point"
 		)
 
-	var mat = draft.material_override
-	var operation = draft.operation
+	var normal := HFConvexClip.axis_normal(axis_index)
+	return clip_brush_by_plane(brush_id, Plane(normal, split_pos))
 
-	# Build two brush infos — one for each side
-	var size_a = draft.size.abs()
-	var size_b = draft.size.abs()
-	var center_a = pos
-	var center_b = pos
 
-	match axis:
-		0:  # X axis
-			size_a.x = split_pos - brush_min
-			size_b.x = brush_max - split_pos
-			center_a.x = (brush_min + split_pos) / 2.0
-			center_b.x = (split_pos + brush_max) / 2.0
-		1:  # Y axis
-			size_a.y = split_pos - brush_min
-			size_b.y = brush_max - split_pos
-			center_a.y = (brush_min + split_pos) / 2.0
-			center_b.y = (split_pos + brush_max) / 2.0
-		_:  # Z axis
-			size_a.z = split_pos - brush_min
-			size_b.z = brush_max - split_pos
-			center_a.z = (brush_min + split_pos) / 2.0
-			center_b.z = (split_pos + brush_max) / 2.0
+## Split a brush along the plane of one face of another (or the same) brush.
+##
+## With rotation available this is the cheapest route to an angled cut: pick the
+## face whose plane you want, and cut along it.
+func clip_brush_to_face_plane(
+	brush_id: String, source_brush_id: String, face_index: int
+) -> HFOpResult:
+	var source = _find_brush_by_id(source_brush_id)
+	if not source or not (source is DraftBrush):
+		return _op_fail("Clip: reference brush not found")
+	var source_draft := source as DraftBrush
+	_ensure_faces(source_draft)
+	var faces: Array = source_draft.get_faces()
+	if face_index < 0 or face_index >= faces.size():
+		return _op_fail("Clip: no reference face selected", "Select a face to cut along, then clip")
+	var face: FaceData = faces[face_index]
+	if face == null or face.local_verts.size() < 3:
+		return _op_fail("Clip: the reference face has no geometry")
+	var xform := source_draft.global_transform
+	var world_normal: Vector3 = (xform.basis * face.normal).normalized()
+	if world_normal.length_squared() < 0.5:
+		return _op_fail("Clip: the reference face has no direction")
+	var world_point: Vector3 = xform * face.local_verts[0]
+	return clip_brush_by_plane(brush_id, Plane(world_normal, world_normal.dot(world_point)))
 
-	var infos: Array = [
-		{
-			"shape": root.BrushShape.BOX,
-			"size": size_a,
-			"center": center_a,
-			"operation": operation,
-			"brush_id": _next_brush_id(),
-		},
-		{
-			"shape": root.BrushShape.BOX,
-			"size": size_b,
-			"center": center_b,
-			"operation": operation,
-			"brush_id": _next_brush_id(),
-		},
-	]
 
-	if mat:
-		for info in infos:
-			info["material"] = mat
+# ---------------------------------------------------------------------------
+# Shared cutting helpers (clip and carve)
+# ---------------------------------------------------------------------------
 
-	# Copy brush entity class if present
-	var bec = str(draft.get_meta("brush_entity_class", ""))
-	if bec != "":
-		for info in infos:
-			info["brush_entity_class"] = bec
 
-	# Copy visgroups / group_id
-	var vgs: PackedStringArray = draft.get_meta("visgroups", PackedStringArray())
-	if not vgs.is_empty():
-		for info in infos:
-			info["visgroups"] = Array(vgs)
-	var gid = str(draft.get_meta("group_id", ""))
-	if gid != "":
-		for info in infos:
-			info["group_id"] = gid
+## Make sure a brush has its face data before anything reads geometry off it.
+func _ensure_faces(draft: DraftBrush) -> void:
+	if draft.get_faces().is_empty():
+		draft.rebuild_preview()
 
-	delete_brush(brush)
 
-	var count := 0
+## World bounds measured through the brush's own transform, so a rotated or
+## non-box brush reports the extent it actually occupies rather than
+## `global_position` plus half its nominal size.
+func world_bounds_of(draft: DraftBrush) -> AABB:
+	_ensure_faces(draft)
+	var xform := draft.global_transform
+	var bounds := AABB()
+	var seeded := false
+	for face in draft.get_faces():
+		var data: FaceData = face as FaceData
+		if data == null:
+			continue
+		for vertex in data.local_verts:
+			var world_point: Vector3 = xform * vertex
+			if seeded:
+				bounds = bounds.expand(world_point)
+			else:
+				bounds = AABB(world_point, Vector3.ZERO)
+				seeded = true
+	if seeded:
+		return bounds
+	var half: Vector3 = draft.size * 0.5
+	return AABB(draft.global_position - half, draft.size)
+
+
+static func _local_bounds_of_faces(faces: Array) -> AABB:
+	var bounds := AABB()
+	var seeded := false
+	for face in faces:
+		var data: FaceData = face as FaceData
+		if data == null:
+			continue
+		for vertex in data.local_verts:
+			if seeded:
+				bounds = bounds.expand(vertex)
+			else:
+				bounds = AABB(vertex, Vector3.ZERO)
+				seeded = true
+	return bounds
+
+
+## Move faces so the piece's own centre becomes its origin, then serialize them.
+## Two pieces left sharing the original's origin would both sit under the same
+## gizmo, which makes them awkward to tell apart and to select.
+static func _serialize_shifted_faces(faces: Array, offset: Vector3) -> Array:
+	var out: Array = []
+	for face in faces:
+		var data: FaceData = face as FaceData
+		if data == null or data.local_verts.size() < 3:
+			continue
+		if not offset.is_zero_approx():
+			var moved := PackedVector3Array()
+			for vertex in data.local_verts:
+				moved.append(vertex + offset)
+			data.local_verts = moved
+			data.ensure_geometry()
+		out.append(data.to_dict())
+	return out
+
+
+## Describe one piece of a cut as brush info, inheriting the original's settings.
+##
+## A piece that is still an axis-aligned box in the brush's own frame is emitted
+## as a BOX so it keeps its resize handles; anything else becomes CUSTOM with the
+## split faces as its authoritative geometry.
+func _piece_info_from_faces(draft: DraftBrush, faces: Array) -> Dictionary:
+	var xform := draft.global_transform
+	var described: Dictionary = HFConvexClip.is_axis_aligned_box(faces)
+	var bounds := _local_bounds_of_faces(faces)
+	var centre: Vector3 = described["center"] if not described.is_empty() else bounds.get_center()
+	var info: Dictionary = {
+		"shape": root.BrushShape.BOX if not described.is_empty() else root.BrushShape.CUSTOM,
+		"size": described["size"] if not described.is_empty() else bounds.size,
+		"operation": draft.operation,
+		"brush_id": _next_brush_id(),
+		"transform": Transform3D(xform.basis, xform * centre),
+		"faces": _serialize_shifted_faces(faces, -centre),
+	}
+	if draft.material_override:
+		info["material"] = draft.material_override
+	var entity_class := str(draft.get_meta("brush_entity_class", ""))
+	if entity_class != "":
+		info["brush_entity_class"] = entity_class
+	var visgroups: PackedStringArray = draft.get_meta("visgroups", PackedStringArray())
+	if not visgroups.is_empty():
+		info["visgroups"] = Array(visgroups)
+	var group_id := str(draft.get_meta("group_id", ""))
+	if group_id != "":
+		info["group_id"] = group_id
+	return info
+
+
+## Delete a brush and put the pieces of it back in its place.
+##
+## The first piece is treated as the continuation of the original and inherits its
+## entity name and I/O wiring; the others are new geometry of the same class.
+## Entity names have to stay unique, so they cannot simply be copied to both.
+func _replace_brush_with_pieces(
+	draft: DraftBrush, brush_id: String, infos: Array, op_name: String
+) -> HFOpResult:
+	var entity_name := str(draft.get_meta("entity_name", ""))
+	var io_outputs: Array = draft.get_meta("entity_io_outputs", [])
+	if entity_name != "" and not infos.is_empty():
+		infos[0]["entity_name"] = entity_name
+	if not io_outputs.is_empty() and not infos.is_empty():
+		infos[0]["entity_io_outputs"] = io_outputs.duplicate(true)
+
+	delete_brush_by_id(brush_id)
+
+	var created := 0
 	for info in infos:
-		var piece = create_brush_from_info(info)
-		if piece:
-			count += 1
-
-	var axis_label = ["X", "Y", "Z"][clampi(axis, 0, 2)]
-	root._log("Clip: split along %s at %.1f → %d pieces" % [axis_label, split_pos, count])
-	return HFOpResult.success("Clip: split into %d pieces" % count)
-
-
-## Clip brush using a face hit from FaceSelector.
-## Determines the axis from the face normal and uses the hit position.
-func clip_brush_at_point(brush_id: String, face_idx: int, hit_position: Vector3) -> void:
-	if brush_id == "":
-		return
-	var brush = _find_brush_by_id(brush_id)
-	if not brush or not (brush is DraftBrush):
-		return
-	var draft := brush as DraftBrush
-	if face_idx < 0 or face_idx >= draft.faces.size():
-		return
-
-	var face: FaceData = draft.faces[face_idx]
-	face.ensure_geometry()
-
-	# Transform face normal to world space to determine clip axis
-	var world_normal = (draft.global_transform.basis * face.normal).normalized()
-	var abs_normal = world_normal.abs()
-
-	var axis: int
-	var split_pos: float
-	if abs_normal.x >= abs_normal.y and abs_normal.x >= abs_normal.z:
-		axis = 0
-		split_pos = hit_position.x
-	elif abs_normal.y >= abs_normal.x and abs_normal.y >= abs_normal.z:
-		axis = 1
-		split_pos = hit_position.y
-	else:
-		axis = 2
-		split_pos = hit_position.z
-
-	clip_brush_by_id(brush_id, axis, split_pos)
-
-
-# ---------------------------------------------------------------------------
-# Brush Entity (Tie / Untie)
-# ---------------------------------------------------------------------------
+		if create_brush_from_info(info):
+			created += 1
+	if created == 0:
+		return _op_fail("%s: produced no geometry" % op_name)
+	var message := "%s: split into %d pieces" % [op_name, created]
+	root._log(message)
+	return HFOpResult.success(message)
 
 
 func tie_brushes_to_entity(brush_ids: Array, entity_class: String) -> void:
