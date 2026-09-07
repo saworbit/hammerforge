@@ -44,6 +44,34 @@ static func axis_normal(axis_index: int) -> Vector3:
 			return Vector3.BACK
 
 
+## The plane a face lies in, in the face's own space.
+static func face_plane(face: FaceData) -> Plane:
+	if face == null or face.local_verts.size() < 3:
+		return Plane()
+	var normal := _face_normal(face)
+	if normal.length_squared() < 0.5:
+		return Plane()
+	return Plane(normal, normal.dot(face.local_verts[0]))
+
+
+## Every bounding plane of a convex solid, taken into another space.
+##
+## Carve needs the carver's own faces as planes in the target's frame, and its
+## face normals point outward, so a point in front of one of these planes is
+## outside the carver.
+static func face_planes_in_space(faces: Array, into: Transform3D) -> Array:
+	var planes: Array = []
+	for face in faces:
+		var data: FaceData = face as FaceData
+		if data == null or data.local_verts.size() < 3:
+			continue
+		var local := face_plane(data)
+		if local.normal.length_squared() < 0.5:
+			continue
+		planes.append(into * local)
+	return planes
+
+
 ## Split a convex face set by a plane expressed in the same space.
 ##
 ## Returns `{"front": Array, "back": Array, "cut": PackedVector3Array}`. A side

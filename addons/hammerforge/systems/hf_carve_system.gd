@@ -3,10 +3,13 @@ class_name HFCarveSystem
 extends RefCounted
 
 ## Performs boolean subtraction (carve) of one brush against all overlapping brushes.
-## The carver's volume is "cut out" of every intersecting brush, splitting each
-## into up to 6 box slices that surround the carved region.
+##
+## The carver's volume is cut out of every intersecting brush by progressive
+## remainder over the carver's own face planes, so the carver and its targets can
+## be rotated, non-box, or both. See `HFConvexClip` for the split itself.
 
 const DraftBrush = preload("../brush_instance.gd")
+const HFConvexClip = preload("../hf_convex_clip.gd")
 
 var root: Node3D
 
@@ -34,19 +37,13 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 		return _op_fail("Carve: brush '%s' not found" % brush_id)
 
 	var carver_draft := carver as DraftBrush
-	# Carve reads world bounds off global_position and size, and rebuilds every
-	# target as axis-aligned boxes. Neither holds for a rotated brush or a shape
-	# that is not a box, so refuse before anything is deleted. Same rule and same
-	# owner as Hollow and Clip.
-	var carver_check: HFOpResult = HFBrushSystem._check_axis_aligned_box(carver_draft, "Carve")
-	if not carver_check.ok:
-		# Through _op_fail, not straight back: every other refusal in here warns
-		# the user, and a silent one just looks like the carve did nothing.
-		return _op_fail(carver_check.message, carver_check.fix_hint)
-
-	var carver_pos: Vector3 = carver_draft.global_position
-	var carver_size: Vector3 = carver_draft.size
-	var carver_aabb := AABB(carver_pos - carver_size * 0.5, carver_size)
+	root.brush_system._ensure_faces(carver_draft)
+	if carver_draft.get_faces().size() < 4:
+		return _op_fail(
+			"Carve: the carver has no usable geometry",
+			"Rebuild or redraw the carving brush and try again"
+		)
+	var carver_aabb: AABB = root.brush_system.world_bounds_of(carver_draft)
 
 	# Find all overlapping brushes (excluding the carver itself)
 	var targets: Array = _find_overlapping_brushes(brush_id, carver_aabb)
@@ -55,30 +52,18 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 			"Carve: no overlapping brushes found", "Move the carver so it overlaps other brushes"
 		)
 
-	# Check every target up front. Carving some and refusing the rest would leave
-	# the user with a half applied cut and no way to tell which brushes moved.
-	for target in targets:
-		var target_check: HFOpResult = HFBrushSystem._check_axis_aligned_box(
-			target as DraftBrush, "Carve"
-		)
-		if not target_check.ok:
-			return _op_fail(
-				"Carve: overlapping brush '%s' is not an unrotated box" % _brush_id_of(target),
-				"Carve rebuilds what it cuts as axis-aligned boxes. Move the carver clear of that brush."
-			)
-
 	var total_pieces := 0
 	var targets_carved := 0
 
 	for target in targets:
 		var target_draft := target as DraftBrush
 		var target_id := _brush_id_of(target_draft)
-		var target_pos: Vector3 = target_draft.global_position
-		var target_size: Vector3 = target_draft.size
-		var target_aabb := AABB(target_pos - target_size * 0.5, target_size)
+		root.brush_system._ensure_faces(target_draft)
+		if target_draft.get_faces().size() < 4:
+			continue
 
-		# Compute intersection — skip if ANY axis has zero/negligible overlap
-		# (face/edge contact only, not a volumetric intersection)
+		# Cheap rejection before any splitting: touching bounds is not a volume.
+		var target_aabb: AABB = root.brush_system.world_bounds_of(target_draft)
 		var inter := target_aabb.intersection(carver_aabb)
 		if (
 			inter.size.x <= min_thickness
@@ -87,41 +72,19 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 		):
 			continue
 
-		# Gather metadata from target to copy to pieces
-		var target_mat = target_draft.material_override
-		var target_operation: int = target_draft.operation
-		var target_visgroups: PackedStringArray = target_draft.get_meta(
-			"visgroups", PackedStringArray()
-		)
-		var target_group_id: String = str(target_draft.get_meta("group_id", ""))
-		var target_bec: String = str(target_draft.get_meta("brush_entity_class", ""))
-		var target_faces: Array = target_draft.faces
-
-		# Build up to 6 slices around the carved-out region
-		var slices: Array = _compute_slices(target_pos, target_size, carver_pos, carver_size)
-
-		if slices.is_empty():
+		var pieces: Array = _carve_pieces(carver_draft, target_draft)
+		if pieces.is_empty():
 			continue
 
-		# Delete original target brush
-		root.brush_system.delete_brush_by_id(target_id)
+		# Build every piece before deleting anything: _piece_info_from_faces reads
+		# the target for its material, visgroups, group and entity class.
+		var infos: Array = []
+		for piece_faces in pieces:
+			infos.append(root.brush_system._piece_info_from_faces(target_draft, piece_faces))
 
-		# Create replacement pieces
-		for slice_info in slices:
-			slice_info["operation"] = target_operation
-			slice_info["brush_id"] = root.brush_system._next_brush_id()
-			if target_mat:
-				slice_info["material"] = target_mat
-			var piece = root.brush_system.create_brush_from_info(slice_info)
-			if piece:
-				if not target_visgroups.is_empty():
-					piece.set_meta("visgroups", target_visgroups)
-				if target_group_id != "":
-					piece.set_meta("group_id", target_group_id)
-				if target_bec != "":
-					piece.set_brush_entity_class(target_bec)
-				var slice_center: Vector3 = slice_info.get("center", Vector3.ZERO)
-				_copy_uv_settings_to_piece(piece, target_faces, target_pos, slice_center)
+		root.brush_system.delete_brush_by_id(target_id)
+		for info in infos:
+			if root.brush_system.create_brush_from_info(info):
 				total_pieces += 1
 
 		targets_carved += 1
@@ -143,107 +106,49 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 	return HFOpResult.success(msg)
 
 
-## Compute up to 6 box slices of target_brush that remain after carving out the
-## carver volume.  Each slice is a dict with "shape", "size", "center" keys.
+## The pieces of `target` that survive carving `carver` out of it.
 ##
-## The slices are:
-##   -X (left), +X (right), -Y (bottom), +Y (top), -Z (back), +Z (front)
-## computed by progressive remainder — each successive slice uses the space
-## remaining after the previous axis was consumed.
-func _compute_slices(
-	target_pos: Vector3, target_size: Vector3, carver_pos: Vector3, carver_size: Vector3
-) -> Array:
-	# Target bounds
-	var t_min := target_pos - target_size * 0.5
-	var t_max := target_pos + target_size * 0.5
-
-	# Carver bounds, clamped to target
-	var c_min := Vector3(
-		maxf(carver_pos.x - carver_size.x * 0.5, t_min.x),
-		maxf(carver_pos.y - carver_size.y * 0.5, t_min.y),
-		maxf(carver_pos.z - carver_size.z * 0.5, t_min.z)
+## Classic progressive-remainder carving, generalised off boxes: for each plane
+## bounding the carver, split what is left of the target. The half outside that
+## plane is finished, because nothing else can remove it, and the half inside
+## carries on to the next plane. What survives every plane is the intersection,
+## and that is exactly what the carve takes away.
+##
+## Working from the carver's real face planes rather than the six sides of its
+## bounding box is what lets the carver be rotated, or a cylinder, or a merged
+## brush, or anything else convex.
+func _carve_pieces(carver: DraftBrush, target: DraftBrush) -> Array:
+	var into_target: Transform3D = (
+		target.global_transform.affine_inverse() * carver.global_transform
 	)
-	var c_max := Vector3(
-		minf(carver_pos.x + carver_size.x * 0.5, t_max.x),
-		minf(carver_pos.y + carver_size.y * 0.5, t_max.y),
-		minf(carver_pos.z + carver_size.z * 0.5, t_max.z)
+	var planes: Array = HFConvexClip.face_planes_in_space(carver.get_faces(), into_target)
+	if planes.is_empty():
+		return []
+
+	var remainder: Array = target.get_faces()
+	var pieces: Array = []
+	for plane in planes:
+		var halves: Dictionary = HFConvexClip.split(remainder, plane)
+		var outside: Array = halves["front"]
+		var inside: Array = halves["back"]
+		if inside.is_empty():
+			# The remainder lies entirely outside this plane, so it lies entirely
+			# outside the carver. There is nothing here to carve.
+			return []
+		if not outside.is_empty() and _is_thick_enough(outside):
+			pieces.append(outside)
+		remainder = inside
+	return pieces
+
+
+## Reject pieces too thin to be worth a brush, the way the box carve did.
+func _is_thick_enough(faces: Array) -> bool:
+	var bounds: AABB = HFBrushSystem._local_bounds_of_faces(faces)
+	return (
+		bounds.size.x > min_thickness
+		and bounds.size.y > min_thickness
+		and bounds.size.z > min_thickness
 	)
-
-	var slices: Array = []
-
-	# Left slice (X-): full Y and Z extent of target, from t_min.x to c_min.x
-	var left_w := c_min.x - t_min.x
-	if left_w > min_thickness:
-		slices.append(
-			_make_slice(
-				Vector3(left_w, target_size.y, target_size.z),
-				Vector3(t_min.x + left_w * 0.5, target_pos.y, target_pos.z)
-			)
-		)
-
-	# Right slice (X+): full Y and Z extent, from c_max.x to t_max.x
-	var right_w := t_max.x - c_max.x
-	if right_w > min_thickness:
-		slices.append(
-			_make_slice(
-				Vector3(right_w, target_size.y, target_size.z),
-				Vector3(c_max.x + right_w * 0.5, target_pos.y, target_pos.z)
-			)
-		)
-
-	# Remaining X span for Y and Z slices
-	var mid_x_min := c_min.x
-	var mid_x_max := c_max.x
-	var mid_x_size := mid_x_max - mid_x_min
-	var mid_x_center := (mid_x_min + mid_x_max) * 0.5
-
-	# Bottom slice (Y-): uses middle X span, full Z extent
-	var bottom_h := c_min.y - t_min.y
-	if bottom_h > min_thickness and mid_x_size > min_thickness:
-		slices.append(
-			_make_slice(
-				Vector3(mid_x_size, bottom_h, target_size.z),
-				Vector3(mid_x_center, t_min.y + bottom_h * 0.5, target_pos.z)
-			)
-		)
-
-	# Top slice (Y+): uses middle X span, full Z extent
-	var top_h := t_max.y - c_max.y
-	if top_h > min_thickness and mid_x_size > min_thickness:
-		slices.append(
-			_make_slice(
-				Vector3(mid_x_size, top_h, target_size.z),
-				Vector3(mid_x_center, c_max.y + top_h * 0.5, target_pos.z)
-			)
-		)
-
-	# Remaining Y span for Z slices
-	var mid_y_min := c_min.y
-	var mid_y_max := c_max.y
-	var mid_y_size := mid_y_max - mid_y_min
-	var mid_y_center := (mid_y_min + mid_y_max) * 0.5
-
-	# Back slice (Z-): uses middle X and Y span
-	var back_d := c_min.z - t_min.z
-	if back_d > min_thickness and mid_x_size > min_thickness and mid_y_size > min_thickness:
-		slices.append(
-			_make_slice(
-				Vector3(mid_x_size, mid_y_size, back_d),
-				Vector3(mid_x_center, mid_y_center, t_min.z + back_d * 0.5)
-			)
-		)
-
-	# Front slice (Z+): uses middle X and Y span
-	var front_d := t_max.z - c_max.z
-	if front_d > min_thickness and mid_x_size > min_thickness and mid_y_size > min_thickness:
-		slices.append(
-			_make_slice(
-				Vector3(mid_x_size, mid_y_size, front_d),
-				Vector3(mid_x_center, mid_y_center, c_max.z + front_d * 0.5)
-			)
-		)
-
-	return slices
 
 
 ## Brush ids normally live on the property, but brushes restored from a scene can
@@ -253,14 +158,6 @@ static func _brush_id_of(brush: Node) -> String:
 	if bid == "" and brush.has_meta("brush_id"):
 		bid = str(brush.get_meta("brush_id"))
 	return bid
-
-
-func _make_slice(size: Vector3, center: Vector3) -> Dictionary:
-	return {
-		"shape": root.BrushShape.BOX,
-		"size": size,
-		"center": center,
-	}
 
 
 ## Find all DraftBrush nodes whose AABB overlaps the given AABB,
@@ -279,60 +176,6 @@ func _find_overlapping_brushes(exclude_id: String, aabb: AABB) -> Array:
 		if aabb.intersects(node_aabb):
 			result.append(draft)
 	return result
-
-
-## Copy UV settings from the original target's faces to a carved slice piece.
-## Each new face gets BOX_UV projection and inherits UV scale/offset/rotation
-## from the best-matching original face (matched by normal direction).
-## Compensates UV offset for the positional difference between the original
-## brush center and the slice center so textures stay aligned.
-func _copy_uv_settings_to_piece(
-	piece: Node, target_faces: Array, target_pos: Vector3, slice_center: Vector3
-) -> void:
-	if not (piece is DraftBrush):
-		return
-	var draft := piece as DraftBrush
-	if draft.faces.is_empty() or target_faces.is_empty():
-		return
-	var pos_delta: Vector3 = slice_center - target_pos
-	for face in draft.faces:
-		if face == null:
-			continue
-		face.uv_projection = FaceData.UVProjection.BOX_UV
-		var best_face: FaceData = null
-		var best_dot: float = -2.0
-		for src_face in target_faces:
-			if src_face == null:
-				continue
-			var d: float = face.normal.dot(src_face.normal)
-			if d > best_dot:
-				best_dot = d
-				best_face = src_face
-		if best_face:
-			face.uv_scale = best_face.uv_scale
-			face.uv_rotation = best_face.uv_rotation
-			face.material_idx = best_face.material_idx
-			# Compensate offset for the slice's different position in world space.
-			# The slice center moved by pos_delta, so each face's local vertices
-			# shift by -pos_delta, making projected UVs: uv_new = uv_old - delta_2d.
-			# Under new transform order uv.rotated(R)*S + O, solving for O_new:
-			#   O_new = O_old + delta_2d.rotated(R) * S
-			var resolved_proj: int = best_face.uv_projection
-			if resolved_proj == FaceData.UVProjection.BOX_UV:
-				resolved_proj = face._box_projection_axis()
-			var delta_2d := Vector2.ZERO
-			match resolved_proj:
-				FaceData.UVProjection.PLANAR_X:
-					delta_2d = Vector2(pos_delta.z, pos_delta.y)
-				FaceData.UVProjection.PLANAR_Y:
-					delta_2d = Vector2(pos_delta.x, pos_delta.z)
-				FaceData.UVProjection.PLANAR_Z:
-					delta_2d = Vector2(pos_delta.x, pos_delta.y)
-			var rotated_delta: Vector2 = delta_2d
-			if best_face.uv_rotation != 0.0:
-				rotated_delta = delta_2d.rotated(best_face.uv_rotation)
-			face.uv_offset = best_face.uv_offset + rotated_delta * best_face.uv_scale
-	draft.rebuild_preview()
 
 
 func _op_fail(msg: String, hint: String = "") -> HFOpResult:

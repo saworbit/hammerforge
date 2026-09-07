@@ -86,76 +86,74 @@ func _rebuild() -> void:
 		return
 
 	var carver_draft := carver as DraftBrush
-	# Preview what carve will actually do. It refuses anything that is not an
-	# unrotated box, so drawing slice pieces for one would promise a cut the
-	# operation is going to turn down.
-	if not HFBrushSystem._check_axis_aligned_box(carver_draft, "Carve").ok:
+	root.brush_system._ensure_faces(carver_draft)
+	if carver_draft.get_faces().size() < 4:
 		clear()
 		return
-
-	var carver_pos: Vector3 = carver_draft.global_position
-	var carver_size: Vector3 = carver_draft.size
-	var carver_aabb := AABB(carver_pos - carver_size * 0.5, carver_size)
+	var carver_aabb: AABB = root.brush_system.world_bounds_of(carver_draft)
 
 	# Find overlapping targets — reuse carve_system logic
 	var targets: Array = root.carve_system._find_overlapping_brushes(_carver_id, carver_aabb)
 
-	var all_slices: Array = []  # Array[AABB]
+	# Each entry is one resulting piece: the faces to outline, and the transform
+	# they are expressed in. Carve works in each target's own frame now, so the
+	# preview has to carry that frame rather than assume world-aligned boxes.
+	var previews: Array = []
 
 	for target in targets:
 		var target_draft := target as DraftBrush
-		# One unsuitable target refuses the whole carve, so preview nothing.
-		if not HFBrushSystem._check_axis_aligned_box(target_draft, "Carve").ok:
-			clear()
-			return
-		var target_pos: Vector3 = target_draft.global_position
-		var target_size: Vector3 = target_draft.size
-		var target_aabb := AABB(target_pos - target_size * 0.5, target_size)
-
+		root.brush_system._ensure_faces(target_draft)
+		if target_draft.get_faces().size() < 4:
+			continue
+		var target_aabb: AABB = root.brush_system.world_bounds_of(target_draft)
 		var inter := target_aabb.intersection(carver_aabb)
 		if inter.size.x <= 0.01 or inter.size.y <= 0.01 or inter.size.z <= 0.01:
 			continue
 
-		# Compute slice boxes
-		var slices: Array = root.carve_system._compute_slices(
-			target_pos, target_size, carver_pos, carver_size
-		)
-		for slice_info in slices:
-			var s_size: Vector3 = slice_info["size"]
-			var s_center: Vector3 = slice_info["center"]
-			all_slices.append(AABB(s_center - s_size * 0.5, s_size))
-			if all_slices.size() >= MAX_PREVIEWS:
+		for piece_faces in root.carve_system._carve_pieces(carver_draft, target_draft):
+			previews.append({"faces": piece_faces, "transform": target_draft.global_transform})
+			if previews.size() >= MAX_PREVIEWS:
 				break
-		if all_slices.size() >= MAX_PREVIEWS:
+		if previews.size() >= MAX_PREVIEWS:
 			break
-
-	# Also draw the carved-out volume in a dimmer color (handled by subtract_preview)
-	# We only draw the resulting pieces here.
 
 	_ensure_container()
 
 	# Grow pool if needed
-	while _mesh_pool.size() < all_slices.size():
+	while _mesh_pool.size() < previews.size():
 		var mi = MeshInstance3D.new()
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		mi.material_override = _material
 		_preview_container.add_child(mi)
 		_mesh_pool.append(mi)
 
-	# Update active wireframes
-	for i in all_slices.size():
+	# Update active wireframes with the real outline of each resulting piece.
+	for i in previews.size():
 		var mi: MeshInstance3D = _mesh_pool[i]
-		mi.mesh = HFOutlineUtil.unit_box_line_mesh()
-		mi.transform = HFOutlineUtil.aabb_box_transform(all_slices[i])
+		var entry: Dictionary = previews[i]
+		mi.mesh = _lines_mesh(HFOutlineUtil.face_boundary_lines(entry["faces"]))
+		mi.transform = entry["transform"]
 		mi.visible = true
 
 	# Hide unused
-	for i in range(all_slices.size(), _mesh_pool.size()):
+	for i in range(previews.size(), _mesh_pool.size()):
 		if is_instance_valid(_mesh_pool[i]):
 			_mesh_pool[i].visible = false
 
-	_active_count = all_slices.size()
+	_active_count = previews.size()
 	_preview_container.visible = _active_count > 0
+
+
+## Wrap a flat list of line-segment endpoints into a drawable mesh.
+static func _lines_mesh(points: PackedVector3Array) -> ArrayMesh:
+	var mesh := ArrayMesh.new()
+	if points.size() < 2:
+		return mesh
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = points
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_LINES, arrays)
+	return mesh
 
 
 func _ensure_container() -> void:
