@@ -195,6 +195,52 @@ Press **M** to activate the Measure tool. It supports persistent multi-ruler mea
 - Press **Escape** to clear all rulers.
 - The HUD shows ruler count, distance of the last ruler, and alignment status.
 
+## Generators: Hollow, Arch and Helix
+
+### Hollow
+
+`Ctrl+H` turns a solid brush into walls of the thickness you set. It works on any
+brush, at any rotation, and it gives you one wall per face — so hollowing a
+**cylinder gives you a pipe**, and hollowing a rotated box gives you six rotated
+walls.
+
+The confirmation tells you how many walls you are about to get, because that
+number depends on the shape: a box makes six, a cylinder makes one per facet plus
+a top and a bottom. The yellow preview outlines the real walls.
+
+If the thickness leaves no room inside, hollow says so and suggests one that fits.
+And it will refuse a sphere, a capsule, an ellipsoid or a torus: those are built
+from thousands of tiny faces, so shelling one would make thousands of brushes,
+which is never what anyone means by hollowing a ball.
+
+### Arch
+
+The **Arch** section in the Build tab builds a curved run of brushes from six
+numbers:
+
+| Setting | What it does |
+|---------|--------------|
+| Radius | The outside of the arch |
+| Wall | How thick the ring is — the opening is what is left inside |
+| Depth | How far the arch extends along its own axis |
+| Arc | Degrees swept. 180 is a half arch, 360 a full ring, 90 a quarter |
+| Segments | One brush per segment. More segments, smoother curve |
+| Start | The angle the arch begins at |
+
+Press **Create Arch** (or `Ctrl+Shift+A`) and it lands centred on whatever you
+have selected, or on the world origin if nothing is. Then treat it like any other
+geometry: rotate it upright, carve a doorway through it, clip a segment off.
+
+A segment cannot span half a turn or more — a wedge that wide is not a convex
+shape, and every brush here is convex — so a full ring needs at least three
+segments. The arch will tell you the minimum if you ask for too few.
+
+### Spiral stairs
+
+A radial array with a **Rise** climbs as it turns. Draw one step, set the array
+to Radial, pick a step angle and a rise, and you have a spiral staircase. Leave
+the rise at zero and you get the flat ring it always made.
+
 ## Cutting: Clip and Carve
 
 **Clip** splits one brush into two. **Carve** cuts one brush out of every brush it

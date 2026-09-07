@@ -480,6 +480,33 @@ and run".
   it, which is what the box carve did. Deleting a brush whose preview showed no
   pieces would be a surprise.
 
+## Done (Generators — Shells, Arches and Helixes — September 2026)
+- Hollow shells any convex brush at any rotation, by running the same progressive
+  remainder carve uses against the brush's own inset planes. One face gives one
+  wall, so a cylinder becomes a tube. The last `_check_axis_aligned_box()` caller
+  is gone and the guard is deleted.
+- `HFArchBuilder` builds a parametric arch, one brush per voussoir, from radius,
+  wall thickness, depth, arc degrees, segments and start angle. Reachable from the
+  Build tab, the palette, and Ctrl+Shift+A.
+- Radial arrays gained a rise per copy: a helix, and with a box, a spiral stair.
+- `HFConvexClip.orient_faces_outward()` settles the winding of any built solid by
+  measurement, so a generator cannot ship geometry that bakes inside out.
+- Fixed: plane orientation was taken from each face's own normal, and a primitive
+  mesh has near-degenerate faces whose normal is noise — enough to make hollowing
+  a sphere report that it had no interior.
+- Both booleans now refuse brushes past 128 distinct planes; shelling a sphere
+  measured sixty seconds and 2,051 brushes before that limit existed.
+- 55 new tests, including bake-level winding proofs with untouched controls.
+
+### Known limits of the current generator pass
+- Hollow and carve are capped at 128 distinct planes, so a sphere, capsule,
+  ellipsoid or torus cannot be shelled or used as a carver. Those shapes have
+  thousands of planes and would produce thousands of brushes.
+- The arch is described rather than dragged. An interactive arch gizmo is an
+  input problem rather than a geometry one.
+- Wall thickness is uniform. A shell that varies in thickness is a different
+  algorithm.
+
 ## Future (Wave 3 -- Polish)
 - Multiple simultaneous cordons.
 - Multi-tool presets for common workflows.

@@ -282,6 +282,23 @@ It writes one PNG per tab under `user://console_preview/`.
 - Undo each cut with Ctrl+Z and confirm the original brush returns whole, with its material and per-face textures intact.
 - Select a brush with per-face textures, clip it, and confirm each piece kept the textures on the faces they were painted on, and that the new cut surface took the nearest face's material.
 
+### 7c-5. Generators (Hollow, Arch, Helix)
+- Hollow an ordinary box. Confirm the yellow preview outlines six walls, that the confirmation names the wall count, and that committing leaves six brushes that tile the original.
+- Rotate a box 30 degrees and hollow it. Confirm the preview follows the rotation and the walls come out rotated with it.
+- Hollow a **cylinder**. Confirm the preview shows a ring of walls, the confirmation warns how many, and the result is a tube. Bake it and walk inside — confirm no wall renders inside out.
+- Try hollowing a **sphere**. Confirm it refuses promptly with a message naming the face count, and that the sphere is untouched. It must not hang.
+- Try a wall thickness larger than the brush. Confirm the refusal suggests a thickness that fits.
+- Open the **Arch** section in the Build tab. Create an arch with the defaults. Confirm eight brushes appear as a half arch centred on the origin.
+- Select a brush somewhere off-origin and create another arch. Confirm it lands centred on the selection.
+- Set Arc to 360 and Segments to 12, and create. Confirm a closed ring with no gaps between segments.
+- Set Arc to 360 and Segments to 2, and create. Confirm it refuses and names the minimum segment count.
+- Bake an arch. Confirm every segment is solid and textured from outside, including the flat radial faces where segments meet.
+- Carve a doorway through an arch and bake again. Confirm the cut segments still render correctly.
+- Rotate an arch upright with `R`, then hollow one of its segments. Confirm both operations work on generated geometry.
+- Draw a single step box offset from the origin. Set Duplicate Array to **Radial**, count 12, step 30 degrees, **Rise** 16, and Create Array. Confirm a spiral staircase, each step turned and raised.
+- Set Rise back to 0 and create again. Confirm a flat ring, exactly as before the rise existed.
+- Undo each of the above and confirm the level returns to its previous state.
+
 ### 7d. Face Winding Migration (Old Saves)
 - Open a `.hflevel` file saved before the CW winding fix (April 6, 2026 or earlier).
 - Confirm all brush faces render with textures visible from outside (not inside-out).

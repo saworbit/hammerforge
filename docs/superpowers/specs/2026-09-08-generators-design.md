@@ -175,3 +175,37 @@ then attack it — degenerate thicknesses, single-segment arches, full rings,
 hollowing shapes with many faces, cuts applied to generated geometry, closure and
 winding through a real bake; then fold the findings back in and bring the
 documentation in line with what shipped.
+
+## What the verification passes found
+
+**Yellow** — built against the design above; the suite, `gdformat` and `gdlint`
+all clean.
+
+**Red** — two real defects, one of them severe:
+
+1. **Plane orientation was taken from each face's own normal, and a primitive
+   mesh has faces whose normal cannot be trusted.** A sphere's poles carry
+   near-degenerate triangles whose cross product is long enough to pass any sane
+   epsilon but points in a direction that is numerical noise. One of those flipped
+   turns an inset plane inside out, and hollowing a sphere reported that there was
+   no room inside it. Orientation is now measured against an interior point, which
+   is a question with an answer. The design assumed face normals were usable; they
+   are not.
+2. **Hollowing a sphere took sixty seconds and produced 2,051 brushes.** Every
+   triangle of a sphere is its own plane, so deduplication cannot help, and the
+   design's note that "the segment count is the user's existing `sides` setting"
+   was simply wrong — a `CylinderMesh` uses 64 radial segments regardless, and a
+   sphere far more. Both booleans now check a plane budget first and refuse with
+   the real count. A box has six planes and a cylinder sixty-six, so the shapes
+   people actually shell and carve with are unaffected.
+
+Two of the wave's own tests had to be rewritten afterwards, because they asserted
+that a sphere hollows — written before it was clear that it should not.
+
+**Purple** — the findings were folded back in, the wall count was surfaced in the
+hollow confirmation so a cylinder's tube is an informed choice rather than a
+surprise, and the documentation was brought in line, including the earlier waves'
+claims about which operations still need an unrotated box. None do.
+
+Final state: **2,557 tests across 137 scripts, 2,550 passing, none failing**, with
+`gdformat` and `gdlint` clean.
