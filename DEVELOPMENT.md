@@ -1,6 +1,6 @@
 # Development Guide
 
-Last updated: September 3, 2026
+Last updated: September 7, 2026
 
 This document covers local setup, codebase structure, and how to test features.
 
@@ -12,6 +12,71 @@ This document covers local setup, codebase structure, and how to test features.
 1. Open the project in Godot.
 2. Enable the plugin: Project -> Project Settings -> Plugins -> HammerForge.
 3. Open any 3D scene and choose **Create Starter** or **Create Empty** from the dock's empty state.
+
+## What ships, and what does not
+
+This repository is a development workspace as well as the home of the plugin.
+The distinction matters more than it looks, because the Godot Asset Library
+installs whatever it finds at the commit it is pointed at -- so without a
+deliberate separation, installing HammerForge would also drop a test framework
+and the maintainer's own tooling into somebody else's project.
+
+**Only `addons/hammerforge` reaches users.** Everything else in the tree is
+development apparatus:
+
+| Not shipped | Why |
+|---|---|
+| `addons/gut` | Third-party test framework. Only `tests/` uses it, and anyone who already has GUT installed would have their copy overwritten by whichever version this repository pins, which can break their own suite. |
+| `addons/godot_mcp` | Contributor MCP server. Nothing to do with the plugin. |
+| `addons/hf_docshot` | Dev-only screenshot and demo-recording plugin. It reads an environment variable and can quit the editor. |
+| `tests/`, `tools/` | Test suite and build machinery. |
+| `docs/`, `overrides/` | The documentation site. Published, not installed. |
+| `samples/` | Demo scenes for the screenshots and the video. |
+| `project.godot`, `level_root.tscn` | Belong to whoever is installing. |
+
+The list lives in `tools/build_release_tree.py` and the default is exclude: a
+new folder does not reach users until somebody adds it deliberately. The
+release workflow re-checks the built output rather than trusting the list.
+
+```bash
+python tools/build_release_tree.py /tmp/release   # inspect what would ship
+```
+
+### Cutting a release
+
+The `release` branch holds the built tree. It is what the Asset Library
+downloads, by commit hash. It is a build artefact: never merge it into `main`
+or `main` into it, and expect its contents to be replaced wholesale each time.
+
+1. Bump `version=` in `addons/hammerforge/plugin.cfg` and update `CHANGELOG.md`.
+2. Build the tree and replace the branch contents with it:
+
+   ```bash
+   python tools/build_release_tree.py /tmp/release
+   git worktree add --detach /tmp/relwt && cd /tmp/relwt
+   git checkout release
+   find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+   cp -a /tmp/release/. .
+   git add -A && git commit -m "HammerForge 0.3.0" && git push origin release
+   ```
+
+   Removing the contents first matters: copying over the top would leave behind
+   anything dropped from the ship list.
+3. Tag `main`: `git tag v0.3.0 && git push origin v0.3.0`.
+4. Paste the new `release` commit hash into the Asset Library entry's
+   **Download Commit** field. There is no API for that, so it stays manual.
+
+Steps 2 and 4's first half are worth automating on tag; a workflow to do it is
+drafted but not yet committed, because pushing `.github/workflows/` needs a
+token with the `workflow` scope.
+
+### The same rule applies to screenshots and demos
+
+Development tooling should not appear in anything users see, not just in what
+they install. `tools/capture_ui.py` removes the MCP server from `project.godot`
+before capturing so it does not show up in the editor's main-screen bar, and
+puts it back afterwards. If you add tooling that is visible in the editor,
+extend that swap rather than cropping it out of the image.
 
 ## Godot MCP Development Setup
 
