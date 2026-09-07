@@ -1,3 +1,7 @@
+---
+description: "Manual smoke checklist for verifying a HammerForge build inside the Godot editor before release."
+---
+
 # HammerForge Editor Smoke Checklist
 
 Last updated: September 2, 2026

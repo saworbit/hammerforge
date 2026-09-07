@@ -1,3 +1,7 @@
+---
+description: "What HammerForge optimises for, stated plainly: draft brush previews rather than live CSG, cuts staged until applied, geometry made at bake time."
+---
+
 # HammerForge Design Constraints
 
 Last updated: September 3, 2026

@@ -1,3 +1,7 @@
+---
+description: "HammerForge brand identity: logo lockups and marks, the colour palette, and how the assets should be used."
+---
+
 # HammerForge — brand identity
 
 `saworbit/hammerforge` · a brush-based level editor for Godot 4.7+

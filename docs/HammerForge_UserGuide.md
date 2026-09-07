@@ -1,3 +1,7 @@
+---
+description: "Day-to-day reference for building levels with HammerForge: the dock, viewport tools, entities, I/O connections and the runtime API."
+---
+
 # HammerForge User Guide
 
 Last updated: September 5, 2026

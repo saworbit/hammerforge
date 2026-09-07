@@ -1,3 +1,7 @@
+---
+description: "Grid-based floor painting and greyboxing in HammerForge: heightmaps, multi-material blending, auto-connectors and foliage scatter."
+---
+
 # HammerForge Floor Paint Greyboxing
 
 Last updated: March 27, 2026
