@@ -216,3 +216,42 @@ degenerate planes, planes on faces, planes through vertices, rotated and scaled
 brushes, cylinders and merged brushes, closure and winding through a real bake,
 undo and save round trips; then fold the findings back in and bring the
 documentation in line with what shipped.
+
+## What the verification passes found
+
+**Yellow** — built against the design above; the suite, `gdformat` and `gdlint`
+all clean.
+
+**Red** — the adversarial pass found three real defects:
+
+1. **Sutherland-Hodgman emitted duplicate vertices** whenever a polygon vertex lay
+   exactly on the cut plane: the vertex was kept by the inside test and then an
+   intersection was emitted at the same point, leaving a zero-length edge that
+   stopped the piece being a closed solid. Not an exotic case — it is what a
+   diagonal cut through a box's own edges does, and the diagonal test caught it
+   immediately. Fixed with a three-way front/back/on classification.
+2. **Cut-surface points were deduplicated by grid cell**, so two crossings a hair
+   apart either side of a cell boundary both survived and fanned into a
+   zero-area sliver whose normal is numerical noise. It showed up as two of
+   ~1,270 triangles inverted on a cut cylinder. Fixed with distance-based
+   deduplication plus removal of collinear ring vertices.
+3. **Clip to Convex had been producing entirely inside-out geometry since it
+   shipped.** `_faces_from_convex_hull()` ordered every rebuilt face
+   counter-clockwise about its outward normal, which is the opposite of the
+   convention the rest of the codebase reads. This wave did not cause it; the
+   winding check written for the cut surface simply got pointed at the one other
+   place in the codebase that orders a ring of coplanar vertices, and it measured
+   0% of faces outward. The duplicate ring sorter is deleted and both callers now
+   share `sort_coplanar_cw()`, whose name states the convention.
+
+One finding was a wrong premise rather than a bug: `clip_to_convex()` returns
+false for an already-convex brush, which is correct and not a refusal. The test
+now dents a brush first so it actually reaches the hull path.
+
+**Purple** — the findings were folded back in, Clip to Face Plane was wired to
+every command surface and pinned with boundary tests, and the free-transform
+wave's documentation was corrected: it recorded "Hollow, Clip and Carve refuse a
+rotated brush" as a known limit, and two thirds of that is no longer true.
+
+Final state: **2,582 tests across 137 scripts, 2,575 passing, none failing**, with
+`gdformat` and `gdlint` clean.

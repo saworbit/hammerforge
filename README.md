@@ -16,7 +16,7 @@
   <img src="https://img.shields.io/badge/Godot-4.7%2B-478cbf?logo=godot-engine&logoColor=white" alt="Godot 4.7+">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
   <img src="https://img.shields.io/badge/Status-Early%20Alpha-red" alt="Early Alpha">
-  <img src="https://img.shields.io/badge/Tests-2479%20passing-brightgreen" alt="2479 tests passing">
+  <img src="https://img.shields.io/badge/Tests-2575%20passing-brightgreen" alt="2575 tests passing">
   <img src="https://img.shields.io/badge/GDScript-58k%2B%20lines-blueviolet" alt="58k+ lines">
 </p>
 
@@ -77,6 +77,7 @@ Level editors like Hammer and TrenchBroom proved that **brush-based workflows** 
 - **No full-scene live CSG** -- brushes are lightweight preview nodes; full CSG runs only at bake time. An optional, capped subtract overlay computes only nearby cut previews.
 - **Two-click geometry** -- drag a base rectangle, click to set height. Extrude faces to extend rooms. Type exact numbers any time.
 - **Free transform** -- rotate and mirror anything you have drawn, in snapped steps about the axis you choose, then array it in a line, a ring, or a lattice.
+- **Cut along any plane** -- clip and carve split the real geometry, so a diagonal cut, a rotated brush or a cylinder are all fair game. Clip along a selected face's plane to chamfer a corner in one action.
 - **Paint floors and terrain** -- grid-based floor paint with heightmaps, multi-material blending, auto-connectors (ramps/stairs), and foliage scatter.
 - **Bake when ready** -- one click produces merged meshes, collision shapes (trimesh, per-brush convex, or per-visgroup partitioned), lightmap UVs, navmeshes, and LODs.
 

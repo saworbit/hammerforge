@@ -426,8 +426,9 @@ and run".
   their shape and resize handles; asymmetric ones get the mirror baked into their
   faces.
 - Reset Rotation (Alt+R) clears a rotation without moving geometry, folding a
-  quarter turn into the brush size. It is the way back to Hollow, Clip and Carve,
-  which all read world extents off `size` and refuse a rotated brush.
+  quarter turn into the brush size. It is the way back to Hollow, which reads
+  world extents off `size` and refuses a rotated brush. Clip and Carve refused one
+  for the same reason until the precision-cutting wave below.
 - Radial and grid array layouts in `HFDuplicator`, sharing the rotation code and
   the existing instance bookkeeping. Old serialized duplicators load as linear.
 - New `HFTransformSystem` subsystem, `rotate_snap_degrees` and
@@ -443,8 +444,41 @@ and run".
 - Hollow, Clip and Carve still require an unrotated box. Making them work in a
   rotated brush's own frame is a larger job than this pass; Reset Rotation is the
   supported answer, and it is now lossless for quarter turns.
+  **Resolved for Clip and Carve** by the precision-cutting wave below; Hollow
+  still insets faces off `size` and keeps the restriction.
 - Rotation is stepped, not a modal mouse drag. A drag gesture belongs with the
   drag system and needs interactive validation this pass could not give it.
+
+## Done (Precision Cutting — Arbitrary-Plane Clip and Carve — September 2026)
+- `HFConvexClip` splits a convex solid along an arbitrary plane: three-way vertex
+  classification, UV interpolation along the cut, a rebuilt cut surface wound
+  clockwise from outside, and distance-based deduplication of crossing points.
+  Scene-free, so it and both its callers test without a LevelRoot.
+- Clip works on any convex brush at any rotation, along any plane. New
+  `clip_brush_by_plane()` and `clip_brush_to_face_plane()` (Alt+Shift+X); the axis
+  form keeps its signature, snapping and messages and routes through the new one.
+  A piece that is still an axis-aligned box is emitted as a BOX so it keeps its
+  resize handles.
+- Carve runs progressive remainder over the carver's real face planes, so a
+  rotated carver, a cylinder or a merged brush all cut. Same algorithm as before,
+  generalised off boxes.
+- Both previews run the same split the tools run, and outline the real pieces
+  instead of scaled unit boxes.
+- Fixed: Clip to Convex had been producing entirely inside-out geometry since it
+  shipped, by ordering rebuilt hull faces counter-clockwise. One ring sorter now,
+  named for the convention.
+- 96 new tests, including bake-level winding proofs with untouched controls.
+
+### Known limits of the current cutting pass
+- Hollow still requires an unrotated box. It insets every face inward off `size`
+  rather than splitting, so it is a different algorithm; Reset Rotation remains
+  the answer, and it is lossless for quarter turns.
+- The clip plane is set by axis and position, or by a selected face. A
+  click-and-drag clip-plane gesture in the viewport is an input problem rather
+  than a geometry one and needs interactive validation.
+- A carver that would swallow a target whole leaves it alone rather than deleting
+  it, which is what the box carve did. Deleting a brush whose preview showed no
+  pieces would be a surprise.
 
 ## Future (Wave 3 -- Polish)
 - Multiple simultaneous cordons.

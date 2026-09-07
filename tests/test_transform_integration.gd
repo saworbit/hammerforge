@@ -362,20 +362,21 @@ func test_a_flipped_brush_survives_the_info_round_trip():
 # ===========================================================================
 
 
-func test_hollow_clip_and_carve_all_refuse_a_rotated_brush():
-	var b := _make_brush(Vector3.ZERO, Vector3(64, 64, 64), "g1")
+func test_hollow_is_the_only_operation_that_still_refuses_a_rotated_brush():
+	# Clip and carve split real geometry now, so rotation costs them nothing.
+	# Hollow still insets every face inward off `size`, so it keeps the guard.
+	_make_brush(Vector3.ZERO, Vector3(64, 64, 64), "g1")
 	sys.rotate(["g1"], [], 1, deg_to_rad(30.0), Vector3.ZERO)
-	assert_false(brushes.can_hollow_brush("g1", 4.0).ok, "hollow must refuse")
-	assert_false(brushes.can_clip_brush("g1", 0, 0.0).ok, "clip must refuse")
-	assert_false(HFBrushSystem._check_axis_aligned_box(b, "Carve").ok, "carve must refuse")
+	assert_false(brushes.can_hollow_brush("g1", 4.0).ok, "hollow must still refuse")
+	assert_true(brushes.can_clip_brush("g1", 0, 0.0).ok, "clip handles rotation now")
 
 
-func test_reset_rotation_makes_hollow_and_clip_reachable_again():
+func test_reset_rotation_makes_hollow_reachable_again():
 	var b := _make_brush(Vector3.ZERO, Vector3(64, 64, 64), "g1")
 	sys.rotate(["g1"], [], 1, deg_to_rad(30.0), Vector3.ZERO)
 	sys.reset_rotation(["g1"])
 	assert_true(brushes.can_hollow_brush("g1", 4.0).ok, "hollow should be reachable again")
-	assert_true(HFBrushSystem._check_axis_aligned_box(b, "Carve").ok)
+	assert_true(HFBrushSystem._check_axis_aligned_box(b, "Hollow").ok)
 
 
 func test_a_refused_operation_names_the_rotation_and_offers_a_fix():
