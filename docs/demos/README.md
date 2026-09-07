@@ -143,28 +143,73 @@ ffmpeg -ss 43.5 -i docs/demos/carve_a_doorway.mp4 -frames:v 1   docs/images/demo
 
 ### Recording harness
 
-The clip is produced by a harness that drives the real editor with the real OS
-mouse while OBS captures the editor window. **That harness is not in the tree
-yet** -- it lives locally alongside `tools/capture_ui.py`, which it reuses for
-the crash-safe environment swap. The committed artefacts above are its output.
+The clip is produced by driving the real editor with the real OS mouse while OBS
+captures the editor window.
 
-Two constraints from it are worth recording even while it is parked, because
-they are properties of HammerForge rather than of the harness:
+```bash
+# OBS must be running with obs-websocket enabled. The password is read from the
+# environment and never written to a file.
+OBS_WS_PASSWORD=... tools/record_demo_video.sh carve_a_doorway
 
-- **The draw tool raycasts existing brush faces before the grid plane.** Ground
-  hidden behind a wall cannot be clicked; the click lands on the wall instead.
-  Anything scripted against the viewport has to be laid out so no drag point
-  falls in an existing brush's shadow.
-- **Cuts extrude upward from the grid plane.** A doorway cut through a wall also
-  cuts any floor brush beneath it, which leaves a pit at the threshold. The
-  demo room has no floor brush for that reason; its walls stand on the ground
-  plane that New Level provides.
+# Rehearse without recording, for iterating on geometry and timing.
+HF_DRY=1 tools/record_demo_video.sh carve_a_doorway
+```
 
-Recording also has to account for two Godot behaviours: the editor window stops
-presenting frames the moment a playtest launches, so a capture left pointing at
-it goes black; and the playtest window is owned by the editor for about twelve
-seconds before the game's own process takes it over, which destroys the window
-being captured.
+| File | Role |
+|------|------|
+| `tools/record_demo_video.sh` | Orchestrates a take: environment swap, editor launch, beat resolution, OBS, encode. |
+| `tools/beats/*.beats` | The timeline for one demo, one action per line. |
+| `tools/mouse_beats.ps1` | Plays a resolved beat file against the real mouse and keyboard. |
+| `tools/obs_ctl.py` | obs-websocket v5 client: point a capture at a window, record, and the diagnostics for when it captures the wrong one. |
+| `tools/win_rect.ps1` | Win32 window geometry. `GetClientRect` plus `ClientToScreen`, because Godot's own window position is relative to the current screen. |
+
+The environment swap is delegated to `capture_ui.py` rather than reimplemented,
+so there is one copy of the crash-safe backup and restore rather than two.
+
+#### Writing beats
+
+Coordinates are resolved against the live editor just before playback:
+
+| Placeholder | Means |
+|-------------|-------|
+| `w(x,y,z)` | A point in the level, projected to viewport pixels by the editor's own camera. |
+| `up(h)` | Extrude the brush being drawn to `h` units tall. |
+| `vx(f)` / `vy(f)` | A fraction of the 3D viewport. |
+| `cx(px)` / `cy(px)` | Pixels from the window's client origin, for dock buttons and the viewport toolbar, which are outside the 3D viewport. |
+
+`w()` exists because screen fractions cannot say where a brush lands in the
+level. A room drawn against them is only ever as good as the guess, and the
+first attempt at this demo produced walls in the wrong places and a cut brush
+that missed the wall entirely.
+
+`up()` is a pixel gesture rather than a height, because the draw tool derives
+height from mouse travel: `grid_snap + pixels_up / height_pixels_per_unit`,
+snapped to the grid. The resolver reads both numbers from the editor at runtime
+rather than hard-coding them.
+
+#### Why it refuses to run alongside another editor
+
+`capture_ui.py` rewrites `project.godot` for the duration of a take. Any editor
+already holding that file raises a "files have been modified outside Godot"
+dialog -- a real window, of the same window class, which sits on top of the
+playtest and gets recorded instead of it. A second editor can also save the
+project back at a different engine version. The harness therefore checks for
+other Godot processes and stops; `HF_ALLOW_STRAY_EDITOR=1` overrides it.
+
+#### Godot behaviours it has to work around
+
+- **The editor window stops presenting frames when a playtest launches.** A
+  capture left pointing at it goes black, so the take has to cut to the
+  playtest window.
+- **The playtest window is owned by the editor for about twelve seconds** before
+  the game's own process takes it over, and the handover destroys the window
+  being captured. Everything worth showing has to happen inside that window,
+  which is why the walk is short and the clip cuts when it does.
+- **Two windows answer to the playtest's title** during that period, under one
+  identical `title:class:exe` string. `capture --index` picks between them.
+- **OBS falls back by the field named in `priority`** when the exact window is
+  gone -- class hands back any other Godot window, executable hands back the
+  editor. Neither is what you want, so the default is left alone.
 
 ## Audio
 
