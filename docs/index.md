@@ -15,6 +15,20 @@ no export plugins. Drop it in, enable, draw.
     This is a solo hobby project. It's buggy and rough around the edges.
     Testing and issue reports are genuinely welcome.
 
+## See it in motion
+
+Building a room from an empty grid, carving a doorway through one wall,
+applying the cut, and then playing the level to walk up to the hole.
+
+Recorded from the editor itself and driven by a real mouse, at normal speed —
+nothing is sped up, cut together, or mocked up.
+
+<video controls preload="metadata" poster="images/demo_carve_a_doorway_poster.png" style="width:100%; border-radius:4px">
+  <source src="demos/carve_a_doorway.mp4" type="video/mp4">
+  Your browser cannot play this video.
+  <a href="demos/carve_a_doorway.mp4">Download it instead</a> (MP4, 55 seconds, no audio).
+</video>
+
 ## How it works
 
 | Step | | |

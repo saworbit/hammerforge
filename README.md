@@ -29,6 +29,19 @@
   textured with the built-in prototype materials.</em>
 </p>
 
+<h3 align="center">Carving a doorway</h3>
+
+<p align="center">
+  <a href="https://saworbit.github.io/hammerforge/#see-it-in-motion">
+    <img src="docs/images/demo_carve_a_doorway.gif" alt="Screen recording of the HammerForge editor: a cut brush is dragged through a wall, the cut is applied, and the level is then played in first person, walking up to the doorway that was cut" width="820">
+  </a>
+</p>
+
+<p align="center">
+  <em>Drag a cut brush through the wall, apply it, then Test Level and walk up to the hole.<br>
+  <a href="https://saworbit.github.io/hammerforge/#see-it-in-motion">Watch the full 55-second clip</a> — it starts from an empty grid and builds the room first.</em>
+</p>
+
 > **Fair warning:** This is a solo hobby project in early alpha. I built it to support another project and it grew from there. It's buggy, rough around the edges, and a bit directionless. If any of this looks useful to you, I'd genuinely appreciate help testing and filing issues. Contributions welcome -- just know you're signing up for an adventure, not a polished product.
 
 ---
