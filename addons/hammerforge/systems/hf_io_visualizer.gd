@@ -102,6 +102,9 @@ func refresh() -> void:
 	_ensure_mesh_instance()
 	if not _immediate_mesh:
 		return
+	# The connection lines are drawn between two entities' `global_position`, and
+	# this hangs off the LevelRoot, so it has to be pinned to world space.
+	_mesh_instance.global_transform = Transform3D.IDENTITY
 	_immediate_mesh.clear_surfaces()
 	if not root.entity_system:
 		return

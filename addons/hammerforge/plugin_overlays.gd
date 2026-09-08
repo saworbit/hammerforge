@@ -283,6 +283,10 @@ static func update_vertex_overlay(plugin: Object, root: Node) -> void:
 		clear_vertex_overlay(plugin)
 		return
 	ensure_vertex_overlay(plugin, root)
+	# The handles and edges are world positions, and this hangs off the LevelRoot,
+	# so it has to be pinned to world space. These are what a vertex drag is aimed
+	# at; drawing them a root transform away makes the tool unusable off the origin.
+	plugin._vertex_overlay_mesh.global_transform = Transform3D.IDENTITY
 	plugin._vertex_overlay_imesh.clear_surfaces()
 	var edge_data = vertex_system.get_all_edge_world_positions()
 	if not edge_data.is_empty():
