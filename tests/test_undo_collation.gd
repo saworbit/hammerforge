@@ -397,3 +397,78 @@ func test_the_tag_changes_with_the_target_and_the_inputs():
 	assert_ne(base, HFPluginEditActions.collation_tag("rotate", ["a"], [], [1]), "command")
 	assert_ne(base, HFPluginEditActions.collation_tag("nudge", ["a"], ["e"], [1]), "entities")
 	assert_eq(base, HFPluginEditActions.collation_tag("nudge", ["a"], [], [1]), "same press")
+
+
+# ===========================================================================
+# A command with more arguments than the unroll covers
+# ===========================================================================
+
+
+func _brush_count() -> int:
+	var total := 0
+	for node in root._iter_pick_nodes():
+		if node is DraftBrush:
+			total += 1
+	return total
+
+
+## create_radial_array takes six arguments. The unrolled add_do_method stops at
+## five, so this used to run the command and register nothing at all: Ctrl+Z
+## reached past it and undid whatever came before.
+func test_a_six_argument_command_still_registers_an_undo_entry():
+	var brush := _make_brush(Vector3.ZERO)
+	var undo_redo := FakeUndoRedo.new()
+	var before := root.capture_state()
+
+	HFUndoHelper.register_action(
+		undo_redo,
+		root,
+		"Create Radial Array",
+		MERGE_DISABLE,
+		"create_radial_array",
+		[PackedStringArray([_brush_id(brush)]), 4, 1, 90.0, Vector3.ZERO, 0.0],
+		before
+	)
+
+	assert_eq(undo_redo.entries.size(), 1, "six arguments must still reach the undo manager")
+	assert_false(
+		undo_redo.entries[0]["do"].is_empty(), "an entry with no do operation cannot be redone"
+	)
+	assert_gt(_brush_count(), 1, "the array copies are in the level")
+
+
+func test_undoing_a_radial_array_removes_the_copies():
+	var brush := _make_brush(Vector3.ZERO)
+	var undo_redo := FakeUndoRedo.new()
+	var before := root.capture_state()
+
+	HFUndoHelper.register_action(
+		undo_redo,
+		root,
+		"Create Radial Array",
+		MERGE_DISABLE,
+		"create_radial_array",
+		[PackedStringArray([_brush_id(brush)]), 4, 1, 90.0, Vector3.ZERO, 0.0],
+		before
+	)
+	var with_array := _brush_count()
+	assert_gt(with_array, 1, "the array has to exist before undo can mean anything")
+
+	undo_redo.undo()
+	assert_eq(_brush_count(), 1, "undo takes the array copies back out")
+
+	undo_redo.redo()
+	assert_eq(_brush_count(), with_array, "redo puts the whole array back")
+
+
+## MAX_UNROLLED_ARGS decides when register_action stops naming the method and
+## starts registering a snapshot. If it drifts below what the unroll covers, a
+## call quietly loses its do operation again.
+func test_the_unroll_covers_every_argument_count_below_the_snapshot_cutoff():
+	var source := FileAccess.get_file_as_string("res://addons/hammerforge/undo_helper.gd")
+	for count in range(HFUndoHelper.MAX_UNROLLED_ARGS + 1):
+		assert_gt(
+			source.find("\t\t%d:" % count),
+			-1,
+			"register_action must unroll add_do_method for %d arguments" % count
+		)
