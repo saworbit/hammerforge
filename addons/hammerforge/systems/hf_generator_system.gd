@@ -164,18 +164,18 @@ func regenerate(generator_id: String, settings: Dictionary) -> HFOpResult:
 	if face_sets.is_empty():
 		return HFOpResult.fail("Generator: those settings produce no geometry")
 
-	# Materials are what a designer adds after generating, so losing them on every
+	# Appearance is what a designer adds after generating, so losing it on every
 	# radius nudge would make this not worth using. Captured in order and put back
 	# by index; when the piece count changes there is no correspondence past the
 	# shorter list, and the extra pieces take the default.
-	var materials := _capture_materials(record)
+	var appearance := _capture_appearance(record)
 	# Where the structure is now, not where it was made. Read before anything is
 	# deleted, because it is the existing pieces that say where they have gone.
 	record.placement.origin += relocation_delta(generator_id)
 	_delete_brushes(record.brush_ids, generator_id)
 
 	record.settings = settings.duplicate(true)
-	record.brush_ids = _spawn(face_sets, record.placement, generator_id, materials)
+	record.brush_ids = _spawn(face_sets, record.placement, generator_id, appearance)
 	if record.brush_ids.is_empty():
 		generators.erase(generator_id)
 		return HFOpResult.fail("Generator: those settings produce no geometry")
@@ -347,7 +347,7 @@ func clear() -> void:
 
 
 func _spawn(
-	face_sets: Array, placement: Transform3D, generator_id: String, materials: Array
+	face_sets: Array, placement: Transform3D, generator_id: String, appearance: Array
 ) -> PackedStringArray:
 	if root == null or root.get("brush_system") == null:
 		return PackedStringArray()
@@ -359,17 +359,116 @@ func _spawn(
 		if brush == null:
 			continue
 		brush.set_meta(GENERATOR_META, generator_id)
-		if i < materials.size() and materials[i] != null:
-			brush.material_override = materials[i]
+		if i < appearance.size():
+			_apply_appearance(brush, appearance[i])
 	return created
 
 
-func _capture_materials(record: HFGenerator) -> Array:
+## What each piece looks like, in the order the pieces were built.
+##
+## The override material is the whole-brush one. The face entries are what the
+## Paint tab writes, which is per face and is the work most worth not losing:
+## painting a generated arch and then nudging its radius should not reset it.
+func _capture_appearance(record: HFGenerator) -> Array:
 	var out: Array = []
 	for brush_id in record.brush_ids:
 		var brush = _brush(str(brush_id))
-		out.append(brush.material_override if brush else null)
+		if brush == null:
+			out.append({})
+			continue
+		var faces: Array = []
+		for face in brush.faces:
+			faces.append(_face_appearance(face))
+		out.append({"override": brush.material_override, "faces": faces})
 	return out
+
+
+static func _face_appearance(face) -> Dictionary:
+	if face == null:
+		return {}
+	return {
+		"material_idx": face.material_idx,
+		"uv_projection": face.uv_projection,
+		"uv_scale": face.uv_scale,
+		"uv_offset": face.uv_offset,
+		"uv_rotation": face.uv_rotation,
+		"custom_uvs": face.custom_uvs,
+		"paint_layers": face.paint_layers,
+	}
+
+
+## Put back what a piece looked like.
+##
+## Faces are matched by index, which is a real correspondence only while the
+## rebuilt piece has the same faces in the same order. A piece whose face count
+## changed keeps the whole-brush material and takes default faces, and
+## `appearance_at_risk()` is what says so before the rebuild happens.
+static func _apply_appearance(brush, appearance) -> void:
+	if not (appearance is Dictionary) or appearance.is_empty():
+		return
+	if appearance.get("override", null) != null:
+		brush.material_override = appearance["override"]
+	var stored: Array = appearance.get("faces", [])
+	var faces: Array = brush.faces
+	if stored.size() != faces.size():
+		return
+	for i in faces.size():
+		_restore_face(faces[i], stored[i])
+	brush.rebuild_preview()
+
+
+static func _restore_face(face, stored) -> void:
+	if face == null or not (stored is Dictionary) or stored.is_empty():
+		return
+	face.material_idx = int(stored.get("material_idx", -1))
+	face.uv_projection = int(stored.get("uv_projection", face.uv_projection))
+	face.uv_scale = stored.get("uv_scale", face.uv_scale)
+	face.uv_offset = stored.get("uv_offset", face.uv_offset)
+	face.uv_rotation = float(stored.get("uv_rotation", 0.0))
+	var uvs: PackedVector2Array = stored.get("custom_uvs", PackedVector2Array())
+	if uvs.size() == face.local_verts.size():
+		face.custom_uvs = uvs
+	var layers: Array = stored.get("paint_layers", [])
+	if not layers.is_empty():
+		face.paint_layers.assign(layers)
+
+
+## The pieces whose authored appearance a rebuild with these settings could not
+## put back: the ones a shorter piece list drops, and the ones whose faces would
+## no longer line up one to one.
+##
+## Asked before an Update, because that is the last moment the user can choose
+## Detach instead. A piece with nothing authored on it is never at risk; there is
+## nothing there to lose.
+func appearance_at_risk(generator_id: String, settings: Dictionary) -> PackedStringArray:
+	var out := PackedStringArray()
+	if not generators.has(generator_id):
+		return out
+	var record: HFGenerator = generators[generator_id]
+	var face_sets := build_faces(record.type, settings)
+	for i in record.brush_ids.size():
+		var brush = _owned_brush(str(record.brush_ids[i]), generator_id)
+		if brush == null or not _has_authored_faces(brush):
+			continue
+		if i >= face_sets.size() or face_sets[i].size() != brush.faces.size():
+			out.append(str(record.brush_ids[i]))
+	return out
+
+
+## True when any face of the piece carries appearance the Paint tab put there.
+static func _has_authored_faces(brush) -> bool:
+	for face in brush.faces:
+		if face == null:
+			continue
+		if face.material_idx != -1 or not face.paint_layers.is_empty():
+			return true
+		if not face.custom_uvs.is_empty() or not is_zero_approx(face.uv_rotation):
+			return true
+		if not face.uv_scale.is_equal_approx(Vector2.ONE):
+			return true
+		if not face.uv_offset.is_equal_approx(Vector2.ZERO):
+			return true
+	return false
 
 
 ## Delete only the brushes that still say they belong to this generator.

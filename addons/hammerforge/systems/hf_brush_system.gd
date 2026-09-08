@@ -720,6 +720,13 @@ func clear_brushes() -> void:
 				root.draft_brushes_node.remove_child(child)
 				child.queue_free()
 	_clear_generated()
+	# The records describe geometry that has just gone. Keeping them would leave
+	# orphans in the next save and in every undo snapshot after this one.
+	# Restoring a state puts the records for that state back afterwards, and
+	# deleting a single generated piece still goes nowhere near here, because that
+	# record is what warns about the gap and rebuilds it.
+	if root.generator_system:
+		root.generator_system.clear()
 	_clear_preview()
 	clear_pending_cuts()
 	_clear_committed_cuts()

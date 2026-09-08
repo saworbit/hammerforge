@@ -161,6 +161,54 @@ func test_a_refused_update_does_not_report_a_rebuild():
 
 
 # ===========================================================================
+# Rebuilding over painted faces
+# ===========================================================================
+
+
+func test_an_update_that_would_drop_paint_warns_before_it_does_it():
+	_set_field("segments", 9.0)
+	_create_then_select_a_piece()
+	# The last piece is the one a shorter arch would not have.
+	var last := str(_only_record().brush_ids[8])
+	root.assign_material_to_faces_by_id(last, [0], 7)
+	_set_field("segments", 5.0)
+
+	dock._on_create_structure()
+
+	assert_eq(_only_record().brush_ids.size(), 9, "the first press must not rebuild")
+	assert_true(dock.structure_warning.visible, "the warning has to be shown")
+	assert_true(
+		dock.structure_warning.text.contains("Detach"),
+		"and has to offer the other way out: got '%s'" % dock.structure_warning.text
+	)
+
+
+func test_pressing_update_again_goes_ahead():
+	_set_field("segments", 9.0)
+	_create_then_select_a_piece()
+	root.assign_material_to_faces_by_id(str(_only_record().brush_ids[8]), [0], 7)
+	_set_field("segments", 5.0)
+
+	dock._on_create_structure()
+	dock._on_create_structure()
+
+	assert_eq(_status(), "Arch rebuilt")
+	assert_eq(_only_record().brush_ids.size(), 5)
+
+
+func test_an_update_that_keeps_the_paint_does_not_warn():
+	_create_then_select_a_piece()
+	root.assign_material_to_faces_by_id(str(_only_record().brush_ids[0]), [0], 7)
+	_set_field("radius", 192.0)
+
+	dock._on_create_structure()
+
+	assert_eq(_status(), "Arch rebuilt", "a radius nudge keeps every face, so it just rebuilds")
+	var rebuilt = root.brush_system.find_brush_by_id(str(_only_record().brush_ids[0]))
+	assert_eq(rebuilt.faces[0].material_idx, 7, "and the paint is still there")
+
+
+# ===========================================================================
 # The advertised shortcut (#198)
 # ===========================================================================
 

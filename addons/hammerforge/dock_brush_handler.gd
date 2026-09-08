@@ -569,6 +569,8 @@ static func refresh_structure_section(dock: Object) -> void:
 		_show_edit_warning(dock, 0)
 		return
 
+	if str(dock._active_generator_id) != str(record.generator_id):
+		dock._structure_overwrite_ack = ""
 	dock._active_generator_id = record.generator_id
 	if structure_type(dock) != record.type:
 		_select_type(dock, record.type)
@@ -694,12 +696,49 @@ static func _update_structure(dock: Object, generator_id: String, settings: Dict
 	if not check.ok:
 		dock._set_status("%s not changed. %s" % [label, check.user_text()], true)
 		return
+	# Painting a generated structure is normal authoring work. A rebuild carries it
+	# across whenever the pieces still line up, and when they do not the user gets
+	# to see that before it goes, with Detach sitting beside the button.
+	if not _confirm_appearance_overwrite(dock, generator_id, settings):
+		return
 	dock._commit_state_action("Update %s" % label, "regenerate_generator", [generator_id, settings])
+	dock._structure_overwrite_ack = ""
 	if dock.level_root.has_generator(generator_id):
 		dock._set_status("%s rebuilt" % label)
 	else:
 		dock._set_status("%s was not rebuilt" % label, true)
 	refresh_structure_section(dock)
+
+
+## False when the user has not yet seen that this rebuild would drop painted
+## faces. The first press warns and stops; a second press of the same settings
+## goes ahead, and Detach is the other way out.
+static func _confirm_appearance_overwrite(
+	dock: Object, generator_id: String, settings: Dictionary
+) -> bool:
+	if not dock.level_root.has_method("generator_appearance_at_risk"):
+		return true
+	var at_risk: int = dock.level_root.generator_appearance_at_risk(generator_id, settings).size()
+	if at_risk <= 0:
+		dock._structure_overwrite_ack = ""
+		return true
+	var token := "%s|%d" % [generator_id, hash(settings)]
+	if str(dock._structure_overwrite_ack) == token:
+		return true
+	dock._structure_overwrite_ack = token
+	_show_paint_warning(dock, at_risk)
+	dock._set_status("Press Update again to rebuild over the painted faces", true)
+	return false
+
+
+static func _show_paint_warning(dock: Object, at_risk: int) -> void:
+	if dock == null or dock.structure_warning == null:
+		return
+	dock.structure_warning.visible = true
+	dock.structure_warning.text = (
+		"%d piece%s painted faces these settings cannot keep. Update again to rebuild over %s, or Detach to keep them."
+		% [at_risk, " has" if at_risk == 1 else "s have", "it" if at_risk == 1 else "them"]
+	)
 
 
 static func on_rotate_selection(dock: Object, direction: int) -> void:
