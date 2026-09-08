@@ -73,6 +73,40 @@ func test_the_flight_is_centred_on_its_own_origin():
 	assert_almost_eq(centre.z, 0.0, EPS)
 
 
+func test_an_open_flight_is_centred_on_its_own_origin_too():
+	# An open flight starts at the underside of its first tread, so it does not
+	# span the whole climb. Centring on the climb left it half a tread high.
+	var box: AABB = SolidChecks.structure_bounds(
+		HFStairsBuilderScript.build(_settings({"fill": 1}))
+	)
+	assert_almost_eq(box.get_center().y, 0.0, EPS, "an open flight sat above its placement point")
+
+
+func test_an_open_flight_stays_centred_at_other_rises_and_thicknesses():
+	for overrides in [
+		{"fill": 1, "rise": 24.0, "tread_thickness": 4.0},
+		{"fill": 1, "rise": 12.0, "tread_thickness": 12.0},
+		{"fill": 1, "rise": 10.0, "tread_thickness": 20.0, "steps": 6},
+	]:
+		var box: AABB = SolidChecks.structure_bounds(
+			HFStairsBuilderScript.build(_settings(overrides))
+		)
+		assert_almost_eq(box.get_center().y, 0.0, EPS, "off centre for %s" % overrides)
+
+
+func test_an_open_flight_still_reaches_the_same_top_step():
+	# Centring moves the flight, it does not change how tall it is.
+	var flight: Array = HFStairsBuilderScript.build(_settings({"fill": 1}))
+	var box: AABB = SolidChecks.structure_bounds(flight)
+	var settings := _settings()
+	var rise: float = settings["rise"]
+	var thickness: float = settings["tread_thickness"]
+	var steps: int = settings["steps"]
+	assert_almost_eq(
+		box.size.y, float(steps) * rise - (rise - thickness), EPS, "the flight changed height"
+	)
+
+
 func test_each_step_is_exactly_one_tread_on_and_one_rise_up():
 	var flight: Array = HFStairsBuilderScript.build(
 		_settings({"steps": 6, "rise": 12.0, "tread": 40.0})

@@ -140,8 +140,13 @@ static func build(settings: Dictionary) -> Array:
 	var thickness: float = merged["tread_thickness"]
 
 	# Centred on its own middle, the way every other generator is, so placing it
-	# on a selection puts the middle of the flight where you were looking.
-	var y_shift := -float(steps) * rise * 0.5
+	# on a selection puts the middle of the flight where you were looking. That
+	# has to be the middle of the geometry actually emitted: an open flight starts
+	# at the underside of its first tread, not at the foot of the climb, so
+	# centring on the nominal climb would leave it half a tread out.
+	var lowest := (rise - thickness) if open_treads else 0.0
+	var highest := float(steps) * rise
+	var y_shift := -(lowest + highest) * 0.5
 	var z_shift := -float(steps) * tread * 0.5
 
 	var out: Array = []

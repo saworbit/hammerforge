@@ -183,7 +183,18 @@ static func build(settings: Dictionary) -> Array:
 	var start := deg_to_rad(float(merged["start_degrees"]))
 
 	var climb := float(steps) * rise
-	var y_shift := -climb * 0.5
+	var has_post := bool(merged["center_post"])
+	var post_height := maxf(climb, thickness)
+	# Centred on the geometry actually emitted. The treads start at the underside
+	# of the first one rather than at the foot of the climb, so a flight without a
+	# post to fill that gap would otherwise sit half a tread high. With a post this
+	# comes out at the same place it always did.
+	var lowest := rise - thickness
+	var highest := climb
+	if has_post:
+		lowest = minf(lowest, 0.0)
+		highest = maxf(highest, post_height)
+	var y_shift := -(lowest + highest) * 0.5
 
 	var out: Array = []
 	for i in steps:
@@ -191,8 +202,8 @@ static func build(settings: Dictionary) -> Array:
 		var a0 := start + turn * float(i)
 		var a1 := start + turn * float(i + 1)
 		out.append(_tread_faces(outer, inner, a0, a1, top - thickness, top))
-	if bool(merged["center_post"]):
-		out.append(_post_faces(inner, y_shift, y_shift + maxf(climb, thickness)))
+	if has_post:
+		out.append(_post_faces(inner, y_shift, y_shift + post_height))
 	return out
 
 
