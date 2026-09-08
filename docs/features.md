@@ -32,7 +32,7 @@ Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Su
 - **Merge** (Ctrl+Shift+M) -- combine 2+ selected brushes into one, preserving per-brush materials and full transforms (rotation/scale)
 - **Rotate** (R / Shift+R) -- turn the selection by a configurable step about the locked axis, or Y. Texture Lock keeps the texture pinned in world space
 - **Flip** (Shift+M) -- mirror the selection across the locked axis, or X. Winding is preserved, so a mirrored brush never bakes inside out
-- **Reset Rotation** (Alt+R) -- clear a rotation and keep the geometry. A quarter turn folds into the brush size losslessly, which hands the brush back to Hollow, Clip and Carve
+- **Reset Rotation** (Alt+R) -- clear a rotation and keep the geometry. A quarter turn folds into the brush size losslessly, and any scale set with Godot's own gizmo is left alone, because that is not rotation
 - **Arrays** -- Linear, Radial (copies around an axis) and Grid (a 3D lattice) layouts in the Duplicate Array section
 - **Bevel** -- round off sharp edges with configurable segments and radius (vertex/edge mode)
 - **Face Inset** -- shrink a face inward and optionally extrude along its normal
@@ -373,7 +373,7 @@ transform group while paint mode is on, so only one of the two is ever live.
 
 ## Testing
 
-The verified Godot 4.7 suite on September 8, 2026 contains **2,809 tests across 147 scripts**: **2,802 passing tests**, seven intentional no-assert safety tests, and **15,006 assertions**. All checks run on every push and pull request via GitHub Actions.
+The verified Godot 4.7 suite on September 8, 2026 contains **2,874 tests across 151 scripts**: **2,867 passing tests**, seven intentional no-assert safety tests, and **15,210 assertions**. All checks run on every push and pull request via GitHub Actions.
 
 ```bash
 # Run all tests headless

@@ -316,10 +316,15 @@ pieces** and the Structure section changes: the type switches to whatever that
 structure is, the settings that built it load into the controls, the button reads
 **Update**, and a **Detach** button appears beside it.
 
-Change anything — press **Update** and the structure rebuilds in place. Materials
-you painted on it come back on the same pieces. If you increase the piece count,
-the new pieces take the default material, because there is nothing for them to
-inherit.
+Change anything — press **Update** and the structure rebuilds in place. Everything
+you painted on it comes back on the same faces: per-face materials, UV projection,
+scale, offset and rotation, and paint layers. If you increase the piece count, the
+new pieces start plain, because there is nothing for them to inherit.
+
+**If a change would drop painted faces, Update says so and waits.** Cutting the
+piece count means the pieces past the new end have nowhere to come back to. The
+section tells you how many carry paint, and a second press of **Update** goes
+ahead. **Detach** is the other way out.
 
 This is the point of it: a radius, a segment count and a step rise are numbers you
 get right by looking at the result, not in advance.
@@ -361,9 +366,16 @@ merged brush and a rotated anything are all fair game.
 
 ### Clipping along an angle
 
-The quickest way to an angled cut is **Clip to Face Plane**. Enter Face Select,
-click the face whose angle you want, select the brush or brushes to cut, and press
-`Alt+Shift+X`. Everything selected is cut along that face's plane.
+The quickest way to an angled cut is **Clip to Face Plane**. Select the brush or
+brushes you want to cut **first**, then enter Face Select, click the face whose
+angle you want, and press `Alt+Shift+X`. Everything you had selected is cut along
+that face's plane, as a single undo step.
+
+The order matters because Face Select hides the object selection while it is open
+— that is what makes clicking a face unambiguous. The command remembers what you
+had selected on the way in. Once the cut is done it releases both the face and the
+objects and closes Face Select, because the brushes it was holding have just been
+replaced.
 
 That face can belong to any brush, including one you drew purely as a guide and
 delete afterwards — draw a box, rotate it to the angle you want, and use one of its
