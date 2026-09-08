@@ -27,7 +27,7 @@ Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Su
 - **Dome** -- a hemisphere in rings, one brush per panel. Adjustable arc and sweep, and a wall that can go all the way to solid
 - **Live structures** -- every structure remembers what made it. Select a piece and the Structure section becomes an editor: change a number and it rebuilds in place, where you moved it to, keeping the materials painted on it. It says first if a rebuild would overwrite hand edits. Detach when it should stop being live
 - **Clip** (Shift+X) -- split a brush along a plane. Any convex brush, at any rotation; a piece that is still a box stays a box
-- **Clip to Face Plane** (Alt+Shift+X) -- cut along the plane of a selected face, which is the cheapest route to an angled wall or a chamfered corner
+- **Clip to Face Plane** (Shift+Alt+X) -- cut along the plane of a selected face, which is the cheapest route to an angled wall or a chamfered corner
 - **Carve** (Ctrl+Shift+R) -- boolean-subtract one brush from all intersecting brushes, using the carver's real face planes, so the carver can be rotated or a cylinder
 - **Merge** (Ctrl+Shift+M) -- combine 2+ selected brushes into one, preserving per-brush materials and full transforms (rotation/scale)
 - **Rotate** (R / Shift+R) -- turn the selection by a configurable step about the locked axis, or Y. Texture Lock keeps the texture pinned in world space
@@ -361,7 +361,7 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 | X / Y / Z * | Axis lock | | A | Align mode (measure) |
 | R * | Rotate CCW | | Shift+R * | Rotate CW |
 | Shift+M * | Flip selection | | Alt+R * | Reset rotation |
-| Alt+Shift+X * | Clip to Face Plane | | Ctrl+Shift+A * | Create Structure |
+| Shift+Alt+X * | Clip to Face Plane | | Ctrl+Shift+A * | Create Structure |
 
 R appears twice on purpose. Paint mode claims it for Rect; everywhere else it
 rotates. The viewport dispatches the paint tools first and skips the whole
@@ -373,7 +373,7 @@ transform group while paint mode is on, so only one of the two is ever live.
 
 ## Testing
 
-The verified Godot 4.7 suite on September 8, 2026 contains **2,887 tests across 152 scripts**: **2,880 passing tests**, seven intentional no-assert safety tests, and **15,240 assertions**. All checks run on every push and pull request via GitHub Actions.
+The verified Godot 4.7 suite on September 8, 2026 contains **2,889 tests across 152 scripts**: **2,882 passing tests**, seven intentional no-assert safety tests, and **15,291 assertions**. All checks run on every push and pull request via GitHub Actions.
 
 ```bash
 # Run all tests headless

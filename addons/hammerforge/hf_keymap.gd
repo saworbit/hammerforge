@@ -287,9 +287,16 @@ static func _keycode_to_label(keycode: int) -> String:
 			return "PgDn"
 		KEY_QUOTELEFT:
 			return "`"
+		KEY_BRACKETLEFT:
+			return "["
+		KEY_BRACKETRIGHT:
+			return "]"
 	# Single letter keys
 	if keycode >= KEY_A and keycode <= KEY_Z:
 		return char(keycode)
 	if keycode >= KEY_0 and keycode <= KEY_9:
 		return str(keycode - KEY_0)
-	return "Key%d" % keycode
+	# Anything else gets Godot's own name for the key rather than its number.
+	# "Key91" told a user nothing about which key to press.
+	var named := OS.get_keycode_string(keycode)
+	return named if named != "" else "Key%d" % keycode
