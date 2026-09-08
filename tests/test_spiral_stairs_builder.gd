@@ -105,6 +105,38 @@ func test_the_flight_is_centred_on_its_own_origin_vertically():
 	assert_almost_eq(box.get_center().y, 0.0, EPS)
 
 
+func test_a_postless_flight_is_centred_too():
+	# The post used to fill the gap under the first tread and hide the fact that
+	# the treads alone were centred on the climb rather than on themselves.
+	var box: AABB = SolidChecks.structure_bounds(
+		HFSpiralStairsBuilderScript.build(_settings({"center_post": false}))
+	)
+	assert_almost_eq(box.get_center().y, 0.0, EPS, "a postless spiral sat above its origin")
+
+
+func test_a_postless_flight_stays_centred_at_other_rises_and_thicknesses():
+	for overrides in [
+		{"center_post": false, "rise": 24.0, "tread_thickness": 4.0},
+		{"center_post": false, "rise": 12.0, "tread_thickness": 12.0},
+		{"center_post": false, "rise": 10.0, "tread_thickness": 20.0, "steps": 6},
+	]:
+		var box: AABB = SolidChecks.structure_bounds(
+			HFSpiralStairsBuilderScript.build(_settings(overrides))
+		)
+		assert_almost_eq(box.get_center().y, 0.0, EPS, "off centre for %s" % overrides)
+
+
+func test_a_flight_with_a_post_stays_centred_at_other_rises_and_thicknesses():
+	for overrides in [
+		{"center_post": true, "rise": 24.0, "tread_thickness": 4.0},
+		{"center_post": true, "rise": 10.0, "tread_thickness": 20.0, "steps": 6},
+	]:
+		var box: AABB = SolidChecks.structure_bounds(
+			HFSpiralStairsBuilderScript.build(_settings(overrides))
+		)
+		assert_almost_eq(box.get_center().y, 0.0, EPS, "off centre for %s" % overrides)
+
+
 func test_turning_the_other_way_mirrors_rather_than_breaks():
 	var clockwise: Array = _treads({"degrees_per_step": -30.0})
 	assert_eq(clockwise.size(), 12)
