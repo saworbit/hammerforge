@@ -10,7 +10,6 @@ const PlaytestFPS = preload("playtest_fps.gd")
 const HFLevelIO = preload("hflevel_io.gd")
 const MapIO = preload("map_io.gd")
 const FaceData = preload("face_data.gd")
-const HFArchBuilderType = preload("hf_arch_builder.gd")
 const MaterialManager = preload("material_manager.gd")
 const SurfacePaint = preload("surface_paint.gd")
 const FaceSelector = preload("face_selector.gd")
@@ -239,6 +238,7 @@ var io_presets
 var displacement_system
 var bevel_system
 var transform_system
+var generator_system
 
 @export var show_subtract_preview: bool = false:
 	set(value):
@@ -575,6 +575,7 @@ func _initialize_editor_systems() -> void:
 	)
 	bevel_system = load("res://addons/hammerforge/systems/hf_bevel_system.gd").new(self)
 	transform_system = load("res://addons/hammerforge/systems/hf_transform_system.gd").new(self)
+	generator_system = load("res://addons/hammerforge/systems/hf_generator_system.gd").new(self)
 	if show_subtract_preview:
 		subtract_preview.set_enabled(true)
 	entity_system.load_entity_definitions()
@@ -1221,25 +1222,42 @@ func move_brushes_to_ceiling(brush_ids: Array) -> void:
 
 ## Build an arch centred on `centre`, one brush per segment.
 ##
-## Undo dispatches by this name, so its signature is what undo replays.
+## Undo dispatches by these names, so their signatures are what undo replays.
 func create_arch(settings: Dictionary, centre: Vector3) -> HFOpResult:
-	var check: HFOpResult = HFArchBuilderType.validate(settings)
-	if not check.ok:
-		user_message.emit(check.user_text(), 1)
-		return check
-	var face_sets: Array = HFArchBuilderType.build(settings)
-	if face_sets.is_empty():
-		return HFOpResult.fail("Arch: produced no geometry")
+	return create_generator("arch", settings, Transform3D(Basis.IDENTITY, centre))
+
+
+## Build a structure and keep a record of it, so it can be rebuilt differently.
+func create_generator(type: String, settings: Dictionary, placement: Transform3D) -> HFOpResult:
+	if not generator_system:
+		return HFOpResult.fail("Generator: system unavailable")
 	begin_signal_batch()
-	var created: PackedStringArray = brush_system.create_brushes_from_face_sets(
-		face_sets, Transform3D(Basis.IDENTITY, centre)
-	)
+	var result: HFOpResult = generator_system.create(type, settings, placement)
 	end_signal_batch()
-	if created.is_empty():
-		return HFOpResult.fail("Arch: produced no geometry")
-	var message := "Arch: created %d segments" % created.size()
-	_log(message)
-	return HFOpResult.success(message)
+	if not result.ok:
+		user_message.emit(result.user_text(), 1)
+	return result
+
+
+## Rebuild an existing structure from new settings, in place.
+func regenerate_generator(generator_id: String, settings: Dictionary) -> HFOpResult:
+	if not generator_system:
+		return HFOpResult.fail("Generator: system unavailable")
+	begin_signal_batch()
+	var result: HFOpResult = generator_system.regenerate(generator_id, settings)
+	end_signal_batch()
+	if not result.ok:
+		user_message.emit(result.user_text(), 1)
+	return result
+
+
+## Forget a structure's record, leaving its brushes as ordinary geometry.
+func detach_generator(generator_id: String) -> bool:
+	return generator_system.detach(generator_id) if generator_system else false
+
+
+func generator_for_selection(brush_ids: Array):
+	return generator_system.generator_for_selection(brush_ids) if generator_system else null
 
 
 func clip_brush_by_plane(brush_id: String, plane: Plane) -> HFOpResult:

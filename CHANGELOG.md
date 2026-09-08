@@ -5,6 +5,46 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Live generators — structures you can go back and change.** A generator turns a
+  handful of numbers into a lot of brushes, and until now the numbers were gone
+  the moment the brushes existed. An arch became eight loose brushes with no
+  memory of the radius, thickness or segment count behind them, so wanting a
+  slightly wider one meant deleting everything and building it again — losing any
+  materials painted on the old one. Radius and segment count are exactly the
+  values a designer tunes by looking at the result.
+  - **`HFGeneratorSystem`** keeps a record of what each generator made: its type,
+    its settings, where it was placed, and the brushes it produced. Shaped after
+    `HFDuplicator`, which already remembers its sources and instances, and
+    persisted the same way — the records ride in the state snapshot, so they
+    travel through undo and into the `.hflevel` file.
+  - **The Arch section becomes an editor.** Select any piece of an arch and the
+    section loads that arch's settings, the button reads **Update Arch**, and a
+    **Detach** button appears. Change a number and the structure rebuilds in
+    place.
+  - **Materials survive a rebuild.** Each piece's material is captured in order
+    and reapplied by index, so nudging a radius does not cost a texture pass.
+    When the segment count changes the shorter list wins and the extra pieces take
+    the default, since there is no correspondence to preserve.
+  - **Detach** forgets the record and leaves ordinary brushes — the way out for a
+    structure that has been edited by hand and should stop being rebuilt out from
+    under those edits. It sits beside Update so the choice is visible rather than
+    discovered afterwards.
+  - Validation runs before anything is deleted, so an unbuildable change refuses
+    and leaves the structure standing rather than removing it and then failing to
+    replace it.
+- **Live generator coverage** (`tests/test_generator_system.gd`,
+  `tests/test_live_generators_integration.gd`,
+  `tests/test_live_generator_commands.gd`, 63 cases): records surviving undo and
+  the save format, material preservation across a changing segment count, stale
+  records staying harmless, regenerated geometry still baking outward against an
+  untouched control, and the ordering contracts that keep a bad edit from
+  destroying what it cannot rebuild.
+
+### Changed
+- **A generator record is a hint, never ownership.** Brush ids are reissued as the
+  id counter moves, so a stale entry in one record could name a brush that now
+  belongs to something else — and a rebuild would quietly delete a neighbour's
+  geometry. Deletion checks each brush's own `hf_generator_id` before removing it.
 - **Generators — one description, many brushes.** Three gaps that looked unrelated
   turned out to be the same shape of problem.
   - **Hollow works on any convex brush, at any rotation.** It was the last

@@ -299,6 +299,21 @@ It writes one PNG per tab under `user://console_preview/`.
 - Set Rise back to 0 and create again. Confirm a flat ring, exactly as before the rise existed.
 - Undo each of the above and confirm the level returns to its previous state.
 
+### 7c-6. Live Generators (Editing an Arch After the Fact)
+- Create an arch with the defaults. Confirm eight brushes appear and the button still reads **Create Arch** while nothing is selected.
+- Click one segment of the arch. Confirm the Arch section loads that arch's settings, the button changes to **Update Arch**, and a **Detach** button appears.
+- Change Radius and press **Update Arch**. Confirm the arch rebuilds at the new radius, in the same place, with the same segment count.
+- Paint a distinct material on three different segments. Change Radius again and press **Update Arch**. Confirm all three materials come back on the same segments.
+- Increase Segments and update. Confirm the extra pieces appear with the default material and the earlier ones keep theirs.
+- Decrease Segments and update. Confirm the arch shrinks and the surviving pieces keep their materials.
+- Set Segments to 0 and press **Update Arch**. Confirm it refuses with a message and **the existing arch is still there** — nothing may be deleted by a refused update.
+- Press Ctrl+Z after an update. Confirm the previous arch comes back with its old settings, and that selecting a piece shows those old settings in the section.
+- Click empty space to deselect. Confirm the button returns to **Create Arch** and Detach disappears.
+- Select a piece and press **Detach**. Confirm the brushes stay exactly where they are, the button returns to **Create Arch**, and selecting a piece no longer loads settings.
+- Build two arches in different places. Select a piece of the first and update it. Confirm the second arch does not move or change.
+- Clip one segment of an arch in two, then select an untouched segment and update. Confirm the arch rebuilds and the clipped pieces are left alone.
+- Save the level, reopen it, select an arch segment. Confirm the section still recognises it and loads its settings.
+
 ### 7d. Face Winding Migration (Old Saves)
 - Open a `.hflevel` file saved before the CW winding fix (April 6, 2026 or earlier).
 - Confirm all brush faces render with textures visible from outside (not inside-out).

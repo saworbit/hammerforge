@@ -474,6 +474,10 @@ var arch_arc_spin: SpinBox = null
 var arch_segments_spin: SpinBox = null
 var arch_start_spin: SpinBox = null
 var arch_create_btn: Button = null
+var arch_detach_btn: Button = null
+## The generator the selection belongs to, if any. Empty means the Arch
+## section is creating rather than editing.
+var _active_generator_id: String = ""
 var dup_rise_spin: SpinBox = null
 var rotate_ccw_btn: Button = null
 var rotate_cw_btn: Button = null
@@ -1706,12 +1710,29 @@ func _build_arch_section(brush_vbox: VBoxContainer) -> void:
 	count_row.add_child(arch_start_spin)
 	box.add_child(count_row)
 
+	var arch_buttons = HBoxContainer.new()
+	box.add_child(arch_buttons)
 	arch_create_btn = HFUIFactory.make_button(
 		"Create Arch", "Build the arch centred on the selection, or on the world origin"
 	)
+	arch_create_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	arch_create_btn.pressed.connect(_on_create_arch)
-	box.add_child(arch_create_btn)
+	arch_buttons.add_child(arch_create_btn)
+	arch_detach_btn = HFUIFactory.make_button(
+		"Detach", "Stop this structure being rebuilt, and keep its brushes as ordinary geometry"
+	)
+	arch_detach_btn.visible = false
+	arch_detach_btn.pressed.connect(_on_detach_arch)
+	arch_buttons.add_child(arch_detach_btn)
 	_register_section(_arch_section, "Arch")
+
+
+## Point the Arch section at whatever is selected.
+##
+## Selecting a piece of a generated arch turns the section from a creator into an
+## editor for that arch: its own settings, an Update button, and a way out.
+func refresh_arch_section() -> void:
+	HFDockBrushHandler.refresh_arch_section(self)
 
 
 func _make_label(text: String) -> Label:
@@ -2565,6 +2586,7 @@ func set_selection_nodes(nodes: Array) -> void:
 		_vertex_tool_separator.visible = has_brush_selection
 	if tool_vertex:
 		tool_vertex.visible = has_brush_selection
+	refresh_arch_section()
 	set_selection_count(nodes.size())
 	# Mark hints dirty so selection-dependent buttons update
 	_hints_dirty = true
@@ -3116,6 +3138,10 @@ func _on_duplicate_array_mode_changed(index: int) -> void:
 
 func _on_create_arch() -> void:
 	HFDockBrushHandler.on_create_arch(self)
+
+
+func _on_detach_arch() -> void:
+	HFDockBrushHandler.on_detach_generator(self)
 
 
 func _on_rotate_selection(direction: int) -> void:

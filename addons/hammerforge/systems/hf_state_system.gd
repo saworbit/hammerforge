@@ -126,6 +126,9 @@ func capture_state(include_transient: bool = true) -> Dictionary:
 	for dup_id in root.brush_system._duplicators:
 		duplicators.append(root.brush_system._duplicators[dup_id].to_dict())
 	state["duplicators"] = duplicators
+	# Generated structures remember what made them, so they travel with the
+	# level and through undo the same way duplicators do.
+	state["generators"] = root.generator_system.capture() if root.generator_system else []
 	if root.prefab_system:
 		state["prefab_instances"] = root.prefab_system.capture_state()
 	return state
@@ -181,6 +184,8 @@ func restore_state(state: Dictionary) -> void:
 	if root.visgroup_system:
 		root.visgroup_system.restore_visgroups(state.get("visgroups", {}))
 		root.visgroup_system.restore_groups(state.get("groups", {}))
+	if root.generator_system:
+		root.generator_system.restore(state.get("generators", []))
 	root.brush_system._duplicators.clear()
 	for dup_dict in state.get("duplicators", []):
 		var dup = HFDuplicator.from_dict(dup_dict)
