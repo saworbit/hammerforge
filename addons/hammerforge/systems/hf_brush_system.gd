@@ -61,7 +61,6 @@ func place_brush(
 
 	var snapped = root._snap_point(hit.position)
 	var brush = _create_brush(shape, size, operation, sides)
-	brush.global_position = snapped + Vector3(0, size.y * 0.5, 0)
 	var brush_id = _next_brush_id()
 	brush.brush_id = str(brush_id)
 	brush.set_meta("brush_id", str(brush_id))
@@ -71,6 +70,7 @@ func place_brush(
 		_add_pending_cut(brush)
 	else:
 		_add_brush_to_draft(brush)
+	brush.global_position = snapped + Vector3(0, size.y * 0.5, 0)
 	_legacy_manager_add(brush)
 	root._record_last_brush(brush.global_position)
 	return true

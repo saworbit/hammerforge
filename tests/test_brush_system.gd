@@ -46,6 +46,8 @@ var brush_manager = null
 var texture_lock: bool = false
 var drag_size_default: Vector3 = Vector3(32, 32, 32)
 var dirty_brush_ids: Array[String] = []
+var raycast_position: Vector3 = Vector3.ZERO
+var last_brush_position: Vector3 = Vector3.INF
 
 enum BrushShape { BOX, CYLINDER, SPHERE, CONE, WEDGE, PYRAMID, PRISM_TRI, PRISM_PENT, ELLIPSOID, CAPSULE, TORUS, TETRAHEDRON, OCTAHEDRON, DODECAHEDRON, ICOSAHEDRON, CUSTOM }
 
@@ -64,8 +66,14 @@ func _log(_msg: String) -> void:
 func _assign_owner(_node: Node) -> void:
 	pass
 
-func _record_last_brush(_pos: Vector3) -> void:
-	pass
+func _raycast(_camera, _mouse_pos) -> Dictionary:
+	return {"position": raycast_position}
+
+func _snap_point(point: Vector3) -> Vector3:
+	return point
+
+func _record_last_brush(pos: Vector3) -> void:
+	last_brush_position = pos
 
 func tag_brush_dirty(brush_id: String) -> void:
 	dirty_brush_ids.append(brush_id)
@@ -118,6 +126,31 @@ func test_cache_is_authority_when_legacy_manager_exists():
 	sys.delete_brush_by_id("cached")
 	assert_eq(sys.get_cached_brush_count(), 0)
 	assert_eq(manager.brushes, [])
+
+
+func test_place_brush_uses_world_space_when_root_is_offset():
+	root.position = Vector3(50, 0, 50)
+	root.raycast_position = Vector3.ZERO
+	var camera := Camera3D.new()
+	add_child_autoqfree(camera)
+	var placed = sys.place_brush(
+		Vector2.ZERO, CSGShape3D.OPERATION_UNION, Vector3(16, 16, 16), camera
+	)
+	assert_true(placed, "A hit under the cursor places a brush")
+	assert_eq(root.draft_brushes_node.get_child_count(), 1)
+	var brush = root.draft_brushes_node.get_child(0)
+	assert_almost_eq(
+		brush.global_position,
+		Vector3(0, 8, 0),
+		Vector3(0.001, 0.001, 0.001),
+		"The brush sits on the point the ray hit, not that point plus the root offset"
+	)
+	assert_almost_eq(
+		root.last_brush_position,
+		Vector3(0, 8, 0),
+		Vector3(0.001, 0.001, 0.001),
+		"The recorded last brush position is the world position too"
+	)
 
 
 class _FakeManager:
