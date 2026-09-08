@@ -668,7 +668,7 @@ Completion is responsibility-based rather than tied to an arbitrary line count. 
 - Headless editor tests retain the complete tool graph, with focused export-playtest coverage guarding the runtime boundary.
 
 ### Risk-focused test gaps
-The current suite covers 2,922 tests across 153 scripts, including the large brush, bake, paint, vertex, transform, generator, baker, brush-instance, and map-I/O systems. The issue tracker is clear as of September 8, 2026. No known limitation is currently untracked and uncovered.
+The current suite covers 2,931 tests across 153 scripts, including the large brush, bake, paint, vertex, transform, generator, baker, brush-instance, and map-I/O systems. The issue tracker is clear as of September 8, 2026. No known limitation is currently untracked and uncovered.
 
 The last one on this list is **resolved**: a `.map` entity property value
 containing a quote used to come back truncated, silently, because four quotes is
