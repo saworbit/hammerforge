@@ -614,12 +614,14 @@ Completion is responsibility-based rather than tied to an arbitrary line count. 
 - Headless editor tests retain the complete tool graph, with focused export-playtest coverage guarding the runtime boundary.
 
 ### Risk-focused test gaps
-The current suite covers 2,874 tests across 151 scripts, including the large brush, bake, paint, vertex, transform, generator, baker, brush-instance, and map-I/O systems. The issue tracker is clear as of September 8, 2026. One known limitation is not
-tracked as an issue and has no coverage:
-- A `.map` entity property value containing a quote or a backslash does not round
-  trip. `MapIO._parse_key_value()` splits on unescaped quote positions and
-  `HFMapAdapter.format_entity_properties()` writes values verbatim, so neither
-  side escapes.
+The current suite covers 2,887 tests across 152 scripts, including the large brush, bake, paint, vertex, transform, generator, baker, brush-instance, and map-I/O systems. The issue tracker is clear as of September 8, 2026. No known limitation is currently untracked and uncovered.
+
+The last one on this list is **resolved**: a `.map` entity property value
+containing a quote used to come back truncated, silently, because four quotes is
+exactly what a valid line has. `MapIO` reads key and value as quoted tokens now,
+honouring `\"` and `\\`, and writes them through `escape_property()`. A `//`
+inside a value — a URL, most obviously — no longer takes the rest of the line
+with it. Covered by `tests/test_map_property_escaping.gd`.
 
 ### Apply HFValidation broadly
 Currently applied to two `HFBrushSystem` methods as demonstration. Roughly 300 inline `if not root.<container>:` patterns remain across `hf_brush_system`, `hf_paint_system`, `hf_bake_system`, `hf_entity_system`, `baker`. Single-property guards are 1-line either way; the win is centralization. Apply opportunistically when touching each system, not as a bulk sweep.

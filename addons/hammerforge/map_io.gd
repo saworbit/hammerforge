@@ -43,9 +43,7 @@ static func parse_map_text(text: String) -> Dictionary:
 		var line = raw_line.strip_edges()
 		if line == "" or line.begins_with("//"):
 			continue
-		var comment_index = line.find("//")
-		if comment_index >= 0:
-			line = line.substr(0, comment_index).strip_edges()
+		line = strip_comment(line)
 		if line == "":
 			continue
 		if line == "{":
@@ -152,7 +150,7 @@ static func export_map_from_level(level_root: Node, adapter: HFMapAdapterType = 
 	lines.append("}")
 	for block in entity_brush_blocks:
 		lines.append("{")
-		lines.append('"classname" "%s"' % str(block["classname"]))
+		lines.append('"classname" "%s"' % escape_property(str(block["classname"])))
 		lines.append("{")
 		lines.append_array(block["lines"])
 		lines.append("}")
@@ -194,7 +192,9 @@ static func _entity_to_map_lines(
 		lines.append_array(adapter.format_entity_properties(props))
 	else:
 		for key in props:
-			lines.append('"%s" "%s"' % [str(key), str(props[key])])
+			lines.append(
+				'"%s" "%s"' % [escape_property(str(key)), escape_property(str(props[key]))]
+			)
 	lines.append("}")
 	return lines
 
@@ -290,20 +290,75 @@ static func _parse_origin(text: String) -> Vector3:
 	return Vector3(float(parts[0]), float(parts[1]), float(parts[2]))
 
 
+## The two quoted tokens on a key/value line, unescaped, or an empty array when
+## the line is not one.
+##
+## Scanned as quoted strings rather than by counting quote positions, so a value
+## may contain a quote of its own. Without that, `"message" "he said "hi""` read
+## back as `he said ` — silently, because four quotes is exactly what a valid
+## line has.
 static func _parse_key_value(line: String) -> Array:
-	var first = line.find('"')
-	if first < 0:
+	var key := _read_quoted(line, 0)
+	if key.is_empty():
 		return []
-	var second = line.find('"', first + 1)
-	if second < 0:
+	var value := _read_quoted(line, int(key[1]))
+	if value.is_empty():
 		return []
-	var third = line.find('"', second + 1)
-	if third < 0:
+	return [str(key[0]), str(value[0])]
+
+
+## Read one quoted token starting at or after `from`.
+##
+## Returns `[text, index_after_the_closing_quote]`, or an empty array when there
+## is no complete token. `\"` and `\\` are unescaped; a backslash before
+## anything else is left exactly as it is, so a Windows path written by a tool
+## that does not escape — `textures\wall` — survives being read.
+static func _read_quoted(line: String, from: int) -> Array:
+	var open_index := line.find('"', from)
+	if open_index < 0:
 		return []
-	var fourth = line.find('"', third + 1)
-	if fourth < 0:
-		return []
-	return [line.substr(first + 1, second - first - 1), line.substr(third + 1, fourth - third - 1)]
+	var out := ""
+	var i := open_index + 1
+	while i < line.length():
+		var c := line[i]
+		if c == "\\" and i + 1 < line.length() and line[i + 1] in ['"', "\\"]:
+			out += line[i + 1]
+			i += 2
+			continue
+		if c == '"':
+			return [out, i + 1]
+		out += c
+		i += 1
+	return []
+
+
+## Drop a `//` comment, ignoring one that sits inside a quoted string.
+##
+## A property value is allowed to contain `//` — a URL is the obvious case — and
+## cutting the line there left it with an odd number of quotes and no way to
+## parse.
+static func strip_comment(line: String) -> String:
+	var in_quotes := false
+	var i := 0
+	while i < line.length():
+		var c := line[i]
+		if in_quotes and c == "\\" and i + 1 < line.length():
+			i += 2
+			continue
+		if c == '"':
+			in_quotes = not in_quotes
+			i += 1
+			continue
+		if not in_quotes and c == "/" and i + 1 < line.length() and line[i + 1] == "/":
+			return line.substr(0, i).strip_edges()
+		i += 1
+	return line.strip_edges()
+
+
+## Escape a key or value for writing between quotes. The inverse of the
+## unescaping in `_read_quoted()`.
+static func escape_property(text: String) -> String:
+	return text.replace("\\", "\\\\").replace('"', '\\"')
 
 
 static func _parse_face_line(line: String, face_re: RegEx) -> Dictionary:

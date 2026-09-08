@@ -532,6 +532,6 @@ Unit tests use the [GUT](https://github.com/bitwes/Gut) framework and run headle
 | `test_selection_gesture.gd` | 38 | Native widget/Object Select ownership, modal Face Select, recovery, focus/scope guards, native duplicate/reparent repair, and Inspector/undo change tracking |
 | `test_viewport_outlines.gd` | 39 | Sparse semantic outlines, exact/composite entity collision, visibility/transforms, and shape-aware resize recovery |
 
-Full suite (verified locally on September 8, 2026): **2,874 tests** across **151 scripts** (**2,867 passing** plus seven intentional no-assert safety tests; **15,210 assertions**).
+Full suite (verified locally on September 8, 2026): **2,887 tests** across **152 scripts** (**2,880 passing** plus seven intentional no-assert safety tests; **15,240 assertions**).
 
 Tests use root shim scripts (dynamically created GDScript) to provide the LevelRoot interface without circular preload dependencies. Configuration in `.gutconfig.json`.

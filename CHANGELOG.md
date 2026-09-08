@@ -57,6 +57,19 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   saved-and-reopened level checked for *not* claiming its pieces were edited.
 
 ### Fixed
+- **An entity property containing a quote came back truncated, silently.**
+  `_parse_key_value()` found four quote positions and sliced between them, which
+  is right until the value has a quote of its own — `"message" "he said "hi""`
+  read back as `he said `, with no error, because four quotes is exactly what a
+  valid line has. Key and value are read as quoted tokens now, honouring `\"`
+  and `\\`, and written through `MapIO.escape_property()`. Unescaping is
+  deliberately conservative: a backslash before anything else is left alone, so
+  an unescaped Windows path from another tool still reads as written. The same
+  root cause cost a value its `//` — the comment stripper cut the line at the
+  first one it found, so a URL in a property left an odd number of quotes and no
+  way to parse. It respects quoting now. The `.map` format defines no escaping
+  rule of its own, so the contract here is HammerForge's: what it writes, it
+  reads back unchanged.
 - **Clip to Face Plane could not be undone, and could not be reached.** Two
   separate faults in one command, and the second hid the first. It looped over the
   targets calling `clip_brush_to_face_plane()` directly and then recorded a
