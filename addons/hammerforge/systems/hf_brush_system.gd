@@ -1573,23 +1573,69 @@ func clip_brush_by_id(brush_id: String, axis: int, split_pos: float) -> HFOpResu
 func clip_brush_to_face_plane(
 	brush_id: String, source_brush_id: String, face_index: int
 ) -> HFOpResult:
+	var plane := face_world_plane(source_brush_id, face_index)
+	if plane.normal.length_squared() < 0.5:
+		return _op_fail(
+			"Clip: no usable reference face selected", "Select a face to cut along, then clip"
+		)
+	return clip_brush_by_plane(brush_id, plane)
+
+
+## The world-space plane a brush face lies in. A zero normal means there is no
+## usable face there.
+##
+## Read once and passed around as a plain Plane so a cut survives its reference
+## brush: the reference can itself be one of the targets, and then it no longer
+## exists by the time a redo replays the cut.
+func face_world_plane(source_brush_id: String, face_index: int) -> Plane:
 	var source = _find_brush_by_id(source_brush_id)
 	if not source or not (source is DraftBrush):
-		return _op_fail("Clip: reference brush not found")
+		return Plane()
 	var source_draft := source as DraftBrush
 	_ensure_faces(source_draft)
 	var faces: Array = source_draft.get_faces()
 	if face_index < 0 or face_index >= faces.size():
-		return _op_fail("Clip: no reference face selected", "Select a face to cut along, then clip")
+		return Plane()
 	var face: FaceData = faces[face_index]
 	if face == null or face.local_verts.size() < 3:
-		return _op_fail("Clip: the reference face has no geometry")
+		return Plane()
 	var xform := source_draft.global_transform
 	var world_normal: Vector3 = (xform.basis * face.normal).normalized()
 	if world_normal.length_squared() < 0.5:
-		return _op_fail("Clip: the reference face has no direction")
+		return Plane()
 	var world_point: Vector3 = xform * face.local_verts[0]
-	return clip_brush_by_plane(brush_id, Plane(world_normal, world_normal.dot(world_point)))
+	return Plane(world_normal, world_normal.dot(world_point))
+
+
+## True when the plane actually passes through the brush, so a clip would produce
+## two pieces. Asked before an undo action is opened, so a cut that would do
+## nothing never reaches the history.
+func plane_splits_brush(brush_id: String, plane: Plane) -> bool:
+	if brush_id == "" or plane.normal.length_squared() < 0.5:
+		return false
+	var brush = _find_brush_by_id(brush_id)
+	if not brush or not (brush is DraftBrush):
+		return false
+	var draft := brush as DraftBrush
+	_ensure_faces(draft)
+	var faces: Array = draft.get_faces()
+	if faces.size() < 4:
+		return false
+	var local_plane := draft.global_transform.affine_inverse() * plane
+	var halves: Dictionary = HFConvexClip.split(faces, local_plane)
+	return not halves["front"].is_empty() and not halves["back"].is_empty()
+
+
+## Cut every named brush along one plane. Returns how many were cut.
+##
+## One call so the whole batch is a single undo action: a multi-brush cut that
+## undid a piece at a time would leave the level half cut.
+func clip_brushes_by_plane(brush_ids: Array, plane: Plane) -> int:
+	var cut := 0
+	for brush_id in brush_ids:
+		if clip_brush_by_plane(str(brush_id), plane).ok:
+			cut += 1
+	return cut
 
 
 # ---------------------------------------------------------------------------
