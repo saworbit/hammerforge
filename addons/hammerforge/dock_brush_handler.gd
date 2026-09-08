@@ -440,44 +440,196 @@ static func _transform_targets(dock: Object) -> Dictionary:
 	return {"brush_ids": brush_ids, "entity_paths": entity_paths}
 
 
-## Build an arch, centred on whatever is selected, or on the world origin.
+## The type currently chosen in the Structure section.
+static func structure_type(dock: Object) -> String:
+	if dock == null or dock.structure_type_option == null:
+		return HFGeneratorSystem.TYPE_ARCH
+	var index: int = dock.structure_type_option.selected
+	if index < 0:
+		return HFGeneratorSystem.TYPE_ARCH
+	return str(dock.structure_type_option.get_item_metadata(index))
+
+
+## Build the section controls from the chosen builder own description of its
+## settings.
 ##
-## Placing it where the transform commands would pivot is the least surprising
-## answer, and it means an arch lands somewhere you were already looking.
-## Load the selected structure's settings into the Arch section, or reset it to
+## This is the whole point of the schema. Nothing here knows what an arch or a
+## staircase is made of, so a new generator needs no dock code at all.
+static func rebuild_structure_fields(dock: Object) -> void:
+	if dock == null or dock.structure_fields_box == null:
+		return
+	for child in dock.structure_fields_box.get_children():
+		dock.structure_fields_box.remove_child(child)
+		child.queue_free()
+	dock.structure_fields.clear()
+
+	var type := structure_type(dock)
+	var row: HBoxContainer = null
+	var in_row := 0
+	for entry in HFGeneratorSystem.settings_schema(type):
+		var schema_field: Dictionary = entry
+		var key := str(schema_field["key"])
+		var control := _make_field_control(schema_field)
+		if control == null:
+			continue
+		control.tooltip_text = str(schema_field.get("tooltip", ""))
+		dock.structure_fields[key] = control
+		# Two to a row, the way the section has always read, so a six-setting
+		# generator is three lines rather than six.
+		if control is CheckBox:
+			dock.structure_fields_box.add_child(control)
+			row = null
+			in_row = 0
+			continue
+		if row == null or in_row >= 2:
+			row = HBoxContainer.new()
+			dock.structure_fields_box.add_child(row)
+			in_row = 0
+		var label := Label.new()
+		label.text = "%s:" % str(schema_field.get("label", key))
+		row.add_child(label)
+		control.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(control)
+		in_row += 1
+
+
+static func _make_field_control(schema_field: Dictionary) -> Control:
+	match str(schema_field.get("type", HFGeneratorSchema.TYPE_FLOAT)):
+		HFGeneratorSchema.TYPE_BOOL:
+			return HFUIFactory.make_check(
+				str(schema_field.get("label", "")), bool(schema_field.get("default", false))
+			)
+		HFGeneratorSchema.TYPE_ENUM:
+			var option := HFUIFactory.make_option(schema_field.get("options", []))
+			option.selected = int(schema_field.get("default", 0))
+			return option
+		_:
+			return HFUIFactory.make_spin(
+				float(schema_field.get("min", 0.0)),
+				float(schema_field.get("max", 4096.0)),
+				float(schema_field.get("step", 1.0)),
+				float(schema_field.get("default", 0.0))
+			)
+
+
+## Read the section controls back out as settings for the chosen builder.
+static func collect_structure_settings(dock: Object) -> Dictionary:
+	var type := structure_type(dock)
+	var settings: Dictionary = HFGeneratorSystem.default_settings(type)
+	if dock == null:
+		return settings
+	for key in settings:
+		var control = dock.structure_fields.get(str(key), null)
+		if control == null:
+			continue
+		if control is CheckBox:
+			settings[key] = control.button_pressed
+		elif control is OptionButton:
+			settings[key] = control.selected
+		elif control is SpinBox:
+			settings[key] = control.value
+	return HFGeneratorSchema.merge(HFGeneratorSystem.settings_schema(type), settings)
+
+
+## Choosing a type from the dropdown is a decision to build that thing.
+##
+## It deliberately does not go back through the selection. Picking Dome while a
+## piece of an arch is still selected would otherwise be answered by putting the
+## dropdown straight back on Arch, and the only way to build a dome would be to
+## click empty space first.
+static func on_structure_type_changed(dock: Object) -> void:
+	if dock == null:
+		return
+	dock._active_generator_id = ""
+	rebuild_structure_fields(dock)
+	if dock.structure_create_btn:
+		dock.structure_create_btn.text = (
+			"Create %s" % HFGeneratorSystem.display_name(structure_type(dock))
+		)
+	if dock.structure_detach_btn:
+		dock.structure_detach_btn.visible = false
+	_show_edit_warning(dock, 0)
+
+
+## Load the selected structure settings into the section, or reset it to
 ## creating a new one.
-static func refresh_arch_section(dock: Object) -> void:
-	if dock == null or dock.arch_create_btn == null:
+static func refresh_structure_section(dock: Object) -> void:
+	if dock == null or dock.structure_create_btn == null:
 		return
 	var record = null
 	if dock.level_root and dock.level_root.has_method("generator_for_selection"):
 		record = dock.level_root.generator_for_selection(_transform_targets(dock)["brush_ids"])
-	if record == null or record.type != "arch":
+	if record == null or HFGeneratorSystem.builder_for(record.type) == null:
 		dock._active_generator_id = ""
-		dock.arch_create_btn.text = "Create Arch"
-		if dock.arch_detach_btn:
-			dock.arch_detach_btn.visible = false
+		dock.structure_create_btn.text = (
+			"Create %s" % HFGeneratorSystem.display_name(structure_type(dock))
+		)
+		if dock.structure_detach_btn:
+			dock.structure_detach_btn.visible = false
+		_show_edit_warning(dock, 0)
 		return
 
 	dock._active_generator_id = record.generator_id
-	dock.arch_create_btn.text = "Update Arch"
-	if dock.arch_detach_btn:
-		dock.arch_detach_btn.visible = true
-	_load_arch_settings(dock, record.settings)
+	if structure_type(dock) != record.type:
+		_select_type(dock, record.type)
+		rebuild_structure_fields(dock)
+	dock.structure_create_btn.text = "Update %s" % HFGeneratorSystem.display_name(record.type)
+	if dock.structure_detach_btn:
+		dock.structure_detach_btn.visible = true
+	_load_structure_settings(dock, record.settings)
+	_show_edit_warning(dock, _edited_piece_count(dock, record.generator_id))
 
 
-static func _load_arch_settings(dock: Object, settings: Dictionary) -> void:
-	for pair in [
-		["arch_radius_spin", "radius"],
-		["arch_thickness_spin", "wall_thickness"],
-		["arch_depth_spin", "depth"],
-		["arch_arc_spin", "arc_degrees"],
-		["arch_segments_spin", "segments"],
-		["arch_start_spin", "start_degrees"],
-	]:
-		var control = dock.get(pair[0])
-		if control and settings.has(pair[1]):
-			control.set_value_no_signal(float(settings[pair[1]]))
+## Say how many pieces a rebuild would overwrite, before it overwrites them.
+##
+## Detach is the answer to a structure that has been edited by hand, and it sits
+## right beside Update — but a choice you do not know you are making is not a
+## choice, so the count is said out loud.
+static func _show_edit_warning(dock: Object, edited: int) -> void:
+	if dock == null or dock.structure_warning == null:
+		return
+	if edited <= 0:
+		dock.structure_warning.visible = false
+		dock.structure_warning.text = ""
+		return
+	dock.structure_warning.visible = true
+	dock.structure_warning.text = (
+		"%d piece%s been edited by hand. Update will rebuild over %s — Detach to keep them."
+		% [edited, " has" if edited == 1 else "s have", "it" if edited == 1 else "them"]
+	)
+
+
+static func _edited_piece_count(dock: Object, generator_id: String) -> int:
+	if dock == null or not dock.level_root:
+		return 0
+	if not dock.level_root.has_method("edited_generator_pieces"):
+		return 0
+	return int(dock.level_root.edited_generator_pieces(generator_id))
+
+
+static func _select_type(dock: Object, type: String) -> void:
+	if dock == null or dock.structure_type_option == null:
+		return
+	for i in dock.structure_type_option.item_count:
+		if str(dock.structure_type_option.get_item_metadata(i)) == type:
+			dock.structure_type_option.selected = i
+			return
+
+
+static func _load_structure_settings(dock: Object, settings: Dictionary) -> void:
+	if dock == null:
+		return
+	for key in settings:
+		var control = dock.structure_fields.get(str(key), null)
+		if control == null:
+			continue
+		# Writing a value back into a control must not read as the user editing it.
+		if control is CheckBox:
+			control.set_pressed_no_signal(bool(settings[key]))
+		elif control is OptionButton:
+			control.selected = int(settings[key])
+		elif control is SpinBox:
+			control.set_value_no_signal(float(settings[key]))
 
 
 static func on_detach_generator(dock: Object) -> void:
@@ -486,34 +638,38 @@ static func on_detach_generator(dock: Object) -> void:
 	dock._commit_state_action("Detach Structure", "detach_generator", [dock._active_generator_id])
 	dock._active_generator_id = ""
 	dock._set_status("Structure detached — its brushes are ordinary geometry now")
-	refresh_arch_section(dock)
+	refresh_structure_section(dock)
 
 
-static func on_create_arch(dock: Object) -> void:
+## Build a structure, centred on whatever is selected, or on the world origin.
+##
+## Placing it where the transform commands would pivot is the least surprising
+## answer, and it means a structure lands somewhere you were already looking.
+static func on_create_structure(dock: Object) -> void:
 	if dock == null or not dock.level_root:
 		return
-	var settings := {
-		"radius": dock.arch_radius_spin.value if dock.arch_radius_spin else 128.0,
-		"wall_thickness": dock.arch_thickness_spin.value if dock.arch_thickness_spin else 32.0,
-		"depth": dock.arch_depth_spin.value if dock.arch_depth_spin else 64.0,
-		"arc_degrees": dock.arch_arc_spin.value if dock.arch_arc_spin else 180.0,
-		"segments": int(dock.arch_segments_spin.value) if dock.arch_segments_spin else 8,
-		"start_degrees": dock.arch_start_spin.value if dock.arch_start_spin else 0.0,
-	}
+	var type := structure_type(dock)
+	var settings := collect_structure_settings(dock)
+	var label := HFGeneratorSystem.display_name(type)
 	# Editing an existing structure rather than making another one: the section
 	# switched to Update when a piece of it was selected.
 	if dock._active_generator_id != "":
 		dock._commit_state_action(
-			"Update Arch", "regenerate_generator", [dock._active_generator_id, settings]
+			"Update %s" % label, "regenerate_generator", [dock._active_generator_id, settings]
 		)
-		dock._set_status("Arch rebuilt with %d segments" % settings["segments"])
+		dock._set_status("%s rebuilt" % label)
+		refresh_structure_section(dock)
 		return
 	var targets := _transform_targets(dock)
 	var centre: Vector3 = dock.level_root.resolve_transform_pivot(
 		targets["brush_ids"], targets["entity_paths"]
 	)
-	dock._commit_state_action("Create Arch", "create_arch", [settings, centre])
-	dock._set_status("Created an arch of %d segments" % settings["segments"])
+	dock._commit_state_action(
+		"Create %s" % label,
+		"create_generator",
+		[type, settings, Transform3D(Basis.IDENTITY, centre)]
+	)
+	dock._set_status("Created a %s" % label.to_lower())
 
 
 static func on_rotate_selection(dock: Object, direction: int) -> void:

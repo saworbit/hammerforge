@@ -466,15 +466,16 @@ var dup_grid_x: SpinBox = null
 var dup_grid_y: SpinBox = null
 var dup_grid_z: SpinBox = null
 var rotate_snap_spin: SpinBox = null
-var _arch_section: HFCollapsibleSection = null
-var arch_radius_spin: SpinBox = null
-var arch_thickness_spin: SpinBox = null
-var arch_depth_spin: SpinBox = null
-var arch_arc_spin: SpinBox = null
-var arch_segments_spin: SpinBox = null
-var arch_start_spin: SpinBox = null
-var arch_create_btn: Button = null
-var arch_detach_btn: Button = null
+var _structure_section: HFCollapsibleSection = null
+var structure_type_option: OptionButton = null
+var structure_fields_box: VBoxContainer = null
+## Setting key -> the control that holds it. The dock knows the controls by the
+## names the builder gave them rather than by members of its own, which is what
+## lets one section serve every generator.
+var structure_fields: Dictionary = {}
+var structure_create_btn: Button = null
+var structure_detach_btn: Button = null
+var structure_warning: Label = null
 ## The generator the selection belongs to, if any. Empty means the Arch
 ## section is creating rather than editing.
 var _active_generator_id: String = ""
@@ -1667,72 +1668,66 @@ func _build_displacement_bevel_section() -> void:
 	_bevel_inset_btn.pressed.connect(_on_bevel_inset)
 	bbox.add_child(_bevel_inset_btn)
 	_register_section(_bevel_section, "Bevel")
-	_build_arch_section(brush_vbox)
+	_build_structure_section(brush_vbox)
 
 
-## An arch is described rather than drawn, so it gets a section of parameters and
-## a button rather than a viewport tool.
-func _build_arch_section(brush_vbox: VBoxContainer) -> void:
-	_arch_section = HFCollapsibleSection.create("Arch", false)
-	brush_vbox.add_child(_arch_section)
-	var box: VBoxContainer = _arch_section.get_content()
+## A structure is described rather than drawn, so it gets a section of parameters
+## and a button rather than a viewport tool.
+##
+## The parameters are not written here. Each builder describes its own settings
+## and this builds the controls from that description, so adding a generator adds
+## nothing to the dock at all.
+func _build_structure_section(brush_vbox: VBoxContainer) -> void:
+	_structure_section = HFCollapsibleSection.create("Structure", false)
+	brush_vbox.add_child(_structure_section)
+	var box: VBoxContainer = _structure_section.get_content()
 
-	var size_row = HBoxContainer.new()
-	size_row.add_child(_make_label("Radius:"))
-	arch_radius_spin = HFUIFactory.make_spin(1.0, 4096.0, 1.0, 128.0)
-	arch_radius_spin.tooltip_text = "Outer radius of the arch"
-	size_row.add_child(arch_radius_spin)
-	size_row.add_child(_make_label("Wall:"))
-	arch_thickness_spin = HFUIFactory.make_spin(1.0, 2048.0, 1.0, 32.0)
-	arch_thickness_spin.tooltip_text = "How thick the arch ring is; the opening is the rest"
-	size_row.add_child(arch_thickness_spin)
-	box.add_child(size_row)
+	structure_type_option = HFUIFactory.make_option()
+	for type in HFGeneratorSystem.known_types():
+		structure_type_option.add_item(HFGeneratorSystem.display_name(str(type)))
+		structure_type_option.set_item_metadata(structure_type_option.item_count - 1, str(type))
+	structure_type_option.selected = 0
+	structure_type_option.tooltip_text = "What to build"
+	structure_type_option.item_selected.connect(_on_structure_type_changed)
+	box.add_child(HFUIFactory.make_label_row("Type:", structure_type_option))
 
-	var shape_row = HBoxContainer.new()
-	shape_row.add_child(_make_label("Depth:"))
-	arch_depth_spin = HFUIFactory.make_spin(1.0, 2048.0, 1.0, 64.0)
-	arch_depth_spin.tooltip_text = "How far the arch extends along its own axis"
-	shape_row.add_child(arch_depth_spin)
-	shape_row.add_child(_make_label("Arc:"))
-	arch_arc_spin = HFUIFactory.make_spin(-360.0, 360.0, 5.0, 180.0)
-	arch_arc_spin.tooltip_text = "Degrees the arch sweeps. 180 is a half arch, 360 a full ring"
-	shape_row.add_child(arch_arc_spin)
-	box.add_child(shape_row)
+	structure_fields_box = VBoxContainer.new()
+	box.add_child(structure_fields_box)
 
-	var count_row = HBoxContainer.new()
-	count_row.add_child(_make_label("Segments:"))
-	arch_segments_spin = HFUIFactory.make_spin(1, 128, 1, 8)
-	arch_segments_spin.tooltip_text = "One brush per segment. More segments, smoother curve"
-	count_row.add_child(arch_segments_spin)
-	count_row.add_child(_make_label("Start:"))
-	arch_start_spin = HFUIFactory.make_spin(-360.0, 360.0, 5.0, 0.0)
-	arch_start_spin.tooltip_text = "Angle the arch begins at"
-	count_row.add_child(arch_start_spin)
-	box.add_child(count_row)
+	structure_warning = Label.new()
+	structure_warning.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	structure_warning.visible = false
+	box.add_child(structure_warning)
 
-	var arch_buttons = HBoxContainer.new()
-	box.add_child(arch_buttons)
-	arch_create_btn = HFUIFactory.make_button(
-		"Create Arch", "Build the arch centred on the selection, or on the world origin"
+	var buttons = HBoxContainer.new()
+	box.add_child(buttons)
+	structure_create_btn = HFUIFactory.make_button(
+		"Create Arch", "Build the structure centred on the selection, or on the world origin"
 	)
-	arch_create_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	arch_create_btn.pressed.connect(_on_create_arch)
-	arch_buttons.add_child(arch_create_btn)
-	arch_detach_btn = HFUIFactory.make_button(
+	structure_create_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	structure_create_btn.pressed.connect(_on_create_structure)
+	buttons.add_child(structure_create_btn)
+	structure_detach_btn = HFUIFactory.make_button(
 		"Detach", "Stop this structure being rebuilt, and keep its brushes as ordinary geometry"
 	)
-	arch_detach_btn.visible = false
-	arch_detach_btn.pressed.connect(_on_detach_arch)
-	arch_buttons.add_child(arch_detach_btn)
-	_register_section(_arch_section, "Arch")
+	structure_detach_btn.visible = false
+	structure_detach_btn.pressed.connect(_on_detach_structure)
+	buttons.add_child(structure_detach_btn)
+	_register_section(_structure_section, "Structure")
+	HFDockBrushHandler.rebuild_structure_fields(self)
 
 
-## Point the Arch section at whatever is selected.
+func _on_structure_type_changed(_index: int) -> void:
+	HFDockBrushHandler.on_structure_type_changed(self)
+
+
+## Point the Structure section at whatever is selected.
 ##
-## Selecting a piece of a generated arch turns the section from a creator into an
-## editor for that arch: its own settings, an Update button, and a way out.
-func refresh_arch_section() -> void:
-	HFDockBrushHandler.refresh_arch_section(self)
+## Selecting a piece of a generated structure turns the section from a creator
+## into an editor for that structure: its own type, its own settings, an Update
+## button, and a way out.
+func refresh_structure_section() -> void:
+	HFDockBrushHandler.refresh_structure_section(self)
 
 
 func _make_label(text: String) -> Label:
@@ -2586,7 +2581,7 @@ func set_selection_nodes(nodes: Array) -> void:
 		_vertex_tool_separator.visible = has_brush_selection
 	if tool_vertex:
 		tool_vertex.visible = has_brush_selection
-	refresh_arch_section()
+	refresh_structure_section()
 	set_selection_count(nodes.size())
 	# Mark hints dirty so selection-dependent buttons update
 	_hints_dirty = true
@@ -3136,11 +3131,11 @@ func _on_duplicate_array_mode_changed(index: int) -> void:
 	HFDockBrushHandler.on_duplicate_array_mode_changed(self, index)
 
 
-func _on_create_arch() -> void:
-	HFDockBrushHandler.on_create_arch(self)
+func _on_create_structure() -> void:
+	HFDockBrushHandler.on_create_structure(self)
 
 
-func _on_detach_arch() -> void:
+func _on_detach_structure() -> void:
 	HFDockBrushHandler.on_detach_generator(self)
 
 
