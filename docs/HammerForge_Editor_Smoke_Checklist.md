@@ -314,6 +314,34 @@ It writes one PNG per tab under `user://console_preview/`.
 - Clip one segment of an arch in two, then select an untouched segment and update. Confirm the arch rebuilds and the clipped pieces are left alone.
 - Save the level, reopen it, select an arch segment. Confirm the section still recognises it and loads its settings.
 
+### 7c-7. The Structure Section (Types, Stairs, Spiral Stairs, Domes)
+- Open the Build tab and find the **Structure** section. Confirm the Type dropdown lists Arch, Stairs, Spiral Stairs and Dome, and that Arch is chosen.
+- Change Type to **Stairs**. Confirm the settings below change to Width, Tread, Rise, Steps, Fill and Slab, and that the button reads **Create Stairs**.
+- Press **Create Stairs**. Confirm eight steps appear, each one a tread further on and a rise higher than the last, with no gaps between them.
+- Set Fill to **Open** and create another. Confirm the treads float and you can see under them.
+- Change Type to **Spiral Stairs** and create one. Confirm twelve treads climb around a newel post, and that each tread is a wedge rather than a rotated box.
+- Set Inner R to 0 with the newel post on and press Create. Confirm it refuses with a message naming the inner radius, and creates nothing.
+- Turn the post off and create again. Confirm the treads meet at the axis.
+- Change Type to **Dome** and create one. Confirm a faceted hemisphere of 48 panels appears. Look at it from inside: confirm no panel is inside out and there are no gaps between rings.
+- Set Sweep to 45 and update. Confirm the crown is open.
+- Set Wall equal to Radius and create. Confirm the dome is solid rather than a shell.
+- Set Rings to 32 and Segments to 32 and press Create. Confirm it refuses, names 1024, and creates nothing.
+- Bake with a dome, a spiral stair and a flight of stairs in the level. Confirm every surface is visible from outside and nothing renders inside out.
+
+### 7c-8. Editing a Structure After the Fact
+- Create an arch. Select one segment. Confirm the Type dropdown says Arch, the settings load, the button reads **Update Arch**, and **Detach** appears.
+- Create a dome elsewhere. Select one of its panels. Confirm the dropdown switches to Dome and the dome's own settings load — not the arch's.
+- With an arch piece selected, change the Type dropdown to Dome. Confirm the section switches to creating a new dome (button reads **Create Dome**, Detach disappears) rather than snapping back to Arch.
+- Select an arch piece again, change Radius, press **Update Arch**. Confirm it rebuilds at the new radius in the same place.
+- **Move a structure and then update it.** Select every piece of an arch, drag it well away, then select one piece, change the radius and press Update. Confirm the arch rebuilds *where you moved it*, not back where it was created.
+- Move a single piece of a structure on its own. Select any piece. Confirm the section shows a warning naming how many pieces have been edited and mentioning Detach.
+- Vertex-drag a piece of a dome. Select any panel. Confirm the count in the warning goes up.
+- Press Update with the warning showing. Confirm the structure rebuilds and the warning clears.
+- Press Ctrl+Z. Confirm the hand edits come back.
+- Save the level, reopen it, select a piece of each structure. Confirm the section recognises each one, loads its settings, and shows **no** edit warning — a reopened level must not claim its pieces were edited.
+- Press **Detach** on a structure, then select a piece. Confirm the section is back to Create and loads nothing.
+- Press `Ctrl+Shift+A` with the Type dropdown on Dome. Confirm the shortcut builds a dome, not an arch.
+
 ### 7d. Face Winding Migration (Old Saves)
 - Open a `.hflevel` file saved before the CW winding fix (April 6, 2026 or earlier).
 - Confirm all brush faces render with textures visible from outside (not inside-out).

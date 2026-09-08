@@ -529,6 +529,43 @@ and run".
   answer and is offered beside Update, but nothing warns that edits exist.
 - Generators cannot nest, and none depends on other geometry.
 
+## Done (Structure Library — Stairs, Spiral Stairs and Domes — September 2026)
+- `HFGeneratorSchema`: a builder describes its own settings (key, label, type,
+  range, default, tooltip) and the dock builds its controls from that. The Arch
+  section became the **Structure** section, with a type dropdown, and adding a
+  generator now needs no dock code at all.
+- `HFStairsBuilder`: a straight flight, one brush per step, solid underneath or
+  floating treads.
+- `HFSpiralStairsBuilder`: a flight that turns as it climbs, each tread the
+  annular wedge a tread at that radius is, with an optional newel post.
+- `HFDomeBuilder`: a hemisphere in rings, one brush per panel, adjustable sweep
+  and a wall that can reach all the way to solid. Rings rather than patches
+  because a patch of sphere is not planar and a brush has to be.
+- `HFConvexClip.solid_from_rings()`: a solid from the corner rings of its faces,
+  collapsing coincident corners, so a generator writes the general case once and
+  gets a wedge where the shape pinches.
+- **Relocation**: a structure moved as a unit rebuilds where it now is. Pieces
+  that disagree about the move were edited individually, and the placement stays.
+- **Hand-edit warning**: the section says how many pieces a rebuild would
+  overwrite, so Detach is a choice rather than a lesson.
+- `HFGeneratorSystem.builder_for()` is the single seam: one branch adds a type to
+  the defaults, the schema, the validation, the build and the dock together.
+- Two transform test files that had been silently skipped since the generators
+  wave were repaired, and `tests/test_suite_integrity.gd` now fails the suite when
+  any test file will not load.
+- 107 new tests, and 81 that had stopped running are running again.
+
+### Known limits of the current structure pass
+- Only the four described generators are live. Hollow and the array modes still
+  have their own records and their own shapes.
+- Turning a whole structure is not recovered the way moving it is; a rebuild
+  squares it back up. Every piece reads as edited, so the warning fires first.
+- The warning is refreshed when the selection changes, not while a piece stays
+  selected and is edited under it.
+- A dome is faceted and its wall thickness is measured radially, so panels near
+  the crown are slightly thicker in section than panels at the base.
+- Structures still cannot nest, and none depends on other geometry.
+
 ## Future (Wave 3 -- Polish)
 - Multiple simultaneous cordons.
 - Multi-tool presets for common workflows.

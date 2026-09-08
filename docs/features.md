@@ -21,7 +21,10 @@ Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Su
 - **Extrude Up/Down** (E / U or Shift+E / J) -- click any face and drag to extend
 - **Hollow** (Ctrl+H) -- shell a brush into walls of a configurable thickness. Any convex brush at any rotation; a cylinder becomes a tube
 - **Arch** (Ctrl+Shift+A) -- a parametric arch, one brush per segment. Radius, wall thickness, depth, arc degrees, segments and start angle
-- **Live structures** -- an arch remembers what made it. Select a segment and the Arch section becomes an editor: change a number and it rebuilds in place, keeping the materials painted on it. Detach when it should stop being live
+- **Stairs** -- a straight flight, one brush per step. Width, tread, rise, step count, and solid-underneath or floating treads
+- **Spiral stairs** -- a flight that turns as it climbs, each tread the wedge that radius makes, with an optional newel post
+- **Dome** -- a hemisphere in rings, one brush per panel. Adjustable arc and sweep, and a wall that can go all the way to solid
+- **Live structures** -- every structure remembers what made it. Select a piece and the Structure section becomes an editor: change a number and it rebuilds in place, where you moved it to, keeping the materials painted on it. It says first if a rebuild would overwrite hand edits. Detach when it should stop being live
 - **Clip** (Shift+X) -- split a brush along a plane. Any convex brush, at any rotation; a piece that is still a box stays a box
 - **Clip to Face Plane** (Alt+Shift+X) -- cut along the plane of a selected face, which is the cheapest route to an angled wall or a chamfered corner
 - **Carve** (Ctrl+Shift+R) -- boolean-subtract one brush from all intersecting brushes, using the carver's real face planes, so the carver can be rotated or a cylinder
@@ -290,6 +293,10 @@ plugin.gd            EditorPlugin lifecycle, composition, discovery, and undo wi
        ├─ HFCarveSystem     Boolean-subtract carve (progressive remainder over the carver's face planes)
        ├─ HFConvexClip      Plane/convex-solid split shared by clip, carve and hollow; winding-safe surfaces
        ├─ HFArchBuilder     Parametric arches: one description, one brush per voussoir
+       ├─ HFStairsBuilder   Straight flights: solid underneath or floating treads
+       ├─ HFSpiralStairsBuilder  Annular treads about an axis, with a newel post
+       ├─ HFDomeBuilder     Hemispheres in rings, because a patch of sphere is not planar
+       ├─ HFGeneratorSchema What a generator's settings are, so the dock can build them
        ├─ HFGeneratorSystem Records of what each generator made, so structures stay editable
        ├─ HFTransformSystem Rotate, flip and reset rotation, with winding-safe mirroring and stable pivots
        ├─ HFIOVisualizer    Entity I/O connection lines in viewport (curved, color-coded, highlight pulse)
@@ -353,7 +360,7 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 | X / Y / Z * | Axis lock | | A | Align mode (measure) |
 | R * | Rotate CCW | | Shift+R * | Rotate CW |
 | Shift+M * | Flip selection | | Alt+R * | Reset rotation |
-| Alt+Shift+X * | Clip to Face Plane | | Ctrl+Shift+A * | Create Arch |
+| Alt+Shift+X * | Clip to Face Plane | | Ctrl+Shift+A * | Create Structure |
 
 R appears twice on purpose. Paint mode claims it for Rect; everywhere else it
 rotates. The viewport dispatches the paint tools first and skips the whole
@@ -365,7 +372,7 @@ transform group while paint mode is on, so only one of the two is ever live.
 
 ## Testing
 
-The verified Godot 4.7 suite on September 8, 2026 contains **2,621 tests across 140 scripts**: **2,614 passing tests**, seven intentional no-assert safety tests, and **13,564 assertions**. All checks run on every push and pull request via GitHub Actions.
+The verified Godot 4.7 suite on September 8, 2026 contains **2,809 tests across 147 scripts**: **2,802 passing tests**, seven intentional no-assert safety tests, and **15,006 assertions**. All checks run on every push and pull request via GitHub Actions.
 
 ```bash
 # Run all tests headless
