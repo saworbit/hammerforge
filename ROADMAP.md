@@ -444,8 +444,10 @@ and run".
 - Hollow, Clip and Carve still require an unrotated box. Making them work in a
   rotated brush's own frame is a larger job than this pass; Reset Rotation is the
   supported answer, and it is now lossless for quarter turns.
-  **Resolved for Clip and Carve** by the precision-cutting wave below; Hollow
-  still insets faces off `size` and keeps the restriction.
+  **Resolved for Clip and Carve** by the precision-cutting wave below, and
+  **resolved for Hollow** by the generators wave, which shells a brush against its
+  own face planes. Nothing refuses a rotated brush any more, and
+  `_check_axis_aligned_box()` is deleted.
 - Rotation is stepped, not a modal mouse drag. A drag gesture belongs with the
   drag system and needs interactive validation this pass could not give it.
 
@@ -473,6 +475,9 @@ and run".
 - Hollow still requires an unrotated box. It insets every face inward off `size`
   rather than splitting, so it is a different algorithm; Reset Rotation remains
   the answer, and it is lossless for quarter turns.
+  **Resolved** by the generators wave, which shells a brush against its own face
+  planes — the same progressive remainder carve already runs. One face gives one
+  wall, so a cylinder gives a pipe.
 - The clip plane is set by axis and position, or by a selected face. A
   click-and-drag clip-plane gesture in the viewport is an input problem rather
   than a geometry one and needs interactive validation.
@@ -609,7 +614,7 @@ Completion is responsibility-based rather than tied to an arbitrary line count. 
 - Headless editor tests retain the complete tool graph, with focused export-playtest coverage guarding the runtime boundary.
 
 ### Risk-focused test gaps
-The current suite covers 2,809 tests across 147 scripts, including the large brush, bake, paint, vertex, transform, generator, baker, brush-instance, and map-I/O systems. The issue tracker is clear as of September 7, 2026. One known limitation is not
+The current suite covers 2,874 tests across 151 scripts, including the large brush, bake, paint, vertex, transform, generator, baker, brush-instance, and map-I/O systems. The issue tracker is clear as of September 8, 2026. One known limitation is not
 tracked as an issue and has no coverage:
 - A `.map` entity property value containing a quote or a backslash does not round
   trip. `MapIO._parse_key_value()` splits on unescaped quote positions and

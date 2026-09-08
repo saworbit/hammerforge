@@ -57,6 +57,93 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   saved-and-reopened level checked for *not* claiming its pieces were edited.
 
 ### Fixed
+- **Clip to Face Plane could not be undone, and could not be reached.** Two
+  separate faults in one command, and the second hid the first. It looped over the
+  targets calling `clip_brush_to_face_plane()` directly and then recorded a
+  *history label* — a line in the history browser, not an `EditorUndoRedoManager`
+  action. An advertised destructive command replaced several authored brushes with
+  no way back. The batch now commits through `HFUndoHelper` as one action against a
+  new `clip_brushes_by_plane()`, and the cut is carried as a `Plane` rather than a
+  brush id and a face index, so a redo still works when the reference brush was
+  itself one of the targets. Meanwhile the documented workflow could not be
+  performed at all: entering Face Select saves the object selection and then clears
+  it, so by the time a reference face existed there was nothing left to cut. The
+  command reads that saved selection now, and releases both selections afterwards
+  rather than restoring brushes the cut has just replaced. `Alt+Shift+X` was in the
+  keymap and in the guide, but the viewport router never dispatched it, so the flow
+  in the guide could not be followed from the viewport either.
+- **Reset Rotation erased scale set with Godot's own gizmo.** `axis_permutation()`
+  normalises the basis columns, so a purely *scaled* box read as an axis permutation
+  and had its scale wiped along with a rotation it did not have. A basis is rotation
+  times scale; the cleared basis is now that scale on its own, read back with
+  `get_scale()`. A brush that is only scaled has nothing to clear and is left alone.
+  The quarter-turn fold into `size` carries the scale with it, because scale belongs
+  to the local axis the fold is moving.
+- **Flip left per-face appearance on the side it started.** When a local mirror maps
+  a primitive onto itself the geometry needs no surgery, so the faces were left
+  alone — but face data is held by index, and the mirror sends each face to where a
+  *different* face used to be. A material on the positive X face stayed on positive
+  X after an X flip. Each face now takes the data of the face its own reflection
+  lands on, mirrored back into place, so material, UVs and paint travel with the
+  geometry and the brush keeps its shape and its resize handles.
+- **A collated run of edits redid only its last step.** Godot's `MERGE_ENDS` keeps
+  the first action's undo operations and the last action's do operations, which is
+  correct only when that last do names an absolute final value. Rotate and nudge
+  register a *step*, so three quick presses undid forty-five degrees and redid
+  fifteen — the history claimed one action and performed a different one.
+  `HFUndoHelper.commit()` takes an `absolute_redo` flag for stepping commands: it
+  runs the method itself, captures the result, and registers a snapshot as the do
+  operation, committing without executing so the work is not done twice. The
+  collation tags were also global, so a run could merge a changed selection, a
+  reversed direction, a different axis or a different brush. They now name the
+  command, the targets, and the inputs that change what the press means.
+- **Rejected Structure settings reported success.** Every field can be in range
+  while the combination is not — a wall as thick as the arch is wide, an arc of
+  zero, a wide arc across too few segments. The builder refused those and created
+  nothing, but the dock committed an undo action anyway and said *Created* either
+  way. `HFGeneratorSystem.can_build()` answers whether settings would build without
+  building anything that lasts, and the dock asks before it opens an action. A
+  refused Create says why; a refused Update says the structure was not changed and
+  leaves it standing. Both paths read the level back afterwards rather than
+  assuming. `Ctrl+Shift+A` is advertised for Create Structure but the viewport
+  router never dispatched it either; it does now, guarded on the level and the dock
+  rather than on a selection count, because with nothing selected it builds at the
+  origin.
+- **Updating a structure silently dropped painted faces.** Regeneration said it
+  preserved materials, but it read and reapplied only `material_override`. The Paint
+  tab writes `FaceData.material_idx`, per-face UV settings and paint layers, and
+  none of it came back — so painting a generated arch and then nudging its radius
+  reset the work, with no warning, because the edited-piece hash ignores appearance
+  entirely. The whole per-face appearance is now captured and put back. Where a
+  rebuild cannot line the pieces up, `appearance_at_risk()` names the painted pieces
+  that would be dropped, and the section warns and waits for a second press, with
+  Detach beside it as it always was.
+- **Whole-level replacement kept the records of the geometry it replaced.**
+  `clear_brushes()` never touched the generator system, so a `.map` import or an
+  example load left the records for the discarded level in memory — and those
+  orphans went into every undo snapshot and every `.hflevel` save afterwards. It
+  clears them with the brushes now. Restoring a state puts the right records back,
+  so undo is unaffected, and deleting a single generated piece still leaves its
+  record alone, because that record is what warns about the gap and rebuilds it.
+- **Open stairs sat above the point they were placed on.** Both open stair builders
+  centred against the *nominal climb*. An open flight starts at the underside of its
+  first tread, so it spans `rise - tread_thickness` less than the climb and landed
+  half that high — four units on the defaults. Both now derive the vertical shift
+  from the lowest and highest Y they actually emit. The spiral counts its centre
+  post when it has one, which leaves that case exactly where it was and also fixes
+  one nobody had noticed: a tread thicker than the rise reaches below the foot of
+  the post, and was off centre the other way.
+- **Carve could not find a rotated brush where it actually reached.** The broad
+  phase built each candidate's box from `global_position` and `size`, which describe
+  a brush *before* it was turned. A long brush yawed 45 degrees reaches well outside
+  that box, so a carver sitting on its far end was rejected with "no overlapping
+  brushes found" and the cut silently did not happen. It reads `world_bounds_of()`
+  now — the same bounds the narrow phase two lines later already used.
+- **Texture lock ignored UV rotation when a brush moved.**
+  `adjust_uvs_for_transform()` rotates the projected move by `uv_rotation` before
+  scaling and subtracting it, matching the carve system's math, so a texture on a
+  rotated face stays pinned in world space instead of drifting along the wrong axes.
+
 - **Two test files, 121 tests, had been silently skipped for two waves.**
   `tests/test_transform_integration.gd` and `tests/test_transform_system.gd` called
   `HFBrushSystem._check_axis_aligned_box()`, which the generators wave deleted when
@@ -66,6 +153,22 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   are rewritten against what replaced the guard (nothing refuses a rotated brush
   any more), and `tests/test_suite_integrity.gd` now fails the suite when any test
   file will not load, so a silent skip cannot happen again.
+
+### Documentation
+- **Three places still said Hollow refuses a rotated brush.** It stopped refusing
+  when it moved to shelling a brush against its own face planes, and the guide
+  already described the current behaviour correctly under **Hollow** itself — so it
+  was contradicting itself two sections apart, and sending the reader to Reset
+  Rotation as the way back from a problem that no longer exists. Corrected in the
+  cutting-section callout, in **After you rotate**, and in the doc comment on
+  `reset_rotation_selected()`.
+- **The Clip to Face Plane walkthrough described an order that cannot work.** It
+  said to enter Face Select, pick the face, *then* select the brushes to cut — but
+  selecting an object closes Face Select and clears the face. The guide now says to
+  select the targets first, and explains why the order is what it is.
+- Reset Rotation is no longer described as the way back to Hollow, Clip and Carve.
+  The structure walkthrough now covers per-face paint surviving a rebuild, and the
+  warning when it cannot. Test and script counts refreshed.
 
 ### Changed
 - The dock's **Arch** section is now the **Structure** section, with a type
