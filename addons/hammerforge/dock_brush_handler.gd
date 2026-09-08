@@ -329,6 +329,57 @@ static func on_move_to_ceiling(dock: Object) -> void:
 	dock._commit_state_action("Move to Ceiling", "move_brushes_to_ceiling", [brush_ids])
 
 
+## The brushes an array would copy: the current selection, as ids.
+static func array_source_ids(dock: Object) -> PackedStringArray:
+	var brush_ids := PackedStringArray()
+	if dock == null or not dock.level_root:
+		return brush_ids
+	for node in dock._selection_nodes:
+		if dock.level_root.is_brush_node(node):
+			var info = dock.level_root.get_brush_info_from_node(node)
+			if info and info.has("brush_id"):
+				brush_ids.append(info["brush_id"])
+	return brush_ids
+
+
+## Every number the array controls are showing, in one dictionary.
+##
+## Read once and used twice: the ghost draws from it and the button builds from
+## it, so what appears is what was drawn rather than a second reading of the same
+## controls that might not agree with the first.
+static func array_params(dock: Object, brush_ids: PackedStringArray) -> Dictionary:
+	var count: int = int(dock.dup_count_spin.value) if dock.dup_count_spin else 3
+	var offset := Vector3(
+		dock.dup_offset_x.value if dock.dup_offset_x else 8,
+		dock.dup_offset_y.value if dock.dup_offset_y else 0,
+		dock.dup_offset_z.value if dock.dup_offset_z else 0
+	)
+	var step: float = dock.dup_step_spin.value if dock.dup_step_spin else 90.0
+	# "Fill 360" spaces the copies and the source evenly around a closed ring, so
+	# the last copy stops one step short of the source rather than on top of it.
+	if dock.dup_fill_check and dock.dup_fill_check.button_pressed:
+		step = 360.0 / float(count + 1)
+	return {
+		"count": count,
+		"offset": offset,
+		"axis_index": int(dock.dup_axis_opt.selected) if dock.dup_axis_opt else 1,
+		"step_degrees": step,
+		"rise": float(dock.dup_rise_spin.value) if dock.dup_rise_spin else 0.0,
+		"pivot": dock.level_root.resolve_transform_pivot(Array(brush_ids), []),
+		"counts":
+		Vector3i(
+			int(dock.dup_grid_x.value) if dock.dup_grid_x else 2,
+			int(dock.dup_grid_y.value) if dock.dup_grid_y else 1,
+			int(dock.dup_grid_z.value) if dock.dup_grid_z else 2
+		),
+		"spacing": offset,
+	}
+
+
+static func array_mode(dock: Object) -> int:
+	return int(dock.dup_mode_opt.selected) if dock.dup_mode_opt else 0
+
+
 static func on_create_duplicate_array(dock: Object) -> void:
 	if dock == null or not dock.level_root or dock._selection_nodes.is_empty():
 		if dock:
@@ -338,47 +389,47 @@ static func on_create_duplicate_array(dock: Object) -> void:
 		"Create Duplicate Array", dock.DockSelectionRequirement.BRUSHES_ONLY
 	):
 		return
-	var brush_ids = PackedStringArray()
-	for node in dock._selection_nodes:
-		if dock.level_root.is_brush_node(node):
-			var info = dock.level_root.get_brush_info_from_node(node)
-			if info and info.has("brush_id"):
-				brush_ids.append(info["brush_id"])
+	var brush_ids := array_source_ids(dock)
 	if brush_ids.is_empty():
 		dock._set_status("No brushes selected", true)
 		return
-	var cnt = int(dock.dup_count_spin.value) if dock.dup_count_spin else 3
-	var mode: int = dock.dup_mode_opt.selected if dock.dup_mode_opt else 0
+	var mode := array_mode(dock)
+	var params := array_params(dock, brush_ids)
+	# Ask whether this is an array to build before an undo action is opened. The
+	# layout controls will happily describe thirty-two thousand brushes, and a
+	# refusal that names the number beats one that says "too many".
+	var check: HFOpResult = HFDuplicator.can_generate(
+		HFDuplicator.placements_for(mode, params).size(), brush_ids.size()
+	)
+	if not check.ok:
+		dock._set_status(check.user_text(), true)
+		return
 	match mode:
 		1:
-			_create_radial_array(dock, brush_ids, cnt)
+			_create_radial_array(dock, brush_ids, params)
 		2:
-			_create_grid_array(dock, brush_ids)
+			_create_grid_array(dock, brush_ids, params)
 		_:
-			var off = Vector3(
-				dock.dup_offset_x.value if dock.dup_offset_x else 8,
-				dock.dup_offset_y.value if dock.dup_offset_y else 0,
-				dock.dup_offset_z.value if dock.dup_offset_z else 0,
-			)
 			dock._commit_state_action(
-				"Create Duplicate Array", "create_duplicate_array", [brush_ids, cnt, off]
+				"Create Duplicate Array",
+				"create_duplicate_array",
+				[brush_ids, int(params["count"]), params["offset"]]
 			)
-			dock._set_status("Created %d copies" % cnt)
+			dock._set_status("Created %d copies" % int(params["count"]))
+	# The ghost showed what was not there yet. It is there now.
+	_put_array_ghost_away(dock)
 
 
-static func _create_radial_array(dock: Object, brush_ids: PackedStringArray, cnt: int) -> void:
-	var axis_index: int = dock.dup_axis_opt.selected if dock.dup_axis_opt else 1
-	var rise: float = dock.dup_rise_spin.value if dock.dup_rise_spin else 0.0
-	var step: float = dock.dup_step_spin.value if dock.dup_step_spin else 90.0
-	# "Fill 360" spaces the copies and the source evenly around a closed ring, so
-	# the last copy stops one step short of the source rather than on top of it.
-	if dock.dup_fill_check and dock.dup_fill_check.button_pressed:
-		step = 360.0 / float(cnt + 1)
-	var pivot: Vector3 = dock.level_root.resolve_transform_pivot(Array(brush_ids), [])
+static func _create_radial_array(
+	dock: Object, brush_ids: PackedStringArray, params: Dictionary
+) -> void:
+	var cnt := int(params["count"])
+	var step := float(params["step_degrees"])
+	var rise := float(params["rise"])
 	dock._commit_state_action(
 		"Create Radial Array",
 		"create_radial_array",
-		[brush_ids, cnt, axis_index, step, pivot, rise]
+		[brush_ids, cnt, int(params["axis_index"]), step, params["pivot"], rise]
 	)
 	if is_zero_approx(rise):
 		dock._set_status("Created %d copies %.1f° apart" % [cnt, step])
@@ -386,25 +437,80 @@ static func _create_radial_array(dock: Object, brush_ids: PackedStringArray, cnt
 		dock._set_status("Created %d copies %.1f° apart, rising %.1f" % [cnt, step, rise])
 
 
-static func _create_grid_array(dock: Object, brush_ids: PackedStringArray) -> void:
-	var counts := Vector3i(
-		int(dock.dup_grid_x.value) if dock.dup_grid_x else 2,
-		int(dock.dup_grid_y.value) if dock.dup_grid_y else 1,
-		int(dock.dup_grid_z.value) if dock.dup_grid_z else 2
-	)
-	var spacing = Vector3(
-		dock.dup_offset_x.value if dock.dup_offset_x else 64,
-		dock.dup_offset_y.value if dock.dup_offset_y else 64,
-		dock.dup_offset_z.value if dock.dup_offset_z else 64,
-	)
+static func _create_grid_array(
+	dock: Object, brush_ids: PackedStringArray, params: Dictionary
+) -> void:
+	var counts: Vector3i = params["counts"]
 	var total: int = counts.x * counts.y * counts.z - 1
 	if total < 1:
 		dock._set_status("Grid array needs more than one cell", true)
 		return
 	dock._commit_state_action(
-		"Create Grid Array", "create_grid_array", [brush_ids, counts, spacing]
+		"Create Grid Array", "create_grid_array", [brush_ids, counts, params["spacing"]]
 	)
 	dock._set_status("Created %d copies" % total)
+
+
+## Draw a ghost of the copies the button would make, before it makes them.
+##
+## Shown only once it has been asked for. The structure ghost can appear the
+## moment its section is opened because opening that section is the request;
+## these controls live among a dozen other tools in a section that is open by
+## default, so a ghost of three offset copies would follow every brush you
+## clicked. Turning one of the array controls is the request instead.
+##
+## An array the controls describe but will not build draws nothing and says why,
+## because an empty viewport is not an answer on its own — and that message is
+## worth keeping armed, since it is the one telling you which control to turn back.
+static func refresh_array_preview(dock: Object) -> void:
+	if dock == null or not dock.level_root:
+		return
+	if not dock.level_root.has_method("preview_array"):
+		return
+	if not dock._array_ghost_armed or not _array_ghost_wanted(dock):
+		_put_array_ghost_away(dock)
+		return
+	var brush_ids := array_source_ids(dock)
+	if brush_ids.is_empty():
+		_put_array_ghost_away(dock)
+		return
+	var placements := HFDuplicator.placements_for(array_mode(dock), array_params(dock, brush_ids))
+	var check: HFOpResult = HFDuplicator.can_generate(placements.size(), brush_ids.size())
+	if not check.ok:
+		dock.level_root.clear_array_preview()
+		_show_array_message(dock, check.user_text())
+		return
+	dock.level_root.preview_array(Array(brush_ids), placements)
+	_show_array_message(dock, _array_summary(placements.size(), brush_ids.size()))
+
+
+static func _array_summary(copies: int, sources: int) -> String:
+	return (
+		"%d cop%s of %d brush%s"
+		% [copies, "y" if copies == 1 else "ies", sources, "" if sources == 1 else "es"]
+	)
+
+
+## The ghost belongs to the Build tab, and follows it out of sight.
+static func _array_ghost_wanted(dock: Object) -> bool:
+	var tabs = dock.main_tabs
+	if tabs == null or not is_instance_valid(tabs):
+		return true
+	return tabs.get_tab_title(tabs.current_tab) == "Build"
+
+
+## Hide the ghost and stop it coming back until it is asked for again.
+static func _put_array_ghost_away(dock: Object) -> void:
+	dock._array_ghost_armed = false
+	dock.level_root.clear_array_preview()
+	_show_array_message(dock, "")
+
+
+static func _show_array_message(dock: Object, text: String) -> void:
+	if dock == null or dock.dup_summary_label == null:
+		return
+	dock.dup_summary_label.visible = text != ""
+	dock.dup_summary_label.text = text
 
 
 ## Only the row that belongs to the chosen layout stays on screen.
@@ -415,6 +521,8 @@ static func on_duplicate_array_mode_changed(dock: Object, index: int) -> void:
 		dock.dup_radial_row.visible = index == 1
 	if dock.dup_grid_row:
 		dock.dup_grid_row.visible = index == 2
+	dock._array_ghost_armed = true
+	refresh_array_preview(dock)
 
 
 # ---------------------------------------------------------------------------

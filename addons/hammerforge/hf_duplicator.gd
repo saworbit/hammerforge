@@ -11,6 +11,125 @@ extends RefCounted
 
 enum ArrayMode { LINEAR, RADIAL, GRID }
 
+## The most brushes one array may make. The same budget the dome builder keeps,
+## in the same currency: brushes that will exist afterwards. A 32 by 32 by 32
+## lattice is thirty-two thousand of them, which is not a level-editing operation
+## but a hang, and the layout controls will happily ask for it.
+const MAX_COPY_BRUSHES := 256
+
+
+## Where one copy goes, applied to a source brush's own transform.
+##
+## The one definition of the layout arithmetic. What the ghost draws and what the
+## button builds read the same placements, so the two cannot drift into disagreeing
+## about how many copies there are or where they land.
+class CopyPlacement:
+	extends RefCounted
+
+	var rotation: Basis = Basis.IDENTITY
+	var pivot: Vector3 = Vector3.ZERO
+	var translation: Vector3 = Vector3.ZERO
+
+	func applied_to(source: Transform3D) -> Transform3D:
+		var out: Transform3D = HFTransformSystem.rotated_transform(source, rotation, pivot)
+		out.origin += translation
+		return out
+
+
+static func _translated(translation: Vector3) -> CopyPlacement:
+	var placement := CopyPlacement.new()
+	placement.translation = translation
+	return placement
+
+
+## A run of copies, each one offset further than the last.
+static func linear_placements(p_count: int, p_offset: Vector3) -> Array:
+	var out: Array = []
+	for copy_index in range(1, maxi(0, p_count) + 1):
+		out.append(_translated(p_offset * copy_index))
+	return out
+
+
+## A ring of copies about `p_pivot`, optionally climbing as it turns.
+static func radial_placements(
+	p_count: int, p_axis_index: int, p_step_degrees: float, p_pivot: Vector3, p_rise: float = 0.0
+) -> Array:
+	var out: Array = []
+	var climb := HFTransformSystem.axis_vector(p_axis_index) * p_rise
+	for copy_index in range(1, maxi(0, p_count) + 1):
+		var placement := CopyPlacement.new()
+		placement.rotation = HFTransformSystem.rotation_basis(
+			p_axis_index, deg_to_rad(p_step_degrees * copy_index)
+		)
+		placement.pivot = p_pivot
+		placement.translation = climb * float(copy_index)
+		out.append(placement)
+	return out
+
+
+## A lattice of copies. `p_counts` includes the source cell on each axis, so the
+## cell the source already occupies is not among the placements.
+static func grid_placements(p_counts: Vector3i, p_spacing: Vector3) -> Array:
+	var counts := Vector3i(maxi(1, p_counts.x), maxi(1, p_counts.y), maxi(1, p_counts.z))
+	var out: Array = []
+	for ix in counts.x:
+		for iy in counts.y:
+			for iz in counts.z:
+				if ix == 0 and iy == 0 and iz == 0:
+					continue
+				out.append(
+					_translated(Vector3(p_spacing.x * ix, p_spacing.y * iy, p_spacing.z * iz))
+				)
+	return out
+
+
+## The placements a layout produces, read from one dictionary of control values.
+##
+## Both the ghost and the button go through here, so the numbers on screen and the
+## brushes that appear are the same arithmetic rather than two copies of it.
+static func placements_for(mode: int, params: Dictionary) -> Array:
+	match mode:
+		ArrayMode.RADIAL:
+			return radial_placements(
+				int(params.get("count", 0)),
+				int(params.get("axis_index", 1)),
+				float(params.get("step_degrees", 90.0)),
+				params.get("pivot", Vector3.ZERO),
+				float(params.get("rise", 0.0))
+			)
+		ArrayMode.GRID:
+			return grid_placements(
+				params.get("counts", Vector3i.ONE), params.get("spacing", Vector3.ZERO)
+			)
+		_:
+			return linear_placements(
+				int(params.get("count", 0)), params.get("offset", Vector3.ZERO)
+			)
+
+
+## Whether an array of this size is one to build, asked before an undo action is
+## opened and before a ghost is drawn.
+##
+## The count the controls ask for is said back, the way the dome builder says the
+## number of panels it was asked for, because "too many" without a number leaves
+## the user guessing which control to turn.
+static func can_generate(copy_count: int, source_count: int) -> HFOpResult:
+	if source_count < 1:
+		return HFOpResult.fail("Array: nothing selected to copy", "Select a brush first")
+	if copy_count < 1:
+		return HFOpResult.fail("Array: that layout makes no copies", "Raise the count")
+	var total := copy_count * source_count
+	if total > MAX_COPY_BRUSHES:
+		return HFOpResult.fail(
+			(
+				"Array: %d copies of %d brush%s is %d brushes"
+				% [copy_count, source_count, "" if source_count == 1 else "es", total]
+			),
+			"Keep the total at or below %d" % MAX_COPY_BRUSHES
+		)
+	return HFOpResult.success("%d copies" % copy_count)
+
+
 var duplicator_id := ""
 var source_brush_ids: PackedStringArray = PackedStringArray()
 var instance_groups: Array = []  # Array of PackedStringArray, one per copy
@@ -44,7 +163,7 @@ func generate(brush_system, p_count: int, p_offset: Vector3) -> bool:
 	offset = p_offset
 	instance_groups.clear()
 
-	for copy_index in range(1, p_count + 1):
+	for placement in linear_placements(p_count, p_offset):
 		var copy_ids := PackedStringArray()
 		for source_id in source_brush_ids:
 			var brush_node = brush_system.find_brush_by_id(source_id)
@@ -52,7 +171,7 @@ func generate(brush_system, p_count: int, p_offset: Vector3) -> bool:
 				push_warning("HFDuplicator: source brush '%s' not found, skipping" % source_id)
 				continue
 			var info: Dictionary = brush_system.build_duplicate_info(
-				brush_node, p_offset * copy_index
+				brush_node, placement.translation
 			)
 			if info.is_empty():
 				continue
@@ -97,20 +216,14 @@ func generate_radial(
 	rise = p_rise
 	instance_groups.clear()
 
-	var climb := HFTransformSystem.axis_vector(p_axis_index) * p_rise
-	for copy_index in range(1, p_count + 1):
-		var angle := deg_to_rad(p_step_degrees * copy_index)
-		var rot := HFTransformSystem.rotation_basis(p_axis_index, angle)
-		var lift: Vector3 = climb * float(copy_index)
+	for placement in radial_placements(p_count, p_axis_index, p_step_degrees, p_pivot, p_rise):
 		var copy_ids := PackedStringArray()
 		for source_id in source_brush_ids:
 			var info := _copy_info(brush_system, source_id)
 			if info.is_empty():
 				continue
 			var source_xform: Transform3D = info.get("transform", Transform3D.IDENTITY)
-			var turned := HFTransformSystem.rotated_transform(source_xform, rot, p_pivot)
-			turned.origin += lift
-			info["transform"] = turned
+			info["transform"] = placement.applied_to(source_xform)
 			info.erase("center")
 			var new_id := _spawn_copy(brush_system, info)
 			if new_id != "":
@@ -135,29 +248,22 @@ func generate_grid(brush_system, p_counts: Vector3i, p_spacing: Vector3) -> bool
 	count = counts.x * counts.y * counts.z - 1
 	instance_groups.clear()
 
-	for ix in counts.x:
-		for iy in counts.y:
-			for iz in counts.z:
-				if ix == 0 and iy == 0 and iz == 0:
-					continue
-				var cell_offset := Vector3(p_spacing.x * ix, p_spacing.y * iy, p_spacing.z * iz)
-				var copy_ids := PackedStringArray()
-				for source_id in source_brush_ids:
-					var brush_node = brush_system.find_brush_by_id(source_id)
-					if not is_instance_valid(brush_node):
-						push_warning(
-							"HFDuplicator: source brush '%s' not found, skipping" % source_id
-						)
-						continue
-					var info: Dictionary = brush_system.build_duplicate_info(
-						brush_node, cell_offset
-					)
-					if info.is_empty():
-						continue
-					var new_id := _spawn_copy(brush_system, info)
-					if new_id != "":
-						copy_ids.append(new_id)
-				instance_groups.append(copy_ids)
+	for placement in grid_placements(counts, p_spacing):
+		var copy_ids := PackedStringArray()
+		for source_id in source_brush_ids:
+			var brush_node = brush_system.find_brush_by_id(source_id)
+			if not is_instance_valid(brush_node):
+				push_warning("HFDuplicator: source brush '%s' not found, skipping" % source_id)
+				continue
+			var info: Dictionary = brush_system.build_duplicate_info(
+				brush_node, placement.translation
+			)
+			if info.is_empty():
+				continue
+			var new_id := _spawn_copy(brush_system, info)
+			if new_id != "":
+				copy_ids.append(new_id)
+		instance_groups.append(copy_ids)
 
 	_tag_sources(brush_system)
 	return true

@@ -456,6 +456,16 @@ var dup_offset_x: SpinBox = null
 var dup_offset_y: SpinBox = null
 var dup_offset_z: SpinBox = null
 var dup_mode_opt: OptionButton = null
+## What the array would make, said before it makes it, and the reason when it
+## will not.
+var dup_summary_label: Label = null
+## Whether the array ghost has been asked for.
+##
+## Selecting a brush is not asking about arrays, and a ghost of three offset
+## copies beside everything you click would be noise. Turning one of the array
+## controls is asking; that arms it, and creating the array, emptying the
+## selection or leaving the tab puts it away again.
+var _array_ghost_armed: bool = false
 var dup_linear_row: HBoxContainer = null
 var dup_radial_row: HBoxContainer = null
 var dup_grid_row: HBoxContainer = null
@@ -991,10 +1001,11 @@ func highlight_tab(tab_name: String) -> void:
 
 
 func _on_main_tab_changed(tab_index: int) -> void:
-	# The structure ghost belongs to a Build-tab section, so it leaves with the
-	# tab. Ahead of the paint guards below, which return early for their own
-	# reasons and would otherwise leave a wireframe behind.
+	# The Build-tab ghosts leave with the tab. Ahead of the paint guards below,
+	# which return early for their own reasons and would otherwise leave a
+	# wireframe behind.
 	HFDockBrushHandler.refresh_structure_preview(self)
+	HFDockBrushHandler.refresh_array_preview(self)
 	if _syncing_paint_tab or not paint_mode or not main_tabs:
 		return
 	var paint_tab_active := main_tabs.get_tab_title(tab_index) == "Paint"
@@ -2602,6 +2613,8 @@ func set_selection_nodes(nodes: Array) -> void:
 	if tool_vertex:
 		tool_vertex.visible = has_brush_selection
 	refresh_structure_section()
+	# The array ghost is a ghost of the selection, so it follows the selection.
+	HFDockBrushHandler.refresh_array_preview(self)
 	set_selection_count(nodes.size())
 	# Mark hints dirty so selection-dependent buttons update
 	_hints_dirty = true
@@ -3149,6 +3162,13 @@ func _on_create_duplicate_array() -> void:
 
 func _on_duplicate_array_mode_changed(index: int) -> void:
 	HFDockBrushHandler.on_duplicate_array_mode_changed(self, index)
+
+
+## Any control in the Duplicate Array section, whatever its type. The ghost
+## redraws from the whole section rather than from the one field that moved.
+func _on_array_setting_changed(_value: Variant = null) -> void:
+	_array_ghost_armed = true
+	HFDockBrushHandler.refresh_array_preview(self)
 
 
 func _on_create_structure() -> void:

@@ -240,6 +240,7 @@ var bevel_system
 var transform_system
 var generator_system
 var structure_preview
+var array_preview
 
 @export var show_subtract_preview: bool = false:
 	set(value):
@@ -578,6 +579,7 @@ func _initialize_editor_systems() -> void:
 	transform_system = load("res://addons/hammerforge/systems/hf_transform_system.gd").new(self)
 	generator_system = load("res://addons/hammerforge/systems/hf_generator_system.gd").new(self)
 	structure_preview = load("res://addons/hammerforge/systems/hf_structure_preview.gd").new(self)
+	array_preview = load("res://addons/hammerforge/systems/hf_array_preview.gd").new(self)
 	if show_subtract_preview:
 		subtract_preview.set_enabled(true)
 	entity_system.load_entity_definitions()
@@ -607,6 +609,8 @@ func _exit_tree() -> void:
 		hollow_preview.destroy()
 	if structure_preview:
 		structure_preview.destroy()
+	if array_preview:
+		array_preview.destroy()
 	# Cancel any in-flight tool previews so their nodes don't outlive the tree
 	if extrude_tool:
 		extrude_tool.cancel_extrude()
@@ -1332,6 +1336,24 @@ func preview_structure(type: String, settings: Dictionary, placement: Transform3
 func clear_structure_preview() -> void:
 	if structure_preview:
 		structure_preview.clear()
+
+
+## Draw a wireframe of the copies an array would make, without making them.
+## Returns the number of copies shown; zero means the array will not be built.
+func preview_array(brush_ids: Array, placements: Array) -> int:
+	if not array_preview:
+		return 0
+	return array_preview.show_preview(brush_ids, placements)
+
+
+func clear_array_preview() -> void:
+	if array_preview:
+		array_preview.clear()
+
+
+## How many copies the array ghost is currently showing.
+func array_preview_copies() -> int:
+	return array_preview.copy_count() if array_preview else 0
 
 
 ## How many pieces the structure ghost is currently showing.

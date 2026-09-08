@@ -94,14 +94,50 @@ func test_settings_load_without_firing_the_controls_they_land_in():
 func test_the_dock_names_no_generator_setting_of_its_own():
 	# The whole point of the schema: adding a generator adds no dock code. If the
 	# dock knows a setting by name, the next generator will need dock work.
+	#
+	# Asked of the structure code specifically rather than of every line in the
+	# handler. Settings have ordinary names — an array of copies has a rise too —
+	# and a whole-file search for "rise" reports the neighbours rather than a
+	# generator leaking into the dock.
 	var dock := FileAccess.get_file_as_string("res://addons/hammerforge/dock.gd")
 	var handler := FileAccess.get_file_as_string("res://addons/hammerforge/dock_brush_handler.gd")
 	var section := dock.substr(dock.find("func _build_structure_section"), 2600)
+	var structure_code := section
+	for function_name in [
+		"rebuild_structure_fields",
+		"_make_field_control",
+		"collect_structure_settings",
+		"on_structure_type_changed",
+		"refresh_structure_section",
+		"_load_structure_settings",
+		"on_create_structure",
+		"_update_structure",
+		"refresh_structure_preview",
+		"create_placement",
+	]:
+		var body := _function_body(handler, function_name)
+		assert_ne(body, "", "the guard has to actually find %s" % function_name)
+		structure_code += body
 	for setting in [
 		"radius", "wall_thickness", "arc_degrees", "segments", "tread", "rise", "sweep_degrees"
 	]:
-		assert_false(section.contains('"%s"' % setting), "the section hard-codes %s" % setting)
-		assert_false(handler.contains('"%s"' % setting), "the handler hard-codes %s" % setting)
+		assert_false(
+			structure_code.contains('"%s"' % setting),
+			"the structure section hard-codes %s" % setting
+		)
+
+
+## One function of a GDScript source, from its declaration to the next one.
+func _function_body(source: String, function_name: String) -> String:
+	var start := source.find("func %s(" % function_name)
+	if start < 0:
+		return ""
+	var rest := source.substr(start)
+	var next := rest.find("\nfunc ", 1)
+	var next_static := rest.find("\nstatic func ", 1)
+	if next_static >= 0 and (next < 0 or next_static < next):
+		next = next_static
+	return rest.substr(0, next) if next > 0 else rest
 
 
 func test_the_controls_come_from_the_builders_own_description():

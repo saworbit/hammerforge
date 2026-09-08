@@ -504,6 +504,23 @@ refuses and says why. Destroy the displacement first if you need the mirror.
 - **Grid** — a 3D lattice. Set the cell count per axis (counting the original)
   and the X/Y/Z offset becomes the spacing.
 
+**Turn any of those controls and the copies draw themselves.** A pale wireframe
+shows the copies **Create Array** would make, standing where they would stand,
+and it follows every number as you change it. The line under the controls says
+what you are about to get — *"12 copies of 1 brush"*. Nothing is created until
+you press the button.
+
+The ghost waits to be asked for: selecting a brush is not asking about arrays, so
+it appears once you touch an array control and goes again when you create the
+array, clear the selection, or leave the Build tab. One more tick of a control
+brings it back.
+
+**An array has a ceiling of 256 brushes.** The cell counts go to 32 a side, which
+is a lattice of over thirty-two thousand brushes — not an edit but a hang. Ask
+for more than the ceiling and the ghost disappears and the line tells you the
+number you asked for, so you know which control to turn back. **Create Array**
+refuses the same arrays for the same reason.
+
 > `R` is also the Rect tool in paint mode. Paint mode gets first claim on it, and
 > the whole rotate/flip group is skipped while paint mode is on, so the two never
 > fight over the key.
@@ -564,7 +581,7 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
   - **Positioning**: Move to Floor (Ctrl+Shift+F) / Ceiling (Ctrl+Shift+C).
   - **Transform**: Step (degrees per press) and Pivot (Selection / World Origin / Active). Rotate CCW (R) and CW (Shift+R) turn the selection about the locked axis, or Y when no axis lock is set. Flip (Shift+M) mirrors it across the locked axis, or X. Reset Rotation (Alt+R) clears a rotation without moving the geometry.
   - **Entity Binding**: Tie/Untie brush entity class (populated from entity definitions).
-  - **Duplicate Array**: Layout (Linear / Radial / Grid), count, X/Y/Z offset, and the controls for the chosen layout — axis, step degrees and a Fill 360 helper for Radial; per-axis cell counts for Grid, which uses the X/Y/Z offset as its spacing. Create/Remove Array buttons.
+  - **Duplicate Array**: Layout (Linear / Radial / Grid), count, X/Y/Z offset, and the controls for the chosen layout — axis, step degrees and a Fill 360 helper for Radial; per-axis cell counts for Grid, which uses the X/Y/Z offset as its spacing. A live wireframe of the copies and a line saying how many. Create/Remove Array buttons.
   - **Bulk delete**: deleting 3+ brushes shows a confirmation dialog (undo reminder). Single/dual deletes remain instant.
 
 ### Paint tab (collapsible sections)

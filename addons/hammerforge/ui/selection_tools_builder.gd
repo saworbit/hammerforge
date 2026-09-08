@@ -199,6 +199,11 @@ func build(parent: Control) -> void:
 	grid_hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.4))
 	dock.dup_grid_row.add_child(grid_hint)
 
+	dock.dup_summary_label = Label.new()
+	dock.dup_summary_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	dock.dup_summary_label.visible = false
+	sc.add_child(dock.dup_summary_label)
+
 	var dup_btns = HBoxContainer.new()
 	sc.add_child(dup_btns)
 	var create_dup_btn = HFUIFactoryType.make_button(
@@ -233,6 +238,7 @@ func _add_sub_header(parent: Control, text: String) -> void:
 func connect_signals() -> void:
 	if dock.dup_mode_opt:
 		dock.dup_mode_opt.item_selected.connect(dock._on_duplicate_array_mode_changed)
+	_watch_array_controls()
 	if dock.rotate_snap_spin:
 		dock.rotate_snap_spin.value_changed.connect(dock._on_rotate_snap_changed)
 	if dock.transform_pivot_opt:
@@ -257,3 +263,33 @@ func connect_signals() -> void:
 		dock.untie_entity_btn.pressed.connect(dock._on_untie_entity)
 	if dock.clip_btn:
 		dock.clip_btn.pressed.connect(dock._on_clip)
+
+
+## Keep the array ghost in step with the controls that describe it.
+##
+## Every control here carries exactly one argument on its change signal, so one
+## handler serves all of them.
+func _watch_array_controls() -> void:
+	var handler := Callable(dock, "_on_array_setting_changed")
+	for control in [
+		dock.dup_mode_opt,
+		dock.dup_count_spin,
+		dock.dup_offset_x,
+		dock.dup_offset_y,
+		dock.dup_offset_z,
+		dock.dup_axis_opt,
+		dock.dup_step_spin,
+		dock.dup_rise_spin,
+		dock.dup_fill_check,
+		dock.dup_grid_x,
+		dock.dup_grid_y,
+		dock.dup_grid_z,
+	]:
+		if control == null:
+			continue
+		if control is CheckBox:
+			(control as CheckBox).toggled.connect(handler)
+		elif control is OptionButton:
+			(control as OptionButton).item_selected.connect(handler)
+		elif control is SpinBox:
+			(control as SpinBox).value_changed.connect(handler)

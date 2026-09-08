@@ -5,6 +5,40 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **The array section draws its copies, and refuses to describe a hang.** The
+  Structure section next to it learned to draw itself two waves ago; this one had
+  three layouts, nine numbers between them, and a button that turned them into as
+  many brushes as the numbers asked for. Nothing said how many until they existed
+  — and the grid cell counts reach 32 a side, which is a lattice of over
+  **thirty-two thousand brushes**: not an edit but a hang, one button press away.
+  - **`HFArrayPreview`** draws the selection's own outlines at each placement the
+    command would use. That is the honest picture — an array does not invent
+    geometry, it repeats what you already have — and the line under the controls
+    says what you are about to get: *"12 copies of 1 brush"*.
+  - **One definition of where the copies go.** `HFDuplicator.CopyPlacement` and
+    the three `*_placements()` builders are what `generate()`, `generate_radial()`
+    and `generate_grid()` now read, and what the ghost reads. The numbers on
+    screen and the brushes that appear are the same arithmetic rather than two
+    copies of it that can drift.
+  - **`HFDuplicator.can_generate()` caps an array at 256 brushes** — the same
+    budget, in the same currency, that `HFDomeBuilder` already keeps. The refusal
+    names the number asked for, because "too many" without a number leaves you
+    guessing which control to turn back. Asked before an undo action is opened and
+    before a ghost is drawn.
+  - **The ghost waits to be asked for.** The structure ghost can appear when its
+    section is opened, because opening that section is the request. These controls
+    share an always-open section with a dozen other tools, so a ghost of three
+    offset copies would follow every brush you clicked. Turning an array control
+    is the request instead; creating the array, clearing the selection or leaving
+    the Build tab puts it away.
+  - **Coverage** (`tests/test_array_preview.gd`): each layout's placements
+    measured, including a lattice leaving out the cell its source occupies and a
+    radial rise climbing; the budget in copies and in total brushes, and its
+    refusal naming the number; the ghost drawn, redrawn, and cleared on every gate
+    that should clear it; a thirty-two-cube grid drawing nothing *and* building
+    nothing; the ghost and the button agreeing on the count; and the ghost not
+    appearing until it is asked for.
+
 - **A structure built on a selection now faces the way that selection faces.**
   Create placed a structure at the selection's pivot and then built it square, so
   selecting a wall standing at forty-five degrees and building an arch on it gave
