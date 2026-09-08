@@ -64,6 +64,47 @@ static func face_plane(face: FaceData) -> Plane:
 	return Plane(normal, normal.dot(face.local_verts[0]))
 
 
+## Build a convex solid from the ordered corner rings of its faces.
+##
+## Generators describe a shape by writing out its corners, and the general case
+## they want to write is the eight-corner box. But a shape that pinches — a dome
+## panel at the pole, where the inner surface closes onto the axis — has rings
+## that collapse to a line or a point at exactly that corner, and a ring with two
+## copies of the same corner is not a polygon.
+##
+## Collapsing coincident corners here means a generator can write the general case
+## once and get a wedge where the shape pinches, rather than carrying a special
+## case through its own arithmetic. Winding is settled afterwards by measurement
+## against the interior point, as everywhere else.
+static func solid_from_rings(rings: Array, epsilon := DEFAULT_EPSILON) -> Array:
+	var faces: Array = []
+	for ring in rings:
+		var corners: PackedVector3Array = _collapse_ring(ring, epsilon)
+		if corners.size() < 3:
+			continue
+		var face := FaceData.new()
+		face.local_verts = corners
+		face.ensure_geometry()
+		faces.append(face)
+	if faces.size() < MIN_SOLID_FACES:
+		return []
+	return orient_faces_outward(faces, interior_point(faces))
+
+
+## Drop corners that repeat the one before them, and the last if it repeats the
+## first. A ring is a closed loop, so both ends count as adjacent.
+static func _collapse_ring(ring, epsilon: float) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	for corner in ring:
+		var point: Vector3 = corner
+		if out.size() > 0 and out[out.size() - 1].distance_to(point) <= epsilon:
+			continue
+		out.append(point)
+	while out.size() >= 2 and out[0].distance_to(out[out.size() - 1]) <= epsilon:
+		out.remove_at(out.size() - 1)
+	return out
+
+
 ## The point inside a solid that its own vertices average to.
 static func interior_point(faces: Array) -> Vector3:
 	var total := Vector3.ZERO

@@ -14,8 +14,8 @@ class_name HFArchBuilder
 ## own origin, lying in the XY plane and extruded along Z, and the caller places
 ## it.
 
-const FaceData = preload("face_data.gd")
 const HFConvexClip = preload("hf_convex_clip.gd")
+const HFGeneratorSchema = preload("hf_generator_schema.gd")
 const HFOpResult = preload("hf_op_result.gd")
 
 ## A segment spanning half a turn or more is not convex, and every brush in
@@ -23,21 +23,79 @@ const HFOpResult = preload("hf_op_result.gd")
 const MAX_SEGMENT_DEGREES := 179.0
 
 
+static func settings_schema() -> Array:
+	return [
+		{
+			"key": "radius",
+			"label": "Radius",
+			"type": HFGeneratorSchema.TYPE_FLOAT,
+			"min": 1.0,
+			"max": 4096.0,
+			"step": 1.0,
+			"default": 128.0,
+			"tooltip": "Outer radius of the arch",
+		},
+		{
+			"key": "wall_thickness",
+			"label": "Wall",
+			"type": HFGeneratorSchema.TYPE_FLOAT,
+			"min": 1.0,
+			"max": 2048.0,
+			"step": 1.0,
+			"default": 32.0,
+			"tooltip": "How thick the arch ring is; the opening is the rest",
+		},
+		{
+			"key": "depth",
+			"label": "Depth",
+			"type": HFGeneratorSchema.TYPE_FLOAT,
+			"min": 1.0,
+			"max": 2048.0,
+			"step": 1.0,
+			"default": 64.0,
+			"tooltip": "How far the arch extends along its own axis",
+		},
+		{
+			"key": "arc_degrees",
+			"label": "Arc",
+			"type": HFGeneratorSchema.TYPE_FLOAT,
+			"min": -360.0,
+			"max": 360.0,
+			"step": 5.0,
+			"default": 180.0,
+			"tooltip": "Degrees the arch sweeps. 180 is a half arch, 360 a full ring",
+		},
+		{
+			"key": "segments",
+			"label": "Segments",
+			"type": HFGeneratorSchema.TYPE_INT,
+			"min": 1,
+			"max": 128,
+			"step": 1,
+			"default": 8,
+			"tooltip": "One brush per segment. More segments, smoother curve",
+		},
+		{
+			"key": "start_degrees",
+			"label": "Start",
+			"type": HFGeneratorSchema.TYPE_FLOAT,
+			"min": -360.0,
+			"max": 360.0,
+			"step": 5.0,
+			"default": 0.0,
+			"tooltip": "Angle the arch begins at",
+		},
+	]
+
+
 static func default_settings() -> Dictionary:
-	return {
-		"radius": 128.0,
-		"wall_thickness": 32.0,
-		"depth": 64.0,
-		"arc_degrees": 180.0,
-		"segments": 8,
-		"start_degrees": 0.0,
-	}
+	return HFGeneratorSchema.defaults(settings_schema())
 
 
 ## Check settings before anything is created, so a bad arch refuses rather than
 ## producing rubbish the user then has to delete.
 static func validate(settings: Dictionary) -> HFOpResult:
-	var merged := _merged(settings)
+	var merged := HFGeneratorSchema.merge(settings_schema(), settings)
 	var radius: float = merged["radius"]
 	var thickness: float = merged["wall_thickness"]
 	var depth: float = merged["depth"]
@@ -84,7 +142,7 @@ static func validate(settings: Dictionary) -> HFOpResult:
 static func build(settings: Dictionary) -> Array:
 	if not validate(settings).ok:
 		return []
-	var merged := _merged(settings)
+	var merged := HFGeneratorSchema.merge(settings_schema(), settings)
 	var outer: float = merged["radius"]
 	var inner: float = outer - float(merged["wall_thickness"])
 	var half_depth: float = float(merged["depth"]) * 0.5
@@ -113,38 +171,24 @@ static func _segment_faces(
 	var inner_1_back := _at(inner, a1, -half_depth)
 	var inner_0_back := _at(inner, a0, -half_depth)
 
-	var faces: Array = [
-		_quad(outer_0_front, outer_1_front, inner_1_front, inner_0_front),
-		_quad(outer_0_back, outer_1_back, inner_1_back, inner_0_back),
-		_quad(outer_0_front, outer_1_front, outer_1_back, outer_0_back),
-		_quad(inner_0_front, inner_1_front, inner_1_back, inner_0_back),
-		_quad(outer_0_front, inner_0_front, inner_0_back, outer_0_back),
-		_quad(outer_1_front, inner_1_front, inner_1_back, outer_1_back),
-	]
 	# Winding is settled by measurement, not by the order the corners were listed
 	# above. A voussoir is convex, so every face of it points away from its centre,
 	# and that is checkable — which is the difference between geometry that bakes
 	# and geometry that bakes inside out.
-	return HFConvexClip.orient_faces_outward(faces, HFConvexClip.interior_point(faces))
+	return (
+		HFConvexClip
+		. solid_from_rings(
+			[
+				[outer_0_front, outer_1_front, inner_1_front, inner_0_front],
+				[outer_0_back, outer_1_back, inner_1_back, inner_0_back],
+				[outer_0_front, outer_1_front, outer_1_back, outer_0_back],
+				[inner_0_front, inner_1_front, inner_1_back, inner_0_back],
+				[outer_0_front, inner_0_front, inner_0_back, outer_0_back],
+				[outer_1_front, inner_1_front, inner_1_back, outer_1_back],
+			]
+		)
+	)
 
 
 static func _at(radius: float, angle: float, z: float) -> Vector3:
 	return Vector3(radius * cos(angle), radius * sin(angle), z)
-
-
-static func _quad(a: Vector3, b: Vector3, c: Vector3, d: Vector3) -> FaceData:
-	var face := FaceData.new()
-	face.local_verts = PackedVector3Array([a, b, c, d])
-	face.ensure_geometry()
-	return face
-
-
-static func _merged(settings: Dictionary) -> Dictionary:
-	var merged := default_settings()
-	for key in settings:
-		if merged.has(key):
-			merged[key] = settings[key]
-	merged["segments"] = int(merged["segments"])
-	for key in ["radius", "wall_thickness", "depth", "arc_degrees", "start_degrees"]:
-		merged[key] = float(merged[key])
-	return merged
