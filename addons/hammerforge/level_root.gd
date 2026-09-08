@@ -3021,12 +3021,36 @@ func _raycast(camera: Camera3D, mouse_pos: Vector2) -> Dictionary:
 		var face_hit: Dictionary = brush_system.pick_face_from_ray(from, ray_dir)
 		if not face_hit.is_empty():
 			return face_hit
-	var plane_hit := construction_plane_intersection(from, to)
+	var plane_hit = construction_plane_hit(camera, mouse_pos, from, to)
 	if plane_hit is Vector3:
 		return {"position": plane_hit}
 	return {}
 
 
+## Where a screen ray meets the plane the editor is building on.
+##
+## Which is the plane the grid is drawn on: `record_last_brush()` moves the grid
+## to the last brush you made, and an axis lock stands it up on X or Z. Before
+## this, a ray that missed every brush was answered by the horizontal plane
+## through the world origin instead — so drawing a brush at y=128 moved the grid
+## up to meet it and then put the next brush back down on zero, a hundred and
+## twenty-eight units below the grid being looked at. At the world origin, in the
+## ordinary way of working.
+##
+## The static below stays as the answer when there is no grid system, which is
+## every exported game: the editor systems are not loaded there.
+func construction_plane_hit(
+	camera: Camera3D, mouse_pos: Vector2, from: Vector3, to: Vector3
+) -> Variant:
+	if grid_system and camera:
+		return grid_system.intersect_axis_plane(
+			camera, mouse_pos, grid_system.effective_grid_axis(), grid_plane_origin
+		)
+	return construction_plane_intersection(from, to)
+
+
+## The horizontal plane through the world origin. The fallback, and what the
+## editor used for everything before the grid plane was consulted.
 static func construction_plane_intersection(from: Vector3, to: Vector3) -> Variant:
 	return Plane(Vector3.UP, 0.0).intersects_segment(from, to)
 
