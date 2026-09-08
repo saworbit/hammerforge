@@ -306,6 +306,36 @@ func test_looking_away_and_back_makes_the_paint_warning_be_earned_again():
 	assert_true(dock.structure_warning.text.contains("Detach"), "it is said again instead")
 
 
+func test_a_structure_nobody_can_locate_says_that_rather_than_counting_shapes():
+	# Where the structure is has to be said before what shape its pieces are in:
+	# a rebuild that carries the whole thing back across the level is the larger
+	# surprise, and a count of edited pieces does not mention it.
+	dock._on_create_structure()
+	var brushes := _generated_brushes()
+	for index in brushes.size():
+		brushes[index].global_transform.origin += Vector3(64.0 * float(index), 0.0, 0.0)
+
+	dock.set_selection_nodes([brushes[0]])
+
+	assert_true(
+		_message().contains("no longer agree on where the structure is"), "got '%s'" % _message()
+	)
+	assert_true(_message().contains("Detach"), "and it still offers the way out")
+
+
+func test_a_structure_around_one_stray_piece_still_counts_that_one_piece():
+	_turn("segments", 12.0)
+	dock._on_create_structure()
+	var brushes := _generated_brushes()
+	for brush in brushes:
+		brush.global_transform.origin += Vector3(512.0, 0.0, 0.0)
+	brushes[0].global_transform.origin += Vector3(1.0, 0.0, 0.0)
+
+	dock.set_selection_nodes([brushes[1]])
+
+	assert_true(_message().begins_with("1 piece has been edited"), "got '%s'" % _message())
+
+
 func test_the_hand_edit_warning_survives_a_redraw():
 	dock._on_create_structure()
 	var brushes := _generated_brushes()

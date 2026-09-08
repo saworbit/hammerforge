@@ -890,6 +890,111 @@ func test_a_record_written_before_piece_bases_existed_still_recovers_a_turn():
 	)
 
 
+# ===========================================================================
+# Deciding where the structure went when the pieces do not all agree
+# ===========================================================================
+
+
+func test_one_stray_piece_does_not_overrule_the_eleven_that_agree():
+	# The defect this exists for: drag a twelve-piece arch across the level,
+	# nudge one brush, and the whole structure reads as hand-edited and jumps
+	# back to the origin the moment you press Update.
+	assert_true(_create({"segments": 12}).ok)
+	var record = _only_record()
+	var far := Vector3(512.0, 0.0, 0.0)
+	_move_whole_structure(record, Transform3D(Basis.IDENTITY, far))
+	brushes.find_brush_by_id(str(record.brush_ids[0])).global_position += Vector3(1.0, 0.0, 0.0)
+
+	assert_almost_eq(
+		generators.relocation_transform(record.generator_id).origin,
+		far,
+		Vector3.ONE * 0.01,
+		"eleven pieces agreeing is where the structure is"
+	)
+	assert_eq(
+		generators.edited_piece_count(record.generator_id),
+		1,
+		"and the one that disagrees is the only hand edit"
+	)
+	assert_false(generators.pieces_disagree_about_placement(record.generator_id))
+
+
+func test_the_structure_stays_put_when_it_is_rebuilt_around_a_stray_piece():
+	assert_true(_create({"segments": 12}).ok)
+	var record = _only_record()
+	_move_whole_structure(record, Transform3D(Basis.IDENTITY, Vector3(512.0, 0.0, 0.0)))
+	brushes.find_brush_by_id(str(record.brush_ids[0])).global_position += Vector3(1.0, 0.0, 0.0)
+
+	assert_true(generators.regenerate(record.generator_id, _arch({"segments": 12})).ok)
+
+	assert_almost_eq(
+		_structure_centre(record).x, 512.0, 1.0, "a rebuild must not carry it back to the origin"
+	)
+
+
+func test_a_bare_majority_is_enough_and_a_tie_is_not():
+	assert_true(_create({"segments": 4}).ok)
+	var record = _only_record()
+	# Two pieces one way, two the other: nothing to call the structure's move.
+	for index in 2:
+		brushes.find_brush_by_id(str(record.brush_ids[index])).global_position += Vector3(64, 0, 0)
+	for index in range(2, 4):
+		brushes.find_brush_by_id(str(record.brush_ids[index])).global_position += Vector3(0, 0, 64)
+
+	assert_eq(generators.relocation_transform(record.generator_id), Transform3D.IDENTITY)
+	assert_true(
+		generators.pieces_disagree_about_placement(record.generator_id),
+		"a structure nobody can locate has to say so"
+	)
+
+
+func test_three_of_four_agreeing_carries_the_structure():
+	assert_true(_create({"segments": 4}).ok)
+	var record = _only_record()
+	var move := Vector3(64.0, 0.0, 0.0)
+	for index in 3:
+		brushes.find_brush_by_id(str(record.brush_ids[index])).global_position += move
+
+	assert_almost_eq(
+		generators.relocation_transform(record.generator_id).origin, move, Vector3.ONE * 0.01
+	)
+	assert_eq(generators.edited_piece_count(record.generator_id), 1, "the one left behind")
+
+
+func test_a_mirror_cannot_out_vote_its_own_refusal():
+	# Every piece agrees, and what they agree on still must not be applied.
+	assert_true(_create({"segments": 4}).ok)
+	var record = _only_record()
+
+	_move_whole_structure(record, Transform3D(Basis.from_scale(Vector3(-1, 1, 1)), Vector3.ZERO))
+
+	assert_eq(generators.relocation_transform(record.generator_id), Transform3D.IDENTITY)
+	assert_true(
+		generators.pieces_disagree_about_placement(record.generator_id),
+		"a mirrored structure is one a rebuild cannot place"
+	)
+
+
+func test_an_untouched_structure_is_not_reported_as_lost():
+	assert_true(_create({"segments": 4}).ok)
+	assert_false(generators.pieces_disagree_about_placement(_only_record().generator_id))
+
+
+func test_a_structure_with_one_piece_left_still_says_where_it_is():
+	assert_true(_create({"segments": 4}).ok)
+	var record = _only_record()
+	for index in range(1, 4):
+		brushes.delete_brush_by_id(str(record.brush_ids[index]))
+	brushes.find_brush_by_id(str(record.brush_ids[0])).global_position += Vector3(32, 0, 0)
+
+	assert_almost_eq(
+		generators.relocation_transform(record.generator_id).origin,
+		Vector3(32, 0, 0),
+		Vector3.ONE * 0.01,
+		"the only piece there is speaks for the structure"
+	)
+
+
 func _structure_centre(record) -> Vector3:
 	var total := Vector3.ZERO
 	var count := 0

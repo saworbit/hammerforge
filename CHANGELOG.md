@@ -4,6 +4,35 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Fixed
+- **One nudged brush no longer throws a structure back across the level.**
+  Relocation asked for unanimity, which sounds like the stricter test and was in
+  fact the worse one. Drag a twelve-piece arch five hundred units, nudge a single
+  brush by one, and all eleven pieces that agreed were overruled: the section
+  reported *twelve* pieces edited by hand rather than one, and the next Update
+  carried the whole arch back to the origin it was created at.
+  - **Where a structure went is decided by vote.** Pieces are grouped by the
+    rigid transform they received, and a group holding more than half of them is
+    the relocation. The pieces outside that majority are the hand edits, which is
+    what they always were. A tie decides nothing, which is the right answer for a
+    structure that has been pulled in two.
+  - **A non-rigid move never joins a group**, so a mirrored or squashed structure
+    cannot out-vote its own refusal however many pieces agree on it.
+  - **A structure nobody can locate says so.** When no majority exists and the
+    pieces have plainly moved, the section reads *"These pieces no longer agree
+    on where the structure is. Update will rebuild it where it was created —
+    Detach to keep them where they are."* Where a rebuild lands is the larger
+    surprise, and a count of edited shapes never mentioned it. This also gives a
+    mirrored structure a reason of its own instead of a misleading hand-edit
+    count.
+  - **Coverage** (`tests/test_generator_system.gd`,
+    `tests/test_structure_preview.gd`): eleven of twelve agreeing carrying the
+    structure and the twelfth counted as the single edit; the rebuild staying put
+    around that stray piece; a bare majority accepted and a two-two tie refused; a
+    mirror out-numbering itself and still refused; a structure down to its last
+    piece still able to say where it is; and the section's message checked for
+    naming the placement before the shapes.
+
 ### Added
 - **A structure you have turned rebuilds turned.** Relocation understood
   translation and nothing else, so a flight of stairs rotated into the corner it
