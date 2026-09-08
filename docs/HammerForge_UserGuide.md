@@ -794,7 +794,7 @@ Resize distances and grid snap are measured in world units. If a brush is below 
 
 Click and hover picking ignores brushes, entities, and preview visuals hidden by a visgroup. Brush bounds are only a fast candidate check: the final hit uses the actual face triangles, so a ray through empty space inside a wedge, cone, pyramid, curved, or custom brush does not select or hide geometry behind it. Entity previews are picked from their visible geometry even when that geometry is stored as an internal editor child. When geometry overlaps in screen space, HammerForge compares brush and entity hits in the same world-space ray and chooses the genuinely nearest visible result, including when either object is scaled.
 
-Surface placement uses the same exact brush-face fallback when editor draft brushes do not yet have physics bodies. Draw placement, entity/prefab drops, and other callers of the shared editor raycast land on the visible non-box surface rather than an AABB wall; when no geometry is hit, the forward ray falls back to the construction plane.
+Surface placement uses the same exact brush-face fallback when editor draft brushes do not yet have physics bodies. Draw placement, entity/prefab drops, and other callers of the shared editor raycast land on the visible non-box surface rather than an AABB wall; when no geometry is hit, the forward ray falls back to **the plane the grid is drawn on** — the one that follows your last brush and that an axis lock stands up on X or Z. What you draw on is what you are looking at.
 
 ### Selection Filters
 Press **Shift+F** or click the **Flt** button on the context toolbar to open the Selection Filter popover. It provides bulk selection tools organized by category:
@@ -1245,7 +1245,7 @@ The polygon tool lets you draw arbitrary convex shapes and extrude them into bru
 
 ### Workflow
 1. Press **P** to activate the Polygon tool.
-2. Click in the viewport to place the first vertex on the nearest exact visible surface. If no geometry is hit, placement uses the forward construction plane. The point passes through the shared Grid, Vertex, Center, Edge, Perpendicular, and reference-line snap pipeline.
+2. Click in the viewport to place the first vertex on the nearest exact visible surface. If no geometry is hit, placement uses the plane the grid is drawn on. The point passes through the shared Grid, Vertex, Center, Edge, Perpendicular, and reference-line snap pipeline.
 3. Place more vertices. Each cursor ray starts on the horizontal plane established by the first point, then passes through the shared snap pipeline.
 4. Each new vertex is validated for convexity -- concave placements are rejected.
 5. Close the polygon by clicking near the first vertex (within the auto-close threshold) or pressing **Enter** (requires 3+ vertices).
@@ -1274,7 +1274,7 @@ The path tool creates corridors by placing waypoints and extruding a rectangular
 
 ### Workflow
 1. Press **;** (semicolon) to activate the Path tool.
-2. Click in the viewport to place the first waypoint on the nearest exact visible surface. If no geometry is hit, placement uses the forward construction plane. The point passes through the shared Grid, Vertex, Center, Edge, Perpendicular, and reference-line snap pipeline.
+2. Click in the viewport to place the first waypoint on the nearest exact visible surface. If no geometry is hit, placement uses the plane the grid is drawn on. The point passes through the shared Grid, Vertex, Center, Edge, Perpendicular, and reference-line snap pipeline.
 3. Place more waypoints. Each cursor ray starts on the horizontal plane established by the first point, then passes through the shared snap pipeline.
 4. Press **Enter** to finalize the path (requires 2+ waypoints).
 5. For each segment, an oriented-box brush is created. At interior corners, a miter joint brush fills the gap.

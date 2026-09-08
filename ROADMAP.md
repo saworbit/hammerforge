@@ -608,6 +608,19 @@ and run".
 - A selection hands over its facing but not its scale or its size, so a structure
   built on a large wall is still the size its own settings say.
 
+## Done (Construction Plane — September 2026)
+- Having fixed where the overlays draw, the same question was asked of where the
+  editor acts. `LevelRoot._raycast()` answered every miss with the horizontal
+  plane through the world origin, ignoring the grid entirely — so the grid moved
+  to the last brush and the next brush did not follow it, at the world origin,
+  with nothing moved.
+- An axis-locked grid was worse: from a side view the horizontal plane is
+  parallel to the ray, so the raycast returned nothing and the drag never started.
+- The fallback is now `HFGridSystem.intersect_axis_plane()` at the grid's own axis
+  and origin. `construction_plane_intersection()` stays for the no-grid-system
+  case, which is every exported game.
+- 9 new tests (`tests/test_draw_plane.gd`); five fail against the old code.
+
 ## Done (Overlay Placement — September 2026)
 - Hollow, carve, clip and subtract placed their overlay meshes from world-space
   measurements into a node hanging off `LevelRoot`, which is only correct while

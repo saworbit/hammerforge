@@ -5,6 +5,31 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **You drew on a different plane from the grid you were looking at.** Having
+  fixed where the overlays *draw*, the other half of the same question was
+  whether the editor *acts* where it draws. It did not, and not only off the
+  origin — this one is the ordinary way of working, at the world origin, with
+  nothing moved.
+  - The grid plane follows the last brush you made; that is what
+    `record_last_brush()` is for, and the grid visibly goes there. But the ray
+    that places a new brush was answered by the horizontal plane through the
+    world origin regardless. Draw a brush at y=128, watch the grid rise to meet
+    it, then drag out the next one — it lands back on zero, a hundred and
+    twenty-eight units below the grid on screen.
+  - **An axis lock was worse than wrong.** With the grid stood up on X or Z and
+    the camera looking along it, a horizontal plane is parallel to the ray, so
+    the raycast returned nothing at all: the drag could not start.
+  - `_raycast()` now falls back to `HFGridSystem.intersect_axis_plane()` at the
+    grid's own axis and origin — the plane that is actually on screen. Picking a
+    brush face still wins over any plane, as it always did.
+  - The old world-origin plane stays as `construction_plane_intersection()`, used
+    when no grid system is loaded. That is every exported game, where the editor
+    systems are never initialised, so runtime behaviour is untouched.
+  - **Coverage** (`tests/test_draw_plane.gd`): the plane following the grid up
+    and back down, both axis locks placing on the upright grid and a released
+    lock returning to the floor, a moved root drawing on its own grid, a brush
+    under the cursor still winning over the plane, and the static fallback
+    keeping its old answer. Five of the nine fail against the old code.
 - **The rest of the overlays drew a LevelRoot away too.** Fixing the four
   destructive previews left the same assumption everywhere else it had spread, so
   the remaining overlays were measured the same way rather than assumed innocent.
