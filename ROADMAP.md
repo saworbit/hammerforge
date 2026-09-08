@@ -608,15 +608,21 @@ and run".
 - A selection hands over its facing but not its scale or its size, so a structure
   built on a large wall is still the size its own settings say.
 
-## Done (Preview Placement — September 2026)
+## Done (Overlay Placement — September 2026)
 - Hollow, carve, clip and subtract placed their overlay meshes from world-space
   measurements into a node hanging off `LevelRoot`, which is only correct while
   the root is at the origin. A root a thousand units out drew the hollow preview
   two thousand units out. They place through `global_transform` now.
 - `HFSubtractPreview`'s CSG results are the deliberate exception and stay local:
   `get_meshes()` reports them relative to a combiner parented to `LevelRoot`.
-- `tests/test_preview_placement.gd` holds the property for all six previews with
-  the root moved *and* turned. Four of its seven cases fail against the old code.
+- The same assumption had spread to every other overlay, and measuring rather
+  than assuming found all four wrong: the cordon wireframe (the box that says
+  which region a partial bake takes), the entity wiring lines, the vertex and edge
+  handles a drag is aimed at, and the prefab ghost box. Each holds world
+  coordinates directly, so each is pinned to world identity.
+- `tests/test_preview_placement.gd` holds the property for every overlay in the
+  plugin, with the root moved *and* turned, and asserts the mesh is non-empty so
+  an overlay that drew nothing cannot pass by sitting at the origin.
 
 ## Done (Array Preview and Budget — September 2026)
 - `HFArrayPreview`: a wireframe of the copies a Duplicate Array would make, drawn

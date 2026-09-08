@@ -5,6 +5,26 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **The rest of the overlays drew a LevelRoot away too.** Fixing the four
+  destructive previews left the same assumption everywhere else it had spread, so
+  the remaining overlays were measured the same way rather than assumed innocent.
+  All four were wrong:
+  - **The cordon wireframe** — the box that says which part of the level a partial
+    bake will take, drawn around a region other than the one it names.
+  - **The entity wiring lines** — drawn between two points that are neither
+    entity.
+  - **The vertex and edge overlay** — the handles a vertex drag is aimed at,
+    which makes the tool unusable off the origin rather than merely wrong.
+  - **The prefab ghost box** — drawn around nothing.
+  - Each builds its geometry from world coordinates into a node hanging off
+    `LevelRoot`, so each is now pinned to world space. The previews carry a
+    placement and assign it through `global_transform`; these hold world
+    coordinates directly, so their instance transform is pinned to identity.
+  - `tests/test_preview_placement.gd` covers every overlay in the plugin now, and
+    gained an assertion that the mesh is not empty — the I/O case passed on an
+    empty mesh at first, because nothing drawn has its bounds at the origin and
+    the origin was close enough to pass. Four of its eleven cases fail against the
+    old code.
 - **Move the LevelRoot node and every destructive preview drew somewhere else.**
   Hollow, carve, clip and subtract place their overlay meshes from world-space
   measurements — a brush's own `global_transform`, a cutting plane built from

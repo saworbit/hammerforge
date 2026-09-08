@@ -813,6 +813,12 @@ func update_cordon_visual() -> void:
 	cordon_wireframe.visible = cordon_enabled
 	if not cordon_enabled:
 		return
+	# The corners below are world coordinates and this hangs off the LevelRoot, so
+	# it has to be pinned to world space. Without this, a level whose root has been
+	# moved or turned drew its cordon box a root transform away from the region the
+	# box actually names — and that box is what says which part of the level a
+	# partial bake will take.
+	cordon_wireframe.global_transform = Transform3D.IDENTITY
 	if not _cordon_mesh:
 		_cordon_mesh = ImmediateMesh.new()
 	else:

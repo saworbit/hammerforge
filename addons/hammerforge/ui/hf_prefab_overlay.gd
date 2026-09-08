@@ -155,6 +155,9 @@ func _draw_wireframe_box(aabb: AABB) -> void:
 	_overlay_mesh_instance.material_override = _material
 	_overlay_mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(_overlay_mesh_instance)
+	# The box corners are world coordinates and this hangs off the LevelRoot, so it
+	# has to be pinned to world space.
+	_overlay_mesh_instance.global_transform = Transform3D.IDENTITY
 
 
 func _draw_override_markers(rec) -> void:
