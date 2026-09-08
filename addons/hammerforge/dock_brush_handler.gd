@@ -473,6 +473,7 @@ static func rebuild_structure_fields(dock: Object) -> void:
 		if control == null:
 			continue
 		control.tooltip_text = str(schema_field.get("tooltip", ""))
+		_watch_structure_field(dock, control)
 		dock.structure_fields[key] = control
 		# Two to a row, the way the section has always read, so a six-setting
 		# generator is three lines rather than six.
@@ -491,6 +492,20 @@ static func rebuild_structure_fields(dock: Object) -> void:
 		control.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(control)
 		in_row += 1
+
+
+## Keep the ghost in step with the control the user is turning.
+##
+## Every schema type carries exactly one argument on its change signal, so one
+## handler serves all of them and a new field type needs no new wiring here.
+static func _watch_structure_field(dock: Object, control: Control) -> void:
+	var handler := Callable(dock, "_on_structure_setting_changed")
+	if control is CheckBox:
+		(control as CheckBox).toggled.connect(handler)
+	elif control is OptionButton:
+		(control as OptionButton).item_selected.connect(handler)
+	elif control is SpinBox:
+		(control as SpinBox).value_changed.connect(handler)
 
 
 static func _make_field_control(schema_field: Dictionary) -> Control:
@@ -549,6 +564,7 @@ static func on_structure_type_changed(dock: Object) -> void:
 	if dock.structure_detach_btn:
 		dock.structure_detach_btn.visible = false
 	_show_edit_warning(dock, 0)
+	refresh_structure_preview(dock)
 
 
 ## Load the selected structure settings into the section, or reset it to
@@ -567,6 +583,7 @@ static func refresh_structure_section(dock: Object) -> void:
 		if dock.structure_detach_btn:
 			dock.structure_detach_btn.visible = false
 		_show_edit_warning(dock, 0)
+		refresh_structure_preview(dock)
 		return
 
 	if str(dock._active_generator_id) != str(record.generator_id):
@@ -580,6 +597,7 @@ static func refresh_structure_section(dock: Object) -> void:
 		dock.structure_detach_btn.visible = true
 	_load_structure_settings(dock, record.settings)
 	_show_edit_warning(dock, _edited_piece_count(dock, record.generator_id))
+	refresh_structure_preview(dock)
 
 
 ## Say how many pieces a rebuild would overwrite, before it overwrites them.
@@ -591,14 +609,85 @@ static func _show_edit_warning(dock: Object, edited: int) -> void:
 	if dock == null or dock.structure_warning == null:
 		return
 	if edited <= 0:
-		dock.structure_warning.visible = false
-		dock.structure_warning.text = ""
+		_show_structure_message(dock, "")
 		return
-	dock.structure_warning.visible = true
-	dock.structure_warning.text = (
-		"%d piece%s been edited by hand. Update will rebuild over %s — Detach to keep them."
-		% [edited, " has" if edited == 1 else "s have", "it" if edited == 1 else "them"]
+	_show_structure_message(
+		dock,
+		(
+			"%d piece%s been edited by hand. Update will rebuild over %s — Detach to keep them."
+			% [edited, " has" if edited == 1 else "s have", "it" if edited == 1 else "them"]
+		)
 	)
+
+
+## Draw a ghost of what the button would build, before it builds it.
+##
+## Gated rather than always on. The ghost stands in the viewport, so it shows only
+## while the section that owns it is open and its tab is in front; anything else
+## leaves a wireframe floating with nothing on screen to explain where it came
+## from.
+##
+## Settings that cannot build draw nothing, and an empty viewport is not an
+## answer — so the refusal goes in the section's own message line, which is where
+## the other things worth knowing before you press the button already are.
+static func refresh_structure_preview(dock: Object) -> void:
+	if dock == null or not dock.level_root:
+		return
+	if not dock.level_root.has_method("preview_structure"):
+		return
+	if not _structure_preview_wanted(dock):
+		dock.level_root.clear_structure_preview()
+		return
+
+	var generator_id := str(dock._active_generator_id)
+	var type := structure_type(dock)
+	var placement := Transform3D.IDENTITY
+	if generator_id != "":
+		var record = dock.level_root.generator_for_id(generator_id)
+		if record == null:
+			generator_id = ""
+		else:
+			type = record.type
+			placement = dock.level_root.generator_rebuild_placement(generator_id)
+	if generator_id == "":
+		# Where Create would centre it, which is where the transform commands
+		# would pivot — the same answer the button itself uses.
+		var targets := _transform_targets(dock)
+		placement = Transform3D(
+			Basis.IDENTITY,
+			dock.level_root.resolve_transform_pivot(targets["brush_ids"], targets["entity_paths"])
+		)
+
+	var settings := collect_structure_settings(dock)
+	var check: HFOpResult = dock.level_root.can_build_generator(type, settings)
+	if not check.ok:
+		dock.level_root.clear_structure_preview()
+		_show_structure_message(dock, check.user_text())
+		return
+	dock.level_root.preview_structure(type, settings, placement)
+	# Any redraw means the section is being looked at again, so a paint warning
+	# that has scrolled off it has to be earned a second time. Otherwise the
+	# acknowledgement outlives the sentence that asked for it.
+	dock._structure_overwrite_ack = ""
+	_show_edit_warning(dock, _edited_piece_count(dock, generator_id) if generator_id != "" else 0)
+
+
+## The ghost belongs to the Structure section, and follows it out of sight.
+static func _structure_preview_wanted(dock: Object) -> bool:
+	var section = dock._structure_section
+	if section == null or not is_instance_valid(section) or not section.is_expanded():
+		return false
+	var tabs = dock.main_tabs
+	if tabs == null or not is_instance_valid(tabs):
+		return true
+	return tabs.get_tab_title(tabs.current_tab) == "Build"
+
+
+static func _show_structure_message(dock: Object, text: String) -> void:
+	if dock == null or dock.structure_warning == null:
+		return
+	dock.structure_warning.visible = text != ""
+	dock.structure_warning.text = text
 
 
 static func _edited_piece_count(dock: Object, generator_id: String) -> int:
@@ -641,6 +730,7 @@ static func on_detach_generator(dock: Object) -> void:
 	dock._active_generator_id = ""
 	dock._set_status("Structure detached — its brushes are ordinary geometry now")
 	refresh_structure_section(dock)
+	dock.level_root.clear_structure_preview()
 
 
 ## Build a structure, centred on whatever is selected, or on the world origin.
@@ -681,6 +771,9 @@ static func on_create_structure(dock: Object) -> void:
 	else:
 		dock._set_status("%s was not created" % label, true)
 	refresh_structure_section(dock)
+	# The ghost showed what was not there yet. It is there now, so it stops
+	# standing on top of itself; the next change to the settings brings it back.
+	dock.level_root.clear_structure_preview()
 
 
 ## Rebuild the selected structure. A refused rebuild has to leave it alone and
@@ -708,6 +801,7 @@ static func _update_structure(dock: Object, generator_id: String, settings: Dict
 	else:
 		dock._set_status("%s was not rebuilt" % label, true)
 	refresh_structure_section(dock)
+	dock.level_root.clear_structure_preview()
 
 
 ## False when the user has not yet seen that this rebuild would drop painted
@@ -732,12 +826,12 @@ static func _confirm_appearance_overwrite(
 
 
 static func _show_paint_warning(dock: Object, at_risk: int) -> void:
-	if dock == null or dock.structure_warning == null:
-		return
-	dock.structure_warning.visible = true
-	dock.structure_warning.text = (
-		"%d piece%s painted faces these settings cannot keep. Update again to rebuild over %s, or Detach to keep them."
-		% [at_risk, " has" if at_risk == 1 else "s have", "it" if at_risk == 1 else "them"]
+	_show_structure_message(
+		dock,
+		(
+			"%d piece%s painted faces these settings cannot keep. Update again to rebuild over %s, or Detach to keep them."
+			% [at_risk, " has" if at_risk == 1 else "s have", "it" if at_risk == 1 else "them"]
+		)
 	)
 
 

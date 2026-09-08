@@ -309,6 +309,20 @@ func edited_piece_count(generator_id: String) -> int:
 	return edited_brush_ids(generator_id).size()
 
 
+## Where a rebuild of this structure would put it.
+##
+## Which is not where it was created: a structure dragged into place rebuilds
+## where it now is, and a preview of the rebuild has to stand in the same spot or
+## it is showing the wrong answer.
+func rebuild_placement(generator_id: String) -> Transform3D:
+	if not generators.has(generator_id):
+		return Transform3D.IDENTITY
+	var record: HFGenerator = generators[generator_id]
+	return Transform3D(
+		record.placement.basis, record.placement.origin + relocation_delta(generator_id)
+	)
+
+
 # ---------------------------------------------------------------------------
 # Persistence
 # ---------------------------------------------------------------------------

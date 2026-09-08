@@ -991,6 +991,10 @@ func highlight_tab(tab_name: String) -> void:
 
 
 func _on_main_tab_changed(tab_index: int) -> void:
+	# The structure ghost belongs to a Build-tab section, so it leaves with the
+	# tab. Ahead of the paint guards below, which return early for their own
+	# reasons and would otherwise leave a wireframe behind.
+	HFDockBrushHandler.refresh_structure_preview(self)
 	if _syncing_paint_tab or not paint_mode or not main_tabs:
 		return
 	var paint_tab_active := main_tabs.get_tab_title(tab_index) == "Paint"
@@ -1042,6 +1046,8 @@ func _on_section_toggled(expanded: bool, section_name: String) -> void:
 	if _user_prefs:
 		_user_prefs.set_section_collapsed(section_name, not expanded)
 		_user_prefs.save()
+	if section_name == "Structure":
+		HFDockBrushHandler.refresh_structure_preview(self)
 
 
 func set_keymap(km: HFKeymap) -> void:
@@ -1723,6 +1729,12 @@ func _build_structure_section(brush_vbox: VBoxContainer) -> void:
 
 func _on_structure_type_changed(_index: int) -> void:
 	HFDockBrushHandler.on_structure_type_changed(self)
+
+
+## Any control in the Structure section, whatever its type. The ghost redraws
+## from the whole section rather than from the one field that moved.
+func _on_structure_setting_changed(_value: Variant = null) -> void:
+	HFDockBrushHandler.refresh_structure_preview(self)
 
 
 ## Point the Structure section at whatever is selected.
