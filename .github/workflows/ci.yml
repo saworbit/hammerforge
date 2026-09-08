@@ -39,6 +39,10 @@ jobs:
   unit-tests:
     name: GUT Unit Tests
     runs-on: ubuntu-latest
+    # Only the push-to-main run writes the totals back; a pull request run has
+    # nothing to push to and leaves the documents alone.
+    permissions:
+      contents: write
     env:
       GODOT_VERSION: "4.7-stable"
     steps:
@@ -56,5 +60,39 @@ jobs:
 
       - name: Run GUT tests
         run: |
-          godot --headless -s res://addons/gut/gut_cmdln.gd --path . 2>&1
-          exit $?
+          set -o pipefail
+          godot --headless -s res://addons/gut/gut_cmdln.gd --path . 2>&1 | tee gut.log
+
+      # The five documents that quote the size of the suite go stale on any pull
+      # request that adds a test. CI has just measured them, so CI writes them
+      # down rather than asking every contributor to.
+      - name: Update published test counts
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: python3 tools/update_test_counts.py --gut-log gut.log --write
+
+      - name: Commit updated counts
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          if git diff --quiet; then
+            echo "Counts already current, nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          # [skip ci] plus the fact that a GITHUB_TOKEN push raises no workflow
+          # event: this cannot start a run that writes the counts again.
+          git commit -m "Update published test counts [skip ci]"
+          # Another merge may have landed while the suite was running, which
+          # would make this push non-fast-forward. Rebase onto whatever main is
+          # now and try once more rather than failing a green build over it.
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            echo "Push rejected, rebasing onto main (attempt $attempt)."
+            git fetch origin main
+            git rebase origin/main || { git rebase --abort; exit 1; }
+          done
+          echo "Could not push the updated counts after three attempts."
+          exit 1
