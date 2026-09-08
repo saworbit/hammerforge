@@ -393,10 +393,8 @@ cut leaves a few pieces and a slot driven right through leaves two.
 A carver that would swallow a brush entirely leaves that brush alone rather than
 deleting it — nothing vanishes without a preview showing it first.
 
-> Hollow (`Ctrl+H`) is the one cutting-adjacent tool that still needs an unrotated
-> box. It builds walls by insetting every face inward off the brush's width, height
-> and depth, which only describe the brush while it is unrotated. Use **Reset
-> Rotation** (`Alt+R`) first.
+> Hollow (`Ctrl+H`) handles rotation too. It shells a brush against its own face
+> planes, so a turned box gives you six turned walls. See [Hollow](#hollow).
 
 ## Rotating and Mirroring
 
@@ -429,15 +427,14 @@ brush turns underneath them. Turn it off if you want the texture to ride along.
 
 Clip and Carve both handle rotation — they cut the real geometry wherever it is.
 
-**Hollow is the one that will refuse a rotated brush.** It measures a brush's
-extent straight off its size along the world axes, which is only true while the
-brush is unrotated, and hollowing anyway would build the walls in the wrong place.
-It will tell you so, and **Reset Rotation** (`Alt+R`) is the way back.
+Hollow handles it as well. It shells a brush against its own face planes, so a
+turned box gives you six turned walls rather than a refusal.
 
-Reset Rotation does not move your geometry. If you turned a brush by exactly 90°,
-it folds that quarter turn into the brush's dimensions instead of snapping the
-brush back to its old footprint, so the brush stays exactly where it looks like it
-is and Hollow works again.
+So **Reset Rotation** (`Alt+R`) is there for when you want a brush square again,
+not because anything has stopped working on it. It does not move your geometry: if
+you turned a brush by exactly 90°, it folds that quarter turn into the brush's
+dimensions instead of snapping the brush back to its old footprint, so the brush
+stays exactly where it looks like it is.
 
 ### Flip
 

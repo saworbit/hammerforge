@@ -168,8 +168,14 @@ static func _brush_id_of(brush: Node) -> String:
 	return bid
 
 
-## Find all DraftBrush nodes whose AABB overlaps the given AABB,
+## Find all DraftBrush nodes whose world bounds overlap the given AABB,
 ## excluding the brush with the given ID.
+##
+## The bounds come from `world_bounds_of()` rather than from `position` and
+## `size`, because those two describe the brush before it was turned. A rotated
+## brush reaches outside that box, and a rejection that reads the wrong box is
+## not a cheap rejection, it is a wrong answer: the carve reported no overlapping
+## brushes and did nothing.
 func _find_overlapping_brushes(exclude_id: String, aabb: AABB) -> Array:
 	var result: Array = []
 	for node in root._iter_pick_nodes():
@@ -178,10 +184,7 @@ func _find_overlapping_brushes(exclude_id: String, aabb: AABB) -> Array:
 		var draft := node as DraftBrush
 		if _brush_id_of(draft) == exclude_id:
 			continue
-		var node_pos: Vector3 = draft.global_position
-		var node_size: Vector3 = draft.size
-		var node_aabb := AABB(node_pos - node_size * 0.5, node_size)
-		if aabb.intersects(node_aabb):
+		if aabb.intersects(root.brush_system.world_bounds_of(draft)):
 			result.append(draft)
 	return result
 
