@@ -1095,6 +1095,14 @@ func resolve_transform_pivot(brush_ids: Array, entity_paths: Array) -> Vector3:
 	return transform_system.resolve_pivot(brush_ids, entity_paths, transform_pivot_mode)
 
 
+## The way the selection is facing, when every part of it faces the same way.
+## Identity otherwise, and for a selection that has been mirrored or scaled.
+func resolve_selection_basis(brush_ids: Array, entity_paths: Array) -> Basis:
+	if not transform_system:
+		return Basis.IDENTITY
+	return transform_system.resolve_selection_basis(brush_ids, entity_paths)
+
+
 func can_flip_brushes(brush_ids: Array) -> HFOpResult:
 	if not transform_system:
 		return HFOpResult.fail("Flip: transform system unavailable")

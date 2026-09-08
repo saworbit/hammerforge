@@ -640,6 +640,32 @@ static func _pieces_disagree(dock: Object, generator_id: String) -> bool:
 	return bool(dock.level_root.generator_pieces_disagree(generator_id))
 
 
+## Where a new structure would land: centred on the selection, and facing the way
+## it faces.
+##
+## The pivot is where the transform commands would turn the selection, so a
+## structure lands somewhere you were already looking. The basis is the half that
+## used to be missing: select a wall standing at forty-five degrees, build an arch
+## on it, and the arch came out square while everything around it did not. A
+## selection that does not agree with itself — or that has been mirrored or
+## scaled — answers with the world axes.
+##
+## The ghost reads this too, so the angle is visible before the button is pressed.
+static func create_placement(dock: Object) -> Transform3D:
+	if dock == null or not dock.level_root:
+		return Transform3D.IDENTITY
+	var targets := _transform_targets(dock)
+	var basis: Basis = Basis.IDENTITY
+	if dock.level_root.has_method("resolve_selection_basis"):
+		basis = dock.level_root.resolve_selection_basis(
+			targets["brush_ids"], targets["entity_paths"]
+		)
+	return Transform3D(
+		basis,
+		dock.level_root.resolve_transform_pivot(targets["brush_ids"], targets["entity_paths"])
+	)
+
+
 ## Draw a ghost of what the button would build, before it builds it.
 ##
 ## Gated rather than always on. The ghost stands in the viewport, so it shows only
@@ -670,13 +696,7 @@ static func refresh_structure_preview(dock: Object) -> void:
 			type = record.type
 			placement = dock.level_root.generator_rebuild_placement(generator_id)
 	if generator_id == "":
-		# Where Create would centre it, which is where the transform commands
-		# would pivot — the same answer the button itself uses.
-		var targets := _transform_targets(dock)
-		placement = Transform3D(
-			Basis.IDENTITY,
-			dock.level_root.resolve_transform_pivot(targets["brush_ids"], targets["entity_paths"])
-		)
+		placement = create_placement(dock)
 
 	var settings := collect_structure_settings(dock)
 	var check: HFOpResult = dock.level_root.can_build_generator(type, settings)
@@ -778,15 +798,9 @@ static func on_create_structure(dock: Object) -> void:
 	if not check.ok:
 		dock._set_status(check.user_text(), true)
 		return
-	var targets := _transform_targets(dock)
-	var centre: Vector3 = dock.level_root.resolve_transform_pivot(
-		targets["brush_ids"], targets["entity_paths"]
-	)
 	var before: int = dock.level_root.generator_count()
 	dock._commit_state_action(
-		"Create %s" % label,
-		"create_generator",
-		[type, settings, Transform3D(Basis.IDENTITY, centre)]
+		"Create %s" % label, "create_generator", [type, settings, create_placement(dock)]
 	)
 	if dock.level_root.generator_count() > before:
 		dock._set_status("Created a %s" % label.to_lower())

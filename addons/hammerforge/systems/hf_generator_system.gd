@@ -378,13 +378,7 @@ static func _same_move(a: Transform3D, b: Transform3D) -> bool:
 ## which leaves the placement alone and lets the pieces read as edited, which is
 ## what they are.
 static func _is_rigid(move: Transform3D) -> bool:
-	if move.basis.determinant() <= 0.0:
-		return false
-	var unit := move.basis.orthonormalized()
-	for axis in 3:
-		if move.basis[axis].distance_to(unit[axis]) > ROTATION_EPSILON:
-			return false
-	return true
+	return HFTransformSystem.is_rotation_basis(move.basis)
 
 
 ## The pieces of a structure that are no longer the shape they were generated as.

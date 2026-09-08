@@ -336,6 +336,27 @@ func test_a_structure_around_one_stray_piece_still_counts_that_one_piece():
 	assert_true(_message().begins_with("1 piece has been edited"), "got '%s'" % _message())
 
 
+func test_the_ghost_leans_the_way_the_selection_does():
+	# The angle a structure will inherit has to be visible before the button is
+	# pressed, not discovered by pressing it.
+	dock._on_create_structure()
+	var generator_id: String = root.generator_system.generators.keys()[0]
+	var ids := Array(root.generator_system.generators[generator_id].brush_ids)
+	var pieces := _generated_brushes()
+	assert_true(root.detach_generator(generator_id))
+	root.rotate_managed_nodes(ids, [], 1, 45.0, root.resolve_transform_pivot(ids, []))
+
+	dock.set_selection_nodes([pieces[0]])
+
+	assert_gt(_pieces(), 0, "the ghost is drawn for a new structure")
+	assert_almost_eq(
+		_ghost().global_transform.basis.x,
+		pieces[0].global_transform.basis.x,
+		Vector3.ONE * 0.01,
+		"the ghost has to lean the way the thing it will be built on does"
+	)
+
+
 func test_the_hand_edit_warning_survives_a_redraw():
 	dock._on_create_structure()
 	var brushes := _generated_brushes()
