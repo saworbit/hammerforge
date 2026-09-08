@@ -484,6 +484,109 @@ func test_flip_preserves_per_face_materials():
 		assert_eq(after[i].material_idx, i, "face %d kept its material" % i)
 
 
+## The material on the face whose outward world normal points along `direction`.
+func _material_facing(draft: DraftBrush, direction: Vector3) -> int:
+	var basis := draft.global_transform.basis
+	for face in draft.get_faces():
+		if face == null:
+			continue
+		var world_normal: Vector3 = (basis * face.normal).normalized()
+		if world_normal.dot(direction.normalized()) > 0.99:
+			return face.material_idx
+	return -999
+
+
+func _face_facing(draft: DraftBrush, direction: Vector3):
+	var basis := draft.global_transform.basis
+	for face in draft.get_faces():
+		if face == null:
+			continue
+		var world_normal: Vector3 = (basis * face.normal).normalized()
+		if world_normal.dot(direction.normalized()) > 0.99:
+			return face
+	return null
+
+
+func _paint_a_box(brush_id: String) -> DraftBrush:
+	var b := _make_brush(Vector3(48, 0, 0), Vector3(32, 16, 8), brush_id)
+	_face_facing(b, Vector3.RIGHT).material_idx = 10
+	_face_facing(b, Vector3.LEFT).material_idx = 20
+	return b
+
+
+func test_flip_moves_per_face_material_to_the_mirrored_side():
+	# The whole point of a mirror is that what was on the right ends up on the
+	# left. A box stays a box through the flip, so nothing else moves the data.
+	var b := _paint_a_box("f1")
+
+	sys.flip(["f1"], [], 0, Vector3.ZERO)
+
+	assert_eq(_material_facing(b, Vector3.RIGHT), 20, "the left face is now on the right")
+	assert_eq(_material_facing(b, Vector3.LEFT), 10, "and the right face is now on the left")
+
+
+func test_flip_moves_per_face_uv_settings_to_the_mirrored_side():
+	var b := _make_brush(Vector3(48, 0, 0), Vector3(32, 16, 8), "f1")
+	var right = _face_facing(b, Vector3.RIGHT)
+	right.uv_offset = Vector2(7, 3)
+	right.uv_rotation = 0.5
+	right.uv_scale = Vector2(2, 4)
+
+	sys.flip(["f1"], [], 0, Vector3.ZERO)
+
+	var moved = _face_facing(b, Vector3.LEFT)
+	assert_almost_eq(moved.uv_offset.x, 7.0, EPS, "uv offset travels with the face")
+	assert_almost_eq(moved.uv_rotation, 0.5, EPS, "so does uv rotation")
+	assert_almost_eq(moved.uv_scale.y, 4.0, EPS, "so does uv scale")
+
+
+func test_flip_moves_paint_layers_to_the_mirrored_side():
+	var b := _make_brush(Vector3(48, 0, 0), Vector3(32, 16, 8), "f1")
+	var layer := FaceDataScript.PaintLayer.new()
+	layer.opacity = 0.25
+	_face_facing(b, Vector3.RIGHT).paint_layers.append(layer)
+
+	sys.flip(["f1"], [], 0, Vector3.ZERO)
+
+	var moved = _face_facing(b, Vector3.LEFT)
+	assert_eq(moved.paint_layers.size(), 1, "the painted face is now the left one")
+	assert_almost_eq(float(moved.paint_layers[0].opacity), 0.25, EPS)
+	assert_eq(
+		_face_facing(b, Vector3.RIGHT).paint_layers.size(), 0, "and the right one is unpainted"
+	)
+
+
+func test_flip_twice_returns_every_face_to_its_own_side():
+	var b := _paint_a_box("f1")
+
+	sys.flip(["f1"], [], 0, Vector3.ZERO)
+	sys.flip(["f1"], [], 0, Vector3.ZERO)
+
+	assert_eq(_material_facing(b, Vector3.RIGHT), 10, "two mirrors are the identity")
+	assert_eq(_material_facing(b, Vector3.LEFT), 20)
+
+
+func test_flip_keeps_a_painted_box_parametric():
+	var b := _paint_a_box("f1")
+	sys.flip(["f1"], [], 0, Vector3.ZERO)
+	assert_eq(
+		b.shape,
+		DraftBrush.BrushShape.BOX,
+		"moving the face data must not cost the brush its resize handles"
+	)
+
+
+func test_flip_moves_face_data_on_the_axis_it_was_asked_for():
+	var b := _make_brush(Vector3(0, 48, 0), Vector3(32, 16, 8), "f1")
+	_face_facing(b, Vector3.UP).material_idx = 3
+	_face_facing(b, Vector3.RIGHT).material_idx = 9
+
+	sys.flip(["f1"], [], 1, Vector3.ZERO)
+
+	assert_eq(_material_facing(b, Vector3.DOWN), 3, "a Y flip swaps top and bottom")
+	assert_eq(_material_facing(b, Vector3.RIGHT), 9, "and leaves the sides where they were")
+
+
 func test_flip_mirrors_entity_position_and_yaw():
 	var e := _make_entity(Vector3(100, 0, 0), "Mirror")
 	e.entity_data = {"angle": 30.0}
@@ -553,6 +656,76 @@ func test_reset_rotation_clears_the_basis_a_rotation_put_there():
 	assert_false(b.global_transform.basis.is_equal_approx(Basis.IDENTITY))
 	assert_eq(sys.reset_rotation(["r1"]), 1)
 	assert_true(b.global_transform.basis.is_equal_approx(Basis.IDENTITY))
+
+
+## The world-space extent of a brush along each axis.
+func _world_extent(draft: DraftBrush) -> Vector3:
+	var low := Vector3.INF
+	var high := -Vector3.INF
+	for v in _world_verts(draft):
+		low = Vector3(minf(low.x, v.x), minf(low.y, v.y), minf(low.z, v.z))
+		high = Vector3(maxf(high.x, v.x), maxf(high.y, v.y), maxf(high.z, v.z))
+	return high - low
+
+
+func test_reset_rotation_leaves_a_scaled_box_alone():
+	# Scaling with Godot's own gizmo writes into the basis. It is not rotation, so
+	# there is nothing here to clear.
+	var b := _make_brush(Vector3(48, 12, -7), Vector3(32, 32, 32), "r1")
+	b.global_transform = Transform3D(Basis.from_scale(Vector3(2, 3, 4)), b.global_position)
+	var extent := _world_extent(b)
+
+	assert_eq(sys.reset_rotation(["r1"]), 0, "a scaled box is not a rotated box")
+
+	assert_true(
+		b.global_transform.basis.get_scale().is_equal_approx(Vector3(2, 3, 4)),
+		"the scale the user set has to survive: got %s" % b.global_transform.basis.get_scale()
+	)
+	assert_true(_world_extent(b).is_equal_approx(extent), "and the brush stays the size it was")
+
+
+func test_reset_rotation_keeps_the_scale_of_a_rotated_and_scaled_box():
+	var b := _make_brush(Vector3.ZERO, Vector3(32, 16, 8), "r1")
+	b.global_transform = Transform3D(
+		Basis(Vector3.UP, deg_to_rad(37.0)) * Basis.from_scale(Vector3(2, 3, 4)), Vector3.ZERO
+	)
+
+	assert_eq(sys.reset_rotation(["r1"]), 1)
+
+	var basis := b.global_transform.basis
+	assert_true(
+		basis.orthonormalized().is_equal_approx(Basis.IDENTITY),
+		"the rotation is what was asked to go"
+	)
+	assert_true(
+		basis.get_scale().is_equal_approx(Vector3(2, 3, 4)),
+		"the scale is not: got %s" % basis.get_scale()
+	)
+	assert_true(
+		_world_extent(b).is_equal_approx(Vector3(64, 48, 32)),
+		"a 32 by 16 by 8 box scaled 2, 3, 4 measures 64 by 48 by 32: got %s" % _world_extent(b)
+	)
+
+
+func test_reset_rotation_keeps_a_quarter_turned_scaled_box_exactly_where_it_is():
+	# A quarter turn is folded into `size` rather than undone, so the geometry does
+	# not move at all. The scale has to be folded with it or the box changes size.
+	var b := _make_brush(Vector3.ZERO, Vector3(32, 16, 8), "r1")
+	b.global_transform = Transform3D(
+		Basis(Vector3.UP, deg_to_rad(90.0)) * Basis.from_scale(Vector3(2, 3, 4)), Vector3.ZERO
+	)
+	var extent := _world_extent(b)
+
+	assert_eq(sys.reset_rotation(["r1"]), 1)
+
+	assert_true(
+		b.global_transform.basis.orthonormalized().is_equal_approx(Basis.IDENTITY),
+		"the quarter turn is gone"
+	)
+	assert_true(
+		_world_extent(b).is_equal_approx(extent),
+		"but the brush occupies the same space: %s became %s" % [extent, _world_extent(b)]
+	)
 
 
 # ===========================================================================
