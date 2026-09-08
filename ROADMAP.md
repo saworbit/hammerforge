@@ -571,6 +571,31 @@ and run".
   the crown are slightly thicker in section than panels at the base.
 - Structures still cannot nest, and none depends on other geometry.
 
+## Done (Structure Preview — Seeing It Before Building It — September 2026)
+- `HFStructurePreview`: a pale wireframe of the structure the Structure section
+  would build, at the placement it would build at, redrawn as each control moves.
+  One line mesh for the whole structure rather than a node per piece.
+- Editing an existing structure previews the rebuild standing over the real
+  pieces, at `rebuild_placement()` — so a structure dragged into a doorway
+  previews in the doorway rather than back where it was created.
+- Settings the builder refuses draw nothing and put the refusal in the section's
+  message line, so a combination that cannot be built is found while choosing
+  rather than after pressing the button.
+- Gated on the section being expanded and the Build tab being current; cleared
+  once Create or Update has happened; destroyed with its `LevelRoot`. Records
+  nothing and is never written to a `.hflevel`.
+- A redraw takes the "would drop painted faces" warning down with it, so the
+  second press of Update that goes ahead has to be earned again.
+- 23 new tests (`tests/test_structure_preview.gd`).
+
+### Known limits of the structure preview
+- The ghost is a wireframe of the piece boundaries, not a shaded solid, so a
+  dense dome reads as a mesh of lines rather than a surface.
+- It shows the pieces a rebuild would make, not which existing pieces it would
+  replace; the hand-edit count beside it is still what says that.
+- Nothing previews the other generators of geometry — hollow, carve and clip
+  keep their own previews, and the array modes have none.
+
 ## Future (Wave 3 -- Polish)
 - Multiple simultaneous cordons.
 - Multi-tool presets for common workflows.

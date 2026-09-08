@@ -239,6 +239,7 @@ var displacement_system
 var bevel_system
 var transform_system
 var generator_system
+var structure_preview
 
 @export var show_subtract_preview: bool = false:
 	set(value):
@@ -576,6 +577,7 @@ func _initialize_editor_systems() -> void:
 	bevel_system = load("res://addons/hammerforge/systems/hf_bevel_system.gd").new(self)
 	transform_system = load("res://addons/hammerforge/systems/hf_transform_system.gd").new(self)
 	generator_system = load("res://addons/hammerforge/systems/hf_generator_system.gd").new(self)
+	structure_preview = load("res://addons/hammerforge/systems/hf_structure_preview.gd").new(self)
 	if show_subtract_preview:
 		subtract_preview.set_enabled(true)
 	entity_system.load_entity_definitions()
@@ -603,6 +605,8 @@ func _exit_tree() -> void:
 		clip_preview.destroy()
 	if hollow_preview:
 		hollow_preview.destroy()
+	if structure_preview:
+		structure_preview.destroy()
 	# Cancel any in-flight tool previews so their nodes don't outlive the tree
 	if extrude_tool:
 		extrude_tool.cancel_extrude()
@@ -1291,6 +1295,32 @@ func generator_appearance_at_risk(generator_id: String, settings: Dictionary) ->
 	if not generator_system:
 		return PackedStringArray()
 	return generator_system.appearance_at_risk(generator_id, settings)
+
+
+## Where a rebuild of this structure would stand, so a preview of it can stand
+## there too.
+func generator_rebuild_placement(generator_id: String) -> Transform3D:
+	if not generator_system:
+		return Transform3D.IDENTITY
+	return generator_system.rebuild_placement(generator_id)
+
+
+## Draw a wireframe of what these settings would build, without building it.
+## Returns the number of pieces shown; zero means the settings do not build.
+func preview_structure(type: String, settings: Dictionary, placement: Transform3D) -> int:
+	if not structure_preview:
+		return 0
+	return structure_preview.show_preview(type, settings, placement)
+
+
+func clear_structure_preview() -> void:
+	if structure_preview:
+		structure_preview.clear()
+
+
+## How many pieces the structure ghost is currently showing.
+func structure_preview_pieces() -> int:
+	return structure_preview.piece_count() if structure_preview else 0
 
 
 func clip_brush_by_plane(brush_id: String, plane: Plane) -> HFOpResult:

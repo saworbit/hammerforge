@@ -5,6 +5,39 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **The Structure section draws what it would build, before it builds it.** Every
+  other way of making geometry in HammerForge shows you the shape while you are
+  still choosing it: a drag has its box, a hollow has its walls, a clip has its
+  cut. A structure had eight numbers and a button. You pressed the button to find
+  out what "sweep 60, rings 6" meant, and if it was wrong you undid it and pressed
+  it again.
+  - **Now the numbers draw.** `HFStructurePreview` stands a pale wireframe where
+    Create would put the structure and follows every control as you turn it — a
+    dome gains a ring, a spiral gains a step, an arch widens. One line mesh for
+    the whole structure rather than one node per piece, because a dome is a few
+    hundred pieces and a redraw happens on every keystroke.
+  - **For a structure that already exists it stands over the real pieces**, at
+    the placement a rebuild would use — the recorded placement plus the
+    relocation delta, so a structure you dragged into a doorway previews in the
+    doorway. That is the moment that matters: you can see the arch getting wider
+    before you agree to rebuild it.
+  - **A combination that cannot be built draws nothing and says why.** An empty
+    viewport is not an answer, so the refusal goes in the section's own message
+    line, beside the other things worth knowing before pressing the button. You
+    find out while you are still choosing rather than afterwards.
+  - **The ghost belongs to the section.** It appears while Structure is open and
+    the Build tab is in front, goes when either stops being true, and clears once
+    Create or Update has happened — the real thing is there, so it stops standing
+    on top of itself. It records nothing, is never written to a `.hflevel`, and is
+    destroyed with its `LevelRoot`.
+  - A redraw also takes down the "these settings would drop painted faces"
+    warning, so the second press of Update that goes ahead has to be earned
+    again. An acknowledgement that outlives the sentence asking for it is not one.
+  - **Coverage** (`tests/test_structure_preview.gd`): the ghost measured against
+    the piece count for each type, stood at the placement it claims, followed to
+    a structure that was moved, cleared on every gate that should clear it, drawn
+    again after a plugin-reload teardown, and checked for leaving no node behind
+    in the level.
 - **A structure library, and one place to add to it.** The live-generator wave
   built a type table and put one thing in it. Two problems sat behind that single
   entry, and only one of them was "we need more generators": the dock could not

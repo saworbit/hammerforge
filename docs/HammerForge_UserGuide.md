@@ -226,6 +226,16 @@ Press the button (or `Ctrl+Shift+A`) and it lands centred on whatever you have
 selected, or on the world origin if nothing is. Then treat it like any other
 geometry: rotate it, carve a doorway through it, clip a piece off.
 
+**Open the section and the shape draws itself first.** A pale wireframe stands
+where the button would build, and it follows every number as you turn it: a dome
+gains a ring, a spiral gains a step, an arch widens. Nothing is built until you
+press the button — the ghost is what you would get if you did.
+
+If a combination cannot be built the ghost disappears and the section says why,
+so you find out while you are still choosing rather than after you have pressed
+the button. The ghost belongs to the section: collapse it, or move to another
+tab, and it goes.
+
 ### Arch
 
 A curved run of brushes from six numbers:
@@ -316,7 +326,9 @@ pieces** and the Structure section changes: the type switches to whatever that
 structure is, the settings that built it load into the controls, the button reads
 **Update**, and a **Detach** button appears beside it.
 
-Change anything — press **Update** and the structure rebuilds in place. Everything
+Change anything and the ghost shows the new shape standing over the real one, so
+you can see the arch getting wider before you agree to rebuild it. Press
+**Update** and the structure rebuilds in place. Everything
 you painted on it comes back on the same faces: per-face materials, UV projection,
 scale, offset and rotation, and paint layers. If you increase the piece count, the
 new pieces start plain, because there is nothing for them to inherit.
