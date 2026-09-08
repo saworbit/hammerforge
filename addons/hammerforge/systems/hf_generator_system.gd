@@ -117,7 +117,7 @@ func regenerate(generator_id: String, settings: Dictionary) -> HFOpResult:
 	# by index; when the piece count changes there is no correspondence past the
 	# shorter list, and the extra pieces take the default.
 	var materials := _capture_materials(record)
-	_delete_brushes(record.brush_ids)
+	_delete_brushes(record.brush_ids, generator_id)
 
 	record.settings = settings.duplicate(true)
 	record.brush_ids = _spawn(face_sets, record.placement, generator_id, materials)
@@ -151,7 +151,7 @@ func remove(generator_id: String) -> bool:
 	if not generators.has(generator_id):
 		return false
 	var record: HFGenerator = generators[generator_id]
-	_delete_brushes(record.brush_ids)
+	_delete_brushes(record.brush_ids, generator_id)
 	generators.erase(generator_id)
 	return true
 
@@ -241,12 +241,22 @@ func _capture_materials(record: HFGenerator) -> Array:
 	return out
 
 
-func _delete_brushes(brush_ids: PackedStringArray) -> void:
+## Delete only the brushes that still say they belong to this generator.
+##
+## The record is a hint. Brush ids are reissued as the counter moves, and a stale
+## entry could otherwise name a brush that now belongs to something else — so a
+## rebuild would quietly delete a neighbour's geometry. The meta on the brush is
+## the authority, not the list.
+func _delete_brushes(brush_ids: PackedStringArray, generator_id: String) -> void:
 	if root == null or root.get("brush_system") == null:
 		return
 	for brush_id in brush_ids:
-		if _brush(str(brush_id)) != null:
-			root.brush_system.delete_brush_by_id(str(brush_id))
+		var brush = _brush(str(brush_id))
+		if brush == null:
+			continue
+		if str(brush.get_meta(GENERATOR_META, "")) != generator_id:
+			continue
+		root.brush_system.delete_brush_by_id(str(brush_id))
 
 
 func _brush(brush_id: String):

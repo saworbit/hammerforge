@@ -458,3 +458,55 @@ func test_an_unknown_type_has_no_defaults_and_builds_nothing():
 	assert_true(HFGeneratorSystemScript.default_settings("gazebo").is_empty())
 	assert_eq(HFGeneratorSystemScript.build_faces("gazebo", {}).size(), 0)
 	assert_false(HFGeneratorSystemScript.validate("gazebo", {}).ok)
+
+
+# ===========================================================================
+# Stale records must stay harmless
+# ===========================================================================
+
+
+func test_a_rebuild_does_not_delete_a_brush_it_no_longer_owns():
+	# Brush ids are reissued as the counter moves, so a stale entry in one record
+	# can name a brush that now belongs to something else. The meta on the brush is
+	# the authority, not the list.
+	assert_true(_create({"segments": 4}).ok)
+	var record = _only_record()
+	var stranger = DraftBrush.new()
+	stranger.brush_id = "stranger"
+	stranger.set_meta("brush_id", "stranger")
+	root.draft_brushes_node.add_child(stranger)
+	brushes._register_brush_id("stranger", stranger)
+	record.brush_ids.append("stranger")
+
+	assert_true(generators.regenerate(record.generator_id, _arch({"segments": 4})).ok)
+	assert_not_null(
+		brushes.find_brush_by_id("stranger"),
+		"a brush that belongs to nobody must survive a rebuild"
+	)
+
+
+func test_removing_does_not_delete_a_brush_it_no_longer_owns():
+	assert_true(_create({"segments": 4}).ok)
+	var record = _only_record()
+	var stranger = DraftBrush.new()
+	stranger.brush_id = "stranger"
+	stranger.set_meta("brush_id", "stranger")
+	root.draft_brushes_node.add_child(stranger)
+	brushes._register_brush_id("stranger", stranger)
+	record.brush_ids.append("stranger")
+
+	assert_true(generators.remove(record.generator_id))
+	assert_not_null(brushes.find_brush_by_id("stranger"), "only its own pieces may be removed")
+
+
+func test_a_structure_whose_pieces_were_all_deleted_can_still_be_rebuilt():
+	assert_true(_create({"segments": 4}).ok)
+	var record = _only_record()
+	for brush_id in Array(record.brush_ids):
+		brushes.delete_brush_by_id(str(brush_id))
+	assert_eq(_brush_count(), 0)
+	assert_true(
+		generators.regenerate(record.generator_id, _arch({"segments": 4})).ok,
+		"the record outlives the geometry, which is the point of it"
+	)
+	assert_eq(_brush_count(), 4)
