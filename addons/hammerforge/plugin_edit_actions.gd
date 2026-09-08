@@ -605,8 +605,10 @@ static func flip_selected(plugin: Object, root: Node) -> bool:
 	return true
 
 
-## Clear rotation on the selected brushes. This is the way back to hollow, clip,
-## and carve, all three of which refuse a rotated brush.
+## Clear rotation on the selected brushes, keeping their position and size.
+##
+## Hollow, clip and carve all work in the brush's own frame now, so this is a
+## tidying command rather than the way back to any of them.
 static func reset_rotation_selected(plugin: Object, root: Node) -> bool:
 	if not root:
 		return false

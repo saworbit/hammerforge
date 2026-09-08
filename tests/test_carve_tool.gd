@@ -352,6 +352,30 @@ func test_a_rotated_target_is_carved():
 		assert_eq(_open_edge_count(piece), 0)
 
 
+func test_a_rotated_target_is_found_where_it_actually_reaches():
+	# The broad phase used to build the candidate box from position and size,
+	# which describe a brush before it was turned. A long brush at 45 degrees
+	# reaches well outside that box, and carve reported no overlapping brushes.
+	var target := _make_brush(Vector3.ZERO, Vector3(400, 64, 32), "target")
+	target.rotation_degrees = Vector3(0, 45, 0)
+	target.rebuild_preview()
+	var naive := AABB(target.global_position - target.size * 0.5, target.size)
+	# A yaw of 45 sends local +X to (0.707, 0, -0.707), so the far end of the
+	# target is out along +X and -Z. That is solid geometry, not an empty corner
+	# of its bounding box.
+	var carver := _make_brush(Vector3(130, 0, -130), Vector3(48, 200, 48), "carver")
+	assert_false(
+		naive.intersects(AABB(carver.global_position - carver.size * 0.5, carver.size)),
+		"the fixture only means something while the unturned boxes miss each other"
+	)
+
+	var result = carve.carve_with_brush("carver")
+
+	assert_true(result.ok, "the turned end of the target is real geometry: %s" % result.message)
+	for piece in _pieces():
+		assert_eq(_open_edge_count(piece), 0)
+
+
 func test_a_cylinder_carver_carves():
 	_make_brush(Vector3.ZERO, Vector3(64, 64, 64), "target")
 	_make_brush(Vector3(0, 0, 0), Vector3(24, 200, 24), "carver", DraftBrush.BrushShape.CYLINDER)
