@@ -276,9 +276,12 @@ func flip(brush_ids: Array, entity_paths: Array, axis_index: int, pivot: Vector3
 	return changed
 
 
-## Clear each brush's rotation, keeping its position. This is what makes hollow,
-## clip, and carve reachable again after a rotation — all three refuse a rotated
-## brush through `HFBrushSystem._check_axis_aligned_box()`.
+## Clear each brush's rotation, keeping its position and its size.
+##
+## Rotation is only one part of a basis. Godot's own scale gizmo writes into the
+## same matrix, so replacing the whole basis with the identity would quietly
+## resize the brush as well. `basis = rotation * scale` and `get_scale()` reads
+## the scale half back out, so the cleared basis is that scale on its own.
 func reset_rotation(brush_ids: Array) -> int:
 	var changed := 0
 	for brush_id in brush_ids:
@@ -286,16 +289,21 @@ func reset_rotation(brush_ids: Array) -> int:
 		if draft == null:
 			continue
 		var xform := draft.global_transform
-		if xform.basis.is_equal_approx(Basis.IDENTITY):
+		var scale := xform.basis.get_scale()
+		var cleared := Basis.from_scale(scale)
+		# Scale alone is not rotation. Leave it exactly as the user set it.
+		if xform.basis.is_equal_approx(cleared):
 			continue
 		# A basis that only swaps and flips whole axes is describing a box that is
 		# already axis-aligned, just bookkept oddly. Fold the swap into `size` so
 		# clearing the basis leaves the geometry exactly where it was — otherwise a
-		# quarter turn would snap a non-cube box back to its old footprint.
+		# quarter turn would snap a non-cube box back to its old footprint. The
+		# scale is per local axis, so it has to travel with the swap.
 		var permutation := axis_permutation(xform.basis)
 		if not permutation.is_empty() and draft.shape == DraftBrush.BrushShape.BOX:
 			draft.size = permuted_size(draft.size, permutation)
-		draft.global_transform = Transform3D(Basis.IDENTITY, xform.origin)
+			cleared = Basis.from_scale(permuted_size(scale, permutation))
+		draft.global_transform = Transform3D(cleared, xform.origin)
 		_tag_dirty(draft)
 		changed += 1
 	return changed
@@ -431,8 +439,20 @@ func _flip_brush(draft: DraftBrush, axis_index: int, pivot: Vector3) -> void:
 	_ensure_faces(draft)
 	# A primitive that a local mirror maps onto itself needs no geometry surgery:
 	# the fold-back reflection lands every generated vertex on another vertex of
-	# the same shape, and the per-face data rides along to where that face went.
+	# the same shape.
 	var keeps_primitive := _primitive_survives_mirror(draft, local_axis)
+	# The shape survives, but the authored appearance does not ride along on its
+	# own. Face data is held by index, and the mirror sends each face to where a
+	# different face used to be, so a material on the positive X side would stay
+	# on positive X after an X flip. Move the data to follow the geometry.
+	var remapped := false
+	if keeps_primitive:
+		remapped = remap_mirrored_faces(draft, local_axis)
+		if not remapped and _face_appearance_varies(draft):
+			# The faces cannot be paired up, which is rare and shape-specific. The
+			# appearance would land on the wrong sides, so take the exact path
+			# instead and accept becoming CUSTOM.
+			keeps_primitive = false
 	if not keeps_primitive:
 		draft.mark_faces_authoritative()
 	draft.global_transform = flipped_transform(
@@ -440,8 +460,95 @@ func _flip_brush(draft: DraftBrush, axis_index: int, pivot: Vector3) -> void:
 	)
 	if not keeps_primitive:
 		mirror_faces(draft.get_faces(), local_axis)
+	if remapped or not keeps_primitive:
 		draft.rebuild_preview()
 	_tag_dirty(draft)
+
+
+## Move each face's data to the face the mirror sends its geometry to, keeping
+## every face's vertices where the primitive generates them.
+##
+## Reflecting local vertex `v` puts it where the world mirror sent the old vertex
+## at `H * v`, so the face that now occupies a given place is the one that used to
+## occupy its reflection. `mirror_face()` turns the source face's geometry back
+## into the target's, winding included, and carries its material, UVs and paint
+## with it. False when the faces cannot be paired one to one, having changed
+## nothing.
+func remap_mirrored_faces(draft: DraftBrush, local_axis: int) -> bool:
+	var faces: Array = draft.get_faces()
+	var count := faces.size()
+	if count < 2:
+		return false
+	var by_place := {}
+	for face in faces:
+		if face == null or face.local_verts.is_empty():
+			return false
+		var place := _face_place(face, -1)
+		if by_place.has(place):
+			return false
+		by_place[place] = face
+	var sources: Array[FaceData] = []
+	for face in faces:
+		var mirrored := _face_place(face, local_axis)
+		if not by_place.has(mirrored):
+			return false
+		sources.append(by_place[mirrored])
+	# The mirror is its own inverse, so the pairing above is a bijection and every
+	# face is mirrored exactly once.
+	for face in sources:
+		mirror_face(face, local_axis)
+	draft.faces = sources
+	return true
+
+
+## An order-independent name for the place a face occupies, optionally after
+## reflecting it through one local axis. Two faces of one brush never share one.
+static func _face_place(face: FaceData, mirror_axis: int) -> String:
+	var parts := PackedStringArray()
+	for vertex in face.local_verts:
+		var point: Vector3 = vertex
+		if mirror_axis >= 0:
+			point[mirror_axis] = -point[mirror_axis]
+		parts.append(_quantize(point))
+	parts.sort()
+	return "|".join(parts)
+
+
+## True when the brush's faces do not all look alike, which is the only case
+## where it matters which face the data ends up on.
+static func _face_appearance_varies(draft: DraftBrush) -> bool:
+	var first := ""
+	var seen := false
+	for face in draft.faces:
+		if face == null:
+			continue
+		# Paint is authored one face at a time, so treat any of it as worth moving
+		# rather than trying to compare weight images.
+		if not face.paint_layers.is_empty():
+			return true
+		var signature := _appearance_signature(face)
+		if not seen:
+			first = signature
+			seen = true
+		elif signature != first:
+			return true
+	return false
+
+
+static func _appearance_signature(face: FaceData) -> String:
+	return (
+		"%d/%d/%.4f,%.4f/%.4f,%.4f/%.4f/%d"
+		% [
+			face.material_idx,
+			face.uv_projection,
+			face.uv_scale.x,
+			face.uv_scale.y,
+			face.uv_offset.x,
+			face.uv_offset.y,
+			face.uv_rotation,
+			face.custom_uvs.size(),
+		]
+	)
 
 
 ## True when reflecting the brush's local vertices through `local_axis` leaves
