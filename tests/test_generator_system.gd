@@ -740,6 +740,156 @@ func test_a_stranger_brush_in_the_record_is_ignored_by_both_questions():
 	assert_eq(generators.edited_piece_count(record.generator_id), 0)
 
 
+# ===========================================================================
+# Turning a structure, rather than only sliding it
+# ===========================================================================
+
+
+## Apply one rigid move to every piece, the way the Rotate command does.
+func _move_whole_structure(record, move: Transform3D) -> void:
+	for brush_id in record.brush_ids:
+		var brush = brushes.find_brush_by_id(str(brush_id))
+		if brush:
+			brush.global_transform = move * brush.global_transform
+
+
+func _turn(degrees: float, pivot: Vector3 = Vector3.ZERO) -> Transform3D:
+	var rotation := Basis(Vector3.UP, deg_to_rad(degrees))
+	return Transform3D(rotation, pivot - rotation * pivot)
+
+
+func test_turning_the_whole_structure_reads_as_a_move_and_not_as_editing():
+	assert_true(_create({"segments": 4}).ok)
+	var record = _only_record()
+	var move := _turn(90.0)
+
+	_move_whole_structure(record, move)
+
+	assert_eq(
+		generators.edited_piece_count(record.generator_id),
+		0,
+		"turning a structure is not editing its pieces"
+	)
+	var recovered: Transform3D = generators.relocation_transform(record.generator_id)
+	assert_almost_eq(recovered.basis.x, move.basis.x, Vector3.ONE * 0.001)
+	assert_almost_eq(recovered.basis.z, move.basis.z, Vector3.ONE * 0.001)
+
+
+func test_a_structure_that_was_turned_rebuilds_turned():
+	# The defect this exists for: build an arch, turn it into the wall it belongs
+	# in, widen it, and watch it square itself back up.
+	assert_true(_create({"segments": 4}).ok)
+	var record = _only_record()
+	var move := _turn(90.0, Vector3(0.0, 0.0, 128.0))
+	_move_whole_structure(record, move)
+	var turned_centre := _structure_centre(record)
+
+	assert_true(generators.regenerate(record.generator_id, _arch({"segments": 4})).ok)
+
+	assert_almost_eq(record.placement.basis.x, move.basis.x, Vector3.ONE * 0.01)
+	assert_almost_eq(_structure_centre(record), turned_centre, Vector3.ONE * 1.0)
+	assert_eq(
+		generators.edited_piece_count(record.generator_id),
+		0,
+		"and the rebuilt pieces are the generated ones again"
+	)
+
+
+func test_a_turn_and_a_slide_together_are_still_one_move():
+	assert_true(_create({"segments": 4}).ok)
+	var record = _only_record()
+	var move := _turn(45.0)
+	move.origin += Vector3(80.0, 16.0, -24.0)
+
+	_move_whole_structure(record, move)
+
+	assert_eq(generators.edited_piece_count(record.generator_id), 0)
+	assert_almost_eq(
+		generators.relocation_transform(record.generator_id).origin, move.origin, Vector3.ONE * 0.01
+	)
+
+
+func test_pieces_turned_on_their_own_are_edits_rather_than_a_relocation():
+	assert_true(_create({"segments": 4}).ok)
+	var record = _only_record()
+	# Each piece about its own centre, which is four different moves.
+	for brush_id in record.brush_ids:
+		brushes.find_brush_by_id(str(brush_id)).rotate_y(0.4)
+
+	assert_eq(
+		generators.relocation_transform(record.generator_id),
+		Transform3D.IDENTITY,
+		"pieces that disagree were not turned together"
+	)
+	assert_eq(generators.edited_piece_count(record.generator_id), 4)
+
+
+func test_a_mirrored_structure_is_not_treated_as_a_relocation():
+	# Rebuilding through a negative-determinant basis would invert the winding of
+	# every face in the structure and not look wrong until the bake.
+	assert_true(_create({"segments": 4}).ok)
+	var record = _only_record()
+	var mirror := Transform3D(Basis.from_scale(Vector3(-1.0, 1.0, 1.0)), Vector3.ZERO)
+
+	_move_whole_structure(record, mirror)
+
+	assert_eq(generators.relocation_transform(record.generator_id), Transform3D.IDENTITY)
+	assert_gt(
+		generators.edited_piece_count(record.generator_id), 0, "a mirror has to be visible as one"
+	)
+
+
+func test_a_squashed_structure_is_not_treated_as_a_relocation():
+	assert_true(_create({"segments": 4}).ok)
+	var record = _only_record()
+	var squash := Transform3D(Basis.from_scale(Vector3(1.0, 0.5, 1.0)), Vector3.ZERO)
+
+	_move_whole_structure(record, squash)
+
+	assert_eq(generators.relocation_transform(record.generator_id), Transform3D.IDENTITY)
+
+
+func test_a_turn_survives_the_save_format():
+	assert_true(_create({"segments": 4}).ok)
+	var record = _only_record()
+	var move := _turn(90.0)
+	_move_whole_structure(record, move)
+
+	generators.restore(generators.capture())
+
+	var restored = _only_record()
+	assert_eq(
+		generators.edited_piece_count(restored.generator_id),
+		0,
+		"a reopened level must still know the structure was turned, not edited"
+	)
+	assert_almost_eq(
+		generators.relocation_transform(restored.generator_id).basis.x,
+		move.basis.x,
+		Vector3.ONE * 0.001
+	)
+
+
+func test_a_record_written_before_piece_bases_existed_still_recovers_a_turn():
+	# Older records recorded where each piece was put but not how it was turned.
+	# The placement's own basis is the right answer for a missing one, because it
+	# is what every piece the generator built was given.
+	assert_true(_create({"segments": 4}).ok)
+	var record = _only_record()
+	for brush_id in record.brush_signatures:
+		record.brush_signatures[brush_id].erase("basis")
+	var move := _turn(90.0)
+
+	_move_whole_structure(record, move)
+
+	assert_eq(generators.edited_piece_count(record.generator_id), 0)
+	assert_almost_eq(
+		generators.relocation_transform(record.generator_id).basis.x,
+		move.basis.x,
+		Vector3.ONE * 0.001
+	)
+
+
 func _structure_centre(record) -> Vector3:
 	var total := Vector3.ZERO
 	var count := 0

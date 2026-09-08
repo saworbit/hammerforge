@@ -486,10 +486,11 @@ func test_a_saved_and_reopened_structure_does_not_read_as_edited():
 		)
 
 
-func test_a_structure_turned_as_a_whole_warns_rather_than_silently_straightening():
-	# Rotation is not recovered — only translation is — so the honest behaviour is
-	# that every piece reads as edited and the user is told before Update
-	# straightens the structure out.
+func test_pieces_turned_one_at_a_time_warn_rather_than_rebuilding_silently():
+	# Each piece about its own centre is as many different moves as there are
+	# pieces, which is editing rather than turning the structure. The honest
+	# behaviour is that they read as edited and the user is told before Update
+	# straightens them out.
 	assert_true(root.create_generator("stairs", _small("stairs"), Transform3D.IDENTITY).ok)
 	var record = _record_of_type("stairs")
 	for brush_id in record.brush_ids:
@@ -497,8 +498,39 @@ func test_a_structure_turned_as_a_whole_warns_rather_than_silently_straightening
 	assert_eq(
 		root.edited_generator_pieces(record.generator_id),
 		record.brush_ids.size(),
-		"a turned structure must not rebuild silently"
+		"pieces turned individually must not rebuild silently"
 	)
+
+
+func test_a_structure_turned_by_the_rotate_command_rebuilds_turned():
+	# The whole point of the record: turn a flight of stairs into the corner it
+	# belongs in, change the step count, and have it stay in the corner.
+	assert_true(root.create_generator("stairs", _small("stairs"), Transform3D.IDENTITY).ok)
+	var record = _record_of_type("stairs")
+	var pivot: Vector3 = root.resolve_transform_pivot(Array(record.brush_ids), [])
+
+	root.rotate_managed_nodes(Array(record.brush_ids), [], 1, 90.0, pivot)
+
+	assert_eq(
+		root.edited_generator_pieces(record.generator_id),
+		0,
+		"the Rotate command moves every piece by the same transform"
+	)
+	var settings: Dictionary = record.settings.duplicate(true)
+	settings["steps"] = int(settings["steps"]) + 2
+	assert_true(root.regenerate_generator(record.generator_id, settings).ok)
+
+	assert_almost_eq(
+		record.placement.basis.x, Basis(Vector3.UP, deg_to_rad(90.0)).x, Vector3.ONE * 0.01
+	)
+	for brush_id in record.brush_ids:
+		var brush = root.brush_system.find_brush_by_id(str(brush_id))
+		assert_not_null(brush)
+		assert_gt(
+			brush.global_transform.basis.determinant(),
+			0.0,
+			"a rebuilt piece must never come back with its winding inverted"
+		)
 
 
 func test_a_moved_structure_can_still_be_detached_where_it_stands():

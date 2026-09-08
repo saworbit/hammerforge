@@ -36,6 +36,11 @@ const TYPE_DOME := "dome"
 ## exactly the same amount; anything looser than this is individual editing.
 const RELOCATION_EPSILON := 0.01
 
+## How far two pieces can disagree about how far they have been *turned* and
+## still count as having been turned together. Basis columns are unit length, so
+## this is an angle in disguise: about a twentieth of a degree.
+const ROTATION_EPSILON := 0.001
+
 var root: Node3D
 var generators: Dictionary = {}  # generator_id -> HFGenerator
 
@@ -171,7 +176,7 @@ func regenerate(generator_id: String, settings: Dictionary) -> HFOpResult:
 	var appearance := _capture_appearance(record)
 	# Where the structure is now, not where it was made. Read before anything is
 	# deleted, because it is the existing pieces that say where they have gone.
-	record.placement.origin += relocation_delta(generator_id)
+	record.placement = relocation_transform(generator_id) * record.placement
 	_delete_brushes(record.brush_ids, generator_id)
 
 	record.settings = settings.duplicate(true)
@@ -254,11 +259,11 @@ func generator_for_selection(brush_ids: Array) -> HFGenerator:
 ## Without this, dragging an arch into a doorway and then widening it puts the
 ## arch back where it was created — which is where the whole premise of changing
 ## your mind after seeing it in place falls down.
-func relocation_delta(generator_id: String) -> Vector3:
+func relocation_transform(generator_id: String) -> Transform3D:
 	if not generators.has(generator_id):
-		return Vector3.ZERO
+		return Transform3D.IDENTITY
 	var record: HFGenerator = generators[generator_id]
-	var delta := Vector3.ZERO
+	var delta := Transform3D.IDENTITY
 	var seen := false
 	for brush_id in record.brush_ids:
 		var signature: Dictionary = record.brush_signatures.get(str(brush_id), {})
@@ -267,13 +272,65 @@ func relocation_delta(generator_id: String) -> Vector3:
 		var brush = _owned_brush(str(brush_id), generator_id)
 		if brush == null:
 			continue
-		var moved: Vector3 = brush.global_transform.origin - signature.get("origin", Vector3.ZERO)
+		var was := _signature_transform(record, signature)
+		if is_zero_approx(was.basis.determinant()):
+			continue
+		var moved: Transform3D = brush.global_transform * was.affine_inverse()
 		if not seen:
 			delta = moved
 			seen = true
-		elif moved.distance_to(delta) > RELOCATION_EPSILON:
-			return Vector3.ZERO
-	return delta if seen else Vector3.ZERO
+		elif not _same_move(moved, delta):
+			return Transform3D.IDENTITY
+	if not seen or not _is_rigid(delta):
+		return Transform3D.IDENTITY
+	return delta
+
+
+## How far the structure has been dragged, ignoring any turn.
+##
+## Kept because a translation is what most callers mean and what most of the
+## tests ask about. The rebuild itself uses the whole transform.
+func relocation_delta(generator_id: String) -> Vector3:
+	return relocation_transform(generator_id).origin
+
+
+## Where a piece was put, as a transform rather than a point.
+##
+## A record written before turning was understood has no basis for its pieces,
+## and the right answer for one of those is the placement's own basis: that is
+## what every piece the generator built was given, so a record that predates the
+## field reads exactly as it would have been written today.
+static func _signature_transform(record: HFGenerator, signature: Dictionary) -> Transform3D:
+	return Transform3D(
+		signature.get("basis", record.placement.basis), signature.get("origin", Vector3.ZERO)
+	)
+
+
+static func _same_move(a: Transform3D, b: Transform3D) -> bool:
+	if a.origin.distance_to(b.origin) > RELOCATION_EPSILON:
+		return false
+	for axis in 3:
+		if a.basis[axis].distance_to(b.basis[axis]) > ROTATION_EPSILON:
+			return false
+	return true
+
+
+## Whether a move is one a structure could have been given as a whole: a turn and
+## a slide, nothing else.
+##
+## A squash or a stretch is not a relocation, and a mirror is worse than not one —
+## rebuilding through a negative-determinant basis would invert the winding of
+## every face in the structure and not look wrong until the bake. Both answer no,
+## which leaves the placement alone and lets the pieces read as edited, which is
+## what they are.
+static func _is_rigid(move: Transform3D) -> bool:
+	if move.basis.determinant() <= 0.0:
+		return false
+	var unit := move.basis.orthonormalized()
+	for axis in 3:
+		if move.basis[axis].distance_to(unit[axis]) > ROTATION_EPSILON:
+			return false
+	return true
 
 
 ## The pieces of a structure that are no longer the shape they were generated as.
@@ -286,7 +343,7 @@ func edited_brush_ids(generator_id: String) -> PackedStringArray:
 	if not generators.has(generator_id):
 		return out
 	var record: HFGenerator = generators[generator_id]
-	var moved := relocation_delta(generator_id)
+	var moved := relocation_transform(generator_id)
 	for brush_id in record.brush_ids:
 		var signature: Dictionary = record.brush_signatures.get(str(brush_id), {})
 		if signature.is_empty():
@@ -294,13 +351,17 @@ func edited_brush_ids(generator_id: String) -> PackedStringArray:
 		var brush = _owned_brush(str(brush_id), generator_id)
 		if brush == null:
 			continue
-		if _geometry_hash(brush) != str(signature.get("geometry", "")):
+		var was := _signature_transform(record, signature)
+		# The shape is asked about in the basis the piece was recorded in, not the
+		# one it is standing in now. Hashing the same Basis value on both sides is
+		# exact, where un-turning the current one would compare rounded floats
+		# against the rounding of a different arithmetic path.
+		if _geometry_hash_in_basis(brush, was.basis) != str(signature.get("geometry", "")):
 			out.append(str(brush_id))
 			continue
 		# A piece that has moved on its own has been edited even though its shape
 		# is untouched, because a rebuild will put it back in the row.
-		var expected: Vector3 = signature.get("origin", Vector3.ZERO) + moved
-		if brush.global_transform.origin.distance_to(expected) > RELOCATION_EPSILON:
+		if not _same_move(brush.global_transform, moved * was):
 			out.append(str(brush_id))
 	return out
 
@@ -311,16 +372,13 @@ func edited_piece_count(generator_id: String) -> int:
 
 ## Where a rebuild of this structure would put it.
 ##
-## Which is not where it was created: a structure dragged into place rebuilds
-## where it now is, and a preview of the rebuild has to stand in the same spot or
-## it is showing the wrong answer.
+## Which is not where it was created: a structure dragged or turned into place
+## rebuilds where it now stands, and a preview of the rebuild has to stand in the
+## same spot and at the same angle or it is showing the wrong answer.
 func rebuild_placement(generator_id: String) -> Transform3D:
 	if not generators.has(generator_id):
 		return Transform3D.IDENTITY
-	var record: HFGenerator = generators[generator_id]
-	return Transform3D(
-		record.placement.basis, record.placement.origin + relocation_delta(generator_id)
-	)
+	return relocation_transform(generator_id) * generators[generator_id].placement
 
 
 # ---------------------------------------------------------------------------
@@ -530,6 +588,7 @@ func _record_signatures(record: HFGenerator) -> void:
 			continue
 		record.brush_signatures[str(brush_id)] = {
 			"origin": brush.global_transform.origin,
+			"basis": brush.global_transform.basis,
 			"geometry": _geometry_hash(brush),
 		}
 
@@ -540,10 +599,19 @@ func _record_signatures(record: HFGenerator) -> void:
 func _geometry_hash(brush) -> String:
 	if brush == null:
 		return ""
+	return _geometry_hash_in_basis(brush, brush.global_transform.basis)
+
+
+## The same question asked about a basis the piece is not necessarily standing
+## in. A structure turned as a whole has every piece in a new basis and none of
+## them changed, so the comparison has to be made in the basis each piece was
+## recorded in rather than the one it is standing in now.
+static func _geometry_hash_in_basis(brush, basis: Basis) -> String:
+	if brush == null:
+		return ""
 	var parts := PackedStringArray()
 	parts.append("s%d" % int(brush.shape))
 	parts.append(_rounded(brush.size))
-	var basis: Basis = brush.global_transform.basis
 	parts.append(_rounded(basis.x))
 	parts.append(_rounded(basis.y))
 	parts.append(_rounded(basis.z))
