@@ -358,41 +358,40 @@ func test_a_flipped_brush_survives_the_info_round_trip():
 
 
 # ===========================================================================
-# The guards rotation makes reachable
+# What rotation costs the operations that used to refuse it
 # ===========================================================================
+#
+# These once pinned `HFBrushSystem._check_axis_aligned_box()`, the guard that
+# refused hollow, clip and carve on any rotated brush. Precision cutting removed
+# it for clip and carve, and the generators wave removed it altogether — hollow
+# now runs the same progressive remainder against the brush's own inset planes,
+# so rotation costs it nothing either. The guard is gone, and what these check now
+# is that nothing refuses a rotated brush any more.
 
 
-func test_hollow_is_the_only_operation_that_still_refuses_a_rotated_brush():
-	# Clip and carve split real geometry now, so rotation costs them nothing.
-	# Hollow still insets every face inward off `size`, so it keeps the guard.
+func test_no_operation_refuses_a_rotated_brush_any_more():
 	_make_brush(Vector3.ZERO, Vector3(64, 64, 64), "g1")
 	sys.rotate(["g1"], [], 1, deg_to_rad(30.0), Vector3.ZERO)
-	assert_false(brushes.can_hollow_brush("g1", 4.0).ok, "hollow must still refuse")
-	assert_true(brushes.can_clip_brush("g1", 0, 0.0).ok, "clip handles rotation now")
+	assert_true(brushes.can_hollow_brush("g1", 4.0).ok, "hollow works in the brush's own frame now")
+	assert_true(brushes.can_clip_brush("g1", 0, 0.0).ok, "clip handles rotation")
 
 
-func test_reset_rotation_makes_hollow_reachable_again():
-	var b := _make_brush(Vector3.ZERO, Vector3(64, 64, 64), "g1")
-	sys.rotate(["g1"], [], 1, deg_to_rad(30.0), Vector3.ZERO)
-	sys.reset_rotation(["g1"])
-	assert_true(brushes.can_hollow_brush("g1", 4.0).ok, "hollow should be reachable again")
-	assert_true(HFBrushSystem._check_axis_aligned_box(b, "Hollow").ok)
-
-
-func test_a_refused_operation_names_the_rotation_and_offers_a_fix():
-	_make_brush(Vector3.ZERO, Vector3(64, 64, 64), "g1")
-	sys.rotate(["g1"], [], 1, deg_to_rad(30.0), Vector3.ZERO)
-	var result = brushes.can_hollow_brush("g1", 4.0)
-	assert_true(result.message.to_lower().contains("unrotated"), result.message)
-	assert_ne(result.fix_hint, "", "a refusal must tell the user what to do about it")
-
-
-func test_a_quarter_turn_is_still_refused_because_size_no_longer_matches_world():
-	# Hollow, clip and carve read world extents straight off `size`, and a quarter
-	# turn swaps which world axis each extent belongs to. Refusing is correct.
-	var b := _make_brush(Vector3.ZERO, Vector3(64, 32, 16), "g1")
+func test_a_quarter_turned_box_can_still_be_hollowed():
+	# The case the guard was strictest about: a quarter turn swaps which world
+	# axis each extent belongs to, which used to matter because hollow read world
+	# extents off `size`. It insets the brush's own faces now.
+	_make_brush(Vector3.ZERO, Vector3(64, 32, 16), "g1")
 	sys.rotate(["g1"], [], 1, deg_to_rad(90.0), Vector3.ZERO)
-	assert_false(HFBrushSystem._check_axis_aligned_box(b, "Hollow").ok)
+	assert_true(brushes.can_hollow_brush("g1", 4.0).ok)
+
+
+func test_hollow_still_refuses_a_wall_that_would_leave_no_room():
+	# The refusals that remain are about the numbers, not about the rotation.
+	_make_brush(Vector3.ZERO, Vector3(32, 32, 32), "g1")
+	sys.rotate(["g1"], [], 1, deg_to_rad(30.0), Vector3.ZERO)
+	var result = brushes.can_hollow_brush("g1", 64.0)
+	assert_false(result.ok, "a wall thicker than the brush has to be refused")
+	assert_ne(result.fix_hint, "", "a refusal must tell the user what to do about it")
 
 
 func test_reset_after_a_quarter_turn_keeps_the_geometry_and_permutes_the_size():
@@ -409,8 +408,8 @@ func test_reset_after_a_quarter_turn_keeps_the_geometry_and_permutes_the_size():
 				seeded = true
 	sys.reset_rotation(["g1"])
 	assert_true(
-		HFBrushSystem._check_axis_aligned_box(b, "Hollow").ok,
-		"clearing the rotation should hand the brush back to hollow and clip"
+		b.global_transform.basis.is_equal_approx(Basis.IDENTITY),
+		"a quarter turn must clear to an identity basis"
 	)
 	assert_almost_eq(b.size.x, 16.0, 0.001, "the 64-unit extent moved to Z, so X keeps 16")
 	assert_almost_eq(b.size.y, 32.0, 0.001)
