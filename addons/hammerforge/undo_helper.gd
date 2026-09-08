@@ -14,6 +14,14 @@ static var _last_collation_state: Dictionary = {}
 static var _last_collation_full := false
 
 
+## Register one undoable action, optionally merging it with the last one.
+##
+## `absolute_redo` is for commands that step rather than set: rotate by fifteen
+## degrees, nudge by one grid square. Godot's MERGE_ENDS keeps the first action's
+## undo and the last action's do, which is only right when that last do names the
+## final result. A third quick rotate would otherwise redo fifteen degrees where
+## undo had removed forty-five. When it is on, the method runs first and the
+## action's do method is a snapshot of the result instead of the step.
 static func commit(
 	undo_redo: EditorUndoRedoManager,
 	root: Node,
@@ -22,7 +30,8 @@ static func commit(
 	args: Array = [],
 	full_state: bool = false,
 	history_cb: Callable = Callable(),
-	collation_tag: String = ""
+	collation_tag: String = "",
+	absolute_redo: bool = false
 ) -> void:
 	if not root or method_name == "" or not root.has_method(method_name):
 		return
@@ -62,7 +71,51 @@ static func commit(
 		state = root.capture_full_state() if full_state else root.capture_state()
 
 	# merge_mode: 0 = MERGE_DISABLE, 1 = MERGE_ENDS (merges consecutive same-name actions)
-	var merge_mode := 1 if can_collate else 0
+	register_action(
+		undo_redo,
+		root,
+		action_name,
+		1 if can_collate else 0,
+		method_name,
+		args,
+		state,
+		full_state,
+		absolute_redo
+	)
+
+	_update_collation(collation_tag, can_collate, full_state, now, state)
+	_fire_history_cb(history_cb, action_name, can_collate)
+
+
+## The half of `commit()` that talks to the undo manager.
+##
+## Its own function so it can be driven against a stand-in: an
+## `EditorUndoRedoManager` cannot be constructed outside the editor, and this is
+## the part where getting the do operation wrong is invisible until a redo.
+static func register_action(
+	undo_redo,
+	root: Node,
+	action_name: String,
+	merge_mode: int,
+	method_name: String,
+	args: Array,
+	state: Dictionary,
+	full_state: bool = false,
+	absolute_redo: bool = false
+) -> void:
+	var restore_name := "restore_full_state" if full_state else "restore_state"
+
+	if absolute_redo:
+		# Run it here, then register the result rather than the step, and commit
+		# without executing so the work is not done twice.
+		root.callv(method_name, args)
+		var after: Dictionary = root.capture_full_state() if full_state else root.capture_state()
+		undo_redo.create_action(action_name, merge_mode, null, false)
+		undo_redo.add_do_method(root, restore_name, after)
+		undo_redo.add_undo_method(root, restore_name, state)
+		undo_redo.commit_action(false)
+		return
+
 	undo_redo.create_action(action_name, merge_mode, null, false)
 	match args.size():
 		0:
@@ -77,11 +130,8 @@ static func commit(
 			undo_redo.add_do_method(root, method_name, args[0], args[1], args[2], args[3])
 		5:
 			undo_redo.add_do_method(root, method_name, args[0], args[1], args[2], args[3], args[4])
-	undo_redo.add_undo_method(root, "restore_full_state" if full_state else "restore_state", state)
+	undo_redo.add_undo_method(root, restore_name, state)
 	undo_redo.commit_action()
-
-	_update_collation(collation_tag, can_collate, full_state, now, state)
-	_fire_history_cb(history_cb, action_name, can_collate)
 
 
 ## Update collation tracking after a commit.

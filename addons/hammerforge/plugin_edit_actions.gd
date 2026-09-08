@@ -149,6 +149,22 @@ static func collect_managed_targets(plugin: Object, root: Node) -> Dictionary:
 	return {"brush_ids": brush_ids, "entity_paths": entity_paths}
 
 
+## A collation key that changes whenever the next press would mean something
+## different. Two commands only merge into one undo entry when they are the same
+## command, on the same objects, going the same way.
+static func collation_tag(
+	action: String, brush_ids: Array, entity_paths: Array, inputs: Array
+) -> String:
+	var parts := PackedStringArray([action])
+	for brush_id in brush_ids:
+		parts.append(str(brush_id))
+	for entity_path in entity_paths:
+		parts.append(str(entity_path))
+	for value in inputs:
+		parts.append(str(value))
+	return "|".join(parts)
+
+
 static func nudge_selected(plugin: Object, root: Node, direction: Vector3) -> bool:
 	var step = root.grid_snap if root.grid_snap > 0.0 else 1.0
 	var targets := collect_managed_targets(plugin, root)
@@ -165,7 +181,8 @@ static func nudge_selected(plugin: Object, root: Node, direction: Vector3) -> bo
 		[brush_ids, entity_paths, offset],
 		false,
 		Callable(plugin, "_record_history"),
-		"nudge"
+		collation_tag("nudge", brush_ids, entity_paths, [direction, step]),
+		true
 	)
 	return true
 
@@ -555,7 +572,8 @@ static func rotate_selected(plugin: Object, root: Node, direction: int) -> bool:
 		[brush_ids, entity_paths, axis_index, angle_degrees, pivot],
 		false,
 		Callable(plugin, "_record_history"),
-		"rotate"
+		collation_tag("rotate", brush_ids, entity_paths, [axis_index, signf(angle_degrees)]),
+		true
 	)
 	return true
 

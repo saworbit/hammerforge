@@ -35,15 +35,20 @@ static func paint_brush_with_undo(plugin: Object, root: Node, brush: Node, mat: 
 	if brush_id != "":
 		method_name = "apply_material_to_brush_by_id"
 		args = [brush_id, mat]
-	HFUndoHelper.commit(
-		plugin._get_undo_redo(),
-		root,
-		"Paint Brush",
-		method_name,
-		args,
-		false,
-		Callable(plugin, "_record_history"),
-		"paint_brush"
+	(
+		HFUndoHelper
+		. commit(
+			plugin._get_undo_redo(),
+			root,
+			"Paint Brush",
+			method_name,
+			args,
+			false,
+			Callable(plugin, "_record_history"),
+			# Named after the brush. Painting a run of brushes quickly used to merge
+			# them all into one entry whose redo only repainted the last one.
+			"paint_brush|%s" % (brush_id if brush_id != "" else str(brush.get_instance_id()))
+		)
 	)
 
 
