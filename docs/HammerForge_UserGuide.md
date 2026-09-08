@@ -195,6 +195,57 @@ Press **M** to activate the Measure tool. It supports persistent multi-ruler mea
 - Press **Escape** to clear all rulers.
 - The HUD shows ruler count, distance of the last ruler, and alignment status.
 
+## Cutting: Clip and Carve
+
+**Clip** splits one brush into two. **Carve** cuts one brush out of every brush it
+overlaps. Both work on the real geometry, so a cylinder, a polygon-tool brush, a
+merged brush and a rotated anything are all fair game.
+
+| Key | Action |
+|-----|--------|
+| `Shift+X` | Clip the selected brush |
+| `Alt+Shift+X` | Clip along the selected face's plane |
+| `Ctrl+Shift+R` | Carve |
+
+### Clipping along an angle
+
+The quickest way to an angled cut is **Clip to Face Plane**. Enter Face Select,
+click the face whose angle you want, select the brush or brushes to cut, and press
+`Alt+Shift+X`. Everything selected is cut along that face's plane.
+
+That face can belong to any brush, including one you drew purely as a guide and
+delete afterwards — draw a box, rotate it to the angle you want, and use one of its
+faces as a straightedge.
+
+### What you get back
+
+Half a box is still a box: it keeps its resize handles and behaves exactly as it
+did before. An angled piece cannot be described by a box, so it comes back as a
+**Custom** brush — still fully editable, but sized by its vertices rather than by
+width, height and depth.
+
+Both pieces keep the original's material, its per-face textures, its operation, its
+visgroups, its group and its entity class. If the brush was a named entity with I/O
+wiring, the first piece keeps the name and the wiring, because entity names have to
+stay unique.
+
+The cyan preview shows the two real pieces before you commit, so an angled cut looks
+like what you are about to get.
+
+### Carving
+
+Carve removes the carver's volume from everything it overlaps and then consumes the
+carver. The pieces left behind are whatever survives outside the carver, so a corner
+cut leaves a few pieces and a slot driven right through leaves two.
+
+A carver that would swallow a brush entirely leaves that brush alone rather than
+deleting it — nothing vanishes without a preview showing it first.
+
+> Hollow (`Ctrl+H`) is the one cutting-adjacent tool that still needs an unrotated
+> box. It builds walls by insetting every face inward off the brush's width, height
+> and depth, which only describe the brush while it is unrotated. Use **Reset
+> Rotation** (`Alt+R`) first.
+
 ## Rotating and Mirroring
 
 Select anything — brushes, entities, or both — and turn it.
@@ -224,15 +275,17 @@ brush turns underneath them. Turn it off if you want the texture to ride along.
 
 ### After you rotate
 
-**Hollow, Clip and Carve will refuse a rotated brush.** They measure a brush's
-extent straight off its size along the world axes, which is only true while it is
-unrotated — running them anyway would cut in the wrong place. They will tell you
-so, and **Reset Rotation** (`Alt+R`) is the way back.
+Clip and Carve both handle rotation — they cut the real geometry wherever it is.
+
+**Hollow is the one that will refuse a rotated brush.** It measures a brush's
+extent straight off its size along the world axes, which is only true while the
+brush is unrotated, and hollowing anyway would build the walls in the wrong place.
+It will tell you so, and **Reset Rotation** (`Alt+R`) is the way back.
 
 Reset Rotation does not move your geometry. If you turned a brush by exactly 90°,
 it folds that quarter turn into the brush's dimensions instead of snapping the
 brush back to its old footprint, so the brush stays exactly where it looks like it
-is and Hollow and Clip work again.
+is and Hollow works again.
 
 ### Flip
 

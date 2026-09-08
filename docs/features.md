@@ -20,8 +20,9 @@ Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Su
 - **15 shapes** -- box, cylinder, sphere, cone, wedge, pyramid, prisms, ellipsoid, capsule, torus, and platonic solids
 - **Extrude Up/Down** (E / U or Shift+E / J) -- click any face and drag to extend
 - **Hollow** (Ctrl+H) -- convert a solid brush to a room with configurable wall thickness
-- **Clip** (Shift+X) -- split a brush along an axis-aligned plane
-- **Carve** (Ctrl+Shift+R) -- boolean-subtract one brush from all intersecting brushes
+- **Clip** (Shift+X) -- split a brush along a plane. Any convex brush, at any rotation; a piece that is still a box stays a box
+- **Clip to Face Plane** (Alt+Shift+X) -- cut along the plane of a selected face, which is the cheapest route to an angled wall or a chamfered corner
+- **Carve** (Ctrl+Shift+R) -- boolean-subtract one brush from all intersecting brushes, using the carver's real face planes, so the carver can be rotated or a cylinder
 - **Merge** (Ctrl+Shift+M) -- combine 2+ selected brushes into one, preserving per-brush materials and full transforms (rotation/scale)
 - **Rotate** (R / Shift+R) -- turn the selection by a configurable step about the locked axis, or Y. Texture Lock keeps the texture pinned in world space
 - **Flip** (Shift+M) -- mirror the selection across the locked axis, or X. Winding is preserved, so a mirrored brush never bakes inside out
@@ -284,7 +285,8 @@ plugin.gd            EditorPlugin lifecycle, composition, discovery, and undo wi
        ├─ HFValidationSystem Level integrity checks, bake issue detection
        ├─ HFGridSystem      Grid rendering and follow mode
        ├─ HFVisgroupSystem  Named visibility groups + brush grouping
-       ├─ HFCarveSystem     Boolean-subtract carve (progressive-remainder slicing)
+       ├─ HFCarveSystem     Boolean-subtract carve (progressive remainder over the carver's face planes)
+       ├─ HFConvexClip      Plane/convex-solid split shared by clip and carve; winding-safe cut surfaces
        ├─ HFTransformSystem Rotate, flip and reset rotation, with winding-safe mirroring and stable pivots
        ├─ HFIOVisualizer    Entity I/O connection lines in viewport (curved, color-coded, highlight pulse)
        ├─ HFIOPresets       Reusable I/O connection presets (built-in + user-saved)
@@ -347,6 +349,7 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 | X / Y / Z * | Axis lock | | A | Align mode (measure) |
 | R * | Rotate CCW | | Shift+R * | Rotate CW |
 | Shift+M * | Flip selection | | Alt+R * | Reset rotation |
+| Alt+Shift+X * | Clip to Face Plane | | | |
 
 R appears twice on purpose. Paint mode claims it for Rect; everywhere else it
 rotates. The viewport dispatches the paint tools first and skips the whole
@@ -358,7 +361,7 @@ transform group while paint mode is on, so only one of the two is ever live.
 
 ## Testing
 
-The verified Godot 4.7 suite on September 7, 2026 contains **2,486 tests across 133 scripts**: **2,479 passing tests**, seven intentional no-assert safety tests, and **10,436 assertions**. All checks run on every push and pull request via GitHub Actions.
+The verified Godot 4.7 suite on September 8, 2026 contains **2,582 tests across 137 scripts**: **2,575 passing tests**, seven intentional no-assert safety tests, and **10,934 assertions**. All checks run on every push and pull request via GitHub Actions.
 
 ```bash
 # Run all tests headless

@@ -112,7 +112,7 @@ See [DEVELOPMENT.md](https://github.com/saworbit/hammerforge/blob/main/DEVELOPME
 
 ### Brush Operations (`HFBrushSystem` extended)
 - **Hollow** (Ctrl+H): creates 6 wall brushes, deletes original. Configurable wall thickness.
-- **Clip** (Shift+X): splits a brush along an axis-aligned plane. Preserves material, entity class, visgroups, group ID.
+- **Clip** (Shift+X): splits a brush along a plane through `HFConvexClip`. Any convex brush at any rotation; a piece that is still an axis-aligned box is emitted as a BOX so it keeps its handles. **Clip to Face Plane** (Alt+Shift+X) cuts along a selected face's plane. Preserves material, entity class, visgroups, group ID.
 - **Merge** (Ctrl+Shift+M): combines 2+ selected brushes into a single brush. Applies full transform (rotation/scale) to face vertices, preserves per-brush materials via per-face material indices.
 - **Rotate** (R / Shift+R) and **Flip** (Shift+M): `HFTransformSystem` turns and mirrors brushes and entities. Mirroring folds the reflection through a local axis so the basis keeps a positive determinant and geometry never bakes inside out. **Reset Rotation** (Alt+R) clears a rotation, folding a quarter turn into `size` so nothing moves — it is the route back to hollow, clip and carve, which all require an unrotated box.
 - **Tie/Untie**: tag brushes as brush entity classes (`func_detail`, `func_wall`, `trigger_once`, `trigger_multiple`). Tagged brushes get color-coded overlays and may be excluded from structural bake.

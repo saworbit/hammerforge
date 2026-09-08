@@ -184,6 +184,12 @@ func _build_brush_section() -> void:
 	_add_group_label(section, "Modify")
 	_add_tool_button(section, "Hol", "Hollow (Ctrl+H)", "hollow")
 	_add_tool_button(section, "Clip", "Clip (Shift+X)", "clip")
+	_add_tool_button(
+		section,
+		"Clip\u2220",
+		"Clip to Face Plane (Alt+Shift+X) — cut along the selected face's plane",
+		"clip_to_face"
+	)
 	_add_tool_button(section, "Carve", "Carve (Ctrl+Shift+R)", "carve")
 	_add_tool_button(section, "Mrg", "Merge Brushes (Ctrl+Shift+M)", "merge")
 	_add_sep(section)

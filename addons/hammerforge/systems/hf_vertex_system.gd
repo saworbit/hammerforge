@@ -7,6 +7,7 @@ extends RefCounted
 ## convexity validation, and undo/redo integration.
 
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
+const HFConvexClip = preload("../hf_convex_clip.gd")
 
 enum VertexSubMode { VERTEX, EDGE }
 
@@ -283,7 +284,7 @@ func _faces_from_convex_hull(hull_verts: PackedVector3Array, original_faces: Arr
 					if abs(normal.dot(hull_verts[m]) - d) < 0.02:
 						coplanar.append(hull_verts[m])
 				if coplanar.size() >= 3:
-					var sorted_verts := _sort_coplanar_verts(coplanar, normal)
+					var sorted_verts := HFConvexClip.sort_coplanar_cw(coplanar, normal)
 					if sorted_verts.size() >= 3:
 						plane_groups.append({"normal": normal, "verts": sorted_verts})
 						found_planes.append({"normal": normal, "d": d})
@@ -313,31 +314,6 @@ func _faces_from_convex_hull(hull_verts: PackedVector3Array, original_faces: Arr
 		face.ensure_geometry()
 		result.append(face)
 	return result
-
-
-## Sort coplanar vertices in winding order around their centroid.
-func _sort_coplanar_verts(verts: PackedVector3Array, normal: Vector3) -> PackedVector3Array:
-	if verts.size() < 3:
-		return verts
-	var centroid := Vector3.ZERO
-	for v in verts:
-		centroid += v
-	centroid /= float(verts.size())
-	# Build a local 2D basis on the plane
-	var arbitrary := Vector3.UP if abs(normal.dot(Vector3.UP)) < 0.99 else Vector3.RIGHT
-	var u: Vector3 = normal.cross(arbitrary).normalized()
-	var v_axis: Vector3 = normal.cross(u).normalized()
-	# Project to 2D and sort by angle
-	var angles: Array = []
-	for i in range(verts.size()):
-		var rel: Vector3 = verts[i] - centroid
-		var angle: float = atan2(rel.dot(v_axis), rel.dot(u))
-		angles.append({"idx": i, "angle": angle})
-	angles.sort_custom(func(a, b): return a["angle"] < b["angle"])
-	var sorted := PackedVector3Array()
-	for entry in angles:
-		sorted.append(verts[entry["idx"]])
-	return sorted
 
 
 ## Find the closest vertex to screen position. Returns {brush_id, vertex_index, distance}

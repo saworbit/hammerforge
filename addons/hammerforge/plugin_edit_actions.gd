@@ -316,6 +316,57 @@ static func move_selected_vertical(
 	return true
 
 
+## Cut every selected brush along the plane of the currently selected face.
+##
+## With rotation in the toolbox this is the cheapest route to an angled cut:
+## pick the face whose plane you want, select what to cut, and clip.
+static func clip_to_face_plane_selected(plugin: Object, root: Node) -> bool:
+	if not root:
+		return false
+	var face_selection: Dictionary = root.face_selection
+	if face_selection.is_empty():
+		root.user_message.emit(
+			"Clip to Face: select a face to cut along first — enter Face Select and click one", 1
+		)
+		return false
+	var source_id := ""
+	var face_index := -1
+	for key in face_selection:
+		var indices: Array = face_selection.get(key, [])
+		if indices.is_empty():
+			continue
+		var source = root.find_brush_by_id(str(key))
+		if source == null:
+			continue
+		source_id = str(key)
+		face_index = int(indices[0])
+		break
+	if source_id == "" or face_index < 0:
+		root.user_message.emit("Clip to Face: no usable face is selected", 1)
+		return false
+
+	var targets := collect_managed_targets(plugin, root)
+	var brush_ids: Array = targets["brush_ids"]
+	if brush_ids.is_empty():
+		root.user_message.emit("Clip to Face: select the brushes to cut", 1)
+		return false
+
+	var cut_any := false
+	for brush_id in brush_ids:
+		var check: HFOpResult = root.brush_system.clip_brush_to_face_plane(
+			str(brush_id), source_id, face_index
+		)
+		if check.ok:
+			cut_any = true
+	if not cut_any:
+		root.user_message.emit(
+			"Clip to Face: that plane does not pass through any selected brush", 1
+		)
+	else:
+		plugin._record_history("Clip to Face Plane")
+	return cut_any
+
+
 static func clip_selected(plugin: Object, root: Node) -> bool:
 	var nodes = plugin._current_selection_nodes()
 	if nodes.is_empty():

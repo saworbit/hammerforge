@@ -388,74 +388,94 @@ func _record_user_messages() -> Array:
 	return seen
 
 
-func test_carve_rejects_non_box_carver():
-	var carver = _make_cylinder_brush(Vector3.ZERO, Vector3(32, 32, 32), "cyl_carver")
-	var target = _make_box_brush(Vector3(16, 0, 0), Vector3(32, 32, 32), "box_target")
-	var child_count_before = draft_node.get_child_count()
+func test_carve_accepts_a_non_box_carver():
+	# Carve used to rebuild every target as axis-aligned boxes and so refused any
+	# carver that was not one. It now cuts with the carver's real face planes.
+	_make_cylinder_brush(Vector3.ZERO, Vector3(32, 32, 32), "cyl_carver")
+	_make_box_brush(Vector3(16, 0, 0), Vector3(32, 32, 32), "box_target")
 
-	var warnings := _record_user_messages()
 	var result = HFCarveSystem.new(root).carve_with_brush("cyl_carver")
 
-	assert_false(result.ok, "A cylinder carver has no axis-aligned volume to cut with")
-	assert_eq(warnings.size(), 1, "A refused carve has to say so, not look like a no-op")
-	assert_true(is_instance_valid(carver), "The carver must survive a refused carve")
-	assert_true(is_instance_valid(target), "The target must survive a refused carve")
-	assert_eq(draft_node.get_child_count(), child_count_before, "Nothing should be replaced")
+	assert_true(result.ok, "A cylinder carver should cut: %s" % result.message)
+	assert_null(
+		root.brush_system.find_brush_by_id("cyl_carver"), "The carver is consumed by a carve"
+	)
+	assert_null(
+		root.brush_system.find_brush_by_id("box_target"), "The target is replaced by its pieces"
+	)
 
 
-func test_carve_rejects_rotated_carver():
+func test_carve_accepts_a_rotated_carver():
 	var carver = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "rot_carver")
 	carver.rotation = Vector3(0, deg_to_rad(45.0), 0)
-	var target = _make_box_brush(Vector3(16, 0, 0), Vector3(32, 32, 32), "rot_target")
-	var child_count_before = draft_node.get_child_count()
+	carver.rebuild_preview()
+	_make_box_brush(Vector3(16, 0, 0), Vector3(32, 32, 32), "rot_target")
 
 	var result = HFCarveSystem.new(root).carve_with_brush("rot_carver")
 
-	assert_false(result.ok, "A rotated carver's world bounds are not its size")
-	assert_true(is_instance_valid(carver), "The carver must survive a refused carve")
-	assert_true(is_instance_valid(target), "The target must survive a refused carve")
-	assert_eq(draft_node.get_child_count(), child_count_before, "Nothing should be replaced")
+	assert_true(result.ok, "A turned carver should cut: %s" % result.message)
+	assert_null(
+		root.brush_system.find_brush_by_id("rot_target"), "The target is replaced by its pieces"
+	)
 
 
-func test_carve_rejects_non_box_target():
-	var carver = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "box_carver")
-	var target = _make_cylinder_brush(Vector3(16, 0, 0), Vector3(32, 32, 32), "cyl_target")
-	var child_count_before = draft_node.get_child_count()
+func test_carve_accepts_a_non_box_target():
+	_make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "box_carver")
+	_make_cylinder_brush(Vector3(16, 0, 0), Vector3(32, 32, 32), "cyl_target")
 
-	var warnings := _record_user_messages()
 	var result = HFCarveSystem.new(root).carve_with_brush("box_carver")
 
-	assert_false(result.ok, "Carve cannot rebuild a cylinder as boxes")
-	assert_eq(warnings.size(), 1, "A refused carve has to say so, not look like a no-op")
-	assert_true(is_instance_valid(target), "The cylinder must not be deleted")
-	assert_true(is_instance_valid(carver), "The carver must survive a refused carve")
-	assert_eq(draft_node.get_child_count(), child_count_before, "Nothing should be replaced")
+	assert_true(result.ok, "A cylinder target should be carved: %s" % result.message)
+	assert_null(
+		root.brush_system.find_brush_by_id("cyl_target"), "The cylinder is replaced by its pieces"
+	)
+	assert_null(root.brush_system.find_brush_by_id("box_carver"), "The carver is consumed")
 
 
-func test_carve_rejects_rotated_target():
+func test_carve_accepts_a_rotated_target():
 	var carver = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "rt_carver")
 	var target = _make_box_brush(Vector3(16, 0, 0), Vector3(32, 32, 32), "rt_target")
 	target.rotation = Vector3(0, deg_to_rad(45.0), 0)
-	var child_count_before = draft_node.get_child_count()
+	target.rebuild_preview()
 
 	var result = HFCarveSystem.new(root).carve_with_brush("rt_carver")
 
-	assert_false(result.ok, "Carve would replace a rotated box with world-aligned pieces")
-	assert_true(is_instance_valid(target), "The rotated box must not be deleted")
-	assert_eq(draft_node.get_child_count(), child_count_before, "Nothing should be replaced")
+	assert_true(result.ok, "A turned target should be carved: %s" % result.message)
+	assert_null(
+		root.brush_system.find_brush_by_id("rt_target"), "The rotated box is replaced by its pieces"
+	)
 
 
-func test_carve_refuses_before_carving_any_of_a_mixed_target_set():
-	var carver = _make_box_brush(Vector3.ZERO, Vector3(64, 32, 32), "mixed_carver")
-	var plain = _make_box_brush(Vector3(24, 0, 0), Vector3(32, 32, 32), "mixed_box")
-	var awkward = _make_cylinder_brush(Vector3(-24, 0, 0), Vector3(32, 32, 32), "mixed_cyl")
-	var child_count_before = draft_node.get_child_count()
+func test_carve_cuts_every_target_in_a_mixed_set():
+	# The old rule refused the whole carve if any target was not an unrotated box,
+	# so that a partial cut could not leave the user guessing which brushes moved.
+	# Every target is cuttable now, so the whole set is carved instead.
+	_make_box_brush(Vector3.ZERO, Vector3(64, 32, 32), "mixed_carver")
+	_make_box_brush(Vector3(24, 0, 0), Vector3(32, 32, 32), "mixed_box")
+	_make_cylinder_brush(Vector3(-24, 0, 0), Vector3(32, 32, 32), "mixed_cyl")
 
 	var result = HFCarveSystem.new(root).carve_with_brush("mixed_carver")
 
-	assert_false(result.ok, "One unsuitable target refuses the whole carve")
-	assert_true(is_instance_valid(plain), "The box target must not be half carved")
-	assert_true(is_instance_valid(awkward), "The cylinder target must not be deleted")
+	assert_true(result.ok, "A mixed target set should carve: %s" % result.message)
+	assert_null(root.brush_system.find_brush_by_id("mixed_box"), "The box target is carved")
+	assert_null(
+		root.brush_system.find_brush_by_id("mixed_cyl"), "The cylinder target is carved too"
+	)
+	assert_null(root.brush_system.find_brush_by_id("mixed_carver"), "The carver is consumed")
+
+
+func test_carve_still_refuses_when_nothing_overlaps():
+	var carver = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "lonely_carver")
+	var target = _make_box_brush(Vector3(500, 0, 0), Vector3(32, 32, 32), "far_target")
+	var child_count_before = draft_node.get_child_count()
+
+	var warnings := _record_user_messages()
+	var result = HFCarveSystem.new(root).carve_with_brush("lonely_carver")
+
+	assert_false(result.ok, "A carver touching nothing has nothing to cut")
+	assert_eq(warnings.size(), 1, "A refused carve has to say so, not look like a no-op")
+	assert_true(is_instance_valid(carver), "The carver must survive a refused carve")
+	assert_true(is_instance_valid(target), "The target must survive a refused carve")
 	assert_eq(draft_node.get_child_count(), child_count_before, "Nothing should be replaced")
 
 
@@ -1143,5 +1163,52 @@ class _FakeBrushSystem:
 		b.size = info.get("size", Vector3(1, 1, 1))
 		b.brush_id = info.get("brush_id", _next_brush_id())
 		_draft_node.add_child(b)
-		b.global_position = info.get("center", Vector3.ZERO)
+		if info.has("transform"):
+			b.global_transform = info["transform"]
+		else:
+			b.global_position = info.get("center", Vector3.ZERO)
+		if info.has("faces"):
+			b.apply_serialized_faces(info.get("faces", []))
 		return b
+
+	# Carve reads geometry through the brush system now, so the double has to
+	# answer the same questions the real one does.
+	func _ensure_faces(draft) -> void:
+		if draft and draft.get_faces().is_empty():
+			draft.rebuild_preview()
+
+	func world_bounds_of(draft) -> AABB:
+		_ensure_faces(draft)
+		var xform: Transform3D = draft.global_transform
+		var bounds := AABB()
+		var seeded := false
+		for face in draft.get_faces():
+			if face == null:
+				continue
+			for vertex in face.local_verts:
+				var world_point: Vector3 = xform * vertex
+				if seeded:
+					bounds = bounds.expand(world_point)
+				else:
+					bounds = AABB(world_point, Vector3.ZERO)
+					seeded = true
+		if seeded:
+			return bounds
+		var half: Vector3 = draft.size * 0.5
+		return AABB(draft.global_position - half, draft.size)
+
+	func _piece_info_from_faces(draft, faces: Array) -> Dictionary:
+		var xform: Transform3D = draft.global_transform
+		var bounds := HFBrushSystem._local_bounds_of_faces(faces)
+		var described: Dictionary = HFConvexClip.is_axis_aligned_box(faces)
+		var centre: Vector3 = (
+			described["center"] if not described.is_empty() else bounds.get_center()
+		)
+		return {
+			"shape": 0 if not described.is_empty() else 15,
+			"size": described["size"] if not described.is_empty() else bounds.size,
+			"operation": draft.operation,
+			"brush_id": _next_brush_id(),
+			"transform": Transform3D(xform.basis, xform * centre),
+			"faces": HFBrushSystem._serialize_shifted_faces(faces, -centre),
+		}

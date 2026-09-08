@@ -182,30 +182,91 @@ func test_clip_on_edge_is_rejected():
 	assert_not_null(sys.find_brush_by_id("brush_1"), "Clip on brush edge should be rejected")
 
 
-func test_clip_rejects_non_box_shape():
-	# Clip builds two axis-aligned boxes. A wedge must not be swapped for them.
+func test_clip_splits_a_non_box_shape():
+	# Clip used to rebuild the brush as two axis-aligned boxes and so refused
+	# anything else. It now splits the real geometry, so a wedge cuts.
 	var b = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
 	b.shape = root.BrushShape.WEDGE
+	b.rebuild_preview()
 	var result = sys.clip_brush_by_id("brush_1", 1, 0.0)
-	assert_false(result.ok, "Clip should reject a wedge")
-	assert_true(is_instance_valid(b), "The wedge must survive a rejected clip")
-	assert_eq(root.draft_brushes_node.get_child_count(), 1, "No clip pieces should be created")
+	assert_true(result.ok, "Clip should split a wedge: %s" % result.message)
+	assert_eq(root.draft_brushes_node.get_child_count(), 2, "A wedge clips into two pieces")
 
 
-func test_can_clip_brush_rejects_non_box_shape():
+func test_can_clip_brush_accepts_a_non_box_shape():
 	var b = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
 	b.shape = root.BrushShape.CAPSULE
-	assert_false(sys.can_clip_brush("brush_1", 1, 0.0).ok, "Pre-check should reject a capsule")
+	b.rebuild_preview()
+	assert_true(sys.can_clip_brush("brush_1", 1, 0.0).ok, "Pre-check should accept a capsule")
 
 
-func test_clip_rejects_rotated_box():
-	# The split plane is computed in world space, so a turned box would come back
-	# as two unrotated pieces that do not match what the user had.
+func test_clip_splits_a_rotated_box():
+	# The plane is taken into the brush's own frame, so a turned box cuts along the
+	# world plane the user asked for and both pieces keep the rotation.
 	var b = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
 	b.rotation_degrees = Vector3(0, 30, 0)
+	b.rebuild_preview()
 	var result = sys.clip_brush_by_id("brush_1", 1, 0.0)
-	assert_false(result.ok, "Clip should reject a rotated box")
-	assert_true(is_instance_valid(b), "The rotated box must survive a rejected clip")
+	assert_true(result.ok, "Clip should split a rotated box: %s" % result.message)
+	assert_eq(root.draft_brushes_node.get_child_count(), 2)
+	for child in root.draft_brushes_node.get_children():
+		assert_almost_eq(
+			child.rotation_degrees.y, 30.0, 0.01, "each piece keeps the original rotation"
+		)
+
+
+func test_clip_rejects_a_plane_that_misses_the_brush():
+	var b = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
+	var result = sys.clip_brush_by_plane("brush_1", Plane(Vector3.UP, 500.0))
+	assert_false(result.ok, "a plane clear of the brush cuts nothing")
+	assert_true(is_instance_valid(b), "the brush must survive a rejected clip")
+	assert_eq(root.draft_brushes_node.get_child_count(), 1)
+
+
+func test_clip_by_plane_cuts_on_a_diagonal():
+	_make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
+	var result = sys.clip_brush_by_plane("brush_1", Plane(Vector3(1, 1, 0).normalized(), 0.0))
+	assert_true(result.ok, "a diagonal plane should cut: %s" % result.message)
+	assert_eq(root.draft_brushes_node.get_child_count(), 2)
+
+
+func test_clip_to_face_plane_cuts_along_the_chosen_face():
+	var target = _make_brush(Vector3.ZERO, Vector3(64, 64, 64), "target")
+	var reference = _make_brush(Vector3(8, 0, 0), Vector3(32, 32, 32), "ref")
+	reference.rotation_degrees = Vector3(0, 0, 45)
+	reference.rebuild_preview()
+	var result = sys.clip_brush_to_face_plane("target", "ref", 0)
+	assert_true(result.ok, "clipping along a face plane should cut: %s" % result.message)
+	assert_null(sys.find_brush_by_id("target"), "the original target is replaced")
+	assert_not_null(sys.find_brush_by_id("ref"), "the reference brush is untouched")
+
+
+func test_clip_to_face_plane_rejects_a_missing_face():
+	_make_brush(Vector3.ZERO, Vector3(64, 64, 64), "target")
+	_make_brush(Vector3(8, 0, 0), Vector3(32, 32, 32), "ref")
+	var result = sys.clip_brush_to_face_plane("target", "ref", 99)
+	assert_false(result.ok)
+	assert_ne(result.fix_hint, "", "a refusal must say what to do instead")
+
+
+func test_clip_keeps_an_axis_aligned_box_a_box():
+	_make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
+	assert_true(sys.clip_brush_by_id("brush_1", 1, 0.0).ok)
+	for child in root.draft_brushes_node.get_children():
+		assert_eq(
+			child.shape,
+			root.BrushShape.BOX,
+			"half a box is still a box, so it must keep its resize handles"
+		)
+
+
+func test_clip_makes_a_diagonal_piece_custom():
+	_make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
+	assert_true(sys.clip_brush_by_plane("brush_1", Plane(Vector3(1, 1, 0).normalized(), 0.0)).ok)
+	for child in root.draft_brushes_node.get_children():
+		assert_eq(
+			child.shape, root.BrushShape.CUSTOM, "an angled piece is no longer a box primitive"
+		)
 
 
 func test_clip_empty_id_noop():

@@ -1314,6 +1314,10 @@ func _clip_selected(root: Node) -> bool:
 	return HFPluginEditActions.clip_selected(self, root)
 
 
+func _clip_to_face_plane_selected(root: Node) -> bool:
+	return HFPluginEditActions.clip_to_face_plane_selected(self, root)
+
+
 func _carve_selected(root: Node) -> bool:
 	return HFPluginEditActions.carve_selected(self, root)
 

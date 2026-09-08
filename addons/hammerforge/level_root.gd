@@ -1218,6 +1218,16 @@ func move_brushes_to_ceiling(brush_ids: Array) -> void:
 	brush_system.move_brushes_to_ceiling(brush_ids)
 
 
+func clip_brush_by_plane(brush_id: String, plane: Plane) -> HFOpResult:
+	return brush_system.clip_brush_by_plane(brush_id, plane)
+
+
+func clip_brush_to_face_plane(
+	brush_id: String, source_brush_id: String, face_index: int
+) -> HFOpResult:
+	return brush_system.clip_brush_to_face_plane(brush_id, source_brush_id, face_index)
+
+
 func clip_brush_by_id(brush_id: String, axis: int, split_pos: float) -> HFOpResult:
 	return brush_system.clip_brush_by_id(brush_id, axis, split_pos)
 

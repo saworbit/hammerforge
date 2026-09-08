@@ -320,6 +320,11 @@ but it means hollow, clip, and carve will start refusing work for users who
 rotate. Reset Rotation is the answer, and it is surfaced everywhere the
 transform commands are.
 
+*Followed up:* the precision-cutting wave
+(`2026-09-08-precision-cutting-design.md`) removed that cost for clip and carve by
+teaching both to split real geometry along an arbitrary plane. Hollow insets every
+face inward off `size`, which is a different algorithm, so it keeps the guard.
+
 ## Verification
 
 Yellow, red, and purple passes over the finished work:

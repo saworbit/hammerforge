@@ -268,6 +268,20 @@ It writes one PNG per tab under `user://console_preview/`.
 - Switch back to **Linear** and confirm the offset row returns and the old behaviour is unchanged.
 - Confirm the Radial and Grid rows only appear for their own layout.
 
+### 7c-4. Precision Cutting (Clip and Carve on Any Brush)
+- Draw a box, rotate it 30 degrees (`R`), then press **Shift+X**. Confirm the cyan preview shows two turned pieces, and that committing leaves two brushes that both keep the rotation.
+- Draw a cylinder and clip it. Confirm the preview outlines the real curved halves, not two boxes, and that the committed pieces look right from every angle.
+- Clip an ordinary axis-aligned box. Confirm both pieces still have resize handles (they are still boxes).
+- Clip a box on a diagonal via Clip to Face Plane. Confirm each piece reports as Custom in the dock and has no box resize handles.
+- **Bake after each of the above.** Confirm no piece renders inside out — look at the cut surface in particular, from both sides.
+- Enter Face Select, click an angled face on a rotated brush, select a different brush, and press **Alt+Shift+X**. Confirm the second brush is cut along the first one's face plane and the reference brush is untouched.
+- With no face selected, press **Alt+Shift+X**. Confirm a message asks for a face rather than cutting anything.
+- Carve with a rotated carver, then with a cylinder carver. Confirm the green preview outlines the real resulting pieces and that the committed result matches it.
+- Carve a brush that has already been clipped on a diagonal. Confirm it cuts and bakes correctly.
+- Position a carver so it fully contains a small brush and carve. Confirm the small brush is left alone rather than disappearing.
+- Undo each cut with Ctrl+Z and confirm the original brush returns whole, with its material and per-face textures intact.
+- Select a brush with per-face textures, clip it, and confirm each piece kept the textures on the faces they were painted on, and that the new cut surface took the nearest face's material.
+
 ### 7d. Face Winding Migration (Old Saves)
 - Open a `.hflevel` file saved before the CW winding fix (April 6, 2026 or earlier).
 - Confirm all brush faces render with textures visible from outside (not inside-out).

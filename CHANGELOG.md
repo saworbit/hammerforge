@@ -5,6 +5,49 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Precision cutting — clip and carve along any plane.** Clip could only split a
+  brush along X, Y or Z, and both clip and carve rebuilt what they touched as
+  axis-aligned boxes, so both refused a cylinder, a polygon-tool brush, a merged
+  brush — and, once the free-transform work above shipped, any brush the user had
+  rotated. Three of the tools a level designer reaches for most were refusing to
+  touch the results of a brand new feature.
+  - **`HFConvexClip`** (`hf_convex_clip.gd`) splits a convex solid along an
+    arbitrary plane and is now the geometry behind both operations. It takes faces
+    and a `Plane` and returns faces, with no reference to the scene, so both
+    callers and their tests work without a level.
+  - **Clip** takes any plane, on any convex brush, at any rotation. The plane is
+    taken into the brush's own frame, so both pieces inherit the original
+    transform and rotation is carried rather than handled. A piece that is still
+    an axis-aligned box in that frame is emitted as a `BOX` and keeps its resize
+    handles, so the commonest cut of all behaves exactly as it did.
+  - **Clip to Face Plane** (Alt+Shift+X) cuts along the plane of a selected face.
+    With rotation available this is the cheapest route to an angled wall or a
+    chamfered corner without typing coordinates.
+  - **Carve** runs progressive remainder over the carver's own face planes rather
+    than the six sides of its bounding box, which is the same algorithm it always
+    used, generalised. A rotated carver, a cylinder, or a merged brush all cut now.
+  - **Both previews show the real cut.** The clip and carve previews drew scaled
+    unit boxes, which is a lie for every angled cut; they now run the same split
+    the tools run and outline the actual resulting pieces.
+  - The axis-aligned guard is down to Hollow alone, which insets every face inward
+    off `size` and is a different algorithm.
+- **Cutting coverage** (`tests/test_convex_clip.gd`, `tests/test_carve_tool.gd`,
+  `tests/test_cutting_integration.gd`, `tests/test_cutting_commands.gd`, 96 cases —
+  carve had no dedicated suite at all before this): volume conservation, closure
+  (every edge shared by exactly two faces), bake-level winding proofs each paired
+  with an untouched control, planes that graze a face or pass through a vertex,
+  repeated cuts, coincident carver and target planes, distant origins, and scaled
+  brushes.
+
+### Fixed
+- **Clip to Convex produced entirely inside-out geometry.** `_faces_from_convex_hull()`
+  ordered each rebuilt face counter-clockwise about its outward normal, and
+  HammerForge reads faces clockwise from outside, so every brush repaired by Clip
+  to Convex baked inverted — invisible in the viewport, obvious in a bake. Found by
+  turning this wave's winding check on the one other place in the codebase that
+  orders a ring of coplanar vertices. The duplicate ring sorter is deleted; both
+  callers now go through `HFConvexClip.sort_coplanar_cw()`, whose name states the
+  convention.
 - **Free transform — rotate, flip and array.** HammerForge could not turn a
   brush. Every brush was authored axis-aligned, so a diagonal wall or an angled
   ramp was unreachable except by hand-placing faces with the polygon or path
@@ -23,10 +66,12 @@ The format is based on Keep a Changelog, and this project follows semantic versi
     world vertex lands exactly where the mirror puts it. A shape a mirror maps
     onto itself, like a box, keeps its primitive and its resize handles; one it
     does not, like a wedge, has the mirror baked into its faces.
-  - **Reset Rotation** (Alt+R) clears a rotation and keeps the position. Hollow,
-    Clip and Carve all read world extents straight off `size` and refuse a
-    rotated brush, so this is the way back to them. A quarter turn is folded into
-    the brush size rather than snapped away, so clearing it never moves geometry.
+  - **Reset Rotation** (Alt+R) clears a rotation and keeps the position. Hollow
+    reads world extents straight off `size` and refuses a rotated brush, so this
+    is the way back to it. A quarter turn is folded into the brush size rather
+    than snapped away, so clearing it never moves geometry. (Clip and Carve
+    refused rotated brushes for the same reason until the precision-cutting work
+    below taught them to split real geometry.)
   - **Array layouts**: the Duplicate Array section gains **Radial** (copies
     around an axis, with a "Fill 360°" helper) and **Grid** (a 3D lattice)
     beside the existing linear run. Radial copies compose their transform through
