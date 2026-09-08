@@ -95,15 +95,19 @@ def parse_gut_log(path: str) -> dict:
     return counts
 
 
-def rewrites(c: dict, date: str) -> list:
-    """One (path, pattern, replacement) per number this owns.
+DATE_PATTERN = r"(?P<date>[A-Z][a-z]+ \d{1,2}, \d{4})"
+
+
+def rewrites(c: dict) -> list:
+    """One (path, pattern, template) per number this owns.
 
     Patterns are anchored on the prose around the number rather than on the
     number itself, so a reworded sentence fails loudly here instead of silently
-    leaving a stale figure behind.
+    leaving a stale figure behind. Where a sentence carries a verification date,
+    the pattern captures it as `date` and the template leaves `{date}` unfilled,
+    so the caller decides whether this rewrite is worth restamping.
     """
     common = {
-        "date": date,
         "tests": grouped(c["tests"]),
         "scripts": grouped(c["scripts"]),
         "passing": grouped(c["passing"]),
@@ -121,37 +125,38 @@ def rewrites(c: dict, date: str) -> list:
         ),
         (
             "docs/features.md",
-            r"The verified Godot 4\.7 suite on .+? contains \*\*[\d,]+ tests across "
+            r"The verified Godot 4\.7 suite on " + DATE_PATTERN + r" contains \*\*[\d,]+ tests across "
             r"[\d,]+ scripts\*\*: \*\*[\d,]+ passing tests\*\*, \w+ intentional "
             r"no-assert safety tests, and \*\*[\d,]+ assertions\*\*\.",
             (
                 "The verified Godot 4.7 suite on {date} contains **{tests} tests "
                 "across {scripts} scripts**: **{passing} passing tests**, {risky} "
                 "intentional no-assert safety tests, and **{asserts} assertions**."
-            ).format(**common),
+            ).format(date="{date}", **common),
         ),
         (
             "DEVELOPMENT.md",
             r"- \*\*GUT unit \+ integration tests\*\* -- [\d,]+ tests across [\d,]+ "
             r"test scripts \([\d,]+ passing plus \w+ intentional no-assert safety "
-            r"tests; [\d,]+ assertions; verified .+?; runs Godot headless\)",
+            r"tests; [\d,]+ assertions; verified in CI on " + DATE_PATTERN
+            + r"; runs Godot headless\)",
             (
                 "- **GUT unit + integration tests** -- {tests} tests across "
                 "{scripts} test scripts ({passing} passing plus {risky} intentional "
                 "no-assert safety tests; {asserts} assertions; verified in CI on "
                 "{date}; runs Godot headless)"
-            ).format(**common),
+            ).format(date="{date}", **common),
         ),
         (
             "HammerForge_SPEC.md",
-            r"Full suite \(verified .+?\): \*\*[\d,]+ tests\*\* across \*\*[\d,]+ "
+            r"Full suite \(verified in CI on " + DATE_PATTERN + r"\): \*\*[\d,]+ tests\*\* across \*\*[\d,]+ "
             r"scripts\*\* \(\*\*[\d,]+ passing\*\* plus \w+ intentional no-assert "
             r"safety tests; \*\*[\d,]+ assertions\*\*\)\.",
             (
                 "Full suite (verified in CI on {date}): **{tests} tests** across "
                 "**{scripts} scripts** (**{passing} passing** plus {risky} "
                 "intentional no-assert safety tests; **{asserts} assertions**)."
-            ).format(**common),
+            ).format(date="{date}", **common),
         ),
         (
             "ROADMAP.md",
@@ -191,21 +196,25 @@ def main() -> int:
     )
 
     stale = []
-    for path, pattern, replacement in rewrites(counts, args.date):
+    for path, pattern, template in rewrites(counts):
         original = io.open(path, encoding="utf-8").read()
-        # A function replacement so nothing in the text is read as a group
-        # reference or an escape.
-        updated, hits = re.subn(pattern, lambda _m: replacement, original, count=1)
-        if hits == 0:
+        found = re.search(pattern, original)
+        if found is None:
             raise SystemExit(
                 "update_test_counts: nothing matched in %s. The sentence this owns "
                 "was reworded or removed; update its pattern in "
                 "tools/update_test_counts.py." % path
             )
-        if updated == original:
+        # Hold the date the file already carries and see whether anything else
+        # differs. A date is a record of when the numbers were measured, so
+        # restamping one that has not moved would commit a change saying nothing.
+        carried = found.groupdict().get("date") or args.date
+        if found.group(0) == template.format(date=carried):
             continue
         stale.append(path)
         if args.write:
+            replacement = template.format(date=args.date)
+            updated = original[: found.start()] + replacement + original[found.end() :]
             io.open(path, "w", encoding="utf-8", newline="\n").write(updated)
 
     if args.check:

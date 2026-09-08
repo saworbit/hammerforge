@@ -421,6 +421,10 @@ python tools/update_test_counts.py --gut-log gut.log --check
 number, so rewording one of those sentences makes the tool fail loudly rather
 than leave a stale figure behind — the message names the file to fix.
 
+The verification date moves only when a count moves. A date is a record of when
+the numbers were measured, so restamping one that has not changed would put a
+commit in the history saying nothing.
+
 ### VS Code Integration
 
 The repo includes `.vscode/tasks.json` with pre-configured GUT test tasks and problem matchers that surface failures as clickable file:line links in the Problems panel.
