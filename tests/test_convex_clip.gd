@@ -649,3 +649,121 @@ func test_clip_polygon_tolerates_a_degenerate_polygon():
 		line, PackedVector2Array(), Plane(Vector3.RIGHT, 0.0), true
 	)
 	assert_eq(result["verts"].size(), 0)
+
+
+# ===========================================================================
+# solid_from_rings — building a solid from the corners of its faces
+# ===========================================================================
+
+
+func _ring_solid_box(low: Vector3, high: Vector3) -> Array:
+	var a := Vector3(low.x, low.y, low.z)
+	var b := Vector3(high.x, low.y, low.z)
+	var c := Vector3(high.x, low.y, high.z)
+	var d := Vector3(low.x, low.y, high.z)
+	var e := Vector3(low.x, high.y, low.z)
+	var f := Vector3(high.x, high.y, low.z)
+	var g := Vector3(high.x, high.y, high.z)
+	var h := Vector3(low.x, high.y, high.z)
+	return HFConvexClipScript.solid_from_rings(
+		[[a, b, c, d], [e, f, g, h], [a, b, f, e], [d, c, g, h], [a, d, h, e], [b, c, g, f]]
+	)
+
+
+func _rings_outward_ratio(faces: Array) -> float:
+	var centre := HFConvexClipScript.interior_point(faces)
+	var outward := 0
+	var counted := 0
+	for face in faces:
+		var verts: PackedVector3Array = face.local_verts
+		if verts.size() < 3:
+			continue
+		var a: Vector3 = verts[0]
+		var normal: Vector3 = (verts[2] - a).cross(verts[1] - a)
+		if normal.length() < 0.000001:
+			continue
+		var face_centre := Vector3.ZERO
+		for v in verts:
+			face_centre += v
+		face_centre /= float(verts.size())
+		var to_face: Vector3 = face_centre - centre
+		if to_face.length() < 0.000001:
+			continue
+		counted += 1
+		if normal.normalized().dot(to_face.normalized()) > 0.0:
+			outward += 1
+	return float(outward) / float(counted) if counted > 0 else -1.0
+
+
+func test_rings_build_a_box_that_faces_outward():
+	var faces := _ring_solid_box(Vector3(-8, -8, -8), Vector3(8, 8, 8))
+	assert_eq(faces.size(), 6)
+	assert_almost_eq(_rings_outward_ratio(faces), 1.0, 0.0001)
+
+
+func test_a_ring_that_closes_to_a_line_is_not_a_face():
+	# The pinch case a dome crown and a spiral tread at the axis both produce: two
+	# corners of a quad land on the same point, so the ring is a triangle, and a
+	# ring where both pairs coincide is not a polygon at all.
+	var apex := Vector3(0, 10, 0)
+	var a := Vector3(-5, 0, -5)
+	var b := Vector3(5, 0, -5)
+	var c := Vector3(5, 0, 5)
+	var d := Vector3(-5, 0, 5)
+	var faces := (
+		HFConvexClipScript
+		. solid_from_rings(
+			[
+				[a, b, c, d],
+				[apex, apex, apex, apex],
+				[a, b, apex, apex],
+				[b, c, apex, apex],
+				[c, d, apex, apex],
+				[d, a, apex, apex],
+			]
+		)
+	)
+	assert_eq(faces.size(), 5, "a pyramid is a base and four triangles")
+	for face in faces:
+		assert_true(face.local_verts.size() >= 3, "a face collapsed to a line survived")
+	assert_almost_eq(_rings_outward_ratio(faces), 1.0, 0.0001)
+
+
+func test_repeated_corners_anywhere_in_a_ring_are_collapsed():
+	var a := Vector3(0, 0, 0)
+	var b := Vector3(4, 0, 0)
+	var c := Vector3(4, 0, 4)
+	var ring_faces := HFConvexClipScript.solid_from_rings(
+		[[a, a, b, b, c, c, a], [a, b, c], [a, b, c], [a, b, c]]
+	)
+	# Every ring reduces to the same triangle, so this is not a solid — but the
+	# collapsing itself must have worked rather than left duplicate vertices.
+	for face in ring_faces:
+		assert_eq(face.local_verts.size(), 3)
+
+
+func test_too_few_faces_to_bound_a_volume_returns_nothing():
+	var a := Vector3(0, 0, 0)
+	var b := Vector3(4, 0, 0)
+	var c := Vector3(4, 4, 0)
+	assert_eq(HFConvexClipScript.solid_from_rings([[a, b, c], [a, b, c]]).size(), 0)
+	assert_eq(HFConvexClipScript.solid_from_rings([]).size(), 0)
+
+
+func test_corner_order_does_not_decide_the_winding():
+	# The same box written the other way round has to come back wound the same
+	# way, because winding is measured rather than trusted.
+	var forward := _ring_solid_box(Vector3(-3, -3, -3), Vector3(3, 3, 3))
+	var a := Vector3(-3, -3, -3)
+	var b := Vector3(3, -3, -3)
+	var c := Vector3(3, -3, 3)
+	var d := Vector3(-3, -3, 3)
+	var e := Vector3(-3, 3, -3)
+	var f := Vector3(3, 3, -3)
+	var g := Vector3(3, 3, 3)
+	var h := Vector3(-3, 3, 3)
+	var backward := HFConvexClipScript.solid_from_rings(
+		[[d, c, b, a], [h, g, f, e], [e, f, b, a], [h, g, c, d], [e, h, d, a], [f, g, c, b]]
+	)
+	assert_almost_eq(_rings_outward_ratio(forward), 1.0, 0.0001)
+	assert_almost_eq(_rings_outward_ratio(backward), 1.0, 0.0001)

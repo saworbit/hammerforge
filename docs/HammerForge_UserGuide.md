@@ -195,7 +195,7 @@ Press **M** to activate the Measure tool. It supports persistent multi-ruler mea
 - Press **Escape** to clear all rulers.
 - The HUD shows ruler count, distance of the last ruler, and alignment status.
 
-## Generators: Hollow, Arch and Helix
+## Generators: Structures From Numbers
 
 ### Hollow
 
@@ -213,10 +213,22 @@ And it will refuse a sphere, a capsule, an ellipsoid or a torus: those are built
 from thousands of tiny faces, so shelling one would make thousands of brushes,
 which is never what anyone means by hollowing a ball.
 
+### The Structure section
+
+The **Structure** section in the Build tab builds a whole shape out of a handful
+of numbers. Pick what you want from the **Type** dropdown and the settings below
+it change to that shape's own — a dome has rings and a sweep, a staircase has a
+tread and a rise, and neither of them has a wall thickness.
+
+There are four: **Arch**, **Stairs**, **Spiral Stairs** and **Dome**.
+
+Press the button (or `Ctrl+Shift+A`) and it lands centred on whatever you have
+selected, or on the world origin if nothing is. Then treat it like any other
+geometry: rotate it, carve a doorway through it, clip a piece off.
+
 ### Arch
 
-The **Arch** section in the Build tab builds a curved run of brushes from six
-numbers:
+A curved run of brushes from six numbers:
 
 | Setting | What it does |
 |---------|--------------|
@@ -227,41 +239,113 @@ numbers:
 | Segments | One brush per segment. More segments, smoother curve |
 | Start | The angle the arch begins at |
 
-Press **Create Arch** (or `Ctrl+Shift+A`) and it lands centred on whatever you
-have selected, or on the world origin if nothing is. Then treat it like any other
-geometry: rotate it upright, carve a doorway through it, clip a segment off.
-
-### Changing an arch after you have built one
-
-The arch remembers the numbers that made it. **Select any one of its segments** and
-the Arch section changes: the settings that built it load into the controls, the
-button reads **Update Arch**, and a **Detach** button appears beside it.
-
-Change the radius, the segment count, anything — press **Update Arch** and the
-structure rebuilds in place. Materials you painted on it come back on the same
-pieces. If you increase the segment count, the new pieces take the default
-material, because there is nothing for them to inherit.
-
-This is the point of it: radius and segment count are numbers you get right by
-looking at the result, not in advance.
-
-**Detach** stops the arch being an arch. It keeps every brush exactly where it is
-and forgets that a generator made them. Use it once you have started editing
-segments by hand — otherwise the next **Update** rebuilds over those edits and
-they are gone. Ctrl+Z will bring them back, but detaching is the deliberate answer.
-
-An arch that has been clipped or carved still updates; the pieces the generator
-does not recognise any more are simply left alone.
-
 A segment cannot span half a turn or more — a wedge that wide is not a convex
 shape, and every brush here is convex — so a full ring needs at least three
 segments. The arch will tell you the minimum if you ask for too few.
 
+### Stairs
+
+A straight flight, one brush per step.
+
+| Setting | What it does |
+|---------|--------------|
+| Width | How wide the flight is, across the direction of travel |
+| Tread | How far one step carries you forward |
+| Rise | How far one step carries you up |
+| Steps | One brush per step |
+| Fill | **Solid** fills under each step down to the base; **Open** leaves floating treads |
+| Slab | How thick a floating tread is. Only used when Fill is Open |
+
+Solid is what most stairs in a level are — you cannot see under them, so there is
+nothing to build there. Open is for a flight you can see through.
+
+Keep the rise under what the player can actually climb. In a Godot
+`CharacterBody3D` that is the step height on the floor snapping, and a flight one
+unit over it is a flight the player walks into rather than up.
+
 ### Spiral stairs
 
-A radial array with a **Rise** climbs as it turns. Draw one step, set the array
-to Radial, pick a step angle and a rise, and you have a spiral staircase. Leave
-the rise at zero and you get the flat ring it always made.
+A flight that turns as it climbs. Every tread is computed as the wedge a tread at
+that radius actually is, which is what a radial array of a box cannot give you.
+
+| Setting | What it does |
+|---------|--------------|
+| Outer R | How far the treads reach from the axis |
+| Inner R | The hole down the middle. Zero makes treads that meet at the axis |
+| Steps | One brush per tread |
+| Turn | Degrees one tread turns through. Negative turns the other way |
+| Rise | How far one tread carries you up. Zero makes a flat fan |
+| Slab | How thick one tread is |
+| Start | The angle the first tread begins at |
+| Newel post | Fills the middle with a post the full height of the flight |
+
+Twelve treads at thirty degrees is one full turn. A tread cannot turn through half
+a circle or more, for the same reason an arch segment cannot.
+
+The newel post needs an inner radius to occupy — with the hole set to zero the
+treads already meet in the middle, and the section says so rather than quietly
+skipping the post.
+
+### Dome
+
+A hemisphere built in rings, one brush per panel.
+
+| Setting | What it does |
+|---------|--------------|
+| Radius | The outside of the dome |
+| Wall | How thick the shell is. A wall equal to the radius makes it solid |
+| Rings | Bands of panels stacked from the base to the crown |
+| Segments | Panels around the dome. More segments, rounder dome |
+| Arc | Degrees swept around. Less than 360 makes a slice |
+| Sweep | Degrees climbed. 90 reaches the crown, less leaves it open |
+| Start | The angle the dome begins at |
+
+A brush dome is faceted, because a patch of a sphere is not a convex solid with
+flat faces and a brush has to be. Four rings of twelve panels reads as round from
+inside a room. It is `rings × segments` brushes, so it will refuse a dome past a
+few hundred and tell you the number you asked for.
+
+A **Sweep** below 90 stops short of the crown and leaves it open — an oculus, or
+the base for a lantern. A **Wall** equal to the **Radius** makes a solid dome
+rather than a shell, which is the shape of a hill.
+
+### Changing a structure after you have built one
+
+Every structure remembers the numbers that made it. **Select any one of its
+pieces** and the Structure section changes: the type switches to whatever that
+structure is, the settings that built it load into the controls, the button reads
+**Update**, and a **Detach** button appears beside it.
+
+Change anything — press **Update** and the structure rebuilds in place. Materials
+you painted on it come back on the same pieces. If you increase the piece count,
+the new pieces take the default material, because there is nothing for them to
+inherit.
+
+This is the point of it: a radius, a segment count and a step rise are numbers you
+get right by looking at the result, not in advance.
+
+**A structure you have dragged somewhere else rebuilds where it now is.** Build an
+arch, move it into the doorway it belongs in, then widen it — it stays in the
+doorway. That only holds when you moved the whole thing: if you have moved
+individual pieces around, the structure was not relocated, it was edited, and the
+next section is about that.
+
+**If you have edited pieces by hand, the section says so** — *"3 pieces have been
+edited by hand. Update will rebuild over them — Detach to keep them."* Vertex
+drags, clips, bevels, resizes and turns all count. Update still does what you
+asked; the warning is so that Detach is a choice you make rather than a lesson you
+learn.
+
+**Detach** stops a structure being a structure. It keeps every brush exactly where
+it is and forgets that a generator made them. Use it once you have started editing
+pieces by hand. Ctrl+Z will bring an overwritten edit back, but detaching is the
+deliberate answer.
+
+Turning a whole structure is not recovered the way moving it is — a rebuild
+squares it back up. The warning fires, because every piece reads as edited.
+
+A structure that has been clipped or carved still updates; the pieces the
+generator does not recognise any more are simply left alone.
 
 ## Cutting: Clip and Carve
 

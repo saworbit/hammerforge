@@ -126,7 +126,16 @@ addons/hammerforge/
   plugin_overlays.gd     Power-user lifecycle, vertex/marquee drawing, quick properties, and coach marks
   plugin_vertex_input.gd Vertex/edge pick, drag, merge, and split dispatch
   plugin_hud.gd          HUD context, mode banner, and context-toolbar state
-  level_root.gd          Public level facade and coordinator (2,851 lines)
+  plugin_vertex_ops.gd   Vertex merge, split, and selection-resolving wrappers
+  plugin_shortcuts.gd    Editor shortcut registration and keymap binding
+  plugin_tool_modes.gd   Tool-mode entry, exit, and mutual exclusion
+  plugin_selection_commands.gd  Selection-scope commands (all, none, invert, by class)
+  plugin_material_commands.gd   Material apply, pick, and palette commands
+  plugin_prefab_commands.gd     Prefab place, save, and library commands
+  plugin_undo_events.gd  Undo/redo signal handling and post-action reconciliation
+  plugin_bake_preview.gd Bake preview lifecycle and wireframe toggle
+  plugin_gesture_recovery.gd  Stale-gesture detection and recovery on re-entry
+  level_root.gd          Public level facade and coordinator (3,025 lines)
   input_state.gd         Drag/paint/extrude/vertex state machine (HFInputState)
   hf_selection_gesture.gd Select-mode LMB arbiter (native object selection, face marquee, gizmos)
   dock.gd + dock.tscn    UI dock (displayed as Build, Paint, Objects, Test), collapsible sections with persisted state
@@ -148,6 +157,12 @@ addons/hammerforge/
   ui/hf_status_strip.gd  The same lamp in the 3D viewport toolbar, on a slower beat
   shortcut_hud.gd        Single-row shortcut strip in the 3D toolbar (primary line per mode, full list on the tooltip) + grid size indicator with flash-on-change
   brush_instance.gd      DraftBrush node
+  draft_entity.gd        DraftEntity node
+  brush_manager.gd       Legacy brush registry kept for compatibility with older saves
+  brush_preset.gd        Named brush shape/size presets
+  brush_gizmo_plugin.gd  EditorNode3DGizmoPlugin: resize handles and face gizmos
+  hf_brush_change_tracker.gd  Per-brush dirty tracking that drives incremental rebuilds
+  playtest_fps.gd        Test Level: the throwaway first-person controller
   baker.gd               CSG -> mesh bake pipeline (per-face materials, atlas integration, snapshot-based non-blocking face bakes, convex collision shapes)
   hf_material_atlas.gd   HFMaterialAtlas: texture atlas packing for draw-call reduction
   face_data.gd           Per-face materials, UVs, paint layers, displacement
@@ -159,6 +174,13 @@ addons/hammerforge/
   hf_gesture.gd          Gesture tracker base class (update/commit/cancel pattern)
   hf_entity_def.gd       Data-driven entity definition system (JSON + built-in defaults)
   hf_duplicator.gd       Duplicator / instanced geometry (source brushes + progressive offset)
+  hf_generator.gd        HFGenerator: the record of what a generator made (type, settings, placement, per-piece signatures)
+  hf_generator_schema.gd HFGeneratorSchema: what a generator's settings are, so the dock can build the controls
+  hf_arch_builder.gd     Parametric arches: one face set per voussoir
+  hf_stairs_builder.gd   Straight flights: solid underneath or floating treads
+  hf_spiral_stairs_builder.gd  Annular treads about an axis, with an optional newel post
+  hf_dome_builder.gd     Hemispheres in rings, because a patch of sphere is not planar
+  hf_convex_clip.gd      Splitting and building convex solids: the geometry behind Clip, Carve, Hollow and every generator
   hf_editor_tool.gd      Plugin API: base class for custom editor tools (+ poll, declarative settings)
   hf_tool_registry.gd    Plugin API: tool registration, dispatch, external tool loader
   hf_measure_tool.gd     Multi-ruler measurement tool (persistent rulers, angles, snap reference)
@@ -329,9 +351,13 @@ addons/hammerforge/
 - **Face hover highlight.** `level_root.highlight_hovered_face(camera, mouse_pos, color)` performs a FaceSelector raycast and renders a semi-transparent overlay on the hit face. Used by `plugin.gd` in extrude mode when idle. Call `clear_face_hover_highlight()` when switching tools.
 - **Undo/redo stability.** Prefer brush IDs and `create_brush_from_info()` for undo instead of storing Node references in history.
 - **Displacement surfaces.** `HFDisplacementData` (`displacement_data.gd`) is a `Resource` storing a subdivided grid (power 2-4 → 5x5 to 17x17 vertices) with per-vertex distance offsets. `FaceData.displacement` is typed as `Resource` (not `HFDisplacementData`) to avoid circular preload. `HFDisplacementSystem` manages create/destroy/paint/sew. Paint input in `plugin.gd` uses plane intersection constrained by `_point_near_polygon_3d()` convex polygon bounds check and is gated behind `dock.is_paint_mode_enabled()` + Displacement section expanded. Continuous paint strokes capture pre-state on mouse-down and commit a single undo action on mouse-up via `_commit_disp_paint_undo()`. Dock callbacks use `_try_undoable_action()` which checks return values and only commits undo + records history on success.
+- **Structure library.** A builder describes its own settings and the dock builds the controls from that description. `HFGeneratorSchema` is the shape of a field — key, label, type, range, default, tooltip — and `HFGeneratorSystem.builder_for()` is the single seam that maps a type name to the script that owns it, so `default_settings()`, `settings_schema()`, `validate()` and `build_faces()` all resolve through one branch. Adding a generator is writing the builder and naming it there; the dock never learns it exists.
+  Four builders live behind it. `HFArchBuilder` (voussoirs), `HFStairsBuilder` (a straight flight, solid or floating), `HFSpiralStairsBuilder` (annular treads about an axis, with an optional newel post) and `HFDomeBuilder` (a hemisphere in rings). All four are pure statics with no scene, so they and their tests run without a LevelRoot.
+  The dome is the one with a construction decision in it. Four points on a sphere at two latitudes and two longitudes are not coplanar, so a per-patch panel is a warped quad and not a brush. Bounding each band by two horizontal planes instead makes the outer surface a conical frustum, whose four corners are `r0·u0`, `r1·u0`, `r0·u1`, `r1·u1` — a plane through the origin. Every face is then planar and the panel is a real convex solid.
+  `HFConvexClip.solid_from_rings()` takes the corner rings of a solid's faces and collapses coincident corners, dropping rings that close to a line or a point. That is what lets every builder write the general eight-corner case once: where a shape pinches — a dome panel at the crown, a spiral tread meeting the axis — the wedge that is actually there comes back instead of a face with duplicate vertices.
 - **Live generators.** `HFGeneratorSystem` (`systems/hf_generator_system.gd`) keeps a `HFGenerator` record of what each generator made — its type, settings, placement and brush ids — so a structure can be rebuilt from changed settings instead of deleted and made again. Shaped after `HFDuplicator`, which already records its sources and instances, and persisted the same way: the records ride in `HFStateSystem.capture_state()`, which puts them in both the undo snapshot and the `.hflevel` file. Brushes carry an `hf_generator_id` meta, which is how a selected piece finds its generator.
   Three properties make it safe. **Validation runs before deletion**, so an unbuildable change refuses and leaves the structure standing rather than removing it and failing to replace it. **Materials are captured in order and reapplied by index**, because materials are what a designer adds after generating and losing them on every radius nudge would make the feature not worth using. And **the record is a hint, never ownership**: brush ids are reissued as the counter moves, so `_delete_brushes()` checks each brush's own meta before removing it, or a stale entry could delete a neighbour's geometry.
-  The type table — `known_types`, `default_settings`, `validate`, `build_faces` — is the seam. A second generator needs a branch in each and nothing else.
+  Each record also keeps a signature per piece: where it was put, and a hash of what it is. Those answer two different questions. **Has the structure been moved?** If every surviving piece agrees on the delta it was relocated, and the delta folds into `record.placement` before the rebuild, so a structure dragged into place stays there — without this, widening an arch you had moved put it back at the origin. **Have pieces been edited?** A piece whose geometry hash differs has been vertex-dragged, clipped, bevelled, resized or turned, and the dock says how many before Update rebuilds over them.
 - **Generators.** `HFArchBuilder` (`hf_arch_builder.gd`) turns arch parameters into one face set per voussoir, and `HFBrushSystem.create_brushes_from_face_sets()` turns any generator's face sets into brushes. Both are scene-free. The winding of a *built* solid is settled by `HFConvexClip.orient_faces_outward()` rather than by careful vertex ordering: every face of a convex solid points away from any interior point, which is measurable, and measuring it is the difference between geometry that bakes and geometry that bakes inside out.
 - **Hollow is a carve against itself.** The inside of a hollow brush is the same solid with every face plane pushed inward by the wall thickness, so shelling is `HFConvexClip.progressive_remainder()` over the brush's own inset planes — the identical loop carve runs with the carving brush's planes. One face gives one wall, so a box yields six and a cylinder yields a tube. Validation falls out of it: if the remainder empties before the planes run out, the insets crossed and the thickness is too large, which is exact for any shape where the old "twice the thickness against the smallest dimension" test only ever meant anything for a box.
 - **Plane orientation is measured, not trusted.** `HFConvexClip.outward_planes()` orients each face plane against an interior point instead of believing the face's own winding. Brushes store triangles, and a primitive mesh has near-degenerate ones — at a sphere's poles — whose cross product is long enough to pass any sane epsilon but points in a direction that is numerical noise. One of those flipped turns an inset plane inside out, and shelling a sphere reports there is no room inside it.
@@ -373,7 +399,7 @@ addons/hammerforge/
 The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on push and PR to `main`:
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
-- **GUT unit + integration tests** -- 2,621 tests across 140 test scripts (2,614 passing plus seven intentional no-assert safety tests; 13,564 assertions; verified locally September 8, 2026; runs Godot headless)
+- **GUT unit + integration tests** -- 2,809 tests across 147 test scripts (2,802 passing plus seven intentional no-assert safety tests; 15,006 assertions; verified locally September 8, 2026; runs Godot headless)
 
 Run locally before pushing:
 ```
@@ -406,6 +432,8 @@ $env:GODOT = "C:\Godot\Godot_v4.7-stable_win64.exe"
 ### Unit Tests (GUT)
 
 Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framework (installed in `addons/gut/`).
+
+The table below describes the larger suites rather than all 147 files; `ls tests/test_*.gd` is the complete list. `tests/test_suite_integrity.gd` fails the run if any of them will not load, because GUT skips an unparseable test file with a warning rather than a failure, and a file that is skipped is coverage that has silently gone.
 
 | Test File | Tests | Coverage |
 |-----------|-------|----------|
@@ -484,6 +512,19 @@ Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framewor
 | `test_paint_hot_paths.gd` | 39 | `SurfacePaint.paint_at_uv` (write-through, falloff, accumulation, erase, edge clamping, layer creation), `FaceData.get_painted_albedo` (blend modes, opacity, layer stacking, resize, non-RGBA8 sources, cache hits and invalidation), and `HFPaintTool._apply_terrain_brush` (raise/lower/smooth/flatten, falloff, wrapping, clamping, dirty chunks) |
 | `test_material_atlas_pbr.gd` | 32 | PBR slot packing (normal/roughness/metallic/emission), flat tiles for materials without a map, settings carried onto the atlas material, every skip reason, shared layout across channel atlases, resampling, and non-RGBA8 sources |
 | `test_hf_log.gd` | 6 | Warning capture and suppression, buffer lifetime, copy-on-read, and warning outside a capture (no spurious engine error) |
+| `test_convex_clip.gd` | 43 | Sutherland-Hodgman splitting with three-way vertex classification, on-plane vertices, cap rebuilding and ring ordering, axis-aligned-box detection, progressive remainder, plane budgets, and `solid_from_rings` (collapsing coincident corners, refusing a shape too thin to bound a volume, winding decided by measurement rather than corner order) |
+| `test_transform_system.gd` | 51 | Rotate, flip and reset rotation for brushes and entities: scale-preserving rotation, winding-safe mirroring, lossless quarter-turn reset with axis permutation, pivots, and displacement refusals |
+| `test_transform_integration.gd` | 30 | Free transform against a real LevelRoot and baker: bake-level winding proof for rotation and mirroring, texture-lock UV compensation, and the operations that used to refuse a rotated brush and no longer do |
+| `test_arch_builder.gd` | 21 | Voussoir count and shape, closed solids, outward winding, neighbours sharing their meeting face, full rings, and each refusal on its own boundary |
+| `test_stairs_builder.gd` | 18 | Step count, solid and open fills, the climb and run a flight claims, steps meeting their neighbour, and refusals including a tread deeper than the whole climb |
+| `test_spiral_stairs_builder.gd` | 19 | Annular treads, the newel post as a piece, treads meeting at the axis as wedges, the climb per tread, flat fans, reversed turns, and convexity refusals |
+| `test_dome_builder.gd` | 21 | The construction claim itself — every face of every panel planar — plus closure, convexity, outward winding, the crown and solid-dome pinch cases, hollowness, slices, and the panel cap |
+| `test_generator_schema.gd` | 9 | Defaults from a schema, per-field type coercion, unknown keys dropped, field lookup, ordering, and malformed fields skipped rather than crashing |
+| `test_generator_system.gd` | 52 | Records, per-piece signatures, regeneration with material preservation, relocation versus hand editing, edit counts, detach and remove, stale ids staying harmless, every known type, and serialization round trips |
+| `test_generators_integration.gd` | 30 | Hollow, arch and carve against a real LevelRoot and baker, every winding claim measured on baked triangles beside an untouched control |
+| `test_live_generators_integration.gd` | 25 | Every structure type through LevelRoot, the undo snapshot, the save format, the cutting tools and the baker; a moved structure rebuilding where it stands; a reopened level not claiming its pieces were edited |
+| `test_live_generator_commands.gd` | 19 | The dock surface: undo dispatch by method name, the argument limit, the section following the selection, a type choice not being re-derived from it, the dock naming no generator setting of its own, and the edit warning |
+| `test_suite_integrity.gd` | 3 | Every `test_*.gd` loads and extends GutTest, and the shared helpers beside them parse |
 
 Run all tests:
 ```

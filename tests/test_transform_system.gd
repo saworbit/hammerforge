@@ -543,18 +543,16 @@ func test_reset_rotation_skips_an_unrotated_brush():
 	assert_eq(sys.reset_rotation(["r1"]), 0)
 
 
-func test_reset_rotation_restores_the_axis_aligned_guard():
+func test_reset_rotation_clears_the_basis_a_rotation_put_there():
+	# This once checked `HFBrushSystem._check_axis_aligned_box()`, the guard that
+	# refused hollow, clip and carve on a rotated brush. That guard is gone — those
+	# operations work in the brush's own frame now — so what reset rotation is for
+	# is squaring a brush up, and that is what is checked.
 	var b := _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "r1")
 	sys.rotate(["r1"], [], 1, deg_to_rad(37.0), Vector3.ZERO)
-	assert_false(
-		HFBrushSystem._check_axis_aligned_box(b, "Hollow").ok,
-		"a rotated brush should fail the hollow/clip/carve guard"
-	)
-	sys.reset_rotation(["r1"])
-	assert_true(
-		HFBrushSystem._check_axis_aligned_box(b, "Hollow").ok,
-		"reset rotation is what makes those operations reachable again"
-	)
+	assert_false(b.global_transform.basis.is_equal_approx(Basis.IDENTITY))
+	assert_eq(sys.reset_rotation(["r1"]), 1)
+	assert_true(b.global_transform.basis.is_equal_approx(Basis.IDENTITY))
 
 
 # ===========================================================================

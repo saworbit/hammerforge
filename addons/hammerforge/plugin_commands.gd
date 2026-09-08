@@ -111,7 +111,7 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			plugin._clip_to_face_plane_selected(root)
 		"create_arch":
 			if dock:
-				dock._on_create_arch()
+				dock._on_create_structure()
 		"carve":
 			plugin._carve_selected(root)
 		"merge":

@@ -282,37 +282,56 @@ It writes one PNG per tab under `user://console_preview/`.
 - Undo each cut with Ctrl+Z and confirm the original brush returns whole, with its material and per-face textures intact.
 - Select a brush with per-face textures, clip it, and confirm each piece kept the textures on the faces they were painted on, and that the new cut surface took the nearest face's material.
 
-### 7c-5. Generators (Hollow, Arch, Helix)
+### 7c-5. Generators (Hollow and the Arch)
 - Hollow an ordinary box. Confirm the yellow preview outlines six walls, that the confirmation names the wall count, and that committing leaves six brushes that tile the original.
 - Rotate a box 30 degrees and hollow it. Confirm the preview follows the rotation and the walls come out rotated with it.
 - Hollow a **cylinder**. Confirm the preview shows a ring of walls, the confirmation warns how many, and the result is a tube. Bake it and walk inside — confirm no wall renders inside out.
 - Try hollowing a **sphere**. Confirm it refuses promptly with a message naming the face count, and that the sphere is untouched. It must not hang.
 - Try a wall thickness larger than the brush. Confirm the refusal suggests a thickness that fits.
-- Open the **Arch** section in the Build tab. Create an arch with the defaults. Confirm eight brushes appear as a half arch centred on the origin.
+- Open the **Structure** section in the Build tab with Type on **Arch**. Create an arch with the defaults. Confirm eight brushes appear as a half arch centred on the origin.
 - Select a brush somewhere off-origin and create another arch. Confirm it lands centred on the selection.
 - Set Arc to 360 and Segments to 12, and create. Confirm a closed ring with no gaps between segments.
 - Set Arc to 360 and Segments to 2, and create. Confirm it refuses and names the minimum segment count.
 - Bake an arch. Confirm every segment is solid and textured from outside, including the flat radial faces where segments meet.
 - Carve a doorway through an arch and bake again. Confirm the cut segments still render correctly.
 - Rotate an arch upright with `R`, then hollow one of its segments. Confirm both operations work on generated geometry.
-- Draw a single step box offset from the origin. Set Duplicate Array to **Radial**, count 12, step 30 degrees, **Rise** 16, and Create Array. Confirm a spiral staircase, each step turned and raised.
+- Draw a single step box offset from the origin. Set Duplicate Array to **Radial**, count 12, step 30 degrees, **Rise** 16, and Create Array. Confirm a ring of turned, raised copies. (For a real spiral staircase use the **Spiral Stairs** structure in 7c-6; this is the array tool, and it repeats a shape rather than computing one.)
 - Set Rise back to 0 and create again. Confirm a flat ring, exactly as before the rise existed.
 - Undo each of the above and confirm the level returns to its previous state.
 
-### 7c-6. Live Generators (Editing an Arch After the Fact)
-- Create an arch with the defaults. Confirm eight brushes appear and the button still reads **Create Arch** while nothing is selected.
-- Click one segment of the arch. Confirm the Arch section loads that arch's settings, the button changes to **Update Arch**, and a **Detach** button appears.
-- Change Radius and press **Update Arch**. Confirm the arch rebuilds at the new radius, in the same place, with the same segment count.
-- Paint a distinct material on three different segments. Change Radius again and press **Update Arch**. Confirm all three materials come back on the same segments.
-- Increase Segments and update. Confirm the extra pieces appear with the default material and the earlier ones keep theirs.
-- Decrease Segments and update. Confirm the arch shrinks and the surviving pieces keep their materials.
-- Set Segments to 0 and press **Update Arch**. Confirm it refuses with a message and **the existing arch is still there** — nothing may be deleted by a refused update.
-- Press Ctrl+Z after an update. Confirm the previous arch comes back with its old settings, and that selecting a piece shows those old settings in the section.
-- Click empty space to deselect. Confirm the button returns to **Create Arch** and Detach disappears.
-- Select a piece and press **Detach**. Confirm the brushes stay exactly where they are, the button returns to **Create Arch**, and selecting a piece no longer loads settings.
-- Build two arches in different places. Select a piece of the first and update it. Confirm the second arch does not move or change.
-- Clip one segment of an arch in two, then select an untouched segment and update. Confirm the arch rebuilds and the clipped pieces are left alone.
-- Save the level, reopen it, select an arch segment. Confirm the section still recognises it and loads its settings.
+### 7c-6. The Structure Section (Types, Stairs, Spiral Stairs, Domes)
+- Open the Build tab and find the **Structure** section. Confirm the Type dropdown lists Arch, Stairs, Spiral Stairs and Dome, and that Arch is chosen.
+- Change Type to **Stairs**. Confirm the settings below change to Width, Tread, Rise, Steps, Fill and Slab, and that the button reads **Create Stairs**.
+- Press **Create Stairs**. Confirm eight steps appear, each one a tread further on and a rise higher than the last, with no gaps between them.
+- Set Fill to **Open** and create another. Confirm the treads float and you can see under them.
+- Change Type to **Spiral Stairs** and create one. Confirm twelve treads climb around a newel post, and that each tread is a wedge rather than a rotated box.
+- Set Inner R to 0 with the newel post on and press Create. Confirm it refuses with a message naming the inner radius, and creates nothing.
+- Turn the post off and create again. Confirm the treads meet at the axis.
+- Change Type to **Dome** and create one. Confirm a faceted hemisphere of 48 panels appears. Look at it from inside: confirm no panel is inside out and there are no gaps between rings.
+- Set Sweep to 45 and update. Confirm the crown is open.
+- Set Wall equal to Radius and create. Confirm the dome is solid rather than a shell.
+- Set Rings to 32 and Segments to 32 and press Create. Confirm it refuses, names 1024, and creates nothing.
+- Bake with a dome, a spiral stair and a flight of stairs in the level. Confirm every surface is visible from outside and nothing renders inside out.
+
+### 7c-7. Editing a Structure After the Fact
+- Create an arch. Select one segment. Confirm the Type dropdown says Arch, the settings load, the button reads **Update Arch**, and **Detach** appears.
+- Create a dome elsewhere. Select one of its panels. Confirm the dropdown switches to Dome and the dome's own settings load — not the arch's.
+- With an arch piece selected, change the Type dropdown to Dome. Confirm the section switches to creating a new dome (button reads **Create Dome**, Detach disappears) rather than snapping back to Arch.
+- Select an arch piece again, change Radius, press **Update Arch**. Confirm it rebuilds at the new radius in the same place.
+- Paint a distinct material on three different pieces. Change a setting and Update. Confirm all three materials come back on the same pieces.
+- Increase the piece count and update. Confirm the extra pieces take the default material and the earlier ones keep theirs.
+- Decrease it and update. Confirm the structure shrinks and the surviving pieces keep their materials.
+- Set Segments to 0 and press Update. Confirm it refuses with a message and **the existing structure is still there** — nothing may be deleted by a refused update.
+- Build two structures in different places. Update the first. Confirm the second does not move or change.
+- Clip one piece of a structure in two, then select an untouched piece and update. Confirm it rebuilds and the clipped pieces are left alone.
+- **Move a structure and then update it.** Select every piece of an arch, drag it well away, then select one piece, change the radius and press Update. Confirm the arch rebuilds *where you moved it*, not back where it was created.
+- Move a single piece of a structure on its own. Select any piece. Confirm the section shows a warning naming how many pieces have been edited and mentioning Detach.
+- Vertex-drag a piece of a dome. Select any panel. Confirm the count in the warning goes up.
+- Press Update with the warning showing. Confirm the structure rebuilds and the warning clears.
+- Press Ctrl+Z. Confirm the hand edits come back.
+- Save the level, reopen it, select a piece of each structure. Confirm the section recognises each one, loads its settings, and shows **no** edit warning — a reopened level must not claim its pieces were edited.
+- Press **Detach** on a structure, then select a piece. Confirm the section is back to Create and loads nothing.
+- Press `Ctrl+Shift+A` with the Type dropdown on Dome. Confirm the shortcut builds a dome, not an arch.
 
 ### 7d. Face Winding Migration (Old Saves)
 - Open a `.hflevel` file saved before the CW winding fix (April 6, 2026 or earlier).

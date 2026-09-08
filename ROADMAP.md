@@ -529,6 +529,43 @@ and run".
   answer and is offered beside Update, but nothing warns that edits exist.
 - Generators cannot nest, and none depends on other geometry.
 
+## Done (Structure Library — Stairs, Spiral Stairs and Domes — September 2026)
+- `HFGeneratorSchema`: a builder describes its own settings (key, label, type,
+  range, default, tooltip) and the dock builds its controls from that. The Arch
+  section became the **Structure** section, with a type dropdown, and adding a
+  generator now needs no dock code at all.
+- `HFStairsBuilder`: a straight flight, one brush per step, solid underneath or
+  floating treads.
+- `HFSpiralStairsBuilder`: a flight that turns as it climbs, each tread the
+  annular wedge a tread at that radius is, with an optional newel post.
+- `HFDomeBuilder`: a hemisphere in rings, one brush per panel, adjustable sweep
+  and a wall that can reach all the way to solid. Rings rather than patches
+  because a patch of sphere is not planar and a brush has to be.
+- `HFConvexClip.solid_from_rings()`: a solid from the corner rings of its faces,
+  collapsing coincident corners, so a generator writes the general case once and
+  gets a wedge where the shape pinches.
+- **Relocation**: a structure moved as a unit rebuilds where it now is. Pieces
+  that disagree about the move were edited individually, and the placement stays.
+- **Hand-edit warning**: the section says how many pieces a rebuild would
+  overwrite, so Detach is a choice rather than a lesson.
+- `HFGeneratorSystem.builder_for()` is the single seam: one branch adds a type to
+  the defaults, the schema, the validation, the build and the dock together.
+- Two transform test files that had been silently skipped since the generators
+  wave were repaired, and `tests/test_suite_integrity.gd` now fails the suite when
+  any test file will not load.
+- 107 new tests, and 81 that had stopped running are running again.
+
+### Known limits of the current structure pass
+- Only the four described generators are live. Hollow and the array modes still
+  have their own records and their own shapes.
+- Turning a whole structure is not recovered the way moving it is; a rebuild
+  squares it back up. Every piece reads as edited, so the warning fires first.
+- The warning is refreshed when the selection changes, not while a piece stays
+  selected and is edited under it.
+- A dome is faceted and its wall thickness is measured radially, so panels near
+  the crown are slightly thicker in section than panels at the base.
+- Structures still cannot nest, and none depends on other geometry.
+
 ## Future (Wave 3 -- Polish)
 - Multiple simultaneous cordons.
 - Multi-tool presets for common workflows.
@@ -541,14 +578,14 @@ and run".
 The May 2026 simplification phase 1 landed shared utilities and migrated low-risk call sites. The following items continue that initiative but each requires a dedicated session with interactive UI/bake validation, or a profiling pass, before landing safely.
 
 ### Continued dock.gd decomposition
-The current 5,475-line file is still dominated by `_on_*` signal handlers wired to dock-internal state.
+The current 5,591-line file is still dominated by `_on_*` signal handlers wired to dock-internal state.
 - Split into per-tab handler files: `dock_brush_handler.gd` (done), `dock_paint_handler.gd` (done), `dock_entity_handler.gd` (done), `dock_manage_handler.gd` (Test-tab bake/play done), and `dock_visgroup_handler.gd` (visgroups, grouping, and cordon done). Target dock.gd shell at ~1,500 lines.
 - File dialogs and import/export callbacks delegate to `dock_file_handler.gd`; settings and `LevelRoot` signal lifecycle delegate to `dock_connections.gd`.
 - Consolidate the entity-properties UI builder and the external-tool-settings UI builder (both schema-driven; share ~100 lines of dispatch logic).
 - Migrate `paint_tab_builder.gd` (50 call sites) and `manage_tab_builder.gd` (58 call sites) from `dock._make_*` to direct `HFUIFactory` calls. Mechanical churn — wait until shared with another tab-builder change.
 
 ### plugin.gd decomposition (Phase 3b)
-Current: 2,506 lines. Remaining work is concentrated in other coordinator responsibilities:
+Current: 1,599 lines. Remaining work is concentrated in other coordinator responsibilities:
 - `_forward_3d_gui_input` and native RMB camera ownership now live in `plugin_viewport_input.gd` (`HFPluginViewportInput`).
 - Floor, surface, and displacement paint input now lives in `plugin_paint_input.gd` (`HFPluginPaintInput`).
 - Draw, extrude, motion, face hover, and prefab hover now live in `plugin_pointer_tools.gd` (`HFPluginPointerTools`).
@@ -572,7 +609,7 @@ Completion is responsibility-based rather than tied to an arbitrary line count. 
 - Headless editor tests retain the complete tool graph, with focused export-playtest coverage guarding the runtime boundary.
 
 ### Risk-focused test gaps
-The current suite covers 2,486 tests across 133 scripts, including the large brush, bake, paint, vertex, transform, baker, brush-instance, and map-I/O systems. The issue tracker is clear as of September 7, 2026. One known limitation is not
+The current suite covers 2,809 tests across 147 scripts, including the large brush, bake, paint, vertex, transform, generator, baker, brush-instance, and map-I/O systems. The issue tracker is clear as of September 7, 2026. One known limitation is not
 tracked as an issue and has no coverage:
 - A `.map` entity property value containing a quote or a backslash does not round
   trip. `MapIO._parse_key_value()` splits on unescaped quote positions and

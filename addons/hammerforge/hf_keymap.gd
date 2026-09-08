@@ -229,7 +229,7 @@ static func get_action_label(action: String) -> String:
 		"hollow": "Hollow",
 		"clip": "Clip",
 		"clip_to_face": "Clip to Face Plane",
-		"create_arch": "Create Arch",
+		"create_arch": "Create Structure",
 		"carve": "Carve",
 		"merge": "Merge Brushes",
 		"move_to_floor": "Move to Floor",

@@ -14,14 +14,27 @@ class_name HFGeneratorSystem
 ## against what actually exists.
 
 const HFArchBuilder = preload("../hf_arch_builder.gd")
+const HFDomeBuilder = preload("../hf_dome_builder.gd")
 const HFGenerator = preload("../hf_generator.gd")
 const HFOpResult = preload("../hf_op_result.gd")
+const HFSpiralStairsBuilder = preload("../hf_spiral_stairs_builder.gd")
+const HFStairsBuilder = preload("../hf_stairs_builder.gd")
 
 const GENERATOR_META := &"hf_generator_id"
 
-## Generator types this system can build. Adding one means adding a branch in
-## `build_faces()` and `validate()` and nothing else.
+## Generator types this system can build. A builder owns its own settings, its own
+## validation and its own arithmetic, so adding one means writing the builder and
+## naming it in `builder_for()`. Nothing else in the system, and nothing at all in
+## the dock, has to know it exists.
 const TYPE_ARCH := "arch"
+const TYPE_STAIRS := "stairs"
+const TYPE_SPIRAL_STAIRS := "spiral_stairs"
+const TYPE_DOME := "dome"
+
+## How far two pieces can disagree about how far they have moved and still count
+## as having moved together. A user dragging a structure moves every piece by
+## exactly the same amount; anything looser than this is individual editing.
+const RELOCATION_EPSILON := 0.01
 
 var root: Node3D
 var generators: Dictionary = {}  # generator_id -> HFGenerator
@@ -37,35 +50,55 @@ func _init(level_root: Node3D = null) -> void:
 
 
 static func known_types() -> PackedStringArray:
-	return PackedStringArray([TYPE_ARCH])
+	return PackedStringArray([TYPE_ARCH, TYPE_STAIRS, TYPE_SPIRAL_STAIRS, TYPE_DOME])
+
+
+## The one place that knows which builder is which. Everything below asks here.
+static func builder_for(type: String):
+	match type:
+		TYPE_ARCH:
+			return HFArchBuilder
+		TYPE_STAIRS:
+			return HFStairsBuilder
+		TYPE_SPIRAL_STAIRS:
+			return HFSpiralStairsBuilder
+		TYPE_DOME:
+			return HFDomeBuilder
+		_:
+			return null
+
+
+## What to call this in the dock. Derived rather than tabled, so a new type gets a
+## readable name without a second list to keep in step.
+static func display_name(type: String) -> String:
+	return type.replace("_", " ").capitalize()
 
 
 static func default_settings(type: String) -> Dictionary:
-	match type:
-		TYPE_ARCH:
-			return HFArchBuilder.default_settings()
-		_:
-			return {}
+	var builder = builder_for(type)
+	return builder.default_settings() if builder else {}
+
+
+## The fields a type has, described well enough for the dock to build controls.
+static func settings_schema(type: String) -> Array:
+	var builder = builder_for(type)
+	return builder.settings_schema() if builder else []
 
 
 static func validate(type: String, settings: Dictionary) -> HFOpResult:
-	match type:
-		TYPE_ARCH:
-			return HFArchBuilder.validate(settings)
-		_:
-			return HFOpResult.fail(
-				"Generator: '%s' is not a generator type" % type,
-				"Known types: %s" % ", ".join(known_types())
-			)
+	var builder = builder_for(type)
+	if builder == null:
+		return HFOpResult.fail(
+			"Generator: '%s' is not a generator type" % type,
+			"Known types: %s" % ", ".join(known_types())
+		)
+	return builder.validate(settings)
 
 
 ## One face set per piece the structure is made of, in the structure's own space.
 static func build_faces(type: String, settings: Dictionary) -> Array:
-	match type:
-		TYPE_ARCH:
-			return HFArchBuilder.build(settings)
-		_:
-			return []
+	var builder = builder_for(type)
+	return builder.build(settings) if builder else []
 
 
 # ---------------------------------------------------------------------------
@@ -88,6 +121,7 @@ func create(type: String, settings: Dictionary, placement: Transform3D) -> HFOpR
 	record.brush_ids = _spawn(face_sets, placement, record.generator_id, [])
 	if record.brush_ids.is_empty():
 		return HFOpResult.fail("Generator: '%s' produced no geometry" % type)
+	_record_signatures(record)
 
 	generators[record.generator_id] = record
 	var message := "%s: created %d pieces" % [type.capitalize(), record.brush_ids.size()]
@@ -117,6 +151,9 @@ func regenerate(generator_id: String, settings: Dictionary) -> HFOpResult:
 	# by index; when the piece count changes there is no correspondence past the
 	# shorter list, and the extra pieces take the default.
 	var materials := _capture_materials(record)
+	# Where the structure is now, not where it was made. Read before anything is
+	# deleted, because it is the existing pieces that say where they have gone.
+	record.placement.origin += relocation_delta(generator_id)
 	_delete_brushes(record.brush_ids, generator_id)
 
 	record.settings = settings.duplicate(true)
@@ -124,6 +161,7 @@ func regenerate(generator_id: String, settings: Dictionary) -> HFOpResult:
 	if record.brush_ids.is_empty():
 		generators.erase(generator_id)
 		return HFOpResult.fail("Generator: those settings produce no geometry")
+	_record_signatures(record)
 	var message := "%s: rebuilt as %d pieces" % [record.type.capitalize(), record.brush_ids.size()]
 	if root and root.has_method("_log"):
 		root._log(message)
@@ -176,6 +214,77 @@ func generator_for_selection(brush_ids: Array) -> HFGenerator:
 		if record != null:
 			return record
 	return null
+
+
+# ---------------------------------------------------------------------------
+# What has happened to a structure since it was made
+# ---------------------------------------------------------------------------
+
+
+## How far the whole structure has been dragged since it was last built.
+##
+## A user who moves a structure moves every piece of it by exactly the same
+## amount, so that is the test: if every surviving piece agrees on the delta, the
+## structure was relocated and it should rebuild where it now is. If the pieces
+## disagree they were moved individually, which is editing rather than
+## relocating, and the placement stays where it was.
+##
+## Without this, dragging an arch into a doorway and then widening it puts the
+## arch back where it was created — which is where the whole premise of changing
+## your mind after seeing it in place falls down.
+func relocation_delta(generator_id: String) -> Vector3:
+	if not generators.has(generator_id):
+		return Vector3.ZERO
+	var record: HFGenerator = generators[generator_id]
+	var delta := Vector3.ZERO
+	var seen := false
+	for brush_id in record.brush_ids:
+		var signature: Dictionary = record.brush_signatures.get(str(brush_id), {})
+		if signature.is_empty():
+			continue
+		var brush = _owned_brush(str(brush_id), generator_id)
+		if brush == null:
+			continue
+		var moved: Vector3 = brush.global_transform.origin - signature.get("origin", Vector3.ZERO)
+		if not seen:
+			delta = moved
+			seen = true
+		elif moved.distance_to(delta) > RELOCATION_EPSILON:
+			return Vector3.ZERO
+	return delta if seen else Vector3.ZERO
+
+
+## The pieces of a structure that are no longer the shape they were generated as.
+##
+## Vertex-dragged, clipped, bevelled, resized or turned — anything that changes
+## what the piece *is* rather than only where it is. A rebuild replaces these, so
+## the count is worth saying out loud before it happens.
+func edited_brush_ids(generator_id: String) -> PackedStringArray:
+	var out := PackedStringArray()
+	if not generators.has(generator_id):
+		return out
+	var record: HFGenerator = generators[generator_id]
+	var moved := relocation_delta(generator_id)
+	for brush_id in record.brush_ids:
+		var signature: Dictionary = record.brush_signatures.get(str(brush_id), {})
+		if signature.is_empty():
+			continue
+		var brush = _owned_brush(str(brush_id), generator_id)
+		if brush == null:
+			continue
+		if _geometry_hash(brush) != str(signature.get("geometry", "")):
+			out.append(str(brush_id))
+			continue
+		# A piece that has moved on its own has been edited even though its shape
+		# is untouched, because a rebuild will put it back in the row.
+		var expected: Vector3 = signature.get("origin", Vector3.ZERO) + moved
+		if brush.global_transform.origin.distance_to(expected) > RELOCATION_EPSILON:
+			out.append(str(brush_id))
+	return out
+
+
+func edited_piece_count(generator_id: String) -> int:
+	return edited_brush_ids(generator_id).size()
 
 
 # ---------------------------------------------------------------------------
@@ -263,3 +372,54 @@ func _brush(brush_id: String):
 	if brush_id == "" or root == null or root.get("brush_system") == null:
 		return null
 	return root.brush_system.find_brush_by_id(brush_id)
+
+
+## A brush, but only if it still says it belongs to this generator.
+##
+## The record is a hint. Ids are reissued as the counter moves, so asking about a
+## brush by id alone can answer about somebody else's geometry.
+func _owned_brush(brush_id: String, generator_id: String):
+	var brush = _brush(brush_id)
+	if brush == null or str(brush.get_meta(GENERATOR_META, "")) != generator_id:
+		return null
+	return brush
+
+
+## Remember what each piece was, so a later question about what has changed has
+## something to compare against.
+func _record_signatures(record: HFGenerator) -> void:
+	record.brush_signatures.clear()
+	for brush_id in record.brush_ids:
+		var brush = _brush(str(brush_id))
+		if brush == null:
+			continue
+		record.brush_signatures[str(brush_id)] = {
+			"origin": brush.global_transform.origin,
+			"geometry": _geometry_hash(brush),
+		}
+
+
+## What a piece *is*, independent of where it is: its rotation, its shape, its
+## size and its face vertices, rounded to a thousandth so that the float
+## formatting a save and reload goes through does not read as an edit.
+func _geometry_hash(brush) -> String:
+	if brush == null:
+		return ""
+	var parts := PackedStringArray()
+	parts.append("s%d" % int(brush.shape))
+	parts.append(_rounded(brush.size))
+	var basis: Basis = brush.global_transform.basis
+	parts.append(_rounded(basis.x))
+	parts.append(_rounded(basis.y))
+	parts.append(_rounded(basis.z))
+	for face in brush.faces:
+		if face == null:
+			continue
+		for vertex in face.local_verts:
+			parts.append(_rounded(vertex))
+		parts.append("/")
+	return str(", ".join(parts).hash())
+
+
+static func _rounded(v: Vector3) -> String:
+	return "%.3f %.3f %.3f" % [v.x, v.y, v.z]

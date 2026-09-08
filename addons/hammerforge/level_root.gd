@@ -1260,6 +1260,12 @@ func generator_for_selection(brush_ids: Array):
 	return generator_system.generator_for_selection(brush_ids) if generator_system else null
 
 
+## How many pieces of a structure are no longer the shape they were generated as.
+## What the dock says out loud before a rebuild overwrites them.
+func edited_generator_pieces(generator_id: String) -> int:
+	return generator_system.edited_piece_count(generator_id) if generator_system else 0
+
+
 func clip_brush_by_plane(brush_id: String, plane: Plane) -> HFOpResult:
 	return brush_system.clip_brush_by_plane(brush_id, plane)
 

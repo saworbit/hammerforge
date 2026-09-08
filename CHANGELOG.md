@@ -5,6 +5,72 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **A structure library, and one place to add to it.** The live-generator wave
+  built a type table and put one thing in it. Two problems sat behind that single
+  entry, and only one of them was "we need more generators": the dock could not
+  afford a second one. Its Arch section was six named SpinBox members, six
+  hand-built rows, a loader listing the six by name and a reader listing them
+  again — four of everything, per generator. The cost of adding a generator was
+  never the arithmetic; it was the dock.
+  - **Builders describe their own settings.** `HFGeneratorSchema` is the shape of
+    that description — key, label, type, range, default, tooltip — and the dock
+    builds its controls from it. One **Structure** section with a type dropdown
+    now serves every generator, and adding another needs no dock code at all.
+  - **Stairs** (`HFStairsBuilder`) — a straight flight, one brush per step, solid
+    underneath or floating treads. After the box it is the most common piece of
+    built geometry in a level, and building one by hand is a dozen brushes each
+    offset from the last in two axes at once, every offset a chance to be a unit
+    out.
+  - **Spiral stairs** (`HFSpiralStairsBuilder`) — a flight that turns as it
+    climbs, with an optional newel post. Every tread is computed as the annular
+    wedge a tread at that radius actually is. The old answer was a radial array
+    with a rise, which repeats a shape around an axis but cannot compute the shape
+    — the same limitation that made the arch worth building.
+  - **Dome** (`HFDomeBuilder`) — a hemisphere in rings, one brush per panel, with
+    an adjustable sweep for an open crown and a wall that can go all the way to
+    solid. Built in rings rather than in patches of sphere because four points on
+    a sphere at two latitudes and two longitudes are *not coplanar*, and a brush
+    is a convex solid with planar faces. The frustum band of a cone is planar, so
+    rings give a real brush where patches give a warped quad.
+  - **`HFConvexClip.solid_from_rings()`** builds a solid from the corner rings of
+    its faces, collapsing coincident corners. That is what lets a generator write
+    the general eight-corner case once and still get a wedge where the shape
+    pinches — a dome panel at the crown, a spiral tread meeting the axis.
+- **A structure you have moved rebuilds where it now is.** Regeneration used to
+  build at the placement recorded when the structure was created, so dragging an
+  arch into a doorway and then widening it put the arch back at the origin. Each
+  piece now records where it was put; if every surviving piece has moved by the
+  same amount the structure was relocated, and it rebuilds there. Pieces that
+  disagree were moved individually, which is editing rather than relocating, and
+  the placement stays.
+- **The Structure section says how many pieces a rebuild would overwrite.** Each
+  piece also records a hash of what it *is*, so a vertex drag, clip, bevel, resize
+  or turn is visible: *"3 pieces have been edited by hand. Update will rebuild
+  over them — Detach to keep them."* Detach was always the answer and always sat
+  beside Update, but a choice you do not know you are making is not a choice.
+- **Structure library coverage** (`tests/test_stairs_builder.gd`,
+  `tests/test_spiral_stairs_builder.gd`, `tests/test_dome_builder.gd`,
+  `tests/test_generator_schema.gd`, and additions across the generator, convex-clip
+  and integration suites): every panel of every structure measured for planarity,
+  closure, convexity and outward winding; each refusal fired on its own boundary
+  and not one step inside it; every type baked against an untouched control; and a
+  saved-and-reopened level checked for *not* claiming its pieces were edited.
+
+### Fixed
+- **Two test files, 121 tests, had been silently skipped for two waves.**
+  `tests/test_transform_integration.gd` and `tests/test_transform_system.gd` called
+  `HFBrushSystem._check_axis_aligned_box()`, which the generators wave deleted when
+  hollow stopped needing it. GDScript resolves that at parse time, so both files
+  failed to load — and GUT skips a file it cannot load with a warning rather than a
+  failure, leaving the totals slightly smaller and entirely plausible. The tests
+  are rewritten against what replaced the guard (nothing refuses a rotated brush
+  any more), and `tests/test_suite_integrity.gd` now fails the suite when any test
+  file will not load, so a silent skip cannot happen again.
+
+### Changed
+- The dock's **Arch** section is now the **Structure** section, with a type
+  dropdown. `Ctrl+Shift+A` keeps its action id, so existing custom keymaps still
+  resolve, and builds whatever type the section is showing.
 - **Live generators — structures you can go back and change.** A generator turns a
   handful of numbers into a lot of brushes, and until now the numbers were gone
   the moment the brushes existed. An arch became eight loose brushes with no

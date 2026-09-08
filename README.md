@@ -16,8 +16,8 @@
   <img src="https://img.shields.io/badge/Godot-4.7%2B-478cbf?logo=godot-engine&logoColor=white" alt="Godot 4.7+">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
   <img src="https://img.shields.io/badge/Status-Early%20Alpha-red" alt="Early Alpha">
-  <img src="https://img.shields.io/badge/Tests-2614%20passing-brightgreen" alt="2614 tests passing">
-  <img src="https://img.shields.io/badge/GDScript-58k%2B%20lines-blueviolet" alt="58k+ lines">
+  <img src="https://img.shields.io/badge/Tests-2802%20passing-brightgreen" alt="2802 tests passing">
+  <img src="https://img.shields.io/badge/GDScript-61k%2B%20lines-blueviolet" alt="61k+ lines">
 </p>
 
 <p align="center">
@@ -78,8 +78,8 @@ Level editors like Hammer and TrenchBroom proved that **brush-based workflows** 
 - **Two-click geometry** -- drag a base rectangle, click to set height. Extrude faces to extend rooms. Type exact numbers any time.
 - **Free transform** -- rotate and mirror anything you have drawn, in snapped steps about the axis you choose, then array it in a line, a ring, or a lattice.
 - **Cut along any plane** -- clip and carve split the real geometry, so a diagonal cut, a rotated brush or a cylinder are all fair game. Clip along a selected face's plane to chamfer a corner in one action.
-- **Generate structures** -- hollow any brush into walls (a cylinder becomes a tube), build a parametric arch one brush per segment, and array copies around an axis with a rise to get a spiral stair.
-- **Go back and change them** -- an arch remembers the numbers that made it. Select a segment, adjust the radius or the segment count, and it rebuilds in place, keeping the materials you painted on it.
+- **Generate structures** -- hollow any brush into walls (a cylinder becomes a tube), and build an arch, a straight flight of stairs, a spiral staircase or a faceted dome from a handful of numbers, one brush per piece.
+- **Go back and change them** -- a structure remembers the numbers that made it. Select a piece, adjust anything, and it rebuilds in place — where you moved it to, keeping the materials you painted on it, and telling you first if a rebuild would overwrite work you did by hand.
 - **Paint floors and terrain** -- grid-based floor paint with heightmaps, multi-material blending, auto-connectors (ramps/stairs), and foliage scatter.
 - **Bake when ready** -- one click produces merged meshes, collision shapes (trimesh, per-brush convex, or per-visgroup partitioned), lightmap UVs, navmeshes, and LODs.
 
@@ -93,7 +93,7 @@ HammerForge is a single `addons/` folder. No external tools, no custom builds, n
 
 | | |
 |---|---|
-| **Subsystem-based coordinator architecture** | **2,200 unit + integration tests** with CI on every push |
+| **Subsystem-based coordinator architecture** | **2,800 unit + integration tests** with CI on every push |
 | **15 brush shapes** (box through dodecahedron) | **150 built-in prototype textures** for instant greyboxing |
 | **Quake `.map`** + **glTF `.glb`** export | **.hflevel** native format with threaded I/O |
 | **Customizable keymaps** (JSON) | **Plugin API** for custom tools |
