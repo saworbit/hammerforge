@@ -319,3 +319,199 @@ func test_regenerating_one_arch_leaves_the_other_alone():
 	assert_eq(Array(second.brush_ids), untouched, "the other structure must not move")
 	for brush_id in untouched:
 		assert_not_null(root.brush_system.find_brush_by_id(str(brush_id)))
+
+
+# ===========================================================================
+# Every structure type on a real level
+# ===========================================================================
+
+
+func _settings(type: String, overrides: Dictionary = {}) -> Dictionary:
+	var settings: Dictionary = HFGeneratorSystemScript.default_settings(type)
+	for key in overrides:
+		settings[key] = overrides[key]
+	return settings
+
+
+func _small(type: String) -> Dictionary:
+	# Small enough to bake every piece of, big enough to be the real shape.
+	match type:
+		"arch":
+			return _settings(type, {"segments": 4})
+		"stairs":
+			return _settings(type, {"steps": 4})
+		"spiral_stairs":
+			return _settings(type, {"steps": 4})
+		_:
+			return _settings(type, {"rings": 2, "segments": 6})
+
+
+func test_every_structure_type_bakes_outward_facing_triangles():
+	# The control is a plain box built the ordinary way. If the control fails the
+	# measurement is wrong; if only the structure fails the geometry is wrong.
+	var control := DraftBrush.new()
+	control.size = Vector3(64, 64, 64)
+	control.brush_id = "control"
+	control.set_meta("brush_id", "control")
+	root.draft_brushes_node.add_child(control)
+	control.global_position = Vector3(999, 0, 0)
+	control.rebuild_preview()
+	assert_almost_eq(_outward_ratio(control), 1.0, 0.0001, "the control must pass")
+
+	for type in HFGeneratorSystemScript.known_types():
+		var name := str(type)
+		assert_true(
+			root.create_generator(name, _small(name), Transform3D.IDENTITY).ok,
+			"%s could not be created" % name
+		)
+		var record = _record_of_type(name)
+		for brush_id in record.brush_ids:
+			var brush = root.brush_system.find_brush_by_id(str(brush_id))
+			assert_almost_eq(
+				_outward_ratio(brush), 1.0, 0.0001, "a %s piece would bake inside out" % name
+			)
+
+
+func test_every_structure_type_still_bakes_outward_after_a_rebuild():
+	for type in HFGeneratorSystemScript.known_types():
+		var name := str(type)
+		assert_true(root.create_generator(name, _small(name), Transform3D.IDENTITY).ok)
+		var record = _record_of_type(name)
+		var changed := _small(name)
+		changed["_unused"] = 0  # dropped by the schema; the rest is what it was
+		assert_true(root.regenerate_generator(record.generator_id, changed).ok)
+		for brush_id in record.brush_ids:
+			var brush = root.brush_system.find_brush_by_id(str(brush_id))
+			assert_almost_eq(
+				_outward_ratio(brush), 1.0, 0.0001, "a rebuilt %s piece bakes inside out" % name
+			)
+
+
+func test_every_structure_type_survives_a_state_round_trip():
+	for type in HFGeneratorSystemScript.known_types():
+		assert_true(root.create_generator(str(type), _small(str(type)), Transform3D.IDENTITY).ok)
+	var expected: int = HFGeneratorSystemScript.known_types().size()
+	var state: Dictionary = root.capture_state()
+	root.generator_system.clear()
+	root.restore_state(state)
+	assert_eq(root.generator_system.generators.size(), expected, "a type was lost in the save")
+	for generator_id in root.generator_system.generators:
+		var record = root.generator_system.generators[generator_id]
+		assert_gt(record.brush_ids.size(), 0)
+		assert_eq(
+			record.brush_signatures.size(),
+			record.brush_ids.size(),
+			"%s forgot what its pieces were" % record.type
+		)
+
+
+func test_a_structure_dragged_across_the_level_rebuilds_where_it_now_is():
+	# End to end through LevelRoot: the defect was that it rebuilt where it was
+	# created, which made "change your mind after seeing it in place" impossible.
+	assert_true(root.create_generator("stairs", _small("stairs"), Transform3D.IDENTITY).ok)
+	var record = _record_of_type("stairs")
+	var delta := Vector3(256.0, 0.0, 128.0)
+	for brush_id in record.brush_ids:
+		root.brush_system.find_brush_by_id(str(brush_id)).global_position += delta
+
+	assert_true(
+		root.regenerate_generator(record.generator_id, _settings("stairs", {"steps": 6})).ok
+	)
+	var centre := Vector3.ZERO
+	for brush_id in record.brush_ids:
+		centre += root.brush_system.find_brush_by_id(str(brush_id)).global_position
+	centre /= float(record.brush_ids.size())
+	assert_almost_eq(centre.x, delta.x, 1.0, "the flight jumped back to where it was made")
+	assert_almost_eq(centre.z, delta.z, 1.0)
+
+
+func test_the_edit_count_a_rebuild_would_overwrite_is_visible_from_level_root():
+	assert_true(root.create_generator("stairs", _small("stairs"), Transform3D.IDENTITY).ok)
+	var record = _record_of_type("stairs")
+	assert_eq(root.edited_generator_pieces(record.generator_id), 0)
+	var victim = root.brush_system.find_brush_by_id(str(record.brush_ids[0]))
+	victim.size += Vector3(16, 16, 16)
+	assert_eq(root.edited_generator_pieces(record.generator_id), 1)
+
+
+func test_structures_of_different_types_keep_separate_records():
+	assert_true(root.create_generator("dome", _small("dome"), Transform3D.IDENTITY).ok)
+	assert_true(
+		(
+			root
+			. create_generator(
+				"stairs", _small("stairs"), Transform3D(Basis.IDENTITY, Vector3(512, 0, 0))
+			)
+			. ok
+		)
+	)
+	var dome = _record_of_type("dome")
+	var stairs = _record_of_type("stairs")
+	var stairs_ids := Array(stairs.brush_ids)
+	assert_true(root.regenerate_generator(dome.generator_id, _settings("dome", {"rings": 3})).ok)
+	for brush_id in stairs_ids:
+		assert_not_null(
+			root.brush_system.find_brush_by_id(str(brush_id)),
+			"rebuilding the dome took a step with it"
+		)
+
+
+func _record_of_type(type: String):
+	for generator_id in root.generator_system.generators:
+		if root.generator_system.generators[generator_id].type == type:
+			return root.generator_system.generators[generator_id]
+	return null
+
+
+func test_a_saved_and_reopened_structure_does_not_read_as_edited():
+	# The failure this catches would be constant: the pieces come back out of the
+	# save format rebuilt from serialized floats, and if that round trip moves a
+	# vertex by a hair, every structure in the level warns that it has been edited
+	# by hand and the warning stops meaning anything.
+	for type in HFGeneratorSystemScript.known_types():
+		assert_true(root.create_generator(str(type), _small(str(type)), Transform3D.IDENTITY).ok)
+	var state: Dictionary = root.capture_state()
+	root.restore_state(state)
+	for generator_id in root.generator_system.generators:
+		var record = root.generator_system.generators[generator_id]
+		assert_eq(
+			root.edited_generator_pieces(generator_id),
+			0,
+			"a reopened %s claims pieces were edited by hand" % record.type
+		)
+		assert_eq(
+			root.generator_system.relocation_delta(generator_id),
+			Vector3.ZERO,
+			"a reopened %s claims it was moved" % record.type
+		)
+
+
+func test_a_structure_turned_as_a_whole_warns_rather_than_silently_straightening():
+	# Rotation is not recovered — only translation is — so the honest behaviour is
+	# that every piece reads as edited and the user is told before Update
+	# straightens the structure out.
+	assert_true(root.create_generator("stairs", _small("stairs"), Transform3D.IDENTITY).ok)
+	var record = _record_of_type("stairs")
+	for brush_id in record.brush_ids:
+		root.brush_system.find_brush_by_id(str(brush_id)).rotate_y(0.4)
+	assert_eq(
+		root.edited_generator_pieces(record.generator_id),
+		record.brush_ids.size(),
+		"a turned structure must not rebuild silently"
+	)
+
+
+func test_a_moved_structure_can_still_be_detached_where_it_stands():
+	assert_true(root.create_generator("dome", _small("dome"), Transform3D.IDENTITY).ok)
+	var record = _record_of_type("dome")
+	var ids := Array(record.brush_ids)
+	for brush_id in ids:
+		root.brush_system.find_brush_by_id(str(brush_id)).global_position += Vector3(64, 0, 0)
+	assert_true(root.detach_generator(record.generator_id))
+	var centre := Vector3.ZERO
+	for brush_id in ids:
+		var brush = root.brush_system.find_brush_by_id(str(brush_id))
+		assert_not_null(brush, "detaching must keep the geometry")
+		centre += brush.global_position
+	centre /= float(ids.size())
+	assert_almost_eq(centre.x, 64.0, 1.0, "and leave it where it stands")

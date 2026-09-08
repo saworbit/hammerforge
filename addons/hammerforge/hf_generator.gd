@@ -19,6 +19,10 @@ var settings: Dictionary = {}
 ## Where the structure was placed. Its geometry is built about its own origin.
 var placement: Transform3D = Transform3D.IDENTITY
 var brush_ids: PackedStringArray = PackedStringArray()
+## What each piece was when it was made: where it was put, and a hash of what it
+## is. Two different questions get answered from this — has the structure been
+## moved, and have its pieces been edited — and they need different answers.
+var brush_signatures: Dictionary = {}
 
 
 func _init() -> void:
@@ -39,7 +43,20 @@ func to_dict() -> Dictionary:
 			[basis.y.x, basis.y.y, basis.y.z],
 			[basis.z.x, basis.z.y, basis.z.z],
 		],
+		"brush_signatures": _signatures_to_dict(),
 	}
+
+
+func _signatures_to_dict() -> Dictionary:
+	var out: Dictionary = {}
+	for brush_id in brush_signatures:
+		var signature: Dictionary = brush_signatures[brush_id]
+		var origin: Vector3 = signature.get("origin", Vector3.ZERO)
+		out[str(brush_id)] = {
+			"origin": [origin.x, origin.y, origin.z],
+			"geometry": str(signature.get("geometry", "")),
+		}
+	return out
 
 
 ## Rebuild a record from a serialized dictionary. Anything missing takes its
@@ -74,4 +91,19 @@ static func from_dict(data: Dictionary) -> HFGenerator:
 		if usable:
 			basis = Basis(rows[0], rows[1], rows[2])
 	record.placement = Transform3D(basis, origin)
+
+	var stored_signatures = data.get("brush_signatures", {})
+	if stored_signatures is Dictionary:
+		for brush_id in stored_signatures:
+			var entry = stored_signatures[brush_id]
+			if not (entry is Dictionary):
+				continue
+			var point := Vector3.ZERO
+			var point_arr = (entry as Dictionary).get("origin", [])
+			if point_arr is Array and (point_arr as Array).size() >= 3:
+				point = Vector3(float(point_arr[0]), float(point_arr[1]), float(point_arr[2]))
+			record.brush_signatures[str(brush_id)] = {
+				"origin": point,
+				"geometry": str((entry as Dictionary).get("geometry", "")),
+			}
 	return record

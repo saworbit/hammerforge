@@ -510,3 +510,242 @@ func test_a_structure_whose_pieces_were_all_deleted_can_still_be_rebuilt():
 		"the record outlives the geometry, which is the point of it"
 	)
 	assert_eq(_brush_count(), 4)
+
+
+# ===========================================================================
+# Every type, not only the arch
+# ===========================================================================
+
+
+func test_every_known_type_creates_a_structure_of_its_own():
+	for type in HFGeneratorSystemScript.known_types():
+		var name := str(type)
+		var result = generators.create(
+			name, HFGeneratorSystemScript.default_settings(name), Transform3D.IDENTITY
+		)
+		assert_true(result.ok, "%s could not be created: %s" % [name, result.message])
+	assert_eq(
+		generators.generators.size(),
+		HFGeneratorSystemScript.known_types().size(),
+		"each type is its own structure"
+	)
+
+
+func test_a_piece_of_any_type_finds_its_own_generator():
+	for type in HFGeneratorSystemScript.known_types():
+		var name := str(type)
+		assert_true(
+			(
+				generators
+				. create(name, HFGeneratorSystemScript.default_settings(name), Transform3D.IDENTITY)
+				. ok
+			)
+		)
+	for generator_id in generators.generators:
+		var record = generators.generators[generator_id]
+		for brush_id in record.brush_ids:
+			var found = generators.generator_for_brush(str(brush_id))
+			assert_eq(
+				found.generator_id, record.generator_id, "a piece pointed at the wrong structure"
+			)
+
+
+func test_a_structure_of_any_type_rebuilds_from_new_settings():
+	var cases := {
+		"stairs": {"steps": 5},
+		"spiral_stairs": {"steps": 5},
+		"dome": {"rings": 2, "segments": 6},
+	}
+	for type in cases:
+		var name := str(type)
+		var settings: Dictionary = HFGeneratorSystemScript.default_settings(name)
+		assert_true(generators.create(name, settings, Transform3D.IDENTITY).ok)
+		var record = _record_of_type(name)
+		var before: int = record.brush_ids.size()
+		var changed: Dictionary = settings.duplicate()
+		for key in cases[type]:
+			changed[key] = cases[type][key]
+		assert_true(
+			generators.regenerate(record.generator_id, changed).ok, "%s would not rebuild" % name
+		)
+		assert_ne(record.brush_ids.size(), before, "%s ignored its new settings" % name)
+
+
+func _record_of_type(type: String):
+	for generator_id in generators.generators:
+		if generators.generators[generator_id].type == type:
+			return generators.generators[generator_id]
+	return null
+
+
+# ===========================================================================
+# What has happened to a structure since it was made
+# ===========================================================================
+
+
+func test_creating_remembers_what_each_piece_was():
+	assert_true(_create({"segments": 4}).ok)
+	var record = _only_record()
+	assert_eq(record.brush_signatures.size(), 4, "every piece is remembered")
+	for brush_id in record.brush_ids:
+		var signature: Dictionary = record.brush_signatures[str(brush_id)]
+		assert_true(str(signature.get("geometry", "")) != "", "a piece has no shape recorded")
+
+
+func test_an_untouched_structure_has_moved_nowhere_and_been_edited_nowhere():
+	assert_true(_create({"segments": 6}).ok)
+	var record = _only_record()
+	assert_eq(generators.relocation_delta(record.generator_id), Vector3.ZERO)
+	assert_eq(generators.edited_piece_count(record.generator_id), 0)
+
+
+func test_dragging_the_whole_structure_reads_as_a_move_and_not_as_editing():
+	assert_true(_create({"segments": 4}).ok)
+	var record = _only_record()
+	var delta := Vector3(64.0, 0.0, -32.0)
+	for brush_id in record.brush_ids:
+		brushes.find_brush_by_id(str(brush_id)).global_position += delta
+	assert_almost_eq(generators.relocation_delta(record.generator_id).x, delta.x, 0.001)
+	assert_almost_eq(generators.relocation_delta(record.generator_id).z, delta.z, 0.001)
+	assert_eq(
+		generators.edited_piece_count(record.generator_id),
+		0,
+		"moving a structure is not editing its pieces"
+	)
+
+
+func test_a_structure_that_was_moved_rebuilds_where_it_now_is():
+	# The defect this exists for: create an arch on the origin, drag it into a
+	# doorway, widen it, and watch it jump back to the origin.
+	assert_true(_create({"segments": 4}).ok)
+	var record = _only_record()
+	var delta := Vector3(100.0, 50.0, 0.0)
+	for brush_id in record.brush_ids:
+		brushes.find_brush_by_id(str(brush_id)).global_position += delta
+	var moved_centre := _structure_centre(record)
+
+	assert_true(generators.regenerate(record.generator_id, _arch({"segments": 4})).ok)
+	assert_almost_eq(record.placement.origin.x, delta.x, 0.01, "the record forgot where it went")
+	assert_almost_eq(_structure_centre(record).x, moved_centre.x, 1.0)
+	assert_almost_eq(_structure_centre(record).y, moved_centre.y, 1.0)
+
+
+func test_pieces_moved_apart_are_edits_rather_than_a_relocation():
+	assert_true(_create({"segments": 4}).ok)
+	var record = _only_record()
+	var i := 0
+	for brush_id in record.brush_ids:
+		brushes.find_brush_by_id(str(brush_id)).global_position += Vector3(10.0 * float(i), 0, 0)
+		i += 1
+	assert_eq(
+		generators.relocation_delta(record.generator_id),
+		Vector3.ZERO,
+		"pieces that disagree were not moved together"
+	)
+	assert_gt(
+		generators.edited_piece_count(record.generator_id), 0, "moving one piece is a hand edit"
+	)
+
+
+func test_a_reshaped_piece_is_counted_as_edited():
+	assert_true(_create({"segments": 4}).ok)
+	var record = _only_record()
+	var victim = brushes.find_brush_by_id(str(record.brush_ids[0]))
+	victim.size = victim.size * 2.0
+	assert_eq(generators.edited_piece_count(record.generator_id), 1)
+	assert_eq(Array(generators.edited_brush_ids(record.generator_id)), [str(record.brush_ids[0])])
+
+
+func test_a_turned_piece_is_counted_as_edited():
+	assert_true(_create({"segments": 4}).ok)
+	var record = _only_record()
+	var victim = brushes.find_brush_by_id(str(record.brush_ids[1]))
+	victim.rotate_y(0.5)
+	assert_eq(generators.edited_piece_count(record.generator_id), 1)
+
+
+func test_a_rebuild_clears_the_edit_count_because_the_edits_are_gone():
+	assert_true(_create({"segments": 4}).ok)
+	var record = _only_record()
+	brushes.find_brush_by_id(str(record.brush_ids[0])).size += Vector3(8, 8, 8)
+	assert_eq(generators.edited_piece_count(record.generator_id), 1)
+	assert_true(generators.regenerate(record.generator_id, _arch({"segments": 4})).ok)
+	assert_eq(
+		generators.edited_piece_count(record.generator_id),
+		0,
+		"the pieces are the generated ones again"
+	)
+
+
+func test_a_deleted_piece_is_not_counted_as_an_edit():
+	# It is missing, not changed, and a rebuild puts it back without losing work.
+	assert_true(_create({"segments": 4}).ok)
+	var record = _only_record()
+	brushes.delete_brush_by_id(str(record.brush_ids[0]))
+	assert_eq(generators.edited_piece_count(record.generator_id), 0)
+
+
+func test_signatures_survive_the_save_format():
+	assert_true(_create({"segments": 4}).ok)
+	var record = _only_record()
+	brushes.find_brush_by_id(str(record.brush_ids[0])).size += Vector3(8, 8, 8)
+	var edited_before: int = generators.edited_piece_count(record.generator_id)
+
+	var captured: Array = generators.capture()
+	generators.restore(captured)
+	var restored = _only_record()
+	assert_eq(restored.brush_signatures.size(), 4, "a reopened level must still know what it built")
+	assert_eq(
+		generators.edited_piece_count(restored.generator_id),
+		edited_before,
+		"the same pieces must still read as edited after a reload"
+	)
+
+
+func test_a_record_saved_before_signatures_existed_still_loads():
+	var older := {
+		"generator_id": "gen_old",
+		"type": "arch",
+		"settings": _arch(),
+		"brush_ids": ["b1"],
+	}
+	generators.restore([older])
+	var record = generators.generators["gen_old"]
+	assert_eq(record.brush_signatures.size(), 0)
+	assert_eq(
+		generators.relocation_delta("gen_old"),
+		Vector3.ZERO,
+		"nothing recorded means nothing known, not a move"
+	)
+	assert_eq(generators.edited_piece_count("gen_old"), 0)
+
+
+func test_a_stranger_brush_in_the_record_is_ignored_by_both_questions():
+	assert_true(_create({"segments": 4}).ok)
+	var record = _only_record()
+	var stranger = DraftBrush.new()
+	stranger.brush_id = "stranger"
+	stranger.set_meta("brush_id", "stranger")
+	root.draft_brushes_node.add_child(stranger)
+	brushes._register_brush_id("stranger", stranger)
+	stranger.global_position = Vector3(999, 999, 999)
+	record.brush_ids.append("stranger")
+	record.brush_signatures["stranger"] = {"origin": Vector3.ZERO, "geometry": "nonsense"}
+
+	assert_eq(
+		generators.relocation_delta(record.generator_id),
+		Vector3.ZERO,
+		"a brush that is not ours cannot say where our structure went"
+	)
+	assert_eq(generators.edited_piece_count(record.generator_id), 0)
+
+
+func _structure_centre(record) -> Vector3:
+	var total := Vector3.ZERO
+	var count := 0
+	for brush_id in record.brush_ids:
+		var brush = brushes.find_brush_by_id(str(brush_id))
+		if brush:
+			total += brush.global_position
+			count += 1
+	return total / float(count) if count > 0 else Vector3.ZERO
