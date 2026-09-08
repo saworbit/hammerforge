@@ -19,9 +19,12 @@ var settings: Dictionary = {}
 ## Where the structure was placed. Its geometry is built about its own origin.
 var placement: Transform3D = Transform3D.IDENTITY
 var brush_ids: PackedStringArray = PackedStringArray()
-## What each piece was when it was made: where it was put, and a hash of what it
-## is. Two different questions get answered from this — has the structure been
-## moved, and have its pieces been edited — and they need different answers.
+## What each piece was when it was made: where it was put, how it was turned, and
+## a hash of what it is. Two different questions get answered from this — has the
+## structure been moved, and have its pieces been edited — and they need different
+## answers. A record written before turning was understood has no basis for its
+## pieces; the reader answers that with the placement's own basis, which is what
+## every piece the generator built was given.
 var brush_signatures: Dictionary = {}
 
 
@@ -52,11 +55,37 @@ func _signatures_to_dict() -> Dictionary:
 	for brush_id in brush_signatures:
 		var signature: Dictionary = brush_signatures[brush_id]
 		var origin: Vector3 = signature.get("origin", Vector3.ZERO)
-		out[str(brush_id)] = {
+		var entry := {
 			"origin": [origin.x, origin.y, origin.z],
 			"geometry": str(signature.get("geometry", "")),
 		}
+		# Written only when it is known. A record that never had one must not come
+		# back claiming its pieces were built square, because the reader has a
+		# better answer for a missing basis than any value written here could be.
+		if signature.has("basis"):
+			entry["basis"] = _basis_to_rows(signature["basis"])
+		out[str(brush_id)] = entry
 	return out
+
+
+static func _basis_to_rows(basis: Basis) -> Array:
+	return [
+		[basis.x.x, basis.x.y, basis.x.z],
+		[basis.y.x, basis.y.y, basis.y.z],
+		[basis.z.x, basis.z.y, basis.z.z],
+	]
+
+
+## A basis from serialized rows, or `null` when the rows are missing or unusable.
+static func _basis_from_rows(rows_value) -> Variant:
+	if not (rows_value is Array) or (rows_value as Array).size() < 3:
+		return null
+	var columns: Array = []
+	for row in rows_value:
+		if not (row is Array) or (row as Array).size() < 3:
+			return null
+		columns.append(Vector3(float(row[0]), float(row[1]), float(row[2])))
+	return Basis(columns[0], columns[1], columns[2])
 
 
 ## Rebuild a record from a serialized dictionary. Anything missing takes its
@@ -79,17 +108,9 @@ static func from_dict(data: Dictionary) -> HFGenerator:
 	if origin_arr is Array and origin_arr.size() >= 3:
 		origin = Vector3(float(origin_arr[0]), float(origin_arr[1]), float(origin_arr[2]))
 	var basis := Basis.IDENTITY
-	var basis_arr = data.get("placement_basis", [])
-	if basis_arr is Array and basis_arr.size() >= 3:
-		var rows: Array = []
-		var usable := true
-		for row in basis_arr:
-			if not (row is Array) or (row as Array).size() < 3:
-				usable = false
-				break
-			rows.append(Vector3(float(row[0]), float(row[1]), float(row[2])))
-		if usable:
-			basis = Basis(rows[0], rows[1], rows[2])
+	var stored_basis = _basis_from_rows(data.get("placement_basis", []))
+	if stored_basis != null:
+		basis = stored_basis
 	record.placement = Transform3D(basis, origin)
 
 	var stored_signatures = data.get("brush_signatures", {})
@@ -102,8 +123,12 @@ static func from_dict(data: Dictionary) -> HFGenerator:
 			var point_arr = (entry as Dictionary).get("origin", [])
 			if point_arr is Array and (point_arr as Array).size() >= 3:
 				point = Vector3(float(point_arr[0]), float(point_arr[1]), float(point_arr[2]))
-			record.brush_signatures[str(brush_id)] = {
+			var signature := {
 				"origin": point,
 				"geometry": str((entry as Dictionary).get("geometry", "")),
 			}
+			var piece_basis = _basis_from_rows((entry as Dictionary).get("basis", []))
+			if piece_basis != null:
+				signature["basis"] = piece_basis
+			record.brush_signatures[str(brush_id)] = signature
 	return record

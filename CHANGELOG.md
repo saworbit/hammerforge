@@ -5,6 +5,39 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **A structure you have turned rebuilds turned.** Relocation understood
+  translation and nothing else, so a flight of stairs rotated into the corner it
+  belongs in and then given two more steps squared itself back up on the world
+  axes — and, because every piece was standing in a basis it had not been
+  recorded in, first told you all of them had been edited by hand. Both halves of
+  that were the same missing fact.
+  - Each piece now records **how it was turned** as well as where it was put, and
+    the question asked of the pieces is a rigid transform rather than a vector: if
+    every surviving piece received the same turn and slide, the structure was
+    moved as a whole and the placement is composed with it.
+  - **A move that is not rigid answers no.** A squash is not a relocation, and a
+    mirror is refused outright — rebuilding a structure through a
+    negative-determinant basis inverts the winding of every face in it and does
+    not look wrong until the bake. Both leave the placement alone and let the
+    pieces read as edited, which is what they are.
+  - **A piece is asked about its shape in the basis it was recorded in**, not the
+    one it is standing in. That is what separates a structure turned as a whole
+    from a piece reshaped by hand, and comparing the same recorded `Basis` on both
+    sides is exact where un-turning the current one would compare the rounding of
+    one arithmetic path against the rounding of another.
+  - **Levels saved before this open unchanged.** A signature with no basis is
+    answered with the placement's own, which is what every piece the generator
+    built was given — so an older structure recovers a turn with no migration and
+    no re-record.
+  - The structure ghost follows: select a piece of a turned structure and the
+    preview of the rebuild stands over it at the angle it actually has.
+  - **Coverage** (`tests/test_generator_system.gd`,
+    `tests/test_live_generators_integration.gd`,
+    `tests/test_structure_preview.gd`): a turn recovered and rebuilt in place; a
+    turn and a slide together; pieces turned one at a time still reading as edits;
+    a mirror and a squash both refused; a turn surviving the save format; a record
+    with its piece bases stripped still recovering one; and every rebuilt piece
+    checked for positive determinant.
 - **The Structure section draws what it would build, before it builds it.** Every
   other way of making geometry in HammerForge shows you the shape while you are
   still choosing it: a drag has its box, a hollow has its walls, a clip has its

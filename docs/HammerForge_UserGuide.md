@@ -341,11 +341,17 @@ ahead. **Detach** is the other way out.
 This is the point of it: a radius, a segment count and a step rise are numbers you
 get right by looking at the result, not in advance.
 
-**A structure you have dragged somewhere else rebuilds where it now is.** Build an
-arch, move it into the doorway it belongs in, then widen it — it stays in the
-doorway. That only holds when you moved the whole thing: if you have moved
+**A structure you have moved or turned rebuilds where it now stands.** Build an
+arch, drag it into the doorway it belongs in, rotate it to face the way the
+doorway does, then widen it — it stays in the doorway, still facing that way.
+That only holds when you moved the whole thing: if you have dragged or turned
 individual pieces around, the structure was not relocated, it was edited, and the
 next section is about that.
+
+A **flip** is the exception. Mirroring a structure turns every face inside out,
+and rebuilding through that would give you geometry that looks right in the
+viewport and wrong in the bake — so a mirrored structure is not treated as
+relocated. Its pieces read as edited, and **Detach** is the way to keep them.
 
 **If you have edited pieces by hand, the section says so** — *"3 pieces have been
 edited by hand. Update will rebuild over them — Detach to keep them."* Vertex

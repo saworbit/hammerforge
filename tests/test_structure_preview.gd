@@ -246,6 +246,24 @@ func test_the_rebuild_ghost_follows_a_structure_that_was_moved():
 	)
 
 
+func test_the_rebuild_ghost_follows_a_structure_that_was_turned():
+	dock._on_create_structure()
+	var generator_id: String = root.generator_system.generators.keys()[0]
+	var brush_ids := Array(root.generator_system.generators[generator_id].brush_ids)
+	var pivot: Vector3 = root.resolve_transform_pivot(brush_ids, [])
+
+	root.rotate_managed_nodes(brush_ids, [], 1, 90.0, pivot)
+	dock.set_selection_nodes([_generated_brushes()[0]])
+
+	assert_gt(_pieces(), 0, "the ghost is still drawn")
+	assert_almost_eq(
+		_ghost().global_transform.basis.x,
+		Basis(Vector3.UP, deg_to_rad(90.0)).x,
+		Vector3.ONE * 0.01,
+		"a ghost that stands square over a structure that does not is the wrong answer"
+	)
+
+
 func test_looking_at_a_refused_rebuild_leaves_the_structure_alone():
 	dock._on_create_structure()
 	dock.set_selection_nodes([_generated_brushes()[0]])

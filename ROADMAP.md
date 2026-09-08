@@ -563,13 +563,34 @@ and run".
 ### Known limits of the current structure pass
 - Only the four described generators are live. Hollow and the array modes still
   have their own records and their own shapes.
-- Turning a whole structure is not recovered the way moving it is; a rebuild
-  squares it back up. Every piece reads as edited, so the warning fires first.
 - The warning is refreshed when the selection changes, not while a piece stays
   selected and is edited under it.
 - A dome is faceted and its wall thickness is measured radially, so panels near
   the crown are slightly thicker in section than panels at the base.
 - Structures still cannot nest, and none depends on other geometry.
+
+## Done (Structure Relocation — Turning as Well as Sliding — September 2026)
+- Relocation is a rigid transform rather than a vector: a structure whose
+  surviving pieces all received the same turn and slide rebuilds where it now
+  stands and at the angle it now has.
+- Each piece signature records its basis. A missing one — every record written
+  before this — is answered with the placement's own basis, which is what every
+  generated piece was given, so older levels recover a turn with no migration.
+- A shape is compared in the basis it was recorded in, which is what separates a
+  structure turned as a whole from a piece reshaped by hand.
+- Non-rigid moves answer no. A squash is not a relocation; a mirror is refused
+  outright, because rebuilding through a negative-determinant basis inverts the
+  winding of every face and does not look wrong until the bake.
+- `rebuild_placement()` follows, so the structure ghost stands over a turned
+  structure at its actual angle.
+- 12 new tests across the generator, integration and preview suites.
+
+### Known limits of structure relocation
+- A structure is still created square: the placement basis only becomes
+  non-identity by turning the pieces afterwards.
+- Pieces turned one at a time remain hand edits, which is the intended reading,
+  but there is no way to say "treat these as the new shape" short of Detach.
+- A mirrored structure gives no more specific reason than the hand-edit warning.
 
 ## Done (Structure Preview — Seeing It Before Building It — September 2026)
 - `HFStructurePreview`: a pale wireframe of the structure the Structure section
