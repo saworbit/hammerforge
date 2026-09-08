@@ -5,6 +5,50 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Generators — one description, many brushes.** Three gaps that looked unrelated
+  turned out to be the same shape of problem.
+  - **Hollow works on any convex brush, at any rotation.** It was the last
+    operation that rebuilt what it touched as axis-aligned slabs, and so the last
+    reason `_check_axis_aligned_box()` existed. It needed no new algorithm: the
+    inside of a hollow brush is the same solid with every face pushed inward by
+    the wall thickness, so shelling is the progressive remainder carve already
+    runs, with the brush supplying its own planes. One face gives one wall — which
+    means hollowing a cylinder now gives you a pipe.
+  - **A parametric arch.** `HFArchBuilder` turns radius, wall thickness, depth,
+    arc degrees, segment count and start angle into one brush per voussoir. The
+    radial array can repeat a shape; it cannot compute the wedge an arch is made
+    of. Reachable from a section in the Build tab, the command palette, and
+    Ctrl+Shift+A, and placed on the selection or the world origin.
+  - **Radial arrays can climb.** A `rise` per copy turns the ring into a helix,
+    and with a box as the source, a spiral staircase. Zero keeps the flat ring
+    exactly as it was, and a duplicator saved before the field existed loads as
+    zero.
+  - Hollow's confirmation now names the number of walls it is about to make, and
+    its preview outlines the real walls instead of six axis-aligned slabs. The
+    validation is exact for any shape too: if the inset planes cross, there is no
+    interior, where the old rule compared twice the thickness against the smallest
+    dimension and only ever meant anything for a box.
+- **Generator coverage** (`tests/test_arch_builder.gd`,
+  `tests/test_generators_integration.gd`, plus rewritten hollow suites, 55 cases):
+  closure, convexity, neighbouring segments sharing a whole face, arch dimensions,
+  helix rise, and bake-level winding proofs each paired with an untouched control.
+
+### Fixed
+- **Shelling a brush trusted each face's own normal, and a primitive mesh has
+  faces whose normal cannot be trusted.** A sphere's poles carry near-degenerate
+  triangles whose cross product is long enough to pass any sane epsilon but points
+  in a direction that is numerical noise. One of those flipped turns an inset
+  plane inside out, and hollowing a sphere reported that there was no room inside
+  it. Plane orientation is now measured against an interior point rather than
+  taken from the face, which is a question with an answer.
+
+### Changed
+- **Hollow and carve refuse brushes with more than 128 distinct planes.** Every
+  plane is a split of a growing face set, so cost and piece count climb together.
+  A box has six and a cylinder sixty-six, both fine; a sphere has thousands,
+  because every triangle is its own plane. Hollowing one measured sixty seconds
+  and 2,051 brushes. Both operations now check first and refuse with the real
+  number rather than grinding the editor to a halt.
 - **Precision cutting — clip and carve along any plane.** Clip could only split a
   brush along X, Y or Z, and both clip and carve rebuilt what they touched as
   axis-aligned boxes, so both refused a cylinder, a polygon-tool brush, a merged

@@ -22,6 +22,9 @@ var mode: int = ArrayMode.LINEAR
 var axis_index: int = 1
 var step_degrees: float = 90.0
 var pivot: Vector3 = Vector3.ZERO
+## Distance each radial copy climbs along the rotation axis. Zero is a flat
+## ring; anything else is a helix, and with a box as the source, a spiral stair.
+var rise: float = 0.0
 ## Grid layout: copies per axis including the source cell, and the gap between
 ## cells on each axis.
 var grid_counts: Vector3i = Vector3i(2, 1, 2)
@@ -77,7 +80,12 @@ func generate(brush_system, p_count: int, p_offset: Vector3) -> bool:
 ## ambiguity about whether the last copy lands on the end angle. To close a full
 ## ring, pass `360.0 / (p_count + 1)`.
 func generate_radial(
-	brush_system, p_count: int, p_axis_index: int, p_step_degrees: float, p_pivot: Vector3
+	brush_system,
+	p_count: int,
+	p_axis_index: int,
+	p_step_degrees: float,
+	p_pivot: Vector3,
+	p_rise: float = 0.0
 ) -> bool:
 	if source_brush_ids.is_empty() or p_count < 1:
 		return false
@@ -86,18 +94,23 @@ func generate_radial(
 	axis_index = p_axis_index
 	step_degrees = p_step_degrees
 	pivot = p_pivot
+	rise = p_rise
 	instance_groups.clear()
 
+	var climb := HFTransformSystem.axis_vector(p_axis_index) * p_rise
 	for copy_index in range(1, p_count + 1):
 		var angle := deg_to_rad(p_step_degrees * copy_index)
 		var rot := HFTransformSystem.rotation_basis(p_axis_index, angle)
+		var lift: Vector3 = climb * float(copy_index)
 		var copy_ids := PackedStringArray()
 		for source_id in source_brush_ids:
 			var info := _copy_info(brush_system, source_id)
 			if info.is_empty():
 				continue
 			var source_xform: Transform3D = info.get("transform", Transform3D.IDENTITY)
-			info["transform"] = HFTransformSystem.rotated_transform(source_xform, rot, p_pivot)
+			var turned := HFTransformSystem.rotated_transform(source_xform, rot, p_pivot)
+			turned.origin += lift
+			info["transform"] = turned
 			info.erase("center")
 			var new_id := _spawn_copy(brush_system, info)
 			if new_id != "":
@@ -211,6 +224,7 @@ func to_dict() -> Dictionary:
 		"mode": mode,
 		"axis_index": axis_index,
 		"step_degrees": step_degrees,
+		"rise": rise,
 		"pivot": [pivot.x, pivot.y, pivot.z],
 		"grid_counts": [grid_counts.x, grid_counts.y, grid_counts.z],
 		"grid_spacing": [grid_spacing.x, grid_spacing.y, grid_spacing.z],
@@ -235,6 +249,8 @@ static func from_dict(data: Dictionary) -> HFDuplicator:
 	dup.mode = int(data.get("mode", ArrayMode.LINEAR))
 	dup.axis_index = int(data.get("axis_index", 1))
 	dup.step_degrees = float(data.get("step_degrees", 90.0))
+	# A duplicator written before radial arrays could climb loads as a flat ring.
+	dup.rise = float(data.get("rise", 0.0))
 	var pivot_arr = data.get("pivot", [0.0, 0.0, 0.0])
 	if pivot_arr is Array and pivot_arr.size() >= 3:
 		dup.pivot = Vector3(float(pivot_arr[0]), float(pivot_arr[1]), float(pivot_arr[2]))

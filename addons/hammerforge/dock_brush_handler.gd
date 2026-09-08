@@ -368,6 +368,7 @@ static func on_create_duplicate_array(dock: Object) -> void:
 
 static func _create_radial_array(dock: Object, brush_ids: PackedStringArray, cnt: int) -> void:
 	var axis_index: int = dock.dup_axis_opt.selected if dock.dup_axis_opt else 1
+	var rise: float = dock.dup_rise_spin.value if dock.dup_rise_spin else 0.0
 	var step: float = dock.dup_step_spin.value if dock.dup_step_spin else 90.0
 	# "Fill 360" spaces the copies and the source evenly around a closed ring, so
 	# the last copy stops one step short of the source rather than on top of it.
@@ -375,9 +376,14 @@ static func _create_radial_array(dock: Object, brush_ids: PackedStringArray, cnt
 		step = 360.0 / float(cnt + 1)
 	var pivot: Vector3 = dock.level_root.resolve_transform_pivot(Array(brush_ids), [])
 	dock._commit_state_action(
-		"Create Radial Array", "create_radial_array", [brush_ids, cnt, axis_index, step, pivot]
+		"Create Radial Array",
+		"create_radial_array",
+		[brush_ids, cnt, axis_index, step, pivot, rise]
 	)
-	dock._set_status("Created %d copies %.1f° apart" % [cnt, step])
+	if is_zero_approx(rise):
+		dock._set_status("Created %d copies %.1f° apart" % [cnt, step])
+	else:
+		dock._set_status("Created %d copies %.1f° apart, rising %.1f" % [cnt, step, rise])
 
 
 static func _create_grid_array(dock: Object, brush_ids: PackedStringArray) -> void:
@@ -432,6 +438,29 @@ static func _transform_targets(dock: Object) -> Dictionary:
 		elif dock.level_root.is_entity_node(node):
 			entity_paths.append(dock.level_root.get_path_to(node))
 	return {"brush_ids": brush_ids, "entity_paths": entity_paths}
+
+
+## Build an arch, centred on whatever is selected, or on the world origin.
+##
+## Placing it where the transform commands would pivot is the least surprising
+## answer, and it means an arch lands somewhere you were already looking.
+static func on_create_arch(dock: Object) -> void:
+	if dock == null or not dock.level_root:
+		return
+	var settings := {
+		"radius": dock.arch_radius_spin.value if dock.arch_radius_spin else 128.0,
+		"wall_thickness": dock.arch_thickness_spin.value if dock.arch_thickness_spin else 32.0,
+		"depth": dock.arch_depth_spin.value if dock.arch_depth_spin else 64.0,
+		"arc_degrees": dock.arch_arc_spin.value if dock.arch_arc_spin else 180.0,
+		"segments": int(dock.arch_segments_spin.value) if dock.arch_segments_spin else 8,
+		"start_degrees": dock.arch_start_spin.value if dock.arch_start_spin else 0.0,
+	}
+	var targets := _transform_targets(dock)
+	var centre: Vector3 = dock.level_root.resolve_transform_pivot(
+		targets["brush_ids"], targets["entity_paths"]
+	)
+	dock._commit_state_action("Create Arch", "create_arch", [settings, centre])
+	dock._set_status("Created an arch of %d segments" % settings["segments"])
 
 
 static func on_rotate_selection(dock: Object, direction: int) -> void:

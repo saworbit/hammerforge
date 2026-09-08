@@ -168,6 +168,12 @@ func build(parent: Control) -> void:
 	dock.dup_step_spin = HFUIFactoryType.make_spin(-360.0, 360.0, 1.0, 90.0)
 	dock.dup_step_spin.tooltip_text = "Degrees between copies"
 	dock.dup_radial_row.add_child(dock.dup_step_spin)
+	var rise_lbl = Label.new()
+	rise_lbl.text = "Rise:"
+	dock.dup_radial_row.add_child(rise_lbl)
+	dock.dup_rise_spin = HFUIFactoryType.make_spin(-1024.0, 1024.0, 1.0, 0.0)
+	dock.dup_rise_spin.tooltip_text = ("How far each copy climbs along the axis. Zero is a flat ring; anything else is a helix, and with a step box, a spiral stair.")
+	dock.dup_radial_row.add_child(dock.dup_rise_spin)
 	dock.dup_fill_check = HFUIFactoryType.make_check("Fill 360°", false)
 	dock.dup_fill_check.tooltip_text = ("Ignore the step and space the copies evenly around a closed ring")
 	dock.dup_radial_row.add_child(dock.dup_fill_check)

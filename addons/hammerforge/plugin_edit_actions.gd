@@ -219,8 +219,12 @@ static func hollow_selected(plugin: Object, root: Node) -> bool:
 		root.hollow_preview.show_preview(brush_id, thickness)
 	var dlg = ConfirmationDialog.new()
 	dlg.title = "Hollow Brush"
+	# The wall count comes from the same planner that built the preview. A brush
+	# with many faces shells into many walls — a cylinder becomes a tube of them —
+	# and that is worth knowing before committing rather than after.
 	dlg.dialog_text = (
-		"Hollow with wall thickness %.1f?\n(Yellow wireframe shows resulting walls)" % thickness
+		"Hollow with wall thickness %.1f into %s?\n(Yellow wireframe shows resulting walls)"
+		% [thickness, check.message if check.message != "" else "walls"]
 	)
 	dlg.min_size = Vector2i(300, 100)
 	plugin._add_confirmable_dialog(dlg)

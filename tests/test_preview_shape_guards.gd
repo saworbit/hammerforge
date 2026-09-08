@@ -168,36 +168,47 @@ func test_hollow_preview_draws_for_an_axis_aligned_box():
 	assert_true(hollow_preview._preview_container.visible, "A valid hollow shows its container")
 
 
-func test_hollow_preview_stays_empty_for_a_cylinder():
+func test_hollow_preview_draws_for_a_cylinder():
+	# Hollow shells real geometry now, so the preview has to promise the walls the
+	# tool will build rather than refusing every shape that is not a box.
 	var b = _make_brush()
 	b.shape = DraftBrush.BrushShape.CYLINDER
+	b.rebuild_preview()
 	hollow_preview.show_preview("brush_1", 4.0)
-	_assert_no_hollow_wireframes("Cylinder")
-	assert_false(sys.can_hollow_brush("brush_1", 4.0).ok, "The tool refuses a cylinder")
+	assert_gt(hollow_preview._active_count, 0, "a cylinder hollow must show its walls")
+	assert_true(sys.can_hollow_brush("brush_1", 4.0).ok, "The tool accepts a cylinder")
 
 
-func test_hollow_preview_stays_empty_for_a_wedge():
+func test_hollow_preview_draws_for_a_wedge():
 	var b = _make_brush()
 	b.shape = DraftBrush.BrushShape.WEDGE
+	b.rebuild_preview()
 	hollow_preview.show_preview("brush_1", 4.0)
-	_assert_no_hollow_wireframes("Wedge")
+	assert_gt(hollow_preview._active_count, 0, "a wedge hollow must show its walls")
 
 
-func test_hollow_preview_stays_empty_for_a_rotated_box():
+func test_hollow_preview_draws_for_a_rotated_box():
 	var b = _make_brush()
 	b.rotation_degrees = Vector3(0, 45, 0)
+	b.rebuild_preview()
 	hollow_preview.show_preview("brush_1", 4.0)
-	_assert_no_hollow_wireframes("Rotated box")
-	assert_false(sys.can_hollow_brush("brush_1", 4.0).ok, "The tool refuses a rotated box")
+	assert_eq(hollow_preview._active_count, 6, "a rotated box still hollows into six walls")
 
 
-func test_hollow_preview_clears_when_the_brush_is_rotated_mid_drag():
+func test_hollow_preview_stays_empty_when_the_thickness_leaves_no_room():
+	_make_brush()
+	hollow_preview.show_preview("brush_1", 500.0)
+	_assert_no_hollow_wireframes("Thickness with no interior")
+
+
+func test_hollow_preview_follows_the_brush_when_it_is_rotated_mid_drag():
 	var b = _make_brush()
 	hollow_preview.show_preview("brush_1", 4.0)
 	assert_eq(hollow_preview._active_count, 6, "Starts as a valid box preview")
-	b.rotation_degrees = Vector3(0, 45, 0)
+	b.rotation_degrees = Vector3(0, 30, 0)
+	b.rebuild_preview()
 	hollow_preview.update_thickness(6.0)
-	_assert_no_hollow_wireframes("Rotated box after update_thickness")
+	assert_eq(hollow_preview._active_count, 6, "The preview keeps up with the rotation")
 
 
 # ===========================================================================
@@ -253,23 +264,40 @@ func _mesh_bounds(instance: MeshInstance3D) -> AABB:
 	return bounds
 
 
-func test_hollow_preview_places_the_top_wall_wireframe_on_the_wall_bounds():
+func test_hollow_preview_draws_walls_one_thickness_deep():
+	# The preview outlines the real walls now, so which wall is which depends on
+	# the order the faces come in. What holds for every wall is that it is one wall
+	# thickness deep in one direction, and that they all sit inside the brush.
 	_make_brush()
 	hollow_preview.show_preview("brush_1", 4.0)
-	# Wall 0 is the top slab: full width and depth, thickness tall, pushed up.
-	var t: Transform3D = hollow_preview._mesh_pool[0].transform
-	assert_almost_eq(t.origin, Vector3(0, 30, 0), Vector3.ONE * 0.001, "Top wall centre")
-	assert_almost_eq(t.basis.get_scale(), Vector3(64, 4, 64), Vector3.ONE * 0.001, "Top wall size")
+	assert_eq(hollow_preview._active_count, 6)
+	for i in hollow_preview._active_count:
+		var bounds := _mesh_bounds(hollow_preview._mesh_pool[i])
+		var thin := (
+			absf(bounds.size.x - 4.0) < 0.001
+			or absf(bounds.size.y - 4.0) < 0.001
+			or absf(bounds.size.z - 4.0) < 0.001
+		)
+		assert_true(thin, "wall %d is not one thickness deep: %s" % [i, bounds.size])
+		assert_lt(bounds.size.x, 64.001, "no wall may reach outside the brush")
+		assert_lt(bounds.size.y, 64.001)
+		assert_lt(bounds.size.z, 64.001)
 
 
-func test_box_preview_wireframes_still_share_one_outline_mesh():
-	# Hollow and carve still draw axis-aligned box pieces, so they still share the
-	# one unit mesh. Clip no longer can: its pieces are real geometry, which is
-	# the whole reason it can preview an angled cut at all.
+func test_every_preview_now_outlines_real_geometry():
+	# All three previews used to draw a shared unit box scaled by the instance
+	# transform, which is a lie for any cut or shell that is not box-shaped. They
+	# each build the real outline now, so none of them shares that mesh.
 	_make_brush()
 	hollow_preview.show_preview("brush_1", 4.0)
-	assert_same(
+	clip_preview.show_preview("brush_1", 1, 0.0)
+	assert_not_same(
 		hollow_preview._mesh_pool[0].mesh,
 		HFOutlineUtil.unit_box_line_mesh(),
-		"Box outlines are the same unit mesh, scaled by the instance transform"
+		"the hollow preview builds its own wall outlines"
+	)
+	assert_not_same(
+		clip_preview._piece_a_mesh.mesh,
+		HFOutlineUtil.unit_box_line_mesh(),
+		"the clip preview builds its own piece outlines"
 	)

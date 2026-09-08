@@ -43,6 +43,21 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 			"Carve: the carver has no usable geometry",
 			"Rebuild or redraw the carving brush and try again"
 		)
+	var carver_faces: Array = carver_draft.get_faces()
+	var carver_budget: Dictionary = HFConvexClip.boolean_plane_budget(
+		carver_faces, HFConvexClip.interior_point(carver_faces)
+	)
+	if not carver_budget["ok"]:
+		return _op_fail(
+			(
+				"Carve: this carver has %d distinct faces, which would shatter every brush it touches"
+				% carver_budget["planes"]
+			),
+			(
+				"Carve works with carvers of up to %d faces. A sphere or capsule has thousands."
+				% HFConvexClip.MAX_BOOLEAN_PLANES
+			)
+		)
 	var carver_aabb: AABB = root.brush_system.world_bounds_of(carver_draft)
 
 	# Find all overlapping brushes (excluding the carver itself)
@@ -124,20 +139,13 @@ func _carve_pieces(carver: DraftBrush, target: DraftBrush) -> Array:
 	var planes: Array = HFConvexClip.face_planes_in_space(carver.get_faces(), into_target)
 	if planes.is_empty():
 		return []
-
-	var remainder: Array = target.get_faces()
+	var result: Dictionary = HFConvexClip.progressive_remainder(target.get_faces(), planes)
+	if not result["separated"]:
+		return []
 	var pieces: Array = []
-	for plane in planes:
-		var halves: Dictionary = HFConvexClip.split(remainder, plane)
-		var outside: Array = halves["front"]
-		var inside: Array = halves["back"]
-		if inside.is_empty():
-			# The remainder lies entirely outside this plane, so it lies entirely
-			# outside the carver. There is nothing here to carve.
-			return []
-		if not outside.is_empty() and _is_thick_enough(outside):
-			pieces.append(outside)
-		remainder = inside
+	for piece_faces in result["pieces"]:
+		if _is_thick_enough(piece_faces):
+			pieces.append(piece_faces)
 	return pieces
 
 

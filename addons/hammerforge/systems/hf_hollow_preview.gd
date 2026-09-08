@@ -89,51 +89,21 @@ func _rebuild() -> void:
 		clear()
 		return
 
-	# The walls below are axis-aligned slabs, so the preview only holds for the
-	# same brushes hollow_brush_by_id accepts. Ask its validator rather than
-	# keeping a second, looser copy of the shape and thickness rules here.
-	var check: HFOpResult = root.brush_system.can_hollow_brush(_brush_id, _wall_thickness)
+	# Preview the walls the tool will actually build. Ask its planner rather than
+	# keeping a second copy of the thickness rules here — and take the real wall
+	# geometry from it, because drawing axis-aligned slabs would be a lie for every
+	# rotated brush and every shape that is not a box.
+	var draft := brush as DraftBrush
+	var plan: Dictionary = root.brush_system._plan_hollow(draft, _wall_thickness)
+	var check: HFOpResult = plan["result"]
 	if not check.ok:
 		clear()
 		return
-
-	var draft := brush as DraftBrush
-	var size: Vector3 = draft.size
-	var pos: Vector3 = draft.global_position
-	var t: float = _wall_thickness
-
-	# Compute 6 wall AABBs (same logic as brush_system.hollow_brush_by_id)
-	var walls: Array = []  # Array[AABB]
-
-	# Top wall
-	var top_size := Vector3(size.x, t, size.z)
-	var top_center := Vector3(pos.x, pos.y + (size.y - t) / 2.0, pos.z)
-	walls.append(AABB(top_center - top_size * 0.5, top_size))
-
-	# Bottom wall
-	var bot_size := Vector3(size.x, t, size.z)
-	var bot_center := Vector3(pos.x, pos.y - (size.y - t) / 2.0, pos.z)
-	walls.append(AABB(bot_center - bot_size * 0.5, bot_size))
-
-	# Left wall (X-)
-	var left_size := Vector3(t, size.y - 2.0 * t, size.z)
-	var left_center := Vector3(pos.x - (size.x - t) / 2.0, pos.y, pos.z)
-	walls.append(AABB(left_center - left_size * 0.5, left_size))
-
-	# Right wall (X+)
-	var right_size := Vector3(t, size.y - 2.0 * t, size.z)
-	var right_center := Vector3(pos.x + (size.x - t) / 2.0, pos.y, pos.z)
-	walls.append(AABB(right_center - right_size * 0.5, right_size))
-
-	# Front wall (Z+)
-	var front_size := Vector3(size.x - 2.0 * t, size.y - 2.0 * t, t)
-	var front_center := Vector3(pos.x, pos.y, pos.z + (size.z - t) / 2.0)
-	walls.append(AABB(front_center - front_size * 0.5, front_size))
-
-	# Back wall (Z-)
-	var back_size := Vector3(size.x - 2.0 * t, size.y - 2.0 * t, t)
-	var back_center := Vector3(pos.x, pos.y, pos.z - (size.z - t) / 2.0)
-	walls.append(AABB(back_center - back_size * 0.5, back_size))
+	var walls: Array = plan["walls"]
+	if walls.is_empty():
+		clear()
+		return
+	var xform: Transform3D = draft.global_transform
 
 	_ensure_container()
 
@@ -145,11 +115,11 @@ func _rebuild() -> void:
 		_preview_container.add_child(mi)
 		_mesh_pool.append(mi)
 
-	# Update active wireframes
+	# Update active wireframes with the real outline of each wall.
 	for i in walls.size():
 		var mi: MeshInstance3D = _mesh_pool[i]
-		mi.mesh = HFOutlineUtil.unit_box_line_mesh()
-		mi.transform = HFOutlineUtil.aabb_box_transform(walls[i])
+		mi.mesh = _lines_mesh(HFOutlineUtil.face_boundary_lines(walls[i]))
+		mi.transform = xform
 		mi.visible = true
 
 	# Hide unused
@@ -159,6 +129,18 @@ func _rebuild() -> void:
 
 	_active_count = walls.size()
 	_preview_container.visible = _active_count > 0
+
+
+## Wrap a flat list of line-segment endpoints into a drawable mesh.
+static func _lines_mesh(points: PackedVector3Array) -> ArrayMesh:
+	var mesh := ArrayMesh.new()
+	if points.size() < 2:
+		return mesh
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = points
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_LINES, arrays)
+	return mesh
 
 
 func _ensure_container() -> void:

@@ -104,18 +104,43 @@ func test_hollow_deletes_original_brush():
 	assert_null(found, "Original brush should be deleted after hollow")
 
 
-func test_hollow_wall_thickness_reflected_in_sizes():
+func test_every_wall_is_one_thickness_thick():
+	# Hollow shells the brush by pushing each of its own faces inward, so which
+	# wall gets the full span and which gets the remainder depends on the order the
+	# faces come in. What has to hold for every wall, in every order, is that it is
+	# exactly one wall thickness deep in one direction.
 	_make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
 	sys.hollow_brush_by_id("brush_1", 4.0)
-	var children = root.draft_brushes_node.get_children()
-	# Top and bottom walls should have full X and Z but thickness Y=4
-	var found_top_bottom := 0
-	for child in children:
-		if child is DraftBrush:
-			var draft := child as DraftBrush
-			if is_equal_approx(draft.size.y, 4.0) and is_equal_approx(draft.size.x, 32.0):
-				found_top_bottom += 1
-	assert_eq(found_top_bottom, 2, "Should have 2 top/bottom walls with full X and thickness Y")
+	for child in root.draft_brushes_node.get_children():
+		if not (child is DraftBrush):
+			continue
+		var size: Vector3 = (child as DraftBrush).size
+		var thin := (
+			is_equal_approx(size.x, 4.0)
+			or is_equal_approx(size.y, 4.0)
+			or is_equal_approx(size.z, 4.0)
+		)
+		assert_true(thin, "wall %s is not one thickness deep in any direction" % size)
+
+
+func test_the_walls_tile_the_original_volume():
+	# The walls plus the void they surround are the brush they came from.
+	_make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
+	var thickness := 4.0
+	sys.hollow_brush_by_id("brush_1", thickness)
+	var wall_volume := 0.0
+	for child in root.draft_brushes_node.get_children():
+		if not (child is DraftBrush):
+			continue
+		var size: Vector3 = (child as DraftBrush).size
+		wall_volume += size.x * size.y * size.z
+	var inner := 32.0 - 2.0 * thickness
+	assert_almost_eq(
+		wall_volume,
+		32.0 * 32.0 * 32.0 - inner * inner * inner,
+		1.0,
+		"the walls must tile the brush"
+	)
 
 
 func test_hollow_preserves_material():
@@ -139,7 +164,7 @@ func test_hollow_preserves_material():
 
 
 func test_hollow_rejects_thickness_too_large():
-	# Smallest dim is 10. Wall thickness 6 -> 2*6=12 >= 10, should reject
+	# The insets would cross each other, leaving no interior to hollow out.
 	_make_brush(Vector3.ZERO, Vector3(10, 20, 30), "brush_1")
 	sys.hollow_brush_by_id("brush_1", 6.0)
 	# Original brush should still exist
@@ -148,37 +173,72 @@ func test_hollow_rejects_thickness_too_large():
 
 
 func test_hollow_accepts_valid_thickness():
-	# Smallest dim is 10. Wall thickness 4 -> 2*4=8 < 10, should accept
+	# The insets still bound a volume, so there is something to hollow out.
 	_make_brush(Vector3.ZERO, Vector3(10, 20, 30), "brush_1")
 	sys.hollow_brush_by_id("brush_1", 4.0)
 	var children = root.draft_brushes_node.get_children()
 	assert_eq(children.size(), 6, "Should accept valid thickness")
 
 
-func test_hollow_rejects_non_box_shape():
-	# Hollow builds 6 axis-aligned slabs. A cylinder must not be swapped for them.
+func test_hollowing_a_cylinder_makes_a_tube():
+	# Hollow used to rebuild every brush as six axis-aligned slabs and so refused
+	# anything else. It shells the real geometry now, which means a hollow cylinder
+	# is a pipe: one wall per side facet, plus a top and a bottom.
 	var b = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
 	b.shape = root.BrushShape.CYLINDER
+	b.rebuild_preview()
+	# The brush stores triangles, so a cylinder has hundreds of faces describing
+	# far fewer distinct planes. One wall per distinct plane is the real rule.
 	var result = sys.hollow_brush_by_id("brush_1", 4.0)
-	assert_false(result.ok, "Hollow should reject a cylinder")
-	assert_true(is_instance_valid(b), "The cylinder must survive a rejected hollow")
-	assert_eq(root.draft_brushes_node.get_child_count(), 1, "No wall brushes should be created")
+	assert_true(result.ok, "Hollow should shell a cylinder: %s" % result.message)
+	var walls: int = root.draft_brushes_node.get_child_count()
+	assert_gt(walls, 6, "a cylinder shells into more walls than a box")
+	assert_lt(walls, b.get_faces().size(), "and far fewer than it has triangles")
 
 
-func test_can_hollow_brush_rejects_non_box_shape():
+func test_can_hollow_brush_accepts_a_non_box_shape():
+	var b = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
+	b.shape = root.BrushShape.PRISM_TRI
+	b.rebuild_preview()
+	var check = sys.can_hollow_brush("brush_1", 2.0)
+	assert_true(check.ok, "Pre-check should accept a prism: %s" % check.user_text())
+
+
+func test_can_hollow_brush_refuses_a_shape_with_too_many_faces():
+	# A sphere would shell into thousands of walls, which is never what was meant.
 	var b = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
 	b.shape = root.BrushShape.SPHERE
-	assert_false(sys.can_hollow_brush("brush_1", 4.0).ok, "Pre-check should reject a sphere")
+	b.rebuild_preview()
+	var check = sys.can_hollow_brush("brush_1", 2.0)
+	assert_false(check.ok, "a sphere has thousands of distinct planes")
+	assert_true(check.fix_hint.contains("128"), check.fix_hint)
 
 
-func test_hollow_rejects_rotated_box():
-	# Bounds are read straight off global_position and size, which is a lie once
-	# the brush is turned.
+func test_hollowing_a_rotated_box_keeps_the_rotation():
 	var b = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
 	b.rotation_degrees = Vector3(0, 45, 0)
+	b.rebuild_preview()
 	var result = sys.hollow_brush_by_id("brush_1", 4.0)
-	assert_false(result.ok, "Hollow should reject a rotated box")
-	assert_true(is_instance_valid(b), "The rotated box must survive a rejected hollow")
+	assert_true(result.ok, "Hollow should shell a rotated box: %s" % result.message)
+	assert_eq(root.draft_brushes_node.get_child_count(), 6)
+	for child in root.draft_brushes_node.get_children():
+		assert_almost_eq(
+			child.rotation_degrees.y, 45.0, 0.01, "each wall keeps the brush's rotation"
+		)
+
+
+func test_hollow_refuses_a_thickness_with_no_room_inside():
+	_make_brush(Vector3.ZERO, Vector3(20, 20, 20), "brush_1")
+	var result = sys.hollow_brush_by_id("brush_1", 12.0)
+	assert_false(result.ok, "a thickness past the halfway point leaves no interior")
+	assert_ne(result.fix_hint, "", "a refusal must say what thickness would work")
+	assert_not_null(sys.find_brush_by_id("brush_1"), "the brush must survive")
+
+
+func test_hollow_refuses_a_thickness_of_zero():
+	_make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
+	assert_false(sys.hollow_brush_by_id("brush_1", 0.0).ok)
+	assert_not_null(sys.find_brush_by_id("brush_1"))
 
 
 func test_hollow_empty_id_noop():

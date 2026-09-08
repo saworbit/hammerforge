@@ -32,6 +32,16 @@ const DEFAULT_EPSILON := 0.001
 ## sliver, not a brush.
 const MIN_SOLID_FACES := 4
 
+## The most bounding planes a boolean operation will work through.
+##
+## Every plane is a split of an ever-growing face set, so the cost climbs steeply
+## with the count, and so does the number of pieces that come out. A box has six
+## planes and a cylinder sixty-six — a tube, which is a reasonable thing to ask
+## for. A sphere has thousands, because every one of its triangles is its own
+## plane: shelling one takes a minute and produces two thousand brushes, which is
+## never what anybody meant. Past this many, the operation says so instead.
+const MAX_BOOLEAN_PLANES := 128
+
 
 ## World axis for an index: 0 = X, 1 = Y, anything else = Z.
 static func axis_normal(axis_index: int) -> Vector3:
@@ -54,21 +64,57 @@ static func face_plane(face: FaceData) -> Plane:
 	return Plane(normal, normal.dot(face.local_verts[0]))
 
 
-## Every bounding plane of a convex solid, taken into another space.
+## The point inside a solid that its own vertices average to.
+static func interior_point(faces: Array) -> Vector3:
+	var total := Vector3.ZERO
+	var count := 0
+	for face in faces:
+		var data: FaceData = face as FaceData
+		if data == null:
+			continue
+		for vertex in data.local_verts:
+			total += vertex
+			count += 1
+	return total / float(count) if count > 0 else Vector3.ZERO
+
+
+## Every distinct bounding plane of a convex solid, each facing away from inside.
 ##
-## Carve needs the carver's own faces as planes in the target's frame, and its
-## face normals point outward, so a point in front of one of these planes is
-## outside the carver.
-static func face_planes_in_space(faces: Array, into: Transform3D) -> Array:
+## Orientation comes from an interior point rather than from each face's own
+## winding, because a single unreliable face normal is enough to ruin the whole
+## operation. Brushes store triangles, and a primitive mesh has near-degenerate
+## ones — at a sphere's poles, for instance — whose cross product has a length
+## above any sane epsilon but a direction that is numerical noise. One of those
+## flipped the wrong way turns an inset plane inside out, and shelling a sphere
+## reports that there is no room inside it.
+##
+## Every face plane of a convex solid has the whole solid behind it, so which way
+## round it goes is a question with an answer, not a matter of trusting the input.
+static func outward_planes(
+	faces: Array, interior: Vector3, epsilon: float = DEFAULT_EPSILON
+) -> Array:
 	var planes: Array = []
 	for face in faces:
 		var data: FaceData = face as FaceData
 		if data == null or data.local_verts.size() < 3:
 			continue
-		var local := face_plane(data)
-		if local.normal.length_squared() < 0.5:
+		var plane := face_plane(data)
+		if plane.normal.length_squared() < 0.5:
 			continue
-		planes.append(into * local)
+		if plane.distance_to(interior) > 0.0:
+			plane = Plane(-plane.normal, -plane.d)
+		planes.append(plane)
+	return dedupe_planes(planes, epsilon)
+
+
+## Every bounding plane of a convex solid, taken into another space.
+##
+## Carve needs the carving brush's planes expressed in its target's frame. They
+## face outward, so a point in front of one of them is outside the carver.
+static func face_planes_in_space(faces: Array, into: Transform3D) -> Array:
+	var planes: Array = []
+	for plane in outward_planes(faces, interior_point(faces)):
+		planes.append(into * plane)
 	return planes
 
 
@@ -151,6 +197,119 @@ static func split(faces: Array, plane: Plane, epsilon: float = DEFAULT_EPSILON) 
 	if back.size() < MIN_SOLID_FACES:
 		back = []
 	return {"front": front, "back": back, "cut": cut_points}
+
+
+## Cut a convex solid down by a set of bounding planes, keeping what falls outside
+## each one.
+##
+## This is the shape of both boolean operations HammerForge has. For each plane:
+## split what is left, the half outside that plane can never be removed by a later
+## plane so it is finished, and the half inside carries on. What survives every
+## plane is the intersection of all of them.
+##
+## Carve passes the planes of the carving brush, and the intersection is the volume
+## it removes. Hollow passes the brush's own planes pushed inward, and the
+## intersection is the void. Same loop, different planes.
+##
+## Returns `{"pieces": Array, "remainder": Array, "separated": bool}`. `separated`
+## is false when the solid never straddled one of the planes, which means it lies
+## entirely outside the intersection and nothing should be cut at all.
+static func progressive_remainder(
+	faces: Array, planes: Array, epsilon: float = DEFAULT_EPSILON
+) -> Dictionary:
+	var pieces: Array = []
+	var remainder: Array = _duplicate_faces(faces)
+	if remainder.is_empty() or planes.is_empty():
+		return {"pieces": pieces, "remainder": remainder, "separated": false}
+	for plane in dedupe_planes(planes):
+		var halves: Dictionary = split(remainder, plane, epsilon)
+		var outside: Array = halves["front"]
+		var inside: Array = halves["back"]
+		if inside.is_empty():
+			# Nothing of the remainder is behind this plane, so nothing of it is
+			# inside the intersection. There is nothing here to cut.
+			return {"pieces": [], "remainder": [], "separated": false}
+		if not outside.is_empty():
+			pieces.append(outside)
+		remainder = inside
+	return {"pieces": pieces, "remainder": remainder, "separated": true}
+
+
+## Whether a solid has few enough distinct planes to run a boolean against.
+##
+## Returns `{"ok": bool, "planes": int}` so a caller can report the real number.
+static func boolean_plane_budget(faces: Array, interior: Vector3) -> Dictionary:
+	var count: int = outward_planes(faces, interior).size()
+	return {"ok": count <= MAX_BOOLEAN_PLANES, "planes": count}
+
+
+## Drop planes that repeat one already in the list.
+##
+## A brush's faces are triangles, so a cylinder hands over 768 of them describing
+## 66 distinct planes, and a sphere far more. A repeated plane can never cut
+## anything a previous pass left, so every one of those is a whole split done for
+## nothing.
+static func dedupe_planes(planes: Array, epsilon: float = DEFAULT_EPSILON) -> Array:
+	var out: Array = []
+	var seen := {}
+	var angular_step := maxf(epsilon, 0.000001)
+	for plane in planes:
+		var normal: Vector3 = plane.normal
+		if normal.length_squared() < 0.5:
+			continue
+		var key := (
+			"%d,%d,%d,%d"
+			% [
+				roundi(normal.x / angular_step),
+				roundi(normal.y / angular_step),
+				roundi(normal.z / angular_step),
+				roundi(plane.d / angular_step),
+			]
+		)
+		if seen.has(key):
+			continue
+		seen[key] = true
+		out.append(plane)
+	return out
+
+
+## Move a plane along its own normal. Negative moves it inward for an outward
+## normal, which is what shelling a solid needs.
+static func offset_plane(plane: Plane, distance: float) -> Plane:
+	return Plane(plane.normal, plane.d + distance)
+
+
+## Reverse any face that points towards `interior` instead of away from it.
+##
+## The one safe way to wind a solid built from scratch. Every face of a convex
+## solid points away from any point inside it, which is checkable rather than
+## reasoned about — and reasoning about it is how rebuilt faces have shipped inside
+## out before. Generators should build their faces in any order and finish here.
+static func orient_faces_outward(faces: Array, interior: Vector3) -> Array:
+	for face in faces:
+		var data: FaceData = face as FaceData
+		if data == null or data.local_verts.size() < 3:
+			continue
+		var centre := Vector3.ZERO
+		for vertex in data.local_verts:
+			centre += vertex
+		centre /= float(data.local_verts.size())
+		var outward := centre - interior
+		if outward.length_squared() < 0.000001:
+			continue
+		if _face_normal(data).dot(outward) < 0.0:
+			var flipped := PackedVector3Array()
+			var uvs: PackedVector2Array = data.custom_uvs
+			var carry_uvs := uvs.size() == data.local_verts.size()
+			var flipped_uvs := PackedVector2Array()
+			for i in range(data.local_verts.size() - 1, -1, -1):
+				flipped.append(data.local_verts[i])
+				if carry_uvs:
+					flipped_uvs.append(uvs[i])
+			data.local_verts = flipped
+			data.custom_uvs = flipped_uvs if carry_uvs else PackedVector2Array()
+		data.ensure_geometry()
+	return faces
 
 
 ## Clip one convex planar polygon, keeping the front or the back half.
