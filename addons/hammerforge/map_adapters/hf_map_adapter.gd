@@ -16,10 +16,18 @@ func format_face_line(
 
 
 ## Format entity properties as .map key-value lines (one per property).
+##
+## Keys and values are escaped, because either may contain a quote and a raw one
+## would end the string early and take the rest of the value with it.
 func format_entity_properties(properties: Dictionary) -> Array[String]:
 	var lines: Array[String] = []
 	for key in properties:
-		lines.append('"%s" "%s"' % [str(key), str(properties[key])])
+		lines.append(
+			(
+				'"%s" "%s"'
+				% [MapIO.escape_property(str(key)), MapIO.escape_property(str(properties[key]))]
+			)
+		)
 	return lines
 
 
