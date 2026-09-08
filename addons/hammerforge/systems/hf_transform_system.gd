@@ -28,6 +28,11 @@ enum PivotMode { SELECTION_CENTER, WORLD_ORIGIN, ACTIVE, CUSTOM }
 ## share a cell. Misjudging falls to the exact path, never to wrong geometry.
 const MIRROR_EPSILON := 0.001
 
+## How far a basis column may stray from unit length, or from square with its
+## neighbours, and still count as a turn and nothing else. Columns are unit
+## length, so this is an angle in disguise: about a twentieth of a degree.
+const ROTATION_EPSILON := 0.001
+
 var root: Node3D
 
 
@@ -60,6 +65,21 @@ static func reflection_basis(axis_index: int) -> Basis:
 	var scale := Vector3.ONE
 	scale[clampi(axis_index, 0, 2)] = -1.0
 	return Basis.IDENTITY.scaled(scale)
+
+
+## Whether a basis is a turn and nothing else — no squash, no stretch, no mirror.
+##
+## The mirror half is the one that matters most: a negative determinant inverts
+## the winding of every face built through the basis, and that does not look wrong
+## in the viewport. It looks wrong in the bake.
+static func is_rotation_basis(basis: Basis) -> bool:
+	if basis.determinant() <= 0.0:
+		return false
+	var unit := basis.orthonormalized()
+	for axis in 3:
+		if basis[axis].distance_to(unit[axis]) > ROTATION_EPSILON:
+			return false
+	return true
 
 
 ## Column `index` of a basis, which is the world direction of that local axis.
@@ -356,6 +376,50 @@ func resolve_pivot(
 			return _active_origin(brush_ids, entity_paths)
 		_:
 			return selection_origin_centroid(brush_ids, entity_paths)
+
+
+## The way the selection is facing, when it is all facing the same way.
+##
+## The companion to `resolve_pivot()`: a structure built on a selection should
+## stand where the selection is *and* face the way it does, which is one fact
+## short of what the pivot alone says. Anything less than agreement answers with
+## the world axes, because there is no single direction to inherit — and so does a
+## selection that has been mirrored or scaled, which is a basis nothing should be
+## built through.
+func resolve_selection_basis(brush_ids: Array, entity_paths: Array) -> Basis:
+	var shared := Basis.IDENTITY
+	var seen := false
+	for node in _selected_nodes(brush_ids, entity_paths):
+		var basis: Basis = node.global_transform.basis
+		if not is_rotation_basis(basis):
+			return Basis.IDENTITY
+		if not seen:
+			shared = basis
+			seen = true
+		elif not _same_basis(basis, shared):
+			return Basis.IDENTITY
+	return shared
+
+
+static func _same_basis(a: Basis, b: Basis) -> bool:
+	for axis in 3:
+		if a[axis].distance_to(b[axis]) > ROTATION_EPSILON:
+			return false
+	return true
+
+
+## The live brushes and entities a selection names, in the order it names them.
+func _selected_nodes(brush_ids: Array, entity_paths: Array) -> Array:
+	var out: Array = []
+	for brush_id in brush_ids:
+		var draft := _brush_at_id(str(brush_id))
+		if draft != null:
+			out.append(draft)
+	for entity_path in entity_paths:
+		var entity := _entity_at_path(entity_path)
+		if entity != null:
+			out.append(entity)
+	return out
 
 
 ## Centroid of the selection's object origins — Blender's "median point".

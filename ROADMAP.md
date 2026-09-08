@@ -592,13 +592,21 @@ and run".
   the next Update. A structure with no majority says it cannot be located rather
   than counting shapes.
 
-### Known limits of structure relocation
-- A structure is still created square: the placement basis only becomes
-  non-identity by turning the pieces afterwards.
+- **A structure is built facing the way its selection faces** (September 2026):
+  `resolve_selection_basis()` is the companion to `resolve_pivot()`, and
+  `create_placement()` is the single definition of where a new structure lands,
+  read by the ghost as well as the button. A selection that does not agree with
+  itself, or whose basis is not a pure rotation, answers with the world axes.
+  `HFTransformSystem.is_rotation_basis()` is now the one definition of that test.
+
+### Known limits of structure placement
 - Pieces turned one at a time remain hand edits, which is the intended reading,
   but there is no way to say "treat these as the new shape" short of Detach.
-- The majority is counted over pieces, not volume, so a structure whose pieces
-  differ greatly in size weights a small piece the same as a large one.
+- The relocation majority is counted over pieces, not volume, so a structure
+  whose pieces differ greatly in size weights a small piece the same as a large
+  one.
+- A selection hands over its facing but not its scale or its size, so a structure
+  built on a large wall is still the size its own settings say.
 
 ## Done (Structure Preview — Seeing It Before Building It — September 2026)
 - `HFStructurePreview`: a pale wireframe of the structure the Structure section

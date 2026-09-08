@@ -4,6 +4,36 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Added
+- **A structure built on a selection now faces the way that selection faces.**
+  Create placed a structure at the selection's pivot and then built it square, so
+  selecting a wall standing at forty-five degrees and building an arch on it gave
+  an arch standing square in a room that was not. The position half of "centred on
+  the selection" was there from the start; the facing half was the sentence's
+  missing clause, and every piece of plumbing it needed — a rotated placement that
+  builds, serializes, previews and relocates correctly — was finished by the two
+  waves before this one.
+  - `HFTransformSystem.resolve_selection_basis()` is the companion to
+    `resolve_pivot()`, and `HFDockBrushHandler.create_placement()` is now the one
+    definition of where a new structure lands. The ghost reads the same function,
+    so the angle is visible before the button is pressed rather than discovered by
+    pressing it.
+  - **A selection has to agree with itself.** Two brushes turned different ways
+    give the world axes, because there is no single direction to inherit and
+    guessing one is worse than not answering.
+  - **A basis that is not a pure rotation gives the world axes too.** A mirrored
+    or scaled brush has axes that are not a facing, and building a structure
+    through a negative-determinant basis would invert the winding of every face in
+    it. `HFTransformSystem.is_rotation_basis()` is now the single definition of
+    that test, replacing the copy the generator system had been keeping.
+  - **Coverage** (`tests/test_selection_basis.gd`,
+    `tests/test_structure_dock_commands.gd`, `tests/test_structure_preview.gd`):
+    the predicate against turns, mirrors, squashes and uniform scales; a selection
+    agreeing, disagreeing, spoiled by one mirrored member, mixing a brush with an
+    entity, and naming a brush that is gone; a structure built on a turned brush
+    coming out turned, keeping positive determinant on every piece, and not
+    reading as edited afterwards; and the ghost leaning the same way first.
+
 ### Fixed
 - **One nudged brush no longer throws a structure back across the level.**
   Relocation asked for unanimity, which sounds like the stricter test and was in

@@ -223,8 +223,16 @@ tread and a rise, and neither of them has a wall thickness.
 There are four: **Arch**, **Stairs**, **Spiral Stairs** and **Dome**.
 
 Press the button (or `Ctrl+Shift+A`) and it lands centred on whatever you have
-selected, or on the world origin if nothing is. Then treat it like any other
-geometry: rotate it, carve a doorway through it, clip a piece off.
+selected, **facing the way that selection faces** — select a wall standing at
+forty-five degrees and the arch you build on it stands at forty-five degrees too.
+With nothing selected it lands on the world origin, square. Then treat it like
+any other geometry: rotate it, carve a doorway through it, clip a piece off.
+
+A selection has to agree with itself to hand its facing over: pick two brushes
+turned different ways and you get the world axes, because there is no single
+direction to inherit. So does a brush that has been scaled or mirrored in the
+inspector, whose axes are not a facing at all. Either way the ghost shows the
+angle before you press anything.
 
 **Open the section and the shape draws itself first.** A pale wireframe stands
 where the button would build, and it follows every number as you turn it: a dome

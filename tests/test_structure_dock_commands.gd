@@ -161,6 +161,71 @@ func test_a_refused_update_does_not_report_a_rebuild():
 
 
 # ===========================================================================
+# Building on a selection that is not square
+# ===========================================================================
+
+
+## An ordinary rotated brush: a structure detached from its record, turned.
+func _turned_loose_brush(degrees: float) -> Node3D:
+	dock._on_create_structure()
+	var record = _only_record()
+	var ids := Array(record.brush_ids)
+	var pieces := _generated_brushes()
+	assert_true(root.detach_generator(record.generator_id), "detach leaves ordinary geometry")
+	root.rotate_managed_nodes(ids, [], 1, degrees, root.resolve_transform_pivot(ids, []))
+	dock.set_selection_nodes([pieces[0]])
+	assert_eq(str(dock._active_generator_id), "", "a detached piece is not a structure")
+	return pieces[0]
+
+
+func test_a_structure_built_on_a_turned_brush_comes_out_turned():
+	# Selecting a wall standing at forty-five degrees and building an arch on it
+	# used to give an arch standing square in a room that was not.
+	var wall := _turned_loose_brush(45.0)
+
+	dock._on_create_structure()
+
+	var record = _only_record()
+	assert_not_null(record, "the second press builds a new structure")
+	assert_almost_eq(record.placement.basis.x, wall.global_transform.basis.x, Vector3.ONE * 0.01)
+
+
+func test_pieces_built_on_a_turned_brush_keep_their_winding():
+	_turned_loose_brush(37.0)
+
+	dock._on_create_structure()
+
+	for brush_id in _only_record().brush_ids:
+		var brush = root.brush_system.find_brush_by_id(str(brush_id))
+		assert_not_null(brush)
+		assert_gt(
+			brush.global_transform.basis.determinant(),
+			0.0,
+			"an inherited facing must never invert a face"
+		)
+
+
+func test_a_turned_structure_built_that_way_does_not_read_as_edited():
+	_turned_loose_brush(45.0)
+
+	dock._on_create_structure()
+
+	assert_eq(
+		root.edited_generator_pieces(_only_record().generator_id),
+		0,
+		"the pieces are exactly what the generator built"
+	)
+
+
+func test_nothing_selected_still_builds_square():
+	dock.set_selection_nodes([])
+
+	dock._on_create_structure()
+
+	assert_almost_eq(_only_record().placement.basis.x, Vector3.RIGHT, Vector3.ONE * 0.001)
+
+
+# ===========================================================================
 # Rebuilding over painted faces
 # ===========================================================================
 

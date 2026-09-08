@@ -1711,8 +1711,12 @@ func _build_structure_section(brush_vbox: VBoxContainer) -> void:
 
 	var buttons = HBoxContainer.new()
 	box.add_child(buttons)
-	structure_create_btn = HFUIFactory.make_button(
-		"Create Arch", "Build the structure centred on the selection, or on the world origin"
+	structure_create_btn = (
+		HFUIFactory
+		. make_button(
+			"Create Arch",
+			"Build the structure centred on the selection and facing the way it faces, or on the world origin"
+		)
 	)
 	structure_create_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	structure_create_btn.pressed.connect(_on_create_structure)
