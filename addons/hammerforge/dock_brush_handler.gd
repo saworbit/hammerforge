@@ -596,7 +596,7 @@ static func refresh_structure_section(dock: Object) -> void:
 	if dock.structure_detach_btn:
 		dock.structure_detach_btn.visible = true
 	_load_structure_settings(dock, record.settings)
-	_show_edit_warning(dock, _edited_piece_count(dock, record.generator_id))
+	_show_edit_warning(dock, _edited_piece_count(dock, record.generator_id), record.generator_id)
 	refresh_structure_preview(dock)
 
 
@@ -605,8 +605,20 @@ static func refresh_structure_section(dock: Object) -> void:
 ## Detach is the answer to a structure that has been edited by hand, and it sits
 ## right beside Update — but a choice you do not know you are making is not a
 ## choice, so the count is said out loud.
-static func _show_edit_warning(dock: Object, edited: int) -> void:
+static func _show_edit_warning(dock: Object, edited: int, generator_id: String = "") -> void:
 	if dock == null or dock.structure_warning == null:
+		return
+	# Where the structure is has to be said before what shape its pieces are in.
+	# A rebuild that carries the whole thing back across the level is the larger
+	# surprise, and counting shapes does not mention it.
+	if generator_id != "" and _pieces_disagree(dock, generator_id):
+		_show_structure_message(
+			dock,
+			(
+				"These pieces no longer agree on where the structure is. Update will rebuild it "
+				+ "where it was created — Detach to keep them where they are."
+			)
+		)
 		return
 	if edited <= 0:
 		_show_structure_message(dock, "")
@@ -618,6 +630,14 @@ static func _show_edit_warning(dock: Object, edited: int) -> void:
 			% [edited, " has" if edited == 1 else "s have", "it" if edited == 1 else "them"]
 		)
 	)
+
+
+static func _pieces_disagree(dock: Object, generator_id: String) -> bool:
+	if dock == null or not dock.level_root:
+		return false
+	if not dock.level_root.has_method("generator_pieces_disagree"):
+		return false
+	return bool(dock.level_root.generator_pieces_disagree(generator_id))
 
 
 ## Draw a ghost of what the button would build, before it builds it.
@@ -669,7 +689,9 @@ static func refresh_structure_preview(dock: Object) -> void:
 	# that has scrolled off it has to be earned a second time. Otherwise the
 	# acknowledgement outlives the sentence that asked for it.
 	dock._structure_overwrite_ack = ""
-	_show_edit_warning(dock, _edited_piece_count(dock, generator_id) if generator_id != "" else 0)
+	_show_edit_warning(
+		dock, _edited_piece_count(dock, generator_id) if generator_id != "" else 0, generator_id
+	)
 
 
 ## The ghost belongs to the Structure section, and follows it out of sight.

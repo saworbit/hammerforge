@@ -260,30 +260,84 @@ func generator_for_selection(brush_ids: Array) -> HFGenerator:
 ## arch back where it was created — which is where the whole premise of changing
 ## your mind after seeing it in place falls down.
 func relocation_transform(generator_id: String) -> Transform3D:
+	var vote := _relocation_vote(generator_id)
+	return vote["move"]
+
+
+## Whether the pieces could not agree on where the structure is, having plainly
+## been moved from where they were put.
+##
+## The honest reading of a structure nobody can locate: a rebuild has nowhere to
+## put it but the placement it was created at, which may be across the level. The
+## section says that rather than only counting shapes.
+func pieces_disagree_about_placement(generator_id: String) -> bool:
+	var vote := _relocation_vote(generator_id)
+	return not vote["agreed"] and vote["moved"]
+
+
+## Where the structure has gone, decided by vote rather than by unanimity.
+##
+## Unanimity sounds like the stricter test and is in fact the worse one. Nudge a
+## single brush of a twelve-piece arch you have dragged across the level and the
+## eleven that agree are overruled: the structure reads as twelve hand edits
+## instead of one, and Update carries the whole thing back to the origin it was
+## created at. More than half the pieces agreeing is enough to say where the
+## structure went, and the ones outside that majority are the hand edits — which
+## is exactly what they are.
+##
+## A piece whose move is not rigid never joins a group, so a mirrored or squashed
+## structure cannot out-vote its own refusal however many pieces it has.
+##
+## Returns `move` (the relocation, identity when undecided), `agreed` (whether a
+## majority was found) and `moved` (whether any piece has left its recorded spot).
+func _relocation_vote(generator_id: String) -> Dictionary:
+	var undecided := {"move": Transform3D.IDENTITY, "agreed": false, "moved": false}
 	if not generators.has(generator_id):
-		return Transform3D.IDENTITY
+		return undecided
 	var record: HFGenerator = generators[generator_id]
-	var delta := Transform3D.IDENTITY
-	var seen := false
+	var groups: Array = []
+	var voters := 0
 	for brush_id in record.brush_ids:
-		var signature: Dictionary = record.brush_signatures.get(str(brush_id), {})
-		if signature.is_empty():
+		var reading = _piece_move(record, str(brush_id), generator_id)
+		if reading == null:
 			continue
-		var brush = _owned_brush(str(brush_id), generator_id)
-		if brush == null:
+		voters += 1
+		var move: Transform3D = reading
+		if not _same_move(move, Transform3D.IDENTITY):
+			undecided["moved"] = true
+		if not _is_rigid(move):
 			continue
-		var was := _signature_transform(record, signature)
-		if is_zero_approx(was.basis.determinant()):
-			continue
-		var moved: Transform3D = brush.global_transform * was.affine_inverse()
-		if not seen:
-			delta = moved
-			seen = true
-		elif not _same_move(moved, delta):
-			return Transform3D.IDENTITY
-	if not seen or not _is_rigid(delta):
-		return Transform3D.IDENTITY
-	return delta
+		var joined := false
+		for group in groups:
+			if _same_move(move, group["move"]):
+				group["votes"] = int(group["votes"]) + 1
+				joined = true
+				break
+		if not joined:
+			groups.append({"move": move, "votes": 1})
+
+	var best: Dictionary = {}
+	for group in groups:
+		if best.is_empty() or int(group["votes"]) > int(best["votes"]):
+			best = group
+	if best.is_empty() or int(best["votes"]) * 2 <= voters:
+		return undecided
+	return {"move": best["move"], "agreed": true, "moved": undecided["moved"]}
+
+
+## How one piece has moved since it was recorded, or `null` when it cannot say:
+## no signature, not ours any more, or a signature that never was a usable frame.
+func _piece_move(record: HFGenerator, brush_id: String, generator_id: String) -> Variant:
+	var signature: Dictionary = record.brush_signatures.get(brush_id, {})
+	if signature.is_empty():
+		return null
+	var brush = _owned_brush(brush_id, generator_id)
+	if brush == null:
+		return null
+	var was := _signature_transform(record, signature)
+	if is_zero_approx(was.basis.determinant()):
+		return null
+	return brush.global_transform * was.affine_inverse()
 
 
 ## How far the structure has been dragged, ignoring any turn.

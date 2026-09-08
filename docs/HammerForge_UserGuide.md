@@ -344,9 +344,15 @@ get right by looking at the result, not in advance.
 **A structure you have moved or turned rebuilds where it now stands.** Build an
 arch, drag it into the doorway it belongs in, rotate it to face the way the
 doorway does, then widen it — it stays in the doorway, still facing that way.
-That only holds when you moved the whole thing: if you have dragged or turned
-individual pieces around, the structure was not relocated, it was edited, and the
-next section is about that.
+It takes **more than half the pieces agreeing** to say where a structure went, so
+nudging one brush of a twelve-piece arch does not lose the other eleven. That one
+brush is a hand edit; the arch is still where you dragged it.
+
+If the pieces genuinely no longer agree — half of them one way, half another —
+the section says so: *"These pieces no longer agree on where the structure is.
+Update will rebuild it where it was created — Detach to keep them where they
+are."* That is the warning worth reading, because where the structure lands is a
+bigger surprise than what shape its pieces are in.
 
 A **flip** is the exception. Mirroring a structure turns every face inside out,
 and rebuilding through that would give you geometry that looks right in the

@@ -585,12 +585,20 @@ and run".
   structure at its actual angle.
 - 12 new tests across the generator, integration and preview suites.
 
+- **Relocation is decided by vote, not unanimity** (September 2026): pieces are
+  grouped by the rigid transform they received and a majority carries the
+  structure. One nudged brush used to overrule eleven that agreed, misreport the
+  edit count as twelve, and send the structure back to its creation placement on
+  the next Update. A structure with no majority says it cannot be located rather
+  than counting shapes.
+
 ### Known limits of structure relocation
 - A structure is still created square: the placement basis only becomes
   non-identity by turning the pieces afterwards.
 - Pieces turned one at a time remain hand edits, which is the intended reading,
   but there is no way to say "treat these as the new shape" short of Detach.
-- A mirrored structure gives no more specific reason than the hand-edit warning.
+- The majority is counted over pieces, not volume, so a structure whose pieces
+  differ greatly in size weights a small piece the same as a large one.
 
 ## Done (Structure Preview — Seeing It Before Building It — September 2026)
 - `HFStructurePreview`: a pale wireframe of the structure the Structure section

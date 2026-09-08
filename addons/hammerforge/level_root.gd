@@ -1297,6 +1297,14 @@ func generator_appearance_at_risk(generator_id: String, settings: Dictionary) ->
 	return generator_system.appearance_at_risk(generator_id, settings)
 
 
+## Whether the pieces of this structure no longer agree on where it is. A rebuild
+## then has nowhere to put it but the placement it was created at.
+func generator_pieces_disagree(generator_id: String) -> bool:
+	if not generator_system:
+		return false
+	return generator_system.pieces_disagree_about_placement(generator_id)
+
+
 ## Where a rebuild of this structure would stand, so a preview of it can stand
 ## there too.
 func generator_rebuild_placement(generator_id: String) -> Transform3D:
