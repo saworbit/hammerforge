@@ -231,6 +231,28 @@ Press **Create Arch** (or `Ctrl+Shift+A`) and it lands centred on whatever you
 have selected, or on the world origin if nothing is. Then treat it like any other
 geometry: rotate it upright, carve a doorway through it, clip a segment off.
 
+### Changing an arch after you have built one
+
+The arch remembers the numbers that made it. **Select any one of its segments** and
+the Arch section changes: the settings that built it load into the controls, the
+button reads **Update Arch**, and a **Detach** button appears beside it.
+
+Change the radius, the segment count, anything — press **Update Arch** and the
+structure rebuilds in place. Materials you painted on it come back on the same
+pieces. If you increase the segment count, the new pieces take the default
+material, because there is nothing for them to inherit.
+
+This is the point of it: radius and segment count are numbers you get right by
+looking at the result, not in advance.
+
+**Detach** stops the arch being an arch. It keeps every brush exactly where it is
+and forgets that a generator made them. Use it once you have started editing
+segments by hand — otherwise the next **Update** rebuilds over those edits and
+they are gone. Ctrl+Z will bring them back, but detaching is the deliberate answer.
+
+An arch that has been clipped or carved still updates; the pieces the generator
+does not recognise any more are simply left alone.
+
 A segment cannot span half a turn or more — a wedge that wide is not a convex
 shape, and every brush here is convex — so a full ring needs at least three
 segments. The arch will tell you the minimum if you ask for too few.

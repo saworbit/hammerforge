@@ -114,6 +114,7 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `hf_displacement_system.gd` | `HFDisplacementSystem` | Displacement surface creation, painting, sewing, elevation, and power changes |
 | `hf_bevel_system.gd` | `HFBevelSystem` | Edge bevel (chamfer) and face inset operations |
 | `hf_transform_system.gd` | `HFTransformSystem` | Rotate, flip and reset rotation for brushes and entities. Winding-safe mirroring, stable pivots, texture-lock UV compensation |
+| `hf_generator_system.gd` | `HFGeneratorSystem` | Records of what each generator made (`HFGenerator`), so a structure can be rebuilt from changed settings, detached, or removed. Persisted beside the duplicators |
 
 ### Other Modules
 
@@ -214,6 +215,7 @@ LevelRoot (Node3D)
 - Extrude Up/Down picks a face via `FaceSelector`, creates a preview brush along the face normal, and commits a new DraftBrush on release. Uses `HFExtrudeTool` (RefCounted).
 - **Hollow** (Ctrl+H): shells a brush into walls of a configurable thickness, by running `HFConvexClip.progressive_remainder()` over the brush's own face planes pushed inward. One face gives one wall, so a box yields six and a cylinder yields a tube. Works on any convex brush at any rotation. Refuses a thickness that leaves no interior, and refuses brushes with more than `HFConvexClip.MAX_BOOLEAN_PLANES` distinct planes — a sphere would otherwise shell into thousands of walls.
 - **Arch** (Ctrl+Shift+A): `HFArchBuilder` turns radius, wall thickness, depth, arc degrees, segment count and start angle into one brush per voussoir, placed on the selection or the world origin. Winding comes from `HFConvexClip.orient_faces_outward()`.
+- **Live generators**: an arch is created through `HFGeneratorSystem`, which records its settings and the brushes it made. Selecting a piece turns the dock's Arch section into an editor for that structure — **Update Arch** rebuilds it in place from new settings, preserving per-brush materials by index; **Detach** forgets the record and leaves ordinary brushes. Validation runs before any deletion, and deletion checks each brush's `hf_generator_id` rather than trusting the record's id list.
 - **Clip** (Shift+X): splits a brush along a plane into two new brushes, via `HFConvexClip.split()`. The plane is taken into the brush's own frame, so any convex brush at any rotation cuts, and both pieces inherit the original transform. A piece that is still an axis-aligned box in that frame is emitted as a BOX and keeps its resize handles; anything else becomes CUSTOM with the split faces as authoritative geometry. `clip_brush_by_plane()` takes an arbitrary world plane; `clip_brush_to_face_plane()` (Alt+Shift+X) cuts along the plane of a selected face. Preserves material, operation, brush entity class, visgroups, and group ID; the first piece also inherits the entity name and I/O wiring, which have to stay unique.
 - **Move to Floor/Ceiling** (Ctrl+Shift+F/C): raycasts against other brush AABBs to snap selection vertically.
 - **Carve** (Ctrl+Shift+R): boolean-subtract one brush from all intersecting brushes. `HFCarveSystem` runs progressive remainder over the carver's own face planes: for each plane, split what is left of the target, keep the half outside as a finished piece, and carry the half inside to the next plane. What survives every plane is the intersection, which is what the carve removes. Because the planes come from the carver's real faces rather than the six sides of its bounding box, the carver and its targets may be rotated, cylinders, merged brushes, or anything else convex. Preserves material, operation, visgroups, group_id, brush_entity_class.
@@ -524,6 +526,6 @@ Unit tests use the [GUT](https://github.com/bitwes/Gut) framework and run headle
 | `test_selection_gesture.gd` | 38 | Native widget/Object Select ownership, modal Face Select, recovery, focus/scope guards, native duplicate/reparent repair, and Inspector/undo change tracking |
 | `test_viewport_outlines.gd` | 39 | Sparse semantic outlines, exact/composite entity collision, visibility/transforms, and shape-aware resize recovery |
 
-Full suite (verified locally on September 8, 2026): **2,557 tests** across **137 scripts** (**2,550 passing** plus seven intentional no-assert safety tests; **13,304 assertions**).
+Full suite (verified locally on September 8, 2026): **2,621 tests** across **140 scripts** (**2,614 passing** plus seven intentional no-assert safety tests; **13,564 assertions**).
 
 Tests use root shim scripts (dynamically created GDScript) to provide the LevelRoot interface without circular preload dependencies. Configuration in `.gutconfig.json`.

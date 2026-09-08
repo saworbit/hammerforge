@@ -507,6 +507,28 @@ and run".
 - Wall thickness is uniform. A shell that varies in thickness is a different
   algorithm.
 
+## Done (Live Generators — Structures That Stay Editable — September 2026)
+- `HFGeneratorSystem` records what each generator made — type, settings, placement
+  and brush ids — so a structure can be rebuilt from changed settings rather than
+  deleted and made again. Records persist through undo and into the `.hflevel`
+  file beside the duplicator records.
+- The dock's Arch section becomes an editor when a piece of an arch is selected:
+  its settings load, the button becomes **Update Arch**, and **Detach** appears.
+- Materials are captured in order and reapplied by index across a rebuild, so
+  tuning a radius does not cost a texture pass.
+- Validation runs before deletion, and deletion checks each brush's own
+  `hf_generator_id` rather than trusting the record's list.
+- The type table (`known_types` / `default_settings` / `validate` / `build_faces`)
+  is the seam: a second generator needs a branch in each and nothing else.
+- 63 new tests.
+
+### Known limits of the current live-generator pass
+- Only the arch is live. Hollow and the array modes have their own records and
+  their own shapes; this establishes the pattern before spreading it.
+- Hand edits to a generated piece are lost on the next rebuild. Detach is the
+  answer and is offered beside Update, but nothing warns that edits exist.
+- Generators cannot nest, and none depends on other geometry.
+
 ## Future (Wave 3 -- Polish)
 - Multiple simultaneous cordons.
 - Multi-tool presets for common workflows.

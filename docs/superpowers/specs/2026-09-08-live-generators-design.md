@@ -177,3 +177,35 @@ The three passes again: build it and get the suite, `gdformat` and `gdlint`
 clean; then attack it — regenerating after deleting brushes by hand, after
 carving one, with invalid settings, with a changed segment count, across a save
 and undo; then fold the findings back in and update the documentation.
+
+## What the verification passes found
+
+**Yellow** — built against the design above; the suite, `gdformat` and `gdlint`
+all clean, and the generator system's own thirty-four cases passed on the first
+run.
+
+**Red** — one real hazard, found by asking what the record actually guarantees.
+`_delete_brushes()` removed brushes by id, trusting the record's list. But brush
+ids are reissued as the id counter moves, and brushes are deleted, clipped and
+merged outside the generator's knowledge — so a stale entry in one record could
+name a brush that by then belonged to something else, and a rebuild would quietly
+delete a neighbour's geometry. Deletion now checks each brush's own
+`hf_generator_id` before removing it, which makes the record's staleness genuinely
+harmless rather than harmless-in-practice. The design said "the record is treated
+as a hint, never as a guarantee"; the first implementation did not actually honour
+that in the one place it mattered.
+
+The adversarial pass otherwise came back clean, including regenerating after
+pieces were deleted by hand, after a segment was clipped in two, with invalid
+settings, across a changing segment count, and through undo and the save format.
+Two hazards turned out to be already covered: the selection holding freed nodes
+after an update is the same situation clip and hollow already create and handle,
+and the brush cache is cleared by the existing delete path.
+
+**Purple** — the finding was folded back in, the dock surface was pinned with
+boundary tests for the contracts that matter (validate before deleting, ask the
+record before switching the button, load settings without firing the controls),
+and the documentation was brought in line.
+
+Final state: **2,621 tests across 140 scripts, 2,614 passing, none failing**, with
+`gdformat` and `gdlint` clean.
