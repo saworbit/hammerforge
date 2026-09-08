@@ -1285,6 +1285,14 @@ func generator_for_id(generator_id: String):
 	return generator_system.generator_for_id(generator_id) if generator_system else null
 
 
+## The generated pieces whose painted faces a rebuild with these settings could
+## not put back.
+func generator_appearance_at_risk(generator_id: String, settings: Dictionary) -> PackedStringArray:
+	if not generator_system:
+		return PackedStringArray()
+	return generator_system.appearance_at_risk(generator_id, settings)
+
+
 func clip_brush_by_plane(brush_id: String, plane: Plane) -> HFOpResult:
 	return brush_system.clip_brush_by_plane(brush_id, plane)
 

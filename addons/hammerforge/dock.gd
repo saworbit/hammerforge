@@ -479,6 +479,10 @@ var structure_warning: Label = null
 ## The generator the selection belongs to, if any. Empty means the Arch
 ## section is creating rather than editing.
 var _active_generator_id: String = ""
+
+## The structure and settings the user has already been warned about, so a second
+## press of Update goes ahead rather than warning again forever.
+var _structure_overwrite_ack: String = ""
 var dup_rise_spin: SpinBox = null
 var rotate_ccw_btn: Button = null
 var rotate_cw_btn: Button = null
