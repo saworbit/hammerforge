@@ -274,8 +274,8 @@ It writes one PNG per tab under `user://console_preview/`.
 - Clip an ordinary axis-aligned box. Confirm both pieces still have resize handles (they are still boxes).
 - Clip a box on a diagonal via Clip to Face Plane. Confirm each piece reports as Custom in the dock and has no box resize handles.
 - **Bake after each of the above.** Confirm no piece renders inside out — look at the cut surface in particular, from both sides.
-- Enter Face Select, click an angled face on a rotated brush, select a different brush, and press **Alt+Shift+X**. Confirm the second brush is cut along the first one's face plane and the reference brush is untouched.
-- With no face selected, press **Alt+Shift+X**. Confirm a message asks for a face rather than cutting anything.
+- Enter Face Select, click an angled face on a rotated brush, select a different brush, and press **Shift+Alt+X**. Confirm the second brush is cut along the first one's face plane and the reference brush is untouched.
+- With no face selected, press **Shift+Alt+X**. Confirm a message asks for a face rather than cutting anything.
 - Carve with a rotated carver, then with a cylinder carver. Confirm the green preview outlines the real resulting pieces and that the committed result matches it.
 - Carve a brush that has already been clipped on a diagonal. Confirm it cuts and bakes correctly.
 - Position a carver so it fully contains a small brush and carve. Confirm the small brush is left alone rather than disappearing.

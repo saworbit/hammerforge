@@ -361,14 +361,14 @@ merged brush and a rotated anything are all fair game.
 | Key | Action |
 |-----|--------|
 | `Shift+X` | Clip the selected brush |
-| `Alt+Shift+X` | Clip along the selected face's plane |
+| `Shift+Alt+X` | Clip along the selected face's plane |
 | `Ctrl+Shift+R` | Carve |
 
 ### Clipping along an angle
 
 The quickest way to an angled cut is **Clip to Face Plane**. Select the brush or
 brushes you want to cut **first**, then enter Face Select, click the face whose
-angle you want, and press `Alt+Shift+X`. Everything you had selected is cut along
+angle you want, and press `Shift+Alt+X`. Everything you had selected is cut along
 that face's plane, as a single undo step.
 
 The order matters because Face Select hides the object selection while it is open

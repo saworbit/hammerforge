@@ -126,6 +126,22 @@ func test_workflow_category_and_labels():
 	assert_eq(HFKeymapType.get_action_label("paint_blend"), "Blend")
 
 
+func test_display_string_names_the_bracket_keys():
+	# The guide tells the reader to press [ and ]. The palette used to answer
+	# "Key91" and "Key93", which names no key on anybody's keyboard.
+	assert_eq(keymap.get_display_string("grid_decrease"), "[")
+	assert_eq(keymap.get_display_string("grid_increase"), "]")
+
+
+func test_no_default_binding_renders_as_a_number():
+	for action in keymap.get_all_bindings():
+		var display := keymap.get_display_string(action)
+		assert_false(
+			display.contains("Key"),
+			"%s renders as %s, which tells the user nothing" % [action, display]
+		)
+
+
 func test_display_string_unknown():
 	var display = keymap.get_display_string("nonexistent_action")
 	assert_eq(display, "?", "Unknown action display should be '?'")
