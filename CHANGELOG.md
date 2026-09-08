@@ -5,6 +5,44 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Free transform — rotate, flip and array.** HammerForge could not turn a
+  brush. Every brush was authored axis-aligned, so a diagonal wall or an angled
+  ramp was unreachable except by hand-placing faces with the polygon or path
+  tool. The plumbing had been there all along — the baker, the snap system, the
+  gizmos and the `.hflevel` writer all already carried a full `Transform3D`, and
+  `FaceData.adjust_uvs_for_rotation()` had been written for this and never
+  called. What was missing was the authoring layer.
+  - **Rotate** (R / Shift+R) turns the selection by a configurable step, about
+    the locked axis or Y, around the selection's median point, the world origin,
+    or the active object. With Texture Lock on, the texture stays pinned in world
+    space, which is what the setting already means for moving and resizing.
+  - **Flip** (Shift+M) mirrors the selection across the locked axis, or X.
+    A mirror has determinant -1, which would invert triangle winding and bake
+    every face inside out; instead the reflection is folded back through a
+    reflection along one *local* axis, so the basis stays right-handed and every
+    world vertex lands exactly where the mirror puts it. A shape a mirror maps
+    onto itself, like a box, keeps its primitive and its resize handles; one it
+    does not, like a wedge, has the mirror baked into its faces.
+  - **Reset Rotation** (Alt+R) clears a rotation and keeps the position. Hollow,
+    Clip and Carve all read world extents straight off `size` and refuse a
+    rotated brush, so this is the way back to them. A quarter turn is folded into
+    the brush size rather than snapped away, so clearing it never moves geometry.
+  - **Array layouts**: the Duplicate Array section gains **Radial** (copies
+    around an axis, with a "Fill 360°" helper) and **Grid** (a 3D lattice)
+    beside the existing linear run. Radial copies compose their transform through
+    the same rotation code, so there is one implementation, not two.
+  - Reachable from the viewport hotkeys, the floating context toolbar, the Space
+    context menu, the command palette, and a Transform section in the dock's
+    Selection Tools. New subsystem `systems/hf_transform_system.gd`; new
+    `rotate_snap_degrees` and `transform_pivot_mode` settings, saved with the level
+    beside `texture_lock`.
+- **Free-transform coverage** (`tests/test_transform_system.gd`,
+  `tests/test_transform_array.gd`, `tests/test_transform_integration.gd`,
+  `tests/test_transform_commands.gd`, 129 cases): the rotation and mirror algebra,
+  four quarter turns returning home, double flips being exactly the identity, and
+  — the ones that matter — bake-level winding proofs that mirrored geometry still
+  faces outward, each paired with an untouched control so a failure cannot be
+  confused with a broken measurement.
 - **The HammerForge Console** — a dashboard on its own main screen, opened from
   the switcher at the top of the editor beside 2D, 3D and Script, and the
   addon's front door. Three tabs: **Status**, a red / amber / green board of eight checks
@@ -294,6 +332,12 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   an engine error alongside it.
 
 ### Changed
+- `HFBrushSystem._adjust_face_uvs_for_rotation()` moved to
+  `HFTransformSystem.adjust_face_uvs_for_rotation()`, where it finally has a
+  caller. It was written for rotation and had been dead since it landed.
+- `HFPluginEditActions` gained `collect_managed_targets()`; `nudge_selected()`
+  and the three transform actions now share one selection classifier instead of
+  repeating it.
 - **Snap geometry is cached per brush**
   ([#122](https://github.com/saworbit/hammerforge/issues/122)): deduping a brush's
   faces was the remaining cost in a snap query, and it ran for every non-box brush

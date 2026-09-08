@@ -113,6 +113,7 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `hf_prefab_system.gd` | `HFPrefabSystem` | Prefab instance registry (stable entity UIDs), variant cycling, live-linked propagation, override tracking, push-to-source |
 | `hf_displacement_system.gd` | `HFDisplacementSystem` | Displacement surface creation, painting, sewing, elevation, and power changes |
 | `hf_bevel_system.gd` | `HFBevelSystem` | Edge bevel (chamfer) and face inset operations |
+| `hf_transform_system.gd` | `HFTransformSystem` | Rotate, flip and reset rotation for brushes and entities. Winding-safe mirroring, stable pivots, texture-lock UV compensation |
 
 ### Other Modules
 
@@ -216,6 +217,10 @@ LevelRoot (Node3D)
 - **Move to Floor/Ceiling** (Ctrl+Shift+F/C): raycasts against other brush AABBs to snap selection vertically.
 - **Carve** (Ctrl+Shift+R): boolean-subtract one brush from all intersecting brushes. `HFCarveSystem` uses progressive-remainder algorithm to produce up to 6 box slices per target. Preserves material, operation, visgroups, group_id, brush_entity_class.
 - **Merge** (Ctrl+Shift+M): combines 2+ selected brushes into a single CUSTOM brush. Transforms all face `local_verts` and normals through the full `Transform3D` pipeline (source local → world → merged local via `affine_inverse()`), so rotated/scaled brushes merge correctly. Per-brush `material_override` is registered into MaterialManager and stamped as per-face `material_idx`. Validates same operation type. Inherits metadata from first brush.
+- **Rotate** (R / Shift+R): turns the selection by `rotate_snap_degrees` about the axis lock, or Y when none is set. Pivots on `transform_pivot_mode` — the selection's origin centroid, the world origin, or the active object. The centroid is used rather than a bounding-box centre because it is exactly invariant under rotation about itself, so repeated presses cannot walk the selection. With `texture_lock` on, every face's `uv_rotation` is compensated.
+- **Flip** (Shift+M): mirrors the selection across an axis-aligned plane. A world reflection `R` gives a determinant `-1` basis, which would invert triangle winding at bake; the transform is composed as `R * basis * H` with `H` a reflection along the local axis most aligned with the mirror normal, restoring a positive determinant while leaving world vertices exactly mirrored. A primitive that `H` maps onto itself keeps its shape and resize handles; otherwise the faces are promoted to `CUSTOM`, their `local_verts` reflected by `H` and their vertex order reversed. Refuses brushes carrying displacement faces.
+- **Reset Rotation** (Alt+R): clears a brush basis, keeping its origin. When the basis is a signed axis permutation and the brush is a BOX, the swap is folded into `size` first, so a quarter turn is cleared losslessly. This is the supported route back to Hollow, Clip and Carve, which read world extents off `size` and refuse a rotated brush via `_check_axis_aligned_box()`.
+- **Arrays**: `HFDuplicator` supports linear, radial (count / axis / step degrees / pivot) and grid (per-axis cell counts and spacing) layouts. Radial copies compose their transform through `HFTransformSystem.rotated_transform()`. A serialized duplicator without a `mode` key loads as linear.
 - **Numeric input**: type exact dimensions during drag or extrude (Enter applies, Backspace edits).
 - **UV Justify**: fit/center/left/right/top/bottom alignment modes for selected faces.
 - Bake builds a temporary CSG tree from DraftBrushes + CommittedCuts and outputs BakedGeometry. If cordon is enabled, transformed geometry bounds—not an untranslated local AABB—determine inclusion. Brush entity classes `func_detail` and `trigger_*` are excluded from structural bake. Commit Cuts prepares and bakes outside UndoRedo, then stores exact source and baked snapshots for synchronous undo/redo; failed preparation leaves its cutters pending.
@@ -518,6 +523,6 @@ Unit tests use the [GUT](https://github.com/bitwes/Gut) framework and run headle
 | `test_selection_gesture.gd` | 38 | Native widget/Object Select ownership, modal Face Select, recovery, focus/scope guards, native duplicate/reparent repair, and Inspector/undo change tracking |
 | `test_viewport_outlines.gd` | 39 | Sparse semantic outlines, exact/composite entity collision, visibility/transforms, and shape-aware resize recovery |
 
-Full suite (verified locally on September 7, 2026): **2,364 tests** across **129 scripts** (**2,357 passing** plus seven intentional no-assert safety tests; **9,821 assertions**).
+Full suite (verified locally on September 7, 2026): **2,486 tests** across **133 scripts** (**2,479 passing** plus seven intentional no-assert safety tests; **10,436 assertions**).
 
 Tests use root shim scripts (dynamically created GDScript) to provide the LevelRoot interface without circular preload dependencies. Configuration in `.gutconfig.json`.

@@ -874,13 +874,6 @@ func _adjust_face_uvs_for_transform(
 			face.custom_uvs = PackedVector2Array()
 
 
-func _adjust_face_uvs_for_rotation(draft: DraftBrush, angle_rad: float) -> void:
-	for face in draft.faces:
-		if face == null:
-			continue
-		face.adjust_uvs_for_rotation(angle_rad)
-
-
 func _refresh_brush_previews() -> void:
 	for node in root._iter_pick_nodes():
 		if node is DraftBrush:
@@ -1905,7 +1898,41 @@ func create_duplicate_array(
 ) -> Variant:
 	if brush_ids.is_empty() or p_count < 1:
 		return null
-	# Clean up any existing duplicator that owns these source brushes.
+	var dup := _new_duplicator_for(brush_ids)
+	if not dup.generate(self, p_count, p_offset):
+		return null
+	_duplicators[dup.duplicator_id] = dup
+	return dup
+
+
+## Ring of copies rotated `step_degrees` apart about `pivot`. Pass
+## `360.0 / (count + 1)` as the step to close a full circle.
+func create_radial_array(
+	brush_ids: PackedStringArray, p_count: int, axis_index: int, step_degrees: float, pivot: Vector3
+) -> Variant:
+	if brush_ids.is_empty() or p_count < 1:
+		return null
+	var dup := _new_duplicator_for(brush_ids)
+	if not dup.generate_radial(self, p_count, axis_index, step_degrees, pivot):
+		return null
+	_duplicators[dup.duplicator_id] = dup
+	return dup
+
+
+## Lattice of copies. `counts` includes the source cell on each axis.
+func create_grid_array(brush_ids: PackedStringArray, counts: Vector3i, spacing: Vector3) -> Variant:
+	if brush_ids.is_empty():
+		return null
+	var dup := _new_duplicator_for(brush_ids)
+	if not dup.generate_grid(self, counts, spacing):
+		return null
+	_duplicators[dup.duplicator_id] = dup
+	return dup
+
+
+## Retire any duplicator that already owns these source brushes, then hand back a
+## fresh one bound to them. One source set owns at most one array at a time.
+func _new_duplicator_for(brush_ids: PackedStringArray) -> HFDuplicator:
 	for bid in brush_ids:
 		var brush = _brush_cache.get(bid)
 		if brush and brush.has_meta("duplicator_id"):
@@ -1915,9 +1942,6 @@ func create_duplicate_array(
 				_duplicators.erase(old_id)
 	var dup := HFDuplicator.new()
 	dup.source_brush_ids = brush_ids
-	if not dup.generate(self, p_count, p_offset):
-		return null
-	_duplicators[dup.duplicator_id] = dup
 	return dup
 
 

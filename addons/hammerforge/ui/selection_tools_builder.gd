@@ -71,7 +71,61 @@ func build(parent: Control) -> void:
 	dock.untie_entity_btn = HFUIFactoryType.make_button("Untie")
 	tie_row.add_child(dock.untie_entity_btn)
 
+	_add_sub_header(sc, "Transform")
+
+	var xform_row = HBoxContainer.new()
+	sc.add_child(xform_row)
+	var angle_lbl = Label.new()
+	angle_lbl.text = "Step:"
+	xform_row.add_child(angle_lbl)
+	dock.rotate_snap_spin = HFUIFactoryType.make_spin(1.0, 180.0, 1.0, 15.0)
+	dock.rotate_snap_spin.tooltip_text = "Degrees per rotate press"
+	xform_row.add_child(dock.rotate_snap_spin)
+	var pivot_lbl = Label.new()
+	pivot_lbl.text = "Pivot:"
+	xform_row.add_child(pivot_lbl)
+	dock.transform_pivot_opt = HFUIFactoryType.make_option(["Selection", "World Origin", "Active"])
+	dock.transform_pivot_opt.tooltip_text = ("Selection: the centre of the selected objects. World Origin: (0, 0, 0). Active: the first selected object.")
+	xform_row.add_child(dock.transform_pivot_opt)
+
+	var rotate_row = HBoxContainer.new()
+	sc.add_child(rotate_row)
+	dock.rotate_ccw_btn = HFUIFactoryType.make_button(
+		"↺ CCW (R)", "Rotate counter-clockwise about the locked axis, or Y"
+	)
+	dock.rotate_ccw_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rotate_row.add_child(dock.rotate_ccw_btn)
+	dock.rotate_cw_btn = HFUIFactoryType.make_button(
+		"↻ CW (Shift+R)", "Rotate clockwise about the locked axis, or Y"
+	)
+	dock.rotate_cw_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rotate_row.add_child(dock.rotate_cw_btn)
+
+	var flip_row = HBoxContainer.new()
+	sc.add_child(flip_row)
+	dock.flip_btn = HFUIFactoryType.make_button(
+		"Flip (Shift+M)", "Mirror the selection across the locked axis, or X"
+	)
+	dock.flip_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	flip_row.add_child(dock.flip_btn)
+	dock.reset_rotation_btn = HFUIFactoryType.make_button(
+		"Reset Rotation (Alt+R)",
+		"Clear rotation and keep position — Hollow, Clip and Carve need an unrotated brush"
+	)
+	dock.reset_rotation_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	flip_row.add_child(dock.reset_rotation_btn)
+
 	_add_sub_header(sc, "Duplicate Array")
+
+	var dup_mode_row = HBoxContainer.new()
+	sc.add_child(dup_mode_row)
+	var mode_lbl = Label.new()
+	mode_lbl.text = "Layout:"
+	dup_mode_row.add_child(mode_lbl)
+	dock.dup_mode_opt = HFUIFactoryType.make_option(["Linear", "Radial", "Grid"])
+	dock.dup_mode_opt.tooltip_text = ("Linear: copies along an offset. Radial: copies around an axis. Grid: a 3D lattice of copies.")
+	dock.dup_mode_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dup_mode_row.add_child(dock.dup_mode_opt)
 
 	var dup_row1 = HBoxContainer.new()
 	sc.add_child(dup_row1)
@@ -83,6 +137,7 @@ func build(parent: Control) -> void:
 	dup_row1.add_child(dock.dup_count_spin)
 
 	var dup_row2 = HBoxContainer.new()
+	dock.dup_linear_row = dup_row2
 	sc.add_child(dup_row2)
 	var off_lbl = Label.new()
 	off_lbl.text = "Offset:"
@@ -96,6 +151,47 @@ func build(parent: Control) -> void:
 	dock.dup_offset_z = HFUIFactoryType.make_spin(-1000, 1000, 1, 0)
 	dock.dup_offset_z.tooltip_text = "Z offset per copy"
 	dup_row2.add_child(dock.dup_offset_z)
+
+	dock.dup_radial_row = HBoxContainer.new()
+	dock.dup_radial_row.visible = false
+	sc.add_child(dock.dup_radial_row)
+	var axis_lbl = Label.new()
+	axis_lbl.text = "Axis:"
+	dock.dup_radial_row.add_child(axis_lbl)
+	dock.dup_axis_opt = HFUIFactoryType.make_option(["X", "Y", "Z"])
+	dock.dup_axis_opt.select(1)
+	dock.dup_axis_opt.tooltip_text = "Axis the ring turns about"
+	dock.dup_radial_row.add_child(dock.dup_axis_opt)
+	var step_lbl = Label.new()
+	step_lbl.text = "Step°:"
+	dock.dup_radial_row.add_child(step_lbl)
+	dock.dup_step_spin = HFUIFactoryType.make_spin(-360.0, 360.0, 1.0, 90.0)
+	dock.dup_step_spin.tooltip_text = "Degrees between copies"
+	dock.dup_radial_row.add_child(dock.dup_step_spin)
+	dock.dup_fill_check = HFUIFactoryType.make_check("Fill 360°", false)
+	dock.dup_fill_check.tooltip_text = ("Ignore the step and space the copies evenly around a closed ring")
+	dock.dup_radial_row.add_child(dock.dup_fill_check)
+
+	dock.dup_grid_row = HBoxContainer.new()
+	dock.dup_grid_row.visible = false
+	sc.add_child(dock.dup_grid_row)
+	var grid_lbl = Label.new()
+	grid_lbl.text = "Cells:"
+	dock.dup_grid_row.add_child(grid_lbl)
+	dock.dup_grid_x = HFUIFactoryType.make_spin(1, 32, 1, 2)
+	dock.dup_grid_x.tooltip_text = "Cells along X, counting the original"
+	dock.dup_grid_row.add_child(dock.dup_grid_x)
+	dock.dup_grid_y = HFUIFactoryType.make_spin(1, 32, 1, 1)
+	dock.dup_grid_y.tooltip_text = "Cells along Y, counting the original"
+	dock.dup_grid_row.add_child(dock.dup_grid_y)
+	dock.dup_grid_z = HFUIFactoryType.make_spin(1, 32, 1, 2)
+	dock.dup_grid_z.tooltip_text = "Cells along Z, counting the original"
+	dock.dup_grid_row.add_child(dock.dup_grid_z)
+	var grid_hint = Label.new()
+	grid_hint.text = "spacing = offset"
+	grid_hint.add_theme_font_size_override("font_size", 10)
+	grid_hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.4))
+	dock.dup_grid_row.add_child(grid_hint)
 
 	var dup_btns = HBoxContainer.new()
 	sc.add_child(dup_btns)
@@ -129,6 +225,20 @@ func _add_sub_header(parent: Control, text: String) -> void:
 
 
 func connect_signals() -> void:
+	if dock.dup_mode_opt:
+		dock.dup_mode_opt.item_selected.connect(dock._on_duplicate_array_mode_changed)
+	if dock.rotate_snap_spin:
+		dock.rotate_snap_spin.value_changed.connect(dock._on_rotate_snap_changed)
+	if dock.transform_pivot_opt:
+		dock.transform_pivot_opt.item_selected.connect(dock._on_transform_pivot_changed)
+	if dock.rotate_ccw_btn:
+		dock.rotate_ccw_btn.pressed.connect(dock._on_rotate_selection.bind(1))
+	if dock.rotate_cw_btn:
+		dock.rotate_cw_btn.pressed.connect(dock._on_rotate_selection.bind(-1))
+	if dock.flip_btn:
+		dock.flip_btn.pressed.connect(dock._on_flip_selection)
+	if dock.reset_rotation_btn:
+		dock.reset_rotation_btn.pressed.connect(dock._on_reset_rotation)
 	if dock.hollow_btn:
 		dock.hollow_btn.pressed.connect(dock._on_hollow)
 	if dock.move_floor_btn:

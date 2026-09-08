@@ -195,6 +195,73 @@ Press **M** to activate the Measure tool. It supports persistent multi-ruler mea
 - Press **Escape** to clear all rulers.
 - The HUD shows ruler count, distance of the last ruler, and alignment status.
 
+## Rotating and Mirroring
+
+Select anything — brushes, entities, or both — and turn it.
+
+| Key | Action |
+|-----|--------|
+| `R` | Rotate counter-clockwise by the step |
+| `Shift+R` | Rotate clockwise by the step |
+| `Shift+M` | Flip (mirror) the selection |
+| `Alt+R` | Reset rotation |
+
+**Which axis.** If you have an axis lock set (`X` / `Y` / `Z`), that is the axis.
+Otherwise rotate uses **Y** — a yaw, which is what you want almost every time —
+and flip uses **X**, a left-right mirror.
+
+**What it turns around.** The **Pivot** picker in Selection Tools chooses between
+the centre of your selection, the world origin, and the first object you
+selected. The selection centre is the median of the objects' own positions, which
+means pressing `R` four times with a 90° step puts everything back exactly where
+it started, however lopsided the selection is.
+
+**The step.** Set it in Selection Tools. 15° by default; 45° and 90° are the
+other two you will reach for.
+
+**Texture Lock applies.** With it on, textures stay put in world space as the
+brush turns underneath them. Turn it off if you want the texture to ride along.
+
+### After you rotate
+
+**Hollow, Clip and Carve will refuse a rotated brush.** They measure a brush's
+extent straight off its size along the world axes, which is only true while it is
+unrotated — running them anyway would cut in the wrong place. They will tell you
+so, and **Reset Rotation** (`Alt+R`) is the way back.
+
+Reset Rotation does not move your geometry. If you turned a brush by exactly 90°,
+it folds that quarter turn into the brush's dimensions instead of snapping the
+brush back to its old footprint, so the brush stays exactly where it looks like it
+is and Hollow and Clip work again.
+
+### Flip
+
+Mirroring is exact. A mirrored box is still a box and keeps its resize handles; a
+shape that a mirror genuinely changes, like a wedge, has the mirror written into
+its faces and becomes a Custom brush. Either way the faces stay wound the right
+way out, so a mirrored brush never bakes inside out.
+
+One thing flip will not do: mirror a brush carrying a **sculpted displacement**.
+The displacement grid is anchored to the order of its face's corners and
+mirroring reverses that order, so rather than quietly wrecking your terrain it
+refuses and says why. Destroy the displacement first if you need the mirror.
+
+### Arrays
+
+**Duplicate Array** in Selection Tools has three layouts:
+
+- **Linear** — copies along the X/Y/Z offset, one step further each time.
+- **Radial** — copies around an axis. Set the step in degrees, or tick
+  **Fill 360°** and let it space the copies and the original evenly around a
+  closed ring. Each copy is turned as well as moved, so a ring of arches faces
+  outward rather than all facing the same way.
+- **Grid** — a 3D lattice. Set the cell count per axis (counting the original)
+  and the X/Y/Z offset becomes the spacing.
+
+> `R` is also the Rect tool in paint mode. Paint mode gets first claim on it, and
+> the whole rotate/flip group is skipped while paint mode is on, so the two never
+> fight over the key.
+
 ## Command Palette (Ctrl+K)
 
 The command palette is a searchable action list. Open it with **Shift+?**, **F1**, or **Ctrl+K**.
@@ -245,12 +312,13 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
 - **Snap Modes**: G (Grid), V (Vertex), C (Center), E (Edge midpoint), and P (Perpendicular projection). Toggle independently; the closest eligible geometry candidate within the threshold beats grid snap.
 - **Material**: active material picker.
 - **Physics Layer**: collision layer for baked output.
-- **Texture Lock**: UV alignment preserved on move/resize (enabled by default).
+- **Texture Lock**: UV alignment preserved on move, resize, and rotate (enabled by default).
 - **Selection Tools** (visible when brushes are selected, grouped by domain):
   - **Brush Modification**: Hollow (wall thickness spinner + button, Ctrl+H) with yellow wireframe preview; Clip Selected (Shift+X) with cyan wireframe preview + orange split plane. Carve (Ctrl+Shift+R) with green wireframe preview. Merge (Ctrl+Shift+M) combining 2+ brushes.
   - **Positioning**: Move to Floor (Ctrl+Shift+F) / Ceiling (Ctrl+Shift+C).
+  - **Transform**: Step (degrees per press) and Pivot (Selection / World Origin / Active). Rotate CCW (R) and CW (Shift+R) turn the selection about the locked axis, or Y when no axis lock is set. Flip (Shift+M) mirrors it across the locked axis, or X. Reset Rotation (Alt+R) clears a rotation without moving the geometry.
   - **Entity Binding**: Tie/Untie brush entity class (populated from entity definitions).
-  - **Duplicate Array**: count, X/Y/Z offset, Create/Remove Array buttons.
+  - **Duplicate Array**: Layout (Linear / Radial / Grid), count, X/Y/Z offset, and the controls for the chosen layout — axis, step degrees and a Fill 360 helper for Radial; per-axis cell counts for Grid, which uses the X/Y/Z offset as its spacing. Create/Remove Array buttons.
   - **Bulk delete**: deleting 3+ brushes shows a confirmation dialog (undo reminder). Single/dual deletes remain instant.
 
 ### Paint tab (collapsible sections)

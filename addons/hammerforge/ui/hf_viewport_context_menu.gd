@@ -14,6 +14,10 @@ const _ID_HOLLOW := 102
 const _ID_CLIP := 103
 const _ID_CARVE := 104
 const _ID_MERGE := 105
+const _ID_ROTATE_CCW := 106
+const _ID_ROTATE_CW := 107
+const _ID_FLIP := 108
+const _ID_RESET_ROTATION := 109
 const _ID_DUPLICATE := 110
 const _ID_DELETE := 111
 const _ID_SELECT_SIMILAR := 113
@@ -148,6 +152,11 @@ func _build_context_items(ctx: Context) -> void:
 			add_item("Carve", _ID_CARVE)
 			add_item("Merge", _ID_MERGE)
 			add_separator()
+			add_item("Rotate CCW", _ID_ROTATE_CCW)
+			add_item("Rotate CW", _ID_ROTATE_CW)
+			add_item("Flip", _ID_FLIP)
+			add_item("Reset Rotation", _ID_RESET_ROTATION)
+			add_separator()
 			add_item("Select Similar", _ID_SELECT_SIMILAR)
 			add_item("Selection Filters...", _ID_SELECTION_FILTER)
 			add_separator()
@@ -195,6 +204,14 @@ func _on_id_pressed(id: int) -> void:
 			action = "carve"
 		_ID_MERGE:
 			action = "merge"
+		_ID_ROTATE_CCW:
+			action = "rotate_ccw"
+		_ID_ROTATE_CW:
+			action = "rotate_cw"
+		_ID_FLIP:
+			action = "flip_selection"
+		_ID_RESET_ROTATION:
+			action = "reset_rotation"
 		_ID_DUPLICATE:
 			action = "duplicate"
 		_ID_DELETE:

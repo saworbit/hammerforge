@@ -242,6 +242,32 @@ It writes one PNG per tab under `user://console_preview/`.
 - Try merging a single brush; confirm an error toast appears ("Select at least 2 brushes").
 - Try merging an additive brush with a subtractive brush; confirm rejection ("all brushes must have the same operation type").
 
+### 7c-2. Free Transform (Rotate, Flip, Reset)
+- Draw a box that is clearly not a cube (say 64 x 32 x 16) and select it.
+- Press **R** a few times. Confirm it turns about Y in the step shown in Selection
+  Tools, and that the brush outline and resize handles turn with it.
+- Press **Shift+R** the same number of times. Confirm it returns to where it started.
+- Set the axis lock to **X**, then press **R**. Confirm it now pitches instead of yawing. Clear the lock.
+- Change **Pivot** to **World Origin** and press **R**. Confirm the brush orbits the origin rather than turning in place.
+- With **Texture Lock** on, rotate a textured brush and confirm the texture stays put in world space. Turn Texture Lock off, rotate again, and confirm the texture now turns with the brush.
+- Bake the rotated brush. Confirm the geometry is solid and textured from outside, not inside-out.
+- Press **Shift+M** to flip. Confirm the brush mirrors across X and still renders from outside. Press **Shift+M** again and confirm it returns exactly.
+- Repeat the flip on a **wedge**. Confirm the mirrored wedge slopes the other way, still renders correctly, and its shape reads as Custom in the dock.
+- Select several brushes and an entity together, then rotate and flip. Confirm they move as one group and that a `player_start`'s angle follows the rotation.
+- Rotate a box, then try **Hollow** (Ctrl+H). Confirm it refuses with a message naming the rotation and suggesting a fix. Try **Clip** and **Carve**; confirm the same.
+- Press **Alt+R** (Reset Rotation) on a brush turned exactly 90 degrees. Confirm the brush does **not** move or change size on screen, and that Hollow and Clip now work.
+- Press **Alt+R** on a brush turned by an odd angle. Confirm it snaps to axis-aligned.
+- Create a displacement on a face, then try **Shift+M**. Confirm the flip is refused with a message about displacement rather than corrupting the terrain.
+- Undo each of the above with Ctrl+Z and confirm the brush returns to its previous transform.
+
+### 7c-3. Array Layouts
+- Select a brush offset from the origin. In Selection Tools, set **Layout** to **Radial**.
+- Set count to 5, axis Y, tick **Fill 360**, and click **Create Array**. Confirm six evenly spaced copies form a closed ring and each copy faces outward rather than all facing the same way.
+- Click **Remove Array**; confirm only the original remains.
+- Set **Layout** to **Grid**, cells 3/1/3, X/Y/Z offset 64/0/64, and click **Create Array**. Confirm a 3x3 lattice of eight copies plus the original.
+- Switch back to **Linear** and confirm the offset row returns and the old behaviour is unchanged.
+- Confirm the Radial and Grid rows only appear for their own layout.
+
 ### 7d. Face Winding Migration (Old Saves)
 - Open a `.hflevel` file saved before the CW winding fix (April 6, 2026 or earlier).
 - Confirm all brush faces render with textures visible from outside (not inside-out).
