@@ -155,6 +155,14 @@ static func handle_keyboard(
 			return clip_guard
 		plugin._clip_selected(root)
 		return STOP
+	# No selection guard: Face Select empties the object selection by design, and
+	# the command reads the objects that were selected on the way in. Its own
+	# messages say what is missing.
+	if keymap.matches("clip_to_face", event):
+		if root == null:
+			return PASS
+		plugin._clip_to_face_plane_selected(root)
+		return STOP
 	if keymap.matches("carve", event):
 		var carve_guard = plugin._guard_hammerforge_shortcut(root, true, 1, "Carve")
 		if carve_guard != SHORTCUT_APPLY:

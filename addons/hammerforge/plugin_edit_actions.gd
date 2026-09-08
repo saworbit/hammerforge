@@ -349,26 +349,73 @@ static func clip_to_face_plane_selected(plugin: Object, root: Node) -> bool:
 		root.user_message.emit("Clip to Face: no usable face is selected", 1)
 		return false
 
-	var targets := collect_managed_targets(plugin, root)
-	var brush_ids: Array = targets["brush_ids"]
+	var plane: Plane = root.brush_system.face_world_plane(source_id, face_index)
+	if plane.normal.length_squared() < 0.5:
+		root.user_message.emit("Clip to Face: the selected face has no usable plane", 1)
+		return false
+
+	var brush_ids := clip_target_brush_ids(plugin, root)
 	if brush_ids.is_empty():
 		root.user_message.emit("Clip to Face: select the brushes to cut", 1)
 		return false
 
-	var cut_any := false
+	# Ask before committing. An action that cuts nothing would still open an undo
+	# entry and claim the level changed.
+	var cuttable: Array = []
 	for brush_id in brush_ids:
-		var check: HFOpResult = root.brush_system.clip_brush_to_face_plane(
-			str(brush_id), source_id, face_index
-		)
-		if check.ok:
-			cut_any = true
-	if not cut_any:
+		if root.brush_system.plane_splits_brush(str(brush_id), plane):
+			cuttable.append(str(brush_id))
+	if cuttable.is_empty():
 		root.user_message.emit(
 			"Clip to Face: that plane does not pass through any selected brush", 1
 		)
-	else:
-		plugin._record_history("Clip to Face Plane")
-	return cut_any
+		return false
+
+	HFUndoHelper.commit(
+		plugin._get_undo_redo(),
+		root,
+		"Clip to Face Plane",
+		"clip_brushes_by_plane",
+		[cuttable, plane],
+		false,
+		Callable(plugin, "_record_history")
+	)
+	_release_face_select_after_cut(plugin, root)
+	return true
+
+
+## The brushes a face-plane cut should take, including the ones Face Select hid.
+##
+## Entering Face Select empties the object selection on purpose, so by the time a
+## reference face exists there is nothing left in the live selection to cut. The
+## objects that were selected on the way in are the ones the user meant.
+static func clip_target_brush_ids(plugin: Object, root: Node) -> Array:
+	var brush_ids: Array = collect_managed_targets(plugin, root)["brush_ids"]
+	if not brush_ids.is_empty():
+		return brush_ids
+	var saved: Array = plugin.get("_face_mode_saved_object_selection")
+	if saved == null:
+		return brush_ids
+	for node in saved:
+		if not is_instance_valid(node) or not (node is Node3D) or not root.is_brush_node(node):
+			continue
+		var info = root.get_brush_info_from_node(node)
+		var brush_id := str(info.get("brush_id", ""))
+		if brush_id != "":
+			brush_ids.append(brush_id)
+	return brush_ids
+
+
+## Both selections named brushes that the cut has just replaced. Drop them and
+## leave Face Select rather than restoring a selection of freed nodes.
+static func _release_face_select_after_cut(plugin: Object, root: Node) -> void:
+	var saved: Array = plugin.get("_face_mode_saved_object_selection")
+	if saved != null:
+		saved.clear()
+	if root and root.has_method("clear_face_selection"):
+		root.clear_face_selection()
+	if plugin.has_method("_close_face_select_mode"):
+		plugin._close_face_select_mode()
 
 
 static func clip_selected(plugin: Object, root: Node) -> bool:

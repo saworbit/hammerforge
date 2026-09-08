@@ -96,7 +96,7 @@ func test_clip_to_face_asks_for_a_face_before_cutting_anything():
 	assert_true(body.contains("root.face_selection"), "the plane comes from the face selection")
 	assert_lt(
 		body.find("face_selection.is_empty()"),
-		body.find("clip_brush_to_face_plane"),
+		body.find("clip_brushes_by_plane"),
 		"the missing-face check must run before anything is cut"
 	)
 	assert_true(body.contains("user_message.emit"), "a refusal must reach the user")

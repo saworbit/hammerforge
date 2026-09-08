@@ -1303,6 +1303,19 @@ func clip_brush_to_face_plane(
 	return brush_system.clip_brush_to_face_plane(brush_id, source_brush_id, face_index)
 
 
+func face_world_plane(source_brush_id: String, face_index: int) -> Plane:
+	return brush_system.face_world_plane(source_brush_id, face_index)
+
+
+func plane_splits_brush(brush_id: String, plane: Plane) -> bool:
+	return brush_system.plane_splits_brush(brush_id, plane)
+
+
+## Named for the undo helper, which resolves the do method on LevelRoot by name.
+func clip_brushes_by_plane(brush_ids: Array, plane: Plane) -> int:
+	return brush_system.clip_brushes_by_plane(brush_ids, plane)
+
+
 func clip_brush_by_id(brush_id: String, axis: int, split_pos: float) -> HFOpResult:
 	return brush_system.clip_brush_by_id(brush_id, axis, split_pos)
 
