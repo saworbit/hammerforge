@@ -578,14 +578,14 @@ and run".
 The May 2026 simplification phase 1 landed shared utilities and migrated low-risk call sites. The following items continue that initiative but each requires a dedicated session with interactive UI/bake validation, or a profiling pass, before landing safely.
 
 ### Continued dock.gd decomposition
-The current 5,475-line file is still dominated by `_on_*` signal handlers wired to dock-internal state.
+The current 5,591-line file is still dominated by `_on_*` signal handlers wired to dock-internal state.
 - Split into per-tab handler files: `dock_brush_handler.gd` (done), `dock_paint_handler.gd` (done), `dock_entity_handler.gd` (done), `dock_manage_handler.gd` (Test-tab bake/play done), and `dock_visgroup_handler.gd` (visgroups, grouping, and cordon done). Target dock.gd shell at ~1,500 lines.
 - File dialogs and import/export callbacks delegate to `dock_file_handler.gd`; settings and `LevelRoot` signal lifecycle delegate to `dock_connections.gd`.
 - Consolidate the entity-properties UI builder and the external-tool-settings UI builder (both schema-driven; share ~100 lines of dispatch logic).
 - Migrate `paint_tab_builder.gd` (50 call sites) and `manage_tab_builder.gd` (58 call sites) from `dock._make_*` to direct `HFUIFactory` calls. Mechanical churn — wait until shared with another tab-builder change.
 
 ### plugin.gd decomposition (Phase 3b)
-Current: 2,506 lines. Remaining work is concentrated in other coordinator responsibilities:
+Current: 1,599 lines. Remaining work is concentrated in other coordinator responsibilities:
 - `_forward_3d_gui_input` and native RMB camera ownership now live in `plugin_viewport_input.gd` (`HFPluginViewportInput`).
 - Floor, surface, and displacement paint input now lives in `plugin_paint_input.gd` (`HFPluginPaintInput`).
 - Draw, extrude, motion, face hover, and prefab hover now live in `plugin_pointer_tools.gd` (`HFPluginPointerTools`).
@@ -609,7 +609,7 @@ Completion is responsibility-based rather than tied to an arbitrary line count. 
 - Headless editor tests retain the complete tool graph, with focused export-playtest coverage guarding the runtime boundary.
 
 ### Risk-focused test gaps
-The current suite covers 2,486 tests across 133 scripts, including the large brush, bake, paint, vertex, transform, baker, brush-instance, and map-I/O systems. The issue tracker is clear as of September 7, 2026. One known limitation is not
+The current suite covers 2,809 tests across 147 scripts, including the large brush, bake, paint, vertex, transform, generator, baker, brush-instance, and map-I/O systems. The issue tracker is clear as of September 7, 2026. One known limitation is not
 tracked as an issue and has no coverage:
 - A `.map` entity property value containing a quote or a backslash does not round
   trip. `MapIO._parse_key_value()` splits on unescaped quote positions and

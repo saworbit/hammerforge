@@ -126,7 +126,16 @@ addons/hammerforge/
   plugin_overlays.gd     Power-user lifecycle, vertex/marquee drawing, quick properties, and coach marks
   plugin_vertex_input.gd Vertex/edge pick, drag, merge, and split dispatch
   plugin_hud.gd          HUD context, mode banner, and context-toolbar state
-  level_root.gd          Public level facade and coordinator (2,851 lines)
+  plugin_vertex_ops.gd   Vertex merge, split, and selection-resolving wrappers
+  plugin_shortcuts.gd    Editor shortcut registration and keymap binding
+  plugin_tool_modes.gd   Tool-mode entry, exit, and mutual exclusion
+  plugin_selection_commands.gd  Selection-scope commands (all, none, invert, by class)
+  plugin_material_commands.gd   Material apply, pick, and palette commands
+  plugin_prefab_commands.gd     Prefab place, save, and library commands
+  plugin_undo_events.gd  Undo/redo signal handling and post-action reconciliation
+  plugin_bake_preview.gd Bake preview lifecycle and wireframe toggle
+  plugin_gesture_recovery.gd  Stale-gesture detection and recovery on re-entry
+  level_root.gd          Public level facade and coordinator (3,025 lines)
   input_state.gd         Drag/paint/extrude/vertex state machine (HFInputState)
   hf_selection_gesture.gd Select-mode LMB arbiter (native object selection, face marquee, gizmos)
   dock.gd + dock.tscn    UI dock (displayed as Build, Paint, Objects, Test), collapsible sections with persisted state
@@ -148,6 +157,12 @@ addons/hammerforge/
   ui/hf_status_strip.gd  The same lamp in the 3D viewport toolbar, on a slower beat
   shortcut_hud.gd        Single-row shortcut strip in the 3D toolbar (primary line per mode, full list on the tooltip) + grid size indicator with flash-on-change
   brush_instance.gd      DraftBrush node
+  draft_entity.gd        DraftEntity node
+  brush_manager.gd       Legacy brush registry kept for compatibility with older saves
+  brush_preset.gd        Named brush shape/size presets
+  brush_gizmo_plugin.gd  EditorNode3DGizmoPlugin: resize handles and face gizmos
+  hf_brush_change_tracker.gd  Per-brush dirty tracking that drives incremental rebuilds
+  playtest_fps.gd        Test Level: the throwaway first-person controller
   baker.gd               CSG -> mesh bake pipeline (per-face materials, atlas integration, snapshot-based non-blocking face bakes, convex collision shapes)
   hf_material_atlas.gd   HFMaterialAtlas: texture atlas packing for draw-call reduction
   face_data.gd           Per-face materials, UVs, paint layers, displacement
@@ -159,6 +174,13 @@ addons/hammerforge/
   hf_gesture.gd          Gesture tracker base class (update/commit/cancel pattern)
   hf_entity_def.gd       Data-driven entity definition system (JSON + built-in defaults)
   hf_duplicator.gd       Duplicator / instanced geometry (source brushes + progressive offset)
+  hf_generator.gd        HFGenerator: the record of what a generator made (type, settings, placement, per-piece signatures)
+  hf_generator_schema.gd HFGeneratorSchema: what a generator's settings are, so the dock can build the controls
+  hf_arch_builder.gd     Parametric arches: one face set per voussoir
+  hf_stairs_builder.gd   Straight flights: solid underneath or floating treads
+  hf_spiral_stairs_builder.gd  Annular treads about an axis, with an optional newel post
+  hf_dome_builder.gd     Hemispheres in rings, because a patch of sphere is not planar
+  hf_convex_clip.gd      Splitting and building convex solids: the geometry behind Clip, Carve, Hollow and every generator
   hf_editor_tool.gd      Plugin API: base class for custom editor tools (+ poll, declarative settings)
   hf_tool_registry.gd    Plugin API: tool registration, dispatch, external tool loader
   hf_measure_tool.gd     Multi-ruler measurement tool (persistent rulers, angles, snap reference)
@@ -411,6 +433,8 @@ $env:GODOT = "C:\Godot\Godot_v4.7-stable_win64.exe"
 
 Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framework (installed in `addons/gut/`).
 
+The table below describes the larger suites rather than all 147 files; `ls tests/test_*.gd` is the complete list. `tests/test_suite_integrity.gd` fails the run if any of them will not load, because GUT skips an unparseable test file with a warning rather than a failure, and a file that is skipped is coverage that has silently gone.
+
 | Test File | Tests | Coverage |
 |-----------|-------|----------|
 | `test_visgroup_system.gd` | 18 | Visgroup CRUD, visibility, membership, serialization |
@@ -488,6 +512,19 @@ Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framewor
 | `test_paint_hot_paths.gd` | 39 | `SurfacePaint.paint_at_uv` (write-through, falloff, accumulation, erase, edge clamping, layer creation), `FaceData.get_painted_albedo` (blend modes, opacity, layer stacking, resize, non-RGBA8 sources, cache hits and invalidation), and `HFPaintTool._apply_terrain_brush` (raise/lower/smooth/flatten, falloff, wrapping, clamping, dirty chunks) |
 | `test_material_atlas_pbr.gd` | 32 | PBR slot packing (normal/roughness/metallic/emission), flat tiles for materials without a map, settings carried onto the atlas material, every skip reason, shared layout across channel atlases, resampling, and non-RGBA8 sources |
 | `test_hf_log.gd` | 6 | Warning capture and suppression, buffer lifetime, copy-on-read, and warning outside a capture (no spurious engine error) |
+| `test_convex_clip.gd` | 43 | Sutherland-Hodgman splitting with three-way vertex classification, on-plane vertices, cap rebuilding and ring ordering, axis-aligned-box detection, progressive remainder, plane budgets, and `solid_from_rings` (collapsing coincident corners, refusing a shape too thin to bound a volume, winding decided by measurement rather than corner order) |
+| `test_transform_system.gd` | 51 | Rotate, flip and reset rotation for brushes and entities: scale-preserving rotation, winding-safe mirroring, lossless quarter-turn reset with axis permutation, pivots, and displacement refusals |
+| `test_transform_integration.gd` | 30 | Free transform against a real LevelRoot and baker: bake-level winding proof for rotation and mirroring, texture-lock UV compensation, and the operations that used to refuse a rotated brush and no longer do |
+| `test_arch_builder.gd` | 21 | Voussoir count and shape, closed solids, outward winding, neighbours sharing their meeting face, full rings, and each refusal on its own boundary |
+| `test_stairs_builder.gd` | 18 | Step count, solid and open fills, the climb and run a flight claims, steps meeting their neighbour, and refusals including a tread deeper than the whole climb |
+| `test_spiral_stairs_builder.gd` | 19 | Annular treads, the newel post as a piece, treads meeting at the axis as wedges, the climb per tread, flat fans, reversed turns, and convexity refusals |
+| `test_dome_builder.gd` | 21 | The construction claim itself — every face of every panel planar — plus closure, convexity, outward winding, the crown and solid-dome pinch cases, hollowness, slices, and the panel cap |
+| `test_generator_schema.gd` | 9 | Defaults from a schema, per-field type coercion, unknown keys dropped, field lookup, ordering, and malformed fields skipped rather than crashing |
+| `test_generator_system.gd` | 52 | Records, per-piece signatures, regeneration with material preservation, relocation versus hand editing, edit counts, detach and remove, stale ids staying harmless, every known type, and serialization round trips |
+| `test_generators_integration.gd` | 30 | Hollow, arch and carve against a real LevelRoot and baker, every winding claim measured on baked triangles beside an untouched control |
+| `test_live_generators_integration.gd` | 25 | Every structure type through LevelRoot, the undo snapshot, the save format, the cutting tools and the baker; a moved structure rebuilding where it stands; a reopened level not claiming its pieces were edited |
+| `test_live_generator_commands.gd` | 19 | The dock surface: undo dispatch by method name, the argument limit, the section following the selection, a type choice not being re-derived from it, the dock naming no generator setting of its own, and the edit warning |
+| `test_suite_integrity.gd` | 3 | Every `test_*.gd` loads and extends GutTest, and the shared helpers beside them parse |
 
 Run all tests:
 ```

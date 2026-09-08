@@ -17,7 +17,7 @@
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
   <img src="https://img.shields.io/badge/Status-Early%20Alpha-red" alt="Early Alpha">
   <img src="https://img.shields.io/badge/Tests-2802%20passing-brightgreen" alt="2802 tests passing">
-  <img src="https://img.shields.io/badge/GDScript-58k%2B%20lines-blueviolet" alt="58k+ lines">
+  <img src="https://img.shields.io/badge/GDScript-61k%2B%20lines-blueviolet" alt="61k+ lines">
 </p>
 
 <p align="center">

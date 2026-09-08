@@ -12,7 +12,7 @@ This document describes HammerForge's architecture and data flow.
 
 ## Architecture
 
-HammerForge uses a coordinator + subsystems pattern. `LevelRoot` is a 2,851-line public level facade and coordinator that owns container nodes, exported properties, signals, runtime setup, and cross-system coordination. Concrete subsystems receive a reference to `LevelRoot` in their constructor. Export templates eagerly construct only the brush, entity, bake, paint, and file core; editor builds dynamically load the authoring graph. Default editor UX is the core loop (Draw → material → entity → bake → Test Level); radial menu, coach marks, and operation replay install only when `power_user_overlays` is enabled.
+HammerForge uses a coordinator + subsystems pattern. `LevelRoot` is a 3,025-line public level facade and coordinator that owns container nodes, exported properties, signals, runtime setup, and cross-system coordination. Concrete subsystems receive a reference to `LevelRoot` in their constructor. Export templates eagerly construct only the brush, entity, bake, paint, and file core; editor builds dynamically load the authoring graph. Default editor UX is the core loop (Draw → material → entity → bake → Test Level); radial menu, coach marks, and operation replay install only when `power_user_overlays` is enabled.
 
 ### Signals (Central Registry)
 All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.emit(...)`. UI and other consumers subscribe instead of polling.
