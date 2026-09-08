@@ -132,7 +132,8 @@ func _rebuild() -> void:
 		var mi: MeshInstance3D = _mesh_pool[i]
 		var entry: Dictionary = previews[i]
 		mi.mesh = _lines_mesh(HFOutlineUtil.face_boundary_lines(entry["faces"]))
-		mi.transform = entry["transform"]
+		# World space: the entry carries the target brush's own global transform.
+		mi.global_transform = entry["transform"]
 		mi.visible = true
 
 	# Hide unused

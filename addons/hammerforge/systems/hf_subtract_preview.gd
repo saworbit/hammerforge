@@ -213,7 +213,10 @@ func _show_aabb_wireframes(intersections: Array) -> void:
 	for i in intersections.size():
 		var mi: MeshInstance3D = _mesh_pool[i]
 		mi.mesh = HFOutlineUtil.unit_box_line_mesh()
-		mi.transform = HFOutlineUtil.aabb_box_transform(intersections[i])
+		# World space: the intersection boxes are measured with `world_aabb()`. The
+		# CSG results below are not — those come out of a combiner parented to
+		# LevelRoot, so they are in the root's own space and stay local.
+		mi.global_transform = HFOutlineUtil.aabb_box_transform(intersections[i])
 		mi.material_override = _material
 		mi.visible = true
 
