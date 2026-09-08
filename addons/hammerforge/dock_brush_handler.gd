@@ -444,6 +444,51 @@ static func _transform_targets(dock: Object) -> Dictionary:
 ##
 ## Placing it where the transform commands would pivot is the least surprising
 ## answer, and it means an arch lands somewhere you were already looking.
+## Load the selected structure's settings into the Arch section, or reset it to
+## creating a new one.
+static func refresh_arch_section(dock: Object) -> void:
+	if dock == null or dock.arch_create_btn == null:
+		return
+	var record = null
+	if dock.level_root and dock.level_root.has_method("generator_for_selection"):
+		record = dock.level_root.generator_for_selection(_transform_targets(dock)["brush_ids"])
+	if record == null or record.type != "arch":
+		dock._active_generator_id = ""
+		dock.arch_create_btn.text = "Create Arch"
+		if dock.arch_detach_btn:
+			dock.arch_detach_btn.visible = false
+		return
+
+	dock._active_generator_id = record.generator_id
+	dock.arch_create_btn.text = "Update Arch"
+	if dock.arch_detach_btn:
+		dock.arch_detach_btn.visible = true
+	_load_arch_settings(dock, record.settings)
+
+
+static func _load_arch_settings(dock: Object, settings: Dictionary) -> void:
+	for pair in [
+		["arch_radius_spin", "radius"],
+		["arch_thickness_spin", "wall_thickness"],
+		["arch_depth_spin", "depth"],
+		["arch_arc_spin", "arc_degrees"],
+		["arch_segments_spin", "segments"],
+		["arch_start_spin", "start_degrees"],
+	]:
+		var control = dock.get(pair[0])
+		if control and settings.has(pair[1]):
+			control.set_value_no_signal(float(settings[pair[1]]))
+
+
+static func on_detach_generator(dock: Object) -> void:
+	if dock == null or not dock.level_root or dock._active_generator_id == "":
+		return
+	dock._commit_state_action("Detach Structure", "detach_generator", [dock._active_generator_id])
+	dock._active_generator_id = ""
+	dock._set_status("Structure detached — its brushes are ordinary geometry now")
+	refresh_arch_section(dock)
+
+
 static func on_create_arch(dock: Object) -> void:
 	if dock == null or not dock.level_root:
 		return
@@ -455,6 +500,14 @@ static func on_create_arch(dock: Object) -> void:
 		"segments": int(dock.arch_segments_spin.value) if dock.arch_segments_spin else 8,
 		"start_degrees": dock.arch_start_spin.value if dock.arch_start_spin else 0.0,
 	}
+	# Editing an existing structure rather than making another one: the section
+	# switched to Update when a piece of it was selected.
+	if dock._active_generator_id != "":
+		dock._commit_state_action(
+			"Update Arch", "regenerate_generator", [dock._active_generator_id, settings]
+		)
+		dock._set_status("Arch rebuilt with %d segments" % settings["segments"])
+		return
 	var targets := _transform_targets(dock)
 	var centre: Vector3 = dock.level_root.resolve_transform_pivot(
 		targets["brush_ids"], targets["entity_paths"]
