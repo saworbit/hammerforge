@@ -1266,6 +1266,25 @@ func edited_generator_pieces(generator_id: String) -> int:
 	return generator_system.edited_piece_count(generator_id) if generator_system else 0
 
 
+## Whether these settings would build. Asked before an undo action is opened.
+func can_build_generator(type: String, settings: Dictionary) -> HFOpResult:
+	return HFGeneratorSystem.can_build(type, settings)
+
+
+## How many live structures the level holds. The dock reads this either side of a
+## build to tell a real one from a refused one.
+func generator_count() -> int:
+	return generator_system.generators.size() if generator_system else 0
+
+
+func has_generator(generator_id: String) -> bool:
+	return generator_system != null and generator_system.generators.has(generator_id)
+
+
+func generator_for_id(generator_id: String):
+	return generator_system.generator_for_id(generator_id) if generator_system else null
+
+
 func clip_brush_by_plane(brush_id: String, plane: Plane) -> HFOpResult:
 	return brush_system.clip_brush_by_plane(brush_id, plane)
 

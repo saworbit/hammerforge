@@ -167,6 +167,13 @@ static func handle_keyboard(
 			return merge_guard
 		plugin._merge_selected(root)
 		return STOP
+	# Create Structure needs a level and the dock that holds the settings, but no
+	# selection: with nothing selected it builds at the world origin.
+	if keymap.matches("create_arch", event):
+		if root == null or dock == null:
+			return PASS
+		dock._on_create_structure()
+		return STOP
 	# Nudge keys
 	var nudge = plugin._get_nudge_direction(event.keycode)
 	if nudge != Vector3.ZERO and not event.ctrl_pressed and not event.alt_pressed:

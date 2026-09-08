@@ -650,26 +650,56 @@ static func on_create_structure(dock: Object) -> void:
 		return
 	var type := structure_type(dock)
 	var settings := collect_structure_settings(dock)
-	var label := HFGeneratorSystem.display_name(type)
 	# Editing an existing structure rather than making another one: the section
 	# switched to Update when a piece of it was selected.
-	if dock._active_generator_id != "":
-		dock._commit_state_action(
-			"Update %s" % label, "regenerate_generator", [dock._active_generator_id, settings]
-		)
-		dock._set_status("%s rebuilt" % label)
-		refresh_structure_section(dock)
+	var generator_id := str(dock._active_generator_id)
+	if generator_id != "":
+		_update_structure(dock, generator_id, settings)
+		return
+	var label := HFGeneratorSystem.display_name(type)
+	# Ask whether these settings build before opening an undo action. Each field
+	# can be in range while the combination is not, and a refused build would
+	# otherwise leave an empty entry in the history under a success message.
+	var check: HFOpResult = dock.level_root.can_build_generator(type, settings)
+	if not check.ok:
+		dock._set_status(check.user_text(), true)
 		return
 	var targets := _transform_targets(dock)
 	var centre: Vector3 = dock.level_root.resolve_transform_pivot(
 		targets["brush_ids"], targets["entity_paths"]
 	)
+	var before: int = dock.level_root.generator_count()
 	dock._commit_state_action(
 		"Create %s" % label,
 		"create_generator",
 		[type, settings, Transform3D(Basis.IDENTITY, centre)]
 	)
-	dock._set_status("Created a %s" % label.to_lower())
+	if dock.level_root.generator_count() > before:
+		dock._set_status("Created a %s" % label.to_lower())
+	else:
+		dock._set_status("%s was not created" % label, true)
+	refresh_structure_section(dock)
+
+
+## Rebuild the selected structure. A refused rebuild has to leave it alone and
+## say so, rather than reporting that it was rebuilt.
+static func _update_structure(dock: Object, generator_id: String, settings: Dictionary) -> void:
+	var record = dock.level_root.generator_for_id(generator_id)
+	if record == null:
+		dock._set_status("That structure is no longer in the level", true)
+		refresh_structure_section(dock)
+		return
+	var label := HFGeneratorSystem.display_name(record.type)
+	var check: HFOpResult = dock.level_root.can_build_generator(record.type, settings)
+	if not check.ok:
+		dock._set_status("%s not changed. %s" % [label, check.user_text()], true)
+		return
+	dock._commit_state_action("Update %s" % label, "regenerate_generator", [generator_id, settings])
+	if dock.level_root.has_generator(generator_id):
+		dock._set_status("%s rebuilt" % label)
+	else:
+		dock._set_status("%s was not rebuilt" % label, true)
+	refresh_structure_section(dock)
 
 
 static func on_rotate_selection(dock: Object, direction: int) -> void:

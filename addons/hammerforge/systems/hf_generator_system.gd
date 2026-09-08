@@ -101,6 +101,24 @@ static func build_faces(type: String, settings: Dictionary) -> Array:
 	return builder.build(settings) if builder else []
 
 
+## Whether these settings would build, without building anything that lasts.
+##
+## Each field can be in range while the combination is not: a wall as thick as
+## the arch is wide, an arc of zero, a wide arc across too few segments. The
+## builder refuses those, so the dock has to be able to ask before it opens an
+## undo action and tells the user it worked.
+static func can_build(type: String, settings: Dictionary) -> HFOpResult:
+	var check := validate(type, settings)
+	if not check.ok:
+		return check
+	if build_faces(type, settings).is_empty():
+		return HFOpResult.fail(
+			"%s: those settings produce no geometry" % display_name(type),
+			"Widen the structure or add segments"
+		)
+	return HFOpResult.success()
+
+
 # ---------------------------------------------------------------------------
 # Creating, changing and forgetting
 # ---------------------------------------------------------------------------
@@ -197,6 +215,10 @@ func remove(generator_id: String) -> bool:
 # ---------------------------------------------------------------------------
 # Lookups
 # ---------------------------------------------------------------------------
+
+
+func generator_for_id(generator_id: String) -> HFGenerator:
+	return generators.get(generator_id, null)
 
 
 func generator_for_brush(brush_id: String) -> HFGenerator:
