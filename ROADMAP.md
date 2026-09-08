@@ -608,6 +608,16 @@ and run".
 - A selection hands over its facing but not its scale or its size, so a structure
   built on a large wall is still the size its own settings say.
 
+## Done (Preview Placement — September 2026)
+- Hollow, carve, clip and subtract placed their overlay meshes from world-space
+  measurements into a node hanging off `LevelRoot`, which is only correct while
+  the root is at the origin. A root a thousand units out drew the hollow preview
+  two thousand units out. They place through `global_transform` now.
+- `HFSubtractPreview`'s CSG results are the deliberate exception and stay local:
+  `get_meshes()` reports them relative to a combiner parented to `LevelRoot`.
+- `tests/test_preview_placement.gd` holds the property for all six previews with
+  the root moved *and* turned. Four of its seven cases fail against the old code.
+
 ## Done (Array Preview and Budget — September 2026)
 - `HFArrayPreview`: a wireframe of the copies a Duplicate Array would make, drawn
   as the selection's own outlines at each placement, with a line saying how many
@@ -651,7 +661,11 @@ and run".
   dense dome reads as a mesh of lines rather than a surface.
 - It shows the pieces a rebuild would make, not which existing pieces it would
   replace; the hand-edit count beside it is still what says that.
-- Hollow, carve and clip keep their own previews rather than sharing one.
+- Hollow, carve, clip, subtract, structure and array run six near-identical
+  preview systems, each with its own container, mesh handling and teardown. The
+  duplication is what let four of them drift into placing their meshes in the
+  wrong space; `tests/test_preview_placement.gd` now holds the property they
+  share, but the mechanics are still six copies.
 
 ## Future (Wave 3 -- Polish)
 - Multiple simultaneous cordons.

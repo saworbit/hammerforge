@@ -119,7 +119,11 @@ func _rebuild() -> void:
 	for i in walls.size():
 		var mi: MeshInstance3D = _mesh_pool[i]
 		mi.mesh = _lines_mesh(HFOutlineUtil.face_boundary_lines(walls[i]))
-		mi.transform = xform
+		# Placed in world space, not the container's. The outlines come from the
+		# brush's own global transform, and the container hangs off LevelRoot — so
+		# a level whose root has been moved or turned drew this a whole root
+		# transform away from the brush it claimed to preview.
+		mi.global_transform = xform
 		mi.visible = true
 
 	# Hide unused

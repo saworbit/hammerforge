@@ -138,16 +138,20 @@ func _rebuild() -> void:
 
 	_ensure_container()
 
+	# Both halves and the cutting plane are placed in world space. The pieces come
+	# from the brush's own global transform and the plane from world bounds, while
+	# the container hangs off LevelRoot — so a level whose root has been moved or
+	# turned drew the cut a whole root transform away from the brush being cut.
 	_piece_a_mesh.mesh = _lines_mesh(HFOutlineUtil.face_boundary_lines(front))
-	_piece_a_mesh.transform = xform
+	_piece_a_mesh.global_transform = xform
 	_piece_a_mesh.visible = true
 	_piece_b_mesh.mesh = _lines_mesh(HFOutlineUtil.face_boundary_lines(back))
-	_piece_b_mesh.transform = xform
+	_piece_b_mesh.global_transform = xform
 	_piece_b_mesh.visible = true
 
 	var bounds: AABB = root.brush_system.world_bounds_of(draft)
 	_plane_mesh.mesh = _build_plane_mesh(bounds.get_center(), bounds.size, _axis, split)
-	_plane_mesh.transform = Transform3D.IDENTITY
+	_plane_mesh.global_transform = Transform3D.IDENTITY
 	_plane_mesh.visible = true
 	_preview_container.visible = true
 

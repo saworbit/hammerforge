@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Fixed
+- **Move the LevelRoot node and every destructive preview drew somewhere else.**
+  Hollow, carve, clip and subtract place their overlay meshes from world-space
+  measurements — a brush's own `global_transform`, a cutting plane built from
+  world bounds, an intersection from `world_aabb()` — but assigned them to the
+  *local* transform of a node hanging off `LevelRoot`. That is correct only while
+  the root sits at the world origin with no rotation, which is the only way it had
+  ever been exercised. With the root a thousand units out, the hollow preview drew
+  its six walls two thousand units out.
+  - The whole contract of these overlays is that you agree to an irreversible edit
+    by looking at one. The clip plane is the worst of them: it is the thing being
+    aimed, and it was drawn a whole root transform away from the brush it was
+    about to cut.
+  - The four now place through `global_transform`. `HFSubtractPreview`'s CSG
+    results are the deliberate exception and stay local — `get_meshes()` reports
+    them relative to a combiner that is itself parented to `LevelRoot`, so they
+    were already in the right space, and the two cases now say which is which.
+  - **Coverage** (`tests/test_preview_placement.gd`): the property asked of all
+    six previews with the root both moved *and* turned, so a fix that only handled
+    translation would not pass. Four of the seven fail against the old code.
+
 ### Added
 - **The array section draws its copies, and refuses to describe a hang.** The
   Structure section next to it learned to draw itself two waves ago; this one had
