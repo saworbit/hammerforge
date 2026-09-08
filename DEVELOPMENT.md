@@ -399,7 +399,7 @@ addons/hammerforge/
 The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on push and PR to `main`:
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
-- **GUT unit + integration tests** -- 2,889 tests across 152 test scripts (2,882 passing plus seven intentional no-assert safety tests; 15,291 assertions; verified locally September 8, 2026; runs Godot headless)
+- **GUT unit + integration tests** -- 2,889 tests across 152 test scripts (2,882 passing plus seven intentional no-assert safety tests; 15,291 assertions; verified in CI on September 8, 2026; runs Godot headless)
 
 Run locally before pushing:
 ```
@@ -407,6 +407,19 @@ gdformat --check addons/hammerforge/ tests/
 gdlint addons/hammerforge/
 godot --headless -s res://addons/gut/gut_cmdln.gd --path .
 ```
+
+**Published test totals look after themselves.** Five documents quote the size of
+the suite, and every pull request that adds a test would otherwise invalidate all
+five. The push-to-`main` CI run measures the suite and rewrites them in a
+follow-up commit, so leave those numbers alone in a pull request. To see what CI
+would write, redirect a run and ask:
+```
+godot --headless -s res://addons/gut/gut_cmdln.gd --path . > gut.log 2>&1
+python tools/update_test_counts.py --gut-log gut.log --check
+```
+`--write` applies it. The patterns are anchored on the sentences around each
+number, so rewording one of those sentences makes the tool fail loudly rather
+than leave a stale figure behind — the message names the file to fix.
 
 ### VS Code Integration
 

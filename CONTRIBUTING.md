@@ -38,6 +38,7 @@ prompt for what's actually needed to act on them.
 - Verify behavior claims against current code and tests. Do not copy test totals or source line counts from an older document.
 - Update the README, relevant guide/spec, roadmap status, and `[Unreleased]` changelog together when a change affects users or contributors.
 - Only publish aggregate test totals from a successful full CI run; include the verification date so readers can distinguish a measured snapshot from a permanent guarantee.
+- You do not have to update the published totals yourself. CI measures them on every push to `main` and rewrites the five documents that quote them, so a pull request that adds tests can leave those numbers alone. To see what it would write, run `python tools/update_test_counts.py --gut-log <your test log> --check`.
 - Check relative Markdown links and `git diff --check` before submitting documentation-only changes.
 - Describe known limitations plainly and link the tracking issue instead of implying unfinished safety or fidelity work is complete.
 
