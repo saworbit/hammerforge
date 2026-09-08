@@ -608,6 +608,27 @@ and run".
 - A selection hands over its facing but not its scale or its size, so a structure
   built on a large wall is still the size its own settings say.
 
+## Done (Array Preview and Budget — September 2026)
+- `HFArrayPreview`: a wireframe of the copies a Duplicate Array would make, drawn
+  as the selection's own outlines at each placement, with a line saying how many
+  copies of how many brushes.
+- `HFDuplicator.CopyPlacement` and the three `*_placements()` builders are the one
+  definition of an array's arithmetic, read by both `generate*()` and the ghost.
+- `can_generate()` caps an array at 256 brushes, the same budget and currency as
+  `HFDomeBuilder.MAX_PANELS`, and names the count asked for. The grid controls
+  reach 32 cells a side — over thirty-two thousand brushes — which was a hang one
+  button press away with nothing said in advance.
+- The ghost is armed by touching an array control rather than by selection,
+  because these controls share an always-open section with a dozen other tools.
+- 26 new tests (`tests/test_array_preview.gd`).
+
+### Known limits of the array preview
+- The ghost repeats each source brush's outline per copy, so a large selection in
+  a large array is a lot of line segments; the 256-brush budget is what bounds it.
+- Arrays are still not live: unlike a structure, an existing array cannot be
+  reselected and its numbers changed.
+- The budget is a brush count, not a measure of how much geometry each brush is.
+
 ## Done (Structure Preview — Seeing It Before Building It — September 2026)
 - `HFStructurePreview`: a pale wireframe of the structure the Structure section
   would build, at the placement it would build at, redrawn as each control moves.
@@ -630,8 +651,7 @@ and run".
   dense dome reads as a mesh of lines rather than a surface.
 - It shows the pieces a rebuild would make, not which existing pieces it would
   replace; the hand-edit count beside it is still what says that.
-- Nothing previews the other generators of geometry — hollow, carve and clip
-  keep their own previews, and the array modes have none.
+- Hollow, carve and clip keep their own previews rather than sharing one.
 
 ## Future (Wave 3 -- Polish)
 - Multiple simultaneous cordons.
