@@ -3,6 +3,12 @@
 # account; this is the mechanical one, grouped by the labels triage already
 # applies.
 
+# Every release so far is a prerelease. Without this, release-drafter looks
+# for the last full release, finds none, and resolves the next version from
+# 0.0.0 -- which is how the first draft came out as v0.0.1 rather than
+# v0.3.1.
+include-pre-releases: true
+
 name-template: "v$RESOLVED_VERSION"
 tag-template: "v$RESOLVED_VERSION"
 
