@@ -206,3 +206,99 @@ func test_delete_with_no_references_no_crash():
 	_delete_brush_now(b)
 	# No crash, no error — just works
 	assert_true(true)
+
+
+# ===========================================================================
+# An entity is deleted by both of its addresses (#256)
+# ===========================================================================
+
+
+## An entity whose node name and authored name differ, which is what a level
+## saved and reloaded since #251 looks like.
+func _make_aliased_entity(node_name: String, authored: String) -> DraftEntity:
+	var e = DraftEntity.new()
+	e.name = node_name
+	e.set_meta("entity_name", authored)
+	e.set_meta("is_entity", true)
+	root.entities_node.add_child(e)
+	return e
+
+
+func _delete_entity_now(entity: Node) -> void:
+	entity_sys.delete_entities_by_paths([root.get_path_to(entity)])
+
+
+func _make_brush_entity(node_name: String, authored: String) -> DraftBrush:
+	var b = _make_brush()
+	b.name = node_name
+	b.set_meta("brush_entity_class", "trigger_once")
+	if authored != "":
+		b.set_meta("entity_name", authored)
+	return b
+
+
+func test_deleting_an_entity_cleans_connections_that_used_its_authored_name():
+	var src = _make_entity("trigger_source")
+	var tgt = _make_aliased_entity("DraftEntity", "door_authored_name")
+	entity_sys.add_entity_output(src, "OnTrigger", "door_authored_name", "Open")
+
+	_delete_entity_now(tgt)
+
+	assert_eq(
+		entity_sys.get_entity_outputs(src).size(),
+		0,
+		"an output aimed at the alias is aimed at nothing now"
+	)
+
+
+func test_deleting_an_entity_cleans_both_of_its_addresses():
+	var src = _make_entity("trigger_source")
+	var tgt = _make_aliased_entity("DoorNode", "door_authored_name")
+	entity_sys.add_entity_output(src, "OnTrigger", "DoorNode", "Open")
+	entity_sys.add_entity_output(src, "OnTrigger", "door_authored_name", "Close")
+
+	_delete_entity_now(tgt)
+
+	assert_eq(entity_sys.get_entity_outputs(src).size(), 0, "both addresses went with it")
+
+
+func test_an_address_another_entity_still_answers_to_is_left_alone():
+	# Duplication and prefab placement both produce two entities sharing an
+	# authored name. Deleting one must not cut the survivor's connections.
+	var src = _make_entity("trigger_source")
+	var doomed = _make_aliased_entity("DoorNode", "door_authored_name")
+	_make_aliased_entity("OtherDoorNode", "door_authored_name")
+	entity_sys.add_entity_output(src, "OnTrigger", "door_authored_name", "Open")
+
+	_delete_entity_now(doomed)
+
+	assert_eq(
+		entity_sys.get_entity_outputs(src).size(),
+		1,
+		"the connection still resolves to the entity that is still there"
+	)
+
+
+func test_deleting_an_entity_with_no_authored_name_still_cleans_by_node_name():
+	var src = _make_entity("trigger_source")
+	var tgt = DraftEntity.new()
+	tgt.name = "PlainDoor"
+	tgt.set_meta("is_entity", true)
+	root.entities_node.add_child(tgt)
+	entity_sys.add_entity_output(src, "OnTrigger", "PlainDoor", "Open")
+
+	_delete_entity_now(tgt)
+
+	assert_eq(entity_sys.get_entity_outputs(src).size(), 0)
+
+
+func test_deleting_a_brush_entity_cleans_connections_that_used_its_authored_name():
+	# The same defect on the brush side, where authored names have persisted since
+	# #149 and only the node name was ever cleaned up.
+	var src = _make_entity("trigger_source")
+	var tgt = _make_brush_entity("DraftBrush", "gate_authored_name")
+	entity_sys.add_entity_output(src, "OnTrigger", "gate_authored_name", "Open")
+
+	_delete_brush_now(tgt)
+
+	assert_eq(entity_sys.get_entity_outputs(src).size(), 0)
