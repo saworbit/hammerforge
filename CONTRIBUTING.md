@@ -27,28 +27,28 @@ prompt for what's actually needed to act on them.
 - Large changes should start with an issue or discussion before a PR.
 - Keep changes aligned with the current MVP and architecture.
 
-## AI-Assisted Contributions
+## AI Assisted Contributions
 
-Yes, you can use them. This project is built with them and it would be strange to
-ask otherwise -- see [AI.md](AI.md) for how and why.
+Yes, you can use them. This project is built with them and it would be odd to ask
+otherwise. See [AI.md](AI.md) for how and why.
 
-The terms are the same ones I hold myself to:
+The terms are the same ones I hold myself to.
 
 - **You are the author.** Whatever produced a line, you are the one submitting it
-  and the one answerable for it. That does not change.
+  and you are answerable for it. That does not change.
 - **Be able to explain it.** If you cannot say why a change is correct, or what it
   does when the input is empty, it is not ready for review. This is the only rule
-  here that ever actually bites.
-- **Tests must test something.** A test that asserts nothing, or that was written
-  to match the implementation rather than the requirement, is worse than no test.
-  CI counts assertions for a reason.
+  here that actually bites.
+- **Tests have to test something.** A test that asserts nothing, or that was
+  written to match the implementation rather than the requirement, is worse than
+  no test.
 - **Run the checks before you open the PR.** They are listed under
-  [Running Checks Locally](#running-checks-locally) and they will catch most of
-  what a review would otherwise spend its time on.
+  [Running Checks Locally](#running-checks-locally) and they catch most of what a
+  review would otherwise spend its time on.
 
-You do not need to disclose per-pull-request whether you used an assistant. I am
-not going to ask, and I would not be able to verify the answer. What gets reviewed
-is the change.
+You do not need to say whether you used an assistant on a given pull request. I am
+not going to ask, and I could not verify the answer anyway. What gets reviewed is
+the change.
 
 ## How To Contribute
 1. Open an issue describing the problem and proposed fix.
