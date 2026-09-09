@@ -56,6 +56,12 @@ jobs:
       - name: Check placement order
         run: python3 tools/check_placement_order.py
 
+      # wait_for_ci.py decides whether a branch is safe to merge. Its whole job
+      # is refusing a green run that belongs to some other commit, so the
+      # fixtures for that case run here rather than being taken on trust.
+      - name: Check the CI wait grades the right commit
+        run: python3 tools/wait_for_ci.py --selftest
+
   tooling-checks:
     name: Workflow & Tooling Lint
     runs-on: ubuntu-latest
