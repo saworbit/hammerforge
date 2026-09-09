@@ -167,13 +167,6 @@ pass before anything can merge, and `main` takes no direct pushes from anyone.
 You do not need to update the published test counts by hand. CI measures the
 suite on your pull request and commits the numbers to your branch.
 
-That commit moves your branch's head, which matters if you are waiting on the
-checks before merging. Wait on the commit, never the branch: the newest run on a
-branch is often the previous one, and a run that went green on the commit a
-counts push replaced says nothing about what would merge. `python
-tools/wait_for_ci.py <pr>` does this properly and exits non-zero if the run
-fails, times out, or never appears.
-
 ## Communication
 - Be clear about tradeoffs and known limitations.
 - Include before/after behavior notes in PR descriptions.
