@@ -35,6 +35,7 @@ This document describes how to move data in and out of HammerForge safely.
 - Point-entity key/value properties and brush entity classes round-trip through the supported Classic Quake and Valve 220 adapters.
 - Per-face materials and HammerForge surface-paint layers are not preserved, so `.hflevel` remains the editable source of truth.
 - Treat `.map` as a blockout exchange format, not a full fidelity export.
+- Cutters are not exported. A `.map` worldspawn holds additive solids only, so a subtraction brush written into one would fill the hole it was made for instead of cutting it. Carved shapes export uncut; bake or export `.glb` when the carve has to come with them.
 - Face planes are written in `.map` winding, which is the reverse of the clockwise-from-outside order `FaceData` stores, so exported hulls are the right way out for compilers and other editors. Import applies the same conversion in reverse.
 - A file that does not parse is refused before the level is touched. Unbalanced braces, face lines that are not three points, and text outside any block are reported, the current level is left alone, and no undo entry is created.
 - Multi-format export: **Classic Quake** and **Valve 220** format adapters are available via the format selector in the dock File section. Valve 220 includes UV texture axes from FaceData.

@@ -161,6 +161,24 @@ The format is based on Keep a Changelog, and this project follows semantic versi
     copy, undo, and what survives a state restore.
 
 ### Fixed
+- **Cutters exported to `.map` as solid brushes, filling the holes they made.**
+  A `.map` worldspawn holds additive convex solids and nothing else — the format
+  has no negative brush — so every subtraction brush written into one arrives as
+  matter. A doorway carved into a wall exported as a wall with a solid block
+  standing in the doorway, and nothing said so until the map was opened in
+  TrenchBroom or compiled.
+  - `export_map_from_level()` reached into `CommittedCuts` on purpose and added
+    its children to the same list as the solids, and a subtraction brush sitting
+    in `DraftBrushes` went the same way. Only `PendingCuts` was filtered.
+  - All three are now read as one question, `_is_cutter()`, because a cutter is
+    not one state: pending, committed and frozen, or plainly subtractive. The
+    operation alone misses the frozen one, which keeps whatever operation it had
+    when it was stashed; the container alone misses the other two.
+  - Carved shapes therefore leave uncut rather than leaving wrong. `.map` is a
+    blockout exchange format, not a bake.
+  - **Coverage** (`tests/test_map_export.gd`): a committed cutter, a subtraction
+    brush and a pending cutter, each asserting the export carries the solid's six
+    planes and only those. The first two fail against the old code.
 - **Baking with the LevelRoot away from the origin put the geometry somewhere
   else.** Found by sweeping for the rest of the ordering bug below rather than
   by hitting it, and it is the worst of the family: the others were the editor

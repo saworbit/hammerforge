@@ -115,6 +115,14 @@ static func parse_map_text(text: String) -> Dictionary:
 	return {"entities": entity_points, "brushes": brushes, "errors": errors}
 
 
+## Write the level out as `.map` text.
+##
+## Cutters are left out. Every brush inside a `.map` worldspawn is an additive
+## convex solid — the format has no negative brush — so a subtraction brush
+## written here does not carve the hole it was made for, it fills it. A doorway
+## exported as a solid block is worse than a doorway that is missing, and it is
+## silent. Carved shapes therefore leave here uncut; `.map` is a blockout
+## exchange format, not a bake.
 static func export_map_from_level(level_root: Node, adapter: HFMapAdapterType = null) -> String:
 	if not level_root:
 		return ""
@@ -126,16 +134,13 @@ static func export_map_from_level(level_root: Node, adapter: HFMapAdapterType = 
 	var brush_nodes: Array = []
 	if level_root.has_method("_iter_pick_nodes"):
 		brush_nodes.append_array(level_root.call("_iter_pick_nodes"))
-	var committed = level_root.get_node_or_null("CommittedCuts")
-	if committed:
-		brush_nodes.append_array(committed.get_children())
 	var entity_brush_blocks: Array = []
 	for node in brush_nodes:
 		if not (node is DraftBrush):
 			continue
 		if level_root.has_method("is_entity_node") and level_root.is_entity_node(node):
 			continue
-		if node.get_parent() and node.get_parent().name == "PendingCuts":
+		if _is_cutter(node):
 			continue
 		var brush_lines = _brush_to_map_lines(node, adapter)
 		if brush_lines.is_empty():
@@ -164,6 +169,22 @@ static func export_map_from_level(level_root: Node, adapter: HFMapAdapterType = 
 				continue
 			lines.append_array(ent_lines)
 	return "\n".join(lines)
+
+
+## True when a brush cuts geometry away rather than adding it.
+##
+## Three ways to be a cutter, because a cutter is not one state. A pending cut is
+## still being aimed, a committed cut has been frozen out of sight under
+## `CommittedCuts` and keeps whatever operation it had when it was stashed, and a
+## plain subtraction brush is neither. Reading only the operation misses the
+## frozen one; reading only the container misses the other two.
+static func _is_cutter(node: DraftBrush) -> bool:
+	if node.operation == CSGShape3D.OPERATION_SUBTRACTION:
+		return true
+	if bool(node.get_meta("committed_cut", false)):
+		return true
+	var parent: Node = node.get_parent()
+	return parent != null and parent.name in ["PendingCuts", "CommittedCuts"]
 
 
 static func _entity_to_map_lines(

@@ -428,6 +428,95 @@ func test_export_writes_func_detail_as_own_entity_block():
 
 
 # ===========================================================================
+# Cutters must not export as solid worldspawn brushes (#243)
+# ===========================================================================
+
+
+## A root shaped like LevelRoot's containers: picking sees draft and pending
+## brushes, and committed cutters are reachable only by name, exactly as the real
+## one arranges them.
+func _make_container_root() -> Node3D:
+	var script := GDScript.new()
+	script.source_code = """
+extends Node3D
+func _iter_pick_nodes():
+	var nodes := []
+	for container_name in ["DraftBrushes", "PendingCuts"]:
+		var container = get_node_or_null(container_name)
+		if container:
+			nodes.append_array(container.get_children())
+	return nodes
+func is_entity_node(_n):
+	return false
+"""
+	script.reload()
+	var root := Node3D.new()
+	root.set_script(script)
+	add_child_autoqfree(root)
+	for container_name in ["DraftBrushes", "PendingCuts", "CommittedCuts"]:
+		var container := Node3D.new()
+		container.name = container_name
+		root.add_child(container)
+	return root
+
+
+func _add_box(root: Node3D, container_name: String, extent: float) -> DraftBrush:
+	var brush := DraftBrush.new()
+	brush.shape = LevelRoot.BrushShape.BOX
+	brush.size = Vector3(extent, extent, extent) * 2.0
+	root.get_node(container_name).add_child(brush)
+	return brush
+
+
+## The furthest any exported plane point sits from the origin on any axis. A box
+## written at the origin reaches exactly its own half extent, so this says which
+## brush the planes came from.
+func _plane_point_reach(text: String) -> float:
+	var reach := 0.0
+	for line in _plane_lines(text):
+		for point in _plane_points(line):
+			var p: Vector3 = point
+			reach = maxf(reach, maxf(absf(p.x), maxf(absf(p.y), absf(p.z))))
+	return reach
+
+
+func test_committed_cutter_is_not_exported_as_a_solid_brush():
+	var root := _make_container_root()
+	_add_box(root, "DraftBrushes", 5.0)
+	var cutter := _add_box(root, "CommittedCuts", 1.0)
+	cutter.set_meta("committed_cut", true)
+
+	var text := MapIO.export_map_from_level(root)
+
+	assert_eq(_plane_lines(text).size(), 6, "Only the solid may be written")
+	assert_almost_eq(_plane_point_reach(text), 5.0, 0.001, "The planes are the solid's")
+
+
+func test_subtraction_brush_is_not_exported_as_a_solid_brush():
+	var root := _make_container_root()
+	_add_box(root, "DraftBrushes", 5.0)
+	var cutter := _add_box(root, "DraftBrushes", 1.0)
+	cutter.operation = CSGShape3D.OPERATION_SUBTRACTION
+
+	var text := MapIO.export_map_from_level(root)
+
+	assert_eq(_plane_lines(text).size(), 6, "Only the solid may be written")
+	assert_almost_eq(_plane_point_reach(text), 5.0, 0.001, "The planes are the solid's")
+
+
+func test_pending_cutter_is_not_exported_as_a_solid_brush():
+	var root := _make_container_root()
+	_add_box(root, "DraftBrushes", 5.0)
+	# Left on union on purpose: being in PendingCuts is what makes it a cutter.
+	_add_box(root, "PendingCuts", 1.0)
+
+	var text := MapIO.export_map_from_level(root)
+
+	assert_eq(_plane_lines(text).size(), 6, "Only the solid may be written")
+	assert_almost_eq(_plane_point_reach(text), 5.0, 0.001, "The planes are the solid's")
+
+
+# ===========================================================================
 # Face plane winding (#148)
 # ===========================================================================
 
