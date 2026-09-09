@@ -61,6 +61,37 @@ The format is based on Keep a Changelog, and this project follows semantic versi
     presses without reselecting, undo, and what survives a state restore.
 
 ### Changed
+- **Precision snap stops measuring brushes the pointer cannot reach.** With
+  Vertex, Center, Edge or Perpendicular on, every pointer motion transformed
+  every vertex of every brush in the level into world space, appended the lot,
+  and only then measured them against `snap_threshold`. A brush on the far side
+  of the map did the same work as the one under the cursor, so the cost tracked
+  the size of the level rather than how much of it was in reach.
+  - **A brush is now measured against the query point before any of its snap
+    points are built.** The check is the brush origin against the query, allowing
+    for how far the brush's own box reaches once its rotation and scale are
+    applied, so a long wall whose origin is a hundred units away is still kept
+    while its far end is under the pointer. Edges lie between vertices inside
+    that reach, so Perpendicular is covered by the same bound.
+  - **The extent is read without building the snap points**, because building
+    them is the work being skipped. It follows the same branch as the geometry
+    itself, and tests hold the two to the same answer for a box, a custom brush,
+    a wedge and a brush with no faces.
+  - **The bound is exact for any transform**, including a mirrored or sheared
+    one, because it sums each axis's contribution to the furthest corner rather
+    than assuming the basis is a rotation.
+  - Measured over 300 brushes and 200 motion events with Vertex, Edge and
+    Perpendicular on, one brush in reach: an all non-box level went from 2.40 ms
+    to 0.86 ms per event, and a level of boxes from 2.63 ms to 0.44 ms. The
+    non-box figure still carries a cache lookup per brush, which is the snap
+    geometry cache's key and not this change.
+  - **Coverage** (`tests/test_snap_candidate_culling.gd`): 20 tests over a
+    distant brush contributing nothing, three hundred of them changing nothing,
+    a distant centre, an unlimited query still collecting the level, a long wall
+    reached by its far end, perpendicular snap onto a long edge, a turned brush,
+    a scaled brush, a custom brush, exclusions, the preview brush, closest
+    candidate ordering, a point out of reach of everything, what a pointer query
+    actually measures, and the two extent branches agreeing.
 - **Check Issues stops comparing brushes that are nowhere near each other.** The
   two subtraction checks each did their own broad scan. `_check_floating_subtract()`
   walked the whole brush list for every subtraction looking for an additive to
