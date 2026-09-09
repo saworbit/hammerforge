@@ -46,6 +46,11 @@
 
 > **Fair warning:** This is a solo hobby project in early alpha. I built it to support another project and it grew from there. It's buggy, rough around the edges, and a bit directionless. If any of this looks useful to you, I'd genuinely appreciate help testing and filing issues. Contributions welcome -- just know you're signing up for an adventure, not a polished product.
 
+> **On AI:** Yes, AI assistants helped build this -- writing code, reviewing
+> code I wrote by hand, drafting docs. Nothing here ships unread or untested,
+> and no image models were used for any art, texture or screenshot. The full
+> position, including where it does not help, is in [AI.md](AI.md).
+
 ---
 
 ## How It Works
@@ -160,6 +165,7 @@ This repository also vendors a project-scoped Godot MCP server in `addons/godot_
 | [Changelog](CHANGELOG.md) | Version history |
 | [Roadmap](ROADMAP.md) | Planned features and priorities |
 | [Brand](docs/brand/BRAND.md) | The mark, palette, and asset generators |
+| [AI Disclosure](AI.md) | How AI is used here, what checks it, and where it does not help |
 | [Contributing](CONTRIBUTING.md) | How to contribute |
 | [Code of Conduct](CODE_OF_CONDUCT.md) | Expected behavior and how to report a problem |
 | [Security Policy](SECURITY.md) | What counts as a vulnerability and how to report one privately |
