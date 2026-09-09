@@ -204,6 +204,13 @@ func build(parent: Control) -> void:
 	dock.dup_summary_label.visible = false
 	sc.add_child(dock.dup_summary_label)
 
+	# What an Update would undo. Its own label rather than the summary line, which
+	# the ghost rewrites on every turn of a control.
+	dock.dup_warning = Label.new()
+	dock.dup_warning.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	dock.dup_warning.visible = false
+	sc.add_child(dock.dup_warning)
+
 	var dup_btns = HBoxContainer.new()
 	sc.add_child(dup_btns)
 	dock.dup_create_btn = HFUIFactoryType.make_button(

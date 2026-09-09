@@ -374,6 +374,123 @@ func detach(brush_system) -> void:
 	count = 0
 
 
+## How far a copy may sit from where this array puts it and still count as
+## standing there. Positions in a level are whole units and the arithmetic that
+## places a copy is a couple of multiplications, so anything past a thousandth of
+## a unit was somebody dragging it.
+const PLACEMENT_EPSILON := 0.001
+
+
+## Where each copy of this array should be standing, keyed by its brush id.
+##
+## Recomputed from the live sources rather than remembered, so it costs nothing
+## in the `.hflevel` and cannot go stale: an array's arithmetic is deterministic,
+## and where a copy *would* be rebuilt is therefore always computable.
+##
+## Answers with nothing when the copies and the sources no longer pair up — a
+## source deleted after the array was made shifts every group — because guessing
+## the pairing would report every copy in the level as moved.
+func expected_copy_transforms(brush_system) -> Dictionary:
+	var out: Dictionary = {}
+	var placements := placements_for(mode, settings())
+	if placements.size() != instance_groups.size():
+		return out
+	var sources: Array = []
+	for source_id in source_brush_ids:
+		var source = brush_system.find_brush_by_id(source_id)
+		if not is_instance_valid(source):
+			return {}
+		sources.append(source)
+	for i in instance_groups.size():
+		var group: PackedStringArray = instance_groups[i]
+		if group.size() != sources.size():
+			return {}
+		for j in group.size():
+			out[group[j]] = placements[i].applied_to(sources[j].global_transform)
+	return out
+
+
+## What has happened to this array's copies since it laid them out.
+##
+## `move` is the one transform most of the copies would need to reach their
+## placement, `followers` is how many agree on it, and `strays` names the ones
+## that do not.
+##
+## Read as a vote for the same reason the structure records are: a source that has
+## been dragged leaves every copy needing the same move, and calling that twelve
+## hand edits would be a lie. One copy pulled out of a ring of twelve is the other
+## reading, and it is the one an Update is about to undo.
+func relocation_vote(brush_system) -> Dictionary:
+	var quiet := {"move": Transform3D.IDENTITY, "followers": 0, "strays": PackedStringArray()}
+	var expected := expected_copy_transforms(brush_system)
+	if expected.is_empty():
+		return quiet
+	# Group the copies by the move each of them would need. Transform3D is not a
+	# dictionary key worth trusting across float noise, so the groups are built by
+	# comparing against the moves already seen.
+	var moves: Array = []
+	var groups: Array = []
+	for brush_id in expected:
+		var copy_brush = brush_system.find_brush_by_id(brush_id)
+		if not is_instance_valid(copy_brush):
+			continue
+		var delta: Transform3D = expected[brush_id] * copy_brush.global_transform.affine_inverse()
+		var found := -1
+		for i in moves.size():
+			if _same_placement(moves[i], delta):
+				found = i
+				break
+		if found < 0:
+			moves.append(delta)
+			groups.append(PackedStringArray([str(brush_id)]))
+		else:
+			groups[found].append(str(brush_id))
+	if moves.is_empty():
+		return quiet
+	var winner := 0
+	for i in groups.size():
+		if groups[i].size() > groups[winner].size():
+			winner = i
+	var strays := PackedStringArray()
+	for i in groups.size():
+		if i == winner:
+			continue
+		for brush_id in groups[i]:
+			strays.append(brush_id)
+	return {"move": moves[winner], "followers": groups[winner].size(), "strays": strays}
+
+
+## The copies that are not standing where the rest of the array agrees it stands.
+##
+## What an Update would move, and therefore what it would undo of the user's own
+## work. A copy that has been resized, reshaped or repainted rather than dragged
+## is not among them: that needs a signature recorded per copy, which is what a
+## structure has and an array does not.
+func displaced_copy_ids(brush_system) -> PackedStringArray:
+	return relocation_vote(brush_system)["strays"]
+
+
+## Whether the copies have been left behind by a source that moved.
+##
+## An Update in that state carries the whole array over to follow its source,
+## which is what an array is for. It is said differently from a hand edit because
+## nothing of the user's is lost.
+func copies_follow_a_moved_source(brush_system) -> bool:
+	var vote := relocation_vote(brush_system)
+	if int(vote["followers"]) < 1:
+		return false
+	return not _same_placement(vote["move"], Transform3D.IDENTITY)
+
+
+static func _same_placement(a: Transform3D, b: Transform3D) -> bool:
+	if a.origin.distance_to(b.origin) > PLACEMENT_EPSILON:
+		return false
+	for axis in 3:
+		if a.basis[axis].distance_to(b.basis[axis]) > PLACEMENT_EPSILON:
+			return false
+	return true
+
+
 ## Remove all instance brushes created by this duplicator.
 func clear_instances(brush_system) -> void:
 	for group in instance_groups:
