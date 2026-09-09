@@ -2,6 +2,7 @@ extends GutTest
 
 const HFEntitySystem = preload("res://addons/hammerforge/systems/hf_entity_system.gd")
 const HFIOVisualizer = preload("res://addons/hammerforge/systems/hf_io_visualizer.gd")
+const LevelRootType = preload("res://addons/hammerforge/level_root.gd")
 
 var root: Node3D
 var sys: HFEntitySystem
@@ -288,3 +289,23 @@ func test_cleanup():
 	viz.cleanup()
 	assert_eq(viz._highlight_overlays.size(), 0)
 	assert_null(viz._immediate_mesh)
+
+
+func test_the_wiring_overlay_leaves_with_the_level_it_was_drawn_in():
+	# Closing the scene or reloading the plugin takes the LevelRoot out of the
+	# tree, and the wiring lines hang off it. An overlay that outlived it would be
+	# a mesh with no owner, left behind on every scene reload.
+	var level: Node3D = LevelRootType.new()
+	level.auto_spawn_player = false
+	level.commit_freeze = false
+	level.hflevel_autosave_enabled = false
+	add_child_autoqfree(level)
+	level.io_visualizer.set_enabled(true)
+	level.io_visualizer.refresh()
+	var overlay: Node = level.io_visualizer._mesh_instance
+	assert_not_null(overlay, "there is something to lose")
+
+	level.get_parent().remove_child(level)
+
+	assert_null(level.io_visualizer._mesh_instance, "the overlay went with the level")
+	assert_false(is_instance_valid(overlay) and overlay.get_parent() != null, "and left the tree")

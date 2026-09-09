@@ -611,6 +611,8 @@ func _exit_tree() -> void:
 		structure_preview.destroy()
 	if array_preview:
 		array_preview.destroy()
+	if io_visualizer:
+		io_visualizer.cleanup()
 	# Cancel any in-flight tool previews so their nodes don't outlive the tree
 	if extrude_tool:
 		extrude_tool.cancel_extrude()
