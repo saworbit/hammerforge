@@ -399,14 +399,36 @@ addons/hammerforge/
 The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on push and PR to `main`:
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
+- `tools/check_placement_order.py` -- refuses a world transform written to a node that is not in the tree yet
 - **GUT unit + integration tests** -- 3,004 tests across 157 test scripts (2,997 passing plus seven intentional no-assert safety tests; 15,707 assertions; verified in CI on September 9, 2026; runs Godot headless)
 
 Run locally before pushing:
 ```
 gdformat --check addons/hammerforge/ tests/
 gdlint addons/hammerforge/
+python tools/check_placement_order.py
 godot --headless -s res://addons/gut/gut_cmdln.gd --path .
 ```
+
+**Parent the node, then place it.** A `Node3D` outside the scene tree has no
+parent to measure against, so assigning `global_position` or `global_transform`
+writes the local transform instead. Nothing errors. The node lands wherever its
+container puts it, shifted by that container's own transform, and none of it
+shows while `LevelRoot` sits at the world origin, which is how it usually gets
+exercised. That has been fixed six times: the draw path, the entity restore, the
+map import and the baker, where it was applying the root transform twice to
+geometry that ships.
+
+`tools/check_placement_order.py` fails the build when a `global_*` assignment
+runs before the node is parented in the same function. It reads the four
+historical bugs correctly, which is the test that it works. A deliberate case
+says so on the assignment line or the one above it:
+```
+# hf-allow-global-before-parent: <why>
+```
+`--selftest` runs the detector over a known-bad and a known-good snippet and
+fails if either answer changed. CI runs that first, so a detector that has
+quietly stopped detecting fails loudly rather than passing everything.
 
 **Published test totals look after themselves.** Five documents quote the size of
 the suite, and every pull request that adds a test would otherwise invalidate all

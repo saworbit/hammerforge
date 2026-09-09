@@ -136,6 +136,27 @@ The format is based on Keep a Changelog, and this project follows semantic versi
     translation would not pass. Four of the seven fail against the old code.
 
 ### Added
+- **A build guard against the mistake that has now been fixed six times.**
+  Assigning `global_position` or `global_transform` to a `Node3D` that is not in
+  the tree yet writes the local transform instead. Nothing errors, and the node
+  lands shifted by its container. It stays invisible while `LevelRoot` sits at
+  the world origin, which is how it usually gets exercised, so each instance was
+  found by someone hitting it. The last one was found by a scan instead, in the
+  baker, applying the root transform twice to geometry that ships.
+  - `tools/check_placement_order.py` fails the build when a `global_*`
+    assignment runs before the node is parented in the same function. It reads
+    `addons/hammerforge/` and `tests/`, since a fixture with the same mistake
+    builds a scene it is not describing and passes without holding the property
+    it names.
+  - It folds wrapped calls onto one line before matching, because gdformat
+    routinely puts `add_child(` and its argument on separate lines. A deliberate
+    case is marked with a `hf-allow-global-before-parent` comment rather than by
+    switching the check off.
+  - `--selftest` runs the detector over a known-bad and a known-good snippet and
+    fails if either answer changed. CI runs it before the scan, so a detector
+    that has quietly stopped detecting fails loudly rather than passing
+    everything. Checked against the four historical bugs: it reports all four at
+    the lines their reports named.
 - **The array section draws its copies, and refuses to describe a hang.** The
   Structure section next to it learned to draw itself two waves ago; this one had
   three layouts, nine numbers between them, and a button that turned them into as
