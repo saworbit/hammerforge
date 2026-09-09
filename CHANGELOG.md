@@ -5,6 +5,23 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **Baking with the LevelRoot away from the origin put the geometry somewhere
+  else.** Found by sweeping for the rest of the ordering bug below rather than
+  by hitting it, and it is the worst of the family: the others were the editor
+  drawing or placing in the wrong spot, this one bakes the wrong thing into what
+  ships.
+  - `append_brush_list_to_csg()` set each CSG stand-in's `global_transform` from
+    the draft brush before adding it to the combiner. The combiner is a child of
+    `LevelRoot`, so the assignment landed on the local transform and the root's
+    transform was applied a second time when the shape was parented.
+  - A brush at `(32, 0, 0)` with the root at `(1000, 0, 1000)` baked at
+    `(1032, 0, 1000)`. A turned root was worse: the rotation doubled too, so a
+    brush facing 45 degrees baked facing -135.
+  - The shape is placed after `add_child()` now. All three bake paths build their
+    combiner with `root.add_child()` first, so all three are covered.
+  - **Coverage** (`tests/test_bake_system.gd`): a translated root and a turned
+    one, asserting the stand-in's world transform matches the brush it stands
+    for, position and facing. Both fail against the old code.
 - **Create Radial Array could not be undone.** Ctrl+Z reached past it and undid
   whatever you did before it, while the new copies stayed in the scene.
   - `EditorUndoRedoManager.add_do_method()` takes an object, a method name and
