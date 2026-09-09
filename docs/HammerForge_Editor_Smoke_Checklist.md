@@ -282,6 +282,8 @@ It writes one PNG per tab under `user://console_preview/`.
 - Raise the count and press **Update Array**. Confirm nothing rebuilds and the status line asks you to press it again; press it again and confirm the rebuild happens and the message clears.
 - Drag a copy off the row again, press Update once (warned), then change the count and press again. Confirm the changed numbers have to be agreed to a second time as well.
 - Drag the **original** instead of a copy. Confirm the message reads "The original has moved" with no mention of Detach, and that Update goes ahead on the first press.
+- Resize one copy without moving it, then click another copy. Confirm the section still counts it as edited even though nothing has moved.
+- Apply a different material to one copy and confirm the same. Then apply a material to the **original** instead and confirm the section stays quiet — the copies still agree with each other.
 
 ### 7c-4. Precision Cutting (Clip and Carve on Any Brush)
 - Draw a box, rotate it 30 degrees (`R`), then press **Shift+X**. Confirm the cyan preview shows two turned pieces, and that committing leaves two brushes that both keep the rotation.

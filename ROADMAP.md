@@ -785,11 +785,9 @@ and run".
 - 21 new tests (`tests/test_array_edit_warning.gd`).
 
 ### Known limits of the array edit warning
-- Only a copy that has been *moved* is counted. One that was resized, reshaped or
-  repainted is rebuilt over without a word, because telling would need a
-  signature recorded per copy — which is what a structure has and an array does
-  not, and which cannot be taken cheaply: `FaceData.to_dict()` PNG-encodes every
-  paint weight image.
+- **Resolved** by the reshape wave below: a copy that was resized, reshaped,
+  retextured or had a paint layer added is counted too. Painting *inside* an
+  existing layer still is not.
 - The majority is counted over copies, not volume, so an array of two copies has
   no majority to speak of and one dragged copy reads as a moved source.
 - The warning is refreshed when the selection changes, not while a piece stays
@@ -821,6 +819,37 @@ and run".
 - Behaviour is unchanged: the suite reports the same counts either side of the
   refactor. 16 new tests (`tests/test_preview_system.gd`), including a drift guard
   that fails if two previews ever name their container the same thing.
+
+## Done (Array Reshape Warning — Counting More Than Movement — September 2026)
+- The edit warning counted a copy that had been dragged and said nothing about
+  one that had been resized, reshaped, retextured, or had a paint layer added.
+  Both are rebuilt over by the same press. Both are counted now, and the sentence
+  says "edited by hand" rather than "moved by hand".
+- **Read as a vote again, and grouped rather than compared against the source.**
+  Paint the original and every copy differs from it at once, which is the source
+  having changed rather than anybody editing copies. Copies that still agree with
+  each other are the array; a copy on its own is the edit.
+- **Nothing new is recorded**, as with the move: the comparison is between the
+  copies themselves.
+- **The comparison is values only, with no resource identity.** Reusing
+  `HFBrushChangeTracker._signature()` looked right and was not: each copy holds
+  its own equal-but-separate `FaceData` and its own weight image, so a signature
+  carrying identity reported 199 of 200 copies as edits. That signature is
+  correct for its own question — whether one brush has changed since it was last
+  looked at — and wrong for this one, which is whether two brushes are the same
+  shape. Found by measuring rather than by reading.
+- **Weight-image contents are deliberately left out.** Hashing every texel of
+  every face of every copy measured 127 ms over a full-budget array against 22 ms
+  without, on an event that fires whenever the selection changes. A layer added,
+  removed, retextured or resized is noticed; painting inside an existing one is
+  not. The full check over 200 fully-painted copies measures 27.9 ms.
+- 9 new tests (`tests/test_array_edit_warning.gd`), including the painted-array
+  regression the measurement exposed.
+
+### Known limits of the reshape warning
+- Painting inside an existing layer on a copy is not counted, for the cost above.
+- The majority is still counted over copies rather than volume, so an array of two
+  has no majority to speak of.
 
 ## Future (Wave 3 -- Polish)
 - Multiple simultaneous cordons.
@@ -865,7 +894,7 @@ Completion is responsibility-based rather than tied to an arbitrary line count. 
 - Headless editor tests retain the complete tool graph, with focused export-playtest coverage guarding the runtime boundary.
 
 ### Risk-focused test gaps
-The current suite covers 3,072 tests across 160 scripts, including the large brush, bake, paint, vertex, transform, generator, baker, brush-instance, and map-I/O systems. The issue tracker is clear as of September 8, 2026. No known limitation is currently untracked and uncovered.
+The current suite covers 3,081 tests across 160 scripts, including the large brush, bake, paint, vertex, transform, generator, baker, brush-instance, and map-I/O systems. The issue tracker is clear as of September 8, 2026. No known limitation is currently untracked and uncovered.
 
 The last one on this list is **resolved**: a `.map` entity property value
 containing a quote used to come back truncated, silently, because four quotes is

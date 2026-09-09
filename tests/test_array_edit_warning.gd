@@ -161,6 +161,113 @@ func test_a_moved_source_and_one_dragged_copy_counts_only_the_copy():
 	assert_true(record.copies_follow_a_moved_source(root.brush_system))
 
 
+# ===========================================================================
+# Copies that were reshaped rather than moved
+# ===========================================================================
+
+
+func test_a_resized_copy_is_counted():
+	# It is standing exactly where the array puts it, so the move vote says
+	# nothing. A rebuild would still replace it.
+	var source := _a_brush()
+	var record := _make_array(source, 3)
+	var reshaped: Node3D = _copies(record)[0]
+	reshaped.size = Vector3(64, 64, 64)
+	assert_eq(record.displaced_copy_ids(root.brush_system).size(), 0, "nothing has moved")
+	assert_eq(record.reshaped_copy_ids(root.brush_system).size(), 1)
+	assert_eq(record.edited_copy_ids(root.brush_system).size(), 1)
+
+
+func test_a_repainted_copy_is_counted():
+	var source := _a_brush()
+	var record := _make_array(source, 3)
+	var painted: Node3D = _copies(record)[0]
+	root.brush_system._ensure_faces(painted)
+	painted.get_faces()[0].material_idx = 7
+	assert_eq(record.edited_copy_ids(root.brush_system).size(), 1)
+
+
+func test_a_copy_that_was_both_moved_and_reshaped_is_counted_once():
+	var source := _a_brush()
+	var record := _make_array(source, 4)
+	var both: Node3D = _copies(record)[0]
+	_drag(both, Vector3(0, 96, 0))
+	both.size = Vector3(64, 64, 64)
+	assert_eq(record.edited_copy_ids(root.brush_system).size(), 1)
+
+
+func test_repainting_the_original_is_not_every_copy_edited():
+	# Every copy differs from the source at once, which is the source having
+	# changed rather than anybody editing copies. The copies still agree with each
+	# other, and that is what is read.
+	var source := _a_brush()
+	var record := _make_array(source, 4)
+	root.brush_system._ensure_faces(source)
+	source.get_faces()[0].material_idx = 7
+	assert_eq(record.reshaped_copy_ids(root.brush_system).size(), 0)
+
+
+func test_a_painted_array_does_not_report_every_copy_as_edited():
+	# Each copy holds its own equal-but-separate FaceData and its own weight
+	# image. A signature built on resource identity — which is what the bake
+	# tracker's is, correctly, for its own question — reported 199 of 200 copies
+	# as edits. The comparison is values only for exactly this reason.
+	var source := _a_brush()
+	root.brush_system._ensure_faces(source)
+	for face in source.get_faces():
+		var layer = FaceData.PaintLayer.new()
+		layer.ensure_weight_image(Vector2i(64, 64))
+		face.paint_layers.append(layer)
+	var record := _make_array(source, 6)
+	assert_eq(
+		record.reshaped_copy_ids(root.brush_system).size(),
+		0,
+		"copies of one painted brush are all the same shape as each other"
+	)
+
+
+func test_a_layer_added_to_one_copy_is_an_edit():
+	var source := _a_brush()
+	var record := _make_array(source, 4)
+	var painted: Node3D = _copies(record)[0]
+	root.brush_system._ensure_faces(painted)
+	var layer = FaceData.PaintLayer.new()
+	layer.ensure_weight_image(Vector2i(64, 64))
+	painted.get_faces()[0].paint_layers.append(layer)
+	assert_eq(record.reshaped_copy_ids(root.brush_system).size(), 1)
+
+
+func test_two_copies_reshaped_the_same_way_are_still_both_edits():
+	# Two of four is not a majority, so the untouched pair is the array and the
+	# reshaped pair are the edits.
+	var source := _a_brush()
+	var record := _make_array(source, 4)
+	var copies := _copies(record)
+	copies[0].size = Vector3(64, 64, 64)
+	copies[1].size = Vector3(64, 64, 64)
+	assert_eq(record.reshaped_copy_ids(root.brush_system).size(), 2)
+
+
+func test_an_untouched_array_reports_no_reshapes():
+	var source := _a_brush()
+	var record := _make_array(source, 3)
+	assert_eq(record.reshaped_copy_ids(root.brush_system).size(), 0)
+
+
+func test_the_section_counts_a_reshaped_copy_and_asks_twice():
+	var source := _a_brush()
+	var record := _make_array(source, 3)
+	var reshaped: Node3D = _copies(record)[0]
+	reshaped.size = Vector3(64, 64, 64)
+	_select([_copies(record)[1]])
+	assert_true(_warning().contains("1 copy has been edited"), "got '%s'" % _warning())
+	dock.dup_count_spin.set_value_no_signal(5.0)
+	HFDockBrushHandler.on_create_duplicate_array(dock)
+	assert_eq(_brush_count(), 4, "nothing was rebuilt on the first press")
+	HFDockBrushHandler.on_create_duplicate_array(dock)
+	assert_eq(_brush_count(), 6, "and the second press goes ahead")
+
+
 func test_an_array_whose_sources_are_gone_says_nothing():
 	# The copies and the sources no longer pair up, and guessing the pairing would
 	# report every copy in the level as moved.
@@ -175,11 +282,11 @@ func test_the_level_root_reports_the_same_counts():
 	var source := _a_brush()
 	var record := _make_array(source, 3)
 	_drag(_copies(record)[0], Vector3(0, 96, 0))
-	assert_eq(root.displaced_array_copies(str(record.duplicator_id)), 1)
+	assert_eq(root.edited_array_copies(str(record.duplicator_id)), 1)
 
 
 func test_an_unknown_array_reports_nothing():
-	assert_eq(root.displaced_array_copies("dup_nothing"), 0)
+	assert_eq(root.edited_array_copies("dup_nothing"), 0)
 	assert_false(root.array_copies_follow_a_moved_source("dup_nothing"))
 
 
@@ -202,7 +309,7 @@ func test_the_section_names_the_number_of_moved_copies():
 	_drag(_copies(record)[1], Vector3(0, 0, 96))
 	_select([_copies(record)[2]])
 	var text := _warning()
-	assert_true(text.contains("2 copies"), "got '%s'" % text)
+	assert_true(text.contains("2 copies have been edited"), "got '%s'" % text)
 	assert_true(text.contains("Detach"), "the way out belongs in the sentence: got '%s'" % text)
 
 
@@ -211,7 +318,7 @@ func test_one_moved_copy_reads_as_one():
 	var record := _make_array(source, 3)
 	_drag(_copies(record)[0], Vector3(0, 96, 0))
 	_select([_copies(record)[1]])
-	assert_true(_warning().contains("1 copy has"), "got '%s'" % _warning())
+	assert_true(_warning().contains("1 copy has been edited"), "got '%s'" % _warning())
 
 
 func test_a_moved_source_is_said_differently():
