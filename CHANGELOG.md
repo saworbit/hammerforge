@@ -93,6 +93,57 @@ The format is based on Keep a Changelog, and this project follows semantic versi
     different axes, a long corridor reaching a cut far from its origin, three and
     twelve mutually overlapping cuts, pair naming and ordering, and comparison
     budgets over spread out and strung out levels.
+- **The Performance section stops measuring the level when nobody is looking at
+  it.** It refreshed every thirty editor frames whether it was open or shut, and
+  it is created shut. Those readouts are not label assignments: the vertex
+  estimate walks every brush and every face, the paint figure walks every layer,
+  and with chunking on the chunk count recollects the whole bake candidate set,
+  builds the chunk dictionary and sorts it while the recommendation measures the
+  level bounds all over again. The levels that make that expensive are the ones
+  that make the panel worth opening, so an idle editor on a big chunked scene was
+  paying the most for numbers on screen nowhere.
+  - **Collapsed, on another tab, or in a hidden dock all count as not looking.**
+    Leaving the section open on the Manage tab and working on the Build tab is
+    the common case, and it used to cost the same as watching it.
+  - **Opening the section fills it in at once** rather than showing whatever the
+    last look left behind until the next tick.
+  - The **Live Brushes** count in the footer is on screen at all times and still
+    refreshes on the same tick. It reads a cached count, so it was never part of
+    the cost.
+  - **Coverage** (`tests/test_perf_panel_visibility.gd`): 8 tests over the section
+    starting shut, a shut section left alone across ninety frames, the footer
+    still counting, opening, an open section refreshing, closing again, an open
+    section on a tab nobody is on, and coming back to that tab.
+- **The entity wiring overlay only redraws when the wiring changes.** It rebuilt
+  every ten editor frames whether or not anything had moved: the connection list
+  was recollected, every target was resolved by scanning the whole level, the
+  curve mesh was thrown away and rebuilt, and Highlight Connected freed and
+  remade its pulse spheres. On a level with 200 entities and 400 outputs that is
+  about 80,000 name comparisons per rebuild, six times a second, to draw the
+  picture that was already on screen.
+  - **Targets resolve through one index instead of one scan each.**
+    `HFEntitySystem.build_name_index()` maps every address in the level to the
+    nodes that answer to it in a single pass, and the drawing loop reads it. The
+    addresses and their order match `find_entities_by_name()` exactly, and they
+    are built next to it so the two cannot drift apart.
+  - **The redraw is guarded by a change check rather than by a signal.** A rename
+    in the Scene dock, an undo, and an entity dragged in the viewport all change
+    the picture without going through HammerForge, so a signal would have had to
+    be emitted from each of them and the ones nobody remembered would be
+    stale-overlay bugs. The check reads each node once; the rebuild it guards
+    reads every connection against every entity.
+  - **Pulse spheres are moved rather than freed and remade**, and the pulse now
+    advances on the real frame time instead of an assumed 60 frames per second.
+  - **A graph where every connection dangles no longer opens an empty mesh
+    surface.** Renaming the last live target left the overlay closing a surface
+    with no vertices in it, which Godot reports as an error. Nothing resolves, so
+    now nothing is drawn.
+  - **Coverage** (`tests/test_io_visualizer_dirty.gd`): 28 tests over idle frames,
+    an output added, removed and re-delayed, a native rename, an alias edit, a
+    moved entity, a moved brush entity, an entity added and removed, selection,
+    a forced rebuild, a lost mesh node, sphere reuse and release, the real delta,
+    the dangling-only graph and its recovery, and the index against the lookup it
+    replaces.
 - **The array edit warning counts more than movement.** It counted a copy that had
   been dragged and said nothing about one that had been resized, reshaped,
   retextured, or had a paint layer added — though the same press rebuilds over

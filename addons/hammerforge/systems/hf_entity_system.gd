@@ -485,6 +485,41 @@ func find_entities_by_name(entity_name: String) -> Array:
 	return result
 
 
+## Every address in the level mapped to the nodes that answer to it.
+##
+## One pass over the entities and brush entities, so a caller resolving many
+## connections at once does not rescan the level per connection. The addresses
+## and the order within an address match `find_entities_by_name()` exactly, and
+## they are built here rather than at the call site so the two cannot drift.
+##
+## A snapshot. Anything that adds, removes, renames or re-aliases a node makes it
+## wrong, so build it inside the pass that reads it.
+func build_name_index() -> Dictionary:
+	var index: Dictionary = {}
+	if root.entities_node:
+		for child in root.entities_node.get_children():
+			_index_address(index, str(child.name), child)
+			_index_address(index, str(child.get_meta("entity_name", "")), child)
+	if root.draft_brushes_node:
+		for child in root.draft_brushes_node.get_children():
+			if is_brush_io_target(child):
+				_index_address(index, str(child.name), child)
+	return index
+
+
+## A node answering to both its node name and the same authored name is still one
+## target, the way `find_entities_by_name()` appends it once.
+static func _index_address(index: Dictionary, address: String, node: Node) -> void:
+	if address == "":
+		return
+	if not index.has(address):
+		index[address] = [node]
+		return
+	var nodes: Array = index[address]
+	if not nodes.has(node):
+		nodes.append(node)
+
+
 static func is_brush_io_target(node: Node) -> bool:
 	return (
 		node != null
