@@ -82,18 +82,9 @@ func bake_from_csg(
 				return result
 
 	var mesh_count := 0
-	for entry in entries:
-		var mesh: Mesh = null
-		var mesh_xform := Transform3D.IDENTITY
-		if entry is Mesh:
-			mesh = entry
-		elif entry is Array:
-			if entry.size() > 0 and entry[0] is Mesh:
-				mesh = entry[0]
-			if entry.size() > 1 and entry[1] is Transform3D:
-				mesh_xform = entry[1]
-		if not mesh:
-			continue
+	for pair in _csg_mesh_pairs(entries):
+		var mesh: Mesh = pair["mesh"]
+		var mesh_xform: Transform3D = pair["transform"]
 
 		var processed = _postprocess_mesh(
 			mesh, generate_lods, unwrap_uv2, uv2_texel_size, unwrap_uv0_flag
@@ -680,30 +671,46 @@ static func _extract_mesh_verts(
 ## Collect per-entry vertex arrays from CSG output entries for convex hull generation.
 func _collect_entry_verts(entries: Array) -> Array:
 	var result: Array = []
-	for entry in entries:
-		var mesh: Mesh = null
-		var mesh_xform := Transform3D.IDENTITY
-		if entry is Mesh:
-			mesh = entry
-		elif entry is Array:
-			if entry.size() > 0 and entry[0] is Mesh:
-				mesh = entry[0]
-			if entry.size() > 1 and entry[1] is Transform3D:
-				mesh_xform = entry[1]
-		if mesh:
-			result.append(_extract_mesh_verts(mesh, mesh_xform))
+	for pair in _csg_mesh_pairs(entries):
+		result.append(_extract_mesh_verts(pair["mesh"], pair["transform"]))
 	return result
 
 
+## What `CSGShape3D.get_meshes()` handed back, as mesh-and-placement pairs.
+##
+## Godot 4 returns a flat two-element array: the node's `Transform3D` first, then
+## its root `Mesh`. It is not a list of meshes and not a list of pairs. Walking it
+## as a list still finds the mesh, because the second element is one, and throws
+## the transform away, because the first element is not a mesh and nothing else
+## looks at it. A CSG node standing anywhere but the origin therefore baked its
+## visual mesh and its convex collision at the origin.
+##
+## The flat pair is read first. The per-entry walk stays behind it for a list of
+## meshes or of pairs, in either order, so a build that returns one is read rather
+## than quietly mishandled. `HFSubtractPreview.extract_csg_meshes()` already had
+## this shape; the baker had three copies of the version without it.
 func _collect_mesh_entries(entries: Array) -> Array:
+	return _csg_mesh_pairs(entries)
+
+
+static func _csg_mesh_pairs(entries: Array) -> Array:
 	var list: Array = []
+	if entries.is_empty():
+		return list
+	if entries.size() >= 2 and entries[0] is Transform3D and entries[1] is Mesh:
+		list.append({"mesh": entries[1], "transform": entries[0]})
+		return list
 	for entry in entries:
 		var mesh: Mesh = null
 		var mesh_xform := Transform3D.IDENTITY
 		if entry is Mesh:
 			mesh = entry
 		elif entry is Array:
-			if entry.size() > 0 and entry[0] is Mesh:
+			if entry.size() > 0 and entry[0] is Transform3D:
+				mesh_xform = entry[0]
+			if entry.size() > 1 and entry[1] is Mesh:
+				mesh = entry[1]
+			elif entry.size() > 0 and entry[0] is Mesh:
 				mesh = entry[0]
 			if entry.size() > 1 and entry[1] is Transform3D:
 				mesh_xform = entry[1]
