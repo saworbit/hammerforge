@@ -276,7 +276,7 @@ addons/hammerforge/
     hf_paint_layer.gd      Layer data (bitset + material_ids + blend_weights + heightmap)
     hf_paint_layer_manager.gd  Layer management
     hf_paint_tool.gd       Paint tool input handling (routes to heightmap synth when layer has heightmap)
-    hf_inference_engine.gd Inference for paint operations
+    hf_inference_engine.gd Stroke intent classification; cleanup pass unimplemented and not wired in
     hf_geometry_synth.gd   Greedy meshing for flat floors/walls
     hf_heightmap_synth.gd  Heightmap-displaced mesh generation (SurfaceTool, per-vertex displacement)
     hf_heightmap_io.gd     Heightmap load/generate/serialize (base64 PNG, FastNoiseLite)
@@ -400,7 +400,7 @@ The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
 - `tools/check_placement_order.py` -- refuses a world transform written to a node that is not in the tree yet
-- **GUT unit + integration tests** -- 3,162 tests across 162 test scripts (3,155 passing plus seven intentional no-assert safety tests; 16,391 assertions; verified in CI on September 9, 2026; runs Godot headless)
+- **GUT unit + integration tests** -- 3,166 tests across 163 test scripts (3,159 passing plus seven intentional no-assert safety tests; 16,398 assertions; verified in CI on September 9, 2026; runs Godot headless)
 
 Run locally before pushing:
 ```

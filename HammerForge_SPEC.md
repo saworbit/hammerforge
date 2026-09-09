@@ -155,7 +155,7 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `hf_connector_tool.gd` | `HFConnectorTool` | Ramp/stair mesh generation between layers |
 | `hf_foliage_populator.gd` | `HFFoliagePopulator` | MultiMeshInstance3D procedural scatter |
 | `hf_blend.gdshader` | -- | Four-slot blend shader (UV2 blend map, RGB weights) |
-| `hf_inference_engine.gd` | `HFInferenceEngine` | Inference for paint operations |
+| `hf_inference_engine.gd` | `HFInferenceEngine` | Stroke intent classification. Its cleanup pass is unimplemented, so nothing wires it into the paint tool |
 
 ## Node Hierarchy
 ```
@@ -540,6 +540,6 @@ Unit tests use the [GUT](https://github.com/bitwes/Gut) framework and run headle
 | `test_selection_gesture.gd` | 40 | Native widget/Object Select ownership, modal Face Select, recovery, focus/scope guards, native duplicate/reparent repair, and Inspector/undo change tracking |
 | `test_viewport_outlines.gd` | 39 | Sparse semantic outlines, exact/composite entity collision, visibility/transforms, and shape-aware resize recovery |
 
-Full suite (verified in CI on September 9, 2026): **3,162 tests** across **162 scripts** (**3,155 passing** plus seven intentional no-assert safety tests; **16,391 assertions**).
+Full suite (verified in CI on September 9, 2026): **3,166 tests** across **163 scripts** (**3,159 passing** plus seven intentional no-assert safety tests; **16,398 assertions**).
 
 Tests use root shim scripts (dynamically created GDScript) to provide the LevelRoot interface without circular preload dependencies. Configuration in `.gutconfig.json`.
