@@ -95,6 +95,29 @@ The format is based on Keep a Changelog, and this project follows semantic versi
     presses without reselecting, undo, and what survives a state restore.
 
 ### Changed
+- **Check Issues spends its time on the level, not on building strings.** The
+  micro-gap and non-manifold scans key their spatial grid on the position of
+  every vertex and every edge. Those keys were formatted strings, and
+  `_cell_keys()` built **twenty-seven of them per vertex** so a pair straddling a
+  cell boundary would still be found. At 76 microseconds a call, once per vertex,
+  that was very nearly the whole pass.
+  - **The keys are grid indices now.** A cell is a `Vector3i`, its neighbours are
+    plus or minus one, and an edge is the pair of cells its ends fall in with the
+    smaller end first. Nothing is allocated to look a point up.
+  - **The buckets are the same buckets.** The index is the snapped position
+    divided by the step, with `snapped()` still in the middle, so the grid has not
+    moved and the same levels report the same issues.
+  - Measured over 1,000 brushes: a full `check_bake_issues()` went from 1,835.8 ms
+    to 460.4 ms. Per 20,000 calls, `_cell_keys()` went from 1,520.8 ms to 157.8 ms,
+    `_snap_key()` from 57.8 ms to 11.1 ms, and `_edge_key()` from 74.4 ms to
+    23.2 ms.
+  - **Coverage** (`tests/test_validation_cell_keys.gd`): 12 tests over the
+    tolerance, negative coordinates, the index matching the snapped position it
+    replaced, the twenty-seven distinct neighbours, a point finding its own cell,
+    a neighbour across a boundary, edge symmetry, fixed edge precision against a
+    raised weld tolerance, and both key kinds actually colliding as dictionary
+    keys rather than merely comparing equal.
+
 - **Floor paint stops running an inference stage that does nothing.** Every level
   handed its paint tool an `HFInferenceEngine`, and every ordinary stroke ended by
   classifying its intent and walking its dirty chunks calling a cleanup that was
