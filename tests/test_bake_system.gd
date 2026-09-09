@@ -7,6 +7,8 @@ const HFPaintLayerManagerScript = preload(
 	"res://addons/hammerforge/paint/hf_paint_layer_manager.gd"
 )
 const HFPaintGridScript = preload("res://addons/hammerforge/paint/hf_paint_grid.gd")
+const FaceData = preload("res://addons/hammerforge/face_data.gd")
+const HFConvexClipScript = preload("res://addons/hammerforge/hf_convex_clip.gd")
 
 var root: Node3D
 var bake_sys: HFBakeSystem
@@ -2714,3 +2716,116 @@ func test_csg_shapes_keep_rotation_and_position_together_when_the_root_is_turned
 	assert_almost_eq(
 		got, expected, Vector3(0.001, 0.001, 0.001), "the stand-in keeps the brush's facing"
 	)
+
+
+# ===========================================================================
+# A custom brush is cut with its own mesh, not with a box (#250)
+# ===========================================================================
+
+
+## A wedge, which is nothing like the 4x4x4 box `_make_brush` reports as its size.
+## That difference is the whole test: the old path built the size and got a box.
+func _make_wedge(parent: Node3D, pos: Vector3 = Vector3.ZERO) -> DraftBrush:
+	var brush := _make_brush(parent, pos)
+	var low := Vector3(0, -2, 0)
+	var high := Vector3(0, 2, 0)
+	var a := Vector3(0, 0, 0)
+	var b := Vector3(8, 0, 0)
+	var c := Vector3(0, 0, 8)
+	var rings := [
+		[a + low, b + low, c + low],
+		[a + high, b + high, c + high],
+		[a + low, b + low, b + high, a + high],
+		[b + low, c + low, c + high, b + high],
+		[c + low, a + low, a + high, c + high],
+	]
+	var built: Array[FaceData] = []
+	for face in HFConvexClipScript.solid_from_rings(rings):
+		built.append(face)
+	assert_gt(built.size(), 3, "the fixture needs a solid, not a handful of loose faces")
+	brush.faces = built
+	# The order a vertex edit uses: promote to CUSTOM first, because assigning the
+	# shape re-runs set_size() and would dirty the geometry again.
+	brush.mark_faces_authoritative()
+	brush.geometry_dirty = false
+	brush.rebuild_preview()
+	assert_eq(brush.shape, DraftBrush.BrushShape.CUSTOM, "the fixture needs a promoted brush")
+	assert_not_null(brush.mesh_instance, "the fixture needs a brush that has drawn itself")
+	assert_not_null(brush.mesh_instance.mesh, "and a mesh to be cut with")
+	return brush
+
+
+func _only_csg_child(brushes: Array) -> Node3D:
+	var temp_csg := CSGCombiner3D.new()
+	temp_csg.hide()
+	temp_csg.use_collision = false
+	root.add_child(temp_csg)
+	bake_sys.append_brush_list_to_csg(brushes, temp_csg)
+	assert_eq(temp_csg.get_child_count(), 1, "the brush has to reach the CSG tree")
+	return temp_csg.get_child(0)
+
+
+func test_a_custom_brush_goes_into_the_csg_as_its_own_mesh():
+	var brush := _make_wedge(root.draft_brushes_node)
+
+	var shape: Node3D = _only_csg_child([brush])
+
+	assert_true(shape is CSGMesh3D, "a shape the prefab factory cannot build is cut with its mesh")
+	assert_eq(
+		(shape as CSGMesh3D).mesh, brush.mesh_instance.mesh, "and it is the mesh it is drawing"
+	)
+
+
+func test_a_custom_brush_keeps_the_shape_it_was_authored_as():
+	var brush := _make_wedge(root.draft_brushes_node)
+
+	var shape: Node3D = _only_csg_child([brush])
+
+	var got: Vector3 = (shape as CSGMesh3D).mesh.get_aabb().size
+	assert_almost_eq(
+		got,
+		Vector3(8, 4, 8),
+		Vector3(0.01, 0.01, 0.01),
+		"the wedge bakes as a wedge, not as the box its size field describes"
+	)
+
+
+func test_a_custom_brush_is_still_placed_where_the_brush_is():
+	root.position = Vector3(1000, 0, 1000)
+	var brush := _make_wedge(root.draft_brushes_node, Vector3(32, 0, 0))
+	brush.rotate_y(PI / 4.0)
+
+	var shape: Node3D = _only_csg_child([brush])
+
+	assert_almost_eq(
+		shape.global_transform.origin,
+		brush.global_transform.origin,
+		Vector3(0.001, 0.001, 0.001),
+		"the mesh stand-in bakes where the brush is, root offset and all"
+	)
+	assert_almost_eq(
+		shape.global_transform.basis.get_euler(),
+		brush.global_transform.basis.get_euler(),
+		Vector3(0.001, 0.001, 0.001),
+		"and facing the way it does"
+	)
+
+
+func test_a_primitive_brush_still_takes_the_prefab_path():
+	var brush := _make_brush(root.draft_brushes_node)
+
+	var shape: Node3D = _only_csg_child([brush])
+
+	assert_true(shape is CSGBox3D, "a box is still built as a box")
+
+
+func test_a_custom_brush_with_no_mesh_yet_still_reaches_the_csg():
+	# Wrong shape, but a brush that vanishes from the bake without a word is worse.
+	var brush := _make_brush(root.draft_brushes_node)
+	brush.shape = DraftBrush.BrushShape.CUSTOM
+	if brush.mesh_instance:
+		brush.mesh_instance.mesh = null
+
+	var shape: Node3D = _only_csg_child([brush])
+
+	assert_true(shape is CSGShape3D)
