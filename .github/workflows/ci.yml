@@ -36,6 +36,18 @@ jobs:
       - name: Lint
         run: gdlint addons/hammerforge/
 
+      # A world transform assigned to a node that is not in the tree yet writes
+      # the local one instead, and the node lands shifted by its container. That
+      # has been fixed six times, most recently in the baker, where it was
+      # applying the root transform twice to geometry that ships. The selftest
+      # runs first so a detector that has quietly stopped detecting fails loudly
+      # rather than passing everything.
+      - name: Check the placement-order guard still detects
+        run: python3 tools/check_placement_order.py --selftest
+
+      - name: Check placement order
+        run: python3 tools/check_placement_order.py
+
   unit-tests:
     name: GUT Unit Tests
     runs-on: ubuntu-latest

@@ -96,7 +96,14 @@ prompt for what's actually needed to act on them.
 ```
 gdformat --check addons/hammerforge/ tests/
 gdlint addons/hammerforge/
+python tools/check_placement_order.py
 ```
+
+The last one refuses a `global_position` or `global_transform` written to a node
+that is not in the tree yet. Godot writes the local transform in that case
+without complaining, and the node lands shifted by whatever its container's
+transform is, so parent it first and place it second. See DEVELOPMENT.md if you
+need the deliberate-case escape hatch.
 
 ### Unit Tests (GUT)
 Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framework (installed in `addons/gut/`).
