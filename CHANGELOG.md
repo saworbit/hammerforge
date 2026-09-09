@@ -61,6 +61,36 @@ The format is based on Keep a Changelog, and this project follows semantic versi
     presses without reselecting, undo, and what survives a state restore.
 
 ### Changed
+- **The entity wiring overlay only redraws when the wiring changes.** It rebuilt
+  every ten editor frames whether or not anything had moved: the connection list
+  was recollected, every target was resolved by scanning the whole level, the
+  curve mesh was thrown away and rebuilt, and Highlight Connected freed and
+  remade its pulse spheres. On a level with 200 entities and 400 outputs that is
+  about 80,000 name comparisons per rebuild, six times a second, to draw the
+  picture that was already on screen.
+  - **Targets resolve through one index instead of one scan each.**
+    `HFEntitySystem.build_name_index()` maps every address in the level to the
+    nodes that answer to it in a single pass, and the drawing loop reads it. The
+    addresses and their order match `find_entities_by_name()` exactly, and they
+    are built next to it so the two cannot drift apart.
+  - **The redraw is guarded by a change check rather than by a signal.** A rename
+    in the Scene dock, an undo, and an entity dragged in the viewport all change
+    the picture without going through HammerForge, so a signal would have had to
+    be emitted from each of them and the ones nobody remembered would be
+    stale-overlay bugs. The check reads each node once; the rebuild it guards
+    reads every connection against every entity.
+  - **Pulse spheres are moved rather than freed and remade**, and the pulse now
+    advances on the real frame time instead of an assumed 60 frames per second.
+  - **A graph where every connection dangles no longer opens an empty mesh
+    surface.** Renaming the last live target left the overlay closing a surface
+    with no vertices in it, which Godot reports as an error. Nothing resolves, so
+    now nothing is drawn.
+  - **Coverage** (`tests/test_io_visualizer_dirty.gd`): 28 tests over idle frames,
+    an output added, removed and re-delayed, a native rename, an alias edit, a
+    moved entity, a moved brush entity, an entity added and removed, selection,
+    a forced rebuild, a lost mesh node, sphere reuse and release, the real delta,
+    the dangling-only graph and its recovery, and the index against the lookup it
+    replaces.
 - **The array edit warning counts more than movement.** It counted a copy that had
   been dragged and said nothing about one that had been resized, reshaped,
   retextured, or had a paint layer added — though the same press rebuilds over
