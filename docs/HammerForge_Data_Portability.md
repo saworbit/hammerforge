@@ -83,6 +83,7 @@ After import, run **Check Only** (Test tab) to detect any remaining non-planar f
 - Transforms are stored relative to the group centroid, so prefabs can be placed at any world position.
 - Brush IDs and group IDs are stripped on capture; new ones are assigned on instantiation.
 - Entity I/O connections are captured and remapped to new entity names when instantiated.
+- The authored entity name travels verbatim, so placing a prefab twice gives both copies the same name. The I/O remap works off node names, which are made unique on placement; rename the copies yourself if two of them are meant to be told apart by an output.
 - Data encoding uses the same `HFLevelIO.encode_variant()` / `decode_variant()` pipeline as `.hflevel` (handles Vector3, Transform3D, Basis, etc.).
 - Prefab files are saved to `res://prefabs/` by default. The directory is created automatically on first save.
 - Prefabs are portable between projects — just copy `.hfprefab` files to another project's `res://prefabs/` folder.
