@@ -391,11 +391,11 @@ func _check_non_manifold(brush: DraftBrush, issues: Array) -> void:
 		for i in range(verts.size()):
 			var a: Vector3 = verts[i]
 			var b: Vector3 = verts[(i + 1) % verts.size()]
-			var key: String = _edge_key(a, b)
+			var key: Array = _edge_key(a, b)
 			edge_counts[key] = edge_counts.get(key, 0) + 1
 	var open_count := 0
 	var non_manifold_count := 0
-	for key: String in edge_counts:
+	for key: Array in edge_counts:
 		var count: int = edge_counts[key]
 		if count == 1:
 			open_count += 1
@@ -432,17 +432,22 @@ func _check_non_manifold(brush: DraftBrush, issues: Array) -> void:
 ## Create a canonical edge key from two vertices (order-independent, rounded to 0.001).
 ## This tolerance is intentionally fixed — it must NOT vary with weld_tolerance,
 ## because non-manifold/open-edge detection depends on stable topology hashing.
-func _edge_key(a: Vector3, b: Vector3) -> String:
-	var ax := snapped(a.x, 0.001)
-	var ay := snapped(a.y, 0.001)
-	var az := snapped(a.z, 0.001)
-	var bx := snapped(b.x, 0.001)
-	var by := snapped(b.y, 0.001)
-	var bz := snapped(b.z, 0.001)
-	# Sort so edge (A,B) == edge (B,A)
-	if ax < bx or (ax == bx and ay < by) or (ax == bx and ay == by and az < bz):
-		return "%s,%s,%s-%s,%s,%s" % [ax, ay, az, bx, by, bz]
-	return "%s,%s,%s-%s,%s,%s" % [bx, by, bz, ax, ay, az]
+## An edge as the pair of grid cells its ends fall in, smaller end first so
+## (A,B) and (B,A) are one edge.
+##
+## Deliberately a pair of Vector3i rather than a formatted string. This runs for
+## every edge of every face of every brush, and building the string cost more
+## than everything it was a key for.
+func _edge_key(a: Vector3, b: Vector3) -> Array:
+	var ai := _quantise(a, 0.001)
+	var bi := _quantise(b, 0.001)
+	if (
+		ai.x < bi.x
+		or (ai.x == bi.x and ai.y < bi.y)
+		or (ai.x == bi.x and ai.y == bi.y and ai.z < bi.z)
+	):
+		return [ai, bi]
+	return [bi, ai]
 
 
 # ---------------------------------------------------------------------------
@@ -512,7 +517,7 @@ func _check_micro_gaps(all_brushes: Array, issues: Array) -> void:
 				var world_v: Vector3 = brush.global_transform * face.local_verts[vi]
 				var idx: int = entries.size()
 				entries.append({"brush": brush, "pos": world_v})
-				var key: String = _snap_key(world_v, tol)
+				var key: Vector3i = _snap_key(world_v, tol)
 				if not cells.has(key):
 					cells[key] = []
 				(cells[key] as Array).append(idx)
@@ -520,7 +525,7 @@ func _check_micro_gaps(all_brushes: Array, issues: Array) -> void:
 	var flagged_pairs: Dictionary = {}  # avoid duplicate warnings
 	for i in range(entries.size()):
 		var pos_i: Vector3 = entries[i]["pos"]
-		for cell_key: String in _cell_keys(pos_i, tol):
+		for cell_key: Vector3i in _cell_keys(pos_i, tol):
 			for j: int in cells.get(cell_key, []):
 				if j <= i:
 					continue  # ordered pair dedup
@@ -576,7 +581,7 @@ func weld_brush_vertices(brush: DraftBrush) -> int:
 			var idx: int = entries.size()
 			var pos: Vector3 = face.local_verts[vi]
 			entries.append({"fi": fi, "vi": vi, "pos": pos})
-			var key: String = _snap_key(pos, tol)
+			var key: Vector3i = _snap_key(pos, tol)
 			if not cells.has(key):
 				cells[key] = []
 			(cells[key] as Array).append(idx)
@@ -595,7 +600,7 @@ func weld_brush_vertices(brush: DraftBrush) -> int:
 		while not queue.is_empty():
 			var cur: int = queue.pop_front()
 			var cur_pos: Vector3 = entries[cur]["pos"]
-			for cell_key: String in _cell_keys(cur_pos, tol):
+			for cell_key: Vector3i in _cell_keys(cur_pos, tol):
 				for neighbor_idx: int in cells.get(cell_key, []):
 					if group_of[neighbor_idx] >= 0:
 						continue
@@ -661,21 +666,38 @@ func fix_non_planar_faces(brush: DraftBrush) -> int:
 	return fixed
 
 
-func _snap_key(v: Vector3, tol: float) -> String:
-	return "%s,%s,%s" % [snapped(v.x, tol), snapped(v.y, tol), snapped(v.z, tol)]
+## The grid cell a point falls in, at `tol` spacing.
+##
+## The index rather than the formatted position: same buckets, no allocation.
+## `snapped()` is kept in the middle so the bucket boundaries are exactly the
+## ones this used to produce.
+func _quantise(v: Vector3, tol: float) -> Vector3i:
+	return Vector3i(
+		roundi(snapped(v.x, tol) / tol),
+		roundi(snapped(v.y, tol) / tol),
+		roundi(snapped(v.z, tol) / tol)
+	)
+
+
+func _snap_key(v: Vector3, tol: float) -> Vector3i:
+	return _quantise(v, tol)
 
 
 ## Return all 27 cell keys (self + 26 neighbors) for a spatial hash lookup.
 ## Guarantees that any point within `cell_size` distance shares at least one cell.
+## This cell and its 26 neighbours, so a pair straddling a boundary is still
+## found.
+##
+## In index space the neighbours are just +/-1, which is why this is the change
+## that mattered: the old version formatted 27 strings for every vertex of every
+## brush, and that was almost the whole cost of a Check Issues pass.
 func _cell_keys(v: Vector3, cell_size: float) -> Array:
-	var cx: float = snapped(v.x, cell_size)
-	var cy: float = snapped(v.y, cell_size)
-	var cz: float = snapped(v.z, cell_size)
+	var c := _quantise(v, cell_size)
 	var keys: Array = []
-	for dx in [-cell_size, 0.0, cell_size]:
-		for dy in [-cell_size, 0.0, cell_size]:
-			for dz in [-cell_size, 0.0, cell_size]:
-				keys.append("%s,%s,%s" % [cx + dx, cy + dy, cz + dz])
+	for dx in [-1, 0, 1]:
+		for dy in [-1, 0, 1]:
+			for dz in [-1, 0, 1]:
+				keys.append(Vector3i(c.x + dx, c.y + dy, c.z + dz))
 	return keys
 
 
