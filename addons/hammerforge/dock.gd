@@ -1073,6 +1073,27 @@ func _on_section_toggled(expanded: bool, section_name: String) -> void:
 		_user_prefs.save()
 	if section_name == "Structure":
 		HFDockBrushHandler.refresh_structure_preview(self)
+	if section_name == "Performance" and expanded:
+		# Opened, so the numbers in it are however old the last look left them.
+		_update_perf_panel()
+
+
+## Is anybody actually looking at the Performance section?
+##
+## Its readouts are not label assignments. The vertex estimate walks every brush
+## and every face, the paint figure walks every layer, and with chunking on the
+## chunk count recollects the whole bake candidate set and the recommendation
+## measures the level bounds again. The levels that make that expensive are the
+## same ones that make the panel worth opening, so it used to cost the most on
+## exactly the scenes that could least afford it, collapsed or not.
+##
+## Collapsed counts as not looking, and so does sitting on another tab or in a
+## hidden dock.
+func _is_perf_panel_visible() -> bool:
+	var section = _all_sections.get("Performance")
+	if not section or not is_instance_valid(section):
+		return false
+	return section.is_expanded() and section.is_visible_in_tree()
 
 
 func set_keymap(km: HFKeymap) -> void:
@@ -2101,8 +2122,9 @@ func _process(_delta):
 	_perf_frame_counter += 1
 	if _perf_frame_counter >= 30:
 		_perf_frame_counter = 0
-		_update_perf_panel()
 		_update_perf_label()
+		if _is_perf_panel_visible():
+			_update_perf_panel()
 
 
 func _sync_paint_layers_from_root() -> void:

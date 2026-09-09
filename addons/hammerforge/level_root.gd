@@ -627,7 +627,7 @@ func _process(_delta: float) -> void:
 		return
 	_process_hflevel_saves()
 	if io_visualizer:
-		io_visualizer.process()
+		io_visualizer.process(_delta)
 	if subtract_preview and subtract_preview.is_enabled():
 		subtract_preview.process(_delta)
 
