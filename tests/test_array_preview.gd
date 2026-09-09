@@ -343,7 +343,7 @@ func test_the_ghost_leaves_with_the_level_it_was_drawn_in():
 
 	root.get_parent().remove_child(root)
 
-	assert_null(root.array_preview._container, "the overlay went with the level")
+	assert_null(root.array_preview._preview_container, "the overlay went with the level")
 
 
 func test_a_dock_with_no_level_draws_nothing_rather_than_erroring():

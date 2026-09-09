@@ -104,6 +104,7 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `hf_carve_system.gd` | `HFCarveSystem` | Boolean-subtract carve (progressive-remainder box slicing) |
 | `hf_io_visualizer.gd` | `HFIOVisualizer` | Entity I/O connection lines in viewport (ImmediateMesh) |
 | `hf_io_presets.gd` | `HFIOPresets` | Built-in and user-saved I/O connection presets with target-tag mapping |
+| `hf_preview_system.gd` | `HFPreviewSystem` | Base for the six overlay previews. Owns the container node, the `MeshInstance3D` pool, `ghost_material()`, `clear()`, `set_enabled()` and `destroy()`; each preview keeps only what it draws, what colour, and when there is nothing to draw. `_ensure_container()` is overridable for a preview whose meshes are named rather than indexed, and the base reaches the container through a non-virtual `_build_container()` so such an override cannot be re-entered |
 | `hf_subtract_preview.gd` | `HFSubtractPreview` | Live CSG cut overlay between subtract and additive brushes, with a wireframe AABB fallback (debounced, pooled) |
 | `hf_carve_preview.gd` | `HFCarvePreview` | Green wireframe preview of carve slice pieces before confirmation |
 | `hf_clip_preview.gd` | `HFClipPreview` | Clip-plane and retained-half preview before confirmation |
@@ -539,6 +540,6 @@ Unit tests use the [GUT](https://github.com/bitwes/Gut) framework and run headle
 | `test_selection_gesture.gd` | 40 | Native widget/Object Select ownership, modal Face Select, recovery, focus/scope guards, native duplicate/reparent repair, and Inspector/undo change tracking |
 | `test_viewport_outlines.gd` | 39 | Sparse semantic outlines, exact/composite entity collision, visibility/transforms, and shape-aware resize recovery |
 
-Full suite (verified in CI on September 9, 2026): **3,056 tests** across **159 scripts** (**3,049 passing** plus seven intentional no-assert safety tests; **15,945 assertions**).
+Full suite (verified in CI on September 9, 2026): **3,072 tests** across **160 scripts** (**3,065 passing** plus seven intentional no-assert safety tests; **16,000 assertions**).
 
 Tests use root shim scripts (dynamically created GDScript) to provide the LevelRoot interface without circular preload dependencies. Configuration in `.gutconfig.json`.

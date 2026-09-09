@@ -1,6 +1,6 @@
 @tool
 class_name HFClipPreview
-extends "hf_system.gd"
+extends "hf_preview_system.gd"
 ## Real-time preview showing the two resulting pieces from a clip operation,
 ## plus a translucent split plane.  Wireframe boxes show the two halves;
 ## a quad mesh shows the cut plane itself.
@@ -9,7 +9,6 @@ const DraftBrush = preload("../brush_instance.gd")
 const HFOutlineUtil = preload("../hf_outline_util.gd")
 const HFConvexClip = preload("../hf_convex_clip.gd")
 
-var _preview_container: Node3D
 var _piece_a_mesh: MeshInstance3D
 var _piece_b_mesh: MeshInstance3D
 var _plane_mesh: MeshInstance3D
@@ -26,33 +25,10 @@ func _init(p_root: Node3D = null) -> void:
 	super(p_root)
 	_enabled = false
 	# Wireframe for the two resulting pieces — cyan
-	_wire_material = StandardMaterial3D.new()
-	_wire_material.albedo_color = Color(0.2, 0.8, 1.0, 0.7)
-	_wire_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_wire_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_wire_material.no_depth_test = true
-
-	# Semi-transparent plane showing the cut surface — orange
-	_plane_material = StandardMaterial3D.new()
-	_plane_material.albedo_color = Color(1.0, 0.6, 0.1, 0.3)
-	_plane_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_plane_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_plane_material.no_depth_test = true
-	_plane_material.cull_mode = BaseMaterial3D.CULL_DISABLED
-
-
-func set_enabled(value: bool) -> void:
-	if value == _enabled:
-		return
-	_enabled = value
-	if _enabled:
-		_ensure_container()
-	else:
-		clear()
-
-
-func is_enabled() -> bool:
-	return _enabled
+	_wire_material = ghost_material(Color(0.2, 0.8, 1.0, 0.7))
+	# Semi-transparent plane showing the cut surface — orange, and drawn from both
+	# sides because the cut is looked at from whichever side you are standing on.
+	_plane_material = ghost_material(Color(1.0, 0.6, 0.1, 0.3), true)
 
 
 ## Show preview for a clip operation on the given brush.
@@ -74,27 +50,17 @@ func update_split(split_pos: float) -> void:
 ## Hide the preview.
 func clear() -> void:
 	_brush_id = ""
-	if _piece_a_mesh and is_instance_valid(_piece_a_mesh):
-		_piece_a_mesh.visible = false
-	if _piece_b_mesh and is_instance_valid(_piece_b_mesh):
-		_piece_b_mesh.visible = false
-	if _plane_mesh and is_instance_valid(_plane_mesh):
-		_plane_mesh.visible = false
-	if _preview_container and is_instance_valid(_preview_container):
-		_preview_container.visible = false
+	# The three meshes are in the pool like any other preview's, so hiding them is
+	# the base's job even though this one addresses them by name.
+	super()
 
 
 ## Free all resources immediately.
 func destroy() -> void:
-	if _preview_container and is_instance_valid(_preview_container):
-		if _preview_container.get_parent():
-			_preview_container.get_parent().remove_child(_preview_container)
-		_preview_container.free()
-	_preview_container = null
 	_piece_a_mesh = null
 	_piece_b_mesh = null
 	_plane_mesh = null
-	_enabled = false
+	super()
 
 
 func _rebuild() -> void:
@@ -142,10 +108,10 @@ func _rebuild() -> void:
 	# from the brush's own global transform and the plane from world bounds, while
 	# the container hangs off LevelRoot — so a level whose root has been moved or
 	# turned drew the cut a whole root transform away from the brush being cut.
-	_piece_a_mesh.mesh = _lines_mesh(HFOutlineUtil.face_boundary_lines(front))
+	_piece_a_mesh.mesh = HFOutlineUtil.line_mesh(HFOutlineUtil.face_boundary_lines(front))
 	_piece_a_mesh.global_transform = xform
 	_piece_a_mesh.visible = true
-	_piece_b_mesh.mesh = _lines_mesh(HFOutlineUtil.face_boundary_lines(back))
+	_piece_b_mesh.mesh = HFOutlineUtil.line_mesh(HFOutlineUtil.face_boundary_lines(back))
 	_piece_b_mesh.global_transform = xform
 	_piece_b_mesh.visible = true
 
@@ -156,40 +122,19 @@ func _rebuild() -> void:
 	_preview_container.visible = true
 
 
-## Wrap a flat list of line-segment endpoints into a drawable mesh.
-static func _lines_mesh(points: PackedVector3Array) -> ArrayMesh:
-	var mesh := ArrayMesh.new()
-	if points.size() < 2:
-		return mesh
-	var arrays := []
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = points
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_LINES, arrays)
-	return mesh
+func _preview_name() -> String:
+	return "ClipPreview"
 
 
+## Two wireframe halves and the cut between them, made on first use.
 func _ensure_container() -> void:
-	if _preview_container and is_instance_valid(_preview_container):
-		_preview_container.visible = true
-		return
-	_preview_container = Node3D.new()
-	_preview_container.name = "ClipPreview"
-	root.add_child(_preview_container)
-
-	_piece_a_mesh = MeshInstance3D.new()
-	_piece_a_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_piece_a_mesh.material_override = _wire_material
-	_preview_container.add_child(_piece_a_mesh)
-
-	_piece_b_mesh = MeshInstance3D.new()
-	_piece_b_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_piece_b_mesh.material_override = _wire_material
-	_preview_container.add_child(_piece_b_mesh)
-
-	_plane_mesh = MeshInstance3D.new()
-	_plane_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_plane_mesh.material_override = _plane_material
-	_preview_container.add_child(_plane_mesh)
+	_build_container()
+	if not is_instance_valid(_piece_a_mesh):
+		_piece_a_mesh = _make_mesh(_wire_material)
+	if not is_instance_valid(_piece_b_mesh):
+		_piece_b_mesh = _make_mesh(_wire_material)
+	if not is_instance_valid(_plane_mesh):
+		_plane_mesh = _make_mesh(_plane_material)
 
 
 ## Build a translucent quad representing the split plane.
