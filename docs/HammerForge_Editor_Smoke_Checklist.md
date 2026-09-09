@@ -294,6 +294,12 @@ It writes one PNG per tab under `user://console_preview/`.
 - Drag a single wall away from the others, then Re-hollow. Confirm the room rebuilds at its old placement instead of following the one wall.
 - Press **Ctrl+Z** and confirm the previous walls come back.
 - Click a wall and press **Detach**. Confirm nothing is deleted, the button goes back to **Hollow (Ctrl+H)**, and clicking a wall again leaves it there.
+- Hollow a fresh box. Drag one wall well away from the others, then click another wall. Confirm the row says one wall has been reworked by hand and names Detach.
+- Change the Wall value and press **Re-hollow**. Confirm nothing rebuilds and the status line asks you to press it again; press it again and confirm the rebuild happens and the message clears.
+- Rework a wall again, press Re-hollow once (warned), then change the Wall value and press again. Confirm the changed thickness has to be agreed to a second time as well.
+- Resize a wall without moving it, then click another wall. Confirm the row still counts it. Apply a different material to a wall and confirm the same.
+- Select every wall and drag the whole room across the level. Confirm the row stays quiet and Re-hollow goes ahead on the first press.
+- Rework a wall, press Re-hollow once to see the warning, then press **Detach**. Confirm the message goes and nothing is deleted.
 
 ### 7c-4. Precision Cutting (Clip and Carve on Any Brush)
 - Draw a box, rotate it 30 degrees (`R`), then press **Shift+X**. Confirm the cyan preview shows two turned pieces, and that committing leaves two brushes that both keep the rotation.
