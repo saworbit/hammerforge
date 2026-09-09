@@ -530,6 +530,8 @@ and run".
 ### Known limits of the current live-generator pass
 - Only the arch is live. Hollow and the array modes have their own records and
   their own shapes; this establishes the pattern before spreading it.
+  **Both are live now**, each through its own record: arrays by the live-arrays
+  wave and hollow by the live-hollow wave below.
 - Hand edits to a generated piece are lost on the next rebuild. Detach is the
   answer and is offered beside Update, but nothing warns that edits exist.
 - Generators cannot nest, and none depends on other geometry.
@@ -562,7 +564,8 @@ and run".
 
 ### Known limits of the current structure pass
 - Only the four described generators are live. Hollow and the array modes still
-  have their own records and their own shapes.
+  have their own records and their own shapes — but they are live too now, each
+  through its own record rather than through `HFGeneratorSystem`.
 - The warning is refreshed when the selection changes, not while a piece stays
   selected and is edited under it.
 - A dome is faceted and its wall thickness is measured radially, so panels near
@@ -851,6 +854,38 @@ and run".
 - The majority is still counted over copies rather than volume, so an array of two
   has no majority to speak of.
 
+## Done (Live Hollow — Shelling the Same Solid Again — September 2026)
+- Hollow was the last operation with no way back to its own numbers short of
+  Ctrl+Z: it replaced a solid with walls and forgot the solid, so a room whose
+  walls came out too thin could only be undone. Selecting any wall now turns the
+  Hollow row into an editor for that hollow — its own thickness, a **Re-hollow**
+  button, and **Detach** beside it.
+- **The record keeps the solid**, which is the one thing that could not be
+  recovered from the walls themselves. Everything else is derived.
+- **The walls are only replaced once the new ones are known good.** A re-shell
+  rebuilds the solid and plans the new walls on it *before* touching the old ones,
+  so a thickness the brush cannot take leaves the level exactly as it was — the
+  "validate replacement geometry before deleting the original" rule, applied to an
+  operation that had nothing to validate against before.
+- **A room dragged across the level re-shells where it now stands.** Each wall
+  sits at its own centroid rather than at the solid's origin, so the record keeps
+  where each wall was put and the move is read from the delta they share. Walls
+  moved one at a time disagree, which is editing rather than relocating, and the
+  placement stays. A record written without wall placements answers "no move",
+  so nothing needs migrating.
+- `HFTransformSystem.same_transform()` is now the one definition of "these two
+  transforms are the same place", read by the hollow's walls and the array's
+  copies both.
+- 27 new tests (`tests/test_live_hollow.gd`).
+
+### Known limits of the live-hollow pass
+- Hand edits to a wall are overwritten by the next Re-hollow with no warning. The
+  array section counts its edited copies and asks twice; hollow does not yet.
+- The recorded solid is the solid as it was. Resizing the room means Detach and
+  start again, because there is nothing that edits the source through the walls.
+- Only one hollow per set of walls, and hollowing a wall of a hollow makes a
+  second, unrelated record rather than nesting.
+
 ## Future (Wave 3 -- Polish)
 - Multiple simultaneous cordons.
 - Multi-tool presets for common workflows.
@@ -894,7 +929,7 @@ Completion is responsibility-based rather than tied to an arbitrary line count. 
 - Headless editor tests retain the complete tool graph, with focused export-playtest coverage guarding the runtime boundary.
 
 ### Risk-focused test gaps
-The current suite covers 3,081 tests across 160 scripts, including the large brush, bake, paint, vertex, transform, generator, baker, brush-instance, and map-I/O systems. The issue tracker is clear as of September 8, 2026. No known limitation is currently untracked and uncovered.
+The current suite covers 3,108 tests across 161 scripts, including the large brush, bake, paint, vertex, transform, generator, baker, brush-instance, and map-I/O systems. The issue tracker is clear as of September 8, 2026. No known limitation is currently untracked and uncovered.
 
 The last one on this list is **resolved**: a `.map` entity property value
 containing a quote used to come back truncated, silently, because four quotes is

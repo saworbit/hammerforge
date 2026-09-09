@@ -1197,7 +1197,14 @@ func can_clip_brush(brush_id: String, axis: int, split_pos: float) -> HFOpResult
 ## it, so this is the same progressive remainder carve uses, with the brush
 ## supplying its own planes. One face gives one wall, which means a box gives six
 ## and a cylinder gives a tube.
-func hollow_brush_by_id(brush_id: String, wall_thickness: float) -> HFOpResult:
+## Shell a solid into walls, and remember the solid so it can be shelled again.
+##
+## `hollow_id` is passed only by `update_hollow()`, which is re-shelling a hollow
+## that already exists and has to keep its identity across the rebuild the way an
+## array keeps its own.
+func hollow_brush_by_id(
+	brush_id: String, wall_thickness: float, hollow_id: String = ""
+) -> HFOpResult:
 	if brush_id == "":
 		return _op_fail("Hollow: no brush ID provided")
 	if root.has_method("tag_full_reconcile"):
@@ -1214,7 +1221,14 @@ func hollow_brush_by_id(brush_id: String, wall_thickness: float) -> HFOpResult:
 	var infos: Array = []
 	for wall_faces in plan["walls"]:
 		infos.append(_piece_info_from_faces(draft, wall_faces))
-	return _replace_brush_with_pieces(draft, brush_id, infos, "Hollow", "walls")
+	# What the solid was, taken before the solid stops existing. This is the whole
+	# of what makes a hollow live: without the original there is nothing to shell
+	# again at a different thickness.
+	var source_info: Dictionary = get_brush_info_from_node(draft)
+	var result: HFOpResult = _replace_brush_with_pieces(draft, brush_id, infos, "Hollow", "walls")
+	if result.ok:
+		_record_hollow(source_info, wall_thickness, infos, hollow_id)
+	return result
 
 
 ## Work out the walls a hollow would produce, and whether it can happen at all.
@@ -1942,6 +1956,168 @@ func _justify_face(face: FaceData, mode: String, uv_min: Vector2, uv_max: Vector
 			var shift = Vector2(0.5, 0.5) - new_center
 			face.uv_offset = face.uv_offset * scale_uniform + shift
 			face.custom_uvs = PackedVector2Array()
+
+
+# ---------------------------------------------------------------------------
+# Hollow records
+# ---------------------------------------------------------------------------
+
+## hollow_id -> {hollow_id, thickness, source, wall_ids}
+##
+## `source` is the brush info of the solid the walls were shelled out of, which is
+## the only thing here that could not be recovered from the walls themselves.
+var _hollows: Dictionary = {}
+
+
+func _record_hollow(
+	source_info: Dictionary, thickness: float, wall_infos: Array, hollow_id: String = ""
+) -> void:
+	var record_id := hollow_id
+	if record_id == "":
+		record_id = "hol_%d" % Time.get_ticks_usec()
+	var wall_ids := PackedStringArray()
+	# Each wall stands at its own centroid rather than at the solid's origin, so
+	# telling a room that has been dragged from walls moved one at a time needs
+	# where each wall was put, not just which walls there are.
+	var wall_transforms: Array = []
+	for info in wall_infos:
+		var wall_id := str(info.get("brush_id", ""))
+		if wall_id == "":
+			continue
+		wall_ids.append(wall_id)
+		wall_transforms.append(info.get("transform", Transform3D.IDENTITY))
+		var wall = _brush_cache.get(wall_id)
+		if is_instance_valid(wall):
+			wall.set_meta("hollow_instance_of", record_id)
+	if wall_ids.is_empty():
+		return
+	_hollows[record_id] = {
+		"hollow_id": record_id,
+		"thickness": thickness,
+		"source": source_info.duplicate(true),
+		"wall_ids": Array(wall_ids),
+		"wall_transforms": wall_transforms,
+	}
+
+
+## Shell the same solid again at a different thickness, keeping the same hollow.
+##
+## The solid is rebuilt and the new walls are planned on it *before* the old walls
+## are touched, so a thickness this brush cannot take leaves the level exactly as
+## it was rather than deleting the walls and failing to replace them.
+func update_hollow(hollow_id: String, thickness: float) -> HFOpResult:
+	if not _hollows.has(hollow_id):
+		return _op_fail("Hollow: that hollow is no longer in the level")
+	var record: Dictionary = _hollows[hollow_id]
+	var source_info: Dictionary = (record["source"] as Dictionary).duplicate(true)
+	source_info["brush_id"] = _next_brush_id()
+	# A hollowed room dragged across the level rebuilds where it now stands.
+	# Rebuilding it back where it was made is the surprise the structure records'
+	# relocation vote exists to prevent, and the walls answer it without a vote:
+	# every one of them was created at the solid's own transform, so they either
+	# still agree on one placement or they have been edited individually.
+	var placement: Variant = _hollow_placement(record)
+	if placement != null:
+		source_info["transform"] = placement
+	var source = create_brush_from_info(source_info)
+	if not is_instance_valid(source):
+		return _op_fail("Hollow: the original solid could not be rebuilt")
+	var source_id := str(source_info["brush_id"])
+	var plan: Dictionary = _plan_hollow(source as DraftBrush, thickness)
+	var check: HFOpResult = plan["result"]
+	if not check.ok:
+		# Put the level back the way it was: the walls were never touched.
+		delete_brush_by_id(source_id)
+		return _op_fail(check.message, check.fix_hint)
+	for wall_id in record["wall_ids"]:
+		delete_brush_by_id(str(wall_id))
+	_hollows.erase(hollow_id)
+	return hollow_brush_by_id(source_id, thickness, hollow_id)
+
+
+## Where the solid should be rebuilt, when every surviving wall agrees on the
+## move it has been given.
+##
+## Answers with nothing when they disagree, which is walls moved one at a time —
+## editing rather than relocating, so the placement stays where it was. Also
+## nothing for a record written before wall placements were kept, which is what
+## makes those records load and re-shell with no migration.
+func _hollow_placement(record: Dictionary) -> Variant:
+	var ids: Array = record.get("wall_ids", [])
+	var placed: Array = record.get("wall_transforms", [])
+	if placed.size() != ids.size() or ids.is_empty():
+		return null
+	var shared: Variant = null
+	for i in ids.size():
+		var wall = _brush_cache.get(str(ids[i]))
+		if not is_instance_valid(wall):
+			continue
+		var was: Transform3D = placed[i]
+		var delta: Transform3D = wall.global_transform * was.affine_inverse()
+		if shared == null:
+			shared = delta
+		elif not HFTransformSystem.same_transform(shared, delta):
+			return null
+	if shared == null:
+		return null
+	var source_transform: Transform3D = (record["source"] as Dictionary).get(
+		"transform", Transform3D.IDENTITY
+	)
+	return (shared as Transform3D) * source_transform
+
+
+## Forget a hollow's record, leaving its walls as ordinary brushes.
+func detach_hollow(hollow_id: String) -> bool:
+	if not _hollows.has(hollow_id):
+		return false
+	for wall_id in _hollows[hollow_id]["wall_ids"]:
+		var wall = _brush_cache.get(str(wall_id))
+		if is_instance_valid(wall) and wall.has_meta("hollow_instance_of"):
+			wall.remove_meta("hollow_instance_of")
+	_hollows.erase(hollow_id)
+	return true
+
+
+func hollow_for_id(hollow_id: String) -> Variant:
+	return _hollows.get(hollow_id, null)
+
+
+## The hollow that owns the first brush in a selection that belongs to one.
+func hollow_for_selection(brush_ids: Array) -> Variant:
+	for brush_id in brush_ids:
+		var brush = _brush_cache.get(str(brush_id))
+		if not is_instance_valid(brush):
+			continue
+		var record_id := str(brush.get_meta("hollow_instance_of", ""))
+		if record_id != "" and _hollows.has(record_id):
+			return _hollows[record_id]
+	return null
+
+
+## Every hollow record, for state capture.
+func capture_hollows() -> Array:
+	var out: Array = []
+	for hollow_id in _hollows:
+		out.append((_hollows[hollow_id] as Dictionary).duplicate(true))
+	return out
+
+
+## Put the records back and re-tag the walls, which carry no tag of their own
+## through a brush info.
+func restore_hollows(records: Array) -> void:
+	_hollows.clear()
+	for entry in records:
+		if not (entry is Dictionary):
+			continue
+		var record: Dictionary = (entry as Dictionary).duplicate(true)
+		var hollow_id := str(record.get("hollow_id", ""))
+		if hollow_id == "":
+			continue
+		_hollows[hollow_id] = record
+		for wall_id in record.get("wall_ids", []):
+			var wall = _brush_cache.get(str(wall_id))
+			if is_instance_valid(wall):
+				wall.set_meta("hollow_instance_of", hollow_id)
 
 
 # ---------------------------------------------------------------------------

@@ -72,6 +72,28 @@ static func reflection_basis(axis_index: int) -> Basis:
 ## The mirror half is the one that matters most: a negative determinant inverts
 ## the winding of every face built through the basis, and that does not look wrong
 ## in the viewport. It looks wrong in the bake.
+## How far apart two transforms may be and still be the same place.
+##
+## Positions in a level are whole units and the arithmetic that places a piece is
+## a couple of multiplications, so anything past a thousandth of a unit was
+## somebody moving it.
+const PLACEMENT_EPSILON := 0.001
+
+
+## Whether two transforms stand in the same place, facing the same way.
+##
+## The one definition of that question, asked by anything that has to tell a
+## piece somebody moved from a piece that is where it was put — an array's copies
+## and a hollow's walls both.
+static func same_transform(a: Transform3D, b: Transform3D, epsilon := PLACEMENT_EPSILON) -> bool:
+	if a.origin.distance_to(b.origin) > epsilon:
+		return false
+	for axis in 3:
+		if a.basis[axis].distance_to(b.basis[axis]) > epsilon:
+			return false
+	return true
+
+
 static func is_rotation_basis(basis: Basis) -> bool:
 	if basis.determinant() <= 0.0:
 		return false

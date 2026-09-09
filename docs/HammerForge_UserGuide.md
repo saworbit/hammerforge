@@ -122,7 +122,7 @@ When you activate an advanced tool for the first time, a floating overlay appear
 | Extrude | E/U/J keys | Select brush → click face → drag → confirm |
 | Carve | Ctrl+Shift+R | Select brushes → preview (green wireframe) → confirm → delete fragments |
 | Clip | Shift+X | Select → preview (cyan wireframe + orange plane) → confirm → split |
-| Hollow | Ctrl+H | Select solid → preview (yellow wireframe walls) → confirm → hollow |
+| Hollow | Ctrl+H | Select solid → preview (yellow wireframe walls) → confirm → hollow. Select a wall afterwards to **Re-hollow** at a new thickness |
 | Measure | M key | Click start → click end → Shift+Click to chain → Ctrl+Click for snap ref |
 | Decal | N key | Click surface → resize/rotate → assign material |
 | Surface Paint | Shift+P toggle | Toggle paint → select tool → click cells |
@@ -212,6 +212,23 @@ If the thickness leaves no room inside, hollow says so and suggests one that fit
 And it will refuse a sphere, a capsule, an ellipsoid or a torus: those are built
 from thousands of tiny faces, so shelling one would make thousands of brushes,
 which is never what anyone means by hollowing a ball.
+
+**The walls come out too thin? Shell it again.** Select any wall of a hollowed
+brush and the row becomes an editor for it: the thickness you used comes back,
+**Hollow** becomes **Re-hollow**, and **Detach** appears beside it. Change the
+number, press Re-hollow, and the same solid is shelled again at the new
+thickness. Detach keeps the walls and forgets the hollow, which is what you want
+once the room is the shape you meant and you would rather edit the walls
+themselves.
+
+A room you have dragged or turned since hollowing it re-shells **where it now
+stands**. Move the walls one at a time, though, and they stop agreeing about
+where the room is — that reads as editing rather than moving, and the re-shell
+goes back to the placement it had.
+
+> A thickness the brush cannot take is refused before anything is deleted, so a
+> Re-hollow that will not work costs you nothing. What it does not do is warn you
+> about walls you have reworked by hand: those are rebuilt over. Detach first.
 
 ### The Structure section
 

@@ -437,6 +437,9 @@ var cordon_from_sel_btn: Button = null
 # Wave 2 UI controls
 var hollow_thickness: SpinBox = null
 var hollow_btn: Button = null
+var hollow_detach_btn: Button = null
+## The hollow the Hollow row is editing, empty while it is describing a new one.
+var _active_hollow_id: String = ""
 var move_floor_btn: Button = null
 var move_ceiling_btn: Button = null
 var tie_entity_btn: Button = null
@@ -2625,6 +2628,7 @@ func set_selection_nodes(nodes: Array) -> void:
 	# Selecting part of an existing array turns the section into an editor for it;
 	# this also redraws the ghost, which follows the selection.
 	refresh_array_section()
+	refresh_hollow_section()
 	set_selection_count(nodes.size())
 	# Mark hints dirty so selection-dependent buttons update
 	_hints_dirty = true
@@ -3156,6 +3160,16 @@ func _on_restore_cuts():
 
 func _on_hollow() -> void:
 	HFDockBrushHandler.on_hollow(self)
+
+
+func _on_detach_hollow() -> void:
+	HFDockBrushHandler.on_detach_hollow(self)
+
+
+## Selecting a wall of a hollowed brush turns the Hollow row from a command into
+## an editor for that hollow: its own thickness, a Re-hollow button, and Detach.
+func refresh_hollow_section() -> void:
+	HFDockBrushHandler.refresh_hollow_section(self)
 
 
 func _on_move_to_floor() -> void:
