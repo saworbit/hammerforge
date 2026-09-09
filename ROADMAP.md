@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: September 9, 2026
+Last updated: September 10, 2026
 
 This roadmap is a directional plan. Items may change based on user feedback.
 

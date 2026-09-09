@@ -468,5 +468,5 @@ Run `godot --headless --import --path .` first, then re-run the test command.
 
 <p align="center">
   <strong>MIT License</strong><br>
-  <sub>Built for Godot 4.7+ | Last updated September 9, 2026</sub>
+  <sub>Built for Godot 4.7+ | Last updated September 10, 2026</sub>
 </p>

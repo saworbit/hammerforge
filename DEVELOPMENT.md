@@ -1,6 +1,6 @@
 # Development Guide
 
-Last updated: September 9, 2026
+Last updated: September 10, 2026
 
 This document covers local setup, codebase structure, and how to test features.
 
