@@ -187,6 +187,26 @@ The format is based on Keep a Changelog, and this project follows semantic versi
     copy, undo, and what survives a state restore.
 
 ### Fixed
+- **Deleting a named entity left the connections that used its authored name.**
+  An entity has two addresses — its node name and its authored `entity_name` — and
+  an output can be aimed at either. Deletion only ever cleaned up the node name, so
+  a connection aimed at the alias stayed on its source, pointing at nothing, and
+  would quietly start addressing an unrelated entity the moment somebody reused the
+  name.
+  - Both are cleaned now, through one `cleanup_connections_for_deleted()`.
+  - **A name some other live node still answers to is left alone.** Duplication and
+    prefab placement both produce two entities sharing an authored name, and
+    cutting the survivor's connections would be worse than the bug being fixed. The
+    check is deliberately wider than `find_entities_by_name()`, which resolves a
+    brush entity by node name only though the runtime also uses its authored name:
+    being wrong there only ever keeps a connection.
+  - **The brush side had the same defect** and has had it longer, since brush
+    entity names started persisting in #149. Same helper, called from
+    `_cleanup_brush_references()`.
+  - **Coverage** (`tests/test_reference_cleanup.gd`): a connection on the authored
+    name, one on each address, a shared authored name surviving, an entity with no
+    authored name, and the brush-entity case. Three fail against the old code, and
+    disabling the ambiguity check alone fails the shared-name test.
 - **The baker read `get_meshes()` as a list and threw the placement away.** Godot 4
   returns a flat two-element array from `CSGShape3D.get_meshes()` — the node's
   `Transform3D` first, then its root `Mesh`. The baker walked it as a list of
