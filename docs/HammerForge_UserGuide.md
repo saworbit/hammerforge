@@ -521,6 +521,10 @@ for more than the ceiling and the ghost disappears and the line tells you the
 number you asked for, so you know which control to turn back. **Create Array**
 refuses the same arrays for the same reason.
 
+**Ctrl+Z takes an array back out.** All three layouts are one undo step, so an
+array you did not want goes away in a single press rather than one copy at a
+time.
+
 > `R` is also the Rect tool in paint mode. Paint mode gets first claim on it, and
 > the whole rotate/flip group is skipped while paint mode is on, so the two never
 > fight over the key.

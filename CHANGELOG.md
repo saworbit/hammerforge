@@ -5,6 +5,54 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **Create Radial Array could not be undone.** Ctrl+Z reached past it and undid
+  whatever you did before it, while the new copies stayed in the scene.
+  - `EditorUndoRedoManager.add_do_method()` takes an object, a method name and
+    varargs, and GDScript cannot spread an array into varargs, so
+    `HFUndoHelper.register_action()` unrolls the call by hand and stops at five
+    arguments. `create_radial_array` passes six. The `match` fell through with no
+    do operation registered, and `commit()` had already bailed out to a plain
+    call before it got that far.
+  - Past the unroll it now registers the result instead of the call: run the
+    method, snapshot the state, and make that snapshot the do operation. That is
+    the same kind of restore the undo side already uses, so redo has the same
+    fidelity as undo, and it is the path stepping commands like rotate and nudge
+    already take. No ceiling was raised, so the next six argument command is
+    covered without another edit.
+  - `create_radial_array` was the only command over the limit. All 43 method
+    names dispatched through the commit sites were checked against their
+    `LevelRoot` signatures.
+  - **Coverage** (`tests/test_undo_collation.gd`): a six argument command
+    registers an entry that has a do operation, and a radial array undoes and
+    redoes whole. The undo test asserts the array exists before undoing it,
+    because the old path never built it through `register_action()` and the test
+    passed for the wrong reason at first.
+    `test_transform_undo_methods_stay_within_the_helper_argument_limit` guarded
+    the ceiling this removes and is gone; the rename check it shared is already
+    done by `test_level_root_exposes_the_methods_undo_dispatches_by_name`.
+- **Move the LevelRoot node and new brushes and restored entities landed
+  somewhere else.** A `Node3D` outside the scene tree has no parent to measure
+  against, so setting `global_position` or `global_transform` on it only writes
+  the local one. The node then lands wherever its container puts it, shifted by
+  the LevelRoot transform.
+  - **Clicking to place a brush.** `place_brush()` set the position before the
+    brush went into the draft or pending container. With the root at (50, 0, 50)
+    a click on the origin made a brush at (50, 8, 50), and `_record_last_brush()`
+    stored that same wrong point, so the grid followed the brush to the wrong
+    place as well.
+  - **Restoring an entity.** `restore_entity_from_info()` and
+    `create_entity_from_map()` assigned the transform before parenting, so undo,
+    redo, state restore, prefab placement and map import each shifted every
+    entity by the root transform. Godot logged the out-of-tree transform error
+    each time.
+  - Each now assigns after the `add_child`. `restore_entity_from_info()` does it
+    before it emits `entity_added`, so anything listening sees the entity where
+    it belongs. This is the order `create_brush_from_info()` and
+    `create_default_spawn()` already used.
+  - **Coverage** (`tests/test_brush_system.gd`, `tests/test_entity_props.gd`): a
+    click and an entity restore with the root translated away from the origin.
+    All three cases fail against the old code with the exact coordinates from the
+    reports.
 - **You drew on a different plane from the grid you were looking at.** Having
   fixed where the overlays *draw*, the other half of the same question was
   whether the editor *acts* where it draws. It did not, and not only off the
