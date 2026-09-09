@@ -18,6 +18,10 @@ That is not something I feel I need to apologise for, and it is not something I 
 selling either. It is just how this got made. You should be able to find that out
 without working it out from the MCP server sitting in `addons/godot_mcp`.
 
+That includes the writing. Some of the commit messages and parts of these docs
+were drafted with help, and it shows in places. I would rather say so here than
+have you spot it and wonder what else went unmentioned.
+
 ## Why I am comfortable with it
 
 HammerForge exists because placing every vertex by hand is a slow way to spend an
