@@ -187,6 +187,22 @@ The format is based on Keep a Changelog, and this project follows semantic versi
     copy, undo, and what survives a state restore.
 
 ### Fixed
+- **A prefab could wire its copy's outputs to the entities it was built from.**
+  `HFPrefab.instantiate()` remapped I/O by turning each old node name into the new
+  one and then looking that name back up. The lookup resolves an authored
+  `entity_name` as well as a node name, so an entity of the same prefab whose
+  authored name matched a later one's generated node name was returned first: it
+  was remapped twice, and the entity it stood in for was never remapped at all and
+  kept its outputs aimed outside the instance. The prefab looked right in the scene
+  tree and its wiring was wrong.
+  - It already had direct references to every entity it had just created. The
+    remap walks those instead, so each is remapped exactly once and no name lookup
+    is involved.
+  - **Coverage** (`tests/test_prefab.gd`): a two-entity prefab whose first entity
+    is renamed on the way in and carries an authored name matching the second one's
+    node name, asserting the second one's output lands inside the new instance; and
+    the ordinary case with no alias in the way. The first fails against the old
+    code, keeping the output aimed at the entity the prefab was built from.
 - **Deleting a named entity left the connections that used its authored name.**
   An entity has two addresses — its node name and its authored `entity_name` — and
   an output can be aimed at either. Deletion only ever cleaned up the node name, so
