@@ -102,16 +102,27 @@ jobs:
   unit-tests:
     name: GUT Unit Tests
     runs-on: ubuntu-latest
-    # Only the push-to-main run writes the totals back; a pull request run has
-    # nothing to push to and leaves the documents alone.
+    # Nothing here writes with the workflow token any more. The counts commit
+    # goes out over a deploy key, and only ever to a pull request's own branch.
     permissions:
-      contents: write
+      contents: read
     env:
       GODOT_VERSION: "4.7-stable"
+      # A pull request from a fork gets no secrets and has no branch here to
+      # write to, so the counts steps below sit out those runs.
+      OWN_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
     steps:
-      # persist-credentials stays on here, unlike the other jobs: the counts
-      # step below pushes with this token.
+      # On this repository's own pull requests, check out the head branch
+      # rather than the merge commit, and authenticate with the deploy key:
+      # the counts commit below has to land on that branch and has to start a
+      # run of its own. A GITHUB_TOKEN push raises no workflow event, which
+      # would leave the new head carrying no checks and the pull request
+      # unmergeable for good. Every other run is an ordinary read-only
+      # checkout.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 # zizmor: ignore[artipacked]
+        with:
+          ref: ${{ env.OWN_PR == 'true' && github.event.pull_request.head.ref || '' }}
+          ssh-key: ${{ env.OWN_PR == 'true' && secrets.HF_COUNTS_DEPLOY_KEY || '' }}
 
       - name: Download Godot
         run: |
@@ -128,19 +139,22 @@ jobs:
           set -o pipefail
           godot --headless -s res://addons/gut/gut_cmdln.gd --path . 2>&1 | tee gut.log
 
-      # The five documents that quote the size of the suite go stale on any pull
-      # request that adds a test. CI has just measured them, so CI writes them
-      # down rather than asking every contributor to.
+      # The five documents that quote the size of the suite go stale on any
+      # pull request that adds a test. CI has just measured the suite, so CI
+      # writes the numbers down rather than asking every contributor to.
       - name: Update published test counts
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: env.OWN_PR == 'true'
         run: python3 tools/update_test_counts.py --gut-log gut.log --write
 
-      - name: Commit updated counts
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      - name: Commit the counts to this pull request
+        if: env.OWN_PR == 'true'
+        env:
+          BRANCH: ${{ github.event.pull_request.head.ref }}
         run: |
-          # Scoped to exactly the documents update_test_counts.py rewrites. This
-          # was `git add -A`, which in c121f50 swept the 73 MB Godot download
-          # still sitting in the workspace into a commit on main.
+          # Scoped to exactly the documents update_test_counts.py rewrites.
+          # This was `git add -A` against a workspace still holding the 75 MB
+          # Godot download unpacked above, which is how c121f50 put that zip
+          # on main.
           DOCS=(README.md docs/features.md DEVELOPMENT.md HammerForge_SPEC.md ROADMAP.md)
           if git diff --quiet -- "${DOCS[@]}"; then
             echo "Counts already current, nothing to commit."
@@ -149,19 +163,21 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -- "${DOCS[@]}"
-          # [skip ci] plus the fact that a GITHUB_TOKEN push raises no workflow
-          # event: this cannot start a run that writes the counts again.
-          git commit -m "Update published test counts [skip ci]"
-          # Another merge may have landed while the suite was running, which
-          # would make this push non-fast-forward. Rebase onto whatever main is
-          # now and try once more rather than failing a green build over it.
-          for attempt in 1 2 3; do
-            if git push origin HEAD:main; then
-              exit 0
-            fi
-            echo "Push rejected, rebasing onto main (attempt $attempt)."
-            git fetch origin main
-            git rebase origin/main || { git rebase --abort; exit 1; }
-          done
-          echo "Could not push the updated counts after three attempts."
-          exit 1
+          git commit -m "Update published test counts"
+          # Deliberately no [skip ci]: this push must start a run, so the new
+          # head commit carries the checks the branch ruleset requires. It
+          # cannot loop, because that run measures the same suite, finds the
+          # numbers already written, and pushes nothing.
+          git push origin "HEAD:${BRANCH}"
+
+      # Two pull requests that each add tests can each write a number that was
+      # correct when it was measured, and main ends up between them. The next
+      # pull request that touches the suite writes the true figure, since the
+      # script writes what it measured rather than a delta -- so this reports
+      # rather than fails.
+      - name: Report drift in main's published counts
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          if ! python3 tools/update_test_counts.py --gut-log gut.log --check; then
+            echo "::warning::Published test counts on main are stale. The next pull request that changes the suite will correct them."
+          fi
