@@ -1546,6 +1546,24 @@ func duplicator_for_selection(brush_ids: Array) -> Variant:
 	return brush_system.duplicator_for_selection(brush_ids)
 
 
+## How many copies of an array have been dragged off the placement it puts them
+## at. What the dock says out loud before an Update moves them back.
+func displaced_array_copies(duplicator_id: String) -> int:
+	var dup = brush_system.duplicator_for_id(duplicator_id)
+	if dup == null:
+		return 0
+	return dup.displaced_copy_ids(brush_system).size()
+
+
+## Whether an array's copies have all been left behind by a source that moved,
+## rather than dragged about one at a time.
+func array_copies_follow_a_moved_source(duplicator_id: String) -> bool:
+	var dup = brush_system.duplicator_for_id(duplicator_id)
+	if dup == null:
+		return false
+	return dup.copies_follow_a_moved_source(brush_system)
+
+
 func _make_brush_material(operation: int, solid: bool = false, unshaded: bool = false) -> Material:
 	return brush_system._make_brush_material(operation, solid, unshaded)
 

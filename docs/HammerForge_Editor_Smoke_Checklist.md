@@ -278,6 +278,10 @@ It writes one PNG per tab under `user://console_preview/`.
 - Click a copy and press **Detach**. Confirm nothing is deleted, the button goes back to **Create Array**, and Detach disappears. Click a copy again and confirm the section stays on Create.
 - Make another array, click a copy, and press **Remove Array**. Confirm the copies go, the original stays, and there is no "not a duplicator source" message.
 - Select an unrelated brush and confirm the section returns to **Create Array**.
+- Make a linear array of four. Drag one copy well off the row, then click another copy. Confirm the section says one copy has been moved by hand and names Detach.
+- Raise the count and press **Update Array**. Confirm nothing rebuilds and the status line asks you to press it again; press it again and confirm the rebuild happens and the message clears.
+- Drag a copy off the row again, press Update once (warned), then change the count and press again. Confirm the changed numbers have to be agreed to a second time as well.
+- Drag the **original** instead of a copy. Confirm the message reads "The original has moved" with no mention of Detach, and that Update goes ahead on the first press.
 
 ### 7c-4. Precision Cutting (Clip and Carve on Any Brush)
 - Draw a box, rotate it 30 degrees (`R`), then press **Shift+X**. Confirm the cyan preview shows two turned pieces, and that committing leaves two brushes that both keep the rotation.

@@ -474,8 +474,11 @@ static func on_create_duplicate_array(dock: Object) -> void:
 static func _update_duplicate_array(
 	dock: Object, record: Variant, mode: int, params: Dictionary
 ) -> void:
+	if not _confirm_array_overwrite(dock, record, params):
+		return
 	var copies: int = HFDuplicator.placements_for(mode, params).size()
 	var sources: int = record.source_brush_ids.size()
+	dock._array_overwrite_ack = ""
 	dock._commit_state_action(
 		"Update Duplicate Array",
 		"update_duplicate_array",
@@ -630,14 +633,18 @@ static func refresh_array_section(dock: Object) -> void:
 			dock._active_duplicator_id = ""
 			_put_array_ghost_away(dock)
 		_set_array_buttons(dock, "Create Array", false)
+		_show_array_warning(dock, "")
 		# The ghost is a ghost of the selection, so it still follows the selection
 		# when the selection is not part of an array.
 		refresh_array_preview(dock)
 		return
 	var same_array := str(dock._active_duplicator_id) == str(record.duplicator_id)
+	if not same_array:
+		dock._array_overwrite_ack = ""
 	dock._active_duplicator_id = str(record.duplicator_id)
 	_load_array_settings(dock, record)
 	_set_array_buttons(dock, "Update Array", true)
+	_refresh_array_warning(dock, str(record.duplicator_id))
 	# The ghost is normally armed by turning a control, because these live in a
 	# section that is open beside a dozen other tools. Selecting an array is a
 	# request to see it — but only the first time, so that putting the ghost away
@@ -645,6 +652,77 @@ static func refresh_array_section(dock: Object) -> void:
 	if not same_array:
 		dock._array_ghost_armed = true
 	refresh_array_preview(dock)
+
+
+## Say what an Update would undo, before it undoes it.
+##
+## Detach is the answer to an array whose copies have been moved by hand, and it
+## sits right beside Update — but a choice you do not know you are making is not
+## a choice, so the count is said out loud.
+static func _refresh_array_warning(dock: Object, duplicator_id: String) -> void:
+	if dock == null or not dock.level_root:
+		return
+	if not dock.level_root.has_method("displaced_array_copies"):
+		return
+	var moved: int = dock.level_root.displaced_array_copies(duplicator_id)
+	if moved <= 0:
+		# A source that has moved takes the whole array with it on the next Update.
+		# That is what an array is for rather than a loss, so it is said differently
+		# and does not stand in the way of the button.
+		if dock.level_root.array_copies_follow_a_moved_source(duplicator_id):
+			_show_array_warning(
+				dock, "The original has moved. Update will bring the copies over to follow it."
+			)
+		else:
+			_show_array_warning(dock, "")
+		return
+	# The loss is said before the move is, because the move is what an array does
+	# and the loss is what the user is about to agree to.
+	_show_array_warning(
+		dock,
+		(
+			"%d cop%s been moved by hand. Update will put %s back in the layout — Detach to keep %s."
+			% [
+				moved,
+				"y has" if moved == 1 else "ies have",
+				"it" if moved == 1 else "them",
+				"it" if moved == 1 else "them"
+			]
+		)
+	)
+
+
+static func _show_array_warning(dock: Object, text: String) -> void:
+	if dock == null or dock.dup_warning == null:
+		return
+	dock.dup_warning.visible = text != ""
+	dock.dup_warning.text = text
+
+
+## False when the user has not yet seen that this Update would move copies they
+## placed themselves. The first press warns and stops; a second press of the same
+## array and the same numbers goes ahead, and Detach is the other way out.
+static func _confirm_array_overwrite(dock: Object, record: Variant, params: Dictionary) -> bool:
+	var duplicator_id := str(record.duplicator_id)
+	if not dock.level_root.has_method("displaced_array_copies"):
+		return true
+	var moved: int = dock.level_root.displaced_array_copies(duplicator_id)
+	if moved <= 0:
+		dock._array_overwrite_ack = ""
+		return true
+	var token := "%s|%d" % [duplicator_id, hash(params)]
+	if str(dock._array_overwrite_ack) == token:
+		return true
+	dock._array_overwrite_ack = token
+	_refresh_array_warning(dock, duplicator_id)
+	dock._set_status(
+		(
+			"Press Update again to put %d moved cop%s back in the layout"
+			% [moved, "y" if moved == 1 else "ies"]
+		),
+		true
+	)
+	return false
 
 
 static func _set_array_buttons(dock: Object, create_text: String, detachable: bool) -> void:
@@ -701,6 +779,7 @@ static func on_detach_duplicate_array(dock: Object) -> void:
 		"Detach Array", "detach_duplicate_array", [str(dock._active_duplicator_id)]
 	)
 	dock._active_duplicator_id = ""
+	dock._array_overwrite_ack = ""
 	dock._set_status("Array detached — its copies are ordinary brushes now")
 	refresh_array_section(dock)
 	_put_array_ghost_away(dock)

@@ -461,6 +461,10 @@ var dup_mode_opt: OptionButton = null
 var dup_summary_label: Label = null
 var dup_create_btn: Button = null
 var dup_detach_btn: Button = null
+var dup_warning: Label = null
+## The array and numbers the user has already been warned about, so a second
+## press of Update goes ahead. The counterpart of `_structure_overwrite_ack`.
+var _array_overwrite_ack: String = ""
 ## The array the Duplicate Array section is editing, empty while it is describing
 ## a new one. The counterpart of `_active_generator_id` for the Structure section.
 var _active_duplicator_id: String = ""

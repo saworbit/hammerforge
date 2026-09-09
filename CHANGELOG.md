@@ -5,6 +5,35 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **An Update to an array now says what it would undo.** A copy can be dragged
+  somewhere on purpose; Update put it back without a word, and Detach sat beside
+  the button as the way out — but a choice you do not know you are making is not
+  a choice.
+  - The section counts the copies a rebuild would move and says so, naming the
+    number and naming Detach. Update then asks a second time before doing it, the
+    way the Structure section asks before rebuilding over painted faces.
+  - **The reading is a vote**, the same shape as the structure records' relocation
+    vote and for the same reason: a source that has been dragged leaves every copy
+    needing the same move, and calling that twelve hand edits would be a lie. The
+    move most copies agree on carries the array; the copies that disagree are the
+    edits. A source that moved is said separately — *"The original has moved.
+    Update will bring the copies over to follow it."* — and does not stand in the
+    way of the button, because following the original is what an array is for.
+  - **Nothing new is recorded.** `expected_copy_transforms()` recomputes where each
+    copy would be rebuilt from the live sources through `placements_for()`, the
+    arithmetic the ghost and the button already share. No new `.hflevel` field, no
+    migration, and a reading that cannot go stale. It answers with nothing when the
+    copies and the sources no longer pair up, because guessing the pairing would
+    report every copy in the level as moved.
+  - The second press agrees to one particular rebuild: changing the numbers after
+    the warning earns it again, and Detach clears it.
+  - Not covered: a copy that was resized, reshaped or repainted rather than moved.
+    Telling would need a signature recorded per copy, and it cannot be taken
+    cheaply — `FaceData.to_dict()` PNG-encodes every paint weight image.
+  - **Coverage** (`tests/test_array_edit_warning.gd`): 21 tests over the vote, the
+    moved-source reading, a source moved *and* a copy dragged, float noise below
+    the threshold, the messages, and both presses.
+
 - **An array you made is an array you can change your mind about.** A structure
   could be reselected, retuned and rebuilt; an array could only be created and
   deleted. The numbers that laid one out were already recorded and already

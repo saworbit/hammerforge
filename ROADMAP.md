@@ -757,14 +757,46 @@ and run".
 - 31 new tests (`tests/test_live_arrays.gd`).
 
 ### Known limits of the live-array pass
-- Hand edits to a copy are overwritten by the next Update, and nothing counts
-  them the way the Structure section counts edited pieces. Detach is the answer
-  and sits beside Update, but it is not yet a warned choice.
+- **Resolved** by the edit-warning wave below: a copy moved by hand is counted
+  and said out loud, and Update asks twice before putting it back.
 - An array rebuilds from where its sources now are, so dragging the original
   carries the array with it — but dragging the copies does not, and a structure's
   relocation vote has no counterpart here.
 - Only one array per source set, unchanged: creating a second array from the same
   brushes still retires the first.
+
+## Done (Array Edit Warning — Saying What Update Would Undo — September 2026)
+- An array's copies can be dragged somewhere on purpose. Update put them back
+  without a word, and Detach sat beside it as the way out — but a choice you do
+  not know you are making is not a choice. The section now counts the copies a
+  rebuild would move and says so, and Update asks a second time before doing it.
+- **The reading is a vote**, the same shape as `HFGeneratorSystem._relocation_vote()`
+  and for the same reason: a source that has been dragged leaves every copy
+  needing the same move, and calling that twelve hand edits would be a lie. The
+  move most copies agree on carries the array; the copies that disagree are the
+  edits. A source that moved is said separately — *"The original has moved. Update
+  will bring the copies over to follow it."* — and does not stand in the way of
+  the button, because following the original is what an array is for.
+- **Nothing new is recorded.** `HFDuplicator.expected_copy_transforms()` recomputes
+  where each copy would be rebuilt from the live sources through
+  `placements_for()`, the arithmetic the ghost and the button already share. No
+  new `.hflevel` field, no migration, and a reading that cannot go stale. It
+  answers with nothing when the copies and the sources no longer pair up, because
+  guessing the pairing would report every copy in the level as moved.
+- The second press agrees to one particular rebuild: changing the numbers after
+  the warning earns it again, and Detach clears it.
+- 21 new tests (`tests/test_array_edit_warning.gd`).
+
+### Known limits of the array edit warning
+- Only a copy that has been *moved* is counted. One that was resized, reshaped or
+  repainted is rebuilt over without a word, because telling would need a
+  signature recorded per copy — which is what a structure has and an array does
+  not, and which cannot be taken cheaply: `FaceData.to_dict()` PNG-encodes every
+  paint weight image.
+- The majority is counted over copies, not volume, so an array of two copies has
+  no majority to speak of and one dragged copy reads as a moved source.
+- The warning is refreshed when the selection changes, not while a piece stays
+  selected and is dragged under it — the same limit the Structure section has.
 
 ## Future (Wave 3 -- Polish)
 - Multiple simultaneous cordons.
@@ -809,7 +841,7 @@ Completion is responsibility-based rather than tied to an arbitrary line count. 
 - Headless editor tests retain the complete tool graph, with focused export-playtest coverage guarding the runtime boundary.
 
 ### Risk-focused test gaps
-The current suite covers 3,035 tests across 158 scripts, including the large brush, bake, paint, vertex, transform, generator, baker, brush-instance, and map-I/O systems. The issue tracker is clear as of September 8, 2026. No known limitation is currently untracked and uncovered.
+The current suite covers 3,056 tests across 159 scripts, including the large brush, bake, paint, vertex, transform, generator, baker, brush-instance, and map-I/O systems. The issue tracker is clear as of September 8, 2026. No known limitation is currently untracked and uncovered.
 
 The last one on this list is **resolved**: a `.map` entity property value
 containing a quote used to come back truncated, silently, because four quotes is
