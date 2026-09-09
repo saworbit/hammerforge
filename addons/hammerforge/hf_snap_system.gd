@@ -41,6 +41,11 @@ var _custom_snap_origin: Vector3 = Vector3.ZERO
 var _custom_snap_dir: Vector3 = Vector3.ZERO
 var _has_custom_snap := false
 
+## Diagnostic: how many brushes had their geometry transformed by the last
+## candidate query. Brushes culled by distance are not counted. Read by the scale
+## test and useful when profiling a large level.
+var brushes_measured: int = 0
+
 ## Face snap geometry per brush id. Brush space does not move with the brush,
 ## so an entry survives every drag, rotate and resize of everything around it
 ## and only goes stale when a brush's own faces change.
@@ -97,7 +102,7 @@ func snap_point(point: Vector3, grid_snap: float, exclude_ids: Array = []) -> Ve
 		or is_mode_on(SnapMode.EDGE)
 		or is_mode_on(SnapMode.PERPENDICULAR)
 	):
-		var candidates := _collect_candidates(exclude_ids, point)
+		var candidates := _collect_candidates(exclude_ids, point, snap_threshold)
 		for c in candidates:
 			var d := point.distance_to(c)
 			if d < snap_threshold and d < best_dist:
@@ -135,8 +140,18 @@ func _project_onto_line(point: Vector3, line_origin: Vector3, line_dir: Vector3)
 	return line_origin + line_dir * t
 
 
-func _collect_candidates(exclude_ids: Array, point: Vector3 = Vector3.ZERO) -> PackedVector3Array:
+## Snap targets near `point`, in world space.
+##
+## `max_distance` is how far a candidate may be from the point and still matter.
+## A brush whose own extent cannot reach that far is skipped before any of its
+## vertices are transformed, which is the work that made this scale with the size
+## of the level rather than with how much of it is under the pointer. Left at
+## `INF` every brush is collected, which is what the geometry tests want.
+func _collect_candidates(
+	exclude_ids: Array, point: Vector3 = Vector3.ZERO, max_distance: float = INF
+) -> PackedVector3Array:
 	var out := PackedVector3Array()
+	brushes_measured = 0
 	if not root or not root.has_method("_iter_pick_nodes"):
 		return out
 	var do_vertex := is_mode_on(SnapMode.VERTEX)
@@ -152,14 +167,28 @@ func _collect_candidates(exclude_ids: Array, point: Vector3 = Vector3.ZERO) -> P
 		var brush := node as DraftBrush
 		if exclude_ids.has(str(brush.brush_id)):
 			continue
-		if do_center:
-			out.append(brush.global_position)
+		var origin := brush.global_position
+		var origin_distance := point.distance_to(origin)
+		if do_center and origin_distance <= max_distance:
+			out.append(origin)
 		if not (do_vertex or do_edge or do_perp):
 			continue
 		# Snap points live in brush space. Going through the transform is what
 		# carries the rotation and scale that world axis offsets threw away.
 		var xform := brush.global_transform
+		# Measured from the brush origin, so a long wall whose origin is far away
+		# is still kept while any part of it is in range. Edges lie between two
+		# vertices inside that reach, so perpendicular snap is covered too.
+		#
+		# The extent is read before the snap points are, because building them is
+		# the work this is here to skip.
+		if (
+			max_distance < INF
+			and origin_distance > max_distance + _world_reach(xform.basis, _snap_half_extent(brush))
+		):
+			continue
 		var geometry := _snap_geometry_local(brush)
+		brushes_measured += 1
 		var local_verts: PackedVector3Array = geometry["verts"]
 		var verts := PackedVector3Array()
 		for local_vert in local_verts:
@@ -177,6 +206,23 @@ func _collect_candidates(exclude_ids: Array, point: Vector3 = Vector3.ZERO) -> P
 	return out
 
 
+## How far one brush's snap points reach from its own origin, in brush space.
+##
+## The same answer as the `half` on the geometry `_snap_geometry_local()` returns,
+## read without building the snap points, because on a large level most brushes
+## are only asked this and then dropped. The two follow the same branch and
+## `test_snap_candidate_culling.gd` holds them to the same answer.
+func _snap_half_extent(brush: DraftBrush) -> Vector3:
+	if brush.shape != DraftBrush.BrushShape.BOX:
+		var faces: Array = brush.faces
+		if not faces.is_empty() and faces.size() <= MAX_SNAP_FACES:
+			var face_geometry := _cached_face_geometry(brush, faces)
+			var face_verts: PackedVector3Array = face_geometry["verts"]
+			if face_verts.size() >= 2:
+				return face_geometry["half"]
+	return (brush.size * 0.5).abs()
+
+
 ## Snap targets for one brush in brush-local space: unique vertices, plus the
 ## unique edges between them as index pairs into that vertex list.
 ##
@@ -188,14 +234,38 @@ func _snap_geometry_local(brush: DraftBrush) -> Dictionary:
 	# from size alone, so its corners are the size corners. Boxes are most of a
 	# level, so take them straight rather than deduping six faces every query.
 	if brush.shape == DraftBrush.BrushShape.BOX:
-		return {"verts": _box_corners(brush.size * 0.5), "edges": BOX_EDGE_INDICES}
+		return _box_geometry(brush.size)
 	var faces: Array = brush.faces
 	if not faces.is_empty() and faces.size() <= MAX_SNAP_FACES:
 		var face_geometry := _cached_face_geometry(brush, faces)
 		var face_verts: PackedVector3Array = face_geometry["verts"]
 		if face_verts.size() >= 2:
 			return face_geometry
-	return {"verts": _box_corners(brush.size * 0.5), "edges": BOX_EDGE_INDICES}
+	return _box_geometry(brush.size)
+
+
+static func _box_geometry(size: Vector3) -> Dictionary:
+	var half: Vector3 = size * 0.5
+	return {"verts": _box_corners(half), "edges": BOX_EDGE_INDICES, "half": half.abs()}
+
+
+## How far the transformed local box reaches from the brush origin.
+##
+## The furthest corner of a box under a basis is the one that takes every axis
+## the same way, so summing the absolute contributions per axis bounds all eight
+## of them. True for any basis, including a sheared or mirrored one.
+static func _world_reach(basis: Basis, half: Vector3) -> float:
+	var x: Vector3 = basis.x * half.x
+	var y: Vector3 = basis.y * half.y
+	var z: Vector3 = basis.z * half.z
+	return (
+		Vector3(
+			absf(x.x) + absf(y.x) + absf(z.x),
+			absf(x.y) + absf(y.y) + absf(z.y),
+			absf(x.z) + absf(y.z) + absf(z.z)
+		)
+		. length()
+	)
 
 
 ## Deduping a brush's faces is the expensive half of a snap query and it runs
@@ -267,7 +337,12 @@ static func _face_snap_geometry(faces: Array) -> Dictionary:
 				continue
 			seen_edges[edge_key] = true
 			edges.append([lo, hi])
-	return {"verts": verts, "edges": edges}
+	# The box that holds these vertices, so a query can tell how far this brush
+	# reaches without transforming any of them.
+	var half := Vector3.ZERO
+	for v in verts:
+		half = Vector3(maxf(half.x, absf(v.x)), maxf(half.y, absf(v.y)), maxf(half.z, absf(v.z)))
+	return {"verts": verts, "edges": edges, "half": half}
 
 
 ## Vertices dedupe at millimetre precision. Keying by Vector3i holds that
