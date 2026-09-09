@@ -61,6 +61,27 @@ The format is based on Keep a Changelog, and this project follows semantic versi
     presses without reselecting, undo, and what survives a state restore.
 
 ### Changed
+- **The Performance section stops measuring the level when nobody is looking at
+  it.** It refreshed every thirty editor frames whether it was open or shut, and
+  it is created shut. Those readouts are not label assignments: the vertex
+  estimate walks every brush and every face, the paint figure walks every layer,
+  and with chunking on the chunk count recollects the whole bake candidate set,
+  builds the chunk dictionary and sorts it while the recommendation measures the
+  level bounds all over again. The levels that make that expensive are the ones
+  that make the panel worth opening, so an idle editor on a big chunked scene was
+  paying the most for numbers on screen nowhere.
+  - **Collapsed, on another tab, or in a hidden dock all count as not looking.**
+    Leaving the section open on the Manage tab and working on the Build tab is
+    the common case, and it used to cost the same as watching it.
+  - **Opening the section fills it in at once** rather than showing whatever the
+    last look left behind until the next tick.
+  - The **Live Brushes** count in the footer is on screen at all times and still
+    refreshes on the same tick. It reads a cached count, so it was never part of
+    the cost.
+  - **Coverage** (`tests/test_perf_panel_visibility.gd`): 8 tests over the section
+    starting shut, a shut section left alone across ninety frames, the footer
+    still counting, opening, an open section refreshing, closing again, an open
+    section on a tab nobody is on, and coming back to that tab.
 - **The array edit warning counts more than movement.** It counted a copy that had
   been dragged and said nothing about one that had been resized, reshaped,
   retextured, or had a paint layer added — though the same press rebuilds over
