@@ -15,6 +15,11 @@ var weld_tolerance: float = 0.001
 ## the face is flagged as non-planar. Increase for imported geometry.
 var planarity_tolerance: float = 0.01
 
+## Diagnostic: how many brush pairs reached an AABB test in the last
+## `check_bake_issues()` pass. Read by the scale test and useful when profiling a
+## cutter-heavy level. Reset at the start of every pass.
+var pair_tests: int = 0
+
 
 func _init(level_root: Node3D) -> void:
 	root = level_root
@@ -177,6 +182,15 @@ func check_bake_issues() -> Array:
 	if root.committed_node:
 		brush_nodes.append_array(root.committed_node.get_children())
 
+	# One pass builds every world AABB the subtraction checks need, and one sweep
+	# answers both of them. Testing each subtraction against the whole brush list
+	# and then every subtraction against every other made the two checks cost
+	# roughly brushes times subtractions plus subtractions squared, on a level
+	# where most of those pairs are nowhere near each other.
+	pair_tests = 0
+	var records := _build_brush_records(brush_nodes)
+	var overlaps := _sweep_subtract_pairs(records)
+
 	for node in brush_nodes:
 		if not (node is DraftBrush):
 			continue
@@ -184,11 +198,11 @@ func check_bake_issues() -> Array:
 		if root.is_entity_node(brush):
 			continue
 		_check_degenerate_brush(brush, issues)
-		_check_floating_subtract(brush, brush_nodes, issues)
+		_check_floating_subtract(brush, overlaps["grounded"], issues)
 		_check_non_manifold(brush, issues)
 		_check_non_planar_faces(brush, issues)
 
-	_check_overlapping_subtracts(brush_nodes, issues)
+	_report_overlapping_subtracts(records, overlaps["subtract_pairs"], issues)
 	_check_micro_gaps(brush_nodes, issues)
 	issues.append_array(check_occlusion_coverage())
 	return issues
@@ -218,61 +232,147 @@ func _check_degenerate_brush(brush: DraftBrush, issues: Array) -> void:
 		)
 
 
-func _check_floating_subtract(brush: DraftBrush, all_brushes: Array, issues: Array) -> void:
-	if brush.operation != CSGShape3D.OPERATION_SUBTRACTION:
-		return
-	var half = brush.size * 0.5
-	var sub_aabb = AABB(brush.global_position - half, brush.size)
-	var intersects_any := false
-	for other in all_brushes:
-		if other == brush or not (other is DraftBrush):
-			continue
-		var ob := other as DraftBrush
-		if ob.operation == CSGShape3D.OPERATION_SUBTRACTION:
-			continue
-		if root.is_entity_node(ob):
-			continue
-		var other_half = ob.size * 0.5
-		var other_aabb = AABB(ob.global_position - other_half, ob.size)
-		if sub_aabb.intersects(other_aabb):
-			intersects_any = true
-			break
-	if not intersects_any:
-		issues.append(
-			{
-				"type": "floating_subtract",
-				"severity": 1,
-				"message": "Subtraction '%s' doesn't intersect any additive brush" % brush.name,
-				"node": brush
-			}
-		)
-
-
-func _check_overlapping_subtracts(all_brushes: Array, issues: Array) -> void:
-	var subtracts: Array = []
-	for node in all_brushes:
+## Every brush the subtraction checks care about, with its world AABB measured
+## once, in the order the level lists them.
+##
+## The box is the brush's own size placed at its origin, which is what both
+## checks have always compared. It ignores rotation deliberately: widening it to
+## the turned brush's real extent would change which levels report an issue, and
+## that is a different question from this one.
+func _build_brush_records(brush_nodes: Array) -> Array:
+	var records: Array = []
+	for node in brush_nodes:
 		if not (node is DraftBrush):
 			continue
 		var brush := node as DraftBrush
-		if brush.operation == CSGShape3D.OPERATION_SUBTRACTION and not root.is_entity_node(brush):
-			subtracts.append(brush)
-	for i in range(subtracts.size()):
-		var a: DraftBrush = subtracts[i]
-		var a_half = a.size * 0.5
-		var a_aabb = AABB(a.global_position - a_half, a.size)
-		for j in range(i + 1, subtracts.size()):
-			var b: DraftBrush = subtracts[j]
-			var b_half = b.size * 0.5
-			var b_aabb = AABB(b.global_position - b_half, b.size)
-			if a_aabb.intersects(b_aabb):
-				issues.append(
-					{
-						"type": "overlapping_subtract",
-						"severity": 1,
-						"message": "Overlapping subtractions: '%s' and '%s'" % [a.name, b.name],
-						"node": a
-					}
-				)
+		if root.is_entity_node(brush):
+			continue
+		var half: Vector3 = brush.size * 0.5
+		(
+			records
+			. append(
+				{
+					"brush": brush,
+					"aabb": AABB(brush.global_position - half, brush.size),
+					"subtract": brush.operation == CSGShape3D.OPERATION_SUBTRACTION,
+				}
+			)
+		)
+	return records
+
+
+## Sort along one axis and walk it, keeping only the boxes still open at the
+## current position. Two boxes that intersect must overlap on that axis, so they
+## are both in the active list at the same moment and every intersecting pair is
+## seen exactly once. Boxes that are far apart never meet.
+##
+## The axis is whichever one the level is widest on, because that is the one that
+## separates the most brushes. A level is usually a floor plan, so it is normally
+## X or Z and almost never Y.
+##
+## Returns the subtractions that landed on an additive brush, keyed by instance
+## id, and the subtraction pairs that overlap each other, as index pairs into
+## `records`.
+func _sweep_subtract_pairs(records: Array) -> Dictionary:
+	var grounded: Dictionary = {}
+	var subtract_pairs: Array = []
+	var axis := _widest_axis(records)
+	var order: Array = []
+	for i in range(records.size()):
+		order.append(i)
+	order.sort_custom(
+		func(a: int, b: int) -> bool:
+			return (
+				(records[a]["aabb"] as AABB).position[axis]
+				< (records[b]["aabb"] as AABB).position[axis]
+			)
+	)
+	var active: Array = []
+	for index: int in order:
+		var record: Dictionary = records[index]
+		var aabb: AABB = record["aabb"]
+		var still_open: Array = []
+		for other_index: int in active:
+			var other: Dictionary = records[other_index]
+			var other_aabb: AABB = other["aabb"]
+			if other_aabb.end[axis] < aabb.position[axis]:
+				continue
+			still_open.append(other_index)
+			pair_tests += 1
+			if not other_aabb.intersects(aabb):
+				continue
+			if record["subtract"] and other["subtract"]:
+				subtract_pairs.append([other_index, index])
+			elif record["subtract"]:
+				grounded[(record["brush"] as Node).get_instance_id()] = true
+			elif other["subtract"]:
+				grounded[(other["brush"] as Node).get_instance_id()] = true
+		still_open.append(index)
+		active = still_open
+	return {"grounded": grounded, "subtract_pairs": subtract_pairs}
+
+
+## The axis the brushes are most spread out along, as an index into Vector3.
+static func _widest_axis(records: Array) -> int:
+	if records.is_empty():
+		return Vector3.AXIS_X
+	var low: Vector3 = (records[0]["aabb"] as AABB).position
+	var high: Vector3 = low
+	for record in records:
+		var aabb: AABB = record["aabb"]
+		low = Vector3(
+			minf(low.x, aabb.position.x), minf(low.y, aabb.position.y), minf(low.z, aabb.position.z)
+		)
+		high = Vector3(
+			maxf(high.x, aabb.position.x),
+			maxf(high.y, aabb.position.y),
+			maxf(high.z, aabb.position.z)
+		)
+	var spread: Vector3 = high - low
+	if spread.x >= spread.y and spread.x >= spread.z:
+		return Vector3.AXIS_X
+	if spread.z >= spread.y:
+		return Vector3.AXIS_Z
+	return Vector3.AXIS_Y
+
+
+func _check_floating_subtract(brush: DraftBrush, grounded: Dictionary, issues: Array) -> void:
+	if brush.operation != CSGShape3D.OPERATION_SUBTRACTION:
+		return
+	if grounded.has(brush.get_instance_id()):
+		return
+	issues.append(
+		{
+			"type": "floating_subtract",
+			"severity": 1,
+			"message": "Subtraction '%s' doesn't intersect any additive brush" % brush.name,
+			"node": brush
+		}
+	)
+
+
+## Report the overlapping pairs in level order, so the list reads the same as it
+## did when both loops walked the brushes from the top.
+func _report_overlapping_subtracts(records: Array, pairs: Array, issues: Array) -> void:
+	var ordered: Array = []
+	for pair in pairs:
+		var first: int = mini(pair[0], pair[1])
+		var second: int = maxi(pair[0], pair[1])
+		ordered.append([first, second])
+	ordered.sort_custom(
+		func(a: Array, b: Array) -> bool: return a[0] < b[0] if a[0] != b[0] else a[1] < b[1]
+	)
+	for pair in ordered:
+		var a: DraftBrush = records[pair[0]]["brush"]
+		var b: DraftBrush = records[pair[1]]["brush"]
+		issues.append(
+			{
+				"type": "overlapping_subtract",
+				"severity": 1,
+				"message": "Overlapping subtractions: '%s' and '%s'" % [a.name, b.name],
+				"node": a
+			}
+		)
 
 
 ## Check for non-manifold and open-edge geometry by analyzing the edge adjacency

@@ -61,6 +61,38 @@ The format is based on Keep a Changelog, and this project follows semantic versi
     presses without reselecting, undo, and what survives a state restore.
 
 ### Changed
+- **Check Issues stops comparing brushes that are nowhere near each other.** The
+  two subtraction checks each did their own broad scan. `_check_floating_subtract()`
+  walked the whole brush list for every subtraction looking for an additive to
+  land on, `_check_overlapping_subtracts()` then compared every subtraction with
+  every other one, and both rebuilt each brush's AABB inside those loops. On a
+  level of 500 solids and 500 cuts that is 250,000 pair tests and 500,000 boxes
+  built, almost all of them between brushes on opposite sides of the map.
+  - **One broad phase now answers both questions.** Every world AABB is built
+    once, then a single sort-and-sweep along the axis the level is widest on
+    visits only the pairs that overlap on that axis. A cut is grounded when the
+    sweep pairs it with a solid, and two cuts that meet are an overlap, so the
+    same walk produces both results.
+  - **The axis is chosen from the brushes**, not fixed, because a level is usually
+    a floor plan and the axis that separates the most brushes is the one worth
+    sorting on.
+  - **The box is still the brush's own size at its origin, rotation and all.**
+    Widening it to a turned brush's real extent would change which levels report
+    an issue, and that is a different question from this one.
+  - **What gets reported has not moved.** Floating cuts are still listed in level
+    order among the other per-brush issues, and overlapping pairs still name the
+    earlier brush first and carry it as the issue's node.
+  - Measured over 1,000 brushes with the checks timed on their own: a floor plan
+    went from 117.51 ms and 250,000 pair tests to 11.26 ms and 21,248, and the
+    same brushes strung out along a line went from 114.26 ms to 4.85 ms and 500
+    pair tests. The rest of `check_bake_issues()` is untouched and still the
+    larger share of the pass.
+  - **Coverage** (`tests/test_bake_issues_scale.gd`): 18 tests over a cut inside a
+    solid, a cut that only touches one, a solid in the committed node, entity
+    solids and entity cuts, a turned cut, a solid that sorts after its cut on two
+    different axes, a long corridor reaching a cut far from its origin, three and
+    twelve mutually overlapping cuts, pair naming and ordering, and comparison
+    budgets over spread out and strung out levels.
 - **The Performance section stops measuring the level when nobody is looking at
   it.** It refreshed every thirty editor frames whether it was open or shut, and
   it is created shut. Those readouts are not label assignments: the vertex
