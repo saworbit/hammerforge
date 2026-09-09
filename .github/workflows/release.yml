@@ -107,6 +107,8 @@ jobs:
         # Printed rather than submitted: the Asset Library has no API for
         # updating an entry, so the hash has to be pasted into the form by hand.
         run: |
-          echo "### Asset Library" >> "$GITHUB_STEP_SUMMARY"
-          echo "Update the Download Commit to \`$RELEASE_COMMIT\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "at https://godotengine.org/asset-library/asset/edit" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "### Asset Library"
+            echo "Update the Download Commit to \`$RELEASE_COMMIT\`"
+            echo "at https://godotengine.org/asset-library/asset/edit"
+          } >> "$GITHUB_STEP_SUMMARY"
