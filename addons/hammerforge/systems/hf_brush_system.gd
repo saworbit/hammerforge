@@ -2321,9 +2321,11 @@ func _cleanup_brush_references(brush: Node) -> void:
 	if not vgs.is_empty():
 		brush.set_meta("visgroups", PackedStringArray())
 	# Clean up entity I/O connections targeting this brush by name
+	# By both of its addresses: a brush entity carries an authored name as well as
+	# its node name, and an output can be aimed at either.
 	var brush_name := brush.name
 	if brush_name != "" and root.get("entity_system"):
-		var removed_count: int = root.entity_system.cleanup_dangling_connections(brush_name)
+		var removed_count: int = root.entity_system.cleanup_connections_for_deleted(brush)
 		if removed_count > 0 and root.has_signal("user_message"):
 			root.user_message.emit(
 				(

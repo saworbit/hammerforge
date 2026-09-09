@@ -217,7 +217,7 @@ func delete_entities_by_paths(entity_paths: Array) -> void:
 		entity.set_meta("visgroups", PackedStringArray())
 		if group_id != "" and root.get("visgroup_system"):
 			root.visgroup_system._cleanup_empty_group(group_id)
-		var removed_count := cleanup_dangling_connections(entity_name)
+		var removed_count := cleanup_connections_for_deleted(entity)
 		if removed_count > 0 and root.has_signal("user_message"):
 			root.user_message.emit(
 				(
@@ -325,6 +325,62 @@ func get_entity_outputs(entity: Node) -> Array:
 
 ## Remove all I/O connections that target a deleted node by name.
 ## Returns the number of connections removed.
+## Drop the connections aimed at an entity that is going away.
+##
+## An entity has two addresses: its node name and its authored `entity_name`.
+## An output can be aimed at either, so cleaning up only the node name leaves the
+## connections that used the alias — silently, and ready to start addressing an
+## unrelated entity the moment somebody reuses the name.
+##
+## A name that some other live node still answers to is not dangling and is left
+## alone. Two entities can share an authored name; duplication and prefab
+## placement both produce that, and cutting the survivor's connections would be a
+## worse bug than the one this fixes.
+##
+## Called while the node is still in the tree, so it is excluded by identity
+## rather than by having already gone.
+func cleanup_connections_for_deleted(entity: Node) -> int:
+	if entity == null:
+		return 0
+	var removed := 0
+	var seen := {}
+	for address in [str(entity.name), str(entity.get_meta("entity_name", ""))]:
+		var target := str(address)
+		if target == "" or seen.has(target):
+			continue
+		seen[target] = true
+		if _another_node_answers_to(target, entity):
+			continue
+		removed += cleanup_dangling_connections(target)
+	return removed
+
+
+## True when some node other than `excluding` still answers to this address.
+##
+## Deliberately wider than `find_entities_by_name()`, which resolves a brush
+## entity by its node name only even though the runtime addresses it by its
+## authored name as well. Being wrong here only ever keeps a connection, which is
+## the safe way to be wrong.
+func _another_node_answers_to(address: String, excluding: Node) -> bool:
+	if address == "":
+		return false
+	if root.entities_node:
+		for child in root.entities_node.get_children():
+			if child != excluding and _node_answers_to(child, address):
+				return true
+	if root.draft_brushes_node:
+		for child in root.draft_brushes_node.get_children():
+			if child == excluding or not is_brush_io_target(child):
+				continue
+			if _node_answers_to(child, address):
+				return true
+	return false
+
+
+static func _node_answers_to(node: Node, address: String) -> bool:
+	return str(node.name) == address or str(node.get_meta("entity_name", "")) == address
+
+
 func cleanup_dangling_connections(deleted_name: String) -> int:
 	var removed := 0
 	if deleted_name == "":
