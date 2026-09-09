@@ -592,3 +592,71 @@ func test_postprocess_without_lods_returns_the_same_mesh():
 	var mesh := _make_dense_mesh()
 	var out: Mesh = baker._postprocess_mesh(mesh, false, false, 0.1)
 	assert_eq(out, mesh, "Leaving the option off must not rebuild the mesh")
+
+
+# ===========================================================================
+# CSG output carries its own placement (#252)
+# ===========================================================================
+
+
+func _a_triangle_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.add_vertex(Vector3(0, 0, 0))
+	st.add_vertex(Vector3(1, 0, 0))
+	st.add_vertex(Vector3(0, 1, 0))
+	return st.commit()
+
+
+func test_a_flat_transform_and_mesh_pair_keeps_its_transform():
+	# This is exactly what Godot 4's CSGShape3D.get_meshes() returns: the node's
+	# transform first, then its root mesh. Read as a list it still finds the mesh
+	# and silently drops the placement.
+	var placement := Transform3D(Basis.IDENTITY, Vector3(100, 0, 50))
+	var mesh := _a_triangle_mesh()
+
+	var pairs: Array = baker._collect_mesh_entries([placement, mesh])
+
+	assert_eq(pairs.size(), 1, "one mesh came out of the CSG")
+	assert_eq(pairs[0]["mesh"], mesh)
+	assert_eq(pairs[0]["transform"], placement, "and it knows where it stands")
+
+
+func test_flat_pair_collision_verts_are_moved_into_place():
+	var placement := Transform3D(Basis.IDENTITY, Vector3(100, 0, 50))
+
+	var per_entry: Array = baker._collect_entry_verts([placement, _a_triangle_mesh()])
+
+	assert_eq(per_entry.size(), 1)
+	var verts: Array = per_entry[0]
+	assert_gt(verts.size(), 0, "the mesh has vertices to move")
+	for vertex in verts:
+		assert_almost_eq(
+			(vertex as Vector3).z, 50.0, 0.001, "convex hulls stand where the CSG node does"
+		)
+
+
+func test_a_bare_list_of_meshes_is_still_read():
+	var mesh := _a_triangle_mesh()
+
+	var pairs: Array = baker._collect_mesh_entries([mesh, mesh])
+
+	assert_eq(pairs.size(), 2, "a plain list of meshes is still a list of meshes")
+	assert_eq(pairs[0]["transform"], Transform3D.IDENTITY)
+
+
+func test_a_list_of_pairs_is_still_read_in_either_order():
+	var placement := Transform3D(Basis.IDENTITY, Vector3(0, 8, 0))
+	var mesh := _a_triangle_mesh()
+
+	var transform_first: Array = baker._collect_mesh_entries([[placement, mesh]])
+	var mesh_first: Array = baker._collect_mesh_entries([[mesh, placement]])
+
+	assert_eq(transform_first.size(), 1)
+	assert_eq(transform_first[0]["transform"], placement)
+	assert_eq(mesh_first.size(), 1)
+	assert_eq(mesh_first[0]["transform"], placement)
+
+
+func test_nothing_out_of_the_csg_is_no_pairs():
+	assert_eq(baker._collect_mesh_entries([]).size(), 0)
