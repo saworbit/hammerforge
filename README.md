@@ -46,10 +46,10 @@
 
 > **Fair warning:** This is a solo hobby project in early alpha. I built it to support another project and it grew from there. It's buggy, rough around the edges, and a bit directionless. If any of this looks useful to you, I'd genuinely appreciate help testing and filing issues. Contributions welcome -- just know you're signing up for an adventure, not a polished product.
 
-> **On AI:** Yes, AI assistants helped build this -- writing code, reviewing
-> code I wrote by hand, drafting docs. Nothing here ships unread or untested,
-> and no image models were used for any art, texture or screenshot. The full
-> position, including where it does not help, is in [AI.md](AI.md).
+> **On AI:** Yes, AI assistants helped build this. Writing code, reviewing code I
+> wrote myself, drafting docs. Nothing here ships unread or untested, and no image
+> models were used for any art, texture or screenshot. The full position, and
+> where it is not much help, is in [AI.md](AI.md).
 
 ---
 

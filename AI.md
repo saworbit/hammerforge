@@ -1,146 +1,133 @@
 # On the Use of AI
 
-People ask whether AI helped build HammerForge often enough that it deserves one
-real answer instead of a slightly different half-answer each time.
+I get asked whether AI helped build HammerForge. It comes up often enough that it
+is worth writing down once.
 
-Yes. Extensively. Here is the whole position, including the parts that flatter it
-less.
+Yes. Quite a lot of it. Here is the honest version.
 
-## The short version
+## The short answer
 
-I use AI assistants throughout this project: writing code, reviewing code I wrote
-by hand, drafting documentation, and arguing through design problems I had not yet
-resolved. I do not take what comes back and ship it. Everything here has been
-read, run, and tested, and a good deal of it has been thrown away and done again.
+I use AI assistants for a lot of this project. Writing code, reviewing code I
+wrote myself, drafting documentation, thinking through design problems before I
+commit to one of them.
 
-That is not a confession and it is not a sales pitch. It is how this was made, and
-you should be able to find that out without inferring it from the presence of
-`addons/godot_mcp`.
+I do not paste what comes back and ship it. Everything here has been read, run and
+tested, and plenty of it has been thrown away and done again.
 
-## A level editor is in no position to object
+That is not something I feel I need to apologise for, and it is not something I am
+selling either. It is just how this got made. You should be able to find that out
+without working it out from the MCP server sitting in `addons/godot_mcp`.
 
-HammerForge exists because placing every vertex by hand is a poor use of a
-designer's afternoon. That is the entire premise, and it is not original to me —
-it is the premise of Hammer, of TrenchBroom, and of every brush-based editor in
-that lineage. The interesting part of level design is deciding where the room
-goes. The rest is getting the geometry to agree with the decision, and that part
-has been worth automating since 1996.
+## Why I am comfortable with it
 
-So a tool built to remove tedium, built using tools that remove tedium, is not a
-contradiction. It is the same conviction applied one level up. I would find it
-strange to spend this long automating the tedious parts of blockout while treating
-the tedious parts of writing the automation as sacred.
+HammerForge exists because placing every vertex by hand is a slow way to spend an
+afternoon. That is the whole idea, and it is not mine. It is what Hammer and
+TrenchBroom were for. The interesting part of level design is working out where
+the room goes. Making the geometry agree with that decision is the boring part,
+and people have been automating it since the nineties.
 
-Labour saved is not the interesting question. The interesting questions are
-whether the result is any good, and whether somebody is answerable for it.
+So building a tool that removes tedious work, using tools that remove tedious
+work, seems consistent to me rather than contradictory.
 
-## What "did you write this?" is actually asking
+What matters is not how much effort got saved. It is whether the result works, and
+whether someone is on the hook when it does not.
 
-Underneath that question is a better one: *who do I hold responsible when it
-breaks?*
+## Who is responsible
 
-Me. Without qualification, and without an asterisk pointing at a model.
+When people ask whether I wrote this, I think the real question is who to blame
+when it breaks.
 
-Every line in this repository is a line I chose to ship. If a brush bakes with
-inverted winding, if a cut corrupts your level file, if an undo step eats your
-work — that is mine. Not partly mine. Not mine-with-context. The provenance of a
-suggestion has no bearing on who owns the decision to accept it, and I have never
-found the distinction between code I typed and code I approved to be as morally
-significant as it is usually made out to be. Both are choices. Both are mine.
+That is me.
 
-This is also why I am relaxed about disclosing it. Authorship, in the sense that
-matters to you as a user, was never about keystrokes. It is about accountability,
-and that has not moved.
+Every line in here is a line I decided to ship. If a brush bakes with its faces
+inside out, if a cut corrupts your level file, if undo eats your work, that is
+mine. Where a suggestion came from does not change who chose to accept it. I have
+never found the line between code I typed and code I approved to be as meaningful
+as it usually gets treated.
+
+That is also why I am relaxed about saying all this. The part that matters to you
+was never about who pressed the keys.
 
 ## What actually checks it
 
-The claim "I test what it produces" is worth nothing on its own — anyone can write
-that sentence. So instead, here is what runs, all of it in this repository and all
-of it runnable by you:
+Saying "I test what it produces" is easy and worth very little on its own. So here
+is what actually runs. All of it is in this repository and you can run it
+yourself.
 
-- **The GUT suite** in `tests/`, several thousand tests, run headless in CI on
-  every pull request and every push to `main`.
-- **`tools/check_placement_order.py`**, a static guard for one specific bug class,
-  with a `--selftest` that runs first so a detector which has quietly stopped
-  detecting fails loudly rather than passing everything.
-- **`gdformat` and `gdlint`** over every line of GDScript.
-- **`ruff`** over the Python tooling, **`actionlint`** and **`zizmor`** over the
-  CI workflows themselves.
-- **A protected `main`** that takes no direct pushes from anyone, including me and
-  including CI. Every change arrives as a pull request with three green checks.
+- The GUT suite in `tests/`. Several thousand tests, run headless in CI on every
+  pull request and every push to `main`.
+- `tools/check_placement_order.py`, a static check for one specific bug. It tests
+  itself first, so a check that has quietly stopped working fails loudly instead
+  of passing everything.
+- `gdformat` and `gdlint` across all the GDScript.
+- `ruff` on the Python tooling, plus `actionlint` and `zizmor` on the CI workflows.
+- A protected `main` that takes no direct pushes from anyone, including me and
+  including CI. Everything arrives as a pull request with green checks.
 
-None of that exists because of AI. It exists because I am one person and this is
-more code than one person can hold in their head. But it is the reason I am
-willing to work this way: the verification is the load-bearing part, and it does
-not care where a line came from.
+None of that is there because of AI. It is there because I am one person and this
+is more code than I can keep in my head. But it is the reason I am willing to work
+this way. The checking is the part carrying the weight, and it does not care where
+a line came from.
 
-## Where it does not help
+## Where it is not much help
 
-This is the section that makes the rest believable, so it is specific.
+This is the part that makes the rest worth believing, so it is specific.
 
-**It is confidently wrong about Godot.** The engine's API surface moves, and
-assistants will cheerfully call `Image.load()`, which Godot 4 removed, or reach
-for `undo()` on `EditorUndoRedoManager`, which has never had it. Every one of
-those cost me time before it cost me nothing, because I now keep notes.
+**It gets Godot wrong with confidence.** The engine moves and assistants will
+happily call `Image.load()`, which Godot 4 removed, or reach for `undo()` on
+`EditorUndoRedoManager`, which never had it. Each of those cost me time before I
+started keeping notes.
 
-**It reasons poorly about space.** Face winding is clockwise from outside. A basis
-with a negative determinant inverts that winding invisibly — nothing looks wrong
-until you bake. This is exactly the class of error a model will not catch, and
-frankly one I miss by eye too.
+**It is poor at spatial reasoning.** Face winding is clockwise from outside. A
+basis with a negative determinant flips that invisibly, and nothing looks wrong
+until you bake. That is not something a model catches. I miss it by eye too, to be
+fair.
 
-**It repeats mistakes convincingly.** A world transform assigned to a node before
-that node is in the tree writes the local transform instead, and the node lands
-shifted by its container. That bug has been fixed here six times, most recently in
-the baker, where it was applying the root transform twice to geometry that ships.
-Six times. The response was not to try harder; it was to write
-`tools/check_placement_order.py` so the build refuses it. That guard is the honest
-artefact of this whole arrangement — proof that I do not trust the process, mine
-or a model's, without something mechanical standing behind it.
+**It repeats the same mistake convincingly.** Assigning a world transform to a
+node that is not in the tree yet writes the local transform instead, and the node
+ends up offset by its parent. That has been fixed here six times. The most recent
+was in the baker, applying the root transform twice to geometry that ships. After
+six times the answer was not to be more careful. It was to write
+`tools/check_placement_order.py` so the build refuses it.
 
-**It does not know when the approach is wrong.** It will help you build the wrong
-thing beautifully. Deciding what not to build is still entirely manual, and it is
-most of the job.
+**It does not know when the idea is wrong.** It will help you build the wrong
+thing very well. Deciding what not to build is still entirely on me, and that is
+most of the work.
 
-I still write code by hand — often the parts I care most about — and then have it
-reviewed. The traffic goes both ways.
+I still write plenty by hand, usually the parts I care about most, and then have
+it reviewed. It goes both ways.
 
-## About the art
+## The art
 
-**No image models were used anywhere in this project.** This matters more to some
-readers than the code does, so here is precisely how each asset was made:
+No image models were used anywhere in this project. That matters more to some
+people than the code does, so here is how each thing was actually made.
 
-- **The mark and wordmark** are custom-drawn SVG on a 100-unit grid — kerf 3u,
-  ring 14u — with a compact weight for small sizes. Sources in `docs/brand/svg/`,
-  rasterised by `docs/brand/build.py` and `raster.js`. The geometry is a
-  deliberate reference to the outline HammerForge draws around subtract brushes.
-  See [BRAND.md](docs/brand/BRAND.md).
-- **The 150 prototype textures** are generated by script as SVG, not sampled or
-  synthesised. See [Prototype Textures](docs/HammerForge_Prototype_Textures.md).
-- **Every screenshot and clip** is real editor output. The showcase scene is built
-  by `tools/build_showcase_scene.gd` and captured by `tools/capture_showcase.gd`.
-  The hall on the README is 81 brushes, drawn with the tools it is advertising.
+- The mark and wordmark are drawn by hand as SVG on a 100 unit grid, with a
+  compact version for small sizes. Sources are in `docs/brand/svg/`, rasterised by
+  `docs/brand/build.py` and `raster.js`. See [BRAND.md](docs/brand/BRAND.md).
+- The 150 prototype textures are generated by script as SVG. See
+  [Prototype Textures](docs/HammerForge_Prototype_Textures.md).
+- Every screenshot and clip is real editor output. The showcase scene is built by
+  `tools/build_showcase_scene.gd` and captured by `tools/capture_showcase.gd`. The
+  hall on the README is 81 brushes, drawn with the tools it is showing off.
 
-If that ever changes, it will say so here first.
+If that ever changes I will say so here first.
 
 ## If you would rather not
 
-Some people want nothing to do with software built this way. That is a coherent
-position, held for reasons ranging from labour to provenance to taste, and I am
-not going to argue you out of it.
+Some people want nothing to do with software built this way. That is a fair
+position to hold and I am not going to try to talk anyone out of it.
 
-What I do think is that you are owed the information without having to dig for it,
-which is why this file exists at the root of the repository rather than in a
-footnote. Read it, decide, and use something else with my genuine good wishes if
-that is where you land.
+I do think you are owed the information without having to go looking for it, which
+is why this sits at the root of the repository rather than buried somewhere. Read
+it, make your own call, and go use something else with no hard feelings if that is
+where you land.
 
-For what it is worth, my own view is narrower than the argument usually gets: I
-think a tool is worth using if it lets one person hold more of a hard problem at
-once, and worth distrusting to exactly the degree that nothing is checking its
-output. Both halves matter. I have tried to build the second half into this
-repository in a way you can run yourself.
+My own view is fairly narrow. A tool is worth using if it lets one person hold
+more of a hard problem at once. It is worth distrusting to exactly the degree that
+nothing is checking its output. I have tried to build the second half into this
+repository so you can run it yourself.
 
----
-
-**Contributors:** the related question — whether *you* can use AI on a pull
-request — is answered in [CONTRIBUTING.md](CONTRIBUTING.md#ai-assisted-contributions).
-The short version is yes, on the same terms.
+Contributors: whether you can use AI on a pull request is answered in
+[CONTRIBUTING.md](CONTRIBUTING.md#ai-assisted-contributions). Short answer is yes,
+on the same terms.
