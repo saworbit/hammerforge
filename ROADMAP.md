@@ -723,11 +723,8 @@ and run".
   dense dome reads as a mesh of lines rather than a surface.
 - It shows the pieces a rebuild would make, not which existing pieces it would
   replace; the hand-edit count beside it is still what says that.
-- Hollow, carve, clip, subtract, structure and array run six near-identical
-  preview systems, each with its own container, mesh handling and teardown. The
-  duplication is what let four of them drift into placing their meshes in the
-  wrong space; `tests/test_preview_placement.gd` now holds the property they
-  share, but the mechanics are still six copies.
+- **Resolved** by the preview-base wave below: the mechanics are one copy now,
+  in `HFPreviewSystem`.
 
 ## Done (Live Arrays — Changing One After You Have Made It — September 2026)
 - Selecting any piece of an array turns the **Duplicate Array** section into an
@@ -798,6 +795,33 @@ and run".
 - The warning is refreshed when the selection changes, not while a piece stays
   selected and is dragged under it — the same limit the Structure section has.
 
+## Done (One Preview Base — September 2026)
+- Hollow, carve, clip, subtract, structure and array each owned a container node,
+  a set of `MeshInstance3D`, a ghost material and a teardown, and each wrote all
+  four out again. Two called the container `_container` and four called it
+  `_preview_container`. That duplication is what let four of them drift into
+  placing their meshes in the wrong space: each was fixed on its own, because
+  there was nowhere to fix it once.
+- `HFPreviewSystem` (`systems/hf_preview_system.gd`) extends `HFSystem` and owns
+  the container lifecycle, the mesh pool, `ghost_material()`, `clear()`,
+  `set_enabled()` and `destroy()`. What stays with each preview is what actually
+  differs: what it draws, what colour it draws in, and how it decides there is
+  nothing to draw.
+- **The third copy of `line_mesh` is gone.** Carve, clip and hollow each carried a
+  private `_lines_mesh()` static identical to `HFOutlineUtil.line_mesh()`.
+- `_ensure_container()` stays overridable, because clip makes three named meshes
+  rather than an indexed pool — but the base reaches the container through a
+  non-virtual `_build_container()`, so an override that makes meshes cannot be
+  re-entered by the making of them. Getting that wrong the first time was an
+  immediate stack overflow rather than a subtle bug, which is the right failure.
+- Subtract keeps its own `set_enabled()`: it connects and disconnects signals on
+  the way in and out, so unlike the others it has to know it is already enabled.
+- Six previews: 1,249 lines to 1,006. With the 122-line base, 121 lines fewer
+  overall and one definition of each mechanic instead of six.
+- Behaviour is unchanged: the suite reports the same counts either side of the
+  refactor. 16 new tests (`tests/test_preview_system.gd`), including a drift guard
+  that fails if two previews ever name their container the same thing.
+
 ## Future (Wave 3 -- Polish)
 - Multiple simultaneous cordons.
 - Multi-tool presets for common workflows.
@@ -841,7 +865,7 @@ Completion is responsibility-based rather than tied to an arbitrary line count. 
 - Headless editor tests retain the complete tool graph, with focused export-playtest coverage guarding the runtime boundary.
 
 ### Risk-focused test gaps
-The current suite covers 3,056 tests across 159 scripts, including the large brush, bake, paint, vertex, transform, generator, baker, brush-instance, and map-I/O systems. The issue tracker is clear as of September 8, 2026. No known limitation is currently untracked and uncovered.
+The current suite covers 3,072 tests across 160 scripts, including the large brush, bake, paint, vertex, transform, generator, baker, brush-instance, and map-I/O systems. The issue tracker is clear as of September 8, 2026. No known limitation is currently untracked and uncovered.
 
 The last one on this list is **resolved**: a `.map` entity property value
 containing a quote used to come back truncated, silently, because four quotes is

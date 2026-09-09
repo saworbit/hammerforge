@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Changed
+- **The six preview overlays share one base instead of six copies of it.** Hollow,
+  carve, clip, subtract, structure and array each owned a container node, a set of
+  `MeshInstance3D`, a ghost material and a teardown, and each wrote all four out
+  again. Two called the container `_container` and four called it
+  `_preview_container`. That duplication is what let four of them drift into
+  placing their meshes in the wrong space — each was fixed on its own, because
+  there was nowhere to fix it once.
+  - `HFPreviewSystem` extends `HFSystem` and owns the container lifecycle, the
+    mesh pool, `ghost_material()`, `clear()`, `set_enabled()` and `destroy()`.
+    What stays with each preview is what actually differs: what it draws, what
+    colour it draws in, and how it decides there is nothing to draw.
+  - **The third copy of `line_mesh` is gone.** Carve, clip and hollow each carried
+    a private `_lines_mesh()` static identical to `HFOutlineUtil.line_mesh()`.
+  - `_ensure_container()` stays overridable, because clip makes three named meshes
+    rather than an indexed pool — but the base reaches the container through a
+    non-virtual `_build_container()`, so an override that makes meshes cannot be
+    re-entered by the making of them.
+  - Subtract keeps its own `set_enabled()`: it connects and disconnects signals on
+    the way in and out, so unlike the others it has to know it is already enabled.
+  - Six previews: 1,249 lines to 1,006. With the 122-line base, 121 lines fewer
+    overall.
+  - **Behaviour is unchanged**, and the suite reports the same counts either side
+    of the refactor. **Coverage** (`tests/test_preview_system.gd`): 16 tests over
+    the material, the container, the pool, clearing, enabling and teardown,
+    including a drift guard that fails if two previews ever name their container
+    the same thing.
+
 ### Added
 - **An Update to an array now says what it would undo.** A copy can be dragged
   somewhere on purpose; Update put it back without a word, and Detach sat beside

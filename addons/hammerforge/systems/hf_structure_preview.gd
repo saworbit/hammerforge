@@ -1,6 +1,6 @@
 @tool
 class_name HFStructurePreview
-extends "hf_system.gd"
+extends "hf_preview_system.gd"
 ## A wireframe of the structure the Structure section would build, before it builds it.
 ##
 ## Every other way of making geometry in HammerForge shows you the shape while you
@@ -26,7 +26,6 @@ const HFOutlineUtil = preload("../hf_outline_util.gd")
 ## yellow hollow walls, green carve pieces, cyan clip wires, red subtract volumes.
 const GHOST_COLOR := Color(0.9, 0.95, 1.0, 0.5)
 
-var _container: Node3D
 var _mesh_instance: MeshInstance3D
 var _material: StandardMaterial3D
 var _piece_count: int = 0
@@ -35,11 +34,11 @@ var _piece_count: int = 0
 func _init(p_root: Node3D = null) -> void:
 	super(p_root)
 	_enabled = false
-	_material = StandardMaterial3D.new()
-	_material.albedo_color = GHOST_COLOR
-	_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_material.no_depth_test = true
+	_material = ghost_material(GHOST_COLOR)
+
+
+func _preview_name() -> String:
+	return "StructurePreview"
 
 
 ## Draw what these settings would build, at the placement they would build at.
@@ -77,7 +76,7 @@ func show_preview(type: String, settings: Dictionary, placement: Transform3D) ->
 	# from the same face sets is given.
 	_mesh_instance.global_transform = placement
 	_mesh_instance.visible = true
-	_container.visible = true
+	_preview_container.visible = true
 	_piece_count = drawn
 	return drawn
 
@@ -89,41 +88,24 @@ func piece_count() -> int:
 
 func clear() -> void:
 	_piece_count = 0
-	_enabled = false
 	if is_instance_valid(_mesh_instance):
-		_mesh_instance.visible = false
 		_mesh_instance.mesh = null
-	if is_instance_valid(_container):
-		_container.visible = false
+	super()
 
 
 func set_enabled(value: bool) -> void:
 	if value:
-		_enabled = true
 		_ensure_nodes()
-	else:
-		clear()
+	super(value)
 
 
 func destroy() -> void:
 	_piece_count = 0
-	_enabled = false
 	_mesh_instance = null
-	if is_instance_valid(_container):
-		if _container.get_parent():
-			_container.get_parent().remove_child(_container)
-		_container.free()
-	_container = null
+	super()
 
 
 func _ensure_nodes() -> void:
-	if not is_instance_valid(_container):
-		_container = Node3D.new()
-		_container.name = "StructurePreview"
-		root.add_child(_container)
-	_container.visible = true
+	_ensure_container()
 	if not is_instance_valid(_mesh_instance):
-		_mesh_instance = MeshInstance3D.new()
-		_mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		_mesh_instance.material_override = _material
-		_container.add_child(_mesh_instance)
+		_mesh_instance = _make_mesh(_material)

@@ -124,7 +124,7 @@ func test_clearing_hides_the_ghost_and_forgets_the_count():
 	root.clear_structure_preview()
 
 	assert_eq(root.structure_preview_pieces(), 0)
-	assert_false(root.structure_preview._container.visible, "the container goes with it")
+	assert_false(root.structure_preview._preview_container.visible, "the container goes with it")
 
 
 func test_a_destroyed_preview_can_be_used_again():
@@ -388,4 +388,4 @@ func test_the_ghost_leaves_with_the_level_it_was_drawn_in():
 
 	root.get_parent().remove_child(root)
 
-	assert_null(root.structure_preview._container, "the overlay went with the level")
+	assert_null(root.structure_preview._preview_container, "the overlay went with the level")

@@ -1,6 +1,6 @@
 @tool
 class_name HFArrayPreview
-extends "hf_system.gd"
+extends "hf_preview_system.gd"
 ## A wireframe of the copies an array would make, before it makes them.
 ##
 ## The Structure section learned to draw itself; the array section next to it did
@@ -19,7 +19,6 @@ const HFOutlineUtil = preload("../hf_outline_util.gd")
 ## something that does.
 const GHOST_COLOR := Color(0.9, 0.95, 1.0, 0.5)
 
-var _container: Node3D
 var _mesh_instance: MeshInstance3D
 var _material: StandardMaterial3D
 var _copy_count: int = 0
@@ -28,11 +27,11 @@ var _copy_count: int = 0
 func _init(p_root: Node3D = null) -> void:
 	super(p_root)
 	_enabled = false
-	_material = StandardMaterial3D.new()
-	_material.albedo_color = GHOST_COLOR
-	_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_material.no_depth_test = true
+	_material = ghost_material(GHOST_COLOR)
+
+
+func _preview_name() -> String:
+	return "ArrayPreview"
 
 
 ## Draw the copies these placements would make of these brushes.
@@ -73,7 +72,7 @@ func show_preview(brush_ids: Array, placements: Array) -> int:
 	# stands somewhere different; the mesh itself carries no placement of its own.
 	_mesh_instance.global_transform = Transform3D.IDENTITY
 	_mesh_instance.visible = true
-	_container.visible = true
+	_preview_container.visible = true
 	_copy_count = placements.size()
 	return _copy_count
 
@@ -85,41 +84,24 @@ func copy_count() -> int:
 
 func clear() -> void:
 	_copy_count = 0
-	_enabled = false
 	if is_instance_valid(_mesh_instance):
-		_mesh_instance.visible = false
 		_mesh_instance.mesh = null
-	if is_instance_valid(_container):
-		_container.visible = false
+	super()
 
 
 func set_enabled(value: bool) -> void:
 	if value:
-		_enabled = true
 		_ensure_nodes()
-	else:
-		clear()
+	super(value)
 
 
 func destroy() -> void:
 	_copy_count = 0
-	_enabled = false
 	_mesh_instance = null
-	if is_instance_valid(_container):
-		if _container.get_parent():
-			_container.get_parent().remove_child(_container)
-		_container.free()
-	_container = null
+	super()
 
 
 func _ensure_nodes() -> void:
-	if not is_instance_valid(_container):
-		_container = Node3D.new()
-		_container.name = "ArrayPreview"
-		root.add_child(_container)
-	_container.visible = true
+	_ensure_container()
 	if not is_instance_valid(_mesh_instance):
-		_mesh_instance = MeshInstance3D.new()
-		_mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		_mesh_instance.material_override = _material
-		_container.add_child(_mesh_instance)
+		_mesh_instance = _make_mesh(_material)

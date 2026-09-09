@@ -104,6 +104,7 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `hf_carve_system.gd` | `HFCarveSystem` | Boolean-subtract carve (progressive-remainder box slicing) |
 | `hf_io_visualizer.gd` | `HFIOVisualizer` | Entity I/O connection lines in viewport (ImmediateMesh) |
 | `hf_io_presets.gd` | `HFIOPresets` | Built-in and user-saved I/O connection presets with target-tag mapping |
+| `hf_preview_system.gd` | `HFPreviewSystem` | Base for the six overlay previews. Owns the container node, the `MeshInstance3D` pool, `ghost_material()`, `clear()`, `set_enabled()` and `destroy()`; each preview keeps only what it draws, what colour, and when there is nothing to draw. `_ensure_container()` is overridable for a preview whose meshes are named rather than indexed, and the base reaches the container through a non-virtual `_build_container()` so such an override cannot be re-entered |
 | `hf_subtract_preview.gd` | `HFSubtractPreview` | Live CSG cut overlay between subtract and additive brushes, with a wireframe AABB fallback (debounced, pooled) |
 | `hf_carve_preview.gd` | `HFCarvePreview` | Green wireframe preview of carve slice pieces before confirmation |
 | `hf_clip_preview.gd` | `HFClipPreview` | Clip-plane and retained-half preview before confirmation |
