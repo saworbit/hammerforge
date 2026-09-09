@@ -143,6 +143,13 @@ func capture_entity_info(entity: DraftEntity) -> Dictionary:
 	var group_id := str(entity.get_meta("group_id", ""))
 	if group_id != "":
 		info["group_id"] = group_id
+	# The authored name, which is not the node name. It is what an I/O output
+	# targets and what `find_entities_by_name()` looks up, so an entity that comes
+	# back without it is wired to nothing. Brush entities have carried it through
+	# their own infos since #149; point entities were left out.
+	var authored := str(entity.get_meta("entity_name", ""))
+	if authored != "":
+		info["entity_name"] = authored
 	return info
 
 
@@ -170,6 +177,9 @@ func restore_entity_from_info(info: Dictionary) -> DraftEntity:
 	var group_id := str(info.get("group_id", ""))
 	if group_id != "":
 		entity.set_meta("group_id", group_id)
+	var authored := str(info.get("entity_name", ""))
+	if authored != "":
+		entity.set_meta("entity_name", authored)
 	entity.set_meta("is_entity", true)
 	root.entities_node.add_child(entity)
 	root._assign_owner(entity)

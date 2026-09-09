@@ -296,3 +296,61 @@ func test_create_entity_from_map_keeps_world_origin_when_root_is_offset():
 		Vector3(0.001, 0.001, 0.001),
 		"Map origins are world coordinates, not offsets from the level root"
 	)
+
+
+# ===========================================================================
+# The authored entity name survives capture and restore (#251)
+# ===========================================================================
+
+
+func test_roundtrip_preserves_the_authored_entity_name():
+	# The authored name is not the node name. It is what an I/O output targets and
+	# what find_entities_by_name() looks up, so an entity that comes back without
+	# it is wired to nothing.
+	var e = _make_draft_entity("info_target")
+	e.set_meta("entity_name", "key_door_target")
+
+	var info = sys.capture_entity_info(e)
+	assert_eq(str(info.get("entity_name", "")), "key_door_target", "the name is captured")
+
+	var restored = sys.restore_entity_from_info(info)
+	assert_not_null(restored)
+	assert_eq(str(restored.get_meta("entity_name", "")), "key_door_target")
+
+
+func test_duplicate_info_keeps_the_authored_entity_name():
+	var e = _make_draft_entity("info_target")
+	e.set_meta("entity_name", "key_door_target")
+
+	var dup = sys.restore_entity_from_info(sys.build_duplicate_info(e, Vector3(64, 0, 0)))
+
+	assert_not_null(dup)
+	assert_eq(str(dup.get_meta("entity_name", "")), "key_door_target")
+
+
+func test_roundtrip_without_a_name_sets_no_meta():
+	var e = _make_draft_entity("light_point")
+	var info = sys.capture_entity_info(e)
+	assert_false(info.has("entity_name"))
+	var restored = sys.restore_entity_from_info(info)
+	assert_false(restored.has_meta("entity_name"), "Unnamed entities stay free of the meta")
+
+
+func test_a_point_entity_name_survives_a_state_restore():
+	# The reported symptom: an undo, a redo, an autosave or a reload all run the
+	# level through a snapshot, and the name was dropped every time.
+	var level := LevelRoot.new()
+	level.auto_spawn_player = false
+	level.commit_freeze = false
+	level.hflevel_autosave_enabled = false
+	add_child_autoqfree(level)
+	var entity := DraftEntity.new()
+	entity.entity_type = "info_target"
+	entity.entity_class = "info_target"
+	level.entities_node.add_child(entity)
+	entity.set_meta("entity_name", "key_door_target")
+
+	level.restore_state(level.capture_state())
+
+	var found: Array = level.entity_system.find_entities_by_name("key_door_target")
+	assert_eq(found.size(), 1, "the restored entity still answers to the name it was given")
