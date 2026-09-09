@@ -51,6 +51,13 @@ func build(parent: Control) -> void:
 	dock.hollow_detach_btn.pressed.connect(dock._on_detach_hollow)
 	hollow_row.add_child(dock.hollow_detach_btn)
 
+	# What a Re-hollow would undo. Under the row rather than in it, because it is a
+	# sentence and the row is three controls wide.
+	dock.hollow_warning = Label.new()
+	dock.hollow_warning.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	dock.hollow_warning.visible = false
+	sc.add_child(dock.hollow_warning)
+
 	dock.clip_btn = HFUIFactoryType.make_button("Clip Selected (Shift+X)")
 	sc.add_child(dock.clip_btn)
 
