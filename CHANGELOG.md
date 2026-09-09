@@ -83,6 +83,120 @@ The format is based on Keep a Changelog, and this project follows semantic versi
     building its paint tool without an engine, the hook surviving, the cleanup
     leaving a lone island and a one cell hole exactly as it found them, and intent
     classification still answering.
+- **Precision snap stops measuring brushes the pointer cannot reach.** With
+  Vertex, Center, Edge or Perpendicular on, every pointer motion transformed
+  every vertex of every brush in the level into world space, appended the lot,
+  and only then measured them against `snap_threshold`. A brush on the far side
+  of the map did the same work as the one under the cursor, so the cost tracked
+  the size of the level rather than how much of it was in reach.
+  - **A brush is now measured against the query point before any of its snap
+    points are built.** The check is the brush origin against the query, allowing
+    for how far the brush's own box reaches once its rotation and scale are
+    applied, so a long wall whose origin is a hundred units away is still kept
+    while its far end is under the pointer. Edges lie between vertices inside
+    that reach, so Perpendicular is covered by the same bound.
+  - **The extent is read without building the snap points**, because building
+    them is the work being skipped. It follows the same branch as the geometry
+    itself, and tests hold the two to the same answer for a box, a custom brush,
+    a wedge and a brush with no faces.
+  - **The bound is exact for any transform**, including a mirrored or sheared
+    one, because it sums each axis's contribution to the furthest corner rather
+    than assuming the basis is a rotation.
+  - Measured over 300 brushes and 200 motion events with Vertex, Edge and
+    Perpendicular on, one brush in reach: an all non-box level went from 2.40 ms
+    to 0.86 ms per event, and a level of boxes from 2.63 ms to 0.44 ms. The
+    non-box figure still carries a cache lookup per brush, which is the snap
+    geometry cache's key and not this change.
+  - **Coverage** (`tests/test_snap_candidate_culling.gd`): 20 tests over a
+    distant brush contributing nothing, three hundred of them changing nothing,
+    a distant centre, an unlimited query still collecting the level, a long wall
+    reached by its far end, perpendicular snap onto a long edge, a turned brush,
+    a scaled brush, a custom brush, exclusions, the preview brush, closest
+    candidate ordering, a point out of reach of everything, what a pointer query
+    actually measures, and the two extent branches agreeing.
+- **Check Issues stops comparing brushes that are nowhere near each other.** The
+  two subtraction checks each did their own broad scan. `_check_floating_subtract()`
+  walked the whole brush list for every subtraction looking for an additive to
+  land on, `_check_overlapping_subtracts()` then compared every subtraction with
+  every other one, and both rebuilt each brush's AABB inside those loops. On a
+  level of 500 solids and 500 cuts that is 250,000 pair tests and 500,000 boxes
+  built, almost all of them between brushes on opposite sides of the map.
+  - **One broad phase now answers both questions.** Every world AABB is built
+    once, then a single sort-and-sweep along the axis the level is widest on
+    visits only the pairs that overlap on that axis. A cut is grounded when the
+    sweep pairs it with a solid, and two cuts that meet are an overlap, so the
+    same walk produces both results.
+  - **The axis is chosen from the brushes**, not fixed, because a level is usually
+    a floor plan and the axis that separates the most brushes is the one worth
+    sorting on.
+  - **The box is still the brush's own size at its origin, rotation and all.**
+    Widening it to a turned brush's real extent would change which levels report
+    an issue, and that is a different question from this one.
+  - **What gets reported has not moved.** Floating cuts are still listed in level
+    order among the other per-brush issues, and overlapping pairs still name the
+    earlier brush first and carry it as the issue's node.
+  - Measured over 1,000 brushes with the checks timed on their own: a floor plan
+    went from 117.51 ms and 250,000 pair tests to 11.26 ms and 21,248, and the
+    same brushes strung out along a line went from 114.26 ms to 4.85 ms and 500
+    pair tests. The rest of `check_bake_issues()` is untouched and still the
+    larger share of the pass.
+  - **Coverage** (`tests/test_bake_issues_scale.gd`): 18 tests over a cut inside a
+    solid, a cut that only touches one, a solid in the committed node, entity
+    solids and entity cuts, a turned cut, a solid that sorts after its cut on two
+    different axes, a long corridor reaching a cut far from its origin, three and
+    twelve mutually overlapping cuts, pair naming and ordering, and comparison
+    budgets over spread out and strung out levels.
+- **The Performance section stops measuring the level when nobody is looking at
+  it.** It refreshed every thirty editor frames whether it was open or shut, and
+  it is created shut. Those readouts are not label assignments: the vertex
+  estimate walks every brush and every face, the paint figure walks every layer,
+  and with chunking on the chunk count recollects the whole bake candidate set,
+  builds the chunk dictionary and sorts it while the recommendation measures the
+  level bounds all over again. The levels that make that expensive are the ones
+  that make the panel worth opening, so an idle editor on a big chunked scene was
+  paying the most for numbers on screen nowhere.
+  - **Collapsed, on another tab, or in a hidden dock all count as not looking.**
+    Leaving the section open on the Manage tab and working on the Build tab is
+    the common case, and it used to cost the same as watching it.
+  - **Opening the section fills it in at once** rather than showing whatever the
+    last look left behind until the next tick.
+  - The **Live Brushes** count in the footer is on screen at all times and still
+    refreshes on the same tick. It reads a cached count, so it was never part of
+    the cost.
+  - **Coverage** (`tests/test_perf_panel_visibility.gd`): 8 tests over the section
+    starting shut, a shut section left alone across ninety frames, the footer
+    still counting, opening, an open section refreshing, closing again, an open
+    section on a tab nobody is on, and coming back to that tab.
+- **The entity wiring overlay only redraws when the wiring changes.** It rebuilt
+  every ten editor frames whether or not anything had moved: the connection list
+  was recollected, every target was resolved by scanning the whole level, the
+  curve mesh was thrown away and rebuilt, and Highlight Connected freed and
+  remade its pulse spheres. On a level with 200 entities and 400 outputs that is
+  about 80,000 name comparisons per rebuild, six times a second, to draw the
+  picture that was already on screen.
+  - **Targets resolve through one index instead of one scan each.**
+    `HFEntitySystem.build_name_index()` maps every address in the level to the
+    nodes that answer to it in a single pass, and the drawing loop reads it. The
+    addresses and their order match `find_entities_by_name()` exactly, and they
+    are built next to it so the two cannot drift apart.
+  - **The redraw is guarded by a change check rather than by a signal.** A rename
+    in the Scene dock, an undo, and an entity dragged in the viewport all change
+    the picture without going through HammerForge, so a signal would have had to
+    be emitted from each of them and the ones nobody remembered would be
+    stale-overlay bugs. The check reads each node once; the rebuild it guards
+    reads every connection against every entity.
+  - **Pulse spheres are moved rather than freed and remade**, and the pulse now
+    advances on the real frame time instead of an assumed 60 frames per second.
+  - **A graph where every connection dangles no longer opens an empty mesh
+    surface.** Renaming the last live target left the overlay closing a surface
+    with no vertices in it, which Godot reports as an error. Nothing resolves, so
+    now nothing is drawn.
+  - **Coverage** (`tests/test_io_visualizer_dirty.gd`): 28 tests over idle frames,
+    an output added, removed and re-delayed, a native rename, an alias edit, a
+    moved entity, a moved brush entity, an entity added and removed, selection,
+    a forced rebuild, a lost mesh node, sphere reuse and release, the real delta,
+    the dangling-only graph and its recovery, and the index against the lookup it
+    replaces.
 - **The array edit warning counts more than movement.** It counted a copy that had
   been dragged and said nothing about one that had been resized, reshaped,
   retextured, or had a paint layer added — though the same press rebuilds over
