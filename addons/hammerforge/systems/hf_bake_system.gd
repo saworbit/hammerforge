@@ -1357,7 +1357,6 @@ func append_brush_list_to_csg(
 		csg_shape.operation = (
 			CSGShape3D.OPERATION_SUBTRACTION if force_subtract else draft.operation
 		)
-		csg_shape.global_transform = draft.global_transform
 		if csg_shape.operation != CSGShape3D.OPERATION_SUBTRACTION:
 			var mat = draft.material_override
 			if not mat:
@@ -1365,7 +1364,11 @@ func append_brush_list_to_csg(
 			if mat:
 				csg_shape.set("material", mat)
 				csg_shape.set("material_override", mat)
+		# The combiner is parented to LevelRoot, so it carries the root's
+		# transform. Place the shape after it is in the tree, or the assignment
+		# writes a local transform and the root lands on it a second time.
 		target.add_child(csg_shape)
+		csg_shape.global_transform = draft.global_transform
 
 
 ## Replace existing collision bodies with per-visgroup StaticBody3D nodes.

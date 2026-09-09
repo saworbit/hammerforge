@@ -608,6 +608,19 @@ and run".
 - A selection hands over its facing but not its scale or its size, so a structure
   built on a large wall is still the size its own settings say.
 
+## Done (Bake Placement, September 2026)
+- Found by sweeping for the rest of the parent-before-you-place family rather
+  than by hitting it. The worst of the group: the others were the editor drawing
+  or placing wrongly, this one baked the wrong geometry into the output.
+- `append_brush_list_to_csg()` assigned each CSG stand-in's `global_transform`
+  before adding it to the combiner. The combiner is a child of `LevelRoot`, so
+  the write went to the local transform and the root transform was applied again
+  on parenting. A brush at `(32, 0, 0)` under a root at `(1000, 0, 1000)` baked
+  at `(1032, 0, 1000)`, and a turned root doubled the rotation as well.
+- The shape is placed after `add_child()` now. All three bake paths parent their
+  combiner under the root first, so all three are covered.
+- 2 new tests (`tests/test_bake_system.gd`); both fail against the old code.
+
 ## Done (Undo Coverage, September 2026)
 - `HFUndoHelper.register_action()` unrolls `add_do_method()` by hand, because it
   takes an object, a method name and varargs and GDScript cannot spread an array
@@ -759,7 +772,7 @@ Completion is responsibility-based rather than tied to an arbitrary line count. 
 - Headless editor tests retain the complete tool graph, with focused export-playtest coverage guarding the runtime boundary.
 
 ### Risk-focused test gaps
-The current suite covers 3,002 tests across 157 scripts, including the large brush, bake, paint, vertex, transform, generator, baker, brush-instance, and map-I/O systems. The issue tracker is clear as of September 8, 2026. No known limitation is currently untracked and uncovered.
+The current suite covers 3,004 tests across 157 scripts, including the large brush, bake, paint, vertex, transform, generator, baker, brush-instance, and map-I/O systems. The issue tracker is clear as of September 8, 2026. No known limitation is currently untracked and uncovered.
 
 The last one on this list is **resolved**: a `.map` entity property value
 containing a quote used to come back truncated, silently, because four quotes is

@@ -399,7 +399,7 @@ addons/hammerforge/
 The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on push and PR to `main`:
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
-- **GUT unit + integration tests** -- 3,002 tests across 157 test scripts (2,995 passing plus seven intentional no-assert safety tests; 15,703 assertions; verified in CI on September 9, 2026; runs Godot headless)
+- **GUT unit + integration tests** -- 3,004 tests across 157 test scripts (2,997 passing plus seven intentional no-assert safety tests; 15,707 assertions; verified in CI on September 9, 2026; runs Godot headless)
 
 Run locally before pushing:
 ```
@@ -488,7 +488,7 @@ The table below describes the larger suites rather than all 157 files; `ls tests
 | `test_bugfix_regressions.gd` | 38 | Vertex undo/projection/axis constraints, cancelled-release restoration, viewport owner routing, RMB session and lost-release recovery, narrow native-object handling, paint capture, and scene-creation safety |
 | `test_vertex_system.gd` | 40 | Vertex movement/convexity/undo snapshots, exact convex-clip dirty tags, and perspective/orthographic/axis-locked drag projection |
 | `test_reference_cleanup.gd` | 8 | Delete cleans group/visgroup membership and entity I/O while preserving unrelated references |
-| `test_bake_system.gd` | 139 | Baked-container adoption/replacement/clear and exact snapshot restore, conservative legacy migration (chunk, face-material, heightmap), structural-cut fallback, one-pass visual/collision CSG equivalence, transformed cordon/chunk interactions, build options, dry runs, preview modes, dirty-tag concurrency, connectors/navmesh, brush entities, and mode 2 integration |
+| `test_bake_system.gd` | 141 | Baked-container adoption/replacement/clear and exact snapshot restore, conservative legacy migration (chunk, face-material, heightmap), structural-cut fallback, one-pass visual/collision CSG equivalence, transformed cordon/chunk interactions, build options, dry runs, preview modes, dirty-tag concurrency, connectors/navmesh, brush entities, and mode 2 integration |
 | `test_bake_issues.gd` | 10 | check_bake_issues: degenerate, oversized, floating subtract, overlapping subtracts, non-manifold/open-edge, clean level, entity skip |
 | `test_weld_and_planarity.gd` | 21 | Non-planar face detection (5), vertex welding + ensure_geometry refresh (3), planarity auto-fix (3), micro-gap detection (2), edge-key independence (1), boundary-straddling weld/gap/parse (3), MapIO integration (2), MapIO snap unit (2) |
 | `test_quick_play_modes.gd` | 13 | Severity blocking, cordon save/restore, dirty retention, camera yaw, and spawn restore across play/error paths |

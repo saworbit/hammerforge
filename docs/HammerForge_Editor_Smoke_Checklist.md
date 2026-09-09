@@ -712,6 +712,10 @@ translated to `(1000, 0, 1000)`.
 - Create a radial array, then press Ctrl+Z once. Confirm the whole array goes
   away in that one press and that the action before it is left alone. Redo and
   confirm every copy comes back.
+- Bake the level. Confirm the baked geometry sits on top of the draft brushes
+  rather than a second root offset away. Turn the LevelRoot 90 degrees and bake
+  again, and confirm the output is still lined up rather than spun about the
+  root.
 
 ### 34. Cleanup / Persistence
 - Dismiss the tutorial with and without `Don't show again` checked.

@@ -2659,3 +2659,58 @@ func test_func_detail_collision_body_sits_at_the_brush():
 	assert_almost_eq(shape_pos.x, mi.position.x, 0.001)
 	assert_almost_eq(shape_pos.y, mi.position.y, 0.001)
 	assert_almost_eq(shape_pos.z, mi.position.z, 0.001)
+
+
+# ===========================================================================
+# The CSG stand-in has to sit where the brush sits
+# ===========================================================================
+
+
+## The temporary combiner is parented to LevelRoot, so it carries the root's
+## transform. A shape whose world transform is set before it is added to that
+## combiner only gets a local transform, and the root's transform lands on it a
+## second time when it is parented.
+func test_csg_shapes_are_placed_in_world_space_when_the_root_is_offset():
+	root.position = Vector3(1000, 0, 1000)
+	var brush := _make_brush(root.draft_brushes_node, Vector3(32, 0, 0))
+	var temp_csg := CSGCombiner3D.new()
+	temp_csg.hide()
+	temp_csg.use_collision = false
+	root.add_child(temp_csg)
+
+	bake_sys.append_brush_list_to_csg([brush], temp_csg)
+
+	assert_eq(temp_csg.get_child_count(), 1, "the brush has to reach the CSG tree")
+	var shape: Node3D = temp_csg.get_child(0)
+	assert_almost_eq(
+		shape.global_position,
+		brush.global_position,
+		Vector3(0.001, 0.001, 0.001),
+		"the CSG stand-in bakes where the brush is, not offset by the root a second time"
+	)
+
+
+func test_csg_shapes_keep_rotation_and_position_together_when_the_root_is_turned():
+	root.position = Vector3(0, 0, 512)
+	root.rotation = Vector3(0, PI / 2.0, 0)
+	var brush := _make_brush(root.draft_brushes_node, Vector3(64, 8, 0))
+	brush.rotate_y(PI / 4.0)
+	var temp_csg := CSGCombiner3D.new()
+	temp_csg.hide()
+	temp_csg.use_collision = false
+	root.add_child(temp_csg)
+
+	bake_sys.append_brush_list_to_csg([brush], temp_csg)
+
+	var shape: Node3D = temp_csg.get_child(0)
+	assert_almost_eq(
+		shape.global_position,
+		brush.global_position,
+		Vector3(0.001, 0.001, 0.001),
+		"a turned root must not move the baked geometry"
+	)
+	var expected: Vector3 = brush.global_transform.basis.get_euler()
+	var got: Vector3 = shape.global_transform.basis.get_euler()
+	assert_almost_eq(
+		got, expected, Vector3(0.001, 0.001, 0.001), "the stand-in keeps the brush's facing"
+	)
