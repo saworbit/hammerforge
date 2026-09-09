@@ -61,6 +61,28 @@ The format is based on Keep a Changelog, and this project follows semantic versi
     presses without reselecting, undo, and what survives a state restore.
 
 ### Changed
+- **Floor paint stops running an inference stage that does nothing.** Every level
+  handed its paint tool an `HFInferenceEngine`, and every ordinary stroke ended by
+  classifying its intent and walking its dirty chunks calling a cleanup that was
+  never written. Denoise, small hole fill, gap bridging, corridor width and angle
+  handling were all presented as a working stage of the paint pipeline and not one
+  of them changed a cell. There was no setting to turn it off, because there was
+  nothing to turn on.
+  - **Nothing assigns it now**, so no stroke enters the stage. The hook on the
+    paint tool stays, because assigning an engine is what will turn it on once
+    there is one worth turning on, and that should arrive with a setting and a
+    default rather than by being on for everybody by accident.
+  - **The stub says what it is.** `apply_cleanup()` is documented as changing no
+    cells, and the shape the stage would take is kept on record beside it: chunk
+    local, one chunk mask at a time with a one cell border so a cleanup cannot
+    seam at a chunk edge or reach a cell the stroke never touched.
+  - `infer_intent()` is the half that works and is kept.
+  - The floor paint guide said inference ran on mouse release if enabled. It now
+    says it is not enabled and what enabling it would take.
+  - **Coverage** (`tests/test_paint_inference_unwired.gd`): 4 tests over a level
+    building its paint tool without an engine, the hook surviving, the cleanup
+    leaving a lone island and a one cell hole exactly as it found them, and intent
+    classification still answering.
 - **Precision snap stops measuring brushes the pointer cannot reach.** With
   Vertex, Center, Edge or Perpendicular on, every pointer motion transformed
   every vertex of every brush in the level into world space, appended the lot,

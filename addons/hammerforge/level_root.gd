@@ -16,7 +16,6 @@ const FaceSelector = preload("face_selector.gd")
 const HFPaintGrid = preload("paint/hf_paint_grid.gd")
 const HFPaintLayerManager = preload("paint/hf_paint_layer_manager.gd")
 const HFPaintTool = preload("paint/hf_paint_tool.gd")
-const HFInferenceEngine = preload("paint/hf_inference_engine.gd")
 const HFGeometrySynth = preload("paint/hf_geometry_synth.gd")
 const HFGeneratedReconciler = preload("paint/hf_reconciler.gd")
 const HFStroke = preload("paint/hf_stroke.gd")
@@ -2647,8 +2646,6 @@ func _setup_paint_system() -> void:
 	paint_tool.layer_manager = paint_layers
 	if not paint_tool.stroke_committed.is_connected(_on_paint_stroke_committed):
 		paint_tool.stroke_committed.connect(_on_paint_stroke_committed)
-	if not paint_tool.inference:
-		paint_tool.inference = HFInferenceEngine.new()
 	if not paint_tool.geometry:
 		paint_tool.geometry = HFGeometrySynth.new()
 	if not paint_tool.reconciler:

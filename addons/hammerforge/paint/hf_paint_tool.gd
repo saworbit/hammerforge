@@ -152,6 +152,9 @@ func _end_stroke() -> void:
 	if dirty.is_empty():
 		_active_stroke = null
 		return
+	# Nothing assigns `inference`. The cleanup pass behind it was never written,
+	# so running it classified every stroke and then changed no cells. Assigning
+	# an engine here is what turns it on, once there is one worth turning on.
 	if inference:
 		var intent = inference.infer_intent(_active_stroke)
 		inference.apply_cleanup(layer, dirty, intent, inference_settings)

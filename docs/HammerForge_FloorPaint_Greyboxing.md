@@ -67,7 +67,8 @@ Brush Shape
 
 Live preview
 - During drag, preview writes into the layer and immediately regenerates affected chunks.
-- On mouse-up, inference (if enabled) runs and a final regeneration happens.
+- On mouse-up, a final regeneration happens.
+- Stroke inference (denoise, hole fill, gap bridging, corridor width) is **not enabled**. `HFInferenceEngine` classifies a stroke's intent but its cleanup pass was never written, so nothing assigns it to the paint tool and no stroke is cleaned up. Turning it on means writing that pass, assigning an engine, and giving it a setting and a default.
 
 ## Geometry Synthesis
 
