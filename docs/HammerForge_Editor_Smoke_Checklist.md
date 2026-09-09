@@ -691,6 +691,28 @@ It writes one PNG per tab under `user://console_preview/`.
 - Make the `<level>.hfregions` directory unwritable (for example put a regular file at that path) and save. Confirm the save is reported as failed rather than succeeding with missing region data.
 - Save twice in quick succession to the same path while the first write is still running. Confirm the file ends up holding the newer of the two.
 
+### 33c. A LevelRoot Away From the World Origin
+Most placement bugs are invisible while the root sits at the origin, which is the
+only way it usually gets exercised. Run this whole block with the LevelRoot node
+translated to `(1000, 0, 1000)`.
+
+- Click in the viewport to place a brush. Confirm it lands under the cursor
+  rather than a thousand units away, and that the grid moves to the brush you
+  just made rather than somewhere else.
+- Drag out a second brush. Confirm it lands on the grid you can see.
+- Select a brush and open the hollow, carve, clip and subtract previews in turn.
+  Confirm each overlay draws around the real geometry.
+- Enable the cordon and confirm the wireframe surrounds the region it names.
+  Check the entity wiring lines, the vertex and edge handles, and the prefab
+  ghost in the same way.
+- Place an entity, save state, then undo and redo. Confirm the entity returns to
+  where it was, and that the Output log carries no out-of-tree transform errors.
+- Import a `.map` file. Confirm its entities land at their authored coordinates
+  rather than offset by the root.
+- Create a radial array, then press Ctrl+Z once. Confirm the whole array goes
+  away in that one press and that the action before it is left alone. Redo and
+  confirm every copy comes back.
+
 ### 34. Cleanup / Persistence
 - Dismiss the tutorial with and without `Don't show again` checked.
 - Restart Godot and confirm the `show_welcome` preference behaves as expected.

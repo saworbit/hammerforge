@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: September 3, 2026
+Last updated: September 9, 2026
 
 This roadmap is a directional plan. Items may change based on user feedback.
 
@@ -607,6 +607,36 @@ and run".
   one.
 - A selection hands over its facing but not its scale or its size, so a structure
   built on a large wall is still the size its own settings say.
+
+## Done (Undo Coverage, September 2026)
+- `HFUndoHelper.register_action()` unrolls `add_do_method()` by hand, because it
+  takes an object, a method name and varargs and GDScript cannot spread an array
+  into varargs. The unroll stopped at five arguments and anything longer fell
+  through with no do operation, while `commit()` bailed out to a plain call even
+  earlier. Create Radial Array passes six, so it ran and registered nothing.
+- Past the unroll the helper now registers the result rather than the call: run
+  the method, snapshot the state, and make that snapshot the do operation. It is
+  the same restore the undo side already uses and the path stepping commands like
+  rotate and nudge already take, so no ceiling was raised.
+- `create_radial_array` was the only command over the limit, checked across all
+  43 method names dispatched through the commit sites.
+- 3 new tests (`tests/test_undo_collation.gd`); two fail against the old code.
+
+## Done (World-Space Placement, September 2026)
+- Setting `global_position` or `global_transform` on a `Node3D` that is not yet
+  in the tree writes the local transform instead, so the node lands shifted by
+  its container once parented.
+- `place_brush()` assigned the click position before the brush entered the draft
+  or pending container, so a click landed at the root's offset and
+  `_record_last_brush()` stored that same wrong point.
+- `restore_entity_from_info()` and `create_entity_from_map()` assigned before
+  parenting, shifting every entity on undo, redo, state restore, prefab placement
+  and map import.
+- All three now assign after the `add_child`, the order `create_brush_from_info()`
+  and `create_default_spawn()` already used. The entity restore does it before it
+  emits `entity_added`.
+- 3 new tests (`tests/test_brush_system.gd`, `tests/test_entity_props.gd`); all
+  three fail against the old code.
 
 ## Done (Construction Plane — September 2026)
 - Having fixed where the overlays draw, the same question was asked of where the

@@ -1,6 +1,6 @@
 # Development Guide
 
-Last updated: September 7, 2026
+Last updated: September 9, 2026
 
 This document covers local setup, codebase structure, and how to test features.
 
@@ -135,7 +135,7 @@ addons/hammerforge/
   plugin_undo_events.gd  Undo/redo signal handling and post-action reconciliation
   plugin_bake_preview.gd Bake preview lifecycle and wireframe toggle
   plugin_gesture_recovery.gd  Stale-gesture detection and recovery on re-entry
-  level_root.gd          Public level facade and coordinator (3,025 lines)
+  level_root.gd          Public level facade and coordinator (3,163 lines)
   input_state.gd         Drag/paint/extrude/vertex state machine (HFInputState)
   hf_selection_gesture.gd Select-mode LMB arbiter (native object selection, face marquee, gizmos)
   dock.gd + dock.tscn    UI dock (displayed as Build, Paint, Objects, Test), collapsible sections with persisted state
@@ -450,7 +450,7 @@ $env:GODOT = "C:\Godot\Godot_v4.7-stable_win64.exe"
 
 Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framework (installed in `addons/gut/`).
 
-The table below describes the larger suites rather than all 147 files; `ls tests/test_*.gd` is the complete list. `tests/test_suite_integrity.gd` fails the run if any of them will not load, because GUT skips an unparseable test file with a warning rather than a failure, and a file that is skipped is coverage that has silently gone.
+The table below describes the larger suites rather than all 157 files; `ls tests/test_*.gd` is the complete list. `tests/test_suite_integrity.gd` fails the run if any of them will not load, because GUT skips an unparseable test file with a warning rather than a failure, and a file that is skipped is coverage that has silently gone.
 
 | Test File | Tests | Coverage |
 |-----------|-------|----------|
@@ -458,8 +458,8 @@ The table below describes the larger suites rather than all 147 files; `ls tests
 | `test_grouping.gd` | 9 | Group creation, meta, ungroup, regroup, serialization |
 | `test_texture_lock.gd` | 16 | UV offset/scale compensation for all projection types |
 | `test_cordon_filter.gd` | 10 | AABB intersection, cordon-filtered collection, chunk_coord |
-| `test_hollow_tool.gd` | 10 | Hollow creation (6 walls), thickness validation, material/operation preservation |
-| `test_clip_tool.gd` | 16 | Axis splitting (X/Y/Z), size correctness, property preservation (material, visgroups, group_id, brush_entity_class), edge rejection |
+| `test_hollow_tool.gd` | 17 | Hollow creation (6 walls), thickness validation, material/operation preservation |
+| `test_clip_tool.gd` | 25 | Axis splitting (X/Y/Z), size correctness, property preservation (material, visgroups, group_id, brush_entity_class), edge rejection |
 | `test_brush_entity.gd` | 19 | Tie/untie entity classes, structural brush filtering, bake collection exclusion, brush info round-trip, and exact Commit Cuts preparation/finalization |
 | `test_entity_io.gd` | 27 | Entity I/O CRUD (add/remove/get outputs), find by name, get_all_connections, serialization, default values |
 | `test_justify_uv.gd` | 10 | UV justify modes (fit/center/left/right/top/bottom/stretch/tile), zero-range safety, offset accumulation |
@@ -467,26 +467,26 @@ The table below describes the larger suites rather than all 147 files; `ls tests
 | `test_face_data.gd` | 15 | FaceData to_dict/from_dict round-trip, ensure_geometry, triangulate, box_projection_axis |
 | `test_paint_layer.gd` | 32 | Cell bit storage, chunk management, material IDs, blend weights, dirty tracking, heightmap, memory |
 | `test_heightmap_io.gd` | 12 | Base64 encode/decode round-trip, noise generation (FastNoiseLite), determinism |
-| `test_hflevel_io.gd` | 38 | Variant encode/decode (Vector2/3, Transform3D, Basis, Color), payload build/parse, full pipeline |
+| `test_hflevel_io.gd` | 41 | Variant encode/decode (Vector2/3, Transform3D, Basis, Color), payload build/parse, full pipeline |
 | `test_brush_shapes.gd` | 37 | Box face generation, normals, vertex bounds, triangulation, serialization, centered odd-sided pyramid/prism preview+bake bounds, winding migration, sparse overlay lifecycle, material refresh, and truthful custom-face previews |
 | `test_viewport_outlines.gd` | 39 | Semantic primitive/custom/subtract outlines, combined nested entity targets, top-level/hidden visibility, hover suppression, shape-aware handle sizing, odd-polygon agreement, world-snapped resize, and bounded recovery/cancel/undo behavior |
 | `test_selection_gesture.gd` | 40 | Native Object Select/widget ownership, modal Face Select, scope/focus guards, runtime repair, modifiers, recovery, native duplicate/reparent handling, prefab unlinking, bake-setting invalidation, native overlay drawing, delegated input/state boundaries, and stable-ID transform/Inspector/FaceData/undo Bake Changed reconciliation |
 | `test_plugin_edit_actions.gd` | 3 | Thin plugin delegates, stable managed IDs/paths and undo targets, plus confirmation-dialog and preview-cleanup ownership |
 | `test_plugin_drop_handler.gd` | 3 | Supported drag payload classification, thin plugin delegates, and placement/selection/prefab/material undo contracts |
 | `test_picking_correctness.gd` | 15 | Exact non-box face hits and placement, construction-plane fallback, internal entity preview traversal, nearest brush/entity ordering, scaled world-ray distances, hidden-visgroup exclusion, and canonical visibility-aware picking across tools |
-| `test_entity_props.gd` | 12 | Entity property form defaults (all types), roundtrip capture/restore, empty properties safety |
+| `test_entity_props.gd` | 14 | Entity property form defaults (all types), roundtrip capture/restore, empty properties safety |
 | `test_duplicator.gd` | 7 | Instance count, progressive offset, clear cleanup, to_dict/from_dict roundtrip, edge cases |
 | `test_map_export.gd` | 38 | Quake/Valve220 face formats, custom-face geometry, entity properties, brush entities, fractional coordinates, and projections |
 | `test_tool_registry.gd` | 27 | Tool registration, activate/deactivate, dispatch routing, shortcut/external ID guards, exclusivity, and pointer capture cancel/recovery |
-| `test_keymap.gd` | 20 | Default bindings loaded, key/modifier matching, display strings, rebinding, JSON roundtrip, and current action coverage |
+| `test_keymap.gd` | 22 | Default bindings loaded, key/modifier matching, display strings, rebinding, JSON roundtrip, and current action coverage |
 | `test_user_prefs.gd` | 15 | Defaults, get/set prefs, section state, recent files, JSON roundtrip, and dismissed hints |
 | `test_dirty_tags.gd` | 31 | Exact transform/material/UV/paint/vertex dirty tags, no-op suppression, floor routing, paint/full tags, consume, and batch queue/flush/discard/nesting |
 | `test_prototype_textures.gd` | 27 | Catalog constants, path generation, texture existence, material persistence (resource_path), batch loading into MaterialManager |
 | `test_op_result.gd` | 30 | HFOpResult constructors and operation result/failure/fix-hint contracts |
-| `test_snap_system.gd` | 17 | Grid/Vertex/Center/Edge/Perpendicular snap modes, threshold, preview exclusion, priority, and empty-scene fallback |
+| `test_snap_system.gd` | 32 | Grid/Vertex/Center/Edge/Perpendicular snap modes, threshold, preview exclusion, priority, and empty-scene fallback |
 | `test_drag_dimensions.gd` | 16 | Drag dimensions/formatting plus normalized sphere/cylinder/cone/capsule placement bounds |
-| `test_bugfix_regressions.gd` | 32 | Vertex undo/projection/axis constraints, cancelled-release restoration, viewport owner routing, RMB session and lost-release recovery, narrow native-object handling, paint capture, and scene-creation safety |
-| `test_vertex_system.gd` | 35 | Vertex movement/convexity/undo snapshots, exact convex-clip dirty tags, and perspective/orthographic/axis-locked drag projection |
+| `test_bugfix_regressions.gd` | 38 | Vertex undo/projection/axis constraints, cancelled-release restoration, viewport owner routing, RMB session and lost-release recovery, narrow native-object handling, paint capture, and scene-creation safety |
+| `test_vertex_system.gd` | 40 | Vertex movement/convexity/undo snapshots, exact convex-clip dirty tags, and perspective/orthographic/axis-locked drag projection |
 | `test_reference_cleanup.gd` | 8 | Delete cleans group/visgroup membership and entity I/O while preserving unrelated references |
 | `test_bake_system.gd` | 139 | Baked-container adoption/replacement/clear and exact snapshot restore, conservative legacy migration (chunk, face-material, heightmap), structural-cut fallback, one-pass visual/collision CSG equivalence, transformed cordon/chunk interactions, build options, dry runs, preview modes, dirty-tag concurrency, connectors/navmesh, brush entities, and mode 2 integration |
 | `test_bake_issues.gd` | 10 | check_bake_issues: degenerate, oversized, floating subtract, overlapping subtracts, non-manifold/open-edge, clean level, entity skip |
@@ -495,15 +495,15 @@ The table below describes the larger suites rather than all 147 files; `ls tests
 | `test_integration.gd` | 22 | End-to-end: brush lifecycle, paint + heightmap, entity workflow, visgroup cross-system, snap, bake cross-system, entity I/O cleanup, brush info round-trip |
 | `test_shortcut_dialog.gd` | 8 | Category assignment (tools, paint, axis lock, editing), action labels (known/unknown), get_all_bindings copy safety |
 | `test_tutorial_wizard.gd` | 18 | Step advancement, persistence, deferred start/resume, bake validation, completion, and no-root safety |
-| `test_subtract_preview.gd` | 14 | AABB math, overlapping live-CSG cut groups, enable/disable, debounce, and safe destroy |
+| `test_subtract_preview.gd` | 16 | AABB math, overlapping live-CSG cut groups, enable/disable, debounce, and safe destroy |
 | `test_prefab.gd` | 11 | Empty prefab, to_dict/from_dict roundtrip, transform preservation, file save/load, invalid data handling, multiple brushes, entity I/O preservation, instantiate empty |
-| `test_vertex_edges.gd` | 19 | Edge extraction (12 edges for box), dedup, edge selection (additive, toggle, clear), edge world positions, edge split (vertex count, face vert count), vertex merge, sub-mode toggle, get_single_selected_edge, point-to-segment-dist-2d |
-| `test_polygon_tool.gd` | 20 | Convexity/face construction, bidirectional positive height, missed-release and focus recovery, tool metadata, and settings schema |
-| `test_path_tool.gd` | 16 | Segment/miter construction, face data, reconstruction, pointer lifecycle, and tool metadata |
+| `test_vertex_edges.gd` | 21 | Edge extraction (12 edges for box), dedup, edge selection (additive, toggle, clear), edge world positions, edge split (vertex count, face vert count), vertex merge, sub-mode toggle, get_single_selected_edge, point-to-segment-dist-2d |
+| `test_polygon_tool.gd` | 23 | Convexity/face construction, bidirectional positive height, missed-release and focus recovery, tool metadata, and settings schema |
+| `test_path_tool.gd` | 19 | Segment/miter construction, face data, reconstruction, pointer lifecycle, and tool metadata |
 | `test_material_browser.gd` | 24 | Thumbnail grid, palette view, null material skip, selection signals, double-click, drag data, search, pattern/color filters, favorites, hover preview, context popup |
 | `test_material_integration.gd` | 28 | Brush search (_iter_pick_nodes), hover overlay mesh (normals, mutation, lifecycle), whole-brush/per-face assignment via root, face selection counting via dock, resolve_material_assign_action fallback (face→brush→error), selection-clear signaling, and the invariant that empty `EditorSelection` is never hidden by a stale plugin cache |
-| `test_context_toolbar.gd` | 23 | Context determination, mixed-selection suppression, labels, actions, material thumbnails, and live refresh |
-| `test_hotkey_palette.gd` | 16 | Search, action availability, mixed-selection suppression, bindings, and invocation |
+| `test_context_toolbar.gd` | 25 | Context determination, mixed-selection suppression, labels, actions, material thumbnails, and live refresh |
+| `test_hotkey_palette.gd` | 20 | Search, action availability, mixed-selection suppression, bindings, and invocation |
 | `test_spawn_system.gd` | 31 | Spawn lookup/validation/auto-fix/default creation/debug viz, property helpers, masks, and floor offsets |
 | `test_selection_features.gd` | 25 | Selection filters/similar/texture actions plus dock ownership, mixed/heterogeneous guards, and disabled controls |
 | `test_io_presets.gd` | 21 | Builtin preset structure, user preset CRUD, apply with target mapping/self/delay/fire_once, save entity as preset, get target tags |
@@ -516,30 +516,30 @@ The table below describes the larger suites rather than all 147 files; `ls tests
 | `test_dock_terrain_integration.gd` | 30 | Dock heightmap convert (selection→convert→grid inheritance→chunk_size→signal→active layer→regenerate→height data), scatter settings (defaults, spline points, circle, null controls), scatter preview (circle, no layer, spline too few/stale/valid), scatter commit (empty, no mesh early return, preserves result), scatter clear (removes preview, safe when null, already-freed) |
 | `test_theme_utils.gd` | 15 | Dark/light detection, panel_bg, panel_border, muted_text, primary_text, accent, success/warning/error colors, toast bg variants, make_panel_stylebox, consistency across dark/light |
 | `test_perf_monitor.gd` | 6 | Entity count, vertex estimate, chunk recommendation, health, AABB, and empty state |
-| `test_measure_tool.gd` | 22 | Tool metadata/state, rulers/distances/chaining, cap/removal, snap references, input ownership, and HUD |
+| `test_measure_tool.gd` | 23 | Tool metadata/state, rulers/distances/chaining, cap/removal, snap references, input ownership, and HUD |
 | `test_snap_system_custom.gd` | 6 | Custom snap line set/clear, projection onto line, snap_point with custom line, threshold, clear restores default |
 | `test_history_browser.gd` | 23 | Record/cap/clear, undo/redo controls, icon/color mapping, navigation, and history refresh |
-| `test_export_playtest.gd` | 8 | Empty export, lighting/environment, player spawn/controller, nested ownership, and transform preservation |
+| `test_export_playtest.gd` | 11 | Empty export, lighting/environment, player spawn/controller, nested ownership, and transform preservation |
 | `test_dock_history_and_playtest.gd` | 8 | Null-safe history refresh/buttons, selection typing, version updates, spawn creation, and state capture |
 | `test_baker.gd` | 32 | Material-preserving merge/face bake, indexed/non-indexed concatenation, convex collision generation, snapshots, and simplification |
 | `test_undo_helper.gd` | 10 | History callbacks, collation tags/windows/scopes, dynamic method arities, and null safety |
-| `test_displacement.gd` | 38 | Displacement data, FaceData triangulation/serialization, create/destroy, painting, power/elevation, noise, and sewing |
-| `test_bevel.gd` | 15 | Face inset (basic, height extrude, collapse guard, material inheritance, connecting sides winding), edge bevel (basic, segments, neighbor update, small radius, material inheritance), slerp utility (endpoints, midpoint, parallel, anti-parallel, quarter turn) |
+| `test_displacement.gd` | 40 | Displacement data, FaceData triangulation/serialization, create/destroy, painting, power/elevation, noise, and sewing |
+| `test_bevel.gd` | 20 | Face inset (basic, height extrude, collapse guard, material inheritance, connecting sides winding), edge bevel (basic, segments, neighbor update, small radius, material inheritance), slerp utility (endpoints, midpoint, parallel, anti-parallel, quarter turn) |
 | `test_occluder_generation.gd` | 13 | Occluder generation: flat mesh, chunked hierarchy (BakedChunk_* nodes), coplanar merge across chunks, plane separation, min-area filtering, idempotent re-generation, postprocess toggle (enabled/disabled), validation coverage + missing-occluder warnings |
 | `test_paint_hot_paths.gd` | 39 | `SurfacePaint.paint_at_uv` (write-through, falloff, accumulation, erase, edge clamping, layer creation), `FaceData.get_painted_albedo` (blend modes, opacity, layer stacking, resize, non-RGBA8 sources, cache hits and invalidation), and `HFPaintTool._apply_terrain_brush` (raise/lower/smooth/flatten, falloff, wrapping, clamping, dirty chunks) |
 | `test_material_atlas_pbr.gd` | 32 | PBR slot packing (normal/roughness/metallic/emission), flat tiles for materials without a map, settings carried onto the atlas material, every skip reason, shared layout across channel atlases, resampling, and non-RGBA8 sources |
 | `test_hf_log.gd` | 6 | Warning capture and suppression, buffer lifetime, copy-on-read, and warning outside a capture (no spurious engine error) |
 | `test_convex_clip.gd` | 43 | Sutherland-Hodgman splitting with three-way vertex classification, on-plane vertices, cap rebuilding and ring ordering, axis-aligned-box detection, progressive remainder, plane budgets, and `solid_from_rings` (collapsing coincident corners, refusing a shape too thin to bound a volume, winding decided by measurement rather than corner order) |
-| `test_transform_system.gd` | 51 | Rotate, flip and reset rotation for brushes and entities: scale-preserving rotation, winding-safe mirroring, lossless quarter-turn reset with axis permutation, pivots, and displacement refusals |
+| `test_transform_system.gd` | 60 | Rotate, flip and reset rotation for brushes and entities: scale-preserving rotation, winding-safe mirroring, lossless quarter-turn reset with axis permutation, pivots, and displacement refusals |
 | `test_transform_integration.gd` | 30 | Free transform against a real LevelRoot and baker: bake-level winding proof for rotation and mirroring, texture-lock UV compensation, and the operations that used to refuse a rotated brush and no longer do |
 | `test_arch_builder.gd` | 21 | Voussoir count and shape, closed solids, outward winding, neighbours sharing their meeting face, full rings, and each refusal on its own boundary |
-| `test_stairs_builder.gd` | 18 | Step count, solid and open fills, the climb and run a flight claims, steps meeting their neighbour, and refusals including a tread deeper than the whole climb |
-| `test_spiral_stairs_builder.gd` | 19 | Annular treads, the newel post as a piece, treads meeting at the axis as wedges, the climb per tread, flat fans, reversed turns, and convexity refusals |
+| `test_stairs_builder.gd` | 21 | Step count, solid and open fills, the climb and run a flight claims, steps meeting their neighbour, and refusals including a tread deeper than the whole climb |
+| `test_spiral_stairs_builder.gd` | 22 | Annular treads, the newel post as a piece, treads meeting at the axis as wedges, the climb per tread, flat fans, reversed turns, and convexity refusals |
 | `test_dome_builder.gd` | 21 | The construction claim itself — every face of every panel planar — plus closure, convexity, outward winding, the crown and solid-dome pinch cases, hollowness, slices, and the panel cap |
 | `test_generator_schema.gd` | 9 | Defaults from a schema, per-field type coercion, unknown keys dropped, field lookup, ordering, and malformed fields skipped rather than crashing |
-| `test_generator_system.gd` | 52 | Records, per-piece signatures, regeneration with material preservation, relocation versus hand editing, edit counts, detach and remove, stale ids staying harmless, every known type, and serialization round trips |
+| `test_generator_system.gd` | 67 | Records, per-piece signatures, regeneration with material preservation, relocation versus hand editing, edit counts, detach and remove, stale ids staying harmless, every known type, and serialization round trips |
 | `test_generators_integration.gd` | 30 | Hollow, arch and carve against a real LevelRoot and baker, every winding claim measured on baked triangles beside an untouched control |
-| `test_live_generators_integration.gd` | 25 | Every structure type through LevelRoot, the undo snapshot, the save format, the cutting tools and the baker; a moved structure rebuilding where it stands; a reopened level not claiming its pieces were edited |
+| `test_live_generators_integration.gd` | 26 | Every structure type through LevelRoot, the undo snapshot, the save format, the cutting tools and the baker; a moved structure rebuilding where it stands; a reopened level not claiming its pieces were edited |
 | `test_live_generator_commands.gd` | 19 | The dock surface: undo dispatch by method name, the argument limit, the section following the selection, a type choice not being re-derived from it, the dock naming no generator setting of its own, and the edit warning |
 | `test_suite_integrity.gd` | 3 | Every `test_*.gd` loads and extends GutTest, and the shared helpers beside them parse |
 
