@@ -3,6 +3,7 @@ extends GutTest
 const HFPrefabType = preload("res://addons/hammerforge/hf_prefab.gd")
 const HFLog = preload("res://addons/hammerforge/hf_log.gd")
 const HFLevelIO = preload("res://addons/hammerforge/hflevel_io.gd")
+const DraftEntity = preload("res://addons/hammerforge/draft_entity.gd")
 
 
 func before_each():
@@ -181,3 +182,87 @@ func test_centroid_uses_combined_aabb_center_not_origin_mean():
 	assert_almost_eq(centroid.x, 6.0, 0.05, "Centroid should be combined AABB center")
 	assert_almost_eq(centroid.y, 0.0, 0.05)
 	assert_almost_eq(centroid.z, 0.0, 0.05)
+
+
+# ===========================================================================
+# Prefab I/O is remapped through the entities it just made (#257)
+# ===========================================================================
+
+
+func _a_level() -> LevelRoot:
+	var level := LevelRoot.new()
+	level.auto_spawn_player = false
+	level.commit_freeze = false
+	level.hflevel_autosave_enabled = false
+	add_child_autoqfree(level)
+	return level
+
+
+func _an_entity_in(level: LevelRoot, node_name: String) -> DraftEntity:
+	var entity := DraftEntity.new()
+	entity.name = node_name
+	entity.entity_type = "light"
+	entity.entity_class = "light"
+	entity.set_meta("is_entity", true)
+	level.entities_node.add_child(entity)
+	return entity
+
+
+func test_prefab_io_is_remapped_through_the_entities_it_just_made():
+	# The alias-aware name lookup is not unique. Here the first prefab entity is
+	# renamed on the way in and carries an authored name matching the second one's
+	# node name, so looking the second one up by name returns the first: it gets
+	# remapped twice, and the entity it stood in for is never remapped at all.
+	var level := _a_level()
+	# Occupy the first name only, so the first entity is renamed and the second is not.
+	_an_entity_in(level, "Source")
+
+	var source_info := _make_entity_info(Vector3.ZERO, "Source")
+	source_info["entity_name"] = "Target"
+	var target_info := _make_entity_info(Vector3.ZERO, "Target")
+	target_info["io_outputs"] = [
+		{"output_name": "OnTrigger", "target_name": "Source", "input_name": "Open"}
+	]
+	var prefab = HFPrefabType.new()
+	prefab.entity_infos = [source_info, target_info]
+
+	var result: Dictionary = prefab.instantiate(
+		level.brush_system, level.entity_system, level, Vector3.ZERO
+	)
+
+	var made: Array = result.get("entity_nodes", [])
+	assert_eq(made.size(), 2, "both prefab entities were placed")
+	assert_ne(str(made[0].name), "Source", "the first was renamed, so the remap has work to do")
+	var outputs: Array = made[1].get_meta("entity_io_outputs", [])
+	assert_eq(outputs.size(), 1, "the output travelled with the prefab")
+	assert_eq(
+		str(outputs[0].get("target_name", "")),
+		str(made[0].name),
+		"the output points inside the new instance, not at the entity it was built from"
+	)
+
+
+func test_prefab_io_remap_still_works_without_an_alias_in_the_way():
+	var level := _a_level()
+	_an_entity_in(level, "Button")
+
+	var source_info := _make_entity_info(Vector3.ZERO, "Button")
+	var target_info := _make_entity_info(Vector3.ZERO, "Door")
+	target_info["io_outputs"] = [
+		{"output_name": "OnTrigger", "target_name": "Button", "input_name": "Open"}
+	]
+	var prefab = HFPrefabType.new()
+	prefab.entity_infos = [source_info, target_info]
+
+	var result: Dictionary = prefab.instantiate(
+		level.brush_system, level.entity_system, level, Vector3.ZERO
+	)
+
+	var made: Array = result.get("entity_nodes", [])
+	assert_eq(made.size(), 2)
+	var outputs: Array = made[1].get_meta("entity_io_outputs", [])
+	assert_eq(
+		str(outputs[0].get("target_name", "")),
+		str(made[0].name),
+		"the ordinary case still lands on the copy it was made with"
+	)

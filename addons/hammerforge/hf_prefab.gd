@@ -171,15 +171,17 @@ func instantiate(
 			if old_name != "":
 				name_map[old_name] = entity.name
 
-	# Remap I/O connections
+	# Remap I/O connections, through the nodes that were just created rather than by
+	# looking their new names back up.
+	#
+	# The lookup resolves an authored `entity_name` as well as a node name, so an
+	# entity of this same prefab whose authored name happens to match a later one's
+	# generated node name is returned first: remapped twice, while the entity it
+	# stood in for is never remapped at all and keeps its outputs aimed outside the
+	# instance. Every restored node is here already, exactly once.
 	if not name_map.is_empty() and entity_system.has_method("remap_io_connections"):
-		for entity_info in e_infos:
-			var ent_name: String = name_map.get(str(entity_info.get("name", "")), "")
-			if ent_name == "":
-				continue
-			var entities = entity_system.find_entities_by_name(ent_name)
-			if not entities.is_empty():
-				entity_system.remap_io_connections(entities[0], name_map)
+		for entity in new_entity_nodes:
+			entity_system.remap_io_connections(entity, name_map)
 
 	if root.has_method("end_signal_batch"):
 		root.end_signal_batch()
