@@ -2062,6 +2062,10 @@ func handle_paint_input(
 	)
 
 
+func prepare_paint_stroke(camera: Camera3D, screen_pos: Vector2) -> void:
+	paint_system.prepare_paint_stroke(camera, screen_pos)
+
+
 func get_paint_layer_names() -> Array:
 	return paint_system.get_paint_layer_names()
 

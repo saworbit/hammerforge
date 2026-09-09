@@ -107,6 +107,7 @@ class FakePlugin:
 	var _focus_recovery_queued := true
 
 	var disp_undo_commits := 0
+	var floor_undo_commits := 0
 	var selection_cancels := 0
 	var reconcile_queues := 0
 	var hud_updates := 0
@@ -119,6 +120,9 @@ class FakePlugin:
 
 	func _commit_disp_paint_undo(_root: Node) -> void:
 		disp_undo_commits += 1
+
+	func _commit_floor_paint_undo(_root: Node) -> void:
+		floor_undo_commits += 1
 
 	func _cancel_selection_gesture() -> bool:
 		selection_cancels += 1
@@ -253,6 +257,7 @@ func test_stale_floor_and_surface_strokes_are_both_finished():
 	)
 
 	assert_eq(root.paint_tool.finishes, 1)
+	assert_eq(plugin.floor_undo_commits, 1, "Recovered floor paint remains one undoable stroke")
 	assert_eq(root.input_state.surface_paint_ends, 1)
 
 

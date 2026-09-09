@@ -68,6 +68,18 @@ func test_full_shortcut_list_stays_on_the_tooltip():
 	assert_eq(hud.tooltip_text, full, "Nothing is lost, it is one hover away")
 
 
+func test_floor_paint_hud_teaches_the_modifier_contract():
+	var hud := _hud()
+	var full: String = hud._build_shortcuts_text(
+		{"tool": 0, "mode": 0, "paint_mode": true, "paint_target": 0}
+	)
+	assert_true(full.contains("Alt: Erase"))
+	assert_true(full.contains("Shift+Drag: Axis Lock"))
+	assert_true(full.contains("Ctrl+Click: Pick Material"))
+	assert_true(full.contains("Esc: Cancel Stroke"))
+	assert_false(full.contains("Shift+click to erase"))
+
+
 func test_primary_line_takes_the_first_real_line():
 	assert_eq(ShortcutHUD.primary_line("first\nsecond\nthird"), "first")
 	assert_eq(ShortcutHUD.primary_line("\n\nafter blanks"), "after blanks")

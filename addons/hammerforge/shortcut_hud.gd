@@ -41,7 +41,7 @@ const MODE_HINTS := {
 	"select": "Click to select; drag empty space for a box; drag widgets to edit",
 	"extrude_up_idle": "Click a face to start extruding upward",
 	"extrude_down_idle": "Click a face to start extruding downward",
-	"paint_floor": "Click cells to paint, Shift+click to erase",
+	"paint_floor": "Drag to paint; Alt erases, Shift locks an axis, Ctrl picks material",
 	"paint_surface": "Click brush faces to apply material",
 	"vertex_edit": "Click vertex to select, drag to move, X/Y/Z to lock axis",
 }
@@ -410,9 +410,10 @@ func _extrude_active_shortcuts(dir_label: String) -> String:
 func _floor_paint_shortcuts() -> String:
 	var lines := PackedStringArray()
 	lines.append("-- Floor Paint --")
-	lines.append("Click + Drag: Paint")
+	lines.append("Click + Drag: Paint | Alt: Erase")
+	lines.append("Shift+Drag: Axis Lock | Ctrl+Click: Pick Material")
 	lines.append("B: Brush | E: Erase | R: Rect")
-	lines.append("L: Line | K: Bucket")
+	lines.append("L: Line | K: Bucket | Esc: Cancel Stroke")
 	return "\n".join(lines)
 
 

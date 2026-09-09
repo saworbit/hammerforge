@@ -68,6 +68,17 @@ static func update_hud_context(plugin: Object) -> void:
 				stage_hint = "Extruding..."
 			elif root.input_state.is_surface_painting():
 				stage_hint = "Painting..."
+		if (
+			ctx.get("paint_mode", false)
+			and int(ctx.get("paint_target", 0)) == 0
+			and root
+			and root.get("paint_tool")
+		):
+			var paint_status: String = root.paint_tool.get_stroke_hud_text()
+			if paint_status.is_empty():
+				paint_status = root.paint_tool.get_hover_hud_text()
+			if not paint_status.is_empty():
+				stage_hint = paint_status
 		var num_display := ""
 		if plugin.numeric_buffer.length() > 0:
 			num_display = plugin.numeric_buffer

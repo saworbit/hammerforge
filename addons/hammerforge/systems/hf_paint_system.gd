@@ -25,6 +25,7 @@ var region_streaming_enabled: bool = false
 var region_memory_budget_mb: int = 256
 var region_show_grid: bool = false
 var region_overlay_material: Material = null
+var _paint_region_pins: Dictionary = {}
 
 
 func _init(level_root: Node3D) -> void:
@@ -66,7 +67,44 @@ func handle_paint_input(
 		var cell = _screen_to_cell(camera, screen_pos)
 		if cell != null:
 			_ensure_regions_for_cell(cell)
-	return root.paint_tool.handle_input(camera, event, screen_pos)
+			var starts_stroke: bool = (
+				event is InputEventMouseButton
+				and event.button_index == MOUSE_BUTTON_LEFT
+				and event.pressed
+				and not (event as InputEventMouseButton).is_command_or_control_pressed()
+			)
+			if root.paint_tool.is_stroke_active() or starts_stroke:
+				_pin_paint_region(region_manager.region_id_from_cell(cell))
+	var handled: bool = root.paint_tool.handle_input(camera, event, screen_pos)
+	if (
+		region_streaming_enabled
+		and event is InputEventMouseButton
+		and event.button_index == MOUSE_BUTTON_LEFT
+		and not event.pressed
+	):
+		release_paint_region_pins()
+	return handled
+
+
+func prepare_paint_stroke(camera: Camera3D, screen_pos: Vector2) -> void:
+	if not region_streaming_enabled:
+		return
+	var cell = _screen_to_cell(camera, screen_pos)
+	if cell == null:
+		return
+	_ensure_regions_for_cell(cell)
+	_pin_paint_region(region_manager.region_id_from_cell(cell))
+
+
+func _pin_paint_region(region_id: Vector2i) -> void:
+	_paint_region_pins[region_id] = true
+	region_manager.set_pinned(region_id, true)
+
+
+func release_paint_region_pins() -> void:
+	for region_id: Vector2i in _paint_region_pins.keys():
+		region_manager.set_pinned(region_id, false)
+	_paint_region_pins.clear()
 
 
 func get_paint_layer_names() -> Array:

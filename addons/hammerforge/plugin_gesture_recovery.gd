@@ -50,6 +50,7 @@ static func finish_stale_paint_strokes(
 		and paint_tool.has_method("finish_stroke_if_active")
 	):
 		paint_tool.finish_stroke_if_active()
+		plugin._commit_floor_paint_undo(root)
 		finished = true
 	if input_state != null and input_state.is_surface_painting():
 		input_state.end_surface_paint()

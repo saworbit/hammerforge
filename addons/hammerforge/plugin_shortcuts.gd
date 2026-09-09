@@ -11,6 +11,7 @@ extends RefCounted
 const STOP := EditorPlugin.AFTER_GUI_INPUT_STOP
 ## Same sentinel as plugin.HF_SHORTCUT_APPLY
 const SHORTCUT_APPLY := -3
+const HFPluginPaintInput = preload("plugin_paint_input.gd")
 
 
 ## Route one global key press. Returns nothing: ownership is expressed by
@@ -127,6 +128,8 @@ static func cancel_escape_step(plugin: Object, root: Node) -> bool:
 		plugin._texture_picker_active = false
 		if plugin.dock:
 			plugin.dock.show_toast("Texture Picker cancelled", 1)
+		return true
+	if HFPluginPaintInput.cancel_floor_paint(plugin, root):
 		return true
 	if plugin._disp_paint_active:
 		if (

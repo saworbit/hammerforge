@@ -59,6 +59,16 @@ HFStroke
 - Sculpt Smooth: averages terrain to reduce jaggedness (3x3 kernel).
 - Sculpt Flatten: captures reference height on first click, lerps terrain toward it.
 
+### Viewport input
+
+- **Shift+P** toggles Paint mode. A first room needs no dock interaction: press **R** for Rect, then LMB-drag the walkable footprint.
+- **LMB-drag** uses the selected Floor Paint tool. **Alt+LMB** temporarily erases occupancy without changing that tool.
+- **Shift+LMB-drag** locks a Brush, Erase, Line, or Blend stroke to the first dominant grid axis. The axis stays fixed for the stroke, so diagonal pointer jitter cannot flip it.
+- **Ctrl/Cmd+LMB** samples the cell material for the Blend tool and does not start an undoable stroke.
+- **Esc** cancels the active stroke and restores its pre-stroke cells. Plain **RMB** is never a Floor Paint input; at rest it remains Godot's 3D camera control.
+- The existing viewport banner reports the hovered cell and brush footprint, then live unique-cell count and world-space width/depth while painting.
+- A changed press-drag-release is one **Paint Floor** undo entry. Lost-release recovery closes that same entry; no-op strokes and material picks create none.
+
 Sculpt tools operate directly on heightmap Image pixels (not cell bits). Configurable: strength (0.1–10.0), radius (1–50 cells), falloff (0.0–1.0 Gaussian curve). Available in dock Paint tab → Heightmap section.
 
 Brush Shape
@@ -68,6 +78,7 @@ Brush Shape
 Live preview
 - During drag, preview writes into the layer and immediately regenerates affected chunks.
 - On mouse-up, a final regeneration happens.
+- Preview work consumes only dirty chunks. With region streaming enabled, every region crossed by the current stroke is pinned until release or cancel, and the starting region is loaded before the undo snapshot.
 - Stroke inference (denoise, hole fill, gap bridging, corridor width) is **not enabled**. `HFInferenceEngine` classifies a stroke's intent but its cleanup pass was never written, so nothing assigns it to the paint tool and no stroke is cleaned up. Turning it on means writing that pass, assigning an engine, and giving it a setting and a default.
 
 ## Geometry Synthesis

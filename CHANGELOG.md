@@ -5,6 +5,20 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Floor Paint now supports a zero-dock, undo-safe first-room loop.** Shift+P,
+  R, then LMB-drag lays out a rectangular walkable footprint; Alt+LMB erases
+  temporarily, Shift+LMB locks the first dominant grid axis, Ctrl/Cmd+LMB
+  samples a cell material, and Escape restores a cancelled stroke. The existing
+  banner reports the hovered footprint and live cells/metres. Each changed
+  stroke is one undo entry, including lost-release recovery; streamed regions
+  are loaded before capture and pinned for the stroke. Plain RMB remains Godot
+  camera input, preview reconcile remains dirty-chunk scoped, and inference
+  cleanup remains unwired/default-off.
+  - **Coverage** (`tests/test_paint_polish.gd`, `tests/test_paint_system.gd`,
+    `tests/test_plugin_gesture_recovery.gd`, `tests/test_shortcut_hud_layout.gd`):
+    modifiers, stable axis choice, material pick, live metrics, preview cancel,
+    one-entry undo, no-op undo suppression, no RMB handler, region pin release,
+    stale-release commit, and modifier guidance.
 - **Re-hollow says what it would rebuild over.** Pressing Re-hollow deletes every
   wall and shells the recorded solid again. A wall you had moved, resized,
   retextured or painted went with the rest of them, without a word — the one thing

@@ -86,6 +86,7 @@ var _disp_paint_active := false
 var _disp_paint_brush_id := ""
 var _disp_paint_face_idx := -1
 var _disp_paint_pre_state: Dictionary = {}
+var _floor_paint_pre_state: Dictionary = {}
 var _context_toolbar: Control = null
 var _hotkey_palette: Control = null
 var _selection_filter: Window = null
@@ -664,6 +665,10 @@ func _handle_disp_paint_input(event: InputEvent, root: Node, cam: Camera3D, pos:
 
 func _commit_disp_paint_undo(root: Node) -> void:
 	HFPluginPaintInput.commit_displacement_undo(self, root)
+
+
+func _commit_floor_paint_undo(root: Node) -> void:
+	HFPluginPaintInput.commit_floor_paint_undo(self, root)
 
 
 func _do_disp_paint_stroke(root: Node, cam: Camera3D, pos: Vector2) -> void:
