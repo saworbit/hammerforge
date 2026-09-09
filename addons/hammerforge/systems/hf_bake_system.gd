@@ -1331,6 +1331,26 @@ func _append_face_bake_container(container: Node3D, out: Array) -> void:
 			out.append(child)
 
 
+## The mesh a brush has to be cut with because the prefab factory cannot build it.
+##
+## `PrefabFactory.create_prefab()` knows the primitives and falls back to a box for
+## anything else, and CUSTOM is the only shape that reaches that fallback. So a
+## vertex-edited wedge, a polygon extrusion, a bevelled brush or a hull imported
+## from a `.map` went into the CSG as a rectangular box and baked as one. Its own
+## mesh is what it looks like on screen and what `HFSubtractPreview` already cuts
+## with, so the bake now cuts with the same thing.
+##
+## Null for every shape the factory does build, and for a custom brush whose mesh
+## has not been built yet: the box is wrong, but it is better than dropping the
+## brush out of the bake without a word.
+static func _authored_brush_mesh(draft: DraftBrush) -> Mesh:
+	if draft.shape != DraftBrush.BrushShape.CUSTOM:
+		return null
+	if draft.mesh_instance == null:
+		return null
+	return draft.mesh_instance.mesh
+
+
 func append_brush_list_to_csg(
 	brushes: Array, target: CSGCombiner3D, force_subtract: bool = false, only_additive: bool = false
 ) -> void:
@@ -1353,7 +1373,18 @@ func append_brush_list_to_csg(
 			and (force_subtract or draft.operation == CSGShape3D.OPERATION_SUBTRACTION)
 		):
 			continue
-		var csg_shape = PrefabFactory.create_prefab(draft.shape, draft.size, max(3, draft.sides))
+		var csg_shape: CSGShape3D = null
+		var placement := draft.global_transform
+		var authored: Mesh = _authored_brush_mesh(draft)
+		if authored != null:
+			var csg_mesh := CSGMesh3D.new()
+			csg_mesh.mesh = authored
+			csg_mesh.use_collision = true
+			csg_shape = csg_mesh
+			# The mesh is in the mesh instance's own space, so that is where it goes.
+			placement = draft.mesh_instance.global_transform
+		else:
+			csg_shape = PrefabFactory.create_prefab(draft.shape, draft.size, max(3, draft.sides))
 		csg_shape.operation = (
 			CSGShape3D.OPERATION_SUBTRACTION if force_subtract else draft.operation
 		)
@@ -1368,7 +1399,7 @@ func append_brush_list_to_csg(
 		# transform. Place the shape after it is in the tree, or the assignment
 		# writes a local transform and the root lands on it a second time.
 		target.add_child(csg_shape)
-		csg_shape.global_transform = draft.global_transform
+		csg_shape.global_transform = placement
 
 
 ## Replace existing collision bodies with per-visgroup StaticBody3D nodes.

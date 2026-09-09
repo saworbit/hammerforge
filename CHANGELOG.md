@@ -187,6 +187,26 @@ The format is based on Keep a Changelog, and this project follows semantic versi
     copy, undo, and what survives a state restore.
 
 ### Fixed
+- **Custom brushes baked as rectangular boxes.** `append_brush_list_to_csg()`
+  built every CSG stand-in with `PrefabFactory.create_prefab()`, which knows the
+  primitives and falls back to a box for anything else. CUSTOM is the only shape
+  that reaches that fallback, so a vertex-edited wedge, a polygon extrusion, a
+  bevelled brush or a hull imported from a `.map` went into the boolean as a box
+  of its bounding size and came out of the bake as one. It affected every bake
+  path, because all three build their CSG through that one function.
+  - A custom brush is now cut with the mesh it is drawing, which is what
+    `HFSubtractPreview` already cuts with — so the preview of a cut and the bake
+    of it finally agree.
+  - The stand-in is placed at the mesh instance's own transform, because that is
+    the space the mesh is in. Same ordering rule as before: parented first,
+    positioned second.
+  - A custom brush whose mesh has not been built yet still goes in as a box. That
+    is wrong, but a brush that vanishes from the bake without a word is worse.
+  - **Coverage** (`tests/test_bake_system.gd`): a wedge reaching the CSG as its own
+    mesh and keeping its own bounds rather than the box its size field describes,
+    the same wedge placed correctly under a moved and turned root, a primitive
+    still taking the prefab path, and the no-mesh fallback. The first two fail
+    against the old code.
 - **A point entity's authored name was thrown away by every save, undo and
   duplicate.** The authored name is not the node name: it is what an I/O output
   targets and what `find_entities_by_name()` looks up. `capture_entity_info()`
