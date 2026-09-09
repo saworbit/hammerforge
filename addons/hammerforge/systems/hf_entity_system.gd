@@ -103,10 +103,10 @@ func create_entity_from_map(info: Dictionary) -> DraftEntity:
 		data.erase("classname")
 		data.erase("origin")
 		entity.entity_data = data
+	add_entity(entity)
 	var origin = info.get("origin", Vector3.ZERO)
 	if origin is Vector3:
 		entity.global_position = origin
-	add_entity(entity)
 	return entity
 
 
@@ -159,8 +159,6 @@ func restore_entity_from_info(info: Dictionary) -> DraftEntity:
 	var props = info.get("properties", {})
 	if props is Dictionary:
 		entity.entity_data = props.duplicate(true)
-	if info.has("transform"):
-		entity.global_transform = info["transform"]
 	var io_outputs = info.get("io_outputs", [])
 	if not io_outputs.is_empty():
 		entity.set_meta("entity_io_outputs", io_outputs.duplicate(true))
@@ -175,6 +173,8 @@ func restore_entity_from_info(info: Dictionary) -> DraftEntity:
 	entity.set_meta("is_entity", true)
 	root.entities_node.add_child(entity)
 	root._assign_owner(entity)
+	if info.has("transform"):
+		entity.global_transform = info["transform"]
 	_emit_entity_signal("entity_added", entity)
 	return entity
 

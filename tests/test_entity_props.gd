@@ -256,3 +256,43 @@ func test_missing_property_uses_default():
 	assert_true(e.entity_data.has("speed"), "speed should be populated by defaults")
 	assert_almost_eq(float(e.entity_data.get("speed", 0.0)), 200.0, 0.01)
 	assert_eq(e.entity_data.get("locked"), false)
+
+
+# ===========================================================================
+# World placement with an offset LevelRoot
+# ===========================================================================
+
+
+func test_restore_entity_from_info_keeps_world_transform_when_root_is_offset():
+	root.position = Vector3(100, 0, 100)
+	var restored = (
+		sys
+		. restore_entity_from_info(
+			{
+				"name": "OffsetLight",
+				"entity_type": "light_point",
+				"transform": Transform3D(Basis.IDENTITY, Vector3(10, 0, 0)),
+			}
+		)
+	)
+	assert_not_null(restored)
+	assert_almost_eq(
+		restored.global_position,
+		Vector3(10, 0, 0),
+		Vector3(0.001, 0.001, 0.001),
+		"A restored entity keeps the world position it was captured at"
+	)
+
+
+func test_create_entity_from_map_keeps_world_origin_when_root_is_offset():
+	root.position = Vector3(100, 0, 100)
+	var entity = sys.create_entity_from_map(
+		{"classname": "light_point", "origin": Vector3(10, 0, 0)}
+	)
+	assert_not_null(entity)
+	assert_almost_eq(
+		entity.global_position,
+		Vector3(10, 0, 0),
+		Vector3(0.001, 0.001, 0.001),
+		"Map origins are world coordinates, not offsets from the level root"
+	)
