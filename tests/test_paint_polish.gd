@@ -76,6 +76,7 @@ class FakePlugin:
 	func _update_hud_context() -> void:
 		hud_updates += 1
 
+
 var manager: HFPaintLayerManager
 var layer
 var tool: HFPaintTool
@@ -158,9 +159,7 @@ func test_escape_cancel_restores_rect_preview_without_committing():
 
 
 func test_floor_paint_tool_never_handles_rmb():
-	var source := FileAccess.get_file_as_string(
-		"res://addons/hammerforge/paint/hf_paint_tool.gd"
-	)
+	var source := FileAccess.get_file_as_string("res://addons/hammerforge/paint/hf_paint_tool.gd")
 	assert_false(source.contains("MOUSE_BUTTON_RIGHT"), "Plain RMB belongs to Godot's camera")
 
 

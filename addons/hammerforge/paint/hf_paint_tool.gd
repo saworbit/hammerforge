@@ -320,18 +320,14 @@ func get_stroke_hud_text() -> String:
 		cell_size = layer.grid.cell_size
 	var width := float(max_cell.x - min_cell.x + 1) * cell_size
 	var depth := float(max_cell.y - min_cell.y + 1) * cell_size
-	return "%d cells — %s m × %s m" % [
-		cells.size(), _format_metres(width), _format_metres(depth)
-	]
+	return "%d cells — %s m × %s m" % [cells.size(), _format_metres(width), _format_metres(depth)]
 
 
 func get_hover_hud_text() -> String:
 	if _painting or _hover_cell == null:
 		return ""
 	var footprint := max(1, brush_radius_cells * 2 - 1)
-	return "Cell %d, %d — %d×%d footprint" % [
-		_hover_cell.x, _hover_cell.y, footprint, footprint
-	]
+	return "Cell %d, %d — %d×%d footprint" % [_hover_cell.x, _hover_cell.y, footprint, footprint]
 
 
 func _format_metres(value: float) -> String:
