@@ -187,6 +187,23 @@ The format is based on Keep a Changelog, and this project follows semantic versi
     copy, undo, and what survives a state restore.
 
 ### Fixed
+- **A point entity's authored name was thrown away by every save, undo and
+  duplicate.** The authored name is not the node name: it is what an I/O output
+  targets and what `find_entities_by_name()` looks up. `capture_entity_info()`
+  never read the `entity_name` meta and `restore_entity_from_info()` never wrote
+  it, so a name survived only until the next snapshot — which is any undo, any
+  redo, an autosave, a level reload, or a Ctrl+D. After that the entity answered
+  to nothing and the outputs aimed at it fired into the air.
+  - Every one of those paths runs through the same pair of functions, so both ends
+    of the info dictionary carry the name now. Brush entities have carried theirs
+    since #149; point entities were left out of that pass.
+  - A prefab placed twice now gives both copies the same authored name, the same
+    way two placements of a named brush entity already do. The I/O remap works off
+    node names, which stay unique.
+  - **Coverage** (`tests/test_entity_props.gd`): capture and restore, duplication,
+    an unnamed entity gaining no metadata, and a real `LevelRoot` taken through a
+    state snapshot and asked to find the entity by name afterwards. Three of the
+    four fail against the old code.
 - **The entity wiring overlay stayed behind when the level left the tree.**
   `HFIOVisualizer` hangs a `MeshInstance3D` and its pulse overlays off the
   `LevelRoot`, and `cleanup()` was written to take them down, but
