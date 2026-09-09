@@ -52,6 +52,18 @@ func test_layer_names_use_display_then_id():
 	assert_eq(str(names[1]), "layer_1")
 
 
+func test_paint_stroke_region_pins_release_as_one_unit():
+	sys._pin_paint_region(Vector2i(-1, 2))
+	sys._pin_paint_region(Vector2i(3, 4))
+	assert_true(sys.region_manager.is_pinned(Vector2i(-1, 2)))
+	assert_true(sys.region_manager.is_pinned(Vector2i(3, 4)))
+
+	sys.release_paint_region_pins()
+
+	assert_false(sys.region_manager.is_pinned(Vector2i(-1, 2)))
+	assert_false(sys.region_manager.is_pinned(Vector2i(3, 4)))
+
+
 # ===========================================================================
 # Region streaming persistence (#172, #173)
 # ===========================================================================
