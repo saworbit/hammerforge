@@ -329,8 +329,19 @@ static func on_move_to_ceiling(dock: Object) -> void:
 	dock._commit_state_action("Move to Ceiling", "move_brushes_to_ceiling", [brush_ids])
 
 
-## The brushes an array would copy: the current selection, as ids.
-static func array_source_ids(dock: Object) -> PackedStringArray:
+## The array the section is editing, or null when it is describing a new one.
+static func editing_duplicator(dock: Object) -> Variant:
+	if dock == null or not dock.level_root:
+		return null
+	if str(dock._active_duplicator_id) == "":
+		return null
+	if not dock.level_root.has_method("duplicator_for_id"):
+		return null
+	return dock.level_root.duplicator_for_id(str(dock._active_duplicator_id))
+
+
+## The brushes the current selection is, as ids.
+static func selection_brush_ids(dock: Object) -> PackedStringArray:
 	var brush_ids := PackedStringArray()
 	if dock == null or not dock.level_root:
 		return brush_ids
@@ -340,6 +351,19 @@ static func array_source_ids(dock: Object) -> PackedStringArray:
 			if info and info.has("brush_id"):
 				brush_ids.append(info["brush_id"])
 	return brush_ids
+
+
+## The brushes an array would copy.
+##
+## The selection, unless the section is editing an existing array — then it is
+## that array's own sources, because what you selected was very likely one of the
+## copies. One definition, so the ghost, the pivot and the rebuild cannot end up
+## copying different brushes from each other.
+static func array_source_ids(dock: Object) -> PackedStringArray:
+	var editing = editing_duplicator(dock)
+	if editing != null:
+		return editing.source_brush_ids
+	return selection_brush_ids(dock)
 
 
 ## Every number the array controls are showing, in one dictionary.
@@ -365,7 +389,11 @@ static func array_params(dock: Object, brush_ids: PackedStringArray) -> Dictiona
 		"axis_index": int(dock.dup_axis_opt.selected) if dock.dup_axis_opt else 1,
 		"step_degrees": step,
 		"rise": float(dock.dup_rise_spin.value) if dock.dup_rise_spin else 0.0,
-		"pivot": dock.level_root.resolve_transform_pivot(Array(brush_ids), []),
+		# A ring being rebuilt turns about the point it already turns about. Taking
+		# the pivot from the selection instead would send the whole ring somewhere
+		# else the moment you nudged its count, because what is selected is usually
+		# one copy rather than the centre.
+		"pivot": _array_pivot(dock, brush_ids),
 		"counts":
 		Vector3i(
 			int(dock.dup_grid_x.value) if dock.dup_grid_x else 2,
@@ -376,19 +404,32 @@ static func array_params(dock: Object, brush_ids: PackedStringArray) -> Dictiona
 	}
 
 
+static func _array_pivot(dock: Object, brush_ids: PackedStringArray) -> Vector3:
+	var editing = editing_duplicator(dock)
+	if editing != null:
+		return editing.pivot
+	return dock.level_root.resolve_transform_pivot(Array(brush_ids), [])
+
+
 static func array_mode(dock: Object) -> int:
 	return int(dock.dup_mode_opt.selected) if dock.dup_mode_opt else 0
 
 
 static func on_create_duplicate_array(dock: Object) -> void:
-	if dock == null or not dock.level_root or dock._selection_nodes.is_empty():
-		if dock:
+	if dock == null or not dock.level_root:
+		return
+	# An array being edited takes its sources from its own record, so what is
+	# selected does not matter — and must not be asked for. The button says
+	# Update, and a button that says Update cannot answer "select brushes first".
+	var editing = editing_duplicator(dock)
+	if editing == null:
+		if dock._selection_nodes.is_empty():
 			dock._set_status("Select brushes first", true)
-		return
-	if not dock._guard_selection_action(
-		"Create Duplicate Array", dock.DockSelectionRequirement.BRUSHES_ONLY
-	):
-		return
+			return
+		if not dock._guard_selection_action(
+			"Create Duplicate Array", dock.DockSelectionRequirement.BRUSHES_ONLY
+		):
+			return
 	var brush_ids := array_source_ids(dock)
 	if brush_ids.is_empty():
 		dock._set_status("No brushes selected", true)
@@ -404,6 +445,11 @@ static func on_create_duplicate_array(dock: Object) -> void:
 	if not check.ok:
 		dock._set_status(check.user_text(), true)
 		return
+	# Editing an existing array rather than making another one: the section
+	# switched to Update when a piece of it was selected.
+	if editing != null:
+		_update_duplicate_array(dock, editing, mode, params)
+		return
 	match mode:
 		1:
 			_create_radial_array(dock, brush_ids, params)
@@ -416,7 +462,34 @@ static func on_create_duplicate_array(dock: Object) -> void:
 				[brush_ids, int(params["count"]), params["offset"]]
 			)
 			dock._set_status("Created %d copies" % int(params["count"]))
+	# The selection is still the brushes the array was made from, so the section
+	# is now an editor for the array that has just appeared. Saying so here is
+	# what makes Update discoverable at all: it is the same button, one press later.
+	refresh_array_section(dock)
 	# The ghost showed what was not there yet. It is there now.
+	_put_array_ghost_away(dock)
+
+
+## Rebuild the array the section is editing from the numbers now on screen.
+static func _update_duplicate_array(
+	dock: Object, record: Variant, mode: int, params: Dictionary
+) -> void:
+	var copies: int = HFDuplicator.placements_for(mode, params).size()
+	var sources: int = record.source_brush_ids.size()
+	dock._commit_state_action(
+		"Update Duplicate Array",
+		"update_duplicate_array",
+		[str(record.duplicator_id), mode, params]
+	)
+	if dock.level_root.duplicator_for_id(str(record.duplicator_id)) == null:
+		# The rebuild produced nothing, which is what an array whose source brushes
+		# have since been deleted does. The record is gone with it.
+		dock._active_duplicator_id = ""
+		dock._set_status("That array's brushes are no longer in the level", true)
+	else:
+		dock._set_status("Array updated — %s" % _array_summary(copies, sources))
+	refresh_array_section(dock)
+	# The ghost has been overtaken by the real thing standing in the same place.
 	_put_array_ghost_away(dock)
 
 
@@ -502,7 +575,8 @@ static func _array_ghost_wanted(dock: Object) -> bool:
 ## Hide the ghost and stop it coming back until it is asked for again.
 static func _put_array_ghost_away(dock: Object) -> void:
 	dock._array_ghost_armed = false
-	dock.level_root.clear_array_preview()
+	if dock.level_root:
+		dock.level_root.clear_array_preview()
 	_show_array_message(dock, "")
 
 
@@ -515,14 +589,121 @@ static func _show_array_message(dock: Object, text: String) -> void:
 
 ## Only the row that belongs to the chosen layout stays on screen.
 static func on_duplicate_array_mode_changed(dock: Object, index: int) -> void:
+	_show_array_rows(dock, index)
+	dock._array_ghost_armed = true
+	refresh_array_preview(dock)
+
+
+static func _show_array_rows(dock: Object, index: int) -> void:
 	if dock.dup_linear_row:
 		dock.dup_linear_row.visible = index != 1
 	if dock.dup_radial_row:
 		dock.dup_radial_row.visible = index == 1
 	if dock.dup_grid_row:
 		dock.dup_grid_row.visible = index == 2
-	dock._array_ghost_armed = true
+
+
+## Load the selected array's numbers into the section, or reset it to describing
+## a new one.
+##
+## Selecting a piece of an array turns the section from a creator into an editor
+## for that array, the way the Structure section already does for a structure.
+## Either the source or any copy will do, because the copy is the one you can
+## see. Without this an array was a thing you could make and delete but never
+## change your mind about.
+static func refresh_array_section(dock: Object) -> void:
+	if dock == null:
+		return
+	var ids := selection_brush_ids(dock)
+	var record: Variant = null
+	if dock.level_root and dock.level_root.has_method("duplicator_for_selection"):
+		record = dock.level_root.duplicator_for_selection(Array(ids))
+	# An Update frees every copy, including the one that was selected, so by the
+	# time the section is asked again the selection names nothing. Dropping the
+	# array there would put the section back to Create at the one moment it must
+	# not — the press after Update. A selection that does name brushes, none of
+	# which belong to an array, is a genuine change of subject and does reset it.
+	if record == null and ids.is_empty():
+		record = editing_duplicator(dock)
+	if record == null:
+		if str(dock._active_duplicator_id) != "":
+			dock._active_duplicator_id = ""
+			_put_array_ghost_away(dock)
+		_set_array_buttons(dock, "Create Array", false)
+		# The ghost is a ghost of the selection, so it still follows the selection
+		# when the selection is not part of an array.
+		refresh_array_preview(dock)
+		return
+	var same_array := str(dock._active_duplicator_id) == str(record.duplicator_id)
+	dock._active_duplicator_id = str(record.duplicator_id)
+	_load_array_settings(dock, record)
+	_set_array_buttons(dock, "Update Array", true)
+	# The ghost is normally armed by turning a control, because these live in a
+	# section that is open beside a dozen other tools. Selecting an array is a
+	# request to see it — but only the first time, so that putting the ghost away
+	# after an Update does not have it straight back on the next refresh.
+	if not same_array:
+		dock._array_ghost_armed = true
 	refresh_array_preview(dock)
+
+
+static func _set_array_buttons(dock: Object, create_text: String, detachable: bool) -> void:
+	if dock.dup_create_btn:
+		dock.dup_create_btn.text = create_text
+	if dock.dup_detach_btn:
+		dock.dup_detach_btn.visible = detachable
+
+
+## Write an array's own numbers back into the controls.
+##
+## Every write is signal-free: putting a value into a control must not read as
+## the user turning it, or loading an array would arm the ghost and redraw the
+## section a dozen times on one selection.
+static func _load_array_settings(dock: Object, record: Variant) -> void:
+	var mode := int(record.mode)
+	if dock.dup_mode_opt:
+		dock.dup_mode_opt.selected = mode
+	_show_array_rows(dock, mode)
+	if dock.dup_count_spin:
+		dock.dup_count_spin.set_value_no_signal(float(record.count))
+	# Grid spacing and linear offset share one row of controls, so which of them
+	# is loaded follows the layout being edited.
+	var offset: Vector3 = record.grid_spacing if mode == 2 else record.offset
+	if dock.dup_offset_x:
+		dock.dup_offset_x.set_value_no_signal(offset.x)
+	if dock.dup_offset_y:
+		dock.dup_offset_y.set_value_no_signal(offset.y)
+	if dock.dup_offset_z:
+		dock.dup_offset_z.set_value_no_signal(offset.z)
+	if dock.dup_axis_opt:
+		dock.dup_axis_opt.selected = int(record.axis_index)
+	if dock.dup_step_spin:
+		dock.dup_step_spin.set_value_no_signal(float(record.step_degrees))
+	if dock.dup_rise_spin:
+		dock.dup_rise_spin.set_value_no_signal(float(record.rise))
+	# Fill 360 is a way of arriving at a step, not something the array remembers,
+	# so an array loads with the step it actually has and the box unticked.
+	if dock.dup_fill_check:
+		dock.dup_fill_check.set_pressed_no_signal(false)
+	if dock.dup_grid_x:
+		dock.dup_grid_x.set_value_no_signal(float(record.grid_counts.x))
+	if dock.dup_grid_y:
+		dock.dup_grid_y.set_value_no_signal(float(record.grid_counts.y))
+	if dock.dup_grid_z:
+		dock.dup_grid_z.set_value_no_signal(float(record.grid_counts.z))
+
+
+## Keep the copies and forget the array.
+static func on_detach_duplicate_array(dock: Object) -> void:
+	if dock == null or not dock.level_root or str(dock._active_duplicator_id) == "":
+		return
+	dock._commit_state_action(
+		"Detach Array", "detach_duplicate_array", [str(dock._active_duplicator_id)]
+	)
+	dock._active_duplicator_id = ""
+	dock._set_status("Array detached — its copies are ordinary brushes now")
+	refresh_array_section(dock)
+	_put_array_ghost_away(dock)
 
 
 # ---------------------------------------------------------------------------
@@ -1041,21 +1222,26 @@ static func on_reset_rotation(dock: Object) -> void:
 static func on_remove_duplicate_array(dock: Object) -> void:
 	if dock == null or not dock.level_root or dock._selection_nodes.is_empty():
 		if dock:
-			dock._set_status("Select a duplicator source brush", true)
+			dock._set_status("Select part of an array first", true)
 		return
 	if not dock._guard_selection_action(
 		"Remove Duplicate Array", dock.DockSelectionRequirement.BRUSHES_ONLY
 	):
 		return
-	for node in dock._selection_nodes:
-		if not dock.level_root.is_brush_node(node):
-			continue
-		var dup_id: String = str(node.get_meta("duplicator_id", ""))
-		if dup_id != "":
-			dock._commit_state_action("Remove Duplicate Array", "remove_duplicate_array", [dup_id])
-			dock._set_status("Removed duplicate array")
-			return
-	dock._set_status("Selected brush is not a duplicator source", true)
+	# Resolved the same way the section resolves it, so clicking a copy of an
+	# array removes that array rather than reporting that the brush you can see
+	# is not the one the array was made from.
+	var record: Variant = dock.level_root.duplicator_for_selection(Array(selection_brush_ids(dock)))
+	if record == null:
+		dock._set_status("Selected brush is not part of an array", true)
+		return
+	dock._commit_state_action(
+		"Remove Duplicate Array", "remove_duplicate_array", [str(record.duplicator_id)]
+	)
+	dock._active_duplicator_id = ""
+	dock._set_status("Removed duplicate array")
+	refresh_array_section(dock)
+	_put_array_ghost_away(dock)
 
 
 static func on_tie_entity(dock: Object) -> void:

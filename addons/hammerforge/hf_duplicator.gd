@@ -292,6 +292,88 @@ func _tag_sources(brush_system) -> void:
 			source_brush.set_meta("duplicator_id", duplicator_id)
 
 
+## Every number this array was laid out from, in the shape `placements_for` takes.
+##
+## What the section loads back into its controls when a piece of an existing
+## array is selected. All three layouts are reported at once, because changing
+## the layout of an existing array is one of the things a rebuild is for and the
+## numbers for the layout you are leaving should still be there when you come
+## back to it.
+func settings() -> Dictionary:
+	return {
+		"count": count,
+		"offset": offset,
+		"axis_index": axis_index,
+		"step_degrees": step_degrees,
+		"rise": rise,
+		"pivot": pivot,
+		"counts": grid_counts,
+		"spacing": grid_spacing,
+	}
+
+
+## Rebuild this array's copies from new numbers, keeping the array itself.
+##
+## The copies are thrown away and made again rather than moved, because a change
+## of layout — or of count — changes how many there are. `clear_instances()`
+## takes the `duplicator_id` back off the sources and each `generate*` puts it
+## on again, so the array keeps its identity across the rebuild and the section
+## stays an editor for it.
+func regenerate(brush_system, p_mode: int, params: Dictionary) -> bool:
+	if source_brush_ids.is_empty():
+		return false
+	clear_instances(brush_system)
+	if not _lay_out(brush_system, p_mode, params):
+		return false
+	# Every source can have been deleted since the array was made — nothing cleans
+	# a duplicator record when a brush goes — and the layout calls answer "yes" to
+	# having run rather than to having produced anything. An array of no copies is
+	# not an array, and saying so is what lets the caller drop the dead record
+	# rather than leave one that cannot be rebuilt.
+	return not get_all_instance_ids().is_empty()
+
+
+func _lay_out(brush_system, p_mode: int, params: Dictionary) -> bool:
+	match p_mode:
+		ArrayMode.RADIAL:
+			return generate_radial(
+				brush_system,
+				int(params.get("count", count)),
+				int(params.get("axis_index", axis_index)),
+				float(params.get("step_degrees", step_degrees)),
+				params.get("pivot", pivot),
+				float(params.get("rise", rise))
+			)
+		ArrayMode.GRID:
+			return generate_grid(
+				brush_system, params.get("counts", grid_counts), params.get("spacing", grid_spacing)
+			)
+		_:
+			mode = ArrayMode.LINEAR
+			return generate(
+				brush_system, int(params.get("count", count)), params.get("offset", offset)
+			)
+
+
+## Forget the array without touching a single brush.
+##
+## The copies stay exactly where they are, as ordinary geometry. This is the way
+## out for someone who wants the layout an array gave them and then wants to edit
+## one copy of it — the answer that is not "Remove Array", which deletes them.
+func detach(brush_system) -> void:
+	for group in instance_groups:
+		for brush_id in group:
+			var copy_brush = brush_system.find_brush_by_id(brush_id)
+			if is_instance_valid(copy_brush) and copy_brush.has_meta("duplicator_instance_of"):
+				copy_brush.remove_meta("duplicator_instance_of")
+	for source_id in source_brush_ids:
+		var source_brush = brush_system.find_brush_by_id(source_id)
+		if is_instance_valid(source_brush) and source_brush.has_meta("duplicator_id"):
+			source_brush.remove_meta("duplicator_id")
+	instance_groups.clear()
+	count = 0
+
+
 ## Remove all instance brushes created by this duplicator.
 func clear_instances(brush_system) -> void:
 	for group in instance_groups:

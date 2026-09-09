@@ -268,6 +268,17 @@ It writes one PNG per tab under `user://console_preview/`.
 - Switch back to **Linear** and confirm the offset row returns and the old behaviour is unchanged.
 - Confirm the Radial and Grid rows only appear for their own layout.
 
+### 7c-3b. Editing an Array After You Have Made It
+- With **Linear** selected, count 3, click **Create Array**. Confirm the button now reads **Update Array** and a **Detach** button has appeared beside Remove Array.
+- Click one of the **copies** (not the original). Confirm the section still reads **Update Array**, shows that array's layout and numbers, and that the ghost appears over it.
+- Raise the count to 6 and click **Update Array**. Confirm there are now six copies and the button still reads Update. Lower it to 2 and press Update again without reselecting; confirm two copies.
+- Press **Ctrl+Z**. Confirm the array goes back to the copy count it had before the update.
+- Switch **Layout** to **Radial** while a copy is selected, set count 5 and step 45, and press **Update Array**. Confirm the same array becomes a ring rather than a second array appearing beside the run.
+- With a copy of a radial array selected, raise the count and press Update. Confirm the ring stays centred where it was rather than moving to the copy you clicked.
+- Click a copy and press **Detach**. Confirm nothing is deleted, the button goes back to **Create Array**, and Detach disappears. Click a copy again and confirm the section stays on Create.
+- Make another array, click a copy, and press **Remove Array**. Confirm the copies go, the original stays, and there is no "not a duplicator source" message.
+- Select an unrelated brush and confirm the section returns to **Create Array**.
+
 ### 7c-4. Precision Cutting (Clip and Carve on Any Brush)
 - Draw a box, rotate it 30 degrees (`R`), then press **Shift+X**. Confirm the cyan preview shows two turned pieces, and that committing leaves two brushes that both keep the rotation.
 - Draw a cylinder and clip it. Confirm the preview outlines the real curved halves, not two boxes, and that the committed pieces look right from every angle.
