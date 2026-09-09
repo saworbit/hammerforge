@@ -5,6 +5,33 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Changed
+- **The array edit warning counts more than movement.** It counted a copy that had
+  been dragged and said nothing about one that had been resized, reshaped,
+  retextured, or had a paint layer added — though the same press rebuilds over
+  both. Both are counted now, and the sentence says "edited by hand" rather than
+  "moved by hand".
+  - Read as a vote again, and grouped rather than compared against the source:
+    paint the original and every copy differs from it at once, which is the source
+    having changed rather than anybody editing copies. Copies that still agree
+    with each other are the array; a copy on its own is the edit.
+  - **The comparison is values only, with no resource identity.** Reusing
+    `HFBrushChangeTracker._signature()` looked right and was not: each copy holds
+    its own equal-but-separate `FaceData` and its own weight image, so a signature
+    carrying identity reported 199 of 200 copies as edits. That signature is
+    correct for its own question — whether one brush has changed since it was last
+    looked at — and wrong for this one. Found by measuring rather than by reading.
+  - **Weight-image contents are deliberately left out.** Hashing every texel of
+    every face of every copy measured 127 ms over a full-budget array against
+    22 ms without, on an event that fires whenever the selection changes. A layer
+    added, removed, retextured or resized is noticed; painting inside an existing
+    one is not. The full check over 200 fully-painted copies measures 27.9 ms.
+  - Nothing new is recorded, as with the move: the comparison is between the
+    copies themselves.
+  - **Coverage** (`tests/test_array_edit_warning.gd`): 9 more tests, including a
+    resized copy that has not moved, a repainted one, a copy that is both, a layer
+    added to one copy, two copies reshaped alike, a repainted original, and the
+    painted-array regression the measurement exposed.
+
 - **The six preview overlays share one base instead of six copies of it.** Hollow,
   carve, clip, subtract, structure and array each owned a container node, a set of
   `MeshInstance3D`, a ghost material and a teardown, and each wrote all four out

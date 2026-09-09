@@ -548,19 +548,21 @@ selected. And **Fill 360°** is a way of arriving at a step rather than somethin
 the array remembers, so an array loads with the step it actually has and the box
 unticked.
 
-**Update says what it would undo.** Drag one copy of an array somewhere on
-purpose and the section says so — *"1 copy has been moved by hand. Update will
-put it back in the layout — Detach to keep it."* Press Update and nothing
-happens the first time; the status line asks you to press it again. Detach is
-the other answer, and it is the one that keeps where you put things.
+**Update says what it would undo.** Rework one copy of an array on purpose —
+drag it, resize it, retexture it, add a paint layer to it — and the section says
+so: *"1 copy has been edited by hand. Update will rebuild over it — Detach to
+keep it."* Press Update and nothing happens the first time; the status line asks
+you to press it again. Detach is the other answer, and it is the one that keeps
+what you did.
 
 Moving the **original** is different, and reads differently: *"The original has
 moved. Update will bring the copies over to follow it."* Nothing of yours is
 lost there — an array following its source is what an array is for — so Update
 goes ahead on the first press.
 
-> The count is of copies that have been **moved**. A copy you resized or painted
-> is rebuilt over without a warning, so Detach first if you have reworked one.
+> The one thing it does not notice is **painting inside a layer a copy already
+> had** — hashing every texel of every copy would cost more than the whole check
+> is worth. A layer you add, remove, retexture or resize is noticed.
 
 > `R` is also the Rect tool in paint mode. Paint mode gets first claim on it, and
 > the whole rotate/flip group is skipped while paint mode is on, so the two never

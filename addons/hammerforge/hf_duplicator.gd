@@ -460,6 +460,133 @@ func relocation_vote(brush_system) -> Dictionary:
 	return {"move": moves[winner], "followers": groups[winner].size(), "strays": strays}
 
 
+## What each copy is, apart from where it is standing.
+##
+## Values only, and no resource identity: two copies of one brush hold equal but
+## separate `FaceData` and separate weight images, so a signature that included
+## identity would report every copy in a painted array as unique. That is exactly
+## what `HFBrushChangeTracker._signature()` does, correctly — it asks whether one
+## brush has changed since it last looked at *that* brush, and identity is a
+## sound answer to that question. This asks whether two brushes are the same
+## shape, which is a different question.
+##
+## The transform is not in it either: movement is the other vote's business.
+static func _shape_signature(brush) -> String:
+	if not is_instance_valid(brush):
+		return ""
+	var parts := PackedStringArray(
+		[
+			"s%d" % int(brush.shape),
+			"n%d" % int(brush.sides),
+			"o%d" % int(brush.operation),
+			_rounded(brush.size),
+		]
+	)
+	for face in brush.faces:
+		if face == null:
+			parts.append("-")
+			continue
+		parts.append(
+			(
+				"m%d/p%d/r%.4f/%s/%s"
+				% [
+					int(face.material_idx),
+					int(face.uv_projection),
+					float(face.uv_rotation),
+					str(face.uv_scale),
+					str(face.uv_offset)
+				]
+			)
+		)
+		for vertex in face.local_verts:
+			parts.append(_rounded(vertex))
+		for uv in face.custom_uvs:
+			parts.append(str(uv))
+		# The weight images themselves are left out. Hashing every texel of every
+		# face of every copy measured 127 ms over a full-budget array against 22 ms
+		# without, on an event that fires whenever the selection changes — so a
+		# layer added, removed, retextured or resized is noticed, and painting
+		# inside an existing one is not.
+		for layer in face.paint_layers:
+			if layer == null:
+				parts.append("-")
+				continue
+			var image_size := "none"
+			if layer.weight_image != null and not layer.weight_image.is_empty():
+				image_size = str(layer.weight_image.get_size())
+			parts.append(
+				(
+					"t%s/b%d/o%.4f/%s"
+					% [
+						layer.texture.resource_path if layer.texture else "",
+						int(layer.blend_mode),
+						float(layer.opacity),
+						image_size
+					]
+				)
+			)
+		if face.displacement == null:
+			parts.append("d-")
+		else:
+			parts.append(
+				(
+					"d%d/%.4f/%d"
+					% [
+						face.displacement.distances.size(),
+						float(face.displacement.elevation),
+						hash(face.displacement.distances)
+					]
+				)
+			)
+	return "/".join(parts)
+
+
+static func _rounded(v: Vector3) -> String:
+	return "%.3f %.3f %.3f" % [v.x, v.y, v.z]
+
+
+## The copies that are not the shape the rest of the array agrees on.
+##
+## Grouped rather than compared against the source, and for the same reason the
+## move is read as a vote: paint the original and every copy differs from it at
+## once, which is the source having changed rather than anybody editing copies.
+## Copies that still agree with each other are the array; a copy on its own is
+## the edit.
+func reshaped_copy_ids(brush_system) -> PackedStringArray:
+	var groups: Dictionary = {}
+	for brush_id in expected_copy_transforms(brush_system):
+		var copy_brush = brush_system.find_brush_by_id(brush_id)
+		if not is_instance_valid(copy_brush):
+			continue
+		var signature := _shape_signature(copy_brush)
+		if not groups.has(signature):
+			groups[signature] = PackedStringArray()
+		groups[signature].append(str(brush_id))
+	if groups.size() < 2:
+		return PackedStringArray()
+	var winner := ""
+	for signature in groups:
+		if winner == "" or groups[signature].size() > groups[winner].size():
+			winner = signature
+	var strays := PackedStringArray()
+	for signature in groups:
+		if signature == winner:
+			continue
+		for brush_id in groups[signature]:
+			strays.append(brush_id)
+	return strays
+
+
+## Everything a rebuild of this array would undo: the copies that have been moved
+## and the copies that have been reshaped or repainted.
+func edited_copy_ids(brush_system) -> PackedStringArray:
+	var out := displaced_copy_ids(brush_system)
+	for brush_id in reshaped_copy_ids(brush_system):
+		if not out.has(brush_id):
+			out.append(brush_id)
+	return out
+
+
 ## The copies that are not standing where the rest of the array agrees it stands.
 ##
 ## What an Update would move, and therefore what it would undo of the user's own

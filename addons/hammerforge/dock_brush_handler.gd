@@ -662,10 +662,10 @@ static func refresh_array_section(dock: Object) -> void:
 static func _refresh_array_warning(dock: Object, duplicator_id: String) -> void:
 	if dock == null or not dock.level_root:
 		return
-	if not dock.level_root.has_method("displaced_array_copies"):
+	if not dock.level_root.has_method("edited_array_copies"):
 		return
-	var moved: int = dock.level_root.displaced_array_copies(duplicator_id)
-	if moved <= 0:
+	var edited: int = dock.level_root.edited_array_copies(duplicator_id)
+	if edited <= 0:
 		# A source that has moved takes the whole array with it on the next Update.
 		# That is what an array is for rather than a loss, so it is said differently
 		# and does not stand in the way of the button.
@@ -681,12 +681,12 @@ static func _refresh_array_warning(dock: Object, duplicator_id: String) -> void:
 	_show_array_warning(
 		dock,
 		(
-			"%d cop%s been moved by hand. Update will put %s back in the layout — Detach to keep %s."
+			"%d cop%s been edited by hand. Update will rebuild over %s — Detach to keep %s."
 			% [
-				moved,
-				"y has" if moved == 1 else "ies have",
-				"it" if moved == 1 else "them",
-				"it" if moved == 1 else "them"
+				edited,
+				"y has" if edited == 1 else "ies have",
+				"it" if edited == 1 else "them",
+				"it" if edited == 1 else "them"
 			]
 		)
 	)
@@ -704,10 +704,10 @@ static func _show_array_warning(dock: Object, text: String) -> void:
 ## array and the same numbers goes ahead, and Detach is the other way out.
 static func _confirm_array_overwrite(dock: Object, record: Variant, params: Dictionary) -> bool:
 	var duplicator_id := str(record.duplicator_id)
-	if not dock.level_root.has_method("displaced_array_copies"):
+	if not dock.level_root.has_method("edited_array_copies"):
 		return true
-	var moved: int = dock.level_root.displaced_array_copies(duplicator_id)
-	if moved <= 0:
+	var edited: int = dock.level_root.edited_array_copies(duplicator_id)
+	if edited <= 0:
 		dock._array_overwrite_ack = ""
 		return true
 	var token := "%s|%d" % [duplicator_id, hash(params)]
@@ -717,8 +717,8 @@ static func _confirm_array_overwrite(dock: Object, record: Variant, params: Dict
 	_refresh_array_warning(dock, duplicator_id)
 	dock._set_status(
 		(
-			"Press Update again to put %d moved cop%s back in the layout"
-			% [moved, "y" if moved == 1 else "ies"]
+			"Press Update again to rebuild over %d edited cop%s"
+			% [edited, "y" if edited == 1 else "ies"]
 		),
 		true
 	)
