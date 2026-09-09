@@ -161,6 +161,15 @@ The format is based on Keep a Changelog, and this project follows semantic versi
     copy, undo, and what survives a state restore.
 
 ### Fixed
+- **The entity wiring overlay stayed behind when the level left the tree.**
+  `HFIOVisualizer` hangs a `MeshInstance3D` and its pulse overlays off the
+  `LevelRoot`, and `cleanup()` was written to take them down, but
+  `LevelRoot._exit_tree()` never called it. Closing a scene or reloading the
+  plugin left the mesh behind, once per reload. Every other overlay in that
+  teardown was already accounted for.
+  - **Coverage** (`tests/test_io_visualizer_enhanced.gd`): a real `LevelRoot`
+    with the wiring drawn, taken out of the tree, asserting the mesh is gone and
+    left no node behind. It fails against the old code.
 - **Tilted brushes imported from `.map` as loose triangles.** A `.map` face line
   names three points on an infinite plane, not the corners of a face. Import read
   them as corners, so every brush that was not an axis-aligned box arrived as a
