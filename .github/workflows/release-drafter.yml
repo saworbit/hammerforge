@@ -1,0 +1,31 @@
+name: Release Drafter
+
+# Runs only on merges to main. Deliberately not on pull_request: that variant
+# needs write access on a run triggered by a fork's branch, and drafting notes
+# is not worth that.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-drafter
+  cancel-in-progress: false
+
+jobs:
+  draft:
+    name: Update the draft release
+    runs-on: ubuntu-latest
+    permissions:
+      # Writes the draft release itself.
+      contents: write
+      pull-requests: read
+    steps:
+      - uses: release-drafter/release-drafter@34d80673e067bdc0c24568d3af899c216adcfaa9 # v7.7.0
+        with:
+          config-name: release-drafter.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

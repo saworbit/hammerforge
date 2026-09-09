@@ -1,0 +1,13 @@
+# Pinned exactly rather than loosely so a green CI run stays reproducible and
+# Dependabot has something concrete to bump. These were inline `pip install`
+# arguments in ci.yml, where nothing watched them.
+
+# gdformat --check and gdlint over addons/hammerforge/ and tests/.
+gdtoolkit==4.5.0
+
+# Static analysis of this repository's own workflows: token scope, injection
+# through ${{ }} into run blocks, unpinned third-party actions.
+zizmor==1.30.0
+
+# Lint and format check for tools/*.py.
+ruff==0.16.6

@@ -1,0 +1,46 @@
+name: Stale
+
+on:
+  schedule:
+    # 03:30 UTC daily, well away from the hour when everyone else's cron runs.
+    - cron: "30 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stale:
+    name: Mark and close inactive threads
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/stale@4391f3da665fdf50b6810c1a66712fb9ba21aa93 # v11.0.0
+        with:
+          days-before-stale: 60
+          days-before-close: 30
+          # A draft is someone's parked work, not an abandoned thread.
+          exempt-draft-pr: true
+          exempt-issue-labels: "pinned,help wanted,good first issue,enhancement"
+          exempt-pr-labels: "pinned,help wanted"
+          stale-issue-label: "stale"
+          stale-pr-label: "stale"
+          stale-issue-message: >
+            No activity here for 60 days. This is a solo hobby project, so a
+            quiet thread usually means it is queued rather than rejected —
+            a comment saying it still matters is enough to keep it open.
+            Otherwise it closes in 30 days, and reopening is always fine.
+          stale-pr-message: >
+            No activity on this pull request for 60 days. Comment or push if
+            it is still live; otherwise it closes in 30 days. Closing is not a
+            rejection and reopening is always fine.
+          close-issue-message: >
+            Closing after 90 days without activity. Reopen or file a fresh
+            issue if it comes back.
+          close-pr-message: >
+            Closing after 90 days without activity. Reopen whenever you want
+            to pick it back up.
+          # Keeps the daily run inside a slice of the API budget.
+          operations-per-run: 60

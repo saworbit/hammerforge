@@ -23,6 +23,7 @@ Diagnostics, for when a capture is not showing what it should:
                               what was asked for
     shot <scene> <path>       write a PNG of what the source is capturing now
 """
+
 import base64
 import hashlib
 import json
@@ -60,8 +61,14 @@ def connect():
 
 def request(ws, kind, data=None):
     rid = str(uuid.uuid4())
-    ws.send(json.dumps({"op": 6, "d": {
-        "requestType": kind, "requestId": rid, "requestData": data or {}}}))
+    ws.send(
+        json.dumps(
+            {
+                "op": 6,
+                "d": {"requestType": kind, "requestId": rid, "requestData": data or {}},
+            }
+        )
+    )
     while True:
         msg = json.loads(ws.recv())
         if msg.get("op") == 7 and msg["d"]["requestId"] == rid:
@@ -78,19 +85,28 @@ def _fit_to_canvas(ws, scene, name):
     playtest window would sit in the top-left corner of a 1920x1080 canvas with
     black around two sides. SCALE_INNER fits it without cropping or distorting.
     """
-    item = request(ws, "GetSceneItemId", {
-        "sceneName": scene, "sourceName": name})["sceneItemId"]
+    item = request(ws, "GetSceneItemId", {"sceneName": scene, "sourceName": name})[
+        "sceneItemId"
+    ]
     video = request(ws, "GetVideoSettings")
     cw, ch = video["baseWidth"], video["baseHeight"]
-    request(ws, "SetSceneItemTransform", {
-        "sceneName": scene, "sceneItemId": item,
-        "sceneItemTransform": {
-            "positionX": cw / 2.0, "positionY": ch / 2.0,
-            "alignment": 0,  # centred on the position, rather than anchored
-            "boundsType": "OBS_BOUNDS_SCALE_INNER",
-            "boundsAlignment": 0,
-            "boundsWidth": float(cw), "boundsHeight": float(ch),
-        }})
+    request(
+        ws,
+        "SetSceneItemTransform",
+        {
+            "sceneName": scene,
+            "sceneItemId": item,
+            "sceneItemTransform": {
+                "positionX": cw / 2.0,
+                "positionY": ch / 2.0,
+                "alignment": 0,  # centred on the position, rather than anchored
+                "boundsType": "OBS_BOUNDS_SCALE_INNER",
+                "boundsAlignment": 0,
+                "boundsWidth": float(cw),
+                "boundsHeight": float(ch),
+            },
+        },
+    )
 
 
 def main():
@@ -111,8 +127,11 @@ def main():
         # Lists what OBS can see, in the order it offers them -- which is the
         # order `capture` picks from when two windows share a title.
         name = sys.argv[2] if len(sys.argv) > 2 else "HF HammerForgeDemo source"
-        items = request(ws, "GetInputPropertiesListPropertyItems",
-                        {"inputName": name, "propertyName": "window"})
+        items = request(
+            ws,
+            "GetInputPropertiesListPropertyItems",
+            {"inputName": name, "propertyName": "window"},
+        )
         for it in items["propertyItems"]:
             print(it["itemValue"])
     elif cmd == "capture":
@@ -143,19 +162,31 @@ def main():
             request(ws, "CreateScene", {"sceneName": scene})
         inputs = [i["inputName"] for i in request(ws, "GetInputList")["inputs"]]
         if name not in inputs:
-            request(ws, "CreateInput", {
-                "sceneName": scene, "inputName": name,
-                "inputKind": "window_capture",
-                "inputSettings": {"method": 2, "cursor": True}})
-        items = request(ws, "GetInputPropertiesListPropertyItems",
-                        {"inputName": name, "propertyName": "window"})
+            request(
+                ws,
+                "CreateInput",
+                {
+                    "sceneName": scene,
+                    "inputName": name,
+                    "inputKind": "window_capture",
+                    "inputSettings": {"method": 2, "cursor": True},
+                },
+            )
+        items = request(
+            ws,
+            "GetInputPropertiesListPropertyItems",
+            {"inputName": name, "propertyName": "window"},
+        )
         # A launched Godot game shows up twice under one identical
         # "title:class:exe" string, and only one of the two survives -- capture
         # the wrong one and the picture goes black a few seconds in. The string
         # cannot tell them apart, so --index picks by position and the last
         # match is the fallback.
-        hits = [it["itemValue"] for it in items["propertyItems"]
-                if all(w in str(it["itemValue"]).lower() for w in wanted)]
+        hits = [
+            it["itemValue"]
+            for it in items["propertyItems"]
+            if all(w in str(it["itemValue"]).lower() for w in wanted)
+        ]
         if not hits:
             raise SystemExit("no window matching all of %r" % wanted)
         if index >= len(hits):
@@ -164,10 +195,15 @@ def main():
         match = hits[index]
         if len(hits) > 1:
             print("  %d identical matches; took #%d" % (len(hits), index))
-        request(ws, "SetInputSettings", {
-            "inputName": name,
-            "inputSettings": {"window": match, "method": 2, "cursor": True},
-            "overlay": True})
+        request(
+            ws,
+            "SetInputSettings",
+            {
+                "inputName": name,
+                "inputSettings": {"window": match, "method": 2, "cursor": True},
+                "overlay": True,
+            },
+        )
         _fit_to_canvas(ws, scene, name)
         request(ws, "SetCurrentProgramScene", {"sceneName": scene})
         print("capturing:", match, "in", scene)
@@ -176,8 +212,7 @@ def main():
         # it could not honour is not reported as an error, it just quietly
         # produces black once the window is no longer on top.
         scene = sys.argv[2] if len(sys.argv) > 2 else "HammerForgeDemo"
-        got = request(ws, "GetInputSettings",
-                      {"inputName": "HF %s source" % scene})
+        got = request(ws, "GetInputSettings", {"inputName": "HF %s source" % scene})
         for k, v in sorted(got.get("inputSettings", {}).items()):
             print("  %s = %r" % (k, v))
     elif cmd == "shot":
@@ -185,9 +220,15 @@ def main():
         # silently re-matched something else looks fine in every log line and
         # only shows up in the picture.
         scene, path = sys.argv[2], sys.argv[3]
-        request(ws, "SaveSourceScreenshot", {
-            "sourceName": "HF %s source" % scene,
-            "imageFormat": "png", "imageFilePath": path})
+        request(
+            ws,
+            "SaveSourceScreenshot",
+            {
+                "sourceName": "HF %s source" % scene,
+                "imageFormat": "png",
+                "imageFilePath": path,
+            },
+        )
         print("shot:", path)
     elif cmd == "scene":
         request(ws, "SetCurrentProgramScene", {"sceneName": sys.argv[2]})

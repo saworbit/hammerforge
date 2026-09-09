@@ -1,0 +1,27 @@
+# The plugin is GDScript; Python here is contributor tooling only. It still gets
+# linted, because two of the five scripts in tools/ decide whether a build
+# passes: check_placement_order.py fails CI on a world transform assigned before
+# a node is parented, and build_release_tree.py decides what ships to the Godot
+# Asset Library. A silent break in either is worse than a broken addon.
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+# Nothing outside tools/ is Python.
+include = ["tools/*.py"]
+
+[tool.ruff.lint]
+# Defects, not restyling. pyupgrade (UP) is deliberately absent: it wants 28
+# `"%s" % x` prints rewritten as f-strings across scripts that work, which is a
+# separate change from adding a gate. E501 is absent because the formatter owns
+# line length and the two disagree at the margins.
+select = [
+  "E4",  # imports
+  "E7",  # statement-level mistakes
+  "E9",  # syntax and IO errors
+  "F",   # pyflakes: undefined names, unused imports, broken f-strings
+  "I",   # import order
+  "B",   # bugbear: mutable defaults, loop-variable capture, silent except
+  "SIM", # simplify: unclosed handles, redundant branches
+  "RUF",
+]

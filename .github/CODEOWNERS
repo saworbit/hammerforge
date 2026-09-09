@@ -1,0 +1,15 @@
+# Every path resolves to the same person, so per-area ownership lines would be
+# decoration. What is worth writing down is which directories are not ours to
+# edit: they are upstream snapshots, and a change made here is lost at the next
+# bump. Those lines exist to put a review on the PR that touches them.
+
+*                       @saworbit
+
+# Vendored upstream. Fix these at the source and re-vendor; do not patch here.
+/addons/gut/            @saworbit
+/addons/godot_mcp/      @saworbit
+
+# Break these and the Asset Library ships the wrong tree, or CI stops catching
+# the bug it was written to catch.
+/.github/workflows/     @saworbit
+/tools/                 @saworbit

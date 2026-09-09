@@ -13,6 +13,7 @@ What ships is the list below and nothing that is not on it. The default is
 exclude: a new folder added to the repository does not reach users until
 somebody puts it here deliberately.
 """
+
 from __future__ import annotations
 
 import shutil
@@ -105,7 +106,10 @@ def tracked(path: str) -> list[str]:
     """
     out = subprocess.run(
         ["git", "ls-files", "-z", "--", path],
-        cwd=REPO, capture_output=True, text=True, check=True,
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        check=True,
     ).stdout
     return [f for f in out.split("\0") if f]
 

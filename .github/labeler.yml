@@ -1,0 +1,116 @@
+# Applies the area: labels this repository already uses, so triage does not
+# depend on remembering to. Paths follow the layout in docs/architecture: the
+# plugin_*.gd modules sit beside plugin.gd, the RefCounted subsystems live in
+# addons/hammerforge/systems/.
+#
+# A file that maps to nothing is deliberate, not an oversight: level file I/O
+# (map_io.gd, hflevel_io.gd) has no area label, and inventing one to make the
+# mapping look complete would put a wrong label on real PRs.
+
+"area: build":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "addons/hammerforge/brush_*.gd"
+          - "addons/hammerforge/face_*.gd"
+          - "addons/hammerforge/hf_*_builder.gd"
+          - "addons/hammerforge/hf_generator*.gd"
+          - "addons/hammerforge/hf_convex_clip.gd"
+          - "addons/hammerforge/hf_extrude_tool.gd"
+          - "addons/hammerforge/hf_polygon_tool.gd"
+          - "addons/hammerforge/hf_path_tool.gd"
+          - "addons/hammerforge/hf_duplicator.gd"
+          - "addons/hammerforge/hf_snap_system.gd"
+          - "addons/hammerforge/plugin_vertex_*.gd"
+          - "addons/hammerforge/plugin_edit_actions.gd"
+          - "addons/hammerforge/dock_brush_handler.gd"
+          - "addons/hammerforge/systems/hf_brush_system.gd"
+          - "addons/hammerforge/systems/hf_carve_*.gd"
+          - "addons/hammerforge/systems/hf_bevel_system.gd"
+          - "addons/hammerforge/systems/hf_clip_preview.gd"
+          - "addons/hammerforge/systems/hf_drag_system.gd"
+          - "addons/hammerforge/systems/hf_hollow_preview.gd"
+          - "addons/hammerforge/systems/hf_array_preview.gd"
+          - "addons/hammerforge/systems/hf_generator_system.gd"
+          - "addons/hammerforge/systems/hf_grid_system.gd"
+
+"area: paint":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "addons/hammerforge/paint/**"
+          - "addons/hammerforge/surface_paint.gd"
+          - "addons/hammerforge/material_manager.gd"
+          - "addons/hammerforge/displacement_data.gd"
+          - "addons/hammerforge/hf_material_atlas.gd"
+          - "addons/hammerforge/hf_prototype_textures.gd"
+          - "addons/hammerforge/hf_decal_tool.gd"
+          - "addons/hammerforge/uv_editor.*"
+          - "addons/hammerforge/plugin_paint_input.gd"
+          - "addons/hammerforge/plugin_material_commands.gd"
+          - "addons/hammerforge/dock_paint_handler.gd"
+          - "addons/hammerforge/systems/hf_paint_system.gd"
+          - "addons/hammerforge/systems/hf_displacement_system.gd"
+          - "materials/**"
+          - "addons/hammerforge/textures/**"
+
+"area: objects":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "addons/hammerforge/entities.json"
+          - "addons/hammerforge/draft_entity.gd"
+          - "addons/hammerforge/hf_entity_def.gd"
+          - "addons/hammerforge/hf_prefab.gd"
+          - "addons/hammerforge/hf_io_runtime.gd"
+          - "addons/hammerforge/prefab_factory.gd"
+          - "addons/hammerforge/plugin_prefab_commands.gd"
+          - "addons/hammerforge/dock_entity_handler.gd"
+          - "addons/hammerforge/dock_connections.gd"
+          - "addons/hammerforge/presets/**"
+          - "addons/hammerforge/systems/hf_entity_system.gd"
+          - "addons/hammerforge/systems/hf_prefab_system.gd"
+          - "addons/hammerforge/systems/hf_spawn_system.gd"
+          - "addons/hammerforge/systems/hf_io_*.gd"
+
+"area: test":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "addons/hammerforge/baker.gd"
+          - "addons/hammerforge/hf_validation.gd"
+          - "addons/hammerforge/playtest_fps.gd"
+          - "addons/hammerforge/plugin_bake_preview.gd"
+          - "addons/hammerforge/systems/hf_bake_system.gd"
+
+"area: architecture":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "addons/hammerforge/plugin.gd"
+          - "addons/hammerforge/level_root.gd"
+          - "addons/hammerforge/hf_tool_registry.gd"
+          - "addons/hammerforge/hf_editor_tool.gd"
+          - "addons/hammerforge/hf_op_result.gd"
+          - "addons/hammerforge/hf_log.gd"
+          - "addons/hammerforge/undo_helper.gd"
+          - "addons/hammerforge/systems/hf_state_system.gd"
+
+"area: docs":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docs/**"
+          - "overrides/**"
+          - "mkdocs.yml"
+          - "*.md"
+
+tests:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "tests/**"
+          - ".gutconfig.json"
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/**"
+          - "tools/**"
+          - "requirements-*.txt"
+          - "pyproject.toml"
+          - ".gdlintrc"
+          - ".editorconfig"

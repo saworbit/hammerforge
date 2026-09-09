@@ -1,0 +1,24 @@
+name: Labeler
+
+# pull_request_target rather than pull_request so the token can still write
+# labels on a pull request opened from a fork. It is safe here for the reason
+# the trigger is usually unsafe does not apply: this job never checks out the
+# pull request's code, and runs nothing from it. It calls one API.
+on:
+  pull_request_target: # zizmor: ignore[dangerous-triggers]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  label:
+    name: Apply area labels
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13 # v7.0.0
+        with:
+          sync-labels: true

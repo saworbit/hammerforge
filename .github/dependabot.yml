@@ -1,7 +1,5 @@
 version: 2
 updates:
-  # Godot and GDScript tooling are pinned in ci.yml itself, so only the
-  # Actions themselves are tracked here.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -9,8 +7,25 @@ updates:
     commit-message:
       prefix: "ci"
     labels:
-      - "enhancement"
+      - "ci"
     groups:
       actions:
+        patterns:
+          - "*"
+
+  # Godot itself is pinned in ci.yml and cannot be tracked here, but the Python
+  # tooling can be. It used to be inline `pip install` arguments that nothing
+  # watched; as requirements files, a bump arrives as a pull request that runs
+  # the suite against it before anyone accepts it.
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"
+    labels:
+      - "ci"
+    groups:
+      python-tooling:
         patterns:
           - "*"

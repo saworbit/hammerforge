@@ -1,0 +1,51 @@
+# Assembles the next release's notes as PRs merge, so tagging publishes
+# something already written. CHANGELOG.md stays the hand-written, curated
+# account; this is the mechanical one, grouped by the labels triage already
+# applies.
+
+name-template: "v$RESOLVED_VERSION"
+tag-template: "v$RESOLVED_VERSION"
+
+categories:
+  - title: "Build tools"
+    labels: ["area: build"]
+  - title: "Paint and materials"
+    labels: ["area: paint"]
+  - title: "Entities and prefabs"
+    labels: ["area: objects"]
+  - title: "Bake, validation and playtest"
+    labels: ["area: test"]
+  - title: "Performance"
+    labels: ["performance"]
+  - title: "Fixes"
+    labels: ["bug"]
+  - title: "Architecture"
+    labels: ["area: architecture"]
+  - title: "Documentation"
+    labels: ["area: docs", "documentation"]
+  - title: "Tests and tooling"
+    labels: ["tests", "ci"]
+
+exclude-labels:
+  - "duplicate"
+  - "invalid"
+  - "wontfix"
+
+# Nothing here is 1.0 yet, so a feature does not move the major. A PR carrying
+# no version label lands as a patch bump.
+version-resolver:
+  minor:
+    labels: ["enhancement"]
+  default: patch
+
+change-template: "- $TITLE (#$NUMBER) @$AUTHOR"
+no-changes-template: "- No user-facing changes."
+
+template: |
+  $CHANGES
+
+  **Full changelog:** https://github.com/saworbit/hammerforge/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION
+
+  Installing: download the zip below, or point the Godot Asset Library at the
+  `release` branch. See [CHANGELOG.md](https://github.com/saworbit/hammerforge/blob/main/CHANGELOG.md)
+  for the curated account of this release.

@@ -22,6 +22,7 @@ This script makes the swap recoverable rather than merely careful:
 
 Nothing here is Windows-specific except the default Godot path.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -90,14 +91,14 @@ def prepare() -> None:
     text = proj.read_text(encoding="utf-8")
     text = text.replace(', "res://addons/godot_mcp/plugin.cfg"', "")
     text = "\n".join(
-        l for l in text.split("\n") if not l.startswith("MCPRuntimeProbe=")
+        line for line in text.split("\n") if not line.startswith("MCPRuntimeProbe=")
     )
     # Enable the capture plugin for this run only. It is deliberately not
     # shipped enabled: an EditorPlugin that reads an environment variable and
     # can call get_tree().quit() should not load during a contributor's normal
     # session, where a stray HF_DOCSHOT=1 would close their editor mid-work.
     text, enabled_count = re.subn(
-        r'(?m)^(enabled=PackedStringArray\((?!.*hf_docshot).*?)\)$',
+        r"(?m)^(enabled=PackedStringArray\((?!.*hf_docshot).*?)\)$",
         r'\1, "res://addons/hf_docshot/plugin.cfg")',
         text,
         count=1,
@@ -113,14 +114,14 @@ def prepare() -> None:
         s = re.sub(
             r"^open_scenes=.*$", "open_scenes=PackedStringArray()", s, flags=re.M
         )
-        s = re.sub(r'^current_scene=.*$', 'current_scene=""', s, flags=re.M)
+        s = re.sub(r"^current_scene=.*$", 'current_scene=""', s, flags=re.M)
         # Pin the window geometry. Without this the editor restores its saved
         # position *after* anything else moves it, so a capture that measures
         # the window and then acts on those coordinates ends up pointing at
         # wherever the window used to be -- possibly another monitor. It also
         # makes output dimensions reproducible instead of depending on which
         # display the editor was last maximised on.
-        s = re.sub(r'^mode=.*$', 'mode="windowed"', s, flags=re.M)
+        s = re.sub(r"^mode=.*$", 'mode="windowed"', s, flags=re.M)
         s = re.sub(r"^position=Vector2i.*$", "position=Vector2i(0, 0)", s, flags=re.M)
         s = re.sub(r"^size=Vector2i.*$", "size=Vector2i(1920, 1080)", s, flags=re.M)
         layout.write_text(s, encoding="utf-8", newline="\n")
@@ -132,10 +133,16 @@ def main() -> int:
     # The video harness drives its own editor lifecycle (it has to interleave
     # OBS and mouse control), but must not duplicate the environment swap --
     # duplicating it means duplicating the crash-safety, and one copy would rot.
-    ap.add_argument("--prepare-only", action="store_true",
-                    help="apply the environment swap and exit (for other harnesses)")
-    ap.add_argument("--restore-only", action="store_true",
-                    help="undo a previous --prepare-only and exit")
+    ap.add_argument(
+        "--prepare-only",
+        action="store_true",
+        help="apply the environment swap and exit (for other harnesses)",
+    )
+    ap.add_argument(
+        "--restore-only",
+        action="store_true",
+        help="undo a previous --prepare-only and exit",
+    )
     args = ap.parse_args()
 
     if args.restore_only:
@@ -149,17 +156,32 @@ def main() -> int:
 
     dirty = [str(r) for r in TARGETS if is_dirty(r)]
     if dirty:
-        print("Refusing to run: these tracked files already have changes:", file=sys.stderr)
+        print(
+            "Refusing to run: these tracked files already have changes:",
+            file=sys.stderr,
+        )
         for d in dirty:
             print(f"  {d}", file=sys.stderr)
-        print("Commit or stash them first, or the swap cannot be undone cleanly.", file=sys.stderr)
+        print(
+            "Commit or stash them first, or the swap cannot be undone cleanly.",
+            file=sys.stderr,
+        )
         return 2
 
     # Suppress the onboarding card, which otherwise fills the top of the dock.
     subprocess.run(
-        [args.godot, "--headless", "-s", "res://tools/prepare_editor_smoke.gd",
-         "--path", ".", "--", "--show-welcome=false"],
-        cwd=REPO, check=False,
+        [
+            args.godot,
+            "--headless",
+            "-s",
+            "res://tools/prepare_editor_smoke.gd",
+            "--path",
+            ".",
+            "--",
+            "--show-welcome=false",
+        ],
+        cwd=REPO,
+        check=False,
     )
 
     prepare()
