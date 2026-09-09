@@ -32,6 +32,7 @@ This document describes how to move data in and out of HammerForge safely.
 ## `.map` Import / Export
 - Use `.map` to exchange basic brush layouts with other editors.
 - Axis-aligned boxes use the optimized primitive path; tilted, clipped, and other non-axis-aligned convex brushes import and export as CUSTOM face geometry.
+- Import works the face polygons out rather than reading them off the file. A `.map` face line names three points on an infinite plane, not the corners of a face, and the solid is the intersection of the half spaces behind its planes. A set of planes that closes nothing still imports, on the old reading of the points as corners, so an ill-formed brush arrives wrong rather than not at all.
 - Point-entity key/value properties and brush entity classes round-trip through the supported Classic Quake and Valve 220 adapters.
 - Per-face materials and HammerForge surface-paint layers are not preserved, so `.hflevel` remains the editable source of truth.
 - Treat `.map` as a blockout exchange format, not a full fidelity export.
