@@ -226,9 +226,17 @@ stands**. Move the walls one at a time, though, and they stop agreeing about
 where the room is — that reads as editing rather than moving, and the re-shell
 goes back to the placement it had.
 
+**Walls you have reworked are counted first.** Move a wall on its own, resize it,
+retexture it or paint on it, and the row says how many walls are in that state and
+names Detach. Press Re-hollow and the first press only warns; press it again and
+the rebuild goes ahead. Change the thickness and the second press has to be earned
+again, because you agreed to one particular re-shell rather than to all of them.
+
+> Moving the room as a whole is not reworking it. Every wall shares the same move,
+> the re-shell follows the room, and nothing is counted.
+
 > A thickness the brush cannot take is refused before anything is deleted, so a
-> Re-hollow that will not work costs you nothing. What it does not do is warn you
-> about walls you have reworked by hand: those are rebuilt over. Detach first.
+> Re-hollow that will not work costs you nothing.
 
 ### The Structure section
 

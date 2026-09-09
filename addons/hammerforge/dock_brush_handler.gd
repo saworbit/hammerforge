@@ -262,9 +262,11 @@ static func refresh_hollow_section(dock: Object) -> void:
 			record = dock.level_root.hollow_for_id(str(dock._active_hollow_id))
 	if record == null:
 		dock._active_hollow_id = ""
+		dock._hollow_overwrite_ack = ""
 		dock.hollow_btn.text = "Hollow (Ctrl+H)"
 		if dock.hollow_detach_btn:
 			dock.hollow_detach_btn.visible = false
+		_show_hollow_warning(dock, "")
 		return
 	dock._active_hollow_id = str(record["hollow_id"])
 	dock.hollow_btn.text = "Re-hollow"
@@ -273,6 +275,7 @@ static func refresh_hollow_section(dock: Object) -> void:
 	if dock.hollow_thickness:
 		# Writing the value back must not read as the user turning the control.
 		dock.hollow_thickness.set_value_no_signal(float(record["thickness"]))
+	_refresh_hollow_warning(dock, str(record["hollow_id"]))
 
 
 ## Keep the walls and forget the hollow.
@@ -281,17 +284,23 @@ static func on_detach_hollow(dock: Object) -> void:
 		return
 	dock._commit_state_action("Detach Hollow", "detach_hollow", [str(dock._active_hollow_id)])
 	dock._active_hollow_id = ""
+	dock._hollow_overwrite_ack = ""
 	dock._set_status("Hollow detached — its walls are ordinary brushes now")
 	refresh_hollow_section(dock)
 
 
 ## Shell the same solid again at the thickness now on screen.
 ##
-## No confirmation dialog: the walls this replaces are the walls the last press
-## made, so there is nothing of the user's to lose that Detach does not keep.
+## No dialog: the walls this replaces are usually the walls the last press made,
+## and there is nothing of the user's to lose that Detach does not keep. Walls that
+## have been reworked by hand are the exception, and those are counted, named, and
+## made to ask twice rather than opening a modal over an operation that is almost
+## always harmless.
 static func _rehollow(dock: Object) -> void:
 	var thickness: float = dock.hollow_thickness.value if dock.hollow_thickness else 4.0
 	var hollow_id := str(dock._active_hollow_id)
+	if not _confirm_hollow_overwrite(dock, hollow_id, thickness):
+		return
 	dock._commit_state_action("Re-hollow", "update_hollow", [hollow_id, thickness])
 	if dock.level_root.hollow_for_id(hollow_id) == null:
 		# The rebuild was refused, and `update_hollow` has already said why.
@@ -299,6 +308,67 @@ static func _rehollow(dock: Object) -> void:
 	else:
 		dock._set_status("Re-hollowed at wall thickness %.1f" % thickness)
 	refresh_hollow_section(dock)
+
+
+## Say what a Re-hollow would undo, before it undoes it.
+##
+## Detach is the answer to walls that have been reworked, and it sits right beside
+## Re-hollow — but a choice you do not know you are making is not a choice, so the
+## count is said out loud.
+static func _refresh_hollow_warning(dock: Object, hollow_id: String) -> void:
+	if dock == null or not dock.level_root:
+		return
+	if not dock.level_root.has_method("edited_hollow_walls"):
+		return
+	var edited: int = dock.level_root.edited_hollow_walls(hollow_id)
+	if edited <= 0:
+		_show_hollow_warning(dock, "")
+		return
+	_show_hollow_warning(
+		dock,
+		(
+			"%d wall%s been reworked by hand. Re-hollow will rebuild over %s — Detach to keep %s."
+			% [
+				edited,
+				" has" if edited == 1 else "s have",
+				"it" if edited == 1 else "them",
+				"it" if edited == 1 else "them"
+			]
+		)
+	)
+
+
+static func _show_hollow_warning(dock: Object, text: String) -> void:
+	if dock == null or dock.hollow_warning == null:
+		return
+	dock.hollow_warning.visible = text != ""
+	dock.hollow_warning.text = text
+
+
+## False when the user has not yet seen that this Re-hollow would rebuild over
+## walls they reworked themselves. The first press warns and stops; a second press
+## of the same hollow at the same thickness goes ahead, and Detach is the other way
+## out. A different thickness is a different edit and is earned again.
+static func _confirm_hollow_overwrite(dock: Object, hollow_id: String, thickness: float) -> bool:
+	if not dock.level_root.has_method("edited_hollow_walls"):
+		return true
+	var edited: int = dock.level_root.edited_hollow_walls(hollow_id)
+	if edited <= 0:
+		dock._hollow_overwrite_ack = ""
+		return true
+	var token := "%s|%.4f" % [hollow_id, thickness]
+	if str(dock._hollow_overwrite_ack) == token:
+		return true
+	dock._hollow_overwrite_ack = token
+	_refresh_hollow_warning(dock, hollow_id)
+	dock._set_status(
+		(
+			"Press Re-hollow again to rebuild over %d reworked wall%s"
+			% [edited, "" if edited == 1 else "s"]
+		),
+		true
+	)
+	return false
 
 
 static func on_hollow(dock: Object) -> void:

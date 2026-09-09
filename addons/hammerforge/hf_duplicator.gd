@@ -464,7 +464,12 @@ func relocation_vote(brush_system) -> Dictionary:
 ## shape, which is a different question.
 ##
 ## The transform is not in it either: movement is the other vote's business.
-static func _shape_signature(brush) -> String:
+##
+## Public because a hollow's walls ask the same question of themselves. They are
+## each a different shape by design, so they cannot be grouped against each other
+## the way copies are — but "is this brush still the shape it was" is the same
+## computation, and there is no reason for two of it.
+static func shape_signature(brush) -> String:
 	if not is_instance_valid(brush):
 		return ""
 	var parts := PackedStringArray(
@@ -551,7 +556,7 @@ func reshaped_copy_ids(brush_system) -> PackedStringArray:
 		var copy_brush = brush_system.find_brush_by_id(brush_id)
 		if not is_instance_valid(copy_brush):
 			continue
-		var signature := _shape_signature(copy_brush)
+		var signature := shape_signature(copy_brush)
 		if not groups.has(signature):
 			groups[signature] = PackedStringArray()
 		groups[signature].append(str(brush_id))

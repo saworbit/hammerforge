@@ -438,8 +438,10 @@ var cordon_from_sel_btn: Button = null
 var hollow_thickness: SpinBox = null
 var hollow_btn: Button = null
 var hollow_detach_btn: Button = null
+var hollow_warning: Label = null
 ## The hollow the Hollow row is editing, empty while it is describing a new one.
 var _active_hollow_id: String = ""
+var _hollow_overwrite_ack: String = ""
 var move_floor_btn: Button = null
 var move_ceiling_btn: Button = null
 var tie_entity_btn: Button = null

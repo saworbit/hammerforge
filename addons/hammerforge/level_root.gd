@@ -1571,6 +1571,13 @@ func hollow_for_selection(brush_ids: Array) -> Variant:
 	return brush_system.hollow_for_selection(brush_ids)
 
 
+## How many walls of a hollow have been reworked by hand: moved off the placement
+## the shell put them at, or resized, retextured or painted since. What the dock
+## says out loud before a Re-hollow rebuilds over them.
+func edited_hollow_walls(hollow_id: String) -> int:
+	return brush_system.edited_hollow_walls(hollow_id)
+
+
 ## How many copies of an array have been edited by hand: dragged off the
 ## placement it puts them at, or reshaped or repainted since it made them. What
 ## the dock says out loud before an Update rebuilds over them.

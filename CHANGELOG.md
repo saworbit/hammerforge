@@ -5,6 +5,34 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Re-hollow says what it would rebuild over.** Pressing Re-hollow deletes every
+  wall and shells the recorded solid again. A wall you had moved, resized,
+  retextured or painted went with the rest of them, without a word — the one thing
+  the live-hollow pass shipped knowing was missing.
+  - The record now keeps **the shape each wall was made as** beside where it was
+    put. That is the only thing that could tell a reworked wall from a fresh one:
+    the walls are not copies of each other, so there is nothing to group them
+    against the way the array groups its copies. It is
+    `HFDuplicator.shape_signature()`, made public rather than written twice — values
+    only, serializable, and blind to weight-image contents for the cost reason
+    recorded beside it.
+  - **Movement is read against what a re-shell would actually do.** When the walls
+    agree on one move the room has been relocated, the re-shell follows it, and
+    nothing is counted. When they disagree the rebuild goes back to the recorded
+    placement, so any wall standing anywhere else is about to be moved back, and
+    that is the count.
+  - The Hollow row names the number and names **Detach** in the same sentence, and
+    Re-hollow has to be pressed twice. The agreement is keyed on the hollow and the
+    thickness, so changing the number earns the warning again — you agreed to one
+    re-shell, not to all of them.
+  - Records written before either field answer "cannot tell" for that half, so an
+    older level loads and re-shells with nothing to migrate.
+  - **Coverage** (`tests/test_hollow_edit_warning.gd`): 25 tests over a moved wall,
+    a resized wall, a repainted wall, a wall that is both, a room relocated and a
+    room turned counting nothing, a relocated room with one wall pushed further, a
+    deleted wall, an unknown hollow, an old record, a restored hollow, the first
+    press refused, the second going ahead, a changed thickness earning it again,
+    and Detach clearing it.
 - **A hollowed brush can be shelled again at a different thickness.** Hollow was
   the last operation with no way back to its own numbers short of Ctrl+Z: it
   replaced a solid with walls and forgot the solid, so a room whose walls came out
@@ -27,8 +55,6 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   - `HFTransformSystem.same_transform()` is now the one definition of "these two
     transforms are the same place", read by the hollow's walls and the array's
     copies both.
-  - Not covered: hand edits to a wall are overwritten by the next Re-hollow with
-    no warning, where the array section counts its edited copies and asks twice.
   - **Coverage** (`tests/test_live_hollow.gd`): 27 tests over the record, the
     re-shell, the refused thickness that costs nothing, relocation by drag and by
     turn, walls moved one at a time, detach, the row becoming an editor, repeat

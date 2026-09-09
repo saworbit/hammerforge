@@ -876,14 +876,15 @@ and run".
 - `HFTransformSystem.same_transform()` is now the one definition of "these two
   transforms are the same place", read by the hollow's walls and the array's
   copies both.
-- 27 new tests (`tests/test_live_hollow.gd`).
+- **A wall you have reworked is counted before Re-hollow rebuilds over it.** The
+  record keeps the shape each wall was made as beside where it was put, so a wall
+  that has been moved, resized, retextured or painted is named in the row and the
+  press has to be made twice. A room moved as a whole re-shells where it stands and
+  counts nothing, because nothing is lost.
+- 27 new tests (`tests/test_live_hollow.gd`), and 25 more for the warning
+  (`tests/test_hollow_edit_warning.gd`).
 
 ### Known limits of the live-hollow pass
-- Hand edits to a wall are overwritten by the next Re-hollow with no warning. The
-  array section counts its edited copies and asks twice; hollow does not yet.
-  Tracked as [#241](https://github.com/saworbit/hammerforge/issues/241), which
-  also records why the reading is simpler here: the record already keeps where
-  each wall was put.
 - The recorded solid is the solid as it was. Resizing the room means Detach and
   start again, because there is nothing that edits the source through the walls.
 - Only one hollow per set of walls, and hollowing a wall of a hollow makes a
@@ -932,7 +933,7 @@ Completion is responsibility-based rather than tied to an arbitrary line count. 
 - Headless editor tests retain the complete tool graph, with focused export-playtest coverage guarding the runtime boundary.
 
 ### Risk-focused test gaps
-The current suite covers 3,116 tests across 161 scripts, including the large brush, bake, paint, vertex, transform, generator, baker, brush-instance, and map-I/O systems. One issue is open — [#241](https://github.com/saworbit/hammerforge/issues/241), the Re-hollow overwrite warning — and it is the only known limitation that is not yet either covered or written down beside the wave that introduced it.
+The current suite covers 3,141 tests across 162 scripts, including the large brush, bake, paint, vertex, transform, generator, baker, brush-instance, and map-I/O systems. No issues are open, and every known limitation is either covered by tests or written down beside the wave that introduced it.
 
 The last one on this list is **resolved**: a `.map` entity property value
 containing a quote used to come back truncated, silently, because four quotes is
