@@ -644,6 +644,162 @@ func test_tilted_hull_round_trip_keeps_face_winding():
 
 
 # ===========================================================================
+# Face polygons are worked out, not read off the plane line (#244)
+# ===========================================================================
+
+
+## A `.map` face line whose three points sit on the plane but nowhere near the
+## face polygon, which is all a plane definition ever promised to be. Reading
+## these three back as corners is the bug.
+func _plane_line(plane: Plane, spread: float) -> String:
+	var normal := plane.normal.normalized()
+	var reference := Vector3.UP if absf(normal.dot(Vector3.UP)) < 0.9 else Vector3.RIGHT
+	var u := normal.cross(reference).normalized()
+	# u cross v is the normal, and the reader takes (p1 - p0) cross (p2 - p0),
+	# so these three points name the plane facing outward.
+	var v := normal.cross(u)
+	var origin := normal * plane.d
+	return HFMapQuake.new().format_face_line(
+		origin, origin + u * spread, origin + v * spread, "brick", null
+	)
+
+
+func _face_lines_for_planes(planes: Array, spread: float) -> Array[String]:
+	var lines: Array[String] = []
+	for plane in planes:
+		lines.append(_plane_line(plane, spread))
+	return lines
+
+
+## The six outward planes of a box brush, in world space.
+func _box_planes(brush: DraftBrush) -> Array:
+	var planes: Array = []
+	var half := [brush.size.x * 0.5, brush.size.y * 0.5, brush.size.z * 0.5]
+	var placement := brush.global_transform
+	var axes := [placement.basis.x, placement.basis.y, placement.basis.z]
+	for axis in range(3):
+		var normal: Vector3 = (axes[axis] as Vector3).normalized()
+		var reach: float = half[axis]
+		planes.append(Plane(normal, normal.dot(placement.origin + normal * reach)))
+		planes.append(Plane(-normal, -normal.dot(placement.origin - normal * reach)))
+	return planes
+
+
+func _box_corners(brush: DraftBrush) -> PackedVector3Array:
+	var half: Vector3 = brush.size * 0.5
+	var corners := PackedVector3Array()
+	for x in [-half.x, half.x]:
+		for y in [-half.y, half.y]:
+			for z in [-half.z, half.z]:
+				corners.append(brush.global_transform * Vector3(x, y, z))
+	return corners
+
+
+func _face_world_verts(face: Dictionary, center: Vector3) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	for entry in face["local_verts"]:
+		out.append(Vector3(entry[0], entry[1], entry[2]) + center)
+	return out
+
+
+func _nearest_distance(point: Vector3, candidates: PackedVector3Array) -> float:
+	var best := INF
+	for candidate in candidates:
+		best = minf(best, point.distance_to(candidate))
+	return best
+
+
+## A box turned off every axis, written out as plane definitions that are not its
+## corners, then read back.
+func _import_tilted_box(brush: DraftBrush) -> Dictionary:
+	brush.shape = LevelRoot.BrushShape.BOX
+	brush.size = Vector3(8, 8, 8)
+	brush.rotation = Vector3(deg_to_rad(15), deg_to_rad(30), deg_to_rad(20))
+	var parsed: Dictionary = MapIO.parse_map_text(
+		_wrap_worldspawn(_face_lines_for_planes(_box_planes(brush), 20.0))
+	)
+	assert_eq(parsed.get("errors", []), [], "Well formed planes parse clean")
+	var brushes: Array = parsed.get("brushes", [])
+	assert_eq(brushes.size(), 1, "Six planes are one brush")
+	return brushes[0] if brushes.size() == 1 else {}
+
+
+func test_tilted_brush_faces_come_back_as_polygons_not_plane_points():
+	var brush := DraftBrush.new()
+	add_child_autoqfree(brush)
+	var imported := _import_tilted_box(brush)
+	assert_eq(int(imported["shape"]), LevelRoot.BrushShape.CUSTOM)
+
+	var corners := _box_corners(brush)
+	var center: Vector3 = imported["center"]
+	var faces: Array = imported["faces"]
+	assert_eq(faces.size(), 6, "A box has six faces")
+	for i in range(faces.size()):
+		var verts := _face_world_verts(faces[i], center)
+		assert_eq(
+			verts.size(), 4, "Face %d is a quad, not the three points that named its plane" % i
+		)
+		for vertex in verts:
+			assert_lt(
+				_nearest_distance(vertex, corners), 0.02, "Face %d has a corner off the box" % i
+			)
+
+
+func test_tilted_brush_size_comes_from_the_hull_not_the_plane_points():
+	var brush := DraftBrush.new()
+	add_child_autoqfree(brush)
+	var imported := _import_tilted_box(brush)
+
+	var corners := _box_corners(brush)
+	var low := corners[0]
+	var high := corners[0]
+	for corner in corners:
+		low = Vector3(minf(low.x, corner.x), minf(low.y, corner.y), minf(low.z, corner.z))
+		high = Vector3(maxf(high.x, corner.x), maxf(high.y, corner.y), maxf(high.z, corner.z))
+	var size: Vector3 = imported["size"]
+	assert_lt(
+		size.distance_to(high - low), 0.02, "The brush is as big as its hull, not as its planes"
+	)
+
+
+func test_wedge_imports_with_triangle_ends_and_quad_sides():
+	# x >= 0, z >= 0, x + z <= 10, extruded along y from -4 to 4.
+	var diagonal := Vector3(1, 0, 1).normalized()
+	var planes := [
+		Plane(Vector3(-1, 0, 0), 0.0),
+		Plane(Vector3(0, 0, -1), 0.0),
+		Plane(diagonal, diagonal.dot(Vector3(10, 0, 0))),
+		Plane(Vector3(0, 1, 0), 4.0),
+		Plane(Vector3(0, -1, 0), 4.0),
+	]
+	var parsed: Dictionary = MapIO.parse_map_text(
+		_wrap_worldspawn(_face_lines_for_planes(planes, 20.0))
+	)
+
+	assert_eq(parsed.get("errors", []), [], "Well formed planes parse clean")
+	var brushes: Array = parsed.get("brushes", [])
+	assert_eq(brushes.size(), 1)
+	assert_eq(int(brushes[0]["shape"]), LevelRoot.BrushShape.CUSTOM)
+	var counts: Array = []
+	for face in brushes[0]["faces"]:
+		counts.append((face["local_verts"] as Array).size())
+	assert_eq(counts.size(), 5, "Five planes, five faces")
+	assert_eq(counts.count(3), 2, "The two ends are triangles")
+	assert_eq(counts.count(4), 3, "The three sides are quads")
+
+
+func test_planes_that_close_nothing_still_import():
+	# Two planes bound no solid. The old reading of the plane points as corners is
+	# all there is to fall back on, and losing the brush would be worse.
+	var lines: Array[String] = [
+		"( 0 0 0 ) ( 4 0 0 ) ( 4 4 0 ) brick 0 0 0 1 1",
+		"( 0 0 8 ) ( 4 4 8 ) ( 4 0 8 ) brick 0 0 0 1 1",
+	]
+	var parsed: Dictionary = MapIO.parse_map_text(_wrap_worldspawn(lines))
+	assert_eq((parsed.get("brushes", []) as Array).size(), 1, "The brush survives an open hull")
+
+
+# ===========================================================================
 # Malformed map input (#174)
 # ===========================================================================
 
