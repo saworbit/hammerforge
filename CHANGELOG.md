@@ -161,6 +161,33 @@ The format is based on Keep a Changelog, and this project follows semantic versi
     copy, undo, and what survives a state restore.
 
 ### Fixed
+- **Tilted brushes imported from `.map` as loose triangles.** A `.map` face line
+  names three points on an infinite plane, not the corners of a face. Import read
+  them as corners, so every brush that was not an axis-aligned box arrived as a
+  handful of disconnected 3-point triangles standing wherever the file happened to
+  put its plane references. A cylinder, a ramp, a wedge or a turned box from
+  TrenchBroom or Hammer came in deformed and not watertight.
+  - The solid is the intersection of the half spaces behind its planes, so each
+    face is now worked out: a square laid on the plane, clipped by every other
+    plane of the brush, and wound clockwise from outside like the rest of the
+    codebase. `HFConvexClip` already had the clipping and the winding.
+  - The brush's size and centre came from the same misread points and are now
+    taken from the hull, which also settles the axis-aligned box path: a box
+    written with plane references off in a corner used to import the wrong size.
+  - **Planes that close nothing still import.** Two planes bound no solid, and a
+    file can hold that. A face whose square still reaches its own rim means the
+    solid is open on that side, and the old reading of the points as corners is
+    the only thing left; it gives the wrong hull, but it gives one, and the brush
+    is still on screen to be fixed.
+  - **The whole set is retried flipped**, because the order of the three points
+    settles which side is solid and editors do not agree on it. The intersection
+    of the outside half spaces of a closed solid is empty, so the wrong
+    orientation cannot pass by accident.
+  - **Coverage** (`tests/test_map_export.gd`): a box turned on every axis written
+    out with plane references 20 units clear of its own corners, asserting six
+    quads whose corners land on the box and a size that matches the hull; a wedge
+    coming back as two triangle ends and three quad sides; and an open plane pair
+    still importing. The first three fail against the old code.
 - **Cutters exported to `.map` as solid brushes, filling the holes they made.**
   A `.map` worldspawn holds additive convex solids and nothing else — the format
   has no negative brush — so every subtraction brush written into one arrives as

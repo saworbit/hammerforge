@@ -7,6 +7,7 @@ const DraftBrush = preload("brush_instance.gd")
 const DraftEntity = preload("draft_entity.gd")
 const HFMapAdapterType = preload("map_adapters/hf_map_adapter.gd")
 const HFMapQuakeType = preload("map_adapters/hf_map_quake.gd")
+const HFConvexClip = preload("hf_convex_clip.gd")
 
 const DEFAULT_TEXTURE := "__default"
 const AXIS_THRESHOLD := 0.98
@@ -220,11 +221,24 @@ static func _entity_to_map_lines(
 	return lines
 
 
+## Read one parsed brush into a brush record.
+##
+## A `.map` face line names three points on an infinite plane, not the corners of
+## a face. The solid is the intersection of the half spaces behind those planes,
+## and each face is the part of its own plane left over once every other plane has
+## cut it. So the corners are worked out here rather than read off the line.
+##
+## Ill-formed brushes still import. Two planes do not bound anything, and neither
+## does a set left open on one side, but a file can hold either and the old
+## reading of the plane points as corners is the only thing left to fall back on.
+## It gives the wrong hull; it gives one, and the brush is still there to fix.
 static func _brush_from_faces(faces: Array) -> Dictionary:
 	if faces.is_empty():
 		return {}
 	var points: Array = []
+	var planes: Array = []
 	var axis_aligned = true
+	var planes_usable = true
 	for face in faces:
 		var face_points: Array = face.get("points", [])
 		if face_points.size() < 3:
@@ -234,21 +248,24 @@ static func _brush_from_faces(faces: Array) -> Dictionary:
 		var normal = _face_normal(face_points)
 		if _axis_from_normal(normal) == Vector3.ZERO:
 			axis_aligned = false
+		if normal == Vector3.ZERO:
+			planes_usable = false
+		else:
+			planes.append(Plane(normal, normal.dot(face_points[0])))
 	if points.is_empty():
 		return {}
-	var min_pt = Vector3(INF, INF, INF)
-	var max_pt = Vector3(-INF, -INF, -INF)
-	for p in points:
-		min_pt.x = min(min_pt.x, p.x)
-		min_pt.y = min(min_pt.y, p.y)
-		min_pt.z = min(min_pt.z, p.z)
-		max_pt.x = max(max_pt.x, p.x)
-		max_pt.y = max(max_pt.y, p.y)
-		max_pt.z = max(max_pt.z, p.z)
-	var size = max_pt - min_pt
+	var bounds := _bounds_of(points)
+	var hull: Array = _hull_polygons(planes, bounds) if planes_usable else []
+	if not hull.is_empty():
+		var corners: Array = []
+		for entry in hull:
+			for vertex in entry["verts"]:
+				corners.append(vertex)
+		bounds = _bounds_of(corners)
+	var size = bounds.size
 	if size.length() <= 0.001:
 		return {}
-	var center = (min_pt + max_pt) * 0.5
+	var center = bounds.get_center()
 	if axis_aligned and faces.size() <= 8:
 		return {
 			"shape": LevelRoot.BrushShape.BOX,
@@ -256,17 +273,24 @@ static func _brush_from_faces(faces: Array) -> Dictionary:
 			"center": center,
 			"operation": CSGShape3D.OPERATION_UNION
 		}
+	var rings: Array = []
+	if hull.is_empty():
+		for face in faces:
+			var face_points: Array = face.get("points", [])
+			if face_points.size() < 3:
+				continue
+			# Mirror of the export: undo the .map plane order so the stored face
+			# keeps FaceData's clockwise-from-outside winding.
+			var wound: Array = face_points.duplicate()
+			wound.reverse()
+			rings.append(wound)
+	else:
+		for entry in hull:
+			rings.append(entry["verts"])
 	var serialized_faces: Array = []
-	for face in faces:
-		var face_points: Array = face.get("points", [])
-		if face_points.size() < 3:
-			continue
+	for ring in rings:
 		var local_verts: Array = []
-		# Mirror of the export: undo the .map plane order so the stored face keeps
-		# FaceData's clockwise-from-outside winding.
-		var wound: Array = face_points.duplicate()
-		wound.reverse()
-		for p in wound:
+		for p in ring:
 			var pt: Vector3 = p
 			local_verts.append([pt.x - center.x, pt.y - center.y, pt.z - center.z])
 		serialized_faces.append({"local_verts": local_verts, "winding_version": 1})
@@ -277,6 +301,97 @@ static func _brush_from_faces(faces: Array) -> Dictionary:
 		"faces": serialized_faces,
 		"operation": CSGShape3D.OPERATION_UNION
 	}
+
+
+## The box that contains every point.
+static func _bounds_of(points: Array) -> AABB:
+	var min_pt = Vector3(INF, INF, INF)
+	var max_pt = Vector3(-INF, -INF, -INF)
+	for p in points:
+		min_pt.x = min(min_pt.x, p.x)
+		min_pt.y = min(min_pt.y, p.y)
+		min_pt.z = min(min_pt.z, p.z)
+		max_pt.x = max(max_pt.x, p.x)
+		max_pt.y = max(max_pt.y, p.y)
+		max_pt.z = max(max_pt.z, p.z)
+	return AABB(min_pt, max_pt - min_pt)
+
+
+## The corner ring each plane contributes to the solid its planes bound, or an
+## empty array when they bound nothing.
+##
+## Returns `{"index": int, "verts": PackedVector3Array}` per plane that reaches
+## the surface, in plane order, wound clockwise from outside like every other
+## face in the codebase.
+##
+## Two things are tried before giving up. A face starts as a square that has to
+## be wider than the solid, and a solid can reach well past the points that
+## defined its planes, so a pass whose faces still touch the rim of their square
+## is retried wider before it is believed. And the whole set is retried flipped,
+## because the order of the three points on a face line settles which side is
+## solid and editors do not agree on it; the intersection of the outside half
+## spaces of a closed solid is empty, so the wrong orientation cannot pass.
+static func _hull_polygons(planes: Array, bounds: AABB) -> Array:
+	if planes.size() < HFConvexClip.MIN_SOLID_FACES:
+		return []
+	var radius := maxf(bounds.size.length() * 0.5, 1.0)
+	var flipped: Array = []
+	for plane in planes:
+		flipped.append(Plane(-plane.normal, -plane.d))
+	for candidate in [planes, flipped]:
+		for half in [radius * 4.0, radius * 64.0]:
+			var rings := _clip_planes(candidate, bounds.get_center(), half)
+			if not rings.is_empty():
+				return rings
+	return []
+
+
+## One clipping pass at a given starting square size.
+##
+## Empty when a face still reaches the rim of its square, which means the planes
+## leave the solid open on that side, or that the square started too small to
+## tell the difference.
+static func _clip_planes(planes: Array, centre: Vector3, half: float) -> Array:
+	var out: Array = []
+	var rim := half - HFConvexClip.DEFAULT_EPSILON
+	for i in range(planes.size()):
+		var plane: Plane = planes[i]
+		var origin: Vector3 = centre - plane.normal * plane.distance_to(centre)
+		var axes := _plane_axes(plane)
+		var u: Vector3 = axes[0]
+		var v: Vector3 = axes[1]
+		var poly := PackedVector3Array(
+			[
+				origin - u * half - v * half,
+				origin + u * half - v * half,
+				origin + u * half + v * half,
+				origin - u * half + v * half,
+			]
+		)
+		for j in range(planes.size()):
+			if j == i:
+				continue
+			poly = HFConvexClip.clip_polygon(poly, PackedVector2Array(), planes[j], false)["verts"]
+			if poly.size() < 3:
+				break
+		if poly.size() < 3:
+			continue
+		for point in poly:
+			var offset: Vector3 = point - origin
+			if absf(offset.dot(u)) >= rim or absf(offset.dot(v)) >= rim:
+				return []
+		var ring := HFConvexClip.cap_polygon(poly, plane.normal)
+		if ring.size() >= 3:
+			out.append({"index": i, "verts": ring})
+	return out if out.size() >= HFConvexClip.MIN_SOLID_FACES else []
+
+
+## Two unit vectors spanning a plane, for laying a square on it.
+static func _plane_axes(plane: Plane) -> Array:
+	var normal := plane.normal.normalized()
+	var reference := Vector3.UP if absf(normal.dot(Vector3.UP)) < 0.99 else Vector3.RIGHT
+	var u := normal.cross(reference).normalized()
+	return [u, normal.cross(u)]
 
 
 static func _face_normal(face_points: Array) -> Vector3:
