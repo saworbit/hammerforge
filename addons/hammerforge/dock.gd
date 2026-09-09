@@ -459,6 +459,11 @@ var dup_mode_opt: OptionButton = null
 ## What the array would make, said before it makes it, and the reason when it
 ## will not.
 var dup_summary_label: Label = null
+var dup_create_btn: Button = null
+var dup_detach_btn: Button = null
+## The array the Duplicate Array section is editing, empty while it is describing
+## a new one. The counterpart of `_active_generator_id` for the Structure section.
+var _active_duplicator_id: String = ""
 ## Whether the array ghost has been asked for.
 ##
 ## Selecting a brush is not asking about arrays, and a ghost of three offset
@@ -2613,8 +2618,9 @@ func set_selection_nodes(nodes: Array) -> void:
 	if tool_vertex:
 		tool_vertex.visible = has_brush_selection
 	refresh_structure_section()
-	# The array ghost is a ghost of the selection, so it follows the selection.
-	HFDockBrushHandler.refresh_array_preview(self)
+	# Selecting part of an existing array turns the section into an editor for it;
+	# this also redraws the ghost, which follows the selection.
+	refresh_array_section()
 	set_selection_count(nodes.size())
 	# Mark hints dirty so selection-dependent buttons update
 	_hints_dirty = true
@@ -3158,6 +3164,17 @@ func _on_move_to_ceiling() -> void:
 
 func _on_create_duplicate_array() -> void:
 	HFDockBrushHandler.on_create_duplicate_array(self)
+
+
+func _on_detach_duplicate_array() -> void:
+	HFDockBrushHandler.on_detach_duplicate_array(self)
+
+
+## Selecting a piece of an array turns the Duplicate Array section from a creator
+## into an editor for that array: its own layout, its own numbers, an Update
+## button and a Detach beside it.
+func refresh_array_section() -> void:
+	HFDockBrushHandler.refresh_array_section(self)
 
 
 func _on_duplicate_array_mode_changed(index: int) -> void:

@@ -4,6 +4,48 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Added
+- **An array you made is an array you can change your mind about.** A structure
+  could be reselected, retuned and rebuilt; an array could only be created and
+  deleted. The numbers that laid one out were already recorded and already
+  serialized in the `.hflevel` — nothing ever read them back.
+  - Selecting any piece of an array turns the **Duplicate Array** section into an
+    editor for it: its layout, its own numbers, **Create Array** becomes **Update
+    Array**, and **Detach** appears beside it. This is the same shape the
+    Structure section already had, so the two surfaces now answer a selection the
+    same way.
+  - **Either the source or any copy will do.** `get_duplicator_for_brush()` only
+    ever resolved the `duplicator_id` on a source brush, and the sources are
+    buried under the ring or the lattice they seeded, so the piece you can
+    actually click on reached nothing. It reads `duplicator_instance_of` as well
+    now, which is also why **Remove Array** no longer answers a clicked copy with
+    "not a duplicator source".
+  - **Update rebuilds rather than moves**, because a change of layout or of count
+    changes how many copies there are. The array keeps its id across the rebuild,
+    so it can be tuned again without reselecting — the first Update frees the copy
+    that was selected, and the section holds on to the array rather than falling
+    back to Create at the one moment it must not.
+  - **A ring keeps its own centre.** The pivot of an array being edited comes from
+    its record, not from the selection: taking it from the selection would send
+    the whole ring over to whichever copy was clicked the moment its count moved.
+  - **Detach keeps the copies and forgets the array**, for when the layout has
+    given you what you needed and you want to edit one copy on its own. Update,
+    Detach and Remove are the three different answers, and they now sit together.
+  - The 256-brush budget is asked before the rebuild, so an update that would blow
+    it is refused with nothing deleted.
+  - A brush info carries neither duplicator tag, so a state restore re-tags the
+    copies as well as the sources; without that an undo left an array whose pieces
+    no longer said what they belonged to.
+  - A rebuild that produced nothing answers no rather than yes. Nothing cleans a
+    duplicator record when a brush is deleted, and the layout calls report having
+    run rather than having produced anything, so an array whose sources have since
+    been deleted is dropped instead of left offering Update on nothing.
+  - **Coverage** (`tests/test_live_arrays.gd`): 31 tests over resolution from a
+    copy, the section becoming an editor and going back, all three layouts loading
+    their own controls, rebuild, repeat rebuild, layout change, pivot stability,
+    the refused-over-budget path, the deleted-source path, detach, remove from a
+    copy, undo, and what survives a state restore.
+
 ### Fixed
 - **Baking with the LevelRoot away from the origin put the geometry somewhere
   else.** Found by sweeping for the rest of the ordering bug below rather than

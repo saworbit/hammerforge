@@ -1521,6 +1521,31 @@ func remove_duplicate_array(duplicator_id: String) -> void:
 	brush_system.remove_duplicate_array(duplicator_id)
 
 
+## Rebuild an existing array from new numbers, keeping the same array.
+##
+## A rebuild deletes and re-creates every copy, so the signals it would emit one
+## brush at a time are batched the way every other multi-brush operation batches
+## them.
+func update_duplicate_array(duplicator_id: String, mode: int, params: Dictionary) -> bool:
+	begin_signal_batch()
+	var ok: bool = brush_system.update_duplicate_array(duplicator_id, mode, params)
+	end_signal_batch()
+	return ok
+
+
+## Forget an array's record, leaving its copies as ordinary brushes.
+func detach_duplicate_array(duplicator_id: String) -> bool:
+	return brush_system.detach_duplicate_array(duplicator_id)
+
+
+func duplicator_for_id(duplicator_id: String) -> Variant:
+	return brush_system.duplicator_for_id(duplicator_id)
+
+
+func duplicator_for_selection(brush_ids: Array) -> Variant:
+	return brush_system.duplicator_for_selection(brush_ids)
+
+
 func _make_brush_material(operation: int, solid: bool = false, unshaded: bool = false) -> Material:
 	return brush_system._make_brush_material(operation, solid, unshaded)
 

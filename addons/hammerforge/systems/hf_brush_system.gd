@@ -2016,6 +2016,43 @@ func remove_duplicate_array(duplicator_id: String) -> void:
 	_duplicators.erase(duplicator_id)
 
 
+## Rebuild an existing array from new numbers, keeping the same array.
+##
+## The alternative was to delete the copies and make a second array, which loses
+## the identity the section is holding on to and leaves the level with a record
+## nobody can reach.
+func update_duplicate_array(duplicator_id: String, mode: int, params: Dictionary) -> bool:
+	if not _duplicators.has(duplicator_id):
+		return false
+	var dup: HFDuplicator = _duplicators[duplicator_id]
+	if not dup.regenerate(self, mode, params):
+		# A rebuild that produced nothing has already thrown the old copies away,
+		# so the record no longer describes anything that exists.
+		_duplicators.erase(duplicator_id)
+		return false
+	return true
+
+
+## Forget an array's record, leaving its copies as ordinary brushes.
+func detach_duplicate_array(duplicator_id: String) -> bool:
+	if not _duplicators.has(duplicator_id):
+		return false
+	var dup: HFDuplicator = _duplicators[duplicator_id]
+	dup.detach(self)
+	_duplicators.erase(duplicator_id)
+	return true
+
+
+func duplicator_for_id(duplicator_id: String) -> Variant:
+	return _duplicators.get(duplicator_id, null)
+
+
+## The array a brush belongs to, whether it is one of the sources or one of the
+## copies.
+##
+## A copy is what you click on: the sources are usually buried under the ring or
+## the lattice they seeded. Resolving only from the source is why the array
+## controls could never be brought back up on an array you could actually see.
 func get_duplicator_for_brush(brush_id: String) -> Variant:
 	var brush = _brush_cache.get(brush_id)
 	if not is_instance_valid(brush):
@@ -2023,9 +2060,23 @@ func get_duplicator_for_brush(brush_id: String) -> Variant:
 	if not is_instance_valid(brush):
 		return null
 	var dup_id: String = str(brush.get_meta("duplicator_id", ""))
+	if dup_id == "":
+		dup_id = str(brush.get_meta("duplicator_instance_of", ""))
 	if dup_id == "" or not _duplicators.has(dup_id):
 		return null
 	return _duplicators[dup_id]
+
+
+## The array that owns the first brush in a selection that belongs to one.
+##
+## The companion to `generator_for_selection`, and deliberately the same shape:
+## the two sections answer a selection the same way.
+func duplicator_for_selection(brush_ids: Array) -> Variant:
+	for brush_id in brush_ids:
+		var dup = get_duplicator_for_brush(str(brush_id))
+		if dup != null:
+			return dup
+	return null
 
 
 # ---------------------------------------------------------------------------

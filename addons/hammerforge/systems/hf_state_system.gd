@@ -195,6 +195,13 @@ func restore_state(state: Dictionary) -> void:
 			var src_brush = root.brush_system._brush_cache.get(src_id)
 			if is_instance_valid(src_brush):
 				src_brush.set_meta("duplicator_id", dup.duplicator_id)
+		# And on the copies, which is what you click on when you want the array
+		# back. A brush info does not carry either tag, so without this an undo
+		# leaves an array whose pieces no longer say what they belong to.
+		for copy_id in dup.get_all_instance_ids():
+			var copy_brush = root.brush_system._brush_cache.get(copy_id)
+			if is_instance_valid(copy_brush):
+				copy_brush.set_meta("duplicator_instance_of", dup.duplicator_id)
 	restore_floor_info(state.get("floor", {}))
 	restore_sun_info(state.get("sun", {}))
 	if root.draft_brushes_node:

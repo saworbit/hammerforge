@@ -697,7 +697,7 @@ and run".
 ### Known limits of the array preview
 - The ghost repeats each source brush's outline per copy, so a large selection in
   a large array is a lot of line segments; the 256-brush budget is what bounds it.
-- Arrays are still not live: unlike a structure, an existing array cannot be
+- **Resolved** by the live-arrays wave below: an existing array can be
   reselected and its numbers changed.
 - The budget is a brush count, not a measure of how much geometry each brush is.
 
@@ -728,6 +728,43 @@ and run".
   duplication is what let four of them drift into placing their meshes in the
   wrong space; `tests/test_preview_placement.gd` now holds the property they
   share, but the mechanics are still six copies.
+
+## Done (Live Arrays — Changing One After You Have Made It — September 2026)
+- Selecting any piece of an array turns the **Duplicate Array** section into an
+  editor for it: its layout, its own numbers, **Create Array** becomes **Update
+  Array**, and **Detach** appears beside it. The same shape the Structure section
+  already had, so the two surfaces answer a selection the same way. The numbers
+  were already recorded and already serialized; nothing read them back.
+- Either the source or any copy resolves the array. Resolving only from the
+  source is why the controls could never be brought back up on an array you could
+  see — the sources are buried under the ring or the lattice they seeded. **Remove
+  Array** resolves the same way and no longer answers a clicked copy with "not a
+  duplicator source".
+- Update rebuilds rather than moves, because a change of layout or of count
+  changes how many copies there are, and it keeps the array's id so it can be
+  tuned again without reselecting. The first Update frees the copy that was
+  selected, so the section holds the array through a selection that names nothing.
+- A ring being rebuilt keeps its own centre. Taking the pivot from the selection
+  would send the ring over to whichever copy was clicked the moment its count
+  moved.
+- The 256-brush budget is asked before the rebuild, so a refused update deletes
+  nothing, and a rebuild that produced no copies answers no rather than yes —
+  nothing cleans a duplicator record when a brush is deleted, so an array whose
+  sources are gone is dropped instead of left offering Update on nothing.
+- A state restore re-tags the copies as well as the sources; a brush info carries
+  neither duplicator tag, so without that an undo left an array whose pieces no
+  longer said what they belonged to.
+- 31 new tests (`tests/test_live_arrays.gd`).
+
+### Known limits of the live-array pass
+- Hand edits to a copy are overwritten by the next Update, and nothing counts
+  them the way the Structure section counts edited pieces. Detach is the answer
+  and sits beside Update, but it is not yet a warned choice.
+- An array rebuilds from where its sources now are, so dragging the original
+  carries the array with it — but dragging the copies does not, and a structure's
+  relocation vote has no counterpart here.
+- Only one array per source set, unchanged: creating a second array from the same
+  brushes still retires the first.
 
 ## Future (Wave 3 -- Polish)
 - Multiple simultaneous cordons.
@@ -772,7 +809,7 @@ Completion is responsibility-based rather than tied to an arbitrary line count. 
 - Headless editor tests retain the complete tool graph, with focused export-playtest coverage guarding the runtime boundary.
 
 ### Risk-focused test gaps
-The current suite covers 3,004 tests across 157 scripts, including the large brush, bake, paint, vertex, transform, generator, baker, brush-instance, and map-I/O systems. The issue tracker is clear as of September 8, 2026. No known limitation is currently untracked and uncovered.
+The current suite covers 3,035 tests across 158 scripts, including the large brush, bake, paint, vertex, transform, generator, baker, brush-instance, and map-I/O systems. The issue tracker is clear as of September 8, 2026. No known limitation is currently untracked and uncovered.
 
 The last one on this list is **resolved**: a `.map` entity property value
 containing a quote used to come back truncated, silently, because four quotes is

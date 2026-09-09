@@ -206,16 +206,23 @@ func build(parent: Control) -> void:
 
 	var dup_btns = HBoxContainer.new()
 	sc.add_child(dup_btns)
-	var create_dup_btn = HFUIFactoryType.make_button(
-		"Create Array", "Create duplicate array from selected brushes"
+	dock.dup_create_btn = HFUIFactoryType.make_button(
+		"Create Array",
+		"Create a duplicate array from the selected brushes, or update the one they belong to"
 	)
-	create_dup_btn.pressed.connect(dock._on_create_duplicate_array)
-	dup_btns.add_child(create_dup_btn)
+	dock.dup_create_btn.pressed.connect(dock._on_create_duplicate_array)
+	dup_btns.add_child(dock.dup_create_btn)
 	var remove_dup_btn = HFUIFactoryType.make_button(
-		"Remove Array", "Remove duplicate array for selected brushes"
+		"Remove Array", "Delete the copies and the array they belong to"
 	)
 	remove_dup_btn.pressed.connect(dock._on_remove_duplicate_array)
 	dup_btns.add_child(remove_dup_btn)
+	dock.dup_detach_btn = HFUIFactoryType.make_button(
+		"Detach", "Stop this array being rebuilt, and keep its copies as ordinary brushes"
+	)
+	dock.dup_detach_btn.visible = false
+	dock.dup_detach_btn.pressed.connect(dock._on_detach_duplicate_array)
+	dup_btns.add_child(dock.dup_detach_btn)
 
 
 func _add_sub_header(parent: Control, text: String) -> void:

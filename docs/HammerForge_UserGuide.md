@@ -525,6 +525,30 @@ refuses the same arrays for the same reason.
 array you did not want goes away in a single press rather than one copy at a
 time.
 
+**An array can be changed after you have made it.** Select any piece of one —
+the original, or any copy, whichever you can see — and the section becomes an
+editor for that array: its layout, its numbers, and **Create Array** becomes
+**Update Array**. Turn the count up, switch the layout from Linear to Radial,
+move the offset, and press Update. The copies are rebuilt where they now belong.
+Pressing Create with the original still selected does the same thing, so the
+button says Update one press after it said Create.
+
+Three buttons, three different answers:
+
+- **Update Array** rebuilds the copies from the numbers on screen. The array
+  itself is kept, so you can keep tuning it.
+- **Detach** keeps every copy exactly where it is and forgets the array. This is
+  what you want when the layout has given you what you needed and you now want
+  to edit one copy on its own.
+- **Remove Array** deletes the copies and keeps the original.
+
+A ring keeps turning about the point it already turns about, so raising the
+count of a radial array does not send the ring over to whichever copy you had
+selected. Hand edits to a copy are overwritten by the next Update — Detach first
+if you want to keep them. And **Fill 360°** is a way of arriving at a step
+rather than something the array remembers, so an array loads with the step it
+actually has and the box unticked.
+
 > `R` is also the Rect tool in paint mode. Paint mode gets first claim on it, and
 > the whole rotate/flip group is skipped while paint mode is on, so the two never
 > fight over the key.
@@ -585,7 +609,7 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
   - **Positioning**: Move to Floor (Ctrl+Shift+F) / Ceiling (Ctrl+Shift+C).
   - **Transform**: Step (degrees per press) and Pivot (Selection / World Origin / Active). Rotate CCW (R) and CW (Shift+R) turn the selection about the locked axis, or Y when no axis lock is set. Flip (Shift+M) mirrors it across the locked axis, or X. Reset Rotation (Alt+R) clears a rotation without moving the geometry.
   - **Entity Binding**: Tie/Untie brush entity class (populated from entity definitions).
-  - **Duplicate Array**: Layout (Linear / Radial / Grid), count, X/Y/Z offset, and the controls for the chosen layout — axis, step degrees and a Fill 360 helper for Radial; per-axis cell counts for Grid, which uses the X/Y/Z offset as its spacing. A live wireframe of the copies and a line saying how many. Create/Remove Array buttons.
+  - **Duplicate Array**: Layout (Linear / Radial / Grid), count, X/Y/Z offset, and the controls for the chosen layout — axis, step degrees and a Fill 360 helper for Radial; per-axis cell counts for Grid, which uses the X/Y/Z offset as its spacing. A live wireframe of the copies and a line saying how many. Create/Remove Array buttons; selecting any piece of an existing array turns Create into **Update Array** and shows **Detach** beside it.
   - **Bulk delete**: deleting 3+ brushes shows a confirmation dialog (undo reminder). Single/dual deletes remain instant.
 
 ### Paint tab (collapsible sections)
