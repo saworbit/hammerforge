@@ -145,8 +145,27 @@ If you get "class_names not imported", run `godot --headless --import --path .` 
 - Keep tests focused: one behavior per test function.
 - For negative-path tests that trigger runtime warnings, use `HFLog.warn()` in production code and `HFLog.begin_test_capture()` / `end_test_capture()` in tests. This prevents expected warnings from polluting the test output. See `test_bevel.gd` for the pattern.
 
+### Python and Workflow Checks
+Only relevant if you touch `tools/` or `.github/workflows/`. CI runs these and
+will fail the build on them.
+```
+pip install -r requirements-ci.txt
+ruff check tools/
+ruff format --check tools/
+zizmor .github/workflows/
+```
+
+`actionlint` is downloaded by the workflow rather than pinned in the requirements
+file, so grab the release binary if you want it locally. It runs shellcheck over
+every `run:` block, which is usually what catches things.
+
 ### CI
-All checks (format, lint, unit tests) run automatically on push/PR to `main` via GitHub Actions.
+Three jobs run on every push and pull request to `main`: **GDScript Lint and
+Format**, **Workflow and Tooling Lint**, and **GUT Unit Tests**. All three have to
+pass before anything can merge, and `main` takes no direct pushes from anyone.
+
+You do not need to update the published test counts by hand. CI measures the
+suite on your pull request and commits the numbers to your branch.
 
 ## Communication
 - Be clear about tradeoffs and known limitations.
