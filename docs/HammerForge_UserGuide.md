@@ -66,7 +66,7 @@ A message that repeats collapses to one row with a count (`(x4)`) rather than fi
 
 Plain **RMB** uses Godot's native 3D camera look whenever HammerForge is idle. It works the same whether nothing, a brush, a face, an entity, a camera, or another scene node is selected, and persistent tool modes do not claim it just by being enabled. While RMB is held, native W/A/S/D camera flight and mixed mouse input stay with Godot and cannot accidentally switch tools, draw, or change selection. **MMB** and the mouse wheel also remain available to Godot for camera navigation.
 
-**Alt+LMB** is also reserved for Godot's alternate viewport navigation and transform schemes. HammerForge does not begin a selection or box-select gesture from that press.
+Outside **Floor Paint**, **Alt+LMB** is reserved for Godot's alternate viewport navigation and transform schemes. HammerForge does not begin a selection or box-select gesture from that press. Floor Paint deliberately owns Alt+LMB as its temporary erase action while that mode is active.
 
 In **Select** mode, every ordinary LMB click or drag uses Godot's native Object Select pipeline. HammerForge contributes accurate filled gizmo hit targets for brush faces and visible entity preview meshes; it does not draw a second object rectangle or guess whether the press was on a transform/property widget.
 
@@ -125,7 +125,7 @@ When you activate an advanced tool for the first time, a floating overlay appear
 | Hollow | Ctrl+H | Select solid → preview (yellow wireframe walls) → confirm → hollow. Select a wall afterwards to **Re-hollow** at a new thickness |
 | Measure | M key | Click start → click end → Shift+Click to chain → Ctrl+Click for snap ref |
 | Decal | N key | Click surface → resize/rotate → assign material |
-| Surface Paint | Shift+P toggle | Toggle paint → select tool → click cells |
+| Floor Paint | Shift+P toggle | Toggle paint → R for Rect → LMB-drag a walkable room |
 
 Each guide has a "Don't show again" checkbox. Dismissed guides are persisted in user prefs. Guides trigger from keyboard shortcuts, the command palette, and context toolbar actions.
 
@@ -653,7 +653,7 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
   - **Bulk delete**: deleting 3+ brushes shows a confirmation dialog (undo reminder). Single/dual deletes remain instant.
 
 ### Paint tab (collapsible sections)
-- **Floor Paint**: Brush, Erase, Rect, Line, Bucket, Blend tools. Brush shape (Square/Circle), radius, and layer picker. Rename button ("R") for custom layer display names.
+- **Floor Paint**: Brush, Erase, Rect, Line, Bucket, Blend tools. Brush shape (Square/Circle), radius, and layer picker. Rename button ("R") for custom layer display names. The dock is optional for the first room: Shift+P, R, then LMB-drag in the viewport.
 - **Heightmap**: Import PNG/EXR or Generate procedural noise. Height Scale and Layer Y spinboxes. **Sculpt tools**: Raise, Lower, Smooth, Flatten buttons with strength/radius/falloff spinboxes for interactive terrain editing. **Convert Selection → Heightmap** button rasterizes selected brush top faces into a new heightmap layer (inherits grid origin/basis and chunk_size from the paint layer manager).
 - **Blend & Terrain**: Blend Strength, Blend Slot (B/C/D), and Terrain Slot A-D texture pickers with UV scales.
 - **Foliage & Scatter**: Interactive scatter brush for foliage and object placement. Pick a mesh resource, set density/radius/height constraints/slope filter/scale variation. Choose Circle or Spline brush shape. Preview generates a MultiMesh preview (Dots/Wireframe/Full). Scatter commits as a permanent `MultiMeshInstance3D`. Clear removes the preview. Spline mode uses selected nodes as path control points with a configurable width band.
@@ -962,7 +962,7 @@ When you switch tools, a brief instruction hint appears in the viewport overlay:
 - **Draw**: "Click to place corner → drag to set size → release for height"
 - **Select**: "Click to select; drag empty space for a box; drag widgets to edit"
 - **Extrude Up/Down**: "Click a face to start extruding upward/downward"
-- **Paint Floor**: "Click cells to paint, Shift+click to erase"
+- **Paint Floor**: "Drag to paint; Alt erases, Shift locks an axis, Ctrl picks material"
 - **Paint Surface**: "Click brush faces to apply material"
 
 Hints auto-fade after 4 seconds. Once you dismiss a hint (by switching away), it won't appear again. Hint dismissal persists across sessions. To reset all hints, delete `user://hammerforge_prefs.json` or clear the `hints_dismissed` key.
@@ -1095,7 +1095,7 @@ The contexts and what their full lists cover:
 | Select | Native click/Shift object selection; Face Select Shift-add/Ctrl-toggle; Escape, Delete, Ctrl+D, Arrow nudge, Ctrl+H Hollow, Shift+X Clip, Ctrl+Shift+F/C Floor/Ceiling |
 | Extrude Up/Down (idle) | Click face + drag, U/J tool switch, Right-click cancel |
 | Extrude Up/Down (active) | Move mouse to set height, Release to confirm, Right-click cancel |
-| Floor Paint | Click+Drag, B/E/R/L/K tool shortcuts |
+| Floor Paint | LMB paint, Alt erase, Shift axis lock, Ctrl/Cmd pick material, Esc cancel, B/E/R/L/K/N tools; live cells and metres in the banner |
 | Surface Paint | Click+Drag, radius/strength info |
 | Vertex Edit | Click vertex to select, drag to move, E: edge mode, Ctrl+W: merge, Ctrl+E: split |
 | Polygon Tool | Click to place verts, Enter: close, Escape: remove last |
@@ -1142,7 +1142,7 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Grid Size Down | [ | Halve grid snap (min 0.125) |
 | Grid Size Up | ] | Double grid snap (max 512) |
 | Axis Lock X/Y/Z | X / Y / Z | Constrain to axis |
-| Paint tools | B / E / R / L / K | Bucket / Erase / Ramp / Line / Blend |
+| Paint tools | B / E / R / L / K / N | Brush / Erase / Rect / Line / Bucket / Blend |
 | Command palette | Shift+? / F1 / Ctrl+K | Searchable action palette with fuzzy search |
 | Operation timeline | Ctrl+Shift+T | Toggle operation replay timeline |
 
@@ -1474,12 +1474,17 @@ Notes
 - Right-click cancels the extrude in progress.
 
 ## Floor Paint
-1. Enable Paint Mode.
-2. Open the **Paint** tab → **Floor Paint** section.
-3. Choose tool, brush shape (Square or Circle), radius, and layer.
-4. Paint in the viewport.
+1. Press **Shift+P** to enable Paint mode.
+2. Press **R** and LMB-drag a rectangle in the viewport for a first walkable room. No dock interaction is required.
+3. Continue with **B** Brush, **E** Erase, **L** Line, **K** Bucket, or **N** Blend. Open the **Paint** tab only when you need shape, radius, layer, heightmap, or terrain settings.
 
 Notes
+- **Alt+LMB** temporarily erases without changing the selected tool.
+- **Shift+LMB-drag** locks the stroke to its first dominant grid axis.
+- **Ctrl/Cmd+LMB** samples the cell material for Blend without creating an undo entry.
+- **Esc** restores a cancelled stroke. Plain **RMB** remains Godot camera navigation.
+- The viewport banner shows the hovered cell and footprint, then live unique-cell count and metres while a stroke is active.
+- Each changed stroke is one **Paint Floor** undo entry; a no-op or material pick is not.
 - **Brush Shape**: Square fills a full box of cells; Circle clips corners using Euclidean distance.
 - Live preview updates while dragging.
 - Bucket fills a contiguous region (click filled to erase).

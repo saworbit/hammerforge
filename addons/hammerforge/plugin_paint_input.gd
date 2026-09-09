@@ -148,6 +148,25 @@ static func handle_paint(
 	var operation = plugin.dock.get_operation()
 	var size = plugin.dock.get_brush_size()
 	if paint_target == 0:
+		var floor_press: bool = (
+			event is InputEventMouseButton
+			and event.button_index == MOUSE_BUTTON_LEFT
+			and event.pressed
+		)
+		var floor_release: bool = (
+			event is InputEventMouseButton
+			and event.button_index == MOUSE_BUTTON_LEFT
+			and not event.pressed
+		)
+		var eyedropper: bool = (
+			floor_press and (event as InputEventMouseButton).is_command_or_control_pressed()
+		)
+		if floor_press and not eyedropper:
+			# Region sidecars must be loaded before the pre-stroke snapshot, or Undo
+			# would mistake their existing cells for paint created by this stroke.
+			if root.has_method("prepare_paint_stroke"):
+				root.prepare_paint_stroke(camera, position)
+			begin_floor_paint_undo(plugin, root)
 		var handled = root.handle_paint_input(
 			camera,
 			event,
@@ -158,7 +177,21 @@ static func handle_paint(
 			plugin.dock.get_paint_radius_cells(),
 			plugin.dock.get_brush_shape()
 		)
+		plugin._update_hud_context()
 		if handled:
+			if eyedropper and root.get("paint_tool"):
+				plugin.dock.show_toast(
+					"Picked floor material %d" % root.paint_tool.blend_material_id, 0
+				)
+			elif floor_release:
+				commit_floor_paint_undo(plugin, root)
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+		if floor_press:
+			plugin._floor_paint_pre_state = {}
+			if root.has_signal("user_message"):
+				root.user_message.emit("Floor Paint could not reach the active layer plane", 1)
+			# Paint mode owns LMB even when the ray misses. Passing it onward can
+			# accidentally start the build tool underneath the paint workflow.
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 	elif paint_target == 1:
 		var handled_surface = root.handle_surface_paint_input(
@@ -172,6 +205,63 @@ static func handle_paint(
 		if handled_surface:
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
+
+
+static func begin_floor_paint_undo(plugin: Object, root: Node) -> void:
+	if plugin == null or not root or not plugin._floor_paint_pre_state.is_empty():
+		return
+	if root.has_method("capture_state"):
+		plugin._floor_paint_pre_state = root.capture_state()
+
+
+static func commit_floor_paint_undo(plugin: Object, root: Node) -> void:
+	if plugin == null or not root or plugin._floor_paint_pre_state.is_empty():
+		return
+	var before: Dictionary = plugin._floor_paint_pre_state
+	plugin._floor_paint_pre_state = {}
+	_release_region_pins(root)
+	var paint_tool = root.get("paint_tool")
+	if (
+		paint_tool == null
+		or not paint_tool.has_method("get_last_committed_cell_count")
+		or paint_tool.get_last_committed_cell_count() <= 0
+	):
+		return
+	if not root.has_method("capture_state") or not root.has_method("restore_state"):
+		return
+	var after: Dictionary = root.capture_state()
+	if plugin.undo_redo_manager:
+		plugin.undo_redo_manager.create_action("Paint Floor", 0, null, false)
+		plugin.undo_redo_manager.add_do_method(root, "restore_state", after)
+		plugin.undo_redo_manager.add_undo_method(root, "restore_state", before)
+		plugin.undo_redo_manager.commit_action(false)
+	plugin._record_history("Paint Floor")
+
+
+static func cancel_floor_paint(plugin: Object, root: Node) -> bool:
+	if plugin == null or not root:
+		return false
+	var paint_tool = root.get("paint_tool")
+	if (
+		paint_tool == null
+		or not paint_tool.has_method("is_stroke_active")
+		or not paint_tool.is_stroke_active()
+	):
+		return false
+	if paint_tool.has_method("cancel_stroke"):
+		paint_tool.cancel_stroke()
+	if not plugin._floor_paint_pre_state.is_empty() and root.has_method("restore_state"):
+		root.restore_state(plugin._floor_paint_pre_state)
+	plugin._floor_paint_pre_state = {}
+	_release_region_pins(root)
+	plugin._update_hud_context()
+	return true
+
+
+static func _release_region_pins(root: Node) -> void:
+	var paint_system = root.get("paint_system")
+	if paint_system != null and paint_system.has_method("release_paint_region_pins"):
+		paint_system.release_paint_region_pins()
 
 
 static func _is_visible_pick(root: Node, brush: Node3D) -> bool:

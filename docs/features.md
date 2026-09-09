@@ -89,7 +89,10 @@ Closest candidate within threshold wins. Modes combine freely. The Measure tool 
 
 Grid-based paint layers with chunked storage for large worlds:
 
-- **Tools:** Brush (B), Erase (E), Rect (R), Line (L), Bucket (K), Blend
+- **Tools:** Brush (B), Erase (E), Rect (R), Line (L), Bucket (K), Blend (N)
+- **Fast viewport loop:** Shift+P enters Paint mode; R then LMB-drag creates a rectangular walkable room without opening the dock
+- **Stroke modifiers:** Alt+LMB temporarily erases, Shift+LMB locks the first dominant grid axis, Ctrl/Cmd+LMB samples a cell material, and Esc restores a cancelled stroke
+- **Live feedback and undo:** the existing banner shows hovered cell/footprint plus live cells and metres; each changed stroke is one undo entry, including lost-release recovery
 - **Sculpting:** Raise, Lower, Smooth, Flatten brushes for interactive terrain editing with configurable strength, radius, and falloff
 - **Shapes:** Square, Circle with adjustable radius
 - **Heightmaps:** import PNG/EXR or generate procedural noise -- per-vertex displacement via SurfaceTool
@@ -363,6 +366,10 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 | Shift+M * | Flip selection | | Alt+R * | Reset rotation |
 | Shift+Alt+X * | Clip to Face Plane | | Ctrl+Shift+A * | Create Structure |
 
+Floor Paint mouse modifiers are deliberately not keymap actions: LMB paints,
+Alt+LMB temporarily erases, Shift+LMB locks the stroke axis, Ctrl/Cmd+LMB picks
+the cell material, and Escape cancels. Plain RMB remains Godot camera navigation.
+
 R appears twice on purpose. Paint mode claims it for Rect; everywhere else it
 rotates. The viewport dispatches the paint tools first and skips the whole
 transform group while paint mode is on, so only one of the two is ever live.
@@ -373,7 +380,7 @@ transform group while paint mode is on, so only one of the two is ever live.
 
 ## Testing
 
-The verified Godot 4.7 suite on September 10, 2026 contains **3,240 tests across 167 scripts**: **3,233 passing tests**, seven intentional no-assert safety tests, and **16,500 assertions**. All checks run on every push and pull request via GitHub Actions.
+The verified Godot 4.7 suite on September 9, 2026 contains **3,251 tests across 168 scripts**: **3,244 passing tests**, seven intentional no-assert safety tests, and **16,535 assertions**. All checks run on every push and pull request via GitHub Actions.
 
 ```bash
 # Run all tests headless

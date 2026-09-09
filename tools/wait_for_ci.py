@@ -15,12 +15,19 @@ which happened while landing #265 to #270:
     created yet" as "everything passed", because zero pending is also what an
     empty list looks like.
 
-There is a fourth that has not bitten yet and would be the worst, because it
-looks like a pass: ci.yml pushes a counts commit to the pull request when the
-published test totals move, so the head can change *during* the wait. A commit
-that was green a moment ago is then no longer what would merge. This re-reads
-the head every poll and starts over on the new commit rather than reporting on
-the old one.
+The fourth is the worst, because it looks like a pass: ci.yml pushes a counts
+commit to the pull request when the published test totals move, so the head can
+change *during* the wait. A commit that was green a moment ago is then no longer
+what would merge. This one is not hypothetical -- it happened on #271 while this
+script was watching it, and the log reads:
+
+    #271 head b267dc2
+    #271 head moved b267dc2 -> f2ae5fa, waiting on the new commit
+    #271 CI failed on f2ae5fa
+
+f2ae5fa was CI's own "Update published test counts". A branch-keyed wait would
+have graded b267dc2 and called it green. This re-reads the head every poll and
+starts over on the new commit rather than reporting on the old one.
 
     python tools/wait_for_ci.py 270
     python tools/wait_for_ci.py 270 --workflow CI --timeout 1800

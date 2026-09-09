@@ -3,6 +3,7 @@ class_name HFPaintTool
 extends Node
 
 signal stroke_committed(changed_cell_count: int)
+signal material_picked(material_id: int)
 
 const HFStroke = preload("hf_stroke.gd")
 const HFHeightmapSynth = preload("hf_heightmap_synth.gd")
@@ -37,6 +38,13 @@ var _preview_cells: Dictionary = {}  # Dictionary[Vector2i, bool]
 var _preview_original: Dictionary = {}  # Dictionary[Vector2i, bool]
 var _stroke_dirty: Dictionary = {}  # Dictionary[Vector2i, bool]
 var _preview_dirty: Dictionary = {}  # Dictionary[Vector2i, bool]
+var _stroke_erasing := false
+## 0 = undecided/free, 1 = X, 2 = Z (the paint grid's Vector2i.y axis).
+var _stroke_axis := 0
+var _stroke_axis_requested := false
+var _stroke_cells: Dictionary = {}  # Dictionary[Vector2i, bool]
+var _hover_cell: Variant = null
+var _last_committed_cell_count := 0
 
 
 func is_stroke_active() -> bool:
@@ -48,6 +56,22 @@ func finish_stroke_if_active() -> void:
 		_end_stroke()
 
 
+func cancel_stroke() -> bool:
+	if not _painting:
+		return false
+	_clear_preview_restore()
+	_painting = false
+	_active_stroke = null
+	_stroke_dirty.clear()
+	_preview_dirty.clear()
+	_stroke_cells.clear()
+	_stroke_axis = 0
+	_stroke_axis_requested = false
+	_stroke_erasing = false
+	_last_committed_cell_count = 0
+	return true
+
+
 func handle_input(camera: Camera3D, event: InputEvent, screen_pos: Vector2) -> bool:
 	if not camera or not layer_manager:
 		if not layer_manager:
@@ -55,13 +79,20 @@ func handle_input(camera: Camera3D, event: InputEvent, screen_pos: Vector2) -> b
 		return false
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
-			return _begin_stroke(camera, screen_pos)
+			if event.is_command_or_control_pressed():
+				var pick_cell = _screen_to_cell(camera, screen_pos)
+				if pick_cell == null:
+					return false
+				material_picked.emit(pick_cell_material(pick_cell))
+				return true
+			return _begin_stroke(camera, screen_pos, event.alt_pressed, event.shift_pressed)
 		if _painting:
 			_end_stroke()
 			return true
 	if event is InputEventMouseMotion:
+		_hover_cell = _screen_to_cell(camera, screen_pos)
 		if _painting and event.button_mask & MOUSE_BUTTON_MASK_LEFT != 0:
-			_continue_stroke(camera, screen_pos)
+			_continue_stroke(camera, screen_pos, event.shift_pressed)
 			return true
 	return false
 
@@ -70,7 +101,9 @@ func _is_sculpt_tool() -> bool:
 	return tool >= HFStroke.Tool.SCULPT_RAISE and tool <= HFStroke.Tool.SCULPT_FLATTEN
 
 
-func _begin_stroke(camera: Camera3D, screen_pos: Vector2) -> bool:
+func _begin_stroke(
+	camera: Camera3D, screen_pos: Vector2, temporary_erase: bool = false, axis_lock: bool = false
+) -> bool:
 	if _is_sculpt_tool():
 		return _begin_sculpt_stroke(camera, screen_pos)
 	var cell = _screen_to_cell(camera, screen_pos)
@@ -80,6 +113,11 @@ func _begin_stroke(camera: Camera3D, screen_pos: Vector2) -> bool:
 	_active_stroke.tool = tool
 	_active_stroke.radius_cells = brush_radius_cells
 	_painting = true
+	_stroke_erasing = tool == HFStroke.Tool.ERASE or temporary_erase
+	_stroke_axis = 0
+	_stroke_axis_requested = axis_lock
+	_stroke_cells.clear()
+	_last_committed_cell_count = 0
 	_stroke_dirty.clear()
 	_preview_dirty.clear()
 	_start_cell = cell
@@ -99,7 +137,7 @@ func _begin_stroke(camera: Camera3D, screen_pos: Vector2) -> bool:
 	return true
 
 
-func _continue_stroke(camera: Camera3D, screen_pos: Vector2) -> void:
+func _continue_stroke(camera: Camera3D, screen_pos: Vector2, axis_lock: bool = false) -> void:
 	if _is_sculpt_tool():
 		var layer = layer_manager.get_active_layer() if layer_manager else null
 		if layer:
@@ -108,6 +146,9 @@ func _continue_stroke(camera: Camera3D, screen_pos: Vector2) -> void:
 	var cell = _screen_to_cell(camera, screen_pos)
 	if cell == null:
 		return
+	_stroke_axis_requested = _stroke_axis_requested or axis_lock
+	if tool in [HFStroke.Tool.PAINT, HFStroke.Tool.ERASE, HFStroke.Tool.LINE, HFStroke.Tool.BLEND]:
+		cell = _apply_axis_lock(cell, _stroke_axis_requested)
 	if cell == _last_cell:
 		return
 	if tool == HFStroke.Tool.PAINT or tool == HFStroke.Tool.ERASE or tool == HFStroke.Tool.BLEND:
@@ -125,7 +166,12 @@ func _end_stroke() -> void:
 	_painting = false
 	if _is_sculpt_tool():
 		var sculpt_changed := _stroke_dirty.size()
+		_last_committed_cell_count = sculpt_changed
 		_stroke_dirty.clear()
+		_stroke_cells.clear()
+		_stroke_axis = 0
+		_stroke_axis_requested = false
+		_stroke_erasing = false
 		if sculpt_changed > 0:
 			stroke_committed.emit(sculpt_changed)
 		return
@@ -151,6 +197,10 @@ func _end_stroke() -> void:
 	_preview_dirty.clear()
 	if dirty.is_empty():
 		_active_stroke = null
+		_stroke_cells.clear()
+		_stroke_axis = 0
+		_stroke_axis_requested = false
+		_stroke_erasing = false
 		return
 	# Nothing assigns `inference`. The cleanup pass behind it was never written,
 	# so running it classified every stroke and then changed no cells. Assigning
@@ -170,6 +220,11 @@ func _end_stroke() -> void:
 			var model = geometry.build_for_chunks(layer, dirty, synth_settings)
 			reconciler.reconcile(model, layer.grid, synth_settings, dirty)
 	_active_stroke = null
+	_last_committed_cell_count = changed_cell_count
+	_stroke_cells.clear()
+	_stroke_axis = 0
+	_stroke_axis_requested = false
+	_stroke_erasing = false
 	stroke_committed.emit(changed_cell_count)
 
 
@@ -196,8 +251,8 @@ func _stamp_cell(cell: Vector2i) -> void:
 	var layer = layer_manager.get_active_layer() if layer_manager else null
 	if not layer:
 		return
-	var is_blend := tool == HFStroke.Tool.BLEND
-	var filled = tool != HFStroke.Tool.ERASE
+	var is_blend := tool == HFStroke.Tool.BLEND and not _stroke_erasing
+	var filled = not _stroke_erasing
 	var r = max(0, brush_radius_cells - 1)
 	for dy in range(-r, r + 1):
 		for dx in range(-r, r + 1):
@@ -212,8 +267,73 @@ func _stamp_cell(cell: Vector2i) -> void:
 				layer.set_cell_blend_slot(target, blend_slot, blend_strength)
 			else:
 				layer.set_cell(target, filled)
+			_record_stroke_cell(target)
 			if _active_stroke:
 				_active_stroke.add_cell(target, _now_seconds())
+
+
+func _record_stroke_cell(cell: Vector2i) -> void:
+	_stroke_cells[cell] = true
+
+
+func _apply_axis_lock(cell: Vector2i, requested: bool) -> Vector2i:
+	if not requested:
+		return cell
+	if _stroke_axis == 0:
+		var delta := cell - _start_cell
+		if delta == Vector2i.ZERO:
+			return cell
+		_stroke_axis = 1 if abs(delta.x) >= abs(delta.y) else 2
+	if _stroke_axis == 1:
+		return Vector2i(cell.x, _start_cell.y)
+	return Vector2i(_start_cell.x, cell.y)
+
+
+func pick_cell_material(cell: Vector2i) -> int:
+	var layer = layer_manager.get_active_layer() if layer_manager else null
+	if not layer:
+		return 0
+	blend_material_id = layer.get_cell_material(cell)
+	return blend_material_id
+
+
+func get_last_committed_cell_count() -> int:
+	return _last_committed_cell_count
+
+
+func get_stroke_hud_text() -> String:
+	if not _painting:
+		return ""
+	var cells: Array = _stroke_cells.keys()
+	if cells.is_empty():
+		cells = [_start_cell]
+	var min_cell: Vector2i = cells[0]
+	var max_cell: Vector2i = cells[0]
+	for cell: Vector2i in cells:
+		min_cell.x = mini(min_cell.x, cell.x)
+		min_cell.y = mini(min_cell.y, cell.y)
+		max_cell.x = maxi(max_cell.x, cell.x)
+		max_cell.y = maxi(max_cell.y, cell.y)
+	var cell_size := 1.0
+	var layer = layer_manager.get_active_layer() if layer_manager else null
+	if layer and layer.grid:
+		cell_size = layer.grid.cell_size
+	var width := float(max_cell.x - min_cell.x + 1) * cell_size
+	var depth := float(max_cell.y - min_cell.y + 1) * cell_size
+	return "%d cells — %s m × %s m" % [cells.size(), _format_metres(width), _format_metres(depth)]
+
+
+func get_hover_hud_text() -> String:
+	if _painting or _hover_cell == null:
+		return ""
+	var footprint := max(1, brush_radius_cells * 2 - 1)
+	return "Cell %d, %d — %d×%d footprint" % [_hover_cell.x, _hover_cell.y, footprint, footprint]
+
+
+func _format_metres(value: float) -> String:
+	if is_equal_approx(value, round(value)):
+		return str(int(round(value)))
+	return ("%.2f" % value).trim_suffix("0").trim_suffix("0").trim_suffix(".")
 
 
 func _stamp_line(a: Vector2i, b: Vector2i) -> void:
@@ -248,7 +368,7 @@ func _apply_preview_cells(cells: Array) -> void:
 	var layer = layer_manager.get_active_layer() if layer_manager else null
 	if not layer:
 		return
-	var filled = tool != HFStroke.Tool.ERASE
+	var filled = not _stroke_erasing
 	var next_set: Dictionary = {}
 	for cell in cells:
 		next_set[cell] = true
@@ -311,7 +431,9 @@ func _bucket_fill(start: Vector2i) -> void:
 	if not layer:
 		return
 	var target_filled = layer.get_cell(start)
-	var fill_value = not target_filled
+	var fill_value = false if _stroke_erasing else not target_filled
+	if target_filled == fill_value:
+		return
 	var stack: Array = [start]
 	var visited: Dictionary = {}
 	var guard = 0
@@ -323,6 +445,7 @@ func _bucket_fill(start: Vector2i) -> void:
 		if layer.get_cell(cell) != target_filled:
 			continue
 		layer.set_cell(cell, fill_value)
+		_record_stroke_cell(cell)
 		if _active_stroke:
 			_active_stroke.add_cell(cell, _now_seconds())
 		stack.append(cell + Vector2i(1, 0))
