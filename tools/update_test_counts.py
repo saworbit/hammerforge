@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import argparse
 import datetime
-import io
 import re
 import sys
 
@@ -69,7 +68,8 @@ def grouped(n: int) -> str:
 
 def parse_gut_log(path: str) -> dict:
     """Pull the totals out of GUT's own summary block."""
-    text = io.open(path, encoding="utf-8", errors="replace").read()
+    with open(path, encoding="utf-8", errors="replace") as handle:
+        text = handle.read()
     required = {
         "scripts": r"^Scripts\s+(\d+)\s*$",
         "tests": r"^Tests\s+(\d+)\s*$",
@@ -82,7 +82,8 @@ def parse_gut_log(path: str) -> dict:
         if not found:
             raise SystemExit(
                 "update_test_counts: no '%s' total in %s. This reads GUT's own "
-                "summary block, so the log has to be the full test output." % (key, path)
+                "summary block, so the log has to be the full test output."
+                % (key, path)
             )
         counts[key] = int(found[-1])
     # Absent from the summary when there are none of them.
@@ -125,7 +126,9 @@ def rewrites(c: dict) -> list:
         ),
         (
             "docs/features.md",
-            r"The verified Godot 4\.7 suite on " + DATE_PATTERN + r" contains \*\*[\d,]+ tests across "
+            r"The verified Godot 4\.7 suite on "
+            + DATE_PATTERN
+            + r" contains \*\*[\d,]+ tests across "
             r"[\d,]+ scripts\*\*: \*\*[\d,]+ passing tests\*\*, \w+ intentional "
             r"no-assert safety tests, and \*\*[\d,]+ assertions\*\*\.",
             (
@@ -138,7 +141,8 @@ def rewrites(c: dict) -> list:
             "DEVELOPMENT.md",
             r"- \*\*GUT unit \+ integration tests\*\* -- [\d,]+ tests across [\d,]+ "
             r"test scripts \([\d,]+ passing plus \w+ intentional no-assert safety "
-            r"tests; [\d,]+ assertions; verified in CI on " + DATE_PATTERN
+            r"tests; [\d,]+ assertions; verified in CI on "
+            + DATE_PATTERN
             + r"; runs Godot headless\)",
             (
                 "- **GUT unit + integration tests** -- {tests} tests across "
@@ -149,7 +153,9 @@ def rewrites(c: dict) -> list:
         ),
         (
             "HammerForge_SPEC.md",
-            r"Full suite \(verified in CI on " + DATE_PATTERN + r"\): \*\*[\d,]+ tests\*\* across \*\*[\d,]+ "
+            r"Full suite \(verified in CI on "
+            + DATE_PATTERN
+            + r"\): \*\*[\d,]+ tests\*\* across \*\*[\d,]+ "
             r"scripts\*\* \(\*\*[\d,]+ passing\*\* plus \w+ intentional no-assert "
             r"safety tests; \*\*[\d,]+ assertions\*\*\)\.",
             (
@@ -177,7 +183,9 @@ def main() -> int:
         "--check", action="store_true", help="report drift, change nothing"
     )
     parser.add_argument(
-        "--date", default=today(), help="verification date to write (default: today UTC)"
+        "--date",
+        default=today(),
+        help="verification date to write (default: today UTC)",
     )
     args = parser.parse_args()
 
@@ -197,7 +205,8 @@ def main() -> int:
 
     stale = []
     for path, pattern, template in rewrites(counts):
-        original = io.open(path, encoding="utf-8").read()
+        with open(path, encoding="utf-8") as handle:
+            original = handle.read()
         found = re.search(pattern, original)
         if found is None:
             raise SystemExit(
@@ -215,7 +224,8 @@ def main() -> int:
         if args.write:
             replacement = template.format(date=args.date)
             updated = original[: found.start()] + replacement + original[found.end() :]
-            io.open(path, "w", encoding="utf-8", newline="\n").write(updated)
+            with open(path, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write(updated)
 
     if args.check:
         if stale:
