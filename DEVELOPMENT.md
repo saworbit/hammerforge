@@ -410,6 +410,11 @@ python tools/check_placement_order.py
 godot --headless -s res://addons/gut/gut_cmdln.gd --path .
 ```
 
+After pushing, `python tools/wait_for_ci.py <pr>` blocks until CI finishes on
+that pull request's head commit. It keys off the commit rather than the branch,
+because the newest run on a branch is frequently a superseded one and CI's own
+counts commit moves the head mid-wait.
+
 **Parent the node, then place it.** A `Node3D` outside the scene tree has no
 parent to measure against, so assigning `global_position` or `global_transform`
 writes the local transform instead. Nothing errors. The node lands wherever its

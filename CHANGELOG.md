@@ -5,6 +5,26 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **`tools/wait_for_ci.py` waits on the commit, not the branch.** Waiting on a
+  pull request's checks by branch is the obvious thing and it is wrong: the
+  newest run on a branch is often the previous one, so a merge can go ahead on a
+  result that belongs to a commit nobody is merging. That happened twice while
+  landing the five performance branches, once reading a superseded run and once
+  reading `main`'s tip because the local checkout had drifted off the branch.
+  Neither merged anything on the bad signal, but both would have.
+  - **It resolves the head from the pull request every poll**, so CI's own
+    published-counts commit moving the branch under it is noticed and the newer
+    commit is the one graded. The head is read once more after a pass, because a
+    counts push landing between the fetch and the answer would otherwise be
+    reported green on the strength of the commit it replaced.
+  - **A missing run is "not yet", never "passed".** Polling until nothing is
+    pending cannot tell an empty check list from a finished one, which is how an
+    ungraded commit looked ready to merge.
+  - `--selftest` covers a run carrying the wrong commit, the wrong workflow, an
+    empty list, each terminal conclusion, a head that moves mid-wait, a pass on a
+    commit that was superseded in flight, and a run that never finishes. It runs
+    in CI beside the placement-order selftest, since a guard that cannot fail is
+    not a guard.
 - **Floor Paint now supports a zero-dock, undo-safe first-room loop.** Shift+P,
   R, then LMB-drag lays out a rectangular walkable footprint; Alt+LMB erases
   temporarily, Shift+LMB locks the first dominant grid axis, Ctrl/Cmd+LMB
