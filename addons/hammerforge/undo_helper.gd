@@ -7,6 +7,9 @@ extends RefCounted
 ## undo entry, preventing undo-history flooding during drags / nudges.
 const COLLATION_WINDOW_MS := 1000
 
+## How many arguments the hand written add_do_method unroll covers.
+const MAX_UNROLLED_ARGS := 5
+
 ## Tracks the last collation state so we can merge follow-up commits.
 static var _last_collation_tag := ""
 static var _last_collation_time := 0
@@ -47,12 +50,6 @@ static func commit(
 		and not _last_collation_state.is_empty()
 	)
 
-	if args.size() > 5:
-		root.callv(method_name, args)
-		var state: Dictionary = root.capture_full_state() if full_state else root.capture_state()
-		_update_collation(collation_tag, can_collate, full_state, now, state)
-		_fire_history_cb(history_cb, action_name, can_collate)
-		return
 	if not undo_redo:
 		root.callv(method_name, args)
 		# Still maintain collation tracking + history even without undo_redo,
@@ -105,7 +102,11 @@ static func register_action(
 ) -> void:
 	var restore_name := "restore_full_state" if full_state else "restore_state"
 
-	if absolute_redo:
+	# add_do_method takes an object, a method name and varargs. GDScript cannot
+	# spread an array into varargs, so the call below is unrolled by hand and
+	# stops at five. Past that, register the result instead of the call: the do
+	# operation becomes the same kind of state restore the undo already is.
+	if absolute_redo or args.size() > MAX_UNROLLED_ARGS:
 		# Run it here, then register the result rather than the step, and commit
 		# without executing so the work is not done twice.
 		root.callv(method_name, args)

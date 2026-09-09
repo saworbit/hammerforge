@@ -135,21 +135,6 @@ func test_level_root_exposes_the_methods_undo_dispatches_by_name():
 		assert_true(root.has_method(method_name), "LevelRoot must expose %s" % method_name)
 
 
-func test_transform_undo_methods_stay_within_the_helper_argument_limit():
-	# HFUndoHelper falls back to a direct, non-undoable call past five arguments.
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/level_root.gd")
-	for method_name in ["rotate_managed_nodes", "flip_managed_nodes", "reset_managed_rotation"]:
-		var start := source.find("func %s(" % method_name)
-		assert_gt(start, -1, "%s must exist" % method_name)
-		var finish := source.find(") -> void:", start)
-		var signature := source.substr(start, finish - start)
-		assert_lt(
-			signature.count(",") + 1,
-			6,
-			"%s would drop off the undoable path with six arguments" % method_name
-		)
-
-
 func test_edit_actions_commit_through_the_undo_helper():
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_edit_actions.gd")
 	for pair in [
