@@ -72,3 +72,7 @@ docs/brand/svg/*.import
 # MkDocs build output
 .site/
 .docshot-backup/
+
+# CI downloads the Godot build to this name in the workspace root. It was once
+# swept into a commit by an unscoped `git add -A` in the test-count step.
+/godot.zip

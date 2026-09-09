@@ -2,13 +2,17 @@ name: CI
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-  GDTOOLKIT_VERSION: "4.*"
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+
+# Read is what this workflow needs. The one job that writes declares it itself,
+# next to the reason.
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -19,16 +23,20 @@ jobs:
     name: GDScript Lint & Format
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.x"
+          cache: pip
+          cache-dependency-path: requirements-ci.txt
 
       - name: Install gdtoolkit
         run: |
           python -m pip install --upgrade setuptools
-          python -m pip install "gdtoolkit==${GDTOOLKIT_VERSION}"
+          python -m pip install -r requirements-ci.txt
 
       - name: Check formatting
         run: gdformat --check addons/hammerforge/ tests/
@@ -48,6 +56,49 @@ jobs:
       - name: Check placement order
         run: python3 tools/check_placement_order.py
 
+  tooling-checks:
+    name: Workflow & Tooling Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-ci.txt
+
+      - name: Install tooling
+        run: python -m pip install -r requirements-ci.txt
+
+      # tools/ is small but two of its scripts decide whether a build passes,
+      # and until now nothing checked them at all.
+      - name: Lint tools/
+        run: ruff check tools/
+
+      - name: Check tools/ formatting
+        run: ruff format --check tools/
+
+      # Workflow syntax, expression errors, and shellcheck over every run block.
+      - name: Lint workflow syntax
+        env:
+          ACTIONLINT_VERSION: "1.7.12"
+        run: |
+          curl -fsSL -o actionlint.tar.gz \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          tar -xzf actionlint.tar.gz actionlint
+          ./actionlint -color
+
+      # Token scope, credential persistence, expression injection into run
+      # blocks, and actions with known advisories. Needs the token only to look
+      # advisories up.
+      - name: Audit workflows for supply-chain risk
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: zizmor .github/workflows/
+
   unit-tests:
     name: GUT Unit Tests
     runs-on: ubuntu-latest
@@ -58,13 +109,15 @@ jobs:
     env:
       GODOT_VERSION: "4.7-stable"
     steps:
-      - uses: actions/checkout@v7
+      # persist-credentials stays on here, unlike the other jobs: the counts
+      # step below pushes with this token.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 # zizmor: ignore[artipacked]
 
       - name: Download Godot
         run: |
           wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip" -O godot.zip
           unzip -q godot.zip
-          mv Godot_v${GODOT_VERSION}_linux.x86_64 /usr/local/bin/godot
+          mv "Godot_v${GODOT_VERSION}_linux.x86_64" /usr/local/bin/godot
           chmod +x /usr/local/bin/godot
 
       - name: Import project
@@ -85,13 +138,17 @@ jobs:
       - name: Commit updated counts
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          if git diff --quiet; then
+          # Scoped to exactly the documents update_test_counts.py rewrites. This
+          # was `git add -A`, which in c121f50 swept the 73 MB Godot download
+          # still sitting in the workspace into a commit on main.
+          DOCS=(README.md docs/features.md DEVELOPMENT.md HammerForge_SPEC.md ROADMAP.md)
+          if git diff --quiet -- "${DOCS[@]}"; then
             echo "Counts already current, nothing to commit."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
+          git add -- "${DOCS[@]}"
           # [skip ci] plus the fact that a GITHUB_TOKEN push raises no workflow
           # event: this cannot start a run that writes the counts again.
           git commit -m "Update published test counts [skip ci]"

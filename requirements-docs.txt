@@ -1,0 +1,4 @@
+# Builds the site published to https://saworbit.github.io/hammerforge/.
+# Split from requirements-ci.txt so a docs-only bump cannot turn the test
+# suite red, and so the Pages job installs nothing it does not use.
+mkdocs-material==9.7.7

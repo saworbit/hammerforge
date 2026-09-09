@@ -13,6 +13,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/saworbit/hammerforge/actions/workflows/ci.yml"><img src="https://github.com/saworbit/hammerforge/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI status"></a>
   <img src="https://img.shields.io/badge/Godot-4.7%2B-478cbf?logo=godot-engine&logoColor=white" alt="Godot 4.7+">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
   <img src="https://img.shields.io/badge/Status-Early%20Alpha-red" alt="Early Alpha">
