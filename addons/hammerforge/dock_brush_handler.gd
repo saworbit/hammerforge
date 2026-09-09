@@ -237,10 +237,81 @@ static func on_bevel_inset(dock: Object) -> void:
 		dock.show_toast("Inset failed — distance too large or face too small", 2)
 
 
+## Load the selected hollow's thickness into the row, or reset it to shelling a
+## new brush.
+##
+## Selecting any wall of a hollowed brush turns the row from a command into an
+## editor for that hollow, the way the Structure and Duplicate Array sections
+## already do. Hollow was the last operation with no way back to its own numbers
+## short of Ctrl+Z.
+static func refresh_hollow_section(dock: Object) -> void:
+	if dock == null or dock.hollow_btn == null:
+		return
+	var ids := selection_brush_ids(dock)
+	var record: Variant = null
+	if dock.level_root and dock.level_root.has_method("hollow_for_selection"):
+		record = dock.level_root.hollow_for_selection(Array(ids))
+	# A Re-hollow frees every wall, including the one that was selected, so by the
+	# time the row is asked again the selection names nothing. Dropping the hollow
+	# there would put the row back to Hollow at the one moment it must not — the
+	# press after Re-hollow. The array section holds its record for the same
+	# reason; a selection that does name brushes, none of which belong to a
+	# hollow, is a genuine change of subject and does reset it.
+	if record == null and ids.is_empty() and str(dock._active_hollow_id) != "":
+		if dock.level_root and dock.level_root.has_method("hollow_for_id"):
+			record = dock.level_root.hollow_for_id(str(dock._active_hollow_id))
+	if record == null:
+		dock._active_hollow_id = ""
+		dock.hollow_btn.text = "Hollow (Ctrl+H)"
+		if dock.hollow_detach_btn:
+			dock.hollow_detach_btn.visible = false
+		return
+	dock._active_hollow_id = str(record["hollow_id"])
+	dock.hollow_btn.text = "Re-hollow"
+	if dock.hollow_detach_btn:
+		dock.hollow_detach_btn.visible = true
+	if dock.hollow_thickness:
+		# Writing the value back must not read as the user turning the control.
+		dock.hollow_thickness.set_value_no_signal(float(record["thickness"]))
+
+
+## Keep the walls and forget the hollow.
+static func on_detach_hollow(dock: Object) -> void:
+	if dock == null or not dock.level_root or str(dock._active_hollow_id) == "":
+		return
+	dock._commit_state_action("Detach Hollow", "detach_hollow", [str(dock._active_hollow_id)])
+	dock._active_hollow_id = ""
+	dock._set_status("Hollow detached — its walls are ordinary brushes now")
+	refresh_hollow_section(dock)
+
+
+## Shell the same solid again at the thickness now on screen.
+##
+## No confirmation dialog: the walls this replaces are the walls the last press
+## made, so there is nothing of the user's to lose that Detach does not keep.
+static func _rehollow(dock: Object) -> void:
+	var thickness: float = dock.hollow_thickness.value if dock.hollow_thickness else 4.0
+	var hollow_id := str(dock._active_hollow_id)
+	dock._commit_state_action("Re-hollow", "update_hollow", [hollow_id, thickness])
+	if dock.level_root.hollow_for_id(hollow_id) == null:
+		# The rebuild was refused, and `update_hollow` has already said why.
+		dock._active_hollow_id = ""
+	else:
+		dock._set_status("Re-hollowed at wall thickness %.1f" % thickness)
+	refresh_hollow_section(dock)
+
+
 static func on_hollow(dock: Object) -> void:
-	if dock == null or not dock.level_root or dock._selection_nodes.is_empty():
-		if dock:
-			dock._set_status("Select a brush to hollow", true)
+	if dock == null or not dock.level_root:
+		return
+	# Editing a hollow that already exists rather than shelling another brush: the
+	# row switched to Re-hollow when a wall of it was selected. Its solid comes
+	# from the record, so what is selected does not matter.
+	if str(dock._active_hollow_id) != "":
+		_rehollow(dock)
+		return
+	if dock._selection_nodes.is_empty():
+		dock._set_status("Select a brush to hollow", true)
 		return
 	if not dock._guard_selection_action("Hollow", dock.DockSelectionRequirement.BRUSHES_ONLY):
 		return
@@ -278,6 +349,7 @@ static func on_hollow(dock: Object) -> void:
 				dlg.queue_free()
 				return
 			dock._commit_state_action("Hollow", "hollow_brush_by_id", [brush_id, thickness])
+			refresh_hollow_section(dock)
 			dlg.queue_free()
 	)
 	dlg.canceled.connect(

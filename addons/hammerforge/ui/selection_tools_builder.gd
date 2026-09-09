@@ -44,6 +44,12 @@ func build(parent: Control) -> void:
 	dock.hollow_btn = HFUIFactoryType.make_button("Hollow (Ctrl+H)")
 	dock.hollow_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hollow_row.add_child(dock.hollow_btn)
+	dock.hollow_detach_btn = HFUIFactoryType.make_button(
+		"Detach", "Stop these walls being re-shelled, and keep them as ordinary brushes"
+	)
+	dock.hollow_detach_btn.visible = false
+	dock.hollow_detach_btn.pressed.connect(dock._on_detach_hollow)
+	hollow_row.add_child(dock.hollow_detach_btn)
 
 	dock.clip_btn = HFUIFactoryType.make_button("Clip Selected (Shift+X)")
 	sc.add_child(dock.clip_btn)

@@ -1546,6 +1546,29 @@ func duplicator_for_selection(brush_ids: Array) -> Variant:
 	return brush_system.duplicator_for_selection(brush_ids)
 
 
+## Shell the same solid again at a different wall thickness, keeping the hollow.
+func update_hollow(hollow_id: String, thickness: float) -> HFOpResult:
+	begin_signal_batch()
+	var result: HFOpResult = brush_system.update_hollow(hollow_id, thickness)
+	end_signal_batch()
+	if not result.ok:
+		user_message.emit(result.user_text(), 1)
+	return result
+
+
+## Forget a hollow's record, leaving its walls as ordinary brushes.
+func detach_hollow(hollow_id: String) -> bool:
+	return brush_system.detach_hollow(hollow_id)
+
+
+func hollow_for_id(hollow_id: String) -> Variant:
+	return brush_system.hollow_for_id(hollow_id)
+
+
+func hollow_for_selection(brush_ids: Array) -> Variant:
+	return brush_system.hollow_for_selection(brush_ids)
+
+
 ## How many copies of an array have been edited by hand: dragged off the
 ## placement it puts them at, or reshaped or repainted since it made them. What
 ## the dock says out loud before an Update rebuilds over them.

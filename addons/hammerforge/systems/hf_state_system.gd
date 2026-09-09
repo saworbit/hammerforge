@@ -126,6 +126,9 @@ func capture_state(include_transient: bool = true) -> Dictionary:
 	for dup_id in root.brush_system._duplicators:
 		duplicators.append(root.brush_system._duplicators[dup_id].to_dict())
 	state["duplicators"] = duplicators
+	# A hollow remembers the solid it was shelled out of, so it can be shelled
+	# again. It travels with the level and through undo the way duplicators do.
+	state["hollows"] = root.brush_system.capture_hollows()
 	# Generated structures remember what made them, so they travel with the
 	# level and through undo the same way duplicators do.
 	state["generators"] = root.generator_system.capture() if root.generator_system else []
@@ -202,6 +205,7 @@ func restore_state(state: Dictionary) -> void:
 			var copy_brush = root.brush_system._brush_cache.get(copy_id)
 			if is_instance_valid(copy_brush):
 				copy_brush.set_meta("duplicator_instance_of", dup.duplicator_id)
+	root.brush_system.restore_hollows(state.get("hollows", []))
 	restore_floor_info(state.get("floor", {}))
 	restore_sun_info(state.get("sun", {}))
 	if root.draft_brushes_node:

@@ -374,13 +374,6 @@ func detach(brush_system) -> void:
 	count = 0
 
 
-## How far a copy may sit from where this array puts it and still count as
-## standing there. Positions in a level are whole units and the arithmetic that
-## places a copy is a couple of multiplications, so anything past a thousandth of
-## a unit was somebody dragging it.
-const PLACEMENT_EPSILON := 0.001
-
-
 ## Where each copy of this array should be standing, keyed by its brush id.
 ##
 ## Recomputed from the live sources rather than remembered, so it costs nothing
@@ -610,12 +603,7 @@ func copies_follow_a_moved_source(brush_system) -> bool:
 
 
 static func _same_placement(a: Transform3D, b: Transform3D) -> bool:
-	if a.origin.distance_to(b.origin) > PLACEMENT_EPSILON:
-		return false
-	for axis in 3:
-		if a.basis[axis].distance_to(b.basis[axis]) > PLACEMENT_EPSILON:
-			return false
-	return true
+	return HFTransformSystem.same_transform(a, b)
 
 
 ## Remove all instance brushes created by this duplicator.

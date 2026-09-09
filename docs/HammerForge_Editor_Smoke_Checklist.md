@@ -285,6 +285,16 @@ It writes one PNG per tab under `user://console_preview/`.
 - Resize one copy without moving it, then click another copy. Confirm the section still counts it as edited even though nothing has moved.
 - Apply a different material to one copy and confirm the same. Then apply a material to the **original** instead and confirm the section stays quiet — the copies still agree with each other.
 
+### 7c-3c. Re-hollowing
+- Draw a box 64 units a side, set **Wall** to 4, press **Hollow (Ctrl+H)** and confirm.
+- Click one of the walls. Confirm the button now reads **Re-hollow**, a **Detach** button has appeared, and the Wall spinbox shows 4.
+- Set Wall to 12 and press **Re-hollow**. Confirm the room is rebuilt with thicker walls and the button still reads Re-hollow. Press it again at 8 without reselecting and confirm that works too.
+- Set Wall to 40 (more than half the box) and press Re-hollow. Confirm it is refused with a message and the walls you had are still there.
+- Select all the walls, drag the room well across the level, click one wall and press **Re-hollow**. Confirm the room rebuilds where you dragged it, not back at the origin.
+- Drag a single wall away from the others, then Re-hollow. Confirm the room rebuilds at its old placement instead of following the one wall.
+- Press **Ctrl+Z** and confirm the previous walls come back.
+- Click a wall and press **Detach**. Confirm nothing is deleted, the button goes back to **Hollow (Ctrl+H)**, and clicking a wall again leaves it there.
+
 ### 7c-4. Precision Cutting (Clip and Carve on Any Brush)
 - Draw a box, rotate it 30 degrees (`R`), then press **Shift+X**. Confirm the cyan preview shows two turned pieces, and that committing leaves two brushes that both keep the rotation.
 - Draw a cylinder and clip it. Confirm the preview outlines the real curved halves, not two boxes, and that the committed pieces look right from every angle.

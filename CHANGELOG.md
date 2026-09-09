@@ -4,6 +4,36 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Added
+- **A hollowed brush can be shelled again at a different thickness.** Hollow was
+  the last operation with no way back to its own numbers short of Ctrl+Z: it
+  replaced a solid with walls and forgot the solid, so a room whose walls came out
+  too thin could only be undone.
+  - Selecting any wall turns the Hollow row into an editor for that hollow: its
+    own thickness, **Hollow** becomes **Re-hollow**, and **Detach** appears beside
+    it. The same shape the Structure and Duplicate Array sections already had.
+  - **The record keeps the solid**, which is the one thing that could not be
+    recovered from the walls themselves.
+  - **The walls are only replaced once the new ones are known good.** A re-shell
+    rebuilds the solid and plans the new walls on it *before* touching the old
+    ones, so a thickness the brush cannot take leaves the level exactly as it was.
+  - **A room dragged across the level re-shells where it now stands.** Each wall
+    sits at its own centroid rather than at the solid's origin — the first attempt
+    assumed otherwise and rebuilt the room back where it was made, which a test
+    caught — so the record keeps where each wall was put and the move is read from
+    the delta they share. Walls moved one at a time disagree, which is editing
+    rather than relocating, and the placement stays. A record written without wall
+    placements answers "no move", so nothing needs migrating.
+  - `HFTransformSystem.same_transform()` is now the one definition of "these two
+    transforms are the same place", read by the hollow's walls and the array's
+    copies both.
+  - Not covered: hand edits to a wall are overwritten by the next Re-hollow with
+    no warning, where the array section counts its edited copies and asks twice.
+  - **Coverage** (`tests/test_live_hollow.gd`): 27 tests over the record, the
+    re-shell, the refused thickness that costs nothing, relocation by drag and by
+    turn, walls moved one at a time, detach, the row becoming an editor, repeat
+    presses without reselecting, undo, and what survives a state restore.
+
 ### Changed
 - **The array edit warning counts more than movement.** It counted a copy that had
   been dragged and said nothing about one that had been resized, reshaped,
