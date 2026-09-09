@@ -187,6 +187,24 @@ The format is based on Keep a Changelog, and this project follows semantic versi
     copy, undo, and what survives a state restore.
 
 ### Fixed
+- **The baker read `get_meshes()` as a list and threw the placement away.** Godot 4
+  returns a flat two-element array from `CSGShape3D.get_meshes()` — the node's
+  `Transform3D` first, then its root `Mesh`. The baker walked it as a list of
+  meshes, which still found the mesh, because the second element is one, and
+  silently dropped the transform, because the first element is not. A CSG node
+  standing anywhere but the origin baked its visual mesh and its convex collision
+  at the origin.
+  - Both halves of the bake were affected: the per-entry path sets the mesh
+    instance's and the collision shapes' transforms from it, and the merged path
+    carries it into every surface payload.
+  - There were three copies of the same misreading in `baker.gd`, so there is now
+    one `_csg_mesh_pairs()` they all call. It checks the flat pair first and keeps
+    the per-entry walk behind it, in either order, the way
+    `HFSubtractPreview.extract_csg_meshes()` already did.
+  - **Coverage** (`tests/test_baker.gd`): the flat pair keeping its transform, its
+    collision hull vertices standing where the CSG node does, a bare list of meshes
+    still read, nested pairs still read in either order, and nothing in giving
+    nothing out. Three fail against the old code.
 - **Custom brushes baked as rectangular boxes.** `append_brush_list_to_csg()`
   built every CSG stand-in with `PrefabFactory.create_prefab()`, which knows the
   primitives and falls back to a box for anything else. CUSTOM is the only shape
