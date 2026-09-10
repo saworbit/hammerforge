@@ -13,12 +13,20 @@ static func handle(plugin: Object, event: InputEventKey, root: Node) -> int:
 		return PASS
 
 	var keycode := event.keycode
-	if keycode >= KEY_0 and keycode <= KEY_9:
-		plugin.numeric_buffer += str(keycode - KEY_0)
+	# The keypad counts. Typing a dimension mid-drag is the numeric entry path and
+	# a numeric keypad is where people type numbers, and KEY_KP_ENTER was already
+	# accepted below, so the keypad could end a gesture at whatever size the mouse
+	# happened to be at without ever having put a digit in the buffer.
+	#
+	# Mapped by keycode rather than by reading numlock, because with numlock off
+	# these keys arrive as arrows and navigation keys and never reach here at all.
+	var digit := _digit_of(keycode)
+	if digit >= 0:
+		plugin.numeric_buffer += str(digit)
 		update_preview(plugin, root)
 		return STOP
 
-	if keycode == KEY_PERIOD and "." not in plugin.numeric_buffer:
+	if keycode in [KEY_PERIOD, KEY_KP_PERIOD] and "." not in plugin.numeric_buffer:
 		plugin.numeric_buffer += "."
 		update_preview(plugin, root)
 		return STOP
@@ -37,6 +45,16 @@ static func handle(plugin: Object, event: InputEventKey, root: Node) -> int:
 		return STOP
 
 	return PASS
+
+
+## The digit a keycode types, on the top row or the keypad, or -1 for anything
+## else.
+static func _digit_of(keycode: int) -> int:
+	if keycode >= KEY_0 and keycode <= KEY_9:
+		return keycode - KEY_0
+	if keycode >= KEY_KP_0 and keycode <= KEY_KP_9:
+		return keycode - KEY_KP_0
+	return -1
 
 
 static func update_preview(plugin: Object, root: Node) -> void:

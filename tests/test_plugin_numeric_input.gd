@@ -191,3 +191,63 @@ func test_plugin_callbacks_are_thin_numeric_delegates() -> void:
 		"HFPluginNumericInput.apply_value",
 	]:
 		assert_true(source.contains(call), "%s must be delegated" % call)
+
+
+func test_keypad_digits_and_decimal_fill_the_buffer() -> void:
+	# KEY_KP_ENTER was already accepted, so before this the keypad could end a
+	# gesture at whatever size the mouse was at without a digit ever landing.
+	var plugin := FakePlugin.new()
+	var root := FakeRoot.new()
+	root.input_state.dragging = true
+	root.input_state.drag_base = true
+	assert_eq(
+		HFPluginNumericInput.handle(plugin, _key(KEY_KP_1), root),
+		EditorPlugin.AFTER_GUI_INPUT_STOP,
+		"A keypad digit should be consumed, not passed on"
+	)
+	HFPluginNumericInput.handle(plugin, _key(KEY_KP_2), root)
+	HFPluginNumericInput.handle(plugin, _key(KEY_KP_PERIOD), root)
+	HFPluginNumericInput.handle(plugin, _key(KEY_KP_5), root)
+	assert_eq(plugin.numeric_buffer, "12.5", "The keypad should type the same as the top row")
+	assert_eq(root.input_state.drag_end, Vector3(12.5, 0.0, 12.5), "and drive the same preview")
+	root.free()
+
+
+func test_keypad_zero_is_a_digit_not_a_pass_through() -> void:
+	var plugin := FakePlugin.new()
+	var root := FakeRoot.new()
+	root.input_state.dragging = true
+	root.input_state.drag_base = true
+	HFPluginNumericInput.handle(plugin, _key(KEY_KP_1), root)
+	HFPluginNumericInput.handle(plugin, _key(KEY_KP_0), root)
+	assert_eq(plugin.numeric_buffer, "10", "KEY_KP_0 sits at the far end of the range")
+	root.free()
+
+
+func test_keypad_enter_commits_a_keypad_typed_value() -> void:
+	var plugin := FakePlugin.new()
+	var root := FakeRoot.new()
+	root.input_state.dragging = true
+	root.input_state.drag_base = true
+	HFPluginNumericInput.handle(plugin, _key(KEY_KP_1), root)
+	HFPluginNumericInput.handle(plugin, _key(KEY_KP_2), root)
+	HFPluginNumericInput.handle(plugin, _key(KEY_KP_8), root)
+
+	var result := HFPluginNumericInput.handle(plugin, _key(KEY_KP_ENTER), root)
+
+	assert_eq(result, EditorPlugin.AFTER_GUI_INPUT_STOP, "Keypad Enter still commits")
+	assert_eq(root.input_state.drag_end, Vector3(128.0, 0.0, 128.0), "at the size that was typed")
+	root.free()
+
+
+func test_a_second_keypad_decimal_is_ignored() -> void:
+	var plugin := FakePlugin.new()
+	var root := FakeRoot.new()
+	root.input_state.dragging = true
+	root.input_state.drag_base = true
+	HFPluginNumericInput.handle(plugin, _key(KEY_KP_1), root)
+	HFPluginNumericInput.handle(plugin, _key(KEY_KP_PERIOD), root)
+	HFPluginNumericInput.handle(plugin, _key(KEY_PERIOD), root)
+	HFPluginNumericInput.handle(plugin, _key(KEY_KP_5), root)
+	assert_eq(plugin.numeric_buffer, "1.5", "One decimal point, whichever key typed it")
+	root.free()
