@@ -5,6 +5,38 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **Five brush primitives were built inside out** (#313). `PRISM_TRI`,
+  `PRISM_PENT`, `OCTAHEDRON`, `DODECAHEDRON` and `ICOSAHEDRON` came out of
+  `create_brush_from_info()` with every face normal pointing at the brush
+  centre, so `validate_convexity()` called a convex prism broken, the bake ran
+  inside out, and `.map` export wrote a hull that is not a solid. The prism
+  builder and the octahedron and icosahedron tables now wind clockwise from
+  outside; the dodecahedron sorts its ring the other way round for the same
+  reason. The editor preview is cull-disabled, which is why this looked fine in
+  the viewport and only showed at bake or export.
+  - **Levels saved before the fix are migrated on load.** Faces are serialized
+    verbatim, so the inversion was in every `.hflevel` that holds one of those
+    five shapes. `winding_version` is 2, and a v1 face on one of the five runs
+    the centroid migration the v0 path already uses. It is exact there because
+    all five are convex, and no other shape is touched, so a torus still loads
+    as it was saved.
+- **Every bevel left the brush non-convex** (#314). Two causes on the same
+  call. The strip quads were wound counter-clockwise from outside, so a plain
+  `radius 4, segments 2` bevel on a box added two back-facing polygons. And the
+  arc was centred on the corner vertex, which put every intermediate point
+  behind the chord between the two pulled-back edges and scooped the corner out
+  instead of chamfering it, so the strip quads also came out carrying the normal
+  from the far side of the bevel. The arc is centred at
+  `origin + (dir0 + dir1) * radius`, which is exactly `radius` from both ends at
+  any dihedral angle, and the quads are wound against the brush centre the way
+  the endpoint caps already were. `radius` still means the same thing: how far
+  the two faces pull back.
+  - **Coverage**: `tests/test_brush_shapes.gd` sweeps every `BrushShape` for a
+    face normal pointing back at the centre, skipping collapsed triangles and
+    the torus, which is genuinely concave; plus the five named shapes on their
+    own, the v1 migration, and a torus that must not be migrated.
+    `tests/test_bevel.gd` gains outward normals, convexity at two radii, and
+    each strip quad leaning towards the face it borders.
 - **Four calls accepted a value they could not use and reported success.** Same
   shape each time: a number with no relationship to the geometry it modifies
   goes in, something unrecoverable comes out, and the return value says it
