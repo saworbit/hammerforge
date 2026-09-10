@@ -494,24 +494,27 @@ func _build_prism_mesh(edge_count: int) -> ArrayMesh:
 		top.append(Vector3(point.x, point.y, half_z))
 	var st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	# Clockwise from outside, matching FaceData's convention. The profile runs
+	# counter-clockwise in XY, so the sides and the +Z cap take the reversed
+	# order and the -Z cap takes the profile order.
 	for i in range(count):
 		var b0: Vector3 = base[i]
 		var b1: Vector3 = base[(i + 1) % count]
 		var t0: Vector3 = top[i]
 		var t1: Vector3 = top[(i + 1) % count]
 		st.add_vertex(b0)
+		st.add_vertex(t1)
 		st.add_vertex(b1)
-		st.add_vertex(t1)
 		st.add_vertex(b0)
-		st.add_vertex(t1)
 		st.add_vertex(t0)
+		st.add_vertex(t1)
 	for i in range(1, count - 1):
 		st.add_vertex(top[0])
-		st.add_vertex(top[i])
 		st.add_vertex(top[i + 1])
+		st.add_vertex(top[i])
 		st.add_vertex(base[0])
-		st.add_vertex(base[i + 1])
 		st.add_vertex(base[i])
+		st.add_vertex(base[i + 1])
 	st.generate_normals()
 	return st.commit()
 
@@ -781,12 +784,27 @@ func serialize_faces() -> Array:
 	return out
 
 
+## Shapes whose builders wound every face inside out before #313. Their saved
+## faces carry the same inversion, and they are all convex, so the centroid
+## check the v0 migration already uses resolves them exactly.
+const INVERTED_BUILDER_SHAPES := [
+	BrushShape.PRISM_TRI,
+	BrushShape.PRISM_PENT,
+	BrushShape.OCTAHEDRON,
+	BrushShape.DODECAHEDRON,
+	BrushShape.ICOSAHEDRON,
+]
+
+
 func apply_serialized_faces(data: Array) -> void:
 	faces.clear()
 	var needs_winding_migration := false
 	for entry in data:
 		if entry is Dictionary:
-			if int(entry.get("winding_version", 0)) < 1:
+			var version := int(entry.get("winding_version", 0))
+			if version < 1:
+				needs_winding_migration = true
+			elif version < 2 and shape in INVERTED_BUILDER_SHAPES:
 				needs_winding_migration = true
 			faces.append(FaceData.from_dict(entry))
 	if needs_winding_migration:
