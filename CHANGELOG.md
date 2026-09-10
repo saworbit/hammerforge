@@ -729,6 +729,40 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   - **Coverage** (`tests/test_untrusted_payloads.gd`): 16 tests over all four,
     including a good value on each path so the validation cannot start refusing
     what it should accept. Twelve fail on the previous code.
+- **A connection reports its source under the name it is addressed by** (#288).
+  `HFEntitySystem.get_all_connections()` built the source side from the scene
+  tree name and the target side from the stored output, which is the authored
+  `entity_name`, so the two halves of every record were in different namespaces.
+  For a brush entity the tree name is whatever Godot generated, so a source never
+  matched an authored name and `get_connection_summary()` reported every wired
+  entity as triggering nothing. `source_name` is the authored name when there is
+  one and the node name otherwise, `source_node_name` carries the other, and the
+  summary answers to either address rather than making the caller know which one
+  it is holding.
+- **`.map` export carries entity names and I/O outputs** (#287). The authored
+  name and the `entity_io_outputs` metadata were never read, on point entities or
+  brush entities, so a level wired up in the Objects tab exported inert. The
+  authored name is written as `targetname`, and each connection is one key/value
+  line with the output name as the key and
+  `target,input,parameter,delay,fire_once` as the value, which is the order
+  Hammer writes a VMF connection. `parse_map_text()` reads them back.
+  - **No connections block.** A `.map` entity body is key/value lines and nothing
+    else: a nested brace inside an entity is read as a brush by every parser
+    including this one, so a Source style block would not survive its own round
+    trip.
+  - **One line per connection**, so two outputs on the same event both reach the
+    file. The parser now keeps the key/value lines in file order alongside the
+    properties dictionary, which would otherwise keep only the last of a repeated
+    key.
+  - **Wiring is told apart from settings by shape, not by a naming rule.** A line
+    is read as a connection only with five comma-separated fields, a numeric
+    delay, and a target and input that are there. An imported output does not
+    also land in `entity_data`.
+  - **Coverage** (`tests/test_entity_names_and_io.gd`): the source namespace, the
+    summary from either address, an entity with no authored name, the value shape
+    both ways, four ordinary properties that must not read as connections, both
+    entity kinds exporting, two outputs on one event, an unwired block gaining
+    nothing, and a round trip for each entity kind.
 - **A prefab could wire its copy's outputs to the entities it was built from.**
   `HFPrefab.instantiate()` remapped I/O by turning each old node name into the new
   one and then looking that name back up. The lookup resolves an authored

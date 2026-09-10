@@ -276,6 +276,8 @@ static func _face_for_normal(brush: DraftBrush, world_normal: Vector3) -> Varian
 			best_dot = dot
 			best = face
 	return best
+
+
 ## Keys HammerForge writes itself, which are never I/O outputs.
 const RESERVED_ENTITY_KEYS := ["classname", "origin", "targetname"]
 
