@@ -2086,9 +2086,11 @@ func add_paint_layer() -> void:
 	paint_layer_changed.emit(paint_system.get_active_paint_layer_index())
 
 
-func rename_paint_layer(index: int, new_name: String) -> void:
-	paint_system.rename_paint_layer(index, new_name)
+func rename_paint_layer(index: int, new_name: String) -> bool:
+	if not paint_system.rename_paint_layer(index, new_name):
+		return false
 	paint_layer_changed.emit(paint_system.get_active_paint_layer_index())
+	return true
 
 
 func remove_active_paint_layer() -> void:

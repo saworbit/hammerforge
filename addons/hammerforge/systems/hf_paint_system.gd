@@ -129,10 +129,32 @@ func get_paint_layer_names() -> Array:
 	return names
 
 
-func rename_paint_layer(index: int, new_name: String) -> void:
+## Rename a paint layer. Returns false and leaves the layer alone if the name is
+## empty or another layer already shows it. The layer list is how the user picks
+## what they are painting on, so two identical rows leave them no way to tell
+## which is which, and everything downstream that reports a layer by name
+## becomes ambiguous. The check sits here rather than in the rename dialog so a
+## rename from anywhere is covered.
+func rename_paint_layer(index: int, new_name: String) -> bool:
 	if not root.paint_layers:
-		return
-	root.paint_layers.rename_layer(index, new_name)
+		return false
+	var trimmed := new_name.strip_edges()
+	if trimmed == "":
+		HFLog.warn("HFPaintSystem: a paint layer needs a name")
+		return false
+	var layers: Array = root.paint_layers.layers
+	if index < 0 or index >= layers.size():
+		HFLog.warn("HFPaintSystem: paint layer index out of range: %d" % index)
+		return false
+	# Compare against what each row actually shows, which is the display name
+	# when there is one and the layer id when there is not.
+	var names: Array = get_paint_layer_names()
+	for i in range(names.size()):
+		if i != index and str(names[i]) == trimmed:
+			HFLog.warn("HFPaintSystem: a paint layer is already called '%s'" % trimmed)
+			return false
+	root.paint_layers.rename_layer(index, trimmed)
+	return true
 
 
 func set_region_streaming_enabled(value: bool) -> void:
