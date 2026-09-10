@@ -579,6 +579,33 @@ The format is based on Keep a Changelog, and this project follows semantic versi
     copy, undo, and what survives a state restore.
 
 ### Fixed
+- **Undo snapshots no longer share mutable state with the live level** (#282).
+  `HFStateSystem` handed the live containers to the snapshot on one side of two
+  pairs: capture aliased `MaterialManager.materials`, and restore handed the
+  snapshot's own `face_selection` dictionary back as the live selection. Each
+  pair was already guarded on its other side, so the shape was easy to miss. A
+  palette edit after a capture wrote into the snapshot, and undo could not put
+  back the material it was taken to protect. Both sides now copy.
+- **Loading a `.hflevel` restores the material palette again** (#283).
+  `LevelRoot.set_materials()` assigned an untyped `Array` into the
+  `Array[Material]` the manager exports. Godot 4 rejects that, so the write was
+  skipped and nothing checked the result: the editor kept whatever palette it
+  already had while the saved one was dropped, and every face `material_idx`
+  from the file then indexed into the wrong palette. The array is converted
+  first. Slot positions are preserved and a slot that does not hold a Material
+  comes back as null with a warning naming the index, because compacting would
+  repoint every face above it.
+- **Terrain slot paths survive a load** (#284). The same untyped-into-typed
+  assignment in `HFPaintSystem.restore_paint_layers()` dropped
+  `terrain_slot_paths`, `terrain_slot_uv_scales` and `terrain_slot_tints` on
+  every `.hflevel` load. `_ensure_terrain_slots()` ran straight after and
+  refilled the four slots with defaults, so a loaded layer came back pointing at
+  no textures with nothing to say why. Checked against 4.7.stable: the engine
+  rejects the assignment for all three, not only the paths.
+  - **Coverage** (`tests/test_state_snapshot_isolation.gd`): a palette edit after
+    a capture, a selection edit after a restore, an untyped palette replacing a
+    live one, an empty payload clearing it, a junk slot kept in place, and a
+    terrain slot path round trip. All six fail on the previous code.
 - **A prefab could wire its copy's outputs to the entities it was built from.**
   `HFPrefab.instantiate()` remapped I/O by turning each old node name into the new
   one and then looking that name back up. The lookup resolves an authored
