@@ -187,13 +187,13 @@ func test_hollowing_a_cylinder_makes_a_tube():
 	var b = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
 	b.shape = root.BrushShape.CYLINDER
 	b.rebuild_preview()
-	# The brush stores triangles, so a cylinder has hundreds of faces describing
-	# far fewer distinct planes. One wall per distinct plane is the real rule.
+	# One wall per distinct plane is the rule. Since #322 the brush stores one
+	# face per plane rather than one per triangle, so that is one wall per face.
 	var result = sys.hollow_brush_by_id("brush_1", 4.0)
 	assert_true(result.ok, "Hollow should shell a cylinder: %s" % result.message)
 	var walls: int = root.draft_brushes_node.get_child_count()
 	assert_gt(walls, 6, "a cylinder shells into more walls than a box")
-	assert_lt(walls, b.get_faces().size(), "and far fewer than it has triangles")
+	assert_eq(walls, b.get_faces().size(), "one wall per face, and a face is a plane now")
 
 
 func test_can_hollow_brush_accepts_a_non_box_shape():
