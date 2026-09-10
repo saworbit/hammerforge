@@ -56,6 +56,16 @@ jobs:
       - name: Check placement order
         run: python3 tools/check_placement_order.py
 
+      # project.godot is tracked, and the editor rewrites it the moment anyone
+      # enables a plugin. addons/godot_mcp and its autoload rode in that way and
+      # shipped enabled for months. The template asks a human to check; this is
+      # the part that cannot forget.
+      - name: Check the project-settings guard still detects
+        run: python3 tools/check_project_settings.py --selftest
+
+      - name: Check project settings
+        run: python3 tools/check_project_settings.py
+
       # wait_for_ci.py decides whether a branch is safe to merge. Its whole job
       # is refusing a green run that belongs to some other commit, so the
       # fixtures for that case run here rather than being taken on trust.
