@@ -606,6 +606,26 @@ The format is based on Keep a Changelog, and this project follows semantic versi
     a capture, a selection edit after a restore, an untyped palette replacing a
     live one, an empty payload clearing it, a junk slot kept in place, and a
     terrain slot path round trip. All six fail on the previous code.
+- **Removing a palette material no longer repaints the brushes above it**
+  (#285). `FaceData.material_idx` is a plain index into
+  `MaterialManager.materials`, and removal compacted that array without touching
+  the faces pointing into it, so deleting the first material repainted every
+  brush that used a later one and any face on the last slot pointed past the
+  end. `remove_material_from_palette()` now shifts every index above the removed
+  slot down and sets faces that used the removed slot to unset, walking the same
+  managed-brush traversal that identity work uses so committed cutters are
+  covered too. An out-of-range index is a no-op rather than a signal.
+- **Refresh Prototypes is a refresh again** (#298). The button appended all 150
+  prototype materials every time it was pressed, so a second click gave a
+  300-entry palette with every name twice, and the palette is saved with the
+  level. `HFPrototypeTextures.load_all_into()` skips a pattern/colour already in
+  the palette, keyed on `resource_path`, and returns the number actually added,
+  so a second call returns 0. `LevelRoot.add_prototype_materials()` calls it
+  rather than keeping a second copy of the same loop.
+  - **Coverage** (`tests/test_material_palette_integrity.gd`): a face following
+    its material down a slot, a face whose material was removed, a face below the
+    removal, an out-of-range index, a second prototype load adding nothing,
+    unique names after two loads, and a hand-made material keeping slot 0.
 - **A prefab could wire its copy's outputs to the entities it was built from.**
   `HFPrefab.instantiate()` remapped I/O by turning each old node name into the new
   one and then looking that name back up. The lookup resolves an authored
