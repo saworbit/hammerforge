@@ -25,20 +25,29 @@ The format is based on Keep a Changelog, and this project follows semantic versi
     commit that was superseded in flight, and a run that never finishes. It runs
     in CI beside the placement-order selftest, since a guard that cannot fail is
     not a guard.
-- **Floor Paint now supports a zero-dock, undo-safe first-room loop.** Shift+P,
-  R, then LMB-drag lays out a rectangular walkable footprint; Alt+LMB erases
-  temporarily, Shift+LMB locks the first dominant grid axis, Ctrl/Cmd+LMB
-  samples a cell material, and Escape restores a cancelled stroke. The existing
-  banner reports the hovered footprint and live cells/metres. Each changed
-  stroke is one undo entry, including lost-release recovery; streamed regions
-  are loaded before capture and pinned for the stroke. Plain RMB remains Godot
-  camera input, preview reconcile remains dirty-chunk scoped, and inference
-  cleanup remains unwired/default-off.
+- **Floor Paint now carries the first room through a complete generative pass.**
+  Shift+P, R, then LMB-drag lays out a walkable footprint; Y gives that last
+  Brush/Rect footprint its own wall height, X/Z add grid-origin mirror copies,
+  and H stamps another filled room with boundary walls from the last Rect size.
+  Cross-layer strokes show live ramp/stair ghosts and Enter commits their
+  `ConnectorDef`. The footprint, raise cage, and connector ghost are transient,
+  stroke-local overlays; confirmed connectors persist and bake even when global
+  auto-detection is off, without duplicating an automatically detected boundary.
+  Inference is a default-off Paint-tab toggle whose only permitted edits are
+  isolated-cell removal, one-cell cardinal hole/gap fill, and one-row/column
+  corridor widening inside the dirty stroke scope. Existing Alt/Shift/Ctrl paint
+  modifiers, Esc restoration, region pinning, and plain RMB camera ownership are
+  preserved. A paint/mirror/room/connector confirmation is one undo; wall raise
+  is a clearly chained second undo.
   - **Coverage** (`tests/test_paint_polish.gd`, `tests/test_paint_system.gd`,
-    `tests/test_plugin_gesture_recovery.gd`, `tests/test_shortcut_hud_layout.gd`):
-    modifiers, stable axis choice, material pick, live metrics, preview cancel,
-    one-entry undo, no-op undo suppression, no RMB handler, region pin release,
-    stale-release commit, and modifier guidance.
+    `tests/test_paint_wave2.gd`, `tests/test_auto_connector.gd`,
+    `tests/test_keymap.gd`, `tests/test_shortcut_hud_layout.gd`,
+    `tests/test_context_toolbar.gd`, `tests/test_plugin_gesture_recovery.gd`):
+    modifiers, stable axis choice, material pick, live metrics, preview teardown,
+    scoped raise and persistence, X/Z mirroring, room stamping, connector
+    detection/confirmation/bake deduplication, opt-in cleanup limits, one-entry
+    undo boundaries, no RMB handler, lost-release recovery, region reload,
+    keymap discovery, and Paint context controls.
 - **Re-hollow says what it would rebuild over.** Pressing Re-hollow deletes every
   wall and shells the recorded solid again. A wall you had moved, resized,
   retextured or painted went with the rest of them, without a word — the one thing
@@ -118,28 +127,6 @@ The format is based on Keep a Changelog, and this project follows semantic versi
     raised weld tolerance, and both key kinds actually colliding as dictionary
     keys rather than merely comparing equal.
 
-- **Floor paint stops running an inference stage that does nothing.** Every level
-  handed its paint tool an `HFInferenceEngine`, and every ordinary stroke ended by
-  classifying its intent and walking its dirty chunks calling a cleanup that was
-  never written. Denoise, small hole fill, gap bridging, corridor width and angle
-  handling were all presented as a working stage of the paint pipeline and not one
-  of them changed a cell. There was no setting to turn it off, because there was
-  nothing to turn on.
-  - **Nothing assigns it now**, so no stroke enters the stage. The hook on the
-    paint tool stays, because assigning an engine is what will turn it on once
-    there is one worth turning on, and that should arrive with a setting and a
-    default rather than by being on for everybody by accident.
-  - **The stub says what it is.** `apply_cleanup()` is documented as changing no
-    cells, and the shape the stage would take is kept on record beside it: chunk
-    local, one chunk mask at a time with a one cell border so a cleanup cannot
-    seam at a chunk edge or reach a cell the stroke never touched.
-  - `infer_intent()` is the half that works and is kept.
-  - The floor paint guide said inference ran on mouse release if enabled. It now
-    says it is not enabled and what enabling it would take.
-  - **Coverage** (`tests/test_paint_inference_unwired.gd`): 4 tests over a level
-    building its paint tool without an engine, the hook surviving, the cleanup
-    leaving a lone island and a one cell hole exactly as it found them, and intent
-    classification still answering.
 - **Precision snap stops measuring brushes the pointer cannot reach.** With
   Vertex, Center, Edge or Perpendicular on, every pointer motion transformed
   every vertex of every brush in the level into world space, appended the lot,

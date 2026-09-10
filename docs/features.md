@@ -93,13 +93,18 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Fast viewport loop:** Shift+P enters Paint mode; R then LMB-drag creates a rectangular walkable room without opening the dock
 - **Stroke modifiers:** Alt+LMB temporarily erases, Shift+LMB locks the first dominant grid axis, Ctrl/Cmd+LMB samples a cell material, and Esc restores a cancelled stroke
 - **Live feedback and undo:** the existing banner shows hovered cell/footprint plus live cells and metres; each changed stroke is one undo entry, including lost-release recovery
+- **Paint-then-raise:** Y adjusts wall height for the last Brush/Rect footprint as a clearly chained second undo; unrelated wall runs keep their own height
+- **Mirrored paint:** X and Z toggle grid-origin mirroring, off by default and combined with the source stroke in one undo
+- **Room stamp:** H repeats the last Rect dimensions as a filled floor with raised boundary walls in one undo
+- **Opt-in inference:** default-off one-cell denoise, hole/gap repair, and corridor widening, scoped to the stroke's dirty chunks and local halo
 - **Sculpting:** Raise, Lower, Smooth, Flatten brushes for interactive terrain editing with configurable strength, radius, and falloff
 - **Shapes:** Square, Circle with adjustable radius
 - **Heightmaps:** import PNG/EXR or generate procedural noise -- per-vertex displacement via SurfaceTool
 - **Displacement surfaces:** Source-style subdivided face grids (power 2-4) with Raise/Lower/Smooth/Noise/Alpha paint modes, sew adjacent displacements, elevation scale
 - **Convert Selection to Heightmap:** select brushes → rasterize top faces → create sculptable terrain layer
 - **Material blending:** four-slot shader with per-cell blend weights painted directly on the grid
-- **Auto-connectors:** ramp and stair mesh generation between layers at different heights, auto-generated during bake with mode selection (Ramp/Stairs/Auto), configurable step height and width
+- **Live connectors:** touched cross-layer boundaries show ramp/stair ghosts; Enter commits persistent definitions in one undo and Esc dismisses them
+- **Auto-connectors:** optional bake-wide ramp/stair detection with mode selection (Ramp/Stairs/Auto), configurable step height and width; confirmed boundaries also bake when automatic detection is off
 - **Foliage & Scatter brush:** circle/spline shapes, density preview via MultiMesh (Dots/Wireframe/Full), slope/height filtering, align-to-normal, commit as permanent MultiMeshInstance3D
 - **Region streaming:** sparse chunk loading for open worlds
 
@@ -369,6 +374,10 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 Floor Paint mouse modifiers are deliberately not keymap actions: LMB paints,
 Alt+LMB temporarily erases, Shift+LMB locks the stroke axis, Ctrl/Cmd+LMB picks
 the cell material, and Escape cancels. Plain RMB remains Godot camera navigation.
+
+Paint mode contextually claims **X/Z** for mirror toggles, **Y** for raising the
+last footprint, **H** for a room stamp, and **Enter** to confirm a connector.
+Outside Paint mode, X/Y/Z retain their normal axis-lock role.
 
 R appears twice on purpose. Paint mode claims it for Rect; everywhere else it
 rotates. The viewport dispatches the paint tools first and skips the whole

@@ -484,7 +484,20 @@ It writes one PNG per tab under `user://console_preview/`.
 - Select a subset of brushes. Click **Bake Selected**. Confirm no auto-connectors are generated (selection-only bakes skip connectors).
 - With Auto Connectors enabled + NavMesh enabled, bake. Confirm both `AutoConnector_*` collision shapes and `BakedNavmesh` region exist, and navmesh uses STATIC_COLLIDERS parsed geometry type.
 
-### 12c. Occluder Generation (Automated Culling)
+### 12c. Floor Paint Generative Pass
+- Enter Floor Paint with **Shift+P**, choose Rect with **R**, and drag a footprint. Confirm a live footprint overlay follows only the active cells, disappears on release, and the flat floor/walls appear as DraftBrush nodes under `Generated`.
+- Press **Y**, move vertically, and confirm with LMB. Confirm the raise cage previews the height, only the last footprint's boundary walls change height, and Ctrl+Z first undoes the raise then a second Ctrl+Z undoes the paint stroke.
+- Repeat the raise gesture and press **Esc**. Confirm the original wall heights return immediately and no raise overlay remains.
+- Toggle **Mirror X** with **X**, paint once, and confirm the source plus grid-origin reflection disappear together with one Ctrl+Z. Repeat for **Z**, then both axes. Confirm the banner/context toolbar names the active axes and both toggles default off after a fresh plugin session.
+- Draw a Rect of a distinctive size, move the pointer, and press **H**. Confirm one room stamp creates the same filled dimensions with boundary walls and one Ctrl+Z removes the entire room.
+- Leave **Inference cleanup** off and paint an isolated cell plus a one-cell hole/gap pattern; confirm the authored cells are unchanged. Turn it on and repeat: confirm only isolated one-cell noise is removed, a cardinal one-cell hole/gap is filled, and a fast one-cell corridor gains one adjacent row. Confirm distant painted work and erase strokes are untouched.
+- Create a second paint layer at a different Y. Paint adjacent to it and confirm a translucent ramp/stair ghost appears only for the touched boundary. Press **Esc** and confirm it vanishes; repaint, press **Enter**, and confirm one undo removes the committed connector definition.
+- Disable **Auto Connectors**, confirm a connector again, and run a full bake. Confirm exactly one `AutoConnector_*` mesh plus collision is produced. Enable automatic detection and bake again; confirm the same boundary is still emitted only once.
+- Enable a heightmap on a paint layer and repeat paint, mirror, room, and raise. Confirm floors use `Generated/HeightmapFloors` MeshInstance3D output while boundary walls retain scoped per-cell heights; no action rewrites the heightmap.
+- Enable region streaming, perform a mirrored stroke across a region boundary, raise it, unload/reload the region, and confirm occupancy and wall heights persist. Preview work must remain limited to touched dirty chunks.
+- During every idle and active Floor Paint state, use plain RMB/WASD viewport navigation. Confirm no paint action consumes it and no ghost remains after Esc or stroke completion.
+
+### 12d. Occluder Generation (Automated Culling)
 - Draw 3-4 large brushes forming walls and a floor (total visible surface > 4 units²).
 - Open **Test → Advanced Bake**. Check **Generate Occluders**. Leave Min Area at 4.0.
 - Click **Bake**. In the Scene tree, expand `BakedGeometry` → confirm an `Occluders` node exists containing `Occluder_0`, `Occluder_1`, etc. (OccluderInstance3D nodes).
