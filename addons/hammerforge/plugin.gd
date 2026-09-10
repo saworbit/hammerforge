@@ -1643,12 +1643,24 @@ func ensure_level_root() -> Node:
 	return _create_level_root()
 
 
+## Create a starter level in the edited scene and return its LevelRoot: a
+## floor, an angled sun light and a player spawn. One undo entry.
+##
+## This is Create Starter without the dock. For a scene that is not the one open
+## in the editor, use `HFLevelFactory.create_starter()` instead.
+func create_starter_level() -> Node:
+	var root = ensure_level_root()
+	if not root:
+		return null
+	HFUndoHelper.commit(undo_redo_manager, root, "New HammerForge Level", "create_new_level")
+	return root
+
+
 func _create_level_root() -> Node:
 	var scene = get_editor_interface().get_edited_scene_root()
 	if not scene:
 		return null
-	var root = LevelRootType.new()
-	root.name = "LevelRoot"
+	var root = HFLevelFactory.make_level_root()
 	if undo_redo_manager:
 		undo_redo_manager.create_action("Create HammerForge Level")
 		undo_redo_manager.add_do_method(scene, "add_child", root)

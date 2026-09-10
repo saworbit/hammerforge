@@ -191,9 +191,14 @@ static func handle_action(plugin: Object, action_id: String) -> void:
 		"focus_dock":
 			focus_dock(plugin)
 		"create_starter":
+			# Prefer the dock so its banner and hints refresh with the scene.
+			# Without one, the plugin still knows how to build a starter level.
 			if dock and dock.has_method("_on_create_level_root"):
 				dock._on_create_level_root(true)
 				_note(panel, "Created a starter level.")
+			elif plugin.has_method("create_starter_level"):
+				if plugin.call("create_starter_level") != null:
+					_note(panel, "Created a starter level.")
 		"bake":
 			if dock and dock.has_method("_on_bake"):
 				dock._on_bake()
