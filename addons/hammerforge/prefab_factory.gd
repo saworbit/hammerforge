@@ -241,15 +241,16 @@ static func _octahedron_data() -> Dictionary:
 			Vector3(0, 0, -1)
 		]
 	)
+	# Clockwise from outside, matching FaceData's convention.
 	var faces = [
-		PackedInt32Array([0, 2, 4]),
-		PackedInt32Array([2, 1, 4]),
-		PackedInt32Array([1, 3, 4]),
-		PackedInt32Array([3, 0, 4]),
-		PackedInt32Array([2, 0, 5]),
-		PackedInt32Array([1, 2, 5]),
-		PackedInt32Array([3, 1, 5]),
-		PackedInt32Array([0, 3, 5])
+		PackedInt32Array([4, 2, 0]),
+		PackedInt32Array([4, 1, 2]),
+		PackedInt32Array([4, 3, 1]),
+		PackedInt32Array([4, 0, 3]),
+		PackedInt32Array([5, 0, 2]),
+		PackedInt32Array([5, 2, 1]),
+		PackedInt32Array([5, 1, 3]),
+		PackedInt32Array([5, 3, 0])
 	]
 	return {"vertices": vertices, "faces": faces}
 
@@ -272,27 +273,29 @@ static func _icosahedron_data() -> Dictionary:
 			Vector3(-phi, 0, 1)
 		]
 	)
+	# Clockwise from outside, matching FaceData's convention. The published
+	# icosahedron table is counter-clockwise, so every triple is reversed.
 	var faces = [
-		PackedInt32Array([0, 11, 5]),
-		PackedInt32Array([0, 5, 1]),
-		PackedInt32Array([0, 1, 7]),
-		PackedInt32Array([0, 7, 10]),
-		PackedInt32Array([0, 10, 11]),
-		PackedInt32Array([1, 5, 9]),
-		PackedInt32Array([5, 11, 4]),
-		PackedInt32Array([11, 10, 2]),
-		PackedInt32Array([10, 7, 6]),
-		PackedInt32Array([7, 1, 8]),
-		PackedInt32Array([3, 9, 4]),
-		PackedInt32Array([3, 4, 2]),
-		PackedInt32Array([3, 2, 6]),
-		PackedInt32Array([3, 6, 8]),
-		PackedInt32Array([3, 8, 9]),
-		PackedInt32Array([4, 9, 5]),
-		PackedInt32Array([2, 4, 11]),
-		PackedInt32Array([6, 2, 10]),
-		PackedInt32Array([8, 6, 7]),
-		PackedInt32Array([9, 8, 1])
+		PackedInt32Array([5, 11, 0]),
+		PackedInt32Array([1, 5, 0]),
+		PackedInt32Array([7, 1, 0]),
+		PackedInt32Array([10, 7, 0]),
+		PackedInt32Array([11, 10, 0]),
+		PackedInt32Array([9, 5, 1]),
+		PackedInt32Array([4, 11, 5]),
+		PackedInt32Array([2, 10, 11]),
+		PackedInt32Array([6, 7, 10]),
+		PackedInt32Array([8, 1, 7]),
+		PackedInt32Array([4, 9, 3]),
+		PackedInt32Array([2, 4, 3]),
+		PackedInt32Array([6, 2, 3]),
+		PackedInt32Array([8, 6, 3]),
+		PackedInt32Array([9, 8, 3]),
+		PackedInt32Array([5, 9, 4]),
+		PackedInt32Array([11, 4, 2]),
+		PackedInt32Array([10, 2, 6]),
+		PackedInt32Array([7, 6, 8]),
+		PackedInt32Array([1, 8, 9])
 	]
 	return {"vertices": vertices, "faces": faces}
 
@@ -318,6 +321,9 @@ static func _dodecahedron_data() -> Dictionary:
 			axis_x = normal.cross(Vector3.RIGHT)
 		axis_x = axis_x.normalized()
 		var axis_y = normal.cross(axis_x).normalized()
+		# (axis_x, axis_y, normal) is right handed, so increasing angle sweeps
+		# counter-clockwise seen from outside. Sort the other way to get the
+		# clockwise-from-outside order FaceData expects.
 		face_indices.sort_custom(
 			func(a, b):
 				var va = centers[a]
@@ -326,7 +332,7 @@ static func _dodecahedron_data() -> Dictionary:
 				var pb = vb - normal * vb.dot(normal)
 				var angle_a = atan2(pa.dot(axis_y), pa.dot(axis_x))
 				var angle_b = atan2(pb.dot(axis_y), pb.dot(axis_x))
-				return angle_a < angle_b
+				return angle_a > angle_b
 		)
 		dodeca_faces.append(PackedInt32Array(face_indices))
 	return {"vertices": centers, "faces": dodeca_faces}
