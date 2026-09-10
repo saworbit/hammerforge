@@ -50,7 +50,11 @@ static func parse_map_text(text: String) -> Dictionary:
 		if line == "{":
 			if not in_entity:
 				in_entity = true
-				current_entity = {"properties": {}, "brushes": []}
+				# `pairs` keeps every key/value line in file order. `properties`
+				# is a Dictionary, so a repeated key overwrites, and I/O outputs
+				# are written one line per connection with the output name as the
+				# key. Two outputs on the same event would collide there.
+				current_entity = {"properties": {}, "brushes": [], "pairs": []}
 				continue
 			if in_entity and not in_brush:
 				in_brush = true
@@ -86,6 +90,7 @@ static func parse_map_text(text: String) -> Dictionary:
 			var kv = _parse_key_value(line)
 			if kv.size() == 2:
 				current_entity["properties"][kv[0]] = kv[1]
+				current_entity["pairs"].append([kv[0], kv[1]])
 			else:
 				errors.append("Line %d: not a key value pair" % line_no)
 			continue
@@ -105,8 +110,18 @@ static func parse_map_text(text: String) -> Dictionary:
 		var entity_class = str(props.get("classname", ""))
 		var origin = _parse_origin(str(props.get("origin", "")))
 		var has_brushes = entity.get("brushes", []).size() > 0
+		var authored := str(props.get("targetname", ""))
+		var connections := _connections_from_pairs(entity.get("pairs", []))
 		if not has_brushes and entity_class != "":
-			entity_points.append({"classname": entity_class, "origin": origin, "properties": props})
+			entity_points.append(
+				{
+					"classname": entity_class,
+					"origin": origin,
+					"properties": props,
+					"entity_name": authored,
+					"entity_io_outputs": connections
+				}
+			)
 		for brush in entity.get("brushes", []):
 			var info = (
 				_brush_from_faces(brush.get("faces", [])) if bool(brush.get("usable", true)) else {}
@@ -116,10 +131,33 @@ static func parse_map_text(text: String) -> Dictionary:
 				continue
 			if entity_class != "" and entity_class != "worldspawn":
 				info["brush_entity_class"] = entity_class
+				if authored != "":
+					info["entity_name"] = authored
+				if not connections.is_empty():
+					info["entity_io_outputs"] = connections
 			brushes.append(info)
 	if entities.is_empty() and text.strip_edges() != "":
 		errors.append("No map blocks found")
 	return {"entities": entity_points, "brushes": brushes, "errors": errors}
+
+
+## The I/O connections among an entity's key/value lines.
+##
+## Read from the ordered pairs rather than the properties dictionary, so two
+## outputs on the same event both survive. A reserved key is never a connection,
+## and everything else has to look like one to be taken as one.
+static func _connections_from_pairs(pairs: Array) -> Array:
+	var out: Array = []
+	for pair in pairs:
+		if not (pair is Array) or pair.size() != 2:
+			continue
+		var key := str(pair[0])
+		if key in RESERVED_ENTITY_KEYS:
+			continue
+		var connection := parse_connection(key, str(pair[1]))
+		if not connection.is_empty():
+			out.append(connection)
+	return out
 
 
 ## Write the level out as `.map` text.
@@ -157,7 +195,7 @@ static func export_map_from_level(level_root: Node, adapter: HFMapAdapterType = 
 			continue
 		var bec := str(node.get_meta("brush_entity_class", ""))
 		if bec != "":
-			entity_brush_blocks.append({"classname": bec, "lines": brush_lines})
+			entity_brush_blocks.append({"classname": bec, "lines": brush_lines, "node": node})
 			continue
 		lines.append("{")
 		lines.append_array(brush_lines)
@@ -166,6 +204,10 @@ static func export_map_from_level(level_root: Node, adapter: HFMapAdapterType = 
 	for block in entity_brush_blocks:
 		lines.append("{")
 		lines.append('"classname" "%s"' % escape_property(str(block["classname"])))
+		# The authored name is the address every connection targets, and the
+		# outputs are the wiring itself. Both live in metadata rather than in
+		# entity_data, so neither was reaching the file.
+		lines.append_array(_entity_identity_lines(block.get("node", null), adapter))
 		lines.append("{")
 		lines.append_array(block["lines"])
 		lines.append("}")
@@ -234,6 +276,62 @@ static func _face_for_normal(brush: DraftBrush, world_normal: Vector3) -> Varian
 			best_dot = dot
 			best = face
 	return best
+## Keys HammerForge writes itself, which are never I/O outputs.
+const RESERVED_ENTITY_KEYS := ["classname", "origin", "targetname"]
+
+
+## One connection as a `.map` value.
+##
+## `.map` has no connections block. Its entity body is key/value lines and
+## nothing else, and a nested brace inside an entity is read as a brush by every
+## parser including this one, so a Source style block would not survive a round
+## trip. Each connection is therefore a line of its own with the output name as
+## the key, and the value in the order Hammer writes a VMF connection:
+##
+##     "OnOpen" "lamp,TurnOn,,0,0"
+##
+## Commas are stripped from the fields rather than escaped, because the format
+## defines no escape for one and a reader splitting on the comma would get a
+## different number of fields than the writer wrote.
+static func format_connection(connection: Dictionary) -> String:
+	return (
+		"%s,%s,%s,%s,%s"
+		% [
+			_no_commas(str(connection.get("target_name", ""))),
+			_no_commas(str(connection.get("input_name", ""))),
+			_no_commas(str(connection.get("parameter", ""))),
+			_snapped(float(connection.get("delay", 0.0))),
+			"1" if bool(connection.get("fire_once", false)) else "0",
+		]
+	)
+
+
+## A connection read back from a `.map` value, or an empty dictionary when the
+## value is not one.
+##
+## Five comma separated fields with a numeric delay and a target and input that
+## are actually there. An ordinary entity property does not look like that, so
+## wiring is told apart from settings without a naming convention on the key.
+static func parse_connection(output_name: String, value: String) -> Dictionary:
+	var parts := value.split(",", true)
+	if parts.size() != 5:
+		return {}
+	if not str(parts[3]).strip_edges().is_valid_float():
+		return {}
+	if str(parts[0]).strip_edges() == "" or str(parts[1]).strip_edges() == "":
+		return {}
+	return {
+		"output_name": output_name,
+		"target_name": str(parts[0]),
+		"input_name": str(parts[1]),
+		"parameter": str(parts[2]),
+		"delay": float(parts[3]),
+		"fire_once": str(parts[4]).strip_edges() == "1",
+	}
+
+
+static func _no_commas(text: String) -> String:
+	return text.replace(",", " ")
 
 
 ## True when a brush cuts geometry away rather than adding it.
@@ -250,6 +348,38 @@ static func _is_cutter(node: DraftBrush) -> bool:
 		return true
 	var parent: Node = node.get_parent()
 	return parent != null and parent.name in ["PendingCuts", "CommittedCuts"]
+
+
+## The `targetname` and the I/O output lines for one entity, in that order.
+##
+## Empty for an entity with neither, so an unwired entity block is unchanged.
+static func _entity_identity_lines(entity, adapter: HFMapAdapterType = null) -> Array[String]:
+	var out: Array[String] = []
+	if entity == null or not is_instance_valid(entity):
+		return out
+	# An ordered list rather than a Dictionary, because two outputs on the same
+	# event share a key and a Dictionary would keep only the last of them.
+	var pairs: Array = []
+	var authored := str(entity.get_meta("entity_name", ""))
+	if authored != "":
+		pairs.append(["targetname", authored])
+	var outputs = entity.get_meta("entity_io_outputs", [])
+	if outputs is Array:
+		for connection in outputs:
+			if not (connection is Dictionary):
+				continue
+			var output_name := str(connection.get("output_name", ""))
+			if output_name == "":
+				continue
+			pairs.append([output_name, format_connection(connection)])
+	for pair in pairs:
+		# One pair at a time keeps the order and the repeats while still going
+		# through the adapter, which is what escapes the key and the value.
+		if adapter:
+			out.append_array(adapter.format_entity_properties({pair[0]: pair[1]}))
+		else:
+			out.append('"%s" "%s"' % [escape_property(str(pair[0])), escape_property(str(pair[1]))])
+	return out
 
 
 static func _entity_to_map_lines(
@@ -281,6 +411,9 @@ static func _entity_to_map_lines(
 			lines.append(
 				'"%s" "%s"' % [escape_property(str(key)), escape_property(str(props[key]))]
 			)
+	# entity_data carries the authored keys. The name and the I/O outputs live in
+	# metadata, so they come from there.
+	lines.append_array(_entity_identity_lines(entity, adapter))
 	lines.append("}")
 	return lines
 
