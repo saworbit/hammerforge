@@ -24,6 +24,7 @@ enum Context {
 	DRAW_IDLE,
 	DRAGGING,
 	VERTEX_EDIT,
+	PAINT,
 }
 
 var _context := Context.NONE
@@ -88,6 +89,7 @@ func _build_content() -> void:
 	_build_draw_section()
 	_build_drag_section()
 	_build_vertex_section()
+	_build_paint_section()
 
 
 ## The width this toolbar would need laid out as one row.
@@ -439,6 +441,26 @@ func _build_vertex_section() -> void:
 	_add_tool_button(section, "Exit", "Exit vertex mode (V)", "vertex_exit")
 
 
+func _build_paint_section() -> void:
+	var section = HFlowContainer.new()
+	section.add_theme_constant_override("h_separation", 2)
+	section.add_theme_constant_override("v_separation", 2)
+	section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	section.visible = false
+	_content.add_child(section)
+	_sections[Context.PAINT] = section
+	_add_group_label(section, "Generate")
+	_add_tool_button(section, "Raise", "Raise last paint footprint (Y)", "paint_raise")
+	_add_tool_button(section, "Room", "Stamp room from last Rect (H)", "paint_room")
+	_add_tool_button(
+		section, "Connect", "Confirm live connector ghost (Enter)", "paint_confirm_connector"
+	)
+	_add_sep(section)
+	_add_group_label(section, "Mirror")
+	_add_tool_button(section, "X", "Toggle X mirror (X)", "paint_mirror_x")
+	_add_tool_button(section, "Z", "Toggle Z mirror (Z)", "paint_mirror_z")
+
+
 # --- Helpers ---
 
 
@@ -518,6 +540,8 @@ func _determine_context(state: Dictionary) -> Context:
 		# Managed buttons are intentionally unavailable when native Godot nodes
 		# share the selection; applying only the HammerForge subset is surprising.
 		return Context.NONE
+	if state.get("paint_mode", false):
+		return Context.PAINT
 
 	var mode: int = state.get("input_mode", 0)
 
@@ -613,6 +637,15 @@ func _apply_context(state: Dictionary) -> void:
 			_label.text = "Drawing"
 		Context.VERTEX_EDIT:
 			_label.text = "Vertex"
+		Context.PAINT:
+			var axes := PackedStringArray()
+			if state.get("paint_mirror_x", false):
+				axes.append("X")
+			if state.get("paint_mirror_z", false):
+				axes.append("Z")
+			_label.text = "Floor Paint"
+			if not axes.is_empty():
+				_label.text += " · Mirror " + "+".join(axes)
 		_:
 			_label.text = ""
 

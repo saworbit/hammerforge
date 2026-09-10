@@ -135,6 +135,25 @@ func test_context_vertex_edit():
 	assert_eq(toolbar._context, HFContextToolbar.Context.VERTEX_EDIT)
 
 
+func test_floor_paint_has_a_generative_context_toolbar():
+	(
+		toolbar
+		. update_state(
+			{
+				"has_root": true,
+				"paint_mode": true,
+				"paint_mirror_x": true,
+				"paint_mirror_z": false,
+				"mixed_selection": false,
+			}
+		)
+	)
+	assert_eq(toolbar._context, HFContextToolbar.Context.PAINT)
+	assert_true(toolbar.visible)
+	assert_true(toolbar._label.text.contains("Mirror X"))
+	assert_true(toolbar._sections[HFContextToolbar.Context.PAINT].visible)
+
+
 func test_hidden_when_no_context():
 	var state = {
 		"has_root": true,

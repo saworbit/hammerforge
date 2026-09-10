@@ -32,6 +32,47 @@ func build(parent: Control) -> void:
 	dock.brush_shape_select = OptionButton.new()
 	fc.add_child(dock._make_label_row("Shape", dock.brush_shape_select))
 
+	dock.paint_inference_check = dock._make_check("Inference cleanup", false)
+	dock.paint_inference_check.tooltip_text = ("Opt-in one-cell cleanup: denoise, hole fill, gap bridge, corridor width")
+	fc.add_child(dock.paint_inference_check)
+
+	var mirror_row := HBoxContainer.new()
+	dock.paint_mirror_x_check = dock._make_check("Mirror X", false)
+	dock.paint_mirror_z_check = dock._make_check("Mirror Z", false)
+	mirror_row.add_child(dock.paint_mirror_x_check)
+	mirror_row.add_child(dock.paint_mirror_z_check)
+	fc.add_child(mirror_row)
+
+	var generative_row := HBoxContainer.new()
+	dock.paint_raise_btn = Button.new()
+	dock.paint_raise_btn.text = "Raise (Y)"
+	dock.paint_raise_btn.tooltip_text = "Drag vertically to set wall height for the last paint footprint"
+	generative_row.add_child(dock.paint_raise_btn)
+	dock.paint_room_btn = Button.new()
+	dock.paint_room_btn.text = "Room (H)"
+	dock.paint_room_btn.tooltip_text = "Stamp a room using the last Rect size"
+	generative_row.add_child(dock.paint_room_btn)
+	dock.paint_connector_confirm_btn = Button.new()
+	dock.paint_connector_confirm_btn.text = "Connector (Enter)"
+	dock.paint_connector_confirm_btn.tooltip_text = "Confirm the live ramp or stair ghost"
+	generative_row.add_child(dock.paint_connector_confirm_btn)
+	fc.add_child(generative_row)
+
+	dock.paint_inference_check.toggled.connect(
+		func(_enabled: bool): dock.paint_options_changed.emit()
+	)
+	dock.paint_mirror_x_check.toggled.connect(
+		func(_enabled: bool): dock.paint_options_changed.emit()
+	)
+	dock.paint_mirror_z_check.toggled.connect(
+		func(_enabled: bool): dock.paint_options_changed.emit()
+	)
+	dock.paint_raise_btn.pressed.connect(func(): dock.paint_raise_requested.emit())
+	dock.paint_room_btn.pressed.connect(func(): dock.paint_room_requested.emit())
+	dock.paint_connector_confirm_btn.pressed.connect(
+		func(): dock.paint_connector_confirm_requested.emit()
+	)
+
 	var layer_row = HBoxContainer.new()
 	var layer_label = Label.new()
 	layer_label.text = "Layer"

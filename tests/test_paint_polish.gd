@@ -45,6 +45,18 @@ class FakePaintTool:
 		active = false
 		return true
 
+	func stamp_room_from_last_rect() -> int:
+		changed = 6
+		return changed
+
+	func confirm_connector_ghosts() -> int:
+		changed = 1
+		return changed
+
+	func begin_height_gesture(_screen_y: float) -> bool:
+		active = false
+		return true
+
 
 class FakePaintRoot:
 	extends Node
@@ -204,3 +216,38 @@ func test_floor_paint_cancel_restores_pre_state_and_clears_undo_capture():
 	assert_eq(root.paint_tool.cancels, 1)
 	assert_eq(root.restored, [{"marker": 1}])
 	assert_true(plugin._floor_paint_pre_state.is_empty())
+
+
+func test_room_stamp_is_one_named_undo_entry():
+	var plugin := FakePlugin.new()
+	var root := FakePaintRoot.new()
+	add_child_autoqfree(root)
+
+	assert_true(HFPluginPaintInput.stamp_floor_paint_room(plugin, root))
+	assert_eq(plugin.undo_redo_manager.actions, ["Stamp Paint Room"])
+	assert_eq(plugin.history, ["Stamp Paint Room"])
+
+
+func test_connector_confirmation_is_one_named_undo_entry():
+	var plugin := FakePlugin.new()
+	var root := FakePaintRoot.new()
+	add_child_autoqfree(root)
+
+	assert_true(HFPluginPaintInput.confirm_floor_paint_connector(plugin, root))
+	assert_eq(plugin.undo_redo_manager.actions, ["Confirm Paint Connector"])
+	assert_eq(plugin.history, ["Confirm Paint Connector"])
+
+
+func test_raise_gesture_is_a_clearly_chained_second_undo_entry():
+	var plugin := FakePlugin.new()
+	var root := FakePaintRoot.new()
+	add_child_autoqfree(root)
+
+	assert_true(HFPluginPaintInput.begin_floor_paint_raise(plugin, root, 100.0))
+	root.marker = 2
+	root.paint_tool.changed = 2
+	HFPluginPaintInput.commit_floor_paint_undo(plugin, root, "Raise Paint Walls")
+
+	assert_eq(plugin.undo_redo_manager.actions, ["Raise Paint Walls"])
+	assert_eq(plugin.undo_redo_manager.undo_calls[0][2], {"marker": 1})
+	assert_eq(plugin.undo_redo_manager.do_calls[0][2], {"marker": 2})

@@ -2048,7 +2048,8 @@ func handle_paint_input(
 	size: Vector3,
 	paint_tool_id: int = -1,
 	paint_radius_cells: int = -1,
-	paint_brush_shape: int = 1
+	paint_brush_shape: int = 1,
+	paint_options: Dictionary = {}
 ) -> bool:
 	return paint_system.handle_paint_input(
 		camera,
@@ -2058,7 +2059,8 @@ func handle_paint_input(
 		size,
 		paint_tool_id,
 		paint_radius_cells,
-		paint_brush_shape
+		paint_brush_shape,
+		paint_options
 	)
 
 
