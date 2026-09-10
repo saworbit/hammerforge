@@ -821,6 +821,33 @@ The format is based on Keep a Changelog, and this project follows semantic versi
     its own winding, a zero size, a partly zero size moving only the bad axis, a
     good size passing through untouched, a size that is not a Vector3, and both
     validator messages.
+- **Erasing paint gives the memory back** (#301). `HFPaintLayer.set_cell()`
+  allocated a chunk on demand and never released one, so clearing the last cell
+  in a chunk went down the same path as setting one. `remove_chunk()` sat
+  directly below it with no callers, and the only reclamation in the file was
+  region streaming eviction, which is unloading rather than erasing. A chunk is
+  dropped when its last bit clears, so `get_paint_memory_bytes()` goes back down
+  and painting an area to try it out and erasing it does not leave a level file
+  bigger than one that was never painted.
+  - `HFChunkData` keeps a live-cell counter, so "is this chunk empty" is a
+    comparison rather than a scan of every byte on each erase. It is recounted
+    whenever the bitset is written whole, which is what a load does.
+  - **The chunk is dropped before the dirty mark, not after.** `remove_chunk()`
+    clears the dirty flag too, and the reconciler needs to see the chunk to take
+    its geometry away. Region eviction reconciles removed chunk ids the same way.
+  - **`HFStateSystem.capture_paint_layers()` skips an empty chunk**, so one that
+    was created and never filled cannot reach a `.hflevel` save or an undo
+    snapshot carrying its bits, material ids and three blend weight arrays for
+    paint that is not there.
+  - **Erasing no longer allocates.** `set_cell()` went through
+    `_get_or_create_chunk()` on the way out as well as in, so a stroke over
+    unpainted ground built chunks full of zeros. Erasing looks the chunk up
+    instead.
+  - **Coverage** (`tests/test_paint_chunk_reclaim.gd`): chunks returned and paint
+    memory back to zero after an erase, a chunk with one cell left kept, a
+    dropped chunk repainted, erasing unpainted ground, an erased layer
+    serializing nothing, a painted one still serializing, paint surviving a
+    capture and restore, and the live count after a wholesale write.
 - **A prefab could wire its copy's outputs to the entities it was built from.**
   `HFPrefab.instantiate()` remapped I/O by turning each old node name into the new
   one and then looking that name back up. The lookup resolves an authored
