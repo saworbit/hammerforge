@@ -93,7 +93,9 @@ func capture_state(include_transient: bool = true) -> Dictionary:
 	if include_transient:
 		state["face_selection"] = root.face_selection.duplicate(true)
 	if root.material_manager:
-		state["materials"] = root.material_manager.materials
+		# A copy, not the live array. Without this every later palette edit
+		# writes straight into the snapshot that was taken to protect it.
+		state["materials"] = root.material_manager.materials.duplicate()
 	for node in root._iter_pick_nodes():
 		var info = root.get_brush_info_from_node(node)
 		if info.is_empty():
@@ -161,7 +163,9 @@ func restore_state(state: Dictionary) -> void:
 	if state.has("materials"):
 		root.set_materials(state.get("materials", []))
 	if state.has("face_selection"):
-		root.face_selection = state.get("face_selection", {})
+		# Deep copy on the way out too, so later selection edits do not write
+		# back into the snapshot that restored them.
+		root.face_selection = state.get("face_selection", {}).duplicate(true)
 		root._apply_face_selection()
 	else:
 		root.face_selection.clear()
