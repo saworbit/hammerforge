@@ -25,7 +25,7 @@ static func on_disp_create(dock: Object) -> void:
 	if ok:
 		dock.show_toast("Displacement created (power %d)" % power, 0)
 	else:
-		dock.show_toast("Failed — face must be a quad (4 vertices)", 2)
+		dock.show_toast("Failed — needs a quad face with no displacement on it yet", 2)
 
 
 static func on_disp_destroy(dock: Object) -> void:

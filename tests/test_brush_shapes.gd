@@ -785,3 +785,120 @@ func test_bake_factory_torus_uses_godot_4_radius_properties_and_requested_bounds
 	assert_almost_eq(actual_size.x, requested_size.x, 0.05)
 	assert_almost_eq(actual_size.y, requested_size.y, 0.05)
 	assert_almost_eq(actual_size.z, requested_size.z, 0.05)
+
+
+# ===========================================================================
+# Face winding (#313)
+# ===========================================================================
+
+## Shapes whose faces come from a mesh with genuinely concave geometry, where a
+## normal pointing back at the brush centre is correct. Only the torus qualifies.
+const CONCAVE_SHAPES := [DraftBrush.BrushShape.TORUS]
+
+
+func _inward_face_count(shape_id: int, size: Vector3) -> int:
+	brush.shape = shape_id
+	brush.size = size
+	var build := brush._build_base_mesh()
+	brush._rebuild_faces(build.get("mesh"), build.get("scale", Vector3.ONE))
+	var centre := Vector3.ZERO
+	var vertex_count := 0
+	for face in brush.faces:
+		for vertex in face.local_verts:
+			centre += vertex
+			vertex_count += 1
+	if vertex_count == 0:
+		return 0
+	centre /= float(vertex_count)
+	var inward := 0
+	for face in brush.faces:
+		if face.local_verts.size() < 3:
+			continue
+		# A collapsed triangle has no winding to get wrong; FaceData falls back
+		# to UP for those and half of them then read as inward.
+		var a: Vector3 = face.local_verts[0]
+		var b: Vector3 = face.local_verts[1]
+		var c: Vector3 = face.local_verts[2]
+		if (c - a).cross(b - a).length() < 0.0001:
+			continue
+		var face_centre := Vector3.ZERO
+		for vertex in face.local_verts:
+			face_centre += vertex
+		face_centre /= float(face.local_verts.size())
+		if face.normal.dot(face_centre - centre) < 0.0:
+			inward += 1
+	return inward
+
+
+func test_every_convex_primitive_winds_its_faces_outward():
+	for shape_name in DraftBrush.BrushShape.keys():
+		var shape_id: int = DraftBrush.BrushShape[shape_name]
+		if shape_id in CONCAVE_SHAPES:
+			continue
+		var inward := _inward_face_count(shape_id, Vector3(64, 64, 64))
+		assert_eq(
+			inward,
+			0,
+			"%s should have no face normal pointing back at the brush centre" % shape_name
+		)
+
+
+func test_the_five_reported_shapes_are_not_wound_inside_out():
+	# The set named in #313. Pinned separately so a regression on one of them
+	# names the shape rather than failing the sweep above on a keys() index.
+	for shape_name in ["PRISM_TRI", "PRISM_PENT", "OCTAHEDRON", "DODECAHEDRON", "ICOSAHEDRON"]:
+		var shape_id: int = DraftBrush.BrushShape[shape_name]
+		assert_eq(
+			_inward_face_count(shape_id, Vector3(64, 64, 64)), 0, "%s winds outward" % shape_name
+		)
+
+
+func test_a_saved_prism_from_before_the_fix_is_wound_outward_on_load():
+	# A level saved before #313 carries the inverted faces at winding_version 1,
+	# and replaying them verbatim would keep the brush inside out forever.
+	brush.shape = DraftBrush.BrushShape.PRISM_TRI
+	brush.size = Vector3(64, 64, 64)
+	var build := brush._build_base_mesh()
+	brush._rebuild_faces(build.get("mesh"), build.get("scale", Vector3.ONE))
+	var legacy: Array = []
+	for face in brush.faces:
+		# Reverse on the FaceData so to_dict() does its own encoding.
+		face.local_verts.reverse()
+		face.ensure_geometry()
+		var entry: Dictionary = face.to_dict()
+		entry["winding_version"] = 1
+		legacy.append(entry)
+	brush.apply_serialized_faces(legacy)
+	var centre := Vector3.ZERO
+	var count := 0
+	for face in brush.faces:
+		for vertex in face.local_verts:
+			centre += vertex
+			count += 1
+	centre /= float(max(1, count))
+	for i in range(brush.faces.size()):
+		var face: FaceData = brush.faces[i]
+		var face_centre := Vector3.ZERO
+		for vertex in face.local_verts:
+			face_centre += vertex
+		face_centre /= float(face.local_verts.size())
+		assert_gt(
+			face.normal.dot(face_centre - centre), 0.0, "Face %d should be migrated outward" % i
+		)
+
+
+func test_a_torus_saved_at_winding_version_1_is_left_alone():
+	# The migration is a centroid check, which is only valid on a convex brush.
+	# It must not reach a shape whose faces legitimately point inward.
+	brush.shape = DraftBrush.BrushShape.TORUS
+	brush.size = Vector3(64, 64, 64)
+	var build := brush._build_base_mesh()
+	brush._rebuild_faces(build.get("mesh"), build.get("scale", Vector3.ONE))
+	var saved: Array = []
+	for face in brush.faces:
+		var entry: Dictionary = face.to_dict()
+		entry["winding_version"] = 1
+		saved.append(entry)
+	var before: PackedVector3Array = PackedVector3Array(brush.faces[0].local_verts)
+	brush.apply_serialized_faces(saved)
+	assert_eq(brush.faces[0].local_verts, before, "A torus should load exactly as it was saved")

@@ -124,6 +124,12 @@ func refresh_visibility() -> void:
 	for node in _all_managed_nodes():
 		var vgs: PackedStringArray = node.get_meta("visgroups", PackedStringArray())
 		if vgs.is_empty():
+			# A node in no visgroup is a node nothing is hiding. Skipping it left
+			# a deleted visgroup's members with the visible = false they were
+			# given when it was hidden, and no visgroup left to un-hide them
+			# with. Committed cutters are hidden by the cut, not by a visgroup,
+			# and _all_managed_nodes() does not reach them.
+			node.visible = true
 			continue
 		var should_show := true
 		for vg_name in vgs:

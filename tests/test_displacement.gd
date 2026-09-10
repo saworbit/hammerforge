@@ -588,3 +588,96 @@ func test_displacement_is_not_smeared_onto_other_faces_by_resize():
 		if face.displacement != null:
 			carrying += 1
 	assert_eq(carrying, 1, "Only the displaced face should carry displacement after a rebuild")
+
+
+# ---------------------------------------------------------------------------
+# Create refuses to overwrite a sculpt (#319)
+# ---------------------------------------------------------------------------
+
+
+func test_create_refuses_a_face_that_already_has_a_displacement():
+	var brush = _make_quad_brush()
+	assert_true(sys.create_displacement("test_brush", 0, 3), "First create should succeed")
+	assert_true(sys.set_elevation("test_brush", 0, 5.0), "Elevation should be settable")
+	sys.paint("test_brush", 0, Vector3(8, 0, 8), 20.0, 3.0)
+	var before: PackedFloat32Array = brush.faces[0].displacement.distances.duplicate()
+	_capture_warning("already has a displacement")
+	assert_false(sys.create_displacement("test_brush", 0, 3), "Second create should be refused")
+	_assert_captured_warning("already has a displacement")
+	assert_eq(brush.faces[0].displacement.elevation, 5.0, "Elevation should survive")
+	assert_eq(brush.faces[0].displacement.distances, before, "The sculpt should survive")
+
+
+func test_destroy_then_create_still_starts_over():
+	var brush = _make_quad_brush()
+	assert_true(sys.create_displacement("test_brush", 0, 3))
+	assert_true(sys.set_elevation("test_brush", 0, 5.0))
+	assert_true(sys.destroy_displacement("test_brush", 0), "Destroy should succeed")
+	assert_true(sys.create_displacement("test_brush", 0, 3), "Create should work after a destroy")
+	assert_eq(brush.faces[0].displacement.elevation, 1.0, "A fresh displacement is flat")
+
+
+# ---------------------------------------------------------------------------
+# Paint and elevation reject what they cannot use (#320)
+# ---------------------------------------------------------------------------
+
+
+func test_paint_refuses_a_non_finite_centre_and_leaves_the_grid_alone():
+	var brush = _make_quad_brush()
+	assert_true(sys.create_displacement("test_brush", 0, 4))
+	var before: PackedFloat32Array = brush.faces[0].displacement.distances.duplicate()
+	_capture_warning("finite")
+	assert_false(sys.paint("test_brush", 0, Vector3(NAN, NAN, NAN), 10.0, 1.0))
+	_assert_captured_warning("finite")
+	assert_eq(brush.faces[0].displacement.distances, before, "The grid should be untouched")
+
+
+func test_paint_refuses_a_non_finite_radius_or_strength():
+	var brush = _make_quad_brush()
+	assert_true(sys.create_displacement("test_brush", 0, 3))
+	var before: PackedFloat32Array = brush.faces[0].displacement.distances.duplicate()
+	assert_false(sys.paint("test_brush", 0, Vector3(8, 0, 8), NAN, 1.0), "NaN radius")
+	assert_false(sys.paint("test_brush", 0, Vector3(8, 0, 8), 10.0, INF), "Infinite strength")
+	assert_eq(brush.faces[0].displacement.distances, before, "The grid should be untouched")
+
+
+func test_paint_still_works_on_finite_input():
+	var brush = _make_quad_brush()
+	assert_true(sys.create_displacement("test_brush", 0, 3))
+	assert_true(sys.paint("test_brush", 0, Vector3(8, 0, 8), 20.0, 4.0), "A normal stroke")
+	var raised := 0
+	for distance in brush.faces[0].displacement.distances:
+		if distance > 0.0:
+			raised += 1
+	assert_gt(raised, 0, "A normal stroke should raise something")
+
+
+func test_set_elevation_refuses_a_non_finite_value():
+	var brush = _make_quad_brush()
+	assert_true(sys.create_displacement("test_brush", 0, 3))
+	assert_true(sys.set_elevation("test_brush", 0, 3.0))
+	_capture_warning("finite")
+	assert_false(sys.set_elevation("test_brush", 0, NAN))
+	_assert_captured_warning("finite")
+	assert_eq(brush.faces[0].displacement.elevation, 3.0, "The old elevation should stand")
+
+
+func test_set_elevation_is_bounded_by_the_face_it_sits_on():
+	var brush = _make_quad_brush()
+	assert_true(sys.create_displacement("test_brush", 0, 3))
+	# The quad is 16 x 16, so its longest diagonal is a little over 22.
+	_capture_warning("beyond the face")
+	assert_true(sys.set_elevation("test_brush", 0, 1e9), "An over-large value is clamped, not lost")
+	_assert_captured_warning("beyond the face")
+	var elevation: float = brush.faces[0].displacement.elevation
+	assert_lt(elevation, 23.0, "Elevation should be capped near the face diagonal")
+	assert_gt(elevation, 22.0, "The cap should be the face diagonal, not an arbitrary number")
+
+
+func test_an_ordinary_elevation_is_left_alone():
+	var brush = _make_quad_brush()
+	assert_true(sys.create_displacement("test_brush", 0, 3))
+	assert_true(sys.set_elevation("test_brush", 0, 8.0))
+	assert_eq(brush.faces[0].displacement.elevation, 8.0, "8 fits inside a 16 unit face")
+	assert_true(sys.set_elevation("test_brush", 0, -8.0), "A negative elevation is a valid dip")
+	assert_eq(brush.faces[0].displacement.elevation, -8.0)
