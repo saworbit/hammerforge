@@ -161,28 +161,47 @@ static func handle_paint(
 		var eyedropper: bool = (
 			floor_press and (event as InputEventMouseButton).is_command_or_control_pressed()
 		)
-		if floor_press and not eyedropper:
+		var paint_tool = root.get("paint_tool")
+		var height_confirm: bool = (
+			floor_press
+			and paint_tool != null
+			and paint_tool.has_method("is_height_gesture_active")
+			and paint_tool.is_height_gesture_active()
+		)
+		if floor_press and not eyedropper and not height_confirm:
 			# Region sidecars must be loaded before the pre-stroke snapshot, or Undo
 			# would mistake their existing cells for paint created by this stroke.
 			if root.has_method("prepare_paint_stroke"):
 				root.prepare_paint_stroke(camera, position)
 			begin_floor_paint_undo(plugin, root)
-		var handled = root.handle_paint_input(
-			camera,
-			event,
-			position,
-			operation,
-			size,
-			plugin.dock.get_paint_tool_id(),
-			plugin.dock.get_paint_radius_cells(),
-			plugin.dock.get_brush_shape()
+		var handled = (
+			root
+			. handle_paint_input(
+				camera,
+				event,
+				position,
+				operation,
+				size,
+				plugin.dock.get_paint_tool_id(),
+				plugin.dock.get_paint_radius_cells(),
+				plugin.dock.get_brush_shape(),
+				{
+					"inference_enabled": plugin.dock.get_paint_inference_enabled(),
+					"mirror_x_enabled": plugin.dock.get_paint_mirror_x_enabled(),
+					"mirror_z_enabled": plugin.dock.get_paint_mirror_z_enabled(),
+				}
+			)
 		)
 		plugin._update_hud_context()
+		if plugin.has_method("_update_paint_overlay"):
+			plugin._update_paint_overlay(root)
 		if handled:
 			if eyedropper and root.get("paint_tool"):
 				plugin.dock.show_toast(
 					"Picked floor material %d" % root.paint_tool.blend_material_id, 0
 				)
+			elif height_confirm:
+				commit_floor_paint_undo(plugin, root, "Raise Paint Walls")
 			elif floor_release:
 				commit_floor_paint_undo(plugin, root)
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
@@ -214,7 +233,9 @@ static func begin_floor_paint_undo(plugin: Object, root: Node) -> void:
 		plugin._floor_paint_pre_state = root.capture_state()
 
 
-static func commit_floor_paint_undo(plugin: Object, root: Node) -> void:
+static func commit_floor_paint_undo(
+	plugin: Object, root: Node, action_name: String = "Paint Floor"
+) -> void:
 	if plugin == null or not root or plugin._floor_paint_pre_state.is_empty():
 		return
 	var before: Dictionary = plugin._floor_paint_pre_state
@@ -231,30 +252,88 @@ static func commit_floor_paint_undo(plugin: Object, root: Node) -> void:
 		return
 	var after: Dictionary = root.capture_state()
 	if plugin.undo_redo_manager:
-		plugin.undo_redo_manager.create_action("Paint Floor", 0, null, false)
+		plugin.undo_redo_manager.create_action(action_name, 0, null, false)
 		plugin.undo_redo_manager.add_do_method(root, "restore_state", after)
 		plugin.undo_redo_manager.add_undo_method(root, "restore_state", before)
 		plugin.undo_redo_manager.commit_action(false)
-	plugin._record_history("Paint Floor")
+	plugin._record_history(action_name)
+
+
+static func begin_floor_paint_raise(plugin: Object, root: Node, screen_y: float) -> bool:
+	if plugin == null or not root:
+		return false
+	var paint_tool = root.get("paint_tool")
+	if paint_tool == null or not paint_tool.has_method("begin_height_gesture"):
+		return false
+	begin_floor_paint_undo(plugin, root)
+	if paint_tool.begin_height_gesture(screen_y):
+		plugin._update_hud_context()
+		if plugin.has_method("_update_paint_overlay"):
+			plugin._update_paint_overlay(root)
+		return true
+	plugin._floor_paint_pre_state = {}
+	return false
+
+
+static func stamp_floor_paint_room(plugin: Object, root: Node) -> bool:
+	if plugin == null or not root:
+		return false
+	var paint_tool = root.get("paint_tool")
+	if paint_tool == null or not paint_tool.has_method("stamp_room_from_last_rect"):
+		return false
+	begin_floor_paint_undo(plugin, root)
+	if paint_tool.stamp_room_from_last_rect() <= 0:
+		plugin._floor_paint_pre_state = {}
+		return false
+	commit_floor_paint_undo(plugin, root, "Stamp Paint Room")
+	plugin._update_hud_context()
+	if plugin.has_method("_update_paint_overlay"):
+		plugin._update_paint_overlay(root)
+	return true
+
+
+static func confirm_floor_paint_connector(plugin: Object, root: Node) -> bool:
+	if plugin == null or not root:
+		return false
+	var paint_tool = root.get("paint_tool")
+	if paint_tool == null or not paint_tool.has_method("confirm_connector_ghosts"):
+		return false
+	begin_floor_paint_undo(plugin, root)
+	if paint_tool.confirm_connector_ghosts() <= 0:
+		plugin._floor_paint_pre_state = {}
+		return false
+	commit_floor_paint_undo(plugin, root, "Confirm Paint Connector")
+	plugin._update_hud_context()
+	if plugin.has_method("_update_paint_overlay"):
+		plugin._update_paint_overlay(root)
+	return true
 
 
 static func cancel_floor_paint(plugin: Object, root: Node) -> bool:
 	if plugin == null or not root:
 		return false
 	var paint_tool = root.get("paint_tool")
-	if (
-		paint_tool == null
-		or not paint_tool.has_method("is_stroke_active")
-		or not paint_tool.is_stroke_active()
-	):
+	if paint_tool == null:
 		return false
-	if paint_tool.has_method("cancel_stroke"):
+	var stroke_active: bool = (
+		paint_tool.has_method("is_stroke_active") and paint_tool.is_stroke_active()
+	)
+	var pending_active: bool = (
+		paint_tool.has_method("is_height_gesture_active") and paint_tool.is_height_gesture_active()
+	)
+	if not stroke_active and paint_tool.has_method("cancel_pending_action"):
+		pending_active = paint_tool.cancel_pending_action() or pending_active
+	if not stroke_active and not pending_active:
+		return false
+	if stroke_active and paint_tool.has_method("cancel_stroke"):
 		paint_tool.cancel_stroke()
 	if not plugin._floor_paint_pre_state.is_empty() and root.has_method("restore_state"):
 		root.restore_state(plugin._floor_paint_pre_state)
 	plugin._floor_paint_pre_state = {}
 	_release_region_pins(root)
 	plugin._update_hud_context()
+	if plugin.has_method("_update_paint_overlay"):
+		plugin._update_paint_overlay(root)
 	return true
 
 

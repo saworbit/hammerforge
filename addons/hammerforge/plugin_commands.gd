@@ -49,6 +49,11 @@ static func requires_existing_root(action: String) -> bool:
 			"select_similar",
 			"apply_last_texture",
 			"context_menu",
+			"paint_raise",
+			"paint_mirror_x",
+			"paint_mirror_z",
+			"paint_room",
+			"paint_confirm_connector",
 		]
 	)
 
@@ -268,6 +273,18 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 		"paint_blend":
 			if dock:
 				dock.set_paint_tool(5)
+		"paint_raise":
+			plugin._begin_floor_paint_raise(root)
+		"paint_mirror_x":
+			if dock:
+				dock.toggle_paint_mirror_x()
+		"paint_mirror_z":
+			if dock:
+				dock.toggle_paint_mirror_z()
+		"paint_room":
+			plugin._stamp_floor_paint_room(root)
+		"paint_confirm_connector":
+			plugin._confirm_floor_paint_connector(root)
 		"grid_decrease":
 			plugin._adjust_grid_snap(root, 0.5)
 		"grid_increase":

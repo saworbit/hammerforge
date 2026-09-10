@@ -24,6 +24,9 @@ var terrain_slot_tints: Array[Color] = [
 # Chunk storage: key -> ChunkData
 var _chunks: Dictionary = {}  # Dictionary[Vector2i, HFChunkData]
 var _dirty_chunks: Dictionary = {}  # Dictionary[Vector2i, bool] used as set
+## Per-cell wall heights created by the paint-then-raise gesture. Cells without
+## an override continue to use HFPaintTool.synth_settings.wall_height.
+var _wall_heights: Dictionary = {}  # Dictionary[Vector2i, float]
 
 signal layer_changed(dirty_chunks: Array[Vector2i])
 
@@ -56,7 +59,11 @@ func set_cell(cell: Vector2i, filled: bool) -> void:
 	var cid := _cell_to_chunk(cell)
 	var chunk: HFChunkData = _get_or_create_chunk(cid)
 	var local := _cell_to_local(cell)
-	if chunk.set_bit(local, filled):
+	var changed := chunk.set_bit(local, filled)
+	var removed_height := false
+	if not filled:
+		removed_height = _wall_heights.erase(cell)
+	if changed or removed_height:
 		_mark_dirty(cid)
 		_mark_dirty_neighbours(cid)
 
@@ -67,6 +74,51 @@ func get_cell(cell: Vector2i) -> bool:
 	if chunk == null:
 		return false
 	return chunk.get_bit(_cell_to_local(cell))
+
+
+func set_wall_height(cell: Vector2i, height: float) -> void:
+	var value := maxf(0.0, height)
+	if _wall_heights.has(cell) and is_equal_approx(float(_wall_heights[cell]), value):
+		return
+	_wall_heights[cell] = value
+	var cid := _cell_to_chunk(cell)
+	_mark_dirty(cid)
+	_mark_dirty_neighbours(cid)
+
+
+func clear_wall_height(cell: Vector2i) -> void:
+	if not _wall_heights.erase(cell):
+		return
+	var cid := _cell_to_chunk(cell)
+	_mark_dirty(cid)
+	_mark_dirty_neighbours(cid)
+
+
+func get_wall_height(cell: Vector2i, fallback: float) -> float:
+	return float(_wall_heights.get(cell, fallback))
+
+
+func get_wall_height_entries() -> Array:
+	var out: Array = []
+	for cell: Vector2i in _wall_heights:
+		out.append({"x": cell.x, "y": cell.y, "height": float(_wall_heights[cell])})
+	return out
+
+
+func get_chunk_wall_height_entries(cid: Vector2i) -> Array:
+	var out: Array = []
+	for cell: Vector2i in _wall_heights:
+		if _cell_to_chunk(cell) == cid:
+			out.append({"x": cell.x, "y": cell.y, "height": float(_wall_heights[cell])})
+	return out
+
+
+func restore_wall_height_entries(entries: Array) -> void:
+	for entry in entries:
+		if not entry is Dictionary:
+			continue
+		var cell := Vector2i(int(entry.get("x", 0)), int(entry.get("y", 0)))
+		_wall_heights[cell] = maxf(0.0, float(entry.get("height", 0.0)))
 
 
 func set_cell_material(cell: Vector2i, mat_id: int) -> void:
@@ -201,6 +253,7 @@ func set_chunk_blend_weights_slot(cid: Vector2i, slot: int, data: PackedByteArra
 func clear_chunks() -> void:
 	_chunks.clear()
 	_dirty_chunks.clear()
+	_wall_heights.clear()
 
 
 func remove_chunk(cid: Vector2i) -> bool:
@@ -208,6 +261,7 @@ func remove_chunk(cid: Vector2i) -> bool:
 		return false
 	_chunks.erase(cid)
 	_dirty_chunks.erase(cid)
+	_remove_wall_heights_in_chunk(cid)
 	return true
 
 
@@ -223,6 +277,7 @@ func remove_chunks_in_range(min_chunk: Vector2i, max_chunk: Vector2i) -> Array[V
 	for cid in removed:
 		_chunks.erase(cid)
 		_dirty_chunks.erase(cid)
+		_remove_wall_heights_in_chunk(cid)
 	return removed
 
 
@@ -236,11 +291,21 @@ func get_memory_bytes() -> int:
 		total += chunk.blend_weights.size()
 		total += chunk.blend_weights_2.size()
 		total += chunk.blend_weights_3.size()
+	total += _wall_heights.size() * 12
 	if has_heightmap() and heightmap:
 		var data := heightmap.get_data()
 		if data:
 			total += data.size()
 	return total
+
+
+func _remove_wall_heights_in_chunk(cid: Vector2i) -> void:
+	var remove: Array[Vector2i] = []
+	for cell: Vector2i in _wall_heights:
+		if _cell_to_chunk(cell) == cid:
+			remove.append(cell)
+	for cell in remove:
+		_wall_heights.erase(cell)
 
 
 func get_terrain_slot_textures() -> Array:

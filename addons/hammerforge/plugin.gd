@@ -87,6 +87,9 @@ var _disp_paint_brush_id := ""
 var _disp_paint_face_idx := -1
 var _disp_paint_pre_state: Dictionary = {}
 var _floor_paint_pre_state: Dictionary = {}
+var _paint_overlay_mesh: MeshInstance3D = null
+var _paint_overlay_imesh: ImmediateMesh = null
+var _paint_connector_overlay_meshes: Array[MeshInstance3D] = []
 var _context_toolbar: Control = null
 var _hotkey_palette: Control = null
 var _selection_filter: Window = null
@@ -201,6 +204,17 @@ func _enter_tree():
 				"power_user_overlays_changed",
 				Callable(self, "_on_dock_power_user_overlays_changed")
 			)
+		if dock.has_signal("paint_options_changed"):
+			dock.connect("paint_options_changed", Callable(self, "_on_paint_options_changed"))
+		if dock.has_signal("paint_raise_requested"):
+			dock.connect("paint_raise_requested", Callable(self, "_on_paint_raise_requested"))
+		if dock.has_signal("paint_room_requested"):
+			dock.connect("paint_room_requested", Callable(self, "_on_paint_room_requested"))
+		if dock.has_signal("paint_connector_confirm_requested"):
+			dock.connect(
+				"paint_connector_confirm_requested",
+				Callable(self, "_on_paint_connector_confirm_requested")
+			)
 
 	HFPluginConsoleType.setup(self)
 	# The dock lands in its TabContainer during this frame, so the tab icon is
@@ -275,6 +289,7 @@ func _enter_tree():
 
 func _exit_tree():
 	HFPluginConsoleType.teardown(self)
+	_clear_paint_overlay()
 	_cancel_selection_gesture()
 	_brush_reconcile_queued = false
 	_ensure_brush_change_tracker().reset()
@@ -347,6 +362,20 @@ func _exit_tree():
 			dock.disconnect(
 				"power_user_overlays_changed",
 				Callable(self, "_on_dock_power_user_overlays_changed")
+			)
+		if dock.is_connected("paint_options_changed", Callable(self, "_on_paint_options_changed")):
+			dock.disconnect("paint_options_changed", Callable(self, "_on_paint_options_changed"))
+		if dock.is_connected("paint_raise_requested", Callable(self, "_on_paint_raise_requested")):
+			dock.disconnect("paint_raise_requested", Callable(self, "_on_paint_raise_requested"))
+		if dock.is_connected("paint_room_requested", Callable(self, "_on_paint_room_requested")):
+			dock.disconnect("paint_room_requested", Callable(self, "_on_paint_room_requested"))
+		if dock.is_connected(
+			"paint_connector_confirm_requested",
+			Callable(self, "_on_paint_connector_confirm_requested")
+		):
+			dock.disconnect(
+				"paint_connector_confirm_requested",
+				Callable(self, "_on_paint_connector_confirm_requested")
 			)
 		remove_control_from_docks(dock)
 		if is_instance_valid(dock):
@@ -669,6 +698,50 @@ func _commit_disp_paint_undo(root: Node) -> void:
 
 func _commit_floor_paint_undo(root: Node) -> void:
 	HFPluginPaintInput.commit_floor_paint_undo(self, root)
+
+
+func _begin_floor_paint_raise(root: Node) -> bool:
+	return HFPluginPaintInput.begin_floor_paint_raise(self, root, last_3d_mouse_pos.y)
+
+
+func _stamp_floor_paint_room(root: Node) -> bool:
+	return HFPluginPaintInput.stamp_floor_paint_room(self, root)
+
+
+func _confirm_floor_paint_connector(root: Node) -> bool:
+	return HFPluginPaintInput.confirm_floor_paint_connector(self, root)
+
+
+func _on_paint_options_changed() -> void:
+	var root = active_root if active_root else _get_level_root()
+	if root and root.get("paint_tool") and dock:
+		root.paint_tool.inference = (
+			preload("paint/hf_inference_engine.gd").new()
+			if dock.get_paint_inference_enabled()
+			else null
+		)
+		root.paint_tool.mirror_x_enabled = dock.get_paint_mirror_x_enabled()
+		root.paint_tool.mirror_z_enabled = dock.get_paint_mirror_z_enabled()
+	_update_hud_context()
+	_update_paint_overlay(root)
+
+
+func _on_paint_raise_requested() -> void:
+	var root = active_root if active_root else _get_level_root()
+	if root:
+		_begin_floor_paint_raise(root)
+
+
+func _on_paint_room_requested() -> void:
+	var root = active_root if active_root else _get_level_root()
+	if root:
+		_stamp_floor_paint_room(root)
+
+
+func _on_paint_connector_confirm_requested() -> void:
+	var root = active_root if active_root else _get_level_root()
+	if root:
+		_confirm_floor_paint_connector(root)
 
 
 func _do_disp_paint_stroke(root: Node, cam: Camera3D, pos: Vector2) -> void:
@@ -1005,6 +1078,14 @@ func _ensure_vertex_overlay(root: Node) -> void:
 
 func _clear_vertex_overlay() -> void:
 	HFPluginOverlays.clear_vertex_overlay(self)
+
+
+func _update_paint_overlay(root: Node) -> void:
+	HFPluginOverlays.update_paint_overlay(self, root)
+
+
+func _clear_paint_overlay() -> void:
+	HFPluginOverlays.clear_paint_overlay(self)
 
 
 func _shortcut_input(event: InputEvent) -> void:

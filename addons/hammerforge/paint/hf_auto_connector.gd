@@ -168,10 +168,38 @@ func group_segments(segments: Array[ConnectorSegment]) -> Array:
 func generate_connectors(layers: HFPaintLayerManager, settings: Settings = null) -> Array:
 	if not settings:
 		settings = Settings.new()
-	var tool := HFConnectorTool.new()
-	var results: Array = []
 	var segments := detect_boundaries(layers)
 	var groups := group_segments(segments)
+	return generate_definitions(defs_from_groups(groups, settings), layers)
+
+
+## Return connector definitions only for boundaries touched by the latest paint
+## footprint. This is the live-ghost path; it does not scan or rebuild geometry.
+func defs_for_touched_cells(
+	layers: HFPaintLayerManager,
+	touched_layer_index: int,
+	touched_cells: Dictionary,
+	settings: Settings = null
+) -> Array:
+	if touched_cells.is_empty():
+		return []
+	if settings == null:
+		settings = Settings.new()
+	var filtered: Array[ConnectorSegment] = []
+	for segment in detect_boundaries(layers):
+		var touches_from := (
+			segment.from_layer_index == touched_layer_index and touched_cells.has(segment.from_cell)
+		)
+		var touches_to := (
+			segment.to_layer_index == touched_layer_index and touched_cells.has(segment.to_cell)
+		)
+		if touches_from or touches_to:
+			filtered.append(segment)
+	return defs_from_groups(group_segments(filtered), settings)
+
+
+func defs_from_groups(groups: Array, settings: Settings) -> Array:
+	var definitions: Array = []
 
 	for group: Array in groups:
 		if group.is_empty():
@@ -201,8 +229,19 @@ func generate_connectors(layers: HFPaintLayerManager, settings: Settings = null)
 			def.stair_step_height = settings.stair_step_height
 		else:
 			def.connector_type = HFConnectorTool.ConnectorType.RAMP
+		definitions.append(def)
+	return definitions
+
+
+func generate_definitions(definitions: Array, layers: HFPaintLayerManager) -> Array:
+	var tool := HFConnectorTool.new()
+	var results: Array = []
+	for definition in definitions:
+		if not definition is HFConnectorTool.ConnectorDef:
+			continue
+		var def := definition as HFConnectorTool.ConnectorDef
 
 		var mesh: ArrayMesh = tool.generate_connector(def, layers)
 		if mesh:
-			results.append({"mesh": mesh, "transform": Transform3D.IDENTITY})
+			results.append({"mesh": mesh, "transform": Transform3D.IDENTITY, "definition": def})
 	return results

@@ -44,7 +44,7 @@ func _add_walls_for_chunk(
 ) -> void:
 	var size := layer.chunk_size
 	var origin := Vector2i(cid.x * size, cid.y * size)
-	var edges = _boundary_edges(layer, origin, size)
+	var edges = _boundary_edges(layer, origin, size, s)
 	var edges_h: Array = edges[0]
 	var edges_v: Array = edges[1]
 	var segs_h := _merge_horizontal(edges_h)
@@ -58,7 +58,7 @@ func _add_walls_for_chunk(
 		ws.b = Vector2i(max(x0, x1), y)
 		ws.outward = seg.get("outward", Vector2i.ZERO)
 		ws.layer_y = layer.grid.layer_y
-		ws.height = s.wall_height
+		ws.height = float(seg.get("height", s.wall_height))
 		ws.thickness = s.wall_thickness
 		ws.id = HFHash.wall_id(layer.layer_id, cid, ws.a, ws.b, ws.outward)
 		model.walls.append(ws)
@@ -71,7 +71,7 @@ func _add_walls_for_chunk(
 		ws.b = Vector2i(x, max(y0, y1))
 		ws.outward = seg.get("outward", Vector2i.ZERO)
 		ws.layer_y = layer.grid.layer_y
-		ws.height = s.wall_height
+		ws.height = float(seg.get("height", s.wall_height))
 		ws.thickness = s.wall_thickness
 		ws.id = HFHash.wall_id(layer.layer_id, cid, ws.a, ws.b, ws.outward)
 		model.walls.append(ws)
@@ -124,7 +124,7 @@ func _greedy_rectangles(mask: Array, size: int) -> Array:
 	return rects
 
 
-func _boundary_edges(layer: HFPaintLayer, origin: Vector2i, size: int) -> Array:
+func _boundary_edges(layer: HFPaintLayer, origin: Vector2i, size: int, s: SynthSettings) -> Array:
 	var edges_h: Array = []
 	var edges_v: Array = []
 	for ly in range(size):
@@ -134,19 +134,43 @@ func _boundary_edges(layer: HFPaintLayer, origin: Vector2i, size: int) -> Array:
 				continue
 			if not layer.get_cell(cell + Vector2i(0, -1)):
 				edges_h.append(
-					{"x0": cell.x, "x1": cell.x + 1, "y": cell.y, "outward": Vector2i(0, -1)}
+					{
+						"x0": cell.x,
+						"x1": cell.x + 1,
+						"y": cell.y,
+						"outward": Vector2i(0, -1),
+						"height": layer.get_wall_height(cell, s.wall_height)
+					}
 				)
 			if not layer.get_cell(cell + Vector2i(0, 1)):
 				edges_h.append(
-					{"x0": cell.x, "x1": cell.x + 1, "y": cell.y + 1, "outward": Vector2i(0, 1)}
+					{
+						"x0": cell.x,
+						"x1": cell.x + 1,
+						"y": cell.y + 1,
+						"outward": Vector2i(0, 1),
+						"height": layer.get_wall_height(cell, s.wall_height)
+					}
 				)
 			if not layer.get_cell(cell + Vector2i(-1, 0)):
 				edges_v.append(
-					{"x": cell.x, "y0": cell.y, "y1": cell.y + 1, "outward": Vector2i(-1, 0)}
+					{
+						"x": cell.x,
+						"y0": cell.y,
+						"y1": cell.y + 1,
+						"outward": Vector2i(-1, 0),
+						"height": layer.get_wall_height(cell, s.wall_height)
+					}
 				)
 			if not layer.get_cell(cell + Vector2i(1, 0)):
 				edges_v.append(
-					{"x": cell.x + 1, "y0": cell.y, "y1": cell.y + 1, "outward": Vector2i(1, 0)}
+					{
+						"x": cell.x + 1,
+						"y0": cell.y,
+						"y1": cell.y + 1,
+						"outward": Vector2i(1, 0),
+						"height": layer.get_wall_height(cell, s.wall_height)
+					}
 				)
 	return [edges_h, edges_v]
 
@@ -156,7 +180,8 @@ func _merge_horizontal(edges_h: Array) -> Array:
 	for edge in edges_h:
 		var y = int(edge.get("y", 0))
 		var outward: Vector2i = edge.get("outward", Vector2i.ZERO)
-		var key = "%d:%d,%d" % [y, outward.x, outward.y]
+		var height := float(edge.get("height", 0.0))
+		var key = "%d:%d,%d:%d" % [y, outward.x, outward.y, roundi(height * 1000.0)]
 		if not groups.has(key):
 			groups[key] = []
 		groups[key].append(edge)
@@ -169,6 +194,7 @@ func _merge_horizontal(edges_h: Array) -> Array:
 		var cur_end = int(first.get("x1", 0))
 		var y = int(first.get("y", 0))
 		var outward: Vector2i = first.get("outward", Vector2i.ZERO)
+		var height := float(first.get("height", 0.0))
 		for i in range(1, edges.size()):
 			var e = edges[i]
 			var a = int(e.get("x0", 0))
@@ -178,10 +204,12 @@ func _merge_horizontal(edges_h: Array) -> Array:
 			elif a < cur_end:
 				cur_end = max(cur_end, b)
 			else:
-				segs.append({"x0": cur_start, "x1": cur_end, "y": y, "outward": outward})
+				segs.append(
+					{"x0": cur_start, "x1": cur_end, "y": y, "outward": outward, "height": height}
+				)
 				cur_start = a
 				cur_end = b
-		segs.append({"x0": cur_start, "x1": cur_end, "y": y, "outward": outward})
+		segs.append({"x0": cur_start, "x1": cur_end, "y": y, "outward": outward, "height": height})
 	return segs
 
 
@@ -190,7 +218,8 @@ func _merge_vertical(edges_v: Array) -> Array:
 	for edge in edges_v:
 		var x = int(edge.get("x", 0))
 		var outward: Vector2i = edge.get("outward", Vector2i.ZERO)
-		var key = "%d:%d,%d" % [x, outward.x, outward.y]
+		var height := float(edge.get("height", 0.0))
+		var key = "%d:%d,%d:%d" % [x, outward.x, outward.y, roundi(height * 1000.0)]
 		if not groups.has(key):
 			groups[key] = []
 		groups[key].append(edge)
@@ -203,6 +232,7 @@ func _merge_vertical(edges_v: Array) -> Array:
 		var cur_end = int(first.get("y1", 0))
 		var x = int(first.get("x", 0))
 		var outward: Vector2i = first.get("outward", Vector2i.ZERO)
+		var height := float(first.get("height", 0.0))
 		for i in range(1, edges.size()):
 			var e = edges[i]
 			var a = int(e.get("y0", 0))
@@ -212,8 +242,10 @@ func _merge_vertical(edges_v: Array) -> Array:
 			elif a < cur_end:
 				cur_end = max(cur_end, b)
 			else:
-				segs.append({"x": x, "y0": cur_start, "y1": cur_end, "outward": outward})
+				segs.append(
+					{"x": x, "y0": cur_start, "y1": cur_end, "outward": outward, "height": height}
+				)
 				cur_start = a
 				cur_end = b
-		segs.append({"x": x, "y0": cur_start, "y1": cur_end, "outward": outward})
+		segs.append({"x": x, "y0": cur_start, "y1": cur_end, "outward": outward, "height": height})
 	return segs

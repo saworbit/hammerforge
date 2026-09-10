@@ -26,6 +26,7 @@ HFPaintGrid
 HFPaintLayer
 - Chunked grid storage using a bitset per chunk.
 - Per-chunk `material_ids` (PackedByteArray, 1 byte/cell) and blend weights (`blend_weights`, `blend_weights_2`, `blend_weights_3`).
+- Optional per-cell wall height overrides used by the paint-then-raise workflow.
 - Optional `heightmap: Image` (FORMAT_RF) and `height_scale: float` for vertex displacement.
 - Per-layer terrain slot settings: `terrain_slot_paths`, `terrain_slot_uv_scales`, `terrain_slot_tints`.
 - Tracks dirty chunks for incremental regeneration.
@@ -65,7 +66,11 @@ HFStroke
 - **LMB-drag** uses the selected Floor Paint tool. **Alt+LMB** temporarily erases occupancy without changing that tool.
 - **Shift+LMB-drag** locks a Brush, Erase, Line, or Blend stroke to the first dominant grid axis. The axis stays fixed for the stroke, so diagonal pointer jitter cannot flip it.
 - **Ctrl/Cmd+LMB** samples the cell material for the Blend tool and does not start an undoable stroke.
-- **Esc** cancels the active stroke and restores its pre-stroke cells. Plain **RMB** is never a Floor Paint input; at rest it remains Godot's 3D camera control.
+- **Y** starts a height gesture for the last Brush or Rect footprint. Move vertically to set its wall height, then click to confirm. This is a clearly chained **Raise Paint Walls** undo after the paint stroke.
+- **X** and **Z** toggle grid-origin mirroring for subsequent paint. Both are off by default and can be combined; all mirrored copies commit with the source stroke as one undo entry.
+- **H** stamps a room from the last Rect dimensions: filled floor plus raised boundary walls, committed as one undo entry.
+- Painting against an adjacent layer at a different Y height shows a ramp or stair ghost. **Enter** confirms it as a persistent `ConnectorDef`; **Esc** dismisses it.
+- **Esc** cancels the active stroke or raise gesture and removes transient footprint/connector ghosts. Plain **RMB** is never a Floor Paint input; at rest it remains Godot's 3D camera control.
 - The existing viewport banner reports the hovered cell and brush footprint, then live unique-cell count and world-space width/depth while painting.
 - A changed press-drag-release is one **Paint Floor** undo entry. Lost-release recovery closes that same entry; no-op strokes and material picks create none.
 
@@ -77,9 +82,10 @@ Brush Shape
 
 Live preview
 - During drag, preview writes into the layer and immediately regenerates affected chunks.
+- The viewport draws only the active footprint, raise cage, and touched connector candidates. These overlays use stroke-local data rather than scanning a whole layer and are synchronously removed on stroke end or Esc.
 - On mouse-up, a final regeneration happens.
 - Preview work consumes only dirty chunks. With region streaming enabled, every region crossed by the current stroke is pinned until release or cancel, and the starting region is loaded before the undo snapshot.
-- Stroke inference (denoise, hole fill, gap bridging, corridor width) is **not enabled**. `HFInferenceEngine` classifies a stroke's intent but its cleanup pass was never written, so nothing assigns it to the paint tool and no stroke is cleaned up. Turning it on means writing that pass, assigning an engine, and giving it a setting and a default.
+- **Inference cleanup is off by default.** Enabling it in Paint → Floor Paint wires `HFInferenceEngine` for new strokes. Its deliberately bounded pass can remove an isolated one-cell island, fill a one-cell cardinal hole or gap, and widen an inferred one-cell corridor by one row/column. Erase strokes are never rewritten, and cleanup is restricted to the stroke's dirty chunks plus its one-cell local halo.
 
 ## Geometry Synthesis
 
@@ -99,6 +105,7 @@ When a layer has a heightmap assigned, floors use `HFHeightmapSynth` instead of 
 - Extract boundary edges where a filled cell borders empty space.
 - Merge horizontal edges by y/outward and contiguous x.
 - Merge vertical edges by x/outward and contiguous y.
+- Boundary runs with different per-cell wall heights remain separate so a raised footprint does not change unrelated walls.
 - Walls always use flat geometry (even when the layer has a heightmap).
 
 ## Stable ID Scheme
@@ -125,8 +132,10 @@ Paint layers serialize into the level save:
 - grid settings (cell size, origin, basis, layer y)
 - chunk size
 - chunks with bitset data, `material_ids`, and `blend_weights` / `blend_weights_2` / `blend_weights_3`
+- per-cell wall height overrides
 - `heightmap_b64` (base64-encoded PNG) and `height_scale` per layer (optional, backward-compatible)
 - `terrain_slot_paths`, `terrain_slot_uv_scales`, `terrain_slot_tints` per layer
+- confirmed paint connector definitions
 
 Region streaming:
 - Region index stored in `.hflevel` under `terrain_regions`.
@@ -184,7 +193,9 @@ Generates transition geometry between layers at different Y heights:
 - **Ramp**: SurfaceTool sloped quad strip from one cell to another.
 - **Stairs**: horizontal treads + vertical risers when height difference exceeds step threshold.
 - `ConnectorDef` specifies from/to layer indices, cells, width, and step height.
+- **Live paint workflow:** only boundaries touched by the completed stroke become translucent connector ghosts. Enter commits those definitions in one undoable action; Esc discards them. Confirmed definitions persist in editor state and bake even when automatic detection is off.
 - **Auto-detection during bake** (`hf_auto_connector.gd`): When "Auto Connectors" is enabled in Bake settings, the bake pipeline automatically scans paint layers for cross-layer height boundaries (N/S/E/W neighbors), groups adjacent boundary edges, and generates ramp or stair geometry. Mode can be Ramp, Stairs, or Auto (auto selects stairs when height difference exceeds stair step threshold). Connectors include collision shapes for navmesh parsing. Skipped during selection-only bakes.
+- A confirmed boundary takes precedence over the same automatically detected boundary, preventing duplicate baked geometry.
 
 ## Foliage Populator (`hf_foliage_populator.gd`)
 Procedural scatter using MultiMeshInstance3D:

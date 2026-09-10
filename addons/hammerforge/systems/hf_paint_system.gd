@@ -15,6 +15,7 @@ const HFHeightmapIO = preload("../paint/hf_heightmap_io.gd")
 const HFHeightmapSynth = preload("../paint/hf_heightmap_synth.gd")
 const HFGeneratedModel = preload("../paint/hf_generated_model.gd")
 const HFTerrainRegionManager = preload("../paint/hf_region_manager.gd")
+const HFInferenceEngine = preload("../paint/hf_inference_engine.gd")
 const HFLevelIO = preload("../hflevel_io.gd")
 
 var root: Node3D
@@ -41,7 +42,8 @@ func handle_paint_input(
 	size: Vector3,
 	paint_tool_id: int = -1,
 	paint_radius_cells: int = -1,
-	paint_brush_shape: int = 1
+	paint_brush_shape: int = 1,
+	paint_options: Dictionary = {}
 ) -> bool:
 	if not Engine.is_editor_hint():
 		return false
@@ -50,7 +52,16 @@ func handle_paint_input(
 		return false
 	_sync_region_manager()
 	var layer = root.paint_layers.get_active_layer()
+	var inference_enabled := bool(paint_options.get("inference_enabled", false))
+	var mirror_x_enabled := bool(paint_options.get("mirror_x_enabled", false))
+	var mirror_z_enabled := bool(paint_options.get("mirror_z_enabled", false))
 	root.paint_tool.brush_shape = paint_brush_shape
+	root.paint_tool.inference = HFInferenceEngine.new() if inference_enabled else null
+	root.paint_tool.mirror_x_enabled = mirror_x_enabled
+	root.paint_tool.mirror_z_enabled = mirror_z_enabled
+	root.paint_tool.connector_settings.mode = root.bake_connector_mode
+	root.paint_tool.connector_settings.stair_step_height = root.bake_connector_stair_height
+	root.paint_tool.connector_settings.width_cells = root.bake_connector_width
 	if paint_radius_cells > 0:
 		root.paint_tool.brush_radius_cells = paint_radius_cells
 	elif layer and layer.grid:
@@ -429,6 +440,9 @@ func restore_paint_layers(data: Array, active_index: int) -> void:
 			layer.grid.basis = grid_data.get("basis", layer.grid.basis)
 			layer.grid.layer_y = float(grid_data.get("layer_y", layer.grid.layer_y))
 		layer._ensure_terrain_slots()
+		var wall_heights = entry.get("wall_heights", [])
+		if wall_heights is Array:
+			layer.restore_wall_height_entries(wall_heights)
 		var slot_paths = entry.get("terrain_slot_paths", [])
 		if slot_paths is Array:
 			layer.terrain_slot_paths = slot_paths.duplicate()
@@ -498,6 +512,9 @@ func _deserialize_chunks_to_layer(layer: HFPaintLayer, chunks: Array) -> Array[V
 			for i in range(blend3_bytes.size()):
 				blends3[i] = int(blend3_bytes[i])
 			layer.set_chunk_blend_weights_slot(cid, 3, blends3)
+		var wall_heights = chunk.get("wall_heights", [])
+		if wall_heights is Array:
+			layer.restore_wall_height_entries(wall_heights)
 		loaded.append(cid)
 	return loaded
 
@@ -918,7 +935,8 @@ func _save_region_file(region_id: Vector2i) -> int:
 					"material_ids": mat_bytes,
 					"blend_weights": blend_bytes,
 					"blend_weights_2": blend2_bytes,
-					"blend_weights_3": blend3_bytes
+					"blend_weights_3": blend3_bytes,
+					"wall_heights": layer.get_chunk_wall_height_entries(cid)
 				}
 			)
 		if not entry["chunks"].is_empty():

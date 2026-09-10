@@ -1,9 +1,7 @@
 extends GutTest
 
-## Floor paint inference was assigned to every level's paint tool, where it
-## classified each stroke on mouse release and then called a cleanup pass that
-## changes no cells. These tests hold it out of the live stroke path until there
-## is a cleanup pass worth running.
+## Floor paint inference is a real cleanup pass now, but remains opt-in. These
+## tests hold the default-off contract while the wave-2 suite covers each edit.
 
 const LevelRootScript = preload("res://addons/hammerforge/level_root.gd")
 const HFInferenceEngine = preload("res://addons/hammerforge/paint/hf_inference_engine.gd")
@@ -38,22 +36,20 @@ func test_the_stroke_path_still_has_the_hook():
 	)
 
 
-func test_the_cleanup_pass_still_changes_nothing():
-	# The reason it is not wired in. A lone island and a one cell hole are what
-	# denoise and hole fill were described as handling.
+func test_the_cleanup_pass_is_bounded_to_one_cell_topology():
 	var layer := HFPaintLayer.new()
 	layer.grid = HFPaintGrid.new()
 	layer.chunk_size = 8
 	add_child_autoqfree(layer)
-	for cell in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(6, 6)]:
+	for cell in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(6, 6)]:
 		layer.set_cell(cell, true)
 	layer.consume_dirty_chunks()
 	var engine := HFInferenceEngine.new()
 	var chunks: Array[Vector2i] = [Vector2i.ZERO]
 	engine.apply_cleanup(layer, chunks, &"room", HFInferenceEngine.InferenceSettings.new())
-	assert_true(layer.get_cell(Vector2i(6, 6)), "The lone island is still there")
-	assert_false(layer.get_cell(Vector2i(1, 1)), "and the hole is still a hole")
-	assert_eq(layer.consume_dirty_chunks(), [] as Array[Vector2i], "Nothing was touched")
+	assert_false(layer.get_cell(Vector2i(6, 6)), "The one-cell island is denoised")
+	assert_true(layer.get_cell(Vector2i(0, 0)), "A connected run remains")
+	assert_true(layer.get_cell(Vector2i(1, 0)), "Cleanup does not rewrite user intent")
 
 
 func test_intent_classification_still_answers():

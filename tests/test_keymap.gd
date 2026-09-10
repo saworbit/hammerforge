@@ -100,6 +100,14 @@ func test_bucket_and_blend_have_distinct_shortcuts():
 	assert_false(keymap.matches("paint_blend", _make_key(KEY_K)))
 
 
+func test_wave_two_paint_actions_are_in_the_customizable_keymap():
+	assert_true(keymap.matches("paint_mirror_x", _make_key(KEY_X)))
+	assert_true(keymap.matches("paint_mirror_z", _make_key(KEY_Z)))
+	assert_true(keymap.matches("paint_raise", _make_key(KEY_Y)))
+	assert_true(keymap.matches("paint_room", _make_key(KEY_H)))
+	assert_true(keymap.matches("paint_confirm_connector", _make_key(KEY_ENTER)))
+
+
 func test_display_string_simple():
 	var display = keymap.get_display_string("tool_draw")
 	assert_eq(display, "D", "tool_draw display should be 'D'")

@@ -11,6 +11,10 @@ signal grid_snap_applied(value: float)
 signal bake_state_changed(baking: bool, success: bool)
 signal command_palette_requested
 signal power_user_overlays_changed(enabled: bool)
+signal paint_options_changed
+signal paint_raise_requested
+signal paint_room_requested
+signal paint_connector_confirm_requested
 
 const LevelRootType = preload("level_root.gd")
 const BrushPreset = preload("brush_preset.gd")
@@ -120,6 +124,12 @@ var active_material_button: Button = $Margin/VBox/MainTabs/Brush/BrushMargin/Bru
 var paint_tool_select: OptionButton = null
 var paint_radius: SpinBox = null
 var brush_shape_select: OptionButton = null
+var paint_inference_check: CheckBox = null
+var paint_mirror_x_check: CheckBox = null
+var paint_mirror_z_check: CheckBox = null
+var paint_raise_btn: Button = null
+var paint_room_btn: Button = null
+var paint_connector_confirm_btn: Button = null
 var paint_layer_select: OptionButton = null
 var paint_layer_add: Button = null
 var paint_layer_remove: Button = null
@@ -2305,6 +2315,28 @@ func get_brush_shape() -> int:
 	if not brush_shape_select:
 		return 1
 	return brush_shape_select.get_selected_id()
+
+
+func get_paint_inference_enabled() -> bool:
+	return paint_inference_check != null and paint_inference_check.button_pressed
+
+
+func get_paint_mirror_x_enabled() -> bool:
+	return paint_mirror_x_check != null and paint_mirror_x_check.button_pressed
+
+
+func get_paint_mirror_z_enabled() -> bool:
+	return paint_mirror_z_check != null and paint_mirror_z_check.button_pressed
+
+
+func toggle_paint_mirror_x() -> void:
+	if paint_mirror_x_check:
+		paint_mirror_x_check.button_pressed = not paint_mirror_x_check.button_pressed
+
+
+func toggle_paint_mirror_z() -> void:
+	if paint_mirror_z_check:
+		paint_mirror_z_check.button_pressed = not paint_mirror_z_check.button_pressed
 
 
 func get_surface_paint_radius() -> float:

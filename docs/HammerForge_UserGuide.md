@@ -125,7 +125,7 @@ When you activate an advanced tool for the first time, a floating overlay appear
 | Hollow | Ctrl+H | Select solid → preview (yellow wireframe walls) → confirm → hollow. Select a wall afterwards to **Re-hollow** at a new thickness |
 | Measure | M key | Click start → click end → Shift+Click to chain → Ctrl+Click for snap ref |
 | Decal | N key | Click surface → resize/rotate → assign material |
-| Floor Paint | Shift+P toggle | Toggle paint → R for Rect → LMB-drag a walkable room |
+| Floor Paint | Shift+P toggle | R Rect; X/Z mirror; Y raise; H room; Enter connector |
 
 Each guide has a "Don't show again" checkbox. Dismissed guides are persisted in user prefs. Guides trigger from keyboard shortcuts, the command palette, and context toolbar actions.
 
@@ -653,7 +653,7 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
   - **Bulk delete**: deleting 3+ brushes shows a confirmation dialog (undo reminder). Single/dual deletes remain instant.
 
 ### Paint tab (collapsible sections)
-- **Floor Paint**: Brush, Erase, Rect, Line, Bucket, Blend tools. Brush shape (Square/Circle), radius, and layer picker. Rename button ("R") for custom layer display names. The dock is optional for the first room: Shift+P, R, then LMB-drag in the viewport.
+- **Floor Paint**: Brush, Erase, Rect, Line, Bucket, Blend tools; shape, radius, and layer picker; default-off inference and X/Z mirror toggles; Raise, Room, and Connector actions. The dock is optional for the first room: Shift+P, R, then LMB-drag in the viewport.
 - **Heightmap**: Import PNG/EXR or Generate procedural noise. Height Scale and Layer Y spinboxes. **Sculpt tools**: Raise, Lower, Smooth, Flatten buttons with strength/radius/falloff spinboxes for interactive terrain editing. **Convert Selection → Heightmap** button rasterizes selected brush top faces into a new heightmap layer (inherits grid origin/basis and chunk_size from the paint layer manager).
 - **Blend & Terrain**: Blend Strength, Blend Slot (B/C/D), and Terrain Slot A-D texture pickers with UV scales.
 - **Foliage & Scatter**: Interactive scatter brush for foliage and object placement. Pick a mesh resource, set density/radius/height constraints/slope filter/scale variation. Choose Circle or Spline brush shape. Preview generates a MultiMesh preview (Dots/Wireframe/Full). Scatter commits as a permanent `MultiMeshInstance3D`. Clear removes the preview. Spline mode uses selected nodes as path control points with a configurable width band.
@@ -1095,7 +1095,7 @@ The contexts and what their full lists cover:
 | Select | Native click/Shift object selection; Face Select Shift-add/Ctrl-toggle; Escape, Delete, Ctrl+D, Arrow nudge, Ctrl+H Hollow, Shift+X Clip, Ctrl+Shift+F/C Floor/Ceiling |
 | Extrude Up/Down (idle) | Click face + drag, U/J tool switch, Right-click cancel |
 | Extrude Up/Down (active) | Move mouse to set height, Release to confirm, Right-click cancel |
-| Floor Paint | LMB paint, Alt erase, Shift axis lock, Ctrl/Cmd pick material, Esc cancel, B/E/R/L/K/N tools; live cells and metres in the banner |
+| Floor Paint | LMB paint, Alt erase, Shift axis lock, Ctrl/Cmd pick, X/Z mirror, Y raise, H room, Enter connector, Esc cancel; live cells/metres and ghosts |
 | Surface Paint | Click+Drag, radius/strength info |
 | Vertex Edit | Click vertex to select, drag to move, E: edge mode, Ctrl+W: merge, Ctrl+E: split |
 | Polygon Tool | Click to place verts, Enter: close, Escape: remove last |
@@ -1143,6 +1143,10 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Grid Size Up | ] | Double grid snap (max 512) |
 | Axis Lock X/Y/Z | X / Y / Z | Constrain to axis |
 | Paint tools | B / E / R / L / K / N | Brush / Erase / Rect / Line / Bucket / Blend |
+| Raise painted walls | Y | Set wall height for the last Brush/Rect footprint |
+| Paint mirror X / Z | X / Z | Toggle grid-origin mirrored painting (Paint mode only) |
+| Stamp painted room | H | Repeat the last Rect dimensions as floor and boundary walls |
+| Confirm paint connector | Enter | Commit the live ramp/stair connector ghost |
 | Command palette | Shift+? / F1 / Ctrl+K | Searchable action palette with fuzzy search |
 | Operation timeline | Ctrl+Shift+T | Toggle operation replay timeline |
 
@@ -1477,13 +1481,19 @@ Notes
 1. Press **Shift+P** to enable Paint mode.
 2. Press **R** and LMB-drag a rectangle in the viewport for a first walkable room. No dock interaction is required.
 3. Continue with **B** Brush, **E** Erase, **L** Line, **K** Bucket, or **N** Blend. Open the **Paint** tab only when you need shape, radius, layer, heightmap, or terrain settings.
+4. After a Brush or Rect stroke, press **Y**, move vertically, and click to set wall height for that footprint. Press **H** to stamp another room using the last Rect dimensions.
 
 Notes
 - **Alt+LMB** temporarily erases without changing the selected tool.
 - **Shift+LMB-drag** locks the stroke to its first dominant grid axis.
 - **Ctrl/Cmd+LMB** samples the cell material for Blend without creating an undo entry.
 - **Esc** restores a cancelled stroke. Plain **RMB** remains Godot camera navigation.
+- **X/Z** toggle grid-origin mirror axes. They are off by default; mirrored copies and the source are one undo entry.
+- The Y height gesture is a clearly chained second undo after the paint stroke. Esc restores its prior heights.
+- Painting next to a different-Y layer shows a connector ghost. **Enter** commits it in one undo; Esc dismisses it. Confirmed connectors persist and bake even with automatic detection off.
+- **Inference cleanup** is off by default. When enabled, it only removes isolated one-cell noise, fills one-cell cardinal holes/gaps, and widens inferred one-cell corridors inside the stroke-local dirty scope. Erase strokes are untouched.
 - The viewport banner shows the hovered cell and footprint, then live unique-cell count and metres while a stroke is active.
+- Footprint, raise, and connector ghosts are transient and disappear on completion or Esc without rebuilding an entire layer.
 - Each changed stroke is one **Paint Floor** undo entry; a no-op or material pick is not.
 - **Brush Shape**: Square fills a full box of cells; Circle clips corners using Euclidean distance.
 - Live preview updates while dragging.

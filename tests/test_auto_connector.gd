@@ -7,6 +7,8 @@ const HFPaintLayerManagerScript = preload(
 )
 const HFPaintLayerScript = preload("res://addons/hammerforge/paint/hf_paint_layer.gd")
 const HFPaintGridScript = preload("res://addons/hammerforge/paint/hf_paint_grid.gd")
+const HFPaintToolScript = preload("res://addons/hammerforge/paint/hf_paint_tool.gd")
+const HFBakeSystemScript = preload("res://addons/hammerforge/systems/hf_bake_system.gd")
 
 var gen: HFAutoConnectorScript
 
@@ -408,6 +410,7 @@ func _make_bake_root_shim(mgr: HFPaintLayerManagerScript) -> Node3D:
 	var script := GDScript.new()
 	script.source_code = """extends Node3D
 var paint_layers
+var paint_tool = null
 var bake_auto_connectors: bool = true
 var bake_connector_mode: int = 0
 var bake_connector_stair_height: float = 0.25
@@ -434,8 +437,7 @@ func test_postprocess_bake_selection_only_skips_connectors():
 	var shim := _make_bake_root_shim(mgr)
 	add_child_autoqfree(shim)
 
-	var BakeSysScript = preload("res://addons/hammerforge/systems/hf_bake_system.gd")
-	var bake_sys: RefCounted = BakeSysScript.new(shim)
+	var bake_sys: RefCounted = HFBakeSystemScript.new(shim)
 
 	# selection_only = true → container must NOT get AutoConnector children.
 	var container_sel := Node3D.new()
@@ -456,3 +458,65 @@ func test_postprocess_bake_selection_only_skips_connectors():
 		if child.name.begins_with("AutoConnector"):
 			full_count += 1
 	assert_gt(full_count, 0, "selection_only=false must append auto-connectors")
+
+
+func test_confirmed_connector_bakes_when_automatic_detection_is_off():
+	var mgr := _make_layer_manager()
+	mgr.create_layer(&"lo", 0.0)
+	mgr.create_layer(&"hi", 3.0)
+	_fill_cells(mgr.layers[0], [Vector2i(0, 0)])
+	_fill_cells(mgr.layers[1], [Vector2i(1, 0)])
+	var definition := HFConnectorToolScript.ConnectorDef.new()
+	definition.from_layer_index = 0
+	definition.to_layer_index = 1
+	definition.from_cell = Vector2i(0, 0)
+	definition.to_cell = Vector2i(1, 0)
+	var paint_tool = HFPaintToolScript.new()
+	add_child_autoqfree(paint_tool)
+	paint_tool.layer_manager = mgr
+	paint_tool.connector_defs = [definition]
+	var shim := _make_bake_root_shim(mgr)
+	shim.bake_auto_connectors = false
+	shim.paint_tool = paint_tool
+	add_child_autoqfree(shim)
+	var bake_sys = HFBakeSystemScript.new(shim)
+	var container := Node3D.new()
+	add_child_autoqfree(container)
+
+	bake_sys.postprocess_bake(container, false)
+	var count := 0
+	for child in container.get_children():
+		if child.name.begins_with("AutoConnector"):
+			count += 1
+	assert_eq(count, 1)
+
+
+func test_confirmed_connector_is_not_duplicated_when_automatic_detection_is_on():
+	var mgr := _make_layer_manager()
+	mgr.create_layer(&"lo", 0.0)
+	mgr.create_layer(&"hi", 3.0)
+	_fill_cells(mgr.layers[0], [Vector2i(0, 0)])
+	_fill_cells(mgr.layers[1], [Vector2i(1, 0)])
+	var definition := HFConnectorToolScript.ConnectorDef.new()
+	definition.from_layer_index = 0
+	definition.to_layer_index = 1
+	definition.from_cell = Vector2i(0, 0)
+	definition.to_cell = Vector2i(1, 0)
+	var paint_tool = HFPaintToolScript.new()
+	add_child_autoqfree(paint_tool)
+	paint_tool.layer_manager = mgr
+	paint_tool.connector_defs = [definition]
+	var shim := _make_bake_root_shim(mgr)
+	shim.bake_auto_connectors = true
+	shim.paint_tool = paint_tool
+	add_child_autoqfree(shim)
+	var bake_sys = HFBakeSystemScript.new(shim)
+	var container := Node3D.new()
+	add_child_autoqfree(container)
+
+	bake_sys.postprocess_bake(container, false)
+	var count := 0
+	for child in container.get_children():
+		if child.name.begins_with("AutoConnector"):
+			count += 1
+	assert_eq(count, 1)

@@ -307,6 +307,21 @@ static func handle_keyboard(
 		return STOP
 	# Paint tool shortcuts
 	if paint_mode:
+		if keymap.matches("paint_raise", event):
+			plugin._begin_floor_paint_raise(root)
+			return STOP
+		if keymap.matches("paint_mirror_x", event):
+			dock.toggle_paint_mirror_x()
+			return STOP
+		if keymap.matches("paint_mirror_z", event):
+			dock.toggle_paint_mirror_z()
+			return STOP
+		if keymap.matches("paint_room", event):
+			plugin._stamp_floor_paint_room(root)
+			return STOP
+		if keymap.matches("paint_confirm_connector", event):
+			plugin._confirm_floor_paint_connector(root)
+			return STOP
 		var paint_key := -1
 		if keymap.matches("paint_bucket", event):
 			paint_key = 0

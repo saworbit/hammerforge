@@ -87,6 +87,9 @@ func capture_state(include_transient: bool = true) -> Dictionary:
 	state["bake_preview_mode"] = root._last_bake_preview_mode
 	state["paint_layers"] = capture_paint_layers(true)
 	state["paint_active_layer"] = root.paint_layers.active_layer_index if root.paint_layers else 0
+	state["paint_connectors"] = (
+		root.paint_tool.capture_connector_defs() if root.paint_tool else []
+	)
 	if include_transient:
 		state["face_selection"] = root.face_selection.duplicate(true)
 	if root.material_manager:
@@ -150,6 +153,8 @@ func restore_state(state: Dictionary) -> void:
 	root.paint_system.restore_paint_layers(
 		state.get("paint_layers", []), int(state.get("paint_active_layer", 0))
 	)
+	if root.paint_tool:
+		root.paint_tool.restore_connector_defs(state.get("paint_connectors", []))
 	if region_data is Dictionary and not region_data.is_empty():
 		if root.paint_system:
 			root.paint_system.load_initial_regions()
@@ -570,6 +575,7 @@ func capture_paint_layers(include_chunks: bool = true) -> Array:
 		entry["terrain_slot_paths"] = layer.terrain_slot_paths.duplicate()
 		entry["terrain_slot_uv_scales"] = layer.terrain_slot_uv_scales.duplicate()
 		entry["terrain_slot_tints"] = layer.terrain_slot_tints.duplicate()
+		entry["wall_heights"] = layer.get_wall_height_entries()
 		if layer.has_heightmap():
 			entry["heightmap_b64"] = HFHeightmapIO.encode_to_base64(layer.heightmap)
 			entry["height_scale"] = layer.height_scale

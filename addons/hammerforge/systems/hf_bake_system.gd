@@ -795,7 +795,13 @@ func postprocess_bake(
 		_append_nonstructural_brushes(container)
 	if _root_bool("bake_generate_occluders", false) and not selection_only:
 		_generate_occluders(container)
-	if root.bake_auto_connectors and not selection_only:
+	var paint_tool = root.get("paint_tool")
+	var has_committed_connectors: bool = (
+		paint_tool != null
+		and paint_tool.get("connector_defs") is Array
+		and not paint_tool.connector_defs.is_empty()
+	)
+	if (root.bake_auto_connectors or has_committed_connectors) and not selection_only:
 		_append_auto_connectors(container)
 	if root.bake_navmesh:
 		bake_navmesh(container)
@@ -1545,7 +1551,25 @@ func _append_auto_connectors(container: Node3D) -> void:
 	settings.mode = root.bake_connector_mode
 	settings.stair_step_height = root.bake_connector_stair_height
 	settings.width_cells = root.bake_connector_width
-	var results: Array = gen.generate_connectors(root.paint_layers, settings)
+	var definitions: Array = []
+	var known_boundaries: Dictionary = {}
+	var paint_tool = root.get("paint_tool")
+	if (
+		paint_tool != null
+		and paint_tool.get("connector_defs") is Array
+		and not paint_tool.connector_defs.is_empty()
+	):
+		for definition in paint_tool.connector_defs:
+			definitions.append(definition)
+			known_boundaries[definition.boundary_key()] = true
+	if root.bake_auto_connectors:
+		var segments := gen.detect_boundaries(root.paint_layers)
+		for definition in gen.defs_from_groups(gen.group_segments(segments), settings):
+			if known_boundaries.has(definition.boundary_key()):
+				continue
+			known_boundaries[definition.boundary_key()] = true
+			definitions.append(definition)
+	var results := gen.generate_definitions(definitions, root.paint_layers)
 	if results.is_empty():
 		return
 	var body := container.get_node_or_null("FloorCollision") as StaticBody3D

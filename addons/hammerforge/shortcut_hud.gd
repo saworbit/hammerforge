@@ -414,6 +414,8 @@ func _floor_paint_shortcuts() -> String:
 	lines.append("Shift+Drag: Axis Lock | Ctrl+Click: Pick Material")
 	lines.append("B: Brush | E: Erase | R: Rect")
 	lines.append("L: Line | K: Bucket | Esc: Cancel Stroke")
+	lines.append("X/Z: Mirror | Y: Raise Last | H: Room Stamp")
+	lines.append("Enter: Confirm Connector Ghost")
 	return "\n".join(lines)
 
 

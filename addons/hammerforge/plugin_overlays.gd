@@ -354,6 +354,147 @@ static func clear_vertex_overlay(plugin: Object) -> void:
 	plugin._vertex_overlay_imesh = null
 
 
+## Draw only the active Floor Paint footprint, height cage, and connector
+## candidates. The source lists are stroke-local, so mouse motion never scans or
+## rebuilds a complete paint layer.
+static func update_paint_overlay(plugin: Object, root: Node) -> void:
+	if plugin == null or root == null or not plugin.dock or not plugin.dock.is_paint_mode_enabled():
+		clear_paint_overlay(plugin)
+		return
+	var paint_tool = root.get("paint_tool")
+	var layers = root.get("paint_layers")
+	if paint_tool == null or layers == null:
+		clear_paint_overlay(plugin)
+		return
+	var layer = layers.get_active_layer()
+	if layer == null or layer.grid == null:
+		clear_paint_overlay(plugin)
+		return
+	var cells: Array[Vector2i] = paint_tool.get_preview_cells()
+	var connector_meshes: Array = paint_tool.get_pending_connector_meshes()
+	if cells.is_empty():
+		_clear_paint_footprint_overlay(plugin)
+	else:
+		_ensure_paint_overlay(plugin, root)
+		plugin._paint_overlay_mesh.global_transform = Transform3D.IDENTITY
+		plugin._paint_overlay_imesh.clear_surfaces()
+		plugin._paint_overlay_imesh.surface_begin(Mesh.PRIMITIVE_LINES)
+		var raising: bool = paint_tool.is_height_gesture_active()
+		var raise_height: float = paint_tool.get_raise_preview_height()
+		for cell in cells:
+			_draw_paint_cell(plugin._paint_overlay_imesh, layer, cell, raising, raise_height)
+		plugin._paint_overlay_imesh.surface_end()
+	_update_connector_overlays(plugin, root, connector_meshes)
+
+
+static func _ensure_paint_overlay(plugin: Object, root: Node) -> void:
+	if plugin._paint_overlay_mesh and is_instance_valid(plugin._paint_overlay_mesh):
+		return
+	plugin._paint_overlay_mesh = MeshInstance3D.new()
+	plugin._paint_overlay_mesh.name = "_FloorPaintFootprintOverlay"
+	plugin._paint_overlay_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.vertex_color_use_as_albedo = true
+	material.no_depth_test = true
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	plugin._paint_overlay_mesh.material_override = material
+	plugin._paint_overlay_imesh = ImmediateMesh.new()
+	plugin._paint_overlay_mesh.mesh = plugin._paint_overlay_imesh
+	root.add_child(plugin._paint_overlay_mesh)
+
+
+static func _draw_paint_cell(
+	mesh: ImmediateMesh, layer, cell: Vector2i, raising: bool, raise_height: float
+) -> void:
+	var grid = layer.grid
+	var uv: Vector2 = grid.cell_to_uv(cell)
+	var size: float = grid.cell_size
+	var base_y: float = grid.layer_y + layer.get_height_at(cell) + 0.03
+	var corners := [
+		grid.uv_to_world(uv, base_y),
+		grid.uv_to_world(uv + Vector2(size, 0.0), base_y),
+		grid.uv_to_world(uv + Vector2(size, size), base_y),
+		grid.uv_to_world(uv + Vector2(0.0, size), base_y),
+	]
+	var color := Color(0.2, 0.85, 1.0, 0.95)
+	_draw_loop(mesh, corners, color)
+	if not raising:
+		return
+	var top_y := base_y + raise_height
+	var top := [
+		grid.uv_to_world(uv, top_y),
+		grid.uv_to_world(uv + Vector2(size, 0.0), top_y),
+		grid.uv_to_world(uv + Vector2(size, size), top_y),
+		grid.uv_to_world(uv + Vector2(0.0, size), top_y),
+	]
+	var raise_color := Color(1.0, 0.65, 0.15, 0.95)
+	_draw_loop(mesh, top, raise_color)
+	for index in range(4):
+		_add_line(mesh, corners[index], top[index], raise_color)
+
+
+static func _draw_loop(mesh: ImmediateMesh, points: Array, color: Color) -> void:
+	for index in range(points.size()):
+		_add_line(mesh, points[index], points[(index + 1) % points.size()], color)
+
+
+static func _add_line(mesh: ImmediateMesh, from: Vector3, to: Vector3, color: Color) -> void:
+	mesh.surface_set_color(color)
+	mesh.surface_add_vertex(from)
+	mesh.surface_set_color(color)
+	mesh.surface_add_vertex(to)
+
+
+static func _update_connector_overlays(plugin: Object, root: Node, entries: Array) -> void:
+	_clear_connector_overlays(plugin)
+	for entry in entries:
+		if not entry is Dictionary:
+			continue
+		var mesh: ArrayMesh = entry.get("mesh")
+		if mesh == null:
+			continue
+		var instance := MeshInstance3D.new()
+		instance.name = "_FloorPaintConnectorGhost"
+		instance.mesh = mesh
+		instance.transform = entry.get("transform", Transform3D.IDENTITY)
+		instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var material := StandardMaterial3D.new()
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		material.albedo_color = Color(0.35, 0.9, 0.45, 0.45)
+		instance.material_override = material
+		root.add_child(instance)
+		plugin._paint_connector_overlay_meshes.append(instance)
+
+
+static func _clear_paint_footprint_overlay(plugin: Object) -> void:
+	if plugin == null:
+		return
+	if plugin._paint_overlay_mesh and is_instance_valid(plugin._paint_overlay_mesh):
+		if plugin._paint_overlay_mesh.get_parent():
+			plugin._paint_overlay_mesh.get_parent().remove_child(plugin._paint_overlay_mesh)
+		plugin._paint_overlay_mesh.free()
+	plugin._paint_overlay_mesh = null
+	plugin._paint_overlay_imesh = null
+
+
+static func _clear_connector_overlays(plugin: Object) -> void:
+	if plugin == null:
+		return
+	for instance in plugin._paint_connector_overlay_meshes:
+		if instance and is_instance_valid(instance):
+			if instance.get_parent():
+				instance.get_parent().remove_child(instance)
+			instance.free()
+	plugin._paint_connector_overlay_meshes.clear()
+
+
+static func clear_paint_overlay(plugin: Object) -> void:
+	_clear_paint_footprint_overlay(plugin)
+	_clear_connector_overlays(plugin)
+
+
 static func update_marquee_overlay(
 	plugin: Object, from: Vector2, to: Vector2, active: bool
 ) -> void:

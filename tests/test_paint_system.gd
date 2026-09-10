@@ -129,6 +129,18 @@ func test_unloaded_region_reloads_with_its_paint():
 	_clean_region_dir()
 
 
+func test_streamed_region_preserves_raised_wall_heights():
+	_streaming_system()
+	var layer = _floor_layer()
+	layer.set_cell(Vector2i(2, 3), true)
+	layer.set_wall_height(Vector2i(2, 3), 4.5)
+	sys.region_manager.mark_loaded(Vector2i.ZERO)
+	assert_true(sys._unload_region(Vector2i.ZERO))
+	sys._load_region(Vector2i.ZERO)
+	assert_almost_eq(layer.get_wall_height(Vector2i(2, 3), 3.0), 4.5, 0.001)
+	_clean_region_dir()
+
+
 func test_unload_keeps_the_region_when_the_write_fails():
 	_streaming_system()
 	_paint_cell(Vector2i(1, 1))
