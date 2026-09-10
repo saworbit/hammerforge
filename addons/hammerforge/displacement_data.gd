@@ -270,28 +270,62 @@ func to_dict() -> Dictionary:
 
 
 ## Deserialize from dictionary.
+## The power is clamped the way init_flat() clamps it, and every array is
+## checked against the vertex count that power implies.
+##
+## get_dim() returns (1 << power) + 1 and every read is a `row * dim + col`, so a
+## power that does not match the array lengths sends each index to the wrong
+## cell. set_distance() and add_noise() both guard on `idx < size()`, which means
+## the writes past the end are dropped in silence: the surface part flattens and
+## part scrambles with nothing to trace it back to. A face that cannot be trusted
+## comes back flat instead.
 static func from_dict(data: Dictionary) -> HFDisplacementData:
 	var disp = HFDisplacementData.new()
-	disp.power = int(data.get("power", 3))
+	var raw_power := int(data.get("power", 3))
+	var power_value := clampi(raw_power, 2, 4)
+	if power_value != raw_power:
+		HFLog.warn(
+			"Displacement: power %d is outside 2 to 4. Clamped to %d." % [raw_power, power_value]
+		)
+	disp.init_flat(power_value)
 	disp.elevation = float(data.get("elevation", 1.0))
 	disp.sew_group = int(data.get("sew_group", -1))
+	var expected := disp.get_vertex_count()
 	var dist_arr: Array = data.get("distances", [])
-	disp.distances = PackedFloat32Array()
-	disp.distances.resize(dist_arr.size())
-	for i in range(dist_arr.size()):
-		disp.distances[i] = float(dist_arr[i])
+	if dist_arr.size() == expected:
+		for i in range(expected):
+			disp.distances[i] = float(dist_arr[i])
+	elif dist_arr.size() > 0:
+		HFLog.warn(
+			(
+				"Displacement: %d distances for a power %d face, which needs %d. Face left flat."
+				% [dist_arr.size(), power_value, expected]
+			)
+		)
 	var off_arr: Array = data.get("offsets", [])
-	if off_arr.size() > 0:
-		disp.offsets = PackedVector3Array()
-		disp.offsets.resize(off_arr.size())
-		for i in range(off_arr.size()):
+	if off_arr.size() == expected:
+		# init_flat() leaves offsets empty, since a flat face has none.
+		disp.offsets.resize(expected)
+		for i in range(expected):
 			var e: Array = off_arr[i]
 			if e.size() >= 3:
 				disp.offsets[i] = Vector3(float(e[0]), float(e[1]), float(e[2]))
+	elif off_arr.size() > 0:
+		HFLog.warn(
+			(
+				"Displacement: %d offsets for a power %d face, which needs %d. Offsets dropped."
+				% [off_arr.size(), power_value, expected]
+			)
+		)
 	var alpha_arr: Array = data.get("alphas", [])
-	if alpha_arr.size() > 0:
-		disp.alphas = PackedFloat32Array()
-		disp.alphas.resize(alpha_arr.size())
-		for i in range(alpha_arr.size()):
+	if alpha_arr.size() == expected:
+		for i in range(expected):
 			disp.alphas[i] = float(alpha_arr[i])
+	elif alpha_arr.size() > 0:
+		HFLog.warn(
+			(
+				"Displacement: %d alphas for a power %d face, which needs %d. Alphas dropped."
+				% [alpha_arr.size(), power_value, expected]
+			)
+		)
 	return disp

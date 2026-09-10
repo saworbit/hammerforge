@@ -74,11 +74,40 @@ static func field(schema: Array, key: String) -> Dictionary:
 	return {}
 
 
+## A value in the type the field says, or the field's default if it cannot be.
+##
+## Total by construction. `int({})` is not a valid constructor call: it errors and
+## evaluates to null, and a null written into the settings dictionary reaches the
+## builder's `validate()`, which then never returns, which makes `create()`
+## dereference null and hand a caller declared `-> HFOpResult` nothing at all.
+## Refusing a value here is what keeps that cascade from starting.
 static func _coerce(field: Dictionary, value):
-	match str(field.get("type", TYPE_FLOAT)):
+	var type_name := str(field.get("type", TYPE_FLOAT))
+	if not _is_number_like(value):
+		var fallback = field.get("default", 0.0)
+		HFLog.warn(
+			(
+				"Generator setting '%s' cannot be a %s, so the default is used instead."
+				% [str(field.get("key", "?")), type_string(typeof(value))]
+			)
+		)
+		value = fallback if _is_number_like(fallback) else 0.0
+	match type_name:
 		TYPE_INT, TYPE_ENUM:
 			return int(value)
 		TYPE_BOOL:
 			return bool(value)
 		_:
 			return float(value)
+
+
+## Whether int(), bool() and float() will take this value rather than error.
+##
+## Written with `is` rather than `typeof` because this class defines its own
+## TYPE_INT and TYPE_BOOL as strings, which shadow the engine constants of the
+## same name. A string counts only when it reads as a number, so a stray label
+## does not quietly become zero.
+static func _is_number_like(value) -> bool:
+	if value is String or value is StringName:
+		return str(value).is_valid_float()
+	return value is int or value is float or value is bool

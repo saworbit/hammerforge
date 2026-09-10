@@ -21,13 +21,44 @@ static func load_or_default(path: String = "") -> HFKeymap:
 			if data is Dictionary:
 				# Merge: user overrides take priority, but new default
 				# actions are added so new features work out of the box.
-				for action in defaults:
-					if not data.has(action):
-						data[action] = defaults[action]
-				km._bindings = data
+				km._bindings = _validated(data, defaults, path)
 				return km
 	km._bindings = defaults
 	return km
+
+
+## The bindings from a user file, with anything unusable dropped.
+##
+## This is the one file a user is obliged to hand edit, so a typo in it must not
+## become an error on every key event in the viewport. `matches()` runs on each
+## one and starts by assigning the entry to a Dictionary, so a value of the wrong
+## type errors there, naming this script rather than the file the user got wrong.
+## Each rejection is reported once, on load, naming the file and the key.
+static func _validated(data: Dictionary, defaults: Dictionary, path: String) -> Dictionary:
+	var out: Dictionary = {}
+	for action in data:
+		var key := str(action)
+		if not defaults.has(key):
+			HFLog.warn("%s: '%s' is not a HammerForge action. Ignored." % [path, key])
+			continue
+		var binding = data[action]
+		if not (binding is Dictionary):
+			HFLog.warn(
+				(
+					"%s: '%s' is a %s, not a binding. The default is used."
+					% [path, key, type_string(typeof(binding))]
+				)
+			)
+			continue
+		var keycode = binding.get("keycode", null)
+		if not (keycode is int or keycode is float) or int(keycode) == 0:
+			HFLog.warn("%s: '%s' has no usable keycode. The default is used." % [path, key])
+			continue
+		out[key] = binding
+	for action in defaults:
+		if not out.has(action):
+			out[action] = defaults[action]
+	return out
 
 
 static func _default_bindings() -> Dictionary:
