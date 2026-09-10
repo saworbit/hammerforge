@@ -47,7 +47,6 @@ SHIP = [
 #                       who already has GUT installed would have their copy
 #                       overwritten by whichever version this repository pins,
 #                       which can break their own test suite.
-#   addons/godot_mcp    Contributor MCP server. Nothing to do with the plugin.
 #   addons/hf_docshot   Dev-only screenshot and demo-recording plugin. Reads an
 #                       environment variable and can quit the editor.
 #   tests/              Needs GUT, and tests the plugin rather than using it.
@@ -58,7 +57,6 @@ SHIP = [
 #   level_root.tscn     it would overwrite their project settings.
 EXCLUDED_ON_PURPOSE = [
     "addons/gut",
-    "addons/godot_mcp",
     "addons/hf_docshot",
     "tests",
     "tools",

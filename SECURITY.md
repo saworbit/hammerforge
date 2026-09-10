@@ -42,12 +42,13 @@ Helpful things to include, as far as you have them:
   code execution, arbitrary file read, or arbitrary file write is in scope.
 - **File writes outside the intended destination** — save, autosave, bake
   output, and playtest export writing anywhere the user didn't ask for.
-- **Secret handling** — MCP tokens, editor configuration, or anything under
-  `user://` leaking into the repository, logs, exported builds, or diagnostics.
+- **Secret handling** — editor bridge tokens, editor configuration, or anything
+  under `user://` leaking into the repository, logs, exported builds, or
+  diagnostics.
 - **`HFIORuntime`** — the runtime component that ships in exported games, since
   it evaluates entity I/O connections at runtime.
-- **Supply-chain issues in what this repo ships**, including the vendored
-  `addons/godot_mcp` snapshot.
+- **Supply-chain issues in what this repo ships.** That is `addons/hammerforge`
+  and nothing else; no editor bridge or MCP server is vendored here.
 
 ## What Is Not In Scope
 

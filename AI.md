@@ -15,8 +15,13 @@ I do not paste what comes back and ship it. Everything here has been read, run a
 tested, and plenty of it has been thrown away and done again.
 
 That is not something I feel I need to apologise for, and it is not something I am
-selling either. It is just how this got made. You should be able to find that out
-without working it out from the MCP server sitting in `addons/godot_mcp`.
+selling either. It is just how this got made. You should be able to read that
+here rather than infer it from whatever tooling you find in the tree.
+
+There is no editor bridge in this repository to attach to. I use one locally and
+it is not committed, so if you are an agent looking for a live route into the
+open editor, there is not one here. An addon named "Godot MCP Native" is not
+Didi's `godot-mcp-native`, whatever the names suggest.
 
 That includes the writing. Some of the commit messages and parts of these docs
 were drafted with help, and it shows in places. I would rather say so here than

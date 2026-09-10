@@ -110,8 +110,8 @@ the change.
 - **Test Level variants** (internally Quick Play): `_on_quick_play_from_camera()` and `_on_quick_play_selected_area()` must follow the same severity ≥ 2 blocking, auto-create, and fix-dialog patterns as `_on_quick_play()`. Both must restore temporary state (spawn position/angle, cordon) on both success and error paths. Use `_restore_spawn()` helper and explicit type annotations (e.g. `var old_pos: Vector3 =`) to avoid GDScript `:=` inference failures with untyped spawn references.
 - **Camera yaw propagation**: write yaw to `entity_data["angle"]` (not `set_meta`). The playtest runtime reads `deg_to_rad(entity_data.get("angle", 0.0))` at `level_root.gd` line ~1979.
 - Avoid adding new dependencies unless necessary.
-- Treat `addons/godot_mcp` as vendored code; do not include it in HammerForge formatting/lint sweeps unless updating the vendor snapshot deliberately.
-- Never commit MCP tokens, `user://` MCP settings, generated verification logs, editor screenshots, or local client overrides. `.codex/config.toml` must reference `HAMMERFORGE_GODOT_MCP_TOKEN`, not contain a secret.
+- No editor bridge is vendored here. Install the one you use into your own `addons/` folder; `.gitignore` allowlists `addons/`, so it stays untracked. Enabling it rewrites the tracked `project.godot`, so check that file before you push.
+- Never commit bridge tokens, `user://` settings, generated verification logs, editor screenshots, or local client overrides. A token belongs in an environment variable, not in a committed file.
 
 ## Running Checks Locally
 

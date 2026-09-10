@@ -27,7 +27,6 @@ development apparatus:
 | Not shipped | Why |
 |---|---|
 | `addons/gut` | Third-party test framework. Only `tests/` uses it, and anyone who already has GUT installed would have their copy overwritten by whichever version this repository pins, which can break their own suite. |
-| `addons/godot_mcp` | Contributor MCP server. Nothing to do with the plugin. |
 | `addons/hf_docshot` | Dev-only screenshot and demo-recording plugin. It reads an environment variable and can quit the editor. |
 | `tests/`, `tools/` | Test suite and build machinery. |
 | `docs/`, `overrides/` | The documentation site. Published, not installed. |
@@ -78,10 +77,11 @@ git add -A && git commit -m "HammerForge 0.3.1" && git push origin release
 ### The same rule applies to screenshots and demos
 
 Development tooling should not appear in anything users see, not just in what
-they install. `tools/capture_ui.py` removes the MCP server from `project.godot`
-before capturing so it does not show up in the editor's main-screen bar, and
-puts it back afterwards. If you add tooling that is visible in the editor,
-extend that swap rather than cropping it out of the image.
+they install. `tools/capture_ui.py` cuts `project.godot` back to the HammerForge
+plugin alone before capturing, so nothing you have enabled locally shows up in
+the editor's main-screen bar, and puts the file back afterwards. If you add
+tooling that is visible in the editor, extend that swap rather than cropping it
+out of the image.
 
 ### Do not delete docs/googlef8407c6985aae961.html
 
@@ -100,13 +100,15 @@ account by mistake and has been removed; a verification token is per-account,
 so re-verifying under a different one means a new file rather than reusing the
 old.
 
-## Godot MCP Development Setup
+## Editor Bridges and MCP Servers
 
-The repository vendors `addons/godot_mcp`; each contributor keeps `.codex/config.toml` as ignored, machine-local configuration. The client reads authentication from `HAMMERFORGE_GODOT_MCP_TOKEN`; keep Codex configuration, the token, and all `user://` MCP settings outside version control. The server should remain loopback-only on port `9080` with authentication enabled. See [Install + Upgrade](docs/HammerForge_Install_Upgrade.md#project-scoped-godot-mcp-repository-contributors) for configuration and verification.
+This repository vendors none. It used to carry a copy of Godot MCP Native in `addons/godot_mcp`, enabled in `project.godot` for everyone. That was one contributor's tooling and it had nothing to do with the plugin, so it is gone. Install whichever bridge you use into your own `addons/` folder.
 
-Treat `addons/godot_mcp` as vendored code: HammerForge formatting and lint commands target `addons/hammerforge` only. When deliberately updating the vendor snapshot, review it separately and record the upstream revision in the change description.
+Two things have to stay out of the repository. The addon folder itself, which `.gitignore` now handles by allowlisting `addons/`. And the `enabled=PackedStringArray(...)` line in `project.godot`, which changes the moment you enable a plugin and is tracked, so it is on you to keep it out of a commit.
 
-Current vendor: Godot MCP Native v1.0.8 (`2e138ed`). HammerForge keeps two local patches: bind HTTP to `127.0.0.1` unless remote access is enabled, and skip diagnostic `GDScript.reload()` of on-disk scripts (use the editor's compiled resources; rewrite relative `preload()` only when validating unsaved content).
+Tokens, client configuration, and anything Godot writes under `user://` are machine-local. Bind a local server to loopback and leave authentication on.
+
+If you are an agent reading this: nothing here publishes a session, and an addon named "Godot MCP Native" is not Didi's `godot-mcp-native`. They are different products by different authors.
 
 ## Codebase Structure
 
