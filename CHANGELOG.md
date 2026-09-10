@@ -5,6 +5,24 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Create Starter is callable without the dock** (#278). The starter level was
+  a dock button handler and nothing else, so tests, tool scripts and editor
+  bridges had no way to build one. `HFLevelFactory.create_starter(parent)` now
+  adds a `LevelRoot` and fills it with the floor, sun and player spawn;
+  `HFLevelFactory.create_level_root(parent)` stops at the empty root. Both take
+  an optional scene owner and an optional property dictionary, applied before
+  the node enters the tree because `LevelRoot` reads its exports in `_ready`.
+  The editor plugin gained `create_starter_level()` for the same result in the
+  open scene as one undo entry, and the console's Create Starter action falls
+  back to it when no dock is present. The dock buttons are unchanged.
+  - `LevelRoot._get_editor_owner()` no longer assumes there is a `SceneTree` to
+    ask, so a root built in code and not yet parented falls back to its owner
+    instead of erroring.
+  - **Coverage** (`tests/test_level_factory.gd`): parenting, owner resolution
+    through an explicit owner and an inherited one, properties applied before
+    `_ready`, a rejected null and detached parent, the reported property typo,
+    the floor/sun/spawn set, child ownership so the scene saves, and a second
+    call not duplicating the fixtures.
 - **`tools/wait_for_ci.py` waits on the commit, not the branch.** Waiting on a
   pull request's checks by branch is the obvious thing and it is wrong: the
   newest run on a branch is often the previous one, so a merge can go ahead on a
