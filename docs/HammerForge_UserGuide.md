@@ -1157,7 +1157,9 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Command palette | Shift+? / F1 / Ctrl+K | Searchable action palette with fuzzy search |
 | Operation timeline | Ctrl+Shift+T | Toggle operation replay timeline |
 
-**Rebinding:** Edit `user://hammerforge_keymap.json` (created on first run). Each entry maps an action name to `{"keycode": KEY_*, "ctrl": bool, "shift": bool, "alt": bool}`. Restart the plugin after editing.
+**Rebinding:** Edit `user://hammerforge_keymap.json` (created on first run). Each entry maps an action name to `{"keycode": KEY_*, "ctrl": bool, "shift": bool, "alt": bool}`. Restart the plugin after editing. The JSON file is the interface; there is no rebinding UI.
+
+An entry that is not a binding, one with no usable `keycode`, or a key that is not a HammerForge action is reported once on load, naming the file and the key, and the default is used for it. Before, a typo in this file turned every keystroke in the viewport into an error that named `hf_keymap.gd` rather than the file you got wrong.
 
 **Toolbar labels** and **tooltips** update automatically from the keymap, so custom bindings are always reflected in the UI. Press the **?** button on the toolbar to open a searchable shortcut dialog showing all current keybindings grouped by category (Tools, Editing, Selection, Paint, Axis Lock).
 
