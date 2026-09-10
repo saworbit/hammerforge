@@ -5,6 +5,23 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **CI refuses a `project.godot` that enables local tooling.** The file is
+  tracked and the editor rewrites it the moment anyone enables a plugin, so a
+  locally installed bridge rides into the next `git add -A`. That is how
+  `addons/godot_mcp` and its `MCPRuntimeProbe` autoload got in and stayed
+  enabled for months. `tools/check_project_settings.py` asserts the enabled list
+  is HammerForge and nothing else, and that no autoload is registered.
+  - **`override.cfg` is not a way out of this and the tool says so.** On 4.7 an
+    `editor_plugins/enabled` written there does not enable the plugin in the
+    editor, while the same value in `project.godot` does. Checked against
+    4.7.stable with a control, since the documentation is quiet on the point.
+  - **`--selftest` covers nine cases**, including the exact shape this
+    repository shipped before #277, a plugin name that merely contains the
+    allowed one, an enabled list the guard cannot parse, and a missing
+    `[editor_plugins]` section. It runs in CI ahead of the check itself.
+  - DEVELOPMENT.md now carries the `git update-index --skip-worktree` recipe for
+    keeping a local enable out of `git status`, along with the pull it breaks
+    and how to get out of that.
 - **Create Starter is callable without the dock** (#278). The starter level was
   a dock button handler and nothing else, so tests, tool scripts and editor
   bridges had no way to build one. `HFLevelFactory.create_starter(parent)` now

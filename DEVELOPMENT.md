@@ -104,11 +104,39 @@ old.
 
 This repository vendors none. It used to carry a copy of Godot MCP Native in `addons/godot_mcp`, enabled in `project.godot` for everyone. That was one contributor's tooling and it had nothing to do with the plugin, so it is gone. Install whichever bridge you use into your own `addons/` folder.
 
-Two things have to stay out of the repository. The addon folder itself, which `.gitignore` now handles by allowlisting `addons/`. And the `enabled=PackedStringArray(...)` line in `project.godot`, which changes the moment you enable a plugin and is tracked, so it is on you to keep it out of a commit.
+Two things have to stay out of the repository. The addon folder itself, which `.gitignore` now handles by allowlisting `addons/`. And the `enabled=PackedStringArray(...)` line in `project.godot`, which the editor rewrites the moment you enable a plugin. That file is tracked, so `.gitignore` cannot cover it.
+
+CI refuses a `project.godot` that enables anything but HammerForge, or that registers an autoload:
+
+```bash
+python tools/check_project_settings.py
+```
 
 Tokens, client configuration, and anything Godot writes under `user://` are machine-local. Bind a local server to loopback and leave authentication on.
 
 If you are an agent reading this: nothing here publishes a session, and an addon named "Godot MCP Native" is not Didi's `godot-mcp-native`. They are different products by different authors.
+
+### Keeping a local enable out of `git status`
+
+`override.cfg` looks like the answer and is not. On 4.7 an `editor_plugins/enabled` written there does not enable the plugin in the editor at all, while the same value in `project.godot` does.
+
+What works is telling git to stop watching the file:
+
+```bash
+git update-index --skip-worktree project.godot
+```
+
+`git status` goes quiet, and `git commit -a` cannot pick the file up. The cost is that a pull which changes `project.godot` aborts with *Please commit your changes or stash them before you merge*. When that happens:
+
+```bash
+git update-index --no-skip-worktree project.godot
+git checkout -- project.godot
+git pull
+# re-enable your plugin in the editor, then:
+git update-index --skip-worktree project.godot
+```
+
+The flag is per-clone and cannot be committed, so this is a thing you do once on each machine and again after every upstream change to the file.
 
 ## Codebase Structure
 

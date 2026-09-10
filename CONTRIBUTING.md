@@ -110,7 +110,7 @@ the change.
 - **Test Level variants** (internally Quick Play): `_on_quick_play_from_camera()` and `_on_quick_play_selected_area()` must follow the same severity ≥ 2 blocking, auto-create, and fix-dialog patterns as `_on_quick_play()`. Both must restore temporary state (spawn position/angle, cordon) on both success and error paths. Use `_restore_spawn()` helper and explicit type annotations (e.g. `var old_pos: Vector3 =`) to avoid GDScript `:=` inference failures with untyped spawn references.
 - **Camera yaw propagation**: write yaw to `entity_data["angle"]` (not `set_meta`). The playtest runtime reads `deg_to_rad(entity_data.get("angle", 0.0))` at `level_root.gd` line ~1979.
 - Avoid adding new dependencies unless necessary.
-- No editor bridge is vendored here. Install the one you use into your own `addons/` folder; `.gitignore` allowlists `addons/`, so it stays untracked. Enabling it rewrites the tracked `project.godot`, so check that file before you push.
+- No editor bridge is vendored here. Install the one you use into your own `addons/` folder; `.gitignore` allowlists `addons/`, so it stays untracked. Enabling it rewrites the tracked `project.godot`; `tools/check_project_settings.py` fails CI if that reaches a branch, and [DEVELOPMENT.md](DEVELOPMENT.md#keeping-a-local-enable-out-of-git-status) has the way to keep it out of `git status`.
 - Never commit bridge tokens, `user://` settings, generated verification logs, editor screenshots, or local client overrides. A token belongs in an environment variable, not in a committed file.
 
 ## Running Checks Locally
