@@ -37,6 +37,44 @@ The format is based on Keep a Changelog, and this project follows semantic versi
     own, the v1 migration, and a torus that must not be migrated.
     `tests/test_bevel.gd` gains outward normals, convexity at two radii, and
     each strip quad leaning towards the face it borders.
+- **Four calls accepted a value they could not use and reported success.** Same
+  shape each time: a number with no relationship to the geometry it modifies
+  goes in, something unrecoverable comes out, and the return value says it
+  worked.
+  - **Bevel radius is bounded against the edge it rounds** (#315). `segments`
+    was clamped at both ends and `radius` only floored, so `radius = 1e6` on a
+    64 unit box returned `true` and left a brush spanning a million units while
+    its own `size` still read 64. The next carve then treated an unrelated
+    brush at the origin as overlapping and scattered the pieces half a million
+    units away. The radius is capped at half the shorter of the two adjacent
+    face extents, with a warning naming both figures, and a non-finite radius
+    is refused outright.
+  - **`.map` import refuses a plane it cannot read** (#318). Not for the reason
+    the report gave: `float("nan")` answers `0.0` on 4.7, so `nan`, `inf` and a
+    plain typo all arrived as the origin and the face read as a real plane
+    through it. A coordinate token that is not a number now fails the line, and
+    a coordinate past 65536 fails it too, which is what catches `1e30`. A brush
+    holding an unreadable plane is dropped whole rather than built from the
+    planes that did parse, because a `.map` brush is the intersection of all its
+    half spaces and a missing one is a different solid, not a smaller one.
+  - **Creating a displacement on a face that has one is refused** (#319).
+    `init_flat()` resets distances, offsets, alphas, sew group and elevation, so
+    a second press of the button threw away the terrain on that face and still
+    returned `true`. `destroy_displacement()` is the deliberate way to clear
+    one and it is undoable. The dock toast and the user guide say so.
+  - **Displacement paint and elevation reject what they cannot use** (#320). One
+    `paint()` with a non-finite centre filled all 289 distances of a power 4
+    grid with NaN, which no amount of smoothing or further paint can undo, and
+    it survived into the `.hflevel`. `paint()` refuses a non-finite centre,
+    radius or strength, and a radius of zero. `set_elevation()` refuses a
+    non-finite value and clamps the magnitude to the face's own diagonal, which
+    is the only scale a multiplier on world-unit distances has to be measured
+    against. Levels already saved are read through `from_dict()` and are not
+    touched, so nothing changes under an existing sculpt.
+  - **Coverage**: 6 tests in `tests/test_displacement.gd`, 3 in
+    `tests/test_bevel.gd`, 4 in `tests/test_map_export.gd`, each with a good
+    value alongside the bad one so the guards cannot start refusing what they
+    should accept.
 
 ### Added
 - **CI refuses a `project.godot` that enables local tooling.** The file is
