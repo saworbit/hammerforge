@@ -1714,6 +1714,8 @@ Blend shader shows only one slot
 Displacement create fails
 - The face must be a quad (exactly 4 vertices). Triangles and N-gons are not supported.
 - Ensure a face is selected in Face Select Mode.
+- The face must not already have a displacement. Create refuses one rather than
+  wiping the sculpt already on it. Use Destroy first if you want to start over.
 
 Displacement paint does nothing
 - Enable Paint Mode in the dock.
@@ -1723,6 +1725,9 @@ Displacement paint does nothing
 Bevel edge fails
 - Enter Vertex mode (V), then Edge sub-mode (E). Select an edge.
 - The edge must be shared by exactly 2 faces.
+- A radius wider than half the shorter of the two adjacent faces is capped to
+  that, with a warning. A bevel wider than that eats through the faces it sits
+  between.
 
 Inset face fails
 - The inset distance is too large relative to the face size. Use a smaller value.

@@ -31,6 +31,9 @@ func bevel_edge(brush_id: String, edge: Array, segments: int = 2, radius: float 
 		HFLog.warn("HFBevelSystem: edge needs 2 vertex indices")
 		return false
 	segments = clampi(segments, 1, 16)
+	if not is_finite(radius):
+		HFLog.warn("HFBevelSystem: bevel radius must be finite")
+		return false
 	radius = maxf(radius, 0.01)
 	var brush: Node3D = root.find_brush_by_id(brush_id)
 	if not brush:
@@ -57,6 +60,17 @@ func bevel_edge(brush_id: String, edge: Array, segments: int = 2, radius: float 
 	var face_idx_1: int = adjacent[1]
 	var face0: FaceData = faces[face_idx_0]
 	var face1: FaceData = faces[face_idx_1]
+	# A bevel wider than the faces it sits between eats through both of them.
+	# Cap at half the shorter of the two, which is the widest chamfer that still
+	# leaves some of each face behind. Without this a radius of 1e6 on a 64-unit
+	# box returned true and left a brush spanning a million units, whose bounds
+	# then dragged unrelated brushes into the next carve.
+	var radius_cap: float = 0.5 * minf(_face_extent(face0), _face_extent(face1))
+	if radius_cap > 0.01 and radius > radius_cap:
+		HFLog.warn(
+			"HFBevelSystem: radius %f is wider than the edge, using %f" % [radius, radius_cap]
+		)
+		radius = radius_cap
 	# Compute bevel geometry.
 	var edge_dir: Vector3 = (vb - va).normalized()
 	var n0: Vector3 = face0.normal
@@ -302,6 +316,17 @@ func _append_endpoint_caps(
 
 ## Compute arc vertices from `origin` sweeping from `dir0` to `dir1`
 ## at the given `radius` with `segments` steps. Returns segments+1 points.
+## Longest distance between any two vertices of a face. The scale a bevel on one
+## of its edges has to stay inside.
+func _face_extent(face: FaceData) -> float:
+	var extent := 0.0
+	var verts: PackedVector3Array = face.local_verts
+	for i in range(verts.size()):
+		for j in range(i + 1, verts.size()):
+			extent = maxf(extent, verts[i].distance_to(verts[j]))
+	return extent
+
+
 func _compute_arc(
 	origin: Vector3, dir0: Vector3, dir1: Vector3, radius: float, segments: int
 ) -> PackedVector3Array:

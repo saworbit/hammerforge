@@ -336,3 +336,58 @@ func test_slerp_parallel_vectors():
 	var b := Vector3(1, 0, 0)
 	var r: Vector3 = sys._slerp_vec3(a, b, 0.5)
 	assert_almost_eq(r.x, 1.0, 0.01)
+
+
+# ---------------------------------------------------------------------------
+# Bevel radius bounds (#315)
+# ---------------------------------------------------------------------------
+
+
+func _local_extent(brush: Node3D) -> Vector3:
+	var mn := Vector3.INF
+	var mx := -Vector3.INF
+	for face in brush.faces:
+		for vertex in face.local_verts:
+			mn = mn.min(vertex)
+			mx = mx.max(vertex)
+	return mx - mn
+
+
+func test_bevel_refuses_a_non_finite_radius():
+	var brush = _make_box_brush()
+	var before: int = brush.faces.size()
+	_capture_warning("radius must be finite")
+	assert_false(sys.bevel_edge("box_brush", [0, 1], 2, NAN), "NaN radius should be refused")
+	_assert_captured_warning("radius must be finite")
+	assert_eq(brush.faces.size(), before, "A refused bevel should add no faces")
+
+
+func test_an_oversized_radius_does_not_inflate_the_brush():
+	var brush = _make_box_brush()
+	var before := _local_extent(brush)
+	_capture_warning("wider than the edge")
+	assert_true(sys.bevel_edge("box_brush", [0, 1], 2, 1000000.0), "The radius is capped, not lost")
+	_assert_captured_warning("wider than the edge")
+	var after := _local_extent(brush)
+	assert_lt(after.x, before.x + 0.01, "A bevel should not grow the brush on X")
+	assert_lt(after.y, before.y + 0.01, "A bevel should not grow the brush on Y")
+	assert_lt(after.z, before.z + 0.01, "A bevel should not grow the brush on Z")
+
+
+func test_an_ordinary_radius_is_not_capped():
+	var brush = _make_box_brush()
+	var original: Array = []
+	for face in brush.faces:
+		for vertex in face.local_verts:
+			original.append(vertex)
+	assert_true(sys.bevel_edge("box_brush", [0, 1], 2, 4.0), "A 4 unit bevel on a 16 unit box")
+	# Every new vertex sits within the radius of a corner it replaced, and the
+	# furthest one sits at exactly the radius asked for, not a clamped figure.
+	var furthest := 0.0
+	for face in brush.faces:
+		for vertex in face.local_verts:
+			var nearest := INF
+			for old in original:
+				nearest = minf(nearest, vertex.distance_to(old))
+			furthest = maxf(furthest, nearest)
+	assert_almost_eq(furthest, 4.0, 0.001, "The bevel should use the radius asked for")
