@@ -135,6 +135,9 @@ static func export_map_from_level(level_root: Node, adapter: HFMapAdapterType = 
 		return ""
 	if adapter == null:
 		adapter = HFMapQuakeType.new()
+	var material_names: Array = []
+	if level_root.has_method("get_material_names"):
+		material_names = level_root.call("get_material_names")
 	var lines: Array[String] = []
 	lines.append("{")
 	lines.append('"classname" "worldspawn"')
@@ -149,7 +152,7 @@ static func export_map_from_level(level_root: Node, adapter: HFMapAdapterType = 
 			continue
 		if _is_cutter(node):
 			continue
-		var brush_lines = _brush_to_map_lines(node, adapter)
+		var brush_lines = _brush_to_map_lines(node, adapter, material_names)
 		if brush_lines.is_empty():
 			continue
 		var bec := str(node.get_meta("brush_entity_class", ""))
@@ -176,6 +179,61 @@ static func export_map_from_level(level_root: Node, adapter: HFMapAdapterType = 
 				continue
 			lines.append_array(ent_lines)
 	return "\n".join(lines)
+
+
+## A palette material name as it can be written on a face line.
+##
+## The texture field of a `.map` face line is positional and whitespace
+## delimited, so a name with a space in it would be read as the name plus the
+## start of the UV numbers. Whitespace runs collapse to an underscore and quotes
+## are dropped; a name that is empty once cleaned falls back to the default.
+static func texture_token(material_name: String) -> String:
+	var cleaned := material_name.strip_edges().replace('"', "")
+	var out := ""
+	var in_space := false
+	for i in cleaned.length():
+		var ch := cleaned[i]
+		if ch == " " or ch == "	":
+			in_space = true
+			continue
+		if in_space and out != "":
+			out += "_"
+		in_space = false
+		out += ch
+	return out if out != "" else DEFAULT_TEXTURE
+
+
+## The texture name for one face, resolved through the palette names the level
+## was exported with. An unset or out-of-range index is the default texture.
+static func _texture_for_face(face_data: Variant, material_names: Array) -> String:
+	if face_data == null:
+		return DEFAULT_TEXTURE
+	var idx: int = int(face_data.material_idx)
+	if idx < 0 or idx >= material_names.size():
+		return DEFAULT_TEXTURE
+	return texture_token(str(material_names[idx]))
+
+
+## The face whose outward normal is closest to [param world_normal].
+##
+## Curved primitives get their faces from the mesh, so a brush's face order is
+## whatever the mesh generator produced rather than a layout the exporter can
+## count on. Matching by normal asks the question the exporter actually has,
+## which is "which face is this plane", and gets the same answer whatever order
+## the faces are in.
+static func _face_for_normal(brush: DraftBrush, world_normal: Vector3) -> Variant:
+	var best: Variant = null
+	var best_dot := -2.0
+	var basis := brush.global_transform.basis
+	for face in brush.faces:
+		if face == null:
+			continue
+		var normal: Vector3 = (basis * face.normal).normalized()
+		var dot := normal.dot(world_normal)
+		if dot > best_dot:
+			best_dot = dot
+			best = face
+	return best
 
 
 ## True when a brush cuts geometry away rather than adding it.
@@ -243,9 +301,14 @@ static func _brush_from_faces(faces: Array) -> Dictionary:
 		return {}
 	var points: Array = []
 	var planes: Array = []
+	# Which parsed face each usable plane came from. Degenerate faces are skipped,
+	# so the plane index is not the face index, and the hull hands its polygons
+	# back keyed on the plane index.
+	var plane_sources: Array = []
 	var axis_aligned = true
 	var planes_usable = true
-	for face in faces:
+	for face_index in faces.size():
+		var face: Dictionary = faces[face_index]
 		var face_points: Array = face.get("points", [])
 		if face_points.size() < 3:
 			continue
@@ -269,6 +332,7 @@ static func _brush_from_faces(faces: Array) -> Dictionary:
 			planes_usable = false
 		else:
 			planes.append(Plane(normal, normal.dot(face_points[0])))
+			plane_sources.append(face_index)
 	if points.is_empty():
 		return {}
 	var bounds := _bounds_of(points)
@@ -284,18 +348,24 @@ static func _brush_from_faces(faces: Array) -> Dictionary:
 		return {}
 	var center = bounds.get_center()
 	if axis_aligned and faces.size() <= 8:
+		# A box builds its own six faces, so there is no face list to line the
+		# textures up against. They travel keyed on the plane normal instead and
+		# the importer matches them to the faces the box makes.
 		return {
 			"shape": LevelRoot.BrushShape.BOX,
 			"size": size,
 			"center": center,
-			"operation": CSGShape3D.OPERATION_UNION
+			"operation": CSGShape3D.OPERATION_UNION,
+			"map_textures_by_normal": _textures_by_normal(faces)
 		}
 	var rings: Array = []
+	var ring_textures: Array = []
 	if hull.is_empty():
 		for face in faces:
 			var face_points: Array = face.get("points", [])
 			if face_points.size() < 3:
 				continue
+			ring_textures.append(str(face.get("texture", "")))
 			# Mirror of the export: undo the .map plane order so the stored face
 			# keeps FaceData's clockwise-from-outside winding.
 			var wound: Array = face_points.duplicate()
@@ -304,20 +374,62 @@ static func _brush_from_faces(faces: Array) -> Dictionary:
 	else:
 		for entry in hull:
 			rings.append(entry["verts"])
+			var source_index := int(entry.get("index", -1))
+			if source_index >= 0 and source_index < plane_sources.size():
+				ring_textures.append(str(faces[plane_sources[source_index]].get("texture", "")))
+			else:
+				ring_textures.append("")
 	var serialized_faces: Array = []
-	for ring in rings:
+	var map_textures: Array = []
+	for ring_index in rings.size():
 		var local_verts: Array = []
-		for p in ring:
+		for p in rings[ring_index]:
 			var pt: Vector3 = p
 			local_verts.append([pt.x - center.x, pt.y - center.y, pt.z - center.z])
 		serialized_faces.append({"local_verts": local_verts, "winding_version": 1})
+		map_textures.append(ring_textures[ring_index] if ring_index < ring_textures.size() else "")
 	return {
 		"shape": LevelRoot.BrushShape.CUSTOM,
 		"size": size,
 		"center": center,
 		"faces": serialized_faces,
-		"operation": CSGShape3D.OPERATION_UNION
+		"operation": CSGShape3D.OPERATION_UNION,
+		"map_textures": map_textures
 	}
+
+
+## Texture names from the parsed faces, keyed by the direction each plane faces.
+##
+## Used for the box path, where the brush builds its own faces and there is no
+## parsed face to pair each one with. The key is quantised so a normal written
+## out and read back still matches.
+static func _textures_by_normal(faces: Array) -> Dictionary:
+	var out: Dictionary = {}
+	for face in faces:
+		var face_points: Array = face.get("points", [])
+		if face_points.size() < 3:
+			continue
+		var texture := str(face.get("texture", ""))
+		if texture == "":
+			continue
+		var normal := _face_normal(face_points)
+		if normal == Vector3.ZERO:
+			continue
+		out[normal_key(normal)] = texture
+	return out
+
+
+## A rounded direction, so two normals that agree to three decimals share a key.
+##
+## Adding zero folds negative zero onto positive zero. Without it an axis-aligned
+## normal formats as "-0.000" on one side of a round trip and "0.000" on the
+## other, and four of a box's six faces miss each other.
+static func normal_key(normal: Vector3) -> String:
+	var n := normal.normalized()
+	return (
+		"%.3f,%.3f,%.3f"
+		% [snappedf(n.x, 0.001) + 0.0, snappedf(n.y, 0.001) + 0.0, snappedf(n.z, 0.001) + 0.0]
+	)
 
 
 ## The box that contains every point.
@@ -551,11 +663,20 @@ static func _parse_face_line(line: String, face_re: RegEx) -> Dictionary:
 			if not parts[i2].is_valid_float():
 				return {}
 		points.append(Vector3(float(parts[0]), float(parts[1]), float(parts[2])))
-	return {"points": points}
+	# The texture is the first token after the third plane point, in both Classic
+	# Quake and Valve 220. Everything after it is UV numbers, which differ between
+	# the two formats and are not read back.
+	var texture := ""
+	var tail := line.substr(matches[2].get_end()).strip_edges()
+	if tail != "":
+		var tail_parts := tail.split(" ", false)
+		if tail_parts.size() > 0:
+			texture = str(tail_parts[0])
+	return {"points": points, "texture": texture}
 
 
 static func _brush_to_map_lines(
-	brush: DraftBrush, adapter: HFMapAdapterType = null
+	brush: DraftBrush, adapter: HFMapAdapterType = null, material_names: Array = []
 ) -> Array[String]:
 	if not brush:
 		return []
@@ -565,19 +686,19 @@ static func _brush_to_map_lines(
 	var shape = brush.shape
 	match shape:
 		LevelRoot.BrushShape.BOX:
-			lines.append_array(_box_to_map_lines(brush, adapter))
+			lines.append_array(_box_to_map_lines(brush, adapter, material_names))
 		LevelRoot.BrushShape.CYLINDER:
-			lines.append_array(_cylinder_to_map_lines(brush, adapter))
+			lines.append_array(_cylinder_to_map_lines(brush, adapter, material_names))
 		_:
 			if not brush.faces.is_empty():
-				lines.append_array(_faces_to_map_lines(brush, adapter))
+				lines.append_array(_faces_to_map_lines(brush, adapter, material_names))
 			else:
-				lines.append_array(_box_to_map_lines(brush, adapter))
+				lines.append_array(_box_to_map_lines(brush, adapter, material_names))
 	return lines
 
 
 static func _faces_to_map_lines(
-	brush: DraftBrush, adapter: HFMapAdapterType = null
+	brush: DraftBrush, adapter: HFMapAdapterType = null, material_names: Array = []
 ) -> Array[String]:
 	if adapter == null:
 		adapter = HFMapQuakeType.new()
@@ -591,11 +712,15 @@ static func _faces_to_map_lines(
 		# FaceData winds clockwise seen from outside. A .map plane is read as
 		# (b - a) x (c - a), so the points go out in the reverse order or every
 		# hull comes out inside out.
-		lines.append(adapter.format_face_line(a, c, b, DEFAULT_TEXTURE, face))
+		lines.append(
+			adapter.format_face_line(a, c, b, _texture_for_face(face, material_names), face)
+		)
 	return lines
 
 
-static func _box_to_map_lines(brush: DraftBrush, adapter: HFMapAdapterType = null) -> Array[String]:
+static func _box_to_map_lines(
+	brush: DraftBrush, adapter: HFMapAdapterType = null, material_names: Array = []
+) -> Array[String]:
 	if adapter == null:
 		adapter = HFMapQuakeType.new()
 	var lines: Array[String] = []
@@ -623,12 +748,12 @@ static func _box_to_map_lines(brush: DraftBrush, adapter: HFMapAdapterType = nul
 		var b = corners[face[1]]
 		var c = corners[face[2]]
 		var fd: Variant = brush_faces[fi] if fi < brush_faces.size() else null
-		lines.append(adapter.format_face_line(a, b, c, DEFAULT_TEXTURE, fd))
+		lines.append(adapter.format_face_line(a, b, c, _texture_for_face(fd, material_names), fd))
 	return lines
 
 
 static func _cylinder_to_map_lines(
-	brush: DraftBrush, adapter: HFMapAdapterType = null
+	brush: DraftBrush, adapter: HFMapAdapterType = null, material_names: Array = []
 ) -> Array[String]:
 	if adapter == null:
 		adapter = HFMapQuakeType.new()
@@ -644,28 +769,45 @@ static func _cylinder_to_map_lines(
 		var z = sin(angle) * radius
 		points_top.append(brush.global_transform * Vector3(x, half_y, z))
 		points_bottom.append(brush.global_transform * Vector3(x, -half_y, z))
-	var brush_faces = brush.faces
-	var face_idx := 0
+	# One plane per wall, and one per cap. A .map brush is an intersection of half
+	# spaces, so the whole flat top is the single plane y = +half_y; walking the
+	# cap as a triangle fan wrote that same plane once per wedge, which is 3 * sides
+	# planes for a prism that needs sides + 2, most of them exact duplicates.
+	#
+	# The points also go out in the order that makes each plane normal point away
+	# from the brush, which is what the box and custom-face writers already do and
+	# what the format notes promise. The fan wrote its planes facing inward.
+	var up := brush.global_transform.basis.y.normalized()
 	for i in range(sides):
-		var a = points_bottom[i]
-		var b = points_bottom[(i + 1) % sides]
-		var c = points_top[(i + 1) % sides]
-		var fd: Variant = brush_faces[face_idx] if face_idx < brush_faces.size() else null
-		lines.append(adapter.format_face_line(a, b, c, DEFAULT_TEXTURE, fd))
-		face_idx += 1
-	var top_center = brush.global_transform.origin + brush.global_transform.basis.y * half_y
-	var bottom_center = brush.global_transform.origin - brush.global_transform.basis.y * half_y
-	for i in range(sides):
-		var a_top = points_top[i]
-		var b_top = points_top[(i + 1) % sides]
-		var fd_top: Variant = brush_faces[face_idx] if face_idx < brush_faces.size() else null
-		lines.append(adapter.format_face_line(a_top, b_top, top_center, DEFAULT_TEXTURE, fd_top))
-		face_idx += 1
-		var a_bot = points_bottom[(i + 1) % sides]
-		var b_bot = points_bottom[i]
-		var fd_bot: Variant = brush_faces[face_idx] if face_idx < brush_faces.size() else null
-		lines.append(adapter.format_face_line(a_bot, b_bot, bottom_center, DEFAULT_TEXTURE, fd_bot))
-		face_idx += 1
+		var a: Vector3 = points_bottom[i]
+		var b: Vector3 = points_top[(i + 1) % sides]
+		var c: Vector3 = points_bottom[(i + 1) % sides]
+		var wall_normal: Vector3 = (b - a).cross(c - a).normalized()
+		var fd: Variant = _face_for_normal(brush, wall_normal)
+		lines.append(adapter.format_face_line(a, b, c, _texture_for_face(fd, material_names), fd))
+	# Three distinct points on each ring name the cap plane. Taking them from the
+	# ring rather than from the centre keeps them non-collinear for any side count
+	# the brush allows.
+	var fd_top: Variant = _face_for_normal(brush, up)
+	lines.append(
+		adapter.format_face_line(
+			points_top[2],
+			points_top[1],
+			points_top[0],
+			_texture_for_face(fd_top, material_names),
+			fd_top
+		)
+	)
+	var fd_bottom: Variant = _face_for_normal(brush, -up)
+	lines.append(
+		adapter.format_face_line(
+			points_bottom[0],
+			points_bottom[1],
+			points_bottom[2],
+			_texture_for_face(fd_bottom, material_names),
+			fd_bottom
+		)
+	)
 	return lines
 
 

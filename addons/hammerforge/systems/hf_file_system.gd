@@ -106,13 +106,55 @@ func import_map(path: String) -> int:
 		return ERR_INVALID_DATA
 	root.clear_brushes()
 	root._clear_entities()
+	var palette := _palette_by_texture_token()
 	for info in map_data.get("brushes", []):
 		if info is Dictionary:
-			root.create_brush_from_info(info)
+			var brush = root.create_brush_from_info(info)
+			_apply_map_textures(brush, info, palette)
 	for entity_info in map_data.get("entities", []):
 		if entity_info is Dictionary:
 			root._create_entity_from_map(entity_info)
 	return OK
+
+
+## The palette, keyed the way a texture name is written on a face line, so a name
+## read back out of a `.map` finds the slot it was exported from.
+func _palette_by_texture_token() -> Dictionary:
+	var out: Dictionary = {}
+	# Test shims stand in for LevelRoot on this path and do not all carry a
+	# material manager, so ask before reaching for it.
+	if not ("material_manager" in root) or root.material_manager == null:
+		return out
+	var names: Array = root.material_manager.get_material_names()
+	for i in names.size():
+		var token := MapIO.texture_token(str(names[i]))
+		if token != MapIO.DEFAULT_TEXTURE and not out.has(token):
+			out[token] = i
+	return out
+
+
+## Point each imported face at the palette slot its texture name asks for.
+##
+## A name the palette does not hold leaves the face unset rather than adding a
+## material, because a `.map` names a texture without saying where it lives and
+## guessing a resource path would put a broken reference on the face.
+func _apply_map_textures(brush, info: Dictionary, palette: Dictionary) -> void:
+	if not is_instance_valid(brush) or palette.is_empty():
+		return
+	var by_normal: Dictionary = info.get("map_textures_by_normal", {})
+	if not by_normal.is_empty():
+		for face in brush.faces:
+			if face == null:
+				continue
+			var token := str(by_normal.get(MapIO.normal_key(face.normal), ""))
+			if palette.has(token):
+				face.material_idx = int(palette[token])
+		return
+	var textures: Array = info.get("map_textures", [])
+	for i in mini(textures.size(), brush.faces.size()):
+		var name_token := str(textures[i])
+		if palette.has(name_token):
+			brush.faces[i].material_idx = int(palette[name_token])
 
 
 func export_map(path: String, format: String = "quake") -> int:
