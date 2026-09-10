@@ -3160,6 +3160,8 @@ func _on_create_level_root(create_starter: bool) -> void:
 	if not root:
 		show_toast("Open or create a 3D scene first", 2)
 		return
+	# The history browser reads its versions through this node, so adopt it
+	# before the starter fill is committed against it.
 	level_root = root
 	if create_starter:
 		_on_new_level()

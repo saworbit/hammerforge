@@ -2968,7 +2968,9 @@ func create_new_level() -> void:
 
 
 func _get_editor_owner() -> Node:
-	var scene = get_tree().edited_scene_root
+	# A root built in code and not yet parented has no tree to ask.
+	var tree := get_tree()
+	var scene = tree.edited_scene_root if tree else null
 	if scene:
 		return scene
 	return get_owner()

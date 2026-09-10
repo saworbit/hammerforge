@@ -388,9 +388,14 @@ Godot editor input and UI
      -> level_root.gd           (public level facade and cross-system coordination)
         -> runtime core         (brush, entity, bake, paint, file)
         -> editor-only graph    (drag, grid, snap, state, validation, previews, authoring tools)
+
+HFLevelFactory                  (makes a LevelRoot from code; no dock, no EditorPlugin)
+  -> level_root.gd
 ```
 
 `LevelRoot` preserves the public level API used by `plugin.gd` and `dock.gd` (`root.bake()`, `root.begin_drag()`, and similar operations). It delegates cohesive behavior to subsystems while retaining container ownership, exported settings, signals, runtime lifecycle, and cross-system coordination; its methods are therefore not uniformly one-line delegates.
+
+`HFLevelFactory` makes the root itself, which is the one step that sits in front of that API. `create_level_root(parent)` adds an empty `LevelRoot`, and `create_starter(parent)` adds one and fills it with the floor, sun and player spawn that Create Starter builds. Both take an optional owner and an optional property dictionary applied before `_ready`, since `LevelRoot` reads its exports there and outside the editor a fresh root would otherwise start a playtest. `plugin.gd` exposes `create_starter_level()` for the same result in the scene the editor has open, as one undo entry.
 
 `plugin.gd`'s `_forward_3d_gui_input()` is a two-line boundary that delegates viewport arbitration to `HFPluginViewportInput.handle()`. That module coordinates the focused paint, keyboard, RMB, selection, extrude, draw, motion, vertex, and external-tool paths. Numeric dimension parsing, live preview, and draw/extrude commit live in `HFPluginNumericInput`. Other `plugin_*.gd` modules similarly own selection state, commands, HUD state, overlays, edit actions, and viewport drops.
 
@@ -540,6 +545,6 @@ Unit tests use the [GUT](https://github.com/bitwes/Gut) framework and run headle
 | `test_selection_gesture.gd` | 40 | Native widget/Object Select ownership, modal Face Select, recovery, focus/scope guards, native duplicate/reparent repair, and Inspector/undo change tracking |
 | `test_viewport_outlines.gd` | 39 | Sparse semantic outlines, exact/composite entity collision, visibility/transforms, and shape-aware resize recovery |
 
-Full suite (verified in CI on September 10, 2026): **3,286 tests** across **170 scripts** (**3,279 passing** plus seven intentional no-assert safety tests; **16,695 assertions**).
+Full suite (verified in CI on September 10, 2026): **3,299 tests** across **171 scripts** (**3,292 passing** plus seven intentional no-assert safety tests; **16,724 assertions**).
 
 Tests use root shim scripts (dynamically created GDScript) to provide the LevelRoot interface without circular preload dependencies. Configuration in `.gutconfig.json`.
