@@ -112,6 +112,10 @@ CI refuses a `project.godot` that enables anything but HammerForge, or that regi
 python tools/check_project_settings.py
 ```
 
+Tokens, client configuration, and anything Godot writes under `user://` are machine-local. Bind a local server to loopback and leave authentication on.
+
+If you are an agent reading this: nothing here publishes a session, and an addon named "Godot MCP Native" is not Didi's `godot-mcp-native`. They are different products by different authors.
+
 ### Keeping a local enable out of `git status`
 
 `override.cfg` looks like the answer and is not. On 4.7 an `editor_plugins/enabled` written there does not enable the plugin in the editor at all, while the same value in `project.godot` does.
@@ -133,10 +137,6 @@ git update-index --skip-worktree project.godot
 ```
 
 The flag is per-clone and cannot be committed, so this is a thing you do once on each machine and again after every upstream change to the file.
-
-Tokens, client configuration, and anything Godot writes under `user://` are machine-local. Bind a local server to loopback and leave authentication on.
-
-If you are an agent reading this: nothing here publishes a session, and an addon named "Godot MCP Native" is not Didi's `godot-mcp-native`. They are different products by different authors.
 
 ## Codebase Structure
 
