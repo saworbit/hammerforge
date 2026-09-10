@@ -123,9 +123,9 @@ Create Starter adds `LevelRoot`, a floor, sunlight, and a player spawn. Create E
 
 **Upgrading?** See [Install + Upgrade](docs/HammerForge_Install_Upgrade.md) for upgrade steps and cache reset.
 
-### Project MCP for contributors
+### Editor bridges
 
-This repository also vendors a project-scoped Godot MCP server in `addons/godot_mcp`. Each contributor creates an ignored, machine-local `.codex/config.toml`; authentication comes from the user-scoped `HAMMERFORGE_GODOT_MCP_TOKEN` environment variable. Codex configuration, tokens, and Godot `user://` MCP state must never be committed. See [Install + Upgrade](docs/HammerForge_Install_Upgrade.md#project-scoped-godot-mcp-repository-contributors) for the configuration and verification steps.
+This repository does not vendor an MCP server or any other editor bridge. If you use one, install it into your own `addons/` folder and keep it out of your commits. `addons/` is an allowlist in `.gitignore`, so a new folder there is ignored until someone adds it deliberately. Enabling a plugin also rewrites the tracked `project.godot`, which is the one change you have to keep out by hand. Tokens, client configuration, and Godot `user://` state are machine-local and must never be committed. See [Contributing](CONTRIBUTING.md).
 
 ---
 

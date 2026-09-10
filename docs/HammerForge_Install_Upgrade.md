@@ -4,9 +4,9 @@ description: "Install HammerForge into a Godot 4.7+ project, enable the plugin, 
 
 # HammerForge Install + Upgrade
 
-Last updated: August 22, 2026
+Last updated: September 10, 2026
 
-This guide covers installing, upgrading, and recovering HammerForge for Godot 4.7+ and configuring the project-scoped Godot MCP used by contributors to this repository.
+This guide covers installing, upgrading, and recovering HammerForge for Godot 4.7+.
 
 ## Requirements
 
@@ -32,36 +32,6 @@ An intentional left-click with Draw active can create an empty root. Camera navi
 4. Reopen the project and re-enable the plugin if prompted.
 5. Open a level and run **Test → Check Only**, followed by **Test Level**, to verify validation, bake, and play.
 
-## Project-Scoped Godot MCP (Repository Contributors)
-
-This repository vendors Godot MCP Native v1.0.8 in `addons/godot_mcp` and enables it in `project.godot`. The server binds to loopback port `9080`, rejects unauthenticated requests, and does not allow remote clients. Codex client state under `.codex/` is deliberately ignored so machine-specific settings never enter version control.
-
-The authentication token is local user state. Never place it in `.codex/config.toml`, documentation, a shell script, or any committed file.
-
-1. In Godot, open the Godot MCP panel and ensure the server is running on `127.0.0.1:9080` with authentication enabled.
-2. Create a local `.codex/config.toml` with the following client definition:
-
-   ```toml
-   [mcp_servers.godot_mcp]
-   enabled = true
-   required = false
-   url = "http://127.0.0.1:9080/mcp"
-   bearer_token_env_var = "HAMMERFORGE_GODOT_MCP_TOKEN"
-   startup_timeout_sec = 15.0
-   tool_timeout_sec = 300.0
-   ```
-
-3. Copy the configured token into a user-scoped environment variable from PowerShell:
-
-   ```powershell
-   [Environment]::SetEnvironmentVariable("HAMMERFORGE_GODOT_MCP_TOKEN", "<same token configured in Godot MCP>", "User")
-   ```
-
-4. Restart Codex so it inherits the new environment variable.
-5. Confirm the project MCP client connects. A request without the token should return HTTP 401; an authenticated MCP `initialize` request should succeed.
-
-Godot stores MCP preferences and verification state under `user://`; these files and screenshots are intentionally ignored at the repository root. If port `9080` is already occupied, stop the other Godot MCP instance or assign a different port consistently in both Godot and your local client configuration.
-
 ## Cache Reset (Recovery)
 
 If the plugin fails to load, the dock is missing, or tools behave incorrectly:
@@ -71,14 +41,12 @@ If the plugin fails to load, the dock is missing, or tools behave incorrectly:
 3. Reopen the project and enable the plugin again.
 4. If resources still look stale, delete `.godot/imported` and reopen.
 
-For MCP connection failures, first confirm that Godot is still open, the server reports port `9080`, and `HAMMERFORGE_GODOT_MCP_TOKEN` is present in the process environment. Do not disable authentication as a workaround.
-
 ## Compatibility Notes
 
 - HammerForge targets Godot 4.7+.
 - New `.hflevel` fields are backward compatible; missing keys fall back to defaults.
 - `.glb` export requires a successful bake first.
-- The vendored MCP addon is development tooling and is not required when distributing a game built with HammerForge.
+- No editor bridge or MCP server is vendored in this repository, and none is required to use HammerForge.
 
 ## Migration Checklist
 

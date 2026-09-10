@@ -104,6 +104,23 @@ The format is based on Keep a Changelog, and this project follows semantic versi
     presses without reselecting, undo, and what survives a state restore.
 
 ### Changed
+- **No editor bridge is vendored here any more** (#277). The repository shipped
+  a copy of Godot MCP Native in `addons/godot_mcp` and enabled it in
+  `project.godot` for everyone. That was one contributor's tooling, it had
+  nothing to do with the plugin, and having it sitting there enabled made the
+  project look wired to a bridge it was not wired to. It is gone, along with its
+  autoload, its setup guide, and the token and port instructions that went with
+  it. Install whichever bridge you use into your own `addons/` folder.
+  - **`addons/` is an allowlist in `.gitignore`**, so a bridge dropped in there
+    stays untracked. `project.godot` is tracked and cannot be covered that way,
+    so enabling a plugin locally is a change to keep out of a commit by hand.
+    The pull request template asks about both.
+  - **`tools/capture_ui.py` cuts `project.godot` back to the HammerForge plugin
+    alone** for a capture, rather than removing one named addon. Naming them
+    went stale the moment the named one was not the one you had enabled.
+  - **The release guard fails on any `addons/` folder that is not
+    `addons/hammerforge`**, instead of checking a list of the ones someone
+    thought of.
 - **Check Issues spends its time on the level, not on building strings.** The
   micro-gap and non-manifold scans key their spatial grid on the position of
   every vertex and every edge. Those keys were formatted strings, and
