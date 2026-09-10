@@ -159,7 +159,7 @@ Grid-based paint layers with chunked storage for large worlds:
 | **LODs** | Auto-generate level-of-detail meshes |
 | **Lightmap UV2** | Unwrap for lightmap baking |
 | **Navmesh** | Bake navigation mesh |
-| **Dry run** | Preview bake counts without building |
+| **Dry run** | Preview bake counts without building. Counts through the cordon and Bake Visible Only, so the number matches what the bake takes |
 | **Bake Selected** | Bake only selected brushes (merged into existing output) |
 | **Bake Changed** | Bake only dirty-tagged brushes since last successful bake |
 | **Preview modes** | Full / Wireframe / Proxy toggle for ultra-fast iteration |
