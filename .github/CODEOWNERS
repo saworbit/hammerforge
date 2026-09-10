@@ -7,7 +7,6 @@
 
 # Vendored upstream. Fix these at the source and re-vendor; do not patch here.
 /addons/gut/            @saworbit
-/addons/godot_mcp/      @saworbit
 
 # Break these and the Asset Library ships the wrong tree, or CI stops catching
 # the bug it was written to catch.

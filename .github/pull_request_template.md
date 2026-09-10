@@ -20,5 +20,5 @@
 - [ ] `godot --headless -s res://addons/gut/gut_cmdln.gd --path .` passes
 - [ ] Docs updated together where behavior changed (README, guide/spec, ROADMAP status, `[Unreleased]` in CHANGELOG)
 - [ ] `git diff --check` is clean and relative Markdown links resolve
-- [ ] No MCP tokens, `user://` settings, verification logs, editor screenshots, or local client overrides committed
-- [ ] `addons/godot_mcp` left untouched, or the vendor snapshot was updated deliberately
+- [ ] No bridge tokens, `user://` settings, verification logs, editor screenshots, or local client overrides committed
+- [ ] No local editor bridge addon committed, and `project.godot` carries no locally enabled plugin

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Run the editor UI capture with a crash-safe environment swap.
 
-Capturing product shots needs tracked files temporarily changed: the contributor
-MCP server removed from `project.godot` so it does not appear in the editor's
-main-screen bar, the editor layout reset so the tab bar is not cluttered and the
-window geometry is reproducible, and the demo sample scene put back afterwards
-because Godot saves open scenes before running the project. Doing that by hand
--- as the docs used to instruct -- leaves the repository mutated if anything
-goes wrong mid-run.
+Capturing product shots needs tracked files temporarily changed: `project.godot`
+cut back to the HammerForge plugin alone so nothing else a contributor has
+enabled appears in the editor's main-screen bar, the editor layout reset so the
+tab bar is not cluttered and the window geometry is reproducible, and the demo
+sample scene put back afterwards because Godot saves open scenes before running
+the project. Doing that by hand -- as the docs used to instruct -- leaves the
+repository mutated if anything goes wrong mid-run.
 
 This script makes the swap recoverable rather than merely careful:
 
@@ -89,9 +89,14 @@ def prepare() -> None:
 
     proj = REPO / "project.godot"
     text = proj.read_text(encoding="utf-8")
-    text = text.replace(', "res://addons/godot_mcp/plugin.cfg"', "")
-    text = "\n".join(
-        line for line in text.split("\n") if not line.startswith("MCPRuntimeProbe=")
+    # Named plugins would go stale the moment a contributor enabled a different
+    # one. No editor bridge is vendored here, so anything beyond HammerForge is
+    # local tooling and must not reach a product shot.
+    text = re.sub(
+        r"(?m)^enabled=PackedStringArray\(.*\)$",
+        'enabled=PackedStringArray("res://addons/hammerforge/plugin.cfg")',
+        text,
+        count=1,
     )
     # Enable the capture plugin for this run only. It is deliberately not
     # shipped enabled: an EditorPlugin that reads an environment variable and
