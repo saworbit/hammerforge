@@ -76,11 +76,50 @@ func place_brush(
 	return true
 
 
+## The smallest floor a brush may be on any axis. The same figure the validator's
+## auto fix uses, so the two agree about what counts as too small.
+const MIN_BRUSH_EXTENT := 0.1
+
+
+## A size a brush can actually be built from, and a warning when it was not.
+##
+## create_brush_from_info() is the single door into the level for undo restore,
+## duplication, prefab instancing, .map import and .hflevel load, so a bad size
+## from any of those used to become a brush that looked fine in the tree. A
+## negative component gives the basis a negative determinant, which inverts the
+## face winding invisibly: each FaceData ends up with a normal pointing the
+## opposite way from the vertices it holds, and that only shows up at bake or in
+## an exported plane. A zero component gives a brush with no volume at all. Both
+## landed in the draft container with an id and counted as live.
+##
+## The validator did catch them, but only if somebody ran Validate.
+static func _usable_size(raw) -> Vector3:
+	if not (raw is Vector3):
+		return Vector3(MIN_BRUSH_EXTENT, MIN_BRUSH_EXTENT, MIN_BRUSH_EXTENT)
+	var size: Vector3 = raw
+	var fixed := Vector3(
+		maxf(MIN_BRUSH_EXTENT, absf(size.x)),
+		maxf(MIN_BRUSH_EXTENT, absf(size.y)),
+		maxf(MIN_BRUSH_EXTENT, absf(size.z))
+	)
+	if not fixed.is_equal_approx(size):
+		HFLog.warn(
+			(
+				(
+					"Brush size %s cannot be built. Using %s instead. A negative size builds the "
+					+ "brush inside out and a zero size builds no volume."
+				)
+				% [str(size), str(fixed)]
+			)
+		)
+	return fixed
+
+
 func create_brush_from_info(info: Dictionary) -> Node:
 	if info.is_empty():
 		return null
 	var shape = info.get("shape", root.BrushShape.BOX)
-	var size = info.get("size", root.drag_size_default)
+	var size = _usable_size(info.get("size", root.drag_size_default))
 	var sides = int(info.get("sides", 4))
 	var operation = info.get("operation", CSGShape3D.OPERATION_UNION)
 	var committed = bool(info.get("committed", false))
