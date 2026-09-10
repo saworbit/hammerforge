@@ -57,13 +57,29 @@ func get_height_at_uv(u: float, v: float) -> float:
 
 func set_cell(cell: Vector2i, filled: bool) -> void:
 	var cid := _cell_to_chunk(cell)
-	var chunk: HFChunkData = _get_or_create_chunk(cid)
+	# Erasing does not need a chunk. Going through _get_or_create_chunk() on the
+	# way out allocated one full of zeros for every stroke over unpainted ground,
+	# which is the same leak from the other direction.
+	var chunk: HFChunkData = (
+		_get_or_create_chunk(cid) if filled else _chunks.get(cid) as HFChunkData
+	)
 	var local := _cell_to_local(cell)
-	var changed := chunk.set_bit(local, filled)
+	var changed: bool = chunk.set_bit(local, filled) if chunk != null else false
 	var removed_height := false
 	if not filled:
 		removed_height = _wall_heights.erase(cell)
 	if changed or removed_height:
+		# A chunk whose last bit just cleared holds nothing but zeros, and holding
+		# it costs memory that get_paint_memory_bytes() reports and, worse, weight
+		# in every .hflevel save and every undo snapshot, permanently, for paint
+		# the user removed.
+		#
+		# Dropped before the dirty mark rather than after: remove_chunk() clears
+		# the dirty flag too, and the reconciler needs to see this chunk to take
+		# its geometry away. Region eviction reconciles removed chunk ids the same
+		# way.
+		if not filled and chunk != null and chunk.is_empty():
+			remove_chunk(cid)
 		_mark_dirty(cid)
 		_mark_dirty_neighbours(cid)
 
@@ -197,6 +213,12 @@ func has_chunk(cid: Vector2i) -> bool:
 	return _chunks.has(cid)
 
 
+## True when the chunk holds no filled cells, or is not there at all.
+func is_chunk_empty(cid: Vector2i) -> bool:
+	var chunk: HFChunkData = _chunks.get(cid) as HFChunkData
+	return chunk == null or chunk.is_empty()
+
+
 func get_chunk_bits(cid: Vector2i) -> PackedByteArray:
 	var chunk: HFChunkData = _chunks.get(cid) as HFChunkData
 	if chunk == null:
@@ -207,6 +229,7 @@ func get_chunk_bits(cid: Vector2i) -> PackedByteArray:
 func set_chunk_bits(cid: Vector2i, bits: PackedByteArray) -> void:
 	var chunk: HFChunkData = _get_or_create_chunk(cid)
 	chunk.bits = bits.duplicate()
+	chunk.recount_live_bits()
 	_mark_dirty(cid)
 	_mark_dirty_neighbours(cid)
 
@@ -364,6 +387,9 @@ func _mark_dirty_neighbours(cid: Vector2i) -> void:
 class HFChunkData:
 	var size: int
 	var bits: PackedByteArray  # bitset, size*size bits
+	## How many cells are filled. Kept as a counter so "is this chunk empty" is a
+	## comparison rather than a scan of every byte on each erase.
+	var live_bits: int = 0
 	var material_ids: PackedByteArray  # 1 byte per cell (0-255 material index)
 	var blend_weights: PackedByteArray  # 1 byte per cell (0-255, normalized to 0.0-1.0)
 	var blend_weights_2: PackedByteArray  # slot 2
@@ -413,9 +439,25 @@ class HFChunkData:
 			return false
 		if v:
 			bits[byte_i] |= mask
+			live_bits += 1
 		else:
 			bits[byte_i] &= ~mask
+			live_bits -= 1
 		return true
+
+	func is_empty() -> bool:
+		return live_bits <= 0
+
+	## Recount from the bytes. Needed whenever the bitset is written whole rather
+	## than a cell at a time, which is what a load does.
+	func recount_live_bits() -> void:
+		var count := 0
+		for byte in bits:
+			var b: int = byte
+			while b != 0:
+				count += b & 1
+				b >>= 1
+		live_bits = count
 
 	func get_material(local: Vector2i) -> int:
 		return material_ids[_idx(local)]
