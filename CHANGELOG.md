@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Fixed
+- **Deleting a hidden visgroup left its members permanently invisible** (#316).
+  `remove_visgroup()` strips the membership meta from every node and then
+  refreshes, but `refresh_visibility()` skipped any node that was in no
+  visgroup, so every former member kept the `visible = false` it was given when
+  the visgroup was hidden, with nothing left in the UI that could show it again.
+  A node in no visgroup is a node nothing is hiding, so the refresh shows it.
+  That covers pulling a single node out of a hidden visgroup as well.
+  Committed cutters are hidden by the cut rather than by a visgroup and
+  `_all_managed_nodes()` does not reach them, so they stay hidden.
+  - **Coverage** (`tests/test_visgroup_system.gd`): delete a hidden visgroup,
+    remove one node from a hidden visgroup, and a guard that a node still in
+    another hidden visgroup stays hidden.
+
 ### Added
 - **CI refuses a `project.godot` that enables local tooling.** The file is
   tracked and the editor rewrites it the moment anyone enables a plugin, so a
