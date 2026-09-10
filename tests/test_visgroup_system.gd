@@ -107,6 +107,34 @@ func test_rename_visgroup():
 	assert_eq(names[0], "detail")
 
 
+func test_rename_onto_an_existing_name_is_refused():
+	var draft_parent = root.get_node("DraftBrushes")
+	var b1 = _make_brush(draft_parent)
+	var b2 = _make_brush(draft_parent)
+	sys.create_visgroup("A", Color.RED)
+	sys.create_visgroup("B", Color.BLUE)
+	sys.add_to_visgroup(b1, "A")
+	sys.add_to_visgroup(b2, "B")
+	sys.set_visgroup_visible("B", false)
+
+	assert_false(sys.rename_visgroup("A", "B"), "The name is taken, so the rename is refused")
+
+	var names = sys.get_visgroup_names()
+	assert_eq(names.size(), 2, "Both visgroups should survive")
+	assert_true(names.has("A"), "A should still be there")
+	assert_true(names.has("B"), "and so should B")
+	assert_false(sys.is_visgroup_visible("B"), "B should still be hidden")
+	assert_eq(sys.get_members_of("B").size(), 1, "and it should not have absorbed A's member")
+
+
+func test_rename_reports_whether_it_happened():
+	sys.create_visgroup("walls")
+
+	assert_true(sys.rename_visgroup("walls", "detail"), "A rename that works says so")
+	assert_false(sys.rename_visgroup("gone", "detail2"), "A missing source does not")
+	assert_false(sys.rename_visgroup("detail", ""), "and nor does an empty name")
+
+
 func test_rename_updates_membership():
 	var draft_parent = root.get_node("DraftBrushes")
 	var b = _make_brush(draft_parent)

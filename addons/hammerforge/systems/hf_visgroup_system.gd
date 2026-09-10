@@ -37,11 +37,25 @@ func remove_visgroup(vg_name: String) -> void:
 	refresh_visibility()
 
 
-func rename_visgroup(old_name: String, new_name: String) -> void:
+## Rename a visgroup. Returns whether it happened.
+##
+## Refuses a name another visgroup already has. Without that guard, renaming A to
+## an existing B overwrote B's record, colour and visibility and all, and then
+## rewrote the name on every node that carried A, so the two memberships silently
+## became one. The user asked to rename one visgroup and lost a different one,
+## and the loss showed up later: B's members were hidden, B's record was gone,
+## and the next refresh_visibility() made them visible again with nothing in the
+## UI to say why.
+##
+## Merging two visgroups is a different operation, and one somebody should have
+## to ask for by name.
+func rename_visgroup(old_name: String, new_name: String) -> bool:
 	if old_name == "" or new_name == "" or old_name == new_name:
-		return
+		return false
 	if not visgroups.has(old_name):
-		return
+		return false
+	if visgroups.has(new_name):
+		return false
 	visgroups[new_name] = visgroups[old_name]
 	visgroups.erase(old_name)
 	for node in _all_managed_nodes():
@@ -50,6 +64,7 @@ func rename_visgroup(old_name: String, new_name: String) -> void:
 		if idx >= 0:
 			vgs[idx] = new_name
 			node.set_meta("visgroups", vgs)
+	return true
 
 
 func set_visgroup_visible(vg_name: String, visible: bool) -> void:
