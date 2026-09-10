@@ -231,3 +231,42 @@ func test_capture_restore_visgroups_round_trip():
 	assert_eq(sys2.get_visgroup_names().size(), 2)
 	assert_true(sys2.is_visgroup_visible("walls"))
 	assert_false(sys2.is_visgroup_visible("detail"))
+
+
+# ---------------------------------------------------------------------------
+# Deleting a hidden visgroup must not strand its members (#316)
+# ---------------------------------------------------------------------------
+
+
+func test_deleting_a_hidden_visgroup_shows_its_members_again():
+	var brush = _make_brush(root.get_node("DraftBrushes"))
+	sys.create_visgroup("V1")
+	sys.add_to_visgroup(brush, "V1")
+	sys.set_visgroup_visible("V1", false)
+	assert_false(brush.visible, "Hiding the visgroup should hide the member")
+	sys.remove_visgroup("V1")
+	assert_true(brush.visible, "Deleting the visgroup should give the member back")
+
+
+func test_removing_a_node_from_a_hidden_visgroup_shows_it_again():
+	var brush = _make_brush(root.get_node("DraftBrushes"))
+	sys.create_visgroup("V1")
+	sys.add_to_visgroup(brush, "V1")
+	sys.set_visgroup_visible("V1", false)
+	assert_false(brush.visible, "Hiding the visgroup should hide the member")
+	sys.remove_from_visgroup(brush, "V1")
+	sys.refresh_visibility()
+	assert_true(brush.visible, "A node in no visgroup is a node nothing is hiding")
+
+
+func test_a_node_still_in_a_hidden_visgroup_stays_hidden():
+	# The guard that the fix does not simply show everything.
+	var brush = _make_brush(root.get_node("DraftBrushes"))
+	sys.create_visgroup("V1")
+	sys.create_visgroup("V2")
+	sys.add_to_visgroup(brush, "V1")
+	sys.add_to_visgroup(brush, "V2")
+	sys.set_visgroup_visible("V1", false)
+	assert_false(brush.visible, "Hidden by V1")
+	sys.remove_visgroup("V2")
+	assert_false(brush.visible, "V1 is still hiding it")
