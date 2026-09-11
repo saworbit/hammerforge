@@ -21,7 +21,14 @@ const PROJECT_DEFINITIONS_PATH := "res://hammerforge_entities.json"
 
 static func from_dict(data: Dictionary) -> HFEntityDef:
 	var def := HFEntityDef.new()
-	def.classname = str(data.get("id", data.get("class", data.get("classname", ""))))
+	# Stripped, because the classname is the identity of the entity class in three
+	# places at once: the key in LevelRoot.entity_definitions, the row in the
+	# class dropdown, and the "classname" field written into the exported `.map`,
+	# which is what the target engine reads to decide what the entity is. A blank
+	# one is a malformed entity in the `.map` and a blank row in the dropdown that
+	# cannot be told from another blank row. Stripped also means "door" and
+	# "door " are one class rather than two, so the overlay and the base agree.
+	def.classname = str(data.get("id", data.get("class", data.get("classname", "")))).strip_edges()
 	def.description = str(data.get("description", ""))
 	var c = data.get("color", null)
 	if c is Array and c.size() >= 3:
@@ -78,7 +85,22 @@ static func load_definitions(path: String) -> Array[HFEntityDef]:
 		return _built_in_defaults()
 	var entries: Array = []
 	if data is Dictionary:
-		entries = data.get("entities", [])
+		# Read before assigning. `entries` is a typed local, so a file that parses
+		# with an "entities" key of the wrong type used to be a runtime error
+		# here — and GDScript has no exception handling, so the function unwound
+		# past every fallback below it and the caller got nothing. A valid JSON
+		# file with one key of the wrong type is the most likely hand-edit
+		# mistake, not the least.
+		var raw_entries = data.get("entities", [])
+		if raw_entries is Array:
+			entries = raw_entries
+		elif raw_entries != null:
+			push_warning(
+				(
+					"HammerForge: 'entities' in '%s' is a %s, not a list"
+					% [path, type_string(typeof(raw_entries))]
+				)
+			)
 		if entries.is_empty():
 			for key in data.keys():
 				var entry = data[key]
@@ -89,15 +111,28 @@ static func load_definitions(path: String) -> Array[HFEntityDef]:
 	elif data is Array:
 		entries = data
 	var skipped := 0
+	var seen_classnames: Dictionary = {}
 	for entry in entries:
 		if entry is Dictionary:
-			var classname = str(entry.get("id", entry.get("class", entry.get("classname", ""))))
+			var classname = (
+				str(entry.get("id", entry.get("class", entry.get("classname", "")))).strip_edges()
+			)
 			if classname == "":
 				skipped += 1
 				push_warning(
 					"HammerForge: skipping entity definition with no classname in '%s'" % path
 				)
 				continue
+			if seen_classnames.has(classname):
+				# load_entity_definitions() writes these into one dictionary key,
+				# so the second silently wins. Naming it turns a mistake that
+				# vanishes into one the author can fix. This is the file's own
+				# duplicates, not the project overlay replacing a plugin
+				# definition of the same name, which is the intended behaviour.
+				push_warning(
+					"HammerForge: '%s' is defined more than once in '%s'" % [classname, path]
+				)
+			seen_classnames[classname] = true
 			defs.append(HFEntityDef.from_dict(entry))
 		else:
 			skipped += 1
@@ -128,7 +163,22 @@ static func load_definitions_from_file(path: String) -> Array[HFEntityDef]:
 		return defs
 	var entries: Array = []
 	if data is Dictionary:
-		entries = data.get("entities", [])
+		# Read before assigning. `entries` is a typed local, so a file that parses
+		# with an "entities" key of the wrong type used to be a runtime error
+		# here — and GDScript has no exception handling, so the function unwound
+		# past every fallback below it and the caller got nothing. A valid JSON
+		# file with one key of the wrong type is the most likely hand-edit
+		# mistake, not the least.
+		var raw_entries = data.get("entities", [])
+		if raw_entries is Array:
+			entries = raw_entries
+		elif raw_entries != null:
+			push_warning(
+				(
+					"HammerForge: 'entities' in '%s' is a %s, not a list"
+					% [path, type_string(typeof(raw_entries))]
+				)
+			)
 		if entries.is_empty():
 			for key in data.keys():
 				var entry = data[key]
@@ -140,7 +190,9 @@ static func load_definitions_from_file(path: String) -> Array[HFEntityDef]:
 		entries = data
 	for entry in entries:
 		if entry is Dictionary:
-			var classname = str(entry.get("id", entry.get("class", entry.get("classname", ""))))
+			var classname = (
+				str(entry.get("id", entry.get("class", entry.get("classname", "")))).strip_edges()
+			)
 			if classname != "":
 				defs.append(from_dict(entry))
 	return defs
@@ -180,6 +232,7 @@ static func load_raw_entries(path: String) -> Array[Dictionary]:
 		var classname_value := str(
 			record.get("id", record.get("classname", record.get("class", "")))
 		)
+		classname_value = classname_value.strip_edges()
 		if classname_value == "":
 			continue
 		record["id"] = classname_value

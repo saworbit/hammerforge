@@ -141,7 +141,7 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Cordon** -- restrict bake to an AABB region with yellow wireframe; skip everything outside. A min/max pair entered in either order means the same region, and a cordon with a non-finite corner is refused rather than stored
 - **Reference cleanup** -- deleting brushes auto-cleans group/visgroup membership and warns about dangling entity I/O connections
 - **Duplicator** -- create N copies of a brush with progressive offset
-- **Prefabs** -- save brush + entity groups as `.hfprefab` files with variants, tags, and live-linked propagation. Drag from library to instantiate with new IDs and remapped I/O
+- **Prefabs** -- save brush + entity groups as `.hfprefab` files with variants, tags, and live-linked propagation. Drag from library to instantiate with new IDs and remapped I/O. Brush and entity ids, group membership and visgroup membership are all left behind on capture, because they only mean something in the level the selection came from
 - **Measurement** (M key) -- persistent multi-ruler with angle display, Shift+Click chaining, and snap reference alignment
 - **Decal placement** (N key) -- raycast decals onto brush surfaces with live preview
 - **Real-time subtract preview** -- toggle wireframe AABB intersection overlays between additive and subtractive brushes

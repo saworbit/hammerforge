@@ -425,10 +425,26 @@ func consume_dirty_tags() -> Dictionary:
 
 var _signal_batch_depth := 0
 var _batched_signals: Array = []  # Array of {name: String, args: Array}
+var _signal_batch_opened_msec := -1
+var _signal_batch_stuck_reported := false
+
+## How long an open batch may survive before it is treated as
+## abandoned. Every batch in the plugin is opened and closed inside one
+## synchronous operation, so a batch still open this long afterwards is one whose
+## `end_signal_batch()` was skipped — which GDScript makes easy, since a runtime
+## error unwinds the function and there is no `finally` to put the depth back.
+## The consequence was invisible and permanent: `_emit_or_batch()` queued every
+## level signal for the rest of the editor session, so the brush list, the entity
+## list, the visgroup panel and the validation badge froze while editing carried
+## on working, with nothing pointing at the operation that failed.
+const SIGNAL_BATCH_STUCK_MSEC := 1000
 
 
 ## Begin batching signals. Nested calls are supported (depth-counted).
 func begin_signal_batch() -> void:
+	if _signal_batch_depth == 0:
+		_signal_batch_opened_msec = Time.get_ticks_msec()
+		_signal_batch_stuck_reported = false
 	_signal_batch_depth += 1
 
 
@@ -437,7 +453,30 @@ func end_signal_batch() -> void:
 	_signal_batch_depth -= 1
 	if _signal_batch_depth <= 0:
 		_signal_batch_depth = 0
+		_signal_batch_opened_msec = -1
 		_flush_batched_signals()
+
+
+## Flush and clear a batch nothing closed. Called once per frame from _process.
+func _release_stuck_signal_batch() -> void:
+	if _signal_batch_depth <= 0 or _signal_batch_opened_msec < 0:
+		return
+	if Time.get_ticks_msec() - _signal_batch_opened_msec < SIGNAL_BATCH_STUCK_MSEC:
+		return
+	if not _signal_batch_stuck_reported:
+		_signal_batch_stuck_reported = true
+		push_warning(
+			(
+				(
+					"HammerForge: a signal batch was left open (depth %d, %d queued). "
+					+ "Releasing it so the dock keeps updating."
+				)
+				% [_signal_batch_depth, _batched_signals.size()]
+			)
+		)
+	_signal_batch_depth = 0
+	_signal_batch_opened_msec = -1
+	_flush_batched_signals()
 
 
 ## Queue a signal for emission, or emit immediately if not batching.
@@ -471,6 +510,7 @@ func _flush_batched_signals() -> void:
 func discard_signal_batch() -> void:
 	_batched_signals.clear()
 	_signal_batch_depth = 0
+	_signal_batch_opened_msec = -1
 
 
 func _emit_signal_by_name(signal_name: String, args: Array) -> void:
@@ -752,6 +792,7 @@ func _process(_delta: float) -> void:
 	if not Engine.is_editor_hint():
 		return
 	_process_hflevel_saves()
+	_release_stuck_signal_batch()
 	if io_visualizer:
 		io_visualizer.process(_delta)
 	if subtract_preview and subtract_preview.is_enabled():
