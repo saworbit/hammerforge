@@ -214,13 +214,14 @@ func test_grid_array_rejects_a_single_cell():
 	)
 
 
-func test_grid_array_clamps_a_zero_count_to_one():
+func test_grid_array_refuses_a_zero_count_rather_than_clamping_it():
+	# It used to clamp (0, 2, 0) up to (1, 2, 1) and build an array nobody
+	# described. The linear and radial paths refuse the same mistake.
 	_make_brush(Vector3.ZERO, Vector3(32, 32, 32), "src")
 	var dup = brushes.create_grid_array(
 		PackedStringArray(["src"]), Vector3i(0, 2, 0), Vector3(64, 64, 64)
 	)
-	assert_not_null(dup)
-	assert_eq(dup.get_all_instance_ids().size(), 1)
+	assert_null(dup, "a grid needs at least one cell on every axis")
 
 
 # ===========================================================================

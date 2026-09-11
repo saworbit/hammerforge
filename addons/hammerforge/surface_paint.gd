@@ -40,9 +40,17 @@ func paint_at_uv(
 			img.set_pixel(x, y, Color(next, current.g, current.b, 1.0))
 
 
+## How many textures may be blended over one face. The same cap
+## `LevelRoot.add_surface_paint_layer()` enforces, because painting into a layer
+## index creates the layers below it and would otherwise walk straight past it.
+const MAX_PAINT_LAYERS := 8
+
+
 func _ensure_layer(face: FaceData, layer_idx: int) -> FaceData.PaintLayer:
 	if layer_idx < 0:
 		layer_idx = 0
+	if layer_idx >= MAX_PAINT_LAYERS:
+		return null
 	while face.paint_layers.size() <= layer_idx:
 		face.paint_layers.append(FaceData.PaintLayer.new())
 	return face.paint_layers[layer_idx]

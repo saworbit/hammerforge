@@ -24,10 +24,16 @@ func _init(level_root: Node3D) -> void:
 
 
 func create_visgroup(vg_name: String, color: Color = Color.WHITE) -> void:
-	if vg_name == "":
+	# The guard tested the wrong thing: "" was refused and "   " was not, so a
+	# visgroup could exist that shows in the dock as a blank row, cannot be told
+	# apart from another blank one, and is saved into the `.hflevel` on its
+	# members. Stored stripped as well, so "lights" and "lights " are one
+	# visgroup rather than two a keystroke apart.
+	var stripped := vg_name.strip_edges()
+	if stripped == "":
 		return
-	if not visgroups.has(vg_name):
-		visgroups[vg_name] = {"visible": true, "color": color}
+	if not visgroups.has(stripped):
+		visgroups[stripped] = {"visible": true, "color": color}
 
 
 func remove_visgroup(vg_name: String) -> void:
@@ -50,6 +56,7 @@ func remove_visgroup(vg_name: String) -> void:
 ## Merging two visgroups is a different operation, and one somebody should have
 ## to ask for by name.
 func rename_visgroup(old_name: String, new_name: String) -> bool:
+	new_name = new_name.strip_edges()
 	if old_name == "" or new_name == "" or old_name == new_name:
 		return false
 	if not visgroups.has(old_name):

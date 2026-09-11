@@ -132,9 +132,16 @@ static func can_generate(copy_count: int, source_count: int) -> HFOpResult:
 
 ## How many copies a grid of these counts makes. The counts include the source
 ## cell on each axis, so the source itself is not a copy.
+##
+## A count below one on any axis is not a grid, and this answers -1 for it rather
+## than clamping it up to one. `can_generate()` already refuses a copy count below
+## one with the right message, which is how the linear and radial paths treat the
+## same mistake; clamping here was what stopped the grid path reaching it, so a
+## mapper who typed a minus sign got a plausible array they never described.
 static func grid_copy_count(p_counts: Vector3i) -> int:
-	var counts := Vector3i(maxi(1, p_counts.x), maxi(1, p_counts.y), maxi(1, p_counts.z))
-	return counts.x * counts.y * counts.z - 1
+	if p_counts.x < 1 or p_counts.y < 1 or p_counts.z < 1:
+		return -1
+	return p_counts.x * p_counts.y * p_counts.z - 1
 
 
 ## How many copies a rebuild with these parameters would make, worked out
@@ -255,7 +262,9 @@ func generate_radial(
 func generate_grid(brush_system, p_counts: Vector3i, p_spacing: Vector3) -> bool:
 	if not can_generate(grid_copy_count(p_counts), source_brush_ids.size()).ok:
 		return false
-	var counts := Vector3i(maxi(1, p_counts.x), maxi(1, p_counts.y), maxi(1, p_counts.z))
+	# No clamp: the guard above has already refused anything below one, so the
+	# record holds the counts that were asked for rather than ones nobody typed.
+	var counts := p_counts
 	mode = ArrayMode.GRID
 	grid_counts = counts
 	grid_spacing = p_spacing

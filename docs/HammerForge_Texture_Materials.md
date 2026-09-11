@@ -113,6 +113,7 @@ Controls:
 
 Notes:
 - Weights are stored per face as images (default 256x256).
+- A face takes at most 8 paint layers. They are composited into one image at every texel on each preview rebuild and again at bake, so past a handful each extra layer costs preview time, save size and load time without looking different.
 - Surface paint updates the DraftBrush preview immediately.
 - Surface paint does not modify floor paint layers.
 - If paint affects floors, set `Paint Target = Surface` in the Paint tab → Surface Paint section.

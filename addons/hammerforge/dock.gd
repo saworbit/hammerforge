@@ -4663,6 +4663,14 @@ func _on_surface_paint_layer_add() -> void:
 	var face_idx = _surface_active_brush.faces.find(_surface_active_face)
 	if brush_id == "" or face_idx < 0:
 		return
+	if _surface_active_face.paint_layers.size() >= level_root.MAX_SURFACE_PAINT_LAYERS:
+		# Checked before the undo action opens, so Add does not report success
+		# over a layer the face cannot blend.
+		_set_status(
+			"A face blends at most %d surface paint layers" % level_root.MAX_SURFACE_PAINT_LAYERS,
+			true
+		)
+		return
 	_commit_state_action("Add Surface Paint Layer", "add_surface_paint_layer", [brush_id, face_idx])
 	_refresh_surface_paint_layers()
 

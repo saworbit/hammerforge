@@ -532,7 +532,9 @@ refuses and says why. Destroy the displacement first if you need the mirror.
   closed ring. Each copy is turned as well as moved, so a ring of arches faces
   outward rather than all facing the same way.
 - **Grid** — a 3D lattice. Set the cell count per axis (counting the original)
-  and the X/Y/Z offset becomes the spacing.
+  and the X/Y/Z offset becomes the spacing. Every axis needs at least one cell;
+  a count below that is refused rather than treated as one, the same way the
+  linear and radial counts are.
 
 **Turn any of those controls and the copies draw themselves.** A pale wireframe
 shows the copies **Create Array** would make, standing where they would stand,
@@ -1405,7 +1407,7 @@ Preview lines during placement: green ticks for stairs, yellow for railings, ora
 Visgroups let you organize your map into logical groups and toggle their visibility.
 
 1. Open the **Test** tab in the dock.
-2. Type a name in the Visgroup field and click **New** to create a visgroup.
+2. Type a name in the Visgroup field and click **New** to create a visgroup. The name is stored trimmed, and a name that is only spaces is refused — a visgroup that renders as a blank row cannot be picked out or described.
 3. Select brushes/entities in the viewport, then click **Add Sel** to add them to the visgroup.
 4. Click the visgroup name in the list to toggle between **[V]** (visible) and **[H]** (hidden).
 

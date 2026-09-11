@@ -5,6 +5,31 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **A grid array with a negative axis count was built rather than refused**
+  (#346). The linear and radial paths refuse a count below one with a message and
+  a fix hint; the grid path clamped `(-2, 2, 2)` up to `(1, 2, 2)` first, so
+  `can_generate()` was asked about three copies and an array the mapper never
+  described was created without a word. `grid_copy_count()` answers -1 for a
+  count below one on any axis, which the existing refusal already covers, and
+  `generate_grid()` no longer clamps — so the record holds the counts that were
+  asked for rather than ones nobody typed.
+- **A visgroup could be named with nothing but whitespace** (#349). The guard
+  tested `vg_name == ""`, so `""` was refused and `"   "` was not: the visgroup
+  existed, showed in the dock as a blank row, could not be told apart from
+  another blank one, and was saved into the `.hflevel` on its members. Names are
+  stripped and a name that strips to nothing is refused, on create and on rename.
+  Stored stripped as well, so `lights` and `lights ` are one visgroup rather than
+  two a keystroke apart.
+- **Surface paint layers stacked on a face without a cap** (#351). 64 layers on
+  one face is 64 walked on every `rebuild_preview()`, written into the
+  `.hflevel` and read back, and past a handful the composite is not visibly
+  different — `get_painted_albedo()` blends them at every texel, so each extra
+  one is preview time, save size and load time for nothing. A face takes at most
+  8, refused with a message that says the limit, checked in the dock before the
+  undo action opens so Add does not report success over a layer that was not
+  added. `SurfacePaint` honours the same cap, because painting into a layer index
+  creates the layers below it. `remove_surface_paint_layer()` returns whether it
+  removed something, so a no-op can be told from a removal.
 - **The heightmap scale and the terrain layer height took any number** (#350).
   #320 refused a non-finite value at the displacement paint setters for this
   reason; the terrain layer has the same two knobs and did not get the same
