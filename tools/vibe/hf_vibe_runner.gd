@@ -22,6 +22,14 @@ const SCENARIOS: Array[String] = [
 	"res://tools/vibe/scenarios/limits.gd",
 	"res://tools/vibe/scenarios/chaos.gd",
 	"res://tools/vibe/scenarios/cost.gd",
+	"res://tools/vibe/scenarios/transform.gd",
+	"res://tools/vibe/scenarios/structures.gd",
+	"res://tools/vibe/scenarios/cutting.gd",
+	"res://tools/vibe/scenarios/entities.gd",
+	"res://tools/vibe/scenarios/appearance.gd",
+	"res://tools/vibe/scenarios/persistence.gd",
+	"res://tools/vibe/scenarios/housekeeping.gd",
+	"res://tools/vibe/scenarios/terrain.gd",
 ]
 
 
