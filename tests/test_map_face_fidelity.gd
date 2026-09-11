@@ -242,16 +242,11 @@ func test_a_texture_the_palette_does_not_hold_leaves_the_face_unset():
 func test_the_texture_token_is_read_off_a_face_line():
 	var parsed := MapIOType.parse_map_text(
 		(
-			"{
-"
-			+ '"classname" "worldspawn"
-'
-			+ "{
-"
-			+ "( 16 -16 -16 ) ( 16 16 -16 ) ( 16 16 16 ) my_tex 1 2 3 4 5
-"
-			+ "}
-"
+			"{\n"
+			+ '"classname" "worldspawn"\n'
+			+ "{\n"
+			+ "( 16 -16 -16 ) ( 16 16 -16 ) ( 16 16 16 ) my_tex 1 2 3 4 5\n"
+			+ "}\n"
 			+ "}"
 		)
 	)
