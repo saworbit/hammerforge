@@ -788,6 +788,19 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   - **Coverage** (`tests/test_visgroup_system.gd`): a refused rename leaving both
     records, both memberships and B's hidden state alone, plus the return value
     across a working rename, a missing source and an empty name.
+- **The bake dry run counts what the bake will actually take** (#295).
+  `count_brushes_in()` counted container children and checked neither the cordon
+  nor `bake_visible_only`, while the bake checks each of them in seven places. So
+  the preflight, which is the thing that tells a user what a bake is about to do,
+  reported brushes the bake was going to skip: a cordon with one brush inside it
+  and one outside reported two and baked one. A single `brush_bakes()` predicate
+  now answers the question, and the two `_container_has_effective_*` loops ask it
+  too, so the counting and the baking cannot drift apart again. Subtraction is
+  deliberately not part of it, since a subtractor is a brush the bake takes and
+  uses, and pending cuts get their own line in the dry run.
+  - **Coverage** (`tests/test_bake_system.gd`): a brush outside the cordon, a
+    hidden brush under Bake Visible Only, a fully cordoned out level reporting no
+    chunks, and both filters off still counting everything.
 - **A prefab could wire its copy's outputs to the entities it was built from.**
   `HFPrefab.instantiate()` remapped I/O by turning each old node name into the new
   one and then looking that name back up. The lookup resolves an authored

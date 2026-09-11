@@ -607,6 +607,51 @@ func test_dry_run_with_draft_brushes():
 	assert_eq(result["chunk_count"], 1, "Non-chunked bake should report 1 chunk when brushes exist")
 
 
+func test_dry_run_counts_through_the_cordon():
+	root.cordon_enabled = true
+	root.cordon_aabb = AABB(Vector3(-16, -16, -16), Vector3(32, 32, 32))
+	_make_brush(root.draft_brushes_node, Vector3.ZERO, Vector3(8, 8, 8))
+	_make_brush(root.draft_brushes_node, Vector3(500, 0, 0), Vector3(8, 8, 8))
+
+	var result = bake_sys.bake_dry_run()
+
+	assert_eq(result["draft"], 1, "The dry run should count what the bake will take")
+
+
+func test_dry_run_counts_through_bake_visible_only():
+	root.bake_visible_only = true
+	_make_brush(root.draft_brushes_node)
+	var hidden = _make_brush(root.draft_brushes_node)
+	hidden.visible = false
+
+	var result = bake_sys.bake_dry_run()
+
+	assert_eq(result["draft"], 1, "A hidden brush is not going to bake, so it is not counted")
+
+
+func test_dry_run_counts_everything_when_neither_filter_is_on():
+	root.cordon_enabled = false
+	root.bake_visible_only = false
+	_make_brush(root.draft_brushes_node, Vector3(500, 0, 0), Vector3(8, 8, 8))
+	var hidden = _make_brush(root.draft_brushes_node)
+	hidden.visible = false
+
+	var result = bake_sys.bake_dry_run()
+
+	assert_eq(result["draft"], 2, "With both filters off, everything counts")
+
+
+func test_a_fully_cordoned_out_level_reports_no_chunks():
+	root.cordon_enabled = true
+	root.cordon_aabb = AABB(Vector3(-16, -16, -16), Vector3(32, 32, 32))
+	_make_brush(root.draft_brushes_node, Vector3(500, 0, 0), Vector3(8, 8, 8))
+
+	var result = bake_sys.bake_dry_run()
+
+	assert_eq(result["draft"], 0, "Nothing is in the cordon")
+	assert_eq(result["chunk_count"], 0, "so there is nothing to chunk")
+
+
 func test_dry_run_with_pending_brushes():
 	_make_brush(root.pending_node)
 	var result = bake_sys.bake_dry_run()

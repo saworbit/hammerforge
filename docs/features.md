@@ -159,7 +159,7 @@ Grid-based paint layers with chunked storage for large worlds:
 | **LODs** | Auto-generate level-of-detail meshes |
 | **Lightmap UV2** | Unwrap for lightmap baking |
 | **Navmesh** | Bake navigation mesh |
-| **Dry run** | Preview bake counts without building |
+| **Dry run** | Preview bake counts without building. Counts through the cordon and Bake Visible Only, so the number matches what the bake takes |
 | **Bake Selected** | Bake only selected brushes (merged into existing output) |
 | **Bake Changed** | Bake only dirty-tagged brushes since last successful bake |
 | **Preview modes** | Full / Wireframe / Proxy toggle for ultra-fast iteration |
@@ -389,7 +389,7 @@ transform group while paint mode is on, so only one of the two is ever live.
 
 ## Testing
 
-The verified Godot 4.7 suite on September 11, 2026 contains **3,414 tests across 177 scripts**: **3,407 passing tests**, seven intentional no-assert safety tests, and **17,406 assertions**. All checks run on every push and pull request via GitHub Actions.
+The verified Godot 4.7 suite on September 11, 2026 contains **3,418 tests across 177 scripts**: **3,411 passing tests**, seven intentional no-assert safety tests, and **17,411 assertions**. All checks run on every push and pull request via GitHub Actions.
 
 ```bash
 # Run all tests headless

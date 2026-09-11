@@ -449,9 +449,7 @@ func _has_positive_structural_brush(container: Node3D) -> bool:
 		var brush := child as DraftBrush
 		if brush.operation == CSGShape3D.OPERATION_SUBTRACTION:
 			continue
-		if root.bake_visible_only and not brush.visible:
-			continue
-		if root.cordon_enabled and not _brush_in_cordon(brush):
+		if not brush_bakes(brush):
 			continue
 		if not _is_structural_brush(brush):
 			continue
@@ -475,9 +473,7 @@ func _container_has_effective_subtractor(container: Node3D, force_subtract: bool
 		if not (child is DraftBrush) or root.is_entity_node(child):
 			continue
 		var brush := child as DraftBrush
-		if root.bake_visible_only and not brush.visible:
-			continue
-		if root.cordon_enabled and not _brush_in_cordon(brush):
+		if not brush_bakes(brush):
 			continue
 		if not _is_structural_brush(brush):
 			continue
@@ -850,12 +846,34 @@ func _attach_io_dispatcher(container: Node3D) -> void:
 	root._assign_owner_recursive(dispatcher)
 
 
+## Whether the bake will take this brush at all.
+##
+## The cordon and `bake_visible_only` are each checked in seven places along the
+## bake path and in none of the counting. So the dry run, which is the preflight
+## the user reads before committing to a bake, reported brushes the bake was
+## going to skip. One predicate, so the two cannot drift apart again.
+##
+## Subtraction is deliberately not part of this. A subtractor is a brush the bake
+## takes and uses, and the dry run reports pending cuts on their own line.
+func brush_bakes(brush: DraftBrush) -> bool:
+	if brush == null or not is_instance_valid(brush):
+		return false
+	if root.is_entity_node(brush):
+		return false
+	if root.bake_visible_only and not brush.visible:
+		return false
+	if root.cordon_enabled and not _brush_in_cordon(brush):
+		return false
+	return true
+
+
+## How many brushes in this container the bake will take.
 func count_brushes_in(container: Node3D) -> int:
 	if not container:
 		return 0
 	var count := 0
 	for child in container.get_children():
-		if child is DraftBrush and not root.is_entity_node(child):
+		if child is DraftBrush and brush_bakes(child as DraftBrush):
 			count += 1
 	return count
 
