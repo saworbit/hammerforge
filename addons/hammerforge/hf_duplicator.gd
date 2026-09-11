@@ -42,8 +42,34 @@ static func _translated(translation: Vector3) -> CopyPlacement:
 	return placement
 
 
+## Whether every number a layout is laid out from is a number.
+##
+## The count is checked by `can_generate()`; these are the values that decide
+## *where* a copy lands, and nothing looked at them. A non-finite one multiplies
+## through the placement arithmetic into a copy at a NaN position: it draws
+## nothing, cannot be box-selected or framed, is invisible to `validate_level()`
+## and is saved into the `.hflevel`. One array action makes as many of those as
+## the count asked for, which is why this is checked here rather than left to the
+## caller.
+static func layout_numbers_finite(params: Dictionary) -> bool:
+	for key in ["offset", "pivot", "spacing"]:
+		if params.has(key) and params[key] is Vector3 and not (params[key] as Vector3).is_finite():
+			return false
+	for key in ["step_degrees", "rise"]:
+		if params.has(key) and not is_finite(float(params[key])):
+			return false
+	return true
+
+
+static func _refuse_layout(what: String) -> Array:
+	HFLog.warn("HFDuplicator: %s is not a number, so no copies were laid out" % what)
+	return []
+
+
 ## A run of copies, each one offset further than the last.
 static func linear_placements(p_count: int, p_offset: Vector3) -> Array:
+	if not p_offset.is_finite():
+		return _refuse_layout("array offset %s" % str(p_offset))
 	var out: Array = []
 	for copy_index in range(1, maxi(0, p_count) + 1):
 		out.append(_translated(p_offset * copy_index))
@@ -54,6 +80,10 @@ static func linear_placements(p_count: int, p_offset: Vector3) -> Array:
 static func radial_placements(
 	p_count: int, p_axis_index: int, p_step_degrees: float, p_pivot: Vector3, p_rise: float = 0.0
 ) -> Array:
+	if not (is_finite(p_step_degrees) and is_finite(p_rise) and p_pivot.is_finite()):
+		return _refuse_layout(
+			"radial step %s, rise %s or pivot %s" % [p_step_degrees, p_rise, str(p_pivot)]
+		)
 	var out: Array = []
 	var climb := HFTransformSystem.axis_vector(p_axis_index) * p_rise
 	for copy_index in range(1, maxi(0, p_count) + 1):
@@ -70,6 +100,8 @@ static func radial_placements(
 ## A lattice of copies. `p_counts` includes the source cell on each axis, so the
 ## cell the source already occupies is not among the placements.
 static func grid_placements(p_counts: Vector3i, p_spacing: Vector3) -> Array:
+	if not p_spacing.is_finite():
+		return _refuse_layout("grid spacing %s" % str(p_spacing))
 	var counts := Vector3i(maxi(1, p_counts.x), maxi(1, p_counts.y), maxi(1, p_counts.z))
 	var out: Array = []
 	for ix in counts.x:
@@ -113,7 +145,12 @@ static func placements_for(mode: int, params: Dictionary) -> Array:
 ## The count the controls ask for is said back, the way the dome builder says the
 ## number of panels it was asked for, because "too many" without a number leaves
 ## the user guessing which control to turn.
-static func can_generate(copy_count: int, source_count: int) -> HFOpResult:
+static func can_generate(copy_count: int, source_count: int, params: Dictionary = {}) -> HFOpResult:
+	if not layout_numbers_finite(params):
+		return HFOpResult.fail(
+			"Array: that layout has a number that is not a number",
+			"Check the offset, spacing, step and rise fields"
+		)
 	if source_count < 1:
 		return HFOpResult.fail("Array: nothing selected to copy", "Select a brush first")
 	if copy_count < 1:
@@ -180,7 +217,7 @@ func _init() -> void:
 ## Create N copies of the source brushes with progressive offset.
 ## brush_system is untyped to avoid circular preload.
 func generate(brush_system, p_count: int, p_offset: Vector3) -> bool:
-	if not can_generate(p_count, source_brush_ids.size()).ok:
+	if not can_generate(p_count, source_brush_ids.size(), {"offset": p_offset}).ok:
 		return false
 	count = p_count
 	offset = p_offset
@@ -229,7 +266,8 @@ func generate_radial(
 	p_pivot: Vector3,
 	p_rise: float = 0.0
 ) -> bool:
-	if not can_generate(p_count, source_brush_ids.size()).ok:
+	var radial_params := {"step_degrees": p_step_degrees, "pivot": p_pivot, "rise": p_rise}
+	if not can_generate(p_count, source_brush_ids.size(), radial_params).ok:
 		return false
 	mode = ArrayMode.RADIAL
 	count = p_count
@@ -260,7 +298,9 @@ func generate_radial(
 ## Create a lattice of copies. `p_counts` includes the source cell on each axis,
 ## so 2x1x2 produces three copies around one original.
 func generate_grid(brush_system, p_counts: Vector3i, p_spacing: Vector3) -> bool:
-	if not can_generate(grid_copy_count(p_counts), source_brush_ids.size()).ok:
+	if not (
+		can_generate(grid_copy_count(p_counts), source_brush_ids.size(), {"spacing": p_spacing}).ok
+	):
 		return false
 	# No clamp: the guard above has already refused anything below one, so the
 	# record holds the counts that were asked for rather than ones nobody typed.
@@ -348,7 +388,7 @@ func regenerate(brush_system, p_mode: int, params: Dictionary) -> bool:
 	# Asked before anything is torn down. A count the layout cannot use is a
 	# refusal with the existing copies still standing, not a demolition
 	# followed by the news that nothing could be built in their place.
-	if not can_generate(requested_copy_count(p_mode, params), source_brush_ids.size()).ok:
+	if not can_generate(requested_copy_count(p_mode, params), source_brush_ids.size(), params).ok:
 		return false
 	clear_instances(brush_system)
 	if not _lay_out(brush_system, p_mode, params):

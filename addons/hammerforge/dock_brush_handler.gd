@@ -582,7 +582,7 @@ static func on_create_duplicate_array(dock: Object) -> void:
 	# layout controls will happily describe thirty-two thousand brushes, and a
 	# refusal that names the number beats one that says "too many".
 	var check: HFOpResult = HFDuplicator.can_generate(
-		HFDuplicator.placements_for(mode, params).size(), brush_ids.size()
+		HFDuplicator.placements_for(mode, params).size(), brush_ids.size(), params
 	)
 	if not check.ok:
 		dock._set_status(check.user_text(), true)
@@ -692,8 +692,11 @@ static func refresh_array_preview(dock: Object) -> void:
 	if brush_ids.is_empty():
 		_put_array_ghost_away(dock)
 		return
-	var placements := HFDuplicator.placements_for(array_mode(dock), array_params(dock, brush_ids))
-	var check: HFOpResult = HFDuplicator.can_generate(placements.size(), brush_ids.size())
+	var ghost_params := array_params(dock, brush_ids)
+	var placements := HFDuplicator.placements_for(array_mode(dock), ghost_params)
+	var check: HFOpResult = HFDuplicator.can_generate(
+		placements.size(), brush_ids.size(), ghost_params
+	)
 	if not check.ok:
 		dock.level_root.clear_array_preview()
 		_show_array_message(dock, check.user_text())

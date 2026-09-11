@@ -84,6 +84,11 @@ func register_instance(
 			uids.append(uid)
 	rec.entity_uids = uids
 
+	# Overwriting silently is what turns a stale counter into orphaned nodes, so
+	# say so rather than replace. The counter is derived from the restored records
+	# now, which should mean this never fires.
+	if _instances.has(iid):
+		push_warning("HFPrefabSystem: instance id '%s' is already registered" % iid)
 	_instances[iid] = rec
 	# Tag every brush/entity node with the instance_id so we can find them
 	_tag_nodes(rec)
@@ -574,6 +579,15 @@ func quick_save_prefab(
 # ---------------------------------------------------------------------------
 
 
+## The number at the end of a `pfx_N` or `pent_N` id, or 0 if there is not one.
+static func _id_number(id: String) -> int:
+	var underscore := id.rfind("_")
+	if underscore < 0:
+		return 0
+	var tail := id.substr(underscore + 1)
+	return int(tail) if tail.is_valid_int() else 0
+
+
 func capture_state() -> Dictionary:
 	var data: Dictionary = {}
 	data["next_instance_id"] = _next_instance_id
@@ -618,3 +632,16 @@ func restore_state(data: Dictionary) -> void:
 		if rec.instance_id != "":
 			_instances[rec.instance_id] = rec
 			_tag_nodes(rec)
+			# The floor comes from what was restored, not from the stored counter.
+			# A state whose instances list holds `pfx_1` while its
+			# `next_instance_id` is 1 restores cleanly and then issues `pfx_1`
+			# again, and `_instances[iid] = rec` is a plain dictionary write, so
+			# the second registration overwrites the first without a word. The
+			# first placement's nodes are still tagged with that id and now
+			# resolve to a record describing a different prefab, which is how
+			# `set_variant()` ends up orphaning brushes instead of replacing them.
+			# `data.get("next_instance_id", 1)` is exactly what a `.hflevel`
+			# saved before the counter was captured produces.
+			_next_instance_id = maxi(_next_instance_id, _id_number(rec.instance_id) + 1)
+			for uid in rec.entity_uids:
+				_next_entity_uid = maxi(_next_entity_uid, _id_number(str(uid)) + 1)
