@@ -493,3 +493,134 @@ func test_bevel_on_a_larger_radius_is_still_convex():
 	var brush = _make_box_brush()
 	assert_true(sys.bevel_edge("box_brush", [0, 1], 4, 7.0), "Bevel should succeed")
 	assert_lt(_worst_plane_violation(brush), 0.02, "A wider bevel should stay convex")
+
+
+# ---------------------------------------------------------------------------
+# Refusing what is not a bevel or an inset (#330, #339, #340)
+# ---------------------------------------------------------------------------
+
+
+## How many faces point back at the brush's own centre. A back-facing polygon
+## bakes inside out and fails every convexity check from then on.
+func _inward_face_count(brush: Node3D) -> int:
+	var centre := _brush_centre(brush)
+	var inward := 0
+	for face in brush.faces:
+		if face.local_verts.size() < 3:
+			continue
+		var out_dir: Vector3 = _face_centre(face) - centre
+		if out_dir.length() < 0.0001:
+			continue
+		if face.normal.dot(out_dir.normalized()) < 0.0:
+			inward += 1
+	return inward
+
+
+func test_bevel_refuses_a_radius_of_zero():
+	var brush = _make_box_brush()
+	var before: int = brush.faces.size()
+	_capture_warning("greater than zero")
+	assert_false(sys.bevel_edge("box_brush", [0, 3], 2, 0.0), "0 is not a bevel")
+	_assert_captured_warning("greater than zero")
+	assert_eq(brush.faces.size(), before, "nothing added")
+
+
+func test_bevel_refuses_a_negative_radius():
+	var brush = _make_box_brush()
+	var before: int = brush.faces.size()
+	_capture_warning("greater than zero")
+	assert_false(sys.bevel_edge("box_brush", [0, 3], 2, -8.0))
+	_assert_captured_warning("greater than zero")
+	assert_eq(brush.faces.size(), before)
+
+
+## A real 64 unit box, built the way the brush system builds one, because the
+## cap winding was read off arc points that are `radius` apart at coordinates of
+## 32 — and how much of a float32 that leaves is what decided the sign.
+func _make_real_box(brush_id: String) -> Node3D:
+	var brush = DraftBrush.new()
+	brush.brush_id = brush_id
+	brush.shape = 0
+	brush.size = Vector3(64, 64, 64)
+	root.draft_brushes_node.add_child(brush)
+	brush.rebuild_preview()
+	return brush
+
+
+func test_a_small_bevel_winds_its_caps_outward_on_every_edge():
+	var beveled := 0
+	for radius in [0.01, 0.05, 0.5, 4.0]:
+		for a in range(8):
+			for b in range(a + 1, 8):
+				var id := "edge_%s_%d_%d" % [radius, a, b]
+				var brush = _make_real_box(id)
+				if not sys.bevel_edge(id, [a, b], 2, radius):
+					continue
+				beveled += 1
+				assert_eq(
+					_inward_face_count(brush),
+					0,
+					"radius %s on edge %d-%d left an inverted face" % [radius, a, b]
+				)
+	assert_gt(beveled, 0, "there are edges to bevel")
+
+
+func test_inset_refuses_numbers_that_are_not_numbers():
+	var brush = _make_box_brush()
+	var before: int = brush.faces.size()
+	for args in [[NAN, 8.0], [8.0, INF], [INF, 0.0], [8.0, NAN]]:
+		assert_false(
+			sys.inset_face("box_brush", 0, args[0], args[1]),
+			"inset %s should be refused" % str(args)
+		)
+	assert_eq(brush.faces.size(), before, "nothing added")
+	for face in brush.faces:
+		for v in face.local_verts:
+			assert_true(v.is_finite(), "no non-finite vertex reached the brush")
+
+
+func test_inset_refuses_a_distance_that_is_not_an_inset():
+	var brush = _make_box_brush()
+	var before: int = brush.faces.size()
+	assert_false(sys.inset_face("box_brush", 0, 0.0, 0.0))
+	assert_false(sys.inset_face("box_brush", 0, -4.0, 0.0))
+	assert_eq(brush.faces.size(), before)
+
+
+## Which way the walls of an inset look, measured against the inset face itself
+## rather than against the brush centre — a recess makes the brush concave, so
+## the centre says nothing useful about it.
+func _wall_dots_towards_the_inset(brush: Node3D) -> Array:
+	var pit_centre := _face_centre(brush.faces[0])
+	var out: Array = []
+	for i in range(6, brush.faces.size()):
+		var face: FaceData = brush.faces[i]
+		out.append(face.normal.dot((pit_centre - _face_centre(face)).normalized()))
+	return out
+
+
+func test_a_recessed_inset_walls_look_into_the_recess():
+	# A negative height pushes the inset face into the solid, which put the inset
+	# boundary behind the original one and wound every side face inside out.
+	var brush = _make_box_brush()
+	assert_true(sys.inset_face("box_brush", 0, 4.0, -8.0))
+	var dots: Array = _wall_dots_towards_the_inset(brush)
+	assert_eq(dots.size(), 4, "one wall per edge of the face")
+	for d in dots:
+		assert_gt(d, 0.0, "a pit wall is seen from inside the pit")
+
+
+func test_a_raised_inset_walls_look_away_from_the_boss():
+	var brush = _make_box_brush()
+	assert_true(sys.inset_face("box_brush", 0, 4.0, 8.0))
+	assert_eq(_inward_face_count(brush), 0, "a boss stays convex")
+	for d in _wall_dots_towards_the_inset(brush):
+		assert_lt(d, 0.0, "a boss wall is seen from outside it")
+
+
+func test_a_flat_inset_ring_faces_the_way_the_original_face_did():
+	var brush = _make_box_brush()
+	var was: Vector3 = brush.faces[0].normal
+	assert_true(sys.inset_face("box_brush", 0, 4.0, 0.0))
+	for i in range(6, brush.faces.size()):
+		assert_gt(brush.faces[i].normal.dot(was), 0.9, "the ring is the old surface")

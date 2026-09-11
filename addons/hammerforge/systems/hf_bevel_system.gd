@@ -34,7 +34,11 @@ func bevel_edge(brush_id: String, edge: Array, segments: int = 2, radius: float 
 	if not is_finite(radius):
 		HFLog.warn("HFBevelSystem: bevel radius must be finite")
 		return false
-	radius = maxf(radius, 0.01)
+	if radius <= 0.0:
+		# Typing 0 is how a user says "actually, no bevel". Coercing it to 0.01
+		# gave them a bevel they did not ask for and reported success over it.
+		HFLog.warn("HFBevelSystem: bevel radius must be greater than zero")
+		return false
 	var brush: Node3D = root.find_brush_by_id(brush_id)
 	if not brush:
 		return false
@@ -171,7 +175,14 @@ func bevel_edge(brush_id: String, edge: Array, segments: int = 2, radius: float 
 func inset_face(
 	brush_id: String, face_index: int, inset_distance: float = 2.0, height: float = 0.0
 ) -> bool:
-	inset_distance = maxf(inset_distance, 0.01)
+	if not is_finite(inset_distance) or not is_finite(height):
+		# maxf() does not clean a NaN, and height was never looked at, so both
+		# went into the vertex arithmetic and stayed on the face.
+		HFLog.warn("HFBevelSystem: inset needs finite numbers")
+		return false
+	if inset_distance <= 0.0:
+		HFLog.warn("HFBevelSystem: inset distance must be greater than zero")
+		return false
 	var brush: Node3D = root.find_brush_by_id(brush_id)
 	if not brush:
 		return false
@@ -200,6 +211,9 @@ func inset_face(
 		if height != 0.0:
 			inset_v += face.normal * height
 		inset_verts.append(inset_v)
+	# Read before the face is overwritten: the side walls at zero height are part
+	# of the original surface and have to face the way it did.
+	var face_normal: Vector3 = face.normal
 	# Replace original face with the inset face.
 	face.local_verts = inset_verts
 	face.ensure_geometry()
@@ -208,10 +222,20 @@ func inset_face(
 	for i in range(count):
 		var next: int = (i + 1) % count
 		var side_face = FaceData.new()
-		# CW winding from outside: orig[i] → orig[next] → inset[next] → inset[i]
-		side_face.local_verts = PackedVector3Array(
-			[verts[i], verts[next], inset_verts[next], inset_verts[i]]
-		)
+		var quad := PackedVector3Array([verts[i], verts[next], inset_verts[next], inset_verts[i]])
+		# Which way a side wall faces is decided by the height, not by assuming
+		# the inset boundary is in front of the original one. A raised inset is a
+		# boss and its walls face away from the middle of the face; a negative
+		# height is a recess and its walls look into it, the far side of the same
+		# material; at zero height the ring is flat and is part of the original
+		# surface. Assuming the first of those wound the other two inside out.
+		var in_plane: Vector3 = (verts[i] + verts[next]) * 0.5 - centroid
+		var reference: Vector3 = face_normal
+		if not is_zero_approx(height):
+			reference = in_plane * signf(height)
+		if (quad[2] - quad[0]).cross(quad[1] - quad[0]).dot(reference) < 0.0:
+			quad.reverse()
+		side_face.local_verts = quad
 		side_face.material_idx = face.material_idx
 		side_face.uv_projection = face.uv_projection
 		side_face.uv_scale = face.uv_scale
@@ -293,6 +317,7 @@ func _compute_centroid(verts: PackedVector3Array) -> Vector3:
 
 
 ## Fan the arc at one edge endpoint into triangles that face `outward`.
+##
 ## All arc points lie in a plane perpendicular to the edge, so the fan normal is
 ## parallel to the edge axis and a single dot product settles the winding.
 func _append_endpoint_caps(
