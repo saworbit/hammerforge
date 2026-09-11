@@ -171,8 +171,21 @@ func set_region_show_grid(value: bool) -> void:
 	_update_region_overlay()
 
 
+## A region has to stay a useful unit of streaming. `region_size_cells` is the
+## divisor that turns a cell index into a region coordinate, so a region of a
+## million cells is the whole world in one region: the radius-2 neighbourhood the
+## streamer keeps resident is then 25 of those, and the memory budget cannot be
+## met by evicting anything because there is nothing smaller than one region to
+## evict. The streaming radius was already clamped at both ends; these two are
+## the rest of that.
+const MIN_REGION_SIZE_CELLS := 64
+const MAX_REGION_SIZE_CELLS := 4096
+const MIN_MEMORY_BUDGET_MB := 32
+const MAX_MEMORY_BUDGET_MB := 8192
+
+
 func set_region_size_cells(value: int) -> void:
-	region_manager.region_size_cells = max(64, value)
+	region_manager.region_size_cells = clampi(value, MIN_REGION_SIZE_CELLS, MAX_REGION_SIZE_CELLS)
 
 
 func set_region_streaming_radius(value: int) -> void:
@@ -180,7 +193,7 @@ func set_region_streaming_radius(value: int) -> void:
 
 
 func set_region_memory_budget_mb(value: int) -> void:
-	region_memory_budget_mb = max(32, value)
+	region_memory_budget_mb = clampi(value, MIN_MEMORY_BUDGET_MB, MAX_MEMORY_BUDGET_MB)
 
 
 func get_region_settings() -> Dictionary:
@@ -595,15 +608,44 @@ func generate_heightmap_noise(settings: Dictionary = {}) -> void:
 	regenerate_paint_layers()
 
 
+## How flat a heightmap may be scaled before it is not a sculpt any more.
+##
+## Zero is not non-finite, so it is not the same defect, but it multiplies every
+## height on the layer by nothing and the sculpt reads to a mapper as gone. The
+## multiplier is what changed, not the heights, so there is nothing to undo by
+## eye. A floor rather than a refusal, because a very flat terrain is a real
+## thing to want — and applied to the magnitude, because a negative scale turns
+## the sculpt upside down, which is also a real thing to want.
+const MIN_HEIGHT_SCALE := 0.001
+
+
 func set_heightmap_scale(value: float) -> void:
+	if not is_finite(value):
+		HFLog.warn("HFPaintSystem: heightmap scale must be a number")
+		return
 	var layer = root.paint_layers.get_active_layer() if root.paint_layers else null
 	if not layer:
 		return
+	if absf(value) < MIN_HEIGHT_SCALE:
+		var floored := -MIN_HEIGHT_SCALE if value < 0.0 else MIN_HEIGHT_SCALE
+		HFLog.warn(
+			(
+				"HFPaintSystem: heightmap scale %f flattens the sculpt. Using %f instead."
+				% [value, floored]
+			)
+		)
+		value = floored
 	layer.height_scale = value
 	regenerate_paint_layers()
 
 
 func set_layer_y(value: float) -> void:
+	if not is_finite(value):
+		# The plane the layer's geometry is built on and the paint tool's raycast
+		# plane. A non-finite value puts the whole generated layer somewhere that
+		# is not a place, and it is saved with the layer.
+		HFLog.warn("HFPaintSystem: the layer height must be a number")
+		return
 	var layer = root.paint_layers.get_active_layer() if root.paint_layers else null
 	if not layer or not layer.grid:
 		return
@@ -662,12 +704,16 @@ func load_region_index(index_data: Dictionary, hflevel_path: String = "") -> voi
 		set_region_base_path(hflevel_path)
 	if index_data.is_empty():
 		return
-	region_manager.region_size_cells = int(
-		index_data.get("region_size_cells", region_manager.region_size_cells)
+	# Through the setters, because a sidecar written by an older version or by
+	# hand is exactly the caller the clamps are for.
+	set_region_size_cells(
+		int(index_data.get("region_size_cells", region_manager.region_size_cells))
 	)
-	region_manager.streaming_radius = int(
-		index_data.get("streaming_radius", region_manager.streaming_radius)
+	set_region_streaming_radius(
+		int(index_data.get("streaming_radius", region_manager.streaming_radius))
 	)
+	if index_data.has("memory_budget_mb"):
+		set_region_memory_budget_mb(int(index_data["memory_budget_mb"]))
 	region_manager.region_index.clear()
 	var regions = index_data.get("regions", [])
 	if regions is Array:

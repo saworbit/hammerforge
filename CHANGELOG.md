@@ -5,6 +5,27 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **The heightmap scale and the terrain layer height took any number** (#350).
+  #320 refused a non-finite value at the displacement paint setters for this
+  reason; the terrain layer has the same two knobs and did not get the same
+  treatment. `height_scale` multiplies every height on the layer and `layer_y` is
+  the plane its geometry is built on and the paint tool's raycast plane, so a NaN
+  in either put the whole generated layer somewhere that is not a place — and it
+  is saved with the layer, so reopening the level brought it back. Both refuse a
+  non-finite value now. A heightmap scale of zero takes a floor rather than a
+  refusal: it is not non-finite, but it multiplies the sculpt by nothing and
+  reads to a mapper as the terrain having gone, and a very flat terrain is still
+  a thing to want. The floor is on the magnitude, so a negative scale still turns
+  the sculpt upside down.
+- **Region streaming size and memory budget had no ceiling** (#352). Of the three
+  settings, the streaming radius was clamped at both ends, the region size below
+  only, and the budget not at all. `region_size_cells` is the divisor that turns
+  a cell index into a region coordinate, so a million-cell region is the whole
+  world in one region: streaming reports as enabled, the radius-2 neighbourhood
+  is 25 of those, and the budget cannot be met by evicting anything because there
+  is nothing smaller than one region to evict. Both are clamped at both ends now,
+  and `load_region_index()` goes through the setters, because a sidecar written
+  by an older version or by hand is exactly the caller they are for.
 - **A malformed `.hflevel` emptied the level instead of refusing to load**
   (#347). `restore_state()` cleared the level and then read the state it had been
   handed, so a key holding the wrong kind of thing gave a raw engine error with
