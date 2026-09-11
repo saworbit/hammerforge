@@ -100,9 +100,19 @@ func create_entity_from_map(info: Dictionary) -> DraftEntity:
 	var props = info.get("properties", {})
 	if props is Dictionary:
 		var data = props.duplicate(true)
-		data.erase("classname")
-		data.erase("origin")
+		for reserved in MapIO.RESERVED_ENTITY_KEYS:
+			data.erase(reserved)
+		# The output lines are wiring, not settings, and go back into metadata.
+		for connection in info.get("entity_io_outputs", []):
+			if connection is Dictionary:
+				data.erase(str(connection.get("output_name", "")))
 		entity.entity_data = data
+	var authored := str(info.get("entity_name", ""))
+	if authored != "":
+		entity.set_meta("entity_name", authored)
+	var outputs = info.get("entity_io_outputs", [])
+	if outputs is Array and not outputs.is_empty():
+		entity.set_meta("entity_io_outputs", outputs.duplicate(true))
 	add_entity(entity)
 	var origin = info.get("origin", Vector3.ZERO)
 	if origin is Vector3:
@@ -537,6 +547,21 @@ func _iter_io_sources() -> Array:
 	return nodes
 
 
+## The name an entity is addressed by: its authored `entity_name` when it has
+## one, its node name otherwise.
+##
+## The two halves of a connection record used to be in different namespaces. The
+## target side is whatever the output was aimed at, which is the authored name,
+## while the source side was the scene tree name. For a brush entity that is
+## whatever Godot generated, so a source never matched an authored name and
+## get_connection_summary() reported every wired entity as wired to nothing.
+static func authored_address(entity: Node) -> String:
+	if entity == null:
+		return ""
+	var authored := str(entity.get_meta("entity_name", ""))
+	return authored if authored != "" else str(entity.name)
+
+
 ## Get all I/O connections in the scene (for visualization).
 func get_all_connections() -> Array:
 	var connections: Array = []
@@ -550,7 +575,8 @@ func get_all_connections() -> Array:
 				. append(
 					{
 						"source": child,
-						"source_name": child.name,
+						"source_name": authored_address(child),
+						"source_node_name": str(child.name),
 						"output_name": str(conn.get("output_name", "")),
 						"target_name": str(conn.get("target_name", "")),
 						"input_name": str(conn.get("input_name", "")),

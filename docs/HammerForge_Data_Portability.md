@@ -38,6 +38,21 @@ This document describes how to move data in and out of HammerForge safely.
   - The texture field is positional and whitespace delimited, so a palette name with a space in it is written with underscores (`Red Brick` becomes `Red_Brick`). Import matches on the same token.
   - A `.map` names a texture without saying where it lives, so a name the current palette does not hold leaves the face unset rather than adding a material. Load the palette first, then import.
 - UV offset, rotation and scale are written in both formats. Valve 220 additionally carries the texture axes; Classic Quake has no field for them.
+- Authored entity names round-trip as `targetname`, on both point entities and brush entities. The authored name is the address every I/O connection is aimed at, so without it a wired level comes back inert.
+- **Entity I/O connections round-trip, one key/value line per connection.** The key is the output name and the value is `target,input,parameter,delay,fire_once`, which is the order Hammer writes a VMF connection:
+
+  ```
+  {
+  "classname" "func_button"
+  "targetname" "btn"
+  "OnPressed" "door,Open,,0.0,0"
+  }
+  ```
+
+  - There is no `connections { }` block, because `.map` entity bodies are key/value lines and nothing else: a nested brace inside an entity is read as a brush by every parser including this one, so a block would not survive its own round trip.
+  - One line per connection, so two outputs on the same event both reach the file. The import reads the key/value lines in file order rather than through a dictionary, which would keep only the last of a repeated key.
+  - A line is read back as a connection only if it has five comma-separated fields, a numeric delay, and a target and input that are actually there. An ordinary entity property does not look like that, so wiring is told apart from settings without a naming rule on the key.
+  - The format defines no escape for a comma, so a comma inside a field is written as a space rather than escaped. A reader splitting on the comma would otherwise get a different number of fields than the writer wrote.
 - HammerForge surface-paint layers are not preserved, so `.hflevel` remains the editable source of truth.
 - Treat `.map` as a blockout exchange format, not a full fidelity export.
 - Cutters are not exported. A `.map` worldspawn holds additive solids only, so a subtraction brush written into one would fill the hole it was made for instead of cutting it. Carved shapes export uncut; bake or export `.glb` when the carve has to come with them.

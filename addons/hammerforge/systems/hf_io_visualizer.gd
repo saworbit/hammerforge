@@ -494,11 +494,15 @@ func get_connection_summary(entity_name: String) -> Dictionary:
 	for conn in connections:
 		if not (conn is Dictionary):
 			continue
+		# An entity has two addresses, its authored name and its node name, and an
+		# output can be aimed at either. The summary answers for both rather than
+		# making the caller know which one it holds.
 		var src = str(conn.get("source_name", ""))
+		var src_node = str(conn.get("source_node_name", src))
 		var tgt = str(conn.get("target_name", ""))
 		var out_name = str(conn.get("output_name", ""))
 		var inp_name = str(conn.get("input_name", ""))
-		if src == entity_name:
+		if src == entity_name or src_node == entity_name:
 			summary["triggers"] += 1
 			if not summary["target_names"].has(tgt):
 				summary["target_names"].append(tgt)
