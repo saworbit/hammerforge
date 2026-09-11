@@ -24,7 +24,7 @@ HFPaintGrid
 - Converts between world and grid coordinates.
 
 HFPaintLayer
-- Chunked grid storage using a bitset per chunk.
+- Chunked grid storage using a bitset per chunk. A chunk is allocated on the first cell painted in it and dropped when its last cell is erased, so erasing paint gives the memory back and an all-zero chunk is never saved. Erasing over unpainted ground allocates nothing.
 - Per-chunk `material_ids` (PackedByteArray, 1 byte/cell) and blend weights (`blend_weights`, `blend_weights_2`, `blend_weights_3`).
 - Optional per-cell wall height overrides used by the paint-then-raise workflow.
 - Optional `heightmap: Image` (FORMAT_RF) and `height_scale: float` for vertex displacement.

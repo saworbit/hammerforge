@@ -585,6 +585,13 @@ func capture_paint_layers(include_chunks: bool = true) -> Array:
 			entry["height_scale"] = layer.height_scale
 		if include_chunks:
 			for cid in layer.get_chunk_ids():
+				# An all-zero chunk describes nothing. Serializing one writes its
+				# bits, material ids and three blend weight arrays into every save
+				# and every undo snapshot for paint that is not there. set_cell()
+				# drops a chunk when its last bit clears, so this is the guard for
+				# a chunk that was created and never filled.
+				if layer.is_chunk_empty(cid):
+					continue
 				var bits = layer.get_chunk_bits(cid)
 				var bytes: Array = []
 				for b in bits:
