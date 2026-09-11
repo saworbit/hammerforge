@@ -52,6 +52,14 @@ static func capture_from_selection(
 		info.erase("brush_id")
 		# Clear group memberships (prefab instances get their own)
 		info.erase("group_id")
+		# And visgroup membership, for the same reason. A visgroup is a list of
+		# names registered per level, so a prefab placed into a level that has
+		# never had "Lighting" put brushes in a group with no row in the visgroup
+		# panel: it cannot be shown, hidden, renamed or deleted, it is skipped by
+		# refresh_visibility(), the partitioned bake still reads it off the node,
+		# and it is saved. A prefab library shared between levels is the normal
+		# way to use prefabs, so this was the common case.
+		info.erase("visgroups")
 		prefab.brush_infos.append(info)
 
 	# Capture entities
@@ -63,6 +71,9 @@ static func capture_from_selection(
 			var t: Transform3D = info["transform"]
 			t.origin -= centroid
 			info["transform"] = t
+		# The same two, for the same reasons as the brush half above.
+		info.erase("group_id")
+		info.erase("visgroups")
 		prefab.entity_infos.append(info)
 
 	return prefab
@@ -140,6 +151,8 @@ func instantiate(
 
 	# Instantiate brushes
 	for info in b_infos:
+		if not (info is Dictionary):
+			continue
 		var placed_info: Dictionary = info.duplicate(true)
 		# Offset transform by placement position
 		if placed_info.has("transform"):
@@ -157,6 +170,8 @@ func instantiate(
 	var new_entity_names: Array = []
 	var new_entity_nodes: Array = []
 	for info in e_infos:
+		if not (info is Dictionary):
+			continue
 		var placed_info: Dictionary = info.duplicate(true)
 		if placed_info.has("transform"):
 			var t: Transform3D = placed_info["transform"]
@@ -283,13 +298,38 @@ func to_dict() -> Dictionary:
 
 
 ## Deserialize from a dictionary.
+## The Dictionary entries of a decoded list, and a warning about what was dropped.
+##
+## `.hfprefab` files are JSON in the project, so a merge conflict, a truncated
+## write or an older build with a different shape all produce one with an entry
+## that is not a Dictionary. `instantiate()` called `info.duplicate(true)` on it,
+## which is a runtime error, and GDScript has no exception handling — so the
+## function unwound past its own `end_signal_batch()` and left the level's signal
+## batch open for the rest of the editor session, with the dock silently frozen.
+static func _dictionary_entries(raw, what: String) -> Array:
+	if not (raw is Array):
+		if raw != null:
+			HFLog.warn("HFPrefab: '%s' is not a list, ignoring it" % what)
+		return []
+	var out: Array = []
+	var dropped := 0
+	for entry in raw:
+		if entry is Dictionary:
+			out.append(entry)
+		else:
+			dropped += 1
+	if dropped > 0:
+		HFLog.warn("HFPrefab: dropped %d '%s' entries that were not objects" % [dropped, what])
+	return out
+
+
 static func from_dict(data: Dictionary) -> HFPrefab:
 	var prefab = HFPrefab.new()
 	prefab.prefab_name = str(data.get("prefab_name", ""))
 	var raw_brushes = HFLevelIO.decode_variant(data.get("brush_infos", []))
 	var raw_entities = HFLevelIO.decode_variant(data.get("entity_infos", []))
-	prefab.brush_infos = raw_brushes if raw_brushes is Array else []
-	prefab.entity_infos = raw_entities if raw_entities is Array else []
+	prefab.brush_infos = _dictionary_entries(raw_brushes, "brush_infos")
+	prefab.entity_infos = _dictionary_entries(raw_entities, "entity_infos")
 
 	# Tags
 	var raw_tags = data.get("tags", [])
@@ -306,8 +346,8 @@ static func from_dict(data: Dictionary) -> HFPrefab:
 				var vb = HFLevelIO.decode_variant(vd.get("brush_infos", []))
 				var ve = HFLevelIO.decode_variant(vd.get("entity_infos", []))
 				prefab.variants[str(vname)] = {
-					"brush_infos": vb if vb is Array else [],
-					"entity_infos": ve if ve is Array else [],
+					"brush_infos": _dictionary_entries(vb, "variant brush_infos"),
+					"entity_infos": _dictionary_entries(ve, "variant entity_infos"),
 				}
 
 	return prefab
