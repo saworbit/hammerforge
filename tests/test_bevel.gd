@@ -336,3 +336,160 @@ func test_slerp_parallel_vectors():
 	var b := Vector3(1, 0, 0)
 	var r: Vector3 = sys._slerp_vec3(a, b, 0.5)
 	assert_almost_eq(r.x, 1.0, 0.01)
+
+
+# ---------------------------------------------------------------------------
+# Bevel radius bounds (#315)
+# ---------------------------------------------------------------------------
+
+
+func _local_extent(brush: Node3D) -> Vector3:
+	var mn := Vector3.INF
+	var mx := -Vector3.INF
+	for face in brush.faces:
+		for vertex in face.local_verts:
+			mn = mn.min(vertex)
+			mx = mx.max(vertex)
+	return mx - mn
+
+
+func test_bevel_refuses_a_non_finite_radius():
+	var brush = _make_box_brush()
+	var before: int = brush.faces.size()
+	_capture_warning("radius must be finite")
+	assert_false(sys.bevel_edge("box_brush", [0, 1], 2, NAN), "NaN radius should be refused")
+	_assert_captured_warning("radius must be finite")
+	assert_eq(brush.faces.size(), before, "A refused bevel should add no faces")
+
+
+func test_an_oversized_radius_does_not_inflate_the_brush():
+	var brush = _make_box_brush()
+	var before := _local_extent(brush)
+	_capture_warning("wider than the edge")
+	assert_true(sys.bevel_edge("box_brush", [0, 1], 2, 1000000.0), "The radius is capped, not lost")
+	_assert_captured_warning("wider than the edge")
+	var after := _local_extent(brush)
+	assert_lt(after.x, before.x + 0.01, "A bevel should not grow the brush on X")
+	assert_lt(after.y, before.y + 0.01, "A bevel should not grow the brush on Y")
+	assert_lt(after.z, before.z + 0.01, "A bevel should not grow the brush on Z")
+
+
+func test_an_ordinary_radius_is_not_capped():
+	var brush = _make_box_brush()
+	var original: Array = []
+	for face in brush.faces:
+		for vertex in face.local_verts:
+			original.append(vertex)
+	assert_true(sys.bevel_edge("box_brush", [0, 1], 2, 4.0), "A 4 unit bevel on a 16 unit box")
+	# Every new vertex sits within the radius of a corner it replaced, and the
+	# furthest one sits at exactly the radius asked for, not a clamped figure.
+	var furthest := 0.0
+	for face in brush.faces:
+		for vertex in face.local_verts:
+			var nearest := INF
+			for old in original:
+				nearest = minf(nearest, vertex.distance_to(old))
+			furthest = maxf(furthest, nearest)
+	assert_almost_eq(furthest, 4.0, 0.001, "The bevel should use the radius asked for")
+
+
+# ---------------------------------------------------------------------------
+# Bevel winding and convexity (#314)
+# ---------------------------------------------------------------------------
+
+
+func _face_centre(face: FaceData) -> Vector3:
+	var centre := Vector3.ZERO
+	for vertex in face.local_verts:
+		centre += vertex
+	return centre / float(max(1, face.local_verts.size()))
+
+
+func _brush_centre(brush: Node3D) -> Vector3:
+	var centre := Vector3.ZERO
+	var count := 0
+	for face in brush.faces:
+		for vertex in face.local_verts:
+			centre += vertex
+			count += 1
+	return centre / float(max(1, count))
+
+
+func _worst_plane_violation(brush: Node3D) -> float:
+	var verts: Array = []
+	for face in brush.faces:
+		for vertex in face.local_verts:
+			verts.append(vertex)
+	var worst := -INF
+	for face in brush.faces:
+		if face.local_verts.size() < 3:
+			continue
+		for vertex in verts:
+			worst = maxf(worst, face.normal.dot(vertex - face.local_verts[0]))
+	return worst
+
+
+func test_bevel_faces_all_point_away_from_the_brush_centre():
+	var brush = _make_box_brush()
+	assert_true(sys.bevel_edge("box_brush", [0, 1], 2, 4.0), "Bevel should succeed")
+	var centre := _brush_centre(brush)
+	for i in range(brush.faces.size()):
+		var face: FaceData = brush.faces[i]
+		assert_gt(
+			face.normal.dot(_face_centre(face) - centre),
+			0.0,
+			"Face %d should face outward after a bevel" % i
+		)
+
+
+func test_bevel_leaves_the_brush_convex():
+	var brush = _make_box_brush()
+	assert_true(sys.bevel_edge("box_brush", [0, 1], 2, 4.0), "Bevel should succeed")
+	# Every vertex on or behind every face plane is what convexity means here,
+	# and it is the check HFVertexSystem.validate_convexity() runs.
+	assert_lt(_worst_plane_violation(brush), 0.02, "No vertex should sit outside a face plane")
+
+
+func _shared_vertex_count(a: FaceData, b: FaceData) -> int:
+	var shared := 0
+	for vertex in a.local_verts:
+		for other in b.local_verts:
+			if vertex.distance_to(other) < 0.01:
+				shared += 1
+				break
+	return shared
+
+
+func test_each_strip_face_leans_towards_the_face_it_borders():
+	# The arc used to be centred on the corner vertex, so a strip quad ran from
+	# one pulled-back edge to a point tucked in behind the chord and came out
+	# carrying the normal that belongs to the far side of the bevel. A strip
+	# quad that shares an edge with an original face must be the face whose
+	# normal it is nearest to, out of all of them.
+	var brush = _make_box_brush()
+	var before: int = brush.faces.size()
+	assert_true(sys.bevel_edge("box_brush", [0, 1], 2, 4.0), "Bevel should succeed")
+	for i in range(before, before + 2):
+		var strip: FaceData = brush.faces[i]
+		var neighbour := -1
+		for j in range(before):
+			if _shared_vertex_count(strip, brush.faces[j]) >= 2:
+				assert_eq(neighbour, -1, "A strip quad borders one original face")
+				neighbour = j
+		assert_ne(neighbour, -1, "Strip quad %d should border an original face" % i)
+		if neighbour == -1:
+			continue
+		for j in range(before):
+			if j == neighbour:
+				continue
+			assert_gt(
+				strip.normal.dot(brush.faces[neighbour].normal),
+				strip.normal.dot(brush.faces[j].normal),
+				"Strip quad %d should lean towards the face it borders, not face %d" % [i, j]
+			)
+
+
+func test_bevel_on_a_larger_radius_is_still_convex():
+	var brush = _make_box_brush()
+	assert_true(sys.bevel_edge("box_brush", [0, 1], 4, 7.0), "Bevel should succeed")
+	assert_lt(_worst_plane_violation(brush), 0.02, "A wider bevel should stay convex")

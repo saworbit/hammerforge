@@ -45,8 +45,10 @@ static func on_paint_layer_rename(dock: Object) -> void:
 				return
 			var new_name = line_edit.text.strip_edges()
 			if new_name != "" and new_name != current_name:
-				dock.level_root.rename_paint_layer(idx, new_name)
-				dock._refresh_paint_layers()
+				if dock.level_root.rename_paint_layer(idx, new_name):
+					dock._refresh_paint_layers()
+				elif dock.has_method("show_toast"):
+					dock.show_toast('A layer is already called "%s"' % new_name, 2)
 	)
 	dialog.canceled.connect(func(): dialog.queue_free())
 	dialog.confirmed.connect(func(): dialog.queue_free(), CONNECT_DEFERRED)

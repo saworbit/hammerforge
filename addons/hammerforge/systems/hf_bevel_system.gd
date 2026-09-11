@@ -31,6 +31,9 @@ func bevel_edge(brush_id: String, edge: Array, segments: int = 2, radius: float 
 		HFLog.warn("HFBevelSystem: edge needs 2 vertex indices")
 		return false
 	segments = clampi(segments, 1, 16)
+	if not is_finite(radius):
+		HFLog.warn("HFBevelSystem: bevel radius must be finite")
+		return false
 	radius = maxf(radius, 0.01)
 	var brush: Node3D = root.find_brush_by_id(brush_id)
 	if not brush:
@@ -57,6 +60,17 @@ func bevel_edge(brush_id: String, edge: Array, segments: int = 2, radius: float 
 	var face_idx_1: int = adjacent[1]
 	var face0: FaceData = faces[face_idx_0]
 	var face1: FaceData = faces[face_idx_1]
+	# A bevel wider than the faces it sits between eats through both of them.
+	# Cap at half the shorter of the two, which is the widest chamfer that still
+	# leaves some of each face behind. Without this a radius of 1e6 on a 64-unit
+	# box returned true and left a brush spanning a million units, whose bounds
+	# then dragged unrelated brushes into the next carve.
+	var radius_cap: float = 0.5 * minf(_face_extent(face0), _face_extent(face1))
+	if radius_cap > 0.01 and radius > radius_cap:
+		HFLog.warn(
+			"HFBevelSystem: radius %f is wider than the edge, using %f" % [radius, radius_cap]
+		)
+		radius = radius_cap
 	# Compute bevel geometry.
 	var edge_dir: Vector3 = (vb - va).normalized()
 	var n0: Vector3 = face0.normal
@@ -95,8 +109,15 @@ func bevel_edge(brush_id: String, edge: Array, segments: int = 2, radius: float 
 		var p1a: Vector3 = arc_verts_a[i + 1]
 		var p0b: Vector3 = arc_verts_b[i]
 		var p1b: Vector3 = arc_verts_b[i + 1]
-		# CW winding from outside: p0a → p0b → p1b → p1a
-		bevel_face.local_verts = PackedVector3Array([p0a, p0b, p1b, p1a])
+		# The arc points sit at the edge plus an inward pull, so the strip's
+		# outward side is the one facing away from the brush centre. Wind the
+		# quad against that rather than trusting a fixed order, the same way
+		# the endpoint caps decide which side they are on.
+		var quad := PackedVector3Array([p0a, p0b, p1b, p1a])
+		var quad_center: Vector3 = (p0a + p0b + p1b + p1a) * 0.25
+		if (quad[2] - quad[0]).cross(quad[1] - quad[0]).dot(quad_center - center) < 0.0:
+			quad.reverse()
+		bevel_face.local_verts = quad
 		bevel_face.material_idx = face0.material_idx
 		bevel_face.uv_projection = face0.uv_projection
 		bevel_face.uv_scale = face0.uv_scale
@@ -302,15 +323,34 @@ func _append_endpoint_caps(
 
 ## Compute arc vertices from `origin` sweeping from `dir0` to `dir1`
 ## at the given `radius` with `segments` steps. Returns segments+1 points.
+## Longest distance between any two vertices of a face. The scale a bevel on one
+## of its edges has to stay inside.
+func _face_extent(face: FaceData) -> float:
+	var extent := 0.0
+	var verts: PackedVector3Array = face.local_verts
+	for i in range(verts.size()):
+		for j in range(i + 1, verts.size()):
+			extent = maxf(extent, verts[i].distance_to(verts[j]))
+	return extent
+
+
 func _compute_arc(
 	origin: Vector3, dir0: Vector3, dir1: Vector3, radius: float, segments: int
 ) -> PackedVector3Array:
+	# The arc runs between the two pulled-back edge positions,
+	# `origin + dir0 * radius` and `origin + dir1 * radius`. Centring it on
+	# `origin` puts every intermediate point further in than the chord between
+	# them, which scoops the corner out and leaves the brush concave. Centre it
+	# at `origin + (dir0 + dir1) * radius` instead: that point is exactly
+	# `radius` from both ends whatever the dihedral angle, so the arc still
+	# lands on them and now bulges out towards the corner it replaces.
+	var arc_center: Vector3 = origin + (dir0 + dir1) * radius
 	var points := PackedVector3Array()
 	for i in range(segments + 1):
 		var t: float = float(i) / float(segments)
-		# Spherical-linear interpolation between the two pull directions.
-		var dir: Vector3 = _slerp_vec3(dir0, dir1, t)
-		points.append(origin + dir * radius)
+		# Spherical-linear interpolation between the two end radii.
+		var dir: Vector3 = _slerp_vec3(-dir1, -dir0, t)
+		points.append(arc_center + dir * radius)
 	return points
 
 

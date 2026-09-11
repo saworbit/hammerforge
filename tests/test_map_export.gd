@@ -852,6 +852,60 @@ func test_parse_well_formed_map_reports_no_errors():
 
 
 # ---------------------------------------------------------------------------
+# Import refuses a plane it cannot use (#318)
+# ---------------------------------------------------------------------------
+
+
+func _worldspawn_with_first_point(point: String) -> String:
+	return (
+		"{\n"
+		+ '"classname" "worldspawn"\n'
+		+ "{\n"
+		+ "%s ( 64 0 0 ) ( 0 64 0 ) brick 0 0 0 1 1\n" % point
+		+ "( 0 0 32 ) ( 64 0 32 ) ( 0 64 32 ) brick 0 0 0 1 1\n"
+		+ "( 0 0 0 ) ( 0 64 0 ) ( 0 0 32 ) brick 0 0 0 1 1\n"
+		+ "( 64 0 0 ) ( 64 0 32 ) ( 64 64 0 ) brick 0 0 0 1 1\n"
+		+ "( 0 0 0 ) ( 0 0 32 ) ( 64 0 0 ) brick 0 0 0 1 1\n"
+		+ "( 0 64 0 ) ( 64 64 0 ) ( 0 64 32 ) brick 0 0 0 1 1\n"
+		+ "}\n"
+		+ "}\n"
+	)
+
+
+func test_a_plane_coordinate_that_is_not_a_number_fails_the_import():
+	# float() answers 0.0 for a token it cannot read, so nan and inf used to
+	# arrive as the origin and the face read as a real plane through it.
+	for token in ["( nan nan nan )", "( inf inf inf )", "( x y z )"]:
+		var parsed: Dictionary = MapIO.parse_map_text(_worldspawn_with_first_point(token))
+		assert_eq(
+			(parsed.get("brushes", []) as Array).size(), 0, "%s should import nothing" % token
+		)
+		assert_gt((parsed.get("errors", []) as Array).size(), 0, "%s should report why" % token)
+
+
+func test_a_blown_out_plane_coordinate_fails_the_import():
+	# 1e30 parses as a real float, so the finite check does not catch it. A
+	# coordinate that far out is a precision blowout, not a level.
+	var parsed: Dictionary = MapIO.parse_map_text(
+		_worldspawn_with_first_point("( 1e30 1e30 1e30 )")
+	)
+	assert_eq((parsed.get("brushes", []) as Array).size(), 0, "A 1e30 plane should import nothing")
+	assert_gt((parsed.get("errors", []) as Array).size(), 0, "It should report why")
+
+
+func test_an_ordinary_brush_still_imports():
+	var parsed: Dictionary = MapIO.parse_map_text(_worldspawn_with_first_point("( 0 0 0 )"))
+	assert_eq((parsed.get("brushes", []) as Array).size(), 1, "A good brush should still import")
+	assert_eq((parsed.get("errors", []) as Array).size(), 0, "and report no errors")
+
+
+func test_a_coordinate_at_the_limit_is_still_accepted():
+	# The bound has to leave room for a legitimately large level.
+	var parsed: Dictionary = MapIO.parse_map_text(_worldspawn_with_first_point("( -8192 0 0 )"))
+	assert_eq((parsed.get("brushes", []) as Array).size(), 1, "An 8192 unit level is legitimate")
+
+
+# ---------------------------------------------------------------------------
 # Valve 220 texture axes must lie in the face (#317)
 # ---------------------------------------------------------------------------
 
