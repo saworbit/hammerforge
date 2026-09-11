@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Removed
+- **The material usage tracker** (#375). `record_usage()`, `release_usage()`,
+  `rebuild_usage()`, `find_unused_materials()` and `get_usage_count()` had no
+  caller anywhere — not the dock, not the plugin, not the state system, not the
+  test suite — and `rebuild_usage()` counted the wrong thing: it read
+  `child.material_override`, which is the draft preview tint the brush system
+  sets for operation colouring, rather than `FaceData.material_idx`, which is
+  what the Paint tab writes, what the `.hflevel` stores and what the bake reads.
+  A level whose every face was painted with a material reported that material as
+  unused. Nothing could go wrong today because nothing called it; the risk was
+  the next person to want "find unused materials" finding five ready-made
+  functions with plausible names and wiring them up to a "Remove unused" button
+  that would strip the palette of materials in use.
+
 ### Fixed
 - **`merge_brushes_by_ids()` enforced neither rule `can_merge_brushes()` refuses
   on** (#383). The operation collected whatever ids it could find and took the

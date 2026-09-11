@@ -1054,7 +1054,7 @@ A `LevelRoot` can read from somewhere else instead through its `entity_definitio
 The material palette can be saved and loaded as a JSON library file:
 - **Save**: preserves resource paths of all palette materials.
 - **Load**: restores the palette from saved paths.
-- **Usage tracking**: materials in use by brushes are tracked; `find_unused_materials()` identifies cleanup candidates.
+- **Unused materials**: not tracked. Material assignment is per face, through `FaceData.material_idx`, so "is this palette slot used" is a question about face slots rather than about a resource path.
 
 ## Prototype Textures
 HammerForge includes 150 built-in SVG prototype textures organized as 15 patterns in 10 color variations. Click **Refresh Prototypes** in the Paint tab → Materials section to add them all to the palette. The **Material Browser** displays them as a visual thumbnail grid with search and pattern/color filters — no need to memorize names. Patterns include solid, brick, checker, cross, diamond, dots, hex, stripes (diagonal/horizontal), triangles, zigzag, and directional arrows (up/down/left/right).

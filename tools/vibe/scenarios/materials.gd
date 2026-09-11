@@ -140,58 +140,38 @@ func _removing_a_slot_reaches_every_brush_container() -> void:
 				break
 
 
-## `MaterialManager` carries `record_usage`, `release_usage`, `rebuild_usage`,
-## `find_unused_materials` and `get_usage_count`. What calls them, and what would
-## they say if something did.
+## `MaterialManager` carried `record_usage`, `release_usage`, `rebuild_usage`,
+## `find_unused_materials` and `get_usage_count`. Nothing called any of them, and
+## `rebuild_usage()` counted `child.material_override` rather than
+## `FaceData.material_idx`, which is the only way HammerForge assigns a material.
+## The block was removed (#375); this checks it has not come back.
 func _the_usage_tracker() -> void:
 	var root: Node3D = await fresh_root()
 	var mm = root.get_material_manager()
-	# Written to disk so they have a resource_path. The tracker is keyed on that
-	# string and skips any material without one, so an in-memory palette would
-	# make it look right by accident.
-	var red := _mat(Color.RED, "red")
-	var green := _mat(Color.GREEN, "green")
-	ResourceSaver.save(red, "user://vibe_red.tres")
-	ResourceSaver.save(green, "user://vibe_green.tres")
-	red.take_over_path("user://vibe_red.tres")
-	green.take_over_path("user://vibe_green.tres")
-	root.set_materials([red, green])
-
-	# Use them the only way HammerForge actually assigns a material: per face.
-	var b := box(root, Vector3(64, 64, 64))
-	for face in b.faces:
-		face.material_idx = 0
-	await frame()
-
-	mm.rebuild_usage(root.draft_brushes_node)
-	var unused = mm.find_unused_materials()
-	note("palette", root.get_material_names())
-	note("every face of the one brush is on slot 0", _face_slots(b))
-	var unused_names: Array = []
-	for m in unused:
-		unused_names.append(m.resource_path)
-	note("find_unused_materials() after rebuild_usage()", "%d: %s" % [unused.size(), unused_names])
-	note("usage count for the material every face is on", mm.get_usage_count(red.resource_path))
-
-	var with_paths := 0
-	for m in root.get_materials():
-		if m != null and m.resource_path != "":
-			with_paths += 1
+	var gone: Array = []
+	for method in [
+		"record_usage",
+		"release_usage",
+		"rebuild_usage",
+		"find_unused_materials",
+		"get_usage_count",
+	]:
+		if mm.has_method(method):
+			gone.append(method)
 	note(
-		"palette materials that have a resource_path",
-		"%d of %d" % [with_paths, root.get_materials().size()]
+		"usage-tracking methods still on MaterialManager",
+		"%d: %s" % [gone.size(), gone] if not gone.is_empty() else "none, as of #375"
 	)
-
-	# What rebuild_usage actually reads.
-	note(
-		"rebuild_usage reads",
-		"child.material_override on the direct children of the node it is given -- never face.material_idx"
-	)
-	known(
-		375,
-		"the material usage tracker is keyed on the wrong thing and has no caller",
-		(
-			"every face of the level's only brush is on '%s', and after rebuild_usage() its usage count is %d and find_unused_materials() returns %s -- the tracker counts `child.material_override`, never FaceData.material_idx; record_usage, release_usage, rebuild_usage, find_unused_materials and get_usage_count have no caller anywhere in the repo, tests included"
-			% [red.resource_path, mm.get_usage_count(red.resource_path), unused_names]
+	if not gone.is_empty():
+		known(
+			375,
+			"the material usage tracker is back",
+			(
+				(
+					"%s is on MaterialManager again. It counted child.material_override, "
+					+ "never FaceData.material_idx, so it reported the material every face "
+					+ "in the level was painted with as unused."
+				)
+				% [gone]
+			)
 		)
-	)
