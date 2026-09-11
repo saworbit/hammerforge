@@ -58,10 +58,25 @@ func get_brush_vertices(brush: Node3D) -> PackedVector3Array:
 	return verts
 
 
+## Tell the mapper why an edit was refused, when there is a level to tell.
+func _say(text: String) -> void:
+	if root and root.has_signal("user_message"):
+		root.emit_signal("user_message", text, 1)
+
+
 ## Move selected vertices by delta. Updates all faces sharing those vertices.
 ## Returns true if the move was valid (all brushes remain convex).
 func move_vertices(delta: Vector3) -> bool:
 	if selected_vertices.is_empty():
+		return false
+	# Before any face is touched. `validate_convexity()` below is written as a
+	# lower bound (`d > 0.02`), and every comparison against NaN is false, so a
+	# NaN vertex reads as behind every plane of the brush and the move commits.
+	# A vertex position is the geometry rather than a parameter used to build it,
+	# so the result poisons the AABB and the normal, propagates through clip and
+	# carve into brushes that were never touched, and survives the save.
+	if not delta.is_finite():
+		HFLog.warn("HFVertexSystem: vertex move delta %s is not a delta" % str(delta))
 		return false
 	# Snapshot faces before move if not already captured
 	if _pre_drag_faces.is_empty():
@@ -98,10 +113,11 @@ func move_vertices(delta: Vector3) -> bool:
 	# Validate convexity
 	for brush_id in selected_vertices:
 		var brush = _find_brush(brush_id)
-		if brush and not validate_convexity(brush):
+		if not brush:
+			continue
+		if not validate_convexity(brush):
 			_restore_face_snapshots()
-			if root and root.has_signal("user_message"):
-				root.emit_signal("user_message", "Move rejected: would create non-convex brush", 1)
+			_say("Move rejected: would create non-convex brush")
 			return false
 	# Rebuild previews
 	for brush_id in selected_vertices:
@@ -109,6 +125,27 @@ func move_vertices(delta: Vector3) -> bool:
 		if brush:
 			_commit_geometry(brush)
 	return true
+
+
+## The plane through the first corner of a polygon, for the convexity test.
+##
+## `face.normal` is Newell's over the whole polygon, which is the right answer
+## for a planar face and the wrong one here: a face that has been bent has
+## several planes, and the area-weighted average is the one that hides the bend.
+## A dented box would read as convex. This takes the first three vertices that
+## are not collinear instead — the same plane the check used before
+## `_compute_normal()` was widened, and the collinear run `split_edge()` leaves
+## at the front of the list is stepped over rather than measured.
+static func _corner_plane_normal(verts: PackedVector3Array) -> Vector3:
+	var count := verts.size()
+	if count < 3:
+		return Vector3.ZERO
+	var a: Vector3 = verts[0]
+	for i in range(1, count - 1):
+		var n: Vector3 = (verts[i + 1] - a).normalized().cross((verts[i] - a).normalized())
+		if n.length() > 0.0001:
+			return n.normalized()
+	return Vector3.ZERO
 
 
 ## Validate that all faces of a brush form a convex shape.
@@ -128,7 +165,7 @@ func validate_convexity(brush: Node3D) -> bool:
 		if face == null or face.local_verts.size() < 3:
 			continue
 		var plane_point: Vector3 = face.local_verts[0]
-		var plane_normal: Vector3 = face.normal
+		var plane_normal: Vector3 = _corner_plane_normal(face.local_verts)
 		if plane_normal.length() < 0.001:
 			continue
 		for v in all_verts:
@@ -406,6 +443,11 @@ func begin_drag(start_world_pos: Vector3) -> void:
 ## Vector3.ZERO restores the exact starting vertex positions.
 func update_drag_absolute(world_delta: Vector3) -> bool:
 	if not _drag_active or _pre_drag_faces.is_empty():
+		return false
+	# The same guard `move_vertices()` has. A screen-space drag divided by a
+	# zero-length projection arrives here, and the convexity check below cannot
+	# refuse a NaN.
+	if not world_delta.is_finite():
 		return false
 	if _drag_has_valid_update and world_delta.is_equal_approx(_drag_last_world_delta):
 		return true
@@ -735,7 +777,7 @@ func split_edge(brush_id: String, edge: Array) -> bool:
 					new_verts.append(fv[k])
 					if k == j:
 						new_verts.append(midpoint)
-				face.local_verts = new_verts
+				face.local_verts = _rotated_to_a_corner(new_verts)
 				face.ensure_geometry()
 				modified = true
 				break
@@ -748,6 +790,33 @@ func split_edge(brush_id: String, edge: Array) -> bool:
 	# can break convexity.  For splits we only need to verify face integrity.
 	_commit_geometry(brush)
 	return true
+
+
+## The same polygon, started at a vertex that is an actual corner.
+##
+## Inserting a midpoint on the edge at index 0 leaves `[v0, midpoint, v1, ...]`,
+## which is three collinear vertices at the front of the list. `_compute_normal()`
+## reads the whole polygon now, so it no longer minds — but plenty of code reads
+## `local_verts[0..2]` as a plane, and a face whose list starts at a corner costs
+## nothing to produce.
+static func _rotated_to_a_corner(verts: PackedVector3Array) -> PackedVector3Array:
+	var count := verts.size()
+	if count < 3:
+		return verts
+	for start in count:
+		var previous: Vector3 = verts[(start - 1 + count) % count]
+		var current: Vector3 = verts[start]
+		var following: Vector3 = verts[(start + 1) % count]
+		var incoming := (current - previous).normalized()
+		var outgoing := (following - current).normalized()
+		if incoming.cross(outgoing).length() > 0.0001:
+			if start == 0:
+				return verts
+			var out := PackedVector3Array()
+			for offset in count:
+				out.append(verts[(start + offset) % count])
+			return out
+	return verts
 
 
 ## Merge selected vertices in a brush to their centroid. Returns true on success.
@@ -803,9 +872,20 @@ func merge_vertices(brush_id: String, vert_indices: PackedInt32Array) -> bool:
 	# Remove degenerate faces (reverse order)
 	for i in range(faces_to_remove.size() - 1, -1, -1):
 		faces.remove_at(faces_to_remove[i])
+	# Fewer than four faces is not a closed solid. `validate_convexity()` allows
+	# it — `faces.size() < 4` returns true there so a genuinely degenerate
+	# intermediate can pass — which meant merging every vertex of a box removed
+	# all six faces and was accepted. The brush stayed live, selectable, counted
+	# and saved, with no vertex left to move it back and nothing drawn to find
+	# it by.
+	if faces.size() < 4:
+		_restore_face_snapshots()
+		_say("Merge rejected: would leave the brush without a closed solid")
+		return false
 	# Validate
 	if not validate_convexity(brush):
 		_restore_face_snapshots()
+		_say("Merge rejected: would create non-convex brush")
 		return false
 	_commit_geometry(brush)
 	return true
