@@ -5,6 +5,29 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **The bake and grid settings that take a number were unbounded** (#373). #361
+  did this for the terrain settings; these are the same list and were not
+  touched. 22 of 23 out-of-range values landed and stayed. The dock SpinBoxes
+  have ranges so the editor UI cannot produce them, but the `.hflevel` can: it is
+  JSON, it is hand-editable, it gets merged, and it gets written by older builds
+  with different defaults — and an `@export_range` constrains the inspector
+  widget only, not an assignment or a load. Each of these now has a clamping
+  setter with a finiteness guard first, since `clampf()` and `maxf()` both pass
+  NaN through, which is exactly how `grid_snap`'s `max(value, 0.0)` let one past.
+  That one mattered most: every consumer is written
+  `grid_snap if grid_snap > 0.0 else <fallback>`, so a NaN read as "snapping is
+  off" everywhere while the dock still showed a number.
+  `apply_hflevel_settings()` writes the properties, so the load path goes through
+  the setters and is covered by the same change.
+- **A cordon AABB with a negative size baked an empty level and reported
+  success** (#377). An AABB with a negative size is a constructible value of the
+  type and is not a region: Godot's `intersects()` errors on it and returns false
+  for everything, so every brush read as outside the cordon. Nothing said so —
+  the bake reported success and the cordon wireframe draws the same box either
+  way — and the dock's six min/max SpinBoxes are the natural way to produce one.
+  `cordon_aabb` has a setter that refuses a non-finite position or size and calls
+  `.abs()` on a negative one, which is the fix Godot's own error message names
+  and makes a min/max pair entered in either order mean the same region.
 - **A grid array with a negative axis count was built rather than refused**
   (#346). The linear and radial paths refuse a count below one with a message and
   a fix hint; the grid path clamped `(-2, 2, 2)` up to `(1, 2, 2)` first, so

@@ -138,7 +138,7 @@ Grid-based paint layers with chunked storage for large worlds:
 
 - **Visgroups** -- named visibility groups ("walls", "detail", "lighting") with per-group show/hide
 - **Grouping** (Ctrl+G / Ctrl+U) -- persistent groups that select and move together
-- **Cordon** -- restrict bake to an AABB region with yellow wireframe; skip everything outside
+- **Cordon** -- restrict bake to an AABB region with yellow wireframe; skip everything outside. A min/max pair entered in either order means the same region, and a cordon with a non-finite corner is refused rather than stored
 - **Reference cleanup** -- deleting brushes auto-cleans group/visgroup membership and warns about dangling entity I/O connections
 - **Duplicator** -- create N copies of a brush with progressive offset
 - **Prefabs** -- save brush + entity groups as `.hfprefab` files with variants, tags, and live-linked propagation. Drag from library to instantiate with new IDs and remapped I/O
