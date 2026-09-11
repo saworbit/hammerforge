@@ -64,6 +64,14 @@ it from here.
 | `limits` | arrays, generators, prefabs, visgroups and paint layers at zero, negative, absurd, empty and duplicate |
 | `chaos` | 300 randomised operations with structural invariants checked after each one |
 | `cost` | faces, build time and `.hflevel` size for one brush of each shape |
+| `transform` | rotate/flip/reset round trips, mirror winding, pivots, and where texture lock puts a texture |
+| `structures` | the four generators: winding at their defaults, schema ranges, regenerate as a no-op |
+| `cutting` | clip, carve, hollow, inset and arrays, measured by volume rather than by what they report |
+| `entities` | naming, duplication, deletion, and what the I/O wired to an entity does when its name moves |
+| `appearance` | material slots, UV params, projections and paint layers at their edges |
+| `persistence` | `capture_state`/`restore_state` round trips, repeated restores, and malformed state |
+| `housekeeping` | visgroup and group names, the cordon, and the paint layer list |
+| `terrain` | heightmap scale and region settings at their edges, and the playtest/glTF exports |
 
 ## Adding a scenario
 

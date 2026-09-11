@@ -37,6 +37,14 @@ SCENARIOS = [
     "limits",
     "chaos",
     "cost",
+    "transform",
+    "structures",
+    "cutting",
+    "entities",
+    "appearance",
+    "persistence",
+    "housekeeping",
+    "terrain",
 ]
 
 # Generous: chaos runs 300 operations and cost saves eight levels. A scenario
