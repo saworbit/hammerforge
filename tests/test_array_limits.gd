@@ -129,4 +129,7 @@ func test_grid_copy_count_matches_the_placements():
 		"and that is how many placements there are"
 	)
 	assert_eq(HFDuplicatorType.grid_copy_count(Vector3i(1, 1, 1)), 0, "1x1x1 makes none")
-	assert_eq(HFDuplicatorType.grid_copy_count(Vector3i(0, -4, 1)), 0, "and nor does a bad count")
+	# A count below one is not a grid that makes no copies, it is not a grid.
+	# -1 is what `can_generate()` already refuses, so the grid path gets the same
+	# message as the linear and radial ones rather than a clamp.
+	assert_eq(HFDuplicatorType.grid_copy_count(Vector3i(0, -4, 1)), -1, "and a bad count is not")

@@ -1730,31 +1730,52 @@ func clip_brush_to_convex(brush_id: String) -> bool:
 	return vertex_system.clip_to_convex(brush_id)
 
 
-func add_surface_paint_layer(brush_id: String, face_idx: int) -> void:
+## How many textures may be blended over one face.
+##
+## `get_painted_albedo()` composites the layers into one image by walking every
+## layer at every texel, and that runs on each `rebuild_preview()` and again at
+## bake. Past a handful the result is not visibly different and each extra layer
+## is preview time, save size and load time for nothing. Nothing in the dock
+## stopped a mapper clicking Add, because there was no limit to stop them at.
+const MAX_SURFACE_PAINT_LAYERS := 8
+
+
+## Returns whether a layer was added.
+func add_surface_paint_layer(brush_id: String, face_idx: int) -> bool:
 	var brush = brush_system.find_brush_by_id(brush_id)
 	if not brush or not (brush is DraftBrush):
-		return
+		return false
 	var draft := brush as DraftBrush
 	if face_idx < 0 or face_idx >= draft.faces.size():
-		return
-	draft.faces[face_idx].paint_layers.append(FaceData.PaintLayer.new())
+		return false
+	var face: FaceData = draft.faces[face_idx]
+	if face.paint_layers.size() >= MAX_SURFACE_PAINT_LAYERS:
+		HFLog.warn(
+			"LevelRoot: a face blends at most %d surface paint layers" % MAX_SURFACE_PAINT_LAYERS
+		)
+		return false
+	face.paint_layers.append(FaceData.PaintLayer.new())
 	draft.rebuild_preview()
 	tag_brush_dirty(brush_id)
+	return true
 
 
-func remove_surface_paint_layer(brush_id: String, face_idx: int, layer_idx: int) -> void:
+## Returns whether a layer was removed, so a caller can tell a removal from a
+## no-op — an index out of range used to do nothing and say nothing.
+func remove_surface_paint_layer(brush_id: String, face_idx: int, layer_idx: int) -> bool:
 	var brush = brush_system.find_brush_by_id(brush_id)
 	if not brush or not (brush is DraftBrush):
-		return
+		return false
 	var draft := brush as DraftBrush
 	if face_idx < 0 or face_idx >= draft.faces.size():
-		return
+		return false
 	var layers = draft.faces[face_idx].paint_layers
 	if layer_idx < 0 or layer_idx >= layers.size():
-		return
+		return false
 	layers.remove_at(layer_idx)
 	draft.rebuild_preview()
 	tag_brush_dirty(brush_id)
+	return true
 
 
 func set_surface_paint_layer_texture(
