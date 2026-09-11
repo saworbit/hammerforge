@@ -200,6 +200,10 @@ func _make_production_root() -> LevelRoot:
 	var production_root := LevelRootType.new()
 	production_root.auto_spawn_player = false
 	add_child_autoqfree(production_root)
+	# A material slot has to name something in the palette, so the slot numbers
+	# these tests use as markers need a palette deep enough to hold them.
+	while production_root.get_materials().size() < 12:
+		production_root.add_material_to_palette(StandardMaterial3D.new())
 	return production_root
 
 

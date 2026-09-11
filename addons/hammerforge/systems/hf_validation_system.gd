@@ -130,6 +130,7 @@ func validate(auto_fix: bool = false) -> Dictionary:
 	# Face material indices out of palette bounds
 	var palette_count = root.material_manager.materials.size() if root.material_manager else 0
 	var invalid_face_mats := 0
+	var invalid_projections := 0
 	for node in brush_nodes:
 		if not (node is DraftBrush):
 			continue
@@ -138,14 +139,29 @@ func validate(auto_fix: bool = false) -> Dictionary:
 			if face == null:
 				continue
 			var idx = int(face.material_idx)
-			if idx >= palette_count and idx >= 0:
+			# -1 is the default slot. Anything else has to be in the palette —
+			# below it as well as past the end, which a level can acquire from a
+			# file written against a longer palette or by a call that was never
+			# checked.
+			if idx < -1 or idx >= palette_count:
 				invalid_face_mats += 1
 				if auto_fix:
 					face.material_idx = -1
+			if not FaceData.is_valid_projection(int(face.uv_projection)):
+				invalid_projections += 1
+				if auto_fix:
+					face.uv_projection = FaceData.UVProjection.PLANAR_Z
+					face.custom_uvs = PackedVector2Array()
 	if invalid_face_mats > 0:
 		issues.append("Faces reference missing materials: %d" % invalid_face_mats)
 		if auto_fix:
 			fixed += invalid_face_mats
+			if root.brush_system:
+				root.brush_system._refresh_brush_previews()
+	if invalid_projections > 0:
+		issues.append("Faces carry a UV projection that is not one: %d" % invalid_projections)
+		if auto_fix:
+			fixed += invalid_projections
 			if root.brush_system:
 				root.brush_system._refresh_brush_previews()
 

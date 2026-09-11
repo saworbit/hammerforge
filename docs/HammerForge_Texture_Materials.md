@@ -19,9 +19,9 @@ Surface paint is separate from floor paint. Floor paint is a grid-based system t
 ## Data Model (FaceData)
 Face data lives on each DraftBrush in `faces` and is serialized into `.hflevel`.
 
-- `material_idx`: Index into `MaterialManager.materials`.
-- `uv_projection`: Projection enum (planar X/Y/Z, box, cylindrical).
-- `uv_scale`, `uv_offset`, `uv_rotation`: Projection transform. Transform order: rotate → scale → offset (matches Valve 220 convention).
+- `material_idx`: Index into `MaterialManager.materials`, or `-1` for no material. A slot that is neither is refused on assignment, and `Validate Level` reports and resets one that is already on a face.
+- `uv_projection`: Projection enum (planar X/Y/Z, box, cylindrical). An integer outside the enum is refused on assignment and falls back to planar Z on load, so a file cannot carry a projection no control can show.
+- `uv_scale`, `uv_offset`, `uv_rotation`: Projection transform. Transform order: rotate → scale → offset (matches Valve 220 convention). A non-finite value is refused, as is a scale component of zero, which collapses the face onto one texel. A negative scale is allowed and mirrors the texture. The rotation is stored wrapped into `[-pi, pi)`.
 - `custom_uvs`: Optional explicit UVs (per vertex).
 - `uv_format_version`: Serialization version (1 = current). Old data (version 0) used a different transform order and is auto-migrated on load.
 - `paint_layers`: Array of paint layers.

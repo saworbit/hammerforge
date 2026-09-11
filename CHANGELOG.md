@@ -5,6 +5,27 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **A face's material slot was never checked against the palette** (#343). Any
+  integer could be assigned and was stored, saved and read back, so the bake, the
+  `.map` exporter and the UV editor each fell back to something that is not the
+  material the mapper picked — the face silently becomes `__default` in the
+  export. The three `assign_material_*` paths refuse a slot that is not `-1` and
+  not an index into the palette, and `validate_level()` now also reports a slot
+  *below* the default rather than only one past the end, with the same reset.
+- **`set_face_uv_params()` wrote a UV transform the mesh cannot use** (#344). A
+  non-finite scale, offset or rotation reached the mesh's UV channel, where the
+  vertex is discarded or drawn undefined depending on the driver, and it survived
+  the save — with the geometry still looking right, which is why nobody thinks to
+  look at the UVs. A scale component of zero collapsed the whole face onto one
+  texel. Both are refused. A negative scale is still allowed: it mirrors the
+  texture, which is a thing to want.
+- **`reproject_face_uvs()` stored any integer as a UV projection** (#345). The
+  projector falls through its `match` to the `(x, y)` branch, so the face got a
+  projection nobody chose, no dock control can show, and the `.map` exporter
+  wrote out whatever the fallback produced. The setter and
+  `assign_material_and_reproject()` refuse one, `FaceData.from_dict()` falls back
+  to `PLANAR_Z` so a file cannot smuggle one in, and `validate_level()` reports
+  and resets one that is already there.
 - **A bevel radius of zero built a bevel nobody asked for** (#330). `0` is how a
   user says "actually, no bevel", and `bevel_edge()` coerced it — and a negative
   radius — to 0.01, returned true, and left an inverted cap triangle. Both are
