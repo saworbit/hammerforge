@@ -27,6 +27,12 @@ enum BakeStatus { NOT_RUN, SUCCESS, FAILED, BUSY, NOTHING_TO_DO }
 
 var root: Node3D
 var _last_dirty_brush_ids: Dictionary = {}  # brush_id -> true; captured at bake start
+
+## The bake settings the last successful bake ran with, and whether there has
+## been one. Any other signature means the baked result no longer answers the
+## settings that are set — but only once there is a result for them to go stale.
+var _last_bake_settings_signature: int = 0
+var _has_baked_once: bool = false
 var _last_bake_success: bool = false
 var _last_bake_status: int = BakeStatus.NOT_RUN
 var _bake_in_flight := false
@@ -393,6 +399,70 @@ func _bake_selected_impl(
 		root.bake_finished.emit(false)
 
 
+## Every setting that decides what goes into the bake, or how it is built.
+##
+## Compared against the value the last successful bake ran with. A hash rather
+## than a flag on each setter: most of these properties have no setter, and the
+## hash covers the `.hflevel` load path for free, which a setter-set flag would
+## not. The cordon is in here because it decides which brushes are in the bake at
+## all, and `bake_material_override` by resource path because a Material has no
+## stable hash across a reload.
+## Every setting that decides what goes into the bake, or how it is built.
+##
+## Compared against the values the last successful bake ran with. A hash rather
+## than a flag on each setter: most of these properties have no setter, and the
+## hash covers the `.hflevel` load path for free, which a setter-set flag would
+## not. The cordon is in here because it decides which brushes are in the bake at
+## all.
+const BAKE_SETTING_NAMES := [
+	"bake_visible_only",
+	"bake_use_face_materials",
+	"bake_collision_mode",
+	"bake_collision_layer_index",
+	"bake_convex_clean",
+	"bake_convex_simplify",
+	"bake_lightmap_uv2",
+	"bake_lightmap_texel_size",
+	"bake_unwrap_uv0",
+	"bake_generate_lods",
+	"bake_chunk_size",
+	"bake_merge_meshes",
+	"bake_use_multimesh",
+	"bake_use_atlas",
+	"bake_generate_occluders",
+	"bake_occluder_min_area",
+	"bake_navmesh",
+	"bake_navmesh_cell_size",
+	"bake_navmesh_cell_height",
+	"bake_navmesh_agent_height",
+	"bake_navmesh_agent_radius",
+	"bake_auto_connectors",
+	"bake_connector_mode",
+	"bake_connector_stair_height",
+	"bake_connector_width",
+	"bake_wire_io",
+	"cordon_enabled",
+	"cordon_aabb",
+]
+
+
+func bake_settings_signature() -> int:
+	# Read by name, because a test root shim carries only the properties its test
+	# needs and a missing one should be "not set" rather than an error.
+	var values: Array = []
+	for name in BAKE_SETTING_NAMES:
+		values.append(root.get(name))
+	# A Material has no stable hash across a reload, so it goes in by path.
+	var override_path := ""
+	var override = root.get("bake_material_override")
+	if override != null:
+		override_path = str(override.resource_path)
+		if override_path == "":
+			override_path = str(override.get_instance_id())
+	values.append(override_path)
+	return values.hash()
+
+
 ## Rebuild from authoritative source when brush or structural dirty state exists.
 ## Missing dirty IDs represent deletions and therefore still require a bake.
 func bake_dirty(collision_layer_mask: int = 0, preview_mode: int = 0) -> bool:
@@ -402,6 +472,14 @@ func bake_dirty(collision_layer_mask: int = 0, preview_mode: int = 0) -> bool:
 		return false
 	var dirty_ids: Array = root._dirty_brush_ids.keys()
 	var full_reconcile_started: bool = root._full_reconcile_needed
+	# A changed setting is a change. Nothing marked the bake settings dirty, so a
+	# rebake after one was flipped took the "no changed brushes" path and left the
+	# previous result standing: hide a visgroup, bake to check something, turn
+	# "bake visible only" off, bake again, and the level that ships is missing
+	# every brush in that visgroup. Nothing about the result said it was stale.
+	if _has_baked_once and bake_settings_signature() != _last_bake_settings_signature:
+		root._log("Bake settings changed since the last bake, rebuilding in full")
+		return await bake(true, false, collision_layer_mask, preview_mode)
 	if dirty_ids.is_empty() and not full_reconcile_started:
 		_last_bake_status = BakeStatus.NOTHING_TO_DO
 		root.emit_signal("user_message", "No changed brushes since last bake", 1)
@@ -578,9 +656,15 @@ func bake(
 ) -> bool:
 	if not _try_begin_bake():
 		return false
+	var signature := bake_settings_signature()
 	await _bake_impl(apply_cuts, hide_live, collision_layer_mask, preview_mode, force_csg)
 	_bake_in_flight = false
 	_last_bake_status = BakeStatus.SUCCESS if _last_bake_success else BakeStatus.FAILED
+	if _last_bake_success:
+		# Taken before the bake ran, so a setting changed while it was in flight
+		# is still a change the next bake has to answer for.
+		_last_bake_settings_signature = signature
+		_has_baked_once = true
 	return _last_bake_success
 
 

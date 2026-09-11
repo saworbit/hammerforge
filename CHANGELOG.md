@@ -19,6 +19,19 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   that would strip the palette of materials in use.
 
 ### Fixed
+- **Changing a bake setting did not invalidate the bake** (#376). `bake_dirty()`
+  rebuilt only what brush dirty state said needed rebuilding, and the settings
+  were not part of what could be dirty — so the realistic sequence did the wrong
+  thing quietly: hide a visgroup to work on something, bake to check it, turn
+  "bake visible only" off, bake again, and the level that ships is missing every
+  brush in that visgroup. The second bake finished, said it succeeded, and left
+  the previous result standing. `bake_visible_only` is only the easiest to
+  measure; every setting that decides what goes into the bake or how it is built
+  had the same problem, several of them less visible in the result than a missing
+  box. The bake system hashes those settings and compares against the ones the
+  last successful bake ran with, so a setting change is a change. A hash rather
+  than a flag per setter, because most of these properties had no setter and the
+  hash covers the `.hflevel` load path for free.
 - **`merge_brushes_by_ids()` enforced neither rule `can_merge_brushes()` refuses
   on** (#383). The operation collected whatever ids it could find and took the
   first brush's operation for the result, so merging an additive brush with a
