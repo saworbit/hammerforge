@@ -87,7 +87,13 @@ func validate(auto_fix: bool = false) -> Dictionary:
 		var brush := node as DraftBrush
 		var size = brush.size
 		if size.x <= 0.0 or size.y <= 0.0 or size.z <= 0.0:
-			issues.append("Zero-size brush: %s" % brush.name)
+			# A negative size is not a zero size. It builds the brush inside out,
+			# with every face normal pointing the opposite way from the vertices
+			# it holds, and saying "zero" sends the reader looking for the wrong
+			# thing.
+			var negative: bool = size.x < 0.0 or size.y < 0.0 or size.z < 0.0
+			var label: String = "Inverted brush" if negative else "Zero-size brush"
+			issues.append("%s: %s" % [label, brush.name])
 			if auto_fix:
 				var next = Vector3(
 					max(0.1, abs(size.x)), max(0.1, abs(size.y)), max(0.1, abs(size.z))

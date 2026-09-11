@@ -801,6 +801,26 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   - **Coverage** (`tests/test_bake_system.gd`): a brush outside the cordon, a
     hidden brush under Bake Visible Only, a fully cordoned out level reporting no
     chunks, and both filters off still counting everything.
+- **A brush cannot be created at a zero or negative size** (#289).
+  `create_brush_from_info()` took `info["size"]` as given, and it is the single
+  door into the level for undo restore, duplication, prefab instancing, `.map`
+  import and `.hflevel` load. A negative component gave the basis a negative
+  determinant, which inverts the face winding invisibly: every `FaceData` ended
+  up with a normal pointing the opposite way from the vertices it holds, which
+  only shows at bake or in an exported plane. A zero component gave a brush with
+  no volume. Both landed in the draft container with an id and counted as live.
+  Each component is now taken as its magnitude and floored at 0.1, the same
+  figure the validator's auto fix uses, with one warning naming the size that was
+  asked for and the one used.
+  - **The validator tells the two apart.** A negative size was being reported as
+    a "Zero-size brush", which sends the reader looking for the wrong thing. It
+    reads "Inverted brush" now, and a genuine zero extent still reads
+    "Zero-size brush".
+  - **Coverage** (`tests/test_brush_size_guard.gd`): a negative size building the
+    right way out with a positive determinant, every face normal agreeing with
+    its own winding, a zero size, a partly zero size moving only the bad axis, a
+    good size passing through untouched, a size that is not a Vector3, and both
+    validator messages.
 - **A prefab could wire its copy's outputs to the entities it was built from.**
   `HFPrefab.instantiate()` remapped I/O by turning each old node name into the new
   one and then looking that name back up. The lookup resolves an authored
