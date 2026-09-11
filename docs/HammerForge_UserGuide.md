@@ -1621,7 +1621,7 @@ Replace a sharp edge with a rounded profile:
 1. Enter **Vertex mode** (V key) and switch to **Edge sub-mode** (E key).
 2. Select one or more edges.
 3. Open the **Brush** tab → **Bevel** section.
-4. Set **Segments** (1-16) and **Radius** (distance the bevel cuts into the brush).
+4. Set **Segments** (1-16) and **Radius** (distance the bevel cuts into the brush). The radius has to be greater than zero; `0` or below is refused rather than treated as a very small bevel.
 5. Click **Bevel Edge**.
 
 The selected edges are replaced with bevel strip faces. Higher segment counts produce smoother curves.
@@ -1630,11 +1630,11 @@ The selected edges are replaced with bevel strip faces. Higher segment counts pr
 Shrink a face inward and create connecting side faces:
 1. Select a face in **Face Select Mode**.
 2. Open the **Brush** tab → **Bevel** section.
-3. Set **Inset** (distance to shrink inward) and optional **Height** (extrude along normal).
+3. Set **Inset** (distance to shrink inward) and optional **Height** (extrude along normal). A positive height raises the face into a boss; a negative one pushes it in to make a recessed panel.
 4. Click **Inset Face**.
 
 Notes:
-- Inset distance cannot exceed the face's corner-to-centroid distance (the operation is rejected with a toast if too large).
+- Inset distance has to be greater than zero and cannot exceed the face's corner-to-centroid distance (the operation is rejected with a toast if too large).
 - Both bevel and inset operations are fully undoable.
 
 ## Entities (early)

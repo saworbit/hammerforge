@@ -568,7 +568,13 @@ func _compute_normal() -> void:
 	var a = local_verts[0]
 	var b = local_verts[1]
 	var c = local_verts[2]
-	var n = (c - a).cross(b - a)
+	# The edges are normalised before the cross, so what is measured is the angle
+	# between them rather than the area of the triangle. The raw cross product
+	# grows with the square of the face, so an absolute floor on it meant any
+	# small face was called degenerate and given `Vector3.UP` — a 0.01-unit bevel
+	# cap came out facing into the solid whatever winding it was built with, and
+	# the same is true of every tessellation sliver.
+	var n = (c - a).normalized().cross((b - a).normalized())
 	if n.length() > 0.0001:
 		normal = n.normalized()
 	else:

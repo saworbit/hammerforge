@@ -5,6 +5,31 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **A bevel radius of zero built a bevel nobody asked for** (#330). `0` is how a
+  user says "actually, no bevel", and `bevel_edge()` coerced it — and a negative
+  radius — to 0.01, returned true, and left an inverted cap triangle. Both are
+  refused now, the way `can_hollow_brush()` refuses a wall thickness of zero.
+  - **The inverted cap was not a winding problem.** `FaceData._compute_normal()`
+    called a face degenerate when the raw cross product of its first two edges
+    came out under `0.0001`, and that quantity grows with the *square* of the
+    face, so a 0.01-unit cap on a 64-unit brush measured `4e-5` and was handed
+    `Vector3.UP` regardless of how it had been wound. Both caps of a small bevel
+    came out facing the same way, one of them into the solid. The edges are
+    normalised before the cross now, so what is measured is the angle between
+    them and the answer does not depend on how big the face is. Three points in
+    a line are still degenerate, which is the thing the check was for.
+- **Inset accepted numbers it could not use** (#339, #340). `maxf()` does not
+  clean a NaN and the height was never looked at, so both went into the vertex
+  arithmetic and a brush came back with a non-finite extent while the call
+  reported success. Both are now refused, along with an inset distance of zero
+  or less — the same coercion #330 removes from the bevel.
+  - **A recessed inset no longer turns its walls inside out.** The side faces
+    were wound on the assumption that the inset boundary is in front of the
+    original one. A negative height puts it behind, which inverted every wall.
+    Which way a wall faces is now taken from the height: a raised inset is a
+    boss and its walls face away from the middle of the face, a recess is a pit
+    and its walls are seen from inside it, and at zero height the ring is flat
+    and is part of the original surface.
 - **A generator built a structure out of NaN brushes** (#336). Every builder
   checks its settings with comparisons like `radius <= 0.0`, and a NaN fails all
   of them, so it passed every check and the arithmetic ran on it. 27 field and

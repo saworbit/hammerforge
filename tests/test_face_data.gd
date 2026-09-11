@@ -172,3 +172,43 @@ func test_box_projection_z():
 	var face = FaceData.new()
 	face.normal = Vector3(0, 0, 1)
 	assert_eq(face._box_projection_axis(), FaceData.UVProjection.PLANAR_Z)
+
+
+# ===========================================================================
+# A face normal must not depend on how big the face is (#330)
+# ===========================================================================
+
+
+func test_a_small_face_gets_its_real_normal_not_the_fallback():
+	# The degenerate test used to be an absolute floor on the raw cross product,
+	# which grows with the square of the face. A 0.01-unit triangle fell under it
+	# and was given Vector3.UP, so a small bevel cap faced into the solid
+	# whatever winding it had been built with.
+	for scale in [1.0, 0.1, 0.01, 0.001]:
+		var face = FaceData.new()
+		face.local_verts = PackedVector3Array(
+			[
+				Vector3(32.0, -32.0, 32.0),
+				Vector3(32.0 - scale, -32.0, 32.0),
+				Vector3(32.0, -32.0, 32.0 - scale),
+			]
+		)
+		face.ensure_geometry()
+		assert_almost_eq(
+			absf(face.normal.dot(Vector3.UP)), 1.0, 0.0001, "scale %s is flat in Y" % scale
+		)
+		assert_almost_eq(face.normal.y, 1.0, 0.0001, "scale %s should keep its winding" % scale)
+
+
+func test_a_face_with_three_points_in_a_line_is_still_called_degenerate():
+	var face = FaceData.new()
+	face.local_verts = PackedVector3Array([Vector3.ZERO, Vector3(1, 0, 0), Vector3(2, 0, 0)])
+	face.ensure_geometry()
+	assert_eq(face.normal, Vector3.UP, "collinear points have no plane")
+
+
+func test_a_face_with_two_points_in_the_same_place_is_degenerate():
+	var face = FaceData.new()
+	face.local_verts = PackedVector3Array([Vector3.ZERO, Vector3.ZERO, Vector3(1, 0, 0)])
+	face.ensure_geometry()
+	assert_eq(face.normal, Vector3.UP)
