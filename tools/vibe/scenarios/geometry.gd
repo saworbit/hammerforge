@@ -120,7 +120,10 @@ func run() -> void:
 			)
 		)
 		if ok and inward > 0:
-			known(314, "%s leaves inverted faces" % entry[2], "%d faces wound inward" % inward)
+			# #314 fixed the strip winding. The endpoint caps still lose their sign
+			# once the arc collapses, which a radius of 0 or below reaches because
+			# bevel_edge() coerces it to 0.01 rather than refusing it.
+			known(330, "%s leaves inverted faces" % entry[2], "%d faces wound inward" % inward)
 		if ok and extent.length() > Vector3(64, 64, 64).length() * 2.0:
 			known(
 				315,
