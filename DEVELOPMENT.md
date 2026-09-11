@@ -642,6 +642,31 @@ Configuration is in `.gutconfig.json` (test directory, prefix, exit behavior).
 - Keep tests focused: one behavior per test function.
 - **Warning suppression**: For negative-path tests that intentionally trigger runtime warnings, use `HFLog` instead of `push_warning()` in production code. In tests, wrap the triggering call with `HFLog.begin_test_capture(["expected pattern"])` / `HFLog.end_test_capture()` and assert with `HFLog.get_captured_warnings()`. This keeps the test output clean while still verifying the warning was emitted. See `test_bevel.gd` or `test_hflevel_io.gd` for the pattern.
 
+### Exploratory ("vibe") scenarios
+
+`tests/` asserts known behaviour and gates every commit. `tools/vibe/` goes
+looking for behaviour nobody has written down yet: it drives a **real**
+`LevelRoot` -- not the shimmed one the GUT suites use -- through long operation
+sequences, edge and nonsense inputs, and round trips through every format, and
+reports anything that does not look right.
+
+```bash
+python tools/vibe/run_vibe.py                 # every scenario
+python tools/vibe/run_vibe.py geometry cost   # named ones
+python tools/vibe/run_vibe.py --list
+```
+
+Nothing asserts. A scenario emits plain observations, `FLAG` for something that
+looks wrong and has no issue yet, and `KNOWN #n` for something already reported.
+The run exits 1 only on a `FLAG`, so the exit code means "something new". Logs
+land in `.vibe/` (git-ignored).
+
+It is a sweep you run deliberately -- when you want to know what is broken that
+nobody has asked about -- not a gate on every commit. See
+[`tools/vibe/README.md`](tools/vibe/README.md) for the scenario list, how to add
+one, what makes a finding hold up, and the headless traps (threaded saves, async
+bake calls, `_ready()` being a frame late) that otherwise cost a run each.
+
 ## Materials Resources
 HammerForge expects Godot material resources (`.tres` or `.material`) in the palette.
 

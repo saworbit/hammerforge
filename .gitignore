@@ -75,6 +75,10 @@ docs/brand/package-lock.json
 docs/brand/png/*.import
 docs/brand/svg/*.import
 
+# Per-scenario logs from tools/vibe/run_vibe.py. Written on every sweep, and
+# every line of them is a report about the tree they ran against.
+.vibe/
+
 # MkDocs build output
 .site/
 .docshot-backup/
