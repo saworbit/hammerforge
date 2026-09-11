@@ -203,3 +203,61 @@ func test_failed_region_write_is_not_recorded_as_having_data():
 		"The index must not claim a sidecar that was never written"
 	)
 	DirAccess.remove_absolute("user://hf_region_stream_test.hfregions")
+
+
+# ---------------------------------------------------------------------------
+# Paint layer rename collisions (#321)
+# ---------------------------------------------------------------------------
+
+
+func _three_layers() -> void:
+	root.paint_layers.create_layer(&"layer_0", 0.0).display_name = "Ground"
+	root.paint_layers.create_layer(&"layer_1", 1.0).display_name = "Walkway"
+	root.paint_layers.create_layer(&"layer_2", 2.0).display_name = ""
+
+
+func test_rename_refuses_a_name_another_layer_already_has():
+	_three_layers()
+	assert_false(sys.rename_paint_layer(0, "Walkway"), "Walkway is taken")
+	assert_eq(sys.get_paint_layer_names()[0], "Ground", "The layer should keep its name")
+	assert_eq(sys.get_paint_layer_names()[1], "Walkway", "The other layer is untouched")
+
+
+func test_rename_refuses_a_name_a_layer_shows_because_it_has_no_display_name():
+	# A layer with no display name shows its id, and that is the row the user
+	# reads, so it is the name that has to stay unique.
+	_three_layers()
+	assert_false(sys.rename_paint_layer(0, "layer_2"), "layer_2 is what row 3 shows")
+	assert_eq(sys.get_paint_layer_names()[0], "Ground")
+
+
+func test_rename_refuses_an_empty_name():
+	_three_layers()
+	assert_false(sys.rename_paint_layer(0, "   "), "Whitespace is not a name")
+	assert_eq(sys.get_paint_layer_names()[0], "Ground")
+
+
+func test_rename_refuses_an_index_out_of_range():
+	_three_layers()
+	assert_false(sys.rename_paint_layer(7, "Anything"))
+	assert_false(sys.rename_paint_layer(-1, "Anything"))
+	assert_eq(sys.get_paint_layer_names().size(), 3, "No layer should have been added")
+
+
+func test_a_rename_to_a_free_name_still_works():
+	_three_layers()
+	assert_true(sys.rename_paint_layer(0, "Basement"))
+	assert_eq(sys.get_paint_layer_names()[0], "Basement")
+
+
+func test_renaming_a_layer_to_its_own_name_is_not_a_collision():
+	_three_layers()
+	assert_true(sys.rename_paint_layer(1, "Walkway"), "A layer does not collide with itself")
+	assert_eq(sys.get_paint_layer_names()[1], "Walkway")
+
+
+func test_a_rename_is_trimmed_before_it_is_compared():
+	_three_layers()
+	assert_false(sys.rename_paint_layer(0, "  Walkway  "), "Padding does not make it a new name")
+	assert_true(sys.rename_paint_layer(0, "  Basement  "))
+	assert_eq(sys.get_paint_layer_names()[0], "Basement", "The stored name is trimmed")

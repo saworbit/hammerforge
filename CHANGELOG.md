@@ -87,6 +87,20 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   - **Coverage** (`tests/test_visgroup_system.gd`): delete a hidden visgroup,
     remove one node from a hidden visgroup, and a guard that a node still in
     another hidden visgroup stays hidden.
+- **Two paint layers could be renamed to the same name** (#321). The rename
+  dialog checked that the new name was non-empty and different from the layer's
+  own, and nothing checked it against the other layers, so the list the user
+  picks a paint target from could show the same row twice with no way to tell
+  them apart. `HFPaintSystem.rename_paint_layer()` returns bool and refuses an
+  empty name, an index out of range, and a name another layer already shows.
+  The check sits there rather than in the dialog so a rename from anywhere is
+  covered, and the dialog reports the refusal as a toast.
+  - A layer with no display name shows its `layer_id`, which is the row the user
+    reads, so that counts as a taken name too. Names are trimmed before they are
+    compared, so padding cannot smuggle a duplicate through.
+  - **Coverage** (`tests/test_paint_system.gd`): 7 tests, including renaming a
+    layer to its own name, which is not a collision, and a rename to a free
+    name, so the guard cannot start refusing what it should accept.
 
 ### Added
 - **CI refuses a `project.godot` that enables local tooling.** The file is
