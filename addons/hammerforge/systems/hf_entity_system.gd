@@ -273,6 +273,11 @@ func delete_entities_by_paths(entity_paths: Array) -> void:
 
 
 func nudge_entities_by_paths(entity_paths: Array, offset: Vector3) -> void:
+	# The same guard the brush nudge has. Entities travel with the selection, so
+	# an offset that cannot be added would take them to the same nowhere.
+	if not offset.is_finite():
+		HFLog.warn("HFEntitySystem: nudge offset %s is not an offset" % str(offset))
+		return
 	for entity_path in entity_paths:
 		var entity := _entity_at_path(entity_path)
 		if entity:
