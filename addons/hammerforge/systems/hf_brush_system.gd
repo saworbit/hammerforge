@@ -1386,8 +1386,19 @@ func can_merge_brushes(brush_ids: Array) -> HFOpResult:
 
 
 func merge_brushes_by_ids(brush_ids: Array) -> HFOpResult:
-	if brush_ids.size() < 2:
-		return _op_fail("Merge: select at least 2 brushes")
+	# The rules live in can_merge_brushes() and have to hold here, not only at the
+	# one caller that consults it. plugin_edit_actions.gd asks before it opens the
+	# undo action, and the undo entry stores this method and these ids — so a redo
+	# calls straight in, against a level that has moved on since the check ran.
+	# Undo a merge, delete one of the sources, redo, and the operation used to
+	# merge the subset and report the count it merged. The other rule is worse: a
+	# subtractive brush is a hole, and merged into an additive one its geometry
+	# became part of a solid, so the mapper had a doorway and now has a wall,
+	# under a message saying "Merged 2 brushes". can_merge_brushes() is side
+	# effect free and already returns the right message for each case.
+	var check := can_merge_brushes(brush_ids)
+	if not check.ok:
+		return check
 	if root.has_method("tag_full_reconcile"):
 		root.tag_full_reconcile()
 
