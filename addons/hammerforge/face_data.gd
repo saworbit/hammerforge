@@ -3,6 +3,11 @@ extends Resource
 class_name FaceData
 
 enum UVProjection { PLANAR_X, PLANAR_Y, PLANAR_Z, BOX_UV, CYLINDRICAL }
+
+## How far a rotated projection plane may lean off a local axis and still be
+## treated as that axis. Rotations arrive as exact quarter turns or as a turn
+## about the projection axis itself, so anything past this is a genuine tilt.
+const UV_AXIS_EPSILON := 0.0001
 enum PaintBlend { OVERLAY, MULTIPLY, ADD }
 
 
@@ -90,11 +95,70 @@ func adjust_uvs_for_transform(pos_delta: Vector3, size_ratio: Vector3) -> void:
 		uv_scale *= inv_size
 
 
-func adjust_uvs_for_rotation(angle_rad: float) -> void:
+## The two local directions a planar projection reads, in (u, v) order.
+##
+## These are the axes `_project_uvs_for_vertices()` samples, written out so the
+## texture-lock maths can work with the projection rather than guess at it.
+## Note the handedness is not the same for all three: PLANAR_Z reads (x, y) and
+## PLANAR_Y reads (x, z), so a turn about Y moves U the opposite way round to a
+## turn about Z. That is the sign that used to be assumed.
+static func projection_axes(projection: int) -> Array:
+	match projection:
+		UVProjection.PLANAR_X:
+			return [Vector3.BACK, Vector3.UP]
+		UVProjection.PLANAR_Y:
+			return [Vector3.RIGHT, Vector3.BACK]
+		_:
+			return [Vector3.RIGHT, Vector3.UP]
+
+
+## Keep this face's texture where it is in the world while the brush turns.
+##
+## `local_rot` is the brush's rotation expressed in the brush's own space: a
+## local point `v` ends up where `local_rot * v` used to be, so reading the old
+## projection at `local_rot * v` is exactly "the texture did not move".
+##
+## That only stays a projection of the same kind when the turn keeps the
+## projection plane where it is — a turn about the projection axis, at any angle.
+## Then the whole difference is a turn inside the UV plane, which `uv_rotation`
+## can hold. A turn about any other axis swings the face out from under its own
+## projection, and nothing the stored fields can say expresses that, so the face
+## is left alone and its texture travels with the brush rather than being tipped
+## on its side.
+##
+## Returns true if the UVs were adjusted.
+func adjust_uvs_for_rotation(local_rot: Basis) -> bool:
 	if uv_projection == UVProjection.CYLINDRICAL:
-		return
-	uv_rotation -= angle_rad
+		return false
+	var effective := uv_projection
+	if effective == UVProjection.BOX_UV:
+		effective = _box_projection_axis()
+	var axes: Array = projection_axes(effective)
+	# The composed map reads the old projection axes pulled back through the
+	# turn, so these two vectors span the plane the projection would have to be.
+	var inv := local_rot.inverse()
+	var f_u: Vector3 = inv * (axes[0] as Vector3)
+	var f_v: Vector3 = inv * (axes[1] as Vector3)
+	var kept: Vector3 = (axes[0] as Vector3).cross(axes[1] as Vector3)
+	if absf(f_u.cross(f_v).dot(kept)) < 1.0 - UV_AXIS_EPSILON:
+		return false
+	# The change of basis from the projection's own axes to the pulled-back ones.
+	# It is orthogonal, so it is a turn in the UV plane, possibly mirrored.
+	var a00 := f_u.dot(axes[0])
+	var a01 := f_u.dot(axes[1])
+	var a10 := f_v.dot(axes[0])
+	var a11 := f_v.dot(axes[1])
+	var turn := atan2(a10, a00)
+	if a00 * a11 - a01 * a10 >= 0.0:
+		uv_rotation = wrapf(uv_rotation + turn, -PI, PI)
+	else:
+		# The turn put the plane back the other way up. `diag(sx, sy) * rot(r) *
+		# diag(1, -1)` is the same map as `diag(sx, -sy) * rot(-r)`, which the
+		# stored fields can hold, so the flip folds into the V scale.
+		uv_rotation = wrapf(-(uv_rotation + turn), -PI, PI)
+		uv_scale.y = -uv_scale.y
 	custom_uvs = PackedVector2Array()
+	return true
 
 
 func triangulate() -> Dictionary:

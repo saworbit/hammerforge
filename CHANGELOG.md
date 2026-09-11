@@ -5,6 +5,32 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **Texture lock tipped the texture on every wall of a rotated brush** (#333).
+  The counter-rotation was applied to every face at the same angle whatever axis
+  the brush turned about, so a yaw — the most common thing a mapper does — left
+  four faces of a box a quarter turn out and the mapper fixing UVs by hand
+  afterwards. It is now derived from the face's own projection: a turn that keeps
+  the projection plane where it is folds into `uv_rotation`, with the sign taken
+  from the projection rather than assumed (PLANAR_Z reads `(x, y)` and PLANAR_Y
+  reads `(x, z)`, so the two go opposite ways round), and a half turn that puts
+  the plane the other way up folds into the V scale. A turn that swings a face
+  out from under its own projection cannot be written as a UV rotation at all, so
+  that face is left alone and its texture travels with the brush upright, instead
+  of being tipped.
+- **A UV rotation was never wrapped, so a round trip was not a round trip**
+  (#334). Four 90-degree turns left every face at `-2 pi` rather than `0`, so a
+  level saved afterwards differed from the same level saved before, the exported
+  `.map` said `-360` where it meant `0`, and a long session walked the angle off
+  to where a float32 has no fraction left. `adjust_uvs_for_rotation()` and
+  `set_face_uv_params()` both wrap into `[-pi, pi)` now.
+- **Rotate and flip wrote a NaN transform onto a brush** (#335). Neither checked
+  the angle or the pivot it was handed, so a non-finite value from an undo
+  replay, a numeric field or a script went into the basis and the origin and
+  stayed there — poisoning the brush AABB, the level AABB, the bake and the
+  saved file, with no editor action able to recover it. Both refuse a non-finite
+  argument and log, the way `can_hollow_brush()` already does. An axis index
+  outside 0-2 is refused too rather than falling through to Z, which used to
+  turn the selection about an axis the caller never asked for.
 - **Five brush primitives were built inside out** (#313). `PRISM_TRI`,
   `PRISM_PENT`, `OCTAHEDRON`, `DODECAHEDRON` and `ICOSAHEDRON` came out of
   `create_brush_from_info()` with every face normal pointing at the brush

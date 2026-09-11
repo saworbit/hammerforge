@@ -1670,7 +1670,9 @@ func set_face_uv_params(
 	var before := face.to_dict()
 	face.uv_scale = scale
 	face.uv_offset = offset
-	face.uv_rotation = rotation
+	# Stored wrapped so two faces that look the same compare the same, and so a
+	# run of turns cannot walk the angle off to where a float has no fraction left.
+	face.uv_rotation = wrapf(rotation, -PI, PI)
 	face.custom_uvs = PackedVector2Array()
 	face.ensure_custom_uvs()
 	draft.rebuild_preview()

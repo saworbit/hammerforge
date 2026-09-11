@@ -250,7 +250,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Press **Shift+R** the same number of times. Confirm it returns to where it started.
 - Set the axis lock to **X**, then press **R**. Confirm it now pitches instead of yawing. Clear the lock.
 - Change **Pivot** to **World Origin** and press **R**. Confirm the brush orbits the origin rather than turning in place.
-- With **Texture Lock** on, rotate a textured brush and confirm the texture stays put in world space. Turn Texture Lock off, rotate again, and confirm the texture now turns with the brush.
+- With **Texture Lock** on, yaw a textured box 90 degrees. Confirm the top and bottom keep their texture where it was in the world, and that the four walls carry theirs around upright rather than tipped on their side. Yaw four times and confirm the textures are back exactly as they started.
 - Bake the rotated brush. Confirm the geometry is solid and textured from outside, not inside-out.
 - Press **Shift+M** to flip. Confirm the brush mirrors across X and still renders from outside. Press **Shift+M** again and confirm it returns exactly.
 - Repeat the flip on a **wedge**. Confirm the mirrored wedge slopes the other way, still renders correctly, and its shape reads as Custom in the dock.

@@ -523,10 +523,12 @@ func test_mirror_face_tolerates_a_null_entry():
 	pass_test("mirroring a face list with a hole in it must not crash")
 
 
-func test_an_out_of_range_axis_falls_back_to_z():
+func test_an_out_of_range_axis_is_refused():
+	# It used to fall through to Z, so a caller with the wrong index mirrored the
+	# selection about an axis it never asked for.
 	var b := _make_brush(Vector3(40, 0, 10), Vector3(32, 32, 32), "z1")
-	sys.flip(["z1"], [], 99, Vector3.ZERO)
-	assert_almost_eq(b.global_position.z, -10.0, 0.001)
+	assert_eq(sys.flip(["z1"], [], 99, Vector3.ZERO), 0)
+	assert_almost_eq(b.global_position.z, 10.0, 0.001)
 	assert_almost_eq(b.global_position.x, 40.0, 0.001)
 
 

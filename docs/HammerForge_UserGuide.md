@@ -489,8 +489,13 @@ it started, however lopsided the selection is.
 **The step.** Set it in Selection Tools. 15° by default; 45° and 90° are the
 other two you will reach for.
 
-**Texture Lock applies.** With it on, textures stay put in world space as the
-brush turns underneath them. Turn it off if you want the texture to ride along.
+**Texture Lock applies.** With it on, a face that turns in its own plane keeps
+its texture where it is in the world — the top and bottom of a box under a yaw,
+for instance. A face that swings around instead, like a wall under that same
+yaw, carries its texture with it upright; a face projection cannot express a
+world-locked texture on a face that has moved out from under it, and tipping the
+texture on its side is worse than carrying it. Turn Texture Lock off and every
+face carries its texture along.
 
 ### After you rotate
 
@@ -1455,7 +1460,8 @@ When Texture Lock is enabled, moving or resizing a brush automatically adjusts i
 Notes:
 - Works with PLANAR_X, PLANAR_Y, PLANAR_Z, and BOX_UV projections.
 - CYLINDRICAL projection is not compensated (complex; future enhancement).
-- Applies to HammerForge move, nudge, floor/ceiling, and resize actions. Godot's native Node3D transform widget leaves the brush's face UV resources unchanged so native undo/redo remains truthful.
+- Applies to HammerForge move, nudge, floor/ceiling, resize and rotate actions. Godot's native Node3D transform widget leaves the brush's face UV resources unchanged so native undo/redo remains truthful.
+- On a rotation, a face is compensated when the turn keeps its projection plane where it is. A face that turns out from under its own projection is left alone, so its texture travels with the brush rather than tipping.
 - Persists in `.hflevel` settings.
 
 ## Cordon (Partial Bake)

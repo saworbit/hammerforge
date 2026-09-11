@@ -308,7 +308,7 @@ func test_rotate_reports_changed_count():
 
 func test_rotate_by_zero_is_a_no_op():
 	var b := _make_brush(Vector3(10, 0, 0), Vector3(32, 32, 32), "r1")
-	var before := b.global_transform
+	var before: Transform3D = b.global_transform
 	var changed: int = sys.rotate(["r1"], [], 1, 0.0, Vector3.ZERO)
 	assert_eq(changed, 0)
 	assert_true(b.global_transform.is_equal_approx(before))
@@ -346,13 +346,26 @@ func test_rotate_ignores_entities_without_an_angle_key():
 # ===========================================================================
 
 
-func test_texture_lock_on_compensates_uv_rotation():
+func test_texture_lock_on_compensates_a_face_that_turns_in_its_own_plane():
 	root.texture_lock = true
 	var b := _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "t1")
 	var face = b.get_faces()[0]
+	face.uv_projection = FaceDataScript.UVProjection.PLANAR_Y
 	face.uv_rotation = 0.0
 	sys.rotate(["t1"], [], 1, deg_to_rad(90.0), Vector3.ZERO)
 	assert_almost_eq(face.uv_rotation, -deg_to_rad(90.0), 0.001)
+
+
+func test_texture_lock_leaves_a_face_the_turn_swings_around():
+	# A yaw does not turn a PLANAR_Z face in its own plane, so subtracting the
+	# yaw from its UV rotation only tipped the texture on its side.
+	root.texture_lock = true
+	var b := _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "t2")
+	var face = b.get_faces()[0]
+	face.uv_projection = FaceDataScript.UVProjection.PLANAR_Z
+	face.uv_rotation = 0.0
+	sys.rotate(["t2"], [], 1, deg_to_rad(90.0), Vector3.ZERO)
+	assert_almost_eq(face.uv_rotation, 0.0, 0.001)
 
 
 func test_texture_lock_off_leaves_uv_rotation():
@@ -397,7 +410,7 @@ func test_flip_mirrors_every_world_vertex():
 
 func test_flip_twice_restores_a_box_exactly():
 	var b := _make_brush(Vector3(48, 12, -7), Vector3(32, 16, 8), "f1")
-	var before := b.global_transform
+	var before: Transform3D = b.global_transform
 	sys.flip(["f1"], [], 0, Vector3.ZERO)
 	sys.flip(["f1"], [], 0, Vector3.ZERO)
 	assert_true(b.global_transform.is_equal_approx(before))
@@ -406,7 +419,7 @@ func test_flip_twice_restores_a_box_exactly():
 func test_flip_twice_restores_a_rotated_brush_exactly():
 	var b := _make_brush(Vector3(48, 0, 0), Vector3(32, 16, 8), "f1")
 	sys.rotate(["f1"], [], 1, deg_to_rad(30.0), Vector3.ZERO)
-	var before := b.global_transform
+	var before: Transform3D = b.global_transform
 	sys.flip(["f1"], [], 2, Vector3(10, 0, 0))
 	sys.flip(["f1"], [], 2, Vector3(10, 0, 0))
 	assert_true(b.global_transform.is_equal_approx(before))
@@ -622,7 +635,7 @@ func test_can_flip_refuses_a_displaced_brush():
 func test_flip_skips_a_displaced_brush():
 	var b := _make_brush(Vector3(48, 0, 0), Vector3(32, 32, 32), "f1")
 	b.get_faces()[0].displacement = Resource.new()
-	var before := b.global_transform
+	var before: Transform3D = b.global_transform
 	assert_eq(sys.flip(["f1"], [], 0, Vector3.ZERO), 0)
 	assert_true(b.global_transform.is_equal_approx(before))
 
@@ -809,3 +822,50 @@ func test_selection_bounds_grows_when_a_brush_is_turned():
 func test_selection_bounds_on_empty_selection_is_degenerate():
 	var bounds: AABB = sys.selection_bounds([], [])
 	assert_true(bounds.size.is_equal_approx(Vector3.ZERO))
+
+
+# ===========================================================================
+# Nonsense inputs (#335) and rotation round trips (#334)
+# ===========================================================================
+
+
+func test_rotate_refuses_a_non_finite_angle():
+	var b = _make_brush(Vector3.ZERO)
+	assert_eq(sys.rotate([b.brush_id], [], 1, NAN, Vector3.ZERO), 0, "NAN angle")
+	assert_eq(sys.rotate([b.brush_id], [], 1, INF, Vector3.ZERO), 0, "INF angle")
+	assert_true(b.global_transform.is_finite(), "brush transform stays finite")
+
+
+func test_rotate_refuses_a_non_finite_pivot():
+	var b = _make_brush(Vector3.ZERO)
+	var pivot := Vector3(NAN, 0, 0)
+	assert_eq(sys.rotate([b.brush_id], [], 1, deg_to_rad(90.0), pivot), 0)
+	assert_true(b.global_transform.is_finite())
+
+
+func test_flip_refuses_a_non_finite_pivot():
+	var b = _make_brush(Vector3.ZERO)
+	assert_eq(sys.flip([b.brush_id], [], 0, Vector3(INF, 0, 0)), 0)
+	assert_true(b.global_transform.is_finite())
+
+
+func test_rotate_and_flip_refuse_an_axis_that_is_not_an_axis():
+	# `axis_vector()` falls through to Z, so an out of range index used to turn
+	# the selection about an axis nobody asked for.
+	var b = _make_brush(Vector3.ZERO)
+	var before: Transform3D = b.global_transform
+	assert_eq(sys.rotate([b.brush_id], [], 9, deg_to_rad(90.0), Vector3.ZERO), 0)
+	assert_eq(sys.flip([b.brush_id], [], -1, Vector3.ZERO), 0)
+	assert_eq(b.global_transform, before, "brush untouched")
+
+
+func test_four_quarter_turns_leave_the_faces_as_they_were():
+	root.texture_lock = true
+	var b = _make_brush(Vector3.ZERO, Vector3(128, 64, 32))
+	var before: Array = []
+	for face in b.get_faces():
+		before.append(face.to_dict())
+	for _i in 4:
+		sys.rotate([b.brush_id], [], 1, deg_to_rad(90.0), Vector3.ZERO)
+	for i in b.get_faces().size():
+		assert_eq(b.get_faces()[i].to_dict(), before[i], "face %d drifted" % i)
