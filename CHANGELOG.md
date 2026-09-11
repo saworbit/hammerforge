@@ -775,6 +775,19 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   - **Coverage** (`tests/test_plugin_numeric_input.gd`): a keypad-typed decimal
     driving the preview, `KEY_KP_0` at the far end of the range, keypad Enter
     committing a keypad-typed value, and one decimal point whichever key typed it.
+- **Renaming a visgroup onto an existing name is refused** (#296).
+  `HFVisgroupSystem.rename_visgroup()` guarded an empty name, an unchanged name
+  and a missing source, but not the target already existing. Renaming A to B when
+  B existed overwrote B's record, colour and visibility and all, then rewrote the
+  name on every node that carried A, so two memberships silently became one. The
+  loss showed up later rather than at the time: B's members were hidden, B's
+  record was gone, and the next `refresh_visibility()` made them visible again
+  with nothing to say why. It returns whether the rename happened, so a rename
+  field can say the name is taken. Merging two visgroups is a different
+  operation, and one somebody should have to ask for.
+  - **Coverage** (`tests/test_visgroup_system.gd`): a refused rename leaving both
+    records, both memberships and B's hidden state alone, plus the return value
+    across a working rename, a missing source and an empty name.
 - **A prefab could wire its copy's outputs to the entities it was built from.**
   `HFPrefab.instantiate()` remapped I/O by turning each old node name into the new
   one and then looking that name back up. The lookup resolves an authored
