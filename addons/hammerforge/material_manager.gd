@@ -4,9 +4,6 @@ class_name MaterialManager
 
 @export var materials: Array[Material] = []
 
-## Tracks how many brushes reference each material resource path.
-var _usage_counts: Dictionary = {}
-
 ## Path to the last saved/loaded material library (for auto-reload).
 var _library_path := ""
 
@@ -103,52 +100,3 @@ func load_library(path: String) -> bool:
 ## Returns the path of the last saved/loaded library, or empty string.
 func get_library_path() -> String:
 	return _library_path
-
-
-# ---------------------------------------------------------------------------
-# Usage Tracking
-# ---------------------------------------------------------------------------
-
-
-## Record that a material resource path is used by one more brush.
-func record_usage(resource_path: String) -> void:
-	if resource_path == "":
-		return
-	_usage_counts[resource_path] = int(_usage_counts.get(resource_path, 0)) + 1
-
-
-## Record that a material resource path is used by one fewer brush.
-func release_usage(resource_path: String) -> void:
-	if resource_path == "" or not _usage_counts.has(resource_path):
-		return
-	var count := int(_usage_counts[resource_path]) - 1
-	if count <= 0:
-		_usage_counts.erase(resource_path)
-	else:
-		_usage_counts[resource_path] = count
-
-
-## Rebuild usage counts by scanning all brushes under a parent node.
-func rebuild_usage(brushes_parent: Node) -> void:
-	_usage_counts.clear()
-	if not brushes_parent:
-		return
-	for child in brushes_parent.get_children():
-		var mat: Material = child.get("material_override")
-		if mat and mat.resource_path != "":
-			record_usage(mat.resource_path)
-
-
-## Returns materials in the palette that are not used by any brush.
-func find_unused_materials() -> Array[Material]:
-	var unused: Array[Material] = []
-	for mat in materials:
-		if mat and mat.resource_path != "":
-			if not _usage_counts.has(mat.resource_path):
-				unused.append(mat)
-	return unused
-
-
-## Returns the usage count for a material resource path.
-func get_usage_count(resource_path: String) -> int:
-	return int(_usage_counts.get(resource_path, 0))

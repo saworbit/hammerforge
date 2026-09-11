@@ -269,8 +269,7 @@ Entity types and brush entity classes are data-driven via `HFEntityDef` (`hf_ent
 
 `MaterialManager` (`material_manager.gd`) manages the shared material palette:
 - **Library persistence**: `save_library(path)` / `load_library(path)` serialize material resource paths to JSON.
-- **Usage tracking**: `record_usage()` / `release_usage()` / `rebuild_usage()` track which materials are used by brushes.
-- **Cleanup**: `find_unused_materials()` returns palette materials not used by any brush.
+- **Usage tracking**: none. Materials are assigned per face via `FaceData.material_idx`, so usage is a count per palette index, not per resource path.
 - **Prototype textures**: `HFPrototypeTextures.load_all_into(manager)` batch-loads 150 built-in SVG textures as `StandardMaterial3D` resources. The dock exposes this via the "Refresh Prototypes" button in the Paint tab → Materials section.
 - **Visual browser**: `HFMaterialBrowser` (`ui/hf_material_browser.gd`) provides a thumbnail grid with search, pattern/color filters, favorites, hover preview, context menu, and drag-and-drop. Replaces the text-only `ItemList`.
 - **Texture Picker**: T key activates an eyedropper that raycasts to a face, reads `FaceData.material_idx`, and sets it as the browser's current selection.
