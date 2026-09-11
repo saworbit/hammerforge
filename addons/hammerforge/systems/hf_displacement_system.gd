@@ -48,6 +48,18 @@ func create_displacement(brush_id: String, face_index: int, power: int = 3) -> b
 			)
 		)
 		return false
+	if face.displacement != null:
+		# init_flat() resets distances, offsets, alphas, sew_group and elevation,
+		# so building a fresh one here would throw away the sculpt on this face
+		# and still report success. destroy_displacement() is the deliberate way
+		# to clear one, and it is undoable.
+		HFLog.warn(
+			(
+				"HFDisplacementSystem: face %d already has a displacement, destroy it first"
+				% face_index
+			)
+		)
+		return false
 	var disp = HFDisplacementData.new()
 	disp.init_flat(power)
 	face.displacement = disp
@@ -139,6 +151,15 @@ func paint(
 	strength: float,
 	mode: int = PaintMode.RAISE  # PaintMode enum
 ) -> bool:
+	# world_pos comes from a raycast. A miss, a degenerate camera or an
+	# off-surface hit produces a non-finite vector at that boundary, and this is
+	# the last place that can catch it: one NaN centre fills every distance in
+	# the grid with NaN, and smooth, noise and further paint all stay NaN.
+	if not world_pos.is_finite() or not is_finite(radius) or not is_finite(strength):
+		HFLog.warn("HFDisplacementSystem: paint needs a finite centre, radius and strength")
+		return false
+	if radius <= 0.0:
+		return false
 	var brush: Node3D = root.find_brush_by_id(brush_id)
 	if not brush:
 		return false
@@ -242,9 +263,31 @@ func set_elevation(brush_id: String, face_index: int, elevation: float) -> bool:
 	var face: FaceData = faces[face_index]
 	if face.displacement == null:
 		return false
-	face.displacement.elevation = elevation
+	if not is_finite(elevation):
+		HFLog.warn("HFDisplacementSystem: elevation must be finite")
+		return false
+	# elevation multiplies distances that are already in world units, so the
+	# scale that means anything is the face's own size. An elevation past that
+	# moves one unit of sculpt further than the face it sits on is wide.
+	var limit: float = maxf(_face_extent(face), 1.0)
+	var bounded: float = clampf(elevation, -limit, limit)
+	if not is_equal_approx(bounded, elevation):
+		HFLog.warn(
+			"HFDisplacementSystem: elevation %f is beyond the face, using %f" % [elevation, bounded]
+		)
+	face.displacement.elevation = bounded
 	_mark_brush_dirty(brush)
 	return true
+
+
+## Longest distance between any two corners of a face. Used as the scale the
+## face's own displacement is measured against.
+func _face_extent(face: FaceData) -> float:
+	var extent := 0.0
+	for i in range(face.local_verts.size()):
+		for j in range(i + 1, face.local_verts.size()):
+			extent = maxf(extent, face.local_verts[i].distance_to(face.local_verts[j]))
+	return extent
 
 
 # ---------------------------------------------------------------------------

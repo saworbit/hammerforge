@@ -4,6 +4,121 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Fixed
+- **Five brush primitives were built inside out** (#313). `PRISM_TRI`,
+  `PRISM_PENT`, `OCTAHEDRON`, `DODECAHEDRON` and `ICOSAHEDRON` came out of
+  `create_brush_from_info()` with every face normal pointing at the brush
+  centre, so `validate_convexity()` called a convex prism broken, the bake ran
+  inside out, and `.map` export wrote a hull that is not a solid. The prism
+  builder and the octahedron and icosahedron tables now wind clockwise from
+  outside; the dodecahedron sorts its ring the other way round for the same
+  reason. The editor preview is cull-disabled, which is why this looked fine in
+  the viewport and only showed at bake or export.
+  - **Levels saved before the fix are migrated on load.** Faces are serialized
+    verbatim, so the inversion was in every `.hflevel` that holds one of those
+    five shapes. `winding_version` is 2, and a v1 face on one of the five runs
+    the centroid migration the v0 path already uses. It is exact there because
+    all five are convex, and no other shape is touched, so a torus still loads
+    as it was saved.
+- **Every bevel left the brush non-convex** (#314). Two causes on the same
+  call. The strip quads were wound counter-clockwise from outside, so a plain
+  `radius 4, segments 2` bevel on a box added two back-facing polygons. And the
+  arc was centred on the corner vertex, which put every intermediate point
+  behind the chord between the two pulled-back edges and scooped the corner out
+  instead of chamfering it, so the strip quads also came out carrying the normal
+  from the far side of the bevel. The arc is centred at
+  `origin + (dir0 + dir1) * radius`, which is exactly `radius` from both ends at
+  any dihedral angle, and the quads are wound against the brush centre the way
+  the endpoint caps already were. `radius` still means the same thing: how far
+  the two faces pull back.
+  - **Coverage**: `tests/test_brush_shapes.gd` sweeps every `BrushShape` for a
+    face normal pointing back at the centre, skipping collapsed triangles and
+    the torus, which is genuinely concave; plus the five named shapes on their
+    own, the v1 migration, and a torus that must not be migrated.
+    `tests/test_bevel.gd` gains outward normals, convexity at two radii, and
+    each strip quad leaning towards the face it borders.
+- **Four calls accepted a value they could not use and reported success.** Same
+  shape each time: a number with no relationship to the geometry it modifies
+  goes in, something unrecoverable comes out, and the return value says it
+  worked.
+  - **Bevel radius is bounded against the edge it rounds** (#315). `segments`
+    was clamped at both ends and `radius` only floored, so `radius = 1e6` on a
+    64 unit box returned `true` and left a brush spanning a million units while
+    its own `size` still read 64. The next carve then treated an unrelated
+    brush at the origin as overlapping and scattered the pieces half a million
+    units away. The radius is capped at half the shorter of the two adjacent
+    face extents, with a warning naming both figures, and a non-finite radius
+    is refused outright.
+  - **`.map` import refuses a plane it cannot read** (#318). Not for the reason
+    the report gave: `float("nan")` answers `0.0` on 4.7, so `nan`, `inf` and a
+    plain typo all arrived as the origin and the face read as a real plane
+    through it. A coordinate token that is not a number now fails the line, and
+    a coordinate past 65536 fails it too, which is what catches `1e30`. A brush
+    holding an unreadable plane is dropped whole rather than built from the
+    planes that did parse, because a `.map` brush is the intersection of all its
+    half spaces and a missing one is a different solid, not a smaller one.
+  - **Creating a displacement on a face that has one is refused** (#319).
+    `init_flat()` resets distances, offsets, alphas, sew group and elevation, so
+    a second press of the button threw away the terrain on that face and still
+    returned `true`. `destroy_displacement()` is the deliberate way to clear
+    one and it is undoable. The dock toast and the user guide say so.
+  - **Displacement paint and elevation reject what they cannot use** (#320). One
+    `paint()` with a non-finite centre filled all 289 distances of a power 4
+    grid with NaN, which no amount of smoothing or further paint can undo, and
+    it survived into the `.hflevel`. `paint()` refuses a non-finite centre,
+    radius or strength, and a radius of zero. `set_elevation()` refuses a
+    non-finite value and clamps the magnitude to the face's own diagonal, which
+    is the only scale a multiplier on world-unit distances has to be measured
+    against. Levels already saved are read through `from_dict()` and are not
+    touched, so nothing changes under an existing sculpt.
+  - **Coverage**: 6 tests in `tests/test_displacement.gd`, 3 in
+    `tests/test_bevel.gd`, 4 in `tests/test_map_export.gd`, each with a good
+    value alongside the bad one so the guards cannot start refusing what they
+    should accept.
+- **Deleting a hidden visgroup left its members permanently invisible** (#316).
+  `remove_visgroup()` strips the membership meta from every node and then
+  refreshes, but `refresh_visibility()` skipped any node that was in no
+  visgroup, so every former member kept the `visible = false` it was given when
+  the visgroup was hidden, with nothing left in the UI that could show it again.
+  A node in no visgroup is a node nothing is hiding, so the refresh shows it.
+  That covers pulling a single node out of a hidden visgroup as well.
+  Committed cutters are hidden by the cut rather than by a visgroup and
+  `_all_managed_nodes()` does not reach them, so they stay hidden.
+  - **Coverage** (`tests/test_visgroup_system.gd`): delete a hidden visgroup,
+    remove one node from a hidden visgroup, and a guard that a node still in
+    another hidden visgroup stays hidden.
+- **Two paint layers could be renamed to the same name** (#321). The rename
+  dialog checked that the new name was non-empty and different from the layer's
+  own, and nothing checked it against the other layers, so the list the user
+  picks a paint target from could show the same row twice with no way to tell
+  them apart. `HFPaintSystem.rename_paint_layer()` returns bool and refuses an
+  empty name, an index out of range, and a name another layer already shows.
+  The check sits there rather than in the dialog so a rename from anywhere is
+  covered, and the dialog reports the refusal as a toast.
+  - A layer with no display name shows its `layer_id`, which is the row the user
+    reads, so that counts as a taken name too. Names are trimmed before they are
+    compared, so padding cannot smuggle a duplicate through.
+  - **Coverage** (`tests/test_paint_system.gd`): 7 tests, including renaming a
+    layer to its own name, which is not a collision, and a rename to a free
+    name, so the guard cannot start refusing what it should accept.
+- **Valve 220 export wrote texture axes parallel to the face normal** (#317).
+  Every face went out as `[ 1 0 0 0 ] [ 0 1 0 0 ]` whatever direction it faced,
+  so four of the six faces of a plain box were degenerate: on a +/-X face the U
+  axis was the normal, on a +/-Y face the V axis was. Valve 220 exists to carry
+  per-face alignment into TrenchBroom, J.A.C.K. and the Source-lineage tools,
+  and those either reject such a face or stretch the texture across it, so the
+  format chosen to preserve alignment preserved nothing.
+  - The cause was not a missing feature. `_auto_axes()` already picks correct
+    axes per normal, but it was only reached for `CYLINDRICAL` or a projection
+    outside the enum. `FaceData.uv_projection` defaults to `PLANAR_Z`, and
+    `_compute_axes_from_projection()` returned `PLANAR_Z`'s `[RIGHT, UP]` for
+    every face carrying it without asking whether those axes lie in the face.
+    A candidate pair is now checked against the normal and falls back to
+    `_auto_axes()`, which is what `BOX_UV` already did.
+  - The classic Quake exporter is unaffected. It has no texture axes.
+  - **Coverage** (`tests/test_map_export.gd`): all six axis directions with the
+    default projection, an exported box checked line by line, and a guard that a
+    +Z face keeps `PLANAR_Z`'s axes, since that is what `PLANAR_Z` is for.
 ### Changed
 - **Non-box primitives store one face per flat surface, not one per mesh
   triangle** (#322). `_rebuild_faces()` derived the face list straight from the

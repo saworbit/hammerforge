@@ -849,3 +849,139 @@ func test_parse_well_formed_map_reports_no_errors():
 	)
 	assert_eq(parsed.get("errors", []), [], "A good map must not raise a false alarm")
 	assert_eq((parsed.get("brushes", []) as Array).size(), 1)
+
+
+# ---------------------------------------------------------------------------
+# Import refuses a plane it cannot use (#318)
+# ---------------------------------------------------------------------------
+
+
+func _worldspawn_with_first_point(point: String) -> String:
+	return (
+		"{\n"
+		+ '"classname" "worldspawn"\n'
+		+ "{\n"
+		+ "%s ( 64 0 0 ) ( 0 64 0 ) brick 0 0 0 1 1\n" % point
+		+ "( 0 0 32 ) ( 64 0 32 ) ( 0 64 32 ) brick 0 0 0 1 1\n"
+		+ "( 0 0 0 ) ( 0 64 0 ) ( 0 0 32 ) brick 0 0 0 1 1\n"
+		+ "( 64 0 0 ) ( 64 0 32 ) ( 64 64 0 ) brick 0 0 0 1 1\n"
+		+ "( 0 0 0 ) ( 0 0 32 ) ( 64 0 0 ) brick 0 0 0 1 1\n"
+		+ "( 0 64 0 ) ( 64 64 0 ) ( 0 64 32 ) brick 0 0 0 1 1\n"
+		+ "}\n"
+		+ "}\n"
+	)
+
+
+func test_a_plane_coordinate_that_is_not_a_number_fails_the_import():
+	# float() answers 0.0 for a token it cannot read, so nan and inf used to
+	# arrive as the origin and the face read as a real plane through it.
+	for token in ["( nan nan nan )", "( inf inf inf )", "( x y z )"]:
+		var parsed: Dictionary = MapIO.parse_map_text(_worldspawn_with_first_point(token))
+		assert_eq(
+			(parsed.get("brushes", []) as Array).size(), 0, "%s should import nothing" % token
+		)
+		assert_gt((parsed.get("errors", []) as Array).size(), 0, "%s should report why" % token)
+
+
+func test_a_blown_out_plane_coordinate_fails_the_import():
+	# 1e30 parses as a real float, so the finite check does not catch it. A
+	# coordinate that far out is a precision blowout, not a level.
+	var parsed: Dictionary = MapIO.parse_map_text(
+		_worldspawn_with_first_point("( 1e30 1e30 1e30 )")
+	)
+	assert_eq((parsed.get("brushes", []) as Array).size(), 0, "A 1e30 plane should import nothing")
+	assert_gt((parsed.get("errors", []) as Array).size(), 0, "It should report why")
+
+
+func test_an_ordinary_brush_still_imports():
+	var parsed: Dictionary = MapIO.parse_map_text(_worldspawn_with_first_point("( 0 0 0 )"))
+	assert_eq((parsed.get("brushes", []) as Array).size(), 1, "A good brush should still import")
+	assert_eq((parsed.get("errors", []) as Array).size(), 0, "and report no errors")
+
+
+func test_a_coordinate_at_the_limit_is_still_accepted():
+	# The bound has to leave room for a legitimately large level.
+	var parsed: Dictionary = MapIO.parse_map_text(_worldspawn_with_first_point("( -8192 0 0 )"))
+	assert_eq((parsed.get("brushes", []) as Array).size(), 1, "An 8192 unit level is legitimate")
+
+
+# ---------------------------------------------------------------------------
+# Valve 220 texture axes must lie in the face (#317)
+# ---------------------------------------------------------------------------
+
+
+func _axes_from_face_line(line: String) -> Array:
+	# ... texture [ ux uy uz uoff ] [ vx vy vz voff ] rot us vs
+	var open_brackets: PackedStringArray = line.split("[")
+	assert_eq(open_brackets.size(), 3, "A Valve 220 face line carries two axis brackets")
+	if open_brackets.size() != 3:
+		return []
+	var out: Array = []
+	for i in [1, 2]:
+		var inner: String = open_brackets[i].split("]")[0].strip_edges()
+		var parts: PackedStringArray = inner.split(" ", false)
+		out.append(Vector3(float(parts[0]), float(parts[1]), float(parts[2])))
+	return out
+
+
+func test_valve220_axes_lie_in_the_face_for_every_direction():
+	# FaceData defaults to PLANAR_Z, whose axes are RIGHT and UP. On a +/-X or
+	# +/-Y face one of those is the face normal, which is a degenerate
+	# projection that TrenchBroom and J.A.C.K. cannot use.
+	var adapter = HFMapValve220.new()
+	var triangles := {
+		"+X": [Vector3(1, 0, 0), Vector3(1, 1, 0), Vector3(1, 1, 1)],
+		"-X": [Vector3(0, 0, 0), Vector3(0, 0, 1), Vector3(0, 1, 1)],
+		"+Y": [Vector3(0, 1, 0), Vector3(0, 1, 1), Vector3(1, 1, 1)],
+		"-Y": [Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(1, 0, 1)],
+		"+Z": [Vector3(0, 0, 1), Vector3(1, 0, 1), Vector3(1, 1, 1)],
+		"-Z": [Vector3(0, 0, 0), Vector3(0, 1, 0), Vector3(1, 1, 0)],
+	}
+	for label in triangles:
+		var tri: Array = triangles[label]
+		var fd = FaceData.new()
+		fd.uv_projection = FaceData.UVProjection.PLANAR_Z
+		var line: String = adapter.format_face_line(tri[0], tri[1], tri[2], "brick", fd)
+		var normal: Vector3 = (tri[1] - tri[0]).cross(tri[2] - tri[0]).normalized()
+		var axes: Array = _axes_from_face_line(line)
+		assert_eq(axes.size(), 2, "%s face should carry two axes" % label)
+		if axes.size() != 2:
+			continue
+		assert_almost_eq(
+			axes[0].dot(normal), 0.0, 0.001, "%s: the U axis must lie in the face" % label
+		)
+		assert_almost_eq(
+			axes[1].dot(normal), 0.0, 0.001, "%s: the V axis must lie in the face" % label
+		)
+
+
+func test_valve220_keeps_a_projection_that_already_lies_in_the_face():
+	# The guard must not start overriding an alignment the user chose. A +Z face
+	# with PLANAR_Z is exactly what PLANAR_Z is for.
+	var adapter = HFMapValve220.new()
+	var fd = FaceData.new()
+	fd.uv_projection = FaceData.UVProjection.PLANAR_Z
+	var line: String = adapter.format_face_line(
+		Vector3(0, 0, 1), Vector3(1, 0, 1), Vector3(1, 1, 1), "brick", fd
+	)
+	var axes: Array = _axes_from_face_line(line)
+	assert_eq(axes[0], Vector3.RIGHT, "PLANAR_Z's U axis should survive on a Z facing face")
+	assert_eq(axes[1], Vector3.UP, "PLANAR_Z's V axis should survive on a Z facing face")
+
+
+func test_valve220_axes_of_an_exported_box_all_lie_in_their_faces():
+	var brush := DraftBrush.new()
+	brush.shape = LevelRoot.BrushShape.BOX
+	brush.size = Vector3(64, 16, 64)
+	var root := _make_export_root([brush])
+	assert_eq(brush.faces.size(), 6, "Adding the box to the tree builds its six faces")
+	var text := MapIO.export_map_from_level(root, HFMapValve220.new())
+	var checked := 0
+	for line in _plane_lines(text):
+		var points: Array = _plane_points(line)
+		var normal: Vector3 = (points[1] - points[0]).cross(points[2] - points[0]).normalized()
+		var axes: Array = _axes_from_face_line(line)
+		assert_almost_eq(axes[0].dot(normal), 0.0, 0.001, "U axis lies in the face: %s" % line)
+		assert_almost_eq(axes[1].dot(normal), 0.0, 0.001, "V axis lies in the face: %s" % line)
+		checked += 1
+	assert_eq(checked, 6, "A box exports six face lines")

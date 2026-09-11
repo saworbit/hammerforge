@@ -54,7 +54,7 @@ static func parse_map_text(text: String) -> Dictionary:
 				continue
 			if in_entity and not in_brush:
 				in_brush = true
-				current_brush = {"faces": []}
+				current_brush = {"faces": [], "usable": true}
 				continue
 			errors.append("Line %d: brush inside a brush" % line_no)
 			continue
@@ -74,7 +74,11 @@ static func parse_map_text(text: String) -> Dictionary:
 		if in_brush:
 			var face = _parse_face_line(line, face_re)
 			if face.is_empty():
+				# A .map brush is the intersection of all its half spaces, so a
+				# plane that cannot be read does not leave a smaller brush. It
+				# leaves a different one. Drop the whole brush instead.
 				errors.append("Line %d: face is not three planar points" % line_no)
+				current_brush["usable"] = false
 			else:
 				current_brush["faces"].append(face)
 			continue
@@ -104,7 +108,9 @@ static func parse_map_text(text: String) -> Dictionary:
 		if not has_brushes and entity_class != "":
 			entity_points.append({"classname": entity_class, "origin": origin, "properties": props})
 		for brush in entity.get("brushes", []):
-			var info = _brush_from_faces(brush.get("faces", []))
+			var info = (
+				_brush_from_faces(brush.get("faces", [])) if bool(brush.get("usable", true)) else {}
+			)
 			if info.is_empty():
 				errors.append("A brush in '%s' has no usable geometry" % entity_class)
 				continue
@@ -243,9 +249,20 @@ static func _brush_from_faces(faces: Array) -> Dictionary:
 		var face_points: Array = face.get("points", [])
 		if face_points.size() < 3:
 			continue
+		# .map files come from other tools, so a plane point can be NaN or a
+		# blown-out magnitude. The degenerate case is already caught below by
+		# the zero normal, but the cross product of NaN points is NaN, not zero,
+		# and a 1e30 point is finite. Both slip past that check and land in the
+		# level as a brush with NaN vertices, which then poisons every bound
+		# computed from it. Refuse the whole brush, the way a degenerate one is
+		# refused.
+		if not _points_usable(face_points):
+			return {}
 
 		points.append_array(face_points)
 		var normal = _face_normal(face_points)
+		if not normal.is_finite():
+			return {}
 		if _axis_from_normal(normal) == Vector3.ZERO:
 			axis_aligned = false
 		if normal == Vector3.ZERO:
@@ -394,6 +411,26 @@ static func _plane_axes(plane: Plane) -> Array:
 	return [u, normal.cross(u)]
 
 
+## The largest plane coordinate a brush is allowed to carry. Quake-lineage
+## compilers put the world at +/-4096 and the Source-era ones at +/-16384, so a
+## coordinate past this is a precision blowout in the file, not a level.
+const MAX_PLANE_COORD := 65536.0
+
+
+static func _points_usable(face_points: Array) -> bool:
+	for point in face_points:
+		if not (point is Vector3):
+			return false
+		var p: Vector3 = point
+		if not p.is_finite():
+			return false
+		if absf(p.x) > MAX_PLANE_COORD or absf(p.y) > MAX_PLANE_COORD:
+			return false
+		if absf(p.z) > MAX_PLANE_COORD:
+			return false
+	return true
+
+
 static func _face_normal(face_points: Array) -> Vector3:
 	if face_points.size() < 3:
 		return Vector3.ZERO
@@ -507,6 +544,12 @@ static func _parse_face_line(line: String, face_re: RegEx) -> Dictionary:
 		var parts = group.strip_edges().split(" ", false)
 		if parts.size() < 3:
 			return {}
+		# float() answers 0.0 for any token it cannot read, so `nan`, `inf` and
+		# a typo all arrive as the origin and the face reads as a real plane
+		# through it. A coordinate that is not a number is a broken line.
+		for i2 in range(3):
+			if not parts[i2].is_valid_float():
+				return {}
 		points.append(Vector3(float(parts[0]), float(parts[1]), float(parts[2])))
 	return {"points": points}
 
