@@ -1,5 +1,5 @@
 @tool
-extends HFVibeScenario
+extends "res://tools/vibe/hf_vibe_scenario.gd"
 
 ## Visgroups, groups, the cordon and paint layers -- the bookkeeping a mapper
 ## builds up around the geometry rather than in it.

@@ -1,5 +1,5 @@
 @tool
-extends HFVibeScenario
+extends "res://tools/vibe/hf_vibe_scenario.gd"
 
 ## The four live generators -- arch, stairs, spiral stairs, dome -- driven
 ## through `LevelRoot`, which is how the Structure dock drives them.
@@ -8,9 +8,6 @@ extends HFVibeScenario
 ## Does a setting outside the schema's own range get refused, or built? And is
 ## regenerating with the settings a structure already has a no-op, or does it
 ## move the structure?
-
-const HFGeneratorSchema = preload("res://addons/hammerforge/hf_generator_schema.gd")
-const HFGeneratorSystem = preload("res://addons/hammerforge/systems/hf_generator_system.gd")
 
 
 func id() -> String:

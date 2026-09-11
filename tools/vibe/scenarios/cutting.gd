@@ -1,5 +1,5 @@
 @tool
-extends HFVibeScenario
+extends "res://tools/vibe/hf_vibe_scenario.gd"
 
 ## The operations that take a brush apart: clip, carve, hollow, inset and the
 ## duplicate arrays that copy the result.

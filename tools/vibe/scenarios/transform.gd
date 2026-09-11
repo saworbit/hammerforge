@@ -1,5 +1,5 @@
 @tool
-extends HFVibeScenario
+extends "res://tools/vibe/hf_vibe_scenario.gd"
 
 ## Rotate, flip and reset-rotation, driven the way the transform commands drive
 ## them: always through `LevelRoot`'s five-argument delegates, because those are
