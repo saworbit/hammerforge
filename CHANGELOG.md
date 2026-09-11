@@ -5,6 +5,25 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **A generator built a structure out of NaN brushes** (#336). Every builder
+  checks its settings with comparisons like `radius <= 0.0`, and a NaN fails all
+  of them, so it passed every check and the arithmetic ran on it. 27 field and
+  value combinations across the four types produced structures where every piece
+  had a non-finite position or extent, and `create_generator()` reported success
+  over them. The dock's spinners cannot produce one, but a regenerate from a
+  `.hflevel`, an undo replay and a script all can.
+- **Generator dimensions and counts had no ceiling** (#337, #338). The schema's
+  `max` was the dock's SpinBox and nothing else, so an arch could be asked for
+  129,000 segments — 129,000 brushes in one call that reported success — and a
+  stairs could be built 8,200,000 units tall, far past where a float32 position
+  holds a 1-unit grid. `HFGeneratorSchema.check_ranges()` now holds every caller
+  to the schema's own maximums, so the schema is one description of what a field
+  may be rather than a description for the dock and nothing for anyone else, and
+  a new builder gets the rule for free.
+  - Both checks run in `HFGeneratorSystem.validate()`, before the builder sees
+    the settings. A level saved with an out of range structure still loads — the
+    pieces are saved as brushes and only re-linked — and a regenerate refuses
+    before anything is deleted, so the structure stays as it was.
 - **Texture lock tipped the texture on every wall of a rotated brush** (#333).
   The counter-rotation was applied to every face at the same angle whatever axis
   the brush turned about, so a yaw — the most common thing a mapper does — left

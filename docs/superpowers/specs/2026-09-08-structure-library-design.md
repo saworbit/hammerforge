@@ -82,6 +82,12 @@ because the interesting refusals are relationships between fields — a wall
 thicker than its radius, an arc too coarse to stay convex — and no per-field range
 expresses those.
 
+> Amended 2026-09-11 (#336, #338): the ranges are enforced.
+> `HFGeneratorSchema.check_ranges()` holds a caller that never saw the dock to
+> the schema's own maximums, and refuses a non-finite number, because a NaN
+> passes every comparison a builder makes. `validate()` is still the authority
+> on the relationships between fields.
+
 ### The dock's Structure section
 
 The Arch section becomes the **Structure** section: a type dropdown, controls

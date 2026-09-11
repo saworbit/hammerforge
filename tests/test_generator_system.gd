@@ -1004,3 +1004,50 @@ func _structure_centre(record) -> Vector3:
 			total += brush.global_position
 			count += 1
 	return total / float(count) if count > 0 else Vector3.ZERO
+
+
+# ===========================================================================
+# Every generator refuses a setting it cannot build (#336, #337, #338)
+# ===========================================================================
+
+
+func test_every_generator_refuses_a_non_finite_setting():
+	# A NaN fails `radius <= 0.0` the way it fails every comparison, so it used
+	# to pass every check a builder made and build a structure of NaN brushes.
+	var checked := 0
+	for type in HFGeneratorSystemScript.known_types():
+		for field in HFGeneratorSystemScript.settings_schema(type):
+			if field["type"] == "bool" or field["type"] == "enum":
+				continue
+			for value in [NAN, INF, -INF]:
+				var settings := {}
+				settings[str(field["key"])] = value
+				var result = HFGeneratorSystemScript.validate(type, settings)
+				assert_false(result.ok, "%s should refuse %s = %s" % [type, field["key"], value])
+				checked += 1
+	assert_gt(checked, 0, "there are generator settings to check")
+
+
+func test_every_generator_refuses_a_setting_past_its_schema_maximum():
+	# The schema's max was the dock's SpinBox and nothing else, so a regenerate
+	# from a file, an undo replay or a script walked straight past it.
+	for type in HFGeneratorSystemScript.known_types():
+		for field in HFGeneratorSystemScript.settings_schema(type):
+			if not field.has("max") or field["type"] == "bool" or field["type"] == "enum":
+				continue
+			var settings := {}
+			settings[str(field["key"])] = float(field["max"]) * 1000.0
+			var result = HFGeneratorSystemScript.validate(type, settings)
+			assert_false(result.ok, "%s should refuse a huge %s" % [type, field["key"]])
+
+
+func test_an_arch_of_129000_segments_is_refused():
+	var result = HFGeneratorSystemScript.validate("arch", {"segments": 129000})
+	assert_false(result.ok, "129000 segments is 129000 brushes")
+	assert_false(HFGeneratorSystemScript.can_build("arch", {"segments": 129000}).ok)
+
+
+func test_every_generator_still_builds_at_its_defaults():
+	for type in HFGeneratorSystemScript.known_types():
+		var defaults = HFGeneratorSystemScript.default_settings(type)
+		assert_true(HFGeneratorSystemScript.validate(type, defaults).ok, "%s defaults" % type)

@@ -18,11 +18,13 @@ class_name HFGeneratorSchema
 ## with `type` one of `float`, `int`, `bool` or `enum`, and `enum` carrying an
 ## `options` array of labels.
 ##
-## The schema is a description, not a validator. Its ranges keep a SpinBox
-## sensible; `validate()` on the builder stays the authority on whether settings
-## can be built, because the refusals that matter are relationships between fields
-## — a wall thicker than its own radius, an arc too coarse to stay convex — and no
-## per-field range says that.
+## The schema says what a field may be, for everyone. The dock builds a SpinBox
+## from its range; `check_ranges()` holds a caller that never saw the dock to the
+## same range, which is what a regenerate from a `.hflevel`, an undo replay and a
+## script all are. `validate()` on the builder stays the authority on the
+## refusals that are relationships between fields — a wall thicker than its own
+## radius, an arc too coarse to stay convex — because no per-field range says
+## that.
 
 const TYPE_FLOAT := "float"
 const TYPE_INT := "int"
@@ -65,6 +67,48 @@ static func keys(schema: Array) -> PackedStringArray:
 		if entry is Dictionary and (entry as Dictionary).has("key"):
 			out.append(str((entry as Dictionary)["key"]))
 	return out
+
+
+## What is wrong with these settings against the schema, or an empty array.
+##
+## Two rules, both of which every builder's own `validate()` misses by
+## construction: a NaN fails `radius <= 0.0` the way it fails every comparison,
+## and an upper bound was only ever the dock's SpinBox. A caller that did not
+## come through the dock — a regenerate from a file, an undo replay, a script —
+## reached the arithmetic with either.
+##
+## Returns `[message, hint]` for the first field that is out of range.
+static func check_ranges(schema: Array, settings: Dictionary) -> Array:
+	var merged := merge(schema, settings)
+	for entry in schema:
+		if not (entry is Dictionary) or not (entry as Dictionary).has("key"):
+			continue
+		var field_def: Dictionary = entry
+		var type_name := str(field_def.get("type", TYPE_FLOAT))
+		if type_name == TYPE_BOOL or type_name == TYPE_ENUM:
+			continue
+		var key := str(field_def["key"])
+		var label := str(field_def.get("label", key))
+		# Read finiteness off the value as it arrived. An int field coerces a NaN
+		# to some integer on the way through `merge()`, so by then it is gone.
+		var raw = settings.get(key, 0.0)
+		if (raw is float or raw is int) and not is_finite(float(raw)):
+			return ["'%s' is not a number" % label, "Set %s to a number" % label]
+		var value := float(merged.get(key, 0.0))
+		if field_def.has("max") and value > float(field_def["max"]):
+			var ceiling := _number_text(float(field_def["max"]))
+			return [
+				"'%s' cannot be more than %s" % [label, ceiling],
+				"Use %s or less" % ceiling,
+			]
+	return []
+
+
+## A number written the way a settings field reads it: whole where it is whole.
+static func _number_text(value: float) -> String:
+	if is_equal_approx(value, roundf(value)):
+		return "%d" % int(roundf(value))
+	return "%.3f" % value
 
 
 static func field(schema: Array, key: String) -> Dictionary:

@@ -77,3 +77,66 @@ func test_a_malformed_field_is_skipped_rather_than_crashing():
 func test_an_empty_schema_describes_nothing():
 	assert_eq(HFGeneratorSchemaScript.defaults([]), {})
 	assert_eq(HFGeneratorSchemaScript.merge([], {"radius": 5.0}), {})
+
+
+# ===========================================================================
+# check_ranges — the schema holds a caller that never saw the dock (#336, #338)
+# ===========================================================================
+
+const RANGED := [
+	{
+		"key": "radius",
+		"label": "Radius",
+		"type": "float",
+		"min": 1.0,
+		"max": 4096.0,
+		"default": 128.0
+	},
+	{"key": "segments", "label": "Segments", "type": "int", "min": 1, "max": 128, "default": 8},
+	{"key": "post", "label": "Post", "type": "bool", "default": true},
+	{"key": "fill", "label": "Fill", "type": "enum", "options": ["Solid", "Open"], "default": 0},
+]
+
+
+func test_settings_inside_the_schema_are_accepted():
+	var problem = HFGeneratorSchemaScript.check_ranges(RANGED, {"radius": 256.0, "segments": 16})
+	assert_eq(problem, [], "nothing wrong with these")
+
+
+func test_defaults_are_inside_their_own_schema():
+	assert_eq(HFGeneratorSchemaScript.check_ranges(RANGED, {}), [])
+
+
+func test_a_non_finite_float_is_refused():
+	for value in [NAN, INF, -INF]:
+		var problem = HFGeneratorSchemaScript.check_ranges(RANGED, {"radius": value})
+		assert_false(problem.is_empty(), "radius %s should be refused" % value)
+		assert_string_contains(str(problem[0]), "Radius")
+
+
+func test_a_non_finite_int_field_is_refused_before_it_is_coerced():
+	# int(NAN) is some integer, so by the time merge() has run the NaN is gone.
+	var problem = HFGeneratorSchemaScript.check_ranges(RANGED, {"segments": NAN})
+	assert_false(problem.is_empty())
+	assert_string_contains(str(problem[0]), "Segments")
+
+
+func test_a_value_past_the_schema_maximum_is_refused():
+	var problem = HFGeneratorSchemaScript.check_ranges(RANGED, {"segments": 129000})
+	assert_false(problem.is_empty())
+	assert_string_contains(str(problem[0]), "128")
+	assert_string_contains(str(problem[1]), "128")
+
+
+func test_the_maximum_itself_is_allowed():
+	assert_eq(HFGeneratorSchemaScript.check_ranges(RANGED, {"segments": 128}), [])
+	assert_eq(HFGeneratorSchemaScript.check_ranges(RANGED, {"radius": 4096.0}), [])
+
+
+func test_a_bool_or_enum_field_is_not_range_checked():
+	assert_eq(HFGeneratorSchemaScript.check_ranges(RANGED, {"post": false, "fill": 1}), [])
+
+
+func test_a_field_with_no_maximum_has_no_ceiling():
+	var open_schema := [{"key": "n", "label": "N", "type": "float", "default": 1.0}]
+	assert_eq(HFGeneratorSchemaScript.check_ranges(open_schema, {"n": 1.0e9}), [])
