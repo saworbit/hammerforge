@@ -60,6 +60,24 @@ static func rotation_basis(axis_index: int, angle_rad: float) -> Basis:
 	return Basis(axis_vector(axis_index), angle_rad)
 
 
+## Whether an axis index names a world axis. `axis_vector()` falls through to Z,
+## so a caller that got its index wrong would otherwise turn the selection about
+## an axis it did not ask for.
+static func is_valid_axis(axis_index: int) -> bool:
+	return axis_index >= 0 and axis_index <= 2
+
+
+## A world rotation written in the object's own space.
+##
+## Texture lock works on local face data, so it needs the turn as the object sees
+## it: after the move, the local point `v` sits where `local_rotation * v` used
+## to sit. The basis is orthonormalised first because only its rotation part
+## takes part in that; any scale on the node is a separate thing.
+static func local_rotation(basis: Basis, rot: Basis) -> Basis:
+	var orientation := basis.orthonormalized()
+	return orientation.inverse() * rot * orientation
+
+
 ## Linear reflection through the plane whose normal is the given axis.
 static func reflection_basis(axis_index: int) -> Basis:
 	var scale := Vector3.ONE
@@ -266,6 +284,12 @@ func can_flip_brushes(brush_ids: Array) -> HFOpResult:
 func rotate(
 	brush_ids: Array, entity_paths: Array, axis_index: int, angle_rad: float, pivot: Vector3
 ) -> int:
+	if not is_valid_axis(axis_index):
+		HFLog.warn("HFTransformSystem: rotate needs an axis of 0, 1 or 2")
+		return 0
+	if not is_finite(angle_rad) or not pivot.is_finite():
+		HFLog.warn("HFTransformSystem: rotate needs a finite angle and pivot")
+		return 0
 	if is_zero_approx(angle_rad):
 		return 0
 	var rot := rotation_basis(axis_index, angle_rad)
@@ -276,9 +300,10 @@ func rotate(
 		var draft := _brush_at_id(str(brush_id))
 		if draft == null:
 			continue
+		var local_rot := local_rotation(draft.global_transform.basis, rot)
 		draft.global_transform = rotated_transform(draft.global_transform, rot, pivot)
 		if lock_textures:
-			adjust_face_uvs_for_rotation(draft, angle_rad)
+			adjust_face_uvs_for_rotation(draft, local_rot)
 			draft.rebuild_preview()
 		_tag_dirty(draft)
 		changed += 1
@@ -298,6 +323,12 @@ func rotate(
 ## `can_flip_brushes()` first to report that to the user. Returns the number
 ## changed.
 func flip(brush_ids: Array, entity_paths: Array, axis_index: int, pivot: Vector3) -> int:
+	if not is_valid_axis(axis_index):
+		HFLog.warn("HFTransformSystem: flip needs an axis of 0, 1 or 2")
+		return 0
+	if not pivot.is_finite():
+		HFLog.warn("HFTransformSystem: flip needs a finite pivot")
+		return 0
 	var changed := 0
 	for brush_id in brush_ids:
 		var draft := _brush_at_id(str(brush_id))
@@ -506,11 +537,11 @@ func selection_bounds(brush_ids: Array, entity_paths: Array) -> AABB:
 
 ## Compensate every face's UV rotation so the texture stays put in world space,
 ## matching what `texture_lock` already means for moving and resizing a brush.
-static func adjust_face_uvs_for_rotation(draft: DraftBrush, angle_rad: float) -> void:
+static func adjust_face_uvs_for_rotation(draft: DraftBrush, local_rot: Basis) -> void:
 	for face in draft.faces:
 		if face == null:
 			continue
-		face.adjust_uvs_for_rotation(angle_rad)
+		face.adjust_uvs_for_rotation(local_rot)
 
 
 # ---------------------------------------------------------------------------
