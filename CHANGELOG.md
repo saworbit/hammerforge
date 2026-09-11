@@ -5,6 +5,37 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **A group could be named with nothing but whitespace** (#374). #349 fixed this
+  for visgroups and left a comment saying exactly what was wrong with the guard;
+  sixty lines further down in the same file `create_group()` still tested
+  `group_name == ""`. It matters more for a group than for a visgroup, because a
+  group is the unit the editor moves and duplicates together: `"Arch"` and
+  `"Arch "` were two groups, so half the brushes the mapper thought they had
+  grouped moved without the other half, and the group list looked right because
+  both rows read "Arch". Names are stripped and a name that strips to nothing is
+  refused, in `create_group()` and in `group_selection()`, which writes the same
+  string into node meta.
+- **An `entities.json` with an "entities" key of the wrong type left the editor
+  with no entity definitions** (#380). The loader falls back to the built-in
+  classes when the file is missing, unopenable or unparseable — but it read the
+  entries into a typed local, so a file that parsed with `"entities": "nope"` was
+  a runtime error, and GDScript unwound the function past every fallback below
+  it. `load_entity_definitions()` clears the table before it reloads, so the
+  level was left with an empty definition table: no class could be placed and
+  every entity already in the level lost its property schema and its colour. A
+  valid JSON file with one key of the wrong type is the most likely hand-edit
+  mistake, not the least. The value is read before it is assigned, in all three
+  readers.
+- **An entity class could be defined with a whitespace-only classname** (#381).
+  The classname is the identity of the class in three places at once: the key in
+  `entity_definitions`, the row in the class dropdown, and the `"classname"`
+  field written into the exported `.map`, which is what the target engine reads
+  to decide what the entity is. A blank one was a blank dropdown row that could
+  not be told from another and a malformed entity in the export, and it survived
+  every round trip. Classnames are stripped before the emptiness test and stored
+  stripped, so `"door"` and `"door "` are one class and the project overlay and
+  the plugin base agree about which. A file that defines the same classname twice
+  now warns instead of the second one silently winning.
 - **A grid array with a negative axis count was built rather than refused**
   (#346). The linear and radial paths refuse a count below one with a message and
   a fix hint; the grid path clamped `(-2, 2, 2)` up to `(1, 2, 2)` first, so
