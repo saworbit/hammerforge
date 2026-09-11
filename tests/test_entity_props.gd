@@ -318,14 +318,20 @@ func test_roundtrip_preserves_the_authored_entity_name():
 	assert_eq(str(restored.get_meta("entity_name", "")), "key_door_target")
 
 
-func test_duplicate_info_keeps_the_authored_entity_name():
+func test_duplicate_info_gives_the_copy_an_authored_name_of_its_own():
+	# #251 was the copy coming back with no authored name at all, which left it
+	# wired to nothing. It carries one, but it has to be its own: the authored
+	# name is the address, and two entities cannot answer to one.
 	var e = _make_draft_entity("info_target")
 	e.set_meta("entity_name", "key_door_target")
 
 	var dup = sys.restore_entity_from_info(sys.build_duplicate_info(e, Vector3(64, 0, 0)))
 
 	assert_not_null(dup)
-	assert_eq(str(dup.get_meta("entity_name", "")), "key_door_target")
+	var copied := str(dup.get_meta("entity_name", ""))
+	assert_ne(copied, "", "a copy still has to be addressable")
+	assert_ne(copied, "key_door_target", "and not at the original's address")
+	assert_string_starts_with(copied, "key_door_target", "named after what it came from")
 
 
 func test_roundtrip_without_a_name_sets_no_meta():

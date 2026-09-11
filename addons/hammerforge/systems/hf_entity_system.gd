@@ -207,7 +207,36 @@ func build_duplicate_info(entity: DraftEntity, offset: Vector3) -> Dictionary:
 	transform.origin += offset
 	info["transform"] = transform
 	info["name"] = _unique_entity_copy_name(str(entity.name))
+	# The authored name is the address I/O is wired by, so a copy that keeps it
+	# answers to everything aimed at the original and there is no way to aim at
+	# one of them. The copy's own outputs are left as they are on purpose: a copy
+	# of a button should go on firing at the door it fired at.
+	if info.has("entity_name"):
+		info["entity_name"] = unique_authored_name(str(info["entity_name"]))
 	return info
+
+
+## An authored name nothing in the level already answers to.
+##
+## A trailing number is counted on, because that is how a mapper names a run of
+## them — `door_1` becomes `door_2` — and a name without one gets `_2` added.
+## Both node names and authored names are checked, since an output resolves
+## against either.
+func unique_authored_name(source_name: String) -> String:
+	if source_name.strip_edges() == "":
+		return source_name
+	var taken := build_name_index()
+	if not taken.has(source_name):
+		return source_name
+	var stem := source_name
+	var counter := 2
+	var underscore := source_name.rfind("_")
+	if underscore > 0 and source_name.substr(underscore + 1).is_valid_int():
+		stem = source_name.substr(0, underscore)
+		counter = int(source_name.substr(underscore + 1)) + 1
+	while taken.has("%s_%d" % [stem, counter]):
+		counter += 1
+	return "%s_%d" % [stem, counter]
 
 
 func create_entities_from_infos(infos: Array) -> void:
@@ -297,6 +326,22 @@ func add_entity_output(
 	fire_once: bool = false
 ) -> void:
 	if not entity:
+		return
+	# Every one of these reaches the exported `.map` as a line that reads like
+	# wiring and does nothing, and this project's own importer drops it again on
+	# the way back in — so the dock shows a connection that the round trip has
+	# already lost.
+	if output_name.strip_edges() == "":
+		HFLog.warn("HFEntitySystem: an output needs a name")
+		return
+	if target_name.strip_edges() == "":
+		HFLog.warn("HFEntitySystem: an output needs something to fire at")
+		return
+	if input_name.strip_edges() == "":
+		HFLog.warn("HFEntitySystem: an output needs an input to fire")
+		return
+	if not is_finite(delay) or delay < 0.0:
+		HFLog.warn("HFEntitySystem: an output delay must be zero or more seconds")
 		return
 	var outputs: Array = entity.get_meta("entity_io_outputs", [])
 	(

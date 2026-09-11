@@ -220,3 +220,112 @@ func test_an_imported_output_is_not_also_an_entity_property():
 		assert_false(node.entity_data.has("OnLit"), "Wiring should not land in entity_data")
 		assert_false(node.entity_data.has("targetname"), "and nor should the name")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+# ===========================================================================
+# A duplicate must not answer to the original's address (#341)
+# ===========================================================================
+
+
+func test_duplicating_a_named_entity_gives_the_copy_its_own_name():
+	var door := _point_entity("func_door")
+	door.set_meta("entity_name", "door_1")
+	var info: Dictionary = root.build_duplicate_entity_info(door, Vector3(64, 0, 0))
+	root.create_entities_from_infos([info])
+	assert_eq(root.find_entities_by_name("door_1").size(), 1, "only the original answers to door_1")
+	assert_eq(root.find_entities_by_name("door_2").size(), 1, "the copy took the next number")
+
+
+func test_a_run_of_duplicates_keeps_taking_the_next_free_number():
+	var door := _point_entity("func_door")
+	door.set_meta("entity_name", "door_1")
+	for _i in 3:
+		root.create_entities_from_infos([root.build_duplicate_entity_info(door, Vector3(64, 0, 0))])
+	for expected in ["door_1", "door_2", "door_3", "door_4"]:
+		assert_eq(root.find_entities_by_name(expected).size(), 1, "%s is one entity" % expected)
+
+
+func test_a_name_without_a_number_gets_one():
+	var door := _point_entity("func_door")
+	door.set_meta("entity_name", "door")
+	root.create_entities_from_infos([root.build_duplicate_entity_info(door, Vector3.ZERO)])
+	assert_eq(root.find_entities_by_name("door").size(), 1)
+	assert_eq(root.find_entities_by_name("door_2").size(), 1)
+
+
+func test_a_copy_keeps_firing_at_what_the_original_fired_at():
+	var door := _point_entity("func_door")
+	door.set_meta("entity_name", "door_1")
+	var button := _point_entity("func_button")
+	button.set_meta("entity_name", "button_1")
+	root.add_entity_output(button, "OnPressed", "door_1", "Open")
+	root.create_entities_from_infos([root.build_duplicate_entity_info(button, Vector3.ZERO)])
+	var copies: Array = root.find_entities_by_name("button_2")
+	assert_eq(copies.size(), 1, "the copy got its own address")
+	var outputs: Array = root.get_entity_outputs(copies[0])
+	assert_eq(outputs.size(), 1, "and kept its wiring")
+	assert_eq(str(outputs[0]["target_name"]), "door_1", "still aimed at the same door")
+
+
+func test_validate_reports_two_entities_on_one_authored_name():
+	var a := _point_entity("func_door")
+	a.set_meta("entity_name", "door_1")
+	var b := _point_entity("func_door")
+	b.set_meta("entity_name", "door_1")
+	var report: Dictionary = root.validate_level(false)
+	var found := false
+	for issue in report.get("issues", []):
+		if str(issue).findn("door_1") >= 0:
+			found = true
+	assert_true(found, "a shared address is a level defect")
+
+
+# ===========================================================================
+# An output has to be wiring (#342)
+# ===========================================================================
+
+
+func test_an_output_with_a_missing_field_is_refused():
+	var button := _point_entity("func_button")
+	root.add_entity_output(button, "", "door_1", "Open")
+	root.add_entity_output(button, "OnPressed", "", "Open")
+	root.add_entity_output(button, "OnPressed", "door_1", "")
+	root.add_entity_output(button, "OnPressed", "   ", "Open")
+	assert_eq(root.get_entity_outputs(button).size(), 0, "none of those is a connection")
+
+
+func test_an_output_with_a_delay_that_is_not_one_is_refused():
+	var button := _point_entity("func_button")
+	for delay in [NAN, INF, -INF, -5.0]:
+		root.add_entity_output(button, "OnPressed", "door_1", "Open", "", delay)
+	assert_eq(root.get_entity_outputs(button).size(), 0)
+	root.add_entity_output(button, "OnPressed", "door_1", "Open", "", 0.5)
+	assert_eq(root.get_entity_outputs(button).size(), 1, "a real delay still goes through")
+
+
+func test_wiring_that_survives_export_survives_the_import_back():
+	var button := _point_entity("func_button")
+	button.set_meta("entity_name", "button_1")
+	root.add_entity_output(button, "OnPressed", "door_1", "Open", "", 0.25)
+	_box("solid")
+	var text: String = MapIOType.export_map_from_level(root, QuakeAdapter.new())
+	var parsed: Dictionary = MapIOType.parse_map_text(text)
+	var total := 0
+	for entity in parsed.get("entities", []):
+		total += (entity.get("entity_io_outputs", []) as Array).size()
+	assert_eq(total, 1, "the round trip keeps the connection the editor showed")
+	assert_eq(parsed.get("errors", []).size(), 0, "and drops nothing on the way")
+
+
+func test_the_importer_says_when_it_drops_a_connection():
+	var text := (
+		'{\n"classname" "func_button"\n"origin" "0 0 0"\n"targetname" "button_1"\n'
+		+ '"OnPressed" "door_1,Open,,0.0,0"\n"OnPressed" "door_1,,,0.0,0"\n}\n'
+	)
+	var parsed: Dictionary = MapIOType.parse_map_text(text)
+	var errors: Array = parsed.get("errors", [])
+	var mentioned := false
+	for err in errors:
+		if str(err).findn("dropped") >= 0:
+			mentioned = true
+	assert_true(mentioned, "a line that looks like wiring and is not must be reported")
