@@ -5,6 +5,36 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **A placed prefab brush kept visgroup names the receiving level had never
+  registered** (#368). `capture_from_selection()` strips `brush_id` and
+  `group_id` because they only mean something in the level the selection came
+  from; `visgroups` is the same kind of thing and was kept. A prefab library
+  shared between levels is the normal way to use prefabs, so the placed brush
+  routinely ended up in a group with no row in the visgroup panel — it could not
+  be shown, hidden, renamed or deleted, `refresh_visibility()` skipped it, the
+  partitioned bake still read the membership off the node, and the `.hflevel`
+  kept it. Stripped on capture now, for entities as well as brushes.
+- **A prefab restore could reissue a live instance id** (#369). `restore_state()`
+  took `next_instance_id` from the saved data and never reconciled it against the
+  records it had just restored, so a state whose instances list held `pfx_1` with
+  a counter of 1 — exactly what a `.hflevel` saved before the counter was
+  captured produces — issued `pfx_1` again for the next placement. The registry
+  write is a plain dictionary assignment, so the second registration overwrote
+  the first silently and the first placement's nodes were left tagged with an id
+  that now resolved to a different prefab. The counter is derived from the
+  restored records, for entity uids as well, and `register_instance()` warns
+  rather than overwrite.
+- **A malformed `.hfprefab` left the level's signal batch open for the session**
+  (#370). `from_dict()` checked that `brush_infos` was an Array and not what was
+  in it, so an entry that was not a Dictionary reached `info.duplicate(true)` in
+  `instantiate()`. GDScript has no exception handling, the function unwound past
+  its own `end_signal_batch()`, and from then on `_emit_or_batch()` queued every
+  level signal and emitted none: the brush list, the entity list, the visgroup
+  panel and the validation badge all froze while editing carried on working, with
+  nothing pointing back at a prefab that failed to place. Non-Dictionary entries
+  are dropped on load with a warning, and `LevelRoot` releases a signal batch
+  that has been open for more than a second with a warning, so no skipped
+  `end_signal_batch()` can take the dock down again.
 - **A non-finite vertex move was accepted and wrote NaN into the face data**
   (#365). `validate_convexity()` is written as a lower bound (`d > 0.02`) and
   every comparison against NaN is false, so a NaN vertex read as behind every
