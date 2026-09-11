@@ -72,15 +72,35 @@ it from here.
 | `persistence` | `capture_state`/`restore_state` round trips, repeated restores, and malformed state |
 | `housekeeping` | visgroup and group names, the cordon, and the paint layer list |
 | `terrain` | heightmap scale and region settings at their edges, and the playtest/glTF exports |
+| `vertex` | vertex moves, edge splits, merges and the convexity check that gates them |
+| `prefabs` | prefab capture, `.hfprefab` round trip, placement, and the instance registry |
+| `validation` | what `validate_level()` reports, and what it says nothing about |
+| `settings` | grid, rotate-snap and bake settings at their edges, and through a state round trip |
+| `groups` | group names, membership after a delete, and where groups differ from visgroups |
+| `materials` | palette slots, the remap when one is removed, and the usage tracker |
+| `bake` | what a bake produces: geometry, idempotence, and the flags that exclude brushes |
+| `previews` | clip, carve, hollow, array and structure ghosts: leaks, bad inputs, and what counts them |
+| `cordon` | what the cordon excludes from a bake, and what an ill-formed cordon AABB does |
+| `spawn` | spawn validation against the layer the bake actually put the collision on |
+| `lifecycle` | what survives a `restore_state` that should not: counters, registries and selection |
+| `placement` | resize and nudge at their edges, against what the create path allows |
+| `definitions` | `entities.json` and the I/O preset file, malformed and at their edges |
+| `operations` | whether each `can_*()` rule is also enforced by the operation it guards |
 
 ## Adding a scenario
 
-Subclass `HFVibeScenario` in `tools/vibe/scenarios/`, then add the path to
+Subclass the scenario base in `tools/vibe/scenarios/`, then add the path to
 `SCENARIOS` in `hf_vibe_runner.gd` and the id to `SCENARIOS` in `run_vibe.py`.
+
+Extend it **by path**. `hf_vibe_scenario.gd` has no `class_name`, so
+`extends HFVibeScenario` only resolves while a stale
+`.godot/global_script_class_cache.cfg` still holds the name — it passes all
+session and fails to parse on a clean checkout, and CI does not run the sweep so
+nothing says otherwise.
 
 ```gdscript
 @tool
-extends HFVibeScenario
+extends "res://tools/vibe/hf_vibe_scenario.gd"
 
 func id() -> String:
 	return "my-area"
@@ -100,6 +120,22 @@ func run() -> void:
 `flag()`, `known()` and `diff_levels()`. `HFVibe` has the heavier helpers:
 `describe_level()`, `check_invariants()`, `inward_face_count()`,
 `local_extent()`, `settle_save()`, `write_text()`, `file_size()`.
+
+### A clean scenario is a result too
+
+Four of these found nothing. `previews` confirms no ghost is counted as a brush,
+reaches the save, or reaches the bake; `lifecycle` confirms `restore_state()`
+resets the visgroup, group and prefab registries and the face selection, and
+that brush ids cannot collide the way prefab instance ids can; `spawn` records
+what the validator actually measures; and `materials` confirms the palette remap
+is correct in all three brush containers. Those are kept. A scenario that only
+exists while it is failing cannot tell you when something stops being true, and
+the notes are where the next reader finds out the ground was already covered.
+
+Several `note()` lines exist purely to close off a suspicion — that built-in I/O
+presets are handed out by reference, for instance, which is safe only because a
+`const` Dictionary is read-only in Godot 4. Writing down why something is *not*
+a finding is worth as much as writing down a finding.
 
 ### What makes a good scenario
 
@@ -147,6 +183,13 @@ Every one of these has cost a wasted run.
   trailing `pivot`. `apply_noise` takes a `FastNoiseLite`, not a float. The
   `FaceData` property is `material_idx`, not `material_index`. Generator records
   come from `generator_system.capture()`.
+- **A typed local assigned from parsed JSON is a runtime error, not a fallback.**
+  `var entries: Array = data.get("entities", [])` takes the whole function down
+  when the value is a String, skipping every fallback below it. This is a defect
+  shape worth hunting (#370, #380) and a trap when a scenario does the same.
+- **`Transform3D` has no `applied_to()`.** `HFDuplicator.CopyPlacement` does, and
+  the array preview and the array builder both take `CopyPlacement` objects, not
+  raw transforms. Build them with `HFDuplicator.linear_placements()` and friends.
 - **`export_map`'s Valve key is `"valve220"`.** Any unrecognised string falls
   back to classic Quake without saying so, which reads as "the two formats
   produce identical files".

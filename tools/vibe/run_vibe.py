@@ -45,6 +45,20 @@ SCENARIOS = [
     "persistence",
     "housekeeping",
     "terrain",
+    "vertex",
+    "prefabs",
+    "validation",
+    "settings",
+    "groups",
+    "materials",
+    "bake",
+    "previews",
+    "cordon",
+    "spawn",
+    "lifecycle",
+    "placement",
+    "definitions",
+    "operations",
 ]
 
 # Generous: chaos runs 300 operations and cost saves eight levels. A scenario
