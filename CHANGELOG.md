@@ -5,6 +5,26 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **Duplicating a wired entity left two entities on one address** (#341). I/O is
+  addressed by the authored name, and `build_duplicate_entity_info()` copied it
+  along with everything else — so `find_entities_by_name("door_1")` returned both,
+  every output aimed at `door_1` fired at both, and there was no way to aim at
+  one of them. It survived a save and a `.map` export, where the ambiguity became
+  the compiler's problem. The copy takes the next free name now: `door_1` becomes
+  `door_2`, and a name with no number on the end gets one. Its own outputs are
+  left alone on purpose — a copy of a button should go on firing at the door the
+  original fired at. `validate_level()` reports two entities sharing an address,
+  which a paste, an import or a hand edit can also produce.
+- **Entity outputs accepted blank names and a NaN delay** (#342). All of them
+  reached the exported `.map` as lines that read like wiring and do nothing, and
+  this project's own importer drops three of six such lines on the way back in —
+  so the dock showed connections the round trip had already lost.
+  `add_entity_output()` refuses a blank output, target or input name and a delay
+  that is not zero or more seconds. `validate_level()` reports a connection with
+  a field missing, and the `.map` importer now counts the lines it drops and says
+  so in the import result instead of dropping them in silence. A line only counts
+  as a loss when it has the five fields of a connection and fails on one of them;
+  an ordinary entity property is not wiring.
 - **A face's material slot was never checked against the palette** (#343). Any
   integer could be assigned and was stored, saved and read back, so the bake, the
   `.map` exporter and the UV editor each fell back to something that is not the

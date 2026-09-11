@@ -49,6 +49,7 @@ This document describes how to move data in and out of HammerForge safely.
   }
   ```
 
+  - A line with the five fields of a connection but a blank target or input, or a delay that is not a number, cannot be used and is dropped on import. The import result names how many were dropped rather than losing them in silence. The editor refuses to create one, so a file carrying them was written somewhere else or by hand.
   - There is no `connections { }` block, because `.map` entity bodies are key/value lines and nothing else: a nested brace inside an entity is read as a brush by every parser including this one, so a block would not survive its own round trip.
   - One line per connection, so two outputs on the same event both reach the file. The import reads the key/value lines in file order rather than through a dictionary, which would keep only the last of a repeated key.
   - A line is read back as a connection only if it has five comma-separated fields, a numeric delay, and a target and input that are actually there. An ordinary entity property does not look like that, so wiring is told apart from settings without a naming rule on the key.

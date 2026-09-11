@@ -679,7 +679,7 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
 - Entity palette with drag-and-drop placement.
 - Selected `DraftEntity` nodes use the same managed **Delete**, **Ctrl+D Duplicate**, arrow-key X/Z nudge, and PageUp/PageDown Y nudge workflow as brushes, including HammerForge undo/state cleanup.
 - **Entity Properties** (collapsible, context-hidden): auto-generated typed controls based on entity definition. Only visible when an entity is selected.
-- **Entity I/O** (collapsible, context-hidden): Output, Target, Input, Parameter fields. Delay (seconds) and Fire Once checkbox. Add Output / Remove buttons and connection ItemList. Only visible when an entity is selected; connections auto-refresh on selection change. **Show I/O Lines** checkbox to visualize connections in the viewport.
+- **Entity I/O** (collapsible, context-hidden): Output, Target, Input, Parameter fields. Delay (seconds) and Fire Once checkbox. Add Output / Remove buttons and connection ItemList. An output needs a name, a target and an input — blank is refused rather than added as a connection that does nothing — and the delay has to be zero seconds or more. Only visible when an entity is selected; connections auto-refresh on selection change. **Show I/O Lines** checkbox to visualize connections in the viewport.
 - **I/O Wiring** (collapsible, context-hidden, collapsed by default): Quick-wire form (output name, target dropdown, input name, parameter, delay, fire-once). Only visible when an entity is selected. Connection summary shows triggers and triggered-by counts. **Highlight** toggle button pulses all linked entities in the viewport. **Connection Presets** picker with 6 built-in patterns (Door+Light+Sound, Button→Toggle, Alarm Sequence, Pickup+Remove, Damage+Break, Timer Lights) plus user-saved presets. Target tag mapping lets you assign preset target placeholders to actual entity names.
 
 > **Progressive disclosure:** During greyboxing, the Objects tab shows only the entity palette and create button. Entity Properties, Entity I/O, and I/O Wiring sections appear automatically when you select an entity, keeping the UI clean when you're focused on shapes and layout.
@@ -1264,7 +1264,7 @@ Modifier keys
 
 General keyboard shortcuts
 - Delete: remove selected brushes and DraftEntities.
-- Ctrl+D: duplicate selected brushes and DraftEntities.
+- Ctrl+D: duplicate selected brushes and DraftEntities. A copy of a named entity takes the next free name (`door_1` becomes `door_2`), because the authored name is the address I/O is aimed at and two entities cannot share one. The copy keeps its own outputs, so a duplicated button goes on firing at what the original fired at.
 - Arrow keys: nudge selected brushes and DraftEntities (XZ plane).
 - PageUp/PageDown: nudge selected brushes and DraftEntities (Y axis).
 - Escape: clear selection.

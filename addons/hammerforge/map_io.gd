@@ -111,7 +111,21 @@ static func parse_map_text(text: String) -> Dictionary:
 		var origin = _parse_origin(str(props.get("origin", "")))
 		var has_brushes = entity.get("brushes", []).size() > 0
 		var authored := str(props.get("targetname", ""))
-		var connections := _connections_from_pairs(entity.get("pairs", []))
+		var unusable_connections := [0]
+		var connections := _connections_from_pairs(entity.get("pairs", []), unusable_connections)
+		if unusable_connections[0] > 0:
+			(
+				errors
+				. append(
+					(
+						"%s: dropped %d I/O line(s) with a missing field or a delay that is not a number"
+						% [
+							entity_class if entity_class != "" else "entity",
+							unusable_connections[0]
+						]
+					)
+				)
+			)
 		if not has_brushes and entity_class != "":
 			entity_points.append(
 				{
@@ -146,7 +160,11 @@ static func parse_map_text(text: String) -> Dictionary:
 ## Read from the ordered pairs rather than the properties dictionary, so two
 ## outputs on the same event both survive. A reserved key is never a connection,
 ## and everything else has to look like one to be taken as one.
-static func _connections_from_pairs(pairs: Array) -> Array:
+## `dropped` is a one-element array the count of unusable lines is written into,
+## so the importer can say what it lost rather than losing it in silence. A line
+## only counts as lost when it has the five fields of a connection and fails on
+## one of them; an ordinary entity property is not wiring and is not a loss.
+static func _connections_from_pairs(pairs: Array, dropped: Array) -> Array:
 	var out: Array = []
 	for pair in pairs:
 		if not (pair is Array) or pair.size() != 2:
@@ -154,9 +172,12 @@ static func _connections_from_pairs(pairs: Array) -> Array:
 		var key := str(pair[0])
 		if key in RESERVED_ENTITY_KEYS:
 			continue
-		var connection := parse_connection(key, str(pair[1]))
+		var value := str(pair[1])
+		var connection := parse_connection(key, value)
 		if not connection.is_empty():
 			out.append(connection)
+		elif value.split(",", true).size() == 5:
+			dropped[0] = int(dropped[0]) + 1
 	return out
 
 
