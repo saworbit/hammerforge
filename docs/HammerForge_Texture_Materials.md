@@ -83,7 +83,7 @@ Notes:
 - Per-face materials override the DraftBrush material for preview and face-material bake.
 - The palette is saved in `.hflevel`.
 - **Library persistence**: the palette can be saved to / loaded from a JSON library file via `MaterialManager.save_library()` / `load_library()`. This preserves the material list across projects. Missing or unloadable materials are preserved as `null` placeholder slots to keep palette indices stable.
-- **Usage tracking**: `MaterialManager` tracks which materials are referenced by brushes. Use `find_unused_materials()` to identify palette entries that are no longer in use.
+- **Unused materials**: there is no usage tracker. The one that existed counted `material_override`, which HammerForge only uses for the draft preview tint, rather than `FaceData.material_idx`, which is what the Paint tab writes and the bake reads, so it reported the material every face was painted with as unused. It was removed rather than left as a correct-looking implementation of the wrong model.
 
 ## UV Editor
 The Paint tab → UV Editor section shows a simple per-face UV editor.

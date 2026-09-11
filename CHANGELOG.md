@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Removed
+- **The material usage tracker** (#375). `record_usage()`, `release_usage()`,
+  `rebuild_usage()`, `find_unused_materials()` and `get_usage_count()` had no
+  caller anywhere — not the dock, not the plugin, not the state system, not the
+  test suite — and `rebuild_usage()` counted the wrong thing: it read
+  `child.material_override`, which is the draft preview tint the brush system
+  sets for operation colouring, rather than `FaceData.material_idx`, which is
+  what the Paint tab writes, what the `.hflevel` stores and what the bake reads.
+  A level whose every face was painted with a material reported that material as
+  unused. Nothing could go wrong today because nothing called it; the risk was
+  the next person to want "find unused materials" finding five ready-made
+  functions with plausible names and wiring them up to a "Remove unused" button
+  that would strip the palette of materials in use.
+
 ### Fixed
 - **Changing a bake setting did not invalidate the bake** (#376). `bake_dirty()`
   rebuilt only what brush dirty state said needed rebuilding, and the settings
@@ -18,6 +32,171 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   last successful bake ran with, so a setting change is a change. A hash rather
   than a flag per setter, because most of these properties had no setter and the
   hash covers the `.hflevel` load path for free.
+- **`merge_brushes_by_ids()` enforced neither rule `can_merge_brushes()` refuses
+  on** (#383). The operation collected whatever ids it could find and took the
+  first brush's operation for the result, so merging an additive brush with a
+  subtractive one succeeded — a subtractive brush is a hole, and merged into a
+  solid the mapper's doorway became a wall under a message saying "Merged 2
+  brushes" — and a selection with one stale id merged the subset and reported the
+  count it merged. The reachable path is a redo: the pre-check runs before the
+  undo action is opened, and the undo entry stores the method and the ids, so a
+  redo calls the operation directly against a level that has moved on.
+  `merge_brushes_by_ids()` calls the check, which is side effect free and already
+  returns the right message for each case.
+- **The bake and grid settings that take a number were unbounded** (#373). #361
+  did this for the terrain settings; these are the same list and were not
+  touched. 22 of 23 out-of-range values landed and stayed. The dock SpinBoxes
+  have ranges so the editor UI cannot produce them, but the `.hflevel` can: it is
+  JSON, it is hand-editable, it gets merged, and it gets written by older builds
+  with different defaults — and an `@export_range` constrains the inspector
+  widget only, not an assignment or a load. Each of these now has a clamping
+  setter with a finiteness guard first, since `clampf()` and `maxf()` both pass
+  NaN through, which is exactly how `grid_snap`'s `max(value, 0.0)` let one past.
+  That one mattered most: every consumer is written
+  `grid_snap if grid_snap > 0.0 else <fallback>`, so a NaN read as "snapping is
+  off" everywhere while the dock still showed a number.
+  `apply_hflevel_settings()` writes the properties, so the load path goes through
+  the setters and is covered by the same change.
+- **A cordon AABB with a negative size baked an empty level and reported
+  success** (#377). An AABB with a negative size is a constructible value of the
+  type and is not a region: Godot's `intersects()` errors on it and returns false
+  for everything, so every brush read as outside the cordon. Nothing said so —
+  the bake reported success and the cordon wireframe draws the same box either
+  way — and the dock's six min/max SpinBoxes are the natural way to produce one.
+  `cordon_aabb` has a setter that refuses a non-finite position or size and calls
+  `.abs()` on a negative one, which is the fix Godot's own error message names
+  and makes a min/max pair entered in either order mean the same region.
+- **`validate_level()` could not see a brush whose size was NaN** (#371). Its one
+  size check was a comparison, and every comparison against NaN is false — an
+  infinite size is legitimately `> 0.0` as well. The validator is the backstop:
+  a mapper with a NaN-sized brush saw a clean badge, baked, and got a mesh with a
+  poisoned AABB with nothing anywhere naming the brush responsible, and no way to
+  find it by eye because a NaN size draws nothing. Finite is tested first, so the
+  report says what is actually wrong, and `auto_fix` puts the default size back.
+  The brush transform is checked the same way, and reported rather than repaired,
+  because there is no honest repair for a non-finite origin.
+- **`validate_level()` checked no brush geometry, and owned two repairs nothing
+  called** (#372). `weld_brush_vertices()` and `fix_non_planar_faces()` worked and
+  were tested and had no caller outside the suite — no dock button, no menu item,
+  and not `validate()` itself in `auto_fix` or out of it. Meanwhile a brush with
+  no faces, a face bowed off its own plane, and a face with a NaN vertex all
+  validated clean. Fixing the setters that create those states does nothing for a
+  `.hflevel` saved last week or a `.map` imported from another editor, which is
+  the ground the validator covers. `validate()` now reports all four, and
+  `auto_fix` deletes a brush with no faces (there is nothing to repair), calls
+  `fix_non_planar_faces()` on a bowed one and `weld_brush_vertices()` on vertices
+  a weld apart, and leaves a non-finite vertex reported only.
+- **A group could be named with nothing but whitespace** (#374). #349 fixed this
+  for visgroups and left a comment saying exactly what was wrong with the guard;
+  sixty lines further down in the same file `create_group()` still tested
+  `group_name == ""`. It matters more for a group than for a visgroup, because a
+  group is the unit the editor moves and duplicates together: `"Arch"` and
+  `"Arch "` were two groups, so half the brushes the mapper thought they had
+  grouped moved without the other half, and the group list looked right because
+  both rows read "Arch". Names are stripped and a name that strips to nothing is
+  refused, in `create_group()` and in `group_selection()`, which writes the same
+  string into node meta.
+- **An `entities.json` with an "entities" key of the wrong type left the editor
+  with no entity definitions** (#380). The loader falls back to the built-in
+  classes when the file is missing, unopenable or unparseable — but it read the
+  entries into a typed local, so a file that parsed with `"entities": "nope"` was
+  a runtime error, and GDScript unwound the function past every fallback below
+  it. `load_entity_definitions()` clears the table before it reloads, so the
+  level was left with an empty definition table: no class could be placed and
+  every entity already in the level lost its property schema and its colour. A
+  valid JSON file with one key of the wrong type is the most likely hand-edit
+  mistake, not the least. The value is read before it is assigned, in all three
+  readers.
+- **An entity class could be defined with a whitespace-only classname** (#381).
+  The classname is the identity of the class in three places at once: the key in
+  `entity_definitions`, the row in the class dropdown, and the `"classname"`
+  field written into the exported `.map`, which is what the target engine reads
+  to decide what the entity is. A blank one was a blank dropdown row that could
+  not be told from another and a malformed entity in the export, and it survived
+  every round trip. Classnames are stripped before the emptiness test and stored
+  stripped, so `"door"` and `"door "` are one class and the project overlay and
+  the plugin base agree about which. A file that defines the same classname twice
+  now warns instead of the second one silently winning.
+- **A placed prefab brush kept visgroup names the receiving level had never
+  registered** (#368). `capture_from_selection()` strips `brush_id` and
+  `group_id` because they only mean something in the level the selection came
+  from; `visgroups` is the same kind of thing and was kept. A prefab library
+  shared between levels is the normal way to use prefabs, so the placed brush
+  routinely ended up in a group with no row in the visgroup panel — it could not
+  be shown, hidden, renamed or deleted, `refresh_visibility()` skipped it, the
+  partitioned bake still read the membership off the node, and the `.hflevel`
+  kept it. Stripped on capture now, for entities as well as brushes.
+- **A prefab restore could reissue a live instance id** (#369). `restore_state()`
+  took `next_instance_id` from the saved data and never reconciled it against the
+  records it had just restored, so a state whose instances list held `pfx_1` with
+  a counter of 1 — exactly what a `.hflevel` saved before the counter was
+  captured produces — issued `pfx_1` again for the next placement. The registry
+  write is a plain dictionary assignment, so the second registration overwrote
+  the first silently and the first placement's nodes were left tagged with an id
+  that now resolved to a different prefab. The counter is derived from the
+  restored records, for entity uids as well, and `register_instance()` warns
+  rather than overwrite.
+- **A malformed `.hfprefab` left the level's signal batch open for the session**
+  (#370). `from_dict()` checked that `brush_infos` was an Array and not what was
+  in it, so an entry that was not a Dictionary reached `info.duplicate(true)` in
+  `instantiate()`. GDScript has no exception handling, the function unwound past
+  its own `end_signal_batch()`, and from then on `_emit_or_batch()` queued every
+  level signal and emitted none: the brush list, the entity list, the visgroup
+  panel and the validation badge all froze while editing carried on working, with
+  nothing pointing back at a prefab that failed to place. Non-Dictionary entries
+  are dropped on load with a warning, and `LevelRoot` releases a signal batch
+  that has been open for more than a second with a warning, so no skipped
+  `end_signal_batch()` can take the dock down again.
+- **A non-finite vertex move was accepted and wrote NaN into the face data**
+  (#365). `validate_convexity()` is written as a lower bound (`d > 0.02`) and
+  every comparison against NaN is false, so a NaN vertex read as behind every
+  plane of the brush and the move committed. A vertex position is the geometry
+  rather than a parameter used to build it, so the result poisoned the AABB and
+  the normal, propagated through clip and carve into brushes that were never
+  touched, and survived the save with no editor action that put it back.
+  `move_vertices()` and `update_drag_absolute()` refuse a non-finite delta before
+  any face is touched.
+- **Merging every vertex of a brush left a live brush with no faces** (#366).
+  Every face collapsed to a point and was removed, and `validate_convexity()` was
+  then asked about a brush with no faces — its `faces.size() < 4` early-out
+  returns true, so the merge was accepted. The brush stayed in the draft
+  container, selectable, counted and saved, drawing nothing and with no vertex
+  left to move it back. A merge that would leave fewer than four faces is refused
+  with a message, and the snapshot is restored.
+- **Splitting an edge could tell a wall it was a floor** (#367). `split_edge()`
+  inserts the midpoint *on* the edge, so when the split edge is the one at index
+  0 the face's first three vertices are collinear by construction. The normal was
+  computed from exactly those three, measured zero, and fell back to
+  `Vector3.UP` — and the normal is what the convexity check, the bake and the
+  `.map` export read, not the vertices. `_compute_normal()` uses Newell's method
+  over the whole polygon now, which is correct for any planar polygon regardless
+  of collinear runs, and `split_edge()` rotates the vertex list so it starts at
+  an actual corner. The convexity check builds its own plane from the first three
+  non-collinear vertices rather than reading the face normal, because an
+  area-weighted average is the one plane that hides a bend.
+- **The resize path took sizes the create path refuses** (#378). A brush gets
+  its size two ways and the two disagreed completely. `create_brush_from_info()`
+  puts a size through `_usable_size()`, which floors a zero extent, makes a
+  negative one positive, warns about both, and refuses a non-finite one outright.
+  `set_brush_transform_by_id()` — the dock's size fields, the gizmo commit and
+  every scripted resize — wrote the value straight onto the property. A negative
+  size built the brush inside out, a zero size built no volume, and a NaN size
+  poisoned the AABB with no editor action that put it back. The resize path goes
+  through the same funnel now, and refuses a non-finite position with it.
+- **A non-finite nudge offset sent the selection to nowhere** (#379). The only
+  guard was `offset.is_zero_approx()`, which is a magnitude test that a NaN
+  passes. The offset comes from the dock's transform fields and from the
+  arrow-key nudge, which uses `grid_snap`, so one bad number moved every selected
+  brush to a position with no AABB, nothing drawn to click, and the `.hflevel`
+  keeping it. `nudge_brushes_by_id()` and `nudge_entities_by_paths()` refuse a
+  non-finite offset.
+- **An array with a non-finite layout number built every copy at a NaN position**
+  (#382). `can_generate()` checked the copy count and the source count and never
+  looked at the numbers that decide where a copy lands, so five copies meant five
+  lost brushes rather than one. `linear_placements()`, `radial_placements()` and
+  `grid_placements()` lay out nothing when the offset, spacing, step, rise or
+  pivot they were handed is not a number, and `can_generate()` takes the layout
+  parameters so the refusal says which fields to check.
 - **A grid array with a negative axis count was built rather than refused**
   (#346). The linear and radial paths refuse a count below one with a message and
   a fix hint; the grid path clamped `(-2, 2, 2)` up to `(1, 2, 2)` first, so

@@ -238,7 +238,17 @@ func delete_brush_by_id(brush_id: String) -> HFOpResult:
 
 
 func nudge_brushes_by_id(brush_ids: Array, offset: Vector3) -> void:
-	if brush_ids.is_empty() or offset.is_zero_approx():
+	if brush_ids.is_empty():
+		return
+	# `is_zero_approx()` is a magnitude test, and a non-finite offset is not
+	# approximately zero, so it used to pass. The offset comes from the dock's
+	# transform fields and from the arrow-key nudge, which uses `grid_snap` — so
+	# one bad number sends the whole selection to a position nothing can reach
+	# again: no AABB, nothing drawn to click, and the save keeps it.
+	if not offset.is_finite():
+		HFLog.warn("HFBrushSystem: nudge offset %s is not an offset" % str(offset))
+		return
+	if offset.is_zero_approx():
 		return
 	for brush_id in brush_ids:
 		var brush_key := str(brush_id)
@@ -876,15 +886,32 @@ func apply_material_to_brush_by_id(brush_id: String, mat: Material) -> void:
 		apply_material_to_brush(brush, mat)
 
 
+## The resize path, and the same funnel the create path uses.
+##
+## These two used to disagree about what a size is: `create_brush_from_info()`
+## refuses a non-finite one and coerces a zero or negative one with a warning,
+## while this wrote whatever it was given straight onto the property. A negative
+## size builds the brush inside out, a zero one builds no volume, and a NaN one
+## poisons the AABB with no editor action that puts it back. The dock's size
+## fields come through here, so the resize path was the easier of the two to
+## reach.
 func set_brush_transform_by_id(brush_id: String, size: Vector3, position: Vector3) -> void:
 	if brush_id == "":
+		return
+	if not size.is_finite() or not position.is_finite():
+		HFLog.warn(
+			(
+				"HFBrushSystem: refusing to move brush '%s' to size %s at %s"
+				% [brush_id, str(size), str(position)]
+			)
+		)
 		return
 	var brush = _find_brush_by_id(brush_id)
 	if brush and brush is DraftBrush:
 		var draft := brush as DraftBrush
 		var old_size := draft.size
 		var old_pos := draft.global_position
-		var normalized_size := DraftBrush.normalized_size_for_shape(draft.shape, size)
+		var normalized_size := DraftBrush.normalized_size_for_shape(draft.shape, _usable_size(size))
 		if old_size.is_equal_approx(normalized_size) and old_pos.is_equal_approx(position):
 			return
 		draft.size = normalized_size
@@ -1386,8 +1413,19 @@ func can_merge_brushes(brush_ids: Array) -> HFOpResult:
 
 
 func merge_brushes_by_ids(brush_ids: Array) -> HFOpResult:
-	if brush_ids.size() < 2:
-		return _op_fail("Merge: select at least 2 brushes")
+	# The rules live in can_merge_brushes() and have to hold here, not only at the
+	# one caller that consults it. plugin_edit_actions.gd asks before it opens the
+	# undo action, and the undo entry stores this method and these ids — so a redo
+	# calls straight in, against a level that has moved on since the check ran.
+	# Undo a merge, delete one of the sources, redo, and the operation used to
+	# merge the subset and report the count it merged. The other rule is worse: a
+	# subtractive brush is a hole, and merged into an additive one its geometry
+	# became part of a solid, so the mapper had a doorway and now has a wall,
+	# under a message saying "Merged 2 brushes". can_merge_brushes() is side
+	# effect free and already returns the right message for each case.
+	var check := can_merge_brushes(brush_ids)
+	if not check.ok:
+		return check
 	if root.has_method("tag_full_reconcile"):
 		root.tag_full_reconcile()
 
@@ -2227,7 +2265,7 @@ func create_duplicate_array(
 	# Asked before _new_duplicator_for, which retires whatever array already owns
 	# these sources and takes its copies with it. A refusal must not cost the user
 	# the array they already had.
-	if not HFDuplicator.can_generate(p_count, brush_ids.size()).ok:
+	if not HFDuplicator.can_generate(p_count, brush_ids.size(), {"offset": p_offset}).ok:
 		return null
 	var dup := _new_duplicator_for(brush_ids)
 	if not dup.generate(self, p_count, p_offset):
@@ -2246,7 +2284,13 @@ func create_radial_array(
 	pivot: Vector3,
 	rise: float = 0.0
 ) -> Variant:
-	if not HFDuplicator.can_generate(p_count, brush_ids.size()).ok:
+	if not (
+		HFDuplicator
+		. can_generate(
+			p_count, brush_ids.size(), {"step_degrees": step_degrees, "pivot": pivot, "rise": rise}
+		)
+		. ok
+	):
 		return null
 	var dup := _new_duplicator_for(brush_ids)
 	if not dup.generate_radial(self, p_count, axis_index, step_degrees, pivot, rise):
@@ -2257,7 +2301,11 @@ func create_radial_array(
 
 ## Lattice of copies. `counts` includes the source cell on each axis.
 func create_grid_array(brush_ids: PackedStringArray, counts: Vector3i, spacing: Vector3) -> Variant:
-	if not HFDuplicator.can_generate(HFDuplicator.grid_copy_count(counts), brush_ids.size()).ok:
+	if not (
+		HFDuplicator
+		. can_generate(HFDuplicator.grid_copy_count(counts), brush_ids.size(), {"spacing": spacing})
+		. ok
+	):
 		return null
 	var dup := _new_duplicator_for(brush_ids)
 	if not dup.generate_grid(self, counts, spacing):
@@ -2303,7 +2351,7 @@ func update_duplicate_array(duplicator_id: String, mode: int, params: Dictionary
 	# stays reachable.
 	if not (
 		HFDuplicator
-		. can_generate(dup.requested_copy_count(mode, params), dup.source_brush_ids.size())
+		. can_generate(dup.requested_copy_count(mode, params), dup.source_brush_ids.size(), params)
 		. ok
 	):
 		return false

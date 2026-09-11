@@ -820,9 +820,11 @@ Click **Check Bake Issues** to scan for potential problems before baking:
 - **Occlusion coverage** (severity 0, info): reports occluder count and estimated coverage as a percentage of baked AABB surface area. Appears when occluders exist.
 - **Micro-gaps** (severity 1): near-coincident but not-exactly-equal vertices across different brushes that would cause seam tearing after bake. Detected within `weld_tolerance` (default 0.001 units).
 
-**Auto-fix helpers** (available via GDScript API on `level_root.validation_system`):
+**Auto-fix helpers** (also reachable directly on `level_root.validation_system`):
 - `weld_brush_vertices(brush)` — snaps near-coincident vertices to their average. Refreshes face normals and bounds automatically.
 - `fix_non_planar_faces(brush)` — projects drifting vertices back onto the face plane.
+
+`validate_level(true)` runs both over every brush in the level as part of its geometry pass, so a level imported from another editor can be cleaned up without calling them per brush. That pass also reports a brush whose size or transform is not a number, a brush with no faces (which auto-fix deletes, since there is nothing to repair), and a vertex that is not a number (reported only — there is no nearest position to a NaN).
 
 Both tolerances (`weld_tolerance`, `planarity_tolerance`) are configurable per-instance for noisy imported geometry.
 
@@ -1052,7 +1054,7 @@ A `LevelRoot` can read from somewhere else instead through its `entity_definitio
 The material palette can be saved and loaded as a JSON library file:
 - **Save**: preserves resource paths of all palette materials.
 - **Load**: restores the palette from saved paths.
-- **Usage tracking**: materials in use by brushes are tracked; `find_unused_materials()` identifies cleanup candidates.
+- **Unused materials**: not tracked. Material assignment is per face, through `FaceData.material_idx`, so "is this palette slot used" is a question about face slots rather than about a resource path.
 
 ## Prototype Textures
 HammerForge includes 150 built-in SVG prototype textures organized as 15 patterns in 10 color variations. Click **Refresh Prototypes** in the Paint tab → Materials section to add them all to the palette. The **Material Browser** displays them as a visual thumbnail grid with search and pattern/color filters — no need to memorize names. Patterns include solid, brick, checker, cross, diamond, dots, hex, stripes (diagonal/horizontal), triangles, zigzag, and directional arrows (up/down/left/right).
@@ -1309,7 +1311,7 @@ Use **X**, **Y**, or **Z** to constrain the drag to that world axis. HammerForge
 - **Merge vertices** (Ctrl+W): select 2+ vertices, then press Ctrl+W to merge them to their centroid. Merging is rejected if it would break convexity.
 
 ### Convexity Enforcement
-All vertex operations validate that the brush remains convex. If a move or merge would create a concave shape, the operation is rejected and the brush reverts to its previous state.
+All vertex operations validate that the brush remains convex. If a move or merge would create a concave shape, the operation is rejected and the brush reverts to its previous state. A merge is also rejected if it would leave the brush without a closed solid, which is what merging every vertex of a box would do. A move by an offset that is not a number is refused before any face is touched.
 
 ### Clip to Convex
 If a brush has been deformed into a non-convex shape (e.g., by external editing or import), use the **Convex** button in the vertex edit context toolbar to recompute its convex hull. This:
