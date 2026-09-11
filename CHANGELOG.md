@@ -5,6 +5,33 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **A non-finite vertex move was accepted and wrote NaN into the face data**
+  (#365). `validate_convexity()` is written as a lower bound (`d > 0.02`) and
+  every comparison against NaN is false, so a NaN vertex read as behind every
+  plane of the brush and the move committed. A vertex position is the geometry
+  rather than a parameter used to build it, so the result poisoned the AABB and
+  the normal, propagated through clip and carve into brushes that were never
+  touched, and survived the save with no editor action that put it back.
+  `move_vertices()` and `update_drag_absolute()` refuse a non-finite delta before
+  any face is touched.
+- **Merging every vertex of a brush left a live brush with no faces** (#366).
+  Every face collapsed to a point and was removed, and `validate_convexity()` was
+  then asked about a brush with no faces — its `faces.size() < 4` early-out
+  returns true, so the merge was accepted. The brush stayed in the draft
+  container, selectable, counted and saved, drawing nothing and with no vertex
+  left to move it back. A merge that would leave fewer than four faces is refused
+  with a message, and the snapshot is restored.
+- **Splitting an edge could tell a wall it was a floor** (#367). `split_edge()`
+  inserts the midpoint *on* the edge, so when the split edge is the one at index
+  0 the face's first three vertices are collinear by construction. The normal was
+  computed from exactly those three, measured zero, and fell back to
+  `Vector3.UP` — and the normal is what the convexity check, the bake and the
+  `.map` export read, not the vertices. `_compute_normal()` uses Newell's method
+  over the whole polygon now, which is correct for any planar polygon regardless
+  of collinear runs, and `split_edge()` rotates the vertex list so it starts at
+  an actual corner. The convexity check builds its own plane from the first three
+  non-collinear vertices rather than reading the face normal, because an
+  area-weighted average is the one plane that hides a bend.
 - **The resize path took sizes the create path refuses** (#378). A brush gets
   its size two ways and the two disagreed completely. `create_brush_from_info()`
   puts a size through `_usable_size()`, which floors a zero extent, makes a
