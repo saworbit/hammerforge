@@ -579,6 +579,13 @@ func _compute_normal() -> void:
 	if local_verts.size() < 3:
 		normal = Vector3.UP
 		return
+	# A face with a vertex that is not a number has no normal, and asking for one
+	# is an engine error per call rather than a value. The validator reports the
+	# vertex; this just stops the noise.
+	for v in local_verts:
+		if not v.is_finite():
+			normal = Vector3.UP
+			return
 	var a = local_verts[0]
 	var b = local_verts[1]
 	var c = local_verts[2]

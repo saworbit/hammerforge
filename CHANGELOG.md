@@ -5,6 +5,26 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **`validate_level()` could not see a brush whose size was NaN** (#371). Its one
+  size check was a comparison, and every comparison against NaN is false — an
+  infinite size is legitimately `> 0.0` as well. The validator is the backstop:
+  a mapper with a NaN-sized brush saw a clean badge, baked, and got a mesh with a
+  poisoned AABB with nothing anywhere naming the brush responsible, and no way to
+  find it by eye because a NaN size draws nothing. Finite is tested first, so the
+  report says what is actually wrong, and `auto_fix` puts the default size back.
+  The brush transform is checked the same way, and reported rather than repaired,
+  because there is no honest repair for a non-finite origin.
+- **`validate_level()` checked no brush geometry, and owned two repairs nothing
+  called** (#372). `weld_brush_vertices()` and `fix_non_planar_faces()` worked and
+  were tested and had no caller outside the suite — no dock button, no menu item,
+  and not `validate()` itself in `auto_fix` or out of it. Meanwhile a brush with
+  no faces, a face bowed off its own plane, and a face with a NaN vertex all
+  validated clean. Fixing the setters that create those states does nothing for a
+  `.hflevel` saved last week or a `.map` imported from another editor, which is
+  the ground the validator covers. `validate()` now reports all four, and
+  `auto_fix` deletes a brush with no faces (there is nothing to repair), calls
+  `fix_non_planar_faces()` on a bowed one and `weld_brush_vertices()` on vertices
+  a weld apart, and leaves a non-finite vertex reported only.
 - **A grid array with a negative axis count was built rather than refused**
   (#346). The linear and radial paths refuse a count below one with a message and
   a fix hint; the grid path clamped `(-2, 2, 2)` up to `(1, 2, 2)` first, so
