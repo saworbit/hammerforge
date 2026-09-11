@@ -160,6 +160,10 @@ When a brush is carved (boolean subtracted), the resulting slice pieces inherit 
 
 ## Suggested Testing
 - Click Refresh Prototypes and confirm 150 materials appear in the browser grid with thumbnails.
+- Click it a second time and confirm the palette stays at 150. A pattern/colour already in the
+  palette is skipped, so the button is a refresh rather than a second helping.
+- Remove a material that is not the last one and confirm brushes using a later slot keep the
+  material they had. Faces that used the removed slot fall back to unset.
 - Use pattern filter, color swatches, and search bar to narrow the grid. Verify counts in the status label.
 - Switch between Prototypes / Palette / Favorites views.
 - Right-click a thumbnail → Toggle Favorite. Switch to Favorites view and confirm it appears.

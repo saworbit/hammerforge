@@ -2509,27 +2509,52 @@ func add_material_to_palette(material: Material) -> int:
 	return idx
 
 
+## Removes a palette slot and repoints every face that referenced a later one.
+##
+## FaceData.material_idx is a plain index into MaterialManager.materials, so
+## compacting the array without a remap repaints every brush that used a slot
+## above the removed one. Faces that used the removed slot fall back to unset.
 func remove_material_from_palette(index: int) -> void:
 	if not material_manager:
 		return
+	if index < 0 or index >= material_manager.materials.size():
+		return
 	material_manager.remove_material(index)
+	_remap_face_material_indices(index)
 	_refresh_brush_previews()
 	material_list_changed.emit()
 
 
+## Shifts face material indices down over a removed palette slot. Faces that
+## pointed at the removed slot become -1, which is the unset value.
+func _remap_face_material_indices(removed_index: int) -> void:
+	for node in _iter_managed_brush_nodes():
+		var brush := node as DraftBrush
+		if not brush or not is_instance_valid(brush):
+			continue
+		var changed := false
+		for face in brush.faces:
+			if face == null:
+				continue
+			if face.material_idx == removed_index:
+				face.material_idx = -1
+				changed = true
+			elif face.material_idx > removed_index:
+				face.material_idx -= 1
+				changed = true
+		if changed:
+			tag_brush_dirty(brush.brush_id)
+
+
 ## Batch-loads all built-in prototype textures into the material palette.
 ## Uses signal batching and a single preview refresh for performance.
+## Returns the number actually added, so a second call returns 0 rather than
+## putting a second copy of all 150 into the palette.
 func add_prototype_materials() -> int:
 	if not material_manager:
 		_setup_material_manager()
 	begin_signal_batch()
-	var count := 0
-	for pattern in HFPrototypeTextures.PATTERNS:
-		for color in HFPrototypeTextures.COLORS:
-			var mat = HFPrototypeTextures.create_material(pattern, color)
-			if mat:
-				material_manager.add_material(mat)
-				count += 1
+	var count := HFPrototypeTextures.load_all_into(material_manager)
 	_refresh_brush_previews()
 	end_signal_batch()
 	material_list_changed.emit()
