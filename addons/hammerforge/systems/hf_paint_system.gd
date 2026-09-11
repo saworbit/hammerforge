@@ -465,15 +465,28 @@ func restore_paint_layers(data: Array, active_index: int) -> void:
 		var wall_heights = entry.get("wall_heights", [])
 		if wall_heights is Array:
 			layer.restore_wall_height_entries(wall_heights)
+		# These three properties are typed arrays. A decoded .hflevel payload is
+		# untyped, and the engine rejects an untyped array assigned into a typed
+		# property, so each one has to be converted first or the slot data is
+		# dropped and _ensure_terrain_slots() refills it with defaults.
 		var slot_paths = entry.get("terrain_slot_paths", [])
 		if slot_paths is Array:
-			layer.terrain_slot_paths = slot_paths.duplicate()
+			var typed_paths: Array[String] = []
+			for p in slot_paths:
+				typed_paths.append(str(p))
+			layer.terrain_slot_paths = typed_paths
 		var slot_scales = entry.get("terrain_slot_uv_scales", [])
 		if slot_scales is Array:
-			layer.terrain_slot_uv_scales = slot_scales.duplicate()
+			var typed_scales: Array[float] = []
+			for s in slot_scales:
+				typed_scales.append(float(s) if s is float or s is int else 1.0)
+			layer.terrain_slot_uv_scales = typed_scales
 		var slot_tints = entry.get("terrain_slot_tints", [])
 		if slot_tints is Array:
-			layer.terrain_slot_tints = slot_tints.duplicate()
+			var typed_tints: Array[Color] = []
+			for t in slot_tints:
+				typed_tints.append(t if t is Color else Color(0.5, 0.5, 0.5))
+			layer.terrain_slot_tints = typed_tints
 		layer._ensure_terrain_slots()
 		var hm_b64 = str(entry.get("heightmap_b64", ""))
 		if hm_b64 != "":

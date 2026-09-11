@@ -2470,10 +2470,33 @@ func get_materials() -> Array:
 	return material_manager.materials if material_manager else []
 
 
+## Replaces the palette. Accepts an untyped Array, which is what a decoded
+## .hflevel payload is, and converts it to the Array[Material] the manager
+## exports. Assigning an untyped array straight into that property is rejected
+## by the engine and the write is silently skipped, so the conversion is the
+## whole point of this function.
+##
+## Slot positions are preserved. A slot that does not hold a Material comes back
+## as null rather than being dropped, because face material_idx values are plain
+## indices into this array and compacting it would repoint every face above the
+## bad slot.
 func set_materials(materials: Array) -> void:
 	if not material_manager:
 		_setup_material_manager()
-	material_manager.materials = materials.duplicate()
+	var typed: Array[Material] = []
+	typed.resize(materials.size())
+	for i in materials.size():
+		var entry = materials[i]
+		if entry == null or entry is Material:
+			typed[i] = entry
+		else:
+			HFLog.warn(
+				(
+					"set_materials: palette slot %d is a %s, not a Material. Slot kept empty."
+					% [i, type_string(typeof(entry))]
+				)
+			)
+	material_manager.materials = typed
 	_refresh_brush_previews()
 
 
