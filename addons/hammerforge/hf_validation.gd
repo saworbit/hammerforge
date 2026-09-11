@@ -77,3 +77,48 @@ static func require_nodes(root: Object, property_names: Array, context: String =
 		push_warning("[HFValidation] missing on root: %s (%s)" % [missing, context])
 		return false
 	return true
+
+
+## What is wrong with the shape of a level state, or "" when nothing is.
+##
+## `restore_state()` reads a state into typed locals, so a key holding the wrong
+## kind of thing is an engine error mid-restore — and by then the level has
+## already been cleared, so a malformed `.hflevel` does not fail to load, it
+## destroys what was loaded and then fails. A `.hflevel` is JSON on disk: it gets
+## truncated by a full disk, edited by hand, written by an older version, or
+## synced half finished, and every one of those arrives here.
+##
+## Only the keys `restore_state()` types are checked, and only when present, so a
+## state written by a newer version is not refused for carrying something extra.
+static func level_state_problem(state: Dictionary) -> String:
+	const ARRAY_KEYS := [
+		"brushes",
+		"pending",
+		"committed",
+		"entities",
+		"materials",
+		"generators",
+		"duplicators",
+		"hollows",
+		"paint_layers",
+		"paint_connectors",
+	]
+	const DICTIONARY_KEYS := [
+		"face_selection",
+		"visgroups",
+		"groups",
+		"terrain_regions",
+		"floor",
+		"sun",
+		"prefab_instances",
+	]
+	for key in ARRAY_KEYS:
+		if state.has(key) and not (state[key] is Array):
+			return "'%s' should be a list and is a %s" % [key, type_string(typeof(state[key]))]
+	for key in DICTIONARY_KEYS:
+		if state.has(key) and not (state[key] is Dictionary):
+			return (
+				"'%s' should be a set of values and is a %s"
+				% [key, type_string(typeof(state[key]))]
+			)
+	return ""

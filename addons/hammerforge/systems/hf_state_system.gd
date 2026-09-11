@@ -142,8 +142,30 @@ func capture_state(include_transient: bool = true) -> Dictionary:
 	return state
 
 
+## One brush out of a state entry, or null when the entry is not one.
+##
+## `extra` is merged in rather than written onto the caller's dictionary, because
+## the state a caller handed in is not ours to edit — the old code set
+## `info["pending"] = true` on the dictionary it was given.
+func _restored_brush(info, extra: Dictionary) -> Node:
+	if not (info is Dictionary):
+		return null
+	var entry: Dictionary = (info as Dictionary).duplicate()
+	for key in extra:
+		entry[key] = extra[key]
+	return root.create_brush_from_info(entry)
+
+
 func restore_state(state: Dictionary) -> void:
 	if state.is_empty():
+		return
+	# Before anything is cleared. The order is what made a malformed state costly:
+	# it did not fail to load, it destroyed what was loaded and then failed.
+	var problem := HFValidation.level_state_problem(state)
+	if problem != "":
+		HFLog.warn("HFStateSystem: this level state cannot be read - %s" % problem)
+		if root.has_signal("user_message"):
+			root.user_message.emit("Level not loaded: %s" % problem, 2)
 		return
 	root.clear_brushes()
 	root.entity_system.clear_entities()
@@ -171,19 +193,27 @@ func restore_state(state: Dictionary) -> void:
 		root.face_selection.clear()
 		root._apply_face_selection()
 	root._brush_id_counter = int(state.get("id_counter", 0))
+	# One unreadable entry costs that entry, not the load. The `.map` importer
+	# already works this way for a malformed brush (#318), and a state can hold
+	# one for the same reasons — an older version, a partial write, a hand edit.
+	var skipped := 0
 	var brushes: Array = state.get("brushes", [])
 	for info in brushes:
-		root.create_brush_from_info(info)
+		if not _restored_brush(info, {}):
+			skipped += 1
 	var pending: Array = state.get("pending", [])
 	for info in pending:
-		info["pending"] = true
-		root.create_brush_from_info(info)
+		if not _restored_brush(info, {"pending": true}):
+			skipped += 1
 	var committed: Array = state.get("committed", [])
 	for info in committed:
-		info["committed"] = true
-		root.create_brush_from_info(info)
+		if not _restored_brush(info, {"committed": true}):
+			skipped += 1
 	var entities: Array = state.get("entities", [])
 	for info in entities:
+		if not (info is Dictionary):
+			skipped += 1
+			continue
 		var entity = root.entity_system.restore_entity_from_info(info)
 		if entity:
 			if info.has("visgroups"):
@@ -232,6 +262,10 @@ func restore_state(state: Dictionary) -> void:
 		root._last_bake_preview_mode = 0
 	if root.prefab_system and state.has("prefab_instances"):
 		root.prefab_system.restore_state(state["prefab_instances"])
+	if skipped > 0:
+		HFLog.warn("HFStateSystem: skipped %d entry this level could not use" % skipped)
+		if root.has_signal("user_message"):
+			root.user_message.emit("Skipped %d unreadable entry in this level" % skipped, 1)
 
 
 func capture_full_state() -> Dictionary:

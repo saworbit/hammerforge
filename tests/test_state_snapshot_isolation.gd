@@ -94,3 +94,99 @@ func test_restore_paint_layers_keeps_terrain_slot_paths_from_an_untyped_payload(
 	assert_eq(layer.terrain_slot_paths[0], "res://grass.tres", "Slot path should survive the load")
 	assert_eq(layer.terrain_slot_uv_scales[0], 2.0, "Slot uv scale should survive the load")
 	assert_eq(layer.terrain_slot_tints[0], Color.RED, "Slot tint should survive the load")
+
+
+# ===========================================================================
+# A malformed state must not cost the level (#347, #348)
+# ===========================================================================
+
+
+func _level_with_one_brush() -> int:
+	root.create_brush_from_info({"size": Vector3(32, 32, 32), "brush_id": "keep"})
+	return root.draft_brushes_node.get_child_count()
+
+
+func test_a_state_of_the_wrong_shape_leaves_the_level_alone():
+	var before := _level_with_one_brush()
+	for bad in [
+		{"brushes": "not a list"},
+		{"entities": {"nope": 1}},
+		{"materials": 7},
+		{"face_selection": []},
+		{"visgroups": "nope"},
+	]:
+		root.restore_state(bad)
+		assert_eq(
+			root.draft_brushes_node.get_child_count(),
+			before,
+			"%s must not clear the level" % str(bad)
+		)
+
+
+func test_a_good_state_still_restores():
+	_level_with_one_brush()
+	var state: Dictionary = root.capture_state()
+	root.clear_brushes()
+	root.restore_state(state)
+	assert_eq(root.draft_brushes_node.get_child_count(), 1, "a real state still loads")
+
+
+func test_one_unreadable_brush_costs_that_brush_and_not_the_load():
+	(
+		root
+		. restore_state(
+			{
+				"brushes":
+				[
+					{"size": Vector3(32, 32, 32), "brush_id": "a"},
+					17,
+					{"size": Vector3(32, 32, 32), "brush_id": "b"},
+				],
+				"entities": [],
+				"materials": [],
+			}
+		)
+	)
+	assert_eq(root.draft_brushes_node.get_child_count(), 2, "the two good ones are here")
+
+
+func test_a_brush_with_a_size_that_is_not_a_size_is_skipped():
+	(
+		root
+		. restore_state(
+			{
+				"brushes":
+				[
+					{"shape": 0, "size": Vector3(NAN, NAN, NAN)},
+					{"shape": 0, "size": Vector3(32, 32, 32), "brush_id": "good"},
+				],
+				"entities": [],
+				"materials": [],
+			}
+		)
+	)
+	assert_eq(root.draft_brushes_node.get_child_count(), 1, "only the buildable one")
+	for child in root.draft_brushes_node.get_children():
+		assert_true(child.size.is_finite(), "no NaN size reached the level")
+
+
+func test_a_zero_size_is_still_coerced_rather_than_skipped():
+	# There is a nearest size a user plainly meant. There is no nearest size to
+	# a NaN, which is why only that one is refused.
+	root.restore_state(
+		{"brushes": [{"shape": 0, "size": Vector3.ZERO}], "entities": [], "materials": []}
+	)
+	assert_eq(root.draft_brushes_node.get_child_count(), 1)
+
+
+func test_restoring_a_state_does_not_write_back_into_it():
+	var state := {
+		"brushes": [{"size": Vector3(32, 32, 32)}],
+		"pending": [{"size": Vector3(32, 32, 32)}],
+		"entities": [],
+		"materials": [],
+	}
+	root.restore_state(state)
+	assert_false(
+		(state["pending"][0] as Dictionary).has("pending"), "the caller's state is not ours to edit"
+	)

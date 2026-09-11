@@ -1682,6 +1682,7 @@ Use Face Materials (optional):
 - Save .hflevel stores brushes, entities, settings, materials palette, face data, and paint layers.
 - Paint layer data includes per-chunk `material_ids`, `blend_weights` (+ _2/_3), optional `heightmap_b64`, `height_scale`, and terrain slot settings.
 - Load .hflevel restores them. Missing heightmap/material fields default to zero (backward-compatible).
+- A file whose shape cannot be read leaves the open level exactly as it was and reports why, rather than clearing it first. A single brush or entity in an otherwise good file that cannot be read is skipped, the rest loads, and the count of what was skipped is reported.
 - Autosave can write to a configurable path.
 
 ## Capturing Exit-Time Errors
