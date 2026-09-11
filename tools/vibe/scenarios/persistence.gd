@@ -135,38 +135,85 @@ func _restore_across_levels() -> void:
 ## A state dictionary that did not come from `capture_state`: truncated, wrong
 ## types, absurd counts. A hand-edited `.hflevel` produces all three.
 func _junk_state() -> void:
-	var cases := {
-		"empty": {},
+	# Two kinds of bad state, and they are not the same failure.
+	#
+	# A state whose *shape* is wrong cannot be read at all, and the level must be
+	# left as it was: the cost used to be that it was cleared first, so a bad file
+	# took the good level with it.
+	#
+	# A state that can be read is a replacement, even when one entry in it is
+	# rubbish. The level is meant to become what the state says, so the check is
+	# that the entries it could read survived and the one it could not was
+	# dropped rather than built.
+	var good := {"shape": 0, "size": Vector3(64, 64, 64)}
+	var unreadable := {
 		"brushes is a string": {"brushes": "nope", "entities": [], "materials": []},
-		"a brush entry is a number": {"brushes": [42], "entities": [], "materials": []},
-		"a brush with no size": {"brushes": [{"shape": 0}], "entities": [], "materials": []},
-		"a brush with a NAN size":
-		{
-			"brushes": [{"shape": 0, "size": Vector3(NAN, NAN, NAN)}],
-			"entities": [],
-			"materials": []
-		},
 		"entities is a dictionary": {"brushes": [], "entities": {}, "materials": []},
-		"materials holds junk": {"brushes": [], "entities": [], "materials": [1, "two", null]},
+		"face_selection is a list": {"brushes": [], "face_selection": [], "materials": []},
 	}
-	for label in cases:
+	var readable := {
+		"empty": [{}, -1],
+		"a brush entry is a number": [{"brushes": [42, good], "entities": [], "materials": []}, 1],
+		"a brush with no size": [{"brushes": [{"shape": 0}], "entities": [], "materials": []}, 1],
+		"a brush with a NAN size":
+		[
+			{
+				"brushes": [{"shape": 0, "size": Vector3(NAN, NAN, NAN)}, good],
+				"entities": [],
+				"materials": []
+			},
+			1
+		],
+		"materials holds junk":
+		[{"brushes": [good], "entities": [], "materials": [1, "two", null]}, 1],
+	}
+
+	note("--- a state whose shape cannot be read must leave the level alone")
+	for label in unreadable:
 		var root: Node3D = await fresh_root()
-		# Furnished first, deliberately. The cost of a malformed state is not
-		# that it fails to load -- it is that the level is cleared before the
-		# state it was handed is looked at, so a bad file takes the good level
-		# with it.
 		_furnish(root)
 		await frame()
 		var before_count: int = root.get_live_brush_count()
-		root.restore_state(cases[label])
+		root.restore_state(unreadable[label])
 		await frame()
+		note(
+			"restore_state with %s" % label,
+			"%d brushes (was %d)" % [root.get_live_brush_count(), before_count]
+		)
+		if root.get_live_brush_count() < before_count:
+			flag(
+				"restore_state with %s emptied a level it could not read" % label,
+				"%d brushes before, %d after" % [before_count, root.get_live_brush_count()]
+			)
+
+	note("--- a state that can be read replaces the level, minus what it could not use")
+	for label in readable:
+		var root: Node3D = await fresh_root()
+		_furnish(root)
+		await frame()
+		var before_count: int = root.get_live_brush_count()
+		var entry: Array = readable[label]
+		var expected: int = int(entry[1])
+		root.restore_state(entry[0])
+		await frame()
+		var after_count: int = root.get_live_brush_count()
 		note(
 			"restore_state with %s" % label,
 			(
 				"%d brushes (was %d), %d materials"
-				% [root.get_live_brush_count(), before_count, root.get_materials().size()]
+				% [after_count, before_count, root.get_materials().size()]
 			)
 		)
+		if expected >= 0 and after_count != expected:
+			flag(
+				"restore_state with %s built %d brushes, not %d" % [label, after_count, expected],
+				"an entry it could not read should be skipped, and the rest should be built"
+			)
+		if expected < 0 and after_count != before_count:
+			flag(
+				"restore_state with an empty state changed the level",
+				"%d brushes before, %d after" % [before_count, after_count]
+			)
 		var junk_materials := 0
 		for m in root.get_materials():
 			if m != null and not (m is Material):
@@ -179,11 +226,5 @@ func _junk_state() -> void:
 				),
 				"get_materials() hands those back to every caller that then reads a Material off them"
 			)
-		if before_count > 0 and root.get_live_brush_count() < before_count:
-			known(
-				347,
-				"restore_state with %s emptied a level it could not replace" % label,
-				"%d brushes before, %d after" % [before_count, root.get_live_brush_count()]
-			)
 		for problem in HFVibe.check_invariants(root):
-			known(348, "restore_state with %s broke an invariant" % label, problem)
+			flag("restore_state with %s broke an invariant" % label, problem)

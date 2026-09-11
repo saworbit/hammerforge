@@ -118,8 +118,16 @@ static func _usable_size(raw) -> Vector3:
 func create_brush_from_info(info: Dictionary) -> Node:
 	if info.is_empty():
 		return null
+	var raw_size = info.get("size", root.drag_size_default)
+	if raw_size is Vector3 and not (raw_size as Vector3).is_finite():
+		# A zero or negative size is coerced, because there is a nearest size a
+		# user plainly meant. There is no nearest size to a NaN, and once one is
+		# on a brush the AABB, the level AABB, the chunking and the saved file all
+		# take it and no editor action gets the brush back.
+		HFLog.warn("HFBrushSystem: brush size %s is not a size" % str(raw_size))
+		return null
 	var shape = info.get("shape", root.BrushShape.BOX)
-	var size = _usable_size(info.get("size", root.drag_size_default))
+	var size = _usable_size(raw_size)
 	var sides = int(info.get("sides", 4))
 	var operation = info.get("operation", CSGShape3D.OPERATION_UNION)
 	var committed = bool(info.get("committed", false))

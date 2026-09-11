@@ -5,6 +5,30 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **A malformed `.hflevel` emptied the level instead of refusing to load**
+  (#347). `restore_state()` cleared the level and then read the state it had been
+  handed, so a key holding the wrong kind of thing gave a raw engine error with
+  the level already gone. It is not an internal-only path: `load_hflevel()` lands
+  there, so does undo, a prefab drop and a whole-level replace, and a `.hflevel`
+  is JSON on disk that gets truncated, hand edited, written by an older version
+  or synced half finished. `HFValidation.level_state_problem()` checks the shape
+  before anything is cleared, and a state that does not pass leaves the level
+  exactly as it was and says why. Only the keys `restore_state()` types are
+  checked, and only when present, so a state from a newer version is not refused
+  for carrying something extra.
+  - **One unreadable entry costs that entry, not the load.** A brush or entity
+    entry that is not a dictionary is skipped and counted, the way the `.map`
+    importer already handles a malformed brush (#318), and the count is reported.
+  - Restoring a state no longer writes `pending` and `committed` flags back into
+    the caller's own dictionaries.
+- **A brush with a size that is not a size was built rather than skipped**
+  (#348). #289 and #311 made `create_brush_from_info()` coerce a zero or negative
+  size, and `maxf()` passes a NaN straight through, so a state restore — the load
+  path, and the undo replay — built a brush whose AABB then poisoned the level
+  AABB, the chunking and the saved file, with no editor action able to fix it.
+  A non-finite size is refused at that same entry point, so every caller gets it:
+  there is a nearest size a user plainly meant by zero, and there is no nearest
+  size to a NaN.
 - **Duplicating a wired entity left two entities on one address** (#341). I/O is
   addressed by the authored name, and `build_duplicate_entity_info()` copied it
   along with everything else — so `find_entities_by_name("door_1")` returned both,

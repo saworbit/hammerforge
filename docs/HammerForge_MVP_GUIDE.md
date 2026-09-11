@@ -124,6 +124,7 @@ See [DEVELOPMENT.md](https://github.com/saworbit/hammerforge/blob/main/DEVELOPME
 ### Persistence (`HFFileSystem` + `HFStateSystem`)
 - `HFStateSystem` captures and restores brush/entity/paint/settings state for undo/redo.
 - `HFFileSystem` handles .hflevel save/load, .map import/export, and glTF export with threaded I/O. Queued writes run in request order, a malformed `.map` is refused before the level is touched, and a failed region sidecar fails the save.
+- A `.hflevel` gets the same treatment. `HFStateSystem.restore_state()` checks the shape of a state before it clears anything, so a truncated or hand-edited file leaves the level as it was and says why rather than emptying it and then failing. One brush or entity entry it cannot read is skipped and counted; the load goes ahead.
 - See [Data Portability](HammerForge_Data_Portability.md) for fidelity boundaries and save-safety behaviour.
 
 ## High-Level Flow
