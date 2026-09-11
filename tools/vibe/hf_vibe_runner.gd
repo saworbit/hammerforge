@@ -30,6 +30,20 @@ const SCENARIOS: Array[String] = [
 	"res://tools/vibe/scenarios/persistence.gd",
 	"res://tools/vibe/scenarios/housekeeping.gd",
 	"res://tools/vibe/scenarios/terrain.gd",
+	"res://tools/vibe/scenarios/vertex.gd",
+	"res://tools/vibe/scenarios/prefabs.gd",
+	"res://tools/vibe/scenarios/validation.gd",
+	"res://tools/vibe/scenarios/settings.gd",
+	"res://tools/vibe/scenarios/groups.gd",
+	"res://tools/vibe/scenarios/materials.gd",
+	"res://tools/vibe/scenarios/bake.gd",
+	"res://tools/vibe/scenarios/previews.gd",
+	"res://tools/vibe/scenarios/cordon.gd",
+	"res://tools/vibe/scenarios/spawn.gd",
+	"res://tools/vibe/scenarios/lifecycle.gd",
+	"res://tools/vibe/scenarios/placement.gd",
+	"res://tools/vibe/scenarios/definitions.gd",
+	"res://tools/vibe/scenarios/operations.gd",
 ]
 
 
