@@ -1,5 +1,5 @@
 @tool
-extends HFVibeScenario
+extends "res://tools/vibe/hf_vibe_scenario.gd"
 
 ## What a face looks like: its material slot, its UV transform, its projection
 ## and the surface paint layers stacked on it.

@@ -1,5 +1,5 @@
 @tool
-extends HFVibeScenario
+extends "res://tools/vibe/hf_vibe_scenario.gd"
 
 ## The heightmap layer and the region streaming settings around it, plus the two
 ## exports that take a finished level out of the editor.

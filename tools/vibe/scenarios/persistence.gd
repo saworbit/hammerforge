@@ -1,5 +1,5 @@
 @tool
-extends HFVibeScenario
+extends "res://tools/vibe/hf_vibe_scenario.gd"
 
 ## Capture and restore, which is what undo replays and what every whole-level
 ## operation leans on.
@@ -9,8 +9,6 @@ extends HFVibeScenario
 ## level indistinguishable from the one it came off. When it is not, the loss is
 ## silent -- the operation reports success and the level is just poorer, which
 ## is the shape every round-trip defect in this project has had.
-
-const HFGeneratorSystem = preload("res://addons/hammerforge/systems/hf_generator_system.gd")
 
 
 func id() -> String:
@@ -153,6 +151,12 @@ func _junk_state() -> void:
 	}
 	for label in cases:
 		var root: Node3D = await fresh_root()
+		# Furnished first, deliberately. The cost of a malformed state is not
+		# that it fails to load -- it is that the level is cleared before the
+		# state it was handed is looked at, so a bad file takes the good level
+		# with it.
+		_furnish(root)
+		await frame()
 		var before_count: int = root.get_live_brush_count()
 		root.restore_state(cases[label])
 		await frame()
@@ -174,6 +178,12 @@ func _junk_state() -> void:
 					% [label, junk_materials]
 				),
 				"get_materials() hands those back to every caller that then reads a Material off them"
+			)
+		if before_count > 0 and root.get_live_brush_count() < before_count:
+			known(
+				347,
+				"restore_state with %s emptied a level it could not replace" % label,
+				"%d brushes before, %d after" % [before_count, root.get_live_brush_count()]
 			)
 		for problem in HFVibe.check_invariants(root):
 			known(348, "restore_state with %s broke an invariant" % label, problem)
