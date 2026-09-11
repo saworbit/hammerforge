@@ -167,12 +167,21 @@ func refresh_visibility() -> void:
 
 
 func create_group(group_name: String) -> void:
-	if group_name == "":
+	# The same guard create_visgroup() got, for the same reasons, and worse here:
+	# a group is the unit the editor moves and duplicates together. "Arch" and
+	# "Arch " are two groups, so half the brushes the mapper thinks they grouped
+	# move without the other half — and the group list looks right, because both
+	# rows read "Arch". A group named "   " is a blank row that cannot be told
+	# from another blank one. The name is stored in node meta and saved into the
+	# `.hflevel`, so it persists.
+	var stripped := group_name.strip_edges()
+	if stripped == "":
 		return
-	groups[group_name] = true
+	groups[stripped] = true
 
 
 func remove_group(group_name: String) -> void:
+	group_name = group_name.strip_edges()
 	groups.erase(group_name)
 	for node in _all_managed_nodes():
 		if str(node.get_meta("group_id", "")) == group_name:
@@ -192,12 +201,16 @@ func get_group_names() -> PackedStringArray:
 
 
 func group_selection(group_name: String, nodes: Array) -> void:
-	if group_name == "":
+	# Stripped here as well, or the meta and the registry disagree about which
+	# group the node is in. get_group_members() and get_group_of() compare
+	# against this meta, so they follow from it.
+	var stripped := group_name.strip_edges()
+	if stripped == "":
 		return
-	create_group(group_name)
+	create_group(stripped)
 	for node in nodes:
 		if node is Node:
-			node.set_meta("group_id", group_name)
+			node.set_meta("group_id", stripped)
 
 
 func ungroup_nodes(nodes: Array) -> void:
@@ -217,6 +230,7 @@ func get_group_of(node: Node) -> String:
 
 func get_group_members(group_name: String) -> Array:
 	var out: Array = []
+	group_name = group_name.strip_edges()
 	if group_name == "":
 		return out
 	for node in _all_managed_nodes():
