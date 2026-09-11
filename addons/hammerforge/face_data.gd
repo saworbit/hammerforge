@@ -579,16 +579,49 @@ func _compute_normal() -> void:
 	if local_verts.size() < 3:
 		normal = Vector3.UP
 		return
-	var a = local_verts[0]
-	var b = local_verts[1]
-	var c = local_verts[2]
-	# The edges are normalised before the cross, so what is measured is the angle
-	# between them rather than the area of the triangle. The raw cross product
-	# grows with the square of the face, so an absolute floor on it meant any
-	# small face was called degenerate and given `Vector3.UP` — a 0.01-unit bevel
-	# cap came out facing into the solid whatever winding it was built with, and
-	# the same is true of every tessellation sliver.
-	var n = (c - a).normalized().cross((b - a).normalized())
+	# A face with a vertex that is not a number has no normal, and asking for one
+	# is an engine error per call rather than a value. The validator reports the
+	# vertex; this just stops the noise.
+	for v in local_verts:
+		if not v.is_finite():
+			normal = Vector3.UP
+			return
+	# Newell's method over the whole polygon, not the first three vertices.
+	# Three consecutive vertices can be collinear without the face being
+	# degenerate: `split_edge()` inserts a midpoint *on* an edge, and when the
+	# split edge is the one at index 0 the first three vertices are collinear by
+	# construction. The first-three cross product then measured zero, the
+	# degenerate fallback fired, and a side wall was told it faced up — which is
+	# what `validate_convexity()`, the bake and the `.map` export all read.
+	#
+	# The vertices are made relative to the first one and scaled by the face's
+	# own extent before the sum, so what is measured is the shape rather than its
+	# area. An absolute floor on the raw sum would call any small face
+	# degenerate, which is the bug the previous comment here was about: a
+	# 0.01-unit bevel cap came out facing into the solid whatever winding it was
+	# built with, and the same is true of every tessellation sliver. Newell's sum
+	# is translation invariant, so the shift costs nothing.
+	var origin: Vector3 = local_verts[0]
+	var extent := 0.0
+	for v in local_verts:
+		var offset: Vector3 = v - origin
+		extent = maxf(extent, maxf(absf(offset.x), maxf(absf(offset.y), absf(offset.z))))
+	if extent <= 0.0:
+		normal = Vector3.UP
+		return
+	var inv_extent := 1.0 / extent
+	var count := local_verts.size()
+	var n := Vector3.ZERO
+	for i in count:
+		var current: Vector3 = (local_verts[i] - origin) * inv_extent
+		var next: Vector3 = (local_verts[(i + 1) % count] - origin) * inv_extent
+		n.x += (current.y - next.y) * (current.z + next.z)
+		n.y += (current.z - next.z) * (current.x + next.x)
+		n.z += (current.x - next.x) * (current.y + next.y)
+	# Negated, because HammerForge winds a face clockwise seen from outside and
+	# Newell's sum follows the other hand. This is the winding the old
+	# `(c - a).cross(b - a)` produced.
+	n = -n
 	if n.length() > 0.0001:
 		normal = n.normalized()
 	else:

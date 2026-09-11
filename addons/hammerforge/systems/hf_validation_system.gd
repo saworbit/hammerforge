@@ -81,12 +81,25 @@ func validate(auto_fix: bool = false) -> Dictionary:
 		brush_nodes.append_array(root.pending_node.get_children())
 	if root.committed_node:
 		brush_nodes.append_array(root.committed_node.get_children())
+	var geometry_repairs: Array[DraftBrush] = []
+	var brushes_to_delete: Array[DraftBrush] = []
 	for node in brush_nodes:
 		if not (node is DraftBrush):
 			continue
 		var brush := node as DraftBrush
 		var size = brush.size
-		if size.x <= 0.0 or size.y <= 0.0 or size.z <= 0.0:
+		# Finite first, then the sign. Every comparison against NaN is false and
+		# an infinite size is legitimately `> 0.0`, so the sign test below could
+		# not see either — and this is the backstop: a mapper with a NaN-sized
+		# brush saw a clean badge, baked, and got a mesh with a poisoned AABB
+		# with nothing anywhere naming the brush responsible. The brush cannot be
+		# found by eye either, because a NaN size draws nothing.
+		if not size.is_finite():
+			issues.append("Brush size is not a number: %s" % brush.name)
+			if auto_fix:
+				brush.size = root.brush_size_default
+				fixed += 1
+		elif size.x <= 0.0 or size.y <= 0.0 or size.z <= 0.0:
 			# A negative size is not a zero size. It builds the brush inside out,
 			# with every face normal pointing the opposite way from the vertices
 			# it holds, and saying "zero" sends the reader looking for the wrong
@@ -99,6 +112,26 @@ func validate(auto_fix: bool = false) -> Dictionary:
 					max(0.1, abs(size.x)), max(0.1, abs(size.y)), max(0.1, abs(size.z))
 				)
 				brush.size = next
+				fixed += 1
+		# The transform has the same effect and nothing checked it either. There
+		# is no honest repair for a non-finite origin or basis, so this reports.
+		if not brush.global_transform.is_finite():
+			issues.append("Brush position is not a number: %s" % brush.name)
+		_check_brush_geometry(brush, issues, geometry_repairs, brushes_to_delete)
+
+	# The repairs and the deletion happen after the walk, so the loop is not
+	# mutating the list it is reading.
+	if auto_fix:
+		for brush in geometry_repairs:
+			var repaired := fix_non_planar_faces(brush)
+			repaired += weld_brush_vertices(brush)
+			if repaired > 0:
+				fixed += repaired
+				if root.has_method("tag_brush_dirty"):
+					root.tag_brush_dirty(str(brush.brush_id))
+		for brush in brushes_to_delete:
+			if is_instance_valid(brush) and root.brush_system:
+				root.brush_system.delete_brush(brush)
 				fixed += 1
 
 	# Invalid face indices in selection
@@ -508,6 +541,98 @@ func _edge_key(a: Vector3, b: Vector3) -> Array:
 	):
 		return [ai, bi]
 	return [bi, ai]
+
+
+## The geometry checks validate() had none of.
+##
+## Fixing the setters that create these states does nothing for a `.hflevel`
+## saved last week, a `.map` imported from another editor, or a file that was
+## hand-edited. The validator is what covers that ground, and it checked brush
+## size, face selection indices, material slots, UV projections, entity names,
+## I/O fields and paint layer grids — and nothing about the faces themselves,
+## while owning two geometry repairs that nothing called.
+func _check_brush_geometry(
+	brush: DraftBrush, issues: Array, repairs: Array[DraftBrush], to_delete: Array[DraftBrush]
+) -> void:
+	if brush.faces.is_empty():
+		# A live, selectable, saved brush with no geometry. It exports as a solid
+		# with no planes, which is malformed in both `.map` formats, and the
+		# mapper cannot find it to delete it because it draws nothing. There is
+		# nothing to repair, so the fix is to remove it.
+		issues.append("Brush has no faces: %s" % brush.name)
+		to_delete.append(brush)
+		return
+	var non_finite := 0
+	var worst_drift := 0.0
+	var coincident := false
+	for face in brush.faces:
+		if face == null:
+			continue
+		var verts: PackedVector3Array = face.local_verts
+		for v in verts:
+			if not v.is_finite():
+				non_finite += 1
+		if verts.size() < 3:
+			continue
+		for i in verts.size():
+			for j in range(i + 1, verts.size()):
+				# Near but not identical, which is what weld_brush_vertices()
+				# repairs: it snaps a group to its average, so afterwards the pair
+				# is exactly coincident rather than gone. A pair that is already
+				# exactly coincident is a degenerate face, not a weld job.
+				var gap := verts[i].distance_to(verts[j])
+				if gap > 0.0 and gap <= weld_tolerance:
+					coincident = true
+		worst_drift = maxf(worst_drift, _face_plane_drift(face))
+	if non_finite > 0:
+		# No honest repair: there is no nearest position to a NaN, and the value
+		# poisons the brush AABB and normal and propagates through any later clip
+		# or carve. Report it and name the brush.
+		issues.append("Brush has %d vertices that are not numbers: %s" % [non_finite, brush.name])
+	if worst_drift > planarity_tolerance:
+		issues.append("Brush face is not a plane (%.4f unit drift): %s" % [worst_drift, brush.name])
+		repairs.append(brush)
+	elif coincident:
+		issues.append("Brush has vertices a weld apart: %s" % brush.name)
+		repairs.append(brush)
+
+
+## How far the furthest vertex of a face sits off the plane through its first
+## three non-collinear vertices, or 0.0 when the face has no measurable plane.
+func _face_plane_drift(face) -> float:
+	var verts: PackedVector3Array = face.local_verts
+	if verts.size() < 4:
+		return 0.0  # triangles are always planar
+	var anchor: Vector3 = verts[0]
+	if not anchor.is_finite():
+		return 0.0
+	var normal := Vector3.ZERO
+	for i in range(1, verts.size() - 1):
+		if not verts[i].is_finite() or not verts[i + 1].is_finite():
+			continue
+		# Both edges have to be real edges. A pair of near-coincident vertices
+		# normalises to a direction that has nothing to do with the face, and the
+		# plane built from it reports the rest of the face as drift — so a brush
+		# with two vertices welded together came back as "not a plane" instead.
+		if (
+			(verts[i] - anchor).length() <= weld_tolerance
+			or (verts[i + 1] - anchor).length() <= weld_tolerance
+		):
+			continue
+		var candidate: Vector3 = (verts[i + 1] - anchor).normalized().cross(
+			(verts[i] - anchor).normalized()
+		)
+		if candidate.length() > 0.0001:
+			normal = candidate.normalized()
+			break
+	if normal.length_squared() < 0.0001 or not normal.is_finite():
+		return 0.0
+	var drift := 0.0
+	for v in verts:
+		if not v.is_finite():
+			continue
+		drift = maxf(drift, absf(normal.dot(v - anchor)))
+	return drift
 
 
 # ---------------------------------------------------------------------------
