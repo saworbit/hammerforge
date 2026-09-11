@@ -1519,7 +1519,7 @@ Notes
 ### Region Streaming (Large Worlds)
 Region streaming keeps large paint grids responsive by loading only nearby regions.
 1. Enable **Streaming** in the Paint tab → Regions section.
-2. Set **Region Size** (cells) and **Stream Radius** (regions).
+2. Set **Region Size** (cells, 64 to 4096) and **Stream Radius** (regions, 0 to 8). Region Size is the divisor that turns a cell index into a region coordinate, so a region as large as the world defeats streaming: the neighbourhood the streamer keeps resident is then a handful of enormous regions, and the memory budget cannot be met because there is nothing smaller than one region to evict. The memory budget is held between 32 MB and 8192 MB for the same reason.
 3. Toggle **Show Region Grid** to visualize loaded regions.
 4. Paint normally; regions auto-load around the cursor.
 
@@ -1531,8 +1531,8 @@ Notes
 Heightmaps add vertical displacement to painted floors:
 1. Paint cells on a layer using Brush/Rect/Line/Bucket.
 2. Click **Import** to load a PNG/EXR heightmap, or **Generate** for procedural noise.
-3. Adjust **Height Scale** to control displacement amplitude.
-4. Adjust **Layer Y** to set the base height of the layer.
+3. Adjust **Height Scale** to control displacement amplitude. It has a small floor, because a scale of zero multiplies every height by nothing and reads as the terrain having gone.
+4. Adjust **Layer Y** to set the base height of the layer. Below the grid origin is fine; both fields take a number and nothing else.
 
 When a layer has a heightmap, its floors are generated as displaced MeshInstance3D nodes (not DraftBrush). These live under `Generated/HeightmapFloors` and are baked directly (bypassing CSG) with trimesh collision shapes.
 
