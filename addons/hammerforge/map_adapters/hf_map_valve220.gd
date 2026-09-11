@@ -8,6 +8,10 @@ extends HFMapAdapter
 
 const FaceData = preload("../face_data.gd")
 
+## How close to parallel a texture axis and a face normal have to be before the
+## axis counts as lying along the normal rather than in the face.
+const AXIS_PARALLEL := 0.99
+
 
 func format_name() -> String:
 	return "Valve 220"
@@ -70,15 +74,31 @@ func _compute_axes_from_projection(normal: Vector3, fd: FaceData) -> Array:
 		else:
 			projection = FaceData.UVProjection.PLANAR_Z
 
+	var axes: Array = []
 	match projection:
 		FaceData.UVProjection.PLANAR_X:
-			return [Vector3.BACK, Vector3.UP]
+			axes = [Vector3.BACK, Vector3.UP]
 		FaceData.UVProjection.PLANAR_Y:
-			return [Vector3.RIGHT, Vector3.BACK]
+			axes = [Vector3.RIGHT, Vector3.BACK]
 		FaceData.UVProjection.PLANAR_Z:
-			return [Vector3.RIGHT, Vector3.UP]
+			axes = [Vector3.RIGHT, Vector3.UP]
 		_:
 			return _auto_axes(normal)
+	# Valve 220 needs both axes to lie in the face plane. The stored projection
+	# knows nothing about which way the face points, and PLANAR_Z is the default
+	# on every FaceData, so a +/-X or +/-Y face was handed an axis parallel to
+	# its own normal. That is a degenerate projection: the editors this format
+	# exists to feed either reject the face or stretch the texture across it.
+	# Resolve against the normal instead, the way BOX_UV already is.
+	if _axis_lies_along(axes[0], normal) or _axis_lies_along(axes[1], normal):
+		return _auto_axes(normal)
+	return axes
+
+
+## True when a candidate texture axis is close enough to the face normal that it
+## does not lie in the face.
+func _axis_lies_along(axis: Vector3, normal: Vector3) -> bool:
+	return absf(axis.dot(normal)) > AXIS_PARALLEL
 
 
 func _auto_axes(normal: Vector3) -> Array:

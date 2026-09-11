@@ -101,6 +101,24 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   - **Coverage** (`tests/test_paint_system.gd`): 7 tests, including renaming a
     layer to its own name, which is not a collision, and a rename to a free
     name, so the guard cannot start refusing what it should accept.
+- **Valve 220 export wrote texture axes parallel to the face normal** (#317).
+  Every face went out as `[ 1 0 0 0 ] [ 0 1 0 0 ]` whatever direction it faced,
+  so four of the six faces of a plain box were degenerate: on a +/-X face the U
+  axis was the normal, on a +/-Y face the V axis was. Valve 220 exists to carry
+  per-face alignment into TrenchBroom, J.A.C.K. and the Source-lineage tools,
+  and those either reject such a face or stretch the texture across it, so the
+  format chosen to preserve alignment preserved nothing.
+  - The cause was not a missing feature. `_auto_axes()` already picks correct
+    axes per normal, but it was only reached for `CYLINDRICAL` or a projection
+    outside the enum. `FaceData.uv_projection` defaults to `PLANAR_Z`, and
+    `_compute_axes_from_projection()` returned `PLANAR_Z`'s `[RIGHT, UP]` for
+    every face carrying it without asking whether those axes lie in the face.
+    A candidate pair is now checked against the normal and falls back to
+    `_auto_axes()`, which is what `BOX_UV` already did.
+  - The classic Quake exporter is unaffected. It has no texture axes.
+  - **Coverage** (`tests/test_map_export.gd`): all six axis directions with the
+    default projection, an exported box checked line by line, and a guard that a
+    +Z face keeps `PLANAR_Z`'s axes, since that is what `PLANAR_Z` is for.
 
 ### Added
 - **CI refuses a `project.godot` that enables local tooling.** The file is
