@@ -111,7 +111,39 @@ func load_presets(path: String = "") -> void:
 	var text = file.get_as_text()
 	var data = JSON.parse_string(text)
 	if data is Array:
-		_user_presets = data
+		_user_presets = _validated_presets(data, _presets_path)
+
+
+## The presets from a user file, with anything the rest of this class cannot read
+## left out.
+##
+## Being an array was the whole test before, so a file holding `[1, 2, 3]` was
+## accepted and `get_all_presets()` then errored on `duplicate()` at the first
+## element and returned nothing, dropping the real presets below it. This file
+## lives under `user://`, where it can be hand edited, synced or truncated mid
+## write, so a bad element is reported by index and skipped rather than trusted.
+func _validated_presets(data: Array, path: String) -> Array:
+	var out: Array = []
+	for i in data.size():
+		var entry = data[i]
+		if not (entry is Dictionary):
+			HFLog.warn(
+				(
+					"%s: entry %d is a %s, not a preset. Skipped."
+					% [path, i, type_string(typeof(entry))]
+				)
+			)
+			continue
+		if str(entry.get("name", "")).strip_edges() == "":
+			HFLog.warn("%s: entry %d has no name. Skipped." % [path, i])
+			continue
+		if not (entry.get("connections", null) is Array):
+			HFLog.warn(
+				"%s: preset '%s' has no connections list. Skipped." % [path, str(entry["name"])]
+			)
+			continue
+		out.append(entry)
+	return out
 
 
 ## Save user presets to file.
@@ -147,7 +179,12 @@ func get_user_presets() -> Array:
 
 
 ## Add a new user preset.
-func add_user_preset(name: String, description: String, connections: Array) -> void:
+## Refuses a preset with no name, so a bad entry cannot be made from inside the
+## editor either. Returns whether it was added.
+func add_user_preset(name: String, description: String, connections: Array) -> bool:
+	if name.strip_edges() == "":
+		HFLog.warn("HFIOPresets: a preset needs a name.")
+		return false
 	(
 		_user_presets
 		. append(
@@ -160,6 +197,7 @@ func add_user_preset(name: String, description: String, connections: Array) -> v
 		)
 	)
 	save_presets()
+	return true
 
 
 ## Remove a user preset by index (in the user array, not combined).

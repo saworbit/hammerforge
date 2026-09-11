@@ -97,7 +97,16 @@ static func validate(type: String, settings: Dictionary) -> HFOpResult:
 			"Generator: '%s' is not a generator type" % type,
 			"Known types: %s" % ", ".join(known_types())
 		)
-	return builder.validate(settings)
+	var result = builder.validate(settings)
+	# A builder that returns nothing is a bug in the builder, but it must not
+	# become a null out of create_generator(), which is declared to hand back a
+	# result every caller then reads `.ok` off.
+	if result == null:
+		return HFOpResult.fail(
+			"Generator: '%s' could not check those settings" % type,
+			"Check the settings for a value of the wrong type"
+		)
+	return result
 
 
 ## One face set per piece the structure is made of, in the structure's own space.

@@ -690,6 +690,45 @@ The format is based on Keep a Changelog, and this project follows semantic versi
     UV tail, the plane count at three side counts, no two planes coincident, every
     plane facing outward, a whole-brush and a per-face round trip, and a texture
     the palette does not hold.
+- **Four loaders stop trusting the payload they are handed.** Each sits behind a
+  file that can be hand edited, synced between machines or truncated mid write,
+  and in each case a bad value did not fail where it was read.
+  - **A displacement face comes back flat rather than half restored** (#290).
+    `HFDisplacementData.from_dict()` took the power on trust and sized the arrays
+    from the payload, while `get_dim()` and every read assume the two agree. A
+    mismatch sent each `row * dim + col` to the wrong cell, and because
+    `set_distance()` and `add_noise()` both guard on `idx < size()`, the writes
+    past the end were dropped in silence. The power is clamped the way
+    `init_flat()` clamps it, each array is checked against the vertex count that
+    power implies, and a mismatch is a warning naming both numbers.
+  - **A typo in the keymap file no longer errors on every keystroke** (#292).
+    `HFKeymap.load_or_default()` accepted whatever JSON was there, so a value of
+    the wrong type errored inside `matches()`, which runs on every key event in
+    the viewport, with a message naming `hf_keymap.gd` rather than the file the
+    user actually got wrong. Entries that are not dictionaries, entries with no
+    usable `keycode`, and keys that are not HammerForge actions are reported once
+    on load, naming the file and the key, and the default is used instead.
+  - **A wrong-typed generator setting comes back as a result** (#293).
+    `HFGeneratorSchema._coerce()` called `int({})`, which is not a valid
+    constructor call: it errored, evaluated to null, and the null was written into
+    the settings. From there the builder's `validate()` never returned,
+    `HFGeneratorSystem.create()` read `.ok` off nothing, and
+    `LevelRoot.create_generator()` handed back null from a function declared
+    `-> HFOpResult`. `_coerce()` is total now, falling back to the field's default
+    with a warning; a numeric string still counts as a number. `validate()` also
+    treats a null builder result as a failure, so no future builder can put a
+    null back into that path.
+  - **One junk preset no longer empties the preset list** (#294).
+    `HFIOPresets.load_presets()` tested only that the file parsed to an Array, so
+    `[1, 2, 3]` was accepted and `get_all_presets()` then errored on the first
+    element and returned nothing, dropping the real presets below it. Elements
+    are kept only if they are dictionaries with a name and a connections array,
+    and a rejection names the file and the index. `add_user_preset()` refuses an
+    empty name and returns whether it added anything, so a bad entry cannot be
+    made from inside the editor either.
+  - **Coverage** (`tests/test_untrusted_payloads.gd`): 16 tests over all four,
+    including a good value on each path so the validation cannot start refusing
+    what it should accept. Twelve fail on the previous code.
 - **A prefab could wire its copy's outputs to the entities it was built from.**
   `HFPrefab.instantiate()` remapped I/O by turning each old node name into the new
   one and then looking that name back up. The lookup resolves an authored
