@@ -5,6 +5,17 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **`merge_brushes_by_ids()` enforced neither rule `can_merge_brushes()` refuses
+  on** (#383). The operation collected whatever ids it could find and took the
+  first brush's operation for the result, so merging an additive brush with a
+  subtractive one succeeded — a subtractive brush is a hole, and merged into a
+  solid the mapper's doorway became a wall under a message saying "Merged 2
+  brushes" — and a selection with one stale id merged the subset and reported the
+  count it merged. The reachable path is a redo: the pre-check runs before the
+  undo action is opened, and the undo entry stores the method and the ids, so a
+  redo calls the operation directly against a level that has moved on.
+  `merge_brushes_by_ids()` calls the check, which is side effect free and already
+  returns the right message for each case.
 - **The bake and grid settings that take a number were unbounded** (#373). #361
   did this for the terrain settings; these are the same list and were not
   touched. 22 of 23 out-of-range values landed and stayed. The dock SpinBoxes
