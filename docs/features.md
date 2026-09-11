@@ -138,7 +138,7 @@ Grid-based paint layers with chunked storage for large worlds:
 
 - **Visgroups** -- named visibility groups ("walls", "detail", "lighting") with per-group show/hide
 - **Grouping** (Ctrl+G / Ctrl+U) -- persistent groups that select and move together
-- **Cordon** -- restrict bake to an AABB region with yellow wireframe; skip everything outside
+- **Cordon** -- restrict bake to an AABB region with yellow wireframe; skip everything outside. A min/max pair entered in either order means the same region, and a cordon with a non-finite corner is refused rather than stored
 - **Reference cleanup** -- deleting brushes auto-cleans group/visgroup membership and warns about dangling entity I/O connections
 - **Duplicator** -- create N copies of a brush with progressive offset
 - **Prefabs** -- save brush + entity groups as `.hfprefab` files with variants, tags, and live-linked propagation. Drag from library to instantiate with new IDs and remapped I/O. Brush and entity ids, group membership and visgroup membership are all left behind on capture, because they only mean something in the level the selection came from
@@ -389,7 +389,7 @@ transform group while paint mode is on, so only one of the two is ever live.
 
 ## Testing
 
-The verified Godot 4.7 suite on September 11, 2026 contains **3,569 tests across 186 scripts**: **3,562 passing tests**, seven intentional no-assert safety tests, and **17,994 assertions**. All checks run on every push and pull request via GitHub Actions.
+The verified Godot 4.7 suite on September 11, 2026 contains **3,578 tests across 187 scripts**: **3,571 passing tests**, seven intentional no-assert safety tests, and **18,045 assertions**. All checks run on every push and pull request via GitHub Actions.
 
 ```bash
 # Run all tests headless

@@ -60,6 +60,52 @@ enum AxisLock { NONE, X, Y, Z }
 # Export vars
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Bounds for the settings that take a number
+#
+# #361 did this for the terrain settings. These are the same list and were not
+# touched. The dock SpinBoxes have ranges, so the editor UI cannot produce a
+# value outside them, but the `.hflevel` can: it is JSON, it is hand-editable, it
+# gets merged, and it gets written by older builds with different defaults. An
+# `@export_range` constrains the inspector widget only. It does not clamp an
+# assignment and it is not enforced on load.
+#
+# Finiteness is checked first, because `clampf()` and `maxf()` both pass NaN
+# through. `grid_snap` is the subtle one: every consumer is written
+# `grid_snap if grid_snap > 0.0 else <fallback>`, and `NAN > 0.0` is false, so a
+# NaN read as "snapping is off" everywhere while the dock still showed a number.
+# ---------------------------------------------------------------------------
+
+const MIN_GRID_PLANE_SIZE := 1.0
+const MAX_GRID_PLANE_SIZE := 100000.0
+const MIN_ROTATE_SNAP_DEGREES := 1.0
+const MAX_ROTATE_SNAP_DEGREES := 180.0
+const MIN_BAKE_CHUNK_SIZE := 1.0
+const MAX_BAKE_CHUNK_SIZE := 16384.0
+const MIN_LIGHTMAP_TEXEL_SIZE := 0.001
+const MAX_LIGHTMAP_TEXEL_SIZE := 16.0
+const MIN_NAVMESH_CELL := 0.01
+const MAX_NAVMESH_CELL := 16.0
+const MIN_NAVMESH_AGENT := 0.01
+const MAX_NAVMESH_AGENT := 256.0
+const MIN_CONNECTOR_STAIR_HEIGHT := 0.01
+const MAX_CONNECTOR_STAIR_HEIGHT := 256.0
+const MIN_CONNECTOR_WIDTH := 1
+const MAX_CONNECTOR_WIDTH := 64
+
+
+## A value inside the range, or the one already there when it is not a number.
+##
+## Refusing rather than substituting is deliberate: there is no nearest value to
+## a NaN, and a setting that silently became a number nobody chose is the same
+## class of surprise as one that stayed NaN.
+static func _bounded(value: float, low: float, high: float, current: float) -> float:
+	if not is_finite(value):
+		HFLog.warn("HammerForge: %s is not a setting value, keeping %s" % [value, current])
+		return current
+	return clampf(value, low, high)
+
+
 var _grid_snap: float = 16.0
 @export var grid_snap: float = 16.0:
 	set(value):
@@ -69,18 +115,60 @@ var _grid_snap: float = 16.0
 @export var brush_size_default: Vector3 = Vector3(32, 32, 32)
 @export_range(1, 32, 1) var bake_collision_layer_index: int = 1
 @export var bake_material_override: Material = null
-@export var bake_chunk_size: float = 32.0
+var _bake_chunk_size: float = 32.0
+@export var bake_chunk_size: float = 32.0:
+	set(value):
+		_bake_chunk_size = _bounded(
+			value, MIN_BAKE_CHUNK_SIZE, MAX_BAKE_CHUNK_SIZE, _bake_chunk_size
+		)
+	get:
+		return _bake_chunk_size
 @export var bake_merge_meshes: bool = false
 @export var bake_generate_lods: bool = false
 @export var bake_unwrap_uv0: bool = false
 @export var bake_lightmap_uv2: bool = false
-@export var bake_lightmap_texel_size: float = 0.1
+var _bake_lightmap_texel_size: float = 0.1
+@export var bake_lightmap_texel_size: float = 0.1:
+	set(value):
+		_bake_lightmap_texel_size = _bounded(
+			value, MIN_LIGHTMAP_TEXEL_SIZE, MAX_LIGHTMAP_TEXEL_SIZE, _bake_lightmap_texel_size
+		)
+	get:
+		return _bake_lightmap_texel_size
 @export var bake_use_face_materials: bool = false
 @export var bake_navmesh: bool = false
-@export var bake_navmesh_cell_size: float = 0.3
-@export var bake_navmesh_cell_height: float = 0.25
-@export var bake_navmesh_agent_height: float = 2.0
-@export var bake_navmesh_agent_radius: float = 0.4
+var _bake_navmesh_cell_size: float = 0.3
+@export var bake_navmesh_cell_size: float = 0.3:
+	set(value):
+		_bake_navmesh_cell_size = _bounded(
+			value, MIN_NAVMESH_CELL, MAX_NAVMESH_CELL, _bake_navmesh_cell_size
+		)
+	get:
+		return _bake_navmesh_cell_size
+var _bake_navmesh_cell_height: float = 0.25
+@export var bake_navmesh_cell_height: float = 0.25:
+	set(value):
+		_bake_navmesh_cell_height = _bounded(
+			value, MIN_NAVMESH_CELL, MAX_NAVMESH_CELL, _bake_navmesh_cell_height
+		)
+	get:
+		return _bake_navmesh_cell_height
+var _bake_navmesh_agent_height: float = 2.0
+@export var bake_navmesh_agent_height: float = 2.0:
+	set(value):
+		_bake_navmesh_agent_height = _bounded(
+			value, MIN_NAVMESH_AGENT, MAX_NAVMESH_AGENT, _bake_navmesh_agent_height
+		)
+	get:
+		return _bake_navmesh_agent_height
+var _bake_navmesh_agent_radius: float = 0.4
+@export var bake_navmesh_agent_radius: float = 0.4:
+	set(value):
+		_bake_navmesh_agent_radius = _bounded(
+			value, MIN_NAVMESH_AGENT, MAX_NAVMESH_AGENT, _bake_navmesh_agent_radius
+		)
+	get:
+		return _bake_navmesh_agent_radius
 @export var bake_visible_only: bool = false
 @export var bake_use_multimesh: bool = false
 @export var bake_use_atlas: bool = false
@@ -91,8 +179,23 @@ var _grid_snap: float = 16.0
 ## surfaces rarely block enough pixels to justify the culling overhead.
 @export var bake_occluder_min_area: float = 4.0
 @export var bake_connector_mode: int = 0  # HFAutoConnector.ConnectorMode (RAMP=0, STAIRS=1, AUTO=2)
-@export var bake_connector_stair_height: float = 0.25
-@export var bake_connector_width: int = 2
+var _bake_connector_stair_height: float = 0.25
+@export var bake_connector_stair_height: float = 0.25:
+	set(value):
+		_bake_connector_stair_height = _bounded(
+			value,
+			MIN_CONNECTOR_STAIR_HEIGHT,
+			MAX_CONNECTOR_STAIR_HEIGHT,
+			_bake_connector_stair_height
+		)
+	get:
+		return _bake_connector_stair_height
+var _bake_connector_width: int = 2
+@export var bake_connector_width: int = 2:
+	set(value):
+		_bake_connector_width = clampi(value, MIN_CONNECTOR_WIDTH, MAX_CONNECTOR_WIDTH)
+	get:
+		return _bake_connector_width
 @export var bake_use_thread_pool: bool = true
 ## Collision shape strategy: 0 = single trimesh (legacy), 1 = per-brush convex hulls,
 ## 2 = per-visgroup partitioned bodies.
@@ -102,7 +205,12 @@ var _grid_snap: float = 16.0
 ## broadphase and produce better navigation meshes.
 @export var bake_convex_clean: bool = true
 ## Simplification threshold for convex hull generation (0 = no simplification).
-@export_range(0.0, 1.0, 0.01) var bake_convex_simplify: float = 0.0
+var _bake_convex_simplify: float = 0.0
+@export_range(0.0, 1.0, 0.01) var bake_convex_simplify: float = 0.0:
+	set(value):
+		_bake_convex_simplify = _bounded(value, 0.0, 1.0, _bake_convex_simplify)
+	get:
+		return _bake_convex_simplify
 var _hflevel_autosave_enabled: bool = true
 @export var hflevel_autosave_enabled: bool = true:
 	set(value):
@@ -135,16 +243,35 @@ var _grid_visible: bool = false
 		return _grid_visible
 @export var grid_follow_brush: bool = false
 @export var debug_logging: bool = false
-@export var grid_plane_size: float = 500.0
+var _grid_plane_size: float = 500.0
+@export var grid_plane_size: float = 500.0:
+	set(value):
+		_grid_plane_size = _bounded(
+			value, MIN_GRID_PLANE_SIZE, MAX_GRID_PLANE_SIZE, _grid_plane_size
+		)
+	get:
+		return _grid_plane_size
 @export var grid_color: Color = Color(0.85, 0.95, 1.0, 0.15)
 @export_range(1, 16, 1) var grid_major_line_frequency: int = 4
 @export var texture_lock: bool = true
 ## Step, in degrees, used by the rotate hotkeys and the dock's rotate buttons.
-@export_range(1.0, 180.0, 1.0) var rotate_snap_degrees: float = 15.0
+var _rotate_snap_degrees: float = 15.0
+@export_range(1.0, 180.0, 1.0) var rotate_snap_degrees: float = 15.0:
+	set(value):
+		_rotate_snap_degrees = _bounded(
+			value, MIN_ROTATE_SNAP_DEGREES, MAX_ROTATE_SNAP_DEGREES, _rotate_snap_degrees
+		)
+	get:
+		return _rotate_snap_degrees
 ## Where rotate and flip pivot: 0 selection centre, 1 world origin, 2 active object.
 @export_enum("Selection Center", "World Origin", "Active Object") var transform_pivot_mode: int = 0
 @export var cordon_enabled: bool = false
-@export var cordon_aabb: AABB = AABB(Vector3(-128, -128, -128), Vector3(256, 256, 256))
+var _cordon_aabb: AABB = AABB(Vector3(-128, -128, -128), Vector3(256, 256, 256))
+@export var cordon_aabb: AABB = AABB(Vector3(-128, -128, -128), Vector3(256, 256, 256)):
+	set(value):
+		_set_cordon_aabb(value)
+	get:
+		return _cordon_aabb
 
 # ---------------------------------------------------------------------------
 # Signals — Central registry.  Subsystems and UI should subscribe to these
@@ -2943,7 +3070,28 @@ func clear_face_hover_highlight() -> void:
 	_face_hover_last_face_idx = -1
 
 
+## Normalise a cordon into a region.
+##
+## An AABB with a negative size is a constructible value of the type and is not a
+## region: Godot own intersects() errors on it and returns false for everything,
+## so every brush read as outside the cordon and the bake produced an empty level
+## and reported success. The cordon wireframe draws the same box either way, so
+## there was nothing on screen to go on. abs() is the fix Godot own error message
+## names, and it makes a min/max pair entered in either order mean the same
+## region, which is what the dock six SpinBoxes make easy to get backwards.
+func _set_cordon_aabb(value: AABB) -> void:
+	if not value.position.is_finite() or not value.size.is_finite():
+		HFLog.warn("HammerForge: cordon %s is not a region, keeping %s" % [value, _cordon_aabb])
+		return
+	_cordon_aabb = value.abs()
+
+
 func _set_grid_snap(value: float) -> void:
+	if not is_finite(value):
+		# max() passes NaN through, which is how the one setter that already
+		# refused a negative snap let a NaN past.
+		HFLog.warn("HammerForge: grid snap %s is not a snap, keeping %s" % [value, _grid_snap])
+		return
 	var clamped = max(value, 0.0)
 	if is_equal_approx(_grid_snap, clamped):
 		return
