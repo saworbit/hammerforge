@@ -10,10 +10,17 @@ extends "res://tools/vibe/hf_vibe_scenario.gd"
 ## diffs what comes back. Data loss here is silent by nature: the operation
 ## reports success and the level is simply poorer than it was.
 
-## Keys whose loss is already reported. Both are the same defect: an untyped
-## Array decoded from JSON assigned to a typed property, which Godot refuses at
-## runtime while the caller carries on believing the write landed.
-const KNOWN_LOSSES := {"materials": 283, "paint_layers": 284}
+## Keys whose loss is already reported, mapped to the issue covering them.
+## Empty while the two that were here -- #283 and #284, both the same untyped
+## Array assigned to a typed property -- are fixed and holding.
+const KNOWN_LOSSES := {}
+
+## Real palette materials, loaded from disk. See the note in `_build()`.
+const PALETTE_MATERIALS: Array[String] = [
+	"res://materials/test_mat.tres",
+	"res://addons/hammerforge/textures/prototypes/materials/proto_arrow_down_blue.tres",
+	"res://addons/hammerforge/textures/prototypes/materials/proto_arrow_down_green.tres",
+]
 
 
 func id() -> String:
@@ -63,9 +70,16 @@ func run() -> void:
 
 ## A level with one of everything worth losing.
 func _build(root: Node3D) -> void:
-	for i in range(3):
-		var m := StandardMaterial3D.new()
-		m.resource_name = "vibe_mat_%d" % i
+	# Materials must come off disk. A `.hflevel` stores the resource path of each
+	# palette slot, so a StandardMaterial3D built in memory has nothing to store
+	# and comes back null through no fault of the loader. Using real resources is
+	# what a user's palette actually holds, and is the only way this round trip
+	# says anything.
+	for path in PALETTE_MATERIALS:
+		var m = load(path)
+		if m == null:
+			flag("fixture material missing", path)
+			continue
 		root.material_manager.add_material(m)
 
 	for i in range(4):
