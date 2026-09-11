@@ -119,6 +119,50 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   - **Coverage** (`tests/test_map_export.gd`): all six axis directions with the
     default projection, an exported box checked line by line, and a guard that a
     +Z face keeps `PLANAR_Z`'s axes, since that is what `PLANAR_Z` is for.
+### Changed
+- **Non-box primitives store one face per flat surface, not one per mesh
+  triangle** (#322). `_rebuild_faces()` derived the face list straight from the
+  CSG mesh, so every triangle became its own `FaceData`. A cylinder was 768
+  faces. A sphere was 4,224, cost 129 KB in a `.hflevel` and 424 ms to write,
+  and asked the user to pick one of 4,224 slivers to put a material on a side.
+  Coplanar triangles that share an edge now merge into one face before the list
+  is stored, measured on this machine:
+
+  | shape | faces | `.hflevel` bytes | save ms | create ms |
+  | --- | --- | --- | --- | --- |
+  | box | 6 to 6 | 1,194 to 1,194 | 17 to 17 | 1 to 1 |
+  | cylinder | 768 to 66 | 16,664 to 3,629 | 81 to 19 | 6 to 11 |
+  | sphere | 4,224 to 2,240 | 129,227 to 89,670 | 413 to 252 | 25 to 85 |
+  | torus | 4,096 to 2,059 | 168,085 to 123,009 | 404 to 252 | 26 to 75 |
+
+  The flat-faced shapes land on their real counts: a wedge is 5, a prism 5, a
+  pentagonal prism 7, an octahedron 8, a dodecahedron 12 pentagons, an
+  icosahedron 20. A 64-segment cylinder is 66, its sides plus two caps.
+  - **Creating a curved primitive costs more.** A sphere goes from 25 ms to
+    85 ms because the merge pass walks every triangle. That buys 161 ms off
+    every save of it, and halves what undo capture, bake, validation and every
+    per-face loop have to walk from then on. Positions are indexed to integer
+    ids so the pass is integer lookups rather than string keys, which is what
+    took it from 214 ms to 85 ms while I was writing it.
+  - **Merging is conservative.** Triangles merge only when they share a plane
+    *and* an edge, so two flat regions that happen to be coplanar stay two
+    faces. A run whose boundary is not exactly one closed loop keeps its
+    triangles rather than guessing at a surface with a hole or a pinch in it.
+    Points sitting mid-edge on the boundary are dropped, which is what turns a
+    cap fan back into its rim.
+  - **Levels saved before this keep their old face lists**, because faces are
+    serialized verbatim. They are not rebuilt on load, so nothing shifts under
+    an existing material or displacement assignment. Only newly built brushes
+    get the smaller lists.
+  - `tests/test_hollow_tool.gd` asserted a hollow cylinder produced fewer walls
+    than the brush had faces, which was true only while faces were triangles.
+    One wall per distinct plane is the rule, and a face is a plane now, so it
+    asserts equality.
+  - **Coverage** (`tests/test_brush_shapes.gd`): the real face count of every
+    flat primitive, a dodecahedron face being a pentagon, a cylinder cap keeping
+    all 64 rim points, the curved shapes not losing faces, and four direct tests
+    of the merge itself, including two coplanar triangles that do not touch
+    staying two faces and a merged quad keeping the winding it came from.
 
 ### Added
 - **CI refuses a `project.godot` that enables local tooling.** The file is

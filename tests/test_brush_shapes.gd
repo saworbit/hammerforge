@@ -9,7 +9,7 @@ var brush: DraftBrush
 
 func before_each():
 	brush = autoqfree(DraftBrush.new())
-	# Don't add to tree — _build_box_faces doesn't need it
+	# Don't add to tree â€” _build_box_faces doesn't need it
 
 
 func after_each():
@@ -902,3 +902,119 @@ func test_a_torus_saved_at_winding_version_1_is_left_alone():
 	var before: PackedVector3Array = PackedVector3Array(brush.faces[0].local_verts)
 	brush.apply_serialized_faces(saved)
 	assert_eq(brush.faces[0].local_verts, before, "A torus should load exactly as it was saved")
+
+
+# ===========================================================================
+# Coplanar triangles merge into one face (#322)
+# ===========================================================================
+
+
+func _face_count(shape_id: int, size: Vector3) -> int:
+	brush.shape = shape_id
+	brush.size = size
+	var build := brush._build_base_mesh()
+	brush._rebuild_faces(build.get("mesh"), build.get("scale", Vector3.ONE))
+	return (brush.faces as Array).size()
+
+
+func test_a_cylinder_is_its_sides_plus_two_caps_not_a_face_per_triangle():
+	# CylinderMesh uses 64 radial segments, so the real face count is 66. It was
+	# 768: every cap wedge and every side triangle was its own FaceData.
+	assert_eq(_face_count(DraftBrush.BrushShape.CYLINDER, Vector3(64, 64, 64)), 66)
+
+
+func test_the_flat_primitives_collapse_to_their_real_face_counts():
+	var expected := {
+		"BOX": 6,
+		"WEDGE": 5,
+		"PYRAMID": 5,
+		"PRISM_TRI": 5,
+		"PRISM_PENT": 7,
+		"TETRAHEDRON": 4,
+		"OCTAHEDRON": 8,
+		"DODECAHEDRON": 12,
+		"ICOSAHEDRON": 20,
+	}
+	for shape_name in expected:
+		var shape_id: int = DraftBrush.BrushShape[shape_name]
+		assert_eq(
+			_face_count(shape_id, Vector3(64, 64, 64)),
+			expected[shape_name],
+			"%s should be %d faces" % [shape_name, expected[shape_name]]
+		)
+
+
+func test_a_merged_dodecahedron_face_is_a_pentagon():
+	_face_count(DraftBrush.BrushShape.DODECAHEDRON, Vector3(64, 64, 64))
+	for i in range(brush.faces.size()):
+		assert_eq(brush.faces[i].local_verts.size(), 5, "Face %d should be a pentagon" % i)
+
+
+func test_a_merged_cylinder_cap_keeps_every_rim_point():
+	_face_count(DraftBrush.BrushShape.CYLINDER, Vector3(64, 64, 64))
+	var caps := 0
+	for face in brush.faces:
+		if absf(face.normal.y) > 0.99:
+			caps += 1
+			assert_eq(face.local_verts.size(), 64, "A cap is the whole rim, not a fan wedge")
+	assert_eq(caps, 2, "A cylinder has two caps")
+
+
+func test_the_curved_primitives_still_produce_faces():
+	# They barely collapse, because almost none of their triangles share a
+	# plane. The guard is that the merge does not lose them.
+	for shape_name in ["SPHERE", "ELLIPSOID", "CAPSULE", "TORUS"]:
+		var shape_id: int = DraftBrush.BrushShape[shape_name]
+		assert_gt(
+			_face_count(shape_id, Vector3(64, 64, 64)), 1000, "%s keeps its faces" % shape_name
+		)
+
+
+func _tri(a: Vector3, b: Vector3, c: Vector3) -> Dictionary:
+	return {"verts": PackedVector3Array([a, b, c]), "uvs": PackedVector2Array()}
+
+
+func test_two_coplanar_triangles_that_do_not_touch_stay_two_faces():
+	# Same plane, no shared edge. Merging them would invent a face across a gap.
+	var far_apart := [
+		_tri(Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(0, 0, 1)),
+		_tri(Vector3(50, 0, 50), Vector3(51, 0, 50), Vector3(50, 0, 51)),
+	]
+	var merged: Array = brush._merge_coplanar_triangles(far_apart)
+	assert_eq(merged.size(), 2, "Disconnected coplanar triangles are two faces")
+
+
+func test_two_coplanar_triangles_that_share_an_edge_become_one_quad():
+	var quad := [
+		_tri(Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(1, 0, 1)),
+		_tri(Vector3(0, 0, 0), Vector3(1, 0, 1), Vector3(0, 0, 1)),
+	]
+	var merged: Array = brush._merge_coplanar_triangles(quad)
+	assert_eq(merged.size(), 1, "A split quad is one face")
+	assert_eq(merged[0].local_verts.size(), 4, "and it has four corners, not five")
+
+
+func test_triangles_on_different_planes_never_merge():
+	var corner := [
+		_tri(Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(1, 0, 1)),
+		_tri(Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(1, 1, 0)),
+	]
+	var merged: Array = brush._merge_coplanar_triangles(corner)
+	assert_eq(merged.size(), 2, "Two planes are two faces even when they share an edge")
+
+
+func test_a_merged_face_keeps_the_winding_of_the_triangles_it_came_from():
+	var quad := [
+		_tri(Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(1, 0, 1)),
+		_tri(Vector3(0, 0, 0), Vector3(1, 0, 1), Vector3(0, 0, 1)),
+	]
+	var single: Array = brush._merge_coplanar_triangles(
+		[_tri(Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(1, 0, 1))]
+	)
+	var merged: Array = brush._merge_coplanar_triangles(quad)
+	assert_almost_eq(
+		merged[0].normal.dot(single[0].normal),
+		1.0,
+		0.001,
+		"The quad should face the same way as the triangles it replaced"
+	)
