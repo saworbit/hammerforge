@@ -32,6 +32,29 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   an actual corner. The convexity check builds its own plane from the first three
   non-collinear vertices rather than reading the face normal, because an
   area-weighted average is the one plane that hides a bend.
+- **The resize path took sizes the create path refuses** (#378). A brush gets
+  its size two ways and the two disagreed completely. `create_brush_from_info()`
+  puts a size through `_usable_size()`, which floors a zero extent, makes a
+  negative one positive, warns about both, and refuses a non-finite one outright.
+  `set_brush_transform_by_id()` — the dock's size fields, the gizmo commit and
+  every scripted resize — wrote the value straight onto the property. A negative
+  size built the brush inside out, a zero size built no volume, and a NaN size
+  poisoned the AABB with no editor action that put it back. The resize path goes
+  through the same funnel now, and refuses a non-finite position with it.
+- **A non-finite nudge offset sent the selection to nowhere** (#379). The only
+  guard was `offset.is_zero_approx()`, which is a magnitude test that a NaN
+  passes. The offset comes from the dock's transform fields and from the
+  arrow-key nudge, which uses `grid_snap`, so one bad number moved every selected
+  brush to a position with no AABB, nothing drawn to click, and the `.hflevel`
+  keeping it. `nudge_brushes_by_id()` and `nudge_entities_by_paths()` refuse a
+  non-finite offset.
+- **An array with a non-finite layout number built every copy at a NaN position**
+  (#382). `can_generate()` checked the copy count and the source count and never
+  looked at the numbers that decide where a copy lands, so five copies meant five
+  lost brushes rather than one. `linear_placements()`, `radial_placements()` and
+  `grid_placements()` lay out nothing when the offset, spacing, step, rise or
+  pivot they were handed is not a number, and `can_generate()` takes the layout
+  parameters so the refusal says which fields to check.
 - **A grid array with a negative axis count was built rather than refused**
   (#346). The linear and radial paths refuse a count below one with a message and
   a fix hint; the grid path clamped `(-2, 2, 2)` up to `(1, 2, 2)` first, so
