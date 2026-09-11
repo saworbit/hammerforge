@@ -33,17 +33,18 @@ func test_quake_format_face_line_basic():
 
 
 func test_quake_format_face_line_with_face_data():
-	# Quake adapter ignores face_data — output should be the same
+	# Classic Quake has no texture axes, but it does have an offset, a rotation
+	# and a scale, so the face's own numbers go in them rather than a fixed tail.
 	var adapter = HFMapQuake.new()
 	var fd = FaceData.new()
 	fd.uv_scale = Vector2(2.0, 2.0)
 	fd.uv_offset = Vector2(16.0, 32.0)
+	fd.uv_rotation = 45.0
 	var a = Vector3(0, 0, 0)
 	var b = Vector3(32, 0, 0)
 	var c = Vector3(32, 32, 0)
 	var line = adapter.format_face_line(a, b, c, "stone", fd)
-	# Classic Quake always uses 0 0 0 1 1 for UV params
-	assert_string_contains(line, "0 0 0 1 1")
+	assert_string_contains(line, "stone 16 32 45 2 2")
 
 
 func test_quake_format_face_line_fractional_coords():

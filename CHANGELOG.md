@@ -651,6 +651,45 @@ The format is based on Keep a Changelog, and this project follows semantic versi
     record, correction and detach intact, an update refused at the cap, a grid and
     a radial array over the cap, a grid under it still building, a refused create
     not disturbing the existing array, and the copy count matching the placements.
+- **`.map` export writes the face's material, not `__default`** (#286). Every
+  face line used the module constant, so a level with a full palette exported to
+  a file where every face read `__default` and importing it back gave every face
+  slot 0. The name now comes from the palette through `face.material_idx`, with
+  `__default` kept for an unset or out-of-range index. Import reads the texture
+  token off the face line and maps it back to a palette slot by name.
+  - The texture field is positional and whitespace delimited, so a name with a
+    space in it would be read as the name plus the start of the UV numbers.
+    `MapIO.texture_token()` collapses whitespace to underscores, and import
+    matches on the same token.
+  - A name the palette does not hold leaves the face unset. A `.map` names a
+    texture without saying where it lives, so adding a material would mean
+    putting a guessed resource path on the face.
+  - Box brushes build their own faces, so their textures travel keyed on the
+    plane normal and are matched to the faces the box makes. Everything else
+    lines up index for index against the hull polygons, which carry the plane
+    they came from.
+  - **The UV tail carries the face's numbers** in both adapters. Classic Quake
+    has no texture axes, but it does have an offset, a rotation and a scale, and
+    it was writing `0 0 0 1 1` into all five.
+- **A cylinder exports `sides + 2` planes instead of `3 * sides`** (#291). The
+  caps were walked as a triangle fan and a plane written per wedge, but a `.map`
+  brush is an intersection of half spaces and every wedge of a flat cap lies in
+  the same plane. A 16-sided cylinder went out as 48 planes, 30 of them exact
+  duplicates of two, which is what several external compilers report as a
+  degenerate brush. Each cap is now one plane taken from three points on its
+  ring.
+  - The cylinder writer also wrote its planes facing inward, which the format
+    notes already promised it did not. Its walls and caps now face outward like
+    the box and custom-face writers. Import tried both orientations, so this was
+    invisible until the file reached another tool.
+  - Face data for a cylinder plane is found by normal rather than by counting.
+    Curved primitives take their faces from the mesh, so the old index walk was
+    assuming a face order the mesh generator does not promise.
+  - **Coverage** (`tests/test_map_face_fidelity.gd`): an assigned material on
+    every face line, an unset and an out-of-range index, the whitespace token, the
+    UV tail, the plane count at three side counts, no two planes coincident, every
+    plane facing outward, a whole-brush and a per-face round trip, and a texture
+    the palette does not hold.
 - **A prefab could wire its copy's outputs to the entities it was built from.**
   `HFPrefab.instantiate()` remapped I/O by turning each old node name into the new
   one and then looking that name back up. The lookup resolves an authored
