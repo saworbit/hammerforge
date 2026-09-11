@@ -626,6 +626,31 @@ The format is based on Keep a Changelog, and this project follows semantic versi
     its material down a slot, a face whose material was removed, a face below the
     removal, an out-of-range index, a second prototype load adding nothing,
     unique names after two loads, and a hand-made material keeping slot 0.
+- **A bad array count no longer deletes the array** (#299). `regenerate()` called
+  `clear_instances()` before asking whether the new numbers produced anything, so
+  typing 0 into an array's count threw the copies away and then reported failure.
+  `update_duplicate_array()` read that failure as "the copies are gone, so the
+  record is dead" and erased the record, leaving the array unreachable: a good
+  count afterwards returned false, and so did detach. The check now runs before
+  the teardown, on both sides, so a count the layout cannot use is a no-op with
+  the copies still standing and the record still there to correct. The erase is
+  kept for the case it was written for, which is every source brush deleted.
+- **The 256-copy ceiling holds on every path** (#300). `can_generate()` was
+  called only from the dock's linear-create button, so `create_grid_array()` and
+  `update_duplicate_array()` walked straight past it: a 12-cubed grid built 1728
+  brushes and reported success, and an array created inside the cap could be
+  raised to any size afterwards. The check now sits in `generate()`,
+  `generate_radial()`, `generate_grid()` and `regenerate()`, and in the three
+  `create_*` methods on `HFBrushSystem` ahead of `_new_duplicator_for()` so a
+  refusal cannot take the array the user already had with it. The dock keeps its
+  early check for the message it shows before the user commits.
+  - `HFDuplicator.grid_copy_count()` and `requested_copy_count()` work out how
+    many copies a layout would make without building it, which is what lets the
+    refusal land first. Both agree with `placements_for()`, and a test pins that.
+  - **Coverage** (`tests/test_array_limits.gd`): a refused update leaving copies,
+    record, correction and detach intact, an update refused at the cap, a grid and
+    a radial array over the cap, a grid under it still building, a refused create
+    not disturbing the existing array, and the copy count matching the placements.
 - **A prefab could wire its copy's outputs to the entities it was built from.**
   `HFPrefab.instantiate()` remapped I/O by turning each old node name into the new
   one and then looking that name back up. The lookup resolves an authored

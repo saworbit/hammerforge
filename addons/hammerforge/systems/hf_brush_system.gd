@@ -2177,7 +2177,10 @@ var _duplicators: Dictionary = {}  # duplicator_id -> HFDuplicator
 func create_duplicate_array(
 	brush_ids: PackedStringArray, p_count: int, p_offset: Vector3
 ) -> Variant:
-	if brush_ids.is_empty() or p_count < 1:
+	# Asked before _new_duplicator_for, which retires whatever array already owns
+	# these sources and takes its copies with it. A refusal must not cost the user
+	# the array they already had.
+	if not HFDuplicator.can_generate(p_count, brush_ids.size()).ok:
 		return null
 	var dup := _new_duplicator_for(brush_ids)
 	if not dup.generate(self, p_count, p_offset):
@@ -2196,7 +2199,7 @@ func create_radial_array(
 	pivot: Vector3,
 	rise: float = 0.0
 ) -> Variant:
-	if brush_ids.is_empty() or p_count < 1:
+	if not HFDuplicator.can_generate(p_count, brush_ids.size()).ok:
 		return null
 	var dup := _new_duplicator_for(brush_ids)
 	if not dup.generate_radial(self, p_count, axis_index, step_degrees, pivot, rise):
@@ -2207,7 +2210,7 @@ func create_radial_array(
 
 ## Lattice of copies. `counts` includes the source cell on each axis.
 func create_grid_array(brush_ids: PackedStringArray, counts: Vector3i, spacing: Vector3) -> Variant:
-	if brush_ids.is_empty():
+	if not HFDuplicator.can_generate(HFDuplicator.grid_copy_count(counts), brush_ids.size()).ok:
 		return null
 	var dup := _new_duplicator_for(brush_ids)
 	if not dup.generate_grid(self, counts, spacing):
@@ -2248,9 +2251,19 @@ func update_duplicate_array(duplicator_id: String, mode: int, params: Dictionary
 	if not _duplicators.has(duplicator_id):
 		return false
 	var dup: HFDuplicator = _duplicators[duplicator_id]
+	# A layout that cannot be built is refused with the array untouched, so the
+	# user can correct the number they typed. Nothing is torn down and the record
+	# stays reachable.
+	if not (
+		HFDuplicator
+		. can_generate(dup.requested_copy_count(mode, params), dup.source_brush_ids.size())
+		. ok
+	):
+		return false
 	if not dup.regenerate(self, mode, params):
-		# A rebuild that produced nothing has already thrown the old copies away,
-		# so the record no longer describes anything that exists.
+		# Past that check, a rebuild that produced nothing means the sources
+		# themselves are gone, so the record no longer describes anything that
+		# could exist.
 		_duplicators.erase(duplicator_id)
 		return false
 	return true

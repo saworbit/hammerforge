@@ -130,6 +130,22 @@ static func can_generate(copy_count: int, source_count: int) -> HFOpResult:
 	return HFOpResult.success("%d copies" % copy_count)
 
 
+## How many copies a grid of these counts makes. The counts include the source
+## cell on each axis, so the source itself is not a copy.
+static func grid_copy_count(p_counts: Vector3i) -> int:
+	var counts := Vector3i(maxi(1, p_counts.x), maxi(1, p_counts.y), maxi(1, p_counts.z))
+	return counts.x * counts.y * counts.z - 1
+
+
+## How many copies a rebuild with these parameters would make, worked out
+## without building anything. This is what lets a refusal land before the old
+## copies are torn down.
+func requested_copy_count(p_mode: int, params: Dictionary) -> int:
+	if p_mode == ArrayMode.GRID:
+		return grid_copy_count(params.get("counts", grid_counts))
+	return int(params.get("count", count))
+
+
 var duplicator_id := ""
 var source_brush_ids: PackedStringArray = PackedStringArray()
 var instance_groups: Array = []  # Array of PackedStringArray, one per copy
@@ -157,7 +173,7 @@ func _init() -> void:
 ## Create N copies of the source brushes with progressive offset.
 ## brush_system is untyped to avoid circular preload.
 func generate(brush_system, p_count: int, p_offset: Vector3) -> bool:
-	if source_brush_ids.is_empty() or p_count < 1:
+	if not can_generate(p_count, source_brush_ids.size()).ok:
 		return false
 	count = p_count
 	offset = p_offset
@@ -206,7 +222,7 @@ func generate_radial(
 	p_pivot: Vector3,
 	p_rise: float = 0.0
 ) -> bool:
-	if source_brush_ids.is_empty() or p_count < 1:
+	if not can_generate(p_count, source_brush_ids.size()).ok:
 		return false
 	mode = ArrayMode.RADIAL
 	count = p_count
@@ -237,11 +253,9 @@ func generate_radial(
 ## Create a lattice of copies. `p_counts` includes the source cell on each axis,
 ## so 2x1x2 produces three copies around one original.
 func generate_grid(brush_system, p_counts: Vector3i, p_spacing: Vector3) -> bool:
-	if source_brush_ids.is_empty():
+	if not can_generate(grid_copy_count(p_counts), source_brush_ids.size()).ok:
 		return false
 	var counts := Vector3i(maxi(1, p_counts.x), maxi(1, p_counts.y), maxi(1, p_counts.z))
-	if counts.x * counts.y * counts.z <= 1:
-		return false
 	mode = ArrayMode.GRID
 	grid_counts = counts
 	grid_spacing = p_spacing
@@ -321,6 +335,11 @@ func settings() -> Dictionary:
 ## stays an editor for it.
 func regenerate(brush_system, p_mode: int, params: Dictionary) -> bool:
 	if source_brush_ids.is_empty():
+		return false
+	# Asked before anything is torn down. A count the layout cannot use is a
+	# refusal with the existing copies still standing, not a demolition
+	# followed by the news that nothing could be built in their place.
+	if not can_generate(requested_copy_count(p_mode, params), source_brush_ids.size()).ok:
 		return false
 	clear_instances(brush_system)
 	if not _lay_out(brush_system, p_mode, params):

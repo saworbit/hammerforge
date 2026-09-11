@@ -544,7 +544,14 @@ brings it back.
 is a lattice of over thirty-two thousand brushes — not an edit but a hang. Ask
 for more than the ceiling and the ghost disappears and the line tells you the
 number you asked for, so you know which control to turn back. **Create Array**
-refuses the same arrays for the same reason.
+refuses the same arrays for the same reason, and so does **Update Array**: the
+ceiling is not a property of one button, so raising an existing array past it is
+refused too.
+
+**A refused array costs you nothing.** Whether you are creating or updating, the
+refusal lands before anything is built or taken away. Type a count the layout
+cannot use into an array you already have, press Update, and the copies stay
+where they are with the array still selected, ready for a number that works.
 
 **Ctrl+Z takes an array back out.** All three layouts are one undo step, so an
 array you did not want goes away in a single press rather than one copy at a
