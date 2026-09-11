@@ -763,6 +763,18 @@ The format is based on Keep a Changelog, and this project follows semantic versi
     both ways, four ordinary properties that must not read as connections, both
     entity kinds exporting, two outputs on one event, an unwired block gaining
     nothing, and a round trip for each entity kind.
+- **Numeric dimension entry accepts the keypad** (#297). `KEY_KP_0` through
+  `KEY_KP_9` and `KEY_KP_PERIOD` were not handled anywhere, while `KEY_KP_ENTER`
+  was accepted in six places including the commit key right below the digit
+  check. So typing a size on the keypad mid-drag put nothing in the buffer, and
+  then keypad Enter ended the gesture at whatever size the mouse happened to be
+  at. The half that worked made the half that did not look like the tool had
+  ignored the number rather than never having received it. Mapped by keycode
+  rather than by reading numlock, since with numlock off these keys arrive as
+  arrows and never reach the handler.
+  - **Coverage** (`tests/test_plugin_numeric_input.gd`): a keypad-typed decimal
+    driving the preview, `KEY_KP_0` at the far end of the range, keypad Enter
+    committing a keypad-typed value, and one decimal point whichever key typed it.
 - **A prefab could wire its copy's outputs to the entities it was built from.**
   `HFPrefab.instantiate()` remapped I/O by turning each old node name into the new
   one and then looking that name back up. The lookup resolves an authored
