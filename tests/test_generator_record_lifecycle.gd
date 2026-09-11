@@ -19,6 +19,10 @@ func before_each() -> void:
 	root.commit_freeze = false
 	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
+	# The slot numbers below stand in for "this face was painted", and a slot has
+	# to name something in the palette, so make one deep enough to hold them.
+	while root.get_materials().size() < 12:
+		root.add_material_to_palette(StandardMaterial3D.new())
 
 
 func after_each() -> void:

@@ -22,6 +22,10 @@ func before_each() -> void:
 	root.commit_freeze = false
 	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
+	# A material slot has to name something in the palette, and slot 7 below is
+	# a marker for "this face was painted".
+	while root.get_materials().size() < 12:
+		root.add_material_to_palette(StandardMaterial3D.new())
 	dock.level_root = root
 	_choose("arch")
 	_open_section()

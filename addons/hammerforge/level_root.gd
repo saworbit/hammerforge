@@ -1636,12 +1636,54 @@ func reset_uv_on_face(brush_id: String, face_idx: int) -> void:
 		tag_brush_dirty(brush_id)
 
 
+## Whether a UV scale, offset and rotation can be written onto a face.
+##
+## A non-finite value here reaches the mesh's UV channel, where the vertex is
+## discarded or drawn undefined depending on the driver, and it survives the save
+## — so reopening the level does not clear it, and the geometry still looks
+## right, which is why nobody thinks to look at the UVs. A scale component of
+## zero collapses every vertex of the face onto one texel and cannot be undone by
+## scaling back up. A negative scale is allowed on purpose: it mirrors the
+## texture, which is a thing to want.
+func is_usable_uv_transform(scale: Vector2, offset: Vector2, rotation: float) -> bool:
+	if not scale.is_finite() or not offset.is_finite() or not is_finite(rotation):
+		HFLog.warn("LevelRoot: a UV transform needs finite numbers")
+		return false
+	if is_zero_approx(scale.x) or is_zero_approx(scale.y):
+		HFLog.warn("LevelRoot: a UV scale of zero is not a scale")
+		return false
+	return true
+
+
+## Whether a material slot names something in the palette.
+##
+## `-1` is the default slot and means no material. Anything else has to be an
+## index into the palette: the bake, the `.map` exporter and the UV editor all
+## resolve the slot, and each of their fallbacks for a slot that is not there
+## gives the face something other than what the mapper picked.
+func is_usable_material_slot(material_index: int) -> bool:
+	if material_index == -1:
+		return true
+	if material_index < 0 or material_index >= get_materials().size():
+		HFLog.warn(
+			(
+				"LevelRoot: material slot %d is not in a palette of %d"
+				% [material_index, get_materials().size()]
+			)
+		)
+		return false
+	return true
+
+
 func reproject_face_uvs(brush_id: String, face_idx: int, projection: int) -> void:
 	var brush = brush_system.find_brush_by_id(brush_id)
 	if not brush or not (brush is DraftBrush):
 		return
 	var draft := brush as DraftBrush
 	if face_idx < 0 or face_idx >= draft.faces.size():
+		return
+	if not FaceData.is_valid_projection(projection):
+		HFLog.warn("LevelRoot: %d is not a UV projection" % projection)
 		return
 	var face: FaceData = draft.faces[face_idx]
 	var before := face.to_dict()
@@ -1665,6 +1707,8 @@ func set_face_uv_params(
 		return
 	var draft := brush as DraftBrush
 	if face_idx < 0 or face_idx >= draft.faces.size():
+		return
+	if not is_usable_uv_transform(scale, offset, rotation):
 		return
 	var face: FaceData = draft.faces[face_idx]
 	var before := face.to_dict()
@@ -1785,6 +1829,8 @@ func get_primary_selected_face() -> Dictionary:
 
 
 func assign_material_to_selected_faces(material_index: int) -> int:
+	if not is_usable_material_slot(material_index):
+		return 0
 	return brush_system.assign_material_to_selected_faces(material_index)
 
 
@@ -1793,6 +1839,8 @@ func assign_material_to_faces_by_id(
 ) -> void:
 	var brush: DraftBrush = brush_system.find_brush_by_id(brush_key)
 	if not brush or not is_instance_valid(brush):
+		return
+	if not is_usable_material_slot(material_index):
 		return
 	var typed_indices: Array[int] = []
 	var changed := false
@@ -1811,6 +1859,8 @@ func assign_material_to_faces_by_id(
 
 
 func assign_material_to_whole_brushes(material_index: int, brush_ids: Array) -> int:
+	if not is_usable_material_slot(material_index):
+		return 0
 	var count := 0
 	for bid in brush_ids:
 		var brush: DraftBrush = brush_system._find_brush_by_key(str(bid))
@@ -1830,6 +1880,11 @@ func assign_material_to_whole_brushes(material_index: int, brush_ids: Array) -> 
 
 
 func assign_material_and_reproject(material_index: int, projection: int) -> int:
+	if not is_usable_material_slot(material_index):
+		return 0
+	if not FaceData.is_valid_projection(projection):
+		HFLog.warn("LevelRoot: %d is not a UV projection" % projection)
+		return 0
 	var sel = get_face_selection()
 	var count := 0
 	for brush_key in sel.keys():

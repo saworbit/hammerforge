@@ -116,3 +116,118 @@ func test_load_all_into_keeps_materials_that_were_already_there():
 
 	assert_gt(added, 0, "The prototypes should still load alongside a hand made material")
 	assert_eq(root.get_material_names()[0], "hand_made", "and the existing slot 0 should not move")
+
+
+# -- A slot has to name something in the palette (#343) ------------------------
+
+
+func test_a_slot_outside_the_palette_is_refused():
+	root.add_material_to_palette(_make_material("A"))
+	root.add_material_to_palette(_make_material("B"))
+	var brush := _make_brush("b1")
+	root.assign_material_to_faces_by_id("b1", [0], 1)
+	for slot in [-2, 2, 999999]:
+		root.assign_material_to_faces_by_id("b1", [0], slot)
+		assert_eq(brush.faces[0].material_idx, 1, "slot %d must not stick" % slot)
+
+
+func test_the_default_slot_is_still_allowed():
+	root.add_material_to_palette(_make_material("A"))
+	var brush := _make_brush("b1")
+	root.assign_material_to_faces_by_id("b1", [0], 0)
+	root.assign_material_to_faces_by_id("b1", [0], -1)
+	assert_eq(brush.faces[0].material_idx, -1, "-1 means no material")
+
+
+func test_assigning_a_bad_slot_to_whole_brushes_changes_nothing():
+	root.add_material_to_palette(_make_material("A"))
+	var brush := _make_brush("b1")
+	assert_eq(root.assign_material_to_whole_brushes(7, ["b1"]), 0)
+	for face in brush.faces:
+		assert_eq(face.material_idx, -1)
+
+
+func test_validate_reports_and_fixes_a_slot_below_the_default():
+	root.add_material_to_palette(_make_material("A"))
+	var brush := _make_brush("b1")
+	brush.faces[0].material_idx = -5
+	var report: Dictionary = root.validate_level(false)
+	assert_gt(_issues_mentioning(report, "missing materials").size(), 0, "reported")
+	root.validate_level(true)
+	assert_eq(brush.faces[0].material_idx, -1, "reset to the default slot")
+
+
+func _issues_mentioning(report: Dictionary, text: String) -> Array:
+	var out: Array = []
+	for issue in report.get("issues", []):
+		if str(issue).findn(text) >= 0:
+			out.append(issue)
+	return out
+
+
+# -- A UV projection has to be one of the projections (#345) -------------------
+
+
+func test_reprojecting_to_an_integer_that_is_not_a_projection_is_refused():
+	var brush := _make_brush("b1")
+	root.reproject_face_uvs("b1", 0, FaceData.UVProjection.PLANAR_X)
+	for bad in [-1, 99]:
+		root.reproject_face_uvs("b1", 0, bad)
+		assert_eq(
+			brush.faces[0].uv_projection,
+			FaceData.UVProjection.PLANAR_X,
+			"projection %d must not stick" % bad
+		)
+
+
+func test_a_projection_out_of_range_does_not_survive_a_load():
+	var face := FaceData.new()
+	face.local_verts = PackedVector3Array([Vector3.ZERO, Vector3(1, 0, 0), Vector3(1, 1, 0)])
+	face.uv_projection = 99
+	var restored := FaceData.from_dict(face.to_dict())
+	assert_true(
+		FaceData.is_valid_projection(restored.uv_projection), "a file cannot smuggle one in"
+	)
+
+
+func test_validate_reports_and_fixes_a_projection_that_is_not_one():
+	var brush := _make_brush("b1")
+	brush.faces[0].uv_projection = 99
+	var report: Dictionary = root.validate_level(false)
+	assert_gt(_issues_mentioning(report, "UV projection").size(), 0, "reported")
+	root.validate_level(true)
+	assert_true(FaceData.is_valid_projection(brush.faces[0].uv_projection))
+
+
+# -- A UV transform has to be usable (#344) -----------------------------------
+
+
+func test_a_uv_transform_that_is_not_numbers_is_refused():
+	var brush := _make_brush("b1")
+	root.set_face_uv_params("b1", 0, Vector2(2, 2), Vector2(1, 1), 0.5)
+	var kept := brush.faces[0].to_dict()
+	var bad := [
+		[Vector2(NAN, 1), Vector2.ZERO, 0.0],
+		[Vector2.ONE, Vector2(INF, 0), 0.0],
+		[Vector2.ONE, Vector2.ZERO, NAN],
+	]
+	for entry in bad:
+		root.set_face_uv_params("b1", 0, entry[0], entry[1], entry[2])
+		assert_eq(brush.faces[0].to_dict(), kept, "%s must not stick" % str(entry))
+	for uv in brush.faces[0].custom_uvs:
+		assert_true(uv.is_finite(), "no non-finite UV reached the mesh")
+
+
+func test_a_uv_scale_of_zero_is_refused():
+	var brush := _make_brush("b1")
+	root.set_face_uv_params("b1", 0, Vector2(2, 2), Vector2.ZERO, 0.0)
+	root.set_face_uv_params("b1", 0, Vector2(0, 2), Vector2.ZERO, 0.0)
+	assert_almost_eq(brush.faces[0].uv_scale.x, 2.0, 0.0001, "zero collapses the face")
+	root.set_face_uv_params("b1", 0, Vector2(2, 0), Vector2.ZERO, 0.0)
+	assert_almost_eq(brush.faces[0].uv_scale.y, 2.0, 0.0001)
+
+
+func test_a_negative_uv_scale_is_allowed_because_it_mirrors():
+	var brush := _make_brush("b1")
+	root.set_face_uv_params("b1", 0, Vector2(-1, 1), Vector2.ZERO, 0.0)
+	assert_almost_eq(brush.faces[0].uv_scale.x, -1.0, 0.0001)

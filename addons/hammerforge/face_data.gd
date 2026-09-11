@@ -95,6 +95,16 @@ func adjust_uvs_for_transform(pos_delta: Vector3, size_ratio: Vector3) -> void:
 		uv_scale *= inv_size
 
 
+## Whether an integer names one of this enum's projections.
+##
+## `uv_projection` is a bare `int`, and the projector falls through its `match`
+## to the `(x, y)` branch for anything else — so an out of range value is stored,
+## saved, reloaded and exported as a projection nobody chose and no dock control
+## can show.
+static func is_valid_projection(projection: int) -> bool:
+	return projection >= 0 and projection <= UVProjection.CYLINDRICAL
+
+
 ## The two local directions a planar projection reads, in (u, v) order.
 ##
 ## These are the axes `_project_uvs_for_vertices()` samples, written out so the
@@ -353,7 +363,11 @@ func to_dict() -> Dictionary:
 static func from_dict(data: Dictionary) -> FaceData:
 	var face = FaceData.new()
 	face.material_idx = int(data.get("material_idx", -1))
-	face.uv_projection = int(data.get("uv_projection", UVProjection.PLANAR_Z))
+	var stored_projection := int(data.get("uv_projection", UVProjection.PLANAR_Z))
+	if not is_valid_projection(stored_projection):
+		# An older or newer file, or a hand edit. The enum has to mean something.
+		stored_projection = UVProjection.PLANAR_Z
+	face.uv_projection = stored_projection
 	face.uv_scale = _decode_vec2(data.get("uv_scale", null), Vector2.ONE)
 	face.uv_offset = _decode_vec2(data.get("uv_offset", null), Vector2.ZERO)
 	face.uv_rotation = float(data.get("uv_rotation", 0.0))
