@@ -8,6 +8,14 @@ extends RefCounted
 
 const HFHash = preload("hf_hash.gd")
 
+## The most instances one scatter stroke may lay out.
+##
+## The candidate count is quadratic in the brush radius, so a radius a mapper
+## can type by accident asks for millions of Transform3Ds and the editor is
+## gone for the duration. HFDuplicator refuses past MAX_COPY_BRUSHES the same
+## way rather than building whatever it was handed.
+const MAX_SCATTER_INSTANCES := 50000
+
 ## Brush shape for scatter placement.
 enum BrushShape { CIRCLE, SPLINE }
 
@@ -49,6 +57,8 @@ class ScatterResult:
 	var transforms: Array[Transform3D] = []
 	var rejected_count: int = 0  # Filtered by slope/height
 	var total_candidates: int = 0
+	## Set when the stroke was refused before it ran. Null on a normal result.
+	var refusal: HFOpResult = null
 
 
 ## Generate scatter transforms for a circle brush centered at `center`.
@@ -64,6 +74,9 @@ func scatter_circle(
 	var area := PI * r * r
 	var count := int(ceil(area * settings.density))
 	result.total_candidates = count
+	result.refusal = check_candidate_count(count, "radius %s" % r)
+	if result.refusal:
+		return result
 
 	var rng := RandomNumberGenerator.new()
 	rng.seed = settings.seed if settings.seed != 0 else Time.get_ticks_usec()
@@ -120,6 +133,9 @@ func scatter_spline(layer: HFPaintLayer, settings: ScatterSettings) -> ScatterRe
 	var area := total_length * settings.spline_width
 	var count := int(ceil(area * settings.density))
 	result.total_candidates = count
+	result.refusal = check_candidate_count(count, "a %.1f unit path" % total_length)
+	if result.refusal:
+		return result
 
 	for _i in range(count):
 		# Pick random position along spline length
@@ -143,6 +159,22 @@ func scatter_spline(layer: HFPaintLayer, settings: ScatterSettings) -> ScatterRe
 		result.transforms.append(xform)
 
 	return result
+
+
+## Whether a stroke asking for this many candidates is allowed to run.
+##
+## `what` names the setting that produced the count so the message points at
+## the field to change rather than at the number it arrived as.
+func check_candidate_count(count: int, what: String) -> HFOpResult:
+	if count <= MAX_SCATTER_INSTANCES:
+		return null
+	return HFOpResult.fail(
+		"Scatter: %s at this density is %d instances" % [what, count],
+		(
+			"Keep the total at or below %d by lowering the radius or the density"
+			% MAX_SCATTER_INSTANCES
+		)
+	)
 
 
 ## Build a density preview MultiMesh (lightweight wireframe dots).
@@ -170,11 +202,14 @@ func build_preview(transforms: Array[Transform3D], settings: ScatterSettings) ->
 	return mm
 
 
-## Commit the scatter result as a permanent MultiMeshInstance3D.
-func commit(
-	transforms: Array[Transform3D], settings: ScatterSettings, parent: Node3D
+## Build the committed MultiMeshInstance3D without putting it in the scene.
+##
+## The caller parents it, which is what lets the dock do that inside an undo
+## action instead of after one.
+func build_instance(
+	transforms: Array[Transform3D], settings: ScatterSettings
 ) -> MultiMeshInstance3D:
-	if transforms.is_empty() or not settings.mesh or not parent:
+	if transforms.is_empty() or not settings.mesh:
 		return null
 
 	var mm := MultiMesh.new()
@@ -187,8 +222,49 @@ func commit(
 	var mmi := MultiMeshInstance3D.new()
 	mmi.multimesh = mm
 	mmi.name = "Scatter_%d" % Time.get_ticks_usec()
-	parent.add_child(mmi)
 	return mmi
+
+
+## Commit the scatter result as a permanent MultiMeshInstance3D.
+func commit(
+	transforms: Array[Transform3D], settings: ScatterSettings, parent: Node3D
+) -> MultiMeshInstance3D:
+	if not parent:
+		return null
+	var mmi := build_instance(transforms, settings)
+	if not mmi:
+		return null
+	parent.add_child(mmi)
+	assign_scene_owner(mmi)
+	return mmi
+
+
+## The owner the level's other generated nodes have, resolved from `parent`.
+##
+## A node with a null owner is not written into the .tscn, so a committed
+## scatter without one is in the viewport until the scene is closed and gone
+## after.
+static func scene_owner_for(parent: Node) -> Node:
+	if not parent:
+		return null
+	var tree := parent.get_tree()
+	if tree and tree.edited_scene_root:
+		return tree.edited_scene_root
+	var up := parent
+	while up:
+		if up.owner:
+			return up.owner
+		up = up.get_parent()
+	return null
+
+
+## Give an already parented node that owner.
+static func assign_scene_owner(node: Node) -> void:
+	if not node or not node.is_inside_tree():
+		return
+	var scene_owner := scene_owner_for(node.get_parent())
+	if scene_owner and scene_owner != node:
+		node.owner = scene_owner
 
 
 # ---------------------------------------------------------------------------
@@ -238,7 +314,10 @@ func _compute_normal(layer: HFPaintLayer, cell: Vector2i, grid: HFPaintGrid) -> 
 	# Cross product of tangent vectors
 	var tx := Vector3(cs, h_right - h, 0.0)
 	var tz := Vector3(0.0, h_up - h, cs)
-	return tx.cross(tz).normalized()
+	# tz into tx, not the other way round: tx.cross(tz) has a -cs^2 Y term, so
+	# it points into the ground for every cell size and stands the instance on
+	# its head.
+	return tz.cross(tx).normalized()
 
 
 func _sample_spline_at(points: PackedVector3Array, t: float, offset: float) -> Vector3:

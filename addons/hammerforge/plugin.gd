@@ -250,6 +250,7 @@ func _enter_tree():
 	# Selection filter popover (Window-based — not a Control, so managed manually)
 	_selection_filter = HFSelectionFilter.new()
 	_selection_filter.filter_applied.connect(_on_selection_filter_applied)
+	_selection_filter.filter_reported.connect(_on_selection_filter_reported)
 	get_editor_interface().get_base_control().add_child(_selection_filter)
 	if should_install_power_user_overlays(_user_prefs):
 		_install_power_user_overlays()
@@ -407,6 +408,7 @@ func _exit_tree():
 	if _selection_filter:
 		if is_instance_valid(_selection_filter):
 			_selection_filter.filter_applied.disconnect(_on_selection_filter_applied)
+			_selection_filter.filter_reported.disconnect(_on_selection_filter_reported)
 			if _selection_filter.get_parent():
 				_selection_filter.get_parent().remove_child(_selection_filter)
 			_selection_filter.queue_free()
@@ -1303,6 +1305,12 @@ func _show_selection_filter() -> void:
 
 func _on_selection_filter_applied(nodes: Array, faces: Dictionary) -> void:
 	HFPluginSelectionCommands.on_filter_applied(self, nodes, faces)
+
+
+## A filter that matched nothing says so, rather than closing in silence.
+func _on_selection_filter_reported(message: String) -> void:
+	if dock:
+		dock.show_toast(message, 1)
 
 
 # ---------------------------------------------------------------------------

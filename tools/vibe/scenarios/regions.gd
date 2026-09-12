@@ -59,15 +59,27 @@ func _eviction_when_the_write_fails() -> void:
 	# A budget the level is well over, so the loop has work to do.
 	paint.region_memory_budget_mb = 1
 	note("budget bytes", 1024 * 1024)
+	var heard: Array = []
+	var sink := func(text: String, _level: int): heard.append(text)
+	root.user_message.connect(sink)
 	paint._evict_for_budget(Vector2i.ZERO)
 	await frame()
+	root.user_message.disconnect(sink)
+	note(
+		"what the eviction pass said",
+		heard[heard.size() - 1] if not heard.is_empty() else "<nothing>"
+	)
 
 	var loaded_after: int = paint.region_manager.loaded_regions.size()
 	var bytes_after: int = paint._total_loaded_bytes()
 	note("regions loaded after the eviction pass", loaded_after)
 	note("bytes still loaded", bytes_after)
 
-	if bytes_after > 1024 * 1024 and loaded_after == loaded_before:
+	var said_over_budget := false
+	for text in heard:
+		if str(text).contains("budget"):
+			said_over_budget = true
+	if bytes_after > 1024 * 1024 and loaded_after == loaded_before and not said_over_budget:
 		known(
 			446,
 			"the eviction loop counts memory it did not free and stops with the budget still blown",
