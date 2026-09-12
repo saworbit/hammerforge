@@ -62,6 +62,16 @@ const SCENARIOS: Array[String] = [
 	"res://tools/vibe/scenarios/heightmap_io.gd",
 	"res://tools/vibe/scenarios/regions.gd",
 	"res://tools/vibe/scenarios/quick_property.gd",
+	"res://tools/vibe/scenarios/dock_undo.gd",
+	"res://tools/vibe/scenarios/dock_settings.gd",
+	"res://tools/vibe/scenarios/uv_defaults.gd",
+	"res://tools/vibe/scenarios/surface_paint.gd",
+	"res://tools/vibe/scenarios/dock_cordon.gd",
+	"res://tools/vibe/scenarios/playtest_spawn.gd",
+	"res://tools/vibe/scenarios/entity_props.gd",
+	"res://tools/vibe/scenarios/bake_materials.gd",
+	"res://tools/vibe/scenarios/dock_ranges.gd",
+	"res://tools/vibe/scenarios/brush_sides.gd",
 ]
 
 

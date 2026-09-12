@@ -10,6 +10,8 @@ extends "res://tools/vibe/hf_vibe_scenario.gd"
 ## winding after a mirror (a negative-determinant basis inverts face winding
 ## invisibly until the bake).
 
+const FaceData = preload("res://addons/hammerforge/face_data.gd")
+
 const AXIS_X := 0
 const AXIS_Y := 1
 const AXIS_Z := 2
@@ -167,38 +169,85 @@ func _reset_rotation_keeps_scale() -> void:
 		flag("reset_rotation left a rotation behind", "euler %s" % euler)
 
 
-## Texture lock claims the texture stays where it was in the world while the
-## brush turns under it. Verified independently: the world direction along which
-## U increases on a given face must not move.
+## What texture lock does to a face under a yaw, against what #355 settled it
+## should do: a face whose projection plane the turn keeps holds its world
+## texture direction, and a face the turn swings out from under its projection
+## carries its texture round with it, upright.
+##
+## The projection decides which of the two a face is, so the faces are given the
+## Box UV projection the dock's re-project button applies -- a face left on the
+## PLANAR_Z default is neither, and that is #463 rather than this.
 func _texture_lock_world_direction() -> void:
 	var root: Node3D = await fresh_root()
 	var b = box(root, Vector3(128, 64, 32))
 	var ids := _ids([b])
 	note("texture lock enabled", root.transform_system._texture_lock_enabled())
+
+	# First, the brush exactly as the Draw tool makes it.
+	var default_locked: bool = b.faces[2].adjust_uvs_for_rotation(
+		Basis(Vector3.UP, deg_to_rad(90.0))
+	)
+	note("a default (PLANAR_Z) top face is compensated under a yaw", default_locked)
+	if not default_locked:
+		known(
+			463,
+			"texture lock declines every face of a brush nobody has re-projected",
+			(
+				"FaceData.uv_projection defaults to PLANAR_Z on all six faces, and"
+				+ " adjust_uvs_for_rotation() refuses any face whose projection plane the turn"
+				+ " takes away -- which under a yaw is every face of a default box. Texture"
+				+ " lock therefore does nothing at all until the mapper re-projects."
+			)
+		)
+
+	for face in b.faces:
+		face.uv_projection = FaceData.UVProjection.BOX_UV
+		face.custom_uvs = PackedVector2Array()
+	b.rebuild_preview()
+	await frame()
+
 	var before: Array = []
+	var normals: Array = []
 	for i in range(b.faces.size()):
 		before.append(_u_direction(b, i))
+		normals.append((b.global_transform.basis * b.faces[i].normal).normalized())
 	root.rotate_managed_nodes(ids, [], AXIS_Y, 90.0, Vector3.ZERO)
 	await frame()
+	var turn := Basis(Vector3.UP, deg_to_rad(90.0))
 	for i in range(b.faces.size()):
 		var n0: Vector3 = before[i]
 		var n1: Vector3 = _u_direction(b, i)
 		if n0 == Vector3.ZERO or n1 == Vector3.ZERO:
 			note("face %d" % i, "no measurable U direction (before %s after %s)" % [n0, n1])
 			continue
-		var moved := rad_to_deg(n0.angle_to(n1))
-		var normal: Vector3 = (b.global_transform.basis * b.faces[i].normal).normalized()
+		var normal: Vector3 = normals[i]
+		var turns_in_its_own_plane: bool = absf(normal.dot(Vector3.UP)) > 0.9
+		var locked: bool = n1.dot(n0) > 0.999
+		var carried: bool = n1.dot((turn * n0).normalized()) > 0.999
 		note(
 			"face %d (world normal %s)" % [i, normal.snapped(Vector3.ONE * 0.01)],
-			"U direction moved %.1f deg" % moved
+			"locked %s, carried %s" % [locked, carried]
 		)
-		if moved > 1.0:
-			known(
-				333,
-				"texture lock moves the U direction on face %d by %.1f deg" % [i, moved],
+		if turns_in_its_own_plane and not locked:
+			flag(
+				"a yaw moves the texture on face %d, which turns in its own plane" % i,
 				(
-					"world normal %s: a 90 deg yaw should leave the texture on a vertical wall alone"
-					% normal.snapped(Vector3.ONE * 0.01)
+					(
+						"world normal %s: the projection plane is the one the turn keeps, so the"
+						+ " compensation should hold the texture where it was. U went from %s to %s."
+					)
+					% [normal.snapped(Vector3.ONE * 0.01), n0, n1]
+				)
+			)
+		elif not turns_in_its_own_plane and not carried:
+			flag(
+				"a yaw tips the texture on face %d" % i,
+				(
+					(
+						"world normal %s: the wall swings round, so its texture should go with it"
+						+ " upright. U went from %s to %s, and carrying it would be %s."
+					)
+					% [normal.snapped(Vector3.ONE * 0.01), n0, n1, (turn * n0).normalized()]
 				)
 			)
 

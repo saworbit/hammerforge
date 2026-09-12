@@ -257,12 +257,28 @@ func _splitting_an_edge() -> void:
 		var cross: Vector3 = (fv[2] - fv[0]).normalized().cross((fv[1] - fv[0]).normalized())
 		if cross.length() <= 0.0001:
 			collinear += 1
-			known(
-				367,
-				"split_edge leaves a face whose first three vertices are collinear",
+		# Since #387 the normal comes from Newell's method over the whole polygon
+		# rather than the opening triple, so a collinear triple is allowed to exist
+		# as long as the normal it produces is still the face's own plane. That is
+		# the thing worth checking, and it is checkable independently.
+		var newell := Vector3.ZERO
+		for i in fv.size():
+			var current: Vector3 = fv[i]
+			var next: Vector3 = fv[(i + 1) % fv.size()]
+			newell += Vector3(
+				(current.y - next.y) * (current.z + next.z),
+				(current.z - next.z) * (current.x + next.x),
+				(current.x - next.x) * (current.y + next.y)
+			)
+		# Newell as written here follows the counter-clockwise convention; HammerForge
+		# winds clockwise from outside, so the two agree up to sign. The plane is
+		# what is being checked, and inward-facing geometry has its own probe below.
+		if newell.length() > 0.0001 and absf(face.normal.dot(newell.normalized())) < 0.999:
+			flag(
+				"a face's stored normal is not the plane its vertices lie in",
 				(
-					"_compute_normal() measures only local_verts[0..2], gets a zero cross and falls back to Vector3.UP -- this face now reports normal %s"
-					% face.normal
+					"after split_edge, face normal %s against %s measured over the whole polygon"
+					% [face.normal, newell.normalized()]
 				)
 			)
 	note("faces with a collinear opening triple after one split", collinear)

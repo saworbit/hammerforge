@@ -95,16 +95,18 @@ func _prefs_that_will_not_parse() -> void:
 	prefs.persistence_enabled = false
 	note("grid_snap after loading a truncated file", prefs.get_pref("grid_snap"))
 	note("recent files after loading a truncated file", prefs.get_recent_files())
-	if float(prefs.get_pref("grid_snap")) == 16.0:
-		known(
-			409,
-			"a prefs file that does not parse is replaced by the defaults with no warning",
+	# #423 kept the defaults for an unreadable file -- which is right -- and added
+	# the two things that were missing: the damaged file is set aside rather than
+	# overwritten, and the loader says why. Both are what this checks now.
+	var kept := UserPrefs.PREFS_PATH + ".unreadable"
+	note("the unreadable file was kept as", kept if FileAccess.file_exists(kept) else "nothing")
+	if not FileAccess.file_exists(kept):
+		flag(
+			"a prefs file that will not parse is discarded rather than set aside",
 			(
-				"load_prefs() falls through to _defaults() when JSON.parse_string() fails --"
-				+ " no push_warning, no backup of the unreadable file, and the next save()"
-				+ " overwrites it. Recent files, collapsed sections, dismissed hints and the"
-				+ " grid size are all gone, and the user is told nothing. save() is also not"
-				+ " atomic, which is how the file gets into this state."
+				"load_prefs() falls back to the defaults, which is right, but the file it could"
+				+ " not read is the only copy of the user's recent files, collapsed sections and"
+				+ " dismissed hints. #423 kept it as <prefs>.unreadable; nothing is there now."
 			)
 		)
 	_restore_prefs()
@@ -122,16 +124,24 @@ func _a_rebind_onto_a_key_already_in_use() -> void:
 	km.set_binding("hollow", KEY_G, true)
 	var both := km.matches("group", event) and km.matches("hollow", event)
 	note("after binding 'hollow' to Ctrl+G, both match", both)
-	if both:
-		known(
-			410,
-			"a rebind onto a combination another action already uses is accepted silently",
+	# Two actions sharing a chord is still what the keymap stores -- #428 made it
+	# reportable rather than refused, so the question is whether the report names
+	# the pair. The dialog, the loader and set_binding() all read this.
+	var reported: Array = []
+	if km.has_method("conflicts_for"):
+		reported = Array(km.conflicts_for("hollow"))
+	note("conflicts_for('hollow') after the rebind", reported)
+	if both and not reported.has("group"):
+		flag(
+			"a rebind onto a chord another action already uses is not reported",
 			(
-				"set_binding() writes the binding with no check against the other actions, and"
-				+ " matches() then answers true for both. plugin_input_router tests the actions"
-				+ " one at a time and returns STOP on the first hit, so the one checked earlier"
-				+ " wins and the other becomes unreachable -- decided by the order of the ifs in"
-				+ " the router, with nothing in the UI saying the key was already taken."
+				(
+					"set_binding() wrote the binding and matches() answers true for both, which is"
+					+ " what #428 settled on -- but conflicts_for() is the report that makes it"
+					+ " visible in the shortcut dialog, and it does not name the action that was"
+					+ " already there: %s"
+				)
+				% str(reported)
 			)
 		)
 

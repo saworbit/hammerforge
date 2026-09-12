@@ -77,6 +77,16 @@ SCENARIOS = [
     "heightmap-io",
     "regions",
     "quick-property",
+    "dock-undo",
+    "dock-settings",
+    "uv-defaults",
+    "surface-paint",
+    "dock-cordon",
+    "playtest-spawn",
+    "entity-props",
+    "bake-materials",
+    "dock-ranges",
+    "brush-sides",
 ]
 
 # Generous: chaos runs 300 operations and cost saves eight levels. A scenario
