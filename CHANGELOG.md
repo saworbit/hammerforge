@@ -50,6 +50,16 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   next save and reopen; the commit now runs inside one undo action and gives
   the node the same owner the level's other generated nodes have.
   `HFFoliagePopulator` gets the owner too.
+- **Saving a level no longer rounds every heightmap sample to 8 bits** (#445). A
+  paint layer's heightmap is a `FORMAT_RF` image - one 32 bit float per sample -
+  and `HFHeightmapIO` stored it as a base64 PNG. PNG has no float channel, so
+  Godot wrote it as 8 bit and the decode converted the 8 bit result back to RF:
+  256 height values survived across the whole range, anything above 1.0 or below
+  0.0 was clamped to the limit, and each save re-rounded the already rounded
+  data. `HFStateSystem.capture_state()` uses the same encoder, so an undo of an
+  unrelated operation moved the terrain. The heightmap is now stored as the raw
+  float buffer, zstd compressed, behind a small header, which loses nothing. A
+  base64 PNG written by an older version is still recognised and loaded.
 - **A shortcut rebound onto a chord another action already uses was accepted in
   silence** (#410). Nothing compared a new binding against the others, so
   `matches()` answered true for both, and `plugin_input_router` tests actions one
