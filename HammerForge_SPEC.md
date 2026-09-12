@@ -349,7 +349,7 @@ Foliage Populator
 - Brush records include face data (materials, UVs, paint layers), visgroup membership, group_id, and `brush_entity_class`.
 - Entity records include visgroup membership, group_id, and `io_outputs` (Entity I/O connections).
 - Paint layers include grid settings, chunk size, bitset data, `material_ids`, `blend_weights` (+ _2/_3), and terrain slot settings.
-- Optional per-layer: `heightmap_b64` (base64 PNG), `height_scale`. Missing keys = no heightmap (backward-compatible).
+- Optional per-layer: `heightmap_b64` (base64 raw float buffer, zstd compressed; a base64 PNG from an older version still loads), `height_scale`. Missing keys = no heightmap (backward-compatible).
 - Level settings include `texture_lock`, `cordon_enabled`, `cordon_aabb_pos`, `cordon_aabb_size`.
 - Visgroup definitions and group registry stored in state via `capture_visgroups()` / `capture_groups()`.
 

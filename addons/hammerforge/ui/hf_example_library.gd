@@ -77,7 +77,12 @@ func _load_examples() -> void:
 
 
 func _rebuild_cards() -> void:
+	# remove_child() before queue_free(): a freed child is still in the
+	# container until the end of the frame, so the new cards would be appended
+	# below the old ones and the search below - which indexes _examples by
+	# child order - would filter the dying ones and never reach the live ones.
 	for child in _cards_container.get_children():
+		_cards_container.remove_child(child)
 		child.queue_free()
 
 	for example in _examples:
@@ -88,6 +93,10 @@ func _rebuild_cards() -> void:
 func _create_card(example: Dictionary) -> PanelContainer:
 	var card = PanelContainer.new()
 	card.name = "card_" + example.get("id", "unknown")
+	# The search reads the id off the card rather than counting children, so a
+	# card that is on its way out cannot be mistaken for the example at its
+	# index.
+	card.set_meta("example_id", example.get("id", ""))
 	var style = StyleBoxFlat.new()
 	style.bg_color = Color(0.15, 0.17, 0.22, 0.85)
 	style.set_corner_radius_all(4)
@@ -230,13 +239,13 @@ func _show_annotations(example: Dictionary) -> void:
 func _on_search_changed(text: String) -> void:
 	var query := text.strip_edges().to_lower()
 	for i in range(_cards_container.get_child_count()):
-		if i >= _examples.size():
-			break
 		var card: Control = _cards_container.get_child(i)
+		var example: Dictionary = get_example_data(str(card.get_meta("example_id", "")))
 		if query.is_empty():
 			card.visible = true
+		elif example.is_empty():
+			card.visible = false
 		else:
-			var example: Dictionary = _examples[i]
 			var title_match: bool = example.get("title", "").to_lower().contains(query)
 			var desc_match: bool = example.get("description", "").to_lower().contains(query)
 			var tag_match := false
