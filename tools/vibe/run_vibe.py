@@ -68,6 +68,15 @@ SCENARIOS = [
     "painted-faces",
     "status-board",
     "atlas",
+    "scatter",
+    "selection-filter",
+    "timeline",
+    "shortcut-surfaces",
+    "connectors",
+    "examples",
+    "heightmap-io",
+    "regions",
+    "quick-property",
 ]
 
 # Generous: chaos runs 300 operations and cost saves eight levels. A scenario

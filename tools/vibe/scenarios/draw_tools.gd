@@ -212,10 +212,19 @@ func _path_settings_out_of_range() -> void:
 	for b in negative:
 		var inward := HFVibe.inward_face_count(b)
 		note("  size", b.size)
+		note("  inward faces", "%d of %d" % [inward, b.get_faces().size()])
 		if inward > 0:
-			flag(
+			known(
+				450,
 				"path tool: a negative width inverts the corridor (%d inward faces)" % inward,
-				"schema says min 0.5; set_setting() does not clamp, size came out %s" % b.size
+				(
+					(
+						"schema says min 0.5 and set_setting() does not clamp. The size came out %s "
+						% b.size
+					)
+					+ "because _usable_size() takes absf() of the negative -- it corrects the size "
+					+ "and leaves the face ring the negative half-extent already reversed"
+				)
 			)
 
 	var zero := _path_brushes(

@@ -53,6 +53,15 @@ const SCENARIOS: Array[String] = [
 	"res://tools/vibe/scenarios/painted_faces.gd",
 	"res://tools/vibe/scenarios/status_board.gd",
 	"res://tools/vibe/scenarios/atlas.gd",
+	"res://tools/vibe/scenarios/scatter.gd",
+	"res://tools/vibe/scenarios/selection_filter.gd",
+	"res://tools/vibe/scenarios/timeline.gd",
+	"res://tools/vibe/scenarios/shortcut_surfaces.gd",
+	"res://tools/vibe/scenarios/connectors.gd",
+	"res://tools/vibe/scenarios/examples.gd",
+	"res://tools/vibe/scenarios/heightmap_io.gd",
+	"res://tools/vibe/scenarios/regions.gd",
+	"res://tools/vibe/scenarios/quick_property.gd",
 ]
 
 
