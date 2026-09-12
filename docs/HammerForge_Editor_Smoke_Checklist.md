@@ -706,8 +706,8 @@ It writes one PNG per tab under `user://console_preview/`.
 - Type a new value (e.g. 4) and press **Enter**; confirm the grid snap updates and the popup closes.
 - Tap **G G** again; press **Escape**; confirm the popup closes without changing the value.
 - Tap **G G** again; click somewhere outside the popup; confirm it dismisses (click consumed, no brush placed).
-- Select a brush. Tap **B** twice (B B); confirm a popup appears with 3 SpinBoxes (X, Y, Z).
-- Enable paint mode. Tap **R** twice (R R); confirm a popup appears with a "Paint Radius" SpinBox.
+- Select a brush. Tap **B** twice (B B); confirm a popup appears with 3 SpinBoxes (X, Y, Z) reading the current size exactly, and that the three ranges match the Size X/Y/Z spins in the Build tab. Type a size, press **Enter**, and confirm the dock spins and the next brush you draw are the same size.
+- Enable paint mode. Tap **R** twice (R R); confirm a popup appears with a "Paint Radius" SpinBox whose range is the one the paint radius control in the dock has.
 
 ### 32. Clean Brush Visuals and Lifecycle
 - Draw a new additive box; confirm it has a clean green-tinted surface with **no always-on triangle wireframe**.

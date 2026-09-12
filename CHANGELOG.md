@@ -37,6 +37,20 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **The quick property popup and the control behind it now agree** (#447,
+  #448). The double-tap popup (G G, B B, R R) restated the range of each field
+  instead of taking it from the dock control it writes into, and none of the
+  three pairs matched. The radius pair was the worst: the popup's own default
+  was ten times the maximum of the control it wrote to, so opening R R and
+  pressing Enter without typing anything set the surface paint radius to its
+  limit. The brush size spin had `min` 0.1 with `step` 0.5, so the only values
+  it could hold were 0.1, 0.6, 1.1 ... - it could not express a whole number at
+  all, and opening B B on a 4 unit brush silently showed 4.1. `show_property()`
+  now takes the min, max and step of the controls it stands in for.
+  A committed brush size also went to two places, `input_state.drag_size_default`
+  unclamped and the dock spins clamped, so the dock said 256 while the next
+  brush drawn was 500.5 across; the controls are written first and the size is
+  read back out of them, so there is one answer.
 - **A shortcut rebound onto a chord another action already uses was accepted in
   silence** (#410). Nothing compared a new binding against the others, so
   `matches()` answered true for both, and `plugin_input_router` tests actions one
