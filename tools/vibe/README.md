@@ -104,6 +104,16 @@ it from here.
 | `heightmap-io` | what a heightmap loses going through the `.hflevel`'s base64 PNG, in world units |
 | `regions` | what the region eviction loop frees against what it thinks it freed |
 | `quick-property` | whether the quick popup and the dock control behind it agree on range and step |
+| `dock-undo` | which dock commands change the level without registering an undo step |
+| `dock-settings` | what an exported settings file carries back onto the level, and what a hand-edited one does |
+| `uv-defaults` | whether a brush's faces are born with a projection that can show a texture |
+| `surface-paint` | where a surface paint stroke lands against where the cursor was, and what one costs |
+| `dock-cordon` | whether the cordon spins can hold the cordon the level was given |
+| `playtest-spawn` | where the playtest player's feet end up against the spawn the validator approved |
+| `entity-props` | what a colour or vector entity property is after a save, a load and a `.map` export |
+| `bake-materials` | whether per-face materials reach the baked mesh with the settings a level starts with |
+| `dock-ranges` | whether each dock spin and the level property behind it agree about the legal range |
+| `brush-sides` | whether a cylinder or a cone is built with the number of sides it was asked for |
 
 ## Adding a scenario
 

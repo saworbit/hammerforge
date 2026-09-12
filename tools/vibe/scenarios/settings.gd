@@ -73,12 +73,19 @@ func _assigning_out_of_range_values() -> void:
 	note("accepted out of %d" % OUT_OF_RANGE.size(), accepted.size())
 	if not accepted.is_empty():
 		known(
-			373,
+			480,
 			(
 				"LevelRoot takes %d of %d out-of-range settings without a word"
 				% [accepted.size(), OUT_OF_RANGE.size()]
 			),
-			"; ".join(PackedStringArray(accepted))
+			(
+				(
+					"#373 gave the numeric settings clamping setters; what is left is the two whose"
+					+ " legal values are an enum -- bake_connector_mode has no setter at all and"
+					+ " bake_collision_mode relies on @export_range, which is an inspector hint. %s"
+				)
+				% "; ".join(PackedStringArray(accepted))
+			)
 		)
 
 
@@ -115,11 +122,15 @@ func _through_a_state_round_trip() -> void:
 			landed.append("%s = %s" % [key, poisoned[key]])
 	if not landed.is_empty():
 		known(
-			373,
-			"apply_hflevel_settings writes every value a .hflevel carries straight onto the property",
+			480,
+			"apply_hflevel_settings writes a .hflevel's enum settings straight onto the property",
 			(
-				"%d of 7 poisoned settings landed unchanged: %s -- the dock SpinBoxes have ranges, this path has none"
-				% [landed.size(), "; ".join(PackedStringArray(landed))]
+				(
+					"%d of 7 poisoned settings landed unchanged: %s -- the numeric ones are clamped"
+					% [landed.size(), "; ".join(PackedStringArray(landed))]
+				)
+				+ " by their setters since #373; bake_collision_mode and bake_connector_mode"
+				+ " have no setter to clamp them"
 			)
 		)
 

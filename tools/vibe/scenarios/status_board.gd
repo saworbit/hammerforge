@@ -109,17 +109,27 @@ func _a_palette_whose_files_have_moved() -> void:
 		if mat != null:
 			live += 1
 	note("slots that actually resolved", live)
-	if loaded and live == 0:
-		known(
-			414,
-			"loading a palette whose files have all moved reports success and says nothing",
+	# #426 kept the null slots -- the indices have to stay stable -- and added the
+	# report that was missing: every path that did not resolve is named on load
+	# and available to a caller afterwards.
+	var missing_paths: Array = []
+	if mm.has_method("get_missing_library_paths"):
+		missing_paths = Array(mm.get_missing_library_paths())
+	note("paths the loader says it could not resolve", missing_paths)
+	note(
+		"slots the loader counts as missing",
+		mm.get_missing_count() if mm.has_method("get_missing_count") else -1
+	)
+	if loaded and live == 0 and missing_paths.size() != 3:
+		flag(
+			"a palette whose files have all moved loads without naming what it dropped",
 			(
-				"load_library() appends a null for every path it cannot resolve -- right, since"
-				+ " the indices have to stay stable -- and then returns true with no count of"
-				+ (
-					" what was dropped and no warning. The palette has %d slots and %d materials."
-					% [mm.materials.size(), live]
+				(
+					"load_library() appends a null for every path it cannot resolve and returns"
+					+ " true. #426 made it name each one; get_missing_library_paths() reports %s"
+					+ " for a library of three paths that have all moved."
 				)
+				% str(missing_paths)
 			)
 		)
 

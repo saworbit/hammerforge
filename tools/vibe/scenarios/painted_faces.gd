@@ -176,6 +176,10 @@ func _painting_over_a_shader_material() -> void:
 		face.material_idx = idx
 	_paint_face(b, 0)
 	await frame()
+	# Without this the bake takes the CSG path and every surface carries one
+	# default material, face materials or not -- which says nothing about what
+	# painting did to the shader. That default is its own defect (#466).
+	root.set("bake_use_face_materials", true)
 	root.tag_full_reconcile()
 	await root.bake_dirty()
 	await frame()
@@ -191,14 +195,15 @@ func _painting_over_a_shader_material() -> void:
 	note("baked surfaces keeping the shader material", shader_surfaces)
 	note("baked surfaces replaced by a plain StandardMaterial3D", replaced)
 	if replaced > 0:
-		known(
-			413,
+		flag(
 			"painting on a face with a ShaderMaterial replaces it with a plain material",
 			(
-				"the painted branch builds a StandardMaterial3D and only copies from the base"
-				+ " when the base `is StandardMaterial3D`, so a shader material is dropped"
-				+ " outright: %d surface(s) came back plain. Nothing warns, and the face" % replaced
-				+ " renders unlit-flat next to its neighbours."
+				(
+					"#425 settled that a ShaderMaterial is refused rather than composited: the face"
+					+ " keeps its shader, the paint is not drawn, and a warning says so."
+					+ " %d baked surface(s) came back as a plain StandardMaterial3D instead."
+				)
+				% replaced
 			)
 		)
 

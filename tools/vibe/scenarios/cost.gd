@@ -21,7 +21,24 @@ const SHAPES: Array = [
 ]
 
 ## A brush costing more than this to save is worth a look. A box is ~1.2 KB.
+## Curved shapes are past it by their nature -- a sphere is thousands of genuinely
+## separate planes -- so the size is recorded for them and the face count is what
+## holds the line. See FACE_BUDGET.
 const SIZE_BUDGET_BYTES := 32768
+
+## The face counts #328 landed on, when coplanar triangles that share an edge
+## started merging into one FaceData. A shape past its number here has gone back
+## to one face per mesh triangle, which is what #322 was.
+const FACE_BUDGET := {
+	"box": 6,
+	"wedge": 5,
+	"tetrahedron": 4,
+	"cylinder": 66,
+	"cone": 129,
+	"dodecahedron": 12,
+	"sphere": 2240,
+	"torus": 2059,
+}
 
 
 func id() -> String:
@@ -59,9 +76,18 @@ func run() -> void:
 		var bytes := HFVibe.file_size(path)
 		note("%-14s %8d %10d %12d %9d" % [label, faces, build_ms, bytes, save_ms])
 		if bytes > SIZE_BUDGET_BYTES:
-			known(
-				322,
-				"one %s costs %d bytes to save" % [label, bytes],
-				"%d faces, one per mesh triangle" % faces
+			note("%s is past the %d byte budget" % [label, SIZE_BUDGET_BYTES], bytes)
+		var budget: int = int(FACE_BUDGET.get(label, 0))
+		if budget > 0 and faces > budget:
+			flag(
+				"one %s stores %d faces where #328 left it at %d" % [label, faces, budget],
+				(
+					(
+						"coplanar triangles that share an edge are meant to merge into one FaceData"
+						+ " before the list is stored. %d faces means they are not, which is #322"
+						+ " again: %d bytes to save and the same multiplier on every later operation."
+					)
+					% [faces, bytes]
+				)
 			)
 		root.free()
