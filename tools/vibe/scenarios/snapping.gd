@@ -55,9 +55,14 @@ func _grid_against_vertex() -> void:
 			(
 				"snap_point() picks by raw distance, so with the grid on there is no way to"
 				+ " meet a corner that is further away than the grid node under the cursor:"
-				+ " the corner at %s is %.2f away and within the 2.0 threshold, the point"
-				% [corner, probe.distance_to(corner)]
-				+ " still landed on %s. Vertex, centre and edge snap are the explicit ones;" % landed
+				+ (
+					" the corner at %s is %.2f away and within the 2.0 threshold, the point"
+					% [corner, probe.distance_to(corner)]
+				)
+				+ (
+					" still landed on %s. Vertex, centre and edge snap are the explicit ones;"
+					% landed
+				)
 				+ " they should outrank the grid rather than compete with it on distance."
 			)
 		)

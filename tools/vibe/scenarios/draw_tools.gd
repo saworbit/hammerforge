@@ -65,9 +65,7 @@ func _polygon_brush(root: Node3D, points: Array, height: float = 32.0) -> Node:
 ## can do either; the brush must come out the same way up both times.
 func _polygon_winding_both_ways() -> void:
 	var root: Node3D = await fresh_root()
-	var ccw := [
-		Vector3(-32, 0, -32), Vector3(-32, 0, 32), Vector3(32, 0, 32), Vector3(32, 0, -32)
-	]
+	var ccw := [Vector3(-32, 0, -32), Vector3(-32, 0, 32), Vector3(32, 0, 32), Vector3(32, 0, -32)]
 	var cw := [Vector3(-32, 0, -32), Vector3(32, 0, -32), Vector3(32, 0, 32), Vector3(-32, 0, 32)]
 
 	var a := _polygon_brush(root, ccw)
@@ -110,9 +108,10 @@ func _polygon_degenerate_input() -> void:
 	var root: Node3D = await fresh_root()
 
 	var collinear := [Vector3(-64, 0, 0), Vector3(0, 0, 0), Vector3(64, 0, 0)]
-	note("collinear points pass the convexity gate", PolygonTool._is_convex_xz(
-		PackedVector3Array(collinear)
-	))
+	note(
+		"collinear points pass the convexity gate",
+		PolygonTool._is_convex_xz(PackedVector3Array(collinear))
+	)
 	var flat := _polygon_brush(root, collinear)
 	await frame()
 	if flat != null:
@@ -134,8 +133,10 @@ func _polygon_degenerate_input() -> void:
 		known(
 			399,
 			"polygon tool accepts a repeated vertex",
-			"two of the three points are identical: %d faces, some with zero area"
-			% dup_brush.faces.size()
+			(
+				"two of the three points are identical: %d faces, some with zero area"
+				% dup_brush.faces.size()
+			)
 		)
 
 	for issue in HFVibe.check_invariants(root):
@@ -186,8 +187,10 @@ func _path_winding() -> void:
 		if inward > 0:
 			known(
 				397,
-				"path tool: an L-bend brush has %d of %d faces pointing inward"
-				% [inward, b.faces.size()],
+				(
+					"path tool: an L-bend brush has %d of %d faces pointing inward"
+					% [inward, b.faces.size()]
+				),
 				"size %s" % b.size
 			)
 
@@ -215,7 +218,9 @@ func _path_settings_out_of_range() -> void:
 				"schema says min 0.5; set_setting() does not clamp, size came out %s" % b.size
 			)
 
-	var zero := _path_brushes(root, [Vector3(0, 0, 512), Vector3(256, 0, 512)], {"path_height": 0.0})
+	var zero := _path_brushes(
+		root, [Vector3(0, 0, 512), Vector3(256, 0, 512)], {"path_height": 0.0}
+	)
 	await frame()
 	for b in zero:
 		note("path with height 0: size", b.size)
@@ -310,8 +315,10 @@ func _what_the_inverted_path_bakes_to() -> void:
 			397,
 			"a path corridor bakes the opposite way out from every other brush",
 			(
-				"a 256x4x4 box from the draw tool bakes to a signed volume of %.0f;"
-				% control_volume
+				(
+					"a 256x4x4 box from the draw tool bakes to a signed volume of %.0f;"
+					% control_volume
+				)
 				+ " the same corridor from the path tool bakes to %.0f" % path_volume
 			)
 		)

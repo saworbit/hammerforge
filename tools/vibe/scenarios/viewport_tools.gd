@@ -132,8 +132,10 @@ func _extrude_ids() -> void:
 			402,
 			"two extrusions in the same millisecond claim the same brush id",
 			(
-				"_generate_extrude_id() is 'extrude_<dir>_<ticks_msec>': %s twice."
-				% first.get("brush_id", "")
+				(
+					"_generate_extrude_id() is 'extrude_<dir>_<ticks_msec>': %s twice."
+					% first.get("brush_id", "")
+				)
 				+ " Nothing else in the editor mints an id without the session prefix"
 			)
 		)
@@ -179,8 +181,10 @@ func _decals_and_the_level() -> void:
 	if after_restore != decals:
 		flag(
 			"restore_state loses placed decals",
-			"%d decals before, %d after -- and every undo goes through restore_state"
-			% [decals, after_restore]
+			(
+				"%d decals before, %d after -- and every undo goes through restore_state"
+				% [decals, after_restore]
+			)
 		)
 
 	# Placing one twice in a row: both are called "HFDecal".
@@ -247,8 +251,10 @@ func _measure_tool_state() -> void:
 			(
 				"_toggle_align() turns it off through _remove_snap_reference(), which sets"
 				+ " _snap_ref_index back to -1, so turning it on again silently picks the"
-				+ " newest ruler (%d) instead of the one that was chosen (0)."
-				% measure._snap_ref_index
+				+ (
+					" newest ruler (%d) instead of the one that was chosen (0)."
+					% measure._snap_ref_index
+				)
 			)
 		)
 
@@ -257,7 +263,10 @@ func _measure_tool_state() -> void:
 	await frame()
 	note("labels the measure tool parents to the level", measure._labels.size())
 	var state := HFVibe.describe_level(root)
-	note("brushes with the measure overlay up", state["brushes"].size() if state.has("brushes") else -1)
+	note(
+		"brushes with the measure overlay up",
+		state["brushes"].size() if state.has("brushes") else -1
+	)
 
 	# A ruler with both ends in the same place: a zero-length snap direction.
 	measure._pending_point = Vector3(500, 0, 500)
@@ -307,8 +316,10 @@ func _extrude_preview_placement() -> void:
 			(
 				"_update_preview() writes global_position before add_child(), so the write"
 				+ " lands on a node outside the tree -- the engine prints 'Condition"
-				+ " !is_inside_tree() is true' twice and the ghost ends up at %s instead of %s"
-				% [ghost.global_position, expected]
+				+ (
+					" !is_inside_tree() is true' twice and the ghost ends up at %s instead of %s"
+					% [ghost.global_position, expected]
+				)
 			)
 		)
 	note("source brush basis y-rotation (deg)", rad_to_deg(b.rotation.y))
@@ -321,8 +332,10 @@ func _extrude_preview_placement() -> void:
 				"_update_preview() writes global_position and global_transform.basis before"
 				+ " add_child(), so both go to a node that is not in the tree yet -- the engine"
 				+ " prints 'Condition !is_inside_tree() is true' and the ghost keeps identity"
-				+ " basis. Source y-rotation %.1f deg, ghost %.1f deg"
-				% [rad_to_deg(b.rotation.y), rad_to_deg(ghost.rotation.y)]
+				+ (
+					" basis. Source y-rotation %.1f deg, ghost %.1f deg"
+					% [rad_to_deg(b.rotation.y), rad_to_deg(ghost.rotation.y)]
+				)
 			)
 		)
 	extrude.cancel_extrude()

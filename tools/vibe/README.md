@@ -86,6 +86,15 @@ it from here.
 | `placement` | resize and nudge at their edges, against what the create path allows |
 | `definitions` | `entities.json` and the I/O preset file, malformed and at their edges |
 | `operations` | whether each `can_*()` rule is also enforced by the operation it guards |
+| `draw-tools` | polygon and path tool geometry: winding either way round, degenerate input, settings out of range |
+| `viewport-tools` | extrude, decal and measure: what their scene nodes do to the count, the save and the bake |
+| `runtime-io` | `HFIORuntime` against malformed metadata and input names that collide with `Node` methods |
+| `prefs` | the prefs and keymap files: malformed values, silent resets, rebinds that collide |
+| `snapping` | which snap candidate wins, and whether the cached face geometry keeps up with the brush |
+| `undo-collation` | whether the undo collation window can carry state from one level root to another |
+| `painted-faces` | what a painted face keeps of the material it was painted over |
+| `status-board` | what the status board says against what the level is, and a half-missing palette |
+| `atlas` | the material atlas packer at its size limits, and what a failed pack does to the caller |
 
 ## Adding a scenario
 
@@ -123,7 +132,7 @@ func run() -> void:
 
 ### A clean scenario is a result too
 
-Four of these found nothing. `previews` confirms no ghost is counted as a brush,
+Several of these found nothing. `previews` confirms no ghost is counted as a brush,
 reaches the save, or reaches the bake; `lifecycle` confirms `restore_state()`
 resets the visgroup, group and prefab registries and the face selection, and
 that brush ids cannot collide the way prefab instance ids can; `spawn` records
@@ -131,6 +140,13 @@ what the validator actually measures; and `materials` confirms the palette remap
 is correct in all three brush containers. Those are kept. A scenario that only
 exists while it is failing cannot tell you when something stops being true, and
 the notes are where the next reader finds out the ground was already covered.
+`undo-collation` and `snapping` are the newest of them. The undo helper's
+collation window lives in `static var`s, which looked like it would carry one
+level's captured state into the next level's action, and it does not -- the tag
+carries the brush id, and two roots in one session mint different id prefixes.
+The snap system's per-brush face cache keeps up with a vertex move, and grid
+snap does not shadow a corner that is genuinely nearer. Written down so the next
+reader does not have to work either of them out again.
 
 Several `note()` lines exist purely to close off a suspicion — that built-in I/O
 presets are handed out by reference, for instance, which is safe only because a

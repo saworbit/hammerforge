@@ -92,8 +92,10 @@ func _one_bad_entity_among_good_ones() -> void:
 				"a String where entity_io_outputs should be an Array is a runtime error in the"
 				+ " typed local `var outputs: Array = node.get_meta(...)`, and GDScript unwinds"
 				+ " _collect_connections() past the loop that recurses into the children."
-				+ " NestedButton, one level down, is never scanned: %s. Siblings survive."
-				% str(known_names)
+				+ (
+					" NestedButton, one level down, is never scanned: %s. Siblings survive."
+					% str(known_names)
+				)
 			)
 		)
 
@@ -142,9 +144,7 @@ func _an_input_name_that_is_a_node_method() -> void:
 func _a_target_that_does_not_exist() -> void:
 	var stage: Node3D = await _stage()
 	_source(
-		stage,
-		"Button",
-		[{"output_name": "OnPressed", "target_name": "Dorr", "input_name": "Open"}]
+		stage, "Button", [{"output_name": "OnPressed", "target_name": "Dorr", "input_name": "Open"}]
 	)
 	var door := Node3D.new()
 	door.name = "Door"
@@ -157,10 +157,7 @@ func _a_target_that_does_not_exist() -> void:
 	dispatcher.fire("Button", "OnPressed")
 	await frame()
 	note("deliveries to a misspelt target", received.size())
-	note(
-		"debug_logging is what gates the only warning",
-		dispatcher.debug_logging
-	)
+	note("debug_logging is what gates the only warning", dispatcher.debug_logging)
 
 	stage.queue_free()
 	await frame()

@@ -70,8 +70,10 @@ func _prefs_with_values_of_the_wrong_type() -> void:
 				+ " check, and each accessor then assigns its container to a typed local:"
 				+ " get_section_collapsed(), add_recent_file() and is_hint_dismissed() all"
 				+ " abort with 'Trying to assign value of type String to a variable of type"
-				+ " Array'. add_recent_file() dropped the path silently, leaving %s."
-				% str(recent_now)
+				+ (
+					" Array'. add_recent_file() dropped the path silently, leaving %s."
+					% str(recent_now)
+				)
 				+ " HFKeymap._validated() is the pattern this file is missing."
 			)
 		)
