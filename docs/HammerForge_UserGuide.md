@@ -630,7 +630,7 @@ The **Test** tab contains an **Examples** section (collapsed by default) with 5 
 | Hollowed Building | Intermediate | Hollow + subtract for windows |
 | Simple Arena | Advanced | Multi-level, ramps, cover, multiple spawns |
 
-- **Load** clears the current level and instantiates the example's brushes and entities
+- **Load** replaces the current level with the example's brushes and entities. It asks first when the level is not empty, naming what will go, and the whole load is one undo step
 - **Study This** shows numbered annotations explaining the design decisions
 - Search/filter by title, description, tags, or difficulty level
 

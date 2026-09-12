@@ -37,6 +37,19 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **Loading an example level asks first and can be undone** (#443, #444). The
+  Load button on an Example Level card called `clear_brushes()` and
+  `clear_entities()` straight out, outside undo and with nothing asking - while
+  the Clear Brushes button two sections up the same tab went through
+  `_commit_state_action()`. An hour of work went with one click on a browsable
+  list of tempting cards, and Ctrl+Z did nothing. The load now names what it
+  will replace ("Replace 6 brushes and 1 entity with 'Simple Room'?") when the
+  level is not empty, and the whole thing is one undo step. Rebuilding the card
+  list also left the old cards in the container until the end of the frame,
+  because `queue_free()` alone does not remove them, so the new cards were
+  appended below them and the search - which indexed the examples by child
+  order - filtered the dying half and never reached the live one. The cards are
+  removed before they are freed, and the search reads each card's own id.
 - **A paint layer is now the one the mapper chose, on the level's own grid**
   (#432, #433, #442). `remove_layer()` kept the active index by clamping it,
   which is only right when the removed layer is after the active one: deleting

@@ -190,3 +190,49 @@ func test_difficulty_colors_defined():
 	assert_true(HFExampleLibrary.DIFFICULTY_COLORS.has("Beginner"))
 	assert_true(HFExampleLibrary.DIFFICULTY_COLORS.has("Intermediate"))
 	assert_true(HFExampleLibrary.DIFFICULTY_COLORS.has("Advanced"))
+
+
+# ===========================================================================
+# Rebuilding the card list (#444)
+# ===========================================================================
+
+
+func test_a_rebuild_in_the_same_frame_does_not_double_the_cards():
+	var first := library._cards_container.get_child_count()
+	assert_gt(first, 0, "The first build makes a card per example")
+	library._load_examples()
+	assert_eq(
+		library._cards_container.get_child_count(),
+		first,
+		"The old cards are out of the container before the new ones go in"
+	)
+
+
+func test_search_after_a_rebuild_filters_the_live_cards():
+	library._load_examples()
+	library._on_search_changed("simple")
+	var visible: Array = []
+	for child in library._cards_container.get_children():
+		if child.visible:
+			visible.append(child.name)
+	assert_gt(visible.size(), 0, "The matching card is shown")
+	for name in visible:
+		var id := str(name).trim_prefix("card_")
+		var data := library.get_example_data(id)
+		var haystack := (
+			str(data.get("title", ""))
+			+ str(data.get("description", ""))
+			+ str(data.get("tags", []))
+		)
+		assert_true(
+			haystack.to_lower().contains("simple"), "%s is visible because it matches" % name
+		)
+
+
+func test_search_matches_the_card_by_its_own_id_not_its_index():
+	library._on_search_changed("nothing_matches_this_query")
+	for child in library._cards_container.get_children():
+		assert_false(child.visible, "Nothing matches, so no card is left on screen")
+	library._on_search_changed("")
+	for child in library._cards_container.get_children():
+		assert_true(child.visible, "An empty search shows every card again")
