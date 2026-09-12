@@ -37,6 +37,19 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **A decal was not part of the level** (#403, #404). `_place_decal()` added a
+  `Decal` node under the `LevelRoot` and nothing else knew about it.
+  `capture_state()` had no decal key, and a `.hflevel` is what `capture_state()`
+  returns, so a decal was gone after a save and reload - of the format the
+  editor treats as authoritative and the one autosave writes. Placing one also
+  registered no undo action, so Ctrl+Z undid whatever the user did before the
+  decal and left the decal in place, with no delete gesture to remove it. Decals
+  now live under a `Decals` container on the `LevelRoot`, are captured and
+  restored with the rest of the level state, and a placement is wrapped in the
+  same state capture and restore pair the polygon and path tools use. Each decal
+  also gets a name of its own: they were all called `HFDecal`, so the second one
+  in a level came back as `@Decal@15`. The ghost under the cursor stays out of
+  the container and out of the level, as before.
 - **The extrude tool's ghost was a brush in the level, in the wrong place, and
   its ids were not unique** (#400, #401, #402). The preview was a real
   `DraftBrush` parented into `draft_brushes_node`, the container

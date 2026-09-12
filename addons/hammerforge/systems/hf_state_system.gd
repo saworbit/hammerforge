@@ -139,7 +139,57 @@ func capture_state(include_transient: bool = true) -> Dictionary:
 	state["generators"] = root.generator_system.capture() if root.generator_system else []
 	if root.prefab_system:
 		state["prefab_instances"] = root.prefab_system.capture_state()
+	state["decals"] = capture_decals()
 	return state
+
+
+## Decals placed with the decal tool. They are part of the level: without this a
+## decal was scene decoration that a `.hflevel` save dropped, which is the format
+## the editor treats as authoritative and the one autosave writes.
+func capture_decals() -> Array:
+	var out: Array = []
+	if not root.decals_node:
+		return out
+	for child in root.decals_node.get_children():
+		if not (child is Decal):
+			continue
+		var decal := child as Decal
+		var entry: Dictionary = {
+			"transform": decal.transform,
+			"size": decal.size,
+		}
+		if decal.texture_albedo and decal.texture_albedo.resource_path != "":
+			entry["texture"] = decal.texture_albedo.resource_path
+		out.append(entry)
+	return out
+
+
+## One unreadable entry costs that entry, not the load, the same way a brush
+## entry does.
+func restore_decals(entries: Array) -> void:
+	if not root.decals_node:
+		return
+	for child in root.decals_node.get_children():
+		root.decals_node.remove_child(child)
+		child.queue_free()
+	for entry in entries:
+		if not (entry is Dictionary):
+			continue
+		var decal := Decal.new()
+		decal.set_meta("hf_decal", true)
+		var size = entry.get("size", Vector3(2.0, 4.0, 2.0))
+		if size is Vector3:
+			decal.size = size
+		var tex_path: String = str(entry.get("texture", ""))
+		if tex_path != "" and ResourceLoader.exists(tex_path):
+			var tex = load(tex_path)
+			if tex is Texture2D:
+				decal.texture_albedo = tex
+		root.decals_node.add_child(decal)
+		root._assign_owner(decal)
+		var xform = entry.get("transform", Transform3D())
+		if xform is Transform3D:
+			decal.transform = xform
 
 
 ## One brush out of a state entry, or null when the entry is not one.
@@ -262,6 +312,7 @@ func restore_state(state: Dictionary) -> void:
 		root._last_bake_preview_mode = 0
 	if root.prefab_system and state.has("prefab_instances"):
 		root.prefab_system.restore_state(state["prefab_instances"])
+	restore_decals(state.get("decals", []))
 	if skipped > 0:
 		HFLog.warn("HFStateSystem: skipped %d entry this level could not use" % skipped)
 		if root.has_signal("user_message"):
