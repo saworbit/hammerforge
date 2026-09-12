@@ -1392,7 +1392,9 @@ During placement, a cyan polyline shows the path with parallel offset lines indi
 | railing_post_spacing | 2.0 | Distance between railing posts |
 | trim_width | 0.2 | Width of edge trim strips |
 | trim_height | 0.1 | Height of edge trim strips |
-| trim_material_idx | -1 | Material index for trim faces (-1 = default material) |
+| trim_material_idx | 0 | Material index for trim faces |
+
+Every numeric setting is held to the range in the tool's schema wherever the value comes from, not only in the dock's spinbox: a width below the minimum or above the maximum is clamped to it, and a value that is not a number is refused and the previous one kept.
 
 ### Auto-Generated Extras
 When `path_extra` is set to a value other than None, additional geometry is auto-generated after the base path segments:
