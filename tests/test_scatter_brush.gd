@@ -255,3 +255,92 @@ func test_scatter_scale_variation():
 		# At least one should differ (probabilistic but with wide range + seed 42)
 		var differs := not s1.is_equal_approx(s2)
 		assert_true(differs or result.transforms.size() < 2, "Scales should vary with range")
+
+
+# ===========================================================================
+# Align to normal (#429)
+# ===========================================================================
+
+
+func test_align_to_normal_points_up_on_flat_ground():
+	var brush := HFScatterBrushScript.new()
+	var settings := HFScatterBrushScript.ScatterSettings.new()
+	settings.seed = 4242
+	settings.radius = 3.0
+	settings.density = 1.0
+	settings.align_to_normal = true
+	settings.random_rotation = false
+	var result = brush.scatter_circle(Vector3(4, 0, 4), layer, settings)
+	assert_gt(result.transforms.size(), 0, "Flat ground should place instances")
+	for xform in result.transforms:
+		assert_gt(xform.basis.y.normalized().y, 0.9, "Instance up vector points up, not down")
+
+
+# ===========================================================================
+# Instance cap (#430)
+# ===========================================================================
+
+
+func test_scatter_circle_refuses_an_oversized_stroke():
+	var brush := HFScatterBrushScript.new()
+	var settings := HFScatterBrushScript.ScatterSettings.new()
+	settings.radius = 1000.0
+	settings.density = 1.0
+	settings.max_slope = 90.0
+	var result = brush.scatter_circle(Vector3.ZERO, layer, settings)
+	assert_not_null(result.refusal, "A three million instance stroke is refused")
+	assert_false(result.refusal.ok)
+	assert_eq(result.transforms.size(), 0, "Nothing is laid out when the stroke is refused")
+	assert_string_contains(result.refusal.fix_hint, str(HFScatterBrushScript.MAX_SCATTER_INSTANCES))
+
+
+func test_scatter_spline_refuses_an_oversized_stroke():
+	var brush := HFScatterBrushScript.new()
+	var settings := HFScatterBrushScript.ScatterSettings.new()
+	settings.shape = HFScatterBrushScript.BrushShape.SPLINE
+	settings.spline_points = PackedVector3Array([Vector3.ZERO, Vector3(100000, 0, 0)])
+	settings.spline_width = 10.0
+	settings.density = 1.0
+	var result = brush.scatter_spline(layer, settings)
+	assert_not_null(result.refusal, "A million instance path is refused")
+	assert_eq(result.transforms.size(), 0)
+
+
+func test_scatter_circle_allows_a_normal_stroke():
+	var brush := HFScatterBrushScript.new()
+	var settings := HFScatterBrushScript.ScatterSettings.new()
+	settings.radius = 5.0
+	settings.density = 0.5
+	var result = brush.scatter_circle(Vector3(4, 0, 4), layer, settings)
+	assert_null(result.refusal, "A normal stroke is not refused")
+
+
+# ===========================================================================
+# Ownership (#431)
+# ===========================================================================
+
+
+func test_commit_owns_the_node_so_the_scene_keeps_it():
+	var parent := Node3D.new()
+	add_child_autoqfree(parent)
+	parent.owner = self
+	var brush := HFScatterBrushScript.new()
+	var settings := HFScatterBrushScript.ScatterSettings.new()
+	settings.mesh = BoxMesh.new()
+	var transforms: Array[Transform3D] = [Transform3D.IDENTITY]
+	var mmi := brush.commit(transforms, settings, parent)
+	assert_not_null(mmi)
+	assert_eq(mmi.owner, parent.owner, "Committed node inherits the level's owner")
+	mmi.free()
+
+
+func test_build_instance_leaves_the_node_unparented():
+	var brush := HFScatterBrushScript.new()
+	var settings := HFScatterBrushScript.ScatterSettings.new()
+	settings.mesh = BoxMesh.new()
+	var transforms: Array[Transform3D] = [Transform3D.IDENTITY, Transform3D.IDENTITY]
+	var mmi := brush.build_instance(transforms, settings)
+	assert_not_null(mmi)
+	assert_null(mmi.get_parent(), "The caller parents it, inside an undo action")
+	assert_eq(mmi.multimesh.instance_count, 2)
+	mmi.free()

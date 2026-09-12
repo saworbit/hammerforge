@@ -102,6 +102,8 @@ func _how_many_one_click_makes() -> void:
 				% [result.total_candidates, result.transforms.size(), took]
 			)
 		)
+		if result.refusal:
+			note("  refused", result.refusal.user_text())
 		if result.transforms.size() > 100000:
 			known(
 				430,
@@ -126,6 +128,11 @@ func _what_the_scene_keeps() -> void:
 	var result = brush.scatter_circle(Vector3.ZERO, layer, s)
 	note("instances to commit", result.transforms.size())
 
+	# Headless has no edited scene root, so stand one in. What matters is that
+	# the committed node ends up owned by whatever owns the level, because a
+	# node with a null owner is not written into the .tscn.
+	root.owner = root.get_tree().get_root()
+
 	var before := root.get_child_count()
 	var mmi = brush.commit(result.transforms, s, root)
 	await frame()
@@ -133,14 +140,17 @@ func _what_the_scene_keeps() -> void:
 	note("root children before/after", "%d -> %d" % [before, root.get_child_count()])
 	if mmi:
 		note("committed node owner", mmi.owner)
-		if mmi.owner == null:
+		if mmi.owner != root.owner:
 			known(
 				431,
 				"a committed scatter is not owned, so saving the scene drops every instance",
 				(
-					"HFScatterBrush.commit() calls parent.add_child(mmi) and never sets "
-					+ "mmi.owner. A node without an owner is not written into the .tscn, so "
-					+ "the scatter is there until the scene is closed and gone after"
+					(
+						"the level root is owned by %s and the committed node by %s. A node "
+						% [str(root.owner), str(mmi.owner)]
+					)
+					+ "without an owner is not written into the .tscn, so the scatter is "
+					+ "there until the scene is closed and gone after"
 				)
 			)
 
@@ -152,6 +162,15 @@ func _what_the_scene_keeps() -> void:
 	note("foliage node", foliage.name if foliage else "<null>")
 	if foliage:
 		note("foliage owner", foliage.owner)
+		if foliage.owner != root.owner:
+			known(
+				431,
+				"a populated foliage node is not owned either",
+				(
+					"HFFoliagePopulator.populate() parents the MultiMeshInstance3D and leaves its owner at %s"
+					% str(foliage.owner)
+				)
+			)
 
 	var described := HFVibe.describe_level(root)
 	note("brush count after two commits", described.get("brushes", []).size())
