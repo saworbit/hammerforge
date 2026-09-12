@@ -37,6 +37,23 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **The operation timeline's Replay button can be clicked, and its glyphs name
+  the operation** (#437, #438). The button lives in the panel header, outside
+  the entry it applies to, and was shown on hover and hidden again on
+  mouse_exited - so any pointer path from the entry to the button hid it on the
+  way, and `_hovered_index` went back to -1 so a press would have emitted
+  nothing anyway. `replay_requested` never fired, which made
+  `HFPluginUndoEvents.on_replay_requested()` - the only way to jump to a point
+  in the timeline - unreachable from the UI. A click now sets a selection that
+  only another click, a clear or the panel closing takes away, and the hover
+  drives the detail line alone. The glyph and colour tables also tested the
+  generic draw/brush/create case above most of the specific ones, and most of
+  the plugin's undo action names contain the word "brush", so "Clear Brushes"
+  was drawn as a creation in the create blue, and "Apply Brush Material" and
+  "Assign Face Material" got different glyphs for the same kind of operation.
+  The generic test is last now, destruction is first, and "bevel" and "prefab"
+  have their own glyphs rather than falling through to the catch-all.
+  `HFHistoryBrowser` calls the same two functions, so both surfaces are right.
 - **A shortcut rebound onto a chord another action already uses was accepted in
   silence** (#410). Nothing compared a new binding against the others, so
   `matches()` answered true for both, and `plugin_input_router` tests actions one
