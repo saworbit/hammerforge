@@ -173,6 +173,88 @@ func generate_connectors(layers: HFPaintLayerManager, settings: Settings = null)
 	return generate_definitions(defs_from_groups(groups, settings), layers)
 
 
+## Boundary segments that touch one of `cells` in layer `layer_index`.
+##
+## The same answer `detect_boundaries()` gives filtered down to these cells, at
+## the cost of the cells rather than the cost of the level. The full scan walks
+## every cell of every chunk of every layer to build a dictionary from scratch,
+## then compares each filled cell against every other layer; this walks the
+## handful of cells a stroke touched and their four neighbours.
+##
+## `test_auto_connector.gd` asserts the two agree, which is what keeps this from
+## drifting away from the scan it stands in for.
+func boundaries_for_cells(
+	layers: HFPaintLayerManager, layer_index: int, cells: Dictionary
+) -> Array[ConnectorSegment]:
+	var segments: Array[ConnectorSegment] = []
+	if layers == null or layers.layers.size() < 2:
+		return segments
+	if layer_index < 0 or layer_index >= layers.layers.size():
+		return segments
+	var directions: Array[Vector2i] = [
+		Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)
+	]
+	var paired: Dictionary = {}
+	for cell: Vector2i in cells:
+		for dir in directions:
+			var neighbour: Vector2i = cell + dir
+			# The touched cell as the source of a boundary.
+			_collect_segments_at(layers, layer_index, cell, neighbour, dir, paired, segments)
+			# And as the destination: a cell next door in another layer whose own
+			# unfilled neighbour is this one.
+			for j in range(layers.layers.size()):
+				if j == layer_index:
+					continue
+				_collect_segments_at(layers, j, neighbour, cell, -dir, paired, segments)
+	return segments
+
+
+## One cell, one direction: the boundary test `detect_boundaries()` runs in its
+## innermost loop, against the layers directly rather than a prebuilt map.
+func _collect_segments_at(
+	layers: HFPaintLayerManager,
+	i: int,
+	cell: Vector2i,
+	neighbour: Vector2i,
+	dir: Vector2i,
+	paired: Dictionary,
+	out: Array[ConnectorSegment]
+) -> void:
+	var layer_i: HFPaintLayer = layers.layers[i]
+	if layer_i == null or not layer_i.get_cell(cell):
+		return
+	# Only interested if the neighbour is NOT filled in this layer.
+	if layer_i.get_cell(neighbour):
+		return
+	var h_i: float = layer_i.grid.layer_y + layer_i.get_height_at(cell)
+	for j in range(layers.layers.size()):
+		if j == i:
+			continue
+		var layer_j: HFPaintLayer = layers.layers[j]
+		if layer_j == null or not layer_j.get_cell(neighbour):
+			continue
+		var h_j: float = layer_j.grid.layer_y + layer_j.get_height_at(neighbour)
+		var diff := absf(h_j - h_i)
+		if diff < MIN_HEIGHT_DIFF:
+			continue
+		var lo: int = mini(i, j)
+		var hi: int = maxi(i, j)
+		var c_lo: Vector2i = cell if i < j else neighbour
+		var c_hi: Vector2i = neighbour if i < j else cell
+		var key := "%d_%d_%d_%d_%d_%d" % [lo, hi, c_lo.x, c_lo.y, c_hi.x, c_hi.y]
+		if paired.has(key):
+			continue
+		paired[key] = true
+		var seg := ConnectorSegment.new()
+		seg.from_layer_index = i
+		seg.to_layer_index = j
+		seg.from_cell = cell
+		seg.to_cell = neighbour
+		seg.height_diff = diff
+		seg.direction = dir
+		out.append(seg)
+
+
 ## Return connector definitions only for boundaries touched by the latest paint
 ## footprint. This is the live-ghost path; it does not scan or rebuild geometry.
 func defs_for_touched_cells(
@@ -185,17 +267,8 @@ func defs_for_touched_cells(
 		return []
 	if settings == null:
 		settings = Settings.new()
-	var filtered: Array[ConnectorSegment] = []
-	for segment in detect_boundaries(layers):
-		var touches_from := (
-			segment.from_layer_index == touched_layer_index and touched_cells.has(segment.from_cell)
-		)
-		var touches_to := (
-			segment.to_layer_index == touched_layer_index and touched_cells.has(segment.to_cell)
-		)
-		if touches_from or touches_to:
-			filtered.append(segment)
-	return defs_from_groups(group_segments(filtered), settings)
+	var touched := boundaries_for_cells(layers, touched_layer_index, touched_cells)
+	return defs_from_groups(group_segments(touched), settings)
 
 
 func defs_from_groups(groups: Array, settings: Settings) -> Array:

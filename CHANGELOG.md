@@ -37,6 +37,18 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **The live auto-connector path costs the stroke instead of the level**
+  (#441). `defs_for_touched_cells()` is documented as the cheap path that "does
+  not scan or rebuild geometry", and its first statement was a full
+  `detect_boundaries()` - which walks every cell of every chunk of every layer
+  to build a dictionary from scratch, then compares each filled cell against
+  every other layer. The touched-cell filter ran afterwards, on the result, so
+  the cheap path cost the same as the scan it claimed to avoid and grew with
+  the size of the level rather than the size of the stroke: 39 ms per committed
+  stroke on a level with 8,192 painted cells, while dragging. The live path now
+  walks the touched cells and their four neighbours directly, and a test
+  asserts it gives the same answer as filtering the full scan so the two cannot
+  drift apart.
 - **The HUD, the coach marks and the tooltips read the keymap instead of
   spelling chords out** (#439, #440). `HFKeymap` is rebindable, and three of the
   surfaces that tell a mapper which key does what held their chords as string

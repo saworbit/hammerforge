@@ -520,3 +520,119 @@ func test_confirmed_connector_is_not_duplicated_when_automatic_detection_is_on()
 		if child.name.begins_with("AutoConnector"):
 			count += 1
 	assert_eq(count, 1)
+
+
+# ---------------------------------------------------------------------------
+# The live path costs the stroke, not the level (#441)
+# ---------------------------------------------------------------------------
+
+
+func _segment_keys(segments: Array) -> Array:
+	var keys: Array = []
+	for seg in segments:
+		var lo: int = mini(seg.from_layer_index, seg.to_layer_index)
+		var hi: int = maxi(seg.from_layer_index, seg.to_layer_index)
+		var a: Vector2i = (
+			seg.from_cell if seg.from_layer_index < seg.to_layer_index else seg.to_cell
+		)
+		var b: Vector2i = (
+			seg.to_cell if seg.from_layer_index < seg.to_layer_index else seg.from_cell
+		)
+		keys.append("%d_%d_%d_%d_%d_%d" % [lo, hi, a.x, a.y, b.x, b.y])
+	keys.sort()
+	return keys
+
+
+func _two_level_manager() -> HFPaintLayerManagerScript:
+	var mgr := _make_layer_manager()
+	var lower := mgr.create_layer(&"lo", 0.0)
+	var upper := mgr.create_layer(&"hi", 4.0)
+	for y in range(4):
+		for x in range(4):
+			lower.set_cell(Vector2i(x, y), true)
+	for y in range(4):
+		for x in range(4, 8):
+			upper.set_cell(Vector2i(x, y), true)
+	return mgr
+
+
+func test_the_touched_scan_agrees_with_the_full_scan():
+	var mgr := _two_level_manager()
+	var all_cells: Dictionary = {}
+	for y in range(4):
+		for x in range(4):
+			all_cells[Vector2i(x, y)] = true
+	var touched := gen.boundaries_for_cells(mgr, 0, all_cells)
+	var full: Array = []
+	for seg in gen.detect_boundaries(mgr):
+		if (
+			(seg.from_layer_index == 0 and all_cells.has(seg.from_cell))
+			or (seg.to_layer_index == 0 and all_cells.has(seg.to_cell))
+		):
+			full.append(seg)
+	assert_eq(
+		_segment_keys(touched),
+		_segment_keys(full),
+		"The cheap path answers exactly what the scan it stands in for would"
+	)
+
+
+func test_the_touched_scan_finds_a_boundary_from_either_side():
+	var mgr := _two_level_manager()
+	var from_lower := gen.boundaries_for_cells(mgr, 0, {Vector2i(3, 1): true})
+	assert_eq(from_lower.size(), 1, "The lower cell's own boundary")
+	var from_upper := gen.boundaries_for_cells(mgr, 1, {Vector2i(4, 1): true})
+	assert_eq(_segment_keys(from_upper), _segment_keys(from_lower), "Same boundary, other side")
+
+
+func test_the_touched_scan_ignores_cells_away_from_a_boundary():
+	var mgr := _two_level_manager()
+	assert_eq(gen.boundaries_for_cells(mgr, 0, {Vector2i(0, 0): true}).size(), 0)
+
+
+func test_the_touched_scan_is_empty_without_a_second_layer():
+	var mgr := _make_layer_manager()
+	var only := mgr.create_layer(&"a", 0.0)
+	only.set_cell(Vector2i(0, 0), true)
+	assert_eq(gen.boundaries_for_cells(mgr, 0, {Vector2i(0, 0): true}).size(), 0)
+
+
+func test_the_touched_scan_refuses_a_layer_index_out_of_range():
+	var mgr := _two_level_manager()
+	assert_eq(gen.boundaries_for_cells(mgr, 7, {Vector2i(3, 1): true}).size(), 0)
+
+
+func test_defs_for_touched_cells_matches_the_full_scan_for_that_cell():
+	var mgr := _two_level_manager()
+	var settings := HFAutoConnectorScript.Settings.new()
+	var defs: Array = gen.defs_for_touched_cells(mgr, 0, {Vector2i(3, 1): true}, settings)
+	assert_eq(defs.size(), 1, "One boundary under the stroke, one connector")
+	assert_eq(defs[0].from_layer_index, 0)
+	assert_eq(defs[0].to_layer_index, 1)
+
+
+func test_defs_for_touched_cells_is_empty_for_an_empty_footprint():
+	var mgr := _two_level_manager()
+	assert_eq(gen.defs_for_touched_cells(mgr, 0, {}).size(), 0)
+
+
+func test_the_touched_scan_does_not_grow_with_the_level():
+	# The old live path ran a full detect_boundaries() and filtered the result,
+	# so one touched cell cost what the whole level cost.
+	var mgr := _make_layer_manager()
+	var lower := mgr.create_layer(&"lo", 0.0)
+	var upper := mgr.create_layer(&"hi", 4.0)
+	for y in range(64):
+		for x in range(64):
+			lower.set_cell(Vector2i(x, y), true)
+	for y in range(64):
+		for x in range(64, 128):
+			upper.set_cell(Vector2i(x, y), true)
+	var started := Time.get_ticks_usec()
+	var touched := gen.boundaries_for_cells(mgr, 0, {Vector2i(63, 10): true})
+	var took := Time.get_ticks_usec() - started
+	assert_eq(touched.size(), 1)
+	var full_started := Time.get_ticks_usec()
+	gen.detect_boundaries(mgr)
+	var full_took := Time.get_ticks_usec() - full_started
+	assert_lt(took, full_took / 4, "One cell costs a fraction of the level-wide scan")
