@@ -181,3 +181,54 @@ func test_data_roundtrip_via_json():
 
 	var ev = _make_key(KEY_W, true)
 	assert_true(loaded.matches("tool_draw", ev), "Loaded keymap should match saved binding")
+
+
+# -- chords two actions can both answer ----------------------------------------
+
+
+func test_the_shipped_defaults_have_no_conflicts():
+	# Six chords are shared on purpose - E is extrude, erase and edge mode; R is
+	# rotate and ramp; X, Y and Z are axis locks and paint mirrors - and the
+	# input router gates each family on its mode, so none of those can both fire.
+	for action in keymap.get_actions():
+		assert_eq(
+			Array(keymap.conflicts_for(action)),
+			[],
+			"'%s' should not clash with anything that fires in the same mode" % action
+		)
+
+
+func test_e_is_shared_across_three_modes_without_clashing():
+	assert_eq(HFKeymapType.action_mode("tool_extrude"), "general")
+	assert_eq(HFKeymapType.action_mode("paint_erase"), "paint")
+	assert_eq(HFKeymapType.action_mode("vertex_edge_mode"), "vertex")
+	assert_eq(Array(keymap.conflicts_for("paint_erase")), [], "Paint E only fires in paint mode")
+
+
+func test_rebinding_onto_a_chord_that_fires_in_the_same_mode_is_reported():
+	# Hollow onto Ctrl+G, which Group already uses. Both are general actions, so
+	# the input router's first hit wins and the other becomes unreachable.
+	keymap.set_binding("hollow", KEY_G, true)
+	var clashes := keymap.conflicts_for("hollow")
+	assert_eq(Array(clashes), ["group"], "The clash is named: %s" % str(clashes))
+	assert_eq(Array(keymap.conflicts_for("group")), ["hollow"], "and it is reported both ways")
+
+
+func test_rebinding_onto_a_chord_used_only_in_another_mode_is_not_a_conflict():
+	keymap.set_binding("hollow", KEY_B)
+	assert_eq(
+		Array(keymap.conflicts_for("hollow")),
+		[],
+		"Paint Brush is B, but it only fires while paint mode is on"
+	)
+
+
+func test_a_modifier_makes_it_a_different_chord():
+	keymap.set_binding("hollow", KEY_G, true, true)
+	assert_eq(Array(keymap.conflicts_for("hollow")), [], "Ctrl+Shift+G is not Ctrl+G")
+
+
+func test_toggle_paint_mode_is_a_general_action():
+	# It turns paint mode on, so it cannot be gated behind paint mode.
+	assert_eq(HFKeymapType.action_mode("toggle_paint_mode"), "general")
+	assert_eq(HFKeymapType.action_mode("vertex_edit"), "general", "and so is the vertex toggle")

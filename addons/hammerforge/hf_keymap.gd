@@ -58,7 +58,37 @@ static func _validated(data: Dictionary, defaults: Dictionary, path: String) -> 
 	for action in defaults:
 		if not out.has(action):
 			out[action] = defaults[action]
+	_warn_about_conflicts(out, path)
 	return out
+
+
+## One line per pair of actions that can fire in the same mode on one chord.
+## A hand-edited file is where these arrive, so the load is where to say so.
+static func _warn_about_conflicts(bindings: Dictionary, path: String) -> void:
+	var reported: Dictionary = {}
+	for action in bindings:
+		var first := str(action)
+		for other in bindings:
+			var second := str(other)
+			if first == second:
+				continue
+			if action_mode(first) != action_mode(second):
+				continue
+			if not _same_chord(bindings[first], bindings[second]):
+				continue
+			var pair_key: String = first + "|" + second if first < second else second + "|" + first
+			if reported.has(pair_key):
+				continue
+			reported[pair_key] = true
+			HFLog.warn(
+				(
+					(
+						"%s: '%s' and '%s' share a shortcut and both fire in the same mode."
+						% [path, get_action_label(first), get_action_label(second)]
+					)
+					+ " Only one of them will work."
+				)
+			)
 
 
 static func _default_bindings() -> Dictionary:
@@ -177,6 +207,12 @@ func save(path: String) -> void:
 
 
 ## Update a single binding.
+##
+## A chord another action in the same mode already uses is still written - it is
+## what the caller asked for - but it is no longer silent. `plugin_input_router`
+## tests actions one at a time and returns on the first hit, so the one it
+## happens to check first wins and the other becomes unreachable with nothing
+## said anywhere.
 func set_binding(
 	action: String,
 	keycode: int,
@@ -195,6 +231,74 @@ func set_binding(
 	if meta:
 		b["meta"] = true
 	_bindings[action] = b
+	var clashes := conflicts_for(action)
+	if not clashes.is_empty():
+		(
+			HFLog
+			. warn(
+				(
+					"Keymap: '%s' is now %s, which %s already uses. Only one of them will fire."
+					% [
+						get_action_label(action),
+						get_display_string(action),
+						_label_list(clashes),
+					]
+				)
+			)
+		)
+
+
+## Actions that would fire on the same chord as `action`, in the same mode.
+##
+## The defaults share six chords on purpose - E is extrude, erase and edge mode;
+## R is rotate and ramp; X, Y and Z are axis locks and paint mirrors - and the
+## input router gates each family on its mode, so none of those pairs can both
+## fire. So the question is not whether a chord is taken, it is whether it is
+## taken by something that can fire at the same time.
+func conflicts_for(action: String) -> PackedStringArray:
+	var out := PackedStringArray()
+	var binding: Dictionary = _bindings.get(action, {})
+	if binding.is_empty():
+		return out
+	var mode := action_mode(action)
+	for other in _bindings:
+		var other_action := str(other)
+		if other_action == action:
+			continue
+		if action_mode(other_action) != mode:
+			continue
+		if _same_chord(binding, _bindings[other]):
+			out.append(other_action)
+	return out
+
+
+## Which mode an action can fire in. `plugin_input_router` dispatches the paint
+## family only while paint mode is on and the vertex family only while vertex
+## mode is on, and everything else only while neither is.
+static func action_mode(action: String) -> String:
+	if action.begins_with("paint_") and action != "toggle_paint_mode":
+		return "paint"
+	if action.begins_with("vertex_") and action != "vertex_edit":
+		return "vertex"
+	return "general"
+
+
+static func _same_chord(a, b) -> bool:
+	if not (a is Dictionary and b is Dictionary):
+		return false
+	if int(a.get("keycode", 0)) != int(b.get("keycode", -1)):
+		return false
+	for modifier in ["ctrl", "shift", "alt", "meta"]:
+		if bool(a.get(modifier, false)) != bool(b.get(modifier, false)):
+			return false
+	return true
+
+
+func _label_list(actions: PackedStringArray) -> String:
+	var labels := PackedStringArray()
+	for action in actions:
+		labels.append("'%s'" % get_action_label(action))
+	return ", ".join(labels)
 
 
 ## Get all action names.
