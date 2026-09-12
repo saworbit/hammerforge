@@ -37,6 +37,20 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **A paint layer is now the one the mapper chose, on the level's own grid**
+  (#432, #433, #442). `remove_layer()` kept the active index by clamping it,
+  which is only right when the removed layer is after the active one: deleting
+  a layer below it shifted every later layer down and the paint target moved to
+  a layer above the selected one, with nothing announcing it. `create_layer()`
+  never checked the id was free, so two layers could share one `layer_id` -
+  which is identity, not a label - and Godot renamed the colliding node to
+  `@Node@9`; a repeated id is now uniquified to `roof_2` and the reason logged.
+  And every layer holds its own copy of the grid while
+  `_sync_paint_grid_from_root()` only wrote the template, so moving the level
+  root left every painted floor, connector and scatter on the old world origin
+  and a layer created afterwards landed on a different grid from the ones beside
+  it. The sync now pushes origin, basis and cell size into every layer grid,
+  keeping each layer's own `layer_y`.
 - **A shortcut rebound onto a chord another action already uses was accepted in
   silence** (#410). Nothing compared a new binding against the others, so
   `matches()` answered true for both, and `plugin_input_router` tests actions one
