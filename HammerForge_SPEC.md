@@ -349,7 +349,7 @@ Foliage Populator
 - Brush records include face data (materials, UVs, paint layers), visgroup membership, group_id, and `brush_entity_class`.
 - Entity records include visgroup membership, group_id, and `io_outputs` (Entity I/O connections).
 - Paint layers include grid settings, chunk size, bitset data, `material_ids`, `blend_weights` (+ _2/_3), and terrain slot settings.
-- Optional per-layer: `heightmap_b64` (base64 PNG), `height_scale`. Missing keys = no heightmap (backward-compatible).
+- Optional per-layer: `heightmap_b64` (base64 raw float buffer, zstd compressed; a base64 PNG from an older version still loads), `height_scale`. Missing keys = no heightmap (backward-compatible).
 - Level settings include `texture_lock`, `cordon_enabled`, `cordon_aabb_pos`, `cordon_aabb_size`.
 - Visgroup definitions and group registry stored in state via `capture_visgroups()` / `capture_groups()`.
 
@@ -544,6 +544,6 @@ Unit tests use the [GUT](https://github.com/bitwes/Gut) framework and run headle
 | `test_selection_gesture.gd` | 40 | Native widget/Object Select ownership, modal Face Select, recovery, focus/scope guards, native duplicate/reparent repair, and Inspector/undo change tracking |
 | `test_viewport_outlines.gd` | 39 | Sparse semantic outlines, exact/composite entity collision, visibility/transforms, and shape-aware resize recovery |
 
-Full suite (verified in CI on September 12, 2026): **3,659 tests** across **192 scripts** (**3,652 passing** plus seven intentional no-assert safety tests; **18,459 assertions**).
+Full suite (verified in CI on September 12, 2026): **3,664 tests** across **192 scripts** (**3,657 passing** plus seven intentional no-assert safety tests; **18,471 assertions**).
 
 Tests use root shim scripts (dynamically created GDScript) to provide the LevelRoot interface without circular preload dependencies. Configuration in `.gutconfig.json`.
