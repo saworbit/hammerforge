@@ -37,6 +37,20 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **A tool setting is now held to its own schema, wherever the value comes
+  from** (#450). `HFEditorTool.set_setting()` wrote whatever it was handed. The
+  schema's `min`/`max` was read in exactly two places - `get_setting()` for the
+  default, and the SpinBox `dock._build_tool_settings()` generates - so the
+  constraint lived in one control and the tool itself had no opinion. A path
+  drawn at width -16 built an inside-out corridor: a negative half-extent swaps
+  the two sides of every corner ring and reverses the winding of all six quads,
+  and `HFBrushSystem._usable_size()` - the one guard that knows a negative size
+  builds a brush inside out - only ever saw the size, which it quietly
+  corrected, and never the face array a CUSTOM brush actually renders and
+  bakes. Three values outside one schema gave three different outcomes; they
+  now all give the schema's. A value that is not a number is refused and the
+  previous one kept. `_build_segment_brush()` also refuses a non-positive width
+  or height outright rather than building a ring from it.
 - **A shortcut rebound onto a chord another action already uses was accepted in
   silence** (#410). Nothing compared a new binding against the others, so
   `matches()` answered true for both, and `plugin_input_router` tests actions one
