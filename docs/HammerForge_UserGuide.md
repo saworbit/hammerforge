@@ -190,7 +190,7 @@ Press **M** to activate the Measure tool. It supports persistent multi-ruler mea
 - **Shift+Click** chains a new ruler from the last ruler's endpoint. Consecutive chained rulers that share a vertex display the **angle** between them in degrees.
 - Up to **20 rulers** can be active simultaneously, each drawn in a cycling color palette.
 - **Ctrl+Click** near a ruler to set it as a **snap reference line**. The snap system will project nearby points onto that line.
-- Press **A** to toggle align mode on/off.
+- Press **A** to toggle align mode on/off. Turning it off keeps the ruler you chose, so turning it back on snaps to the same line. With no reference chosen, **A** uses the newest ruler. A ruler with both ends on the same point has no direction and sets no snap line.
 - Press **Delete/Backspace** to remove the last ruler.
 - Press **Escape** to clear all rulers.
 - The HUD shows ruler count, distance of the last ruler, and alignment status.

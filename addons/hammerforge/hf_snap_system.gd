@@ -36,7 +36,26 @@ const VERTEX_KEY_SCALE := 1000.0
 
 var root: Node3D
 var enabled_modes: int = SnapMode.GRID
-var snap_threshold: float = 2.0
+## How far a candidate may be from the point and still be snapped to.
+##
+## A value of zero or less turns every geometry candidate off, so it is refused
+## rather than quietly disabling snapping. The backing variable is separate
+## because a setter that assigns to its own property re-enters itself.
+var _snap_threshold: float = 2.0
+
+var snap_threshold: float:
+	get:
+		return _snap_threshold
+	set(value):
+		if not is_finite(value) or value <= 0.0:
+			HFLog.warn(
+				(
+					"HFSnapSystem: a snap threshold of %s would turn every candidate off. Kept %s."
+					% [str(value), str(_snap_threshold)]
+				)
+			)
+			return
+		_snap_threshold = value
 var _custom_snap_origin: Vector3 = Vector3.ZERO
 var _custom_snap_dir: Vector3 = Vector3.ZERO
 var _has_custom_snap := false
@@ -122,10 +141,23 @@ func snap_point(point: Vector3, grid_snap: float, exclude_ids: Array = []) -> Ve
 	return best
 
 
-func set_custom_snap_line(origin: Vector3, direction: Vector3) -> void:
+## Point every snap within `snap_threshold` of the line at the nearest point on
+## it. Returns false and changes nothing when the direction is not a direction.
+##
+## `Vector3.ZERO.normalized()` is `Vector3.ZERO`, so a zero direction made
+## `_project_onto_line()` return `line_origin + Vector3.ZERO * t` - the origin -
+## for every input, and everything inside the threshold landed on one point. A
+## ruler with both ends in the same place is a real thing a user can draw, and
+## the only caller today checks the length before calling. The rule belongs here,
+## with the code that depends on it.
+func set_custom_snap_line(origin: Vector3, direction: Vector3) -> bool:
+	if not direction.is_finite() or direction.length_squared() < 0.000001:
+		HFLog.warn("HFSnapSystem: a snap line needs a direction. %s is not one." % str(direction))
+		return false
 	_custom_snap_origin = origin
 	_custom_snap_dir = direction.normalized()
 	_has_custom_snap = true
+	return true
 
 
 func clear_custom_snap_line() -> void:

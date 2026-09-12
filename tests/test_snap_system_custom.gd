@@ -60,3 +60,36 @@ func test_snap_point_uses_custom_line():
 	# Custom line projects to (3, 0, 0)
 	assert_almost_eq(result.y, 0.0, 0.01, "Should snap Y to the line")
 	assert_almost_eq(result.x, 3.0, 0.01, "X should stay projected")
+
+
+# --- a line that is not a line, and a threshold that is not one -------------
+
+
+func test_a_snap_line_with_no_direction_is_refused():
+	# `Vector3.ZERO.normalized()` is `Vector3.ZERO`, so the projection returned
+	# the origin for every input and everything inside the threshold landed on
+	# one point. A ruler with both ends in the same place draws one of these.
+	assert_false(
+		snap.set_custom_snap_line(Vector3(10, 20, 30), Vector3.ZERO), "A zero direction is refused"
+	)
+	assert_false(snap._has_custom_snap, "and no custom line is set")
+	snap.snap_threshold = 100.0
+	assert_eq(snap.snap_point(Vector3.ZERO, 0.0, []), Vector3.ZERO, "so nothing collapses onto it")
+
+
+func test_a_snap_line_that_was_set_is_not_lost_to_a_bad_one():
+	assert_true(snap.set_custom_snap_line(Vector3.ZERO, Vector3(1, 0, 0)))
+	assert_false(snap.set_custom_snap_line(Vector3(10, 20, 30), Vector3.ZERO))
+	assert_eq(snap._custom_snap_dir, Vector3(1, 0, 0), "The good line is still the one in use")
+	assert_eq(snap._custom_snap_origin, Vector3.ZERO)
+
+
+func test_a_snap_threshold_of_zero_or_less_is_refused():
+	# It turns every geometry candidate off, which used to happen in silence.
+	snap.snap_threshold = 4.0
+	snap.snap_threshold = -10.0
+	assert_almost_eq(snap.snap_threshold, 4.0, 0.001, "A negative threshold is not taken")
+	snap.snap_threshold = 0.0
+	assert_almost_eq(snap.snap_threshold, 4.0, 0.001, "and neither is zero")
+	snap.snap_threshold = 6.0
+	assert_almost_eq(snap.snap_threshold, 6.0, 0.001, "A usable one still is")
