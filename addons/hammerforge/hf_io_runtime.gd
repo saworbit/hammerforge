@@ -257,11 +257,41 @@ func _deliver(
 		_deliver_to_target(target, input_name, parameter)
 
 
+## Whether an input name may be delivered by calling a method of that name.
+##
+## `has_method()` answers for everything `Object` and `Node` implement, and the
+## snake_case fallback makes the collision easy to hit from ordinary PascalCase
+## naming: an input called `QueueFree` deleted the target, `Free` would have
+## deleted it mid-frame, and `SetScript`, `Hide` and `ReplaceBy` are all one
+## typo away. The input name is free text from a dock field with nothing between
+## it and here, so a name that collides with the engine was destructive while a
+## plain typo was silent.
+##
+## Only methods the target's own script defines are called. An engine method, or
+## anything starting with an underscore, falls through to `_on_io_input` and then
+## to the user signal, which is where a game that means to hide a node on an
+## input can handle it deliberately.
+func _is_callable_input(target: Node, method_name: String) -> bool:
+	if method_name.begins_with("_"):
+		return false
+	# Default third argument: ancestors count. `queue_free` is on `Node`, and the
+	# target is a `Node3D` or further down.
+	if ClassDB.class_has_method(target.get_class(), method_name):
+		push_warning(
+			(
+				"HFIORuntime: input '%s' on '%s' names an engine method - not calling it."
+				% [method_name, target.name]
+			)
+		)
+		return false
+	return true
+
+
 ## Deliver an input to a single target node.
 func _deliver_to_target(target: Node, input_name: String, parameter: String) -> void:
 	# 1) Try calling the input method directly on the target (e.g. "Open", "TurnOn").
 	var method_name: String = input_name
-	if target.has_method(method_name):
+	if target.has_method(method_name) and _is_callable_input(target, method_name):
 		if parameter != "":
 			target.call(method_name, parameter)
 		else:
@@ -270,7 +300,11 @@ func _deliver_to_target(target: Node, input_name: String, parameter: String) -> 
 
 	# 2) Try snake_case variant (e.g. "TurnOn" -> "turn_on").
 	var snake_name: String = _to_snake_case(method_name)
-	if snake_name != method_name and target.has_method(snake_name):
+	if (
+		snake_name != method_name
+		and target.has_method(snake_name)
+		and _is_callable_input(target, snake_name)
+	):
 		if parameter != "":
 			target.call(snake_name, parameter)
 		else:
@@ -346,7 +380,23 @@ func _collect_connections(node: Node) -> void:
 		for child in node.get_children():
 			_collect_connections(child)
 		return
-	var outputs: Array = node.get_meta("entity_io_outputs", [])
+	# Not a typed local. A value of another type here - a String from a
+	# hand-edited scene, an older metadata format, a Dictionary someone wrote by
+	# hand - used to be a runtime error on this line, and GDScript unwinds the
+	# whole function, including the recursion at the bottom. One bad entity took
+	# every entity under it out of the wiring, in the shipped game, with nothing
+	# but a line in a log nobody reads.
+	var raw_outputs = node.get_meta("entity_io_outputs", [])
+	var outputs: Array = []
+	if raw_outputs is Array:
+		outputs = raw_outputs
+	elif raw_outputs != null:
+		push_warning(
+			(
+				"HFIORuntime: '%s' has entity_io_outputs of type %s, not a list - skipping it."
+				% [node.name, type_string(typeof(raw_outputs))]
+			)
+		)
 	if not outputs.is_empty():
 		var id: int = node.get_instance_id()
 		var source_name: String = node.name

@@ -37,6 +37,26 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **An entity I/O input named after a Node method called it, and one malformed
+  entity took its whole subtree out of the wiring** (#406, #407).
+  `_deliver_to_target()` resolved an input name by calling a method of that name,
+  and `has_method()` answers for everything `Object` and `Node` implement. The
+  snake_case fallback made the collision easy to hit from ordinary PascalCase
+  naming: an input called `QueueFree` deleted the target, `Free` would have
+  deleted it mid-frame, and `Hide`, `SetScript` and `ReplaceBy` are each one typo
+  away. The input name is free text from a dock field with nothing between it
+  and there, so a name that collided with the engine was destructive while a
+  plain typo was silent. Only methods the target's own script defines are called
+  now; an engine method, or a name starting with an underscore, falls through to
+  `_on_io_input` and the user signal with a warning naming both. Separately,
+  `_collect_connections()` read `entity_io_outputs` into a typed local, so one
+  entity whose metadata was not an Array - a hand-edited scene, an older format -
+  was a runtime error that unwound the function including the recursion at the
+  bottom of it, and everything nested under that entity dropped out of the
+  wiring. This is the shipped game, not the editor: the level loads, the error
+  goes to a log nobody reads, and a door somewhere never opens. The value is
+  type-checked, the bad entity is skipped with a warning naming it, and its
+  children are scanned as usual.
 - **A decal was not part of the level** (#403, #404). `_place_decal()` added a
   `Decal` node under the `LevelRoot` and nothing else knew about it.
   `capture_state()` had no decal key, and a `.hflevel` is what `capture_state()`

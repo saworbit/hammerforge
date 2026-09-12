@@ -698,6 +698,8 @@ Entity I/O connections are automatically translated into live Godot signals when
 3. Generic handler (`_on_io_input(input_name, parameter)`)
 4. User signal (`io_Open` emitted on the target)
 
+Only methods the target's own script defines are called at steps 1 and 2. An input whose name resolves to an engine method -- `QueueFree`, `Free`, `Hide`, `SetScript` and anything else on `Node` or `Object`, before or after the snake-case conversion -- is not called, and falls through to the generic handler and the user signal instead, with a warning naming the input and the target. Handle those deliberately in `_on_io_input` if your game wants them.
+
 **Firing outputs from game scripts**:
 ```gdscript
 # From any entity script at runtime:
