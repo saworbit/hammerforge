@@ -37,6 +37,20 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **A level with more texture than the atlas holds took the atlas down** (#416).
+  `_shelf_pack()` reports failure by returning zeros, and `build_atlas()` read
+  `width`, `height` and `placements` without looking at `success`. So the
+  failure became an `Image.create(0, 0)` error and then an out-of-bounds on the
+  first placement lookup, the function unwound, and the caller got `null` where
+  it expected an `AtlasResult` - no fallback, no partial pack, no message.
+  Twenty 2K textures does it: each one is a legal tile, and together they are 84
+  million pixels against the 16 million a 4096 atlas holds, which is an ordinary
+  art budget rather than an edge case. The packer now fills the biggest atlas it
+  can and names what would not fit, and those materials go into `fallback_keys`
+  with the reason in a new `AtlasResult.overflow_keys`, the way
+  `skipped_channels` carries a reason for a PBR slot. The bake already renders
+  fallback keys on their own surfaces, so the level bakes with every material on
+  it and a warning saying how many did not make the atlas.
 - **User preferences trusted the file completely and were not written
   atomically** (#408, #409). `load_prefs()` assigned the parsed JSON straight to
   `data`, and every accessor then reads its container into a typed local, so one

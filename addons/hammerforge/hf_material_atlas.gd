@@ -49,6 +49,9 @@ class AtlasResult:
 	## PBR slot name -> reason it could not be packed. Only slots that at least
 	## one packed material supplied a texture for appear here.
 	var skipped_channels: Dictionary = {}
+	## Material key -> reason it could be atlased but did not fit. These are in
+	## `fallback_keys` too, so they render on their own; this says why.
+	var overflow_keys: Dictionary = {}
 
 
 ## Build an atlas from the unique materials used in a face bake.
@@ -107,11 +110,42 @@ static func build_atlas(material_keys: Array, exclude_keys: Dictionary = {}) -> 
 			)
 		)
 
-	# Determine atlas dimensions via shelf-packing.
+	# Determine atlas dimensions via shelf-packing. A level with more texture
+	# than a 4096 atlas holds packs what fits and the rest fall back, rather than
+	# the pack reporting failure through zeros that nothing read - which built an
+	# Image of 0x0 and then went out of bounds on the first placement lookup.
 	var pack_result: Dictionary = _shelf_pack(padded_tiles)
 	var atlas_w: int = pack_result["width"]
 	var atlas_h: int = pack_result["height"]
 	var placements: Array = pack_result["placements"]  # Array of {x, y} per tile index
+	var unplaced: Array = pack_result["unplaced"]
+	if not unplaced.is_empty():
+		var total: int = tiles.size()
+		var reason := (
+			"more texture than a %d atlas holds; this material renders on its own" % MAX_ATLAS_SIZE
+		)
+		for index in unplaced:
+			var key = tiles[index]["key"]
+			result.fallback_keys.append(key)
+			result.overflow_keys[key] = reason
+		# Highest index first, so the entries before it keep their positions. The
+		# three arrays are indexed together and `_build_pbr_channels()` reads
+		# tiles and placements in step, so all three lose the same entries.
+		var ordered: Array = unplaced.duplicate()
+		ordered.sort()
+		ordered.reverse()
+		for index in ordered:
+			tiles.remove_at(index)
+			padded_tiles.remove_at(index)
+			placements.remove_at(index)
+		push_warning(
+			(
+				"HFMaterialAtlas: %d of %d materials did not fit a %d atlas and render on their own."
+				% [unplaced.size(), total, MAX_ATLAS_SIZE]
+			)
+		)
+	if tiles.is_empty():
+		return result
 
 	# Blit tiles onto atlas image with gutter padding.
 	var atlas_img = Image.create(atlas_w, atlas_h, false, Image.FORMAT_RGBA8)
@@ -489,6 +523,14 @@ static func group_has_tiling_uvs(uvs: PackedVector2Array) -> bool:
 
 ## Simple shelf packer. Returns {width, height, placements} where placements
 ## is an array of {x, y} dicts matching the input tile order.
+## Lay the tiles out, growing the atlas until they fit or it reaches
+## `MAX_ATLAS_SIZE`. At that size what does not fit is reported in `unplaced`
+## rather than failing the whole pack: twenty 2K textures is an ordinary art
+## budget and 84 million pixels against the 16 million a 4096 atlas holds, and
+## the caller can render the remainder on their own materials.
+##
+## `placements` always has one entry per tile. An unplaced tile's entry is there
+## but meaningless; the caller drops those tiles before reading it.
 static func _shelf_pack(tiles: Array) -> Dictionary:
 	# Estimate initial width from total area.
 	var total_area := 0
@@ -502,13 +544,16 @@ static func _shelf_pack(tiles: Array) -> Dictionary:
 		if pack["success"]:
 			return pack
 		atlas_w *= 2
-	# Fallback: very wide single row (shouldn't happen for reasonable input).
-	return _try_shelf_pack(tiles, MAX_ATLAS_SIZE)
+	# Nothing fits whole. Pack what the biggest atlas holds and name the rest.
+	return _try_shelf_pack(tiles, MAX_ATLAS_SIZE, true)
 
 
-static func _try_shelf_pack(tiles: Array, max_width: int) -> Dictionary:
+static func _try_shelf_pack(
+	tiles: Array, max_width: int, allow_partial: bool = false
+) -> Dictionary:
 	var placements: Array = []
 	placements.resize(tiles.size())
+	var unplaced: Array = []
 	var shelf_x := 0
 	var shelf_y := 0
 	var shelf_h := 0
@@ -520,15 +565,31 @@ static func _try_shelf_pack(tiles: Array, max_width: int) -> Dictionary:
 			shelf_y += shelf_h
 			shelf_x = 0
 			shelf_h = 0
-		if shelf_x + tw > max_width:
-			return {"success": false, "width": 0, "height": 0, "placements": []}
+		var too_wide: bool = shelf_x + tw > max_width
+		var too_tall: bool = shelf_y + th > MAX_ATLAS_SIZE
+		if too_wide or too_tall:
+			if not allow_partial:
+				return {"success": false, "width": 0, "height": 0, "placements": [], "unplaced": []}
+			# Leave the shelf where it is and try the next tile, which may be
+			# shorter. A tile wider than the atlas can never be placed.
+			placements[i] = {"x": 0, "y": 0}
+			unplaced.append(i)
+			continue
 		placements[i] = {"x": shelf_x, "y": shelf_y}
 		shelf_x += tw
 		shelf_h = maxi(shelf_h, th)
 	var total_h: int = _next_power_of_2(shelf_y + shelf_h)
 	if total_h > MAX_ATLAS_SIZE:
-		return {"success": false, "width": 0, "height": 0, "placements": []}
-	return {"success": true, "width": max_width, "height": total_h, "placements": placements}
+		if not allow_partial:
+			return {"success": false, "width": 0, "height": 0, "placements": [], "unplaced": []}
+		total_h = MAX_ATLAS_SIZE
+	return {
+		"success": unplaced.is_empty(),
+		"width": max_width,
+		"height": total_h,
+		"placements": placements,
+		"unplaced": unplaced,
+	}
 
 
 static func _next_power_of_2(v: int) -> int:
