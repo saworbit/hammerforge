@@ -33,7 +33,7 @@ Eight checks, each a red / amber / green lamp with what was measured, what it me
 | **Geometry budget** | 50 brushes + entities or fewer | Above 50; bakes get slower | Above 100; dragging starts to stutter |
 | **Bake** | Baked meshes match the drafts | Never baked, or brushes edited since — *Bake Now* | — |
 | **Level check** | Scanned, no faults | 1–5 issues — *Check + Fix* | 6 or more |
-| **Material palette** | Materials loaded | Empty (fine for greyboxing) — *Load Palette* | Empty **and** face-material bake is on |
+| **Material palette** | Every slot loaded | Empty (fine for greyboxing), or some slots did not resolve — *Load Palette* | No slot resolved, or empty **and** face-material bake is on |
 | **Player spawn** | At least one spawn point | None, but auto-spawn is on — *Add Spawn Point* | None and auto-spawn is off |
 | **Autosave** | On, and a snapshot exists | Off, or nothing written yet — *Turn On* | — |
 | **Session log** | No warnings | Warnings this session — *Open Log* | Errors this session |

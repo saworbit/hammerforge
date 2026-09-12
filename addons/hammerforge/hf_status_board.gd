@@ -108,7 +108,11 @@ static func collect_context(
 			for mat in materials:
 				if mat != null:
 					loaded += 1
+			# Two numbers, not one. A palette of slots that did not resolve is
+			# not an empty palette: those slots are what every face indexes, and
+			# the validator reports each of them.
 			ctx["material_count"] = loaded
+			ctx["material_slot_count"] = materials.size()
 
 	var spawn_system = level_root.get("spawn_system")
 	if spawn_system and spawn_system.has_method("get_all_spawns"):
@@ -147,6 +151,7 @@ static func _empty_context() -> Dictionary:
 		"recommended_chunk_size": 0.0,
 		"chunk_size": 0.0,
 		"material_count": 0,
+		"material_slot_count": 0,
 		"bake_use_face_materials": false,
 		"spawn_count": 0,
 		"auto_spawn_player": false,
@@ -404,13 +409,41 @@ static func _check_materials(ctx: Dictionary) -> Dictionary:
 	var help := (
 		"The material palette every brush face indexes into. An empty palette is\n"
 		+ "fine for greyboxing and fatal for a face-material bake, which has no\n"
-		+ "palette entry to resolve each face against."
+		+ "palette entry to resolve each face against. A palette with slots that\n"
+		+ "did not resolve is a different thing: those slots are what the faces\n"
+		+ "index, and every one of them is an issue the validator reports."
 	)
 	if not ctx.get("has_root", false):
 		return _row(
 			"materials", "Material palette", Severity.UNKNOWN, "-", "No level loaded.", help
 		)
 	var count := int(ctx.get("material_count", 0))
+	var slots := int(ctx.get("material_slot_count", 0))
+	if count == 0 and slots > 0:
+		# Slots that did not resolve. The board used to call this "Empty" and say
+		# it was fine for greyboxing, while `validation_system.validate()` on the
+		# same level reported a null palette entry for every one of them.
+		return _row(
+			"materials",
+			"Material palette",
+			Severity.PROBLEM,
+			"%d slot%s, 0 loaded" % [slots, "" if slots == 1 else "s"],
+			"No material in the palette could be found. Every face indexes one of these slots.",
+			help,
+			"load_palette",
+			"Load Palette"
+		)
+	if count > 0 and count < slots:
+		return _row(
+			"materials",
+			"Material palette",
+			Severity.WARN,
+			"%d of %d loaded" % [count, slots],
+			"Some materials in the palette could not be found. Faces indexing them bake grey.",
+			help,
+			"load_palette",
+			"Load Palette"
+		)
 	if count == 0 and bool(ctx.get("bake_use_face_materials", false)):
 		return _row(
 			"materials",

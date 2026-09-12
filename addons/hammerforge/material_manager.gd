@@ -7,6 +7,11 @@ class_name MaterialManager
 ## Path to the last saved/loaded material library (for auto-reload).
 var _library_path := ""
 
+## Paths from the last `load_library()` that did not resolve, in slot order.
+## Their slots are still in `materials`, holding null, because `FaceData`
+## `material_idx` indexes this array and compacting it would repaint the level.
+var _missing_paths: Array[String] = []
+
 
 func get_material(index: int) -> Material:
 	if index >= 0 and index < materials.size():
@@ -82,19 +87,56 @@ func load_library(path: String) -> bool:
 		return false
 	var mat_paths: Array = parsed.get("materials", [])
 	materials.clear()
+	_missing_paths.clear()
 	for mat_path in mat_paths:
 		var p := str(mat_path)
 		if p == "" or not ResourceLoader.exists(p):
 			# Preserve slot with null placeholder so indices stay stable.
 			materials.append(null)
+			_missing_paths.append(p)
 			continue
 		var res = ResourceLoader.load(p)
 		if res is Material:
 			materials.append(res)
 		else:
 			materials.append(null)
+			_missing_paths.append(p)
 	_library_path = path
+	if not _missing_paths.is_empty():
+		# Preserving the slots is right; saying nothing about them is not. The
+		# level's own validator reports one issue per null entry, but only if
+		# somebody runs it, and the natural moment to say so is the load.
+		for missing in _missing_paths:
+			HFLog.warn(
+				(
+					"%s: material '%s' could not be found. Its palette slot is empty."
+					% [path, missing if missing != "" else "<blank path>"]
+				)
+			)
+		HFLog.warn(
+			(
+				"%s: %d of %d materials in this library could not be found."
+				% [path, _missing_paths.size(), materials.size()]
+			)
+		)
 	return true
+
+
+## Paths from the last `load_library()` that did not resolve. Empty when every
+## material was found, and after a load that failed before it read any.
+func get_missing_library_paths() -> Array[String]:
+	return _missing_paths.duplicate()
+
+
+## How many palette slots hold no material. The status board reports this beside
+## the loaded count, because a palette of unresolved slots is not an empty
+## palette: those slots are the ones every face indexes.
+func get_missing_count() -> int:
+	var missing := 0
+	for mat in materials:
+		if mat == null:
+			missing += 1
+	return missing
 
 
 ## Returns the path of the last saved/loaded library, or empty string.
