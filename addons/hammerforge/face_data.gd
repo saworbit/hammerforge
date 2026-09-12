@@ -351,7 +351,7 @@ func to_dict() -> Dictionary:
 		"uv_offset": _encode_vec2(uv_offset),
 		"uv_rotation": uv_rotation,
 		"uv_format_version": 1,
-		"winding_version": 2,
+		"winding_version": 3,
 		"custom_uvs": _encode_vec2_array(custom_uvs),
 		"local_verts": _encode_vec3_array(local_verts),
 		"normal": _encode_vec3(normal),

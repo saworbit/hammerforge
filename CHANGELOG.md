@@ -37,6 +37,19 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **Every path tool brush was wound inside out** (#397). `_build_segment_brush()`
+  and `_build_miter_brush()` wrote their rings the opposite way round from the
+  clockwise-from-outside order every other brush in the editor uses, and nothing
+  negated the normals afterwards. A straight corridor came out with all six faces
+  pointing at its own centre, and baked with a signed volume the opposite sign
+  from the same box drawn with the draw tool: invisible from the inside and
+  exported with inverted planes. The stairs, railing and trim extras all go
+  through the segment builder, so they carried it too. Face winding data moves to
+  version 3, and a brush loaded at an older version whose every face points at
+  its own centroid is migrated on load. That signature is what an inverted convex
+  solid looks like and a correctly wound solid cannot, so levels already saved
+  with path corridors come back the right way out and brushes that were always
+  right are not touched.
 - **A vertex move that bowed a face out of plane passed the convexity check**
   (#364). `validate_convexity()` tested one thing: that no vertex sits in front
   of any face plane. It never tested whether a face is still a plane. Every face

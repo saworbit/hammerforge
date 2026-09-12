@@ -1012,6 +1012,7 @@ const INVERTED_BUILDER_SHAPES := [
 func apply_serialized_faces(data: Array) -> void:
 	faces.clear()
 	var needs_winding_migration := false
+	var check_fully_inverted := false
 	for entry in data:
 		if entry is Dictionary:
 			var version := int(entry.get("winding_version", 0))
@@ -1019,7 +1020,11 @@ func apply_serialized_faces(data: Array) -> void:
 				needs_winding_migration = true
 			elif version < 2 and shape in INVERTED_BUILDER_SHAPES:
 				needs_winding_migration = true
+			elif version < 3:
+				check_fully_inverted = true
 			faces.append(FaceData.from_dict(entry))
+	if not needs_winding_migration and check_fully_inverted and _every_face_points_inward():
+		needs_winding_migration = true
 	if needs_winding_migration:
 		_migrate_face_winding()
 	geometry_dirty = false
@@ -1062,6 +1067,42 @@ func make_face_resources_unique() -> void:
 	faces = unique_faces
 	geometry_dirty = false
 	rebuild_preview()
+
+
+## Every path tool brush written before #397 carries the builder's inversion, and
+## the path tool makes CUSTOM brushes, so there is no shape to key the migration
+## on the way `INVERTED_BUILDER_SHAPES` does. What the inversion does leave is a
+## signature: every face of the brush pointing at its own centroid. A correctly
+## wound closed solid cannot look like that, concave or not, because the faces on
+## its convex hull always point away. So this is a test the migration can make on
+## the geometry itself, and a brush that was already right is never touched.
+func _every_face_points_inward() -> bool:
+	var centroid := Vector3.ZERO
+	var vert_count := 0
+	var usable := 0
+	for face in faces:
+		if face == null or face.local_verts.size() < 3:
+			continue
+		usable += 1
+		for v in face.local_verts:
+			centroid += v
+			vert_count += 1
+	if usable < 4 or vert_count == 0:
+		return false
+	centroid /= float(vert_count)
+	for face in faces:
+		if face == null or face.local_verts.size() < 3:
+			continue
+		var face_center := Vector3.ZERO
+		for v in face.local_verts:
+			face_center += v
+		face_center /= float(face.local_verts.size())
+		var outward_dir: Vector3 = (face_center - centroid).normalized()
+		if outward_dir.length() < 0.001:
+			return false
+		if face.normal.dot(outward_dir) >= 0.0:
+			return false
+	return true
 
 
 func _migrate_face_winding() -> void:

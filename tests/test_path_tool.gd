@@ -243,3 +243,47 @@ func test_rmb_passes_when_idle_and_only_steps_back_active_path_work():
 	assert_eq(tool.handle_input(release, camera, Vector2.ZERO), EditorPlugin.AFTER_GUI_INPUT_PASS)
 	root.free()
 	camera.free()
+
+
+func _outward_face_count(info: Dictionary) -> int:
+	# Face verts are local to the brush centre, so a face points outward when
+	# its normal agrees with the direction from the centre to the face.
+	var outward := 0
+	for face_dict in info.faces:
+		var face = FaceData.from_dict(face_dict)
+		var centroid := Vector3.ZERO
+		for v in face.local_verts:
+			centroid += v
+		centroid /= float(face.local_verts.size())
+		if face.normal.dot(centroid) > 0.0:
+			outward += 1
+	return outward
+
+
+func test_segment_brush_faces_point_outward():
+	# Every face of a path segment used to point at the brush centre, so a
+	# corridor baked inside out.
+	var tool = HFPathTool.new()
+	tool._ground_y = 0.0
+	var info = tool._build_segment_brush(Vector3(0, 0, 0), Vector3(256, 0, 0), 4.0, 4.0, "test")
+	assert_eq(info.faces.size(), 6, "A segment is a box")
+	assert_eq(_outward_face_count(info), 6, "Every face of a segment points out of the solid")
+
+
+func test_diagonal_segment_brush_faces_point_outward():
+	var tool = HFPathTool.new()
+	tool._ground_y = 0.0
+	var info = tool._build_segment_brush(Vector3(0, 0, 0), Vector3(64, 0, 64), 8.0, 6.0, "test")
+	assert_eq(_outward_face_count(info), 6, "Winding does not depend on the segment direction")
+
+
+func test_miter_brush_faces_point_outward():
+	var tool = HFPathTool.new()
+	tool._ground_y = 0.0
+	var info = tool._build_miter_brush(
+		Vector3(-64, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 64), 8.0, 8.0, "test"
+	)
+	assert_false(info.is_empty(), "A right-angle bend gets a miter")
+	assert_eq(
+		_outward_face_count(info), info.faces.size(), "Every miter face points out of the solid"
+	)
