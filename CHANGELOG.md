@@ -37,6 +37,25 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **User preferences trusted the file completely and were not written
+  atomically** (#408, #409). `load_prefs()` assigned the parsed JSON straight to
+  `data`, and every accessor then reads its container into a typed local, so one
+  value of the wrong type was not a wrong preference - it was an error on every
+  call that touched it. A `collapsed_sections` of `"all"` broke every section
+  read, `add_recent_file()` aborted before its write so the path was dropped
+  without a word, and `dismiss_hint()` could not record a dismissal so the hint
+  came back forever. The loaded file is now held to a schema: a value that
+  cannot be used is replaced by the default and reported once naming the file
+  and the key, the way `HFKeymap._validated()` does for the keymap, and a key
+  this version does not know is kept rather than thrown away. A number outside
+  its usable range is clamped, on load and in `set_pref()`, so an autosave
+  interval of -1 or a grid snap of 0 cannot reach the disk. `save()` also opened
+  the destination with `FileAccess.WRITE`, which truncates first, so an editor
+  that went down mid-write left a file that would not parse - and a file that
+  would not parse was silently replaced by the defaults and overwritten by the
+  next save, taking the evidence with it. The write goes beside the file and is
+  moved into place, and a file that cannot be read is kept as
+  `hammerforge_prefs.json.unreadable` with a warning that says why.
 - **An entity I/O input named after a Node method called it, and one malformed
   entity took its whole subtree out of the wiring** (#406, #407).
   `_deliver_to_target()` resolved an input name by calling a method of that name,
