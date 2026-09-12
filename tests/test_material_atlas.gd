@@ -653,3 +653,57 @@ func test_atlas_texture_has_the_mipmaps_its_filter_asks_for():
 func test_single_material_atlas_also_gets_mipmaps():
 	var result = HFMaterialAtlasScript.build_atlas([_make_textured_material(Color.GREEN)])
 	assert_true(result.atlas_material.albedo_texture.get_image().has_mipmaps())
+
+
+# ===========================================================================
+# More texture than the atlas holds
+# ===========================================================================
+
+
+func test_more_texture_than_the_atlas_holds_packs_what_fits():
+	# Twenty 2K textures is an ordinary art budget, and 84 million pixels against
+	# the 16 million a 4096 atlas holds. The pack used to report failure by
+	# returning zeros that nothing read, which built a 0x0 Image and then went
+	# out of bounds on the first placement lookup, and the caller got null.
+	var keys: Array = []
+	for i in range(20):
+		keys.append(_make_textured_material(Color(float(i) / 20.0, 0.5, 0.5), 2048))
+	var result = HFMaterialAtlasScript.build_atlas(keys)
+	assert_not_null(result, "An overflowing level still gets a result")
+	assert_not_null(result.atlas_material, "with an atlas built from what fits")
+	assert_true(result.atlased_keys.size() > 0, "Some materials are packed")
+	assert_true(result.fallback_keys.size() > 0, "and the rest fall back")
+	assert_eq(
+		result.atlased_keys.size() + result.fallback_keys.size(),
+		keys.size(),
+		"Every material is accounted for, once"
+	)
+	for key in result.fallback_keys:
+		assert_true(result.overflow_keys.has(key), "and each one that fell back says why")
+
+
+func test_a_level_that_fits_is_packed_whole():
+	var keys: Array = []
+	for i in range(6):
+		keys.append(_make_textured_material(Color(float(i) / 6.0, 0.2, 0.8), 256))
+	var result = HFMaterialAtlasScript.build_atlas(keys)
+	assert_eq(result.atlased_keys.size(), 6, "All six are packed")
+	assert_eq(result.fallback_keys.size(), 0, "and nothing falls back")
+	assert_eq(result.overflow_keys.size(), 0, "so there is nothing to report")
+
+
+func test_the_rects_of_an_overflowing_atlas_still_address_their_own_tiles():
+	# The tiles that did not fit are dropped from the arrays the blit and the PBR
+	# pass walk, so the ones that remain must keep their placements.
+	var keys: Array = []
+	for i in range(20):
+		keys.append(_make_textured_material(Color(float(i) / 20.0, 0.5, 0.5), 2048))
+	var result = HFMaterialAtlasScript.build_atlas(keys)
+	for key in result.atlased_keys:
+		assert_true(result.rects.has(key), "A packed material has a rect")
+		var rect: Rect2 = result.rects[key]
+		assert_true(rect.size.x > 0.0 and rect.size.y > 0.0, "that is not empty")
+		assert_true(
+			rect.position.x >= 0.0 and rect.end.x <= 1.0, "and sits inside the atlas: %s" % rect
+		)
+		assert_true(rect.position.y >= 0.0 and rect.end.y <= 1.0, "and sits inside it vertically")
