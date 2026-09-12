@@ -46,6 +46,9 @@ const SCENARIOS: Array[String] = [
 	"res://tools/vibe/scenarios/operations.gd",
 	"res://tools/vibe/scenarios/draw_tools.gd",
 	"res://tools/vibe/scenarios/viewport_tools.gd",
+	"res://tools/vibe/scenarios/runtime_io.gd",
+	"res://tools/vibe/scenarios/prefs.gd",
+	"res://tools/vibe/scenarios/snapping.gd",
 ]
 
 
