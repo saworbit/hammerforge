@@ -4,15 +4,38 @@ const HFUserPrefsType = preload("res://addons/hammerforge/hf_user_prefs.gd")
 
 var prefs: HFUserPrefsType
 
+## The file tests below write the real preferences path, which is a developer's
+## own file when the suite runs locally. It is moved aside for the run and put
+## back afterwards.
+const BACKUP_PATH := "user://hammerforge_prefs.json.test_backup"
+
 
 func before_each():
 	prefs = HFUserPrefsType.new()
 	prefs.persistence_enabled = false
 	prefs.data = HFUserPrefsType._defaults()
+	_move(HFUserPrefsType.PREFS_PATH, BACKUP_PATH)
 
 
 func after_each():
 	prefs = null
+	for leftover in [
+		HFUserPrefsType.PREFS_PATH,
+		HFUserPrefsType.PREFS_PATH + ".unreadable",
+		HFUserPrefsType.PREFS_PATH + ".writing",
+		HFUserPrefsType.PREFS_PATH + ".previous",
+	]:
+		if FileAccess.file_exists(leftover):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(leftover))
+	_move(BACKUP_PATH, HFUserPrefsType.PREFS_PATH)
+
+
+func _move(from_path: String, to_path: String) -> void:
+	if not FileAccess.file_exists(from_path):
+		return
+	DirAccess.rename_absolute(
+		ProjectSettings.globalize_path(from_path), ProjectSettings.globalize_path(to_path)
+	)
 
 
 # -- Tests ----------------------------------------------------------------------
@@ -158,3 +181,103 @@ func test_hint_dismissed_roundtrip():
 		loaded.is_hint_dismissed("paint_floor"), "paint_floor hint should survive roundtrip"
 	)
 	assert_false(loaded.is_hint_dismissed("draw_idle"), "draw_idle should still be undismissed")
+
+
+# -- What the file is allowed to contain ---------------------------------------
+
+
+func test_a_wrong_typed_value_falls_back_to_the_default():
+	# Each accessor reads its container into a typed local, so one wrong type is
+	# not a wrong preference, it is an error on every call that touches it.
+	var loaded = (
+		HFUserPrefsType
+		. _validated(
+			{
+				"collapsed_sections": "all",
+				"recent_files": "res://a.tscn",
+				"hints_dismissed": 3,
+			}
+		)
+	)
+	assert_eq(loaded["collapsed_sections"], {}, "A String is not a set of sections")
+	assert_eq(loaded["recent_files"], [], "nor a list of recent files")
+	assert_eq(loaded["hints_dismissed"], {}, "and a number is not a set of dismissals")
+
+
+func test_the_accessors_work_after_a_wrong_typed_file():
+	var broken = HFUserPrefsType.new()
+	broken.persistence_enabled = false
+	broken.data = HFUserPrefsType._validated(
+		{"collapsed_sections": "all", "recent_files": "res://a.tscn", "hints_dismissed": 3}
+	)
+	assert_null(broken.get_section_collapsed("Bake"), "A section reads without erroring")
+	broken.add_recent_file("res://kept.hflevel")
+	assert_eq(broken.get_recent_files(), ["res://kept.hflevel"], "A recent file is recorded")
+	broken.dismiss_hint("draw_idle")
+	assert_true(broken.is_hint_dismissed("draw_idle"), "and a dismissal sticks")
+
+
+func test_a_good_file_is_left_alone():
+	var loaded = HFUserPrefsType._validated(
+		{"grid_snap": 64.0, "show_hud": false, "recent_files": ["res://a.hflevel"]}
+	)
+	assert_eq(loaded["grid_snap"], 64.0)
+	assert_eq(loaded["show_hud"], false)
+	assert_eq(loaded["recent_files"], ["res://a.hflevel"])
+	assert_eq(loaded["autosave_interval"], 300, "and the keys it did not carry come from defaults")
+
+
+func test_json_numbers_are_not_treated_as_the_wrong_type():
+	# JSON has one number type, so an int preference comes back as a float.
+	var loaded = HFUserPrefsType._validated({"autosave_interval": 120.0, "grid_snap": 8})
+	assert_eq(loaded["autosave_interval"], 120, "120.0 is the interval the user set")
+	assert_eq(loaded["grid_snap"], 8.0, "and 8 is the grid snap they set")
+
+
+func test_a_key_this_version_does_not_know_is_kept():
+	var loaded = HFUserPrefsType._validated({"some_future_pref": "keep me"})
+	assert_eq(loaded["some_future_pref"], "keep me", "A newer version's key survives a load")
+
+
+func test_a_value_below_the_usable_range_is_clamped():
+	var loaded = HFUserPrefsType._validated({"autosave_interval": -1, "grid_snap": 0.0})
+	assert_eq(loaded["autosave_interval"], 0, "A negative interval is not an interval")
+	assert_almost_eq(loaded["grid_snap"], 0.001, 0.0001, "and a zero grid snap is not a snap")
+
+
+func test_set_pref_refuses_a_value_the_file_could_not_use():
+	prefs.set_pref("autosave_interval", -1)
+	assert_eq(prefs.get_pref("autosave_interval"), 0, "Clamped rather than written as -1")
+	prefs.set_pref("grid_snap", "big")
+	assert_eq(prefs.get_pref("grid_snap"), 16.0, "and a String leaves the grid snap alone")
+
+
+func test_a_file_that_will_not_parse_is_kept_rather_than_overwritten():
+	var path: String = HFUserPrefsType.PREFS_PATH
+	var kept := path + ".unreadable"
+	var damaged := '{"grid_snap": 64.0, "recent_files": ["res://a.tscn", "res://'
+	var file = FileAccess.open(path, FileAccess.WRITE)
+	assert_not_null(file, "The test can write the prefs file")
+	file.store_string(damaged)
+	file.close()
+
+	var loaded = HFUserPrefsType.load_prefs()
+	assert_eq(loaded.get_pref("grid_snap"), 16.0, "The defaults are in use")
+	assert_true(FileAccess.file_exists(kept), "and the damaged file is kept, not thrown away")
+	var recovered = FileAccess.open(kept, FileAccess.READ)
+	assert_eq(recovered.get_as_text(), damaged, "with what was in it")
+	recovered.close()
+
+
+func test_save_does_not_truncate_the_file_it_is_replacing():
+	# `FileAccess.WRITE` truncates first, so a crash mid-write left half a file.
+	# This writes beside the destination and moves it into place.
+	var path: String = HFUserPrefsType.PREFS_PATH
+	var writer = HFUserPrefsType.new()
+	writer.data = HFUserPrefsType._defaults()
+	writer.set_pref("grid_snap", 32.0)
+	writer.save()
+	assert_true(FileAccess.file_exists(path), "The file is written")
+	assert_false(FileAccess.file_exists(path + ".writing"), "and the temporary is not left behind")
+	var back = HFUserPrefsType.load_prefs()
+	assert_eq(back.get_pref("grid_snap"), 32.0, "and reads back")
