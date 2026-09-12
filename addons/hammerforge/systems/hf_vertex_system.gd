@@ -115,9 +115,10 @@ func move_vertices(delta: Vector3) -> bool:
 		var brush = _find_brush(brush_id)
 		if not brush:
 			continue
-		if not validate_convexity(brush):
+		var reason: String = check_solid(brush)
+		if not reason.is_empty():
 			_restore_face_snapshots()
-			_say("Move rejected: would create non-convex brush")
+			_say("Move rejected: %s" % reason)
 			return false
 	# Rebuild previews
 	for brush_id in selected_vertices:
@@ -148,18 +149,52 @@ static func _corner_plane_normal(verts: PackedVector3Array) -> Vector3:
 	return Vector3.ZERO
 
 
-## Validate that all faces of a brush form a convex shape.
+## The largest distance any of a polygon's own vertices sits off the plane
+## through its first corner, and the polygon's own extent to measure that
+## against. A face is a plane by definition — the bake triangulates it, the
+## `.map` export writes it as three points, and every clip and carve intersects
+## it — so a polygon that no longer has one plane means a different solid to
+## each of them.
+##
+## Moving one corner of a quad bows it. The other three corners stay behind the
+## plane through the first three, which is why the convexity test alone cannot
+## see this.
+static func _face_planarity(verts: PackedVector3Array) -> Array:
+	var normal: Vector3 = _corner_plane_normal(verts)
+	if normal.length() < 0.001:
+		return [0.0, 0.0]
+	var origin: Vector3 = verts[0]
+	var worst := 0.0
+	var extent := 0.0
+	for v in verts:
+		var offset: Vector3 = v - origin
+		worst = maxf(worst, absf(normal.dot(offset)))
+		extent = maxf(extent, offset.length())
+	return [worst, extent]
+
+
+## Validate that all faces of a brush form a convex shape, and that each face is
+## still a plane.
 ## Checks that no vertex lies in front of any face plane.
 func validate_convexity(brush: Node3D) -> bool:
+	return check_solid(brush).is_empty()
+
+
+## The same walk, but it says what is wrong. Returns "" for a brush that is
+## still a convex solid with planar faces, otherwise the sentence to put in
+## front of the mapper. The two failures need different words: a non-convex
+## brush is one the user can see is inside out, a bent face looks correct in the
+## viewport and only goes wrong on export.
+func check_solid(brush: Node3D) -> String:
 	if not brush or not brush.get("faces"):
-		return true
+		return ""
 	var faces: Array = brush.faces
 	if faces.size() < 4:
-		return true  # Degenerate, allow
+		return ""  # Degenerate, allow
 	# Collect all unique vertices
 	var all_verts := get_brush_vertices(brush)
 	if all_verts.is_empty():
-		return true
+		return ""
 	# For each face, check that all vertices are behind or on the plane
 	for face in faces:
 		if face == null or face.local_verts.size() < 3:
@@ -171,8 +206,16 @@ func validate_convexity(brush: Node3D) -> bool:
 		for v in all_verts:
 			var d = plane_normal.dot(v - plane_point)
 			if d > 0.02:  # Small tolerance for floating-point imprecision
-				return false
-	return true
+				return "would create a non-convex brush"
+		# The face against its own plane. The tolerance scales with the face so
+		# that a large brush, whose vertex positions carry more float error than
+		# a small one, is not called bent for it.
+		var planarity: Array = _face_planarity(face.local_verts)
+		var bow: float = planarity[0]
+		var extent: float = planarity[1]
+		if bow > maxf(0.02, extent * 0.0005):
+			return "would bend a face %.2f units out of plane" % bow
+	return ""
 
 
 ## Clip a non-convex brush to its convex hull. Recomputes faces from the convex
@@ -454,10 +497,14 @@ func update_drag_absolute(world_delta: Vector3) -> bool:
 
 	var touched := _write_drag_geometry(world_delta)
 	var convex := touched
+	var reason := ""
 	if convex:
 		for brush_id in _drag_face_vertices:
 			var brush = _find_brush(brush_id)
-			if brush and not validate_convexity(brush):
+			if brush == null:
+				continue
+			reason = check_solid(brush)
+			if not reason.is_empty():
 				convex = false
 				break
 
@@ -467,7 +514,7 @@ func update_drag_absolute(world_delta: Vector3) -> bool:
 		_drag_last_world_delta = Vector3.ZERO
 		_drag_has_valid_update = true
 		if touched and root and root.has_signal("user_message"):
-			root.emit_signal("user_message", "Move rejected: would create non-convex brush", 1)
+			root.emit_signal("user_message", "Move rejected: %s" % reason, 1)
 		return false
 
 	_rebuild_drag_previews()
@@ -883,9 +930,10 @@ func merge_vertices(brush_id: String, vert_indices: PackedInt32Array) -> bool:
 		_say("Merge rejected: would leave the brush without a closed solid")
 		return false
 	# Validate
-	if not validate_convexity(brush):
+	var merge_reason: String = check_solid(brush)
+	if not merge_reason.is_empty():
 		_restore_face_snapshots()
-		_say("Merge rejected: would create non-convex brush")
+		_say("Merge rejected: %s" % merge_reason)
 		return false
 	_commit_geometry(brush)
 	return true

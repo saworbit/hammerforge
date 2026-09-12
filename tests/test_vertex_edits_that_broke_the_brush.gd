@@ -108,6 +108,24 @@ func _make_box_brush(pos: Vector3, sz: Vector3, id: String) -> DraftBrush:
 	return b
 
 
+## The vertex indices on the face the box presents toward `local_dir`, selected
+## together. Moving one corner of a quad bows it, so the only plane-preserving
+## move on a box is a whole face along its own normal.
+func _select_face_toward(brush: DraftBrush, id: String, local_dir: Vector3) -> PackedInt32Array:
+	var dir := local_dir.normalized()
+	var verts := vs.get_brush_vertices(brush)
+	var furthest := -INF
+	for v in verts:
+		furthest = maxf(furthest, dir.dot(v))
+	var indices := PackedInt32Array()
+	for i in verts.size():
+		if absf(dir.dot(verts[i]) - furthest) < 0.001:
+			indices.append(i)
+	for i in indices:
+		vs.select_vertex(id, i, i != indices[0])
+	return indices
+
+
 func _side_face(brush: DraftBrush, axis_normal: Vector3) -> FaceData:
 	for face in brush.faces:
 		if face.normal.dot(axis_normal) > 0.9:
@@ -133,16 +151,78 @@ func test_a_non_finite_vertex_move_is_refused():
 
 
 func test_an_ordinary_vertex_move_still_lands():
+	# A whole face slid along its own normal. Every face of the brush stays a
+	# plane, so this is the move the validator has to keep letting through.
 	var brush := _make_box_brush(Vector3.ZERO, Vector3(64, 64, 64), "ok")
 	vs.set_selection([brush])
-	var before := vs.get_brush_vertices(brush)[0]
-	vs.select_vertex("ok", 0, false)
+	var moved := _select_face_toward(brush, "ok", Vector3.RIGHT)
+	var before: Vector3 = vs.get_brush_vertices(brush)[moved[0]]
 	assert_true(vs.move_vertices(Vector3(4, 0, 0)))
 	var found := false
 	for vertex in vs.get_brush_vertices(brush):
 		if vertex.is_equal_approx(before + Vector3(4, 0, 0)):
 			found = true
 	assert_true(found, "the vertex moved")
+
+
+# ===========================================================================
+# A move that bows a face out of plane is refused (#364)
+# ===========================================================================
+
+
+## The largest distance any of a face's own vertices sits off the plane through
+## its first corner.
+func _worst_bow(brush: DraftBrush) -> float:
+	var worst := 0.0
+	for face in brush.faces:
+		var verts: PackedVector3Array = face.local_verts
+		if verts.size() < 4:
+			continue
+		var normal: Vector3 = face.normal
+		for v in verts:
+			worst = maxf(worst, absf(normal.dot(v - verts[0])))
+	return worst
+
+
+func test_a_move_that_bows_a_face_is_refused():
+	# One corner of a quad, moved off its own plane. The other three corners
+	# stay behind the plane through the first three, so the convexity test alone
+	# saw nothing wrong and the move committed. Three faces meet at a box corner
+	# and all three come out bent.
+	var brush := _make_box_brush(Vector3.ZERO, Vector3(64, 64, 64), "bow")
+	vs.set_selection([brush])
+	var before := vs.get_brush_vertices(brush).duplicate()
+	vs.select_vertex("bow", 0, false)
+
+	assert_false(vs.move_vertices(Vector3(0, -256, 0)), "a bent face is not a brush face")
+	var after := vs.get_brush_vertices(brush)
+	assert_eq(after.size(), before.size(), "the refusal put every vertex back")
+	for i in before.size():
+		assert_true(after[i].is_equal_approx(before[i]), "vertex %d is where it started" % i)
+	assert_almost_eq(_worst_bow(brush), 0.0, 0.001, "every face is still a plane")
+
+
+func test_a_small_bow_is_refused_too():
+	# The same defect at a size that looks harmless in the viewport. A four unit
+	# bow on a 64 unit brush still exports as a plane that does not contain its
+	# own corners.
+	var brush := _make_box_brush(Vector3.ZERO, Vector3(64, 64, 64), "small")
+	vs.set_selection([brush])
+	vs.select_vertex("small", 0, false)
+	assert_false(vs.move_vertices(Vector3(4, 0, 0)), "four units off plane is still off plane")
+	assert_almost_eq(_worst_bow(brush), 0.0, 0.001, "every face is still a plane")
+
+
+func test_the_validator_sees_a_bent_face_on_its_own():
+	var brush := _make_box_brush(Vector3.ZERO, Vector3(64, 64, 64), "bent")
+	assert_true(vs.validate_convexity(brush), "the fixture starts as a solid")
+	var face := _side_face(brush, Vector3.RIGHT)
+	var verts := face.local_verts
+	verts[0] = verts[0] + Vector3(8, 0, 0)
+	face.local_verts = verts
+	face.ensure_geometry()
+	assert_false(vs.validate_convexity(brush), "a face with four corners and no plane")
+	assert_string_contains(vs.check_solid(brush), "out of plane")
 
 
 func test_a_non_finite_drag_update_is_refused():

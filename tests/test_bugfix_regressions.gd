@@ -127,6 +127,25 @@ func _make_box_brush(pos: Vector3, sz: Vector3, id: String) -> DraftBrush:
 	return b
 
 
+## The vertex indices on the face the box presents toward `local_dir`, selected
+## together. A single corner move bows the quads that meet at it, which the
+## validator refuses, so a fixture that needs a committed move slides a whole
+## face along its own normal.
+func _select_face_toward(vs, brush: DraftBrush, id: String, local_dir: Vector3) -> PackedInt32Array:
+	var dir := local_dir.normalized()
+	var verts: PackedVector3Array = vs.get_brush_vertices(brush)
+	var furthest := -INF
+	for v in verts:
+		furthest = maxf(furthest, dir.dot(v))
+	var indices := PackedInt32Array()
+	for i in verts.size():
+		if absf(dir.dot(verts[i]) - furthest) < 0.001:
+			indices.append(i)
+	for i in indices:
+		vs.select_vertex(id, i, i != indices[0])
+	return indices
+
+
 # ===========================================================================
 # Bug 1: Vertex undo captures pre-drag state, not post-move state
 # ===========================================================================
@@ -136,7 +155,7 @@ func test_end_drag_returns_pre_drag_face_data():
 	var vs = HFVertexSystem.new(root)
 	var b = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "undo1")
 	vs.set_selection([b])
-	vs.select_vertex("undo1", 0, false)
+	_select_face_toward(vs, b, "undo1", Vector3.RIGHT)
 
 	# Capture expected pre-drag state
 	var pre_drag_expected: Array = []
@@ -171,7 +190,7 @@ func test_pre_drag_snapshots_differ_from_post_move_faces():
 	var vs = HFVertexSystem.new(root)
 	var b = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "undo2")
 	vs.set_selection([b])
-	vs.select_vertex("undo2", 0, false)
+	_select_face_toward(vs, b, "undo2", Vector3.RIGHT)
 
 	vs.begin_drag(Vector3.ZERO)
 	vs.move_vertices(Vector3(8, 0, 0))

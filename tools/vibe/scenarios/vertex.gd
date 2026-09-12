@@ -79,8 +79,9 @@ func _any_non_finite(brush: Node3D) -> bool:
 
 
 ## Dragging one corner of a box far enough past the opposite face makes the
-## solid non-convex. `validate_convexity()` is meant to catch exactly that and
-## put the brush back the way it was.
+## solid non-convex, and bends the three faces that meet at that corner on the
+## way. `validate_convexity()` is meant to catch both and put the brush back the
+## way it was.
 func _a_move_that_breaks_convexity_is_refused() -> void:
 	var root: Node3D = await fresh_root()
 	var b := box(root, Vector3(64, 64, 64))
@@ -97,13 +98,17 @@ func _a_move_that_breaks_convexity_is_refused() -> void:
 	var bow := _worst_non_planarity(b)
 	note("worst face non-planarity after the move", "%.2f units" % bow)
 	if ok:
-		known(
-			364,
+		flag(
 			"a vertex move that warps a brush's faces out of plane is accepted",
 			(
 				"one corner of a 64 box pulled 256 units: volume %.0f -> %.0f, worst face sits %.1f units off its own plane, validate_convexity() said yes"
 				% [before, after, bow]
 			)
+		)
+	elif bow > 0.02:
+		flag(
+			"a refused vertex move left a face bent",
+			"worst face sits %.2f units off its own plane" % bow
 		)
 	elif absf(after - before) > 0.5:
 		flag(

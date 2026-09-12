@@ -45,6 +45,28 @@ func tag_brush_dirty(brush_id: String) -> void:
 	return s
 
 
+## The vertex indices on the face a box presents toward `local_dir`, selected
+## and ready to move along that direction.
+##
+## Moving one corner of a quad bows it out of plane, and the validator refuses
+## that now, so a fixture that just needs a real geometry change has to move a
+## whole face. The face slides along its own normal and the four side faces
+## follow it inside their own planes, so the brush stays a solid.
+func _select_face_toward(brush: DraftBrush, id: String, local_dir: Vector3) -> PackedInt32Array:
+	var dir := local_dir.normalized()
+	var verts := vs.get_brush_vertices(brush)
+	var furthest := -INF
+	for v in verts:
+		furthest = maxf(furthest, dir.dot(v))
+	var indices := PackedInt32Array()
+	for i in verts.size():
+		if absf(dir.dot(verts[i]) - furthest) < 0.001:
+			indices.append(i)
+	for i in indices:
+		vs.select_vertex(id, i, i != indices[0])
+	return indices
+
+
 func _make_box_brush(pos: Vector3, sz: Vector3, id: String) -> DraftBrush:
 	var b = DraftBrush.new()
 	b.size = sz
@@ -270,9 +292,8 @@ func test_clip_to_convex_no_op_and_failure_do_not_tag_dirty():
 func test_move_vertices_updates_face_data():
 	var b = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "mv1")
 	vs.set_selection([b])
-	var verts_before = vs.get_brush_vertices(b)
-	var target_vert = verts_before[0]
-	vs.select_vertex("mv1", 0, false)
+	var moved := _select_face_toward(b, "mv1", Vector3.RIGHT)
+	var target_vert: Vector3 = vs.get_brush_vertices(b)[moved[0]]
 	var delta = Vector3(4, 0, 0)
 	var result = vs.move_vertices(delta)
 	assert_true(result, "Move should succeed for valid convex result")
@@ -300,7 +321,7 @@ func test_move_vertices_promotes_brush_to_custom_shape():
 	var b = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "promote1")
 	assert_eq(b.shape, DraftBrush.BrushShape.BOX, "Fixture starts as a box")
 	vs.set_selection([b])
-	vs.select_vertex("promote1", 0, false)
+	_select_face_toward(b, "promote1", Vector3.RIGHT)
 	assert_true(vs.move_vertices(Vector3(4, 0, 0)))
 	assert_eq(
 		b.shape,
@@ -312,8 +333,8 @@ func test_move_vertices_promotes_brush_to_custom_shape():
 func test_moved_vertices_survive_resize():
 	var b = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "survive1")
 	vs.set_selection([b])
-	var original_vertex: Vector3 = vs.get_brush_vertices(b)[0]
-	vs.select_vertex("survive1", 0, false)
+	var moved := _select_face_toward(b, "survive1", Vector3.RIGHT)
+	var original_vertex: Vector3 = vs.get_brush_vertices(b)[moved[0]]
 	assert_true(vs.move_vertices(Vector3(4, 0, 0)))
 	var moved_vertex := original_vertex + Vector3(4, 0, 0)
 
@@ -339,8 +360,8 @@ func test_clip_to_convex_promotes_brush_to_custom_shape():
 func test_committed_vertex_drag_promotes_brush_to_custom_shape():
 	var b = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "dragged")
 	vs.set_selection([b])
-	var original_vertex: Vector3 = vs.get_brush_vertices(b)[0]
-	vs.select_vertex("dragged", 0, false)
+	var dragged := _select_face_toward(b, "dragged", Vector3.RIGHT)
+	var original_vertex: Vector3 = vs.get_brush_vertices(b)[dragged[0]]
 	vs.begin_drag(b.to_global(original_vertex))
 	assert_true(vs.update_drag_absolute(Vector3(2, 0, 0)))
 	assert_false(vs.end_drag().is_empty(), "A real geometry change should retain undo data")
@@ -350,8 +371,8 @@ func test_committed_vertex_drag_promotes_brush_to_custom_shape():
 func test_canceled_vertex_drag_leaves_brush_as_box():
 	var b = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "canceled")
 	vs.set_selection([b])
-	var original_vertex: Vector3 = vs.get_brush_vertices(b)[0]
-	vs.select_vertex("canceled", 0, false)
+	var canceled := _select_face_toward(b, "canceled", Vector3.RIGHT)
+	var original_vertex: Vector3 = vs.get_brush_vertices(b)[canceled[0]]
 	vs.begin_drag(b.to_global(original_vertex))
 	assert_true(vs.update_drag_absolute(Vector3(2, 0, 0)))
 	vs.cancel_drag()
@@ -378,8 +399,8 @@ func test_begin_end_drag():
 func test_absolute_drag_updates_do_not_accumulate():
 	var b = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "abs1")
 	vs.set_selection([b])
-	var original_vertex: Vector3 = vs.get_brush_vertices(b)[0]
-	vs.select_vertex("abs1", 0, false)
+	var abs_moved := _select_face_toward(b, "abs1", Vector3.RIGHT)
+	var original_vertex: Vector3 = vs.get_brush_vertices(b)[abs_moved[0]]
 	vs.begin_drag(b.to_global(original_vertex))
 
 	assert_true(vs.update_drag_absolute(Vector3(2, 0, 0)))
@@ -396,8 +417,8 @@ func test_zero_absolute_drag_restores_origin_and_suppresses_undo():
 	var b = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "zero1")
 	vs.set_selection([b])
 	var vertices_before := vs.get_brush_vertices(b).duplicate()
-	vs.select_vertex("zero1", 0, false)
-	vs.begin_drag(b.to_global(vertices_before[0]))
+	var zero_moved := _select_face_toward(b, "zero1", Vector3.RIGHT)
+	vs.begin_drag(b.to_global(vertices_before[zero_moved[0]]))
 
 	assert_true(vs.update_drag_absolute(Vector3(4, 0, 0)))
 	assert_true(vs.update_drag_absolute(Vector3.ZERO))
@@ -415,8 +436,8 @@ func test_zero_absolute_drag_restores_origin_and_suppresses_undo():
 func test_changed_absolute_drag_returns_undo_snapshots():
 	var b = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "undo1")
 	vs.set_selection([b])
-	var original_vertex: Vector3 = vs.get_brush_vertices(b)[0]
-	vs.select_vertex("undo1", 0, false)
+	var undo_moved := _select_face_toward(b, "undo1", Vector3.RIGHT)
+	var original_vertex: Vector3 = vs.get_brush_vertices(b)[undo_moved[0]]
 	vs.begin_drag(b.to_global(original_vertex))
 	assert_true(vs.update_drag_absolute(Vector3(2, 0, 0)))
 	assert_false(vs.end_drag().is_empty(), "A real geometry change should retain undo data")
@@ -445,9 +466,11 @@ func test_absolute_drag_world_delta_handles_rotated_brushes():
 	b.rotation = Vector3(0, deg_to_rad(90.0), 0)
 	b.force_update_transform()
 	vs.set_selection([b])
-	var original_vertex: Vector3 = vs.get_brush_vertices(b)[0]
+	var rotated := _select_face_toward(
+		b, "rot1", b.global_transform.basis.inverse() * Vector3.RIGHT
+	)
+	var original_vertex: Vector3 = vs.get_brush_vertices(b)[rotated[0]]
 	var original_world := b.to_global(original_vertex)
-	vs.select_vertex("rot1", 0, false)
 	vs.begin_drag(original_world)
 
 	assert_true(vs.update_drag_absolute(Vector3(2, 0, 0)))
@@ -462,12 +485,12 @@ func test_absolute_drag_world_delta_handles_rotated_brushes():
 func test_cancel_drag():
 	var b = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "cd1")
 	vs.set_selection([b])
-	vs.select_vertex("cd1", 0, false)
+	var cancel_moved := _select_face_toward(b, "cd1", Vector3.RIGHT)
 	var verts_before = vs.get_brush_vertices(b).duplicate()
 	vs.begin_drag(Vector3.ZERO)
 	assert_true(vs.update_drag_absolute(Vector3(4, 0, 0)))
 	assert_false(
-		vs.get_selected_world_positions()[0].is_equal_approx(verts_before[0]),
+		vs.get_selected_world_positions()[0].is_equal_approx(verts_before[cancel_moved[0]]),
 		"The fixture must contain a real change before cancellation"
 	)
 	vs.cancel_drag()
