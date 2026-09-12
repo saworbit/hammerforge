@@ -37,6 +37,23 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **The extrude tool's ghost was a brush in the level, in the wrong place, and
+  its ids were not unique** (#400, #401, #402). The preview was a real
+  `DraftBrush` parented into `draft_brushes_node`, the container
+  `_iter_managed_brush_nodes()`, `_iter_pick_nodes()`, `capture_state()` and the
+  save all walk, so mid-drag the level had a brush in it that nobody made: an
+  undo snapshot or an autosave taken during the drag stored the ghost, and the
+  snap system offered its corners as targets. It now goes into a container of
+  its own the way every other preview in the editor does. It was also positioned
+  before it was added to the tree, and `global_position` is tree-relative, so the
+  engine returned an identity transform twice per preview update and the ghost
+  sat at the origin rather than on the face under the cursor - on a brush turned
+  45 degrees the green volume had nothing to do with what committing would
+  build. The transform is written after `add_child()` now. And the tool minted
+  its own brush ids from the direction and the millisecond clock, so two
+  extrusions committed in the same millisecond claimed the same id, ids collided
+  across sessions whenever the tick counts lined up, and `id_counter` never
+  advanced. Ids come from the brush system, like every other created brush's.
 - **The polygon tool built brushes out of degenerate input** (#398, #399). The
   convexity gate skips any cross product under 0.001 before it looks at the
   sign, so for points all on one line it never disagreed with itself and

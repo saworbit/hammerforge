@@ -24,6 +24,7 @@ var source_face_size: Vector3 = Vector3.ONE
 var _start_mouse_y: float = 0.0
 var _current_height: float = 0.0
 var _preview_brush: DraftBrush = null
+var _preview_container: Node3D = null
 var _snap: float = 1.0
 
 const HEIGHT_SENSITIVITY := 0.02  # world units per screen pixel
@@ -96,13 +97,13 @@ func end_extrude_info() -> Dictionary:
 		return {}
 
 	var info := _build_brush_info(_current_height)
-	_clear_preview()
+	_teardown_preview()
 	active = false
 	return info
 
 
 func cancel_extrude() -> void:
-	_clear_preview()
+	_teardown_preview()
 	active = false
 	_current_height = 0.0
 	source_brush = null
@@ -136,13 +137,6 @@ func _update_preview(height: float) -> void:
 	var preview_size := _compute_preview_size(height, extrude_axis)
 	_preview_brush.size = preview_size
 
-	# Position: offset from face center along extrude direction
-	var offset := extrude_axis * (height * 0.5)
-	_preview_brush.global_position = source_face_center + offset
-
-	# Align rotation to match source brush
-	_preview_brush.global_transform.basis = source_brush.global_transform.basis
-
 	# Semi-transparent preview material
 	var mat := StandardMaterial3D.new()
 	if direction == Direction.UP:
@@ -157,19 +151,56 @@ func _update_preview(height: float) -> void:
 	if source_brush.material_override:
 		_preview_brush.set_meta("source_material", source_brush.material_override)
 
-	if root.draft_brushes_node:
-		root.draft_brushes_node.add_child(_preview_brush)
-	else:
+	var container := _ensure_preview_container()
+	if not container:
 		_preview_brush.free()
 		_preview_brush = null
+		return
+	# In the tree first. `global_position` and `global_transform` are both
+	# tree-relative, and a node that is not in the tree yet answers them with an
+	# engine error and an identity transform, which left the ghost at the origin
+	# instead of on the face being extruded.
+	container.add_child(_preview_brush)
+	var offset := extrude_axis * (height * 0.5)
+	_preview_brush.global_position = source_face_center + offset
+	# Align rotation to match source brush
+	_preview_brush.global_transform.basis = source_brush.global_transform.basis
 
 
+## The ghost gets a container of its own, the way every other preview in the
+## editor does. It used to go into `draft_brushes_node`, which is what
+## `_iter_managed_brush_nodes()`, `_iter_pick_nodes()`, `capture_state()` and the
+## save all walk: mid-drag the level had a brush in it that nobody made, an
+## autosave stored it, and the snap system offered its corners.
+func _ensure_preview_container() -> Node3D:
+	if is_instance_valid(_preview_container):
+		return _preview_container
+	if not is_instance_valid(root):
+		return null
+	_preview_container = Node3D.new()
+	_preview_container.name = "ExtrudePreview"
+	root.add_child(_preview_container)
+	return _preview_container
+
+
+## The ghost only. The container stays up for the rest of the drag, because this
+## runs once per mouse move.
 func _clear_preview() -> void:
 	if _preview_brush and is_instance_valid(_preview_brush):
 		if _preview_brush.get_parent():
 			_preview_brush.get_parent().remove_child(_preview_brush)
 		_preview_brush.queue_free()
-		_preview_brush = null
+	_preview_brush = null
+
+
+## The ghost and its container, for the end of the extrusion either way.
+func _teardown_preview() -> void:
+	_clear_preview()
+	if is_instance_valid(_preview_container):
+		if _preview_container.get_parent():
+			_preview_container.get_parent().remove_child(_preview_container)
+		_preview_container.queue_free()
+	_preview_container = null
 
 
 # ---------------------------------------------------------------------------
@@ -190,15 +221,30 @@ func _build_brush_info(height: float) -> Dictionary:
 	info["size"] = preview_size
 	info["operation"] = CSGShape3D.OPERATION_UNION
 	info["transform"] = xform
-	info["brush_id"] = _generate_extrude_id()
+	var brush_id := _next_brush_id()
+	if brush_id != "":
+		info["brush_id"] = brush_id
 	if source_brush.material_override:
 		info["material"] = source_brush.material_override
 	return info
 
 
-func _generate_extrude_id() -> String:
-	var dir_str := "up" if direction == Direction.UP else "down"
-	return "extrude_%s_%d" % [dir_str, Time.get_ticks_msec()]
+## Ids come from the brush system, the way every other created brush's does.
+## This tool used to mint its own from the direction and the millisecond clock,
+## which is not unique: two extrusions committed in the same millisecond claimed
+## the same id, an id minted in one session collided with one from another
+## whenever the tick counts lined up, and `id_counter` never advanced, so the
+## counter and the ids in the level drifted apart after every extrusion.
+##
+## The id is minted here rather than left to `create_brush_from_info()` because
+## it has to stay the same across a redo, which calls that function again with
+## this same dictionary.
+func _next_brush_id() -> String:
+	if is_instance_valid(root) and root.get("brush_system"):
+		var brush_system = root.brush_system
+		if brush_system.has_method("next_brush_id"):
+			return str(brush_system.next_brush_id())
+	return ""
 
 
 # ---------------------------------------------------------------------------
