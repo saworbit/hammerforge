@@ -134,16 +134,138 @@ func test_replay_signal():
 	var received := []
 	replay.replay_requested.connect(func(idx): received.append(idx))
 	replay.record_operation("Draw Brush")
-	replay._hovered_index = 0
+	replay._on_entry_clicked(0)
 	replay._on_replay_pressed()
 	assert_eq(received, [0])
 
 
-func test_replay_button_visible_on_hover():
+# ===========================================================================
+# Replay follows the selection, not the hover (#438)
+# ===========================================================================
+
+
+func test_hovering_an_entry_does_not_raise_the_replay_button():
 	replay.record_operation("Draw Brush")
 	assert_false(replay._replay_btn.visible)
 	replay._on_entry_hovered(0)
+	assert_false(
+		replay._replay_btn.visible,
+		"The button is in the header, so reaching for it would be what hides it"
+	)
+
+
+func test_clicking_an_entry_raises_the_replay_button():
+	replay.record_operation("Draw Brush")
+	replay._on_entry_clicked(0)
 	assert_true(replay._replay_btn.visible)
+
+
+func test_the_replay_button_survives_the_pointer_leaving_the_entry():
+	var received := []
+	replay.replay_requested.connect(func(idx): received.append(idx))
+	replay.record_operation("Draw Brush")
+	replay.record_operation("Clip Brush")
+	replay._on_entry_clicked(1)
+	replay._on_entry_unhovered()
+	assert_true(replay._replay_btn.visible, "Moving towards the button must not hide it")
+	replay._on_replay_pressed()
+	assert_eq(received, [1], "And pressing it replays the entry that was clicked")
+
+
+func test_a_second_click_moves_the_selection():
+	var received := []
+	replay.replay_requested.connect(func(idx): received.append(idx))
+	replay.record_operation("Draw Brush")
+	replay.record_operation("Clip Brush")
+	replay._on_entry_clicked(1)
+	replay._on_entry_clicked(0)
+	replay._on_replay_pressed()
+	assert_eq(received, [0])
+
+
+func test_the_detail_line_goes_back_to_the_selected_entry_after_a_hover():
+	replay.record_operation("Draw Brush")
+	replay.record_operation("Clip Brush")
+	replay._on_entry_clicked(0)
+	replay._on_entry_hovered(1)
+	assert_true(replay._detail_label.text.begins_with("Clip Brush"))
+	replay._on_entry_unhovered()
+	assert_true(
+		replay._detail_label.text.begins_with("Draw Brush"),
+		"With nothing hovered the line describes the selection"
+	)
+
+
+func test_clearing_the_timeline_drops_the_selection():
+	var received := []
+	replay.replay_requested.connect(func(idx): received.append(idx))
+	replay.record_operation("Draw Brush")
+	replay._on_entry_clicked(0)
+	replay.clear()
+	assert_false(replay._replay_btn.visible)
+	replay._on_replay_pressed()
+	assert_eq(received, [], "There is nothing to replay to")
+
+
+func test_hiding_the_panel_drops_the_selection():
+	replay.record_operation("Draw Brush")
+	replay._on_entry_clicked(0)
+	replay.toggle_visible()  # shown
+	replay.toggle_visible()  # hidden again
+	assert_false(replay._replay_btn.visible)
+
+
+func test_the_selection_follows_an_entry_pushed_off_the_front():
+	var received := []
+	replay.replay_requested.connect(func(idx): received.append(idx))
+	for i in range(HFOperationReplay.MAX_ENTRIES):
+		replay.record_operation("Draw Brush", i)
+	replay._on_entry_clicked(5)
+	replay.record_operation("Clip Brush", 99)
+	replay._on_replay_pressed()
+	assert_eq(received, [4], "The entry the mapper picked moved down one")
+
+
+# ===========================================================================
+# The glyph names the operation, not the noun it was performed on (#437)
+# ===========================================================================
+
+
+func test_clear_brushes_is_drawn_as_destruction():
+	assert_eq(HFOperationReplay._get_icon_for_action("Clear Brushes"), "x")
+	assert_eq(
+		HFOperationReplay._get_color_for_action("Clear Brushes"),
+		HFOperationReplay._get_color_for_action("Delete Selection"),
+		"The one entry a mapper most needs to find is not drawn as a creation"
+	)
+
+
+func test_the_two_material_operations_look_the_same():
+	assert_eq(
+		HFOperationReplay._get_icon_for_action("Apply Brush Material"),
+		HFOperationReplay._get_icon_for_action("Assign Face Material")
+	)
+	assert_eq(HFOperationReplay._get_icon_for_action("Apply Brush Material"), "M")
+
+
+func test_bevel_and_prefab_do_not_fall_through_to_the_same_glyph():
+	var bevel := HFOperationReplay._get_icon_for_action("Bevel Edge")
+	var prefab := HFOperationReplay._get_icon_for_action("Place Prefab: door")
+	assert_ne(bevel, prefab)
+	assert_ne(bevel, "*", "Neither falls through to the catch-all")
+	assert_ne(prefab, "*")
+
+
+func test_move_and_redo_do_not_share_a_glyph():
+	assert_ne(
+		HFOperationReplay._get_icon_for_action("Move Selection"),
+		HFOperationReplay._get_icon_for_action("Redo")
+	)
+
+
+func test_a_plain_creation_still_gets_the_create_glyph_and_colour():
+	assert_eq(HFOperationReplay._get_icon_for_action("Draw Brush"), "+")
+	assert_eq(HFOperationReplay._get_color_for_action("Draw Brush"), Color(0.3, 0.7, 1.0, 0.9))
 
 
 # ===========================================================================

@@ -10,6 +10,11 @@ signal value_committed(property_type: int, values: Array)
 
 enum PropertyType { GRID_SNAP, BRUSH_SIZE, PAINT_RADIUS }
 
+## Only used when the caller has no control to take a range from.
+const DEFAULT_GRID_SNAP_RANGE := {"min": 0.0, "max": 128.0, "step": 1.0}
+const DEFAULT_BRUSH_SIZE_RANGE := {"min": 1.0, "max": 256.0, "step": 1.0}
+const DEFAULT_PAINT_RADIUS_RANGE := {"min": 0.01, "max": 0.5, "step": 0.01}
+
 var _type: int = PropertyType.GRID_SNAP
 var _vbox: VBoxContainer
 var _spinboxes: Array[SpinBox] = []
@@ -31,7 +36,15 @@ func _ready() -> void:
 	_apply_style()
 
 
-func show_property(type: int, pos: Vector2, current_values: Array) -> void:
+## Show the popup for one property.
+##
+## `ranges` carries the min/max/step of the dock controls the committed value
+## is written into, one entry per field. Restating them here instead meant the
+## popup offered values the control could not hold - its own default radius was
+## ten times that control's maximum, and the brush size step of 0.5 from a
+## minimum of 0.1 could not express a whole number at all, so opening the popup
+## on a 4 unit brush showed 4.1 and committing it changed the size.
+func show_property(type: int, pos: Vector2, current_values: Array, ranges: Array = []) -> void:
 	_type = type
 	_spinboxes.clear()
 	# Clear old children
@@ -41,25 +54,27 @@ func show_property(type: int, pos: Vector2, current_values: Array) -> void:
 
 	match type:
 		PropertyType.GRID_SNAP:
+			var r: Dictionary = _range_at(ranges, 0, DEFAULT_GRID_SNAP_RANGE)
 			_add_labeled_spin(
 				"Grid Snap",
-				0.0,
-				256.0,
-				1.0,
+				r["min"],
+				r["max"],
+				r["step"],
 				current_values[0] if not current_values.is_empty() else 16.0
 			)
 		PropertyType.BRUSH_SIZE:
 			var defaults: Array = current_values if current_values.size() >= 3 else [4.0, 4.0, 4.0]
-			_add_labeled_spin("X", 0.1, 1024.0, 0.5, defaults[0])
-			_add_labeled_spin("Y", 0.1, 1024.0, 0.5, defaults[1])
-			_add_labeled_spin("Z", 0.1, 1024.0, 0.5, defaults[2])
+			for i in range(3):
+				var r: Dictionary = _range_at(ranges, i, DEFAULT_BRUSH_SIZE_RANGE)
+				_add_labeled_spin(["X", "Y", "Z"][i], r["min"], r["max"], r["step"], defaults[i])
 		PropertyType.PAINT_RADIUS:
+			var r: Dictionary = _range_at(ranges, 0, DEFAULT_PAINT_RADIUS_RANGE)
 			_add_labeled_spin(
 				"Radius",
-				0.1,
-				512.0,
-				0.1,
-				current_values[0] if not current_values.is_empty() else 5.0
+				r["min"],
+				r["max"],
+				r["step"],
+				current_values[0] if not current_values.is_empty() else r["min"]
 			)
 
 	_active = true
@@ -80,6 +95,21 @@ func show_property(type: int, pos: Vector2, current_values: Array) -> void:
 	if not _spinboxes.is_empty():
 		_spinboxes[0].get_line_edit().grab_focus()
 		_spinboxes[0].get_line_edit().select_all()
+
+
+## The range for field `index`, falling back to `fallback` when the caller gave
+## none. A single entry stands for every field.
+static func _range_at(ranges: Array, index: int, fallback: Dictionary) -> Dictionary:
+	if ranges.is_empty():
+		return fallback
+	var entry = ranges[index] if index < ranges.size() else ranges[0]
+	if not (entry is Dictionary):
+		return fallback
+	return {
+		"min": float(entry.get("min", fallback["min"])),
+		"max": float(entry.get("max", fallback["max"])),
+		"step": float(entry.get("step", fallback["step"])),
+	}
 
 
 func hide_popup() -> void:

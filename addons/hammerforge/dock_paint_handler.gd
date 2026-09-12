@@ -239,6 +239,12 @@ static func on_scatter_preview(dock: Object) -> void:
 			return
 		result = brush.scatter_spline(layer, settings)
 
+	if result.refusal:
+		scatter_clear_preview(dock)
+		_set_scatter_result(dock, [])
+		dock.level_root.emit_signal("user_message", result.refusal.user_text(), 1)
+		return
+
 	_set_scatter_result(dock, result.transforms)
 	scatter_clear_preview(dock)
 	var mm := brush.build_preview(result.transforms, settings)
@@ -279,11 +285,34 @@ static func on_scatter_commit(dock: Object) -> void:
 	var parent: Node3D = dock.level_root
 	if dock.level_root.get("generated_floors") and dock.level_root.generated_floors:
 		parent = dock.level_root.generated_floors.get_parent()
-	brush.commit(dock._scatter_last_result, settings, parent)
-	dock.level_root.emit_signal(
-		"user_message", "Scattered %d instances" % dock._scatter_last_result.size(), 0
-	)
+	var mmi := brush.build_instance(dock._scatter_last_result, settings)
+	if not mmi:
+		dock.level_root.emit_signal("user_message", "No scatter instances to commit", 1)
+		return
+	var placed: int = dock._scatter_last_result.size()
+	_commit_scatter_node(dock, parent, mmi)
+	dock.level_root.emit_signal("user_message", "Scattered %d instances" % placed, 0)
 	_set_scatter_result(dock, [])
+
+
+## Put the committed scatter in the scene as one undoable step.
+##
+## The node also needs an owner, or it is not written into the .tscn and the
+## whole scatter is lost on the next save.
+static func _commit_scatter_node(dock: Object, parent: Node3D, mmi: MultiMeshInstance3D) -> void:
+	var undo_redo = dock.undo_redo
+	if not undo_redo:
+		parent.add_child(mmi)
+		HFScatterBrush.assign_scene_owner(mmi)
+		return
+	var scene_owner := HFScatterBrush.scene_owner_for(parent)
+	undo_redo.create_action("Scatter Instances", 0, dock.level_root, false)
+	undo_redo.add_do_method(parent, "add_child", mmi)
+	if scene_owner:
+		undo_redo.add_do_property(mmi, "owner", scene_owner)
+	undo_redo.add_do_reference(mmi)
+	undo_redo.add_undo_method(parent, "remove_child", mmi)
+	undo_redo.commit_action()
 
 
 static func on_scatter_clear(dock: Object) -> void:

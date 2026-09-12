@@ -101,9 +101,14 @@ func _polygon_winding_both_ways() -> void:
 		flag("polygon tool: pentagon has %d inward faces" % p_inward)
 
 
-## What the tool's own convexity gate lets through. `_is_convex_xz()` skips any
-## cross product under 0.001, which is every cross product a degenerate polygon
-## has.
+## What the tool's own gates let through.
+##
+## `_is_convex_xz()` skips any cross product under 0.001, which is every cross
+## product a degenerate polygon has, so it is not the check that decides. The
+## gates that do are the area test in `_begin_height_stage()` - the only way
+## into the height stage, and so the only way to a brush - and the repeat-point
+## test on each click. Both are asked here rather than the builder underneath
+## them, because the builder is not reachable past a gate that refuses.
 func _polygon_degenerate_input() -> void:
 	var root: Node3D = await fresh_root()
 
@@ -112,32 +117,44 @@ func _polygon_degenerate_input() -> void:
 		"collinear points pass the convexity gate",
 		PolygonTool._is_convex_xz(PackedVector3Array(collinear))
 	)
-	var flat := _polygon_brush(root, collinear)
-	await frame()
-	if flat != null:
-		var extent := HFVibe.local_extent(flat)
-		note("brush from three collinear points: extent", extent)
-		if extent.z <= 0.001 or extent.x <= 0.001:
-			known(
-				398,
-				"polygon tool builds a zero-thickness brush from collinear points",
-				"extent %s, faces %d, volume 0 -- nothing refuses it" % [extent, flat.faces.size()]
-			)
-		var report: Dictionary = root.validation_system.validate(false)
-		note("validate() issues on the flat brush", report.get("issues", []).size())
+	var tool_instance = PolygonTool.new()
+	tool_instance.root = root
+	tool_instance._polygon_points = PackedVector3Array(collinear)
+	tool_instance._ground_y = 0.0
+	var extruded: bool = tool_instance._begin_height_stage(Vector2.ZERO)
+	note("collinear points reach the height stage", extruded)
+	if extruded:
+		var flat := _polygon_brush(root, collinear)
+		await frame()
+		if flat != null:
+			var extent := HFVibe.local_extent(flat)
+			note("brush from three collinear points: extent", extent)
+			if extent.z <= 0.001 or extent.x <= 0.001:
+				known(
+					398,
+					"polygon tool builds a zero-thickness brush from collinear points",
+					(
+						"extent %s, faces %d, volume 0 -- nothing refuses it"
+						% [extent, flat.faces.size()]
+					)
+				)
 
-	var dup := [Vector3(-32, 0, -32), Vector3(-32, 0, -32), Vector3(32, 0, 32)]
-	var dup_brush := _polygon_brush(root, dup)
-	await frame()
-	if dup_brush != null:
-		known(
-			399,
-			"polygon tool accepts a repeated vertex",
-			(
-				"two of the three points are identical: %d faces, some with zero area"
-				% dup_brush.faces.size()
+	var placed := PackedVector3Array([Vector3(-32, 0, -32)])
+	var repeat_refused: bool = PolygonTool._is_repeat_point(placed, Vector3(-32, 0, -32))
+	note("a second click on a placed vertex is refused", repeat_refused)
+	if not repeat_refused:
+		var dup := [Vector3(-32, 0, -32), Vector3(-32, 0, -32), Vector3(32, 0, 32)]
+		var dup_brush := _polygon_brush(root, dup)
+		await frame()
+		if dup_brush != null:
+			known(
+				399,
+				"polygon tool accepts a repeated vertex",
+				(
+					"two of the three points are identical: %d faces, some with zero area"
+					% dup_brush.faces.size()
+				)
 			)
-		)
 
 	for issue in HFVibe.check_invariants(root):
 		flag("invariant after degenerate polygons", issue)

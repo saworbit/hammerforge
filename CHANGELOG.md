@@ -51,6 +51,124 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   rebind list also showed two rows called "Extrude Up" and two called "Extrude
   Down", because `get_action_label()` gave the same name to an action and its
   alias; the aliases are named as aliases now.
+- **The operation timeline's Replay button can be clicked, and its glyphs name
+  the operation** (#437, #438). The button lives in the panel header, outside
+  the entry it applies to, and was shown on hover and hidden again on
+  mouse_exited - so any pointer path from the entry to the button hid it on the
+  way, and `_hovered_index` went back to -1 so a press would have emitted
+  nothing anyway. `replay_requested` never fired, which made
+  `HFPluginUndoEvents.on_replay_requested()` - the only way to jump to a point
+  in the timeline - unreachable from the UI. A click now sets a selection that
+  only another click, a clear or the panel closing takes away, and the hover
+  drives the detail line alone. The glyph and colour tables also tested the
+  generic draw/brush/create case above most of the specific ones, and most of
+  the plugin's undo action names contain the word "brush", so "Clear Brushes"
+  was drawn as a creation in the create blue, and "Apply Brush Material" and
+  "Assign Face Material" got different glyphs for the same kind of operation.
+  The generic test is last now, destruction is first, and "bevel" and "prefab"
+  have their own glyphs rather than falling through to the catch-all.
+  `HFHistoryBrowser` calls the same two functions, so both surfaces are right.
+- **The quick property popup and the control behind it now agree** (#447,
+  #448). The double-tap popup (G G, B B, R R) restated the range of each field
+  instead of taking it from the dock control it writes into, and none of the
+  three pairs matched. The radius pair was the worst: the popup's own default
+  was ten times the maximum of the control it wrote to, so opening R R and
+  pressing Enter without typing anything set the surface paint radius to its
+  limit. The brush size spin had `min` 0.1 with `step` 0.5, so the only values
+  it could hold were 0.1, 0.6, 1.1 ... - it could not express a whole number at
+  all, and opening B B on a 4 unit brush silently showed 4.1. `show_property()`
+  now takes the min, max and step of the controls it stands in for.
+  A committed brush size also went to two places, `input_state.drag_size_default`
+  unclamped and the dock spins clamped, so the dock said 256 while the next
+  brush drawn was 500.5 across; the controls are written first and the size is
+  read back out of them, so there is one answer.
+- **A tool setting is now held to its own schema, wherever the value comes
+  from** (#450). `HFEditorTool.set_setting()` wrote whatever it was handed. The
+  schema's `min`/`max` was read in exactly two places - `get_setting()` for the
+  default, and the SpinBox `dock._build_tool_settings()` generates - so the
+  constraint lived in one control and the tool itself had no opinion. A path
+  drawn at width -16 built an inside-out corridor: a negative half-extent swaps
+  the two sides of every corner ring and reverses the winding of all six quads,
+  and `HFBrushSystem._usable_size()` - the one guard that knows a negative size
+  builds a brush inside out - only ever saw the size, which it quietly
+  corrected, and never the face array a CUSTOM brush actually renders and
+  bakes. Three values outside one schema gave three different outcomes; they
+  now all give the schema's. A value that is not a number is refused and the
+  previous one kept. `_build_segment_brush()` also refuses a non-positive width
+  or height outright rather than building a ring from it.
+- **The region memory budget now counts what it actually freed** (#446).
+  `_unload_region()` is careful: it refuses to throw a region's chunks away if
+  they could not be written to disk first, and says so. `_evict_for_budget()`
+  subtracted the region's bytes from its running total whether or not the
+  region went, so after one refusal it decided the budget had been met and
+  broke out having freed nothing. On a level that has never been saved there is
+  no region path at all, so every write fails and the Memory Budget spin in the
+  Floor Paint tab did nothing whatsoever, in silence. The loop now skips a
+  region it could not free, and when it runs out of candidates with the budget
+  still over it says so once, naming the figures and - on an unsaved level -
+  that the level needs saving before streaming can reclaim anything.
+- **The selection filters reach every face, only the visible ones, and say when
+  they match nothing** (#434, #435, #436). Walls was `|n.y| < 0.3`, Floors was
+  `n.y > 0.7` and Ceilings was `n.y < -0.7`, so a face 17 to 45 degrees off
+  level - a ramp, a chamfer, a bevelled edge, most of what a mapper opens a
+  bulk face filter for - belonged to no button at all. The three now partition
+  the sphere between them at one threshold. `_get_all_brushes()` also walked
+  `_iter_pick_nodes()` with no visibility test, so every bulk filter selected
+  faces on brushes hidden by a visgroup and the paint or material assignment
+  that followed edited geometry the mapper had hidden precisely so it would not
+  be; hidden brushes are now left out. And a filter that matched nothing closed
+  in silence with the previous selection standing, in three different ways:
+  they now all close and report what was looked for.
+- **Loading an example level asks first and can be undone** (#443, #444). The
+  Load button on an Example Level card called `clear_brushes()` and
+  `clear_entities()` straight out, outside undo and with nothing asking - while
+  the Clear Brushes button two sections up the same tab went through
+  `_commit_state_action()`. An hour of work went with one click on a browsable
+  list of tempting cards, and Ctrl+Z did nothing. The load now names what it
+  will replace ("Replace 6 brushes and 1 entity with 'Simple Room'?") when the
+  level is not empty, and the whole thing is one undo step. Rebuilding the card
+  list also left the old cards in the container until the end of the frame,
+  because `queue_free()` alone does not remove them, so the new cards were
+  appended below them and the search - which indexed the examples by child
+  order - filtered the dying half and never reached the live one. The cards are
+  removed before they are freed, and the search reads each card's own id.
+- **A paint layer is now the one the mapper chose, on the level's own grid**
+  (#432, #433, #442). `remove_layer()` kept the active index by clamping it,
+  which is only right when the removed layer is after the active one: deleting
+  a layer below it shifted every later layer down and the paint target moved to
+  a layer above the selected one, with nothing announcing it. `create_layer()`
+  never checked the id was free, so two layers could share one `layer_id` -
+  which is identity, not a label - and Godot renamed the colliding node to
+  `@Node@9`; a repeated id is now uniquified to `roof_2` and the reason logged.
+  And every layer holds its own copy of the grid while
+  `_sync_paint_grid_from_root()` only wrote the template, so moving the level
+  root left every painted floor, connector and scatter on the old world origin
+  and a layer created afterwards landed on a different grid from the ones beside
+  it. The sync now pushes origin, basis and cell size into every layer grid,
+  keeping each layer's own `layer_y`.
+- **A committed scatter is now owned, undoable and capped** (#429, #430, #431).
+  Three things went wrong on the way from a scatter stroke to a scene. Align to
+  Normal crossed the height field tangents the wrong way round, so the "normal"
+  was `(0, -1, 0)` on flat ground and every instance was placed upside down.
+  Nothing refused a large stroke: the candidate count is quadratic in the
+  radius, so radius 1000 at density 1.0 laid out three million transforms and
+  took the editor with it - scatter now refuses past 50,000 the way
+  `HFDuplicator` refuses past 256 copies, naming the count and pointing at the
+  radius and density. And the committed `MultiMeshInstance3D` had no owner, so
+  it was never written into the `.tscn` and a mapper lost every instance on the
+  next save and reopen; the commit now runs inside one undo action and gives
+  the node the same owner the level's other generated nodes have.
+  `HFFoliagePopulator` gets the owner too.
+- **Saving a level no longer rounds every heightmap sample to 8 bits** (#445). A
+  paint layer's heightmap is a `FORMAT_RF` image - one 32 bit float per sample -
+  and `HFHeightmapIO` stored it as a base64 PNG. PNG has no float channel, so
+  Godot wrote it as 8 bit and the decode converted the 8 bit result back to RF:
+  256 height values survived across the whole range, anything above 1.0 or below
+  0.0 was clamped to the limit, and each save re-rounded the already rounded
+  data. `HFStateSystem.capture_state()` uses the same encoder, so an undo of an
+  unrelated operation moved the terrain. The heightmap is now stored as the raw
+  float buffer, zstd compressed, behind a small header, which loses nothing. A
+  base64 PNG written by an older version is still recognised and loaded.
 - **A shortcut rebound onto a chord another action already uses was accepted in
   silence** (#410). Nothing compared a new binding against the others, so
   `matches()` answered true for both, and `plugin_input_router` tests actions one

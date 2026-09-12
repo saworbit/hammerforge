@@ -529,7 +529,12 @@ static func handle_double_tap(plugin: Object, keycode: int, root: Node, paint_mo
 	match keycode:
 		KEY_G:
 			var snap_value: float = root.grid_snap if root else 16.0
-			show_quick_property(plugin, HFQuickProperty.PropertyType.GRID_SNAP, [snap_value])
+			show_quick_property(
+				plugin,
+				HFQuickProperty.PropertyType.GRID_SNAP,
+				[snap_value],
+				_ranges_of(plugin, ["grid_snap"])
+			)
 			return true
 		KEY_B:
 			if paint_mode:
@@ -540,18 +545,51 @@ static func handle_double_tap(plugin: Object, keycode: int, root: Node, paint_mo
 				else Vector3(4, 4, 4)
 			)
 			show_quick_property(
-				plugin, HFQuickProperty.PropertyType.BRUSH_SIZE, [size.x, size.y, size.z]
+				plugin,
+				HFQuickProperty.PropertyType.BRUSH_SIZE,
+				[size.x, size.y, size.z],
+				_ranges_of(plugin, ["size_x", "size_y", "size_z"])
 			)
 			return true
 		KEY_R:
 			if paint_mode:
-				var radius: float = plugin.dock.get_surface_paint_radius() if plugin.dock else 5.0
-				show_quick_property(plugin, HFQuickProperty.PropertyType.PAINT_RADIUS, [radius])
+				var radius: float = plugin.dock.get_surface_paint_radius() if plugin.dock else 0.25
+				show_quick_property(
+					plugin,
+					HFQuickProperty.PropertyType.PAINT_RADIUS,
+					[radius],
+					_ranges_of(plugin, ["surface_paint_radius"])
+				)
 				return true
 	return false
 
 
-static func show_quick_property(plugin: Object, property_type: int, values: Array) -> void:
+## The min/max/step of the named dock controls, for the popup that stands in
+## for them. Empty when the dock is not there, which leaves the popup on its
+## own defaults.
+static func _ranges_of(plugin: Object, control_names: Array) -> Array:
+	var out: Array = []
+	if plugin == null or not plugin.dock:
+		return out
+	for control_name in control_names:
+		var control = plugin.dock.get(control_name)
+		if control is Range:
+			(
+				out
+				. append(
+					{
+						"min": control.min_value,
+						"max": control.max_value,
+						"step": control.step,
+					}
+				)
+			)
+	return out
+
+
+static func show_quick_property(
+	plugin: Object, property_type: int, values: Array, ranges: Array = []
+) -> void:
 	if (
 		plugin == null
 		or not plugin._quick_property
@@ -559,7 +597,7 @@ static func show_quick_property(plugin: Object, property_type: int, values: Arra
 	):
 		return
 	plugin._quick_property.show_property(
-		property_type, plugin._get_current_overlay_mouse_pos(), values
+		property_type, plugin._get_current_overlay_mouse_pos(), values, ranges
 	)
 
 
@@ -573,11 +611,19 @@ static func on_quick_property_committed(plugin: Object, property_type: int, valu
 				plugin.dock._apply_grid_snap(float(values[0]))
 		HFQuickProperty.PropertyType.BRUSH_SIZE:
 			if root and root.input_state and values.size() >= 3:
-				root.input_state.drag_size_default = Vector3(values[0], values[1], values[2])
-				if plugin.dock:
+				# The dock spins clamp and round; drag_size_default takes
+				# whatever it is given. Write the controls first and read the
+				# size back out of them, so the two ends cannot disagree about
+				# how big the next brush is.
+				var applied := Vector3(values[0], values[1], values[2])
+				if plugin.dock and plugin.dock.size_x:
 					plugin.dock.size_x.value = values[0]
 					plugin.dock.size_y.value = values[1]
 					plugin.dock.size_z.value = values[2]
+					applied = Vector3(
+						plugin.dock.size_x.value, plugin.dock.size_y.value, plugin.dock.size_z.value
+					)
+				root.input_state.drag_size_default = applied
 		HFQuickProperty.PropertyType.PAINT_RADIUS:
 			if plugin.dock and not values.is_empty() and plugin.dock.surface_paint_radius:
 				plugin.dock.surface_paint_radius.value = float(values[0])

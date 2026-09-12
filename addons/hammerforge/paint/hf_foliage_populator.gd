@@ -75,4 +75,5 @@ func populate(
 	mmi.name = "Foliage_%s" % layer.layer_id
 	if parent:
 		parent.add_child(mmi)
+		HFScatterBrush.assign_scene_owner(mmi)
 	return mmi

@@ -22,6 +22,8 @@ var root: Node3D
 var region_manager: HFTerrainRegionManager
 ## Regions whose write already failed, so the warning is not repeated every frame.
 var _region_save_warned: Dictionary = {}
+## Whether the mapper has already been told the budget cannot be met.
+var _region_budget_warned: bool = false
 var region_streaming_enabled: bool = false
 var region_memory_budget_mb: int = 256
 var region_show_grid: bool = false
@@ -863,10 +865,43 @@ func _evict_for_budget(center_region: Vector2i) -> void:
 	)
 	for rid in candidates:
 		var bytes = _estimate_region_bytes(rid)
-		_unload_region(rid)
+		# A region whose paint could not be written stays loaded, so its bytes
+		# are still ours. Subtracting them regardless made the loop decide the
+		# budget had been met and break out having freed nothing.
+		if not _unload_region(rid):
+			continue
 		total -= bytes
 		if total <= budget_bytes:
-			break
+			_region_budget_warned = false
+			return
+	_warn_budget_not_met(total, budget_bytes)
+
+
+## Say that streaming could not get back under the budget.
+##
+## The usual reason is a level that has never been saved: with no region base
+## path there is nowhere to write a region to, so nothing can be thrown away
+## and the Memory Budget spin does nothing at all. Once per run of being over,
+## so a stroke does not repeat it.
+func _warn_budget_not_met(total: int, budget_bytes: int) -> void:
+	if _region_budget_warned:
+		return
+	_region_budget_warned = true
+	if not root.has_signal("user_message"):
+		return
+	var over := (
+		"Paint memory is %.1f MB against a %.1f MB budget"
+		% [
+			float(total) / 1048576.0,
+			float(budget_bytes) / 1048576.0,
+		]
+	)
+	if region_manager.region_base_path == "":
+		root.user_message.emit(
+			"%s. Save the level before streaming can reclaim any of it." % over, 2
+		)
+	else:
+		root.user_message.emit("%s and nothing more can be streamed out." % over, 2)
 
 
 func _load_region(region_id: Vector2i) -> void:
