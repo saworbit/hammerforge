@@ -37,6 +37,19 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **A committed scatter is now owned, undoable and capped** (#429, #430, #431).
+  Three things went wrong on the way from a scatter stroke to a scene. Align to
+  Normal crossed the height field tangents the wrong way round, so the "normal"
+  was `(0, -1, 0)` on flat ground and every instance was placed upside down.
+  Nothing refused a large stroke: the candidate count is quadratic in the
+  radius, so radius 1000 at density 1.0 laid out three million transforms and
+  took the editor with it - scatter now refuses past 50,000 the way
+  `HFDuplicator` refuses past 256 copies, naming the count and pointing at the
+  radius and density. And the committed `MultiMeshInstance3D` had no owner, so
+  it was never written into the `.tscn` and a mapper lost every instance on the
+  next save and reopen; the commit now runs inside one undo action and gives
+  the node the same owner the level's other generated nodes have.
+  `HFFoliagePopulator` gets the owner too.
 - **A shortcut rebound onto a chord another action already uses was accepted in
   silence** (#410). Nothing compared a new binding against the others, so
   `matches()` answered true for both, and `plugin_input_router` tests actions one
