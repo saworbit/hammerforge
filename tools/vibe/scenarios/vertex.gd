@@ -22,7 +22,8 @@ func summary() -> String:
 
 
 func run() -> void:
-	await _a_move_that_breaks_convexity_is_refused()
+	await _a_move_that_bends_a_face()
+	await _a_move_that_dents_the_solid()
 	await _a_non_finite_move()
 	await _merging_every_vertex_of_a_box()
 	await _splitting_an_edge()
@@ -78,37 +79,46 @@ func _any_non_finite(brush: Node3D) -> bool:
 	return false
 
 
-## Dragging one corner of a box far enough past the opposite face makes the
-## solid non-convex, and bends the three faces that meet at that corner on the
-## way. `validate_convexity()` is meant to catch both and put the brush back the
-## way it was.
-func _a_move_that_breaks_convexity_is_refused() -> void:
+## Dragging one corner of a box bends the faces that meet at it, because a quad
+## with one corner moved is no longer a plane. Whichever way it goes, the brush
+## the mapper is left with has to be a convex solid made of planes: pulled away
+## from the solid the bent faces are cut into triangles and the move stands,
+## pushed into it there is no split that stays convex and the move goes back.
+func _a_move_that_bends_a_face() -> void:
 	var root: Node3D = await fresh_root()
 	var b := box(root, Vector3(64, 64, 64))
 	var vs = root.vertex_system
 	var before := _volume(b)
+	var faces_before: int = b.faces.size()
 
 	vs.select_vertex(_bid(b), 0)
 	var ok: bool = vs.move_vertices(Vector3(0, -256, 0))
 	var after := _volume(b)
-	note(
-		"pulling one corner 256 through the brush",
-		"accepted: %s, volume %.0f -> %.0f" % [ok, before, after]
-	)
 	var bow := _worst_non_planarity(b)
+	note(
+		"pulling one corner 256 away from the solid",
+		(
+			"accepted: %s, volume %.0f -> %.0f, faces %d -> %d"
+			% [ok, before, after, faces_before, b.faces.size()]
+		)
+	)
 	note("worst face non-planarity after the move", "%.2f units" % bow)
-	if ok:
+	if bow > 0.02:
 		flag(
-			"a vertex move that warps a brush's faces out of plane is accepted",
+			"a vertex move left a face bent",
 			(
-				"one corner of a 64 box pulled 256 units: volume %.0f -> %.0f, worst face sits %.1f units off its own plane, validate_convexity() said yes"
-				% [before, after, bow]
+				"one corner of a 64 box pulled 256 units: accepted %s, worst face sits %.1f units off its own plane"
+				% [ok, bow]
 			)
 		)
-	elif bow > 0.02:
+	elif ok and b.faces.size() <= faces_before:
 		flag(
-			"a refused vertex move left a face bent",
-			"worst face sits %.2f units off its own plane" % bow
+			"a bent face was accepted without being split",
+			"faces %d -> %d" % [faces_before, b.faces.size()]
+		)
+	elif ok:
+		note(
+			"split and kept", "faces %d -> %d, volume %.0f" % [faces_before, b.faces.size(), after]
 		)
 	elif absf(after - before) > 0.5:
 		flag(
@@ -117,6 +127,34 @@ func _a_move_that_breaks_convexity_is_refused() -> void:
 		)
 	else:
 		note("refused and restored", "volume back to %.0f" % after)
+
+
+## The other direction. A corner pushed into the solid dents it, and no
+## triangulation of the bent faces gets that back to convex.
+func _a_move_that_dents_the_solid() -> void:
+	var root: Node3D = await fresh_root()
+	var b := box(root, Vector3(64, 64, 64))
+	var vs = root.vertex_system
+	var before := _volume(b)
+	var faces_before: int = b.faces.size()
+
+	# Vertex 0 of a box is the (+x, -y, +z) corner, so this heads for the middle.
+	vs.select_vertex(_bid(b), 0)
+	var ok: bool = vs.move_vertices(Vector3(-16, 16, -16))
+	var after := _volume(b)
+	note(
+		"pushing one corner 16 into the solid",
+		"accepted: %s, volume %.0f -> %.0f" % [ok, before, after]
+	)
+	if ok:
+		flag("a dent was accepted", "volume %.0f -> %.0f" % [before, after])
+	elif absf(after - before) > 0.5 or b.faces.size() != faces_before:
+		flag(
+			"a refused vertex move did not restore the brush",
+			"volume %.0f -> %.0f, faces %d -> %d" % [before, after, faces_before, b.faces.size()]
+		)
+	else:
+		note("refused and restored", "volume back to %.0f, faces %d" % [after, faces_before])
 
 
 ## The recurring seam. Every comparison against NaN is false, so a check written

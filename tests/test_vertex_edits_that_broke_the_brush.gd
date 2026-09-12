@@ -184,33 +184,143 @@ func _worst_bow(brush: DraftBrush) -> float:
 	return worst
 
 
-func test_a_move_that_bows_a_face_is_refused():
-	# One corner of a quad, moved off its own plane. The other three corners
-	# stay behind the plane through the first three, so the convexity test alone
-	# saw nothing wrong and the move committed. Three faces meet at a box corner
-	# and all three come out bent.
+func test_the_move_that_filed_this_splits_the_faces_it_bends():
+	# One corner of a quad, pulled 256 units. The other three corners stay
+	# behind the plane through the first three, so the convexity test alone saw
+	# nothing wrong and the move committed with the face 62 units off its own
+	# plane.
+	#
+	# The corner goes away from the solid, so the result is a convex spike. The
+	# move is along one axis, so only the face perpendicular to it is bent; the
+	# other two keep the corner inside their own plane. That one quad is cut
+	# into triangles and the move stands.
 	var brush := _make_box_brush(Vector3.ZERO, Vector3(64, 64, 64), "bow")
 	vs.set_selection([brush])
-	var before := vs.get_brush_vertices(brush).duplicate()
+	var before := vs.get_brush_vertices(brush)[0]
 	vs.select_vertex("bow", 0, false)
 
-	assert_false(vs.move_vertices(Vector3(0, -256, 0)), "a bent face is not a brush face")
+	assert_true(vs.move_vertices(Vector3(0, -256, 0)), "a spike is still a convex solid")
+	assert_almost_eq(_worst_bow(brush), 0.0, 0.001, "every face is a plane again")
+	assert_eq(brush.faces.size(), 7, "the one bent quad became two triangles")
+	var found := false
+	for vertex in vs.get_brush_vertices(brush):
+		if vertex.is_equal_approx(before + Vector3(0, -256, 0)):
+			found = true
+	assert_true(found, "the corner is where it was dragged to")
+
+
+func test_a_corner_pulled_outward_splits_the_faces_it_bends():
+	# The same thing at a size that looks harmless in the viewport. Vertex 0 of
+	# the fixture is the (+x, -y, +z) corner, so this is the outward direction.
+	var brush := _make_box_brush(Vector3.ZERO, Vector3(64, 64, 64), "pull")
+	vs.set_selection([brush])
+	var before := vs.get_brush_vertices(brush)[0]
+	vs.select_vertex("pull", 0, false)
+
+	assert_true(vs.move_vertices(Vector3(8, -8, 8)), "an outward pull stays a solid")
+	assert_almost_eq(_worst_bow(brush), 0.0, 0.001, "every face is a plane again")
+	assert_eq(brush.faces.size(), 9, "the three bent quads became six triangles")
+	var found := false
+	for vertex in vs.get_brush_vertices(brush):
+		if vertex.is_equal_approx(before + Vector3(8, -8, 8)):
+			found = true
+	assert_true(found, "the corner is where it was dragged to")
+
+
+func test_a_split_face_keeps_the_material_of_the_face_it_came_from():
+	var brush := _make_box_brush(Vector3.ZERO, Vector3(64, 64, 64), "mat")
+	for face in brush.faces:
+		face.material_idx = 3
+	vs.set_selection([brush])
+	vs.select_vertex("mat", 0, false)
+	assert_true(vs.move_vertices(Vector3(8, -8, 8)))
+	assert_eq(brush.faces.size(), 9, "the fixture really did split")
+	for face in brush.faces:
+		assert_eq(face.material_idx, 3, "a triangle carries its quad's material")
+
+
+func test_a_corner_pushed_inward_is_still_refused():
+	# The other direction. A dent is only visible once the bent quad is two
+	# triangles, and then it is a non-convex brush, which is refused.
+	var brush := _make_box_brush(Vector3.ZERO, Vector3(64, 64, 64), "dent")
+	vs.set_selection([brush])
+	var before := vs.get_brush_vertices(brush).duplicate()
+	vs.select_vertex("dent", 0, false)
+
+	assert_false(vs.move_vertices(Vector3(-8, 8, -8)), "a dent is not a convex solid")
+	assert_eq(brush.faces.size(), 6, "the refusal put the quads back")
 	var after := vs.get_brush_vertices(brush)
-	assert_eq(after.size(), before.size(), "the refusal put every vertex back")
+	assert_eq(after.size(), before.size(), "and every vertex")
 	for i in before.size():
 		assert_true(after[i].is_equal_approx(before[i]), "vertex %d is where it started" % i)
-	assert_almost_eq(_worst_bow(brush), 0.0, 0.001, "every face is still a plane")
 
 
-func test_a_small_bow_is_refused_too():
-	# The same defect at a size that looks harmless in the viewport. A four unit
-	# bow on a 64 unit brush still exports as a plane that does not contain its
-	# own corners.
-	var brush := _make_box_brush(Vector3.ZERO, Vector3(64, 64, 64), "small")
+func test_a_bent_displacement_face_is_refused_rather_than_split():
+	# A displacement is defined over four corners. Splitting the quad would
+	# throw it away, so this is the one bent face that has to be a refusal.
+	var brush := _make_box_brush(Vector3.ZERO, Vector3(64, 64, 64), "disp")
+	var face := _side_face(brush, Vector3.RIGHT)
+	face.displacement = HFDisplacementData.new()
 	vs.set_selection([brush])
-	vs.select_vertex("small", 0, false)
-	assert_false(vs.move_vertices(Vector3(4, 0, 0)), "four units off plane is still off plane")
-	assert_almost_eq(_worst_bow(brush), 0.0, 0.001, "every face is still a plane")
+	var verts := vs.get_brush_vertices(brush)
+	var corner := -1
+	for i in verts.size():
+		if verts[i].is_equal_approx(face.local_verts[0]):
+			corner = i
+	assert_gt(corner, -1, "the fixture found the corner to move")
+
+	vs.select_vertex("disp", corner, false)
+	assert_false(vs.move_vertices(Vector3(8, 0, 0)), "a displacement cannot be split")
+	assert_eq(brush.faces.size(), 6, "and nothing was split")
+	assert_almost_eq(_worst_bow(brush), 0.0, 0.001, "the face is back on its plane")
+
+
+func test_a_bent_displacement_face_is_a_failure_even_where_a_split_is_allowed():
+	var brush := _make_box_brush(Vector3.ZERO, Vector3(64, 64, 64), "disp2")
+	var face := _side_face(brush, Vector3.RIGHT)
+	face.displacement = HFDisplacementData.new()
+	var verts := face.local_verts
+	verts[0] = verts[0] + Vector3(8, 0, 0)
+	face.local_verts = verts
+	face.ensure_geometry()
+
+	assert_string_contains(vs.check_solid(brush, true), "displacement")
+	assert_eq(vs.planarize_faces(brush), 0, "a displacement quad is never split")
+
+
+func test_a_drag_bends_while_it_runs_and_is_split_when_it_ends():
+	# The split happens on commit, not per update: `_write_drag_geometry()`
+	# pairs faces with their starting vertices by position in the array, so the
+	# array has to keep its shape until the drag is over.
+	var brush := _make_box_brush(Vector3.ZERO, Vector3(64, 64, 64), "dragsplit")
+	vs.set_selection([brush])
+	var corner: Vector3 = vs.get_brush_vertices(brush)[0]
+	vs.select_vertex("dragsplit", 0, false)
+	vs.begin_drag(brush.to_global(corner))
+
+	assert_true(vs.update_drag_absolute(Vector3(8, -8, 8)), "the drag runs")
+	assert_eq(brush.faces.size(), 6, "nothing is split mid-drag")
+	assert_gt(_worst_bow(brush), 1.0, "the preview really is bent")
+
+	assert_false(vs.end_drag().is_empty(), "a committed drag keeps its undo data")
+	assert_eq(brush.faces.size(), 9, "the commit split the three bent quads")
+	assert_almost_eq(_worst_bow(brush), 0.0, 0.001, "every face is a plane again")
+
+
+func test_a_drag_that_ends_in_a_dent_is_put_back():
+	var brush := _make_box_brush(Vector3.ZERO, Vector3(64, 64, 64), "dragdent")
+	vs.set_selection([brush])
+	var before := vs.get_brush_vertices(brush).duplicate()
+	vs.select_vertex("dragdent", 0, false)
+	vs.begin_drag(brush.to_global(before[0]))
+
+	vs.update_drag_absolute(Vector3(-8, 8, -8))
+	assert_true(vs.end_drag().is_empty(), "a refused drag leaves no undo data")
+	assert_eq(brush.faces.size(), 6, "the quads went back")
+	var after := vs.get_brush_vertices(brush)
+	assert_eq(after.size(), before.size(), "and every vertex")
+	for i in before.size():
+		assert_true(after[i].is_equal_approx(before[i]), "vertex %d is where it started" % i)
 
 
 func test_the_validator_sees_a_bent_face_on_its_own():

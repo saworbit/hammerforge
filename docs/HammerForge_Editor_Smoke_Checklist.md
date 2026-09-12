@@ -380,11 +380,13 @@ It writes one PNG per tab under `user://console_preview/`.
 - Confirm vertex crosses and edge wireframe lines appear on the brush.
 - Click a vertex to select it (orange cross). Shift+click to multi-select.
 - Select all four vertices of one side of a box and drag along that side's normal. Confirm the face follows the cursor on a view-facing plane through the picked vertex instead of being forced onto world Y, and that the move commits.
-- Drag a single corner of a box. Confirm it is refused and reverts, with a message saying the move would bend a face out of plane. A brush face is a plane, and moving one corner of a quad bends it, so the only moves that commit are the ones that keep every face flat.
+- Drag a single corner of a box away from the solid. Confirm the move commits and the brush gains faces: a brush face is a plane, moving one corner of a quad bends it, so each bent quad is cut into two triangles on release. The face count goes up in the stats and the brush is no longer resizable as a box.
+- Drag a single corner into the solid. Confirm it follows the cursor during the drag and then reverts on release, with a message saying it would create a non-convex brush. A dent only becomes visible once the bent quad is two triangles, so the refusal lands on release rather than mid-drag.
+- Undo the accepted corner drag. Confirm the brush is six faces again.
 - Repeat in front and side orthographic views, then drag a selected edge. Confirm each gesture uses the picked vertex or edge midpoint as its stable anchor with no first-motion jump.
 - During separate drags, press X, Y, and Z to lock movement. Confirm only the chosen world axis changes and grid snapping remains consistent.
 - Aim the camera directly along the locked axis and drag. Confirm the degenerate projection is ignored—geometry must not jump, accumulate a stale prior delta, or become non-convex.
-- Drag to move vertices; confirm the solid checks are enforced and invalid moves revert, both the non-convex ones and the ones that bend a face.
+- Drag to move vertices; confirm a move that would leave the brush non-convex reverts, and a move that only bends a face is kept by splitting that face.
 - Press E to toggle to edge sub-mode; confirm edges become clickable.
 - Click an edge; confirm it highlights orange and both endpoints are selected.
 - Select a single edge and press Ctrl+E; confirm the edge is split (9 vertices on box).
