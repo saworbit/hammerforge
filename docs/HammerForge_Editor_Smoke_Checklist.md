@@ -553,8 +553,9 @@ It writes one PNG per tab under `user://console_preview/`.
 - Draw a brush; confirm a "+" icon appears in the timeline.
 - Delete the brush; confirm an "x" icon appears.
 - Undo the delete; confirm the timeline still shows both operations.
-- Hover an icon in the timeline; confirm the detail label shows the operation name and elapsed time (e.g. "Draw Brush (5s ago)").
-- Click an icon, then click **Replay**; confirm the editor undoes/redoes to reach that point in history with a toast ("Replay: undid N steps" or "Replay: redid N steps").
+- Hover an icon in the timeline; confirm the detail label shows the operation name and elapsed time (e.g. "Draw Brush (5s ago)"), and that the **Replay** button does not appear on hover alone.
+- Click an icon; confirm **Replay** appears and stays there while you move the pointer off the entry and onto the button. Click **Replay**; confirm the editor undoes/redoes to reach that point in history with a toast ("Replay: undid N steps" or "Replay: redid N steps").
+- Clear the brushes; confirm the entry is drawn with the destructive "x" in red rather than the blue "+" a creation gets.
 - Draw several more brushes to accumulate 5+ timeline entries. Confirm the timeline scrolls horizontally.
 - Press **Ctrl+Shift+T** again; confirm the timeline hides.
 
