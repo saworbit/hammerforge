@@ -887,11 +887,13 @@ Press **Shift+F** or click the **Flt** button on the context toolbar to open the
 
 | Category | Filters | Description |
 |----------|---------|-------------|
-| **By Normal** | Walls, Floors, Ceilings | Select faces by surface direction |
+| **By Normal** | Walls, Floors, Ceilings | Select faces by surface direction. The three partition every direction between them: a face within 17 degrees of vertical is a wall, everything else is a floor or a ceiling by its sign, so ramps and chamfers come out with the floors |
 | **By Material** | Same Material | Select all faces matching the selected face's material |
 | **Select Similar** | Similar Faces, Similar Brushes | Faces: match material + normal (15°). Brushes: match size (20% tolerance, orientation-agnostic) |
 | **By Visgroup** | *(dynamic)* | One button per visgroup — select all members |
 | **By Type** | Detail, Structural | func_detail vs worldspawn brushes |
+
+Filters only ever reach brushes you can see. A brush hidden on its own or by a visgroup is left out, so a material assignment made straight after a filter cannot land on geometry you hid on purpose. A filter that matches nothing leaves the current selection alone and says why ("No detail brushes in this level", "Select a face first, then Same Material").
 
 ### Select Similar
 Press **Shift+S** to quickly select similar geometry without opening the filter popover:

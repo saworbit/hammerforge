@@ -37,6 +37,18 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **The selection filters reach every face, only the visible ones, and say when
+  they match nothing** (#434, #435, #436). Walls was `|n.y| < 0.3`, Floors was
+  `n.y > 0.7` and Ceilings was `n.y < -0.7`, so a face 17 to 45 degrees off
+  level - a ramp, a chamfer, a bevelled edge, most of what a mapper opens a
+  bulk face filter for - belonged to no button at all. The three now partition
+  the sphere between them at one threshold. `_get_all_brushes()` also walked
+  `_iter_pick_nodes()` with no visibility test, so every bulk filter selected
+  faces on brushes hidden by a visgroup and the paint or material assignment
+  that followed edited geometry the mapper had hidden precisely so it would not
+  be; hidden brushes are now left out. And a filter that matched nothing closed
+  in silence with the previous selection standing, in three different ways:
+  they now all close and report what was looked for.
 - **A shortcut rebound onto a chord another action already uses was accepted in
   silence** (#410). Nothing compared a new binding against the others, so
   `matches()` answered true for both, and `plugin_input_router` tests actions one
