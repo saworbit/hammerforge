@@ -133,7 +133,7 @@ Paint layers serialize into the level save:
 - chunk size
 - chunks with bitset data, `material_ids`, and `blend_weights` / `blend_weights_2` / `blend_weights_3`
 - per-cell wall height overrides
-- `heightmap_b64` (base64-encoded PNG) and `height_scale` per layer (optional, backward-compatible)
+- `heightmap_b64` (base64-encoded raw float buffer, zstd compressed) and `height_scale` per layer (optional, backward-compatible; a base64 PNG written by an older version still loads)
 - `terrain_slot_paths`, `terrain_slot_uv_scales`, `terrain_slot_tints` per layer
 - confirmed paint connector definitions
 

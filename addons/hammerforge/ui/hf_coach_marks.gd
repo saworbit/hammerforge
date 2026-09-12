@@ -9,6 +9,12 @@ extends PanelContainer
 
 signal guide_dismissed(tool_key: String, dont_show_again: bool)
 
+const HFKeymapType = preload("res://addons/hammerforge/hf_keymap.gd")
+
+## The keymap the steps read their chords from. A default one stands in until
+## the plugin hands over the real one.
+var _keymap = null
+
 const GUIDES: Dictionary = {
 	"polygon":
 	{
@@ -38,7 +44,7 @@ const GUIDES: Dictionary = {
 		"steps":
 		[
 			"Select one or more brushes to carve",
-			"Press Ctrl+Shift+R or use Command Palette",
+			"Press {carve} or use Command Palette",
 			"Overlapping volumes are split into fragments",
 			"Delete unwanted fragments after carving",
 		],
@@ -48,12 +54,12 @@ const GUIDES: Dictionary = {
 		"title": "Vertex Editing",
 		"steps":
 		[
-			"Press V to enter Vertex mode",
+			"Press {vertex_edit} to enter Vertex mode",
 			"Click vertices to select (Shift+click to multi-select)",
-			"Press E to switch to Edge sub-mode",
-			"Ctrl+W merges selected vertices",
-			"Ctrl+E splits the hovered edge",
-			"Press V again to exit Vertex mode",
+			"Press {vertex_edge_mode} to switch to Edge sub-mode",
+			"{vertex_merge} merges selected vertices",
+			"{vertex_split_edge} splits the hovered edge",
+			"Press {vertex_edit} again to exit Vertex mode",
 		],
 	},
 	"extrude":
@@ -61,7 +67,7 @@ const GUIDES: Dictionary = {
 		"title": "Face Extrusion",
 		"steps":
 		[
-			"Select a brush, then press U (up) or J (down)",
+			"Select a brush, then press {tool_extrude_up} (up) or {tool_extrude_down} (down)",
 			"Click a face to begin extruding",
 			"Drag to set extrusion distance",
 			"Click to confirm the new brush",
@@ -73,7 +79,7 @@ const GUIDES: Dictionary = {
 		"steps":
 		[
 			"Select one or more brushes to clip",
-			"Press Shift+X or use Command Palette",
+			"Press {clip} or use Command Palette",
 			"Brush is split along its midplane",
 			"Delete the unwanted half afterward",
 		],
@@ -84,7 +90,7 @@ const GUIDES: Dictionary = {
 		"steps":
 		[
 			"Select a solid brush",
-			"Press Ctrl+H or use Command Palette",
+			"Press {hollow} or use Command Palette",
 			"Enter wall thickness when prompted",
 			"Result: outer shell with inner subtraction",
 		],
@@ -222,10 +228,31 @@ func show_guide(tool_key: String) -> bool:
 	_current_tool_key = tool_key
 	var guide: Dictionary = GUIDES[tool_key]
 	_title_label.text = guide["title"]
-	_populate_steps(guide["steps"])
+	_populate_steps(steps_for(tool_key))
 	_dont_show.button_pressed = false
 	visible = true
 	return true
+
+
+## Hand the coach marks the keymap their chords come from.
+func set_keymap(km) -> void:
+	_keymap = km
+
+
+## A guide's steps with every `{action}` rendered against the current keymap.
+##
+## The steps name chords, and the keymap is rebindable, so they are stored as
+## tokens and resolved here rather than written out as literals that stop being
+## true the moment someone rebinds.
+func steps_for(tool_key: String) -> Array:
+	if not GUIDES.has(tool_key):
+		return []
+	if _keymap == null:
+		_keymap = HFKeymapType.load_or_default("")
+	var out: Array = []
+	for step in GUIDES[tool_key].get("steps", []):
+		out.append(_keymap.format_chords(str(step)))
+	return out
 
 
 ## Hide the current guide.

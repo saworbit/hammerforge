@@ -1109,6 +1109,10 @@ func _is_perf_panel_visible() -> bool:
 func set_keymap(km: HFKeymap) -> void:
 	_keymap = km
 	_update_toolbar_shortcut_labels()
+	# The tooltips name chords too, and they were applied in _ready(), before
+	# the plugin got here with the real keymap.
+	if is_node_ready():
+		_apply_all_tooltips()
 
 
 func _update_toolbar_shortcut_labels() -> void:
@@ -3081,6 +3085,22 @@ func _commit_full_state_action(action_name: String, method_name: String, args: A
 		true,
 		Callable(self, "record_history")
 	)
+
+
+## Register work that has already happened as one undo step.
+##
+## The caller took `before_state` before it started; this takes the after state
+## and commits without executing, so undo puts the whole thing back in one go.
+func _commit_done_state_action(action_name: String, before_state: Dictionary) -> void:
+	if not level_root:
+		return
+	if undo_redo:
+		var after_state: Dictionary = level_root.capture_full_state()
+		undo_redo.create_action(action_name, 0, level_root, false)
+		undo_redo.add_do_method(level_root, "restore_full_state", after_state)
+		undo_redo.add_undo_method(level_root, "restore_full_state", before_state)
+		undo_redo.commit_action(false)
+	record_history(action_name)
 
 
 func _commit_precomputed_state_action(
@@ -5685,10 +5705,55 @@ func _on_example_load_requested(example_id: String) -> void:
 	_load_example_data(data)
 
 
+## Load an example, asking first when there is work in the level to replace.
+##
+## The load clears the open level, so it gets the same treatment the Clear
+## Brushes button two sections up already had: a confirmation naming what goes,
+## and one undo step covering the whole thing.
 func _load_example_data(data: Dictionary) -> void:
+	var title: String = data.get("title", "Example")
+	var brush_count: int = level_root.get_live_brush_count()
+	var entity_count: int = level_root.get_entity_count()
+	if brush_count == 0 and entity_count == 0:
+		_apply_example_data(data)
+		return
+
+	var dlg := ConfirmationDialog.new()
+	dlg.name = "ExampleLoadConfirm"
+	dlg.title = "Load Example Level"
+	dlg.dialog_text = (
+		"Replace %d brush%s and %d entit%s with '%s'?"
+		% [
+			brush_count,
+			"" if brush_count == 1 else "es",
+			entity_count,
+			"y" if entity_count == 1 else "ies",
+			title,
+		]
+	)
+	dlg.ok_button_text = "Replace"
+	dlg.min_size = Vector2i(320, 100)
+	dlg.confirmed.connect(
+		func():
+			if is_instance_valid(self) and is_instance_valid(level_root):
+				_apply_example_data(data)
+	)
+	if _plugin and _plugin.has_method("_add_confirmable_dialog"):
+		_plugin.call("_add_confirmable_dialog", dlg)
+	else:
+		# No plugin to own it, so it cleans up after itself rather than piling
+		# up one dead dialog per press.
+		dlg.confirmed.connect(dlg.queue_free)
+		dlg.canceled.connect(dlg.queue_free)
+		add_child(dlg)
+		dlg.popup_centered()
+
+
+func _apply_example_data(data: Dictionary) -> void:
 	var brushes: Array = data.get("brushes", [])
 	var entities: Array = data.get("entities", [])
 	var title: String = data.get("title", "Example")
+	var before_state: Dictionary = level_root.capture_full_state()
 
 	# Clear existing content before loading
 	if level_root.has_method("clear_brushes"):
@@ -5729,4 +5794,5 @@ func _load_example_data(data: Dictionary) -> void:
 			entity.global_position = epos
 			loaded_count += 1
 
+	_commit_done_state_action("Load Example: %s" % title, before_state)
 	show_toast("Loaded '%s': %d objects" % [title, loaded_count], 0)

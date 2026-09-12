@@ -261,3 +261,77 @@ func test_a_rename_is_trimmed_before_it_is_compared():
 	assert_false(sys.rename_paint_layer(0, "  Walkway  "), "Padding does not make it a new name")
 	assert_true(sys.rename_paint_layer(0, "  Basement  "))
 	assert_eq(sys.get_paint_layer_names()[0], "Basement", "The stored name is trimmed")
+
+
+# ===========================================================================
+# The memory budget only counts what it actually freed (#446)
+# ===========================================================================
+
+
+func _messages_from(fn: Callable) -> Array:
+	var heard: Array = []
+	var sink := func(text: String, level: int): heard.append(text)
+	root.user_message.connect(sink)
+	fn.call()
+	root.user_message.disconnect(sink)
+	return heard
+
+
+## Five regions of one big chunk each, which is comfortably over a 1 MB budget.
+func _budget_fixture() -> void:
+	root.hflevel_compress = false
+	_clean_region_dir()
+	root.paint_layers.chunk_size = 256
+	sys.region_streaming_enabled = true
+	sys.region_manager.region_size_cells = 256
+	sys.region_manager.streaming_radius = 0
+	sys.region_manager.chunk_size = 256
+	sys._sync_region_manager()
+	sys.set_region_base_path(_region_level_path)
+	var layer = root.paint_layers.create_layer(&"floor", 0.0)
+	layer.chunk_size = 256
+	for i in range(5):
+		layer.set_cell(Vector2i(i * 256, 0), true)
+		sys.region_manager.mark_loaded(Vector2i(i, 0))
+	sys.region_memory_budget_mb = 1
+
+
+func test_eviction_does_not_count_a_region_it_failed_to_free():
+	_budget_fixture()
+	# A level that has never been saved has nowhere to write a region to, so
+	# every unload refuses and nothing can be reclaimed.
+	sys.region_manager.region_base_path = ""
+	var loaded_before: int = sys.region_manager.loaded_regions.size()
+	var said: Array = _messages_from(func(): sys._evict_for_budget(Vector2i(9, 9)))
+	assert_eq(
+		sys.region_manager.loaded_regions.size(),
+		loaded_before,
+		"Nothing could be written, so nothing was freed"
+	)
+	assert_gt(said.size(), 0, "And the mapper is told the budget could not be met")
+	var last := str(said[said.size() - 1])
+	assert_string_contains(last, "budget")
+	assert_string_contains(last, "Save the level")
+
+
+func test_eviction_frees_regions_when_the_write_works():
+	_budget_fixture()
+	var loaded_before: int = sys.region_manager.loaded_regions.size()
+	sys._evict_for_budget(Vector2i(9, 9))
+	assert_lt(
+		sys.region_manager.loaded_regions.size(),
+		loaded_before,
+		"A writable destination lets the budget reclaim memory"
+	)
+	assert_lte(sys._total_loaded_bytes(), 1048576, "And it keeps going until the budget is met")
+	_clean_region_dir()
+
+
+func test_eviction_is_silent_while_the_budget_is_met():
+	_streaming_system()
+	_paint_cell(Vector2i(1, 1))
+	sys.region_manager.mark_loaded(Vector2i(0, 0))
+	sys.region_memory_budget_mb = 64
+	var said: Array = _messages_from(func(): sys._evict_for_budget(Vector2i(0, 0)))
+	assert_eq(said, [], "Nothing to say while the budget is fine")
+	_clean_region_dir()

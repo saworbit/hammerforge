@@ -32,11 +32,15 @@ class Capture:
 	var nodes: Array = []
 	var faces: Dictionary = {}
 	var emitted := false
+	var message := ""
 
 	func take(p_nodes: Array, p_faces: Dictionary) -> void:
 		nodes = p_nodes
 		faces = p_faces
 		emitted = true
+
+	func hear(p_message: String) -> void:
+		message = p_message
 
 
 func _filter_for(root: Node3D, selection: Array = []):
@@ -50,6 +54,7 @@ func _run_filter(root: Node3D, method: String, selection: Array = []) -> Capture
 	var f = _filter_for(root, selection)
 	var cap := Capture.new()
 	f.filter_applied.connect(cap.take)
+	f.filter_reported.connect(cap.hear)
 	f.call(method)
 	f.free()
 	return cap
@@ -184,7 +189,8 @@ func _a_filter_that_matches_nothing() -> void:
 	note("detail filter on a level with no detail brushes: emitted", empty.emitted)
 	note("  nodes", empty.nodes.size())
 	note("  faces", empty.faces.size())
-	if empty.emitted and empty.nodes.is_empty() and empty.faces.is_empty():
+	note("  said", empty.message if empty.message != "" else "<nothing>")
+	if empty.message == "" and empty.nodes.is_empty() and empty.faces.is_empty():
 		known(
 			436,
 			"a filter that matches nothing reports nothing and leaves the old selection standing",
@@ -201,8 +207,20 @@ func _a_filter_that_matches_nothing() -> void:
 	var f = _filter_for(root, [])
 	var cap := Capture.new()
 	f.filter_applied.connect(cap.take)
+	f.filter_reported.connect(cap.hear)
 	f.visible = true
 	f._filter_same_material()
 	note("same-material with no face selected: emitted", cap.emitted)
+	note("  said", cap.message if cap.message != "" else "<nothing>")
 	note("  popover still open", f.visible)
+	if cap.message == "" or f.visible:
+		known(
+			436,
+			"a filter with nothing to match against says nothing and stays open",
+			(
+				"_filter_same_material() returned before emitting and before the "
+				+ "visible = false below it, so the popover is still on screen with the "
+				+ "previous selection untouched and no message anywhere"
+			)
+		)
 	f.free()

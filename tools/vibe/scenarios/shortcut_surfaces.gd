@@ -40,9 +40,12 @@ func _select_mode_text(hud: Control) -> String:
 	return hud._build_shortcuts_text({"tool": 1, "mode": 0})
 
 
-func _coach_steps(guide: String) -> Array:
-	var guides: Dictionary = CoachMarks.GUIDES
-	return guides.get(guide, {}).get("steps", [])
+func _coach_steps(guide: String, keymap) -> Array:
+	var marks = CoachMarks.new()
+	marks.set_keymap(keymap)
+	var steps: Array = marks.steps_for(guide)
+	marks.free()
+	return steps
 
 
 func _who_reads_the_keymap_and_who_does_not() -> void:
@@ -50,6 +53,7 @@ func _who_reads_the_keymap_and_who_does_not() -> void:
 	note("default Hollow binding", keymap.get_display_string("hollow"))
 
 	var hud = _hud()
+	hud.set_keymap(keymap)
 	await frame()
 	var before := _select_mode_text(hud)
 	note("HUD select-mode line", before.split("\n")[7] if before.split("\n").size() > 7 else before)
@@ -63,11 +67,11 @@ func _who_reads_the_keymap_and_who_does_not() -> void:
 	var lying: Array = []
 	if after.contains("Ctrl+H"):
 		lying.append("viewport HUD: '%s'" % _line_containing(after, "Ctrl+H"))
-	var hollow_steps := _coach_steps("hollow")
+	var hollow_steps := _coach_steps("hollow", keymap)
 	for step in hollow_steps:
 		if str(step).contains("Ctrl+H"):
 			lying.append("coach mark: '%s'" % str(step))
-	var hollow_tip := str(TooltipText.TEXTS.get("hollow_btn", ""))
+	var hollow_tip := TooltipText.text_for("hollow_btn", keymap)
 	note("hollow_btn tooltip", hollow_tip)
 	if hollow_tip.contains("Ctrl+H"):
 		lying.append("dock tooltip: '%s'" % hollow_tip)
@@ -91,6 +95,16 @@ func _who_reads_the_keymap_and_who_does_not() -> void:
 	note("chord literals in hf_coach_marks.gd", hard_coded["coach"])
 	note("chord literals in hf_tooltip_text.gd", hard_coded["tooltips"])
 
+	# Every token in the three catalogues has to name an action the keymap
+	# knows, or format_chords() leaves it on screen in braces.
+	var unresolved := _unresolved_tokens(keymap)
+	note("chord tokens naming no action", unresolved)
+	if not unresolved.is_empty():
+		flag(
+			"a chord token in a shortcut surface names no action",
+			"format_chords() leaves %s on screen as written" % str(unresolved)
+		)
+
 	hud.queue_free()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(KEYMAP_PATH))
 
@@ -100,6 +114,31 @@ func _line_containing(text: String, needle: String) -> String:
 		if line.contains(needle):
 			return line
 	return ""
+
+
+## Every `{action}` token in the three surfaces that the keymap does not know.
+func _unresolved_tokens(keymap) -> Array:
+	var out: Array = []
+	var regex := RegEx.new()
+	regex.compile("\\{([a-z_0-9]+)\\}")
+	for path in [
+		"res://addons/hammerforge/shortcut_hud.gd",
+		"res://addons/hammerforge/ui/hf_coach_marks.gd",
+		"res://addons/hammerforge/ui/hf_tooltip_text.gd",
+	]:
+		var f := FileAccess.open(path, FileAccess.READ)
+		if not f:
+			continue
+		for line in f.get_as_text().split("
+"):
+			# Comments write {action} as a placeholder; only the strings count.
+			if line.strip_edges().begins_with("#"):
+				continue
+			for hit in regex.search_all(line):
+				var action := hit.get_string(1)
+				if not keymap.has_action(action) and not out.has(action):
+					out.append(action)
+	return out
 
 
 func _count_hard_coded_chords() -> Dictionary:

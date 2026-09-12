@@ -86,11 +86,17 @@ func _what_load_costs_the_open_level() -> void:
 	)
 
 	var source := _dock_source()
-	var load_body := _function_body(source, "func _load_example_data(")
+	# The load is two functions: the one that asks, and the one that does the
+	# work. Read both, or the undo step looks missing because it is next door.
+	var load_body := (
+		_function_body(source, "func _load_example_data(")
+		+ _function_body(source, "func _apply_example_data(")
+	)
 	var clear_body := _function_body(source, "func _on_clear(")
 	var load_is_undoable := (
 		load_body.contains("HFUndoHelper")
 		or load_body.contains("_commit_state_action")
+		or load_body.contains("_commit_done_state_action")
 		or load_body.contains("create_action")
 	)
 	var clear_is_undoable := (
@@ -101,7 +107,7 @@ func _what_load_costs_the_open_level() -> void:
 	var confirms := load_body.contains("ConfirmationDialog") or load_body.contains("confirm")
 	note("_load_example_data asks first", confirms)
 
-	if not load_is_undoable and not confirms:
+	if not load_is_undoable or not confirms:
 		known(
 			443,
 			"loading an example silently destroys the open level, with no confirmation and no undo",

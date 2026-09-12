@@ -553,8 +553,9 @@ It writes one PNG per tab under `user://console_preview/`.
 - Draw a brush; confirm a "+" icon appears in the timeline.
 - Delete the brush; confirm an "x" icon appears.
 - Undo the delete; confirm the timeline still shows both operations.
-- Hover an icon in the timeline; confirm the detail label shows the operation name and elapsed time (e.g. "Draw Brush (5s ago)").
-- Click an icon, then click **Replay**; confirm the editor undoes/redoes to reach that point in history with a toast ("Replay: undid N steps" or "Replay: redid N steps").
+- Hover an icon in the timeline; confirm the detail label shows the operation name and elapsed time (e.g. "Draw Brush (5s ago)"), and that the **Replay** button does not appear on hover alone.
+- Click an icon; confirm **Replay** appears and stays there while you move the pointer off the entry and onto the button. Click **Replay**; confirm the editor undoes/redoes to reach that point in history with a toast ("Replay: undid N steps" or "Replay: redid N steps").
+- Clear the brushes; confirm the entry is drawn with the destructive "x" in red rather than the blue "+" a creation gets.
 - Draw several more brushes to accumulate 5+ timeline entries. Confirm the timeline scrolls horizontally.
 - Press **Ctrl+Shift+T** again; confirm the timeline hides.
 
@@ -588,7 +589,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - In Paint tab → Foliage & Scatter section, click the mesh picker and select any `.tres` or `.obj` mesh.
 - Set density to 2.0, radius to 5.0. Click **Preview**. Confirm dot instances appear in the viewport around the center of your selection.
 - Change preview mode to Wireframe; click **Preview** again; confirm wireframe preview replaces dots.
-- Click **Scatter** to commit. Confirm a toast appears ("Scattered N instances") and the preview is replaced by a permanent MultiMeshInstance3D.
+- Click **Scatter** to commit. Confirm a toast appears ("Scattered N instances") and the preview is replaced by a permanent MultiMeshInstance3D. Press Ctrl+Z and confirm the instances go; redo and confirm they come back. Save the scene, reopen it, and confirm they are still there.
 - Move or rotate the committed scatter container (or its parent), rebuild/commit again, and confirm instances retain the intended container-local placement rather than receiving the parent transform twice.
 - Click **Clear**. Confirm the preview node is removed from the viewport.
 - Switch shape to Spline. Select 3+ nodes/brushes. Click **Preview**. Confirm scatter instances follow the path defined by the selected node positions.
@@ -706,8 +707,8 @@ It writes one PNG per tab under `user://console_preview/`.
 - Type a new value (e.g. 4) and press **Enter**; confirm the grid snap updates and the popup closes.
 - Tap **G G** again; press **Escape**; confirm the popup closes without changing the value.
 - Tap **G G** again; click somewhere outside the popup; confirm it dismisses (click consumed, no brush placed).
-- Select a brush. Tap **B** twice (B B); confirm a popup appears with 3 SpinBoxes (X, Y, Z).
-- Enable paint mode. Tap **R** twice (R R); confirm a popup appears with a "Paint Radius" SpinBox.
+- Select a brush. Tap **B** twice (B B); confirm a popup appears with 3 SpinBoxes (X, Y, Z) reading the current size exactly, and that the three ranges match the Size X/Y/Z spins in the Build tab. Type a size, press **Enter**, and confirm the dock spins and the next brush you draw are the same size.
+- Enable paint mode. Tap **R** twice (R R); confirm a popup appears with a "Paint Radius" SpinBox whose range is the one the paint radius control in the dock has.
 
 ### 32. Clean Brush Visuals and Lifecycle
 - Draw a new additive box; confirm it has a clean green-tinted surface with **no always-on triangle wireframe**.
