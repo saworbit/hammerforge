@@ -779,3 +779,84 @@ func test_fire_ignores_empty_entity_name_meta():
 
 	dispatcher.fire("", "OnPressed")
 	assert_eq(door.received_calls.size(), 0, "An empty alias must not become a lookup key")
+
+
+# ===========================================================================
+# Names that collide with the engine, and metadata that is not a list
+# ===========================================================================
+
+
+func test_an_input_named_after_an_engine_method_does_not_call_it():
+	# `has_method()` answers for everything Node implements, and the snake_case
+	# fallback turns ordinary PascalCase naming into a collision: an input called
+	# QueueFree used to delete the target.
+	var button := _make_entity(scene_root, "Button1")
+	var door := _make_target_entity(scene_root, "Door1")
+	_add_connection(button, "OnTrigger", "Door1", "QueueFree")
+	_wire_dispatcher()
+	dispatcher.fire("Button1", "OnTrigger")
+	assert_true(is_instance_valid(door), "The target is still there")
+	assert_false(door.is_queued_for_deletion(), "and is not on its way out")
+	assert_eq(door.received_calls.size(), 1, "The input went to the generic handler instead")
+	assert_eq(door.received_calls[0]["method"], "_on_io_input")
+	assert_eq(door.received_calls[0]["input"], "QueueFree")
+
+
+func test_an_input_named_hide_is_left_to_the_target_to_handle():
+	var button := _make_entity(scene_root, "Button1")
+	var door := _make_target_entity(scene_root, "Door1")
+	_add_connection(button, "OnTrigger", "Door1", "Hide")
+	_wire_dispatcher()
+	dispatcher.fire("Button1", "OnTrigger")
+	assert_true(door.visible, "The engine method was not called behind the game's back")
+	assert_eq(door.received_calls[0]["method"], "_on_io_input", "It went to the handler")
+
+
+func test_an_input_the_target_script_defines_is_still_called():
+	# The guard must not cost the ordinary case.
+	var button := _make_entity(scene_root, "Button1")
+	var door := _make_target_entity(scene_root, "Door1")
+	_add_connection(button, "OnPressed", "Door1", "Open")
+	_wire_dispatcher()
+	dispatcher.fire("Button1", "OnPressed")
+	assert_eq(door.received_calls.size(), 1)
+	assert_eq(door.received_calls[0]["method"], "Open", "A script method still answers")
+
+
+func test_an_input_starting_with_an_underscore_is_not_called():
+	var button := _make_entity(scene_root, "Button1")
+	var door := _make_target_entity(scene_root, "Door1")
+	_add_connection(button, "OnTrigger", "Door1", "_ready")
+	_wire_dispatcher()
+	dispatcher.fire("Button1", "OnTrigger")
+	assert_eq(door.received_calls[0]["method"], "_on_io_input", "Engine callbacks are not inputs")
+
+
+func test_malformed_outputs_metadata_costs_only_that_entity():
+	# The typed local used to make this a runtime error that unwound the whole
+	# scan, including the recursion into the children, so everything nested under
+	# the bad entity dropped out of the wiring.
+	var broken := _make_entity(scene_root, "BrokenButton")
+	broken.set_meta("entity_io_outputs", "not a list")
+	var nested := _make_entity(broken, "NestedButton")
+	var good := _make_entity(scene_root, "GoodButton")
+	var door := _make_target_entity(scene_root, "Door1")
+	_add_connection(nested, "OnPressed", "Door1", "Open")
+	_add_connection(good, "OnPressed", "Door1", "Open")
+	_wire_dispatcher()
+	assert_true(
+		dispatcher._source_name_to_ids.has("NestedButton"),
+		"The entity under the bad one is still wired"
+	)
+	assert_true(dispatcher._source_name_to_ids.has("GoodButton"), "and so is its sibling")
+	assert_false(dispatcher._source_name_to_ids.has("BrokenButton"), "The bad one is skipped")
+	dispatcher.fire("NestedButton", "OnPressed")
+	assert_eq(door.received_calls.size(), 1, "and the nested connection fires")
+
+
+func test_malformed_outputs_metadata_does_not_stop_the_entity_cache():
+	var broken := _make_entity(scene_root, "BrokenButton")
+	broken.set_meta("entity_io_outputs", {"output_name": "OnPressed"})
+	var nested := _make_entity(broken, "NestedDoor")
+	_wire_dispatcher()
+	assert_true(dispatcher._entity_cache.has("NestedDoor"), "Nested entities are still found")
