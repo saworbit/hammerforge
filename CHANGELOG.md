@@ -37,6 +37,22 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **A palette of materials that could not be found was reported as success, and
+  as an empty palette** (#414, #415). `load_library()` keeps a slot and drops the
+  material when a path no longer resolves, which is right - `FaceData`
+  `material_idx` indexes that array and compacting it would repaint the level -
+  but it said nothing about it and returned `true`. Loading a library of three
+  paths that had moved gave a palette of three nulls, no warning, no count and
+  no list. Each missing path is now named on load with a count after it, and
+  `get_missing_library_paths()` and `get_missing_count()` report the same thing
+  to a caller. The status board counted only the slots that resolved, so a
+  palette of unresolved entries was indistinguishable from no palette at all and
+  the board said "Material palette / Empty / Everything bakes with the default
+  grey. Fine for greyboxing." It is not fine: those slots are the ones every face
+  indexes, and `validation_system.validate()` on the same level reports an issue
+  for each of them. The board carries both numbers now - "3 slots, 0 loaded" at
+  PROBLEM with the load action offered, and "4 of 6 loaded" at WARN when some
+  came back.
 - **Painting a face threw away everything about its material but three scalars,
   and replaced a ShaderMaterial outright** (#412, #413). The editor preview and
   the bake both built the painted material as a bare `StandardMaterial3D`

@@ -231,3 +231,59 @@ func test_a_negative_uv_scale_is_allowed_because_it_mirrors():
 	var brush := _make_brush("b1")
 	root.set_face_uv_params("b1", 0, Vector2(-1, 1), Vector2.ZERO, 0.0)
 	assert_almost_eq(brush.faces[0].uv_scale.x, -1.0, 0.0001)
+
+
+# --- what a library load says about what it dropped ------------------------
+
+
+func _write_library(path: String, paths: Array) -> void:
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	file.store_string(JSON.stringify({"materials": paths}))
+	file.close()
+
+
+func _library_path() -> String:
+	return "user://hf_missing_material_library_test.hfmaterials"
+
+
+func test_a_library_of_paths_that_moved_names_every_one_of_them():
+	# Preserving the slots is right: `material_idx` indexes this array and
+	# compacting it would repaint the level. Saying nothing about them is what
+	# was wrong - the load reported success and the user heard nothing, while
+	# the validator on the same level reported an issue per slot.
+	var path := _library_path()
+	_write_library(path, ["res://gone_a.tres", "res://gone_b.tres", "res://gone_c.tres"])
+	assert_true(root.material_manager.load_library(path), "The library file itself loads")
+	assert_eq(root.material_manager.materials.size(), 3, "The slots are kept")
+	assert_eq(root.material_manager.get_missing_count(), 3, "and all three are empty")
+	var missing := root.material_manager.get_missing_library_paths()
+	assert_eq(missing.size(), 3, "The load says which paths it could not find")
+	assert_true(missing.has("res://gone_b.tres"), "naming each one: %s" % str(missing))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func test_a_library_that_resolves_reports_nothing_missing():
+	var path := _library_path()
+	var mat_path := "user://hf_present_material_test.tres"
+	ResourceSaver.save(_make_material("Present"), mat_path)
+	_write_library(path, [mat_path])
+	assert_true(root.material_manager.load_library(path))
+	assert_eq(root.material_manager.get_missing_count(), 0, "Nothing is missing")
+	assert_eq(root.material_manager.get_missing_library_paths().size(), 0, "so there is no list")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(mat_path))
+
+
+func test_a_later_clean_load_clears_the_missing_list():
+	var path := _library_path()
+	_write_library(path, ["res://gone_a.tres"])
+	root.material_manager.load_library(path)
+	assert_eq(root.material_manager.get_missing_library_paths().size(), 1)
+	_write_library(path, [])
+	root.material_manager.load_library(path)
+	assert_eq(
+		root.material_manager.get_missing_library_paths().size(),
+		0,
+		"The second load does not report the first load's misses"
+	)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))

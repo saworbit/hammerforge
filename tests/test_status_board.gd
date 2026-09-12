@@ -25,6 +25,7 @@ func _healthy_context() -> Dictionary:
 		"recommended_chunk_size": 0.0,
 		"chunk_size": 32.0,
 		"material_count": 6,
+		"material_slot_count": 6,
 		"bake_use_face_materials": false,
 		"spawn_count": 1,
 		"auto_spawn_player": true,
@@ -217,14 +218,39 @@ func test_many_validation_issues_are_red():
 func test_empty_palette_is_amber_while_greyboxing():
 	var ctx := _healthy_context()
 	ctx["material_count"] = 0
+	ctx["material_slot_count"] = 0
 	assert_eq(_severity_of(ctx, "materials"), WARN)
 
 
 func test_empty_palette_is_red_when_face_materials_bake_is_on():
 	var ctx := _healthy_context()
 	ctx["material_count"] = 0
+	ctx["material_slot_count"] = 0
 	ctx["bake_use_face_materials"] = true
 	assert_eq(_severity_of(ctx, "materials"), PROBLEM, "That combination cannot bake correctly")
+
+
+func test_a_palette_of_slots_that_did_not_resolve_is_red():
+	# Not the same thing as an empty palette. Those slots are what every face
+	# indexes, and `validation_system.validate()` reports one issue per slot on
+	# the same level. The board used to call this "Empty" and say it was fine.
+	var ctx := _healthy_context()
+	ctx["material_count"] = 0
+	ctx["material_slot_count"] = 3
+	var row := _find(HFStatusBoardType.evaluate(ctx), "materials")
+	assert_eq(int(row["severity"]), PROBLEM, "A palette nothing resolved in is a problem")
+	assert_string_contains(str(row["value"]), "3 slots", "and the row says how many: %s" % row)
+	assert_string_contains(str(row["value"]), "0 loaded", "and how many came back")
+	assert_eq(str(row.get("action_id", "")), "load_palette", "with the load action offered")
+
+
+func test_a_partly_resolved_palette_is_amber():
+	var ctx := _healthy_context()
+	ctx["material_count"] = 4
+	ctx["material_slot_count"] = 6
+	var row := _find(HFStatusBoardType.evaluate(ctx), "materials")
+	assert_eq(int(row["severity"]), WARN, "Some faces bake grey")
+	assert_string_contains(str(row["value"]), "4 of 6", "and the row says which: %s" % row)
 
 
 func test_loaded_palette_is_green():
