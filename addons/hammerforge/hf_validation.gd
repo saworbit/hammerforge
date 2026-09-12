@@ -102,6 +102,7 @@ static func level_state_problem(state: Dictionary) -> String:
 		"hollows",
 		"paint_layers",
 		"paint_connectors",
+		"decals",
 	]
 	const DICTIONARY_KEYS := [
 		"face_selection",

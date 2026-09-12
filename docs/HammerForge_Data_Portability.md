@@ -9,7 +9,7 @@ Last updated: September 2, 2026
 This document describes how to move data in and out of HammerForge safely.
 
 ## Source of Truth: `.hflevel`
-- `.hflevel` files are the canonical save format for brushes, paint layers, materials, entities, and settings.
+- `.hflevel` files are the canonical save format for brushes, paint layers, materials, entities, decals, and settings.
 - When region streaming is enabled, per-region paint data is stored in a sibling `<level>.hfregions/` folder as one `.hfr` file per region.
 - A region is written before its chunks are streamed out of memory. If that write fails the region stays loaded and you are told, so unsaved paint is not dropped by moving the cursor.
 - A region is only listed in the `.hflevel` index once its `.hfr` file exists on disk.

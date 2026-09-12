@@ -1143,7 +1143,7 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Move to Floor | Ctrl+Shift+F | Snap to nearest surface below |
 | Move to Ceiling | Ctrl+Shift+C | Snap to nearest surface above |
 | Measure | M | Multi-ruler tool (persistent rulers, angles, snap ref) |
-| Decal | N | Place decal on surface with live preview |
+| Decal | N | Place decal on surface with live preview. Decals live under the LevelRoot's `Decals` node, save with the level and undo like any other placement |
 | Polygon | P | Draw convex polygon, extrude to brush |
 | Path | ; | Place waypoints, extrude corridor brushes |
 | Edge sub-mode | E | Toggle vertex/edge sub-mode (in vertex mode) |

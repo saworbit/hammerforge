@@ -320,6 +320,7 @@ var draft_brushes_node: Node3D
 var pending_node: Node3D
 var committed_node: Node3D
 var entities_node: Node3D
+var decals_node: Node3D
 var brush_manager: BrushManager
 var material_manager: MaterialManager
 var baker: Baker
@@ -669,6 +670,7 @@ func _ready():
 	_setup_pending_container()
 	_setup_committed()
 	_setup_entities_container()
+	_setup_decals_container()
 	_setup_manager()
 	_setup_material_manager()
 	_setup_baker()
@@ -2856,6 +2858,15 @@ func _setup_entities_container() -> void:
 		entities_node.name = "Entities"
 		add_child(entities_node)
 		_assign_owner(entities_node)
+
+
+func _setup_decals_container() -> void:
+	decals_node = get_node_or_null("Decals") as Node3D
+	if not decals_node:
+		decals_node = Node3D.new()
+		decals_node.name = "Decals"
+		add_child(decals_node)
+		_assign_owner(decals_node)
 
 
 func _setup_manager() -> void:
