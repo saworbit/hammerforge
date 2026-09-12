@@ -37,6 +37,22 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **Toggling the measure tool's align off forgot which ruler was the reference**
+  (#405, #411). `_toggle_align()` called `_remove_snap_reference()`, which sets
+  `_snap_ref_index` to -1, so the branch below it that reuses the chosen ruler
+  could never run: pressing A again fell through to the last branch and silently
+  took the newest ruler instead. Nothing said the reference had changed; the snap
+  line just moved, and everything snapping to it went somewhere else. Align off
+  now clears the snap line and keeps the choice, which is what the HUD line and
+  that unreachable branch both say was intended; leaving the tool still forgets
+  it. The snap system itself also accepted a line with no direction:
+  `Vector3.ZERO.normalized()` is `Vector3.ZERO`, so every point inside the
+  threshold projected onto the line's origin. A ruler with both ends on one point
+  draws exactly that, and the rule lived in the one caller that checked rather
+  than in the system that depends on it. `set_custom_snap_line()` refuses a
+  direction that is not one, keeping any line already set, and `snap_threshold`
+  refuses a value of zero or less rather than turning every geometry candidate
+  off in silence.
 - **A palette of materials that could not be found was reported as success, and
   as an empty palette** (#414, #415). `load_library()` keeps a slot and drops the
   material when a path no longer resolves, which is right - `FaceData`

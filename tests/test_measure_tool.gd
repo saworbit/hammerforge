@@ -271,3 +271,82 @@ func test_hud_lines_with_measurement():
 	var joined := "\n".join(lines)
 	assert_true(joined.contains("10.0"), "Should show distance")
 	assert_true(joined.contains("Rulers: 1"), "Should show ruler count")
+
+
+# --- the align toggle keeps the ruler you chose -----------------------------
+
+
+class AlignRoot:
+	extends Node3D
+
+	var snap_system = null
+
+	func _init() -> void:
+		snap_system = load("res://addons/hammerforge/hf_snap_system.gd").new(self)
+
+
+func _two_rulers(measure_tool) -> void:
+	measure_tool._measurements = [
+		{"a": Vector3.ZERO, "b": Vector3(64, 0, 0)},
+		{"a": Vector3(0, 0, 64), "b": Vector3(0, 0, 128)},
+	]
+
+
+func test_turning_align_off_and_on_keeps_the_same_ruler():
+	# Turning it off used to clear the chosen index, so turning it back on fell
+	# through to the newest ruler and everything snapping to the line moved.
+	var align_root := AlignRoot.new()
+	add_child_autoqfree(align_root)
+	tool.root = align_root
+	_two_rulers(tool)
+	tool._snap_ref_index = 0
+	tool._align_active = true
+	tool._apply_snap_reference()
+	assert_eq(align_root.snap_system._custom_snap_dir, Vector3(1, 0, 0), "Ruler 1 is the reference")
+
+	tool._toggle_align()
+	assert_false(tool._align_active, "Align is off")
+	assert_eq(tool._snap_ref_index, 0, "and the chosen ruler is remembered")
+	assert_false(align_root.snap_system._has_custom_snap, "but nothing snaps to it")
+
+	tool._toggle_align()
+	assert_true(tool._align_active, "Align is back on")
+	assert_eq(tool._snap_ref_index, 0, "with the ruler that was chosen")
+	assert_eq(
+		align_root.snap_system._custom_snap_dir, Vector3(1, 0, 0), "and the same line to snap to"
+	)
+
+
+func test_align_with_no_reference_chosen_still_takes_the_newest_ruler():
+	var align_root := AlignRoot.new()
+	add_child_autoqfree(align_root)
+	tool.root = align_root
+	_two_rulers(tool)
+	tool._toggle_align()
+	assert_true(tool._align_active)
+	assert_eq(tool._snap_ref_index, 1, "The newest one, as before, when nothing was chosen")
+
+
+func test_leaving_the_tool_forgets_the_reference():
+	var align_root := AlignRoot.new()
+	add_child_autoqfree(align_root)
+	tool.root = align_root
+	_two_rulers(tool)
+	tool._snap_ref_index = 0
+	tool._align_active = true
+	tool._apply_snap_reference()
+	tool._remove_snap_reference()
+	assert_eq(tool._snap_ref_index, -1, "Leaving is not toggling")
+	assert_false(tool._align_active)
+	assert_false(align_root.snap_system._has_custom_snap)
+
+
+func test_a_ruler_with_both_ends_on_one_point_sets_no_snap_line():
+	var align_root := AlignRoot.new()
+	add_child_autoqfree(align_root)
+	tool.root = align_root
+	tool._measurements = [{"a": Vector3(10, 20, 30), "b": Vector3(10, 20, 30)}]
+	tool._snap_ref_index = 0
+	tool._align_active = true
+	tool._apply_snap_reference()
+	assert_false(align_root.snap_system._has_custom_snap, "There is no line through one point")
