@@ -9,6 +9,20 @@ extends "res://tools/vibe/hf_vibe_scenario.gd"
 ## value is.
 
 const QuickProperty = preload("res://addons/hammerforge/ui/hf_quick_property.gd")
+const PluginOverlays = preload("res://addons/hammerforge/plugin_overlays.gd")
+const DockScene = preload("res://addons/hammerforge/dock.tscn")
+
+
+## Enough of the plugin for on_quick_property_committed() to run against.
+class PluginStub:
+	extends RefCounted
+
+	var active_root: Node3D = null
+	var dock: Node = null
+	var _quick_property: Node = null
+
+	func _get_level_root() -> Node3D:
+		return active_root
 
 
 func id() -> String:
@@ -121,18 +135,24 @@ func _what_a_committed_value_becomes() -> void:
 			)
 		)
 
-	# BRUSH_SIZE goes two places: unclamped into input_state.drag_size_default and
-	# clamped into the dock spins.
+	# BRUSH_SIZE goes two places: into input_state.drag_size_default and into the
+	# dock spins, which clamp and round. Drive the real commit path and read
+	# both ends back.
 	var root: Node3D = await fresh_root()
+	var dock = DockScene.instantiate()
+	_tree.get_root().add_child(dock)
 	await frame()
+	dock.level_root = root
+	var plugin := PluginStub.new()
+	plugin.active_root = root
+	plugin.dock = dock
+
 	var typed := Vector3(500.5, 500.5, 500.5)
-	root.input_state.drag_size_default = typed
-	var dock_shows := Vector3(
-		_through(1.0, 256.0, 1.0, typed.x),
-		_through(1.0, 256.0, 1.0, typed.y),
-		_through(1.0, 256.0, 1.0, typed.z)
+	PluginOverlays.on_quick_property_committed(
+		plugin, QuickProperty.PropertyType.BRUSH_SIZE, [typed.x, typed.y, typed.z]
 	)
-	note("popup allows a brush size up to", 1024.0)
+	await frame()
+	var dock_shows := Vector3(dock.size_x.value, dock.size_y.value, dock.size_z.value)
 	note("typed size", typed)
 	note("what the dock spins show", dock_shows)
 	note("what input_state.drag_size_default holds", root.input_state.drag_size_default)
@@ -141,23 +161,18 @@ func _what_a_committed_value_becomes() -> void:
 			448,
 			"a brush size from the quick popup leaves the dock and the draw tool disagreeing",
 			(
-				"on_quick_property_committed() writes the raw values into "
-				+ "input_state.drag_size_default and the same values into dock.size_x/y/z, "
-				+ (
-					"which are 1..256 step 1 and clamp them. A typed %s leaves the dock reading "
-					% str(typed)
+				(
+					"the dock spins read %s and the next brush is drawn at %s. "
+					% [dock_shows, root.input_state.drag_size_default]
 				)
-				+ (
-					"%s while the next brush drawn is %s. The popup's own spin is 0.1..1024 "
-					% [str(dock_shows), str(root.input_state.drag_size_default)]
-				)
-				+ "step 0.5, so any value with a half unit in it or above 256 splits the two"
+				+ "on_quick_property_committed() writes the same values into both ends, and "
+				+ "only one of them clamps"
 			)
 		)
-
-	var brush = root.create_brush_from_info(
-		{"shape": 0, "size": root.input_state.drag_size_default}
+	var drawn = root.create_brush_from_info(
+		{"shape": 0, "size": root.input_state.drag_size_default, "center": Vector3.ZERO}
 	)
 	await frame()
-	note("a brush drawn at that size measures", HFVibe.local_extent(brush))
+	note("a brush drawn at that size measures", drawn.size)
+	dock.queue_free()
 	popup.queue_free()
