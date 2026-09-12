@@ -90,6 +90,18 @@ func populate(keymap) -> void:
 			item.set_meta("action", action)
 			item.set_meta("label_lower", label.to_lower())
 			item.set_meta("binding_lower", binding.to_lower())
+			# A chord two actions in the same mode share: the input router
+			# returns on the first hit, so one of them never fires. Say so here
+			# rather than leaving the user to find out by pressing it.
+			var clashes: PackedStringArray = keymap.conflicts_for(action)
+			if not clashes.is_empty():
+				var others := PackedStringArray()
+				for clash in clashes:
+					others.append(HFKeymapType.get_action_label(clash))
+				item.set_custom_color(1, Color(1.0, 0.6, 0.35, 1.0))
+				item.set_tooltip_text(
+					1, "Also used by %s. Only one of them fires." % ", ".join(others)
+				)
 
 
 func _on_search_text_changed(filter_text: String) -> void:

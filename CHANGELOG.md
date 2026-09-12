@@ -37,6 +37,20 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **A shortcut rebound onto a chord another action already uses was accepted in
+  silence** (#410). Nothing compared a new binding against the others, so
+  `matches()` answered true for both, and `plugin_input_router` tests actions one
+  at a time and returns on the first hit - so the earlier check won and the other
+  action became unreachable with no message anywhere. Rebinding Hollow to Ctrl+G
+  got you Group, forever, with no way to find out why. A plain "this chord is
+  taken" check would be wrong, because the defaults share six chords on purpose:
+  `E` is Extrude, Erase and Edge Mode, `R` is Rotate and Ramp, and `X`, `Y` and
+  `Z` are axis locks and paint mirrors. The router gates each family on its mode,
+  so none of those pairs can both fire. The check is mode-aware to match: two
+  actions clash only when they share a chord and can fire at the same time.
+  `set_binding()` reports one, loading a hand-edited keymap reports each pair
+  once naming the file, and the shortcut dialog marks the binding in amber with a
+  tooltip saying what else uses it - which is before the fact rather than after.
 - **Toggling the measure tool's align off forgot which ruler was the reference**
   (#405, #411). `_toggle_align()` called `_remove_snap_reference()`, which sets
   `_snap_ref_index` to -1, so the branch below it that reuses the chosen ruler

@@ -1170,7 +1170,9 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 
 **Rebinding:** Edit `user://hammerforge_keymap.json` (created on first run). Each entry maps an action name to `{"keycode": KEY_*, "ctrl": bool, "shift": bool, "alt": bool}`. Restart the plugin after editing. The JSON file is the interface; there is no rebinding UI.
 
-An entry that is not a binding, one with no usable `keycode`, or a key that is not a HammerForge action is reported once on load, naming the file and the key, and the default is used for it. Before, a typo in this file turned every keystroke in the viewport into an error that named `hf_keymap.gd` rather than the file you got wrong.
+An entry that is not a binding, one with no usable `keycode`, or a key that is not a HammerForge action is reported once on load, naming the file and the key, and the default is used for it.
+
+Two actions that can fire in the same mode on the same chord are reported on load as well, naming both, because the input router tests actions one at a time and stops on the first hit -- so one of the two never fires. The shortcut dialog marks such a binding in amber and its tooltip says what else uses it. Sharing a chord across modes is fine and the defaults do it six times: `E` is Extrude, Erase and Edge Mode, `R` is Rotate and Ramp, and `X`, `Y` and `Z` are axis locks and paint mirrors. The paint family only fires while paint mode is on and the vertex family only while vertex mode is on, so those pairs never both answer. Before, a typo in this file turned every keystroke in the viewport into an error that named `hf_keymap.gd` rather than the file you got wrong.
 
 **Toolbar labels** and **tooltips** update automatically from the keymap, so custom bindings are always reflected in the UI. Press the **?** button on the toolbar to open a searchable shortcut dialog showing all current keybindings grouped by category (Tools, Editing, Selection, Paint, Axis Lock).
 
