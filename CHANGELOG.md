@@ -19,6 +19,21 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   that would strip the palette of materials in use.
 
 ### Fixed
+- **A vertex move that bowed a face out of plane passed the convexity check**
+  (#364). `validate_convexity()` tested one thing: that no vertex sits in front
+  of any face plane. It never tested whether a face is still a plane. Every face
+  of a box is a quad, and moving one of its four corners bends it while the
+  other three stay behind the plane through the first three, so the check passed
+  and the move committed. Pulling one corner of a 64 unit box 256 units left the
+  worst face sitting 62 units off its own plane. Everything downstream reads a
+  face as a plane: the `.map` export writes it as three points, clip and carve
+  intersect it, and the bake triangulates it while collision and lighting use
+  the plane, so the exported solid stopped being the one on screen. Each face is
+  now measured against the plane through its own first corner, with a tolerance
+  that scales with the face, and a move that bends one is refused and reverted
+  the same way a non-convex one is. The refusal now says which of the two it
+  was. A move that keeps every face flat, such as sliding a whole side along its
+  own normal, still commits.
 - **Changing a bake setting did not invalidate the bake** (#376). `bake_dirty()`
   rebuilt only what brush dirty state said needed rebuilding, and the settings
   were not part of what could be dirty — so the realistic sequence did the wrong
