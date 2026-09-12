@@ -37,6 +37,20 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **The HUD, the coach marks and the tooltips read the keymap instead of
+  spelling chords out** (#439, #440). `HFKeymap` is rebindable, and three of the
+  surfaces that tell a mapper which key does what held their chords as string
+  literals: 14 in `shortcut_hud.gd`, 6 in `hf_coach_marks.gd`, 5 in
+  `hf_tooltip_text.gd`. After one rebind the same editor showed the new chord in
+  the hotkey palette and the old one in the viewport HUD, the coach marks and
+  the tooltip - and the HUD is the one on screen while the mapper is working.
+  Nothing checked them against the defaults either, so changing a default left
+  three files behind with no error. Each surface now writes `{hollow}` and a new
+  `HFKeymap.format_chords()` renders it, with a test that every token names an
+  action the keymap knows and that no rebindable chord is written out. The
+  rebind list also showed two rows called "Extrude Up" and two called "Extrude
+  Down", because `get_action_label()` gave the same name to an action and its
+  alias; the aliases are named as aliases now.
 - **The operation timeline's Replay button can be clicked, and its glyphs name
   the operation** (#437, #438). The button lives in the panel header, outside
   the entry it applies to, and was shown on hover and hidden again on

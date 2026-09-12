@@ -227,6 +227,8 @@ func _enter_tree():
 	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, hud)
 	if hud.has_method("set_user_prefs"):
 		hud.set_user_prefs(_user_prefs)
+	if hud.has_method("set_keymap"):
+		hud.set_keymap(_keymap)
 	if dock:
 		hud.visible = dock.get_show_hud()
 	# Context toolbar (floating above 3D viewport)

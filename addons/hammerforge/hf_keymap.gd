@@ -199,6 +199,38 @@ func get_display_string(action: String) -> String:
 	return "+".join(parts)
 
 
+## Whether this keymap knows an action at all.
+func has_action(action: String) -> bool:
+	return _bindings.has(action)
+
+
+## Replace every `{action}` in `text` with the chord bound to that action.
+##
+## The surfaces that tell a mapper which key does what used to spell their
+## chords into string literals, so a rebind left them advertising a chord that
+## no longer did anything, and changing a default here left them behind with no
+## error. A token naming an action nothing is bound to is left alone rather than
+## quietly turning into "?", so a typo is visible on screen and a test can find
+## it.
+func format_chords(text: String) -> String:
+	var out := ""
+	var rest := text
+	while true:
+		var open_at := rest.find("{")
+		if open_at < 0:
+			return out + rest
+		var close_at := rest.find("}", open_at)
+		if close_at < 0:
+			return out + rest
+		var action := rest.substr(open_at + 1, close_at - open_at - 1)
+		if has_action(action):
+			out += rest.substr(0, open_at) + get_display_string(action)
+		else:
+			out += rest.substr(0, close_at + 1)
+		rest = rest.substr(close_at + 1)
+	return out
+
+
 ## Save current bindings to a JSON file.
 func save(path: String) -> void:
 	var file = FileAccess.open(path, FileAccess.WRITE)
@@ -352,8 +384,8 @@ static func get_action_label(action: String) -> String:
 		"tool_select": "Select",
 		"tool_extrude_up": "Extrude Up",
 		"tool_extrude_down": "Extrude Down",
-		"tool_extrude": "Extrude Up",
-		"tool_extrude_down_alt": "Extrude Down",
+		"tool_extrude": "Extrude Up (alt)",
+		"tool_extrude_down_alt": "Extrude Down (alt)",
 		"toggle_operation": "Toggle Add / Cut",
 		"toggle_paint_mode": "Toggle Paint Mode",
 		"quick_play": "Quick Play",
