@@ -1018,3 +1018,95 @@ func test_a_merged_face_keeps_the_winding_of_the_triangles_it_came_from():
 		0.001,
 		"The quad should face the same way as the triangles it replaced"
 	)
+
+
+func test_v2_path_brush_wound_inside_out_is_migrated_on_load():
+	# Path segments saved before #397 carry the builder's inversion. They are
+	# CUSTOM brushes, so the migration recognises them by the geometry: every
+	# face pointing at the brush centre.
+	brush.shape = DraftBrush.BrushShape.CUSTOM
+	var half := Vector3(64, 4, 4)
+	var inverted_quads := [
+		[
+			Vector3(half.x, half.y, -half.z),
+			Vector3(half.x, half.y, half.z),
+			Vector3(half.x, -half.y, half.z),
+			Vector3(half.x, -half.y, -half.z)
+		],
+		[
+			Vector3(-half.x, half.y, half.z),
+			Vector3(-half.x, half.y, -half.z),
+			Vector3(-half.x, -half.y, -half.z),
+			Vector3(-half.x, -half.y, half.z)
+		],
+		[
+			Vector3(-half.x, half.y, half.z),
+			Vector3(half.x, half.y, half.z),
+			Vector3(half.x, half.y, -half.z),
+			Vector3(-half.x, half.y, -half.z)
+		],
+		[
+			Vector3(-half.x, -half.y, -half.z),
+			Vector3(half.x, -half.y, -half.z),
+			Vector3(half.x, -half.y, half.z),
+			Vector3(-half.x, -half.y, half.z)
+		],
+		[
+			Vector3(-half.x, half.y, half.z),
+			Vector3(-half.x, -half.y, half.z),
+			Vector3(half.x, -half.y, half.z),
+			Vector3(half.x, half.y, half.z)
+		],
+		[
+			Vector3(half.x, half.y, -half.z),
+			Vector3(half.x, -half.y, -half.z),
+			Vector3(-half.x, -half.y, -half.z),
+			Vector3(-half.x, half.y, -half.z)
+		]
+	]
+	var old_data: Array = []
+	for quad in inverted_quads:
+		var face := FaceData.new()
+		face.local_verts = PackedVector3Array(quad)
+		face.ensure_geometry()
+		var d := face.to_dict()
+		d["winding_version"] = 2
+		old_data.append(d)
+	# The saved faces really are inside out.
+	for d in old_data:
+		var saved := FaceData.from_dict(d)
+		var c := Vector3.ZERO
+		for v in saved.local_verts:
+			c += v
+		c /= float(saved.local_verts.size())
+		assert_true(saved.normal.dot(c) < 0.0, "Saved face points into the solid")
+	brush.apply_serialized_faces(old_data)
+	assert_eq(brush.faces.size(), 6, "Should load 6 faces")
+	for face in brush.faces:
+		var face_center := Vector3.ZERO
+		for v in face.local_verts:
+			face_center += v
+		face_center /= float(face.local_verts.size())
+		assert_true(
+			face.normal.dot(face_center.normalized()) > 0.5,
+			"Migrated face %s should point out of the solid" % face.normal
+		)
+
+
+func test_a_correctly_wound_v2_brush_is_left_alone():
+	# The signature is every face inward. A brush that was already right must
+	# come back byte for byte, or the migration repaints levels that were fine.
+	brush.shape = DraftBrush.BrushShape.CUSTOM
+	brush.size = Vector3(32, 32, 32)
+	var good_faces = brush._build_box_faces()
+	var saved: Array = []
+	var before: Array = []
+	for face in good_faces:
+		var d := face.to_dict()
+		d["winding_version"] = 2
+		saved.append(d)
+		before.append(face.local_verts.duplicate())
+	brush.apply_serialized_faces(saved)
+	assert_eq(brush.faces.size(), before.size(), "Same face count")
+	for i in range(brush.faces.size()):
+		assert_eq(brush.faces[i].local_verts, before[i], "Face %d untouched" % i)
