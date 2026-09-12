@@ -95,6 +95,15 @@ it from here.
 | `painted-faces` | what a painted face keeps of the material it was painted over |
 | `status-board` | what the status board says against what the level is, and a half-missing palette |
 | `atlas` | the material atlas packer at its size limits, and what a failed pack does to the caller |
+| `scatter` | what a scattered instance is oriented to, how many one click makes, and what the scene keeps |
+| `selection-filter` | which faces each bulk filter reaches, and which faces no filter reaches at all |
+| `timeline` | the glyph and colour an operation gets on the timeline, and whether Replay can be clicked |
+| `shortcut-surfaces` | whether the HUD, the coach marks and the tooltips still tell the truth after a rebind |
+| `connectors` | what the live connector path costs per stroke, and whether the paint grid follows the level |
+| `examples` | what loading an example does to the level already in the scene, and whether it can be undone |
+| `heightmap-io` | what a heightmap loses going through the `.hflevel`'s base64 PNG, in world units |
+| `regions` | what the region eviction loop frees against what it thinks it freed |
+| `quick-property` | whether the quick popup and the dock control behind it agree on range and step |
 
 ## Adding a scenario
 
