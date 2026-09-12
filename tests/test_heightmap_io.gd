@@ -132,3 +132,61 @@ func test_noise_encode_decode_round_trip():
 	assert_almost_eq(
 		decoded.get_pixel(20, 20).r, original.get_pixel(20, 20).r, 0.01, "Pixel (20,20) survives"
 	)
+
+
+# ===========================================================================
+# Float fidelity (#445)
+# ===========================================================================
+
+
+func test_round_trip_keeps_exact_float_values():
+	var img = Image.create(4, 4, false, Image.FORMAT_RF)
+	img.set_pixel(0, 0, Color(0.123456, 0, 0, 1))
+	img.set_pixel(1, 1, Color(0.987654, 0, 0, 1))
+	var decoded = HFHeightmapIO.decode_from_base64(HFHeightmapIO.encode_to_base64(img))
+	assert_not_null(decoded)
+	assert_almost_eq(decoded.get_pixel(0, 0).r, 0.123456, 0.0000005, "Exact sample preserved")
+	assert_almost_eq(decoded.get_pixel(1, 1).r, 0.987654, 0.0000005, "Exact sample preserved")
+
+
+func test_round_trip_keeps_values_outside_zero_one():
+	var img = Image.create(2, 2, false, Image.FORMAT_RF)
+	img.set_pixel(0, 0, Color(4.5, 0, 0, 1))
+	img.set_pixel(1, 0, Color(-2.0, 0, 0, 1))
+	var decoded = HFHeightmapIO.decode_from_base64(HFHeightmapIO.encode_to_base64(img))
+	assert_not_null(decoded)
+	assert_almost_eq(decoded.get_pixel(0, 0).r, 4.5, 0.0001, "Height above 1.0 survives")
+	assert_almost_eq(decoded.get_pixel(1, 0).r, -2.0, 0.0001, "Height below 0.0 survives")
+
+
+func test_round_trip_keeps_every_step_of_a_ramp():
+	var img = Image.create(64, 1, false, Image.FORMAT_RF)
+	for x in range(64):
+		img.set_pixel(x, 0, Color(float(x) / 64.0, 0, 0, 1))
+	var decoded = HFHeightmapIO.decode_from_base64(HFHeightmapIO.encode_to_base64(img))
+	var distinct := {}
+	for x in range(64):
+		distinct[decoded.get_pixel(x, 0).r] = true
+	assert_eq(distinct.size(), 64, "All 64 ramp steps stay distinct")
+
+
+func test_decode_accepts_legacy_png_payload():
+	var img = Image.create(8, 8, false, Image.FORMAT_RF)
+	img.fill(Color(0.5, 0, 0, 1))
+	var legacy = Marshalls.raw_to_base64(img.save_png_to_buffer())
+	var decoded = HFHeightmapIO.decode_from_base64(legacy)
+	assert_not_null(decoded, "A level saved before the float format still loads")
+	assert_eq(decoded.get_format(), Image.FORMAT_RF, "Legacy payload converts to RF")
+	assert_eq(decoded.get_width(), 8)
+
+
+func test_decode_rejects_payload_whose_header_does_not_match():
+	var img = Image.create(8, 8, false, Image.FORMAT_RF)
+	img.fill(Color(0.25, 0, 0, 1))
+	var raw = Marshalls.base64_to_raw(HFHeightmapIO.encode_to_base64(img))
+	raw.encode_u32(8, 9)  # claim 9x8 samples, which no longer matches the byte count
+	assert_null(
+		HFHeightmapIO.decode_from_base64(Marshalls.raw_to_base64(raw)),
+		"A payload whose header disagrees with its size decodes to null"
+	)
+	assert_push_error("header describes 9x8")

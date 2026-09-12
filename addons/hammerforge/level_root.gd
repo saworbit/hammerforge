@@ -2980,10 +2980,21 @@ func _sync_paint_grid_from_root() -> void:
 		return
 	if not paint_layers.base_grid:
 		paint_layers.base_grid = HFPaintGrid.new()
-	paint_layers.base_grid.cell_size = max(_grid_snap, 0.1)
+	var cell_size = max(_grid_snap, 0.1)
+	paint_layers.base_grid.cell_size = cell_size
 	paint_layers.base_grid.origin = global_position
 	paint_layers.base_grid.basis = Basis.IDENTITY
 	paint_layers.base_grid.layer_y = grid_plane_origin.y
+	# Every layer holds its own copy of the grid, so writing the template is not
+	# enough. A layer left on the old origin puts its floor, its connectors and
+	# anything scattered on it at a world position the brushes no longer use,
+	# and a layer created after the move lands on a different grid from the ones
+	# beside it. layer_y is the layer's own and stays.
+	for layer in paint_layers.layers:
+		if layer and layer.grid:
+			layer.grid.cell_size = cell_size
+			layer.grid.origin = paint_layers.base_grid.origin
+			layer.grid.basis = paint_layers.base_grid.basis
 
 
 func _setup_highlight() -> void:
@@ -3110,10 +3121,6 @@ func _set_grid_snap(value: float) -> void:
 	grid_snap_changed.emit(_grid_snap)
 	_update_grid_material()
 	_sync_paint_grid_from_root()
-	if paint_layers:
-		for layer in paint_layers.layers:
-			if layer and layer.grid:
-				layer.grid.cell_size = max(_grid_snap, 0.1)
 	_log("Grid snap set to %s" % _grid_snap)
 
 
