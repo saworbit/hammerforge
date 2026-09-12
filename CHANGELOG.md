@@ -49,6 +49,56 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   be; hidden brushes are now left out. And a filter that matched nothing closed
   in silence with the previous selection standing, in three different ways:
   they now all close and report what was looked for.
+- **Loading an example level asks first and can be undone** (#443, #444). The
+  Load button on an Example Level card called `clear_brushes()` and
+  `clear_entities()` straight out, outside undo and with nothing asking - while
+  the Clear Brushes button two sections up the same tab went through
+  `_commit_state_action()`. An hour of work went with one click on a browsable
+  list of tempting cards, and Ctrl+Z did nothing. The load now names what it
+  will replace ("Replace 6 brushes and 1 entity with 'Simple Room'?") when the
+  level is not empty, and the whole thing is one undo step. Rebuilding the card
+  list also left the old cards in the container until the end of the frame,
+  because `queue_free()` alone does not remove them, so the new cards were
+  appended below them and the search - which indexed the examples by child
+  order - filtered the dying half and never reached the live one. The cards are
+  removed before they are freed, and the search reads each card's own id.
+- **A paint layer is now the one the mapper chose, on the level's own grid**
+  (#432, #433, #442). `remove_layer()` kept the active index by clamping it,
+  which is only right when the removed layer is after the active one: deleting
+  a layer below it shifted every later layer down and the paint target moved to
+  a layer above the selected one, with nothing announcing it. `create_layer()`
+  never checked the id was free, so two layers could share one `layer_id` -
+  which is identity, not a label - and Godot renamed the colliding node to
+  `@Node@9`; a repeated id is now uniquified to `roof_2` and the reason logged.
+  And every layer holds its own copy of the grid while
+  `_sync_paint_grid_from_root()` only wrote the template, so moving the level
+  root left every painted floor, connector and scatter on the old world origin
+  and a layer created afterwards landed on a different grid from the ones beside
+  it. The sync now pushes origin, basis and cell size into every layer grid,
+  keeping each layer's own `layer_y`.
+- **A committed scatter is now owned, undoable and capped** (#429, #430, #431).
+  Three things went wrong on the way from a scatter stroke to a scene. Align to
+  Normal crossed the height field tangents the wrong way round, so the "normal"
+  was `(0, -1, 0)` on flat ground and every instance was placed upside down.
+  Nothing refused a large stroke: the candidate count is quadratic in the
+  radius, so radius 1000 at density 1.0 laid out three million transforms and
+  took the editor with it - scatter now refuses past 50,000 the way
+  `HFDuplicator` refuses past 256 copies, naming the count and pointing at the
+  radius and density. And the committed `MultiMeshInstance3D` had no owner, so
+  it was never written into the `.tscn` and a mapper lost every instance on the
+  next save and reopen; the commit now runs inside one undo action and gives
+  the node the same owner the level's other generated nodes have.
+  `HFFoliagePopulator` gets the owner too.
+- **Saving a level no longer rounds every heightmap sample to 8 bits** (#445). A
+  paint layer's heightmap is a `FORMAT_RF` image - one 32 bit float per sample -
+  and `HFHeightmapIO` stored it as a base64 PNG. PNG has no float channel, so
+  Godot wrote it as 8 bit and the decode converted the 8 bit result back to RF:
+  256 height values survived across the whole range, anything above 1.0 or below
+  0.0 was clamped to the limit, and each save re-rounded the already rounded
+  data. `HFStateSystem.capture_state()` uses the same encoder, so an undo of an
+  unrelated operation moved the terrain. The heightmap is now stored as the raw
+  float buffer, zstd compressed, behind a small header, which loses nothing. A
+  base64 PNG written by an older version is still recognised and loaded.
 - **A shortcut rebound onto a chord another action already uses was accepted in
   silence** (#410). Nothing compared a new binding against the others, so
   `matches()` answered true for both, and `plugin_input_router` tests actions one

@@ -630,7 +630,7 @@ The **Test** tab contains an **Examples** section (collapsed by default) with 5 
 | Hollowed Building | Intermediate | Hollow + subtract for windows |
 | Simple Arena | Advanced | Multi-level, ramps, cover, multiple spawns |
 
-- **Load** clears the current level and instantiates the example's brushes and entities
+- **Load** replaces the current level with the example's brushes and entities. It asks first when the level is not empty, naming what will go, and the whole load is one undo step
 - **Study This** shows numbered annotations explaining the design decisions
 - Search/filter by title, description, tags, or difficulty level
 
@@ -670,7 +670,7 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
 - **Floor Paint**: Brush, Erase, Rect, Line, Bucket, Blend tools; shape, radius, and layer picker; default-off inference and X/Z mirror toggles; Raise, Room, and Connector actions. The dock is optional for the first room: Shift+P, R, then LMB-drag in the viewport.
 - **Heightmap**: Import PNG/EXR or Generate procedural noise. Height Scale and Layer Y spinboxes. **Sculpt tools**: Raise, Lower, Smooth, Flatten buttons with strength/radius/falloff spinboxes for interactive terrain editing. **Convert Selection → Heightmap** button rasterizes selected brush top faces into a new heightmap layer (inherits grid origin/basis and chunk_size from the paint layer manager).
 - **Blend & Terrain**: Blend Strength, Blend Slot (B/C/D), and Terrain Slot A-D texture pickers with UV scales.
-- **Foliage & Scatter**: Interactive scatter brush for foliage and object placement. Pick a mesh resource, set density/radius/height constraints/slope filter/scale variation. Choose Circle or Spline brush shape. Preview generates a MultiMesh preview (Dots/Wireframe/Full). Scatter commits as a permanent `MultiMeshInstance3D`. Clear removes the preview. Spline mode uses selected nodes as path control points with a configurable width band.
+- **Foliage & Scatter**: Interactive scatter brush for foliage and object placement. Pick a mesh resource, set density/radius/height constraints/slope filter/scale variation. Choose Circle or Spline brush shape. Preview generates a MultiMesh preview (Dots/Wireframe/Full). Scatter commits as a permanent `MultiMeshInstance3D`, in one undo step, owned by the scene so a save keeps it. Clear removes the preview. A stroke asking for more than 50,000 instances is refused with the count, so wind the radius or the density down rather than waiting for it. Spline mode uses selected nodes as path control points with a configurable width band.
 - **Regions**: Region Streaming enable, Region Size, Stream Radius, Show Region Grid, memory stats.
 - **Materials**: Visual thumbnail browser (`HFMaterialBrowser`) with search, pattern/color filters, and Prototypes/Palette/Favorites view toggle. Add/Remove/Refresh Prototypes buttons. Face Select Mode toggle. Assign to Selected Faces. Right-click thumbnails for context menu (Apply to Faces, Apply to Whole Brush, Toggle Favorite, Copy Name). Hover a thumbnail to preview on selected faces. Press **T** for Texture Picker (eyedropper). The **Refresh Prototypes** button batch-loads 150 built-in SVG textures (15 patterns x 10 colors) for quick greyboxing.
 - **UV Editor**: Per-face UV editing with drag handles, Reset Projected UVs, and Justify grid (Fit, Center, Left, Right, Top, Bottom in 3×2 layout).
