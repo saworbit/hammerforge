@@ -336,6 +336,12 @@ func _build_segment_brush(
 	var length := dir.length()
 	if length < 0.01:
 		return {}
+	# A negative half-extent swaps the two sides of every corner ring, which
+	# reverses the winding of all six quads and builds the corridor inside out.
+	# _usable_size() catches a negative in the reported size and never sees the
+	# face array that a CUSTOM brush actually renders and bakes.
+	if width <= 0.0 or height <= 0.0:
+		return {}
 	dir = dir.normalized()
 	# Perpendicular in XZ plane
 	var perp := Vector3(-dir.z, 0.0, dir.x)
