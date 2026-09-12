@@ -588,7 +588,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - In Paint tab → Foliage & Scatter section, click the mesh picker and select any `.tres` or `.obj` mesh.
 - Set density to 2.0, radius to 5.0. Click **Preview**. Confirm dot instances appear in the viewport around the center of your selection.
 - Change preview mode to Wireframe; click **Preview** again; confirm wireframe preview replaces dots.
-- Click **Scatter** to commit. Confirm a toast appears ("Scattered N instances") and the preview is replaced by a permanent MultiMeshInstance3D.
+- Click **Scatter** to commit. Confirm a toast appears ("Scattered N instances") and the preview is replaced by a permanent MultiMeshInstance3D. Press Ctrl+Z and confirm the instances go; redo and confirm they come back. Save the scene, reopen it, and confirm they are still there.
 - Move or rotate the committed scatter container (or its parent), rebuild/commit again, and confirm instances retain the intended container-local placement rather than receiving the parent transform twice.
 - Click **Clear**. Confirm the preview node is removed from the viewport.
 - Switch shape to Spline. Select 3+ nodes/brushes. Click **Preview**. Confirm scatter instances follow the path defined by the selected node positions.
