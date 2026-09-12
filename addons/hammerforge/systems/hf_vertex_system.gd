@@ -115,6 +115,10 @@ func move_vertices(delta: Vector3) -> bool:
 		var brush = _find_brush(brush_id)
 		if not brush:
 			continue
+		# A bent face is cut into triangles rather than refused. What is left
+		# after that is a real refusal: a dent, or a displacement that cannot be
+		# split.
+		planarize_faces(brush)
 		var reason: String = check_solid(brush)
 		if not reason.is_empty():
 			_restore_face_snapshots()
@@ -173,6 +177,65 @@ static func _face_planarity(verts: PackedVector3Array) -> Array:
 	return [worst, extent]
 
 
+## How far a face is off its own plane, or 0.0 when it is within tolerance.
+static func _face_bow(face) -> float:
+	if face == null or face.local_verts.size() < 4:
+		return 0.0
+	var planarity: Array = _face_planarity(face.local_verts)
+	var bow: float = planarity[0]
+	var extent: float = planarity[1]
+	if bow > maxf(0.02, extent * 0.0005):
+		return bow
+	return 0.0
+
+
+## Cut every bent face into triangles, which are planar whatever their corners
+## do. Returns the number of faces the brush gained.
+##
+## This is what a vertex editor does instead of refusing the move: a brush face
+## is a plane, and moving one corner of a quad bends it, so the face has to stop
+## being one polygon. The fan is the same one `FaceData.triangulate()` already
+## uses for the bake, so the committed surface is the one that was on screen
+## during the drag.
+##
+## It runs on commit only. Mid-drag the face array has to keep the shape
+## `_capture_drag_geometry()` recorded, because `_write_drag_geometry()` pairs
+## faces with their starting vertices by position in the array.
+##
+## Splitting can leave the brush non-convex — a corner pushed *into* the solid
+## makes a dent whichever diagonal the fan picks — so the caller still runs
+## `check_solid()` afterwards and still has the snapshot to put back.
+func planarize_faces(brush: Node3D) -> int:
+	if not brush or not brush.get("faces"):
+		return 0
+	var rebuilt: Array = []
+	var added := 0
+	for face in brush.faces:
+		if face == null:
+			continue
+		if face.displacement != null or _face_bow(face) <= 0.0:
+			rebuilt.append(face)
+			continue
+		var verts: PackedVector3Array = face.local_verts
+		var template: Dictionary = face.to_dict()
+		for i in range(1, verts.size() - 1):
+			var tri: FaceData = FaceData.from_dict(template)
+			tri.local_verts = PackedVector3Array([verts[0], verts[i], verts[i + 1]])
+			# Four hand-placed UVs do not describe three vertices. Dropping them
+			# puts the triangle back on the face's own projection, which is what
+			# `triangulate()` does with a mismatched array anyway.
+			tri.custom_uvs = PackedVector2Array()
+			tri.ensure_geometry()
+			rebuilt.append(tri)
+		added += verts.size() - 3
+	if added == 0:
+		return 0
+	brush.faces.clear()
+	for f in rebuilt:
+		brush.faces.append(f)
+	return added
+
+
 ## Validate that all faces of a brush form a convex shape, and that each face is
 ## still a plane.
 ## Checks that no vertex lies in front of any face plane.
@@ -185,7 +248,13 @@ func validate_convexity(brush: Node3D) -> bool:
 ## front of the mapper. The two failures need different words: a non-convex
 ## brush is one the user can see is inside out, a bent face looks correct in the
 ## viewport and only goes wrong on export.
-func check_solid(brush: Node3D) -> String:
+##
+## `splitting_allowed` is for the middle of a drag, where a bent face is not yet
+## a problem because `planarize_faces()` will cut it into triangles on commit.
+## A bent face that carries a displacement is still a problem then: the
+## displacement is defined over four corners and a split would throw it away, so
+## that one is refused while the move can still be taken back.
+func check_solid(brush: Node3D, splitting_allowed: bool = false) -> String:
 	if not brush or not brush.get("faces"):
 		return ""
 	var faces: Array = brush.faces
@@ -210,11 +279,11 @@ func check_solid(brush: Node3D) -> String:
 		# The face against its own plane. The tolerance scales with the face so
 		# that a large brush, whose vertex positions carry more float error than
 		# a small one, is not called bent for it.
-		var planarity: Array = _face_planarity(face.local_verts)
-		var bow: float = planarity[0]
-		var extent: float = planarity[1]
-		if bow > maxf(0.02, extent * 0.0005):
-			return "would bend a face %.2f units out of plane" % bow
+		if _face_bow(face) > 0.0:
+			if face.displacement != null:
+				return "would bend a displacement face out of plane"
+			if not splitting_allowed:
+				return "would bend a face %.2f units out of plane" % _face_bow(face)
 	return ""
 
 
@@ -503,7 +572,7 @@ func update_drag_absolute(world_delta: Vector3) -> bool:
 			var brush = _find_brush(brush_id)
 			if brush == null:
 				continue
-			reason = check_solid(brush)
+			reason = check_solid(brush, true)
 			if not reason.is_empty():
 				convex = false
 				break
@@ -594,12 +663,35 @@ func end_drag() -> Dictionary:
 	_drag_active = false
 	var snapshots := _pre_drag_faces.duplicate(true) if changed else {}
 	if changed:
+		# The face array can grow here, which is why it happens on commit and
+		# not during the drag: a bent face is cut into triangles, and
+		# `_write_drag_geometry()` pairs faces with their starting vertices by
+		# position in the array.
+		var refusal := ""
+		for brush_id in _drag_face_vertices:
+			var brush = _find_brush(brush_id)
+			if brush == null:
+				continue
+			planarize_faces(brush)
+			refusal = check_solid(brush)
+			if not refusal.is_empty():
+				break
+		if not refusal.is_empty():
+			# A dent only becomes visible once the bent face is two triangles,
+			# so this is the first point at which the move can be judged.
+			_restore_face_snapshots()
+			_rebuild_drag_previews()
+			_say("Move rejected: %s" % refusal)
+			_clear_drag_state()
+			return {}
 		# Only on commit. Promoting mid-drag would leave a canceled drag with a
 		# CUSTOM brush and no resize handles even though nothing moved.
 		for brush_id in _drag_face_vertices:
 			var brush = _find_brush(brush_id)
 			if brush and brush.has_method("mark_faces_authoritative"):
 				brush.mark_faces_authoritative()
+			if brush and brush.has_method("rebuild_preview"):
+				brush.rebuild_preview()
 	_clear_drag_state()
 	return snapshots
 
@@ -930,6 +1022,7 @@ func merge_vertices(brush_id: String, vert_indices: PackedInt32Array) -> bool:
 		_say("Merge rejected: would leave the brush without a closed solid")
 		return false
 	# Validate
+	planarize_faces(brush)
 	var merge_reason: String = check_solid(brush)
 	if not merge_reason.is_empty():
 		_restore_face_snapshots()

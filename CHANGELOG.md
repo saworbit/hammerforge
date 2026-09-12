@@ -18,6 +18,24 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   functions with plausible names and wiring them up to a "Remove unused" button
   that would strip the palette of materials in use.
 
+### Changed
+- **A vertex move that bends a face now splits it instead of being refused.**
+  A brush face is a plane and every face of a box is a quad, so moving one of
+  its four corners bends it. #364 made that a refusal, which is correct but
+  means no single corner of a box can be dragged at all. On commit each bent
+  face is now cut into triangles along the same fan the bake already uses, so
+  the committed surface is the one that was on screen during the drag, and each
+  triangle keeps its quad's material and projection. Hand-placed UVs on a split
+  face go back to the face projection, because four of them do not describe
+  three vertices. A move that dents the brush is still refused: no
+  triangulation of a bent face makes a concave solid convex, and with the quad
+  in two pieces the dent is finally something the convexity check can see. The
+  refusal now lands on release rather than mid-drag. A bent face carrying a
+  displacement is also still refused, because the displacement is defined over
+  four corners and a split would throw it away. The face count goes up under
+  the mapper, which is the part of this that had to be decided rather than
+  fall out of a missing check.
+
 ### Fixed
 - **A vertex move that bowed a face out of plane passed the convexity check**
   (#364). `validate_convexity()` tested one thing: that no vertex sits in front
