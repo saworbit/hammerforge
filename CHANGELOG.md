@@ -37,6 +37,19 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **The polygon tool built brushes out of degenerate input** (#398, #399). The
+  convexity gate skips any cross product under 0.001 before it looks at the
+  sign, so for points all on one line it never disagreed with itself and
+  reported a convex polygon. Three collinear clicks and Enter gave a five-faced
+  brush with an extent of zero that validated clean, saved, baked and sat in
+  front of every pick. The same blind spot let a vertex be placed on top of one
+  already there, which built side quads spanning no area that still took a
+  fallback normal, a UV projection, a snap target and a place in the bake. A
+  click within a hundredth of a unit of a vertex already placed is now rejected,
+  and a polygon that encloses no area is refused at the point it would extrude,
+  with a warning saying so. The convexity gate itself is unchanged: a run of
+  collinear points part-way through a polygon is a real shape, and it is the
+  finished polygon's area that decides.
 - **Every path tool brush was wound inside out** (#397). `_build_segment_brush()`
   and `_build_miter_brush()` wrote their rings the opposite way round from the
   clockwise-from-outside order every other brush in the editor uses, and nothing
