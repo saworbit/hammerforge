@@ -1534,6 +1534,7 @@ Region streaming keeps large paint grids responsive by loading only nearby regio
 4. Paint normally; regions auto-load around the cursor.
 
 Notes
+- Streaming a region out writes it to disk first, so a level that has never been saved has nowhere to put one and nothing can be reclaimed. The eviction pass says so rather than leaving the budget quietly ignored.
 - Region data is saved to `.hfr` files in `<level>.hfregions/`.
 - The `.hflevel` stores a region index and layer settings.
 

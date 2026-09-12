@@ -37,6 +37,17 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **The region memory budget now counts what it actually freed** (#446).
+  `_unload_region()` is careful: it refuses to throw a region's chunks away if
+  they could not be written to disk first, and says so. `_evict_for_budget()`
+  subtracted the region's bytes from its running total whether or not the
+  region went, so after one refusal it decided the budget had been met and
+  broke out having freed nothing. On a level that has never been saved there is
+  no region path at all, so every write fails and the Memory Budget spin in the
+  Floor Paint tab did nothing whatsoever, in silence. The loop now skips a
+  region it could not free, and when it runs out of candidates with the budget
+  still over it says so once, naming the figures and - on an unsaved level -
+  that the level needs saving before streaming can reclaim anything.
 - **The selection filters reach every face, only the visible ones, and say when
   they match nothing** (#434, #435, #436). Walls was `|n.y| < 0.3`, Floors was
   `n.y > 0.7` and Ceilings was `n.y < -0.7`, so a face 17 to 45 degrees off
