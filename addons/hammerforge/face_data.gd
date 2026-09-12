@@ -628,6 +628,64 @@ func _compute_normal() -> void:
 		normal = Vector3.UP
 
 
+## The material a painted face renders with: the base with the composited albedo
+## on it, and everything else about it kept.
+##
+## This used to build a bare `StandardMaterial3D` and copy three scalars across -
+## `roughness`, `metallic` and `albedo_color` - so painting a face threw away its
+## normal map, its roughness and metallic maps, its emission and its UV
+## transform. On a tiled wall the UV scale going back to 1 is the visible one:
+## the texture on the painted face is suddenly four times the size of the one
+## beside it. Duplicating the base keeps all of it, including slots added to
+## `StandardMaterial3D` in a future Godot version.
+##
+## A `ShaderMaterial` is refused rather than substituted. There is no way to
+## reproduce one with an albedo texture on it, and building a plain
+## `StandardMaterial3D` instead left one baked surface flat beside its
+## neighbours with the shader silently gone. `HFMaterialAtlas.build_atlas()`
+## already treats a ShaderMaterial this way, putting it in `fallback_keys` rather
+## than pretending it can pack it. The base comes back unpainted, with a warning.
+static func composite_painted_material(base: Material, painted: Image) -> Material:
+	if painted == null:
+		return base
+	var tex := ImageTexture.create_from_image(painted)
+	if tex == null:
+		return base
+	if base is ShaderMaterial:
+		_warn_once_about_shader_paint(base)
+		return base
+	var mat: StandardMaterial3D
+	if base is StandardMaterial3D:
+		mat = (base as StandardMaterial3D).duplicate() as StandardMaterial3D
+	else:
+		# No palette material, or one this cannot read. The composite is the
+		# whole surface.
+		mat = StandardMaterial3D.new()
+	mat.albedo_texture = tex
+	return mat
+
+
+## Once per material, not once per face per rebuild. `rebuild_preview()` runs on
+## every paint sample.
+static var _shader_paint_warned: Dictionary = {}
+
+
+static func _warn_once_about_shader_paint(base: Material) -> void:
+	var id := base.get_instance_id()
+	if _shader_paint_warned.has(id):
+		return
+	_shader_paint_warned[id] = true
+	(
+		HFLog
+		. warn(
+			(
+				"HammerForge: a face painted over a ShaderMaterial keeps the shader and drops the paint."
+				+ " A shader cannot be composited over."
+			)
+		)
+	)
+
+
 func _blend_color(base: Color, tex: Color, weight: float, mode: int) -> Color:
 	match mode:
 		PaintBlend.MULTIPLY:

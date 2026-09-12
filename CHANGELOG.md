@@ -37,6 +37,24 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **Painting a face threw away everything about its material but three scalars,
+  and replaced a ShaderMaterial outright** (#412, #413). The editor preview and
+  the bake both built the painted material as a bare `StandardMaterial3D`
+  carrying copies of `roughness`, `metallic` and `albedo_color`. So a painted
+  face lost its normal map, its roughness and metallic maps, its emission and
+  its UV transform. On a tiled wall the UV scale going back to 1 is the visible
+  one - the texture on the painted face is suddenly four times the size of the
+  one beside it - and the normal map vanishing is the one people spend an
+  afternoon on before finding it. The composite only ever needed to replace the
+  albedo, so it now duplicates the base and sets `albedo_texture` on the copy,
+  which keeps everything else including slots added to `StandardMaterial3D` in a
+  future Godot version. A `ShaderMaterial` failed the `is StandardMaterial3D`
+  test, so the new material was built with nothing on it but the composited
+  albedo and the shader was silently gone from that surface. It is now refused
+  rather than substituted, the way `HFMaterialAtlas.build_atlas()` already puts
+  one in `fallback_keys` rather than pretending it can pack it: the face keeps
+  its shader, the paint is not drawn, and a warning says so once. Both call
+  sites now share one composite on `FaceData` rather than keeping a copy each.
 - **A level with more texture than the atlas holds took the atlas down** (#416).
   `_shelf_pack()` reports failure by returning zeros, and `build_atlas()` read
   `width`, `height` and `placements` without looking at `success`. So the
