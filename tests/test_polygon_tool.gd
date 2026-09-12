@@ -114,9 +114,15 @@ func test_degenerate_two_points():
 	assert_true(HFPolygonTool._is_convex_xz(pts), "Two points should pass (degenerate)")
 
 
-func test_collinear_points():
+func test_collinear_points_pass_the_convexity_gate_but_not_the_area_gate():
+	# The convexity gate skips every cross product under its degenerate
+	# threshold, and for points on one line that is all of them, so it never
+	# disagrees with itself. That is why a polygon on one line has to be caught
+	# on the area it encloses instead: it used to extrude to a five-faced brush
+	# with an extent of zero that saved, baked and blocked every pick.
 	var pts = PackedVector3Array([Vector3(0, 0, 0), Vector3(2, 0, 0), Vector3(4, 0, 0)])
-	assert_true(HFPolygonTool._is_convex_xz(pts), "Collinear points should pass")
+	assert_true(HFPolygonTool._is_convex_xz(pts), "Convexity alone cannot see collinear points")
+	assert_almost_eq(HFPolygonTool._polygon_area_xz(pts), 0.0, 0.0001, "They enclose nothing")
 
 
 # ===========================================================================
@@ -319,3 +325,68 @@ func test_focus_loss_cancels_height_pointer_capture_but_keeps_polygon_editable()
 	assert_false(tool._height_pointer_capture)
 	assert_eq(tool._polygon_points.size(), 3)
 	assert_false(tool.cancel_pointer_capture(), "A settled polygon should not be cancelled twice")
+
+
+# ===========================================================================
+# Degenerate input
+# ===========================================================================
+
+
+func test_a_polygon_on_one_line_does_not_extrude():
+	var tool = HFPolygonTool.new()
+	var root := PlacementRoot.new()
+	tool.root = root
+	tool._polygon_points = PackedVector3Array(
+		[Vector3(-64, 0, 0), Vector3(0, 0, 0), Vector3(64, 0, 0)]
+	)
+	tool._phase = tool.Phase.PLACING_VERTS
+	assert_false(tool._begin_height_stage(Vector2.ZERO), "A polygon with no area is refused")
+	assert_eq(tool._phase, tool.Phase.PLACING_VERTS, "and the tool stays where it was")
+	root.free()
+
+
+func test_a_polygon_with_area_still_extrudes():
+	var tool = HFPolygonTool.new()
+	var root := PlacementRoot.new()
+	tool.root = root
+	tool._polygon_points = PackedVector3Array(
+		[Vector3(0, 0, 0), Vector3(64, 0, 0), Vector3(64, 0, 64), Vector3(0, 0, 64)]
+	)
+	tool._phase = tool.Phase.PLACING_VERTS
+	assert_true(tool._begin_height_stage(Vector2.ZERO), "A square is fine")
+	assert_eq(tool._phase, tool.Phase.SETTING_HEIGHT, "and the height stage opens")
+	root.free()
+
+
+func test_a_point_on_top_of_one_already_placed_is_rejected():
+	var existing = PackedVector3Array([Vector3(0, 0, 0), Vector3(64, 0, 0)])
+	assert_true(
+		HFPolygonTool._is_repeat_point(existing, Vector3(0, 0, 0)), "The same point is a repeat"
+	)
+	assert_true(
+		HFPolygonTool._is_repeat_point(existing, Vector3(64, 0, 0.001)),
+		"and so is one inside the epsilon"
+	)
+	assert_false(
+		HFPolygonTool._is_repeat_point(existing, Vector3(64, 0, 64)), "A new corner is not"
+	)
+
+
+func test_a_repeat_click_places_no_second_vertex():
+	# A repeated vertex used to build a side quad spanning no area, which still
+	# took a normal, a UV projection, a snap target and a place in the bake.
+	var tool = HFPolygonTool.new()
+	var root := PlacementRoot.new()
+	var camera := Camera3D.new()
+	tool.root = root
+	root.raycast_result = {"position": Vector3(0, 0, 0)}
+	tool._handle_click(camera, Vector2.ZERO)
+	assert_eq(tool._polygon_points.size(), 1, "First click places a vertex")
+	assert_eq(
+		tool._handle_click(camera, Vector2.ZERO),
+		EditorPlugin.AFTER_GUI_INPUT_STOP,
+		"The repeat is swallowed"
+	)
+	assert_eq(tool._polygon_points.size(), 1, "and places nothing")
+	root.free()
+	camera.free()

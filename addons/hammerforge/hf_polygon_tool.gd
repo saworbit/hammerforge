@@ -23,6 +23,15 @@ var _immediate_mesh: ImmediateMesh = null
 var _material: StandardMaterial3D = null
 const HEIGHT_SENSITIVITY := 0.5
 
+## How close a click has to land to a vertex already placed to count as the same
+## vertex. Points arrive snapped, so anything short of the smallest grid step is
+## a repeat rather than a very short edge.
+const REPEAT_POINT_EPSILON := 0.01
+
+## Smallest XZ area a finished polygon may enclose. Below this the extrusion is a
+## sheet rather than a solid.
+const MIN_POLYGON_AREA := 0.01
+
 
 func tool_name() -> String:
 	return "Polygon"
@@ -185,6 +194,11 @@ func _handle_click(camera: Camera3D, mouse_pos: Vector2) -> int:
 				if hit.distance_to(first) <= threshold:
 					_begin_height_stage(mouse_pos, true)
 					return EditorPlugin.AFTER_GUI_INPUT_STOP
+			# Reject a point on top of one already placed. Two coincident
+			# vertices make a side quad with no area, and the convexity gate
+			# cannot see them because their cross products are all zero.
+			if _is_repeat_point(_polygon_points, hit):
+				return EditorPlugin.AFTER_GUI_INPUT_STOP
 			# Validate convexity
 			if not _validate_convex(_polygon_points, hit):
 				return EditorPlugin.AFTER_GUI_INPUT_STOP  # Reject concave point
@@ -233,13 +247,48 @@ func _handle_escape() -> int:
 # ---------------------------------------------------------------------------
 
 
-func _begin_height_stage(mouse_pos: Vector2, pointer_capture: bool = false) -> void:
+## Returns false and leaves the tool where it is when the polygon encloses
+## nothing. `_is_convex_xz()` cannot catch this: for points on one line every
+## cross product falls under its degenerate threshold, so it never disagrees with
+## itself and reports a convex polygon. Extruding one gives a brush with no
+## volume that still saves, bakes and sits in front of every pick.
+func _begin_height_stage(mouse_pos: Vector2, pointer_capture: bool = false) -> bool:
+	if _polygon_area_xz(_polygon_points) < MIN_POLYGON_AREA:
+		push_warning(
+			(
+				"HammerForge: polygon encloses no area (%d points on one line) - not extruding."
+				% _polygon_points.size()
+			)
+		)
+		return false
 	_phase = Phase.SETTING_HEIGHT
 	_height_pointer_capture = pointer_capture
 	_height_start_mouse = mouse_pos
 	_height = 32.0
 	_height_start_value = _height
 	_update_preview()
+	return true
+
+
+static func _is_repeat_point(existing: PackedVector3Array, new_pt: Vector3) -> bool:
+	for pt in existing:
+		if pt.distance_to(new_pt) < REPEAT_POINT_EPSILON:
+			return true
+	return false
+
+
+## Area the polygon encloses in XZ, by the shoelace sum. Zero when every point
+## is on one line, which is what the convexity gate reads as agreement.
+static func _polygon_area_xz(pts: PackedVector3Array) -> float:
+	var n := pts.size()
+	if n < 3:
+		return 0.0
+	var twice_area := 0.0
+	for i in range(n):
+		var a: Vector3 = pts[i]
+		var b: Vector3 = pts[(i + 1) % n]
+		twice_area += a.x * b.z - b.x * a.z
+	return absf(twice_area) * 0.5
 
 
 func _validate_convex(existing: PackedVector3Array, new_pt: Vector3) -> bool:

@@ -1337,8 +1337,8 @@ The polygon tool lets you draw arbitrary convex shapes and extrude them into bru
 1. Press **P** to activate the Polygon tool.
 2. Click in the viewport to place the first vertex on the nearest exact visible surface. If no geometry is hit, placement uses the plane the grid is drawn on. The point passes through the shared Grid, Vertex, Center, Edge, Perpendicular, and reference-line snap pipeline.
 3. Place more vertices. Each cursor ray starts on the horizontal plane established by the first point, then passes through the shared snap pipeline.
-4. Each new vertex is validated for convexity -- concave placements are rejected.
-5. Close the polygon by clicking near the first vertex (within the auto-close threshold) or pressing **Enter** (requires 3+ vertices).
+4. Each new vertex is validated for convexity -- concave placements are rejected. A click that lands on a vertex already placed is rejected too, because two vertices in one spot make a side face with no area.
+5. Close the polygon by clicking near the first vertex (within the auto-close threshold) or pressing **Enter** (requires 3+ vertices). A polygon whose points are all on one line encloses nothing, so it is refused with a warning rather than extruded into a brush with no volume.
 6. Move the mouse up/down to set the extrusion height, then click to confirm.
 7. The brush is created with full undo/redo support.
 
