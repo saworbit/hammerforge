@@ -114,6 +114,8 @@ Controls:
 Notes:
 - Weights are stored per face as images (default 256x256).
 - A face takes at most 8 paint layers. They are composited into one image at every texel on each preview rebuild and again at bake, so past a handful each extra layer costs preview time, save size and load time without looking different.
+- The painted composite replaces the material's albedo texture and nothing else. The face keeps its normal map, roughness and metallic maps, emission, UV scale and offset, and cull mode, in the preview and in the bake.
+- A face whose material is a `ShaderMaterial` cannot be painted over: there is no way to composite an albedo image into a shader, so the shader is kept, the paint is not drawn, and a warning says so. The material atlas treats a `ShaderMaterial` the same way.
 - Surface paint updates the DraftBrush preview immediately.
 - Surface paint does not modify floor paint layers.
 - If paint affects floors, set `Paint Target = Surface` in the Paint tab → Surface Paint section.

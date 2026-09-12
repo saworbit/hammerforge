@@ -912,15 +912,9 @@ func _material_for_face(
 	if include_paint:
 		var painted = face.get_painted_albedo()
 		if painted:
-			var tex = ImageTexture.create_from_image(painted)
-			var mat = StandardMaterial3D.new()
-			if base_mat is StandardMaterial3D:
-				var base_std := base_mat as StandardMaterial3D
-				mat.roughness = base_std.roughness
-				mat.metallic = base_std.metallic
-				mat.albedo_color = base_std.albedo_color
-			mat.albedo_texture = tex
-			return mat
+			var mat := FaceData.composite_painted_material(base_mat, painted)
+			if mat:
+				return mat
 	if base_mat:
 		return base_mat
 	return _make_default_material()
