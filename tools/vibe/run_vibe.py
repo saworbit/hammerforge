@@ -59,6 +59,8 @@ SCENARIOS = [
     "placement",
     "definitions",
     "operations",
+    "draw-tools",
+    "viewport-tools",
 ]
 
 # Generous: chaos runs 300 operations and cost saves eight levels. A scenario
