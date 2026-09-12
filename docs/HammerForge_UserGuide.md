@@ -1168,7 +1168,9 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Command palette | Shift+? / F1 / Ctrl+K | Searchable action palette with fuzzy search |
 | Operation timeline | Ctrl+Shift+T | Toggle operation replay timeline |
 
-**Rebinding:** Edit `user://hammerforge_keymap.json` (created on first run). Each entry maps an action name to `{"keycode": KEY_*, "ctrl": bool, "shift": bool, "alt": bool}`. Restart the plugin after editing. The JSON file is the interface; there is no rebinding UI.
+**Rebinding:** Edit `user://hammerforge_keymap.json` (created on first run). Each entry maps an action name to `{"keycode": KEY_*, "ctrl": bool, "shift": bool, "alt": bool}`. Restart the plugin after editing. The JSON file is the interface; there is no rebinding UI. Every surface that names a chord — the viewport HUD, the coach marks, the dock tooltips, the hotkey palette and the shortcut list — reads the binding rather than repeating it, so a rebind shows up everywhere at once.
+
+Extrude has two bindings each way. `Extrude Up` is U and `Extrude Up (alt)` is E; `Extrude Down` is J and `Extrude Down (alt)` is Shift+E. They are listed under their own names so you can tell which row you are changing.
 
 An entry that is not a binding, one with no usable `keycode`, or a key that is not a HammerForge action is reported once on load, naming the file and the key, and the default is used for it.
 

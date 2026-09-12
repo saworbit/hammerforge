@@ -225,6 +225,7 @@ static func install_power_user_overlays(plugin: Object) -> void:
 		if plugin.base_control:
 			plugin._coach_marks.theme = plugin.base_control.theme
 		plugin._coach_marks.set_user_prefs(plugin._user_prefs)
+		plugin._coach_marks.set_keymap(plugin.get("_keymap"))
 		plugin._coach_marks.guide_dismissed.connect(plugin._on_coach_mark_dismissed)
 		attach_viewport_overlay(plugin, plugin._coach_marks)
 	if plugin._operation_replay == null:

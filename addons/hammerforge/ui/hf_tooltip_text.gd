@@ -9,6 +9,8 @@ extends RefCounted
 ## To add a new tooltip: add a `<dock_property>: <text>` pair to TEXTS.
 ## To override at runtime: pass an extra dict to `apply_all`.
 
+const HFKeymapType = preload("res://addons/hammerforge/hf_keymap.gd")
+
 const TEXTS := {
 	# --- Build tab: grid + toggles ---
 	"grid_snap": "Grid snap size in units\nControls brush placement and nudge step",
@@ -107,10 +109,10 @@ const TEXTS := {
 	"clear_cuts_btn": "Remove all pending cuts without applying",
 	"commit_cuts_btn": "Apply pending cuts, bake, then freeze/remove cut geometry",
 	"restore_cuts_btn": "Restore frozen committed cuts back to draft tree",
-	"hollow_btn": "Convert selected solid brush into a hollow room (Ctrl+H)",
+	"hollow_btn": "Convert selected solid brush into a hollow room ({hollow})",
 	"hollow_thickness": "Wall thickness for the hollow operation",
-	"move_floor_btn": "Snap selected brushes to the nearest surface below (Ctrl+Shift+F)",
-	"move_ceiling_btn": "Snap selected brushes to the nearest surface above (Ctrl+Shift+C)",
+	"move_floor_btn": "Snap selected brushes to the nearest surface below ({move_to_floor})",
+	"move_ceiling_btn": "Snap selected brushes to the nearest surface above ({move_to_ceiling})",
 	"tie_entity_btn": "Tag selected brushes as a brush entity class",
 	"untie_entity_btn": "Remove brush entity tag from selected brushes",
 	"brush_entity_class_opt": "Choose brush entity class (func_detail, trigger, etc.)",
@@ -138,7 +140,7 @@ const TEXTS := {
 	"import_settings_btn": "Import editor preferences from a settings file",
 	"save_preset_btn": "Save current brush settings as a reusable preset",
 	"quick_play_btn": "Bake and play the current scene",
-	"clip_btn": "Split selected brush along nearest axis plane (Shift+X)",
+	"clip_btn": "Split selected brush along nearest axis plane ({clip})",
 	# --- Entities tab ---
 	"create_entity_btn": "Create a new entity at the cursor position",
 	"io_output_name": "Output event name (e.g. OnTrigger, OnDamaged)",
@@ -165,13 +167,26 @@ static func set_tooltip(control: Control, text: String) -> void:
 
 ## Walk the catalog and apply each tooltip to its named dock property. Skips
 ## entries whose control isn't present yet (e.g. disabled features).
+## One tooltip, with every `{action}` rendered against `keymap`.
+##
+## The chords in this catalogue are tokens rather than literals: the keymap is
+## rebindable, and a tooltip naming a chord that no longer does anything is
+## worse than one naming none.
+static func text_for(prop_name: String, keymap = null) -> String:
+	var text := str(TEXTS.get(prop_name, ""))
+	if keymap == null:
+		keymap = HFKeymapType.load_or_default("")
+	return keymap.format_chords(text)
+
+
 static func apply_all(dock: Object) -> void:
 	if not is_instance_valid(dock):
 		return
+	var keymap = dock.get("_keymap")
 	for prop_name in TEXTS:
 		var control = dock.get(prop_name)
 		if control:
-			set_tooltip(control, TEXTS[prop_name])
+			set_tooltip(control, text_for(prop_name, keymap))
 
 
 ## Apply tooltips for the snap quick-buttons (which carry their snap value

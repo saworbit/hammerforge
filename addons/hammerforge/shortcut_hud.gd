@@ -22,7 +22,12 @@ const HUD_WIDTH := 260.0
 ## and never move; this one holds still the same way.
 const ROW_FONT_SIZE := 12
 
+const HFKeymapType = preload("hf_keymap.gd")
+
 var _last_context := {}
+## The keymap every chord on this HUD is read from. A default one stands in
+## until the plugin hands over the real one, so the lines are never literals.
+var _keymap = null
 var _user_prefs = null  # HFUserPrefs — untyped to avoid preload
 var _row: HBoxContainer
 var _hint_label: Label
@@ -43,7 +48,7 @@ const MODE_HINTS := {
 	"extrude_down_idle": "Click a face to start extruding downward",
 	"paint_floor": "Drag to paint; Alt erases, Shift locks an axis, Ctrl picks material",
 	"paint_surface": "Click brush faces to apply material",
-	"vertex_edit": "Click vertex to select, drag to move, X/Y/Z to lock axis",
+	"vertex_edit": "Click vertex to select, drag to move, {axis_x}/{axis_y}/{axis_z} to lock axis",
 }
 
 
@@ -174,6 +179,21 @@ func _flash_grid_label() -> void:
 		)
 		. set_ease(Tween.EASE_OUT)
 	)
+
+
+## Hand the HUD the keymap its chords come from.
+func set_keymap(km) -> void:
+	_keymap = km
+	var ctx: Dictionary = _last_context.duplicate()
+	_last_context = {}
+	update_context(ctx)
+
+
+## Render `{action}` tokens in a line against the current keymap.
+func _chords(text: String) -> String:
+	if _keymap == null:
+		_keymap = HFKeymapType.load_or_default("")
+	return _keymap.format_chords(text)
 
 
 func update_context(ctx: Dictionary) -> void:
@@ -347,10 +367,10 @@ func _draw_idle_shortcuts(axis_lock: int) -> String:
 	lines.append("Click + Drag: Draw Base")
 	lines.append("Manage > Create Floor: Stable Surface")
 	lines.append("Shift: Square | Alt+Shift: Cube")
-	lines.append("X / Y / Z: Lock Axis%s" % _axis_suffix(axis_lock))
+	lines.append(_chords("{axis_x} / {axis_y} / {axis_z}: Lock Axis%s" % _axis_suffix(axis_lock)))
 	lines.append("Ctrl+Scroll: Brush Size")
 	lines.append("[ / ]: Grid Size Down/Up")
-	lines.append("Ctrl+D: Duplicate | Del: Remove")
+	lines.append(_chords("{duplicate}: Duplicate | {delete}: Remove"))
 	return "\n".join(lines)
 
 
@@ -381,10 +401,10 @@ func _select_mode_shortcuts() -> String:
 	lines.append("Drag Empty Space: Box Select")
 	lines.append("Drag Brush Widgets: Resize/Move")
 	lines.append("Escape: Clear Selection")
-	lines.append("Del: Remove | Ctrl+D: Duplicate")
+	lines.append(_chords("{delete}: Remove | {duplicate}: Duplicate"))
 	lines.append("Arrows: Nudge | PgUp/Dn: Y-Nudge")
-	lines.append("Ctrl+H: Hollow | Shift+X: Clip")
-	lines.append("Ctrl+Shift+F/C: Floor/Ceiling")
+	lines.append(_chords("{hollow}: Hollow | {clip}: Clip"))
+	lines.append(_chords("{move_to_floor} / {move_to_ceiling}: Floor / Ceiling"))
 	return "\n".join(lines)
 
 
@@ -392,7 +412,7 @@ func _extrude_idle_shortcuts(dir_label: String) -> String:
 	var lines := PackedStringArray()
 	lines.append("-- Extrude %s --" % dir_label)
 	lines.append("Click face + Drag: Extrude %s" % dir_label)
-	lines.append("U: Extrude Up | J: Extrude Down")
+	lines.append(_chords("{tool_extrude_up}: Extrude Up | {tool_extrude_down}: Extrude Down"))
 	lines.append("Right-click: Cancel")
 	return "\n".join(lines)
 
@@ -412,10 +432,17 @@ func _floor_paint_shortcuts() -> String:
 	lines.append("-- Floor Paint --")
 	lines.append("Click + Drag: Paint | Alt: Erase")
 	lines.append("Shift+Drag: Axis Lock | Ctrl+Click: Pick Material")
-	lines.append("B: Brush | E: Erase | R: Rect")
-	lines.append("L: Line | K: Bucket | Esc: Cancel Stroke")
-	lines.append("X/Z: Mirror | Y: Raise Last | H: Room Stamp")
-	lines.append("Enter: Confirm Connector Ghost")
+	lines.append(_chords("{paint_bucket}: Brush | {paint_erase}: Erase | {paint_ramp}: Rect"))
+	lines.append(_chords("{paint_line}: Line | {paint_fill}: Bucket | Esc: Cancel Stroke"))
+	lines.append(
+		_chords(
+			(
+				"{paint_mirror_x}/{paint_mirror_z}: Mirror | {paint_raise}: Raise Last"
+				+ " | {paint_room}: Room Stamp"
+			)
+		)
+	)
+	lines.append(_chords("{paint_confirm_connector}: Confirm Connector Ghost"))
 	return "\n".join(lines)
 
 
@@ -433,10 +460,10 @@ func _vertex_edit_shortcuts() -> String:
 	lines.append("Click: Select vertex")
 	lines.append("Shift+Click: Multi-select")
 	lines.append("Drag: Move selected")
-	lines.append("E: Toggle edge mode")
-	lines.append("Ctrl+W: Merge verts | Ctrl+E: Split edge")
-	lines.append("X / Y / Z: Lock axis")
-	lines.append("Esc: Deselect / V: Exit")
+	lines.append(_chords("{vertex_edge_mode}: Toggle edge mode"))
+	lines.append(_chords("{vertex_merge}: Merge verts | {vertex_split_edge}: Split edge"))
+	lines.append(_chords("{axis_x} / {axis_y} / {axis_z}: Lock axis"))
+	lines.append(_chords("Esc: Deselect / {vertex_edit}: Exit"))
 	return "\n".join(lines)
 
 

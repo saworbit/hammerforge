@@ -1109,6 +1109,10 @@ func _is_perf_panel_visible() -> bool:
 func set_keymap(km: HFKeymap) -> void:
 	_keymap = km
 	_update_toolbar_shortcut_labels()
+	# The tooltips name chords too, and they were applied in _ready(), before
+	# the plugin got here with the real keymap.
+	if is_node_ready():
+		_apply_all_tooltips()
 
 
 func _update_toolbar_shortcut_labels() -> void:
