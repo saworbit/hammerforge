@@ -535,6 +535,21 @@ func _has_positive_structural_brush(container: Node3D) -> bool:
 	return false
 
 
+## Whether any face of the level has been given its own material.
+##
+## Worth saying out loud before a bake drops them: the Materials panel, the face
+## filters and "Apply to Selected Faces" all work on the preview whether or not
+## the bake is going to carry the result.
+func _faces_carry_materials() -> bool:
+	for brush in collect_face_bake_brushes():
+		if not (is_instance_valid(brush) and brush is DraftBrush):
+			continue
+		for face in (brush as DraftBrush).faces:
+			if face and face.material_idx >= 0:
+				return true
+	return false
+
+
 func _has_effective_structural_subtractors() -> bool:
 	for container in [root.draft_brushes_node, root.generated_floors, root.generated_walls]:
 		if _container_has_effective_subtractor(container):
@@ -716,6 +731,14 @@ func _bake_impl(
 		# Keep every effective cutter by switching this bake to CSG.
 		bake_options["use_face_materials"] = false
 		root._log("Face-material bake switched to CSG to preserve active cuts")
+	elif not root.bake_use_face_materials and _faces_carry_materials():
+		# The only log on this path used to fire the other way round, so the
+		# silent case was a mapper texturing a level, pressing Bake and getting one
+		# material over everything with nothing said about it.
+		root.emit_signal(
+			"user_message", "Per-face materials were not baked: Use Face Materials is off", 1
+		)
+		root._log("Per-face materials dropped: the CSG path resolves one material per brush")
 	if not _has_positive_structural_sources():
 		baked = _bake_heightmap_only(layer)
 		if baked == null and _has_nonstructural_sources():

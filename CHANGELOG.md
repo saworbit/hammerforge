@@ -63,6 +63,21 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   rebind list also showed two rows called "Extrude Up" and two called "Extrude
   Down", because `get_action_label()` gave the same name to an action and its
   alias; the aliases are named as aliases now.
+- **Per-face materials reach the baked mesh** (#466). The bake has two paths: the
+  face-material path triangulates each face and resolves its own material, and
+  the CSG path does not. Which one runs was decided by
+  `bake_use_face_materials`, which defaulted to false, with the check box that
+  mirrors it unticked inside the Advanced fold of the Test tab. So the Materials
+  panel, the face selection filters, "Apply to Selected Faces" and the UV
+  controls all worked on the preview and stopped at the bake: a mapper textured a
+  level, pressed Bake, and got one material over everything with nothing said
+  about it. The only log line on that path fired the other way round - when the
+  flag was *on* and a cut forced the CSG path - so the silent case was the
+  default one. The setting now defaults on, and the automatic fallback to CSG for
+  a level with structural subtractors is unchanged, since independent face
+  triangulation has no boolean subtraction stage and that fallback is what keeps
+  the cuts. Turning it off is still a choice, and a bake that drops face
+  materials because of it now says so.
 - **The operation timeline's Replay button can be clicked, and its glyphs name
   the operation** (#437, #438). The button lives in the panel header, outside
   the entry it applies to, and was shown on hover and hidden again on

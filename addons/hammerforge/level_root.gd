@@ -135,7 +135,14 @@ var _bake_lightmap_texel_size: float = 0.1
 		)
 	get:
 		return _bake_lightmap_texel_size
-@export var bake_use_face_materials: bool = false
+## Whether the bake triangulates each face and resolves its own material.
+##
+## Off, the CSG path runs and every face of the level comes out on one surface
+## with one material: the Materials panel, the face selection filters, "Apply to
+## Selected Faces" and the UV controls all work on the preview and stop at the
+## bake. `HFBakeSystem` falls back to CSG on its own, and says so, for a level
+## with structural subtractors - which is the case this path cannot serve.
+@export var bake_use_face_materials: bool = true
 @export var bake_navmesh: bool = false
 var _bake_navmesh_cell_size: float = 0.3
 @export var bake_navmesh_cell_size: float = 0.3:
