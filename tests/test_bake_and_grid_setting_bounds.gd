@@ -51,8 +51,16 @@ func test_no_bake_or_grid_setting_keeps_a_value_that_is_not_a_number():
 
 
 func test_the_settings_that_must_be_positive_are_floored():
+	# The legal chunk sizes are 0, which the bake reads as "do not chunk", and
+	# anything from MIN_BAKE_CHUNK_SIZE up. A negative number is neither, and the
+	# nearest legal value to it is off - not 1, which is the finest chunking the
+	# editor can do and the slowest bake there is (#481).
 	root.bake_chunk_size = -32.0
-	assert_gt(root.bake_chunk_size, 0.0, "a chunk size is a size")
+	assert_eq(
+		root.bake_chunk_size,
+		0.0,
+		"a negative chunk size means no chunking, not the finest chunking there is"
+	)
 	root.bake_lightmap_texel_size = 0.0
 	assert_gt(root.bake_lightmap_texel_size, 0.0, "a texel size is a size")
 	root.bake_navmesh_cell_size = 0.0
@@ -108,7 +116,7 @@ func test_a_poisoned_settings_block_from_a_file_does_not_land():
 	)
 	assert_true(is_finite(root.grid_snap), "grid snap is still a snap")
 	assert_gt(root.grid_snap, 0.0, "and not silently off")
-	assert_gt(root.bake_chunk_size, 0.0)
+	assert_eq(root.bake_chunk_size, 0.0, "-1 is not a chunk size; off is the nearest one")
 	assert_gt(root.bake_lightmap_texel_size, 0.0)
 	assert_true(is_finite(root.bake_navmesh_cell_size))
 	assert_lte(root.bake_convex_simplify, 1.0)

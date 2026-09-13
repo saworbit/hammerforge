@@ -78,8 +78,7 @@ func _both_ends_of_every_spin() -> void:
 				)
 	note("bindings where the two ends disagree", disagreements.size())
 	if not disagreements.is_empty():
-		known(
-			481,
+		flag(
 			"dock spins offer values the level refuses, and go on showing them",
 			(
 				(
