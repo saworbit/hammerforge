@@ -118,4 +118,6 @@ func connect_signals() -> void:
 	if dock._io_wiring_panel:
 		dock._io_wiring_panel.connection_added.connect(dock._on_wiring_connection_added)
 		dock._io_wiring_panel.preset_applied.connect(dock._on_wiring_preset_applied)
+		dock._io_wiring_panel.will_change.connect(dock._on_wiring_will_change)
+		dock._io_wiring_panel.change_abandoned.connect(dock._on_wiring_change_abandoned)
 		dock._io_wiring_panel.highlight_toggled.connect(dock._on_wiring_highlight_toggled)

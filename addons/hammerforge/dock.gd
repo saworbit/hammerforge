@@ -534,6 +534,9 @@ var io_add_btn: Button = null
 var io_list: ItemList = null
 var io_remove_btn: Button = null
 var _io_wiring_panel = null  # HFIOWiringPanel
+## Level state from just before the wiring panel changed something. The panel
+## does the work itself, so the undo step is registered after the fact.
+var _wiring_before_state: Dictionary = {}
 # Entity I/O sections (context-hidden when no entity selected)
 var _entity_io_section: VBoxContainer = null
 var _io_wiring_section: VBoxContainer = null
@@ -3059,7 +3062,15 @@ func _log(message: String, force: bool = false) -> void:
 	print("[HammerForge Dock] %s" % message)
 
 
-func _commit_state_action(action_name: String, method_name: String, args: Array = []) -> void:
+## Register one level-changing command as an undo step.
+##
+## Set `absolute_redo` when any argument is a live node. `restore_state()` clears
+## the brushes and entities and rebuilds them from their captured info, so a node
+## an undo passed over is freed and the reference the redo holds is dangling. With
+## it on, the do operation becomes a snapshot of the result instead of the call.
+func _commit_state_action(
+	action_name: String, method_name: String, args: Array = [], absolute_redo: bool = false
+) -> void:
 	if not level_root:
 		return
 	HFUndoHelper.commit(
@@ -3069,7 +3080,9 @@ func _commit_state_action(action_name: String, method_name: String, args: Array 
 		method_name,
 		args,
 		false,
-		Callable(self, "record_history")
+		Callable(self, "record_history"),
+		"",
+		absolute_redo
 	)
 
 
@@ -5640,6 +5653,14 @@ func _on_wiring_connection_added(
 
 func _on_wiring_preset_applied(source: Node, preset_name: String, count: int) -> void:
 	HFDockEntityHandler.on_wiring_preset_applied(self, source, preset_name, count)
+
+
+func _on_wiring_will_change(action_name: String) -> void:
+	HFDockEntityHandler.on_wiring_will_change(self, action_name)
+
+
+func _on_wiring_change_abandoned() -> void:
+	HFDockEntityHandler.on_wiring_change_abandoned(self)
 
 
 func _on_wiring_highlight_toggled(enabled: bool) -> void:
