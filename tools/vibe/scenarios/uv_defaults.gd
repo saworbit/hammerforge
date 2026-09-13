@@ -107,8 +107,7 @@ func _every_shape_as_drawn() -> void:
 					)
 		note("%s: faces with no UV area" % SHAPES[shape], "%d of %d  %s" % [flat, total, examples])
 		if flat > 0:
-			known(
-				463,
+			flag(
 				"a new %s has %d face(s) no texture can be seen on" % [SHAPES[shape], flat],
 				(
 					"FaceData.uv_projection defaults to PLANAR_Z -- (x, y) -> (u, v) -- and"
@@ -150,9 +149,24 @@ func _what_the_box_uv_button_does() -> void:
 	# Texture lock reads the same field. A projection that does not contain the
 	# face cannot be world locked through a turn either, so the lock declines.
 	var top = brush.get_faces()[2]
-	top.uv_projection = FaceData.UVProjection.PLANAR_Z
+	note("the top face's projection, as drawn", top.uv_projection)
 	var locked: bool = top.adjust_uvs_for_rotation(Basis(Vector3.UP, deg_to_rad(90.0)))
 	note("texture lock compensates the top face of a default box under a yaw", locked)
+	if not locked:
+		flag(
+			"texture lock declines on a face of a brush nobody has re-projected",
+			(
+				"adjust_uvs_for_rotation() refuses any face whose projection plane the turn"
+				+ " takes away. A projection that does not contain the face cannot be world"
+				+ " locked through a turn, so a rotate with texture lock on changes nothing."
+			)
+		)
+	var planar = brush.get_faces()[3]
+	planar.uv_projection = FaceData.UVProjection.PLANAR_Z
+	note(
+		"the same turn on a face forced back to PLANAR_Z",
+		planar.adjust_uvs_for_rotation(Basis(Vector3.UP, deg_to_rad(90.0)))
+	)
 	top.uv_projection = FaceData.UVProjection.BOX_UV
 	var locked_box: bool = top.adjust_uvs_for_rotation(Basis(Vector3.UP, deg_to_rad(90.0)))
 	note("the same face with Box UV", locked_box)

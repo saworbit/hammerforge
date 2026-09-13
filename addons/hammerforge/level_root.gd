@@ -80,6 +80,13 @@ const MIN_GRID_PLANE_SIZE := 1.0
 const MAX_GRID_PLANE_SIZE := 100000.0
 const MIN_ROTATE_SNAP_DEGREES := 1.0
 const MAX_ROTATE_SNAP_DEGREES := 180.0
+## Both bake mode settings are three-value enums, and both are read with a
+## `match` or index arithmetic at bake time, so an out-of-range one falls through
+## to whichever branch the default happens to be and the level bakes differently
+## from what its own file says. `@export_range` is an inspector hint and does not
+## clamp an assignment from code.
+const MIN_BAKE_MODE := 0
+const MAX_BAKE_MODE := 2
 const MIN_BAKE_CHUNK_SIZE := 1.0
 const MAX_BAKE_CHUNK_SIZE := 16384.0
 const MIN_LIGHTMAP_TEXEL_SIZE := 0.001
@@ -118,9 +125,17 @@ var _grid_snap: float = 16.0
 var _bake_chunk_size: float = 32.0
 @export var bake_chunk_size: float = 32.0:
 	set(value):
-		_bake_chunk_size = _bounded(
-			value, MIN_BAKE_CHUNK_SIZE, MAX_BAKE_CHUNK_SIZE, _bake_chunk_size
-		)
+		# 0 is the bake's own "do not chunk" - `bake()` reads `> 0.0` - and it is
+		# the bottom of the dock spin's range. Clamping it up to the minimum gave
+		# the opposite of what the control said: the finest chunking there is,
+		# where the mapper had asked for none. Anything below 0 is not a size
+		# either, so it means off as well.
+		if is_finite(value) and value <= 0.0:
+			_bake_chunk_size = 0.0
+		else:
+			_bake_chunk_size = _bounded(
+				value, MIN_BAKE_CHUNK_SIZE, MAX_BAKE_CHUNK_SIZE, _bake_chunk_size
+			)
 	get:
 		return _bake_chunk_size
 @export var bake_merge_meshes: bool = false
@@ -135,7 +150,14 @@ var _bake_lightmap_texel_size: float = 0.1
 		)
 	get:
 		return _bake_lightmap_texel_size
-@export var bake_use_face_materials: bool = false
+## Whether the bake triangulates each face and resolves its own material.
+##
+## Off, the CSG path runs and every face of the level comes out on one surface
+## with one material: the Materials panel, the face selection filters, "Apply to
+## Selected Faces" and the UV controls all work on the preview and stop at the
+## bake. `HFBakeSystem` falls back to CSG on its own, and says so, for a level
+## with structural subtractors - which is the case this path cannot serve.
+@export var bake_use_face_materials: bool = true
 @export var bake_navmesh: bool = false
 var _bake_navmesh_cell_size: float = 0.3
 @export var bake_navmesh_cell_size: float = 0.3:
@@ -178,7 +200,13 @@ var _bake_navmesh_agent_radius: float = 0.4
 ## Minimum face-group area (world units²) to generate an occluder.  Smaller
 ## surfaces rarely block enough pixels to justify the culling overhead.
 @export var bake_occluder_min_area: float = 4.0
-@export var bake_connector_mode: int = 0  # HFAutoConnector.ConnectorMode (RAMP=0, STAIRS=1, AUTO=2)
+var _bake_connector_mode: int = 0
+## HFAutoConnector.ConnectorMode (RAMP=0, STAIRS=1, AUTO=2).
+@export var bake_connector_mode: int = 0:
+	set(value):
+		_bake_connector_mode = clampi(value, MIN_BAKE_MODE, MAX_BAKE_MODE)
+	get:
+		return _bake_connector_mode
 var _bake_connector_stair_height: float = 0.25
 @export var bake_connector_stair_height: float = 0.25:
 	set(value):
@@ -199,7 +227,12 @@ var _bake_connector_width: int = 2
 @export var bake_use_thread_pool: bool = true
 ## Collision shape strategy: 0 = single trimesh (legacy), 1 = per-brush convex hulls,
 ## 2 = per-visgroup partitioned bodies.
-@export_range(0, 2, 1) var bake_collision_mode: int = 0
+var _bake_collision_mode: int = 0
+@export_range(0, 2, 1) var bake_collision_mode: int = 0:
+	set(value):
+		_bake_collision_mode = clampi(value, MIN_BAKE_MODE, MAX_BAKE_MODE)
+	get:
+		return _bake_collision_mode
 ## When bake_collision_mode >= 1, generate a convex hull per brush instead of one
 ## monolithic ConcavePolygonShape3D.  Per-brush convex shapes are faster for physics
 ## broadphase and produce better navigation meshes.
@@ -2688,13 +2721,19 @@ func _resolve_playtest_spawn() -> Dictionary:
 					break
 	var spawn_pos := Vector3(0, 2, 0)
 	var found_spawn := spawn != null
-	var height_offset := 1.0
 	if found_spawn:
 		spawn_pos = (spawn.global_position if spawn.is_inside_tree() else spawn.position)
 		if spawn is DraftEntity:
 			spawn_yaw = deg_to_rad(float(spawn.entity_data.get("angle", 0.0)))
-			height_offset = float(spawn.entity_data.get("height_offset", 1.0))
-	var offset := Vector3(0, height_offset, 0) if found_spawn else Vector3.ZERO
+	# A spawn marker is the player's feet. `HFSpawnSystem` builds its test capsule
+	# at `pos + PLAYER_HEIGHT / 2` and puts a marker at
+	# `floor + FEET_OFFSET + height_offset`, and the user guide calls
+	# `height_offset` extra height above the floor for safety - so it is already in
+	# the marker's position. What goes here is the body, and `playtest_fps.gd` is a
+	# CharacterBody3D whose capsule is centred on the node, so it sits half a player
+	# above the feet. Adding `height_offset` again counted it twice and put the
+	# feet through the floor the marker was standing on.
+	var offset := Vector3(0, HFSpawnSystem.PLAYER_HEIGHT / 2.0, 0)
 	return {"position": spawn_pos + offset, "yaw": spawn_yaw if found_spawn else 0.0}
 
 

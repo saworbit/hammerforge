@@ -22,7 +22,7 @@ static func on_paint_layer_selected(dock: Object, index: int) -> void:
 static func on_paint_layer_add(dock: Object) -> void:
 	if dock == null or not dock.level_root:
 		return
-	dock.level_root.add_paint_layer()
+	dock._commit_state_action("Add Paint Layer", "add_paint_layer")
 	dock._refresh_paint_layers()
 
 
@@ -60,7 +60,7 @@ static func on_paint_layer_rename(dock: Object) -> void:
 static func on_paint_layer_remove(dock: Object) -> void:
 	if dock == null or not dock.level_root:
 		return
-	dock.level_root.remove_active_paint_layer()
+	dock._commit_state_action("Remove Paint Layer", "remove_active_paint_layer")
 	dock._refresh_paint_layers()
 
 
@@ -72,13 +72,13 @@ static func on_heightmap_import(dock: Object) -> void:
 static func on_heightmap_import_selected(dock: Object, path: String) -> void:
 	if dock == null or not dock.level_root:
 		return
-	dock.level_root.import_heightmap(path)
+	dock._commit_state_action("Import Heightmap", "import_heightmap", [path])
 
 
 static func on_heightmap_generate(dock: Object) -> void:
 	if dock == null or not dock.level_root:
 		return
-	dock.level_root.generate_heightmap_noise()
+	dock._commit_state_action("Generate Noise", "generate_heightmap_noise")
 
 
 static func on_heightmap_convert(dock: Object) -> void:
@@ -119,6 +119,9 @@ static func on_heightmap_convert(dock: Object) -> void:
 			result.layer.grid = grid
 	result.layer.chunk_size = mgr.chunk_size
 	result.layer.name = "Layer_%s" % str(result.layer.layer_id)
+	# Taken here, past every early return, so an abandoned convert leaves no
+	# half-registered step behind.
+	var before_convert: Dictionary = dock.level_root.capture_full_state()
 	mgr.add_child(result.layer)
 	mgr.layers.append(result.layer)
 	mgr.active_layer_index = mgr.layers.size() - 1
@@ -129,6 +132,7 @@ static func on_heightmap_convert(dock: Object) -> void:
 		and dock.level_root.paint_system.has_method("regenerate_paint_layers")
 	):
 		dock.level_root.paint_system.regenerate_paint_layers()
+	dock._commit_done_state_action("Convert to Heightmap", before_convert)
 	dock.level_root.emit_signal(
 		"user_message",
 		(

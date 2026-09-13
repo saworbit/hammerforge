@@ -92,8 +92,7 @@ func _two_materials_on_one_brush() -> void:
 	note("distinct materials on them", _distinct(with_flag))
 
 	if _distinct(as_shipped) < 2 and _distinct(with_flag) >= 2:
-		known(
-			466,
+		flag(
 			"per-face materials do not reach the bake a level starts with",
 			(
 				(
