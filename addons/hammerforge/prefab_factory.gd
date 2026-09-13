@@ -13,7 +13,7 @@ static func create_prefab(type: int, size: Vector3, sides: int = 4) -> CSGShape3
 			var cylinder = CSGCylinder3D.new()
 			cylinder.height = size.y
 			cylinder.radius = max(size.x, size.z) * 0.5
-			cylinder.sides = 16
+			cylinder.sides = DraftBrush.round_sides(sides)
 			brush = cylinder
 		LevelRootType.BrushShape.SPHERE, LevelRootType.BrushShape.ELLIPSOID:
 			var sphere = CSGSphere3D.new()
@@ -33,7 +33,7 @@ static func create_prefab(type: int, size: Vector3, sides: int = 4) -> CSGShape3
 			cone.cone = true
 			cone.height = size.y
 			cone.radius = max(size.x, size.z) * 0.5
-			cone.sides = 16
+			cone.sides = DraftBrush.round_sides(sides)
 			brush = cone
 		LevelRootType.BrushShape.PYRAMID:
 			var pyramid_mesh = _pyramid_mesh(size, safe_sides)
