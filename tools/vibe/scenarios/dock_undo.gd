@@ -106,8 +106,7 @@ func _visgroups_and_groups() -> void:
 	var selected_after: PackedInt32Array = dock.visgroup_list.get_selected_items()
 	note("visgroup list selection after Add Sel", selected_after)
 	if selected_after.is_empty():
-		known(
-			476,
+		flag(
 			"Add Sel clears the visgroup it just added to",
 			(
 				"HFDockVisgroupHandler.on_visgroup_add_selection() ends in refresh_visgroup_ui(),"
@@ -134,8 +133,7 @@ func _visgroups_and_groups() -> void:
 		!= HFVibe.canonical(after_delete.get("visgroups", []))
 	)
 	if state_moved and not _undo_wrapped("on_visgroup_delete"):
-		known(
-			470,
+		flag(
 			"Delete Visgroup is not undoable",
 			(
 				"on_visgroup_delete() calls level_root.remove_visgroup() directly. That erases"
@@ -160,8 +158,7 @@ func _visgroups_and_groups() -> void:
 		)
 		and not _undo_wrapped("on_group_selection")
 	):
-		known(
-			471,
+		flag(
 			"Group Selection and Ungroup are not undoable",
 			(
 				"Both call record_history(), which only appends a row to the dock's own history"
@@ -190,8 +187,7 @@ func _entities_and_their_wiring() -> void:
 	note("entities added by Create Entity", created)
 	note("Create Entity registers an undo step", _undo_wrapped("on_create_entity"))
 	if created > 0 and not _undo_wrapped("on_create_entity"):
-		known(
-			472,
+		flag(
 			"Create Entity is not undoable",
 			(
 				"on_create_entity() calls level_root.add_entity() straight. Placing a brush"
@@ -229,8 +225,7 @@ func _entities_and_their_wiring() -> void:
 		)
 		and not _undo_wrapped("on_io_add")
 	):
-		known(
-			473,
+		flag(
 			"Entity I/O add and remove are not undoable",
 			(
 				"on_io_add() and on_io_remove() call add_entity_output()/remove_entity_output()"
@@ -278,8 +273,7 @@ func _paint_layers() -> void:
 	note("captured paint layers, before and after Remove", [painted_before, painted_after])
 	note("Remove Layer registers an undo step", _undo_wrapped("on_paint_layer_remove"))
 	if painted_after < painted_before and not _undo_wrapped("on_paint_layer_remove"):
-		known(
-			474,
+		flag(
 			"Remove Paint Layer is not undoable",
 			(
 				"on_paint_layer_remove() calls remove_active_paint_layer() straight, and the"
@@ -302,8 +296,7 @@ func _paint_layers() -> void:
 		)
 		and not _undo_wrapped("on_heightmap_generate")
 	):
-		known(
-			475,
+		flag(
 			"Generate Noise overwrites the heightmap with no undo step",
 			(
 				"on_heightmap_generate() calls generate_heightmap_noise() directly. It replaces"

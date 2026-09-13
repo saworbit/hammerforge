@@ -114,6 +114,33 @@ func test_create_entity_redo_survives_the_undo_that_freed_the_entity() -> void:
 	)
 
 
+func test_without_an_absolute_redo_the_same_command_redoes_a_dead_node() -> void:
+	# Why the flag is not optional on these commands. Registered the ordinary way,
+	# the do operation names the call and carries the node, and the undo in
+	# between is what takes that node out of the tree.
+	var root := _fresh_root()
+	var fake = _fake_undo()
+	var entity := DraftEntity.new()
+	entity.name = "DraftEntity"
+	entity.set_meta("is_entity", true)
+
+	_commit(fake, root, "Create Entity", "add_entity", [entity], false)
+	var do_calls: Array = fake.entries[-1]["do"]
+	assert_eq(do_calls[0]["method"], "add_entity", "The ordinary path registers the call itself")
+	assert_eq(
+		do_calls[0]["args"][0],
+		entity,
+		"and holds the node, which is the reference the undo invalidates"
+	)
+
+	fake.undo()
+	assert_eq(root.entities_node.get_child_count(), 0)
+	assert_false(
+		root.entities_node.get_children().has(entity),
+		"The undo removed the node the redo would be handed"
+	)
+
+
 func test_delete_visgroup_undo_restores_the_record_and_the_membership() -> void:
 	var root := _fresh_root()
 	var fake = _fake_undo()
