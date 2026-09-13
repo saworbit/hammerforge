@@ -149,8 +149,7 @@ func _into_the_map_file() -> void:
 		if line.contains('"color"'):
 			colour_line = line.strip_edges()
 	if colour_line.contains("(") or colour_line.contains(","):
-		known(
-			479,
+		flag(
 			"a colour entity property is written into the .map file in Godot's own notation",
 			(
 				(
