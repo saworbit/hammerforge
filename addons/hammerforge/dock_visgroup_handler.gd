@@ -82,6 +82,32 @@ static func refresh_visgroup_ui(dock: Object) -> void:
 		dock.visgroup_list.add_item(prefix + visgroup_name)
 
 
+## The highlighted row, or -1. `refresh_visgroup_ui()` clears the list and
+## rebuilds it, so a command that refreshes has to put the highlight back or the
+## next one reads no visgroup and does nothing.
+static func get_selected_visgroup_index(dock: Object) -> int:
+	if dock == null or not dock.visgroup_list:
+		return -1
+	var selected = dock.visgroup_list.get_selected_items()
+	return -1 if selected.is_empty() else int(selected[0])
+
+
+static func reselect_visgroup_row(dock: Object, index: int) -> void:
+	if dock == null or not dock.visgroup_list or index < 0:
+		return
+	if index < dock.visgroup_list.item_count:
+		dock.visgroup_list.select(index)
+
+
+## The name on the highlighted row, or "". Commands that need one report the
+## miss rather than returning quietly, which used to read as a dead button.
+static func require_visgroup_name(dock: Object, action: String) -> String:
+	var visgroup_name := get_selected_visgroup_name(dock)
+	if visgroup_name == "" and dock:
+		dock._set_status("%s: select a visgroup first" % action, true)
+	return visgroup_name
+
+
 static func get_selected_visgroup_name(dock: Object) -> String:
 	if dock == null or not dock.visgroup_list:
 		return ""
@@ -100,7 +126,7 @@ static func on_visgroup_add(dock: Object) -> void:
 	var visgroup_name = dock.visgroup_name_input.text.strip_edges()
 	if visgroup_name == "" or not dock.level_root:
 		return
-	dock.level_root.create_visgroup(visgroup_name)
+	dock._commit_state_action("New Visgroup", "create_visgroup", [visgroup_name])
 	dock.visgroup_name_input.text = ""
 	refresh_visgroup_ui(dock)
 
@@ -131,34 +157,48 @@ static func on_visgroup_item_clicked(
 static func on_visgroup_add_selection(dock: Object) -> void:
 	if dock == null:
 		return
-	var visgroup_name = get_selected_visgroup_name(dock)
+	var visgroup_name = require_visgroup_name(dock, "Add to Visgroup")
 	if visgroup_name == "" or not dock.level_root:
 		return
 	if not dock._guard_selection_action("Add to Visgroup"):
 		return
-	dock.level_root.add_selection_to_visgroup(visgroup_name, dock._selection_nodes)
+	var row := get_selected_visgroup_index(dock)
+	dock._commit_state_action(
+		"Add to Visgroup",
+		"add_selection_to_visgroup",
+		[visgroup_name, dock._selection_nodes.duplicate()],
+		true
+	)
 	refresh_visgroup_ui(dock)
+	reselect_visgroup_row(dock, row)
 
 
 static func on_visgroup_remove_selection(dock: Object) -> void:
 	if dock == null:
 		return
-	var visgroup_name = get_selected_visgroup_name(dock)
+	var visgroup_name = require_visgroup_name(dock, "Remove from Visgroup")
 	if visgroup_name == "" or not dock.level_root:
 		return
 	if not dock._guard_selection_action("Remove from Visgroup"):
 		return
-	dock.level_root.remove_selection_from_visgroup(visgroup_name, dock._selection_nodes)
+	var row := get_selected_visgroup_index(dock)
+	dock._commit_state_action(
+		"Remove from Visgroup",
+		"remove_selection_from_visgroup",
+		[visgroup_name, dock._selection_nodes.duplicate()],
+		true
+	)
 	refresh_visgroup_ui(dock)
+	reselect_visgroup_row(dock, row)
 
 
 static func on_visgroup_delete(dock: Object) -> void:
 	if dock == null:
 		return
-	var visgroup_name = get_selected_visgroup_name(dock)
+	var visgroup_name = require_visgroup_name(dock, "Delete Visgroup")
 	if visgroup_name == "" or not dock.level_root:
 		return
-	dock.level_root.remove_visgroup(visgroup_name)
+	dock._commit_state_action("Delete Visgroup", "remove_visgroup", [visgroup_name])
 	refresh_visgroup_ui(dock)
 
 
@@ -167,8 +207,12 @@ static func on_group_selection(dock: Object) -> void:
 		return
 	if not dock._guard_selection_action("Group Selection"):
 		return
-	dock.level_root.group_selection("group_%d" % Time.get_ticks_usec(), dock._selection_nodes)
-	dock.record_history("Group Selection")
+	dock._commit_state_action(
+		"Group Selection",
+		"group_selection",
+		["group_%d" % Time.get_ticks_usec(), dock._selection_nodes.duplicate()],
+		true
+	)
 
 
 static func on_ungroup_selection(dock: Object) -> void:
@@ -176,8 +220,9 @@ static func on_ungroup_selection(dock: Object) -> void:
 		return
 	if not dock._guard_selection_action("Ungroup Selection"):
 		return
-	dock.level_root.ungroup_nodes(dock._selection_nodes)
-	dock.record_history("Ungroup Selection")
+	dock._commit_state_action(
+		"Ungroup Selection", "ungroup_nodes", [dock._selection_nodes.duplicate()], true
+	)
 
 
 static func setup_cordon_ui(dock: Object) -> void:

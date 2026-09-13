@@ -37,6 +37,42 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **Every dock command that changes the level now registers an undo step**
+  (#470, #471, #472, #473, #474, #475). Thirteen of them called `level_root`
+  directly: New, Add Sel, Rem Sel and Delete on the visgroup list, Group and
+  Ungroup, Create Entity, Add and Remove on the entity I/O list, Add Layer and
+  Remove Layer, Generate Noise and Import Heightmap. Ctrl+Z after any of them
+  undid whatever
+  came before instead, so a misclick on Delete Visgroup lost the membership of
+  every brush in it and the keystroke that should have taken it back removed
+  something else. Group and Ungroup were the worst of the set because they
+  recorded a row in the History panel, which is where a mapper looks to see what
+  can be stepped back. All of them go through `_commit_state_action()` now, and
+  the History panel entry comes from the same wrapper. Convert to Heightmap
+  builds its layer inline, so it registers the work it already did.
+  `capture_state()` already carried the visgroups, the groups, the entities and
+  the paint layers; nothing about the data was in the way.
+- **A redo no longer reaches for a node the undo freed.** `restore_state()`
+  clears the brushes and entities and rebuilds them from their captured info, so
+  a command registered with a live node in its arguments had a dangling
+  reference waiting in the redo. `_commit_state_action()` takes an
+  `absolute_redo` flag for those, which registers the resulting state as the do
+  operation instead of the call. Every command above that takes a selection or
+  an entity uses it.
+- **The wiring panel's connections and presets are undoable** (#473). The panel
+  holds the entity system rather than the dock's undo manager, so it could not
+  register its own step. It now says when it is about to change something, the
+  dock takes the before state, and the done signal commits the pair - which
+  matters most for a preset, where the alternative to one Ctrl+Z was deleting a
+  dozen connections by hand. A preset that applies nothing says so, rather than
+  leaving a before state to pair with whatever happened next.
+- **Add Sel leaves the visgroup row it just used selected** (#476). All three
+  visgroup commands end in `refresh_visgroup_ui()`, which clears the ItemList
+  and rebuilds it, so the highlight was gone and the next Add Sel, Rem Sel or
+  Delete was a silent no-op until the mapper clicked the visgroup again - which
+  dropped every click after the first in the natural workflow. The row goes back
+  after the refresh, the way the visibility toggle on the same list already did
+  it, and a command that finds no visgroup highlighted now says so.
 - **The live auto-connector path costs the stroke instead of the level**
   (#441). `defs_for_touched_cells()` is documented as the cheap path that "does
   not scan or rebuild geometry", and its first statement was a full
@@ -49,6 +85,46 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   walks the touched cells and their four neighbours directly, and a test
   asserts it gives the same answer as filtering the full scan so the two cannot
   drift apart.
+- **Import Settings validates what it reads instead of casting it** (#478). The
+  parsed `.hfsettings` dictionary went into the level through bare `float()`,
+  `int()` and `bool()` calls. `float("sixteen")` is `0.0` in GDScript, so a
+  hand-edited file, or one from a writer that quotes its numbers, turned
+  snapping off in silence; `int({})` raises at the cast, so a value of the wrong
+  container type aborted the rest of the block rather than being reported. All
+  26 reads go through validating readers now, which keep the setting in force
+  and name the key that was refused, in the shape `HFUserPrefs` got in #423.
+  `_apply_grid_snap()` also writes the value the SpinBox ended up holding rather
+  than the one it was handed, so an imported 4096 no longer leaves the dock
+  reading 128 while the level snaps to 4096 and the out-of-range number goes
+  into the prefs file to come back next session.
+- **Import Settings writes the connector mode to the level** (#477).
+  `OptionButton.select()` does not emit `item_selected`, and that signal was the
+  only thing that wrote `bake_connector_mode`. The dropdown said Auto and the
+  bake ran Ramp, with nothing to say which was in force, until the mapper
+  happened to touch the dropdown or reselect the LevelRoot - which made the
+  wrong state come and go. The import goes through a `_select_option_notifying()`
+  helper now, so the one place that knows what to write is still the only place
+  that writes it. A test pins the `select()` behaviour, because the class
+  reference does not state it.
+- **`bake_collision_mode` and `bake_connector_mode` clamp to the modes that
+  exist** (#480). #373 gave the unbounded bake and grid settings clamping
+  setters and missed the two whose legal values are an enum rather than a range.
+  `bake_connector_mode` had no setter at all, and `@export_range` is an
+  inspector hint that does not clamp an assignment from code, so both took
+  anything a `.hflevel` settings block or a settings import handed them. Both
+  are read as a mode with `match` or index arithmetic at bake time, so an
+  out-of-range value baked as whichever branch the default happened to be and
+  the level baked differently from what its own file said.
+- **A bake chunk size of 0 is the "off" the bake already understands** (#481).
+  `bake()` reads `if root.bake_chunk_size > 0.0` and 0 is the bottom of the dock
+  spin's own range, but the property clamped it up to `MIN_BAKE_CHUNK_SIZE`.
+  Turning the spin all the way down gave the opposite of what it said: one-unit
+  chunks, which is the finest chunking the editor can do and the slowest bake
+  available, where the mapper had asked for none. A negative value means off as
+  well, for the same reason - clamping it up to 1 was the worst answer on offer.
+  Import Settings also reads the chunk size once and lets the spin clamp it,
+  rather than reading it twice with different fallbacks, which could leave the
+  spin and the level saying different things about the chunking.
 - **The HUD, the coach marks and the tooltips read the keymap instead of
   spelling chords out** (#439, #440). `HFKeymap` is rebindable, and three of the
   surfaces that tell a mapper which key does what held their chords as string
@@ -63,6 +139,32 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   rebind list also showed two rows called "Extrude Up" and two called "Extrude
   Down", because `get_action_label()` gave the same name to an action and its
   alias; the aliases are named as aliases now.
+- **A surface paint stroke lands where the cursor is** (#464). `pick_face()`
+  reports the face's own UV, and a face's UVs are the projection of its world
+  coordinates, so a 128-unit wall spans 128 in U rather than 1.
+  `paint_surface_at()` clamped that to 0..1, which threw the position away: every
+  stroke on a face larger than one unit landed in one of two corners of the
+  weight image, chosen by the sign of the coordinate. The painted albedo becomes
+  the material's `albedo_texture` and is sampled through those same UVs, so the
+  texel under the cursor is the one the fractional part points at, and that is
+  what the stroke uses now. The brush also wraps at the tile edges rather than
+  being cut in half there, and a radius wider than half the image is capped so it
+  cannot wrap onto itself and paint the same texel twice in one sample. The mask
+  still repeats with the texture it sits in; making it span the face instead is a
+  change to how a painted face is sampled, not to where a stroke goes.
+- **A surface paint sample walks the circle instead of its bounding square**
+  (#465). `paint_at_uv()` scanned a square of `(2r+1)^2` texels and threw away
+  the corners one at a time, and built a `range()` array for every row of it - at
+  the top of the dock's radius range, 257 arrays of 257 ints per sample, on the
+  main thread, for every mouse-motion event while the button is held. It now
+  takes each row's own span from one `sqrt` a row, and skips a contribution too
+  small to change an 8-bit channel. Measured on the vibe `surface-paint`
+  scenario: 52 ms a sample before, about 17 ms after. The `PackedByteArray`
+  rewrite that usually goes with this was not done, because it is measured about
+  seven times *slower* than `get_pixel` in this engine - see
+  `tools/benchmark_paint_hot_paths.gd`. Memoising the falloff was tried and
+  reverted: it bought 3%, because what is left is the per-texel `Image` calls
+  rather than the arithmetic.
 - **The operation timeline's Replay button can be clicked, and its glyphs name
   the operation** (#437, #438). The button lives in the panel header, outside
   the entry it applies to, and was shown on hover and hidden again on
@@ -80,6 +182,31 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   The generic test is last now, destruction is first, and "bevel" and "prefab"
   have their own glyphs rather than falling through to the catch-all.
   `HFHistoryBrowser` calls the same two functions, so both surfaces are right.
+- **The playtest starts the player standing on the spawn point** (#468). Two
+  pieces of code held a model of the same player and disagreed about what a spawn
+  marker is. `HFSpawnSystem` treats it as the feet - it builds its test capsule
+  at `pos + PLAYER_HEIGHT / 2` and places a marker at
+  `floor + FEET_OFFSET + height_offset`, which the user guide describes as extra
+  height above the floor for safety, so the offset is already in the marker's
+  position. `_resolve_playtest_spawn()` added `height_offset` a second time and
+  handed the result to a `CharacterBody3D` whose capsule is centred on the node.
+  With `height_offset` 0 the validator passed a spawn that started the body 0.7
+  units inside the floor it was meant to stand on, and what happened next was
+  left to `move_and_slide()`. The body is now derived from the marker in one
+  place, half a player above the feet, and a test asserts the two scripts still
+  agree about how tall a player is - which until now was a comment in one of them
+  asking the other to match.
+- **Crouch shrinks the player** (#469). The playtest HUD lists `Ctrl crouch` and
+  what Ctrl did was pick a slower speed: `is_crouching` was assigned and never
+  read again, `_ensure_collider()` built one 1.6-tall capsule at `_ready()` and
+  nothing touched it afterwards, and the camera stayed at eye height. A mapper
+  building a crawl space and pressing Ctrl to test it walked into the wall
+  slowly, with nothing on screen to say whether the gap was too low or the crouch
+  did not work - which is the specific thing playtesting is meant to answer. The
+  capsule now shrinks, the body moves by half the change so the feet stay where
+  they were, the camera comes down with it, and standing up tests that the taller
+  capsule fits before it happens. A player who cannot stand up stays crouched,
+  and the movement speed reads that state rather than the key.
 - **The quick property popup and the control behind it now agree** (#447,
   #448). The double-tap popup (G G, B B, R R) restated the range of each field
   instead of taking it from the dock control it writes into, and none of the
