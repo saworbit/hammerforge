@@ -16,6 +16,12 @@ signal connection_added(
 	fire_once: bool
 )
 signal connection_removed(source: Node, index: int)
+## Emitted immediately before the panel changes the level, so whoever owns the
+## undo manager can take the before state. The matching done signal commits it.
+signal will_change(action_name: String)
+## Emitted when a `will_change` came to nothing, so the before state taken for it
+## is dropped rather than left to pair with whatever happens next.
+signal change_abandoned
 signal preset_applied(source: Node, preset_name: String, count: int)
 signal highlight_toggled(enabled: bool)
 
@@ -352,6 +358,7 @@ func _on_wire_pressed() -> void:
 	var parameter = _wire_param.text.strip_edges()
 	var delay = _wire_delay.value
 	var fire_once = _wire_once.button_pressed
+	will_change.emit("Add Entity Output")
 	_entity_system.add_entity_output(
 		_source_entity, output_name, target_name, input_name, parameter, delay, fire_once
 	)
@@ -379,10 +386,13 @@ func _on_preset_apply() -> void:
 		var edit: LineEdit = _target_map_edits[tag]
 		if edit and edit.text.strip_edges() != "":
 			target_map[tag] = edit.text.strip_edges()
+	will_change.emit("Apply I/O Preset")
 	var count = _io_presets.apply_preset(_source_entity, preset, target_map)
 	if count > 0:
 		preset_applied.emit(_source_entity, str(preset.get("name", "")), count)
 		_refresh()
+	else:
+		change_abandoned.emit()
 
 
 func _on_preset_save() -> void:

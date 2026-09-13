@@ -867,5 +867,19 @@ func test_four_quarter_turns_leave_the_faces_as_they_were():
 		before.append(face.to_dict())
 	for _i in 4:
 		sys.rotate([b.brush_id], [], 1, deg_to_rad(90.0), Vector3.ZERO)
+	# A new face projects on its own dominant axis, so the lock now actually
+	# compensates these turns rather than declining them: under PLANAR_Z a yaw
+	# took the projection plane away from four of the six faces and the face was
+	# left alone, which made an exact comparison pass by doing nothing. The turn
+	# is read back out of a Basis, so four of them compose to within float
+	# precision of where they started rather than to the same bits.
 	for i in b.get_faces().size():
-		assert_eq(b.get_faces()[i].to_dict(), before[i], "face %d drifted" % i)
+		var after: Dictionary = b.get_faces()[i].to_dict()
+		var was: Dictionary = before[i]
+		for key in was:
+			if was[key] is float:
+				assert_almost_eq(
+					float(after[key]), float(was[key]), 0.0001, "face %d drifted in %s" % [i, key]
+				)
+			else:
+				assert_eq(after[key], was[key], "face %d drifted in %s" % [i, key])
