@@ -221,6 +221,20 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   unclamped and the dock spins clamped, so the dock said 256 while the next
   brush drawn was 500.5 across; the controls are written first and the size is
   read back out of them, so there is one answer.
+- **Set Cordon from Selection leaves a cordon that contains the selection**
+  (#467). The button put the right AABB on the level and then copied the six
+  numbers into the cordon spins, which were built with a range of +/-9999. Each
+  assignment clamps to that range *and* fires `value_changed`, and
+  `on_cordon_value_changed()` reads the six clamped spins straight back onto
+  `cordon_aabb` - so a room at x = 12000 collapsed the cordon to a zero-width
+  slab at the limit, the button left the cordon switched on, and the next bake
+  produced an empty level with the control reading 9999 as though that were the
+  number the mapper chose. The write-back is guarded with `syncing_grid` now, the
+  way `_sync_grid_settings_from_root()` already guards the same six, and the
+  range covers the coordinates a level actually holds: one structure builder
+  piece can be 4096 across on its own, and Quake-family maps run well past that
+  per axis. A cordon that still will not fit says so rather than being clamped in
+  silence.
 - **A tool setting is now held to its own schema, wherever the value comes
   from** (#450). `HFEditorTool.set_setting()` wrote whatever it was handed. The
   schema's `min`/`max` was read in exactly two places - `get_setting()` for the
