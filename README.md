@@ -17,7 +17,7 @@
   <img src="https://img.shields.io/badge/Godot-4.7%2B-478cbf?logo=godot-engine&logoColor=white" alt="Godot 4.7+">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
   <img src="https://img.shields.io/badge/Status-Early%20Alpha-red" alt="Early Alpha">
-  <img src="https://img.shields.io/badge/Tests-3768%20passing-brightgreen" alt="3768 tests passing">
+  <img src="https://img.shields.io/badge/Tests-3774%20passing-brightgreen" alt="3774 tests passing">
   <img src="https://img.shields.io/badge/GDScript-61k%2B%20lines-blueviolet" alt="61k+ lines">
 </p>
 

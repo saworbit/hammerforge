@@ -317,8 +317,14 @@ func paint_surface_at(
 	var uv = hit.get("uv", Vector2.ZERO)
 	if not brush or face_idx < 0 or face_idx >= brush.faces.size():
 		return
-	uv.x = clamp(uv.x, 0.0, 1.0)
-	uv.y = clamp(uv.y, 0.0, 1.0)
+	# A face's UVs are the projection of its world coordinates, so a 128-unit wall
+	# spans 128 in U rather than 1. The painted albedo becomes the material's
+	# albedo_texture and is sampled through those same UVs, repeating, so the
+	# texel under the cursor is the one the fractional part points at. Clamping
+	# threw the position away and put every stroke on a face larger than one unit
+	# into whichever corner the sign of the coordinate chose.
+	uv.x = uv.x - floor(uv.x)
+	uv.y = uv.y - floor(uv.y)
 	var face: FaceData = brush.faces[face_idx]
 	root.surface_paint.paint_at_uv(face, layer_idx, uv, radius_uv, strength)
 	brush.rebuild_preview()
