@@ -77,7 +77,7 @@ func build(parent: Control) -> void:
 	dock.bake_lightmap_uv2 = dock._make_check("Lightmap UV2")
 	adv.add_child(dock.bake_lightmap_uv2)
 
-	dock.bake_use_face_materials = dock._make_check("Use Face Materials")
+	dock.bake_use_face_materials = dock._make_check("Use Face Materials", true)
 	adv.add_child(dock.bake_use_face_materials)
 
 	dock.bake_lightmap_texel_row = HBoxContainer.new()
