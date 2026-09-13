@@ -2688,13 +2688,19 @@ func _resolve_playtest_spawn() -> Dictionary:
 					break
 	var spawn_pos := Vector3(0, 2, 0)
 	var found_spawn := spawn != null
-	var height_offset := 1.0
 	if found_spawn:
 		spawn_pos = (spawn.global_position if spawn.is_inside_tree() else spawn.position)
 		if spawn is DraftEntity:
 			spawn_yaw = deg_to_rad(float(spawn.entity_data.get("angle", 0.0)))
-			height_offset = float(spawn.entity_data.get("height_offset", 1.0))
-	var offset := Vector3(0, height_offset, 0) if found_spawn else Vector3.ZERO
+	# A spawn marker is the player's feet. `HFSpawnSystem` builds its test capsule
+	# at `pos + PLAYER_HEIGHT / 2` and puts a marker at
+	# `floor + FEET_OFFSET + height_offset`, and the user guide calls
+	# `height_offset` extra height above the floor for safety - so it is already in
+	# the marker's position. What goes here is the body, and `playtest_fps.gd` is a
+	# CharacterBody3D whose capsule is centred on the node, so it sits half a player
+	# above the feet. Adding `height_offset` again counted it twice and put the
+	# feet through the floor the marker was standing on.
+	var offset := Vector3(0, HFSpawnSystem.PLAYER_HEIGHT / 2.0, 0)
 	return {"position": spawn_pos + offset, "yaw": spawn_yaw if found_spawn else 0.0}
 
 
