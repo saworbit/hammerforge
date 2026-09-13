@@ -37,6 +37,42 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **Every dock command that changes the level now registers an undo step**
+  (#470, #471, #472, #473, #474, #475). Thirteen of them called `level_root`
+  directly: New, Add Sel, Rem Sel and Delete on the visgroup list, Group and
+  Ungroup, Create Entity, Add and Remove on the entity I/O list, Add Layer and
+  Remove Layer, Generate Noise and Import Heightmap. Ctrl+Z after any of them
+  undid whatever
+  came before instead, so a misclick on Delete Visgroup lost the membership of
+  every brush in it and the keystroke that should have taken it back removed
+  something else. Group and Ungroup were the worst of the set because they
+  recorded a row in the History panel, which is where a mapper looks to see what
+  can be stepped back. All of them go through `_commit_state_action()` now, and
+  the History panel entry comes from the same wrapper. Convert to Heightmap
+  builds its layer inline, so it registers the work it already did.
+  `capture_state()` already carried the visgroups, the groups, the entities and
+  the paint layers; nothing about the data was in the way.
+- **A redo no longer reaches for a node the undo freed.** `restore_state()`
+  clears the brushes and entities and rebuilds them from their captured info, so
+  a command registered with a live node in its arguments had a dangling
+  reference waiting in the redo. `_commit_state_action()` takes an
+  `absolute_redo` flag for those, which registers the resulting state as the do
+  operation instead of the call. Every command above that takes a selection or
+  an entity uses it.
+- **The wiring panel's connections and presets are undoable** (#473). The panel
+  holds the entity system rather than the dock's undo manager, so it could not
+  register its own step. It now says when it is about to change something, the
+  dock takes the before state, and the done signal commits the pair - which
+  matters most for a preset, where the alternative to one Ctrl+Z was deleting a
+  dozen connections by hand. A preset that applies nothing says so, rather than
+  leaving a before state to pair with whatever happened next.
+- **Add Sel leaves the visgroup row it just used selected** (#476). All three
+  visgroup commands end in `refresh_visgroup_ui()`, which clears the ItemList
+  and rebuilds it, so the highlight was gone and the next Add Sel, Rem Sel or
+  Delete was a silent no-op until the mapper clicked the visgroup again - which
+  dropped every click after the first in the natural workflow. The row goes back
+  after the refresh, the way the visibility toggle on the same list already did
+  it, and a command that finds no visgroup highlighted now says so.
 - **The live auto-connector path costs the stroke instead of the level**
   (#441). `defs_for_touched_cells()` is documented as the cheap path that "does
   not scan or rebuild geometry", and its first statement was a full
@@ -49,6 +85,46 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   walks the touched cells and their four neighbours directly, and a test
   asserts it gives the same answer as filtering the full scan so the two cannot
   drift apart.
+- **Import Settings validates what it reads instead of casting it** (#478). The
+  parsed `.hfsettings` dictionary went into the level through bare `float()`,
+  `int()` and `bool()` calls. `float("sixteen")` is `0.0` in GDScript, so a
+  hand-edited file, or one from a writer that quotes its numbers, turned
+  snapping off in silence; `int({})` raises at the cast, so a value of the wrong
+  container type aborted the rest of the block rather than being reported. All
+  26 reads go through validating readers now, which keep the setting in force
+  and name the key that was refused, in the shape `HFUserPrefs` got in #423.
+  `_apply_grid_snap()` also writes the value the SpinBox ended up holding rather
+  than the one it was handed, so an imported 4096 no longer leaves the dock
+  reading 128 while the level snaps to 4096 and the out-of-range number goes
+  into the prefs file to come back next session.
+- **Import Settings writes the connector mode to the level** (#477).
+  `OptionButton.select()` does not emit `item_selected`, and that signal was the
+  only thing that wrote `bake_connector_mode`. The dropdown said Auto and the
+  bake ran Ramp, with nothing to say which was in force, until the mapper
+  happened to touch the dropdown or reselect the LevelRoot - which made the
+  wrong state come and go. The import goes through a `_select_option_notifying()`
+  helper now, so the one place that knows what to write is still the only place
+  that writes it. A test pins the `select()` behaviour, because the class
+  reference does not state it.
+- **`bake_collision_mode` and `bake_connector_mode` clamp to the modes that
+  exist** (#480). #373 gave the unbounded bake and grid settings clamping
+  setters and missed the two whose legal values are an enum rather than a range.
+  `bake_connector_mode` had no setter at all, and `@export_range` is an
+  inspector hint that does not clamp an assignment from code, so both took
+  anything a `.hflevel` settings block or a settings import handed them. Both
+  are read as a mode with `match` or index arithmetic at bake time, so an
+  out-of-range value baked as whichever branch the default happened to be and
+  the level baked differently from what its own file said.
+- **A bake chunk size of 0 is the "off" the bake already understands** (#481).
+  `bake()` reads `if root.bake_chunk_size > 0.0` and 0 is the bottom of the dock
+  spin's own range, but the property clamped it up to `MIN_BAKE_CHUNK_SIZE`.
+  Turning the spin all the way down gave the opposite of what it said: one-unit
+  chunks, which is the finest chunking the editor can do and the slowest bake
+  available, where the mapper had asked for none. A negative value means off as
+  well, for the same reason - clamping it up to 1 was the worst answer on offer.
+  Import Settings also reads the chunk size once and lets the spin clamp it,
+  rather than reading it twice with different fallbacks, which could leave the
+  spin and the level saying different things about the chunking.
 - **The HUD, the coach marks and the tooltips read the keymap instead of
   spelling chords out** (#439, #440). `HFKeymap` is rebindable, and three of the
   surfaces that tell a mapper which key does what held their chords as string

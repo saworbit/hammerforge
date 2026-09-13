@@ -72,8 +72,7 @@ func _assigning_out_of_range_values() -> void:
 		root.set(key, before)
 	note("accepted out of %d" % OUT_OF_RANGE.size(), accepted.size())
 	if not accepted.is_empty():
-		known(
-			480,
+		flag(
 			(
 				"LevelRoot takes %d of %d out-of-range settings without a word"
 				% [accepted.size(), OUT_OF_RANGE.size()]
@@ -121,8 +120,7 @@ func _through_a_state_round_trip() -> void:
 		if HFVibe.canonical(got) == HFVibe.canonical(poisoned[key]):
 			landed.append("%s = %s" % [key, poisoned[key]])
 	if not landed.is_empty():
-		known(
-			480,
+		flag(
 			"apply_hflevel_settings writes a .hflevel's enum settings straight onto the property",
 			(
 				(
