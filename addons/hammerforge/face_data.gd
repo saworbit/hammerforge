@@ -25,7 +25,14 @@ class PaintLayer:
 
 
 @export var material_idx: int = -1
-@export var uv_projection: int = UVProjection.PLANAR_Z
+## PLANAR_Z maps (x, y) -> (u, v), so on a face whose plane contains the Z axis,
+## or one lying flat in Y, one UV axis is constant across the whole face and every
+## point on it samples the same line of the texture: four of a box's six faces.
+## BOX_UV resolves to the dominant normal axis per face, which is the answer the
+## dock's "Apply + Re-project (Box UV)" button already applies by hand.
+## `_transfer_face_data()` carries this across a rebuild, so a saved level keeps
+## whatever it was saved with.
+@export var uv_projection: int = UVProjection.BOX_UV
 @export var uv_scale: Vector2 = Vector2.ONE
 @export var uv_offset: Vector2 = Vector2.ZERO
 @export var uv_rotation: float = 0.0

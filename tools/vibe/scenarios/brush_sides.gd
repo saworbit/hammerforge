@@ -62,13 +62,16 @@ func _sides_on_every_round_shape() -> void:
 				)
 			)
 			counts.append(int(made["faces"]))
+			# Below DraftBrush.MIN_ROUND_SIDES a round shape uses the default
+			# instead, because `sides` defaults to 4 on every brush the Build tab
+			# makes and the editor has the prism shapes for the low counts. A 3
+			# here is expected to come back as DEFAULT_ROUND_SIDES.
 		var varies := false
 		for c in counts:
 			if c != counts[0]:
 				varies = true
 		if not varies and counts.size() > 1 and shape[1] != PYRAMID:
-			known(
-				482,
+			flag(
 				"a %s is the same %d faces whatever sides it is given" % [shape[0], counts[0]],
 				(
 					(

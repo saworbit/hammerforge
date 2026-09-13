@@ -235,6 +235,38 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   now all give the schema's. A value that is not a number is refused and the
   previous one kept. `_build_segment_brush()` also refuses a non-positive width
   or height outright rather than building a ring from it.
+- **Every face of a new brush can show a texture** (#463).
+  `FaceData.uv_projection` defaulted to `PLANAR_Z`, which maps `(x, y)` to
+  `(u, v)`: on a face whose plane contains the Z axis, or one lying flat in Y,
+  one UV axis is constant across the whole face and every point on it samples the
+  same row of texels. That was four of a box's six faces, three of a wedge's five
+  and one of a pyramid's, on the baked mesh as well as the preview, with the
+  dock's "Apply + Re-project (Box UV)" there to correct the default by hand a
+  face at a time. A new face uses `BOX_UV`, which resolves to its own dominant
+  normal axis. Texture lock reads the same field and was the second casualty -
+  `adjust_uvs_for_rotation()` declines any face whose projection plane the turn
+  takes away, which under `PLANAR_Z` was every face of a default box under a yaw,
+  so a rotate with texture lock on changed nothing at all.
+  `_transfer_face_data()` carries the projection across a rebuild, so a saved
+  level keeps whatever it was saved with.
+- **A cylinder cap can show a texture too** (#463). The caps were not falling
+  back to the projection as the rest did: `_face_from_ids()` carries the source
+  mesh's UVs across when every vertex has one, and `CylinderMesh` maps both caps
+  onto a *line* - every vertex of the top cap at `v = 0` and every vertex of the
+  bottom at `v = 0.5`. Source UVs that span no area are refused now, because the
+  projection is a far better map than one that cannot be seen.
+- **A cylinder or a cone is built from the sides it was given** (#482).
+  `radial_segments` was never set, so both stayed at Godot's default of 64
+  whatever `sides` said - and `sides` is part of a brush: the `.hflevel` carries
+  it, a preset stores it and `HFDuplicator.shape_signature()` counts it, so two
+  brushes that differed only in `sides` were identical geometry with different
+  signatures. The preview also disagreed with the bake, which builds its CSG
+  through `PrefabFactory` and has always used 16. Below `MIN_ROUND_SIDES` the
+  number is not honoured and the default is used instead: `sides` is 4 on every
+  brush the Build tab makes and on every cylinder in a level saved before this,
+  and the editor has PRISM_TRI and PRISM_PENT for the low counts, so a round
+  shape is not how you ask for one. A greybox cylinder is 18 faces after the
+  coplanar merge now rather than 66.
 - **The region memory budget now counts what it actually freed** (#446).
   `_unload_region()` is careful: it refuses to throw a region's chunks away if
   they could not be written to disk first, and says so. `_evict_for_budget()`
