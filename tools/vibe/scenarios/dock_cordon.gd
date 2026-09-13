@@ -63,8 +63,7 @@ func _a_selection_outside_the_spin_range() -> void:
 	note("the brush the cordon was set from is at", brush_position)
 	note("does the cordon contain it", bounds.has_point(brush_position))
 	if not bounds.has_point(brush_position):
-		known(
-			467,
+		flag(
 			"Set Cordon from Selection leaves a cordon that excludes the selection",
 			(
 				(

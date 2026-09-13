@@ -5,6 +5,17 @@ extends RefCounted
 
 const HFCollapsibleSection = preload("ui/collapsible_section.gd")
 
+## How far a cordon bound may sit from the origin.
+##
+## The old limit was 9999, which is narrower than the coordinates a level holds:
+## a structure builder takes a width or a radius up to 4096 for one piece of
+## geometry, and Quake-family maps run well past 4096 per axis. Set from
+## Selection on a room outside it clamped the cordon to a zero-width slab at the
+## limit and, because the assignment fires `value_changed`, wrote that back onto
+## the level - so the next bake produced an empty level and the control that
+## caused it read 9999 as though that were the number the mapper chose.
+const CORDON_LIMIT := 131072.0
+
 
 static func setup_visgroup_ui(dock: Object) -> void:
 	if dock == null or not dock.manage_tab:
@@ -201,9 +212,9 @@ static func setup_cordon_ui(dock: Object) -> void:
 	min_label.text = "Min (X, Y, Z):"
 	content.add_child(min_label)
 	var min_row = HBoxContainer.new()
-	dock.cordon_min_x = make_cordon_spin(dock, -9999, 9999, -128)
-	dock.cordon_min_y = make_cordon_spin(dock, -9999, 9999, -128)
-	dock.cordon_min_z = make_cordon_spin(dock, -9999, 9999, -128)
+	dock.cordon_min_x = make_cordon_spin(dock, -CORDON_LIMIT, CORDON_LIMIT, -128)
+	dock.cordon_min_y = make_cordon_spin(dock, -CORDON_LIMIT, CORDON_LIMIT, -128)
+	dock.cordon_min_z = make_cordon_spin(dock, -CORDON_LIMIT, CORDON_LIMIT, -128)
 	min_row.add_child(dock.cordon_min_x)
 	min_row.add_child(dock.cordon_min_y)
 	min_row.add_child(dock.cordon_min_z)
@@ -213,9 +224,9 @@ static func setup_cordon_ui(dock: Object) -> void:
 	max_label.text = "Max (X, Y, Z):"
 	content.add_child(max_label)
 	var max_row = HBoxContainer.new()
-	dock.cordon_max_x = make_cordon_spin(dock, -9999, 9999, 128)
-	dock.cordon_max_y = make_cordon_spin(dock, -9999, 9999, 128)
-	dock.cordon_max_z = make_cordon_spin(dock, -9999, 9999, 128)
+	dock.cordon_max_x = make_cordon_spin(dock, -CORDON_LIMIT, CORDON_LIMIT, 128)
+	dock.cordon_max_y = make_cordon_spin(dock, -CORDON_LIMIT, CORDON_LIMIT, 128)
+	dock.cordon_max_z = make_cordon_spin(dock, -CORDON_LIMIT, CORDON_LIMIT, 128)
 	max_row.add_child(dock.cordon_max_x)
 	max_row.add_child(dock.cordon_max_y)
 	max_row.add_child(dock.cordon_max_z)
@@ -297,8 +308,23 @@ static func on_cordon_from_selection(dock: Object) -> void:
 			dock.cordon_max_y,
 			dock.cordon_max_z,
 		]
+		# Each assignment clamps to the control's range *and* fires
+		# `value_changed`, which reads all six spins straight back onto the level.
+		# Without this guard the cordon the selection produced was replaced by
+		# whatever the spins could hold, which is the shape
+		# `_sync_grid_settings_from_root()` already uses for the same six.
+		var was_syncing: bool = dock.syncing_grid
+		dock.syncing_grid = true
+		var clamped := false
 		for index in range(controls.size()):
 			if controls[index]:
 				controls[index].value = values[index]
+				if not is_equal_approx(controls[index].value, values[index]):
+					clamped = true
+		dock.syncing_grid = was_syncing
+		if clamped:
+			dock._set_status_warning(
+				"Cordon set past +/-%d; the spins cannot show it all" % int(CORDON_LIMIT)
+			)
 	if dock.cordon_enabled_check:
 		dock.cordon_enabled_check.button_pressed = true
