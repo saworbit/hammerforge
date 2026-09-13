@@ -19,12 +19,19 @@ static var _last_collation_full := false
 
 ## Register one undoable action, optionally merging it with the last one.
 ##
-## `absolute_redo` is for commands that step rather than set: rotate by fifteen
-## degrees, nudge by one grid square. Godot's MERGE_ENDS keeps the first action's
-## undo and the last action's do, which is only right when that last do names the
-## final result. A third quick rotate would otherwise redo fifteen degrees where
-## undo had removed forty-five. When it is on, the method runs first and the
-## action's do method is a snapshot of the result instead of the step.
+## `absolute_redo` turns the do operation into a snapshot of the result: the
+## method runs first, and what gets registered is the state it produced rather
+## than the call that produced it. Two kinds of command need that.
+##
+## Commands that step rather than set: rotate by fifteen degrees, nudge by one
+## grid square. Godot's MERGE_ENDS keeps the first action's undo and the last
+## action's do, which is only right when that last do names the final result. A
+## third quick rotate would otherwise redo fifteen degrees where undo had removed
+## forty-five.
+##
+## Commands whose arguments are live nodes. `restore_state()` clears the brushes
+## and entities and rebuilds them from their captured info, so a node an undo
+## passed over is freed and the reference held for the redo is dangling.
 static func commit(
 	undo_redo: EditorUndoRedoManager,
 	root: Node,
