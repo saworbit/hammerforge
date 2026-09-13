@@ -63,6 +63,32 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   rebind list also showed two rows called "Extrude Up" and two called "Extrude
   Down", because `get_action_label()` gave the same name to an action and its
   alias; the aliases are named as aliases now.
+- **A surface paint stroke lands where the cursor is** (#464). `pick_face()`
+  reports the face's own UV, and a face's UVs are the projection of its world
+  coordinates, so a 128-unit wall spans 128 in U rather than 1.
+  `paint_surface_at()` clamped that to 0..1, which threw the position away: every
+  stroke on a face larger than one unit landed in one of two corners of the
+  weight image, chosen by the sign of the coordinate. The painted albedo becomes
+  the material's `albedo_texture` and is sampled through those same UVs, so the
+  texel under the cursor is the one the fractional part points at, and that is
+  what the stroke uses now. The brush also wraps at the tile edges rather than
+  being cut in half there, and a radius wider than half the image is capped so it
+  cannot wrap onto itself and paint the same texel twice in one sample. The mask
+  still repeats with the texture it sits in; making it span the face instead is a
+  change to how a painted face is sampled, not to where a stroke goes.
+- **A surface paint sample walks the circle instead of its bounding square**
+  (#465). `paint_at_uv()` scanned a square of `(2r+1)^2` texels and threw away
+  the corners one at a time, and built a `range()` array for every row of it - at
+  the top of the dock's radius range, 257 arrays of 257 ints per sample, on the
+  main thread, for every mouse-motion event while the button is held. It now
+  takes each row's own span from one `sqrt` a row, and skips a contribution too
+  small to change an 8-bit channel. Measured on the vibe `surface-paint`
+  scenario: 52 ms a sample before, about 17 ms after. The `PackedByteArray`
+  rewrite that usually goes with this was not done, because it is measured about
+  seven times *slower* than `get_pixel` in this engine - see
+  `tools/benchmark_paint_hot_paths.gd`. Memoising the falloff was tried and
+  reverted: it bought 3%, because what is left is the per-texel `Image` calls
+  rather than the arithmetic.
 - **The operation timeline's Replay button can be clicked, and its glyphs name
   the operation** (#437, #438). The button lives in the panel header, outside
   the entry it applies to, and was shown on hover and hidden again on
