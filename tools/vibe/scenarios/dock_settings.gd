@@ -71,8 +71,7 @@ func _the_round_trip() -> void:
 		int(other_dock.bake_connector_mode_opt.get_selected_id())
 		!= int(other.get("bake_connector_mode"))
 	):
-		known(
-			477,
+		flag(
 			"Import Settings leaves the connector mode on the dropdown only",
 			(
 				"_apply_editor_settings() calls OptionButton.select(), which by design does not"
@@ -102,8 +101,7 @@ func _values_the_dock_would_never_write() -> void:
 	note("after grid_snap 4096: spin shows", dock.grid_snap.value)
 	note("after grid_snap 4096: level holds", root.get("grid_snap"))
 	if not is_equal_approx(float(dock.grid_snap.value), float(root.get("grid_snap"))):
-		known(
-			478,
+		flag(
 			"Import Settings puts a grid snap on the level that the dock refuses to show",
 			(
 				(
@@ -128,8 +126,7 @@ func _values_the_dock_would_never_write() -> void:
 	await frame()
 	note('after grid_snap "sixteen": level holds', root.get("grid_snap"))
 	if is_zero_approx(float(root.get("grid_snap"))):
-		known(
-			478,
+		flag(
 			"A non-numeric grid snap silently becomes zero",
 			(
 				'float("sixteen") is 0.0 in GDScript, and nothing between the file and the'

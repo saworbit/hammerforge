@@ -2864,11 +2864,16 @@ func _apply_grid_snap(value: float) -> void:
 	syncing_snap = true
 	grid_snap.value = value
 	syncing_snap = false
-	_sync_snap_buttons(value)
+	# The SpinBox clamps to the range the control declares. Everything below has
+	# to use what it ended up holding rather than what it was handed, or an
+	# imported 4096 leaves the dock reading 128 while the level snaps to 4096 and
+	# the out-of-range number goes into the prefs file to come back next session.
+	var applied: float = grid_snap.value
+	_sync_snap_buttons(applied)
 	if level_root and _root_has_property("grid_snap"):
-		level_root.set("grid_snap", value)
-	_save_user_pref("grid_snap", value)
-	grid_snap_applied.emit(value)
+		level_root.set("grid_snap", applied)
+	_save_user_pref("grid_snap", applied)
+	grid_snap_applied.emit(applied)
 
 
 func _sync_snap_buttons(value: float) -> void:
@@ -4964,16 +4969,59 @@ func _collect_editor_settings() -> Dictionary:
 	}
 
 
+## A number out of a settings file, or the setting that is already in force.
+##
+## `float("sixteen")` is 0.0 in GDScript and `int({})` raises at the cast, so a
+## hand-edited file, or one from a writer that quotes its numbers, used to turn a
+## setting off in silence or abort the import part way through. A value that is
+## not a number is reported once, naming the key, and the current setting is kept.
+func _setting_number(source: Dictionary, key: String, fallback: float) -> float:
+	if not source.has(key):
+		return fallback
+	var value: Variant = source[key]
+	if (value is float or value is int) and is_finite(float(value)):
+		return float(value)
+	_reject_setting(key, value)
+	return fallback
+
+
+func _setting_int(source: Dictionary, key: String, fallback: int) -> int:
+	return int(round(_setting_number(source, key, float(fallback))))
+
+
+## A flag out of a settings file. A writer that stores 0 and 1 is not a writer
+## getting it wrong, so a number counts; anything else does not.
+func _setting_bool(source: Dictionary, key: String, fallback: bool) -> bool:
+	if not source.has(key):
+		return fallback
+	var value: Variant = source[key]
+	if value is bool:
+		return value
+	if value is float or value is int:
+		return float(value) != 0.0
+	_reject_setting(key, value)
+	return fallback
+
+
+func _reject_setting(key: String, value: Variant) -> void:
+	var message := (
+		"Settings: '%s' is a %s, not a value this setting takes. The current one is kept."
+		% [key, type_string(typeof(value))]
+	)
+	HFLog.warn(message)
+	_set_status_warning(message)
+
+
 func _apply_editor_settings(data: Dictionary) -> void:
 	if data.has("grid_snap"):
-		_apply_grid_snap(float(data.get("grid_snap", grid_snap.value)))
+		_apply_grid_snap(_setting_number(data, "grid_snap", grid_snap.value))
 	if data.has("snap_presets") and data["snap_presets"] is Array:
 		_apply_snap_presets(data["snap_presets"])
 	if data.has("brush_size") and data["brush_size"] is Dictionary:
 		var size = data["brush_size"]
-		size_x.value = float(size.get("x", size_x.value))
-		size_y.value = float(size.get("y", size_y.value))
-		size_z.value = float(size.get("z", size_z.value))
+		size_x.value = _setting_number(size, "x", size_x.value)
+		size_y.value = _setting_number(size, "y", size_y.value)
+		size_z.value = _setting_number(size, "z", size_z.value)
 		if level_root:
 			level_root.drag_size_default = Vector3(size_x.value, size_y.value, size_z.value)
 			if _root_has_property("brush_size_default"):
@@ -4983,73 +5031,90 @@ func _apply_editor_settings(data: Dictionary) -> void:
 	if data.has("bake") and data["bake"] is Dictionary:
 		var bake = data["bake"]
 		if bake_merge_meshes:
-			bake_merge_meshes.button_pressed = bool(
-				bake.get("merge_meshes", bake_merge_meshes.button_pressed)
+			bake_merge_meshes.button_pressed = _setting_bool(
+				bake, "merge_meshes", bake_merge_meshes.button_pressed
 			)
 		if bake_generate_lods:
-			bake_generate_lods.button_pressed = bool(
-				bake.get("generate_lods", bake_generate_lods.button_pressed)
+			bake_generate_lods.button_pressed = _setting_bool(
+				bake, "generate_lods", bake_generate_lods.button_pressed
 			)
 		if bake_unwrap_uv0:
-			bake_unwrap_uv0.button_pressed = bool(
-				bake.get("unwrap_uv0", bake_unwrap_uv0.button_pressed)
+			bake_unwrap_uv0.button_pressed = _setting_bool(
+				bake, "unwrap_uv0", bake_unwrap_uv0.button_pressed
 			)
 		if bake_lightmap_uv2:
-			bake_lightmap_uv2.button_pressed = bool(
-				bake.get("lightmap_uv2", bake_lightmap_uv2.button_pressed)
+			bake_lightmap_uv2.button_pressed = _setting_bool(
+				bake, "lightmap_uv2", bake_lightmap_uv2.button_pressed
 			)
 		if bake_lightmap_texel:
-			bake_lightmap_texel.value = float(
-				bake.get("lightmap_texel_size", bake_lightmap_texel.value)
+			bake_lightmap_texel.value = _setting_number(
+				bake, "lightmap_texel_size", bake_lightmap_texel.value
 			)
 		if bake_use_face_materials:
-			bake_use_face_materials.button_pressed = bool(
-				bake.get("use_face_materials", bake_use_face_materials.button_pressed)
+			bake_use_face_materials.button_pressed = _setting_bool(
+				bake, "use_face_materials", bake_use_face_materials.button_pressed
 			)
 		if bake_navmesh:
-			bake_navmesh.button_pressed = bool(bake.get("navmesh", bake_navmesh.button_pressed))
+			bake_navmesh.button_pressed = _setting_bool(
+				bake, "navmesh", bake_navmesh.button_pressed
+			)
 		if bake_navmesh_cell_size:
-			bake_navmesh_cell_size.value = float(
-				bake.get("navmesh_cell_size", bake_navmesh_cell_size.value)
+			bake_navmesh_cell_size.value = _setting_number(
+				bake, "navmesh_cell_size", bake_navmesh_cell_size.value
 			)
 		if bake_navmesh_cell_height:
-			bake_navmesh_cell_height.value = float(
-				bake.get("navmesh_cell_height", bake_navmesh_cell_height.value)
+			bake_navmesh_cell_height.value = _setting_number(
+				bake, "navmesh_cell_height", bake_navmesh_cell_height.value
 			)
 		if bake_navmesh_agent_height:
-			bake_navmesh_agent_height.value = float(
-				bake.get("navmesh_agent_height", bake_navmesh_agent_height.value)
+			bake_navmesh_agent_height.value = _setting_number(
+				bake, "navmesh_agent_height", bake_navmesh_agent_height.value
 			)
 		if bake_navmesh_agent_radius:
-			bake_navmesh_agent_radius.value = float(
-				bake.get("navmesh_agent_radius", bake_navmesh_agent_radius.value)
+			bake_navmesh_agent_radius.value = _setting_number(
+				bake, "navmesh_agent_radius", bake_navmesh_agent_radius.value
 			)
 		if collision_layer_opt and bake.has("collision_mask"):
-			_select_option_by_id(collision_layer_opt, int(bake.get("collision_mask", 1)))
-		if level_root and bake.has("chunk_size") and _root_has_property("bake_chunk_size"):
-			level_root.set("bake_chunk_size", float(bake.get("chunk_size", 0.0)))
-		if bake_chunk_size_spin and bake.has("chunk_size"):
-			bake_chunk_size_spin.value = float(bake.get("chunk_size", 32.0))
+			_select_option_by_id(collision_layer_opt, _setting_int(bake, "collision_mask", 1))
+		if bake.has("chunk_size"):
+			# Read once and let the spin clamp it, then give the level what the
+			# control ended up holding. Read twice with different fallbacks, a
+			# value the file could not supply left the two saying different
+			# things about the chunking, which is the fault this pair had.
+			var chunk_size := _setting_number(
+				bake, "chunk_size", bake_chunk_size_spin.value if bake_chunk_size_spin else 32.0
+			)
+			if bake_chunk_size_spin:
+				bake_chunk_size_spin.value = chunk_size
+				chunk_size = bake_chunk_size_spin.value
+			if level_root and _root_has_property("bake_chunk_size"):
+				level_root.set("bake_chunk_size", chunk_size)
 		if bake_visible_only_check and bake.has("visible_only"):
-			bake_visible_only_check.button_pressed = bool(bake.get("visible_only", false))
+			bake_visible_only_check.button_pressed = _setting_bool(bake, "visible_only", false)
 		if bake_use_multimesh_check and bake.has("use_multimesh"):
-			bake_use_multimesh_check.button_pressed = bool(bake.get("use_multimesh", false))
+			bake_use_multimesh_check.button_pressed = _setting_bool(bake, "use_multimesh", false)
 		if bake_use_atlas_check and bake.has("use_atlas"):
-			bake_use_atlas_check.button_pressed = bool(bake.get("use_atlas", false))
+			bake_use_atlas_check.button_pressed = _setting_bool(bake, "use_atlas", false)
 		if bake_auto_connectors_check and bake.has("auto_connectors"):
-			bake_auto_connectors_check.button_pressed = bool(bake.get("auto_connectors", false))
+			bake_auto_connectors_check.button_pressed = _setting_bool(
+				bake, "auto_connectors", false
+			)
 		if bake_generate_occluders_check and bake.has("generate_occluders"):
-			bake_generate_occluders_check.button_pressed = bool(
-				bake.get("generate_occluders", false)
+			bake_generate_occluders_check.button_pressed = _setting_bool(
+				bake, "generate_occluders", false
 			)
 		if bake_occluder_min_area_spin and bake.has("occluder_min_area"):
-			bake_occluder_min_area_spin.value = float(bake.get("occluder_min_area", 4.0))
+			bake_occluder_min_area_spin.value = _setting_number(bake, "occluder_min_area", 4.0)
 		if bake_connector_mode_opt and bake.has("connector_mode"):
-			bake_connector_mode_opt.select(int(bake.get("connector_mode", 0)))
+			_select_option_notifying(
+				bake_connector_mode_opt, _setting_int(bake, "connector_mode", 0)
+			)
 		if bake_connector_stair_height_spin and bake.has("connector_stair_height"):
-			bake_connector_stair_height_spin.value = float(bake.get("connector_stair_height", 0.25))
+			bake_connector_stair_height_spin.value = _setting_number(
+				bake, "connector_stair_height", 0.25
+			)
 		if bake_connector_width_spin and bake.has("connector_width"):
-			bake_connector_width_spin.value = int(bake.get("connector_width", 2))
+			bake_connector_width_spin.value = _setting_int(bake, "connector_width", 2)
 		_sync_bake_option_visibility()
 
 
@@ -5077,6 +5142,19 @@ func _apply_snap_presets(values: Array) -> void:
 		button.text = str(preset)
 	_sync_snap_buttons(grid_snap.value)
 	_apply_all_tooltips()
+
+
+## Select an item and tell the listeners, which `OptionButton.select()` does not.
+##
+## `item_selected` is documented as emitted when the item is changed *by the
+## user*, so a programmatic select leaves every listener holding the old value.
+## For the connector mode that listener is the only thing that writes
+## `bake_connector_mode`, so the dropdown said Auto and the bake ran Ramp.
+func _select_option_notifying(option: OptionButton, index: int) -> void:
+	if not option or index < 0 or index >= option.get_item_count():
+		return
+	option.select(index)
+	option.item_selected.emit(index)
 
 
 func _select_option_by_id(option: OptionButton, id: int) -> void:

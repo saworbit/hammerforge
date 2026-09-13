@@ -49,6 +49,46 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   walks the touched cells and their four neighbours directly, and a test
   asserts it gives the same answer as filtering the full scan so the two cannot
   drift apart.
+- **Import Settings validates what it reads instead of casting it** (#478). The
+  parsed `.hfsettings` dictionary went into the level through bare `float()`,
+  `int()` and `bool()` calls. `float("sixteen")` is `0.0` in GDScript, so a
+  hand-edited file, or one from a writer that quotes its numbers, turned
+  snapping off in silence; `int({})` raises at the cast, so a value of the wrong
+  container type aborted the rest of the block rather than being reported. All
+  26 reads go through validating readers now, which keep the setting in force
+  and name the key that was refused, in the shape `HFUserPrefs` got in #423.
+  `_apply_grid_snap()` also writes the value the SpinBox ended up holding rather
+  than the one it was handed, so an imported 4096 no longer leaves the dock
+  reading 128 while the level snaps to 4096 and the out-of-range number goes
+  into the prefs file to come back next session.
+- **Import Settings writes the connector mode to the level** (#477).
+  `OptionButton.select()` does not emit `item_selected`, and that signal was the
+  only thing that wrote `bake_connector_mode`. The dropdown said Auto and the
+  bake ran Ramp, with nothing to say which was in force, until the mapper
+  happened to touch the dropdown or reselect the LevelRoot - which made the
+  wrong state come and go. The import goes through a `_select_option_notifying()`
+  helper now, so the one place that knows what to write is still the only place
+  that writes it. A test pins the `select()` behaviour, because the class
+  reference does not state it.
+- **`bake_collision_mode` and `bake_connector_mode` clamp to the modes that
+  exist** (#480). #373 gave the unbounded bake and grid settings clamping
+  setters and missed the two whose legal values are an enum rather than a range.
+  `bake_connector_mode` had no setter at all, and `@export_range` is an
+  inspector hint that does not clamp an assignment from code, so both took
+  anything a `.hflevel` settings block or a settings import handed them. Both
+  are read as a mode with `match` or index arithmetic at bake time, so an
+  out-of-range value baked as whichever branch the default happened to be and
+  the level baked differently from what its own file said.
+- **A bake chunk size of 0 is the "off" the bake already understands** (#481).
+  `bake()` reads `if root.bake_chunk_size > 0.0` and 0 is the bottom of the dock
+  spin's own range, but the property clamped it up to `MIN_BAKE_CHUNK_SIZE`.
+  Turning the spin all the way down gave the opposite of what it said: one-unit
+  chunks, which is the finest chunking the editor can do and the slowest bake
+  available, where the mapper had asked for none. A negative value means off as
+  well, for the same reason - clamping it up to 1 was the worst answer on offer.
+  Import Settings also reads the chunk size once and lets the spin clamp it,
+  rather than reading it twice with different fallbacks, which could leave the
+  spin and the level saying different things about the chunking.
 - **The HUD, the coach marks and the tooltips read the keymap instead of
   spelling chords out** (#439, #440). `HFKeymap` is rebindable, and three of the
   surfaces that tell a mapper which key does what held their chords as string
