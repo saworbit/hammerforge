@@ -77,12 +77,8 @@ func _a_spawn_the_validator_is_happy_with() -> void:
 	note("the spawn point, which the validator reads as the feet", spawn.global_position.y)
 	note("the floor is at", 0.0)
 
-	if (
-		int(validation.get("severity", 0)) == 0
-		and absf(feet - float(spawn.global_position.y)) > 0.05
-	):
-		known(
-			468,
+	if absf(feet - float(spawn.global_position.y)) > 0.05:
+		flag(
 			"the playtest player does not start on the spawn the validator approved",
 			(
 				(
@@ -123,8 +119,7 @@ func _a_spawn_asked_to_sit_on_the_floor() -> void:
 	var feet: float = float(pose["position"].y) - PLAYER_HEIGHT * 0.5
 	note("player feet", feet)
 	if feet < 0.0:
-		known(
-			468,
+		flag(
 			"a spawn with height_offset 0 starts the player inside the floor",
 			(
 				(
@@ -142,22 +137,24 @@ func _a_spawn_asked_to_sit_on_the_floor() -> void:
 ## Crouch is on the playtest HUD. What it does to the body.
 func _what_crouch_does() -> void:
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/playtest_fps.gd")
-	var mentions := source.count("is_crouching")
-	note("times playtest_fps.gd names is_crouching", mentions)
+	var shrinks := source.contains("shape.height = crouched")
+	var lowers := source.contains("crouch_eye_height")
+	var checks_headroom := source.contains("_can_stand_up")
+	note("times playtest_fps.gd names is_crouching", source.count("is_crouching"))
 	note("the pause overlay advertises crouch", source.contains("Ctrl crouch"))
-	note("the collider is built once in", "_ensure_collider(), from capsule_height")
-	if mentions <= 2:
-		known(
-			469,
-			"Crouch only slows the player down; the capsule never shrinks",
+	note("crouch changes the capsule height", shrinks)
+	note("crouch lowers the camera pivot", lowers)
+	note("standing up again checks for headroom", checks_headroom)
+	if source.contains("Ctrl crouch") and not (shrinks and lowers and checks_headroom):
+		flag(
+			"the playtest advertises crouch without shrinking the player",
 			(
-				(
-					"_physics_process() sets is_crouching and picks crouch_speed, and the name is"
-					+ " never read again -- _ensure_collider() builds one %s capsule at _ready()"
-					+ ' and nothing touches its shape afterwards. The pause overlay lists "Ctrl'
-					+ ' crouch", so a mapper testing a crawl space finds the player will not fit'
-					+ " and cannot tell whether the gap is wrong or the crouch is."
+				"a crawl space is the thing a playtest is meant to answer. If Ctrl only picks"
+				+ " crouch_speed, a mapper testing one walks into the wall slowly and cannot"
+				+ " tell whether the gap is too low or the crouch does not work. Shrinks the"
+				+ (
+					" capsule: %s. Lowers the camera: %s. Checks headroom before standing: %s."
+					% [shrinks, lowers, checks_headroom]
 				)
-				% "1.6"
 			)
 		)

@@ -1004,16 +1004,23 @@ func test_resize_commit_replays_original_to_final_for_one_texture_lock_adjustmen
 	var brush: DraftBrush = fixture.brush
 	var previous_size := brush.size
 	var previous_position := brush.global_position
-	var original_uv_scale := brush.faces[0].uv_scale
-	var original_uv_offset := brush.faces[0].uv_offset
+	# The top face. Setting `size` rebuilds the faces from the base mesh, so the
+	# one the fixture hand-built is gone by here and these are box faces carrying
+	# the default projection. A new face projects on its own dominant normal axis,
+	# so the top face is the one whose projection reads world X, which is what the
+	# arithmetic below is about. Face 0 is the +X face: its projection reads Z and
+	# Y, and an X resize correctly leaves it alone.
+	var top := 2
+	var original_uv_scale := brush.faces[top].uv_scale
+	var original_uv_offset := brush.faces[top].uv_offset
 	var final_size := Vector3(64, 32, 32)
 	var final_position := Vector3(16, 0, 0)
 
 	# Match _set_handle(): preview changes geometry only and leaves UVs alone.
 	brush.size = final_size
 	brush.global_position = final_position
-	assert_eq(brush.faces[0].uv_scale, original_uv_scale)
-	assert_eq(brush.faces[0].uv_offset, original_uv_offset)
+	assert_eq(brush.faces[top].uv_scale, original_uv_scale)
+	assert_eq(brush.faces[top].uv_offset, original_uv_offset)
 
 	assert_true(
 		(
@@ -1033,9 +1040,9 @@ func test_resize_commit_replays_original_to_final_for_one_texture_lock_adjustmen
 	assert_true(root.dirty_brush_ids.has(brush.brush_id))
 	# PLANAR_Y maps world X/Z. Doubling X size halves U scale, while
 	# moving the center +16 subtracts 16 * the original U scale once.
-	assert_eq(brush.faces[0].uv_scale, Vector2(original_uv_scale.x * 0.5, original_uv_scale.y))
+	assert_eq(brush.faces[top].uv_scale, Vector2(original_uv_scale.x * 0.5, original_uv_scale.y))
 	assert_eq(
-		brush.faces[0].uv_offset,
+		brush.faces[top].uv_offset,
 		Vector2(original_uv_offset.x - 16.0 * original_uv_scale.x, original_uv_offset.y),
 	)
 

@@ -22,6 +22,12 @@ extends CharacterBody3D
 @export var jump_action := "ui_accept"
 @export var capsule_radius := 0.35
 @export var capsule_height := 1.6
+## The capsule while crouched. A crawl space is the thing a playtest is meant to
+## answer, so this has to be a real shape change and not only a slower walk.
+@export var crouch_height := 0.9
+## Camera height above the body origin, standing and crouched.
+@export var eye_height := 1.0
+@export var crouch_eye_height := 0.55
 
 # --- Spawn (set by Quick Play before adding to scene tree) ---
 @export var player_start_position: Vector3 = Vector3.ZERO
@@ -49,7 +55,7 @@ func _ready() -> void:
 	# Setup Camera Hierarchy for separate Bobbing/Tilting
 	camera_pivot = Node3D.new()
 	camera_pivot.name = "CameraPivot"
-	camera_pivot.position.y = 1.0
+	camera_pivot.position.y = eye_height
 	add_child(camera_pivot)
 
 	camera = Camera3D.new()
@@ -124,6 +130,52 @@ func _ensure_collider() -> void:
 	add_child(collider)
 
 
+## Crouch, for real: the capsule shrinks and the camera comes down with it.
+##
+## The capsule is centred on the node, so changing its height moves the feet.
+## The body moves by half the change to leave them where they were.
+func _set_crouched(want_crouch: bool) -> void:
+	if want_crouch == is_crouching:
+		return
+	var collider := get_node_or_null("CollisionShape3D") as CollisionShape3D
+	if collider == null or not (collider.shape is CapsuleShape3D):
+		return
+	var shape := collider.shape as CapsuleShape3D
+	var standing: float = maxf(shape.radius * 2.0, capsule_height)
+	var crouched: float = maxf(shape.radius * 2.0, minf(crouch_height, capsule_height))
+	var half_delta := (standing - crouched) * 0.5
+	if half_delta <= 0.0:
+		is_crouching = want_crouch
+		return
+	if not want_crouch and not _can_stand_up(shape.radius, standing, half_delta):
+		# Still under something. Stay down rather than pushing through it.
+		return
+	shape.height = crouched if want_crouch else standing
+	global_position.y += -half_delta if want_crouch else half_delta
+	if camera_pivot:
+		camera_pivot.position.y = crouch_eye_height if want_crouch else eye_height
+	is_crouching = want_crouch
+
+
+## Whether the standing capsule fits where the body would be if it stood up.
+func _can_stand_up(radius: float, standing: float, half_delta: float) -> bool:
+	var world := get_world_3d()
+	if world == null:
+		return true
+	var space := world.direct_space_state
+	if space == null:
+		return true
+	var shape := CapsuleShape3D.new()
+	shape.radius = radius
+	shape.height = standing
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = shape
+	query.collision_mask = collision_mask
+	query.exclude = [get_rid()]
+	query.transform = Transform3D(Basis.IDENTITY, global_position + Vector3(0, half_delta, 0))
+	return space.collide_shape(query, 1).is_empty()
+
+
 func _ensure_input_map() -> void:
 	var defaults := {
 		"ui_up": [KEY_W, KEY_UP],
@@ -183,14 +235,14 @@ func _physics_process(delta: float) -> void:
 		time_since_on_floor = coyote_time
 
 	# 3. Determine Speed based on State
+	# The crouch is applied before the speed is read, because a player under a
+	# ledge asked to stand up and could not is still crouched.
+	_set_crouched(Input.is_key_pressed(KEY_CTRL))
 	var current_speed = walk_speed
-	var sprinting = Input.is_key_pressed(KEY_SHIFT)
-	var crouching = Input.is_key_pressed(KEY_CTRL)
-	if sprinting:
-		current_speed = sprint_speed
-	elif crouching:
+	if is_crouching:
 		current_speed = crouch_speed
-	is_crouching = crouching
+	elif Input.is_key_pressed(KEY_SHIFT):
+		current_speed = sprint_speed
 
 	# 4. Movement Logic with Smooth Acceleration
 	var input_dir := Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")

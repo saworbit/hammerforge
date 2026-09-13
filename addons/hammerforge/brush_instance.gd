@@ -355,6 +355,28 @@ func _transfer_face_data(old_faces: Array, new_faces: Array) -> void:
 		new_face.displacement = old_face.displacement
 
 
+## How many segments a round shape is actually built from.
+##
+## `sides` is part of a brush - the `.hflevel` carries it, a preset stores it and
+## `HFDuplicator.shape_signature()` counts it - but a cylinder was built from
+## Godot's `radial_segments` default of 64 and ignored it, so two brushes that
+## differed only in `sides` were identical geometry with different signatures.
+##
+## Below `MIN_ROUND_SIDES` the number is not honoured, for two reasons. `sides`
+## defaults to 4 and the Build tab only offers the Sides row for a pyramid, so
+## every cylinder drawn in the editor and every one in a level saved before this
+## carries 4 - and a four-sided cylinder is a box. The editor also has PRISM_TRI
+## and PRISM_PENT for the low counts, so a round shape is not how you ask for
+## one. 16 is what `PrefabFactory` has always built a cylinder from, which is
+## what the bake already produces: the preview was the odd one out at 64.
+const DEFAULT_ROUND_SIDES := 16
+const MIN_ROUND_SIDES := 5
+
+
+static func round_sides(sides_value: int) -> int:
+	return sides_value if sides_value >= MIN_ROUND_SIDES else DEFAULT_ROUND_SIDES
+
+
 func _build_base_mesh() -> Dictionary:
 	var mesh: Mesh = null
 	var mesh_scale := Vector3.ONE
@@ -369,12 +391,14 @@ func _build_base_mesh() -> Dictionary:
 			var radius = max(size.x, size.z) * 0.5
 			cyl.top_radius = radius
 			cyl.bottom_radius = radius
+			cyl.radial_segments = round_sides(sides)
 			mesh = cyl
 		BrushShape.CONE:
 			var cone = CylinderMesh.new()
 			cone.height = size.y
 			cone.bottom_radius = max(size.x, size.z) * 0.5
 			cone.top_radius = 0.0
+			cone.radial_segments = round_sides(sides)
 			mesh = cone
 		BrushShape.WEDGE:
 			mesh = _build_wedge_mesh()
@@ -820,9 +844,30 @@ func _face_from_ids(ids: PackedInt32Array, point_of: Array[Vector3], uv_of: Dict
 				face_uvs = PackedVector2Array()
 				break
 			face_uvs.append(uv_of[id])
+		# A source mesh can hand back UVs that span no area. CylinderMesh maps both
+		# caps onto a line - every vertex of the top cap sits at v = 0 and every
+		# vertex of the bottom at v = 0.5 - so a face carrying them samples one row
+		# of texels however it is textured. The projection is a worse map than a
+		# good source UV and a much better one than that, so it is used instead.
+		if _uvs_span_no_area(face_uvs):
+			face_uvs = PackedVector2Array()
 		face.custom_uvs = face_uvs
 	face.ensure_geometry()
 	return face
+
+
+## Whether a UV loop is flat in one axis, so nothing mapped through it is visible.
+static func _uvs_span_no_area(uvs: PackedVector2Array) -> bool:
+	if uvs.size() < 3:
+		return false
+	var lo: Vector2 = uvs[0]
+	var hi: Vector2 = uvs[0]
+	for uv in uvs:
+		lo.x = minf(lo.x, uv.x)
+		lo.y = minf(lo.y, uv.y)
+		hi.x = maxf(hi.x, uv.x)
+		hi.y = maxf(hi.y, uv.y)
+	return (hi.x - lo.x) < 0.0001 or (hi.y - lo.y) < 0.0001
 
 
 func _build_box_faces() -> Array[FaceData]:
