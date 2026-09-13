@@ -182,6 +182,31 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   The generic test is last now, destruction is first, and "bevel" and "prefab"
   have their own glyphs rather than falling through to the catch-all.
   `HFHistoryBrowser` calls the same two functions, so both surfaces are right.
+- **The playtest starts the player standing on the spawn point** (#468). Two
+  pieces of code held a model of the same player and disagreed about what a spawn
+  marker is. `HFSpawnSystem` treats it as the feet - it builds its test capsule
+  at `pos + PLAYER_HEIGHT / 2` and places a marker at
+  `floor + FEET_OFFSET + height_offset`, which the user guide describes as extra
+  height above the floor for safety, so the offset is already in the marker's
+  position. `_resolve_playtest_spawn()` added `height_offset` a second time and
+  handed the result to a `CharacterBody3D` whose capsule is centred on the node.
+  With `height_offset` 0 the validator passed a spawn that started the body 0.7
+  units inside the floor it was meant to stand on, and what happened next was
+  left to `move_and_slide()`. The body is now derived from the marker in one
+  place, half a player above the feet, and a test asserts the two scripts still
+  agree about how tall a player is - which until now was a comment in one of them
+  asking the other to match.
+- **Crouch shrinks the player** (#469). The playtest HUD lists `Ctrl crouch` and
+  what Ctrl did was pick a slower speed: `is_crouching` was assigned and never
+  read again, `_ensure_collider()` built one 1.6-tall capsule at `_ready()` and
+  nothing touched it afterwards, and the camera stayed at eye height. A mapper
+  building a crawl space and pressing Ctrl to test it walked into the wall
+  slowly, with nothing on screen to say whether the gap was too low or the crouch
+  did not work - which is the specific thing playtesting is meant to answer. The
+  capsule now shrinks, the body moves by half the change so the feet stay where
+  they were, the camera comes down with it, and standing up tests that the taller
+  capsule fits before it happens. A player who cannot stand up stays crouched,
+  and the movement speed reads that state rather than the key.
 - **The quick property popup and the control behind it now agree** (#447,
   #448). The double-tap popup (G G, B B, R R) restated the range of each field
   instead of taking it from the dock control it writes into, and none of the
