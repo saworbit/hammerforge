@@ -296,6 +296,22 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   and the editor has PRISM_TRI and PRISM_PENT for the low counts, so a round
   shape is not how you ask for one. A greybox cylinder is 18 faces after the
   coplanar merge now rather than 66.
+- **Entity properties are written into a `.map` in the notation a `.map` uses**
+  (#479). A `.map` exists to be read by something else, and the Objects tab
+  stores typed values: the colour picker writes a `Color` and the vector row
+  writes a `Vector3`. `_entity_to_map_lines()` called `str()` on each one before
+  the adapter saw it, so a colour reached the file as
+  `"color" "(0.2, 0.4, 0.8, 1.0)"` - and the parentheses and the commas make the
+  key unusable to a Quake-family compiler rather than merely differently scaled.
+  The value keeps its type as far as the adapter now, which writes a colour as
+  three numbers with no alpha, a vector as space-separated components, a flag as
+  `1` or `0` and a float with the snapping the rest of the file uses. A hex
+  string goes the same way, because `entities.json` gives a colour property a hex
+  default and a colour the mapper never opened was reaching the file as
+  `#ffffff`. The colour scale is one overridable method, since it is a per-format
+  convention. The `.map` writer's no-adapter fallback used to `str()` everything,
+  which is the notation this path exists to keep out of the file; it builds a
+  base adapter instead.
 - **The region memory budget now counts what it actually freed** (#446).
   `_unload_region()` is careful: it refuses to throw a region's chunks away if
   they could not be written to disk first, and says so. `_evict_for_budget()`

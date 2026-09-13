@@ -398,10 +398,8 @@ static func _entity_identity_lines(entity, adapter: HFMapAdapterType = null) -> 
 	for pair in pairs:
 		# One pair at a time keeps the order and the repeats while still going
 		# through the adapter, which is what escapes the key and the value.
-		if adapter:
-			out.append_array(adapter.format_entity_properties({pair[0]: pair[1]}))
-		else:
-			out.append('"%s" "%s"' % [escape_property(str(pair[0])), escape_property(str(pair[1]))])
+		var writer: HFMapAdapterType = adapter if adapter else HFMapAdapterType.new()
+		out.append_array(writer.format_entity_properties({pair[0]: pair[1]}))
 	return out
 
 
@@ -421,19 +419,20 @@ static func _entity_to_map_lines(
 		var key_name := str(key)
 		if key_name == "classname" or key_name == "origin":
 			continue
-		var value := str(data[key])
-		if value == "":
+		# The value keeps its type on the way to the adapter. The Objects tab
+		# stores a Color for a colour and a Vector3 for a vector row, and `str()`
+		# on either produces Godot's own notation, which nothing that reads a
+		# `.map` can parse - so flattening here was what put it in the file.
+		if str(data[key]) == "":
 			continue
-		props[key_name] = value
+		props[key_name] = data[key]
 	props["classname"] = entity_class
 	props["origin"] = _format_vec3(entity.global_transform.origin)
-	if adapter:
-		lines.append_array(adapter.format_entity_properties(props))
-	else:
-		for key in props:
-			lines.append(
-				'"%s" "%s"' % [escape_property(str(key)), escape_property(str(props[key]))]
-			)
+	# A base adapter when none was given, rather than a second copy of the
+	# formatting here: the fallback used to `str()` every value, which is the
+	# notation this path exists to keep out of the file.
+	var writer: HFMapAdapterType = adapter if adapter else HFMapAdapterType.new()
+	lines.append_array(writer.format_entity_properties(props))
 	# entity_data carries the authored keys. The name and the I/O outputs live in
 	# metadata, so they come from there.
 	lines.append_array(_entity_identity_lines(entity, adapter))
