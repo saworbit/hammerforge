@@ -80,7 +80,7 @@ func test_round_trip_default_values():
 	var data = face.to_dict()
 	var restored = FaceData.from_dict(data)
 	assert_eq(restored.material_idx, -1, "Default material_idx")
-	assert_eq(restored.uv_projection, FaceData.UVProjection.PLANAR_Z, "Default uv_projection")
+	assert_eq(restored.uv_projection, FaceData.UVProjection.BOX_UV, "Default uv_projection")
 	assert_almost_eq(restored.uv_scale.x, 1.0, 0.001, "Default uv_scale.x")
 	assert_almost_eq(restored.uv_offset.x, 0.0, 0.001, "Default uv_offset.x")
 	assert_almost_eq(restored.uv_rotation, 0.0, 0.001, "Default uv_rotation")

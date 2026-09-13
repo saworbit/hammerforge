@@ -918,9 +918,19 @@ func _face_count(shape_id: int, size: Vector3) -> int:
 
 
 func test_a_cylinder_is_its_sides_plus_two_caps_not_a_face_per_triangle():
-	# CylinderMesh uses 64 radial segments, so the real face count is 66. It was
-	# 768: every cap wedge and every side triangle was its own FaceData.
-	assert_eq(_face_count(DraftBrush.BrushShape.CYLINDER, Vector3(64, 64, 64)), 66)
+	# It was 768: every cap wedge and every side triangle was its own FaceData.
+	# The segment count is the brush's own `sides` now rather than CylinderMesh's
+	# default of 64, so the answer is stated in terms of what was asked for.
+	brush.sides = 12
+	assert_eq(_face_count(DraftBrush.BrushShape.CYLINDER, Vector3(64, 64, 64)), 14)
+	brush.sides = 24
+	assert_eq(_face_count(DraftBrush.BrushShape.CYLINDER, Vector3(64, 64, 64)), 26)
+	brush.sides = 4
+	assert_eq(
+		_face_count(DraftBrush.BrushShape.CYLINDER, Vector3(64, 64, 64)),
+		DraftBrush.DEFAULT_ROUND_SIDES + 2,
+		"a count below the minimum for a round shape uses the default"
+	)
 
 
 func test_the_flat_primitives_collapse_to_their_real_face_counts():
@@ -951,12 +961,13 @@ func test_a_merged_dodecahedron_face_is_a_pentagon():
 
 
 func test_a_merged_cylinder_cap_keeps_every_rim_point():
+	brush.sides = 20
 	_face_count(DraftBrush.BrushShape.CYLINDER, Vector3(64, 64, 64))
 	var caps := 0
 	for face in brush.faces:
 		if absf(face.normal.y) > 0.99:
 			caps += 1
-			assert_eq(face.local_verts.size(), 64, "A cap is the whole rim, not a fan wedge")
+			assert_eq(face.local_verts.size(), 20, "A cap is the whole rim, not a fan wedge")
 	assert_eq(caps, 2, "A cylinder has two caps")
 
 

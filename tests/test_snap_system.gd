@@ -475,11 +475,15 @@ func test_tessellated_primitive_falls_back_to_its_bounding_box():
 	snap.set_mode(HFSnapSystem.SnapMode.VERTEX, true)
 	snap.set_mode(HFSnapSystem.SnapMode.GRID, false)
 	var b := _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "cyl")
+	# A cylinder is built from its own `sides` now, so it is only past the snap
+	# budget when it was asked to be. The fallback is what this is about, so the
+	# brush is given enough segments to need it.
+	b.sides = 96
 	b.shape = DraftBrush.BrushShape.CYLINDER
 	assert_gt(
 		b.faces.size(),
 		HFSnapSystem.MAX_SNAP_FACES,
-		"A cylinder carries one face per triangle, which is what the cap is for"
+		"A brush past the snap budget is what the bounding box fallback is for"
 	)
 
 	assert_eq(
@@ -493,6 +497,7 @@ func test_bounding_box_fallback_still_follows_rotation():
 	snap.set_mode(HFSnapSystem.SnapMode.VERTEX, true)
 	snap.set_mode(HFSnapSystem.SnapMode.GRID, false)
 	var b := _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "cyl_rot")
+	b.sides = 96
 	b.shape = DraftBrush.BrushShape.CYLINDER
 	b.rotation = Vector3(0, deg_to_rad(45.0), 0)
 	var rotated_corner: Vector3 = b.global_transform * Vector3(16, 16, 16)
