@@ -37,6 +37,42 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **Every dock command that changes the level now registers an undo step**
+  (#470, #471, #472, #473, #474, #475). Thirteen of them called `level_root`
+  directly: New, Add Sel, Rem Sel and Delete on the visgroup list, Group and
+  Ungroup, Create Entity, Add and Remove on the entity I/O list, Add Layer and
+  Remove Layer, Generate Noise and Import Heightmap. Ctrl+Z after any of them
+  undid whatever
+  came before instead, so a misclick on Delete Visgroup lost the membership of
+  every brush in it and the keystroke that should have taken it back removed
+  something else. Group and Ungroup were the worst of the set because they
+  recorded a row in the History panel, which is where a mapper looks to see what
+  can be stepped back. All of them go through `_commit_state_action()` now, and
+  the History panel entry comes from the same wrapper. Convert to Heightmap
+  builds its layer inline, so it registers the work it already did.
+  `capture_state()` already carried the visgroups, the groups, the entities and
+  the paint layers; nothing about the data was in the way.
+- **A redo no longer reaches for a node the undo freed.** `restore_state()`
+  clears the brushes and entities and rebuilds them from their captured info, so
+  a command registered with a live node in its arguments had a dangling
+  reference waiting in the redo. `_commit_state_action()` takes an
+  `absolute_redo` flag for those, which registers the resulting state as the do
+  operation instead of the call. Every command above that takes a selection or
+  an entity uses it.
+- **The wiring panel's connections and presets are undoable** (#473). The panel
+  holds the entity system rather than the dock's undo manager, so it could not
+  register its own step. It now says when it is about to change something, the
+  dock takes the before state, and the done signal commits the pair - which
+  matters most for a preset, where the alternative to one Ctrl+Z was deleting a
+  dozen connections by hand. A preset that applies nothing says so, rather than
+  leaving a before state to pair with whatever happened next.
+- **Add Sel leaves the visgroup row it just used selected** (#476). All three
+  visgroup commands end in `refresh_visgroup_ui()`, which clears the ItemList
+  and rebuilds it, so the highlight was gone and the next Add Sel, Rem Sel or
+  Delete was a silent no-op until the mapper clicked the visgroup again - which
+  dropped every click after the first in the natural workflow. The row goes back
+  after the refresh, the way the visibility toggle on the same list already did
+  it, and a command that finds no visgroup highlighted now says so.
 - **The live auto-connector path costs the stroke instead of the level**
   (#441). `defs_for_touched_cells()` is documented as the cheap path that "does
   not scan or rebuild geometry", and its first statement was a full
