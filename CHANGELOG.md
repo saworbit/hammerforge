@@ -37,6 +37,19 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **A dimension typed during a draw drag now shows on the brush, and keeps the
+  drag's direction** (#516, #517). `update_preview()` wrote the typed value into
+  the drag state and then called `update_drag()`, which recomputed the same field
+  from the cursor. The number went onto the HUD and the brush under it carried
+  on following the mouse, so the feature read as broken right up until it was
+  committed. `HFInputState` carries a `numeric_override` now, which the drag
+  system checks before it recomputes either field, and which is cleared when the
+  buffer empties or the gesture ends. The typed base also kept the sign it never
+  had: one number went onto X and Z as a positive extent, so a drag heading into
+  negative X and Z - half of all drags - jumped to the opposite quadrant on
+  Enter, with the HUD reading the same either way because
+  `get_drag_dimensions()` takes `absf()`. The extent is built along the direction
+  the drag already has, and positive when there is no direction yet.
 - **Every dock command that changes the level now registers an undo step**
   (#470, #471, #472, #473, #474, #475). Thirteen of them called `level_root`
   directly: New, Add Sel, Rem Sel and Delete on the visgroup list, Group and
