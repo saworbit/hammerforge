@@ -37,6 +37,22 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **`tools/` is format checked and linted in CI** (#500). Sixty-six `.gd` files -
+  the vibe harness, its scenarios, the benchmark scripts, the showcase builder
+  and the editor smoke setup - sat outside both checks and had drifted. One
+  scenario carried a raw newline inside a double quoted string, which Godot's own
+  parser takes and gdtoolkit does not, so the scenario ran while any other tool
+  that reads GDScript choked on the file. That is #115 again, in the directory
+  #115 never looked at. Both CI invocations cover `tools/` now and the eleven
+  files that needed reformatting are reformatted; `gdlint` needed no rule relaxed.
+- **The README At a Glance test count is maintained by the tool that measures it**
+  (#502). `tools/update_test_counts.py` owned five sentences, and the At a Glance
+  cell was a sixth number in a file it already rewrites. So CI corrected the badge
+  at the top of the README on every wave and walked past the table two screens
+  below it, which had read 2,860 since it was written - undercounting the suite by
+  about a quarter, in the second thing a visitor reads. The cell is in `rewrites()`
+  now, anchored on the prose around the number the way the other five are, and the
+  commit step already had `README.md` in scope.
 - **Save Preset no longer names two presets the same thing** (#513).
   `_suggest_preset_name()` counted the buttons on screen, which matches the
   highest name in use only until one is deleted. Three saves, delete the middle

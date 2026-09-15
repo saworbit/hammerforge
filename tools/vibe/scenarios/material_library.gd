@@ -107,12 +107,16 @@ func _round_trip_runtime_materials() -> void:
 	if loaded and mm.get_missing_count() == mm.materials.size() and mm.materials.size() > 0:
 		known(
 			515,
-			"saving a palette of materials that were made in the editor produces a library"
-			+ " that restores nothing",
+			(
+				"saving a palette of materials that were made in the editor produces a library"
+				+ " that restores nothing"
+			),
 			(
 				"save_library() records each slot's resource_path, and a material added"
-				+ " through the Materials tab's Add button has none, so all %d slots are"
-				% mm.materials.size()
+				+ (
+					" through the Materials tab's Add button has none, so all %d slots are"
+					% mm.materials.size()
+				)
 				+ " written as empty strings and come back null. It returns OK and says nothing"
 			)
 		)

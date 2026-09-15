@@ -65,9 +65,7 @@ func _camera(root: Node3D) -> Camera3D:
 
 
 func _begin_base_drag(root: Node3D, cam: Camera3D) -> void:
-	root.input_state.begin_drag(
-		Vector3.ZERO, 0, 0, 4, 32.0, Vector3(32, 32, 32), Vector2(400, 300)
-	)
+	root.input_state.begin_drag(Vector3.ZERO, 0, 0, 4, 32.0, Vector3(32, 32, 32), Vector2(400, 300))
 	# One mouse update, so the drag is where a real one would be by now.
 	root.update_drag(cam, Vector2(500, 380))
 
@@ -99,8 +97,10 @@ func _typing_during_the_base_stage() -> void:
 				"update_preview() writes drag_end = drag_origin + Vector3(value, 0, value)"
 				+ " and then calls root.update_drag(), whose DRAG_BASE branch"
 				+ " (hf_drag_system.gd:50-56) recomputes drag_end from the mouse raycast"
-				+ " unless Alt is held. Typing 128 asked for %s and left it at %s,"
-				% [str(asked_for), str(after_typing)]
+				+ (
+					" unless Alt is held. Typing 128 asked for %s and left it at %s,"
+					% [str(asked_for), str(after_typing)]
+				)
 				+ " which is the raycast under the cursor. The HUD shows the digits throughout"
 			)
 		)
@@ -132,9 +132,7 @@ func _which_way_the_typed_extent_goes() -> void:
 	plugin.last_3d_camera = cam
 
 	# A drag heading into negative X and Z, which is half of all drags.
-	root.input_state.begin_drag(
-		Vector3.ZERO, 0, 0, 4, 32.0, Vector3(32, 32, 32), Vector2(400, 300)
-	)
+	root.input_state.begin_drag(Vector3.ZERO, 0, 0, 4, 32.0, Vector3(32, 32, 32), Vector2(400, 300))
 	root.input_state.drag_end = Vector3(-64, 0, -64)
 	note("dragging away from the origin, drag_end", root.input_state.drag_end)
 	note("dimensions the HUD reports", root.input_state.get_drag_dimensions())
@@ -167,9 +165,7 @@ func _what_the_buffer_accepts() -> void:
 	var plugin := _stub()
 	plugin.last_3d_camera = cam
 
-	root.input_state.begin_drag(
-		Vector3.ZERO, 0, 0, 4, 32.0, Vector3(32, 32, 32), Vector2(400, 300)
-	)
+	root.input_state.begin_drag(Vector3.ZERO, 0, 0, 4, 32.0, Vector3(32, 32, 32), Vector2(400, 300))
 	root.input_state.advance_to_height(Vector2(400, 300))
 	note("stage", "DRAG_HEIGHT")
 

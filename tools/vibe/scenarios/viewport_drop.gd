@@ -64,8 +64,10 @@ func _what_can_drop_data_accepts() -> void:
 			"every drag type is accepted on its type string alone",
 			(
 				"each handler re-reads the payload and returns early when it is missing,"
-				+ " so the viewport shows a drop cursor for %s and the release does nothing"
-				% str(accepted_hollow)
+				+ (
+					" so the viewport shows a drop cursor for %s and the release does nothing"
+					% str(accepted_hollow)
+				)
 			)
 		)
 

@@ -57,21 +57,15 @@ func _one_change_at_a_time() -> void:
 	)
 	_did_it_notice(tracker, root, b, "hidden in the Scene tree", func(n): n.visible = false)
 	_did_it_notice(tracker, root, b, "shown again", func(n): n.visible = true)
-	_did_it_notice(tracker, root, b, "size changed in the Inspector", func(n): n.size = Vector3(96, 64, 64))
+	_did_it_notice(
+		tracker, root, b, "size changed in the Inspector", func(n): n.size = Vector3(96, 64, 64)
+	)
 	_did_it_notice(tracker, root, b, "operation changed in the Inspector", func(n): n.operation = 2)
 	_did_it_notice(
-		tracker,
-		root,
-		b,
-		"a face's material slot changed",
-		func(n): n.faces[0].material_idx = 1
+		tracker, root, b, "a face's material slot changed", func(n): n.faces[0].material_idx = 1
 	)
 	_did_it_notice(
-		tracker,
-		root,
-		b,
-		"a face's UV rotation changed",
-		func(n): n.faces[0].uv_rotation = 0.5
+		tracker, root, b, "a face's UV rotation changed", func(n): n.faces[0].uv_rotation = 0.5
 	)
 	_did_it_notice(
 		tracker,
