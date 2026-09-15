@@ -37,6 +37,22 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **Save Library and Load Library are in the Paint tab** (#498, #515). The User
+  Guide has listed them under Material Library as if they were buttons since
+  before either was reachable: `MaterialManager.save_library()` had no caller
+  anywhere and `load_library()` had none outside a test. Both are wired into the
+  Materials section beside Refresh Prototypes now, through the same file dialog
+  pattern the rest of the dock uses, and the status line reports what the save
+  could not record and what the load could not resolve.
+  `save_library()` was the silent half of that pair (#515): a library records
+  each slot's `resource_path`, a material made in the editor session has none, so
+  a palette of four saved as four empty strings and reported `OK` while the load
+  side restored four nulls and warned about every one of them. It warns on the
+  way out now, names the slots through `get_dropped_save_slots()`, and returns
+  `ERR_SKIP` when the file it just wrote restores nothing. Both functions close
+  their `FileAccess`, which neither did.
+  The User Guide, `features.md`, the data portability notes and the MVP guide are
+  corrected: two of them still advertised the usage tracking #375 removed.
 - **Editing a brush entity's metadata now marks the bake stale** (#510).
   `HFBrushChangeTracker._signature()` hashed the transform, visibility, size,
   shape, operation, sides, material override and every `FaceData`, and none of

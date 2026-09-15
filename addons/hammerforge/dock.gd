@@ -268,6 +268,8 @@ var export_settings_btn: Button = null
 var import_settings_btn: Button = null
 @onready var settings_export_dialog: FileDialog = $SettingsExportDialog
 @onready var settings_import_dialog: FileDialog = $SettingsImportDialog
+@onready var material_library_save_dialog: FileDialog = $MaterialLibrarySaveDialog
+@onready var material_library_load_dialog: FileDialog = $MaterialLibraryLoadDialog
 # -- Performance (built programmatically) --
 var perf_brushes_value: Label = null
 var perf_entity_value: Label = null
@@ -284,6 +286,8 @@ var materials_list: ItemList = null
 var material_add: Button = null
 var material_remove: Button = null
 var material_load_prototypes: Button = null
+var material_save_library: Button = null
+var material_load_library: Button = null
 var material_assign: Button = null
 var face_select_mode: CheckBox = null
 var face_clear: Button = null
@@ -4262,6 +4266,26 @@ func _on_material_load_prototypes() -> void:
 	_commit_state_action("Load Prototypes", "add_prototype_materials")
 	_sync_materials_from_root()
 	show_toast("Prototype materials loaded", 0)
+
+
+func _on_material_save_library() -> void:
+	if not level_root:
+		return
+	HFDockFileHandler.show_dialog(material_library_save_dialog)
+
+
+func _on_material_load_library() -> void:
+	if not level_root:
+		return
+	HFDockFileHandler.show_dialog(material_library_load_dialog)
+
+
+func _on_material_library_save_selected(path: String) -> void:
+	HFDockFileHandler.on_material_library_save_selected(self, path)
+
+
+func _on_material_library_load_selected(path: String) -> void:
+	HFDockFileHandler.on_material_library_load_selected(self, path)
 
 
 func _on_material_assign() -> void:

@@ -90,6 +90,21 @@ static func setup_storage_dialogs(dock: Object) -> void:
 		Callable(dock, "_on_settings_import_selected")
 	)
 
+	_configure_dialog(
+		dock.material_library_save_dialog,
+		FileDialog.ACCESS_FILESYSTEM,
+		FileDialog.FILE_MODE_SAVE_FILE,
+		PackedStringArray(["*.json ; Material Library"]),
+		Callable(dock, "_on_material_library_save_selected")
+	)
+	_configure_dialog(
+		dock.material_library_load_dialog,
+		FileDialog.ACCESS_FILESYSTEM,
+		FileDialog.FILE_MODE_OPEN_FILE,
+		PackedStringArray(["*.json ; Material Library"]),
+		Callable(dock, "_on_material_library_load_selected")
+	)
+
 
 static func _configure_dialog(
 	dialog: FileDialog,
@@ -239,3 +254,65 @@ static func on_settings_import_selected(dock: Object, path: String) -> void:
 		return
 	dock._apply_editor_settings(parsed)
 	dock._set_status("Imported settings", false, 3.0)
+
+
+## Write the palette out as a material library.
+##
+## `save_library()` records each slot's `resource_path`, so a material made in
+## this session and never saved to disk cannot be recorded and its slot comes
+## back empty. It says which slots those were; this says so where the mapper can
+## see it rather than only in the log.
+static func on_material_library_save_selected(dock: Object, path: String) -> void:
+	if dock == null or not dock.level_root:
+		return
+	if path == "":
+		dock._set_status("Invalid library path", true)
+		return
+	var manager = dock.level_root.material_manager
+	if manager == null:
+		dock._set_status("No material palette", true)
+		return
+	var result: int = manager.save_library(path)
+	if result == ERR_CANT_OPEN:
+		dock._set_status("Failed to write material library", true)
+		return
+	var dropped: Array = manager.get_dropped_save_slots()
+	if result == ERR_SKIP:
+		dock._set_status("Saved, but no material had a path to record", true)
+		return
+	if not dropped.is_empty():
+		dock._set_status(
+			(
+				"Saved %d materials; %d had no path and were left empty"
+				% [manager.materials.size() - dropped.size(), dropped.size()]
+			),
+			true,
+			5.0
+		)
+		return
+	dock._set_status("Saved material library", false, 3.0)
+
+
+static func on_material_library_load_selected(dock: Object, path: String) -> void:
+	if dock == null or not dock.level_root:
+		return
+	if path == "" or not FileAccess.file_exists(path):
+		dock._set_status("Material library not found", true)
+		return
+	var manager = dock.level_root.material_manager
+	if manager == null:
+		dock._set_status("No material palette", true)
+		return
+	if not manager.load_library(path):
+		dock._set_status("Could not read material library", true)
+		return
+	dock._sync_materials_from_root()
+	var missing: int = manager.get_missing_count()
+	if missing > 0:
+		dock._set_status(
+			"Loaded library; %d of %d materials are missing" % [missing, manager.materials.size()],
+			true,
+			5.0
+		)
+		return
+	dock._set_status("Loaded material library", false, 3.0)

@@ -287,3 +287,109 @@ func test_a_later_clean_load_clears_the_missing_list():
 		"The second load does not report the first load's misses"
 	)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+# ===========================================================================
+# Saving a library says what it could not record (#515)
+# ===========================================================================
+
+
+func _save_path() -> String:
+	return "user://hf_test_library_%d.json" % Time.get_ticks_usec()
+
+
+## A library records each slot's `resource_path`. A material made in the editor
+## session has none, so the slot is written empty and comes back null. That is
+## every material added through the Materials tab's Add button, and the save used
+## to report OK and say nothing.
+func test_saving_a_palette_of_pathless_materials_reports_that_it_recorded_nothing():
+	var mats: Array = []
+	for i in 4:
+		mats.append(_make_material("runtime_%d" % i))
+	root.set_materials(mats)
+	var path := _save_path()
+
+	var result: int = root.material_manager.save_library(path)
+
+	assert_eq(result, ERR_SKIP, "a library that restores nothing is not a successful save")
+	assert_eq(root.material_manager.get_dropped_save_slots().size(), 4, "and it names the slots")
+	DirAccess.remove_absolute(path)
+
+
+func test_a_palette_with_paths_saves_clean():
+	var mat := _make_material("on_disk")
+	mat.resource_path = "res://addons/hammerforge/does_not_need_to_exist.tres"
+	root.set_materials([mat])
+	var path := _save_path()
+
+	assert_eq(root.material_manager.save_library(path), OK)
+	assert_true(root.material_manager.get_dropped_save_slots().is_empty())
+	DirAccess.remove_absolute(path)
+
+
+func test_a_mixed_palette_saves_and_names_only_the_slots_it_dropped():
+	var on_disk := _make_material("on_disk")
+	on_disk.resource_path = "res://addons/hammerforge/does_not_need_to_exist.tres"
+	root.set_materials([on_disk, _make_material("runtime")])
+	var path := _save_path()
+
+	assert_eq(root.material_manager.save_library(path), OK, "one slot did record")
+	assert_eq(root.material_manager.get_dropped_save_slots(), [1] as Array[int])
+	DirAccess.remove_absolute(path)
+
+
+func test_an_empty_palette_is_not_a_dropped_library():
+	var path := _save_path()
+	assert_eq(root.material_manager.save_library(path), OK, "nothing to record is not a failure")
+	DirAccess.remove_absolute(path)
+
+
+func test_the_dropped_slots_are_cleared_by_the_next_save():
+	root.set_materials([_make_material("runtime")])
+	var path := _save_path()
+	root.material_manager.save_library(path)
+	assert_eq(root.material_manager.get_dropped_save_slots().size(), 1)
+
+	var on_disk := _make_material("on_disk")
+	on_disk.resource_path = "res://addons/hammerforge/does_not_need_to_exist.tres"
+	root.set_materials([on_disk])
+	root.material_manager.save_library(path)
+
+	assert_true(root.material_manager.get_dropped_save_slots().is_empty())
+	DirAccess.remove_absolute(path)
+
+
+# ===========================================================================
+# The Paint tab can reach save and load (#498)
+# ===========================================================================
+
+
+## The User Guide has listed Save and Load under Material Library since before
+## either had a button, and `MaterialManager` has had both callable from nothing.
+func test_the_paint_tab_builds_a_save_and_a_load_button():
+	var source := FileAccess.get_file_as_string("res://addons/hammerforge/ui/paint_tab_builder.gd")
+	assert_true(source.contains('dock.material_save_library.text = "Save Library"'))
+	assert_true(source.contains('dock.material_load_library.text = "Load Library"'))
+	assert_true(source.contains("dock.material_save_library.pressed.connect"))
+	assert_true(source.contains("dock.material_load_library.pressed.connect"))
+
+
+func test_the_dock_has_a_dialog_for_each():
+	var source := FileAccess.get_file_as_string("res://addons/hammerforge/dock.tscn")
+	assert_true(source.contains('[node name="MaterialLibrarySaveDialog" type="FileDialog"'))
+	assert_true(source.contains('[node name="MaterialLibraryLoadDialog" type="FileDialog"'))
+
+
+func test_a_library_round_trips_through_the_paths_it_recorded():
+	var path := _save_path()
+	root.add_prototype_materials()
+	var before: int = root.material_manager.materials.size()
+	assert_gt(before, 0, "the prototypes are .tres files with stable paths")
+
+	assert_eq(root.material_manager.save_library(path), OK)
+	root.material_manager.clear()
+	assert_true(root.material_manager.load_library(path))
+
+	assert_eq(root.material_manager.materials.size(), before)
+	assert_eq(root.material_manager.get_missing_count(), 0)
+	DirAccess.remove_absolute(path)
