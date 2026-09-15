@@ -87,6 +87,15 @@ SCENARIOS = [
     "bake-materials",
     "dock-ranges",
     "brush-sides",
+    "map-uv-tail",
+    "material-library",
+    "tool-registry",
+    "uv-canvas",
+    "viewport-drop",
+    "change-tracker",
+    "heightmap-convert",
+    "numeric-entry",
+    "generator-ranges",
 ]
 
 # Generous: chaos runs 300 operations and cost saves eight levels. A scenario
