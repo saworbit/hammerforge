@@ -96,7 +96,8 @@ func _what_the_scan_constructs() -> void:
 	note("tools registered", loaded.size())
 	note("orphan nodes", "%d -> %d" % [orphans_before, orphans_after])
 	if orphans_after > orphans_before:
-		flag(
+		known(
+			507,
 			"the custom-tool scan leaks a node for every .gd file that is not a tool",
 			(
 				"load_external_tools() calls script.new() before it checks the type,"
@@ -122,7 +123,8 @@ func _activating_an_id_that_is_not_there() -> void:
 	var after = registry.get_active_tool()
 	note("after activating unknown id 999", after.tool_name() if after else "nothing")
 	if after == null:
-		flag(
+		known(
+			508,
 			"activating a tool id the registry does not have turns off the tool that was active",
 			(
 				"activate_tool() deactivates the current tool before it looks the new id up,"
@@ -187,7 +189,8 @@ func _settings_against_their_own_schema() -> void:
 	t.set_setting("mode", 7)
 	note("enum setting 'mode' (2 options) set to 7", t.get_setting("mode"))
 	if int(t.get_setting("mode")) >= 2:
-		flag(
+		known(
+			509,
 			"an enum tool setting accepts an index its own options do not have",
 			(
 				"set_setting() clamps 'float' and 'int' against min/max and lets every other"

@@ -114,6 +114,15 @@ it from here.
 | `bake-materials` | whether per-face materials reach the baked mesh with the settings a level starts with |
 | `dock-ranges` | whether each dock spin and the level property behind it agree about the legal range |
 | `brush-sides` | whether a cylinder or a cone is built with the number of sides it was asked for |
+| `map-uv-tail` | whether the UV tail of an exported `.map` face means what the face means |
+| `uv-canvas` | where the UV editor draws a real face's UVs, and what dragging one does |
+| `tool-registry` | what the custom-tool scan constructs, and what the registry does with an unknown id |
+| `material-library` | whether the documented Save/Load material library can be reached, and what it keeps |
+| `viewport-drop` | what the viewport accepts as a drop, and how a saved brush preset is named |
+| `change-tracker` | which native edits the brush change tracker notices, and which it does not |
+| `heightmap-convert` | what Convert to Heightmap produces, what it costs, and which settings it honours |
+| `numeric-entry` | whether a dimension typed during a draw drag reaches the preview |
+| `generator-ranges` | every generator setting one step outside the range its own schema declares |
 
 ## Adding a scenario
 

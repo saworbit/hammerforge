@@ -85,7 +85,8 @@ func _remove_sources() -> void:
 		)
 		var reads := source.count("settings.remove_sources") + source.count("remove_sources:")
 		note("mentions of remove_sources in the converter", reads)
-		flag(
+		known(
+			511,
 			"ConvertSettings.remove_sources does nothing",
 			(
 				"the class comment says 'The original brushes can optionally be removed after"
@@ -136,7 +137,8 @@ func _what_the_grid_snap_costs() -> void:
 		)
 	var snap_floor: Variant = root.get("grid_snap")
 	note("the level's own grid_snap", snap_floor)
-	flag(
+	known(
+		512,
 		"Convert to Heightmap sizes its grid from the grid snap with no cap on the result",
 		(
 			"dock_paint_handler.gd passes level_root.grid_snap straight in as cell_size and"

@@ -91,7 +91,8 @@ func _rotation_units() -> void:
 		note("%s rotation field" % format, "%s (face holds %.1f deg)" % [str(emitted), degrees])
 		if absf(emitted - degrees) > 0.5:
 			if absf(emitted - deg_to_rad(degrees)) < 0.001:
-				flag(
+				known(
+					503,
 					"%s writes the UV rotation in radians into a degrees field" % format,
 					(
 						"a face turned %.0f deg exports as %s, which the compiler reads as %s deg"
@@ -148,7 +149,8 @@ func _scale_direction() -> void:
 		note("%s full tail" % format, " ".join(tail))
 		note("%s uscale field" % format, str(u_scale))
 		if repeats_more and u_scale > 1.0:
-			flag(
+			known(
+				504,
 				"%s exports the UV scale without inverting it" % format,
 				(
 					"uv_scale 2 tiles the texture twice as often in the viewport"
@@ -188,7 +190,8 @@ func _degenerate_scale() -> void:
 		var tail := _valve_tail(lines[0])
 		note("valve220 tail at uv_scale 0", " ".join(tail))
 		if tail.size() >= 3 and float(tail[1]) == 0.0:
-			flag(
+			known(
+				505,
 				"a UV scale of zero is exported as a .map texture scale of 0",
 				(
 					"every Quake-family compiler divides by the scale;"

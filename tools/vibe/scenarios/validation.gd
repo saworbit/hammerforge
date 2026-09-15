@@ -52,7 +52,16 @@ func _a_clean_level_is_clean() -> void:
 	var issues := _issues(root)
 	note("a level with one untouched box", "%d issue(s): %s" % [issues.size(), issues])
 	if not issues.is_empty():
-		flag("validate_level reports issues on a level with one default box", issues)
+		known(
+			514,
+			"validate_level reports issues on a level with one default box",
+			(
+				"%s -- #491 turned bake_use_face_materials on by default and the palette still"
+				% str(issues)
+				+ " starts empty, so the rule at hf_validation_system.gd:60 fires on every new"
+				+ " level. This ran clean before that merge"
+			)
+		)
 
 
 ## The zero-size check is `size.x <= 0.0 or ...`. Every comparison against NaN is

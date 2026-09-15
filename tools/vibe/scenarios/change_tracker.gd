@@ -120,7 +120,8 @@ func _entity_metadata_the_bake_reads() -> void:
 	note("metadata hf_bake_system.gd reads off a draft brush", reads)
 
 	if not missed.is_empty() and not reads.is_empty():
-		flag(
+		known(
+			510,
 			"the change tracker does not hash the entity metadata the bake reads",
 			(
 				"_signature() covers transform, visible, size, shape, operation, sides,"

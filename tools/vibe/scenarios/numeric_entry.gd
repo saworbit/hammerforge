@@ -92,7 +92,8 @@ func _typing_during_the_base_stage() -> void:
 	note("what 128 asked for", asked_for)
 
 	if not after_typing.is_equal_approx(asked_for):
-		flag(
+		known(
+			516,
 			"a dimension typed during the base stage never reaches the preview",
 			(
 				"update_preview() writes drag_end = drag_origin + Vector3(value, 0, value)"
@@ -143,7 +144,8 @@ func _which_way_the_typed_extent_goes() -> void:
 	var placed: Vector3 = root.input_state.drag_end
 	note("drag_end after typing 128 and pressing Enter", placed)
 	if placed.x > 0.0 and placed.z > 0.0:
-		flag(
+		known(
+			517,
 			"typing a dimension moves the base to the opposite side of where it was drawn",
 			(
 				"apply_value() sets drag_end = drag_origin + Vector3(value, 0, value)"
@@ -177,7 +179,8 @@ func _what_the_buffer_accepts() -> void:
 		NumericInput.update_preview(plugin, root)
 		note("typed '%s' -> drag_height" % typed, root.input_state.drag_height)
 		if typed == "999999999" and is_equal_approx(root.input_state.drag_height, 32.0):
-			flag(
+			known(
+				516,
 				"a height typed during the height stage never reaches the preview either",
 				(
 					"update_preview() sets drag_height = 999999999 and then calls"

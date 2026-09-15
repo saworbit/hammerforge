@@ -95,6 +95,7 @@ SCENARIOS = [
     "change-tracker",
     "heightmap-convert",
     "numeric-entry",
+    "generator-ranges",
 ]
 
 # Generous: chaos runs 300 operations and cost saves eight levels. A scenario

@@ -58,7 +58,8 @@ func _is_there_a_way_in() -> void:
 	note("MaterialManager has load_library", mm.has_method("load_library"))
 
 	if library_controls.is_empty() and mm.has_method("save_library"):
-		flag(
+		known(
+			498,
 			"the documented Save/Load material library has no control anywhere in the dock",
 			(
 				"docs/HammerForge_UserGuide.md has a 'Material Library' section describing"
@@ -104,7 +105,8 @@ func _round_trip_runtime_materials() -> void:
 	note("palette after loading", mm.materials.size())
 	note("empty slots after loading", mm.get_missing_count())
 	if loaded and mm.get_missing_count() == mm.materials.size() and mm.materials.size() > 0:
-		flag(
+		known(
+			515,
 			"saving a palette of materials that were made in the editor produces a library"
 			+ " that restores nothing",
 			(

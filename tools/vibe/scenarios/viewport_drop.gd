@@ -143,7 +143,8 @@ func _how_presets_are_named() -> void:
 				duplicates.append(name)
 			seen[name] = true
 		if not duplicates.is_empty():
-			flag(
+			known(
+				513,
 				"two saved brush presets can end up with the same name in the list",
 				(
 					"_suggest_preset_name() is 'Preset N' counting the buttons on screen,"

@@ -89,7 +89,8 @@ func _where_the_points_land() -> void:
 				for y in range(0, int(CANVAS.y), 8):
 					if ed._find_nearest_uv_index(Vector2(x, y)) >= 0:
 						reachable += 1
-			flag(
+			known(
+				506,
 				"the UV editor draws a %s brush's face entirely outside its own canvas" % str(size.x),
 				(
 					"UVs span %.0f because a projected UV is a world coordinate,"
@@ -126,7 +127,8 @@ func _what_a_drag_does() -> void:
 	note("vertex 0 UV", "%s -> %s" % [before[0], face.custom_uvs[0]])
 	var moved: float = before[0].distance_to(face.custom_uvs[0])
 	if moved > maxf(before_bounds.size.x, before_bounds.size.y) * 0.25:
-		flag(
+		known(
+			506,
 			"dragging a UV point moves it by the whole face rather than by the cursor",
 			(
 				"the cursor was put at the middle of the canvas and the vertex moved %.1f UV units,"
