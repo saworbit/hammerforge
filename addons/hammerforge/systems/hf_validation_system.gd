@@ -56,11 +56,29 @@ func check_missing_dependencies() -> Array:
 		var blend_path := "res://addons/hammerforge/paint/hf_blend.gdshader"
 		if not ResourceLoader.exists(blend_path):
 			warnings.append("Missing blend shader: %s" % blend_path)
-	# Face material bake without palette
+	# A face pointing at a palette slot that is not there. `bake_use_face_materials`
+	# has been the default since #491 and the palette starts empty, so the pairing
+	# on its own is now the ordinary state of a level nobody has touched. What is
+	# still worth saying is that a face was painted and the bake has nothing to
+	# paint it with.
 	if root.bake_use_face_materials and root.material_manager:
-		if root.material_manager.materials.is_empty():
-			warnings.append("Face material bake enabled but material palette is empty")
+		if root.material_manager.materials.is_empty() and _any_face_names_a_material():
+			warnings.append("A face is painted but the material palette is empty")
 	return warnings
+
+
+## True when some face carries a palette index, rather than sitting at the unset
+## default every new brush is built with.
+func _any_face_names_a_material() -> bool:
+	if not root.draft_brushes_node:
+		return false
+	for child in root.draft_brushes_node.get_children():
+		if not (child is DraftBrush):
+			continue
+		for face in child.faces:
+			if face != null and int(face.material_idx) >= 0:
+				return true
+	return false
 
 
 func validate(auto_fix: bool = false) -> Dictionary:

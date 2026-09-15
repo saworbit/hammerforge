@@ -47,6 +47,38 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   always has. The validator's duplicate-name and broken-connection checks walked
   `entities_node` alone and now walk the brush entities too, since a brush entity
   carries both a name and its own outputs.
+- **The default bake path now runs the same finishing pass as the CSG one**
+  (#494). `build_mesh_from_groups()` unwrapped UV0 and stopped there, so since
+  #491 made `bake_use_face_materials` the default, every ordinary bake dropped
+  the LODs and the lightmap UV2 the Bake Options asked for. It calls
+  `_postprocess_mesh()` now, with `generate_lods`, `unwrap_uv2`, `uv2_texel_size`
+  and `unwrap_uv0` from the options. The face surfaces are also welded into an
+  index array on the way out: Godot generates LODs off the indices, so wiring the
+  pass in on its own would have fixed the UV2 half and left the LOD half exactly
+  as it was.
+- **A new level no longer fails its own validator** (#514). The rule paired
+  `bake_use_face_materials` with an empty palette, which was a deliberate
+  combination when face materials were off by default and is the ordinary
+  starting state now that they are on. Every untouched level reported an issue,
+  which is how a validator loses the weight it needs. It now warns only when some
+  face actually points at a palette slot, which is the case where the bake
+  produces untextured geometry the mapper did not ask for.
+- **The UV tail of an exported `.map` face line is now in the units a `.map`
+  uses** (#503, #504, #505). Three numbers close every face line and all three
+  were wrong. The rotation went out in radians into a field that means degrees,
+  so a face turned 45 degrees was written as `0.7854` and arrived turned by less
+  than one degree. The scale went out uninverted: `_apply_uv_transform()`
+  multiplies a world coordinate by `uv_scale` and a `.map` reader divides by the
+  scale field, so the same number meant twice the repeats inside HammerForge and
+  half of them in the file, and nudging the dock to correct an export made it
+  worse. A `uv_scale` of zero went out as a texture scale of zero, which is a
+  divide by zero in every Quake family compiler. `HFMapAdapter` now owns the
+  conversion for both formats: degrees out, the reciprocal scale out, and 1
+  substituted for a zero or non-finite scale with one warning per export naming
+  the brushes. A negative scale stays negative, because that is how a mirrored
+  face is written and `adjust_uvs_for_rotation()` produces one deliberately.
+  `uv_offset` is unchanged and now says why in a comment: with the scale written
+  as its reciprocal the two offsets are the same quantity.
 - **Every dock command that changes the level now registers an undo step**
   (#470, #471, #472, #473, #474, #475). Thirteen of them called `level_root`
   directly: New, Add Sel, Rem Sel and Delete on the visgroup list, Group and
