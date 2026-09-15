@@ -1051,3 +1051,75 @@ func test_every_generator_still_builds_at_its_defaults():
 	for type in HFGeneratorSystemScript.known_types():
 		var defaults = HFGeneratorSystemScript.default_settings(type)
 		assert_true(HFGeneratorSystemScript.validate(type, defaults).ok, "%s defaults" % type)
+
+
+# ===========================================================================
+# Every field of every builder, at both bounds (#518, #519)
+# ===========================================================================
+
+
+## `check_ranges()` is the only guard on the paths that never saw the dock: a
+## regenerate from a `.hflevel`, an undo replay, a script. Written as a walk over
+## the schemas rather than a list of fields, so a builder added later is covered
+## the day it is added.
+func test_every_numeric_field_refuses_one_step_outside_each_bound():
+	var checked := 0
+	for type in HFGeneratorSystemScript.known_types():
+		var name := str(type)
+		for entry in HFGeneratorSystemScript.settings_schema(name):
+			if not (entry is Dictionary) or not entry.has("key"):
+				continue
+			var kind := str(entry.get("type", "float"))
+			if kind != "float" and kind != "int":
+				continue
+			var key := str(entry["key"])
+			var step: float = 1.0 if kind == "int" else 0.5
+			if entry.has("min"):
+				var below = HFGeneratorSystemScript.default_settings(name)
+				below[key] = float(entry["min"]) - step
+				assert_false(
+					HFGeneratorSystemScript.validate(name, below).ok,
+					"%s.%s accepted %s, below its min of %s" % [name, key, below[key], entry["min"]]
+				)
+				checked += 1
+			if entry.has("max"):
+				var above = HFGeneratorSystemScript.default_settings(name)
+				above[key] = float(entry["max"]) + step
+				assert_false(
+					HFGeneratorSystemScript.validate(name, above).ok,
+					"%s.%s accepted %s, above its max of %s" % [name, key, above[key], entry["max"]]
+				)
+				checked += 1
+	assert_gt(checked, 0, "the walk found no bounded fields, which means it found nothing")
+
+
+func test_every_enum_field_refuses_an_index_its_options_do_not_have():
+	var checked := 0
+	for type in HFGeneratorSystemScript.known_types():
+		var name := str(type)
+		for entry in HFGeneratorSystemScript.settings_schema(name):
+			if not (entry is Dictionary) or str(entry.get("type", "")) != "enum":
+				continue
+			var key := str(entry["key"])
+			var options: Array = Array(entry.get("options", []))
+			var past = HFGeneratorSystemScript.default_settings(name)
+			past[key] = options.size()
+			assert_false(
+				HFGeneratorSystemScript.validate(name, past).ok,
+				"%s.%s accepted index %d of %d options" % [name, key, past[key], options.size()]
+			)
+			var negative = HFGeneratorSystemScript.default_settings(name)
+			negative[key] = -1
+			assert_false(
+				HFGeneratorSystemScript.validate(name, negative).ok,
+				"%s.%s accepted a negative index" % [name, key]
+			)
+			for index in options.size():
+				var inside = HFGeneratorSystemScript.default_settings(name)
+				inside[key] = index
+				assert_true(
+					HFGeneratorSystemScript.validate(name, inside).ok,
+					"%s.%s refused index %d, which is one of its own options" % [name, key, index]
+				)
+			checked += 1
+	assert_gt(checked, 0, "no enum field was found to check")
