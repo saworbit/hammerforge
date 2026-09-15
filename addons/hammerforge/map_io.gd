@@ -939,7 +939,13 @@ static func _cylinder_to_map_lines(
 	if adapter == null:
 		adapter = HFMapQuakeType.new()
 	var lines: Array[String] = []
-	var sides = max(6, brush.sides)
+	# The same resolution the viewport and the bake use. `max(6, brush.sides)`
+	# wrote a hexagon for the default cylinder, whose `sides` is 4 and which
+	# `DraftBrush.round_sides()` resolves to 16, and clamped the 5 the brush
+	# explicitly supports up to 6. The exported prism was not the cylinder on
+	# screen, and `_face_for_normal()` then tested 6 wall normals against 16
+	# authored faces, so the face textures landed on the wrong walls.
+	var sides = DraftBrush.round_sides(brush.sides)
 	var radius = max(brush.size.x, brush.size.z) * 0.5
 	var half_y = brush.size.y * 0.5
 	var points_top: Array = []

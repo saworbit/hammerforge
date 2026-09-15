@@ -221,6 +221,44 @@ func test_a_cylinder_exports_one_plane_per_wall_and_one_per_cap():
 		assert_eq(lines.size(), sides + 2, "A %d sided prism needs %d planes" % [sides, sides + 2])
 
 
+## The default brush has `sides` 4 and `DraftBrush.round_sides()` resolves that to
+## 16, which is what the viewport draws and what the bake builds. The export used
+## to floor it at 6 and write a hexagon instead.
+func test_a_default_cylinder_exports_at_the_resolution_it_is_drawn_at():
+	(
+		root
+		. create_brush_from_info(
+			{
+				"size": Vector3(32, 32, 32),
+				"center": Vector3.ZERO,
+				"shape": LevelRootType.BrushShape.CYLINDER,
+			}
+		)
+	)
+	var lines := _face_lines(MapIOType.export_map_from_level(root, QuakeAdapter.new()))
+
+	assert_eq(
+		lines.size(),
+		DraftBrush.DEFAULT_ROUND_SIDES + 2,
+		"the exported prism has to be the cylinder that was on screen"
+	)
+
+
+## `MIN_ROUND_SIDES` is 5 and the brush honours it. The export clamped it to 6.
+func test_a_five_sided_cylinder_exports_five_walls():
+	root.create_brush_from_info(
+		{
+			"size": Vector3(32, 32, 32),
+			"center": Vector3.ZERO,
+			"shape": LevelRootType.BrushShape.CYLINDER,
+			"sides": 5
+		}
+	)
+	var lines := _face_lines(MapIOType.export_map_from_level(root, QuakeAdapter.new()))
+
+	assert_eq(lines.size(), 7, "five walls and two caps")
+
+
 func test_no_two_cylinder_planes_are_the_same_plane():
 	root.create_brush_from_info(
 		{

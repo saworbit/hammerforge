@@ -37,6 +37,18 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **A cylinder exports at the resolution it is drawn at** (#495).
+  `_cylinder_to_map_lines()` set its side count with `max(6, brush.sides)`, while
+  the viewport and the bake both use `DraftBrush.round_sides()`. The default
+  cylinder has `sides` 4, which resolves to 16 on screen and was written out as a
+  hexagon, and a 5 the brush explicitly supports was clamped to 6. The exported
+  prism was not the shape the mapper saw, and `_face_for_normal()` then matched 6
+  wall normals against 16 authored faces, so the face textures landed on the
+  wrong walls.
+- **`test_brush_shape_defaults` no longer leaks a CSG cylinder** (#496). The node
+  built to compare the preview against the bake was never tracked or freed, so
+  the suite exited with an orphan and a leaked RID, which is noise that hides the
+  next real leak.
 - **An entity input now reaches a handler whatever arity that handler has**
   (#497). `_deliver_to_target()` picked the call shape from the parameter string
   rather than from the method it was about to call, so a handler declared with no
