@@ -37,6 +37,21 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **Convert to Heightmap now has a ceiling, and its remove-sources setting does
+  what it says** (#511, #512). The grid was the selection's extent divided by the
+  level's grid snap, with nothing capping the result - a number set for an
+  unrelated reason, how far a brush moves when it is dragged, quietly deciding
+  the resolution of an allocation that grows quadratically. A 512 unit brush at a
+  snap of 0.1 is a 5124 x 5124 grid, about 210 MB across the float array and the
+  image, walked twice on the main thread with no progress and no way to stop. The
+  cell size now widens to keep the grid inside 2048 a side, the result carries
+  the cell size it actually used, and the dock says so rather than leaving the
+  mapper to wonder. `Image.create()` is checked for null. `remove_sources` was
+  declared, documented on the class and asserted for its default by a test, and
+  read by nothing; it removes the brushes it rasterised now, through the brush
+  system so their cross references go with them, and the dock takes its undo
+  snapshot before the convert rather than after so there is something to put
+  back.
 - **A dimension typed during a draw drag now shows on the brush, and keeps the
   drag's direction** (#516, #517). `update_preview()` wrote the typed value into
   the drag state and then called `update_drag()`, which recomputed the same field
