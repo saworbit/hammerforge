@@ -51,7 +51,11 @@ func update_drag(camera: Camera3D, mouse_pos: Vector2) -> void:
 		var hit = root._raycast(camera, mouse_pos)
 		if not hit:
 			return
-		if not input_state.alt_pressed or input_state.shift_pressed:
+		# A dimension typed into the HUD owns the field it was typed for until the
+		# buffer empties. Recomputing it here is what made the number look like it
+		# did nothing: it went on screen and the mouse took it straight back.
+		var typed_base := input_state.has_numeric_override()
+		if (not input_state.alt_pressed or input_state.shift_pressed) and not typed_base:
 			input_state.drag_end = root._snap_point(hit.position)
 			input_state.drag_end = _apply_axis_lock(input_state.drag_origin, input_state.drag_end)
 			_update_lock_state(input_state.drag_origin, input_state.drag_end)
@@ -72,9 +76,12 @@ func update_drag(camera: Camera3D, mouse_pos: Vector2) -> void:
 			input_state.shift_pressed and input_state.alt_pressed
 		)
 	elif input_state.is_drag_height():
-		input_state.drag_height = _height_from_mouse(
-			mouse_pos, input_state.height_stage_start_mouse, input_state.height_stage_start_height
-		)
+		if not input_state.has_numeric_override():
+			input_state.drag_height = _height_from_mouse(
+				mouse_pos,
+				input_state.height_stage_start_mouse,
+				input_state.height_stage_start_height
+			)
 		_update_preview(
 			input_state.drag_origin,
 			input_state.drag_end,
