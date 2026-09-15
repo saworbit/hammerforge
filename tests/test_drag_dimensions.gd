@@ -228,3 +228,94 @@ func test_version_changed_ignores_idle():
 		"IDLE should not trigger a reset",
 	)
 	assert_true(state.is_idle())
+
+
+# ===========================================================================
+# A typed dimension wins over the mouse (#516)
+# ===========================================================================
+
+
+## The drag system's own root, with a raycast that always lands somewhere the
+## typed value is not. `update_drag()` used to recompute the field it was handed
+## from that hit, so the number went onto the HUD and never onto the brush.
+class RaycastRoot:
+	extends Node3D
+
+	enum AxisLock { NONE, X, Y, Z }
+
+	var grid_snap := 1.0
+	var preview_brush = null
+	var height_pixels_per_unit := 4.0
+	var hit_position := Vector3(-3536, 0, -2576)
+
+	func _raycast(_camera, _mouse_pos: Vector2) -> Dictionary:
+		return {"position": hit_position}
+
+	func _snap_point(point: Vector3) -> Vector3:
+		return point
+
+
+func _drag_system_over_a_raycast() -> HFDragSystem:
+	var fake_root := RaycastRoot.new()
+	add_child_autoqfree(fake_root)
+	return HFDragSystem.new(fake_root)
+
+
+func test_the_mouse_does_not_overwrite_a_typed_base():
+	var drag := _drag_system_over_a_raycast()
+	drag.input_state.begin_drag(Vector3.ZERO, 0, 0, 4, 32.0, Vector3(32, 32, 32), Vector2(400, 300))
+	drag.input_state.drag_end = Vector3(128, 0, 128)
+	drag.input_state.numeric_override = 128.0
+
+	drag.update_drag(null, Vector2(500, 380))
+
+	assert_eq(drag.input_state.drag_end, Vector3(128, 0, 128), "the typed base stands")
+
+
+func test_the_mouse_takes_the_base_back_once_the_buffer_empties():
+	var drag := _drag_system_over_a_raycast()
+	drag.input_state.begin_drag(Vector3.ZERO, 0, 0, 4, 32.0, Vector3(32, 32, 32), Vector2(400, 300))
+	drag.input_state.drag_end = Vector3(128, 0, 128)
+	drag.input_state.clear_numeric_override()
+
+	drag.update_drag(null, Vector2(500, 380))
+
+	assert_eq(
+		drag.input_state.drag_end,
+		Vector3(-3536, 0, -2576),
+		"with nothing typed the cursor owns the base again"
+	)
+
+
+func test_the_mouse_does_not_overwrite_a_typed_height():
+	var drag := _drag_system_over_a_raycast()
+	drag.input_state.begin_drag(Vector3.ZERO, 0, 0, 4, 32.0, Vector3(32, 32, 32), Vector2(400, 300))
+	drag.input_state.drag_end = Vector3(64, 0, 64)
+	drag.input_state.advance_to_height(Vector2(400, 300))
+	drag.input_state.drag_height = 256.0
+	drag.input_state.numeric_override = 256.0
+
+	drag.update_drag(null, Vector2(500, 900))
+
+	assert_eq(drag.input_state.drag_height, 256.0, "the typed height stands")
+
+
+func test_the_mouse_takes_the_height_back_once_the_buffer_empties():
+	var drag := _drag_system_over_a_raycast()
+	drag.input_state.begin_drag(Vector3.ZERO, 0, 0, 4, 32.0, Vector3(32, 32, 32), Vector2(400, 300))
+	drag.input_state.drag_end = Vector3(64, 0, 64)
+	drag.input_state.advance_to_height(Vector2(400, 300))
+	drag.input_state.drag_height = 256.0
+
+	drag.update_drag(null, Vector2(500, 900))
+
+	assert_ne(drag.input_state.drag_height, 256.0, "with nothing typed the cursor sets the height")
+
+
+func test_starting_a_drag_clears_a_stale_override():
+	var drag := _drag_system_over_a_raycast()
+	drag.input_state.numeric_override = 128.0
+
+	drag.input_state.begin_drag(Vector3.ZERO, 0, 0, 4, 32.0, Vector3(32, 32, 32), Vector2(400, 300))
+
+	assert_false(drag.input_state.has_numeric_override(), "a new gesture types nothing yet")

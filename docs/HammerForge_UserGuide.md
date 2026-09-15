@@ -700,6 +700,8 @@ Entity I/O connections are automatically translated into live Godot signals when
 
 Only methods the target's own script defines are called at steps 1 and 2. An input whose name resolves to an engine method -- `QueueFree`, `Free`, `Hide`, `SetScript` and anything else on `Node` or `Object`, before or after the snake-case conversion -- is not called, and falls through to the generic handler and the user signal instead, with a warning naming the input and the target. Handle those deliberately in `_on_io_input` if your game wants them.
 
+At steps 1 and 2 the call shape comes from the handler rather than from whether a parameter was typed. A handler declared `func Open()` is called with no argument even when the connection carries a parameter, and `func Open(parameter: String)` is called with the empty string when the connection carries none. A handler needing two or more arguments cannot be satisfied from one parameter field, so it is skipped with a warning and the input falls through to the generic handler and the user signal.
+
 **Firing outputs from game scripts**:
 ```gdscript
 # From any entity script at runtime:
