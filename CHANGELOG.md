@@ -37,6 +37,22 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **The UV tail of an exported `.map` face line is now in the units a `.map`
+  uses** (#503, #504, #505). Three numbers close every face line and all three
+  were wrong. The rotation went out in radians into a field that means degrees,
+  so a face turned 45 degrees was written as `0.7854` and arrived turned by less
+  than one degree. The scale went out uninverted: `_apply_uv_transform()`
+  multiplies a world coordinate by `uv_scale` and a `.map` reader divides by the
+  scale field, so the same number meant twice the repeats inside HammerForge and
+  half of them in the file, and nudging the dock to correct an export made it
+  worse. A `uv_scale` of zero went out as a texture scale of zero, which is a
+  divide by zero in every Quake family compiler. `HFMapAdapter` now owns the
+  conversion for both formats: degrees out, the reciprocal scale out, and 1
+  substituted for a zero or non-finite scale with one warning per export naming
+  the brushes. A negative scale stays negative, because that is how a mirrored
+  face is written and `adjust_uvs_for_rotation()` produces one deliberately.
+  `uv_offset` is unchanged and now says why in a comment: with the scale written
+  as its reciprocal the two offsets are the same quantity.
 - **Every dock command that changes the level now registers an undo step**
   (#470, #471, #472, #473, #474, #475). Thirteen of them called `level_root`
   directly: New, Add Sel, Rem Sel and Delete on the visgroup list, Group and

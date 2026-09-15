@@ -27,9 +27,9 @@ func format_face_line(
 		var fd := face_data as FaceData
 		u_offset = fd.uv_offset.x
 		v_offset = fd.uv_offset.y
-		rotation = fd.uv_rotation
-		u_scale = fd.uv_scale.x
-		v_scale = fd.uv_scale.y
+		rotation = map_rotation_degrees(fd.uv_rotation)
+		u_scale = map_texture_scale(fd.uv_scale.x)
+		v_scale = map_texture_scale(fd.uv_scale.y)
 	return (
 		"( %s ) ( %s ) ( %s ) %s %s %s %s %s %s"
 		% [
