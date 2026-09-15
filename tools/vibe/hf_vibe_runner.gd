@@ -79,6 +79,7 @@ const SCENARIOS: Array[String] = [
 	"res://tools/vibe/scenarios/viewport_drop.gd",
 	"res://tools/vibe/scenarios/change_tracker.gd",
 	"res://tools/vibe/scenarios/heightmap_convert.gd",
+	"res://tools/vibe/scenarios/numeric_entry.gd",
 ]
 
 

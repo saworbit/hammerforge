@@ -94,6 +94,7 @@ SCENARIOS = [
     "viewport-drop",
     "change-tracker",
     "heightmap-convert",
+    "numeric-entry",
 ]
 
 # Generous: chaos runs 300 operations and cost saves eight levels. A scenario
