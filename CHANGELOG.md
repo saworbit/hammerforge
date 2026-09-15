@@ -37,6 +37,20 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **The UV editor panel now shows the face it is given** (#506). It treated a
+  face's UVs as a 0..1 fraction of the control, and a HammerForge UV is a world
+  coordinate: `_project_uvs_for_vertices()` reads `Vector2(v.x, v.y)` off the
+  vertex, so a 64 unit box face spans 64 and was drawn 64 canvases away. The
+  panel was blank and inert on every brush, at every size, and read as "no face
+  selected" rather than as a panel that does not work. Its one interaction made
+  it worse: a drag clamped the dragged point into 0..1 while the other three
+  stayed out at 32, so the face's UV quad stopped being a quad. The canvas is
+  fitted to the face's own UV bounding box in `set_face()` and mapped through in
+  both directions, with a margin so the outermost points are grabbable, and a
+  drag is held to the canvas rect in screen space rather than to a UV range that
+  was never the face's. A face with no span in one axis - a CYLINDRICAL
+  projection, or any zero-area UV span - gets a fallback extent so the division
+  is safe.
 - **Every dock command that changes the level now registers an undo step**
   (#470, #471, #472, #473, #474, #475). Thirteen of them called `level_root`
   directly: New, Add Sel, Rem Sel and Delete on the visgroup list, Group and
