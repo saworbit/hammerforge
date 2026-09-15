@@ -331,15 +331,17 @@ func test_name_index_holds_both_entities_sharing_a_name():
 	assert_eq(index.get("shared", []), sys.find_entities_by_name("shared"))
 
 
-func test_name_index_covers_brush_entities_by_node_name_only():
+func test_name_index_covers_brush_entities_by_both_names():
 	var brush = _make_brush_entity("door_brush")
 	brush.set_meta("entity_name", "brush_alias")
 	var index = sys.build_name_index()
 	assert_eq(index.get("door_brush", []), [brush], "Brush entities answer to their node name")
-	assert_false(
-		index.has("brush_alias"), "and not to an alias, the way find_entities_by_name has it"
+	assert_eq(
+		index.get("brush_alias", []),
+		[brush],
+		"and to the authored name, which is the one a connection is written against"
 	)
-	assert_eq(sys.find_entities_by_name("brush_alias"), [], "Lookup agrees")
+	assert_eq(sys.find_entities_by_name("brush_alias"), [brush], "Lookup agrees")
 
 
 func test_name_index_skips_plain_brushes():

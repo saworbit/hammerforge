@@ -329,3 +329,95 @@ func test_the_importer_says_when_it_drops_a_connection():
 		if str(err).findn("dropped") >= 0:
 			mentioned = true
 	assert_true(mentioned, "a line that looks like wiring and is not must be reported")
+
+
+# ===========================================================================
+# A brush entity answers to its authored name too (#493)
+# ===========================================================================
+
+
+## A brush entity's node name is whatever Godot gave it. The name a connection is
+## written against lives in metadata, and resolution used to read only the node
+## name, so an output aimed at a door never found the door.
+func test_a_brush_entity_resolves_by_its_authored_name():
+	var brush := _box("b1")
+	root.tie_brushes_to_entity(["b1"], "func_door")
+	brush.set_meta("entity_name", "secret_door")
+
+	var found: Array = root.find_entities_by_name("secret_door")
+
+	assert_eq(found.size(), 1, "the door is addressable by the name it was given")
+	assert_eq(found[0], brush, "and it is the brush that was tied to the class")
+
+
+func test_a_brush_entity_still_resolves_by_its_node_name():
+	var brush := _box("b1")
+	root.tie_brushes_to_entity(["b1"], "func_door")
+	brush.set_meta("entity_name", "secret_door")
+
+	assert_eq(
+		root.find_entities_by_name(str(brush.name)),
+		[brush],
+		"the node name is an address as well, and stays one"
+	)
+
+
+func test_a_plain_brush_is_not_an_io_target():
+	var brush := _box("b1")
+	brush.set_meta("entity_name", "secret_door")
+
+	assert_eq(
+		root.find_entities_by_name("secret_door"), [], "a brush with no entity class is geometry"
+	)
+
+
+func test_the_name_index_carries_a_brush_entity_authored_name():
+	var brush := _box("b1")
+	root.tie_brushes_to_entity(["b1"], "func_door")
+	brush.set_meta("entity_name", "secret_door")
+
+	var index: Dictionary = root.entity_system.build_name_index()
+
+	assert_true(index.has("secret_door"), "the index is what resolves a batch of connections")
+	assert_eq(index["secret_door"], [brush])
+	assert_true(index.has(str(brush.name)), "and the node name is still in it")
+
+
+## `unique_authored_name()` reads the index, so a name already taken by a brush
+## entity used to be handed straight back out to a second one.
+func test_a_name_taken_by_a_brush_entity_is_not_offered_again():
+	var brush := _box("b1")
+	root.tie_brushes_to_entity(["b1"], "func_door")
+	brush.set_meta("entity_name", "secret_door")
+
+	assert_ne(
+		root.entity_system.unique_authored_name("secret_door"),
+		"secret_door",
+		"a second entity would answer to the same address"
+	)
+
+
+func test_validate_reports_a_brush_entity_sharing_a_name_with_an_entity():
+	var point := _point_entity("func_door")
+	point.set_meta("entity_name", "door_1")
+	var brush := _box("b1")
+	root.tie_brushes_to_entity(["b1"], "func_door")
+	brush.set_meta("entity_name", "door_1")
+
+	var found := false
+	for issue in root.validate_level(false).get("issues", []):
+		if str(issue).findn("door_1") >= 0:
+			found = true
+	assert_true(found, "two nodes on one address is a level defect whichever kind they are")
+
+
+func test_validate_sees_a_broken_connection_on_a_brush_entity():
+	var brush := _box("b1")
+	root.tie_brushes_to_entity(["b1"], "func_button")
+	brush.set_meta("entity_io_outputs", [{"output_name": "OnPressed", "input_name": "Open"}])
+
+	var found := false
+	for issue in root.validate_level(false).get("issues", []):
+		if str(issue).findn("missing field") >= 0:
+			found = true
+	assert_true(found, "wiring with no target is broken wherever it is written")

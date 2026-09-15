@@ -860,3 +860,88 @@ func test_malformed_outputs_metadata_does_not_stop_the_entity_cache():
 	var nested := _make_entity(broken, "NestedDoor")
 	_wire_dispatcher()
 	assert_true(dispatcher._entity_cache.has("NestedDoor"), "Nested entities are still found")
+
+
+# ===========================================================================
+# The call shape comes from the handler, not from the parameter field (#497)
+# ===========================================================================
+
+
+## Every handler in the fixture above is declared with a default, so it accepts
+## both call shapes and both branches passed whatever the code did. These targets
+## declare one shape each.
+func _make_arity_target(parent: Node3D, entity_name: String, declaration: String) -> Node:
+	var s = GDScript.new()
+	s.source_code = (
+		"""
+extends Node3D
+
+var received_calls: Array = []
+
+%s
+	received_calls.append({"method": "Open"})
+
+func _on_io_input(input_name: String, parameter: String) -> void:
+	received_calls.append({"method": "_on_io_input", "input": input_name})
+"""
+		% declaration
+	)
+	s.reload()
+	var e := Node3D.new()
+	e.set_script(s)
+	e.name = entity_name
+	parent.add_child(e)
+	return e
+
+
+func test_a_handler_that_takes_nothing_is_called_without_the_parameter():
+	var button := _make_entity(scene_root, "Button1")
+	var door := _make_arity_target(scene_root, "Door1", "func Open() -> void:")
+	_add_connection(button, "OnPressed", "Door1", "Open", "fast")
+	_wire_dispatcher()
+
+	dispatcher.fire("Button1", "OnPressed")
+
+	assert_eq(door.received_calls.size(), 1, "a parameter it cannot take must not stop the call")
+	assert_eq(door.received_calls[0]["method"], "Open")
+
+
+func test_a_handler_that_requires_one_is_called_with_the_empty_parameter():
+	var button := _make_entity(scene_root, "Button1")
+	var door := _make_arity_target(scene_root, "Door1", "func Open(parameter: String) -> void:")
+	_add_connection(button, "OnPressed", "Door1", "Open")
+	_wire_dispatcher()
+
+	dispatcher.fire("Button1", "OnPressed")
+
+	assert_eq(door.received_calls.size(), 1, "no parameter typed is an empty one, not no call")
+	assert_eq(door.received_calls[0]["method"], "Open")
+
+
+func test_a_handler_with_a_default_still_takes_both_shapes():
+	var button := _make_entity(scene_root, "Button1")
+	var door := _make_target_entity(scene_root, "Door1")
+	_add_connection(button, "OnPressed", "Door1", "Open")
+	_add_connection(button, "OnTwo", "Door1", "Open", "fast")
+	_wire_dispatcher()
+
+	dispatcher.fire("Button1", "OnPressed")
+	dispatcher.fire("Button1", "OnTwo")
+
+	assert_eq(door.received_calls.size(), 2)
+	assert_eq(door.received_calls[0]["parameter"], "")
+	assert_eq(door.received_calls[1]["parameter"], "fast")
+
+
+## One parameter field cannot satisfy two required arguments, so the input goes
+## down the fallback chain rather than raising an error that ends delivery.
+func test_a_handler_needing_two_arguments_falls_through_to_the_generic_handler():
+	var button := _make_entity(scene_root, "Button1")
+	var door := _make_arity_target(scene_root, "Door1", "func Open(a: String, b: String) -> void:")
+	_add_connection(button, "OnPressed", "Door1", "Open")
+	_wire_dispatcher()
+
+	dispatcher.fire("Button1", "OnPressed")
+
+	assert_eq(door.received_calls.size(), 1, "the input still lands somewhere")
+	assert_eq(door.received_calls[0]["method"], "_on_io_input")

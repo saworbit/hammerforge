@@ -14,6 +14,13 @@ class FakeInputState:
 	var drag_origin := Vector3.ZERO
 	var drag_end := Vector3.ZERO
 	var drag_height := 0.0
+	var numeric_override := -1.0
+
+	func has_numeric_override() -> bool:
+		return numeric_override > 0.0
+
+	func clear_numeric_override() -> void:
+		numeric_override = -1.0
 
 	func is_dragging() -> bool:
 		return dragging
@@ -250,4 +257,99 @@ func test_a_second_keypad_decimal_is_ignored() -> void:
 	HFPluginNumericInput.handle(plugin, _key(KEY_PERIOD), root)
 	HFPluginNumericInput.handle(plugin, _key(KEY_KP_5), root)
 	assert_eq(plugin.numeric_buffer, "1.5", "One decimal point, whichever key typed it")
+	root.free()
+
+
+# ===========================================================================
+# A typed base keeps the direction the drag had (#517)
+# ===========================================================================
+
+
+func test_a_typed_base_keeps_a_negative_drag_in_its_own_quadrant() -> void:
+	var plugin := FakePlugin.new()
+	var root := FakeRoot.new()
+	root.input_state.dragging = true
+	root.input_state.drag_base = true
+	root.input_state.drag_end = Vector3(-64, 0, -64)
+	plugin.numeric_buffer = "128"
+
+	HFPluginNumericInput.apply_value(plugin, root)
+
+	assert_eq(
+		root.input_state.drag_end,
+		Vector3(-128, 0, -128),
+		"the brush belongs where the cursor is, not across the origin from it"
+	)
+	root.free()
+
+
+func test_a_typed_base_keeps_a_mixed_quadrant() -> void:
+	var plugin := FakePlugin.new()
+	var root := FakeRoot.new()
+	root.input_state.dragging = true
+	root.input_state.drag_base = true
+	root.input_state.drag_end = Vector3(-10, 0, 10)
+	plugin.numeric_buffer = "64"
+
+	HFPluginNumericInput.update_preview(plugin, root)
+
+	assert_eq(root.input_state.drag_end, Vector3(-64, 0, 64))
+	root.free()
+
+
+func test_a_typed_base_before_the_mouse_has_moved_goes_positive() -> void:
+	var plugin := FakePlugin.new()
+	var root := FakeRoot.new()
+	root.input_state.dragging = true
+	root.input_state.drag_base = true
+	plugin.numeric_buffer = "32"
+
+	HFPluginNumericInput.update_preview(plugin, root)
+
+	assert_eq(root.input_state.drag_end, Vector3(32, 0, 32), "no direction yet, so the default")
+	root.free()
+
+
+# ===========================================================================
+# The typed value stands until the buffer empties (#516)
+# ===========================================================================
+
+
+func test_typing_sets_the_override_the_drag_system_reads() -> void:
+	var plugin := FakePlugin.new()
+	var root := FakeRoot.new()
+	root.input_state.dragging = true
+	root.input_state.drag_base = true
+
+	HFPluginNumericInput.handle(plugin, _key(KEY_1), root)
+
+	assert_true(root.input_state.has_numeric_override(), "the mouse has to leave this field alone")
+	assert_eq(root.input_state.numeric_override, 1.0)
+	root.free()
+
+
+func test_backspacing_the_buffer_away_gives_the_gesture_back_to_the_mouse() -> void:
+	var plugin := FakePlugin.new()
+	var root := FakeRoot.new()
+	root.input_state.dragging = true
+	root.input_state.drag_base = true
+	HFPluginNumericInput.handle(plugin, _key(KEY_1), root)
+
+	HFPluginNumericInput.handle(plugin, _key(KEY_BACKSPACE), root)
+
+	assert_eq(plugin.numeric_buffer, "")
+	assert_false(root.input_state.has_numeric_override(), "nothing typed, nothing to hold")
+	root.free()
+
+
+func test_committing_clears_the_override() -> void:
+	var plugin := FakePlugin.new()
+	var root := FakeRoot.new()
+	root.input_state.dragging = true
+	root.input_state.drag_height_mode = true
+	plugin.numeric_buffer = "96"
+
+	HFPluginNumericInput.apply_value(plugin, root)
+
+	assert_false(root.input_state.has_numeric_override())
 	root.free()
