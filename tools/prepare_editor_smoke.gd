@@ -60,6 +60,4 @@ func _print_usage() -> void:
 	print("  --show-welcome=BOOL Set show_welcome in prefs (true/false).")
 	print("Examples:")
 	print("  godot --headless -s res://tools/prepare_editor_smoke.gd --path .")
-	print(
-		"  godot --headless -s res://tools/prepare_editor_smoke.gd --path . -- --tutorial-step=3"
-	)
+	print("  godot --headless -s res://tools/prepare_editor_smoke.gd --path . -- --tutorial-step=3")

@@ -75,7 +75,12 @@ func _where_the_points_land() -> void:
 		for uv in face.custom_uvs:
 			var screen: Vector2 = ed._uv_to_screen(uv)
 			drawn.append(screen)
-			if screen.x >= 0.0 and screen.x <= CANVAS.x and screen.y >= 0.0 and screen.y <= CANVAS.y:
+			if (
+				screen.x >= 0.0
+				and screen.x <= CANVAS.x
+				and screen.y >= 0.0
+				and screen.y <= CANVAS.y
+			):
 				inside += 1
 		note(
 			"%s brush, points inside the %dx%d canvas" % [str(size.x), CANVAS.x, CANVAS.y],
@@ -91,10 +96,15 @@ func _where_the_points_land() -> void:
 						reachable += 1
 			known(
 				506,
-				"the UV editor draws a %s brush's face entirely outside its own canvas" % str(size.x),
 				(
-					"UVs span %.0f because a projected UV is a world coordinate,"
-					% maxf(bounds.size.x, bounds.size.y)
+					"the UV editor draws a %s brush's face entirely outside its own canvas"
+					% str(size.x)
+				),
+				(
+					(
+						"UVs span %.0f because a projected UV is a world coordinate,"
+						% maxf(bounds.size.x, bounds.size.y)
+					)
 					+ " and _uv_to_screen() multiplies by the control size as though it were 0..1;"
 					+ " %d of %d sampled positions can select a point" % [reachable, 900]
 				)
@@ -131,10 +141,14 @@ func _what_a_drag_does() -> void:
 			506,
 			"dragging a UV point moves it by the whole face rather than by the cursor",
 			(
-				"the cursor was put at the middle of the canvas and the vertex moved %.1f UV units,"
-				% moved
-				+ " because _screen_to_uv() clamps to 0..1 and this face's UVs span %.0f"
-				% maxf(before_bounds.size.x, before_bounds.size.y)
+				(
+					"the cursor was put at the middle of the canvas and the vertex moved %.1f UV units,"
+					% moved
+				)
+				+ (
+					" because _screen_to_uv() clamps to 0..1 and this face's UVs span %.0f"
+					% maxf(before_bounds.size.x, before_bounds.size.y)
+				)
 			)
 		)
 	ed.queue_free()
@@ -163,7 +177,6 @@ func _after_the_dock_reprojects() -> void:
 	if face_now == face and shown.size() > 0 and face_now.custom_uvs.size() > 0:
 		if not shown[0].is_equal_approx(face_now.custom_uvs[0]):
 			note(
-				"the editor holds the same FaceData, so a redraw shows the new UVs",
-				"no stale copy"
+				"the editor holds the same FaceData, so a redraw shows the new UVs", "no stale copy"
 			)
 	ed.queue_free()

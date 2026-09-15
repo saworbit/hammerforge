@@ -104,9 +104,7 @@ func _initialize() -> void:
 	buffer.error("Navmesh bake failed: no floor surfaces found", "bake")
 	buffer.info("Autosave written to res://.hammerforge/autosave.hflevel", "autosave")
 
-	panel.record_validation(
-		["Brush Wall_04 is non-planar", "Subtract Cut_11 intersects nothing"]
-	)
+	panel.record_validation(["Brush Wall_04 is non-planar", "Subtract Cut_11 intersects nothing"])
 	_shoot(panel)
 
 

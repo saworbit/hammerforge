@@ -73,14 +73,16 @@ func _both_bounds_of_every_field() -> void:
 					who = "ACCEPTED"
 				elif schema_said.is_empty():
 					who = "refused by the builder"
-				note(
-					"%s.%s %s %s -> %s" % [type, key, bound_name, _fmt(bound), _fmt(value)], who
-				)
+				note("%s.%s %s %s -> %s" % [type, key, bound_name, _fmt(bound), _fmt(value)], who)
 				if result.ok:
 					if bound_name == "min":
-						below_accepted.append("%s.%s (min %s, sent %s)" % [type, key, _fmt(bound), _fmt(value)])
+						below_accepted.append(
+							"%s.%s (min %s, sent %s)" % [type, key, _fmt(bound), _fmt(value)]
+						)
 					else:
-						above_accepted.append("%s.%s (max %s, sent %s)" % [type, key, _fmt(bound), _fmt(value)])
+						above_accepted.append(
+							"%s.%s (max %s, sent %s)" % [type, key, _fmt(bound), _fmt(value)]
+						)
 	note("fields checked at a bound", checked)
 	note("accepted below min", below_accepted.size())
 	note("accepted above max", above_accepted.size())
@@ -90,10 +92,12 @@ func _both_bounds_of_every_field() -> void:
 			518,
 			"check_ranges() enforces the schema's max and never its min",
 			(
-				"%d of %d bound checks passed a value below the field's declared minimum"
-				% [below_accepted.size(), checked]
+				(
+					"%d of %d bound checks passed a value below the field's declared minimum"
+					% [below_accepted.size(), checked]
+				)
 				+ " and none passed one above the maximum. HFGeneratorSchema.check_ranges()"
-				+ " tests `field_def.has(\"max\")` and has no corresponding min branch, so the"
+				+ ' tests `field_def.has("max")` and has no corresponding min branch, so the'
 				+ " half of the range the dock's SpinBox enforces by its min_value is enforced"
 				+ " nowhere else: %s" % str(below_accepted.slice(0, 8))
 			)
@@ -125,7 +129,10 @@ func _enum_fields() -> void:
 			settings[key] = options.size() + 5
 			var result = GeneratorSystem.validate(type, settings)
 			note(
-				"%s.%s enum with %d options, sent %d" % [type, key, options.size(), options.size() + 5],
+				(
+					"%s.%s enum with %d options, sent %d"
+					% [type, key, options.size(), options.size() + 5]
+				),
 				"ACCEPTED" if result.ok else "refused"
 			)
 			if result.ok:

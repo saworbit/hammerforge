@@ -165,6 +165,16 @@ def rewrites(c: dict) -> list:
             ).format(date="{date}", **common),
         ),
         (
+            # The sixth number, in a file the tool already rewrites. The badge at
+            # the top was kept current on every wave while the At a Glance cell
+            # eighty lines below it sat at 2,860, because nothing owned it.
+            "README.md",
+            r"\*\*[\d,]+\+? unit \+ integration tests\*\* with CI on every push",
+            "**{tests} unit + integration tests** with CI on every push".format(
+                **common
+            ),
+        ),
+        (
             "ROADMAP.md",
             r"The current suite covers [\d,]+ tests across [\d,]+ scripts,",
             "The current suite covers {tests} tests across {scripts} scripts,".format(
