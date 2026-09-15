@@ -417,10 +417,8 @@ func cleanup_connections_for_deleted(entity: Node) -> int:
 
 ## True when some node other than `excluding` still answers to this address.
 ##
-## Deliberately wider than `find_entities_by_name()`, which resolves a brush
-## entity by its node name only even though the runtime addresses it by its
-## authored name as well. Being wrong here only ever keeps a connection, which is
-## the safe way to be wrong.
+## The same set of addresses `find_entities_by_name()` resolves: a node name and
+## an authored name, for point entities and brush entities alike.
 func _another_node_answers_to(address: String, excluding: Node) -> bool:
 	if address == "":
 		return false
@@ -537,10 +535,13 @@ func find_entities_by_name(entity_name: String) -> Array:
 	for child in root.entities_node.get_children():
 		if child.name == entity_name or str(child.get_meta("entity_name", "")) == entity_name:
 			result.append(child)
-	# Also check brush entities
+	# Also check brush entities. A brush's node name is engine generated
+	# (`DraftBrush_1`), so the authored name in metadata is the one a connection
+	# is written against, and matching only the node name meant an output pointed
+	# at a door or a button never resolved.
 	if root.draft_brushes_node:
 		for child in root.draft_brushes_node.get_children():
-			if is_brush_io_target(child) and child.name == entity_name:
+			if is_brush_io_target(child) and _node_answers_to(child, entity_name):
 				result.append(child)
 	return result
 
@@ -564,6 +565,7 @@ func build_name_index() -> Dictionary:
 		for child in root.draft_brushes_node.get_children():
 			if is_brush_io_target(child):
 				_index_address(index, str(child.name), child)
+				_index_address(index, str(child.get_meta("entity_name", "")), child)
 	return index
 
 

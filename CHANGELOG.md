@@ -37,6 +37,16 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **A brush entity now answers to the name it was given** (#493). A brush tied
+  to `func_door` or `func_button` keeps its authored name in metadata, because
+  its node name is whatever Godot generated. `find_entities_by_name()` and
+  `build_name_index()` compared the node name only, so an output aimed at a door
+  never resolved and fell through to the fallback dispatch, and
+  `unique_authored_name()` handed out names already taken by a brush entity.
+  Both resolve against either address now, the way `_another_node_answers_to()`
+  always has. The validator's duplicate-name and broken-connection checks walked
+  `entities_node` alone and now walk the brush entities too, since a brush entity
+  carries both a name and its own outputs.
 - **The default bake path now runs the same finishing pass as the CSG one**
   (#494). `build_mesh_from_groups()` unwrapped UV0 and stopped there, so since
   #491 made `bake_use_face_materials` the default, every ordinary bake dropped
