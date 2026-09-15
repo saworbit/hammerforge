@@ -37,6 +37,22 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **The default bake path now runs the same finishing pass as the CSG one**
+  (#494). `build_mesh_from_groups()` unwrapped UV0 and stopped there, so since
+  #491 made `bake_use_face_materials` the default, every ordinary bake dropped
+  the LODs and the lightmap UV2 the Bake Options asked for. It calls
+  `_postprocess_mesh()` now, with `generate_lods`, `unwrap_uv2`, `uv2_texel_size`
+  and `unwrap_uv0` from the options. The face surfaces are also welded into an
+  index array on the way out: Godot generates LODs off the indices, so wiring the
+  pass in on its own would have fixed the UV2 half and left the LOD half exactly
+  as it was.
+- **A new level no longer fails its own validator** (#514). The rule paired
+  `bake_use_face_materials` with an empty palette, which was a deliberate
+  combination when face materials were off by default and is the ordinary
+  starting state now that they are on. Every untouched level reported an issue,
+  which is how a validator loses the weight it needs. It now warns only when some
+  face actually points at a palette slot, which is the case where the bake
+  produces untextured geometry the mapper did not ask for.
 - **The UV tail of an exported `.map` face line is now in the units a `.map`
   uses** (#503, #504, #505). Three numbers close every face line and all three
   were wrong. The rotation went out in radians into a field that means degrees,

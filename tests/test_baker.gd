@@ -660,3 +660,112 @@ func test_a_list_of_pairs_is_still_read_in_either_order():
 
 func test_nothing_out_of_the_csg_is_no_pairs():
 	assert_eq(baker._collect_mesh_entries([]).size(), 0)
+
+
+# ===========================================================================
+# build_mesh_from_groups: the finishing pass
+# ===========================================================================
+
+
+## The face-material path skipped `_postprocess_mesh()` and only ever unwrapped
+## UV0. Since #491 made `bake_use_face_materials` the default, every ordinary
+## bake dropped the LODs and the lightmap UV2 the Bake Options asked for.
+func test_face_material_bake_generates_lods():
+	var mat_mgr = MaterialManager.new()
+	add_child_autoqfree(mat_mgr)
+	mat_mgr.add_material(_make_colored_material(Color.RED))
+	var parent = Node3D.new()
+	add_child_autoqfree(parent)
+	var brush = _make_brush_with_faces(parent, _dense_faces())
+
+	var result = baker.bake_from_faces([brush], mat_mgr, null, 1, 1, {"generate_lods": true})
+
+	assert_not_null(result)
+	add_child_autoqfree(result)
+	var inst: MeshInstance3D = result.get_node_or_null("BakedMesh_0")
+	assert_not_null(inst, "the face material path builds one merged mesh")
+	var importer := ImporterMesh.from_mesh(inst.mesh)
+	assert_gt(importer.get_surface_lod_count(0), 0, "Generate LODs was on and the mesh has no LODs")
+
+
+func test_face_material_bake_unwraps_lightmap_uv2():
+	var mat_mgr = MaterialManager.new()
+	add_child_autoqfree(mat_mgr)
+	mat_mgr.add_material(_make_colored_material(Color.RED))
+	var parent = Node3D.new()
+	add_child_autoqfree(parent)
+	var brush = _make_brush_with_faces(parent, _box_faces())
+
+	var result = baker.bake_from_faces([brush], mat_mgr, null, 1, 1, {"unwrap_uv2": true})
+
+	assert_not_null(result)
+	add_child_autoqfree(result)
+	var inst: MeshInstance3D = result.get_node_or_null("BakedMesh_0")
+	assert_not_null(inst)
+	var arrays: Array = inst.mesh.surface_get_arrays(0)
+	var uv2 = arrays[Mesh.ARRAY_TEX_UV2]
+	assert_true(
+		uv2 is PackedVector2Array and (uv2 as PackedVector2Array).size() > 0,
+		"Lightmap UV2 was on and the mesh has no UV2 array"
+	)
+
+
+## The whole point of the face material path is that each group keeps its own
+## material. The finishing pass round trips through ImporterMesh, so it has to
+## come back out the other side with them.
+func test_the_finishing_pass_keeps_the_face_materials():
+	var mat_mgr = MaterialManager.new()
+	add_child_autoqfree(mat_mgr)
+	mat_mgr.add_material(_make_colored_material(Color.RED))
+	var parent = Node3D.new()
+	add_child_autoqfree(parent)
+	var brush = _make_brush_with_faces(parent, _dense_faces())
+
+	var result = baker.bake_from_faces([brush], mat_mgr, null, 1, 1, {"generate_lods": true})
+
+	add_child_autoqfree(result)
+	var inst: MeshInstance3D = result.get_node_or_null("BakedMesh_0")
+	assert_not_null(inst.mesh.surface_get_material(0), "the surface lost the material it carried")
+
+
+## Six faces, because LOD generation and a lightmap unwrap both need a closed
+## surface with area to work on rather than a single quad.
+func _box_faces() -> Array:
+	var out: Array = []
+	var corners := {
+		Vector3.UP: [Vector3(0, 1, 0), Vector3(1, 1, 0), Vector3(1, 1, 1), Vector3(0, 1, 1)],
+		Vector3.DOWN: [Vector3(0, 0, 1), Vector3(1, 0, 1), Vector3(1, 0, 0), Vector3(0, 0, 0)],
+		Vector3.FORWARD: [Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(1, 1, 0), Vector3(0, 1, 0)],
+		Vector3.BACK: [Vector3(1, 0, 1), Vector3(0, 0, 1), Vector3(0, 1, 1), Vector3(1, 1, 1)],
+		Vector3.LEFT: [Vector3(0, 0, 1), Vector3(0, 0, 0), Vector3(0, 1, 0), Vector3(0, 1, 1)],
+		Vector3.RIGHT: [Vector3(1, 0, 0), Vector3(1, 0, 1), Vector3(1, 1, 1), Vector3(1, 1, 0)],
+	}
+	for normal in corners:
+		var face = FaceData.new()
+		face.normal = normal
+		face.material_idx = 0
+		face.local_verts = PackedVector3Array(corners[normal])
+		out.append(face)
+	return out
+
+
+## A grid of quads, because LOD generation has nothing to simplify on a box and
+## would report zero levels whether the finishing pass ran or not.
+func _dense_faces() -> Array:
+	var out: Array = []
+	var span := 24
+	for x in span:
+		for z in span:
+			var face = FaceData.new()
+			face.normal = Vector3.UP
+			face.material_idx = 0
+			face.local_verts = PackedVector3Array(
+				[
+					Vector3(x, 0, z),
+					Vector3(x + 1, 0, z),
+					Vector3(x + 1, 0, z + 1),
+					Vector3(x, 0, z + 1),
+				]
+			)
+			out.append(face)
+	return out

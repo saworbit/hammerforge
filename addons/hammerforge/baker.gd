@@ -172,6 +172,10 @@ func _add_group_surface(
 		if uvs.size() > i:
 			st.set_uv(uvs[i])
 		st.add_vertex(verts[i])
+	# Weld the duplicated corners into an index array. Godot generates LODs off
+	# the indices, so an unindexed surface comes back with none however the Bake
+	# Options are set.
+	st.index()
 	var surface_mesh = st.commit()
 	if not surface_mesh or surface_mesh.get_surface_count() == 0:
 		return
@@ -387,6 +391,7 @@ func build_mesh_from_groups(
 				st.set_normal(all_normals[i])
 				st.set_uv(all_uvs[i])
 				st.add_vertex(all_verts[i])
+			st.index()
 			var surface_mesh = st.commit()
 			if surface_mesh and surface_mesh.get_surface_count() > 0:
 				var arrays = surface_mesh.surface_get_arrays(0)
@@ -407,8 +412,18 @@ func build_mesh_from_groups(
 		if surface_materials[i]:
 			combined_mesh.surface_set_material(i, surface_materials[i])
 
-	if bool(options.get("unwrap_uv0", false)):
-		combined_mesh = _unwrap_uv0(combined_mesh)
+	# The same finishing pass the CSG path runs. `bake_use_face_materials` is the
+	# default since #491, so without this every default bake silently dropped the
+	# LODs and the lightmap UV2 the Bake Options asked for.
+	combined_mesh = _postprocess_mesh(
+		combined_mesh,
+		bool(options.get("generate_lods", false)),
+		bool(options.get("unwrap_uv2", false)),
+		float(options.get("uv2_texel_size", DEFAULT_UV2_TEXEL_SIZE)),
+		bool(options.get("unwrap_uv0", false))
+	)
+	if combined_mesh == null:
+		return null
 
 	var mesh_inst = MeshInstance3D.new()
 	mesh_inst.name = "BakedMesh_0"
