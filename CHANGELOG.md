@@ -37,6 +37,20 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **The custom tool extension point no longer constructs what it is going to
+  refuse** (#507, #508, #509). `load_external_tools()` called `.new()` on every
+  `.gd` file in the scanned directory and checked what it got afterwards, so a
+  file that is not a tool was constructed anyway: a `Node` subclass became an
+  orphan for the life of the editor session, a script whose `_init()` takes
+  arguments was a hard error, and one with side effects in `_init()` got them.
+  The base script chain is walked instead, which answers the question without
+  running any of the file, and a rejection is logged rather than skipped in
+  silence. `activate_tool()` looked the id up after deactivating the tool in
+  hand, so an id that is not registered turned the mapper's tool off and said
+  nothing; it returns early with a warning now. `HFEditorTool.set_setting()`
+  clamped `float` and `int` and let an `enum` through unchecked, so a tool
+  indexed its own options array with a number the dock cannot show; an enum is
+  held to its `options` the way a number is held to its min and max.
 - **Every dock command that changes the level now registers an undo step**
   (#470, #471, #472, #473, #474, #475). Thirteen of them called `level_root`
   directly: New, Add Sel, Rem Sel and Delete on the visgroup list, Group and

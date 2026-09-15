@@ -279,14 +279,24 @@ func test_has_active_external_tool_false_for_builtin():
 	assert_false(registry.has_active_external_tool())
 
 
-func test_activate_unknown_id_deactivates_current():
+## An id that is not registered is a tool whose script failed to load, or a
+## button wired to an id that has since changed. Turning off the tool in hand and
+## saying nothing reads as the editor losing its place rather than as a button
+## that does not work.
+func test_activate_unknown_id_leaves_the_active_tool_alone():
 	var tool = MockTool.new(100)
 	registry.register_tool(tool)
 	registry.activate_tool(100, null, null)
 	assert_true(tool.activated)
-	# Activating an ID that doesn't exist deactivates the current tool.
+
 	registry.activate_tool(-1, null, null)
-	assert_true(tool.deactivated)
+
+	assert_false(tool.deactivated, "the tool the mapper was using stays on")
+	assert_eq(registry.get_active_tool(), tool)
+
+
+func test_activate_unknown_id_with_nothing_active_activates_nothing():
+	registry.activate_tool(999, null, null)
 	assert_null(registry.get_active_tool())
 
 
@@ -303,3 +313,119 @@ func test_external_tool_stays_active_across_dispatch():
 		assert_eq(result, EditorPlugin.AFTER_GUI_INPUT_STOP)
 	assert_true(registry.has_active_external_tool())
 	assert_eq(registry.get_active_tool(), tool)
+
+
+# -- load_external_tools constructs only what it is going to keep -------------
+
+
+## A directory the class documents as an extension point. Writing a script into
+## it that is not a tool used to construct it anyway: a Node subclass leaked for
+## the life of the editor session, and an `_init()` with arguments or side
+## effects got run.
+func _write_tool_dir(files: Dictionary) -> String:
+	var dir_path := "user://vibe_tools_%d/" % Time.get_ticks_usec()
+	DirAccess.make_dir_recursive_absolute(dir_path)
+	for file_name in files:
+		var f := FileAccess.open(dir_path.path_join(str(file_name)), FileAccess.WRITE)
+		f.store_string(str(files[file_name]))
+		f.close()
+	return dir_path
+
+
+func _remove_tool_dir(dir_path: String) -> void:
+	var dir := DirAccess.open(dir_path)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	var file_name := dir.get_next()
+	while file_name != "":
+		DirAccess.remove_absolute(dir_path.path_join(file_name))
+		file_name = dir.get_next()
+	dir.list_dir_end()
+	DirAccess.remove_absolute(dir_path)
+
+
+func test_a_non_tool_node_script_in_the_directory_is_not_constructed():
+	var dir_path := _write_tool_dir({"not_a_tool.gd": "@tool\nextends Node3D\n"})
+	var before := Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)
+
+	registry.load_external_tools(dir_path)
+
+	assert_eq(
+		Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT),
+		before,
+		"a script that is not a tool left an orphan behind"
+	)
+	assert_eq(registry.get_all_tools().size(), 0)
+	_remove_tool_dir(dir_path)
+
+
+func test_a_script_whose_init_takes_arguments_is_not_constructed():
+	var dir_path := _write_tool_dir(
+		{"needs_args.gd": "@tool\nextends RefCounted\nfunc _init(required: int):\n\tpass\n"}
+	)
+
+	registry.load_external_tools(dir_path)
+
+	assert_eq(registry.get_all_tools().size(), 0, "and it did not take the scan down with it")
+	_remove_tool_dir(dir_path)
+
+
+func test_a_real_tool_in_the_directory_is_still_registered():
+	var source := (
+		'@tool\nextends "res://addons/hammerforge/hf_editor_tool.gd"\n'
+		+ "func tool_id() -> int:\n\treturn 101\n"
+		+ 'func tool_name() -> String:\n\treturn "Good"\n'
+	)
+	var dir_path := _write_tool_dir({"good_tool.gd": source})
+
+	registry.load_external_tools(dir_path)
+
+	assert_eq(registry.get_all_tools().size(), 1, "the extension point still works")
+	assert_eq(registry.get_tool_by_id(101).tool_name(), "Good")
+	_remove_tool_dir(dir_path)
+
+
+# -- An enum setting is held to its own options (#509) ------------------------
+
+
+class EnumTool:
+	extends HFEditorTool
+
+	func tool_id() -> int:
+		return 120
+
+	func get_settings_schema() -> Array:
+		return [
+			{
+				"name": "mode",
+				"type": "enum",
+				"label": "Mode",
+				"default": 0,
+				"options": PackedStringArray(["A", "B"]),
+			},
+		]
+
+
+func test_an_enum_setting_refuses_an_index_its_options_do_not_have():
+	var tool = EnumTool.new()
+
+	tool.set_setting("mode", 7)
+
+	assert_eq(tool.get_setting("mode"), 0, "an OptionButton has no item 7 to show")
+
+
+func test_an_enum_setting_refuses_a_negative_index():
+	var tool = EnumTool.new()
+	tool.set_setting("mode", 1)
+
+	tool.set_setting("mode", -1)
+
+	assert_eq(tool.get_setting("mode"), 1, "the last legal value is kept")
+
+
+func test_an_enum_setting_takes_every_index_its_options_have():
+	var tool = EnumTool.new()
+	for index in 2:
+		tool.set_setting("mode", index)
+		assert_eq(tool.get_setting("mode"), index)
