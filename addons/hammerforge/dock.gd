@@ -5463,9 +5463,24 @@ func _on_save_preset() -> void:
 	_load_presets()
 
 
+## A name no preset on screen is already using.
+##
+## Counting the buttons was enough only while none had ever been deleted. Delete
+## one from the middle and the count no longer matches the highest name in use,
+## so the next save collides: three saves, delete the middle, two more saves, and
+## two buttons read "Preset 3". `_unique_preset_path()` made the file unique and
+## left `resource_name` alone, and `_preset_display_name()` returns
+## `resource_name` when it is set, so the label is the only thing that collided -
+## and the label is the only thing telling two presets apart in the Build tab.
 func _suggest_preset_name() -> String:
 	var base = "Preset"
+	var taken := {}
+	for button in preset_buttons:
+		if is_instance_valid(button):
+			taken[str(button.text)] = true
 	var index = preset_buttons.size() + 1
+	while taken.has("%s %s" % [base, index]):
+		index += 1
 	return "%s %s" % [base, index]
 
 
