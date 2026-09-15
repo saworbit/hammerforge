@@ -72,6 +72,13 @@ const SCENARIOS: Array[String] = [
 	"res://tools/vibe/scenarios/bake_materials.gd",
 	"res://tools/vibe/scenarios/dock_ranges.gd",
 	"res://tools/vibe/scenarios/brush_sides.gd",
+	"res://tools/vibe/scenarios/map_uv_tail.gd",
+	"res://tools/vibe/scenarios/material_library.gd",
+	"res://tools/vibe/scenarios/tool_registry.gd",
+	"res://tools/vibe/scenarios/uv_canvas.gd",
+	"res://tools/vibe/scenarios/viewport_drop.gd",
+	"res://tools/vibe/scenarios/change_tracker.gd",
+	"res://tools/vibe/scenarios/heightmap_convert.gd",
 ]
 
 
