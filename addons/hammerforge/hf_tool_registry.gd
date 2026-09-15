@@ -4,6 +4,10 @@ extends RefCounted
 
 ## Manages registration and dispatch of HFEditorTool instances.
 
+## Where `HFEditorTool` lives, so a candidate script can be checked against it
+## without being constructed.
+const EDITOR_TOOL_PATH := "res://addons/hammerforge/hf_editor_tool.gd"
+
 var _tools: Array = []
 var _active_tool: HFEditorTool = null
 var _tool_by_id: Dictionary = {}
@@ -37,14 +41,20 @@ func activate_tool(
 	if _active_tool and _active_tool.tool_id() == tool_id:
 		deactivate_current()
 		return
+	# Look the id up before letting go of the tool in hand. Deactivating first and
+	# checking after meant an id that is not registered - a tool whose script
+	# failed to load, a toolbar button wired to an id that has since changed -
+	# silently turned off the tool the mapper was using, with nothing said.
+	if not _tool_by_id.has(tool_id):
+		HFLog.warn("HammerForge: no tool registered with id %d" % tool_id)
+		return
 	if _active_tool:
 		_active_tool.deactivate()
 		_active_tool = null
-	if _tool_by_id.has(tool_id):
-		_active_tool = _tool_by_id[tool_id]
-		_active_tool.undo_redo = p_undo_redo
-		_active_tool.history_callback = p_history_callback
-		_active_tool.activate(root, camera)
+	_active_tool = _tool_by_id[tool_id]
+	_active_tool.undo_redo = p_undo_redo
+	_active_tool.history_callback = p_history_callback
+	_active_tool.activate(root, camera)
 
 
 ## Deactivate the current tool without activating another.
@@ -129,11 +139,41 @@ func load_external_tools(path: String) -> void:
 		if not dir.current_is_dir() and file_name.ends_with(".gd"):
 			var full_path = path.path_join(file_name)
 			var script = load(full_path)
-			if script:
+			if script and _extends_editor_tool(script):
 				var instance = script.new()
 				if instance is HFEditorTool and instance.tool_id() >= 100:
 					register_tool(instance)
 				else:
+					# Refused after construction, so it has to be freed. A
+					# RefCounted goes when the reference does; a Node does not,
+					# and stays an orphan for the life of the editor session.
+					HFLog.warn(
+						(
+							"HammerForge: %s is an HFEditorTool with id %d, which is below 100"
+							% [full_path, instance.tool_id() if instance is HFEditorTool else -1]
+						)
+					)
+					if instance is Node:
+						(instance as Node).queue_free()
 					instance = null
+			elif script:
+				HFLog.warn("HammerForge: %s is not an HFEditorTool, skipping it" % full_path)
 		file_name = dir.get_next()
 	dir.list_dir_end()
+
+
+## Whether a script extends `HFEditorTool`, read off the script rather than off an
+## instance of it.
+##
+## `script.new()` used to run first and the check came after, so every `.gd` file
+## in the scanned directory was constructed: a Node subclass leaked, a script whose
+## `_init()` takes arguments was a hard error, and one with side effects in
+## `_init()` got them. Walking the base script chain answers the question without
+## running any of it.
+static func _extends_editor_tool(script: Script) -> bool:
+	var current: Script = script
+	while current != null:
+		if current.resource_path == EDITOR_TOOL_PATH:
+			return true
+		current = current.get_base_script()
+	return false

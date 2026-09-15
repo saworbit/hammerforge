@@ -36,9 +36,9 @@ func format_face_line(
 		v_axis = axes[1]
 		u_offset = face_data.uv_offset.x
 		v_offset = face_data.uv_offset.y
-		u_scale = face_data.uv_scale.x
-		v_scale = face_data.uv_scale.y
-		rotation = face_data.uv_rotation
+		u_scale = map_texture_scale(face_data.uv_scale.x)
+		v_scale = map_texture_scale(face_data.uv_scale.y)
+		rotation = map_rotation_degrees(face_data.uv_rotation)
 	else:
 		var axes := _auto_axes(normal)
 		u_axis = axes[0]
