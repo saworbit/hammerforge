@@ -133,8 +133,44 @@ func test_the_maximum_itself_is_allowed():
 	assert_eq(HFGeneratorSchemaScript.check_ranges(RANGED, {"radius": 4096.0}), [])
 
 
-func test_a_bool_or_enum_field_is_not_range_checked():
+func test_a_bool_is_not_range_checked_and_an_enum_inside_its_options_is_accepted():
 	assert_eq(HFGeneratorSchemaScript.check_ranges(RANGED, {"post": false, "fill": 1}), [])
+	assert_eq(HFGeneratorSchemaScript.check_ranges(RANGED, {"fill": 0}), [])
+
+
+func test_a_value_below_the_schema_minimum_is_refused():
+	var problem = HFGeneratorSchemaScript.check_ranges(RANGED, {"segments": 0})
+	assert_false(problem.is_empty(), "the floor is half the range and was never held")
+	assert_string_contains(str(problem[0]), "1")
+	assert_string_contains(str(problem[1]), "1")
+
+
+func test_the_minimum_itself_is_allowed():
+	assert_eq(HFGeneratorSchemaScript.check_ranges(RANGED, {"segments": 1}), [])
+	assert_eq(HFGeneratorSchemaScript.check_ranges(RANGED, {"radius": 1.0}), [])
+
+
+func test_a_field_with_no_minimum_has_no_floor():
+	var open_schema := [{"key": "n", "label": "N", "type": "float", "default": 1.0}]
+	assert_eq(HFGeneratorSchemaScript.check_ranges(open_schema, {"n": -1.0e9}), [])
+
+
+func test_an_enum_index_its_options_do_not_have_is_refused():
+	var problem = HFGeneratorSchemaScript.check_ranges(RANGED, {"fill": 7})
+	assert_false(problem.is_empty(), "an OptionButton has no item 7 to show")
+	assert_string_contains(str(problem[0]), "Fill")
+	assert_string_contains(str(problem[1]), "Solid")
+
+
+func test_a_negative_enum_index_is_refused():
+	assert_false(HFGeneratorSchemaScript.check_ranges(RANGED, {"fill": -1}).is_empty())
+
+
+## An enum with no options is a schema mistake rather than a settings one, and
+## the dock builds an empty OptionButton from it either way.
+func test_an_enum_declaring_no_options_is_refused():
+	var broken := [{"key": "mode", "label": "Mode", "type": "enum", "default": 0}]
+	assert_false(HFGeneratorSchemaScript.check_ranges(broken, {"mode": 0}).is_empty())
 
 
 func test_a_field_with_no_maximum_has_no_ceiling():

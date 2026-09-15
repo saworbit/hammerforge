@@ -122,15 +122,29 @@ func get_setting(key: String) -> Variant:
 
 ## Write a setting value by key.
 ##
-## A numeric setting is held to its schema's min and max here rather than only
-## in the SpinBox the dock generates from that schema, so a preset, a restore, a
-## script or a control someone adds later cannot put a value into the tool that
-## the tool itself says is illegal. A value that is not a number is refused
-## outright: the geometry built from one is not wrong in a way anything
-## downstream can see.
+## A setting is held to its schema here rather than only in the control the dock
+## generates from that schema, so a preset, a restore, a script or a control
+## someone adds later cannot put a value into the tool that the tool itself says
+## is illegal. A number is held to its min and max, an enum to its own options,
+## and a value that is not a number is refused outright: the geometry built from
+## one is not wrong in a way anything downstream can see.
 func set_setting(key: String, value: Variant) -> void:
 	var prop := _schema_for(key)
 	var kind := str(prop.get("type", ""))
+	# An enum's range is its `options` array. The dock builds an OptionButton from
+	# it and has no item past the end to show, so an index the options do not have
+	# is a setting nothing can display or correct, handed back to a tool that
+	# indexes its own array with it.
+	if kind == "enum" and (value is float or value is int):
+		var options: Array = Array(prop.get("options", []))
+		var index := int(value)
+		if index < 0 or index >= options.size():
+			HFLog.warn(
+				"HammerForge: %s has no choice %d, keeping %s" % [key, index, str(get_setting(key))]
+			)
+			return
+		_settings[key] = index
+		return
 	if (kind == "float" or kind == "int") and (value is float or value is int):
 		var number := float(value)
 		if not is_finite(number):
