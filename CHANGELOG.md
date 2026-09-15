@@ -37,6 +37,19 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **An entity input now reaches a handler whatever arity that handler has**
+  (#497). `_deliver_to_target()` picked the call shape from the parameter string
+  rather than from the method it was about to call, so a handler declared with no
+  argument fired with a parameter raised a script error and was not called, and
+  so did one requiring an argument fired without a parameter. Both are free text
+  from a dock field with nothing checking that they agree. Worse, the error
+  aborted delivery where it stood, so the snake_case name, `_on_io_input` and the
+  user signal - the three fallbacks that exist so an input always lands
+  somewhere - never ran. The shape is read off the target now. A handler needing
+  two or more arguments cannot be satisfied from one parameter field, so it is
+  skipped with a warning and the fallback chain runs. The reason this never
+  failed a test is that every handler in the fixture was declared with a default,
+  which accepts both call shapes.
 - **The UV editor panel now shows the face it is given** (#506). It treated a
   face's UVs as a 0..1 fraction of the control, and a HammerForge UV is a world
   coordinate: `_project_uvs_for_vertices()` reads `Vector2(v.x, v.y)` off the
