@@ -37,7 +37,7 @@ This document describes how to move data in and out of HammerForge safely.
 - Per-face material names round-trip. Each face line names the material its `material_idx` points at, and an import maps that name back to a palette slot by name. A face with no material, or one whose index is past the palette, writes `__default`.
   - The texture field is positional and whitespace delimited, so a palette name with a space in it is written with underscores (`Red Brick` becomes `Red_Brick`). Import matches on the same token.
   - A `.map` names a texture without saying where it lives, so a name the current palette does not hold leaves the face unset rather than adding a material. Load the palette first, then import.
-- UV offset, rotation and scale are written in both formats. Valve 220 additionally carries the texture axes; Classic Quake has no field for them.
+- UV offset, rotation and scale are written in both formats, converted into the units a `.map` uses: the rotation goes out in degrees (`FaceData.uv_rotation` is radians) and the scale goes out as its reciprocal (a `.map` reader divides by the scale field, `_apply_uv_transform()` multiplies by it). A zero or non-finite scale is written as 1 and warned about, since every Quake family compiler divides by it. A negative scale keeps its sign; it mirrors the texture. The offset needs no conversion. Valve 220 additionally carries the texture axes; Classic Quake has no field for them.
 - Authored entity names round-trip as `targetname`, on both point entities and brush entities. The authored name is the address every I/O connection is aimed at, so without it a wired level comes back inert.
 - **Entity I/O connections round-trip, one key/value line per connection.** The key is the output name and the value is `target,input,parameter,delay,fire_once`, which is the order Hammer writes a VMF connection:
 
@@ -83,8 +83,8 @@ After import, run **Check Only** (Test tab) to detect any remaining non-planar f
 - Use `Bake -> Export .glb` when you need DCC or engine interoperability.
 
 ## Material Library
-- The material palette can be saved and loaded independently via `MaterialManager.save_library()` / `load_library()`.
-- Library files are JSON containing material resource paths — portable across projects.
+- The material palette can be saved and loaded independently, from Save Library and Load Library in the Paint tab or via `MaterialManager.save_library()` / `load_library()`.
+- Library files are JSON containing material resource paths — portable across projects. A material with no resource path, which is any made in the editor session rather than loaded from disk, cannot be recorded: its slot saves empty and `get_dropped_save_slots()` names it. `save_library()` returns `ERR_SKIP` when no slot could be recorded at all.
 - The library path can be stored alongside `.hflevel` saves.
 
 ## Prototype Textures

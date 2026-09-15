@@ -338,6 +338,18 @@ func build(parent: Control) -> void:
 	mat_btn_row.add_child(dock.material_load_prototypes)
 	mc.add_child(mat_btn_row)
 
+	# The User Guide has listed Save and Load under Material Library since before
+	# either had a button. `MaterialManager` has had both since then, callable
+	# from nothing.
+	var lib_btn_row = HBoxContainer.new()
+	dock.material_save_library = Button.new()
+	dock.material_save_library.text = "Save Library"
+	lib_btn_row.add_child(dock.material_save_library)
+	dock.material_load_library = Button.new()
+	dock.material_load_library.text = "Load Library"
+	lib_btn_row.add_child(dock.material_load_library)
+	mc.add_child(lib_btn_row)
+
 	# Inline hint when no face is selected
 	dock._uv_hint_label = Label.new()
 	dock._uv_hint_label.text = "Enable Face Select Mode and click a face to edit"
@@ -592,6 +604,10 @@ func connect_signals() -> void:
 		dock.material_remove.pressed.connect(dock._on_material_remove)
 	if dock.material_load_prototypes:
 		dock.material_load_prototypes.pressed.connect(dock._on_material_load_prototypes)
+	if dock.material_save_library:
+		dock.material_save_library.pressed.connect(dock._on_material_save_library)
+	if dock.material_load_library:
+		dock.material_load_library.pressed.connect(dock._on_material_load_library)
 	if dock.material_assign:
 		dock.material_assign.pressed.connect(dock._on_material_assign)
 	if dock.face_clear:
