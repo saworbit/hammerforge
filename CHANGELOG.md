@@ -37,6 +37,18 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **A `.hflevel` from a newer build is refused rather than half-read** (#499).
+  Every bundle carried a format version and nothing read it. Defaulting a missing
+  key protects new code reading old files; it does nothing for old code reading
+  new ones, which is the case a version number exists for, and the first format
+  change that is not purely additive would have been the one to find out - by
+  which point `restore_state()` has already cleared the open level and restored
+  whatever it could parse. `load_hflevel()` now reads the version before applying
+  anything and refuses a bundle stamped higher than this build reads, reporting
+  it the way a bad state is already reported. A missing or zero version is an
+  older file and still loads. `HFLevelIO.FORMAT_VERSION` is the one place to bump
+  it. The editor settings export and the terrain region sidecar write the same
+  unread stamp and are left alone; they are separate files with separate readers.
 - **Save Library and Load Library are in the Paint tab** (#498, #515). The User
   Guide has listed them under Material Library as if they were buttons since
   before either was reachable: `MaterialManager.save_library()` had no caller
