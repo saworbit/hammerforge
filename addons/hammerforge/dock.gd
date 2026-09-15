@@ -3402,10 +3402,6 @@ func _on_root_material_list_changed() -> void:
 	_sync_materials_from_root()
 
 
-func _on_root_selection_for_surface(_brush_ids: Array) -> void:
-	_sync_surface_paint_from_root()
-
-
 func _on_root_face_selection_changed() -> void:
 	_sync_surface_paint_from_root()
 	set_selection_count(_selection_nodes.size())

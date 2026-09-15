@@ -201,6 +201,58 @@ func test_corridor_cleanup_widens_one_cell_run_by_one_cell() -> void:
 	assert_false(layer.get_cell(Vector2i(1, 2)))
 
 
+## The four settings used to be numbers with magnitudes in their names, read as
+## on/off thresholds: `fill_max_hole_area` of 5 did exactly what 1 did. As bools
+## they say what they are, and each one has to actually switch its own repair.
+func test_each_repair_can_be_switched_off_on_its_own() -> void:
+	var settings := HFInferenceEngine.InferenceSettings.new()
+	settings.denoise = false
+	for cell in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(6, 6)]:
+		layer.set_cell(cell, true)
+	layer.consume_dirty_chunks()
+
+	HFInferenceEngine.new().apply_cleanup(layer, [Vector2i.ZERO], &"blob", settings)
+
+	assert_true(layer.get_cell(Vector2i(6, 6)), "denoise off leaves the one-cell island")
+
+
+func test_fill_holes_off_leaves_the_hole() -> void:
+	var settings := HFInferenceEngine.InferenceSettings.new()
+	settings.fill_holes = false
+	settings.fill_gaps = false
+	for cell in [Vector2i(0, -1), Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, 1)]:
+		layer.set_cell(cell, true)
+	layer.consume_dirty_chunks()
+
+	HFInferenceEngine.new().apply_cleanup(layer, [Vector2i.ZERO], &"room", settings)
+
+	assert_false(layer.get_cell(Vector2i(0, 0)))
+
+
+func test_fill_gaps_off_leaves_the_gap() -> void:
+	var settings := HFInferenceEngine.InferenceSettings.new()
+	settings.fill_gaps = false
+	for cell in [Vector2i(4, 0), Vector2i(6, 0)]:
+		layer.set_cell(cell, true)
+	layer.consume_dirty_chunks()
+
+	HFInferenceEngine.new().apply_cleanup(layer, [Vector2i.ZERO], &"room", settings)
+
+	assert_false(layer.get_cell(Vector2i(5, 0)))
+
+
+func test_widen_corridors_off_leaves_the_corridor_one_cell_wide() -> void:
+	var settings := HFInferenceEngine.InferenceSettings.new()
+	settings.widen_corridors = false
+	for x in range(3):
+		layer.set_cell(Vector2i(x, 0), true)
+	layer.consume_dirty_chunks()
+
+	HFInferenceEngine.new().apply_cleanup(layer, [Vector2i.ZERO], &"corridor", settings)
+
+	assert_false(layer.get_cell(Vector2i(1, 1)))
+
+
 func test_inference_is_default_off_until_the_paint_toggle_wires_it() -> void:
 	assert_null(tool.inference)
 

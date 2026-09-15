@@ -12,12 +12,25 @@ extends RefCounted
 const HFStroke = preload("hf_stroke.gd")
 
 
+## Which of the four repairs run.
+##
+## Bools, because that is what they are. They were numbers with magnitudes in
+## their names - `fill_max_hole_area`, `gap_tolerance`,
+## `denoise_min_island_area`, `min_corridor_width` - and every one of them was
+## read as an on/off threshold, so 5 did exactly what 1 did and 50 did exactly
+## what 2 did. The one-cell bound is deliberate and the class comment above
+## defends it; the names are what was wrong. A settings panel built from the old
+## names would have been four spin boxes doing nothing but switching.
+##
+## `angle_snap_degrees` is gone. Nothing read it, no doc promised it, and stroke
+## angle snapping is not something this pass does: `infer_intent()` classifies a
+## stroke and `apply_cleanup()` edits cells. If it is wanted later it belongs on
+## the stroke.
 class InferenceSettings:
-	var denoise_min_island_area := 2
-	var fill_max_hole_area := 1
-	var gap_tolerance := 1
-	var min_corridor_width := 2
-	var angle_snap_degrees := 12.0
+	var denoise := true
+	var fill_holes := true
+	var fill_gaps := true
+	var widen_corridors := true
 
 
 func infer_intent(stroke: HFStroke) -> StringName:
@@ -52,21 +65,21 @@ func apply_cleanup(
 		var right := _filled(snapshot, layer, cell + Vector2i(1, 0))
 		var up := _filled(snapshot, layer, cell + Vector2i(0, -1))
 		var down := _filled(snapshot, layer, cell + Vector2i(0, 1))
-		var hole := settings.fill_max_hole_area >= 1 and left and right and up and down
-		var gap := settings.gap_tolerance >= 1 and ((left and right) or (up and down))
+		var hole := settings.fill_holes and left and right and up and down
+		var gap := settings.fill_gaps and ((left and right) or (up and down))
 		if hole or gap:
 			changes[cell] = true
 	_apply(layer, changes)
 
 	snapshot = _snapshot(layer, writable)
 	changes.clear()
-	if settings.denoise_min_island_area >= 2:
+	if settings.denoise:
 		for cell: Vector2i in writable:
 			if bool(snapshot.get(cell, false)) and _cardinal_count(snapshot, layer, cell) == 0:
 				changes[cell] = false
 	_apply(layer, changes)
 
-	if intent == &"corridor" and settings.min_corridor_width >= 2:
+	if intent == &"corridor" and settings.widen_corridors:
 		_widen_one_cell_corridor(layer, writable)
 
 

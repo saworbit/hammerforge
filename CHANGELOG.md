@@ -5,6 +5,22 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Removed
+- **Five signals that were declared and never emitted** (#521).
+  `HFContextToolbar.tool_switch_requested` and `hotkey_palette_requested` had
+  connect and disconnect pairs in `plugin.gd` and a real handler on the other
+  end, for commands nothing in the viewport could ask for. Both commands are
+  reachable elsewhere - the palette through `dock.command_palette_requested`,
+  tool switching from the Build tab and the shortcuts - so the signals and the
+  four plugin lines are gone rather than the toolbar gaining buttons nobody asked
+  for; `_on_context_tool_switch()` went with them, having lost its only caller.
+  `HFPaintLayer.layer_changed` and `HFIOWiringPanel.connection_removed` had no
+  connect either. `LevelRoot.selection_changed` is the fifth, found by the new
+  check: the dock connected it and its handler only called
+  `_sync_surface_paint_from_root()`, which `face_selection_changed` already
+  triggers and does emit.
+- **`InferenceSettings.angle_snap_degrees`** (#520). Read by nothing, promised by
+  no doc, and not something this pass does: `infer_intent()` classifies a stroke
+  and `apply_cleanup()` edits cells, and neither has an angle in it.
 - **The material usage tracker** (#375). `record_usage()`, `release_usage()`,
   `rebuild_usage()`, `find_unused_materials()` and `get_usage_count()` had no
   caller anywhere — not the dock, not the plugin, not the state system, not the
@@ -19,6 +35,14 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   that would strip the palette of materials in use.
 
 ### Changed
+- **The Floor Paint inference settings are bools with honest names** (#520).
+  `denoise_min_island_area`, `fill_max_hole_area`, `gap_tolerance` and
+  `min_corridor_width` were all read as on/off thresholds, so 5 did exactly what
+  1 did and 50 did exactly what 2 did. The one-cell bound is deliberate and the
+  class comment defends it; the names were what was wrong, and a settings panel
+  built from them would have been four spin boxes that only switch. They are
+  `denoise`, `fill_holes`, `fill_gaps` and `widen_corridors` now. The engine is
+  still opt-in and unwired, so nothing shipped changes behaviour.
 - **A vertex move that bends a face now splits it instead of being refused.**
   A brush face is a plane and every face of a box is a quad, so moving one of
   its four corners bends it. #364 made that a refusal, which is correct but
@@ -37,6 +61,12 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **A whole-tree check that every signal the addon declares is emitted** (#521).
+  A grep over `addons/hammerforge/`, the way `test_suite_integrity.gd` checks
+  that every test script loads. It covers `name.emit(`, `emit_signal("name")` and
+  the forwarding helpers the subsystems use, with a left word boundary so
+  `layer_changed.emit(` is not matched inside `paint_layer_changed.emit(`. It
+  found one more than the issue did.
 - **Every dock command that changes the level now registers an undo step**
   (#470, #471, #472, #473, #474, #475). Thirteen of them called `level_root`
   directly: New, Add Sel, Rem Sel and Delete on the visgroup list, Group and

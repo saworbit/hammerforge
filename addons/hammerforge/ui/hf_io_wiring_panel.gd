@@ -15,7 +15,6 @@ signal connection_added(
 	delay: float,
 	fire_once: bool
 )
-signal connection_removed(source: Node, index: int)
 ## Emitted immediately before the panel changes the level, so whoever owns the
 ## undo manager can take the before state. The matching done signal commits it.
 signal will_change(action_name: String)

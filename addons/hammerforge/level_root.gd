@@ -329,7 +329,6 @@ signal entity_added(node: Node)
 signal entity_removed(node: Node)
 
 # Selection
-signal selection_changed(brush_ids: Array)
 
 # Paint
 signal paint_layer_changed(layer_index: int)

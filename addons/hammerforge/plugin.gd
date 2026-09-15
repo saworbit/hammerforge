@@ -238,9 +238,7 @@ func _enter_tree():
 	_context_toolbar.set_keymap(_keymap)
 	_context_toolbar.action_requested.connect(_on_context_toolbar_action)
 	_context_toolbar.operation_toggle_requested.connect(_on_context_toggle_operation)
-	_context_toolbar.tool_switch_requested.connect(_on_context_tool_switch)
 	_context_toolbar.material_quick_apply.connect(_on_context_material_apply)
-	_context_toolbar.hotkey_palette_requested.connect(_on_toggle_hotkey_palette)
 	HFPluginOverlays.attach_viewport_overlay(self, _context_toolbar)
 	# Hotkey palette (command palette overlay)
 	_hotkey_palette = HFHotkeyPalette.new()
@@ -393,9 +391,7 @@ func _exit_tree():
 		if is_instance_valid(_context_toolbar):
 			_context_toolbar.action_requested.disconnect(_on_context_toolbar_action)
 			_context_toolbar.operation_toggle_requested.disconnect(_on_context_toggle_operation)
-			_context_toolbar.tool_switch_requested.disconnect(_on_context_tool_switch)
 			_context_toolbar.material_quick_apply.disconnect(_on_context_material_apply)
-			_context_toolbar.hotkey_palette_requested.disconnect(_on_toggle_hotkey_palette)
 		HFPluginOverlays.detach_viewport_overlay(self, _context_toolbar)
 		if is_instance_valid(_context_toolbar):
 			_context_toolbar.queue_free()
@@ -1516,10 +1512,6 @@ func _on_dock_bake_state_changed(baking: bool, success: bool) -> void:
 
 func _toggle_bake_preview(root: Node, pressed: bool) -> void:
 	await HFPluginBakePreview.toggle(self, root, pressed)
-
-
-func _on_context_tool_switch(tool_id: int) -> void:
-	HFPluginToolModes.switch_to_tool(self, tool_id)
 
 
 func _on_context_material_apply(mat_index: int) -> void:

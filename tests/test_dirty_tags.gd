@@ -55,7 +55,6 @@ var _batched_signals: Array = []
 signal brush_added(brush_id: String)
 signal brush_removed(brush_id: String)
 signal brush_changed(brush_id: String)
-signal selection_changed(brush_ids: Array)
 
 func begin_signal_batch() -> void:
 	_signal_batch_depth += 1
@@ -282,12 +281,9 @@ func test_delete_brushes_by_id_emits_brush_removed_per_brush():
 	_make_production_brush(production_root, "batch_a")
 	_make_production_brush(production_root, "batch_b")
 	var removed: Array = []
-	var selection_emits: Array = []
 	production_root.brush_removed.connect(func(bid): removed.append(bid))
-	production_root.selection_changed.connect(func(ids): selection_emits.append(ids))
 	production_root.delete_brushes_by_id(["batch_a", "batch_b"])
 	assert_eq(removed, ["batch_a", "batch_b"], "Caches must be told which brushes went away")
-	assert_eq(selection_emits.size(), 0, "Deleted ids are not a selection")
 	assert_eq(production_root.get_live_brush_count(), 0)
 	assert_eq(production_root.brush_system.get_cached_brush_count(), 0)
 
