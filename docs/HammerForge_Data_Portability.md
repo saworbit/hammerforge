@@ -83,8 +83,8 @@ After import, run **Check Only** (Test tab) to detect any remaining non-planar f
 - Use `Bake -> Export .glb` when you need DCC or engine interoperability.
 
 ## Material Library
-- The material palette can be saved and loaded independently via `MaterialManager.save_library()` / `load_library()`.
-- Library files are JSON containing material resource paths — portable across projects.
+- The material palette can be saved and loaded independently, from Save Library and Load Library in the Paint tab or via `MaterialManager.save_library()` / `load_library()`.
+- Library files are JSON containing material resource paths — portable across projects. A material with no resource path, which is any made in the editor session rather than loaded from disk, cannot be recorded: its slot saves empty and `get_dropped_save_slots()` names it. `save_library()` returns `ERR_SKIP` when no slot could be recorded at all.
 - The library path can be stored alongside `.hflevel` saves.
 
 ## Prototype Textures

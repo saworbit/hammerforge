@@ -1055,9 +1055,9 @@ To add custom entity types:
 A `LevelRoot` can read from somewhere else instead through its `entity_definitions_path` export. Both pickers follow it.
 
 ## Material Library
-The material palette can be saved and loaded as a JSON library file:
-- **Save**: preserves resource paths of all palette materials.
-- **Load**: restores the palette from saved paths.
+The material palette can be saved and loaded as a JSON library file. **Save Library** and **Load Library** sit in the Paint tab -> Materials section, beside Refresh Prototypes:
+- **Save Library**: records the resource path of each palette material. A material made in the editor session has no resource path and cannot be recorded, so its slot is written empty and the status line says how many were left that way. Save the material to disk first if it has to survive the trip.
+- **Load Library**: restores the palette from the saved paths. A path the file names but the project cannot find keeps its slot as an empty one rather than shifting the rest, because `FaceData.material_idx` indexes that array; the status line says how many are missing.
 - **Unused materials**: not tracked. Material assignment is per face, through `FaceData.material_idx`, so "is this palette slot used" is a question about face slots rather than about a resource path.
 
 ## Prototype Textures

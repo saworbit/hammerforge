@@ -53,7 +53,7 @@ See [DEVELOPMENT.md](https://github.com/saworbit/hammerforge/blob/main/DEVELOPME
 
 ### Face Materials + Surface Paint (`HFPaintSystem`)
 - DraftBrush faces store material indices, UVs, and paint layers.
-- Materials are managed by a shared palette (`MaterialManager`) with library persistence (save/load JSON) and usage tracking.
+- Materials are managed by a shared palette (`MaterialManager`) with library persistence (Save Library and Load Library in the Paint tab, written as JSON resource paths).
 - `HFPrototypeTextures` provides 150 built-in SVG textures (15 patterns x 10 colors) loadable via the "Refresh Prototypes" button for rapid material testing.
 - Surface paint writes per-face weight images and updates previews.
 

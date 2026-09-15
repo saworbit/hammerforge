@@ -342,6 +342,16 @@ title = "Export Settings"
 access = 2
 file_mode = 4
 
+[node name="MaterialLibrarySaveDialog" type="FileDialog" parent="."]
+title = "Save Material Library"
+access = 2
+file_mode = 4
+
+[node name="MaterialLibraryLoadDialog" type="FileDialog" parent="."]
+title = "Load Material Library"
+access = 2
+file_mode = 0
+
 [node name="SettingsImportDialog" type="FileDialog" parent="."]
 title = "Import Settings"
 access = 2
