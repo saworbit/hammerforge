@@ -56,8 +56,10 @@ func _a_clean_level_is_clean() -> void:
 			514,
 			"validate_level reports issues on a level with one default box",
 			(
-				"%s -- #491 turned bake_use_face_materials on by default and the palette still"
-				% str(issues)
+				(
+					"%s -- #491 turned bake_use_face_materials on by default and the palette still"
+					% str(issues)
+				)
 				+ " starts empty, so the rule at hf_validation_system.gd:60 fires on every new"
 				+ " level. This ran clean before that merge"
 			)

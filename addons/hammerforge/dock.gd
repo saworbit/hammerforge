@@ -268,6 +268,8 @@ var export_settings_btn: Button = null
 var import_settings_btn: Button = null
 @onready var settings_export_dialog: FileDialog = $SettingsExportDialog
 @onready var settings_import_dialog: FileDialog = $SettingsImportDialog
+@onready var material_library_save_dialog: FileDialog = $MaterialLibrarySaveDialog
+@onready var material_library_load_dialog: FileDialog = $MaterialLibraryLoadDialog
 # -- Performance (built programmatically) --
 var perf_brushes_value: Label = null
 var perf_entity_value: Label = null
@@ -284,6 +286,8 @@ var materials_list: ItemList = null
 var material_add: Button = null
 var material_remove: Button = null
 var material_load_prototypes: Button = null
+var material_save_library: Button = null
+var material_load_library: Button = null
 var material_assign: Button = null
 var face_select_mode: CheckBox = null
 var face_clear: Button = null
@@ -4260,6 +4264,26 @@ func _on_material_load_prototypes() -> void:
 	show_toast("Prototype materials loaded", 0)
 
 
+func _on_material_save_library() -> void:
+	if not level_root:
+		return
+	HFDockFileHandler.show_dialog(material_library_save_dialog)
+
+
+func _on_material_load_library() -> void:
+	if not level_root:
+		return
+	HFDockFileHandler.show_dialog(material_library_load_dialog)
+
+
+func _on_material_library_save_selected(path: String) -> void:
+	HFDockFileHandler.on_material_library_save_selected(self, path)
+
+
+func _on_material_library_load_selected(path: String) -> void:
+	HFDockFileHandler.on_material_library_load_selected(self, path)
+
+
 func _on_material_assign() -> void:
 	if _selected_material_index < 0:
 		return
@@ -5459,9 +5483,24 @@ func _on_save_preset() -> void:
 	_load_presets()
 
 
+## A name no preset on screen is already using.
+##
+## Counting the buttons was enough only while none had ever been deleted. Delete
+## one from the middle and the count no longer matches the highest name in use,
+## so the next save collides: three saves, delete the middle, two more saves, and
+## two buttons read "Preset 3". `_unique_preset_path()` made the file unique and
+## left `resource_name` alone, and `_preset_display_name()` returns
+## `resource_name` when it is set, so the label is the only thing that collided -
+## and the label is the only thing telling two presets apart in the Build tab.
 func _suggest_preset_name() -> String:
 	var base = "Preset"
+	var taken := {}
+	for button in preset_buttons:
+		if is_instance_valid(button):
+			taken[str(button.text)] = true
 	var index = preset_buttons.size() + 1
+	while taken.has("%s %s" % [base, index]):
+		index += 1
 	return "%s %s" % [base, index]
 
 

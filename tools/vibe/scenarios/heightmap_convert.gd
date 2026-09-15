@@ -53,13 +53,18 @@ func _round_trip_a_known_height() -> void:
 	# The centre of the brush, in cells.
 	var centre_cell := Vector2i(0, 0)
 	var read_back: float = layer.get_height_at(centre_cell)
-	var expected: float = b.global_position.y + b.size.y * 0.5 - (layer.grid.layer_y if layer.grid else 0.0)
+	var expected: float = (
+		b.global_position.y + b.size.y * 0.5 - (layer.grid.layer_y if layer.grid else 0.0)
+	)
 	note("height read back at the centre cell", "%.3f" % read_back)
 	note("the brush's top above the layer's floor", "%.3f" % expected)
 	if absf(read_back - expected) > maxf(1.0, expected * 0.05):
 		flag(
 			"a brush converted to a heightmap does not read back at its own height",
-			"the layer says %.2f where the brush's top is %.2f above the layer floor" % [read_back, expected]
+			(
+				"the layer says %.2f where the brush's top is %.2f above the layer floor"
+				% [read_back, expected]
+			)
 		)
 
 
@@ -117,10 +122,7 @@ func _what_the_grid_snap_costs() -> void:
 			continue
 		var size: Vector2i = result.heightmap.get_size()
 		measured.append([cell_size, size, took])
-		note(
-			"cell size %.1f" % cell_size,
-			"%dx%d heightmap, %d ms" % [size.x, size.y, took]
-		)
+		note("cell size %.1f" % cell_size, "%dx%d heightmap, %d ms" % [size.x, size.y, took])
 
 	# What the same selection would ask for at the smaller grid snaps the level
 	# will hand over. Projected rather than built, because building it is the
@@ -133,7 +135,10 @@ func _what_the_grid_snap_costs() -> void:
 		var bytes := pixels * 8
 		note(
 			"grid snap %.2f on this brush" % snap,
-			"%dx%d = %d cells, about %.1f MB before the per-cell set_cell() loop" % [side, side, pixels, bytes / 1048576.0]
+			(
+				"%dx%d = %d cells, about %.1f MB before the per-cell set_cell() loop"
+				% [side, side, pixels, bytes / 1048576.0]
+			)
 		)
 	var snap_floor: Variant = root.get("grid_snap")
 	note("the level's own grid_snap", snap_floor)

@@ -129,8 +129,7 @@ func _unresolved_tokens(keymap) -> Array:
 		var f := FileAccess.open(path, FileAccess.READ)
 		if not f:
 			continue
-		for line in f.get_as_text().split("
-"):
+		for line in f.get_as_text().split("\n"):
 			# Comments write {action} as a placeholder; only the strings count.
 			if line.strip_edges().begins_with("#"):
 				continue

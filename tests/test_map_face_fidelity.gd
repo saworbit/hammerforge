@@ -6,6 +6,7 @@ extends GutTest
 const LevelRootType = preload("res://addons/hammerforge/level_root.gd")
 const MapIOType = preload("res://addons/hammerforge/map_io.gd")
 const QuakeAdapter = preload("res://addons/hammerforge/map_adapters/hf_map_quake.gd")
+const Valve220Adapter = preload("res://addons/hammerforge/map_adapters/hf_map_valve220.gd")
 
 var root: LevelRoot
 
@@ -31,6 +32,17 @@ func _box(brush_id: String) -> DraftBrush:
 		)
 		as DraftBrush
 	)
+
+
+## The rotation, u scale and v scale that close a face line. Both formats end on
+## the same three numbers, so one reader serves both.
+func _uv_tail(line: String) -> Array:
+	var parts := line.split(" ", false)
+	return [
+		float(parts[parts.size() - 3]),
+		float(parts[parts.size() - 2]),
+		float(parts[parts.size() - 1]),
+	]
 
 
 ## The face lines of the exported text, in order.
@@ -99,14 +111,96 @@ func test_the_uv_numbers_are_the_face_s_own():
 	for face in brush.faces:
 		face.uv_offset = Vector2(8, 16)
 		face.uv_scale = Vector2(2, 4)
-		face.uv_rotation = 45.0
+		face.uv_rotation = deg_to_rad(45.0)
 
 	var lines := _face_lines(MapIOType.export_map_from_level(root, QuakeAdapter.new()))
 
 	for line in lines:
 		assert_true(
-			line.ends_with("bricks 8 16 45 2 4"), "Face line should carry its UVs, got: %s" % line
+			line.ends_with("bricks 8 16 45 0.5 0.25"),
+			"Face line should carry its UVs in .map units, got: %s" % line
 		)
+
+
+## A `.map` rotation field is degrees. `FaceData.uv_rotation` is radians, because
+## `_apply_uv_transform()` calls `Vector2.rotated()`. Writing the radians out is a
+## factor of 57.3: every rotated face arrives effectively unrotated.
+func test_a_rotated_face_exports_its_rotation_in_degrees():
+	root.add_material_to_palette(_make_material("bricks"))
+	var brush := _box("b1")
+	root.assign_material_to_whole_brushes(0, ["b1"])
+	for face in brush.faces:
+		face.uv_rotation = deg_to_rad(45.0)
+
+	for adapter in [QuakeAdapter.new(), Valve220Adapter.new()]:
+		for line in _face_lines(MapIOType.export_map_from_level(root, adapter)):
+			var tail := _uv_tail(line)
+			assert_almost_eq(
+				tail[0],
+				45.0,
+				0.01,
+				"%s wrote the rotation in radians: %s" % [adapter.format_name(), line]
+			)
+
+
+## A `.map` scale divides and `uv_scale` multiplies, so the two are reciprocal.
+## Exporting the value unchanged puts the tiling out by the square of it.
+func test_a_scaled_face_exports_the_reciprocal_scale():
+	root.add_material_to_palette(_make_material("bricks"))
+	var brush := _box("b1")
+	root.assign_material_to_whole_brushes(0, ["b1"])
+	for face in brush.faces:
+		face.uv_scale = Vector2(2, 2)
+
+	for adapter in [QuakeAdapter.new(), Valve220Adapter.new()]:
+		for line in _face_lines(MapIOType.export_map_from_level(root, adapter)):
+			var tail := _uv_tail(line)
+			assert_almost_eq(tail[1], 0.5, 0.001, "u scale of 2 is 0.5 in a .map: %s" % line)
+			assert_almost_eq(tail[2], 0.5, 0.001, "v scale of 2 is 0.5 in a .map: %s" % line)
+
+
+func test_a_scale_of_one_is_the_identity():
+	root.add_material_to_palette(_make_material("bricks"))
+	var brush := _box("b1")
+	root.assign_material_to_whole_brushes(0, ["b1"])
+
+	for adapter in [QuakeAdapter.new(), Valve220Adapter.new()]:
+		for line in _face_lines(MapIOType.export_map_from_level(root, adapter)):
+			var tail := _uv_tail(line)
+			assert_almost_eq(tail[1], 1.0, 0.001, "scale 1 round trips: %s" % line)
+			assert_almost_eq(tail[2], 1.0, 0.001, "scale 1 round trips: %s" % line)
+
+
+## Every Quake family reader divides by the texture scale, so a zero there is a
+## divide by zero at load. 1 keeps the file loadable.
+func test_a_uv_scale_of_zero_exports_as_one():
+	root.add_material_to_palette(_make_material("bricks"))
+	var brush := _box("b1")
+	root.assign_material_to_whole_brushes(0, ["b1"])
+	for face in brush.faces:
+		face.uv_scale = Vector2.ZERO
+
+	for adapter in [QuakeAdapter.new(), Valve220Adapter.new()]:
+		for line in _face_lines(MapIOType.export_map_from_level(root, adapter)):
+			var tail := _uv_tail(line)
+			assert_almost_eq(tail[1], 1.0, 0.001, "a zero scale is substituted: %s" % line)
+			assert_almost_eq(tail[2], 1.0, 0.001, "a zero scale is substituted: %s" % line)
+
+
+## `adjust_uvs_for_rotation()` writes a negative scale on purpose when a turn
+## flips the projection plane, and a negative scale mirrors the texture in a
+## `.map`. It has to survive the inversion with its sign.
+func test_a_negative_uv_scale_stays_negative():
+	root.add_material_to_palette(_make_material("bricks"))
+	var brush := _box("b1")
+	root.assign_material_to_whole_brushes(0, ["b1"])
+	for face in brush.faces:
+		face.uv_scale = Vector2(1, -2)
+
+	for adapter in [QuakeAdapter.new(), Valve220Adapter.new()]:
+		for line in _face_lines(MapIOType.export_map_from_level(root, adapter)):
+			var tail := _uv_tail(line)
+			assert_almost_eq(tail[2], -0.5, 0.001, "a mirrored face stays mirrored: %s" % line)
 
 
 # -- One plane per flat surface ----------------------------------------------
@@ -125,6 +219,44 @@ func test_a_cylinder_exports_one_plane_per_wall_and_one_per_cap():
 		)
 		var lines := _face_lines(MapIOType.export_map_from_level(root, QuakeAdapter.new()))
 		assert_eq(lines.size(), sides + 2, "A %d sided prism needs %d planes" % [sides, sides + 2])
+
+
+## The default brush has `sides` 4 and `DraftBrush.round_sides()` resolves that to
+## 16, which is what the viewport draws and what the bake builds. The export used
+## to floor it at 6 and write a hexagon instead.
+func test_a_default_cylinder_exports_at_the_resolution_it_is_drawn_at():
+	(
+		root
+		. create_brush_from_info(
+			{
+				"size": Vector3(32, 32, 32),
+				"center": Vector3.ZERO,
+				"shape": LevelRootType.BrushShape.CYLINDER,
+			}
+		)
+	)
+	var lines := _face_lines(MapIOType.export_map_from_level(root, QuakeAdapter.new()))
+
+	assert_eq(
+		lines.size(),
+		DraftBrush.DEFAULT_ROUND_SIDES + 2,
+		"the exported prism has to be the cylinder that was on screen"
+	)
+
+
+## `MIN_ROUND_SIDES` is 5 and the brush honours it. The export clamped it to 6.
+func test_a_five_sided_cylinder_exports_five_walls():
+	root.create_brush_from_info(
+		{
+			"size": Vector3(32, 32, 32),
+			"center": Vector3.ZERO,
+			"shape": LevelRootType.BrushShape.CYLINDER,
+			"sides": 5
+		}
+	)
+	var lines := _face_lines(MapIOType.export_map_from_level(root, QuakeAdapter.new()))
+
+	assert_eq(lines.size(), 7, "five walls and two caps")
 
 
 func test_no_two_cylinder_planes_are_the_same_plane():

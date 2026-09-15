@@ -154,8 +154,10 @@ func _scale_direction() -> void:
 				"%s exports the UV scale without inverting it" % format,
 				(
 					"uv_scale 2 tiles the texture twice as often in the viewport"
-					+ " (UV span %.1f against %.1f), and a .map scale of %s means a texture"
-					% [span_two, span_one, str(u_scale)]
+					+ (
+						" (UV span %.1f against %.1f), and a .map scale of %s means a texture"
+						% [span_two, span_one, str(u_scale)]
+					)
 					+ " twice as large, which is half as often"
 				)
 			)

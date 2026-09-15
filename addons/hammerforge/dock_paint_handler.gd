@@ -103,6 +103,13 @@ static func on_heightmap_convert(dock: Object) -> void:
 		settings.cell_size = dock.level_root.grid_snap
 	if dock.height_scale_spin:
 		settings.height_scale = dock.height_scale_spin.value
+	settings.source_root = dock.level_root
+	# Taken before the convert rather than after it, because `remove_sources`
+	# takes brushes out of the level from inside `convert()` and a state captured
+	# afterwards would have nothing to put back. An abandoned convert still leaves
+	# no half-registered step behind: this is a capture, and nothing is registered
+	# until `_commit_done_state_action()` below.
+	var before_convert: Dictionary = dock.level_root.capture_full_state()
 	var result := converter.convert(brushes, settings)
 	if result.error != "":
 		dock.level_root.emit_signal("user_message", "Convert failed: " + result.error, 2)
@@ -119,9 +126,6 @@ static func on_heightmap_convert(dock: Object) -> void:
 			result.layer.grid = grid
 	result.layer.chunk_size = mgr.chunk_size
 	result.layer.name = "Layer_%s" % str(result.layer.layer_id)
-	# Taken here, past every early return, so an abandoned convert leaves no
-	# half-registered step behind.
-	var before_convert: Dictionary = dock.level_root.capture_full_state()
 	mgr.add_child(result.layer)
 	mgr.layers.append(result.layer)
 	mgr.active_layer_index = mgr.layers.size() - 1
@@ -133,6 +137,8 @@ static func on_heightmap_convert(dock: Object) -> void:
 	):
 		dock.level_root.paint_system.regenerate_paint_layers()
 	dock._commit_done_state_action("Convert to Heightmap", before_convert)
+	if result.notice != "":
+		dock.level_root.emit_signal("user_message", result.notice, 1)
 	dock.level_root.emit_signal(
 		"user_message",
 		(
