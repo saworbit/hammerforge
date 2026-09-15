@@ -37,6 +37,14 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **Save Preset no longer names two presets the same thing** (#513).
+  `_suggest_preset_name()` counted the buttons on screen, which matches the
+  highest name in use only until one is deleted. Three saves, delete the middle
+  one, two more saves, and two buttons read "Preset 3".
+  `_unique_preset_path()` made the file unique and left `resource_name` alone,
+  and the label comes from `resource_name`, so the file was fine and the label
+  was not - and the label is the only thing telling two presets apart in the
+  Build tab. The suggestion now skips the names already on screen.
 - **A `.hflevel` from a newer build is refused rather than half-read** (#499).
   Every bundle carried a format version and nothing read it. Defaulting a missing
   key protects new code reading old files; it does nothing for old code reading
