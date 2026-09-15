@@ -37,6 +37,17 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **Editing a brush entity's metadata now marks the bake stale** (#510).
+  `HFBrushChangeTracker._signature()` hashed the transform, visibility, size,
+  shape, operation, sides, material override and every `FaceData`, and none of
+  the node metadata. Three keys in there decide what a brush becomes in the bake:
+  `brush_entity_class`, `entity_name` and `entity_io_outputs`. Godot 4's
+  Inspector has a Metadata section that edits exactly those, which is the ground
+  this tracker exists to cover, so all three could be changed with Bake Changed
+  reporting nothing to do - the level looking right while the baked output still
+  had the brush as plain world geometry, or wired to a target that no longer
+  exists. All three are hashed now, with the outputs deep copied so an edit to a
+  connection in place is not made underneath the snapshot.
 - **A cylinder exports at the resolution it is drawn at** (#495).
   `_cylinder_to_map_lines()` set its side count with `max(6, brush.sides)`, while
   the viewport and the bake both use `DraftBrush.round_sides()`. The default

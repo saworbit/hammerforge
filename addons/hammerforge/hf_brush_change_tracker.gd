@@ -393,6 +393,28 @@ static func _signature(brush: Node3D) -> Dictionary:
 		"sides": brush.get("sides"),
 		"material": _object_identity(brush.get("material_override")),
 		"faces": _faces_signature(brush.get("faces")),
+		"entity_meta": _entity_meta_signature(brush),
+	}
+
+
+## The metadata that decides what a brush becomes in the bake.
+##
+## `brush_entity_class` chooses whether the brush is world geometry or a
+## `func_door`, `entity_name` is the address every connection aims at, and
+## `entity_io_outputs` is the wiring itself. This tracker exists for edits
+## HammerForge's own commands did not make, and Godot 4's Inspector has a
+## Metadata section that edits exactly these keys - so all three could be
+## changed with Bake Changed reporting nothing to do, and the baked output kept
+## the brush as plain geometry or wired to a target that no longer exists.
+##
+## The outputs are an Array of Dictionaries, deep copied the way
+## `_configuration_value()` already copies an array, or the snapshot changes
+## underneath the comparison.
+static func _entity_meta_signature(brush: Node) -> Dictionary:
+	return {
+		"class": str(brush.get_meta("brush_entity_class", "")),
+		"name": str(brush.get_meta("entity_name", "")),
+		"io": _configuration_value(brush.get_meta("entity_io_outputs", [])),
 	}
 
 
@@ -593,7 +615,7 @@ static func _signature_changed(before: Dictionary, after: Dictionary) -> bool:
 			return true
 	elif old_size != new_size:
 		return true
-	for field in ["visible", "shape", "operation", "sides", "material", "faces"]:
+	for field in ["visible", "shape", "operation", "sides", "material", "faces", "entity_meta"]:
 		if before.get(field) != after.get(field):
 			return true
 	return false
