@@ -28,8 +28,6 @@ var _dirty_chunks: Dictionary = {}  # Dictionary[Vector2i, bool] used as set
 ## an override continue to use HFPaintTool.synth_settings.wall_height.
 var _wall_heights: Dictionary = {}  # Dictionary[Vector2i, float]
 
-signal layer_changed(dirty_chunks: Array[Vector2i])
-
 
 func has_heightmap() -> bool:
 	return heightmap != null and not heightmap.is_empty()

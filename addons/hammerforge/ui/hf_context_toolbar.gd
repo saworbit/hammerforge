@@ -12,9 +12,7 @@ const HFKeymapType = preload("res://addons/hammerforge/hf_keymap.gd")
 
 signal action_requested(action: String, args: Array)
 signal operation_toggle_requested
-signal tool_switch_requested(tool_id: int)
 signal material_quick_apply(index: int)
-signal hotkey_palette_requested
 
 enum Context {
 	NONE,

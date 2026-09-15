@@ -13,7 +13,6 @@ const ROOT_SIGNALS := {
 	"hflevel_save_failed": "_on_hflevel_save_failed",
 	"paint_layer_changed": "_on_root_paint_layer_changed",
 	"material_list_changed": "_on_root_material_list_changed",
-	"selection_changed": "_on_root_selection_for_surface",
 	"face_selection_changed": "_on_root_face_selection_changed",
 	"user_message": "_on_root_user_message",
 }
