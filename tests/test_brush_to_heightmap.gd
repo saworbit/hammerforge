@@ -34,6 +34,7 @@ func test_default_settings():
 	assert_eq(s.cell_size, 1.0)
 	assert_eq(s.margin_cells, 2)
 	assert_eq(s.remove_sources, false)
+	assert_null(s.source_root)
 	assert_eq(s.height_scale, 10.0)
 	assert_null(s.target_layer)
 
@@ -253,3 +254,116 @@ func test_height_roundtrip_nonzero_origin():
 	var outside_cell := result.cell_min  # margin cell, no brush coverage
 	var h_outside := layer.get_height_at(outside_cell)
 	assert_eq(h_outside, 0.0, "Height outside brush should be 0")
+
+
+# ===========================================================================
+# The grid has a ceiling (#512)
+# ===========================================================================
+
+
+## The cell size comes from the level's grid snap, which is set for an unrelated
+## reason and has no bearing on how big a heightmap the editor can hold. The
+## cost is quadratic, so a fine snap over a large selection allocated hundreds of
+## megabytes on the main thread with no progress and no way to stop.
+func test_a_selection_too_large_for_the_cell_size_widens_the_cell_size():
+	var brush := _make_brush(Vector3.ZERO, Vector3(4096, 32, 4096))
+	var settings := HFBrushToHeightmapScript.ConvertSettings.new()
+	settings.cell_size = 0.25
+
+	var result = HFBrushToHeightmapScript.new().convert([brush], settings)
+	_track_result_layer(result)
+
+	assert_eq(result.error, "", "the operation stays useful rather than being refused")
+	assert_lte(result.heightmap.get_width(), 2048, "width is inside the cap")
+	assert_lte(result.heightmap.get_height(), 2048, "height is inside the cap")
+	assert_gt(result.cell_size_used, 0.25, "it had to widen to fit")
+	assert_ne(result.notice, "", "and it says which cell size it used")
+
+
+func test_a_selection_that_fits_keeps_the_cell_size_it_was_given():
+	var brush := _make_brush(Vector3.ZERO, Vector3(64, 32, 64))
+	var settings := HFBrushToHeightmapScript.ConvertSettings.new()
+	settings.cell_size = 4.0
+
+	var result = HFBrushToHeightmapScript.new().convert([brush], settings)
+	_track_result_layer(result)
+
+	assert_eq(result.cell_size_used, 4.0, "nothing to widen")
+	assert_eq(result.notice, "", "and nothing to say about it")
+
+
+# ===========================================================================
+# remove_sources does what it says (#511)
+# ===========================================================================
+
+
+class RemovalRoot:
+	extends Node
+
+	var deleted: Array = []
+
+	func delete_brush(brush: Node, _free: bool = true) -> void:
+		deleted.append(brush)
+
+
+func test_remove_sources_takes_the_rasterised_brushes_out_of_the_level():
+	var level := RemovalRoot.new()
+	add_child_autoqfree(level)
+	var brush := _make_brush(Vector3.ZERO, Vector3(64, 32, 64))
+	var settings := HFBrushToHeightmapScript.ConvertSettings.new()
+	settings.cell_size = 4.0
+	settings.remove_sources = true
+	settings.source_root = level
+
+	var result = HFBrushToHeightmapScript.new().convert([brush], settings)
+	_track_result_layer(result)
+
+	assert_eq(level.deleted, [brush], "the geometry is in the level once, not twice")
+	assert_eq(result.removed_sources, 1)
+
+
+func test_remove_sources_leaves_the_brushes_when_it_is_not_asked_for():
+	var level := RemovalRoot.new()
+	add_child_autoqfree(level)
+	var brush := _make_brush(Vector3.ZERO, Vector3(64, 32, 64))
+	var settings := HFBrushToHeightmapScript.ConvertSettings.new()
+	settings.cell_size = 4.0
+	settings.source_root = level
+
+	var result = HFBrushToHeightmapScript.new().convert([brush], settings)
+	_track_result_layer(result)
+
+	assert_eq(level.deleted, [], "the default is to keep them")
+	assert_eq(result.removed_sources, 0)
+
+
+## A brush it never read is not a source it can claim to have converted.
+func test_remove_sources_keeps_a_subtractive_brush():
+	var level := RemovalRoot.new()
+	add_child_autoqfree(level)
+	var additive := _make_brush(Vector3.ZERO, Vector3(64, 32, 64))
+	var cutter := _make_brush(Vector3(200, 0, 0), Vector3(32, 32, 32))
+	cutter.operation = CSGShape3D.OPERATION_SUBTRACTION
+	var settings := HFBrushToHeightmapScript.ConvertSettings.new()
+	settings.cell_size = 4.0
+	settings.remove_sources = true
+	settings.source_root = level
+
+	var result = HFBrushToHeightmapScript.new().convert([additive, cutter], settings)
+	_track_result_layer(result)
+
+	assert_eq(level.deleted, [additive])
+	assert_eq(result.removed_sources, 1)
+
+
+func test_remove_sources_without_a_root_keeps_the_brushes():
+	var brush := _make_brush(Vector3.ZERO, Vector3(64, 32, 64))
+	var settings := HFBrushToHeightmapScript.ConvertSettings.new()
+	settings.cell_size = 4.0
+	settings.remove_sources = true
+
+	var result = HFBrushToHeightmapScript.new().convert([brush], settings)
+	_track_result_layer(result)
+
+	assert_eq(result.removed_sources, 0, "a brush has to go out through the brush system")
+	assert_true(is_instance_valid(brush))

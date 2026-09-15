@@ -284,7 +284,52 @@ func _is_callable_input(target: Node, method_name: String) -> bool:
 			)
 		)
 		return false
+	# A handler needing two or more arguments cannot be satisfied from one
+	# parameter field. Refusing it here sends the input down the fallback chain
+	# instead of raising an error that aborts delivery entirely.
+	if _arity_of(target, method_name).x > 1:
+		push_warning(
+			(
+				"HFIORuntime: input '%s' on '%s' needs more than one argument - not calling it."
+				% [method_name, target.name]
+			)
+		)
+		return false
 	return true
+
+
+## How many arguments a method needs, and how many it will take.
+##
+## `x` is the count with no default, `y` the total, or -1 when the method is
+## variadic. Read off the target rather than guessed from whether a parameter was
+## typed: a handler declared with no argument, fired with one, raised a script
+## error and was not called, and so did a handler that requires one fired without
+## one. The error aborted `_deliver_to_target()` where it stood, so the three
+## fallbacks below it - the snake_case name, `_on_io_input`, and the user signal -
+## never ran either, and those exist so an input always lands somewhere.
+func _arity_of(target: Node, method_name: String) -> Vector2i:
+	for entry in target.get_method_list():
+		if str(entry.get("name", "")) != method_name:
+			continue
+		var args: Array = entry.get("args", [])
+		var defaults: Array = entry.get("default_args", [])
+		if int(entry.get("flags", 0)) & METHOD_FLAG_VARARG:
+			return Vector2i(maxi(0, args.size() - defaults.size()), -1)
+		return Vector2i(maxi(0, args.size() - defaults.size()), args.size())
+	return Vector2i(0, 0)
+
+
+## Call an input handler in the shape its own signature asks for.
+##
+## A method that takes nothing is called with nothing, whatever was typed in the
+## parameter field. A method that takes one is called with the parameter, which
+## is the empty string when none was given - the same value `_on_io_input` has
+## always been handed.
+func _call_input(target: Node, method_name: String, parameter: String) -> void:
+	if _arity_of(target, method_name).y == 0:
+		target.call(method_name)
+		return
+	target.call(method_name, parameter)
 
 
 ## Deliver an input to a single target node.
@@ -292,10 +337,7 @@ func _deliver_to_target(target: Node, input_name: String, parameter: String) -> 
 	# 1) Try calling the input method directly on the target (e.g. "Open", "TurnOn").
 	var method_name: String = input_name
 	if target.has_method(method_name) and _is_callable_input(target, method_name):
-		if parameter != "":
-			target.call(method_name, parameter)
-		else:
-			target.call(method_name)
+		_call_input(target, method_name, parameter)
 		return
 
 	# 2) Try snake_case variant (e.g. "TurnOn" -> "turn_on").
@@ -305,10 +347,7 @@ func _deliver_to_target(target: Node, input_name: String, parameter: String) -> 
 		and target.has_method(snake_name)
 		and _is_callable_input(target, snake_name)
 	):
-		if parameter != "":
-			target.call(snake_name, parameter)
-		else:
-			target.call(snake_name)
+		_call_input(target, snake_name, parameter)
 		return
 
 	# 3) Try a generic handler: _on_io_input(input_name, parameter).
