@@ -37,6 +37,18 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **A generator setting is now held to both ends of its range, and to its own
+  options** (#518, #519). `check_ranges()` tested a field's `max` and had no
+  branch for `min`, and it skipped enum fields outright. Four fields across the
+  four builders built real geometry out of range as a result: a staircase with
+  zero-thickness treads, which is invisible edge-on and a surface the player
+  falls through once it is baked to collision, and three structures started
+  outside a full turn, which the dock then cannot express or edit back. An enum
+  took any integer, so `stairs.fill` accepted 7 of its 2 choices. Both are
+  checked now, with an enum's `options` array read as the range it is; an enum
+  declaring no options is refused too, since the dock builds an empty
+  OptionButton from one. A `.hflevel` carrying a value outside a bound now
+  reports it instead of building from it.
 - **A brush entity now answers to the name it was given** (#493). A brush tied
   to `func_door` or `func_button` keeps its authored name in metadata, because
   its node name is whatever Godot generated. `find_entities_by_name()` and

@@ -85,16 +85,35 @@ static func check_ranges(schema: Array, settings: Dictionary) -> Array:
 			continue
 		var field_def: Dictionary = entry
 		var type_name := str(field_def.get("type", TYPE_FLOAT))
-		if type_name == TYPE_BOOL or type_name == TYPE_ENUM:
-			continue
 		var key := str(field_def["key"])
 		var label := str(field_def.get("label", key))
+		# An enum's range is its options array, the same way a number's is its min
+		# and max. The dock builds an OptionButton from it and cannot show an index
+		# that is not there, so an out of range one is a setting nothing can
+		# display or correct while the builder indexes its own array with it.
+		if type_name == TYPE_ENUM:
+			var options: Array = Array(field_def.get("options", []))
+			var index := int(merged.get(key, 0))
+			if options.is_empty() or index < 0 or index >= options.size():
+				return [
+					"'%s' is not one of its choices" % label,
+					"Choose one of: %s" % ", ".join(PackedStringArray(options)),
+				]
+			continue
+		if type_name == TYPE_BOOL:
+			continue
 		# Read finiteness off the value as it arrived. An int field coerces a NaN
 		# to some integer on the way through `merge()`, so by then it is gone.
 		var raw = settings.get(key, 0.0)
 		if (raw is float or raw is int) and not is_finite(float(raw)):
 			return ["'%s' is not a number" % label, "Set %s to a number" % label]
 		var value := float(merged.get(key, 0.0))
+		if field_def.has("min") and value < float(field_def["min"]):
+			var floor_value := _number_text(float(field_def["min"]))
+			return [
+				"'%s' cannot be less than %s" % [label, floor_value],
+				"Use %s or more" % floor_value,
+			]
 		if field_def.has("max") and value > float(field_def["max"]):
 			var ceiling := _number_text(float(field_def["max"]))
 			return [
