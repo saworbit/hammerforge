@@ -90,6 +90,7 @@ func test_the_preview_and_the_bake_build_a_cylinder_the_same_way() -> void:
 	var csg := PrefabFactory.create_prefab(
 		LevelRoot.BrushShape.CYLINDER, brush.size, max(3, brush.sides)
 	)
+	autoqfree(csg)
 	assert_not_null(csg, "the bake builds its CSG through PrefabFactory")
 	assert_eq(
 		csg.sides, brush.sides, "the shape the bake produces is the one the mapper was looking at"

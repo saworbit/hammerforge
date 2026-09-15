@@ -39,12 +39,14 @@ func test_quake_format_face_line_with_face_data():
 	var fd = FaceData.new()
 	fd.uv_scale = Vector2(2.0, 2.0)
 	fd.uv_offset = Vector2(16.0, 32.0)
-	fd.uv_rotation = 45.0
+	fd.uv_rotation = deg_to_rad(45.0)
 	var a = Vector3(0, 0, 0)
 	var b = Vector3(32, 0, 0)
 	var c = Vector3(32, 32, 0)
 	var line = adapter.format_face_line(a, b, c, "stone", fd)
-	assert_string_contains(line, "stone 16 32 45 2 2")
+	# Degrees in the rotation field, and the reciprocal in the scale fields: the
+	# offset is the only one of the three that means the same thing on both sides.
+	assert_string_contains(line, "stone 16 32 45 0.5 0.5")
 
 
 func test_quake_format_face_line_fractional_coords():
@@ -87,16 +89,16 @@ func test_valve220_format_face_line_with_face_data():
 	fd.uv_projection = FaceData.UVProjection.PLANAR_Z
 	fd.uv_scale = Vector2(0.5, 0.5)
 	fd.uv_offset = Vector2(16.0, 32.0)
-	fd.uv_rotation = 45.0
+	fd.uv_rotation = deg_to_rad(45.0)
 	var a = Vector3(0, 0, 0)
 	var b = Vector3(64, 0, 0)
 	var c = Vector3(64, 64, 0)
 	var line = adapter.format_face_line(a, b, c, "metal", fd)
 	assert_string_contains(line, "metal")
-	assert_string_contains(line, "16")
-	assert_string_contains(line, "32")
-	assert_string_contains(line, "45")
-	assert_string_contains(line, "0.5")
+	# Offset unchanged, rotation in degrees, and a uv_scale of 0.5 inverted to 2.
+	assert_string_contains(line, "[ 1 0 0 16 ]")
+	assert_string_contains(line, "[ 0 1 0 32 ]")
+	assert_string_contains(line, "45 2 2")
 
 
 func test_valve220_auto_axes_floor():

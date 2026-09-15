@@ -33,6 +33,9 @@ static func handle(plugin: Object, event: InputEventKey, root: Node) -> int:
 
 	if keycode == KEY_BACKSPACE and plugin.numeric_buffer.length() > 0:
 		plugin.numeric_buffer = plugin.numeric_buffer.substr(0, plugin.numeric_buffer.length() - 1)
+		if plugin.numeric_buffer.length() == 0:
+			# Backspaced away to nothing, so the mouse has the gesture back.
+			root.input_state.clear_numeric_override()
 		update_preview(plugin, root)
 		return STOP
 
@@ -63,16 +66,20 @@ static func update_preview(plugin: Object, root: Node) -> void:
 	if not root.input_state.is_dragging() and not root.input_state.is_extruding():
 		return
 	if plugin.numeric_buffer.length() == 0:
+		root.input_state.clear_numeric_override()
 		return
 	var value := float(plugin.numeric_buffer) if plugin.numeric_buffer.is_valid_float() else 0.0
 	if value <= 0.0:
 		return
+	# Set the override before the redraw. `update_drag()` reads it and leaves the
+	# field alone; without it the call below recomputes the same field from the
+	# cursor and the typed number never reaches the screen.
+	root.input_state.numeric_override = value
 	if root.input_state.is_drag_height() or root.input_state.is_extruding():
 		root.input_state.drag_height = value
 		root.update_drag(plugin.last_3d_camera, plugin.last_3d_mouse_pos)
 	elif root.input_state.is_drag_base():
-		var extent := Vector3(value, 0.0, value)
-		root.input_state.drag_end = root.input_state.drag_origin + extent
+		root.input_state.drag_end = root.input_state.drag_origin + _base_extent(root, value)
 		root.update_drag(plugin.last_3d_camera, plugin.last_3d_mouse_pos)
 	plugin._update_hud_context()
 
@@ -84,6 +91,7 @@ static func apply_value(plugin: Object, root: Node) -> void:
 		return
 	var value := float(plugin.numeric_buffer) if plugin.numeric_buffer.is_valid_float() else 0.0
 	plugin.numeric_buffer = ""
+	root.input_state.clear_numeric_override()
 	if value <= 0.0:
 		return
 	if root.input_state.is_drag_height():
@@ -94,8 +102,7 @@ static func apply_value(plugin: Object, root: Node) -> void:
 			plugin._commit_brush_placement(root, info_result.get("info", {}))
 		plugin._update_hud_context()
 	elif root.input_state.is_drag_base():
-		var extent := Vector3(value, 0.0, value)
-		root.input_state.drag_end = root.input_state.drag_origin + extent
+		root.input_state.drag_end = root.input_state.drag_origin + _base_extent(root, value)
 		root.input_state.advance_to_height(plugin.last_3d_mouse_pos)
 		root.update_drag(plugin.last_3d_camera, plugin.last_3d_mouse_pos)
 		plugin._update_hud_context()
@@ -105,3 +112,19 @@ static func apply_value(plugin: Object, root: Node) -> void:
 		if not info.is_empty():
 			plugin._commit_brush_placement(root, info)
 		plugin._update_hud_context()
+
+
+## The base extent a typed dimension asks for, along the direction the drag is
+## already heading.
+##
+## One number goes onto both X and Z, so a typed base is square. It used to be a
+## positive square whichever way the drag went, which put the brush in the
+## opposite quadrant from the cursor for half of all drags: `get_drag_dimensions()`
+## takes `absf()` of the delta, so the HUD read the same either way and gave no
+## clue. A drag with no delta yet has no direction to keep, and positive is the
+## right default there.
+static func _base_extent(root: Node, value: float) -> Vector3:
+	var delta: Vector3 = root.input_state.drag_end - root.input_state.drag_origin
+	var sx := -1.0 if delta.x < 0.0 else 1.0
+	var sz := -1.0 if delta.z < 0.0 else 1.0
+	return Vector3(value * sx, 0.0, value * sz)

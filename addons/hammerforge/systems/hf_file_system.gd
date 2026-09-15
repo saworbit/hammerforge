@@ -66,6 +66,20 @@ func load_hflevel(path: String = "") -> bool:
 	var decoded = HFLevelIO.decode_variant(data)
 	if not (decoded is Dictionary):
 		return false
+	# Before anything is applied, because `restore_state()` clears the level first
+	# and a file this build cannot read correctly must not cost the open one. A
+	# missing or zero version is an older file and still loads: every key defaults,
+	# which is the direction that has always been safe.
+	var version := int(decoded.get("version", 0))
+	if version > HFLevelIO.FORMAT_VERSION:
+		var message := (
+			"%s was written by a newer build (format %d, this build reads %d)"
+			% [target.get_file(), version, HFLevelIO.FORMAT_VERSION]
+		)
+		HFLog.warn("HFFileSystem: %s" % message)
+		if root.has_signal("user_message"):
+			root.user_message.emit("Level not loaded: %s" % message, 2)
+		return false
 	var settings = decoded.get("settings", {})
 	var state = decoded.get("state", {})
 	root._apply_hflevel_settings(settings if settings is Dictionary else {})

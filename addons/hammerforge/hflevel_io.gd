@@ -2,6 +2,15 @@
 extends RefCounted
 class_name HFLevelIO
 
+## The highest bundle version this build knows how to read.
+##
+## `capture_hflevel_state()` stamps this into every `.hflevel`. Nothing read it
+## before, which protects new code reading old files - every key defaults - and
+## does nothing for old code reading new ones, which is the case a version number
+## exists for. Bump it here, in one place, when a format change is not purely
+## additive.
+const FORMAT_VERSION := 1
+
 const MAGIC := "HFLEVEL1"
 const MAGIC_COMPRESSED := "HFLEVEL1C"
 const TYPE_KEY := "__hf_type"

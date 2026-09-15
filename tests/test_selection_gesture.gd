@@ -929,6 +929,63 @@ func test_native_brush_change_tracker_is_exact_idempotent_and_undo_safe() -> voi
 	assert_true(tracker.reconcile(fake_root).is_empty())
 
 
+## The tracker exists for edits HammerForge's own commands did not make, and
+## Godot 4's Inspector has a Metadata section that edits exactly these three
+## keys. The bake reads all of them: the class decides whether the brush is world
+## geometry or a func_door, the name is what every connection aims at, and the
+## outputs are the wiring. None of them was hashed, so the level looked right,
+## Bake Changed said there was nothing to do, and the baked output still had the
+## brush as plain geometry.
+func test_native_metadata_edits_the_bake_reads_make_a_brush_dirty() -> void:
+	var fake_root := ChangeTrackerRoot.new()
+	add_child_autoqfree(fake_root)
+	var brush := _new_tracked_brush(fake_root, "brush_a")
+	var tracker := BrushChangeTracker.new()
+	tracker.prime(fake_root)
+	assert_true(tracker.reconcile(fake_root).is_empty(), "nothing touched yet")
+
+	brush.set_meta("brush_entity_class", "func_door")
+	assert_eq(
+		tracker.reconcile(fake_root),
+		PackedStringArray(["brush_a"]),
+		"the brush is a door now and the bake has to be told",
+	)
+
+	fake_root.dirty_ids.clear()
+	brush.set_meta("entity_name", "secret_door")
+	assert_eq(tracker.reconcile(fake_root), PackedStringArray(["brush_a"]))
+
+	fake_root.dirty_ids.clear()
+	(
+		brush
+		. set_meta(
+			"entity_io_outputs",
+			[{"output_name": "OnOpen", "target_name": "light_1", "input_name": "TurnOn"}],
+		)
+	)
+	assert_eq(tracker.reconcile(fake_root), PackedStringArray(["brush_a"]))
+	assert_true(tracker.reconcile(fake_root).is_empty(), "and it settles")
+
+
+## The outputs are an Array of Dictionaries. Held by reference, the snapshot
+## would change underneath the comparison and an edit to an existing connection
+## would report nothing.
+func test_editing_a_connection_in_place_is_noticed() -> void:
+	var fake_root := ChangeTrackerRoot.new()
+	add_child_autoqfree(fake_root)
+	var brush := _new_tracked_brush(fake_root, "brush_a")
+	var outputs: Array = [
+		{"output_name": "OnOpen", "target_name": "light_1", "input_name": "TurnOn"}
+	]
+	brush.set_meta("entity_io_outputs", outputs)
+	var tracker := BrushChangeTracker.new()
+	tracker.prime(fake_root)
+
+	outputs[0]["target_name"] = "light_2"
+
+	assert_eq(tracker.reconcile(fake_root), PackedStringArray(["brush_a"]))
+
+
 func test_native_bake_configuration_edits_tag_one_full_reconcile_per_change() -> void:
 	var fake_root := ChangeTrackerRoot.new()
 	add_child_autoqfree(fake_root)
