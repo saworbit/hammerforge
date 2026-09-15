@@ -204,6 +204,7 @@ static func export_map_from_level(level_root: Node, adapter: HFMapAdapterType = 
 	if level_root.has_method("_iter_pick_nodes"):
 		brush_nodes.append_array(level_root.call("_iter_pick_nodes"))
 	var entity_brush_blocks: Array = []
+	var substituted_scales: Array[String] = []
 	for node in brush_nodes:
 		if not (node is DraftBrush):
 			continue
@@ -211,6 +212,8 @@ static func export_map_from_level(level_root: Node, adapter: HFMapAdapterType = 
 			continue
 		if _is_cutter(node):
 			continue
+		if _has_unexportable_uv_scale(node):
+			substituted_scales.append(str(node.name))
 		var brush_lines = _brush_to_map_lines(node, adapter, material_names)
 		if brush_lines.is_empty():
 			continue
@@ -241,7 +244,30 @@ static func export_map_from_level(level_root: Node, adapter: HFMapAdapterType = 
 			if ent_lines.is_empty():
 				continue
 			lines.append_array(ent_lines)
+	if not substituted_scales.is_empty():
+		HFLog.warn(
+			(
+				"HammerForge: %d brush(es) had a UV scale of zero and were exported at scale 1: %s"
+				% [substituted_scales.size(), ", ".join(substituted_scales)]
+			)
+		)
 	return "\n".join(lines)
+
+
+## True when any face of the brush carries a UV scale a `.map` cannot express.
+##
+## The substitution itself happens in `HFMapAdapter.map_texture_scale()`, once per
+## component. This walks the brush so the warning can name it - the adapter is
+## handed a face line and never learns which brush it came from.
+static func _has_unexportable_uv_scale(brush: DraftBrush) -> bool:
+	for face in brush.faces:
+		if face == null:
+			continue
+		if not HFMapAdapterType.scale_is_exportable(face.uv_scale.x):
+			return true
+		if not HFMapAdapterType.scale_is_exportable(face.uv_scale.y):
+			return true
+	return false
 
 
 ## A palette material name as it can be written on a face line.

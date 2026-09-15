@@ -51,6 +51,102 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   was never the face's. A face with no span in one axis - a CYLINDRICAL
   projection, or any zero-area UV span - gets a fallback extent so the division
   is safe.
+- **Convert to Heightmap now has a ceiling, and its remove-sources setting does
+  what it says** (#511, #512). The grid was the selection's extent divided by the
+  level's grid snap, with nothing capping the result - a number set for an
+  unrelated reason, how far a brush moves when it is dragged, quietly deciding
+  the resolution of an allocation that grows quadratically. A 512 unit brush at a
+  snap of 0.1 is a 5124 x 5124 grid, about 210 MB across the float array and the
+  image, walked twice on the main thread with no progress and no way to stop. The
+  cell size now widens to keep the grid inside 2048 a side, the result carries
+  the cell size it actually used, and the dock says so rather than leaving the
+  mapper to wonder. `Image.create()` is checked for null. `remove_sources` was
+  declared, documented on the class and asserted for its default by a test, and
+  read by nothing; it removes the brushes it rasterised now, through the brush
+  system so their cross references go with them, and the dock takes its undo
+  snapshot before the convert rather than after so there is something to put
+  back.
+- **A dimension typed during a draw drag now shows on the brush, and keeps the
+  drag's direction** (#516, #517). `update_preview()` wrote the typed value into
+  the drag state and then called `update_drag()`, which recomputed the same field
+  from the cursor. The number went onto the HUD and the brush under it carried
+  on following the mouse, so the feature read as broken right up until it was
+  committed. `HFInputState` carries a `numeric_override` now, which the drag
+  system checks before it recomputes either field, and which is cleared when the
+  buffer empties or the gesture ends. The typed base also kept the sign it never
+  had: one number went onto X and Z as a positive extent, so a drag heading into
+  negative X and Z - half of all drags - jumped to the opposite quadrant on
+  Enter, with the HUD reading the same either way because
+  `get_drag_dimensions()` takes `absf()`. The extent is built along the direction
+  the drag already has, and positive when there is no direction yet.
+- **The custom tool extension point no longer constructs what it is going to
+  refuse** (#507, #508, #509). `load_external_tools()` called `.new()` on every
+  `.gd` file in the scanned directory and checked what it got afterwards, so a
+  file that is not a tool was constructed anyway: a `Node` subclass became an
+  orphan for the life of the editor session, a script whose `_init()` takes
+  arguments was a hard error, and one with side effects in `_init()` got them.
+  The base script chain is walked instead, which answers the question without
+  running any of the file, and a rejection is logged rather than skipped in
+  silence. `activate_tool()` looked the id up after deactivating the tool in
+  hand, so an id that is not registered turned the mapper's tool off and said
+  nothing; it returns early with a warning now. `HFEditorTool.set_setting()`
+  clamped `float` and `int` and let an `enum` through unchecked, so a tool
+  indexed its own options array with a number the dock cannot show; an enum is
+  held to its `options` the way a number is held to its min and max.
+- **A generator setting is now held to both ends of its range, and to its own
+  options** (#518, #519). `check_ranges()` tested a field's `max` and had no
+  branch for `min`, and it skipped enum fields outright. Four fields across the
+  four builders built real geometry out of range as a result: a staircase with
+  zero-thickness treads, which is invisible edge-on and a surface the player
+  falls through once it is baked to collision, and three structures started
+  outside a full turn, which the dock then cannot express or edit back. An enum
+  took any integer, so `stairs.fill` accepted 7 of its 2 choices. Both are
+  checked now, with an enum's `options` array read as the range it is; an enum
+  declaring no options is refused too, since the dock builds an empty
+  OptionButton from one. A `.hflevel` carrying a value outside a bound now
+  reports it instead of building from it.
+- **A brush entity now answers to the name it was given** (#493). A brush tied
+  to `func_door` or `func_button` keeps its authored name in metadata, because
+  its node name is whatever Godot generated. `find_entities_by_name()` and
+  `build_name_index()` compared the node name only, so an output aimed at a door
+  never resolved and fell through to the fallback dispatch, and
+  `unique_authored_name()` handed out names already taken by a brush entity.
+  Both resolve against either address now, the way `_another_node_answers_to()`
+  always has. The validator's duplicate-name and broken-connection checks walked
+  `entities_node` alone and now walk the brush entities too, since a brush entity
+  carries both a name and its own outputs.
+- **The default bake path now runs the same finishing pass as the CSG one**
+  (#494). `build_mesh_from_groups()` unwrapped UV0 and stopped there, so since
+  #491 made `bake_use_face_materials` the default, every ordinary bake dropped
+  the LODs and the lightmap UV2 the Bake Options asked for. It calls
+  `_postprocess_mesh()` now, with `generate_lods`, `unwrap_uv2`, `uv2_texel_size`
+  and `unwrap_uv0` from the options. The face surfaces are also welded into an
+  index array on the way out: Godot generates LODs off the indices, so wiring the
+  pass in on its own would have fixed the UV2 half and left the LOD half exactly
+  as it was.
+- **A new level no longer fails its own validator** (#514). The rule paired
+  `bake_use_face_materials` with an empty palette, which was a deliberate
+  combination when face materials were off by default and is the ordinary
+  starting state now that they are on. Every untouched level reported an issue,
+  which is how a validator loses the weight it needs. It now warns only when some
+  face actually points at a palette slot, which is the case where the bake
+  produces untextured geometry the mapper did not ask for.
+- **The UV tail of an exported `.map` face line is now in the units a `.map`
+  uses** (#503, #504, #505). Three numbers close every face line and all three
+  were wrong. The rotation went out in radians into a field that means degrees,
+  so a face turned 45 degrees was written as `0.7854` and arrived turned by less
+  than one degree. The scale went out uninverted: `_apply_uv_transform()`
+  multiplies a world coordinate by `uv_scale` and a `.map` reader divides by the
+  scale field, so the same number meant twice the repeats inside HammerForge and
+  half of them in the file, and nudging the dock to correct an export made it
+  worse. A `uv_scale` of zero went out as a texture scale of zero, which is a
+  divide by zero in every Quake family compiler. `HFMapAdapter` now owns the
+  conversion for both formats: degrees out, the reciprocal scale out, and 1
+  substituted for a zero or non-finite scale with one warning per export naming
+  the brushes. A negative scale stays negative, because that is how a mirrored
+  face is written and `adjust_uvs_for_rotation()` produces one deliberately.
+  `uv_offset` is unchanged and now says why in a comment: with the scale written
+  as its reciprocal the two offsets are the same quantity.
 - **Every dock command that changes the level now registers an undo step**
   (#470, #471, #472, #473, #474, #475). Thirteen of them called `level_root`
   directly: New, Add Sel, Rem Sel and Delete on the visgroup list, Group and

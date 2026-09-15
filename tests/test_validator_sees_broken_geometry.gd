@@ -119,3 +119,33 @@ func test_vertices_a_weld_apart_are_reported_and_welded():
 	assert_true(_mentions(_report(), "a weld apart"))
 	root.validate_level(true)
 	assert_false(_mentions(_report(), "a weld apart"), "welded")
+
+
+# -- The palette dependency ---------------------------------------------------
+
+
+## `bake_use_face_materials` has been on by default since #491, and the palette
+## starts empty. Pairing those two was a warning on every level nobody had
+## touched yet, which is how a validator loses its weight.
+func test_a_fresh_level_with_one_untouched_box_validates_clean():
+	_box("b1")
+
+	assert_eq(_report(), [], "a level nobody has touched has nothing to report")
+
+
+func test_a_face_pointing_at_an_empty_palette_still_warns():
+	var brush := _box("b1")
+	brush.faces[0].material_idx = 0
+
+	assert_true(
+		"Dependency: A face is painted but the material palette is empty" in _report(),
+		"a painted face the bake cannot resolve is worth saying: %s" % str(_report())
+	)
+
+
+func test_a_painted_face_with_a_palette_behind_it_is_clean():
+	root.add_material_to_palette(StandardMaterial3D.new())
+	var brush := _box("b1")
+	brush.faces[0].material_idx = 0
+
+	assert_eq(_report(), [], "the palette answers the face, so there is nothing to warn about")
