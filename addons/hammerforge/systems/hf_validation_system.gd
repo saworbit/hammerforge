@@ -201,31 +201,34 @@ func validate(auto_fix: bool = false) -> Dictionary:
 	# Two entities answering to the same authored name, and wiring with a field
 	# missing. A level can get either from a paste, a `.map` import or a hand
 	# edit, so the check at the setter is not enough on its own.
+	# Brush entities are in this too. A door or a button is addressed by the same
+	# authored name a point entity is, and it carries its own outputs, so leaving
+	# them out meant a colliding name and a broken connection on a brush entity
+	# were both invisible here.
 	var seen_names: Dictionary = {}
 	var duplicate_names: Array = []
 	var broken_connections := 0
-	if root.entities_node:
-		for child in root.entities_node.get_children():
-			var authored := str(child.get_meta("entity_name", "")).strip_edges()
-			if authored != "":
-				if seen_names.has(authored):
-					if not (authored in duplicate_names):
-						duplicate_names.append(authored)
-				seen_names[authored] = true
-			for connection in child.get_meta("entity_io_outputs", []):
-				if not (connection is Dictionary):
-					broken_connections += 1
-					continue
-				var fields: Dictionary = connection
-				var delay = fields.get("delay", 0.0)
-				if (
-					str(fields.get("output_name", "")).strip_edges() == ""
-					or str(fields.get("target_name", "")).strip_edges() == ""
-					or str(fields.get("input_name", "")).strip_edges() == ""
-					or not is_finite(float(delay))
-					or float(delay) < 0.0
-				):
-					broken_connections += 1
+	for child in _named_io_nodes():
+		var authored := str(child.get_meta("entity_name", "")).strip_edges()
+		if authored != "":
+			if seen_names.has(authored):
+				if not (authored in duplicate_names):
+					duplicate_names.append(authored)
+			seen_names[authored] = true
+		for connection in child.get_meta("entity_io_outputs", []):
+			if not (connection is Dictionary):
+				broken_connections += 1
+				continue
+			var fields: Dictionary = connection
+			var delay = fields.get("delay", 0.0)
+			if (
+				str(fields.get("output_name", "")).strip_edges() == ""
+				or str(fields.get("target_name", "")).strip_edges() == ""
+				or str(fields.get("input_name", "")).strip_edges() == ""
+				or not is_finite(float(delay))
+				or float(delay) < 0.0
+			):
+				broken_connections += 1
 	for authored in duplicate_names:
 		issues.append("Entity name '%s' is answered to by more than one entity" % authored)
 	if broken_connections > 0:
@@ -1009,3 +1012,17 @@ static func _object_property_as_bool(
 	if not _object_has_property(obj, property_name):
 		return default_value
 	return bool(obj.get(property_name))
+
+
+## Every node in the level that carries an authored name and I/O outputs: the
+## point entities, and the brushes tied to an entity class. `HFEntitySystem`
+## resolves a connection against both, so the validator has to look at both.
+func _named_io_nodes() -> Array:
+	var out: Array = []
+	if root.entities_node:
+		out.append_array(root.entities_node.get_children())
+	if root.draft_brushes_node:
+		for child in root.draft_brushes_node.get_children():
+			if HFEntitySystem.is_brush_io_target(child):
+				out.append(child)
+	return out
