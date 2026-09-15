@@ -87,3 +87,45 @@ static func _snapped(value: float) -> String:
 ## Format a Vector3 as space-separated snapped components.
 static func _format_vec3(v: Vector3) -> String:
 	return "%s %s %s" % [_snapped(v.x), _snapped(v.y), _snapped(v.z)]
+
+
+## The rotation field of a `.map` face line, in the units that field uses.
+##
+## `FaceData.uv_rotation` is radians, because `_apply_uv_transform()` calls
+## `Vector2.rotated()`. The `.map` field is degrees in both formats. Writing the
+## radians straight out turns a 45 degree face by 0.7854 of a degree, which is
+## every rotated face arriving effectively unrotated.
+static func map_rotation_degrees(uv_rotation: float) -> float:
+	return rad_to_deg(uv_rotation)
+
+
+## The scale field of a `.map` face line, from a `FaceData.uv_scale` component.
+##
+## The two numbers mean opposite things. `_apply_uv_transform()` multiplies a
+## world coordinate by `uv_scale`, so a larger value spans more UV per unit and
+## the texture repeats more often. A `.map` scale divides: the reader computes
+## `axis / scale`, so a larger value is a larger texture repeating less often.
+## The reciprocal is the conversion between them.
+##
+## `uv_offset` needs no conversion and does not get one. A `.map` reader does
+## `axis / scale + offset` and `_apply_uv_transform()` does `world * uv_scale +
+## uv_offset`, so once the scale is written as its reciprocal the two offsets
+## are the same quantity in the same place.
+##
+## A negative scale is left negative. `adjust_uvs_for_rotation()` writes one
+## deliberately when a turn flips the projection plane, and a negative scale is
+## legal in a `.map` - it mirrors the texture.
+static func map_texture_scale(uv_scale: float) -> float:
+	if not scale_is_exportable(uv_scale):
+		return 1.0
+	return 1.0 / uv_scale
+
+
+## True when a UV scale component survives the trip into a `.map`.
+##
+## Every Quake family compiler divides by the texture scale, so a zero there is a
+## divide by zero at load: a crash, a refused map, or a face with non-finite UVs
+## depending on the tool. `set_face_uv_params()` has refused a zero on the way in
+## since #344; this is the same rule at the last point it is still ours.
+static func scale_is_exportable(value: float) -> bool:
+	return is_finite(value) and not is_zero_approx(value)

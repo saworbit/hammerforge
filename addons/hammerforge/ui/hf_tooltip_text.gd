@@ -97,6 +97,10 @@ const TEXTS := {
 	"material_remove": "Remove selected material from palette",
 	"material_load_prototypes":
 	"Load built-in prototype textures into the palette\nUse this first if the browser looks empty",
+	"material_save_library":
+	"Write the palette out as a JSON library\nA material made here has to be saved to disk first, or its slot saves empty",
+	"material_load_library":
+	"Read a palette back from a JSON library\nA material the file names but cannot find leaves its slot empty",
 	"material_assign":
 	"Apply the selected material to all selected faces\nTip: choose a texture in the browser, then click faces in Face Select Mode",
 	"face_clear": "Clear face selection",

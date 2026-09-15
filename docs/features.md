@@ -120,7 +120,7 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Modal Face Select mode** for painting individual faces; entering hides object transform/resize gizmos, manual exit restores the prior object selection, and selecting an object in the Scene tree returns directly to object editing
 - **Surface paint** with per-face splat layers, weight images, and live preview
 - **UV editor** with per-vertex drag handles and reset-to-projection
-- **Material library persistence** -- save/load palettes as JSON with usage tracking
+- **Material library persistence** -- Save Library and Load Library in the Paint tab write and read the palette as JSON resource paths, reporting the slots they could not record or resolve
 
 ### Entities and I/O
 
@@ -389,7 +389,7 @@ transform group while paint mode is on, so only one of the two is ever live.
 
 ## Testing
 
-The verified Godot 4.7 suite on September 13, 2026 contains **3,813 tests across 207 scripts**: **3,806 passing tests**, seven intentional no-assert safety tests, and **18,877 assertions**. All checks run on every push and pull request via GitHub Actions.
+The verified Godot 4.7 suite on September 15, 2026 contains **3,900 tests across 210 scripts**: **3,893 passing tests**, seven intentional no-assert safety tests, and **19,196 assertions**. All checks run on every push and pull request via GitHub Actions.
 
 ```bash
 # Run all tests headless

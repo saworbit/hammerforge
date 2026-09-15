@@ -338,7 +338,7 @@ func capture_hflevel_state() -> Dictionary:
 		state["terrain_regions"] = root.paint_system.capture_region_index()
 		state["paint_layers"] = capture_paint_layers(false)
 	var data: Dictionary = {
-		"version": 1,
+		"version": HFLevelIO.FORMAT_VERSION,
 		"saved_at": Time.get_datetime_string_from_system(),
 		"settings": capture_hflevel_settings(),
 		"state": state

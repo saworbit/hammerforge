@@ -11,6 +11,7 @@ var _library_path := ""
 ## Their slots are still in `materials`, holding null, because `FaceData`
 ## `material_idx` indexes this array and compacting it would repaint the level.
 var _missing_paths: Array[String] = []
+var _dropped_slots: Array[int] = []
 
 
 func get_material(index: int) -> Material:
@@ -57,21 +58,58 @@ func get_material_names() -> Array[String]:
 
 
 ## Save the current material palette to a JSON file.
-## Stores the resource_path of each material so they can be reloaded.
+##
+## A library records each slot's `resource_path`, so a material with no path
+## cannot be recorded. That is every material made in the editor session through
+## the Materials tab's Add button: the slot is written as an empty string and
+## comes back `null`. The load side says so per slot and in a summary; this used
+## to write the empty string in silence and report `OK`, so the first anyone
+## heard of it was a load that restored nothing.
+##
+## Returns `ERR_SKIP` when the palette had materials and none of them could be
+## recorded, because that file restores nothing. `get_dropped_save_slots()` has
+## the slot numbers either way.
 func save_library(path: String) -> int:
 	var paths: Array = []
-	for mat in materials:
+	_dropped_slots.clear()
+	var recorded := 0
+	for index in materials.size():
+		var mat: Material = materials[index]
 		if mat and mat.resource_path != "":
 			paths.append(mat.resource_path)
+			recorded += 1
 		else:
 			paths.append("")
+			if mat != null:
+				_dropped_slots.append(index)
 	var json = JSON.stringify({"version": 1, "materials": paths})
 	var file = FileAccess.open(path, FileAccess.WRITE)
 	if not file:
 		return ERR_CANT_OPEN
 	file.store_string(json)
+	file.close()
 	_library_path = path
+	if not _dropped_slots.is_empty():
+		HFLog.warn(
+			(
+				(
+					"%s: %d of %d materials have no resource path and were saved as empty slots. "
+					+ "A material created in the editor has to be saved to disk before a library "
+					+ "can reference it."
+				)
+				% [path, _dropped_slots.size(), materials.size()]
+			)
+		)
+	if recorded == 0 and not materials.is_empty():
+		return ERR_SKIP
 	return OK
+
+
+## Slot numbers from the last `save_library()` that held a material with no
+## resource path, and so were written as empty. The save-side counterpart to
+## `get_missing_library_paths()`.
+func get_dropped_save_slots() -> Array[int]:
+	return _dropped_slots.duplicate()
 
 
 ## Load a material palette from a JSON file.
@@ -82,6 +120,7 @@ func load_library(path: String) -> bool:
 	if not file:
 		return false
 	var text = file.get_as_text()
+	file.close()
 	var parsed = JSON.parse_string(text)
 	if not (parsed is Dictionary):
 		return false
