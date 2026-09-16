@@ -102,7 +102,7 @@ HammerForge is a single `addons/` folder. No external tools, no custom builds, n
 | **Subsystem-based coordinator architecture** | **3,966 unit + integration tests** with CI on every push |
 | **15 brush shapes** (box through dodecahedron) | **150 built-in prototype textures** for instant greyboxing |
 | **Quake `.map`** + **glTF `.glb`** export | **.hflevel** native format with threaded I/O |
-| **Customizable keymaps** (JSON) | **Plugin API** for custom tools |
+| **Customizable keymaps** (JSON) | **Plugin API** for custom tools in `hammerforge_tools/` |
 | **Dark/light theme sync** across all custom UI | **Performance health monitor** with recommendations |
 | **HammerForge Console** -- RAG status board, every toggle, live log | **Main-screen entry** -- the mark beside 2D, 3D and Script |
 
