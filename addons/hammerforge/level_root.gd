@@ -2144,10 +2144,6 @@ func assign_material_and_reproject(material_index: int, projection: int) -> int:
 	return count
 
 
-func _apply_face_selection() -> void:
-	brush_system._apply_face_selection()
-
-
 func _find_brush_by_key(key: String) -> DraftBrush:
 	return brush_system._find_brush_by_key(key)
 

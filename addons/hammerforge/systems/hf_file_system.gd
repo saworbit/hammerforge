@@ -13,7 +13,6 @@ var _hflevel_pending: Array[Dictionary] = []
 var _hflevel_last_hash: int = 0
 var _completed_saves: Array[Dictionary] = []
 ## Last write error observed on the main thread (thread result is returned from wait_to_finish).
-var _last_write_error := ""
 ## Set by process_thread_queue() from the worker result (true when hash matched).
 var last_encode_skipped := false
 
@@ -378,21 +377,17 @@ func shutdown() -> void:
 	while not _hflevel_pending.is_empty():
 		var next: Dictionary = _hflevel_pending.pop_front()
 		_flush_job_sync(next)
-	_last_write_error = ""
 
 
 func _apply_thread_result(result: Variant) -> String:
-	_last_write_error = ""
 	if result is Dictionary:
 		var error := str(result.get("error", ""))
 		if result.has("hash"):
 			_hflevel_last_hash = int(result.get("hash", 0))
 		last_encode_skipped = bool(result.get("skipped", false))
-		_last_write_error = error
 		_completed_saves.append((result as Dictionary).duplicate(true))
 		return error
 	if result is String:
-		_last_write_error = result
 		return result
 	return ""
 

@@ -24,8 +24,6 @@ static func face_key_for(brush: DraftBrush) -> String:
 
 static func apply_face_selection(plugin: Object, root: Node, face_sel: Dictionary) -> void:
 	root.face_selection = face_sel
-	if root.brush_system:
-		root.brush_system._apply_face_selection()
 	root.face_selection_changed.emit()
 	plugin._update_hud_context()
 

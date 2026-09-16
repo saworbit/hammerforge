@@ -21,7 +21,6 @@ var _value: Label = null
 var _detail: Label = null
 var _action: Button = null
 var _action_id: String = ""
-var _theme_source: Control = null
 ## The board refreshes once a second. Rebuilding the stylebox and re-applying
 ## the colour overrides on every one of those passes allocates for nothing, so
 ## the styling work only runs when what it depends on has actually moved.
@@ -84,7 +83,6 @@ func _build() -> void:
 ## Point the row at a check row from HFStatusBoard.evaluate().
 func apply_check(check: Dictionary, base_control: Control = null) -> void:
 	check_id = str(check.get("id", ""))
-	_theme_source = base_control
 	var severity := int(check.get("severity", HFStatusBoardType.Severity.UNKNOWN))
 
 	_lamp.theme_source = base_control
@@ -117,7 +115,6 @@ func apply_check(check: Dictionary, base_control: Control = null) -> void:
 
 ## Repaint against a new editor theme without changing what the row says.
 func refresh_theme(base_control: Control) -> void:
-	_theme_source = base_control
 	_lamp.theme_source = base_control
 	_lamp.queue_redraw()
 	_restyle(_lamp.severity, base_control)
