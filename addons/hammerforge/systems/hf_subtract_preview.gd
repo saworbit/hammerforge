@@ -15,7 +15,6 @@ var _material: StandardMaterial3D
 var _csg_material: StandardMaterial3D
 var _csg_scratch: Array = []  # Array[CSGCombiner3D]
 var _csg_wait_frames: int = 0
-var _csg_result_count: int = 0
 
 const DEBOUNCE_SEC := 0.15
 const MAX_PREVIEWS := 50
@@ -67,7 +66,6 @@ func process(delta: float) -> void:
 
 func clear() -> void:
 	_free_csg_scratch()
-	_csg_result_count = 0
 	_active_count = 0
 	super()
 
@@ -80,7 +78,6 @@ func destroy() -> void:
 	_disconnect_signals()
 	_free_csg_scratch()
 	_active_count = 0
-	_csg_result_count = 0
 	super()
 
 
@@ -191,7 +188,6 @@ func _show_aabb_wireframes(intersections: Array) -> void:
 	_hide_meshes_from(intersections.size())
 
 	_active_count = intersections.size()
-	_csg_result_count = 0
 	_preview_container.visible = _active_count > 0
 
 
@@ -264,7 +260,6 @@ func _capture_csg_results() -> void:
 		mi.visible = true
 	_hide_meshes_from(needed)
 	_active_count = needed
-	_csg_result_count = needed
 	_preview_container.visible = needed > 0
 
 

@@ -18,6 +18,31 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   with the value of neither, so it is a feature to open on its own terms rather
   than a field to keep carrying into every save and every undo snapshot.
   `restore_visgroups()` reads past a `color` key in an older payload.
+- **`BrushInstance.selected_faces`, and the pass that maintained it** (#563). The
+  field was written for every brush on every face-selection change and read by
+  nothing - not `rebuild_preview()`, not `_build_face_preview()`, not the gizmo
+  plugin. The selection highlight is drawn from `LevelRoot.face_selection`, which
+  is also what `capture_state()` carries and what `face_selection_changed`
+  announces, so that is the one copy. The cost was real:
+  `HFBrushSystem._apply_face_selection()` called `set_selected_faces()` on every
+  brush in the level on every click in face mode, and `set_selected_faces()` ends
+  in `rebuild_preview()` - a full preview rebuild per brush per click, for a value
+  that changed nothing on screen. `HFPaintSystem.apply_face_selection()` was a
+  third copy of the same loop with no caller at all.
+- **Five fields that were assigned and never read** (#564).
+  `HFFileSystem._last_write_error` was the misleading one: it recorded exactly
+  what a reader chasing "why did my save fail" would want, and nothing consumed
+  it - the real route is the `hflevel_save_failed` signal and the
+  `_completed_saves` queue. Checked before removing it that nothing reaches it
+  alone: the worker always returns a Dictionary, which lands in `_completed_saves`
+  and reaches the signal, so no save failure went unreported.
+  `HFSubtractPreview._csg_result_count` was set to the same value as
+  `_active_count` at every one of its four sites, so there was no rebuild guard to
+  restore. `HFBakeSystem._last_dirty_brush_ids` carried a comment describing when
+  it was captured, which is a promise about how it is used.
+  `HFExampleLibrary._selected_id` and `HFStatusRow._theme_source` round it out -
+  both of the latter's writers already have `base_control` in hand and pass it
+  straight through.
 - **Five signals that were declared and never emitted** (#521).
   `HFContextToolbar.tool_switch_requested` and `hotkey_palette_requested` had
   connect and disconnect pairs in `plugin.gd` and a real handler on the other
