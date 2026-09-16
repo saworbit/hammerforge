@@ -37,6 +37,18 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   document look healthier.
 
 ### Fixed
+- **Undoing a brush resize no longer renames every brush in the level** (#597).
+  `restore_state()` clears the brushes and rebuilds them from their captured
+  info, and the node name was the one thing that info never carried. So a resize
+  followed by Ctrl+Z brought `Floor` and `Wall` back as `@Node3D@27719` and
+  `@Node3D@27718`. Geometry, ids, faces, visgroups and entity wiring all
+  survived; only the names died, and not just on the brush that was resized -
+  on every brush, because the restore rebuilds all of them. That is worse than
+  cosmetic. An entity I/O output targets a brush by name, and the baked `Area3D`
+  takes its name from it, so an undo quietly unwired every connection in the
+  level with no error and no warning. Entity infos have carried their node name
+  all along; brushes were the odd one out, and now match. Found by running the
+  release gate's resize-handle check for the first time (#593).
 - **Clicking a brush in the 3D viewport no longer throws you onto the HammerForge
   main screen** (#592). Nothing in the plugin asked for the switch. Godot's
   `EditorData::get_handling_main_editor()` hands the main screen to any plugin

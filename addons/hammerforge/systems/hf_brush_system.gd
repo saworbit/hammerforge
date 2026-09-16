@@ -148,6 +148,13 @@ func create_brush_from_info(info: Dictionary) -> Node:
 		_add_pending_cut(brush)
 	else:
 		_add_brush_to_draft(brush)
+	# After the brush is in the tree, so Godot resolves a collision against its
+	# real siblings. clear_brushes() detaches with remove_child() before it
+	# queues the old nodes, so a restore is not competing with a name the freed
+	# node still holds.
+	var restored_name := str(info.get("name", ""))
+	if restored_name != "":
+		brush.name = restored_name
 	if info.has("transform"):
 		brush.global_transform = info["transform"]
 	else:
@@ -397,6 +404,12 @@ func get_brush_info_from_node(brush: Node) -> Dictionary:
 	var ename: String = str(draft.get_meta("entity_name", ""))
 	if ename != "":
 		info["entity_name"] = ename
+	# The node name. restore_state() clears every brush and rebuilds it from this
+	# info, so anything not captured here does not survive an undo - and a brush
+	# that comes back as @Node3D@27719 has lost what entity I/O outputs target,
+	# what the baked Area3D is named after, and what anyone reading the scene
+	# tree recognises it by. Entity infos have carried their node name all along.
+	info["name"] = draft.name
 	return info
 
 

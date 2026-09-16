@@ -56,14 +56,14 @@ One line, edited by hand when the gate passes. The release workflow reads it.
 
 Gate passed: 0.3.0
 
-Last run: 2026-09-16, Godot 4.7.2.stable. Nine of the ten checks were executed
-and passed. The resize-handle drag was **not executed**; it was signed off
-instead. If you are reading this line to decide whether that path is covered,
-it is not, and it is the first thing to run next time.
+Last run: 2026-09-16, Godot 4.7.2.stable. The resize-handle drag has since been
+executed and passed: dragging a handle resized the brush against the grid, the
+opposite face stayed put, and it was one undo step. The half of that line still
+**not executed** is drawing a box by dragging in the viewport.
 
-That run is also what corrected two of the checks above. It was the first time
-this document had been executed rather than added to, and it found two of its
-own lines describing things the product does not do.
+That run earned its place. It corrected two of the checks above, and running the
+resize handle turned up a real defect: undoing a resize rebuilt every brush
+without its name, which silently unwires entity I/O. Fixed in #597.
 
 ## Checklist
 
