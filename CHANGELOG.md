@@ -37,6 +37,19 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   document look healthier.
 
 ### Fixed
+- **Autosaving one level no longer deletes another level's backups** (#618).
+  `_write_autosave_rotation()` named each history file after the level that wrote
+  it and then called a prune that forgot the name: every `.hflevel` in
+  `autosave_history/` was a candidate, sorted by modification time, with
+  everything past the keep count deleted. Two levels in one project share the
+  folder and so shared one budget, and the budget was spent on whichever level
+  saved last - three autosaves of a second level was enough to wipe the first
+  level's history. The prune now takes the base name and only considers that
+  level's files, checking that what follows the name looks like a timestamp so
+  `level` does not prune `level_backup`. The timestamp itself was only to the
+  second, and `write_bytes_atomic()` replaces rather than refuses, so three saves
+  inside one second left one backup; it now carries milliseconds and refuses to
+  land on a path that already exists.
 - **Undoing a brush resize no longer renames every brush in the level** (#597).
   `restore_state()` clears the brushes and rebuilds them from their captured
   info, and the node name was the one thing that info never carried. So a resize
