@@ -25,9 +25,9 @@
       "color": "#ffff00"
     },
     "properties": [
-      {"name": "range", "type": "float", "label": "Range", "default": 10.0},
-      {"name": "energy", "type": "float", "label": "Energy", "default": 1.0},
-      {"name": "color", "type": "color", "label": "Color", "default": "#ffffff"}
+      {"name": "range", "type": "float", "label": "Range", "default": 10.0, "maps_to": "omni_range"},
+      {"name": "energy", "type": "float", "label": "Energy", "default": 1.0, "maps_to": "light_energy"},
+      {"name": "color", "type": "color", "label": "Color", "default": "#ffffff", "maps_to": "light_color"}
     ]
   },
   "door_basic": {

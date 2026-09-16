@@ -248,3 +248,133 @@ func test_export_playtest_scene_wires_nested_brush_io():
 	assert_not_null(dispatcher, "Nested trigger I/O should attach HFIORuntime")
 	scene.free()
 	DirAccess.remove_absolute(path)
+
+
+# ===========================================================================
+# An entity definition becomes the node it names (#598, #599)
+# ===========================================================================
+
+
+func _place(entity_class: String) -> DraftEntity:
+	return root._create_entity_from_map({"classname": entity_class, "origin": Vector3.ZERO})
+
+
+func _exported_tree(file_name: String) -> Node:
+	var path := "user://%s" % file_name
+	assert_true(root.export_playtest_scene(path), "the export has to succeed")
+	var packed: PackedScene = ResourceLoader.load(path)
+	DirAccess.remove_absolute(path)
+	assert_not_null(packed, "the exported scene has to load back")
+	return packed.instantiate() if packed else null
+
+
+func test_a_light_entity_becomes_a_light():
+	var lamp := _place("light_point")
+	lamp.name = "lamp_1"
+	var scene := _exported_tree("hf_playtest_light_entity.tscn")
+	var found: OmniLight3D = null
+	for child in scene.get_children():
+		if child is OmniLight3D:
+			found = child as OmniLight3D
+	assert_not_null(found, "entities.json names OmniLight3D, so the playtest gets one")
+	if found:
+		assert_eq(found.name, StringName("lamp_1"), "and it keeps the name it was placed under")
+	scene.free()
+
+
+func test_a_placed_light_stops_the_fallback_sun_being_added():
+	_place("light_point")
+	var scene := _exported_tree("hf_playtest_no_fallback.tscn")
+	var suns := 0
+	for child in scene.get_children():
+		if child is DirectionalLight3D:
+			suns += 1
+	assert_eq(suns, 0, "a level that lights itself does not need PlaytestSun")
+	scene.free()
+
+
+func test_a_lights_authored_properties_land_on_the_real_node():
+	var lamp := _place("light_point")
+	lamp.entity_data["range"] = 42.0
+	lamp.entity_data["energy"] = 3.5
+	lamp.entity_data["color"] = Color(1.0, 0.0, 0.0)
+	var scene := _exported_tree("hf_playtest_light_props.tscn")
+	var found: OmniLight3D = null
+	for child in scene.get_children():
+		if child is OmniLight3D:
+			found = child as OmniLight3D
+	assert_not_null(found)
+	if found:
+		# The names the level stores and the names the engine uses differ, which is
+		# what `maps_to` in entities.json is for.
+		assert_almost_eq(found.omni_range, 42.0, 0.001, "Range reaches omni_range")
+		assert_almost_eq(found.light_energy, 3.5, 0.001, "Energy reaches light_energy")
+		assert_almost_eq(found.light_color.r, 1.0, 0.01, "Colour reaches light_color")
+	scene.free()
+
+
+func test_a_marker_entity_is_still_exported_as_a_marker():
+	var start := _place("player_start")
+	start.name = "start"
+	var scene := _exported_tree("hf_playtest_marker.tscn")
+	var names: Array = []
+	for child in scene.get_children():
+		names.append(str(child.name))
+	assert_true(names.has("start"), "a definition naming a plain Node3D ships the marker")
+	scene.free()
+
+
+func test_an_entity_definition_can_name_a_scene_to_instantiate():
+	# #599: `scene` was parsed, serialized and never instantiated.
+	var scene_path := "user://hf_test_entity_prop.tscn"
+	var prop_root := MeshInstance3D.new()
+	prop_root.name = "PropRoot"
+	var packed_prop := PackedScene.new()
+	assert_eq(packed_prop.pack(prop_root), OK)
+	assert_eq(ResourceSaver.save(packed_prop, scene_path), OK)
+	prop_root.free()
+
+	root.entity_definitions["prop_test"] = {
+		"classname": "prop_test",
+		"scene": scene_path,
+		"properties": [],
+	}
+	var placed := _place("prop_test")
+	placed.name = "prop_1"
+	var scene := _exported_tree("hf_playtest_scene_entity.tscn")
+	var found := false
+	for child in scene.get_children():
+		if child is MeshInstance3D and str(child.name) == "prop_1":
+			found = true
+	assert_true(found, "the named scene is what the playtest should carry")
+	scene.free()
+	DirAccess.remove_absolute(scene_path)
+
+
+func test_a_scene_path_that_does_not_exist_falls_back_to_the_marker():
+	root.entity_definitions["prop_missing"] = {
+		"classname": "prop_missing",
+		"scene": "res://does/not/exist.tscn",
+		"properties": [],
+	}
+	var placed := _place("prop_missing")
+	placed.name = "prop_2"
+	var scene := _exported_tree("hf_playtest_missing_scene.tscn")
+	var names: Array = []
+	for child in scene.get_children():
+		names.append(str(child.name))
+	assert_true(names.has("prop_2"), "a level still exports when a definition is wrong")
+	scene.free()
+
+
+func test_wiring_survives_being_rebuilt_as_a_real_node():
+	var button := _place("light_point")
+	button.set_meta("entity_name", "lamp_1")
+	root.add_entity_output(button, "OnTrigger", "lamp_1", "TurnOn")
+	var scene := _exported_tree("hf_playtest_light_io.tscn")
+	var carried := false
+	for child in scene.get_children():
+		if child is OmniLight3D:
+			carried = not child.get_meta("entity_io_outputs", []).is_empty()
+	assert_true(carried, "the wiring hung on the marker has to move with it")
+	scene.free()

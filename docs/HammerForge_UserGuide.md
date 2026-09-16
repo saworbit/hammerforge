@@ -1676,13 +1676,19 @@ Example (billboard preview):
       "color": "#ffff00"
     },
     "properties": [
-      {"name": "range", "type": "float", "default": 10.0},
-      {"name": "energy", "type": "float", "default": 1.0},
-      {"name": "color", "type": "color", "default": "#ffffff"}
+      {"name": "range", "type": "float", "default": 10.0, "maps_to": "omni_range"},
+      {"name": "energy", "type": "float", "default": 1.0, "maps_to": "light_energy"},
+      {"name": "color", "type": "color", "default": "#ffffff", "maps_to": "light_color"}
     ]
   }
 }
 ```
+
+`class` is the Godot node class the entity stands for. A playtest export builds that node rather than shipping the editor's marker, so a `light_point` placed in the level is a real `OmniLight3D` at runtime, and a level that lights itself does not get the fallback `PlaytestSun`. A definition naming a plain `Node3D` still exports the marker, because there is nothing better to build.
+
+`scene` takes precedence over `class` and names a `PackedScene` with a `Node3D` root to instantiate instead — a working door, a trigger volume with a script, a pickup. A scene that is missing or is not a `Node3D` scene warns and exports the marker, so a wrong definition never costs you the level.
+
+`maps_to` is optional and names the property on the built node to receive the value, for the cases where the name a level stores and the name the engine uses differ. An `OmniLight3D`'s Range is `omni_range`. Without `maps_to` the declared name is used as it stands. The entity's authored name, its wiring, and every other piece of metadata move onto the built node, so I/O keeps working.
 
 ## Bake Output
 Bake creates `BakedGeometry`:
