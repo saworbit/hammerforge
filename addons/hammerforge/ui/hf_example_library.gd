@@ -21,7 +21,6 @@ var _cards_container: VBoxContainer
 var _search_field: LineEdit
 var _annotation_panel: PanelContainer
 var _annotation_list: VBoxContainer
-var _selected_id := ""
 
 
 func _ready() -> void:
@@ -181,7 +180,6 @@ func _create_card(example: Dictionary) -> PanelContainer:
 
 
 func _on_load_pressed(example_id: String) -> void:
-	_selected_id = example_id
 	load_requested.emit(example_id)
 
 

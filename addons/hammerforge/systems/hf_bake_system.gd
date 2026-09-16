@@ -26,7 +26,6 @@ enum PreviewMode { FULL, WIREFRAME, PROXY }
 enum BakeStatus { NOT_RUN, SUCCESS, FAILED, BUSY, NOTHING_TO_DO }
 
 var root: Node3D
-var _last_dirty_brush_ids: Dictionary = {}  # brush_id -> true; captured at bake start
 
 ## The bake settings the last successful bake ran with, and whether there has
 ## been one. Any other signature means the baked result no longer answers the
@@ -485,7 +484,6 @@ func bake_dirty(collision_layer_mask: int = 0, preview_mode: int = 0) -> bool:
 		root.emit_signal("user_message", "No changed brushes since last bake", 1)
 		return false
 	var dirty_snapshot: Dictionary = root._dirty_brush_ids.duplicate()
-	_last_dirty_brush_ids = dirty_snapshot.duplicate()
 	var brush_nodes: Array = []
 	for bid in dirty_ids:
 		var brush = root._find_brush_by_key(str(bid))
