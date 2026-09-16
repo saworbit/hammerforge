@@ -90,7 +90,7 @@ After import, run **Check Only** (Test tab) to detect any remaining non-planar f
 ## Prototype Textures
 - HammerForge ships with 150 built-in SVG prototype textures at `addons/hammerforge/textures/prototypes/`.
 - Click **Refresh Prototypes** in Paint tab → Materials section to batch-load all textures into the palette.
-- Once loaded, prototype materials are serialized in `.hflevel` saves alongside custom materials.
+- Once loaded, prototype materials are serialized in `.hflevel` saves, as resource paths. The same rule as the material library applies: a material with no resource path, which is any made in the editor session rather than loaded from disk, cannot be recorded. Saving one now warns and records its class and name, and the slot loads empty.
 - Prototype textures are included in the plugin directory and travel with the project automatically.
 
 ## Entity Definitions
