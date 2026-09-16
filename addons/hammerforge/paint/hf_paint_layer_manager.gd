@@ -87,9 +87,8 @@ static func safe_layer_id(layer_id: StringName) -> StringName:
 
 ## A free id based on `layer_id`, adding _2, _3 ... until one is free.
 ##
-## The id is identity rather than a label - HFFoliagePopulator names its output
-## after it and anything resolving a layer by id takes whichever it finds first
-## - so two layers must not share one.
+## The id is identity rather than a label - anything resolving a layer by id
+## takes whichever it finds first, so two layers must not share one.
 func unique_layer_id(layer_id: StringName) -> StringName:
 	if not has_layer_id(layer_id):
 		return layer_id

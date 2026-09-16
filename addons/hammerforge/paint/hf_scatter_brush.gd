@@ -4,7 +4,7 @@ extends RefCounted
 
 ## Interactive scatter/foliage placement brush with circle/spline shapes,
 ## density preview (MultiMesh wireframe), and slope/height filtering.
-## Works with HFFoliagePopulator to commit final instances.
+## Commits the instances it previews.
 
 const HFHash = preload("hf_hash.gd")
 
