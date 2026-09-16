@@ -11,6 +11,9 @@ const EDITOR_TOOL_PATH := "res://addons/hammerforge/hf_editor_tool.gd"
 var _tools: Array = []
 var _active_tool: HFEditorTool = null
 var _tool_by_id: Dictionary = {}
+## Handed the tool that became active, or null. The dock builds an active tool's
+## declared settings from it.
+var _settings_callback: Callable = Callable()
 
 
 func register_tool(tool: HFEditorTool) -> void:
@@ -31,13 +34,19 @@ func unregister_tool(tool_id: int) -> void:
 	_tool_by_id.erase(tool_id)
 
 
+## Make a tool active, if it says it can be.
+##
+## `p_settings_callback` is handed the tool that became active, or null when none
+## did, so the dock can build the controls its `get_settings_schema()` declares.
 func activate_tool(
 	tool_id: int,
 	root: Node3D,
 	camera: Camera3D,
 	p_undo_redo: EditorUndoRedoManager = null,
-	p_history_callback: Callable = Callable()
+	p_history_callback: Callable = Callable(),
+	p_settings_callback: Callable = Callable()
 ) -> void:
+	_settings_callback = p_settings_callback
 	if _active_tool and _active_tool.tool_id() == tool_id:
 		deactivate_current()
 		return
@@ -48,13 +57,30 @@ func activate_tool(
 	if not _tool_by_id.has(tool_id):
 		HFLog.warn("HammerForge: no tool registered with id %d" % tool_id)
 		return
+	# Ask before activating. `can_activate()` and `get_poll_fail_reason()` are the
+	# one documented way an HFEditorTool says it cannot run in the current state,
+	# and this is the only thing that activates a tool - so without the poll, a
+	# tool that had already declared it could not run became active anyway, the
+	# toolbar showed it as active, and every click did nothing. HFDecalTool and
+	# HFMeasureTool both override it, so pressing N or M with no LevelRoot in the
+	# scene was exactly that.
+	var candidate: HFEditorTool = _tool_by_id[tool_id]
+	if not candidate.can_activate(root):
+		var reason := candidate.get_poll_fail_reason(root)
+		if reason == "":
+			reason = "%s cannot run right now" % candidate.tool_name()
+		HFLog.warn("HammerForge: %s" % reason)
+		if root and root.has_signal("user_message"):
+			root.user_message.emit(reason, 1)
+		return
 	if _active_tool:
 		_active_tool.deactivate()
 		_active_tool = null
-	_active_tool = _tool_by_id[tool_id]
+	_active_tool = candidate
 	_active_tool.undo_redo = p_undo_redo
 	_active_tool.history_callback = p_history_callback
 	_active_tool.activate(root, camera)
+	_notify_settings_host()
 
 
 ## Deactivate the current tool without activating another.
@@ -62,6 +88,12 @@ func deactivate_current() -> void:
 	if _active_tool:
 		_active_tool.deactivate()
 		_active_tool = null
+	_notify_settings_host()
+
+
+func _notify_settings_host() -> void:
+	if _settings_callback.is_valid():
+		_settings_callback.call(_active_tool)
 
 
 func get_active_tool() -> HFEditorTool:

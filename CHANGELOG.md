@@ -201,6 +201,29 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **The tool registry asks `can_activate()` before activating** (#552).
+  `HFEditorTool` documents a two-part poll - `can_activate()` and
+  `get_poll_fail_reason()`, the string written to explain precisely this - and
+  neither had a call site anywhere. `HFDecalTool` and `HFMeasureTool` both
+  override `can_activate()` and both overrides were dead, so pressing N or M with
+  no LevelRoot in the scene made the tool active, the toolbar showed it as
+  active, and every click did nothing. It matters more for the extension point:
+  `load_external_tools()` scans a directory and the contract that scan advertises
+  includes these two methods, so a third-party tool needing a face selected had
+  one documented way to say so and it was not consulted. The refusal is reported
+  the way the tool wrote it. Same function and the same failure shape as #508.
+- **A custom tool's declared settings produce controls** (#554).
+  `rebuild_tool_settings()` was about ninety lines handling the whole declared
+  type set, and its own doc comment said it was "called when an external tool is
+  activated via the registry" - it was called by nothing, and
+  `_on_tool_setting_changed()` and `_clear_tool_settings()` were reachable only
+  from it. `get_settings_schema()` is the one documented way a custom tool
+  exposes anything adjustable and `set_setting()` had no other route from the UI,
+  so a tool author declaring a radius and a mode got no panel at all - and #509's
+  fix to `set_setting()` had no live caller. `activate_tool()` takes a settings
+  callback in the same shape as the undo and history ones it already takes, and
+  the dock builds the panel into a **Tool Settings** section on the Build tab,
+  hidden while the active tool declares none.
 - **Auto connector mode's stairs-vs-ramp threshold is a setting** (#570). The
   Connector Mode tooltip has always told the mapper a threshold decides it, and
   there was nowhere to look: `stair_threshold` was a constant on
