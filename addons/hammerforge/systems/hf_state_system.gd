@@ -238,10 +238,8 @@ func restore_state(state: Dictionary) -> void:
 		# Deep copy on the way out too, so later selection edits do not write
 		# back into the snapshot that restored them.
 		root.face_selection = state.get("face_selection", {}).duplicate(true)
-		root._apply_face_selection()
 	else:
 		root.face_selection.clear()
-		root._apply_face_selection()
 	root._brush_id_counter = int(state.get("id_counter", 0))
 	# One unreadable entry costs that entry, not the load. The `.map` importer
 	# already works this way for a malformed brush (#318), and a state can hold

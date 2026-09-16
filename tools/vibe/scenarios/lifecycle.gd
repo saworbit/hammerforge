@@ -139,7 +139,6 @@ func _face_selection_after_the_brush_is_gone() -> void:
 	await frame()
 	var bid := _bid(b)
 	root.face_selection = {bid: [0, 1, 2]}
-	root._apply_face_selection()
 	await frame()
 	note("face selection", root.face_selection)
 
