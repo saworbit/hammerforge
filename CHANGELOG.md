@@ -37,6 +37,24 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   document look healthier.
 
 ### Fixed
+- **The shortcut dialog can be opened, and custom tools survive an upgrade**
+  (#606, #612). `HFShortcutDialog` is a searchable, categorised keyboard
+  reference, and the only thing referencing it was a handler nothing called, so
+  the user guide told mappers twice to press a **?** button that did not exist -
+  and the binding-conflict warning the dialog is the only home for was
+  unreachable with it. The button is now on the dock toolbar beside **More** and
+  **Help**. Separately, the only place the plugin looked for a custom tool was
+  `res://addons/hammerforge/tools/`, which is the folder the upgrade
+  instructions tell you to replace, so every tool a project wrote was destroyed
+  by the documented upgrade with no error - and the directory was not in the
+  repository at all, so `load_external_tools()` returned on its first line every
+  launch and the advertised extension point could not be found. Tools now go in
+  `res://hammerforge_tools/`, outside the addon, the way `HFEntityDef` already
+  looks for `res://hammerforge_entities.json`. The folder ships with a README and
+  a complete example tool under `examples/`, which the non-recursive scan
+  deliberately does not register. The in-addon path is still scanned so an
+  existing install loses nothing, and `hammerforge_tools/` is now covered by
+  gdformat and gdlint in CI.
 - **Two bake switches that produced nothing now produce something, or say why**
   (#611, #623). **Generate LODs** reached the baker intact and came back with no
   levels, because `generate_lods()` builds LOD *index* arrays by simplifying an

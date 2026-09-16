@@ -426,6 +426,7 @@ var _uv_hint_label: Label = null
 var _toast_container: VBoxContainer = null
 var _clear_sel_btn: Button = null
 var _command_palette_btn: Button = null
+var _shortcuts_btn: Button = null
 var _guide_btn: Button = null
 var _tutorial_wizard = null
 var _brush_hint: Label = null
@@ -2031,6 +2032,17 @@ func _ready():
 		_guide_btn.focus_mode = Control.FOCUS_NONE
 		_guide_btn.pressed.connect(_restart_tutorial)
 		toolbar.add_child(_guide_btn)
+
+		# The user guide has told mappers to press this since the dialog was
+		# written, and it did not exist, so `HFShortcutDialog` and the binding
+		# conflict warning it is the only home for could not be opened (#606).
+		_shortcuts_btn = Button.new()
+		_shortcuts_btn.text = "?"
+		_shortcuts_btn.tooltip_text = "Searchable keyboard shortcut reference"
+		_shortcuts_btn.flat = true
+		_shortcuts_btn.focus_mode = Control.FOCUS_NONE
+		_shortcuts_btn.pressed.connect(_on_shortcuts_help)
+		toolbar.add_child(_shortcuts_btn)
 
 	var mode_group = ButtonGroup.new()
 	mode_add.toggle_mode = true
