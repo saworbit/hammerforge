@@ -2966,7 +2966,7 @@ func _on_prefab_save_requested(prefab_name: String) -> void:
 	)
 	prefab.prefab_name = prefab_name
 	# Ensure directory exists
-	var dir_path := "res://prefabs"
+	var dir_path := HFPrefabSystem.PREFAB_DIR
 	if not DirAccess.dir_exists_absolute(dir_path):
 		DirAccess.make_dir_recursive_absolute(dir_path)
 	var file_name := prefab_name.to_snake_case() + ".hfprefab"
