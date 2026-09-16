@@ -101,6 +101,14 @@ const MIN_CONNECTOR_WIDTH := 1
 const MAX_CONNECTOR_WIDTH := 64
 const MIN_CONNECTOR_STAIR_THRESHOLD := 0.01
 const MAX_CONNECTOR_STAIR_THRESHOLD := 256.0
+const MIN_COLLISION_LAYER_INDEX := 1
+const MAX_COLLISION_LAYER_INDEX := 32
+const MIN_AUTOSAVE_MINUTES := 1
+const MAX_AUTOSAVE_MINUTES := 60
+const MIN_AUTOSAVE_KEEP := 1
+const MAX_AUTOSAVE_KEEP := 50
+const MIN_GRID_MAJOR_LINE_FREQUENCY := 1
+const MAX_GRID_MAJOR_LINE_FREQUENCY := 16
 
 
 ## A value inside the range, or the one already there when it is not a number.
@@ -122,7 +130,14 @@ var _grid_snap: float = 16.0
 	get:
 		return _grid_snap
 @export var brush_size_default: Vector3 = Vector3(32, 32, 32)
-@export_range(1, 32, 1) var bake_collision_layer_index: int = 1
+var _bake_collision_layer_index: int = 1
+@export_range(1, 32, 1) var bake_collision_layer_index: int = 1:
+	set(value):
+		_bake_collision_layer_index = clampi(
+			value, MIN_COLLISION_LAYER_INDEX, MAX_COLLISION_LAYER_INDEX
+		)
+	get:
+		return _bake_collision_layer_index
 @export var bake_material_override: Material = null
 var _bake_chunk_size: float = 32.0
 @export var bake_chunk_size: float = 32.0:
@@ -289,7 +304,14 @@ var _hflevel_autosave_keep: int = 5
 @export var entity_definitions_path: String = "res://addons/hammerforge/entities.json"
 @export var commit_freeze: bool = true
 @export var auto_spawn_player: bool = true
-@export_range(1, 32, 1) var draft_pick_layer_index: int = 1
+var _draft_pick_layer_index: int = 1
+@export_range(1, 32, 1) var draft_pick_layer_index: int = 1:
+	set(value):
+		_draft_pick_layer_index = clampi(
+			value, MIN_COLLISION_LAYER_INDEX, MAX_COLLISION_LAYER_INDEX
+		)
+	get:
+		return _draft_pick_layer_index
 var _grid_visible: bool = false
 @export var grid_visible: bool = false:
 	set(value):
@@ -307,7 +329,14 @@ var _grid_plane_size: float = 500.0
 	get:
 		return _grid_plane_size
 @export var grid_color: Color = Color(0.85, 0.95, 1.0, 0.15)
-@export_range(1, 16, 1) var grid_major_line_frequency: int = 4
+var _grid_major_line_frequency: int = 4
+@export_range(1, 16, 1) var grid_major_line_frequency: int = 4:
+	set(value):
+		_grid_major_line_frequency = clampi(
+			value, MIN_GRID_MAJOR_LINE_FREQUENCY, MAX_GRID_MAJOR_LINE_FREQUENCY
+		)
+	get:
+		return _grid_major_line_frequency
 @export var texture_lock: bool = true
 ## Step, in degrees, used by the rotate hotkeys and the dock's rotate buttons.
 var _rotate_snap_degrees: float = 15.0
@@ -3333,7 +3362,10 @@ func _set_hflevel_autosave_enabled(value: bool) -> void:
 
 
 func _set_hflevel_autosave_minutes(value: int) -> void:
-	var clamped = max(1, value)
+	# The upper bound is the point of this clamp. A value above 60 was accepted and
+	# turned into a timer measured in weeks, so the autosave toggle still read as on
+	# and nothing ever saved.
+	var clamped = clampi(value, MIN_AUTOSAVE_MINUTES, MAX_AUTOSAVE_MINUTES)
 	if _hflevel_autosave_minutes == clamped:
 		return
 	_hflevel_autosave_minutes = clamped
@@ -3342,7 +3374,7 @@ func _set_hflevel_autosave_minutes(value: int) -> void:
 
 
 func _set_hflevel_autosave_keep(value: int) -> void:
-	var clamped = clamp(value, 1, 50)
+	var clamped = clampi(value, MIN_AUTOSAVE_KEEP, MAX_AUTOSAVE_KEEP)
 	if _hflevel_autosave_keep == clamped:
 		return
 	_hflevel_autosave_keep = clamped
