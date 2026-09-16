@@ -150,6 +150,9 @@ it from here.
 | `level-io-types` | which Variant types survive the `.hflevel` encoder |
 | `prefab-materials` | whether a prefab carries the materials it was built with, or just slot numbers |
 | `bake-equivalence` | whether `bake_dirty()` produces the geometry a full bake would |
+| `scene-weight` | what a level costs inside the `.tscn` it lives in, before and after a bake |
+| `examples-integrity` | whether each shipped example builds a level that validates and holds its invariants |
+| `world-scale` | whether the drawing defaults, the generators, the examples and the player agree on how big a person is |
 
 ## Adding a scenario
 
