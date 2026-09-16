@@ -538,8 +538,6 @@ var io_parameter: LineEdit = null
 var io_delay: SpinBox = null
 var io_fire_once: CheckBox = null
 var io_add_btn: Button = null
-var io_list: ItemList = null
-var io_remove_btn: Button = null
 var _io_wiring_panel = null  # HFIOWiringPanel
 ## Level state from just before the wiring panel changed something. The panel
 ## does the work itself, so the undo step is registered after the fact.
@@ -2723,7 +2721,6 @@ func set_selection_nodes(nodes: Array) -> void:
 				selected_entity = node
 				break
 	if selected_entity:
-		_refresh_io_list(selected_entity)
 		_rebuild_entity_props(selected_entity)
 		if _entity_io_section:
 			_entity_io_section.visible = true
@@ -2732,8 +2729,6 @@ func set_selection_nodes(nodes: Array) -> void:
 		if _io_wiring_panel:
 			_io_wiring_panel.set_source_entity(selected_entity)
 	else:
-		if io_list:
-			io_list.clear()
 		_clear_entity_props()
 		if _entity_io_section:
 			_entity_io_section.visible = false
@@ -3860,16 +3855,6 @@ func _update_disabled_hints() -> void:
 	)
 	_set_control_disabled_hint(
 		io_add_btn,
-		(
-			not has_root
-			or selection_scope != DockSelectionScope.MANAGED
-			or managed_entities < 1
-			or unsafe_entity_action
-		),
-		entity_scope_hint
-	)
-	_set_control_disabled_hint(
-		io_remove_btn,
 		(
 			not has_root
 			or selection_scope != DockSelectionScope.MANAGED
@@ -5763,16 +5748,12 @@ func _on_io_add() -> void:
 	HFDockEntityHandler.on_io_add(self)
 
 
-func _on_io_remove() -> void:
-	HFDockEntityHandler.on_io_remove(self)
-
-
-func _refresh_io_list(entity: Node = null) -> void:
-	HFDockEntityHandler.refresh_io_list(self, entity)
-
-
 func _setup_io_wiring_panel() -> void:
 	HFDockEntityHandler.setup_io_wiring_panel(self)
+
+
+func _on_wiring_connection_removed(source: Node, index: int) -> void:
+	HFDockEntityHandler.on_wiring_connection_removed(self, source, index)
 
 
 func _on_wiring_connection_added(

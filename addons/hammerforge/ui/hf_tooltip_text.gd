@@ -154,7 +154,6 @@ const TEXTS := {
 	"io_delay": "Delay in seconds before firing the input",
 	"io_fire_once": "If checked, connection fires only once then auto-removes",
 	"io_add_btn": "Add an output connection to the selected entity",
-	"io_remove_btn": "Remove the selected output connection",
 }
 
 
