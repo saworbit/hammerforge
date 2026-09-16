@@ -1456,8 +1456,8 @@ func restore_committed_cuts() -> void:
 	brush_system.restore_committed_cuts()
 
 
-func clear_brushes() -> void:
-	brush_system.clear_brushes()
+func clear_brushes(keep_ids: Dictionary = {}) -> void:
+	brush_system.clear_brushes(keep_ids)
 
 
 func _clear_generated() -> void:

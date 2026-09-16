@@ -65,6 +65,26 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   document look healthier.
 
 ### Fixed
+- **Undo keeps the brushes it would have rebuilt identically** (#600). Undo and
+  redo are whole-level snapshots, so the price of taking back a one-brush nudge
+  was set by the size of the level rather than the size of the edit: at 400
+  brushes an undo step was 141 ms, of which `restore_state()` was 122 ms, because
+  it cleared the level and recreated every brush node. Twenty-two of the
+  twenty-three top-level keys in a snapshot are untouched by a brush move, and
+  inside the one that did change, 399 of 400 brush records are identical too. A
+  brush whose record is identical to what it would capture right now is the brush
+  that record describes, so `clear_brushes()` now takes a set of ids to leave
+  alone and those brushes are registered again rather than freed and rebuilt.
+  Restore at 400 brushes went from 122 ms to 44 ms, and what is left is mostly
+  the comparison, which is the same walk the capture already does. A brush that
+  fails the comparison is rebuilt exactly as before, so a comparison that says no
+  when it could have said yes costs time and nothing else; there is no way for it
+  to say yes wrongly, because two brushes with identical records are identical to
+  anything that reads a record, and undo has always been exactly that. The
+  comparison is `recursive_equal()` rather than `==`, because a record carries its
+  faces as an array of dictionaries and `==` does not go down into those. The
+  snapshot is still a whole-level snapshot and still costs what it costs to take;
+  this is the half that was rebuilding what nobody changed.
 - **The threaded `.hflevel` save does its serializing on the thread** (#601). The
   write was threaded and the work in front of it was not, so two thirds of a save
   happened on the calling thread. Autosave runs on a timer nobody chose the

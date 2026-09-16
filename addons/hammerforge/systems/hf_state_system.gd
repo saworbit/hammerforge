@@ -164,7 +164,14 @@ func restore_state(state: Dictionary) -> void:
 		if root.has_signal("user_message"):
 			root.user_message.emit("Level not loaded: %s" % problem, 2)
 		return
-	root.clear_brushes()
+	# Undo and redo are whole-level snapshots, so taking back a nudge of one brush
+	# used to free and rebuild every brush in the level (#600). A brush whose
+	# record is identical to what it would capture right now is the brush that
+	# record describes, so it is kept across the clear and put back into the
+	# registries rather than rebuilt. At 400 brushes a one-brush edit rebuilds one.
+	var brushes: Array = state.get("brushes", [])
+	var reusable: Dictionary = root.brush_system.reusable_draft_brushes(brushes)
+	root.clear_brushes(reusable)
 	root.entity_system.clear_entities()
 	var region_data = state.get("terrain_regions", {})
 	if region_data is Dictionary and not region_data.is_empty():
@@ -192,8 +199,16 @@ func restore_state(state: Dictionary) -> void:
 	# already works this way for a malformed brush (#318), and a state can hold
 	# one for the same reasons — an older version, a partial write, a hand edit.
 	var skipped := 0
-	var brushes: Array = state.get("brushes", [])
 	for info in brushes:
+		var kept_id := ""
+		if info is Dictionary:
+			kept_id = str((info as Dictionary).get("brush_id", ""))
+		if kept_id != "" and reusable.has(kept_id):
+			root.brush_system.reregister_draft_brush(reusable[kept_id])
+			# Erased so a record that names the same brush twice cannot register
+			# one node into the level twice.
+			reusable.erase(kept_id)
+			continue
 		if not _restored_brush(info, {}):
 			skipped += 1
 	var pending: Array = state.get("pending", [])
