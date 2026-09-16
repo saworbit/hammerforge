@@ -7,7 +7,7 @@ const DraftEntity = preload("../draft_entity.gd")
 
 var root: Node3D
 
-# Visgroups: name -> { "visible": bool }
+# Visgroups: name -> { "visible": bool, "color": Color }
 var visgroups: Dictionary = {}
 
 # Groups: name -> true (registry only; membership stored on nodes via meta)
@@ -23,7 +23,7 @@ func _init(level_root: Node3D) -> void:
 # ===========================================================================
 
 
-func create_visgroup(vg_name: String) -> void:
+func create_visgroup(vg_name: String, color: Color = Color.WHITE) -> void:
 	# The guard tested the wrong thing: "" was refused and "   " was not, so a
 	# visgroup could exist that shows in the dock as a blank row, cannot be told
 	# apart from another blank one, and is saved into the `.hflevel` on its
@@ -33,7 +33,7 @@ func create_visgroup(vg_name: String) -> void:
 	if stripped == "":
 		return
 	if not visgroups.has(stripped):
-		visgroups[stripped] = {"visible": true}
+		visgroups[stripped] = {"visible": true, "color": color}
 
 
 func remove_visgroup(vg_name: String) -> void:
@@ -46,7 +46,7 @@ func remove_visgroup(vg_name: String) -> void:
 ## Rename a visgroup. Returns whether it happened.
 ##
 ## Refuses a name another visgroup already has. Without that guard, renaming A to
-## an existing B overwrote B's record, visibility and all, and then
+## an existing B overwrote B's record, colour and visibility and all, and then
 ## rewrote the name on every node that carried A, so the two memberships silently
 ## became one. The user asked to rename one visgroup and lost a different one,
 ## and the loss showed up later: B's members were hidden, B's record was gone,
@@ -79,6 +79,12 @@ func set_visgroup_visible(vg_name: String, visible: bool) -> void:
 		return
 	visgroups[vg_name]["visible"] = visible
 	refresh_visibility()
+
+
+func set_visgroup_color(vg_name: String, color: Color) -> void:
+	if not visgroups.has(vg_name):
+		return
+	visgroups[vg_name]["color"] = color
 
 
 func get_visgroup_names() -> PackedStringArray:
@@ -242,7 +248,16 @@ func capture_visgroups() -> Dictionary:
 	var out: Dictionary = {}
 	for key in visgroups.keys():
 		var vg = visgroups[key]
-		out[key] = {"visible": bool(vg.get("visible", true))}
+		out[key] = {
+			"visible": bool(vg.get("visible", true)),
+			"color":
+			[
+				vg.get("color", Color.WHITE).r,
+				vg.get("color", Color.WHITE).g,
+				vg.get("color", Color.WHITE).b,
+				vg.get("color", Color.WHITE).a
+			]
+		}
 	return out
 
 
@@ -254,10 +269,11 @@ func restore_visgroups(data: Dictionary) -> void:
 		var entry = data[key]
 		if not entry is Dictionary:
 			continue
-		# A "color" key in an older payload is read past. It was carried through
-		# every layer - created, stored, saved, loaded, and given a setter - and
-		# nothing ever read one, so there is nothing to restore it into.
-		visgroups[str(key)] = {"visible": bool(entry.get("visible", true))}
+		var color = Color.WHITE
+		var c_arr = entry.get("color", [1, 1, 1, 1])
+		if c_arr is Array and c_arr.size() >= 4:
+			color = Color(float(c_arr[0]), float(c_arr[1]), float(c_arr[2]), float(c_arr[3]))
+		visgroups[str(key)] = {"visible": bool(entry.get("visible", true)), "color": color}
 	refresh_visibility()
 
 

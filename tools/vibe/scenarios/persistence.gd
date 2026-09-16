@@ -41,7 +41,7 @@ func _furnish(root: Node3D) -> void:
 	a.faces[1].uv_scale = Vector2(2, 4)
 	a.faces[1].uv_offset = Vector2(0.25, 0.5)
 	b.faces[3].uv_rotation = 0.75
-	root.create_visgroup("lights")
+	root.create_visgroup("lights", Color.YELLOW)
 	root.add_selection_to_visgroup("lights", [b])
 	root.tie_brushes_to_entity([str(b.get_meta("brush_id", ""))], "func_door")
 	var entity = (

@@ -111,8 +111,8 @@ func test_rename_onto_an_existing_name_is_refused():
 	var draft_parent = root.get_node("DraftBrushes")
 	var b1 = _make_brush(draft_parent)
 	var b2 = _make_brush(draft_parent)
-	sys.create_visgroup("A")
-	sys.create_visgroup("B")
+	sys.create_visgroup("A", Color.RED)
+	sys.create_visgroup("B", Color.BLUE)
 	sys.add_to_visgroup(b1, "A")
 	sys.add_to_visgroup(b2, "B")
 	sys.set_visgroup_visible("B", false)
@@ -249,19 +249,9 @@ func test_get_members_of():
 # ===========================================================================
 
 
-## A "color" key from an older `.hflevel` is read past rather than refused. The
-## field was created, stored, saved, loaded and given a setter, and nothing ever
-## read one.
-func test_an_older_payload_with_a_colour_still_loads():
-	var sys2 = HFVisgroupSystem.new(root)
-	sys2.restore_visgroups({"walls": {"visible": false, "color": [1, 0, 0, 1]}})
-	assert_eq(sys2.get_visgroup_names().size(), 1, "The visgroup is restored")
-	assert_false(sys2.is_visgroup_visible("walls"), "and so is what was read from it")
-
-
 func test_capture_restore_visgroups_round_trip():
-	sys.create_visgroup("walls")
-	sys.create_visgroup("detail")
+	sys.create_visgroup("walls", Color.RED)
+	sys.create_visgroup("detail", Color.BLUE)
 	sys.set_visgroup_visible("detail", false)
 	var captured = sys.capture_visgroups()
 	var sys2 = HFVisgroupSystem.new(root)
