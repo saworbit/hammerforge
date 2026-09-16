@@ -414,6 +414,7 @@ var _vertex_tool_separator: VSeparator = null
 var _snap_mode_row: HBoxContainer = null
 var _axis_lock_row: HBoxContainer = null
 var _advanced_build_section: HFCollapsibleSection = null
+var _tool_settings_section: HFCollapsibleSection = null
 
 # Wave 1 UI controls
 var _selection_nodes: Array = []
@@ -820,6 +821,12 @@ func _setup_simplified_workflow() -> void:
 	var brush_vbox := brush_tab.get_node_or_null("BrushMargin/BrushVBox") as VBoxContainer
 	if not brush_vbox or _advanced_build_section:
 		return
+	# Where an active tool's declared settings are built. Hidden until a tool with
+	# a schema is in hand, so it does not sit empty on the Build tab.
+	_tool_settings_section = HFCollapsibleSection.create("Tool Settings", true)
+	_tool_settings_section.visible = false
+	brush_vbox.add_child(_tool_settings_section)
+	_register_section(_tool_settings_section, "Tool Settings")
 	_advanced_build_section = HFCollapsibleSection.create("More build settings", false)
 	brush_vbox.add_child(_advanced_build_section)
 	_register_section(_advanced_build_section, "More build settings")
@@ -1461,8 +1468,23 @@ var _tool_settings_controls: Array = []
 const HFEditorToolType = preload("hf_editor_tool.gd")
 
 
+## Show the active tool's declared settings, or nothing when it has none.
+##
+## `HFToolRegistry.activate_tool()` calls this through the callback it is handed,
+## which is how `get_settings_schema()` - the one documented way a custom tool
+## exposes anything adjustable - reaches the mapper. `set_setting()` has no other
+## route from the UI, so before this the whole declaration produced no controls.
+func show_tool_settings(tool) -> void:
+	if not _tool_settings_section:
+		return
+	var content := _tool_settings_section.get_content()
+	if not content:
+		return
+	rebuild_tool_settings(tool, content)
+	_tool_settings_section.visible = not _tool_settings_controls.is_empty()
+
+
 ## Rebuild the tool settings panel from an external tool's schema.
-## Called when an external tool is activated via the registry.
 func rebuild_tool_settings(tool: HFEditorToolType, parent: Control) -> void:
 	_clear_tool_settings(parent)
 	if not tool:
