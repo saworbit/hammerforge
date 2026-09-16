@@ -7,6 +7,13 @@ const DraftBrush = preload("brush_instance.gd")
 
 enum SnapMode { GRID = 1, VERTEX = 2, CENTER = 4, EDGE = 8, PERPENDICULAR = 16 }
 
+## The quick grid sizes, in metres, offered by the dock buttons and the
+## viewport context menu. One world unit is one metre (#625), so the rungs are
+## a trim size up to a room size rather than the power-of-two Quake ladder
+## that used to be here. Both surfaces read this one, because two ladders that
+## drift apart show the same button doing two different things.
+const GRID_PRESETS: Array[float] = [0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0]
+
 ## Past this many faces a brush's `faces` array is engine tessellation rather
 ## than geometry anyone could aim at: a cylinder brush is one FaceData per
 ## triangle, a sphere is thousands. Those brushes keep the bounding box they
@@ -41,7 +48,11 @@ var enabled_modes: int = SnapMode.GRID
 ## A value of zero or less turns every geometry candidate off, so it is refused
 ## rather than quietly disabling snapping. The backing variable is separate
 ## because a setter that assigns to its own property re-enters itself.
-var _snap_threshold: float = 2.0
+## 2.0 was this number when a grid step was 16 units, where it was an eighth of
+## a step. At one unit to the metre it would be four grid steps, so every
+## vertex in the room would beat the grid and grid snap would stop meaning
+## anything. 0.1 m is the same "you are plainly aiming at that corner" distance.
+var _snap_threshold: float = 0.1
 
 var snap_threshold: float:
 	get:

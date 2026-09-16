@@ -282,6 +282,27 @@ func test_brush_entity_class_excludes_from_bake():
 # ===========================================================================
 
 
+func test_chunk_size_cannot_change_under_the_chunks_it_already_made():
+	# A chunk allocates its arrays for the size it was built at, and
+	# _cell_to_local() reduces against the layer's current chunk_size. Let the two
+	# disagree and a read walks off the end of a PackedByteArray, which is an
+	# engine error rather than anything the layer can report. The convert to
+	# heightmap path used to set chunk_size after filling the layer; the only
+	# reason it never bit was that a test brush fitted in one cell at the old
+	# 16-unit grid.
+	var layer = HFPaintLayer.new()
+	layer.grid = HFPaintGrid.new()
+	layer.chunk_size = 8
+	add_child_autoqfree(layer)
+	assert_eq(layer.chunk_size, 8, "a fresh layer takes the size it is given")
+
+	layer.set_cell(Vector2i(3, 5), true)
+	layer.chunk_size = 64
+	assert_eq(layer.chunk_size, 8, "and keeps it once there is a chunk to invalidate")
+	assert_true(layer.get_cell(Vector2i(3, 5)), "so the cell it holds is still readable")
+	assert_false(layer.get_cell(Vector2i(60, 60)), "and a cell it does not hold reads false")
+
+
 func test_paint_layer_cell_lifecycle():
 	# Create a paint layer, paint cells, verify chunk data, remove layer.
 	var layer = HFPaintLayer.new()
@@ -504,15 +525,22 @@ func test_snap_grid_basic():
 	assert_eq(result, Vector3(16, 0, 16), "Should snap to nearest grid point")
 
 
+# These two are written at the scale the editor draws at: one world unit is one
+# metre (#625), so a brush is a couple of metres and `snap_threshold` defaults to
+# 0.1 rather than the 2.0 it was when a brush was 32 units. The behaviour is the
+# thing being asserted, so the distances move with the scale instead of the
+# threshold being set aside.
+
+
 func test_snap_vertex_from_brush():
 	# Place a brush, enable vertex snap, verify nearby point snaps to brush corner.
 	snap_sys.set_mode(HFSnapSystem.SnapMode.VERTEX, true)
 	snap_sys.set_mode(HFSnapSystem.SnapMode.GRID, false)
 
-	# Brush at origin, size 32 -> corners at +/-16 on each axis.
-	_make_brush(Vector3.ZERO, Vector3(32, 32, 32), "snap_b1")
-	var result = snap_sys.snap_point(Vector3(15.5, 15.5, 15.5), 0.0)
-	assert_eq(result, Vector3(16, 16, 16), "Should snap to nearest brush corner")
+	# Brush at origin, size 2 -> corners at +/-1 on each axis.
+	_make_brush(Vector3.ZERO, Vector3(2, 2, 2), "snap_b1")
+	var result = snap_sys.snap_point(Vector3(0.95, 0.95, 0.95), 0.0)
+	assert_eq(result, Vector3(1, 1, 1), "Should snap to nearest brush corner")
 
 
 func test_snap_vertex_beats_grid_when_closer():
@@ -520,11 +548,12 @@ func test_snap_vertex_beats_grid_when_closer():
 	snap_sys.set_mode(HFSnapSystem.SnapMode.GRID, true)
 	snap_sys.set_mode(HFSnapSystem.SnapMode.VERTEX, true)
 
-	# Brush at (3,3,3) size 10 -> corner at (8,8,8) which is not on 16-grid.
-	_make_brush(Vector3(3, 3, 3), Vector3(10, 10, 10), "snap_b2")
-	var result = snap_sys.snap_point(Vector3(7.5, 7.5, 7.5), 16.0)
-	# Vertex (8,8,8) is ~0.87 away; grid (0,0,0) is ~13 away. Vertex should win.
-	assert_eq(result, Vector3(8, 8, 8), "Vertex snap should beat grid when closer")
+	# Brush at (0.15,0.15,0.15) size 0.4 -> corner at (0.35,0.35,0.35), off a 0.5 grid.
+	_make_brush(Vector3(0.15, 0.15, 0.15), Vector3(0.4, 0.4, 0.4), "snap_b2")
+	var result = snap_sys.snap_point(Vector3(0.32, 0.32, 0.32), 0.5)
+	# Vertex (0.35,0.35,0.35) is ~0.05 away, inside the threshold; the grid point
+	# (0.5,0.5,0.5) is ~0.31. Vertex should win.
+	assert_almost_eq(result, Vector3(0.35, 0.35, 0.35), Vector3.ONE * 0.0001)
 
 
 # ===========================================================================

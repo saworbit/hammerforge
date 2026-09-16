@@ -18,8 +18,8 @@ var drag_end := Vector3.ZERO
 var drag_operation: int = 0  # CSGShape3D.OPERATION_UNION
 var drag_shape: int = 0  # BrushShape.BOX
 var drag_sides: int = 4
-var drag_height: float = 32.0
-var drag_size_default := Vector3(32, 32, 32)
+var drag_height: float = 2.0
+var drag_size_default := Vector3(2, 2, 2)
 
 # Axis locking
 var axis_lock: int = 0  # AxisLock.NONE
@@ -33,7 +33,7 @@ var alt_pressed := false
 
 # Height stage tracking
 var height_stage_start_mouse := Vector2.ZERO
-var height_stage_start_height: float = 32.0
+var height_stage_start_height: float = 2.0
 
 ## The dimension typed into the HUD while a gesture is running, or -1 when the
 ## numeric buffer is empty.

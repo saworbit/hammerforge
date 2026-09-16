@@ -123,13 +123,13 @@ static func _bounded(value: float, low: float, high: float, current: float) -> f
 	return clampf(value, low, high)
 
 
-var _grid_snap: float = 16.0
-@export var grid_snap: float = 16.0:
+var _grid_snap: float = 0.5
+@export var grid_snap: float = 0.5:
 	set(value):
 		_set_grid_snap(value)
 	get:
 		return _grid_snap
-@export var brush_size_default: Vector3 = Vector3(32, 32, 32)
+@export var brush_size_default: Vector3 = Vector3(2, 2, 2)
 var _bake_collision_layer_index: int = 1
 @export_range(1, 32, 1) var bake_collision_layer_index: int = 1:
 	set(value):
@@ -245,13 +245,14 @@ var _bake_connector_width: int = 2
 ##
 ## The Connector Mode tooltip has always told the mapper a threshold decides it,
 ## and there was nowhere to look: it was a constant on `HFAutoConnector.Settings`
-## with no property, no control and nothing in the `.hflevel`. The default is 32
-## rather than the 2.0 it was fixed at, because 2.0 is a small height at this
-## genre's scale - on a level built at 32-unit grid steps every cross-layer
-## boundary cleared it, so Auto was Stairs everywhere and the ramp half of the
-## mode never happened.
-var _bake_connector_stair_threshold: float = 32.0
-@export var bake_connector_stair_threshold: float = 32.0:
+## with no property, no control and nothing in the `.hflevel`. The 32 it was
+## raised to was a Quake-scale number, chosen when a grid step was 16 units and
+## a 2.0 threshold meant every cross-layer boundary cleared it, so Auto was
+## Stairs everywhere. One unit is one metre now (#625), so 32 is a height no
+## level reaches and Auto was Ramp everywhere instead. 2.0 is the number that
+## fits the scale: a storey gets stairs, a kerb gets a ramp.
+var _bake_connector_stair_threshold: float = 2.0
+@export var bake_connector_stair_threshold: float = 2.0:
 	set(value):
 		_bake_connector_stair_threshold = _bounded(
 			value,
@@ -659,13 +660,13 @@ var drag_sides: int:
 			drag_system.input_state.drag_sides = value
 var drag_height: float:
 	get:
-		return drag_system.input_state.drag_height if drag_system else 32.0
+		return drag_system.input_state.drag_height if drag_system else 2.0
 	set(value):
 		if drag_system:
 			drag_system.input_state.drag_height = value
 var drag_size_default: Vector3:
 	get:
-		return drag_system.input_state.drag_size_default if drag_system else Vector3(32, 32, 32)
+		return drag_system.input_state.drag_size_default if drag_system else Vector3(2, 2, 2)
 	set(value):
 		if drag_system:
 			drag_system.input_state.drag_size_default = value
@@ -2592,13 +2593,20 @@ func get_total_vertex_estimate() -> int:
 	return total
 
 
+## Below this the level is small enough that one chunk is the right answer. It is
+## four default brushes across, which is what the 128 here meant when a default
+## brush was 32 units. One unit is one metre now (#625), so 128 would be a
+## threshold no greybox reaches and the recommendation would never appear.
+const MIN_CHUNKABLE_EXTENT := 8.0
+
+
 func get_recommended_chunk_size() -> float:
 	var brush_count := get_live_brush_count()
 	if brush_count < 30:
 		return 0.0
 	var aabb := _compute_level_aabb()
 	var extent: float = maxf(aabb.size.x, maxf(aabb.size.y, aabb.size.z))
-	if extent < 128.0:
+	if extent < MIN_CHUNKABLE_EXTENT:
 		return 0.0
 	return snappedf(extent / 4.0, grid_snap)
 

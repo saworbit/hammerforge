@@ -11,8 +11,8 @@ signal value_committed(property_type: int, values: Array)
 enum PropertyType { GRID_SNAP, BRUSH_SIZE, PAINT_RADIUS }
 
 ## Only used when the caller has no control to take a range from.
-const DEFAULT_GRID_SNAP_RANGE := {"min": 0.0, "max": 128.0, "step": 1.0}
-const DEFAULT_BRUSH_SIZE_RANGE := {"min": 1.0, "max": 256.0, "step": 1.0}
+const DEFAULT_GRID_SNAP_RANGE := {"min": 0.0, "max": 128.0, "step": 0.05}
+const DEFAULT_BRUSH_SIZE_RANGE := {"min": 0.05, "max": 256.0, "step": 0.05}
 const DEFAULT_PAINT_RADIUS_RANGE := {"min": 0.01, "max": 0.5, "step": 0.01}
 
 var _type: int = PropertyType.GRID_SNAP

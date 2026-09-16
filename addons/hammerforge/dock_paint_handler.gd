@@ -104,6 +104,8 @@ static func on_heightmap_convert(dock: Object) -> void:
 	if dock.height_scale_spin:
 		settings.height_scale = dock.height_scale_spin.value
 	settings.source_root = dock.level_root
+	if dock.level_root.get("paint_layers") and dock.level_root.paint_layers:
+		settings.chunk_size = dock.level_root.paint_layers.chunk_size
 	# Taken before the convert rather than after it, because `remove_sources`
 	# takes brushes out of the level from inside `convert()` and a state captured
 	# afterwards would have nothing to put back. An abandoned convert still leaves
@@ -124,7 +126,6 @@ static func on_heightmap_convert(dock: Object) -> void:
 			grid.layer_y = result.layer.grid.layer_y if result.layer.grid else 0.0
 			grid.cell_size = result.layer.grid.cell_size if result.layer.grid else grid.cell_size
 			result.layer.grid = grid
-	result.layer.chunk_size = mgr.chunk_size
 	result.layer.name = "Layer_%s" % str(result.layer.layer_id)
 	mgr.add_child(result.layer)
 	mgr.layers.append(result.layer)

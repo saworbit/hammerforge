@@ -244,8 +244,8 @@ func build(parent: Control) -> void:
 	dock.bake_connector_stair_threshold_spin = SpinBox.new()
 	dock.bake_connector_stair_threshold_spin.min_value = LevelRoot.MIN_CONNECTOR_STAIR_THRESHOLD
 	dock.bake_connector_stair_threshold_spin.max_value = LevelRoot.MAX_CONNECTOR_STAIR_THRESHOLD
-	dock.bake_connector_stair_threshold_spin.step = 1.0
-	dock.bake_connector_stair_threshold_spin.value = 32.0
+	dock.bake_connector_stair_threshold_spin.step = 0.05
+	dock.bake_connector_stair_threshold_spin.value = 2.0
 	dock.bake_connector_stair_threshold_spin.tooltip_text = ("Auto mode builds stairs once the height difference reaches this, and a ramp below it")
 	dock.bake_connector_stair_threshold_spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	threshold_row.add_child(dock.bake_connector_stair_threshold_spin)

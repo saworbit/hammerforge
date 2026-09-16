@@ -90,12 +90,19 @@ func test_the_treads_reach_the_radius_they_were_given():
 
 
 func test_no_tread_reaches_inside_the_hole_down_the_middle():
-	var treads: Array = _treads({"inner_radius": 40.0})
+	# A hole wide enough to be worth checking against the default outer radius,
+	# which is metres now (#625) rather than the 128 units it used to be. An inner
+	# radius past the outer one is refused, and `build()` returns nothing when it
+	# is, so the old 40.0 left this test walking an empty array and asserting
+	# nothing at all.
+	var inner := 0.8
+	var treads: Array = _treads({"inner_radius": inner})
+	assert_false(treads.is_empty(), "the flight builds, so there is something to check")
 	for tread in treads:
 		for face in tread:
 			for v in face.local_verts:
 				var radial := Vector2(v.x, v.z).length()
-				assert_true(radial > 40.0 - EPS, "a tread reaches into the newel hole")
+				assert_true(radial > inner - EPS, "a tread reaches into the newel hole")
 
 
 func test_the_flight_is_centred_on_its_own_origin_vertically():

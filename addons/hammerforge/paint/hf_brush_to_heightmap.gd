@@ -31,6 +31,10 @@ class ConvertSettings:
 	var height_scale: float = 10.0
 	## Optional existing layer to merge into (null = create new).
 	var target_layer: HFPaintLayer = null
+	## Cells per chunk for a layer this creates. It has to be set before the
+	## first cell is painted, because a layer's chunks are allocated at the size
+	## in force when they are made and the layer refuses a change after that.
+	var chunk_size: int = 32
 
 
 class ConvertResult:
@@ -147,6 +151,8 @@ func convert(brushes: Array, settings: ConvertSettings) -> ConvertResult:
 		layer.grid = HFPaintGrid.new()
 		layer.grid.cell_size = cs
 		layer.grid.layer_y = y_min
+		# Before the fill below, not after it.
+		layer.chunk_size = settings.chunk_size
 
 	layer.heightmap = img
 	layer.height_scale = hs

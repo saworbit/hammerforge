@@ -1513,7 +1513,7 @@ func merge_brushes_by_ids(brush_ids: Array) -> HFOpResult:
 	# Create merged brush with full transform (not just center position)
 	var merged_info: Dictionary = {
 		"shape": root.BrushShape.CUSTOM,
-		"size": Vector3(32, 32, 32),
+		"size": root.drag_size_default,
 		"transform": merged_xform,
 		"operation": operation,
 		"brush_id": _next_brush_id(),

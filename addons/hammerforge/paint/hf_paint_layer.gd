@@ -6,7 +6,39 @@ const TERRAIN_SLOTS := 4
 const TERRAIN_BLEND_SLOTS := 3  # slots 1..3 have explicit weights; slot 0 is implicit base
 
 @export var grid: HFPaintGrid
-@export var chunk_size: int = 32
+## Cells per chunk, on both axes.
+##
+## A chunk allocates its bit, material and blend arrays for the size it was built
+## at, while `_cell_to_local()` reduces a cell against *this* number. Change it
+## once chunks exist and the two disagree: local coordinates run up to the new
+## size against arrays sized for the old one, and the next read is an out of
+## bounds index into a PackedByteArray rather than anything the layer can report.
+## So a change is refused once there is a chunk to invalidate. Set it on a fresh
+## layer, which is what every caller that legitimately sets it already does.
+var _chunk_size: int = 32
+@export var chunk_size: int = 32:
+	set(value):
+		if value == _chunk_size:
+			return
+		if value < 1:
+			HFLog.warn(
+				"HFPaintLayer: chunk size %d is not a size, keeping %d" % [value, _chunk_size]
+			)
+			return
+		if not _chunks.is_empty():
+			(
+				HFLog
+				. warn(
+					(
+						"HFPaintLayer '%s': chunk size cannot change from %d to %d once the layer holds paint, keeping %d"
+						% [str(layer_id), _chunk_size, value, _chunk_size]
+					)
+				)
+			)
+			return
+		_chunk_size = value
+	get:
+		return _chunk_size
 @export var layer_id: StringName = &"layer_0"
 var display_name: String = ""
 

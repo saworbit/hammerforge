@@ -125,7 +125,7 @@ static func _usable(pref_name: String, value: Variant, fallback: Variant) -> Var
 
 static func _defaults() -> Dictionary:
 	return {
-		"grid_snap": 16.0,
+		"grid_snap": 0.5,
 		"recent_files": [],
 		"collapsed_sections": {},
 		"show_hud": true,

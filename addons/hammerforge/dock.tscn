@@ -141,24 +141,24 @@ size_flags_horizontal = 3
 text = "Size"
 
 [node name="SizeX" type="SpinBox" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/SizeRow"]
-min_value = 1.0
+min_value = 0.05
 max_value = 256.0
-step = 1.0
-value = 32.0
+step = 0.05
+value = 2.0
 size_flags_horizontal = 3
 
 [node name="SizeY" type="SpinBox" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/SizeRow"]
-min_value = 1.0
+min_value = 0.05
 max_value = 256.0
-step = 1.0
-value = 24.0
+step = 0.05
+value = 2.0
 size_flags_horizontal = 3
 
 [node name="SizeZ" type="SpinBox" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/SizeRow"]
-min_value = 1.0
+min_value = 0.05
 max_value = 256.0
-step = 1.0
-value = 24.0
+step = 0.05
+value = 2.0
 size_flags_horizontal = 3
 
 [node name="GridRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox"]
@@ -169,33 +169,33 @@ text = "Grid Snap"
 [node name="GridSnap" type="SpinBox" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/GridRow"]
 min_value = 0.0
 max_value = 128.0
-step = 1.0
-value = 16.0
+step = 0.05
+value = 0.5
 size_flags_horizontal = 3
 
 [node name="QuickSnapGrid" type="GridContainer" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox"]
 columns = 7
 
+[node name="Snap0" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid"]
+text = "0.1"
+
 [node name="Snap1" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid"]
-text = "1"
+text = "0.25"
 
 [node name="Snap2" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid"]
-text = "2"
+text = "0.5"
+
+[node name="Snap3" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid"]
+text = "1"
 
 [node name="Snap4" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid"]
+text = "2"
+
+[node name="Snap5" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid"]
 text = "4"
 
-[node name="Snap8" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid"]
+[node name="Snap6" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid"]
 text = "8"
-
-[node name="Snap16" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid"]
-text = "16"
-
-[node name="Snap32" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid"]
-text = "32"
-
-[node name="Snap64" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid"]
-text = "64"
 
 [node name="MaterialRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox"]
 

@@ -5,6 +5,34 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Changed
+- **One world unit is one metre, and the drawing side now agrees** (#625). Two
+  scale conventions were in the project at once and the seam ran through the core
+  loop. The playtest player, the spawn checks, the bake settings and all five
+  shipped examples were metres; the drawing defaults were Quake-family units. A
+  default brush was 32 units against a 1.6 unit player, so the first thing anyone
+  drew was twenty player heights tall, one grid step was ten, and a room drawn on
+  the defaults was a cathedral nobody could climb out of. Draw, then Test Level,
+  was the loop that broke. The drawing side moved onto the runtime's scale rather
+  than the other way round, because the runtime, the examples and Godot's own
+  physics defaults were already there: grid snap 0.5, a 2 x 2 x 2 default brush,
+  the quick snap buttons 0.1 through 8 instead of 1 through 64, and generator
+  defaults that are sizes a person could walk through: a 3 m arch, and a 1.5 m
+  wide flight of 0.2 m steps. Every length field's minimum and step came down with
+  them, because a minimum of 1.0 meant the thinnest wall the dock could offer was
+  a metre and the grid SpinBox could not be typed a fraction at all. The maximums
+  are untouched, so a level saved with a 128 unit arch still loads and still
+  regenerates. Two more numbers were on the seam and moved with it: the geometry
+  snap threshold, which at 2.0 would have been four grid steps and swallowed the
+  grid whole, and the auto connector's stairs-versus-ramp threshold, whose own
+  comment recorded that it was raised to 32 for the old grid. At this scale no
+  level reaches 32, so Auto was Ramp everywhere. It is back to the 2.0 that
+  comment says it started at. The viewport context menu's grid list and the dock's
+  quick buttons now read one shared ladder instead of a hard-coded copy each; the
+  menu carried its value inside the item id, which is an int and could not hold a
+  fraction. A level saved before this keeps the grid and sizes it was built with, because
+  they live on the `LevelRoot`, so only a new level starts on the new defaults.
+  The user guide now opens with a **World Scale** section that says how many units
+  a person is, which is the one number a level editor's documentation has to have.
 - **Two release gate checks corrected by running the gate** (#593). The first
   execution of the document, rather than another addition to it, and it found
   two of its own lines describing things the product does not do. Create Starter
@@ -37,6 +65,18 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   document look healthier.
 
 ### Fixed
+- **A paint layer's chunk size can no longer change out from under its own
+  chunks** (#625). Convert to Heightmap built the layer, filled every cell, and
+  then set `chunk_size` from the manager. A chunk allocates its bit, material and
+  blend arrays for the size it was built at, while `_cell_to_local()` reduces a
+  cell against the layer's current `chunk_size`, so once the two disagreed every
+  read indexed past the end of a `PackedByteArray`. That is an engine error, not
+  something the layer can report. It had never fired because a test brush fitted
+  inside one cell at the old 16 unit grid; at one unit to the metre the same
+  brush spans eight cells and the convert threw on the first read. The conversion
+  now takes the chunk size as a setting and applies it before the first cell, and
+  the layer refuses a change once it holds paint rather than accepting one it
+  cannot honour. Every other caller already set it on a fresh layer.
 - **An occluder is the wall it stands for, not every wall on its plane**
   (#614). `_generate_occluders()` grouped triangles by normal and plane distance
   and nothing else, so two triangles facing the same way in the same infinite
