@@ -17,7 +17,7 @@
   <img src="https://img.shields.io/badge/Godot-4.7%2B-478cbf?logo=godot-engine&logoColor=white" alt="Godot 4.7+">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
   <img src="https://img.shields.io/badge/Status-Early%20Alpha-red" alt="Early Alpha">
-  <img src="https://img.shields.io/badge/Tests-3981%20passing-brightgreen" alt="3981 tests passing">
+  <img src="https://img.shields.io/badge/Tests-3988%20passing-brightgreen" alt="3988 tests passing">
   <img src="https://img.shields.io/badge/GDScript-61k%2B%20lines-blueviolet" alt="61k+ lines">
 </p>
 
@@ -99,7 +99,7 @@ HammerForge is a single `addons/` folder. No external tools, no custom builds, n
 
 | | |
 |---|---|
-| **Subsystem-based coordinator architecture** | **3,988 unit + integration tests** with CI on every push |
+| **Subsystem-based coordinator architecture** | **3,995 unit + integration tests** with CI on every push |
 | **15 brush shapes** (box through dodecahedron) | **150 built-in prototype textures** for instant greyboxing |
 | **Quake `.map`** + **glTF `.glb`** export | **.hflevel** native format with threaded I/O |
 | **Customizable keymaps** (JSON) | **Plugin API** for custom tools |
