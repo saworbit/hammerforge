@@ -21,6 +21,7 @@ const HANDLER_SOURCES := [
 	"res://addons/hammerforge/dock_visgroup_handler.gd",
 	"res://addons/hammerforge/dock_entity_handler.gd",
 	"res://addons/hammerforge/dock_paint_handler.gd",
+	"res://addons/hammerforge/dock_file_handler.gd",
 ]
 
 const MERGE_DISABLE := 0
@@ -247,6 +248,9 @@ func test_every_level_changing_dock_command_registers_an_undo_step() -> void:
 		"on_paint_layer_remove": "remove_active_paint_layer",
 		"on_heightmap_generate": "generate_heightmap_noise",
 		"on_heightmap_import_selected": "import_heightmap",
+		"on_material_library_load_selected": "load_material_library",
+		"on_terrain_slot_texture_selected": "set_terrain_slot_texture",
+		"on_terrain_slot_scale_changed": "set_terrain_slot_uv_scale",
 	}
 	for function_name in commands:
 		var body := _body(function_name)
@@ -262,6 +266,70 @@ func test_every_level_changing_dock_command_registers_an_undo_step() -> void:
 				% [function_name, commands[function_name]]
 			)
 		)
+
+
+func test_load_material_library_undo_brings_the_old_palette_back() -> void:
+	var root := _fresh_root()
+	var fake = _fake_undo()
+	root.add_material_to_palette(StandardMaterial3D.new())
+	root.add_material_to_palette(StandardMaterial3D.new())
+	var before: int = root.material_manager.materials.size()
+	assert_eq(before, 2, "Two materials to lose")
+
+	var library := "user://hf_test_library.json"
+	var file := FileAccess.open(library, FileAccess.WRITE)
+	file.store_string(JSON.stringify({"materials": []}))
+	file.close()
+
+	_commit(fake, root, "Load Material Library", "load_material_library", [library], false)
+	assert_eq(root.material_manager.materials.size(), 0, "The load replaces the whole palette")
+
+	fake.undo()
+	assert_eq(root.material_manager.materials.size(), before, "Undo must bring the palette back")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(library))
+
+
+func test_a_terrain_slot_texture_undo_puts_the_old_slot_back() -> void:
+	var root := _fresh_root()
+	if not root.paint_layers:
+		pass_test("no paint layer manager on this build")
+		return
+	var fake = _fake_undo()
+	var layer = root.paint_layers.get_active_layer()
+	assert_not_null(layer, "A level comes up with an active paint layer")
+	layer.set_terrain_slot_texture(1, "res://old.tres")
+
+	_commit(
+		fake,
+		root,
+		"Set Terrain Slot Texture",
+		"set_terrain_slot_texture",
+		[1, "res://new.tres"],
+		false
+	)
+	assert_eq(
+		root.paint_layers.get_active_layer().terrain_slot_paths[1],
+		"res://new.tres",
+		"The command points the slot at the new texture"
+	)
+
+	fake.undo()
+	assert_eq(
+		root.paint_layers.get_active_layer().terrain_slot_paths[1],
+		"res://old.tres",
+		"Undo must put the old one back"
+	)
+
+
+func test_a_terrain_slot_refuses_an_index_it_does_not_have() -> void:
+	var root := _fresh_root()
+	if not root.paint_layers:
+		pass_test("no paint layer manager on this build")
+		return
+	var layer = root.paint_layers.get_active_layer()
+	assert_false(layer.set_terrain_slot_texture(9, "res://x.tres"), "Slot 9 is not a slot")
+	assert_false(layer.set_terrain_slot_uv_scale(-1, 2.0), "Neither is slot -1")
+	assert_false(layer.set_terrain_slot_uv_scale(0, NAN), "A scale has to be a number")
 
 
 func test_commands_holding_live_nodes_ask_for_an_absolute_redo() -> void:
