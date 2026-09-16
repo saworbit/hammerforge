@@ -35,6 +35,42 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   carrying either is not warned about. Removing both leaves no `TYPE_INT`
   preference in the schema, so the int half of `_usable()`'s number coercion is
   now there for the next one rather than exercised by a test.
+- **`HFGesture`** (#550). A `class_name`, a doc comment describing an
+  architecture where "the plugin holds at most one active gesture" and routes all
+  input through it, and 109 lines nothing constructs - no subclass, no `new()`,
+  no preload anywhere in `addons/`, `tests/` or `tools/`.
+  `HFSelectionGesture` sounds like one and is not. The expensive part was the
+  complete numeric-entry mechanism inside it, reimplemented separately in
+  `plugin_numeric_input.gd`, which is the copy that runs: the dead one still has
+  the keypad-Enter bug frozen into it that #516 and #517 fixed, so it was a
+  second and wrong reference for anyone who found it first. The guide's Gesture
+  Tracker section goes with it; if the architecture is still wanted it is a
+  design question against what `HFSelectionGesture`, `HFPluginGestureRecovery`
+  and `input_state.gd` actually do.
+- **`HFFoliagePopulator`** (#562). 146 lines, documented in two guides as a
+  shipped subsystem, constructed by nothing. The Paint tab's Foliage & Scatter
+  section commits through `HFScatterBrush`, which is a superset - the same
+  `density`, `min_height`, `max_height`, `max_slope` and the identical
+  `_compute_slope()`, plus a density preview, a circle and a spline shape, an
+  instance budget with a refusal message, and a `rejected_count`. The dead copy
+  was also the weaker one: no budget, so `populate()` built a `Transform3D` per
+  instance over every cell of every chunk with nothing capping the total, which
+  is the shape #512 was about. The greybox guide's section is now about
+  `HFScatterBrush`, which does everything it claimed and more, and
+  `hf_scatter_brush.gd` no longer says it works with a class that is gone.
+- **The state system's transaction API** (#571). `begin_transaction()`,
+  `commit_transaction()`, `rollback_transaction()`, `is_in_transaction()` and
+  their three fields, called by nothing and not covered by the GUT suite, while
+  `HammerForge_MVP_GUIDE.md` listed them as a shipped capability. Every
+  multi-step operation that wanted this solved it separately -
+  `_commit_state_action()` through `HFUndoHelper`, the generator's hand-rolled
+  appearance capture, `propagate_from_source()` with no grouping at all - so the
+  designed answer was not serving as the answer. Grouping a propagate into one
+  undo step is worth doing; it is worth doing against a design rather than by
+  finding four functions nobody has used. `LevelRoot.discard_signal_batch()`
+  stays: it was the transaction's only caller, but it is the one way to abandon
+  an open signal batch, `begin_signal_batch()` has live callers, and
+  `test_dirty_tags.gd` covers its behaviour.
 - **The per-instance prefab override mechanism** (#566). A record field, three
   public functions, a re-apply pass, the overlay's override markers and a
   `capture_state()` field, with no way in: nothing outside
@@ -144,6 +180,35 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   boundary cleared it, Auto was Stairs everywhere, and the ramp half of the mode
   never happened. The tooltip names the control rather than an unreachable
   number.
+- **Validate + Fix reports what is left, not what it repaired** (#569). The
+  handler threw away the `fixed` count `validate_level(true)` returns and
+  re-derived it by differencing two more full validation passes - which is not
+  the number of repairs, since a pass that fixes one issue and exposes another
+  reported zero fixed - and then logged the issue list from *before* the fix, so
+  every problem it had just repaired was printed as though it were still there,
+  with no list of what remained. It reads the validator's own count now and
+  re-runs once for the residue, which is what the log prints; the status line
+  reads "fixed N, M remaining", and a level that comes out clean says so. Three
+  passes become two, and the second is needed because `validate()` reports every
+  finding whether or not it repaired it. `HFUndoHelper.commit_completed()` is new:
+  `commit()` calls the method itself and discards the return, so a caller that
+  needs it could not use it.
+- **The Status board's recommended chunk size is one the editor can accept**
+  (#549). `get_recommended_chunk_size()` has no ceiling and the dock spin it is
+  written through had a maximum of 256, so for any level wider than 1024 units -
+  small, in this genre - the level got 256 and the Log tab was told the
+  unclamped number. The line exists so the action is auditable, and it disagreed
+  with the level. The Console reads the value back after assigning it, the way
+  `dock.gd`'s bake path already does, and the spin's maximum is now
+  `LevelRoot.MAX_BAKE_CHUNK_SIZE` rather than a smaller number of its own - so
+  the recommendation the perf panel shows is one the control beside it can hold.
+- **The Log tab says how much the buffer actually holds** (#543). Trimming is
+  amortised in batches of `TRIM_SLACK`, so `capacity` is what the buffer trims
+  down to rather than a ceiling it never passes - the buffer sits anywhere
+  between 600 and 663 at the default. The footer reported `capacity`, which is
+  the one place a reader is told what the limit is. It says "holds up to" and the
+  real figure now, via `retained_limit()`; the amortisation is worth keeping, so
+  it is the reported number that was wrong.
 - **Cycling a prefab variant leaves the instance where it was** (#565). A
   prefab's brush transforms are stored relative to the merged visual AABB centre
   of the selection it was captured from, and `instantiate()` adds the placement

@@ -96,6 +96,31 @@ static func commit(
 ## Its own function so it can be driven against a stand-in: an
 ## `EditorUndoRedoManager` cannot be constructed outside the editor, and this is
 ## the part where getting the do operation wrong is invisible until a redo.
+## Register an undo step for work the caller has already done.
+##
+## `commit()` and `register_action()` call the method themselves and discard what
+## it returns, so a caller that needs the return value cannot use them.
+## `validate_level(true)` reports both how many issues it repaired and which ones
+## are left, and Validate + Fix was throwing that away and re-deriving the count
+## from two more full validation passes. Hand this the state from before the work
+## instead, and read the result at the call site.
+static func commit_completed(
+	undo_redo,
+	root: Node,
+	action_name: String,
+	before: Dictionary,
+	history_cb: Callable = Callable()
+) -> void:
+	if undo_redo:
+		var after: Dictionary = root.capture_state()
+		undo_redo.create_action(action_name, 0, null, false)
+		undo_redo.add_do_method(root, "restore_state", after)
+		undo_redo.add_undo_method(root, "restore_state", before)
+		undo_redo.commit_action(false)
+	_reset_collation()
+	_fire_history_cb(history_cb, action_name, false)
+
+
 static func register_action(
 	undo_redo,
 	root: Node,

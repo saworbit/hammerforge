@@ -147,7 +147,12 @@ func build(parent: Control) -> void:
 	var chunk_label = Label.new()
 	chunk_label.text = "Chunk Size"
 	chunk_row.add_child(chunk_label)
-	dock.bake_chunk_size_spin = dock._make_spin(0.0, 256.0, 1.0, 32.0)
+	# The maximum is LevelRoot's own bound rather than a smaller number of its
+	# own. 256 meant the Status board's "Apply recommended chunk size" was clamped
+	# for any level wider than 1024 units - a small level in this genre - and the
+	# perf panel's recommendation was a figure the control beside it could not
+	# hold.
+	dock.bake_chunk_size_spin = dock._make_spin(0.0, LevelRoot.MAX_BAKE_CHUNK_SIZE, 1.0, 32.0)
 	dock.bake_chunk_size_spin.tooltip_text = "Spatial chunk size for bake grouping (0 = no chunking)"
 	chunk_row.add_child(dock.bake_chunk_size_spin)
 	adv.add_child(chunk_row)

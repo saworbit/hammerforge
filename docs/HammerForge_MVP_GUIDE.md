@@ -48,7 +48,7 @@ See [DEVELOPMENT.md](https://github.com/saworbit/hammerforge/blob/main/DEVELOPME
 - Per-chunk blend images drive a four-slot shader (`hf_blend.gdshader`).
 - Blend tool paints material blend weights (slots B/C/D) on already-filled cells.
 - Auto-connectors (`HFConnectorTool`) generate ramp/stair meshes between layers.
-- Foliage populator (`HFFoliagePopulator`) scatters `MultiMeshInstance3D` content with height/slope filtering and container-local transforms.
+- Scatter (`HFScatterBrush`) places `MultiMeshInstance3D` content with height/slope filtering, a density preview and an instance budget.
 - Stable IDs are used to reconcile generated nodes without churn.
 
 ### Face Materials + Surface Paint (`HFPaintSystem`)
@@ -60,18 +60,12 @@ See [DEVELOPMENT.md](https://github.com/saworbit/hammerforge/blob/main/DEVELOPME
 ### Undo/Redo (`HFUndoHelper` + `HFStateSystem`)
 - `HFUndoHelper.commit()` wraps all editor actions with state snapshot restore on undo.
 - **Command collation**: pass a `collation_tag` for rapid operations (nudge, resize, paint). Consecutive actions with the same tag and same `full_state` scope within 1 second merge into one undo entry via `MERGE_ENDS`.
-- **Transactions**: `state_system.begin_transaction()` / `commit_transaction()` / `rollback_transaction()` for atomic multi-step operations.
 - **State-tracked scaffolding**: `capture_state()` / `restore_state()` covers brushes, entities, paint layers, TempFloor, and DefaultSun. All scaffolding created by **Create Starter** round-trips through undo/redo.
 
 ### Entity Definitions (`HFEntityDef`)
 - Entity types and brush entity classes are data-driven via `hf_entity_def.gd`.
 - Loaded from `entities.json` or built-in defaults (func_detail, func_wall, trigger_once, trigger_multiple), overlaid with `res://hammerforge_entities.json` when present.
 - The dock brush entity dropdown and the point entity palette are both populated from that merged set, not hardcoded and not from separate files.
-
-### Gesture Tracker (`HFGesture`)
-- Base class for encapsulated input gestures (`hf_gesture.gd`).
-- Holds root, camera, positions, numeric buffer. Subclasses override `update()`, `commit()`, `cancel()`.
-- New tools should subclass this instead of adding modes to the `HFInputState` enum.
 
 ### Bake (`HFBakeSystem`)
 - Assembles DraftBrushes (including generated flat paint geometry) into mesh output via CSG.
