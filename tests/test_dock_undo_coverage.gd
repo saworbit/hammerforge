@@ -264,6 +264,50 @@ func test_every_level_changing_dock_command_registers_an_undo_step() -> void:
 		)
 
 
+## `commit()` calls the method and throws away what it returns, so Validate + Fix
+## could not read the count the validator had already worked out - it re-derived
+## it as before minus after, which is not the number of repairs when a fix
+## exposes another issue, and logged the list from before the fix as though every
+## repaired issue were still there.
+func test_commit_completed_registers_an_undo_for_work_already_done() -> void:
+	var root := _fresh_root()
+	var fake = _fake_undo()
+	root.add_material_to_palette(StandardMaterial3D.new())
+	var before: Dictionary = root.capture_state()
+
+	root.add_material_to_palette(StandardMaterial3D.new())
+	assert_eq(root.material_manager.materials.size(), 2, "The work is done by the caller")
+
+	HFUndoHelper.commit_completed(fake, root, "Validate + Fix", before)
+	fake.undo()
+	assert_eq(root.material_manager.materials.size(), 1, "Undo puts the before state back")
+	fake.redo()
+	assert_eq(root.material_manager.materials.size(), 2, "and redo is the state it left, not a re-call")
+
+
+func test_validate_and_fix_reads_the_count_the_validator_returned() -> void:
+	var body := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/dock_manage_handler.gd"
+	)
+	var start := body.find("
+static func run_validation(")
+	assert_gt(start, -1, "run_validation must exist")
+	var rest := body.substr(start + 1)
+	var end := rest.find("
+
+
+")
+	var run_validation := rest if end < 0 else rest.substr(0, end)
+	assert_true(
+		run_validation.contains('get("fixed"'),
+		"The repair count comes from the validator, which counted it exactly"
+	)
+	assert_false(
+		run_validation.contains("before_count - after_count"),
+		"and is not re-derived by differencing two more validation passes"
+	)
+
+
 func test_commands_holding_live_nodes_ask_for_an_absolute_redo() -> void:
 	# Anything passing dock._selection_nodes or an entity into the wrapper: the
 	# redo cannot be a re-call, because the undo freed what it would be handed.
