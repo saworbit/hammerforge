@@ -448,3 +448,161 @@ func test_encode_payload_job_hash_changes_when_data_changes():
 	var a: Dictionary = HFLevelIO.encode_payload_job({"n": 1}, false)
 	var b: Dictionary = HFLevelIO.encode_payload_job({"n": 2}, false)
 	assert_ne(int(a.get("hash", 0)), int(b.get("hash", 0)))
+
+
+# ===========================================================================
+# encode / decode: the types that used to fall off the end of the match (#619)
+# ===========================================================================
+
+
+func _round_trip_value(value: Variant) -> Variant:
+	var payload := HFLevelIO.build_payload({"v": HFLevelIO.encode_variant(value)}, false)
+	return HFLevelIO.decode_variant(HFLevelIO.parse_payload(payload).get("v"))
+
+
+func test_vector2i_survives_the_file():
+	var out = _round_trip_value(Vector2i(3, -4))
+	assert_true(out is Vector2i, "Vector2i should not come back as a String")
+	assert_eq(out, Vector2i(3, -4))
+
+
+func test_vector3i_survives_the_file():
+	var out = _round_trip_value(Vector3i(1, 2, 3))
+	assert_true(out is Vector3i, "Vector3i should not come back as a String")
+	assert_eq(out, Vector3i(1, 2, 3))
+
+
+func test_aabb_survives_the_file():
+	var out = _round_trip_value(AABB(Vector3(1, 2, 3), Vector3(4, 5, 6)))
+	assert_true(out is AABB, "AABB should not come back as a String")
+	assert_almost_eq(out.position.y, 2.0, 0.001)
+	assert_almost_eq(out.size.z, 6.0, 0.001)
+
+
+func test_plane_survives_the_file():
+	var out = _round_trip_value(Plane(Vector3.UP, 5.0))
+	assert_true(out is Plane, "Plane should not come back as a String")
+	assert_almost_eq(out.d, 5.0, 0.001)
+
+
+func test_quaternion_survives_the_file():
+	var out = _round_trip_value(Quaternion(0.0, 0.7071, 0.0, 0.7071))
+	assert_true(out is Quaternion, "Quaternion should not come back as a String")
+	assert_almost_eq(out.y, 0.7071, 0.001)
+
+
+func test_rect2_and_rect2i_survive_the_file():
+	var r = _round_trip_value(Rect2(1, 2, 3, 4))
+	assert_true(r is Rect2, "Rect2 should not come back as a String")
+	assert_almost_eq(r.size.x, 3.0, 0.001)
+	var ri = _round_trip_value(Rect2i(1, 2, 3, 4))
+	assert_true(ri is Rect2i, "Rect2i should not come back as a String")
+	assert_eq(ri.size.y, 4)
+
+
+func test_vector4_and_transform2d_survive_the_file():
+	var v = _round_trip_value(Vector4(1, 2, 3, 4))
+	assert_true(v is Vector4, "Vector4 should not come back as a String")
+	assert_almost_eq(v.w, 4.0, 0.001)
+	var t = _round_trip_value(Transform2D(0.0, Vector2(7, 8)))
+	assert_true(t is Transform2D, "Transform2D should not come back as a String")
+	assert_almost_eq(t.origin.x, 7.0, 0.001)
+
+
+func test_string_name_survives_the_file():
+	var out = _round_trip_value(StringName("hello"))
+	assert_true(out is StringName, "StringName should not decay to String")
+	assert_eq(str(out), "hello")
+
+
+func test_packed_vector3_array_survives_the_file():
+	var out = _round_trip_value(PackedVector3Array([Vector3(1, 1, 1), Vector3(2, 2, 2)]))
+	assert_true(out is PackedVector3Array, "PackedVector3Array should not become a String")
+	assert_eq(out.size(), 2)
+	assert_almost_eq(out[1].x, 2.0, 0.001)
+
+
+func test_packed_byte_array_survives_the_file():
+	var out = _round_trip_value(PackedByteArray([1, 2, 3]))
+	assert_true(out is PackedByteArray, "PackedByteArray should not become a String")
+	assert_eq(out.size(), 3)
+	assert_eq(int(out[2]), 3)
+
+
+func test_packed_int32_array_survives_as_ints():
+	var out = _round_trip_value(PackedInt32Array([4, 5, 6]))
+	assert_true(out is PackedInt32Array, "PackedInt32Array should not become a float Array")
+	assert_eq(int(out[0]), 4)
+
+
+func test_types_already_handled_keep_their_on_disk_shape():
+	# The added `_` arm must not swallow the types the format already writes, or
+	# every file on disk would decode as null.
+	assert_eq(HFLevelIO.encode_variant(Vector3(1, 2, 3))[HFLevelIO.TYPE_KEY], "Vector3")
+	assert_eq(HFLevelIO.encode_variant(Color.RED)[HFLevelIO.TYPE_KEY], "Color")
+	assert_eq(HFLevelIO.encode_variant(42), 42, "int stays a raw JSON number")
+	assert_eq(HFLevelIO.encode_variant("s"), "s", "String stays a raw JSON string")
+	assert_true(HFLevelIO.encode_variant([1, 2]) is Array, "Array stays an Array")
+
+
+# ===========================================================================
+# encode / decode: Dictionary keys that are not Strings (#619)
+# ===========================================================================
+
+
+func test_non_string_dictionary_keys_survive_the_file():
+	var out = _round_trip_value({Vector2i(3, 4): "cell", 7: "int key", "s": "string key"})
+	assert_true(out is Dictionary, "Should decode back to a Dictionary")
+	assert_eq(out.get(Vector2i(3, 4)), "cell", "A Vector2i key should still be a Vector2i")
+	assert_eq(out.get(7), "int key", "An int key should still be an int")
+	assert_eq(out.get("s"), "string key", "A String key should be untouched")
+
+
+func test_all_string_keys_keep_the_plain_json_object_shape():
+	var encoded = HFLevelIO.encode_variant({"a": 1, "b": 2})
+	assert_false(
+		encoded.has(HFLevelIO.TYPE_KEY), "A plain dictionary must stay a plain JSON object"
+	)
+	assert_eq(encoded.get("a"), 1)
+
+
+# ===========================================================================
+# encode / decode: a Resource with no resource_path (#617)
+# ===========================================================================
+
+
+func test_pathless_resource_warns_and_records_what_was_lost():
+	_capture_warning("no resource path")
+	var mat := StandardMaterial3D.new()
+	mat.resource_name = "runtime_brick"
+	var encoded = HFLevelIO.encode_variant(mat)
+	_assert_captured_warning("no resource path")
+	assert_eq(encoded[HFLevelIO.TYPE_KEY], "MissingResource", "Should record the loss, not null")
+	assert_eq(str(encoded.get("class")), "StandardMaterial3D")
+	assert_eq(str(encoded.get("name")), "runtime_brick")
+
+
+func test_pathless_resource_marker_names_it_on_load():
+	_capture_warning("runtime_brick")
+	var decoded = HFLevelIO.decode_variant(
+		{
+			HFLevelIO.TYPE_KEY: "MissingResource",
+			"class": "StandardMaterial3D",
+			"name": "runtime_brick"
+		}
+	)
+	_assert_captured_warning("runtime_brick")
+	assert_null(decoded, "The slot is still empty, but the load says what it was")
+
+
+func test_resource_with_a_path_is_unchanged():
+	var mat := StandardMaterial3D.new()
+	mat.resource_path = "res://materials/does_not_exist.tres"
+	var encoded = HFLevelIO.encode_variant(mat)
+	assert_eq(encoded[HFLevelIO.TYPE_KEY], "ResourcePath")
+	assert_eq(str(encoded.get("path")), "res://materials/does_not_exist.tres")
+
+
+func test_values_that_are_not_data_are_dropped_with_a_warning():
+	var encoded = HFLevelIO.encode_variant(Callable())
+	assert_null(encoded, "A Callable cannot be written to a level file")
