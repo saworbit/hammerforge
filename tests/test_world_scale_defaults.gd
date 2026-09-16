@@ -20,6 +20,7 @@ const HFDomeBuilderScript = preload("res://addons/hammerforge/hf_dome_builder.gd
 const HFStairsBuilderScript = preload("res://addons/hammerforge/hf_stairs_builder.gd")
 const HFSpiralStairsBuilderScript = preload("res://addons/hammerforge/hf_spiral_stairs_builder.gd")
 const HFSpawnSystemScript = preload("res://addons/hammerforge/systems/hf_spawn_system.gd")
+const HFSnapSystemScript = preload("res://addons/hammerforge/hf_snap_system.gd")
 
 ## The player the level is drawn for. Read off the spawn system rather than
 ## restated, so moving the player moves what counts as a sane default.
@@ -94,6 +95,30 @@ func test_the_saved_preference_default_is_the_level_default():
 		_root().grid_snap,
 		0.0001,
 		"a fresh install draws on the grid the level says it draws on"
+	)
+
+
+func test_geometry_snapping_does_not_swallow_the_grid():
+	# The threshold is how far a vertex may sit from the point and still beat the
+	# grid. 2.0 was an eighth of a step when a step was 16 units. The same number
+	# against a half metre step would be four steps, so every vertex in the room
+	# would win and grid snap would stop meaning anything.
+	var root := _root()
+	var snap := HFSnapSystemScript.new(root)
+	assert_lt(
+		snap.snap_threshold, root.grid_snap, "a vertex has to be nearer than a grid point to win"
+	)
+
+
+func test_the_quick_grid_sizes_are_grid_sizes_for_this_scale():
+	# One ladder, read by the dock buttons and the viewport context menu both.
+	var presets: Array[float] = HFSnapSystemScript.GRID_PRESETS
+	assert_false(presets.is_empty(), "there are quick grid sizes")
+	for value in presets:
+		assert_gt(value, 0.0, "a grid size is a size")
+		assert_lt(value, MAX_STRUCTURE_HEIGHTS * PLAYER_HEIGHT, "%s is not a grid step" % value)
+	assert_true(
+		presets.has(_root().grid_snap), "the default grid is one of the buttons you can get back to"
 	)
 
 

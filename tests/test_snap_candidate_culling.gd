@@ -22,6 +22,13 @@ func before_each():
 	root.draft_brushes_node = draft
 	snap = HFSnapSystem.new(root)
 	snap.set_mode(HFSnapSystem.SnapMode.GRID, false)
+	# Every brush in this file is tens of units across and every query point sits
+	# most of a unit from what it is aiming at, which is geometry written when a
+	# world unit was a Quake unit. The default threshold is a tenth of a metre now
+	# (#625) and is asserted where it belongs, in test_world_scale_defaults.gd.
+	# These tests are about whether a snap finds its candidate, so they say what
+	# reach they are written for instead of leaning on whatever the default is.
+	snap.snap_threshold = 2.0
 
 
 func after_each():

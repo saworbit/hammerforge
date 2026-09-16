@@ -128,11 +128,16 @@ func test_a_solid_flight_reaches_the_floor_under_every_step():
 
 
 func test_an_open_flight_is_slabs_of_the_thickness_asked_for():
+	# A slab deeper than the whole climb is refused, and `build()` returns nothing
+	# when it is. At the old scale five 16 unit rises were an 80 unit climb and a
+	# 6 unit slab sat well inside it; in metres (#625) the same five steps climb
+	# 1.0, so the old thickness silently left this test with nothing to walk.
 	var flight: Array = HFStairsBuilderScript.build(
-		_settings({"steps": 5, "fill": 1, "tread_thickness": 6.0})
+		_settings({"steps": 5, "fill": 1, "tread_thickness": 0.12})
 	)
+	assert_eq(flight.size(), 5, "the flight builds, so there is something to check")
 	for step in flight:
-		assert_almost_eq(SolidChecks.bounds(step).size.y, 6.0, EPS, "a tread is the wrong depth")
+		assert_almost_eq(SolidChecks.bounds(step).size.y, 0.12, EPS, "a tread is the wrong depth")
 
 
 func test_steps_meet_their_neighbour_rather_than_leaving_a_gap():
