@@ -167,6 +167,12 @@ func check_shortcut(event: InputEventKey) -> int:
 	return -1
 
 
+## Where a project keeps its own editor tools. Outside the addon on purpose: the
+## upgrade instructions say to replace `addons/hammerforge`, so anything under it
+## is deleted by a documented upgrade.
+const PROJECT_TOOLS_PATH := "res://hammerforge_tools/"
+
+
 ## Scan a directory for .gd files that extend HFEditorTool, load and register them.
 func load_external_tools(path: String) -> void:
 	if not DirAccess.dir_exists_absolute(path):

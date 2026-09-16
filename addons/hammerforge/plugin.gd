@@ -173,6 +173,12 @@ func _enter_tree():
 	_tool_registry.register_tool(HFDecalTool.new())
 	_tool_registry.register_tool(HFPolygonTool.new())
 	_tool_registry.register_tool(HFPathToolType.new())
+	# A project's own tools go outside the addon, the way HFEntityDef already looks
+	# for `res://hammerforge_entities.json`. The in-addon path is the folder the
+	# upgrade instructions tell you to replace, so every custom tool a project
+	# wrote was destroyed by the documented upgrade, silently (#612). It is kept as
+	# a secondary scan so an existing install does not lose anything today.
+	_tool_registry.load_external_tools(HFToolRegistry.PROJECT_TOOLS_PATH)
 	_tool_registry.load_external_tools("res://addons/hammerforge/tools/")
 	_keymap = HFKeymap.load_or_default("user://hammerforge_keymap.json")
 	_user_prefs = HFUserPrefs.load_prefs()

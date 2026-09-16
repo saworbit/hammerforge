@@ -39,7 +39,7 @@ jobs:
           python -m pip install -r requirements-ci.txt
 
       - name: Check formatting
-        run: gdformat --check addons/hammerforge/ tests/ tools/
+        run: gdformat --check addons/hammerforge/ tests/ tools/ hammerforge_tools/
 
       # tools/ is in scope because the vibe harness is committed on purpose and
       # run every sweep. It sat outside both checks and drifted: one scenario
@@ -47,7 +47,7 @@ jobs:
       # takes and every other GDScript tool chokes on. That is #115 again, in the
       # directory #115 never looked at.
       - name: Lint
-        run: gdlint addons/hammerforge/ tools/
+        run: gdlint addons/hammerforge/ tools/ hammerforge_tools/
 
       # A world transform assigned to a node that is not in the tree yet writes
       # the local one instead, and the node lands shifted by its container. That
