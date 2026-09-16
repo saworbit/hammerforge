@@ -18,10 +18,18 @@ var _instances: Dictionary = {}
 var _next_instance_id: int = 1
 var _next_entity_uid: int = 1
 
+## Where prefabs are saved and where the library lists from.
+##
+## One constant, because it used to be three literals - here, `dock.gd` and
+## `HFPrefabLibrary` - with a `set_prefab_dir()` that could only move one of
+## them. A setter that changes one of three copies is worse than no setter: the
+## library would have listed a different folder from the one Save writes into.
+const PREFAB_DIR := "res://prefabs"
+
 
 class PrefabInstanceRecord:
 	var instance_id: String = ""
-	var source_path: String = ""  # res://prefabs/foo.hfprefab
+	var source_path: String = ""  # PREFAB_DIR/foo.hfprefab
 	var variant_name: String = "base"  # active variant
 	var brush_ids: Array = []  # String brush IDs belonging to this instance
 	var entity_uids: Array = []  # stable IDs ("pent_N") belonging to this instance
@@ -481,7 +489,7 @@ func quick_save_prefab(
 	)
 	prefab.prefab_name = prefab_name
 
-	var dir_path := "res://prefabs"
+	var dir_path := PREFAB_DIR
 	if not DirAccess.dir_exists_absolute(dir_path):
 		DirAccess.make_dir_recursive_absolute(dir_path)
 
