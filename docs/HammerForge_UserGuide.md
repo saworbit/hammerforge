@@ -652,6 +652,7 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
 ### Build tab
 - **Tools**: Draw and Select are always available in the primary toolbar. Use **More**, contextual actions, or the sections below for advanced operations.
 - **Shape**: choose from 15 built-in shapes with recognizable icons (plus Custom). Sides appears only for compatible pyramid/prism shapes.
+  A drawn brush is inscribed in the box you dragged. For a box that is the box itself; for a cylinder, cone, capsule or sphere the smaller side of the base rectangle is the diameter and the footprint is centred on the rectangle, so the brush always ends up inside the ground you dragged over. A sphere is uniform in all three axes, so its height stage takes part in the diameter rather than setting a separate height. Use **Ellipsoid** when you want three independent axes.
 - **Size** X/Y/Z: defaults for new brushes.
 - **Grid Snap**: snap increment with quick preset buttons (1, 2, 4, 8, 16, 32, 64).
 - **Snap Modes**: G (Grid), V (Vertex), C (Center), E (Edge midpoint), and P (Perpendicular projection). Toggle independently; the closest eligible geometry candidate within the threshold beats grid snap.

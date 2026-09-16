@@ -243,7 +243,10 @@ const NUMBERS := [
 		"label": "Chunk size",
 		"help": "Spatial grouping for baked meshes. 0 bakes the level as one piece.",
 		"min": 0.0,
-		"max": 256.0,
+		# The bound belongs to LevelRoot, not to this table. A hard-coded 256 here
+		# clamped a legal chunk size on display and then wrote the clamped value
+		# back through the dock spin the moment the row was touched.
+		"max": LevelRoot.MAX_BAKE_CHUNK_SIZE,
 		"step": 1.0,
 	},
 ]
