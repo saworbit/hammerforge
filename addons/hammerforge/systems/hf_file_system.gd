@@ -320,27 +320,48 @@ func _write_autosave_rotation(
 	var history_dir = base_dir.path_join("autosave_history")
 	if not DirAccess.dir_exists_absolute(history_dir):
 		DirAccess.make_dir_recursive_absolute(history_dir)
-	var timestamp = Time.get_datetime_string_from_system().replace(":", "-").replace(" ", "_")
+	var stamp = Time.get_datetime_string_from_system().replace(":", "-").replace(" ", "_")
+	# To the second was not enough. Two writes inside one second landed on one path
+	# and `write_bytes_atomic()` replaces rather than refuses, so three saves left
+	# one backup and the keep count stopped meaning how far back the history goes.
+	var timestamp = "%s-%03d" % [stamp, Time.get_ticks_msec() % 1000]
 	var base_name = autosave_abs.get_file().get_basename()
 	if base_name == "":
 		base_name = "autosave"
 	var history_path = history_dir.path_join("%s_%s.hflevel" % [base_name, timestamp])
+	# The millisecond makes a same-second collision very unlikely rather than
+	# impossible, and losing a backup to one is not a trade worth making.
+	var attempt := 2
+	while FileAccess.file_exists(history_path) and attempt < 100:
+		history_path = history_dir.path_join("%s_%s-%d.hflevel" % [base_name, timestamp, attempt])
+		attempt += 1
 	var hist_err := HFLevelIO.write_bytes_atomic(history_path, payload)
 	if hist_err != OK:
 		push_warning("HFLevel: Failed to write autosave history file: %s" % history_path)
 		return
-	_prune_autosave_history(history_dir, keep)
+	_prune_autosave_history(history_dir, keep, base_name)
 
 
-func _prune_autosave_history(history_dir: String, keep: int) -> void:
-	if keep <= 0:
+## Delete the oldest history files for one level, keeping `keep` of them.
+##
+## `base_name` is the level's own autosave file name, and it is what stops this
+## being every level's budget. Two levels in one project share a history folder,
+## and pruning by folder meant autosaving one deleted the other's backups.
+func _prune_autosave_history(history_dir: String, keep: int, base_name: String) -> void:
+	if keep <= 0 or base_name == "":
 		return
 	var files = DirAccess.get_files_at(history_dir)
 	if files.is_empty():
 		return
+	var prefix := base_name + "_"
 	var entries: Array = []
 	for file_name in files:
-		if not file_name.ends_with(".hflevel"):
+		if not file_name.ends_with(".hflevel") or not file_name.begins_with(prefix):
+			continue
+		# `level_` also prefixes `level_backup_...`, which belongs to another level.
+		# What follows the name is a timestamp, so it starts with a year.
+		var tail := file_name.substr(prefix.length())
+		if tail.length() < 4 or not tail.substr(0, 4).is_valid_int():
 			continue
 		var full_path = history_dir.path_join(file_name)
 		var mtime = FileAccess.get_modified_time(full_path)
