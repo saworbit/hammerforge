@@ -110,6 +110,10 @@ SCENARIOS = [
     "prefab-links",
     "validate-fix",
     "dock-undo-two",
+    "io-visualizer",
+    "drag-create",
+    "level-scale",
+    "playtest-scene",
 ]
 
 # Generous: chaos runs 300 operations and cost saves eight levels. A scenario

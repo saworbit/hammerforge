@@ -95,6 +95,10 @@ const SCENARIOS: Array[String] = [
 	"res://tools/vibe/scenarios/prefab_links.gd",
 	"res://tools/vibe/scenarios/validate_fix.gd",
 	"res://tools/vibe/scenarios/dock_undo_two.gd",
+	"res://tools/vibe/scenarios/io_visualizer.gd",
+	"res://tools/vibe/scenarios/drag_create.gd",
+	"res://tools/vibe/scenarios/level_scale.gd",
+	"res://tools/vibe/scenarios/playtest_scene.gd",
 ]
 
 
