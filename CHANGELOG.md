@@ -55,6 +55,19 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   so a wrong definition never costs you the level. `from_dict()` now prefers
   `classname` over `class`, without which a definition naming a node class could
   not survive its own round trip.
+- **A broken I/O wire is now visible on all three surfaces that should show it**
+  (#602, #603, #620). Wiring is held by name, and renaming a target is the most
+  ordinary way it breaks. Nothing noticed. The overlay resolved each connection
+  and skipped the ones it could not, so the broken wire was the invisible one and
+  a level whose wiring was entirely broken drew as a level with no wiring at all;
+  a dangling output is now drawn as a short red mast with a cross on top, rising
+  from the source. `validate_level()` walked every output and never asked whether
+  anything answered to the target; it now resolves each one against
+  `build_name_index()` and names the wire it could not resolve. And
+  `get_connection_summary()` used `if`/`elif` on one connection record, so an
+  entity wired to itself satisfied the first branch and was never counted among
+  what triggers it - the surface a mapper uses to answer "what fires this?" said
+  nothing did. The two tests are independent questions and are both `if` now.
 - **Autosaving one level no longer deletes another level's backups** (#618).
   `_write_autosave_rotation()` named each history file after the level that wrote
   it and then called a prune that forgot the name: every `.hflevel` in
