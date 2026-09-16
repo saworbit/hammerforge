@@ -54,6 +54,24 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   what it did, the way the occluder and auto-connector passes do: `Atlas: packed
   4 of 6 material groups into one atlas`, or `Atlas: skipped, 6 of 6 material
   groups have tiling UVs` with the warning that puts it in the Console Log.
+- **An entity definition now becomes the node it names** (#598, #599). Every
+  entity in `entities.json` declares a `class`, and the user guide documented it
+  as the Godot node class the entity stands for. Nothing instantiated it: the
+  parser read that field only as a name, and because the JSON key was injected as
+  `id` first, `light_point`'s `"OmniLight3D"` was never read at all. Placing a
+  light gave you a billboard in the editor and a bare `Node3D` at runtime, so
+  every Test Level looked the same - one hard-coded `PlaytestSun` - and moving a
+  light or changing its Range changed nothing. The optional `scene` field had the
+  same shape one level up: parsed, round-tripped through `to_dict()`, and never
+  loaded. A playtest export now builds the scene or the class the definition
+  names, applies the authored property values, and carries the entity's name,
+  wiring and other metadata onto it. The three `light_point` properties were also
+  not `OmniLight3D` property names, so a new optional `maps_to` key says which
+  engine property a declared property writes to; `range` reaches `omni_range`.
+  A missing scene or a class this build cannot make warns and exports the marker,
+  so a wrong definition never costs you the level. `from_dict()` now prefers
+  `classname` over `class`, without which a definition naming a node class could
+  not survive its own round trip.
 - **A broken I/O wire is now visible on all three surfaces that should show it**
   (#602, #603, #620). Wiring is held by name, and renaming a target is the most
   ordinary way it breaks. Nothing noticed. The overlay resolved each connection
