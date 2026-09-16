@@ -17,6 +17,34 @@ This guide covers the current HammerForge workflow in Godot 4.7: brush-based gre
 
 If anything is not behaving, open the **Console** (the HammerForge entry in the switcher) and read the Status board. It is the fastest way to find out what is wrong and what fixes it.
 
+## World Scale
+
+**One world unit is one metre.** That is the convention Godot's own 3D physics uses,
+and it is the one the project's `physics/3d/default_gravity` of 9.8 already assumed.
+Every size in this guide and every SpinBox in the dock is in metres.
+
+The numbers that make it concrete:
+
+| | in metres |
+|---|---|
+| The playtest player, standing | 1.6 |
+| The playtest player, crouched | 0.9 |
+| Player width | 0.7 |
+| Default grid snap | 0.5 |
+| Default brush | 2 x 2 x 2 |
+| Highest ledge the player can jump onto | about 2.1 |
+
+So a default brush is a little taller than a person, a room is eight to twelve metres
+across, and a doorway is about two metres high and one wide. If you are coming from
+Hammer, Radiant or TrenchBroom, divide the numbers you know by about 45: a 128-unit
+Quake room height is roughly 3 m.
+
+Earlier versions drew on a Quake-family grid: a 16 unit snap and a 32 unit brush,
+while the player and the shipped examples were already metres. A default brush was
+twenty player heights tall. Levels saved before this change keep the grid and sizes
+they were built with, because those are stored on the `LevelRoot`; only the defaults
+for a new level moved.
+
 ## HammerForge Console
 
 Open it from **HammerForge** in the main-screen switcher. The overall lamp also sits in the 3D viewport toolbar while you build; clicking it opens the Console.
@@ -653,8 +681,8 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
 - **Tools**: Draw and Select are always available in the primary toolbar. Use **More**, contextual actions, or the sections below for advanced operations.
 - **Shape**: choose from 15 built-in shapes with recognizable icons (plus Custom). Sides appears only for compatible pyramid/prism shapes.
   A drawn brush is inscribed in the box you dragged. For a box that is the box itself; for a cylinder, cone, capsule or sphere the smaller side of the base rectangle is the diameter and the footprint is centred on the rectangle, so the brush always ends up inside the ground you dragged over. A sphere is uniform in all three axes, so its height stage takes part in the diameter rather than setting a separate height. Use **Ellipsoid** when you want three independent axes.
-- **Size** X/Y/Z: defaults for new brushes.
-- **Grid Snap**: snap increment with quick preset buttons (1, 2, 4, 8, 16, 32, 64).
+- **Size** X/Y/Z: defaults for new brushes, in metres. A new level starts at 2 x 2 x 2.
+- **Grid Snap**: snap increment in metres, with quick preset buttons (0.1, 0.25, 0.5, 1, 2, 4, 8). A new level starts at 0.5.
 - **Snap Modes**: G (Grid), V (Vertex), C (Center), E (Edge midpoint), and P (Perpendicular projection). Toggle independently; the closest eligible geometry candidate within the threshold beats grid snap.
 - **Material**: active material picker.
 - **Physics Layer**: collision layer for baked output.
@@ -803,10 +831,10 @@ The **Test → Advanced Bake** section exposes additional controls:
 - **Convex Simplify** (slider, 0.0–1.0, default 0.0): reduce convex hull complexity by merging nearby vertices into an AABB-proportional grid. Higher values = fewer vertices = simpler collision.
 - **Unwrap UV0** (checkbox): applies per-vertex planar UV projection during bake for surfaces that lack explicit UVs.
 - **Generate Occluders** (checkbox): automatically generates `OccluderInstance3D` nodes from large flat surfaces during bake. The bake pass groups coplanar triangles across the entire baked hierarchy (including chunked bakes) and emits occluders for groups exceeding the minimum area threshold. This enables Godot's built-in occlusion culling at runtime without manual occluder placement. Sub-controls:
-  - **Min Area** (SpinBox, 0.5–100.0, default 4.0): minimum coplanar face-group area in world units² to emit an occluder. Raise this value to reduce occluder count (fewer culling tests); lower it to increase coverage (more surfaces act as occluders). Surfaces smaller than this threshold are skipped.
+  - **Min Area** (SpinBox, 0.5–100.0, default 4.0): minimum coplanar face-group area in m² to emit an occluder. Raise this value to reduce occluder count (fewer culling tests); lower it to increase coverage (more surfaces act as occluders). Surfaces smaller than this threshold are skipped.
 - **Auto Connectors** (checkbox): auto-generates ramps or stairs between paint layers at different heights during bake. Requires at least 2 paint layers with filled cells at adjacent grid positions and a height difference ≥ 0.1 world units. Sub-controls:
   - **Mode** dropdown: *Ramp* (smooth slope), *Stairs* (stepped), *Auto* (stairs once the height difference reaches the Stair Threshold, ramp below it).
-  - **Step H** (SpinBox, 0.05–2.0): stair step height in world units (only affects Stairs/Auto modes).
+  - **Step H** (SpinBox, 0.05–2.0): stair step height in metres (only affects Stairs/Auto modes).
   - **Width** (SpinBox, 1–8): connector width in grid cells.
   - **Stair Threshold** (SpinBox, 0.01–256.0, default 32.0): the height difference at which *Auto* picks stairs over a ramp. Saved with the level.
   Connectors are generated before navmesh baking, so the navmesh automatically covers connector surfaces. Auto-connectors are skipped during selection bakes (Bake Selected) to avoid pulling in unrelated geometry.
@@ -880,7 +908,7 @@ In **Face Select mode**, the saved object selection and its transform/resize giz
 
 Selected non-custom brushes show six yellow face handles; custom face-defined shapes keep their truthful boundary outline without misleading box handles. A handle drag owns its full press/motion/release sequence, so it cannot also click an object, start a marquee, paint, or activate another tool. Godot's move/rotate/scale widget and native property gizmos receive the same protection and remain responsible for their own exact hit-testing.
 
-Resize distances and grid snap are measured in world units. If a brush is below a rotated or non-uniformly scaled parent, the grabbed face follows the transformed local axis, the opposite face stays fixed in world space, and the local brush size is adjusted to produce the requested world extent. Sphere handles keep X/Y/Z equal. On cylinders, cones, and capsules, either X or Z handle changes the shared X/Z radius; Y changes height, but a capsule can never become shorter than its diameter. Odd-sided prisms and adjustable pyramids now fill their centered stored bounds, so their visible faces and handle planes agree. Other supported shapes keep independent axes. A collapsed or invalid transform axis is ignored instead of causing a jump. One completed resize creates one undo step; a click with no change, an explicit cancel, or a recovered lost release creates none. During lost-release recovery the original preview is restored and frozen; if Godot never sends its matching release callback, HammerForge releases the local input latch after the recovery turn and ignores a late callback, so the next handle gesture cannot remain blocked.
+Resize distances and grid snap are measured in world units, which are metres (see **World scale**). If a brush is below a rotated or non-uniformly scaled parent, the grabbed face follows the transformed local axis, the opposite face stays fixed in world space, and the local brush size is adjusted to produce the requested world extent. Sphere handles keep X/Y/Z equal. On cylinders, cones, and capsules, either X or Z handle changes the shared X/Z radius; Y changes height, but a capsule can never become shorter than its diameter. Odd-sided prisms and adjustable pyramids now fill their centered stored bounds, so their visible faces and handle planes agree. Other supported shapes keep independent axes. A collapsed or invalid transform axis is ignored instead of causing a jump. One completed resize creates one undo step; a click with no change, an explicit cancel, or a recovered lost release creates none. During lost-release recovery the original preview is restored and frozen; if Godot never sends its matching release callback, HammerForge releases the local input latch after the recovery turn and ignores a late callback, so the next handle gesture cannot remain blocked.
 
 ### Picking Visibility and Depth
 
@@ -939,7 +967,7 @@ Press **Space** to open a context-sensitive popup menu at the cursor position in
 - **Draw mode (idle)** → Shape selector, Add/Subtract toggle, grid snap presets
 - **Vertex mode** → Merge, Split, sub-mode toggle
 
-**Common footer** (in every context): Select All, Deselect All, Grid Snap submenu (1/2/4/8/16/32/64), Quick Bake, Undo, Redo.
+**Common footer** (in every context): Select All, Deselect All, Grid Snap submenu (0.1/0.25/0.5/1/2/4/8 m), Quick Bake, Undo, Redo.
 
 **Highlight Connected** appears as a check item — it reads the current state and toggles it.
 
@@ -1012,11 +1040,11 @@ Rapid drawing or resizing should never leave nested outlines or a visual trail. 
 
 ### Grid Size Indicator
 
-The viewport HUD shows the current grid snap value (e.g. "Grid: 16") persistently in the top-right panel. When the grid size changes — via the dock SpinBox, quick-property popup (G G), or the `[` / `]` hotkeys — the indicator briefly flashes bright yellow-white and fades back, providing instant feedback without leaving the viewport.
+The viewport HUD shows the current grid snap value (e.g. "Grid: 0.5") persistently in the top-right panel. When the grid size changes — via the dock SpinBox, quick-property popup (G G), or the `[` / `]` hotkeys — the indicator briefly flashes bright yellow-white and fades back, providing instant feedback without leaving the viewport.
 
 **Grid size hotkeys:**
-- **`[`** — halve grid snap (e.g. 16 → 8), minimum 0.125
-- **`]`** — double grid snap (e.g. 16 → 32), maximum 512
+- **`[`** — halve grid snap (e.g. 0.5 → 0.25), minimum 0.125
+- **`]`** — double grid snap (e.g. 0.5 → 1), maximum 512
 
 ### Subtract Preview
 Enable **Subtract Preview** in Test tab → Settings to see the live CSG cut between overlapping additive and subtractive DraftBrushes. A translucent red mesh shows the volume that will be removed; a wireframe AABB is used only while CSG is catching up or when too many subtractors are active. The preview updates when brushes are added, removed, or moved (0.15s debounce). It does not CSG the entire level.
@@ -1041,7 +1069,7 @@ HammerForge supports five snap modes that can be combined:
 | **Edge** | E | Snap to the midpoint of an existing brush AABB edge |
 | **Perpendicular** | P | Snap to the closest perpendicular projection on a brush AABB edge |
 
-Toggle modes independently using the G/V/C/E/P buttons below the Grid Snap row in the Build tab. When multiple modes are enabled, the closest candidate wins — a nearby brush corner will beat a farther grid point. The snap threshold (default 2.0 world units) determines how close you need to be to a geometry candidate for it to take effect.
+Toggle modes independently using the G/V/C/E/P buttons below the Grid Snap row in the Build tab. When multiple modes are enabled, the closest candidate wins — a nearby brush corner will beat a farther grid point. The snap threshold (default 0.1 m) determines how close you need to be to a geometry candidate for it to take effect.
 
 **Tip:** Use Vertex for corner alignment, Center for centered placement, Edge for exact midpoints, and Perpendicular for a right-angle projection onto an edge.
 

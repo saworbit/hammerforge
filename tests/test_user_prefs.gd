@@ -42,7 +42,7 @@ func _move(from_path: String, to_path: String) -> void:
 
 
 func test_defaults_loaded():
-	assert_eq(prefs.get_pref("grid_snap"), 16.0, "Default grid snap should be 16.0")
+	assert_eq(prefs.get_pref("grid_snap"), 0.5, "Default grid snap should be 0.5")
 	assert_eq(prefs.get_pref("show_hud"), true, "Default show_hud should be true")
 	assert_eq(prefs.get_pref("show_welcome"), true, "Default show_welcome should be true")
 	assert_eq(
@@ -249,7 +249,7 @@ func test_a_value_below_the_usable_range_is_clamped():
 
 func test_set_pref_refuses_a_value_the_file_could_not_use():
 	prefs.set_pref("grid_snap", "big")
-	assert_eq(prefs.get_pref("grid_snap"), 16.0, "A String leaves the grid snap alone")
+	assert_eq(prefs.get_pref("grid_snap"), 0.5, "A String leaves the grid snap alone")
 	prefs.set_pref("grid_snap", -1.0)
 	assert_almost_eq(
 		prefs.get_pref("grid_snap"), 0.001, 0.0001, "and a negative one is clamped, not written"
@@ -266,7 +266,7 @@ func test_a_file_that_will_not_parse_is_kept_rather_than_overwritten():
 	file.close()
 
 	var loaded = HFUserPrefsType.load_prefs()
-	assert_eq(loaded.get_pref("grid_snap"), 16.0, "The defaults are in use")
+	assert_eq(loaded.get_pref("grid_snap"), 0.5, "The defaults are in use")
 	assert_true(FileAccess.file_exists(kept), "and the damaged file is kept, not thrown away")
 	var recovered = FileAccess.open(kept, FileAccess.READ)
 	assert_eq(recovered.get_as_text(), damaged, "with what was in it")

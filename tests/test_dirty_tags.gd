@@ -18,8 +18,8 @@ func before_each():
 @tool
 extends Node3D
 
-var drag_size_default := Vector3(32, 32, 32)
-var grid_snap := 16.0
+var drag_size_default := Vector3(2, 2, 2)
+var grid_snap := 0.5
 
 # Dirty tags
 var _dirty_brush_ids: Dictionary = {}

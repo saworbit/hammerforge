@@ -348,10 +348,18 @@ func test_settings_defaults():
 	assert_eq(settings.mode, HFAutoConnectorScript.ConnectorMode.RAMP)
 	assert_almost_eq(settings.stair_step_height, 0.25, 0.001)
 	assert_eq(settings.width_cells, 2)
-	# 32, not the 2.0 it was fixed at while nothing could change it: 2.0 is a
-	# small height at this genre's scale, so on a level built at 32-unit grid
-	# steps every cross-layer boundary cleared it and Auto was Stairs everywhere.
-	assert_almost_eq(settings.stair_threshold, 32.0, 0.001)
+	# Back to 2.0, and for the same reason it was once raised off it. 32 was the
+	# number for a 32-unit grid step, where 2.0 meant every cross-layer boundary
+	# cleared it and Auto was Stairs everywhere. One unit is one metre now (#625),
+	# so 32 is a height no level reaches and Auto was Ramp everywhere instead. At
+	# this scale 2.0 is what the old 32 was: a storey gets stairs, a kerb gets a
+	# ramp. It sits above `stair_step_height`, which is the step it would build.
+	assert_almost_eq(settings.stair_threshold, 2.0, 0.001)
+	assert_gt(
+		settings.stair_threshold,
+		settings.stair_step_height,
+		"a drop worth stairs is more than one step"
+	)
 
 
 # ---------------------------------------------------------------------------

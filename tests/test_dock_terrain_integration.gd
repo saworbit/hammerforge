@@ -278,8 +278,8 @@ func test_heightmap_convert_layer_is_child_of_manager():
 
 func test_heightmap_convert_produces_readable_height():
 	# Force cell_size=1.0 so the brush footprint maps to predictable cells.
-	# Real LevelRoot defaults grid_snap to 16.0, which would collapse the
-	# whole brush into a single cell and make per-cell assertions meaningless.
+	# Real LevelRoot defaults grid_snap to 0.5, which would spread the brush
+	# over sixty-four cells and make per-cell assertions meaningless.
 	root.grid_snap = 1.0
 	var mgr := _get_mgr()
 	var initial_count := mgr.layers.size()

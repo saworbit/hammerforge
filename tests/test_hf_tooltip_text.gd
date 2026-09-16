@@ -52,7 +52,7 @@ func test_apply_snap_buttons_uses_meta_value():
 	add_child_autoqfree(btn)
 	btn.set_meta("snap_value", 8)
 	HFTooltipText.apply_snap_buttons([btn])
-	assert_eq(btn.tooltip_text, "Quick snap: 8 units")
+	assert_eq(btn.tooltip_text, "Quick snap: 8 m")
 
 
 func test_apply_snap_buttons_skips_buttons_without_meta():

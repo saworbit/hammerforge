@@ -5,6 +5,34 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Changed
+- **One world unit is one metre, and the drawing side now agrees** (#625). Two
+  scale conventions were in the project at once and the seam ran through the core
+  loop. The playtest player, the spawn checks, the bake settings and all five
+  shipped examples were metres; the drawing defaults were Quake-family units. A
+  default brush was 32 units against a 1.6 unit player, so the first thing anyone
+  drew was twenty player heights tall, one grid step was ten, and a room drawn on
+  the defaults was a cathedral nobody could climb out of. Draw, then Test Level,
+  was the loop that broke. The drawing side moved onto the runtime's scale rather
+  than the other way round, because the runtime, the examples and Godot's own
+  physics defaults were already there: grid snap 0.5, a 2 x 2 x 2 default brush,
+  the quick snap buttons 0.1 through 8 instead of 1 through 64, and generator
+  defaults that are sizes a person could walk through: a 3 m arch, and a 1.5 m
+  wide flight of 0.2 m steps. Every length field's minimum and step came down with
+  them, because a minimum of 1.0 meant the thinnest wall the dock could offer was
+  a metre and the grid SpinBox could not be typed a fraction at all. The maximums
+  are untouched, so a level saved with a 128 unit arch still loads and still
+  regenerates. Two more numbers were on the seam and moved with it: the geometry
+  snap threshold, which at 2.0 would have been four grid steps and swallowed the
+  grid whole, and the auto connector's stairs-versus-ramp threshold, whose own
+  comment recorded that it was raised to 32 for the old grid. At this scale no
+  level reaches 32, so Auto was Ramp everywhere. It is back to the 2.0 that
+  comment says it started at. The viewport context menu's grid list and the dock's
+  quick buttons now read one shared ladder instead of a hard-coded copy each; the
+  menu carried its value inside the item id, which is an int and could not hold a
+  fraction. A level saved before this keeps the grid and sizes it was built with, because
+  they live on the `LevelRoot`, so only a new level starts on the new defaults.
+  The user guide now opens with a **World Scale** section that says how many units
+  a person is, which is the one number a level editor's documentation has to have.
 - **Two release gate checks corrected by running the gate** (#593). The first
   execution of the document, rather than another addition to it, and it found
   two of its own lines describing things the product does not do. Create Starter

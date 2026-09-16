@@ -13,7 +13,7 @@ const HFKeymapType = preload("res://addons/hammerforge/hf_keymap.gd")
 
 const TEXTS := {
 	# --- Build tab: grid + toggles ---
-	"grid_snap": "Grid snap size in units\nControls brush placement and nudge step",
+	"grid_snap": "Grid snap size in metres\nControls brush placement and nudge step",
 	"show_grid": "Show editor grid in 3D viewport",
 	"follow_grid": "Grid follows last placed brush position",
 	"show_hud": "Show keyboard shortcut overlay in viewport",
@@ -23,9 +23,9 @@ const TEXTS := {
 	"_show_subtract_preview":
 	"Show the live CSG cut between subtract and additive DraftBrushes\nOverlapping brushes only — not a full-level bake",
 	# --- Build tab: brush size & shape ---
-	"size_x": "Brush width (X axis) in units",
-	"size_y": "Brush height (Y axis) in units",
-	"size_z": "Brush depth (Z axis) in units",
+	"size_x": "Brush width (X axis) in metres",
+	"size_y": "Brush height (Y axis) in metres",
+	"size_z": "Brush depth (Z axis) in metres",
 	"shape_select": "Brush shape for new brushes",
 	"sides_spin": "Side count for polygon shapes (Pyramid, Prism)",
 	"commit_freeze": "Keep committed cuts frozen (restorable)\ninstead of deleting them",
@@ -198,4 +198,4 @@ static func apply_all(dock: Object) -> void:
 static func apply_snap_buttons(snap_buttons: Array) -> void:
 	for button in snap_buttons:
 		if button and button.has_meta("snap_value"):
-			set_tooltip(button, "Quick snap: %s units" % str(button.get_meta("snap_value")))
+			set_tooltip(button, "Quick snap: %s m" % str(button.get_meta("snap_value")))

@@ -321,15 +321,15 @@ var preset_grid: GridContainer = null
 @onready var preset_rename_line: LineEdit = $PresetRenameDialog/PresetRenameLine
 
 @onready var snap_buttons: Array[Button] = [
+	$Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid/Snap0,
 	$Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid/Snap1,
 	$Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid/Snap2,
+	$Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid/Snap3,
 	$Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid/Snap4,
-	$Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid/Snap8,
-	$Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid/Snap16,
-	$Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid/Snap32,
-	$Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid/Snap64
+	$Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid/Snap5,
+	$Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid/Snap6
 ]
-var snap_preset_values: Array = [1, 2, 4, 8, 16, 32, 64]
+var snap_preset_values: Array = Array(HFSnapSystem.GRID_PRESETS)
 
 var level_root: LevelRootType = null
 var editor_interface: EditorInterface = null
@@ -726,7 +726,7 @@ func _apply_user_prefs() -> void:
 	if not _user_prefs:
 		return
 	# Grid snap default
-	var snap_val = _user_prefs.get_pref("grid_snap", 16.0)
+	var snap_val = _user_prefs.get_pref("grid_snap", 0.5)
 	if grid_snap and float(snap_val) > 0.0:
 		grid_snap.value = float(snap_val)
 	# Show HUD
@@ -817,8 +817,8 @@ func _setup_simplified_workflow() -> void:
 		size_z.suffix = " Z"
 		size_z.tooltip_text = "Brush depth (Z)"
 	if grid_snap:
-		grid_snap.suffix = " units"
-		grid_snap.tooltip_text = "Movement and drawing grid size"
+		grid_snap.suffix = " m"
+		grid_snap.tooltip_text = "Movement and drawing grid size, in metres"
 
 	# Put infrequent snapping and collision choices behind one collapsed disclosure.
 	var brush_vbox := brush_tab.get_node_or_null("BrushMargin/BrushVBox") as VBoxContainer
@@ -5171,7 +5171,7 @@ func _apply_snap_presets(values: Array) -> void:
 			continue
 		snap_preset_values.append(v)
 	if snap_preset_values.is_empty():
-		snap_preset_values = [1, 2, 4, 8, 16, 32, 64]
+		snap_preset_values = Array(HFSnapSystem.GRID_PRESETS)
 	for index in range(snap_buttons.size()):
 		var button = snap_buttons[index]
 		if not button:

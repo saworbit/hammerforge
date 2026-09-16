@@ -65,8 +65,11 @@ func _init() -> void:
 	# Grid snap submenu
 	_grid_submenu = PopupMenu.new()
 	_grid_submenu.name = "GridSnap"
-	for val in [1, 2, 4, 8, 16, 32, 64]:
-		_grid_submenu.add_item("%d units" % val, _ID_GRID_BASE + val)
+	# The id is the rung, not the value: the value is a float now and an item id
+	# cannot carry one.
+	for index in range(HFSnapSystem.GRID_PRESETS.size()):
+		var val: float = HFSnapSystem.GRID_PRESETS[index]
+		_grid_submenu.add_item("%s m" % str(val), _ID_GRID_BASE + index)
 	_grid_submenu.id_pressed.connect(_on_grid_id_pressed)
 	add_child(_grid_submenu)
 	# UV submenu
@@ -287,5 +290,7 @@ func _on_id_pressed(id: int) -> void:
 
 
 func _on_grid_id_pressed(id: int) -> void:
-	var snap_val: int = id - _ID_GRID_BASE
-	action_requested.emit("set_grid_snap", [snap_val])
+	var index: int = id - _ID_GRID_BASE
+	if index < 0 or index >= HFSnapSystem.GRID_PRESETS.size():
+		return
+	action_requested.emit("set_grid_snap", [HFSnapSystem.GRID_PRESETS[index]])
