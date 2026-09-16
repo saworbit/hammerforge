@@ -6,7 +6,7 @@ const HFDockEntityHandler = preload("res://addons/hammerforge/dock_entity_handle
 func test_handlers_are_noop_without_dock():
 	HFDockEntityHandler.on_create_entity(null)
 	HFDockEntityHandler.on_io_add(null)
-	HFDockEntityHandler.on_io_remove(null)
+	HFDockEntityHandler.on_wiring_connection_removed(null, null, 0)
 	HFDockEntityHandler.clear_entity_props(null)
 	assert_eq(HFDockEntityHandler.get_default_entity_definition(null), {})
 
@@ -19,8 +19,7 @@ func test_dock_wrappers_delegate_to_entity_handler():
 		"_can_edit_selected_entity",
 		"_on_create_entity",
 		"_on_io_add",
-		"_on_io_remove",
-		"_refresh_io_list",
+		"_on_wiring_connection_removed",
 	]:
 		var block := _function_source(source, method_name)
 		assert_true(
@@ -36,7 +35,7 @@ func test_dock_wrappers_delegate_to_entity_handler():
 func test_entity_handler_keeps_entities_only_guards():
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/dock_entity_handler.gd")
 	assert_false(source.is_empty(), "dock_entity_handler.gd must be readable")
-	for method_name in ["can_edit_selected_entity", "on_io_add", "on_io_remove"]:
+	for method_name in ["can_edit_selected_entity", "on_io_add"]:
 		var block := _function_source(source, method_name)
 		assert_true(
 			block.contains("DockSelectionRequirement.ENTITIES_ONLY"),
