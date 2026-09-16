@@ -118,10 +118,19 @@ func cancel_active_pointer_capture() -> bool:
 	return false
 
 
-## Check if any external tool wants this shortcut key.
-func check_shortcut(keycode: int) -> int:
+## Which external tool wants this key, or -1.
+##
+## A tool shortcut is a bare key by construction - `tool_shortcut_key()` returns
+## one keycode and has nowhere to say otherwise - so a chord built on that key is
+## not it. Matching the keycode alone meant Ctrl+M activated Measure, and so did
+## Shift+M in paint mode, where `flip_selection` is gated off and the event fell
+## through to here. Activating a tool is not a quiet no-op: it takes the
+## viewport's left click off whatever the mapper was building with.
+func check_shortcut(event: InputEventKey) -> int:
+	if event.ctrl_pressed or event.shift_pressed or event.alt_pressed or event.meta_pressed:
+		return -1
 	for t in _tools:
-		if t.tool_id() >= 100 and t.tool_shortcut_key() == keycode:
+		if t.tool_id() >= 100 and t.tool_shortcut_key() == event.keycode:
 			return t.tool_id()
 	return -1
 
