@@ -37,6 +37,17 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   document look healthier.
 
 ### Fixed
+- **The Objects tab lists an entity's connections once** (#616). It built two
+  lists of the same wiring, one above the other, and refreshed both for the same
+  selection. The two label builders were the same code twice and had already
+  drifted, so one connection appeared as `OnPressed -> door_1.Open [once]` and
+  again as the same line ending `[1x]`. Only the plainer list could be acted on:
+  the wiring panel's own list was built, cleared, filled and its selection never
+  read, so the surface the user guide describes at length and a mapper actually
+  works in was the one where you could not delete a wire. **Remove Output** now
+  sits on the wiring panel beside the list it acts on, and `io_list`,
+  `io_remove_btn` and `refresh_io_list()` are gone. One connection, one line of
+  text, built in one place.
 - **The `.hflevel` writer no longer loses a value without saying so** (#619,
   #617). `encode_variant()` named the handful of types it knew and passed
   everything else to `JSON.stringify`, which turned nine Variant types into
