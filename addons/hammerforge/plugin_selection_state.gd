@@ -18,6 +18,9 @@ static func on_editor_selection_changed(plugin: Object) -> void:
 	if not selection:
 		return
 	var nodes = selection.get_selected_nodes()
+	# The plugin no longer handles editor objects, so Godot never calls _edit().
+	# Retarget active_root here instead, before anything below reads it.
+	plugin.sync_active_root_from_selection(nodes)
 	var root = plugin.active_root if plugin.active_root else plugin._get_level_root()
 	var selection_before := normalize_editor_selection(plugin, plugin.hf_selection, root)
 	if plugin.dock and plugin.dock.is_face_select_mode_enabled() and not nodes.is_empty():

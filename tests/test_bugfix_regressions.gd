@@ -777,6 +777,9 @@ func test_native_rmb_camera_session_owns_all_input_until_release():
 
 
 func test_editor_object_ownership_is_narrow_and_selection_safe():
+	# This predicate says which nodes HammerForge owns. It no longer answers
+	# _handles() — see test_main_screen_plugin_never_handles_editor_objects — but
+	# it still decides which selections may retarget active_root.
 	var level_root = LevelRoot.new()
 	var brush = DraftBrush.new()
 	var entity = DraftEntity.new()
@@ -795,6 +798,59 @@ func test_editor_object_ownership_is_narrow_and_selection_safe():
 	unrelated.free()
 	camera.free()
 	light.free()
+
+
+func test_main_screen_plugin_never_handles_editor_objects():
+	# Godot switches to a plugin that both has a main screen and handles the
+	# selected object, so declaring both put the Console in front of the 3D view
+	# on every brush click. GUT is headless with no EditorNode, so the pair is
+	# pinned where both halves are written.
+	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
+	var handles_at := source.find("func _handles(")
+	assert_gt(handles_at, -1, "plugin.gd must still declare _handles()")
+	var handles_body := source.substr(handles_at, 80)
+	assert_string_contains(
+		handles_body,
+		"return false",
+		"_handles() must stay false while _has_main_screen() returns true"
+	)
+	assert_false(
+		handles_body.contains("should_handle_editor_object"),
+		"_handles() must not answer from the owned-object predicate again"
+	)
+	assert_string_contains(
+		source, "func _has_main_screen()", "the switcher place is the reason this rule exists"
+	)
+
+
+func test_selection_retargets_active_root_without_handling_the_object():
+	# _edit() used to set active_root and only fired because _handles() was true.
+	# The same job now runs off the selection, so a brush still points the plugin
+	# at its own LevelRoot.
+	var level_root = LevelRoot.new()
+	var brush = DraftBrush.new()
+	level_root.add_child(brush)
+	var camera = Camera3D.new()
+	assert_eq(
+		HammerForgePlugin.resolve_active_root_for_selection([brush]),
+		level_root,
+		"A selected brush must make its own LevelRoot active"
+	)
+	assert_eq(
+		HammerForgePlugin.resolve_active_root_for_selection([level_root]),
+		level_root,
+		"Selecting the LevelRoot itself must make it active"
+	)
+	assert_null(
+		HammerForgePlugin.resolve_active_root_for_selection([camera]),
+		"A camera must not retarget active_root, so the sticky root survives"
+	)
+	assert_null(
+		HammerForgePlugin.resolve_active_root_for_selection([]),
+		"An empty selection must not retarget active_root"
+	)
+	camera.free()
+	level_root.free()
 
 
 func test_quick_property_dismiss_preserves_native_navigation_buttons():

@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Fixed
+- **Clicking a brush in the 3D viewport no longer throws you onto the HammerForge
+  main screen** (#592). Nothing in the plugin asked for the switch. Godot's
+  `EditorData::get_handling_main_editor()` hands the main screen to any plugin
+  that both declares one and handles the selected object, walking the plugin list
+  backwards so an addon beats the built-in 3D editor. HammerForge declared a main
+  screen for the switcher icon and separately answered `_handles()` true for
+  `LevelRoot`, `DraftBrush` and `DraftEntity`, and the pair is what Godot switched
+  on. `_handles()` is now permanently false, which is the shape the Godot main
+  screen tutorial documents. Nothing is lost: viewport input comes from the
+  force-forwarding lists set in `_enter_tree()`, not from handled objects, and the
+  only other thing `_handles()` bought was `_edit()` setting `active_root`. That
+  moved to `sync_active_root_from_selection()` off `selection_changed`, gated by
+  the same `should_handle_editor_object()` bar, so a camera still cannot steal the
+  sticky root. The rule now sits beside `_has_main_screen()` and in
+  `DEVELOPMENT.md`, because the two halves were each correct on their own and the
+  next person will otherwise put them back together.
+
 ### Removed
 - **The visgroup colour** (#551). A visgroup carried one from the moment it was
   created, it was serialised into the `.hflevel` and read back out, and it had a
