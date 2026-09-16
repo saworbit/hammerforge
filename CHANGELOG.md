@@ -54,6 +54,21 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   what it did, the way the occluder and auto-connector passes do: `Atlas: packed
   4 of 6 material groups into one atlas`, or `Atlas: skipped, 6 of 6 material
   groups have tiling UVs` with the warning that puts it in the Console Log.
+- **The door stops previewing as a light bulb, and an entity class says what it
+  fires** (#613). `door_basic` pointed its mesh preview at
+  `light_bulb_proxy.obj`, which is the only file in the plugin's `meshes/`
+  folder, so a level with doors and lights in it showed a bulb for both kinds of
+  thing with a different tint. Previews now understand a `box` type - a sized
+  `BoxMesh` with no asset behind it - and the door uses it. The other half is the
+  vocabulary: `entities.json` shipped three entries, none declaring any I/O
+  names, while the wiring system, the six built-in presets and the overlay's
+  colour table all assumed `OnTrigger`, `OnPressed`, `Open`, `Toggle`, `TurnOn`
+  and the rest. A definition can now declare `outputs` and `inputs`, the three
+  built-ins do, and the quick-wire form offers them in a dropdown beside each
+  box - the source's outputs in **Out**, the chosen target's inputs in **In**.
+  The boxes stay free text, because a mapper may wire to a name no definition
+  declares; what changes is that the names are discoverable from the entity
+  instead of only from the presets.
 - **The Objects tab lists an entity's connections once** (#616). It built two
   lists of the same wiring, one above the other, and refreshed both for the same
   selection. The two label builders were the same code twice and had already
