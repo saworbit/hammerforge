@@ -226,12 +226,12 @@ func _entities_and_their_wiring() -> void:
 		and not _undo_wrapped("on_io_add")
 	):
 		flag(
-			"Entity I/O add and remove are not undoable",
+			"Entity I/O add is not undoable",
 			(
-				"on_io_add() and on_io_remove() call add_entity_output()/remove_entity_output()"
-				+ " directly. The connections are in capture_state() under the entity, so the"
-				+ " wrapper would carry them; Remove in particular destroys a connection with"
-				+ " nothing to get it back."
+				"on_io_add() calls add_entity_output() directly. The connections are in"
+				+ " capture_state() under the entity, so the wrapper would carry them."
+				+ " Removal now lives on the wiring panel and commits through"
+				+ " on_wiring_connection_removed()."
 			)
 		)
 

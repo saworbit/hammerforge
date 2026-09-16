@@ -22,6 +22,9 @@ signal will_change(action_name: String)
 ## is dropped rather than left to pair with whatever happens next.
 signal change_abandoned
 signal preset_applied(source: Node, preset_name: String, count: int)
+## Emitted after an output has been removed, so the dock can commit the undo step
+## the matching `will_change` opened.
+signal connection_removed(source: Node, index: int)
 signal highlight_toggled(enabled: bool)
 
 var _source_entity: Node = null
@@ -34,6 +37,7 @@ var _header_label: Label
 var _summary_label: Label
 var _highlight_btn: Button
 var _outputs_list: ItemList
+var _outputs_remove: Button
 var _targets_list: ItemList
 var _preset_option: OptionButton
 var _preset_delete_btn: Button
@@ -113,6 +117,17 @@ func _build_ui() -> void:
 	_outputs_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_outputs_list.allow_reselect = true
 	add_child(_outputs_list)
+
+	# This list used to be display only, and the plainer duplicate above it in the
+	# Objects tab was the one with a Remove beside it. The panel is where a mapper
+	# works on wiring, so the Remove belongs here and the duplicate is gone (#616).
+	_outputs_remove = Button.new()
+	_outputs_remove.text = "Remove Output"
+	_outputs_remove.disabled = true
+	_outputs_remove.pressed.connect(_on_outputs_remove_pressed)
+	add_child(_outputs_remove)
+	_outputs_list.item_selected.connect(_on_outputs_list_selected)
+	_outputs_list.empty_clicked.connect(_on_outputs_list_empty_clicked)
 
 	# --- Quick wire section ---
 	var wire_sep = HSeparator.new()
@@ -236,23 +251,61 @@ func _refresh_outputs() -> void:
 	if not _outputs_list:
 		return
 	_outputs_list.clear()
-	if not _source_entity or not _entity_system:
+	if _source_entity and _entity_system:
+		for conn in _entity_system.get_entity_outputs(_source_entity):
+			if conn is Dictionary:
+				_outputs_list.add_item(connection_label(conn))
+	_update_outputs_remove_enabled()
+
+
+## The one place a connection is turned into a line of text. There were two, in
+## two files, and they had already drifted to `[once]` and `[1x]` (#616).
+static func connection_label(conn: Dictionary) -> String:
+	var label := (
+		"%s → %s.%s"
+		% [
+			str(conn.get("output_name", "")),
+			str(conn.get("target_name", "")),
+			str(conn.get("input_name", "")),
+		]
+	)
+	var delay := float(conn.get("delay", 0.0))
+	if delay > 0.0:
+		label += " (%.1fs)" % delay
+	if bool(conn.get("fire_once", false)):
+		label += " [once]"
+	return label
+
+
+func _update_outputs_remove_enabled() -> void:
+	if not _outputs_remove:
 		return
-	var outputs = _entity_system.get_entity_outputs(_source_entity)
-	for conn in outputs:
-		if not (conn is Dictionary):
-			continue
-		var out_name = str(conn.get("output_name", ""))
-		var tgt = str(conn.get("target_name", ""))
-		var inp = str(conn.get("input_name", ""))
-		var delay = float(conn.get("delay", 0.0))
-		var once = bool(conn.get("fire_once", false))
-		var label = "%s → %s.%s" % [out_name, tgt, inp]
-		if delay > 0.0:
-			label += " (%.1fs)" % delay
-		if once:
-			label += " [1x]"
-		_outputs_list.add_item(label)
+	_outputs_remove.disabled = (
+		_source_entity == null
+		or _outputs_list == null
+		or _outputs_list.get_selected_items().is_empty()
+	)
+
+
+func _on_outputs_list_selected(_index: int) -> void:
+	_update_outputs_remove_enabled()
+
+
+func _on_outputs_list_empty_clicked(_at_position: Vector2, _button_index: int) -> void:
+	_update_outputs_remove_enabled()
+
+
+func _on_outputs_remove_pressed() -> void:
+	if not _source_entity or not _entity_system or not _outputs_list:
+		return
+	var selected := _outputs_list.get_selected_items()
+	if selected.is_empty():
+		return
+	var index: int = selected[0]
+	will_change.emit("Remove Entity Output")
+	_entity_system.remove_entity_output(_source_entity, index)
+	connection_removed.emit(_source_entity, index)
+	_refresh()
 
 
 func _refresh_target_dropdown() -> void:
