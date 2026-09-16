@@ -108,6 +108,9 @@ const SCENARIOS: Array[String] = [
 	"res://tools/vibe/scenarios/level_io_types.gd",
 	"res://tools/vibe/scenarios/prefab_materials.gd",
 	"res://tools/vibe/scenarios/bake_equivalence.gd",
+	"res://tools/vibe/scenarios/scene_weight.gd",
+	"res://tools/vibe/scenarios/examples_integrity.gd",
+	"res://tools/vibe/scenarios/world_scale.gd",
 ]
 
 

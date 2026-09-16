@@ -123,6 +123,9 @@ SCENARIOS = [
     "level-io-types",
     "prefab-materials",
     "bake-equivalence",
+    "scene-weight",
+    "examples-integrity",
+    "world-scale",
 ]
 
 # Generous: chaos runs 300 operations and cost saves eight levels. A scenario
