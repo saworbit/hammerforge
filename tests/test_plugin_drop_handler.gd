@@ -14,20 +14,31 @@ func test_drop_data_classification_accepts_only_supported_payloads() -> void:
 
 
 func test_plugin_drop_callbacks_are_thin_delegates() -> void:
+	# Godot calls `_can_drop_data` and `_drop_data` on the plugin, and those two
+	# are the whole of the viewport drop path it owns. `drop_data()` dispatches to
+	# the four payload kinds itself, so plugin.gd had a second layer of wrappers
+	# in front of that dispatch which nothing called (#609).
+	#
+	# The delegation is asserted on the two entry points that exist, and the
+	# absence of the classification is asserted directly. Listing the wrappers was
+	# the weaker check: it passed while plugin.gd held a duplicate of the payload
+	# logic, which is the thing "thin delegate" is supposed to rule out.
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
-	for method_name in [
-		"can_drop_data",
-		"drop_data",
-		"is_entity_drag_data",
-		"handle_entity_drop",
-		"is_brush_preset_drag_data",
-		"handle_brush_preset_drop",
-		"is_prefab_drag_data",
-		"handle_prefab_drop",
-		"is_material_drag_data",
-		"handle_material_drop",
+	for method_name in ["can_drop_data", "drop_data"]:
+		assert_true(
+			source.contains("HFPluginDropHandler.%s" % method_name),
+			"plugin.gd hands %s straight to the drop handler" % method_name
+		)
+	for payload in [
+		"hammerforge_entity",
+		"hammerforge_brush_preset",
+		"hammerforge_prefab",
+		"hammerforge_material",
 	]:
-		assert_true(source.contains("HFPluginDropHandler.%s" % method_name))
+		assert_false(
+			source.contains(payload),
+			"plugin.gd does not classify %s itself; the drop handler does" % payload
+		)
 
 
 func test_drop_handler_keeps_placement_selection_and_undo_contracts() -> void:

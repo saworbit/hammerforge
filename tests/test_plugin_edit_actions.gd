@@ -2,6 +2,10 @@ extends GutTest
 
 
 func test_plugin_managed_edit_callbacks_are_thin_delegates() -> void:
+	# The actions plugin.gd offers. `move_selected_vertical()` is not one of them:
+	# it is the helper `move_selected_to_floor()` and `move_selected_to_ceiling()`
+	# share inside the module, and plugin.gd used to carry a wrapper for it that
+	# nothing called, which this list is why (#609).
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
 	for method_name in [
 		"delete_selected",
@@ -13,7 +17,6 @@ func test_plugin_managed_edit_callbacks_are_thin_delegates() -> void:
 		"merge_selected",
 		"move_selected_to_floor",
 		"move_selected_to_ceiling",
-		"move_selected_vertical",
 		"clip_selected",
 		"carve_selected",
 	]:
