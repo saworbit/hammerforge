@@ -77,6 +77,27 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   now takes the chunk size as a setting and applies it before the first cell, and
   the layer refuses a change once it holds paint rather than accepting one it
   cannot honour. Every other caller already set it on a fresh layer.
+- **An occluder is the wall it stands for, not every wall on its plane**
+  (#614). `_generate_occluders()` grouped triangles by normal and plane distance
+  and nothing else, so two triangles facing the same way in the same infinite
+  plane went into one occluder whether they shared an edge or were a level
+  apart. In a grid-snapped greybox that is constantly: every floor at y = 0,
+  every wall on the same line. Godot gives an `OccluderInstance3D` a single
+  bounding volume, so the result was an occluder the size of the level, never
+  culled itself, considered from every camera position, standing for a surface
+  that was mostly holes. Forty boxes in a row measured one occluder spanning all
+  10,113 units between the first and the last, and the span grew with the level.
+  Triangles are now grouped into flat surfaces: coplanar **and** touching, tested
+  on welded vertex positions, which is what sharing an edge comes to for baked
+  geometry. One wall is one occluder; two walls a room apart are two. Two brushes
+  that abut without sharing vertices give two occluders rather than one, which is
+  the right answer either way round. The old merge was also a scan of every plane
+  found so far for every triangle, which is quadratic in the triangle count; the
+  new grouping is a single pass keyed on vertex position, because each vertex
+  already names the handful of triangles that meet there. `Min Area` now measures
+  a surface rather than a plane, so scattered fragments that used to reach the
+  threshold by pooling across the level are skipped, which is what the threshold
+  was for.
 - **A prefab keeps its materials in another level** (#621). A face's material is
   a slot number into the *level's* palette, and a `.hfprefab` carried the number
   without the palette. Every reuse silently re-textured: a doorframe built out of
