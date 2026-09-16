@@ -17,9 +17,10 @@ enum Level { DEBUG, INFO, WARN, ERROR }
 
 const LEVEL_NAMES := ["DEBUG", "INFO", "WARN", "ERROR"]
 
-## Entries beyond this are dropped oldest-first. A bake on a large level can
-## emit hundreds of lines; the cap is what keeps an idle editor from growing a
-## log until it matters.
+## Entries past this are dropped oldest-first, in batches of `TRIM_SLACK`, so the
+## buffer sits anywhere between this and `retained_limit()`. A bake on a large
+## level can emit hundreds of lines; the cap is what keeps an idle editor from
+## growing a log until it matters.
 const DEFAULT_CAPACITY := 600
 
 ## Trimming copies the array, so it happens once per SLACK entries rather than
@@ -208,6 +209,17 @@ func to_text(level_mask: int = 0xF, search: String = "") -> String:
 ## contain a bracket; without this, "[b]" in a level name would style the log.
 static func escape_bbcode(text: String) -> String:
 	return text.replace("[", "[lb]")
+
+
+## The most entries the buffer will hold.
+##
+## Trimming is amortised, so `capacity` is the point it trims *down to* rather
+## than a hard ceiling - the buffer grows `TRIM_SLACK` past it before the slice
+## runs. The Log tab reported `capacity` as the size of the buffer, which was off
+## by the slack, and that line is the one place a reader is told what the limit
+## is.
+func retained_limit() -> int:
+	return maxi(capacity, 1) + TRIM_SLACK - 1
 
 
 func _timestamp() -> String:
