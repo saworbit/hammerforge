@@ -421,3 +421,58 @@ func test_validate_sees_a_broken_connection_on_a_brush_entity():
 		if str(issue).findn("missing field") >= 0:
 			found = true
 	assert_true(found, "wiring with no target is broken wherever it is written")
+
+
+# ===========================================================================
+# A wire aimed at a name nothing answers to (#620)
+# ===========================================================================
+
+
+func _validate_issues() -> Array:
+	return root.validate_level(false).get("issues", [])
+
+
+func _issue_naming(fragment: String) -> bool:
+	for issue in _validate_issues():
+		if str(issue).findn(fragment) >= 0:
+			return true
+	return false
+
+
+func test_renaming_a_target_makes_validate_report_the_wire_it_broke():
+	var button := _point_entity("func_button")
+	button.set_meta("entity_name", "button_1")
+	var door := _point_entity("func_door")
+	door.set_meta("entity_name", "door_1")
+	root.add_entity_output(button, "OnPressed", "door_1", "Open")
+	assert_false(_issue_naming("no entity answers to"), "the wire resolves while the name stands")
+
+	door.set_meta("entity_name", "door_main")
+	door.name = "door_main"
+	assert_true(_issue_naming("door_1"), "Validate is the surface whose whole job is to find this")
+	assert_true(_issue_naming("button_1.OnPressed"), "and it has to say which wire")
+
+
+func test_a_wire_to_a_deleted_entity_is_reported():
+	var button := _point_entity("func_button")
+	button.set_meta("entity_name", "button_1")
+	root.add_entity_output(button, "OnPressed", "gone_1", "Open")
+	assert_true(_issue_naming("gone_1"))
+
+
+func test_a_wire_aimed_at_a_brush_entity_resolves():
+	var button := _point_entity("func_button")
+	button.set_meta("entity_name", "button_1")
+	var brush := _box("door_brush")
+	root.tie_brushes_to_entity(["door_brush"], "func_door")
+	brush.set_meta("entity_name", "door_b")
+	root.add_entity_output(button, "OnPressed", "door_b", "Open")
+	assert_false(_issue_naming("no entity answers to"), "brush entities are I/O targets too")
+
+
+func test_a_level_wired_correctly_reports_nothing_about_dangling_wires():
+	var button := _point_entity("func_button")
+	var door := _point_entity("func_door")
+	door.set_meta("entity_name", "door_1")
+	root.add_entity_output(button, "OnPressed", "door_1", "Open")
+	assert_false(_issue_naming("no entity answers to"))

@@ -225,6 +225,15 @@ func validate(auto_fix: bool = false) -> Dictionary:
 	var seen_names: Dictionary = {}
 	var duplicate_names: Array = []
 	var broken_connections := 0
+	# Wiring is held by name, and the ways a name goes stale are ordinary: the
+	# target was renamed, deleted, or came back from a file without its authored
+	# name. `cleanup_dangling_connections()` only runs on the delete path, so a
+	# rename left a wire pointing at nothing and nothing anywhere said so (#620).
+	# With no entity system there is no index to resolve against, and an empty one
+	# would report every wire in the level as broken.
+	var check_dangling := root.entity_system != null
+	var name_index: Dictionary = root.entity_system.build_name_index() if check_dangling else {}
+	var dangling_targets: Array = []
 	for child in _named_io_nodes():
 		var authored := str(child.get_meta("entity_name", "")).strip_edges()
 		if authored != "":
@@ -246,6 +255,19 @@ func validate(auto_fix: bool = false) -> Dictionary:
 				or float(delay) < 0.0
 			):
 				broken_connections += 1
+				continue
+			var target_name := str(fields.get("target_name", "")).strip_edges()
+			if check_dangling and not name_index.has(target_name):
+				var source_name := authored if authored != "" else str(child.name)
+				var wire := (
+					"%s.%s" % [source_name, str(fields.get("output_name", "")).strip_edges()]
+				)
+				var report := (
+					"I/O connection points at '%s', which no entity answers to: %s"
+					% [target_name, wire]
+				)
+				if not (report in dangling_targets):
+					dangling_targets.append(report)
 	for authored in duplicate_names:
 		issues.append("Entity name '%s' is answered to by more than one entity" % authored)
 	if broken_connections > 0:
@@ -255,6 +277,8 @@ func validate(auto_fix: bool = false) -> Dictionary:
 				% broken_connections
 			)
 		)
+	for report in dangling_targets:
+		issues.append(report)
 
 	# Paint layers without grid
 	if root.paint_layers:
