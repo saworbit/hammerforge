@@ -362,3 +362,86 @@ func test_validate_map_passes_a_good_file():
 func test_validate_map_rejects_a_missing_file():
 	var fs := HFFileSystemType.new(_import_root())
 	assert_false(bool(fs.validate_map("user://hf_does_not_exist.map").get("ok", true)))
+
+
+# ===========================================================================
+# Autosave history rotation (#618)
+# ===========================================================================
+
+
+func _history_dir() -> String:
+	return ProjectSettings.globalize_path("user://hf_autosave_history_test")
+
+
+func _history_files(base_name: String) -> Array:
+	var out: Array = []
+	var dir := _history_dir().path_join("autosave_history")
+	if not DirAccess.dir_exists_absolute(dir):
+		return out
+	for name in DirAccess.get_files_at(dir):
+		if name.begins_with(base_name + "_") and name.ends_with(".hflevel"):
+			out.append(name)
+	out.sort()
+	return out
+
+
+func _clear_history() -> void:
+	var dir := _history_dir().path_join("autosave_history")
+	if not DirAccess.dir_exists_absolute(dir):
+		return
+	for name in DirAccess.get_files_at(dir):
+		DirAccess.remove_absolute(dir.path_join(name))
+	DirAccess.remove_absolute(dir)
+	DirAccess.remove_absolute(_history_dir())
+
+
+func _rotate(level_name: String, keep: int, times: int) -> void:
+	var abs_path := _history_dir().path_join("%s.hflevel" % level_name)
+	DirAccess.make_dir_recursive_absolute(_history_dir())
+	var payload := HFLevelIO.build_payload({"name": level_name}, false)
+	for i in times:
+		files._write_autosave_rotation(abs_path, payload, keep, abs_path)
+
+
+func test_autosaving_one_level_leaves_another_levels_backups_alone():
+	_clear_history()
+	_rotate("levelA", 3, 3)
+	assert_eq(_history_files("levelA").size(), 3, "level A keeps its three backups")
+	_rotate("levelB", 3, 3)
+	assert_eq(
+		_history_files("levelA").size(),
+		3,
+		"level B autosaving must not spend level A's backup budget"
+	)
+	assert_eq(_history_files("levelB").size(), 3, "level B keeps its own three")
+	_clear_history()
+
+
+func test_the_rotation_still_prunes_the_level_that_wrote_it():
+	_clear_history()
+	_rotate("levelA", 3, 6)
+	assert_eq(_history_files("levelA").size(), 3, "six saves, keep three")
+	_clear_history()
+
+
+func test_three_saves_inside_one_second_leave_three_backups():
+	_clear_history()
+	_rotate("levelC", 10, 3)
+	assert_eq(
+		_history_files("levelC").size(),
+		3,
+		"a timestamp only to the second put all three on one path"
+	)
+	_clear_history()
+
+
+func test_a_level_whose_name_prefixes_another_does_not_prune_it():
+	_clear_history()
+	_rotate("level_backup", 3, 3)
+	_rotate("level", 3, 3)
+	assert_eq(
+		_history_files("level_backup").size(),
+		3,
+		"'level_' also prefixes 'level_backup_', so the tail has to look like a timestamp"
+	)
+	_clear_history()
