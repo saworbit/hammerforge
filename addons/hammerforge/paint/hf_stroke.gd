@@ -50,9 +50,13 @@ func analyse() -> void:
 	var h := float(bbox_max.y - bbox_min.y + 1)
 	aspect_ratio = max(w, h) / max(1.0, min(w, h))
 
+	# A loop needs enough cells to be one. Without the count, a stroke of a
+	# single cell measured its first cell against its last, got zero, and came
+	# back closed - so a one-cell dab was classified as a room whose outline had
+	# been drawn, which encloses nothing.
 	var start := cells[0]
 	var end := cells[cells.size() - 1]
-	is_closed = start.distance_to(end) <= 1
+	is_closed = cells.size() >= 3 and start.distance_to(end) <= 1
 
 	# crude speed estimate in cells/sec
 	if times.size() >= 2:

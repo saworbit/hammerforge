@@ -88,6 +88,20 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   button keeps its source line so a rebind re-renders it.
   `tests/test_shortcut_surfaces.gd` covers the toolbar as a fourth surface; it
   was missed the first time because that file named the other three.
+- **Inference cleanup leaves a one-cell stroke alone** (#546). Denoise removes a
+  filled cell with no cardinal neighbour, and a single click on empty ground is
+  exactly that - so with `Inference cleanup` ticked, clicking once painted
+  nothing, with no warning and no undo step to show anything had happened. The
+  pass runs on the stroke that was just made, so the one thing it was guaranteed
+  to reach was what the mapper had just drawn. A stroke of one cell is skipped
+  now; a stray cell in a larger stroke is still removed.
+- **A one-cell dab is not a closed room** (#547). `HFStroke.analyse()` set
+  `is_closed` from the distance between the first cell and the last, and for a
+  stroke of one cell those are the same cell, so the distance was zero and a
+  single click classified as a room whose outline had been drawn. A loop needs
+  three cells to be one. `infer_intent()` also gained a note that `avg_speed` is
+  part of the corridor test, so the same long thin run classifies as a corridor
+  when it is drawn quickly and a blob when it is drawn slowly.
 - **Reconciling one floor paint layer no longer deletes every other layer's
   geometry in the same chunk** (#561). `HFGeneratedReconciler.reconcile()` swept
   by chunk, and every layer shares one `Generated/Floors` and one
