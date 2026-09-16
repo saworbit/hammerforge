@@ -1257,7 +1257,8 @@ Some actions require specific conditions to run:
 - **Hollow, Clip, Move to Floor/Ceiling** require at least one brush selected. When nothing is selected, these buttons are grayed out with an inline hint ("Select a brush to use these tools") visible in the Selection Tools section.
 - **Face-dependent controls** (Assign to Selected Faces, UV editing) show "Enable Face Select Mode and click a face to edit" when no face is selected.
 - **Extrude** requires a LevelRoot in the scene. In extrude mode, a semi-transparent face highlight (green for up, red for down) previews which face you'll select before clicking.
-- **External tools** can define their own requirements via `can_activate()`.
+- **External tools** can define their own requirements via `can_activate()`. The registry asks before activating and reports `get_poll_fail_reason()` rather than making the tool active with nothing for it to do.
+- **An active tool's own settings** appear in a **Tool Settings** section on the Build tab, built from the tool's `get_settings_schema()`. The section is hidden while the active tool declares none.
 
 HammerForge managed edits are scoped to the visible selection. With only native Godot nodes selected, a keyboard shortcut passes through to Godot. With only HammerForge brushes/entities selected, HammerForge owns it. If the selection mixes both domains, HammerForge stops managed operations such as duplicate, delete, group, hollow, nudge, clip, carve, merge, texture, prefab, and variant actions and shows **“Edit HammerForge and Godot nodes separately”**. The same rule is enforced by the context toolbar, viewport context menu, hotkey palette, and selection-dependent radial actions; their managed commands are hidden or disabled where possible and checked again when invoked. Deselect one domain before retrying. This prevents generic editor commands or stale UI state from bypassing HammerForge IDs, caches, or undo state.
 

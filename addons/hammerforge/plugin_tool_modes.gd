@@ -83,8 +83,16 @@ static func activate_external(plugin: Object, tool_id: int, root: Node) -> void:
 	if plugin.dock and plugin.dock.paint_mode and plugin.dock.paint_mode.button_pressed:
 		plugin.dock.paint_mode.set_pressed_no_signal(false)
 		plugin.dock.highlight_tab("Brush")
+	var settings_host := Callable()
+	if plugin.dock and is_instance_valid(plugin.dock):
+		settings_host = Callable(plugin.dock, "show_tool_settings")
 	plugin._tool_registry.activate_tool(
-		tool_id, root, plugin.last_3d_camera, plugin.undo_redo_manager, plugin._record_history
+		tool_id,
+		root,
+		plugin.last_3d_camera,
+		plugin.undo_redo_manager,
+		plugin._record_history,
+		settings_host
 	)
 
 
