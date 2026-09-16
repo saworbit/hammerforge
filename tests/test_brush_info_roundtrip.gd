@@ -276,6 +276,38 @@ func test_full_round_trip():
 	assert_eq(str(restored.get_meta("brush_entity_class", "")), "func_wall")
 
 
+func test_round_trip_keeps_the_node_name():
+	# restore_state() clears every brush and rebuilds it from its captured info,
+	# so a name that is not captured does not survive an undo. Resizing a brush
+	# and pressing Ctrl+Z renamed every brush in the level to @Node3D@27719,
+	# which silently unwires the entity I/O outputs that target a brush by name.
+	var b = _make_brush(Vector3.ZERO, Vector3(16, 24, 32), "named_1")
+	b.name = "Wall"
+
+	var info = sys.get_brush_info_from_node(b)
+	assert_eq(info.get("name", ""), "Wall", "capture must carry the node name")
+
+	sys.delete_brush(b)
+	var restored = sys.create_brush_from_info(info)
+
+	assert_not_null(restored)
+	assert_eq(restored.name, "Wall", "a rebuilt brush must come back under its own name")
+
+
+func test_round_trip_without_a_name_does_not_invent_one():
+	# Older snapshots have no name key. Godot's own unique name is the right
+	# fallback; making one up would rename brushes that never had a name.
+	var b = _make_brush(Vector3.ZERO, Vector3(16, 24, 32), "unnamed_1")
+	var info = sys.get_brush_info_from_node(b)
+	info.erase("name")
+
+	sys.delete_brush(b)
+	var restored = sys.create_brush_from_info(info)
+
+	assert_not_null(restored)
+	assert_ne(str(restored.name), "", "a brush without a captured name still gets Godot's")
+
+
 # ===========================================================================
 # Move floor/ceiling: argument validation
 # ===========================================================================
