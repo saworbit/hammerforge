@@ -344,7 +344,7 @@ Key design choices:
 
 ## Keyboard Shortcuts
 
-Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`. Tool-specific keys (M, N, P, ;, A, Ctrl+Shift+P) are defined by their respective tools and are not yet keymap-backed.
+Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`. Tool-specific keys (M, N, P, ;, A) are defined by their respective tools and are not yet keymap-backed; they are bare keys, so a chord built on one of them is not that tool.
 
 | Key | Action | | Key | Action |
 |-----|--------|-|-----|--------|
@@ -365,11 +365,12 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 | T * | Texture Picker | | ? | Shortcuts popup |
 | Shift+? / F1 / Ctrl+K | Command palette | | Ctrl+Shift+T | Operation timeline |
 | Shift+S * | Select Similar | | Shift+T * | Apply Last Texture |
-| Shift+F * | Selection Filters | | Ctrl+Shift+P | Quick group-to-prefab |
+| Shift+F * | Selection Filters | | Ctrl+Shift+P * | Quick group-to-prefab |
 | X / Y / Z * | Axis lock | | A | Align mode (measure) |
 | R * | Rotate CCW | | Shift+R * | Rotate CW |
 | Shift+M * | Flip selection | | Alt+R * | Reset rotation |
 | Shift+Alt+X * | Clip to Face Plane | | Ctrl+Shift+A * | Create Structure |
+| Ctrl+Shift+V * | Cycle Prefab Variant | | | |
 
 Floor Paint mouse modifiers are deliberately not keymap actions: LMB paints,
 Alt+LMB temporarily erases, Shift+LMB locks the stroke axis, Ctrl/Cmd+LMB picks
