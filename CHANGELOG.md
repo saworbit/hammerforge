@@ -5,6 +5,23 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Removed
+- **The per-instance prefab override mechanism** (#566). A record field, three
+  public functions, a re-apply pass, the overlay's override markers and a
+  `capture_state()` field, with no way in: nothing outside
+  `tests/test_prefab_enhancements.gd` ever called `set_override()`, so an
+  override could not be created, seen or cleared from inside HammerForge. It was
+  not finished underneath either - the only brush case it handled wrote a
+  `brush_size` meta, which the overlay reads for its own bounding box and nothing
+  reads to resize a brush, so applying a size override did not resize anything;
+  `_apply_variant()` never re-applied them, so a variant cycle would have dropped
+  every one; and only two of the field paths it accepted did anything at all. The
+  `capture_state()` field is the part that mattered: the shape of those paths was
+  a file-format commitment already made by a mechanism nobody had used.
+  `restore_state()` reads past an `overrides` key in an older payload.
+  Per-instance overrides are worth having and worth designing - the way in is the
+  open question, not the storage - so that is an issue to open on its own terms.
+  `compute_instance_diff()` stays: its two remaining comparisons are brush and
+  entity counts, which do not depend on overrides.
 - **Five signals that were declared and never emitted** (#521).
   `HFContextToolbar.tool_switch_requested` and `hotkey_palette_requested` had
   connect and disconnect pairs in `plugin.gd` and a real handler on the other
@@ -61,6 +78,16 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **Cycling a prefab variant leaves the instance where it was** (#565). A
+  prefab's brush transforms are stored relative to the merged visual AABB centre
+  of the selection it was captured from, and `instantiate()` adds the placement
+  back onto that. `_apply_variant()` re-placed the instance at the mean of the
+  node origins instead, which is a different point for any prefab that is not
+  symmetric about it - so every press of Cycle Variant walked the instance by the
+  difference, and recomputed it against the new nodes, so cycling back did not
+  bring it home. A door frame or a crate stack is exactly the asymmetric case;
+  everything the same size happened to work. One definition now, the one the file
+  format is written against, and `set_variant()` takes the same path.
 - **Reconciling one floor paint layer no longer deletes every other layer's
   geometry in the same chunk** (#561). `HFGeneratedReconciler.reconcile()` swept
   by chunk, and every layer shares one `Generated/Floors` and one
