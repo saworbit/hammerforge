@@ -95,6 +95,22 @@ const SCENARIOS: Array[String] = [
 	"res://tools/vibe/scenarios/prefab_links.gd",
 	"res://tools/vibe/scenarios/validate_fix.gd",
 	"res://tools/vibe/scenarios/dock_undo_two.gd",
+	"res://tools/vibe/scenarios/io_visualizer.gd",
+	"res://tools/vibe/scenarios/drag_create.gd",
+	"res://tools/vibe/scenarios/level_scale.gd",
+	"res://tools/vibe/scenarios/playtest_scene.gd",
+	"res://tools/vibe/scenarios/bake_options.gd",
+	"res://tools/vibe/scenarios/visibility_workflow.gd",
+	"res://tools/vibe/scenarios/chaos_io.gd",
+	"res://tools/vibe/scenarios/material_persistence.gd",
+	"res://tools/vibe/scenarios/generator_geometry.gd",
+	"res://tools/vibe/scenarios/autosave_history.gd",
+	"res://tools/vibe/scenarios/level_io_types.gd",
+	"res://tools/vibe/scenarios/prefab_materials.gd",
+	"res://tools/vibe/scenarios/bake_equivalence.gd",
+	"res://tools/vibe/scenarios/scene_weight.gd",
+	"res://tools/vibe/scenarios/examples_integrity.gd",
+	"res://tools/vibe/scenarios/world_scale.gd",
 ]
 
 

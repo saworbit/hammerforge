@@ -110,6 +110,22 @@ SCENARIOS = [
     "prefab-links",
     "validate-fix",
     "dock-undo-two",
+    "io-visualizer",
+    "drag-create",
+    "level-scale",
+    "playtest-scene",
+    "bake-options",
+    "visibility-workflow",
+    "chaos-io",
+    "material-persistence",
+    "generator-geometry",
+    "autosave-history",
+    "level-io-types",
+    "prefab-materials",
+    "bake-equivalence",
+    "scene-weight",
+    "examples-integrity",
+    "world-scale",
 ]
 
 # Generous: chaos runs 300 operations and cost saves eight levels. A scenario
