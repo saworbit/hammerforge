@@ -101,7 +101,9 @@ func _hflevel_trip(root: Node3D, step: int) -> int:
 		return 1
 	var after: Dictionary = HFVibe.describe_level(loaded)
 	var count_before: int = flags.size()
-	diff_levels(before, after, "step %d: .hflevel round trip" % step)
+	# `materials` is #617: a material built in the session has no resource_path,
+	# and the encoder writes a Resource as its path or as null.
+	diff_levels(before, after, "step %d: .hflevel round trip" % step, {"materials": 617})
 	var added: int = flags.size() - count_before
 	if added == 0:
 		note(
