@@ -66,6 +66,18 @@ static func _refuse_layout(what: String) -> Array:
 	return []
 
 
+static func _refuse_axis(axis_index: int) -> Array:
+	HFLog.warn("HFDuplicator: %d does not name an axis, so no copies were laid out" % axis_index)
+	return []
+
+
+static func _refuse_counts(counts: Vector3i) -> Array:
+	HFLog.warn(
+		"HFDuplicator: grid counts %s include one below 1, so no copies were laid out" % str(counts)
+	)
+	return []
+
+
 ## A run of copies, each one offset further than the last.
 static func linear_placements(p_count: int, p_offset: Vector3) -> Array:
 	if not p_offset.is_finite():
@@ -84,6 +96,12 @@ static func radial_placements(
 		return _refuse_layout(
 			"radial step %s, rise %s or pivot %s" % [p_step_degrees, p_rise, str(p_pivot)]
 		)
+	# The guard exists in HFTransformSystem and says in its own comment why: both
+	# `axis_vector()` and `rotation_basis()` fall through to Z, so a ring about
+	# axis 7 was built about Z and reported as a success. This was the one caller
+	# of `axis_vector()` that skipped it.
+	if not HFTransformSystem.is_valid_axis(p_axis_index):
+		return _refuse_axis(p_axis_index)
 	var out: Array = []
 	var climb := HFTransformSystem.axis_vector(p_axis_index) * p_rise
 	for copy_index in range(1, maxi(0, p_count) + 1):
@@ -102,7 +120,15 @@ static func radial_placements(
 static func grid_placements(p_counts: Vector3i, p_spacing: Vector3) -> Array:
 	if not p_spacing.is_finite():
 		return _refuse_layout("grid spacing %s" % str(p_spacing))
-	var counts := Vector3i(maxi(1, p_counts.x), maxi(1, p_counts.y), maxi(1, p_counts.z))
+	# Refused rather than clamped up to one, so this and `grid_copy_count()` give
+	# the same answer for the same input. The clamp is what `grid_copy_count()`'s
+	# own comment says was removed, and it was only removed from one of the pair:
+	# a zero or a minus sign became a plausible array the mapper never described
+	# down the dock path, and "that layout makes no copies" down the brush-system
+	# path. Both read the same `can_generate()` gate.
+	if p_counts.x < 1 or p_counts.y < 1 or p_counts.z < 1:
+		return _refuse_counts(p_counts)
+	var counts := p_counts
 	var out: Array = []
 	for ix in counts.x:
 		for iy in counts.y:
@@ -150,6 +176,15 @@ static func can_generate(copy_count: int, source_count: int, params: Dictionary 
 		return HFOpResult.fail(
 			"Array: that layout has a number that is not a number",
 			"Check the offset, spacing, step and rise fields"
+		)
+	# The gate says the same thing the layout does. `radial_placements()` refuses
+	# an axis index that names nothing, so without this the gate passed and the
+	# layout came back empty, which reads as "no copies" rather than as the
+	# wrong axis.
+	if params.has("axis_index") and not HFTransformSystem.is_valid_axis(int(params["axis_index"])):
+		return HFOpResult.fail(
+			"Array: %d does not name an axis" % int(params["axis_index"]),
+			"Use 0 for X, 1 for Y or 2 for Z"
 		)
 	if source_count < 1:
 		return HFOpResult.fail("Array: nothing selected to copy", "Select a brush first")

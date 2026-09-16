@@ -354,3 +354,15 @@ func test_clip_preserves_group_id():
 				"group_42",
 				"Clipped pieces should preserve group_id"
 			)
+
+
+## Clamping turned an index of 5 into a cut on Z and -1 into a cut on X, and
+## reported the cut on the axis it picked, so a caller that got its index wrong
+## got a plausible operation it never described.
+func test_clipping_on_an_axis_that_does_not_exist_is_refused():
+	_make_brush(Vector3(0, 16, 0), Vector3(32, 32, 32), "brush_1")
+	for bad_axis in [5, -1, 3]:
+		var result = sys.clip_brush_by_id("brush_1", bad_axis, 0.0)
+		assert_false(result.ok, "axis %d names nothing" % bad_axis)
+		assert_true(str(result.message).contains("axis"), "and the refusal says so")
+	assert_false(sys.can_clip_brush("brush_1", 5, 0.0).ok, "The preview refuses the same index")
