@@ -158,6 +158,25 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **Material browser favourites survive the dock being rebuilt** (#545).
+  `_favorites` was a plain Dictionary on the control with nothing reading it out
+  or writing it in - no prefs key, nothing in the `.hflevel`, nothing in
+  `capture_state()` - and the dock builds the browser fresh, so every star was
+  gone at the next theme change, project reload or editor restart, with the
+  Favorites view and the HUD's favourites row coming up empty and nothing to say
+  why. They are kept in `HFUserPrefs` by resource path now, which is what the
+  other settings that outlive a level already do, and the dock hands them back
+  every time it refreshes the browser.
+- **Starring one unsaved material no longer stars every unsaved material**
+  (#544). Favourites are keyed on `resource_path`, and a material built in the
+  editor session has an empty one - so every unsaved material in the palette
+  shared one key. One star lit the lot, and un-starring any one of them cleared
+  them all, which is the normal state of a palette being built up before anything
+  is written to disk. `add_favorite()` refuses an empty path and returns whether
+  it took, so the dock can say "Save the material to disk before starring it"
+  rather than doing something surprising. Paths rather than palette indices for
+  the reason the issue gives: an index is only stable while the palette is, and
+  this outlives the level.
 - **A radial array about an axis index that does not exist is refused** (#541).
   `axis_vector()` and `rotation_basis()` both fall through to Z, so a ring about
   axis 7 or axis -1 was built about Z, climbed along Z and reported as a success -

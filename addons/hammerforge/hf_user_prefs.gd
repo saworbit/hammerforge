@@ -76,6 +76,7 @@ const SCHEMA := {
 	"show_welcome": {"type": TYPE_BOOL},
 	"power_user_overlays": {"type": TYPE_BOOL},
 	"hints_dismissed": {"type": TYPE_DICTIONARY},
+	"favorite_materials": {"type": TYPE_ARRAY},
 }
 
 
@@ -135,6 +136,7 @@ static func _defaults() -> Dictionary:
 		"show_welcome": true,
 		"power_user_overlays": false,
 		"hints_dismissed": {},
+		"favorite_materials": [],
 	}
 
 
@@ -212,6 +214,25 @@ func is_hint_dismissed(hint_key: String) -> bool:
 
 
 ## Mark a contextual hint as dismissed and persist.
+## The material palette's starred resource paths.
+##
+## Kept here rather than on the browser because a star only earns its keep across
+## sessions: the browser is built fresh by the dock, so every star was gone at the
+## next theme change, project reload or editor restart, with the Favorites view
+## and the HUD's favourites row coming up empty and nothing to say why.
+##
+## Paths rather than palette indices, because an index is only stable while the
+## palette is and this outlives the level.
+func get_favorite_materials() -> Array:
+	var stored = get_pref("favorite_materials", [])
+	return stored if stored is Array else []
+
+
+func set_favorite_materials(paths: Array) -> void:
+	set_pref("favorite_materials", paths.duplicate())
+	save()
+
+
 func dismiss_hint(hint_key: String) -> void:
 	var dismissed: Dictionary = data.get("hints_dismissed", {})
 	dismissed[hint_key] = true
