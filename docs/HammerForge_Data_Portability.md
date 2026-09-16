@@ -97,7 +97,7 @@ After import, run **Check Only** (Test tab) to detect any remaining non-planar f
 - Entity types and brush entity classes are loaded from `entities.json` (data-driven, not hardcoded).
 - Add your own in `res://hammerforge_entities.json`. That file overlays the plugin's `entities.json`, and an entry with the same classname replaces the plugin one. Prefer it over editing `res://addons/hammerforge/entities.json`, which is overwritten when the plugin is upgraded.
 - A `LevelRoot` can point somewhere else through its `entity_definitions_path` export. The point entity palette and the brush entity dropdown both read the same merged result, so a custom point entity is placeable and a custom brush class is assignable without further setup.
-- Definitions include `classname`, `description`, `color`, `is_brush_entity`, `properties`, optional `scene_path`, and optional `outputs` and `inputs` naming the I/O the class fires and answers to. The dock also reads presentation keys straight from the JSON: `label`, `preview`, and `category`.
+- Definitions include `classname`, `description`, `color`, `is_brush_entity`, `properties`, optional `scene_path`, the optional `class` and `scene` which name the Godot node or `PackedScene` a playtest export builds for the entity, and optional `outputs` and `inputs` naming the I/O the class fires and answers to. A property may carry `maps_to` naming the engine property its value is written to. The dock also reads presentation keys straight from the JSON: `label`, `preview`, and `category`.
 
 ## Prefabs: `.hfprefab`
 - `.hfprefab` files store reusable brush + entity groups as JSON.

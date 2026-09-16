@@ -19,6 +19,9 @@ var scene_path := ""
 ## agree instead of a mapper having to know the strings (#613).
 var outputs: Array = []
 var inputs: Array = []
+## Optional Godot node class to build for this entity in a playtest export, when
+## the definition names one other than a plain marker.
+var node_class := ""
 
 ## Optional per-project overlay. Entries with the same classname replace plugin defs.
 const PROJECT_DEFINITIONS_PATH := "res://hammerforge_entities.json"
@@ -33,7 +36,15 @@ static func from_dict(data: Dictionary) -> HFEntityDef:
 	# one is a malformed entity in the `.map` and a blank row in the dropdown that
 	# cannot be told from another blank row. Stripped also means "door" and
 	# "door " are one class rather than two, so the overlay and the base agree.
-	def.classname = str(data.get("id", data.get("class", data.get("classname", "")))).strip_edges()
+	# `classname` before `class`. `to_dict()` writes both, and reading `class`
+	# first meant a definition that named a node class could not survive its own
+	# round trip - "light_point" came back as "OmniLight3D".
+	def.classname = str(data.get("id", data.get("classname", data.get("class", "")))).strip_edges()
+	# The Godot node class this entity stands for, read only when the entry
+	# identifies itself some other way. In an array-form file `class` *is* the
+	# classname, and instantiating that would be nonsense.
+	if data.has("id") or data.has("classname"):
+		def.node_class = str(data.get("class", "")).strip_edges()
 	def.description = str(data.get("description", ""))
 	var c = data.get("color", null)
 	if c is Array and c.size() >= 3:
@@ -82,6 +93,8 @@ func to_dict() -> Dictionary:
 		d["outputs"] = outputs
 	if not inputs.is_empty():
 		d["inputs"] = inputs
+	if node_class != "":
+		d["class"] = node_class
 	return d
 
 
