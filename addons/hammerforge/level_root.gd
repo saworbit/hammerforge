@@ -618,13 +618,6 @@ var input_state: HFInputStateType:
 	get:
 		return drag_system.input_state if drag_system else null
 var height_pixels_per_unit := 4.0
-
-var drag_active: bool:
-	get:
-		return drag_system.input_state.is_dragging() if drag_system else false
-	set(value):
-		if not value and drag_system:
-			drag_system.input_state.cancel()
 var drag_stage: int:
 	get:
 		return drag_system.input_state.get_drag_stage() if drag_system else 0
@@ -731,7 +724,6 @@ var _face_hover_material: StandardMaterial3D = null
 var _face_hover_st: SurfaceTool = null
 var _face_hover_last_brush: Node3D = null
 var _face_hover_last_face_idx: int = -1
-var grid_plane_axis := AxisLock.Y
 var grid_plane_origin := Vector3.ZERO
 var grid_axis_preference := AxisLock.Y
 var last_brush_center := Vector3.ZERO
@@ -935,28 +927,6 @@ func _update_grid_material() -> void:
 		grid_system.update_grid_material()
 
 
-func _update_grid_transform(axis: int, origin: Vector3) -> void:
-	if grid_system:
-		grid_system.update_grid_transform(axis, origin)
-
-
-func _effective_grid_axis() -> int:
-	return grid_system.effective_grid_axis() if grid_system else AxisLock.Y
-
-
-func _set_grid_plane_origin(origin: Vector3, axis: int) -> void:
-	if grid_system:
-		grid_system.set_grid_plane_origin(origin, axis)
-
-
-func _intersect_axis_plane(
-	camera: Camera3D, mouse_pos: Vector2, axis: int, origin: Vector3
-) -> Variant:
-	return (
-		grid_system.intersect_axis_plane(camera, mouse_pos, axis, origin) if grid_system else null
-	)
-
-
 # ===========================================================================
 # Visgroup / Group API (delegates to visgroup_system)
 # ===========================================================================
@@ -1154,15 +1124,6 @@ func _create_entity_from_map(info: Dictionary) -> DraftEntity:
 
 func is_entity_node(node: Node) -> bool:
 	return entity_system.is_entity_node(node)
-
-
-## Backward-compat alias — prefer is_entity_node().
-func _is_entity_node(node: Node) -> bool:
-	return is_entity_node(node)
-
-
-func _capture_entity_info(entity: DraftEntity) -> Dictionary:
-	return entity_system.capture_entity_info(entity)
 
 
 func _restore_entity_from_info(info: Dictionary) -> DraftEntity:
@@ -2454,10 +2415,6 @@ func handle_surface_paint_input(
 	)
 
 
-func _regenerate_paint_layers() -> void:
-	paint_system.regenerate_paint_layers()
-
-
 func import_heightmap(path: String) -> void:
 	paint_system.import_heightmap(path)
 
@@ -3746,20 +3703,6 @@ static func _local_triangle_pick_distance(
 		if t >= 0.0 and t < best_t:
 			best_t = t
 	return best_t if best_t < INF else -1.0
-
-
-func _ray_intersect_sphere(origin: Vector3, dir: Vector3, center: Vector3, radius: float) -> float:
-	var oc = origin - center
-	var b = oc.dot(dir)
-	var c = oc.dot(oc) - radius * radius
-	var h = b * b - c
-	if h < 0.0:
-		return -1.0
-	var sqrt_h = sqrt(h)
-	var t = -b - sqrt_h
-	if t < 0.0:
-		t = -b + sqrt_h
-	return t if t >= 0.0 else -1.0
 
 
 func _ray_intersect_aabb(origin: Vector3, dir: Vector3, aabb: AABB) -> float:

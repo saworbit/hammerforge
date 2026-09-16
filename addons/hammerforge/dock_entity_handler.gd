@@ -26,7 +26,6 @@ static func rebuild_entity_props(dock: Object, entity: Node3D) -> void:
 		return
 
 	dock._entity_props_section.visible = true
-	dock._entity_props_entity = entity
 	var content = dock._entity_props_section.get_content()
 
 	var e_data := HFEntityPropUtils.get_entity_data(entity)
@@ -140,7 +139,6 @@ static func clear_entity_props(dock: Object) -> void:
 		if is_instance_valid(ctrl):
 			ctrl.queue_free()
 	dock._entity_props_controls.clear()
-	dock._entity_props_entity = null
 	if dock._entity_props_section:
 		dock._entity_props_section.visible = false
 

@@ -15,12 +15,6 @@ var entity_class: String:
 var entity_data: Dictionary = {}
 var preview_node: Node3D = null
 var _gizmo_update_queued := false
-var entity_properties: Dictionary:
-	get:
-		return entity_data
-	set(value):
-		if value is Dictionary:
-			entity_data = value
 
 
 func _set_entity_type(val: String) -> void:
