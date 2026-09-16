@@ -23,6 +23,7 @@ func run() -> void:
 	await _staleness()
 	await _summary_counts()
 	await _overlay_nodes_in_the_level()
+	await _what_notices_a_dangling_wire()
 
 
 func _spawn(root: Node3D, type: String, where: Vector3, authored: String) -> Node3D:
@@ -268,3 +269,49 @@ func _overlay_nodes_in_the_level() -> void:
 		)
 	if door == null:
 		note("door", "not created")
+
+
+## Every surface that could tell a mapper a wire points at nothing, asked.
+func _what_notices_a_dangling_wire() -> void:
+	var root: Node3D = await fresh_root()
+	var button := _spawn(root, "func_button", Vector3.ZERO, "button_1")
+	var door := _spawn(root, "func_door", Vector3(128, 0, 0), "door_1")
+	root.add_entity_output(button, "OnPressed", "door_1", "Open")
+	await frame()
+	note("wired, both ends live: validate issues", root.validate_level().get("issues", []))
+
+	# The most ordinary way a wire breaks: rename the target in the Scene dock.
+	door.set_meta("entity_name", "door_main")
+	door.name = "door_main"
+	await frame()
+	note("after renaming the target to door_main", "the output still says door_1")
+	note("  entities answering to door_1", root.find_entities_by_name("door_1").size())
+	var report: Dictionary = root.validate_level()
+	note("  validate_level issues", report.get("issues", []))
+	var summary: Dictionary = root.get_connection_summary("button_1")
+	note("  connection summary for the source", summary)
+	var vis = root.io_visualizer
+	vis.set_enabled(true)
+	await frame()
+	note(
+		"  routes on the overlay",
+		float(_drawn_vertices(vis)) / float(VERTS_PER_ROUTE)
+	)
+	var issues: Array = report.get("issues", [])
+	var named := false
+	for issue in issues:
+		if str(issue).find("door_1") >= 0 or str(issue).to_lower().find("dangl") >= 0:
+			named = true
+	if not named:
+		flag(
+			"nothing in the editor reports a wire whose target no longer exists",
+			(
+				"the target was renamed, the output still names door_1, and: "
+				+ "validate_level() reports %s; get_connection_summary() still counts it "
+				+ "as a live trigger with target_names %s; and the overlay draws no route "
+				+ "for it. HFValidationSystem checks an output for empty fields "
+				+ "(hf_validation_system.gd:243) and never resolves target_name against "
+				+ "the level. cleanup_dangling_connections() exists but only runs on "
+				+ "delete, so a rename leaves the wire behind with no surface that says so"
+			) % [issues, summary.get("target_names", [])]
+		)

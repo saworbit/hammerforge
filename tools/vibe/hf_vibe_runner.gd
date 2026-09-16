@@ -106,6 +106,7 @@ const SCENARIOS: Array[String] = [
 	"res://tools/vibe/scenarios/generator_geometry.gd",
 	"res://tools/vibe/scenarios/autosave_history.gd",
 	"res://tools/vibe/scenarios/level_io_types.gd",
+	"res://tools/vibe/scenarios/prefab_materials.gd",
 ]
 
 

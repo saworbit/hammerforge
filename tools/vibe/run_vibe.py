@@ -121,6 +121,7 @@ SCENARIOS = [
     "generator-geometry",
     "autosave-history",
     "level-io-types",
+    "prefab-materials",
 ]
 
 # Generous: chaos runs 300 operations and cost saves eight levels. A scenario
