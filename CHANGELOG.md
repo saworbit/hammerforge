@@ -5,6 +5,19 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Changed
+- **Two release gate checks corrected by running the gate** (#593). The first
+  execution of the document, rather than another addition to it, and it found
+  two of its own lines describing things the product does not do. Create Starter
+  Level is two undo actions, not one: the first Ctrl+Z takes the starter contents
+  and leaves the `LevelRoot` standing, which is what the long checklist's section
+  1b always said, so the gate line was the wrong half. And a clean bake writes
+  nothing to the Console Log. `HFLog` has only `warn()` and no `info()`, and its
+  own comment calls it a mirror for what HammerForge warns about, so a successful
+  bake has no way to reach the Log at all. Both the gate line and section 0a
+  claimed it did. The Bake status row is the thing that actually reports a bake,
+  and it names how long it took. The gate record now carries what the run covered
+  and what it did not, including that the resize-handle drag was signed off
+  rather than executed.
 - **The editor smoke checklist is now a short gate plus a long reference, and the
   gate is enforced** (#593). 599 steps across 60 sections, 57 commits since March,
   and nothing ever ran it. Every edit had the same shape: a fix lands, a line

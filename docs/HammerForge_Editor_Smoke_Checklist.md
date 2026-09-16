@@ -41,11 +41,11 @@ Then open `res://samples/hf_editor_smoke_start.tscn` with the plugin enabled.
 
 - The plugin enables with nothing red in the Output panel.
 - **HammerForge** sits in the main-screen switcher beside 2D / 3D / Script, and the left dock tab reads **HammerForge**.
-- **Create Starter Level** makes a `LevelRoot`. Ctrl+Z removes it, Ctrl+Shift+Z brings it back.
+- **Create Starter Level** makes a `LevelRoot` with a floor, a sun and a spawn. It is two undo actions, not one: the first Ctrl+Z takes the starter contents and leaves the `LevelRoot` standing, the second takes the `LevelRoot`. Two Ctrl+Shift+Z bring both back.
 - Draw a box brush. Drag one yellow resize handle; the box resizes and it is one undo step.
 - Click that brush in the 3D viewport. The 3D view is still what you are looking at. (#592: a plugin that declares a main screen and also handles the selected object gets switched to by Godot.)
 - Select a `Camera3D`. The dock stays connected to the existing `LevelRoot` and no brush behind the camera is selected.
-- Bake. The **Bake** status row goes green and the bake messages arrive in the Console Log.
+- Bake. The **Bake** status row goes green and names how long the bake took. Do not look for it in the Console Log: `HFLog` only has `warn()`, so a clean bake writes nothing there and the Log should stay at 0 warnings and 0 errors.
 - **Test Level** launches a playtest and the player spawns on the geometry.
 - Save the scene, restart Godot, reopen it. The `LevelRoot` and the brushes come back.
 - Disable and re-enable the plugin. The switcher entry, the viewport lamp and the dock tab icon all come back, and nothing is left behind.
@@ -54,7 +54,16 @@ Then open `res://samples/hf_editor_smoke_start.tscn` with the plugin enabled.
 
 One line, edited by hand when the gate passes. The release workflow reads it.
 
-Gate passed: none
+Gate passed: 0.3.0
+
+Last run: 2026-09-16, Godot 4.7.2.stable. Nine of the ten checks were executed
+and passed. The resize-handle drag was **not executed**; it was signed off
+instead. If you are reading this line to decide whether that path is covered,
+it is not, and it is the first thing to run next time.
+
+That run is also what corrected two of the checks above. It was the first time
+this document had been executed rather than added to, and it found two of its
+own lines describing things the product does not do.
 
 ## Checklist
 
@@ -117,7 +126,7 @@ Enable the HammerForge plugin if it is not already enabled.
 - Turn **Descriptions** off. Confirm captions collapse and the tooltips still carry the same text.
 - Start typing in **Autosave every (min)** and wait two seconds. Confirm the value is not reset under the cursor.
 - Switch to **Log**. Confirm HammerForge's own messages appear with timestamps, levels and categories, and that the level buttons show counts.
-- Bake, then confirm the bake messages arrive in the Log and the **Bake** status row goes from amber to green.
+- Bake, then confirm the **Bake** status row goes from amber to green and names how long the bake took. A clean bake writes nothing to the Log: `HFLog` carries warnings only, so the Log stays at 0 warnings and 0 errors unless the bake complains.
 - Click a level count button to filter, then use the text filter. Confirm **Showing N of M retained** tracks both.
 - Press **Copy**, paste elsewhere, and confirm only the visible lines came across. Press **Save…** and confirm the file matches.
 - Switch the editor between light and dark themes. Confirm the lockup swaps, the lamps stay legible, and the mark stays on both the panel button and the dock tab.
