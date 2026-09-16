@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Changed
+- **The editor smoke checklist is now a short gate plus a long reference, and the
+  gate is enforced** (#593). 599 steps across 60 sections, 57 commits since March,
+  and nothing ever ran it. Every edit had the same shape: a fix lands, a line
+  describing the new behaviour is added, and that line becomes the evidence the
+  case is covered. #592 is the proof it was not being read from - a brush click
+  threw the editor onto the HammerForge main screen for eleven days, straight
+  through a dozen steps in section 2b that each need a brush clicked in the 3D
+  viewport, while the document was edited five times inside that window. The top
+  of the file now says what it is: a ten-minute Release gate that is run, and a
+  reference below it that is not and never has been. `release.yml` reads the
+  gate's recorded version and fails the release when it does not match the
+  version being shipped, because a warning nobody reads is the thing being fixed.
+  The rule behind it is in `DEVELOPMENT.md`: adding a line to the checklist is
+  not evidence that a case is covered, so put the check where it can fail on its
+  own. The 599 steps are kept rather than cut - they are the only record of what
+  has not been verified, and deleting them would lose that while making the
+  document look healthier.
+
 ### Fixed
 - **Clicking a brush in the 3D viewport no longer throws you onto the HammerForge
   main screen** (#592). Nothing in the plugin asked for the switch. Godot's

@@ -632,6 +632,28 @@ For editor-only coverage that headless tests cannot exercise, use:
 - `res://samples/hf_editor_smoke_start.tscn`
 - [`docs/HammerForge_Editor_Smoke_Checklist.md`](docs/HammerForge_Editor_Smoke_Checklist.md)
 
+**Adding a line to the smoke checklist is not evidence that a case is covered.**
+The checklist is a document that gets written to. Only its short Release gate
+section gets run, and `.github/workflows/release.yml` refuses to ship a version
+that is not recorded there as having passed. Everything below the gate is a
+reference, and most of it has never been run.
+
+So when you close a fix, put the check where it can fail on its own:
+
+- If a headless test can see it, write one in `tests/`. That includes contracts
+  that only exist as a pair across two functions - assert the pair where both
+  halves are written, rather than asserting each half separately and leaving the
+  combination untested.
+- If only the live editor can see it, add it to the Release gate and keep the
+  gate short. A gate that grows stops being run.
+- If neither can see it, say so in the close comment instead of adding a
+  checklist line and calling it covered.
+
+#592 is the worked example: a brush click threw the editor onto the HammerForge
+main screen for eleven days, straight through a dozen checklist steps that each
+needed a brush clicked in the 3D viewport, while the checklist was edited five
+times inside that window.
+
 If you see "class_names not imported", run `godot --headless --import --path .` first to register GUT classes.
 
 Configuration is in `.gutconfig.json` (test directory, prefix, exit behavior).

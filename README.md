@@ -159,7 +159,7 @@ This repository does not vendor an MCP server or any other editor bridge. If you
 | [Texture + Materials](docs/HammerForge_Texture_Materials.md) | Face materials, UVs, and surface paint |
 | [Prototype Textures](docs/HammerForge_Prototype_Textures.md) | Built-in 150 SVG textures |
 | [Floor Paint Design](docs/HammerForge_FloorPaint_Greyboxing.md) | Grid paint system design |
-| [Editor Smoke Checklist](docs/HammerForge_Editor_Smoke_Checklist.md) | Repeatable live-editor verification flow |
+| [Editor Smoke Checklist](docs/HammerForge_Editor_Smoke_Checklist.md) | The short release gate, and the long live-editor reference behind it |
 | [Development + Testing](DEVELOPMENT.md) | Local setup, architecture, test checklist |
 | [Spec](HammerForge_SPEC.md) | Technical specification |
 | [Changelog](CHANGELOG.md) | Version history |
