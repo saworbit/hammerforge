@@ -33,7 +33,9 @@ func run() -> void:
 	await _height_floor()
 
 
-func _drag(root: Node3D, a: Vector3, b: Vector3, h: float, shape: int, opts: Dictionary = {}) -> Dictionary:
+func _drag(
+	root: Node3D, a: Vector3, b: Vector3, h: float, shape: int, opts: Dictionary = {}
+) -> Dictionary:
 	return root.drag_system._compute_brush_info(
 		a,
 		b,
@@ -78,17 +80,33 @@ func _round_shapes_leave_the_rectangle() -> void:
 		var info := _drag(root, Vector3.ZERO, Vector3(128, 0, 32), 64.0, shape)
 		var got := _aabb(info)
 		note("shape %d size for a 128x32 drag" % shape, info["size"])
-		note("shape %d footprint" % shape, "x %s..%s  z %s..%s" % [
-			got.position.x, got.position.x + got.size.x,
-			got.position.z, got.position.z + got.size.z
-		])
+		note(
+			"shape %d footprint" % shape,
+			(
+				"x %s..%s  z %s..%s"
+				% [
+					got.position.x,
+					got.position.x + got.size.x,
+					got.position.z,
+					got.position.z + got.size.z
+				]
+			)
+		)
 		var overshoot_z: float = (got.position.z + got.size.z) - (rect.position.z + rect.size.z)
 		if overshoot_z > 0.5:
-			flag(
-				"a %s drawn in a 128x32 rectangle overshoots it by %s units in Z" % [
-					"cylinder" if shape == CYLINDER else ("cone" if shape == CONE else "sphere"),
-					overshoot_z
-				],
+			known(
+				604,
+				(
+					"a %s drawn in a 128x32 rectangle overshoots it by %s units in Z"
+					% [
+						(
+							"cylinder"
+							if shape == CYLINDER
+							else ("cone" if shape == CONE else "sphere")
+						),
+						overshoot_z
+					]
+				),
 				(
 					"the round shapes square their base off the *longer* dragged side and "
 					+ "anchor at the drag origin, so the brush covers four times the ground "
@@ -113,10 +131,14 @@ func _a_sphere_ignores_its_height_stage() -> void:
 		if not produced.has(float(pair[1])):
 			produced.append(float(pair[1]))
 	if produced.size() == 1:
-		flag(
+		known(
+			605,
 			"the height stage of a sphere drag changes nothing",
 			(
-				("three different dragged heights all produced %s (the base diameter). " % produced[0])
+				(
+					"three different dragged heights all produced %s (the base diameter). "
+					% produced[0]
+				)
 				+ "The second stage of the drag still runs, the HUD still counts the height "
 				+ "up and down, and a number typed into it is still accepted -- and none of "
 				+ "it reaches the brush"
@@ -140,11 +162,13 @@ func _degenerate_and_reversed_drags() -> void:
 	note("dragged forward", _aabb(forward))
 	note("dragged backward over the same rectangle", _aabb(reversed))
 	if _aabb(forward).size != _aabb(reversed).size:
-		flag("dragging the same rectangle backwards makes a different brush", [
-			_aabb(forward), _aabb(reversed)
-		])
-	if not is_equal_approx(_aabb(reversed).position.y, 96.0) and not is_equal_approx(
-		_aabb(reversed).position.y, 0.0
+		flag(
+			"dragging the same rectangle backwards makes a different brush",
+			[_aabb(forward), _aabb(reversed)]
+		)
+	if (
+		not is_equal_approx(_aabb(reversed).position.y, 96.0)
+		and not is_equal_approx(_aabb(reversed).position.y, 0.0)
 	):
 		note("backward drag sits at y", _aabb(reversed).position.y)
 
@@ -158,9 +182,7 @@ func _degenerate_and_reversed_drags() -> void:
 func _shift_recentres_on_the_start_corner() -> void:
 	var root: Node3D = await fresh_root()
 	var plain := _drag(root, Vector3.ZERO, Vector3(128, 0, 32), 64.0, BOX)
-	var shifted := _drag(
-		root, Vector3.ZERO, Vector3(128, 0, 32), 64.0, BOX, {"equal_base": true}
-	)
+	var shifted := _drag(root, Vector3.ZERO, Vector3(128, 0, 32), 64.0, BOX, {"equal_base": true})
 	note("plain 128x32 drag", _aabb(plain))
 	note("same drag with Shift held", _aabb(shifted))
 	note(
@@ -201,7 +223,10 @@ func _height_floor() -> void:
 		note(
 			"a drag cannot make a brush thinner than one grid step",
 			(
-				"height clamps up to grid_snap (%s); a %s-unit trim panel has to be made "
-				+ "by drawing thick and resizing"
-			) % [root.grid_snap, root.grid_snap * 0.25]
+				(
+					"height clamps up to grid_snap (%s); a %s-unit trim panel has to be made "
+					+ "by drawing thick and resizing"
+				)
+				% [root.grid_snap, root.grid_snap * 0.25]
+			)
 		)

@@ -67,7 +67,8 @@ func _export_ranges_are_only_the_inspectors() -> void:
 		if not kept.is_empty():
 			leaky.append("%s kept %s" % [prop, str(kept)])
 	if not leaky.is_empty():
-		flag(
+		known(
+			622,
 			"%d @export_range properties hold values outside their own range" % leaky.size(),
 			(
 				("%s. " % str(leaky))

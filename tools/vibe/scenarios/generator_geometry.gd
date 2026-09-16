@@ -109,7 +109,9 @@ func _sweep_each_generator() -> void:
 			continue
 		for entry in bad:
 			if reported >= MAX_REPORTS:
-				note("  -- more problems suppressed", "%d in total for %s" % [bad.size(), type_name])
+				note(
+					"  -- more problems suppressed", "%d in total for %s" % [bad.size(), type_name]
+				)
 				break
 			reported += 1
 			flag(

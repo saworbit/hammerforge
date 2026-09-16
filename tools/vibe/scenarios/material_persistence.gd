@@ -32,20 +32,29 @@ func _make(name: String, colour: Color) -> StandardMaterial3D:
 func _palette(root: Node3D) -> Array:
 	var out: Array = []
 	for m in root.get_materials():
-		out.append("null" if m == null else str(m.resource_name if m.resource_name != "" else m.resource_path))
+		out.append(
+			(
+				"null"
+				if m == null
+				else str(m.resource_name if m.resource_name != "" else m.resource_path)
+			)
+		)
 	return out
 
 
 ## Four materials made in the session, applied to faces, saved and loaded.
 func _a_runtime_material_through_the_level_file() -> void:
 	var root: Node3D = await fresh_root()
-	root.set_materials(
-		[
-			_make("brick_red", Color(0.8, 0.2, 0.2)),
-			_make("metal_grey", Color(0.5, 0.5, 0.55)),
-			_make("wood", Color(0.5, 0.35, 0.15)),
-			_make("glass", Color(0.4, 0.7, 0.9, 0.5)),
-		]
+	(
+		root
+		. set_materials(
+			[
+				_make("brick_red", Color(0.8, 0.2, 0.2)),
+				_make("metal_grey", Color(0.5, 0.5, 0.55)),
+				_make("wood", Color(0.5, 0.35, 0.15)),
+				_make("glass", Color(0.4, 0.7, 0.9, 0.5)),
+			]
+		)
 	)
 	var b = box(root, Vector3(128, 128, 128))
 	await frame()
@@ -77,15 +86,18 @@ func _a_runtime_material_through_the_level_file() -> void:
 			back_faces.append(f.material_idx)
 	note("face material slots after the load", back_faces)
 	if live == 0:
-		flag(
+		known(
+			617,
 			"every material made in the editor is null after a save and a load",
 			(
-				("a palette of 4 came back as %s, and the faces still point at slots " % [
-					_palette(loaded)
-				])
-				+ ("%s. HFLevelIO.encode_variant() writes a Resource as its resource_path " % [
-					back_faces
-				])
+				(
+					"a palette of 4 came back as %s, and the faces still point at slots "
+					% [_palette(loaded)]
+				)
+				+ (
+					"%s. HFLevelIO.encode_variant() writes a Resource as its resource_path "
+					% [back_faces]
+				)
 				+ "and returns null for one that has none, so the level file records "
 				+ "nothing at all about a material the mapper built in the session -- not "
 				+ "its colour, not its name. save_hflevel() reports OK"
@@ -96,9 +108,13 @@ func _a_runtime_material_through_the_level_file() -> void:
 ## A palette with both kinds in it, so the slot indices matter.
 func _mixed_palette() -> void:
 	var root: Node3D = await fresh_root()
-	var shipped = load("res://addons/hammerforge/textures/prototypes/materials/proto_checker_red.tres")
+	var shipped = load(
+		"res://addons/hammerforge/textures/prototypes/materials/proto_checker_red.tres"
+	)
 	note("a shipped prototype loaded", shipped != null)
-	root.set_materials([shipped, _make("runtime_a", Color.RED), shipped, _make("runtime_b", Color.BLUE)])
+	root.set_materials(
+		[shipped, _make("runtime_a", Color.RED), shipped, _make("runtime_b", Color.BLUE)]
+	)
 	var b = box(root, Vector3(64, 64, 64))
 	await frame()
 	for i in b.faces.size():

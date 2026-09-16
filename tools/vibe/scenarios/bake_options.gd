@@ -96,15 +96,20 @@ func _mesh_facts(node: Node, facts: Array) -> Array:
 			var tmp := "user://vibe_bake_mesh.res"
 			if ResourceSaver.save(am, tmp) == OK:
 				res_bytes = HFVibe.file_size(tmp)
-		facts.append({
-			"node": str(node.name),
-			"surfaces": surfaces,
-			"lods": lods,
-			"uv2": uv2,
-			"verts": verts,
-			"res_bytes": res_bytes,
-			"indices": facts_indexed,
-		})
+		(
+			facts
+			. append(
+				{
+					"node": str(node.name),
+					"surfaces": surfaces,
+					"lods": lods,
+					"uv2": uv2,
+					"verts": verts,
+					"res_bytes": res_bytes,
+					"indices": facts_indexed,
+				}
+			)
+		)
 	for c in node.get_children():
 		_mesh_facts(c, facts)
 	return facts
@@ -198,12 +203,14 @@ func _lods_and_uvs_on_the_mesh() -> void:
 		var lod_count := int(lods_on[0]["lods"]) if not lods_on.is_empty() else -1
 		var indices := int(off[0]["indices"]) if not off.is_empty() else -1
 		if lod_count == 0:
-			flag(
+			known(
+				611,
 				"bake_generate_lods produces no LODs, because the baked surface has no index array",
 				(
-					("the baked mesh is %d loose vertices with %d indices, and " % [
-						int(off[0]["verts"]), indices
-					])
+					(
+						"the baked mesh is %d loose vertices with %d indices, and "
+						% [int(off[0]["verts"]), indices]
+					)
 					+ "ImporterMesh.generate_lods() builds LOD *index* arrays by simplifying an "
 					+ "indexed surface -- with none to simplify it returns the mesh unchanged. "
 					+ "Surface count, vertex count and the saved resource size are all the same "
@@ -212,20 +219,23 @@ func _lods_and_uvs_on_the_mesh() -> void:
 			)
 	if results.size() >= 4:
 		var indexed_lods: Array = results[3]["meshes"]
-		note(
-			"LODs with lightmap UV2 also on (which re-indexes the surface)",
-			indexed_lods
-		)
+		note("LODs with lightmap UV2 also on (which re-indexes the surface)", indexed_lods)
 		if not indexed_lods.is_empty() and int(indexed_lods[0]["lods"]) > 0:
 			note(
 				"  -- confirms the cause",
 				(
-					"the same LOD switch produces %d LOD level(s) once something else has "
-					+ "given the surface an index array"
-				) % int(indexed_lods[0]["lods"])
+					(
+						"the same LOD switch produces %d LOD level(s) once something else has "
+						+ "given the surface an index array"
+					)
+					% int(indexed_lods[0]["lods"])
+				)
 			)
 	if results.size() >= 6:
-		note("LODs with Merge meshes on instead (which indexes through SurfaceTool)", results[4]["meshes"])
+		note(
+			"LODs with Merge meshes on instead (which indexes through SurfaceTool)",
+			results[4]["meshes"]
+		)
 		note("Merge meshes on, LODs off", results[5]["meshes"])
 	if results.size() >= 3:
 		var off2: Array = results[0]["meshes"]
@@ -235,8 +245,10 @@ func _lods_and_uvs_on_the_mesh() -> void:
 				"bake_lightmap_uv2 changes nothing on the baked mesh",
 				(
 					"the setting names a second UV channel for lightmapping and the baked "
-					+ "surface has the same arrays either way: %s"
-					% HFVibe.canonical(off2).substr(0, 300)
+					+ (
+						"surface has the same arrays either way: %s"
+						% HFVibe.canonical(off2).substr(0, 300)
+					)
 				)
 			)
 
@@ -308,15 +320,19 @@ func _what_the_unindexed_mesh_costs() -> void:
 		)
 		if float(indexed_verts) < 0.75 * float(total_verts):
 			flag(
-				"the baked mesh ships as loose triangles, %.1fx the vertices it needs"
-				% (float(total_verts) / float(indexed_verts)),
 				(
-					("100 boxes bake to %d vertices and %d bytes; the same surface " % [
-						total_verts, total_bytes
-					])
-					+ ("through SurfaceTool.index() is %d vertices and %d bytes. " % [
-						indexed_verts, indexed_bytes
-					])
+					"the baked mesh ships as loose triangles, %.1fx the vertices it needs"
+					% (float(total_verts) / float(indexed_verts))
+				),
+				(
+					(
+						"100 boxes bake to %d vertices and %d bytes; the same surface "
+						% [total_verts, total_bytes]
+					)
+					+ (
+						"through SurfaceTool.index() is %d vertices and %d bytes. "
+						% [indexed_verts, indexed_bytes]
+					)
 					+ "Every baked level carries that, in the scene file and in GPU "
 					+ "memory, and it is also why Generate LODs does nothing"
 				)
@@ -365,24 +381,31 @@ func _occluder_count() -> void:
 			if span > widest:
 				widest = span
 				widest_tris = oc.vertices.size() / 3
-		rows.append({
-			"brushes": count,
-			"occluders": occ,
-			"bake_ms": snappedf(bake_ms, 0.1),
-			"level_span": snappedf(float(count) * 256.0, 1.0),
-			"widest_occluder_span": snappedf(widest, 1.0),
-			"tris_in_it": widest_tris,
-		})
+		(
+			rows
+			. append(
+				{
+					"brushes": count,
+					"occluders": occ,
+					"bake_ms": snappedf(bake_ms, 0.1),
+					"level_span": snappedf(float(count) * 256.0, 1.0),
+					"widest_occluder_span": snappedf(widest, 1.0),
+					"tris_in_it": widest_tris,
+				}
+			)
+		)
 		note("occluder row", rows[-1])
 	note("occluders per brush", rows)
 	var last: Dictionary = rows[-1]
 	if float(last["widest_occluder_span"]) > float(last["level_span"]) * 0.5:
-		flag(
+		known(
+			614,
 			"coplanar faces on unconnected brushes merge into one level-spanning occluder",
 			(
-				("%d separate boxes %d units apart produced an occluder %s units across " % [
-					int(last["brushes"]), 256, last["widest_occluder_span"]
-				])
+				(
+					"%d separate boxes %d units apart produced an occluder %s units across "
+					% [int(last["brushes"]), 256, last["widest_occluder_span"]]
+				)
 				+ ("holding %d triangles from all of them. " % int(last["tris_in_it"]))
 				+ "_generate_occluders() groups triangles by normal and plane distance "
 				+ "alone, with no test for whether they are anywhere near each other, and "
@@ -454,14 +477,17 @@ func _atlas_and_face_materials() -> void:
 					materials_on_meshes[m.get_instance_id()] = true
 			if mi.material_override:
 				materials_on_meshes[mi.material_override.get_instance_id()] = true
-		rows.append(
-			{
-				"settings": combo,
-				"palette": mats.size(),
-				"meshes": facts.size(),
-				"surfaces": surfaces,
-				"distinct materials on the baked mesh": materials_on_meshes.size(),
-			}
+		(
+			rows
+			. append(
+				{
+					"settings": combo,
+					"palette": mats.size(),
+					"meshes": facts.size(),
+					"surfaces": surfaces,
+					"distinct materials on the baked mesh": materials_on_meshes.size(),
+				}
+			)
 		)
 		note("atlas row", rows[-1])
 	note("atlas comparison", rows)
@@ -480,19 +506,27 @@ func _atlas_and_face_materials() -> void:
 	if packed == null:
 		note("build_atlas on the same six materials", "returned null")
 	else:
-		note("build_atlas on the same six materials", {
-			"atlased": packed.atlased_keys.size(),
-			"fallback": packed.fallback_keys.size(),
-			"has atlas material": packed.atlas_material != null,
-			"unplaced": packed.get("unplaced").size() if packed.get("unplaced") != null else "n/a",
-		})
+		note(
+			"build_atlas on the same six materials",
+			{
+				"atlased": packed.atlased_keys.size(),
+				"fallback": packed.fallback_keys.size(),
+				"has atlas material": packed.atlas_material != null,
+				"unplaced":
+				packed.get("unplaced").size() if packed.get("unplaced") != null else "n/a",
+			}
+		)
 		var first_img = null
 		if not direct.is_empty() and direct[0] is StandardMaterial3D:
 			var tex = (direct[0] as StandardMaterial3D).albedo_texture
 			first_img = tex.get_image() if tex else null
 		note(
 			"the first material's albedo image, headless",
-			"none" if first_img == null else "%dx%d" % [first_img.get_width(), first_img.get_height()]
+			(
+				"none"
+				if first_img == null
+				else "%dx%d" % [first_img.get_width(), first_img.get_height()]
+			)
 		)
 	if rows.size() >= 4:
 		var face_mats: Dictionary = rows[1]
@@ -516,19 +550,24 @@ func _atlas_and_face_materials() -> void:
 			)
 		)
 		if (
-			int(atlas["distinct materials on the baked mesh"])
-			>= int(face_mats["distinct materials on the baked mesh"])
+			(
+				int(atlas["distinct materials on the baked mesh"])
+				>= int(face_mats["distinct materials on the baked mesh"])
+			)
 			and int(face_mats["distinct materials on the baked mesh"]) > 1
 		):
-			flag(
+			known(
+				623,
 				"the Use atlas bake option changes nothing and reports nothing",
 				(
-					("a 6-material level bakes to %s distinct material(s) with face "
-					+ "materials on, %s with the atlas on as well, and %s once the same "
-					+ "level's UVs are scaled down by 64. Handed the same six materials "
-					+ "directly, HFMaterialAtlas.build_atlas() packs all six with no "
-					+ "fallbacks and returns an atlas material -- so the packer works and "
-					+ "the bake never gets an atlas out of it. Nothing reports a skip")
+					(
+						"a 6-material level bakes to %s distinct material(s) with face "
+						+ "materials on, %s with the atlas on as well, and %s once the same "
+						+ "level's UVs are scaled down by 64. Handed the same six materials "
+						+ "directly, HFMaterialAtlas.build_atlas() packs all six with no "
+						+ "fallbacks and returns an atlas material -- so the packer works and "
+						+ "the bake never gets an atlas out of it. Nothing reports a skip"
+					)
 					% [
 						face_mats["distinct materials on the baked mesh"],
 						atlas["distinct materials on the baked mesh"],

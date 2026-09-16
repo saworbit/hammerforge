@@ -82,10 +82,14 @@ func _round_trip_every_type() -> void:
 				% [
 					HFVibe.canonical(original).substr(0, 40),
 					HFVibe.canonical(back).substr(0, 40),
-					"same" if same and type_kept else (
-						"value kept, type now %s" % type_string(typeof(back))
-						if same
-						else "LOST, came back as %s" % type_string(typeof(back))
+					(
+						"same"
+						if same and type_kept
+						else (
+							"value kept, type now %s" % type_string(typeof(back))
+							if same
+							else "LOST, came back as %s" % type_string(typeof(back))
+						)
 					)
 				]
 			)
@@ -94,7 +98,8 @@ func _round_trip_every_type() -> void:
 			lost.append("%s -> %s" % [label, type_string(typeof(back))])
 	note("types the encoder does not round trip", lost)
 	if not lost.is_empty():
-		flag(
+		known(
+			619,
 			"%d Variant types silently change type through the .hflevel encoder" % lost.size(),
 			(
 				("%s. " % str(lost))
@@ -120,14 +125,18 @@ func _dictionary_keys() -> void:
 			kinds.append(type_string(typeof(k)))
 		note("  key types after", kinds)
 		if not kinds.has("Vector2i"):
-			flag(
+			known(
+				619,
 				"a Dictionary key is never encoded, so a non-String key comes back a String",
 				(
-					"encode_variant() encodes the values of a Dictionary and copies the "
-					+ "keys: `dict_out[key] = encode_variant(value[key], _depth + 1)`. A "
-					+ "Vector2i key -- the shape a paint grid cell is -- becomes the String "
-					+ "'%s' and stays one. Key types after the trip: %s"
-				) % [str(keys[0]) if not keys.is_empty() else "?", kinds]
+					(
+						"encode_variant() encodes the values of a Dictionary and copies the "
+						+ "keys: `dict_out[key] = encode_variant(value[key], _depth + 1)`. A "
+						+ "Vector2i key -- the shape a paint grid cell is -- becomes the String "
+						+ "'%s' and stays one. Key types after the trip: %s"
+					)
+					% [str(keys[0]) if not keys.is_empty() else "?", kinds]
+				)
 			)
 
 

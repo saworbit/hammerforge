@@ -137,6 +137,19 @@ it from here.
 | `validate-fix` | what Validate + Fix reports against what it repaired and what is left |
 | `chaos-systems` | randomised registry operations, with dangling references checked after each |
 | `dock-undo-two` | undo coverage for the structure, library, terrain slot and surface paint commands |
+| `io-visualizer` | what the wiring overlay draws against what the level stores, and what notices a dangling wire |
+| `drag-create` | whether the brush a drag produces is the size and place the drag rectangle described |
+| `level-scale` | what an undo step, a save, a validate and a bake cost as a level grows |
+| `playtest-scene` | what the exported playtest scene contains, read back off disk |
+| `bake-options` | the nine optional bake toggles against what each one puts in the baked container |
+| `visibility-workflow` | which operations agree that a hidden brush is hidden |
+| `chaos-io` | randomised edits with a save/load, a state round trip and a `.map` round trip along the way |
+| `material-persistence` | whether a material made in the editor survives a `.hflevel` save |
+| `generator-geometry` | every generator across its schema's legal range, each piece checked |
+| `autosave-history` | whether the autosave rotation keeps the number of backups it says, and whose |
+| `level-io-types` | which Variant types survive the `.hflevel` encoder |
+| `prefab-materials` | whether a prefab carries the materials it was built with, or just slot numbers |
+| `bake-equivalence` | whether `bake_dirty()` produces the geometry a full bake would |
 
 ## Adding a scenario
 
@@ -245,6 +258,20 @@ Every one of these has cost a wasted run.
   `var entries: Array = data.get("entities", [])` takes the whole function down
   when the value is a String, skipping every fallback below it. This is a defect
   shape worth hunting (#370, #380) and a trap when a scenario does the same.
+- **Default `Array` and `Dictionary` parameters are shared between calls.** A
+  helper written `func collect(node, out: Array = [])` accumulates across every
+  call in the run, which looks like the code under test producing six copies of
+  one answer. Pass a fresh `[]` at every call site.
+- **A bare headless `LevelRoot` has no change tracker.** `HFBrushChangeTracker`
+  lives on the plugin, so writing `brush.global_position` directly never tags the
+  brush dirty and `bake_dirty()` correctly rebuilds nothing. Drive edits through
+  the `LevelRoot` API (`nudge_brushes_by_id`, `rotate_managed_nodes`,
+  `tag_brush_dirty`) or the scenario measures the harness.
+- **`HFVibe.settle_save()` is a coroutine.** Calling it without `await` returns
+  immediately and the file is measured before the writer has finished, which
+  reads as a save that wrote nothing.
+- **A scenario member named `_tree` shadows the base class's `SceneTree`.**
+  `Member "_tree" is not a function` is what that looks like.
 - **`Transform3D` has no `applied_to()`.** `HFDuplicator.CopyPlacement` does, and
   the array preview and the array builder both take `CopyPlacement` objects, not
   raw transforms. Build them with `HFDuplicator.linear_placements()` and friends.

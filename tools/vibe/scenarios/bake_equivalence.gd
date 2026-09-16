@@ -77,7 +77,14 @@ func _fingerprint(root: Node3D) -> Dictionary:
 		"tris": tris,
 		"collision_shapes": shapes,
 		"vertex_sum": (centroid / maxf(1.0, float(verts))).snapped(Vector3.ONE * 0.001),
-		"bounds": "%s .. %s" % [bounds.position.snapped(Vector3.ONE * 0.01), (bounds.position + bounds.size).snapped(Vector3.ONE * 0.01)],
+		"bounds":
+		(
+			"%s .. %s"
+			% [
+				bounds.position.snapped(Vector3.ONE * 0.01),
+				(bounds.position + bounds.size).snapped(Vector3.ONE * 0.01)
+			]
+		),
 	}
 
 

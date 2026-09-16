@@ -80,23 +80,29 @@ func _the_cost_curve() -> void:
 		await root.bake()
 		var bake_ms := _ms(t)
 
-		rows.append(
-			{
-				"brushes": count,
-				"build_ms": snappedf(build_ms, 0.1),
-				"capture_ms": snappedf(capture_ms, 0.1),
-				"state_kb": snappedf(float(state_bytes) / 1024.0, 0.1),
-				"restore_ms": snappedf(restore_ms, 0.1),
-				"validate_ms": snappedf(validate_ms, 0.1),
-				"save_blocking_ms": snappedf(queued_ms, 0.1),
-				"save_total_ms": snappedf(save_ms, 0.1),
-				"file_kb": snappedf(size_kb, 0.1),
-				"bake_ms": snappedf(bake_ms, 0.1),
-			}
+		(
+			rows
+			. append(
+				{
+					"brushes": count,
+					"build_ms": snappedf(build_ms, 0.1),
+					"capture_ms": snappedf(capture_ms, 0.1),
+					"state_kb": snappedf(float(state_bytes) / 1024.0, 0.1),
+					"restore_ms": snappedf(restore_ms, 0.1),
+					"validate_ms": snappedf(validate_ms, 0.1),
+					"save_blocking_ms": snappedf(queued_ms, 0.1),
+					"save_total_ms": snappedf(save_ms, 0.1),
+					"file_kb": snappedf(size_kb, 0.1),
+					"bake_ms": snappedf(bake_ms, 0.1),
+				}
+			)
 		)
 		note("scale row", rows[-1])
 		if report.has("issues"):
-			note("  validate issues", report["issues"].size() if report["issues"] is Array else report["issues"])
+			note(
+				"  validate issues",
+				report["issues"].size() if report["issues"] is Array else report["issues"]
+			)
 
 	note("cost curve", rows)
 	if rows.size() >= 2:
@@ -124,9 +130,12 @@ func _the_cost_curve() -> void:
 	# The number a mapper feels: one undo step on a level this size.
 	var last: Dictionary = rows[-1]
 	if float(last["save_blocking_ms"]) > 100.0:
-		flag(
-			"save_hflevel() blocks for %.0f ms at %d brushes before the write thread starts"
-			% [last["save_blocking_ms"], last["brushes"]],
+		known(
+			601,
+			(
+				"save_hflevel() blocks for %.0f ms at %d brushes before the write thread starts"
+				% [last["save_blocking_ms"], last["brushes"]]
+			),
 			(
 				"the write is threaded but the serialization is not; autosave runs on a "
 				+ "timer, so the editor stalls for that long on its own schedule. The whole "
@@ -136,19 +145,25 @@ func _the_cost_curve() -> void:
 	var undo_ms := float(last["capture_ms"]) + float(last["restore_ms"])
 	note(
 		"one undo step at %d brushes" % last["brushes"],
-		"%.1f ms (capture %.1f + restore %.1f), snapshot %s KB"
-		% [undo_ms, last["capture_ms"], last["restore_ms"], last["state_kb"]]
+		(
+			"%.1f ms (capture %.1f + restore %.1f), snapshot %s KB"
+			% [undo_ms, last["capture_ms"], last["restore_ms"], last["state_kb"]]
+		)
 	)
 	if undo_ms > 100.0:
-		flag(
+		known(
+			600,
 			"an undo step at %d brushes costs %.0f ms" % [last["brushes"], undo_ms],
 			(
-				"undo is a whole-level snapshot -- capture_state() walks every brush, face, "
-				+ "entity and paint cell and restore_state() clears the level and rebuilds "
-				+ "it -- so the price of undoing a one-brush nudge is set by the size of the "
-				+ "level, not the size of the edit. The snapshot itself is %s KB, and the "
-				+ "editor keeps a stack of them"
-			) % last["state_kb"]
+				(
+					"undo is a whole-level snapshot -- capture_state() walks every brush, face, "
+					+ "entity and paint cell and restore_state() clears the level and rebuilds "
+					+ "it -- so the price of undoing a one-brush nudge is set by the size of the "
+					+ "level, not the size of the edit. The snapshot itself is %s KB, and the "
+					+ "editor keeps a stack of them"
+				)
+				% last["state_kb"]
+			)
 		)
 
 
@@ -235,15 +250,19 @@ func _what_the_save_thread_is_not_doing() -> void:
 	)
 	note("encoded payload", "%.1f KB" % (float(var_to_bytes(encoded).size()) / 1024.0))
 	if duplicate_ms > 5.0:
-		flag(
+		known(
+			601,
 			"save_hflevel() deep-copies the encoded level it was just handed",
 			(
-				"capture_hflevel_state() returns a freshly built Dictionary from "
-				+ "HFLevelIO.encode_variant(), and save_hflevel() then does "
-				+ ".duplicate(true) on it before passing it to the thread. Nothing else "
-				+ "holds a reference to it. At 400 brushes the copy alone is %.1f ms on "
-				+ "top of the %.1f ms capture, and it doubles peak memory for the save"
-			) % [duplicate_ms, capture_ms]
+				(
+					"capture_hflevel_state() returns a freshly built Dictionary from "
+					+ "HFLevelIO.encode_variant(), and save_hflevel() then does "
+					+ ".duplicate(true) on it before passing it to the thread. Nothing else "
+					+ "holds a reference to it. At 400 brushes the copy alone is %.1f ms on "
+					+ "top of the %.1f ms capture, and it doubles peak memory for the save"
+				)
+				% [duplicate_ms, capture_ms]
+			)
 		)
 	if copy.size() != (encoded as Dictionary).size():
 		note("copy differs in size", [copy.size(), (encoded as Dictionary).size()])

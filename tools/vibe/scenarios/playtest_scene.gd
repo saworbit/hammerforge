@@ -23,15 +23,18 @@ func run() -> void:
 
 
 func _spawn(root: Node3D, type: String, where: Vector3, authored: String) -> Node3D:
-	return root._restore_entity_from_info(
-		{
-			"entity_type": type,
-			"entity_class": type,
-			"transform": Transform3D(Basis.IDENTITY, where),
-			"properties": {},
-			"name": authored,
-			"entity_name": authored,
-		}
+	return (
+		root
+		. _restore_entity_from_info(
+			{
+				"entity_type": type,
+				"entity_class": type,
+				"transform": Transform3D(Basis.IDENTITY, where),
+				"properties": {},
+				"name": authored,
+				"entity_name": authored,
+			}
+		)
 	)
 
 
@@ -84,16 +87,20 @@ func _what_an_entity_becomes() -> void:
 	var sun := scene.get_node_or_null("PlaytestSun")
 	note("fallback PlaytestSun added", sun != null)
 	if omni == 0:
-		flag(
+		known(
+			598,
 			"a light entity does not become a light in the playtest scene",
 			(
-				"entities.json gives light_point \"class\": \"OmniLight3D\" and the user "
-				+ "guide documents that field as the Godot node class, but "
-				+ "export_playtest_scene() duplicates the DraftEntity itself. The scene "
-				+ "holds %d OmniLight3D and %d Light3D, and because a DraftEntity is not a "
-				+ "Light3D the exporter decides nothing provides light and adds its own sun. "
-				+ "Every light a mapper places is a billboard icon that lights nothing"
-			) % [omni, lights]
+				(
+					'entities.json gives light_point "class": "OmniLight3D" and the user '
+					+ "guide documents that field as the Godot node class, but "
+					+ "export_playtest_scene() duplicates the DraftEntity itself. The scene "
+					+ "holds %d OmniLight3D and %d Light3D, and because a DraftEntity is not a "
+					+ "Light3D the exporter decides nothing provides light and adds its own sun. "
+					+ "Every light a mapper places is a billboard icon that lights nothing"
+				)
+				% [omni, lights]
+			)
 		)
 
 	# Whatever the properties are for, they are not reaching a node either.

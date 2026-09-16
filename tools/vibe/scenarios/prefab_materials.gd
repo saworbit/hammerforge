@@ -50,7 +50,13 @@ func _face_mats(root: Node3D) -> Array:
 func _palette_names(root: Node3D) -> Array:
 	var out: Array = []
 	for m in root.get_materials():
-		out.append("null" if m == null else str(m.resource_name if m.resource_name != "" else m.resource_path.get_file()))
+		out.append(
+			(
+				"null"
+				if m == null
+				else str(m.resource_name if m.resource_name != "" else m.resource_path.get_file())
+			)
+		)
 	return out
 
 
@@ -59,7 +65,11 @@ func _palette_names(root: Node3D) -> Array:
 func _a_prefab_in_another_level() -> void:
 	var source: Node3D = await fresh_root("SourceLevel")
 	source.set_materials(
-		[_shipped("brick", "red"), _shipped("checker", "blue"), _shipped("stripes_diagonal", "green")]
+		[
+			_shipped("brick", "red"),
+			_shipped("checker", "blue"),
+			_shipped("stripes_diagonal", "green")
+		]
 	)
 	note("source palette", _palette_names(source))
 	var b = box(source, Vector3(128, 128, 32))
@@ -69,9 +79,7 @@ func _a_prefab_in_another_level() -> void:
 	note("source face slots", _face_mats(source))
 
 	var path := "user://vibe_prefab_mats.hfprefab"
-	var prefab = HFPrefab.capture_from_selection(
-		source.brush_system, source.entity_system, [b], []
-	)
+	var prefab = HFPrefab.capture_from_selection(source.brush_system, source.entity_system, [b], [])
 	prefab.prefab_name = "doorframe"
 	note("save_to_file returned", prefab.save_to_file(path))
 	note("prefab file bytes", HFVibe.file_size(path))
@@ -101,18 +109,26 @@ func _a_prefab_in_another_level() -> void:
 			var i := int(idx)
 			var mats: Array = other.get_materials()
 			resolved.append(
-				"slot %d -> %s" % [
-					i,
-					"out of range" if i < 0 or i >= mats.size() else (
-						"null" if mats[i] == null else str(mats[i].resource_path.get_file())
-					)
-				]
+				(
+					"slot %d -> %s"
+					% [
+						i,
+						(
+							"out of range"
+							if i < 0 or i >= mats.size()
+							else (
+								"null" if mats[i] == null else str(mats[i].resource_path.get_file())
+							)
+						)
+					]
+				)
 			)
 			break
 		break
 	note("what slot 1 means in the other level", resolved)
 	if text.find("proto_") < 0:
-		flag(
+		known(
+			621,
 			"a .hfprefab records material slot numbers and no materials",
 			(
 				"the doorframe was built entirely out of slot 1, which was "
@@ -142,13 +158,13 @@ func _the_file_itself() -> void:
 	prefab2.save_to_file(path)
 	var text := FileAccess.get_file_as_string(path)
 	note("prefab file size", text.length())
-	note("keys at the top level", JSON.parse_string(text).keys() if JSON.parse_string(text) is Dictionary else "unparsed")
+	note(
+		"keys at the top level",
+		JSON.parse_string(text).keys() if JSON.parse_string(text) is Dictionary else "unparsed"
+	)
 	note("carries uv_scale", text.find("uv_scale") >= 0)
 	note("carries material_idx", text.find("material_idx") >= 0)
 	note(
 		"what that means",
-		(
-			"the UV settings travel with the prefab and the material they were tuned "
-			+ "for does not"
-		)
+		"the UV settings travel with the prefab and the material they were tuned " + "for does not"
 	)

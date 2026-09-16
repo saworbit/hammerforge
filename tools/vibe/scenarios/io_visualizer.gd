@@ -27,15 +27,18 @@ func run() -> void:
 
 
 func _spawn(root: Node3D, type: String, where: Vector3, authored: String) -> Node3D:
-	return root._restore_entity_from_info(
-		{
-			"entity_type": type,
-			"entity_class": type,
-			"transform": Transform3D(Basis.IDENTITY, where),
-			"properties": {},
-			"name": authored,
-			"entity_name": authored,
-		}
+	return (
+		root
+		. _restore_entity_from_info(
+			{
+				"entity_type": type,
+				"entity_class": type,
+				"transform": Transform3D(Basis.IDENTITY, where),
+				"properties": {},
+				"name": authored,
+				"entity_name": authored,
+			}
+		)
 	)
 
 
@@ -80,9 +83,10 @@ func _drawn_against_stored() -> void:
 	note("routes drawn", float(verts) / float(VERTS_PER_ROUTE))
 	if verts != stored * VERTS_PER_ROUTE:
 		flag(
-			"the overlay drew %.2f routes for %d stored connections" % [
-				float(verts) / float(VERTS_PER_ROUTE), stored
-			],
+			(
+				"the overlay drew %.2f routes for %d stored connections"
+				% [float(verts) / float(VERTS_PER_ROUTE), stored]
+			),
 			"expected one route per connection"
 		)
 	note("overlay mesh visible", vis._mesh_instance.visible if vis._mesh_instance else "no mesh")
@@ -108,7 +112,8 @@ func _a_broken_wire_is_invisible() -> void:
 	note("stored connections", stored)
 	note("routes drawn", routes)
 	if stored == 2 and routes == 1.0:
-		flag(
+		known(
+			602,
 			"a wire whose target does not exist is drawn as nothing at all",
 			(
 				"2 outputs on the button, 1 route on the overlay; the dangling one is "
@@ -199,7 +204,8 @@ func _summary_counts() -> void:
 	var summary: Dictionary = root.get_connection_summary("relay_1")
 	note("self-wired entity summary", summary)
 	if int(summary.get("triggers", 0)) == 1 and int(summary.get("triggered_by", 0)) == 0:
-		flag(
+		known(
+			603,
 			"a self-wired entity is not counted among what triggers it",
 			(
 				"relay_1 -> relay_1 reports triggers=1, triggered_by=0; the summary is an "
@@ -293,25 +299,26 @@ func _what_notices_a_dangling_wire() -> void:
 	var vis = root.io_visualizer
 	vis.set_enabled(true)
 	await frame()
-	note(
-		"  routes on the overlay",
-		float(_drawn_vertices(vis)) / float(VERTS_PER_ROUTE)
-	)
+	note("  routes on the overlay", float(_drawn_vertices(vis)) / float(VERTS_PER_ROUTE))
 	var issues: Array = report.get("issues", [])
 	var named := false
 	for issue in issues:
 		if str(issue).find("door_1") >= 0 or str(issue).to_lower().find("dangl") >= 0:
 			named = true
 	if not named:
-		flag(
+		known(
+			620,
 			"nothing in the editor reports a wire whose target no longer exists",
 			(
-				"the target was renamed, the output still names door_1, and: "
-				+ "validate_level() reports %s; get_connection_summary() still counts it "
-				+ "as a live trigger with target_names %s; and the overlay draws no route "
-				+ "for it. HFValidationSystem checks an output for empty fields "
-				+ "(hf_validation_system.gd:243) and never resolves target_name against "
-				+ "the level. cleanup_dangling_connections() exists but only runs on "
-				+ "delete, so a rename leaves the wire behind with no surface that says so"
-			) % [issues, summary.get("target_names", [])]
+				(
+					"the target was renamed, the output still names door_1, and: "
+					+ "validate_level() reports %s; get_connection_summary() still counts it "
+					+ "as a live trigger with target_names %s; and the overlay draws no route "
+					+ "for it. HFValidationSystem checks an output for empty fields "
+					+ "(hf_validation_system.gd:243) and never resolves target_name against "
+					+ "the level. cleanup_dangling_connections() exists but only runs on "
+					+ "delete, so a rename leaves the wire behind with no surface that says so"
+				)
+				% [issues, summary.get("target_names", [])]
+			)
 		)

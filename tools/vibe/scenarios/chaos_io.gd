@@ -26,7 +26,10 @@ func id() -> String:
 
 
 func summary() -> String:
-	return "%d randomised edits with a save/load, a state round trip and a .map round trip along the way" % STEPS
+	return (
+		"%d randomised edits with a save/load, a state round trip and a .map round trip along the way"
+		% STEPS
+	)
 
 
 func run() -> void:
@@ -92,14 +95,19 @@ func _hflevel_trip(root: Node3D, step: int) -> int:
 	var ok: bool = loaded.load_hflevel(path)
 	await frame()
 	if not ok:
-		flag("step %d: a level this run built will not load back" % step, "save_hflevel reported OK")
+		flag(
+			"step %d: a level this run built will not load back" % step, "save_hflevel reported OK"
+		)
 		return 1
 	var after: Dictionary = HFVibe.describe_level(loaded)
 	var count_before: int = flags.size()
 	diff_levels(before, after, "step %d: .hflevel round trip" % step)
 	var added: int = flags.size() - count_before
 	if added == 0:
-		note("step %d: .hflevel round trip clean" % step, "%s brushes" % before.get("brush_count", "?"))
+		note(
+			"step %d: .hflevel round trip clean" % step,
+			"%s brushes" % before.get("brush_count", "?")
+		)
 	loaded.queue_free()
 	return added
 
@@ -136,24 +144,27 @@ func _map_trip(root: Node3D, step: int) -> int:
 	var after_entities: int = imported.entities_node.get_child_count()
 	note(
 		"step %d: .map round trip" % step,
-		"%d brushes -> %d, %d entities -> %d (import returned %s)" % [
-			before_brushes, after_brushes, before_entities, after_entities, count
-		]
+		(
+			"%d brushes -> %d, %d entities -> %d (import returned %s)"
+			% [before_brushes, after_brushes, before_entities, after_entities, count]
+		)
 	)
 	var added := 0
 	if after_brushes < before_brushes:
 		flag(
-			"step %d: the .map round trip lost %d brush(es)" % [
-				step, before_brushes - after_brushes
-			],
+			(
+				"step %d: the .map round trip lost %d brush(es)"
+				% [step, before_brushes - after_brushes]
+			),
 			"%d out, %d back" % [before_brushes, after_brushes]
 		)
 		added += 1
 	if after_entities < before_entities:
 		flag(
-			"step %d: the .map round trip lost %d entit(y/ies)" % [
-				step, before_entities - after_entities
-			],
+			(
+				"step %d: the .map round trip lost %d entit(y/ies)"
+				% [step, before_entities - after_entities]
+			),
 			"%d out, %d back" % [before_entities, after_entities]
 		)
 		added += 1
@@ -183,19 +194,23 @@ func _apply(root: Node3D, rng: RandomNumberGenerator, op: String) -> void:
 					rng.randi_range(1, 4) * 32.0
 				),
 				Vector3(
-					rng.randi_range(-8, 8) * 64.0, rng.randi_range(0, 4) * 64.0,
+					rng.randi_range(-8, 8) * 64.0,
+					rng.randi_range(0, 4) * 64.0,
 					rng.randi_range(-8, 8) * 64.0
 				)
 			)
 		"create_round":
-			root.create_brush_from_info(
-				{
-					"shape": rng.randi_range(1, 3),
-					"size": Vector3(64, 64, 64),
-					"center":
-					Vector3(rng.randi_range(-6, 6) * 64.0, 32, rng.randi_range(-6, 6) * 64.0),
-					"sides": rng.randi_range(3, 12),
-				}
+			(
+				root
+				. create_brush_from_info(
+					{
+						"shape": rng.randi_range(1, 3),
+						"size": Vector3(64, 64, 64),
+						"center":
+						Vector3(rng.randi_range(-6, 6) * 64.0, 32, rng.randi_range(-6, 6) * 64.0),
+						"sides": rng.randi_range(3, 12),
+					}
+				)
 			)
 		"delete":
 			if not ids.is_empty():
@@ -224,8 +239,11 @@ func _apply(root: Node3D, rng: RandomNumberGenerator, op: String) -> void:
 		"rotate":
 			if not ids.is_empty():
 				root.rotate_managed_nodes(
-					[ids[rng.randi() % ids.size()]], [], rng.randi_range(0, 2),
-					float(rng.randi_range(1, 3)) * 90.0, Vector3.ZERO
+					[ids[rng.randi() % ids.size()]],
+					[],
+					rng.randi_range(0, 2),
+					float(rng.randi_range(1, 3)) * 90.0,
+					Vector3.ZERO
 				)
 		"material":
 			if root.material_manager and root.material_manager.materials.size() < 6:
@@ -248,19 +266,24 @@ func _apply(root: Node3D, rng: RandomNumberGenerator, op: String) -> void:
 					f.uv_offset = Vector2(rng.randi_range(-4, 4), rng.randi_range(-4, 4))
 					f.uv_rotation = float(rng.randi_range(0, 3)) * 45.0
 		"entity":
-			root._restore_entity_from_info(
-				{
-					"entity_type": ["player_start", "light_point", "door_basic"][rng.randi() % 3],
-					"entity_class": ["player_start", "light_point", "door_basic"][rng.randi() % 3],
-					"transform":
-					Transform3D(
-						Basis.IDENTITY,
-						Vector3(rng.randi_range(-6, 6) * 64.0, 0, rng.randi_range(-6, 6) * 64.0)
-					),
-					"properties": {},
-					"name": "ent_%d" % rng.randi_range(0, 9999),
-					"entity_name": "ent_%d" % rng.randi_range(0, 9999),
-				}
+			(
+				root
+				. _restore_entity_from_info(
+					{
+						"entity_type":
+						["player_start", "light_point", "door_basic"][rng.randi() % 3],
+						"entity_class":
+						["player_start", "light_point", "door_basic"][rng.randi() % 3],
+						"transform":
+						Transform3D(
+							Basis.IDENTITY,
+							Vector3(rng.randi_range(-6, 6) * 64.0, 0, rng.randi_range(-6, 6) * 64.0)
+						),
+						"properties": {},
+						"name": "ent_%d" % rng.randi_range(0, 9999),
+						"entity_name": "ent_%d" % rng.randi_range(0, 9999),
+					}
+				)
 			)
 		"wire":
 			var entities: Array = root.entities_node.get_children()
@@ -295,23 +318,24 @@ func _apply(root: Node3D, rng: RandomNumberGenerator, op: String) -> void:
 				if root.paint_layers.layers.size() > layer and layer >= 0:
 					var l = root.paint_layers.layers[layer]
 					if l and l.has_method("set_cell"):
-						l.set_cell(
-							Vector2i(rng.randi_range(-8, 8), rng.randi_range(-8, 8)), true
-						)
+						l.set_cell(Vector2i(rng.randi_range(-8, 8), rng.randi_range(-8, 8)), true)
 		"generator":
 			if root.generator_system:
-				root.create_generator(
-					"stairs",
-					{
-						"steps": rng.randi_range(3, 10),
-						"step_height": 16.0,
-						"step_depth": 32.0,
-						"width": 96.0,
-					},
-					Transform3D(
-						Basis.IDENTITY,
-						Vector3(
-							rng.randi_range(-4, 4) * 128.0, 0, rng.randi_range(-4, 4) * 128.0
+				(
+					root
+					. create_generator(
+						"stairs",
+						{
+							"steps": rng.randi_range(3, 10),
+							"step_height": 16.0,
+							"step_depth": 32.0,
+							"width": 96.0,
+						},
+						Transform3D(
+							Basis.IDENTITY,
+							Vector3(
+								rng.randi_range(-4, 4) * 128.0, 0, rng.randi_range(-4, 4) * 128.0
+							)
 						)
 					)
 				)

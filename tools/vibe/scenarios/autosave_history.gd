@@ -69,9 +69,7 @@ func _rotation_depth() -> void:
 	note("keep = 3, autosaved 6 times: history files", files.size())
 	note("  ", files)
 	if files.size() != 3:
-		flag(
-			"the autosave history kept %d backups with keep set to 3" % files.size(), files
-		)
+		flag("the autosave history kept %d backups with keep set to 3" % files.size(), files)
 
 
 ## Two levels whose autosave paths sit in the same folder.
@@ -101,7 +99,8 @@ func _two_levels_one_directory() -> void:
 	note("level A backups left", a_left)
 	note("level B backups left", b_left)
 	if a_left < 3:
-		flag(
+		known(
+			618,
 			"autosaving one level deletes another level's backups",
 			(
 				("level A had 3 backups and has %d after level B autosaved 3 times. " % a_left)
@@ -131,7 +130,10 @@ func _same_second() -> void:
 		note(
 			"the history file name is timestamped to the second",
 			(
-				"'%s' -- three writes produced %d file(s), so a second save in the same "
-				+ "second overwrites the first rather than joining it"
-			) % [files[0] if not files.is_empty() else "none", files.size()]
+				(
+					"'%s' -- three writes produced %d file(s), so a second save in the same "
+					+ "second overwrites the first rather than joining it"
+				)
+				% [files[0] if not files.is_empty() else "none", files.size()]
+			)
 		)
