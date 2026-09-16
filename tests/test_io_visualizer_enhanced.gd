@@ -309,3 +309,86 @@ func test_the_wiring_overlay_leaves_with_the_level_it_was_drawn_in():
 
 	assert_null(level.io_visualizer._mesh_instance, "the overlay went with the level")
 	assert_false(is_instance_valid(overlay) and overlay.get_parent() != null, "and left the tree")
+
+
+# ===========================================================================
+# A wire that points at nothing (#602, #603)
+# ===========================================================================
+
+
+func _overlay_vertices() -> int:
+	if viz._immediate_mesh.get_surface_count() == 0:
+		return 0
+	var arrays := viz._immediate_mesh.surface_get_arrays(0)
+	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	return verts.size()
+
+
+func test_a_dangling_wire_is_drawn_rather_than_dropped():
+	var source := _make_entity("button_1", Vector3.ZERO)
+	_make_entity("door_1", Vector3(2, 0, 0))
+	sys.add_entity_output(source, "OnPressed", "door_1", "Open")
+	viz.set_enabled(true)
+	viz.refresh()
+	var one_good := _overlay_vertices()
+	assert_gt(one_good, 0, "The good wire draws")
+
+	sys.add_entity_output(source, "OnPressed", "door_2", "Open")
+	viz.refresh()
+	assert_gt(
+		_overlay_vertices(), one_good, "The wire aimed at door_2 has to put lines on screen too"
+	)
+
+
+func test_a_level_whose_wiring_is_entirely_broken_does_not_look_unwired():
+	var source := _make_entity("button_1", Vector3.ZERO)
+	sys.add_entity_output(source, "OnPressed", "nothing_answers_to_this", "Open")
+	viz.set_enabled(true)
+	viz.refresh()
+	assert_true(viz._mesh_instance.visible, "An empty overlay and a broken level must differ")
+	assert_gt(_overlay_vertices(), 0, "The broken wire is the one the overlay is for")
+
+
+func test_a_level_with_no_wiring_at_all_still_draws_nothing():
+	_make_entity("button_1", Vector3.ZERO)
+	viz.set_enabled(true)
+	viz.refresh()
+	assert_false(viz._mesh_instance.visible, "No connections is still no overlay")
+
+
+func test_a_dangling_wire_is_drawn_in_the_dangling_colour():
+	var source := _make_entity("button_1", Vector3.ZERO)
+	sys.add_entity_output(source, "OnPressed", "gone", "Open")
+	viz.set_enabled(true)
+	viz.refresh()
+	var arrays := viz._immediate_mesh.surface_get_arrays(0)
+	var colors: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
+	assert_false(colors.is_empty())
+	if not colors.is_empty():
+		assert_almost_eq(colors[0].r, HFIOVisualizer.DANGLING_COLOR.r, 0.005)
+		assert_almost_eq(colors[0].g, HFIOVisualizer.DANGLING_COLOR.g, 0.005)
+
+
+func test_a_self_wired_entity_is_counted_at_both_ends():
+	# #603: the summary used if/elif on one connection, so the first branch
+	# matching meant the entity was never counted among what triggers it.
+	var relay := _make_entity("relay_1")
+	sys.add_entity_output(relay, "OnPressed", "relay_1", "Toggle")
+	var summary = viz.get_connection_summary("relay_1")
+	assert_eq(summary["triggers"], 1, "It fires the connection")
+	assert_eq(summary["triggered_by"], 1, "And the connection fires it")
+	assert_eq(summary["target_names"], ["relay_1"])
+	assert_eq(summary["source_names"], ["relay_1"], "'What fires this?' must not be empty")
+
+
+func test_a_wire_between_two_entities_is_still_counted_once_from_each_end():
+	var a := _make_entity("a")
+	var b := _make_entity("b")
+	sys.add_entity_output(a, "OnTrigger", "b", "Open")
+	var from_source = viz.get_connection_summary("a")
+	assert_eq(from_source["triggers"], 1)
+	assert_eq(from_source["triggered_by"], 0, "a does not trigger itself")
+	var from_target = viz.get_connection_summary("b")
+	assert_eq(from_target["triggers"], 0)
+	assert_eq(from_target["triggered_by"], 1)
+	assert_eq(b.name, StringName("b"))

@@ -38,6 +38,11 @@ const TYPE_COLORS: Dictionary = {
 const DEFAULT_COLOR := Color(0.2, 1.0, 0.3, 0.7)  # Green fallback
 const FIRE_ONCE_COLOR := Color(1.0, 0.5, 0.0, 0.7)  # Orange — fire-once
 const SELECTED_COLOR := Color(1.0, 1.0, 0.2, 0.9)  # Bright yellow
+## A wire aimed at a name nothing answers to. Drawn rather than dropped, because
+## the broken wire is the one the overlay exists to find (#602).
+const DANGLING_COLOR := Color(1.0, 0.15, 0.15, 0.9)  # Red - goes nowhere
+const DANGLING_STUB_HEIGHT := 1.2
+const DANGLING_STUB_ARM := 0.22
 const DELAY_DIM_FACTOR := 0.6  # Dim connections with high delay
 const PULSE_COLOR := Color(1.0, 1.0, 0.4, 0.6)  # Glow for highlight pulse
 
@@ -199,8 +204,6 @@ func refresh() -> void:
 		if target_name == "":
 			continue
 		var targets: Array = name_index.get(target_name, [])
-		if targets.is_empty():
-			continue
 		var fire_once = bool(conn.get("fire_once", false))
 		var source_name = str(conn.get("source_name", ""))
 		var output_name = str(conn.get("output_name", ""))
@@ -215,6 +218,24 @@ func refresh() -> void:
 		var route_idx: int = route_indices.get(route_key, 0)
 		route_indices[route_key] = route_idx + 1
 		var total_routes: int = route_counts.get(route_key, 1)
+
+		if targets.is_empty():
+			# Nothing answers to this name. A level whose wiring is entirely broken
+			# used to draw as a level with no wiring at all.
+			(
+				routes
+				. append(
+					{
+						"start": source.global_position + Vector3(0, 0.3, 0),
+						"end": source.global_position + Vector3(0, 0.3, 0),
+						"color": DANGLING_COLOR,
+						"route_idx": route_idx,
+						"total_routes": total_routes,
+						"dangling": true,
+					}
+				)
+			)
+			continue
 
 		for target in targets:
 			if not (target is Node3D) or not is_instance_valid(target):
@@ -244,6 +265,9 @@ func refresh() -> void:
 
 	_immediate_mesh.surface_begin(Mesh.PRIMITIVE_LINES)
 	for route in routes:
+		if route.get("dangling", false):
+			_draw_dangling_stub(route["start"], route["color"])
+			continue
 		_draw_curved_connection(
 			route["start"], route["end"], route["color"], route["route_idx"], route["total_routes"]
 		)
@@ -277,6 +301,23 @@ func _get_connection_color(
 	if delay > 0.0:
 		c = c.darkened(clampf(delay * 0.05, 0.0, DELAY_DIM_FACTOR))
 	return c
+
+
+## A short mast with a cross on top, rising from an entity whose output points at
+## nothing. Deliberately not an arrow: an arrow would claim a destination.
+func _draw_dangling_stub(start: Vector3, color: Color) -> void:
+	var top := start + Vector3(0, DANGLING_STUB_HEIGHT, 0)
+	_add_line(start, top, color)
+	var arm := DANGLING_STUB_ARM
+	_add_line(top + Vector3(-arm, 0, -arm), top + Vector3(arm, 0, arm), color)
+	_add_line(top + Vector3(-arm, 0, arm), top + Vector3(arm, 0, -arm), color)
+
+
+func _add_line(from: Vector3, to: Vector3, color: Color) -> void:
+	_immediate_mesh.surface_set_color(color)
+	_immediate_mesh.surface_add_vertex(from)
+	_immediate_mesh.surface_set_color(color)
+	_immediate_mesh.surface_add_vertex(to)
 
 
 func _draw_curved_connection(
@@ -507,7 +548,10 @@ func get_connection_summary(entity_name: String) -> Dictionary:
 			if not summary["target_names"].has(tgt):
 				summary["target_names"].append(tgt)
 			summary["details"].append("%s → %s.%s" % [out_name, tgt, inp_name])
-		elif tgt == entity_name:
+		# Not `elif`. "Does this entity fire this connection" and "does this
+		# connection fire this entity" are independent questions, and for an entity
+		# wired to itself both answers are yes (#603).
+		if tgt == entity_name:
 			summary["triggered_by"] += 1
 			if not summary["source_names"].has(src):
 				summary["source_names"].append(src)
