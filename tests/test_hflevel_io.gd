@@ -451,6 +451,95 @@ func test_encode_payload_job_hash_changes_when_data_changes():
 
 
 # ===========================================================================
+# What crosses to the write thread (#601)
+# ===========================================================================
+
+
+## A material with a path of its own. Two live Resources claiming one path is a
+## cyclic inclusion error in Godot, and the tests here run in one session.
+func _a_material(named: bool = true) -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	if named:
+		mat.resource_path = "res://hf_test_%d.tres" % Time.get_ticks_usec()
+	return mat
+
+
+func test_resolve_resources_replaces_a_resource_where_it_stands():
+	var mat := _a_material()
+	var path := mat.resource_path
+	var state := {"materials": [mat], "brushes": [{"material": mat, "size": Vector3(2, 2, 2)}]}
+	state = HFLevelIO.resolve_resources(state)
+	assert_false(HFLevelIO.holds_resource(state), "nothing live is left in the payload")
+	assert_eq(state["materials"][0]["path"], path)
+	assert_eq(state["brushes"][0]["material"]["path"], path)
+
+
+func test_resolve_resources_leaves_every_other_value_exactly_as_it_was():
+	# It walks the same structure `encode_variant()` does and rebuilds none of it,
+	# which is the whole reason it is cheap enough to stay on the calling thread.
+	var state := {
+		"size": Vector3(2, 2, 2),
+		"transform": Transform3D.IDENTITY,
+		"nested": [1, "two", {"three": 3.0}],
+		"flag": true,
+	}
+	HFLevelIO.resolve_resources(state)
+	assert_eq(state["size"], Vector3(2, 2, 2), "a Vector3 is still a Vector3")
+	assert_eq(state["transform"], Transform3D.IDENTITY, "a Transform3D is still a Transform3D")
+	assert_eq(state["nested"][2]["three"], 3.0)
+	assert_eq(state["flag"], true)
+
+
+func test_a_resolved_payload_encodes_to_what_the_one_call_version_produces():
+	# `capture_hflevel_state()` still exists and still returns the finished
+	# structure. Splitting the work in two must not change what lands in the file.
+	var mat := _a_material()
+	var one := {"materials": [mat], "size": Vector3(1, 2, 3)}
+	var two := {"materials": [mat], "size": Vector3(1, 2, 3)}
+	var in_one_go: Variant = HFLevelIO.encode_variant(one)
+	two = HFLevelIO.resolve_resources(two)
+	var in_two_steps: Variant = HFLevelIO.encode_variant(two)
+	assert_eq(JSON.stringify(in_two_steps), JSON.stringify(in_one_go), "the same bytes either way")
+
+
+func test_a_resource_with_no_path_still_becomes_a_named_empty_slot():
+	# #617 from the other side. The warning has to happen on the calling thread,
+	# where the resource is, rather than inside the worker.
+	var state := {"materials": [_a_material(false)]}
+	state = HFLevelIO.resolve_resources(state)
+	assert_false(HFLevelIO.holds_resource(state))
+	assert_eq(state["materials"][0]["class"], "StandardMaterial3D")
+
+
+func test_a_typed_array_of_resources_is_rebuilt_rather_than_written_through():
+	# `MaterialManager.materials` is `Array[Material]`, and a typed array refuses
+	# a Dictionary where a Material used to be. Writing through it left the live
+	# Resource in place and raised an engine error nobody was reading.
+	var mat := _a_material()
+	var typed: Array[Material] = [mat]
+	var state := {"materials": typed}
+	state = HFLevelIO.resolve_resources(state)
+	assert_false(HFLevelIO.holds_resource(state), "the material was actually replaced")
+	assert_eq(state["materials"][0]["path"], mat.resource_path)
+
+
+func test_a_typed_array_of_values_is_left_where_it_stands():
+	# Only arrays that can hold objects need rebuilding. Colors pass through.
+	var tints: Array[Color] = [Color.RED, Color.BLUE]
+	var state := {"tints": tints}
+	state = HFLevelIO.resolve_resources(state)
+	assert_eq(state["tints"][0], Color.RED)
+	assert_eq(state["tints"][1], Color.BLUE)
+	assert_true(state["tints"] is Array)
+
+
+func test_holds_resource_finds_one_however_deep_it_is():
+	assert_false(HFLevelIO.holds_resource({"a": [1, {"b": "c"}]}), "values only, so no")
+	assert_true(HFLevelIO.holds_resource({"a": [1, {"b": _a_material()}]}), "buried in a list")
+	assert_true(HFLevelIO.holds_resource([_a_material()]), "at the top of an array")
+
+
+# ===========================================================================
 # encode / decode: the types that used to fall off the end of the match (#619)
 # ===========================================================================
 

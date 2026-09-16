@@ -232,37 +232,37 @@ func _face_selection_at_scale() -> void:
 
 
 ## `save_hflevel()` is documented as threaded. Time the half that is not.
+##
+## #601 was fixed by splitting the capture from the encode: the scene walk and
+## the Resource reads stay on the calling thread, and `encode_variant()` moved
+## onto the write thread. So the thing to time is the payload the handoff
+## actually builds, not the finished structure it used to build.
 func _what_the_save_thread_is_not_doing() -> void:
 	var root: Node3D = await fresh_root()
 	_build(root, 400)
 	await frame()
 	var t := Time.get_ticks_usec()
-	var encoded = root._capture_hflevel_state()
-	var capture_ms := _ms(t)
+	var payload = root._capture_hflevel_payload()
+	var payload_ms := _ms(t)
 	t = Time.get_ticks_usec()
-	var copy = (encoded as Dictionary).duplicate(true)
-	var duplicate_ms := _ms(t)
-	note("400 brushes: _capture_hflevel_state()", "%.1f ms" % capture_ms)
-	note("  then .duplicate(true) on the result", "%.1f ms" % duplicate_ms)
-	note(
-		"  both run on the calling thread before start_hflevel_thread()",
-		"%.1f ms of stall per save" % (capture_ms + duplicate_ms)
-	)
+	var encoded = HFLevelIO.encode_variant(payload)
+	var encode_ms := _ms(t)
+	note("400 brushes: _capture_hflevel_payload(), the blocking half", "%.1f ms" % payload_ms)
+	note("  then encode_variant() on the write thread", "%.1f ms" % encode_ms)
 	note("encoded payload", "%.1f KB" % (float(var_to_bytes(encoded).size()) / 1024.0))
-	if duplicate_ms > 5.0:
+	# The handoff has to hold nothing the editor owns, because the worker reads it.
+	if HFLevelIO.holds_resource(payload):
 		known(
 			601,
-			"save_hflevel() deep-copies the encoded level it was just handed",
+			"a live Resource crosses to the write thread",
 			(
-				(
-					"capture_hflevel_state() returns a freshly built Dictionary from "
-					+ "HFLevelIO.encode_variant(), and save_hflevel() then does "
-					+ ".duplicate(true) on it before passing it to the thread. Nothing else "
-					+ "holds a reference to it. At 400 brushes the copy alone is %.1f ms on "
-					+ "top of the %.1f ms capture, and it doubles peak memory for the save"
-				)
-				% [duplicate_ms, capture_ms]
+				"capture_hflevel_payload() resolves Resources before the handoff so the "
+				+ "worker only ever touches values. Something is getting past it."
 			)
 		)
-	if copy.size() != (encoded as Dictionary).size():
-		note("copy differs in size", [copy.size(), (encoded as Dictionary).size()])
+	# The split is only worth having while the encode is the larger half.
+	if encode_ms < payload_ms:
+		note(
+			"the encode is no longer the expensive half",
+			"blocking %.1f ms vs threaded %.1f ms" % [payload_ms, encode_ms]
+		)
