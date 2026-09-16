@@ -104,6 +104,39 @@ func test_remove_favorite():
 	assert_false(_browser.is_favorite("res://test.tres"), "Should no longer be favorite")
 
 
+## A material built in the session and not written to disk has an empty
+## `resource_path`, and that is what a favourite was keyed on - so every unsaved
+## material shared one key. Starring one starred the lot, and un-starring any one
+## of them cleared them all.
+func test_a_material_with_no_path_cannot_be_starred():
+	assert_false(_browser.add_favorite(""), "and the caller is told, so it can say why")
+	assert_false(_browser.is_favorite(""), "Nothing is starred")
+	var unsaved_a = _make_material("built_in_session_a")
+	var unsaved_b = _make_material("built_in_session_b")
+	_manager.add_material(unsaved_a)
+	_manager.add_material(unsaved_b)
+	assert_eq(_browser.get_favorite_infos(10).size(), 0, "so neither comes back as a favourite")
+
+
+## A star only earns its keep across sessions, and the browser is built fresh by
+## the dock - so every one was gone at the next theme change or project reload.
+func test_a_star_outlives_the_browser():
+	var prefs = HFUserPrefs.new()
+	_browser.set_user_prefs(prefs)
+	_browser.add_favorite("res://kept.tres")
+
+	var rebuilt = HFMaterialBrowser.new()
+	add_child_autofree(rebuilt)
+	rebuilt.set_user_prefs(prefs)
+	assert_true(rebuilt.is_favorite("res://kept.tres"), "A freshly built browser has it")
+
+	_browser.remove_favorite("res://kept.tres")
+	var after_removal = HFMaterialBrowser.new()
+	add_child_autofree(after_removal)
+	after_removal.set_user_prefs(prefs)
+	assert_false(after_removal.is_favorite("res://kept.tres"), "and un-starring outlives it too")
+
+
 func test_favorites_view_filters_to_starred():
 	var m1 = _make_material("fav")
 	m1.resource_path = "res://fav_mat.tres"
