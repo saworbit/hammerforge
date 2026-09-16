@@ -142,8 +142,8 @@ func _build(root: Node3D) -> void:
 		if spawn:
 			root.add_entity_output(spawn, "OnStart", "the_door", "Open", "1", 1.5)
 
-	root.create_visgroup("Walls", Color(1, 0, 0))
-	root.create_visgroup("Detail", Color(0, 1, 0))
+	root.create_visgroup("Walls")
+	root.create_visgroup("Detail")
 	var kids: Array = root.draft_brushes_node.get_children()
 	root.add_selection_to_visgroup("Walls", [kids[0], kids[1]])
 	root.group_selection("GroupA", [kids[2], kids[3]])
