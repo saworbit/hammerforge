@@ -17,18 +17,20 @@ var _index: Dictionary = {}  # Dictionary[StringName, Node]
 var _blend_shader: Shader = null
 
 
-func build_index() -> void:
-	_index.clear()
-	_index_children(floors_root)
-	_index_children(walls_root)
-	_index_children(heightmap_floors_root)
-
-
+## Bring the generated nodes for one layer into line with `model`.
+##
+## `layer_id` scopes the sweep. Every layer shares `floors_root` and
+## `walls_root`, and `model` only ever describes one of them, so without it the
+## sweep at the end frees every other layer's nodes in the same chunk - and the
+## paint system reconciles each layer in turn, so only the last one survived.
+## It comes from the caller rather than out of the node ids: a layer id is the
+## one field of a generated id that did not come from here.
 func reconcile(
 	model: HFGeneratedModel,
 	grid: HFPaintGrid,
 	settings: HFGeometrySynth.SynthSettings,
-	dirty_chunks: Array[Vector2i] = []
+	dirty_chunks: Array[Vector2i] = [],
+	layer_id: StringName = &""
 ) -> void:
 	if not floors_root or not walls_root:
 		return
@@ -36,26 +38,26 @@ func reconcile(
 	for cid in dirty_chunks:
 		scope["%s,%s" % [cid.x, cid.y]] = true
 	_index.clear()
-	_index_children(floors_root, scope)
-	_index_children(walls_root, scope)
+	_index_children(floors_root, scope, layer_id)
+	_index_children(walls_root, scope, layer_id)
 	if heightmap_floors_root:
-		_index_children(heightmap_floors_root, scope)
+		_index_children(heightmap_floors_root, scope, layer_id)
 	var want: Dictionary = {}
 	for fr in model.floors:
 		if not fr:
 			continue
 		want[fr.id] = true
-		_upsert_floor(fr, grid)
+		_upsert_floor(fr, grid, layer_id)
 	for ws in model.walls:
 		if not ws:
 			continue
 		want[ws.id] = true
-		_upsert_wall(ws, grid)
+		_upsert_wall(ws, grid, layer_id)
 	for hf in model.heightmap_floors:
 		if not hf:
 			continue
 		want[hf.id] = true
-		_upsert_heightmap_floor(hf)
+		_upsert_heightmap_floor(hf, layer_id)
 	for gid in _index.keys():
 		if not want.has(gid):
 			var node = _index.get(gid)
@@ -65,19 +67,35 @@ func reconcile(
 				node.queue_free()
 
 
-func _index_children(root: Node, scope: Dictionary = {}) -> void:
+func _index_children(root: Node, scope: Dictionary = {}, layer_id: StringName = &"") -> void:
 	if not root:
 		return
+	var want_layer := str(layer_id)
 	for child in root.get_children():
 		if not child.has_meta("hf_gid"):
 			continue
 		var chunk_tag = str(child.get_meta("hf_chunk", ""))
 		if scope.size() > 0 and not scope.has(chunk_tag):
 			continue
+		if want_layer != "" and _node_layer(child) != want_layer:
+			continue
 		_index[child.get_meta("hf_gid")] = child
 
 
-func _upsert_floor(fr: HFGeneratedModel.FloorRect, grid: HFPaintGrid) -> void:
+## Which layer a generated node belongs to.
+##
+## The meta is what builds from this version on. A node left by an older build
+## has no `hf_layer`, so its id is read instead - safe for those, because every
+## id the plugin has ever minted carries a layer of the `layer_N` shape.
+func _node_layer(node: Node) -> String:
+	if node.has_meta("hf_layer"):
+		return str(node.get_meta("hf_layer"))
+	return HFHash.layer_tag_from_id(node.get_meta("hf_gid", &""))
+
+
+func _upsert_floor(
+	fr: HFGeneratedModel.FloorRect, grid: HFPaintGrid, layer_id: StringName = &""
+) -> void:
 	var node = _index.get(fr.id)
 	if not node or not is_instance_valid(node):
 		node = DraftBrush.new()
@@ -88,7 +106,7 @@ func _upsert_floor(fr: HFGeneratedModel.FloorRect, grid: HFPaintGrid) -> void:
 		if owner:
 			node.owner = owner
 		_index[fr.id] = node
-		_set_gen_meta(node, fr.id, "floor")
+		_set_gen_meta(node, fr.id, "floor", layer_id)
 	var min_uv = grid.cell_to_uv(fr.min_cell)
 	var max_uv = grid.cell_to_uv(fr.min_cell + fr.size)
 	var center_uv = (min_uv + max_uv) * 0.5
@@ -99,7 +117,9 @@ func _upsert_floor(fr: HFGeneratedModel.FloorRect, grid: HFPaintGrid) -> void:
 	node.size = Vector3(width_world, fr.thickness, depth_world)
 
 
-func _upsert_wall(ws: HFGeneratedModel.WallSeg, grid: HFPaintGrid) -> void:
+func _upsert_wall(
+	ws: HFGeneratedModel.WallSeg, grid: HFPaintGrid, layer_id: StringName = &""
+) -> void:
 	var node = _index.get(ws.id)
 	if not node or not is_instance_valid(node):
 		node = DraftBrush.new()
@@ -110,7 +130,7 @@ func _upsert_wall(ws: HFGeneratedModel.WallSeg, grid: HFPaintGrid) -> void:
 		if owner:
 			node.owner = owner
 		_index[ws.id] = node
-		_set_gen_meta(node, ws.id, "wall")
+		_set_gen_meta(node, ws.id, "wall", layer_id)
 	var a_uv = Vector2(ws.a.x * grid.cell_size, ws.a.y * grid.cell_size)
 	var b_uv = Vector2(ws.b.x * grid.cell_size, ws.b.y * grid.cell_size)
 	var mid_uv = (a_uv + b_uv) * 0.5
@@ -127,7 +147,9 @@ func _upsert_wall(ws: HFGeneratedModel.WallSeg, grid: HFPaintGrid) -> void:
 	node.size = size
 
 
-func _upsert_heightmap_floor(hf: HFGeneratedModel.HeightmapFloor) -> void:
+func _upsert_heightmap_floor(
+	hf: HFGeneratedModel.HeightmapFloor, layer_id: StringName = &""
+) -> void:
 	var target_root := heightmap_floors_root if heightmap_floors_root else floors_root
 	if not target_root:
 		return
@@ -139,7 +161,7 @@ func _upsert_heightmap_floor(hf: HFGeneratedModel.HeightmapFloor) -> void:
 		if owner:
 			node.owner = owner
 		_index[hf.id] = node
-		_set_gen_meta(node, hf.id, "heightmap_floor")
+		_set_gen_meta(node, hf.id, "heightmap_floor", layer_id)
 	node.mesh = hf.mesh
 	node.global_transform = hf.transform
 	node.material_override = _create_blend_material(
@@ -206,8 +228,13 @@ func _slot_color(values: Array, idx: int, fallback: Color) -> Color:
 	return c if c is Color else fallback
 
 
-func _set_gen_meta(node: Node, gid: StringName, kind: String) -> void:
+func _set_gen_meta(node: Node, gid: StringName, kind: String, layer_id: StringName = &"") -> void:
 	node.set_meta("hf_gid", gid)
 	node.set_meta("hf_gen", true)
 	node.set_meta("hf_kind", kind)
 	node.set_meta("hf_chunk", HFHash.chunk_tag_from_id(gid))
+	# An empty layer id means the caller did not name one, and tagging the node
+	# with "" would leave it matching no layer at all. Leaving the meta off lets
+	# `_node_layer()` fall back to the id, which does carry one.
+	if str(layer_id) != "":
+		node.set_meta("hf_layer", str(layer_id))

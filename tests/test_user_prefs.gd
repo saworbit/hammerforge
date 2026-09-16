@@ -43,7 +43,6 @@ func _move(from_path: String, to_path: String) -> void:
 
 func test_defaults_loaded():
 	assert_eq(prefs.get_pref("grid_snap"), 16.0, "Default grid snap should be 16.0")
-	assert_eq(prefs.get_pref("autosave_interval"), 300, "Default autosave interval should be 300")
 	assert_eq(prefs.get_pref("show_hud"), true, "Default show_hud should be true")
 	assert_eq(prefs.get_pref("show_welcome"), true, "Default show_welcome should be true")
 	assert_eq(
@@ -224,14 +223,18 @@ func test_a_good_file_is_left_alone():
 	assert_eq(loaded["grid_snap"], 64.0)
 	assert_eq(loaded["show_hud"], false)
 	assert_eq(loaded["recent_files"], ["res://a.hflevel"])
-	assert_eq(loaded["autosave_interval"], 300, "and the keys it did not carry come from defaults")
+	assert_eq(loaded["show_welcome"], true, "and the keys it did not carry come from defaults")
 
 
+## JSON has one number type, so a float preference can come back as an int.
+##
+## `_usable()` coerces the other direction too, and no preference in the schema
+## is a TYPE_INT any more - `autosave_interval` and `last_tool_id` were the two
+## and neither was read by anything - so that half is kept for the next int
+## preference rather than exercised here.
 func test_json_numbers_are_not_treated_as_the_wrong_type():
-	# JSON has one number type, so an int preference comes back as a float.
-	var loaded = HFUserPrefsType._validated({"autosave_interval": 120.0, "grid_snap": 8})
-	assert_eq(loaded["autosave_interval"], 120, "120.0 is the interval the user set")
-	assert_eq(loaded["grid_snap"], 8.0, "and 8 is the grid snap they set")
+	var loaded = HFUserPrefsType._validated({"grid_snap": 8})
+	assert_eq(loaded["grid_snap"], 8.0, "8 is the grid snap the user set")
 
 
 func test_a_key_this_version_does_not_know_is_kept():
@@ -240,16 +243,17 @@ func test_a_key_this_version_does_not_know_is_kept():
 
 
 func test_a_value_below_the_usable_range_is_clamped():
-	var loaded = HFUserPrefsType._validated({"autosave_interval": -1, "grid_snap": 0.0})
-	assert_eq(loaded["autosave_interval"], 0, "A negative interval is not an interval")
-	assert_almost_eq(loaded["grid_snap"], 0.001, 0.0001, "and a zero grid snap is not a snap")
+	var loaded = HFUserPrefsType._validated({"grid_snap": 0.0})
+	assert_almost_eq(loaded["grid_snap"], 0.001, 0.0001, "A zero grid snap is not a snap")
 
 
 func test_set_pref_refuses_a_value_the_file_could_not_use():
-	prefs.set_pref("autosave_interval", -1)
-	assert_eq(prefs.get_pref("autosave_interval"), 0, "Clamped rather than written as -1")
 	prefs.set_pref("grid_snap", "big")
-	assert_eq(prefs.get_pref("grid_snap"), 16.0, "and a String leaves the grid snap alone")
+	assert_eq(prefs.get_pref("grid_snap"), 16.0, "A String leaves the grid snap alone")
+	prefs.set_pref("grid_snap", -1.0)
+	assert_almost_eq(
+		prefs.get_pref("grid_snap"), 0.001, 0.0001, "and a negative one is clamped, not written"
+	)
 
 
 func test_a_file_that_will_not_parse_is_kept_rather_than_overwritten():

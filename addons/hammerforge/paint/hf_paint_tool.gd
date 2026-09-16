@@ -3,7 +3,6 @@ class_name HFPaintTool
 extends Node
 
 signal stroke_committed(changed_cell_count: int)
-signal material_picked(material_id: int)
 
 const HFStroke = preload("hf_stroke.gd")
 const HFHeightmapSynth = preload("hf_heightmap_synth.gd")
@@ -121,7 +120,13 @@ func handle_input(camera: Camera3D, event: InputEvent, screen_pos: Vector2) -> b
 				var pick_cell = _screen_to_cell(camera, screen_pos)
 				if pick_cell == null:
 					return false
-				material_picked.emit(pick_cell_material(pick_cell))
+				# The pick lands on `blend_material_id`, which is what the next
+				# blend stroke writes, and `plugin_paint_input.gd` names the
+				# picked id in a toast. There was a `material_picked` signal here
+				# as well and nothing connected it - the id is a terrain slot
+				# rather than a palette index, so there is no material browser
+				# selection for it to move.
+				pick_cell_material(pick_cell)
 				return true
 			return _begin_stroke(camera, screen_pos, event.alt_pressed, event.shift_pressed)
 		if _painting:
@@ -255,7 +260,7 @@ func _end_stroke() -> void:
 			_reconcile_heightmap(layer, dirty)
 		else:
 			var model = geometry.build_for_chunks(layer, dirty, synth_settings)
-			reconciler.reconcile(model, layer.grid, synth_settings, dirty)
+			reconciler.reconcile(model, layer.grid, synth_settings, dirty, layer.layer_id)
 	var generative_footprint := (
 		tool in [HFStroke.Tool.PAINT, HFStroke.Tool.RECT] and not _stroke_erasing
 	)
@@ -359,6 +364,7 @@ func _apply_axis_lock(cell: Vector2i, requested: bool) -> Vector2i:
 	return Vector2i(_start_cell.x, cell.y)
 
 
+## The terrain slot painted at `cell`, made the one the next blend stroke writes.
 func pick_cell_material(cell: Vector2i) -> int:
 	var layer = layer_manager.get_active_layer() if layer_manager else null
 	if not layer:
@@ -782,7 +788,7 @@ func _preview_reconcile() -> void:
 		_reconcile_heightmap(layer, dirty)
 	else:
 		var model = geometry.build_for_chunks(layer, dirty, synth_settings)
-		reconciler.reconcile(model, layer.grid, synth_settings, dirty)
+		reconciler.reconcile(model, layer.grid, synth_settings, dirty, layer.layer_id)
 
 
 func build_heightmap_model(layer: HFPaintLayer, chunk_ids: Array) -> HFGeneratedModel:
@@ -807,7 +813,7 @@ func build_heightmap_model(layer: HFPaintLayer, chunk_ids: Array) -> HFGenerated
 
 func _reconcile_heightmap(layer: HFPaintLayer, dirty: Array[Vector2i]) -> void:
 	var model = build_heightmap_model(layer, dirty)
-	reconciler.reconcile(model, layer.grid, synth_settings, dirty)
+	reconciler.reconcile(model, layer.grid, synth_settings, dirty, layer.layer_id)
 
 
 # ---------------------------------------------------------------------------

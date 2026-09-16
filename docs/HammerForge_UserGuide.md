@@ -60,7 +60,7 @@ These are the same settings as **Test → Settings** and **Test → Advanced Bak
 
 HammerForge's own messages, separate from Godot's Output panel where every addon's output is mixed together. The level buttons show how many of each arrived this session and double as the filter — click **Errors 2** to see just those two. **Follow** keeps the newest line in view, and **Copy** / **Save…** take whatever is currently shown.
 
-A message that repeats collapses to one row with a count (`(x4)`) rather than filling the buffer. The buffer holds the most recent 600 entries; the footer says how many older ones were dropped.
+A message that repeats collapses to one row with a count (`(x4)`) rather than filling the buffer. The buffer trims down to the most recent 600 entries in batches, so it holds up to 663; the footer says how many it holds and how many older ones were dropped.
 
 ## Viewport Mouse Controls
 
@@ -672,7 +672,7 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
 - **Blend & Terrain**: Blend Strength, Blend Slot (B/C/D), and Terrain Slot A-D texture pickers with UV scales.
 - **Foliage & Scatter**: Interactive scatter brush for foliage and object placement. Pick a mesh resource, set density/radius/height constraints/slope filter/scale variation. Choose Circle or Spline brush shape. Preview generates a MultiMesh preview (Dots/Wireframe/Full). Scatter commits as a permanent `MultiMeshInstance3D`, in one undo step, owned by the scene so a save keeps it. Clear removes the preview. A stroke asking for more than 50,000 instances is refused with the count, so wind the radius or the density down rather than waiting for it. Spline mode uses selected nodes as path control points with a configurable width band.
 - **Regions**: Region Streaming enable, Region Size, Stream Radius, Show Region Grid, memory stats.
-- **Materials**: Visual thumbnail browser (`HFMaterialBrowser`) with search, pattern/color filters, and Prototypes/Palette/Favorites view toggle. Add/Remove/Refresh Prototypes buttons. Face Select Mode toggle. Assign to Selected Faces. Right-click thumbnails for context menu (Apply to Faces, Apply to Whole Brush, Toggle Favorite, Copy Name). Hover a thumbnail to preview on selected faces. Press **T** for Texture Picker (eyedropper). The **Refresh Prototypes** button batch-loads 150 built-in SVG textures (15 patterns x 10 colors) for quick greyboxing.
+- **Materials**: Visual thumbnail browser (`HFMaterialBrowser`) with search, pattern/color filters, and Prototypes/Palette/Favorites view toggle. Add/Remove/Refresh Prototypes buttons. Face Select Mode toggle. Assign to Selected Faces. Right-click thumbnails for context menu (Apply to Faces, Apply to Whole Brush, Toggle Favorite, Copy Name). Favorites are kept in `user://hammerforge_prefs.json` by resource path, so they survive a dock rebuild and an editor restart; a material built in the session and not saved to disk has no path and cannot be starred, and the status line says so. Hover a thumbnail to preview on selected faces. Press **T** for Texture Picker (eyedropper). The **Refresh Prototypes** button batch-loads 150 built-in SVG textures (15 patterns x 10 colors) for quick greyboxing.
 - **UV Editor**: Per-face UV editing with drag handles, Reset Projected UVs, and Justify grid (Fit, Center, Left, Right, Top, Bottom in 3×2 layout).
 - **Surface Paint**: Paint Target (Floor/Surface), layers, texture picker, radius/strength.
 
@@ -682,7 +682,7 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
 - Selected `DraftEntity` nodes use the same managed **Delete**, **Ctrl+D Duplicate**, arrow-key X/Z nudge, and PageUp/PageDown Y nudge workflow as brushes, including HammerForge undo/state cleanup.
 - **Entity Properties** (collapsible, context-hidden): auto-generated typed controls based on entity definition. Only visible when an entity is selected.
 - **Entity I/O** (collapsible, context-hidden): Output, Target, Input, Parameter fields. Delay (seconds) and Fire Once checkbox. Add Output / Remove buttons and connection ItemList. An output needs a name, a target and an input — blank is refused rather than added as a connection that does nothing — and the delay has to be zero seconds or more. Only visible when an entity is selected; connections auto-refresh on selection change. **Show I/O Lines** checkbox to visualize connections in the viewport.
-- **I/O Wiring** (collapsible, context-hidden, collapsed by default): Quick-wire form (output name, target dropdown, input name, parameter, delay, fire-once). Only visible when an entity is selected. Connection summary shows triggers and triggered-by counts. **Highlight** toggle button pulses all linked entities in the viewport. **Connection Presets** picker with 6 built-in patterns (Door+Light+Sound, Button→Toggle, Alarm Sequence, Pickup+Remove, Damage+Break, Timer Lights) plus user-saved presets. Target tag mapping lets you assign preset target placeholders to actual entity names.
+- **I/O Wiring** (collapsible, context-hidden, collapsed by default): Quick-wire form (output name, target dropdown, input name, parameter, delay, fire-once). Only visible when an entity is selected. Connection summary shows triggers and triggered-by counts. **Highlight** toggle button pulses all linked entities in the viewport. **Connection Presets** picker with 6 built-in patterns (Door+Light+Sound, Button→Toggle, Alarm Sequence, Pickup+Remove, Damage+Break, Timer Lights) plus user-saved presets, with **Save** and **Delete** beside it. Target tag mapping lets you assign preset target placeholders to actual entity names; a tag you leave empty is skipped and named in the status line rather than wired at an entity called after the tag. A saved preset whose name is already in the list gets a number, so two rows never read the same.
 
 > **Progressive disclosure:** During greyboxing, the Objects tab shows only the entity palette and create button. Entity Properties, Entity I/O, and I/O Wiring sections appear automatically when you select an entity, keeping the UI clean when you're focused on shapes and layout.
   - **I/O connection lines**: Bézier curves with arrowheads, color-coded by output type (cyan=OnTrigger, red=OnDamage, yellow=OnUse, green=OnOpen, magenta=OnBreak, orange=OnTimer). Fire-once connections pulse brighter; delayed connections dim proportionally. Parallel connections between the same pair offset laterally.
@@ -787,7 +787,7 @@ Use the **Preview Mode** dropdown in **Test → Advanced Bake** to choose how ba
 
 ### Bake Options
 The **Test → Advanced Bake** section exposes additional controls:
-- **Chunk Size** (SpinBox, 0-256, default 32): spatial chunk size for bake grouping. Set to 0 to disable chunking.
+- **Chunk Size** (SpinBox, 0-16384, default 32): spatial chunk size for bake grouping. Set to 0 to disable chunking. The range is the level's own bound, so the Status board's recommended chunk size is a value this control can hold.
 - **Bake Visible Only** (checkbox): skips hidden visgroups and invisible brushes during bake.
 - **Use MultiMesh** (checkbox): after baking, consolidates repeated identical meshes into `MultiMeshInstance3D` nodes. Useful for levels with many copies of the same brush shape — reduces draw calls.
 - **Material Atlas** (checkbox): packs per-face textures into a single atlas image so all atlased geometry renders in one draw call. Requires **Use Face Materials** to be enabled. Faces with tiling UVs (scale > 1) are automatically excluded and rendered as separate surfaces with their original material so texture repeat works correctly. Best for levels with many small non-tiling textures. Textures with painted layers or ShaderMaterials are not atlased. The atlas is at most 4096 pixels square, so a level carrying more texture than that holds packs what fits and renders the rest on their own materials, with a warning saying how many.
@@ -804,9 +804,10 @@ The **Test → Advanced Bake** section exposes additional controls:
 - **Generate Occluders** (checkbox): automatically generates `OccluderInstance3D` nodes from large flat surfaces during bake. The bake pass groups coplanar triangles across the entire baked hierarchy (including chunked bakes) and emits occluders for groups exceeding the minimum area threshold. This enables Godot's built-in occlusion culling at runtime without manual occluder placement. Sub-controls:
   - **Min Area** (SpinBox, 0.5–100.0, default 4.0): minimum coplanar face-group area in world units² to emit an occluder. Raise this value to reduce occluder count (fewer culling tests); lower it to increase coverage (more surfaces act as occluders). Surfaces smaller than this threshold are skipped.
 - **Auto Connectors** (checkbox): auto-generates ramps or stairs between paint layers at different heights during bake. Requires at least 2 paint layers with filled cells at adjacent grid positions and a height difference ≥ 0.1 world units. Sub-controls:
-  - **Mode** dropdown: *Ramp* (smooth slope), *Stairs* (stepped), *Auto* (stairs when height diff ≥ 2.0, ramp otherwise).
+  - **Mode** dropdown: *Ramp* (smooth slope), *Stairs* (stepped), *Auto* (stairs once the height difference reaches the Stair Threshold, ramp below it).
   - **Step H** (SpinBox, 0.05–2.0): stair step height in world units (only affects Stairs/Auto modes).
   - **Width** (SpinBox, 1–8): connector width in grid cells.
+  - **Stair Threshold** (SpinBox, 0.01–256.0, default 32.0): the height difference at which *Auto* picks stairs over a ramp. Saved with the level.
   Connectors are generated before navmesh baking, so the navmesh automatically covers connector surfaces. Auto-connectors are skipped during selection bakes (Bake Selected) to avoid pulling in unrelated geometry.
 
 The main **Bake** button is smart: if only specific brushes have been modified since the last bake, it automatically uses incremental bake (`Bake Changed`) instead of a full re-bake. Changing a bake setting counts as a change — the settings the last bake ran with are compared against the ones now set, so a rebake after flipping Bake Visible Only, a collision mode, a navmesh parameter or the cordon rebuilds in full rather than returning the previous result.
@@ -1059,7 +1060,7 @@ A `LevelRoot` can read from somewhere else instead through its `entity_definitio
 ## Material Library
 The material palette can be saved and loaded as a JSON library file. **Save Library** and **Load Library** sit in the Paint tab -> Materials section, beside Refresh Prototypes:
 - **Save Library**: records the resource path of each palette material. A material made in the editor session has no resource path and cannot be recorded, so its slot is written empty and the status line says how many were left that way. Save the material to disk first if it has to survive the trip.
-- **Load Library**: restores the palette from the saved paths. A path the file names but the project cannot find keeps its slot as an empty one rather than shifting the rest, because `FaceData.material_idx` indexes that array; the status line says how many are missing.
+- **Load Library**: restores the palette from the saved paths. A path the file names but the project cannot find keeps its slot as an empty one rather than shifting the rest, because `FaceData.material_idx` indexes that array; the status line says how many are missing. The load is a single undo step, so Ctrl+Z brings the old palette back.
 - **Unused materials**: not tracked. Material assignment is per face, through `FaceData.material_idx`, so "is this palette slot used" is a question about face slots rather than about a resource path.
 
 ## Prototype Textures
@@ -1206,7 +1207,7 @@ Prefabs let you save a selection of brushes and entities as a reusable group and
 3. Enter a name and click **Save** (or **Save Linked** to enable live propagation).
 4. The prefab is saved as a `.hfprefab` JSON file in `res://prefabs/`.
 
-**Quick Save**: Press **Ctrl+Shift+P** or click **Pfb** in the context toolbar to instantly save the current selection as a prefab with an auto-generated name. Also available via the context toolbar in both brush and entity selected contexts.
+**Quick Save**: Press **Ctrl+Shift+P** (rebindable, listed as Save Selection as Prefab in the shortcut dialog) or click **Pfb** in the context toolbar to instantly save the current selection as a prefab with an auto-generated name. Also available via the context toolbar in both brush and entity selected contexts.
 
 ### Instantiating a Prefab
 - Drag a prefab from the library list into the 3D viewport.
@@ -1220,7 +1221,7 @@ Prefabs let you save a selection of brushes and entities as a reusable group and
 Prefabs can contain multiple variants (e.g., different door styles: wooden, metal, ornate).
 
 - **Adding a variant**: Right-click a prefab in the library → **Add Variant**. Select the replacement geometry and name the variant.
-- **Cycling variants**: Select a placed prefab instance and press **Ctrl+Shift+V** or click **Var▶** in the context toolbar. This cycles through all available variants in place.
+- **Cycling variants**: Select a placed prefab instance and press **Ctrl+Shift+V** (rebindable, listed as Cycle Prefab Variant) or click **Var▶** in the context toolbar. This cycles through all available variants in place.
 - **Variant indicator**: The library list shows `[N variants]` next to prefabs that have multiple variants.
 
 ### Live-Linked Prefabs
@@ -1228,7 +1229,6 @@ When you save a prefab with **Save Linked**, all placed instances of that prefab
 
 - **Push to source**: Edit a placed instance, then click **Push** in the context toolbar to update the `.hfprefab` source file with the current state.
 - **Propagate to all**: Click **Pull** on any linked instance to propagate the current source file to all linked instances in the level.
-- Per-instance overrides (size, transform changes) are tracked and reapplied after propagation.
 - The context toolbar shows a `[linked]` badge on linked prefab instances.
 
 ### Tags and Search
@@ -1237,7 +1237,7 @@ When you save a prefab with **Save Linked**, all placed instances of that prefab
 - **Tag filtering**: Use the Tag dropdown to filter the list to prefabs with a specific tag.
 
 ### Visual Debug Overlay
-When hovering over a node that belongs to a prefab instance in the 3D viewport, a cyan wireframe bounding box appears around the entire instance. If the instance has overrides relative to the source, orange sphere markers appear on modified nodes.
+When hovering over a node that belongs to a prefab instance in the 3D viewport, a cyan wireframe bounding box appears around the entire instance.
 
 ### What's Captured
 - Brush geometry (shape, size, operation, material, transform relative to group centroid)
@@ -1257,7 +1257,8 @@ Some actions require specific conditions to run:
 - **Hollow, Clip, Move to Floor/Ceiling** require at least one brush selected. When nothing is selected, these buttons are grayed out with an inline hint ("Select a brush to use these tools") visible in the Selection Tools section.
 - **Face-dependent controls** (Assign to Selected Faces, UV editing) show "Enable Face Select Mode and click a face to edit" when no face is selected.
 - **Extrude** requires a LevelRoot in the scene. In extrude mode, a semi-transparent face highlight (green for up, red for down) previews which face you'll select before clicking.
-- **External tools** can define their own requirements via `can_activate()`.
+- **External tools** can define their own requirements via `can_activate()`. The registry asks before activating and reports `get_poll_fail_reason()` rather than making the tool active with nothing for it to do.
+- **An active tool's own settings** appear in a **Tool Settings** section on the Build tab, built from the tool's `get_settings_schema()`. The section is hidden while the active tool declares none.
 
 HammerForge managed edits are scoped to the visible selection. With only native Godot nodes selected, a keyboard shortcut passes through to Godot. With only HammerForge brushes/entities selected, HammerForge owns it. If the selection mixes both domains, HammerForge stops managed operations such as duplicate, delete, group, hollow, nudge, clip, carve, merge, texture, prefab, and variant actions and shows **“Edit HammerForge and Godot nodes separately”**. The same rule is enforced by the context toolbar, viewport context menu, hotkey palette, and selection-dependent radial actions; their managed commands are hidden or disabled where possible and checked again when invoked. Deselect one domain before retrying. This prevents generic editor commands or stale UI state from bypassing HammerForge IDs, caches, or undo state.
 
@@ -1522,7 +1523,7 @@ Notes
 - **X/Z** toggle grid-origin mirror axes. They are off by default; mirrored copies and the source are one undo entry.
 - The Y height gesture is a clearly chained second undo after the paint stroke. Esc restores its prior heights.
 - Painting next to a different-Y layer shows a connector ghost. **Enter** commits it in one undo; Esc dismisses it. Confirmed connectors persist and bake even with automatic detection off.
-- **Inference cleanup** is off by default. When enabled, it only removes isolated one-cell noise, fills one-cell cardinal holes/gaps, and widens inferred one-cell corridors inside the stroke-local dirty scope. Erase strokes are untouched.
+- **Inference cleanup** is off by default. When enabled, it only removes isolated one-cell noise, fills one-cell cardinal holes/gaps, and widens inferred one-cell corridors inside the stroke-local dirty scope. Erase strokes are untouched, and a stroke of a single cell is left alone - one click is a deliberate cell, not noise.
 - The viewport banner shows the hovered cell and footprint, then live unique-cell count and metres while a stroke is active.
 - Footprint, raise, and connector ghosts are transient and disappear on completion or Esc without rebuilding an entire layer.
 - Each changed stroke is one **Paint Floor** undo entry; a no-op or material pick is not.

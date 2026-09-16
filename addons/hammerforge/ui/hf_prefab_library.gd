@@ -7,6 +7,7 @@ extends VBoxContainer
 ## variant indicators, and context-menu actions (rename, delete, tags).
 
 const HFPrefabType = preload("res://addons/hammerforge/hf_prefab.gd")
+const HFPrefabSystemType = preload("res://addons/hammerforge/systems/hf_prefab_system.gd")
 
 signal save_requested(prefab_name: String)
 signal save_linked_requested(prefab_name: String)
@@ -21,7 +22,7 @@ var _save_btn: Button
 var _save_linked_btn: Button
 var _refresh_btn: Button
 var _delete_btn: Button
-var _prefab_dir: String = "res://prefabs"
+var _prefab_dir: String = HFPrefabSystemType.PREFAB_DIR
 var _file_paths: PackedStringArray = []
 var _all_tags: PackedStringArray = []
 var _prefab_cache: Dictionary = {}  # path -> HFPrefab (lazy loaded for tags/variants)
@@ -116,11 +117,6 @@ func _build_ui() -> void:
 	_context_menu.add_item("Delete", 2)
 	_context_menu.id_pressed.connect(_on_context_menu_selected)
 	add_child(_context_menu)
-
-
-func set_prefab_dir(dir: String) -> void:
-	_prefab_dir = dir
-	refresh()
 
 
 func refresh() -> void:

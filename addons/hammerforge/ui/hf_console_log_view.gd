@@ -392,7 +392,7 @@ func _update_summary(shown: int) -> void:
 	var text := "Showing %d of %d retained" % [visible_count, total]
 	var dropped: int = _log.dropped_count()
 	if dropped > 0:
-		text += " · %d older dropped (buffer holds %d)" % [dropped, _log.capacity]
+		text += " · %d older dropped (buffer holds up to %d)" % [dropped, _log.retained_limit()]
 	if _summary:
 		_summary.text = text
 		_summary.add_theme_color_override("font_color", HFThemeUtils.muted_text(_base_control))

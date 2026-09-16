@@ -332,9 +332,7 @@ Key design choices:
 - **Signal-driven UI** -- signals on LevelRoot replace polling; batched emission prevents UI thrash
 - **Tag-based invalidation** -- exact dirty tags on transform, material, UV, paint, and vertex mutations; an ID-keyed change tracker reconciles Godot-owned Inspector/gizmo commits and native undo/redo for selective Bake Changed output
 - **Command collation** -- rapid operations merge into single undo entries within a 1-second window
-- **Transactions** -- atomic multi-step operations (hollow, clip) with rollback on failure
 - **HFOpResult** -- failable operations return structured results with actionable fix hints
-- **HFGesture** -- base class for self-contained input tool gestures
 - **Explicit state machine** -- `HFInputState` manages IDLE / DRAG_BASE / DRAG_HEIGHT / SURFACE_PAINT / EXTRUDE / VERTEX_EDIT modes
 - **Stable public facade** -- editor and dock code use LevelRoot's public operations; focused plugin adapters use deliberate dynamic access where GDScript cannot type the EditorPlugin implementation without creating preload cycles
 
@@ -389,7 +387,7 @@ transform group while paint mode is on, so only one of the two is ever live.
 
 ## Testing
 
-The verified Godot 4.7 suite on September 15, 2026 contains **3,907 tests across 211 scripts**: **3,900 passing tests**, seven intentional no-assert safety tests, and **19,202 assertions**. All checks run on every push and pull request via GitHub Actions.
+The verified Godot 4.7 suite on September 16, 2026 contains **3,933 tests across 213 scripts**: **3,926 passing tests**, seven intentional no-assert safety tests, and **19,310 assertions**. All checks run on every push and pull request via GitHub Actions.
 
 ```bash
 # Run all tests headless

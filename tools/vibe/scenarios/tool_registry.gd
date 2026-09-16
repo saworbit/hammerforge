@@ -152,7 +152,10 @@ func _colliding_ids_and_shortcuts() -> void:
 	var registry2 = ToolRegistry.new()
 	registry2.register_tool(_make_tool(101, KEY_F5, "First"))
 	registry2.register_tool(_make_tool(102, KEY_F5, "Second"))
-	var winner: int = registry2.check_shortcut(KEY_F5)
+	var f5 := InputEventKey.new()
+	f5.keycode = KEY_F5
+	f5.pressed = true
+	var winner: int = registry2.check_shortcut(f5)
 	note("two tools bound to F5, check_shortcut returns", winner)
 	note("registered tools", registry2.get_all_tools().size())
 

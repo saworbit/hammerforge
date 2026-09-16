@@ -26,7 +26,6 @@ enum PreviewMode { FULL, WIREFRAME, PROXY }
 enum BakeStatus { NOT_RUN, SUCCESS, FAILED, BUSY, NOTHING_TO_DO }
 
 var root: Node3D
-var _last_dirty_brush_ids: Dictionary = {}  # brush_id -> true; captured at bake start
 
 ## The bake settings the last successful bake ran with, and whether there has
 ## been one. Any other signature means the baked result no longer answers the
@@ -440,6 +439,7 @@ const BAKE_SETTING_NAMES := [
 	"bake_connector_mode",
 	"bake_connector_stair_height",
 	"bake_connector_width",
+	"bake_connector_stair_threshold",
 	"bake_wire_io",
 	"cordon_enabled",
 	"cordon_aabb",
@@ -485,7 +485,6 @@ func bake_dirty(collision_layer_mask: int = 0, preview_mode: int = 0) -> bool:
 		root.emit_signal("user_message", "No changed brushes since last bake", 1)
 		return false
 	var dirty_snapshot: Dictionary = root._dirty_brush_ids.duplicate()
-	_last_dirty_brush_ids = dirty_snapshot.duplicate()
 	var brush_nodes: Array = []
 	for bid in dirty_ids:
 		var brush = root._find_brush_by_key(str(bid))
@@ -1593,29 +1592,6 @@ func _partition_collision_by_visgroup(
 		baked.add_child(body)
 
 
-func apply_collision_from_bake(target: Node3D, source: Node3D, layer: int) -> void:
-	if not target:
-		return
-	var target_body = target.get_node_or_null("FloorCollision") as StaticBody3D
-	if not target_body:
-		target_body = StaticBody3D.new()
-		target_body.name = "FloorCollision"
-		target.add_child(target_body)
-	target_body.collision_layer = layer
-	target_body.collision_mask = layer
-	for child in target_body.get_children():
-		child.queue_free()
-	if not source:
-		return
-	var source_body = source.get_node_or_null("FloorCollision") as StaticBody3D
-	if not source_body:
-		return
-	for child in source_body.get_children():
-		if child is CollisionShape3D:
-			var dup = child.duplicate()
-			target_body.add_child(dup)
-
-
 func collect_generated_heightmap_meshes() -> Array:
 	var out: Array = []
 	if not root.generated_heightmap_floors:
@@ -1676,6 +1652,7 @@ func _append_auto_connectors(container: Node3D) -> void:
 	settings.mode = root.bake_connector_mode
 	settings.stair_step_height = root.bake_connector_stair_height
 	settings.width_cells = root.bake_connector_width
+	settings.stair_threshold = root.bake_connector_stair_threshold
 	var definitions: Array = []
 	var known_boundaries: Dictionary = {}
 	var paint_tool = root.get("paint_tool")

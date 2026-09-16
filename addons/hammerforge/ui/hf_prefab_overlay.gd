@@ -3,16 +3,13 @@ extends RefCounted
 ## Visual debug overlay for prefab instances.
 ##
 ## When hovering a node that belongs to a prefab instance, draws a
-## wireframe bounding box around the entire instance and shows
-## override indicators (colored dots) on modified nodes.
+## wireframe bounding box around the entire instance.
 
 var root: Node3D  # LevelRoot
 var _overlay_mesh_instance: MeshInstance3D
 var _immediate_mesh: ImmediateMesh
-var _override_markers: Array = []  # MeshInstance3D nodes for override dots
 var _active_instance_id: String = ""
 var _material: StandardMaterial3D
-var _override_material: StandardMaterial3D
 
 
 func _init(level_root: Node3D) -> void:
@@ -27,13 +24,6 @@ func _setup_materials() -> void:
 	_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_material.no_depth_test = true
-
-	# Override indicator material — orange
-	_override_material = StandardMaterial3D.new()
-	_override_material.albedo_color = Color(1.0, 0.6, 0.2, 0.8)
-	_override_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_override_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_override_material.no_depth_test = true
 
 
 ## Show the ghost overlay for a prefab instance.
@@ -86,10 +76,6 @@ func show_instance_overlay(instance_id: String) -> void:
 	# Create wireframe box
 	_draw_wireframe_box(aabb)
 
-	# Draw override markers
-	if not rec.overrides.is_empty():
-		_draw_override_markers(rec)
-
 
 ## Hide the overlay.
 func hide_overlay() -> void:
@@ -101,17 +87,6 @@ func hide_overlay() -> void:
 		_overlay_mesh_instance.queue_free()
 	_overlay_mesh_instance = null
 	_immediate_mesh = null
-	for marker in _override_markers:
-		if is_instance_valid(marker):
-			var mk_parent: Node = marker.get_parent()
-			if mk_parent:
-				mk_parent.remove_child(marker)
-			marker.queue_free()
-	_override_markers.clear()
-
-
-func get_active_instance_id() -> String:
-	return _active_instance_id
 
 
 func _draw_wireframe_box(aabb: AABB) -> void:
@@ -158,56 +133,6 @@ func _draw_wireframe_box(aabb: AABB) -> void:
 	# The box corners are world coordinates and this hangs off the LevelRoot, so it
 	# has to be pinned to world space.
 	_overlay_mesh_instance.global_transform = Transform3D.IDENTITY
-
-
-func _draw_override_markers(rec) -> void:
-	# Show small spheres at nodes that have overrides
-	var sphere_mesh := SphereMesh.new()
-	sphere_mesh.radius = 0.2
-	sphere_mesh.height = 0.4
-	sphere_mesh.radial_segments = 8
-	sphere_mesh.rings = 4
-
-	var marked_positions: Dictionary = {}
-
-	for field_path in rec.overrides:
-		var parts: PackedStringArray = field_path.split("/")
-		if parts.size() < 2:
-			continue
-		var target_type: String = parts[0]
-		var idx_str: String = parts[1]
-		if not idx_str.is_valid_int():
-			continue
-		var idx: int = idx_str.to_int()
-		var pos := Vector3.ZERO
-		var found := false
-
-		var ps = root.get("prefab_system")
-		if target_type == "brush" and idx < rec.brush_ids.size():
-			if ps:
-				var brush = ps._find_brush_by_id(rec.brush_ids[idx])
-				if brush and brush is Node3D:
-					pos = brush.global_position
-					found = true
-		elif target_type == "entity" and idx < rec.entity_uids.size():
-			if ps:
-				var ent = ps._find_entity_by_uid(rec.entity_uids[idx])
-				if ent:
-					pos = ent.global_position
-					found = true
-
-		if found:
-			var key := "%s/%d" % [target_type, idx]
-			if not marked_positions.has(key):
-				marked_positions[key] = pos
-				var marker = MeshInstance3D.new()
-				marker.name = "PrefabOverrideMarker"
-				marker.mesh = sphere_mesh
-				marker.material_override = _override_material
-				marker.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-				root.add_child(marker)
-				marker.global_position = pos + Vector3(0, 0.5, 0)
-				_override_markers.append(marker)
 
 
 func _get_node_aabb(node: Node3D) -> AABB:

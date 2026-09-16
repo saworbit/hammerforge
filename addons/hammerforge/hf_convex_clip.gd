@@ -44,14 +44,12 @@ const MAX_BOOLEAN_PLANES := 128
 
 
 ## World axis for an index: 0 = X, 1 = Y, anything else = Z.
+##
+## One definition, in `HFTransformSystem`, which is where the guard for the
+## fall-through lives. This was a byte-identical second copy, so a fix to either
+## was not a fix to the other.
 static func axis_normal(axis_index: int) -> Vector3:
-	match axis_index:
-		0:
-			return Vector3.RIGHT
-		1:
-			return Vector3.UP
-		_:
-			return Vector3.BACK
+	return HFTransformSystem.axis_vector(axis_index)
 
 
 ## The plane a face lies in, in the face's own space.

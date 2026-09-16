@@ -249,6 +249,34 @@ func add_paint_layer() -> void:
 	root.paint_layers.active_layer_index = root.paint_layers.layers.size() - 1
 
 
+## Point a terrain slot on the active paint layer at `path` and rebuild.
+##
+## Named on the system so the dock has something to commit an undo action
+## against: the slot arrays are carried by `capture_paint_layers()` and put back
+## by `restore_paint_layers()`, so only the wrapper was missing.
+func set_terrain_slot_texture(slot: int, path: String) -> void:
+	if not root.paint_layers:
+		return
+	var layer = root.paint_layers.get_active_layer()
+	if not layer:
+		return
+	if not layer.set_terrain_slot_texture(slot, path):
+		return
+	regenerate_paint_layers()
+
+
+## The UV scale of a terrain slot on the active paint layer.
+func set_terrain_slot_uv_scale(slot: int, value: float) -> void:
+	if not root.paint_layers:
+		return
+	var layer = root.paint_layers.get_active_layer()
+	if not layer:
+		return
+	if not layer.set_terrain_slot_uv_scale(slot, value):
+		return
+	regenerate_paint_layers()
+
+
 func remove_active_paint_layer() -> void:
 	if not root.paint_layers:
 		return
@@ -363,12 +391,10 @@ func toggle_face_selection(brush: DraftBrush, face_idx: int, additive: bool) -> 
 	else:
 		indices.append(face_idx)
 	root.face_selection[key] = indices
-	apply_face_selection()
 
 
 func clear_face_selection() -> void:
 	root.face_selection.clear()
-	apply_face_selection()
 
 
 func get_face_selection() -> Dictionary:
@@ -401,16 +427,6 @@ func assign_material_to_selected_faces(material_index: int) -> int:
 	return count
 
 
-func apply_face_selection() -> void:
-	for node in root._iter_pick_nodes():
-		if not (node is DraftBrush):
-			continue
-		var brush := node as DraftBrush
-		var key = face_key(brush)
-		var indices: Array = root.face_selection.get(key, [])
-		brush.set_selected_faces(PackedInt32Array(indices))
-
-
 func face_key(brush: DraftBrush) -> String:
 	if brush == null:
 		return ""
@@ -436,14 +452,14 @@ func regenerate_paint_layers() -> void:
 		if layer.has_heightmap() and root.paint_tool.heightmap_synth:
 			var model = root.paint_tool.build_heightmap_model(layer, chunk_ids)
 			root.paint_tool.reconciler.reconcile(
-				model, layer.grid, root.paint_tool.synth_settings, chunk_ids
+				model, layer.grid, root.paint_tool.synth_settings, chunk_ids, layer.layer_id
 			)
 		else:
 			var model = root.paint_tool.geometry.build_for_chunks(
 				layer, chunk_ids, root.paint_tool.synth_settings
 			)
 			root.paint_tool.reconciler.reconcile(
-				model, layer.grid, root.paint_tool.synth_settings, chunk_ids
+				model, layer.grid, root.paint_tool.synth_settings, chunk_ids, layer.layer_id
 			)
 	if region_streaming_enabled:
 		_rebuild_loaded_regions_from_layers()
@@ -993,14 +1009,14 @@ func _reconcile_layer(layer: HFPaintLayer, dirty: Array[Vector2i]) -> void:
 	if layer.has_heightmap() and root.paint_tool.heightmap_synth:
 		var model = root.paint_tool.build_heightmap_model(layer, dirty)
 		root.paint_tool.reconciler.reconcile(
-			model, layer.grid, root.paint_tool.synth_settings, dirty
+			model, layer.grid, root.paint_tool.synth_settings, dirty, layer.layer_id
 		)
 	else:
 		var model = root.paint_tool.geometry.build_for_chunks(
 			layer, dirty, root.paint_tool.synth_settings
 		)
 		root.paint_tool.reconciler.reconcile(
-			model, layer.grid, root.paint_tool.synth_settings, dirty
+			model, layer.grid, root.paint_tool.synth_settings, dirty, layer.layer_id
 		)
 
 

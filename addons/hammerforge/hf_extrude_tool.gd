@@ -110,10 +110,6 @@ func cancel_extrude() -> void:
 	source_face_idx = -1
 
 
-func get_current_height() -> float:
-	return _current_height
-
-
 # ---------------------------------------------------------------------------
 # Preview
 # ---------------------------------------------------------------------------

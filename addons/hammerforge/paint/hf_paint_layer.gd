@@ -43,16 +43,6 @@ func get_height_at(cell: Vector2i) -> float:
 	return heightmap.get_pixel(px, py).r * height_scale
 
 
-func get_height_at_uv(u: float, v: float) -> float:
-	if not has_heightmap():
-		return 0.0
-	var w := heightmap.get_width()
-	var h := heightmap.get_height()
-	var px := clampi(int(u * w), 0, w - 1)
-	var py := clampi(int(v * h), 0, h - 1)
-	return heightmap.get_pixel(px, py).r * height_scale
-
-
 func set_cell(cell: Vector2i, filled: bool) -> void:
 	var cid := _cell_to_chunk(cell)
 	# Erasing does not need a chunk. Going through _get_or_create_chunk() on the
@@ -338,6 +328,33 @@ func get_terrain_slot_textures() -> Array:
 		else:
 			out.append(load(path))
 	return out
+
+
+## Point terrain slot `slot` at `path`. False when nothing changed, so the
+## caller can skip the rebuild.
+##
+## The dock used to write `terrain_slot_paths[i]` straight through - the one
+## place in the plugin that wrote a layer's arrays from outside the layer, and
+## with nothing bounding the index.
+func set_terrain_slot_texture(slot: int, path: String) -> bool:
+	_ensure_terrain_slots()
+	if slot < 0 or slot >= TERRAIN_SLOTS:
+		return false
+	if terrain_slot_paths[slot] == path:
+		return false
+	terrain_slot_paths[slot] = path
+	return true
+
+
+## The UV scale of terrain slot `slot`. False when nothing changed.
+func set_terrain_slot_uv_scale(slot: int, value: float) -> bool:
+	_ensure_terrain_slots()
+	if slot < 0 or slot >= TERRAIN_SLOTS:
+		return false
+	if not is_finite(value) or is_equal_approx(terrain_slot_uv_scales[slot], value):
+		return false
+	terrain_slot_uv_scales[slot] = value
+	return true
 
 
 func get_terrain_slot_uv_scales() -> Array[float]:

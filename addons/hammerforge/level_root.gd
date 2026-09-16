@@ -99,6 +99,8 @@ const MIN_CONNECTOR_STAIR_HEIGHT := 0.01
 const MAX_CONNECTOR_STAIR_HEIGHT := 256.0
 const MIN_CONNECTOR_WIDTH := 1
 const MAX_CONNECTOR_WIDTH := 64
+const MIN_CONNECTOR_STAIR_THRESHOLD := 0.01
+const MAX_CONNECTOR_STAIR_THRESHOLD := 256.0
 
 
 ## A value inside the range, or the one already there when it is not a number.
@@ -224,6 +226,26 @@ var _bake_connector_width: int = 2
 		_bake_connector_width = clampi(value, MIN_CONNECTOR_WIDTH, MAX_CONNECTOR_WIDTH)
 	get:
 		return _bake_connector_width
+## The height difference above which Auto connector mode picks stairs over a ramp.
+##
+## The Connector Mode tooltip has always told the mapper a threshold decides it,
+## and there was nowhere to look: it was a constant on `HFAutoConnector.Settings`
+## with no property, no control and nothing in the `.hflevel`. The default is 32
+## rather than the 2.0 it was fixed at, because 2.0 is a small height at this
+## genre's scale - on a level built at 32-unit grid steps every cross-layer
+## boundary cleared it, so Auto was Stairs everywhere and the ramp half of the
+## mode never happened.
+var _bake_connector_stair_threshold: float = 32.0
+@export var bake_connector_stair_threshold: float = 32.0:
+	set(value):
+		_bake_connector_stair_threshold = _bounded(
+			value,
+			MIN_CONNECTOR_STAIR_THRESHOLD,
+			MAX_CONNECTOR_STAIR_THRESHOLD,
+			_bake_connector_stair_threshold
+		)
+	get:
+		return _bake_connector_stair_threshold
 @export var bake_use_thread_pool: bool = true
 ## Collision shape strategy: 0 = single trimesh (legacy), 1 = per-brush convex hulls,
 ## 2 = per-visgroup partitioned bodies.
@@ -945,11 +967,6 @@ func get_visgroup_names() -> PackedStringArray:
 	return visgroup_system.get_visgroup_names() if visgroup_system else PackedStringArray()
 
 
-func refresh_visgroup_visibility() -> void:
-	if visgroup_system:
-		visgroup_system.refresh_visibility()
-
-
 func group_selection(group_name: String, nodes: Array) -> void:
 	if visgroup_system:
 		visgroup_system.group_selection(group_name, nodes)
@@ -1636,13 +1653,6 @@ func set_displacement_elevation(brush_id: String, face_index: int, elevation: fl
 	return displacement_system.set_elevation(brush_id, face_index, elevation)
 
 
-func set_displacement_power(brush_id: String, face_index: int, power: int) -> bool:
-	var ok: bool = displacement_system.set_power(brush_id, face_index, power)
-	if ok:
-		tag_brush_dirty(brush_id)
-	return ok
-
-
 func smooth_displacement(brush_id: String, face_index: int, strength: float) -> bool:
 	return displacement_system.smooth_all(brush_id, face_index, strength)
 
@@ -1670,12 +1680,6 @@ func set_displacement_sew_group(brush_id: String, face_index: int, sew_group_id:
 
 func sew_all_displacements() -> int:
 	return displacement_system.sew_all()
-
-
-func paint_displacement(
-	brush_id: String, face_index: int, world_pos: Vector3, radius: float, strength: float, mode: int
-) -> bool:
-	return displacement_system.paint(brush_id, face_index, world_pos, radius, strength, mode)
 
 
 # ===========================================================================
@@ -2144,10 +2148,6 @@ func assign_material_and_reproject(material_index: int, projection: int) -> int:
 	return count
 
 
-func _apply_face_selection() -> void:
-	brush_system._apply_face_selection()
-
-
 func _find_brush_by_key(key: String) -> DraftBrush:
 	return brush_system._find_brush_by_key(key)
 
@@ -2277,10 +2277,6 @@ func is_bake_in_flight() -> bool:
 	return bake_system != null and bake_system.is_bake_in_flight()
 
 
-func was_last_bake_successful() -> bool:
-	return bake_system != null and bake_system._last_bake_success
-
-
 ## Why the most recent bake call returned what it did, as a BakeStatus. Read it
 ## immediately after the call: the next one overwrites it.
 func get_last_bake_status() -> int:
@@ -2371,6 +2367,14 @@ func rename_paint_layer(index: int, new_name: String) -> bool:
 		return false
 	paint_layer_changed.emit(paint_system.get_active_paint_layer_index())
 	return true
+
+
+func set_terrain_slot_texture(slot: int, path: String) -> void:
+	paint_system.set_terrain_slot_texture(slot, path)
+
+
+func set_terrain_slot_uv_scale(slot: int, value: float) -> void:
+	paint_system.set_terrain_slot_uv_scale(slot, value)
 
 
 func remove_active_paint_layer() -> void:
@@ -2845,6 +2849,22 @@ func add_prototype_materials() -> int:
 	end_signal_batch()
 	material_list_changed.emit()
 	return count
+
+
+## Replace the palette with the one saved at `path`.
+##
+## Named here rather than reached through `material_manager` so the dock can
+## commit it as an undo action: every face's `material_idx` is an index into
+## this palette, so loading a different library repaints every painted face in
+## the level, and there is no route back once the old palette is gone.
+func load_material_library(path: String) -> bool:
+	if not material_manager:
+		_setup_material_manager()
+	if not material_manager.load_library(path):
+		return false
+	_refresh_brush_previews()
+	material_list_changed.emit()
+	return true
 
 
 func get_material_names() -> Array:

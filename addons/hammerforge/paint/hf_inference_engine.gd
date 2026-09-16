@@ -33,6 +33,15 @@ class InferenceSettings:
 	var widen_corridors := true
 
 
+## What the stroke looks like it was meant to be, which decides whether the
+## corridor widening runs.
+##
+## `avg_speed` is part of the corridor test, so the same shape classifies two
+## ways: a long thin run drawn at 10 cells a second or more is a corridor and
+## gains a row, and the identical run drawn slowly is a blob and gains nothing.
+## That is worth knowing before reading a cleanup that did not happen - the
+## widening is the only intent-gated pass, so nothing else depends on which
+## answer comes back.
 func infer_intent(stroke: HFStroke) -> StringName:
 	if stroke.tool == HFStroke.Tool.ERASE:
 		return &"erase"
@@ -73,7 +82,14 @@ func apply_cleanup(
 
 	snapshot = _snapshot(layer, writable)
 	changes.clear()
-	if settings.denoise:
+	# A stroke of exactly one cell is not noise. Denoise removes a filled cell
+	# with no cardinal neighbour, which is every single click on empty ground,
+	# and the scope this pass runs on is the stroke that was just made - so with
+	# cleanup on, one click painted nothing and said nothing about it. There is
+	# no isolated cell to remove from a one-cell stroke that the stroke did not
+	# deliberately put there.
+	var deliberate_dab := affected_cells.size() == 1
+	if settings.denoise and not deliberate_dab:
 		for cell: Vector2i in writable:
 			if bool(snapshot.get(cell, false)) and _cardinal_count(snapshot, layer, cell) == 0:
 				changes[cell] = false

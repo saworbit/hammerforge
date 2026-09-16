@@ -5,6 +5,133 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Removed
+- **Nineteen public functions with no call site** (#572). A scan over `addons/`,
+  `tests/` and `tools/` with comments stripped first, so a name mentioned in
+  prose did not count as a use. Half were named `LevelRoot` delegates, which this
+  project's own rule keeps only where something calls them by name.
+  `paint_displacement()` and `set_displacement_power()` went together - the
+  displacement input path reaches `root.displacement_system.paint()` directly.
+  The two the issue flagged for a look first both checked out:
+  `HFSnapSystem.clear_geometry_cache()` is genuinely unnecessary, because a cache
+  entry is validated against the brush's `instance_id`, `face_count` and `size`,
+  and a state restore frees the old brushes so their entries no longer match; and
+  nothing in `addons/` reads `HFTerrainRegionManager.dirty_regions` at all, so
+  `clear_dirty()` was not the missing half of an eviction - the set it clears is
+  itself written and never read.
+- **`Dock.set_status_grid()`, `set_status_mode()` and `set_show_hud()`** (#555).
+  `set_status_grid()` was the worst: a doc comment saying "Update the grid
+  display in the status bar", a parameter that is never read, and a guard around
+  a `pass`. Anyone wiring grid snap to the status bar would have found it, called
+  it, and got nothing. `set_status_mode()` read as the simple case of
+  `set_mode_indicator()` sitting immediately below it and was the superseded one;
+  `_update_mode_indicator()` went with it, having lost its only caller.
+- **`autosave_interval` and `last_tool_id` from the preferences schema** (#568).
+  Both typed, defaulted, validated on load and written to `user://` on every
+  save, and read by nothing. `autosave_interval` was the one that misled: there
+  are two autosave-interval settings in the plugin, and the one that works is
+  `hflevel_autosave_minutes` on `LevelRoot`, with a spin and a Console row - so
+  anyone finding this one in the prefs file and editing it got no effect and no
+  message. `_validated()` keeps a key it does not know, so an existing prefs file
+  carrying either is not warned about. Removing both leaves no `TYPE_INT`
+  preference in the schema, so the int half of `_usable()`'s number coercion is
+  now there for the next one rather than exercised by a test.
+- **`HFPaintTool.material_picked`** (#553). Declared, emitted on every Ctrl+Click
+  on the floor paint grid, and connected by nothing. One correction to the
+  issue's reading: the gesture is not inert. `pick_cell_material()` sets
+  `blend_material_id`, which is what the next blend stroke writes, and
+  `plugin_paint_input.gd` already toasts "Picked floor material N" - so the
+  eyedropper lands and says so, and it was only the signal that stopped at the
+  boundary. It has nowhere useful to go either: the picked id is a terrain slot
+  rather than a palette index, so there is no material browser selection for it
+  to move. The `return true` stays, because the pick is a real gesture rather
+  than a swallowed click.
+- **`HFPrefabLibrary.set_prefab_dir()`** (#556). `res://prefabs` was written out
+  three times - the library, `HFPrefabSystem` and `dock.gd` - and the setter
+  could only change one of them, so calling it would have left the library
+  listing a different folder from the one Save writes into and the one `dock.gd`
+  scans. A setter that moves one of three copies of a constant is worse than no
+  setter, because it looks like the supported way. There is one
+  `HFPrefabSystem.PREFAB_DIR` now that all three read, and the directory is
+  honestly a constant. Making it configurable is a prefs key and a real setter
+  behind that one value, which is a change worth making deliberately.
+- **`HFGesture`** (#550). A `class_name`, a doc comment describing an
+  architecture where "the plugin holds at most one active gesture" and routes all
+  input through it, and 109 lines nothing constructs - no subclass, no `new()`,
+  no preload anywhere in `addons/`, `tests/` or `tools/`.
+  `HFSelectionGesture` sounds like one and is not. The expensive part was the
+  complete numeric-entry mechanism inside it, reimplemented separately in
+  `plugin_numeric_input.gd`, which is the copy that runs: the dead one still has
+  the keypad-Enter bug frozen into it that #516 and #517 fixed, so it was a
+  second and wrong reference for anyone who found it first. The guide's Gesture
+  Tracker section goes with it; if the architecture is still wanted it is a
+  design question against what `HFSelectionGesture`, `HFPluginGestureRecovery`
+  and `input_state.gd` actually do.
+- **`HFFoliagePopulator`** (#562). 146 lines, documented in two guides as a
+  shipped subsystem, constructed by nothing. The Paint tab's Foliage & Scatter
+  section commits through `HFScatterBrush`, which is a superset - the same
+  `density`, `min_height`, `max_height`, `max_slope` and the identical
+  `_compute_slope()`, plus a density preview, a circle and a spline shape, an
+  instance budget with a refusal message, and a `rejected_count`. The dead copy
+  was also the weaker one: no budget, so `populate()` built a `Transform3D` per
+  instance over every cell of every chunk with nothing capping the total, which
+  is the shape #512 was about. The greybox guide's section is now about
+  `HFScatterBrush`, which does everything it claimed and more, and
+  `hf_scatter_brush.gd` no longer says it works with a class that is gone.
+- **The state system's transaction API** (#571). `begin_transaction()`,
+  `commit_transaction()`, `rollback_transaction()`, `is_in_transaction()` and
+  their three fields, called by nothing and not covered by the GUT suite, while
+  `HammerForge_MVP_GUIDE.md` listed them as a shipped capability. Every
+  multi-step operation that wanted this solved it separately -
+  `_commit_state_action()` through `HFUndoHelper`, the generator's hand-rolled
+  appearance capture, `propagate_from_source()` with no grouping at all - so the
+  designed answer was not serving as the answer. Grouping a propagate into one
+  undo step is worth doing; it is worth doing against a design rather than by
+  finding four functions nobody has used. `LevelRoot.discard_signal_batch()`
+  stays: it was the transaction's only caller, but it is the one way to abandon
+  an open signal batch, `begin_signal_batch()` has live callers, and
+  `test_dirty_tags.gd` covers its behaviour.
+- **The per-instance prefab override mechanism** (#566). A record field, three
+  public functions, a re-apply pass, the overlay's override markers and a
+  `capture_state()` field, with no way in: nothing outside
+  `tests/test_prefab_enhancements.gd` ever called `set_override()`, so an
+  override could not be created, seen or cleared from inside HammerForge. It was
+  not finished underneath either - the only brush case it handled wrote a
+  `brush_size` meta, which the overlay reads for its own bounding box and nothing
+  reads to resize a brush, so applying a size override did not resize anything;
+  `_apply_variant()` never re-applied them, so a variant cycle would have dropped
+  every one; and only two of the field paths it accepted did anything at all. The
+  `capture_state()` field is the part that mattered: the shape of those paths was
+  a file-format commitment already made by a mechanism nobody had used.
+  `restore_state()` reads past an `overrides` key in an older payload.
+  Per-instance overrides are worth having and worth designing - the way in is the
+  open question, not the storage - so that is an issue to open on its own terms.
+  `compute_instance_diff()` stays: its two remaining comparisons are brush and
+  entity counts, which do not depend on overrides.
+- **`BrushInstance.selected_faces`, and the pass that maintained it** (#563). The
+  field was written for every brush on every face-selection change and read by
+  nothing - not `rebuild_preview()`, not `_build_face_preview()`, not the gizmo
+  plugin. The selection highlight is drawn from `LevelRoot.face_selection`, which
+  is also what `capture_state()` carries and what `face_selection_changed`
+  announces, so that is the one copy. The cost was real:
+  `HFBrushSystem._apply_face_selection()` called `set_selected_faces()` on every
+  brush in the level on every click in face mode, and `set_selected_faces()` ends
+  in `rebuild_preview()` - a full preview rebuild per brush per click, for a value
+  that changed nothing on screen. `HFPaintSystem.apply_face_selection()` was a
+  third copy of the same loop with no caller at all.
+- **Five fields that were assigned and never read** (#564).
+  `HFFileSystem._last_write_error` was the misleading one: it recorded exactly
+  what a reader chasing "why did my save fail" would want, and nothing consumed
+  it - the real route is the `hflevel_save_failed` signal and the
+  `_completed_saves` queue. Checked before removing it that nothing reaches it
+  alone: the worker always returns a Dictionary, which lands in `_completed_saves`
+  and reaches the signal, so no save failure went unreported.
+  `HFSubtractPreview._csg_result_count` was set to the same value as
+  `_active_count` at every one of its four sites, so there was no rebuild guard to
+  restore. `HFBakeSystem._last_dirty_brush_ids` carried a comment describing when
+  it was captured, which is a promise about how it is used.
+  `HFExampleLibrary._selected_id` and `HFStatusRow._theme_source` round it out -
+  both of the latter's writers already have `base_control` in hand and pass it
+  straight through.
 - **Five signals that were declared and never emitted** (#521).
   `HFContextToolbar.tool_switch_requested` and `hotkey_palette_requested` had
   connect and disconnect pairs in `plugin.gd` and a real handler on the other
@@ -61,6 +188,199 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **The tool registry asks `can_activate()` before activating** (#552).
+  `HFEditorTool` documents a two-part poll - `can_activate()` and
+  `get_poll_fail_reason()`, the string written to explain precisely this - and
+  neither had a call site anywhere. `HFDecalTool` and `HFMeasureTool` both
+  override `can_activate()` and both overrides were dead, so pressing N or M with
+  no LevelRoot in the scene made the tool active, the toolbar showed it as
+  active, and every click did nothing. It matters more for the extension point:
+  `load_external_tools()` scans a directory and the contract that scan advertises
+  includes these two methods, so a third-party tool needing a face selected had
+  one documented way to say so and it was not consulted. The refusal is reported
+  the way the tool wrote it. Same function and the same failure shape as #508.
+- **A custom tool's declared settings produce controls** (#554).
+  `rebuild_tool_settings()` was about ninety lines handling the whole declared
+  type set, and its own doc comment said it was "called when an external tool is
+  activated via the registry" - it was called by nothing, and
+  `_on_tool_setting_changed()` and `_clear_tool_settings()` were reachable only
+  from it. `get_settings_schema()` is the one documented way a custom tool
+  exposes anything adjustable and `set_setting()` had no other route from the UI,
+  so a tool author declaring a radius and a mode got no panel at all - and #509's
+  fix to `set_setting()` had no live caller. `activate_tool()` takes a settings
+  callback in the same shape as the undo and history ones it already takes, and
+  the dock builds the panel into a **Tool Settings** section on the Build tab,
+  hidden while the active tool declares none.
+- **Auto connector mode's stairs-vs-ramp threshold is a setting** (#570). The
+  Connector Mode tooltip has always told the mapper a threshold decides it, and
+  there was nowhere to look: `stair_threshold` was a constant on
+  `HFAutoConnector.Settings` with no `LevelRoot` property, no control, nothing in
+  the bake settings list and nothing in the `.hflevel` - while the two connector
+  numbers beside it on the same row both had all four. It has them now.
+  The default moves from 2.0 to 32.0 at the same time: 2.0 is a small height at
+  this genre's scale, so on a level built at 32-unit grid steps every cross-layer
+  boundary cleared it, Auto was Stairs everywhere, and the ramp half of the mode
+  never happened. The tooltip names the control rather than an unreachable
+  number.
+- **Material browser favourites survive the dock being rebuilt** (#545).
+  `_favorites` was a plain Dictionary on the control with nothing reading it out
+  or writing it in - no prefs key, nothing in the `.hflevel`, nothing in
+  `capture_state()` - and the dock builds the browser fresh, so every star was
+  gone at the next theme change, project reload or editor restart, with the
+  Favorites view and the HUD's favourites row coming up empty and nothing to say
+  why. They are kept in `HFUserPrefs` by resource path now, which is what the
+  other settings that outlive a level already do, and the dock hands them back
+  every time it refreshes the browser.
+- **Starring one unsaved material no longer stars every unsaved material**
+  (#544). Favourites are keyed on `resource_path`, and a material built in the
+  editor session has an empty one - so every unsaved material in the palette
+  shared one key. One star lit the lot, and un-starring any one of them cleared
+  them all, which is the normal state of a palette being built up before anything
+  is written to disk. `add_favorite()` refuses an empty path and returns whether
+  it took, so the dock can say "Save the material to disk before starring it"
+  rather than doing something surprising. Paths rather than palette indices for
+  the reason the issue gives: an index is only stable while the palette is, and
+  this outlives the level.
+- **A radial array about an axis index that does not exist is refused** (#541).
+  `axis_vector()` and `rotation_basis()` both fall through to Z, so a ring about
+  axis 7 or axis -1 was built about Z, climbed along Z and reported as a success -
+  and the saved array record then said axis 3 while the brushes said Z.
+  `HFTransformSystem.is_valid_axis()` exists for exactly this and says so in its
+  own comment; `radial_placements()` was the one caller of `axis_vector()` that
+  skipped it. `can_generate()` refuses the same index, so the gate says "that is
+  not an axis" rather than the layout quietly coming back empty.
+- **`grid_placements()` refuses a count below one, the way `grid_copy_count()`
+  already did** (#542). There were two ways to ask how many copies a grid makes
+  and they disagreed: the dock measured through `placements_for()` and got 3 for
+  counts of (0, 2, 2), the brush system measured through `grid_copy_count()` and
+  got -1, and both fed the same `can_generate()` gate. The clamp that
+  `grid_copy_count()`'s own comment says was removed was still in the other half
+  of the pair, so down the dock path a zero or a minus sign became "a plausible
+  array they never described" - the precise outcome that comment says was fixed.
+- **One `axis_vector()`, and the clip paths use its guard** (#567).
+  `HFConvexClip.axis_normal()` was a byte-identical second copy with no guard
+  beside it, so a fix to either was not a fix to the other - and #541 was the
+  same fall-through in a third place. It calls `HFTransformSystem.axis_vector()`
+  now. `clip_brush_by_id()` and `can_clip_brush()` clamped the index rather than
+  falling through, which is the same silent wrong answer wearing a different hat:
+  5 became a cut on Z and -1 a cut on X, reported on the axis it picked. Both
+  refuse now, so the ghost and the operation still agree.
+- **Validate + Fix reports what is left, not what it repaired** (#569). The
+  handler threw away the `fixed` count `validate_level(true)` returns and
+  re-derived it by differencing two more full validation passes - which is not
+  the number of repairs, since a pass that fixes one issue and exposes another
+  reported zero fixed - and then logged the issue list from *before* the fix, so
+  every problem it had just repaired was printed as though it were still there,
+  with no list of what remained. It reads the validator's own count now and
+  re-runs once for the residue, which is what the log prints; the status line
+  reads "fixed N, M remaining", and a level that comes out clean says so. Three
+  passes become two, and the second is needed because `validate()` reports every
+  finding whether or not it repaired it. `HFUndoHelper.commit_completed()` is new:
+  `commit()` calls the method itself and discards the return, so a caller that
+  needs it could not use it.
+- **The Status board's recommended chunk size is one the editor can accept**
+  (#549). `get_recommended_chunk_size()` has no ceiling and the dock spin it is
+  written through had a maximum of 256, so for any level wider than 1024 units -
+  small, in this genre - the level got 256 and the Log tab was told the
+  unclamped number. The line exists so the action is auditable, and it disagreed
+  with the level. The Console reads the value back after assigning it, the way
+  `dock.gd`'s bake path already does, and the spin's maximum is now
+  `LevelRoot.MAX_BAKE_CHUNK_SIZE` rather than a smaller number of its own - so
+  the recommendation the perf panel shows is one the control beside it can hold.
+- **The Log tab says how much the buffer actually holds** (#543). Trimming is
+  amortised in batches of `TRIM_SLACK`, so `capacity` is what the buffer trims
+  down to rather than a ceiling it never passes - the buffer sits anywhere
+  between 600 and 663 at the default. The footer reported `capacity`, which is
+  the one place a reader is told what the limit is. It says "holds up to" and the
+  real figure now, via `retained_limit()`; the amortisation is worth keeping, so
+  it is the reported number that was wrong.
+- **Cycling a prefab variant leaves the instance where it was** (#565). A
+  prefab's brush transforms are stored relative to the merged visual AABB centre
+  of the selection it was captured from, and `instantiate()` adds the placement
+  back onto that. `_apply_variant()` re-placed the instance at the mean of the
+  node origins instead, which is a different point for any prefab that is not
+  symmetric about it - so every press of Cycle Variant walked the instance by the
+  difference, and recomputed it against the new nodes, so cycling back did not
+  bring it home. A door frame or a crate stack is exactly the asymmetric case;
+  everything the same size happened to work. One definition now, the one the file
+  format is written against, and `set_variant()` takes the same path.
+- **A chord built on a tool shortcut key is no longer that tool** (#574).
+  `HFToolRegistry.check_shortcut()` matched the bare keycode and never looked at
+  modifiers, so Ctrl+M, Alt+M and Ctrl+Alt+M all activated Measure, and so did
+  Shift+M in paint mode, where the flip family is gated off and the event fell
+  through to the tool check at the end of the router. Activating a tool is not a
+  quiet no-op: Measure and Decal take the viewport's left click, so a mis-struck
+  Ctrl+M swapped the mapper out of Draw and the next click placed a ruler point.
+  A tool shortcut is a bare key by construction - `tool_shortcut_key()` returns
+  one keycode and has nowhere to say otherwise - so the check now refuses any
+  modifier.
+- **Save Prefab and Cycle Variant go through the keymap** (#575). Both were
+  matched against raw keycodes in `plugin_input_router.gd`, so neither had an
+  entry in `HFKeymap`, a row in the shortcut dialog or the hotkey palette, or any
+  way to be rebound - while the context toolbar button beside the viewport named
+  the chord. They were also invisible to the dialog's collision checking, so
+  rebinding anything onto Ctrl+Shift+P reported no conflict and then lost to the
+  hard-coded branch. `quick_save_prefab` and `cycle_variant` are keymap actions
+  now, with labels, on the same defaults.
+- **The context toolbar reads the keymap it is given** (#560). `_keymap` was
+  assigned by `set_keymap()` and never read, while twenty-eight chords were
+  written into the button tooltips as literals - so rebinding Hollow left the
+  toolbar saying Ctrl+H forever, on the surface closest to the mapper's hand.
+  The tooltips are `{action}` tokens rendered through `format_chords()` now, the
+  way the HUD, the coach marks and the dock tooltips already were, and each
+  button keeps its source line so a rebind re-renders it.
+  `tests/test_shortcut_surfaces.gd` covers the toolbar as a fourth surface; it
+  was missed the first time because that file named the other three.
+- **Load Material Library and the two terrain slot commands register an undo
+  step** (#573). All three change state `capture_state()` already carries, and
+  none of them went through `_commit_state_action()` the way their forty
+  neighbours do. Load Library is the one that cost: every face's `material_idx`
+  is an index into the palette it replaces, so loading a different library
+  repaints every painted face in the level, and Ctrl+Z stepped past it to
+  whatever happened before the load - with no route back, since the old palette
+  was only ever in memory. `LevelRoot.load_material_library()`,
+  `set_terrain_slot_texture()` and `set_terrain_slot_uv_scale()` are what the
+  wrappers name. The slot pair also gave the paint layer setters for arrays the
+  dock had been writing into directly, which was the only place in the plugin
+  that wrote a layer's arrays from outside the layer and the reason nothing
+  bounded the slot index.
+- **Inference cleanup leaves a one-cell stroke alone** (#546). Denoise removes a
+  filled cell with no cardinal neighbour, and a single click on empty ground is
+  exactly that - so with `Inference cleanup` ticked, clicking once painted
+  nothing, with no warning and no undo step to show anything had happened. The
+  pass runs on the stroke that was just made, so the one thing it was guaranteed
+  to reach was what the mapper had just drawn. A stroke of one cell is skipped
+  now; a stray cell in a larger stroke is still removed.
+- **A one-cell dab is not a closed room** (#547). `HFStroke.analyse()` set
+  `is_closed` from the distance between the first cell and the last, and for a
+  stroke of one cell those are the same cell, so the distance was zero and a
+  single click classified as a room whose outline had been drawn. A loop needs
+  three cells to be one. `infer_intent()` also gained a note that `avg_speed` is
+  part of the corridor test, so the same long thin run classifies as a corridor
+  when it is drawn quickly and a blob when it is drawn slowly.
+- **Reconciling one floor paint layer no longer deletes every other layer's
+  geometry in the same chunk** (#561). `HFGeneratedReconciler.reconcile()` swept
+  by chunk, and every layer shares one `Generated/Floors` and one
+  `Generated/Walls`, so the pass for a layer freed the nodes belonging to all the
+  others that touched the same chunk. `HFPaintSystem._reconcile_dirty_chunks()`
+  runs that once per layer, so each pass undid the one before it and only the
+  layer reconciled last had any geometry at all. A ground floor blinked out of
+  existence whenever the walkway above it was painted, and a bake in between
+  shipped a level missing a floor. Generated nodes now carry an `hf_layer` meta
+  and the sweep only indexes the layer it was given; the id comes from the
+  caller, so nothing depends on parsing it back out. A node left by an older
+  build has no meta and is matched by its id instead.
+- **A layer id is run through `validate_node_name()` before it is stored**
+  (#548). The id sits in the middle of every generated brush id -
+  `hf:floor:v1:<layer_id>:<chunk>:...` - and `chunk_tag_from_id()` reads field 4,
+  so a ":" in the layer id shifted every field along and the reconciler read the
+  wrong one as the chunk tag. A node whose tag matched no chunk in scope was left
+  out of the index, so the reconciler rebuilt it and never swept the original:
+  duplicated floor and wall geometry that no stroke removed. Plugin-minted ids
+  are `layer_N` and could not do this; a `.hflevel` from another tool could, and
+  `load_paint_layers()` took the id verbatim. `create_layer()` is the one funnel
+  for every id, and the engine's own node-name rule is the right test, since the
+  other characters it rejects were what made `Layer_a_b_c` and `a:b:c` disagree.
 - **A whole-tree check that every signal the addon declares is emitted** (#521).
   A grep over `addons/hammerforge/`, the way `test_suite_integrity.gd` checks
   that every test script loads. It covers `name.emit(`, `emit_signal("name")` and

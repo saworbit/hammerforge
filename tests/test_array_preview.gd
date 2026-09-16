@@ -147,6 +147,50 @@ func test_grid_placements_leave_out_the_cell_the_source_is_in():
 		assert_gt(where.origin.length(), 0.001, "no copy may land on the source")
 
 
+## `axis_vector()` and `rotation_basis()` both fall through to Z, so a ring about
+## an index that names nothing was built about Z and reported as a success.
+## `HFTransformSystem.is_valid_axis()` exists for exactly this and this was the
+## one caller of `axis_vector()` that skipped it.
+func test_a_radial_array_about_an_axis_that_does_not_exist_is_refused():
+	for bad_axis in [7, -1, 3]:
+		assert_eq(
+			HFDuplicator.radial_placements(2, bad_axis, 90.0, Vector3.ZERO, 4.0).size(),
+			0,
+			"axis index %d names nothing, so there is no ring to lay out" % bad_axis
+		)
+	assert_eq(
+		HFDuplicator.radial_placements(2, 2, 90.0, Vector3.ZERO, 4.0).size(), 2, "Z still works"
+	)
+
+
+## `grid_copy_count()` answers -1 for a count below one on any axis, and its own
+## comment says the clamp that hid it was removed. It was removed from one half
+## of the pair: the dock measured an array through `placements_for()` and got a
+## plausible array the mapper never described, and the brush system measured the
+## same input through `grid_copy_count()` and refused it.
+func test_the_two_ways_of_measuring_a_grid_agree():
+	for counts in [Vector3i(0, 2, 2), Vector3i(-1, 2, 2), Vector3i(2, -3, 2), Vector3i(2, 2, 0)]:
+		assert_eq(
+			HFDuplicator.grid_copy_count(counts), -1, "%s is refused by the count" % str(counts)
+		)
+		assert_eq(
+			HFDuplicator.grid_placements(counts, Vector3(8, 0, 8)).size(),
+			0,
+			"%s is refused by the layout too" % str(counts)
+		)
+	assert_eq(HFDuplicator.grid_copy_count(Vector3i(2, 2, 2)), 7)
+	assert_eq(HFDuplicator.grid_placements(Vector3i(2, 2, 2), Vector3(8, 0, 8)).size(), 7)
+
+
+## The gate says what the layout says, so an axis index that names nothing reads
+## as the wrong axis rather than as "no copies".
+func test_can_generate_refuses_an_axis_index_that_names_nothing():
+	var result := HFDuplicator.can_generate(2, 1, {"axis_index": 7})
+	assert_false(result.ok, "The gate refuses it")
+	assert_true(str(result.message).contains("axis"), "and says which field is wrong")
+	assert_true(HFDuplicator.can_generate(2, 1, {"axis_index": 2}).ok, "Z is still an axis")
+
+
 func test_radial_placements_turn_further_each_time():
 	var placements := HFDuplicator.radial_placements(3, 1, 90.0, Vector3.ZERO, 0.0)
 

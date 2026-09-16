@@ -147,7 +147,12 @@ func build(parent: Control) -> void:
 	var chunk_label = Label.new()
 	chunk_label.text = "Chunk Size"
 	chunk_row.add_child(chunk_label)
-	dock.bake_chunk_size_spin = dock._make_spin(0.0, 256.0, 1.0, 32.0)
+	# The maximum is LevelRoot's own bound rather than a smaller number of its
+	# own. 256 meant the Status board's "Apply recommended chunk size" was clamped
+	# for any level wider than 1024 units - a small level in this genre - and the
+	# perf panel's recommendation was a figure the control beside it could not
+	# hold.
+	dock.bake_chunk_size_spin = dock._make_spin(0.0, LevelRoot.MAX_BAKE_CHUNK_SIZE, 1.0, 32.0)
 	dock.bake_chunk_size_spin.tooltip_text = "Spatial chunk size for bake grouping (0 = no chunking)"
 	chunk_row.add_child(dock.bake_chunk_size_spin)
 	adv.add_child(chunk_row)
@@ -188,7 +193,10 @@ func build(parent: Control) -> void:
 	dock.bake_connector_mode_opt.add_item("Ramp", 0)
 	dock.bake_connector_mode_opt.add_item("Stairs", 1)
 	dock.bake_connector_mode_opt.add_item("Auto", 2)
-	dock.bake_connector_mode_opt.tooltip_text = ("Ramp: smooth slope; Stairs: stepped; Auto: stairs when height > threshold")
+	dock.bake_connector_mode_opt.tooltip_text = (
+		"Ramp: smooth slope; Stairs: stepped;"
+		+ " Auto: stairs once the height difference reaches the Stair Threshold"
+	)
 	dock.bake_connector_mode_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	conn_row.add_child(dock.bake_connector_mode_opt)
 
@@ -223,6 +231,24 @@ func build(parent: Control) -> void:
 	dock.bake_connector_width_spin.tooltip_text = "Connector width in cells"
 	dock.bake_connector_width_spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	conn_settings_row.add_child(dock.bake_connector_width_spin)
+
+	var threshold_row := HBoxContainer.new()
+	threshold_row.add_theme_constant_override("separation", 4)
+	adv.add_child(threshold_row)
+
+	var threshold_label := Label.new()
+	threshold_label.text = "Stair Threshold:"
+	threshold_label.add_theme_font_size_override("font_size", 11)
+	threshold_row.add_child(threshold_label)
+
+	dock.bake_connector_stair_threshold_spin = SpinBox.new()
+	dock.bake_connector_stair_threshold_spin.min_value = LevelRoot.MIN_CONNECTOR_STAIR_THRESHOLD
+	dock.bake_connector_stair_threshold_spin.max_value = LevelRoot.MAX_CONNECTOR_STAIR_THRESHOLD
+	dock.bake_connector_stair_threshold_spin.step = 1.0
+	dock.bake_connector_stair_threshold_spin.value = 32.0
+	dock.bake_connector_stair_threshold_spin.tooltip_text = ("Auto mode builds stairs once the height difference reaches this, and a ramp below it")
+	dock.bake_connector_stair_threshold_spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	threshold_row.add_child(dock.bake_connector_stair_threshold_spin)
 
 	# -- Occluder generation --
 	dock.bake_generate_occluders_check = dock._make_check("Generate Occluders")

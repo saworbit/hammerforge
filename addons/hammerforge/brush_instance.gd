@@ -29,7 +29,6 @@ const HFOutlineUtil = preload("hf_outline_util.gd")
 
 var editor_material: Material = null
 var mesh_instance: MeshInstance3D = null
-var selected_faces: PackedInt32Array = PackedInt32Array()
 var geometry_dirty := true
 var _gizmo_update_queued := false
 const MAX_PREVIEW_SURFACES := 200
@@ -107,11 +106,6 @@ func mark_faces_authoritative() -> void:
 	if faces.is_empty() or shape == BrushShape.CUSTOM:
 		return
 	shape = BrushShape.CUSTOM
-
-
-func set_selected_faces(indices: PackedInt32Array) -> void:
-	selected_faces = indices
-	rebuild_preview()
 
 
 func assign_material_to_faces(mat_idx: int, face_indices: Array[int]) -> void:

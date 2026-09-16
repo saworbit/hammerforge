@@ -4,10 +4,16 @@ const HFEditorToolType = preload("res://addons/hammerforge/hf_editor_tool.gd")
 const HFToolRegistryType = preload("res://addons/hammerforge/hf_tool_registry.gd")
 
 var registry: HFToolRegistryType
+## The poll HFEditorTool declares - `can_activate()` returns `p_root != null` on
+## the base class - is asked now, so these activate against a root the way the
+## plugin does rather than against null.
+var root: Node3D
 
 
 func before_each():
 	registry = HFToolRegistryType.new()
+	root = Node3D.new()
+	add_child_autoqfree(root)
 
 
 func after_each():
@@ -66,6 +72,17 @@ class MockTool:
 		return true
 
 
+## A tool that declares it cannot run, the way HFDecalTool and HFMeasureTool do.
+class RefusingTool:
+	extends MockTool
+
+	func can_activate(_p_root: Node3D) -> bool:
+		return false
+
+	func get_poll_fail_reason(_p_root: Node3D) -> String:
+		return "Mock tool needs something it does not have"
+
+
 # -- Tests -------------------------------------------------------------------
 
 
@@ -101,7 +118,7 @@ func test_unregister():
 func test_unregister_active_deactivates():
 	var tool = MockTool.new(100)
 	registry.register_tool(tool)
-	registry.activate_tool(100, null, null)
+	registry.activate_tool(100, root, null)
 	registry.unregister_tool(100)
 	assert_true(tool.deactivated)
 	assert_null(registry.get_active_tool())
@@ -115,7 +132,7 @@ func test_unregister_nonexistent_no_crash():
 func test_activate_deactivate():
 	var tool = MockTool.new(100)
 	registry.register_tool(tool)
-	registry.activate_tool(100, null, null)
+	registry.activate_tool(100, root, null)
 	assert_true(tool.activated)
 	assert_true(tool.is_active)
 	assert_eq(registry.get_active_tool(), tool)
@@ -126,8 +143,8 @@ func test_activate_switches_deactivates_previous():
 	var t2 = MockTool.new(101)
 	registry.register_tool(t1)
 	registry.register_tool(t2)
-	registry.activate_tool(100, null, null)
-	registry.activate_tool(101, null, null)
+	registry.activate_tool(100, root, null)
+	registry.activate_tool(101, root, null)
 	assert_true(t1.deactivated)
 	assert_false(t1.is_active)
 	assert_true(t2.activated)
@@ -137,10 +154,10 @@ func test_activate_switches_deactivates_previous():
 func test_activate_same_tool_toggles_off():
 	var tool = MockTool.new(100)
 	registry.register_tool(tool)
-	registry.activate_tool(100, null, null)
+	registry.activate_tool(100, root, null)
 	assert_true(tool.is_active, "Tool should be active after first activation")
 	tool.activated = false
-	registry.activate_tool(100, null, null)
+	registry.activate_tool(100, root, null)
 	assert_false(tool.activated, "Should not re-activate same tool")
 	assert_true(tool.deactivated, "Tool should be deactivated on second press")
 	assert_false(tool.is_active, "Tool should no longer be active")
@@ -150,7 +167,7 @@ func test_activate_same_tool_toggles_off():
 func test_dispatch_input_routes_to_active_external():
 	var tool = MockTool.new(100)
 	registry.register_tool(tool)
-	registry.activate_tool(100, null, null)
+	registry.activate_tool(100, root, null)
 	var ev = InputEventMouseButton.new()
 	var result = registry.dispatch_input(ev, null, Vector2.ZERO)
 	assert_eq(result, EditorPlugin.AFTER_GUI_INPUT_STOP)
@@ -160,7 +177,7 @@ func test_dispatch_input_routes_to_active_external():
 func test_dispatch_input_passes_for_builtin():
 	var tool = MockTool.new(1)
 	registry.register_tool(tool)
-	registry.activate_tool(1, null, null)
+	registry.activate_tool(1, root, null)
 	var ev = InputEventMouseButton.new()
 	var result = registry.dispatch_input(ev, null, Vector2.ZERO)
 	assert_eq(result, EditorPlugin.AFTER_GUI_INPUT_PASS)
@@ -169,7 +186,7 @@ func test_dispatch_input_passes_for_builtin():
 func test_dispatch_keyboard_routes_to_active_external():
 	var tool = MockTool.new(100)
 	registry.register_tool(tool)
-	registry.activate_tool(100, null, null)
+	registry.activate_tool(100, root, null)
 	var ev = InputEventKey.new()
 	var result = registry.dispatch_keyboard(ev)
 	assert_eq(result, EditorPlugin.AFTER_GUI_INPUT_STOP)
@@ -179,7 +196,7 @@ func test_dispatch_keyboard_routes_to_active_external():
 func test_dispatch_keyboard_passes_for_builtin():
 	var tool = MockTool.new(2)
 	registry.register_tool(tool)
-	registry.activate_tool(2, null, null)
+	registry.activate_tool(2, root, null)
 	var ev = InputEventKey.new()
 	var result = registry.dispatch_keyboard(ev)
 	assert_eq(result, EditorPlugin.AFTER_GUI_INPUT_PASS)
@@ -188,7 +205,7 @@ func test_dispatch_keyboard_passes_for_builtin():
 func test_pointer_recovery_routes_to_active_external_tool_without_deactivating_it():
 	var tool = MockTool.new(100)
 	registry.register_tool(tool)
-	registry.activate_tool(100, null, null)
+	registry.activate_tool(100, root, null)
 	assert_true(registry.recover_active_pointer_capture())
 	assert_true(tool.recovered_pointer)
 	assert_true(registry.cancel_active_pointer_capture())
@@ -202,27 +219,51 @@ func test_pointer_recovery_ignores_builtin_and_inactive_tools():
 	assert_false(registry.cancel_active_pointer_capture())
 	var tool = MockTool.new(1)
 	registry.register_tool(tool)
-	registry.activate_tool(1, null, null)
+	registry.activate_tool(1, root, null)
 	assert_false(registry.recover_active_pointer_capture())
 	assert_false(registry.cancel_active_pointer_capture())
+
+
+func _key(keycode: int, ctrl := false, shift := false, alt := false) -> InputEventKey:
+	var event := InputEventKey.new()
+	event.keycode = keycode
+	event.pressed = true
+	event.ctrl_pressed = ctrl
+	event.shift_pressed = shift
+	event.alt_pressed = alt
+	return event
 
 
 func test_check_shortcut_finds_external():
 	var tool = MockTool.new(100, KEY_F5)
 	registry.register_tool(tool)
-	assert_eq(registry.check_shortcut(KEY_F5), 100)
+	assert_eq(registry.check_shortcut(_key(KEY_F5)), 100)
 
 
 func test_check_shortcut_ignores_builtin():
 	var tool = MockTool.new(1, KEY_D)
 	registry.register_tool(tool)
-	assert_eq(registry.check_shortcut(KEY_D), -1)
+	assert_eq(registry.check_shortcut(_key(KEY_D)), -1)
 
 
 func test_check_shortcut_no_match():
 	var tool = MockTool.new(100, KEY_F5)
 	registry.register_tool(tool)
-	assert_eq(registry.check_shortcut(KEY_F6), -1)
+	assert_eq(registry.check_shortcut(_key(KEY_F6)), -1)
+
+
+## A tool shortcut key is a bare key: `tool_shortcut_key()` returns one keycode
+## and has nowhere to say otherwise. Matching the keycode alone meant Ctrl+M
+## activated Measure, and so did Shift+M in paint mode, where the flip family is
+## gated off and the event fell through to the tool check.
+func test_a_chord_built_on_a_tool_key_is_not_that_tool():
+	var tool = MockTool.new(100, KEY_M)
+	registry.register_tool(tool)
+	assert_eq(registry.check_shortcut(_key(KEY_M)), 100, "The bare key still activates it")
+	assert_eq(registry.check_shortcut(_key(KEY_M, true)), -1, "Ctrl+M is not it")
+	assert_eq(registry.check_shortcut(_key(KEY_M, false, true)), -1, "Shift+M is not it")
+	assert_eq(registry.check_shortcut(_key(KEY_M, false, false, true)), -1, "Alt+M is not it")
+	assert_eq(registry.check_shortcut(_key(KEY_M, true, false, true)), -1, "Nor Ctrl+Alt+M")
 
 
 func test_get_external_tools():
@@ -249,7 +290,7 @@ func test_dispatch_no_active_tool_passes():
 func test_deactivate_current_clears_active():
 	var tool = MockTool.new(100)
 	registry.register_tool(tool)
-	registry.activate_tool(100, null, null)
+	registry.activate_tool(100, root, null)
 	assert_eq(registry.get_active_tool(), tool)
 	registry.deactivate_current()
 	assert_null(registry.get_active_tool())
@@ -266,7 +307,7 @@ func test_has_active_external_tool():
 	var tool = MockTool.new(100)
 	registry.register_tool(tool)
 	assert_false(registry.has_active_external_tool())
-	registry.activate_tool(100, null, null)
+	registry.activate_tool(100, root, null)
 	assert_true(registry.has_active_external_tool())
 	registry.deactivate_current()
 	assert_false(registry.has_active_external_tool())
@@ -275,7 +316,7 @@ func test_has_active_external_tool():
 func test_has_active_external_tool_false_for_builtin():
 	var tool = MockTool.new(1)
 	registry.register_tool(tool)
-	registry.activate_tool(1, null, null)
+	registry.activate_tool(1, root, null)
 	assert_false(registry.has_active_external_tool())
 
 
@@ -286,7 +327,7 @@ func test_has_active_external_tool_false_for_builtin():
 func test_activate_unknown_id_leaves_the_active_tool_alone():
 	var tool = MockTool.new(100)
 	registry.register_tool(tool)
-	registry.activate_tool(100, null, null)
+	registry.activate_tool(100, root, null)
 	assert_true(tool.activated)
 
 	registry.activate_tool(-1, null, null)
@@ -296,7 +337,7 @@ func test_activate_unknown_id_leaves_the_active_tool_alone():
 
 
 func test_activate_unknown_id_with_nothing_active_activates_nothing():
-	registry.activate_tool(999, null, null)
+	registry.activate_tool(999, root, null)
 	assert_null(registry.get_active_tool())
 
 
@@ -305,7 +346,7 @@ func test_external_tool_stays_active_across_dispatch():
 	# After activation, dispatch should still route to the external tool.
 	var tool = MockTool.new(100)
 	registry.register_tool(tool)
-	registry.activate_tool(100, null, null)
+	registry.activate_tool(100, root, null)
 	# Multiple dispatch calls should keep the tool active.
 	for i in range(5):
 		var ev = InputEventMouseButton.new()
@@ -429,3 +470,39 @@ func test_an_enum_setting_takes_every_index_its_options_have():
 	for index in 2:
 		tool.set_setting("mode", index)
 		assert_eq(tool.get_setting("mode"), index)
+
+
+## `can_activate()` and `get_poll_fail_reason()` are the one documented way an
+## HFEditorTool says it cannot run in the current state, and the registry is the
+## only thing that activates a tool. Without the poll a tool that had already
+## declared it could not run became active anyway, the toolbar showed it as
+## active, and every click did nothing.
+func test_a_tool_that_says_it_cannot_run_does_not_become_active():
+	var tool = RefusingTool.new(100)
+	registry.register_tool(tool)
+	registry.activate_tool(100, root, null)
+	assert_null(registry.get_active_tool(), "The tool said no, so nothing activated")
+	assert_false(tool.activated, "and activate() was never called")
+
+
+func test_a_refused_activation_leaves_the_tool_in_hand_alone():
+	var working = MockTool.new(100)
+	var refusing = RefusingTool.new(101)
+	registry.register_tool(working)
+	registry.register_tool(refusing)
+	registry.activate_tool(100, root, null)
+	registry.activate_tool(101, root, null)
+	assert_eq(registry.get_active_tool(), working, "The tool the mapper was using stays on")
+	assert_false(working.deactivated, "and is not turned off on the way past")
+
+
+func test_the_settings_host_is_told_which_tool_became_active():
+	var seen: Array = []
+	var callback := func(tool): seen.append(tool)
+	var tool = MockTool.new(100)
+	registry.register_tool(tool)
+	registry.activate_tool(100, root, null, null, Callable(), callback)
+	assert_eq(seen, [tool], "The dock is handed the tool so it can build its settings")
+	registry.deactivate_current()
+	assert_eq(seen.size(), 2, "and told again when there is none")
+	assert_null(seen[1])

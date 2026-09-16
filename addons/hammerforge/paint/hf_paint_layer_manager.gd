@@ -70,11 +70,25 @@ func has_layer_id(layer_id: StringName) -> bool:
 	return false
 
 
+## `layer_id` with every character Godot strips from a node name replaced.
+##
+## The id goes into the node name and into the middle of every generated brush
+## id (`hf:floor:v1:<layer_id>:<chunk>:...`). A ":" in it shifted every field of
+## the generated id, so the reconciler read the wrong one as the chunk tag, and
+## any of the other characters made the node name and the id disagree.
+## `validate_node_name()` is the engine's own rule for what a node name may
+## hold, so running the id through it keeps the two in step.
+static func safe_layer_id(layer_id: StringName) -> StringName:
+	var safe := str(layer_id).validate_node_name()
+	if safe.strip_edges() == "":
+		return &"layer_0"
+	return StringName(safe)
+
+
 ## A free id based on `layer_id`, adding _2, _3 ... until one is free.
 ##
-## The id is identity rather than a label - HFFoliagePopulator names its output
-## after it and anything resolving a layer by id takes whichever it finds first
-## - so two layers must not share one.
+## The id is identity rather than a label - anything resolving a layer by id
+## takes whichever it finds first, so two layers must not share one.
 func unique_layer_id(layer_id: StringName) -> StringName:
 	if not has_layer_id(layer_id):
 		return layer_id
@@ -92,9 +106,17 @@ func create_layer(layer_id: StringName, layer_y: float) -> HFPaintLayer:
 	if not grid:
 		grid = HFPaintGrid.new()
 	grid.layer_y = layer_y
-	var unique_id := unique_layer_id(layer_id)
-	if unique_id != layer_id:
-		HFLog.warn("HammerForge: paint layer id '%s' is taken, using '%s'" % [layer_id, unique_id])
+	var requested := safe_layer_id(layer_id)
+	if requested != layer_id:
+		HFLog.warn(
+			(
+				"HammerForge: paint layer id '%s' holds characters a node name cannot, using '%s'"
+				% [layer_id, requested]
+			)
+		)
+	var unique_id := unique_layer_id(requested)
+	if unique_id != requested:
+		HFLog.warn("HammerForge: paint layer id '%s' is taken, using '%s'" % [requested, unique_id])
 	var layer := HFPaintLayer.new()
 	layer.name = "Layer_%s" % str(unique_id)
 	layer.layer_id = unique_id
