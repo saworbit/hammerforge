@@ -391,6 +391,38 @@ var entity_system
 	return root
 
 
+## Where an instance is has one definition. A prefab's brush transforms are
+## stored relative to the merged visual AABB centre of the selection, and
+## `instantiate()` adds the placement back onto that - so a variant swap that
+## re-places the instance at the mean of the node origins moves it by the
+## difference between the two, every press, and recomputing against the new
+## nodes means cycling back does not bring it home.
+func test_the_variant_swap_measures_the_instance_the_way_the_capture_did():
+	var root := _make_lookup_root()
+	add_child_autoqfree(root)
+	var big := DraftBrushType.new()
+	big.brush_id = "big"
+	big.size = Vector3(128, 16, 16)
+	root.draft_brushes_node.add_child(big)
+	big.global_position = Vector3.ZERO
+	var small := DraftBrushType.new()
+	small.brush_id = "small"
+	small.size = Vector3(16, 16, 16)
+	root.draft_brushes_node.add_child(small)
+	small.global_position = Vector3(96, 0, 0)
+
+	var system = HFPrefabSystemType.new(root)
+	var iid := system.register_instance("res://prefabs/t.hfprefab", ["big", "small"], [])
+	var rec = system.get_instance(iid)
+
+	var capture_point: Vector3 = HFPrefabType.compute_selection_centroid([big, small], [])
+	assert_eq(
+		system._instance_centroid(rec),
+		capture_point,
+		"The swap and the capture measure the same point"
+	)
+
+
 func test_prefab_system_unregister():
 	var root = _make_root_shim()
 
@@ -415,24 +447,6 @@ func test_prefab_system_get_instances_for_source():
 
 	var window_instances := system.get_instances_for_source("res://prefabs/window.hfprefab")
 	assert_eq(window_instances.size(), 1, "1 window instance")
-
-	root.free()
-
-
-func test_prefab_system_override_tracking():
-	var root = _make_root_shim()
-
-	var system = HFPrefabSystemType.new(root)
-	var iid := system.register_instance("res://prefabs/t.hfprefab", ["b1"], [], false)
-
-	system.set_override(iid, "brush/0/size", Vector3(64, 64, 64))
-	var overrides := system.get_overrides(iid)
-	assert_eq(overrides.size(), 1, "1 override set")
-	assert_eq(overrides["brush/0/size"], Vector3(64, 64, 64))
-
-	system.clear_override(iid, "brush/0/size")
-	overrides = system.get_overrides(iid)
-	assert_eq(overrides.size(), 0, "Override cleared")
 
 	root.free()
 

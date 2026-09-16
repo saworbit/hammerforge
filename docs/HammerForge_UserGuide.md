@@ -1228,7 +1228,6 @@ When you save a prefab with **Save Linked**, all placed instances of that prefab
 
 - **Push to source**: Edit a placed instance, then click **Push** in the context toolbar to update the `.hfprefab` source file with the current state.
 - **Propagate to all**: Click **Pull** on any linked instance to propagate the current source file to all linked instances in the level.
-- Per-instance overrides (size, transform changes) are tracked and reapplied after propagation.
 - The context toolbar shows a `[linked]` badge on linked prefab instances.
 
 ### Tags and Search
@@ -1237,7 +1236,7 @@ When you save a prefab with **Save Linked**, all placed instances of that prefab
 - **Tag filtering**: Use the Tag dropdown to filter the list to prefabs with a specific tag.
 
 ### Visual Debug Overlay
-When hovering over a node that belongs to a prefab instance in the 3D viewport, a cyan wireframe bounding box appears around the entire instance. If the instance has overrides relative to the source, orange sphere markers appear on modified nodes.
+When hovering over a node that belongs to a prefab instance in the 3D viewport, a cyan wireframe bounding box appears around the entire instance.
 
 ### What's Captured
 - Brush geometry (shape, size, operation, material, transform relative to group centroid)
