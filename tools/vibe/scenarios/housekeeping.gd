@@ -29,7 +29,7 @@ func _visgroup_names() -> void:
 	var root: Node3D = await fresh_root()
 	var b = box(root, Vector3(64, 64, 64))
 	for vg_name in ["", "   ", "lights", "lights"]:
-		root.create_visgroup(vg_name, Color.WHITE)
+		root.create_visgroup(vg_name)
 		await frame()
 	var names: PackedStringArray = root.get_visgroup_names()
 	note("created '', '   ', 'lights' twice", "visgroups now %s" % [names])

@@ -910,9 +910,9 @@ func _intersect_axis_plane(
 # ===========================================================================
 
 
-func create_visgroup(vg_name: String, color: Color = Color.WHITE) -> void:
+func create_visgroup(vg_name: String) -> void:
 	if visgroup_system:
-		visgroup_system.create_visgroup(vg_name, color)
+		visgroup_system.create_visgroup(vg_name)
 
 
 func remove_visgroup(vg_name: String) -> void:

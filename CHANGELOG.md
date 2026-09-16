@@ -5,6 +5,19 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Removed
+- **The visgroup colour** (#551). A visgroup carried one from the moment it was
+  created, it was serialised into the `.hflevel` and read back out, and it had a
+  setter - and nothing anywhere read one. No `get_visgroup_color()`, no swatch in
+  the Manage tab, no gizmo or overlay tinting by it, and no caller for
+  `set_visgroup_color()` in `addons/`, `tests/` or `tools/`. The only reads were
+  the two inside the serialiser, writing the value it had been handed back out
+  again. Every visgroup in practice was `Color.WHITE`, because the one caller that
+  creates them never passed a colour. Colour-coded visgroups are worth having -
+  seeing which brushes are the lights and which are the detail is the point of
+  visgroups on a large level - but what was there was the cost of that feature
+  with the value of neither, so it is a feature to open on its own terms rather
+  than a field to keep carrying into every save and every undo snapshot.
+  `restore_visgroups()` reads past a `color` key in an older payload.
 - **Five signals that were declared and never emitted** (#521).
   `HFContextToolbar.tool_switch_requested` and `hotkey_palette_requested` had
   connect and disconnect pairs in `plugin.gd` and a real handler on the other

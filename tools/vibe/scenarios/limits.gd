@@ -74,7 +74,7 @@ func run() -> void:
 	note("propagate_from_source", prefabs.propagate_from_source("res://no_such.tres"))
 
 	note("--- visgroups")
-	root.create_visgroup("", Color.RED)
+	root.create_visgroup("")
 	note("after creating one with an empty name", root.get_visgroup_names())
 	if "" in Array(root.get_visgroup_names()):
 		flag("a visgroup was created with an empty name")
