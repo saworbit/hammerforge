@@ -11,6 +11,8 @@
       "unshaded": true,
       "no_depth_test": true
     },
+    "outputs": ["OnSpawn"],
+    "inputs": [],
     "properties": [
       {"name": "primary", "type": "bool", "label": "Primary Spawn", "default": false},
       {"name": "angle", "type": "float", "label": "Yaw Angle (deg)", "default": 0.0},
@@ -24,6 +26,8 @@
       "path": "res://addons/hammerforge/icon.png",
       "color": "#ffff00"
     },
+    "outputs": [],
+    "inputs": ["TurnOn", "TurnOff", "Toggle"],
     "properties": [
       {"name": "range", "type": "float", "label": "Range", "default": 10.0, "maps_to": "omni_range"},
       {"name": "energy", "type": "float", "label": "Energy", "default": 1.0, "maps_to": "light_energy"},
@@ -33,10 +37,13 @@
   "door_basic": {
     "class": "Node3D",
     "preview": {
-      "type": "mesh",
-      "path": "res://addons/hammerforge/meshes/light_bulb_proxy.obj",
-      "color": "#8888ff"
+      "type": "box",
+      "size": [1.0, 2.0, 0.2],
+      "color": "#8888ff",
+      "alpha": 0.5
     },
+    "outputs": ["OnOpen", "OnClose", "OnTrigger"],
+    "inputs": ["Open", "Close", "Toggle", "Lock", "Unlock"],
     "properties": [
       {"name": "speed", "type": "float", "label": "Speed", "default": 200.0},
       {"name": "locked", "type": "bool", "label": "Locked", "default": false}

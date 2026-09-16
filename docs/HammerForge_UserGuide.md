@@ -1664,6 +1664,7 @@ Notes:
 - Entity palette supports drag-and-drop placement.
 
 Entity definitions live in `res://addons/hammerforge/entities.json`, overlaid by `res://hammerforge_entities.json` when present.
+
 Example (billboard preview):
 
 ```json
@@ -1675,6 +1676,8 @@ Example (billboard preview):
       "path": "res://addons/hammerforge/icon.png",
       "color": "#ffff00"
     },
+    "outputs": [],
+    "inputs": ["TurnOn", "TurnOff", "Toggle"],
     "properties": [
       {"name": "range", "type": "float", "default": 10.0, "maps_to": "omni_range"},
       {"name": "energy", "type": "float", "default": 1.0, "maps_to": "light_energy"},
@@ -1689,6 +1692,9 @@ Example (billboard preview):
 `scene` takes precedence over `class` and names a `PackedScene` with a `Node3D` root to instantiate instead — a working door, a trigger volume with a script, a pickup. A scene that is missing or is not a `Node3D` scene warns and exports the marker, so a wrong definition never costs you the level.
 
 `maps_to` is optional and names the property on the built node to receive the value, for the cases where the name a level stores and the name the engine uses differ. An `OmniLight3D`'s Range is `omni_range`. Without `maps_to` the declared name is used as it stands. The entity's authored name, its wiring, and every other piece of metadata move onto the built node, so I/O keeps working.
+`outputs` and `inputs` are the names an entity class fires and the names it answers to. The quick-wire form offers them in a dropdown beside each free-text box: the source entity's `outputs` in **Out**, and the `inputs` of whatever is chosen in **To** in **In**. The boxes stay free text, because a mapper may wire to a name no definition declares. What changes is that the vocabulary the six built-in presets use is discoverable from the entity rather than only from the presets.
+
+Preview `type` is one of `billboard` (with `path` to a texture), `mesh` (with `path` to a mesh), `capsule` (`radius`, `height`) or `box` (`size` as `[x, y, z]`). All of them take `color`, and the shaped ones take `alpha`. `box` is the proxy that needs no asset.
 
 ## Custom Tools (Plugin API)
 
