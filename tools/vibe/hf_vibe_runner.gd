@@ -81,6 +81,19 @@ const SCENARIOS: Array[String] = [
 	"res://tools/vibe/scenarios/heightmap_convert.gd",
 	"res://tools/vibe/scenarios/numeric_entry.gd",
 	"res://tools/vibe/scenarios/generator_ranges.gd",
+	"res://tools/vibe/scenarios/outline_bounds.gd",
+	"res://tools/vibe/scenarios/console_log.gd",
+	"res://tools/vibe/scenarios/console_controls.gd",
+	"res://tools/vibe/scenarios/paint_grid.gd",
+	"res://tools/vibe/scenarios/paint_inference.gd",
+	"res://tools/vibe/scenarios/material_browser.gd",
+	"res://tools/vibe/scenarios/array_layout.gd",
+	"res://tools/vibe/scenarios/console_actions.gd",
+	"res://tools/vibe/scenarios/io_presets_panel.gd",
+	"res://tools/vibe/scenarios/paint_multilayer.gd",
+	"res://tools/vibe/scenarios/chaos_systems.gd",
+	"res://tools/vibe/scenarios/prefab_links.gd",
+	"res://tools/vibe/scenarios/validate_fix.gd",
 ]
 
 

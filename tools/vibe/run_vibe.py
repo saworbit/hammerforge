@@ -96,6 +96,19 @@ SCENARIOS = [
     "heightmap-convert",
     "numeric-entry",
     "generator-ranges",
+    "outline-bounds",
+    "console-log",
+    "console-controls",
+    "paint-grid",
+    "paint-inference",
+    "material-browser",
+    "array-layout",
+    "console-actions",
+    "io-presets-panel",
+    "paint-multilayer",
+    "chaos-systems",
+    "prefab-links",
+    "validate-fix",
 ]
 
 # Generous: chaos runs 300 operations and cost saves eight levels. A scenario
