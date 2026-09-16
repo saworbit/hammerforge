@@ -4,7 +4,8 @@ extends VBoxContainer
 ##
 ## Scans a project directory for .hfprefab files and presents them
 ## in a searchable grid with thumbnail previews, tag filtering,
-## variant indicators, and context-menu actions (rename, delete, tags).
+## variant indicators, and context-menu actions: add a variant, remove one, edit
+## tags, and delete the prefab itself.
 
 const HFPrefabType = preload("res://addons/hammerforge/hf_prefab.gd")
 const HFPrefabSystemType = preload("res://addons/hammerforge/systems/hf_prefab_system.gd")
@@ -13,6 +14,7 @@ signal save_requested(prefab_name: String)
 signal save_linked_requested(prefab_name: String)
 signal delete_requested(prefab_path: String)
 signal variant_add_requested(prefab_path: String, variant_name: String)
+signal variant_remove_requested(prefab_path: String, variant_name: String)
 
 var _search_bar: LineEdit
 var _tag_filter: OptionButton
@@ -112,6 +114,7 @@ func _build_ui() -> void:
 	# Context menu for right-click
 	_context_menu = PopupMenu.new()
 	_context_menu.add_item("Add Variant...", 0)
+	_context_menu.add_item("Remove Variant...", 3)
 	_context_menu.add_item("Edit Tags...", 1)
 	_context_menu.add_separator()
 	_context_menu.add_item("Delete", 2)
@@ -314,6 +317,8 @@ func _on_context_menu_selected(id: int) -> void:
 			_show_tags_dialog(path)
 		2:  # Delete
 			delete_requested.emit(path)
+		3:  # Remove Variant
+			_show_variant_remove_dialog(path)
 
 
 func _show_variant_dialog(prefab_path: String) -> void:
@@ -334,6 +339,42 @@ func _show_variant_dialog(prefab_path: String) -> void:
 	dialog.canceled.connect(func(): dialog.queue_free())
 	add_child(dialog)
 	dialog.popup_centered(Vector2i(300, 120))
+
+
+## Pick a variant to drop. `base` is not offered, because a prefab without one
+## is not a prefab and `remove_variant()` refuses it anyway.
+func _show_variant_remove_dialog(prefab_path: String) -> void:
+	var prefab = _prefab_cache.get(prefab_path)
+	if prefab == null:
+		prefab = HFPrefabType.load_from_file(prefab_path)
+	var removable := PackedStringArray()
+	if prefab != null:
+		for variant_name in prefab.get_variant_names():
+			if str(variant_name) != "base":
+				removable.append(str(variant_name))
+	var dialog := AcceptDialog.new()
+	dialog.title = "Remove Variant"
+	if removable.is_empty():
+		dialog.dialog_text = "This prefab has no variants beyond its base."
+		dialog.confirmed.connect(func(): dialog.queue_free())
+		dialog.canceled.connect(func(): dialog.queue_free())
+		add_child(dialog)
+		dialog.popup_centered(Vector2i(300, 100))
+		return
+	dialog.dialog_text = "Variant to remove:"
+	var picker := OptionButton.new()
+	for index in removable.size():
+		picker.add_item(removable[index], index)
+	dialog.add_child(picker)
+	dialog.confirmed.connect(
+		func():
+			if is_instance_valid(self) and picker.selected >= 0:
+				variant_remove_requested.emit(prefab_path, removable[picker.selected])
+			dialog.queue_free()
+	)
+	dialog.canceled.connect(func(): dialog.queue_free())
+	add_child(dialog)
+	dialog.popup_centered(Vector2i(320, 130))
 
 
 func _show_tags_dialog(prefab_path: String) -> void:

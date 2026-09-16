@@ -756,7 +756,7 @@ dispatcher.fire("my_button", "OnPressed", "fast")
 - **History**: Undo history browser with thumbnails, color-coded action icons, double-click navigation, undo/redo buttons.
 - **Settings**: Show HUD, Show Grid, Follow Grid, Debug Logs, Autosave path/toggle, Settings Export/Import.
 - **Performance**: Health summary (green/yellow/red), brush count ProgressBar, entity count, vertex estimate, paint memory, chunk count, last bake time, recommended chunk size.
-- **Visgroups & Groups**: Visgroup list with [V]/[H] toggle, New/Add Sel/Rem Sel/Delete, Group Sel/Ungroup.
+- **Visgroups & Groups**: Visgroup list with [V]/[H] toggle, New/Add Sel/Rem Sel/Rename/Delete, Group Sel/Ungroup.
 - **Cordon**: Enable checkbox, min/max spinboxes, Set from Selection.
 - **Prefabs**: Save/search/filter/delete prefabs. Browse with tag filtering and variant indicators. Drag-from the library to instantiate. Save Linked for live propagation. Right-click for variant/tag editing.
 
@@ -1253,6 +1253,7 @@ Prefabs can contain multiple variants (e.g., different door styles: wooden, meta
 
 - **Adding a variant**: Right-click a prefab in the library → **Add Variant**. Select the replacement geometry and name the variant.
 - **Cycling variants**: Select a placed prefab instance and press **Ctrl+Shift+V** (rebindable, listed as Cycle Prefab Variant) or click **Var▶** in the context toolbar. This cycles through all available variants in place.
+- **Removing a variant**: Right-click a prefab in the library → **Remove Variant**, then pick the one to drop. The `base` variant is not offered, because a prefab without one is not a prefab.
 - **Variant indicator**: The library list shows `[N variants]` next to prefabs that have multiple variants.
 
 ### Live-Linked Prefabs
@@ -1461,6 +1462,7 @@ Notes:
 - A node can belong to multiple visgroups. If ANY visgroup it belongs to is hidden, the node is hidden.
 - Nodes not in any visgroup are always visible.
 - Use **Rem Sel** to remove selected nodes from the visgroup, or **Delete** to remove the visgroup entirely.
+- Use **Rename** to change a visgroup's name. Every member moves with it, so you do not have to rebuild the group. A name that is already taken is refused rather than merging the two visgroups, because merging is a different operation and one you should have to ask for by name.
 - Visgroups persist in `.hflevel` saves and undo/redo state.
 
 ## Grouping
@@ -1652,7 +1654,7 @@ Paint uses a circular brush with quadratic falloff. Strokes are continuous — t
 
 ### Settings
 - **Elevation**: global height scale multiplier for the displacement grid.
-- **Power**: subdivision level (changing power resamples existing data via bilinear interpolation).
+- **Power**: subdivision level. Set the spin and click **Apply** to change an existing displacement; the old grid is resampled into the new one by bilinear interpolation, so the sculpt survives. **Create** reads the same spin for a new displacement.
 - **Sew Group**: integer group ID. Click **Sew** to snap shared boundary vertices between adjacent displacements in the same sew group.
 
 ### Destroying a Displacement

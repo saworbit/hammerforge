@@ -972,6 +972,15 @@ func remove_visgroup(vg_name: String) -> void:
 		visgroup_system.remove_visgroup(vg_name)
 
 
+## Refuses a name that is taken, which is why it answers rather than returning
+## nothing: renaming onto an existing visgroup would merge two of them, and that
+## is a different operation (#615).
+func rename_visgroup(old_name: String, new_name: String) -> bool:
+	if not visgroup_system:
+		return false
+	return visgroup_system.rename_visgroup(old_name, new_name)
+
+
 func set_visgroup_visible(vg_name: String, visible: bool) -> void:
 	if visgroup_system:
 		visgroup_system.set_visgroup_visible(vg_name, visible)
@@ -1674,6 +1683,17 @@ func create_displacement(brush_id: String, face_index: int, power: int = 3) -> b
 
 func destroy_displacement(brush_id: String, face_index: int) -> bool:
 	var ok: bool = displacement_system.destroy_displacement(brush_id, face_index)
+	if ok:
+		tag_brush_dirty(brush_id)
+	return ok
+
+
+## Change an existing displacement's subdivision without losing the sculpt.
+##
+## The system resamples the old grid into the new one, which is the whole reason
+## this is not Destroy and Create (#615).
+func set_displacement_power(brush_id: String, face_index: int, power: int) -> bool:
+	var ok: bool = displacement_system.set_power(brush_id, face_index, power)
 	if ok:
 		tag_brush_dirty(brush_id)
 	return ok
