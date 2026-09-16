@@ -476,6 +476,12 @@ func _on_console_requested() -> void:
 # HammerForge takes a place in the main-screen switcher beside 2D, 3D and
 # Script. That row is the one part of the editor chrome that draws a plugin's
 # own icon, and it is where a Godot user looks for an installed addon.
+#
+# The price of that row is _handles(). A plugin that has a main screen and also
+# handles the selected object is switched to by Godot the moment that object is
+# selected, which cost eleven days of the Console jumping in front of the 3D
+# view (#592). Keep the two apart: a main screen is a place you go to, not an
+# editor for a node type.
 
 
 func _has_main_screen() -> bool:
@@ -629,17 +635,31 @@ static func group_removal_requested(
 	return shift_pressed or ctrl_pressed or meta_pressed
 
 
-func _handles(object: Object) -> bool:
-	return should_handle_editor_object(object)
+## Always false, and it has to stay that way while _has_main_screen() is true.
+## Godot resolves the pair in EditorData::get_handling_main_editor(): a plugin
+## that has a main screen and handles the selected object becomes the main
+## screen. That loop runs the plugin list backwards so an addon beats the
+## built-in editors, so claiming a DraftBrush here threw the user off the 3D
+## view and onto the Console on every brush click (#592).
+##
+## Refusing costs nothing. Viewport input comes from the force-forwarding lists
+## set up in _enter_tree(), which Node3DEditorViewport dispatches separately
+## from the handled-object list, so _forward_3d_gui_input() is unaffected. The
+## only other thing a true here bought was _edit(), and that is now
+## sync_active_root_from_selection() driven off selection_changed.
+func _handles(_object: Object) -> bool:
+	return false
 
 
-func _edit(object: Object) -> void:
-	if object and object is Node:
-		var root = _get_level_root_from_node(object as Node)
-		if root:
-			active_root = root
-			_ensure_brush_change_tracker().ensure_root(root)
-			return
+## Point active_root at the LevelRoot that owns the current selection. This is
+## what _edit() used to do, moved onto EditorSelection so the plugin can keep a
+## main screen without claiming the objects it draws for.
+func sync_active_root_from_selection(nodes: Array) -> void:
+	var root := resolve_active_root_for_selection(nodes)
+	if root:
+		active_root = root
+		_ensure_brush_change_tracker().ensure_root(root)
+		return
 	# Don't null active_root — keep the previous root alive as long as it still
 	# exists in the scene. This prevents losing the dock/3D connection when the
 	# user clicks a Camera, Light, or other non-LevelRoot node.
@@ -647,6 +667,19 @@ func _edit(object: Object) -> void:
 		return
 	active_root = null
 	_ensure_brush_change_tracker().reset()
+
+
+## The LevelRoot a selection should make active, or null to keep the current
+## one. Only nodes this plugin owns may retarget it, which is the same bar
+## _handles() used to set before Godot stopped asking.
+static func resolve_active_root_for_selection(nodes: Array) -> Node:
+	for node in nodes:
+		if not is_instance_valid(node) or not should_handle_editor_object(node):
+			continue
+		var root := level_root_from_node(node as Node)
+		if root:
+			return root
+	return null
 
 
 ## Passive viewport input must not create scene content.  Keep this predicate
@@ -1627,7 +1660,7 @@ func _find_level_root_deep(node: Node) -> Node:
 	return null
 
 
-func _get_level_root_from_node(node: Node) -> Node:
+static func level_root_from_node(node: Node) -> Node:
 	var current: Node = node
 	while current:
 		if current.get_script() == LevelRootType or current.name == "LevelRoot":
