@@ -175,7 +175,6 @@ func validate(auto_fix: bool = false) -> Dictionary:
 		issues.append("Face selection contains %d invalid indices" % invalid_indices)
 		if auto_fix:
 			root.face_selection = next_selection
-			root._apply_face_selection()
 			fixed += invalid_indices
 
 	# Face material indices out of palette bounds

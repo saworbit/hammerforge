@@ -205,7 +205,6 @@ func delete_brush(brush: Node, free: bool = true) -> void:
 		var key = face_key(brush as DraftBrush)
 		if root.face_selection.has(key):
 			root.face_selection.erase(key)
-			_apply_face_selection()
 			# The dock's surface panel is still pointed at a face that just went
 			# away. Batched deletes coalesce this down to one emission.
 			if root.has_method("_emit_or_batch"):
@@ -1135,12 +1134,10 @@ func toggle_face_selection(
 		root.face_selection.erase(key)
 	else:
 		root.face_selection[key] = indices
-	_apply_face_selection()
 
 
 func clear_face_selection() -> void:
 	root.face_selection.clear()
-	_apply_face_selection()
 
 
 func get_face_selection() -> Dictionary:
@@ -1181,16 +1178,6 @@ func assign_material_to_selected_faces(material_index: int) -> int:
 			_tag_brush_node_dirty(brush)
 		count += typed.size()
 	return count
-
-
-func _apply_face_selection() -> void:
-	for node in root._iter_pick_nodes():
-		if not (node is DraftBrush):
-			continue
-		var brush := node as DraftBrush
-		var key = face_key(brush)
-		var indices: Array = root.face_selection.get(key, [])
-		brush.set_selected_faces(PackedInt32Array(indices))
 
 
 ## The key a brush is filed under in face_selection. Takes Node rather than
