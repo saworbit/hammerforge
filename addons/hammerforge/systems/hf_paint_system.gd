@@ -464,14 +464,14 @@ func regenerate_paint_layers() -> void:
 		if layer.has_heightmap() and root.paint_tool.heightmap_synth:
 			var model = root.paint_tool.build_heightmap_model(layer, chunk_ids)
 			root.paint_tool.reconciler.reconcile(
-				model, layer.grid, root.paint_tool.synth_settings, chunk_ids
+				model, layer.grid, root.paint_tool.synth_settings, chunk_ids, layer.layer_id
 			)
 		else:
 			var model = root.paint_tool.geometry.build_for_chunks(
 				layer, chunk_ids, root.paint_tool.synth_settings
 			)
 			root.paint_tool.reconciler.reconcile(
-				model, layer.grid, root.paint_tool.synth_settings, chunk_ids
+				model, layer.grid, root.paint_tool.synth_settings, chunk_ids, layer.layer_id
 			)
 	if region_streaming_enabled:
 		_rebuild_loaded_regions_from_layers()
@@ -1021,14 +1021,14 @@ func _reconcile_layer(layer: HFPaintLayer, dirty: Array[Vector2i]) -> void:
 	if layer.has_heightmap() and root.paint_tool.heightmap_synth:
 		var model = root.paint_tool.build_heightmap_model(layer, dirty)
 		root.paint_tool.reconciler.reconcile(
-			model, layer.grid, root.paint_tool.synth_settings, dirty
+			model, layer.grid, root.paint_tool.synth_settings, dirty, layer.layer_id
 		)
 	else:
 		var model = root.paint_tool.geometry.build_for_chunks(
 			layer, dirty, root.paint_tool.synth_settings
 		)
 		root.paint_tool.reconciler.reconcile(
-			model, layer.grid, root.paint_tool.synth_settings, dirty
+			model, layer.grid, root.paint_tool.synth_settings, dirty, layer.layer_id
 		)
 
 
