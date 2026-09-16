@@ -242,7 +242,13 @@ func test_apply_preset_self_target():
 	assert_true(outputs[0]["fire_once"])
 
 
-func test_apply_preset_missing_target_uses_tag_as_name():
+## The fallback used to be the tag itself, so leaving the "door" box empty wired
+## the connection at an entity literally named "door" and reported a success.
+## The six built-ins tag their targets door, light, sound, alarm_light, siren,
+## pickup and effect - names plausible enough that the result looked real, and
+## the visualiser skips a connection whose target resolves to nothing, so no
+## line was drawn going nowhere either.
+func test_apply_preset_refuses_a_tag_the_map_has_no_entry_for():
 	var e = _make_entity("source_1")
 	var preset = {
 		"name": "Test",
@@ -251,10 +257,52 @@ func test_apply_preset_missing_target_uses_tag_as_name():
 			{"output_name": "OnTrigger", "input_name": "Open", "target_tag": "door"},
 		],
 	}
-	var count = presets.apply_preset(e, preset, {})
-	assert_eq(count, 1)
-	var outputs = sys.get_entity_outputs(e)
-	assert_eq(outputs[0]["target_name"], "door", "Unmapped tag should be used as-is")
+	var unresolved: Array = []
+	var count = presets.apply_preset(e, preset, {}, unresolved)
+	assert_eq(count, 0, "An unfilled box is not a target")
+	assert_eq(sys.get_entity_outputs(e).size(), 0, "and nothing dangling is left behind")
+	assert_eq(unresolved, ["door"], "The caller is told which tag had no target")
+
+
+func test_apply_preset_reports_the_half_that_landed():
+	var e = _make_entity("source_1")
+	var preset = {
+		"name": "Test",
+		"connections":
+		[
+			{"output_name": "OnTrigger", "input_name": "Open", "target_tag": "door"},
+			{"output_name": "OnTrigger", "input_name": "TurnOn", "target_tag": "light"},
+		],
+	}
+	var unresolved: Array = []
+	var count = presets.apply_preset(e, preset, {"door": "door_1"}, unresolved)
+	assert_eq(count, 1, "The mapped half is applied")
+	assert_eq(unresolved, ["light"], "and the unmapped half is named rather than invented")
+
+
+func test_a_preset_name_already_in_the_list_is_made_unique():
+	var conns = [{"output_name": "x", "input_name": "y", "target_tag": "z"}]
+	presets.add_user_preset("From Door_A", "", conns)
+	presets.add_user_preset("From Door_A", "", conns)
+	presets.add_user_preset("From Door_A", "", conns)
+	var names: Array = []
+	for preset in presets.get_user_presets():
+		names.append(preset["name"])
+	assert_eq(
+		names,
+		["From Door_A", "From Door_A 2", "From Door_A 3"],
+		"The dropdown is the only view of the list and Apply resolves by position"
+	)
+
+
+func test_a_user_preset_cannot_take_a_builtin_name():
+	var builtin_name: String = str(presets.BUILTIN_PRESETS[0]["name"])
+	presets.add_user_preset(builtin_name, "", [{"output_name": "x", "input_name": "y"}])
+	assert_eq(
+		presets.get_user_presets()[0]["name"],
+		"%s 2" % builtin_name,
+		"The built-ins are in the same dropdown, so they are names in use"
+	)
 
 
 func test_apply_preset_with_delay():
