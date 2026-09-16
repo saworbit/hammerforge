@@ -123,6 +123,20 @@ it from here.
 | `heightmap-convert` | what Convert to Heightmap produces, what it costs, and which settings it honours |
 | `numeric-entry` | whether a dimension typed during a draw drag reaches the preview |
 | `generator-ranges` | every generator setting one step outside the range its own schema declares |
+| `outline-bounds` | whether each shape's selection outline is the size of the brush it is drawn around |
+| `console-log` | what the Console log buffer keeps, drops, collapses and hands to Copy |
+| `console-controls` | whether every switch on the Console's Controls tab reaches the setting it names |
+| `console-actions` | whether a Status board action leaves the level in the state it reported |
+| `paint-grid` | the paint grid's world/cell arithmetic, the layer list, and the ids it mints |
+| `paint-inference` | what the opt-in paint cleanup does to the cells a stroke just painted |
+| `paint-multilayer` | whether painting on one floor layer keeps the geometry of the layers under it |
+| `material-browser` | what the material browser calls a favourite, and what its filters reach |
+| `array-layout` | whether the two ways of counting an array's copies give the same answer |
+| `io-presets-panel` | what the wiring panel's Save preset button adds to the list, and how it comes out |
+| `prefab-links` | whether cycling a variant leaves an instance where it was, and what it does to overrides |
+| `validate-fix` | what Validate + Fix reports against what it repaired and what is left |
+| `chaos-systems` | randomised registry operations, with dangling references checked after each |
+| `dock-undo-two` | undo coverage for the structure, library, terrain slot and surface paint commands |
 
 ## Adding a scenario
 
