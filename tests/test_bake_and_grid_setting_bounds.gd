@@ -124,6 +124,65 @@ func test_a_poisoned_settings_block_from_a_file_does_not_land():
 
 
 # ===========================================================================
+# The four @export_range properties that had no setter (#622)
+# ===========================================================================
+
+
+func test_the_layer_index_settings_are_held_to_their_declared_range():
+	for value in [0, -5, 33, 100000]:
+		root.bake_collision_layer_index = value
+		assert_between(
+			root.bake_collision_layer_index, 1, 32, "bake_collision_layer_index stays in 1..32"
+		)
+		root.draft_pick_layer_index = value
+		assert_between(root.draft_pick_layer_index, 1, 32, "draft_pick_layer_index stays in 1..32")
+
+
+func test_grid_major_line_frequency_is_held_to_its_declared_range():
+	root.grid_major_line_frequency = 0
+	assert_eq(root.grid_major_line_frequency, 1, "0 would be a divide by nothing in the shader")
+	root.grid_major_line_frequency = 100000
+	assert_eq(root.grid_major_line_frequency, 16)
+
+
+func test_an_autosave_interval_above_an_hour_cannot_turn_autosave_off():
+	# A value of 100000 was accepted and set a timer of about ten weeks, with the
+	# autosave toggle still reading as enabled.
+	root.hflevel_autosave_minutes = 100000
+	assert_eq(root.hflevel_autosave_minutes, 60, "the interval is capped at the declared hour")
+	root.hflevel_autosave_minutes = 0
+	assert_eq(root.hflevel_autosave_minutes, 1)
+
+
+func test_ordinary_values_still_land_on_the_newly_clamped_settings():
+	root.bake_collision_layer_index = 7
+	root.draft_pick_layer_index = 12
+	root.grid_major_line_frequency = 8
+	root.hflevel_autosave_minutes = 15
+	root.hflevel_autosave_keep = 20
+	assert_eq(root.bake_collision_layer_index, 7)
+	assert_eq(root.draft_pick_layer_index, 12)
+	assert_eq(root.grid_major_line_frequency, 8)
+	assert_eq(root.hflevel_autosave_minutes, 15)
+	assert_eq(root.hflevel_autosave_keep, 20)
+
+
+func test_the_console_takes_the_chunk_size_bound_from_level_root():
+	# The Console writes through the dock's spin, so a narrower bound here clamped
+	# a legal setting the moment the row was touched (#607).
+	var console_max: Variant = null
+	for row in HFConsoleControls.NUMBERS:
+		if str(row.get("label", "")) == "Chunk size":
+			console_max = row.get("max")
+	assert_not_null(console_max, "the Console still has a Chunk size row")
+	assert_eq(
+		float(console_max),
+		LevelRootType.MAX_BAKE_CHUNK_SIZE,
+		"the Console and the dock must offer the same range"
+	)
+
+
+# ===========================================================================
 # The cordon (#377)
 # ===========================================================================
 
