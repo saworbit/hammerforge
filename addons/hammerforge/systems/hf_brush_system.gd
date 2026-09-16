@@ -1231,7 +1231,12 @@ func can_clip_brush(brush_id: String, axis: int, split_pos: float) -> HFOpResult
 		return HFOpResult.fail("Clip: brush not found")
 	var draft := brush as DraftBrush
 	var bounds := world_bounds_of(draft)
-	var axis_index := clampi(axis, 0, 2)
+	# The same refusal the operation makes, so the ghost and the cut agree.
+	if not HFTransformSystem.is_valid_axis(axis):
+		return HFOpResult.fail(
+			"Clip: %d does not name an axis" % axis, "Use 0 for X, 1 for Y or 2 for Z"
+		)
+	var axis_index := axis
 	var brush_min: float = bounds.position[axis_index]
 	var brush_max: float = bounds.position[axis_index] + bounds.size[axis_index]
 	var snap = root.grid_snap if root.grid_snap > 0.0 else 0.0
@@ -1239,7 +1244,7 @@ func can_clip_brush(brush_id: String, axis: int, split_pos: float) -> HFOpResult
 		split_pos = snapped(split_pos, snap)
 	var margin = snap if snap > 0.0 else 0.01
 	if split_pos <= brush_min + margin or split_pos >= brush_max - margin:
-		var axis_name = ["X", "Y", "Z"][clampi(axis, 0, 2)]
+		var axis_name = ["X", "Y", "Z"][axis_index]
 		return HFOpResult.fail(
 			"Clip: split position %.1f is outside brush bounds on %s axis" % [split_pos, axis_name],
 			"Click inside the brush face to pick a valid split point"
@@ -1636,7 +1641,14 @@ func clip_brush_by_id(brush_id: String, axis: int, split_pos: float) -> HFOpResu
 	if not brush or not (brush is DraftBrush):
 		return _op_fail("Clip: brush not found")
 	var draft := brush as DraftBrush
-	var axis_index := clampi(axis, 0, 2)
+	# Refused rather than clamped. Clamping turned an index of 5 into a cut on Z
+	# and an index of -1 into a cut on X, and reported the cut it made on the
+	# axis it picked, so a caller that got its index wrong got a plausible
+	# operation it never described. The dropdown passes 1 today; `LevelRoot`
+	# exposes this and the preview takes an axis from anyone.
+	if not HFTransformSystem.is_valid_axis(axis):
+		return _op_fail("Clip: %d does not name an axis" % axis, "Use 0 for X, 1 for Y or 2 for Z")
+	var axis_index := axis
 	var bounds := world_bounds_of(draft)
 	var brush_min: float = bounds.position[axis_index]
 	var brush_max: float = bounds.position[axis_index] + bounds.size[axis_index]
