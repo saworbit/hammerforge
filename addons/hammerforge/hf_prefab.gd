@@ -24,6 +24,16 @@ var variants: Dictionary = {}
 # Tags for browser search/filtering (e.g. ["door", "architecture", "interior"])
 var tags: PackedStringArray = []
 
+## What each palette slot the prefab's faces reference meant, as
+## `{slot: resource_path}`.
+##
+## A face's material is a slot number into the *level's* palette, so a prefab
+## carrying only the numbers re-textured itself in every other level - silently,
+## because within one level the palette is the same one (#621). Recorded on
+## capture and remapped on placement. Merged across the base and every variant,
+## since they all index the same palette.
+var material_slots: Dictionary = {}
+
 
 ## Capture a prefab from the current selection.
 ## brush_nodes: Array of DraftBrush nodes
@@ -76,7 +86,43 @@ static func capture_from_selection(
 		info.erase("visgroups")
 		prefab.entity_infos.append(info)
 
+	prefab.material_slots = _record_material_slots(prefab.brush_infos, _palette_of(brush_system))
 	return prefab
+
+
+## The level's material palette, reached through whatever was handed in, or null.
+static func _palette_of(brush_system) -> Object:
+	if brush_system == null:
+		return null
+	var root = brush_system.get("root")
+	if root == null:
+		return null
+	return root.get("material_manager")
+
+
+## What each slot the given faces reference points at, as `{slot: resource_path}`.
+##
+## A material with no `resource_path` cannot be recorded this way - that is #617,
+## and the same fix covers both - so its slot is left out and the face keeps
+## whatever the destination palette holds there, which is today's behaviour.
+static func _record_material_slots(infos: Array, palette) -> Dictionary:
+	var out: Dictionary = {}
+	if palette == null:
+		return out
+	for info in infos:
+		if not (info is Dictionary):
+			continue
+		for face in info.get("faces", []):
+			if not (face is Dictionary):
+				continue
+			var slot := int(face.get("material_idx", -1))
+			if slot < 0 or out.has(slot):
+				continue
+			var mat = palette.get_material(slot)
+			if mat == null or mat.resource_path == "":
+				continue
+			out[slot] = mat.resource_path
+	return out
 
 
 ## Combined visual AABB center of the selection. Falls back to origin mean
@@ -149,11 +195,17 @@ func instantiate(
 	var name_map: Dictionary = {}
 	var new_brush_ids: Array = []
 
+	# A face's material is a slot number into this level's palette, and the prefab
+	# was captured against another one. Resolve what each recorded slot meant
+	# against the destination, appending anything it does not already hold (#621).
+	var slot_map: Dictionary = _resolve_material_slots(root)
+
 	# Instantiate brushes
 	for info in b_infos:
 		if not (info is Dictionary):
 			continue
 		var placed_info: Dictionary = info.duplicate(true)
+		_remap_face_materials(placed_info, slot_map)
 		# Offset transform by placement position
 		if placed_info.has("transform"):
 			var t: Transform3D = placed_info["transform"]
@@ -205,6 +257,67 @@ func instantiate(
 	result["entity_names"] = new_entity_names
 	result["entity_nodes"] = new_entity_nodes
 	return result
+
+
+## Map each recorded slot onto the slot that means the same thing in this level.
+##
+## A recorded path already in the destination palette maps to where it sits; one
+## that is not is loaded and appended, the way `HFPrototypeTextures.load_all_into()`
+## already adds keyed on `resource_path`. A path that will not load is left out,
+## so the face keeps the number it had rather than being pointed somewhere wrong.
+func _resolve_material_slots(root) -> Dictionary:
+	var out: Dictionary = {}
+	if material_slots.is_empty() or root == null:
+		return out
+	var palette = root.get("material_manager")
+	if palette == null:
+		return out
+	var by_path: Dictionary = {}
+	for index in palette.materials.size():
+		var held = palette.materials[index]
+		if held != null and held.resource_path != "" and not by_path.has(held.resource_path):
+			by_path[held.resource_path] = index
+	var missing: Array = []
+	for slot in material_slots:
+		var path := str(material_slots[slot])
+		if path == "":
+			continue
+		if by_path.has(path):
+			out[int(slot)] = int(by_path[path])
+			continue
+		if not ResourceLoader.exists(path):
+			missing.append(path)
+			continue
+		var loaded = ResourceLoader.load(path)
+		if loaded is Material:
+			var added: int = palette.add_material(loaded)
+			by_path[path] = added
+			out[int(slot)] = added
+		else:
+			missing.append(path)
+	if not missing.is_empty():
+		HFLog.warn(
+			(
+				(
+					"HFPrefab: '%s' was built with %d material(s) this project cannot load, "
+					+ "so those faces keep whatever the palette holds: %s"
+				)
+				% [prefab_name, missing.size(), ", ".join(missing)]
+			)
+		)
+	return out
+
+
+## Point each face at the slot its material landed in.
+static func _remap_face_materials(info: Dictionary, slot_map: Dictionary) -> void:
+	if slot_map.is_empty():
+		return
+	for face in info.get("faces", []):
+		if not (face is Dictionary):
+			continue
+		var slot := int(face.get("material_idx", -1))
+		if slot_map.has(slot):
+			face["material_idx"] = int(slot_map[slot])
 
 
 # ---------------------------------------------------------------------------
@@ -264,6 +377,10 @@ func add_variant_from_selection(
 		brush_system, entity_system, brush_nodes, entity_nodes
 	)
 	set_variant_data(variant_name, captured.brush_infos, captured.entity_infos)
+	# Every variant indexes the same palette, so one record covers them all.
+	for slot in captured.material_slots:
+		if not material_slots.has(slot):
+			material_slots[slot] = captured.material_slots[slot]
 
 
 # ---------------------------------------------------------------------------
@@ -278,6 +395,16 @@ func to_dict() -> Dictionary:
 		"brush_infos": HFLevelIO.encode_variant(brush_infos),
 		"entity_infos": HFLevelIO.encode_variant(entity_infos),
 	}
+
+	# What each referenced palette slot meant. Written as records rather than a
+	# dictionary keyed by number, because JSON has only String keys and a slot is
+	# a number on both sides of the file.
+	if not material_slots.is_empty():
+		var slot_records: Array = []
+		for slot in material_slots:
+			slot_records.append({"slot": int(slot), "path": str(material_slots[slot])})
+		slot_records.sort_custom(func(a, b): return int(a["slot"]) < int(b["slot"]))
+		data["materials"] = slot_records
 
 	# Tags
 	if not tags.is_empty():
@@ -330,6 +457,13 @@ static func from_dict(data: Dictionary) -> HFPrefab:
 	var raw_entities = HFLevelIO.decode_variant(data.get("entity_infos", []))
 	prefab.brush_infos = _dictionary_entries(raw_brushes, "brush_infos")
 	prefab.entity_infos = _dictionary_entries(raw_entities, "entity_infos")
+	# A prefab written before this key existed has none, and nothing is remapped,
+	# which is exactly what it did before.
+	for record in _dictionary_entries(data.get("materials", []), "materials"):
+		var path := str(record.get("path", "")).strip_edges()
+		var slot := int(record.get("slot", -1))
+		if slot >= 0 and path != "":
+			prefab.material_slots[slot] = path
 
 	# Tags
 	var raw_tags = data.get("tags", [])
