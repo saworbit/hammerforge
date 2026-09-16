@@ -1662,6 +1662,7 @@ Notes:
 - Entity palette supports drag-and-drop placement.
 
 Entity definitions live in `res://addons/hammerforge/entities.json`, overlaid by `res://hammerforge_entities.json` when present.
+
 Example (billboard preview):
 
 ```json
@@ -1673,6 +1674,8 @@ Example (billboard preview):
       "path": "res://addons/hammerforge/icon.png",
       "color": "#ffff00"
     },
+    "outputs": [],
+    "inputs": ["TurnOn", "TurnOff", "Toggle"],
     "properties": [
       {"name": "range", "type": "float", "default": 10.0},
       {"name": "energy", "type": "float", "default": 1.0},
@@ -1681,6 +1684,10 @@ Example (billboard preview):
   }
 }
 ```
+
+`outputs` and `inputs` are the names an entity class fires and the names it answers to. The quick-wire form offers them in a dropdown beside each free-text box: the source entity's `outputs` in **Out**, and the `inputs` of whatever is chosen in **To** in **In**. The boxes stay free text, because a mapper may wire to a name no definition declares. What changes is that the vocabulary the six built-in presets use is discoverable from the entity rather than only from the presets.
+
+Preview `type` is one of `billboard` (with `path` to a texture), `mesh` (with `path` to a mesh), `capsule` (`radius`, `height`) or `box` (`size` as `[x, y, z]`). All of them take `color`, and the shaped ones take `alpha`. `box` is the proxy that needs no asset.
 
 ## Bake Output
 Bake creates `BakedGeometry`:

@@ -37,6 +37,21 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   document look healthier.
 
 ### Fixed
+- **The door stops previewing as a light bulb, and an entity class says what it
+  fires** (#613). `door_basic` pointed its mesh preview at
+  `light_bulb_proxy.obj`, which is the only file in the plugin's `meshes/`
+  folder, so a level with doors and lights in it showed a bulb for both kinds of
+  thing with a different tint. Previews now understand a `box` type - a sized
+  `BoxMesh` with no asset behind it - and the door uses it. The other half is the
+  vocabulary: `entities.json` shipped three entries, none declaring any I/O
+  names, while the wiring system, the six built-in presets and the overlay's
+  colour table all assumed `OnTrigger`, `OnPressed`, `Open`, `Toggle`, `TurnOn`
+  and the rest. A definition can now declare `outputs` and `inputs`, the three
+  built-ins do, and the quick-wire form offers them in a dropdown beside each
+  box - the source's outputs in **Out**, the chosen target's inputs in **In**.
+  The boxes stay free text, because a mapper may wire to a name no definition
+  declares; what changes is that the names are discoverable from the entity
+  instead of only from the presets.
 - **A setting's declared range is now the range it is held to** (#622, #607).
   `@export_range` is the Inspector's spinner and nothing else, so four
   properties on `LevelRoot` took whatever a script, a `.hflevel` settings block
