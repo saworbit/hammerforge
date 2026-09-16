@@ -43,16 +43,6 @@ func get_height_at(cell: Vector2i) -> float:
 	return heightmap.get_pixel(px, py).r * height_scale
 
 
-func get_height_at_uv(u: float, v: float) -> float:
-	if not has_heightmap():
-		return 0.0
-	var w := heightmap.get_width()
-	var h := heightmap.get_height()
-	var px := clampi(int(u * w), 0, w - 1)
-	var py := clampi(int(v * h), 0, h - 1)
-	return heightmap.get_pixel(px, py).r * height_scale
-
-
 func set_cell(cell: Vector2i, filled: bool) -> void:
 	var cid := _cell_to_chunk(cell)
 	# Erasing does not need a chunk. Going through _get_or_create_chunk() on the

@@ -18,6 +18,36 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   with the value of neither, so it is a feature to open on its own terms rather
   than a field to keep carrying into every save and every undo snapshot.
   `restore_visgroups()` reads past a `color` key in an older payload.
+- **Nineteen public functions with no call site** (#572). A scan over `addons/`,
+  `tests/` and `tools/` with comments stripped first, so a name mentioned in
+  prose did not count as a use. Half were named `LevelRoot` delegates, which this
+  project's own rule keeps only where something calls them by name.
+  `paint_displacement()` and `set_displacement_power()` went together - the
+  displacement input path reaches `root.displacement_system.paint()` directly.
+  The two the issue flagged for a look first both checked out:
+  `HFSnapSystem.clear_geometry_cache()` is genuinely unnecessary, because a cache
+  entry is validated against the brush's `instance_id`, `face_count` and `size`,
+  and a state restore frees the old brushes so their entries no longer match; and
+  nothing in `addons/` reads `HFTerrainRegionManager.dirty_regions` at all, so
+  `clear_dirty()` was not the missing half of an eviction - the set it clears is
+  itself written and never read.
+- **`Dock.set_status_grid()`, `set_status_mode()` and `set_show_hud()`** (#555).
+  `set_status_grid()` was the worst: a doc comment saying "Update the grid
+  display in the status bar", a parameter that is never read, and a guard around
+  a `pass`. Anyone wiring grid snap to the status bar would have found it, called
+  it, and got nothing. `set_status_mode()` read as the simple case of
+  `set_mode_indicator()` sitting immediately below it and was the superseded one;
+  `_update_mode_indicator()` went with it, having lost its only caller.
+- **`autosave_interval` and `last_tool_id` from the preferences schema** (#568).
+  Both typed, defaulted, validated on load and written to `user://` on every
+  save, and read by nothing. `autosave_interval` was the one that misled: there
+  are two autosave-interval settings in the plugin, and the one that works is
+  `hflevel_autosave_minutes` on `LevelRoot`, with a spin and a Console row - so
+  anyone finding this one in the prefs file and editing it got no effect and no
+  message. `_validated()` keeps a key it does not know, so an existing prefs file
+  carrying either is not warned about. Removing both leaves no `TYPE_INT`
+  preference in the schema, so the int half of `_usable()`'s number coercion is
+  now there for the next one rather than exercised by a test.
 - **`HFPaintTool.material_picked`** (#553). Declared, emitted on every Ctrl+Click
   on the floor paint grid, and connected by nothing. One correction to the
   issue's reading: the gesture is not inert. `pick_cell_material()` sets
@@ -171,6 +201,17 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **Auto connector mode's stairs-vs-ramp threshold is a setting** (#570). The
+  Connector Mode tooltip has always told the mapper a threshold decides it, and
+  there was nowhere to look: `stair_threshold` was a constant on
+  `HFAutoConnector.Settings` with no `LevelRoot` property, no control, nothing in
+  the bake settings list and nothing in the `.hflevel` - while the two connector
+  numbers beside it on the same row both had all four. It has them now.
+  The default moves from 2.0 to 32.0 at the same time: 2.0 is a small height at
+  this genre's scale, so on a level built at 32-unit grid steps every cross-layer
+  boundary cleared it, Auto was Stairs everywhere, and the ramp half of the mode
+  never happened. The tooltip names the control rather than an unreachable
+  number.
 - **Material browser favourites survive the dock being rebuilt** (#545).
   `_favorites` was a plain Dictionary on the control with nothing reading it out
   or writing it in - no prefs key, nothing in the `.hflevel`, nothing in

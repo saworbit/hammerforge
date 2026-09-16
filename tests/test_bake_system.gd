@@ -104,6 +104,7 @@ var bake_occluder_min_area: float = 4.0
 var bake_connector_mode: int = 0
 var bake_connector_stair_height: float = 0.25
 var bake_connector_width: int = 2
+var bake_connector_stair_threshold: float = 32.0
 var bake_navmesh: bool = false
 var bake_navmesh_cell_size: float = 0.3
 var bake_navmesh_cell_height: float = 0.25
