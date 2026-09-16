@@ -90,6 +90,19 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the one place a reader is told what the limit is. It says "holds up to" and the
   real figure now, via `retained_limit()`; the amortisation is worth keeping, so
   it is the reported number that was wrong.
+- **Load Material Library and the two terrain slot commands register an undo
+  step** (#573). All three change state `capture_state()` already carries, and
+  none of them went through `_commit_state_action()` the way their forty
+  neighbours do. Load Library is the one that cost: every face's `material_idx`
+  is an index into the palette it replaces, so loading a different library
+  repaints every painted face in the level, and Ctrl+Z stepped past it to
+  whatever happened before the load - with no route back, since the old palette
+  was only ever in memory. `LevelRoot.load_material_library()`,
+  `set_terrain_slot_texture()` and `set_terrain_slot_uv_scale()` are what the
+  wrappers name. The slot pair also gave the paint layer setters for arrays the
+  dock had been writing into directly, which was the only place in the plugin
+  that wrote a layer's arrays from outside the layer and the reason nothing
+  bounded the slot index.
 - **Inference cleanup leaves a one-cell stroke alone** (#546). Denoise removes a
   filled cell with no cardinal neighbour, and a single click on empty ground is
   exactly that - so with `Inference cleanup` ticked, clicking once painted

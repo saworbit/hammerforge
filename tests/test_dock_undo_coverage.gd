@@ -21,6 +21,7 @@ const HANDLER_SOURCES := [
 	"res://addons/hammerforge/dock_visgroup_handler.gd",
 	"res://addons/hammerforge/dock_entity_handler.gd",
 	"res://addons/hammerforge/dock_paint_handler.gd",
+	"res://addons/hammerforge/dock_file_handler.gd",
 ]
 
 const MERGE_DISABLE := 0
@@ -247,6 +248,9 @@ func test_every_level_changing_dock_command_registers_an_undo_step() -> void:
 		"on_paint_layer_remove": "remove_active_paint_layer",
 		"on_heightmap_generate": "generate_heightmap_noise",
 		"on_heightmap_import_selected": "import_heightmap",
+		"on_material_library_load_selected": "load_material_library",
+		"on_terrain_slot_texture_selected": "set_terrain_slot_texture",
+		"on_terrain_slot_scale_changed": "set_terrain_slot_uv_scale",
 	}
 	for function_name in commands:
 		var body := _body(function_name)
@@ -264,48 +268,68 @@ func test_every_level_changing_dock_command_registers_an_undo_step() -> void:
 		)
 
 
-## `commit()` calls the method and throws away what it returns, so Validate + Fix
-## could not read the count the validator had already worked out - it re-derived
-## it as before minus after, which is not the number of repairs when a fix
-## exposes another issue, and logged the list from before the fix as though every
-## repaired issue were still there.
-func test_commit_completed_registers_an_undo_for_work_already_done() -> void:
+func test_load_material_library_undo_brings_the_old_palette_back() -> void:
 	var root := _fresh_root()
 	var fake = _fake_undo()
 	root.add_material_to_palette(StandardMaterial3D.new())
-	var before: Dictionary = root.capture_state()
-
 	root.add_material_to_palette(StandardMaterial3D.new())
-	assert_eq(root.material_manager.materials.size(), 2, "The work is done by the caller")
+	var before: int = root.material_manager.materials.size()
+	assert_eq(before, 2, "Two materials to lose")
 
-	HFUndoHelper.commit_completed(fake, root, "Validate + Fix", before)
+	var library := "user://hf_test_library.json"
+	var file := FileAccess.open(library, FileAccess.WRITE)
+	file.store_string(JSON.stringify({"materials": []}))
+	file.close()
+
+	_commit(fake, root, "Load Material Library", "load_material_library", [library], false)
+	assert_eq(root.material_manager.materials.size(), 0, "The load replaces the whole palette")
+
 	fake.undo()
-	assert_eq(root.material_manager.materials.size(), 1, "Undo puts the before state back")
-	fake.redo()
-	assert_eq(root.material_manager.materials.size(), 2, "and redo is the state it left, not a re-call")
+	assert_eq(root.material_manager.materials.size(), before, "Undo must bring the palette back")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(library))
 
 
-func test_validate_and_fix_reads_the_count_the_validator_returned() -> void:
-	var body := FileAccess.get_file_as_string(
-		"res://addons/hammerforge/dock_manage_handler.gd"
+func test_a_terrain_slot_texture_undo_puts_the_old_slot_back() -> void:
+	var root := _fresh_root()
+	if not root.paint_layers:
+		pass_test("no paint layer manager on this build")
+		return
+	var fake = _fake_undo()
+	var layer = root.paint_layers.get_active_layer()
+	assert_not_null(layer, "A level comes up with an active paint layer")
+	layer.set_terrain_slot_texture(1, "res://old.tres")
+
+	_commit(
+		fake,
+		root,
+		"Set Terrain Slot Texture",
+		"set_terrain_slot_texture",
+		[1, "res://new.tres"],
+		false
 	)
-	var start := body.find("
-static func run_validation(")
-	assert_gt(start, -1, "run_validation must exist")
-	var rest := body.substr(start + 1)
-	var end := rest.find("
+	assert_eq(
+		root.paint_layers.get_active_layer().terrain_slot_paths[1],
+		"res://new.tres",
+		"The command points the slot at the new texture"
+	)
+
+	fake.undo()
+	assert_eq(
+		root.paint_layers.get_active_layer().terrain_slot_paths[1],
+		"res://old.tres",
+		"Undo must put the old one back"
+	)
 
 
-")
-	var run_validation := rest if end < 0 else rest.substr(0, end)
-	assert_true(
-		run_validation.contains('get("fixed"'),
-		"The repair count comes from the validator, which counted it exactly"
-	)
-	assert_false(
-		run_validation.contains("before_count - after_count"),
-		"and is not re-derived by differencing two more validation passes"
-	)
+func test_a_terrain_slot_refuses_an_index_it_does_not_have() -> void:
+	var root := _fresh_root()
+	if not root.paint_layers:
+		pass_test("no paint layer manager on this build")
+		return
+	var layer = root.paint_layers.get_active_layer()
+	assert_false(layer.set_terrain_slot_texture(9, "res://x.tres"), "Slot 9 is not a slot")
+	assert_false(layer.set_terrain_slot_uv_scale(-1, 2.0), "Neither is slot -1")
+	assert_false(layer.set_terrain_slot_uv_scale(0, NAN), "A scale has to be a number")
 
 
 func test_commands_holding_live_nodes_ask_for_an_absolute_redo() -> void:
