@@ -51,6 +51,27 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   own spin, touching that row dragged a legal chunk size down to 256 and wrote it
   back to the level. It now reads `LevelRoot.MAX_BAKE_CHUNK_SIZE`, which is where
   the bound was already written down.
+- **The `.hflevel` writer no longer loses a value without saying so** (#619,
+  #617). `encode_variant()` named the handful of types it knew and passed
+  everything else to `JSON.stringify`, which turned nine Variant types into
+  strings that no later read could turn back - `Vector2i`, `Vector3i`, `Vector4`,
+  `Rect2`, `Rect2i`, `AABB`, `Plane`, `Quaternion`, `Transform2D`, the packed
+  arrays and `StringName`. A dictionary key was copied rather than encoded, so a
+  `Vector2i` cell key came back as the string `"(3, 4)"`. Both now round trip:
+  the remaining types go through `JSON.from_native()`, the engine's own JSON
+  representation for them, and a dictionary with any non-String key is written as
+  a list of encoded pairs. `to_native()` is called with `allow_objects` false,
+  because a level file is untrusted input. Anything genuinely unwritable - an
+  `Object`, `RID`, `Callable` or `Signal` - now warns instead of producing a
+  string. A `Resource` with no `resource_path` was written as a bare `null`; it
+  now warns on save and records the class and name, so the load can say what the
+  empty slot used to be rather than leaving the reader to guess, which is the
+  resolution `save_library()` already had (#515). The format version is not
+  bumped: every shape an old file holds decodes exactly as it did, and the new
+  envelopes only appear where the old encoder wrote garbage. The hand-flattened
+  cordon AABB in `hf_state_system.gd` and the hand-converted paint blend arrays
+  are left alone - they are the shape on disk now - but the comment saying why
+  is no longer missing.
 - **Undoing a brush resize no longer renames every brush in the level** (#597).
   `restore_state()` clears the brushes and rebuilds them from their captured
   info, and the node name was the one thing that info never carried. So a resize

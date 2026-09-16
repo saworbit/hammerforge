@@ -23,6 +23,12 @@ static func _is_vec3_arr(v: Variant) -> bool:
 	return v is Array and v.size() >= 3
 
 
+## Variant types that carry no data a level file can hold. Anything else the
+## `_` arm meets is handed to `JSON.from_native()`, which covers every remaining
+## engine type.
+const UNSERIALIZABLE_TYPES := [TYPE_OBJECT, TYPE_RID, TYPE_CALLABLE, TYPE_SIGNAL]
+
+
 static func encode_variant(value: Variant, _depth: int = 0) -> Variant:
 	if _depth > MAX_RECURSION_DEPTH:
 		push_warning("HFLevelIO: encode_variant max recursion depth exceeded")
@@ -32,8 +38,25 @@ static func encode_variant(value: Variant, _depth: int = 0) -> Variant:
 		var path = res.resource_path
 		if path != "":
 			return {TYPE_KEY: "ResourcePath", "path": path}
-		return null
+		# A resource built in memory has nothing this format can point at. Record
+		# what it was so the load can name it, rather than writing a bare null and
+		# leaving the reader to guess. Same resolution as `save_library()` (#515).
+		var res_class := res.get_class()
+		var res_name := res.resource_name
+		HFLog.warn(
+			(
+				(
+					"HFLevelIO: a %s with no resource path was written as an empty slot. "
+					+ "Save it to disk before saving the level if it should survive."
+				)
+				% res_class
+			)
+		)
+		return {TYPE_KEY: "MissingResource", "class": res_class, "name": res_name}
 	match typeof(value):
+		TYPE_NIL, TYPE_BOOL, TYPE_INT, TYPE_FLOAT, TYPE_STRING:
+			# JSON's own types. Written raw, which is what every existing file holds.
+			return value
 		TYPE_VECTOR2:
 			return {TYPE_KEY: "Vector2", "value": [value.x, value.y]}
 		TYPE_VECTOR3:
@@ -69,12 +92,52 @@ static func encode_variant(value: Variant, _depth: int = 0) -> Variant:
 				out.append(encode_variant(item, _depth + 1))
 			return out
 		TYPE_DICTIONARY:
-			var dict_out: Dictionary = {}
+			# JSON objects have String keys only, so a Vector2i or int key would be
+			# flattened to its str() form and never come back. A dictionary that has
+			# one is written as a list of encoded key/value pairs instead.
+			var string_keys := true
 			for key in value.keys():
-				dict_out[key] = encode_variant(value[key], _depth + 1)
-			return dict_out
+				if typeof(key) != TYPE_STRING:
+					string_keys = false
+					break
+			if string_keys:
+				var dict_out: Dictionary = {}
+				for key in value.keys():
+					dict_out[key] = encode_variant(value[key], _depth + 1)
+				return dict_out
+			var entries: Array = []
+			for key in value.keys():
+				entries.append(
+					[_encode_dict_key(key, _depth + 1), encode_variant(value[key], _depth + 1)]
+				)
+			return {TYPE_KEY: "Dictionary", "entries": entries}
 		_:
-			return value
+			if typeof(value) in UNSERIALIZABLE_TYPES:
+				push_warning(
+					(
+						(
+							"HFLevelIO: a value of type %d cannot be written to a level file "
+							+ "and was dropped."
+						)
+						% typeof(value)
+					)
+				)
+				return null
+			# Everything left is an engine data type. `JSON.from_native()` is the
+			# engine's own JSON representation for these and round trips through
+			# `to_native()` exactly, so the encoder no longer has a list to fall off
+			# the end of.
+			return {TYPE_KEY: "Native", "value": JSON.from_native(value)}
+
+
+## A dictionary key has to come back as the exact type it went in as - an int key
+## widened to a float by JSON no longer finds its own entry. `JSON.from_native()`
+## tags the type of a raw number or string, which `encode_variant()` deliberately
+## does not, so keys take that route instead.
+static func _encode_dict_key(key: Variant, _depth: int = 0) -> Variant:
+	if key is Resource or typeof(key) in UNSERIALIZABLE_TYPES:
+		return encode_variant(key, _depth)
+	return {TYPE_KEY: "Native", "value": JSON.from_native(key)}
 
 
 static func decode_variant(value: Variant, _depth: int = 0) -> Variant:
@@ -138,6 +201,33 @@ static func decode_variant(value: Variant, _depth: int = 0) -> Variant:
 				if path != "" and ResourceLoader.exists(path):
 					return ResourceLoader.load(path)
 				return null
+			"MissingResource":
+				var lost_class = str(value.get("class", "Resource"))
+				var lost_name = str(value.get("name", ""))
+				HFLog.warn(
+					(
+						(
+							"HFLevelIO: this level was saved with a %s that had no resource "
+							+ "path%s, so the slot is empty."
+						)
+						% [lost_class, "" if lost_name == "" else " ('%s')" % lost_name]
+					)
+				)
+				return null
+			"Dictionary":
+				var entries = value.get("entries", [])
+				var pairs_out: Dictionary = {}
+				if entries is Array:
+					for entry in entries:
+						if entry is Array and entry.size() >= 2:
+							pairs_out[decode_variant(entry[0], _depth + 1)] = decode_variant(
+								entry[1], _depth + 1
+							)
+				return pairs_out
+			"Native":
+				# `allow_objects` stays false. A level file is untrusted input, and
+				# turning it on lets one name a class to instantiate on load.
+				return JSON.to_native(value.get("value"), false)
 			_:
 				return null
 	if value is Array:

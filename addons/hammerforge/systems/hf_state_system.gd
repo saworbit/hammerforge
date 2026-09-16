@@ -348,6 +348,9 @@ func capture_hflevel_settings() -> Dictionary:
 		"transform_pivot_mode": root.transform_pivot_mode,
 		"show_subtract_preview": root.show_subtract_preview,
 		"cordon_enabled": root.cordon_enabled,
+		# Flattened to two float arrays because the encoder could not write an AABB
+		# when this was written. It can now (#619); this stays as it is because it
+		# is the shape every .hflevel on disk already holds.
 		"cordon_aabb_pos":
 		[root.cordon_aabb.position.x, root.cordon_aabb.position.y, root.cordon_aabb.position.z],
 		"cordon_aabb_size":
