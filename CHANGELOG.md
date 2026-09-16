@@ -50,6 +50,20 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   second, and `write_bytes_atomic()` replaces rather than refuses, so three saves
   inside one second left one backup; it now carries milliseconds and refuses to
   land on a path that already exists.
+- **A setting's declared range is now the range it is held to** (#622, #607).
+  `@export_range` is the Inspector's spinner and nothing else, so four
+  properties on `LevelRoot` took whatever a script, a `.hflevel` settings block
+  or an undo replay gave them: `bake_collision_layer_index`,
+  `draft_pick_layer_index` and `grid_major_line_frequency` all kept 100000, and
+  `hflevel_autosave_minutes` was clamped at the bottom only. That last one had a
+  live consequence - an interval above 60 set a timer measured in weeks, so the
+  autosave toggle still read as enabled and nothing ever saved. All four now
+  clamp in their setter against named `MIN_*`/`MAX_*` constants, the way #373
+  left the rest of the file. The Console's Chunk size row hard-coded a maximum
+  of 256 against the dock's 16384; because the Console writes through the dock's
+  own spin, touching that row dragged a legal chunk size down to 256 and wrote it
+  back to the level. It now reads `LevelRoot.MAX_BAKE_CHUNK_SIZE`, which is where
+  the bound was already written down.
 - **A round brush now lands inside the rectangle that was dragged** (#604, #605).
   For a cylinder, cone or sphere the base rectangle was squared off the *longer*
   side and then anchored at the drag origin, so a 128 x 32 drag produced a brush
