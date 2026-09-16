@@ -118,6 +118,8 @@ SCENARIOS = [
     "visibility-workflow",
     "chaos-io",
     "material-persistence",
+    "generator-geometry",
+    "autosave-history",
 ]
 
 # Generous: chaos runs 300 operations and cost saves eight levels. A scenario

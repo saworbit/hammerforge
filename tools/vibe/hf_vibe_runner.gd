@@ -103,6 +103,8 @@ const SCENARIOS: Array[String] = [
 	"res://tools/vibe/scenarios/visibility_workflow.gd",
 	"res://tools/vibe/scenarios/chaos_io.gd",
 	"res://tools/vibe/scenarios/material_persistence.gd",
+	"res://tools/vibe/scenarios/generator_geometry.gd",
+	"res://tools/vibe/scenarios/autosave_history.gd",
 ]
 
 
