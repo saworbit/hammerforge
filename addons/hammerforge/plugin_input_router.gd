@@ -291,15 +291,15 @@ static func handle_keyboard(
 	if keymap.matches("deselect_all", event):
 		plugin._deselect_all_nodes(root)
 		return STOP
-	# Quick Save as Prefab — Ctrl+Shift+P
-	if event.keycode == KEY_P and event.ctrl_pressed and event.shift_pressed:
+	# Quick Save as Prefab
+	if keymap.matches("quick_save_prefab", event):
 		var save_prefab_guard = plugin._guard_hammerforge_shortcut(root, false, 1, "Save Prefab")
 		if save_prefab_guard != SHORTCUT_APPLY:
 			return save_prefab_guard
 		plugin._quick_save_prefab(root, false)
 		return STOP
-	# Cycle Prefab Variant — Ctrl+Shift+V
-	if event.keycode == KEY_V and event.ctrl_pressed and event.shift_pressed:
+	# Cycle Prefab Variant
+	if keymap.matches("cycle_variant", event):
 		var variant_guard = plugin._guard_hammerforge_shortcut(root, false, 1, "Cycle Variant")
 		if variant_guard != SHORTCUT_APPLY:
 			return variant_guard
@@ -397,7 +397,7 @@ static func handle_keyboard(
 		return STOP
 	# External tool shortcuts
 	if plugin._tool_registry:
-		var ext_id = plugin._tool_registry.check_shortcut(event.keycode)
+		var ext_id = plugin._tool_registry.check_shortcut(event)
 		if ext_id >= 0 and plugin.active_root:
 			plugin._activate_external_tool(ext_id, plugin.active_root)
 			plugin._show_coach_mark_for_tool_id(ext_id)
