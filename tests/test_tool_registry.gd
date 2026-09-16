@@ -207,22 +207,46 @@ func test_pointer_recovery_ignores_builtin_and_inactive_tools():
 	assert_false(registry.cancel_active_pointer_capture())
 
 
+func _key(keycode: int, ctrl := false, shift := false, alt := false) -> InputEventKey:
+	var event := InputEventKey.new()
+	event.keycode = keycode
+	event.pressed = true
+	event.ctrl_pressed = ctrl
+	event.shift_pressed = shift
+	event.alt_pressed = alt
+	return event
+
+
 func test_check_shortcut_finds_external():
 	var tool = MockTool.new(100, KEY_F5)
 	registry.register_tool(tool)
-	assert_eq(registry.check_shortcut(KEY_F5), 100)
+	assert_eq(registry.check_shortcut(_key(KEY_F5)), 100)
 
 
 func test_check_shortcut_ignores_builtin():
 	var tool = MockTool.new(1, KEY_D)
 	registry.register_tool(tool)
-	assert_eq(registry.check_shortcut(KEY_D), -1)
+	assert_eq(registry.check_shortcut(_key(KEY_D)), -1)
 
 
 func test_check_shortcut_no_match():
 	var tool = MockTool.new(100, KEY_F5)
 	registry.register_tool(tool)
-	assert_eq(registry.check_shortcut(KEY_F6), -1)
+	assert_eq(registry.check_shortcut(_key(KEY_F6)), -1)
+
+
+## A tool shortcut key is a bare key: `tool_shortcut_key()` returns one keycode
+## and has nowhere to say otherwise. Matching the keycode alone meant Ctrl+M
+## activated Measure, and so did Shift+M in paint mode, where the flip family is
+## gated off and the event fell through to the tool check.
+func test_a_chord_built_on_a_tool_key_is_not_that_tool():
+	var tool = MockTool.new(100, KEY_M)
+	registry.register_tool(tool)
+	assert_eq(registry.check_shortcut(_key(KEY_M)), 100, "The bare key still activates it")
+	assert_eq(registry.check_shortcut(_key(KEY_M, true)), -1, "Ctrl+M is not it")
+	assert_eq(registry.check_shortcut(_key(KEY_M, false, true)), -1, "Shift+M is not it")
+	assert_eq(registry.check_shortcut(_key(KEY_M, false, false, true)), -1, "Alt+M is not it")
+	assert_eq(registry.check_shortcut(_key(KEY_M, true, false, true)), -1, "Nor Ctrl+Alt+M")
 
 
 func test_get_external_tools():

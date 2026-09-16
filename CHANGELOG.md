@@ -97,6 +97,33 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **A chord built on a tool shortcut key is no longer that tool** (#574).
+  `HFToolRegistry.check_shortcut()` matched the bare keycode and never looked at
+  modifiers, so Ctrl+M, Alt+M and Ctrl+Alt+M all activated Measure, and so did
+  Shift+M in paint mode, where the flip family is gated off and the event fell
+  through to the tool check at the end of the router. Activating a tool is not a
+  quiet no-op: Measure and Decal take the viewport's left click, so a mis-struck
+  Ctrl+M swapped the mapper out of Draw and the next click placed a ruler point.
+  A tool shortcut is a bare key by construction - `tool_shortcut_key()` returns
+  one keycode and has nowhere to say otherwise - so the check now refuses any
+  modifier.
+- **Save Prefab and Cycle Variant go through the keymap** (#575). Both were
+  matched against raw keycodes in `plugin_input_router.gd`, so neither had an
+  entry in `HFKeymap`, a row in the shortcut dialog or the hotkey palette, or any
+  way to be rebound - while the context toolbar button beside the viewport named
+  the chord. They were also invisible to the dialog's collision checking, so
+  rebinding anything onto Ctrl+Shift+P reported no conflict and then lost to the
+  hard-coded branch. `quick_save_prefab` and `cycle_variant` are keymap actions
+  now, with labels, on the same defaults.
+- **The context toolbar reads the keymap it is given** (#560). `_keymap` was
+  assigned by `set_keymap()` and never read, while twenty-eight chords were
+  written into the button tooltips as literals - so rebinding Hollow left the
+  toolbar saying Ctrl+H forever, on the surface closest to the mapper's hand.
+  The tooltips are `{action}` tokens rendered through `format_chords()` now, the
+  way the HUD, the coach marks and the dock tooltips already were, and each
+  button keeps its source line so a rebind re-renders it.
+  `tests/test_shortcut_surfaces.gd` covers the toolbar as a fourth surface; it
+  was missed the first time because that file named the other three.
 - **Load Material Library and the two terrain slot commands register an undo
   step** (#573). All three change state `capture_state()` already carries, and
   none of them went through `_commit_state_action()` the way their forty
