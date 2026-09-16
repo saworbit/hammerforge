@@ -277,7 +277,21 @@ func restore_full_state(bundle: Dictionary) -> void:
 	restore_state(state if state is Dictionary else {})
 
 
+## The level as the file records it, fully encoded. The save path does not use
+## this: it takes `capture_hflevel_payload()` and lets the write thread encode.
+## Kept because it is the whole answer in one call, which is what a caller
+## reading a level out of the editor wants.
 func capture_hflevel_state() -> Dictionary:
+	return HFLevelIO.encode_variant(capture_hflevel_payload())
+
+
+## The level in its own types, with only its Resources resolved.
+##
+## Everything `encode_variant()` does after that is arithmetic over Variants and
+## belongs on the write thread (#601). What cannot go there is the scene walk
+## above and the Resource reads inside `resolve_resources()`, because both are
+## the editor's to make. So this is the blocking half, and it is the small half.
+func capture_hflevel_payload() -> Dictionary:
 	var state = capture_state(false)
 	if root.paint_system and root.paint_system.region_streaming_enabled:
 		state["terrain_regions"] = root.paint_system.capture_region_index()
@@ -288,7 +302,10 @@ func capture_hflevel_state() -> Dictionary:
 		"settings": capture_hflevel_settings(),
 		"state": state
 	}
-	return HFLevelIO.encode_variant(data)
+	# Assigned back, because a typed array inside it is replaced rather than
+	# written through.
+	data = HFLevelIO.resolve_resources(data)
+	return data
 
 
 func capture_hflevel_settings() -> Dictionary:

@@ -65,6 +65,26 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   document look healthier.
 
 ### Fixed
+- **The threaded `.hflevel` save does its serializing on the thread** (#601). The
+  write was threaded and the work in front of it was not, so two thirds of a save
+  happened on the calling thread. Autosave runs on a timer nobody chose the
+  moment of, which made it a stall the editor took on its own schedule: 183 ms at
+  400 brushes, growing linearly. `capture_hflevel_state()` did two things, and
+  only one of them had to be here. Walking the scene does, and so does reading a
+  `resource_path` off a material the editor owns. Turning Vector3s and
+  Transform3Ds into arrays does not, and that was 128 ms of the 147 ms.
+  `capture_hflevel_payload()` now stops after the walk, with the Resources
+  resolved in place so the payload that crosses to the worker holds nothing but
+  values, and `encode_variant()` runs on the worker. The blocking half of a
+  400-brush save went from 183 ms to 55 ms, and 25 brushes went from 12 ms to
+  4 ms. The deep copy went with it: `save_hflevel()` used to `duplicate(true)`
+  the structure it had just been handed, which was 13 ms and a doubling of peak
+  memory to protect it from nobody, because nothing else held a reference. A live
+  `Array[Material]` cannot have a Dictionary written into it, so an array
+  declared to hold objects is rebuilt rather than written through, which is what
+  the suite checks: the payload is asserted to hold no Resource at all rather
+  than the list of places one can appear being trusted, because that list grows
+  every time the format does.
 - **A paint layer's chunk size can no longer change out from under its own
   chunks** (#625). Convert to Heightmap built the layer, filled every cell, and
   then set `chunk_size` from the manager. A chunk allocates its bit, material and

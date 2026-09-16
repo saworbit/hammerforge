@@ -248,6 +248,92 @@ static func build_payload(data: Dictionary, compress: bool = true) -> PackedByte
 	return build_payload_from_json(json, compress)
 
 
+## Replace every Resource in a captured state with the form the file records,
+## leaving everything else exactly as it is, in place.
+##
+## `encode_variant()` is the rest of the work and it is pure arithmetic over
+## Variants, so it belongs on the write thread rather than on the calling one
+## (#601). The one thing in it that is not pure is this: reading `resource_path`,
+## `get_class()` and `resource_name` off a live Resource is a main thread job,
+## because the palette those resources belong to is the editor's.
+##
+## So the Resources are resolved here, before the handoff, and the payload that
+## crosses to the thread holds nothing but values. This walks the same structure
+## `encode_variant()` does but rebuilds none of it, which is why it costs a
+## fraction of what the encode costs.
+##
+## Returns the value to store in place of `value`, because the root itself may be
+## a Resource and a Dictionary key may be one too.
+static func resolve_resources(value: Variant, _depth: int = 0) -> Variant:
+	if _depth > MAX_RECURSION_DEPTH:
+		push_warning("HFLevelIO: resolve_resources max recursion depth exceeded")
+		return null
+	if value is Resource:
+		return encode_variant(value, _depth)
+	if value is Dictionary:
+		var dict: Dictionary = value
+		# Same refusal as a typed array, for the same reason. Nothing in the level
+		# declares one today; this is here so that the day something does, the
+		# payload does not quietly keep the live Resource.
+		if dict.is_typed_value() and dict.get_typed_value_builtin() == TYPE_OBJECT:
+			var rebuilt: Dictionary = {}
+			for key in dict.keys():
+				rebuilt[resolve_resources(key, _depth + 1)] = resolve_resources(
+					dict[key], _depth + 1
+				)
+			return rebuilt
+		var rekey: Dictionary = {}
+		for key in dict.keys():
+			dict[key] = resolve_resources(dict[key], _depth + 1)
+			# A Resource used as a key cannot be rewritten in place, so the few
+			# that ever are get collected and swapped after the walk.
+			if key is Resource:
+				rekey[key] = resolve_resources(key, _depth + 1)
+		for old_key in rekey:
+			dict[rekey[old_key]] = dict[old_key]
+			dict.erase(old_key)
+		return dict
+	if value is Array:
+		var arr: Array = value
+		# `Array[Material]` refuses a Dictionary where a Material used to be, so an
+		# array declared to hold objects is rebuilt untyped rather than written
+		# through. Nothing reads this payload back into the level, which goes to
+		# JSON, so losing the element type costs nothing. An array of Colors or
+		# Vector3s is left exactly where it is, because its values pass straight
+		# through and it can hold them.
+		if arr.is_typed() and arr.get_typed_builtin() == TYPE_OBJECT:
+			var out: Array = []
+			out.resize(arr.size())
+			for i in arr.size():
+				out[i] = resolve_resources(arr[i], _depth + 1)
+			return out
+		for i in arr.size():
+			arr[i] = resolve_resources(arr[i], _depth + 1)
+		return arr
+	return value
+
+
+## Whether anything in this structure is still a live Resource.
+##
+## The payload handed to the write thread must hold none, so this is what the
+## suite asserts rather than trusting the list of places a Resource can appear.
+static func holds_resource(value: Variant, _depth: int = 0) -> bool:
+	if _depth > MAX_RECURSION_DEPTH:
+		return false
+	if value is Resource:
+		return true
+	if value is Dictionary:
+		for key in value as Dictionary:
+			if holds_resource(key, _depth + 1) or holds_resource(value[key], _depth + 1):
+				return true
+		return false
+	if value is Array:
+		for entry in value as Array:
+			if holds_resource(entry, _depth + 1):
+				return true
+	return false
+
+
 ## Stringify, hash, and pack a captured state dict. Safe to call off the main
 ## thread because it only touches primitives / PackedByteArray.
 static func encode_payload_job(data: Dictionary, compress: bool = true) -> Dictionary:

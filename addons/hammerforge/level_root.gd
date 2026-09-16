@@ -2512,6 +2512,12 @@ func _capture_hflevel_state() -> Dictionary:
 	return state_system.capture_hflevel_state()
 
 
+## The level in its own types, Resources resolved, ready for the write thread to
+## encode. This is what a save hands over (#601).
+func _capture_hflevel_payload() -> Dictionary:
+	return state_system.capture_hflevel_payload()
+
+
 func _capture_hflevel_settings() -> Dictionary:
 	return state_system.capture_hflevel_settings()
 

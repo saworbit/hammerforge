@@ -42,14 +42,17 @@ func save_hflevel(path: String = "", force: bool = false, autosave: bool = false
 			elif root.has_signal("hflevel_save_failed"):
 				root.hflevel_save_failed.emit(target, message)
 			return ERR_FILE_CANT_WRITE
-	var encoded: Dictionary = {}
-	var captured: Variant = root._capture_hflevel_state()
+	# The capture is a fresh structure with nothing else holding a reference to
+	# it, so the deep copy this used to take was protecting it from nobody. The
+	# encode that used to happen here happens on the write thread now (#601).
+	var payload: Dictionary = {}
+	var captured: Variant = root._capture_hflevel_payload()
 	if captured is Dictionary:
-		encoded = (captured as Dictionary).duplicate(true)
+		payload = captured
 	var compress := true
 	if root:
 		compress = bool(root.hflevel_compress)
-	start_hflevel_thread(target, encoded, compress, force, autosave)
+	start_hflevel_thread(target, payload, compress, force, autosave)
 	return OK
 
 
@@ -220,7 +223,7 @@ func ensure_dir_for_path(path: String) -> void:
 
 
 func start_hflevel_thread(
-	path: String, encoded: Dictionary, compress: bool, force: bool, autosave: bool = false
+	path: String, state: Dictionary, compress: bool, force: bool, autosave: bool = false
 ) -> void:
 	if path == "":
 		return
@@ -233,7 +236,7 @@ func start_hflevel_thread(
 	var job := {
 		"path": abs_path,
 		"display_path": path,
-		"encoded": encoded,
+		"state": state,
 		"compress": compress,
 		"force": force,
 		"keep": keep,
@@ -262,14 +265,21 @@ func start_hflevel_thread(
 func _hflevel_thread_encode_and_write(job: Dictionary) -> Dictionary:
 	var path: String = str(job.get("path", ""))
 	var display_path: String = str(job.get("display_path", path))
-	var encoded: Dictionary = job.get("encoded", {})
+	var state: Dictionary = job.get("state", {})
 	var compress: bool = bool(job.get("compress", true))
 	var force: bool = bool(job.get("force", false))
 	var last_hash: int = int(job.get("last_hash", 0))
 	var keep: int = int(job.get("keep", 0))
 	var autosave_abs: String = str(job.get("autosave_abs", ""))
 	var autosave: bool = bool(job.get("autosave", false))
-	var packed: Dictionary = HFLevelIO.encode_payload_job(encoded, compress)
+	# The expensive half, and the reason the thread exists. Everything it touches
+	# is a value, because `capture_hflevel_payload()` resolved the Resources
+	# before the handoff. That is the precondition for running this here at all:
+	# `encode_variant()` reads `resource_path` off a live Resource, and warns
+	# through `HFLog` when there is not one, and neither is the worker's to do.
+	# `test_the_payload_handed_to_the_write_thread_holds_nothing_live` is what
+	# holds it.
+	var packed: Dictionary = HFLevelIO.encode_payload_job(HFLevelIO.encode_variant(state), compress)
 	var hash_value: int = int(packed.get("hash", 0))
 	if not force and hash_value != 0 and hash_value == last_hash:
 		return {
@@ -415,7 +425,7 @@ func _apply_thread_result(result: Variant) -> String:
 
 func _start_pending_job(job: Dictionary) -> bool:
 	var pending_path: String = str(job.get("path", ""))
-	if pending_path == "" or not (job.get("encoded") is Dictionary):
+	if pending_path == "" or not (job.get("state") is Dictionary):
 		push_warning("HFLevel: Discarding pending write with empty path or payload")
 		return false
 	_hflevel_thread = Thread.new()
@@ -436,9 +446,9 @@ func _flush_job_sync(job: Dictionary) -> void:
 	var pending_path: String = str(job.get("path", ""))
 	if pending_path == "":
 		return
-	if job.get("encoded") is Dictionary:
+	if job.get("state") is Dictionary:
 		var packed: Dictionary = HFLevelIO.encode_payload_job(
-			job.get("encoded", {}), bool(job.get("compress", true))
+			HFLevelIO.encode_variant(job.get("state", {})), bool(job.get("compress", true))
 		)
 		var payload: PackedByteArray = packed.get("payload", PackedByteArray())
 		if not payload.is_empty():

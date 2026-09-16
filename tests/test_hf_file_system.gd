@@ -40,6 +40,8 @@ signal autosave_failed(error_message: String)
 var captured: Dictionary = {"name": "level", "n": 1}
 func _capture_hflevel_state() -> Dictionary:
 	return captured
+func _capture_hflevel_payload() -> Dictionary:
+	return captured
 """
 	s.reload()
 	return s

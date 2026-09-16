@@ -28,6 +28,66 @@ func _path() -> String:
 	return "user://hf_version_test_%d.hflevel" % Time.get_ticks_usec()
 
 
+# ===========================================================================
+# What the write thread is handed (#601)
+# ===========================================================================
+
+
+func test_the_payload_handed_to_the_write_thread_holds_nothing_live():
+	# The encode moved onto the write thread, which is only safe because the
+	# Resources are resolved before the handoff. Everything left is a value, so
+	# the worker never reads a property off an object the editor owns. This is
+	# asserted rather than the list of places a Resource can appear being trusted,
+	# because that list grows every time the format does.
+	var mat := StandardMaterial3D.new()
+	# A path of its own: two live Resources claiming one path is a cyclic
+	# inclusion error, and both of these tests run in the same session.
+	mat.resource_path = "res://hf_payload_test_%d.tres" % Time.get_ticks_usec()
+	root.set_materials([mat])
+	(
+		root
+		. create_brush_from_info(
+			{
+				"shape": root.BrushShape.BOX,
+				"size": Vector3(2, 2, 2),
+				"transform": Transform3D.IDENTITY,
+				"operation": CSGShape3D.OPERATION_UNION,
+				"material": mat,
+			}
+		)
+	)
+	var payload: Dictionary = root._capture_hflevel_payload()
+	assert_false(payload.is_empty(), "there is a level to save")
+	assert_false(HFLevelIO.holds_resource(payload), "no live Resource crosses to the write thread")
+
+
+func test_the_payload_still_encodes_to_the_same_level():
+	# Splitting capture from encode must not change the file. The one-call
+	# version is the reference.
+	var mat := StandardMaterial3D.new()
+	# A path of its own: two live Resources claiming one path is a cyclic
+	# inclusion error, and both of these tests run in the same session.
+	mat.resource_path = "res://hf_payload_test_%d.tres" % Time.get_ticks_usec()
+	root.set_materials([mat])
+	(
+		root
+		. create_brush_from_info(
+			{
+				"shape": root.BrushShape.BOX,
+				"size": Vector3(2, 2, 2),
+				"transform": Transform3D.IDENTITY,
+				"operation": CSGShape3D.OPERATION_UNION,
+			}
+		)
+	)
+	var in_one_go: Dictionary = root._capture_hflevel_state()
+	var in_two_steps: Variant = HFLevelIO.encode_variant(root._capture_hflevel_payload())
+	# `saved_at` is a clock reading and differs between the two calls.
+	in_one_go.erase("saved_at")
+	(in_two_steps as Dictionary).erase("saved_at")
+	assert_eq(JSON.stringify(in_two_steps), JSON.stringify(in_one_go), "the same level either way")
+
+
 ## Write a bundle at a chosen version, the way capture_hflevel_state() writes one.
 func _write_bundle(path: String, version: int) -> void:
 	var bundle := {
