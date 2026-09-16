@@ -34,6 +34,8 @@ const FLAGS: Array[String] = [
 func run() -> void:
 	await _each_flag_on_its_own()
 	await _lods_and_uvs_on_the_mesh()
+	await _what_the_unindexed_mesh_costs()
+	await _occluder_count()
 
 
 func _build_room(root: Node3D) -> void:
@@ -236,3 +238,162 @@ func _lods_and_uvs_on_the_mesh() -> void:
 					% HFVibe.canonical(off2).substr(0, 300)
 				)
 			)
+
+
+## The baked mesh ships as loose triangles. Measure what indexing it would save.
+func _what_the_unindexed_mesh_costs() -> void:
+	var root: Node3D = await fresh_root()
+	var per_row := 10
+	for i in 100:
+		box(
+			root,
+			Vector3(64, 64, 64),
+			Vector3(float(i % per_row) * 128.0, 0, float(i / per_row) * 128.0)
+		)
+	await frame()
+	note("bake_chunk_size in force", root.bake_chunk_size)
+	await root.bake()
+	await frame()
+	if root.baked_container == null:
+		flag("100 boxes produced no baked container")
+		return
+	var facts: Array = _mesh_facts(root.baked_container, [])
+	note("100 boxes, unchunked: baked meshes", facts)
+
+	var total_verts := 0
+	var total_bytes := 0
+	var indexed_verts := 0
+	var indexed_bytes := 0
+	for node in _collect_meshes(root.baked_container, []):
+		var mi: MeshInstance3D = node
+		if not (mi.mesh is ArrayMesh):
+			continue
+		var am: ArrayMesh = mi.mesh
+		for s in am.get_surface_count():
+			var arrays: Array = am.surface_get_arrays(s)
+			if arrays[Mesh.ARRAY_VERTEX] == null:
+				continue
+			total_verts += arrays[Mesh.ARRAY_VERTEX].size()
+		var tmp := "user://vibe_unindexed.res"
+		if ResourceSaver.save(am, tmp) == OK:
+			total_bytes += HFVibe.file_size(tmp)
+		# The same mesh with SurfaceTool.index() applied, which is the one line
+		# baker.gd already uses on its merge path.
+		var st := SurfaceTool.new()
+		st.create_from(am, 0)
+		st.index()
+		var indexed: ArrayMesh = st.commit()
+		if indexed and indexed.get_surface_count() > 0:
+			var ia: Array = indexed.surface_get_arrays(0)
+			if ia[Mesh.ARRAY_VERTEX] != null:
+				indexed_verts += ia[Mesh.ARRAY_VERTEX].size()
+			var tmp2 := "user://vibe_indexed.res"
+			if ResourceSaver.save(indexed, tmp2) == OK:
+				indexed_bytes += HFVibe.file_size(tmp2)
+	note("baked vertices as shipped", total_verts)
+	note("the same geometry indexed", indexed_verts)
+	note("baked mesh resource bytes as shipped", total_bytes)
+	note("the same geometry indexed", indexed_bytes)
+	if total_verts > 0 and indexed_verts > 0:
+		note(
+			"indexing the baked mesh",
+			(
+				"%.0f%% of the vertices and %.0f%% of the bytes"
+				% [
+					100.0 * float(indexed_verts) / float(total_verts),
+					100.0 * float(indexed_bytes) / float(max(1, total_bytes)),
+				]
+			)
+		)
+		if float(indexed_verts) < 0.75 * float(total_verts):
+			flag(
+				"the baked mesh ships as loose triangles, %.1fx the vertices it needs"
+				% (float(total_verts) / float(indexed_verts)),
+				(
+					("100 boxes bake to %d vertices and %d bytes; the same surface " % [
+						total_verts, total_bytes
+					])
+					+ ("through SurfaceTool.index() is %d vertices and %d bytes. " % [
+						indexed_verts, indexed_bytes
+					])
+					+ "Every baked level carries that, in the scene file and in GPU "
+					+ "memory, and it is also why Generate LODs does nothing"
+				)
+			)
+
+
+func _collect_meshes(node: Node, out: Array) -> Array:
+	if node is MeshInstance3D and node.mesh:
+		out.append(node)
+	for c in node.get_children():
+		_collect_meshes(c, out)
+	return out
+
+
+## Occluders are one per something. Find out per what, and what that costs.
+func _occluder_count() -> void:
+	var rows: Array = []
+	for count in [4, 12, 40]:
+		var root: Node3D = await fresh_root("Occ%d" % count)
+		for i in count:
+			box(root, Vector3(128, 128, 128), Vector3(float(i) * 256.0, 64, 0))
+		root.bake_generate_occluders = true
+		await frame()
+		var t := Time.get_ticks_usec()
+		await root.bake()
+		var bake_ms := float(Time.get_ticks_usec() - t) / 1000.0
+		await frame()
+		var occ := 0
+		for node in _collect_all(root.baked_container, []):
+			if node is OccluderInstance3D:
+				occ += 1
+		# How far apart are the triangles inside one occluder? Godot gives each
+		# OccluderInstance3D a single bounding volume.
+		var widest := 0.0
+		var widest_tris := 0
+		for node in _collect_all(root.baked_container, []):
+			if not (node is OccluderInstance3D):
+				continue
+			var oc = node.occluder
+			if oc == null or oc.vertices.is_empty():
+				continue
+			var aabb := AABB(oc.vertices[0], Vector3.ZERO)
+			for v in oc.vertices:
+				aabb = aabb.expand(v)
+			var span: float = aabb.size.length()
+			if span > widest:
+				widest = span
+				widest_tris = oc.vertices.size() / 3
+		rows.append({
+			"brushes": count,
+			"occluders": occ,
+			"bake_ms": snappedf(bake_ms, 0.1),
+			"level_span": snappedf(float(count) * 256.0, 1.0),
+			"widest_occluder_span": snappedf(widest, 1.0),
+			"tris_in_it": widest_tris,
+		})
+		note("occluder row", rows[-1])
+	note("occluders per brush", rows)
+	var last: Dictionary = rows[-1]
+	if float(last["widest_occluder_span"]) > float(last["level_span"]) * 0.5:
+		flag(
+			"coplanar faces on unconnected brushes merge into one level-spanning occluder",
+			(
+				("%d separate boxes %d units apart produced an occluder %s units across " % [
+					int(last["brushes"]), 256, last["widest_occluder_span"]
+				])
+				+ ("holding %d triangles from all of them. " % int(last["tris_in_it"]))
+				+ "_generate_occluders() groups triangles by normal and plane distance "
+				+ "alone, with no test for whether they are anywhere near each other, and "
+				+ "Godot gives each OccluderInstance3D one bounding volume"
+			)
+		)
+
+
+func _collect_all(node: Node, out: Array) -> Array:
+	if node == null:
+		return out
+	out.append(node)
+	for c in node.get_children():
+		_collect_all(c, out)
+	return out
