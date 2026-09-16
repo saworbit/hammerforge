@@ -783,16 +783,6 @@ func _on_paint_connector_confirm_requested() -> void:
 		_confirm_floor_paint_connector(root)
 
 
-func _do_disp_paint_stroke(root: Node, cam: Camera3D, pos: Vector2) -> void:
-	HFPluginPaintInput.do_displacement_stroke(self, root, cam, pos)
-
-
-func _point_near_polygon_3d(
-	point: Vector3, verts: PackedVector3Array, normal: Vector3, margin: float
-) -> bool:
-	return HFPluginPaintInput.point_near_polygon_3d(point, verts, normal, margin)
-
-
 func _handle_paint_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vector2) -> int:
 	return HFPluginPaintInput.handle_paint(self, event, root, cam, pos)
 
@@ -816,14 +806,6 @@ func _get_nudge_direction(keycode: int) -> Vector3:
 
 func _handle_numeric_input(event: InputEventKey, root: Node) -> int:
 	return HFPluginNumericInput.handle(self, event, root)
-
-
-func _update_numeric_preview(root: Node) -> void:
-	HFPluginNumericInput.update_preview(self, root)
-
-
-func _apply_numeric_value(root: Node) -> void:
-	HFPluginNumericInput.apply_value(self, root)
 
 
 func _cancel_selection_gesture() -> bool:
@@ -1070,10 +1052,6 @@ func _handle_mouse_motion(
 	return HFPluginPointerTools.handle_motion(self, event, root, cam, pos, tool_id)
 
 
-func _update_prefab_hover_overlay(root, cam: Camera3D, pos: Vector2) -> void:
-	HFPluginPointerTools.update_prefab_hover(root, cam, pos)
-
-
 # ---------------------------------------------------------------------------
 # Vertex editing mode
 # ---------------------------------------------------------------------------
@@ -1111,10 +1089,6 @@ func _update_vertex_overlay(root: Node, _cam: Camera3D) -> void:
 	HFPluginOverlays.update_vertex_overlay(self, root)
 
 
-func _ensure_vertex_overlay(root: Node) -> void:
-	HFPluginOverlays.ensure_vertex_overlay(self, root)
-
-
 func _clear_vertex_overlay() -> void:
 	HFPluginOverlays.clear_vertex_overlay(self)
 
@@ -1148,24 +1122,12 @@ func _finalize_native_selection(selection_before: Array, additive: bool, toggle:
 	HFPluginSelectionState.finalize_native_selection(self, selection_before, additive, toggle)
 
 
-func _normalize_editor_selection(nodes: Array, root: Node) -> Array:
-	return HFPluginSelectionState.normalize_editor_selection(self, nodes, root)
-
-
 func _hammerforge_selection_owner(node: Node, root: Node) -> Node:
 	return HFPluginSelectionState.normalize_managed_selection_owner(node, root)
 
 
 static func normalize_managed_selection_owner(node: Node, root: Node) -> Node:
 	return HFPluginSelectionState.normalize_managed_selection_owner(node, root)
-
-
-func _expand_native_group_selection(
-	root: Node, selection_before: Array, current_selection: Array, toggle: bool
-) -> Array:
-	return HFPluginSelectionState.expand_native_group_selection(
-		root, selection_before, current_selection, toggle
-	)
 
 
 static func expand_native_group_members(
@@ -1176,28 +1138,12 @@ static func expand_native_group_members(
 	)
 
 
-static func _same_node_selection(first: Array, second: Array) -> bool:
-	return HFPluginSelectionState.same_node_selection(first, second)
-
-
 func _apply_selection_list(nodes: Array, additive: bool, toggle: bool = false) -> void:
 	HFPluginSelectionState.apply_selection_list(self, nodes, additive, toggle)
 
 
 func _apply_hf_selection(selection: EditorSelection) -> void:
 	HFPluginSelectionState.apply_hf_selection(self, selection)
-
-
-func _sync_hf_selection_if_empty() -> void:
-	HFPluginSelectionState.sync_hf_selection_if_empty(self)
-
-
-func _selection_has_brush(nodes: Array, root: Node) -> bool:
-	return HFPluginSelectionState.selection_has_brush(nodes, root)
-
-
-func _selection_has_entity(nodes: Array, root: Node) -> bool:
-	return HFPluginSelectionState.selection_has_entity(nodes, root)
 
 
 static func classify_selection_scope(nodes: Array, root: Node) -> int:
@@ -1282,10 +1228,6 @@ func _select_faces_in_rect(
 	root: Node, camera: Camera3D, from: Vector2, to: Vector2, additive: bool, toggle: bool = false
 ) -> void:
 	HFPluginSelectionInput.select_faces_in_rect(self, root, camera, from, to, additive, toggle)
-
-
-func _face_screen_center(camera: Camera3D, brush: DraftBrush, face) -> Vector2:
-	return HFPluginSelectionInput.face_screen_center(camera, brush, face)
 
 
 func _face_key_for(brush: DraftBrush) -> String:
@@ -1437,10 +1379,6 @@ func _move_selected_to_ceiling(root: Node) -> bool:
 	return HFPluginEditActions.move_selected_to_ceiling(self, root)
 
 
-func _move_selected_vertical(root: Node, action_name: String, method_name: String) -> bool:
-	return HFPluginEditActions.move_selected_vertical(self, root, action_name, method_name)
-
-
 func _clip_selected(root: Node) -> bool:
 	return HFPluginEditActions.clip_selected(self, root)
 
@@ -1459,30 +1397,6 @@ func _can_drop_data(_position: Vector2, data: Variant) -> bool:
 
 func _drop_data(position: Vector2, data: Variant) -> void:
 	HFPluginDropHandler.drop_data(self, position, data)
-
-
-func _is_entity_drag_data(data: Variant) -> bool:
-	return HFPluginDropHandler.is_entity_drag_data(data)
-
-
-func _handle_entity_drop(position: Vector2, data: Variant) -> void:
-	HFPluginDropHandler.handle_entity_drop(self, position, data)
-
-
-func _is_brush_preset_drag_data(data: Variant) -> bool:
-	return HFPluginDropHandler.is_brush_preset_drag_data(data)
-
-
-func _handle_brush_preset_drop(position: Vector2, data: Variant) -> void:
-	HFPluginDropHandler.handle_brush_preset_drop(self, position, data)
-
-
-func _is_prefab_drag_data(data: Variant) -> bool:
-	return HFPluginDropHandler.is_prefab_drag_data(data)
-
-
-func _handle_prefab_drop(position: Vector2, data: Variant) -> void:
-	HFPluginDropHandler.handle_prefab_drop(self, position, data)
 
 
 # ---------------------------------------------------------------------------
@@ -1504,14 +1418,6 @@ func _push_prefab_to_source(root) -> void:
 
 func _propagate_prefab(root) -> void:
 	HFPluginPrefabCommands.propagate(self, root)
-
-
-func _is_material_drag_data(data: Variant) -> bool:
-	return HFPluginDropHandler.is_material_drag_data(data)
-
-
-func _handle_material_drop(position: Vector2, data: Variant) -> void:
-	HFPluginDropHandler.handle_material_drop(self, position, data)
 
 
 # ---------------------------------------------------------------------------
@@ -1604,10 +1510,6 @@ func _on_radial_action(action: String) -> void:
 ## Double-tap handler for quick property popups.
 func _handle_double_tap(keycode: int, root: Node, paint_mode: bool) -> bool:
 	return HFPluginOverlays.handle_double_tap(self, keycode, root, paint_mode)
-
-
-func _show_quick_property_at_cursor(prop_type: int, values: Array) -> void:
-	HFPluginOverlays.show_quick_property(self, prop_type, values)
 
 
 func _on_quick_property_committed(property_type: int, values: Array) -> void:

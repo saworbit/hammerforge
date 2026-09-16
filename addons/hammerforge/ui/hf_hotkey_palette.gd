@@ -387,11 +387,6 @@ func _execute_first_match() -> void:
 			return
 
 
-## Execute the "Did you mean" suggestion (first fuzzy match).
-func _accept_suggestion() -> void:
-	_execute_first_match()
-
-
 func _on_entry_pressed(action: String) -> void:
 	visible = false
 	action_invoked.emit(action)

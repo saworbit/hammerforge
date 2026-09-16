@@ -38,10 +38,7 @@ var _sections: Dictionary = {}  # Context -> Control
 var _material_thumbs: Array[Button] = []
 var _favorite_materials: Array = []  # Array of {index, material, texture}
 var _brush_count := 0
-var _entity_count := 0
 var _face_count := 0
-var _has_root := false
-var _is_subtract := false
 var _keymap = null  # HFKeymap
 
 

@@ -64,6 +64,54 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   has not been verified, and deleting them would lose that while making the
   document look healthier.
 
+### Removed
+- **Fifty-seven private functions and nine fields that nothing used** (#609,
+  #610). `plugin.gd` and `level_root.gd` are documented as thin coordinators
+  whose named one-line delegates exist to be called by name, and the rule beside
+  that is that a delegate with no caller gets deleted. These had drifted past it.
+  The whole viewport drop path in `plugin.gd` was a second layer: Godot calls
+  `_can_drop_data` and `_drop_data`, those hand straight to
+  `plugin_drop_handler.gd`, and its own `drop_data()` dispatches the four payload
+  kinds itself, so the eight wrappers in front of that dispatch were reachable
+  from nothing.
+
+  Five architecture tests were keeping much of this alive, which is the more
+  useful half of the finding. Each enumerates a module's methods and asserts
+  `plugin.gd` contains a delegation string for every one, and the lists had grown
+  to include helpers the modules call themselves: `update_preview`,
+  `apply_value`, `do_displacement_stroke`, `point_near_polygon_3d`,
+  `update_prefab_hover`, `move_selected_vertical`, `normalize_editor_selection`,
+  `expand_native_group_selection`, `same_node_selection`,
+  `sync_hf_selection_if_empty`, `face_screen_center`, `show_quick_property`,
+  `ensure_vertex_overlay`. The only way to satisfy the assertion was a wrapper
+  nothing called, so tests written to enforce that `plugin.gd` stays thin were
+  requiring it to be thicker. Each list is now the entry points `plugin.gd`
+  actually owns, and the drop test additionally asserts that `plugin.gd` does not
+  contain the payload type strings, which is the property "thin delegate" was
+  reaching for and the enumeration never checked.
+
+  `HFPluginSelectionState.selection_has_brush()` and `selection_has_entity()` went
+  too. Their only caller was the dead wrapper, so removing it made them provably
+  dead in the same pass.
+
+  Two of the fields are public on registered custom types, so both are a break
+  for any script that touched them, and both earn it. `DraftEntity.entity_properties`
+  was a second name for `entity_data` that nothing in the plugin used, and two
+  names for one dictionary can only ever diverge. `LevelRoot.drag_active` is the
+  worse of the two: its setter called `input_state.cancel()` while the canonical
+  `cancel_drag()` is `input_state.cancel()` **and** `_clear_preview()`, so setting
+  `drag_active = false` did half a cancel and left the preview brush orphaned in
+  the scene. It was a latent bug rather than dead weight. `LevelRoot.grid_plane_axis`
+  and `dock.gd`'s `_entity_props_entity` were written and never read, so the
+  writes went with the declarations.
+
+  `map_io.gd`'s `_format_face_line()` was a drifted second copy of the `.map`
+  face line: it takes three arguments and hard-codes the texture and the
+  `0 0 0 1 1` tail, while the three adapters take `(a, b, c, texture, face_data)`
+  and read real UV data off `FaceData`. Nothing could have called it even by
+  accident, and a second copy of the export format is a trap for whoever fixes
+  the exporter next.
+
 ### Fixed
 - **A visgroup can be renamed, a prefab variant deleted, a displacement's power
   changed** (#615). Three level-editing operations were implemented, carefully,

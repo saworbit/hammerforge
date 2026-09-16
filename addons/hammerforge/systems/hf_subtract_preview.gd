@@ -345,10 +345,6 @@ static func is_valid_aabb(aabb: AABB) -> bool:
 	return aabb.size.x > 0.001 and aabb.size.y > 0.001 and aabb.size.z > 0.001
 
 
-static func _is_valid_aabb(aabb: AABB) -> bool:
-	return is_valid_aabb(aabb)
-
-
 ## Operation used for subtract preview. DraftBrush stores CSG operation ints.
 ## Returns -1 when the node is not a previewable brush.
 static func preview_operation(node: Node) -> int:
@@ -387,7 +383,3 @@ static func world_aabb(node: Node3D) -> AABB:
 		return xform * local_aabb
 	var half_scale := node.scale * 0.5
 	return AABB(xform.origin - half_scale, node.scale)
-
-
-func _get_world_aabb(node: Node3D) -> AABB:
-	return world_aabb(node)
