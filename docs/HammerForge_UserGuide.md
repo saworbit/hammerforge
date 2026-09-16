@@ -685,7 +685,7 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
 - **I/O Wiring** (collapsible, context-hidden, collapsed by default): Quick-wire form (output name, target dropdown, input name, parameter, delay, fire-once). Only visible when an entity is selected. Connection summary shows triggers and triggered-by counts. **Highlight** toggle button pulses all linked entities in the viewport. **Connection Presets** picker with 6 built-in patterns (Door+Light+Sound, Button→Toggle, Alarm Sequence, Pickup+Remove, Damage+Break, Timer Lights) plus user-saved presets, with **Save** and **Delete** beside it. Target tag mapping lets you assign preset target placeholders to actual entity names; a tag you leave empty is skipped and named in the status line rather than wired at an entity called after the tag. A saved preset whose name is already in the list gets a number, so two rows never read the same.
 
 > **Progressive disclosure:** During greyboxing, the Objects tab shows only the entity palette and create button. Entity Properties, Entity I/O, and I/O Wiring sections appear automatically when you select an entity, keeping the UI clean when you're focused on shapes and layout.
-  - **I/O connection lines**: Bézier curves with arrowheads, color-coded by output type (cyan=OnTrigger, red=OnDamage, yellow=OnUse, green=OnOpen, magenta=OnBreak, orange=OnTimer). Fire-once connections pulse brighter; delayed connections dim proportionally. Parallel connections between the same pair offset laterally.
+  - **I/O connection lines**: Bézier curves with arrowheads, color-coded by output type (cyan=OnTrigger, red=OnDamage, yellow=OnUse, green=OnOpen, magenta=OnBreak, orange=OnTimer). Fire-once connections pulse brighter; delayed connections dim proportionally. Parallel connections between the same pair offset laterally. An output aimed at a name no entity answers to is drawn as a short red mast with a cross on top, rising from the source entity — deliberately not an arrow, because there is no destination to point at.
   - **Highlight Connected**: when enabled, all entities wired to the selected entity display a pulsing overlay. The context toolbar shows an "HL" toggle and an I/O summary label ("Triggers 2 targets (door1, light1)"). The highlight state stays in sync between the context toolbar and the wiring panel.
 
 ### I/O Runtime Signal Translation
@@ -830,6 +830,8 @@ Click **Check Bake Issues** to scan for potential problems before baking:
 - `fix_non_planar_faces(brush)` — projects drifting vertices back onto the face plane.
 
 `validate_level(true)` runs both over every brush in the level as part of its geometry pass, so a level imported from another editor can be cleaned up without calling them per brush. That pass also reports a brush whose size or transform is not a number, a brush with no faces (which auto-fix deletes, since there is nothing to repair), and a vertex that is not a number (reported only — there is no nearest position to a NaN).
+
+`validate_level()` also resolves every I/O connection's target name against the entities in the level and reports the ones that miss: `I/O connection points at 'door_1', which no entity answers to: button_1.OnPressed`. Wiring is held by name, so renaming a target in the Scene dock or in the Objects tab breaks every wire aimed at it. It is reported only; deleting a mapper's wiring is not something auto-fix does on its own.
 
 Both tolerances (`weld_tolerance`, `planarity_tolerance`) are configurable per-instance for noisy imported geometry.
 
