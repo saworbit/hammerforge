@@ -85,7 +85,7 @@ Live preview
 - The viewport draws only the active footprint, raise cage, and touched connector candidates. These overlays use stroke-local data rather than scanning a whole layer and are synchronously removed on stroke end or Esc.
 - On mouse-up, a final regeneration happens.
 - Preview work consumes only dirty chunks. With region streaming enabled, every region crossed by the current stroke is pinned until release or cancel, and the starting region is loaded before the undo snapshot.
-- **Inference cleanup is off by default.** Enabling it in Paint → Floor Paint wires `HFInferenceEngine` for new strokes. Its deliberately bounded pass can remove an isolated one-cell island, fill a one-cell cardinal hole or gap, and widen an inferred one-cell corridor by one row/column. Erase strokes are never rewritten, and cleanup is restricted to the stroke's dirty chunks plus its one-cell local halo.
+- **Inference cleanup is off by default.** Enabling it in Paint → Floor Paint wires `HFInferenceEngine` for new strokes. Its deliberately bounded pass can remove an isolated one-cell island, fill a one-cell cardinal hole or gap, and widen an inferred one-cell corridor by one row/column. Erase strokes are never rewritten, a stroke of a single cell is never denoised, and cleanup is restricted to the stroke's dirty chunks plus its one-cell local halo.
 
 ## Geometry Synthesis
 
