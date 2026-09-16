@@ -25,7 +25,6 @@ class PrefabInstanceRecord:
 	var variant_name: String = "base"  # active variant
 	var brush_ids: Array = []  # String brush IDs belonging to this instance
 	var entity_uids: Array = []  # stable IDs ("pent_N") belonging to this instance
-	var overrides: Dictionary = {}  # field_path → value  (per-instance tweaks)
 	var linked: bool = false  # if true, propagation applies
 
 
@@ -207,8 +206,16 @@ func set_variant(instance_id: String, variant_name: String) -> bool:
 
 
 func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_name: String) -> void:
-	# Compute centroid of current instance to keep placement stable
-	var centroid := _compute_instance_centroid(rec)
+	# Where the instance is, measured the way the file format measures it.
+	#
+	# A prefab's brush transforms are stored relative to the merged visual AABB
+	# centre of the selection it was captured from, and `instantiate()` adds the
+	# placement back onto that. This used to take the mean of the node origins
+	# instead, which is a different point for any prefab that is not symmetric
+	# about it - so every variant cycle walked the instance by the difference,
+	# and recomputed it against the new nodes, so cycling back did not bring it
+	# home.
+	var centroid := _instance_centroid(rec)
 
 	# Remove existing brushes/entities for this instance
 	_remove_instance_nodes(rec)
@@ -269,22 +276,20 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 	_tag_nodes(rec)
 
 
-func _compute_instance_centroid(rec: PrefabInstanceRecord) -> Vector3:
-	var positions: Array = []
+## The instance's current nodes measured through the one definition the prefab
+## format is written against.
+func _instance_centroid(rec: PrefabInstanceRecord) -> Vector3:
+	var brush_nodes: Array = []
 	for bid in rec.brush_ids:
 		var brush = _find_brush_by_id(bid)
 		if brush:
-			positions.append(brush.global_position)
+			brush_nodes.append(brush)
+	var entity_nodes: Array = []
 	for uid in rec.entity_uids:
 		var ent = _find_entity_by_uid(uid)
 		if ent:
-			positions.append(ent.global_position)
-	if positions.is_empty():
-		return Vector3.ZERO
-	var c := Vector3.ZERO
-	for p in positions:
-		c += p
-	return c / float(positions.size())
+			entity_nodes.append(ent)
+	return HFPrefabType.compute_selection_centroid(brush_nodes, entity_nodes)
 
 
 func _remove_instance_nodes(rec: PrefabInstanceRecord) -> void:
@@ -319,35 +324,6 @@ func _remove_instance_nodes(rec: PrefabInstanceRecord) -> void:
 
 
 # ---------------------------------------------------------------------------
-# Override tracking
-# ---------------------------------------------------------------------------
-
-
-## Record an override on a prefab instance.
-func set_override(instance_id: String, field_path: String, value: Variant) -> void:
-	var rec: PrefabInstanceRecord = _instances.get(instance_id, null)
-	if not rec:
-		return
-	rec.overrides[field_path] = value
-
-
-## Remove an override.
-func clear_override(instance_id: String, field_path: String) -> void:
-	var rec: PrefabInstanceRecord = _instances.get(instance_id, null)
-	if not rec:
-		return
-	rec.overrides.erase(field_path)
-
-
-## Get all overrides for display.
-func get_overrides(instance_id: String) -> Dictionary:
-	var rec: PrefabInstanceRecord = _instances.get(instance_id, null)
-	if not rec:
-		return {}
-	return rec.overrides.duplicate()
-
-
-# ---------------------------------------------------------------------------
 # Live-linked propagation
 # ---------------------------------------------------------------------------
 
@@ -364,8 +340,6 @@ func propagate_from_source(source_path: String) -> int:
 		if not rec.linked:
 			continue
 		_apply_variant(rec, prefab, rec.variant_name)
-		# Re-apply overrides on top
-		_reapply_overrides(rec)
 		count += 1
 	return count
 
@@ -457,46 +431,7 @@ func compute_instance_diff(instance_id: String) -> Array:
 			)
 		)
 
-	# Per-field overrides
-	for field_path in rec.overrides:
-		(
-			diff
-			. append(
-				{
-					"field": field_path,
-					"source_value": "(original)",
-					"instance_value": rec.overrides[field_path],
-				}
-			)
-		)
-
 	return diff
-
-
-func _reapply_overrides(rec: PrefabInstanceRecord) -> void:
-	# Overrides are stored as field_path → value.
-	# field_path format: "brush/<index>/size", "entity/<index>/transform", etc.
-	for field_path in rec.overrides:
-		var parts: PackedStringArray = field_path.split("/")
-		if parts.size() < 3:
-			continue
-		var target_type: String = parts[0]
-		var idx_str: String = parts[1]
-		if not idx_str.is_valid_int():
-			continue
-		var idx: int = idx_str.to_int()
-		var prop: String = parts[2]
-
-		if target_type == "brush" and idx < rec.brush_ids.size():
-			var brush = _find_brush_by_id(rec.brush_ids[idx])
-			if brush and prop == "size":
-				var size_val = rec.overrides[field_path]
-				if size_val is Vector3:
-					brush.set_meta("brush_size", size_val)
-		elif target_type == "entity" and idx < rec.entity_uids.size():
-			var ent = _find_entity_by_uid(rec.entity_uids[idx])
-			if ent and prop == "transform" and rec.overrides[field_path] is Transform3D:
-				ent.global_transform = rec.overrides[field_path]
 
 
 # ---------------------------------------------------------------------------
@@ -604,7 +539,6 @@ func capture_state() -> Dictionary:
 					"variant_name": rec.variant_name,
 					"brush_ids": rec.brush_ids.duplicate(),
 					"entity_uids": rec.entity_uids.duplicate(),
-					"overrides": rec.overrides.duplicate(true),
 					"linked": rec.linked,
 				}
 			)
@@ -627,7 +561,8 @@ func restore_state(data: Dictionary) -> void:
 		rec.variant_name = str(entry.get("variant_name", "base"))
 		rec.brush_ids = entry.get("brush_ids", [])
 		rec.entity_uids = entry.get("entity_uids", [])
-		rec.overrides = entry.get("overrides", {})
+		# "overrides" in an older payload is read past: the mechanism it belonged
+		# to had no way in from the editor and wrote a meta nothing read.
 		rec.linked = bool(entry.get("linked", false))
 		if rec.instance_id != "":
 			_instances[rec.instance_id] = rec
