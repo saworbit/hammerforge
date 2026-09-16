@@ -1,14 +1,18 @@
 extends GutTest
 
-## #439, #440. The keymap is rebindable, and three of the surfaces that tell a
+## #439, #440, #560. The keymap is rebindable, and the surfaces that tell a
 ## mapper which key does what spelled their chords into string literals instead
 ## of asking it. Two actions also shared a display label, so the rebind list
 ## showed two rows called "Extrude Up" with different keys.
+##
+## The context toolbar was the fourth surface and was missed the first time,
+## because this file named the other three and it was not on the list.
 
 const HFKeymapType = preload("res://addons/hammerforge/hf_keymap.gd")
 const ShortcutHudScene = preload("res://addons/hammerforge/shortcut_hud.tscn")
 const CoachMarks = preload("res://addons/hammerforge/ui/hf_coach_marks.gd")
 const TooltipText = preload("res://addons/hammerforge/ui/hf_tooltip_text.gd")
+const ContextToolbar = preload("res://addons/hammerforge/ui/hf_context_toolbar.gd")
 
 var keymap
 
@@ -88,7 +92,30 @@ func test_the_dock_tooltip_names_the_current_chord():
 	assert_string_contains(TooltipText.text_for("hollow_btn", keymap), "(Ctrl+Alt+H)")
 
 
-func test_every_chord_token_in_the_three_surfaces_names_a_real_action():
+func test_the_context_toolbar_names_the_current_chord():
+	var toolbar = ContextToolbar.new()
+	add_child_autoqfree(toolbar)
+	toolbar.set_keymap(keymap)
+	assert_string_contains(_toolbar_tooltip(toolbar, "Hol"), "(Ctrl+H)")
+	keymap.set_binding("hollow", KEY_H, true, false, true)
+	toolbar.set_keymap(keymap)
+	assert_string_contains(_toolbar_tooltip(toolbar, "Hol"), "(Ctrl+Alt+H)")
+	assert_false(
+		_toolbar_tooltip(toolbar, "Hol").contains("(Ctrl+H)"), "The old chord is off the button"
+	)
+
+
+func _toolbar_tooltip(node: Node, button_text: String) -> String:
+	if node is Button and (node as Button).text == button_text:
+		return (node as Button).tooltip_text
+	for child in node.get_children():
+		var found := _toolbar_tooltip(child, button_text)
+		if found != "":
+			return found
+	return ""
+
+
+func test_every_chord_token_in_the_surfaces_names_a_real_action():
 	var regex := RegEx.new()
 	regex.compile("\\{([a-z_0-9]+)\\}")
 	var unresolved: Array = []
@@ -96,6 +123,7 @@ func test_every_chord_token_in_the_three_surfaces_names_a_real_action():
 		"res://addons/hammerforge/shortcut_hud.gd",
 		"res://addons/hammerforge/ui/hf_coach_marks.gd",
 		"res://addons/hammerforge/ui/hf_tooltip_text.gd",
+		"res://addons/hammerforge/ui/hf_context_toolbar.gd",
 	]:
 		for line in FileAccess.get_file_as_string(path).split("\n"):
 			if line.strip_edges().begins_with("#"):
@@ -115,6 +143,7 @@ func test_the_surfaces_hold_no_chord_literal():
 		"res://addons/hammerforge/shortcut_hud.gd",
 		"res://addons/hammerforge/ui/hf_coach_marks.gd",
 		"res://addons/hammerforge/ui/hf_tooltip_text.gd",
+		"res://addons/hammerforge/ui/hf_context_toolbar.gd",
 	]:
 		for line in FileAccess.get_file_as_string(path).split("\n"):
 			if line.strip_edges().begins_with("#"):

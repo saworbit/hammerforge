@@ -178,47 +178,59 @@ func _build_brush_section() -> void:
 	_sections[Context.BRUSH_SELECTED] = section
 
 	_add_group_label(section, "Extrude")
-	_add_tool_button(section, "Ext\u25b2", "Extrude Up (E / U)", "extrude_up")
-	_add_tool_button(section, "Ext\u25bc", "Extrude Down (Shift+E / J)", "extrude_down")
+	_add_tool_button(
+		section, "Ext\u25b2", "Extrude Up ({tool_extrude} / {tool_extrude_up})", "extrude_up"
+	)
+	_add_tool_button(
+		section,
+		"Ext\u25bc",
+		"Extrude Down ({tool_extrude_down_alt} / {tool_extrude_down})",
+		"extrude_down"
+	)
 	_add_sep(section)
 	_add_group_label(section, "Modify")
-	_add_tool_button(section, "Hol", "Hollow (Ctrl+H)", "hollow")
-	_add_tool_button(section, "Clip", "Clip (Shift+X)", "clip")
+	_add_tool_button(section, "Hol", "Hollow ({hollow})", "hollow")
+	_add_tool_button(section, "Clip", "Clip ({clip})", "clip")
 	_add_tool_button(
 		section,
 		"Clip\u2220",
-		"Clip to Face Plane (Alt+Shift+X) — cut along the selected face's plane",
+		"Clip to Face Plane ({clip_to_face}) — cut along the selected face's plane",
 		"clip_to_face"
 	)
-	_add_tool_button(section, "Carve", "Carve (Ctrl+Shift+R)", "carve")
-	_add_tool_button(section, "Mrg", "Merge Brushes (Ctrl+Shift+M)", "merge")
+	_add_tool_button(section, "Carve", "Carve ({carve})", "carve")
+	_add_tool_button(section, "Mrg", "Merge Brushes ({merge})", "merge")
 	_add_sep(section)
 	_add_group_label(section, "Transform")
 	_add_tool_button(
-		section, "↺", "Rotate counter-clockwise (R) — about the locked axis, or Y", "rotate_ccw"
+		section,
+		"↺",
+		"Rotate counter-clockwise ({rotate_ccw}) — about the locked axis, or Y",
+		"rotate_ccw"
 	)
 	_add_tool_button(
-		section, "↻", "Rotate clockwise (Shift+R) — about the locked axis, or Y", "rotate_cw"
+		section, "↻", "Rotate clockwise ({rotate_cw}) — about the locked axis, or Y", "rotate_cw"
 	)
 	_add_tool_button(
-		section, "Flip", "Flip across the locked axis, or X (Shift+M)", "flip_selection"
+		section, "Flip", "Flip across the locked axis, or X ({flip_selection})", "flip_selection"
 	)
 	_add_tool_button(
 		section,
 		"Rst",
-		"Reset Rotation (Alt+R) — re-enables Hollow, Clip and Carve",
+		"Reset Rotation ({reset_rotation}) — re-enables Hollow, Clip and Carve",
 		"reset_rotation"
 	)
 	_add_sep(section)
-	_add_tool_button(section, "Dup", "Duplicate (Ctrl+D)", "duplicate")
-	_add_tool_button(section, "Del", "Delete (Del)", "delete")
+	_add_tool_button(section, "Dup", "Duplicate ({duplicate})", "duplicate")
+	_add_tool_button(section, "Del", "Delete ({delete})", "delete")
 	_add_sep(section)
 	_add_group_label(section, "Select")
-	_add_tool_button(section, "All", "Select All (A)", "select_all")
-	_add_tool_button(section, "Sim", "Select Similar brushes (Shift+S)", "select_similar")
-	_add_tool_button(section, "Flt", "Selection Filters (Shift+F)", "selection_filter")
+	_add_tool_button(section, "All", "Select All ({select_all})", "select_all")
+	_add_tool_button(section, "Sim", "Select Similar brushes ({select_similar})", "select_similar")
+	_add_tool_button(section, "Flt", "Selection Filters ({selection_filter})", "selection_filter")
 	_add_sep(section)
-	_add_tool_button(section, "Pfb", "Save selection as Prefab (Ctrl+Shift+P)", "quick_save_prefab")
+	_add_tool_button(
+		section, "Pfb", "Save selection as Prefab ({quick_save_prefab})", "quick_save_prefab"
+	)
 	_add_tool_button(section, "Lnk", "Save as Live-Linked Prefab", "quick_save_linked_prefab")
 	_add_sep(section)
 	_add_group_label(section, "Preview")
@@ -237,7 +249,7 @@ func _build_brush_section() -> void:
 	section.add_child(preview_btn)
 	# Prefab instance buttons — hidden by default, shown when prefab instance selected
 	_add_sep(section).name = "PfbSep"
-	_add_tool_button(section, "Var\u25b6", "Cycle Variant (Ctrl+Shift+V)", "cycle_variant").name = "PfbVarBtn"
+	_add_tool_button(section, "Var\u25b6", "Cycle Variant ({cycle_variant})", "cycle_variant").name = "PfbVarBtn"
 	_add_tool_button(section, "Push", "Push changes to prefab source", "push_to_source").name = "PfbPushBtn"
 	_add_tool_button(section, "Pull", "Propagate source to all linked instances", "propagate_prefab").name = "PfbPullBtn"
 	_set_prefab_buttons_visible(section, false)
@@ -278,9 +290,11 @@ func _build_face_section() -> void:
 	_add_sep(section)
 	_add_group_label(section, "Apply")
 	_add_tool_button(section, "All", "Apply to Whole Brush", "apply_to_brush")
-	_add_tool_button(section, "Last", "Apply Last Texture (Shift+T)", "apply_last_texture")
+	_add_tool_button(
+		section, "Last", "Apply Last Texture ({apply_last_texture})", "apply_last_texture"
+	)
 	_add_sep(section)
-	_add_tool_button(section, "Sim", "Select Similar faces (Shift+S)", "select_similar")
+	_add_tool_button(section, "Sim", "Select Similar faces ({select_similar})", "select_similar")
 
 
 func _build_entity_section() -> void:
@@ -319,13 +333,15 @@ func _build_entity_section() -> void:
 	io_summary.add_theme_color_override("font_color", Color(0.6, 0.8, 1.0, 0.7))
 	section.add_child(io_summary)
 	_add_sep(section)
-	_add_tool_button(section, "Dup", "Duplicate (Ctrl+D)", "duplicate")
-	_add_tool_button(section, "Del", "Delete (Del)", "delete")
+	_add_tool_button(section, "Dup", "Duplicate ({duplicate})", "duplicate")
+	_add_tool_button(section, "Del", "Delete ({delete})", "delete")
 	_add_sep(section)
-	_add_tool_button(section, "Pfb", "Save selection as Prefab (Ctrl+Shift+P)", "quick_save_prefab")
+	_add_tool_button(
+		section, "Pfb", "Save selection as Prefab ({quick_save_prefab})", "quick_save_prefab"
+	)
 	# Prefab instance buttons — hidden by default, shown when prefab instance selected
 	_add_sep(section).name = "PfbSep"
-	_add_tool_button(section, "Var\u25b6", "Cycle Variant (Ctrl+Shift+V)", "cycle_variant").name = "PfbVarBtn"
+	_add_tool_button(section, "Var\u25b6", "Cycle Variant ({cycle_variant})", "cycle_variant").name = "PfbVarBtn"
 	_add_tool_button(section, "Push", "Push changes to prefab source", "push_to_source").name = "PfbPushBtn"
 	_add_tool_button(section, "Pull", "Propagate source to all linked instances", "propagate_prefab").name = "PfbPullBtn"
 	_set_prefab_buttons_visible(section, false)
@@ -429,14 +445,14 @@ func _build_vertex_section() -> void:
 
 	_add_group_label(section, "Mode")
 	_add_tool_button(section, "Vtx", "Vertex sub-mode", "vertex_submode")
-	_add_tool_button(section, "Edge", "Edge sub-mode (E)", "edge_submode")
+	_add_tool_button(section, "Edge", "Edge sub-mode ({vertex_edge_mode})", "edge_submode")
 	_add_sep(section)
 	_add_group_label(section, "Edit")
-	_add_tool_button(section, "Merge", "Merge vertices (Ctrl+W)", "vertex_merge")
-	_add_tool_button(section, "Split", "Split edge (Ctrl+E)", "vertex_split")
+	_add_tool_button(section, "Merge", "Merge vertices ({vertex_merge})", "vertex_merge")
+	_add_tool_button(section, "Split", "Split edge ({vertex_split_edge})", "vertex_split")
 	_add_tool_button(section, "Convex", "Clip to convex hull", "vertex_clip_convex")
 	_add_sep(section)
-	_add_tool_button(section, "Exit", "Exit vertex mode (V)", "vertex_exit")
+	_add_tool_button(section, "Exit", "Exit vertex mode ({vertex_edit})", "vertex_exit")
 
 
 func _build_paint_section() -> void:
@@ -448,15 +464,18 @@ func _build_paint_section() -> void:
 	_content.add_child(section)
 	_sections[Context.PAINT] = section
 	_add_group_label(section, "Generate")
-	_add_tool_button(section, "Raise", "Raise last paint footprint (Y)", "paint_raise")
-	_add_tool_button(section, "Room", "Stamp room from last Rect (H)", "paint_room")
+	_add_tool_button(section, "Raise", "Raise last paint footprint ({paint_raise})", "paint_raise")
+	_add_tool_button(section, "Room", "Stamp room from last Rect ({paint_room})", "paint_room")
 	_add_tool_button(
-		section, "Connect", "Confirm live connector ghost (Enter)", "paint_confirm_connector"
+		section,
+		"Connect",
+		"Confirm live connector ghost ({paint_confirm_connector})",
+		"paint_confirm_connector"
 	)
 	_add_sep(section)
 	_add_group_label(section, "Mirror")
-	_add_tool_button(section, "X", "Toggle X mirror (X)", "paint_mirror_x")
-	_add_tool_button(section, "Z", "Toggle Z mirror (Z)", "paint_mirror_z")
+	_add_tool_button(section, "X", "Toggle X mirror ({paint_mirror_x})", "paint_mirror_x")
+	_add_tool_button(section, "Z", "Toggle Z mirror ({paint_mirror_z})", "paint_mirror_z")
 
 
 # --- Helpers ---
@@ -472,10 +491,17 @@ func _add_group_label(parent: Control, text: String) -> Label:
 	return lbl
 
 
+## A toolbar button whose tooltip is rendered against the keymap.
+##
+## The chords used to be written into the tooltips as literals, so a rebind left
+## the toolbar advertising a chord that no longer did anything - on the surface
+## closest to the mapper's hand. The source line is kept on the button so
+## `set_keymap()` can render it again when the bindings change.
 func _add_tool_button(parent: Control, text: String, tooltip: String, action: String) -> Button:
 	var btn = Button.new()
 	btn.text = text
-	btn.tooltip_text = tooltip
+	btn.set_meta("hf_tooltip_source", tooltip)
+	btn.tooltip_text = _chords(tooltip)
 	btn.flat = true
 	btn.focus_mode = Control.FOCUS_NONE
 	btn.add_theme_font_size_override("font_size", 11)
@@ -502,6 +528,21 @@ func refresh_theme_colors() -> void:
 
 func set_keymap(keymap) -> void:
 	_keymap = keymap
+	_refresh_tooltips(self)
+
+
+## Render `{action}` tokens in a line against the current keymap.
+func _chords(text: String) -> String:
+	if _keymap == null:
+		_keymap = HFKeymapType.load_or_default("")
+	return _keymap.format_chords(text)
+
+
+func _refresh_tooltips(node: Node) -> void:
+	if node.has_meta("hf_tooltip_source"):
+		node.tooltip_text = _chords(str(node.get_meta("hf_tooltip_source")))
+	for child in node.get_children():
+		_refresh_tooltips(child)
 
 
 func update_state(state: Dictionary) -> void:
