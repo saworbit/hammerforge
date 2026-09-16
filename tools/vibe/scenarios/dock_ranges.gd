@@ -37,7 +37,54 @@ func summary() -> String:
 	return "whether each dock spin and the level property behind it agree about the legal range"
 
 
+## The five `@export_range` properties on `LevelRoot`. The annotation constrains
+## the Inspector widget and nothing else: a value set from a script, a `.hflevel`
+## or an undo replay goes straight to the setter, or straight onto the field when
+## there is no setter.
+const RANGED := [
+	["bake_collision_layer_index", 1, 32],
+	["hflevel_autosave_minutes", 1, 60],
+	["hflevel_autosave_keep", 1, 50],
+	["draft_pick_layer_index", 1, 32],
+	["grid_major_line_frequency", 1, 16],
+]
+
+
+func _export_ranges_are_only_the_inspectors() -> void:
+	var root: Node3D = await fresh_root()
+	var leaky: Array = []
+	for entry in RANGED:
+		var prop: String = entry[0]
+		var lo = entry[1]
+		var hi = entry[2]
+		var kept: Array = []
+		for candidate in [lo - 1, -5, 0, hi + 1, 100000]:
+			root.set(prop, candidate)
+			var got = root.get(prop)
+			if got == candidate and (candidate < lo or candidate > hi):
+				kept.append(candidate)
+		note("%s (@export_range %s..%s)" % [prop, lo, hi], "kept out of range: %s" % str(kept))
+		if not kept.is_empty():
+			leaky.append("%s kept %s" % [prop, str(kept)])
+	if not leaky.is_empty():
+		flag(
+			"%d @export_range properties hold values outside their own range" % leaky.size(),
+			(
+				("%s. " % str(leaky))
+				+ "@export_range constrains the Inspector spinner; it is not a runtime "
+				+ "clamp. Three of these have no setter at all, so the value lands on the "
+				+ "field, is written back out by capture_hflevel_settings(), and comes back "
+				+ "on the next load. The consumers defend themselves to different degrees: "
+				+ "_layer_from_index() clamps to 1..32 at use, the grid shader does "
+				+ "max(major_line_frequency, 1.0), and _set_hflevel_autosave_minutes() "
+				+ "clamps the bottom with max(1, value) and not the top -- so an autosave "
+				+ "interval of 100000 minutes is accepted and silently means never"
+			)
+		)
+
+
 func run() -> void:
+	await _export_ranges_are_only_the_inspectors()
 	await _both_ends_of_every_spin()
 
 

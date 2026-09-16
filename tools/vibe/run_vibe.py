@@ -122,6 +122,7 @@ SCENARIOS = [
     "autosave-history",
     "level-io-types",
     "prefab-materials",
+    "bake-equivalence",
 ]
 
 # Generous: chaos runs 300 operations and cost saves eight levels. A scenario
