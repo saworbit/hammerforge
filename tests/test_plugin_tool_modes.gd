@@ -74,8 +74,13 @@ class FakeToolRegistry:
 		deactivations += 1
 		has_external = false
 
-	func activate_tool(tool_id: int, _root, _cam, _undo, _record) -> void:
+	## The registry hands the active tool to a settings host, so the plugin passes
+	## a sixth argument: the dock callback that builds a tool's declared settings.
+	var settings_callbacks: Array = []
+
+	func activate_tool(tool_id: int, _root, _cam, _undo, _record, p_settings := Callable()) -> void:
 		activations.append(tool_id)
+		settings_callbacks.append(p_settings)
 
 
 class FakeDock:
