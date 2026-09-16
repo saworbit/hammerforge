@@ -24,17 +24,19 @@ func test_polygon_margin_accepts_inside_and_rejects_distant_points() -> void:
 
 func test_plugin_pointer_callbacks_are_thin_delegates() -> void:
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
+	# The entry points plugin.gd owns. `do_displacement_stroke()`,
+	# `point_near_polygon_3d()` and `update_prefab_hover()` are called by the
+	# handlers below them, inside their own modules; plugin.gd used to carry a
+	# wrapper for each that nothing called, and this assertion is why they
+	# survived (#609).
 	for call in [
 		"HFPluginPaintInput.should_start_displacement",
 		"HFPluginPaintInput.handle_displacement",
 		"HFPluginPaintInput.commit_displacement_undo",
-		"HFPluginPaintInput.do_displacement_stroke",
-		"HFPluginPaintInput.point_near_polygon_3d",
 		"HFPluginPaintInput.handle_paint",
 		"HFPluginPointerTools.handle_extrude",
 		"HFPluginPointerTools.handle_draw",
 		"HFPluginPointerTools.handle_motion",
-		"HFPluginPointerTools.update_prefab_hover",
 	]:
 		assert_true(source.contains(call), "%s must be delegated" % call)
 

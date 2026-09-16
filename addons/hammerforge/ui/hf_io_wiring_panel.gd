@@ -38,7 +38,6 @@ var _summary_label: Label
 var _highlight_btn: Button
 var _outputs_list: ItemList
 var _outputs_remove: Button
-var _targets_list: ItemList
 var _preset_option: OptionButton
 var _preset_delete_btn: Button
 var _preset_apply_btn: Button

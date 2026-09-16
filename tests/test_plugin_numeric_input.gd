@@ -191,13 +191,19 @@ func test_enter_commits_numeric_draw_height() -> void:
 
 
 func test_plugin_callbacks_are_thin_numeric_delegates() -> void:
+	# `handle()` is the entry point, and it is the only one plugin.gd has any
+	# reason to reach: `update_preview()` and `apply_value()` are called by
+	# `handle()` itself. plugin.gd used to carry a wrapper for each of them that
+	# nothing called, and this assertion is why they survived (#609). What the
+	# module does with them is asserted above, against the module.
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
-	for call in [
-		"HFPluginNumericInput.handle",
-		"HFPluginNumericInput.update_preview",
-		"HFPluginNumericInput.apply_value",
-	]:
-		assert_true(source.contains(call), "%s must be delegated" % call)
+	assert_true(
+		source.contains("HFPluginNumericInput.handle"),
+		"plugin.gd hands numeric input straight to the module"
+	)
+	assert_false(
+		source.contains("numeric_buffer.is_valid_float()"), "and does not parse the buffer itself"
+	)
 
 
 func test_keypad_digits_and_decimal_fill_the_buffer() -> void:

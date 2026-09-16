@@ -378,7 +378,6 @@ var active_shape: int = LevelRootType.BrushShape.BOX
 var shape_id_to_key: Dictionary = {}
 var paint_layers_signature: String = ""
 var materials_signature: String = ""
-var surface_paint_signature: String = ""
 var root_properties: Dictionary = {}
 var history_entries: Array = []
 var history_max := 50
@@ -549,8 +548,6 @@ var _io_wiring_section: VBoxContainer = null
 # Entity Properties controls
 var _entity_props_section: VBoxContainer = null
 var _entity_props_controls: Array = []
-var _entity_props_entity: Node3D = null
-
 # Displacement / Bevel UI controls
 var _disp_section: HFCollapsibleSection = null
 var _disp_power_spin: SpinBox = null
@@ -572,10 +569,6 @@ var _bevel_segments_spin: SpinBox = null
 var _bevel_radius_spin: SpinBox = null
 var _bevel_inset_dist_spin: SpinBox = null
 var _bevel_inset_height_spin: SpinBox = null
-
-
-func _is_level_root(node: Node) -> bool:
-	return node != null and node is LevelRootType
 
 
 func _find_level_root_in(scene: Node) -> Node:
@@ -1074,15 +1067,6 @@ func _on_paint_mode_toggled(enabled: bool) -> void:
 	builtin_tool_changed.emit()
 
 
-func _on_welcome_dismissed(dont_show_again: bool) -> void:
-	if dont_show_again and _user_prefs:
-		_user_prefs.set_pref("show_welcome", false)
-		_user_prefs.save()
-	var tabs = $Margin/VBox/MainTabs
-	if tabs:
-		tabs.visible = true
-
-
 ## Persist a pref change to disk.
 func _save_user_pref(key: String, value: Variant) -> void:
 	if not _user_prefs:
@@ -1329,14 +1313,6 @@ func _find_editor_icon(icon_names: Array) -> Texture2D:
 	return HFEditorTheme.find_editor_icon(editor_base_control, self, icon_names)
 
 
-func _has_editor_icon(icon_name: String) -> bool:
-	return HFEditorTheme.has_editor_icon(editor_base_control, self, icon_name)
-
-
-func _get_editor_icon(icon_name: String) -> Texture2D:
-	return HFEditorTheme.get_editor_icon(editor_base_control, self, icon_name)
-
-
 func _get_editor_color(color_name: String, fallback: Color) -> Color:
 	return HFEditorTheme.get_editor_color(editor_base_control, self, color_name, fallback)
 
@@ -1429,10 +1405,6 @@ func _build_paint_tab() -> void:
 	builder.build(root_vbox)
 
 
-func _build_entity_props_section() -> void:
-	pass  # Now built by EntityTabBuilder
-
-
 func _rebuild_entity_props(entity: Node3D) -> void:
 	HFDockEntityHandler.rebuild_entity_props(self, entity)
 
@@ -1459,10 +1431,6 @@ func _on_entity_prop_vec3_changed(
 
 func _can_edit_selected_entity(entity: Node3D) -> bool:
 	return HFDockEntityHandler.can_edit_selected_entity(self, entity)
-
-
-func _entity_prop_default(type_name: String, value: Variant) -> Variant:
-	return HFDockEntityHandler.entity_prop_default(type_name, value)
 
 
 # ---------------------------------------------------------------------------
@@ -3194,10 +3162,6 @@ func _on_bake_dry_run() -> void:
 	HFDockManageHandler.on_bake_dry_run(self)
 
 
-func _get_bake_preview_mode() -> int:
-	return HFDockManageHandler.get_bake_preview_mode(self)
-
-
 func _on_bake_selected() -> void:
 	await HFDockManageHandler.on_bake_selected(self)
 
@@ -3208,10 +3172,6 @@ func _on_bake_changed() -> void:
 
 func _on_bake_check_issues() -> void:
 	HFDockManageHandler.on_bake_check_issues(self)
-
-
-func _update_bake_estimate() -> void:
-	HFDockManageHandler.update_bake_estimate(self)
 
 
 func _on_validate_level() -> void:
@@ -3402,14 +3362,6 @@ func get_hollow_thickness() -> float:
 
 func _on_create_entity() -> void:
 	HFDockEntityHandler.on_create_entity(self)
-
-
-func _focus_entity_selection(entity: Node) -> void:
-	HFDockEntityHandler.focus_entity_selection(self, entity)
-
-
-func _get_default_entity_definition() -> Dictionary:
-	return HFDockEntityHandler.get_default_entity_definition(self)
 
 
 func _connect_root_signals() -> void:
@@ -3616,28 +3568,8 @@ func _on_quick_play_selected_area() -> void:
 	await HFDockManageHandler.on_quick_play_selected_area(self)
 
 
-func _restore_cordon_state(enabled: bool, bounds: AABB) -> void:
-	HFDockManageHandler.restore_cordon_state(self, enabled, bounds)
-
-
 func _on_export_playtest() -> void:
 	await HFDockManageHandler.on_export_playtest(self)
-
-
-func _show_spawn_fix_dialog(spawn: Node3D, validation: Dictionary, mask: int) -> void:
-	HFDockManageHandler.show_spawn_fix_dialog(self, spawn, validation, mask)
-
-
-func _record_spawn_create_undo(before_state: Dictionary) -> void:
-	HFDockManageHandler.record_spawn_create_undo(self, before_state)
-
-
-func _record_spawn_move_undo(spawn: Node3D, old_pos: Vector3, new_pos: Vector3) -> void:
-	HFDockManageHandler.record_spawn_move_undo(self, spawn, old_pos, new_pos)
-
-
-func _restore_spawn(spawn: Node3D, pos: Vector3, angle_deg: float) -> void:
-	HFDockManageHandler.restore_spawn(spawn, pos, angle_deg)
 
 
 func _on_spawn_validate() -> void:
@@ -3650,10 +3582,6 @@ func _on_spawn_auto_create() -> void:
 
 func _on_show_spawn_debug_toggled(enabled: bool) -> void:
 	await HFDockManageHandler.on_show_spawn_debug_toggled(self, enabled)
-
-
-func _notify_running_instances() -> void:
-	HFDockManageHandler.notify_running_instances(self)
 
 
 func _warn_missing_dependencies() -> void:
@@ -4245,14 +4173,6 @@ func _on_terrain_slot_scale_changed(value: float, slot: int) -> void:
 
 func _refresh_terrain_slots() -> void:
 	HFDockPaintHandler.refresh_terrain_slots(self)
-
-
-func _terrain_slot_label(path: String) -> String:
-	return HFDockPaintHandler.terrain_slot_label(path)
-
-
-func _set_terrain_slot_controls_enabled(enabled: bool) -> void:
-	HFDockPaintHandler.set_terrain_slot_controls_enabled(self, enabled)
 
 
 func _on_material_selected(index: int) -> void:
@@ -5718,10 +5638,6 @@ func refresh_visgroup_ui() -> void:
 	HFDockVisgroupHandler.refresh_visgroup_ui(self)
 
 
-func _get_selected_visgroup_name() -> String:
-	return HFDockVisgroupHandler.get_selected_visgroup_name(self)
-
-
 func _on_visgroup_add() -> void:
 	HFDockVisgroupHandler.on_visgroup_add(self)
 
@@ -5761,10 +5677,6 @@ func _on_ungroup_selection() -> void:
 
 func _setup_cordon_ui() -> void:
 	HFDockVisgroupHandler.setup_cordon_ui(self)
-
-
-func _make_cordon_spin(min_val: float, max_val: float, default_val: float) -> SpinBox:
-	return HFDockVisgroupHandler.make_cordon_spin(self, min_val, max_val, default_val)
 
 
 func _on_cordon_toggled(pressed: bool) -> void:

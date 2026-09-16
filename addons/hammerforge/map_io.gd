@@ -998,13 +998,6 @@ static func _cylinder_to_map_lines(
 	return lines
 
 
-static func _format_face_line(a: Vector3, b: Vector3, c: Vector3) -> String:
-	return (
-		"( %s ) ( %s ) ( %s ) %s 0 0 0 1 1"
-		% [_format_vec3(a), _format_vec3(b), _format_vec3(c), DEFAULT_TEXTURE]
-	)
-
-
 static func _format_vec3(v: Vector3) -> String:
 	return "%s %s %s" % [_snapped(v.x), _snapped(v.y), _snapped(v.z)]
 

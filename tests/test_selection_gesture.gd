@@ -445,12 +445,14 @@ func test_face_selection_release_keeps_native_gizmo_cleanup_alive() -> void:
 
 func test_plugin_selection_callbacks_are_thin_delegates() -> void:
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
+	# The entry points plugin.gd owns. Anything a module calls itself is not one:
+	# plugin.gd used to carry a wrapper for each that nothing called, and lists
+	# like this are why they survived (#609).
 	for call in [
 		"HFPluginSelectionInput.handle_press",
 		"HFPluginSelectionInput.custom_release_result",
 		"HFPluginSelectionInput.handle_active",
 		"HFPluginSelectionInput.select_faces_in_rect",
-		"HFPluginSelectionInput.face_screen_center",
 	]:
 		assert_true(source.contains(call), "%s must be delegated" % call)
 
@@ -851,16 +853,10 @@ func test_plugin_selection_state_callbacks_are_thin_delegates() -> void:
 	for method_name in [
 		"on_editor_selection_changed",
 		"finalize_native_selection",
-		"normalize_editor_selection",
 		"normalize_managed_selection_owner",
-		"expand_native_group_selection",
 		"expand_native_group_members",
-		"same_node_selection",
 		"apply_selection_list",
 		"apply_hf_selection",
-		"sync_hf_selection_if_empty",
-		"selection_has_brush",
-		"selection_has_entity",
 		"classify_selection_scope",
 		"guard_hammerforge_shortcut",
 		"managed_surface_action_requirement",

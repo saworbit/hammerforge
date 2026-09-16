@@ -398,12 +398,6 @@ func _update_lock_state(origin: Vector3, current: Vector3) -> void:
 			input_state.locked_thickness.z = abs(current.z - origin.z)
 
 
-func _pick_axis(origin: Vector3, current: Vector3) -> int:
-	var dx = abs(current.x - origin.x)
-	var dz = abs(current.z - origin.z)
-	return root.AxisLock.X if dx >= dz else root.AxisLock.Z
-
-
 # ---------------------------------------------------------------------------
 # Height
 # ---------------------------------------------------------------------------

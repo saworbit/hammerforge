@@ -1509,13 +1509,5 @@ func _discard_private_visual(node: Node) -> void:
 
 # Compatibility entry points for editor code or third-party tools that called
 # the previous private helpers directly.
-func _apply_brush_entity_overlay() -> void:
-	_sync_visual_overlays()
-
-
-func _apply_subtract_wireframe_overlay() -> void:
-	_sync_visual_overlays()
-
-
 func _apply_additive_wireframe_overlay() -> void:
 	_sync_visual_overlays()

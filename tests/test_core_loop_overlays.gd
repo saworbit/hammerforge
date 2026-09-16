@@ -57,14 +57,12 @@ func test_overlay_callbacks_delegate_to_the_overlay_module():
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
 	for method_name in [
 		"handle_double_tap",
-		"show_quick_property",
 		"on_quick_property_committed",
 		"show_coach_mark_for_action",
 		"show_coach_mark_for_tool_id",
 		"install_power_user_overlays",
 		"teardown_power_user_overlays",
 		"update_vertex_overlay",
-		"ensure_vertex_overlay",
 		"clear_vertex_overlay",
 		"update_marquee_overlay",
 		"draw_marquee_overlay",

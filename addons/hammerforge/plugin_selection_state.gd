@@ -213,24 +213,6 @@ static func sync_hf_selection_if_empty(plugin: Object) -> void:
 		plugin.hf_selection = selection.get_selected_nodes()
 
 
-static func selection_has_brush(nodes: Array, root: Node) -> bool:
-	if not root:
-		return false
-	for node in nodes:
-		if root.is_brush_node(node):
-			return true
-	return false
-
-
-static func selection_has_entity(nodes: Array, root: Node) -> bool:
-	if not root:
-		return false
-	for node in nodes:
-		if root.is_entity_node(node):
-			return true
-	return false
-
-
 static func classify_selection_scope(nodes: Array, root: Node) -> int:
 	if nodes.is_empty() or not root:
 		return SCOPE_EMPTY

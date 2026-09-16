@@ -58,7 +58,6 @@ func update_grid_material() -> void:
 func update_grid_transform(axis: int, origin: Vector3) -> void:
 	if not root.grid_mesh or not root.grid_mesh.is_inside_tree():
 		return
-	root.grid_plane_axis = axis
 	root.grid_plane_origin = origin
 	var rot = Vector3.ZERO
 	match axis:
