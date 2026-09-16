@@ -116,6 +116,8 @@ SCENARIOS = [
     "playtest-scene",
     "bake-options",
     "visibility-workflow",
+    "chaos-io",
+    "material-persistence",
 ]
 
 # Generous: chaos runs 300 operations and cost saves eight levels. A scenario
