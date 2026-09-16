@@ -37,6 +37,24 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   document look healthier.
 
 ### Fixed
+- **A prefab keeps its materials in another level** (#621). A face's material is
+  a slot number into the *level's* palette, and a `.hfprefab` carried the number
+  without the palette. Every reuse silently re-textured: a doorframe built out of
+  blue checker arrived purple hex, and a prefab built against an eight-slot
+  palette left every face above the destination's last slot pointing out of
+  range. It worked inside one level, because the palette is the same one, so it
+  was invisible until the first time anyone did the thing prefabs exist for. The
+  capture now records the `resource_path` each referenced slot pointed at, and
+  placement resolves those against the destination palette - appending what it
+  does not already hold, keyed on path so placing the same prefab twice does not
+  add the material twice - and rewrites the face indices to match. The append
+  lands inside the existing undo pair, because the placement takes its before and
+  after state around `instantiate()` and `capture_state()` carries the palette. A
+  material with no `resource_path` still cannot be recorded, which is #617 from
+  the other side; its slot is left alone rather than recorded as something the
+  load cannot resolve. A recorded path the project cannot load is reported by
+  name instead of silently re-texturing. A `.hfprefab` written before this block
+  existed has none and is placed exactly as it was.
 - **The shortcut dialog can be opened, and custom tools survive an upgrade**
   (#606, #612). `HFShortcutDialog` is a searchable, categorised keyboard
   reference, and the only thing referencing it was a handler nothing called, so

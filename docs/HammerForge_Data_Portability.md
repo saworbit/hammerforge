@@ -105,6 +105,9 @@ After import, run **Check Only** (Test tab) to detect any remaining non-planar f
 - Brush IDs and group IDs are stripped on capture; new ones are assigned on instantiation.
 - Entity I/O connections are captured and remapped to new entity names when instantiated. The remap runs over the entities the placement just created, not over a name lookup, so an authored name that collides with another copy's node name cannot send it to the wrong one.
 - The authored entity name travels verbatim, so placing a prefab twice gives both copies the same name. The I/O remap works off node names, which are made unique on placement; rename the copies yourself if two of them are meant to be told apart by an output.
+- Face materials travel by **path**, not by slot number. A face’s material is an index into the *level’s* palette, so a `materials` block records what each referenced slot meant and placement resolves those paths against the destination palette, appending any it does not already hold and rewriting the face indices to match. Placing the same prefab twice does not add the material twice. A material with no `resource_path` cannot be recorded, so its slot is left alone and the face keeps whatever the destination holds there — save the material to disk first if it should travel.
+- A recorded material the destination project cannot load is reported by name, and those faces keep the index they had rather than being pointed somewhere wrong.
+- A `.hfprefab` written before the `materials` block existed has none, and is placed exactly as it was before.
 - Data encoding uses the same `HFLevelIO.encode_variant()` / `decode_variant()` pipeline as `.hflevel` (handles Vector3, Transform3D, Basis, etc.).
 - Prefab files are saved to `res://prefabs/` by default. The directory is created automatically on first save.
 - Prefabs are portable between projects — just copy `.hfprefab` files to another project's `res://prefabs/` folder.
