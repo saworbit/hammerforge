@@ -178,7 +178,8 @@ func _numbers_carry_the_level_range() -> void:
 				)
 			)
 	if not narrower.is_empty():
-		flag(
+		known(
+			607,
 			"the Console and the dock offer different ranges for the same setting",
 			(
 				(
