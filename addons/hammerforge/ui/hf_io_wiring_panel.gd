@@ -36,6 +36,7 @@ var _highlight_btn: Button
 var _outputs_list: ItemList
 var _targets_list: ItemList
 var _preset_option: OptionButton
+var _preset_delete_btn: Button
 var _preset_apply_btn: Button
 var _preset_save_btn: Button
 var _target_map_container: VBoxContainer
@@ -213,6 +214,12 @@ func _build_ui() -> void:
 	_preset_save_btn.pressed.connect(_on_preset_save)
 	preset_row.add_child(_preset_save_btn)
 
+	_preset_delete_btn = Button.new()
+	_preset_delete_btn.text = "Delete"
+	_preset_delete_btn.tooltip_text = "Delete the selected saved preset"
+	_preset_delete_btn.pressed.connect(_on_preset_delete)
+	preset_row.add_child(_preset_delete_btn)
+
 	# Target mapping area (shown when preset has tags)
 	_target_map_container = VBoxContainer.new()
 	add_child(_target_map_container)
@@ -333,6 +340,7 @@ func _refresh_presets() -> void:
 		else:
 			_preset_option.add_item(name_str)
 	_update_target_map_ui()
+	_update_preset_delete_enabled()
 
 
 func _on_highlight_toggled(pressed: bool) -> void:
@@ -369,6 +377,7 @@ func _on_wire_pressed() -> void:
 
 func _on_preset_selected(index: int) -> void:
 	_update_target_map_ui()
+	_update_preset_delete_enabled()
 
 
 func _on_preset_apply() -> void:
@@ -385,10 +394,14 @@ func _on_preset_apply() -> void:
 		var edit: LineEdit = _target_map_edits[tag]
 		if edit and edit.text.strip_edges() != "":
 			target_map[tag] = edit.text.strip_edges()
+	var unresolved: Array = []
 	will_change.emit("Apply I/O Preset")
-	var count = _io_presets.apply_preset(_source_entity, preset, target_map)
+	var count = _io_presets.apply_preset(_source_entity, preset, target_map, unresolved)
 	if count > 0:
-		preset_applied.emit(_source_entity, str(preset.get("name", "")), count)
+		var applied_name := str(preset.get("name", ""))
+		if not unresolved.is_empty():
+			applied_name = "%s (no target given for %s)" % [applied_name, ", ".join(unresolved)]
+		preset_applied.emit(_source_entity, applied_name, count)
 		_refresh()
 	else:
 		change_abandoned.emit()
@@ -402,6 +415,34 @@ func _on_preset_save() -> void:
 	var ok = _io_presets.save_entity_as_preset(_source_entity, preset_name)
 	if ok:
 		_refresh_presets()
+		_preset_option.selected = _preset_option.item_count - 1
+		_update_target_map_ui()
+
+
+## Take the selected user preset back out of the list.
+##
+## The list was append-only and lives under `user://`, so it followed the mapper
+## into every level they opened afterwards, and the only way to clean it up was
+## to hand-edit the JSON. Every other library in the plugin has a removal path.
+func _on_preset_delete() -> void:
+	if not _io_presets or not _preset_option:
+		return
+	var idx = _preset_option.selected
+	var builtin_count: int = _io_presets.BUILTIN_PRESETS.size()
+	if idx < builtin_count:
+		return
+	# remove_user_preset() indexes the user array; the dropdown puts the
+	# built-ins first.
+	_io_presets.remove_user_preset(idx - builtin_count)
+	_refresh_presets()
+	_update_target_map_ui()
+
+
+func _update_preset_delete_enabled() -> void:
+	if not _preset_delete_btn or not _io_presets:
+		return
+	var builtin_count: int = _io_presets.BUILTIN_PRESETS.size()
+	_preset_delete_btn.disabled = _preset_option.selected < builtin_count
 
 
 func _update_target_map_ui() -> void:

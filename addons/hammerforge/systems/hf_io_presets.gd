@@ -178,18 +178,41 @@ func get_user_presets() -> Array:
 	return _user_presets.duplicate(true)
 
 
+## A name no preset in the list is already using, adding 2, 3 ... until one is
+## free.
+##
+## The dropdown is the only view of the list and Apply resolves the selection by
+## position, so three rows reading "From Door_A" can only be told apart by which
+## row they are on. Nothing shows the connection count and the description is
+## empty, so the name is the whole signal.
+func unique_preset_name(name: String) -> String:
+	var taken: Dictionary = {}
+	for preset in get_all_presets():
+		taken[str(preset.get("name", ""))] = true
+	if not taken.has(name):
+		return name
+	var suffix := 2
+	while taken.has("%s %d" % [name, suffix]):
+		suffix += 1
+	return "%s %d" % [name, suffix]
+
+
 ## Add a new user preset.
 ## Refuses a preset with no name, so a bad entry cannot be made from inside the
-## editor either. Returns whether it was added.
+## editor either, and makes a name that is already in the list unique. Returns
+## whether it was added.
 func add_user_preset(name: String, description: String, connections: Array) -> bool:
 	if name.strip_edges() == "":
 		HFLog.warn("HFIOPresets: a preset needs a name.")
 		return false
+	var free_name := unique_preset_name(name)
+	if free_name != name:
+		HFLog.warn("HFIOPresets: '%s' is taken, saving as '%s'." % [name, free_name])
 	(
 		_user_presets
 		. append(
 			{
-				"name": name,
+				"name": free_name,
 				"description": description,
 				"connections": connections.duplicate(true),
 				"builtin": false,
@@ -240,7 +263,13 @@ func save_entity_as_preset(entity: Node, preset_name: String, description: Strin
 ## Apply a preset from a source entity to named targets.
 ## target_map: { "tag" -> "actual_entity_name" } — maps preset target_tags to real entity names.
 ## If target_tag is "self", uses the source entity's name.
-func apply_preset(source_entity: Node, preset: Dictionary, target_map: Dictionary) -> int:
+##
+## `unresolved`, if given, is filled with the tags the map had no entry for, so
+## the caller can say "applied 2 of 3" rather than reporting a plain success for
+## a preset that only half landed.
+func apply_preset(
+	source_entity: Node, preset: Dictionary, target_map: Dictionary, unresolved: Array = []
+) -> int:
 	if not source_entity or not root or not root.entity_system:
 		return 0
 	var connections = preset.get("connections", [])
@@ -259,9 +288,23 @@ func apply_preset(source_entity: Node, preset: Dictionary, target_map: Dictionar
 		var actual_target: String = ""
 		if tag == "self":
 			actual_target = source_name
+		elif target_map.has(tag):
+			actual_target = str(target_map[tag])
 		else:
-			actual_target = str(target_map.get(tag, tag))
+			# An unfilled box is not a target. The fallback used to be the tag
+			# itself, so leaving "door" empty wired the connection at an entity
+			# literally named "door" and counted it - and the six built-ins name
+			# their tags door, light, sound, alarm_light, siren, pickup and
+			# effect, which read as entity names rather than placeholders. The
+			# result sat in the level looking real, and the visualiser skips a
+			# connection whose target resolves to nothing, so no line was drawn
+			# that anyone could notice was going nowhere.
+			if not unresolved.has(tag):
+				unresolved.append(tag)
+			continue
 		if actual_target == "":
+			if not unresolved.has(tag):
+				unresolved.append(tag)
 			continue
 		var delay = float(conn.get("delay", 0.0))
 		var fire_once = bool(conn.get("fire_once", false))
