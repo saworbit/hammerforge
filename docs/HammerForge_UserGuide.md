@@ -1522,7 +1522,7 @@ Notes
 - **X/Z** toggle grid-origin mirror axes. They are off by default; mirrored copies and the source are one undo entry.
 - The Y height gesture is a clearly chained second undo after the paint stroke. Esc restores its prior heights.
 - Painting next to a different-Y layer shows a connector ghost. **Enter** commits it in one undo; Esc dismisses it. Confirmed connectors persist and bake even with automatic detection off.
-- **Inference cleanup** is off by default. When enabled, it only removes isolated one-cell noise, fills one-cell cardinal holes/gaps, and widens inferred one-cell corridors inside the stroke-local dirty scope. Erase strokes are untouched.
+- **Inference cleanup** is off by default. When enabled, it only removes isolated one-cell noise, fills one-cell cardinal holes/gaps, and widens inferred one-cell corridors inside the stroke-local dirty scope. Erase strokes are untouched, and a stroke of a single cell is left alone - one click is a deliberate cell, not noise.
 - The viewport banner shows the hovered cell and footprint, then live unique-cell count and metres while a stroke is active.
 - Footprint, raise, and connector ghosts are transient and disappear on completion or Esc without rebuilding an entire layer.
 - Each changed stroke is one **Paint Floor** undo entry; a no-op or material pick is not.
