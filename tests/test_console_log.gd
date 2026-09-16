@@ -77,6 +77,25 @@ func test_capacity_drops_oldest_entries():
 	assert_eq(entries[-1]["message"], "message 199", "The newest entry always survives")
 
 
+## Trimming is amortised, so `capacity` is what the buffer trims down to rather
+## than a ceiling it never passes. The Log tab used to report `capacity` as the
+## size of the buffer, which was off by the slack - and that line is the one
+## place a reader is told what the limit is.
+func test_the_buffer_never_holds_more_than_it_reports():
+	log_buffer.capacity = 10
+	for i in range(200):
+		log_buffer.info("message %d" % i)
+	assert_lte(
+		log_buffer.size(),
+		log_buffer.retained_limit(),
+		"The number on screen is the number the buffer keeps"
+	)
+	assert_gt(log_buffer.size(), log_buffer.capacity, "and it does hold more than the cap")
+	assert_eq(
+		log_buffer.size() + log_buffer.dropped_count(), 200, "Retained plus dropped is everything"
+	)
+
+
 func test_over_long_message_is_truncated():
 	var huge := "x".repeat(HFConsoleLogType.MAX_MESSAGE_CHARS + 500)
 	log_buffer.info(huge)

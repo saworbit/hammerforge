@@ -679,30 +679,39 @@ static func run_validation(dock: Object, auto_fix: bool) -> void:
 	var issues: Array = []
 	var fixed := 0
 	if auto_fix:
-		result = dock.level_root.validate_level(false)
-		issues = result.get("issues", [])
-		var before_count = issues.size()
-		HFUndoHelper.commit(
+		# The repair count comes from the validator, which counted it exactly.
+		# It used to be re-derived as before minus after, which is not the number
+		# of repairs: a pass that fixes one issue and exposes another reported
+		# zero fixed. That cost a whole validation pass as well.
+		#
+		# The second pass is what remains afterwards. `validate()` reports every
+		# finding whether or not it repaired it, so its own list is not the
+		# residue - and the residue is the one thing a mapper wants after an
+		# auto-fix. The log used to print the list from before the fix, so every
+		# repaired issue was listed as though it were still there.
+		var before: Dictionary = dock.level_root.capture_state()
+		fixed = int(dock.level_root.validate_level(true).get("fixed", 0))
+		HFUndoHelper.commit_completed(
 			dock.undo_redo,
 			dock.level_root,
 			"Validate + Fix",
-			"validate_level",
-			[true],
-			false,
+			before,
 			Callable(dock, "record_history")
 		)
-		var after = dock.level_root.validate_level(false)
-		var after_count = int(after.get("issues", []).size())
-		fixed = max(0, before_count - after_count)
+		result = dock.level_root.validate_level(false)
+		issues = result.get("issues", [])
 	else:
 		result = dock.level_root.validate_level(false)
 		issues = result.get("issues", [])
 	if issues.is_empty():
-		dock._set_status("Validate: no issues found", false, 3.0)
+		if auto_fix and fixed > 0:
+			dock._set_status("Validate: fixed %d, no issues left" % fixed, false, 3.0)
+		else:
+			dock._set_status("Validate: no issues found", false, 3.0)
 		return
 	var message = "Validate: %d issue(s)" % issues.size()
 	if auto_fix:
-		message += ", fixed %d" % fixed
+		message = "Validate: fixed %d, %d remaining" % [fixed, issues.size()]
 	dock._set_status_warning(message, 6.0)
 	for issue in issues:
 		dock._log("[Validate] %s" % str(issue), true)

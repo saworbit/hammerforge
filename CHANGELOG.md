@@ -103,6 +103,35 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fall out of a missing check.
 
 ### Fixed
+- **Validate + Fix reports what is left, not what it repaired** (#569). The
+  handler threw away the `fixed` count `validate_level(true)` returns and
+  re-derived it by differencing two more full validation passes - which is not
+  the number of repairs, since a pass that fixes one issue and exposes another
+  reported zero fixed - and then logged the issue list from *before* the fix, so
+  every problem it had just repaired was printed as though it were still there,
+  with no list of what remained. It reads the validator's own count now and
+  re-runs once for the residue, which is what the log prints; the status line
+  reads "fixed N, M remaining", and a level that comes out clean says so. Three
+  passes become two, and the second is needed because `validate()` reports every
+  finding whether or not it repaired it. `HFUndoHelper.commit_completed()` is new:
+  `commit()` calls the method itself and discards the return, so a caller that
+  needs it could not use it.
+- **The Status board's recommended chunk size is one the editor can accept**
+  (#549). `get_recommended_chunk_size()` has no ceiling and the dock spin it is
+  written through had a maximum of 256, so for any level wider than 1024 units -
+  small, in this genre - the level got 256 and the Log tab was told the
+  unclamped number. The line exists so the action is auditable, and it disagreed
+  with the level. The Console reads the value back after assigning it, the way
+  `dock.gd`'s bake path already does, and the spin's maximum is now
+  `LevelRoot.MAX_BAKE_CHUNK_SIZE` rather than a smaller number of its own - so
+  the recommendation the perf panel shows is one the control beside it can hold.
+- **The Log tab says how much the buffer actually holds** (#543). Trimming is
+  amortised in batches of `TRIM_SLACK`, so `capacity` is what the buffer trims
+  down to rather than a ceiling it never passes - the buffer sits anywhere
+  between 600 and 663 at the default. The footer reported `capacity`, which is
+  the one place a reader is told what the limit is. It says "holds up to" and the
+  real figure now, via `retained_limit()`; the amortisation is worth keeping, so
+  it is the reported number that was wrong.
 - **Cycling a prefab variant leaves the instance where it was** (#565). A
   prefab's brush transforms are stored relative to the merged visual AABB centre
   of the selection it was captured from, and `instantiate()` adds the placement
