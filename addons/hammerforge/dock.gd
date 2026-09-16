@@ -1638,15 +1638,12 @@ func _build_displacement_bevel_section() -> void:
 	_disp_power_spin.value = 3
 	_disp_power_spin.tooltip_text = (
 		"Subdivision: 2=5x5, 3=9x9, 4=17x17"
-		+ "
-Used by Create, and by Apply for a face that already has a displacement"
+		+ "\nUsed by Create, and by Apply for a face that already has a displacement"
 	)
 	pow_row.add_child(_disp_power_spin)
 	_disp_power_apply_btn = Button.new()
 	_disp_power_apply_btn.text = "Apply"
-	_disp_power_apply_btn.tooltip_text = (
-		"Change the selected displacement to this power, keeping the sculpt"
-	)
+	_disp_power_apply_btn.tooltip_text = ("Change the selected displacement to this power, keeping the sculpt")
 	_disp_power_apply_btn.pressed.connect(_on_disp_set_power)
 	pow_row.add_child(_disp_power_apply_btn)
 	dbox.add_child(pow_row)
