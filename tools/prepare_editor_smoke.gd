@@ -32,7 +32,10 @@ func _init() -> void:
 	print("tutorial_step=", prefs.get_pref("tutorial_step", 0))
 	print("show_welcome=", prefs.get_pref("show_welcome", true))
 	print(
-		"Open res://samples/hf_editor_smoke_start.tscn and follow docs/HammerForge_Editor_Smoke_Checklist.md"
+		(
+			"Open res://samples/hf_editor_smoke_start.tscn and run the Release gate in "
+			+ "docs/HammerForge_Editor_Smoke_Checklist.md"
+		)
 	)
 	quit(0)
 

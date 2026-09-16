@@ -42,6 +42,26 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Editor smoke gate
+        # The smoke checklist is 599 steps and nobody runs it end to end (#593).
+        # So the top of it is a short gate that someone does run, and this step
+        # is what makes "does run" true instead of aspirational. It fails the
+        # release rather than warning, because a warning nobody reads is the
+        # thing being fixed.
+        run: |
+          DOC=docs/HammerForge_Editor_Smoke_Checklist.md
+          VERSION="$(python -c "import sys; sys.path.insert(0,'tools'); import build_release_tree as b; print(b.plugin_version())")"
+          RECORDED="$(sed -n 's/^Gate passed:[[:space:]]*//p' "$DOC" | sed 's/[[:space:]]*$//' | head -n 1)"
+          if [ "$RECORDED" != "$VERSION" ]; then
+            echo "::error::the editor smoke gate has not been recorded for $VERSION"
+            echo "$DOC records: ${RECORDED:-nothing}"
+            echo "Run the 'Release gate' section of that document against this"
+            echo "build, then set its 'Gate passed:' line to $VERSION and push"
+            echo "that commit before tagging."
+            exit 1
+          fi
+          echo "editor smoke gate recorded for $VERSION"
+
       - name: Build the release tree
         run: python tools/build_release_tree.py "$RUNNER_TEMP/release"
 

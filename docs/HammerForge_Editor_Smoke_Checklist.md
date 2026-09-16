@@ -1,12 +1,65 @@
 ---
-description: "Manual smoke checklist for verifying a HammerForge build inside the Godot editor before release."
+description: "The short release gate that is run before a HammerForge release, and the long manual reference that is not."
 ---
 
 # HammerForge Editor Smoke Checklist
 
-Last updated: September 2, 2026
+## What this document is
 
-This checklist covers the editor-only flows that are hard to validate in headless tests:
+Two things, and they are not the same.
+
+The **Release gate** below is short, and it is run. `.github/workflows/release.yml`
+refuses to ship a version that is not recorded here as having passed it.
+
+The **Checklist** after it is a reference. It is not run end to end, it has never
+been run end to end, and at its present length it never will be. Treat any step
+in it as unverified until someone says otherwise.
+
+That distinction is the point. A step written down here is a description of what
+should happen, not a report that it does. Adding a line to this document is not
+evidence that a case is covered, and closing a fix with a line added here leaves
+the case untested. Put the check where it can fail on its own: a test in `tests/`
+if headless can see it, the gate below if only the live editor can.
+
+#592 is the worked example. Clicking a brush switched the editor to the
+HammerForge main screen for eleven days. Section 2b is a dozen steps that each
+need a brush clicked in the 3D viewport, and this document was edited five times
+inside that window without anyone hitting it.
+
+## Release gate
+
+Run before tagging a release. Ten minutes, not a day. Keep it that way: a gate
+that grows stops being run, which is how the rest of this document got here.
+
+Prep:
+
+```bash
+godot --headless -s res://tools/prepare_editor_smoke.gd --path .
+```
+
+Then open `res://samples/hf_editor_smoke_start.tscn` with the plugin enabled.
+
+- The plugin enables with nothing red in the Output panel.
+- **HammerForge** sits in the main-screen switcher beside 2D / 3D / Script, and the left dock tab reads **HammerForge**.
+- **Create Starter Level** makes a `LevelRoot`. Ctrl+Z removes it, Ctrl+Shift+Z brings it back.
+- Draw a box brush. Drag one yellow resize handle; the box resizes and it is one undo step.
+- Click that brush in the 3D viewport. The 3D view is still what you are looking at. (#592: a plugin that declares a main screen and also handles the selected object gets switched to by Godot.)
+- Select a `Camera3D`. The dock stays connected to the existing `LevelRoot` and no brush behind the camera is selected.
+- Bake. The **Bake** status row goes green and the bake messages arrive in the Console Log.
+- **Test Level** launches a playtest and the player spawns on the geometry.
+- Save the scene, restart Godot, reopen it. The `LevelRoot` and the brushes come back.
+- Disable and re-enable the plugin. The switcher entry, the viewport lamp and the dock tab icon all come back, and nothing is left behind.
+
+### Gate record
+
+One line, edited by hand when the gate passes. The release workflow reads it.
+
+Gate passed: none
+
+## Checklist
+
+Everything from here down is the reference described above. It is not gated, and
+most of it has never been run. It covers the editor-only flows that are hard to validate in headless tests:
 - viewport input ownership: native Object Select clicks/marquees and filled hit targets, modal HammerForge Face Select, native navigation/gizmos, shortcut scope, and lost-release recovery
 - picking correctness: exact non-box faces and placement, hidden visgroups, internal/geometry-less entity previews, nearest brush/entity ordering, and scaled transforms
 - tutorial banner startup before `LevelRoot` exists
@@ -30,7 +83,7 @@ This checklist covers the editor-only flows that are hard to validate in headles
 - snapping: Grid/Vertex/Center/Edge/Perpendicular candidates and dock toggle state
 - playtest export: player/spawn, nested ownership, world transforms, and entity I/O
 
-## Prep
+### Prep
 
 Reset HammerForge user prefs to a known state:
 
@@ -49,8 +102,6 @@ Then open:
 - `res://samples/hf_editor_smoke_start.tscn`
 
 Enable the HammerForge plugin if it is not already enabled.
-
-## Checklist
 
 ### 0a. HammerForge Console (main screen)
 - Confirm **HammerForge** sits in the main-screen switcher at the top, beside 2D / 3D / Script, wearing the HammerForge mark, and that the mark is the same height as the other entries rather than lifting the toolbar.
