@@ -391,12 +391,10 @@ func toggle_face_selection(brush: DraftBrush, face_idx: int, additive: bool) -> 
 	else:
 		indices.append(face_idx)
 	root.face_selection[key] = indices
-	apply_face_selection()
 
 
 func clear_face_selection() -> void:
 	root.face_selection.clear()
-	apply_face_selection()
 
 
 func get_face_selection() -> Dictionary:
@@ -427,16 +425,6 @@ func assign_material_to_selected_faces(material_index: int) -> int:
 		brush.assign_material_to_faces(material_index, typed)
 		count += typed.size()
 	return count
-
-
-func apply_face_selection() -> void:
-	for node in root._iter_pick_nodes():
-		if not (node is DraftBrush):
-			continue
-		var brush := node as DraftBrush
-		var key = face_key(brush)
-		var indices: Array = root.face_selection.get(key, [])
-		brush.set_selected_faces(PackedInt32Array(indices))
 
 
 func face_key(brush: DraftBrush) -> String:
