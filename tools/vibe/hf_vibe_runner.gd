@@ -99,6 +99,7 @@ const SCENARIOS: Array[String] = [
 	"res://tools/vibe/scenarios/drag_create.gd",
 	"res://tools/vibe/scenarios/level_scale.gd",
 	"res://tools/vibe/scenarios/playtest_scene.gd",
+	"res://tools/vibe/scenarios/bake_options.gd",
 ]
 
 

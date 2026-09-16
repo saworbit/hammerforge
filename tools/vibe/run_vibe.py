@@ -114,6 +114,7 @@ SCENARIOS = [
     "drag-create",
     "level-scale",
     "playtest-scene",
+    "bake-options",
 ]
 
 # Generous: chaos runs 300 operations and cost saves eight levels. A scenario

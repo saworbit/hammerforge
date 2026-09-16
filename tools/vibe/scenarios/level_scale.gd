@@ -27,6 +27,7 @@ func run() -> void:
 	await _the_cost_curve()
 	await _undo_of_one_brush_move()
 	await _face_selection_at_scale()
+	await _what_the_save_thread_is_not_doing()
 
 
 func _build(root: Node3D, count: int) -> void:
@@ -213,3 +214,36 @@ func _face_selection_at_scale() -> void:
 		"capture_state with a full face selection",
 		"%.1f ms, %.1f KB" % [_ms(t), float(var_to_bytes(state).size()) / 1024.0]
 	)
+
+
+## `save_hflevel()` is documented as threaded. Time the half that is not.
+func _what_the_save_thread_is_not_doing() -> void:
+	var root: Node3D = await fresh_root()
+	_build(root, 400)
+	await frame()
+	var t := Time.get_ticks_usec()
+	var encoded = root._capture_hflevel_state()
+	var capture_ms := _ms(t)
+	t = Time.get_ticks_usec()
+	var copy = (encoded as Dictionary).duplicate(true)
+	var duplicate_ms := _ms(t)
+	note("400 brushes: _capture_hflevel_state()", "%.1f ms" % capture_ms)
+	note("  then .duplicate(true) on the result", "%.1f ms" % duplicate_ms)
+	note(
+		"  both run on the calling thread before start_hflevel_thread()",
+		"%.1f ms of stall per save" % (capture_ms + duplicate_ms)
+	)
+	note("encoded payload", "%.1f KB" % (float(var_to_bytes(encoded).size()) / 1024.0))
+	if duplicate_ms > 5.0:
+		flag(
+			"save_hflevel() deep-copies the encoded level it was just handed",
+			(
+				"capture_hflevel_state() returns a freshly built Dictionary from "
+				+ "HFLevelIO.encode_variant(), and save_hflevel() then does "
+				+ ".duplicate(true) on it before passing it to the thread. Nothing else "
+				+ "holds a reference to it. At 400 brushes the copy alone is %.1f ms on "
+				+ "top of the %.1f ms capture, and it doubles peak memory for the save"
+			) % [duplicate_ms, capture_ms]
+		)
+	if copy.size() != (encoded as Dictionary).size():
+		note("copy differs in size", [copy.size(), (encoded as Dictionary).size()])
