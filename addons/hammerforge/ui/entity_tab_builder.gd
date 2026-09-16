@@ -85,18 +85,9 @@ func build(parent: Control) -> void:
 	dock.io_add_btn = HFUIFactoryType.make_button("Add Output")
 	dock.io_add_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	io_btn_row.add_child(dock.io_add_btn)
-	dock.io_remove_btn = HFUIFactoryType.make_button("Remove")
-	io_btn_row.add_child(dock.io_remove_btn)
-
-	# Connection list
-	var list_lbl = Label.new()
-	list_lbl.text = "Connections:"
-	ioc.add_child(list_lbl)
-	dock.io_list = ItemList.new()
-	dock.io_list.custom_minimum_size.y = 80
-	dock.io_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	dock.io_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	ioc.add_child(dock.io_list)
+	# The connection list, and the Remove beside it, used to be here as well as on
+	# the wiring panel below. One connection was listed twice, in two spellings,
+	# and only this plainer copy could be acted on. The panel keeps both (#616).
 
 	# --- I/O Wiring Panel section (collapsed & hidden until entity selected) ---
 	var wire_sec = hf_collapsible_section.create("I/O Wiring", false)
@@ -113,11 +104,10 @@ func build(parent: Control) -> void:
 func connect_signals() -> void:
 	if dock.io_add_btn:
 		dock.io_add_btn.pressed.connect(dock._on_io_add)
-	if dock.io_remove_btn:
-		dock.io_remove_btn.pressed.connect(dock._on_io_remove)
 	if dock._io_wiring_panel:
 		dock._io_wiring_panel.connection_added.connect(dock._on_wiring_connection_added)
 		dock._io_wiring_panel.preset_applied.connect(dock._on_wiring_preset_applied)
+		dock._io_wiring_panel.connection_removed.connect(dock._on_wiring_connection_removed)
 		dock._io_wiring_panel.will_change.connect(dock._on_wiring_will_change)
 		dock._io_wiring_panel.change_abandoned.connect(dock._on_wiring_change_abandoned)
 		dock._io_wiring_panel.highlight_toggled.connect(dock._on_wiring_highlight_toggled)

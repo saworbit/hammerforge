@@ -244,7 +244,6 @@ func test_every_level_changing_dock_command_registers_an_undo_step() -> void:
 		"on_ungroup_selection": "ungroup_nodes",
 		"on_create_entity": "add_entity",
 		"on_io_add": "add_entity_output",
-		"on_io_remove": "remove_entity_output",
 		"on_paint_layer_remove": "remove_active_paint_layer",
 		"on_heightmap_generate": "generate_heightmap_noise",
 		"on_heightmap_import_selected": "import_heightmap",
@@ -342,7 +341,6 @@ func test_commands_holding_live_nodes_ask_for_an_absolute_redo() -> void:
 		"on_ungroup_selection",
 		"on_create_entity",
 		"on_io_add",
-		"on_io_remove",
 	]:
 		var flat := _body(function_name).replace("\n", " ").replace("\t", "")
 		while flat.contains("  "):

@@ -543,7 +543,6 @@ func test_all_dock_selection_mutators_share_the_scope_guard() -> void:
 		"_on_cordon_from_selection",
 		"_on_clip",
 		"_on_io_add",
-		"_on_io_remove",
 		"_apply_material_to_whole_brush",
 	]
 	for function_name in guarded_functions:
@@ -574,7 +573,7 @@ func test_all_dock_selection_mutators_share_the_scope_guard() -> void:
 			),
 			"%s must reject entities instead of filtering them out" % function_name,
 		)
-	for function_name in ["_on_io_add", "_on_io_remove"]:
+	for function_name in ["_on_io_add"]:
 		assert_true(
 			_dock_or_handler_function_source(source, handler_sources, function_name).contains(
 				"DockSelectionRequirement.ENTITIES_ONLY"
