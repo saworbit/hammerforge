@@ -736,6 +736,8 @@ func _apply_user_prefs() -> void:
 		power_user_overlays.set_pressed_no_signal(
 			bool(_user_prefs.get_pref("power_user_overlays", false))
 		)
+	if material_browser:
+		material_browser.set_user_prefs(_user_prefs)
 	# Restore collapsed section state
 	for sec_name in _all_sections:
 		var collapsed = _user_prefs.get_section_collapsed(sec_name)
@@ -2227,6 +2229,10 @@ func _sync_materials_from_root() -> void:
 func _refresh_material_browser() -> void:
 	if not material_browser or not level_root:
 		return
+	# The browser is built fresh by the dock, so the stars have to be handed back
+	# every time it is rebuilt or they last until the next theme change.
+	if _user_prefs:
+		material_browser.set_user_prefs(_user_prefs)
 	material_browser.set_material_manager(level_root.material_manager)
 	material_browser.set_selected_index(_selected_material_index)
 
@@ -4492,9 +4498,13 @@ func _on_material_context_action(id: int) -> void:
 				if mat:
 					if material_browser.is_favorite(mat.resource_path):
 						material_browser.remove_favorite(mat.resource_path)
+						material_browser.rebuild()
+					elif material_browser.add_favorite(mat.resource_path):
+						material_browser.rebuild()
 					else:
-						material_browser.add_favorite(mat.resource_path)
-					material_browser.rebuild()
+						# Every material made in the session shares one empty
+						# path, so starring one would star the lot.
+						show_toast("Save the material to disk before starring it", 1)
 		3:  # Copy Name
 			var mat = level_root.material_manager.get_material(idx)
 			if mat:
