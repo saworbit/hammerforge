@@ -85,11 +85,6 @@ func _on_brush_geometry_invalidated(brush_id: String) -> void:
 	_face_geometry_cache.erase(brush_id)
 
 
-## Drop every cached entry. For callers that rebuild the level wholesale.
-func clear_geometry_cache() -> void:
-	_face_geometry_cache.clear()
-
-
 func set_mode(mode: int, on: bool) -> void:
 	if on:
 		enabled_modes = enabled_modes | mode

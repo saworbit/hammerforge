@@ -89,10 +89,6 @@ func hide_overlay() -> void:
 	_immediate_mesh = null
 
 
-func get_active_instance_id() -> String:
-	return _active_instance_id
-
-
 func _draw_wireframe_box(aabb: AABB) -> void:
 	_immediate_mesh = ImmediateMesh.new()
 	var im := _immediate_mesh

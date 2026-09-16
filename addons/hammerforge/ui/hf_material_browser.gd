@@ -470,17 +470,6 @@ func _get_drag_data_for_index(at_position: Vector2, cell_idx: int) -> Variant:
 	return {"type": "hammerforge_material", "index": palette_idx}
 
 
-## Legacy helper — finds the cell at global position and delegates.
-func get_drag_data_for_cell(at_position: Vector2) -> Variant:
-	for i in range(_grid.get_child_count()):
-		var btn = _grid.get_child(i) as Button
-		if not btn:
-			continue
-		if btn.get_global_rect().has_point(at_position):
-			return _get_drag_data_for_index(at_position, i)
-	return null
-
-
 func _build_drag_preview(mat: Material) -> Control:
 	if mat == null:
 		return null

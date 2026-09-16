@@ -68,10 +68,8 @@ static func _move_aside(path: String, reason: String) -> void:
 ## dropped in silence.
 const SCHEMA := {
 	"grid_snap": {"type": TYPE_FLOAT, "min": 0.001},
-	"autosave_interval": {"type": TYPE_INT, "min": 0},
 	"recent_files": {"type": TYPE_ARRAY},
 	"collapsed_sections": {"type": TYPE_DICTIONARY},
-	"last_tool_id": {"type": TYPE_INT},
 	"show_hud": {"type": TYPE_BOOL},
 	"show_welcome": {"type": TYPE_BOOL},
 	"power_user_overlays": {"type": TYPE_BOOL},
@@ -128,10 +126,8 @@ static func _usable(pref_name: String, value: Variant, fallback: Variant) -> Var
 static func _defaults() -> Dictionary:
 	return {
 		"grid_snap": 16.0,
-		"autosave_interval": 300,
 		"recent_files": [],
 		"collapsed_sections": {},
-		"last_tool_id": 0,
 		"show_hud": true,
 		"show_welcome": true,
 		"power_user_overlays": false,

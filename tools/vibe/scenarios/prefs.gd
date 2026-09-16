@@ -79,9 +79,7 @@ func _prefs_with_values_of_the_wrong_type() -> void:
 		)
 
 	# Values of the right type but absurd: nothing clamps these either.
-	prefs.set_pref("autosave_interval", -1)
 	prefs.set_pref("grid_snap", 0.0)
-	note("autosave_interval accepted", prefs.get_pref("autosave_interval"))
 	note("grid_snap accepted", prefs.get_pref("grid_snap"))
 	_restore_prefs()
 
