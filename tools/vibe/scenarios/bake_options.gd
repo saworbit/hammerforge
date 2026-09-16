@@ -36,6 +36,7 @@ func run() -> void:
 	await _lods_and_uvs_on_the_mesh()
 	await _what_the_unindexed_mesh_costs()
 	await _occluder_count()
+	await _atlas_and_face_materials()
 
 
 func _build_room(root: Node3D) -> void:
@@ -397,3 +398,141 @@ func _collect_all(node: Node, out: Array) -> Array:
 	for c in node.get_children():
 		_collect_all(c, out)
 	return out
+
+
+## The atlas and the per-face material path, on a level with enough materials
+## for either to have something to do.
+func _atlas_and_face_materials() -> void:
+	var patterns := ["brick", "checker", "dots", "hex", "stripes_diagonal", "zigzag"]
+	var rows: Array = []
+	# The third and fourth rows differ only in the UV scale. HFMaterialAtlas
+	# excludes any face whose UVs leave the unit square (group_has_tiling_uvs),
+	# and HammerForge's default projection maps world units to UVs, so a
+	# 64-unit face is 0..64 and every face in an ordinary level is excluded.
+	for combo in [
+		{"bake_use_face_materials": false, "bake_use_atlas": false, "uv": 1.0},
+		{"bake_use_face_materials": true, "bake_use_atlas": false, "uv": 1.0},
+		{"bake_use_face_materials": true, "bake_use_atlas": true, "uv": 1.0},
+		{"bake_use_face_materials": true, "bake_use_atlas": true, "uv": 1.0 / 64.0},
+	]:
+		var root: Node3D = await fresh_root("Atlas_%d" % rows.size())
+		var mats: Array = []
+		for pattern in patterns:
+			var path := (
+				"res://addons/hammerforge/textures/prototypes/materials/proto_%s_red.tres" % pattern
+			)
+			if ResourceLoader.exists(path):
+				mats.append(load(path))
+		root.set_materials(mats)
+		for i in 12:
+			var b = box(root, Vector3(64, 64, 64), Vector3(i * 128.0, 32, 0))
+			if b and b.get("faces") is Array:
+				for f in b.faces:
+					f.material_idx = i % maxi(1, mats.size())
+					f.uv_scale = Vector2(float(combo["uv"]), float(combo["uv"]))
+		for f in FLAGS:
+			if f in root:
+				root.set(f, false)
+		for k in combo:
+			if k in root:
+				root.set(k, combo[k])
+		await frame()
+		await root.bake()
+		await frame()
+		if root.baked_container == null:
+			note("no container for", combo)
+			continue
+		var facts := _mesh_facts(root.baked_container, [])
+		var surfaces := 0
+		var materials_on_meshes: Dictionary = {}
+		for node in _collect_meshes(root.baked_container, []):
+			var mi: MeshInstance3D = node
+			surfaces += mi.mesh.get_surface_count()
+			for s in mi.mesh.get_surface_count():
+				var m = mi.mesh.surface_get_material(s)
+				if m:
+					materials_on_meshes[m.get_instance_id()] = true
+			if mi.material_override:
+				materials_on_meshes[mi.material_override.get_instance_id()] = true
+		rows.append(
+			{
+				"settings": combo,
+				"palette": mats.size(),
+				"meshes": facts.size(),
+				"surfaces": surfaces,
+				"distinct materials on the baked mesh": materials_on_meshes.size(),
+			}
+		)
+		note("atlas row", rows[-1])
+	note("atlas comparison", rows)
+
+	# Ask the packer directly, so a bake that changed nothing can be told from a
+	# packer that refused.
+	var direct: Array = []
+	for pattern in patterns:
+		var path := (
+			"res://addons/hammerforge/textures/prototypes/materials/proto_%s_red.tres" % pattern
+		)
+		if ResourceLoader.exists(path):
+			direct.append(load(path))
+	var atlas_script = load("res://addons/hammerforge/hf_material_atlas.gd")
+	var packed = atlas_script.build_atlas(direct, {})
+	if packed == null:
+		note("build_atlas on the same six materials", "returned null")
+	else:
+		note("build_atlas on the same six materials", {
+			"atlased": packed.atlased_keys.size(),
+			"fallback": packed.fallback_keys.size(),
+			"has atlas material": packed.atlas_material != null,
+			"unplaced": packed.get("unplaced").size() if packed.get("unplaced") != null else "n/a",
+		})
+		var first_img = null
+		if not direct.is_empty() and direct[0] is StandardMaterial3D:
+			var tex = (direct[0] as StandardMaterial3D).albedo_texture
+			first_img = tex.get_image() if tex else null
+		note(
+			"the first material's albedo image, headless",
+			"none" if first_img == null else "%dx%d" % [first_img.get_width(), first_img.get_height()]
+		)
+	if rows.size() >= 4:
+		var face_mats: Dictionary = rows[1]
+		var atlas: Dictionary = rows[2]
+		var atlas_unit_uv: Dictionary = rows[3]
+		note("the same level with UVs inside the unit square", atlas_unit_uv)
+		if HFVibe.canonical(face_mats) == HFVibe.canonical(atlas.duplicate()):
+			note("atlas made no difference", "same meshes, surfaces and materials as without it")
+		note(
+			"what each setting produced",
+			(
+				"plain %s surface(s)/%s material(s), face materials %s/%s, atlas %s/%s"
+				% [
+					rows[0]["surfaces"],
+					rows[0]["distinct materials on the baked mesh"],
+					face_mats["surfaces"],
+					face_mats["distinct materials on the baked mesh"],
+					atlas["surfaces"],
+					atlas["distinct materials on the baked mesh"],
+				]
+			)
+		)
+		if (
+			int(atlas["distinct materials on the baked mesh"])
+			>= int(face_mats["distinct materials on the baked mesh"])
+			and int(face_mats["distinct materials on the baked mesh"]) > 1
+		):
+			flag(
+				"the Use atlas bake option changes nothing and reports nothing",
+				(
+					("a 6-material level bakes to %s distinct material(s) with face "
+					+ "materials on, %s with the atlas on as well, and %s once the same "
+					+ "level's UVs are scaled down by 64. Handed the same six materials "
+					+ "directly, HFMaterialAtlas.build_atlas() packs all six with no "
+					+ "fallbacks and returns an atlas material -- so the packer works and "
+					+ "the bake never gets an atlas out of it. Nothing reports a skip")
+					% [
+						face_mats["distinct materials on the baked mesh"],
+						atlas["distinct materials on the baked mesh"],
+						atlas_unit_uv["distinct materials on the baked mesh"],
+					]
+				)
+			)
