@@ -1912,7 +1912,7 @@ func _generate_occluders(container: Node3D) -> void:
 	occluder_container.name = "Occluders"
 	var count := 0
 	for surface in surfaces:
-		var members: PackedInt32Array = surface
+		var members: Array = surface
 		var area := 0.0
 		for i in members:
 			area += float(tris[i]["area"])
@@ -2021,8 +2021,12 @@ func _collect_occluder_triangles(container: Node3D) -> Array:
 ## what makes this one pass: each vertex names the handful of triangles that meet
 ## there, and only those are ever compared. Nothing walks the list of surfaces
 ## found so far.
+## `Array[int]` rather than `PackedInt32Array` for `parent`: the union-find writes
+## to it from inside a call, and an Array is unambiguously the caller's array
+## rather than a copy-on-write view of it. Typed, so `parent[i]` still has a type
+## to infer from and `resize()` fills with zeros rather than nulls.
 static func _group_touching_coplanar(tris: Array) -> Array:
-	var parent := PackedInt32Array()
+	var parent: Array[int] = []
 	parent.resize(tris.size())
 	for i in tris.size():
 		parent[i] = i
@@ -2034,11 +2038,11 @@ static func _group_touching_coplanar(tris: Array) -> Array:
 		for corner in ["a", "b", "c"]:
 			var key := _weld_key(tri[corner])
 			if not at_vertex.has(key):
-				at_vertex[key] = PackedInt32Array()
+				at_vertex[key] = []
 			at_vertex[key].append(i)
 
 	for key in at_vertex:
-		var here: PackedInt32Array = at_vertex[key]
+		var here: Array = at_vertex[key]
 		for x in range(here.size()):
 			for y in range(x + 1, here.size()):
 				if _same_plane(tris[here[x]], tris[here[y]]):
@@ -2048,7 +2052,7 @@ static func _group_touching_coplanar(tris: Array) -> Array:
 	for i in tris.size():
 		var r := _find(parent, i)
 		if not by_root.has(r):
-			by_root[r] = PackedInt32Array()
+			by_root[r] = []
 		by_root[r].append(i)
 	return by_root.values()
 
@@ -2068,7 +2072,7 @@ static func _same_plane(one: Dictionary, other: Dictionary) -> bool:
 	)
 
 
-static func _find(parent: PackedInt32Array, i: int) -> int:
+static func _find(parent: Array[int], i: int) -> int:
 	var root := i
 	while parent[root] != root:
 		root = parent[root]
@@ -2080,7 +2084,7 @@ static func _find(parent: PackedInt32Array, i: int) -> int:
 	return root
 
 
-static func _union(parent: PackedInt32Array, a: int, b: int) -> void:
+static func _union(parent: Array[int], a: int, b: int) -> void:
 	var ra := _find(parent, a)
 	var rb := _find(parent, b)
 	if ra != rb:
