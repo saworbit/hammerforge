@@ -88,74 +88,94 @@ func test_format_zero_returns_empty():
 # ===========================================================================
 
 
-func test_radial_draw_expands_the_short_axis_without_moving_the_drag_origin():
-	var drag := _new_drag_system()
-	var cone := (
+func _draw(
+	drag: HFDragSystem, current: Vector3, height: float, shape: int, equal_base: bool = false
+) -> Dictionary:
+	return (
 		drag
 		. _compute_brush_info(
 			Vector3.ZERO,
-			Vector3(6, 0, 8),
-			4.0,
-			DraftBrush.BrushShape.CONE,
+			current,
+			height,
+			shape,
 			Vector3(32, 32, 32),
 			DragRoot.AxisLock.NONE,
-			false,
+			equal_base,
 			false,
 		)
 	)
-	assert_eq(cone["size"], Vector3(8, 4, 8))
-	assert_eq(cone["center"], Vector3(4, 2, 4))
 
-	var negative := (
-		drag
-		. _compute_brush_info(
-			Vector3.ZERO,
-			Vector3(-6, 0, -8),
-			4.0,
-			DraftBrush.BrushShape.CYLINDER,
-			Vector3(32, 32, 32),
-			DragRoot.AxisLock.NONE,
-			false,
-			false,
-		)
-	)
-	assert_eq(negative["size"], Vector3(8, 4, 8))
-	assert_eq(negative["center"], Vector3(-4, 2, -4))
+
+func test_a_round_brush_is_inscribed_in_the_rectangle_that_was_dragged():
+	# #604: the diameter was the *longer* dragged side and the footprint was
+	# anchored at the drag origin, so a cylinder drawn in a narrow rectangle landed
+	# four times larger and past the end of the drag.
+	var drag := _new_drag_system()
+	var cone := _draw(drag, Vector3(6, 0, 8), 4.0, DraftBrush.BrushShape.CONE)
+	assert_eq(cone["size"], Vector3(6, 4, 6), "the smaller dragged side is the diameter")
+	assert_eq(cone["center"], Vector3(3, 2, 4), "the footprint is centred on the rectangle")
+
+
+func test_a_round_brush_drawn_backwards_is_inscribed_the_same_way():
+	var drag := _new_drag_system()
+	var negative := _draw(drag, Vector3(-6, 0, -8), 4.0, DraftBrush.BrushShape.CYLINDER)
+	assert_eq(negative["size"], Vector3(6, 4, 6))
+	assert_eq(negative["center"], Vector3(-3, 2, -4))
+
+
+func test_a_round_brush_never_leaves_the_ground_the_drag_covered():
+	var drag := _new_drag_system()
+	for shape in [
+		DraftBrush.BrushShape.CYLINDER,
+		DraftBrush.BrushShape.CONE,
+		DraftBrush.BrushShape.SPHERE,
+		DraftBrush.BrushShape.CAPSULE,
+	]:
+		var info := _draw(drag, Vector3(128, 0, 32), 64.0, shape)
+		var center: Vector3 = info["center"]
+		var size: Vector3 = info["size"]
+		assert_gte(center.x - size.x * 0.5, 0.0, "shape %d starts inside the drag on x" % shape)
+		assert_lte(center.x + size.x * 0.5, 128.0, "shape %d ends inside the drag on x" % shape)
+		assert_gte(center.z - size.z * 0.5, 0.0, "shape %d starts inside the drag on z" % shape)
+		assert_lte(center.z + size.z * 0.5, 32.0, "shape %d ends inside the drag on z" % shape)
+
+
+func test_the_height_stage_of_a_sphere_drag_lands():
+	# #605: a SPHERE is uniform by definition - ELLIPSOID is the shape with three
+	# independent axes - so the only way the second stage of the drag can mean
+	# anything is for the height to take part in the diameter.
+	var drag := _new_drag_system()
+	var produced: Array = []
+	for height in [16.0, 64.0, 256.0]:
+		var info := _draw(drag, Vector3(64, 0, 64), height, DraftBrush.BrushShape.SPHERE)
+		produced.append(info["size"].y)
+	assert_eq(produced, [16.0, 64.0, 64.0], "a shorter drag makes a smaller ball")
+
+
+func test_a_cylinder_still_keeps_the_height_it_was_dragged():
+	var drag := _new_drag_system()
+	var info := _draw(drag, Vector3(64, 0, 64), 16.0, DraftBrush.BrushShape.CYLINDER)
+	assert_eq(info["size"], Vector3(64, 16, 64), "only the sphere folds height into the diameter")
 
 
 func test_capsule_and_sphere_draw_normalization_stays_on_the_construction_plane():
 	var drag := _new_drag_system()
-	var capsule := (
-		drag
-		. _compute_brush_info(
-			Vector3.ZERO,
-			Vector3(6, 0, 8),
-			4.0,
-			DraftBrush.BrushShape.CAPSULE,
-			Vector3(32, 32, 32),
-			DragRoot.AxisLock.NONE,
-			false,
-			false,
-		)
-	)
-	assert_eq(capsule["size"], Vector3(8, 8, 8))
-	assert_eq(capsule["center"], Vector3(4, 4, 4))
+	var capsule := _draw(drag, Vector3(6, 0, 8), 4.0, DraftBrush.BrushShape.CAPSULE)
+	# A capsule cannot be shorter than it is wide, so its height rule still wins.
+	assert_eq(capsule["size"], Vector3(6, 6, 6))
+	assert_eq(capsule["center"], Vector3(3, 3, 4))
 
-	var sphere := (
-		drag
-		. _compute_brush_info(
-			Vector3.ZERO,
-			Vector3(6, 0, 8),
-			32.0,
-			DraftBrush.BrushShape.SPHERE,
-			Vector3(32, 32, 32),
-			DragRoot.AxisLock.NONE,
-			false,
-			false,
-		)
-	)
-	assert_eq(sphere["size"], Vector3(8, 8, 8))
-	assert_eq(sphere["center"], Vector3(4, 4, 4))
+	var sphere := _draw(drag, Vector3(6, 0, 8), 32.0, DraftBrush.BrushShape.SPHERE)
+	assert_eq(sphere["size"], Vector3(6, 6, 6))
+	assert_eq(sphere["center"], Vector3(3, 3, 4))
+
+
+func test_shift_still_centres_a_round_brush_on_the_drag_origin():
+	# equal_base builds its rectangle outward from the origin, so the midpoint the
+	# footprint centres on is the origin, exactly as before.
+	var drag := _new_drag_system()
+	var info := _draw(drag, Vector3(6, 0, 8), 4.0, DraftBrush.BrushShape.CYLINDER, true)
+	assert_eq(info["center"], Vector3(0, 2, 0), "Shift keeps the brush centred where it started")
 
 
 func _new_drag_system() -> HFDragSystem:
