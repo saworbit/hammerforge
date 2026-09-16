@@ -11,6 +11,12 @@ const FaceData = preload("face_data.gd")
 const MaterialManager = preload("material_manager.gd")
 const HFMaterialAtlasScript = preload("hf_material_atlas.gd")
 
+## What the last atlas pass did, for the Console and for tests. The pass was the
+## only one in the bake with no output at all: a mapper ticked Use atlas once and
+## nothing anywhere distinguished "packed 6 materials into 1" from "did nothing"
+## (#623).
+var last_atlas_report: String = ""
+
 
 func bake_from_csg(
 	csg_node: CSGCombiner3D,
@@ -155,6 +161,34 @@ func bake_from_faces(
 	if collision_mode >= 1 and not per_brush_verts.is_empty():
 		options["per_brush_verts"] = per_brush_verts
 	return build_mesh_from_groups(groups, collision_layer, collision_mask, options)
+
+
+## An atlas rect cannot repeat, so a face whose UVs leave the unit square cannot
+## be atlased. HammerForge's projection maps world units into UV space, so an
+## ordinary 64-unit face is 0..64 and every group is excluded - which is correct,
+## and used to be silent.
+func _report_atlas_outcome(
+	result: HFMaterialAtlasScript.AtlasResult, group_count: int, tiling_count: int
+) -> void:
+	if result and result.atlas_material:
+		last_atlas_report = (
+			"Atlas: packed %d of %d material groups into one atlas"
+			% [result.atlased_keys.size(), group_count]
+		)
+		return
+	if tiling_count > 0:
+		last_atlas_report = (
+			(
+				"Atlas: skipped, %d of %d material groups have tiling UVs. Atlasing "
+				+ "needs a group's UVs inside 0..1; scale the face UVs down to atlas it."
+			)
+			% [tiling_count, group_count]
+		)
+	else:
+		last_atlas_report = (
+			"Atlas: skipped, fewer than two of %d material groups could be packed" % group_count
+		)
+	HFLog.warn("Bake: %s" % last_atlas_report)
 
 
 func _add_group_surface(
@@ -356,6 +390,7 @@ func build_mesh_from_groups(
 
 	# --- Material atlasing pass ---
 	var atlas_result: HFMaterialAtlasScript.AtlasResult = null
+	last_atlas_report = ""
 	if use_atlas and groups.size() > 1:
 		var tiling_keys: Dictionary = {}
 		for key in groups:
@@ -364,6 +399,10 @@ func build_mesh_from_groups(
 		atlas_result = HFMaterialAtlasScript.build_atlas(groups.keys(), tiling_keys)
 		if atlas_result and atlas_result.atlased_keys.size() < 2:
 			atlas_result = null
+		_report_atlas_outcome(atlas_result, groups.size(), tiling_keys.size())
+	elif use_atlas:
+		last_atlas_report = "Atlas: skipped, the level bakes to one material group"
+		HFLog.warn("Bake: %s" % last_atlas_report)
 
 	# Build one ArrayMesh with one surface per material group.
 	var combined_mesh = ArrayMesh.new()
@@ -557,6 +596,12 @@ func _postprocess_mesh(
 func _mesh_with_lods(mesh: ArrayMesh) -> ArrayMesh:
 	if mesh.get_surface_count() == 0:
 		return mesh
+	# `generate_lods()` builds LOD *index* arrays by simplifying an indexed
+	# surface. The CSG merge path hands over a triangle soup - every corner a
+	# loose vertex, no indices - so the simplifier had nothing to collapse and
+	# returned the surface unchanged, with no warning (#611). The face-material
+	# path already indexes in `_add_group_surface()`; this is the other one.
+	mesh = _indexed(mesh)
 	var importer := ImporterMesh.from_mesh(mesh)
 	if importer == null:
 		HFLog.warn("Bake: could not build an ImporterMesh, skipping LOD generation")
@@ -566,6 +611,39 @@ func _mesh_with_lods(mesh: ArrayMesh) -> ArrayMesh:
 	if out == null:
 		HFLog.warn("Bake: LOD generation produced no mesh, keeping the original")
 		return mesh
+	return out
+
+
+## Weld each unindexed surface into an indexed one, keeping its material. A
+## surface that already has indices is left exactly as it is, so nothing that
+## was already working goes through SurfaceTool a second time.
+func _indexed(mesh: ArrayMesh) -> ArrayMesh:
+	var needs_work := false
+	for i in range(mesh.get_surface_count()):
+		if mesh.surface_get_arrays(i)[Mesh.ARRAY_INDEX] == null:
+			needs_work = true
+			break
+	if not needs_work:
+		return mesh
+	var out := ArrayMesh.new()
+	for i in range(mesh.get_surface_count()):
+		var material := mesh.surface_get_material(i)
+		var arrays: Array = mesh.surface_get_arrays(i)
+		if arrays[Mesh.ARRAY_INDEX] != null:
+			out.add_surface_from_arrays(mesh.surface_get_primitive_type(i), arrays)
+			if material:
+				out.surface_set_material(out.get_surface_count() - 1, material)
+			continue
+		var st := SurfaceTool.new()
+		st.create_from(mesh, i)
+		st.index()
+		var welded := st.commit()
+		if welded == null or welded.get_surface_count() == 0:
+			out.add_surface_from_arrays(mesh.surface_get_primitive_type(i), arrays)
+		else:
+			out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, welded.surface_get_arrays(0))
+		if material:
+			out.surface_set_material(out.get_surface_count() - 1, material)
 	return out
 
 
