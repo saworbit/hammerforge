@@ -1867,10 +1867,35 @@ static func _multimesh_transform(instance: Node3D, container: Node3D) -> Transfo
 const _OCCLUDER_NORMAL_THRESHOLD := 0.087  # ~5 degrees
 ## Distance threshold for plane membership.
 const _OCCLUDER_PLANE_DIST_THRESHOLD := 0.1
+## Vertex positions are rounded to this before they are compared, so two
+## triangles that meet at a corner are recognised as meeting there. It is the
+## same order as the validator's weld tolerance, and small enough that two
+## surfaces a mapper drew apart never round together.
+const _OCCLUDER_WELD := 0.001
 
 
-## Scan baked MeshInstance3D children, identify large coplanar face groups, and
-## create OccluderInstance3D nodes with ArrayOccluder3D resources.
+## Scan baked MeshInstance3D children, group their triangles into flat surfaces,
+## and create one OccluderInstance3D per surface.
+##
+## A surface is triangles that are coplanar **and touching**. The coplanarity
+## test on its own is what #614 was: two triangles facing the same way and lying
+## in the same infinite plane were put in the same occluder whether they shared
+## an edge or were a level apart, so every floor at y = 0 became one occluder and
+## every wall on a shared line joined it. Godot gives an OccluderInstance3D a
+## single bounding volume, so one of those is never itself culled and stands for
+## a surface that is mostly holes. Forty boxes in a row produced an occluder
+## spanning all 10,113 units between the first and the last.
+##
+## Touching is tested on welded vertex positions, which is what "shares an edge
+## with it" comes to for baked geometry: the triangles of one wall come from one
+## brush face and hold its corners exactly, and two walls a room apart hold none
+## in common. Two brushes that abut without sharing vertices give two occluders
+## rather than one, which is the right answer either way round.
+##
+## The grouping is transitive, so a run of triangles that turns gently stays one
+## occluder shaped like the run. That is what an occluder should be. It is a
+## single pass keyed on vertex position rather than the old scan of every plane
+## found so far for every triangle, which was quadratic in the triangle count.
 func _generate_occluders(container: Node3D) -> void:
 	# Remove previously generated occluders so re-bake is idempotent.
 	var existing: Node = container.find_child("Occluders", false, false)
@@ -1879,11 +1904,61 @@ func _generate_occluders(container: Node3D) -> void:
 		existing.free()
 
 	var min_area: float = _root_float("bake_occluder_min_area", 4.0)
-	var planes: Array = []  # Array of {normal, dist, verts, indices, area}
+	var tris: Array = _collect_occluder_triangles(container)
+	var surfaces: Array = _group_touching_coplanar(tris)
 
-	# Collect triangles from all baked meshes (recurse into BakedChunk_* nodes).
-	var mesh_instances: Array = _collect_mesh_instances(container)
-	for mi: MeshInstance3D in mesh_instances:
+	# Filter by minimum area and build occluder nodes.
+	var occluder_container := Node3D.new()
+	occluder_container.name = "Occluders"
+	var count := 0
+	for surface in surfaces:
+		var members: Array = surface
+		var area := 0.0
+		for i in members:
+			area += float(tris[i]["area"])
+		if area < min_area:
+			continue
+		var verts := PackedVector3Array()
+		var indices := PackedInt32Array()
+		for i in members:
+			var tri: Dictionary = tris[i]
+			var base := verts.size()
+			verts.append(tri["a"])
+			verts.append(tri["b"])
+			verts.append(tri["c"])
+			indices.append(base)
+			indices.append(base + 1)
+			indices.append(base + 2)
+		var occ := ArrayOccluder3D.new()
+		occ.vertices = verts
+		occ.indices = indices
+		var inst := OccluderInstance3D.new()
+		inst.occluder = occ
+		inst.name = "Occluder_%d" % count
+		occluder_container.add_child(inst)
+		count += 1
+
+	if count > 0:
+		container.add_child(occluder_container)
+		root._assign_owner_recursive(occluder_container)
+		root._log(
+			(
+				"Occluders: generated %d from %d flat surfaces in %d triangles"
+				% [count, surfaces.size(), tris.size()]
+			)
+		)
+	else:
+		occluder_container.free()
+
+
+## Every triangle of every baked mesh, in container space, with the plane it lies
+## on. One Dictionary per triangle: `a`, `b`, `c`, `normal`, `dist`, `area`.
+##
+## Triangles too small to have a reliable normal are dropped here rather than
+## carried, because a degenerate one has no plane to be grouped by.
+func _collect_occluder_triangles(container: Node3D) -> Array:
+	var out: Array = []
+	for mi: MeshInstance3D in _collect_mesh_instances(container):
 		var mesh: Mesh = mi.mesh
 		if not mesh:
 			continue
@@ -1894,6 +1969,8 @@ func _generate_occluders(container: Node3D) -> void:
 			if arrays.is_empty():
 				continue
 			var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+			if verts.is_empty():
+				continue
 			var normals_arr: PackedVector3Array = (
 				arrays[Mesh.ARRAY_NORMAL]
 				if (
@@ -1910,90 +1987,108 @@ func _generate_occluders(container: Node3D) -> void:
 				)
 				else PackedInt32Array()
 			)
-			if verts.is_empty():
-				continue
-			# Build triangle list.
-			var tri_list: Array = []
-			if indices.size() >= 3:
-				var i := 0
-				while i + 2 < indices.size():
-					tri_list.append([indices[i], indices[i + 1], indices[i + 2]])
-					i += 3
-			else:
-				var i := 0
-				while i + 2 < verts.size():
-					tri_list.append([i, i + 1, i + 2])
-					i += 3
-
-			for tri in tri_list:
-				var a: Vector3 = xform * verts[tri[0]]
-				var b: Vector3 = xform * verts[tri[1]]
-				var c: Vector3 = xform * verts[tri[2]]
-				var edge1: Vector3 = b - a
-				var edge2: Vector3 = c - a
-				var n: Vector3 = edge2.cross(edge1)
+			var corners: PackedInt32Array = indices
+			if corners.size() < 3:
+				corners = PackedInt32Array()
+				for i in verts.size():
+					corners.append(i)
+			var i := 0
+			while i + 2 < corners.size():
+				var first: int = corners[i]
+				var a: Vector3 = xform * verts[first]
+				var b: Vector3 = xform * verts[corners[i + 1]]
+				var c: Vector3 = xform * verts[corners[i + 2]]
+				i += 3
+				var n: Vector3 = (c - a).cross(b - a)
 				var area: float = n.length() * 0.5
 				if area < 0.001:
 					continue
 				n = n.normalized()
 				# Use normal from mesh data if available.
-				if normals_arr.size() > tri[0]:
-					var mesh_n: Vector3 = (xform.basis * normals_arr[tri[0]]).normalized()
+				if normals_arr.size() > first:
+					var mesh_n: Vector3 = (xform.basis * normals_arr[first]).normalized()
 					if mesh_n.length_squared() > 0.5:
 						n = mesh_n
-				var dist: float = n.dot(a)
-				# Try to merge into an existing coplanar group.
-				var merged := false
-				for plane in planes:
-					if (
-						n.dot(plane["normal"]) >= cos(_OCCLUDER_NORMAL_THRESHOLD)
-						and absf(dist - plane["dist"]) < _OCCLUDER_PLANE_DIST_THRESHOLD
-					):
-						var base_idx: int = plane["verts"].size()
-						plane["verts"].append(a)
-						plane["verts"].append(b)
-						plane["verts"].append(c)
-						plane["indices"].append(base_idx)
-						plane["indices"].append(base_idx + 1)
-						plane["indices"].append(base_idx + 2)
-						plane["area"] += area
-						merged = true
-						break
-				if not merged:
-					var pv := PackedVector3Array()
-					pv.append(a)
-					pv.append(b)
-					pv.append(c)
-					var pi := PackedInt32Array()
-					pi.append(0)
-					pi.append(1)
-					pi.append(2)
-					planes.append(
-						{"normal": n, "dist": dist, "verts": pv, "indices": pi, "area": area}
-					)
+				out.append({"a": a, "b": b, "c": c, "normal": n, "dist": n.dot(a), "area": area})
+	return out
 
-	# Filter by minimum area and build occluder nodes.
-	var occluder_container := Node3D.new()
-	occluder_container.name = "Occluders"
-	var count := 0
-	for plane in planes:
-		if plane["area"] < min_area:
-			continue
-		var occ := ArrayOccluder3D.new()
-		occ.vertices = plane["verts"]
-		occ.indices = plane["indices"]
-		var inst := OccluderInstance3D.new()
-		inst.occluder = occ
-		inst.name = "Occluder_%d" % count
-		occluder_container.add_child(inst)
-		count += 1
 
-	if count > 0:
-		container.add_child(occluder_container)
-		root._assign_owner_recursive(occluder_container)
-		root._log("Occluders: generated %d from %d coplanar groups" % [count, planes.size()])
-	else:
-		occluder_container.free()
+## The triangles grouped into flat surfaces: coplanar and touching. Returns one
+## `PackedInt32Array` of indices into `tris` per surface.
+##
+## Two triangles are joined when they hold a vertex in common and lie on the same
+## plane within the angle and distance thresholds. Holding a vertex in common is
+## what makes this one pass: each vertex names the handful of triangles that meet
+## there, and only those are ever compared. Nothing walks the list of surfaces
+## found so far.
+## `Array[int]` rather than `PackedInt32Array` for `parent`: the union-find writes
+## to it from inside a call, and an Array is unambiguously the caller's array
+## rather than a copy-on-write view of it. Typed, so `parent[i]` still has a type
+## to infer from and `resize()` fills with zeros rather than nulls.
+static func _group_touching_coplanar(tris: Array) -> Array:
+	var parent: Array[int] = []
+	parent.resize(tris.size())
+	for i in tris.size():
+		parent[i] = i
+
+	# vertex position -> the triangles that touch it
+	var at_vertex: Dictionary = {}
+	for i in tris.size():
+		var tri: Dictionary = tris[i]
+		for corner in ["a", "b", "c"]:
+			var key := _weld_key(tri[corner])
+			if not at_vertex.has(key):
+				at_vertex[key] = []
+			at_vertex[key].append(i)
+
+	for key in at_vertex:
+		var here: Array = at_vertex[key]
+		for x in range(here.size()):
+			for y in range(x + 1, here.size()):
+				if _same_plane(tris[here[x]], tris[here[y]]):
+					_union(parent, here[x], here[y])
+
+	var by_root: Dictionary = {}
+	for i in tris.size():
+		var r := _find(parent, i)
+		if not by_root.has(r):
+			by_root[r] = []
+		by_root[r].append(i)
+	return by_root.values()
+
+
+## A vertex position rounded to the weld tolerance, so two triangles that meet
+## at a corner agree on where that corner is.
+static func _weld_key(v: Vector3) -> Vector3i:
+	return Vector3i(
+		roundi(v.x / _OCCLUDER_WELD), roundi(v.y / _OCCLUDER_WELD), roundi(v.z / _OCCLUDER_WELD)
+	)
+
+
+static func _same_plane(one: Dictionary, other: Dictionary) -> bool:
+	return (
+		(one["normal"] as Vector3).dot(other["normal"]) >= cos(_OCCLUDER_NORMAL_THRESHOLD)
+		and absf(float(one["dist"]) - float(other["dist"])) < _OCCLUDER_PLANE_DIST_THRESHOLD
+	)
+
+
+static func _find(parent: Array[int], i: int) -> int:
+	var root := i
+	while parent[root] != root:
+		root = parent[root]
+	# Path compression, so a long chain is walked once rather than once per query.
+	while parent[i] != root:
+		var next := parent[i]
+		parent[i] = root
+		i = next
+	return root
+
+
+static func _union(parent: Array[int], a: int, b: int) -> void:
+	var ra := _find(parent, a)
+	var rb := _find(parent, b)
+	if ra != rb:
+		parent[rb] = ra
 
 
 ## Recursively collect all MeshInstance3D nodes under a container, walking into
