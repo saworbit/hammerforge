@@ -17,13 +17,6 @@ var _index: Dictionary = {}  # Dictionary[StringName, Node]
 var _blend_shader: Shader = null
 
 
-func build_index() -> void:
-	_index.clear()
-	_index_children(floors_root)
-	_index_children(walls_root)
-	_index_children(heightmap_floors_root)
-
-
 ## Bring the generated nodes for one layer into line with `model`.
 ##
 ## `layer_id` scopes the sweep. Every layer shares `floors_root` and

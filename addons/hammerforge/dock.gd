@@ -210,6 +210,7 @@ var bake_occluder_min_area_spin: SpinBox = null
 var bake_connector_mode_opt: OptionButton = null
 var bake_connector_stair_height_spin: SpinBox = null
 var bake_connector_width_spin: SpinBox = null
+var bake_connector_stair_threshold_spin: SpinBox = null
 # -- Quick Play mode controls --
 var primary_quick_play_btn: Button = null
 var quick_play_camera_btn: Button = null
@@ -688,6 +689,7 @@ func _apply_ui_state_to_root() -> void:
 		[bake_navmesh_agent_height, "bake_navmesh_agent_height"],
 		[bake_navmesh_agent_radius, "bake_navmesh_agent_radius"],
 		[bake_connector_stair_height_spin, "bake_connector_stair_height"],
+		[bake_connector_stair_threshold_spin, "bake_connector_stair_threshold"],
 		[bake_occluder_min_area_spin, "bake_occluder_min_area"],
 	]
 	for pair in float_pairs:
@@ -2406,12 +2408,6 @@ func get_show_hud() -> bool:
 	return show_hud.button_pressed
 
 
-func set_show_hud(visible: bool) -> void:
-	if show_hud.button_pressed == visible:
-		return
-	show_hud.button_pressed = visible
-
-
 func get_extrude_direction() -> int:
 	if tool_extrude_up and tool_extrude_up.button_pressed:
 		return 1  # UP
@@ -2436,11 +2432,6 @@ func set_paint_tool(tool_id: int) -> void:
 			return
 
 
-## Update the mode indicator banner and status bar.
-func set_status_mode(mode_name: String) -> void:
-	_update_mode_indicator(mode_name)
-
-
 ## Update the prominent mode indicator with structured info.
 ## stage_hint: e.g. "Step 1/2: Draw base", numeric: e.g. "64"
 func set_mode_indicator(mode_name: String, stage_hint: String = "", numeric: String = "") -> void:
@@ -2450,21 +2441,6 @@ func set_mode_indicator(mode_name: String, stage_hint: String = "", numeric: Str
 	if numeric != "":
 		display += "  [" + numeric + "]"
 	_update_mode_indicator_text(display, mode_name)
-
-
-func _update_mode_indicator(mode_name: String) -> void:
-	var instruction := mode_name
-	if mode_name.begins_with("Draw"):
-		instruction = "Draw - drag in the 3D viewport"
-	elif mode_name.begins_with("Select"):
-		instruction = "Select - click geometry to edit"
-	elif mode_name.begins_with("Extrude"):
-		instruction = "Extrude - click a face, then drag"
-	elif mode_name.begins_with("Paint"):
-		instruction = "Paint - drag across the level"
-	elif mode_name.begins_with("Vertex"):
-		instruction = "Vertex - drag a highlighted point"
-	_update_mode_indicator_text(instruction, mode_name)
 
 
 func _update_mode_indicator_text(display_text: String, mode_key: String) -> void:
@@ -2543,13 +2519,6 @@ func _on_clear_selection_pressed() -> void:
 func show_toast(message: String, level: int = 0) -> void:
 	if _toast_container:
 		_toast_container.show_toast(message, level)
-
-
-## Update the grid display in the status bar.
-func set_status_grid(snap_value: float) -> void:
-	if perf_label:
-		# Perf label doubles as grid indicator when not showing brush counts
-		pass  # Grid is already visible in the Brush tab SpinBox
 
 
 func set_selection_count(count: int) -> void:
@@ -3485,6 +3454,10 @@ func _sync_grid_settings_from_root() -> void:
 		)
 	if bake_connector_width_spin and _root_has_property("bake_connector_width"):
 		bake_connector_width_spin.value = int(connected_root.get("bake_connector_width"))
+	if bake_connector_stair_threshold_spin and _root_has_property("bake_connector_stair_threshold"):
+		bake_connector_stair_threshold_spin.value = float(
+			connected_root.get("bake_connector_stair_threshold")
+		)
 	if bake_chunk_size_spin and _root_has_property("bake_chunk_size"):
 		bake_chunk_size_spin.value = float(connected_root.get("bake_chunk_size"))
 	if bake_navmesh and _root_has_property("bake_navmesh"):
@@ -5024,6 +4997,10 @@ func _collect_editor_settings() -> Dictionary:
 		bake_settings["connector_stair_height"] = float(bake_connector_stair_height_spin.value)
 	if bake_connector_width_spin:
 		bake_settings["connector_width"] = int(bake_connector_width_spin.value)
+	if bake_connector_stair_threshold_spin:
+		bake_settings["connector_stair_threshold"] = float(
+			bake_connector_stair_threshold_spin.value
+		)
 	return {
 		"version": 1,
 		"saved_at": Time.get_datetime_string_from_system(),
@@ -5180,6 +5157,10 @@ func _apply_editor_settings(data: Dictionary) -> void:
 			)
 		if bake_connector_width_spin and bake.has("connector_width"):
 			bake_connector_width_spin.value = _setting_int(bake, "connector_width", 2)
+		if bake_connector_stair_threshold_spin and bake.has("connector_stair_threshold"):
+			bake_connector_stair_threshold_spin.value = _setting_number(
+				bake, "connector_stair_threshold", 32.0
+			)
 		_sync_bake_option_visibility()
 
 

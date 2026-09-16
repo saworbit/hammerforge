@@ -804,9 +804,10 @@ The **Test → Advanced Bake** section exposes additional controls:
 - **Generate Occluders** (checkbox): automatically generates `OccluderInstance3D` nodes from large flat surfaces during bake. The bake pass groups coplanar triangles across the entire baked hierarchy (including chunked bakes) and emits occluders for groups exceeding the minimum area threshold. This enables Godot's built-in occlusion culling at runtime without manual occluder placement. Sub-controls:
   - **Min Area** (SpinBox, 0.5–100.0, default 4.0): minimum coplanar face-group area in world units² to emit an occluder. Raise this value to reduce occluder count (fewer culling tests); lower it to increase coverage (more surfaces act as occluders). Surfaces smaller than this threshold are skipped.
 - **Auto Connectors** (checkbox): auto-generates ramps or stairs between paint layers at different heights during bake. Requires at least 2 paint layers with filled cells at adjacent grid positions and a height difference ≥ 0.1 world units. Sub-controls:
-  - **Mode** dropdown: *Ramp* (smooth slope), *Stairs* (stepped), *Auto* (stairs when height diff ≥ 2.0, ramp otherwise).
+  - **Mode** dropdown: *Ramp* (smooth slope), *Stairs* (stepped), *Auto* (stairs once the height difference reaches the Stair Threshold, ramp below it).
   - **Step H** (SpinBox, 0.05–2.0): stair step height in world units (only affects Stairs/Auto modes).
   - **Width** (SpinBox, 1–8): connector width in grid cells.
+  - **Stair Threshold** (SpinBox, 0.01–256.0, default 32.0): the height difference at which *Auto* picks stairs over a ramp. Saved with the level.
   Connectors are generated before navmesh baking, so the navmesh automatically covers connector surfaces. Auto-connectors are skipped during selection bakes (Bake Selected) to avoid pulling in unrelated geometry.
 
 The main **Bake** button is smart: if only specific brushes have been modified since the last bake, it automatically uses incremental bake (`Bake Changed`) instead of a full re-bake. Changing a bake setting counts as a change — the settings the last bake ran with are compared against the ones now set, so a rebake after flipping Bake Visible Only, a collision mode, a navmesh parameter or the cordon rebuilds in full rather than returning the previous result.

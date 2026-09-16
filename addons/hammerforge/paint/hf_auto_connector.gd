@@ -30,7 +30,7 @@ class Settings:
 	var stair_step_height: float = 0.25
 	var width_cells: int = 2
 	## Height threshold above which AUTO mode picks stairs over ramp.
-	var stair_threshold: float = 2.0
+	var stair_threshold: float = 32.0
 
 
 # ---------------------------------------------------------------------------
