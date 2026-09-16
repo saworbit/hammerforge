@@ -2373,6 +2373,14 @@ func rename_paint_layer(index: int, new_name: String) -> bool:
 	return true
 
 
+func set_terrain_slot_texture(slot: int, path: String) -> void:
+	paint_system.set_terrain_slot_texture(slot, path)
+
+
+func set_terrain_slot_uv_scale(slot: int, value: float) -> void:
+	paint_system.set_terrain_slot_uv_scale(slot, value)
+
+
 func remove_active_paint_layer() -> void:
 	paint_system.remove_active_paint_layer()
 	paint_layer_changed.emit(paint_system.get_active_paint_layer_index())
@@ -2845,6 +2853,22 @@ func add_prototype_materials() -> int:
 	end_signal_batch()
 	material_list_changed.emit()
 	return count
+
+
+## Replace the palette with the one saved at `path`.
+##
+## Named here rather than reached through `material_manager` so the dock can
+## commit it as an undo action: every face's `material_idx` is an index into
+## this palette, so loading a different library repaints every painted face in
+## the level, and there is no route back once the old palette is gone.
+func load_material_library(path: String) -> bool:
+	if not material_manager:
+		_setup_material_manager()
+	if not material_manager.load_library(path):
+		return false
+	_refresh_brush_previews()
+	material_list_changed.emit()
+	return true
 
 
 func get_material_names() -> Array:

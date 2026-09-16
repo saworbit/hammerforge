@@ -340,6 +340,33 @@ func get_terrain_slot_textures() -> Array:
 	return out
 
 
+## Point terrain slot `slot` at `path`. False when nothing changed, so the
+## caller can skip the rebuild.
+##
+## The dock used to write `terrain_slot_paths[i]` straight through - the one
+## place in the plugin that wrote a layer's arrays from outside the layer, and
+## with nothing bounding the index.
+func set_terrain_slot_texture(slot: int, path: String) -> bool:
+	_ensure_terrain_slots()
+	if slot < 0 or slot >= TERRAIN_SLOTS:
+		return false
+	if terrain_slot_paths[slot] == path:
+		return false
+	terrain_slot_paths[slot] = path
+	return true
+
+
+## The UV scale of terrain slot `slot`. False when nothing changed.
+func set_terrain_slot_uv_scale(slot: int, value: float) -> bool:
+	_ensure_terrain_slots()
+	if slot < 0 or slot >= TERRAIN_SLOTS:
+		return false
+	if not is_finite(value) or is_equal_approx(terrain_slot_uv_scales[slot], value):
+		return false
+	terrain_slot_uv_scales[slot] = value
+	return true
+
+
 func get_terrain_slot_uv_scales() -> Array[float]:
 	_ensure_terrain_slots()
 	return terrain_slot_uv_scales.duplicate()
