@@ -37,6 +37,23 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   document look healthier.
 
 ### Fixed
+- **Two bake switches that produced nothing now produce something, or say why**
+  (#611, #623). **Generate LODs** reached the baker intact and came back with no
+  levels, because `generate_lods()` builds LOD *index* arrays by simplifying an
+  indexed surface and the CSG merge path hands over a triangle soup - every
+  corner a loose vertex, no indices. The face-material path already welded its
+  surfaces for exactly this reason; the other one did not. `_mesh_with_lods()`
+  now indexes first, which also shrinks the mesh on its own, and leaves an
+  already-indexed surface untouched so nothing that worked goes through
+  `SurfaceTool` twice. **Use atlas** was the harder one: the packer is correct
+  and the exclusion is correct too - an atlas rect cannot repeat, so a face whose
+  UVs leave the unit square cannot be atlased - but HammerForge maps world units
+  into UV space, so an ordinary 64-unit face is 0..64 and every group is
+  excluded. On a level built with the defaults the switch packs nothing, and
+  nothing anywhere distinguished that from having worked. The pass now reports
+  what it did, the way the occluder and auto-connector passes do: `Atlas: packed
+  4 of 6 material groups into one atlas`, or `Atlas: skipped, 6 of 6 material
+  groups have tiling UVs` with the warning that puts it in the Console Log.
 - **The door stops previewing as a light bulb, and an entity class says what it
   fires** (#613). `door_basic` pointed its mesh preview at
   `light_bulb_proxy.obj`, which is the only file in the plugin's `meshes/`
