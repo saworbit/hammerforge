@@ -5,6 +5,42 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Removed
+- **`HFGesture`** (#550). A `class_name`, a doc comment describing an
+  architecture where "the plugin holds at most one active gesture" and routes all
+  input through it, and 109 lines nothing constructs - no subclass, no `new()`,
+  no preload anywhere in `addons/`, `tests/` or `tools/`.
+  `HFSelectionGesture` sounds like one and is not. The expensive part was the
+  complete numeric-entry mechanism inside it, reimplemented separately in
+  `plugin_numeric_input.gd`, which is the copy that runs: the dead one still has
+  the keypad-Enter bug frozen into it that #516 and #517 fixed, so it was a
+  second and wrong reference for anyone who found it first. The guide's Gesture
+  Tracker section goes with it; if the architecture is still wanted it is a
+  design question against what `HFSelectionGesture`, `HFPluginGestureRecovery`
+  and `input_state.gd` actually do.
+- **`HFFoliagePopulator`** (#562). 146 lines, documented in two guides as a
+  shipped subsystem, constructed by nothing. The Paint tab's Foliage & Scatter
+  section commits through `HFScatterBrush`, which is a superset - the same
+  `density`, `min_height`, `max_height`, `max_slope` and the identical
+  `_compute_slope()`, plus a density preview, a circle and a spline shape, an
+  instance budget with a refusal message, and a `rejected_count`. The dead copy
+  was also the weaker one: no budget, so `populate()` built a `Transform3D` per
+  instance over every cell of every chunk with nothing capping the total, which
+  is the shape #512 was about. The greybox guide's section is now about
+  `HFScatterBrush`, which does everything it claimed and more, and
+  `hf_scatter_brush.gd` no longer says it works with a class that is gone.
+- **The state system's transaction API** (#571). `begin_transaction()`,
+  `commit_transaction()`, `rollback_transaction()`, `is_in_transaction()` and
+  their three fields, called by nothing and not covered by the GUT suite, while
+  `HammerForge_MVP_GUIDE.md` listed them as a shipped capability. Every
+  multi-step operation that wanted this solved it separately -
+  `_commit_state_action()` through `HFUndoHelper`, the generator's hand-rolled
+  appearance capture, `propagate_from_source()` with no grouping at all - so the
+  designed answer was not serving as the answer. Grouping a propagate into one
+  undo step is worth doing; it is worth doing against a design rather than by
+  finding four functions nobody has used. `LevelRoot.discard_signal_batch()`
+  stays: it was the transaction's only caller, but it is the one way to abandon
+  an open signal batch, `begin_signal_batch()` has live callers, and
+  `test_dirty_tags.gd` covers its behaviour.
 - **Five signals that were declared and never emitted** (#521).
   `HFContextToolbar.tool_switch_requested` and `hotkey_palette_requested` had
   connect and disconnect pairs in `plugin.gd` and a real handler on the other
