@@ -6,6 +6,15 @@ const HFInputStateType = preload("../input_state.gd")
 const PrefabFactory = preload("../prefab_factory.gd")
 const DraftBrush = preload("../brush_instance.gd")
 
+## The shapes whose ground footprint is a circle, so a dragged rectangle has to
+## be reduced to one diameter before it can become a brush.
+const RADIAL_SHAPES := [
+	DraftBrush.BrushShape.CYLINDER,
+	DraftBrush.BrushShape.CONE,
+	DraftBrush.BrushShape.SPHERE,
+	DraftBrush.BrushShape.CAPSULE,
+]
+
 var root: Node3D
 var input_state: HFInputStateType = HFInputStateType.new()
 
@@ -287,58 +296,48 @@ func _compute_brush_info(
 	var extent = max(size_x, size_z)
 	var min_extent = max(0.1, root.grid_snap * 0.5)
 	var final_size = Vector3(size_x, height, size_z)
-	var used_default_base := false
 	if extent < min_extent:
-		used_default_base = true
 		final_size = Vector3(size_default.x, height, size_default.z)
 		min_x = origin.x - final_size.x * 0.5
 		max_x = origin.x + final_size.x * 0.5
 		min_z = origin.z - final_size.z * 0.5
 		max_z = origin.z + final_size.z * 0.5
+	# The rectangle a mapper drags is ground they can see: up to a wall, between two
+	# pillars, inside a doorway. A round brush has to end up inside it. That means
+	# the *smaller* dragged side is the diameter, not the larger one, and the
+	# footprint is centred on the rectangle rather than grown out of the corner the
+	# drag started at. Both halves of that were the other way round (#604).
+	if shape in RADIAL_SHAPES:
+		var diameter := maxf(0.1, minf(final_size.x, final_size.z))
+		if shape == DraftBrush.BrushShape.SPHERE:
+			# A SPHERE is uniform by definition - ELLIPSOID is the shape with three
+			# independent axes - so the height stage cannot set it alone. Taking the
+			# height into the diameter is what makes that stage land at all, instead
+			# of asking for a number and throwing it away (#605). The sphere is then
+			# inscribed in the box that was dragged, which is the same rule as the
+			# other three.
+			diameter = maxf(0.1, minf(diameter, final_size.y))
+			final_size = Vector3(diameter, diameter, diameter)
+		else:
+			final_size = Vector3(diameter, final_size.y, diameter)
 	final_size = DraftBrush.normalized_size_for_shape(shape, final_size)
-	if (
-		shape
-		in [
-			DraftBrush.BrushShape.CYLINDER,
-			DraftBrush.BrushShape.CONE,
-			DraftBrush.BrushShape.SPHERE,
-			DraftBrush.BrushShape.CAPSULE,
-		]
-	):
-		var center_x := (
-			equal_base
-			or equal_all
-			or used_default_base
-			or lock_axis in [root.AxisLock.Z, root.AxisLock.Y]
-		)
-		var center_z := (
-			equal_base
-			or equal_all
-			or used_default_base
-			or lock_axis in [root.AxisLock.X, root.AxisLock.Y]
-		)
-		var x_bounds := _normalized_radial_axis_bounds(origin.x, current.x, final_size.x, center_x)
-		var z_bounds := _normalized_radial_axis_bounds(origin.z, current.z, final_size.z, center_z)
-		min_x = x_bounds.x
-		max_x = x_bounds.y
-		min_z = z_bounds.x
-		max_z = z_bounds.y
+	if shape in RADIAL_SHAPES:
+		# Every earlier branch - axis lock, equal_base, equal_all, the default-size
+		# fallback - has already written the rectangle it wants into min/max, and for
+		# all of those the midpoint is the origin. Centring on the midpoint is
+		# therefore the one rule that serves them and a plain drag alike.
+		var center_x: float = (min_x + max_x) * 0.5
+		var center_z: float = (min_z + max_z) * 0.5
+		min_x = center_x - final_size.x * 0.5
+		max_x = center_x + final_size.x * 0.5
+		min_z = center_z - final_size.z * 0.5
+		max_z = center_z + final_size.z * 0.5
 	var center = Vector3(
 		(min_x + max_x) * 0.5,
 		origin.y + final_size.y * 0.5,
 		(min_z + max_z) * 0.5,
 	)
 	return {"center": center, "size": final_size}
-
-
-static func _normalized_radial_axis_bounds(
-	origin: float, current: float, extent: float, centered: bool
-) -> Vector2:
-	if centered or is_equal_approx(origin, current):
-		return Vector2(origin - extent * 0.5, origin + extent * 0.5)
-	if current > origin:
-		return Vector2(origin, origin + extent)
-	return Vector2(origin - extent, origin)
 
 
 # ---------------------------------------------------------------------------
