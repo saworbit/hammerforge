@@ -567,6 +567,64 @@ func next_brush_id() -> String:
 	return _next_brush_id()
 
 
+## How deep a brush record can nest before the comparison gives up. A record is
+## a handful of values and an array of faces, so this is far past anything real.
+const _RECORD_COMPARE_DEPTH := 32
+
+
+## The draft brushes a restore can keep, as `{brush_id: DraftBrush}`.
+##
+## A brush is keepable when the record the incoming state holds for it is
+## identical to what that brush would capture right now, which means restoring it
+## would rebuild the brush that is already there. A brush that fails the test is
+## rebuilt as before, so a comparison that says no when it could have said yes
+## costs time and nothing else. There is no way for it to say yes wrongly: two
+## brushes with identical records are identical as far as anything that reads a
+## record is concerned, and undo has always been exactly that.
+func reusable_draft_brushes(records: Array) -> Dictionary:
+	var keep: Dictionary = {}
+	if not root.draft_brushes_node:
+		return keep
+	var wanted: Dictionary = {}
+	for entry in records:
+		if entry is Dictionary and (entry as Dictionary).has("brush_id"):
+			wanted[str((entry as Dictionary)["brush_id"])] = entry
+	if wanted.is_empty():
+		return keep
+	for child in root.draft_brushes_node.get_children():
+		if not (child is DraftBrush):
+			continue
+		var brush := child as DraftBrush
+		var brush_id := str(brush.brush_id)
+		if not wanted.has(brush_id) or keep.has(brush_id):
+			continue
+		var live: Dictionary = get_brush_info_from_node(brush)
+		if live.is_empty():
+			continue
+		var record: Dictionary = wanted[brush_id]
+		# `recursive_equal` rather than `==`, because a record carries an array of
+		# face dictionaries and `==` does not go down into those.
+		if live.recursive_equal(record, _RECORD_COMPARE_DEPTH):
+			keep[brush_id] = brush
+	return keep
+
+
+## Put a kept brush back into the registries a cleared level no longer has it in.
+##
+## Its node was never touched, so there is no tree work here: this is the half of
+## `create_brush_from_info()` that is bookkeeping.
+func reregister_draft_brush(brush: DraftBrush) -> void:
+	if not is_instance_valid(brush):
+		return
+	var brush_id := str(brush.brush_id)
+	if brush_id == "":
+		return
+	_brush_cache[brush_id] = brush
+	_brush_count += 1
+	_advance_id_counter(brush_id)
+	_legacy_manager_add(brush)
+
+
 func _register_brush_id(brush_id: String, brush_node: Node = null) -> void:
 	if brush_id == "":
 		return
@@ -777,7 +835,15 @@ func restore_committed_cuts() -> void:
 		root._log("Restored committed cuts (%s)" % restored)
 
 
-func clear_brushes() -> void:
+## Take the level down to nothing, except any draft brush named in `keep_ids`.
+##
+## The keep set exists for `restore_state()`, which used to free and rebuild every
+## brush in the level to take back a nudge of one of them (#600). A kept brush
+## stays where it is, in the tree, still owned: only the registries are cleared,
+## and the caller puts the kept ones back into them with
+## `reregister_draft_brush()`. Everything else about the clear is unchanged, and
+## every other caller passes nothing and gets what it always got.
+func clear_brushes(keep_ids: Dictionary = {}) -> void:
 	clear_face_selection()
 	_brush_cache.clear()
 	_brush_count = 0
@@ -786,6 +852,8 @@ func clear_brushes() -> void:
 	if root.draft_brushes_node:
 		for child in root.draft_brushes_node.get_children():
 			if child is DraftBrush:
+				if keep_ids.has(str((child as DraftBrush).brush_id)):
+					continue
 				root.draft_brushes_node.remove_child(child)
 				child.queue_free()
 	_clear_generated()

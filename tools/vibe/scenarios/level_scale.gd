@@ -150,19 +150,30 @@ func _the_cost_curve() -> void:
 			% [undo_ms, last["capture_ms"], last["restore_ms"], last["state_kb"]]
 		)
 	)
+	# #600 was fixed by keeping the brushes a restore would have rebuilt
+	# identically, so restore is no longer the expensive half. This is the guard
+	# that says so if it ever becomes one again.
 	if undo_ms > 100.0:
 		known(
 			600,
-			"an undo step at %d brushes costs %.0f ms" % [last["brushes"], undo_ms],
+			"an undo step at %d brushes costs %.0f ms again" % [last["brushes"], undo_ms],
 			(
 				(
-					"undo is a whole-level snapshot -- capture_state() walks every brush, face, "
-					+ "entity and paint cell and restore_state() clears the level and rebuilds "
-					+ "it -- so the price of undoing a one-brush nudge is set by the size of the "
-					+ "level, not the size of the edit. The snapshot itself is %s KB, and the "
-					+ "editor keeps a stack of them"
+					"restore_state() keeps a brush whose record matches what it would capture "
+					+ "right now rather than rebuilding it, so an undo should cost about what "
+					+ "the capture costs. It is costing %.0f ms of restore against %.0f ms of "
+					+ "capture, so either the comparison stopped matching or the snapshot grew. "
+					+ "The snapshot is %s KB"
 				)
-				% last["state_kb"]
+				% [last["restore_ms"], last["capture_ms"], last["state_kb"]]
+			)
+		)
+	if float(last["restore_ms"]) > float(last["capture_ms"]) * 4.0:
+		note(
+			"restore is still much dearer than capture",
+			(
+				"restore %.1f ms against capture %.1f ms at %d brushes"
+				% [last["restore_ms"], last["capture_ms"], last["brushes"]]
 			)
 		)
 
