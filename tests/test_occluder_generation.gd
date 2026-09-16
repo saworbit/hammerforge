@@ -229,6 +229,102 @@ func test_generate_occluders_groups_coplanar_tris():
 	assert_eq(occluders.get_child_count(), 1, "Coplanar quads should merge into one occluder")
 
 
+## Two quads on one plane, `apart` units apart along X, each `size` across.
+func _two_coplanar_quads(size: float, apart: float) -> Node3D:
+	var container = Node3D.new()
+	container.name = "BakedGeometry"
+	root.add_child(container)
+	for idx in 2:
+		var mi = MeshInstance3D.new()
+		mi.mesh = _make_quad_mesh(Vector2(size, size), Vector3.UP)
+		mi.name = "BakedMesh_%d" % idx
+		mi.transform.origin = Vector3(apart * idx, 0, 0)
+		container.add_child(mi)
+	return container
+
+
+## The widest distance between any two vertices the occluder holds.
+func _occluder_span(inst: OccluderInstance3D) -> float:
+	var occ := inst.occluder as ArrayOccluder3D
+	var verts: PackedVector3Array = occ.vertices
+	if verts.is_empty():
+		return 0.0
+	var box := AABB(verts[0], Vector3.ZERO)
+	for v in verts:
+		box = box.expand(v)
+	return maxf(box.size.x, maxf(box.size.y, box.size.z))
+
+
+func test_two_floors_a_level_apart_are_two_occluders():
+	# #614. Both quads face up and both lie at y = 0, so the coplanarity test on
+	# its own put them in one occluder whose bounding volume covered the gap.
+	var container = _two_coplanar_quads(5.0, 256.0)
+	root.bake_occluder_min_area = 1.0
+	bake_sys._generate_occluders(container)
+	var occluders = container.find_child("Occluders", false, false)
+	assert_not_null(occluders)
+	assert_eq(
+		occluders.get_child_count(), 2, "Same plane, nowhere near each other, so not one surface"
+	)
+
+
+func test_an_occluder_is_no_bigger_than_the_surface_it_stands_for():
+	# The measurement in #614: the widest occluder was always the width of the
+	# whole level, and grew with it.
+	var container = _two_coplanar_quads(5.0, 256.0)
+	root.bake_occluder_min_area = 1.0
+	bake_sys._generate_occluders(container)
+	var occluders = container.find_child("Occluders", false, false)
+	assert_not_null(occluders)
+	for child in occluders.get_children():
+		assert_almost_eq(
+			_occluder_span(child as OccluderInstance3D),
+			5.0,
+			0.001,
+			"an occluder spans its own quad, not the distance to the other one"
+		)
+
+
+func test_two_floors_that_meet_are_still_one_occluder():
+	# The other half of it: the fix must not split a surface that is a surface.
+	# These two quads share the edge at x = 5.
+	var container = _two_coplanar_quads(5.0, 5.0)
+	root.bake_occluder_min_area = 1.0
+	bake_sys._generate_occluders(container)
+	var occluders = container.find_child("Occluders", false, false)
+	assert_not_null(occluders)
+	assert_eq(occluders.get_child_count(), 1, "Touching coplanar quads are one surface")
+	assert_almost_eq(
+		_occluder_span(occluders.get_child(0) as OccluderInstance3D),
+		10.0,
+		0.001,
+		"and the one occluder covers both of them"
+	)
+
+
+func test_a_row_of_separate_floors_does_not_make_a_level_spanning_occluder():
+	# The shape of the measured case: N boxes in a row, every top face on the
+	# same plane. The old grouping produced one occluder holding all N.
+	var container = Node3D.new()
+	container.name = "BakedGeometry"
+	root.add_child(container)
+	for idx in 8:
+		var mi = MeshInstance3D.new()
+		mi.mesh = _make_quad_mesh(Vector2(4, 4), Vector3.UP)
+		mi.name = "BakedMesh_%d" % idx
+		mi.transform.origin = Vector3(64.0 * idx, 0, 0)
+		container.add_child(mi)
+	root.bake_occluder_min_area = 1.0
+	bake_sys._generate_occluders(container)
+	var occluders = container.find_child("Occluders", false, false)
+	assert_not_null(occluders)
+	assert_eq(occluders.get_child_count(), 8, "one per top face")
+	var widest := 0.0
+	for child in occluders.get_children():
+		widest = maxf(widest, _occluder_span(child as OccluderInstance3D))
+	assert_lt(widest, 64.0, "no occluder reaches the next box, let alone the last one")
+
+
 func test_generate_occluders_separates_different_planes():
 	# Two quads on different planes → two occluders.
 	var mesh1 = _make_quad_mesh(Vector2(5, 5), Vector3.UP)
