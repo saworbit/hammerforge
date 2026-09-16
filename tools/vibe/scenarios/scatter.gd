@@ -1,7 +1,7 @@
 @tool
 extends "res://tools/vibe/hf_vibe_scenario.gd"
 
-## The scatter brush, the foliage populator and the paint layer list behind them.
+## The scatter brush and the paint layer list behind it.
 ##
 ## Scatter is the one part of the plugin that puts hundreds of nodes into the
 ## scene from one click, so what it orients them to, how many it is willing to
@@ -9,7 +9,6 @@ extends "res://tools/vibe/hf_vibe_scenario.gd"
 ## rather than trusting.
 
 const ScatterBrush = preload("res://addons/hammerforge/paint/hf_scatter_brush.gd")
-const FoliagePopulator = preload("res://addons/hammerforge/paint/hf_foliage_populator.gd")
 
 
 func id() -> String:
@@ -151,24 +150,6 @@ func _what_the_scene_keeps() -> void:
 					)
 					+ "without an owner is not written into the .tscn, so the scatter is "
 					+ "there until the scene is closed and gone after"
-				)
-			)
-
-	var populator = FoliagePopulator.new()
-	var fs = FoliagePopulator.FoliageSettings.new()
-	fs.mesh = BoxMesh.new()
-	fs.seed = 7
-	var foliage = populator.populate(layer, fs, root)
-	note("foliage node", foliage.name if foliage else "<null>")
-	if foliage:
-		note("foliage owner", foliage.owner)
-		if foliage.owner != root.owner:
-			known(
-				431,
-				"a populated foliage node is not owned either",
-				(
-					"HFFoliagePopulator.populate() parents the MultiMeshInstance3D and leaves its owner at %s"
-					% str(foliage.owner)
 				)
 			)
 

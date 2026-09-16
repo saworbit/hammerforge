@@ -197,11 +197,13 @@ Generates transition geometry between layers at different Y heights:
 - **Auto-detection during bake** (`hf_auto_connector.gd`): When "Auto Connectors" is enabled in Bake settings, the bake pipeline automatically scans paint layers for cross-layer height boundaries (N/S/E/W neighbors), groups adjacent boundary edges, and generates ramp or stair geometry. Mode can be Ramp, Stairs, or Auto (auto selects stairs when height difference exceeds stair step threshold). Connectors include collision shapes for navmesh parsing. Skipped during selection-only bakes.
 - A confirmed boundary takes precedence over the same automatically detected boundary, preventing duplicate baked geometry.
 
-## Foliage Populator (`hf_foliage_populator.gd`)
-Procedural scatter using MultiMeshInstance3D:
+## Scatter (`hf_scatter_brush.gd`)
+Procedural scatter using MultiMeshInstance3D, from the Paint tab's Foliage & Scatter section:
 - Height range and slope filtering per cell.
 - Configurable density (instances per cell with fractional probabilistic rounding).
 - Random jitter, scale range, and optional Y-axis rotation.
+- A circle or spline shape, a density preview, and an instance budget that refuses
+  and says so rather than building an unbounded number.
 - Output: MultiMeshInstance3D added to a parent node.
 
 ## Implementation Notes

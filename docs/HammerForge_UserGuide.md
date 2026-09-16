@@ -60,7 +60,7 @@ These are the same settings as **Test → Settings** and **Test → Advanced Bak
 
 HammerForge's own messages, separate from Godot's Output panel where every addon's output is mixed together. The level buttons show how many of each arrived this session and double as the filter — click **Errors 2** to see just those two. **Follow** keeps the newest line in view, and **Copy** / **Save…** take whatever is currently shown.
 
-A message that repeats collapses to one row with a count (`(x4)`) rather than filling the buffer. The buffer holds the most recent 600 entries; the footer says how many older ones were dropped.
+A message that repeats collapses to one row with a count (`(x4)`) rather than filling the buffer. The buffer trims down to the most recent 600 entries in batches, so it holds up to 663; the footer says how many it holds and how many older ones were dropped.
 
 ## Viewport Mouse Controls
 
@@ -787,7 +787,7 @@ Use the **Preview Mode** dropdown in **Test → Advanced Bake** to choose how ba
 
 ### Bake Options
 The **Test → Advanced Bake** section exposes additional controls:
-- **Chunk Size** (SpinBox, 0-256, default 32): spatial chunk size for bake grouping. Set to 0 to disable chunking.
+- **Chunk Size** (SpinBox, 0-16384, default 32): spatial chunk size for bake grouping. Set to 0 to disable chunking. The range is the level's own bound, so the Status board's recommended chunk size is a value this control can hold.
 - **Bake Visible Only** (checkbox): skips hidden visgroups and invisible brushes during bake.
 - **Use MultiMesh** (checkbox): after baking, consolidates repeated identical meshes into `MultiMeshInstance3D` nodes. Useful for levels with many copies of the same brush shape — reduces draw calls.
 - **Material Atlas** (checkbox): packs per-face textures into a single atlas image so all atlased geometry renders in one draw call. Requires **Use Face Materials** to be enabled. Faces with tiling UVs (scale > 1) are automatically excluded and rendered as separate surfaces with their original material so texture repeat works correctly. Best for levels with many small non-tiling textures. Textures with painted layers or ShaderMaterials are not atlased. The atlas is at most 4096 pixels square, so a level carrying more texture than that holds packs what fits and renders the rest on their own materials, with a warning saying how many.
