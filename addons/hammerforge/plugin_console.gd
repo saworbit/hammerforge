@@ -268,8 +268,15 @@ static func _apply_recommended_chunk_size(plugin: Object) -> void:
 	var spin = dock.get("bake_chunk_size_spin") if dock else null
 	if spin != null and is_instance_valid(spin):
 		spin.value = recommended
+		# Read it back, the way the dock's own bake path does. The control clamps,
+		# and the Log tab line exists precisely so this action is auditable - so
+		# reporting the number that was asked for rather than the one that landed
+		# left a reader checking why their bake was still chunked wrong with a log
+		# that disagreed with the level.
+		recommended = spin.value
 	else:
 		root.set("bake_chunk_size", recommended)
+		recommended = float(root.get("bake_chunk_size"))
 	HFConsoleLogType.shared().info("Chunk size set to %d." % int(recommended), "settings")
 
 
