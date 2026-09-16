@@ -199,6 +199,30 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   boundary cleared it, Auto was Stairs everywhere, and the ramp half of the mode
   never happened. The tooltip names the control rather than an unreachable
   number.
+- **A radial array about an axis index that does not exist is refused** (#541).
+  `axis_vector()` and `rotation_basis()` both fall through to Z, so a ring about
+  axis 7 or axis -1 was built about Z, climbed along Z and reported as a success -
+  and the saved array record then said axis 3 while the brushes said Z.
+  `HFTransformSystem.is_valid_axis()` exists for exactly this and says so in its
+  own comment; `radial_placements()` was the one caller of `axis_vector()` that
+  skipped it. `can_generate()` refuses the same index, so the gate says "that is
+  not an axis" rather than the layout quietly coming back empty.
+- **`grid_placements()` refuses a count below one, the way `grid_copy_count()`
+  already did** (#542). There were two ways to ask how many copies a grid makes
+  and they disagreed: the dock measured through `placements_for()` and got 3 for
+  counts of (0, 2, 2), the brush system measured through `grid_copy_count()` and
+  got -1, and both fed the same `can_generate()` gate. The clamp that
+  `grid_copy_count()`'s own comment says was removed was still in the other half
+  of the pair, so down the dock path a zero or a minus sign became "a plausible
+  array they never described" - the precise outcome that comment says was fixed.
+- **One `axis_vector()`, and the clip paths use its guard** (#567).
+  `HFConvexClip.axis_normal()` was a byte-identical second copy with no guard
+  beside it, so a fix to either was not a fix to the other - and #541 was the
+  same fall-through in a third place. It calls `HFTransformSystem.axis_vector()`
+  now. `clip_brush_by_id()` and `can_clip_brush()` clamped the index rather than
+  falling through, which is the same silent wrong answer wearing a different hat:
+  5 became a cut on Z and -1 a cut on X, reported on the axis it picked. Both
+  refuse now, so the ghost and the operation still agree.
 - **Validate + Fix reports what is left, not what it repaired** (#569). The
   handler threw away the `fixed` count `validate_level(true)` returns and
   re-derived it by differencing two more full validation passes - which is not
