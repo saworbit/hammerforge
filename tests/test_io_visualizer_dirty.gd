@@ -357,11 +357,21 @@ func test_name_index_skips_plain_brushes():
 # ===========================================================================
 
 
-func test_dangling_only_graph_hides_the_mesh():
+func test_a_graph_that_only_dangles_still_draws():
+	# This used to assert the opposite. Renaming the target is the single most
+	# common way wiring breaks, and hiding the overlay meant the level with the
+	# broken wire looked exactly like a level with no wiring at all (#602).
 	var pair = _wired_pair()
 	pair[1].name = "door_renamed"
 	_idle(15)
-	assert_false(viz._mesh_instance.visible, "Nothing resolves, so nothing should be drawn")
+	assert_true(viz._mesh_instance.visible, "A broken wire is what the overlay is for")
+
+
+func test_a_graph_with_no_connections_at_all_still_hides_the_mesh():
+	_make_entity("button_a", Vector3.ZERO)
+	viz.set_enabled(true)
+	viz.refresh()
+	assert_false(viz._mesh_instance.visible, "No wiring is still nothing to draw")
 
 
 func test_graph_comes_back_when_the_target_returns():
