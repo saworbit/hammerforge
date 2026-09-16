@@ -109,6 +109,7 @@ SCENARIOS = [
     "chaos-systems",
     "prefab-links",
     "validate-fix",
+    "dock-undo-two",
 ]
 
 # Generous: chaos runs 300 operations and cost saves eight levels. A scenario

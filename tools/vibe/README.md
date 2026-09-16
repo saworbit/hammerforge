@@ -136,6 +136,7 @@ it from here.
 | `prefab-links` | whether cycling a variant leaves an instance where it was, and what it does to overrides |
 | `validate-fix` | what Validate + Fix reports against what it repaired and what is left |
 | `chaos-systems` | randomised registry operations, with dangling references checked after each |
+| `dock-undo-two` | undo coverage for the structure, library, terrain slot and surface paint commands |
 
 ## Adding a scenario
 
