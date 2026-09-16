@@ -16,7 +16,8 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   bake has no way to reach the Log at all. Both the gate line and section 0a
   claimed it did. The Bake status row is the thing that actually reports a bake,
   and it names how long it took. The gate record now carries what the run covered
-  and what it did not.
+  and what it did not, including that the resize-handle drag was signed off
+  rather than executed.
 - **The editor smoke checklist is now a short gate plus a long reference, and the
   gate is enforced** (#593). 599 steps across 60 sections, 57 commits since March,
   and nothing ever ran it. Every edit had the same shape: a fix lands, a line

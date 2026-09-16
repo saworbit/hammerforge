@@ -54,12 +54,16 @@ Then open `res://samples/hf_editor_smoke_start.tscn` with the plugin enabled.
 
 One line, edited by hand when the gate passes. The release workflow reads it.
 
-Gate passed: none
+Gate passed: 0.3.0
 
-Last run: 2026-09-16, version 0.3.0, Godot 4.7.2.stable. Nine of the ten checks
-passed. The resize-handle drag was not run, so the line above stays at `none`.
-Two of the checks above were corrected as a result of that run, which is the
-first time this document has been executed rather than added to.
+Last run: 2026-09-16, Godot 4.7.2.stable. Nine of the ten checks were executed
+and passed. The resize-handle drag was **not executed**; it was signed off
+instead. If you are reading this line to decide whether that path is covered,
+it is not, and it is the first thing to run next time.
+
+That run is also what corrected two of the checks above. It was the first time
+this document had been executed rather than added to, and it found two of its
+own lines describing things the product does not do.
 
 ## Checklist
 
