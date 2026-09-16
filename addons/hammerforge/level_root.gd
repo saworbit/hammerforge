@@ -2620,9 +2620,10 @@ func export_playtest_scene(path: String) -> bool:
 	if entities_node:
 		for child in entities_node.get_children():
 			if child is Node3D:
-				var dup = child.duplicate()
+				var built := _playtest_node_for_entity(child as Node3D)
+				var dup: Node = built if built else child.duplicate()
 				scene_root.add_child(dup)
-				dup.transform = child.global_transform
+				(dup as Node3D).transform = (child as Node3D).global_transform
 				_own_tree(dup, scene_root)
 
 	# Copy DefaultSun if it exists (created by New HammerForge Level)
@@ -2688,6 +2689,98 @@ func export_playtest_scene(path: String) -> bool:
 		return false
 
 	return true
+
+
+## Build the node an entity definition names, or null to ship the editor's marker.
+##
+## `entities.json` gives every entity a `class`, and may give one a `scene`. Both
+## were parsed, stored and never instantiated, so every light a mapper placed
+## exported as a bare `Node3D` and the level lit itself with the fallback sun
+## (#598, #599). A definition naming a plain `Node3D` still ships the marker,
+## because there is nothing better to build.
+func _playtest_node_for_entity(entity: Node3D) -> Node3D:
+	if not (entity is DraftEntity):
+		return null
+	var draft := entity as DraftEntity
+	var key: String = draft.entity_class if draft.entity_class != "" else draft.entity_type
+	if key == "":
+		return null
+	var definition: Dictionary = get_entity_definition(key)
+	if definition.is_empty():
+		return null
+
+	var built: Node3D = null
+	var scene_path := str(definition.get("scene", "")).strip_edges()
+	if scene_path != "":
+		if ResourceLoader.exists(scene_path):
+			var packed := ResourceLoader.load(scene_path) as PackedScene
+			if packed:
+				built = packed.instantiate() as Node3D
+			if built == null:
+				HFLog.warn(
+					(
+						(
+							"HammerForge: '%s' names scene '%s', which is not a PackedScene "
+							+ "with a Node3D root. Exporting the marker instead."
+						)
+						% [key, scene_path]
+					)
+				)
+		else:
+			HFLog.warn(
+				"HammerForge: '%s' names scene '%s', which does not exist." % [key, scene_path]
+			)
+
+	if built == null:
+		var node_class := str(definition.get("class", "")).strip_edges()
+		if (
+			node_class != ""
+			and node_class != "Node3D"
+			and ClassDB.class_exists(node_class)
+			and ClassDB.can_instantiate(node_class)
+			and ClassDB.is_parent_class(node_class, "Node3D")
+		):
+			built = ClassDB.instantiate(node_class) as Node3D
+			if built == null:
+				HFLog.warn(
+					"HammerForge: '%s' names class '%s', which did not build." % [key, node_class]
+				)
+	if built == null:
+		return null
+
+	_apply_entity_properties_to_node(built, draft, definition)
+	# The wiring, the authored name and everything else the editor hung on the
+	# marker has to move with it, or the I/O dispatcher finds nothing to wire.
+	for meta_name in entity.get_meta_list():
+		built.set_meta(meta_name, entity.get_meta(meta_name))
+	built.name = entity.name
+	return built
+
+
+## Copy an entity's authored property values onto the node built for it.
+##
+## The name a level stores and the name the engine uses are not always the same -
+## an `OmniLight3D`'s Range is `omni_range` - so a property may carry `maps_to`
+## naming the engine property. Without it the declared name is used as it stands.
+func _apply_entity_properties_to_node(
+	node: Node3D, draft: DraftEntity, definition: Dictionary
+) -> void:
+	var declared_props = definition.get("properties", [])
+	if not (declared_props is Array):
+		return
+	var available: Dictionary = {}
+	for entry in node.get_property_list():
+		available[str(entry.get("name", ""))] = true
+	for prop in declared_props:
+		if not (prop is Dictionary):
+			continue
+		var declared := str(prop.get("name", ""))
+		if declared == "" or not draft.entity_data.has(declared):
+			continue
+		var target := str(prop.get("maps_to", declared))
+		if target == "" or not available.has(target):
+			continue
+		node.set(target, draft.entity_data[declared])
 
 
 func _node_tree_has_io(node: Node) -> bool:
