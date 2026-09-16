@@ -112,6 +112,23 @@ func get_dropped_save_slots() -> Array[int]:
 	return _dropped_slots.duplicate()
 
 
+## Whether `path` holds a library this can read.
+##
+## Asked before the load is committed as an undo action. `load_library()` only
+## refuses on these three things, and all of them can be known without touching
+## the palette, so the caller can report a bad file rather than opening an undo
+## step for a load that never happened.
+static func library_is_readable(path: String) -> bool:
+	if not FileAccess.file_exists(path):
+		return false
+	var file := FileAccess.open(path, FileAccess.READ)
+	if not file:
+		return false
+	var text := file.get_as_text()
+	file.close()
+	return JSON.parse_string(text) is Dictionary
+
+
 ## Load a material palette from a JSON file.
 func load_library(path: String) -> bool:
 	if not FileAccess.file_exists(path):

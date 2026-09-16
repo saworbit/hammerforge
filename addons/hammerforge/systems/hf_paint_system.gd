@@ -249,6 +249,34 @@ func add_paint_layer() -> void:
 	root.paint_layers.active_layer_index = root.paint_layers.layers.size() - 1
 
 
+## Point a terrain slot on the active paint layer at `path` and rebuild.
+##
+## Named on the system so the dock has something to commit an undo action
+## against: the slot arrays are carried by `capture_paint_layers()` and put back
+## by `restore_paint_layers()`, so only the wrapper was missing.
+func set_terrain_slot_texture(slot: int, path: String) -> void:
+	if not root.paint_layers:
+		return
+	var layer = root.paint_layers.get_active_layer()
+	if not layer:
+		return
+	if not layer.set_terrain_slot_texture(slot, path):
+		return
+	regenerate_paint_layers()
+
+
+## The UV scale of a terrain slot on the active paint layer.
+func set_terrain_slot_uv_scale(slot: int, value: float) -> void:
+	if not root.paint_layers:
+		return
+	var layer = root.paint_layers.get_active_layer()
+	if not layer:
+		return
+	if not layer.set_terrain_slot_uv_scale(slot, value):
+		return
+	regenerate_paint_layers()
+
+
 func remove_active_paint_layer() -> void:
 	if not root.paint_layers:
 		return
