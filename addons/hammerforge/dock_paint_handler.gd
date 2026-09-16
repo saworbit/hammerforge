@@ -473,10 +473,12 @@ static func on_terrain_slot_texture_selected(dock: Object, path: String) -> void
 	var layer = dock.level_root.paint_layers.get_active_layer()
 	if not layer:
 		return
-	layer._ensure_terrain_slots()
-	layer.terrain_slot_paths[dock._terrain_slot_pick_index] = path
+	dock._commit_state_action(
+		"Set Terrain Slot Texture",
+		"set_terrain_slot_texture",
+		[dock._terrain_slot_pick_index, path]
+	)
 	refresh_terrain_slots(dock)
-	dock.level_root._regenerate_paint_layers()
 
 
 static func on_terrain_slot_scale_changed(dock: Object, value: float, slot: int) -> void:
@@ -488,11 +490,11 @@ static func on_terrain_slot_scale_changed(dock: Object, value: float, slot: int)
 	if not layer:
 		return
 	layer._ensure_terrain_slots()
-	var current = float(layer.terrain_slot_uv_scales[slot])
-	if is_equal_approx(current, value):
+	if is_equal_approx(float(layer.terrain_slot_uv_scales[slot]), value):
 		return
-	layer.terrain_slot_uv_scales[slot] = float(value)
-	dock.level_root._regenerate_paint_layers()
+	dock._commit_state_action(
+		"Set Terrain Slot UV Scale", "set_terrain_slot_uv_scale", [slot, float(value)]
+	)
 
 
 static func refresh_terrain_slots(dock: Object) -> void:

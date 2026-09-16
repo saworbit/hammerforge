@@ -303,9 +303,13 @@ static func on_material_library_load_selected(dock: Object, path: String) -> voi
 	if manager == null:
 		dock._set_status("No material palette", true)
 		return
-	if not manager.load_library(path):
+	if not manager.library_is_readable(path):
 		dock._set_status("Could not read material library", true)
 		return
+	# Every face's material_idx is an index into the palette this replaces, so
+	# the load repaints every painted face in the level. It goes through the
+	# undo commit for the same reason its neighbours on the Paint tab do.
+	dock._commit_state_action("Load Material Library", "load_material_library", [path])
 	dock._sync_materials_from_root()
 	var missing: int = manager.get_missing_count()
 	if missing > 0:

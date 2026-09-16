@@ -1059,7 +1059,7 @@ A `LevelRoot` can read from somewhere else instead through its `entity_definitio
 ## Material Library
 The material palette can be saved and loaded as a JSON library file. **Save Library** and **Load Library** sit in the Paint tab -> Materials section, beside Refresh Prototypes:
 - **Save Library**: records the resource path of each palette material. A material made in the editor session has no resource path and cannot be recorded, so its slot is written empty and the status line says how many were left that way. Save the material to disk first if it has to survive the trip.
-- **Load Library**: restores the palette from the saved paths. A path the file names but the project cannot find keeps its slot as an empty one rather than shifting the rest, because `FaceData.material_idx` indexes that array; the status line says how many are missing.
+- **Load Library**: restores the palette from the saved paths. A path the file names but the project cannot find keeps its slot as an empty one rather than shifting the rest, because `FaceData.material_idx` indexes that array; the status line says how many are missing. The load is a single undo step, so Ctrl+Z brings the old palette back.
 - **Unused materials**: not tracked. Material assignment is per face, through `FaceData.material_idx`, so "is this palette slot used" is a question about face slots rather than about a resource path.
 
 ## Prototype Textures
@@ -1206,7 +1206,7 @@ Prefabs let you save a selection of brushes and entities as a reusable group and
 3. Enter a name and click **Save** (or **Save Linked** to enable live propagation).
 4. The prefab is saved as a `.hfprefab` JSON file in `res://prefabs/`.
 
-**Quick Save**: Press **Ctrl+Shift+P** or click **Pfb** in the context toolbar to instantly save the current selection as a prefab with an auto-generated name. Also available via the context toolbar in both brush and entity selected contexts.
+**Quick Save**: Press **Ctrl+Shift+P** (rebindable, listed as Save Selection as Prefab in the shortcut dialog) or click **Pfb** in the context toolbar to instantly save the current selection as a prefab with an auto-generated name. Also available via the context toolbar in both brush and entity selected contexts.
 
 ### Instantiating a Prefab
 - Drag a prefab from the library list into the 3D viewport.
@@ -1220,7 +1220,7 @@ Prefabs let you save a selection of brushes and entities as a reusable group and
 Prefabs can contain multiple variants (e.g., different door styles: wooden, metal, ornate).
 
 - **Adding a variant**: Right-click a prefab in the library → **Add Variant**. Select the replacement geometry and name the variant.
-- **Cycling variants**: Select a placed prefab instance and press **Ctrl+Shift+V** or click **Var▶** in the context toolbar. This cycles through all available variants in place.
+- **Cycling variants**: Select a placed prefab instance and press **Ctrl+Shift+V** (rebindable, listed as Cycle Prefab Variant) or click **Var▶** in the context toolbar. This cycles through all available variants in place.
 - **Variant indicator**: The library list shows `[N variants]` next to prefabs that have multiple variants.
 
 ### Live-Linked Prefabs

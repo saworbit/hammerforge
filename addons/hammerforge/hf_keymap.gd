@@ -116,6 +116,8 @@ static func _default_bindings() -> Dictionary:
 		"create_arch": {"keycode": KEY_A, "ctrl": true, "shift": true},
 		"carve": {"keycode": KEY_R, "shift": true, "ctrl": true},
 		"merge": {"keycode": KEY_M, "ctrl": true, "shift": true},
+		"quick_save_prefab": {"keycode": KEY_P, "ctrl": true, "shift": true},
+		"cycle_variant": {"keycode": KEY_V, "ctrl": true, "shift": true},
 		"move_to_floor": {"keycode": KEY_F, "ctrl": true, "shift": true},
 		"move_to_ceiling": {"keycode": KEY_C, "ctrl": true, "shift": true},
 		# Free transform. R is also paint_ramp, which plugin_input_router only
@@ -404,6 +406,8 @@ static func get_action_label(action: String) -> String:
 		"create_arch": "Create Structure",
 		"carve": "Carve",
 		"merge": "Merge Brushes",
+		"quick_save_prefab": "Save Selection as Prefab",
+		"cycle_variant": "Cycle Prefab Variant",
 		"move_to_floor": "Move to Floor",
 		"move_to_ceiling": "Move to Ceiling",
 		"rotate_ccw": "Rotate CCW",
