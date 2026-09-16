@@ -188,7 +188,10 @@ func build(parent: Control) -> void:
 	dock.bake_connector_mode_opt.add_item("Ramp", 0)
 	dock.bake_connector_mode_opt.add_item("Stairs", 1)
 	dock.bake_connector_mode_opt.add_item("Auto", 2)
-	dock.bake_connector_mode_opt.tooltip_text = ("Ramp: smooth slope; Stairs: stepped; Auto: stairs when height > threshold")
+	dock.bake_connector_mode_opt.tooltip_text = (
+		"Ramp: smooth slope; Stairs: stepped;"
+		+ " Auto: stairs once the height difference reaches the Stair Threshold"
+	)
 	dock.bake_connector_mode_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	conn_row.add_child(dock.bake_connector_mode_opt)
 
@@ -223,6 +226,24 @@ func build(parent: Control) -> void:
 	dock.bake_connector_width_spin.tooltip_text = "Connector width in cells"
 	dock.bake_connector_width_spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	conn_settings_row.add_child(dock.bake_connector_width_spin)
+
+	var threshold_row := HBoxContainer.new()
+	threshold_row.add_theme_constant_override("separation", 4)
+	adv.add_child(threshold_row)
+
+	var threshold_label := Label.new()
+	threshold_label.text = "Stair Threshold:"
+	threshold_label.add_theme_font_size_override("font_size", 11)
+	threshold_row.add_child(threshold_label)
+
+	dock.bake_connector_stair_threshold_spin = SpinBox.new()
+	dock.bake_connector_stair_threshold_spin.min_value = LevelRoot.MIN_CONNECTOR_STAIR_THRESHOLD
+	dock.bake_connector_stair_threshold_spin.max_value = LevelRoot.MAX_CONNECTOR_STAIR_THRESHOLD
+	dock.bake_connector_stair_threshold_spin.step = 1.0
+	dock.bake_connector_stair_threshold_spin.value = 32.0
+	dock.bake_connector_stair_threshold_spin.tooltip_text = ("Auto mode builds stairs once the height difference reaches this, and a ramp below it")
+	dock.bake_connector_stair_threshold_spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	threshold_row.add_child(dock.bake_connector_stair_threshold_spin)
 
 	# -- Occluder generation --
 	dock.bake_generate_occluders_check = dock._make_check("Generate Occluders")

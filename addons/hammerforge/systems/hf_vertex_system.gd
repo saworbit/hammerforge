@@ -708,10 +708,6 @@ func is_dragging() -> bool:
 	return _drag_active
 
 
-func get_drag_anchor_world() -> Vector3:
-	return _drag_start_pos
-
-
 ## Get total number of selected vertices across all brushes.
 func get_selection_count() -> int:
 	var count := 0

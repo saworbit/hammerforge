@@ -305,14 +305,6 @@ func _hide_hint() -> void:
 		_hint_tween = null
 
 
-func dismiss_current_hint() -> void:
-	if _current_hint_key.is_empty():
-		return
-	if _user_prefs:
-		_user_prefs.dismiss_hint(_current_hint_key)
-	_hide_hint()
-
-
 func _build_shortcuts_text(ctx: Dictionary) -> String:
 	var tool_id: int = ctx.get("tool", 0)
 	var mode: int = ctx.get("mode", 0)

@@ -348,7 +348,10 @@ func test_settings_defaults():
 	assert_eq(settings.mode, HFAutoConnectorScript.ConnectorMode.RAMP)
 	assert_almost_eq(settings.stair_step_height, 0.25, 0.001)
 	assert_eq(settings.width_cells, 2)
-	assert_almost_eq(settings.stair_threshold, 2.0, 0.001)
+	# 32, not the 2.0 it was fixed at while nothing could change it: 2.0 is a
+	# small height at this genre's scale, so on a level built at 32-unit grid
+	# steps every cross-layer boundary cleared it and Auto was Stairs everywhere.
+	assert_almost_eq(settings.stair_threshold, 32.0, 0.001)
 
 
 # ---------------------------------------------------------------------------
@@ -415,6 +418,7 @@ var bake_auto_connectors: bool = true
 var bake_connector_mode: int = 0
 var bake_connector_stair_height: float = 0.25
 var bake_connector_width: int = 2
+var bake_connector_stair_threshold: float = 32.0
 var bake_navmesh: bool = false
 func _log(_msg: String) -> void:
 	pass

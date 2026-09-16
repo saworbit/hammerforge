@@ -107,14 +107,6 @@ func get_instance(instance_id: String) -> PrefabInstanceRecord:
 	return _instances.get(instance_id, null)
 
 
-## Find the instance record for a given node (brush or entity).
-func get_instance_for_node(node: Node3D) -> PrefabInstanceRecord:
-	var iid: String = str(node.get_meta("hf_prefab_instance", ""))
-	if iid == "" or not _instances.has(iid):
-		return null
-	return _instances[iid]
-
-
 ## Return all instance records whose source_path matches.
 func get_instances_for_source(source_path: String) -> Array:
 	var result: Array = []

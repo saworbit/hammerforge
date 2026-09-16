@@ -367,12 +367,3 @@ static func filter_brush_entities(defs: Array[HFEntityDef]) -> Array[HFEntityDef
 		if d.is_brush_entity:
 			out.append(d)
 	return out
-
-
-## Filter definitions to only point entities.
-static func filter_point_entities(defs: Array[HFEntityDef]) -> Array[HFEntityDef]:
-	var out: Array[HFEntityDef] = []
-	for d in defs:
-		if not d.is_brush_entity:
-			out.append(d)
-	return out
