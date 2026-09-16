@@ -255,7 +255,7 @@ func _end_stroke() -> void:
 			_reconcile_heightmap(layer, dirty)
 		else:
 			var model = geometry.build_for_chunks(layer, dirty, synth_settings)
-			reconciler.reconcile(model, layer.grid, synth_settings, dirty)
+			reconciler.reconcile(model, layer.grid, synth_settings, dirty, layer.layer_id)
 	var generative_footprint := (
 		tool in [HFStroke.Tool.PAINT, HFStroke.Tool.RECT] and not _stroke_erasing
 	)
@@ -782,7 +782,7 @@ func _preview_reconcile() -> void:
 		_reconcile_heightmap(layer, dirty)
 	else:
 		var model = geometry.build_for_chunks(layer, dirty, synth_settings)
-		reconciler.reconcile(model, layer.grid, synth_settings, dirty)
+		reconciler.reconcile(model, layer.grid, synth_settings, dirty, layer.layer_id)
 
 
 func build_heightmap_model(layer: HFPaintLayer, chunk_ids: Array) -> HFGeneratedModel:
@@ -807,7 +807,7 @@ func build_heightmap_model(layer: HFPaintLayer, chunk_ids: Array) -> HFGenerated
 
 func _reconcile_heightmap(layer: HFPaintLayer, dirty: Array[Vector2i]) -> void:
 	var model = build_heightmap_model(layer, dirty)
-	reconciler.reconcile(model, layer.grid, synth_settings, dirty)
+	reconciler.reconcile(model, layer.grid, synth_settings, dirty, layer.layer_id)
 
 
 # ---------------------------------------------------------------------------

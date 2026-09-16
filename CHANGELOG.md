@@ -75,6 +75,29 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   three cells to be one. `infer_intent()` also gained a note that `avg_speed` is
   part of the corridor test, so the same long thin run classifies as a corridor
   when it is drawn quickly and a blob when it is drawn slowly.
+- **Reconciling one floor paint layer no longer deletes every other layer's
+  geometry in the same chunk** (#561). `HFGeneratedReconciler.reconcile()` swept
+  by chunk, and every layer shares one `Generated/Floors` and one
+  `Generated/Walls`, so the pass for a layer freed the nodes belonging to all the
+  others that touched the same chunk. `HFPaintSystem._reconcile_dirty_chunks()`
+  runs that once per layer, so each pass undid the one before it and only the
+  layer reconciled last had any geometry at all. A ground floor blinked out of
+  existence whenever the walkway above it was painted, and a bake in between
+  shipped a level missing a floor. Generated nodes now carry an `hf_layer` meta
+  and the sweep only indexes the layer it was given; the id comes from the
+  caller, so nothing depends on parsing it back out. A node left by an older
+  build has no meta and is matched by its id instead.
+- **A layer id is run through `validate_node_name()` before it is stored**
+  (#548). The id sits in the middle of every generated brush id -
+  `hf:floor:v1:<layer_id>:<chunk>:...` - and `chunk_tag_from_id()` reads field 4,
+  so a ":" in the layer id shifted every field along and the reconciler read the
+  wrong one as the chunk tag. A node whose tag matched no chunk in scope was left
+  out of the index, so the reconciler rebuilt it and never swept the original:
+  duplicated floor and wall geometry that no stroke removed. Plugin-minted ids
+  are `layer_N` and could not do this; a `.hflevel` from another tool could, and
+  `load_paint_layers()` took the id verbatim. `create_layer()` is the one funnel
+  for every id, and the engine's own node-name rule is the right test, since the
+  other characters it rejects were what made `Layer_a_b_c` and `a:b:c` disagree.
 - **A whole-tree check that every signal the addon declares is emitted** (#521).
   A grep over `addons/hammerforge/`, the way `test_suite_integrity.gd` checks
   that every test script loads. It covers `name.emit(`, `emit_signal("name")` and
