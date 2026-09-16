@@ -98,6 +98,34 @@ func _update_preview() -> void:
 			mesh_inst.material_override = mat
 			mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			_assign_preview(mesh_inst)
+		"box":
+			# A proxy that needs no asset. `door_basic` previewed with the only mesh
+			# in the plugin, which is a light bulb, so a level with doors and lights
+			# in it showed a bulb for both kinds of thing (#613).
+			var box_inst = MeshInstance3D.new()
+			var box = BoxMesh.new()
+			var box_size = preview.get("size", [1.0, 2.0, 0.2])
+			if box_size is Array and box_size.size() >= 3:
+				box.size = Vector3(
+					maxf(0.05, float(box_size[0])),
+					maxf(0.05, float(box_size[1])),
+					maxf(0.05, float(box_size[2]))
+				)
+			var box_alpha = float(preview.get("alpha", 0.6))
+			var box_mat = StandardMaterial3D.new()
+			box_mat.albedo_color = preview_color
+			box_mat.albedo_color.a = clamp(box_alpha, 0.05, 1.0)
+			box_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			box_mat.shading_mode = (
+				BaseMaterial3D.SHADING_MODE_UNSHADED
+				if bool(preview.get("unshaded", true))
+				else BaseMaterial3D.SHADING_MODE_PER_PIXEL
+			)
+			box_mat.no_depth_test = bool(preview.get("no_depth_test", false))
+			box_inst.mesh = box
+			box_inst.material_override = box_mat
+			box_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			_assign_preview(box_inst)
 		"capsule":
 			var mesh_inst = MeshInstance3D.new()
 			var capsule = CapsuleMesh.new()

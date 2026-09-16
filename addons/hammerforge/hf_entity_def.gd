@@ -14,6 +14,11 @@ var is_brush_entity := false
 var properties: Array[Dictionary] = []
 ## Optional scene path to instantiate instead of a plain DraftEntity.
 var scene_path := ""
+## The output names this entity class fires, and the input names it answers to.
+## The wiring form offers these, so the preset vocabulary and the definitions can
+## agree instead of a mapper having to know the strings (#613).
+var outputs: Array = []
+var inputs: Array = []
 ## Optional Godot node class to build for this entity in a playtest export, when
 ## the definition names one other than a plain marker.
 var node_class := ""
@@ -55,7 +60,21 @@ static func from_dict(data: Dictionary) -> HFEntityDef:
 			if p is Dictionary:
 				def.properties.append(p)
 	def.scene_path = str(data.get("scene", ""))
+	def.outputs = _string_list(data.get("outputs", []))
+	def.inputs = _string_list(data.get("inputs", []))
 	return def
+
+
+## Names only, stripped, in order, without blanks or repeats.
+static func _string_list(value: Variant) -> Array:
+	var out: Array = []
+	if not (value is Array):
+		return out
+	for item in value:
+		var name := str(item).strip_edges()
+		if name != "" and not (name in out):
+			out.append(name)
+	return out
 
 
 func to_dict() -> Dictionary:
@@ -70,6 +89,10 @@ func to_dict() -> Dictionary:
 		d["properties"] = properties
 	if scene_path != "":
 		d["scene"] = scene_path
+	if not outputs.is_empty():
+		d["outputs"] = outputs
+	if not inputs.is_empty():
+		d["inputs"] = inputs
 	if node_class != "":
 		d["class"] = node_class
 	return d
