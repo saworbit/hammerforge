@@ -439,6 +439,7 @@ var visgroup_name_input: LineEdit = null
 var visgroup_add_btn: Button = null
 var visgroup_add_sel_btn: Button = null
 var visgroup_rem_sel_btn: Button = null
+var visgroup_rename_btn: Button = null
 var visgroup_delete_btn: Button = null
 var group_sel_btn: Button = null
 var ungroup_btn: Button = null
@@ -553,6 +554,7 @@ var _entity_props_entity: Node3D = null
 # Displacement / Bevel UI controls
 var _disp_section: HFCollapsibleSection = null
 var _disp_power_spin: SpinBox = null
+var _disp_power_apply_btn: Button = null
 var _disp_elevation_spin: SpinBox = null
 var _disp_create_btn: Button = null
 var _disp_destroy_btn: Button = null
@@ -1634,8 +1636,19 @@ func _build_displacement_bevel_section() -> void:
 	_disp_power_spin.max_value = 4
 	_disp_power_spin.step = 1
 	_disp_power_spin.value = 3
-	_disp_power_spin.tooltip_text = "Subdivision: 2=5x5, 3=9x9, 4=17x17"
+	_disp_power_spin.tooltip_text = (
+		"Subdivision: 2=5x5, 3=9x9, 4=17x17"
+		+ "
+Used by Create, and by Apply for a face that already has a displacement"
+	)
 	pow_row.add_child(_disp_power_spin)
+	_disp_power_apply_btn = Button.new()
+	_disp_power_apply_btn.text = "Apply"
+	_disp_power_apply_btn.tooltip_text = (
+		"Change the selected displacement to this power, keeping the sculpt"
+	)
+	_disp_power_apply_btn.pressed.connect(_on_disp_set_power)
+	pow_row.add_child(_disp_power_apply_btn)
 	dbox.add_child(pow_row)
 	# Elevation
 	var elev_row = HBoxContainer.new()
@@ -1910,6 +1923,10 @@ func _try_undoable_action(action_name: String, method_name: String, args: Array 
 
 func _on_disp_create() -> void:
 	HFDockBrushHandler.on_disp_create(self)
+
+
+func _on_disp_set_power() -> void:
+	HFDockBrushHandler.on_disp_set_power(self)
 
 
 func _on_disp_destroy() -> void:
@@ -3003,6 +3020,27 @@ func _on_prefab_delete_requested(prefab_path: String) -> void:
 	DirAccess.remove_absolute(prefab_path)
 	if _prefab_library:
 		_prefab_library.on_prefab_saved()
+
+
+## Remove a variant from a prefab.
+##
+## `HFPrefab.remove_variant()` has always existed and refuses to remove `base`.
+## Nothing outside the suite could call it (#615), so the list of variants on a
+## prefab was append-only, while the library's own header comment claimed the
+## context menu could delete one.
+func _on_prefab_variant_remove_requested(prefab_path: String, variant_name: String) -> void:
+	if prefab_path == "" or variant_name == "":
+		return
+	var prefab = HFPrefabType.load_from_file(prefab_path)
+	if not prefab:
+		return
+	if not prefab.remove_variant(variant_name):
+		show_toast('"%s" is not a variant that can be removed' % variant_name, 2)
+		return
+	prefab.save_to_file(prefab_path)
+	if _prefab_library:
+		_prefab_library.on_prefab_saved()
+	show_toast('Removed variant "%s"' % variant_name, 0)
 
 
 func _on_prefab_variant_add_requested(prefab_path: String, variant_name: String) -> void:
@@ -5701,6 +5739,10 @@ func _on_visgroup_add_selection() -> void:
 
 func _on_visgroup_remove_selection() -> void:
 	HFDockVisgroupHandler.on_visgroup_remove_selection(self)
+
+
+func _on_visgroup_rename() -> void:
+	HFDockVisgroupHandler.on_visgroup_rename(self)
 
 
 func _on_visgroup_delete() -> void:

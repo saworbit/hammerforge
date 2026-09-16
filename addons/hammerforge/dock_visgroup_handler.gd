@@ -59,6 +59,11 @@ static func setup_visgroup_ui(dock: Object) -> void:
 	dock.visgroup_rem_sel_btn.tooltip_text = ("Remove selected brushes/entities from the highlighted visgroup")
 	dock.visgroup_rem_sel_btn.pressed.connect(dock._on_visgroup_remove_selection)
 	visgroup_buttons.add_child(dock.visgroup_rem_sel_btn)
+	dock.visgroup_rename_btn = Button.new()
+	dock.visgroup_rename_btn.text = "Rename"
+	dock.visgroup_rename_btn.tooltip_text = "Rename the highlighted visgroup"
+	dock.visgroup_rename_btn.pressed.connect(dock._on_visgroup_rename)
+	visgroup_buttons.add_child(dock.visgroup_rename_btn)
 	dock.visgroup_delete_btn = Button.new()
 	dock.visgroup_delete_btn.text = "Delete"
 	dock.visgroup_delete_btn.tooltip_text = "Delete the highlighted visgroup"
@@ -211,6 +216,54 @@ static func on_visgroup_delete(dock: Object) -> void:
 		return
 	dock._commit_state_action("Delete Visgroup", "remove_visgroup", [visgroup_name])
 	refresh_visgroup_ui(dock)
+
+
+## Rename the highlighted visgroup.
+##
+## The system has always been able to do this, carefully: it refuses a name that
+## is taken rather than merging two visgroups, and it rewrites the membership
+## metadata on every node that carried the old name. Nothing outside the suite
+## could ask for it (#615), so a mapper who named one `roof` and then wanted
+## `roof_upper` had to make a new one, re-add every member and delete the old.
+##
+## The collision is checked here rather than left to the refusal, because
+## `_commit_state_action()` cannot see a return value and would otherwise push an
+## undo step for a rename that did not happen.
+static func on_visgroup_rename(dock: Object) -> void:
+	if dock == null or not dock.level_root:
+		return
+	var current_name := require_visgroup_name(dock, "Rename Visgroup")
+	if current_name == "":
+		return
+	var row := get_selected_visgroup_index(dock)
+	var dialog := AcceptDialog.new()
+	dialog.title = "Rename Visgroup"
+	var line_edit := LineEdit.new()
+	line_edit.text = current_name
+	line_edit.select_all()
+	dialog.add_child(line_edit)
+	dialog.confirmed.connect(
+		func():
+			if not is_instance_valid(dock) or not dock.level_root:
+				return
+			var new_name: String = line_edit.text.strip_edges()
+			if new_name == "" or new_name == current_name:
+				return
+			if Array(dock.level_root.get_visgroup_names()).has(new_name):
+				if dock.has_method("show_toast"):
+					dock.show_toast('A visgroup is already called "%s"' % new_name, 2)
+				return
+			dock._commit_state_action(
+				"Rename Visgroup", "rename_visgroup", [current_name, new_name]
+			)
+			refresh_visgroup_ui(dock)
+			reselect_visgroup_row(dock, row)
+	)
+	dialog.canceled.connect(func(): dialog.queue_free())
+	dialog.confirmed.connect(func(): dialog.queue_free(), CONNECT_DEFERRED)
+	dock.add_child(dialog)
+	dialog.popup_centered(Vector2i(300, 80))
+	line_edit.grab_focus()
 
 
 static func on_group_selection(dock: Object) -> void:

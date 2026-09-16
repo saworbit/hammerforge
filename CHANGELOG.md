@@ -65,6 +65,27 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   document look healthier.
 
 ### Fixed
+- **A visgroup can be renamed, a prefab variant deleted, a displacement's power
+  changed** (#615). Three level-editing operations were implemented, carefully,
+  and had no entry point outside the GUT suite. Each was the missing half of a
+  feature whose other half was already in the dock, and each left the mapper
+  doing destructive busywork instead. `rename_visgroup()` carried a collision
+  check and a rewrite of every member's metadata, and the dock could create a
+  visgroup, delete one, add and remove a selection and toggle visibility, but not
+  rename, so someone who named one `roof` and later wanted `roof_upper` had to
+  make a new one, re-add every member and delete the old. There is a **Rename**
+  button beside **Delete** now, and a name that is already taken is refused rather
+  than merging two visgroups, because merging is a different operation. The
+  prefab library could add a variant, show a `[N variants]` indicator and cycle
+  through them with Ctrl+Shift+V, so the list was append-only while the file's own
+  header comment said the context menu could delete one; **Remove Variant** is on
+  that menu now and does not offer `base`. And the **Power** spin was read once,
+  at creation, so its tooltip described a choice that was final: a cliff sculpted
+  at 9x9 could only reach 17x17 through Destroy and Create, which throws the
+  sculpt away. `set_power()` resamples the old grid into the new one and was
+  written for exactly this, and an **Apply** button beside the spin now calls it.
+  The user guide already claimed that last one worked, which is the shape of all
+  three: the feature was finished everywhere except where someone could reach it.
 - **Undo keeps the brushes it would have rebuilt identically** (#600). Undo and
   redo are whole-level snapshots, so the price of taking back a one-brush nudge
   was set by the size of the level rather than the size of the edit: at 400

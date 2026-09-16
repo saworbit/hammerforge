@@ -48,6 +48,36 @@ static func on_disp_destroy(dock: Object) -> void:
 		dock.show_toast("Face has no displacement to remove", 2)
 
 
+## Change the subdivision of the selected displacement, keeping the sculpt.
+##
+## The Power spin was read once, at creation, so its own tooltip described a
+## choice that was final (#615): a mapper who sculpted a cliff at 9x9 and wanted
+## 17x17 had to Destroy and Create, which throws the sculpt away.
+## `HFDisplacementSystem.set_power()` resamples the old grid into the new one and
+## was written for exactly this, and nothing could call it.
+static func on_disp_set_power(dock: Object) -> void:
+	if dock == null or not dock.level_root:
+		return
+	if not dock._guard_selection_action(
+		"Set Displacement Power", dock.DockSelectionRequirement.BRUSHES_ONLY
+	):
+		return
+	var info: Dictionary = dock._get_selected_face_info()
+	if info.is_empty() or not dock._selected_face_has_displacement(info):
+		dock.show_toast("Select a displaced face first", 1)
+		return
+	var power: int = int(dock._disp_power_spin.value) if dock._disp_power_spin else 3
+	var ok: bool = dock._try_undoable_action(
+		"Set Displacement Power",
+		"set_displacement_power",
+		[info["brush_id"], info["face_index"], power]
+	)
+	if ok:
+		dock.show_toast("Displacement is now power %d, sculpt kept" % power, 0)
+	else:
+		dock.show_toast("Could not change the power of that face", 2)
+
+
 static func on_disp_elevation_changed(dock: Object, value: float) -> void:
 	if dock == null or not dock.level_root:
 		return
