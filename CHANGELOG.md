@@ -65,6 +65,18 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   document look healthier.
 
 ### Fixed
+- **A paint layer's chunk size can no longer change out from under its own
+  chunks** (#625). Convert to Heightmap built the layer, filled every cell, and
+  then set `chunk_size` from the manager. A chunk allocates its bit, material and
+  blend arrays for the size it was built at, while `_cell_to_local()` reduces a
+  cell against the layer's current `chunk_size`, so once the two disagreed every
+  read indexed past the end of a `PackedByteArray`. That is an engine error, not
+  something the layer can report. It had never fired because a test brush fitted
+  inside one cell at the old 16 unit grid; at one unit to the metre the same
+  brush spans eight cells and the convert threw on the first read. The conversion
+  now takes the chunk size as a setting and applies it before the first cell, and
+  the layer refuses a change once it holds paint rather than accepting one it
+  cannot honour. Every other caller already set it on a fresh layer.
 - **A prefab keeps its materials in another level** (#621). A face's material is
   a slot number into the *level's* palette, and a `.hfprefab` carried the number
   without the palette. Every reuse silently re-textured: a doorframe built out of
