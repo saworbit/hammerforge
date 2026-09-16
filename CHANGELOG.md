@@ -18,6 +18,25 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   with the value of neither, so it is a feature to open on its own terms rather
   than a field to keep carrying into every save and every undo snapshot.
   `restore_visgroups()` reads past a `color` key in an older payload.
+- **`HFPaintTool.material_picked`** (#553). Declared, emitted on every Ctrl+Click
+  on the floor paint grid, and connected by nothing. One correction to the
+  issue's reading: the gesture is not inert. `pick_cell_material()` sets
+  `blend_material_id`, which is what the next blend stroke writes, and
+  `plugin_paint_input.gd` already toasts "Picked floor material N" - so the
+  eyedropper lands and says so, and it was only the signal that stopped at the
+  boundary. It has nowhere useful to go either: the picked id is a terrain slot
+  rather than a palette index, so there is no material browser selection for it
+  to move. The `return true` stays, because the pick is a real gesture rather
+  than a swallowed click.
+- **`HFPrefabLibrary.set_prefab_dir()`** (#556). `res://prefabs` was written out
+  three times - the library, `HFPrefabSystem` and `dock.gd` - and the setter
+  could only change one of them, so calling it would have left the library
+  listing a different folder from the one Save writes into and the one `dock.gd`
+  scans. A setter that moves one of three copies of a constant is worse than no
+  setter, because it looks like the supported way. There is one
+  `HFPrefabSystem.PREFAB_DIR` now that all three read, and the directory is
+  honestly a constant. Making it configurable is a prefs key and a real setter
+  behind that one value, which is a change worth making deliberately.
 - **`HFGesture`** (#550). A `class_name`, a doc comment describing an
   architecture where "the plugin holds at most one active gesture" and routes all
   input through it, and 109 lines nothing constructs - no subclass, no `new()`,
