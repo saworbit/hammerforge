@@ -18,6 +18,19 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   never be given one. The editor writes that key now, rather than a second key
   meaning the same thing.
 
+- **An idle autosave writes nothing** (#716). `saved_at` was stamped when the
+  level was captured, inside the payload the save dedupe hashes, so every save
+  produced a different hash however little had changed. The mechanism that exists
+  to stop an idle autosave rewriting the same bytes could therefore only ever
+  fire for two saves inside one wall-clock second - which is not a case anybody
+  hits on purpose - and never on the multi-minute schedule it was written for.
+  The stamp now goes on as the file is written, so the hash covers the level and
+  not the clock, and the file still records when it was saved. The hash is taken
+  from the state rather than from its JSON, which is about thirty times cheaper
+  on a level-sized structure; it is sensitive to the order keys were inserted in
+  where JSON's sorted form is not, and that is the safe direction to be wrong in,
+  because it means a level is written again rather than not written at all.
+
 ### Added
 - **A sound entity** (#704). `HFIOPresets` ships "Door Open -> Light + Sound" as
   the first of its six built-in connection presets, and there was no class a

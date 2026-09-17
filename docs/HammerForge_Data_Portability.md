@@ -21,6 +21,7 @@ This document describes how to move data in and out of HammerForge safely.
 - Store `.hflevel` in version control for reliable recovery.
 - Visgroups and groups are saved with the order they were made in, beside the registry itself. The registries are JSON objects and `JSON.stringify` sorts object keys, so without it the panel came back alphabetised on every reload. A file written before September 2026 has no order recorded and loads the way it always did.
 - **Save compression** (Console > Controls) decides the form on disk. On, the default, the bundle is deflated: a 45-brush level is about 3 KB. Off, it is plain JSON written one value per line with keys in a stable order, which is the form to use when the level is reviewed and merged like any other file in the repository. The same level is about 250 KB that way, and the loader reads either form without being told which.
+- A `.hflevel` records `saved_at`, stamped as the file is written rather than when the level was captured. An autosave of a level nothing has changed therefore writes nothing, because what decides that is the level and not the clock.
 - Save Level writes the file it is given, every time. A save to a second path is a copy of the level, not a no-op, even when nothing has changed since the last one.
 
 ### Which File Opens: the `.tscn` Wins
