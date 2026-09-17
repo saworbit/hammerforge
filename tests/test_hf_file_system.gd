@@ -31,6 +31,8 @@ func _root_shim_script() -> GDScript:
 	s.source_code = """
 extends Node3D
 var hflevel_autosave_path: String = "user://hf_encode_thread_test.hflevel"
+func resolved_hflevel_path() -> String:
+	return hflevel_autosave_path
 var hflevel_compress: bool = false
 var hflevel_autosave_keep: int = 0
 var paint_system = null
@@ -466,6 +468,8 @@ extends Node3D
 var hflevel_autosave_path: String = "%s"
 var keeps_brushes: bool = %s
 var scene_path: String = "%s"
+func resolved_hflevel_path() -> String:
+	return hflevel_autosave_path
 func scene_keeps_brushes() -> bool:
 	return keeps_brushes
 func scene_source_path() -> String:
