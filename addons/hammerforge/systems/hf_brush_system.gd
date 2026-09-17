@@ -189,6 +189,8 @@ func create_brush_from_info(info: Dictionary) -> Node:
 			brush.set_meta("entity_io_outputs", outputs.duplicate(true))
 	if info.has("entity_name") and str(info["entity_name"]) != "":
 		brush.set_meta("entity_name", str(info["entity_name"]))
+	if info.has("brush_entity_group") and str(info["brush_entity_group"]) != "":
+		brush.set_meta("brush_entity_group", str(info["brush_entity_group"]))
 	# What a `.map` said this entity is, beyond its class: a door's speed, a
 	# trigger's target. Carried so an export can write it back (#663).
 	if info.has("brush_entity_data"):
@@ -407,6 +409,9 @@ func get_brush_info_from_node(brush: Node) -> Dictionary:
 	var outputs: Array = draft.get_meta("entity_io_outputs", [])
 	if not outputs.is_empty():
 		info["entity_io_outputs"] = outputs.duplicate(true)
+	var group: String = str(draft.get_meta("brush_entity_group", ""))
+	if group != "":
+		info["brush_entity_group"] = group
 	var entity_data = draft.get_meta("brush_entity_data", {})
 	if entity_data is Dictionary and not (entity_data as Dictionary).is_empty():
 		info["brush_entity_data"] = (entity_data as Dictionary).duplicate()
@@ -2059,12 +2064,40 @@ func _replace_brush_with_pieces(
 	return HFOpResult.success(message)
 
 
-func tie_brushes_to_entity(brush_ids: Array, entity_class: String) -> void:
+## Tie brushes to an entity class, and optionally give them a name.
+##
+## The name is the address every I/O connection is written against:
+## `find_entities_by_name()` looks for it on brushes and says so in its own
+## comment, and the `.map` exporter writes it. The only code that ever set it was
+## the `.map` import path, so a door built in HammerForge could never be
+## targeted while a door imported from someone else's `.map` could (#668).
+##
+## Several brushes tied under one name are one entity -- a two leaf door is two
+## brushes and one door -- which is what the `.map` export and the playtest need
+## in order to group them.
+func tie_brushes_to_entity(
+	brush_ids: Array, entity_class: String, entity_name: String = ""
+) -> void:
+	var authored := entity_name.strip_edges()
+	# One tie is one entity. A two leaf door is two brushes and one door, and the
+	# mapper said so by tying them together, so the operation mints an identity
+	# rather than leaving the export to infer one. The name is an address for
+	# wiring; this is identity, and they are different questions -- two unnamed
+	# doors must stay two doors (#668).
+	var group := "beg_%x_%d" % [Time.get_ticks_usec(), root._brush_id_counter]
 	for brush_id in brush_ids:
 		var brush = _find_brush_by_id(str(brush_id))
 		if brush and brush is DraftBrush:
 			brush.set_brush_entity_class(entity_class)
-	root._log("Tied %d brushes as '%s'" % [brush_ids.size(), entity_class])
+			brush.set_meta("brush_entity_group", group)
+			if authored != "":
+				brush.set_meta("entity_name", authored)
+			elif brush.has_meta("entity_name"):
+				brush.remove_meta("entity_name")
+	if authored == "":
+		root._log("Tied %d brushes as '%s'" % [brush_ids.size(), entity_class])
+	else:
+		root._log("Tied %d brushes as '%s' named '%s'" % [brush_ids.size(), entity_class, authored])
 
 
 func untie_brushes_from_entity(brush_ids: Array) -> void:
@@ -2072,6 +2105,13 @@ func untie_brushes_from_entity(brush_ids: Array) -> void:
 		var brush = _find_brush_by_id(str(brush_id))
 		if brush and brush is DraftBrush:
 			brush.set_brush_entity_class("")
+			# The name went with the class. A brush that is no longer an entity
+			# must not keep answering to one, or #620's dangling wire check finds
+			# a target that is ordinary geometry.
+			if brush.has_meta("entity_name"):
+				brush.remove_meta("entity_name")
+			if brush.has_meta("brush_entity_group"):
+				brush.remove_meta("brush_entity_group")
 	root._log("Untied %d brushes" % brush_ids.size())
 
 

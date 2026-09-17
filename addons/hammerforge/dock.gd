@@ -466,6 +466,7 @@ var move_ceiling_btn: Button = null
 var tie_entity_btn: Button = null
 var untie_entity_btn: Button = null
 var brush_entity_class_opt: OptionButton = null
+var brush_entity_name_edit: LineEdit = null
 var justify_fit_btn: Button = null
 var justify_center_btn: Button = null
 var justify_left_btn: Button = null

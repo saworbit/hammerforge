@@ -229,6 +229,52 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the exporter next.
 
 ### Fixed
+- **A brush entity can be named, and a two leaf door is one door** (#668). A
+  brush entity arrived in the level as a class string on each brush and nothing
+  else, and three things that should follow from it did not.
+  It could not be named. `find_entities_by_name()` checks brushes for an
+  `entity_name` meta and says why in its own comment, and the `.map` exporter
+  writes one, so the mechanism was complete except for a surface that set it --
+  the only code that ever wrote the meta onto a brush was the `.map` *import*
+  path. A door built in HammerForge could never be targeted; a door imported
+  from someone else's `.map` could. Tie to Entity takes a name beside the class
+  now, and Untie takes the name away with the class, or #620's dangling wire
+  check would find a target that is ordinary geometry.
+  Two brushes tied to one entity exported as two entities, because
+  `entity_brush_blocks` held one entry per *node*: a door with two leaves
+  compiled as two doors that moved independently. The export keys on the entity
+  now. Not on `(class, name)` as the issue suggests, because that merges two
+  separately tied unnamed doors into one: a tie mints a `brush_entity_group`, so
+  identity is what the tie declared and the name is only the address a wire uses.
+  The two are different questions and conflating them is wrong in both
+  directions.
+  The door was not a thing in the playtest scene. `_append_trigger_volume()`
+  carries an entity's name, class and outputs onto the baked `Area3D`;
+  `_append_detail_mesh()`, which is where a `func_door` goes because it is not a
+  trigger, carried only the name -- so the runtime could find a node and nothing
+  said what it was or what it was wired to. The two are symmetric now. A
+  `Node3D` per entity is not needed for it: `HFIORuntime._cache_entity_under_key()`
+  holds several nodes per name deliberately, so a two leaf door is two meshes
+  answering to one name and both receive the input, which is what a two leaf door
+  should do.
+- **The entity classes the I/O system was built for** (#659). Three classes
+  shipped -- a spawn, a point light and a door -- around a complete entity
+  system: a schema-driven property editor, an I/O wiring panel with presets,
+  a connection visualiser, a runtime dispatcher, `.map` entity export in both
+  formats and the playtest exporter's mapping. All of it pointed at a light, a
+  spawn and a door, so the gameplay half of the tool was unreachable without
+  hand-authoring JSON first.
+  `entities.json` ships fifteen now. The brush entities are `trigger_once`,
+  `trigger_multiple`, `func_door`, `func_button`, `func_detail` and `func_wall` --
+  the last two were already offered as hard coded fallbacks by the dock when the
+  JSON had no brush entities at all, which was the shape of the same gap. The
+  point entities gain `light_spot`, `light_directional`, `prop_static`,
+  `info_target`, `logic_relay` and `logic_timer`. Each is a JSON object of the
+  shape the existing three use, with `maps_to` on the light properties so they
+  drive the real Godot node, so no code changes are implied by most of them.
+  `door_basic` stays. It is a point entity with a box preview rather than the
+  brush entity this lineage builds a door out of, but removing it would break
+  every level already using one; `func_door` is the one to reach for now.
 - **A prefab name cannot write outside the prefab directory** (#667). The library
   panel's Save box is free text and it went straight into a path.
   `to_snake_case()` normalises case and word breaks and does not touch a slash, a
