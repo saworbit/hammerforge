@@ -148,17 +148,29 @@ func _scale_direction() -> void:
 		var u_scale := float(tail[3]) if format == "quake" else float(tail[1])
 		note("%s full tail" % format, " ".join(tail))
 		note("%s uscale field" % format, str(u_scale))
-		if repeats_more and u_scale > 1.0:
+		# The field is not unitless any more (#713): it is the reciprocal times
+		# however many `.map` units one of ours is, so a face at `uv_scale` 2
+		# exported at 32 writes 16 and not 0.5. Comparing it against 1, which is
+		# what this did, reported #504 as reproducing on a file that is correct,
+		# and #504 is fixed. Against what the reciprocal should be instead.
+		var inverted := MapIO.QUAKE_UNITS_PER_METRE / 2.0
+		var not_inverted := MapIO.QUAKE_UNITS_PER_METRE * 2.0
+		note("%s uscale if the reciprocal was taken" % format, inverted)
+		note("%s uscale if it was not" % format, not_inverted)
+		if repeats_more and absf(u_scale - inverted) > absf(u_scale - not_inverted):
 			known(
 				504,
 				"%s exports the UV scale without inverting it" % format,
 				(
 					"uv_scale 2 tiles the texture twice as often in the viewport"
 					+ (
-						" (UV span %.1f against %.1f), and a .map scale of %s means a texture"
-						% [span_two, span_one, str(u_scale)]
+						" (UV span %.1f against %.1f), and a .map scale of %s is nearer %s than"
+						% [span_two, span_one, str(u_scale), str(not_inverted)]
 					)
-					+ " twice as large, which is half as often"
+					+ (
+						" %s, so the texture comes out twice as large and repeats half as often"
+						% str(inverted)
+					)
 				)
 			)
 

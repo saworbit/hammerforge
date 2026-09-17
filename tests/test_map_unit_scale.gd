@@ -117,11 +117,14 @@ func _first_face_scales(text: String) -> Vector2:
 
 
 func test_a_quake_corridor_arrives_at_a_size_a_person_fits_in():
+	# The axes turn as well as the numbers (#733), so the source's 112, which is
+	# its height, is the height here. This asserted 1 tall and 3.5 deep while the
+	# import was still copying the axes across.
 	var root := _imported(_QUAKE_DOOR)
 	var size := _first_brush_size(root)
 	assert_almost_eq(size.x, 4.0, 0.01, "128 map units is 4 metres at 32 per metre")
-	assert_almost_eq(size.y, 1.0, 0.01, "and 32 is 1")
-	assert_almost_eq(size.z, 3.5, 0.01, "and 112 is 3.5, which a 1.6 person walks under")
+	assert_almost_eq(size.y, 3.5, 0.01, "and its 112 high is 3.5 high, which a 1.6 walks under")
+	assert_almost_eq(size.z, 1.0, 0.01, "and its 32 deep is 1 deep")
 
 
 func test_a_spawn_lands_where_the_file_put_it_rather_than_where_the_numbers_did():
@@ -131,7 +134,7 @@ func test_a_spawn_lands_where_the_file_put_it_rather_than_where_the_numbers_did(
 		found = child
 		break
 	assert_not_null(found, "the point entity imported")
-	assert_almost_eq(found.global_position.z, 0.75, 0.01, "24 map units up is 0.75 metres up")
+	assert_almost_eq(found.global_position.y, 0.75, 0.01, "24 map units up is 0.75 metres up")
 
 
 func test_the_codec_on_its_own_converts_nothing():
@@ -171,9 +174,11 @@ func test_an_export_writes_the_numbers_the_other_editor_expects():
 	var root := _level()
 	_room(root)
 	var extent := _written_extent(_exported(root))
+	# Turned on the way out too, so the room's 3.5 of height is written on the
+	# file's own up axis, which is its z.
 	assert_almost_eq(extent.x, 128.0, 0.1, "4 metres is 128 map units")
-	assert_almost_eq(extent.y, 32.0, 0.1, "and 1 is 32")
-	assert_almost_eq(extent.z, 112.0, 0.1, "and 3.5 is 112, which is a grid-friendly number")
+	assert_almost_eq(extent.y, 112.0, 0.1, "3.5 of depth here is 112 on their y")
+	assert_almost_eq(extent.z, 32.0, 0.1, "and 1 of height here is 32 on their z")
 
 
 func test_an_export_at_one_writes_the_level_as_it_stands():
@@ -205,7 +210,8 @@ func test_a_spawn_is_written_at_the_same_scale_as_the_geometry():
 	# An origin is written to three decimals where a plane point is written as a
 	# whole number when it is one. Both parse; only the geometry is asserted on
 	# here, because the spacing of that line is not what this fix is about.
-	assert_string_contains(text, '"origin" "0.0 24.0 0.0"', "0.75 metres up is 24 map units up")
+	# 0.75 up here is 24 up there, which is their z (#733).
+	assert_string_contains(text, '"origin" "0.0 0.0 24.0"', "0.75 metres up is 24 map units up")
 
 
 # ===========================================================================

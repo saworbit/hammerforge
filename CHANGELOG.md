@@ -5,6 +5,33 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **A `.map` keeps which way up it is crossing between editors** (#733). `.map`
+  is Z-up across the whole Quake family and Godot is Y-up. Nothing converted, in
+  either direction, so a corridor drawn 112 units high arrived 3.5 metres deep
+  and one metre high, and a floor exported from here opened in TrenchBroom as a
+  wall. It went unnoticed for a long time because it is symmetric: out of
+  HammerForge and back came home, and only the crossing was wrong, which is the
+  only thing the format is for. The turn is a rotation about X, so the file's
+  `(x, y, z)` is `(x, z, -y)` here and the reverse on the way out. Being a
+  rotation it leaves handedness alone, so the winding reversal is untouched by
+  it. That rotation rather than another because it keeps the level looking from
+  above exactly as it did in the editor it came from; Func_Godot uses a cyclic
+  one which is equally correct and which puts the map down at ninety degrees to
+  the way it was drawn, and that shows the moment a piece is imported next to
+  geometry that is already there. A point entity's origin takes the turn for the
+  same reason it takes the scale. An `angle` does not, because it is a bearing in
+  the file's own horizontal plane and would need turning as a direction rather
+  than as a point. The Valve 220 texture axes do take it: the reader works the
+  texture coordinate out by projecting the point onto those axes, and turning
+  both by the same rotation leaves that projection alone, so the UVs come out of
+  the conversion exactly as they went in. An export records which way up it wrote
+  in `worldspawn`, so a file that says it is already this project's way up is
+  left alone. One that says nothing is turned, because every editor other than
+  this one writes the format's own axes. A `.map` exported by an older build
+  carries this project's axes and does not say so, and nothing in it tells it
+  apart from a file another editor wrote: export it again from a current build
+  rather than relying on the import to guess.
+
 - **A `.map` keeps its size crossing between editors** (#713). A `.map` file
   carries bare numbers and never says what a unit is. Every editor that writes
   one is on Quake units, where a player is 56 to 72 tall and the grid steps in
