@@ -89,6 +89,118 @@ func load_hflevel(path: String = "") -> bool:
 	return true
 
 
+## Whether a level's two files are out of step, and which way.
+##
+## A level lives in a `.tscn` and a `.hflevel`, written by two different commands
+## (#646). Ctrl+S writes the scene, Save Level writes the `.hflevel`, and on open
+## the scene wins because the scene is what Godot loads. So a `.hflevel` saved
+## after the last Ctrl+S is sitting beside the level unread, and nothing said so.
+## Autosave puts the level in that state on a timer nobody chose.
+##
+## This only reports. Reconciling the two, or diffing them and letting the mapper
+## pick, is a much larger feature; knowing they disagree is most of the value.
+func check_hflevel_freshness() -> Dictionary:
+	var report := {
+		"stale": false,
+		"reason": "",
+		"message": "",
+		"hflevel_path": "",
+		"scene_path": "",
+		"hflevel_time": 0,
+		"scene_time": 0,
+	}
+	if root == null:
+		report["reason"] = "no_level"
+		return report
+	var hflevel_path := str(root.hflevel_autosave_path).strip_edges()
+	if hflevel_path == "":
+		report["reason"] = "no_hflevel_path"
+		return report
+	report["hflevel_path"] = hflevel_path
+	# A scene that keeps only its baked geometry has no brushes to win with, so it
+	# loads the `.hflevel` when it opens (#624). It is never the one behind.
+	if root.has_method("scene_keeps_brushes") and not root.scene_keeps_brushes():
+		report["reason"] = "loads_from_hflevel"
+		return report
+	var scene_path := str(root.scene_source_path())
+	report["scene_path"] = scene_path
+	if scene_path == "":
+		report["reason"] = "scene_never_saved"
+		return report
+	var hflevel_time := FileAccess.get_modified_time(hflevel_path)
+	var scene_time := FileAccess.get_modified_time(scene_path)
+	report["hflevel_time"] = hflevel_time
+	report["scene_time"] = scene_time
+	if hflevel_time <= 0:
+		report["reason"] = "no_hflevel_file"
+		return report
+	if scene_time <= 0:
+		report["reason"] = "scene_never_saved"
+		return report
+	if not level_file_is_stale(hflevel_time, scene_time):
+		report["reason"] = "scene_current"
+		return report
+	# Only now is the file worth opening. Every level points at
+	# `res://.hammerforge/autosave.hflevel` until someone changes it, so a newer
+	# file next to this scene is as likely to be another level's as this one's,
+	# and Load Level would overwrite the open level with it.
+	var recorded := read_recorded_scene(hflevel_path)
+	if recorded != "" and recorded != scene_path:
+		report["reason"] = "another_level"
+		return report
+	report["stale"] = true
+	if recorded == "":
+		# Written before a `.hflevel` said where it came from. It may be this
+		# level's and it may be the level next door's, and saying which is not
+		# available here, so the message does not claim one.
+		report["reason"] = "hflevel_newer_unattributed"
+		report["message"] = (
+			"%s was saved after %s, and does not say which level it holds. Load Level brings it in, and replaces what is open."
+			% [hflevel_path.get_file(), scene_path.get_file()]
+		)
+		return report
+	report["reason"] = "hflevel_newer"
+	report["message"] = (
+		"%s was saved after %s. The scene is what opened. Load Level brings the newer one in, and replaces what is open."
+		% [hflevel_path.get_file(), scene_path.get_file()]
+	)
+	return report
+
+
+## The scene a `.hflevel` records itself as holding, or "" for a file written
+## before that was recorded or one this build cannot read.
+##
+## Deliberately not `HFLevelIO.load_from_path()`: that renames a `.previous`
+## back over a missing file, and recovering a level is not something a question
+## about one should do.
+static func read_recorded_scene(path: String) -> String:
+	if path == "" or not FileAccess.file_exists(path):
+		return ""
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return ""
+	var data: Variant = HFLevelIO.parse_payload(file.get_buffer(file.get_length()))
+	file.close()
+	if not (data is Dictionary):
+		return ""
+	return str((data as Dictionary).get("scene", "")).strip_edges()
+
+
+## Whether the `.hflevel` is ahead of the scene, given when each was written.
+##
+## Zero is what `FileAccess.get_modified_time()` returns for a file that is not
+## there, and it means "never written" here: neither half of a level can be
+## behind a file that does not exist.
+##
+## Equal is not stale. The stamps are whole seconds, so a scene and a level
+## written inside the same second cannot be told apart, and under reporting is
+## the right direction for a warning nobody asked for.
+static func level_file_is_stale(hflevel_time: int, scene_time: int) -> bool:
+	if hflevel_time <= 0 or scene_time <= 0:
+		return false
+	return hflevel_time > scene_time
+
+
 ## Parse a .map without touching the level. The dock preflights with this so a
 ## malformed file never clears the current work.
 func validate_map(path: String) -> Dictionary:

@@ -5,6 +5,31 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **A level says when its `.hflevel` and its `.tscn` have come apart** (#646). A
+  level lives in two files written by two different commands: Godot's own Ctrl+S
+  writes the scene, Save Level writes the `.hflevel`, and on open the scene wins
+  because the scene is what Godot loads. So draw, Ctrl+S, draw more, Save Level,
+  close without Ctrl+S, and the newer `.hflevel` sits beside the level unread
+  with nothing saying so. Autosave puts a level in that state on a timer nobody
+  chose, so it did not take a deliberate Save Level to get there. HammerForge now
+  compares the two files' modification times on the frame the dock binds to a
+  level, and puts a Console line and a toast on screen when the `.hflevel` is the
+  newer one. It says it once per open rather than once per bind, because the dock
+  rebinds every time a scene tab is switched, and by then the open scene has moved
+  on and Load Level would cost whatever was done since. A level set to keep only
+  its baked geometry loads its `.hflevel` on open by design (#624) and is never
+  reported. Nothing is reconciled or merged: knowing the two disagree is the part
+  that was missing.
+- **A `.hflevel` records the scene it was saved from** (#646). Every level writes
+  to `res://.hammerforge/autosave.hflevel` until it is given its own path, so a
+  newer `.hflevel` beside a scene was as likely to be the level next door's, and
+  Load Level on it would overwrite the open level. The bundle now carries a
+  `scene` field, and a file that names a different scene is not reported against
+  this one. A file written before this carries no such field and is still
+  reported, with a message that says it cannot tell which level it holds. The
+  field is read only after the timestamps already say the file is newer, and it is
+  read without `HFLevelIO.load_from_path()`, which renames a `.previous` back over
+  a missing file: asking a question about a level must not recover one.
 - **A level can choose what its scene keeps** (#624). HammerForge gives an
   `owner` to almost everything it makes, so Godot's own Ctrl+S writes the brushes
   and the geometry baked from them into the `.tscn`, and Save Level writes a

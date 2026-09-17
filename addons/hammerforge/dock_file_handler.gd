@@ -122,6 +122,25 @@ static func _configure_dialog(
 		dialog.file_selected.connect(callback)
 
 
+## Say it once, when a level binds, if its `.hflevel` is newer than the scene
+## that opened (#646). A toast and a Console line, not a dialog: this is worth
+## knowing, and it is not worth blocking a scene from opening over.
+static func report_hflevel_freshness(dock: Object) -> void:
+	if dock == null or not dock.connected_root:
+		return
+	var root = dock.connected_root
+	if not root.has_method("take_hflevel_freshness_report"):
+		return
+	var report: Dictionary = root.take_hflevel_freshness_report()
+	if not bool(report.get("stale", false)):
+		return
+	var message := str(report.get("message", ""))
+	if message == "":
+		return
+	if root.has_signal("user_message"):
+		root.user_message.emit(message, 1)
+
+
 static func show_dialog(dialog: FileDialog) -> void:
 	if dialog:
 		dialog.popup_centered_ratio(0.6)

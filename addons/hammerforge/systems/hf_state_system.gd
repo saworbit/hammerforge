@@ -314,6 +314,11 @@ func capture_hflevel_payload() -> Dictionary:
 	var data: Dictionary = {
 		"version": HFLevelIO.FORMAT_VERSION,
 		"saved_at": Time.get_datetime_string_from_system(),
+		# The one link the two halves of a level never had (#646). Levels share a
+		# `.hflevel` path by default, so without this a file cannot say which scene
+		# it came out of, and nothing can tell a level that is behind its own
+		# `.hflevel` from one sitting next to another level's.
+		"scene": root.scene_source_path(),
 		"settings": capture_hflevel_settings(),
 		"state": state
 	}

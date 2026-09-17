@@ -4,7 +4,7 @@ description: "Moving level data in and out of HammerForge safely: the .hflevel s
 
 # HammerForge Data Portability
 
-Last updated: September 2, 2026
+Last updated: September 17, 2026
 
 This document describes how to move data in and out of HammerForge safely.
 
@@ -17,12 +17,17 @@ This document describes how to move data in and out of HammerForge safely.
 - Per-face UV data includes `uv_format_version` (current: 1). Legacy data (version 0, pre-April 2026) used a different UV transform order (scale+offset before rotation). On load, legacy faces are auto-migrated: uniform-scale faces get their offset adjusted; non-uniform-scale faces with rotation are baked to `custom_uvs`. No manual intervention is needed.
 - Per-face vertex winding includes `winding_version` (current: 3). Legacy data (version 0, pre-April 2026) used CCW vertex winding for manually-created faces, which rendered inside-out under Godot 4's CW front-face convention. On load, `apply_serialized_faces()` detects v0 faces and runs a centroid-based migration: each face's normal is checked against the outward direction from the brush center, and faces pointing inward have their vertices reversed to CW. Mesh-extracted faces (already CW) are left unchanged. Version 1 data is correct except on the five shapes whose builders wound every face inside out before September 2026: `PRISM_TRI`, `PRISM_PENT`, `OCTAHEDRON`, `DODECAHEDRON` and `ICOSAHEDRON`. A v1 brush of one of those shapes runs the same centroid migration, which is exact because all five are convex; every other v1 face is left alone, so a torus or another concave brush is never touched. Version 2 data is correct except for path tool brushes, whose two builders wound every face inside out before September 2026. Those are `CUSTOM` brushes, so there is no shape to key the migration on; instead a brush saved below version 3 whose every face points at its own centroid runs the same centroid migration. That is what an inverted convex solid looks like and what a correctly wound closed solid cannot look like, concave or not, because the faces on its convex hull always point away from the centre. No manual intervention is needed.
 - Autosaves write to `res://.hammerforge/autosave.hflevel` by default.
+- Files carry a `scene` field naming the `.tscn` they were saved from. It is what lets a file say which level it holds when every level shares the default autosave path. Files written before September 2026 do not have it, and every key defaults, so they still load.
 - Store `.hflevel` in version control for reliable recovery.
 
 ### Which File Opens: the `.tscn` Wins
-A level lives in two files, and they are written by two different commands. Godot's own **Ctrl+S** writes the scene; **Save Level** writes the `.hflevel`. Nothing reconciles them.
+A level lives in two files, and they are written by two different commands. Godot's own **Ctrl+S** writes the scene; **Save Level** writes the `.hflevel`. Nothing reconciles them, and nothing merges them; HammerForge only tells you when they have come apart.
 
 **On open, the scene wins**, because the scene is what Godot loads. A `.hflevel` saved after the last Ctrl+S is not what comes up. Use **Load Level** to bring it in.
+
+HammerForge says so when it happens. On the frame the dock binds to a level it compares the two files' modification times, and if the `.hflevel` is the newer one it puts a line in the Console and a toast on screen. It says it once per open, not once per rebind, because after that the scene in the editor has moved on and Load Level would cost you whatever you did since.
+
+A `.hflevel` records the scene it was saved from, so a file that belongs to another level is not reported against this one. That matters because every level writes to `res://.hammerforge/autosave.hflevel` until it is given its own path, and Load Level on another level's file would overwrite the open one. Files written before September 2026 carry no such record; they are still reported, and the message says it cannot tell which level they hold.
 
 The one exception is a level set to keep only its baked geometry, below: that scene has no brushes to win with, so it loads its `.hflevel` when it opens.
 
