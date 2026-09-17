@@ -32,20 +32,23 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ### Changed
 - **The test suite runs in four shards** (#648). A CI run was 6 minutes 24
-  seconds, and 94% of that was one job: the GUT suite took 386 seconds while
-  the two lint jobs finished inside 73. Per-script timings say there was nothing
-  to optimise -- 222 scripts, median runtime 0.99s, 112 of them under a second,
-  and the slowest single file 21s -- which is exactly the shape that divides
-  instead. `tools/shard_tests.py` splits the scripts round-robin over their
-  sorted names, four legs of a matrix run 56/56/55/55 of them in 89/89/95/88
-  seconds, and an aggregate job adds the four logs back together. Coverage is
-  unchanged: the same 222 scripts and 4,093 tests run, and the aggregate refuses
-  to publish a total unless the logs account for every script, because a shard
-  that ran short would otherwise write a smaller suite into all five documents
-  as measured fact. Path filtering was measured and rejected instead: 53 of the
-  last 60 commits touch both `addons/` and `tests/`, and all three job names are
-  required checks, so a filtered job reports `skipped` and leaves the pull
-  request unmergeable for good.
+  seconds at the median, and 94% of that was one job: the GUT suite took 386
+  seconds while the two lint jobs finished inside 73. Per-script timings say
+  there was nothing to optimise -- 222 scripts, median runtime 0.99s, 112 of
+  them under a second, and the slowest single file 21s -- which is exactly the
+  shape that divides instead. `tools/shard_tests.py` splits the scripts
+  round-robin over their sorted names into four legs of 56/56/55/55 scripts,
+  and an aggregate job adds the four logs back together. The measured run:
+  shard jobs of 1m53s, 1m58s, 1m57s and 2m01s, an aggregate job of 10s, and
+  GDScript Lint & Format at 1m4s -- a total of 2m21s against 6m33s for the
+  equivalent run on main. Coverage is unchanged: the same 222 scripts, 4,093
+  tests and 19,729 asserts run, 4,086 passing, identical to the single-job run,
+  and the aggregate refuses to publish a total unless the logs account for
+  every script, because a shard that ran short would otherwise write a smaller
+  suite into all five documents as measured fact. Path filtering was measured
+  and rejected instead: 53 of the last 60 commits touch both `addons/` and
+  `tests/`, and all three job names are required checks, so a filtered job
+  reports `skipped` and leaves the pull request unmergeable for good.
 - **One world unit is one metre, and the drawing side now agrees** (#625). Two
   scale conventions were in the project at once and the seam ran through the core
   loop. The playtest player, the spawn checks, the bake settings and all five

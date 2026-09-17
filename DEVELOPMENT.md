@@ -658,6 +658,14 @@ If you see "class_names not imported", run `godot --headless --import --path .` 
 
 Configuration is in `.gutconfig.json` (test directory, prefix, exit behavior).
 
+**`-gtest` does not narrow a run on its own.** `gut_config.gd` applies `dirs`
+and then `tests` one after another, so with `.gutconfig.json` in play,
+`-gtest` *adds* to the scripts already collected from `res://tests/` instead
+of replacing them. `-gconfig=` disables the config file and is what makes
+`-gtest` mean what it says. CI's shard command depends on it, and dropping it
+fails nothing: every shard just silently runs the whole suite instead of its
+own slice, green and four times slower.
+
 **Writing new tests:**
 - Add files in `tests/` with the `test_` prefix and `.gd` suffix.
 - Extend `GutTest`. Use `before_each()` / `after_each()` for setup/teardown.
