@@ -138,6 +138,19 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   an authored parameter is converted to the declared type.
 
 ### Changed
+- **`func_detail` is the cheap option it reads like** (#712). Its own description
+  is "Geometry the structural bake skips. For trim and clutter that should not
+  cut the world", which is most of a finished map, so the class gets applied to
+  hundreds of brushes - and every one of them got its own `MeshInstance3D`, its
+  own `StaticBody3D` and its own `CollisionShape3D`. Five walls and eighty crates
+  baked to eighty-one draw calls and eighty-one bodies where the same room left
+  structural made one of each, and it was linear: three hundred detail brushes
+  shipped nine hundred nodes. They now go through the same material grouping the
+  structural path already uses, into one mesh per material and one body, with a
+  convex hull per brush so a pile of clutter still collides as the separate
+  solids it is. A detail brush carrying an entity name or I/O outputs keeps a
+  node of its own, because that is the address the runtime finds it by.
+
 - **An uncompressed level is one value per line** (#708). Save compression
   exists so a team can turn it off and put the level in version control, and what
   it produced was a single 140 KB line: one changed line in every diff, a

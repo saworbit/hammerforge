@@ -1214,13 +1214,10 @@ func test_only_nonstructural_brush_entities_bake_into_container():
 	assert_not_null(root.baked_container, "func_detail/trigger-only levels still bake")
 	var holder: Node = root.baked_container.get_node_or_null("Nonstructural")
 	assert_not_null(holder, "Nonstructural holder should exist")
-	var has_mesh := false
-	var has_area := false
-	for child in holder.get_children():
-		if child is MeshInstance3D:
-			has_mesh = true
-		if child is Area3D:
-			has_area = true
+	# Detail brushes are grouped under a holder of their own, so look for the mesh
+	# anywhere below rather than only among the direct children.
+	var has_mesh := _count_under(holder, "MeshInstance3D") > 0
+	var has_area := _count_under(holder, "Area3D") > 0
 	assert_true(has_mesh, "func_detail should emit a mesh")
 	assert_true(has_area, "trigger should emit an Area3D")
 
@@ -2460,24 +2457,106 @@ func test_has_bake_sources_true_for_trigger_only():
 	assert_true(bake_sys._has_bake_sources(), "trigger-only levels are bakeable")
 
 
+## The first node of a class anywhere below this one, or null.
+func _first_under(node: Node, class_wanted: String) -> Node:
+	for child in node.get_children():
+		if child.is_class(class_wanted):
+			return child
+		var found := _first_under(child, class_wanted)
+		if found:
+			return found
+	return null
+
+
+## How many nodes of a class are anywhere below this one.
+func _count_under(node: Node, class_wanted: String) -> int:
+	var total := 0
+	for child in node.get_children():
+		if child.is_class(class_wanted):
+			total += 1
+		total += _count_under(child, class_wanted)
+	return total
+
+
 func test_append_func_detail_creates_mesh_and_collision():
 	var detail := _make_brush(root.draft_brushes_node, Vector3(2, 1, 0), Vector3(4, 4, 4))
 	detail.set_meta("brush_entity_class", "func_detail")
 	var container := Node3D.new()
 	add_child_autoqfree(container)
+	_setup_real_baker()
 	bake_sys._append_nonstructural_brushes(container)
 	var holder: Node = container.get_node_or_null("Nonstructural")
 	assert_not_null(holder)
-	var mesh_n := 0
-	var body_n := 0
+	assert_eq(_count_under(holder, "MeshInstance3D"), 1)
+	assert_eq(_count_under(holder, "StaticBody3D"), 1)
+	assert_gt(_count_under(holder, "CollisionShape3D"), 0, "Detail collision needs a shape")
+
+
+func test_many_detail_brushes_bake_to_one_mesh_and_one_body():
+	# `func_detail` is trim and clutter, which is most of a finished map, and it
+	# reads like the cheap option. Eighty crates in a room were eighty draw calls
+	# and eighty StaticBody3D nodes, where the structural path would have made one
+	# of each (#712).
+	for i in 8:
+		var crate := _make_brush(
+			root.draft_brushes_node, Vector3(i * 2, 0.5, 0), Vector3(0.5, 0.5, 0.5)
+		)
+		crate.set_meta("brush_entity_class", "func_detail")
+	var container := Node3D.new()
+	add_child_autoqfree(container)
+	_setup_real_baker()
+	bake_sys._append_nonstructural_brushes(container)
+	var holder: Node = container.get_node_or_null("Nonstructural")
+	assert_not_null(holder)
+	assert_eq(_count_under(holder, "MeshInstance3D"), 1, "eight crates are one draw call")
+	assert_eq(_count_under(holder, "StaticBody3D"), 1, "and one body")
+	assert_eq(
+		_count_under(holder, "CollisionShape3D"),
+		8,
+		"a pile of clutter still collides as the separate solids it is"
+	)
+
+
+func test_a_named_detail_brush_keeps_a_node_of_its_own():
+	# A name is the address an I/O connection targets, so a brush carrying one has
+	# to stay findable however cheap grouping it would be.
+	var plain := _make_brush(root.draft_brushes_node, Vector3(0, 0.5, 0), Vector3(1, 1, 1))
+	plain.set_meta("brush_entity_class", "func_detail")
+	var named := _make_brush(root.draft_brushes_node, Vector3(4, 0.5, 0), Vector3(1, 1, 1))
+	named.set_meta("brush_entity_class", "func_detail")
+	named.set_meta("entity_name", "lever_housing")
+	var container := Node3D.new()
+	add_child_autoqfree(container)
+	_setup_real_baker()
+	bake_sys._append_nonstructural_brushes(container)
+	var holder: Node = container.get_node_or_null("Nonstructural")
+	assert_not_null(holder)
+	var found := false
 	for child in holder.get_children():
-		if child is MeshInstance3D and (child as MeshInstance3D).mesh:
-			mesh_n += 1
-		if child is StaticBody3D:
-			body_n += 1
-			assert_gt(child.get_child_count(), 0, "Detail collision body needs a shape")
-	assert_eq(mesh_n, 1)
-	assert_eq(body_n, 1)
+		if str(child.name) == "lever_housing":
+			found = true
+	assert_true(found, "the named brush is still a node the runtime can find")
+	assert_eq(_count_under(holder, "MeshInstance3D"), 2, "the unnamed one is grouped, not lost")
+
+
+func test_a_wired_detail_brush_keeps_a_node_of_its_own():
+	var wired := _make_brush(root.draft_brushes_node, Vector3(0, 0.5, 0), Vector3(1, 1, 1))
+	wired.set_meta("brush_entity_class", "func_detail")
+	wired.set_meta(
+		"entity_io_outputs",
+		[{"output_name": "OnBreak", "target_name": "door", "input_name": "Open"}]
+	)
+	var container := Node3D.new()
+	add_child_autoqfree(container)
+	_setup_real_baker()
+	bake_sys._append_nonstructural_brushes(container)
+	var holder: Node = container.get_node_or_null("Nonstructural")
+	assert_not_null(holder)
+	var carries_outputs := false
+	for child in holder.get_children():
+		if not (child.get_meta("entity_io_outputs", []) as Array).is_empty():
+			carries_outputs = true
+	assert_true(carries_outputs, "a brush with outputs stays a node the dispatcher can wire")
 
 
 func test_append_trigger_creates_area_volume():
@@ -2489,6 +2568,7 @@ func test_append_trigger_creates_area_volume():
 	)
 	var container := Node3D.new()
 	add_child_autoqfree(container)
+	_setup_real_baker()
 	bake_sys._append_nonstructural_brushes(container)
 	var holder: Node = container.get_node_or_null("Nonstructural")
 	assert_not_null(holder)
@@ -2530,6 +2610,7 @@ func test_append_skips_worldspawn_brushes():
 	_make_brush(root.draft_brushes_node)
 	var container := Node3D.new()
 	add_child_autoqfree(container)
+	_setup_real_baker()
 	bake_sys._append_nonstructural_brushes(container)
 	var holder: Node = container.get_node_or_null("Nonstructural")
 	assert_true(
@@ -2604,7 +2685,17 @@ func test_bake_dirty_with_no_changes_reports_nothing_to_do():
 # ===========================================================================
 
 
+## Detail brushes are grouped by material, which needs the real Baker rather than
+## one of the mocks. The mocks stand in for the structural paths.
+func _setup_real_baker() -> Node:
+	var real: Node = load("res://addons/hammerforge/baker.gd").new()
+	add_child_autoqfree(real)
+	root.baker = real
+	return real
+
+
 func _nonstructural_holder(container: Node3D) -> Node:
+	_setup_real_baker()
 	bake_sys._append_nonstructural_brushes(container)
 	return container.get_node_or_null("Nonstructural")
 
@@ -2688,25 +2779,24 @@ func test_func_detail_collision_body_sits_at_the_brush():
 	add_child_autoqfree(container)
 
 	var holder := _nonstructural_holder(container)
-	var mi: MeshInstance3D = null
-	var body: StaticBody3D = null
-	for child in holder.get_children():
-		if child is MeshInstance3D:
-			mi = child
-		elif child is StaticBody3D:
-			body = child
-	assert_not_null(mi)
-	assert_not_null(body)
-	assert_almost_eq(body.position.x, mi.position.x, 0.001)
-	assert_almost_eq(body.position.y, mi.position.y, 0.001)
-	assert_almost_eq(body.position.z, mi.position.z, 0.001)
-	var col := body.get_child(0) as CollisionShape3D
-	assert_not_null(col)
-	# The shape still lands where the mesh does, now relative to a placed body.
-	var shape_pos: Vector3 = (body.transform * col.transform).origin
-	assert_almost_eq(shape_pos.x, mi.position.x, 0.001)
-	assert_almost_eq(shape_pos.y, mi.position.y, 0.001)
-	assert_almost_eq(shape_pos.z, mi.position.z, 0.001)
+	# Detail brushes share one body now, so what has to hold is that the collision
+	# is still where the brush is - not that the body node sits on top of it.
+	var body: StaticBody3D = _first_under(holder, "StaticBody3D") as StaticBody3D
+	assert_not_null(body, "grouped detail still has a collision body")
+	var col := _first_under(body, "CollisionShape3D") as CollisionShape3D
+	assert_not_null(col, "and a shape in it")
+	# A convex hull carries its world positions in its own points, the way the
+	# structural path builds them, so the shape node stays at identity and the
+	# question is where the points are.
+	var hull := col.shape as ConvexPolygonShape3D
+	assert_not_null(hull, "grouped detail collides as per-brush convex hulls")
+	var centre := Vector3.ZERO
+	for point in hull.points:
+		centre += point
+	centre /= maxi(hull.points.size(), 1)
+	assert_almost_eq(centre.x, detail.global_position.x, 0.5)
+	assert_almost_eq(centre.y, detail.global_position.y, 0.5)
+	assert_almost_eq(centre.z, detail.global_position.z, 0.5)
 
 
 # ===========================================================================
