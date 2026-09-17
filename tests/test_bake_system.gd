@@ -110,6 +110,8 @@ var bake_navmesh_cell_size: float = 0.3
 var bake_navmesh_cell_height: float = 0.25
 var bake_navmesh_agent_height: float = 2.0
 var bake_navmesh_agent_radius: float = 0.4
+var bake_navmesh_agent_max_climb: float = 0.25
+var bake_navmesh_agent_max_slope: float = 45.0
 var paint_layers = null
 var commit_freeze: bool = false
 var baker = null
@@ -1755,6 +1757,26 @@ func test_postprocess_bake_navmesh_settings_propagate():
 	assert_almost_eq(
 		nav_mesh.agent_radius, 1.0, 0.001, "agent_radius should be ceiled to cell_size units"
 	)
+	container.free()
+
+
+func test_postprocess_bake_navmesh_agent_limits_propagate():
+	# The two that decide whether an agent can use the stairs this plugin builds
+	# were left at Godot's defaults while the four beside them were set (#701).
+	root.bake_navmesh = true
+	root.bake_navmesh_agent_max_climb = 0.5
+	root.bake_navmesh_agent_max_slope = 30.0
+	var container := Node3D.new()
+	root.add_child(container)
+	bake_sys.postprocess_bake(container, false)
+	var nav_region: NavigationRegion3D = (
+		container.get_node_or_null("BakedNavmesh") as NavigationRegion3D
+	)
+	assert_not_null(nav_region)
+	var nav_mesh: NavigationMesh = nav_region.navigation_mesh
+	assert_not_null(nav_mesh)
+	assert_almost_eq(nav_mesh.agent_max_climb, 0.5, 0.001, "agent_max_climb should propagate")
+	assert_almost_eq(nav_mesh.agent_max_slope, 30.0, 0.001, "agent_max_slope should propagate")
 	container.free()
 
 

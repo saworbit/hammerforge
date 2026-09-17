@@ -148,19 +148,48 @@ func _do_the_agent_settings_reach_it() -> void:
 			"navmesh agent_radius is neither the asked value nor its cell multiple",
 			"asked 1.0, cell multiple %s, got %s" % [want_radius, facts.get("agent_radius")]
 		)
-	# The two settings the dock never offers. A stair a player can walk up is
-	# unreachable to an agent whose max climb is the Godot default.
+	# The two that decide whether an agent can use the stairs this plugin builds.
+	# A stair a player can walk up is unreachable to an agent whose max climb is
+	# below its rise.
+	for pair in [
+		["agent_max_climb", root.bake_navmesh_agent_max_climb],
+		["agent_max_slope", root.bake_navmesh_agent_max_slope],
+	]:
+		if not is_equal_approx(float(facts.get(pair[0], -1.0)), float(pair[1])):
+			flag(
+				"navmesh %s is not what the level asked for" % pair[0],
+				"asked %s, got %s" % [pair[1], facts.get(pair[0])]
+			)
 	note(
-		"settings the Manage tab has no control for",
+		"the stair the plugin builds against the climb the agent is given",
 		(
-			"agent_max_climb=%s agent_max_slope=%s"
-			% [facts.get("agent_max_climb"), facts.get("agent_max_slope")]
+			"bake_connector_stair_height = %s, agent_max_climb = %s"
+			% [root.get("bake_connector_stair_height"), root.bake_navmesh_agent_max_climb]
 		)
 	)
-	note(
-		"the default stair step this plugin builds",
-		"bake_connector_stair_height = %s" % root.get("bake_connector_stair_height")
-	)
+
+	# Raising the step without raising the climb is the combination that produces
+	# stairs nothing can use, and Validate is what has to say so.
+	root.bake_auto_connectors = true
+	root.bake_connector_stair_height = root.bake_navmesh_agent_max_climb + 0.2
+	# Bake Check, not Level Check: these are two separate reports, and the one
+	# that answers "will this bake give me what I asked for" is this one.
+	var reported: Array = root.validation_system.check_bake_issues()
+	var named: Array = []
+	for entry in reported:
+		var text := str(entry.get("message", "")) if entry is Dictionary else str(entry)
+		if text.to_lower().contains("climb"):
+			named.append(text)
+	note("what Validate says about a step taller than the agent can climb", named)
+	if named.is_empty():
+		flag(
+			"nothing says when the stairs the level builds are taller than its agents climb",
+			(
+				"The auto-connector's step and the navmesh agent's max climb are two "
+				+ "settings that have to agree, and a level where they do not bakes a "
+				+ "staircase nothing in the game can use, with nothing said anywhere."
+			)
+		)
 
 
 func _does_it_survive_a_rebake() -> void:

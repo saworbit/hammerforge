@@ -262,6 +262,28 @@ var _bake_navmesh_agent_radius: float = 0.4
 		)
 	get:
 		return _bake_navmesh_agent_radius
+var _bake_navmesh_agent_max_climb: float = 0.25
+## The tallest step an agent can walk up, and the steepest slope it can walk.
+##
+## Godot's defaults, and the bake left both at them while setting the four beside
+## them - which mattered because the plugin builds stairs itself. The
+## auto-connector's default step is `bake_connector_stair_height`, also 0.25, so
+## every generated staircase sat exactly on the limit and a mapper raising it for
+## a chunkier step put their stairs out of reach of every agent in the game
+## (#701). `validate_level()` says so when the two disagree.
+@export var bake_navmesh_agent_max_climb: float = 0.25:
+	set(value):
+		_bake_navmesh_agent_max_climb = _bounded(
+			value, MIN_NAVMESH_AGENT, MAX_NAVMESH_AGENT, _bake_navmesh_agent_max_climb
+		)
+	get:
+		return _bake_navmesh_agent_max_climb
+var _bake_navmesh_agent_max_slope: float = 45.0
+@export_range(0.0, 90.0, 0.1) var bake_navmesh_agent_max_slope: float = 45.0:
+	set(value):
+		_bake_navmesh_agent_max_slope = _bounded(value, 0.0, 90.0, _bake_navmesh_agent_max_slope)
+	get:
+		return _bake_navmesh_agent_max_slope
 @export var bake_visible_only: bool = false
 @export var bake_use_multimesh: bool = false
 @export var bake_use_atlas: bool = false

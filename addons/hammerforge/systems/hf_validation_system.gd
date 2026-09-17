@@ -458,8 +458,45 @@ func check_bake_issues() -> Array:
 
 	_report_overlapping_subtracts(records, overlaps["subtract_pairs"], issues)
 	_check_micro_gaps(brush_nodes, issues)
+	_check_stairs_are_climbable(issues)
 	issues.append_array(check_occlusion_coverage())
 	return issues
+
+
+## The two settings that decide whether an agent can use the stairs this level
+## builds for it.
+##
+## The auto-connector's step defaults to the same 0.25 as Godot's default max
+## climb, so a generated staircase sits exactly on the limit and a mapper raising
+## the step for a chunkier stair puts it out of reach of everything in the game
+## (#701). Only worth saying when the level is actually baking a navmesh and
+## actually building stairs.
+func _check_stairs_are_climbable(issues: Array) -> void:
+	if not bool(root.get("bake_navmesh")):
+		return
+	if not bool(root.get("bake_auto_connectors")):
+		return
+	var step := float(root.get("bake_connector_stair_height"))
+	var climb := float(root.get("bake_navmesh_agent_max_climb"))
+	if step <= climb:
+		return
+	# Same shape as every other entry on this report: `on_bake_check_issues()`
+	# reads `severity` off each one to count errors against warnings.
+	issues.append(
+		{
+			"type": "stairs_above_agent_climb",
+			"severity": 1,
+			"message":
+			(
+				(
+					"Connector stairs rise %.2f per step and the navmesh agent can climb "
+					+ "%.2f, so nothing that follows the navmesh can use them"
+				)
+				% [step, climb]
+			),
+			"node": root
+		}
+	)
 
 
 func _check_degenerate_brush(brush: DraftBrush, issues: Array) -> void:

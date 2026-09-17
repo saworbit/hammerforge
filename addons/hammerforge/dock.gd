@@ -194,6 +194,9 @@ var bake_navmesh_cell_height: SpinBox = null
 var bake_navmesh_agent_row: HBoxContainer = null
 var bake_navmesh_agent_height: SpinBox = null
 var bake_navmesh_agent_radius: SpinBox = null
+var bake_navmesh_agent_max_climb: SpinBox = null
+var bake_navmesh_agent_max_slope: SpinBox = null
+var bake_navmesh_limits_row: HBoxContainer = null
 # -- Bake optimization controls (built programmatically) --
 var bake_selected_btn: Button = null
 var bake_changed_btn: Button = null
@@ -686,6 +689,8 @@ func _apply_ui_state_to_root() -> void:
 		[bake_navmesh_cell_height, "bake_navmesh_cell_height"],
 		[bake_navmesh_agent_height, "bake_navmesh_agent_height"],
 		[bake_navmesh_agent_radius, "bake_navmesh_agent_radius"],
+		[bake_navmesh_agent_max_climb, "bake_navmesh_agent_max_climb"],
+		[bake_navmesh_agent_max_slope, "bake_navmesh_agent_max_slope"],
 		[bake_connector_stair_height_spin, "bake_connector_stair_height"],
 		[bake_connector_stair_threshold_spin, "bake_connector_stair_threshold"],
 		[bake_occluder_min_area_spin, "bake_occluder_min_area"],
@@ -3471,6 +3476,14 @@ func _sync_grid_settings_from_root() -> void:
 		bake_navmesh_agent_height.value = float(connected_root.get("bake_navmesh_agent_height"))
 	if bake_navmesh_agent_radius and _root_has_property("bake_navmesh_agent_radius"):
 		bake_navmesh_agent_radius.value = float(connected_root.get("bake_navmesh_agent_radius"))
+	if bake_navmesh_agent_max_climb and _root_has_property("bake_navmesh_agent_max_climb"):
+		bake_navmesh_agent_max_climb.value = float(
+			connected_root.get("bake_navmesh_agent_max_climb")
+		)
+	if bake_navmesh_agent_max_slope and _root_has_property("bake_navmesh_agent_max_slope"):
+		bake_navmesh_agent_max_slope.value = float(
+			connected_root.get("bake_navmesh_agent_max_slope")
+		)
 	if autosave_enabled and _root_has_property("hflevel_autosave_enabled"):
 		autosave_enabled.button_pressed = bool(connected_root.get("hflevel_autosave_enabled"))
 	if autosave_minutes and _root_has_property("hflevel_autosave_minutes"):

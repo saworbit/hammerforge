@@ -104,6 +104,23 @@ func fresh_root(node_name: String = "Level", spawn_player: bool = false) -> Node
 	return root
 
 
+## Take a root out of the tree, and out of the physics space with it.
+##
+## `fresh_root()` adds a new root beside whatever is already there, so a scenario
+## that loops over configurations built its second level on top of its first and
+## measured both. A walk over eight 0.125 steps climbed the 0.25 staircase from
+## the iteration before and reported its rise. Call this at the end of a loop
+## body, not at the end of the scenario, or the next iteration inherits the lot.
+func drop_root(root: Node3D) -> void:
+	if not is_instance_valid(root):
+		return
+	var parent := root.get_parent()
+	if parent:
+		parent.remove_child(root)
+	root.queue_free()
+	await _tree.process_frame
+
+
 ## One frame, for the callers that need to let a deferred call land.
 func frame() -> void:
 	await _tree.process_frame
