@@ -19,6 +19,8 @@ This document describes how to move data in and out of HammerForge safely.
 - Autosaves write to `res://.hammerforge/<scene name>.hflevel` by default, derived from the scene the level was opened from. A level whose scene has never been saved has no name to derive from and uses `res://.hammerforge/autosave.hflevel` until it does.
 - Files carry a `scene` field naming the `.tscn` they were saved from. It is what lets a file say which level it holds when every level shares the default autosave path. Files written before September 2026 do not have it, and every key defaults, so they still load.
 - Store `.hflevel` in version control for reliable recovery.
+- **Save compression** (Console > Controls) decides the form on disk. On, the default, the bundle is deflated: a 45-brush level is about 3 KB. Off, it is plain JSON written one value per line with keys in a stable order, which is the form to use when the level is reviewed and merged like any other file in the repository. The same level is about 250 KB that way, and the loader reads either form without being told which.
+- Save Level writes the file it is given, every time. A save to a second path is a copy of the level, not a no-op, even when nothing has changed since the last one.
 
 ### Which File Opens: the `.tscn` Wins
 A level lives in two files, and they are written by two different commands. Godot's own **Ctrl+S** writes the scene; **Save Level** writes the `.hflevel`. Nothing reconciles them, and nothing merges them; HammerForge only tells you when they have come apart.
