@@ -182,8 +182,19 @@ var _bake_collision_layer_index: int = 1
 	get:
 		return _bake_collision_layer_index
 @export var bake_material_override: Material = null
-var _bake_chunk_size: float = 32.0
-@export var bake_chunk_size: float = 32.0:
+## Off by default, which is what a level wants until it is big enough not to.
+##
+## It was 32.0, a world-space number from before #625 made one unit one metre --
+## four rooms wide on a project whose shipped examples are 8 unit rooms, so the
+## whole of a greybox level fell in one chunk and the setting did nothing anyway
+## (#656). A fixed distance is the wrong kind of default for this: it goes stale
+## the moment the project's scale moves, which is exactly what happened.
+## `get_recommended_chunk_size()` returns 0.0 for anything under 30 brushes, so
+## off agrees with the recommendation for every level small enough to have one
+## mesh, and the status board offers **Set chunk size N** once a level is large
+## enough to want chunking.
+var _bake_chunk_size: float = 0.0
+@export var bake_chunk_size: float = 0.0:
 	set(value):
 		# 0 is the bake's own "do not chunk" - `bake()` reads `> 0.0` - and it is
 		# the bottom of the dock spin's range. Clamping it up to the minimum gave

@@ -152,8 +152,11 @@ func build(parent: Control) -> void:
 	# for any level wider than 1024 units - a small level in this genre - and the
 	# perf panel's recommendation was a figure the control beside it could not
 	# hold.
-	dock.bake_chunk_size_spin = dock._make_spin(0.0, LevelRoot.MAX_BAKE_CHUNK_SIZE, 1.0, 32.0)
-	dock.bake_chunk_size_spin.tooltip_text = "Spatial chunk size for bake grouping (0 = no chunking)"
+	dock.bake_chunk_size_spin = dock._make_spin(0.0, LevelRoot.MAX_BAKE_CHUNK_SIZE, 1.0, 0.0)
+	dock.bake_chunk_size_spin.tooltip_text = (
+		"Spatial chunk size for bake grouping (0 = no chunking)\nThe status board"
+		+ " recommends one once the level is big enough to want it"
+	)
 	chunk_row.add_child(dock.bake_chunk_size_spin)
 	adv.add_child(chunk_row)
 

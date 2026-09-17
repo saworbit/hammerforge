@@ -763,38 +763,49 @@ func _bake_impl(
 				else:
 					brush_visgroups.append(PackedStringArray())
 		# --- Yielding pass: world-space transform + grouping from frozen data ---
-		var groups: Dictionary = {}
+		# Grouped per chunk, not just per material. The chunked branch used to
+		# live only on the CSG path, and `bake_use_face_materials` defaults to
+		# true, so on every default level the bake took the branch that had never
+		# heard of `bake_chunk_size` -- while the dock offered a Chunk Size spin,
+		# the health badge said "Consider Chunking" and the dry run reported a
+		# chunk count the bake did not produce (#656). Per-face baking has no
+		# boolean interactions to preserve across a boundary, which is exactly why
+		# `_chunking_has_cross_boundary_interactions()` guards the CSG path and is
+		# not needed here.
+		var chunk_members := _face_chunk_members(snapshots)
+		var chunk_coords: Array = chunk_members.keys()
+		chunk_coords.sort_custom(_compare_chunk_coords)
 		var snap_total: int = snapshots.size()
-		for _bi in range(snap_total):
-			root.baker.collect_snapshot_groups(snapshots[_bi], use_atlas, groups)
-			if (_bi + 1) % _FACE_BAKE_BATCH == 0 or _bi == snap_total - 1:
-				root.bake_progress.emit(
-					float(_bi + 1) / float(max(1, snap_total)) * 0.7,
-					"Collecting faces %d/%d" % [_bi + 1, snap_total]
-				)
-				var yield_start_ms := Time.get_ticks_msec()
-				await root.get_tree().process_frame
-				yield_overhead_ms += Time.get_ticks_msec() - yield_start_ms
+		var collected := 0
+		var chunk_groups: Dictionary = {}
+		for coord in chunk_coords:
+			var members: Array = chunk_members[coord]
+			var groups: Dictionary = {}
+			for index in members:
+				root.baker.collect_snapshot_groups(snapshots[index], use_atlas, groups)
+				collected += 1
+				if collected % _FACE_BAKE_BATCH == 0 or collected == snap_total:
+					root.bake_progress.emit(
+						float(collected) / float(max(1, snap_total)) * 0.7,
+						"Collecting faces %d/%d" % [collected, snap_total]
+					)
+					var yield_start_ms := Time.get_ticks_msec()
+					await root.get_tree().process_frame
+					yield_overhead_ms += Time.get_ticks_msec() - yield_start_ms
+			chunk_groups[coord] = groups
 		root.bake_progress.emit(0.75, "Building mesh")
 		var build_yield_start_ms := Time.get_ticks_msec()
 		await root.get_tree().process_frame
 		yield_overhead_ms += Time.get_ticks_msec() - build_yield_start_ms
-		# Collect per-brush world-space hull verts for convex collision (mode >= 1)
-		if collision_mode >= 1:
-			var per_brush_verts: Array = []
-			for snap in snapshots:
-				per_brush_verts.append(snap.get("hull_verts", PackedVector3Array()))
-			bake_options["per_brush_verts"] = per_brush_verts
-		# Visgroup partitioning (mode 2): separate collision bodies per visgroup
-		if collision_mode >= 2:
-			bake_options["brush_visgroups"] = brush_visgroups
-		baked = root.baker.build_mesh_from_groups(groups, layer, layer, bake_options)
-		# Apply visgroup-partitioned collision bodies after initial build
-		if baked and collision_mode >= 2:
-			var face_hull_verts: Array = []
-			for snap in snapshots:
-				face_hull_verts.append(snap.get("hull_verts", PackedVector3Array()))
-			_partition_collision_by_visgroup(baked, face_hull_verts, brush_visgroups, bake_options)
+		baked = _build_face_chunks(
+			chunk_coords,
+			chunk_groups,
+			chunk_members,
+			snapshots,
+			brush_visgroups,
+			bake_options,
+			layer
+		)
 		# Match the CSG path: append heightmaps after collision partitioning so
 		# partition cleanup cannot remove the heightmap collision body.
 		if baked:
@@ -1095,6 +1106,94 @@ func bake_chunked(chunk_size: float, layer: int, options: Dictionary) -> Node3D:
 	return container if chunk_count > 0 else null
 
 
+## Which snapshots belong to which chunk, as `coord -> [snapshot index]`.
+##
+## One entry at `Vector3i.ZERO` when chunking is off, so the caller's loop is the
+## same shape either way and an unchunked bake produces exactly what it did
+## before. The brush's world origin is already in the snapshot, taken before the
+## yields, so this needs nothing off the live node.
+func _face_chunk_members(snapshots: Array) -> Dictionary:
+	var members: Dictionary = {}
+	var chunk_size: float = root.bake_chunk_size
+	for i in snapshots.size():
+		var coord := Vector3i.ZERO
+		if chunk_size > 0.0:
+			var origin: Vector3 = (snapshots[i] as Dictionary).get("origin", Vector3.ZERO)
+			coord = chunk_coord(origin, chunk_size)
+		if not members.has(coord):
+			members[coord] = []
+		members[coord].append(i)
+	return members
+
+
+## A stable order for chunk containers, so two bakes of the same level produce
+## the same scene rather than whatever order the dictionary happened to hold.
+func _compare_chunk_coords(a: Vector3i, b: Vector3i) -> bool:
+	if a.x != b.x:
+		return a.x < b.x
+	if a.y != b.y:
+		return a.y < b.y
+	return a.z < b.z
+
+
+## One mesh per chunk, or one mesh when there is one chunk.
+##
+## A single chunk returns exactly what the unchunked path returned, with the same
+## node shape, so nothing downstream has to learn about chunking to keep working.
+## Several chunks are wrapped the way the CSG path wraps them, in `BakedChunk_`
+## children of one container, which is what `postprocess_bake()`,
+## `clear_baked_containers()` and the preview modes already walk.
+func _build_face_chunks(
+	chunk_coords: Array,
+	chunk_groups: Dictionary,
+	chunk_members: Dictionary,
+	snapshots: Array,
+	brush_visgroups: Array,
+	bake_options: Dictionary,
+	layer: int
+) -> Node3D:
+	var collision_mode: int = int(bake_options.get("collision_mode", 0))
+	var built: Array = []
+	for coord in chunk_coords:
+		var members: Array = chunk_members[coord]
+		var options := bake_options.duplicate()
+		# Per-brush collision data is per chunk too, or a chunk's convex hulls
+		# would be built from the whole level's brushes.
+		var hull_verts: Array = []
+		var visgroups: Array = []
+		for index in members:
+			hull_verts.append(
+				(snapshots[index] as Dictionary).get("hull_verts", PackedVector3Array())
+			)
+			visgroups.append(
+				brush_visgroups[index] if index < brush_visgroups.size() else PackedStringArray()
+			)
+		if collision_mode >= 1:
+			options["per_brush_verts"] = hull_verts
+		if collision_mode >= 2:
+			options["brush_visgroups"] = visgroups
+		var mesh: Node3D = root.baker.build_mesh_from_groups(
+			chunk_groups[coord], layer, layer, options
+		)
+		if mesh == null:
+			continue
+		if collision_mode >= 2:
+			_partition_collision_by_visgroup(mesh, hull_verts, visgroups, options)
+		built.append({"coord": coord, "node": mesh})
+	if built.is_empty():
+		return null
+	if built.size() == 1:
+		return built[0]["node"]
+	var container := Node3D.new()
+	container.name = String(BAKED_CONTAINER_NAME)
+	for entry in built:
+		var coord: Vector3i = entry["coord"]
+		var node: Node3D = entry["node"]
+		node.name = "BakedChunk_%s_%s_%s" % [coord.x, coord.y, coord.z]
+		container.add_child(node)
+	return container
+
+
 func get_bake_chunk_count() -> int:
 	if root.bake_chunk_size <= 0.0:
 		var total = count_brushes_in(root.draft_brushes_node)
@@ -1105,7 +1204,12 @@ func get_bake_chunk_count() -> int:
 		return 1 if total > 0 else 0
 	var size = max(0.001, root.bake_chunk_size)
 	var chunks = _collect_all_chunks(size)
-	if _chunking_has_cross_boundary_interactions(chunks):
+	# A boolean that reaches across a chunk boundary is a CSG problem: a cutter
+	# in one chunk has to cut a solid in the next, and separate CSG trees cannot.
+	# The per-face path has no booleans to preserve, so it chunks anyway -- and it
+	# is the default, which is why this asks which path will run rather than
+	# assuming the CSG one (#656).
+	if not root.bake_use_face_materials and _chunking_has_cross_boundary_interactions(chunks):
 		return 1
 	var count := 0
 	for coord in chunks:
