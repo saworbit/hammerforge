@@ -124,6 +124,7 @@ const SCENARIOS: Array[String] = [
 	"res://tools/vibe/scenarios/scene_reopen.gd",
 	"res://tools/vibe/scenarios/command_surfaces.gd",
 	"res://tools/vibe/scenarios/op_results.gd",
+	"res://tools/vibe/scenarios/prefab_library.gd",
 ]
 
 

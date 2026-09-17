@@ -139,6 +139,7 @@ SCENARIOS = [
     "scene-reopen",
     "command-surfaces",
     "op-results",
+    "prefab-library",
 ]
 
 # Generous: chaos runs 300 operations and cost saves eight levels. A scenario
@@ -192,6 +193,12 @@ def run_scenario(godot: str, scenario: str, timeout: int, log_dir: Path) -> dict
             command,
             capture_output=True,
             text=True,
+            # Godot writes UTF-8. Without this the default console codepage is
+            # used on Windows and one non-ASCII character anywhere in a scenario's
+            # output takes the whole run down with a UnicodeDecodeError, which
+            # reads as the scenario having crashed.
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout,
             cwd=REPO_ROOT,
             check=False,
