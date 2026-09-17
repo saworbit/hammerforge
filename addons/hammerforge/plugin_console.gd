@@ -296,8 +296,12 @@ static func _reveal_autosave(plugin: Object) -> void:
 	var root = dock.get("level_root") if dock and is_instance_valid(dock) else null
 	if root == null or not is_instance_valid(root):
 		return
-	var path_value = root.get("hflevel_autosave_path")
-	var path := "" if path_value == null else str(path_value)
+	var path := ""
+	if root.has_method("resolved_hflevel_path"):
+		path = str(root.call("resolved_hflevel_path"))
+	else:
+		var path_value = root.get("hflevel_autosave_path")
+		path = "" if path_value == null else str(path_value)
 	if path == "":
 		return
 	var folder := ProjectSettings.globalize_path(path.get_base_dir())

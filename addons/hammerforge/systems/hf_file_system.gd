@@ -15,6 +15,10 @@ var _completed_saves: Array[Dictionary] = []
 ## Last write error observed on the main thread (thread result is returned from wait_to_finish).
 ## Set by process_thread_queue() from the worker result (true when hash matched).
 var last_encode_skipped := false
+## The target an autosave collision was last reported against, so the refusal is
+## said once rather than every five minutes -- and said again if the level is
+## later pointed at a different file that is also somebody else's.
+var _autosave_collision_path := ""
 
 
 func _init(level_root: Node3D) -> void:
@@ -22,9 +26,22 @@ func _init(level_root: Node3D) -> void:
 
 
 func save_hflevel(path: String = "", force: bool = false, autosave: bool = false) -> int:
-	var target = path if path != "" else root.hflevel_autosave_path
+	var target = path if path != "" else root.resolved_hflevel_path()
 	if target == "":
 		return ERR_INVALID_PARAMETER
+	if autosave:
+		var occupant := autosave_target_belongs_elsewhere(target)
+		if occupant != "":
+			var message := (
+				"Autosave skipped: %s holds %s, not this level. Set this level's own autosave path."
+				% [target.get_file(), occupant.get_file()]
+			)
+			if _autosave_collision_path != target:
+				_autosave_collision_path = target
+				HFLog.warn("HammerForge: %s" % message)
+				if root.has_signal("autosave_failed"):
+					root.autosave_failed.emit(message)
+			return ERR_FILE_CANT_WRITE
 	ensure_dir_for_path(target)
 	if root.paint_system:
 		root.paint_system.set_region_base_path(target)
@@ -57,7 +74,7 @@ func save_hflevel(path: String = "", force: bool = false, autosave: bool = false
 
 
 func load_hflevel(path: String = "") -> bool:
-	var target = path if path != "" else root.hflevel_autosave_path
+	var target = path if path != "" else root.resolved_hflevel_path()
 	if target == "":
 		return false
 	if root.paint_system:
@@ -112,7 +129,7 @@ func check_hflevel_freshness() -> Dictionary:
 	if root == null:
 		report["reason"] = "no_level"
 		return report
-	var hflevel_path := str(root.hflevel_autosave_path).strip_edges()
+	var hflevel_path := str(root.resolved_hflevel_path()).strip_edges()
 	if hflevel_path == "":
 		report["reason"] = "no_hflevel_path"
 		return report
@@ -140,10 +157,11 @@ func check_hflevel_freshness() -> Dictionary:
 	if not level_file_is_stale(hflevel_time, scene_time):
 		report["reason"] = "scene_current"
 		return report
-	# Only now is the file worth opening. Every level points at
-	# `res://.hammerforge/autosave.hflevel` until someone changes it, so a newer
-	# file next to this scene is as likely to be another level's as this one's,
-	# and Load Level would overwrite the open level with it.
+	# Only now is the file worth opening. A level derives its own autosave name
+	# from its scene now (#655), so a newer file next to this scene is usually
+	# this one's -- but a level pointed at a shared path by hand, or a file
+	# written before that derivation, can still be another level's, and Load
+	# Level would overwrite the open level with it.
 	var recorded := read_recorded_scene(hflevel_path)
 	if recorded != "" and recorded != scene_path:
 		report["reason"] = "another_level"
@@ -184,6 +202,28 @@ static func read_recorded_scene(path: String) -> String:
 	if not (data is Dictionary):
 		return ""
 	return str((data as Dictionary).get("scene", "")).strip_edges()
+
+
+## The scene an existing `.hflevel` says it holds, when that is not this level.
+##
+## An autosave is a write nobody asked for, on a timer, so it is the one save
+## that must not land on another level's file. A file that records no scene is
+## not attributed either way -- it was written before that was recorded, and
+## refusing on a guess would stop a level autosaving to its own history (#655).
+## Neither is a level whose scene has never been saved: it has no name to
+## compare, and nothing yet to lose.
+func autosave_target_belongs_elsewhere(target: String) -> String:
+	if target == "" or not FileAccess.file_exists(target):
+		return ""
+	if root == null or not root.has_method("scene_source_path"):
+		return ""
+	var mine := str(root.scene_source_path()).strip_edges()
+	if mine == "":
+		return ""
+	var recorded := read_recorded_scene(target)
+	if recorded == "" or recorded == mine:
+		return ""
+	return recorded
 
 
 ## Whether the `.hflevel` is ahead of the scene, given when each was written.
@@ -344,7 +384,7 @@ func start_hflevel_thread(
 	var autosave_abs := ""
 	if root:
 		keep = int(root.hflevel_autosave_keep)
-		autosave_abs = ProjectSettings.globalize_path(str(root.hflevel_autosave_path))
+		autosave_abs = ProjectSettings.globalize_path(root.resolved_hflevel_path())
 	var job := {
 		"path": abs_path,
 		"display_path": path,

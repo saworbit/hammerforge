@@ -343,6 +343,22 @@ var _hflevel_autosave_keep: int = 5
 		_set_hflevel_autosave_keep(value)
 	get:
 		return _hflevel_autosave_keep
+## Where a level autosaves until someone points it somewhere else.
+##
+## Every level in a project starts on this one string, which is what made the
+## collision in #655 need nothing unusual to happen. Kept as the default so an
+## existing level's stored value is unchanged; `resolved_hflevel_path()` is what
+## turns it into a file.
+const DEFAULT_HFLEVEL_AUTOSAVE_PATH := "res://.hammerforge/autosave.hflevel"
+@export var hflevel_autosave_path: String = DEFAULT_HFLEVEL_AUTOSAVE_PATH
+## This level's own name for itself, minted once and kept in the scene.
+##
+## Only ever used before the scene has been saved. A level with a `.tscn` derives
+## its autosave name from that, but a scene that has never been saved has no name
+## to derive from -- and that is exactly when the autosave is the only copy of
+## the work, so two unsaved levels sharing one file is the worst version of #655
+## rather than an edge of it.
+@export_storage var level_uid: String = ""
 ## The level records that are not nodes, so the scene carries them too.
 ##
 ## Visgroups, groups, arrays, hollows, generators and prefab instances live on
@@ -371,7 +387,6 @@ var _hflevel_autosave_keep: int = 5
 ## What a scene handed over before the subsystems existed to take it. Emptied by
 ## `_restore_live_registries()` once they have.
 var _pending_registries: Dictionary = {}
-@export var hflevel_autosave_path: String = "res://.hammerforge/autosave.hflevel"
 @export var hflevel_compress: bool = true
 @export var entity_definitions_path: String = "res://addons/hammerforge/entities.json"
 @export var commit_freeze: bool = true
@@ -853,6 +868,7 @@ func _ready():
 	# record names its brushes by id and the lookup goes through the cache that
 	# pass builds.
 	_restore_live_registries()
+	_ensure_level_uid()
 	# A scene that keeps only its geometry has no brushes in it, so the level is
 	# loaded from the `.hflevel` beside it (#624). Deferred because a load rebuilds
 	# the level and the subsystems above have only just been built.
@@ -884,6 +900,17 @@ func _restore_live_registries() -> void:
 	# with no control that shows them (#664).
 	if visgroup_system:
 		visgroup_system.reconcile_visgroups_from_members()
+
+
+## Mint this level's own name for itself, once, the first time it opens for
+## editing. Nothing outside `resolved_hflevel_path()` reads it, and a level whose
+## scene has been saved never needs it, so the value it gets is only required to
+## be unlike another level's. Gated on the same test as the editor subsystems, so
+## an exported game neither mints one nor writes to a scene it is only running.
+func _ensure_level_uid() -> void:
+	if level_uid != "" or not _should_initialize_editor_systems():
+		return
+	level_uid = "%x%x" % [Time.get_ticks_usec(), randi() % 0xFFFF]
 
 
 func _should_initialize_editor_systems() -> bool:
@@ -3453,7 +3480,7 @@ func _setup_autosave() -> void:
 func _on_autosave_timeout() -> void:
 	if not hflevel_autosave_enabled:
 		return
-	save_hflevel(hflevel_autosave_path, true, true)
+	save_hflevel(resolved_hflevel_path(), true, true)
 
 
 func _set_hflevel_autosave_enabled(value: bool) -> void:
@@ -3602,7 +3629,7 @@ func create_new_level() -> void:
 func _load_hflevel_for_bake_only_scene() -> void:
 	if not is_inside_tree() or brush_system.get_live_brush_count() > 0:
 		return
-	var path := str(hflevel_autosave_path)
+	var path := resolved_hflevel_path()
 	if not FileAccess.file_exists(path):
 		var message := (
 			(
@@ -3662,7 +3689,50 @@ func scene_keeps_brushes() -> bool:
 
 ## Whether this level has somewhere to write a `.hflevel`.
 func has_hflevel_path() -> bool:
-	return str(hflevel_autosave_path).strip_edges() != ""
+	return resolved_hflevel_path() != ""
+
+
+## The file this level's `.hflevel` actually goes to.
+##
+## `hflevel_autosave_path` is what the mapper chose from the dialog, and until
+## they choose, it is the same literal on every level in the project. So two
+## levels open in two tabs autosaved over each other on a five minute timer:
+## the second one to fire won, `load_hflevel()` reported success because the
+## file it read was perfectly valid, and the first level only found out when
+## someone reopened it and got the other one (#655).
+##
+## A level already knows where it lives, so the default is derived from that
+## instead. A level that has been given its own path keeps it, and a level whose
+## scene has never been saved has no name to derive from and falls back to the
+## literal, which is the one case where two levels can still collide and the one
+## where neither has anything to lose yet.
+##
+## The scene's whole path under `res://` is mirrored, not just its file name:
+## `res://levels/e1m1.tscn` becomes `res://.hammerforge/levels/e1m1.hflevel`.
+## Two scenes in one project can be called the same thing -- `levels/test.tscn`
+## and `prototypes/test.tscn` is an ordinary way to end up there -- and the
+## basename alone would have put those two back on one file, which is the bug.
+func resolved_hflevel_path() -> String:
+	var chosen := str(hflevel_autosave_path).strip_edges()
+	# Only the untouched default is derived from. An empty path is a level that
+	# has been told not to autosave, and reading it as "no choice yet" made
+	# `has_hflevel_path()` true for a level with nowhere to write -- which is
+	# what a `BAKE_ONLY` scene consults before dropping its brushes.
+	if chosen != DEFAULT_HFLEVEL_AUTOSAVE_PATH:
+		return chosen
+	var root_dir := DEFAULT_HFLEVEL_AUTOSAVE_PATH.get_base_dir()
+	var scene := scene_source_path()
+	if scene == "":
+		if level_uid != "":
+			return root_dir.path_join("unsaved_%s.hflevel" % level_uid)
+		return chosen
+	# A scene anywhere other than `res://` is not something the editor produces,
+	# so it keeps its name and loses its directory rather than reaching outside.
+	var relative := scene.trim_prefix("res://") if scene.begins_with("res://") else scene.get_file()
+	var without_extension := relative.get_basename()
+	if without_extension == "":
+		return chosen
+	return root_dir.path_join("%s.hflevel" % without_extension)
 
 
 ## Whether baked geometry goes into the `.tscn`. When it does not, the level has

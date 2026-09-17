@@ -47,10 +47,11 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   its baked geometry loads its `.hflevel` on open by design (#624) and is never
   reported. Nothing is reconciled or merged: knowing the two disagree is the part
   that was missing.
-- **A `.hflevel` records the scene it was saved from** (#646). Every level writes
-  to `res://.hammerforge/autosave.hflevel` until it is given its own path, so a
-  newer `.hflevel` beside a scene was as likely to be the level next door's, and
-  Load Level on it would overwrite the open level. The bundle now carries a
+- **A `.hflevel` records the scene it was saved from** (#646). Every level wrote
+  to `res://.hammerforge/autosave.hflevel` until it was given its own path (#655
+  has since made that default per level), so a newer `.hflevel` beside a scene
+  was as likely to be the level next door's, and Load Level on it would
+  overwrite the open level. The bundle now carries a
   `scene` field, and a file that names a different scene is not reported against
   this one. A file written before this carries no such field and is still
   reported, with a message that says it cannot tell which level it holds. The
@@ -228,6 +229,41 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the exporter next.
 
 ### Fixed
+- **A level autosaves to its own file** (#655). `hflevel_autosave_path` shipped
+  as one literal, `res://.hammerforge/autosave.hflevel`, with autosave already
+  on and a five minute timer. So every level in a project pointed at the same
+  file, and nothing unusual had to happen: open `e1m1`, build, leave it; open
+  `e1m2`, build for five minutes; `e1m1`'s `.hflevel` is now `e1m2`. The mapper
+  found out on reopening the first level, by which time the rotation in
+  `.hammerforge/` held five copies of the wrong one, and `load_hflevel()` had
+  reported success the whole way because the file it read was perfectly valid.
+  #618 fixed the neighbouring half of this by keying the backup rotation per
+  level; the path that rotation is keyed on was still one path for everybody.
+  A level already knows where it lives, so `resolved_hflevel_path()` derives the
+  default from `scene_source_path()` instead, mirroring the scene's whole path
+  under `res://`: `res://levels/e1m1.tscn` autosaves to
+  `res://.hammerforge/levels/e1m1.hflevel`. The whole path rather than the
+  basename, because `levels/test.tscn` beside `prototypes/test.tscn` is an
+  ordinary way to end up in a project and the basename alone would have put
+  those two back on one file. A level given its own path from the dialog keeps
+  it, and no existing level's stored value changes. Every reader goes through
+  it, including the backup rotation, the freshness check, the status board and
+  the console, so the board now names the file a level is actually writing to
+  rather than the one they all claimed.
+  A scene that has never been saved has no name to derive from, and that is the
+  case where the autosave is the *only* copy of the work, so it is the worst
+  version of this rather than an edge of it. Such a level mints a `level_uid`
+  once, kept in the scene, and autosaves to `unsaved_<uid>.hflevel` until it has
+  a `.tscn` to be named after.
+  The collision is still reachable by pointing two levels at one path by hand,
+  so the file's own record of where it came from (#646) is now a guard as well as
+  a report: an autosave whose target `.hflevel` names a different scene is
+  refused, and says so once rather than every five minutes. A file that records
+  no scene is not refused on a guess, and neither is **Save Level** -- writing
+  over another level's file on purpose is a thing a mapper is allowed to do.
+  It mattered most for a `SceneContents.BAKE_ONLY` level, where the `.hflevel`
+  is the only copy of the brushes and the shared path meant the level could
+  silently open as a different one.
 - **Ctrl+S keeps the records that describe the brushes, not only the brushes**
   (#664, #665). A level has two saves. `capture_state()` writes the `.hflevel`
   and carries everything; Godot's own Ctrl+S writes the `.tscn`, which is

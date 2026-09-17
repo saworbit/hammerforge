@@ -123,8 +123,16 @@ static func collect_context(
 	ctx["auto_spawn_player"] = _get_bool(level_root, "auto_spawn_player", false)
 	ctx["autosave_enabled"] = _get_bool(level_root, "hflevel_autosave_enabled", false)
 	ctx["autosave_minutes"] = int(_get_float(level_root, "hflevel_autosave_minutes", 0.0))
-	var autosave_raw = level_root.get("hflevel_autosave_path")
-	var autosave_path := "" if autosave_raw == null else str(autosave_raw)
+	# The resolved one, not the stored one. Until a level is given its own path
+	# the stored value is the same literal on every level in the project, so the
+	# board would have told four levels they were all writing to one file without
+	# that being what happened (#655).
+	var autosave_path := ""
+	if level_root.has_method("resolved_hflevel_path"):
+		autosave_path = str(level_root.call("resolved_hflevel_path"))
+	else:
+		var autosave_raw = level_root.get("hflevel_autosave_path")
+		autosave_path = "" if autosave_raw == null else str(autosave_raw)
 	ctx["autosave_path"] = autosave_path
 	if autosave_path != "" and FileAccess.file_exists(autosave_path):
 		ctx["autosave_exists"] = true

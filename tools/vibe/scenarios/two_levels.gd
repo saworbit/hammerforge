@@ -9,9 +9,11 @@ extends "res://tools/vibe/hf_vibe_scenario.gd"
 ##
 ## `hflevel_autosave_path` is an `@export String` with a literal default, and
 ## `hflevel_autosave_enabled` is an `@export bool` that defaults to true on a
-## five minute timer. Both are per-node, so every level in a project starts life
-## pointing at the same file. This measures what that costs, and what else two
-## roots in one tree share.
+## five minute timer. Both are per-node, so every level in a project started life
+## pointing at the same file (#655). The stored default is still one string --
+## `resolved_hflevel_path()` is what turns it into a file now, so that is the
+## surface these read. This measures what a second level costs the first, and
+## what else two roots in one tree share.
 
 
 func id() -> String:
@@ -29,38 +31,69 @@ func run() -> void:
 	await _what_scene_source_path_knows()
 
 
+## A level that has been saved is named after its scene; one that has not is
+## named after the id it minted for itself. Neither may share a file with
+## another level, because autosave is on by default and nothing asks first.
 func _the_default_autosave_path() -> void:
 	note("-- the path each level starts with --")
-	var a: Node3D = await fresh_root("LevelA")
-	var b: Node3D = await fresh_root("LevelB")
-	note("LevelA autosave path", a.hflevel_autosave_path)
-	note("LevelB autosave path", b.hflevel_autosave_path)
+	var a: Node3D = await _level_from_scene("LevelA", "res://vibe_levels/e1m1.tscn")
+	var b: Node3D = await _level_from_scene("LevelB", "res://vibe_levels/e1m2.tscn")
+	note("both still store the same default", a.hflevel_autosave_path)
+	note("LevelA resolves to", a.resolved_hflevel_path())
+	note("LevelB resolves to", b.resolved_hflevel_path())
 	note("autosave enabled by default", a.hflevel_autosave_enabled)
 	note("autosave interval, minutes", a.hflevel_autosave_minutes)
-	if str(a.hflevel_autosave_path) == str(b.hflevel_autosave_path):
-		known(
-			655,
-			"every level in a project autosaves to the same file",
-			(
-				(
-					"`hflevel_autosave_path` defaults to the literal '%s' and the only thing "
-					+ "that ever changes it is a mapper picking a file by hand "
-					+ "(dock_file_handler.on_autosave_path_selected). Autosave is on by "
-					+ "default on a %s minute timer, so the second level a project has "
-					+ "silently takes the first one's file"
-				)
-				% [a.hflevel_autosave_path, a.hflevel_autosave_minutes]
-			)
+	if a.resolved_hflevel_path() == b.resolved_hflevel_path():
+		flag(
+			"two saved levels resolve to one autosave file",
+			"both at '%s'" % a.resolved_hflevel_path()
+		)
+
+	# Same file name in two directories, which a project gets to have.
+	var c: Node3D = await _level_from_scene("LevelC", "res://vibe_levels/test.tscn")
+	var d: Node3D = await _level_from_scene("LevelD", "res://vibe_proto/test.tscn")
+	note("LevelC resolves to", c.resolved_hflevel_path())
+	note("LevelD resolves to", d.resolved_hflevel_path())
+	if c.resolved_hflevel_path() == d.resolved_hflevel_path():
+		flag(
+			"two scenes with the same file name resolve to one autosave file",
+			"both at '%s'" % c.resolved_hflevel_path()
+		)
+
+	# A scene that has never been saved is the case where the autosave is the
+	# only copy, so it is the one that matters most.
+	var e: Node3D = await fresh_root("LevelE")
+	var f: Node3D = await fresh_root("LevelF")
+	note("an unsaved level resolves to", e.resolved_hflevel_path())
+	note("another unsaved level resolves to", f.resolved_hflevel_path())
+	if e.resolved_hflevel_path() == f.resolved_hflevel_path():
+		flag(
+			"two unsaved levels resolve to one autosave file",
+			"both at '%s', and an unsaved level has no other copy" % e.resolved_hflevel_path()
 		)
 
 
-## Not a theory about the path: two levels, both saved, then the first one asked
-## to load its own file back.
+## A root that answers `scene_source_path()` the way one opened from a scene
+## does. `scene_source_path()` walks up to the topmost node with no owner, and a
+## root parented straight to the tree is already that node.
+func _level_from_scene(node_name: String, scene: String) -> Node3D:
+	var root: Node3D = await fresh_root(node_name)
+	root.scene_file_path = scene
+	return root
+
+
+## Not a theory about the path: two levels pointed at one file by hand, then the
+## first one asked to load its own work back.
+##
+## Pointing two levels at one path is a thing a mapper is allowed to do, so the
+## file's own record of the scene it came from is the guard: an autosave whose
+## target names a different level is refused. A manual Save Level is not, because
+## that one was asked for.
 func _the_second_level_overwrites_the_first() -> void:
-	note("-- two levels, both saved to the default path, first one reloaded --")
+	note("-- two levels pointed at one file by hand, first one reloaded --")
 	var shared := "user://vibe_two_levels_default.hflevel"
 
-	var a: Node3D = await fresh_root("LevelA")
+	var a: Node3D = await _level_from_scene("LevelA", "res://vibe_levels/e1m1.tscn")
 	a.hflevel_autosave_path = shared
 	for i in 4:
 		box(a, Vector3(128, 128, 128), Vector3(i * 256, 0, 0))
@@ -71,15 +104,15 @@ func _the_second_level_overwrites_the_first() -> void:
 		flag("LevelA's save never finished")
 		return
 
-	var b: Node3D = await fresh_root("LevelB")
+	var b: Node3D = await _level_from_scene("LevelB", "res://vibe_levels/e1m2.tscn")
 	b.hflevel_autosave_path = shared
 	box(b, Vector3(64, 64, 64), Vector3.ZERO)
 	await frame()
 	note("LevelB brushes", _count(b))
-	b.save_hflevel(shared, true, true)
-	if not await HFVibe.settle_save(_tree, b):
-		flag("LevelB's save never finished")
-		return
+	var refused: int = b.save_hflevel(shared, true, true)
+	note("LevelB's autosave onto LevelA's file returned", refused)
+	if refused == OK:
+		await HFVibe.settle_save(_tree, b)
 
 	a.clear_brushes()
 	await frame()
@@ -88,14 +121,11 @@ func _the_second_level_overwrites_the_first() -> void:
 	note("LevelA reloaded its own path", loaded)
 	note("LevelA brushes after the reload", _count(a))
 	if _count(a) == 1:
-		known(
-			655,
-			"a second level's autosave replaces the first level's saved work",
+		flag(
+			"a second level's autosave replaced the first level's saved work",
 			(
-				"LevelA saved four brushes to its default path and got one back: the "
-				+ "one LevelB autosaved over the top. No prompt, no backup of the "
-				+ "displaced file under a different name, and nothing in the dock "
-				+ "shows which level a path belongs to"
+				"LevelA saved four brushes and got one back: the one LevelB autosaved "
+				+ "over the top, onto a file that records LevelA's scene"
 			)
 		)
 	elif _count(a) != 4:
