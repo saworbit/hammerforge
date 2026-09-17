@@ -250,6 +250,10 @@
   "logic_timer": {
     "class": "Timer",
     "description": "Fires on an interval, or once after a delay.",
+    "input_methods": {
+      "Start": "start",
+      "Stop": "stop"
+    },
     "preview": {
       "type": "billboard",
       "path": "res://addons/hammerforge/icon.png",

@@ -2941,6 +2941,12 @@ func _playtest_node_for_entity(entity: Node3D) -> Node3D:
 	# marker has to move with it, or the I/O dispatcher finds nothing to wire.
 	for meta_name in entity.get_meta_list():
 		built.set_meta(meta_name, entity.get_meta(meta_name))
+	# Which engine method each declared input means, if the class says. It travels
+	# on the node because `HFIORuntime` runs in a shipped game with no entity
+	# library to read (#714).
+	var input_methods: Variant = definition.get("input_methods", {})
+	if input_methods is Dictionary and not (input_methods as Dictionary).is_empty():
+		built.set_meta("entity_io_input_methods", (input_methods as Dictionary).duplicate())
 	built.name = entity.name
 	return built
 

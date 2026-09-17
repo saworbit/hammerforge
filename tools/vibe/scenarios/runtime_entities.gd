@@ -240,11 +240,17 @@ func _which_declared_inputs_can_be_delivered() -> void:
 		var node_class := str(defs[key].get("class", ""))
 		if node_class == "" or not ClassDB.class_exists(node_class):
 			continue
+		# A class may name the engine method an input means, which is an explicit
+		# grant rather than a guess at free text, so the guard lets it through.
+		var granted: Dictionary = defs[key].get("input_methods", {})
+		if not (granted is Dictionary):
+			granted = {}
 		for input_name in defs[key].get("inputs", []):
 			var name := str(input_name)
 			var snake := _to_snake(name)
 			var direct := ClassDB.class_has_method(node_class, name)
 			var via_snake := ClassDB.class_has_method(node_class, snake)
+			var is_granted: bool = granted.has(name)
 			(
 				rows
 				. append(
@@ -253,10 +259,11 @@ func _which_declared_inputs_can_be_delivered() -> void:
 						"node": node_class,
 						"input": name,
 						"engine_method": direct or via_snake,
+						"granted": is_granted,
 					}
 				)
 			)
-			if direct or via_snake:
+			if (direct or via_snake) and not is_granted:
 				refused.append("%s (%s).%s -> %s.%s()" % [key, node_class, name, node_class, snake])
 	note("every declared input on a class with a Godot node class", rows)
 	note("inputs HFIORuntime refuses to call as methods", refused)

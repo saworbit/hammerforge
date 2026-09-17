@@ -1460,6 +1460,13 @@ func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 	mi.transform = _source_transform_in_baked_container(source, holder.get_parent() as Node3D)
 	var body := StaticBody3D.new()
 	body.name = "FuncDetailCollision_%d" % idx
+	# What a ray that hits this body has hit. A button is pressed by the player
+	# looking at it, and what a ray returns is the collider, not the mesh beside it
+	# that carries the wiring (#686).
+	if authored != "":
+		body.set_meta("entity_name", authored)
+	if bec != "":
+		body.set_meta("brush_entity_class", bec)
 	var layer := 1
 	if root.has_method("_layer_from_index"):
 		layer = root._layer_from_index(root.bake_collision_layer_index)
