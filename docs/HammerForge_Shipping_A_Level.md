@@ -143,10 +143,19 @@ input reaches its target and what a class can declare about it.
 
 ## Navmesh
 
-If anything in your game pathfinds, turn **Navmesh** on before exporting. Check
-the agent settings against your actual agent — in particular, an agent's maximum
-step height decides whether it can use the stairs the plugin generates, and the
-default stair step sits close to Godot's default limit.
+If anything in your game pathfinds, turn **Navmesh** on before exporting, and set
+the agent settings to your actual agent. Six of them are in the Manage tab: cell
+size and height, agent height and radius, and **Agent Climb / Slope**.
+
+The climb is the one to check. It is the tallest step an agent will walk up, and
+the plugin builds stairs itself — the auto-connector's default step and Godot's
+default max climb are both `0.25`, so they sit exactly on each other. Raise the
+step for a chunkier stair without raising the climb and nothing that follows the
+navmesh can use the staircase. Bake Check says so when the two disagree.
+
+The playtest player is separate and has its own `max_step_height`, defaulting to
+`0.4`. A game with its own character controller needs its own step-up; Godot's
+`CharacterBody3D` has none built in.
 
 ## Checklist
 
