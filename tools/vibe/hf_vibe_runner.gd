@@ -118,6 +118,7 @@ const SCENARIOS: Array[String] = [
 	"res://tools/vibe/scenarios/build_a_room.gd",
 	"res://tools/vibe/scenarios/bake_chunking.gd",
 	"res://tools/vibe/scenarios/scale_leftovers.gd",
+	"res://tools/vibe/scenarios/undo_depth.gd",
 ]
 
 

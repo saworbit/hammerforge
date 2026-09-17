@@ -133,6 +133,7 @@ SCENARIOS = [
     "build-a-room",
     "bake-chunking",
     "scale-leftovers",
+    "undo-depth",
 ]
 
 # Generous: chaos runs 300 operations and cost saves eight levels. A scenario
