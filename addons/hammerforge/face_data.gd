@@ -10,19 +10,11 @@ enum UVProjection { PLANAR_X, PLANAR_Y, PLANAR_Z, BOX_UV, CYLINDRICAL }
 const UV_AXIS_EPSILON := 0.0001
 enum PaintBlend { OVERLAY, MULTIPLY, ADD }
 
-
-class PaintLayer:
-	extends Resource
-	@export var texture: Texture2D = null
-	@export var weight_image: Image = null
-	@export var blend_mode: int = PaintBlend.OVERLAY
-	@export var opacity: float = 1.0
-
-	func ensure_weight_image(size: Vector2i = Vector2i(256, 256)) -> void:
-		if weight_image == null or weight_image.is_empty():
-			weight_image = Image.create(size.x, size.y, false, Image.FORMAT_RGBA8)
-			weight_image.fill(Color(0, 0, 0, 1))
-
+## Kept as a name on `FaceData` because every call site spells it
+## `FaceData.PaintLayer`, and as a file of its own because an inner class has no
+## type a `.tscn` can name: the scene wrote the layers and refused them on load,
+## so a painted face reopened unpainted (#665). See `hf_face_paint_layer.gd`.
+const PaintLayer = preload("res://addons/hammerforge/paint/hf_face_paint_layer.gd")
 
 @export var material_idx: int = -1
 ## PLANAR_Z maps (x, y) -> (u, v), so on a face whose plane contains the Z axis,

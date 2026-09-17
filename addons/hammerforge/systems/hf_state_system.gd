@@ -71,23 +71,69 @@ func capture_state(include_transient: bool = true) -> Dictionary:
 					if gid != "":
 						info["group_id"] = gid
 					state["entities"].append(info)
-	if root.visgroup_system:
-		state["visgroups"] = root.visgroup_system.capture_visgroups()
-		state["groups"] = root.visgroup_system.capture_groups()
-	var duplicators: Array = []
-	for dup_id in root.brush_system._duplicators:
-		duplicators.append(root.brush_system._duplicators[dup_id].to_dict())
-	state["duplicators"] = duplicators
-	# A hollow remembers the solid it was shelled out of, so it can be shelled
-	# again. It travels with the level and through undo the way duplicators do.
-	state["hollows"] = root.brush_system.capture_hollows()
-	# Generated structures remember what made them, so they travel with the
-	# level and through undo the same way duplicators do.
-	state["generators"] = root.generator_system.capture() if root.generator_system else []
-	if root.prefab_system:
-		state["prefab_instances"] = root.prefab_system.capture_state()
+	state.merge(capture_registries(), true)
 	state["decals"] = capture_decals()
 	return state
+
+
+## The level state that describes brushes without being one.
+##
+## A hollow remembers the solid it was shelled out of so it can be shelled
+## again; an array remembers its count and spacing; a generator remembers what
+## made the stairs. None of them is a node, so `PackedScene.pack()` writes the
+## brushes and none of this, and a level saved with Ctrl+S reopened as loose
+## geometry with nothing that could still edit it (#665) -- and, for visgroups,
+## with members of a group the dock had never heard of (#664).
+##
+## Split out of `capture_state()` so `LevelRoot.live_registries` can put the same
+## dictionary in the `.tscn`. Two callers, one definition: a record added here
+## reaches both saves or neither.
+func capture_registries() -> Dictionary:
+	var out: Dictionary = {}
+	if root.visgroup_system:
+		out["visgroups"] = root.visgroup_system.capture_visgroups()
+		out["groups"] = root.visgroup_system.capture_groups()
+	if root.brush_system:
+		var duplicators: Array = []
+		for dup_id in root.brush_system._duplicators:
+			duplicators.append(root.brush_system._duplicators[dup_id].to_dict())
+		out["duplicators"] = duplicators
+		out["hollows"] = root.brush_system.capture_hollows()
+	out["generators"] = root.generator_system.capture() if root.generator_system else []
+	if root.prefab_system:
+		out["prefab_instances"] = root.prefab_system.capture_state()
+	return out
+
+
+## The mirror of `capture_registries()`. Reads past a key it was not given, so a
+## caller holding half a payload -- a scene written before an entry existed --
+## restores the half it has rather than clearing the rest.
+func restore_registries(state: Dictionary) -> void:
+	if root.visgroup_system:
+		root.visgroup_system.restore_visgroups(state.get("visgroups", {}))
+		root.visgroup_system.restore_groups(state.get("groups", {}))
+	if root.generator_system:
+		root.generator_system.restore(state.get("generators", []))
+	if root.brush_system:
+		root.brush_system._duplicators.clear()
+		for dup_dict in state.get("duplicators", []):
+			var dup = HFDuplicator.from_dict(dup_dict)
+			root.brush_system._duplicators[dup.duplicator_id] = dup
+			# Reapply duplicator_id meta on source brushes so Remove Array can find them.
+			for src_id in dup.source_brush_ids:
+				var src_brush = root.brush_system._brush_cache.get(src_id)
+				if is_instance_valid(src_brush):
+					src_brush.set_meta("duplicator_id", dup.duplicator_id)
+			# And on the copies, which is what you click on when you want the array
+			# back. A brush info does not carry either tag, so without this an undo
+			# leaves an array whose pieces no longer say what they belong to.
+			for copy_id in dup.get_all_instance_ids():
+				var copy_brush = root.brush_system._brush_cache.get(copy_id)
+				if is_instance_valid(copy_brush):
+					copy_brush.set_meta("duplicator_instance_of", dup.duplicator_id)
+		root.brush_system.restore_hollows(state.get("hollows", []))
+	if root.prefab_system and state.has("prefab_instances"):
+		root.prefab_system.restore_state(state["prefab_instances"])
 
 
 ## Decals placed with the decal tool. They are part of the level: without this a
@@ -233,28 +279,7 @@ func restore_state(state: Dictionary) -> void:
 				entity.set_meta("visgroups", vgs)
 			if info.has("group_id") and str(info["group_id"]) != "":
 				entity.set_meta("group_id", str(info["group_id"]))
-	if root.visgroup_system:
-		root.visgroup_system.restore_visgroups(state.get("visgroups", {}))
-		root.visgroup_system.restore_groups(state.get("groups", {}))
-	if root.generator_system:
-		root.generator_system.restore(state.get("generators", []))
-	root.brush_system._duplicators.clear()
-	for dup_dict in state.get("duplicators", []):
-		var dup = HFDuplicator.from_dict(dup_dict)
-		root.brush_system._duplicators[dup.duplicator_id] = dup
-		# Reapply duplicator_id meta on source brushes so Remove Array can find them.
-		for src_id in dup.source_brush_ids:
-			var src_brush = root.brush_system._brush_cache.get(src_id)
-			if is_instance_valid(src_brush):
-				src_brush.set_meta("duplicator_id", dup.duplicator_id)
-		# And on the copies, which is what you click on when you want the array
-		# back. A brush info does not carry either tag, so without this an undo
-		# leaves an array whose pieces no longer say what they belong to.
-		for copy_id in dup.get_all_instance_ids():
-			var copy_brush = root.brush_system._brush_cache.get(copy_id)
-			if is_instance_valid(copy_brush):
-				copy_brush.set_meta("duplicator_instance_of", dup.duplicator_id)
-	root.brush_system.restore_hollows(state.get("hollows", []))
+	restore_registries(state)
 	restore_floor_info(state.get("floor", {}))
 	restore_sun_info(state.get("sun", {}))
 	if root.draft_brushes_node:
@@ -270,8 +295,6 @@ func restore_state(state: Dictionary) -> void:
 		root._last_bake_preview_mode = int(state.get("bake_preview_mode", 0))
 	else:
 		root._last_bake_preview_mode = 0
-	if root.prefab_system and state.has("prefab_instances"):
-		root.prefab_system.restore_state(state["prefab_instances"])
 	restore_decals(state.get("decals", []))
 	if skipped > 0:
 		HFLog.warn("HFStateSystem: skipped %d entry this level could not use" % skipped)

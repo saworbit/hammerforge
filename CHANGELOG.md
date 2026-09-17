@@ -228,6 +228,42 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the exporter next.
 
 ### Fixed
+- **Ctrl+S keeps the records that describe the brushes, not only the brushes**
+  (#664, #665). A level has two saves. `capture_state()` writes the `.hflevel`
+  and carries everything; Godot's own Ctrl+S writes the `.tscn`, which is
+  `PackedScene.pack()` over the nodes. Visgroups, groups, arrays, hollows,
+  generators and prefab instances are not nodes -- each lives on a `RefCounted`
+  subsystem -- so the scene save wrote all eighteen brushes of a furnished level
+  and none of the five registries that could still edit them. A spiral stair
+  whose step count the mapper was promised they could change came back as loose
+  geometry; `update_hollow()` had no record to re-shell; the array controls went
+  dead with nothing to follow. Worse for visgroups, where membership *is* node
+  metadata and always survived: a visgroup hidden at save time reopened with its
+  brushes invisible, still claiming to belong to a group the dock had never heard
+  of, and no control anywhere that could show them. `LevelRoot.live_registries`
+  is an `@export_storage` dictionary holding exactly what `pack()` drops.
+  Computed on read rather than kept in step, because the value has to be current
+  at the instant something packs the scene and no one notification covers every
+  packer -- the editor's save, a tool script and the exploratory harness each
+  reach `pack()` by a different route. It is filled and emptied by
+  `capture_registries()`/`restore_registries()`, split out of `capture_state()`
+  so the two saves share one definition and a record added later reaches both or
+  neither. Scenes already saved without the list are repaired rather than left
+  broken: every node carrying a `visgroups` meta names a visgroup that should
+  exist, so `reconcile_visgroups_from_members()` puts it back on open. A
+  recovered visgroup is visible, because the flag is not recoverable from the
+  members and that is the direction that does not leave geometry unreachable.
+  Two more things the same save dropped for their own reasons. A paint layer is
+  a node and the scene always wrote it, but `layers` was an index built only by
+  `create_layer()`, so a reopened level had every layer node present, an empty
+  index, and a second `layer_0` added on top of the one `_ready()` could not
+  see -- and the layer nodes had no `owner`, which is what decides whether
+  `pack()` walks past a node at all. And a face's surface paint came back empty
+  with `Attempted to assign an object into a TypedArray` on the console:
+  `FaceData.PaintLayer` was an inner class, which has no type a `.tscn` can
+  name, so the scene wrote the layers and the engine refused them on load. It is
+  `HFFacePaintLayer` in its own file now, still reachable as
+  `FaceData.PaintLayer` through a const preload, so no call site changed.
 - **A visgroup can be renamed, a prefab variant deleted, a displacement's power
   changed** (#615). Three level-editing operations were implemented, carefully,
   and had no entry point outside the GUT suite. Each was the missing half of a

@@ -343,6 +343,34 @@ var _hflevel_autosave_keep: int = 5
 		_set_hflevel_autosave_keep(value)
 	get:
 		return _hflevel_autosave_keep
+## The level records that are not nodes, so the scene carries them too.
+##
+## Visgroups, groups, arrays, hollows, generators and prefab instances live on
+## `RefCounted` subsystems, and `PackedScene.pack()` writes nodes. Godot's own
+## Ctrl+S therefore wrote every brush and none of the records that describe
+## them: a reopened level was loose geometry the structure panels could no
+## longer find, and a visgroup hidden at save time came back with its brushes
+## invisible and nothing in the dock to show them (#664, #665).
+##
+## Computed on read rather than kept in step, because the value has to be
+## current at the instant something packs the scene and no one notification
+## covers every packer -- the editor's save, a tool script and the exploratory
+## harness each reach `pack()` by a different route. `@export_storage` because
+## this is serialization, not a control: the inspector has nothing to do with it.
+##
+## Empty on a scene that keeps only its bake (#645): these records describe
+## brushes that scene does not hold, its `.hflevel` carries them already, and the
+## whole point of that setting is a scene that stays small.
+@export_storage var live_registries: Dictionary = {}:
+	get:
+		if not scene_keeps_brushes():
+			return {}
+		return state_system.capture_registries() if state_system else _pending_registries
+	set(value):
+		_pending_registries = value if value is Dictionary else {}
+## What a scene handed over before the subsystems existed to take it. Emptied by
+## `_restore_live_registries()` once they have.
+var _pending_registries: Dictionary = {}
 @export var hflevel_autosave_path: String = "res://.hammerforge/autosave.hflevel"
 @export var hflevel_compress: bool = true
 @export var entity_definitions_path: String = "res://addons/hammerforge/entities.json"
@@ -820,6 +848,11 @@ func _ready():
 	file_system = HFFileSystemType.new(self)
 	if _should_initialize_editor_systems():
 		_initialize_editor_systems()
+	# After the editor systems, because they are what holds the registries, and
+	# after `reconcile_external_structure()` above, because a hollow or an array
+	# record names its brushes by id and the lookup goes through the cache that
+	# pass builds.
+	_restore_live_registries()
 	# A scene that keeps only its geometry has no brushes in it, so the level is
 	# loaded from the `.hflevel` beside it (#624). Deferred because a load rebuilds
 	# the level and the subsystems above have only just been built.
@@ -837,6 +870,20 @@ func _ready():
 		_setup_runtime_reload()
 		if auto_spawn_player:
 			call_deferred("_start_playtest")
+
+
+## Take back what the scene carried, and repair what an older scene did not.
+func _restore_live_registries() -> void:
+	if state_system and not _pending_registries.is_empty():
+		state_system.restore_registries(_pending_registries)
+		_pending_registries = {}
+	# A scene saved before `live_registries` existed has the membership and not
+	# the list, because membership is node metadata and always survived. Every
+	# node carrying a `visgroups` meta names a visgroup that should exist, so the
+	# list is recoverable from them -- and without it those brushes reopen hidden
+	# with no control that shows them (#664).
+	if visgroup_system:
+		visgroup_system.reconcile_visgroups_from_members()
 
 
 func _should_initialize_editor_systems() -> bool:
