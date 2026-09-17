@@ -136,6 +136,7 @@ SCENARIOS = [
     "undo-depth",
     "material-palette",
     "map-real-world",
+    "scene-reopen",
 ]
 
 # Generous: chaos runs 300 operations and cost saves eight levels. A scenario
