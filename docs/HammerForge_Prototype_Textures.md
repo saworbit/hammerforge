@@ -68,7 +68,7 @@ Godot 4.7 automatically imports SVGs as `CompressedTexture2D` resources.
 ## Usage via Editor UI
 
 1. Open the **Paint** tab in the HammerForge dock.
-2. In the **Materials** section, click **Refresh Prototypes**.
+2. In the **Materials** section, click **Refresh Prototypes**. **Remove Unused** beside it takes back the slots the level never used.
 3. All 150 prototype materials are added to the palette and displayed as a visual thumbnail grid in the **Material Browser**.
 4. Use the **pattern dropdown**, **color swatches**, or **search bar** to filter the grid.
 5. Click a thumbnail to select a material. Enable **Face Select Mode** and click faces in the viewport.

@@ -229,6 +229,24 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the exporter next.
 
 ### Fixed
+- **The palette has a way back out** (#661). A fresh level's palette is empty, so
+  **Refresh Prototypes** is the first button a mapper presses, and it adds 150
+  materials in one go. The only way back was the minus button, 149 times, and
+  each press walked every brush in the level and rebuilt every preview: 124 ms on
+  a six brush room, O(removals x brushes) on a real one, assuming the mapper was
+  willing to press a button 149 times to undo one press. The first thing a new
+  user does was one-way.
+  `remove_materials_from_palette()` takes a set. It builds one index map -- where
+  each surviving slot lands, -1 for the ones going -- applies it in a single walk
+  of the level and rebuilds the previews once, so the cost is the size of the
+  level rather than the size of the removal. **Clear** and **Remove Unused** are
+  one line each on top of it, and both are in the palette's button row beside the
+  one that fills it. A face whose slot goes is unset rather than left dangling,
+  and keeps its geometry.
+  No Validate check for a mostly dead palette, which the issue floats: a palette
+  with unused slots is the ordinary state while building, and Refresh Prototypes
+  gives you 150 of them on purpose. The buttons report their count in a toast
+  when pressed, which is the same information without the nagging.
 - **Justify moves a hand-made UV layout instead of throwing it away** (#654).
   `justify_selected_faces()` reads a face's current UV rectangle out of
   `custom_uvs`, works out the shift that would put it where the button says, and

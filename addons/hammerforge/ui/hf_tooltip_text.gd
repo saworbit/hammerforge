@@ -97,6 +97,10 @@ const TEXTS := {
 	"material_remove": "Remove selected material from palette",
 	"material_load_prototypes":
 	"Load built-in prototype textures into the palette\nUse this first if the browser looks empty",
+	"material_remove_unused":
+	"Drop every palette slot no face is using\nRefresh Prototypes adds 150; this is the way back",
+	"material_clear":
+	"Empty the palette\nFaces that used a slot become unset, and keep their geometry",
 	"material_save_library":
 	"Write the palette out as a JSON library\nA material made here has to be saved to disk first, or its slot saves empty",
 	"material_load_library":
