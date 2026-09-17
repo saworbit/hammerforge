@@ -894,6 +894,8 @@ Click **Check Bake Issues** to scan for potential problems before baking:
 
 It also says when the level has no player spawn, or when the spawn sits outside the level's bounds. This one is deliberately geometric rather than the physics check behind **Validate Spawn**: that needs collision, and collision comes from the bake, which is why the button bakes first. Validate runs on an unbaked level, so it answers the question it can answer honestly without one.
 
+It reports two brushes in the same place: `2 brushes occupy the same space: crate_1, crate_2`. That is Ctrl+D followed by a drag that did not take — the copy is exactly on the original, so nothing looks wrong in the viewport, and what the level gets is doubled triangles over the whole overlap and z-fighting on every coincident face. The check is deliberately narrow: position, size and shape all matching within an epsilon. Brushes are meant to intersect, so ordinary overlap is not reported. There is no auto-fix, because deleting one of a pair is a guess about which one you want.
+
 A prefab instance whose `.hfprefab` has been deleted or moved is reported as a missing dependency. The instance goes on working, because its brushes are real brushes, so the only other sign is Cycle Variant doing nothing.
 
 `validate_level()` also resolves every I/O connection's target name against the entities in the level and reports the ones that miss: `I/O connection points at 'door_1', which no entity answers to: button_1.OnPressed`. Wiring is held by name, so renaming a target in the Scene dock or in the Objects tab breaks every wire aimed at it. It is reported only; deleting a mapper's wiring is not something auto-fix does on its own.

@@ -28,6 +28,18 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the combination that produces stairs nothing can use.
 
 ### Added
+- **Validate reports two brushes in the same place** (#702). The most common
+  mistake in brush editing had no check: Ctrl+D followed by a drag that did not
+  take leaves the copy exactly on the original, so nothing looks wrong in the
+  viewport, and what the level gets is doubled triangles over the whole overlap
+  and z-fighting on every coincident face - which shows up in the game as
+  flickering surfaces that are hard to trace back to their cause. The check is
+  the narrow one: position, size and shape all matching within an epsilon, which
+  catches the duplicate left in place without flagging ordinary intersecting
+  geometry, because brushes are meant to intersect. No auto-fix, since deleting
+  one of a pair is a guess about which one the mapper wants.
+
+### Added
 - **Export Game Scene** (#697, #698). The playtest export was the only path in
   the plugin that turned an entity marker into the real node it stands for - a
   `light_point` into an `OmniLight3D`, a `logic_timer` into a `Timer` - so it was
