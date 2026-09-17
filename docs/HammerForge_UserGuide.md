@@ -730,12 +730,28 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
 Entity I/O connections are automatically translated into live Godot signals when you bake or export a playtest scene. No manual signal wiring is required.
 
 **How it works**: An `HFIODispatcher` node is injected into the exported/baked scene. On `_ready()`, it scans all entities for `entity_io_outputs` metadata and builds a connection table. When a source entity fires an output, the dispatcher delivers to each target via:
+0. The engine method the target's own class granted for that input name
 1. Direct method call (e.g. `Open()`, `Kill()`)
 2. Snake-case variant (e.g. `turn_on()` for `TurnOn`)
 3. Generic handler (`_on_io_input(input_name, parameter)`)
 4. User signal (`io_Open` emitted on the target)
 
 Only methods the target's own script defines are called at steps 1 and 2. An input whose name resolves to an engine method -- `QueueFree`, `Free`, `Hide`, `SetScript` and anything else on `Node` or `Object`, before or after the snake-case conversion -- is not called, and falls through to the generic handler and the user signal instead, with a warning naming the input and the target. Handle those deliberately in `_on_io_input` if your game wants them.
+
+Step 0 is how a shipped class says it means one of those on purpose. An entity definition may carry `input_methods` naming the engine method behind an input, the same way a property carries `maps_to` naming the engine property behind it:
+
+```json
+"logic_timer": {
+  "class": "Timer",
+  "input_methods": { "Start": "start", "Stop": "stop" }
+}
+```
+
+The grant is per class, so it never widens what a free-text input name can reach. A granted method is called in the shape the engine declares: one that can take no argument is called with none when the connection carries no parameter, and a parameter that is there is converted to the type the argument declares. `Start` with `2.5` in the parameter field is a two and a half second timer.
+
+**What raises an output**: a trigger volume raises its own. A baked `trigger_once` or `trigger_multiple` fires `OnStartTouch` when a body enters it and `OnEndTouch` when one leaves, with no help from the game -- a body entering is the whole event. `trigger_once` fires the first time and then stops, which is the only thing separating it from `trigger_multiple`.
+
+Everything else is the game's to raise, because it depends on something the game decides. Pressing is the clearest case: the playtest player rays from the camera on its **Use** key (**E**), and when it finds a `func_button` it calls `dispatcher.fire(name, "OnPressed")`. A game with its own player does the same thing in its own interact code. The dispatcher connects a trigger's signals at runtime only -- a regular editor bake attaches a dispatcher too, and a volume that ran the graph because a mapper dragged a brush through it is not wanted.
 
 At steps 1 and 2 the call shape comes from the handler rather than from whether a parameter was typed. A handler declared `func Open()` is called with no argument even when the connection carries a parameter, and `func Open(parameter: String)` is called with the empty string when the connection carries none. A handler needing two or more arguments cannot be satisfied from one parameter field, so it is skipped with a warning and the input falls through to the generic handler and the user signal.
 
@@ -799,7 +815,7 @@ Click **Export Playtest Build** in **Test → Advanced Bake** to create a standa
 - If no spawn exists, auto-creates a default (fully undoable with state capture).
 - Bakes the level in Full mode.
 - Packs baked geometry, brush entities, point entities, DefaultSun (if present), and fallback lighting (DirectionalLight3D + WorldEnvironment if no light exists) into a temporary scene at `user://hammerforge_playtest.tscn`.
-- Adds the playtest player controller at the active spawn and applies the spawn's yaw.
+- Adds the playtest player controller at the active spawn and applies the spawn's yaw. It walks on **WASD**, jumps on **Space**, and presses a `func_button` with **E** when the reticle is on one within 2.5 units.
 - Preserves world transforms while reparenting export content and recursively owns nested geometry/collision so it survives scene packing.
 - Injects the entity I/O runtime automatically when the exported content contains connections.
 - Initializes only the runtime level core in the exported scene. Grid, drawing, snapping, selection, previews, prefab authoring, validation, undo, and other editor services are not loaded or constructed by export templates.
