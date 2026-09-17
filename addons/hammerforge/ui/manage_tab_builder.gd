@@ -302,6 +302,13 @@ func build(parent: Control) -> void:
 	dock.export_playtest_btn.tooltip_text = ("Validate, bake optimized, and launch as playable scene")
 	adv.add_child(dock.export_playtest_btn)
 
+	dock.export_game_scene_btn = dock._make_button("Export Game Scene")
+	dock.export_game_scene_btn.tooltip_text = (
+		"Save a .tscn the game loads: the same geometry and the same real lights,\n"
+		+ "doors and triggers as a playtest, with no debug player, sun or environment"
+	)
+	adv.add_child(dock.export_game_scene_btn)
+
 	# --- Actions section ---
 	var act_sec = hf_collapsible_section.create("Actions", false)
 	root_vbox.add_child(act_sec)
@@ -606,6 +613,8 @@ func connect_signals() -> void:
 		dock.quick_play_area_btn.pressed.connect(dock._on_quick_play_selected_area)
 	if dock.export_playtest_btn:
 		dock.export_playtest_btn.pressed.connect(dock._on_export_playtest)
+	if dock.export_game_scene_btn:
+		dock.export_game_scene_btn.pressed.connect(dock._on_export_game_scene)
 	if dock._spawn_validate_btn:
 		dock._spawn_validate_btn.pressed.connect(dock._on_spawn_validate)
 	if dock._spawn_auto_create_btn:

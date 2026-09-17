@@ -582,9 +582,26 @@ func _postprocess_mesh(
 			arr_mesh = _unwrap_uv0(arr_mesh)
 			result = arr_mesh
 		if unwrap_uv2:
-			var unwrapped = arr_mesh.lightmap_unwrap(Transform3D.IDENTITY, uv2_texel_size)
-			if unwrapped is Mesh:
-				result = unwrapped
+			# `lightmap_unwrap()` returns an Error and mutates the mesh in place, so
+			# the branch that checked for a Mesh was never true and the Error went
+			# into a local nobody read (#700). The unwrap itself worked, because
+			# `arr_mesh` and `result` are the same object. What was missing was the
+			# failure: ERR_UNAVAILABLE when the engine has no unwrapper, and
+			# ERR_CANT_CREATE when it cannot lay the mesh out. Either way the bake
+			# reported success, the checkbox stayed ticked, and a LightmapGI over
+			# the result baked black with nothing said.
+			var unwrap_err: int = arr_mesh.lightmap_unwrap(Transform3D.IDENTITY, uv2_texel_size)
+			if unwrap_err != OK:
+				HFLog.warn(
+					(
+						(
+							"Bake: lightmap UV2 unwrap failed (%s), so this mesh has no UV2 and a "
+							+ "LightmapGI over it will bake black."
+						)
+						% error_string(unwrap_err)
+					)
+				)
+			result = arr_mesh
 		if generate_lods and result is ArrayMesh:
 			result = _mesh_with_lods(result as ArrayMesh)
 	return result

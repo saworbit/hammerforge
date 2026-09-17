@@ -216,6 +216,7 @@ var primary_quick_play_btn: Button = null
 var quick_play_camera_btn: Button = null
 var quick_play_area_btn: Button = null
 var export_playtest_btn: Button = null
+var export_game_scene_btn: Button = null
 # -- Editor toggles (built programmatically in _build_manage_tab) --
 var commit_freeze: CheckBox = null
 var show_hud: CheckBox = null
@@ -3576,6 +3577,10 @@ func _on_quick_play_selected_area() -> void:
 
 func _on_export_playtest() -> void:
 	await HFDockManageHandler.on_export_playtest(self)
+
+
+func _on_export_game_scene() -> void:
+	await HFDockManageHandler.on_export_game_scene(self)
 
 
 func _on_spawn_validate() -> void:

@@ -483,3 +483,74 @@ func test_an_instantiated_scene_survives_packing_once():
 	back.free()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	_remove_crate_scene()
+
+
+# ===========================================================================
+# A scene the game loads (#697, #698)
+# ===========================================================================
+
+
+func _child_classes(node: Node) -> Array:
+	var out: Array = []
+	for child in node.get_children():
+		out.append(child.get_class())
+	return out
+
+
+func test_a_game_scene_carries_no_debug_rig():
+	# The playtest export was the only path that turned an entity marker into a
+	# real node, so it was also the only way to get a shippable scene - and it
+	# always appended a debug FPS controller, a flat grey environment and a
+	# fallback sun. Two character controllers in one scene is a bug in the game.
+	var path := "user://test_game_scene.tscn"
+	assert_true(root.export_game_scene(path), "the export should succeed")
+	var packed: PackedScene = ResourceLoader.load(path)
+	assert_not_null(packed)
+	var scene: Node = packed.instantiate()
+	add_child_autoqfree(scene)
+	assert_null(scene.get_node_or_null("PlaytestPlayer"), "a game brings its own player")
+	assert_null(scene.get_node_or_null("PlaytestSun"), "and its own lighting decisions")
+	assert_null(scene.get_node_or_null("PlaytestEnv"), "and its own environment")
+	assert_false("CharacterBody3D" in _child_classes(scene), "no controller of any name")
+	DirAccess.remove_absolute(path)
+
+
+func test_a_playtest_scene_still_carries_its_rig():
+	# The same function serves both, so the default has to stay what it was.
+	var path := "user://test_playtest_still_rigged.tscn"
+	assert_true(root.export_playtest_scene(path))
+	var packed: PackedScene = ResourceLoader.load(path)
+	assert_not_null(packed)
+	var scene: Node = packed.instantiate()
+	add_child_autoqfree(scene)
+	assert_not_null(scene.get_node_or_null("PlaytestPlayer"), "Quick Play needs its player")
+	assert_not_null(scene.get_node_or_null("PlaytestEnv"))
+	DirAccess.remove_absolute(path)
+
+
+func test_a_game_scene_builds_the_real_light_a_marker_stands_for():
+	# light_point is a marker everywhere in the editor, and this is the path that
+	# turns it into an OmniLight3D. Without it a level has no lights in it at all.
+	var marker: Node3D = (
+		root
+		. _restore_entity_from_info(
+			{
+				"entity_type": "light_point",
+				"entity_class": "light_point",
+				"transform": Transform3D(Basis.IDENTITY, Vector3(0, 3, 0)),
+				"properties": {"range": 8.0},
+				"name": "lamp_1",
+			}
+		)
+	)
+	assert_not_null(marker, "the light marker should have been placed")
+	var path := "user://test_game_scene_light.tscn"
+	assert_true(root.export_game_scene(path))
+	var packed: PackedScene = ResourceLoader.load(path)
+	var scene: Node = packed.instantiate()
+	add_child_autoqfree(scene)
+	var lamp: Node = scene.get_node_or_null("lamp_1")
+	assert_not_null(lamp, "the marker should be in the exported scene")
+	assert_true(lamp is OmniLight3D, "and it should be the light it stands for")
+	assert_null(scene.get_node_or_null("PlaytestSun"), "a level with a light needs no fallback")
+	DirAccess.remove_absolute(path)

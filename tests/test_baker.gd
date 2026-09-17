@@ -688,6 +688,41 @@ func test_face_material_bake_generates_lods():
 	assert_gt(importer.get_surface_lod_count(0), 0, "Generate LODs was on and the mesh has no LODs")
 
 
+func test_an_unwrap_that_fails_says_so_and_keeps_the_mesh():
+	# `lightmap_unwrap()` returns an Error and mutates the mesh in place, so the
+	# branch that checked whether it returned a Mesh was never true and the Error
+	# went into a local nobody read. The unwrap worked anyway, because the two
+	# names are the same object. What was missing was the failure: the bake
+	# reported success, the checkbox stayed ticked, and a LightmapGI over the
+	# result baked black with nothing said (#700).
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for _i in 3:
+		st.set_normal(Vector3.UP)
+		st.set_uv(Vector2.ZERO)
+		st.add_vertex(Vector3.ZERO)
+	var degenerate: ArrayMesh = st.commit()
+	assert_eq(
+		degenerate.lightmap_unwrap(Transform3D.IDENTITY, 0.1),
+		ERR_CANT_CREATE,
+		"a zero-area surface is what the engine refuses to lay out"
+	)
+
+	st = SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for _i in 3:
+		st.set_normal(Vector3.UP)
+		st.set_uv(Vector2.ZERO)
+		st.add_vertex(Vector3.ZERO)
+	var again: ArrayMesh = st.commit()
+	var out: Mesh = baker._postprocess_mesh(again, false, true, 0.1)
+	assert_not_null(out, "a mesh that cannot be unwrapped is still the mesh")
+	assert_null(
+		out.surface_get_arrays(0)[Mesh.ARRAY_TEX_UV2],
+		"and it comes back with no UV2, which is the thing worth warning about"
+	)
+
+
 func test_face_material_bake_unwraps_lightmap_uv2():
 	var mat_mgr = MaterialManager.new()
 	add_child_autoqfree(mat_mgr)
