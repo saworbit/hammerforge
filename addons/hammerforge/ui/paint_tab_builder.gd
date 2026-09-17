@@ -336,6 +336,14 @@ func build(parent: Control) -> void:
 	dock.material_load_prototypes = Button.new()
 	dock.material_load_prototypes.text = "Refresh Prototypes"
 	mat_btn_row.add_child(dock.material_load_prototypes)
+	# Refresh Prototypes puts 150 slots in with one press, so the way back is one
+	# press too. Before these, it was the minus button 149 times (#661).
+	dock.material_remove_unused = Button.new()
+	dock.material_remove_unused.text = "Remove Unused"
+	mat_btn_row.add_child(dock.material_remove_unused)
+	dock.material_clear = Button.new()
+	dock.material_clear.text = "Clear"
+	mat_btn_row.add_child(dock.material_clear)
 	mc.add_child(mat_btn_row)
 
 	# The User Guide has listed Save and Load under Material Library since before
@@ -604,6 +612,10 @@ func connect_signals() -> void:
 		dock.material_remove.pressed.connect(dock._on_material_remove)
 	if dock.material_load_prototypes:
 		dock.material_load_prototypes.pressed.connect(dock._on_material_load_prototypes)
+	if dock.material_remove_unused:
+		dock.material_remove_unused.pressed.connect(dock._on_material_remove_unused)
+	if dock.material_clear:
+		dock.material_clear.pressed.connect(dock._on_material_clear)
 	if dock.material_save_library:
 		dock.material_save_library.pressed.connect(dock._on_material_save_library)
 	if dock.material_load_library:

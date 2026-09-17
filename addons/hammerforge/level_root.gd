@@ -3083,6 +3083,94 @@ func remove_material_from_palette(index: int) -> void:
 	material_list_changed.emit()
 
 
+## Remove several palette slots in one pass. Returns how many went.
+##
+## The single-slot path walks every brush and rebuilds every preview per call, so
+## tidying a 150 slot palette down to one was 149 of those: O(removals x brushes)
+## and 124 ms on a six brush room, minutes of frozen editor on a real level, and
+## 149 presses of a button that removes one thing (#661). Add Prototype Textures
+## puts 150 in with one press, so the way back has to be one press too.
+func remove_materials_from_palette(indices: Array) -> int:
+	if not material_manager:
+		return 0
+	var doomed: Dictionary = {}
+	for value in indices:
+		var idx := int(value)
+		if idx >= 0 and idx < material_manager.materials.size():
+			doomed[idx] = true
+	if doomed.is_empty():
+		return 0
+	# Where each surviving slot lands, and -1 for the ones going. Built once and
+	# applied once, rather than shifting every face down by one per removal.
+	var moved: Array[int] = []
+	var kept: Array[Material] = []
+	for i in material_manager.materials.size():
+		if doomed.has(i):
+			moved.append(-1)
+		else:
+			moved.append(kept.size())
+			kept.append(material_manager.materials[i])
+	material_manager.materials = kept
+	_apply_material_index_map(moved)
+	_refresh_brush_previews()
+	material_list_changed.emit()
+	return doomed.size()
+
+
+## Every palette slot with nothing pointing at it.
+func unused_material_slots() -> Array:
+	var used: Dictionary = {}
+	for node in _iter_managed_brush_nodes():
+		var brush := node as DraftBrush
+		if not brush or not is_instance_valid(brush):
+			continue
+		for face in brush.faces:
+			if face != null and face.material_idx >= 0:
+				used[int(face.material_idx)] = true
+	var out: Array = []
+	if not material_manager:
+		return out
+	for i in material_manager.materials.size():
+		if not used.has(i):
+			out.append(i)
+	return out
+
+
+## Drop the palette slots nothing uses. Returns how many went.
+func remove_unused_materials() -> int:
+	return remove_materials_from_palette(unused_material_slots())
+
+
+## Empty the palette, and unset every face that pointed into it.
+func clear_palette() -> int:
+	if not material_manager:
+		return 0
+	var all_slots: Array = []
+	for i in material_manager.materials.size():
+		all_slots.append(i)
+	return remove_materials_from_palette(all_slots)
+
+
+## Point every face at where its slot moved to, in one walk of the level.
+func _apply_material_index_map(moved: Array) -> void:
+	for node in _iter_managed_brush_nodes():
+		var brush := node as DraftBrush
+		if not brush or not is_instance_valid(brush):
+			continue
+		var changed := false
+		for face in brush.faces:
+			if face == null:
+				continue
+			var idx := int(face.material_idx)
+			if idx < 0 or idx >= moved.size():
+				continue
+			if int(moved[idx]) != idx:
+				face.material_idx = int(moved[idx])
+				changed = true
+		if changed:
+			tag_brush_dirty(brush.brush_id)
+
+
 ## Shifts face material indices down over a removed palette slot. Faces that
 ## pointed at the removed slot become -1, which is the unset value.
 func _remap_face_material_indices(removed_index: int) -> void:

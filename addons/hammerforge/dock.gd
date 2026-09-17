@@ -287,6 +287,8 @@ var materials_list: ItemList = null
 var material_add: Button = null
 var material_remove: Button = null
 var material_load_prototypes: Button = null
+var material_remove_unused: Button = null
+var material_clear: Button = null
 var material_save_library: Button = null
 var material_load_library: Button = null
 var material_assign: Button = null
@@ -4203,6 +4205,35 @@ func _on_material_remove() -> void:
 	)
 	_selected_material_index = -1
 	_sync_materials_from_root()
+
+
+func _on_material_remove_unused() -> void:
+	if not level_root:
+		return
+	var dead: int = level_root.unused_material_slots().size()
+	if dead <= 0:
+		show_toast("Every palette slot is in use", 0)
+		return
+	_commit_state_action("Remove Unused Materials", "remove_unused_materials")
+	_selected_material_index = -1
+	_sync_materials_from_root()
+	show_toast("Removed %d unused material%s" % [dead, "" if dead == 1 else "s"], 0)
+
+
+func _on_material_clear() -> void:
+	if not level_root:
+		return
+	var held: int = level_root.get_materials().size()
+	if held <= 0:
+		show_toast("The palette is already empty", 0)
+		return
+	_commit_state_action("Clear Palette", "clear_palette")
+	_selected_material_index = -1
+	_sync_materials_from_root()
+	show_toast(
+		"Cleared %d material%s; faces that used them are unset" % [held, "" if held == 1 else "s"],
+		0
+	)
 
 
 func _on_material_load_prototypes() -> void:
