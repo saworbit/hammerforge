@@ -89,6 +89,93 @@ func test_a_bake_that_drops_face_materials_says_so() -> void:
 	)
 
 
+func test_a_cutter_that_drops_face_materials_says_so() -> void:
+	# The mirror of the test above, for the case a mapper hits by accident. Drawing
+	# a cutter turns the face-material path off for the whole level, and the only
+	# thing that said so was a Console line: the checkbox stayed ticked and the
+	# Manage tab looked exactly as it had.
+	var root := _fresh_root()
+	root.bake_use_face_materials = true
+	root.set_materials([_palette_material(Color.RED), _palette_material(Color.BLUE)])
+	var brush = (
+		root
+		. create_brush_from_info(
+			{
+				"shape": LevelRoot.BrushShape.BOX,
+				"size": Vector3(64, 64, 64),
+				"center": Vector3.ZERO,
+				"operation": CSGShape3D.OPERATION_UNION,
+				"brush_id": "textured_wall",
+			}
+		)
+	)
+	brush.faces[0].material_idx = 1
+	(
+		root
+		. create_brush_from_info(
+			{
+				"shape": LevelRoot.BrushShape.BOX,
+				"size": Vector3(16, 16, 16),
+				"center": Vector3.ZERO,
+				"operation": CSGShape3D.OPERATION_SUBTRACTION,
+				"brush_id": "window_cutter",
+			}
+		)
+	)
+
+	var messages: Array = []
+	root.user_message.connect(func(text: String, _severity: int) -> void: messages.append(text))
+	await root.bake(true, false, 0)
+
+	var said := ""
+	for text in messages:
+		if str(text).contains("Per-face materials"):
+			said = str(text)
+	assert_ne(said, "", "drawing a cutter is not a choice to stop texturing the level")
+	assert_true(said.contains("subtractive brush"), "and the message names the cause: %s" % said)
+
+
+func test_a_cutter_with_nothing_textured_says_nothing() -> void:
+	# Same guard the checkbox-off branch uses. A level with nothing painted on it
+	# loses nothing by taking the CSG path, so there is nothing to say.
+	var root := _fresh_root()
+	root.bake_use_face_materials = true
+	(
+		root
+		. create_brush_from_info(
+			{
+				"shape": LevelRoot.BrushShape.BOX,
+				"size": Vector3(64, 64, 64),
+				"center": Vector3.ZERO,
+				"operation": CSGShape3D.OPERATION_UNION,
+				"brush_id": "plain_wall",
+			}
+		)
+	)
+	(
+		root
+		. create_brush_from_info(
+			{
+				"shape": LevelRoot.BrushShape.BOX,
+				"size": Vector3(16, 16, 16),
+				"center": Vector3.ZERO,
+				"operation": CSGShape3D.OPERATION_SUBTRACTION,
+				"brush_id": "plain_cutter",
+			}
+		)
+	)
+
+	var messages: Array = []
+	root.user_message.connect(func(text: String, _severity: int) -> void: messages.append(text))
+	await root.bake(true, false, 0)
+
+	var said := false
+	for text in messages:
+		if str(text).contains("Per-face materials"):
+			said = true
+	assert_false(said, "nothing painted, nothing lost, nothing to say")
+
+
 func test_a_bake_with_no_face_materials_says_nothing_about_them() -> void:
 	var root := _fresh_root()
 	root.bake_use_face_materials = false

@@ -559,8 +559,27 @@ func _has_effective_structural_subtractors() -> bool:
 
 
 func _container_has_effective_subtractor(container: Node3D, force_subtract: bool = false) -> bool:
+	return _count_effective_subtractors(container, force_subtract, true) > 0
+
+
+## How many cutters are in the level. Same walk as the test above, counted rather
+## than answered yes or no, so the message that says the face-material path was
+## dropped can name how many brushes caused it (#694).
+func _count_effective_structural_subtractors() -> int:
+	var total := 0
+	for container in [root.draft_brushes_node, root.generated_floors, root.generated_walls]:
+		total += _count_effective_subtractors(container)
+	if root.commit_freeze:
+		total += _count_effective_subtractors(root.committed_node, true)
+	return total
+
+
+func _count_effective_subtractors(
+	container: Node3D, force_subtract: bool = false, stop_at_first: bool = false
+) -> int:
 	if not container:
-		return false
+		return 0
+	var total := 0
 	for child in container.get_children():
 		if not (child is DraftBrush) or root.is_entity_node(child):
 			continue
@@ -570,8 +589,10 @@ func _container_has_effective_subtractor(container: Node3D, force_subtract: bool
 		if not _is_structural_brush(brush):
 			continue
 		if force_subtract or brush.operation == CSGShape3D.OPERATION_SUBTRACTION:
-			return true
-	return false
+			total += 1
+			if stop_at_first:
+				return total
+	return total
 
 
 ## Remove the exact set of dirty tags represented by a started bake.
@@ -730,6 +751,22 @@ func _bake_impl(
 		# Keep every effective cutter by switching this bake to CSG.
 		bake_options["use_face_materials"] = false
 		root._log("Face-material bake switched to CSG to preserve active cuts")
+		# And say so where the mapper is looking. The branch below has always sent a
+		# user_message for the case they chose - Use Face Materials unticked by hand
+		# - while the case they hit by accident, by drawing a cutter, said nothing
+		# anywhere but the Console: the checkbox stayed ticked and the Manage tab
+		# looked exactly as it had (#694). Only worth saying when there is
+		# something to lose, which is the same guard the branch below uses.
+		if _faces_carry_materials():
+			var why := "this bake was asked for as CSG"
+			if not force_csg:
+				var cutters := _count_effective_structural_subtractors()
+				var one := cutters == 1
+				why = (
+					"the level has %d subtractive brush%s, which %s the CSG path"
+					% [cutters, "" if one else "es", "needs" if one else "need"]
+				)
+			root.emit_signal("user_message", "Per-face materials were not baked: %s" % why, 1)
 	elif not root.bake_use_face_materials and _faces_carry_materials():
 		# The only log on this path used to fire the other way round, so the
 		# silent case was a mapper texturing a level, pressing Bake and getting one
