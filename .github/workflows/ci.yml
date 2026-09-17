@@ -245,9 +245,10 @@ jobs:
 
       - name: Check every shard reported
         run: |
-          # Flat glob, matching exactly what the update step below consumes --
-          # a recursive find here could count logs this glob would not see.
-          found=$(ls shard-logs/gut-shard-*.log 2>/dev/null | wc -l)
+          # -maxdepth 1 so this counts exactly what the update step below
+          # globs: a recursive find would count logs that glob cannot see, and
+          # `ls` here trips shellcheck SC2012, which actionlint fails on.
+          found=$(find shard-logs -maxdepth 1 -name 'gut-shard-*.log' | wc -l)
           if [ "$found" -ne "$SHARDS" ]; then
             echo "::error::expected $SHARDS shard logs, found $found"
             exit 1
