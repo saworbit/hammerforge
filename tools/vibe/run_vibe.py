@@ -134,6 +134,8 @@ SCENARIOS = [
     "bake-chunking",
     "scale-leftovers",
     "undo-depth",
+    "material-palette",
+    "map-real-world",
 ]
 
 # Generous: chaos runs 300 operations and cost saves eight levels. A scenario
