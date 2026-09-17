@@ -371,6 +371,28 @@ func test_uncompressed_payload_keeps_legacy_header():
 	assert_eq(parsed.get("name"), "plain")
 
 
+func test_uncompressed_payload_is_written_one_value_per_line():
+	# The reason to turn compression off is to put the level in version control, and
+	# a level written as a single line cannot be diffed, reviewed or merged (#708).
+	var data := {"name": "plain", "brushes": [{"id": "b1"}, {"id": "b2"}]}
+	var job: Dictionary = HFLevelIO.encode_payload_job(data, false)
+	var payload: PackedByteArray = job.get("payload", PackedByteArray())
+	var text := payload.get_string_from_utf8()
+	assert_gt(text.split("\n").size(), 8, "An uncompressed level should be one value per line")
+	var parsed: Dictionary = HFLevelIO.parse_payload(payload)
+	assert_eq(parsed.get("name"), "plain")
+	assert_eq((parsed.get("brushes") as Array).size(), 2)
+
+
+func test_compressed_and_uncompressed_payloads_hash_differently():
+	# The save dedupe keys off this hash, so it has to cover the form the bytes are
+	# written in or unticking Use Compression is skipped as a rewrite (#688).
+	var data := {"name": "plain", "n": 1}
+	var packed: Dictionary = HFLevelIO.encode_payload_job(data, true)
+	var raw: Dictionary = HFLevelIO.encode_payload_job(data, false)
+	assert_ne(int(packed.get("hash", 0)), int(raw.get("hash", 0)))
+
+
 func test_save_to_path_is_atomic_and_leaves_no_writing_sidecar():
 	var path := "user://hflevel_atomic_test.hflevel"
 	var writing := path + ".writing"

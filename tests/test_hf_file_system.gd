@@ -110,6 +110,60 @@ func test_unchanged_save_skips_rewrite_after_hash_settles():
 	assert_true(files.last_encode_skipped, "Identical capture should skip the disk write")
 
 
+func test_save_as_to_a_new_path_writes_even_when_nothing_changed():
+	# Save As, a numbered backup, a copy for a teammate. The level has not changed
+	# since the last save, and the file still has to appear (#688).
+	assert_eq(files.save_hflevel(_save_path, true), OK)
+	await _drain_write()
+	files.take_completed_saves()
+	assert_eq(files.save_hflevel(_second_save_path(), false), OK)
+	await _drain_write()
+	assert_false(files.last_encode_skipped, "A new destination is not a rewrite of the last one")
+	assert_true(FileAccess.file_exists(_second_save_path()), "Save As has to leave a file behind")
+	var loaded: Dictionary = HFLevelIO.load_from_path(_second_save_path())
+	assert_eq(loaded.get("name"), "level")
+
+
+func test_toggling_compression_rewrites_the_same_path():
+	# Unticking Use Compression is a request for different bytes at the same path,
+	# so the dedupe must not read it as the write it already did.
+	assert_eq(files.save_hflevel(_save_path, true), OK)
+	await _drain_write()
+	files.take_completed_saves()
+	root.hflevel_compress = true
+	assert_eq(files.save_hflevel(_save_path, false), OK)
+	await _drain_write()
+	assert_false(files.last_encode_skipped, "A change of form is a change of bytes")
+	var payload := FileAccess.get_file_as_bytes(_save_path)
+	var header := payload.slice(0, HFLevelIO.MAGIC_COMPRESSED.length()).get_string_from_utf8()
+	assert_eq(header, HFLevelIO.MAGIC_COMPRESSED, "The file on disk should now be compressed")
+
+
+func test_a_failed_write_does_not_dedupe_away_the_retry():
+	# A write that failed left nothing on disk, so the retry after it has to go out
+	# even though the level has not changed in between.
+	var job: Dictionary = HFLevelIO.encode_payload_job(root.captured, false)
+	(
+		files
+		. _apply_thread_result(
+			{
+				"error": "HFLevel: Failed to write file",
+				"hash": int(job.get("hash", 0)),
+				"skipped": false,
+				"path": _save_path,
+				"abs_path": ProjectSettings.globalize_path(_save_path),
+				"compress": false,
+				"autosave": false,
+			}
+		)
+	)
+	files.take_completed_saves()
+	assert_eq(files.save_hflevel(_save_path, false), OK)
+	await _drain_write()
+	assert_false(files.last_encode_skipped, "The retry after a failed write has to reach the disk")
+	assert_true(FileAccess.file_exists(_save_path))
+
+
 func test_changed_save_rewrites_file():
 	assert_eq(files.save_hflevel(_save_path, true), OK)
 	await _drain_write()

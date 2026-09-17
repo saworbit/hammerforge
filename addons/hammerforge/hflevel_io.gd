@@ -243,9 +243,25 @@ static func decode_variant(value: Variant, _depth: int = 0) -> Variant:
 	return value
 
 
+## Compact, always. The only thing that writes a payload this way is a paint
+## region sidecar, whose chunks are flat arrays of one integer per texel - laying
+## those out one value per line is thousands of lines of something nobody reads.
+## The level bundle goes through `encode_payload_job()` instead.
 static func build_payload(data: Dictionary, compress: bool = true) -> PackedByteArray:
-	var json = JSON.stringify(data)
-	return build_payload_from_json(json, compress)
+	return build_payload_from_json(JSON.stringify(data), compress)
+
+
+## The JSON a level bundle is written as. A compressed level is bytes nothing
+## reads but the loader, so it gets the compact form. An uncompressed level is
+## the one a team puts in version control, and that is the whole reason the
+## setting exists, so it gets one value per line. A level written as a single
+## 140 KB line cannot be diffed, reviewed or merged (#708). `JSON.stringify`
+## sorts keys by default, which is what keeps a diff down to the lines that
+## actually changed.
+static func stringify_level_json(data: Dictionary, compress: bool = true) -> String:
+	if compress:
+		return JSON.stringify(data)
+	return JSON.stringify(data, "\t")
 
 
 ## Replace every Resource in a captured state with the form the file records,
@@ -337,7 +353,7 @@ static func holds_resource(value: Variant, _depth: int = 0) -> bool:
 ## Stringify, hash, and pack a captured state dict. Safe to call off the main
 ## thread because it only touches primitives / PackedByteArray.
 static func encode_payload_job(data: Dictionary, compress: bool = true) -> Dictionary:
-	var json := JSON.stringify(data)
+	var json := stringify_level_json(data, compress)
 	var hash_value := json.hash()
 	return {
 		"hash": hash_value,
