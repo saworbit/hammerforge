@@ -80,6 +80,9 @@ func sync_face_world_transform() -> void:
 		# converted, because it is the first moment the face knows where the
 		# brush is. It is a no-op for anything saved since.
 		face.migrate_uvs_to_world_space()
+		# A turn can move a face onto a different Box UV axis, and the three do
+		# not share a handedness, so the texture would come back mirrored (#684).
+		face.reconcile_box_uv_axis()
 
 
 func _ensure_mesh_instance() -> void:

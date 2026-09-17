@@ -517,13 +517,21 @@ it started, however lopsided the selection is.
 **The step.** Set it in Selection Tools. 15° by default; 45° and 90° are the
 other two you will reach for.
 
-**Texture Lock applies.** With it on, a face that turns in its own plane keeps
-its texture where it is in the world — the top and bottom of a box under a yaw,
-for instance. A face that swings around instead, like a wall under that same
-yaw, carries its texture with it upright; a face projection cannot express a
-world-locked texture on a face that has moved out from under it, and tipping the
-texture on its side is worse than carrying it. Turn Texture Lock off and every
-face carries its texture along.
+**Texture Lock applies.** With it on, the texture goes round with the brush, the
+same way it travels with a brush you move. Every face of a box under a yaw keeps
+its texture where it sits on the brush, upright as it was. Turn Texture Lock off
+and the texture keeps its place in the level instead, so the brush turns under it.
+
+This is the opposite of what it did before planar UVs moved into world space. A
+projection taken from a brush's own vertices did not move when the brush did, so
+back then the compensation was the thing that let go of the texture. Now the
+projection follows the level and the compensation is what holds the texture on
+the brush.
+
+A face that swings out from under its own projection, like a wall under a yaw,
+lands on a different projection axis. The texture goes round with it, but the
+placement is re-derived rather than carried exactly, because a planar projection
+cannot say more than which plane it reads.
 
 ### After you rotate
 

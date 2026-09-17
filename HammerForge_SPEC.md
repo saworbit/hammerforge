@@ -200,8 +200,11 @@ LevelRoot (Node3D)
   - PLANAR_X: projects (z, y), PLANAR_Y: projects (x, z), PLANAR_Z: projects (x, y).
   - BOX_UV resolves to the planar axis matching the face normal.
   - CYLINDRICAL is skipped (complex, future enhancement).
+- Texture lock holds a texture on the brush, for a turn as well as for a move. Since #652 the projection follows the level, so no compensation at all leaves a texture where it is in the world, and the compensation is what carries it round. Before #652 it was the other way about, which is what #355 settled and #653 and #684 corrected.
 - Position compensation: `uv_offset -= projected_delta.rotated(uv_rotation) * uv_scale`. The UV transform rotates before it scales and offsets, so the projected move is rotated the same way. `hf_carve_system.gd` uses the same expression.
 - Size compensation: `uv_scale *= inverse_size_ratio` per projection axis.
+- Rotation compensation: `adjust_uvs_for_rotation()` reads the old projection at `local_rot.inverse() * v`, cancelling the turn the projection already carries. It only answers for a turn that keeps the projection plane; a turn that does not returns false.
+- Axis handedness: `projection_axes()` is right handed for PLANAR_Z against its own normal and left handed for PLANAR_X and PLANAR_Y. A face that changes axis under a turn would therefore come back mirrored, so `reconcile_box_uv_axis()` folds the flip into `uv_scale` at the moment the axis changes, comparing the old axes carried through the turn against the new ones. It holds the brush orientation the UVs were laid out against, which is transient: the first orientation a face is told is its layout, so a reopened level reconciles nothing.
 - Hook in `hf_brush_system.gd:set_brush_transform_by_id()` captures old transform, applies new, then adjusts UVs.
 - HammerForge move, nudge, floor/ceiling, and resize paths use that boundary. Godot's native Node3D transform widget intentionally leaves face UV resources unchanged, because its native undo action does not capture those nested Resource edits. Since the projection is world-space, leaving them unchanged means a brush moved with the native widget behaves as though Texture Lock were off: the texture keeps its place in the level and the brush slides under it.
 
@@ -546,6 +549,6 @@ Unit tests use the [GUT](https://github.com/bitwes/Gut) framework and run headle
 | `test_selection_gesture.gd` | 40 | Native widget/Object Select ownership, modal Face Select, recovery, focus/scope guards, native duplicate/reparent repair, and Inspector/undo change tracking |
 | `test_viewport_outlines.gd` | 39 | Sparse semantic outlines, exact/composite entity collision, visibility/transforms, and shape-aware resize recovery |
 
-Full suite (verified in CI on September 17, 2026): **4,200 tests** across **234 scripts** (**4,193 passing** plus seven intentional no-assert safety tests; **20,071 assertions**).
+Full suite (verified in CI on September 17, 2026): **4,210 tests** across **235 scripts** (**4,203 passing** plus seven intentional no-assert safety tests; **20,090 assertions**).
 
 Tests use root shim scripts (dynamically created GDScript) to provide the LevelRoot interface without circular preload dependencies. Configuration in `.gutconfig.json`.

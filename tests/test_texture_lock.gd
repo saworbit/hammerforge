@@ -263,19 +263,23 @@ func test_a_half_turn_across_the_plane_mirrors_v_rather_than_tipping():
 func test_turn_about_the_projection_axis_keeps_the_projection():
 	# PLANAR_Y reads (x, z) and PLANAR_Z reads (x, y), so the two counter-turns
 	# go opposite ways. That sign used to be assumed to be the same for both.
+	#
+	# Both are the opposite of what they were before #652. The projection is
+	# taken in the level now, so a turn already carries it across the face and
+	# the compensation cancels that turn rather than adding to it.
 	var y_face = FaceData.new()
 	y_face.uv_projection = FaceData.UVProjection.PLANAR_Y
 	y_face.normal = Vector3.UP
 	assert_true(y_face.adjust_uvs_for_rotation(_rot(Vector3.UP, 30.0)))
 	assert_eq(y_face.uv_projection, FaceData.UVProjection.PLANAR_Y)
-	assert_almost_eq(y_face.uv_rotation, deg_to_rad(-30.0), 0.0001)
+	assert_almost_eq(y_face.uv_rotation, deg_to_rad(30.0), 0.0001)
 
 	var z_face = FaceData.new()
 	z_face.uv_projection = FaceData.UVProjection.PLANAR_Z
 	z_face.normal = Vector3.BACK
 	assert_true(z_face.adjust_uvs_for_rotation(_rot(Vector3.BACK, 30.0)))
 	assert_eq(z_face.uv_projection, FaceData.UVProjection.PLANAR_Z)
-	assert_almost_eq(z_face.uv_rotation, deg_to_rad(30.0), 0.0001)
+	assert_almost_eq(z_face.uv_rotation, deg_to_rad(-30.0), 0.0001)
 
 
 func test_turn_that_no_projection_can_express_leaves_the_face_alone():
@@ -307,7 +311,8 @@ func test_uv_rotation_is_wrapped_into_a_turn():
 	assert_almost_eq(face.uv_rotation, 0.0, 0.0001, "four quarter turns is no turn")
 
 
-## The texture did not move: where U increases in the world is where it did.
+## Where U increases in the world, which is what a mapper sees rather than what
+## the stored fields say.
 ##
 ## Solved from the face's own projected UVs rather than from the stored fields,
 ## so a change that keeps the fields tidy and the texture wrong still fails.
@@ -331,7 +336,14 @@ func _world_u_direction(face, basis: Basis) -> Vector3:
 	return (basis * grad).normalized()
 
 
-func test_a_yaw_does_not_tip_any_face_texture():
+## Texture lock on, a yaw, and every one of a box's six faces: the texture goes
+## round with the brush and none of it arrives tipped or mirrored.
+##
+## The brush is really turned rather than the turn being handed to the faces on
+## its own, because the projection reads `world_transform` now and the two halves
+## have to agree. Driving only `adjust_uvs_for_rotation()` measured a brush that
+## had not moved, which is how the sign stayed wrong through a green suite.
+func test_a_yaw_carries_every_face_texture_round_with_the_brush():
 	var brush: DraftBrush = load("res://addons/hammerforge/brush_instance.gd").new()
 	brush.shape = 0
 	brush.size = Vector3(128, 64, 32)
@@ -340,14 +352,21 @@ func test_a_yaw_does_not_tip_any_face_texture():
 	for face in brush.get_faces():
 		face.uv_projection = FaceData.UVProjection.BOX_UV
 		face.custom_uvs = PackedVector2Array()
+	brush.rebuild_preview()
 
 	var before: Array = []
 	for face in brush.get_faces():
 		before.append(_world_u_direction(face, Basis.IDENTITY))
 
+	# The order `rotate_managed_nodes()` uses: place the brush, compensate, then
+	# rebuild. The rebuild is what tells the faces where the brush went --
+	# NOTIFICATION_TRANSFORM_CHANGED is deferred and has not arrived yet, which
+	# is why `rebuild_preview()` syncs rather than leaving it to the notification.
 	var turn := Basis(Vector3.UP, deg_to_rad(90.0))
+	brush.global_transform = Transform3D(turn, Vector3.ZERO)
 	for face in brush.get_faces():
 		face.adjust_uvs_for_rotation(turn)
+	brush.rebuild_preview()
 
 	for i in brush.get_faces().size():
 		var face = brush.get_faces()[i]
@@ -355,10 +374,5 @@ func test_a_yaw_does_not_tip_any_face_texture():
 		if was == Vector3.ZERO:
 			continue
 		var now: Vector3 = _world_u_direction(face, turn)
-		if absf(face.normal.dot(Vector3.UP)) > 0.9:
-			# Top and bottom turn in their own plane, so the texture stays put.
-			assert_almost_eq(now.dot(was), 1.0, 0.0001, "face %d should be locked" % i)
-		else:
-			# A wall swings around. Its texture goes with it, upright as it was.
-			var carried := turn * was
-			assert_almost_eq(now.dot(carried), 1.0, 0.0001, "face %d was tipped" % i)
+		var carried: Vector3 = turn * was
+		assert_almost_eq(now.dot(carried), 1.0, 0.0001, "face %d did not carry its texture" % i)

@@ -60,6 +60,15 @@ var world_transform: Transform3D = Transform3D.IDENTITY
 ## Back to -1 once the brush has done it, and -1 for a face that was built
 ## rather than loaded.
 var pending_uv_migration: int = -1
+## The brush orientation these UVs were laid out against, so a face that swings
+## onto a different Box UV axis can keep the handedness it had (#684).
+##
+## Not persisted, and not a default anyone should read as meaningful: the first
+## time a brush tells a face where it is, whatever it says is the layout. That
+## is what makes a saved level safe -- it reopens with the orientation it was
+## saved at, so nothing is reconciled and nothing moves.
+var _uv_layout_basis: Basis = Basis.IDENTITY
+var _uv_layout_known: bool = false
 @export var normal: Vector3 = Vector3.UP
 
 ## Optional displacement data. When non-null the face is a displacement surface
@@ -151,11 +160,22 @@ static func projection_axes(projection: int) -> Array:
 			return [Vector3.RIGHT, Vector3.UP]
 
 
-## Keep this face's texture where it is in the world while the brush turns.
+## Keep this face's texture on the brush while the brush turns.
 ##
 ## `local_rot` is the brush's rotation expressed in the brush's own space: a
-## local point `v` ends up where `local_rot * v` used to be, so reading the old
-## projection at `local_rot * v` is exactly "the texture did not move".
+## local point `v` ends up where `local_rot * v` used to be. Since #652 the
+## projection is taken in the level, so a turn already moves the projection
+## across the face and doing nothing leaves the texture where it was in the
+## world. Carrying it round with the brush is the thing that needs saying, and
+## it is said by reading the projection at `local_rot.inverse() * v` -- the turn
+## cancelled rather than counted twice.
+##
+## That is the same reading as texture lock on a move, which holds the texture on
+## a brush that slides. Before #652 it was the other way round, because a
+## projection from a brush's own vertices did not move when the brush did, so the
+## compensation was what unstuck the texture. Turn texture lock off and the
+## texture stays where it is in the level, which is a projection from the level
+## doing nothing at all.
 ##
 ## That only stays a projection of the same kind when the turn keeps the
 ## projection plane where it is — a turn about the projection axis, at any angle.
@@ -173,11 +193,10 @@ func adjust_uvs_for_rotation(local_rot: Basis) -> bool:
 	if effective == UVProjection.BOX_UV:
 		effective = _box_projection_axis()
 	var axes: Array = projection_axes(effective)
-	# The composed map reads the old projection axes pulled back through the
-	# turn, so these two vectors span the plane the projection would have to be.
-	var inv := local_rot.inverse()
-	var f_u: Vector3 = inv * (axes[0] as Vector3)
-	var f_v: Vector3 = inv * (axes[1] as Vector3)
+	# The composed map reads the old projection axes pushed through the turn, so
+	# these two vectors span the plane the projection would have to be.
+	var f_u: Vector3 = local_rot * (axes[0] as Vector3)
+	var f_v: Vector3 = local_rot * (axes[1] as Vector3)
 	var kept: Vector3 = (axes[0] as Vector3).cross(axes[1] as Vector3)
 	if absf(f_u.cross(f_v).dot(kept)) < 1.0 - UV_AXIS_EPSILON:
 		return false
@@ -604,6 +623,60 @@ func migrate_uvs_to_world_space() -> void:
 	if uv_rotation != 0.0:
 		placement = placement.rotated(uv_rotation)
 	uv_offset -= placement * uv_scale
+
+
+## Keep a face's texture the right way round when a turn moves it onto a
+## different Box UV axis.
+##
+## `projection_axes()` is right handed for PLANAR_Z against its own normal and
+## left handed for the other two. That could not matter while UVs were projected
+## from a brush's own vertices, because a face's axis could not change. Since
+## #652 the axis is resolved in the level, so a wall yawed a quarter turn moves
+## from PLANAR_Z to PLANAR_X and comes back mirrored (#684).
+##
+## The correction is a sign on `uv_scale`, folded in at the moment the axis
+## changes. Nothing on disk changes meaning, so no saved level needs migrating:
+## a face reloaded after a turn already carries the flip in the scale it saved.
+##
+## Which of the two axes to flip is not a fixed answer. A yaw that takes a face
+## from PLANAR_Z to PLANAR_X reverses U and leaves V; a roll that takes one from
+## PLANAR_Y to PLANAR_Z reverses V and leaves U. So the old projection's axes are
+## carried through the turn the brush made and compared with the new one's.
+## A turn that does not land them on each other is a skew no planar projection
+## holds, and is left alone rather than guessed at.
+func reconcile_box_uv_axis() -> void:
+	if uv_projection != UVProjection.BOX_UV:
+		return
+	var basis := world_transform.basis.orthonormalized()
+	if not _uv_layout_known:
+		_uv_layout_basis = basis
+		_uv_layout_known = true
+		return
+	if basis.is_equal_approx(_uv_layout_basis):
+		return
+	var was := _uv_layout_basis
+	_uv_layout_basis = basis
+	var old_axis := _box_projection_axis_in(Transform3D(was, Vector3.ZERO))
+	var new_axis := _box_projection_axis_in(Transform3D(basis, Vector3.ZERO))
+	if old_axis == new_axis:
+		# The face kept its plane. `adjust_uvs_for_rotation()` is what answers
+		# for that case, and it is the caller's business whether to run it.
+		return
+	var turn := basis * was.inverse()
+	var old_axes: Array = projection_axes(old_axis)
+	var new_axes: Array = projection_axes(new_axis)
+	var carried_u: Vector3 = (turn * (old_axes[0] as Vector3)).normalized()
+	var carried_v: Vector3 = (turn * (old_axes[1] as Vector3)).normalized()
+	var u_now: Vector3 = new_axes[0] as Vector3
+	var v_now: Vector3 = new_axes[1] as Vector3
+	var u_dot := u_now.dot(carried_u)
+	var v_dot := v_now.dot(carried_v)
+	if absf(u_dot) < 1.0 - UV_AXIS_EPSILON or absf(v_dot) < 1.0 - UV_AXIS_EPSILON:
+		return
+	if u_dot < 0.0:
+		uv_scale.x = -uv_scale.x
+	if v_dot < 0.0:
+		uv_scale.y = -uv_scale.y
 
 
 func _apply_uv_transform(uv: Vector2) -> Vector2:

@@ -169,10 +169,17 @@ func _reset_rotation_keeps_scale() -> void:
 		flag("reset_rotation left a rotation behind", "euler %s" % euler)
 
 
-## What texture lock does to a face under a yaw, against what #355 settled it
-## should do: a face whose projection plane the turn keeps holds its world
-## texture direction, and a face the turn swings out from under its projection
-## carries its texture round with it, upright.
+## What texture lock does to a face under a yaw.
+##
+## #355 settled this while UVs were projected from a brush's own vertices, where
+## doing nothing held a texture on the brush and the compensation was what let go
+## of it. Since #652 the projection is taken in the level and the two have
+## swapped: doing nothing holds the texture where it is in the level, and the
+## compensation is what carries it round. So ticked now means what it means for a
+## move, that the texture goes with the brush, and every face is carried.
+##
+## Unticked is the other half and is not measured here: no compensation runs, so
+## the texture keeps its place in the level.
 ##
 ## The projection decides which of the two a face is, so the faces are given the
 ## Box UV projection the dock's re-project button applies -- a face left on the
@@ -221,49 +228,37 @@ func _texture_lock_world_direction() -> void:
 			note("face %d" % i, "no measurable U direction (before %s after %s)" % [n0, n1])
 			continue
 		var normal: Vector3 = normals[i]
-		var turns_in_its_own_plane: bool = absf(normal.dot(Vector3.UP)) > 0.9
 		var locked: bool = n1.dot(n0) > 0.999
 		var carried: bool = n1.dot((turn * n0).normalized()) > 0.999
 		note(
 			"face %d (world normal %s)" % [i, normal.snapped(Vector3.ONE * 0.01)],
 			"locked %s, carried %s" % [locked, carried]
 		)
-		if turns_in_its_own_plane and not locked:
-			flag(
-				"a yaw moves the texture on face %d, which turns in its own plane" % i,
-				(
-					(
-						"world normal %s: the projection plane is the one the turn keeps, so the"
-						+ " compensation should hold the texture where it was. U went from %s to %s."
-					)
-					% [normal.snapped(Vector3.ONE * 0.01), n0, n1]
-				)
-			)
-		elif not turns_in_its_own_plane and not carried:
-			# An exact negation is the handedness flip of #684, not a tilt: the face
-			# moved between two planar axes that do not share a chirality. Anything
-			# else is a new shape of wrong and still gets flagged.
+		if not carried:
+			# An exact negation is the handedness flip of #684: the face moved
+			# between two planar axes that do not share a chirality and nothing
+			# folded the difference in. Worth saying separately, because it points
+			# at `reconcile_box_uv_axis()` rather than at the compensation.
 			if n1.dot((turn * n0).normalized()) < -0.999:
-				known(
-					684,
-					"a yaw brings a wall's texture back mirrored along U",
+				flag(
+					"a yaw brings the texture on face %d back mirrored along U" % i,
 					(
 						(
-							"world normal %s: the face re-projects from PLANAR_Z, which reads"
-							+ " world (x, y), onto PLANAR_X, which reads (z, y), and the two do"
-							+ " not share a handedness. U went from %s to %s, the exact negation"
-							+ " of the %s that carrying it would give"
+							"world normal %s: the face re-projects onto a planar axis with the"
+							+ " other handedness and the flip was not folded into uv_scale (#684)."
+							+ " U went from %s to %s, the exact negation of the %s that carrying"
+							+ " it would give"
 						)
 						% [normal.snapped(Vector3.ONE * 0.01), n0, n1, (turn * n0).normalized()]
 					)
 				)
 				continue
 			flag(
-				"a yaw tips the texture on face %d" % i,
+				"a yaw does not carry the texture on face %d" % i,
 				(
 					(
-						"world normal %s: the wall swings round, so its texture should go with it"
-						+ " upright. U went from %s to %s, and carrying it would be %s."
+						"world normal %s: texture lock is on, so the texture should go round with"
+						+ " the brush upright. U went from %s to %s, and carrying it would be %s."
 					)
 					% [normal.snapped(Vector3.ONE * 0.01), n0, n1, (turn * n0).normalized()]
 				)
