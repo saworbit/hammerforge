@@ -95,8 +95,14 @@ func capture_state(include_transient: bool = true) -> Dictionary:
 func capture_registries() -> Dictionary:
 	var out: Dictionary = {}
 	if root.visgroup_system:
-		out["visgroups"] = root.visgroup_system.capture_visgroups()
-		out["groups"] = root.visgroup_system.capture_groups()
+		var captured_visgroups: Dictionary = root.visgroup_system.capture_visgroups()
+		var captured_groups: Dictionary = root.visgroup_system.capture_groups()
+		out["visgroups"] = captured_visgroups
+		out["groups"] = captured_groups
+		# Beside them, because JSON sorts object keys and these two lists have an
+		# order the mapper made on purpose (#706).
+		out["visgroup_order"] = root.visgroup_system.capture_order(captured_visgroups)
+		out["group_order"] = root.visgroup_system.capture_order(captured_groups)
 	if root.brush_system:
 		var duplicators: Array = []
 		for dup_id in root.brush_system._duplicators:
@@ -114,8 +120,10 @@ func capture_registries() -> Dictionary:
 ## restores the half it has rather than clearing the rest.
 func restore_registries(state: Dictionary) -> void:
 	if root.visgroup_system:
-		root.visgroup_system.restore_visgroups(state.get("visgroups", {}))
-		root.visgroup_system.restore_groups(state.get("groups", {}))
+		root.visgroup_system.restore_visgroups(
+			state.get("visgroups", {}), state.get("visgroup_order", [])
+		)
+		root.visgroup_system.restore_groups(state.get("groups", {}), state.get("group_order", []))
 	if root.generator_system:
 		root.generator_system.restore(state.get("generators", []))
 	if root.brush_system:

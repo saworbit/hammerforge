@@ -246,11 +246,29 @@ func capture_visgroups() -> Dictionary:
 	return out
 
 
-func restore_visgroups(data: Dictionary) -> void:
+## The order the mapper made these in.
+##
+## `capture_visgroups()` and `capture_groups()` both hand back a Dictionary, and
+## a level bundle is JSON, where `JSON.stringify` sorts object keys. So every
+## name survived a round trip and the list came back alphabetised, and reshuffled
+## again the moment a new one was added (#706). The order is not arbitrary: on a
+## real map it is roughly the order the level was built, and the thing being
+## worked on today ends up at the bottom where it is easy to find.
+##
+## Recorded beside the registry rather than inside it, so a name can be anything
+## - including a name that looks like a bookkeeping key.
+func capture_order(registry: Dictionary) -> Array:
+	var order: Array = []
+	for key in registry.keys():
+		order.append(str(key))
+	return order
+
+
+func restore_visgroups(data: Dictionary, order: Array = []) -> void:
 	visgroups.clear()
 	if not data is Dictionary:
 		return
-	for key in data.keys():
+	for key in _ordered_keys(data, order):
 		var entry = data[key]
 		if not entry is Dictionary:
 			continue
@@ -259,6 +277,27 @@ func restore_visgroups(data: Dictionary) -> void:
 		# nothing ever read one, so there is nothing to restore it into.
 		visgroups[str(key)] = {"visible": bool(entry.get("visible", true))}
 	refresh_visibility()
+
+
+## `data`'s keys, in `order` first and then whatever `order` did not mention.
+##
+## A file written before the order was recorded has none, and falls through to
+## the dictionary's own iteration, which is what it always did. A name in the
+## order that is no longer in the data is skipped rather than resurrected.
+func _ordered_keys(data: Dictionary, order: Array) -> Array:
+	var out: Array = []
+	var seen: Dictionary = {}
+	for key in order:
+		var name := str(key)
+		if data.has(name) and not seen.has(name):
+			seen[name] = true
+			out.append(name)
+	for key in data.keys():
+		var name := str(key)
+		if not seen.has(name):
+			seen[name] = true
+			out.append(name)
+	return out
 
 
 ## Put back any visgroup that its own members still name. Returns how many.
@@ -293,10 +332,10 @@ func capture_groups() -> Dictionary:
 	return groups.duplicate()
 
 
-func restore_groups(data: Dictionary) -> void:
+func restore_groups(data: Dictionary, order: Array = []) -> void:
 	groups.clear()
 	if data is Dictionary:
-		for key in data.keys():
+		for key in _ordered_keys(data, order):
 			groups[str(key)] = true
 
 
