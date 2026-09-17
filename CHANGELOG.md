@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Fixed
+- **Save As writes the file** (#688). Saving a level that had not changed since
+  the last save wrote nothing, whatever path it was given, and reported success.
+  The dedupe that stops an idle autosave rewriting the same bytes compared one
+  hash with no record of which file produced it, so Save As to a new name, a
+  numbered backup at the end of a session and a copy for a teammate all closed
+  the dialog and left no file. The key is now the destination, the compression
+  setting and the hash, because all three decide the bytes on disk. A write that
+  failed no longer records its hash either, which had the same effect one step
+  later: the retry matched the failed attempt and was skipped as a rewrite.
+
+### Changed
+- **An uncompressed level is one value per line** (#708). Save compression
+  exists so a team can turn it off and put the level in version control, and what
+  it produced was a single 140 KB line: one changed line in every diff, a
+  conflict on that line for any two branches that touched the level, and a blame
+  that named whoever saved last. Uncompressed bundles are now written with one
+  value per line and keys in a stable order, so a level change reviews like any
+  other file. Compressed is still the default and is unchanged, and the loader
+  reads either form. Paint region sidecars stay compact whichever way the setting
+  is set, since their chunks are flat arrays of one integer per texel.
+
 ### Added
 - **A gate that can tell a call site from a mention** (#647). #609 and #610
   together were 66 dead declarations, and thirteen of those existed only because

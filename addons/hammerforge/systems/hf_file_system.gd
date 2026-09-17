@@ -10,7 +10,13 @@ const HFMapValve220Type = preload("../map_adapters/hf_map_valve220.gd")
 var root: Node3D
 var _hflevel_thread: Thread = null
 var _hflevel_pending: Array[Dictionary] = []
-var _hflevel_last_hash: int = 0
+## What the last completed write put where. The dedupe below has to answer "are
+## these bytes already at *this* path, in *this* form", and a bare hash answers a
+## different question: it skipped a Save As to a brand new file and reported
+## success (#688). Path, compression and hash, because all three decide the bytes
+## on disk. Only a write that succeeded is recorded, or a failed write would
+## dedupe away the retry that fixes it.
+var _hflevel_last_write := {"path": "", "compress": true, "hash": 0}
 var _completed_saves: Array[Dictionary] = []
 ## Last write error observed on the main thread (thread result is returned from wait_to_finish).
 ## Set by process_thread_queue() from the worker result (true when hash matched).
@@ -428,7 +434,7 @@ func start_hflevel_thread(
 		"keep": keep,
 		"autosave_abs": autosave_abs,
 		"autosave": autosave,
-		"last_hash": _hflevel_last_hash,
+		"last_write": _hflevel_last_write.duplicate(),
 	}
 	if _hflevel_thread:
 		if _hflevel_thread.is_alive():
@@ -454,7 +460,7 @@ func _hflevel_thread_encode_and_write(job: Dictionary) -> Dictionary:
 	var state: Dictionary = job.get("state", {})
 	var compress: bool = bool(job.get("compress", true))
 	var force: bool = bool(job.get("force", false))
-	var last_hash: int = int(job.get("last_hash", 0))
+	var last_write: Dictionary = job.get("last_write", {})
 	var keep: int = int(job.get("keep", 0))
 	var autosave_abs: String = str(job.get("autosave_abs", ""))
 	var autosave: bool = bool(job.get("autosave", false))
@@ -467,12 +473,20 @@ func _hflevel_thread_encode_and_write(job: Dictionary) -> Dictionary:
 	# holds it.
 	var packed: Dictionary = HFLevelIO.encode_payload_job(HFLevelIO.encode_variant(state), compress)
 	var hash_value: int = int(packed.get("hash", 0))
-	if not force and hash_value != 0 and hash_value == last_hash:
+	if (
+		not force
+		and hash_value != 0
+		and hash_value == int(last_write.get("hash", 0))
+		and path == str(last_write.get("path", ""))
+		and compress == bool(last_write.get("compress", true))
+	):
 		return {
 			"error": "",
 			"hash": hash_value,
 			"skipped": true,
 			"path": display_path,
+			"abs_path": path,
+			"compress": compress,
 			"autosave": autosave,
 		}
 	var payload: PackedByteArray = packed.get("payload", PackedByteArray())
@@ -482,6 +496,8 @@ func _hflevel_thread_encode_and_write(job: Dictionary) -> Dictionary:
 			"hash": hash_value,
 			"skipped": true,
 			"path": display_path,
+			"abs_path": path,
+			"compress": compress,
 			"autosave": autosave,
 		}
 	var err := HFLevelIO.write_bytes_atomic(path, payload)
@@ -493,6 +509,8 @@ func _hflevel_thread_encode_and_write(job: Dictionary) -> Dictionary:
 			"hash": hash_value,
 			"skipped": false,
 			"path": display_path,
+			"abs_path": path,
+			"compress": compress,
 			"autosave": autosave,
 		}
 	_write_autosave_rotation(path, payload, keep, autosave_abs)
@@ -501,6 +519,8 @@ func _hflevel_thread_encode_and_write(job: Dictionary) -> Dictionary:
 		"hash": hash_value,
 		"skipped": false,
 		"path": display_path,
+		"abs_path": path,
+		"compress": compress,
 		"autosave": autosave,
 	}
 
@@ -599,8 +619,12 @@ func shutdown() -> void:
 func _apply_thread_result(result: Variant) -> String:
 	if result is Dictionary:
 		var error := str(result.get("error", ""))
-		if result.has("hash"):
-			_hflevel_last_hash = int(result.get("hash", 0))
+		if error == "" and result.has("hash"):
+			_hflevel_last_write = {
+				"path": str(result.get("abs_path", "")),
+				"compress": bool(result.get("compress", true)),
+				"hash": int(result.get("hash", 0)),
+			}
 		last_encode_skipped = bool(result.get("skipped", false))
 		_completed_saves.append((result as Dictionary).duplicate(true))
 		return error
@@ -615,7 +639,7 @@ func _start_pending_job(job: Dictionary) -> bool:
 		push_warning("HFLevel: Discarding pending write with empty path or payload")
 		return false
 	_hflevel_thread = Thread.new()
-	job["last_hash"] = _hflevel_last_hash
+	job["last_write"] = _hflevel_last_write.duplicate()
 	_hflevel_thread.start(Callable(self, "_hflevel_thread_encode_and_write").bind(job))
 	return true
 
@@ -637,10 +661,15 @@ func _flush_job_sync(job: Dictionary) -> void:
 			HFLevelIO.encode_variant(job.get("state", {})), bool(job.get("compress", true))
 		)
 		var payload: PackedByteArray = packed.get("payload", PackedByteArray())
-		if not payload.is_empty():
-			HFLevelIO.write_bytes_atomic(pending_path, payload)
-		if packed.has("hash"):
-			_hflevel_last_hash = int(packed.get("hash", 0))
+		if payload.is_empty():
+			return
+		if HFLevelIO.write_bytes_atomic(pending_path, payload) != OK:
+			return
+		_hflevel_last_write = {
+			"path": pending_path,
+			"compress": bool(job.get("compress", true)),
+			"hash": int(packed.get("hash", 0)),
+		}
 		return
 	var legacy_payload: PackedByteArray = job.get("payload", PackedByteArray())
 	if not legacy_payload.is_empty():
