@@ -778,6 +778,8 @@ var _autosave_timer: Timer = null
 var face_selection: Dictionary = {}
 var _last_bake_duration_ms: int = 0
 var _last_bake_preview_mode: int = 0  # 0 = FULL, 1 = WIREFRAME, 2 = PROXY
+## Latched by `take_hflevel_freshness_report()` so a level says it once per open.
+var _hflevel_freshness_reported: bool = false
 
 # ===========================================================================
 # Lifecycle
@@ -2568,6 +2570,28 @@ func load_hflevel(path: String = "") -> bool:
 	return ok
 
 
+## Whether this level's `.hflevel` is newer than the scene that opened (#646).
+func check_hflevel_freshness() -> Dictionary:
+	return file_system.check_hflevel_freshness()
+
+
+## The same report, but only the first time it is asked for.
+##
+## The dock asks on the frame it binds to a level. That happens again every time
+## the mapper switches scene tabs and back, and it is the same level each time,
+## so without this the warning repeats for something already said.
+##
+## It is not only noise. On the first bind the open scene still matches the
+## `.tscn` on disk, so "Load Level replaces what is open" costs nothing. Later in
+## a session it can cost unsaved editor work, and that is not a trade to offer
+## unprompted.
+func take_hflevel_freshness_report() -> Dictionary:
+	if _hflevel_freshness_reported:
+		return {}
+	_hflevel_freshness_reported = true
+	return check_hflevel_freshness()
+
+
 func validate_map(path: String) -> Dictionary:
 	return file_system.validate_map(path)
 
@@ -3545,6 +3569,25 @@ func _load_hflevel_for_bake_only_scene() -> void:
 			user_message.emit(message, 2)
 		return
 	load_hflevel(path)
+
+
+## The `.tscn` Ctrl+S writes for this level.
+##
+## Deliberately not `edited_scene_root`, which `_get_editor_owner()` uses. That
+## is the right answer for a node being created, because a node is only ever
+## created in the focused tab. It is the wrong answer for a node that already
+## exists: Godot keeps every open tab's tree alive and processing, so this level's
+## autosave can fire while another scene is the focused one, and asking the editor
+## what is in front would stamp this level's file with that scene's name.
+##
+## The topmost node with no owner is the root of the scene a node belongs to,
+## whichever tab is in front. A level built in code and never saved resolves
+## to "".
+func scene_source_path() -> String:
+	var node: Node = self
+	while node.get_owner() != null:
+		node = node.get_owner()
+	return str(node.scene_file_path).strip_edges()
 
 
 func _get_editor_owner() -> Node:

@@ -190,3 +190,62 @@ func test_an_out_of_range_setting_from_a_file_lands_on_a_mode_that_exists():
 	assert_lt(int(root.scene_contents), LevelRootType.SceneContents.size(), "clamped to a mode")
 	root._apply_hflevel_settings({"scene_contents": -5})
 	assert_gte(int(root.scene_contents), 0, "and not below one either")
+
+
+# ===========================================================================
+# Saying it once, when the two files disagree (#646)
+# ===========================================================================
+
+
+func test_a_level_offers_its_freshness_report_once_per_open():
+	var root := _fresh_root()
+
+	var first: Dictionary = root.take_hflevel_freshness_report()
+	assert_true(first.has("stale"), "the first ask gets the report")
+
+	assert_eq(
+		root.take_hflevel_freshness_report(),
+		{},
+		"the dock rebinds on every scene tab switch, and it is the same level each time"
+	)
+
+
+func test_asking_for_the_report_directly_is_not_latched():
+	var root := _fresh_root()
+
+	root.take_hflevel_freshness_report()
+	assert_true(
+		root.check_hflevel_freshness().has("stale"),
+		"the latch is the dock's once-per-open, not an answer the level stops giving"
+	)
+
+
+func test_a_level_resolves_the_scene_that_holds_it_through_its_owners():
+	var scene_root := Node3D.new()
+	scene_root.scene_file_path = "user://hf_owner_chain_test.tscn"
+	add_child_autoqfree(scene_root)
+	var level := LevelRootType.new()
+	level.auto_spawn_player = false
+	level.hflevel_autosave_enabled = false
+	scene_root.add_child(level)
+	level.owner = scene_root
+
+	assert_eq(
+		level.scene_source_path(),
+		"user://hf_owner_chain_test.tscn",
+		"the topmost unowned node is the scene a level belongs to, whichever tab is in front"
+	)
+
+
+func test_a_level_that_is_its_own_scene_resolves_to_itself():
+	var level := LevelRootType.new()
+	level.auto_spawn_player = false
+	level.hflevel_autosave_enabled = false
+	add_child_autoqfree(level)
+	level.scene_file_path = "user://hf_own_scene_test.tscn"
+
+	assert_eq(level.scene_source_path(), "user://hf_own_scene_test.tscn")
+
+
+func test_a_level_that_was_never_saved_has_no_scene_path():
+	assert_eq(_fresh_root().scene_source_path(), "", "nothing to be out of step with")

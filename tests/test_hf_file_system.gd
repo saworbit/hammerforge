@@ -447,3 +447,198 @@ func test_a_level_whose_name_prefixes_another_does_not_prune_it():
 		"'level_' also prefixes 'level_backup_', so the tail has to look like a timestamp"
 	)
 	_clear_history()
+
+
+# ===========================================================================
+# The `.hflevel` against the `.tscn` (#646)
+# ===========================================================================
+
+const _FRESH_SCENE := "user://hf_freshness_test.tscn"
+const _OTHER_SCENE := "user://hf_freshness_other.tscn"
+const _FRESH_LEVEL := "user://hf_freshness_test.hflevel"
+
+
+func _freshness_shim(keeps_brushes: bool) -> GDScript:
+	var s := GDScript.new()
+	s.source_code = (
+		"""
+extends Node3D
+var hflevel_autosave_path: String = "%s"
+var keeps_brushes: bool = %s
+var scene_path: String = "%s"
+func scene_keeps_brushes() -> bool:
+	return keeps_brushes
+func scene_source_path() -> String:
+	return scene_path
+"""
+		% [_FRESH_LEVEL, "true" if keeps_brushes else "false", _FRESH_SCENE]
+	)
+	s.reload()
+	return s
+
+
+func _freshness_root(keeps_brushes: bool = true) -> Node3D:
+	var node := Node3D.new()
+	node.set_script(_freshness_shim(keeps_brushes))
+	add_child_autoqfree(node)
+	return node
+
+
+func _touch(path: String) -> void:
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_string("x")
+	f.close()
+
+
+## A `.hflevel` the way Save Level writes one, recording the scene it came from.
+func _write_level_file(scene: String) -> void:
+	var bundle := {"version": HFLevelIO.FORMAT_VERSION, "settings": {}, "state": {}}
+	if scene != "":
+		bundle["scene"] = scene
+	HFLevelIO.save_to_path(_FRESH_LEVEL, bundle, false)
+
+
+func _clear_freshness_files() -> void:
+	for path in [_FRESH_SCENE, _OTHER_SCENE, _FRESH_LEVEL]:
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(path)
+
+
+## The stamps are whole seconds, so two writes have to straddle a tick to be
+## told apart at all.
+func _after_a_tick() -> void:
+	await get_tree().create_timer(1.1).timeout
+
+
+func _report(keeps_brushes: bool = true) -> Dictionary:
+	return HFFileSystemType.new(_freshness_root(keeps_brushes)).check_hflevel_freshness()
+
+
+func test_a_level_saved_after_the_scene_is_stale():
+	assert_true(
+		HFFileSystemType.level_file_is_stale(200, 100), "the .hflevel is ahead of the .tscn"
+	)
+
+
+func test_a_scene_saved_after_the_level_is_not_stale():
+	assert_false(HFFileSystemType.level_file_is_stale(100, 200))
+
+
+func test_two_files_written_in_the_same_second_are_not_stale():
+	assert_false(
+		HFFileSystemType.level_file_is_stale(100, 100),
+		"the stamps are whole seconds, so under reporting is the safe direction"
+	)
+
+
+func test_a_file_that_was_never_written_is_not_stale():
+	assert_false(HFFileSystemType.level_file_is_stale(0, 100), "no .hflevel to be ahead")
+	assert_false(HFFileSystemType.level_file_is_stale(100, 0), "no .tscn to be behind")
+
+
+func test_a_level_with_no_hflevel_path_is_not_reported():
+	var node := _freshness_root()
+	node.hflevel_autosave_path = "   "
+	var report: Dictionary = HFFileSystemType.new(node).check_hflevel_freshness()
+	assert_false(bool(report["stale"]))
+	assert_eq(report["reason"], "no_hflevel_path")
+
+
+func test_a_scene_that_loads_from_the_hflevel_is_not_reported():
+	_clear_freshness_files()
+	_touch(_FRESH_SCENE)
+	_write_level_file(_FRESH_SCENE)
+	var report := _report(false)
+	assert_false(bool(report["stale"]), "baked-geometry-only loads its .hflevel by design (#624)")
+	assert_eq(report["reason"], "loads_from_hflevel")
+	_clear_freshness_files()
+
+
+func test_a_level_with_no_hflevel_file_yet_is_not_reported():
+	_clear_freshness_files()
+	_touch(_FRESH_SCENE)
+	var report := _report()
+	assert_false(bool(report["stale"]))
+	assert_eq(report["reason"], "no_hflevel_file")
+	_clear_freshness_files()
+
+
+func test_a_scene_that_was_never_saved_is_not_reported():
+	_clear_freshness_files()
+	_write_level_file(_FRESH_SCENE)
+	var report := _report()
+	assert_false(bool(report["stale"]))
+	assert_eq(report["reason"], "scene_never_saved")
+	_clear_freshness_files()
+
+
+func test_a_level_saved_after_its_scene_reports_stale_and_names_both_files():
+	_clear_freshness_files()
+	_touch(_FRESH_SCENE)
+	await _after_a_tick()
+	_write_level_file(_FRESH_SCENE)
+
+	var report := _report()
+	assert_true(bool(report["stale"]), "the .hflevel is newer than the scene that would open")
+	assert_eq(report["reason"], "hflevel_newer")
+	assert_string_contains(str(report["message"]), "hf_freshness_test.hflevel")
+	assert_string_contains(str(report["message"]), "hf_freshness_test.tscn")
+	assert_string_contains(str(report["message"]), "Load Level")
+	_clear_freshness_files()
+
+
+func test_a_newer_hflevel_belonging_to_another_level_is_not_this_level_s_problem():
+	_clear_freshness_files()
+	_touch(_FRESH_SCENE)
+	await _after_a_tick()
+	_write_level_file(_OTHER_SCENE)
+
+	var report := _report()
+	assert_false(
+		bool(report["stale"]),
+		"every level shares that path by default, and Load Level would overwrite this one"
+	)
+	assert_eq(report["reason"], "another_level")
+	assert_eq(report["message"], "", "nothing shows this, so nothing writes it")
+	_clear_freshness_files()
+
+
+func test_a_newer_hflevel_that_names_no_scene_is_reported_without_claiming_one():
+	_clear_freshness_files()
+	_touch(_FRESH_SCENE)
+	await _after_a_tick()
+	_write_level_file("")
+
+	var report := _report()
+	assert_true(bool(report["stale"]), "it may well be this level's, and it is newer either way")
+	assert_eq(report["reason"], "hflevel_newer_unattributed")
+	assert_string_contains(str(report["message"]), "does not say which level it holds")
+	_clear_freshness_files()
+
+
+func test_a_scene_saved_after_its_level_reports_current():
+	_clear_freshness_files()
+	_write_level_file(_FRESH_SCENE)
+	await _after_a_tick()
+	_touch(_FRESH_SCENE)
+
+	var report := _report()
+	assert_false(bool(report["stale"]))
+	assert_eq(report["reason"], "scene_current")
+	_clear_freshness_files()
+
+
+func test_a_question_about_a_level_does_not_recover_a_previous_file():
+	_clear_freshness_files()
+	_write_level_file(_FRESH_SCENE)
+	DirAccess.rename_absolute(_FRESH_LEVEL, _FRESH_LEVEL + ".previous")
+	_touch(_FRESH_SCENE)
+
+	var report := _report()
+	assert_eq(report["reason"], "no_hflevel_file")
+	assert_false(
+		FileAccess.file_exists(_FRESH_LEVEL),
+		"load_from_path() renames a .previous back; asking a question must not"
+	)
+	DirAccess.remove_absolute(_FRESH_LEVEL + ".previous")
+	_clear_freshness_files()
