@@ -25,6 +25,10 @@ const HFOutlineUtil = preload("hf_outline_util.gd")
 @export var faces: Array[FaceData] = []:
 	set(value):
 		faces = value
+		# Faces assigned from outside -- a `.map` import, a restore, a generator,
+		# the vertex tools -- have never been told where the brush is, and a world
+		# space UV needs that (#652).
+		sync_face_world_transform()
 		_queue_gizmo_update()
 
 var editor_material: Material = null
@@ -44,7 +48,38 @@ const ENTITY_OVERLAY_NAME := &"_BrushEntityOverlay"
 
 func _ready() -> void:
 	_ensure_mesh_instance()
+	# Every move has to reach the faces: a planar UV is taken in world space now,
+	# so a face that does not know where its brush is textures as though the brush
+	# were at the origin (#652).
+	set_notify_transform(true)
+	sync_face_world_transform()
 	_update_visuals()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_TRANSFORM_CHANGED:
+		sync_face_world_transform()
+
+
+## Tell each face where its brush is, so a world space projection can be taken.
+##
+## Cheap enough to do on every move -- a brush has six faces and this is an
+## assignment each -- and doing it from the notification rather than at the call
+## sites means a transform set by the gizmo, by undo, by a generator or by a
+## `.map` import all arrive the same way.
+func sync_face_world_transform() -> void:
+	if faces.is_empty():
+		return
+	var xform := global_transform if is_inside_tree() else transform
+	for face in faces:
+		if face == null:
+			continue
+		face.world_transform = xform
+		# A face loaded from before #652 has an offset measured from its brush
+		# rather than from the level. This is the first moment it can be
+		# converted, because it is the first moment the face knows where the
+		# brush is. It is a no-op for anything saved since.
+		face.migrate_uvs_to_world_space()
 
 
 func _ensure_mesh_instance() -> void:
@@ -218,6 +253,14 @@ func _update_visuals() -> void:
 
 
 func rebuild_preview(base_mesh: Mesh = null, mesh_scale: Vector3 = Vector3.ONE) -> void:
+	# Every path that changes a brush's faces ends here, and several of them
+	# append into `faces` rather than assigning it, so the setter above does
+	# not fire: `apply_serialized_faces()` on a load or an undo, and the
+	# bevel, inset and vertex tools adding faces to a brush already placed.
+	# Without this those faces project from the origin instead of from the
+	# brush (#652). It has to come before the `mesh_instance` guard, because
+	# a brush outside the tree still has UVs.
+	sync_face_world_transform()
 	_queue_gizmo_update()
 	if not mesh_instance:
 		return

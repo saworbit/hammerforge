@@ -168,6 +168,21 @@ func _on_hand_edited_uvs() -> void:
 	note("resulting rect", _r(after))
 
 
+## The face of a brush that looks at the camera, which is the one a mapper
+## textures. Face 0 is the +X face of a box, and a planar projection on it reads
+## (z, y): three brushes in a row along X share it whatever the projection does,
+## so measuring that one says nothing about a run of wall.
+func _front_face(brush) -> int:
+	var best := 0
+	var best_dot := -INF
+	for i in brush.faces.size():
+		var d: float = brush.faces[i].normal.normalized().dot(Vector3.BACK)
+		if d > best_dot:
+			best_dot = d
+			best = i
+	return best
+
+
 ## Treat as one: several faces of a wall justified as a single sheet, which is
 ## how a mapper textures a run of wall so the texture does not restart at each
 ## brush.
@@ -180,12 +195,12 @@ func _treat_as_one() -> void:
 		await frame()
 	root.clear_face_selection()
 	for b in brushes:
-		root.toggle_face_selection(b, 0, true)
+		root.toggle_face_selection(b, _front_face(b), true)
 	note("faces selected", root.get_face_selection())
 	root.justify_selected_faces("fit", true)
 	var rects: Array[Rect2] = []
 	for b in brushes:
-		rects.append(_uv_rect(b.faces[0]))
+		rects.append(_uv_rect(b.faces[_front_face(b)]))
 	note("three faces after Fit (treat as one)", ", ".join(rects.map(func(r): return _r(r))))
 	var union := rects[0]
 	for r in rects:
@@ -198,8 +213,7 @@ func _treat_as_one() -> void:
 		if not r.is_equal_approx(rects[0]):
 			identical = false
 	if identical:
-		known(
-			652,
+		flag(
 			"treat-as-one gives every face the same UV rectangle",
 			(
 				(
@@ -210,6 +224,14 @@ func _treat_as_one() -> void:
 				% _r(rects[0])
 			)
 		)
+	# Each face should hold its own third of the sheet, in the order the brushes
+	# sit in the level.
+	for i in range(1, rects.size()):
+		if rects[i].position.x <= rects[i - 1].position.x:
+			flag(
+				"treat-as-one does not lay the faces out in the order they sit",
+				"%s then %s" % [_r(rects[i - 1]), _r(rects[i])]
+			)
 
 
 ## `_justify_face()` handles a seventh mode, "stretch", that no surface passes.

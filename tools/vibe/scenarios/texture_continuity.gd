@@ -80,15 +80,14 @@ func _drawn_side_by_side() -> void:
 		if not r.is_equal_approx(rects[0]):
 			all_same = false
 	if all_same:
-		known(
-			652,
+		flag(
 			"three panels drawn side by side all sample the same texture coordinates",
 			(
 				(
 					"every panel's front face maps to %s, so the texture restarts at each "
 					+ "brush edge instead of running along the wall -- "
-					+ "`_project_uvs_for_vertices()` reads `local_verts`, and a brush's "
-					+ "local vertices do not know where the brush is"
+					+ "`_project_uvs_for_vertices()` projects in world space since #652, so "
+					+ "this is that fix coming undone"
 				)
 				% _r(rects[0])
 			)
@@ -118,19 +117,15 @@ func _drawn_against_moved() -> void:
 	note("drawn at x=128", _r(a))
 	note("drawn at 0, nudged +128", _r(b))
 	note("both now at", "%s and %s" % [drawn.global_position, moved.global_position])
+	# The two disagree, and that is texture lock doing its job rather than a
+	# defect (#653). The brush that was drawn in place takes the texture the
+	# world grid gives it. The brush that was moved carries the texture it was
+	# drawn with, because the checkbox is on. Turn the checkbox off and the two
+	# agree, which is what `_which_way_the_checkbox_goes()` below measures.
 	if not a.is_equal_approx(b):
-		known(
-			653,
-			"two brushes in the same place with the same size have different UVs",
-			(
-				(
-					"drawing a panel where it goes gives %s; drawing it at the origin and "
-					+ "moving it there gives %s. The texture on a wall then depends on how "
-					+ "the mapper got the brush there, and no surface says which one happened"
-				)
-				% [_r(a), _r(b)]
-			)
-		)
+		note("they differ, which is texture lock carrying the moved one's texture")
+	else:
+		note("they agree")
 
 
 ## The dock's Texture Lock checkbox is on by default and says "Keep texture
@@ -164,14 +159,13 @@ func _which_way_the_checkbox_goes() -> void:
 			)
 		)
 	if results.get(true) == false and results.get(false) == true:
-		known(
-			653,
-			"Texture Lock on is the setting that lets the texture slide off the brush",
+		flag(
+			"Texture Lock is inverted: on, the texture slides off the brush",
 			(
 				"with Texture Lock ticked, moving a brush 256 units changes the UVs of "
 				+ "its own vertices, so the texture slides across the face; unticked, the "
 				+ "texture stays put on the brush. The checkbox says 'Keep texture "
-				+ "alignment while moving' and is on by default"
+				+ "alignment while moving' and is on by default (#653)"
 			)
 		)
 
@@ -197,13 +191,13 @@ func _a_duplicated_row() -> void:
 		seen[_r(rect)] = int(seen.get(_r(rect), 0)) + 1
 		note("copy at %s" % b.global_position, _r(rect))
 	if seen.size() == 1 and brushes.size() > 1:
-		known(
-			652,
+		flag(
 			"every copy in an array samples the same texture coordinates",
 			(
 				(
 					"%s brushes spread over %s units all map to %s, so an arrayed wall "
-					+ "shows the same patch of texture repeated rather than a continuous run"
+					+ "shows the same patch of texture repeated rather than a continuous "
+					+ "run (#652)"
 				)
 				% [brushes.size(), 3 * 128, seen.keys()[0]]
 			)

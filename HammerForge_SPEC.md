@@ -193,6 +193,8 @@ LevelRoot (Node3D)
 - Groups persist in `.hflevel` via `capture_groups()` / `restore_groups()`.
 
 ## Texture Lock
+- Planar UVs project from a vertex's position in the level, not in its brush, so `uv_offset` is an offset from the world grid. A brush that moves with no compensation keeps its place in the level and the texture slides under it; the compensation below is what holds the texture on the brush. Cylindrical stays in the brush's own space and is not compensated.
+- The brush tells its faces where it is from `NOTIFICATION_TRANSFORM_CHANGED` and from `rebuild_preview()`. The second covers the paths that fill `faces` by appending rather than assigning, so the setter never fires: `apply_serialized_faces()` on a load or an undo restore, and the bevel, inset and vertex tools adding faces to a brush already placed.
 - When `texture_lock` is enabled (default), moving or resizing a brush automatically compensates face UV offset and scale.
 - Per-projection-axis math in `face_data.gd:adjust_uvs_for_transform()`:
   - PLANAR_X: projects (z, y), PLANAR_Y: projects (x, z), PLANAR_Z: projects (x, y).
@@ -201,7 +203,7 @@ LevelRoot (Node3D)
 - Position compensation: `uv_offset -= projected_delta.rotated(uv_rotation) * uv_scale`. The UV transform rotates before it scales and offsets, so the projected move is rotated the same way. `hf_carve_system.gd` uses the same expression.
 - Size compensation: `uv_scale *= inverse_size_ratio` per projection axis.
 - Hook in `hf_brush_system.gd:set_brush_transform_by_id()` captures old transform, applies new, then adjusts UVs.
-- HammerForge move, nudge, floor/ceiling, and resize paths use that boundary. Godot's native Node3D transform widget intentionally leaves face UV resources unchanged because its native undo action does not capture those nested Resource edits.
+- HammerForge move, nudge, floor/ceiling, and resize paths use that boundary. Godot's native Node3D transform widget intentionally leaves face UV resources unchanged, because its native undo action does not capture those nested Resource edits. Since the projection is world-space, leaving them unchanged means a brush moved with the native widget behaves as though Texture Lock were off: the texture keeps its place in the level and the brush slides under it.
 
 ## Cordon (Partial Bake)
 - Restricts bake to an AABB region. Brushes outside the cordon are skipped.
@@ -544,6 +546,6 @@ Unit tests use the [GUT](https://github.com/bitwes/Gut) framework and run headle
 | `test_selection_gesture.gd` | 40 | Native widget/Object Select ownership, modal Face Select, recovery, focus/scope guards, native duplicate/reparent repair, and Inspector/undo change tracking |
 | `test_viewport_outlines.gd` | 39 | Sparse semantic outlines, exact/composite entity collision, visibility/transforms, and shape-aware resize recovery |
 
-Full suite (verified in CI on September 17, 2026): **4,186 tests** across **233 scripts** (**4,179 passing** plus seven intentional no-assert safety tests; **20,028 assertions**).
+Full suite (verified in CI on September 17, 2026): **4,200 tests** across **234 scripts** (**4,193 passing** plus seven intentional no-assert safety tests; **20,071 assertions**).
 
 Tests use root shim scripts (dynamically created GDScript) to provide the LevelRoot interface without circular preload dependencies. Configuration in `.gutconfig.json`.

@@ -240,6 +240,24 @@ func _texture_lock_world_direction() -> void:
 				)
 			)
 		elif not turns_in_its_own_plane and not carried:
+			# An exact negation is the handedness flip of #684, not a tilt: the face
+			# moved between two planar axes that do not share a chirality. Anything
+			# else is a new shape of wrong and still gets flagged.
+			if n1.dot((turn * n0).normalized()) < -0.999:
+				known(
+					684,
+					"a yaw brings a wall's texture back mirrored along U",
+					(
+						(
+							"world normal %s: the face re-projects from PLANAR_Z, which reads"
+							+ " world (x, y), onto PLANAR_X, which reads (z, y), and the two do"
+							+ " not share a handedness. U went from %s to %s, the exact negation"
+							+ " of the %s that carrying it would give"
+						)
+						% [normal.snapped(Vector3.ONE * 0.01), n0, n1, (turn * n0).normalized()]
+					)
+				)
+				continue
 			flag(
 				"a yaw tips the texture on face %d" % i,
 				(

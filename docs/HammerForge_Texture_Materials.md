@@ -140,12 +140,28 @@ When to use:
 
 Paint weights are stored as embedded PNG bytes (base64) per layer.
 
+## Projection Space
+The planar projections read a vertex's position **in the level**, not in its
+brush. Two brushes the same size in different places therefore get different
+UVs, and a wall built from several brushes reads as one surface with the texture
+running across the seams. `uv_offset` is an offset from the world grid, which is
+what the `.map` formats already mean by it -- `hf_map_valve220.gd` writes world
+texture axes.
+
+Cylindrical is the exception and stays in the brush's own space. Its angle is
+measured about the brush's axis, so taking it in world space would spin the
+texture as the brush moved.
+
 ## UV Transform Order
 The UV transform is applied as: **rotate → scale → offset** (matching Valve 220 convention). This means `uv_rotation` rotates the raw projected UV around the origin, then `uv_scale` is applied, then `uv_offset` shifts the result. This order ensures that offset values are stable regardless of rotation.
 
-Serialized face data includes `uv_format_version`. Version 0 (legacy) used a different order (scale+offset → rotate). On load, legacy data is auto-migrated:
+Serialized face data includes `uv_format_version`, currently 2. On load, older data is auto-migrated.
+
+Version 0 used a different order (scale+offset → rotate):
 - **Uniform scale** (sx == sy): offset is rotated to match the new semantics.
 - **Non-uniform scale with rotation**: UVs are baked into `custom_uvs` using the old transform, then parametric transforms are cleared.
+
+Version 1 projected from the brush's own vertices rather than from the level, so an offset measured from the brush. A face below version 2 folds its brush's placement back into `uv_offset` the first time the brush tells it where that is, which cannot happen in `from_dict()` -- a face does not know where its brush is until the brush says so. Only an offset somebody set is folded in; a face still on zero was never positioned by hand and takes the new projection. A rotated brush cannot be corrected by an offset, because world projection is a different map there rather than the same one shifted, so those faces are baked into `custom_uvs` the way version 0's non-uniform scale is.
 
 ## Carve and UV Preservation
 When a brush is carved (boolean subtracted), the resulting slice pieces inherit UV settings from the original target brush. Each slice face is matched to the closest source face by normal direction, copying `uv_scale`, `uv_offset`, `uv_rotation`, and `material_idx`. The UV offset is compensated for the positional difference between the original brush center and the slice center, ensuring textures remain aligned across all surviving faces. Slice faces use BOX_UV projection to auto-select the correct planar axis.

@@ -229,6 +229,65 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the exporter next.
 
 ### Fixed
+- **A texture runs across a wall built from more than one brush** (#652, #653). A
+  face's UVs were projected from the brush's own vertices, and a brush's local
+  vertices do not know where the brush is. Two brushes the same size therefore
+  had the same UVs wherever they sat, so a wall built from three panels was three
+  copies of one patch of texture with a hard restart at every brush edge, and a
+  four copy array was four. Building a surface out of several brushes is the
+  fundamental move in this style of editor, and it is invisible in a one brush
+  test.
+  The planar projections read the vertex's position in the level now. The three
+  panels land on `u[-64..64]`, `u[64..192]` and `u[192..320]` and butt up.
+  Cylindrical is deliberately left in the brush's own space: its angle is
+  measured about the brush's axis, and taking that in world space would spin the
+  texture as the brush moved.
+  Box UV resolves its axis in the space the projection is taken in. It picks the
+  axis a face most nearly faces, and asking that in the brush's space while
+  projecting in the level's is how a wall yawed a quarter turn kept `PLANAR_Z`
+  and then projected world (x, y) onto a plane of constant x: every vertex got
+  the same u and the texture smeared into a line. The same goes for the move
+  compensation, whose `pos_delta` is a distance through the level. A brush that
+  has not been turned resolves to the same axis either way, which is why this is
+  invisible until something rotates.
+  The brush is what tells a face where it is, from `NOTIFICATION_TRANSFORM_CHANGED`
+  and from `rebuild_preview()`. The notification covers a transform set by the
+  gizmo, by undo, by a generator or by a `.map` import without any of them
+  knowing about it. `rebuild_preview()` covers the paths that fill `faces` by
+  appending rather than assigning, so the setter never fires: a load, an undo
+  restore, and the bevel, inset and vertex tools adding faces to a brush that is
+  already placed. It runs before the `mesh_instance` guard, because a brush
+  outside the tree still has UVs.
+  **Treat as one** works as a result. Its whole job is aligning several faces as
+  a single sheet, and `justify_selected_faces()` had the arithmetic right all
+  along -- it computed a shared rectangle across every selected face and could
+  not help, because all of those faces reported the same rectangle to begin with.
+  Three panels in a row now take a third of the sheet each, in the order they sit
+  in the level.
+- **Texture Lock keeps the texture on the brush** (#653). It needed no code
+  change, and the sign flip the issue proposed would have broken it. Under a
+  local projection a brush that moved kept its texture whatever the checkbox
+  said, and the compensation the checkbox switched on was the thing that made the
+  texture slide off, so the control was inverted. Under a world projection the
+  existing `uv_offset -= rotated_delta * uv_scale` is what holds the texture on a
+  brush that moves, which is what the label promises. Ticked, the texture travels
+  with the brush; unticked, the brush slides under it and the texture stays on
+  the world grid. The resize half of the same function already worked that way,
+  which is why the two halves of one function used to disagree.
+- **Levels saved before that keep the texture placement somebody set** (#652).
+  `uv_format_version` is 2. An offset used to measure from the brush and now
+  measures from the level, and the two differ by wherever the brush is, so a face
+  loaded below v2 folds its brush's placement back into `uv_offset` the first
+  time the brush tells it where that is. That cannot happen in `from_dict()`,
+  which is why the gate is on the face and the work is done by the brush.
+  Only an offset somebody set is folded in. A face still on zero was never
+  positioned by hand, and giving it one would put the panels of a wall back on
+  the same patch of texture, which is the defect. Those faces take the new
+  projection, which is the fix reaching levels that already exist. A rotated
+  brush cannot be corrected by an offset at all, because world projection is a
+  different map there rather than the same one shifted; those faces keep their
+  old look by baking it into `custom_uvs`, the way the v0 to v1 migration keeps a
+  non-uniform scale.
 - **A brush entity can be named, and a two leaf door is one door** (#668). A
   brush entity arrived in the level as a class string on each brush and nothing
   else, and three things that should follow from it did not.

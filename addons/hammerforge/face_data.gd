@@ -41,6 +41,25 @@ const PaintLayer = preload("res://addons/hammerforge/paint/hf_face_paint_layer.g
 @export var paint_layers: Array[PaintLayer] = []
 @export var bounds: AABB = AABB()
 @export var local_verts: PackedVector3Array = PackedVector3Array()
+## Where this face's brush sits in the level, so a planar projection can be taken
+## in world space rather than in the brush's own space.
+##
+## Two brushes of the same size used to get identical UVs wherever they were, so
+## a wall built out of three panels was three copies of the same patch of texture
+## with a hard restart at every seam -- and building a surface out of several
+## brushes is the fundamental move in this style of editor (#652). Every other
+## editor in this lineage projects from world space for that reason, and the
+## `.map` formats already mean it: `hf_map_valve220.gd` writes world texture axes.
+##
+## Not persisted. It is the brush's transform, kept in step by `DraftBrush`, and
+## a face that has never been told is at the origin -- which is what a face with
+## no brush (a test, a raw `from_dict`) should assume.
+var world_transform: Transform3D = Transform3D.IDENTITY
+## The `uv_format_version` this face was loaded from, so a brush that has just
+## been given its transform can migrate offsets tuned against the old projection.
+## Back to -1 once the brush has done it, and -1 for a face that was built
+## rather than loaded.
+var pending_uv_migration: int = -1
 @export var normal: Vector3 = Vector3.UP
 
 ## Optional displacement data. When non-null the face is a displacement surface
@@ -75,7 +94,9 @@ func ensure_custom_uvs() -> void:
 func adjust_uvs_for_transform(pos_delta: Vector3, size_ratio: Vector3) -> void:
 	var projection = uv_projection
 	if projection == UVProjection.BOX_UV:
-		projection = _box_projection_axis()
+		# `pos_delta` is a move through the level, so the axis is the one the
+		# projection is using there.
+		projection = _box_projection_axis_in(world_transform)
 	if projection == UVProjection.CYLINDRICAL:
 		return
 	var offset_delta = Vector2.ZERO
@@ -359,7 +380,7 @@ func to_dict() -> Dictionary:
 		"uv_scale": _encode_vec2(uv_scale),
 		"uv_offset": _encode_vec2(uv_offset),
 		"uv_rotation": uv_rotation,
-		"uv_format_version": 1,
+		"uv_format_version": 2,
 		"winding_version": 3,
 		"custom_uvs": _encode_vec2_array(custom_uvs),
 		"local_verts": _encode_vec3_array(local_verts),
@@ -414,6 +435,12 @@ static func from_dict(data: Dictionary) -> FaceData:
 	# new order is uv.rotated(R) * scale + offset. Only affects faces with
 	# non-zero rotation.
 	var uv_fmt: int = int(data.get("uv_format_version", 0))
+	# v2 moved the planar projection out of the brush's space and into the
+	# level's (#652), which changes what `uv_offset` measures from. A face
+	# cannot fold that in here, because it does not know where its brush is
+	# until the brush tells it. Record the version and let the brush do it.
+	if uv_fmt < 2:
+		face.pending_uv_migration = uv_fmt
 	if uv_fmt < 1 and face.uv_rotation != 0.0:
 		if is_equal_approx(face.uv_scale.x, face.uv_scale.y):
 			# Uniform scale: rotation commutes with scale, only offset changes.
@@ -489,13 +516,24 @@ static func _decode_vec3_array(values: Array) -> PackedVector3Array:
 
 
 func _project_uvs_for_vertices(verts: PackedVector3Array) -> PackedVector2Array:
+	return _project_uvs_in_space(verts, world_transform)
+
+
+## The projection, in whatever space the caller asks for. `Transform3D.IDENTITY`
+## is what the projection did before #652, which is what the migration folds out.
+func _project_uvs_in_space(verts: PackedVector3Array, space: Transform3D) -> PackedVector2Array:
 	var out := PackedVector2Array()
 	var projection = uv_projection
 	if projection == UVProjection.BOX_UV:
-		projection = _box_projection_axis()
+		projection = _box_projection_axis_in(space)
 	var aabb = _compute_bounds_for(verts)
 	var height = max(0.001, aabb.size.y)
-	for v in verts:
+	for local in verts:
+		# World space, so the same face in two places gets two patches of texture
+		# and a run of brushes reads as one surface (#652). Cylindrical keeps its
+		# own space: its angle is measured about the brush's own axis, and taking
+		# that in world space would spin the texture as the brush moved.
+		var v: Vector3 = local if projection == UVProjection.CYLINDRICAL else space * local
 		var uv = Vector2.ZERO
 		match projection:
 			UVProjection.PLANAR_X:
@@ -513,6 +551,59 @@ func _project_uvs_for_vertices(verts: PackedVector3Array) -> PackedVector2Array:
 		uv = _apply_uv_transform(uv)
 		out.append(uv)
 	return out
+
+
+## Fold a brush's placement into a hand-tuned `uv_offset`, so an alignment a
+## mapper set before #652 survives the move to world-space projection.
+##
+## Before v2 a planar UV was projected from the brush's own vertices, so an
+## offset meant "shift the texture along the brush". It now means "shift it
+## along the level", and the two differ by wherever the brush is. Folding that
+## in is the same sum texture lock does for a move, because moving a brush and
+## changing the space it projects in do the same thing to the result.
+##
+## Only an offset somebody set is folded in. A face still on zero was never
+## positioned by hand, and giving it one would put it back where #652 says it
+## should not be, with the panels of a wall on the same patch of texture again.
+## Those faces take the new projection, which is the fix arriving.
+##
+## A rotated brush cannot be corrected by an offset at all: world projection is
+## a different map there, not the same one shifted. Those faces keep their old
+## look the way the v0 to v1 migration keeps a non-uniform scale, by baking it
+## into `custom_uvs`.
+func migrate_uvs_to_world_space() -> void:
+	var from_version := pending_uv_migration
+	pending_uv_migration = -1
+	if from_version < 0 or from_version >= 2:
+		return
+	if uv_offset.is_zero_approx():
+		return
+	if world_transform.is_equal_approx(Transform3D.IDENTITY):
+		return
+	var projection = uv_projection
+	if projection == UVProjection.BOX_UV:
+		projection = _box_projection_axis()
+	# Cylindrical never left the brush's space, so it has nothing to fold in.
+	if projection == UVProjection.CYLINDRICAL:
+		return
+	if not world_transform.basis.is_equal_approx(Basis.IDENTITY):
+		if local_verts.size() >= 3 and custom_uvs.size() != local_verts.size():
+			custom_uvs = _project_uvs_in_space(local_verts, Transform3D.IDENTITY)
+		return
+	var origin := world_transform.origin
+	var placement := Vector2.ZERO
+	match projection:
+		UVProjection.PLANAR_X:
+			placement = Vector2(origin.z, origin.y)
+		UVProjection.PLANAR_Y:
+			placement = Vector2(origin.x, origin.z)
+		UVProjection.PLANAR_Z:
+			placement = Vector2(origin.x, origin.y)
+	# Rotation is applied before the scale and the offset, so the placement has
+	# to be rotated the same way before it is taken back out.
+	if uv_rotation != 0.0:
+		placement = placement.rotated(uv_rotation)
+	uv_offset -= placement * uv_scale
 
 
 func _apply_uv_transform(uv: Vector2) -> Vector2:
@@ -560,6 +651,27 @@ func _project_uvs_v0(verts: PackedVector3Array) -> PackedVector2Array:
 	return out
 
 
+## Which planar axis Box UV resolves to, measured in `space`.
+##
+## Box UV picks the axis the face most nearly faces, so it has to be asked in
+## the same space the projection is taken in. Asking in the brush's space while
+## projecting in the level's is how a wall yawed a quarter turn kept `PLANAR_Z`
+## and then projected world (x, y) onto a plane of constant x: every vertex got
+## the same u and the texture smeared into a line (#652).
+func _box_projection_axis_in(space: Transform3D) -> int:
+	var n := normal if space.basis.is_equal_approx(Basis.IDENTITY) else space.basis * normal
+	var ax = abs(n.x)
+	var ay = abs(n.y)
+	var az = abs(n.z)
+	if ax >= ay and ax >= az:
+		return UVProjection.PLANAR_X
+	if ay >= ax and ay >= az:
+		return UVProjection.PLANAR_Y
+	return UVProjection.PLANAR_Z
+
+
+## The axis as the face's own brush sees it. `adjust_uvs_for_rotation()` reasons
+## in that space, and both migrations measure against what the old projection did.
 func _box_projection_axis() -> int:
 	var n = normal
 	var ax = abs(n.x)

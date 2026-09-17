@@ -431,7 +431,7 @@ The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
 - `tools/check_placement_order.py` -- refuses a world transform written to a node that is not in the tree yet
-- **GUT unit + integration tests** -- 4,186 tests across 233 test scripts (4,179 passing plus seven intentional no-assert safety tests; 20,028 assertions; verified in CI on September 17, 2026; runs Godot headless)
+- **GUT unit + integration tests** -- 4,200 tests across 234 test scripts (4,193 passing plus seven intentional no-assert safety tests; 20,071 assertions; verified in CI on September 17, 2026; runs Godot headless)
 
 Run locally before pushing:
 ```
@@ -729,9 +729,11 @@ Grouping
 Texture Lock
 - Place a textured brush with Texture Lock enabled (Build tab checkbox).
 - Resize the brush via gizmo -- confirm UV alignment stays consistent.
-- Move the brush -- confirm UVs track the movement.
-- Rotate a face's UVs, then move the brush -- confirm the texture stays pinned in world space rather than drifting along the wrong axis.
+- Move the brush -- confirm the texture travels with it rather than sliding across the face.
+- Rotate a face's UVs, then move the brush -- confirm the texture still travels with the brush rather than drifting along the wrong axis.
+- Disable Texture Lock and move the brush -- confirm the texture keeps its place in the level and the brush slides under it.
 - Disable Texture Lock and resize -- confirm UVs shift with the resize.
+- Draw three panels in a row along X with the same material -- confirm the texture runs across all three rather than restarting at each brush edge.
 
 Carve UV Preservation
 - Apply a grid texture to a large brush.

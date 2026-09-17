@@ -1489,9 +1489,9 @@ The Paint tab includes a UV Editor section for fine-tuning per-face UV settings:
 
 ### Projection Mode
 Select a UV projection mode from the dropdown:
-- **Planar X/Y/Z**: projects UVs along the specified axis.
+- **Planar X/Y/Z**: projects UVs along the specified axis, from where the face sits in the level. A wall built from several brushes textures as one surface, and Offset X/Y is measured from the world grid rather than from the brush.
 - **Box UV**: automatically picks the best axis per face (default for most workflows).
-- **Cylindrical**: wraps UVs around a cylinder (best for round shapes).
+- **Cylindrical**: wraps UVs around a cylinder (best for round shapes). This one is measured about the brush's own axis, so the texture does not turn when the brush moves.
 
 Click **Re-project UVs** to recompute UVs using the selected projection mode (resets scale/offset/rotation).
 
@@ -1516,7 +1516,7 @@ When Texture Lock is enabled, moving or resizing a brush automatically adjusts i
 Notes:
 - Works with PLANAR_X, PLANAR_Y, PLANAR_Z, and BOX_UV projections.
 - CYLINDRICAL projection is not compensated (complex; future enhancement).
-- Applies to HammerForge move, nudge, floor/ceiling, resize and rotate actions. Godot's native Node3D transform widget leaves the brush's face UV resources unchanged so native undo/redo remains truthful.
+- Applies to HammerForge move, nudge, floor/ceiling, resize and rotate actions. Godot's native Node3D transform widget leaves the brush's face UV resources unchanged so native undo/redo remains truthful, which means a brush moved with that widget behaves as though Texture Lock were off.
 - On a rotation, a face is compensated when the turn keeps its projection plane where it is. A face that turns out from under its own projection is left alone, so its texture travels with the brush rather than tipping.
 - Persists in `.hflevel` settings.
 
