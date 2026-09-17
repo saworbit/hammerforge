@@ -34,6 +34,14 @@ So this reads GDScript and nothing else:
 Only underscore-prefixed declarations are in scope. A public method on an addon
 is callable from a game script this repo cannot see; a private one is not.
 
+What this still cannot see, said plainly so nobody reads it as stronger than it
+is. Of 3192 private declarations, 192 are held live by a whole string literal
+somewhere and 46 share a name with a Godot virtual. Both are deliberate and both
+are places a genuinely dead declaration can hide. Narrowing the literal rule to
+dispatch-shaped call sites only is the real work #647 names, and it is not done
+here; the rule as it stands cannot delete something live, which is the direction
+that matters for a gate.
+
     python tools/check_dead_declarations.py
 
 Exits 1 and names file, line and declaration for every one that nothing uses.
@@ -163,11 +171,13 @@ def _scan(extension: str) -> list[str]:
         found += glob.glob(os.path.join(root, "**", "*" + extension), recursive=True)
     out = []
     for path in sorted(set(found)):
+        # Forward slashes whatever the platform, so the reported path is the
+        # same one on Windows and in CI and both are clickable.
         flat = path.replace("\\", "/")
         if any(skip in flat for skip in SKIP_DIRS):
             continue
-        out.append(path)
-    return out
+        out.append(flat)
+    return sorted(out)
 
 
 def gd_files() -> list[str]:
@@ -323,10 +333,24 @@ def _scan_source(src: str) -> tuple[list, list]:
 
 
 def selftest() -> int:
-    code, lits = split_code_and_strings("# don't stop here\nvar _x = 1\n")
-    if "_x" not in code:
-        print("selftest: an apostrophe in a comment swallowed the code below it")
+    # The whole reason this file exists: a name written about in a comment is
+    # not a caller. `_point_near_polygon_3d` survived the old scan on a line of
+    # prose.
+    code, lits = split_code_and_strings("# see _written_about_only\nvar _x = 1\n")
+    if "_written_about_only" in code:
+        print("selftest: a name in a comment is still being counted as a use")
         return 1
+    if "_x" not in code:
+        print("selftest: a comment swallowed the code below it")
+        return 1
+
+    # An apostrophe in a comment must not open a literal. If it does, the text
+    # after it is harvested as a dispatch name and keeps something alive.
+    code, lits = split_code_and_strings('# don\'t count _sneaky\nvar _y = "real"\n')
+    if lits != ["real"]:
+        print("selftest: an apostrophe in a comment opened a literal: %s" % lits)
+        return 1
+
     code, lits = split_code_and_strings('var _s = "# not a comment"\nvar _y = 2\n')
     if "_y" not in code or "# not a comment" not in lits:
         print("selftest: a hash inside a literal was read as a comment")
