@@ -132,7 +132,7 @@ jobs:
         env:
           ACTIONLINT_VERSION: "1.7.12"
         run: |
-          curl -fsSL -o actionlint.tar.gz \
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors -o actionlint.tar.gz \
             "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
           tar -xzf actionlint.tar.gz actionlint
           ./actionlint -color
@@ -182,9 +182,35 @@ jobs:
           ref: ${{ env.OWN_PR == 'true' && github.event.pull_request.head.ref || '' }}
           persist-credentials: false
 
+      # One GET, no retry, and -q hid the reason it failed. On d1b6ca5 the
+      # release host answered this shard with an error while the other three
+      # fetched the same URL a second apart and got it, so main went red on a
+      # run where no test had been executed. Four shards each fetch this, so
+      # every run carries four chances to lose the merge gate to someone else's
+      # bad second.
+      #
+      # wget does not retry an HTTP error response on its own: --tries treats
+      # one as fatal, which is why that attempt gave up in half a second. The
+      # listed codes are the transient ones. The loop around it covers what the
+      # list cannot: a code that is not on it, and a zip that arrives short with
+      # a 200 on it. -S is what puts the status line in the log, because -q was
+      # swallowing it, and -nv alone prints the URL again per retry without
+      # saying what came back.
       - name: Download Godot
         run: |
-          wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip" -O godot.zip
+          url="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip"
+          for attempt in 1 2 3; do
+            if wget -nv -S --tries=3 --waitretry=5 --retry-connrefused \
+                --retry-on-http-error=429,500,502,503,504 "$url" -O godot.zip \
+                && unzip -qt godot.zip; then
+              break
+            fi
+            if [ "$attempt" = 3 ]; then
+              echo "Godot ${GODOT_VERSION} would not download after 3 attempts"
+              exit 1
+            fi
+            sleep $((attempt * 15))
+          done
           unzip -q godot.zip
           mv "Godot_v${GODOT_VERSION}_linux.x86_64" /usr/local/bin/godot
           chmod +x /usr/local/bin/godot

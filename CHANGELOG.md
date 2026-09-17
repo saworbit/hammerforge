@@ -5,6 +5,19 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **CI stops going red on a download**. Shard 4 failed on d1b6ca5 with exit code
+  8 from `wget`, while the other three shards fetched the same URL a second apart
+  and got it. No test ran in that shard, and main went red on a commit whose
+  tests all pass. The step made one GET with no retry, and `wget` does not retry
+  an HTTP error response on its own: `--tries` treats one as fatal, which is why
+  the attempt gave up in half a second. `-q` hid which code came back, so the log
+  had nothing to say about what happened. Four shards each fetch that file, so
+  every run carried four chances to lose the merge gate to a bad second on a host
+  nobody here owns. The step now retries the transient codes, retries the whole
+  fetch up to three times for anything else, checks the zip is whole before
+  accepting it, and leaves the server's answer in the log. The actionlint
+  download beside it gets the same treatment.
+
 - **A brush entity's properties can be set** (#728). `func_door` declares
   `speed`, `wait`, `angle` and `locked`, `func_button` declares `wait` and
   `locked`, and none of them could be given a value in the editor. Two things
