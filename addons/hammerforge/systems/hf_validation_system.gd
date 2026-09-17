@@ -471,13 +471,28 @@ func check_bake_issues() -> Array:
 ## the step for a chunkier stair puts it out of reach of everything in the game
 ## (#701). Only worth saying when the level is actually baking a navmesh and
 ## actually building stairs.
+func _root_says_yes(property: String) -> bool:
+	var value: Variant = root.get(property)
+	return value is bool and value
+
+
+func _root_number(property: String, fallback: float = 0.0) -> float:
+	var value: Variant = root.get(property)
+	if value is float or value is int:
+		return float(value)
+	return fallback
+
+
 func _check_stairs_are_climbable(issues: Array) -> void:
-	if not bool(root.get("bake_navmesh")):
+	# Read defensively: `root` is a shim in a good many tests, and `get()` on a
+	# property it does not have returns null, which `bool()` refuses to construct
+	# from rather than treating as false.
+	if not _root_says_yes("bake_navmesh") or not _root_says_yes("bake_auto_connectors"):
 		return
-	if not bool(root.get("bake_auto_connectors")):
+	var step := _root_number("bake_connector_stair_height")
+	var climb := _root_number("bake_navmesh_agent_max_climb")
+	if step <= 0.0 or climb <= 0.0:
 		return
-	var step := float(root.get("bake_connector_stair_height"))
-	var climb := float(root.get("bake_navmesh_agent_max_climb"))
 	if step <= climb:
 		return
 	# Same shape as every other entry on this report: `on_bake_check_issues()`
