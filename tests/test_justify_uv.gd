@@ -83,19 +83,6 @@ func _make_face_with_uvs(uvs: PackedVector2Array) -> FaceData:
 	return face
 
 
-func _make_brush_with_face(face: FaceData, brush_id: String = "") -> DraftBrush:
-	var b = DraftBrush.new()
-	b.size = Vector3(32, 32, 32)
-	if brush_id == "":
-		root._brush_id_counter += 1
-		brush_id = "test_%d" % root._brush_id_counter
-	b.brush_id = brush_id
-	b.set_meta("brush_id", brush_id)
-	root.draft_brushes_node.add_child(b)
-	sys._register_brush_id(brush_id, b)
-	return b
-
-
 # ===========================================================================
 # _justify_face: direct unit tests on the internal method
 # ===========================================================================

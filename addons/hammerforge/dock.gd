@@ -1317,10 +1317,6 @@ func _get_editor_color(color_name: String, fallback: Color) -> Color:
 	return HFEditorTheme.get_editor_color(editor_base_control, self, color_name, fallback)
 
 
-func _get_scene_history_id() -> int:
-	return HFUndoNav.get_scene_history_id(undo_redo, level_root)
-
-
 func _get_scene_undo_redo() -> UndoRedo:
 	return HFUndoNav.get_scene_undo_redo(undo_redo, level_root)
 
