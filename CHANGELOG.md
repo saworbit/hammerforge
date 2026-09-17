@@ -229,6 +229,41 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the exporter next.
 
 ### Fixed
+- **A prefab name cannot write outside the prefab directory** (#667). The library
+  panel's Save box is free text and it went straight into a path.
+  `to_snake_case()` normalises case and word breaks and does not touch a slash, a
+  dot or a leading `..`, so `../escape` resolved to `res://escape.hfprefab` --
+  sitting beside `project.godot`, outside the directory, and invisible to the
+  panel that made it. `validate_filename()` is the engine's own rule for what a
+  filesystem accepts and replaces every separator, but it is not enough on its
+  own: `../escape` comes out of it as `.._escape`, which is safe from separators
+  and still leads with a dot, so leading dots are stripped as well. Names are
+  capped at 200 characters, and a name that cleans away to nothing becomes
+  `untitled` -- trimmed *before* `to_snake_case()`, which turns a run of spaces
+  into a run of underscores and so made `"   "` come out as `___`.
+  `validate_filename()` also replaces characters a filesystem refuses without
+  knowing about names it refuses: on Windows `CON`, `NUL`, `PRN`, `AUX` and the
+  COM and LPT series are devices whatever extension follows, so `CON.hfprefab`
+  could not be opened and the save failed with nothing on screen. Only the whole
+  name is a device, so `console` and `aux_wall` are untouched.
+  A save that genuinely fails now says so. `quick_save_prefab()` reported failure
+  as an empty string and nothing above it turned that into a message, so a mapper
+  whose disk was full got the same feedback as one who typed a slash: the name
+  stayed in the box, the list did not change, and the button looked like it had
+  not registered the click.
+- **The prefab search filters instead of dimming** (#667). An `ItemList` has no
+  per-item visibility, so the panel set non-matching rows to 15% alpha and
+  disabled them: a search in a directory of fifty prefabs still showed fifty
+  rows, and the mapper scrolled a list of unreadable text looking for the two
+  that lit up. It rebuilds the list from the entries it found on disk now, the
+  way the material browser rebuilds its grid, and `_file_paths` stays parallel to
+  the rows that are actually visible so selection and drag follow the filter.
+  A `.hfprefab` that will not parse is no longer offered as an ordinary prefab.
+  `refresh()` listed by extension and added the row before the load below it had
+  answered, so a file holding `this is not json` appeared with a normal name and
+  could be dragged into a level. The parse result is available at that point, so
+  such a file is marked and disabled -- visible, because it is on disk and the
+  mapper should see it, and unusable, because it is not a prefab.
 - **The distances #625 did not reach** (#658). One world unit is a metre since
   #625 -- the player is 1.6, a default drawn brush is 2, the grid snaps at 0.5
   and the shipped examples are 8 unit rooms -- and these are the numbers that
