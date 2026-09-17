@@ -476,6 +476,74 @@ func _shape_name(shape: int) -> String:
 
 
 ## Quick-save selection as prefab. Returns the saved path or "".
+## Names Windows treats as devices whatever extension follows them.
+const _RESERVED_FILE_NAMES := [
+	"CON",
+	"PRN",
+	"AUX",
+	"NUL",
+	"COM1",
+	"COM2",
+	"COM3",
+	"COM4",
+	"COM5",
+	"COM6",
+	"COM7",
+	"COM8",
+	"COM9",
+	"LPT1",
+	"LPT2",
+	"LPT3",
+	"LPT4",
+	"LPT5",
+	"LPT6",
+	"LPT7",
+	"LPT8",
+	"LPT9",
+]
+
+
+## A prefab name as a file name that stays inside the prefab directory.
+##
+## `to_snake_case()` normalises case and word breaks and does not touch a slash,
+## a dot or a leading `..`, so the Save box was free text going straight into a
+## path: "../escape" resolved to `res://escape.hfprefab`, beside `project.godot`
+## and invisible to the panel that made it, and "level 2/pillar" failed silently
+## (#667). `validate_filename()` is the engine's own rule for what a filesystem
+## accepts and replaces every separator, so a name can no longer point anywhere
+## but here.
+##
+## Capped at 200 characters before the extension. The usual filesystem limit is
+## 255 bytes for the whole name, and a name the panel's list cannot show is not a
+## name anybody wanted.
+static func prefab_file_name(prefab_name: String) -> String:
+	# Trimmed before `to_snake_case()`, which turns a run of spaces into a run of
+	# underscores: "   " came out as "___" rather than as no name at all.
+	var cleaned := prefab_name.strip_edges().to_snake_case().validate_filename().strip_edges()
+	# Leading dots are what a traversal is made of, and a file starting with one
+	# is hidden on every platform that matters.
+	while cleaned.begins_with("."):
+		cleaned = cleaned.substr(1)
+	if cleaned.length() > 200:
+		cleaned = cleaned.substr(0, 200)
+	if cleaned == "":
+		cleaned = "untitled"
+	# `validate_filename()` replaces characters a filesystem refuses; it does not
+	# know about names it refuses. On Windows `CON`, `NUL`, `PRN`, `AUX` and the
+	# COM/LPT series are devices, with or without an extension, so `CON.hfprefab`
+	# cannot be opened and the save failed with nothing on screen (#667).
+	if _RESERVED_FILE_NAMES.has(cleaned.to_upper()):
+		cleaned = "%s_prefab" % cleaned
+	return cleaned + ".hfprefab"
+
+
+## Say something to the mapper, the way the other subsystems do.
+func _report(message: String, severity: int) -> void:
+	HFLog.warn("HammerForge: %s" % message)
+	if root and root.has_signal("user_message"):
+		root.user_message.emit(message, severity)
+
+
 func quick_save_prefab(
 	brush_nodes: Array, entity_nodes: Array, prefab_name: String = "", linked: bool = false
 ) -> String:
@@ -493,10 +561,16 @@ func quick_save_prefab(
 	if not DirAccess.dir_exists_absolute(dir_path):
 		DirAccess.make_dir_recursive_absolute(dir_path)
 
-	var file_name := prefab_name.to_snake_case() + ".hfprefab"
+	var file_name := prefab_file_name(prefab_name)
 	var path := dir_path.path_join(file_name)
 	var err := prefab.save_to_file(path)
 	if err != OK:
+		# `quick_save_prefab()` reported failure as an empty string and nothing
+		# above it turned that into a message: the name stayed in the box, the
+		# list did not change, and the Save button looked like it had not
+		# registered the click. A mapper whose disk was full got exactly the same
+		# feedback as one who typed a name with a slash in it (#667).
+		_report("Prefab '%s' could not be written to %s (error %d)" % [prefab_name, path, err], 2)
 		return ""
 
 	# Register as a linked instance if requested

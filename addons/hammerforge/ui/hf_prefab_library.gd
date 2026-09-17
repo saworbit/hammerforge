@@ -26,6 +26,10 @@ var _refresh_btn: Button
 var _delete_btn: Button
 var _prefab_dir: String = HFPrefabSystemType.PREFAB_DIR
 var _file_paths: PackedStringArray = []
+## Every prefab found on disk, whether or not the current filter shows it.
+## `_apply_filters()` rebuilds the list from this, so a search removes rows
+## rather than dimming them (#667).
+var _entries: Array = []
 var _all_tags: PackedStringArray = []
 var _prefab_cache: Dictionary = {}  # path -> HFPrefab (lazy loaded for tags/variants)
 var _context_menu: PopupMenu
@@ -127,6 +131,7 @@ func refresh() -> void:
 		return
 	_file_list.clear()
 	_file_paths = PackedStringArray()
+	_entries = []
 	_prefab_cache.clear()
 	_all_tags = PackedStringArray()
 
@@ -155,6 +160,7 @@ func refresh() -> void:
 
 		# Load prefab metadata (tags, variants)
 		var prefab = HFPrefabType.load_from_file(path)
+		var tooltip := ""
 		if prefab:
 			_prefab_cache[path] = prefab
 			for tag in prefab.tags:
@@ -164,14 +170,20 @@ func refresh() -> void:
 			var vcount: int = prefab.get_variant_names().size()
 			if vcount > 1:
 				display += " [%d variants]" % vcount
+			if not prefab.tags.is_empty():
+				tooltip = "Tags: %s" % ", ".join(Array(prefab.tags))
+		else:
+			# `refresh()` listed by extension and added the row before the load
+			# below had answered, so a file holding `this is not json` appeared as
+			# an ordinary prefab and was offered for selection and for dragging
+			# into the viewport (#667). The parse result is available here, so a
+			# file that will not read says so and cannot be used.
+			display += "  (unreadable)"
+			tooltip = "This file is not a prefab this build can read."
 
-		_file_list.add_item(display)
-		_file_paths.append(path)
-
-		# Set tooltip with tags
-		if prefab and not prefab.tags.is_empty():
-			var idx: int = _file_list.item_count - 1
-			_file_list.set_item_tooltip(idx, "Tags: %s" % ", ".join(Array(prefab.tags)))
+		_entries.append(
+			{"path": path, "display": display, "tooltip": tooltip, "ok": prefab != null}
+		)
 
 	_refresh_tag_filter()
 	_apply_filters()
@@ -200,11 +212,16 @@ func _apply_filters() -> void:
 	if tag_idx > 0 and tag_idx - 1 < _all_tags.size():
 		filter_tag = _all_tags[tag_idx - 1]
 
-	for i in range(_file_list.item_count):
-		if i >= _file_paths.size():
-			break
-		var path: String = _file_paths[i]
-		var display: String = _file_list.get_item_text(i).to_lower()
+	# Rebuilt rather than dimmed. An `ItemList` has no per-item visibility, so the
+	# panel used to set non-matching rows to 15% alpha and disable them: a search
+	# in a directory of fifty prefabs still showed fifty rows, and the mapper
+	# scrolled a list of unreadable text looking for the two that lit up (#667).
+	# The material browser solves the same problem by rebuilding its grid.
+	_file_list.clear()
+	_file_paths = PackedStringArray()
+	for entry in _entries:
+		var path: String = str(entry["path"])
+		var display: String = str(entry["display"]).to_lower()
 		var show := true
 
 		# Search filter
@@ -234,12 +251,18 @@ func _apply_filters() -> void:
 			else:
 				show = false
 
-		# ItemList doesn't support per-item visibility, so we use modulate
-		_file_list.set_item_disabled(i, not show)
-		if show:
-			_file_list.set_item_custom_fg_color(i, Color.WHITE)
-		else:
-			_file_list.set_item_custom_fg_color(i, Color(1, 1, 1, 0.15))
+		if not show:
+			continue
+		_file_list.add_item(str(entry["display"]))
+		_file_paths.append(path)
+		var idx: int = _file_list.item_count - 1
+		if str(entry["tooltip"]) != "":
+			_file_list.set_item_tooltip(idx, str(entry["tooltip"]))
+		# A file that would not parse stays visible, so the mapper can see it is
+		# there, and stays unselectable, so it cannot be dragged into a level.
+		if not bool(entry["ok"]):
+			_file_list.set_item_disabled(idx, true)
+			_file_list.set_item_custom_fg_color(idx, Color(1, 0.6, 0.6))
 
 
 ## Get the file path for a selected item index.
