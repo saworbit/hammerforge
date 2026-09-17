@@ -693,7 +693,7 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
 - **Grid Snap**: snap increment in metres, with quick preset buttons (0.1, 0.25, 0.5, 1, 2, 4, 8). A new level starts at 0.5.
 - **Snap Modes**: G (Grid), V (Vertex), C (Center), E (Edge midpoint), and P (Perpendicular projection). Toggle independently; the closest eligible geometry candidate within the threshold beats grid snap.
 - **Material**: active material picker.
-- **Physics Layer**: collision layer for baked output.
+- **Physics Layer**: which collision layer the baked world goes on. Godot's own `CharacterBody3D`, `RigidBody3D` and every raycast default to mask 1, so **Static World (Layer 1)** is the one the player walks on and the other two entries produce a level the player falls through unless your game looks at that layer deliberately. The baked body's own mask is always 0: it never moves, so a mask buys it nothing and only widens the broadphase.
 - **Texture Lock**: UV alignment preserved on move, resize, and rotate (enabled by default).
 - **Selection Tools** (visible when brushes are selected, grouped by domain):
   - **Brush Modification**: Hollow (wall thickness spinner + button, Ctrl+H) with yellow wireframe preview; Clip Selected (Shift+X) with cyan wireframe preview + orange split plane. Carve (Ctrl+Shift+R) with green wireframe preview. Merge (Ctrl+Shift+M) combining 2+ brushes.
