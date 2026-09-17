@@ -229,6 +229,39 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the exporter next.
 
 ### Fixed
+- **The bake chunks on the path it actually takes** (#656). `_bake_impl()` picks
+  between two geometry paths and only the CSG one had a chunked branch.
+  `bake_use_face_materials` defaults to true, so on every default level the bake
+  took the branch that had never heard of `bake_chunk_size` -- while the dock
+  offered a Chunk Size spin, `get_level_health()` said "Consider Chunking"
+  between 50 and 100 nodes, and `bake_dry_run()` reported a chunk count the bake
+  did not produce. Twenty-five separated pillars at chunk size 8 promised 25
+  chunks and made none, and the only way in was turning the default off.
+  The per-face path groups per chunk now as well as per material.
+  `collect_snapshot_groups()` fills a dictionary the caller hands it, so it takes
+  one per chunk; the brush's world origin is already in the snapshot, taken
+  before the yields, so partitioning needs nothing off the live node. Per-brush
+  collision hulls and visgroup partitioning are sliced per chunk too, or a
+  chunk's convex hulls would be built from the whole level's brushes. Chunks are
+  emitted in a sorted order so two bakes of one level produce the same scene.
+  A single chunk returns exactly what the unchunked path returned, with the same
+  node shape, so nothing downstream has to learn about chunking to keep working;
+  several are wrapped in `BakedChunk_` children the way the CSG path wraps them,
+  which `postprocess_bake()` and the preview modes already walk. None of the
+  CSG-boundary reasoning is needed here, because per-face baking has no boolean
+  interactions to preserve across a boundary -- which is why
+  `_chunking_has_cross_boundary_interactions()` guards the other path, and why
+  `get_bake_chunk_count()` now asks which path will run before applying it.
+  `bake_chunk_size` defaults to 0, meaning one mesh, rather than 32.0. That was
+  a world-space number from before #625 made one unit one metre: four rooms wide
+  on a project whose shipped examples are 8 unit rooms, so the whole of a greybox
+  level fell in one chunk and the setting did nothing even on the path that could
+  chunk. A fixed distance is the wrong kind of default for this, because it goes
+  stale the moment the project's scale moves. `get_recommended_chunk_size()`
+  returns 0.0 for anything under 30 brushes, so off agrees with the
+  recommendation for every level small enough to want one mesh, and the status
+  board already offers **Set chunk size N** once a level is large enough to want
+  chunking.
 - **The palette has a way back out** (#661). A fresh level's palette is empty, so
   **Refresh Prototypes** is the first button a mapper presses, and it adds 150
   materials in one go. The only way back was the minus button, 149 times, and

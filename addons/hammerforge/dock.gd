@@ -5103,7 +5103,7 @@ func _apply_editor_settings(data: Dictionary) -> void:
 			# value the file could not supply left the two saying different
 			# things about the chunking, which is the fault this pair had.
 			var chunk_size := _setting_number(
-				bake, "chunk_size", bake_chunk_size_spin.value if bake_chunk_size_spin else 32.0
+				bake, "chunk_size", bake_chunk_size_spin.value if bake_chunk_size_spin else 0.0
 			)
 			if bake_chunk_size_spin:
 				bake_chunk_size_spin.value = chunk_size
