@@ -2987,3 +2987,40 @@ func test_a_custom_brush_with_no_mesh_yet_still_reaches_the_csg():
 	var shape: Node3D = _only_csg_child([brush])
 
 	assert_true(shape is CSGShape3D)
+
+
+# ===========================================================================
+# What a baked static body detects (#695)
+# ===========================================================================
+
+
+func test_a_baked_detail_body_masks_against_nothing():
+	# A StaticBody3D never moves, so a mask buys it nothing and only widens the
+	# broadphase. The mask used to be a copy of the layer, which meant the Physics
+	# Layer dropdown moved two things at once.
+	var detail := _make_brush(root.draft_brushes_node, Vector3(2, 1, 0), Vector3(4, 4, 4))
+	detail.set_meta("brush_entity_class", "func_detail")
+	detail.set_meta("entity_name", "crate_that_keeps_its_node")
+	var container := Node3D.new()
+	add_child_autoqfree(container)
+	_setup_real_baker()
+	bake_sys._append_nonstructural_brushes(container)
+	var holder: Node = container.get_node_or_null("Nonstructural")
+	assert_not_null(holder)
+	var body: StaticBody3D = _first_under(holder, "StaticBody3D") as StaticBody3D
+	assert_not_null(body)
+	assert_eq(body.collision_mask, 0, "a baked body is detected, not a detector")
+	assert_gt(body.collision_layer, 0, "and it still has a layer to be found on")
+
+
+func test_grouped_detail_collision_masks_against_nothing():
+	var crate := _make_brush(root.draft_brushes_node, Vector3(0, 0.5, 0), Vector3(1, 1, 1))
+	crate.set_meta("brush_entity_class", "func_detail")
+	var container := Node3D.new()
+	add_child_autoqfree(container)
+	_setup_real_baker()
+	bake_sys._append_nonstructural_brushes(container)
+	var holder: Node = container.get_node_or_null("Nonstructural")
+	var body: StaticBody3D = _first_under(holder, "StaticBody3D") as StaticBody3D
+	assert_not_null(body)
+	assert_eq(body.collision_mask, 0)

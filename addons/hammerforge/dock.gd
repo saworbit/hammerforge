@@ -2107,10 +2107,18 @@ func _ready():
 	_setup_storage_dialogs()
 	if collision_layer_opt:
 		collision_layer_opt.clear()
-		collision_layer_opt.add_item("Static World (Layer 1)", 1)
-		collision_layer_opt.add_item("Debris/Prop (Layer 2)", 2)
-		collision_layer_opt.add_item("Trigger Only (Layer 3)", 4)
+		# Named for what they cost, not for what they are called. Two of these bake
+		# a world that nothing with default settings collides with: CharacterBody3D,
+		# RigidBody3D and every ray in Godot look at layer 1, so a level baked onto
+		# layer 2 or 3 is one the player falls through (#695).
+		collision_layer_opt.add_item("Static World (Layer 1) - the player walks on it", 1)
+		collision_layer_opt.add_item("Debris/Prop (Layer 2) - the player falls through", 2)
+		collision_layer_opt.add_item("Trigger Only (Layer 3) - the player falls through", 4)
 		collision_layer_opt.select(0)
+		collision_layer_opt.tooltip_text = (
+			"Which physics layer the baked world is on. Godot's own bodies and rays "
+			+ "default to layer 1, so anything else needs a game that looks there."
+		)
 
 	# --- Final setup ---
 	status_label.text = "Ready"

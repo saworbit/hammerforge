@@ -29,6 +29,45 @@ func run() -> void:
 	await _can_a_stock_body_stand_on_it()
 
 
+## The baked world's collision body, wherever in the container it ended up.
+func _first_static_body(node: Node) -> StaticBody3D:
+	if node == null:
+		return null
+	for child in node.get_children():
+		if child is StaticBody3D:
+			return child
+		var found := _first_static_body(child)
+		if found:
+			return found
+	return null
+
+
+## Whether `validate_spawn()` finds the floor with no mask handed to it, which is
+## the case where it has to work the layer out from the level itself.
+func _spawn_validator_sees_the_floor(root: Node3D, layer_id: int) -> bool:
+	if not root.spawn_system:
+		return true
+	root.bake_collision_layer_index = _index_of_layer(layer_id)
+	var spawn: Node3D = root.spawn_system.create_default_spawn()
+	if spawn == null:
+		return true
+	spawn.global_position = Vector3(0, 1.0, 0)
+	var report: Dictionary = root.spawn_system.validate_spawn(spawn, 0)
+	var issues: PackedStringArray = report.get("issues", PackedStringArray())
+	for line in issues:
+		if str(line).to_lower().contains("floating"):
+			return false
+	return true
+
+
+## The 1-based index behind a layer bit, which is what the level stores.
+func _index_of_layer(layer_id: int) -> int:
+	for i in range(1, 33):
+		if (1 << (i - 1)) == layer_id:
+			return i
+	return 1
+
+
 func _bodies(node: Node, out: Array) -> Array:
 	if node is StaticBody3D or node is Area3D or node is CharacterBody3D:
 		out.append(node)
@@ -156,22 +195,29 @@ func _can_a_stock_body_stand_on_it() -> void:
 				]
 			)
 		)
-		if hit.is_empty() and not any.is_empty() and int(entry[0]) != 1:
+		# Layer 2 and layer 4 really are layers nothing stock looks at - that is what
+		# a layer is, and the mapper is allowed to choose one. What is worth
+		# checking is whether they are left to find out on their own: a baked body
+		# should not be masked against itself, and the spawn validator should look
+		# at the layer the level actually baked onto rather than assuming layer 1.
+		var baked_body: StaticBody3D = _first_static_body(root.get_node_or_null("BakedGeometry"))
+		if baked_body and baked_body.collision_mask != 0:
 			flag(
+				"a baked static body masks against layer %d" % baked_body.collision_mask,
 				(
-					"baking to the '%s' physics layer makes a level nothing stock collides with"
-					% entry[1]
-				),
+					"It never moves, so a mask buys it nothing and only widens the "
+					+ "broadphase. Copying the layer into it also means the Physics Layer "
+					+ "dropdown moves two things at once."
+				)
+			)
+		if not _spawn_validator_sees_the_floor(root, int(entry[0])):
+			flag(
+				"the spawn validator cannot see a floor baked onto the '%s' layer" % entry[1],
 				(
 					(
-						"The Brush tab's Physics Layer dropdown offers this entry, and picking it "
-						+ "puts world collision on layer %d only. A CharacterBody3D, a RigidBody3D and "
-						+ "every raycast in Godot default to mask 1, so the player walks through the "
-						+ "floor with no warning anywhere. Two of the dropdown's three entries do this, "
-						+ "and the plugin's own spawn validator falls back to mask 1 as well, so it "
-						+ "reports the spawn as floating rather than naming the layer. The bake also "
-						+ "copies the layer onto the body's collision_mask, which a StaticBody3D has no "
-						+ "use for."
+						"It falls back to mask 1 when the caller does not say, so a level "
+						+ "baked onto layer %d reports its spawn as floating in space rather "
+						+ "than naming the layer it is actually on."
 					)
 					% int(entry[0])
 				)

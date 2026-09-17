@@ -65,6 +65,15 @@ func get_all_spawns() -> Array[Node3D]:
 ##        floor_hit (Variant), ceiling_hit (Variant), severity (int).
 ## [collision_mask]: bitmask for physics queries; 0 falls back to layer 1.
 ## Should match the bake collision layer used by Quick Play.
+## The layer this level bakes its world onto, or 1 if it cannot say.
+func _level_bake_mask() -> int:
+	if root and root.has_method("_layer_from_index"):
+		var index: Variant = root.get("bake_collision_layer_index")
+		if index is int or index is float:
+			return int(root._layer_from_index(int(index)))
+	return 1
+
+
 func validate_spawn(spawn: Node3D, collision_mask: int = 0) -> Dictionary:
 	if not spawn or not is_instance_valid(spawn) or not spawn.is_inside_tree():
 		return {
@@ -100,7 +109,10 @@ func validate_spawn(spawn: Node3D, collision_mask: int = 0) -> Dictionary:
 
 	var pos := spawn.global_position
 	var height_offset := _get_entity_float(spawn, "height_offset", 1.0)
-	var mask := collision_mask if collision_mask > 0 else 1
+	# The level's own bake layer when the caller did not say, rather than layer 1.
+	# A level baked onto layer 2 was reported as floating in space, because the
+	# ray was looking at a layer nothing had been baked onto (#695).
+	var mask := collision_mask if collision_mask > 0 else _level_bake_mask()
 	var result := {
 		"valid": true,
 		"issues": PackedStringArray(),
