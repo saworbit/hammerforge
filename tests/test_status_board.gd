@@ -28,7 +28,6 @@ func _healthy_context() -> Dictionary:
 		"material_slot_count": 6,
 		"bake_use_face_materials": false,
 		"spawn_count": 1,
-		"auto_spawn_player": true,
 		"autosave_enabled": true,
 		"autosave_minutes": 5,
 		"autosave_path": "res://.hammerforge/autosave.hflevel",
@@ -264,17 +263,16 @@ func test_a_spawn_point_is_green():
 	assert_eq(_severity_of(_healthy_context(), "spawn"), OK)
 
 
-func test_no_spawn_with_auto_spawn_on_is_amber():
+func test_no_spawn_is_amber_whatever_auto_spawn_says():
+	# The row used to read `auto_spawn_player` and call a level with it off a
+	# problem, on the grounds that Test Level would start with no player. Test
+	# Level has never read that property: it builds its own player and makes a
+	# spawn when the level has none.
 	var ctx := _healthy_context()
 	ctx["spawn_count"] = 0
 	assert_eq(_severity_of(ctx, "spawn"), WARN)
-
-
-func test_no_spawn_with_auto_spawn_off_is_red():
-	var ctx := _healthy_context()
-	ctx["spawn_count"] = 0
 	ctx["auto_spawn_player"] = false
-	assert_eq(_severity_of(ctx, "spawn"), PROBLEM)
+	assert_eq(_severity_of(ctx, "spawn"), WARN, "the setting decides something else")
 
 
 # --- autosave -----------------------------------------------------------

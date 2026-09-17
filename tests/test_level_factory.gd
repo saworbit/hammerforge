@@ -2,9 +2,9 @@ extends GutTest
 ## Tests for HFLevelFactory, the dockless entry point for making a LevelRoot
 ## and for building the starter level the dock's empty-state banner builds.
 
-# A fresh root outside the editor would otherwise bake and spawn a player the
-# moment it enters the tree.
-const HEADLESS := {"auto_spawn_player": false, "hflevel_autosave_enabled": false}
+# Autosave on a timer is not something a test wants running. The player is off by
+# default now, and `test_a_fresh_root_spawns_no_player` is what holds that.
+const HEADLESS := {"hflevel_autosave_enabled": false}
 
 var parent: Node3D
 
@@ -22,6 +22,15 @@ func after_each():
 # ===========================================================================
 # make_level_root
 # ===========================================================================
+
+
+func test_a_fresh_root_spawns_no_player():
+	# A scene with a LevelRoot in it is a scene a game loads, and this defaulted on,
+	# so the game got a second character controller and a second camera beside its
+	# own, plus a full rebuild of the level from source brushes at load.
+	var root: LevelRoot = HFLevelFactory.make_level_root()
+	assert_false(root.auto_spawn_player, "a level is not a playtest unless asked")
+	root.free()
 
 
 func test_make_level_root_returns_named_detached_node():

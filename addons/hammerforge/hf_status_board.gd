@@ -120,7 +120,6 @@ static func collect_context(
 
 	ctx["chunk_size"] = _get_float(level_root, "bake_chunk_size", 0.0)
 	ctx["bake_use_face_materials"] = _get_bool(level_root, "bake_use_face_materials", false)
-	ctx["auto_spawn_player"] = _get_bool(level_root, "auto_spawn_player", false)
 	ctx["autosave_enabled"] = _get_bool(level_root, "hflevel_autosave_enabled", false)
 	ctx["autosave_minutes"] = int(_get_float(level_root, "hflevel_autosave_minutes", 0.0))
 	# The resolved one, not the stored one. Until a level is given its own path
@@ -162,7 +161,6 @@ static func _empty_context() -> Dictionary:
 		"material_slot_count": 0,
 		"bake_use_face_materials": false,
 		"spawn_count": 0,
-		"auto_spawn_player": false,
 		"autosave_enabled": false,
 		"autosave_minutes": 0,
 		"autosave_path": "",
@@ -501,23 +499,16 @@ static func _check_spawn(ctx: Dictionary) -> Dictionary:
 			"Test Level starts here.",
 			help
 		)
-	if bool(ctx.get("auto_spawn_player", false)):
-		return _row(
-			"spawn",
-			"Player spawn",
-			Severity.WARN,
-			"Auto only",
-			"No spawn point, so Test Level falls back to the world origin.",
-			help,
-			"add_spawn",
-			"Add Spawn Point"
-		)
+	# This used to read `auto_spawn_player` and report "Test Level starts with no
+	# player at all" when it was off. Test Level has never read that property - it
+	# builds its own player and auto-creates a spawn when the level has none - so
+	# the row was answering with a setting that decides something else entirely.
 	return _row(
 		"spawn",
 		"Player spawn",
-		Severity.PROBLEM,
+		Severity.WARN,
 		"None",
-		"No spawn point and auto-spawn is off, so Test Level starts with no player at all.",
+		"No spawn point, so Test Level makes one at the world origin.",
 		help,
 		"add_spawn",
 		"Add Spawn Point"
