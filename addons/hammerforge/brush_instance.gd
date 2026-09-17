@@ -1505,9 +1505,3 @@ func _discard_private_visual(node: Node) -> void:
 		remove_child(node)
 	if not node.is_queued_for_deletion():
 		node.queue_free()
-
-
-# Compatibility entry points for editor code or third-party tools that called
-# the previous private helpers directly.
-func _apply_additive_wireframe_overlay() -> void:
-	_sync_visual_overlays()

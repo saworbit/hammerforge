@@ -82,9 +82,6 @@ class SignalDock:
 	func _on_root_material_list_changed():
 		callback_calls += 1
 
-	func _on_root_selection_for_surface(_ids):
-		callback_calls += 1
-
 	func _on_root_face_selection_changed():
 		callback_calls += 1
 

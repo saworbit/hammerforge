@@ -1224,12 +1224,6 @@ func _pick_face_material(root: Node) -> void:
 # ---------------------------------------------------------------------------
 
 
-func _select_faces_in_rect(
-	root: Node, camera: Camera3D, from: Vector2, to: Vector2, additive: bool, toggle: bool = false
-) -> void:
-	HFPluginSelectionInput.select_faces_in_rect(self, root, camera, from, to, additive, toggle)
-
-
 func _face_key_for(brush: DraftBrush) -> String:
 	return HFPluginSelectionCommands.face_key_for(brush)
 

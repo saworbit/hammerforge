@@ -89,6 +89,19 @@ jobs:
       - name: Check the shard totals still add up
         run: python3 tools/update_test_counts.py --selftest
 
+      # #609 and #610 were 66 dead declarations, thirteen of them regrown by
+      # architecture tests that required them by name. The scan that found them
+      # counted any mention as a caller, including doc comments and the
+      # CHANGELOG, so a dead function stayed off the list by being written
+      # about. This one reads GDScript, strips comments and literals in one
+      # left-to-right pass, and harvests the literals separately because string
+      # dispatch is load bearing here.
+      - name: Check the dead-declaration guard still detects
+        run: python3 tools/check_dead_declarations.py --selftest
+
+      - name: Check for dead declarations
+        run: python3 tools/check_dead_declarations.py
+
   tooling-checks:
     name: Workflow & Tooling Lint
     runs-on: ubuntu-latest
