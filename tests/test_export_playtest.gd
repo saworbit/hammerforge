@@ -378,3 +378,108 @@ func test_wiring_survives_being_rebuilt_as_a_real_node():
 			carried = not child.get_meta("entity_io_outputs", []).is_empty()
 	assert_true(carried, "the wiring hung on the marker has to move with it")
 	scene.free()
+
+
+# ===========================================================================
+# A prop's model reaches the level (#690)
+# ===========================================================================
+
+const _CRATE_PATH := "user://hf_test_prop_crate.tscn"
+
+
+func _write_crate_scene() -> void:
+	var crate := Node3D.new()
+	crate.name = "Crate"
+	var mi := MeshInstance3D.new()
+	mi.name = "CrateMesh"
+	mi.mesh = BoxMesh.new()
+	crate.add_child(mi)
+	mi.owner = crate
+	var packed := PackedScene.new()
+	assert_eq(packed.pack(crate), OK)
+	assert_eq(ResourceSaver.save(packed, _CRATE_PATH), OK)
+	crate.free()
+
+
+func _remove_crate_scene() -> void:
+	if FileAccess.file_exists(_CRATE_PATH):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(_CRATE_PATH))
+
+
+func _place_crate_prop() -> Node3D:
+	return (
+		root
+		. _restore_entity_from_info(
+			{
+				"entity_type": "prop_static",
+				"entity_class": "prop_static",
+				"transform": Transform3D(Basis.IDENTITY, Vector3(2, 0.4, 0)),
+				"properties": {"scene": _CRATE_PATH},
+				"name": "crate_1",
+				"entity_name": "crate_1",
+			}
+		)
+	)
+
+
+func _mesh_names(node: Node, out: Array) -> Array:
+	if node is MeshInstance3D:
+		out.append(str(node.name))
+	for child in node.get_children():
+		_mesh_names(child, out)
+	return out
+
+
+func test_a_prop_scene_is_instantiated_into_the_playtest_node():
+	# prop_static is the documented way to put a model in a level, and its path was
+	# stored, saved and exported as an empty marker with nothing said anywhere.
+	_write_crate_scene()
+	var prop: Node3D = _place_crate_prop()
+	assert_not_null(prop, "the prop should have been placed")
+	var built: Node3D = root._playtest_node_for_entity(prop)
+	assert_not_null(built, "a prop naming a scene should build that scene")
+	assert_eq(_mesh_names(built, []), ["CrateMesh"], "the model should be under the node")
+	built.free()
+	_remove_crate_scene()
+
+
+func test_a_prop_with_no_scene_still_builds_its_marker():
+	var prop: Node3D = (
+		root
+		. _restore_entity_from_info(
+			{
+				"entity_type": "prop_static",
+				"entity_class": "prop_static",
+				"transform": Transform3D.IDENTITY,
+				"properties": {"scene": ""},
+				"name": "crate_2",
+			}
+		)
+	)
+	assert_not_null(prop)
+	var built: Node3D = root._playtest_node_for_entity(prop)
+	if built:
+		assert_eq(_mesh_names(built, []), [], "an unset path brings no model with it")
+		built.free()
+
+
+func test_an_instantiated_scene_survives_packing_once():
+	# Owning the inside of an instantiated scene makes pack() write those nodes out
+	# beside the instance too, so the saved scene holds the model twice.
+	_write_crate_scene()
+	var outer := Node3D.new()
+	outer.name = "PackRoot"
+	add_child_autoqfree(outer)
+	var inst: Node3D = (load(_CRATE_PATH) as PackedScene).instantiate()
+	inst.name = "crate_1"
+	outer.add_child(inst)
+	root._own_tree(inst, outer)
+	var packed := PackedScene.new()
+	assert_eq(packed.pack(outer), OK)
+	var path := "user://hf_test_prop_outer.tscn"
+	assert_eq(ResourceSaver.save(packed, path), OK)
+	var back: Node = (load(path) as PackedScene).instantiate()
+	assert_eq(_mesh_names(back, []), ["CrateMesh"], "one model in, one model out")
+	back.free()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	_remove_crate_scene()

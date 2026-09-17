@@ -128,3 +128,60 @@ func test_merged_raw_and_typed_loaders_agree_on_classnames():
 	raw_ids.sort()
 	typed_ids.sort()
 	assert_eq(raw_ids, typed_ids, "The two pickers must not disagree about what exists")
+
+
+# ===========================================================================
+# A definition file is data, not a whitelist (#690)
+# ===========================================================================
+
+
+func test_to_dict_carries_keys_the_model_does_not_model():
+	# `root.entity_definitions` is built from `to_dict()`, and it was the only
+	# writer, so anything this model had no field for never reached the level root
+	# that reads it. `preview` is how an entity draws itself in the viewport and
+	# `input_methods` is how a class says an input names an engine method; both
+	# were written, both were read, and neither survived the trip.
+	var def := (
+		HFEntityDef
+		. from_dict(
+			{
+				"classname": "logic_timer",
+				"class": "Timer",
+				"preview": {"type": "billboard", "path": "res://icon.svg"},
+				"input_methods": {"Start": "start"},
+				"some_future_key": 7,
+			}
+		)
+	)
+	var d := def.to_dict()
+	assert_eq(d.get("preview", {}).get("type", ""), "billboard")
+	assert_eq(d.get("input_methods", {}).get("Start", ""), "start")
+	assert_eq(int(d.get("some_future_key", 0)), 7)
+
+
+func test_to_dict_still_normalises_the_keys_it_owns():
+	# The raw entry carries `class`, and reading it back first is what made
+	# "light_point" come back as "OmniLight3D". The modelled keys have to win.
+	var def := HFEntityDef.from_dict(
+		{"id": "light_point", "class": "OmniLight3D", "description": "a lamp"}
+	)
+	var d := def.to_dict()
+	assert_eq(d.get("classname"), "light_point", "the classname is the identity")
+	assert_eq(d.get("class"), "OmniLight3D", "the node class stays beside it")
+	assert_false(d.has("id"), "the spelling it came in under is not written back")
+
+
+func test_the_shipped_library_keeps_its_previews_and_grants():
+	var defs := HFEntityDef.load_definitions("res://addons/hammerforge/entities.json")
+	var by_name := {}
+	for def in defs:
+		if def and def.classname != "":
+			by_name[def.classname] = def.to_dict()
+	assert_true(by_name.has("prop_static"), "the shipped library should load")
+	assert_true(by_name["prop_static"].has("preview"), "prop_static draws itself with a preview")
+	assert_eq(
+		by_name["logic_timer"].get("input_methods", {}).get("Start", ""),
+		"start",
+		"logic_timer names the engine method behind its Start input"
+	)
+	assert_eq(by_name["prop_static"].get("scene_property", ""), "scene")

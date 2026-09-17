@@ -26,6 +26,30 @@ var node_class := ""
 ## Optional per-project overlay. Entries with the same classname replace plugin defs.
 const PROJECT_DEFINITIONS_PATH := "res://hammerforge_entities.json"
 
+## The keys this model has a field for. Everything else in a definition file is
+## carried through `to_dict()` untouched, because a definition file is data and a
+## whitelist in the middle of it drops features in silence. Two had already gone
+## that way: `preview`, which is how an entity draws itself in the viewport, and
+## `input_methods`, which is how a class says an input names an engine method.
+## Both were written, both were read, and neither survived the trip to the level
+## root that reads them.
+const MODELLED_KEYS := [
+	"id",
+	"classname",
+	"class",
+	"description",
+	"color",
+	"is_brush_entity",
+	"properties",
+	"scene",
+	"outputs",
+	"inputs",
+]
+
+## The entry this definition was read from, so `to_dict()` can put back what this
+## model does not model.
+var source_entry: Dictionary = {}
+
 
 static func from_dict(data: Dictionary) -> HFEntityDef:
 	var def := HFEntityDef.new()
@@ -62,6 +86,7 @@ static func from_dict(data: Dictionary) -> HFEntityDef:
 	def.scene_path = str(data.get("scene", ""))
 	def.outputs = _string_list(data.get("outputs", []))
 	def.inputs = _string_list(data.get("inputs", []))
+	def.source_entry = data.duplicate(true)
 	return def
 
 
@@ -78,11 +103,19 @@ static func _string_list(value: Variant) -> Array:
 
 
 func to_dict() -> Dictionary:
-	var d: Dictionary = {
-		"classname": classname,
-		"description": description,
-		"is_brush_entity": is_brush_entity,
-	}
+	var d: Dictionary = {}
+	# What the file carried and this model has no field for. The modelled keys are
+	# written below and win, because `from_dict()` normalises several of them and
+	# the raw ones would undo that -- `classname` is resolved from three possible
+	# spellings, and a definition that named a node class in `class` came back as
+	# that class the last time the raw value was read first.
+	for key in source_entry:
+		if key in MODELLED_KEYS:
+			continue
+		d[key] = source_entry[key]
+	d["classname"] = classname
+	d["description"] = description
+	d["is_brush_entity"] = is_brush_entity
 	if color != Color.WHITE:
 		d["color"] = [color.r, color.g, color.b, color.a]
 	if not properties.is_empty():

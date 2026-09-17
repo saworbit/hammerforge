@@ -2912,7 +2912,15 @@ func _playtest_node_for_entity(entity: Node3D) -> Node3D:
 		return null
 
 	var built: Node3D = null
+	# The class may name a scene, and an instance may name its own in a property -
+	# `prop_static` is the second kind, and putting a model in a level is what it
+	# is for. The instance wins, because it is the more specific answer (#690).
 	var scene_path := str(definition.get("scene", "")).strip_edges()
+	var scene_property := str(definition.get("scene_property", "")).strip_edges()
+	if scene_property != "":
+		var authored := str(draft.entity_data.get(scene_property, "")).strip_edges()
+		if authored != "":
+			scene_path = authored
 	if scene_path != "":
 		if ResourceLoader.exists(scene_path):
 			var packed := ResourceLoader.load(scene_path) as PackedScene
@@ -3000,10 +3008,19 @@ func _node_tree_has_io(node: Node) -> bool:
 	return false
 
 
+## Make every node a packed scene has to keep belong to its root.
+##
+## It stops at an instantiated scene. Owning the inside of one makes `pack()`
+## write those nodes out beside the instance as well, so the saved scene holds
+## the model twice and loads it twice. Baked geometry is built here and owns all
+## the way down; a `prop_static`'s model came from a file and brings its own
+## children back with it.
 func _own_tree(node: Node, scene_owner: Node) -> void:
 	if not node:
 		return
 	node.owner = scene_owner
+	if node != scene_owner and node.scene_file_path != "":
+		return
 	for child in node.get_children():
 		_own_tree(child, scene_owner)
 
