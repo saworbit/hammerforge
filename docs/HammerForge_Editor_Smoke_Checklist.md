@@ -794,6 +794,11 @@ It writes one PNG per tab under `user://console_preview/`.
 - Press **`]`** repeatedly until maximum (512); confirm it stops doubling.
 - Double-tap **G G** to open quick-property popup; change value; confirm HUD updates with flash.
 - Perform a state restore (undo a bulk operation); confirm the HUD picks up the restored grid snap.
+- Select a few brushes in the viewport and press Ctrl+C, then Ctrl+V. Confirm a copy lands on top of the originals, that the copy is what is now selected, and that one Ctrl+Z removes the whole paste in a single step.
+- Paste again without copying. Confirm a second copy appears and that no two brushes report the same id in the Console.
+- Copy a piece with a wired button and door in it, open a different level, and paste. Confirm the wiring, the brush entity properties and the materials all came across, and that the piece is not listed as a prefab instance.
+- Copy something, close the level, reopen it, and paste. Confirm the clipboard survived.
+- With focus in the Scene tree and a non-HammerForge node selected, press Ctrl+C and Ctrl+V. Confirm Godot's own node copy and paste still work and that HammerForge did not claim them.
 - On a level with a few hundred brushes and several materials, nudge one brush and press Ctrl+Z. Confirm the undo is quick and that nothing else in the level flickers or changes appearance: a restore only repaints when the palette is part of what changed.
 - Then change a palette slot to a different material, and undo that. Confirm every brush using that slot goes back to the material it had. This is the half the check above must not break.
 

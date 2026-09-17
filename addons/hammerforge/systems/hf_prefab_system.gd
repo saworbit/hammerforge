@@ -26,6 +26,18 @@ var _next_entity_uid: int = 1
 ## library would have listed a different folder from the one Save writes into.
 const PREFAB_DIR := "res://prefabs"
 
+## Where a cut or copied selection waits.
+##
+## A clipboard is a prefab without a name: the same capture, the same file
+## format, the same placement. What differs is its lifetime, and that a mapper
+## uses it forty times an evening rather than saving it once (#703).
+##
+## In `user://` rather than in memory, so it survives a restart and so two
+## editors open on two projects can pass geometry between them. Outside
+## `res://` because it is not part of any project, and a clipboard buffer
+## committed to a repository would be somebody's stray corridor.
+const CLIPBOARD_PATH := "user://hammerforge_clipboard.hfprefab"
+
 
 class PrefabInstanceRecord:
 	var instance_id: String = ""
@@ -581,6 +593,70 @@ func quick_save_prefab(
 		register_instance(path, brush_ids, entity_nodes, true)
 
 	return path
+
+
+# ---------------------------------------------------------------------------
+# Clipboard (#703)
+# ---------------------------------------------------------------------------
+
+
+## Put a selection on the clipboard. False when there was nothing to put there,
+## or when the buffer could not be written.
+##
+## The same capture a prefab gets, so it arrives with its entity wiring, its
+## brush entity ties and a record of what each material slot meant. It is not
+## registered as a linked instance: a pasted corridor is geometry, not a copy of
+## a library asset that should follow it when the asset changes.
+func copy_to_clipboard(brush_nodes: Array, entity_nodes: Array) -> bool:
+	if brush_nodes.is_empty() and entity_nodes.is_empty():
+		return false
+	var prefab = HFPrefabType.capture_from_selection(
+		root.brush_system, root.entity_system, brush_nodes, entity_nodes
+	)
+	if prefab.brush_infos.is_empty() and prefab.entity_infos.is_empty():
+		return false
+	prefab.prefab_name = "Clipboard"
+	var err := prefab.save_to_file(CLIPBOARD_PATH)
+	if err != OK:
+		# The same rule the prefab save learned in #667: a write that failed has
+		# to say so, or the next paste quietly puts back whatever was there
+		# before and the mapper is looking at the wrong geometry.
+		_report("Copy failed: the clipboard buffer could not be written (error %d)" % err, 2)
+		return false
+	return true
+
+
+## What is on the clipboard, or null when it is empty or unreadable.
+func clipboard_contents():
+	if not FileAccess.file_exists(CLIPBOARD_PATH):
+		return null
+	return HFPrefabType.load_from_file(CLIPBOARD_PATH)
+
+
+func clipboard_is_empty() -> bool:
+	return clipboard_contents() == null
+
+
+## Place what is on the clipboard.
+##
+## `at` is where the selection's centre lands. `Vector3.INF` means "where it was
+## copied from", which is what Ctrl+C then Ctrl+V means in every editor in this
+## lineage, and is the only placement that lines a pasted piece up with the one
+## it came from.
+##
+## Brush ids are minted fresh, and group and visgroup membership is dropped by
+## the capture, so pasting into a level that has never heard of "West Wing" does
+## not put brushes in a group with no row in the panel. Material slots are
+## resolved against the destination's palette.
+func paste_from_clipboard(at: Vector3 = Vector3.INF) -> Dictionary:
+	var empty := {"brush_ids": [], "entity_count": 0, "entity_names": [], "entity_nodes": []}
+	var prefab = clipboard_contents()
+	if prefab == null:
+		return empty
+	if prefab.brush_infos.is_empty() and prefab.entity_infos.is_empty():
+		return empty
+	var placement: Vector3 = prefab.source_centroid if not at.is_finite() else at
+	return prefab.instantiate(root.brush_system, root.entity_system, root, placement)
 
 
 # ---------------------------------------------------------------------------

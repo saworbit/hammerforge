@@ -34,6 +34,14 @@ var tags: PackedStringArray = []
 ## since they all index the same palette.
 var material_slots: Dictionary = {}
 
+## Where the selection was standing when it was captured.
+##
+## Everything else in here is relative to the centroid, so that a prefab can be
+## placed anywhere. The clipboard is the one caller that wants to put it back
+## exactly where it came from, which is what Ctrl+C then Ctrl+V means in every
+## editor in this lineage (#703). A prefab placed from the library ignores it.
+var source_centroid: Vector3 = Vector3.ZERO
+
 
 ## Capture a prefab from the current selection.
 ## brush_nodes: Array of DraftBrush nodes
@@ -47,6 +55,7 @@ static func capture_from_selection(
 		return prefab
 
 	var centroid := compute_selection_centroid(brush_nodes, entity_nodes)
+	prefab.source_centroid = centroid
 
 	# Capture brushes
 	for brush in brush_nodes:
@@ -396,6 +405,11 @@ func to_dict() -> Dictionary:
 		"entity_infos": HFLevelIO.encode_variant(entity_infos),
 	}
 
+	# Only when there is one to record, so a prefab written by an older build and
+	# one captured from nothing read back the same way.
+	if source_centroid != Vector3.ZERO:
+		data["source_centroid"] = HFLevelIO.encode_variant(source_centroid)
+
 	# What each referenced palette slot meant. Written as records rather than a
 	# dictionary keyed by number, because JSON has only String keys and a slot is
 	# a number on both sides of the file.
@@ -457,6 +471,11 @@ static func from_dict(data: Dictionary) -> HFPrefab:
 	var raw_entities = HFLevelIO.decode_variant(data.get("entity_infos", []))
 	prefab.brush_infos = _dictionary_entries(raw_brushes, "brush_infos")
 	prefab.entity_infos = _dictionary_entries(raw_entities, "entity_infos")
+	# A file written before this key existed, or one whose value is not a vector
+	# because it was hand edited, places at the origin the way it always did.
+	var centroid = HFLevelIO.decode_variant(data.get("source_centroid", null))
+	if centroid is Vector3 and (centroid as Vector3).is_finite():
+		prefab.source_centroid = centroid
 	# A prefab written before this key existed has none, and nothing is remapped,
 	# which is exactly what it did before.
 	for record in _dictionary_entries(data.get("materials", []), "materials"):

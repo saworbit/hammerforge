@@ -1321,6 +1321,14 @@ func _duplicate_selected(root: Node) -> bool:
 	return HFPluginEditActions.duplicate_selected(self, root)
 
 
+func _copy_selection(root: Node) -> bool:
+	return HFPluginEditActions.copy_selection(self, root)
+
+
+func _paste_clipboard(root: Node) -> bool:
+	return HFPluginEditActions.paste_clipboard(self, root)
+
+
 func _nudge_selected(root: Node, dir: Vector3) -> bool:
 	return HFPluginEditActions.nudge_selected(self, root, dir)
 

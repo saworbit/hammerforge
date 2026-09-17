@@ -108,6 +108,8 @@ static func _default_bindings() -> Dictionary:
 		# Editing
 		"delete": {"keycode": KEY_DELETE},
 		"duplicate": {"keycode": KEY_D, "ctrl": true},
+		"copy": {"keycode": KEY_C, "ctrl": true},
+		"paste": {"keycode": KEY_V, "ctrl": true},
 		"group": {"keycode": KEY_G, "ctrl": true},
 		"ungroup": {"keycode": KEY_U, "ctrl": true},
 		"hollow": {"keycode": KEY_H, "ctrl": true},
@@ -398,6 +400,8 @@ static func get_action_label(action: String) -> String:
 		"vertex_split_edge": "Split Edge",
 		"delete": "Delete",
 		"duplicate": "Duplicate",
+		"copy": "Copy",
+		"paste": "Paste",
 		"group": "Group",
 		"ungroup": "Ungroup",
 		"hollow": "Hollow",

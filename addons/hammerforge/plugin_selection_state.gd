@@ -257,8 +257,12 @@ static func guard_hammerforge_shortcut(
 
 
 static func managed_surface_action_requirement(action: String) -> Dictionary:
-	if action in ["delete", "duplicate"]:
+	if action in ["delete", "duplicate", "copy"]:
 		return {"brushes_only": false, "minimum": 1, "label": action.capitalize()}
+	# Paste is the one managed action with nothing to act on: what it places
+	# comes from the clipboard, not from the selection (#703).
+	if action == "paste":
+		return {"brushes_only": false, "minimum": 0, "label": "Paste"}
 	if action == "group":
 		return {"brushes_only": false, "minimum": 2, "label": "Group"}
 	if action == "ungroup":

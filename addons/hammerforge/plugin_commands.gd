@@ -21,6 +21,8 @@ static func requires_existing_root(action: String) -> bool:
 			"deselect_all",
 			"delete",
 			"duplicate",
+			"copy",
+			"paste",
 			"group",
 			"ungroup",
 			"hollow",
@@ -131,6 +133,10 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			plugin._reset_rotation_selected(root)
 		"duplicate":
 			plugin._duplicate_selected(root)
+		"copy":
+			plugin._copy_selection(root)
+		"paste":
+			plugin._paste_clipboard(root)
 		"delete":
 			plugin._delete_selected(root)
 		"group":

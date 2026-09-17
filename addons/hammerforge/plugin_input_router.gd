@@ -119,6 +119,21 @@ static func handle_keyboard(
 			return duplicate_guard
 		plugin._duplicate_selected(root)
 		return STOP
+	if keymap.matches("copy", event):
+		var copy_guard = plugin._guard_hammerforge_shortcut(root, false, 1, "Copy")
+		if copy_guard != SHORTCUT_APPLY:
+			return copy_guard
+		plugin._copy_selection(root)
+		return STOP
+	if keymap.matches("paste", event):
+		# Nothing has to be selected to paste, so the guard asks for none. It is
+		# still asked, because the answer also says whether this selection is
+		# HammerForge's to act on at all.
+		var paste_guard = plugin._guard_hammerforge_shortcut(root, false, 0, "Paste")
+		if paste_guard != SHORTCUT_APPLY:
+			return paste_guard
+		plugin._paste_clipboard(root)
+		return STOP
 	if keymap.matches("group", event):
 		var group_guard = plugin._guard_hammerforge_shortcut(root, false, 2, "Group")
 		if group_guard != SHORTCUT_APPLY:
