@@ -1444,13 +1444,78 @@ func _append_nonstructural_brushes(container: Node3D, filter: Variant = null) ->
 	var holder := Node3D.new()
 	holder.name = "Nonstructural"
 	container.add_child(holder)
+	# A brush the runtime has to find by name stays its own node; everything else
+	# is grouped by material the way the structural path already groups. Trim and
+	# clutter is most of a finished map, and `func_detail` reads like the cheap
+	# option while costing one MeshInstance3D, one StaticBody3D and one
+	# CollisionShape3D each - eighty crates in a room were eighty-one draw calls
+	# where the structural path would have made one (#712).
+	var grouped: Array = []
 	var idx := 0
 	for draft in brushes:
 		if _is_trigger_brush(draft):
 			_append_trigger_volume(holder, draft, idx)
-		else:
+		elif _needs_its_own_node(draft):
 			_append_detail_mesh(holder, draft, idx)
+		else:
+			grouped.append(draft)
 		idx += 1
+	_append_grouped_detail(holder, grouped)
+
+
+## Whether this brush has to survive the bake as a node of its own.
+##
+## A name is the address an I/O connection targets and outputs are what it
+## dispatches, so a brush carrying either has to stay findable. `func_detail` has
+## no inputs, no outputs and no name - it is excluded from the structural CSG and
+## nothing else - so it does not need to be its own node at all.
+func _needs_its_own_node(draft: DraftBrush) -> bool:
+	if authored_entity_name(draft) != "":
+		return true
+	return not (draft.get_meta("entity_io_outputs", []) as Array).is_empty()
+
+
+## One mesh per material and one collision body for every detail brush that does
+## not need a node of its own. The same grouping the structural path uses, run a
+## second time over the brushes that path skipped.
+func _append_grouped_detail(holder: Node3D, brushes: Array) -> void:
+	if brushes.is_empty():
+		return
+	if not root.baker:
+		# Nothing to group with. Fall back to what this path did before, so a level
+		# with only clutter in it still bakes rather than failing on the way in.
+		var idx := 0
+		for draft in brushes:
+			_append_detail_mesh(holder, draft, idx)
+			idx += 1
+		return
+	var options := build_bake_options()
+	var use_atlas: bool = bool(options.get("use_atlas", false))
+	var groups: Dictionary = {}
+	var hull_verts: Array = []
+	for draft in brushes:
+		root.baker.collect_brush_face_groups(
+			draft, root.material_manager, root.bake_material_override, use_atlas, groups
+		)
+		var snapshot: Dictionary = root.baker.snapshot_brush_faces(
+			draft, root.material_manager, root.bake_material_override, use_atlas
+		)
+		hull_verts.append(snapshot.get("hull_verts", PackedVector3Array()))
+	if groups.is_empty():
+		return
+	var layer := 1
+	if root.has_method("_layer_from_index"):
+		layer = root._layer_from_index(root.bake_collision_layer_index)
+	# Per-brush convex hulls, so a merged pile of clutter still collides as the
+	# separate solids it is rather than as one hull around all of them.
+	var detail_options := options.duplicate(true)
+	detail_options["collision_mode"] = maxi(1, int(options.get("collision_mode", 0)))
+	detail_options["per_brush_verts"] = hull_verts
+	var built: Node3D = root.baker.build_mesh_from_groups(groups, layer, layer, detail_options)
+	if not built:
+		return
+	built.name = "DetailGeometry"
+	holder.add_child(built)
 
 
 ## The authored name an entity is wired to. Brushes get a Godot generated node
