@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Added
+- **A level can choose what its scene keeps** (#624). HammerForge gives an
+  `owner` to almost everything it makes, so Godot's own Ctrl+S writes the brushes
+  and the geometry baked from them into the `.tscn`, and Save Level writes a
+  third copy into the `.hflevel` beside it. A 100 brush level measured 261 KB of
+  scene against 4 KB of `.hflevel`, and a bake added another 149 KB that is
+  entirely derivable from the brushes already in the file. For a greybox session
+  that is a megabyte of scene rewriting on every save, and it is what a mapper
+  commits and what a teammate has to merge. There was no way to say keep the
+  brushes and rebuild the geometry, or keep the geometry and let the brushes live
+  in the `.hflevel`. **Scene Keeps** on the `LevelRoot` now says which:
+  brushes and bake, brushes only, or baked geometry only. The default is
+  unchanged and is the only one that needs no other file, because the bake has to
+  be owned for a level to have geometry at runtime without the plugin, which was
+  always deliberate. Changing it re-owns what is already in the level, so the
+  next Ctrl+S writes what the setting says rather than what the level happened to
+  be built with. Baked geometry only is refused when there is nowhere to put the
+  brushes: a level with no `.hflevel` path keeps them regardless, because
+  dropping a level's only copy of its brushes is not a trade worth making
+  silently, and the setting says why it is not doing what it was set to. That
+  mode is also the one whose scene cannot open on its own, so it loads its
+  `.hflevel` when the scene comes up, and says so rather than opening empty when
+  the file is not there. The data portability guide now also states the thing it
+  never did: on open the scene wins, because the scene is what Godot loads, so a
+  `.hflevel` saved after the last Ctrl+S is not what comes up.
+
 ### Changed
 - **One world unit is one metre, and the drawing side now agrees** (#625). Two
   scale conventions were in the project at once and the seam ran through the core

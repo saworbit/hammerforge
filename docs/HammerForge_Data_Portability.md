@@ -19,6 +19,28 @@ This document describes how to move data in and out of HammerForge safely.
 - Autosaves write to `res://.hammerforge/autosave.hflevel` by default.
 - Store `.hflevel` in version control for reliable recovery.
 
+### Which File Opens: the `.tscn` Wins
+A level lives in two files, and they are written by two different commands. Godot's own **Ctrl+S** writes the scene; **Save Level** writes the `.hflevel`. Nothing reconciles them.
+
+**On open, the scene wins**, because the scene is what Godot loads. A `.hflevel` saved after the last Ctrl+S is not what comes up. Use **Load Level** to bring it in.
+
+The one exception is a level set to keep only its baked geometry, below: that scene has no brushes to win with, so it loads its `.hflevel` when it opens.
+
+### What the Scene Keeps
+HammerForge gives an `owner` to almost everything it makes, so Ctrl+S writes the brushes *and* the geometry baked from them into the `.tscn`. A 100-brush level is about 261 KB of scene against 4 KB of `.hflevel`, and a bake adds another 149 KB that is derivable from the brushes already in the file. For a greybox session that is what you commit and what a teammate has to merge.
+
+**Scene Keeps** on the `LevelRoot` chooses what goes in:
+
+| Setting | The `.tscn` holds | Notes |
+|---|---|---|
+| **Brushes and bake** (default) | Both | The scene is the whole level on its own, and has geometry at runtime without the plugin. |
+| **Brushes only** | The sources | The scene stays the size of its brushes. Bake again to get geometry back; there is none at runtime until you do. |
+| **Baked geometry only** | The geometry | The lightest scene. The brushes live in the `.hflevel` and are loaded when the scene opens. |
+
+Changing the setting re-owns what is already in the level, so the next Ctrl+S writes what the setting says rather than what the level happened to be built with.
+
+**Baked geometry only** needs somewhere to put the brushes. A level with no `.hflevel` path keeps them in the scene regardless, because dropping a level's only copy of its brushes is not a trade worth making silently. If the `.hflevel` is missing when such a scene opens, HammerForge says so rather than opening an empty level.
+
 ### Entity I/O Serialization
 - Entity I/O connections are stored per-entity in the `io_outputs` key of each entity record.
 - Each connection is a Dictionary: `{output_name, target_name, input_name, parameter, delay, fire_once}`.

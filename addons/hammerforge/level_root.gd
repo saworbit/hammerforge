@@ -56,6 +56,33 @@ enum BrushShape {
 }
 enum AxisLock { NONE, X, Y, Z }
 
+## What the `.tscn` keeps of a level, as against what the `.hflevel` keeps (#624).
+##
+## HammerForge gives an `owner` to almost everything it makes, so Godot's own
+## Ctrl+S writes the brushes and the geometry baked from them into the scene file,
+## and Save Level writes a third copy into the `.hflevel` beside it. A 100 brush
+## level is 261 KB of `.tscn` against 4 KB of `.hflevel`, and a bake adds another
+## 149 KB of geometry that is entirely derivable from the brushes already there.
+##
+## For a greybox session that is a megabyte of scene rewriting on every save, and
+## it is what a mapper commits and what a teammate has to merge.
+##
+## `BRUSHES_AND_BAKE` is what HammerForge has always done and stays the default:
+## the bake has to be owned for the level to have geometry at runtime without the
+## plugin, which is deliberate, and the brushes have to be owned for the scene to
+## be the whole level on its own.
+enum SceneContents {
+	## Both, which is today's behaviour and the only one that needs no other file.
+	BRUSHES_AND_BAKE,
+	## The brushes, and rebuild the bake when it is wanted. The scene stays the
+	## size of its sources.
+	BRUSHES_ONLY,
+	## The geometry, with the brushes living in the `.hflevel`. The lightest scene
+	## and the only mode that cannot open on its own, so the level is loaded from
+	## the `.hflevel` when the scene comes up.
+	BAKE_ONLY,
+}
+
 # ---------------------------------------------------------------------------
 # Export vars
 # ---------------------------------------------------------------------------
@@ -130,6 +157,22 @@ var _grid_snap: float = 0.5
 	get:
 		return _grid_snap
 @export var brush_size_default: Vector3 = Vector3(2, 2, 2)
+
+var _scene_contents: int = SceneContents.BRUSHES_AND_BAKE
+## What Ctrl+S writes into the `.tscn` (#624). See `SceneContents`.
+##
+## Changing it re-owns what is already in the level, so the next Ctrl+S writes
+## what the setting says rather than what the level happened to be built with.
+@export var scene_contents: SceneContents = SceneContents.BRUSHES_AND_BAKE:
+	set(value):
+		var wanted := clampi(int(value), 0, SceneContents.size() - 1)
+		if wanted == _scene_contents:
+			return
+		_scene_contents = wanted
+		_reapply_scene_ownership()
+		_log("Scene keeps: %s" % scene_contents_description())
+	get:
+		return _scene_contents
 var _bake_collision_layer_index: int = 1
 @export_range(1, 32, 1) var bake_collision_layer_index: int = 1:
 	set(value):
@@ -775,6 +818,12 @@ func _ready():
 	file_system = HFFileSystemType.new(self)
 	if _should_initialize_editor_systems():
 		_initialize_editor_systems()
+	# A scene that keeps only its geometry has no brushes in it, so the level is
+	# loaded from the `.hflevel` beside it (#624). Deferred because a load rebuilds
+	# the level and the subsystems above have only just been built.
+	if _scene_contents == SceneContents.BAKE_ONLY and has_hflevel_path():
+		if brush_system.get_live_brush_count() == 0:
+			call_deferred("_load_hflevel_for_bake_only_scene")
 	if Engine.is_editor_hint():
 		_set_hflevel_autosave_minutes(hflevel_autosave_minutes)
 		_set_hflevel_autosave_enabled(hflevel_autosave_enabled)
@@ -3476,6 +3525,28 @@ func create_new_level() -> void:
 # ===========================================================================
 
 
+## The other half of `BAKE_ONLY`: the scene holds the geometry, so the brushes
+## come from the file. A missing file is said out loud rather than opening an
+## empty level and leaving the mapper to work out where the level went.
+func _load_hflevel_for_bake_only_scene() -> void:
+	if not is_inside_tree() or brush_system.get_live_brush_count() > 0:
+		return
+	var path := str(hflevel_autosave_path)
+	if not FileAccess.file_exists(path):
+		var message := (
+			(
+				"This level keeps only its baked geometry in the scene, and %s is not there, "
+				+ "so its brushes could not be loaded."
+			)
+			% path
+		)
+		HFLog.warn("HammerForge: %s" % message)
+		if has_signal("user_message"):
+			user_message.emit(message, 2)
+		return
+	load_hflevel(path)
+
+
 func _get_editor_owner() -> Node:
 	# A root built in code and not yet parented has no tree to ask.
 	var tree := get_tree()
@@ -3485,16 +3556,69 @@ func _get_editor_owner() -> Node:
 	return get_owner()
 
 
+## Whether a level's sources go into the `.tscn`.
+##
+## `BAKE_ONLY` is refused when there is nowhere to put them instead: a level with
+## no `.hflevel` path would be dropping its brushes into a file that does not
+## exist, which is the one way this setting can lose work.
+func scene_keeps_brushes() -> bool:
+	if _scene_contents != SceneContents.BAKE_ONLY:
+		return true
+	# Nowhere else to put them means the scene keeps them whatever the setting
+	# says. Dropping a level's only copy of its brushes is not a trade anyone
+	# asked for.
+	return not has_hflevel_path()
+
+
+## Whether this level has somewhere to write a `.hflevel`.
+func has_hflevel_path() -> bool:
+	return str(hflevel_autosave_path).strip_edges() != ""
+
+
+## Whether baked geometry goes into the `.tscn`. When it does not, the level has
+## no geometry at runtime without a bake, which is the trade the mode is for.
+func scene_keeps_bake() -> bool:
+	return _scene_contents != SceneContents.BRUSHES_ONLY
+
+
+## What the setting currently comes to, in a line, for the log and the dock.
+func scene_contents_description() -> String:
+	match _scene_contents:
+		SceneContents.BRUSHES_ONLY:
+			return "brushes only, bake rebuilt on demand"
+		SceneContents.BAKE_ONLY:
+			if scene_keeps_brushes():
+				return "brushes and bake, because this level has no .hflevel path"
+			return "baked geometry only, brushes load from the .hflevel"
+		_:
+			return "brushes and bake"
+
+
+## A brush or an entity is a level's source. Everything else `_assign_owner()` is
+## handed is structure the scene keeps either way: the containers, the managers,
+## the floor and the sun.
+func _is_level_source(node: Node) -> bool:
+	return node is DraftBrush or node is DraftEntity
+
+
 func _assign_owner(node: Node) -> void:
 	if not node:
+		return
+	if _is_level_source(node) and not scene_keeps_brushes():
+		node.owner = null
 		return
 	var owner = _get_editor_owner()
 	if owner:
 		node.owner = owner
 
 
+## Only the bake output is handed to this: the baked container, the occluders and
+## the I/O dispatcher built from them.
 func _assign_owner_recursive(node: Node) -> void:
 	if not node:
+		return
+	if not scene_keeps_bake():
+		_clear_owner_recursive(node)
 		return
 	var owner = _get_editor_owner()
 	if not owner:
@@ -3502,6 +3626,28 @@ func _assign_owner_recursive(node: Node) -> void:
 	node.owner = owner
 	for child in node.get_children():
 		_assign_owner_recursive(child)
+
+
+func _clear_owner_recursive(node: Node) -> void:
+	if not node:
+		return
+	node.owner = null
+	for child in node.get_children():
+		_clear_owner_recursive(child)
+
+
+## Re-own what is already here, so a change to `scene_contents` shows up in the
+## next Ctrl+S rather than only in what is built after it.
+func _reapply_scene_ownership() -> void:
+	if not is_inside_tree():
+		return
+	for node in _iter_pick_nodes():
+		_assign_owner(node)
+	if committed_node:
+		for child in committed_node.get_children():
+			_assign_owner(child)
+	if baked_container and is_instance_valid(baked_container):
+		_assign_owner_recursive(baked_container)
 
 
 func _iter_pick_nodes() -> Array:
