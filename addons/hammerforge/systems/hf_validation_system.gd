@@ -320,9 +320,68 @@ func validate(auto_fix: bool = false) -> Dictionary:
 					fixed += 1
 
 	_check_convexity(brush_nodes, issues)
+	_check_coincident_brushes(brush_nodes, issues)
 	_check_spawn(issues)
 
 	return {"issues": issues, "fixed": fixed}
+
+
+## Two brushes in the same place.
+##
+## The most common mistake in brush editing: Ctrl+D and then a drag that did not
+## take. The copy is exactly on the original, so nothing looks wrong in the
+## viewport, and what the level gets is doubled triangles over the whole overlap
+## and z-fighting on every coincident face - which shows up in the game as
+## flickering surfaces that are hard to trace back to their cause (#702).
+##
+## Overlap in general is not a defect: brushes are meant to intersect. The check
+## is the narrow one, brushes whose position, size and shape all match within an
+## epsilon, which catches the duplicate left in place without flagging ordinary
+## intersecting geometry. No `auto_fix`, because deleting one of a pair is a
+## guess about which one the mapper wants.
+func _check_coincident_brushes(brush_nodes: Array, issues: Array) -> void:
+	var groups: Dictionary = {}
+	for node in brush_nodes:
+		if not (node is DraftBrush):
+			continue
+		var brush := node as DraftBrush
+		# `auto_fix` deletes brushes on its way through, and this runs afterwards,
+		# so some of what it was handed is gone or out of the tree by now - and
+		# `global_position` on a node outside the tree is an error, not a position.
+		if not is_instance_valid(brush) or not brush.is_inside_tree():
+			continue
+		if root.is_entity_node(brush):
+			continue
+		if not brush.size.is_finite() or not brush.global_position.is_finite():
+			continue
+		var key := (
+			"%s|%s|%d"
+			% [
+				_quantised(brush.global_position),
+				_quantised(brush.size),
+				int(brush.shape) if "shape" in brush else -1,
+			]
+		)
+		if not groups.has(key):
+			groups[key] = []
+		groups[key].append(str(brush.name))
+	for key in groups:
+		var names: Array = groups[key]
+		if names.size() < 2:
+			continue
+		issues.append(
+			(
+				"%d brushes occupy the same space: %s"
+				% [names.size(), ", ".join(PackedStringArray(names))]
+			)
+		)
+
+
+## A position rounded to the coincidence epsilon, as a string that can key a
+## dictionary. A tenth of a grid unit is far below anything a mapper places on
+## purpose and far above float noise from a round trip.
+func _quantised(value: Vector3) -> String:
+	return "%d,%d,%d" % [round(value.x * 1000.0), round(value.y * 1000.0), round(value.z * 1000.0)]
 
 
 ## Every brush is a convex solid, or it is not a brush.
