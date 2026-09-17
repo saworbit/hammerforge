@@ -249,6 +249,7 @@ var load_hflevel_btn: Button = null
 var import_map_btn: Button = null
 var export_map_btn: Button = null
 var map_format_select: OptionButton = null
+var map_scale_spin: SpinBox = null
 var export_glb_btn: Button = null
 # -- Autosave controls (built programmatically) --
 var autosave_enabled: CheckBox = null

@@ -4,6 +4,9 @@ extends RefCounted
 ## Keeps the common build-and-play workflow obvious while grouping specialist
 ## controls into collapsed sections.
 
+const HFUIFactoryType = preload("hf_ui_factory.gd")
+const MapIOType = preload("../map_io.gd")
+
 var dock  # HammerForgeDock reference
 
 
@@ -372,6 +375,14 @@ func build(parent: Control) -> void:
 	dock.map_format_select.add_item("Valve 220", 1)
 	dock.map_format_select.tooltip_text = "Map export format"
 	flc.add_child(dock.map_format_select)
+
+	# Both directions, because a unit is a unit whichever way the file is going.
+	# It sits between the import and the export buttons for that reason (#713).
+	var scale_row := HFUIFactoryType.make_spin_row(
+		"Map units/m", 0.001, 4096.0, 0.001, MapIOType.QUAKE_UNITS_PER_METRE
+	)
+	dock.map_scale_spin = scale_row.get_child(1)
+	flc.add_child(scale_row)
 
 	dock.export_map_btn = dock._make_button("Export .map")
 	flc.add_child(dock.export_map_btn)

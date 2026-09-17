@@ -141,6 +141,12 @@ const TEXTS := {
 	"load_hflevel_btn": "Load level from .hflevel file",
 	"import_map_btn": "Import a Quake-style .map file",
 	"export_map_btn": "Export level as .map file",
+	"map_scale_spin":
+	(
+		"How many .map units one metre is, for both import and export.\n"
+		+ "32 is the Quake-family convention: a player is 56 units there and 1.6 here.\n"
+		+ "A file that records its own figure is imported at that one instead."
+	),
 	"export_glb_btn": "Export baked geometry as .glb file",
 	"autosave_enabled": "Enable automatic saving at regular intervals",
 	"autosave_minutes": "Autosave interval in minutes",

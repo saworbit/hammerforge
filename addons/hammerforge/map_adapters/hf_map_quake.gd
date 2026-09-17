@@ -21,21 +21,21 @@ func format_face_line(
 	var u_offset := 0.0
 	var v_offset := 0.0
 	var rotation := 0.0
-	var u_scale := 1.0
-	var v_scale := 1.0
+	var u_scale := units_per_metre
+	var v_scale := units_per_metre
 	if face_data is FaceData:
 		var fd := face_data as FaceData
 		u_offset = fd.uv_offset.x
 		v_offset = fd.uv_offset.y
 		rotation = map_rotation_degrees(fd.uv_rotation)
-		u_scale = map_texture_scale(fd.uv_scale.x)
-		v_scale = map_texture_scale(fd.uv_scale.y)
+		u_scale = map_texture_scale_in_units(fd.uv_scale.x)
+		v_scale = map_texture_scale_in_units(fd.uv_scale.y)
 	return (
 		"( %s ) ( %s ) ( %s ) %s %s %s %s %s %s"
 		% [
-			_format_vec3(a),
-			_format_vec3(b),
-			_format_vec3(c),
+			_format_vec3(map_point(a)),
+			_format_vec3(map_point(b)),
+			_format_vec3(map_point(c)),
 			texture,
 			_fmt_float(u_offset),
 			_fmt_float(v_offset),

@@ -2723,16 +2723,18 @@ func take_hflevel_freshness_report() -> Dictionary:
 	return check_hflevel_freshness()
 
 
-func validate_map(path: String) -> Dictionary:
-	return file_system.validate_map(path)
+func validate_map(path: String, units_per_metre: float = MapIO.QUAKE_UNITS_PER_METRE) -> Dictionary:
+	return file_system.validate_map(path, units_per_metre)
 
 
-func import_map(path: String) -> int:
-	return file_system.import_map(path)
+func import_map(path: String, units_per_metre: float = MapIO.QUAKE_UNITS_PER_METRE) -> int:
+	return file_system.import_map(path, units_per_metre)
 
 
-func export_map(path: String, format: String = "quake") -> int:
-	return file_system.export_map(path, format)
+func export_map(
+	path: String, format: String = "quake", units_per_metre: float = MapIO.QUAKE_UNITS_PER_METRE
+) -> int:
+	return file_system.export_map(path, format, units_per_metre)
 
 
 func export_baked_gltf(path: String) -> int:

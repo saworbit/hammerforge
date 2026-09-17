@@ -36,20 +36,22 @@ func format_face_line(
 		v_axis = axes[1]
 		u_offset = face_data.uv_offset.x
 		v_offset = face_data.uv_offset.y
-		u_scale = map_texture_scale(face_data.uv_scale.x)
-		v_scale = map_texture_scale(face_data.uv_scale.y)
+		u_scale = map_texture_scale_in_units(face_data.uv_scale.x)
+		v_scale = map_texture_scale_in_units(face_data.uv_scale.y)
 		rotation = map_rotation_degrees(face_data.uv_rotation)
 	else:
 		var axes := _auto_axes(normal)
 		u_axis = axes[0]
 		v_axis = axes[1]
+		u_scale = units_per_metre
+		v_scale = units_per_metre
 
 	return (
 		"( %s ) ( %s ) ( %s ) %s [ %s %s ] [ %s %s ] %s %s %s"
 		% [
-			_format_vec3(a),
-			_format_vec3(b),
-			_format_vec3(c),
+			_format_vec3(map_point(a)),
+			_format_vec3(map_point(b)),
+			_format_vec3(map_point(c)),
 			texture,
 			_fmt_axis(u_axis),
 			_fmt_float(u_offset),

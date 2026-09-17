@@ -4,6 +4,15 @@ extends RefCounted
 
 ## Base class for .map format adapters. Subclass to support different map formats.
 
+## How many `.map` units one HammerForge unit is written as.
+##
+## The whole unit conversion for an export lives here, because every face line in
+## every shape writer goes through `format_face_line()` and nothing else touches
+## a coordinate on the way out. 1 writes the level's own numbers, which is what a
+## caller that has not asked for a conversion gets. `MapIO.QUAKE_UNITS_PER_METRE`
+## is the figure the dialog offers (#713).
+var units_per_metre: float = 1.0
+
 
 func format_name() -> String:
 	return "Base"
@@ -13,6 +22,22 @@ func format_face_line(
 	a: Vector3, b: Vector3, c: Vector3, texture: String, face_data: Variant
 ) -> String:
 	return ""
+
+
+## A point, in the units the file is being written in.
+func map_point(v: Vector3) -> Vector3:
+	return v * units_per_metre
+
+
+## A face's texture scale, in the units the file is being written in.
+##
+## A `.map` reader computes `axis . point / scale`, so multiplying the point by
+## the unit factor and leaving the scale alone would tile the texture that many
+## times more often. The scale takes the same factor and the texture comes out
+## the size it was drawn. `uv_offset` is in texture space, added after the
+## division, and needs none.
+func map_texture_scale_in_units(uv_scale: float) -> float:
+	return map_texture_scale(uv_scale) * units_per_metre
 
 
 ## Format entity properties as .map key-value lines (one per property).
@@ -76,8 +101,14 @@ func format_color(value: Color) -> String:
 	return "%d %d %d" % [roundi(value.r * 255.0), roundi(value.g * 255.0), roundi(value.b * 255.0)]
 
 
-## Snap a float to 3 decimal places, matching MapIO._snapped().
+## Snap a float to 3 decimal places for a face line.
 ## Outputs clean integers when the value has no fractional part (e.g. "64" not "64.000").
+##
+## Not the same as `MapIO._snapped()`, which this used to claim to match.
+## That one always writes the decimals, and it is what an entity `origin` and an
+## I/O delay go through. Both forms parse; the delay in particular is a wire
+## format other tools read, so they are left as they are rather than unified in
+## passing.
 static func _snapped(value: float) -> String:
 	if absf(value - roundf(value)) < 0.001:
 		return str(int(roundf(value)))
