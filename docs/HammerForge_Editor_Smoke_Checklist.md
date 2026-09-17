@@ -794,6 +794,8 @@ It writes one PNG per tab under `user://console_preview/`.
 - Press **`]`** repeatedly until maximum (512); confirm it stops doubling.
 - Double-tap **G G** to open quick-property popup; change value; confirm HUD updates with flash.
 - Perform a state restore (undo a bulk operation); confirm the HUD picks up the restored grid snap.
+- On a level with a few hundred brushes and several materials, nudge one brush and press Ctrl+Z. Confirm the undo is quick and that nothing else in the level flickers or changes appearance: a restore only repaints when the palette is part of what changed.
+- Then change a palette slot to a different material, and undo that. Confirm every brush using that slot goes back to the material it had. This is the half the check above must not break.
 
 ### 33b. File I/O Refusals and Durability
 - Create a file named `broken.map` containing only `not a map`. Import it from the dock. Confirm the current level is untouched, the status line reports a failed import naming the reason, and no undo entry was added.
