@@ -809,6 +809,11 @@ Click **Play Selected Area** to bake and playtest only the region around your cu
 - After launch, the original cordon state is restored (enabled/disabled, original AABB).
 - On validation failure (severity ≥ 2), the cordon is restored before showing the fix dialog.
 
+#### Export Game Scene
+Click **Export Game Scene** in **Test → Advanced Bake** to write the level as a scene a game loads. It bakes, then saves a `.tscn` beside the level's own scene, named after it. The contents are the same geometry and the same real entity nodes as a playtest export — a `light_point` as an `OmniLight3D`, a `logic_timer` as a `Timer` — with no playtest player, no fallback sun and no debug environment. That is the difference between the two buttons, and the player is the one that matters: two character controllers in one scene is a bug in the game.
+
+See [Shipping a Level](HammerForge_Shipping_A_Level.md) for the bake options a shipped level wants and how to get lighting baked into it.
+
 #### Export Playtest Build
 Click **Export Playtest Build** in **Test → Advanced Bake** to create a standalone playable scene:
 - Validates spawn (severity ≥ 2 blocks the export).

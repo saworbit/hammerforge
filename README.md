@@ -156,6 +156,7 @@ This repository does not vendor an MCP server or any other editor bridge. If you
 | [Install + Upgrade](docs/HammerForge_Install_Upgrade.md) | Setup, upgrade, and cache reset |
 | [Design Constraints](docs/HammerForge_Design_Constraints.md) | Explicit tradeoffs and limits |
 | [Data Portability](docs/HammerForge_Data_Portability.md) | .hflevel / .map / .glb workflow |
+| [Shipping a Level](docs/HammerForge_Shipping_A_Level.md) | Taking a finished level into a game |
 | [Texture + Materials](docs/HammerForge_Texture_Materials.md) | Face materials, UVs, and surface paint |
 | [Prototype Textures](docs/HammerForge_Prototype_Textures.md) | Built-in 150 SVG textures |
 | [Floor Paint Design](docs/HammerForge_FloorPaint_Greyboxing.md) | Grid paint system design |

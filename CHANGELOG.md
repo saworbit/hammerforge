@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Added
+- **Export Game Scene** (#697, #698). The playtest export was the only path in
+  the plugin that turned an entity marker into the real node it stands for - a
+  `light_point` into an `OmniLight3D`, a `logic_timer` into a `Timer` - so it was
+  also the only way to get a scene that could be shipped, and it always appended
+  a debug FPS controller, a flat grey environment and a fallback sun, with no
+  argument to leave any of them out. The mapper's options were to delete three
+  nodes by hand after every export or to write their own exporter. There is now a
+  button beside Export Playtest Build that writes the same geometry, the same
+  real entity nodes and the same `HFIODispatcher`, with none of the rig, next to
+  the level's own scene and named after it. The environment and the sun are a
+  matter of taste; two character controllers in one scene is a bug in the game.
+
+- **A "Shipping a Level" guide** (#709). Which of the files beside a level is the
+  level, what the export writes and what it leaves out, how to get lighting baked
+  in, which bake options a shipped level wants and what each costs, what to turn
+  off, and how to raise an output from game code. Every one of those had an
+  answer and several were only discoverable by reading `level_root.gd`.
+
 ### Fixed
 - **A bake says when a cutter drops the face materials** (#694). A level with a
   subtractive brush in it takes the CSG path, which resolves one material per
@@ -16,6 +35,15 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the new one names the cause and how many brushes caused it. It is said only
   when faces actually carry materials, which is the same guard the other branch
   uses: a level with nothing painted on it loses nothing by taking the CSG path.
+
+- **A lightmap unwrap that fails says so** (#700). `ArrayMesh.lightmap_unwrap()`
+  returns an `Error` and mutates the mesh in place, and the code checked whether
+  it had returned a `Mesh` - so the branch was dead and the `Error` went into a
+  local nobody read. The unwrap worked anyway, because the two names are the same
+  object. What was missing was the failure: `ERR_UNAVAILABLE` when the engine has
+  no unwrapper and `ERR_CANT_CREATE` when it cannot lay the mesh out. Either way
+  the bake reported success, the Lightmap UV2 checkbox stayed ticked, and a
+  `LightmapGI` over the result baked that surface black with no explanation.
 
 - **A level in a game scene is a level, not a playtest** (#699, #689).
   `auto_spawn_player` defaulted on and `LevelRoot._ready()` acted on it outside
