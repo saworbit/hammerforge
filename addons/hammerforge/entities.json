@@ -45,7 +45,7 @@
     "outputs": ["OnOpen", "OnClose", "OnTrigger"],
     "inputs": ["Open", "Close", "Toggle", "Lock", "Unlock"],
     "properties": [
-      {"name": "speed", "type": "float", "label": "Speed", "default": 200.0},
+      {"name": "speed", "type": "float", "label": "Speed", "default": 2.0},
       {"name": "locked", "type": "bool", "label": "Locked", "default": false}
     ]
   }

@@ -138,14 +138,17 @@ func _the_polygon_tools_height() -> void:
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/hf_polygon_tool.gd")
 	var root: Node3D = await fresh_root()
 	var tool_instance = PolygonTool.new()
-	var height := float(tool_instance.get("_height"))
-	note("Polygon tool default height", _players(height))
+	tool_instance.root = root
+	# What a fresh polygon would extrude to, which is the level's own default
+	# brush height until the mapper has built one and it remembers theirs. The
+	# bare `_height` declaration is 0.0 now and says nothing on its own.
+	var height := float(tool_instance.call("_starting_height"))
+	note("Polygon tool starting height", _players(height))
 	note("the level's grid snap", _players(root.grid_snap))
 	note("a drawn brush's default size", root.brush_size_default)
-	note("resets to the same number after each shape", source.count("_height = 32.0"))
+	note("resets to a hard coded number after each shape", source.count("_height = 32.0"))
 	if height > root.brush_size_default.y * 4.0:
-		known(
-			658,
+		flag(
 			"the Polygon tool extrudes to a height nothing else on the project's scale uses",
 			(
 				(
@@ -215,8 +218,13 @@ func _the_shipped_entity_properties() -> void:
 func _controls_whose_range_outlives_the_level() -> void:
 	note("-- dock spin ranges against the size of a level --")
 	var dock_source := FileAccess.get_file_as_string("res://addons/hammerforge/dock.gd")
+	# Distances only. `_disp_elevation_spin` looked like a sixth, and is not one:
+	# the dock calls it a "Scale multiplier for displacement heights" and
+	# `HFDisplacementSystem.set_elevation()` is "Set elevation scale for the
+	# displacement". Reading a unitless multiplier as metres and dividing it by
+	# the 16 that #625's conversion used would have been a wrong answer confidently
+	# reported, which is the thing this sweep is supposed to avoid.
 	var interesting := {
-		"_disp_elevation_spin": "displacement elevation",
 		"_disp_radius_spin": "displacement brush radius",
 		"_bevel_radius_spin": "bevel radius",
 		"_bevel_inset_dist_spin": "inset distance",
@@ -230,8 +238,7 @@ func _controls_whose_range_outlives_the_level() -> void:
 		var maximum := float(rest.split("\n")[0])
 		note("%s max" % interesting[name], _players(maximum))
 		if maximum >= 32.0:
-			known(
-				658,
+			flag(
 				"a dock control's range is four rooms wide",
 				(
 					(

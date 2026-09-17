@@ -229,6 +229,33 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the exporter next.
 
 ### Fixed
+- **The distances #625 did not reach** (#658). One world unit is a metre since
+  #625 -- the player is 1.6, a default drawn brush is 2, the grid snaps at 0.5
+  and the shipped examples are 8 unit rooms -- and these are the numbers that
+  conversion missed, where a value that used to be a small nudge became several
+  rooms.
+  **The Polygon tool** extruded to a literal 32.0, twenty players tall, and the
+  literal appeared in the two resets as well: a mapper who dragged the height
+  down to something usable got 32 back on the next polygon. It starts from the
+  level's own `brush_size_default.y` now and then remembers whatever was last
+  built, so the tool follows the project's scale and then the mapper's.
+  **`door_basic.speed`** was 200 units a second. The playtest player walks at 6.5
+  and a doorway is about 2 units across, so the door was open in ten
+  milliseconds. It is 2.
+  **Four dock controls** ran to sixty-four units, forty players, so every useful
+  bevel radius sat in the first few percent of the slider with sixty units of
+  dead travel after it and an arrow-key step sized for the range rather than the
+  level. Bevel radius, inset distance and inset height now run to 4 with a 0.05
+  step; the displacement paint radius runs to 8, because terrain covers more
+  ground than a brush detail does. Their defaults moved with them -- a bevel
+  radius of 2.0 on a 2 unit brush bevels the whole brush, so fixing only the
+  range would have left the control unusable out of the box.
+  The fifth control the sweep named, displacement elevation, is deliberately
+  unchanged. The dock calls it a "Scale multiplier for displacement heights" and
+  `HFDisplacementSystem.set_elevation()` is "Set elevation scale": it is
+  unitless, so reading it as metres and dividing it by the 16 that #625 used
+  elsewhere would have been a wrong answer confidently applied. The sweep's own
+  check has been corrected to measure distances only.
 - **The bake chunks on the path it actually takes** (#656). `_bake_impl()` picks
   between two geometry paths and only the CSG one had a chunked branch.
   `bake_use_face_materials` defaults to true, so on every default level the bake

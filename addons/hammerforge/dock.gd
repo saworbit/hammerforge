@@ -1641,10 +1641,14 @@ func _build_displacement_bevel_section() -> void:
 	var rs_row = HBoxContainer.new()
 	rs_row.add_child(_make_label("R:"))
 	_disp_radius_spin = SpinBox.new()
-	_disp_radius_spin.min_value = 0.5
-	_disp_radius_spin.max_value = 64.0
-	_disp_radius_spin.step = 0.5
-	_disp_radius_spin.value = 4.0
+	# Distances here are metres since #625, so a range that ran to 64 was forty
+	# players wide and every useful value sat in the first few percent of the
+	# control (#658). Terrain covers more ground than a brush detail does, so this
+	# one keeps a room's width rather than taking the same cut as the bevels.
+	_disp_radius_spin.min_value = 0.1
+	_disp_radius_spin.max_value = 8.0
+	_disp_radius_spin.step = 0.1
+	_disp_radius_spin.value = 1.0
 	_disp_radius_spin.tooltip_text = "Displacement paint brush radius"
 	rs_row.add_child(_disp_radius_spin)
 	rs_row.add_child(_make_label("S:"))
@@ -1711,10 +1715,13 @@ func _build_displacement_bevel_section() -> void:
 	sr_row.add_child(_bevel_segments_spin)
 	sr_row.add_child(_make_label("Radius:"))
 	_bevel_radius_spin = SpinBox.new()
-	_bevel_radius_spin.min_value = 0.1
-	_bevel_radius_spin.max_value = 64.0
-	_bevel_radius_spin.step = 0.1
-	_bevel_radius_spin.value = 2.0
+	# A default drawn brush is 2 units, so a bevel radius that ran to 64 put every
+	# usable value in the first 3% of the control, with sixty units of dead travel
+	# after it and an arrow-key step sized for the range rather than the level.
+	_bevel_radius_spin.min_value = 0.05
+	_bevel_radius_spin.max_value = 4.0
+	_bevel_radius_spin.step = 0.05
+	_bevel_radius_spin.value = 0.25
 	_bevel_radius_spin.tooltip_text = "Bevel radius (how far the bevel extends)"
 	sr_row.add_child(_bevel_radius_spin)
 	bbox.add_child(sr_row)
@@ -1725,17 +1732,17 @@ func _build_displacement_bevel_section() -> void:
 	var fi_row = HBoxContainer.new()
 	fi_row.add_child(_make_label("Inset:"))
 	_bevel_inset_dist_spin = SpinBox.new()
-	_bevel_inset_dist_spin.min_value = 0.1
-	_bevel_inset_dist_spin.max_value = 64.0
-	_bevel_inset_dist_spin.step = 0.1
-	_bevel_inset_dist_spin.value = 2.0
+	_bevel_inset_dist_spin.min_value = 0.05
+	_bevel_inset_dist_spin.max_value = 4.0
+	_bevel_inset_dist_spin.step = 0.05
+	_bevel_inset_dist_spin.value = 0.25
 	_bevel_inset_dist_spin.tooltip_text = "Distance to inset the face boundary"
 	fi_row.add_child(_bevel_inset_dist_spin)
 	fi_row.add_child(_make_label("Height:"))
 	_bevel_inset_height_spin = SpinBox.new()
-	_bevel_inset_height_spin.min_value = -64.0
-	_bevel_inset_height_spin.max_value = 64.0
-	_bevel_inset_height_spin.step = 0.1
+	_bevel_inset_height_spin.min_value = -4.0
+	_bevel_inset_height_spin.max_value = 4.0
+	_bevel_inset_height_spin.step = 0.05
 	_bevel_inset_height_spin.value = 0.0
 	_bevel_inset_height_spin.tooltip_text = "Extrude the inset face along its normal (0 = flat inset)"
 	fi_row.add_child(_bevel_inset_height_spin)
