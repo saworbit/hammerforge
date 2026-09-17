@@ -146,13 +146,27 @@ jobs:
         shard: [1, 2, 3, 4]
     env:
       GODOT_VERSION: "4.7-stable"
+      # The shard count is stated three times: matrix.shard above, this
+      # SHARDS, and the aggregate job's own SHARDS below. That duplication is
+      # safe only because the aggregate's "every shard reported" guard counts
+      # the uploaded logs and fails if any of the three disagree -- don't
+      # simplify that guard away, it is what lets these stay independent.
       SHARDS: "4"
+      OWN_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
     steps:
       # Read-only, and no credentials left behind: nothing in a shard writes.
       # The counts commit and its deploy key live in the aggregate job below,
       # which runs none of the test code.
+      #
+      # ref must match the aggregate job's checkout below. The aggregate
+      # cross-checks the shards' summed Scripts count against
+      # `tools/shard_tests.py --count` run on the tree IT checked out; if the
+      # shards measured a different tree than the aggregate, that check
+      # compares two different commits and can fail -- or worse, pass -- for
+      # the wrong reason.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ env.OWN_PR == 'true' && github.event.pull_request.head.ref || '' }}
           persist-credentials: false
 
       - name: Download Godot
@@ -198,6 +212,9 @@ jobs:
     # it would be *skipped* instead, and a skipped required check never reports
     # at all -- the pull request would sit waiting on it for good.
     if: always()
+    # Looks wrong next to a job that git pushes below, but the push travels
+    # over HF_COUNTS_DEPLOY_KEY (an ssh-key on the checkout step), not the
+    # workflow token -- so the token's permissions never come into it.
     permissions:
       contents: read
     env:
@@ -228,7 +245,9 @@ jobs:
 
       - name: Check every shard reported
         run: |
-          found=$(find shard-logs -name 'gut-shard-*.log' | wc -l)
+          # Flat glob, matching exactly what the update step below consumes --
+          # a recursive find here could count logs this glob would not see.
+          found=$(ls shard-logs/gut-shard-*.log 2>/dev/null | wc -l)
           if [ "$found" -ne "$SHARDS" ]; then
             echo "::error::expected $SHARDS shard logs, found $found"
             exit 1

@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Split the GUT suite into shards CI can run in parallel.
 
-The suite is 360 seconds of a 384 second CI run, and the other two jobs are done
-inside 73. So the wait is the suite. The suite is 222 scripts with a median
-runtime of 0.99s and no hotspot to fix -- which is exactly what makes it worth
-dividing rather than optimising. Four shards come out at 89, 89, 95 and 88
-seconds.
+The suite was 360 seconds of a 384 second CI run, and the other two jobs were
+done inside 73 -- so the wait was the suite. It divides well: 222 scripts,
+median runtime 0.99s, and no hotspot to fix instead of dividing, save one
+21s file that sets the floor no split can beat. Measured after sharding, the
+four shard jobs ran 1m53s to 2m07s and the whole CI run finished in 2m21s,
+against 6m33s for the equivalent single-job run.
 
     python tools/shard_tests.py --shard 1 --of 4   # the paths for shard 1
     python tools/shard_tests.py --count            # how many scripts exist

@@ -326,9 +326,9 @@ def main() -> int:
     counts = sum_gut_logs(args.gut_log)
     if args.expect_scripts is not None and counts["scripts"] != args.expect_scripts:
         raise SystemExit(
-            "update_test_counts: the logs account for %d scripts, not %d. A shard "
-            "ran fewer scripts than it was given, and publishing this total would "
-            "record a smaller suite as measured fact."
+            "update_test_counts: the logs account for %d scripts, not %d. The "
+            "shards and the split disagree on the size of the suite, and "
+            "publishing this total would record the wrong one as measured fact."
             % (counts["scripts"], args.expect_scripts)
         )
     if counts["failing"]:

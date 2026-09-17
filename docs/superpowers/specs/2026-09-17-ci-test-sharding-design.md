@@ -28,8 +28,9 @@ critical path through a sweep. The queue either drains or it backs up.
 
 The obvious answers were measured first, and none of them survive.
 
-**Path filters buy nothing.** Of the last 60 commits, 53 touch both
-`addons/` and `tests/`. Around five are docs-only or tools-only. Worse, all
+**Path filters buy nothing.** Of the last 60 commits, 49 touch both
+`addons/` and `tests/`, 3 more touch only `addons/` and 1 only `tests/`, and 7
+touch neither. Worse, all
 three job names are required status checks on the `main` ruleset, and a
 path-filtered job reports `skipped` — which never satisfies a required check, so
 the pull request becomes permanently unmergeable. That is real machinery, and a
