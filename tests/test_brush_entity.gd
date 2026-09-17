@@ -371,3 +371,63 @@ func test_create_brush_from_info_restores_entity_class():
 		brush.get_node_or_null("_BrushEntityOverlay"),
 		"Restored entity brushes should render their semantic cue immediately",
 	)
+
+
+# ===========================================================================
+# A brush entity's own properties (#728)
+# ===========================================================================
+
+const HFEntityPropUtils = preload("res://addons/hammerforge/ui/hf_entity_prop_utils.gd")
+
+
+func _tied_brush(entity_class: String = "func_door") -> DraftBrush:
+	var brush := DraftBrush.new()
+	root.draft_brushes_node.add_child(brush)
+	brush.set_meta("brush_entity_class", entity_class)
+	return brush
+
+
+func test_a_tied_brush_is_recognised_as_a_brush_entity():
+	var brush := _tied_brush()
+	assert_true(HFEntityPropUtils.is_brush_entity(brush))
+	assert_eq(HFEntityPropUtils.get_entity_type(brush), "func_door", "and names its class")
+
+
+func test_a_property_set_on_a_brush_entity_is_kept():
+	# The setter used to require an `entity_data` meta a brush does not have, so
+	# the call was accepted and dropped with no error anywhere.
+	var brush := _tied_brush()
+	HFEntityPropUtils.set_entity_property(brush, "speed", 4.0)
+	HFEntityPropUtils.set_entity_property(brush, "angle", 0.0)
+	var data := HFEntityPropUtils.get_entity_data(brush)
+	assert_almost_eq(float(data.get("speed", -1.0)), 4.0, 0.001)
+	assert_almost_eq(float(data.get("angle", -1.0)), 0.0, 0.001)
+
+
+func test_it_is_kept_under_the_key_that_already_round_trips():
+	# `brush_entity_data` is what the brush capture and the .map writer read, so
+	# writing anywhere else would have been a value that never left the session.
+	var brush := _tied_brush()
+	HFEntityPropUtils.set_entity_property(brush, "speed", 4.0)
+	assert_true(brush.has_meta("brush_entity_data"), "the key the format already carries")
+	assert_almost_eq(
+		float((brush.get_meta("brush_entity_data") as Dictionary).get("speed", -1.0)), 4.0, 0.001
+	)
+
+
+func test_a_plain_brush_is_not_a_brush_entity():
+	var brush := DraftBrush.new()
+	root.draft_brushes_node.add_child(brush)
+	assert_false(HFEntityPropUtils.is_brush_entity(brush), "untied is not tied")
+	HFEntityPropUtils.set_entity_property(brush, "speed", 4.0)
+	assert_false(brush.has_meta("brush_entity_data"), "and gets no properties invented for it")
+
+
+func test_a_brush_entity_property_survives_the_brush_capture():
+	var brush := _tied_brush()
+	HFEntityPropUtils.set_entity_property(brush, "speed", 4.0)
+	var info: Dictionary = brush_sys.get_brush_info_from_node(brush)
+	assert_true(info.has("brush_entity_data"), "the capture carries it: %s" % str(info.keys()))
+	assert_almost_eq(
+		float((info["brush_entity_data"] as Dictionary).get("speed", -1.0)), 4.0, 0.001
+	)

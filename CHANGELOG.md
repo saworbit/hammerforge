@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Fixed
+- **A brush entity's properties can be set** (#728). `func_door` declares
+  `speed`, `wait`, `angle` and `locked`, `func_button` declares `wait` and
+  `locked`, and none of them could be given a value in the editor. Two things
+  were in the way and either would have been enough: a brush tied to an entity
+  class is a brush, so the Entity Properties panel never opened for it, and the
+  setter behind that panel wrote to an `entity_data` meta a brush does not
+  have - the call was accepted and dropped, with no error anywhere. The storage
+  existed the whole time under `brush_entity_data`, which the brush capture and
+  the `.map` writer both read and only a `.map` import ever wrote, so a door
+  imported from TrenchBroom arrived with its speed and a door drawn here could
+  never be given one. The editor writes that key now, rather than a second key
+  meaning the same thing.
+
 ### Added
 - **A sound entity** (#704). `HFIOPresets` ships "Door Open -> Light + Sound" as
   the first of its six built-in connection presets, and there was no class a

@@ -122,3 +122,50 @@ func test_the_class_defaults_stand_when_nothing_was_authored():
 	assert_almost_eq(door.wait, 3.0, 0.001)
 	assert_almost_eq(door.angle, 90.0, 0.001)
 	assert_false(door.locked)
+
+
+# ===========================================================================
+# What the mapper authored reaches the door (#728)
+# ===========================================================================
+
+const HFEntityPropUtils = preload("res://addons/hammerforge/ui/hf_entity_prop_utils.gd")
+const HFLevelFactory = preload("res://addons/hammerforge/hf_level_factory.gd")
+
+
+func _level() -> LevelRoot:
+	var parent := Node3D.new()
+	add_child_autoqfree(parent)
+	return HFLevelFactory.create_level_root(parent, parent, {"hflevel_autosave_enabled": false})
+
+
+func _bake_door_from(level: LevelRoot, brush_id: String, door_name: String) -> Node:
+	var container := Node3D.new()
+	level.add_child(container)
+	level.bake_system._append_nonstructural_brushes(container)
+	return container.get_node_or_null("Nonstructural").get_node_or_null(door_name)
+
+
+func test_an_authored_speed_reaches_the_baked_door():
+	var level := _level()
+	var brush = level.create_brush_from_info(
+		{"shape": 0, "size": Vector3(1, 2, 0.2), "center": Vector3.ZERO, "brush_id": "d1"}
+	)
+	level.tie_brushes_to_entity(["d1"], "func_door", "gate")
+	HFEntityPropUtils.set_entity_property(brush, "speed", 7.0)
+	HFEntityPropUtils.set_entity_property(brush, "angle", 0.0)
+	var mover: Node = _bake_door_from(level, "d1", "gate")
+	assert_not_null(mover, "the door bakes under its own name")
+	assert_almost_eq(mover.speed, 7.0, 0.001, "the authored speed, not the class default")
+	assert_almost_eq(mover.angle, 0.0, 0.001, "and the authored angle")
+
+
+func test_a_door_with_nothing_authored_uses_the_class_defaults():
+	var level := _level()
+	level.create_brush_from_info(
+		{"shape": 0, "size": Vector3(1, 2, 0.2), "center": Vector3.ZERO, "brush_id": "d2"}
+	)
+	level.tie_brushes_to_entity(["d2"], "func_door", "gate2")
+	var mover: Node = _bake_door_from(level, "d2", "gate2")
+	assert_not_null(mover)
+	assert_almost_eq(mover.speed, 2.0, 0.001, "entities.json says 2.0")
+	assert_almost_eq(mover.wait, 3.0, 0.001, "and 3.0")

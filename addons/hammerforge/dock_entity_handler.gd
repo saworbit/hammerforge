@@ -13,7 +13,11 @@ static func rebuild_entity_props(dock: Object, entity: Node3D) -> void:
 	clear_entity_props(dock)
 	if not entity or not is_instance_valid(entity):
 		return
-	if not dock.level_root or not dock.level_root.is_entity_node(entity):
+	# A brush tied to an entity class is a brush, so `is_entity_node()` is false
+	# for it - and it has properties of its own that nothing could reach (#728).
+	if not dock.level_root:
+		return
+	if not dock.level_root.is_entity_node(entity) and not HFEntityPropUtils.is_brush_entity(entity):
 		return
 
 	var entity_type_key := HFEntityPropUtils.get_entity_type(entity)
