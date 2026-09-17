@@ -17,6 +17,19 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   onto instead of falling back to 1, so a level on another layer no longer has
   its spawn reported as floating in space - which named the wrong problem.
 
+- **A visgroup list comes back in the order it was made** (#706). Every name
+  survived a `.hflevel` round trip and came back alphabetised, and reshuffled
+  again the moment a new one was added. The registries are `Dictionary`s and a
+  level bundle is JSON, where `JSON.stringify` sorts object keys - so the order
+  went in and did not come out. That order is not arbitrary: on a real map it is
+  roughly the order the level was built, shell then detail then lighting, with
+  the wing being worked on today at the bottom where it is easy to find. The
+  order is now recorded beside the registry rather than inside it, so a visgroup
+  can be called anything, including something that looks like a bookkeeping key.
+  Groups had the same shape and get the same treatment. Paint layers were already
+  an ordered array and never had the problem. A file written before this has no
+  order recorded and loads exactly as it did.
+
 ### Fixed
 - **The player can climb the stairs the plugin builds** (#711). The plugin ships
   a Stairs generator, a Spiral Stairs generator and an auto-connector that builds
