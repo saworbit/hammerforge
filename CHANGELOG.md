@@ -5,6 +5,24 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **A level in a game scene is a level, not a playtest** (#699, #689).
+  `auto_spawn_player` defaulted on and `LevelRoot._ready()` acted on it outside
+  the editor, so a scene with a `LevelRoot` in it, loaded by a built game, added
+  a debug FPS controller with its own camera and HUD beside whatever player the
+  game already had, and rebuilt the whole level from source brushes at load
+  rather than showing the `BakedGeometry` the scene carries. Beside it,
+  `_setup_runtime_reload()` started a timer that stat'd
+  `res://.hammerforge/reload.lock` twice a second forever - 120 times a minute
+  per level root, under a dot directory an export does not ship, so the answer
+  could never be true - and a hit rebuilt the level mid-play. Both were gated on
+  "not in the editor", which is the shipped game and nothing else. The default is
+  now off, and both are gated on `OS.has_feature("debug")`, so a release build
+  takes neither whatever the properties say. Test Level is unaffected: the
+  playtest export has always built its own player and never read this property.
+  The status board said so too - it reported a level with the setting off as a
+  problem, on the grounds that Test Level would start with no player - and now
+  reports what is true, that a level with no spawn point gets one at the origin.
+
 - **Save As writes the file** (#688). Saving a level that had not changed since
   the last save wrote nothing, whatever path it was given, and reported success.
   The dedupe that stops an idle autosave rewriting the same bytes compared one
