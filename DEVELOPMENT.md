@@ -431,7 +431,7 @@ The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
 - `tools/check_placement_order.py` -- refuses a world transform written to a node that is not in the tree yet
-- **GUT unit + integration tests** -- 4,151 tests across 227 test scripts (4,144 passing plus seven intentional no-assert safety tests; 19,918 assertions; verified in CI on September 17, 2026; runs Godot headless)
+- **GUT unit + integration tests** -- 4,155 tests across 228 test scripts (4,148 passing plus seven intentional no-assert safety tests; 19,924 assertions; verified in CI on September 17, 2026; runs Godot headless)
 
 Run locally before pushing:
 ```

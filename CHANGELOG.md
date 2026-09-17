@@ -229,6 +229,36 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the exporter next.
 
 ### Fixed
+- **Justify moves a hand-made UV layout instead of throwing it away** (#654).
+  `justify_selected_faces()` reads a face's current UV rectangle out of
+  `custom_uvs`, works out the shift that would put it where the button says, and
+  then hands the face to `_justify_face()` -- every branch of which ends
+  `face.custom_uvs = PackedVector2Array()`. Clearing it drops the face back to
+  its projection, so the shift was applied to a rectangle it was not measured
+  from: the mapper lost the hand alignment *and* did not get the button's result.
+  Justify Left on a face dragged to `u[-3.75..4.25]` put its left edge at -4.25
+  and stretched it to sixteen UV units wide. For a face nobody had hand-edited
+  the two rectangles are the same one, which is why this never showed up, and the
+  UV editor is the surface that writes `custom_uvs`, so the two texturing tools
+  in the dock were silently undoing each other.
+  `_justify_layout()` moves the layout instead: `custom_uvs` is per-vertex and in
+  the same space the shift is measured in, so every mode is a scale and an offset
+  over the points. `uv_offset` and `uv_scale` are left alone there, because the
+  layout already carries the result and applying it to both would count it twice.
+  A face with no layout still goes through the offset, so it stays free to
+  re-project when its geometry changes rather than being pinned to explicit UVs.
+  Which of the two a face gets is decided from whether it had `custom_uvs` before
+  the selection was built, because both call sites run `ensure_custom_uvs()` to
+  measure and that fills them from the projection.
+- **Two pieces of code nothing could reach** (#654, #670). `_justify_face()`
+  implemented a seventh mode, `stretch`, that no button and no console command
+  could ask for and whose body was character for character the `fit` body above
+  it. The viewport context menu carried a `_ID_APPLY_MATERIAL` const and a `match`
+  arm turning it into an action string, with no `add_item()` anywhere -- and
+  `apply_material` was the one action name in that file `HFPluginCommands.execute()`
+  had no arm for, which is consistent: nothing could ask for it, so nothing had to
+  handle it. Both are gone. The neighbouring `Apply to Whole Brush` entry is
+  complete and unaffected.
 - **Validate runs the checks that already existed** (#657, #666, #669). Three
   checks were implemented, working, and reachable from everywhere except the
   button a mapper presses before shipping. `validate_convexity()` gated the

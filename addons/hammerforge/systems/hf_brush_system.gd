@@ -2094,7 +2094,20 @@ func justify_selected_faces(mode: String, treat_as_one: bool) -> void:
 		for idx in indices:
 			var face_idx = int(idx)
 			if face_idx >= 0 and face_idx < brush.faces.size():
-				face_refs.append({"brush": brush, "face": brush.faces[face_idx]})
+				var face_data: FaceData = brush.faces[face_idx]
+				# Recorded before anything calls `ensure_custom_uvs()`, which
+				# fills `custom_uvs` from the projection and would make every
+				# face look hand-edited from that point on.
+				(
+					face_refs
+					. append(
+						{
+							"brush": brush,
+							"face": face_data,
+							"had_layout": not face_data.custom_uvs.is_empty(),
+						}
+					)
+				)
 
 	if face_refs.is_empty():
 		return
@@ -2114,7 +2127,7 @@ func justify_selected_faces(mode: String, treat_as_one: bool) -> void:
 		for ref in face_refs:
 			var face: FaceData = ref["face"]
 			var before := face.to_dict()
-			_justify_face(face, mode, all_min, all_max)
+			_justify_face(face, mode, all_min, all_max, bool(ref.get("had_layout", false)))
 			ref["brush"].rebuild_preview()
 			if face.to_dict() != before:
 				_tag_brush_node_dirty(ref["brush"])
@@ -2130,15 +2143,70 @@ func justify_selected_faces(mode: String, treat_as_one: bool) -> void:
 				uv_min.y = min(uv_min.y, uv.y)
 				uv_max.x = max(uv_max.x, uv.x)
 				uv_max.y = max(uv_max.y, uv.y)
-			_justify_face(face, mode, uv_min, uv_max)
+			_justify_face(face, mode, uv_min, uv_max, bool(ref.get("had_layout", false)))
 			ref["brush"].rebuild_preview()
 			if face.to_dict() != before:
 				_tag_brush_node_dirty(ref["brush"])
 
 
-func _justify_face(face: FaceData, mode: String, uv_min: Vector2, uv_max: Vector2) -> void:
+## Move a hand-made UV layout the way the button says, instead of throwing it away.
+##
+## `custom_uvs` is per-vertex and in the same space the shift is measured in, so
+## every mode is a scale and an offset over the points. `uv_offset` and
+## `uv_scale` are deliberately left alone here: the layout already carries the
+## result, and applying it to both would count it twice.
+##
+## The UV editor is what writes `custom_uvs`, so before this the two texturing
+## tools in the dock silently undid each other (#654).
+func _justify_layout(face: FaceData, mode: String, uv_min: Vector2, uv_max: Vector2) -> void:
+	var uv_size := uv_max - uv_min
+	var scale := Vector2.ONE
+	var shift := Vector2.ZERO
+	match mode:
+		"fit":
+			scale = Vector2(
+				1.0 / uv_size.x if uv_size.x > 0.0001 else 1.0,
+				1.0 / uv_size.y if uv_size.y > 0.0001 else 1.0
+			)
+			shift = -uv_min * scale
+		"tile":
+			var min_dim := minf(uv_size.x, uv_size.y)
+			var uniform := 1.0 / min_dim if min_dim > 0.0001 else 1.0
+			scale = Vector2(uniform, uniform)
+			shift = Vector2(0.5, 0.5) - (uv_min + uv_max) * 0.5 * uniform
+		"center":
+			shift = Vector2(0.5, 0.5) - (uv_min + uv_max) * 0.5
+		"left":
+			shift.x = -uv_min.x
+		"right":
+			shift.x = 1.0 - uv_max.x
+		"top":
+			shift.y = -uv_min.y
+		"bottom":
+			shift.y = 1.0 - uv_max.y
+		_:
+			return
+	var moved := PackedVector2Array()
+	for uv in face.custom_uvs:
+		moved.append(uv * scale + shift)
+	face.custom_uvs = moved
+
+
+func _justify_face(
+	face: FaceData, mode: String, uv_min: Vector2, uv_max: Vector2, keep_layout: bool = false
+) -> void:
 	var uv_size = uv_max - uv_min
 	if uv_size.x < 0.0001 and uv_size.y < 0.0001:
+		return
+
+	# A face somebody laid out by hand keeps that layout, moved. Every branch
+	# below ends by clearing `custom_uvs`, which drops the face back to its
+	# projection -- so the shift measured from the hand-made rectangle was then
+	# applied to a different one, and the mapper lost the alignment *and* did not
+	# get the button's result (#654). For a face nobody has touched the two
+	# rectangles are the same one, which is why this never showed up.
+	if keep_layout:
+		_justify_layout(face, mode, uv_min, uv_max)
 		return
 
 	match mode:
@@ -2172,16 +2240,6 @@ func _justify_face(face: FaceData, mode: String, uv_min: Vector2, uv_max: Vector
 		"bottom":
 			var shift_y = 1.0 - uv_max.y
 			face.uv_offset.y += shift_y
-			face.custom_uvs = PackedVector2Array()
-		"stretch":
-			# Scale UVs to exactly fill 0..1, stretching non-uniformly
-			var scale_x = 1.0 / uv_size.x if uv_size.x > 0.0001 else 1.0
-			var scale_y = 1.0 / uv_size.y if uv_size.y > 0.0001 else 1.0
-			face.uv_scale = Vector2(face.uv_scale.x * scale_x, face.uv_scale.y * scale_y)
-			face.uv_offset = Vector2(
-				-uv_min.x * scale_x + face.uv_offset.x * scale_x,
-				-uv_min.y * scale_y + face.uv_offset.y * scale_y
-			)
 			face.custom_uvs = PackedVector2Array()
 		"tile":
 			# Scale UVs uniformly so the shorter axis fills 0..1, preserving aspect ratio

@@ -702,7 +702,7 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
 - **Foliage & Scatter**: Interactive scatter brush for foliage and object placement. Pick a mesh resource, set density/radius/height constraints/slope filter/scale variation. Choose Circle or Spline brush shape. Preview generates a MultiMesh preview (Dots/Wireframe/Full). Scatter commits as a permanent `MultiMeshInstance3D`, in one undo step, owned by the scene so a save keeps it. Clear removes the preview. A stroke asking for more than 50,000 instances is refused with the count, so wind the radius or the density down rather than waiting for it. Spline mode uses selected nodes as path control points with a configurable width band.
 - **Regions**: Region Streaming enable, Region Size, Stream Radius, Show Region Grid, memory stats.
 - **Materials**: Visual thumbnail browser (`HFMaterialBrowser`) with search, pattern/color filters, and Prototypes/Palette/Favorites view toggle. Add/Remove/Refresh Prototypes buttons. Face Select Mode toggle. Assign to Selected Faces. Right-click thumbnails for context menu (Apply to Faces, Apply to Whole Brush, Toggle Favorite, Copy Name). Favorites are kept in `user://hammerforge_prefs.json` by resource path, so they survive a dock rebuild and an editor restart; a material built in the session and not saved to disk has no path and cannot be starred, and the status line says so. Hover a thumbnail to preview on selected faces. Press **T** for Texture Picker (eyedropper). The **Refresh Prototypes** button batch-loads 150 built-in SVG textures (15 patterns x 10 colors) for quick greyboxing.
-- **UV Editor**: Per-face UV editing with drag handles, Reset Projected UVs, and Justify grid (Fit, Center, Left, Right, Top, Bottom in 3×2 layout).
+- **UV Editor**: Per-face UV editing with drag handles, Reset Projected UVs, and Justify grid (Fit, Center, Left, Right, Top, Bottom in 3×2 layout). Justify moves a layout dragged out by hand rather than resetting it, so the UV editor and the Justify buttons compose.
 - **Surface Paint**: Paint Target (Floor/Surface), layers, texture picker, radius/strength.
 
 ### Objects tab
@@ -968,7 +968,7 @@ Selection-dependent managed actions are also grayed out for a mixed HammerForge/
 Press **Space** to open a context-sensitive popup menu at the cursor position in the 3D viewport. The menu adapts to your current selection and tool state:
 
 - **Brush selected** → Extrude Up/Down, Hollow, Clip, Carve, Duplicate, Delete, grid snap presets, draw shapes
-- **Face selected** → UV operations (Fit, Center, Stretch, Tile, Left/Right/Top/Bottom justify), texture tools
+- **Face selected** → UV operations (Fit, Center, Left/Right/Top/Bottom justify), texture tools
 - **Entity selected** → I/O Connect, Properties, Duplicate, Delete
 - **Draw mode (idle)** → Shape selector, Add/Subtract toggle, grid snap presets
 - **Vertex mode** → Merge, Split, sub-mode toggle
