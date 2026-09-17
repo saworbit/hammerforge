@@ -124,6 +124,8 @@ const TEXTS := {
 	"tie_entity_btn": "Tag selected brushes as a brush entity class",
 	"untie_entity_btn": "Remove brush entity tag from selected brushes",
 	"brush_entity_class_opt": "Choose brush entity class (func_detail, trigger, etc.)",
+	"brush_entity_name_edit":
+	"Name this entity so I/O can target it\nBrushes tied under one name are one entity",
 	"justify_fit_btn": "Scale UVs to fit the face exactly",
 	"justify_center_btn": "Center UVs on the face",
 	"justify_left_btn": "Align UVs to the left edge",

@@ -228,7 +228,10 @@ static func export_map_from_level(level_root: Node, adapter: HFMapAdapterType = 
 	var brush_nodes: Array = []
 	if level_root.has_method("_iter_pick_nodes"):
 		brush_nodes.append_array(level_root.call("_iter_pick_nodes"))
-	var entity_brush_blocks: Array = []
+	# Keyed on `[class, authored name]` rather than on the node, so brushes tied
+	# under one name become one entity. An Array key compares by content in Godot,
+	# which avoids inventing a separator that an authored name could contain.
+	var entity_brush_blocks: Dictionary = {}
 	var substituted_scales: Array[String] = []
 	for node in brush_nodes:
 		if not (node is DraftBrush):
@@ -244,13 +247,28 @@ static func export_map_from_level(level_root: Node, adapter: HFMapAdapterType = 
 			continue
 		var bec := str(node.get_meta("brush_entity_class", ""))
 		if bec != "":
-			entity_brush_blocks.append({"classname": bec, "lines": brush_lines, "node": node})
+			# One entry per node emitted one block per brush, so a two leaf door
+			# exported as two doors that move independently (#668). Brushes tied
+			# under one name are one entity and belong in one block. Brushes with
+			# no name keep a block each, because nothing says they are the same.
+			# The authored name when there is one, because that is what a reader
+			# targets; otherwise the identity the tie minted, so brushes tied
+			# together stay one entity and two separate ties stay two.
+			var authored := str(node.get_meta("entity_name", ""))
+			var identity: String = authored
+			if identity == "":
+				identity = str(node.get_meta("brush_entity_group", str(node.get_instance_id())))
+			var key: Array = [bec, identity]
+			if not entity_brush_blocks.has(key):
+				entity_brush_blocks[key] = {"classname": bec, "lines": [], "node": node}
+			(entity_brush_blocks[key]["lines"] as Array).append_array(brush_lines)
 			continue
 		lines.append("{")
 		lines.append_array(brush_lines)
 		lines.append("}")
 	lines.append("}")
-	for block in entity_brush_blocks:
+	for key in entity_brush_blocks:
+		var block: Dictionary = entity_brush_blocks[key]
 		lines.append("{")
 		lines.append('"classname" "%s"' % escape_property(str(block["classname"])))
 		# The authored name is the address every connection targets, and the

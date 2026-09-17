@@ -1766,8 +1766,10 @@ func clip_brush_at_point(brush_id: String, face_idx: int, hit_position: Vector3)
 	brush_system.clip_brush_at_point(brush_id, face_idx, hit_position)
 
 
-func tie_brushes_to_entity(brush_ids: Array, entity_class: String) -> void:
-	brush_system.tie_brushes_to_entity(brush_ids, entity_class)
+func tie_brushes_to_entity(
+	brush_ids: Array, entity_class: String, entity_name: String = ""
+) -> void:
+	brush_system.tie_brushes_to_entity(brush_ids, entity_class, entity_name)
 
 
 func untie_brushes_from_entity(brush_ids: Array) -> void:

@@ -1443,6 +1443,19 @@ func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 	mi.mesh = mesh
 	if authored != "":
 		mi.set_meta("entity_name", authored)
+	# The same three the trigger volume below carries. A `func_door` went through
+	# here rather than `_append_trigger_volume()` and kept only its name, so the
+	# playtest scene had a node the runtime could find and nothing saying what it
+	# was or what it was wired to -- `HFIORuntime` had nothing to dispatch `Open`
+	# against (#668). `_cache_entity_under_key()` holds several nodes per name by
+	# design, so a two leaf door is two meshes answering to one name and both
+	# receive the input, which is what a two leaf door should do.
+	var bec := str(draft.get_meta("brush_entity_class", ""))
+	if bec != "":
+		mi.set_meta("brush_entity_class", bec)
+	var outputs: Array = draft.get_meta("entity_io_outputs", [])
+	if not outputs.is_empty():
+		mi.set_meta("entity_io_outputs", outputs.duplicate(true))
 	holder.add_child(mi)
 	mi.transform = _source_transform_in_baked_container(source, holder.get_parent() as Node3D)
 	var body := StaticBody3D.new()

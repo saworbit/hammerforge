@@ -1525,7 +1525,12 @@ static func on_tie_entity(dock: Object) -> void:
 				brush_ids.append(bid)
 	if brush_ids.is_empty():
 		return
-	dock._commit_state_action("Tie to Entity", "tie_brushes_to_entity", [brush_ids, class_name_str])
+	var entity_name := ""
+	if dock.brush_entity_name_edit:
+		entity_name = str(dock.brush_entity_name_edit.text).strip_edges()
+	dock._commit_state_action(
+		"Tie to Entity", "tie_brushes_to_entity", [brush_ids, class_name_str, entity_name]
+	)
 
 
 static func on_untie_entity(dock: Object) -> void:

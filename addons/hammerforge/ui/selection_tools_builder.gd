@@ -79,6 +79,13 @@ func build(parent: Control) -> void:
 	dock.brush_entity_class_opt = HFUIFactoryType.make_option()
 	dock._populate_brush_entity_classes()
 	tie_row.add_child(dock.brush_entity_class_opt)
+	# The name is the address every I/O connection is aimed at, and there was
+	# nowhere to type one: a door built here could never be targeted, while a
+	# door imported from someone else's `.map` could (#668).
+	dock.brush_entity_name_edit = LineEdit.new()
+	dock.brush_entity_name_edit.placeholder_text = "name (optional)"
+	dock.brush_entity_name_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tie_row.add_child(dock.brush_entity_name_edit)
 	dock.tie_entity_btn = HFUIFactoryType.make_button("Tie")
 	tie_row.add_child(dock.tie_entity_btn)
 	dock.untie_entity_btn = HFUIFactoryType.make_button("Untie")
