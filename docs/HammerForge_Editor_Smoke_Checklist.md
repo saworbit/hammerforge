@@ -521,7 +521,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Set Preview Mode to **Wireframe**; click Bake. Confirm baked output renders as cyan wireframe overlay.
 - Set Preview Mode to **Proxy**; click Bake. Confirm baked output renders as semi-transparent grey.
 - Set Preview Mode back to **Full**; click Bake. Confirm normal material rendering resumes.
-- Create a subtract brush that cuts a doorway through a solid wall. Enable **Use Face Materials**, then test ordinary Bake with the cut pending/applied and again after a frozen Commit Cuts. Confirm every bake visibly keeps the opening and collision permits movement/raycasting through it; the face-material fast path must yield to CSG while structural cuts exist.
+- Create a subtract brush that cuts a doorway through a solid wall. Enable **Use Face Materials**, then test ordinary Bake with the cut pending/applied and again after a frozen Commit Cuts. Confirm every bake visibly keeps the opening and collision permits movement/raycasting through it; the face-material fast path must yield to CSG while structural cuts exist, and a toast must say so and name how many cutters caused it.
 - With an existing Wireframe or Proxy bake, Commit Cuts and then Undo/Redo. Confirm the exact pre/post baked geometry and its preview mode return on each transition, with no extra bake, consumed cutter, or stale solid collision.
 - Click **Check Bake Issues** on a clean level; confirm no issues reported.
 - Create a brush with near-zero thickness (e.g. 0.01 on Y axis). Click **Check Bake Issues**; confirm a severity-2 "degenerate brush" issue appears.
