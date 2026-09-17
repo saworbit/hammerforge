@@ -23,6 +23,41 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   problem, on the grounds that Test Level would start with no player - and now
   reports what is true, that a level with no spawn point gets one at the origin.
 
+- **A model a mapper points at appears** (#690, #691). `prop_static` is the
+  documented way to put a model in a level - "Set Scene to the mesh or scene to
+  show" - and the path it stored was saved, exported and never loaded, so the
+  level stayed empty in the viewport, in the bake and in the playtest, with no
+  error anywhere. A definition can now name the property an instance chooses its
+  own model with, and `prop_static` names `scene`: the path is instantiated as
+  the entity's preview and as the node the bake and the export carry, and one
+  that does not resolve leaves the class's own preview in place and says so
+  rather than showing nothing. The scatter brush had the same shape from the
+  other side: its picker offers `.glb` and `.gltf`, which is the format an artist
+  hands over, Godot imports both as a `PackedScene`, and the loader kept the
+  resource only if it was already a `Mesh` - so the pick was accepted by the
+  dialog, dropped by the loader, and reported at Scatter time as "Pick a mesh
+  first", naming the step the mapper had just done. A picked scene now scatters
+  the first mesh inside it.
+
+- **An entity definition is data, not a whitelist**. `entities.json` was read
+  into a model that had a field for ten keys and wrote back only those, and that
+  model was the only thing that populated the level root's definitions. So
+  `preview`, which is how an entity draws itself in the viewport, and
+  `input_methods`, which is how a class says an input names an engine method
+  (#714), were both parsed, both read for, and neither survived the trip.
+  Anything the model does not model is now carried through untouched. The keys it
+  does model still win, because several are normalised on the way in - reading
+  the raw `class` back first is what once made `light_point` come back as
+  `OmniLight3D`.
+
+- **A prop's model is packed once**. Making every node under the exported scene
+  belong to its root is what keeps baked geometry through `pack()`, and doing it
+  to the inside of an instantiated scene writes those nodes out beside the scene
+  instance as well, so the saved scene held the model twice and loaded it twice.
+  Ownership now stops at an instantiated scene, which brings its own children
+  back with it. Nothing hit this before, because nothing instantiated a scene
+  into an export.
+
 - **Save As writes the file** (#688). Saving a level that had not changed since
   the last save wrote nothing, whatever path it was given, and reported success.
   The dedupe that stops an idle autosave rewriting the same bytes compared one
