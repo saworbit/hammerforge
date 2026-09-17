@@ -17,6 +17,15 @@ enum PaintBlend { OVERLAY, MULTIPLY, ADD }
 const PaintLayer = preload("res://addons/hammerforge/paint/hf_face_paint_layer.gd")
 
 @export var material_idx: int = -1
+## The texture this face was named in the `.map` it came from.
+##
+## In this lineage the texture name *is* the surface's behaviour -- `AAATRIGGER`
+## is a trigger volume, `*water1` is water, `sky1` is sky -- so dropping it drops
+## the classification, not just the decoration. The importer parsed the name and
+## nothing stored it, and the exporter wrote `__default` on all sixty faces of a
+## ten brush map (#662). Kept whether or not the palette has a slot for it, so a
+## round trip is lossless with no materials loaded at all.
+@export var map_texture: String = ""
 ## PLANAR_Z maps (x, y) -> (u, v), so on a face whose plane contains the Z axis,
 ## or one lying flat in Y, one UV axis is constant across the whole face and every
 ## point on it samples the same line of the texture: four of a box's six faces.
@@ -345,6 +354,7 @@ func to_dict() -> Dictionary:
 		layer_data.append(entry)
 	return {
 		"material_idx": material_idx,
+		"map_texture": map_texture,
 		"uv_projection": uv_projection,
 		"uv_scale": _encode_vec2(uv_scale),
 		"uv_offset": _encode_vec2(uv_offset),
@@ -362,6 +372,7 @@ func to_dict() -> Dictionary:
 static func from_dict(data: Dictionary) -> FaceData:
 	var face = FaceData.new()
 	face.material_idx = int(data.get("material_idx", -1))
+	face.map_texture = str(data.get("map_texture", ""))
 	var stored_projection := int(data.get("uv_projection", UVProjection.PLANAR_Z))
 	if not is_valid_projection(stored_projection):
 		# An older or newer file, or a hand edit. The enum has to mean something.

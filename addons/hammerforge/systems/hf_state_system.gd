@@ -73,6 +73,10 @@ func capture_state(include_transient: bool = true) -> Dictionary:
 					state["entities"].append(info)
 	state.merge(capture_registries(), true)
 	state["decals"] = capture_decals()
+	# Not a registry, but in the same position: it describes the level and is not
+	# a node, so the `.hflevel` has to carry it too (#663).
+	if not root.map_worldspawn_properties.is_empty():
+		state["map_worldspawn"] = root.map_worldspawn_properties.duplicate()
 	return state
 
 
@@ -296,6 +300,10 @@ func restore_state(state: Dictionary) -> void:
 	else:
 		root._last_bake_preview_mode = 0
 	restore_decals(state.get("decals", []))
+	var worldspawn = state.get("map_worldspawn", {})
+	root.map_worldspawn_properties = (
+		(worldspawn as Dictionary).duplicate() if worldspawn is Dictionary else {}
+	)
 	if skipped > 0:
 		HFLog.warn("HFStateSystem: skipped %d entry this level could not use" % skipped)
 		if root.has_signal("user_message"):

@@ -189,6 +189,12 @@ func create_brush_from_info(info: Dictionary) -> Node:
 			brush.set_meta("entity_io_outputs", outputs.duplicate(true))
 	if info.has("entity_name") and str(info["entity_name"]) != "":
 		brush.set_meta("entity_name", str(info["entity_name"]))
+	# What a `.map` said this entity is, beyond its class: a door's speed, a
+	# trigger's target. Carried so an export can write it back (#663).
+	if info.has("brush_entity_data"):
+		var entity_data = info.get("brush_entity_data", {})
+		if entity_data is Dictionary and not (entity_data as Dictionary).is_empty():
+			brush.set_meta("brush_entity_data", (entity_data as Dictionary).duplicate())
 	if root.has_method("tag_brush_dirty"):
 		root.tag_brush_dirty(str(brush_id))
 	if root.has_method("_emit_or_batch"):
@@ -401,6 +407,9 @@ func get_brush_info_from_node(brush: Node) -> Dictionary:
 	var outputs: Array = draft.get_meta("entity_io_outputs", [])
 	if not outputs.is_empty():
 		info["entity_io_outputs"] = outputs.duplicate(true)
+	var entity_data = draft.get_meta("brush_entity_data", {})
+	if entity_data is Dictionary and not (entity_data as Dictionary).is_empty():
+		info["brush_entity_data"] = (entity_data as Dictionary).duplicate()
 	var ename: String = str(draft.get_meta("entity_name", ""))
 	if ename != "":
 		info["entity_name"] = ename
