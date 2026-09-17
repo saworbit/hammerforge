@@ -34,6 +34,20 @@ static func canonical(value: Variant) -> String:
 		for item in value:
 			items.append(canonical(item))
 		return "[%s]" % ", ".join(items)
+	# Floats are rounded before they are compared. Every round trip in the sweep
+	# goes through a matrix or a serialiser somewhere, and both leave residue in
+	# the last few bits -- four 90-degree rotations of a brush come back with a
+	# uv_rotation of 1.7e-7 rather than 0. Reporting that as "the round trip
+	# changed the level" is the harness flagging the float type rather than the
+	# code under test, and it hides the differences that matter among the ones
+	# that do not. Six decimal places is finer than any real geometry difference
+	# in a project whose player is 1.6 units tall.
+	if value is float:
+		return "%.6f" % snappedf(value, 0.000001)
+	if value is Vector2:
+		return "(%.6f, %.6f)" % [value.x, value.y]
+	if value is Vector3:
+		return "(%.6f, %.6f, %.6f)" % [value.x, value.y, value.z]
 	return str(value)
 
 
@@ -44,10 +58,21 @@ static func canonical(value: Variant) -> String:
 ## graph headlessly without the plugin. The caller must `await tree.process_frame`
 ## once afterwards: `_ready()` runs on the frame after `add_child()`, and until it
 ## has, every `root.*_system` is still null.
-static func make_root(tree: SceneTree, node_name: String = "Level") -> Node3D:
+## `auto_spawn_player` has to be set here, before `add_child()`, and not by the
+## caller afterwards. `_ready()` reads it once and queues `_start_playtest()`
+## with `call_deferred()`, so a scenario that writes `root.auto_spawn_player =
+## false` on the line after `fresh_root()` is already too late: the playtest has
+## been scheduled, a whole extra bake runs, and a `CharacterBody3D` lands in the
+## physics space. Every raycast the scenario makes then has a chance of hitting
+## the player rather than the level, which reads as the level being there when
+## it is not -- and back, which is worse.
+static func make_root(
+	tree: SceneTree, node_name: String = "Level", spawn_player: bool = false
+) -> Node3D:
 	var root := Node3D.new()
 	root.name = node_name
 	root.set_script(LevelRootScript)
+	root.auto_spawn_player = spawn_player
 	tree.get_root().add_child(root)
 	return root
 

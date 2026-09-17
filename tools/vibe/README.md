@@ -170,6 +170,28 @@ it from here.
 | `brush-entities` | brushes tied to an entity class: naming, wiring, saving and what the exports make of them |
 | `missing-files` | what a level does when a file it points at is taken away |
 | `docs-truth` | what the guide, the tutorial and the feature pages claim, against the running plugin |
+| `navmesh` | whether the baked navmesh has polygons over the floor, and whose agent settings |
+| `runtime-entities` | whether a trigger, a button and a door do at runtime what their definitions promise |
+| `ship-runtime` | what a `LevelRoot` does, keeps and costs on the branch a built game takes |
+| `big-level` | a 900-brush map priced at every step: build, save, validate, bake, draw calls |
+| `unicode-names` | non-ASCII and punctuation in every kind of name, through every format |
+| `props-and-models` | what happens to a `prop_static`'s Scene property, and what the scatter picker accepts |
+| `bake-optimisation` | what Use multimesh and Generate occluders do to a level built to need them |
+| `collision-layers` | what layer and mask the bake writes, and who still collides with it |
+| `level-instancing` | what a level saved as a scene and instanced twice into a parent is |
+| `lighting` | what the baked geometry gives a `LightmapGI`, and what it still needs by hand |
+| `subtractive-bake` | what one subtract brush does to the materials and the cost of the whole bake |
+| `map-quality` | the defects a real map has, against what Validate looks for |
+| `save-as` | whether saving an unchanged level to a second path writes a second file |
+| `surface-response` | what a raycast can learn about the material of the surface it hit |
+| `team-workflow` | what a level looks like to version control: diff size, readability, merge |
+| `session-leaks` | whether a long run of ordinary edits gives back the nodes and objects it took |
+| `build-outdoors` | a whole outdoor level: terrain, ground textures, a building, bake, playtest |
+| `bulk-edits` | the Build tab's transforms and selections applied to 200 brushes at once |
+| `map-units` | whether a `.map` crossing between this editor and a Quake-family one keeps its size |
+| `detail-brushes` | what tying clutter to `func_detail` does to the node count and the draw calls |
+| `gltf-export` | what `export_baked_gltf` writes for a real level, read back off disk |
+| `streamed-world-bake` | whether a bake of a streamed world covers the parts that are not resident |
 
 ## Adding a scenario
 
@@ -216,6 +238,17 @@ is correct in all three brush containers. Those are kept. A scenario that only
 exists while it is failing cannot tell you when something stops being true, and
 the notes are where the next reader finds out the ground was already covered.
 `build-a-room`, `far-origin` and `docs-truth` are the newest of them.
+The newest clean scenarios are `session-leaks`, `bulk-edits` and `unicode-names`.
+`session-leaks` runs 200 create/delete cycles, 25 re-bakes, 100 undo round trips
+and 100 preview show/hides and every one of them gives back every node, orphan
+and object it took — which is the answer to "the editor gets slow over an
+evening" and is worth having written down. `bulk-edits` applies a nudge, a
+rotation, a retexture, a visgroup hide and a delete to 200 brushes at once: all
+correct, all fast, and four 90-degree turns about a pivot come back to within
+5e-6 of the start. `unicode-names` puts accented, Cyrillic, CJK, emoji and
+punctuated names through entity names, visgroups, groups, the `.hflevel`, the
+`.map` export and re-import, and through non-ASCII *filenames*, and loses
+nothing.
 `build-a-room` runs a whole first evening -- hollow a room, carve a doorway, run
 a corridor to a second room, texture twenty brushes, place a light and a spawn,
 group and visgroup the shell, validate, bake, export the playtest scene -- and
@@ -328,6 +361,44 @@ Every one of these has cost a wasted run.
   the running game and deferred-starts a playtest. Its `CharacterBody3D` is then
   in the physics space, and a scenario that raycasts -- the spawn validator, for
   one -- hits the player rather than the level. Set `auto_spawn_player = false`.
+- **The project is on metric scale.** The playtest player is 1.6 units tall and a
+  default drawn brush is 2. A scenario written with 512-unit rooms is building a
+  level 300 players across, which makes navmesh bakes enormous, occluder counts
+  meaningless and every cost number a measurement of nothing. `world-scale` has
+  the table.
+- **`auto_spawn_player` has to be off before `add_child()`.** `_ready()` reads it
+  once and queues `_start_playtest()` with `call_deferred()`, so
+  `root.auto_spawn_player = false` on the line after `fresh_root()` is too late:
+  a whole extra bake runs and a `CharacterBody3D` lands in the physics space,
+  where every raycast the scenario makes can hit it instead of the level. This is
+  why `HFVibe.make_root()` takes the flag and sets it itself, defaulting to off —
+  pass `fresh_root("Level", true)` for the playtest scenarios.
+- **The live draft brushes carry their own picking collision, on layer 1.** A ray
+  fired after a bake finds the editor's pick bodies rather than the baked world
+  unless the drafts are removed first, which reads as "the collision is there" in
+  exactly the cases where it is not.
+- **A freed root's collision does not leave the physics space on the frame
+  `queue_free()` is called.** Three cases in a loop, each building a floor at the
+  origin, measure the first case's floor three times. Put each case somewhere
+  else in space rather than trying to free between them.
+- **`save_hflevel()` skips a write whose payload hashes the same as the last one,
+  whatever path it is given (#688).** A scenario that saves twice without editing
+  in between measures a file that was never written. Change the level between
+  saves, or pass `force`.
+- **The paint reconciler has three holders, not one.** `floors_root` takes flat
+  floor rects from the brush paint path, `heightmap_floors_root` takes displaced
+  terrain chunks, `walls_root` takes the skirts. Looking in only the first reads
+  as "the terrain built nothing".
+- **`create_brush_from_info()` clamps a collapsed axis to 0.1.** A scenario that
+  asks for a zero-extent brush to test a validator gets a thin one, and the
+  validator correctly says nothing. Write `size` on the node to make a real one.
+- **`rotate_managed_nodes()` takes five arguments**, and the first is brush *ids*:
+  `(brush_ids, entity_paths, axis_index, angle_degrees, pivot)`.
+- **`run_vibe.py`'s own stdout has to be reconfigured to UTF-8.** Godot's output
+  is UTF-8 and the Windows console is cp1252; `run_scenario` already decodes with
+  `errors="replace"`, and printing the decoded line back out was still taking the
+  whole run down with a `UnicodeEncodeError` after the findings were already in
+  the log file.
 - **Check findings against the open PRs before filing.** `main` can be well
   behind a stack of fixes. `git diff main...origin/<branch>` over the file you
   are looking at is the check; several confirmed reproductions on `main` were
