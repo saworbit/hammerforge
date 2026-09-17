@@ -288,8 +288,16 @@ func restore_state(state: Dictionary) -> void:
 	if region_data is Dictionary and not region_data.is_empty():
 		if root.paint_system:
 			root.paint_system.load_initial_regions()
+	# Only when the palette is part of what changed. `set_materials()` ends in a
+	# rebuild of every brush preview in the level, and on a 900-brush map that was
+	# 141 ms of the 188 an undo cost (#705) -- spent re-applying a palette nothing
+	# had touched, to exactly the brushes the reconcile above had just decided did
+	# not need rebuilding. A brush that does need rebuilding is rebuilt below and
+	# gets its preview then, so nothing here is what keeps those right.
 	if state.has("materials"):
-		root.set_materials(state.get("materials", []))
+		var palette: Array = state.get("materials", [])
+		if root.material_manager == null or not root.material_manager.palette_matches(palette):
+			root.set_materials(palette)
 	if state.has("face_selection"):
 		# Deep copy on the way out too, so later selection edits do not write
 		# back into the snapshot that restored them.

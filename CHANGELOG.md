@@ -5,6 +5,23 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **Undo stops repainting a level that did not change** (#705). Ctrl+Z on a
+  900-brush map cost 195 ms. The reported cause was that a restore rebuilds the
+  whole level, and that has not been true since #600: the reconcile keeps every
+  brush whose record is identical to what it would capture right now, and on
+  that map a one-brush edit rebuilds exactly one. Measured, all 900 were kept and
+  none rebuilt. What the time actually went on was the line after it.
+  `restore_state()` called `set_materials()` whatever the snapshot held, and
+  `set_materials()` ends in a rebuild of every brush preview in the level: 141 ms
+  of the 188, spent repainting the brushes the reconcile had just decided to
+  keep, from a palette nobody had touched. It only happens when the palette is
+  part of what changed now. A brush that does need rebuilding is rebuilt further
+  down and gets its preview there, so nothing was depending on that refresh to be
+  correct. **Undo on that map is 51 ms**, and 48 of those are the reconcile
+  working out that there is nothing to do. `big-level` records the split and
+  flags a restore that costs more than the decision does, which is the check that
+  would have caught this.
+
 - **A `.map` keeps which way up it is crossing between editors** (#733). `.map`
   is Z-up across the whole Quake family and Godot is Y-up. Nothing converted, in
   either direction, so a corridor drawn 112 units high arrived 3.5 metres deep

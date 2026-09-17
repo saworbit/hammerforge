@@ -37,6 +37,27 @@ func clear() -> void:
 	materials.clear()
 
 
+## Whether the palette already holds exactly these materials, in this order.
+##
+## By identity rather than by value, because that is the question worth asking:
+## the same `Material` object in the same slot paints the same faces the same
+## way, and two different objects that happen to look alike would still have to
+## be swapped in. A material edited in place is the same object, and the level is
+## already showing the edit.
+##
+## Exists so a restore can tell whether the palette is part of what changed.
+## `LevelRoot.set_materials()` ends in a rebuild of every brush preview in the
+## level, and an undo was paying for that whether or not the palette had been
+## touched (#705).
+func palette_matches(other: Array) -> bool:
+	if other.size() != materials.size():
+		return false
+	for i in materials.size():
+		if materials[i] != other[i]:
+			return false
+	return true
+
+
 func get_material_names() -> Array[String]:
 	var names: Array[String] = []
 	for mat in materials:

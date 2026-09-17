@@ -116,7 +116,15 @@ func _build_and_price() -> void:
 	t = Time.get_ticks_msec()
 	root.restore_state(state)
 	await frame()
-	note("restore_state", "%d ms" % (Time.get_ticks_msec() - t))
+	var restore_ms := Time.get_ticks_msec() - t
+	note("restore_state", "%d ms" % restore_ms)
+	# What that restore is made of, so the next reader knows which half moved.
+	# Nothing changed between the capture and the restore, so every brush is
+	# reusable and none is rebuilt; what is left is the cost of proving it.
+	t = Time.get_ticks_msec()
+	var reusable: Dictionary = root.brush_system.reusable_draft_brushes(state.get("brushes", []))
+	note("of which, deciding nothing needed rebuilding", "%d ms" % (Time.get_ticks_msec() - t))
+	note("brushes it would have rebuilt", state.get("brushes", []).size() - reusable.size())
 	if capture_ms > 250:
 		flag(
 			"one undo step on a 900-brush map costs %d ms" % capture_ms,
@@ -124,6 +132,23 @@ func _build_and_price() -> void:
 				"capture_state() runs on every action, so this is the delay between a nudge "
 				+ "and the brush moving. At this size the editor is unusable for the map sizes "
 				+ "the format is designed for."
+			)
+		)
+	# An undo that rebuilds nothing should cost about what it costs to work out
+	# that it rebuilds nothing. More than that is work being done for a level that
+	# did not change, which is how #705 stayed hidden: the restore was repainting
+	# every brush in the level for a palette nobody had touched.
+	if restore_ms > 150:
+		flag(
+			"undoing a change to nothing costs %d ms on a 900-brush map" % restore_ms,
+			(
+				(
+					"Nothing moved between the capture and the restore, so the reconcile keeps "
+					+ "every brush and rebuilds none of them. That accounted for %d ms of it. "
+					+ "The rest is a restore doing work proportional to the level rather than "
+					+ "to the change, and Ctrl+Z is a key people hold down."
+				)
+				% (Time.get_ticks_msec() - t)
 			)
 		)
 
