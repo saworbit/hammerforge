@@ -393,3 +393,63 @@ func test_a_library_round_trips_through_the_paths_it_recorded():
 	assert_eq(root.material_manager.materials.size(), before)
 	assert_eq(root.material_manager.get_missing_count(), 0)
 	DirAccess.remove_absolute(path)
+
+
+# ===========================================================================
+# A file that is not a library (#739)
+# ===========================================================================
+
+
+func _write_raw(path: String, text: String) -> void:
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	file.store_string(text)
+	file.close()
+
+
+func test_a_materials_key_that_is_not_a_list_is_refused_rather_than_thrown_on():
+	# `var mat_paths: Array = parsed.get("materials", [])` is a runtime error when
+	# the value is a String, and GDScript has no exception handling: the function
+	# unwound and a `-> bool` call handed back null. Callers that tested the
+	# result saw a falsy value by luck rather than by design.
+	var path := "user://hf_not_a_library.hfmaterials"
+	_write_raw(path, '{"version": 1, "materials": "res://a.tres"}')
+	var returned = root.material_manager.load_library(path)
+	assert_eq(typeof(returned), TYPE_BOOL, "it answers the question it was asked")
+	assert_false(returned, "and the answer is no")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func test_a_refused_load_leaves_the_palette_it_could_not_replace():
+	var path := "user://hf_not_a_library.hfmaterials"
+	root.material_manager.add_material(StandardMaterial3D.new())
+	_write_raw(path, '{"version": 1, "materials": 7}')
+	root.material_manager.load_library(path)
+	assert_eq(
+		root.material_manager.materials.size(), 1, "the palette that was there is still there"
+	)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func test_the_pre_flight_refuses_exactly_what_the_load_refuses():
+	# `library_is_readable()` is asked before the load is committed as an undo
+	# action. A file it clears and the load then rejects is a pre-flight that
+	# opened an undo step for a load that never happened.
+	var path := "user://hf_not_a_library.hfmaterials"
+	for text in ['{"version": 1, "materials": "res://a.tres"}', '{"version": 1, "materials": 7}']:
+		_write_raw(path, text)
+		assert_eq(
+			root.material_manager.library_is_readable(path),
+			root.material_manager.load_library(path),
+			"the two agree about %s" % text
+		)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func test_a_library_with_no_materials_key_at_all_still_loads_as_an_empty_one():
+	# Absent is not malformed. It was read as `[]` before and still is.
+	var path := "user://hf_keyless_library.hfmaterials"
+	_write_raw(path, '{"version": 1}')
+	assert_true(root.material_manager.load_library(path))
+	assert_eq(root.material_manager.materials.size(), 0)
+	assert_true(root.material_manager.library_is_readable(path), "and the pre-flight agrees")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
