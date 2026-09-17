@@ -272,6 +272,58 @@ func test_capture_restore_visgroups_round_trip():
 
 
 # ---------------------------------------------------------------------------
+# The order a mapper made them in (#706)
+# ---------------------------------------------------------------------------
+
+
+func test_the_order_survives_a_round_trip_that_sorts_its_keys():
+	# The registry is a Dictionary and a level bundle is JSON, where stringify
+	# sorts object keys - so the list came back alphabetised on every reload. On a
+	# real map the order is roughly the order the level was built, and the wing
+	# being worked on today is at the bottom where it is easy to find.
+	for name in ["shell", "detail", "lighting", "atrium"]:
+		sys.create_visgroup(name)
+	var captured: Dictionary = sys.capture_visgroups()
+	var order: Array = sys.capture_order(captured)
+
+	# What the save and load actually do to it.
+	var sorted_by_json: Dictionary = JSON.parse_string(JSON.stringify(captured))
+	var sys2 = HFVisgroupSystem.new(root)
+	sys2.restore_visgroups(sorted_by_json, order)
+	assert_eq(
+		Array(sys2.get_visgroup_names()),
+		["shell", "detail", "lighting", "atrium"],
+		"the order the mapper made them in"
+	)
+
+
+func test_a_file_written_before_the_order_was_recorded_still_loads():
+	# Every existing .hflevel and .tscn has no order beside its registry.
+	var sys2 = HFVisgroupSystem.new(root)
+	sys2.restore_visgroups({"walls": {"visible": true}, "detail": {"visible": false}})
+	assert_eq(sys2.get_visgroup_names().size(), 2, "both are restored")
+	assert_false(sys2.is_visgroup_visible("detail"), "with what was read from them")
+
+
+func test_a_name_the_order_lists_but_the_data_does_not_is_skipped():
+	var sys2 = HFVisgroupSystem.new(root)
+	sys2.restore_visgroups({"walls": {"visible": true}}, ["deleted_wing", "walls"])
+	assert_eq(Array(sys2.get_visgroup_names()), ["walls"], "a stale name is not resurrected")
+
+
+func test_a_name_the_order_misses_is_still_restored():
+	var sys2 = HFVisgroupSystem.new(root)
+	sys2.restore_visgroups({"walls": {"visible": true}, "later": {"visible": true}}, ["walls"])
+	assert_eq(Array(sys2.get_visgroup_names()), ["walls", "later"], "nothing is dropped")
+
+
+func test_groups_keep_their_order_too():
+	var sys2 = HFVisgroupSystem.new(root)
+	sys2.restore_groups({"a": true, "b": true, "c": true}, ["c", "a", "b"])
+	assert_eq(Array(sys2.groups.keys()), ["c", "a", "b"])
+
+
+# ---------------------------------------------------------------------------
 # Deleting a hidden visgroup must not strand its members (#316)
 # ---------------------------------------------------------------------------
 
