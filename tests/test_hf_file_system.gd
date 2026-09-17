@@ -110,6 +110,36 @@ func test_unchanged_save_skips_rewrite_after_hash_settles():
 	assert_true(files.last_encode_skipped, "Identical capture should skip the disk write")
 
 
+func test_an_idle_autosave_of_a_real_level_state_dedupes():
+	# The shim's capture is a constant, so it could never see the clock reading
+	# that `capture_hflevel_payload()` used to put in the hashed payload. This is
+	# what an autosave actually hands over: a level, and a `saved_at` (#716).
+	root.captured = {"version": 1, "scene": "res://arena.tscn", "brushes": [{"id": "b1"}]}
+	assert_eq(files.save_hflevel(_save_path, true), OK)
+	await _drain_write()
+	files.take_completed_saves()
+	# Over a second, deliberately. `saved_at` reads the clock to the second, so two
+	# saves inside one second produce the same stamp and cannot tell a hash that
+	# ignores it from one that does not. An autosave is minutes apart.
+	await get_tree().create_timer(1.1).timeout
+	assert_eq(files.save_hflevel(_save_path, false), OK)
+	await _drain_write()
+	assert_true(files.last_encode_skipped, "nothing changed, so the second write is not needed")
+	var loaded: Dictionary = HFLevelIO.load_from_path(_save_path)
+	assert_true(loaded.has("saved_at"), "and the file written the first time has its stamp")
+
+
+func test_a_changed_level_still_writes_even_a_second_apart():
+	root.captured = {"version": 1, "brushes": [{"id": "b1"}]}
+	assert_eq(files.save_hflevel(_save_path, true), OK)
+	await _drain_write()
+	files.take_completed_saves()
+	root.captured = {"version": 1, "brushes": [{"id": "b1"}, {"id": "b2"}]}
+	assert_eq(files.save_hflevel(_save_path, false), OK)
+	await _drain_write()
+	assert_false(files.last_encode_skipped, "a brush was added, so it has to go out")
+
+
 func test_save_as_to_a_new_path_writes_even_when_nothing_changed():
 	# Save As, a numbered backup, a copy for a teammate. The level has not changed
 	# since the last save, and the file still has to appear (#688).

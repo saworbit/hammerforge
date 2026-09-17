@@ -353,12 +353,33 @@ static func holds_resource(value: Variant, _depth: int = 0) -> bool:
 ## Stringify, hash, and pack a captured state dict. Safe to call off the main
 ## thread because it only touches primitives / PackedByteArray.
 static func encode_payload_job(data: Dictionary, compress: bool = true) -> Dictionary:
-	var json := stringify_level_json(data, compress)
-	var hash_value := json.hash()
+	# The hash answers "is this the same level, written the same way", so it is
+	# taken before the clock reading goes in. `saved_at` used to be stamped at
+	# capture, inside what was hashed, so every save produced a different hash
+	# however little had changed - and the dedupe this feeds could only ever fire
+	# for two saves inside one wall-clock second, never for the idle autosave it
+	# was written for (#716).
+	var hash_value := content_hash(data, compress)
+	var stamped := data.duplicate()
+	stamped["saved_at"] = Time.get_datetime_string_from_system()
 	return {
 		"hash": hash_value,
-		"payload": build_payload_from_json(json, compress),
+		"payload": build_payload_from_json(stringify_level_json(stamped, compress), compress),
 	}
+
+
+## What decides whether this level has to be written again.
+##
+## `Dictionary.hash()` rather than hashing the JSON, because it is about thirty
+## times cheaper on a level-sized structure and this runs on every save. It is
+## sensitive to the order keys were inserted in, which `JSON.stringify` is not,
+## and that is the safe direction to be wrong in: a capture whose key order
+## moved hashes differently and the level is written again, where the opposite
+## mistake is a save that does not happen (#688).
+##
+## The compression setting is part of it because it decides the bytes on disk.
+static func content_hash(data: Dictionary, compress: bool) -> int:
+	return hash([data.hash(), compress])
 
 
 static func build_payload_from_json(json: String, compress: bool = true) -> PackedByteArray:

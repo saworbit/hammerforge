@@ -402,7 +402,9 @@ func capture_hflevel_payload() -> Dictionary:
 		state["paint_layers"] = capture_paint_layers(false)
 	var data: Dictionary = {
 		"version": HFLevelIO.FORMAT_VERSION,
-		"saved_at": Time.get_datetime_string_from_system(),
+		# `saved_at` is stamped by `HFLevelIO.encode_payload_job()` on the way to
+		# disk rather than here, so the hash that decides whether a write is needed
+		# covers the level and not the clock (#716).
 		# The one link the two halves of a level never had (#646). Levels share a
 		# `.hflevel` path by default, so without this a file cannot say which scene
 		# it came out of, and nothing can tell a level that is behind its own

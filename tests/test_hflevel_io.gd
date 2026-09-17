@@ -384,6 +384,39 @@ func test_uncompressed_payload_is_written_one_value_per_line():
 	assert_eq((parsed.get("brushes") as Array).size(), 2)
 
 
+func test_the_hash_ignores_the_clock_but_the_file_keeps_it():
+	# `saved_at` used to be stamped at capture, inside what was hashed, so every
+	# save produced a different hash however little had changed - and the dedupe
+	# it feeds could only ever fire for two saves inside one second (#716).
+	var data := {"name": "level", "n": 1}
+	var first: Dictionary = HFLevelIO.encode_payload_job(data, false)
+	var second: Dictionary = HFLevelIO.encode_payload_job(data, false)
+	assert_eq(
+		int(first.get("hash", 0)),
+		int(second.get("hash", 1)),
+		"the same level is the same level, whatever time it is"
+	)
+	# Two calls a moment apart read the same clock, so comparing them cannot tell
+	# a hash that ignores the stamp from one that includes it. What can is asking
+	# whether the hash is a function of what the caller handed over.
+	assert_eq(
+		int(first.get("hash", 0)),
+		HFLevelIO.content_hash(data, false),
+		"the hash covers the level it was given and nothing added on the way"
+	)
+	var parsed: Dictionary = HFLevelIO.parse_payload(second.get("payload", PackedByteArray()))
+	assert_true(parsed.has("saved_at"), "and the file still records when it was written")
+	assert_ne(str(parsed.get("saved_at", "")), "", "with a real reading in it")
+
+
+func test_the_caller_is_not_given_a_stamped_copy_of_its_own_state():
+	# The stamp goes on the way to disk. A capture that came back with a key it
+	# did not have would change the next hash for a reason nobody asked for.
+	var data := {"name": "level"}
+	HFLevelIO.encode_payload_job(data, false)
+	assert_false(data.has("saved_at"), "the caller's dictionary is left alone")
+
+
 func test_compressed_and_uncompressed_payloads_hash_differently():
 	# The save dedupe keys off this hash, so it has to cover the form the bytes are
 	# written in or unticking Use Compression is skipped as a rewrite (#688).
