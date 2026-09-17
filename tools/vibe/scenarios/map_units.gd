@@ -1,19 +1,26 @@
 @tool
 extends "res://tools/vibe/hf_vibe_scenario.gd"
 
-## How big a `.map` is, in the units the two sides of the exchange believe in.
+## What a `.map` coordinate means: how big it is, and which way up.
 ##
 ## `map-io` checks the format is well formed. `map-real-world` checks a file
 ## written by another editor survives an import. `world-scale` checks the
 ## plugin's own defaults agree with each other about how big a person is.
-## Nothing checked the join: a `.map` carries bare numbers and no statement of
-## what a unit is, so the two editors either agree or the level is the wrong
-## size, and the way that shows up is not an error.
+## Nothing checked the join: a `.map` carries bare numbers and says neither what
+## a unit is nor which axis points up, so the two editors either agree or the
+## level is the wrong size and on its side, and the way that shows up is not an
+## error.
 ##
 ## HammerForge is on Godot's metric scale since #625, where the playtest player
-## is 1.6 units tall. Every Quake-family editor a `.map` comes from is on Quake
-## units, where a player is 56 to 72. Since #713 the two sides are converted
-## between, at 32 map units to one of ours.
+## is 1.6 units tall, and Godot is Y-up. Every Quake-family editor a `.map` comes
+## from is on Quake units, where a player is 56 to 72, and is Z-up. Since #713
+## the sizes are converted between, at 32 map units to one of ours, and since
+## #733 so are the axes.
+##
+## Both halves are worth checking the same way: not by reading the plugin's
+## source, but by putting a shape through the crossing whose right answer is
+## obvious. A corridor a person fits down, and a floor that is thin in the
+## direction you stand up in.
 
 
 func id() -> String:
@@ -58,6 +65,7 @@ func _quake_door() -> String:
 
 func run() -> void:
 	await _what_an_imported_quake_map_is()
+	await _which_way_up_it_lands()
 	await _what_an_exported_level_looks_like_to_them()
 	await _what_survives_a_round_trip()
 
@@ -83,8 +91,12 @@ func _export_text(root: Node3D) -> String:
 	return text
 
 
-## Every plane coordinate the export wrote.
-func _written_numbers(text: String) -> Array:
+## Every plane point the export wrote.
+##
+## One place that knows how to read a face line, because the two readings below
+## want the same numbers grouped differently and a second copy of this regex is
+## a second chance to get its escaping wrong.
+func _written_points(text: String) -> Array:
 	var out: Array = []
 	var re := RegEx.new()
 	re.compile("\\(([^\\)]+)\\)")
@@ -93,10 +105,36 @@ func _written_numbers(text: String) -> Array:
 		if not stripped.begins_with("("):
 			continue
 		for m in re.search_all(stripped):
-			for part in m.get_string(1).strip_edges().split(" ", false):
-				if part.is_valid_float():
-					out.append(float(part))
+			var parts := m.get_string(1).strip_edges().split(" ", false)
+			if parts.size() < 3:
+				continue
+			out.append(Vector3(float(parts[0]), float(parts[1]), float(parts[2])))
 	return out
+
+
+## The largest coordinate written, in any direction.
+func _largest_written(text: String) -> float:
+	var largest := 0.0
+	for p in _written_points(text):
+		var point: Vector3 = p
+		largest = maxf(largest, absf(point.x))
+		largest = maxf(largest, absf(point.y))
+		largest = maxf(largest, absf(point.z))
+	return largest
+
+
+## The size of the box the written plane points describe.
+func _written_extent_of(text: String) -> Vector3:
+	var points := _written_points(text)
+	if points.is_empty():
+		return Vector3.ZERO
+	var lo: Vector3 = points[0]
+	var hi: Vector3 = points[0]
+	for p in points:
+		var point: Vector3 = p
+		lo = Vector3(minf(lo.x, point.x), minf(lo.y, point.y), minf(lo.z, point.z))
+		hi = Vector3(maxf(hi.x, point.x), maxf(hi.y, point.y), maxf(hi.z, point.z))
+	return hi - lo
 
 
 func _what_an_imported_quake_map_is() -> void:
@@ -149,16 +187,21 @@ func _what_an_imported_quake_map_is() -> void:
 		)
 	var spawn_height := 24.0 / MapIO.QUAKE_UNITS_PER_METRE
 	for c in root.entities_node.get_children() if root.entities_node else []:
-		if absf((c as Node3D).global_position.z - spawn_height) > 0.01:
+		if absf((c as Node3D).global_position.y - spawn_height) > 0.01:
 			flag(
 				"a point entity does not take the same conversion as the geometry",
 				(
 					(
-						"`origin` is a position in the same space as the plane points. This one "
-						+ "is at %s and the geometry around it was divided by %.0f, so the spawn "
-						+ "is somewhere the level is not."
+						"`origin` is a position in the same space as the plane points, so it takes "
+						+ "the same divide and the same turn. This one is at %s and the file put "
+						+ "it %.2f above the floor at %.0f units to one of ours, so the spawn is "
+						+ "somewhere the level is not."
 					)
-					% [str((c as Node3D).global_position), MapIO.QUAKE_UNITS_PER_METRE]
+					% [
+						str((c as Node3D).global_position),
+						spawn_height,
+						MapIO.QUAKE_UNITS_PER_METRE
+					]
 				)
 			)
 
@@ -179,10 +222,7 @@ func _what_an_exported_level_looks_like_to_them() -> void:
 		if s.begins_with("("):
 			plane_lines.append(s.substr(0, 60))
 	note("the first plane lines the export writes", plane_lines.slice(0, 3))
-	var numbers := _written_numbers(text)
-	var largest := 0.0
-	for n in numbers:
-		largest = maxf(largest, absf(float(n)))
+	var largest := _largest_written(text)
 	note("the largest coordinate written", largest)
 	note(
 		"what a Quake-family editor makes of those numbers",
@@ -269,3 +309,91 @@ func _what_survives_a_round_trip() -> void:
 				% worst
 			)
 		)
+
+
+## A floor slab as an editor in that family writes one: wide in x and y, thin in
+## z, because z is their up.
+func _quake_floor() -> String:
+	var lines: Array[String] = []
+	lines.append("{")
+	lines.append('"classname" "worldspawn"')
+	lines.append("{")
+	lines.append(
+		"( -64 -64 -8 ) ( -64 -63 -8 ) ( -63 -64 -8 ) FLOOR1 [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1"
+	)
+	lines.append("( -64 -64 0 ) ( -63 -64 0 ) ( -64 -63 0 ) FLOOR1 [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1")
+	lines.append(
+		"( -64 -64 -8 ) ( -64 -64 -7 ) ( -64 -63 -8 ) WALL_A [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 1 1"
+	)
+	lines.append("( 64 -64 -8 ) ( 64 -63 -8 ) ( 64 -64 -7 ) WALL_A [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 1 1")
+	lines.append(
+		"( -64 -64 -8 ) ( -63 -64 -8 ) ( -64 -64 -7 ) WALL_A [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1"
+	)
+	lines.append("( -64 64 -8 ) ( -64 64 -7 ) ( -63 64 -8 ) WALL_A [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1")
+	lines.append("}")
+	lines.append("}")
+	lines.append("")
+	return "\n".join(lines)
+
+
+## Whether the file's up axis is this level's up axis, in both directions.
+##
+## A level the right size and on its side is harder to notice than one seventy
+## players high, so this asks the question with a shape that has an obvious right
+## answer: a floor is thin in the direction you stand up in.
+func _which_way_up_it_lands() -> void:
+	var root: Node3D = await fresh_root()
+	_import(root, _quake_floor())
+	await frame()
+	var extent := Vector3.ZERO
+	for b in root.draft_brushes_node.get_children():
+		extent = HFVibe.local_extent(b)
+		break
+	note("a 128 x 128 x 8 slab, thin on the file's up axis, imports as", str(extent))
+	var thinnest := "x"
+	if extent.y <= extent.x and extent.y <= extent.z:
+		thinnest = "y"
+	elif extent.z <= extent.x and extent.z <= extent.y:
+		thinnest = "z"
+	note("the axis it is thinnest on", thinnest)
+	note("the axis a floor should be thinnest on here", "y, which is up in Godot")
+	if thinnest != "y":
+		flag(
+			"a floor imports as a wall",
+			(
+				(
+					"`.map` is Z-up across the whole Quake family and this project is Y-up. A "
+					+ "slab written 8 units thick on the file's up axis came in %s, thinnest on "
+					+ "%s, so the level is on its side. It is hard to spot because the trip out "
+					+ "and back is symmetric: only the crossing is wrong, and the crossing is "
+					+ "what the format is for."
+				)
+				% [str(extent), thinnest]
+			)
+		)
+
+	var out: Node3D = await fresh_root()
+	box(out, Vector3(4, 0.25, 4), Vector3.ZERO)
+	await frame()
+	var text := _export_text(out)
+	if text == "":
+		return
+	var written := _written_extent_of(text)
+	note("and a floor drawn here exports as", str(written))
+	note("the axis it should be thinnest on there", "z, which is up in a .map")
+	if written.z > written.x or written.z > written.y:
+		flag(
+			"a floor exports as a wall",
+			(
+				(
+					"A slab 0.25 thick on this project's up axis was written %s. A `.map` is "
+					+ "Z-up, so a floor has to be the thin one on z or it opens upright in the "
+					+ "editor it was written for."
+				)
+				% str(written)
+			)
+		)
+	note(
+		"what the file records it was written as",
+		"%s = %s" % [MapIO.AXIS_PROPERTY, MapIO.AXES_QUAKE]
+	)

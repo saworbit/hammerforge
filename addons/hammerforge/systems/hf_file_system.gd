@@ -257,10 +257,12 @@ static func level_file_is_stale(hflevel_time: int, scene_time: int) -> bool:
 ## at one scale and imported at another, a brush can pass here and be dropped a
 ## moment later, which is a pre-flight that clears a file the import then
 ## complains about (#713).
-func validate_map(path: String, units_per_metre: float = MapIO.QUAKE_UNITS_PER_METRE) -> Dictionary:
+func validate_map(
+	path: String, units_per_metre: float = MapIO.QUAKE_UNITS_PER_METRE, convert_axes: bool = true
+) -> Dictionary:
 	if path == "" or not FileAccess.file_exists(path):
 		return {"ok": false, "error": "File not found: %s" % path}
-	var map_data = MapIO.load_map(path, units_per_metre)
+	var map_data = MapIO.load_map(path, units_per_metre, convert_axes)
 	if map_data.is_empty():
 		return {"ok": false, "error": "Could not read %s" % path.get_file()}
 	var errors: Array = map_data.get("errors", [])
@@ -287,10 +289,12 @@ func _report_map_error(path: String, message: String) -> void:
 ## gives back the level that was exported however the setting has moved since.
 ## The export uses the setting as it stands, so changing it between an import and
 ## an export rescales the level on purpose (#713).
-func import_map(path: String, units_per_metre: float = MapIO.QUAKE_UNITS_PER_METRE) -> int:
+func import_map(
+	path: String, units_per_metre: float = MapIO.QUAKE_UNITS_PER_METRE, convert_axes: bool = true
+) -> int:
 	if path == "":
 		return ERR_INVALID_PARAMETER
-	var map_data = MapIO.load_map(path, units_per_metre)
+	var map_data = MapIO.load_map(path, units_per_metre, convert_axes)
 	if map_data.is_empty():
 		return ERR_INVALID_DATA
 	var errors: Array = map_data.get("errors", [])
@@ -385,7 +389,10 @@ func _mint_palette_slot(name_token: String) -> int:
 
 
 func export_map(
-	path: String, format: String = "quake", units_per_metre: float = MapIO.QUAKE_UNITS_PER_METRE
+	path: String,
+	format: String = "quake",
+	units_per_metre: float = MapIO.QUAKE_UNITS_PER_METRE,
+	convert_axes: bool = true
 ) -> int:
 	if path == "":
 		return ERR_INVALID_PARAMETER
@@ -395,7 +402,7 @@ func export_map(
 		adapter = HFMapValve220Type.new()
 	else:
 		adapter = HFMapQuakeType.new()
-	var text = MapIO.export_map_from_level(root, adapter, units_per_metre)
+	var text = MapIO.export_map_from_level(root, adapter, units_per_metre, convert_axes)
 	if text == "":
 		return ERR_INVALID_DATA
 	var file = FileAccess.open(path, FileAccess.WRITE)

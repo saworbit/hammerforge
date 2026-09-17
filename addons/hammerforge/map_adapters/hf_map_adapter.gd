@@ -13,6 +13,14 @@ extends RefCounted
 ## is the figure the dialog offers (#713).
 var units_per_metre: float = 1.0
 
+## Whether coordinates are turned into the file's own axes on the way out.
+##
+## Alongside `units_per_metre` for the same reason and at the same place: `.map`
+## is Z-up and this project is Y-up, and an export that writes one as the other
+## produces a file whose floors are walls (#733). False writes this project's
+## axes, which is what a caller that has not asked for a conversion gets.
+var convert_axes: bool = false
+
 
 func format_name() -> String:
 	return "Base"
@@ -24,9 +32,21 @@ func format_face_line(
 	return ""
 
 
-## A point, in the units the file is being written in.
+## A point, in the units and the axes the file is being written in.
 func map_point(v: Vector3) -> Vector3:
-	return v * units_per_metre
+	var scaled := v * units_per_metre
+	return MapIO.to_map_axes(scaled) if convert_axes else scaled
+
+
+## A direction, in the axes the file is being written in.
+##
+## The Valve 220 texture axes go through this rather than `map_point()`, because
+## a unit vector that took the scale factor would say the texture repeats every
+## thirty-second of a unit. Turning the points and the axes by the same rotation
+## leaves the dot product the reader computes between them unchanged, so the UVs
+## come out of the conversion exactly as they went in.
+func map_direction(v: Vector3) -> Vector3:
+	return MapIO.to_map_axes(v) if convert_axes else v
 
 
 ## A face's texture scale, in the units the file is being written in.

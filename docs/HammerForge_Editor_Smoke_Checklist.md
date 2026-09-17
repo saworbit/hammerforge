@@ -800,6 +800,8 @@ It writes one PNG per tab under `user://console_preview/`.
 - Export a level containing a carved or beveled brush to `.map` and reimport it. Confirm the brushes come back the right way out rather than inside out.
 - Export a room of a known size to `.map` and open the file. Confirm the plane coordinates are the size times the **Map units/m** row, and that `worldspawn` carries one `_hf_units_per_metre` line rather than two. Import it back and confirm the room is the size it started at.
 - Set **Map units/m** to 16, import a file exported at 32, and confirm the level comes back at its exported size rather than doubled: the file's own figure wins. Then export it and confirm the new file is written at 16, which is how a map is moved between conventions.
+- Import a `.map` containing a floor slab written by another editor. Confirm it lands flat, not upright: a floor is thin in the direction you stand up in. Export a floor from here and open the file; confirm the thin axis is its `z`, and that `worldspawn` carries one `_hf_axis_convention` line reading `quake`.
+- Import a `.map`, then export it and import the result. Confirm the level is the same size and the same way up both times, and that the second file carries one copy of each of the two `worldspawn` keys rather than two.
 - Enable region streaming with a small radius. Paint in one region, move the cursor into another so the first unloads, then return. Confirm the paint is still there.
 - Make the `<level>.hfregions` directory unwritable (for example put a regular file at that path) and save. Confirm the save is reported as failed rather than succeeding with missing region data.
 - Save twice in quick succession to the same path while the first write is still running. Confirm the file ends up holding the newer of the two.
@@ -822,8 +824,9 @@ translated to `(1000, 0, 1000)`.
   where it was, and that the Output log carries no out-of-tree transform errors.
 - Import a `.map` file. Confirm its entities land where the file put them,
   relative to the geometry around them, rather than offset by the root. The
-  coordinates are divided by the **Map units/m** row on the way in, so a spawn
-  written at `0 0 24` sits 0.75 above the floor at the default of 32, not 24.
+  coordinates are divided by the **Map units/m** row and turned onto this
+  project's axes on the way in, so a spawn written at `0 0 24` sits 0.75
+  above the floor at the default of 32, not 24 along the depth axis.
 - Create a radial array, then press Ctrl+Z once. Confirm the whole array goes
   away in that one press and that the action before it is left alone. Redo and
   confirm every copy comes back.
