@@ -176,6 +176,18 @@ static func on_hflevel_load_selected(dock: Object, path: String) -> void:
 		dock._user_prefs.save()
 
 
+## What the dock's scale row says a `.map` unit is worth, for both directions.
+##
+## Falls back to the Quake-family figure rather than to 1 when the control is not
+## built: a headless dock or a test shim has no row, and treating that as "no
+## conversion" would be the defect this exists to fix, silently (#713).
+static func map_units_per_metre(dock: Object) -> float:
+	if dock == null or not ("map_scale_spin" in dock) or dock.map_scale_spin == null:
+		return MapIO.QUAKE_UNITS_PER_METRE
+	var value := float(dock.map_scale_spin.value)
+	return value if is_finite(value) and value > 0.0 else MapIO.QUAKE_UNITS_PER_METRE
+
+
 static func on_map_import_selected(dock: Object, path: String) -> void:
 	if dock == null:
 		return
@@ -185,13 +197,14 @@ static func on_map_import_selected(dock: Object, path: String) -> void:
 	if not dock.level_root:
 		dock._set_status("No LevelRoot for .map import", true)
 		return
-	var check: Dictionary = dock.level_root.validate_map(path)
+	var units := map_units_per_metre(dock)
+	var check: Dictionary = dock.level_root.validate_map(path, units)
 	if not bool(check.get("ok", false)):
 		var reason := str(check.get("error", "unreadable file"))
 		dock._set_status("Failed to import .map: %s" % reason, true)
 		dock.show_toast("Failed to import .map", 2)
 		return
-	dock._commit_full_state_action("Import .map", "import_map", [path])
+	dock._commit_full_state_action("Import .map", "import_map", [path, units])
 	dock._set_status("Imported .map", false, 3.0)
 	dock.show_toast("Imported .map", 0)
 
@@ -205,7 +218,7 @@ static func on_map_export_selected(dock: Object, path: String) -> void:
 	var format = (
 		"valve220" if dock.map_format_select and dock.map_format_select.selected == 1 else "quake"
 	)
-	var error := int(dock.level_root.export_map(path, format))
+	var error := int(dock.level_root.export_map(path, format, map_units_per_metre(dock)))
 	var format_name = "Valve 220" if format == "valve220" else "Classic Quake"
 	var message = "Exported .map (%s)" % format_name if error == OK else "Failed to export .map"
 	dock._set_status(message, error != OK, 3.0)

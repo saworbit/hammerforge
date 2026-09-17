@@ -5,6 +5,30 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **A `.map` keeps its size crossing between editors** (#713). A `.map` file
+  carries bare numbers and never says what a unit is. Every editor that writes
+  one is on Quake units, where a player is 56 to 72 tall and the grid steps in
+  16s, and this project has been on Godot's metric scale since #625, where the
+  playtest player is 1.6. `MapIO` copied the coordinates through, so a corridor
+  drawn two players high arrived seventy players high with its spawn twenty-four
+  units off the floor, and the level was unusable without rescaling every brush
+  by hand. The export had it in reverse: a room from here was smaller than the
+  other editor's smallest grid step, so every vertex of it snapped onto the same
+  point. Both directions now convert, through a **Map units/m** row in the File
+  section that defaults to 32. That is the figure Func_Godot uses for the same
+  exchange, and it puts a 56-unit player at 1.75, which is the same person as
+  this project's 1.6. A point entity's origin takes the conversion because an
+  origin is a position in the same space as the plane points; a door's `speed`
+  does not, because that is a distance per second in the source game's units and
+  only that game knows what it meant. The texture scale takes it as well, since
+  a `.map` reader divides the projected point by that field and a room scaled
+  without it would come out the right size covered in dust. An export records
+  what it used in `worldspawn`, so reopening your own file gives back the level
+  you exported however the row has moved since, and moving the row between an
+  import and an export rescales the level on purpose. The conversion lives in
+  `HFFileSystem` rather than in `MapIO`, which reads and writes the format and
+  converts nothing it was not asked to.
+
 - **CI stops going red on a download**. Shard 4 failed on d1b6ca5 with exit code
   8 from `wget`, while the other three shards fetched the same URL a second apart
   and got it. No test ran in that shard, and main went red on a commit whose

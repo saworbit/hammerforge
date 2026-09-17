@@ -249,10 +249,18 @@ static func level_file_is_stale(hflevel_time: int, scene_time: int) -> bool:
 
 ## Parse a .map without touching the level. The dock preflights with this so a
 ## malformed file never clears the current work.
-func validate_map(path: String) -> Dictionary:
+## At the same scale the import will use, or the check answers a different
+## question than the one the dock is about to ask.
+##
+## `_brush_from_faces()` refuses a brush whose bounds have collapsed, and that
+## threshold is in the units the geometry is in by the time it is tested. Checked
+## at one scale and imported at another, a brush can pass here and be dropped a
+## moment later, which is a pre-flight that clears a file the import then
+## complains about (#713).
+func validate_map(path: String, units_per_metre: float = MapIO.QUAKE_UNITS_PER_METRE) -> Dictionary:
 	if path == "" or not FileAccess.file_exists(path):
 		return {"ok": false, "error": "File not found: %s" % path}
-	var map_data = MapIO.load_map(path)
+	var map_data = MapIO.load_map(path, units_per_metre)
 	if map_data.is_empty():
 		return {"ok": false, "error": "Could not read %s" % path.get_file()}
 	var errors: Array = map_data.get("errors", [])
@@ -268,10 +276,21 @@ func _report_map_error(path: String, message: String) -> void:
 		root.user_message.emit(text, 2)
 
 
-func import_map(path: String) -> int:
+## `units_per_metre` is how many `.map` units one HammerForge unit is worth.
+##
+## This is the layer that has an opinion, because this is the layer that owns a
+## level: `MapIO` reads and writes the format and converts nothing unless asked.
+## The Quake-family figure is the default because every editor that writes a
+## `.map` is on it.
+##
+## A file that states its own figure wins over this one, so reopening an export
+## gives back the level that was exported however the setting has moved since.
+## The export uses the setting as it stands, so changing it between an import and
+## an export rescales the level on purpose (#713).
+func import_map(path: String, units_per_metre: float = MapIO.QUAKE_UNITS_PER_METRE) -> int:
 	if path == "":
 		return ERR_INVALID_PARAMETER
-	var map_data = MapIO.load_map(path)
+	var map_data = MapIO.load_map(path, units_per_metre)
 	if map_data.is_empty():
 		return ERR_INVALID_DATA
 	var errors: Array = map_data.get("errors", [])
@@ -365,7 +384,9 @@ func _mint_palette_slot(name_token: String) -> int:
 	return int(root.material_manager.add_material(placeholder))
 
 
-func export_map(path: String, format: String = "quake") -> int:
+func export_map(
+	path: String, format: String = "quake", units_per_metre: float = MapIO.QUAKE_UNITS_PER_METRE
+) -> int:
 	if path == "":
 		return ERR_INVALID_PARAMETER
 	ensure_dir_for_path(path)
@@ -374,7 +395,7 @@ func export_map(path: String, format: String = "quake") -> int:
 		adapter = HFMapValve220Type.new()
 	else:
 		adapter = HFMapQuakeType.new()
-	var text = MapIO.export_map_from_level(root, adapter)
+	var text = MapIO.export_map_from_level(root, adapter, units_per_metre)
 	if text == "":
 		return ERR_INVALID_DATA
 	var file = FileAccess.open(path, FileAccess.WRITE)

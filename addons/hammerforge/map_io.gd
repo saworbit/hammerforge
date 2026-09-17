@@ -12,23 +12,56 @@ const HFConvexClip = preload("hf_convex_clip.gd")
 const DEFAULT_TEXTURE := "__default"
 const AXIS_THRESHOLD := 0.98
 
+## How many `.map` units one HammerForge unit is worth, by the convention of the
+## editors that write the format.
+##
+## A `.map` file carries bare numbers and never says what a unit is. Every editor
+## in the Quake family is on Quake units, where a player is 56 to 72 tall and the
+## default grid step is 16. HammerForge has been on Godot's metric scale since
+## #625, where the playtest player is 1.6. Without a conversion a corridor drawn
+## two players high arrives seventy players high, and a room exported from here
+## is smaller than one grid square over there (#713).
+##
+## 32 is the figure the Godot side of this exchange settled on: Func_Godot, which
+## is what a Godot project normally uses to read a `.map`, defaults its
+## `inverse_scale_factor` to 32 and divides brush coordinates by it. At 32 a
+## 56-unit player is 1.75, which is the same person as this project's 1.6.
+const QUAKE_UNITS_PER_METRE := 32.0
+
+## The worldspawn key that records which figure a file was written with.
+##
+## Underscore-prefixed because that is how the Quake-family editors mark a key as
+## their own rather than the compiler's; TrenchBroom writes `_tb_` keys the same
+## way. A file that carries it round trips at its own scale whatever the current
+## setting is, which is the difference between reopening your own export and
+## importing it at whatever the dialog last said.
+const SCALE_PROPERTY := "_hf_units_per_metre"
+
 ## Vertex snapping tolerance for imported .map geometry.  Vertices closer than
 ## this distance are welded to their average position to eliminate floating-point
 ## drift from legacy editors.  Set to 0.0 to disable.
+##
+## In `.map` units, and applied before the unit conversion: the drift it exists
+## to close is drift in the numbers as the other editor wrote them.
 static var import_weld_tolerance: float = 0.01
 
 
-static func load_map(path: String) -> Dictionary:
+static func load_map(path: String, units_per_metre: float = 1.0) -> Dictionary:
 	if path == "" or not FileAccess.file_exists(path):
 		return {}
 	var file = FileAccess.open(path, FileAccess.READ)
 	if not file:
 		return {}
 	var text = file.get_as_text()
-	return parse_map_text(text)
+	return parse_map_text(text, units_per_metre)
 
 
-static func parse_map_text(text: String) -> Dictionary:
+## `units_per_metre` defaults to 1, which is no conversion at all.
+##
+## This class reads and writes the format; what a unit means is the level's
+## business, so the figure comes in from `HFFileSystem`, where the Quake-family
+## default lives. A caller that wants the file's numbers as written gets them.
+static func parse_map_text(text: String, units_per_metre: float = 1.0) -> Dictionary:
 	var lines = text.replace("\r", "").split("\n")
 	var entities: Array = []
 	var errors: Array[String] = []
@@ -97,11 +130,20 @@ static func parse_map_text(text: String) -> Dictionary:
 		errors.append("Line %d: text outside any block" % line_no)
 	if in_brush or in_entity:
 		errors.append("Unclosed block at end of file")
-	# Weld near-coincident vertices across all parsed faces to close micro-gaps
+	# Weld near-coincident vertices across all parsed faces to close micro-gaps.
+	# Before the unit conversion, because the tolerance is in the units the file
+	# was written in.
 	if import_weld_tolerance > 0.0:
 		for entity in entities:
 			for brush in entity.get("brushes", []):
 				_snap_parsed_vertices(brush.get("faces", []), import_weld_tolerance)
+
+	# A file that says what it was written with wins over what the caller asked
+	# for, so reopening your own export is the level you exported whatever the
+	# dialog currently says.
+	var scale := _recorded_scale(entities, units_per_metre)
+	if scale != 1.0:
+		_scale_parsed_points(entities, 1.0 / scale)
 
 	var brushes: Array = []
 	var entity_points: Array = []
@@ -114,7 +156,11 @@ static func parse_map_text(text: String) -> Dictionary:
 	for entity in entities:
 		var props: Dictionary = entity.get("properties", {})
 		var entity_class = str(props.get("classname", ""))
-		var origin = _parse_origin(str(props.get("origin", "")))
+		# An origin is a position in the same space as the plane points, so it
+		# takes the same conversion. Nothing else in the block does: a door's
+		# `speed` is a distance per second in the source game's units and only
+		# that game knows it, so the keys travel as written.
+		var origin = _parse_origin(str(props.get("origin", ""))) / scale
 		var has_brushes = entity.get("brushes", []).size() > 0
 		var authored := str(props.get("targetname", ""))
 		var unusable_connections := [0]
@@ -176,7 +222,47 @@ static func parse_map_text(text: String) -> Dictionary:
 		"brushes": brushes,
 		"errors": errors,
 		"worldspawn": worldspawn,
+		# What the geometry above was divided by, so the caller can say so and an
+		# export can put the level back the size it came in at.
+		"units_per_metre": scale,
 	}
+
+
+## The figure a file states it was written with, or `fallback` when it says
+## nothing.
+##
+## A value that is zero, negative or not a number would turn the level inside out
+## or collapse it to a point, so it is refused and the fallback stands. The key
+## is read off `worldspawn` because that is the block that describes the map.
+static func _recorded_scale(entities: Array, fallback: float) -> float:
+	for entity in entities:
+		var props = entity.get("properties", {})
+		if not (props is Dictionary):
+			continue
+		if str(props.get("classname", "")) != "worldspawn":
+			continue
+		var text := str(props.get(SCALE_PROPERTY, "")).strip_edges()
+		if not text.is_valid_float():
+			break
+		var stated := float(text)
+		if not is_finite(stated) or stated <= 0.0:
+			break
+		return stated
+	return fallback if is_finite(fallback) and fallback > 0.0 else 1.0
+
+
+## Multiply every parsed plane point by `factor`, in place.
+##
+## Applied to the points rather than to the brush records `_brush_from_faces()`
+## builds from them, so the hull clipping, the bounds and the box detection all
+## run on one set of numbers in one space.
+static func _scale_parsed_points(entities: Array, factor: float) -> void:
+	for entity in entities:
+		for brush in entity.get("brushes", []):
+			for face in brush.get("faces", []):
+				var points: Array = face.get("points", [])
+				for i in points.size():
+					points[i] = (points[i] as Vector3) * factor
 
 
 ## The I/O connections among an entity's key/value lines.
@@ -213,17 +299,31 @@ static func _connections_from_pairs(pairs: Array, dropped: Array) -> Array:
 ## exported as a solid block is worse than a doorway that is missing, and it is
 ## silent. Carved shapes therefore leave here uncut; `.map` is a blockout
 ## exchange format, not a bake.
-static func export_map_from_level(level_root: Node, adapter: HFMapAdapterType = null) -> String:
+## `units_per_metre` defaults to 1, the level's own numbers, for the same reason
+## `parse_map_text()` does: the conversion is the level's policy, not the
+## format's. The figure is put on the adapter, which is where every coordinate
+## and every texture scale passes through on the way out.
+static func export_map_from_level(
+	level_root: Node, adapter: HFMapAdapterType = null, units_per_metre: float = 1.0
+) -> String:
 	if not level_root:
 		return ""
 	if adapter == null:
 		adapter = HFMapQuakeType.new()
+	adapter.units_per_metre = (
+		units_per_metre if is_finite(units_per_metre) and units_per_metre > 0.0 else 1.0
+	)
 	var material_names: Array = []
 	if level_root.has_method("get_material_names"):
 		material_names = level_root.call("get_material_names")
 	var lines: Array[String] = []
 	lines.append("{")
 	lines.append('"classname" "worldspawn"')
+	# Written before the keys the file came in with, and skipped by
+	# `_worldspawn_lines()` so a round trip does not grow a second copy of it.
+	# A block with the key twice is a block whose scale depends on which one the
+	# reader keeps.
+	lines.append_array(adapter.format_entity_properties({SCALE_PROPERTY: adapter.units_per_metre}))
 	lines.append_array(_worldspawn_lines(level_root, adapter))
 	var brush_nodes: Array = []
 	if level_root.has_method("_iter_pick_nodes"):
@@ -469,8 +569,9 @@ static func _worldspawn_lines(level_root, adapter: HFMapAdapterType = null) -> A
 	for key in props as Dictionary:
 		# `classname` is written by the caller and must not be written twice: a
 		# block with two of them is a block whose class depends on which one the
-		# reader keeps.
-		if str(key) == "classname":
+		# reader keeps. The scale key is the caller's too, and an import stores
+		# it here along with everything else worldspawn carried.
+		if str(key) == "classname" or str(key) == SCALE_PROPERTY:
 			continue
 		out.append_array(writer.format_entity_properties({str(key): str(props[key])}))
 	return out
@@ -549,11 +650,14 @@ static func _entity_to_map_lines(
 			continue
 		props[key_name] = data[key]
 	props["classname"] = entity_class
-	props["origin"] = _format_vec3(entity.global_transform.origin)
 	# A base adapter when none was given, rather than a second copy of the
 	# formatting here: the fallback used to `str()` every value, which is the
 	# notation this path exists to keep out of the file.
 	var writer: HFMapAdapterType = adapter if adapter else HFMapAdapterType.new()
+	# The same conversion the plane points take. A spawn written at the level's
+	# own scale into a file written at the Quake-family one lands at the origin's
+	# feet rather than where the mapper put it.
+	props["origin"] = _format_vec3(writer.map_point(entity.global_transform.origin))
 	lines.append_array(writer.format_entity_properties(props))
 	# entity_data carries the authored keys. The name and the I/O outputs live in
 	# metadata, so they come from there.
