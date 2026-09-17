@@ -29,10 +29,10 @@ static func make_level_root() -> LevelRoot:
 ## answer when `parent` is the scene root.
 ##
 ## `properties` is applied before the node enters the tree, because `LevelRoot`
-## reads its exports in `_ready` and there is no later chance. Outside the
-## editor that is the only way to stop a fresh root starting a playtest:
-## `{"auto_spawn_player": false}`. Inside the editor the defaults are correct
-## and this can be left empty.
+## reads its exports in `_ready` and there is no later chance. The defaults are
+## correct in the editor and out of it, so this can usually be left empty; it is
+## how to ask a fresh root for something other than a default, such as
+## `{"auto_spawn_player": true}` for a scene meant to be run on its own.
 ##
 ## `parent` must already be inside a `SceneTree`, because the root builds its
 ## subsystems in `_ready`. Returns null if it is not.

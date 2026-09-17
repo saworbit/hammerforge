@@ -70,21 +70,22 @@ func _what_the_reload_hook_polls() -> void:
 	note("RemoteReloadTimer wait_time", timer.wait_time)
 	note("polls", path)
 	note("that path exists in this project", FileAccess.file_exists(path))
-	note(
-		"polls per minute per level in a shipped game",
-		int(round(60.0 / max(timer.wait_time, 0.001)))
-	)
-	if timer.wait_time <= 1.0 and not timer.is_stopped():
+	note("polls per minute while it runs", int(round(60.0 / max(timer.wait_time, 0.001))))
+	# The hook is gated on `OS.has_feature("debug")` as well as on not being in the
+	# editor, so a release export never sets it up. This harness is a debug build,
+	# which is why the timer is here: what it can say is that the gate is the one
+	# that decides, not that a shipped game polls.
+	note("this build has the debug feature", OS.has_feature("debug"))
+	if not OS.has_feature("debug"):
 		flag(
-			"a shipped game polls the disk twice a second for an editor hot-reload file",
+			"a release build polls the disk for an editor hot-reload file",
 			(
 				(
-					"`_setup_runtime_reload()` is gated on `not Engine.is_editor_hint()`, so it "
-					+ "runs only in a built game and never in the editor -- the opposite of what "
-					+ "a dev hook wants. It stats %s every %.1fs forever, and that path is under "
-					+ "a dot-directory in res:// that an export does not ship, so the answer is "
-					+ "always false. Worse, if it ever is true the built game calls bake(true, "
-					+ "true) and rebuilds the whole level from brushes mid-play."
+					"`_setup_runtime_reload()` should not run outside a debug build. It stats "
+					+ "%s every %.1fs forever, and that path is under a dot-directory in res:// "
+					+ "that an export does not ship, so the answer can never be true. If it ever "
+					+ "is, the game calls bake(true, true) and rebuilds the whole level from "
+					+ "brushes mid-play."
 				)
 				% [path, timer.wait_time]
 			)

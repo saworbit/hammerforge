@@ -409,7 +409,15 @@ var _pending_registries: Dictionary = {}
 @export var hflevel_compress: bool = true
 @export var entity_definitions_path: String = "res://addons/hammerforge/entities.json"
 @export var commit_freeze: bool = true
-@export var auto_spawn_player: bool = true
+## Run this level's scene on its own and get a debug player in it.
+##
+## It is a convenience for pressing F6 on a level scene, and it was the default,
+## so a game that loaded a scene with a `LevelRoot` in it got a second character
+## controller and a second camera alongside its own, plus a full rebuild of the
+## level from source brushes at load (#699). Test Level does not read this: the
+## playtest export builds its own player either way. Off unless somebody asks
+## for it, and never in a release build whoever asks.
+@export var auto_spawn_player: bool = false
 var _draft_pick_layer_index: int = 1
 @export_range(1, 32, 1) var draft_pick_layer_index: int = 1:
 	set(value):
@@ -901,7 +909,13 @@ func _ready():
 		_setup_autosave()
 		set_process(true)
 	_log("Ready (grid_visible=%s, follow_grid=%s)" % [_grid_visible, grid_follow_brush])
-	if not Engine.is_editor_hint():
+	if not Engine.is_editor_hint() and OS.has_feature("debug"):
+		# Both of these are development conveniences, and the gate they had - "not
+		# in the editor" - is the shipped game and nothing else. The remote reload
+		# poll stat'd a file twice a second forever under a dot directory an export
+		# does not ship, and a hit rebuilt the whole level mid-play (#689). The
+		# debug player arrived beside the game's own (#699). A release build takes
+		# neither, whatever the properties say.
 		_setup_runtime_reload()
 		if auto_spawn_player:
 			call_deferred("_start_playtest")

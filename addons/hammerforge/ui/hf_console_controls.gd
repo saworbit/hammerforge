@@ -201,7 +201,7 @@ const GROUPS := [
 				"key": "auto_spawn_player",
 				"label": "Auto-spawn player",
 				"help":
-				"Places a player at the origin during Test Level when the level has no spawn point."
+				"Adds a debug player when this level's own scene is run on its own. Test Level builds its own player and does not read this. Never applies to a release build."
 			},
 			{
 				"key": "debug_logging",

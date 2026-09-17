@@ -62,7 +62,7 @@ Eight checks, each a red / amber / green lamp with what was measured, what it me
 | **Bake** | Baked meshes match the drafts | Never baked, or brushes edited since — *Bake Now* | — |
 | **Level check** | Scanned, no faults | 1–5 issues — *Check + Fix* | 6 or more |
 | **Material palette** | Every slot loaded | Empty (fine for greyboxing), or some slots did not resolve — *Load Palette* | No slot resolved, or empty **and** face-material bake is on |
-| **Player spawn** | At least one spawn point | None, but auto-spawn is on — *Add Spawn Point* | None and auto-spawn is off |
+| **Player spawn** | At least one spawn point | None, so Test Level makes one at the origin — *Add Spawn Point* | — |
 | **Autosave** | On, and a snapshot exists | Off, or nothing written yet — *Turn On* | — |
 | **Session log** | No warnings | Warnings this session — *Open Log* | Errors this session |
 
@@ -78,7 +78,7 @@ Every HammerForge switch on one screen, grouped by what it affects:
 
 - **Viewport** — show grid, grid follows brush, shortcut HUD, power-user overlays, I/O connection lines, subtract preview, spawn debug, texture lock, cordon
 - **Bake** — merge meshes, LODs, unwrap UV0, lightmap UV2, face materials, navmesh, visible only, MultiMesh, material atlas, auto connectors, wire I/O, occluders, worker threads, freeze on commit, chunk size
-- **Safety net** — autosave (with interval and backups kept), compress saves, auto-spawn player, debug logging
+- **Safety net** — autosave (with interval and backups kept), compress saves, auto-spawn player (off by default; adds a debug player when this level's own scene is run on its own, never in a release build), debug logging
 
 Each switch is captioned with what it does, and **Find a setting** searches those captions as well as the names, so "pathfinding" finds *Bake navmesh*. Turn **Descriptions** off to fit more on screen; the text stays on the tooltips. A switch with nowhere to write — no level open — is disabled rather than shown at a made-up default.
 
