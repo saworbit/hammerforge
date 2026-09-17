@@ -1943,6 +1943,10 @@ func bake_navmesh(container: Node3D) -> void:
 	# Ceil agent_radius to cell_size units to avoid precision warning
 	var cs: float = root.bake_navmesh_cell_size
 	nav_mesh.agent_radius = ceil(root.bake_navmesh_agent_radius / cs) * cs
+	# The two that decide whether an agent can use the stairs this plugin builds.
+	# They were left at Godot's defaults while the four above them were set (#701).
+	nav_mesh.agent_max_climb = root.bake_navmesh_agent_max_climb
+	nav_mesh.agent_max_slope = root.bake_navmesh_agent_max_slope
 	# Parse collision shapes instead of visual meshes (avoids GPU readback stall).
 	_set_parsed_geometry_type(nav_mesh, NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS)
 	if (

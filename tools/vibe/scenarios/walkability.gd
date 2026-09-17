@@ -32,6 +32,14 @@ func run() -> void:
 
 
 ## A capsule the size of the playtest player, dropped in and settled.
+## The step height and physics tick the walk loop drives the shipped routine with.
+## `max_step_height` is what `playtest_fps.gd` exports; the tick is Godot's
+## default physics rate, which is what `_physics_process` would hand it.
+const STEP_HEIGHT := 0.4
+const FIXED_STEP := 1.0 / 60.0
+const PlaytestFPS = preload("res://addons/hammerforge/playtest_fps.gd")
+
+
 func _player(root: Node3D, at: Vector3) -> CharacterBody3D:
 	var body := CharacterBody3D.new()
 	var shape := CollisionShape3D.new()
@@ -41,6 +49,9 @@ func _player(root: Node3D, at: Vector3) -> CharacterBody3D:
 	shape.shape = capsule
 	body.add_child(shape)
 	root.add_child(body)
+	body.global_position = at
+	# The shipped player widens this so the drop onto a step is caught.
+	body.floor_snap_length = maxf(body.floor_snap_length, STEP_HEIGHT + 0.05)
 	body.global_position = at
 	return body
 
@@ -56,9 +67,12 @@ func _hide_drafts(root: Node3D) -> void:
 
 
 func _settle(body: CharacterBody3D) -> void:
+	var fall := 0.0
 	for _i in 24:
-		body.velocity = Vector3(0, -9.8, 0)
+		fall = 0.0 if body.is_on_floor() else fall - 9.8 * FIXED_STEP
+		body.velocity = Vector3(0, fall, 0)
 		body.move_and_slide()
+		fall = body.velocity.y
 		await frame()
 
 
@@ -74,15 +88,32 @@ func _walk_to(body: CharacterBody3D, target: Vector3, budget: int = 2000) -> Dic
 	var stalled := 0
 	var last: Vector3 = body.global_position
 	var used := 0
+	# Gravity the way `playtest_fps.gd` applies it: zero on the floor, accumulating
+	# only while airborne. The constant -9.8 this loop used to set is not gravity,
+	# it is a downward velocity nine times a walk speed, and it pins the body to
+	# whatever it is standing on - which is a fair model of nothing the plugin
+	# ships, and it hides every step the player takes.
+	var fall := 0.0
 	for _i in budget:
 		used += 1
 		var to_target: Vector3 = target - body.global_position
 		to_target.y = 0.0
 		if to_target.length() < 0.25:
 			break
+		if body.is_on_floor():
+			fall = 0.0
+		else:
+			fall -= 9.8 * FIXED_STEP
 		body.velocity = to_target.normalized() * 3.0
-		body.velocity.y = -9.8
+		body.velocity.y = fall
+		# The step-up the shipped player runs, driven directly, because this loop
+		# sets velocity rather than pressing keys. It is the same static routine
+		# `playtest_fps.gd` calls each physics frame.
+		PlaytestFPS.step_body_up(
+			body, Vector3(body.velocity.x, 0.0, body.velocity.z) * FIXED_STEP, STEP_HEIGHT
+		)
 		body.move_and_slide()
+		fall = body.velocity.y
 		lowest = minf(lowest, body.global_position.y)
 		if body.global_position.distance_to(last) < 0.002:
 			stalled += 1
@@ -161,6 +192,7 @@ func _does_the_floor_hold() -> void:
 			)
 		body.queue_free()
 		await frame()
+		await drop_root(root)
 
 
 func _can_it_get_through_a_doorway() -> void:
@@ -203,6 +235,7 @@ func _can_it_get_through_a_doorway() -> void:
 			)
 		body.queue_free()
 		await frame()
+		await drop_root(root)
 
 
 func _can_it_climb_the_stairs_the_plugin_builds() -> void:
@@ -271,3 +304,4 @@ func _can_it_climb_the_stairs_the_plugin_builds() -> void:
 			)
 		body.queue_free()
 		await frame()
+		await drop_root(root)

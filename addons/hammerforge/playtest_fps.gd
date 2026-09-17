@@ -23,6 +23,15 @@ extends CharacterBody3D
 ## The Use key, and how far in front of the camera it reaches.
 @export var use_action := "hf_use"
 @export var use_distance := 2.5
+## The tallest riser the player will walk up.
+##
+## Godot's `CharacterBody3D` has no automatic step-up, so before this every
+## vertical face was a wall to it whatever its height: a five centimetre riser
+## stopped the player exactly as a twenty-five centimetre one did, and the stairs
+## the plugin's own generators build were unwalkable (#711). Defaults above
+## `bake_connector_stair_height`, so the auto-connector's stairs are climbable
+## without anybody changing anything.
+@export var max_step_height := 0.4
 @export var capsule_radius := 0.35
 @export var capsule_height := 1.6
 ## The capsule while crouched. A crawl space is the thing a playtest is meant to
@@ -72,6 +81,10 @@ func _ready() -> void:
 		global_position = player_start_position
 	if player_start_rotation_y != 0.0:
 		rotation.y = player_start_rotation_y
+
+	# Long enough to catch the drop onto a step after the body has been lifted over
+	# its riser, or the player floats forward and falls off the front of it.
+	floor_snap_length = maxf(floor_snap_length, max_step_height + 0.05)
 
 	_ensure_hud()
 	_set_cursor_captured(true)
@@ -301,10 +314,50 @@ func _physics_process(delta: float) -> void:
 	velocity.x = move_toward(velocity.x, target_vel.x, accel * delta)
 	velocity.z = move_toward(velocity.z, target_vel.z, accel * delta)
 
+	_step_up_if_blocked(delta)
 	move_and_slide()
 
 	# 5. Effects (FOV and Head Bob)
 	_apply_camera_effects(delta, has_input)
+
+
+## Lift a grounded body over a riser it is about to walk into. Returns whether it
+## did.
+##
+## Godot's `CharacterBody3D` has no automatic step-up, so a vertical face is a
+## wall to it whatever its height - a five centimetre riser stopped the player
+## exactly as a twenty-five centimetre one did, and the stairs the plugin's own
+## generators build were unwalkable (#711).
+##
+## Three tests, and all three have to hold. The motion is blocked from where the
+## feet are, or there is nothing in the way. It is clear from a step height above
+## them, or this is a wall rather than a step. And there is something to land on
+## up there, or it is a lip over a hole. The caller's `move_and_slide()` then
+## carries the body forward the same frame, and `floor_snap_length` pulls it back
+## down onto the step.
+##
+## Static, and taking the body, so the thing that ships is the thing a test or a
+## scenario can drive without an input device.
+static func step_body_up(body: CharacterBody3D, motion: Vector3, max_height: float) -> bool:
+	if max_height <= 0.0 or not body.is_on_floor():
+		return false
+	var flat := Vector3(motion.x, 0.0, motion.z)
+	if flat.length_squared() <= 0.0:
+		return false
+	var here := body.global_transform
+	if not body.test_move(here, flat):
+		return false
+	var lifted := here.translated(Vector3.UP * max_height)
+	if body.test_move(lifted, flat):
+		return false
+	if not body.test_move(lifted, Vector3.DOWN * (max_height + 0.05)):
+		return false
+	body.global_transform = lifted
+	return true
+
+
+func _step_up_if_blocked(delta: float) -> void:
+	step_body_up(self, Vector3(velocity.x, 0.0, velocity.z) * delta, max_step_height)
 
 
 func _apply_camera_effects(delta: float, is_moving: bool) -> void:

@@ -77,7 +77,7 @@ The header carries the overall lamp, the live scope line (`Arena · 74 brushes �
 Every HammerForge switch on one screen, grouped by what it affects:
 
 - **Viewport** — show grid, grid follows brush, shortcut HUD, power-user overlays, I/O connection lines, subtract preview, spawn debug, texture lock, cordon
-- **Bake** — merge meshes, LODs, unwrap UV0, lightmap UV2, face materials, navmesh, visible only, MultiMesh, material atlas, auto connectors, wire I/O, occluders, worker threads, freeze on commit, chunk size
+- **Bake** — merge meshes, LODs, unwrap UV0, lightmap UV2, face materials, navmesh (cell size and height, agent height, radius, climb and slope), visible only, MultiMesh, material atlas, auto connectors, wire I/O, occluders, worker threads, freeze on commit, chunk size
 - **Safety net** — autosave (with interval and backups kept), compress saves, auto-spawn player (off by default; adds a debug player when this level's own scene is run on its own, never in a release build), debug logging
 
 Each switch is captioned with what it does, and **Find a setting** searches those captions as well as the names, so "pathfinding" finds *Bake navmesh*. Turn **Descriptions** off to fit more on screen; the text stays on the tooltips. A switch with nowhere to write — no level open — is disabled rather than shown at a made-up default.
@@ -867,6 +867,7 @@ The **Test → Advanced Bake** section exposes additional controls:
   - **Width** (SpinBox, 1–8): connector width in grid cells.
   - **Stair Threshold** (SpinBox, 0.01–256.0, default 32.0): the height difference at which *Auto* picks stairs over a ramp. Saved with the level.
   Connectors are generated before navmesh baking, so the navmesh automatically covers connector surfaces. Auto-connectors are skipped during selection bakes (Bake Selected) to avoid pulling in unrelated geometry.
+  **Step H** and the navmesh's **Agent Climb** have to agree. A step taller than the agent can climb bakes a staircase nothing that follows the navmesh can use, and both default to 0.25, so they start exactly on each other. Bake Check reports it when they disagree. The playtest player is separate and steps up to its own `max_step_height` (0.4 by default).
 
 The main **Bake** button is smart: if only specific brushes have been modified since the last bake, it automatically uses incremental bake (`Bake Changed`) instead of a full re-bake. Changing a bake setting counts as a change — the settings the last bake ran with are compared against the ones now set, so a rebake after flipping Bake Visible Only, a collision mode, a navmesh parameter or the cordon rebuilds in full rather than returning the previous result.
 

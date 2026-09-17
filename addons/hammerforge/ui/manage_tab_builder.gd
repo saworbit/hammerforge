@@ -111,6 +111,21 @@ func build(parent: Control) -> void:
 	dock.bake_navmesh_agent_row.add_child(dock.bake_navmesh_agent_radius)
 	adv.add_child(dock.bake_navmesh_agent_row)
 
+	dock.bake_navmesh_limits_row = HBoxContainer.new()
+	var nav_limits_label = Label.new()
+	nav_limits_label.text = "Agent Climb / Slope"
+	dock.bake_navmesh_limits_row.add_child(nav_limits_label)
+	dock.bake_navmesh_agent_max_climb = dock._make_spin(0.0, 4.0, 0.01, 0.25)
+	dock.bake_navmesh_agent_max_climb.tooltip_text = (
+		"The tallest step an agent can walk up. Below the stair height this level "
+		+ "builds, and nothing in the game can use its stairs."
+	)
+	dock.bake_navmesh_limits_row.add_child(dock.bake_navmesh_agent_max_climb)
+	dock.bake_navmesh_agent_max_slope = dock._make_spin(0.0, 90.0, 0.5, 45.0)
+	dock.bake_navmesh_agent_max_slope.tooltip_text = ("The steepest slope an agent can walk, in degrees. The same question for ramps.")
+	dock.bake_navmesh_limits_row.add_child(dock.bake_navmesh_agent_max_slope)
+	adv.add_child(dock.bake_navmesh_limits_row)
+
 	# -- Incremental / selection bake --
 	var bake_opt_sep = HSeparator.new()
 	adv.add_child(bake_opt_sep)

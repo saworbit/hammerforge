@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Fixed
+- **The player can climb the stairs the plugin builds** (#711). The plugin ships
+  a Stairs generator, a Spiral Stairs generator and an auto-connector that builds
+  stairs between height layers - and the character that has to walk them could
+  not climb a step of any height. Godot's `CharacterBody3D` has no automatic
+  step-up, so a vertical face is a wall to it whatever its height: a five
+  centimetre riser stopped the player exactly as a twenty-five centimetre one
+  did. `playtest_fps.gd` now runs a step-up before each `move_and_slide()`, with
+  a `max_step_height` beside the walk speed defaulting above the connector's own
+  stair height. Three tests decide it: the motion is blocked at foot level, clear
+  from a step height above, and there is something to land on up there. A wall of
+  the same total height as a staircase is still a wall.
+
+- **The navmesh has the two settings that decide whether an agent can use the
+  stairs** (#701). `bake_navmesh()` set four properties on the `NavigationMesh`
+  and left `agent_max_climb` and `agent_max_slope` at Godot's defaults, which
+  mattered because the plugin builds stairs itself: the auto-connector's default
+  step is 0.25 and so is Godot's default max climb, so every generated staircase
+  sat exactly on the limit and a mapper raising the step for a chunkier stair put
+  it out of reach of every agent in the game. Both are now spins in the Manage
+  tab beside the other four, defaulting to Godot's values, and Bake Check reports
+  the combination that produces stairs nothing can use.
+
 ### Added
 - **Export Game Scene** (#697, #698). The playtest export was the only path in
   the plugin that turned an entity marker into the real node it stands for - a
