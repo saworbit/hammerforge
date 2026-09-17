@@ -141,8 +141,16 @@ func _what_the_reorder_costs() -> void:
 	note("the cutter's operation", cutter.operation)
 
 	var path := "user://vibe_undo_depth_order.hflevel"
+	var path2 := "user://vibe_undo_depth_order2.hflevel"
+	# Both files, gone, before either is written. A save skips a payload whose
+	# hash matches the last one, which is exactly what happens once an undo
+	# genuinely restores the level -- and the read below would then compare a
+	# fresh file against whatever a previous run left behind.
+	for stale in [path, path2]:
+		if FileAccess.file_exists(stale):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(stale))
 	root.hflevel_autosave_path = path
-	root.save_hflevel(path)
+	root.save_hflevel(path, true)
 	await HFVibe.settle_save(_tree, root)
 	var before_bytes := HFVibe.file_size(path)
 	var before_text := _brush_order_text(path)
@@ -157,8 +165,7 @@ func _what_the_reorder_costs() -> void:
 	await frame()
 	note("order after one undo of a nudge", _order(root))
 
-	var path2 := "user://vibe_undo_depth_order2.hflevel"
-	root.save_hflevel(path2)
+	root.save_hflevel(path2, true)
 	await HFVibe.settle_save(_tree, root)
 	note("the .hflevel after the undo", "%s bytes" % HFVibe.file_size(path2))
 	var after_text := _brush_order_text(path2)
@@ -527,9 +534,23 @@ func _explain(want: Dictionary, got: Dictionary) -> void:
 		if HFVibe.canonical(entry) != HFVibe.canonical(by_id[bid]):
 			changed += 1
 			if changed == 1:
+				# The key, not the first 400 characters of the record. A brush
+				# record is mostly faces, so a truncated dump is the same prefix
+				# twice and says nothing about what actually moved.
 				note("  first record whose content differs, brush %s" % bid)
-				note("    snapshot", HFVibe.canonical(entry).substr(0, 400))
-				note("    re-capture", HFVibe.canonical(by_id[bid]).substr(0, 400))
+				note("    keys that differ", _keys_that_moved(entry, by_id[bid]))
+				for key in _keys_that_moved(entry, by_id[bid]):
+					var plain := key.replace(" (gone)", "").replace(" (new)", "")
+					note(
+						"    %s" % plain,
+						(
+							"%s -> %s"
+							% [
+								HFVibe.canonical(entry.get(plain, "<absent>")).substr(0, 200),
+								HFVibe.canonical(by_id[bid].get(plain, "<absent>")).substr(0, 200)
+							]
+						)
+					)
 	note("  records whose content differs once matched by id", changed)
 
 

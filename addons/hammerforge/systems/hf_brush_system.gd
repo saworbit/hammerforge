@@ -418,7 +418,18 @@ func get_brush_info_from_node(brush: Node) -> Dictionary:
 	# that comes back as @Node3D@27719 has lost what entity I/O outputs target,
 	# what the baked Area3D is named after, and what anyone reading the scene
 	# tree recognises it by. Entity infos have carried their node name all along.
-	info["name"] = draft.name
+	# An authored name only. Godot auto-names an unnamed brush `@Node3D@14`, and
+	# that is not identity -- `brush_id` is -- nor can it round trip: `@` is not a
+	# character a node name may hold, so setting it back gives `_Node3D_14`, and
+	# the engine reuses the number once a node is freed, so two live brushes can
+	# record the same name and the second to be rebuilt collides with the first
+	# and becomes `_Node3D_15`. Either way the record could not match the node it
+	# described, and `capture_state()` was not a fixed point for any brush nobody
+	# had named (#660). A generated name is left to the engine, which assigns a
+	# fresh one and is not asked about it again.
+	var node_name := String(draft.name)
+	if not node_name.begins_with("@"):
+		info["name"] = node_name
 	return info
 
 
