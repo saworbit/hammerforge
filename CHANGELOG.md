@@ -229,6 +229,42 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the exporter next.
 
 ### Fixed
+- **A turn keeps a face's texture the right way round** (#684). #683 moved the
+  projection into the level, which means a face can now change which Box UV axis
+  it resolves to. `projection_axes()` is right handed for PLANAR_Z against its
+  own normal and left handed for the other two, an asymmetry the file already
+  noted, and it could not matter while a face's axis was fixed. A wall yawed a
+  quarter turn moved from PLANAR_Z to PLANAR_X and came back mirrored along U,
+  with the measured direction the exact negation of the carried one.
+  A face remembers the brush orientation its UVs were laid out against, and the
+  handedness change is folded into `uv_scale` at the moment the axis changes.
+  Nothing on disk changes meaning and no saved level is migrated: the correction
+  lives in a field that was already persisted, and a level reopens at the
+  orientation it was saved at, so nothing is reconciled and nothing moves.
+  Which of the two axes to reverse is not a fixed answer. A yaw from PLANAR_Z to
+  PLANAR_X reverses U and leaves V; a roll from PLANAR_Y to PLANAR_Z reverses V
+  and leaves U. The old projection's axes are carried through the turn the brush
+  made and compared against the new one's, and a turn that does not land them on
+  each other is a skew no planar projection holds, so it is left alone rather
+  than guessed at.
+- **Texture Lock carries a turning brush's texture, the way it carries a moving
+  one's** (#684). The compensation was subtracting the turn where it now has to
+  cancel it, so a box's top and bottom came back turned the wrong way by twice
+  the angle -- at ninety degrees, exactly reversed.
+  This is the rotation half of what #653 was for translation. While UVs were
+  projected from a brush's own vertices, doing nothing held a texture on the
+  brush and the compensation was what let go of it, so #355 settled Texture Lock
+  as the setting that pinned a face to the world. The two have swapped. Doing
+  nothing now holds a texture where it is in the level, and the compensation is
+  what carries it round, so ticked means for a turn what it already means for a
+  move: the texture goes with the brush. Unticked keeps it on the world grid.
+  Both behaviours are still reachable and the label is true of both.
+  `tests/test_texture_lock.gd` drove `adjust_uvs_for_rotation()` on a brush that
+  had not moved, so it measured the old projection and passed either way. It
+  turns the brush now. That also turned up that
+  `NOTIFICATION_TRANSFORM_CHANGED` is deferred and has not arrived by the time
+  the compensation runs, which is why `rebuild_preview()` syncs the faces rather
+  than leaving it to the notification.
 - **A texture runs across a wall built from more than one brush** (#652, #653). A
   face's UVs were projected from the brush's own vertices, and a brush's local
   vertices do not know where the brush is. Two brushes the same size therefore

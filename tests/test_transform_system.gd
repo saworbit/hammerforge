@@ -347,13 +347,17 @@ func test_rotate_ignores_entities_without_an_angle_key():
 
 
 func test_texture_lock_on_compensates_a_face_that_turns_in_its_own_plane():
+	# The sign is the opposite of what it was before #652. The projection is
+	# taken in the level now, so the turn is already in it and the compensation
+	# cancels the turn rather than adding to it, which is what carries the
+	# texture round with the brush.
 	root.texture_lock = true
 	var b := _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "t1")
 	var face = b.get_faces()[0]
 	face.uv_projection = FaceDataScript.UVProjection.PLANAR_Y
 	face.uv_rotation = 0.0
 	sys.rotate(["t1"], [], 1, deg_to_rad(90.0), Vector3.ZERO)
-	assert_almost_eq(face.uv_rotation, -deg_to_rad(90.0), 0.001)
+	assert_almost_eq(face.uv_rotation, deg_to_rad(90.0), 0.001)
 
 
 func test_texture_lock_leaves_a_face_the_turn_swings_around():
