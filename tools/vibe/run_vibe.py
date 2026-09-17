@@ -143,6 +143,29 @@ SCENARIOS = [
     "brush-entities",
     "missing-files",
     "docs-truth",
+    "navmesh",
+    "runtime-entities",
+    "ship-runtime",
+    "big-level",
+    "unicode-names",
+    "props-and-models",
+    "bake-optimisation",
+    "collision-layers",
+    "level-instancing",
+    "lighting",
+    "subtractive-bake",
+    "map-quality",
+    "save-as",
+    "surface-response",
+    "team-workflow",
+    "session-leaks",
+    "build-outdoors",
+    "bulk-edits",
+    "map-units",
+    "detail-brushes",
+    "gltf-export",
+    "streamed-world-bake",
+    "walkability",
 ]
 
 # Generous: chaos runs 300 operations and cost saves eight levels. A scenario
@@ -255,6 +278,16 @@ def main() -> int:
         help="where to write per-scenario logs (default .vibe/)",
     )
     args = parser.parse_args()
+
+    # Godot's output is UTF-8. The Windows console is cp1252, and printing a
+    # scenario's line with a non-ASCII character in it takes the whole run down
+    # with a UnicodeEncodeError after that scenario has already finished -- the
+    # findings are in the log file and the sweep stops anyway. `run_scenario`
+    # already decodes with errors="replace"; this is the other end of the same
+    # pipe.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
 
     if args.list:
         for scenario in SCENARIOS:

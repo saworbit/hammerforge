@@ -94,8 +94,12 @@ func diff_levels(
 
 
 ## A live root plus the frame its `_ready()` needs. Every scenario starts here.
-func fresh_root(node_name: String = "Level") -> Node3D:
-	var root := HFVibe.make_root(_tree, node_name)
+##
+## The root comes up with `auto_spawn_player` already off, because setting it
+## after this returns does nothing -- see `HFVibe.make_root()`. Pass true for the
+## handful of scenarios that are about the playtest itself.
+func fresh_root(node_name: String = "Level", spawn_player: bool = false) -> Node3D:
+	var root := HFVibe.make_root(_tree, node_name, spawn_player)
 	await _tree.process_frame
 	return root
 
