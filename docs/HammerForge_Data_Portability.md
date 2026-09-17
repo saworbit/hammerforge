@@ -60,6 +60,7 @@ Whichever setting is on, the scene also carries the records that describe the br
 
 ### Brush Entity Class Serialization
 - Brush entity class (`func_detail`, `func_wall`, `trigger_once`, `trigger_multiple`) is stored in the `brush_entity_class` key of each brush record.
+- `func_detail` brushes bake into one mesh per material and one collision body, the way the structural path groups, with a convex hull per brush so a pile of clutter still collides as the separate solids it is. A detail brush that carries an entity name or I/O outputs keeps a node of its own instead, because that is the address the runtime finds it by.
 - Missing key on load = no entity class (standard structural brush).
 
 ## `.map` Import / Export
