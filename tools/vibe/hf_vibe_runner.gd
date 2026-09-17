@@ -150,6 +150,7 @@ const SCENARIOS: Array[String] = [
 	"res://tools/vibe/scenarios/detail_brushes.gd",
 	"res://tools/vibe/scenarios/gltf_export.gd",
 	"res://tools/vibe/scenarios/streamed_world_bake.gd",
+	"res://tools/vibe/scenarios/walkability.gd",
 ]
 
 

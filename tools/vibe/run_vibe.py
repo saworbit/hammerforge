@@ -165,6 +165,7 @@ SCENARIOS = [
     "detail-brushes",
     "gltf-export",
     "streamed-world-bake",
+    "walkability",
 ]
 
 # Generous: chaos runs 300 operations and cost saves eight levels. A scenario

@@ -192,6 +192,7 @@ it from here.
 | `detail-brushes` | what tying clutter to `func_detail` does to the node count and the draw calls |
 | `gltf-export` | what `export_baked_gltf` writes for a real level, read back off disk |
 | `streamed-world-bake` | whether a bake of a streamed world covers the parts that are not resident |
+| `walkability` | whether a body the size of the playtest player can walk the level that was baked |
 
 ## Adding a scenario
 
@@ -238,7 +239,8 @@ is correct in all three brush containers. Those are kept. A scenario that only
 exists while it is failing cannot tell you when something stops being true, and
 the notes are where the next reader finds out the ground was already covered.
 `build-a-room`, `far-origin` and `docs-truth` are the newest of them.
-The newest clean scenarios are `session-leaks`, `bulk-edits` and `unicode-names`.
+The newest clean scenarios are `session-leaks`, `bulk-edits`, `unicode-names`,
+`gltf-export`, `streamed-world-bake` and `big-level`.
 `session-leaks` runs 200 create/delete cycles, 25 re-bakes, 100 undo round trips
 and 100 preview show/hides and every one of them gives back every node, orphan
 and object it took — which is the answer to "the editor gets slow over an
@@ -249,6 +251,21 @@ correct, all fast, and four 90-degree turns about a pivot come back to within
 punctuated names through entity names, visgroups, groups, the `.hflevel`, the
 `.map` export and re-import, and through non-ASCII *filenames*, and loses
 nothing.
+
+`gltf-export` takes a textured room out through `export_baked_gltf()` and reads
+it back with Godot's own importer: the geometry is there, it is the size of the
+level, every surface carries a UV channel and the four material names survive.
+`streamed-world-bake` settles the suspicion that a bake of a streamed world
+would have holes where the evicted regions were -- it covers 252.9 of the 256
+units painted. `big-level` prices a 900-brush map and finds a linear curve with
+no cliff in it: 141 ms to build, 68 ms to validate, 581 ms to save into 47 KB,
+1391 ms for a full bake and 0 ms for a `bake_dirty()` with nothing dirty.
+
+`walkability` is two thirds clean and worth reading for the two thirds. Floor
+seams hold in all three collision modes and a doorway one tenth of a unit wider
+than the player is passable; only the stairs fail, and they fail at five
+centimetres as surely as at twenty-five, which is what says the step height is
+not the variable.
 `build-a-room` runs a whole first evening -- hollow a room, carve a doorway, run
 a corridor to a second room, texture twenty brushes, place a light and a spawn,
 group and visgroup the shell, validate, bake, export the playtest scene -- and
