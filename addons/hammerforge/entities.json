@@ -191,6 +191,7 @@
   "prop_static": {
     "class": "Node3D",
     "description": "A model placed in the level. Set Scene to the mesh or scene to show.",
+    "scene_property": "scene",
     "preview": {
       "type": "box",
       "color": "#88ccff",

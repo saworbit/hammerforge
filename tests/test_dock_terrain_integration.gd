@@ -337,6 +337,48 @@ func test_build_scatter_settings_defaults():
 	assert_eq(s.preview_mode, HFScatterBrush.PreviewMode.DOTS)
 
 
+func test_picking_a_scene_yields_the_mesh_inside_it():
+	# The picker offers .glb and .gltf, which is the format an artist hands over,
+	# and Godot imports both as a PackedScene. The loader kept the resource only
+	# `if res is Mesh`, so the pick was accepted by the dialog and dropped by the
+	# loader, then reported at Scatter time as "Pick a mesh first" (#691).
+	var crate := Node3D.new()
+	crate.name = "Crate"
+	var mi := MeshInstance3D.new()
+	mi.name = "CrateMesh"
+	mi.mesh = BoxMesh.new()
+	crate.add_child(mi)
+	mi.owner = crate
+	var packed := PackedScene.new()
+	assert_eq(packed.pack(crate), OK)
+	var path := "user://hf_test_scatter_crate.tscn"
+	assert_eq(ResourceSaver.save(packed, path), OK)
+	crate.free()
+
+	var got: Mesh = HFDockPaintHandler._mesh_from_pick(path)
+	assert_not_null(got, "a scene the picker offers should yield the mesh inside it")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func test_picking_a_plain_mesh_resource_still_works():
+	var path := "user://hf_test_scatter_mesh.tres"
+	assert_eq(ResourceSaver.save(BoxMesh.new(), path), OK)
+	assert_not_null(HFDockPaintHandler._mesh_from_pick(path))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func test_picking_a_scene_with_no_mesh_in_it_yields_nothing():
+	var empty := Node3D.new()
+	empty.name = "Empty"
+	var packed := PackedScene.new()
+	assert_eq(packed.pack(empty), OK)
+	var path := "user://hf_test_scatter_empty.tscn"
+	assert_eq(ResourceSaver.save(packed, path), OK)
+	empty.free()
+	assert_null(HFDockPaintHandler._mesh_from_pick(path), "nothing to scatter is nothing")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
 func test_build_scatter_settings_spline_populates_points():
 	_setup_scatter_ui()
 	dock.scatter_shape_select.selected = 1  # Spline

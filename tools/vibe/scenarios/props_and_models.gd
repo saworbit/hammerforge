@@ -100,17 +100,23 @@ func _place_one_and_look_for_it() -> void:
 	)
 	var meshes := _mesh_nodes(prop)
 	note("MeshInstance3D nodes under the prop", meshes)
-	# The question the description answers "yes" to.
-	var loaded_crate := _find(prop, func(n: Node) -> bool: return str(n.name).contains("Crate"), [])
-	if loaded_crate.is_empty():
+	# The viewport preview is built only under `Engine.is_editor_hint()`, which is
+	# false here, so this run cannot see one either way. What it can check is that
+	# the class still declares which property names the model, since that is what
+	# the preview, the bake and the export all read. Whether a model actually
+	# arrives is answered by `_through_the_bake_and_the_playtest` below, on the
+	# exported scene, where it is a fact rather than an editor-only drawing.
+	var definition: Dictionary = root.get_entity_definition("prop_static")
+	note("the property prop_static names its model with", definition.get("scene_property", ""))
+	note("the marker stored the path", prop.entity_data.get("scene", ""))
+	if str(definition.get("scene_property", "")) == "":
 		flag(
-			"setting a prop_static's Scene property loads nothing",
+			"prop_static does not say which property names its model",
 			(
 				"prop_static's own description is 'A model placed in the level. Set Scene to "
-				+ "the mesh or scene to show.' The property is stored and nothing in the addon "
-				+ "ever calls load() or instantiate() on it, so the mapper places a prop, types "
-				+ "a path, and the level stays empty with no error anywhere. Nothing that "
-				+ "places a model in a level works."
+				+ "the mesh or scene to show.' Without `scene_property` on the definition, "
+				+ "nothing loads the path: the preview, the bake and the playtest export all "
+				+ "read it to know which field to instantiate."
 			)
 		)
 
@@ -155,6 +161,27 @@ func _through_the_bake_and_the_playtest() -> void:
 	)
 	var crates := _find(inst, func(n: Node) -> bool: return str(n.name).contains("Crate"), [])
 	note("crate meshes in the exported playtest", crates.size())
+	if crates.is_empty():
+		flag(
+			"a prop_static's model does not reach the exported scene",
+			(
+				"The mapper placed a prop, pointed it at a real PackedScene, baked and "
+				+ "exported, and the level shipped an empty marker. Placing a model is the "
+				+ "other half of level editing."
+			)
+		)
+	elif crates.size() > 1:
+		flag(
+			"a prop_static's model reaches the exported scene more than once",
+			(
+				(
+					"%d copies. Owning the inside of an instantiated scene makes pack() write "
+					+ "those nodes out beside the instance as well, so the saved scene holds the "
+					+ "model twice and loads it twice."
+				)
+				% crates.size()
+			)
+		)
 	inst.free()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(scene_path))
 
@@ -202,10 +229,9 @@ func _what_the_scatter_picker_accepts() -> void:
 		var close := text.find(")", at)
 		filter_line = text.substr(at, max(close - at + 1, 0))
 	note("what the scatter Pick Mesh dialog offers", filter_line)
-	note(
-		"what build_scatter_settings keeps",
-		"`if res is Mesh: s.mesh = res` (dock_paint_handler.gd)"
-	)
+	# What the loader does with each offered kind, rather than what its source says.
+	var from_scene: Mesh = HFDockPaintHandler._mesh_from_pick(PROP_PATH)
+	note("picking a scene yields a mesh", from_scene != null)
 
 	# What each offered extension actually loads as. A .glb or .gltf is imported
 	# by Godot as a PackedScene, never as a Mesh.
@@ -214,16 +240,17 @@ func _what_the_scatter_picker_accepts() -> void:
 	note("a scene resource `is PackedScene`", scene_res is PackedScene)
 	var mesh_res := BoxMesh.new()
 	note("a Mesh resource `is Mesh`", mesh_res is Mesh)
-	if filter_line.contains("glb") or filter_line.contains("gltf"):
+	var offers_scenes := filter_line.contains("glb") or filter_line.contains("gltf")
+	if offers_scenes and from_scene == null:
 		flag(
 			"the scatter mesh picker offers .glb and .gltf and then discards them",
 			(
 				"The dialog filter is `*.tres,*.res,*.obj,*.glb,*.gltf`, so a mapper picking "
 				+ "the crate an artist handed over picks a .glb. Godot imports .glb and .gltf "
-				+ "as PackedScene, and `build_scatter_settings()` keeps the resource only `if "
-				+ "res is Mesh`, so the pick is silently dropped: the button's label changes to "
-				+ "the filename, `s.mesh` stays null, and scattering places nothing. Either the "
-				+ "filter should not offer scene formats, or the loader should pull the first "
-				+ "MeshInstance3D out of the instantiated scene."
+				+ "as PackedScene, so a loader that keeps the resource only `if res is Mesh` "
+				+ "drops the pick in silence: the button's label changes to the filename, the "
+				+ "mesh stays null, and scattering places nothing. Either the filter should "
+				+ "not offer scene formats, or the loader should pull the first MeshInstance3D "
+				+ "out of the instantiated scene."
 			)
 		)

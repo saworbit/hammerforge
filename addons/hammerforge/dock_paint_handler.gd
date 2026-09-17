@@ -151,6 +151,39 @@ static func on_heightmap_convert(dock: Object) -> void:
 	dock._refresh_paint_layers()
 
 
+## The mesh behind a picked file, or null.
+##
+## The picker offers `.glb` and `.gltf`, which is the format an artist hands over,
+## and Godot imports both as a `PackedScene` rather than a `Mesh`. The load used
+## to keep only what was already a `Mesh`, so those two were accepted by the
+## dialog, dropped on the floor, and reported at Scatter time as "Pick a mesh
+## first" - pointing at the step the mapper had just done (#691).
+static func _mesh_from_pick(path: String) -> Mesh:
+	var res: Resource = load(path)
+	if res is Mesh:
+		return res
+	if res is PackedScene:
+		var instance: Node = (res as PackedScene).instantiate()
+		var mesh := _first_mesh_in(instance)
+		instance.free()
+		if mesh == null:
+			HFLog.warn("HammerForge: '%s' has no mesh in it to scatter." % path)
+		return mesh
+	HFLog.warn("HammerForge: '%s' is not a mesh or a scene." % path)
+	return null
+
+
+## The first mesh found walking the tree, in order.
+static func _first_mesh_in(node: Node) -> Mesh:
+	if node is MeshInstance3D and (node as MeshInstance3D).mesh:
+		return (node as MeshInstance3D).mesh
+	for child in node.get_children():
+		var found := _first_mesh_in(child)
+		if found:
+			return found
+	return null
+
+
 static func on_scatter_mesh_pick(dock: Object) -> void:
 	if dock == null or not dock.level_root:
 		return
@@ -177,9 +210,7 @@ static func build_scatter_settings(dock: Object) -> HFScatterBrush.ScatterSettin
 	if dock == null:
 		return s
 	if dock._scatter_mesh_path != "" and ResourceLoader.exists(dock._scatter_mesh_path):
-		var res = load(dock._scatter_mesh_path)
-		if res is Mesh:
-			s.mesh = res
+		s.mesh = _mesh_from_pick(dock._scatter_mesh_path)
 	if dock.scatter_density_spin:
 		s.density = dock.scatter_density_spin.value
 	if dock.scatter_radius_spin:

@@ -43,6 +43,11 @@ static func set_entity_property(entity: Node3D, prop_name: String, value: Varian
 	if entity is DraftEntity:
 		entity.entity_data[prop_name] = value
 		entity.notify_property_list_changed()
+		# A class whose instances name their own model draws that model, so the
+		# viewport has to follow the field. Only that one property, because
+		# rebuilding the preview on every edit would do it per keystroke.
+		if prop_name == entity.authored_scene_property():
+			entity.refresh_preview()
 	elif entity.has_meta("entity_data"):
 		var d: Dictionary = entity.get_meta("entity_data")
 		d[prop_name] = value
