@@ -2805,9 +2805,25 @@ func _compute_level_aabb() -> AABB:
 	return result
 
 
-func export_playtest_scene(path: String) -> bool:
+## Write a scene a game loads: the same geometry and the same real entity nodes
+## as a playtest, with none of the rig that makes a playtest a playtest.
+##
+## The playtest export was the only path that turned an entity marker into a real
+## node - a `light_point` into an `OmniLight3D`, a `logic_timer` into a `Timer` -
+## so it was also the only way to get a scene that could be shipped, and it always
+## appended a debug FPS controller, a flat grey environment and a fallback sun
+## (#697, #698). The environment and the sun are a matter of taste; two character
+## controllers in one scene is a bug in the game.
+func export_game_scene(path: String) -> bool:
+	return export_playtest_scene(path, false)
+
+
+## `include_debug_rig` adds the player, the fallback sun and the flat debug
+## environment. On for Quick Play and Export Playtest Build, off for a scene the
+## game is going to load.
+func export_playtest_scene(path: String, include_debug_rig: bool = true) -> bool:
 	var scene_root := Node3D.new()
-	scene_root.name = "PlaytestScene"
+	scene_root.name = "PlaytestScene" if include_debug_rig else "Level"
 
 	# Copy baked geometry
 	if baked_container:
@@ -2837,29 +2853,30 @@ func export_playtest_scene(path: String) -> bool:
 		_own_tree(sun_dup, scene_root)
 
 	# Add fallback light only if nothing provides one
-	var has_light := false
-	for child in scene_root.get_children():
-		if child is Light3D:
-			has_light = true
-			break
-	if not has_light:
-		var light := DirectionalLight3D.new()
-		light.name = "PlaytestSun"
-		light.rotation_degrees = Vector3(-45, 30, 0)
-		scene_root.add_child(light)
-		light.owner = scene_root
+	if include_debug_rig:
+		var has_light := false
+		for child in scene_root.get_children():
+			if child is Light3D:
+				has_light = true
+				break
+		if not has_light:
+			var light := DirectionalLight3D.new()
+			light.name = "PlaytestSun"
+			light.rotation_degrees = Vector3(-45, 30, 0)
+			scene_root.add_child(light)
+			light.owner = scene_root
 
-	var env := WorldEnvironment.new()
-	env.name = "PlaytestEnv"
-	var environment := Environment.new()
-	environment.background_mode = Environment.BG_COLOR
-	environment.background_color = Color(0.3, 0.35, 0.45)
-	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	environment.ambient_light_color = Color(0.5, 0.5, 0.55)
-	environment.ambient_light_energy = 0.5
-	env.environment = environment
-	scene_root.add_child(env)
-	env.owner = scene_root
+		var env := WorldEnvironment.new()
+		env.name = "PlaytestEnv"
+		var environment := Environment.new()
+		environment.background_mode = Environment.BG_COLOR
+		environment.background_color = Color(0.3, 0.35, 0.45)
+		environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+		environment.ambient_light_color = Color(0.5, 0.5, 0.55)
+		environment.ambient_light_energy = 0.5
+		env.environment = environment
+		scene_root.add_child(env)
+		env.owner = scene_root
 
 	# Wire entity I/O connections into Godot signals. Trigger volumes sit
 	# under a Nonstructural holder, so scan the packed tree, not only roots.
@@ -2870,12 +2887,13 @@ func export_playtest_scene(path: String) -> bool:
 		scene_root.add_child(io_dispatcher)
 		_own_tree(io_dispatcher, scene_root)
 
-	var player := _make_playtest_player()
-	scene_root.add_child(player)
-	var pose := _resolve_playtest_spawn()
-	player.position = pose["position"]
-	player.rotation.y = pose["yaw"]
-	_own_tree(player, scene_root)
+	if include_debug_rig:
+		var player := _make_playtest_player()
+		scene_root.add_child(player)
+		var pose := _resolve_playtest_spawn()
+		player.position = pose["position"]
+		player.rotation.y = pose["yaw"]
+		_own_tree(player, scene_root)
 
 	# Pack and save
 	var packed := PackedScene.new()

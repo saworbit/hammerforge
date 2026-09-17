@@ -17,7 +17,7 @@
   <img src="https://img.shields.io/badge/Godot-4.7%2B-478cbf?logo=godot-engine&logoColor=white" alt="Godot 4.7+">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
   <img src="https://img.shields.io/badge/Status-Early%20Alpha-red" alt="Early Alpha">
-  <img src="https://img.shields.io/badge/Tests-4228%20passing-brightgreen" alt="4228 tests passing">
+  <img src="https://img.shields.io/badge/Tests-4232%20passing-brightgreen" alt="4232 tests passing">
   <img src="https://img.shields.io/badge/GDScript-61k%2B%20lines-blueviolet" alt="61k+ lines">
 </p>
 
@@ -99,7 +99,7 @@ HammerForge is a single `addons/` folder. No external tools, no custom builds, n
 
 | | |
 |---|---|
-| **Subsystem-based coordinator architecture** | **4,235 unit + integration tests** with CI on every push |
+| **Subsystem-based coordinator architecture** | **4,239 unit + integration tests** with CI on every push |
 | **15 brush shapes** (box through dodecahedron) | **150 built-in prototype textures** for instant greyboxing |
 | **Quake `.map`** + **glTF `.glb`** export | **.hflevel** native format with threaded I/O |
 | **Customizable keymaps** (JSON) | **Plugin API** for custom tools |
@@ -156,6 +156,7 @@ This repository does not vendor an MCP server or any other editor bridge. If you
 | [Install + Upgrade](docs/HammerForge_Install_Upgrade.md) | Setup, upgrade, and cache reset |
 | [Design Constraints](docs/HammerForge_Design_Constraints.md) | Explicit tradeoffs and limits |
 | [Data Portability](docs/HammerForge_Data_Portability.md) | .hflevel / .map / .glb workflow |
+| [Shipping a Level](docs/HammerForge_Shipping_A_Level.md) | Taking a finished level into a game |
 | [Texture + Materials](docs/HammerForge_Texture_Materials.md) | Face materials, UVs, and surface paint |
 | [Prototype Textures](docs/HammerForge_Prototype_Textures.md) | Built-in 150 SVG textures |
 | [Floor Paint Design](docs/HammerForge_FloorPaint_Greyboxing.md) | Grid paint system design |

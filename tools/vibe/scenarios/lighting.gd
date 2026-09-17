@@ -204,15 +204,50 @@ func _what_a_level_has_to_light_itself_with() -> void:
 			for c in n.get_children():
 				stack.append(c)
 	note("Light3D nodes in the baked container", baked_lights)
-	if lights.is_empty() and baked_lights.is_empty():
+
+	# The markers stay markers in the editor by design. What matters is whether
+	# there is a path that turns them into real lights in a scene a game keeps,
+	# rather than only in the throwaway one Quick Play launches.
+	var game_path := "user://vibe_lighting_game.tscn"
+	var exported: bool = root.export_game_scene(game_path)
+	note("export_game_scene", exported)
+	var shipped_lights: Array = []
+	var debug_rig: Array = []
+	if exported and ResourceLoader.exists(game_path):
+		var inst: Node = (load(game_path) as PackedScene).instantiate()
+		stack = [inst]
+		while not stack.is_empty():
+			var n: Node = stack.pop_back()
+			if n is Light3D:
+				shipped_lights.append(n.name)
+			if n is CharacterBody3D or n is WorldEnvironment:
+				debug_rig.append("%s (%s)" % [n.name, n.get_class()])
+			for c in n.get_children():
+				stack.append(c)
+		inst.free()
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(game_path))
+	note("Light3D nodes in the exported game scene", shipped_lights)
+	note("debug rig in the exported game scene", debug_rig)
+	if shipped_lights.is_empty():
 		flag(
 			"the three light entity classes put no Light3D anywhere the level keeps",
 			(
 				"light_point, light_spot and light_directional are Node3D placeholders with "
-				+ "colour, energy and range properties. Only export_playtest_scene() turns "
-				+ "them into real lights, and that writes a throwaway scene. A level saved as "
-				+ "its own .tscn and used as a game scene, or a level baked and shipped, has "
-				+ "no lights in it at all -- so neither a LightmapGI nor a real-time pass has "
-				+ "anything to work from, however carefully the mapper placed them."
+				+ "colour, energy and range properties. If nothing turns them into real "
+				+ "lights in a scene a game loads, then neither a LightmapGI nor a "
+				+ "real-time pass has anything to work from, however carefully the mapper "
+				+ "placed them."
+			)
+		)
+	if not debug_rig.is_empty():
+		flag(
+			"the exported game scene carries a debug rig",
+			(
+				(
+					"A scene a game loads should have no playtest player and no debug "
+					+ "environment in it: %s. Two character controllers in one scene is a bug "
+					+ "in the game."
+				)
+				% str(debug_rig)
 			)
 		)

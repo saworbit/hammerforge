@@ -492,6 +492,45 @@ static func on_export_playtest(dock: Object) -> void:
 		dock.show_toast("No EditorInterface — cannot launch", 2)
 
 
+## Write the level as a scene the game loads, beside the level's own scene.
+##
+## Export Playtest Build validates a spawn, bakes, exports and launches. This does
+## the middle two and stops: there is nobody to drop at a spawn, because the game
+## brings its own player. What it writes has the same geometry and the same real
+## entity nodes - a light_point as an OmniLight3D, a logic_timer as a Timer - and
+## none of the debug rig (#697, #698).
+static func on_export_game_scene(dock: Object) -> void:
+	if dock == null:
+		return
+	dock._log("Export Game Scene requested")
+	if not dock.level_root or not can_start_bake(dock, "Export Game Scene"):
+		dock.show_toast("No LevelRoot active", 2)
+		return
+
+	dock.show_toast("Baking for export...", 0)
+	var mask = dock.get_collision_layer_mask()
+	if not await dock.level_root.bake(true, false, mask):
+		dock.show_toast("Export cancelled because the level could not be baked", 2)
+		return
+
+	var export_path := _game_scene_path(dock)
+	if not dock.level_root.export_game_scene(export_path):
+		dock.show_toast("Export failed — could not pack scene", 2)
+		return
+	dock.show_toast("Game scene written to %s" % export_path, 0)
+
+
+## Beside the level's own scene, named after it, so a project ends up with
+## `arena.tscn` and `arena_game.tscn` rather than a file in user:// nobody finds.
+static func _game_scene_path(dock: Object) -> String:
+	var source := ""
+	if dock.level_root.has_method("scene_source_path"):
+		source = str(dock.level_root.scene_source_path())
+	if source == "" or not source.begins_with("res://"):
+		return "res://hammerforge_game_scene.tscn"
+	return "%s/%s_game.tscn" % [source.get_base_dir(), source.get_file().get_basename()]
+
+
 static func show_spawn_fix_dialog(
 	dock: Object, spawn: Node3D, validation: Dictionary, _mask: int
 ) -> void:
