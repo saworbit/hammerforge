@@ -13,9 +13,20 @@ enum Phase { IDLE, PLACING_VERTS, SETTING_HEIGHT }
 var _phase: int = Phase.IDLE
 var _polygon_points: PackedVector3Array = PackedVector3Array()
 var _ground_y: float = 0.0
-var _height: float = 32.0
+## How far a polygon extrudes, and what the next one starts at.
+##
+## Both were the literal 32.0, in the declaration and in two resets. Since #625
+## the player is 1.6 units, a default drawn brush is 2 and the grid snaps at 0.5,
+## so 32 is twenty players tall -- and because the resets used the literal too, a
+## mapper who dragged it down to something usable got 32 back on the next polygon
+## (#658). The level's own default brush height is the starting point now, and
+## after that it remembers whatever was last built.
+var _height: float = 0.0
 var _height_start_mouse: Vector2 = Vector2.ZERO
-var _height_start_value: float = 32.0
+var _height_start_value: float = 0.0
+## Zero until the first polygon is finished, so the level's default is used until
+## the mapper has expressed a preference.
+var _remembered_height: float = 0.0
 var _height_pointer_capture := false
 var _cursor_pos: Vector3 = Vector3.ZERO  # Current mouse world pos for preview
 var _mesh_instance: MeshInstance3D = null
@@ -264,7 +275,7 @@ func _begin_height_stage(mouse_pos: Vector2, pointer_capture: bool = false) -> b
 	_phase = Phase.SETTING_HEIGHT
 	_height_pointer_capture = pointer_capture
 	_height_start_mouse = mouse_pos
-	_height = 32.0
+	_height = _starting_height()
 	_height_start_value = _height
 	_update_preview()
 	return true
@@ -442,6 +453,9 @@ func _finalize_brush() -> void:
 			undo_redo.commit_action(false)
 		if history_callback.is_valid():
 			history_callback.call("Create Polygon Brush")
+	# Before the reset, so the next polygon starts where this one ended rather
+	# than back at a literal the mapper has already dragged away from.
+	_remembered_height = _height
 	_reset()
 
 
@@ -522,11 +536,23 @@ func _update_preview() -> void:
 # ---------------------------------------------------------------------------
 
 
+## What a new polygon starts at: what the mapper last built, or the level's own
+## default brush height before they have built one.
+func _starting_height() -> float:
+	if _remembered_height > 0.0:
+		return _remembered_height
+	if root and "brush_size_default" in root:
+		var fallback: float = (root.brush_size_default as Vector3).y
+		if fallback > 0.0:
+			return fallback
+	return 2.0
+
+
 func _reset() -> void:
 	_phase = Phase.IDLE
 	_height_pointer_capture = false
 	_polygon_points = PackedVector3Array()
-	_height = 32.0
+	_height = _starting_height()
 	_cursor_pos = Vector3.ZERO
 	_clear_visuals()
 

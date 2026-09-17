@@ -310,7 +310,13 @@ func test_lost_height_release_finalizes_once_before_buttonless_motion_mutates_he
 	)
 	assert_eq(tool._phase, tool.Phase.IDLE)
 	assert_false(tool._height_pointer_capture)
-	assert_eq(tool._height, 32.0, "Finalization should reset instead of applying stale motion")
+	# The reset used to land on a literal 32.0. It lands on the height the shape
+	# was finished at now, because the tool remembers what the mapper set rather
+	# than throwing it away every polygon (#658). Either way the point of the
+	# assertion is the same: a 100 pixel motion arriving with the finalisation
+	# must not be added to the height on the way out.
+	assert_eq(tool._height, 8.0, "Finalization resets instead of applying stale motion")
+	assert_eq(tool._remembered_height, 8.0, "and the next polygon starts where this one was built")
 	root.free()
 	camera.free()
 
