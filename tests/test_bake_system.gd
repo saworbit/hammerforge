@@ -3024,3 +3024,86 @@ func test_grouped_detail_collision_masks_against_nothing():
 	var body: StaticBody3D = _first_under(holder, "StaticBody3D") as StaticBody3D
 	assert_not_null(body)
 	assert_eq(body.collision_mask, 0)
+
+
+# ===========================================================================
+# A door bakes as something that can move (#687)
+# ===========================================================================
+
+
+func _bake_a_door(entity_name: String = "gate") -> Node:
+	var door := _make_brush(root.draft_brushes_node, Vector3(0, 1, 0), Vector3(1, 2, 0.2))
+	door.set_meta("brush_entity_class", "func_door")
+	if entity_name != "":
+		door.set_meta("entity_name", entity_name)
+	var container := Node3D.new()
+	add_child_autoqfree(container)
+	_setup_real_baker()
+	bake_sys._append_nonstructural_brushes(container)
+	return container.get_node_or_null("Nonstructural")
+
+
+func test_a_door_bakes_its_mesh_and_collision_into_one_holder():
+	# A door that slid its mesh and left its collision behind would be worse than
+	# one that does not move at all.
+	var holder: Node = _bake_a_door()
+	assert_not_null(holder)
+	var mover: Node = holder.get_node_or_null("gate")
+	assert_not_null(mover, "the door answers to its own name")
+	assert_eq(_count_under(mover, "MeshInstance3D"), 1, "its mesh is inside it")
+	assert_eq(_count_under(mover, "StaticBody3D"), 1, "and so is its collision")
+
+
+func test_a_baked_door_carries_the_script_that_moves_it():
+	var holder: Node = _bake_a_door()
+	var mover: Node = holder.get_node_or_null("gate")
+	assert_not_null(mover)
+	assert_not_null(mover.get_script(), "the holder is what receives Open")
+	assert_true(mover.has_method("open"), "and what can act on it")
+
+
+func test_the_mesh_under_a_door_does_not_answer_to_the_door_name():
+	# `_cache_entities()` keys a node by its name as well as by its entity_name
+	# meta, so a mesh still called `gate` would receive Open too - and it is the
+	# one thing under there that cannot act on it.
+	var holder: Node = _bake_a_door()
+	var mover: Node = holder.get_node_or_null("gate")
+	for child in mover.get_children():
+		if child is MeshInstance3D:
+			assert_ne(str(child.name), "gate", "the leaf is not the door")
+			assert_false(child.has_meta("entity_name"), "and does not claim to be")
+
+
+func test_a_door_holder_carries_the_wiring():
+	var door := _make_brush(root.draft_brushes_node, Vector3(0, 1, 0), Vector3(1, 2, 0.2))
+	door.set_meta("brush_entity_class", "func_door")
+	door.set_meta("entity_name", "gate")
+	door.set_meta(
+		"entity_io_outputs",
+		[{"output_name": "OnOpen", "target_name": "lamp", "input_name": "TurnOn"}]
+	)
+	var container := Node3D.new()
+	add_child_autoqfree(container)
+	_setup_real_baker()
+	bake_sys._append_nonstructural_brushes(container)
+	var mover: Node = container.get_node_or_null("Nonstructural").get_node_or_null("gate")
+	assert_not_null(mover)
+	assert_false(
+		(mover.get_meta("entity_io_outputs", []) as Array).is_empty(),
+		"the node that receives the input is the node that raises the output"
+	)
+
+
+func test_a_detail_brush_gets_no_mover_holder():
+	# Only a class whose geometry moves needs one.
+	var detail := _make_brush(root.draft_brushes_node, Vector3(0, 1, 0), Vector3(1, 1, 1))
+	detail.set_meta("brush_entity_class", "func_detail")
+	detail.set_meta("entity_name", "crate")
+	var container := Node3D.new()
+	add_child_autoqfree(container)
+	_setup_real_baker()
+	bake_sys._append_nonstructural_brushes(container)
+	var holder: Node = container.get_node_or_null("Nonstructural")
+	var crate: Node = holder.get_node_or_null("crate")
+	assert_not_null(crate)
+	assert_true(crate is MeshInstance3D, "clutter is still just a mesh")

@@ -554,3 +554,85 @@ func test_a_game_scene_builds_the_real_light_a_marker_stands_for():
 	assert_true(lamp is OmniLight3D, "and it should be the light it stands for")
 	assert_null(scene.get_node_or_null("PlaytestSun"), "a level with a light needs no fallback")
 	DirAccess.remove_absolute(path)
+
+
+# ===========================================================================
+# A sound a preset already wires to (#704)
+# ===========================================================================
+
+
+func test_ambient_sound_exports_as_a_real_audio_player():
+	# `HFIOPresets` ships "Door Open -> Light + Sound" as its first built-in, and
+	# there was no class a mapper could map its `sound` tag to.
+	var marker: Node3D = (
+		root
+		. _restore_entity_from_info(
+			{
+				"entity_type": "ambient_sound",
+				"entity_class": "ambient_sound",
+				"transform": Transform3D(Basis.IDENTITY, Vector3(1, 1, 1)),
+				"properties": {"volume_db": -6.0, "max_distance": 12.0},
+				"name": "hum",
+			}
+		)
+	)
+	assert_not_null(marker, "the class should be placeable")
+	var built: Node3D = root._playtest_node_for_entity(marker)
+	assert_not_null(built, "and should build the node its class names")
+	assert_true(built is AudioStreamPlayer3D)
+	assert_almost_eq((built as AudioStreamPlayer3D).volume_db, -6.0, 0.01)
+	assert_almost_eq((built as AudioStreamPlayer3D).max_distance, 12.0, 0.01)
+	built.free()
+
+
+func test_ambient_sound_grants_the_engine_methods_its_inputs_mean():
+	# Play and Stop are exactly the two methods the engine-method guard refuses,
+	# so without the grant the class would be as unusable as logic_timer was.
+	var definition: Dictionary = root.get_entity_definition("ambient_sound")
+	assert_eq(definition.get("input_methods", {}).get("Play", ""), "play")
+	assert_eq(definition.get("input_methods", {}).get("Stop", ""), "stop")
+
+
+func test_a_stream_path_is_loaded_rather_than_set_as_a_string():
+	# The property holds a path a mapper types, and the node wants the resource.
+	var stream := AudioStreamWAV.new()
+	var path := "user://hf_test_tone.tres"
+	assert_eq(ResourceSaver.save(stream, path), OK)
+	var marker: Node3D = (
+		root
+		. _restore_entity_from_info(
+			{
+				"entity_type": "ambient_sound",
+				"entity_class": "ambient_sound",
+				"transform": Transform3D.IDENTITY,
+				"properties": {"stream": path},
+				"name": "hum",
+			}
+		)
+	)
+	assert_not_null(marker)
+	var built: Node3D = root._playtest_node_for_entity(marker)
+	assert_not_null(built)
+	assert_not_null((built as AudioStreamPlayer3D).stream, "the path should have been loaded")
+	built.free()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func test_a_stream_path_that_does_not_resolve_leaves_the_player_silent():
+	var marker: Node3D = (
+		root
+		. _restore_entity_from_info(
+			{
+				"entity_type": "ambient_sound",
+				"entity_class": "ambient_sound",
+				"transform": Transform3D.IDENTITY,
+				"properties": {"stream": "res://does_not_exist.ogg"},
+				"name": "hum",
+			}
+		)
+	)
+	assert_not_null(marker)
+	var built: Node3D = root._playtest_node_for_entity(marker)
+	assert_not_null(built, "the player is still built")
+	assert_null((built as AudioStreamPlayer3D).stream, "with nothing in it")
+	built.free()

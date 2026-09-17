@@ -159,17 +159,25 @@ func _does_a_door_move() -> void:
 	var dispatcher: Node = container.get_node_or_null("HFIODispatcher")
 	if dispatcher == null:
 		return
+	# The node that answers to the name, not the first thing whose name starts with
+	# it - `gate_button` begins with "gate" and is a Node3D, so it used to be the
+	# one this measured.
 	var door: Node3D = null
 	for g in gates:
-		if g is Node3D:
+		if g is Node3D and str(g.name) == "gate":
 			door = g
 			break
 	if door == null:
-		flag("the func_door baked no node at all")
+		flag("the func_door baked no node answering to its own name")
 		return
+	note("the node named 'gate'", "%s (%s)" % [door.name, door.get_class()])
+	note("it has a script", door.get_script() != null)
 	var before: Transform3D = door.global_transform
 	dispatcher.call("fire", "front_trigger", "OnStartTouch", "")
-	for _i in 10:
+	# A door slides over speed-many metres a second rather than teleporting, so
+	# this has to outlast the tween: a 1-unit door at the default 2.0 is half a
+	# second.
+	for _i in 90:
 		await frame()
 	var after: Transform3D = door.global_transform
 	note("door transform before Open", before)

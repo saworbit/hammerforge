@@ -188,6 +188,56 @@
       }
     ]
   },
+  "ambient_sound": {
+    "class": "AudioStreamPlayer3D",
+    "description": "A sound that plays in the level. Set Stream to the audio file.",
+    "resource_properties": {
+      "stream": "AudioStream"
+    },
+    "input_methods": {
+      "Play": "play",
+      "Stop": "stop"
+    },
+    "preview": {
+      "type": "billboard",
+      "path": "res://addons/hammerforge/icon.png",
+      "color": "#66ddff"
+    },
+    "outputs": [],
+    "inputs": [
+      "Play",
+      "Stop"
+    ],
+    "properties": [
+      {
+        "name": "stream",
+        "type": "string",
+        "label": "Stream",
+        "default": ""
+      },
+      {
+        "name": "volume_db",
+        "type": "float",
+        "label": "Volume (dB)",
+        "default": 0.0,
+        "maps_to": "volume_db"
+      },
+      {
+        "name": "max_distance",
+        "type": "float",
+        "label": "Max Distance",
+        "default": 20.0,
+        "maps_to": "max_distance"
+      },
+      {
+        "name": "autoplay",
+        "type": "bool",
+        "label": "Autoplay",
+        "default": true,
+        "maps_to": "autoplay"
+      }
+    ]
+  },
   "prop_static": {
     "class": "Node3D",
     "description": "A model placed in the level. Set Scene to the mesh or scene to show.",
