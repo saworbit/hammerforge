@@ -729,9 +729,11 @@ Grouping
 Texture Lock
 - Place a textured brush with Texture Lock enabled (Build tab checkbox).
 - Resize the brush via gizmo -- confirm UV alignment stays consistent.
-- Move the brush -- confirm UVs track the movement.
-- Rotate a face's UVs, then move the brush -- confirm the texture stays pinned in world space rather than drifting along the wrong axis.
+- Move the brush -- confirm the texture travels with it rather than sliding across the face.
+- Rotate a face's UVs, then move the brush -- confirm the texture still travels with the brush rather than drifting along the wrong axis.
+- Disable Texture Lock and move the brush -- confirm the texture keeps its place in the level and the brush slides under it.
 - Disable Texture Lock and resize -- confirm UVs shift with the resize.
+- Draw three panels in a row along X with the same material -- confirm the texture runs across all three rather than restarting at each brush edge.
 
 Carve UV Preservation
 - Apply a grid texture to a large brush.

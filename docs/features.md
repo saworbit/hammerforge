@@ -83,7 +83,7 @@ Geometry-aware snapping goes beyond a simple grid:
 | Edge | E | Midpoints of existing brush AABB edges |
 | Perpendicular | P | Closest point on an existing brush AABB edge |
 
-Closest candidate within threshold wins. Modes combine freely. The Measure tool can set a **custom snap reference line** with Ctrl+Click for alignment along arbitrary axes. **Texture Lock** preserves UV alignment for HammerForge move and resize actions, including nudge and Move to Floor/Ceiling. Godot's native Node3D transform widget keeps brush-local UV data unchanged. **Move to Floor/Ceiling** (Ctrl+Shift+F/C) raycasts to snap brushes vertically. **UV Justify** offers fit/center/left/right/top/bottom/stretch/tile alignment for selected faces.
+Closest candidate within threshold wins. Modes combine freely. The Measure tool can set a **custom snap reference line** with Ctrl+Click for alignment along arbitrary axes. **Texture Lock** preserves UV alignment for HammerForge move and resize actions, including nudge and Move to Floor/Ceiling. Godot's native Node3D transform widget leaves the UV settings alone, so a brush moved with it behaves as though Texture Lock were off and the texture keeps its place in the level. **Move to Floor/Ceiling** (Ctrl+Shift+F/C) raycasts to snap brushes vertically. **UV Justify** offers fit/center/left/right/top/bottom/stretch/tile alignment for selected faces.
 
 ### Paint Floors and Terrain
 
