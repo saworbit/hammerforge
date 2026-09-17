@@ -111,6 +111,23 @@ const SCENARIOS: Array[String] = [
 	"res://tools/vibe/scenarios/scene_weight.gd",
 	"res://tools/vibe/scenarios/examples_integrity.gd",
 	"res://tools/vibe/scenarios/world_scale.gd",
+	"res://tools/vibe/scenarios/far_origin.gd",
+	"res://tools/vibe/scenarios/uv_justify.gd",
+	"res://tools/vibe/scenarios/texture_continuity.gd",
+	"res://tools/vibe/scenarios/two_levels.gd",
+	"res://tools/vibe/scenarios/build_a_room.gd",
+	"res://tools/vibe/scenarios/bake_chunking.gd",
+	"res://tools/vibe/scenarios/scale_leftovers.gd",
+	"res://tools/vibe/scenarios/undo_depth.gd",
+	"res://tools/vibe/scenarios/material_palette.gd",
+	"res://tools/vibe/scenarios/map_real_world.gd",
+	"res://tools/vibe/scenarios/scene_reopen.gd",
+	"res://tools/vibe/scenarios/command_surfaces.gd",
+	"res://tools/vibe/scenarios/op_results.gd",
+	"res://tools/vibe/scenarios/prefab_library.gd",
+	"res://tools/vibe/scenarios/brush_entities.gd",
+	"res://tools/vibe/scenarios/missing_files.gd",
+	"res://tools/vibe/scenarios/docs_truth.gd",
 ]
 
 
