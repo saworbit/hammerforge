@@ -83,6 +83,12 @@ jobs:
       - name: Check the test split still covers the suite
         run: python3 tools/shard_tests.py --selftest
 
+      # The five published totals are now added up from four shard logs rather
+      # than read from one. That addition is where a wrong number would come
+      # from, so it is checked here.
+      - name: Check the shard totals still add up
+        run: python3 tools/update_test_counts.py --selftest
+
   tooling-checks:
     name: Workflow & Tooling Lint
     runs-on: ubuntu-latest
