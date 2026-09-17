@@ -3710,10 +3710,11 @@ func has_hflevel_path() -> bool:
 ## someone reopened it and got the other one (#655).
 ##
 ## A level already knows where it lives, so the default is derived from that
-## instead. A level that has been given its own path keeps it, and a level whose
-## scene has never been saved has no name to derive from and falls back to the
-## literal, which is the one case where two levels can still collide and the one
-## where neither has anything to lose yet.
+## instead. A level that has been given its own path keeps it. A level whose
+## scene has never been saved has no name to derive from and uses the `level_uid`
+## it minted for itself, because that is the case where the autosave is the only
+## copy of the work and two of them sharing a file is the worst version of this.
+## An explicitly empty path is a level told not to autosave, and stays empty.
 ##
 ## The scene's whole path under `res://` is mirrored, not just its file name:
 ## `res://levels/e1m1.tscn` becomes `res://.hammerforge/levels/e1m1.hflevel`.
