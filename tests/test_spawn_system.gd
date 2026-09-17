@@ -37,6 +37,10 @@ var entity_definitions: Dictionary = {}
 var entity_definitions_path: String = ""
 var entity_system = null
 var spawn_system = null
+var bake_collision_layer_index: int = 1
+
+func _layer_from_index(index: int) -> int:
+	return 1 << (clamp(index, 1, 32) - 1)
 
 func get_entity_definition(key: String) -> Dictionary:
 	return entity_definitions.get(key, {})
@@ -178,6 +182,46 @@ func test_validate_spawn_not_in_tree():
 	var result = sys.validate_spawn(e)
 	assert_false(result.valid)
 	e.free()
+
+
+func test_the_mask_falls_back_to_the_layer_the_level_bakes_onto():
+	# It used to fall back to layer 1, so a level baked onto layer 2 reported its
+	# spawn as floating in space - the ray was looking at a layer nothing had been
+	# baked onto, and the report named the wrong problem (#695).
+	var world := Node3D.new()
+	add_child_autoqfree(world)
+	var floor_body := StaticBody3D.new()
+	floor_body.collision_layer = 2
+	floor_body.collision_mask = 0
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(10, 0.5, 10)
+	shape.shape = box
+	floor_body.add_child(shape)
+	world.add_child(floor_body)
+	floor_body.global_position = Vector3(0, -0.25, 0)
+	root.bake_collision_layer_index = 2
+
+	var spawn := _make_spawn(Vector3(0, 0.1, 0))
+	var result: Dictionary = sys.validate_spawn(spawn, 0)
+	var issues: PackedStringArray = result.get("issues", PackedStringArray())
+	var floating := false
+	for line in issues:
+		if str(line).to_lower().contains("floating"):
+			floating = true
+	assert_false(
+		floating, "the floor is there, on the layer the level baked onto: %s" % str(issues)
+	)
+
+
+func test_an_explicit_mask_still_wins():
+	# The dock passes the selected layer, and that has to keep deciding.
+	var world := Node3D.new()
+	add_child_autoqfree(world)
+	root.bake_collision_layer_index = 2
+	var spawn := _make_spawn(Vector3(0, 0.1, 0))
+	var result: Dictionary = sys.validate_spawn(spawn, 1)
+	assert_true(result is Dictionary, "an explicit mask is used as given")
 
 
 func test_validate_spawn_in_tree_no_physics():

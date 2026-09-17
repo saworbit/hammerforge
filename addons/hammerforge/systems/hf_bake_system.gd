@@ -8,6 +8,14 @@ const HFAutoConnector = preload("../paint/hf_auto_connector.gd")
 const HFIORuntime = preload("../hf_io_runtime.gd")
 const HFLog = preload("../hf_log.gd")
 
+## What a baked static body detects: nothing.
+##
+## These never move, so a mask buys them nothing and only widens the broadphase.
+## The mask used to be a copy of the layer, which meant changing the Physics
+## Layer moved the mask with it - two controls' worth of behaviour from one
+## dropdown, and not what either of them is for (#695).
+const STATIC_BODY_MASK := 0
+
 const BAKED_CONTAINER_NAME := &"BakedGeometry"
 const BAKED_CONTAINER_META := &"_hammerforge_baked_container"
 const BAKED_CONTAINER_SCHEMA := 1
@@ -368,7 +376,7 @@ func _bake_selected_impl(
 	await root.get_tree().process_frame
 	yield_overhead_ms += Time.get_ticks_msec() - yield_start_ms
 	var baked = root.baker.bake_from_csg(
-		temp_csg, root.bake_material_override, layer, layer, bake_options
+		temp_csg, root.bake_material_override, layer, STATIC_BODY_MASK, bake_options
 	)
 	if baked:
 		# Baker derives both the visual mesh and collision from this final boolean
@@ -1044,7 +1052,7 @@ func bake_single(layer: int, options: Dictionary) -> Node3D:
 	await root.get_tree().process_frame
 	await root.get_tree().process_frame
 	var baked = root.baker.bake_from_csg(
-		temp_csg, root.bake_material_override, layer, layer, options
+		temp_csg, root.bake_material_override, layer, STATIC_BODY_MASK, options
 	)
 	temp_csg.queue_free()
 	if baked:
@@ -1115,7 +1123,7 @@ func bake_chunked(chunk_size: float, layer: int, options: Dictionary) -> Node3D:
 		await root.get_tree().process_frame
 		await root.get_tree().process_frame
 		var baked_chunk = root.baker.bake_from_csg(
-			temp_csg, root.bake_material_override, layer, layer, options
+			temp_csg, root.bake_material_override, layer, STATIC_BODY_MASK, options
 		)
 		if baked_chunk:
 			# Visgroup-partitioned collision (mode 2) for this chunk
@@ -1210,7 +1218,7 @@ func _build_face_chunks(
 		if collision_mode >= 2:
 			options["brush_visgroups"] = visgroups
 		var mesh: Node3D = root.baker.build_mesh_from_groups(
-			chunk_groups[coord], layer, layer, options
+			chunk_groups[coord], layer, STATIC_BODY_MASK, options
 		)
 		if mesh == null:
 			continue
@@ -1511,7 +1519,9 @@ func _append_grouped_detail(holder: Node3D, brushes: Array) -> void:
 	var detail_options := options.duplicate(true)
 	detail_options["collision_mode"] = maxi(1, int(options.get("collision_mode", 0)))
 	detail_options["per_brush_verts"] = hull_verts
-	var built: Node3D = root.baker.build_mesh_from_groups(groups, layer, layer, detail_options)
+	var built: Node3D = root.baker.build_mesh_from_groups(
+		groups, layer, STATIC_BODY_MASK, detail_options
+	)
 	if not built:
 		return
 	built.name = "DetailGeometry"
@@ -1573,7 +1583,7 @@ func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 	if root.has_method("_layer_from_index"):
 		layer = root._layer_from_index(root.bake_collision_layer_index)
 	body.collision_layer = layer
-	body.collision_mask = layer
+	body.collision_mask = STATIC_BODY_MASK
 	holder.add_child(body)
 	body.transform = mi.transform
 	var col := CollisionShape3D.new()
@@ -1847,7 +1857,7 @@ func _append_heightmap_meshes_to_baked(container: Node3D, layer: int) -> void:
 		body = StaticBody3D.new()
 		body.name = "FloorCollision"
 		body.collision_layer = layer
-		body.collision_mask = layer
+		body.collision_mask = STATIC_BODY_MASK
 		container.add_child(body)
 	for hm in hm_meshes:
 		var dup: MeshInstance3D = hm.duplicate()

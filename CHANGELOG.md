@@ -5,6 +5,19 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **The Physics Layer dropdown says what each entry costs** (#695). Two of its
+  three entries bake a world that nothing with default settings collides with:
+  `CharacterBody3D`, `RigidBody3D` and every `PhysicsRayQueryParameters3D` in
+  Godot default to mask 1, so a level baked onto layer 2 or 3 is one the player
+  walks through, and "Debris/Prop" reads like a categorisation rather than like
+  that. The entries now name the consequence. A baked `StaticBody3D`'s mask is 0
+  as well: it never moves, so a mask buys it nothing and only widens the
+  broadphase, and copying the layer into it meant the one dropdown moved two
+  things at once. And the spawn validator asks the level which layer it bakes
+  onto instead of falling back to 1, so a level on another layer no longer has
+  its spawn reported as floating in space - which named the wrong problem.
+
+### Fixed
 - **The player can climb the stairs the plugin builds** (#711). The plugin ships
   a Stairs generator, a Spiral Stairs generator and an auto-connector that builds
   stairs between height layers - and the character that has to walk them could
