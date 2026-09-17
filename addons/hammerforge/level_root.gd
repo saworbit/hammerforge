@@ -3036,7 +3036,31 @@ func _apply_entity_properties_to_node(
 		var target := str(prop.get("maps_to", declared))
 		if target == "" or not available.has(target):
 			continue
-		node.set(target, draft.entity_data[declared])
+		node.set(target, _entity_property_value(definition, declared, draft.entity_data[declared]))
+
+
+## An authored property value in the form the node's property takes.
+##
+## Most are the value as it stands. A property the class lists under
+## `resource_properties` holds a path, and the node wants the resource: an
+## `ambient_sound`'s Stream is a path a mapper types and an `AudioStream` the
+## player needs, and setting the string does nothing at all (#704).
+func _entity_property_value(definition: Dictionary, declared: String, value: Variant) -> Variant:
+	var resource_props: Variant = definition.get("resource_properties", {})
+	if not (resource_props is Dictionary) or not (resource_props as Dictionary).has(declared):
+		return value
+	var path := str(value).strip_edges()
+	if path == "":
+		return null
+	if not ResourceLoader.exists(path):
+		HFLog.warn("HammerForge: '%s' names '%s', which does not exist." % [declared, path])
+		return null
+	var wanted := str((resource_props as Dictionary)[declared])
+	var loaded: Resource = ResourceLoader.load(path)
+	if loaded == null or (wanted != "" and not loaded.is_class(wanted)):
+		HFLog.warn("HammerForge: '%s' names '%s', which is not a %s." % [declared, path, wanted])
+		return null
+	return loaded
 
 
 func _node_tree_has_io(node: Node) -> bool:

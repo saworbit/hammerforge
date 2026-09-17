@@ -6,6 +6,7 @@ const PrefabFactory = preload("../prefab_factory.gd")
 const DraftBrush = preload("../brush_instance.gd")
 const HFAutoConnector = preload("../paint/hf_auto_connector.gd")
 const HFIORuntime = preload("../hf_io_runtime.gd")
+const HFDoorRuntime = preload("../hf_door_runtime.gd")
 const HFLog = preload("../hf_log.gd")
 
 ## What a baked static body detects: nothing.
@@ -15,6 +16,10 @@ const HFLog = preload("../hf_log.gd")
 ## Layer moved the mask with it - two controls' worth of behaviour from one
 ## dropdown, and not what either of them is for (#695).
 const STATIC_BODY_MASK := 0
+
+## Brush entity classes whose geometry moves, and so needs a node of its own to
+## move with its collision.
+const MOVER_CLASSES := ["func_door", "door_basic"]
 
 const BAKED_CONTAINER_NAME := &"BakedGeometry"
 const BAKED_CONTAINER_META := &"_hammerforge_baked_container"
@@ -1552,6 +1557,14 @@ func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 	var authored := authored_entity_name(draft)
 	var mi := MeshInstance3D.new()
 	mi.name = authored if authored != "" else "FuncDetail_%d" % idx
+	# A mover's identity belongs to the holder, so the holder takes the authored
+	# name and the mesh under it becomes a leaf. `_cache_entities()` keys a node by
+	# its name as well as by its `entity_name` meta, so a mesh still called `gate`
+	# would answer to `gate` however its metadata read - and it is the one thing
+	# under there that cannot act on an input (#687).
+	var bec_early := str(draft.get_meta("brush_entity_class", ""))
+	if bec_early in MOVER_CLASSES and authored != "":
+		mi.name = "%s_Leaf_%d" % [authored, idx]
 	mi.mesh = mesh
 	if authored != "":
 		mi.set_meta("entity_name", authored)
@@ -1568,7 +1581,17 @@ func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 	var outputs: Array = draft.get_meta("entity_io_outputs", [])
 	if not outputs.is_empty():
 		mi.set_meta("entity_io_outputs", outputs.duplicate(true))
-	holder.add_child(mi)
+	# A class that moves gets a holder of its own, so its mesh and its collision
+	# travel together. A door that slid its mesh and left its collision behind
+	# would be worse than one that does not move at all (#687).
+	var parent: Node3D = holder
+	var mover: Node3D = null
+	if bec in MOVER_CLASSES:
+		mover = Node3D.new()
+		mover.name = authored if authored != "" else "Door_%d" % idx
+		holder.add_child(mover)
+		parent = mover
+	parent.add_child(mi)
 	mi.transform = _source_transform_in_baked_container(source, holder.get_parent() as Node3D)
 	var body := StaticBody3D.new()
 	body.name = "FuncDetailCollision_%d" % idx
@@ -1584,12 +1607,64 @@ func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 		layer = root._layer_from_index(root.bake_collision_layer_index)
 	body.collision_layer = layer
 	body.collision_mask = STATIC_BODY_MASK
-	holder.add_child(body)
+	parent.add_child(body)
 	body.transform = mi.transform
 	var col := CollisionShape3D.new()
 	col.shape = _shape_for_draft(draft, mesh)
 	col.transform = body.transform.affine_inverse() * mi.transform
 	body.add_child(col)
+	if mover:
+		_make_it_a_door(mover, mi, draft, authored, bec)
+
+
+## Move the identity onto the holder and give it the script that moves it.
+##
+## The name and the wiring go to the holder rather than the mesh, because the
+## holder is what has to receive `Open` - `_cache_entity_under_key()` holds every
+## node answering to a name, so leaving them on the mesh as well would deliver
+## the input twice, once to something that cannot act on it.
+func _make_it_a_door(
+	mover: Node3D, mi: MeshInstance3D, draft: DraftBrush, authored: String, entity_class: String
+) -> void:
+	mover.set_meta("brush_entity_class", entity_class)
+	mi.remove_meta("brush_entity_class")
+	if authored != "":
+		mover.set_meta("entity_name", authored)
+		mi.remove_meta("entity_name")
+	var outputs: Array = draft.get_meta("entity_io_outputs", [])
+	if not outputs.is_empty():
+		mover.set_meta("entity_io_outputs", outputs.duplicate(true))
+		mi.remove_meta("entity_io_outputs")
+	# The authored values, or the class defaults where the mapper set none. A
+	# brush entity's properties can only be set by a `.map` import today (#728),
+	# so on a level drawn here this is the defaults every time.
+	var authored_data: Dictionary = _brush_entity_properties(draft, entity_class)
+	if not authored_data.is_empty():
+		mover.set_meta("entity_data", authored_data.duplicate())
+	mover.set_script(HFDoorRuntime)
+	if mover.has_method("apply_entity_data"):
+		mover.call("apply_entity_data", authored_data)
+
+
+## What a brush entity's properties are, class defaults filled in underneath.
+func _brush_entity_properties(draft: DraftBrush, entity_class: String) -> Dictionary:
+	var out: Dictionary = {}
+	# Asked for rather than assumed: `root` is a shim in a good many tests, and the
+	# defaults are a nicety here - what matters is what the mapper authored.
+	var definition: Dictionary = {}
+	if root.has_method("get_entity_definition"):
+		definition = root.get_entity_definition(entity_class)
+	for prop in definition.get("properties", []):
+		if not (prop is Dictionary):
+			continue
+		var prop_name := str(prop.get("name", ""))
+		if prop_name != "" and prop.has("default"):
+			out[prop_name] = prop["default"]
+	var stored: Variant = draft.get_meta("brush_entity_data", {})
+	if stored is Dictionary:
+		for key in stored as Dictionary:
+			out[str(key)] = stored[key]
+	return out
 
 
 func _append_trigger_volume(holder: Node3D, draft: DraftBrush, idx: int) -> void:
