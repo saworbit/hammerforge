@@ -126,10 +126,14 @@ func _cycling_a_variant() -> void:
 	note("instance bounds centre before the swap", before_bounds.get_center())
 	note("instance origin mean before the swap", before_centre)
 
-	# A per-instance tweak, the thing an override is for. The field path format
-	# is the one `_reapply_overrides()` parses: "brush/<index>/<property>".
-	level.prefab_system.set_override(instance_id, "brush/0/size", Vector3(64, 64, 64))
-	note("overrides on the instance", level.prefab_system.get_overrides(instance_id).keys())
+	# This used to set a per-instance override here and check what became of it
+	# across the swap. `set_override()` was removed with the rest of that
+	# mechanism in #582, for the reason `hf_prefab_system.gd` records where it
+	# reads past the old key: it had no way in from the editor and wrote a meta
+	# nothing read. The call stayed behind and errored, which cost nothing
+	# visible because a script error was not a finding and the scenario went on
+	# reporting clean (#739).
+	note("per-instance overrides", "the mechanism was removed in #582; nothing to measure")
 	var first_brush = level.find_brush_by_id(str(rec.brush_ids[0]))
 	note("size of piece 0 before the swap", first_brush.size if first_brush else null)
 
@@ -167,30 +171,9 @@ func _cycling_a_variant() -> void:
 			)
 		)
 
-	# And what became of the override.
-	var still: Dictionary = level.prefab_system.get_overrides(instance_id)
-	note("overrides still on the record after the swap", still.keys())
+	# What the pieces are after the swap, which is what the override block used to
+	# read and is still worth having on its own.
 	var piece = (
 		level.find_brush_by_id(str(rec.brush_ids[0])) if not rec.brush_ids.is_empty() else null
 	)
 	note("size of piece 0 after the swap", piece.size if piece else null)
-	var honoured: bool = piece != null and piece.size.is_equal_approx(Vector3(64, 64, 64))
-	note("the override is reflected in the geometry", honoured)
-	if not still.is_empty() and not honoured:
-		known(
-			566,
-			"a variant swap leaves the override on the record and not on the brush",
-			(
-				"`_apply_variant()` rebuilds the instance and never calls"
-				+ " `_reapply_overrides()` -- which `propagate_from_source()` does call at"
-				+ " hf_prefab_system.gd:368. Even when it is called, the brush branch does"
-				+ ' `set_meta("brush_size", ...)` and nothing reads that meta, so the size'
-				+ " never reaches the geometry either way"
-			)
-		)
-
-	# Nothing in the editor can make one of these in the first place.
-	note(
-		"editor call sites for set_override/clear_override/get_overrides",
-		"none -- only tests/test_prefab_enhancements.gd and this scenario"
-	)

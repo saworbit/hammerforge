@@ -198,8 +198,44 @@ def find_godot() -> str | None:
     return None
 
 
+# A GDScript error is not a finding, and a scenario that hit one did not finish
+# what it set out to do. It still reaches `quit(0)`, so the process says clean
+# and the summary agrees, which is worse than a failure because it is
+# indistinguishable from a real pass (#739).
+#
+# `SCRIPT ERROR` and not the engine's broader `ERROR:`. Measured over the 142
+# logs in `.vibe/`: thirteen carry an `ERROR:` line, because scenarios provoke
+# engine errors on purpose -- a missing file, a refused load, a malformed
+# payload are things they exist to try. Two carry a `SCRIPT ERROR`, and both
+# were real defects. One of them, `status-board`, had already written the
+# detector for the defect it was hitting: GDScript has no exception handling, so
+# the throw unwound the scenario past its own `flag()` call.
+SCRIPT_ERROR_MARKER = "SCRIPT ERROR"
+
+
 def is_noise(line: str) -> bool:
     return any(marker in line for marker in NOISE_MARKERS)
+
+
+def grade(output: str, returncode: int | None) -> str:
+    """What a scenario's run amounts to.
+
+    Separate from `run_scenario` so `--selftest` can drive it without Godot.
+    """
+    if returncode is None:
+        return "timeout"
+    if returncode == 1:
+        status = "flagged"
+    elif returncode == 0:
+        status = "clean"
+    else:
+        return "error"
+    for line in output.splitlines():
+        if is_noise(line):
+            continue
+        if SCRIPT_ERROR_MARKER in line:
+            return "script error" if status == "clean" else status + " + script error"
+    return status
 
 
 def run_scenario(godot: str, scenario: str, timeout: int, log_dir: Path) -> dict:
@@ -230,15 +266,13 @@ def run_scenario(godot: str, scenario: str, timeout: int, log_dir: Path) -> dict
             check=False,
         )
         output = completed.stdout + completed.stderr
-        status = "flagged" if completed.returncode == 1 else "clean"
-        if completed.returncode not in (0, 1):
-            status = "error"
+        status = grade(output, completed.returncode)
     except subprocess.TimeoutExpired as expired:
         output = (expired.stdout or "") + (expired.stderr or "")
         if isinstance(output, bytes):
             output = output.decode("utf-8", "replace")
         output += f"\n*** timed out after {timeout}s ***\n"
-        status = "timeout"
+        status = grade(output, None)
 
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / f"{scenario}.log"
@@ -258,6 +292,56 @@ def run_scenario(godot: str, scenario: str, timeout: int, log_dir: Path) -> dict
     }
 
 
+def selftest() -> int:
+    """Prove the grading still grades, the way the other tools/ guards do.
+
+    A detector that has quietly stopped detecting is worse than no detector,
+    because it is reported as a pass. These are the cases that matter: a script
+    error must not read as clean, and an ordinary run must not read as an error.
+    """
+    engine_noise = "Godot Engine v4.7.stable.official - https://godotengine.org"
+    script_error = "SCRIPT ERROR: Invalid call. Nonexistent function 'x' in base 'y'."
+    cases = [
+        ("a quiet run is clean", "    all fine\n", 0, "clean"),
+        ("a flag is a flag", "  FLAG  something\n", 1, "flagged"),
+        ("a script error is never clean", script_error, 0, "script error"),
+        (
+            "a scenario can both flag and break",
+            "  FLAG  something\n" + script_error,
+            1,
+            "flagged + script error",
+        ),
+        ("a crash stays a crash", script_error, 139, "error"),
+        ("a hang stays a hang", "", None, "timeout"),
+        # The engine narrates its own startup, and a GDExtension narrates its
+        # own everything. Grading on a marker inside somebody else's line would
+        # turn every run red for a reason that is not the scenario's.
+        (
+            "somebody else's line is not the scenario's",
+            "[GDEXTENSION] " + script_error + "\n",
+            0,
+            "clean",
+        ),
+        (
+            "noise around a real one still counts",
+            engine_noise + "\n" + script_error,
+            0,
+            "script error",
+        ),
+    ]
+    failures = 0
+    for name, output, code, expected in cases:
+        actual = grade(output, code)
+        if actual != expected:
+            failures += 1
+            print(f"FAIL {name}: expected {expected!r}, got {actual!r}")
+    if failures:
+        print(f"{failures} of {len(cases)} grading cases wrong")
+        return 1
+    print(f"run_vibe grading selftest: {len(cases)} cases OK")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -265,6 +349,11 @@ def main() -> int:
     )
     parser.add_argument(
         "--list", action="store_true", help="list the scenario ids and stop"
+    )
+    parser.add_argument(
+        "--selftest",
+        action="store_true",
+        help="check the grading still grades, without running Godot",
     )
     parser.add_argument(
         "--timeout",
@@ -288,6 +377,9 @@ def main() -> int:
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
+
+    if args.selftest:
+        return selftest()
 
     if args.list:
         for scenario in SCENARIOS:
@@ -321,7 +413,7 @@ def main() -> int:
     for result in results:
         print(f"  {result['scenario']:<14} {result['status']}")
 
-    trouble = [r for r in results if r["status"] in ("flagged", "error", "timeout")]
+    trouble = [r for r in results if r["status"] != "clean"]
     if trouble:
         print()
         print("Look at: " + ", ".join(r["scenario"] for r in trouble))

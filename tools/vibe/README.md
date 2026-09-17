@@ -228,6 +228,32 @@ func run() -> void:
 `describe_level()`, `check_invariants()`, `inward_face_count()`,
 `local_extent()`, `settle_save()`, `write_text()`, `file_size()`.
 
+### A scenario that could not run is not a scenario that found nothing
+
+The runner grades each scenario on its exit code, and a scenario that hits a
+GDScript error still reaches `quit(0)`. So a broken one reported **clean**, which
+is worse than reporting a failure, because in the summary it is indistinguishable
+from a real pass.
+
+`prefab-links` called `set_override()` for two releases after that mechanism was
+removed. It errored on the line, the whole override section was dead, and every
+sweep said clean. `status-board` was worse: it had already written the detector
+for the defect it was hitting, and the throw unwound the scenario past its own
+`flag()` call, because GDScript has no exception handling. Both were found by
+grading on the error rather than by anybody reading a log (#739).
+
+A run whose output carries a `SCRIPT ERROR` line is now graded `script error`, or
+`flagged + script error` when it also found something, and the sweep exits 1
+either way. `SCRIPT ERROR` and not the engine's broader `ERROR:`, because
+scenarios provoke engine errors on purpose: a missing file, a refused load and a
+malformed payload are things they exist to try. Of the 142 logs in `.vibe/` at
+the time, thirteen carried an `ERROR:` and two carried a `SCRIPT ERROR`.
+
+There is deliberately no way to mark a script error as expected. A scenario that
+needs one is a scenario asking to be silenced, and that is how a detector stops
+detecting. `python tools/vibe/run_vibe.py --selftest` checks the grading still
+grades, and CI runs it beside the repository's other guards.
+
 ### A clean scenario is a result too
 
 Several of these found nothing. `previews` confirms no ghost is counted as a brush,

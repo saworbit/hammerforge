@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Fixed
+- **A vibe scenario that breaks stops reporting clean** (#739). The sweep grades
+  each scenario on its exit code, and a scenario that hits a GDScript error still
+  reaches `quit(0)`. So a broken one was reported clean, which is worse than a
+  failure, because in the summary it is indistinguishable from a real pass. It
+  hid two things. `prefab-links` called `set_override()` for two releases after
+  that mechanism was removed in #582, so its whole override section was dead.
+  `status-board` was the worse one: it had already written the detector for the
+  defect it was hitting, and because GDScript has no exception handling the throw
+  unwound the scenario past its own `flag()` call. A run whose output carries a
+  `SCRIPT ERROR` is graded as one now, and the sweep exits 1. That marker rather
+  than the engine's broader `ERROR:`, because scenarios provoke engine errors on
+  purpose: of the 142 logs sitting in `.vibe/`, thirteen carried an `ERROR:` and
+  two carried a `SCRIPT ERROR`, and both of those were real. There is no way to
+  mark one as expected, because that is how a detector stops detecting.
+  `run_vibe.py --selftest` checks the grading still grades, and CI runs it beside
+  the other guards.
+
+- **A `.hfmaterials` file that is not a palette is refused rather than thrown on**
+  (#739). `var mat_paths: Array = parsed.get("materials", [])` is a runtime error
+  when the value is not a list, so a `-> bool` function unwound and handed back
+  null: callers that tested the result got a falsy value by luck rather than by
+  design, and nothing told anyone the file was unusable. It returns false and
+  says why, and the palette that was already loaded survives the refusal.
+  `library_is_readable()`, which is asked before the load is committed as an undo
+  action, refuses the same files, so a pre-flight can no longer clear a file the
+  load then rejects.
+
 ### Added
 - **Copy and paste** (#703). `hf_keymap.gd` bound `duplicate` to Ctrl+D and
   nothing to Ctrl+C or Ctrl+V, and the only operations in the codebase made a

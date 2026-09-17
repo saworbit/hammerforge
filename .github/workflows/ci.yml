@@ -77,6 +77,13 @@ jobs:
       - name: Check the CI wait grades the right commit
         run: python3 tools/wait_for_ci.py --selftest
 
+      # The vibe sweep grades itself on each scenario's exit code, and a scenario
+      # that hits a GDScript error still exits 0. Reported as clean, that is
+      # indistinguishable from a real pass, which is how a scenario calling a
+      # function removed two releases ago went unnoticed (#739).
+      - name: Check the vibe runner still grades a broken scenario
+        run: python3 tools/vibe/run_vibe.py --selftest
+
       # The suite is run in four shards and the totals are published from what
       # they report together. A splitter that quietly drops a file gives a green
       # run with less in it, so the split is checked before it is trusted.

@@ -136,9 +136,13 @@ func get_dropped_save_slots() -> Array[int]:
 ## Whether `path` holds a library this can read.
 ##
 ## Asked before the load is committed as an undo action. `load_library()` only
-## refuses on these three things, and all of them can be known without touching
+## refuses on these four things, and all of them can be known without touching
 ## the palette, so the caller can report a bad file rather than opening an undo
 ## step for a load that never happened.
+##
+## It has to refuse exactly what the load refuses, or it answers a different
+## question from the one the caller is about to ask: a file this cleared and the
+## load then rejected is a pre-flight that passed a file nothing can read.
 static func library_is_readable(path: String) -> bool:
 	if not FileAccess.file_exists(path):
 		return false
@@ -147,7 +151,23 @@ static func library_is_readable(path: String) -> bool:
 		return false
 	var text := file.get_as_text()
 	file.close()
-	return JSON.parse_string(text) is Dictionary
+	var parsed = JSON.parse_string(text)
+	return parsed is Dictionary and _material_paths_of(parsed) != null
+
+
+## The list of paths a parsed library holds, or null when it does not hold one.
+##
+## `materials` is a list of resource paths. A file with something else under that
+## key is not a palette, and assigning it to a typed `Array` is a runtime error
+## rather than a refusal: the function unwound, a `-> bool` call handed back
+## null, and callers that tested the result got a falsy value by luck rather than
+## by design (#739). `status-board` had the detector for this written already and
+## never reached it, because the throw unwound the scenario too.
+static func _material_paths_of(parsed: Dictionary):
+	if not parsed.has("materials"):
+		return []
+	var raw = parsed["materials"]
+	return raw if raw is Array else null
 
 
 ## Load a material palette from a JSON file.
@@ -162,7 +182,11 @@ func load_library(path: String) -> bool:
 	var parsed = JSON.parse_string(text)
 	if not (parsed is Dictionary):
 		return false
-	var mat_paths: Array = parsed.get("materials", [])
+	var raw_paths = _material_paths_of(parsed)
+	if raw_paths == null:
+		HFLog.warn("%s: the 'materials' key is not a list, so this file is not a palette." % path)
+		return false
+	var mat_paths: Array = raw_paths
 	materials.clear()
 	_missing_paths.clear()
 	for mat_path in mat_paths:
