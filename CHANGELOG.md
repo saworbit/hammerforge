@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Added
+- **A sound entity** (#704). `HFIOPresets` ships "Door Open -> Light + Sound" as
+  the first of its six built-in connection presets, and there was no class a
+  mapper could map its `sound` tag to - the preset was unfillable out of the box.
+  `ambient_sound` is an `AudioStreamPlayer3D` with a stream, a volume, a max
+  distance and an autoplay, and `Play` and `Stop` as inputs. Those two are
+  exactly the engine methods the guard refuses, so the class declares them
+  through `input_methods` the way `logic_timer` does. A property can also name
+  the resource class it holds, through `resource_properties`, so the path a
+  mapper types for a stream is loaded rather than assigned as a string - which
+  did nothing at all.
+
+### Fixed
+- **A door moves when it is opened** (#687). `func_door` describes itself as
+  "Geometry that moves when opened" and ships `speed`, `wait` and `angle`.
+  Nothing read any of them: the bake produced a plain `MeshInstance3D` with no
+  script, so `HFIORuntime` fell through to the last branch of its delivery chain
+  and emitted a signal nobody was connected to. A mover class now bakes into a
+  holder of its own carrying the mesh and the collision together - a door that
+  slid its mesh and left its collision behind would be worse than one that does
+  not move - with a script that slides it its own width along the angle at the
+  speed it was given, closes itself after the wait, and raises `OnOpen` and
+  `OnClose` as it goes. The holder takes the authored name, because the mesh
+  under it cannot act on an input and `_cache_entities()` keys a node by its name
+  as well as by its metadata. A brush entity's properties can only be set by a
+  `.map` import today (#728), so a door drawn here runs on the class defaults.
+
 ### Fixed
 - **The Physics Layer dropdown says what each entry costs** (#695). Two of its
   three entries bake a world that nothing with default settings collides with:
