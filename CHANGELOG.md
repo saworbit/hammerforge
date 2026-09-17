@@ -229,6 +229,50 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the exporter next.
 
 ### Fixed
+- **An undo puts the brushes back where they were, not at the end** (#660). Undo
+  is a whole-level snapshot restore, and #600 made that affordable by keeping the
+  brushes whose record still matches instead of rebuilding every one. A kept
+  brush stays where it is in the container; a rebuilt one is `add_child`ed, so it
+  lands at the back. The brushes a restore rebuilds are exactly the ones the
+  undone action changed, so every undo moved the brushes the mapper had just
+  touched to the end of the level, and `capture_state()` records the container in
+  order. Capture, restore, capture therefore gave a different dictionary from
+  capture -- the fixed point the whole undo design rests on, which nothing
+  asserted. Over forty mixed edits undone one at a time, 37 of the 40 steps
+  landed somewhere other than the snapshot they were given, with the same set of
+  brushes in a different order.
+  Two things follow from it. The `.tscn` and the `.hflevel` both serialise the
+  brushes in container order, so a session where the mapper undid anything
+  produced a diff even when the level ended up identical: review of a level file
+  is useless and merges conflict on lines nobody touched. And brush order is CSG
+  order -- `append_brush_list_to_csg()` adds children in order and a `SUBTRACT`
+  brush only cuts what precedes it -- so on the CSG bake path a cutter an undo
+  had moved to the end was a different boolean from the one that was set up. The
+  per-face path is order independent, which is the only reason this was not
+  already a visible geometry bug.
+  `restore_state()` now walks the ordered `brushes` array it already holds and
+  puts each node back at its index; anything the record does not name, such as a
+  preview brush, keeps its relative order after the ones it does. The
+  `id_counter` drift was the same defect in a field rather than a list: the
+  counter was set from the snapshot *before* the rebuilds, and `_next_brush_id()`
+  climbed it while they ran, so it ended one higher every time. It is set
+  afterwards now. Ids carry a microsecond timestamp, so the counter is a suffix
+  and putting it back cannot collide.
+  A third cause, which the issue's own measurement showed without naming: the
+  brush's node name. Godot auto-names an unnamed brush `@Node3D@14`, and that
+  cannot round trip -- `@` is not a character a node name may hold, so setting it
+  back gives `_Node3D_14`. Recording the sanitised form instead is not a fix
+  either, because the engine reuses the number once a node is freed: over a long
+  session one live brush is `@Node3D@14` while another is already `_Node3D_14`
+  from an earlier restore, both record the same name, and the one that gets
+  rebuilt collides with the one that survived and becomes `_Node3D_15`. A
+  generated name is not identity -- `brush_id` is -- so it is no longer captured
+  at all, and the engine keeps owning the names it makes up. An authored name,
+  which is what entity I/O and the baked `Area3D` are named after, round-trips
+  exactly as before.
+  Together these make a save after an undo a no-op rather than a rewrite:
+  `save_hflevel()` already skipped a payload whose hash matched the last one, and
+  the payload now genuinely matches, so the write does not happen at all.
 - **A `.map` keeps its texture names and its entity keys through a round trip**
   (#662, #663). `parse_map_text()` reads every key/value pair a block carries and
   every face's texture name. The level only took some of them, so ten brushes of

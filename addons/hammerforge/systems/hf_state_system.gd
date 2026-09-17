@@ -140,6 +140,50 @@ func restore_registries(state: Dictionary) -> void:
 		root.prefab_system.restore_state(state["prefab_instances"])
 
 
+## Put the brushes back in the order the snapshot recorded them in.
+##
+## A reused brush stays where it is and a rebuilt one is `add_child`ed, so it
+## lands at the end -- and the brushes a restore rebuilds are exactly the ones
+## the undone action changed. Every undo therefore moved the brushes the mapper
+## had just touched to the back of the level, and `capture_state()` records the
+## container in order, so capture, restore, capture gave a different dictionary
+## from capture (#660). That is the property the whole undo design rests on.
+##
+## It is not only churn in the file. `append_brush_list_to_csg()` adds children in
+## order and a SUBTRACT brush only cuts what precedes it, so on the CSG bake path
+## a cutter an undo has moved to the end is a different boolean from the one the
+## mapper set up. The per-face path is order independent, which is the only reason
+## this was not already a visible geometry bug.
+##
+## Anything the record does not name -- a preview brush, a child another subsystem
+## put in the container -- keeps its relative order, after the ones it does.
+func _restore_brush_order(records: Array) -> void:
+	var container = root.draft_brushes_node
+	if container == null:
+		return
+	var ordered: Array[Node] = []
+	var taken: Dictionary = {}
+	for entry in records:
+		if not (entry is Dictionary):
+			continue
+		var brush_id := str((entry as Dictionary).get("brush_id", ""))
+		if brush_id == "":
+			continue
+		var node = root.brush_system._brush_cache.get(brush_id)
+		if not is_instance_valid(node) or node.get_parent() != container:
+			continue
+		# A record naming the same brush twice must not place one node twice.
+		if taken.has(node.get_instance_id()):
+			continue
+		taken[node.get_instance_id()] = true
+		ordered.append(node)
+	for child in container.get_children():
+		if not taken.has(child.get_instance_id()):
+			ordered.append(child)
+	for i in ordered.size():
+		container.move_child(ordered[i], i)
+
+
 ## Decals placed with the decal tool. They are part of the level: without this a
 ## decal was scene decoration that a `.hflevel` save dropped, which is the format
 ## the editor treats as authoritative and the one autosave writes.
@@ -269,6 +313,12 @@ func restore_state(state: Dictionary) -> void:
 	for info in committed:
 		if not _restored_brush(info, {"committed": true}):
 			skipped += 1
+	_restore_brush_order(brushes)
+	# After the rebuilds, not before. `_next_brush_id()` climbs while a restore
+	# mints ids for the brushes it is putting back, so setting the counter first
+	# left it one higher than the snapshot said every single time -- which is the
+	# same defect as the ordering, in a field instead of a list (#660).
+	root._brush_id_counter = int(state.get("id_counter", root._brush_id_counter))
 	var entities: Array = state.get("entities", [])
 	for info in entities:
 		if not (info is Dictionary):
