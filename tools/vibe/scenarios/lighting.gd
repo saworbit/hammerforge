@@ -61,34 +61,34 @@ func _what_the_baked_mesh_is_marked_as() -> void:
 		var has_uv2 := false
 		if m and m.get_surface_count() > 0:
 			has_uv2 = (m.surface_get_format(0) & Mesh.ARRAY_FORMAT_TEX_UV2) != 0
-		rows.append(
-			{
-				"node": mi.name,
-				"uv2": has_uv2,
-				"gi_mode": mi.gi_mode,
-				"lightmap_scale": mi.gi_lightmap_scale,
-				"cast_shadow": mi.cast_shadow,
-			}
+		(
+			rows
+			. append(
+				{
+					"node": mi.name,
+					"uv2": has_uv2,
+					"gi_mode": mi.gi_mode,
+					"lightmap_scale": mi.gi_lightmap_scale,
+					"cast_shadow": mi.cast_shadow,
+				}
+			)
 		)
 	note("what a LightmapGI would see", rows)
-	note(
-		"gi_mode values",
-		"0 = DISABLED, 1 = STATIC (what LightmapGI needs), 2 = DYNAMIC"
-	)
+	note("gi_mode values", "0 = DISABLED, 1 = STATIC (what LightmapGI needs), 2 = DYNAMIC")
 	for r in rows:
 		if int(r["gi_mode"]) != 1:
 			flag(
 				"a baked mesh is not marked GI_MODE_STATIC",
 				(
-					"%s has gi_mode=%s, so LightmapGI skips it even with the UV2 the Lightmap "
-					+ "toggle just produced"
-				) % [r["node"], r["gi_mode"]]
+					(
+						"%s has gi_mode=%s, so LightmapGI skips it even with the UV2 the Lightmap "
+						+ "toggle just produced"
+					)
+					% [r["node"], r["gi_mode"]]
+				)
 			)
 		if not bool(r["uv2"]):
-			flag(
-				"Lightmap UV2 was on and the baked mesh has no UV2 channel",
-				r["node"]
-			)
+			flag("Lightmap UV2 was on and the baked mesh has no UV2 channel", r["node"])
 
 
 func _what_the_texel_size_buys() -> void:
@@ -101,11 +101,16 @@ func _what_the_texel_size_buys() -> void:
 		"%.1f" % (1.6 / max(root.bake_lightmap_texel_size, 0.0001))
 	)
 	# A 10x10 room's floor at the default texel size.
-	var texels: float = (10.0 / root.bake_lightmap_texel_size) * (10.0 / root.bake_lightmap_texel_size)
+	var texels: float = (
+		(10.0 / root.bake_lightmap_texel_size) * (10.0 / root.bake_lightmap_texel_size)
+	)
 	note("texels one 10x10 floor needs at the default", int(texels))
 	note(
 		"what that is as a lightmap",
-		"%d x %d, before any other surface in the level" % [int(10.0 / root.bake_lightmap_texel_size), int(10.0 / root.bake_lightmap_texel_size)]
+		(
+			"%d x %d, before any other surface in the level"
+			% [int(10.0 / root.bake_lightmap_texel_size), int(10.0 / root.bake_lightmap_texel_size)]
+		)
 	)
 	# The range the spin allows, against the range that is useful here.
 	root.bake_lightmap_texel_size = 0.0
@@ -162,15 +167,18 @@ func _what_a_level_has_to_light_itself_with() -> void:
 	root.auto_spawn_player = false
 	_room(root)
 	for cls in ["light_point", "light_spot", "light_directional"]:
-		root._restore_entity_from_info(
-			{
-				"entity_type": cls,
-				"entity_class": cls,
-				"transform": Transform3D(Basis.IDENTITY, Vector3(0, 2, 0)),
-				"properties": {},
-				"name": cls,
-				"entity_name": cls,
-			}
+		(
+			root
+			. _restore_entity_from_info(
+				{
+					"entity_type": cls,
+					"entity_class": cls,
+					"transform": Transform3D(Basis.IDENTITY, Vector3(0, 2, 0)),
+					"properties": {},
+					"name": cls,
+					"entity_name": cls,
+				}
+			)
 		)
 	await frame()
 	var lights: Array = []

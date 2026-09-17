@@ -45,7 +45,9 @@ func _room(root: Node3D, detail: bool) -> void:
 	var ids: Array = []
 	for i in CLUTTER:
 		var b = box(
-			root, Vector3(0.5, 0.5, 0.5), Vector3(-9.0 + (i % 10) * 2.0, 0.25, -7.0 + (i / 10) * 2.0)
+			root,
+			Vector3(0.5, 0.5, 0.5),
+			Vector3(-9.0 + (i % 10) * 2.0, 0.25, -7.0 + (i / 10) * 2.0)
 		)
 		ids.append(str(b.brush_id))
 	if detail:
@@ -81,16 +83,15 @@ func _structural_against_detail() -> void:
 	var plain: Dictionary = results[false]
 	var tied: Dictionary = results[true]
 	for key in ["MeshInstance3D", "StaticBody3D", "CollisionShape3D", "surfaces"]:
-		note(
-			"%s: structural %s -> detail %s" % [key, plain.get(key, 0), tied.get(key, 0)],
-			""
-		)
+		note("%s: structural %s -> detail %s" % [key, plain.get(key, 0), tied.get(key, 0)], "")
 	var plain_meshes := int(plain.get("MeshInstance3D", 0))
 	var tied_meshes := int(tied.get("MeshInstance3D", 0))
 	if tied_meshes > plain_meshes + 4:
 		flag(
-			"tying %d clutter brushes to func_detail turns %d baked mesh(es) into %d"
-			% [CLUTTER, plain_meshes, tied_meshes],
+			(
+				"tying %d clutter brushes to func_detail turns %d baked mesh(es) into %d"
+				% [CLUTTER, plain_meshes, tied_meshes]
+			),
 			(
 				(
 					"`func_detail`'s own description is 'Geometry the structural bake skips. For "

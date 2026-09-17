@@ -130,15 +130,18 @@ func _a_wire_aimed_at_nothing() -> void:
 	var root: Node3D = await fresh_root()
 	root.auto_spawn_player = false
 	box(root, Vector3(6, 0.2, 6), Vector3(0, -0.1, 0))
-	var button = root._restore_entity_from_info(
-		{
-			"entity_type": "func_button",
-			"entity_class": "func_button",
-			"transform": Transform3D(Basis.IDENTITY, Vector3(1, 1, 0)),
-			"properties": {},
-			"name": "b1",
-			"entity_name": "b1",
-		}
+	var button = (
+		root
+		. _restore_entity_from_info(
+			{
+				"entity_type": "func_button",
+				"entity_class": "func_button",
+				"transform": Transform3D(Basis.IDENTITY, Vector3(1, 1, 0)),
+				"properties": {},
+				"name": "b1",
+				"entity_name": "b1",
+			}
+		)
 	)
 	await frame()
 	root.add_entity_output(button, "OnPressed", "a_door_that_does_not_exist", "Open")
@@ -167,15 +170,18 @@ func _two_entities_with_one_name() -> void:
 	var root: Node3D = await fresh_root()
 	root.auto_spawn_player = false
 	for i in 2:
-		root._restore_entity_from_info(
-			{
-				"entity_type": "func_door",
-				"entity_class": "func_door",
-				"transform": Transform3D(Basis.IDENTITY, Vector3(i * 2.0, 1, 0)),
-				"properties": {},
-				"name": "gate",
-				"entity_name": "gate",
-			}
+		(
+			root
+			. _restore_entity_from_info(
+				{
+					"entity_type": "func_door",
+					"entity_class": "func_door",
+					"transform": Transform3D(Basis.IDENTITY, Vector3(i * 2.0, 1, 0)),
+					"properties": {},
+					"name": "gate",
+					"entity_name": "gate",
+				}
+			)
 		)
 	await frame()
 	var names: Array = []

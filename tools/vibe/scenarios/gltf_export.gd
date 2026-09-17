@@ -169,10 +169,13 @@ func _a_real_level_out_and_back() -> void:
 		flag(
 			"the .gltf export carries no materials",
 			(
-				"four materials were assigned across the room's faces and the baked mesh has "
-				+ "a surface per material; the exported file has %d surface(s) and no material "
-				+ "on any of them, so the level opens in Blender as untextured grey"
-			) % surfaces
+				(
+					"four materials were assigned across the room's faces and the baked mesh has "
+					+ "a surface per material; the exported file has %d surface(s) and no material "
+					+ "on any of them, so the level opens in Blender as untextured grey"
+				)
+				% surfaces
+			)
 		)
 
 

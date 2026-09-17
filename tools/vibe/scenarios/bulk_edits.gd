@@ -93,7 +93,10 @@ func _rotate_two_hundred() -> void:
 	var t := Time.get_ticks_msec()
 	root.rotate_managed_nodes(_ids(brushes), [], 1, 90.0, pivot)
 	await frame()
-	note("rotating %d brushes 90 degrees about a pivot" % COUNT, "%d ms" % (Time.get_ticks_msec() - t))
+	note(
+		"rotating %d brushes 90 degrees about a pivot" % COUNT,
+		"%d ms" % (Time.get_ticks_msec() - t)
+	)
 	var after := _positions(brushes)
 	# A rotation about a pivot preserves every brush's distance from it.
 	var kept := 0
@@ -189,9 +192,7 @@ func _hide_and_show_two_hundred() -> void:
 			hidden += 1
 	note("brushes actually hidden", hidden)
 	if hidden != COUNT:
-		flag(
-			"hiding a visgroup left %d of its %d brushes visible" % [COUNT - hidden, COUNT]
-		)
+		flag("hiding a visgroup left %d of its %d brushes visible" % [COUNT - hidden, COUNT])
 	t = Time.get_ticks_msec()
 	root.set_visgroup_visible("wing_a", true)
 	await frame()

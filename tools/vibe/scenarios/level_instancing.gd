@@ -118,10 +118,7 @@ func _save_a_piece_and_instance_it_twice() -> void:
 			continue
 		note(
 			"copy %d" % i,
-			(
-				"brushes=%s ids=%s"
-				% [lr.brush_system.get_live_brush_count(), _brush_ids(lr)]
-			)
+			"brushes=%s ids=%s" % [lr.brush_system.get_live_brush_count(), _brush_ids(lr)]
 		)
 
 	var ids0: Array = _brush_ids(copies[0])
@@ -132,12 +129,15 @@ func _save_a_piece_and_instance_it_twice() -> void:
 		flag(
 			"two instances of the same level piece carry the same brush ids",
 			(
-				"brush_id is the address every visgroup, group, hollow, array and I/O wire is "
-				+ "written against, and the plugin's own id minting is per-session. Instancing "
-				+ "a saved piece twice -- the way any project reuses a corridor -- puts %d "
-				+ "duplicate ids in one scene tree, so any lookup by id in the parent scene is "
-				+ "ambiguous. The ids are %s."
-			) % [shared.size(), shared.slice(0, 4)]
+				(
+					"brush_id is the address every visgroup, group, hollow, array and I/O wire is "
+					+ "written against, and the plugin's own id minting is per-session. Instancing "
+					+ "a saved piece twice -- the way any project reuses a corridor -- puts %d "
+					+ "duplicate ids in one scene tree, so any lookup by id in the parent scene is "
+					+ "ambiguous. The ids are %s."
+				)
+				% [shared.size(), shared.slice(0, 4)]
+			)
 		)
 	parent.queue_free()
 	await frame()

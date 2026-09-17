@@ -47,7 +47,9 @@ func _a_room_full_of_identical_crates() -> void:
 	root.auto_spawn_player = false
 	box(root, Vector3(20, 0.2, 20), Vector3(0, -0.1, 0))
 	for i in 60:
-		box(root, Vector3(0.8, 0.8, 0.8), Vector3(-9.0 + (i % 10) * 2.0, 0.4, -5.0 + (i / 10) * 2.0))
+		box(
+			root, Vector3(0.8, 0.8, 0.8), Vector3(-9.0 + (i % 10) * 2.0, 0.4, -5.0 + (i / 10) * 2.0)
+		)
 	await frame()
 	note("brushes", root.brush_system.get_live_brush_count())
 	note("of which identical 0.8 crates", 60)
@@ -167,7 +169,10 @@ func _what_an_occluder_costs_per_brush() -> void:
 		)
 		if is_equal_approx(pitch, 4.0) and occ.size() > 4:
 			flag(
-				"a wall built from %d abutting segments bakes to %d occluders" % [brushes, occ.size()],
+				(
+					"a wall built from %d abutting segments bakes to %d occluders"
+					% [brushes, occ.size()]
+				),
 				(
 					"The segments are placed edge to edge, so their front faces are one "
 					+ "continuous flat surface and their back faces are another -- two occluders "

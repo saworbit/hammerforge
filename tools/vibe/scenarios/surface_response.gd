@@ -29,7 +29,11 @@ func run() -> void:
 
 
 func _palette(root: Node3D) -> void:
-	for pair in [["metal", Color(0.7, 0.7, 0.8)], ["wood", Color(0.5, 0.3, 0.1)], ["stone", Color(0.4, 0.4, 0.4)]]:
+	for pair in [
+		["metal", Color(0.7, 0.7, 0.8)],
+		["wood", Color(0.5, 0.3, 0.1)],
+		["stone", Color(0.4, 0.4, 0.4)]
+	]:
 		var mat := StandardMaterial3D.new()
 		mat.resource_name = str(pair[0])
 		mat.albedo_color = pair[1]
@@ -85,14 +89,17 @@ func _what_a_raycast_gets_back() -> void:
 			continue
 		var collider: Object = hit.get("collider")
 		var shape_index: int = int(hit.get("shape", -1))
-		rows.append(
-			{
-				"slab": i,
-				"material_the_mapper_gave_it": ["metal", "wood", "stone"][i],
-				"collider": collider.name if collider else "-",
-				"collider_meta": collider.get_meta_list() if collider else [],
-				"shape_index": shape_index,
-			}
+		(
+			rows
+			. append(
+				{
+					"slab": i,
+					"material_the_mapper_gave_it": ["metal", "wood", "stone"][i],
+					"collider": collider.name if collider else "-",
+					"collider_meta": collider.get_meta_list() if collider else [],
+					"shape_index": shape_index,
+				}
+			)
 		)
 	note("what a raycast onto each slab returns", rows)
 	var distinct: Dictionary = {}

@@ -152,7 +152,8 @@ func _what_the_mapper_is_told() -> void:
 	await frame()
 	note("user_message signals the bake emitted", messages)
 	var mentions := messages.filter(
-		func(m: String) -> bool: return m.to_lower().contains("material") or m.to_lower().contains("csg")
+		func(m: String) -> bool:
+			return m.to_lower().contains("material") or m.to_lower().contains("csg")
 	)
 	note("of those, ones that mention materials or CSG", mentions)
 	if mentions.is_empty():

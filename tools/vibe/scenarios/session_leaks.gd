@@ -132,7 +132,9 @@ func _undo_and_redo() -> void:
 	note("before 100 capture/restore round trips", before)
 	for i in 100:
 		box(root, Vector3(0.5, 0.5, 0.5), Vector3(i % 8, 0.25, 0))
-		var _s: Dictionary = root.capture_state()
+		var step: Dictionary = root.capture_state()
+		if step.is_empty():
+			flag("capture_state returned nothing mid-session", "iteration %d" % i)
 		root.restore_state(base)
 	await _settle(16)
 	var after := _counts()

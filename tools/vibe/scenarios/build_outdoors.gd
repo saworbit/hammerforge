@@ -134,9 +134,12 @@ func _the_evening() -> void:
 		flag(
 			"a painted, heightmapped ground produces no terrain mesh",
 			(
-				"%d cells painted on the active layer, a noise heightmap over them, and "
-				+ "regenerate_paint_layers() built nothing to walk on"
-			) % painted
+				(
+					"%d cells painted on the active layer, a noise heightmap over them, and "
+					+ "regenerate_paint_layers() built nothing to walk on"
+				)
+				% painted
+			)
 		)
 
 	# --- 4. A building on top of it. Brushes and terrain in one level.
@@ -240,10 +243,7 @@ func _the_evening() -> void:
 	note("brushes after the reload", root.brush_system.get_live_brush_count())
 	var reloaded = root.paint_layers.get_active_layer() if root.paint_layers else null
 	note("the terrain layer after the reload", reloaded.display_name if reloaded else null)
-	note(
-		"its slot textures after the reload",
-		reloaded.terrain_slot_paths if reloaded else null
-	)
+	note("its slot textures after the reload", reloaded.terrain_slot_paths if reloaded else null)
 	note("paint memory after the reload", "%d bytes" % root.get_paint_memory_bytes())
 	if bytes > 0 and reloaded == null:
 		flag("the terrain layer did not survive the .hflevel", "saved %d bytes" % bytes)

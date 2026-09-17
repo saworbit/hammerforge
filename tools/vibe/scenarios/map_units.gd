@@ -25,25 +25,30 @@ func summary() -> String:
 
 const PLAYER_HEIGHT := 1.6
 
+
 ## A doorway in Quake units. Every editor in that family uses roughly this: a
 ## player 56 tall, a door 64 wide by 112 high, a grid step of 16.
-const QUAKE_DOOR := "\
-{\n\
-\"classname\" \"worldspawn\"\n\
-{\n\
-( -64 -16 0 ) ( -64 -15 0 ) ( -64 -16 1 ) WALL_A [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 1 1\n\
-( 64 -16 0 ) ( 64 -16 1 ) ( 64 -15 0 ) WALL_A [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 1 1\n\
-( -64 -16 0 ) ( -64 -16 1 ) ( -63 -16 0 ) WALL_A [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1\n\
-( -64 16 0 ) ( -63 16 0 ) ( -64 16 1 ) WALL_A [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1\n\
-( -64 -16 0 ) ( -63 -16 0 ) ( -64 -15 0 ) FLOOR1 [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1\n\
-( -64 -16 112 ) ( -64 -15 112 ) ( -63 -16 112 ) CEIL1 [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1\n\
-}\n\
-}\n\
-{\n\
-\"classname\" \"info_player_start\"\n\
-\"origin\" \"0 0 24\"\n\
-}\n\
-"
+func _quake_door() -> String:
+	var lines: Array[String] = []
+	lines.append("{")
+	lines.append('"classname" "worldspawn"')
+	lines.append("{")
+	lines.append("( -64 -16 0 ) ( -64 -15 0 ) ( -64 -16 1 ) WALL_A [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 1 1")
+	lines.append("( 64 -16 0 ) ( 64 -16 1 ) ( 64 -15 0 ) WALL_A [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 1 1")
+	lines.append("( -64 -16 0 ) ( -64 -16 1 ) ( -63 -16 0 ) WALL_A [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1")
+	lines.append("( -64 16 0 ) ( -63 16 0 ) ( -64 16 1 ) WALL_A [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1")
+	lines.append("( -64 -16 0 ) ( -63 -16 0 ) ( -64 -15 0 ) FLOOR1 [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1")
+	lines.append(
+		"( -64 -16 112 ) ( -64 -15 112 ) ( -63 -16 112 ) CEIL1 [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1"
+	)
+	lines.append("}")
+	lines.append("}")
+	lines.append("{")
+	lines.append('"classname" "info_player_start"')
+	lines.append('"origin" "0 0 24"')
+	lines.append("}")
+	lines.append("")
+	return "\n".join(lines)
 
 
 func run() -> void:
@@ -61,7 +66,7 @@ func _import(root: Node3D, text: String) -> int:
 
 func _what_an_imported_quake_map_is() -> void:
 	var root: Node3D = await fresh_root()
-	var result := _import(root, QUAKE_DOOR)
+	var result := _import(root, _quake_door())
 	await frame()
 	note("import_map returned", result)
 	note("brushes imported", root.brush_system.get_live_brush_count())
@@ -73,10 +78,7 @@ func _what_an_imported_quake_map_is() -> void:
 		biggest = maxf(biggest, extent.length())
 	note("imported brush extents, in HammerForge units", sizes)
 	note("the playtest player's height, for scale", PLAYER_HEIGHT)
-	note(
-		"the largest imported brush, in player heights",
-		"%.1f" % (biggest / PLAYER_HEIGHT)
-	)
+	note("the largest imported brush, in player heights", "%.1f" % (biggest / PLAYER_HEIGHT))
 	var spawns: Array = []
 	if root.entities_node:
 		for c in root.entities_node.get_children():
@@ -93,12 +95,17 @@ func _what_an_imported_quake_map_is() -> void:
 	)
 	note(
 		"what those numbers are here",
-		"%.1f players high, because nothing converts between the two scales" % (112.0 / PLAYER_HEIGHT)
+		(
+			"%.1f players high, because nothing converts between the two scales"
+			% (112.0 / PLAYER_HEIGHT)
+		)
 	)
 	if biggest / PLAYER_HEIGHT > 10.0:
 		flag(
-			"a .map from a Quake-family editor imports at %.0fx the size it was drawn"
-			% (PLAYER_HEIGHT * 0.0 + 56.0 / PLAYER_HEIGHT),
+			(
+				"a .map from a Quake-family editor imports at %.0fx the size it was drawn"
+				% (PLAYER_HEIGHT * 0.0 + 56.0 / PLAYER_HEIGHT)
+			),
 			(
 				(
 					"`MapIO` copies coordinates through unchanged, and a `.map` file states no "

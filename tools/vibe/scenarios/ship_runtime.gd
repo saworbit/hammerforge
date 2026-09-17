@@ -34,13 +34,16 @@ func _timers(root: Node3D) -> Array:
 	var out: Array = []
 	for c in root.get_children():
 		if c is Timer:
-			out.append(
-				{
-					"name": c.name,
-					"wait": c.wait_time,
-					"running": not c.is_stopped(),
-					"one_shot": c.one_shot,
-				}
+			(
+				out
+				. append(
+					{
+						"name": c.name,
+						"wait": c.wait_time,
+						"running": not c.is_stopped(),
+						"one_shot": c.one_shot,
+					}
+				)
 			)
 	return out
 

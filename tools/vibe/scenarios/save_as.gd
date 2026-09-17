@@ -55,13 +55,16 @@ func _two_paths_one_level() -> void:
 	for p in _paths():
 		root.save_hflevel(p)
 		var settled: bool = await HFVibe.settle_save(_tree, root, 2000)
-		sizes.append(
-			{
-				"path": p.get_file(),
-				"settled": settled,
-				"exists": FileAccess.file_exists(p),
-				"bytes": HFVibe.file_size(p),
-			}
+		(
+			sizes
+			. append(
+				{
+					"path": p.get_file(),
+					"settled": settled,
+					"exists": FileAccess.file_exists(p),
+					"bytes": HFVibe.file_size(p),
+				}
+			)
 		)
 	note("the same level saved to three paths, unchanged in between", sizes)
 	var written := sizes.filter(func(s: Dictionary) -> bool: return int(s["bytes"]) > 0)
@@ -113,10 +116,13 @@ func _what_the_level_reports() -> void:
 		flag(
 			"the level announces a save for a file that was never written",
 			(
-				"%d hflevel_saved signal(s) against %d file(s) on disk. Whatever the dock "
-				+ "shows after a save -- a status line, a cleared modified marker -- is "
-				+ "showing it for a write that did not happen."
-			) % [saved.size(), on_disk.size()]
+				(
+					"%d hflevel_saved signal(s) against %d file(s) on disk. Whatever the dock "
+					+ "shows after a save -- a status line, a cleared modified marker -- is "
+					+ "showing it for a write that did not happen."
+				)
+				% [saved.size(), on_disk.size()]
+			)
 		)
 
 

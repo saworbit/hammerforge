@@ -21,6 +21,7 @@ func summary() -> String:
 
 func run() -> void:
 	await _what_the_definitions_promise()
+	await _which_declared_inputs_can_be_delivered()
 	await _does_a_trigger_volume_fire()
 	await _does_a_door_move()
 	await _what_a_light_entity_is_in_the_level()
@@ -57,7 +58,9 @@ func _what_the_definitions_promise() -> void:
 	if src:
 		src.close()
 	var hooks: Dictionary = {}
-	for hook in ["body_entered", "area_entered", "input_event", "_physics_process", "mouse_entered"]:
+	for hook in [
+		"body_entered", "area_entered", "input_event", "_physics_process", "mouse_entered"
+	]:
 		hooks[hook] = text.contains(hook)
 	note("physics or input hooks HFIORuntime mentions", hooks)
 
@@ -218,3 +221,82 @@ func _what_a_light_entity_is_in_the_level() -> void:
 				+ "and shipped, is unlit"
 			)
 		)
+
+
+## Every input the shipped library declares, against the rule `HFIORuntime` uses
+## to decide whether it can call one.
+##
+## `_is_callable_input()` refuses an input whose name resolves to an engine
+## method, which is right -- an input called `QueueFree` would delete the target
+## and `Hide` would hide it, and both are one dock field away. It also means an
+## entity class whose input names happen to be engine methods on its own node
+## class has inputs that can never be delivered, and the check that would catch
+## that is this one.
+func _which_declared_inputs_can_be_delivered() -> void:
+	var defs := _defs()
+	var refused: Array = []
+	var rows: Array = []
+	for key in defs:
+		var node_class := str(defs[key].get("class", ""))
+		if node_class == "" or not ClassDB.class_exists(node_class):
+			continue
+		for input_name in defs[key].get("inputs", []):
+			var name := str(input_name)
+			var snake := _to_snake(name)
+			var direct := ClassDB.class_has_method(node_class, name)
+			var via_snake := ClassDB.class_has_method(node_class, snake)
+			(
+				rows
+				. append(
+					{
+						"class": key,
+						"node": node_class,
+						"input": name,
+						"engine_method": direct or via_snake,
+					}
+				)
+			)
+			if direct or via_snake:
+				refused.append("%s (%s).%s -> %s.%s()" % [key, node_class, name, node_class, snake])
+	note("every declared input on a class with a Godot node class", rows)
+	note("inputs HFIORuntime refuses to call as methods", refused)
+	if not refused.is_empty():
+		flag(
+			(
+				"%d shipped entity input(s) name an engine method, so the dispatcher refuses them"
+				% refused.size()
+			),
+			(
+				(
+					"`_is_callable_input()` returns false when `ClassDB.class_has_method()` says "
+					+ "the name belongs to the engine, and pushes a warning. That rule exists to "
+					+ "stop an input called `QueueFree` deleting the target, and it is right. "
+					+ "The consequence is that these inputs, which `entities.json` ships and the "
+					+ "Objects tab offers in its dropdown, can never be delivered: %s. "
+					+ "`logic_timer` is the whole class -- it declares Start and Stop, its node "
+					+ "class is Timer, and Timer.start() and Timer.stop() are exactly the two "
+					+ "methods the guard exists to protect. Firing either one prints a warning "
+					+ "and emits a signal nobody is connected to. "
+					+ "The library and the guard were written against each other and only one of "
+					+ "them knows it. An allow-list of engine methods that are safe to call by "
+					+ "name -- start, stop, show, hide, play -- or a `maps_to` field on the "
+					+ "input the way the properties already have one, would let a shipped class "
+					+ "say which engine method it means."
+				)
+				% [", ".join(refused)]
+			)
+		)
+
+
+## The same conversion `HFIORuntime._to_snake_case()` does.
+func _to_snake(name: String) -> String:
+	var out := ""
+	for i in name.length():
+		var c := name[i]
+		if c == c.to_upper() and c != c.to_lower():
+			if i > 0:
+				out += "_"
+			out += c.to_lower()
+		else:
+			out += c
+	return out

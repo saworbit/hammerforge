@@ -79,9 +79,12 @@ func _what_one_small_edit_costs_a_commit() -> void:
 		note(
 			"hflevel_compress = %s" % compress,
 			(
-				"%d bytes -> %d bytes after nudging one brush of 45; %.1f%% of the "
-				+ "overlapping bytes are unchanged"
-			) % [ba.size(), bb.size(), pct]
+				(
+					"%d bytes -> %d bytes after nudging one brush of 45; %.1f%% of the "
+					+ "overlapping bytes are unchanged"
+				)
+				% [ba.size(), bb.size(), pct]
+			)
 		)
 		if compress and pct < 50.0:
 			note(

@@ -138,7 +138,10 @@ func _build_and_price() -> void:
 	note("baked geometry, freshly textured", fresh)
 	note(
 		"draw calls for %d materials" % palette,
-		"%d surface(s) across %d MeshInstance3D" % [int(fresh.get("surfaces", 0)), int(fresh.get("meshes", 0))]
+		(
+			"%d surface(s) across %d MeshInstance3D"
+			% [int(fresh.get("surfaces", 0)), int(fresh.get("meshes", 0))]
+		)
 	)
 	if int(fresh.get("surfaces", 0)) > palette * 2:
 		flag(
@@ -158,7 +161,10 @@ func _build_and_price() -> void:
 	var save_ms := Time.get_ticks_msec() - t
 	note("save_hflevel settled", settled)
 	note("save_hflevel", "%d ms" % save_ms)
-	note("file size", "%d bytes (%.1f KB)" % [HFVibe.file_size(path), HFVibe.file_size(path) / 1024.0])
+	note(
+		"file size",
+		"%d bytes (%.1f KB)" % [HFVibe.file_size(path), HFVibe.file_size(path) / 1024.0]
+	)
 
 	t = Time.get_ticks_msec()
 	root.load_hflevel(path)
@@ -180,7 +186,10 @@ func _build_and_price() -> void:
 	note("collision shapes", int(facts.get("collision_shapes", 0)))
 	if int(facts.get("surfaces", 0)) < int(fresh.get("surfaces", 0)):
 		note(
-			"the round trip cost %d surface(s)" % (int(fresh.get("surfaces", 0)) - int(facts.get("surfaces", 0))),
+			(
+				"the round trip cost %d surface(s)"
+				% (int(fresh.get("surfaces", 0)) - int(facts.get("surfaces", 0)))
+			),
 			(
 				"the palette is made of StandardMaterial3D built in memory, and HFLevelIO "
 				+ "writes a resource with no path as an empty slot -- the documented behaviour "

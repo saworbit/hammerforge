@@ -40,13 +40,16 @@ func _bodies(node: Node, out: Array) -> Array:
 func _describe(container: Node) -> Array:
 	var out: Array = []
 	for b in _bodies(container, []):
-		out.append(
-			{
-				"node": b.name,
-				"class": b.get_class(),
-				"layer": b.collision_layer,
-				"mask": b.collision_mask,
-			}
+		(
+			out
+			. append(
+				{
+					"node": b.name,
+					"class": b.get_class(),
+					"layer": b.collision_layer,
+					"mask": b.collision_mask,
+				}
+			)
 		)
 	return out
 
@@ -92,7 +95,10 @@ func _each_dropdown_entry() -> void:
 		await root.bake(false, false, int(entry[0]), 0)
 		await frame()
 		var container := root.get_node_or_null("BakedGeometry")
-		note("dropdown '%s' (mask %s)" % [entry[1], entry[0]], _describe(container) if container else "nothing baked")
+		note(
+			"dropdown '%s' (mask %s)" % [entry[1], entry[0]],
+			_describe(container) if container else "nothing baked"
+		)
 
 
 func _can_a_stock_body_stand_on_it() -> void:
@@ -123,10 +129,7 @@ func _can_a_stock_body_stand_on_it() -> void:
 				child.queue_free()
 		await frame()
 		await frame()
-		note(
-			"'%s': the baked body" % entry[1],
-			_describe(root.get_node_or_null("BakedGeometry"))
-		)
+		note("'%s': the baked body" % entry[1], _describe(root.get_node_or_null("BakedGeometry")))
 		var space := root.get_world_3d().direct_space_state
 		var q := PhysicsRayQueryParameters3D.new()
 		q.from = here + Vector3(0, 4, 0)
@@ -137,7 +140,10 @@ func _can_a_stock_body_stand_on_it() -> void:
 		var any: Dictionary = space.intersect_ray(q)
 		note(
 			"  a ray with the stock mask of 1 finds it",
-			"%s (%s)" % [not hit.is_empty(), hit.get("collider").name if hit.has("collider") else "-"]
+			(
+				"%s (%s)"
+				% [not hit.is_empty(), hit.get("collider").name if hit.has("collider") else "-"]
+			)
 		)
 		note(
 			"  the same ray against every layer finds it",
@@ -152,8 +158,10 @@ func _can_a_stock_body_stand_on_it() -> void:
 		)
 		if hit.is_empty() and not any.is_empty() and int(entry[0]) != 1:
 			flag(
-				"baking to the '%s' physics layer makes a level nothing stock collides with"
-				% entry[1],
+				(
+					"baking to the '%s' physics layer makes a level nothing stock collides with"
+					% entry[1]
+				),
 				(
 					(
 						"The Brush tab's Physics Layer dropdown offers this entry, and picking it "

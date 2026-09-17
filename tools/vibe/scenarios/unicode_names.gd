@@ -45,15 +45,18 @@ func run() -> void:
 
 
 func _spawn(root: Node3D, type: String, where: Vector3, authored: String) -> Node3D:
-	return root._restore_entity_from_info(
-		{
-			"entity_type": type,
-			"entity_class": type,
-			"transform": Transform3D(Basis.IDENTITY, where),
-			"properties": {},
-			"name": authored,
-			"entity_name": authored,
-		}
+	return (
+		root
+		. _restore_entity_from_info(
+			{
+				"entity_type": type,
+				"entity_class": type,
+				"transform": Transform3D(Basis.IDENTITY, where),
+				"properties": {},
+				"name": authored,
+				"entity_name": authored,
+			}
+		)
 	)
 
 
@@ -67,12 +70,15 @@ func _entity_names() -> void:
 		if ent == null:
 			rows.append({"asked": n, "result": "not created"})
 			continue
-		rows.append(
-			{
-				"asked": n,
-				"meta": str(ent.get_meta("entity_name", "")),
-				"node": str(ent.name),
-			}
+		(
+			rows
+			. append(
+				{
+					"asked": n,
+					"meta": str(ent.get_meta("entity_name", "")),
+					"node": str(ent.name),
+				}
+			)
 		)
 	note("what each name became", rows)
 	var lost: Array = []
@@ -85,7 +91,7 @@ func _entity_names() -> void:
 		"why meta and node can differ",
 		(
 			"entity_name metadata is the identity HFIORuntime dispatches on; Node.name is "
-			+ "what the scene tree and get_node() use. Godot strips . : @ / \" % from the "
+			+ 'what the scene tree and get_node() use. Godot strips . : @ / " % from the '
 			+ "second, so a name legal in the panel is not the name in the tree"
 		)
 	)
@@ -194,10 +200,7 @@ func _through_the_hflevel() -> void:
 		settled = await HFVibe.settle_save(_tree, root, 2000)
 		var size := HFVibe.file_size(utf_path)
 		var exists := FileAccess.file_exists(utf_path)
-		note(
-			"saved to '%s'" % utf_path,
-			"settled=%s exists=%s size=%d" % [settled, exists, size]
-		)
+		note("saved to '%s'" % utf_path, "settled=%s exists=%s size=%d" % [settled, exists, size])
 		if settled and size <= 0:
 			# Not a filename problem: the ASCII control in this same loop is
 			# dropped too, because the level has not changed since the save above

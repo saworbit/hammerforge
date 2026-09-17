@@ -65,8 +65,9 @@ func _find(node: Node, pred: Callable, out: Array) -> Array:
 
 
 func _mesh_nodes(root: Node) -> Array:
-	return _find(root, func(n: Node) -> bool: return n is MeshInstance3D, []).map(
-		func(n: Node) -> String: return n.name
+	return (
+		_find(root, func(n: Node) -> bool: return n is MeshInstance3D, [])
+		. map(func(n: Node) -> String: return n.name)
 	)
 
 
@@ -74,15 +75,18 @@ func _place_one_and_look_for_it() -> void:
 	var root: Node3D = await fresh_root()
 	root.auto_spawn_player = false
 	box(root, Vector3(12, 0.2, 12), Vector3(0, -0.1, 0))
-	var prop = root._restore_entity_from_info(
-		{
-			"entity_type": "prop_static",
-			"entity_class": "prop_static",
-			"transform": Transform3D(Basis.IDENTITY, Vector3(0, 0.4, 0)),
-			"properties": {"scene": PROP_PATH},
-			"name": "crate_1",
-			"entity_name": "crate_1",
-		}
+	var prop = (
+		root
+		. _restore_entity_from_info(
+			{
+				"entity_type": "prop_static",
+				"entity_class": "prop_static",
+				"transform": Transform3D(Basis.IDENTITY, Vector3(0, 0.4, 0)),
+				"properties": {"scene": PROP_PATH},
+				"name": "crate_1",
+				"entity_name": "crate_1",
+			}
+		)
 	)
 	if prop == null:
 		flag("prop_static could not be placed at all")
@@ -90,13 +94,14 @@ func _place_one_and_look_for_it() -> void:
 	await frame()
 	note("the prop node", "%s (%s)" % [prop.name, prop.get_class()])
 	note("its stored properties", prop.get_meta("entity_properties", {}))
-	note("children it has", prop.get_children().map(func(c: Node) -> String: return "%s (%s)" % [c.name, c.get_class()]))
+	note(
+		"children it has",
+		prop.get_children().map(func(c: Node) -> String: return "%s (%s)" % [c.name, c.get_class()])
+	)
 	var meshes := _mesh_nodes(prop)
 	note("MeshInstance3D nodes under the prop", meshes)
 	# The question the description answers "yes" to.
-	var loaded_crate := _find(
-		prop, func(n: Node) -> bool: return str(n.name).contains("Crate"), []
-	)
+	var loaded_crate := _find(prop, func(n: Node) -> bool: return str(n.name).contains("Crate"), [])
 	if loaded_crate.is_empty():
 		flag(
 			"setting a prop_static's Scene property loads nothing",
@@ -114,15 +119,18 @@ func _through_the_bake_and_the_playtest() -> void:
 	var root: Node3D = await fresh_root()
 	root.auto_spawn_player = false
 	box(root, Vector3(12, 0.2, 12), Vector3(0, -0.1, 0))
-	root._restore_entity_from_info(
-		{
-			"entity_type": "prop_static",
-			"entity_class": "prop_static",
-			"transform": Transform3D(Basis.IDENTITY, Vector3(2, 0.4, 0)),
-			"properties": {"scene": PROP_PATH},
-			"name": "crate_1",
-			"entity_name": "crate_1",
-		}
+	(
+		root
+		. _restore_entity_from_info(
+			{
+				"entity_type": "prop_static",
+				"entity_class": "prop_static",
+				"transform": Transform3D(Basis.IDENTITY, Vector3(2, 0.4, 0)),
+				"properties": {"scene": PROP_PATH},
+				"name": "crate_1",
+				"entity_name": "crate_1",
+			}
+		)
 	)
 	await frame()
 	await root.bake(false, false)
@@ -140,8 +148,9 @@ func _through_the_bake_and_the_playtest() -> void:
 	var inst := packed.instantiate()
 	note(
 		"the playtest scene's tree",
-		_find(inst, func(_n: Node) -> bool: return true, []).map(
-			func(n: Node) -> String: return "%s (%s)" % [n.name, n.get_class()]
+		(
+			_find(inst, func(_n: Node) -> bool: return true, [])
+			. map(func(n: Node) -> String: return "%s (%s)" % [n.name, n.get_class()])
 		)
 	)
 	var crates := _find(inst, func(n: Node) -> bool: return str(n.name).contains("Crate"), [])
@@ -193,7 +202,10 @@ func _what_the_scatter_picker_accepts() -> void:
 		var close := text.find(")", at)
 		filter_line = text.substr(at, max(close - at + 1, 0))
 	note("what the scatter Pick Mesh dialog offers", filter_line)
-	note("what build_scatter_settings keeps", "`if res is Mesh: s.mesh = res` (dock_paint_handler.gd)")
+	note(
+		"what build_scatter_settings keeps",
+		"`if res is Mesh: s.mesh = res` (dock_paint_handler.gd)"
+	)
 
 	# What each offered extension actually loads as. A .glb or .gltf is imported
 	# by Godot as a PackedScene, never as a Mesh.
