@@ -88,7 +88,7 @@ func _tie_and_name() -> void:
 		"the dock's Tie to Entity arguments",
 		"a class from brush_entity_class_opt and nothing else (dock_brush_handler.gd:1526)"
 	)
-	var _unused = [dock_source, entity_handler]
+	var unused_ref = [dock_source, entity_handler]
 
 	# Can a wire reach it? `add_entity_output` wants a source Node.
 	var lamp := DraftEntity.new()
@@ -108,17 +108,21 @@ func _tie_and_name() -> void:
 			dangling.append(str((w as Dictionary).get("target_name", "")))
 	note("wire targets the level cannot resolve", dangling)
 	if not dangling.is_empty():
-		flag(
+		known(
+			668,
 			"a brush entity cannot be given a name, so nothing can be wired to it",
 			(
-				"`find_entities_by_name()` checks brush entities for an `entity_name` "
-				+ "meta and the `.map` exporter writes one, so the mechanism is complete "
-				+ "except for a surface that sets it: the dock's Tie to Entity takes a "
-				+ "class from a dropdown and no name, and the only code that ever writes "
-				+ "the meta onto a brush is the `.map` *import* path. A wire to %s "
-				+ "therefore cannot resolve, and #620's dangling-wire check reports it "
-				+ "as broken"
-			) % str(dangling)
+				(
+					"`find_entities_by_name()` checks brush entities for an `entity_name` "
+					+ "meta and the `.map` exporter writes one, so the mechanism is complete "
+					+ "except for a surface that sets it: the dock's Tie to Entity takes a "
+					+ "class from a dropdown and no name, and the only code that ever writes "
+					+ "the meta onto a brush is the `.map` *import* path. A wire to %s "
+					+ "therefore cannot resolve, and #620's dangling-wire check reports it "
+					+ "as broken"
+				)
+				% str(dangling)
+			)
 		)
 
 
@@ -182,16 +186,20 @@ func _through_the_exports() -> void:
 	var door_blocks := text.count('"classname" "door_basic"')
 	note("door_basic blocks in the .map", door_blocks)
 	if door_blocks > 1:
-		flag(
+		known(
+			668,
 			"two brushes tied to one entity are exported as two entities",
 			(
-				"the .map holds %s separate `door_basic` blocks, one brush each. "
-				+ "`export_map()` appends an `entity_brush_blocks` entry per node "
-				+ "(map_io.gd:222) and then writes one block per entry, so a door with "
-				+ "two leaves compiles as two doors that move independently and are "
-				+ "targeted separately. Grouping the blocks by class and name is what "
-				+ "makes it one entity"
-			) % door_blocks
+				(
+					"the .map holds %s separate `door_basic` blocks, one brush each. "
+					+ "`export_map()` appends an `entity_brush_blocks` entry per node "
+					+ "(map_io.gd:222) and then writes one block per entry, so a door with "
+					+ "two leaves compiles as two doors that move independently and are "
+					+ "targeted separately. Grouping the blocks by class and name is what "
+					+ "makes it one entity"
+				)
+				% door_blocks
+			)
 		)
 
 	var scene_path := "user://vibe_brush_entities_playtest.tscn"
@@ -210,7 +218,8 @@ func _through_the_exports() -> void:
 	note("playtest scene node classes", counts)
 	note("nodes whose name mentions the door", named)
 	if named.is_empty():
-		flag(
+		known(
+			668,
 			"the door is not a thing in the playtest scene",
 			(
 				"the two leaves are tied to door_basic and the exported scene has no "

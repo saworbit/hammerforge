@@ -166,7 +166,9 @@ func _pack_and_open() -> void:
 	note("after: visgroups %s, group %s" % [after["visgroups"], after["group_members"]])
 	note("after: connections", after["connections"])
 
-	diff_levels(before, after, "packing the level into its .tscn and opening it")
+	diff_levels(
+		before, after, "packing the level into its .tscn and opening it", {"visgroups": 664}
+	)
 
 	# The things the level-wide diff does not reach.
 	for key in [
@@ -184,7 +186,8 @@ func _pack_and_open() -> void:
 		"entity_count",
 	]:
 		if HFVibe.canonical(before[key]) != HFVibe.canonical(after[key]):
-			flag(
+			known(
+				664 if key == "visgroups" else 665,
 				"reopening the scene changed '%s'" % key,
 				"%s -> %s" % [HFVibe.canonical(before[key]), HFVibe.canonical(after[key])]
 			)
@@ -199,8 +202,9 @@ func _pack_and_open() -> void:
 		note("its id", fresh_brush.brush_id)
 		var clash := 0
 		for child in reopened.draft_brushes_node.get_children():
-			if reopened.is_brush_node(child) and str(child.get("brush_id")) == str(
-				fresh_brush.brush_id
+			if (
+				reopened.is_brush_node(child)
+				and str(child.get("brush_id")) == str(fresh_brush.brush_id)
 			):
 				clash += 1
 		if clash > 1:
@@ -265,16 +269,21 @@ func _every_other_registry() -> void:
 		if key == "brushes":
 			continue
 		if int(before[key]) > 0 and int(after[key]) == 0:
-			flag(
+			known(
+				665,
 				"saving the scene loses the %s registry" % key,
 				(
-					"%s before the save, %s after, while the brushes it describes are "
-					+ "still there (%s of them). The record lives on a RefCounted "
-					+ "subsystem and `PackedScene.pack()` writes nodes"
-				) % [before[key], after[key], after["brushes"]]
+					(
+						"%s before the save, %s after, while the brushes it describes are "
+						+ "still there (%s of them). The record lives on a RefCounted "
+						+ "subsystem and `PackedScene.pack()` writes nodes"
+					)
+					% [before[key], after[key], after["brushes"]]
+				)
 			)
 		elif int(before[key]) != int(after[key]):
-			flag(
+			known(
+				665,
 				"the %s registry does not come back the same size" % key,
 				"%s -> %s" % [before[key], after[key]]
 			)
@@ -306,9 +315,8 @@ func _registries(root: Node3D) -> Dictionary:
 		"brushes_in_a_hollow": hollows,
 		"paint_layers": root.get_paint_layer_names().size(),
 		"surface_paint_layers": surface_layers,
-		"prefab_instances": (
-			root.prefab_system.get_all_instances().size() if root.prefab_system else 0
-		),
+		"prefab_instances":
+		root.prefab_system.get_all_instances().size() if root.prefab_system else 0,
 		"brushes": root.get_live_brush_count(),
 	}
 
@@ -359,19 +367,23 @@ func _a_hidden_visgroup_across_a_save() -> void:
 	note("after the reopen: membership still on the nodes", memberships)
 	note("after the reopen: brushes that are invisible", hidden_now)
 	if reopened.get_visgroup_names().size() == 0 and hidden_now > 0:
-		flag(
+		known(
+			664,
 			"a hidden visgroup comes back with its brushes still hidden and no way to show them",
 			(
-				"the membership is node metadata and survives the .tscn; the registry is "
-				+ "a plain `var visgroups` on HFVisgroupSystem and does not, so the "
-				+ "reopened level has %s invisible brush(es) that still claim to be in "
-				+ "'detail' and a visgroup list with nothing in it. Nothing in the dock "
-				+ "can unhide them and Validate says nothing"
-			) % hidden_now
+				(
+					"the membership is node metadata and survives the .tscn; the registry is "
+					+ "a plain `var visgroups` on HFVisgroupSystem and does not, so the "
+					+ "reopened level has %s invisible brush(es) that still claim to be in "
+					+ "'detail' and a visgroup list with nothing in it. Nothing in the dock "
+					+ "can unhide them and Validate says nothing"
+				)
+				% hidden_now
+			)
 		)
 	var report: Dictionary = reopened.validate_level()
 	note("validate_level on the reopened level", report)
-	var _unused = keep
+	var unused_ref = keep
 
 
 func _open_it_twice() -> void:

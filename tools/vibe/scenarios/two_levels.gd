@@ -38,15 +38,19 @@ func _the_default_autosave_path() -> void:
 	note("autosave enabled by default", a.hflevel_autosave_enabled)
 	note("autosave interval, minutes", a.hflevel_autosave_minutes)
 	if str(a.hflevel_autosave_path) == str(b.hflevel_autosave_path):
-		flag(
+		known(
+			655,
 			"every level in a project autosaves to the same file",
 			(
-				"`hflevel_autosave_path` defaults to the literal '%s' and the only thing "
-				+ "that ever changes it is a mapper picking a file by hand "
-				+ "(dock_file_handler.on_autosave_path_selected). Autosave is on by "
-				+ "default on a %s minute timer, so the second level a project has "
-				+ "silently takes the first one's file"
-			) % [a.hflevel_autosave_path, a.hflevel_autosave_minutes]
+				(
+					"`hflevel_autosave_path` defaults to the literal '%s' and the only thing "
+					+ "that ever changes it is a mapper picking a file by hand "
+					+ "(dock_file_handler.on_autosave_path_selected). Autosave is on by "
+					+ "default on a %s minute timer, so the second level a project has "
+					+ "silently takes the first one's file"
+				)
+				% [a.hflevel_autosave_path, a.hflevel_autosave_minutes]
+			)
 		)
 
 
@@ -84,7 +88,8 @@ func _the_second_level_overwrites_the_first() -> void:
 	note("LevelA reloaded its own path", loaded)
 	note("LevelA brushes after the reload", _count(a))
 	if _count(a) == 1:
-		flag(
+		known(
+			655,
 			"a second level's autosave replaces the first level's saved work",
 			(
 				"LevelA saved four brushes to its default path and got one back: the "

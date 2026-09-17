@@ -63,7 +63,7 @@ func _what_it_costs() -> void:
 	note("lean palette", lean.get_material_names())
 	var lean_bytes: int = await _save_size(lean, "user://vibe_palette_lean.hflevel")
 	note("lean .hflevel", "%s bytes" % lean_bytes)
-	var _unused = all_protos
+	var unused_ref = all_protos
 
 	var loaded: Node3D = await fresh_root("Loaded")
 	loaded.auto_spawn_player = false
@@ -82,10 +82,13 @@ func _what_it_costs() -> void:
 		flag(
 			"the prototype palette is most of a greybox level's file",
 			(
-				"the same six-brush room is %s bytes with three materials and %s bytes "
-				+ "after pressing Add Prototype Textures -- %sx -- and 147 of the 150 "
-				+ "slots are unused by any face"
-			) % [lean_bytes, loaded_bytes, snappedf(float(loaded_bytes) / float(lean_bytes), 0.1)]
+				(
+					"the same six-brush room is %s bytes with three materials and %s bytes "
+					+ "after pressing Add Prototype Textures -- %sx -- and 147 of the 150 "
+					+ "slots are unused by any face"
+				)
+				% [lean_bytes, loaded_bytes, snappedf(float(loaded_bytes) / float(lean_bytes), 0.1)]
+			)
 		)
 
 	# And what it costs an undo, which snapshots the palette by value.
@@ -144,15 +147,19 @@ func _getting_back_to_three() -> void:
 	note("palette now", root.get_material_names())
 	note("faces still pointing somewhere real", _faces_with_material(root))
 	if not bulk:
-		flag(
+		known(
+			661,
 			"there is no way to undo Add Prototype Textures except 149 presses",
 			(
-				"`remove_material_from_palette()` takes one index and walks every brush "
-				+ "in the level remapping face indices each time; getting back to a "
-				+ "hand-picked palette is %s of those, %s ms here on a six-brush room "
-				+ "and quadratic in the level's size. The dock has no Remove Unused, no "
-				+ "multi-select on the material list and no Clear Palette"
-			) % [removals, ms]
+				(
+					"`remove_material_from_palette()` takes one index and walks every brush "
+					+ "in the level remapping face indices each time; getting back to a "
+					+ "hand-picked palette is %s of those, %s ms here on a six-brush room "
+					+ "and quadratic in the level's size. The dock has no Remove Unused, no "
+					+ "multi-select on the material list and no Clear Palette"
+				)
+				% [removals, ms]
+			)
 		)
 
 

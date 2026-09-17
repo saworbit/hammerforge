@@ -86,9 +86,11 @@ func _what_the_list_shows() -> void:
 	root.auto_spawn_player = false
 	note("prefab directory", HFPrefabSystemType.PREFAB_DIR)
 	var made: Array[String] = []
-	for entry in [["vibe_pillar", PackedStringArray(["structure", "stone"])],
-			["vibe_doorframe", PackedStringArray(["structure"])],
-			["vibe_lamp", PackedStringArray(["prop"])]]:
+	for entry in [
+		["vibe_pillar", PackedStringArray(["structure", "stone"])],
+		["vibe_doorframe", PackedStringArray(["structure"])],
+		["vibe_lamp", PackedStringArray(["prop"])]
+	]:
 		var path: String = await _write_prefab(root, str(entry[0]), entry[1])
 		if path != "":
 			made.append(path)
@@ -125,7 +127,8 @@ func _what_the_list_shows() -> void:
 	panel._apply_filters()
 	await frame()
 	if panel._file_list.item_count > 0 and _enabled(panel) == 0:
-		flag(
+		known(
+			667,
 			"a search that matches nothing leaves every row in the list, greyed out",
 			(
 				"the panel dims non-matching rows to 15%% alpha and disables them "
@@ -197,9 +200,7 @@ func _names_the_panel_accepts() -> void:
 		# `begins_with` is not enough: "res://prefabs/../escape.hfprefab" starts with
 		# the directory and resolves outside it.
 		var resolved := written.simplify_path()
-		var inside := (
-			written != "" and resolved.begins_with(HFPrefabSystemType.PREFAB_DIR + "/")
-		)
+		var inside := written != "" and resolved.begins_with(HFPrefabSystemType.PREFAB_DIR + "/")
 		var exists := written != "" and FileAccess.file_exists(written)
 		note(
 			"%s -> '%s' (resolves to '%s')" % [entry[1], written, resolved],
@@ -212,26 +213,34 @@ func _names_the_panel_accepts() -> void:
 		if written == "":
 			refused.append(str(entry[1]))
 	if not escaped.is_empty():
-		flag(
+		known(
+			667,
 			"a prefab name with a path in it writes outside the prefab directory",
 			(
-				"`quick_save_prefab()` builds its filename as "
-				+ "`prefab_name.to_snake_case() + '.hfprefab'` and joins it onto "
-				+ "PREFAB_DIR, and `to_snake_case()` leaves a slash alone: %s. The name "
-				+ "comes straight off a free-text box in the panel with no validation on "
-				+ "either side"
-			) % str(escaped)
+				(
+					"`quick_save_prefab()` builds its filename as "
+					+ "`prefab_name.to_snake_case() + '.hfprefab'` and joins it onto "
+					+ "PREFAB_DIR, and `to_snake_case()` leaves a slash alone: %s. The name "
+					+ "comes straight off a free-text box in the panel with no validation on "
+					+ "either side"
+				)
+				% str(escaped)
+			)
 		)
 	note("names the save side refused, returning an empty path", refused)
 	if not refused.is_empty():
-		flag(
+		known(
+			667,
 			"a prefab name the filesystem will not take fails with no message",
 			(
-				"%s return an empty string from `quick_save_prefab()` and nothing above "
-				+ "it turns that into anything the mapper sees -- the name stays in the "
-				+ "box, the list does not change, and the Save button looks like it did "
-				+ "not register the click"
-			) % str(refused)
+				(
+					"%s return an empty string from `quick_save_prefab()` and nothing above "
+					+ "it turns that into anything the mapper sees -- the name stays in the "
+					+ "box, the list does not change, and the Save button looks like it did "
+					+ "not register the click"
+				)
+				% str(refused)
+			)
 		)
 
 
@@ -294,12 +303,16 @@ func _the_drag_payload() -> void:
 	var rect: Rect2 = panel._file_list.get_item_rect(0)
 	var payload = panel._get_drag_data_fw(rect.get_center(), panel._file_list)
 	note("payload from over the first row", payload)
-	note("payload from above the list", panel._get_drag_data_fw(Vector2(-10, -10), panel._file_list))
+	note(
+		"payload from above the list", panel._get_drag_data_fw(Vector2(-10, -10), panel._file_list)
+	)
 	if payload == null:
 		note(
 			"no payload from over a row",
-			"`get_item_at_position(pos, true)` wants an exact hit; a headless list has "
-			+ "no layout, so this is the harness rather than the panel"
+			(
+				"`get_item_at_position(pos, true)` wants an exact hit; a headless list has "
+				+ "no layout, so this is the harness rather than the panel"
+			)
 		)
 	else:
 		note("payload type", str((payload as Dictionary).get("type", "")))

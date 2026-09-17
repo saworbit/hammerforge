@@ -22,6 +22,8 @@ extends "res://tools/vibe/hf_vibe_scenario.gd"
 const DraftEntity = preload("res://addons/hammerforge/draft_entity.gd")
 const HFLevelIO = preload("res://addons/hammerforge/hflevel_io.gd")
 
+const SAVE_PATH := "user://vibe_undo_depth.hflevel"
+
 
 func id() -> String:
 	return "undo-depth"
@@ -70,20 +72,26 @@ func _is_a_snapshot_a_fixed_point() -> void:
 		flag(
 			"restoring an undo snapshot renames every brush in it",
 			(
-				"the ids captured were %s and the same level re-captured after one "
-				+ "restore_state() holds %s. Every reference held by id -- a group, a "
-				+ "visgroup, a prefab instance record, a generator's piece list, a "
-				+ "duplicator's source list -- is aimed at the old ones"
-			) % [_ids_in(first), _ids_in(second)]
+				(
+					"the ids captured were %s and the same level re-captured after one "
+					+ "restore_state() holds %s. Every reference held by id -- a group, a "
+					+ "visgroup, a prefab instance record, a generator's piece list, a "
+					+ "duplicator's source list -- is aimed at the old ones"
+				)
+				% [_ids_in(first), _ids_in(second)]
+			)
 		)
 	if int(first.get("id_counter", 0)) != int(second.get("id_counter", 0)):
 		flag(
 			"the brush id counter advances on every undo",
 			(
-				"capture said %s, one restore later it says %s. Undo is a whole-level "
-				+ "snapshot restore, so a long session's counter climbs by the level's "
-				+ "brush count on every Ctrl+Z"
-			) % [first.get("id_counter"), second.get("id_counter")]
+				(
+					"capture said %s, one restore later it says %s. Undo is a whole-level "
+					+ "snapshot restore, so a long session's counter climbs by the level's "
+					+ "brush count on every Ctrl+Z"
+				)
+				% [first.get("id_counter"), second.get("id_counter")]
+			)
 		)
 
 	# Ten restores of the same snapshot: whatever drifts, drifts ten times.
@@ -98,8 +106,10 @@ func _is_a_snapshot_a_fixed_point() -> void:
 	if root.get_group_members("pair").size() != 2:
 		flag(
 			"a group loses its members to repeated undo",
-			"2 brushes went in, %s are in the group after ten restores"
-			% root.get_group_members("pair").size()
+			(
+				"2 brushes went in, %s are in the group after ten restores"
+				% root.get_group_members("pair").size()
+			)
 		)
 
 
@@ -155,26 +165,34 @@ func _what_the_reorder_costs() -> void:
 	note("brush order in the file, before", before_text)
 	note("brush order in the file, after", after_text)
 	if before_text != after_text:
-		flag(
+		known(
+			660,
 			"a save taken after an undo writes the brushes in a different order",
 			(
-				"nothing about the level changed -- an edit was made and taken back -- "
-				+ "and the file's brush order went from %s to %s. Every undo/redo pair a "
-				+ "mapper makes rewrites the .hflevel and the .tscn with the touched "
-				+ "brushes moved to the end, so version control sees a change on every "
-				+ "session whether or not the level was edited"
-			) % [before_text, after_text]
+				(
+					"nothing about the level changed -- an edit was made and taken back -- "
+					+ "and the file's brush order went from %s to %s. Every undo/redo pair a "
+					+ "mapper makes rewrites the .hflevel and the .tscn with the touched "
+					+ "brushes moved to the end, so version control sees a change on every "
+					+ "session whether or not the level was edited"
+				)
+				% [before_text, after_text]
+			)
 		)
-	var _unused = cutter
+	var unused_ref = cutter
 	if _order(root) != _order_of(snapshot):
-		flag(
+		known(
+			660,
 			"an undo changes the order of the brushes in the level",
 			(
-				"the level was %s and after restoring a snapshot of that same order it "
-				+ "is %s. `restore_state()` keeps the brushes whose record still matches "
-				+ "and rebuilds the rest, and a rebuilt brush is appended, so every undo "
-				+ "moves the brushes it touched to the end"
-			) % [_order_of(snapshot), _order(root)]
+				(
+					"the level was %s and after restoring a snapshot of that same order it "
+					+ "is %s. `restore_state()` keeps the brushes whose record still matches "
+					+ "and rebuilds the rest, and a rebuilt brush is appended, so every undo "
+					+ "moves the brushes it touched to the end"
+				)
+				% [_order_of(snapshot), _order(root)]
+			)
 		)
 
 
@@ -225,67 +243,141 @@ func _triangles(root: Node3D) -> int:
 func _script(root: Node3D) -> Array:
 	var ops: Array = []
 	var made: Array = []
+	# Short names so every closure below stays on one line. gdformat will happily
+	# break a long lambda body across lines, and GDScript cannot parse a
+	# multi-line `func():` inside an array literal -- the run then dies with
+	# "Unindent doesn't match the previous indentation level" pointing at the
+	# closing bracket rather than at the lambda.
+	var id0 := func(): return str(made[0].brush_id)
+	var id1 := func(): return str(made[1].brush_id)
+	var id2 := func(): return str(made[2].brush_id)
+	var zero := Vector3.ZERO
 
-	ops.append(["draw a floor", func(): made.append(box(root, Vector3(8, 0.25, 8), Vector3(0, -0.125, 0)))])
-	ops.append(["draw a wall", func(): made.append(box(root, Vector3(8, 3, 0.25), Vector3(0, 1.5, -4)))])
-	ops.append(["draw a second wall", func(): made.append(box(root, Vector3(0.25, 3, 8), Vector3(-4, 1.5, 0)))])
+	ops.append(["draw a floor", func(): made.append(_slab(root))])
+	ops.append(["draw a wall", func(): made.append(_wall_z(root))])
+	ops.append(["draw a second wall", func(): made.append(_wall_x(root))])
 	ops.append(["add the prototype palette", func(): root.add_prototype_materials()])
-	ops.append(["texture the floor", func(): root.assign_material_to_whole_brushes(2, [str(made[0].brush_id)])])
+	ops.append(["texture the floor", func(): _texture(root, id0.call())])
 	ops.append(["set the grid to 0.25", func(): root.grid_snap = 0.25])
 	ops.append(["make a visgroup", func(): root.create_visgroup("shell")])
-	ops.append(["put the walls in it", func(): root.add_selection_to_visgroup("shell", [made[1], made[2]])])
+	ops.append(["put the walls in it", func(): _to_visgroup(root, made)])
 	ops.append(["hide it", func(): root.set_visgroup_visible("shell", false)])
 	ops.append(["show it", func(): root.set_visgroup_visible("shell", true)])
-	ops.append(["group the shell", func(): root.group_selection("shell_group", [made[1], made[2]])])
-	ops.append(["nudge the floor", func(): root.nudge_brushes_by_id([str(made[0].brush_id)], Vector3(0, 0.5, 0))])
-	ops.append(["rotate a wall", func(): root.rotate_managed_nodes([str(made[1].brush_id)], [], 1, deg_to_rad(15.0), Vector3.ZERO)])
-	ops.append(["flip a wall", func(): root.flip_managed_nodes([str(made[2].brush_id)], [], 0, Vector3.ZERO)])
-	ops.append(["place a light", func():
-		var e := DraftEntity.new()
-		e.entity_class = "light_point"
-		e.name = "lamp"
-		root.add_entity(e)
-		made.append(e)])
-	ops.append(["place a second light", func():
-		var e := DraftEntity.new()
-		e.entity_class = "light_point"
-		e.name = "lamp_two"
-		root.add_entity(e)
-		made.append(e)])
-	ops.append(["wire one to the other", func():
-		var targets: Array = root.find_entities_by_name("lamp_two")
-		if targets.size() > 0:
-			root.add_entity_output(made[3], "TurnOn", "lamp_two", "Toggle", "", 0.0, false)])
+	ops.append(["group the shell", func(): _group(root, made)])
+	ops.append(["nudge the floor", func(): _nudge(root, id0.call())])
+	ops.append(["rotate a wall", func(): _rotate(root, id1.call())])
+	ops.append(["flip a wall", func(): root.flip_managed_nodes([id2.call()], [], 0, zero)])
+	ops.append(["place a light", func(): made.append(_entity(root, "lamp"))])
+	ops.append(["place a second light", func(): made.append(_entity(root, "lamp_two"))])
+	ops.append(["wire one to the other", func(): _wire(root, made)])
 	ops.append(["add a paint layer", func(): root.add_paint_layer()])
 	ops.append(["rename it", func(): root.rename_paint_layer(0, "ground")])
 	ops.append(["set the layer height", func(): root.set_layer_y(0.5)])
 	ops.append(["turn texture lock off", func(): root.texture_lock = false])
-	ops.append(["set a cordon", func(): root.cordon_aabb = AABB(Vector3(-8, -1, -8), Vector3(16, 6, 16))])
+	ops.append(["set a cordon", func(): _cordon(root)])
 	ops.append(["turn the cordon on", func(): root.cordon_enabled = true])
-	ops.append(["select two faces", func():
-		root.clear_face_selection()
-		root.toggle_face_selection(made[0], 0, true)
-		root.toggle_face_selection(made[1], 0, true)])
+	ops.append(["select two faces", func(): _select_faces(root, made)])
 	ops.append(["justify them", func(): root.justify_selected_faces("fit", false)])
-	ops.append(["reproject a face", func(): root.reproject_face_uvs(str(made[0].brush_id), 1, 1)])
-	ops.append(["set UV params on a face", func(): root.set_face_uv_params(str(made[0].brush_id), 2, Vector2(2, 2), Vector2(0.25, 0.25), deg_to_rad(30.0))])
-	ops.append(["hollow a new box", func():
-		var b = box(root, Vector3(4, 3, 4), Vector3(16, 1.5, 0))
-		made.append(b)
-		root.hollow_brush_by_id(b.brush_id, 0.25)])
-	ops.append(["clip a wall", func(): root.clip_brush_by_id(str(made[1].brush_id), 0, 0.0)])
-	ops.append(["array the floor", func(): root.create_duplicate_array(PackedStringArray([str(made[0].brush_id)]), 3, Vector3(0, 4, 0))])
+	ops.append(["reproject a face", func(): root.reproject_face_uvs(id0.call(), 1, 1)])
+	ops.append(["set UV params on a face", func(): _uv_params(root, id0.call())])
+	ops.append(["hollow a new box", func(): made.append(_hollowed(root))])
+	ops.append(["clip a wall", func(): root.clip_brush_by_id(id1.call(), 0, 0.0)])
+	ops.append(["array the floor", func(): _array(root, id0.call())])
 	ops.append(["build an arch", func(): root.create_arch({}, Vector3(0, 0, 16))])
 	ops.append(["set the bake chunk size", func(): root.bake_chunk_size = 8.0])
 	ops.append(["turn face materials off", func(): root.bake_use_face_materials = false])
-	ops.append(["set the autosave path", func(): root.hflevel_autosave_path = "user://vibe_undo_depth.hflevel"])
+	ops.append(["set the autosave path", func(): root.hflevel_autosave_path = SAVE_PATH])
 	ops.append(["rename the visgroup", func(): root.rename_visgroup("shell", "outer_shell")])
-	ops.append(["move a brush to the floor", func(): root.move_brushes_to_floor([str(made[2].brush_id)])])
-	ops.append(["tie brushes to an entity", func(): root.tie_brushes_to_entity([str(made[2].brush_id)], "door_basic")])
-	ops.append(["untie them", func(): root.untie_brushes_from_entity([str(made[2].brush_id)])])
-	ops.append(["delete a light", func(): root.delete_entities_by_paths([str(root.get_path_to(made[4]))])])
-	ops.append(["draw one last brush", func(): made.append(box(root, Vector3(1, 1, 1), Vector3(0, 8, 0)))])
+	ops.append(["move a brush to the floor", func(): root.move_brushes_to_floor([id2.call()])])
+	ops.append(["tie brushes to an entity", func(): _tie(root, id2.call())])
+	ops.append(["untie them", func(): root.untie_brushes_from_entity([id2.call()])])
+	ops.append(["delete a light", func(): _delete_entity(root, made)])
+	ops.append(["draw one last brush", func(): made.append(_cube(root))])
 	return ops
+
+
+# The bodies the closures above call, kept out of them so each stays one line.
+
+
+func _slab(root: Node3D) -> Node:
+	return box(root, Vector3(8, 0.25, 8), Vector3(0, -0.125, 0))
+
+
+func _wall_z(root: Node3D) -> Node:
+	return box(root, Vector3(8, 3, 0.25), Vector3(0, 1.5, -4))
+
+
+func _wall_x(root: Node3D) -> Node:
+	return box(root, Vector3(0.25, 3, 8), Vector3(-4, 1.5, 0))
+
+
+func _cube(root: Node3D) -> Node:
+	return box(root, Vector3(1, 1, 1), Vector3(0, 8, 0))
+
+
+func _texture(root: Node3D, brush_id: String) -> void:
+	root.assign_material_to_whole_brushes(2, [brush_id])
+
+
+func _to_visgroup(root: Node3D, made: Array) -> void:
+	root.add_selection_to_visgroup("shell", [made[1], made[2]])
+
+
+func _group(root: Node3D, made: Array) -> void:
+	root.group_selection("shell_group", [made[1], made[2]])
+
+
+func _nudge(root: Node3D, brush_id: String) -> void:
+	root.nudge_brushes_by_id([brush_id], Vector3(0, 0.5, 0))
+
+
+func _rotate(root: Node3D, brush_id: String) -> void:
+	root.rotate_managed_nodes([brush_id], [], 1, deg_to_rad(15.0), Vector3.ZERO)
+
+
+func _entity(root: Node3D, entity_name: String) -> Node:
+	var e := DraftEntity.new()
+	e.entity_type = "light_point"
+	e.entity_class = "light_point"
+	e.name = entity_name
+	root.add_entity(e)
+	return e
+
+
+func _wire(root: Node3D, made: Array) -> void:
+	root.add_entity_output(made[3], "TurnOn", "lamp_two", "Toggle", "", 0.0, false)
+
+
+func _cordon(root: Node3D) -> void:
+	root.cordon_aabb = AABB(Vector3(-8, -1, -8), Vector3(16, 6, 16))
+
+
+func _select_faces(root: Node3D, made: Array) -> void:
+	root.clear_face_selection()
+	root.toggle_face_selection(made[0], 0, true)
+	root.toggle_face_selection(made[1], 0, true)
+
+
+func _uv_params(root: Node3D, brush_id: String) -> void:
+	root.set_face_uv_params(brush_id, 2, Vector2(2, 2), Vector2(0.25, 0.25), deg_to_rad(30.0))
+
+
+func _hollowed(root: Node3D) -> Node:
+	var b = box(root, Vector3(4, 3, 4), Vector3(16, 1.5, 0))
+	root.hollow_brush_by_id(b.brush_id, 0.25)
+	return b
+
+
+func _array(root: Node3D, brush_id: String) -> void:
+	root.create_duplicate_array(PackedStringArray([brush_id]), 3, Vector3(0, 4, 0))
+
+
+func _tie(root: Node3D, brush_id: String) -> void:
+	root.tie_brushes_to_entity([brush_id], "door_basic")
+
+
+func _delete_entity(root: Node3D, made: Array) -> void:
+	root.delete_entities_by_paths([str(root.get_path_to(made[4]))])
 
 
 func _undo_all_the_way_back() -> void:
@@ -323,9 +415,12 @@ func _undo_all_the_way_back() -> void:
 	else:
 		for line in mismatches:
 			note("  mismatch", line)
-		flag(
-			"%s of %s undo steps do not land on the state they snapshotted"
-			% [mismatches.size(), ops.size()],
+		known(
+			660,
+			(
+				"%s of %s undo steps do not land on the state they snapshotted"
+				% [mismatches.size(), ops.size()]
+			),
 			(
 				"the brushes and their contents come back; what does not is their order "
 				+ "and the id counter, both of which `capture_state()` records. The detail "
@@ -373,7 +468,8 @@ func _redo_all_the_way_forward() -> void:
 	var moved := _keys_that_moved(after_states[after_states.size() - 1], final_state)
 	note("keys that differ after undoing everything and redoing everything", moved)
 	if not moved.is_empty():
-		flag(
+		known(
+			660,
 			"undo to the start and redo to the end does not give the level back",
 			"%s differ" % str(moved)
 		)

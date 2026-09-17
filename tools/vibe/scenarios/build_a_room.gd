@@ -203,8 +203,10 @@ func _step_6_group_the_room(root: Node3D) -> void:
 	if nodes.is_empty():
 		flag(
 			"none of the original room's brushes survived the doorway carve",
-			"the ids captured after the hollow no longer resolve, so a mapper who "
-			+ "selected the room before carving has lost the selection"
+			(
+				"the ids captured after the hollow no longer resolve, so a mapper who "
+				+ "selected the room before carving has lost the selection"
+			)
 		)
 		return
 	root.group_selection("first_room", nodes)
@@ -272,8 +274,12 @@ func _step_8_bake(root: Node3D) -> void:
 		flag("a room, a corridor and a second room bake to no geometry")
 	var collision := _collision_shapes(root)
 	note("collision shapes in the bake", collision)
+	note("bake_collision_mode", root.bake_collision_mode)
 	if collision == 0:
-		flag("the bake produced no collision, so a playtest walks through walls")
+		flag(
+			"the bake produced no collision, so a playtest walks through walls",
+			"bake_collision_mode is %s and the mask passed was 1" % root.bake_collision_mode
+		)
 
 
 func _step_9_playtest(root: Node3D) -> void:
@@ -297,10 +303,7 @@ func _step_9_playtest(root: Node3D) -> void:
 	note("playtest scene contents", counts)
 	if int(counts.get("MeshInstance3D", 0)) == 0:
 		flag("the playtest scene has no geometry in it")
-	if (
-		int(counts.get("CharacterBody3D", 0)) == 0
-		and int(counts.get("CollisionShape3D", 0)) == 0
-	):
+	if int(counts.get("CharacterBody3D", 0)) == 0 and int(counts.get("CollisionShape3D", 0)) == 0:
 		flag("the playtest scene has neither a player nor any collision", counts)
 	inst.get_parent().remove_child(inst)
 	inst.queue_free()
@@ -350,26 +353,35 @@ func _inner_void(walls: Array) -> Vector3:
 	for w in walls:
 		var extent: Vector3 = HFVibe.local_extent(w)
 		thinnest = minf(thinnest, minf(extent.x, minf(extent.y, extent.z)))
-	var _unused = [inner_lo, inner_hi]
+	var unused_ref = [inner_lo, inner_hi]
 	return (hi - lo) - Vector3(thinnest, thinnest, thinnest) * 2.0
 
 
 func _baked_meshes(root: Node3D) -> Array:
 	var out: Array = []
-	_walk(root, func(n): if n is MeshInstance3D and not root.is_brush_node(n): out.append(n))
+	var stack: Array[Node] = [root]
+	while not stack.is_empty():
+		var node: Node = stack.pop_back()
+		for child in node.get_children():
+			if child is MeshInstance3D and not root.is_brush_node(child):
+				out.append(child)
+			stack.append(child)
 	return out
 
 
+## Counted with a loop rather than a closure: a GDScript lambda captures by
+## value, so `_walk(root, func(node): n += 1)` increments a copy and always
+## reports zero -- which reads exactly like a bake that produced no collision.
 func _collision_shapes(root: Node3D) -> int:
 	var n := 0
-	_walk(root, func(node): if node is CollisionShape3D: n += 1)
+	var stack: Array[Node] = [root]
+	while not stack.is_empty():
+		var node: Node = stack.pop_back()
+		for child in node.get_children():
+			if child is CollisionShape3D:
+				n += 1
+			stack.append(child)
 	return n
-
-
-func _walk(node: Node, fn: Callable) -> void:
-	for child in node.get_children():
-		fn.call(child)
-		_walk(child, fn)
 
 
 func _tally(node: Node, counts: Dictionary) -> void:

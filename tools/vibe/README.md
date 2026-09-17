@@ -153,6 +153,22 @@ it from here.
 | `scene-weight` | what a level costs inside the `.tscn` it lives in, before and after a bake |
 | `examples-integrity` | whether each shipped example builds a level that validates and holds its invariants |
 | `world-scale` | whether the drawing defaults, the generators, the examples and the player agree on how big a person is |
+| `far-origin` | whether a brush built far from the origin is the brush built at it |
+| `uv-justify` | where each Justify mode puts a face's texture, measured off the face |
+| `texture-continuity` | whether a texture runs across a wall built from several brushes |
+| `two-levels` | what a second level in the same project does to the first |
+| `build-a-room` | one map built end to end: hollow, doorway, corridor, texture, light, bake, playtest |
+| `bake-chunking` | whether a level a mapper would build ever reaches the chunked bake |
+| `scale-leftovers` | defaults elsewhere in the plugin that are still on the pre-#625 scale |
+| `undo-depth` | forty mixed edits, undone all the way back and redone, diffed at every step |
+| `material-palette` | what the 150-material prototype palette costs a level, and the way back out |
+| `map-real-world` | a `.map` written by another editor: what survives import, and the export after it |
+| `scene-reopen` | what a level is after being packed into its `.tscn` and opened again |
+| `command-surfaces` | every action a surface can emit against the dispatcher that runs it |
+| `op-results` | which refusals carry a reason to the mapper, and which are silent |
+| `prefab-library` | the prefab library panel: its list, filters, names and what it does with a bad file |
+| `brush-entities` | brushes tied to an entity class: naming, wiring, saving and what the exports make of them |
+| `missing-files` | what a level does when a file it points at is taken away |
 
 ## Adding a scenario
 
@@ -161,7 +177,7 @@ Subclass the scenario base in `tools/vibe/scenarios/`, then add the path to
 
 Extend it **by path**. `hf_vibe_scenario.gd` has no `class_name`, so
 `extends HFVibeScenario` only resolves while a stale
-`.godot/global_script_class_cache.cfg` still holds the name — it passes all
+`.godot/global_script_class_cache.cfg` still holds the name â€” it passes all
 session and fails to parse on a clean checkout, and CI does not run the sweep so
 nothing says otherwise.
 
@@ -206,7 +222,7 @@ The snap system's per-brush face cache keeps up with a vertex move, and grid
 snap does not shadow a corner that is genuinely nearer. Written down so the next
 reader does not have to work either of them out again.
 
-Several `note()` lines exist purely to close off a suspicion — that built-in I/O
+Several `note()` lines exist purely to close off a suspicion â€” that built-in I/O
 presets are handed out by reference, for instance, which is safe only because a
 `const` Dictionary is read-only in Godot 4. Writing down why something is *not*
 a finding is worth as much as writing down a finding.
@@ -284,6 +300,22 @@ Every one of these has cost a wasted run.
 - **Brush ids carry a per-session prefix.** Two runs of the same build produce
   different ids, so never diff on them. `HFVibe.describe_brushes()` leaves them
   out.
+- **A `match` arm can name several actions at once.** `"extrude_up",
+  "tool_extrude_up", "tool_extrude":` is one arm and three names. A scan that
+  reads the first name off each arm reports the other two as unhandled, which is
+  a scenario producing findings about itself.
+- **Godot's output is UTF-8 and the Windows console is not.** `run_vibe.py`
+  passes `encoding="utf-8", errors="replace"`; without it a single non-ASCII
+  character anywhere in a scenario's output took the whole run down with a
+  `UnicodeDecodeError` that read as the scenario having crashed.
+- **A scenario that writes into `res://` has to clean up after itself.**
+  `prefab-library` and `missing-files` both drive surfaces that read a real
+  directory. Anything left behind turns up in the next run's counts and in
+  `git status`. Keep the list of paths written and remove them at the end.
+- **Headless is not `Engine.is_editor_hint()`**, so a fresh root treats itself as
+  the running game and deferred-starts a playtest. Its `CharacterBody3D` is then
+  in the physics space, and a scenario that raycasts -- the spawn validator, for
+  one -- hits the player rather than the level. Set `auto_spawn_player = false`.
 - **Check findings against the open PRs before filing.** `main` can be well
   behind a stack of fixes. `git diff main...origin/<branch>` over the file you
   are looking at is the check; several confirmed reproductions on `main` were

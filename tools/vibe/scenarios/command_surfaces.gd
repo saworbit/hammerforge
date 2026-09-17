@@ -80,10 +80,13 @@ func _the_radial_menu(handled: Dictionary) -> void:
 		flag(
 			"a radial menu segment names an action nothing runs",
 			(
-				"pressing %s in the pie does nothing at all -- `HFPluginCommands."
-				+ "execute()` has no arm for it and the dispatcher's `match` has no "
-				+ "default, so the press is swallowed with no message"
-			) % str(dead)
+				(
+					"pressing %s in the pie does nothing at all -- `HFPluginCommands."
+					+ "execute()` has no arm for it and the dispatcher's `match` has no "
+					+ "default, so the press is swallowed with no message"
+				)
+				% str(dead)
+			)
 		)
 
 
@@ -106,12 +109,8 @@ func _the_keymap(handled: Dictionary) -> void:
 	# by the plugin's own input path rather than the dispatcher, so this is
 	# recorded rather than flagged unless the name appears nowhere at all.
 	var plugin_source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
-	var overlays := FileAccess.get_file_as_string(
-		"res://addons/hammerforge/plugin_overlays.gd"
-	)
-	var input_source := FileAccess.get_file_as_string(
-		"res://addons/hammerforge/plugin_input.gd"
-	)
+	var overlays := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_overlays.gd")
+	var input_source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_input.gd")
 	var orphaned: Array[String] = []
 	for a in bindings:
 		if handled.has(a):
@@ -128,11 +127,14 @@ func _the_keymap(handled: Dictionary) -> void:
 		flag(
 			"a key is bound to an action nothing anywhere runs",
 			(
-				"%s are in the keymap with a keycode, appear in the rebind dialog, and "
-				+ "are named by neither `HFPluginCommands.execute()` nor the plugin's "
-				+ "own input handling. Pressing them does nothing and rebinding them "
-				+ "can take a key away from something that works"
-			) % str(orphaned)
+				(
+					"%s are in the keymap with a keycode, appear in the rebind dialog, and "
+					+ "are named by neither `HFPluginCommands.execute()` nor the plugin's "
+					+ "own input handling. Pressing them does nothing and rebinding them "
+					+ "can take a key away from something that works"
+				)
+				% str(orphaned)
+			)
 		)
 
 
@@ -175,13 +177,17 @@ func _the_context_menu(handled: Dictionary) -> void:
 			else:
 				unreachable.append(a)
 		if not orphaned_ids.is_empty():
-			flag(
+			known(
+				670,
 				"%s maps a menu id to an action and never adds the item" % path.get_file(),
 				(
-					"%s: the const, the `match` arm and the action name all exist and no "
-					+ "`add_item()` call uses the id, so the entry is not in the menu and "
-					+ "the action behind it has no way in"
-				) % ", ".join(orphaned_ids)
+					(
+						"%s: the const, the `match` arm and the action name all exist and no "
+						+ "`add_item()` call uses the id, so the entry is not in the menu and "
+						+ "the action behind it has no way in"
+					)
+					% ", ".join(orphaned_ids)
+				)
 			)
 		if not unreachable.is_empty():
 			flag(
@@ -239,8 +245,11 @@ func _commands_no_surface_reaches(handled: Dictionary) -> void:
 		flag(
 			"%s commands exist that nothing can ask for" % unreachable.size(),
 			(
-				"`HFPluginCommands.execute()` implements %s, and no keymap entry, menu, "
-				+ "palette, toolbar, radial segment, dock button or console command "
-				+ "names them"
-			) % str(unreachable)
+				(
+					"`HFPluginCommands.execute()` implements %s, and no keymap entry, menu, "
+					+ "palette, toolbar, radial segment, dock button or console command "
+					+ "names them"
+				)
+				% str(unreachable)
+			)
 		)

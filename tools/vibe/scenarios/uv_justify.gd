@@ -113,8 +113,9 @@ func _on_a_rotated_texture() -> void:
 		note("rotated 30deg, %s: %s -> %s" % [mode, _r(before), _r(after)])
 		if mode == "left" and not is_equal_approx(after.position.x, 0.0):
 			flag("Left on a rotated face does not reach u=0", _r(after))
-		if mode == "fit" and not (
-			is_equal_approx(after.size.x, 1.0) and is_equal_approx(after.size.y, 1.0)
+		if (
+			mode == "fit"
+			and not (is_equal_approx(after.size.x, 1.0) and is_equal_approx(after.size.y, 1.0))
 		):
 			flag("Fit on a rotated face does not fill the unit square", _r(after))
 		if mode == "center":
@@ -146,7 +147,8 @@ func _on_hand_edited_uvs() -> void:
 	root.justify_selected_faces("left", false)
 	note("custom_uvs after Justify Left", face.custom_uvs.size())
 	if face.custom_uvs.size() == 0:
-		flag(
+		known(
+			654,
 			"Justify discards a hand-edited UV layout instead of moving it",
 			(
 				"the UV editor writes custom_uvs; every _justify_face() branch sets "
@@ -189,22 +191,24 @@ func _treat_as_one() -> void:
 		if not r.is_equal_approx(rects[0]):
 			identical = false
 	if identical:
-		flag(
+		known(
+			652,
 			"treat-as-one gives every face the same UV rectangle",
 			(
-				"three faces of three brushes side by side all land on %s, so the "
-				+ "texture restarts at each brush -- which is the thing the "
-				+ "checkbox exists to stop"
-			) % _r(rects[0])
+				(
+					"three faces of three brushes side by side all land on %s, so the "
+					+ "texture restarts at each brush -- which is the thing the "
+					+ "checkbox exists to stop"
+				)
+				% _r(rects[0])
+			)
 		)
 
 
 ## `_justify_face()` handles a seventh mode, "stretch", that no surface passes.
 func _modes_the_dock_cannot_reach() -> void:
 	note("-- modes in the code against modes on a button --")
-	var body := FileAccess.get_file_as_string(
-		"res://addons/hammerforge/systems/hf_brush_system.gd"
-	)
+	var body := FileAccess.get_file_as_string("res://addons/hammerforge/systems/hf_brush_system.gd")
 	var implemented: Array[String] = []
 	for mode in ["fit", "center", "left", "right", "top", "bottom", "stretch", "scale"]:
 		if body.find('"%s":' % mode) >= 0:

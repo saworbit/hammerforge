@@ -60,15 +60,22 @@ func _the_default_size_against_the_recommended_one() -> void:
 		box(root, Vector3(2, 2, 2), Vector3((i % 8) * 8, 0, (i / 8) * 8))
 		await frame()
 	var r := _chunk_report(root, "40 separated 2-cubes over 56x24 units")
-	if float(r["recommended"]) > 0.0 and absf(float(r["recommended"]) - float(r["chunk_size"])) > 1.0:
-		flag(
+	if (
+		float(r["recommended"]) > 0.0
+		and absf(float(r["recommended"]) - float(r["chunk_size"])) > 1.0
+	):
+		known(
+			656,
 			"the default chunk size is nothing like the recommended one",
 			(
-				"a level starts at bake_chunk_size=%s and `get_recommended_chunk_size()` "
-				+ "says %s for this level. Nothing applies the recommendation, and at %s "
-				+ "units every brush a mapper draws at the default 128 size spans a "
-				+ "chunk boundary"
-			) % [r["chunk_size"], r["recommended"], r["chunk_size"]]
+				(
+					"a level starts at bake_chunk_size=%s and `get_recommended_chunk_size()` "
+					+ "says %s for this level. Nothing applies the recommendation, and at %s "
+					+ "units every brush a mapper draws at the default 128 size spans a "
+					+ "chunk boundary"
+				)
+				% [r["chunk_size"], r["recommended"], r["chunk_size"]]
+			)
 		)
 
 
@@ -96,16 +103,20 @@ func _a_grid_of_separated_pillars() -> void:
 	var chunks_made := _chunk_nodes(root)
 	note("BakedChunk_ nodes in the result", chunks_made)
 	if chunks_made == 0 and int(r["chunk_count"]) > 1:
-		flag(
+		known(
+			656,
 			"the bake ignores the chunk size on the path every level uses",
 			(
-				"bake_dry_run() promises %s chunks and the bake makes 0. "
-				+ "`bake_chunked()` is only reached from the `else` of the "
-				+ "`use_face_material_path` branch in `_bake_impl()`, and "
-				+ "`bake_use_face_materials` defaults to true, so the Chunk Size spin, "
-				+ "`get_recommended_chunk_size()` and the dry run's chunk count all "
-				+ "describe a code path a default level never takes"
-			) % r["chunk_count"]
+				(
+					"bake_dry_run() promises %s chunks and the bake makes 0. "
+					+ "`bake_chunked()` is only reached from the `else` of the "
+					+ "`use_face_material_path` branch in `_bake_impl()`, and "
+					+ "`bake_use_face_materials` defaults to true, so the Chunk Size spin, "
+					+ "`get_recommended_chunk_size()` and the dry run's chunk count all "
+					+ "describe a code path a default level never takes"
+				)
+				% r["chunk_count"]
+			)
 		)
 	# The same level with face materials off, which is the only way in.
 	root.bake_use_face_materials = false
@@ -161,10 +172,13 @@ func _a_room_and_a_corridor() -> void:
 		flag(
 			"a level made of rooms and a corridor cannot be chunked at any size",
 			(
-				"brushes that touch is what a room is: six walls meeting at twelve "
-				+ "edges. Set the chunk size to whatever `get_recommended_chunk_size()` "
-				+ "returns (%s here) and the count is still %s"
-			) % [r["chunk_size"], r["chunk_count"]]
+				(
+					"brushes that touch is what a room is: six walls meeting at twelve "
+					+ "edges. Set the chunk size to whatever `get_recommended_chunk_size()` "
+					+ "returns (%s here) and the count is still %s"
+				)
+				% [r["chunk_size"], r["chunk_count"]]
+			)
 		)
 	# And sweep every size, so the report is not about one unlucky number.
 	var sizes: Array[float] = [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0]
@@ -191,9 +205,12 @@ func _what_the_dry_run_tells_the_mapper() -> void:
 		flag(
 			"the recommended chunk size is outside the range the property accepts",
 			(
-				"get_recommended_chunk_size() returned %s and setting it left the "
-				+ "property at %s"
-			) % [root.get_recommended_chunk_size(), root.bake_chunk_size]
+				(
+					"get_recommended_chunk_size() returned %s and setting it left the "
+					+ "property at %s"
+				)
+				% [root.get_recommended_chunk_size(), root.bake_chunk_size]
+			)
 		)
 	note("chunk count at the recommended size", root.get_bake_chunk_count())
 

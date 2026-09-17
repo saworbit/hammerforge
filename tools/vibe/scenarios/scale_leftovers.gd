@@ -68,16 +68,20 @@ func _the_default_spawn() -> void:
 	note("spawn placed at", spawn.global_position)
 	note("its height above the floor", _players(spawn.global_position.y))
 	if spawn.global_position.y > aabb.end.y:
-		flag(
+		known(
+			657,
 			"the default player spawn is placed above the level's ceiling",
 			(
-				"`create_default_spawn()` takes the centroid of every pick node and adds "
-				+ "a literal 5.0 to its y (hf_spawn_system.gd:203), with a hard-coded "
-				+ "Vector3(0, 5, 0) for an empty level. The room here is %s units tall "
-				+ "and the spawn is at %s. Five units was a small step up when the "
-				+ "project was on Quake scale; on the scale #625 settled it is three "
-				+ "rooms up"
-			) % [aabb.size.y, spawn.global_position.y]
+				(
+					"`create_default_spawn()` takes the centroid of every pick node and adds "
+					+ "a literal 5.0 to its y (hf_spawn_system.gd:203), with a hard-coded "
+					+ "Vector3(0, 5, 0) for an empty level. The room here is %s units tall "
+					+ "and the spawn is at %s. Five units was a small step up when the "
+					+ "project was on Quake scale; on the scale #625 settled it is three "
+					+ "rooms up"
+				)
+				% [aabb.size.y, spawn.global_position.y]
+			)
 		)
 
 	# Give the physics server frames to register the draft collision before
@@ -110,18 +114,22 @@ func _the_default_spawn() -> void:
 	)
 	note("times hf_validation_system.gd says 'spawn'", validation_source.countn("spawn"))
 	if spawn.global_position.y > aabb.end.y and not mentions_spawn:
-		flag(
+		known(
+			657,
 			"validate_level() passes a level whose spawn its own spawn validator rejects",
 			(
-				"the Validate button reports %s issues on a level whose only player "
-				+ "spawn is outside the level. `hf_validation_system.gd` contains the "
-				+ "word 'spawn' %s times: `validate_spawn()` is not among the twenty-odd "
-				+ "checks `validate()` runs, so the surface a mapper presses before "
-				+ "testing is the one that never looks at the thing testing starts from"
-			) % [
-				issues.size() if issues is Array else "?",
-				validation_source.countn("spawn"),
-			]
+				(
+					"the Validate button reports %s issues on a level whose only player "
+					+ "spawn is outside the level. `hf_validation_system.gd` contains the "
+					+ "word 'spawn' %s times: `validate_spawn()` is not among the twenty-odd "
+					+ "checks `validate()` runs, so the surface a mapper presses before "
+					+ "testing is the one that never looks at the thing testing starts from"
+				)
+				% [
+					issues.size() if issues is Array else "?",
+					validation_source.countn("spawn"),
+				]
+			)
 		)
 
 
@@ -136,14 +144,18 @@ func _the_polygon_tools_height() -> void:
 	note("a drawn brush's default size", root.brush_size_default)
 	note("resets to the same number after each shape", source.count("_height = 32.0"))
 	if height > root.brush_size_default.y * 4.0:
-		flag(
+		known(
+			658,
 			"the Polygon tool extrudes to a height nothing else on the project's scale uses",
 			(
-				"`_height` starts at %s units -- %.0f players -- against a default drawn "
-				+ "brush of %s and a grid that snaps at %s. It is also reset to the "
-				+ "literal 32.0 in two more places after each shape, so a mapper who "
-				+ "drags it down to something usable gets it back on the next polygon"
-			) % [height, height / PLAYER_HEIGHT, root.brush_size_default.y, root.grid_snap]
+				(
+					"`_height` starts at %s units -- %.0f players -- against a default drawn "
+					+ "brush of %s and a grid that snaps at %s. It is also reset to the "
+					+ "literal 32.0 in two more places after each shape, so a mapper who "
+					+ "drags it down to something usable gets it back on the next polygon"
+				)
+				% [height, height / PLAYER_HEIGHT, root.brush_size_default.y, root.grid_snap]
+			)
 		)
 
 
@@ -154,16 +166,20 @@ func _the_shipped_entity_properties() -> void:
 	var defs: Dictionary = root.get_entity_definitions()
 	note("classes in entities.json", defs.keys())
 	if defs.keys().size() <= 3:
-		flag(
+		known(
+			659,
 			"three entity classes ship with a level editor built around entity I/O",
 			(
-				"entities.json defines %s: no trigger volume, no spot or directional "
-				+ "light, no static prop, no brush entity class. The I/O wiring panel, "
-				+ "the connection visualiser, the runtime dispatcher and the .map entity "
-				+ "export are all built and there is almost nothing to point them at, so "
-				+ "the whole gameplay half of the tool is unreachable without the mapper "
-				+ "hand-authoring JSON first"
-			) % str(defs.keys())
+				(
+					"entities.json defines %s: no trigger volume, no spot or directional "
+					+ "light, no static prop, no brush entity class. The I/O wiring panel, "
+					+ "the connection visualiser, the runtime dispatcher and the .map entity "
+					+ "export are all built and there is almost nothing to point them at, so "
+					+ "the whole gameplay half of the tool is unreachable without the mapper "
+					+ "hand-authoring JSON first"
+				)
+				% str(defs.keys())
+			)
 		)
 	for key in defs.keys():
 		var entry: Dictionary = defs[key]
@@ -181,13 +197,17 @@ func _the_shipped_entity_properties() -> void:
 			# A distance or a speed two orders of magnitude off the scale the
 			# project settled on is the leftover shape.
 			if value >= 100.0:
-				flag(
+				known(
+					658,
 					"a shipped entity's default is on the pre-#625 scale",
 					(
-						"%s.%s defaults to %s. The playtest player walks at 6.5 units a "
-						+ "second and a room is 8 units across, so this is the Quake-scale "
-						+ "number the rest of the project moved off"
-					) % [key, prop.get("name", "?"), value]
+						(
+							"%s.%s defaults to %s. The playtest player walks at 6.5 units a "
+							+ "second and a room is 8 units across, so this is the Quake-scale "
+							+ "number the rest of the project moved off"
+						)
+						% [key, prop.get("name", "?"), value]
+					)
 				)
 
 
@@ -210,11 +230,15 @@ func _controls_whose_range_outlives_the_level() -> void:
 		var maximum := float(rest.split("\n")[0])
 		note("%s max" % interesting[name], _players(maximum))
 		if maximum >= 32.0:
-			flag(
+			known(
+				658,
 				"a dock control's range is four rooms wide",
 				(
-					"%s runs to %s units -- %.0f players -- on a project whose default "
-					+ "brush is 2 units and whose shipped examples are 8 unit rooms. "
-					+ "Every useful value is in the first 3%% of the slider"
-				) % [interesting[name], maximum, maximum / PLAYER_HEIGHT]
+					(
+						"%s runs to %s units -- %.0f players -- on a project whose default "
+						+ "brush is 2 units and whose shipped examples are 8 unit rooms. "
+						+ "Every useful value is in the first 3%% of the slider"
+					)
+					% [interesting[name], maximum, maximum / PLAYER_HEIGHT]
+				)
 			)

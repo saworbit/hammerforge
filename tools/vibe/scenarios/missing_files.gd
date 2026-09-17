@@ -89,7 +89,10 @@ func _a_material_that_is_gone() -> void:
 	note("the level loaded", ok)
 	note("palette after the load", reopened.get_material_names())
 	note("palette slots", reopened.get_materials().size())
-	note("slot 0 resolves to a material", reopened.get_materials()[0] if reopened.get_materials().size() > 0 else null)
+	note(
+		"slot 0 resolves to a material",
+		reopened.get_materials()[0] if reopened.get_materials().size() > 0 else null
+	)
 	note("faces still pointing at slot 0", _faces_on(reopened, 0))
 	note("check_missing_dependencies()", reopened.check_missing_dependencies())
 	var report: Dictionary = reopened.validate_level()
@@ -102,15 +105,22 @@ func _a_material_that_is_gone() -> void:
 		flag(
 			"a level whose material file is gone reports nothing",
 			(
-				"the palette slot the faces point at is %s and `validate_level()` "
-				+ "returns %s issues. `check_missing_dependencies()` returned %s. The "
-				+ "brush renders with whatever the slot fell back to and nothing names "
-				+ "the file that went"
-			) % [
-				str(reopened.get_materials()[0]) if reopened.get_materials().size() > 0 else "gone",
-				(report.get("issues", []) as Array).size(),
-				str(reopened.check_missing_dependencies()),
-			]
+				(
+					"the palette slot the faces point at is %s and `validate_level()` "
+					+ "returns %s issues. `check_missing_dependencies()` returned %s. The "
+					+ "brush renders with whatever the slot fell back to and nothing names "
+					+ "the file that went"
+				)
+				% [
+					(
+						str(reopened.get_materials()[0])
+						if reopened.get_materials().size() > 0
+						else "gone"
+					),
+					(report.get("issues", []) as Array).size(),
+					str(reopened.check_missing_dependencies()),
+				]
+			)
 		)
 
 
@@ -130,7 +140,13 @@ func _a_prefab_an_instance_points_at() -> void:
 	var instances: Dictionary = root.prefab_system.get_all_instances()
 	note("instances registered", instances.size())
 	for key in instances.keys():
-		note("  instance", "%s -> %s" % [key, instances[key].source_path if "source_path" in instances[key] else "?"])
+		note(
+			"  instance",
+			(
+				"%s -> %s"
+				% [key, instances[key].source_path if "source_path" in instances[key] else "?"]
+			)
+		)
 
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(written))
 	note("prefab still on disk", FileAccess.file_exists(written))
@@ -167,11 +183,14 @@ func _a_prefab_an_instance_points_at() -> void:
 		flag(
 			"prefab operations report success against a source file that is not there",
 			(
-				"%s on an instance whose `.hfprefab` has been deleted return success "
-				+ "without the file existing before or after. Push to Source is the "
-				+ "operation a mapper uses to save changes back to the library, so a "
-				+ "success it did not earn is the shape that loses work"
-			) % str(lied)
+				(
+					"%s on an instance whose `.hfprefab` has been deleted return success "
+					+ "without the file existing before or after. Push to Source is the "
+					+ "operation a mapper uses to save changes back to the library, so a "
+					+ "success it did not earn is the shape that loses work"
+				)
+				% str(lied)
+			)
 		)
 	note("brushes still in the level", root.get_live_brush_count())
 	var mentions := false
@@ -179,15 +198,19 @@ func _a_prefab_an_instance_points_at() -> void:
 		if str(entry).to_lower().find("prefab") >= 0:
 			mentions = true
 	if not mentions and instances.size() > 0:
-		flag(
+		known(
+			669,
 			"a linked prefab instance whose source is gone is not reported",
 			(
-				"%s instance(s) point at %s, the file is not there, and both "
-				+ "`check_missing_dependencies()` and `validate_level()` are quiet. The "
-				+ "dock still offers Cycle Variant, Push to Source and Propagate on it, "
-				+ "and #615 already covers the ones that cannot be reached at all -- "
-				+ "this is the ones that can, aimed at nothing"
-			) % [instances.size(), written]
+				(
+					"%s instance(s) point at %s, the file is not there, and both "
+					+ "`check_missing_dependencies()` and `validate_level()` are quiet. The "
+					+ "dock still offers Cycle Variant, Push to Source and Propagate on it, "
+					+ "and #615 already covers the ones that cannot be reached at all -- "
+					+ "this is the ones that can, aimed at nothing"
+				)
+				% [instances.size(), written]
+			)
 		)
 
 
@@ -207,8 +230,10 @@ func _no_entity_definitions_at_all() -> void:
 	if defs.is_empty():
 		note(
 			"an empty definition set",
-			"placing an entity, the Objects tab and the brush-entity dropdown all "
-			+ "have nothing to offer; the dropdown has documented built-in fallbacks"
+			(
+				"placing an entity, the Objects tab and the brush-entity dropdown all "
+				+ "have nothing to offer; the dropdown has documented built-in fallbacks"
+			)
 		)
 
 

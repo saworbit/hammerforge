@@ -80,14 +80,18 @@ func _drawn_side_by_side() -> void:
 		if not r.is_equal_approx(rects[0]):
 			all_same = false
 	if all_same:
-		flag(
+		known(
+			652,
 			"three panels drawn side by side all sample the same texture coordinates",
 			(
-				"every panel's front face maps to %s, so the texture restarts at each "
-				+ "brush edge instead of running along the wall -- "
-				+ "`_project_uvs_for_vertices()` reads `local_verts`, and a brush's "
-				+ "local vertices do not know where the brush is"
-			) % _r(rects[0])
+				(
+					"every panel's front face maps to %s, so the texture restarts at each "
+					+ "brush edge instead of running along the wall -- "
+					+ "`_project_uvs_for_vertices()` reads `local_verts`, and a brush's "
+					+ "local vertices do not know where the brush is"
+				)
+				% _r(rects[0])
+			)
 		)
 	else:
 		note("panels differ, checking they butt up")
@@ -115,13 +119,17 @@ func _drawn_against_moved() -> void:
 	note("drawn at 0, nudged +128", _r(b))
 	note("both now at", "%s and %s" % [drawn.global_position, moved.global_position])
 	if not a.is_equal_approx(b):
-		flag(
+		known(
+			653,
 			"two brushes in the same place with the same size have different UVs",
 			(
-				"drawing a panel where it goes gives %s; drawing it at the origin and "
-				+ "moving it there gives %s. The texture on a wall then depends on how "
-				+ "the mapper got the brush there, and no surface says which one happened"
-			) % [_r(a), _r(b)]
+				(
+					"drawing a panel where it goes gives %s; drawing it at the origin and "
+					+ "moving it there gives %s. The texture on a wall then depends on how "
+					+ "the mapper got the brush there, and no surface says which one happened"
+				)
+				% [_r(a), _r(b)]
+			)
 		)
 
 
@@ -145,16 +153,19 @@ func _which_way_the_checkbox_goes() -> void:
 		var stayed_on_the_brush := before.is_equal_approx(after)
 		results[locked] = stayed_on_the_brush
 		note(
-			"texture_lock=%s: %s -> %s, texture %s"
-			% [
-				locked,
-				_r(before),
-				_r(after),
-				"stayed on the brush" if stayed_on_the_brush else "slid across the brush"
-			]
+			(
+				"texture_lock=%s: %s -> %s, texture %s"
+				% [
+					locked,
+					_r(before),
+					_r(after),
+					"stayed on the brush" if stayed_on_the_brush else "slid across the brush"
+				]
+			)
 		)
 	if results.get(true) == false and results.get(false) == true:
-		flag(
+		known(
+			653,
 			"Texture Lock on is the setting that lets the texture slide off the brush",
 			(
 				"with Texture Lock ticked, moving a brush 256 units changes the UVs of "
@@ -172,7 +183,9 @@ func _a_duplicated_row() -> void:
 	var root: Node3D = await fresh_root()
 	var src = box(root, Vector3(128, 128, 16), Vector3.ZERO)
 	await frame()
-	var result = root.create_duplicate_array(PackedStringArray([src.brush_id]), 4, Vector3(128, 0, 0))
+	var result = root.create_duplicate_array(
+		PackedStringArray([src.brush_id]), 4, Vector3(128, 0, 0)
+	)
 	await frame()
 	note("array result", result)
 	var brushes: Array = []
@@ -184,12 +197,16 @@ func _a_duplicated_row() -> void:
 		seen[_r(rect)] = int(seen.get(_r(rect), 0)) + 1
 		note("copy at %s" % b.global_position, _r(rect))
 	if seen.size() == 1 and brushes.size() > 1:
-		flag(
+		known(
+			652,
 			"every copy in an array samples the same texture coordinates",
 			(
-				"%s brushes spread over %s units all map to %s, so an arrayed wall "
-				+ "shows the same patch of texture repeated rather than a continuous run"
-			) % [brushes.size(), 3 * 128, seen.keys()[0]]
+				(
+					"%s brushes spread over %s units all map to %s, so an arrayed wall "
+					+ "shows the same patch of texture repeated rather than a continuous run"
+				)
+				% [brushes.size(), 3 * 128, seen.keys()[0]]
+			)
 		)
 
 

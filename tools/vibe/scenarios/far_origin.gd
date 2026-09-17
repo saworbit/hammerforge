@@ -128,7 +128,10 @@ func _round_trips_out_there() -> void:
 		var back: Array = []
 		_collect_brushes(root, root, back)
 		if back.is_empty():
-			flag(".map written at 16384 imports as an empty level", "export wrote %s bytes" % text.length())
+			flag(
+				".map written at 16384 imports as an empty level",
+				"export wrote %s bytes" % text.length()
+			)
 		else:
 			var re: Vector3 = (back[0] as Node3D).global_position
 			var map_drift := (re - before).length()
@@ -179,10 +182,12 @@ func _operations_out_there() -> void:
 		var cutter = box(root3, Vector3(128, 512, 128), centre)
 		await frame()
 		var carve = root3.carve_with_brush(cutter.brush_id)
-		note("at %s: carve reported %s, level holds %s brushes" % [d, carve.ok, _brush_count(root3)])
+		note(
+			"at %s: carve reported %s, level holds %s brushes" % [d, carve.ok, _brush_count(root3)]
+		)
 		if d > 0.0 and not carve.ok:
 			flag("carve refuses at %s and works at the origin" % d, carve.user_text())
-		var _unused = solid
+		var unused_ref = solid
 
 
 func _brush_count(root: Node3D) -> int:

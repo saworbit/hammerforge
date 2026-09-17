@@ -60,12 +60,12 @@ func _source_map() -> String:
 	# A wedge, defined by planes rather than as a box.
 	lines.append("// brush 6")
 	lines.append("{")
-	lines.append('( 0 0 0 ) ( 0 0 1 ) ( 0 1 0 ) sky1 [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 1 1')
-	lines.append('( 128 0 0 ) ( 128 1 0 ) ( 128 0 1 ) sky1 [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 1 1')
-	lines.append('( 0 0 0 ) ( 1 0 0 ) ( 0 0 1 ) sky1 [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1')
-	lines.append('( 0 96 0 ) ( 0 96 1 ) ( 1 96 0 ) sky1 [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1')
-	lines.append('( 0 0 0 ) ( 0 1 0 ) ( 1 0 0 ) sky1 [ 1 0 0 0 ] [ 0 1 0 0 ] 0 1 1')
-	lines.append('( 0 0 96 ) ( 1 0 96 ) ( 0 1 96 ) sky1 [ 1 0 0 0 ] [ 0 1 0 0 ] 0 1 1')
+	lines.append("( 0 0 0 ) ( 0 0 1 ) ( 0 1 0 ) sky1 [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 1 1")
+	lines.append("( 128 0 0 ) ( 128 1 0 ) ( 128 0 1 ) sky1 [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 1 1")
+	lines.append("( 0 0 0 ) ( 1 0 0 ) ( 0 0 1 ) sky1 [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1")
+	lines.append("( 0 96 0 ) ( 0 96 1 ) ( 1 96 0 ) sky1 [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1")
+	lines.append("( 0 0 0 ) ( 0 1 0 ) ( 1 0 0 ) sky1 [ 1 0 0 0 ] [ 0 1 0 0 ] 0 1 1")
+	lines.append("( 0 0 96 ) ( 1 0 96 ) ( 0 1 96 ) sky1 [ 1 0 0 0 ] [ 0 1 0 0 ] 0 1 1")
 	lines.append("}")
 	lines.append("}")
 	# A point entity with keys nothing in HammerForge names.
@@ -112,28 +112,40 @@ func _box_brush(
 	out.append("{")
 	# ( p1 ) ( p2 ) ( p3 ) TEX [ ux uy uz uoff ] [ vx vy vz voff ] rot xs ys
 	out.append(
-		"( %d %d %d ) ( %d %d %d ) ( %d %d %d ) %s [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1"
-		% [x0, y1, z0, x1, y1, z0, x1, y1, z1, texture]
+		(
+			"( %d %d %d ) ( %d %d %d ) ( %d %d %d ) %s [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1"
+			% [x0, y1, z0, x1, y1, z0, x1, y1, z1, texture]
+		)
 	)
 	out.append(
-		"( %d %d %d ) ( %d %d %d ) ( %d %d %d ) %s [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1"
-		% [x0, y0, z0, x1, y0, z1, x1, y0, z0, texture]
+		(
+			"( %d %d %d ) ( %d %d %d ) ( %d %d %d ) %s [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1"
+			% [x0, y0, z0, x1, y0, z1, x1, y0, z0, texture]
+		)
 	)
 	out.append(
-		"( %d %d %d ) ( %d %d %d ) ( %d %d %d ) %s [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1"
-		% [x0, y0, z0, x0, y1, z0, x1, y1, z0, texture]
+		(
+			"( %d %d %d ) ( %d %d %d ) ( %d %d %d ) %s [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1"
+			% [x0, y0, z0, x0, y1, z0, x1, y1, z0, texture]
+		)
 	)
 	out.append(
-		"( %d %d %d ) ( %d %d %d ) ( %d %d %d ) %s [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1"
-		% [x1, y0, z1, x1, y1, z1, x0, y1, z1, texture]
+		(
+			"( %d %d %d ) ( %d %d %d ) ( %d %d %d ) %s [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1"
+			% [x1, y0, z1, x1, y1, z1, x0, y1, z1, texture]
+		)
 	)
 	out.append(
-		"( %d %d %d ) ( %d %d %d ) ( %d %d %d ) %s [ 0 0 1 0 ] [ 0 -1 0 0 ] 0 1 1"
-		% [x0, y0, z0, x0, y1, z1, x0, y1, z0, texture]
+		(
+			"( %d %d %d ) ( %d %d %d ) ( %d %d %d ) %s [ 0 0 1 0 ] [ 0 -1 0 0 ] 0 1 1"
+			% [x0, y0, z0, x0, y1, z1, x0, y1, z0, texture]
+		)
 	)
 	out.append(
-		"( %d %d %d ) ( %d %d %d ) ( %d %d %d ) %s [ 0 0 1 0 ] [ 0 -1 0 0 ] 0 1 1"
-		% [x1, y0, z0, x1, y1, z0, x1, y1, z1, texture]
+		(
+			"( %d %d %d ) ( %d %d %d ) ( %d %d %d ) %s [ 0 0 1 0 ] [ 0 -1 0 0 ] 0 1 1"
+			% [x1, y0, z0, x1, y1, z0, x1, y1, z1, texture]
+		)
 	)
 	out.append("}")
 	return out
@@ -216,14 +228,18 @@ func _import_a_third_party_map() -> void:
 				slots[int(face.material_idx)] = int(slots.get(int(face.material_idx), 0)) + 1
 	note("face material slots after the import", slots)
 	if root.get_materials().is_empty() and slots.keys() == [-1]:
-		flag(
+		known(
+			662,
 			"a .map import throws away every texture name in the file",
 			(
-				"the file names floor1, ceil1, wall_a, wall_b, *water1, AAATRIGGER, "
-				+ "sky1 and +0button across %s faces. The palette is empty afterwards "
-				+ "and all %s faces are on material_idx -1, so the level arrives "
-				+ "untextured with no record anywhere of what each face was"
-			) % [slots.get(-1, 0), slots.get(-1, 0)]
+				(
+					"the file names floor1, ceil1, wall_a, wall_b, *water1, AAATRIGGER, "
+					+ "sky1 and +0button across %s faces. The palette is empty afterwards "
+					+ "and all %s faces are on material_idx -1, so the level arrives "
+					+ "untextured with no record anywhere of what each face was"
+				)
+				% [slots.get(-1, 0), slots.get(-1, 0)]
+			)
 		)
 
 
@@ -244,8 +260,7 @@ func _and_export_it_again() -> void:
 	# What the export writes in the texture field of a face line, since the
 	# source's names are the thing most obviously at risk.
 	var written := {}
-	for line in text.split("
-"):
+	for line in text.split("\n"):
 		var idx := line.rfind(") ")
 		if idx < 0 or not line.begins_with("("):
 			continue
@@ -282,14 +297,18 @@ func _and_export_it_again() -> void:
 	# The texture half is already flagged above; this is the key/value half.
 	var keys_lost: Array[String] = lost.filter(func(x: String): return x.find('("') >= 0)
 	if not keys_lost.is_empty():
-		flag(
+		known(
+			663,
 			"a .map round trip drops the worldspawn and brush-entity keys",
 			(
-				"opening someone's map and saving it back loses: %s. "
-				+ "`parse_map_text()` keeps every key/value pair in the record's "
-				+ "'properties' and 'pairs'; a point entity's land on `entity_data` and "
-				+ "come back out, and worldspawn's and a brush entity's have nowhere to "
-				+ "go, so export has nothing to write. The `target` loss takes the "
-				+ "trigger-to-door link with it, which is the whole of the map's logic"
-			) % ", ".join(keys_lost)
+				(
+					"opening someone's map and saving it back loses: %s. "
+					+ "`parse_map_text()` keeps every key/value pair in the record's "
+					+ "'properties' and 'pairs'; a point entity's land on `entity_data` and "
+					+ "come back out, and worldspawn's and a brush entity's have nowhere to "
+					+ "go, so export has nothing to write. The `target` loss takes the "
+					+ "trigger-to-door link with it, which is the whole of the map's logic"
+				)
+				% ", ".join(keys_lost)
+			)
 		)
