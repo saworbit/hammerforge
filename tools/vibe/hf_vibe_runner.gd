@@ -111,6 +111,13 @@ const SCENARIOS: Array[String] = [
 	"res://tools/vibe/scenarios/scene_weight.gd",
 	"res://tools/vibe/scenarios/examples_integrity.gd",
 	"res://tools/vibe/scenarios/world_scale.gd",
+	"res://tools/vibe/scenarios/far_origin.gd",
+	"res://tools/vibe/scenarios/uv_justify.gd",
+	"res://tools/vibe/scenarios/texture_continuity.gd",
+	"res://tools/vibe/scenarios/two_levels.gd",
+	"res://tools/vibe/scenarios/build_a_room.gd",
+	"res://tools/vibe/scenarios/bake_chunking.gd",
+	"res://tools/vibe/scenarios/scale_leftovers.gd",
 ]
 
 

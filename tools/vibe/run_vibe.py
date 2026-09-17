@@ -126,6 +126,13 @@ SCENARIOS = [
     "scene-weight",
     "examples-integrity",
     "world-scale",
+    "far-origin",
+    "uv-justify",
+    "texture-continuity",
+    "two-levels",
+    "build-a-room",
+    "bake-chunking",
+    "scale-leftovers",
 ]
 
 # Generous: chaos runs 300 operations and cost saves eight levels. A scenario
