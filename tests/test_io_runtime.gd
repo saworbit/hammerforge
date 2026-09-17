@@ -945,3 +945,136 @@ func test_a_handler_needing_two_arguments_falls_through_to_the_generic_handler()
 
 	assert_eq(door.received_calls.size(), 1, "the input still lands somewhere")
 	assert_eq(door.received_calls[0]["method"], "_on_io_input")
+
+
+# ===========================================================================
+# A source raises its own output (#686, #714)
+# ===========================================================================
+
+
+func _make_trigger_volume(parent: Node3D, volume_name: String, entity_class: String) -> Area3D:
+	var area := Area3D.new()
+	area.name = volume_name
+	area.monitoring = true
+	area.set_meta("entity_name", volume_name)
+	area.set_meta("brush_entity_class", entity_class)
+	parent.add_child(area)
+	return area
+
+
+func test_a_trigger_volume_raises_its_output_when_a_body_enters():
+	# Nothing in the addon called fire(), so every graph a mapper wired was inert
+	# at runtime however correct it was.
+	var volume := _make_trigger_volume(scene_root, "front_trigger", "trigger_multiple")
+	var door := _make_target_entity(scene_root, "gate")
+	_add_connection(volume, "OnStartTouch", "gate", "Open")
+	_wire_dispatcher()
+	assert_gt(
+		volume.get_signal_connection_list("body_entered").size(),
+		0,
+		"body_entered is what a trigger volume fires from"
+	)
+	volume.emit_signal("body_entered", autofree(CharacterBody3D.new()))
+	assert_eq(door.received_calls.size(), 1, "walking in should deliver the wired input")
+	assert_eq(door.received_calls[0]["method"], "Open")
+
+
+func test_a_trigger_volume_raises_its_end_output_when_a_body_leaves():
+	var volume := _make_trigger_volume(scene_root, "front_trigger", "trigger_multiple")
+	var door := _make_target_entity(scene_root, "gate")
+	_add_connection(volume, "OnEndTouch", "gate", "Open")
+	_wire_dispatcher()
+	volume.emit_signal("body_exited", autofree(CharacterBody3D.new()))
+	assert_eq(door.received_calls.size(), 1, "leaving should deliver the wired input")
+
+
+func test_trigger_multiple_raises_its_output_every_time():
+	var volume := _make_trigger_volume(scene_root, "front_trigger", "trigger_multiple")
+	var door := _make_target_entity(scene_root, "gate")
+	_add_connection(volume, "OnStartTouch", "gate", "Open")
+	_wire_dispatcher()
+	for _i in 3:
+		volume.emit_signal("body_entered", autofree(CharacterBody3D.new()))
+	assert_eq(door.received_calls.size(), 3, "trigger_multiple fires every time")
+
+
+func test_trigger_once_raises_its_output_only_the_first_time():
+	# The class describes itself as firing the first time the player enters it, and
+	# that is the only thing separating it from trigger_multiple in the bake.
+	var volume := _make_trigger_volume(scene_root, "front_trigger", "trigger_once")
+	var door := _make_target_entity(scene_root, "gate")
+	_add_connection(volume, "OnStartTouch", "gate", "Open")
+	_wire_dispatcher()
+	for _i in 3:
+		volume.emit_signal("body_entered", autofree(CharacterBody3D.new()))
+	assert_eq(door.received_calls.size(), 1, "trigger_once fires the first time only")
+
+
+func test_a_brush_entity_with_no_class_signal_is_left_alone():
+	# func_detail and func_wall have no event of their own, and connecting one to
+	# a signal the class does not name would fire outputs nobody asked for.
+	var volume := _make_trigger_volume(scene_root, "clutter", "func_detail")
+	_add_connection(volume, "OnStartTouch", "gate", "Open")
+	_wire_dispatcher()
+	assert_eq(volume.get_signal_connection_list("body_entered").size(), 0)
+
+
+func test_rewiring_does_not_double_connect_a_class_signal():
+	var volume := _make_trigger_volume(scene_root, "front_trigger", "trigger_multiple")
+	var door := _make_target_entity(scene_root, "gate")
+	_add_connection(volume, "OnStartTouch", "gate", "Open")
+	_wire_dispatcher()
+	dispatcher.wire()
+	dispatcher.wire()
+	assert_eq(volume.get_signal_connection_list("body_entered").size(), 1)
+	volume.emit_signal("body_entered", autofree(CharacterBody3D.new()))
+	assert_eq(door.received_calls.size(), 1, "one body entering is one delivery")
+
+
+func test_an_input_the_class_grants_calls_the_engine_method():
+	# logic_timer declares Start and Stop, its node class is Timer, and those are
+	# exactly the two methods the engine-method guard exists to refuse.
+	var relay := _make_entity(scene_root, "relay")
+	var timer := Timer.new()
+	timer.name = "spawner"
+	timer.set_meta("entity_name", "spawner")
+	timer.set_meta("entity_io_input_methods", {"Start": "start", "Stop": "stop"})
+	timer.wait_time = 5.0
+	scene_root.add_child(timer)
+	_add_connection(relay, "OnTrigger", "spawner", "Start")
+	_wire_dispatcher()
+	assert_true(timer.is_stopped(), "the timer has not been started yet")
+	dispatcher.fire("relay", "OnTrigger")
+	assert_false(timer.is_stopped(), "Start should have called Timer.start()")
+
+
+func test_a_granted_method_takes_its_parameter_in_the_type_it_declares():
+	# The parameter field is free text and an engine argument is typed, so handing
+	# Timer.start() a String is an argument error that stops the delivery dead.
+	var relay := _make_entity(scene_root, "relay")
+	var timer := Timer.new()
+	timer.name = "spawner"
+	timer.set_meta("entity_name", "spawner")
+	timer.set_meta("entity_io_input_methods", {"Start": "start", "Stop": "stop"})
+	timer.wait_time = 60.0
+	scene_root.add_child(timer)
+	_add_connection(relay, "OnTrigger", "spawner", "Start", "2.5")
+	_wire_dispatcher()
+	dispatcher.fire("relay", "OnTrigger")
+	assert_false(timer.is_stopped(), "Start should have called Timer.start()")
+	assert_almost_eq(timer.time_left, 2.5, 0.25, "the parameter is the interval in seconds")
+
+
+func test_an_engine_method_the_class_does_not_grant_is_still_refused():
+	# The guard is what stops an input called QueueFree deleting its target, and a
+	# grant is per class rather than a global allow-list for that reason.
+	var relay := _make_entity(scene_root, "relay")
+	var timer := Timer.new()
+	timer.name = "spawner"
+	timer.set_meta("entity_name", "spawner")
+	timer.wait_time = 5.0
+	scene_root.add_child(timer)
+	_add_connection(relay, "OnTrigger", "spawner", "Start")
+	_wire_dispatcher()
+	dispatcher.fire("relay", "OnTrigger")
+	assert_true(timer.is_stopped(), "an ungranted engine method is not called")

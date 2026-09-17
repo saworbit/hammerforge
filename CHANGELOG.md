@@ -15,6 +15,35 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   failed no longer records its hash either, which had the same effect one step
   later: the retry matched the failed attempt and was skipped as a rewrite.
 
+- **The I/O graph a mapper wires now runs** (#686). Every output wired in the
+  Objects tab was dispatched correctly and never started. The bake built the
+  `Area3D`, `wire()` built the connection table, `HFIORuntime` delivered
+  faithfully, and nothing ever called `fire()`, so the whole tab -- the panel,
+  the wiring visualiser, the six connection presets -- produced a graph that was
+  correct, saved, exported and inert. A trigger volume now raises its own:
+  `trigger_once` and `trigger_multiple` fire `OnStartTouch` when a body enters
+  and `OnEndTouch` when one leaves, and `trigger_once` fires the first time only,
+  which is the one thing separating it from `trigger_multiple` in the bake.
+  Pressing is not something the plugin can raise on anybody's behalf, so the
+  playtest player does what a game's player would: a ray from the camera on its
+  Use key, and `fire(name, "OnPressed")` on the `func_button` it finds. A regular
+  editor bake attaches a dispatcher too, so the trigger signals are connected at
+  runtime only.
+
+- **An entity class can say which engine method an input means** (#714).
+  `logic_timer` shipped `Start` and `Stop` against a `Timer`, and those are
+  exactly `Timer.start()` and `Timer.stop()` -- the two methods the guard that
+  stops an input called `QueueFree` deleting its target exists to refuse. The
+  class was unusable as shipped: the dropdown offered both, the visualiser drew
+  the wire, and firing either printed a warning and emitted a signal nobody was
+  connected to. A definition can now carry `input_methods` naming the engine
+  method behind an input, the way a property carries `maps_to`. The grant is per
+  class, so nothing widens what a free-text input name can reach. A granted
+  method is called in the shape the engine declares it: `Timer.start()` takes a
+  float, and handing it the empty string was an argument error that stopped the
+  delivery dead, so a method that can take no argument is called with none, and
+  an authored parameter is converted to the declared type.
+
 ### Changed
 - **An uncompressed level is one value per line** (#708). Save compression
   exists so a team can turn it off and put the level in version control, and what

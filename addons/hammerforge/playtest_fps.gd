@@ -20,6 +20,9 @@ extends CharacterBody3D
 @export var sprint_fov_multiplier := 1.15
 @export var coyote_time := 0.15
 @export var jump_action := "ui_accept"
+## The Use key, and how far in front of the camera it reaches.
+@export var use_action := "hf_use"
+@export var use_distance := 2.5
 @export var capsule_radius := 0.35
 @export var capsule_height := 1.6
 ## The capsule while crouched. A crawl space is the thing a playtest is meant to
@@ -182,7 +185,8 @@ func _ensure_input_map() -> void:
 		"ui_down": [KEY_S, KEY_DOWN],
 		"ui_left": [KEY_A, KEY_LEFT],
 		"ui_right": [KEY_D, KEY_RIGHT],
-		"ui_accept": [KEY_SPACE]
+		"ui_accept": [KEY_SPACE],
+		"hf_use": [KEY_E]
 	}
 
 	for action_name in defaults.keys():
@@ -213,6 +217,46 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if event.is_action_pressed("ui_cancel"):
 		_set_cursor_captured(Input.mouse_mode != Input.MOUSE_MODE_CAPTURED)
+
+	if InputMap.has_action(use_action) and event.is_action_pressed(use_action):
+		_press_what_is_under_the_reticle()
+
+
+## Fire `OnPressed` on the button the reticle is on.
+##
+## A trigger volume raises its own output, because a body entering it is the
+## whole event. Pressing is not: it is something a player decides to do, so the
+## game is the only thing that can say it happened (#686). This is the playtest
+## player saying it, and it is also the shape a game's own player wants - ray
+## from the camera, find a button, hand its name to the dispatcher.
+func _press_what_is_under_the_reticle() -> void:
+	if not camera or not is_inside_tree():
+		return
+	var space := get_world_3d().direct_space_state
+	if not space:
+		return
+	var from: Vector3 = camera.global_position
+	var to: Vector3 = from - camera.global_transform.basis.z * use_distance
+	var query := PhysicsRayQueryParameters3D.create(from, to)
+	# Every layer. Which one the level baked onto is the mapper's choice and is
+	# not a statement about what can be pressed.
+	query.collision_mask = 0xFFFFFFFF
+	query.exclude = [get_rid()]
+	var hit: Dictionary = space.intersect_ray(query)
+	if hit.is_empty():
+		return
+	var collider: Variant = hit.get("collider")
+	if not (collider is Node):
+		return
+	var node := collider as Node
+	if str(node.get_meta("brush_entity_class", "")) != "func_button":
+		return
+	var pressed := str(node.get_meta("entity_name", ""))
+	if pressed == "":
+		return
+	var dispatcher: Node = get_tree().get_first_node_in_group(HFIORuntime.DISPATCHER_GROUP)
+	if dispatcher and dispatcher.has_method("fire"):
+		dispatcher.call("fire", pressed, "OnPressed", "")
 
 
 func _physics_process(delta: float) -> void:
