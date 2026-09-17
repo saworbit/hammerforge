@@ -142,6 +142,7 @@ SCENARIOS = [
     "prefab-library",
     "brush-entities",
     "missing-files",
+    "docs-truth",
 ]
 
 # Generous: chaos runs 300 operations and cost saves eight levels. A scenario

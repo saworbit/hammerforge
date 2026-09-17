@@ -169,6 +169,7 @@ it from here.
 | `prefab-library` | the prefab library panel: its list, filters, names and what it does with a bad file |
 | `brush-entities` | brushes tied to an entity class: naming, wiring, saving and what the exports make of them |
 | `missing-files` | what a level does when a file it points at is taken away |
+| `docs-truth` | what the guide, the tutorial and the feature pages claim, against the running plugin |
 
 ## Adding a scenario
 
@@ -214,7 +215,18 @@ what the validator actually measures; and `materials` confirms the palette remap
 is correct in all three brush containers. Those are kept. A scenario that only
 exists while it is failing cannot tell you when something stops being true, and
 the notes are where the next reader finds out the ground was already covered.
-`undo-collation` and `snapping` are the newest of them. The undo helper's
+`build-a-room`, `far-origin` and `docs-truth` are the newest of them.
+`build-a-room` runs a whole first evening -- hollow a room, carve a doorway, run
+a corridor to a second room, texture twenty brushes, place a light and a spawn,
+group and visgroup the shell, validate, bake, export the playtest scene -- and
+finds nothing wrong at any step. `far-origin` settles the suspicion that the
+plugin's absolute float epsilons must fail a long way out: they do not, at any
+distance to 32768, through both file formats. `docs-truth` reads the user guide
+and the tutorial wizard against the running plugin and finds them accurate --
+the guide explains the #625 scale change rather than being stale on it, every
+shortcut it names is bound, and every entity class it names is offered.
+
+`undo-collation` and `snapping` are the older two. The undo helper's
 collation window lives in `static var`s, which looked like it would carry one
 level's captured state into the next level's action, and it does not -- the tag
 carries the brush id, and two roots in one session mint different id prefixes.
