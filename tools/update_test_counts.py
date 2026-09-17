@@ -66,10 +66,14 @@ def grouped(n: int) -> str:
     return "{:,}".format(n)
 
 
-def parse_gut_log(path: str) -> dict:
+# The keys that are simply added together across shards. Every one of them is a
+# count of things that happened, so four shards summing to the whole suite is
+# the same arithmetic in each case.
+SUMMED = ("scripts", "tests", "passing", "asserts", "risky", "failing")
+
+
+def parse_gut_text(text: str, source: str = "<text>") -> dict:
     """Pull the totals out of GUT's own summary block."""
-    with open(path, encoding="utf-8", errors="replace") as handle:
-        text = handle.read()
     required = {
         "scripts": r"^Scripts\s+(\d+)\s*$",
         "tests": r"^Tests\s+(\d+)\s*$",
@@ -83,7 +87,7 @@ def parse_gut_log(path: str) -> dict:
             raise SystemExit(
                 "update_test_counts: no '%s' total in %s. This reads GUT's own "
                 "summary block, so the log has to be the full test output."
-                % (key, path)
+                % (key, source)
             )
         counts[key] = int(found[-1])
     # Absent from the summary when there are none of them.
@@ -94,6 +98,33 @@ def parse_gut_log(path: str) -> dict:
         found = re.findall(pattern, text, re.MULTILINE)
         counts[key] = int(found[-1]) if found else 0
     return counts
+
+
+def parse_gut_log(path: str) -> dict:
+    try:
+        with open(path, encoding="utf-8", errors="replace") as handle:
+            text = handle.read()
+    except OSError as problem:
+        # A shard that never uploaded its log must say so in one line rather
+        # than as a traceback, because this is the failure the totals depend on
+        # noticing.
+        raise SystemExit(
+            "update_test_counts: cannot read %s: %s" % (path, problem)
+        ) from problem
+    return parse_gut_text(text, path)
+
+
+def add_counts(per_shard: list[dict]) -> dict:
+    """Add the shard totals together into one suite total."""
+    totals = dict.fromkeys(SUMMED, 0)
+    for counts in per_shard:
+        for key in SUMMED:
+            totals[key] += counts[key]
+    return totals
+
+
+def sum_gut_logs(paths: list[str]) -> dict:
+    return add_counts([parse_gut_log(path) for path in paths])
 
 
 DATE_PATTERN = r"(?P<date>[A-Z][a-z]+ \d{1,2}, \d{4})"
@@ -184,10 +215,95 @@ def rewrites(c: dict) -> list:
     ]
 
 
+def _fixture(scripts, tests, passing, asserts, risky=None, failing=None) -> str:
+    """A GUT summary block, shaped the way a shard writes one."""
+    lines = [
+        "Totals",
+        "------",
+        "Scripts          %d" % scripts,
+        "Tests            %d" % tests,
+        "Passing Tests    %d" % passing,
+    ]
+    # GUT leaves both of these out of the block entirely when they are zero,
+    # which is the case the parser has to keep getting right.
+    if risky is not None:
+        lines.append("Risky/Pending    %d" % risky)
+    if failing is not None:
+        lines.append("Failing Tests    %d" % failing)
+    lines.append("Asserts          %d" % asserts)
+    return "\n".join(lines) + "\n"
+
+
+def selftest() -> int:
+    failures = 0
+
+    def check(name, got, want):
+        nonlocal failures
+        if got != want:
+            print("selftest: %s got %r, wanted %r" % (name, got, want))
+            failures += 1
+
+    # The real run, split the way CI splits it.
+    shards = [
+        parse_gut_text(_fixture(56, 1000, 1000, 5000)),
+        parse_gut_text(_fixture(56, 1100, 1098, 5200, risky=2)),
+        parse_gut_text(_fixture(55, 990, 990, 4800)),
+        parse_gut_text(_fixture(55, 1003, 1003, 4729)),
+    ]
+    total = add_counts(shards)
+    check("summed scripts", total["scripts"], 222)
+    check("summed tests", total["tests"], 4093)
+    check("summed passing", total["passing"], 4091)
+    check("summed asserts", total["asserts"], 19729)
+    check("summed risky", total["risky"], 2)
+    check("absent risky reads as zero", total["failing"], 0)
+
+    # A failing shard has to survive the addition. Publishing a total from a run
+    # with failures in it is what the --write guard refuses, and it can only
+    # refuse what the sum still carries.
+    failed = add_counts([parse_gut_text(_fixture(55, 990, 989, 4800, failing=1))])
+    check("a failing shard keeps its failure", failed["failing"], 1)
+
+    # A shard that died before printing its summary is the dangerous case: the
+    # other three still parse and the total is still plausible.
+    try:
+        parse_gut_text("Godot Engine v4.7.stable\nSegmentation fault\n", "shard-3.log")
+    except SystemExit:
+        pass
+    else:
+        print("selftest: a log with no summary block should have been refused")
+        failures += 1
+
+    if failures:
+        print("selftest: %d checks wrong" % failures)
+        return 1
+    print("selftest: shard totals add up and a truncated log is refused")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--gut-log", required=True, help="file holding GUT's output")
-    mode = parser.add_mutually_exclusive_group(required=True)
+    parser.add_argument(
+        "--gut-log",
+        action="extend",
+        nargs="+",
+        metavar="PATH",
+        help="files holding GUT's output, one per shard; may be repeated",
+    )
+    parser.add_argument(
+        "--expect-scripts",
+        type=int,
+        help=(
+            "refuse the totals unless the logs together report this many "
+            "scripts; CI passes tools/shard_tests.py --count"
+        ),
+    )
+    parser.add_argument(
+        "--selftest",
+        action="store_true",
+        help="check the shard totals still add up",
+    )
+    mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--write", action="store_true", help="rewrite the documents")
     mode.add_argument(
         "--check", action="store_true", help="report drift, change nothing"
@@ -199,7 +315,22 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    counts = parse_gut_log(args.gut_log)
+    if args.selftest:
+        return selftest()
+
+    if not args.gut_log:
+        parser.error("--gut-log is required unless --selftest is given")
+    if not (args.write or args.check):
+        parser.error("give --write or --check")
+
+    counts = sum_gut_logs(args.gut_log)
+    if args.expect_scripts is not None and counts["scripts"] != args.expect_scripts:
+        raise SystemExit(
+            "update_test_counts: the logs account for %d scripts, not %d. The "
+            "shards and the split disagree on the size of the suite, and "
+            "publishing this total would record the wrong one as measured fact."
+            % (counts["scripts"], args.expect_scripts)
+        )
     if counts["failing"]:
         raise SystemExit(
             "update_test_counts: %d failing tests in the log. A total is only worth "

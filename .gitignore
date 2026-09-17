@@ -79,6 +79,11 @@ docs/brand/svg/*.import
 # every line of them is a report about the tree they ran against.
 .vibe/
 
+# Scratch for a plan being executed task by task: the progress ledger, the task
+# briefs, the implementer reports and the review packages. The record that
+# outlives the work is the git history and the plan under docs/superpowers/.
+.superpowers/
+
 # MkDocs build output
 .site/
 .docshot-backup/

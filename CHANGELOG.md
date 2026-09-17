@@ -31,6 +31,24 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   `.hflevel` saved after the last Ctrl+S is not what comes up.
 
 ### Changed
+- **The test suite runs in four shards** (#648). A CI run was 6 minutes 24
+  seconds at the median, and 94% of that was one job: the GUT suite took 386
+  seconds while the two lint jobs finished inside 73. Per-script timings say
+  there was nothing to optimise -- 222 scripts, median runtime 0.99s, 112 of
+  them under a second, and the slowest single file 21s -- which is exactly the
+  shape that divides instead. `tools/shard_tests.py` splits the scripts
+  round-robin over their sorted names into four legs of 56/56/55/55 scripts,
+  and an aggregate job adds the four logs back together. The measured run:
+  shard jobs of roughly 1m45s to 2m05s, an aggregate job of 10s, and
+  GDScript Lint & Format at 1m4s -- a total of 2m21s against 6m33s for the
+  equivalent run on main. Coverage is unchanged: the same 222 scripts, 4,093
+  tests and 19,729 asserts run, 4,086 passing, identical to the single-job run,
+  and the aggregate refuses to publish a total unless the logs account for
+  every script, because a shard that ran short would otherwise write a smaller
+  suite into all five documents as measured fact. Path filtering was measured
+  and rejected instead: 49 of the last 60 commits touch both `addons/` and
+  `tests/`, and all three job names are required checks, so a filtered job
+  reports `skipped` and leaves the pull request unmergeable for good.
 - **One world unit is one metre, and the drawing side now agrees** (#625). Two
   scale conventions were in the project at once and the seam ran through the core
   loop. The playtest player, the spawn checks, the bake settings and all five
