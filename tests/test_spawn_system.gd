@@ -236,7 +236,13 @@ func test_create_default_spawn_when_empty():
 	assert_true(spawn.get_parent() == root.entities_node)
 
 
-func test_create_default_spawn_uses_brush_centroid():
+## A spawn goes over the middle of what is built, standing on its floor.
+##
+## It used to be the centroid of the brush origins plus five units. Five was a
+## small step up when a room was 256 units tall; since #625 the player is 1.6 and
+## a room is 3, so it put the spawn above the ceiling of anything a mapper builds
+## and `validate_spawn()` rejected where it had just been put (#657).
+func test_create_default_spawn_stands_on_the_floor_of_the_level():
 	# Add a mock draft_brushes_node with some brushes
 	var draft = Node3D.new()
 	draft.name = "DraftBrushes"
@@ -252,9 +258,11 @@ func test_create_default_spawn_uses_brush_centroid():
 
 	var spawn = sys.create_default_spawn()
 	assert_not_null(spawn)
-	# Centroid of (10,0,0) and (0,0,10) = (5,0,5), + 5.0 height = (5,5,5)
+	# Two unit cubes at (10,0,0) and (0,0,10) span x -0.5..10.5, y -0.5..0.5,
+	# z -0.5..10.5. Centre in x and z, floor in y, plus the 1.0 height offset
+	# that `entities.json` gives `player_start` and `validate_spawn()` measures.
 	assert_almost_eq(spawn.global_position.x, 5.0, 0.1)
-	assert_almost_eq(spawn.global_position.y, 5.0, 0.1)
+	assert_almost_eq(spawn.global_position.y, 0.5, 0.1)
 	assert_almost_eq(spawn.global_position.z, 5.0, 0.1)
 
 

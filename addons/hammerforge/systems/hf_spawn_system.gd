@@ -208,10 +208,8 @@ const DEFAULT_SPAWN_HEIGHT_OFFSET := 1.0
 ## same property `validate_spawn()` measures against, so the two now agree.
 func create_default_spawn() -> Node3D:
 	var centroid := Vector3.ZERO
-	var bounds := AABB()
-	if root.has_method("_compute_level_aabb"):
-		bounds = root._compute_level_aabb()
-	if bounds.size != Vector3.ZERO:
+	var bounds := _level_bounds()
+	if bounds.size != Vector3.ZERO or bounds.position != Vector3.ZERO:
 		centroid = bounds.get_center()
 		centroid.y = bounds.position.y
 	centroid.y += DEFAULT_SPAWN_HEIGHT_OFFSET
@@ -226,6 +224,31 @@ func create_default_spawn() -> Node3D:
 		root.entities_node.add_child(entity)
 	entity.global_position = centroid
 	return entity
+
+
+## What the level occupies, over the same nodes the spawn already walked.
+##
+## Computed here rather than through `LevelRoot._compute_level_aabb()`, because
+## this subsystem is handed a root that does not always have it -- the test shims
+## stand in for one and carry only what the spawn system asks of them, and a
+## missing method would silently put every spawn at the origin instead of failing.
+func _level_bounds() -> AABB:
+	if not root.has_method("_iter_pick_nodes"):
+		return AABB()
+	var bounds := AABB()
+	var first := true
+	for node in root._iter_pick_nodes():
+		if not (node is Node3D) or node is DraftEntity:
+			continue
+		var size: Variant = node.get("size")
+		var extent: Vector3 = size if size is Vector3 else Vector3.ONE
+		var box := AABB((node as Node3D).global_position - extent * 0.5, extent)
+		if first:
+			bounds = box
+			first = false
+		else:
+			bounds = bounds.merge(box)
+	return bounds
 
 
 # ===========================================================================
