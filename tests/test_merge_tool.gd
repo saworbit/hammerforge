@@ -121,7 +121,7 @@ func test_merge_rejects_missing_brush():
 func test_merge_rejects_mixed_operations():
 	var b1 = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
 	b1.operation = CSGShape3D.OPERATION_UNION
-	var b2 = _make_brush(Vector3(64, 0, 0), Vector3(32, 32, 32), "b2")
+	var b2 = _make_brush(Vector3(32, 0, 0), Vector3(32, 32, 32), "b2")
 	b2.operation = CSGShape3D.OPERATION_SUBTRACTION
 	var result = sys.can_merge_brushes(["b1", "b2"])
 	assert_false(result.ok, "Merge should reject brushes with different operations")
@@ -129,7 +129,7 @@ func test_merge_rejects_mixed_operations():
 
 func test_merge_accepts_two_valid_brushes():
 	_make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
-	_make_brush(Vector3(64, 0, 0), Vector3(32, 32, 32), "b2")
+	_make_brush(Vector3(32, 0, 0), Vector3(32, 32, 32), "b2")
 	var result = sys.can_merge_brushes(["b1", "b2"])
 	assert_true(result.ok, "Merge should accept two valid same-operation brushes")
 
@@ -141,7 +141,7 @@ func test_merge_accepts_two_valid_brushes():
 
 func test_merge_creates_one_brush():
 	_make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
-	_make_brush(Vector3(64, 0, 0), Vector3(32, 32, 32), "b2")
+	_make_brush(Vector3(32, 0, 0), Vector3(32, 32, 32), "b2")
 	sys.merge_brushes_by_ids(["b1", "b2"])
 	var children = root.draft_brushes_node.get_children()
 	assert_eq(children.size(), 1, "Merge should produce exactly one brush")
@@ -149,7 +149,7 @@ func test_merge_creates_one_brush():
 
 func test_merge_deletes_originals():
 	_make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
-	_make_brush(Vector3(64, 0, 0), Vector3(32, 32, 32), "b2")
+	_make_brush(Vector3(32, 0, 0), Vector3(32, 32, 32), "b2")
 	sys.merge_brushes_by_ids(["b1", "b2"])
 	assert_null(sys.find_brush_by_id("b1"), "Original brush b1 should be deleted")
 	assert_null(sys.find_brush_by_id("b2"), "Original brush b2 should be deleted")
@@ -157,7 +157,7 @@ func test_merge_deletes_originals():
 
 func test_merge_result_is_custom_shape():
 	_make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
-	_make_brush(Vector3(64, 0, 0), Vector3(32, 32, 32), "b2")
+	_make_brush(Vector3(32, 0, 0), Vector3(32, 32, 32), "b2")
 	sys.merge_brushes_by_ids(["b1", "b2"])
 	var children = root.draft_brushes_node.get_children()
 	var merged = children[0] as DraftBrush
@@ -168,7 +168,7 @@ func test_merge_combines_faces():
 	var b1 = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
 	b1.rebuild_preview()
 	var b1_face_count = b1.faces.size()
-	var b2 = _make_brush(Vector3(64, 0, 0), Vector3(32, 32, 32), "b2")
+	var b2 = _make_brush(Vector3(32, 0, 0), Vector3(32, 32, 32), "b2")
 	b2.rebuild_preview()
 	var b2_face_count = b2.faces.size()
 	sys.merge_brushes_by_ids(["b1", "b2"])
@@ -188,7 +188,7 @@ func test_merge_registers_material_override_as_face_material():
 	mat_b.albedo_color = Color.BLUE
 	var b1 = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
 	b1.material_override = mat_a
-	var b2 = _make_brush(Vector3(64, 0, 0), Vector3(32, 32, 32), "b2")
+	var b2 = _make_brush(Vector3(32, 0, 0), Vector3(32, 32, 32), "b2")
 	b2.material_override = mat_b
 	sys.merge_brushes_by_ids(["b1", "b2"])
 	var children = root.draft_brushes_node.get_children()
@@ -207,7 +207,7 @@ func test_merge_registers_material_override_as_face_material():
 func test_merge_preserves_visgroups():
 	var b1 = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
 	b1.set_meta("visgroups", PackedStringArray(["vg_walls"]))
-	_make_brush(Vector3(64, 0, 0), Vector3(32, 32, 32), "b2")
+	_make_brush(Vector3(32, 0, 0), Vector3(32, 32, 32), "b2")
 	sys.merge_brushes_by_ids(["b1", "b2"])
 	var children = root.draft_brushes_node.get_children()
 	var merged = children[0] as DraftBrush
@@ -218,7 +218,7 @@ func test_merge_preserves_visgroups():
 func test_merge_preserves_group_id():
 	var b1 = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
 	b1.set_meta("group_id", "grp_01")
-	_make_brush(Vector3(64, 0, 0), Vector3(32, 32, 32), "b2")
+	_make_brush(Vector3(32, 0, 0), Vector3(32, 32, 32), "b2")
 	sys.merge_brushes_by_ids(["b1", "b2"])
 	var children = root.draft_brushes_node.get_children()
 	var merged = children[0] as DraftBrush
@@ -237,7 +237,7 @@ func test_merge_preserves_group_id():
 func test_merge_offsets_verts_for_second_brush():
 	var b1 = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
 	b1.rebuild_preview()
-	var b2 = _make_brush(Vector3(64, 0, 0), Vector3(32, 32, 32), "b2")
+	var b2 = _make_brush(Vector3(32, 0, 0), Vector3(32, 32, 32), "b2")
 	b2.rebuild_preview()
 	var b2_face_count = b2.faces.size()
 
@@ -246,15 +246,15 @@ func test_merge_offsets_verts_for_second_brush():
 	var merged = children[0] as DraftBrush
 
 	# The first brush's faces should be near origin (no offset).
-	# The second brush's faces should be offset by (64, 0, 0).
-	# Check that at least one face from the second brush has verts near x=64.
+	# The second brush's faces should be offset by (32, 0, 0).
+	# Check that at least one face from the second brush has verts near x=32.
 	var found_offset_face := false
 	# Faces from the second brush start after the first brush's faces
 	var b1_face_count = 6  # box has 6 faces
 	for i in range(b1_face_count, merged.faces.size()):
 		var face = merged.faces[i]
 		for v in face.local_verts:
-			if absf(v.x - 64.0) < 20.0:  # Within half-size of offset brush
+			if absf(v.x - 32.0) < 20.0:  # Within half-size of offset brush
 				found_offset_face = true
 				break
 		if found_offset_face:
@@ -264,8 +264,8 @@ func test_merge_offsets_verts_for_second_brush():
 
 func test_merge_three_brushes():
 	_make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
-	_make_brush(Vector3(64, 0, 0), Vector3(32, 32, 32), "b2")
-	_make_brush(Vector3(0, 64, 0), Vector3(32, 32, 32), "b3")
+	_make_brush(Vector3(32, 0, 0), Vector3(32, 32, 32), "b2")
+	_make_brush(Vector3(0, 32, 0), Vector3(32, 32, 32), "b3")
 	sys.merge_brushes_by_ids(["b1", "b2", "b3"])
 	var children = root.draft_brushes_node.get_children()
 	assert_eq(children.size(), 1, "Merge of 3 brushes should produce 1 brush")
@@ -281,7 +281,7 @@ func test_merge_three_brushes():
 
 func test_merge_returns_success():
 	_make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
-	_make_brush(Vector3(64, 0, 0), Vector3(32, 32, 32), "b2")
+	_make_brush(Vector3(32, 0, 0), Vector3(32, 32, 32), "b2")
 	var result = sys.merge_brushes_by_ids(["b1", "b2"])
 	assert_true(result.ok, "Merge should return success")
 
@@ -294,7 +294,7 @@ func test_merge_single_brush_returns_failure():
 
 func test_merge_positioned_at_first_brush():
 	_make_brush(Vector3(10, 20, 30), Vector3(32, 32, 32), "b1")
-	_make_brush(Vector3(74, 20, 30), Vector3(32, 32, 32), "b2")
+	_make_brush(Vector3(42, 20, 30), Vector3(32, 32, 32), "b2")
 	sys.merge_brushes_by_ids(["b1", "b2"])
 	var children = root.draft_brushes_node.get_children()
 	var merged = children[0] as DraftBrush
@@ -316,9 +316,9 @@ func test_merge_rotated_brush_applies_basis():
 	var b1 = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
 	b1.rebuild_preview()
 	# Second brush rotated 90 degrees around Y
-	var b2 = _make_brush(Vector3(64, 0, 0), Vector3(32, 32, 32), "b2")
+	var b2 = _make_brush(Vector3(32, 0, 0), Vector3(32, 32, 32), "b2")
 	b2.rebuild_preview()
-	b2.global_transform = Transform3D(Basis(Vector3.UP, deg_to_rad(90.0)), Vector3(64, 0, 0))
+	b2.global_transform = Transform3D(Basis(Vector3.UP, deg_to_rad(90.0)), Vector3(32, 0, 0))
 	# Before merge, b2 has a face with +X normal in local space (right face).
 	# After 90-deg Y rotation, that should become +Z in world space,
 	# then mapped back into merged brush local space (identity basis) → +Z.
@@ -374,7 +374,7 @@ func test_merge_preserves_transform_of_merged_brush():
 	var b1 = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
 	var rot_basis := Basis(Vector3.UP, deg_to_rad(45.0))
 	b1.global_transform = Transform3D(rot_basis, Vector3(10, 20, 30))
-	var b2 = _make_brush(Vector3(50, 20, 30), Vector3(32, 32, 32), "b2")
+	var b2 = _make_brush(Vector3(32, 20, 30), Vector3(32, 32, 32), "b2")
 	sys.merge_brushes_by_ids(["b1", "b2"])
 	var children = root.draft_brushes_node.get_children()
 	var merged = children[0] as DraftBrush
@@ -400,7 +400,7 @@ func test_merge_different_materials_get_distinct_indices():
 	mat_b.albedo_color = Color.GREEN
 	var b1 = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
 	b1.material_override = mat_a
-	var b2 = _make_brush(Vector3(64, 0, 0), Vector3(32, 32, 32), "b2")
+	var b2 = _make_brush(Vector3(32, 0, 0), Vector3(32, 32, 32), "b2")
 	b2.material_override = mat_b
 	sys.merge_brushes_by_ids(["b1", "b2"])
 	var children = root.draft_brushes_node.get_children()
@@ -417,7 +417,7 @@ func test_merge_same_material_reuses_index():
 	mat.albedo_color = Color.RED
 	var b1 = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
 	b1.material_override = mat
-	var b2 = _make_brush(Vector3(64, 0, 0), Vector3(32, 32, 32), "b2")
+	var b2 = _make_brush(Vector3(32, 0, 0), Vector3(32, 32, 32), "b2")
 	b2.material_override = mat  # Same material instance
 	sys.merge_brushes_by_ids(["b1", "b2"])
 	var children = root.draft_brushes_node.get_children()
@@ -432,7 +432,7 @@ func test_merge_same_material_reuses_index():
 
 func test_merge_no_material_override_leaves_idx_unchanged():
 	var b1 = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
-	var b2 = _make_brush(Vector3(64, 0, 0), Vector3(32, 32, 32), "b2")
+	var b2 = _make_brush(Vector3(32, 0, 0), Vector3(32, 32, 32), "b2")
 	# Neither brush has material_override
 	sys.merge_brushes_by_ids(["b1", "b2"])
 	var children = root.draft_brushes_node.get_children()

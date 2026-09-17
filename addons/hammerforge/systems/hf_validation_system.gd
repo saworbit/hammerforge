@@ -43,6 +43,26 @@ func check_missing_dependencies() -> Array:
 				var shader_mat := mat as ShaderMaterial
 				if shader_mat.shader == null:
 					warnings.append("ShaderMaterial %d has no shader" % i)
+	# A prefab instance whose source file has gone. The instance keeps working --
+	# the brushes are real brushes -- so nothing looked wrong until someone
+	# pressed Cycle Variant and got an empty string back, or Propagate and got
+	# "0 instances updated", with no clue that the source was the problem (#669).
+	# It is the case that gets worse with time: a project that has moved its
+	# prefabs once has every instance in every level pointing at the old path.
+	if root.prefab_system:
+		var instances: Dictionary = root.prefab_system.get_all_instances()
+		for instance_id in instances:
+			var record = instances[instance_id]
+			if record == null:
+				continue
+			var source := str(record.source_path)
+			if source != "" and not FileAccess.file_exists(source):
+				warnings.append(
+					(
+						"Prefab instance '%s' points at a file that is not there: %s"
+						% [str(instance_id), source]
+					)
+				)
 	# Blend shader check for heightmaps
 	var has_heightmap := false
 	if root.paint_layers:
@@ -299,7 +319,104 @@ func validate(auto_fix: bool = false) -> Dictionary:
 					layer.grid = grid
 					fixed += 1
 
+	_check_convexity(brush_nodes, issues)
+	_check_spawn(issues)
+
 	return {"issues": issues, "fixed": fixed}
+
+
+## Every brush is a convex solid, or it is not a brush.
+##
+## `HFVertexSystem.check_solid()` is the plugin's own test and already gates the
+## vertex tools, and Validate never consulted it, so a non-convex brush was
+## clean here while the vertex tools refused to open on it (#666). Merge could
+## make one out of two brushes that do not touch, and a `.map` import or a hand
+## edited `.tscn` can produce one too -- this catches whichever made it, and
+## anything a future operation produces that nobody has written yet.
+##
+## No `auto_fix`: there is no honest repair. A non-convex brush is two solids or
+## a bent one, and guessing which the mapper meant would throw geometry away.
+func _check_convexity(brush_nodes: Array, issues: Array) -> void:
+	if not root.vertex_system:
+		return
+	for node in brush_nodes:
+		if not (node is DraftBrush) or not is_instance_valid(node):
+			continue
+		var brush := node as DraftBrush
+		if not _brush_is_measurable(brush):
+			continue
+		var problem := str(root.vertex_system.check_solid(brush))
+		if problem != "":
+			issues.append("Brush %s is not a convex solid: %s" % [brush.name, problem])
+
+
+## Whether asking this brush about its shape will get an answer rather than an
+## error.
+##
+## Everything refused here is already reported by the pass above: a non-finite
+## size or transform, a vertex that is not a number. `check_solid()` builds plane
+## normals out of those and normalising a NaN vector is an engine error per face,
+## so running it anyway would bury the real finding in console noise. A brush the
+## auto-fix has just deleted is gone from the tree while still in the list this
+## walk was given, and asking a freed node for its global transform is another.
+func _brush_is_measurable(brush: DraftBrush) -> bool:
+	if not brush.is_inside_tree():
+		return false
+	if not brush.size.is_finite() or not brush.global_transform.is_finite():
+		return false
+	for face in brush.faces:
+		if face == null:
+			continue
+		for v in face.local_verts:
+			if not v.is_finite():
+				return false
+	return true
+
+
+## Where the level starts is part of whether the level works.
+##
+## `hf_validation_system.gd` contained the word "spawn" zero times, so the one
+## surface a mapper presses before pressing Test Level was the one that never
+## looked at where testing starts (#657). Create Starter, build a room, Test
+## Level is the shortest path through the tool, and it dropped the player through
+## the ceiling with a Healthy badge the whole way.
+##
+## Deliberately geometric rather than `validate_spawn()`, which is the richer
+## check and the wrong one here: it raycasts, so it needs collision, and the
+## collision comes from the bake. `dock_manage_handler.gd` bakes before it calls
+## it for exactly that reason. Validate runs on an unbaked level, which is most
+## levels most of the time, so asking the physics space would report "no floor
+## below" for every one of them -- a check that cries wolf is worse than the
+## silence it replaced. The level's own AABB needs nothing but the brushes, and
+## it catches the case the issue is about: a spawn above the ceiling of anything
+## that was built.
+##
+## Reported rather than fixed. Moving where the player starts is the mapper's to
+## agree to, and `auto_fix_spawn()` is on the button that asks them.
+func _check_spawn(issues: Array) -> void:
+	if not root.spawn_system or not root.brush_system:
+		return
+	# An empty scene has nothing to say about where a level starts.
+	if root.brush_system.get_live_brush_count() == 0:
+		return
+	# A level with no spawn yet is a level being built, not a broken one --
+	# `create_default_spawn()` makes one and the playtest export makes one -- so
+	# saying so on every press would be the crying wolf this check is trying to
+	# avoid. Only a spawn that exists and is somewhere unusable is reported.
+	var spawn = root.spawn_system.get_active_spawn()
+	if spawn == null or not is_instance_valid(spawn):
+		return
+	if not root.has_method("_compute_level_aabb"):
+		return
+	var bounds: AABB = root._compute_level_aabb()
+	if bounds.size == Vector3.ZERO or bounds.has_point(spawn.global_position):
+		return
+	issues.append(
+		(
+			"Player spawn is outside the level: it is at %s, and the level spans %s to %s"
+			% [spawn.global_position, bounds.position, bounds.end]
+		)
+	)
 
 
 # ---------------------------------------------------------------------------

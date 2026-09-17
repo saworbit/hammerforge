@@ -229,6 +229,50 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the exporter next.
 
 ### Fixed
+- **Validate runs the checks that already existed** (#657, #666, #669). Three
+  checks were implemented, working, and reachable from everywhere except the
+  button a mapper presses before shipping. `validate_convexity()` gated the
+  vertex tools; `validate_spawn()` sat 130 lines from the function that places
+  the spawn; `check_missing_dependencies()` walked the material palette and
+  nothing else.
+  **Merge accepted brushes that do not touch** and collected their faces into one
+  `DraftBrush`, so two cubes eight units apart became one brush made of two
+  disconnected lumps -- which is not convex, and convexity is the one property a
+  brush in this lineage has to have. The volume gave it away: two 2-unit cubes
+  merged to 16, not the 40 a convex hull would be. Nothing downstream objected.
+  Validate reported nothing, the `.map` export wrote twelve planes describing the
+  intersection of two separate boxes, and the bake generated a convex collision
+  hull spanning the whole 10-unit extent, so the gap between the pieces became
+  solid to the player while staying empty to the eye. `can_merge_brushes()`
+  refuses a selection that is not one connected lump, by world AABB closed
+  transitively -- the same sweep `_chunking_has_cross_boundary_interactions()`
+  does -- so a touching run of three still merges and two pillars across a room
+  do not. `merge_brushes_by_ids()` already consulted the guard itself, which is
+  the rule its own comment sets out. Validate runs `check_solid()` over every
+  brush as well, because a non-convex brush can also arrive from a `.map` import
+  or a hand edited `.tscn`, and there is no `auto_fix` for one: it is two solids
+  or a bent one, and guessing which the mapper meant would throw geometry away.
+  **The default spawn was placed above the ceiling.** `create_default_spawn()`
+  used the centroid of the brush origins plus five units, with a hard coded
+  `Vector3(0, 5, 0)` for an empty level. Five units was a small step up when a
+  room was 256 units tall; since #625 the player is 1.6 and a room is 3, so it
+  put the spawn above anything a mapper builds -- and `validate_spawn()`, further
+  down the same file, rejected where it had just been put. It uses the level's
+  own AABB now, standing on the floor with the same `height_offset` default that
+  `entities.json` carries and `validate_spawn()` measures against, so the two
+  agree. Validate gained a spawn check, deliberately geometric rather than
+  calling `validate_spawn()`: that one raycasts, so it needs collision, and the
+  collision comes from the bake -- `dock_manage_handler.gd` bakes before calling
+  it for exactly that reason. Validate runs on an unbaked level, which is most
+  levels most of the time, so asking the physics space would have reported "no
+  floor below" for all of them, and a check that cries wolf is worse than the
+  silence it replaced.
+  **A prefab instance whose source file has gone** is a missing dependency now.
+  The instance keeps working, because the brushes are real brushes, so nothing
+  looked wrong until someone pressed Cycle Variant and got an empty string back
+  or Propagate and got "0 instances updated". `validate_level()` already prefixes
+  and reports whatever `check_missing_dependencies()` returns, so that was the
+  whole change.
 - **An undo puts the brushes back where they were, not at the end** (#660). Undo
   is a whole-level snapshot restore, and #600 made that affordable by keeping the
   brushes whose record still matches instead of rebuilding every one. A kept
