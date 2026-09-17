@@ -89,7 +89,7 @@ saying so. Four shards also means four legs that can flake rather than six.
 ## Scope
 
 1. Split the `unit-tests` job into a four-way shard matrix and an aggregate job.
-2. Add `tools/test_shard.py` to compute the split, with a selftest.
+2. Add `tools/shard_tests.py` to compute the split, with a selftest.
 3. Teach `update_test_counts.py` to sum across several shard logs.
 4. Assert that the shards together covered every test script.
 
@@ -116,7 +116,7 @@ existing write / commit / drift-report work unchanged.
 ```bash
 godot --headless -s res://addons/gut/gut_cmdln.gd --path . \
   -gconfig= -gexit -glog=1 \
-  -gtest="$(python3 tools/test_shard.py --shard "$SHARD" --of 4)"
+  -gtest="$(python3 tools/shard_tests.py --shard "$SHARD" --of 4)"
 ```
 
 `-gconfig=` is load-bearing, and the workflow needs a comment saying so.
@@ -139,7 +139,7 @@ the config file is what makes `-gtest` mean what it says.
 Verified against the real suite before writing this document: two named scripts
 produced `Scripts 2` and `Tests 44`, and nothing else was collected.
 
-### `tools/test_shard.py`
+### `tools/shard_tests.py`
 
 Round-robin over the sorted filename list. Shards are numbered from 1 to match
 the matrix, so the file at position `index` belongs to the shard where
@@ -160,7 +160,7 @@ GUT's summary block prints `Scripts 222` — exactly the number of files on disk
 The aggregate job hard-fails when either:
 
 - a shard log is missing, or
-- the summed `Scripts` does not equal `tools/test_shard.py --count`.
+- the summed `Scripts` does not equal `tools/shard_tests.py --count`.
 
 Without this, a shard that dies early yields a quietly smaller total, and CI
 writes that smaller number into all five published documents as measured fact.

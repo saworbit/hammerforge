@@ -77,6 +77,12 @@ jobs:
       - name: Check the CI wait grades the right commit
         run: python3 tools/wait_for_ci.py --selftest
 
+      # The suite is run in four shards and the totals are published from what
+      # they report together. A splitter that quietly drops a file gives a green
+      # run with less in it, so the split is checked before it is trusted.
+      - name: Check the test split still covers the suite
+        run: python3 tools/shard_tests.py --selftest
+
   tooling-checks:
     name: Workflow & Tooling Lint
     runs-on: ubuntu-latest
