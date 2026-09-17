@@ -224,21 +224,6 @@ func _order_of(state: Dictionary) -> Array:
 	return _ids_in(state)
 
 
-func _triangles(root: Node3D) -> int:
-	var total := 0
-	var stack: Array[Node] = [root]
-	while not stack.is_empty():
-		var node: Node = stack.pop_back()
-		for child in node.get_children():
-			if child is MeshInstance3D and not root.is_brush_node(child):
-				var mesh: Mesh = (child as MeshInstance3D).mesh
-				if mesh:
-					for surf in mesh.get_surface_count():
-						total += mesh.surface_get_array_len(surf) / 3
-			stack.append(child)
-	return total
-
-
 ## One edit: what it was called, and the closure that performs it.
 func _script(root: Node3D) -> Array:
 	var ops: Array = []
