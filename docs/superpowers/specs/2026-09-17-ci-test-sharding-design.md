@@ -222,7 +222,7 @@ part of why the shard count stops at four.
 
 ## Testing
 
-- `tools/test_shard.py --selftest` in `static-checks`, with the other guards.
+- `tools/shard_tests.py --selftest` in `static-checks`, with the other guards.
 - `ruff` and `gdformat` already cover `tools/`, so the new script is linted by
   the existing jobs.
 - Before merging: compare the aggregate's summed totals against the last
