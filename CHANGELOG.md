@@ -5,6 +5,18 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **A bake says when a cutter drops the face materials** (#694). A level with a
+  subtractive brush in it takes the CSG path, which resolves one material per
+  brush rather than one per face, and the only thing that said so was a line in
+  the Console. The Use Face Materials checkbox stayed ticked and the Manage tab
+  looked exactly as it had. The branch immediately below it has always sent a
+  `user_message` for the mirror case - the checkbox turned off by hand while
+  faces carry materials - so the case a mapper chose got a message and the case
+  they hit by accident, by drawing a cutter, got nothing. Both now say so, and
+  the new one names the cause and how many brushes caused it. It is said only
+  when faces actually carry materials, which is the same guard the other branch
+  uses: a level with nothing painted on it loses nothing by taking the CSG path.
+
 - **A level in a game scene is a level, not a playtest** (#699, #689).
   `auto_spawn_player` defaulted on and `LevelRoot._ready()` acted on it outside
   the editor, so a scene with a `LevelRoot` in it, loaded by a built game, added
