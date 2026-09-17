@@ -420,9 +420,10 @@ In `main()`, replace the `--gut-log` argument with these three:
 ```python
     parser.add_argument(
         "--gut-log",
-        action="append",
+        action="extend",
+        nargs="+",
         metavar="PATH",
-        help="a file holding GUT's output; repeat once per shard",
+        help="files holding GUT's output, one per shard; may be repeated",
     )
     parser.add_argument(
         "--expect-scripts",
@@ -642,11 +643,7 @@ Immediately after the shard job, add:
       - name: Update published test counts
         if: env.OWN_PR == 'true'
         run: |
-          ARGS=()
-          for n in $(seq 1 "$SHARDS"); do
-            ARGS+=(--gut-log "shard-logs/gut-shard-${n}.log")
-          done
-          python3 tools/update_test_counts.py "${ARGS[@]}" \
+          python3 tools/update_test_counts.py --gut-log shard-logs/gut-shard-*.log \
             --expect-scripts "$(python3 tools/shard_tests.py --count)" --write
 
       - name: Commit the counts to this pull request
@@ -678,11 +675,7 @@ Immediately after the shard job, add:
       - name: Report drift in main's published counts
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          ARGS=()
-          for n in $(seq 1 "$SHARDS"); do
-            ARGS+=(--gut-log "shard-logs/gut-shard-${n}.log")
-          done
-          if ! python3 tools/update_test_counts.py "${ARGS[@]}" \
+          if ! python3 tools/update_test_counts.py --gut-log shard-logs/gut-shard-*.log \
             --expect-scripts "$(python3 tools/shard_tests.py --count)" --check; then
             echo "::warning::Published test counts on main are stale. The next pull request that changes the suite will correct them."
           fi
