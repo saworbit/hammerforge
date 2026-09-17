@@ -1502,7 +1502,61 @@ func can_merge_brushes(brush_ids: Array) -> HFOpResult:
 				"Merge: all brushes must have the same operation type",
 				"Cannot merge additive and subtractive brushes together"
 			)
+	if not _brushes_form_one_solid(brush_ids):
+		return HFOpResult.fail(
+			"Merge: the selected brushes do not touch",
+			"Merge only joins brushes that share a face or overlap"
+		)
 	return HFOpResult.success()
+
+
+## How far apart two brushes may be and still count as touching, in metres.
+## Faces that meet exactly are the ordinary case, and a float is a float.
+const _MERGE_ADJACENCY_EPSILON := 0.001
+
+
+## Whether these brushes are one connected lump rather than several.
+##
+## A brush in this lineage is the intersection of its half spaces, so it has to
+## be convex. `merge_brushes_by_ids()` collects the faces of every brush into one
+## `DraftBrush`, and two brushes with a gap between them become one brush made of
+## two disconnected lumps -- which is not convex, and nothing downstream noticed:
+## Validate reported nothing, the `.map` export wrote twelve planes describing an
+## empty solid, and the bake generated a convex hull spanning the gap, so the
+## space between the two pieces became solid to the player and stayed empty to
+## the eye (#666).
+##
+## World AABBs, closed transitively, which is the same sweep
+## `_chunking_has_cross_boundary_interactions()` does in `hf_bake_system.gd`. It
+## is a conservative test: two brushes whose boxes overlap while their geometry
+## does not will pass. That is the right direction -- it refuses the selection a
+## mapper plainly did not mean, and does not refuse a legitimate one.
+func _brushes_form_one_solid(brush_ids: Array) -> bool:
+	var boxes: Array[AABB] = []
+	for brush_id in brush_ids:
+		var brush = _find_brush_by_id(str(brush_id))
+		if not (brush is DraftBrush):
+			return false
+		var draft := brush as DraftBrush
+		var size: Vector3 = draft.size
+		var box := AABB(draft.global_position - size * 0.5, size)
+		boxes.append(box.grow(_MERGE_ADJACENCY_EPSILON))
+	if boxes.size() < 2:
+		return true
+	# Grow the group from the first brush until nothing else touches it.
+	var joined: Array[int] = [0]
+	var reached: Dictionary = {0: true}
+	var cursor := 0
+	while cursor < joined.size():
+		var current: AABB = boxes[joined[cursor]]
+		for i in boxes.size():
+			if reached.has(i):
+				continue
+			if current.intersects(boxes[i]):
+				reached[i] = true
+				joined.append(i)
+		cursor += 1
+	return joined.size() == boxes.size()
 
 
 func merge_brushes_by_ids(brush_ids: Array) -> HFOpResult:

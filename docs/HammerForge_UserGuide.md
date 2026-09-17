@@ -750,7 +750,7 @@ dispatcher.fire("my_button", "OnPressed", "fast")
 - **Test Level**: **Test Level (Bake + Play)** is the one-click default. **Check Only** validates without baking and **Bake Only** produces geometry without launching. **Play from Camera** and **Play Selected Area** remain available for focused testing.
 - **Advanced Bake**: Bake Selected/Changed, dry run, mesh, LOD, lightmap, navmesh, face material, preview, collision, chunking, occluder, and connector controls are collapsed until needed.
 - **Actions**: Create Starter, Create Empty/Create Floor, Apply/Clear/Commit/Restore Cuts, and Clear Brushes.
-- **Spawn**: Validate Spawn (bakes, then runs physics-based checks and shows debug overlay), Create Default Spawn (auto-places a `player_start` at brush centroid), Preview Spawn Debug (bakes, then shows persistent capsule/ray overlay toggle).
+- **Spawn**: Validate Spawn (bakes, then runs physics-based checks and shows debug overlay), Create Default Spawn (auto-places a `player_start` on the floor of the level, one metre up, which is the `height_offset` default), Preview Spawn Debug (bakes, then shows persistent capsule/ray overlay toggle).
 - **File**: Save/Load .hflevel, Import/Export .map (Classic Quake / Valve 220), Export .glb.
 - **Presets**: Save/rename presets grid.
 - **History**: Undo history browser with thumbnails, color-coded action icons, double-click navigation, undo/redo buttons.
@@ -859,6 +859,12 @@ Click **Check Bake Issues** to scan for potential problems before baking:
 - `fix_non_planar_faces(brush)` — projects drifting vertices back onto the face plane.
 
 `validate_level(true)` runs both over every brush in the level as part of its geometry pass, so a level imported from another editor can be cleaned up without calling them per brush. That pass also reports a brush whose size or transform is not a number, a brush with no faces (which auto-fix deletes, since there is nothing to repair), and a vertex that is not a number (reported only — there is no nearest position to a NaN).
+
+`validate_level()` checks that every brush is still a convex solid, which is the one property a brush in this lineage has to have and the same test that gates the vertex tools. There is no auto-fix for a brush that is not: it is two solids or a bent one, and guessing which was meant would throw geometry away. Merge will not make one any more, but a `.map` import or a hand edited `.tscn` still can.
+
+It also says when the level has no player spawn, or when the spawn sits outside the level's bounds. This one is deliberately geometric rather than the physics check behind **Validate Spawn**: that needs collision, and collision comes from the bake, which is why the button bakes first. Validate runs on an unbaked level, so it answers the question it can answer honestly without one.
+
+A prefab instance whose `.hfprefab` has been deleted or moved is reported as a missing dependency. The instance goes on working, because its brushes are real brushes, so the only other sign is Cycle Variant doing nothing.
 
 `validate_level()` also resolves every I/O connection's target name against the entities in the level and reports the ones that miss: `I/O connection points at 'door_1', which no entity answers to: button_1.OnPressed`. Wiring is held by name, so renaming a target in the Scene dock or in the Objects tab breaks every wire aimed at it. It is reported only; deleting a mapper's wiring is not something auto-fix does on its own.
 

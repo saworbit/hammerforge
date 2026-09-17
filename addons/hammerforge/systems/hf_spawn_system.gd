@@ -186,21 +186,35 @@ func auto_fix_spawn(spawn: Node3D, validation: Dictionary) -> void:
 # Auto-create fallback spawn
 # ===========================================================================
 
+## How far above the floor a created spawn starts, in metres. The same default
+## `player_start.height_offset` carries in `entities.json`, so a spawn this makes
+## is where `validate_spawn()` would put one.
+const DEFAULT_SPAWN_HEIGHT_OFFSET := 1.0
 
-## Create a safe default player_start from brush centroids + height offset.
+
+## The spawn a level gets when it has none: over the middle of what is built,
+## standing on the floor.
+##
+## It used to be the centroid of the brush origins plus five units, with a hard
+## coded `Vector3(0, 5, 0)` for an empty level. Five units was a small step up
+## when a room was 256 units tall; since #625 the player is 1.6 units and a room
+## is 3, so it put the spawn above the ceiling of anything a mapper builds --
+## and `validate_spawn()`, 130 lines further down the same file, rejected where
+## it had just been put (#657).
+##
+## The level's own AABB rather than the centroid of the origins, because the
+## centroid of a hollowed room's six walls is the middle of the room whatever
+## size it is, and the floor is what the player stands on. `height_offset` is the
+## same property `validate_spawn()` measures against, so the two now agree.
 func create_default_spawn() -> Node3D:
-	var centroid := Vector3(0, 5, 0)
-	if root.has_method("_iter_pick_nodes"):
-		var pick_nodes: Array = root._iter_pick_nodes()
-		var count := 0
-		var sum := Vector3.ZERO
-		for node in pick_nodes:
-			if node is Node3D and not (node is DraftEntity):
-				sum += node.global_position
-				count += 1
-		if count > 0:
-			centroid = sum / float(count)
-			centroid.y += 5.0
+	var centroid := Vector3.ZERO
+	var bounds := AABB()
+	if root.has_method("_compute_level_aabb"):
+		bounds = root._compute_level_aabb()
+	if bounds.size != Vector3.ZERO:
+		centroid = bounds.get_center()
+		centroid.y = bounds.position.y
+	centroid.y += DEFAULT_SPAWN_HEIGHT_OFFSET
 
 	var entity := DraftEntity.new()
 	entity.name = "DraftEntity"
