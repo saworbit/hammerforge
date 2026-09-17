@@ -9,10 +9,11 @@ extends "res://tools/vibe/hf_vibe_scenario.gd"
 ## into `justify_selected_faces()`.
 ##
 ## Nothing here takes the operation's word for it. Each mode is run and then the
-## face's UVs are recomputed from its own vertices through the same projection
-## the renderer uses, and the resulting UV rectangle is what gets reported. A
-## mode whose name says "left" and whose result does not start at u=0 has not
-## done what the button says.
+## face's UVs are read back -- the hand layout in `custom_uvs` when there is one,
+## otherwise recomputed from its own vertices through the same projection the
+## renderer uses -- and the resulting UV rectangle is what gets reported. A mode
+## whose name says "left" and whose result does not start at u=0 has not done
+## what the button says.
 
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
 
@@ -35,9 +36,15 @@ func run() -> void:
 	await _modes_the_dock_cannot_reach()
 
 
-## The UV rectangle a face's own vertices map onto, recomputed from scratch.
+## The rectangle the face actually textures with.
+##
+## `custom_uvs` wins when it is there, because that is what a hand layout is and
+## what the renderer uses. Reading the projection regardless meant this reported
+## the same numbers whatever Justify did to the layout (#654).
 func _uv_rect(face) -> Rect2:
-	var uvs: PackedVector2Array = face._project_uvs_for_vertices(face.local_verts)
+	var uvs: PackedVector2Array = face.custom_uvs
+	if uvs.is_empty():
+		uvs = face._project_uvs_for_vertices(face.local_verts)
 	if uvs.is_empty():
 		return Rect2()
 	var lo := uvs[0]

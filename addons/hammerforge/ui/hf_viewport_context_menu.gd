@@ -24,7 +24,6 @@ const _ID_DELETE := 111
 const _ID_SELECT_SIMILAR := 113
 const _ID_APPLY_LAST_TEX := 114
 const _ID_SELECTION_FILTER := 115
-const _ID_APPLY_MATERIAL := 120
 const _ID_APPLY_TO_BRUSH := 121
 const _ID_JUSTIFY_FIT := 130
 const _ID_JUSTIFY_CENTER := 131
@@ -229,8 +228,6 @@ func _on_id_pressed(id: int) -> void:
 			action = "apply_last_texture"
 		_ID_SELECTION_FILTER:
 			action = "selection_filter"
-		_ID_APPLY_MATERIAL:
-			action = "apply_material"
 		_ID_APPLY_TO_BRUSH:
 			action = "apply_to_brush"
 		_ID_JUSTIFY_FIT:
