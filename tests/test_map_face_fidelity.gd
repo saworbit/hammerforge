@@ -352,7 +352,13 @@ func test_per_face_materials_survive_an_export_and_import():
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 
-func test_a_texture_the_palette_does_not_hold_leaves_the_face_unset():
+## A texture the palette does not hold used to leave the face unset, and the name
+## with it, so a fresh import -- which is always into an empty palette -- dropped
+## every texture in the file and exported `__default` back (#662). The name is
+## kept on the face now, and mints a placeholder slot so the palette mirrors the
+## file. A placeholder carries no resource path: a `.map` names a texture without
+## saying where it lives, and guessing would put a broken reference on the face.
+func test_a_texture_the_palette_does_not_hold_is_minted_rather_than_dropped():
 	root.add_material_to_palette(_make_material("wall"))
 	var brush := _box("b1")
 	root.assign_material_to_whole_brushes(0, ["b1"])
@@ -366,8 +372,17 @@ func test_a_texture_the_palette_does_not_hold_leaves_the_face_unset():
 
 	var imported: Array = root.get_all_draft_brushes()
 	assert_eq(imported.size(), 1, "The brush should still import")
+	assert_has(root.get_material_names(), "wall", "the name the file used is in the palette")
 	for face in imported[0].faces:
-		assert_eq(face.material_idx, -1, "A texture the palette lacks leaves the face unset")
+		assert_eq(str(face.map_texture), "wall", "and the face records what it was called")
+		assert_ne(face.material_idx, -1, "pointing at the slot minted for it")
+		var slot: Material = root.material_manager.get_material(face.material_idx)
+		assert_not_null(slot, "the slot holds a placeholder")
+		assert_eq(
+			slot.resource_path,
+			"",
+			"with no resource path, because the file did not say where the texture lives"
+		)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 

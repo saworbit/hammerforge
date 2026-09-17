@@ -229,6 +229,36 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the exporter next.
 
 ### Fixed
+- **A `.map` keeps its texture names and its entity keys through a round trip**
+  (#662, #663). `parse_map_text()` reads every key/value pair a block carries and
+  every face's texture name. The level only took some of them, so ten brushes of
+  a TrenchBroom file arrived with perfect geometry, sixty faces on slot -1, and
+  an export that wrote `__default` sixty times. In this lineage a texture name is
+  not decoration -- `AAATRIGGER` is a trigger volume, `*water1` is water, `sky1`
+  is sky -- so dropping it drops the classification. The mechanism was all there:
+  the importer already built `map_textures`, and `_apply_map_textures()` already
+  mapped a name to a palette slot. It opened with `if palette.is_empty(): return`,
+  and a fresh import is into an empty palette, so it gave up on exactly the path
+  it existed for. The name now goes on the face whatever the palette holds, as
+  `FaceData.map_texture`, which makes the round trip lossless in a project with
+  no materials loaded at all; a name the palette does not have mints a
+  placeholder slot named after it, carrying no resource path because a `.map`
+  names a texture without saying where it lives.
+  The same shape on the keys. A point entity's survived, because it was the only
+  kind of block that reached the branch that stored them. A brush entity's were
+  read and discarded, so a `func_door` arrived in the right place, with the right
+  name, and no `speed`, `wait` or `angle` -- a door that does not move. They ride
+  on a `brush_entity_data` meta now, through the same info-to-meta path the class
+  and the name already used. `worldspawn`'s were discarded too, because it has
+  brushes and so never reached that branch at all: an exported map had no `wad`
+  to compile its textures against and no `message` to name it. They live on
+  `LevelRoot.map_worldspawn_properties`, travel in the `.hflevel`, and are
+  written back above the world brushes. That is also the first home the editor
+  has had for a level name.
+  `target`/`targetname` is kept as an ordinary property rather than translated
+  into HammerForge's own I/O. The reverse mapping is not one-to-one and deserves
+  its own decision; keeping the pair is what stops a round trip destroying the
+  only logic a three entity map has.
 - **A level autosaves to its own file** (#655). `hflevel_autosave_path` shipped
   as one literal, `res://.hammerforge/autosave.hflevel`, with autosave already
   on and a five minute timer. So every level in a project pointed at the same

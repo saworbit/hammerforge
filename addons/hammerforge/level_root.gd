@@ -387,6 +387,14 @@ const DEFAULT_HFLEVEL_AUTOSAVE_PATH := "res://.hammerforge/autosave.hflevel"
 ## What a scene handed over before the subsystems existed to take it. Emptied by
 ## `_restore_live_registries()` once they have.
 var _pending_registries: Dictionary = {}
+## The keys the `worldspawn` block of an imported `.map` carried.
+##
+## The WAD list its textures live in, the level's name, the format marker. They
+## describe the map rather than the geometry, so there is nowhere else for them
+## to live, and without somewhere a round trip through HammerForge handed the
+## compiler a map with no textures to find and no name (#663). Also the natural
+## home for a level name, which the editor otherwise has no concept of.
+@export_storage var map_worldspawn_properties: Dictionary = {}
 @export var hflevel_compress: bool = true
 @export var entity_definitions_path: String = "res://addons/hammerforge/entities.json"
 @export var commit_freeze: bool = true

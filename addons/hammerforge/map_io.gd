@@ -105,6 +105,12 @@ static func parse_map_text(text: String) -> Dictionary:
 
 	var brushes: Array = []
 	var entity_points: Array = []
+	# `worldspawn` carries the keys that describe the map itself -- the WAD list
+	# the textures come from, the level's name, the format marker. It has brushes,
+	# so it never reached the point-entity branch below and its keys went nowhere
+	# (#663). An exported map with no `wad` does not compile against the right
+	# textures and has no name.
+	var worldspawn: Dictionary = {}
 	for entity in entities:
 		var props: Dictionary = entity.get("properties", {})
 		var entity_class = str(props.get("classname", ""))
@@ -126,6 +132,9 @@ static func parse_map_text(text: String) -> Dictionary:
 					)
 				)
 			)
+		if entity_class == "worldspawn":
+			worldspawn = (props as Dictionary).duplicate()
+			worldspawn.erase("classname")
 		if not has_brushes and entity_class != "":
 			entity_points.append(
 				{
@@ -149,10 +158,25 @@ static func parse_map_text(text: String) -> Dictionary:
 					info["entity_name"] = authored
 				if not connections.is_empty():
 					info["entity_io_outputs"] = connections
+				# The rest of the block's keys are the entity's behaviour: a
+				# door's `speed` and `wait`, a trigger's `target`. They were read
+				# and dropped, so a func_door arrived in the right place, with
+				# the right name, and no way to move (#663). `classname` and
+				# `targetname` are left out because they are already carried.
+				var extra: Dictionary = (props as Dictionary).duplicate()
+				for carried in ["classname", "targetname"]:
+					extra.erase(carried)
+				if not extra.is_empty():
+					info["brush_entity_data"] = extra
 			brushes.append(info)
 	if entities.is_empty() and text.strip_edges() != "":
 		errors.append("No map blocks found")
-	return {"entities": entity_points, "brushes": brushes, "errors": errors}
+	return {
+		"entities": entity_points,
+		"brushes": brushes,
+		"errors": errors,
+		"worldspawn": worldspawn,
+	}
 
 
 ## The I/O connections among an entity's key/value lines.
@@ -200,6 +224,7 @@ static func export_map_from_level(level_root: Node, adapter: HFMapAdapterType = 
 	var lines: Array[String] = []
 	lines.append("{")
 	lines.append('"classname" "worldspawn"')
+	lines.append_array(_worldspawn_lines(level_root, adapter))
 	var brush_nodes: Array = []
 	if level_root.has_method("_iter_pick_nodes"):
 		brush_nodes.append_array(level_root.call("_iter_pick_nodes"))
@@ -232,6 +257,7 @@ static func export_map_from_level(level_root: Node, adapter: HFMapAdapterType = 
 		# outputs are the wiring itself. Both live in metadata rather than in
 		# entity_data, so neither was reaching the file.
 		lines.append_array(_entity_identity_lines(block.get("node", null), adapter))
+		lines.append_array(_brush_entity_property_lines(block.get("node", null), adapter))
 		lines.append("{")
 		lines.append_array(block["lines"])
 		lines.append("}")
@@ -298,9 +324,15 @@ static func _texture_for_face(face_data: Variant, material_names: Array) -> Stri
 	if face_data == null:
 		return DEFAULT_TEXTURE
 	var idx: int = int(face_data.material_idx)
-	if idx < 0 or idx >= material_names.size():
-		return DEFAULT_TEXTURE
-	return texture_token(str(material_names[idx]))
+	if idx >= 0 and idx < material_names.size():
+		return texture_token(str(material_names[idx]))
+	# No palette slot, but the face may still know what it was called in the
+	# `.map` it came from. Without this an import and an export in a level with
+	# no materials loaded turned every texture name into `__default` (#662).
+	var imported := str(face_data.map_texture).strip_edges()
+	if imported != "":
+		return texture_token(imported)
+	return DEFAULT_TEXTURE
 
 
 ## The face whose outward normal is closest to [param world_normal].
@@ -402,6 +434,52 @@ static func _is_cutter(node: DraftBrush) -> bool:
 ## The `targetname` and the I/O output lines for one entity, in that order.
 ##
 ## Empty for an entity with neither, so an unwired entity block is unchanged.
+## The keys `worldspawn` came in with, written back above the world brushes.
+##
+## Kept on the level rather than regenerated, because they describe the map
+## rather than the geometry: the WAD list its textures live in, its name, the
+## format marker. An importer read them and nothing stored them, so a round trip
+## handed the compiler a map with no textures to find and no name (#663).
+static func _worldspawn_lines(level_root, adapter: HFMapAdapterType = null) -> Array[String]:
+	var out: Array[String] = []
+	if level_root == null or not ("map_worldspawn_properties" in level_root):
+		return out
+	var props = level_root.get("map_worldspawn_properties")
+	if not (props is Dictionary):
+		return out
+	var writer: HFMapAdapterType = adapter if adapter else HFMapAdapterType.new()
+	for key in props as Dictionary:
+		# `classname` is written by the caller and must not be written twice: a
+		# block with two of them is a block whose class depends on which one the
+		# reader keeps.
+		if str(key) == "classname":
+			continue
+		out.append_array(writer.format_entity_properties({str(key): str(props[key])}))
+	return out
+
+
+## The keys a brush entity came in with, beyond its class, name and wiring.
+##
+## A `func_door` is a door because of `speed`, `wait` and `angle`, and those were
+## parsed and dropped (#663). One pair at a time through the adapter, the way
+## `_entity_identity_lines()` does it, so the escaping is the adapter's job.
+static func _brush_entity_property_lines(entity, adapter: HFMapAdapterType = null) -> Array[String]:
+	var out: Array[String] = []
+	if entity == null or not is_instance_valid(entity):
+		return out
+	var props = entity.get_meta("brush_entity_data", {})
+	if not (props is Dictionary):
+		return out
+	var writer: HFMapAdapterType = adapter if adapter else HFMapAdapterType.new()
+	for key in props as Dictionary:
+		# Everything `_entity_identity_lines()` already wrote is skipped, so a
+		# round trip does not grow a second copy of the name on every pass.
+		if str(key) in ["classname", "targetname"]:
+			continue
+		out.append_array(writer.format_entity_properties({str(key): str(props[key])}))
+	return out
+
+
 static func _entity_identity_lines(entity, adapter: HFMapAdapterType = null) -> Array[String]:
 	var out: Array[String] = []
 	if entity == null or not is_instance_valid(entity):

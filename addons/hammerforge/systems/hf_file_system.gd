@@ -274,6 +274,9 @@ func import_map(path: String) -> int:
 		return ERR_INVALID_DATA
 	root.clear_brushes()
 	root._clear_entities()
+	var worldspawn = map_data.get("worldspawn", {})
+	if worldspawn is Dictionary and "map_worldspawn_properties" in root:
+		root.map_worldspawn_properties = (worldspawn as Dictionary).duplicate()
 	var palette := _palette_by_texture_token()
 	for info in map_data.get("brushes", []):
 		if info is Dictionary:
@@ -301,28 +304,59 @@ func _palette_by_texture_token() -> Dictionary:
 	return out
 
 
-## Point each imported face at the palette slot its texture name asks for.
+## Record each imported face's texture name, and point it at a palette slot.
 ##
-## A name the palette does not hold leaves the face unset rather than adding a
-## material, because a `.map` names a texture without saying where it lives and
-## guessing a resource path would put a broken reference on the face.
+## The name goes on the face whatever the palette holds. A fresh import is into
+## an empty palette, so the old guard -- give up when the palette is empty --
+## meant sixty faces arrived on slot -1 with their names nowhere, and an export
+## wrote `__default` on all of them (#662). The name is not decoration in this
+## lineage: `AAATRIGGER` is a trigger volume and `*water1` is water.
+##
+## A name the palette does not already hold mints a placeholder slot named after
+## it, so the Surface panel says `*water1` on the water and the palette mirrors
+## the file. A placeholder is deliberately not given a `resource_path`: a `.map`
+## names a texture without saying where it lives, and guessing one would put a
+## broken reference on the face.
 func _apply_map_textures(brush, info: Dictionary, palette: Dictionary) -> void:
-	if not is_instance_valid(brush) or palette.is_empty():
+	if not is_instance_valid(brush):
 		return
 	var by_normal: Dictionary = info.get("map_textures_by_normal", {})
 	if not by_normal.is_empty():
 		for face in brush.faces:
 			if face == null:
 				continue
-			var token := str(by_normal.get(MapIO.normal_key(face.normal), ""))
-			if palette.has(token):
-				face.material_idx = int(palette[token])
+			_assign_map_texture(
+				face, str(by_normal.get(MapIO.normal_key(face.normal), "")), palette
+			)
 		return
 	var textures: Array = info.get("map_textures", [])
 	for i in mini(textures.size(), brush.faces.size()):
-		var name_token := str(textures[i])
-		if palette.has(name_token):
-			brush.faces[i].material_idx = int(palette[name_token])
+		_assign_map_texture(brush.faces[i], str(textures[i]), palette)
+
+
+func _assign_map_texture(face, token: String, palette: Dictionary) -> void:
+	if face == null:
+		return
+	var name_token := token.strip_edges()
+	if name_token == "" or name_token == MapIO.DEFAULT_TEXTURE:
+		return
+	face.map_texture = name_token
+	if not palette.has(name_token):
+		var minted := _mint_palette_slot(name_token)
+		if minted < 0:
+			return
+		palette[name_token] = minted
+	face.material_idx = int(palette[name_token])
+
+
+## A palette slot standing in for a texture the file names and the project does
+## not have. Returns its index, or -1 when there is no palette to add to.
+func _mint_palette_slot(name_token: String) -> int:
+	if not ("material_manager" in root) or root.material_manager == null:
+		return -1
+	var placeholder := StandardMaterial3D.new()
+	placeholder.resource_name = name_token
+	return int(root.material_manager.add_material(placeholder))
 
 
 func export_map(path: String, format: String = "quake") -> int:
