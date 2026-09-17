@@ -448,11 +448,15 @@ func test_plugin_selection_callbacks_are_thin_delegates() -> void:
 	# The entry points plugin.gd owns. Anything a module calls itself is not one:
 	# plugin.gd used to carry a wrapper for each that nothing called, and lists
 	# like this are why they survived (#609).
+	#
+	# `select_faces_in_rect` was on this list and failed that rule. `handle_release`
+	# calls it, inside the same module, and the only thing in plugin.gd naming it
+	# was a wrapper nothing called. The list kept the wrapper alive, which is the
+	# mechanism #647 is about, so the entry is gone rather than the rule.
 	for call in [
 		"HFPluginSelectionInput.handle_press",
 		"HFPluginSelectionInput.custom_release_result",
 		"HFPluginSelectionInput.handle_active",
-		"HFPluginSelectionInput.select_faces_in_rect",
 	]:
 		assert_true(source.contains(call), "%s must be delegated" % call)
 

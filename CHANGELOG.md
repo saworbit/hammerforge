@@ -90,7 +90,13 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   one-line delegates with nothing on the other side; a test helper in
   `test_justify_uv.gd`; and a signal callback in `test_dock_decomposition.gd`
   shimming a signal that is no longer in `HFDockConnections.ROOT_SIGNALS`, which
-  is the shape #647 describes. The Displacement paragraph in DEVELOPMENT.md
+  is the shape #647 describes. `plugin.gd:_select_faces_in_rect` was the
+  mechanism itself, not just an instance of it: an architecture test listed
+  `HFPluginSelectionInput.select_faces_in_rect` among the entry points
+  `plugin.gd` must delegate, and the wrapper existed only to satisfy the list.
+  The rule written above that list already excluded it, because `handle_release`
+  calls it inside the same module, so the entry is gone rather than the rule.
+  The Displacement paragraph in DEVELOPMENT.md
   still pointed at `plugin.gd:_point_near_polygon_3d()`; that function moved to
   `plugin_paint_input.gd` and lost its underscore, and the stale line is exactly
   what kept it off the old list.
