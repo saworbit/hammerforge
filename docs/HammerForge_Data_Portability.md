@@ -44,6 +44,8 @@ HammerForge gives an `owner` to almost everything it makes, so Ctrl+S writes the
 
 Changing the setting re-owns what is already in the level, so the next Ctrl+S writes what the setting says rather than what the level happened to be built with.
 
+Whichever setting is on, the scene also carries the records that describe the brushes without being brushes: visgroups and their visibility, groups, arrays, hollows, generators and prefab instances. They are not nodes, so they ride in a `live_registries` property on the `LevelRoot` rather than as children. Before September 2026 they did not ride anywhere, and a level reopened from its scene came back as loose geometry the structure panels could no longer edit. A scene saved back then is repaired on open as far as it can be: a visgroup is put back from the members that still name it, and comes back visible.
+
 **Baked geometry only** needs somewhere to put the brushes. A level with no `.hflevel` path keeps them in the scene regardless, because dropping a level's only copy of its brushes is not a trade worth making silently. If the `.hflevel` is missing when such a scene opens, HammerForge says so rather than opening an empty level.
 
 ### Entity I/O Serialization

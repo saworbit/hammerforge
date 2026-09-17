@@ -261,6 +261,34 @@ func restore_visgroups(data: Dictionary) -> void:
 	refresh_visibility()
 
 
+## Put back any visgroup that its own members still name. Returns how many.
+##
+## Membership is node metadata and has always survived a `.tscn`; the registry
+## did not, so a scene saved before `LevelRoot.live_registries` existed reopens
+## with brushes claiming a visgroup the dock has never heard of. If that visgroup
+## was hidden when the scene was saved, the brushes come back invisible with
+## nothing that can show them (#664).
+##
+## A recovered visgroup is visible. The `visible` flag is not recoverable from
+## the members, and of the two directions this is the one that does not leave
+## geometry the mapper cannot reach.
+func reconcile_visgroups_from_members() -> int:
+	var added := 0
+	for node in _all_managed_nodes():
+		if not is_instance_valid(node):
+			continue
+		var vgs: PackedStringArray = node.get_meta("visgroups", PackedStringArray())
+		for vg_name in vgs:
+			var stripped := str(vg_name).strip_edges()
+			if stripped == "" or visgroups.has(stripped):
+				continue
+			visgroups[stripped] = {"visible": true}
+			added += 1
+	if added > 0:
+		refresh_visibility()
+	return added
+
+
 func capture_groups() -> Dictionary:
 	return groups.duplicate()
 

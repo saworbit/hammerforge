@@ -10,8 +10,34 @@ var active_layer_index: int = 0
 
 
 func _ready() -> void:
+	adopt_layer_children()
 	if layers.is_empty():
 		create_layer(&"layer_0", 0.0)
+
+
+## Rebuild the index from the children that already are the layers.
+##
+## A layer is a node and the scene has always written it, but `layers` is a
+## plain array built only by `create_layer()`, so a reopened scene arrived with
+## every layer node present and an empty index -- and `_ready()` then added a
+## second `layer_0` on top of the one it could not see. The paint layer list in
+## the dock showed one layer over a level painted across several (#665).
+##
+## Ordered by the children rather than by id, because that is the order they were
+## created in and the order the scene wrote them back.
+func adopt_layer_children() -> int:
+	var adopted := 0
+	for child in get_children():
+		if not (child is HFPaintLayer):
+			continue
+		var layer := child as HFPaintLayer
+		if layers.has(layer):
+			continue
+		layers.append(layer)
+		adopted += 1
+	if adopted > 0:
+		active_layer_index = clamp(active_layer_index, 0, layers.size() - 1)
+	return adopted
 
 
 func get_active_layer() -> HFPaintLayer:
@@ -123,6 +149,12 @@ func create_layer(layer_id: StringName, layer_y: float) -> HFPaintLayer:
 	layer.grid = grid
 	layer.chunk_size = chunk_size
 	add_child(layer)
+	# Without an owner `PackedScene.pack()` walks straight past the node, so the
+	# scene kept the manager and none of its layers (#665). The manager's own
+	# owner is the right one to copy: whatever `_assign_owner()` decided for it
+	# -- including deciding nothing, on a scene that keeps only its bake -- is
+	# the same decision this layer wants.
+	layer.owner = owner
 	layers.append(layer)
 	active_layer_index = layers.size() - 1
 	return layer
