@@ -2722,6 +2722,15 @@ func set_selection_nodes(nodes: Array) -> void:
 			if level_root.is_entity_node(node):
 				selected_entity = node
 				break
+	# A brush tied to an entity class counts as a brush, so it never reached the
+	# branch above and its properties and its wiring had nowhere to be edited
+	# (#728). One subject, the first of them, the way a point entity selection
+	# takes the first.
+	if selected_entity == null and level_root:
+		for node in nodes:
+			if node is Node3D and HFEntityPropUtils.is_brush_entity(node):
+				selected_entity = node
+				break
 	if selected_entity:
 		_rebuild_entity_props(selected_entity)
 		if _entity_io_section:
