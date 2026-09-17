@@ -227,12 +227,32 @@ func test_deleting_checks_ownership_rather_than_the_list():
 	)
 
 
+## A generated structure is only editable for as long as the record that made it
+## survives, and a snapshot is what undo and the `.hflevel` both are. Asserted
+## against a real capture rather than by reading `hf_state_system.gd` for the
+## line that writes the key: the string moved when the registries were split out
+## for the scene save (#665), the behaviour did not, and a test that greps source
+## fails for refactors and passes for a capture that silently stopped running.
 func test_generator_records_are_persisted_beside_the_duplicators():
-	var source := FileAccess.get_file_as_string(
-		"res://addons/hammerforge/systems/hf_state_system.gd"
-	)
-	assert_true(source.contains('state["generators"]'), "records must travel in the snapshot")
-	assert_true(source.contains("generator_system.restore("), "and come back out of it")
+	var root := LevelRoot.new()
+	root.auto_spawn_player = false
+	root.commit_freeze = false
+	root.hflevel_autosave_enabled = false
+	add_child_autoqfree(root)
+	var settings: Dictionary = HFGeneratorSystemScript.default_settings("stairs")
+	settings["steps"] = 4
+	assert_true(root.create_generator("stairs", settings, Transform3D.IDENTITY).ok, "stairs built")
+	assert_eq(root.generator_count(), 1, "the level has a structure to lose")
+
+	var state: Dictionary = root.state_system.capture_state()
+	assert_true(state.has("generators"), "records must travel in the snapshot")
+	assert_eq((state["generators"] as Array).size(), 1, "and the snapshot holds this one")
+	assert_true(state.has("duplicators"), "beside the duplicators, which travel the same way")
+
+	root.generator_system.clear()
+	assert_eq(root.generator_count(), 0, "cleared, so the restore has something to prove")
+	root.state_system.restore_state(state)
+	assert_eq(root.generator_count(), 1, "and come back out of it")
 
 
 func test_adding_a_generator_type_has_one_place_to_do_it():
