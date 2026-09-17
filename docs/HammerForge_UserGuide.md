@@ -1213,6 +1213,8 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Extrude Down | Shift+E / J | Switch to Extrude Down mode (Shift+E skipped in paint/vertex modes) |
 | Delete | Delete | Delete selected brushes and DraftEntities |
 | Duplicate | Ctrl+D | Duplicate selected brushes and DraftEntities |
+| Copy | Ctrl+C | Put the selection on the clipboard |
+| Paste | Ctrl+V | Place what is on the clipboard, where it was copied from |
 | Group | Ctrl+G | Group selected brushes |
 | Ungroup | Ctrl+U | Ungroup selection |
 | Hollow | Ctrl+H | Convert brush to hollow room |
@@ -1267,6 +1269,18 @@ Preferences include:
 - HUD visibility
 - Tutorial wizard visibility and progress step
 - Dismissed viewport contextual hints
+
+## Clipboard
+
+**Ctrl+C** puts the selected brushes and entities on the clipboard. **Ctrl+V** places them, at the position they were copied from, and selects what it placed so the first drag moves the new piece rather than hunting for it.
+
+The clipboard is a prefab without a name. It is the same capture a prefab gets, so a copied piece arrives with its entity wiring, its brush entity ties, and a record of what each material slot meant; pasting into a level with a different palette resolves those against the destination and appends anything it does not already hold. What a prefab has and the clipboard does not is a name, a place in the library, and a link back to its source: a pasted piece is geometry, not an instance that follows an asset when the asset changes.
+
+Brush ids are minted fresh on every paste, so pasting twice gives two pieces the level can tell apart. Group and visgroup membership is deliberately not carried, because a visgroup is a list of names registered per level and pasting into a level that has never heard of "West Wing" would otherwise put brushes in a group with no row in the panel.
+
+The buffer is a file in `user://`, not something the level holds, so it survives closing a level and restarting the editor, and a piece copied in one project can be pasted into another.
+
+**Where the keys work.** In the 3D viewport, both. In the Scene tree, Ctrl+C is claimed when the selection is HammerForge's, because Godot's own node copy would put a `DraftBrush` on its clipboard that a later paste would rebuild outside the brush registry with the id it already had. Ctrl+V is deliberately not claimed there: it needs nothing selected, and taking it away from the Scene tree whenever a level is open would mean you could no longer paste an ordinary node.
 
 ## Prefabs (Reusable Brush Groups)
 

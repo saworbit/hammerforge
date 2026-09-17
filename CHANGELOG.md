@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Added
+- **Copy and paste** (#703). `hf_keymap.gd` bound `duplicate` to Ctrl+D and
+  nothing to Ctrl+C or Ctrl+V, and the only operations in the codebase made a
+  copy in place, in the same level, immediately. That covers one of the two
+  things duplication is for. The one it did not cover is taking a room out of one
+  level and putting it in another, which is how people move work between maps and
+  which every editor in this lineage has. **Ctrl+C** puts the selection on the
+  clipboard and **Ctrl+V** places it, where it was copied from, and selects what
+  it placed so the first drag moves the new piece. The clipboard is a prefab
+  without a name: the same capture, so a copied piece arrives with its entity
+  wiring, its brush entity ties and a record of what each material slot meant,
+  and pasting into a level with a different palette resolves those against the
+  destination. What a prefab has and this does not is a name, a place in the
+  library, and a link back to a source; a pasted piece is geometry rather than an
+  instance that follows an asset when the asset changes. Brush ids are minted
+  fresh, so pasting twice gives two pieces the level can tell apart, and group and
+  visgroup membership is not carried, because pasting into a level that has never
+  heard of "West Wing" would otherwise put brushes in a group with no row in the
+  panel. The buffer is a file in `user://` rather than something a level holds, so
+  it survives closing a level and restarting the editor, and a piece copied in one
+  project can be pasted into another. In the Scene tree, Ctrl+C is claimed when
+  the selection is this plugin's, because Godot's own node copy would put a
+  `DraftBrush` on its clipboard that a later paste would rebuild outside the brush
+  registry with the id it already had; Ctrl+V is deliberately not claimed there,
+  since it needs nothing selected and taking it from the Scene tree whenever a
+  level is open would mean an ordinary node could no longer be pasted.
+
 ### Fixed
 - **Undo stops repainting a level that did not change** (#705). Ctrl+Z on a
   900-brush map cost 195 ms. The reported cause was that a restore rebuilds the

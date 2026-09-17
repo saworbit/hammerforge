@@ -80,6 +80,63 @@ static func delete_selected(plugin: Object, root: Node) -> bool:
 	return true
 
 
+## The selected brushes and entities, as the nodes themselves.
+##
+## `collect_managed_targets()` below answers the same question as ids and paths,
+## which is what the `*_managed_nodes` methods take. The prefab capture path takes
+## nodes, so this is the same walk with the other answer.
+static func collect_managed_nodes(plugin: Object, root: Node) -> Dictionary:
+	var brush_nodes: Array = []
+	var entity_nodes: Array = []
+	for node in plugin._current_selection_nodes():
+		if node and node is Node3D and root.is_brush_node(node):
+			brush_nodes.append(node)
+		elif node and node is Node3D and root.is_entity_node(node):
+			var entity: Node = plugin._managed_entity_owner(root, node)
+			if entity:
+				entity_nodes.append(entity)
+	return {"brush_nodes": brush_nodes, "entity_nodes": entity_nodes}
+
+
+## Put the selection on the clipboard. Changes nothing in the level, so there is
+## no undo step: copying is not an edit (#703).
+static func copy_selection(plugin: Object, root: Node) -> bool:
+	var targets: Dictionary = collect_managed_nodes(plugin, root)
+	return root.prefab_system.copy_to_clipboard(targets["brush_nodes"], targets["entity_nodes"])
+
+
+## Place what is on the clipboard, where it was copied from.
+##
+## Registered through `commit_completed()` rather than `commit()`, for the reason
+## that function exists: the paste has to be run to learn what it made, and what
+## it made is what gets selected afterwards. It also makes redo deterministic,
+## because redo puts back the state this paste produced rather than reading the
+## clipboard a second time and pasting whatever is on it by then.
+static func paste_clipboard(plugin: Object, root: Node) -> bool:
+	var selection = plugin.get_editor_interface().get_selection()
+	var before: Dictionary = root.capture_state()
+	var result: Dictionary = root.prefab_system.paste_from_clipboard()
+	var brush_ids: Array = result.get("brush_ids", [])
+	var entity_nodes: Array = result.get("entity_nodes", [])
+	if brush_ids.is_empty() and entity_nodes.is_empty():
+		return false
+	HFUndoHelper.commit_completed(
+		plugin._get_undo_redo(), root, "Paste", before, Callable(plugin, "_record_history")
+	)
+	# Selected, because the first thing anyone does with a pasted piece is move
+	# it, and hunting for it in the level first is not part of that.
+	plugin.hf_selection.clear()
+	for brush_id in brush_ids:
+		var pasted = root.find_brush_by_id(str(brush_id))
+		if pasted:
+			plugin.hf_selection.append(pasted)
+	for entity in entity_nodes:
+		if is_instance_valid(entity):
+			plugin.hf_selection.append(entity)
+	plugin._apply_hf_selection(selection)
+	return true
+
+
 static func duplicate_selected(plugin: Object, root: Node) -> bool:
 	var selection = plugin.get_editor_interface().get_selection()
 	var nodes = plugin._current_selection_nodes()

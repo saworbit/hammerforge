@@ -58,6 +58,18 @@ static func handle(plugin: Object, event: InputEvent) -> void:
 		if _claim(plugin, root, "Duplicate"):
 			plugin._duplicate_selected(root)
 		return
+	# Copy for the same reason, and with the same guard: Godot's own Ctrl+C on a
+	# DraftBrush node would put a node on its clipboard that a later paste would
+	# rebuild outside the brush registry, with the id it already had.
+	if plugin._keymap.matches("copy", event):
+		if _claim(plugin, root, "Copy"):
+			plugin._copy_selection(root)
+		return
+	# Paste is deliberately not claimed here. It needs nothing selected, so there
+	# is no managed selection to claim it on, and taking Ctrl+V away from the
+	# Scene tree whenever a level is open would mean a mapper could no longer
+	# paste an ordinary node there. In the 3D viewport, where the surface is
+	# unambiguously this plugin's, the router handles it (#703).
 	if not event.ctrl_pressed:
 		return
 	var nudge: Vector3 = plugin._get_nudge_direction(event.keycode)
