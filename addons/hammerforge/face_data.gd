@@ -94,7 +94,9 @@ func ensure_custom_uvs() -> void:
 func adjust_uvs_for_transform(pos_delta: Vector3, size_ratio: Vector3) -> void:
 	var projection = uv_projection
 	if projection == UVProjection.BOX_UV:
-		projection = _box_projection_axis()
+		# `pos_delta` is a move through the level, so the axis is the one the
+		# projection is using there.
+		projection = _box_projection_axis_in(world_transform)
 	if projection == UVProjection.CYLINDRICAL:
 		return
 	var offset_delta = Vector2.ZERO
@@ -523,7 +525,7 @@ func _project_uvs_in_space(verts: PackedVector3Array, space: Transform3D) -> Pac
 	var out := PackedVector2Array()
 	var projection = uv_projection
 	if projection == UVProjection.BOX_UV:
-		projection = _box_projection_axis()
+		projection = _box_projection_axis_in(space)
 	var aabb = _compute_bounds_for(verts)
 	var height = max(0.001, aabb.size.y)
 	for local in verts:
@@ -649,6 +651,27 @@ func _project_uvs_v0(verts: PackedVector3Array) -> PackedVector2Array:
 	return out
 
 
+## Which planar axis Box UV resolves to, measured in `space`.
+##
+## Box UV picks the axis the face most nearly faces, so it has to be asked in
+## the same space the projection is taken in. Asking in the brush's space while
+## projecting in the level's is how a wall yawed a quarter turn kept `PLANAR_Z`
+## and then projected world (x, y) onto a plane of constant x: every vertex got
+## the same u and the texture smeared into a line (#652).
+func _box_projection_axis_in(space: Transform3D) -> int:
+	var n := normal if space.basis.is_equal_approx(Basis.IDENTITY) else space.basis * normal
+	var ax = abs(n.x)
+	var ay = abs(n.y)
+	var az = abs(n.z)
+	if ax >= ay and ax >= az:
+		return UVProjection.PLANAR_X
+	if ay >= ax and ay >= az:
+		return UVProjection.PLANAR_Y
+	return UVProjection.PLANAR_Z
+
+
+## The axis as the face's own brush sees it. `adjust_uvs_for_rotation()` reasons
+## in that space, and both migrations measure against what the old projection did.
 func _box_projection_axis() -> int:
 	var n = normal
 	var ax = abs(n.x)

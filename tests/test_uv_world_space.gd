@@ -85,6 +85,40 @@ func test_a_cylindrical_projection_stays_in_the_brushs_own_space():
 
 
 # ===========================================================================
+# Which axis Box UV resolves to
+# ===========================================================================
+
+
+func _yawed_wall() -> FaceData:
+	var face := _panel(0.0)
+	face.uv_projection = FaceData.UVProjection.BOX_UV
+	face.world_transform = Transform3D(Basis(Vector3.UP, deg_to_rad(90.0)), Vector3.ZERO)
+	return face
+
+
+func test_box_uv_resolves_its_axis_in_the_space_it_projects_in():
+	var face := _yawed_wall()
+	assert_eq(
+		face._box_projection_axis_in(Transform3D.IDENTITY),
+		FaceData.UVProjection.PLANAR_Z,
+		"the panel faces along Z in its brush"
+	)
+	assert_eq(
+		face._box_projection_axis_in(face.world_transform),
+		FaceData.UVProjection.PLANAR_X,
+		"and along X in the level once the brush is yawed a quarter turn"
+	)
+
+
+func test_a_yawed_wall_still_has_a_texture_across_it():
+	# Resolving in the brush's space kept PLANAR_Z, which reads world (x, y) --
+	# and a wall yawed a quarter turn sits at one x, so every vertex got the same
+	# u and the texture smeared into a line.
+	var span := _u_span(_yawed_wall())
+	assert_almost_eq(span.y - span.x, 128.0, 0.001, "the wall's own width, in world units")
+
+
+# ===========================================================================
 # Texture lock
 # ===========================================================================
 

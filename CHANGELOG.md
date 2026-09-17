@@ -242,6 +242,14 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   Cylindrical is deliberately left in the brush's own space: its angle is
   measured about the brush's axis, and taking that in world space would spin the
   texture as the brush moved.
+  Box UV resolves its axis in the space the projection is taken in. It picks the
+  axis a face most nearly faces, and asking that in the brush's space while
+  projecting in the level's is how a wall yawed a quarter turn kept `PLANAR_Z`
+  and then projected world (x, y) onto a plane of constant x: every vertex got
+  the same u and the texture smeared into a line. The same goes for the move
+  compensation, whose `pos_delta` is a distance through the level. A brush that
+  has not been turned resolves to the same axis either way, which is why this is
+  invisible until something rotates.
   The brush is what tells a face where it is, from `NOTIFICATION_TRANSFORM_CHANGED`
   and from `rebuild_preview()`. The notification covers a transform set by the
   gizmo, by undo, by a generator or by a `.map` import without any of them
