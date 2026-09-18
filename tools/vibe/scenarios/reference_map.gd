@@ -29,8 +29,16 @@ const MAP_PATH := "res://addons/hammerforge/data/reference_map.hflevel"
 const WANT_BRUSHES := 119
 const WANT_ENTITIES := 6
 const WANT_VISGROUPS := ["west_wing", "east_wing", "corridor"]
-const WANT_TIED := 3
-const WANT_IO := 3
+const WANT_TIES := [
+	"corridor_trigger as trigger_multiple",
+	"door_button as func_button",
+	"west_door as func_door",
+]
+const WANT_WIRES := [
+	"corridor_trigger.OnStartTouch -> door_relay.Trigger",
+	"door_button.OnPressed -> door_relay.Trigger",
+	"door_relay.OnTrigger -> west_door.Open",
+]
 const WANT_MATERIAL_SLOTS := 15
 const WANT_UV_ANCHORED := 216
 
@@ -105,28 +113,35 @@ func _what_came_back(root: Node3D) -> void:
 		if not names.has(wanted):
 			flag("a visgroup did not survive the round trip", wanted)
 
-	var tied := 0
-	var io := 0
+	var ties: Array = []
+	var wires: Array = []
 	var slots: Dictionary = {}
 	var anchored := 0
 	for b in brushes:
-		if str(b.get_meta("brush_entity_class", "")) != "":
-			tied += 1
-		io += (b.get_meta("entity_io_outputs", []) as Array).size()
+		var tie := str(b.get_meta("brush_entity_class", ""))
+		if tie != "":
+			ties.append("%s as %s" % [str(b.get_meta("entity_name", "")), tie])
+		wires.append_array(_wires_on(b))
 		for f in b.faces:
 			slots[int(f.material_idx)] = true
 			if not f.uv_scale.is_equal_approx(Vector2.ONE) or f.uv_offset != Vector2.ZERO:
 				anchored += 1
 	if root.entities_node:
 		for e in root.entities_node.get_children():
-			io += (e.get_meta("entity_io_outputs", []) as Array).size()
+			wires.append_array(_wires_on(e))
+	ties.sort()
+	wires.sort()
 
-	note("tied brushes", tied)
-	if tied != WANT_TIED:
-		flag("a tie did not survive the round trip", "%d, expected %d" % [tied, WANT_TIED])
-	note("io connections", io)
-	if io != WANT_IO:
-		flag("a wire did not survive the round trip", "%d, expected %d" % [io, WANT_IO])
+	# Counted and compared, not just counted. A wire is the record most likely to
+	# come back mangled rather than missing: the entity system's own note says the
+	# `.map` round trip drops connections, and a count cannot tell a dropped wire
+	# from a dropped wire plus an invented one.
+	note("ties", ties)
+	if ties != WANT_TIES:
+		flag("a tie did not survive the round trip", "%s, expected %s" % [ties, WANT_TIES])
+	note("io connections", wires)
+	if wires != WANT_WIRES:
+		flag("a wire did not survive the round trip", "%s, expected %s" % [wires, WANT_WIRES])
 	note("distinct material slots", slots.keys().size())
 	if slots.keys().size() != WANT_MATERIAL_SLOTS:
 		flag(
@@ -255,6 +270,33 @@ func _cost(root: Node3D) -> void:
 	var report: Dictionary = root.validate_level()
 	note("validate_level", "%.1f ms" % (float(Time.get_ticks_usec() - t) / 1000.0))
 	note("validate still clean", (report.get("issues", []) as Array).is_empty())
+
+
+## Every output on a node, as "source.Output -> target.Input".
+##
+## The source name is the node's own, so a tied brush reports the entity it was
+## tied as rather than its brush id.
+func _wires_on(node: Node) -> Array:
+	var out: Array = []
+	var source := str(node.get_meta("entity_name", ""))
+	if source == "":
+		source = String(node.name)
+	for entry in node.get_meta("entity_io_outputs", []) as Array:
+		if not (entry is Dictionary):
+			continue
+		var w: Dictionary = entry
+		out.append(
+			(
+				"%s.%s -> %s.%s"
+				% [
+					source,
+					str(w.get("output_name", "")),
+					str(w.get("target_name", "")),
+					str(w.get("input_name", ""))
+				]
+			)
+		)
+	return out
 
 
 func _brushes(root: Node3D) -> Array:
