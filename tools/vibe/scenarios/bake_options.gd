@@ -24,7 +24,6 @@ const FLAGS: Array[String] = [
 	"bake_unwrap_uv0",
 	"bake_lightmap_uv2",
 	"bake_use_face_materials",
-	"bake_use_multimesh",
 	"bake_use_atlas",
 	"bake_generate_occluders",
 	"bake_navmesh",

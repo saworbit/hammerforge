@@ -205,7 +205,6 @@ var bake_preview_mode_opt: OptionButton = null
 var bake_estimate_label: Label = null
 var bake_chunk_size_spin: SpinBox = null
 var bake_visible_only_check: CheckBox = null
-var bake_use_multimesh_check: CheckBox = null
 var bake_use_atlas_check: CheckBox = null
 var bake_auto_connectors_check: CheckBox = null
 var bake_generate_occluders_check: CheckBox = null
@@ -669,7 +668,6 @@ func _apply_ui_state_to_root() -> void:
 		[bake_use_face_materials, "bake_use_face_materials"],
 		[bake_navmesh, "bake_navmesh"],
 		[bake_visible_only_check, "bake_visible_only"],
-		[bake_use_multimesh_check, "bake_use_multimesh"],
 		[bake_use_atlas_check, "bake_use_atlas"],
 		[bake_auto_connectors_check, "bake_auto_connectors"],
 		[bake_generate_occluders_check, "bake_generate_occluders"],
@@ -3458,8 +3456,6 @@ func _sync_grid_settings_from_root() -> void:
 		bake_lightmap_texel.value = float(connected_root.get("bake_lightmap_texel_size"))
 	if bake_visible_only_check and _root_has_property("bake_visible_only"):
 		bake_visible_only_check.button_pressed = bool(connected_root.get("bake_visible_only"))
-	if bake_use_multimesh_check and _root_has_property("bake_use_multimesh"):
-		bake_use_multimesh_check.button_pressed = bool(connected_root.get("bake_use_multimesh"))
 	if bake_use_atlas_check and _root_has_property("bake_use_atlas"):
 		bake_use_atlas_check.button_pressed = bool(connected_root.get("bake_use_atlas"))
 	if bake_auto_connectors_check and _root_has_property("bake_auto_connectors"):
@@ -5004,8 +5000,6 @@ func _collect_editor_settings() -> Dictionary:
 		bake_settings["chunk_size"] = float(level_root.get("bake_chunk_size"))
 	if bake_visible_only_check:
 		bake_settings["visible_only"] = bake_visible_only_check.button_pressed
-	if bake_use_multimesh_check:
-		bake_settings["use_multimesh"] = bake_use_multimesh_check.button_pressed
 	if bake_use_atlas_check:
 		bake_settings["use_atlas"] = bake_use_atlas_check.button_pressed
 	if bake_auto_connectors_check:
@@ -5156,8 +5150,6 @@ func _apply_editor_settings(data: Dictionary) -> void:
 				level_root.set("bake_chunk_size", chunk_size)
 		if bake_visible_only_check and bake.has("visible_only"):
 			bake_visible_only_check.button_pressed = _setting_bool(bake, "visible_only", false)
-		if bake_use_multimesh_check and bake.has("use_multimesh"):
-			bake_use_multimesh_check.button_pressed = _setting_bool(bake, "use_multimesh", false)
 		if bake_use_atlas_check and bake.has("use_atlas"):
 			bake_use_atlas_check.button_pressed = _setting_bool(bake, "use_atlas", false)
 		if bake_auto_connectors_check and bake.has("auto_connectors"):

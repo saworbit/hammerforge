@@ -96,7 +96,6 @@ var bake_use_thread_pool: bool = false
 var bake_use_face_materials: bool = false
 var bake_chunk_size: float = 0.0
 var bake_visible_only: bool = false
-var bake_use_multimesh: bool = false
 var bake_use_atlas: bool = false
 var bake_auto_connectors: bool = false
 var bake_generate_occluders: bool = false
@@ -950,116 +949,6 @@ func test_apply_preview_visuals_multimesh_in_chunk():
 	assert_not_null(
 		mmi.material_override, "MultiMeshInstance3D nested in chunk should get wireframe override"
 	)
-
-
-func test_multimesh_consolidation_preserves_world_transforms():
-	root.position = Vector3(100, 0, 0)
-	root.rotation_degrees = Vector3(0, 30, 0)
-	var container := Node3D.new()
-	container.position = Vector3(10, 0, 0)
-	container.rotation_degrees = Vector3(0, 15, 0)
-	root.add_child(container)
-	var shared_mesh := BoxMesh.new()
-	var first := MeshInstance3D.new()
-	first.mesh = shared_mesh
-	first.position = Vector3(1, 2, 3)
-	first.scale = Vector3(2, 1, 1)
-	container.add_child(first)
-	var second := MeshInstance3D.new()
-	second.mesh = shared_mesh
-	second.position = Vector3(4, 5, 6)
-	container.add_child(second)
-	var expected := [first.global_transform, second.global_transform]
-	assert_true(
-		(
-			(container.global_transform * HFBakeSystem._multimesh_transform(first, container))
-			. is_equal_approx(expected[0])
-		)
-	)
-	assert_true(
-		(
-			(container.global_transform * HFBakeSystem._multimesh_transform(second, container))
-			. is_equal_approx(expected[1])
-		)
-	)
-	bake_sys._consolidate_to_multimesh(container)
-	var mmi: MultiMeshInstance3D = null
-	for child in container.get_children():
-		if child is MultiMeshInstance3D:
-			mmi = child
-			break
-	assert_not_null(mmi)
-	if mmi == null:
-		return
-	assert_eq(mmi.multimesh.transform_format, MultiMesh.TRANSFORM_3D)
-	assert_eq(mmi.multimesh.instance_count, 2)
-
-
-func test_multimesh_consolidation_reaches_into_chunks():
-	## Chunked bakes nest meshes under BakedChunk_* nodes, so scanning only the
-	## container's immediate children found nothing to consolidate.
-	var container := Node3D.new()
-	container.name = "BakedGeometry"
-	root.add_child(container)
-	var shared_mesh := BoxMesh.new()
-	var chunks: Array = []
-	for i in 2:
-		var chunk := Node3D.new()
-		chunk.name = "BakedChunk_%d_0_0" % i
-		container.add_child(chunk)
-		var body := StaticBody3D.new()
-		body.name = "FloorCollision"
-		chunk.add_child(body)
-		var mi := MeshInstance3D.new()
-		mi.name = "BakedMesh_0"
-		mi.mesh = shared_mesh
-		chunk.add_child(mi)
-		mi.position = Vector3(i * 32, 0, 0)
-		chunks.append(chunk)
-
-	bake_sys._consolidate_to_multimesh(container)
-
-	var mmi: MultiMeshInstance3D = null
-	for child in container.get_children():
-		if child is MultiMeshInstance3D:
-			mmi = child
-			break
-	assert_not_null(mmi, "Meshes inside BakedChunk_* nodes should be consolidated")
-	if mmi == null:
-		return
-	assert_eq(mmi.multimesh.instance_count, 2, "Both chunk meshes should be instanced")
-	for chunk: Node3D in chunks:
-		assert_null(
-			chunk.get_node_or_null("BakedMesh_0"), "The original chunk mesh should be removed"
-		)
-		assert_not_null(
-			chunk.get_node_or_null("FloorCollision"), "Chunk collision must survive consolidation"
-		)
-
-
-func test_multimesh_consolidation_keeps_distinct_materials_apart():
-	## Two instances of one mesh with different materials cannot be drawn by a
-	## single MultiMeshInstance3D, so they must not be merged.
-	var container := Node3D.new()
-	root.add_child(container)
-	var shared_mesh := BoxMesh.new()
-	for i in 2:
-		var mi := MeshInstance3D.new()
-		mi.mesh = shared_mesh
-		mi.material_override = StandardMaterial3D.new()
-		container.add_child(mi)
-
-	bake_sys._consolidate_to_multimesh(container)
-
-	var mmi_count := 0
-	var mesh_count := 0
-	for child in container.get_children():
-		if child is MultiMeshInstance3D:
-			mmi_count += 1
-		elif child is MeshInstance3D:
-			mesh_count += 1
-	assert_eq(mmi_count, 0, "Different materials should not be collapsed together")
-	assert_eq(mesh_count, 2, "Both original meshes should be left alone")
 
 
 func test_apply_preview_visuals_full_mode_skips_chunks():

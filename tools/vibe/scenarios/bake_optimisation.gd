@@ -54,39 +54,32 @@ func _a_room_full_of_identical_crates() -> void:
 	note("brushes", root.brush_system.get_live_brush_count())
 	note("of which identical 0.8 crates", 60)
 
-	root.bake_use_multimesh = false
-	await root.bake(false, false)
-	await frame()
-	var plain := _counts(root.get_node_or_null("BakedGeometry"), {})
-	note("multimesh off", plain)
-
-	root.bake_use_multimesh = true
 	await root.bake(false, false)
 	await frame()
 	var container := root.get_node_or_null("BakedGeometry") as Node3D
-	var with_mm := _counts(container, {})
-	note("multimesh on", with_mm)
-	var mmis: Array = _collect(
-		container, func(n: Node) -> bool: return n is MultiMeshInstance3D, []
+	var baked := _counts(container, {})
+	note("what 60 identical crates bake to", baked)
+
+	# There used to be a `Use MultiMesh` toggle here, and the measurement above is
+	# why it was removed (#692). The structural pass merges every face into one
+	# mesh per material before anything else looks at the container, so what
+	# consolidation was handed was a single MeshInstance3D and a group of one.
+	# There was no level, at any size, in any arrangement, that could make it
+	# fire.
+	var meshes: Array = _collect(container, func(n: Node) -> bool: return n is MeshInstance3D, [])
+	note("MeshInstance3D nodes the merge leaves to consolidate", meshes.size())
+	note(
+		"draw calls for this room",
+		"one per material, which is the floor; multimesh would have made it two"
 	)
-	note("MultiMeshInstance3D nodes produced", mmis.size())
-	for m in mmis:
-		note("  %s instances" % m.name, m.multimesh.instance_count if m.multimesh else 0)
-	if mmis.is_empty():
-		flag(
-			"Use multimesh consolidates nothing, even on 60 identical brushes",
+	if meshes.size() > 1:
+		note(
+			"worth revisiting",
 			(
-				"_consolidate_to_multimesh() groups MeshInstance3D by `[mi.mesh, material]` -- "
-				+ "object identity of the Mesh resource. Every brush's mesh is built fresh by "
-				+ "the bake, so no two instances ever share one, every group has size 1, and "
-				+ "the `instances.size() < 2` guard skips all of them. The toggle can never "
-				+ "fire on a HammerForge bake whatever the level looks like. Grouping by mesh "
-				+ "*content* -- surface arrays, or the brush's shape and size -- is what would "
-				+ "make it work."
+				"more than one mesh instance survived the merge here, which is the input "
+				+ "consolidation always wanted and never got. See #742."
 			)
 		)
-	else:
-		note("consolidation happened", true)
 
 
 func _room(root: Node3D, span: float) -> void:

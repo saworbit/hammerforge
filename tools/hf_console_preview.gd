@@ -27,7 +27,6 @@ class PreviewRoot:
 	var bake_use_face_materials := true
 	var bake_navmesh := false
 	var bake_visible_only := false
-	var bake_use_multimesh := false
 	var bake_use_atlas := false
 	var bake_auto_connectors := false
 	var bake_wire_io := true
