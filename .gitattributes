@@ -4,3 +4,9 @@
 # Preserve the upstream MCP bundle verbatim and keep its legacy whitespace
 # from obscuring first-party diff checks.
 addons/godot_mcp/** -whitespace linguist-vendored
+
+# The reference map is a compressed .hflevel. text=auto guesses, and a wrong
+# guess would mangle line endings inside the payload on checkout. An
+# uncompressed .hflevel is JSON and stays diffable, so this names the one file
+# rather than the extension.
+addons/hammerforge/data/reference_map.hflevel binary
