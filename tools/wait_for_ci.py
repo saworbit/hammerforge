@@ -31,6 +31,11 @@ starts over on the new commit rather than reporting on the old one.
 
     python tools/wait_for_ci.py 270
     python tools/wait_for_ci.py 270 --workflow CI --timeout 1800
+    python tools/wait_for_ci.py 1b1e341
+
+The argument is a pull request number or a commit. A commit is the case after a
+squash merge, where the thing that landed on main has no pull request of its own
+and so no head to re-read: it is graded exactly once and cannot move.
 
 Exits 0 only when the named workflow concluded successfully on the commit that
 is still the pull request's head. Exits 1 on failure, timeout, or a missing
@@ -45,6 +50,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import time
@@ -101,12 +107,62 @@ def head_sha(pr: int) -> str:
     return sha
 
 
+_HEX = re.compile(r"[0-9a-f]{7,40}")
+
+
+def classify_target(value: str) -> int | str:
+    """A pull request number or a commit-ish, decided by shape.
+
+    Digits alone are a pull request number, because that is what this script
+    took for its first six hundred invocations and an abbreviated commit is
+    rarely all digits. Seven to forty hexadecimal characters are a commit.
+    Nothing else resolves, and a branch name least of all: the branch is the
+    thing this whole script exists to refuse to grade.
+
+    Pure, and no network, so --selftest can exercise it.
+    """
+    text = value.strip()
+    if text.isdigit():
+        return int(text)
+    # Lowercased because select_run() compares against `headSha` exactly, and
+    # gh reports that lowercase. An uppercase SHA would match no run and wait
+    # out the full timeout rather than saying it found nothing.
+    if _HEX.fullmatch(text.lower()):
+        return text.lower()
+    raise ValueError("%r is neither a pull request number nor a commit" % value)
+
+
+def resolve_commit(ref: str) -> str:
+    """Expand a commit-ish to the forty characters GitHub indexes runs by.
+
+    `gh run list --commit` matches nothing on an abbreviated SHA and answers
+    with an empty list, which verdict() reads as "no run yet". A short SHA
+    passed straight through would therefore poll until the timeout and report a
+    commit that is green as though it never ran. So it is expanded here, before
+    it can reach runs_for().
+
+    A full SHA is sent too, rather than short-circuited, because a typo in one
+    is the same failure: no such commit looks exactly like no run yet, and the
+    default timeout makes that forty-five minutes of silence. One call up front
+    turns it into one second.
+
+    Asked of GitHub rather than `git rev-parse`, for the same reason head_sha()
+    does not read the local checkout: after a merge the commit that landed may
+    not have been fetched yet.
+    """
+    sha = _gh(["api", "repos/{owner}/{repo}/commits/%s" % ref, "--jq", ".sha"]).strip()
+    if len(sha) != 40:
+        raise GhError("%s is not a commit in this repository" % ref)
+    return sha
+
+
 def runs_for(sha: str) -> list[dict]:
     """Workflow runs GitHub associates with one commit.
 
     `--commit` wants the full forty characters. An abbreviated one matches
     nothing and returns an empty list, which is indistinguishable from "no run
-    yet" -- so callers must pass what `head_sha()` gave them.
+    yet" -- so callers must pass what `head_sha()` or `resolve_commit()` gave
+    them, never a SHA a human typed.
     """
     return _gh_json(
         [
@@ -152,7 +208,7 @@ def verdict(run: dict | None) -> str:
 
 
 def wait(
-    pr: int,
+    target: int | str,
     workflow: str = DEFAULT_WORKFLOW,
     timeout: int = DEFAULT_TIMEOUT_SECONDS,
     poll: int = POLL_SECONDS,
@@ -161,19 +217,28 @@ def wait(
     resolve_head=head_sha,
     fetch_runs=runs_for,
 ) -> int:
+    """Block until `workflow` settles on what `target` currently points at.
+
+    `target` is a pull request number, or a full commit SHA with an identity
+    `resolve_head`. The loop is the same either way: a commit simply resolves to
+    itself, so the head can never move under it and the re-reads below are free.
+    """
     deadline = clock() + timeout
-    sha = resolve_head(pr)
-    print("#%d head %s" % (pr, sha[:7]), flush=True)
+    sha = resolve_head(target)
+    # Only a pull request has a head worth reporting. A commit is its own answer.
+    prefix = "#%d " % target if isinstance(target, int) else ""
+    if prefix:
+        print("%shead %s" % (prefix, sha[:7]), flush=True)
 
     while True:
-        current = resolve_head(pr)
+        current = resolve_head(target)
         if current != sha:
             # ci.yml commits the published test counts to the branch, so this is
             # ordinary rather than alarming. The old commit's result is now
             # about something that will not merge.
             print(
-                "#%d head moved %s -> %s, waiting on the new commit"
-                % (pr, sha[:7], current[:7]),
+                "%shead moved %s -> %s, waiting on the new commit"
+                % (prefix, sha[:7], current[:7]),
                 flush=True,
             )
             sha = current
@@ -183,25 +248,26 @@ def wait(
             # Read the head once more before answering. A counts commit landing
             # between the fetch above and this line would otherwise be reported
             # green on the strength of the commit it replaced.
-            settled = resolve_head(pr)
+            settled = resolve_head(target)
             if settled != sha:
                 print(
-                    "#%d head moved to %s as it passed, regrading" % (pr, settled[:7]),
+                    "%shead moved to %s as it passed, regrading"
+                    % (prefix, settled[:7]),
                     flush=True,
                 )
                 sha = settled
                 sleeper(poll)
                 continue
-            print("#%d %s passed on %s" % (pr, workflow, sha[:7]), flush=True)
+            print("%s%s passed on %s" % (prefix, workflow, sha[:7]), flush=True)
             return 0
         if state == "failure":
-            print("#%d %s failed on %s" % (pr, workflow, sha[:7]), flush=True)
+            print("%s%s failed on %s" % (prefix, workflow, sha[:7]), flush=True)
             return 1
 
         if clock() >= deadline:
             print(
-                "#%d %s did not finish on %s within %ds"
-                % (pr, workflow, sha[:7], timeout),
+                "%s%s did not finish on %s within %ds"
+                % (prefix, workflow, sha[:7], timeout),
                 flush=True,
             )
             return 1
@@ -338,6 +404,60 @@ def _selftest() -> int:
         1,
     )
 
+    # The argument shapes. A branch name has to be refused rather than guessed
+    # at, because grading a branch is the mistake this script was written for.
+    check("digits are a pull request", classify_target("270"), 270)
+    check("a full SHA is a commit", classify_target(_SHA), _SHA)
+    check("a short SHA is a commit", classify_target("1b1e341"), "1b1e341")
+    # gh reports headSha lowercase and select_run compares exactly, so an
+    # uppercase argument that survived would match no run and time out.
+    check("an uppercase SHA is lowered", classify_target("1B1E341"), "1b1e341")
+    check("surrounding space is ignored", classify_target(" 270 "), 270)
+    for bad in ["main", "", "1b1e34", "zzzzzzz", "1b1e341" + "a" * 34]:
+        try:
+            classify_target(bad)
+        except ValueError:
+            check("%r is refused" % bad, True, True)
+        else:
+            check("%r is refused" % bad, False, True)
+
+    # A commit target with an identity resolver. The head cannot move, so the
+    # re-read that regrades a pull request must not fire, and the log lines
+    # carry no "#N " prefix to put a number on a commit that has no pull
+    # request.
+    commit_reads: list[str] = []
+
+    def _identity(commit: str) -> str:
+        commit_reads.append(commit)
+        return commit
+
+    check(
+        "a commit is graded on itself",
+        wait(
+            _SHA,
+            poll=0,
+            sleeper=lambda _: None,
+            clock=lambda: 0.0,
+            resolve_head=_identity,
+            fetch_runs=lambda sha: [done] if sha == _SHA else [],
+        ),
+        0,
+    )
+    check("every read of a commit is that commit", set(commit_reads), {_SHA})
+
+    check(
+        "a failing commit is a failure",
+        wait(
+            _SHA,
+            poll=0,
+            sleeper=lambda _: None,
+            clock=lambda: 0.0,
+            resolve_head=lambda commit: commit,
+            fetch_runs=lambda _sha: [dict(done, conclusion="failure")],
+        ),
+        1,
+    )
+
     if failures:
         for line in failures:
             print("selftest: %s" % line, file=sys.stderr)
@@ -348,7 +468,7 @@ def _selftest() -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("pr", nargs="?", type=int, help="pull request number")
+    parser.add_argument("target", nargs="?", help="pull request number or commit SHA")
     parser.add_argument("--workflow", default=DEFAULT_WORKFLOW)
     parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT_SECONDS)
     parser.add_argument("--poll", type=int, default=POLL_SECONDS)
@@ -357,11 +477,26 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.selftest:
         return _selftest()
-    if args.pr is None:
-        parser.error("a pull request number is required")
+    if args.target is None:
+        parser.error("a pull request number or commit is required")
 
     try:
-        return wait(args.pr, args.workflow, args.timeout, args.poll)
+        target = classify_target(args.target)
+    except ValueError as exc:
+        parser.error(str(exc))
+
+    try:
+        if isinstance(target, int):
+            return wait(target, args.workflow, args.timeout, args.poll)
+        # A commit does not move, so it resolves to itself every poll.
+        sha = resolve_commit(target)
+        return wait(
+            sha,
+            args.workflow,
+            args.timeout,
+            args.poll,
+            resolve_head=lambda commit: commit,
+        )
     except GhError as exc:
         print("wait_for_ci: %s" % exc, file=sys.stderr)
         return 1

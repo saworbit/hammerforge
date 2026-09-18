@@ -5,6 +5,23 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **`tools/wait_for_ci.py` takes a commit as well as a pull request** (#763).
+  The internals were always keyed to a commit; only the argument parser insisted
+  on a pull request number. That left out the one commit most worth checking:
+  after a squash merge, what landed on `main` has no pull request of its own, so
+  there was no way to ask this tool whether the merge went green.
+  `python tools/wait_for_ci.py 1b1e341` now answers. A commit resolves to itself
+  every poll, so the head-moved handling that exists for CI's counts commit
+  simply never fires, and the log drops the `#N` prefix rather than putting a
+  pull request number on a commit that has none. A pull request number behaves
+  exactly as before.
+  Short SHAs are expanded through GitHub before they are used, because
+  `gh run list --commit` matches nothing on an abbreviated one and answers with
+  an empty list -- which this tool reads as "no run yet" and would have waited
+  out the full forty-five minute timeout on. A SHA that is not a commit here now
+  fails in about a second instead. An uppercase SHA is lowered for the same
+  reason: run comparison is exact.
+
 - **A reference map ships with the plugin** (#710). The five examples in
   `example_levels.json` each demonstrate one feature, and that file's schema
   carries brush shape, position, size and operation plus point entities. It
