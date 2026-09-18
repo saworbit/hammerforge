@@ -58,15 +58,30 @@ func _textured_room(root: Node3D) -> Array:
 
 ## Signed volume of every baked surface, which says where the cut landed without
 ## needing to know what the mesh looks like.
+##
+## `ARRAY_VERTEX` is the unique vertex list, not the triangle list. CSG output is
+## unindexed so the two are the same thing there, which is why reading it in
+## threes gave the right answer for every cut. The structural merge indexes its
+## output, and reading that in threes gave a number with no meaning at all: one
+## 2 x 2 x 2 brush came out as eight triangles rather than twelve, and two levels
+## of identical geometry measured differently because their vertices were ordered
+## differently. Every other scenario that counts triangles already reads the index.
 func _baked_volume(node: Node) -> float:
 	var total := 0.0
 	if node is MeshInstance3D and node.mesh:
 		var m: Mesh = node.mesh
 		for s in m.get_surface_count():
-			var verts: PackedVector3Array = m.surface_get_arrays(s)[Mesh.ARRAY_VERTEX]
+			var arrays: Array = m.surface_get_arrays(s)
+			var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+			var raw_idx = arrays[Mesh.ARRAY_INDEX]
+			var idx: PackedInt32Array = (
+				raw_idx if raw_idx is PackedInt32Array else PackedInt32Array()
+			)
+			if idx.is_empty():
+				idx = PackedInt32Array(range(verts.size()))
 			var i := 0
-			while i + 2 < verts.size():
-				total += verts[i].dot(verts[i + 1].cross(verts[i + 2])) / 6.0
+			while i + 2 < idx.size():
+				total += verts[idx[i]].dot(verts[idx[i + 1]].cross(verts[idx[i + 2]])) / 6.0
 				i += 3
 	for c in node.get_children():
 		total += _baked_volume(c)
@@ -213,7 +228,23 @@ func _what_fills_the_interior_a_cut_exposes() -> void:
 	await _whether_texturing_a_cutter_moves_the_cut()
 
 
-## Whether texturing a cutter changes where it cuts.
+## What the cut should leave, where that is arithmetic rather than a second
+## implementation of the boolean.
+##
+## Wall 6 x 4 x 1 at (0, 2, 0) is 24.0. The cutter is 1.5 x 1.5 x 3 at
+## (0.4, 2.2, 0), so 2.25 of it is inside the wall: subtracting leaves 21.75. The
+## cutter is a box centred on its own origin, so a mirror maps it onto itself and
+## the mirrored row wants the same number.
+##
+## Cutter rows only. The rotated one has no closed form, and the added rows have
+## no boolean stage at all: two brushes with no subtractor anywhere take the
+## structural merge, which keeps both brushes whole rather than unioning them, so
+## the signed volume is their sum and not the volume of anything. The relative
+## check still means something there and is kept.
+const EXPECTED_VOLUME := {"axis aligned": 21.75, "mirrored": 21.75}
+
+
+## Whether texturing a cutter changes where it cuts, and whether it cuts right.
 ##
 ## A textured cutter stops being an exact prefab primitive and becomes a
 ## triangulated mesh, which is the risk: on the additive side a bad operand is
@@ -221,6 +252,16 @@ func _what_fills_the_interior_a_cut_exposes() -> void:
 ## awkward cases are the ones a prefab is exact at and a mesh has to reproduce --
 ## an angle that is not axis aligned, and a mirrored brush, whose negative
 ## determinant inverts face winding invisibly until a bake.
+##
+## Comparing the two operand paths against each other is not enough on its own,
+## and #749 is what proved it: a mirrored cutter added its volume instead of
+## removing it down both paths, and this scenario reported clean the whole time
+## because both answers were wrong together. The rows with a known answer are now
+## checked against it.
+##
+## The mirrored rows go through the repair, because that is what the editor does.
+## A negative scale is what Godot's own gizmo writes, and the change tracker takes
+## the mirror back off on release. Reconciling here is that release.
 func _whether_texturing_a_cutter_moves_the_cut() -> void:
 	for subtracts in [true, false]:
 		for placement in ["axis aligned", "rotated", "mirrored"]:
@@ -240,6 +281,17 @@ func _whether_texturing_a_cutter_moves_the_cut() -> void:
 					second.rotation = Vector3(0.3, 0.7, 0.2)
 				elif placement == "mirrored":
 					second.scale = Vector3(-1, 1, 1)
+					var tracker = load("res://addons/hammerforge/hf_brush_change_tracker.gd").new()
+					tracker.prime(root)
+					tracker.reconcile(root)
+					if second.global_transform.basis.determinant() < 0.0:
+						flag(
+							"the change tracker left a brush mirrored",
+							(
+								"A negative scale is what Godot's own gizmo writes. Nothing "
+								+ "downstream reads a right-handed brush after this."
+							)
+						)
 				if textured:
 					for face in second.faces:
 						if face:
@@ -272,6 +324,20 @@ func _whether_texturing_a_cutter_moves_the_cut() -> void:
 						% [volumes[0], volumes[1]]
 					)
 				)
+			var want: float = float(EXPECTED_VOLUME.get(placement, -1.0)) if subtracts else -1.0
+			if want > 0.0:
+				for i in 2:
+					if volumes[i] >= 0.0 and absf(volumes[i] - want) > 0.01:
+						flag(
+							(
+								"a %s %s as a %s operand cut the wrong amount"
+								% [placement, kind, "mesh" if i == 1 else "primitive"]
+							),
+							(
+								"The level bakes to %.4f and the arithmetic says %.4f."
+								% [volumes[i], want]
+							)
+						)
 
 
 ## What the two paths cost, textured and not.
