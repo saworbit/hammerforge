@@ -68,7 +68,6 @@ func test_advanced_bake_keeps_all_secondary_controls_collapsed() -> void:
 		dock.bake_preview_mode_opt,
 		dock.bake_chunk_size_spin,
 		dock.bake_visible_only_check,
-		dock.bake_use_multimesh_check,
 		dock.bake_use_atlas_check,
 		dock.bake_auto_connectors_check,
 		dock.bake_connector_mode_opt,

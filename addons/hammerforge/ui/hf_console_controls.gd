@@ -136,12 +136,6 @@ const GROUPS := [
 				"help": "Skips hidden visgroups and invisible brushes. Fast iteration on one area."
 			},
 			{
-				"key": "bake_use_multimesh",
-				"dock": "bake_use_multimesh_check",
-				"label": "MultiMesh repeats",
-				"help": "Collapses identical repeated meshes into one instanced draw."
-			},
-			{
 				"key": "bake_use_atlas",
 				"dock": "bake_use_atlas_check",
 				"label": "Material atlas",

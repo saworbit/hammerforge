@@ -163,7 +163,6 @@ Grid-based paint layers with chunked storage for large worlds:
 | **Bake Selected** | Bake only selected brushes (merged into existing output) |
 | **Bake Changed** | Bake only dirty-tagged brushes since last successful bake |
 | **Preview modes** | Full / Wireframe / Proxy toggle for ultra-fast iteration |
-| **MultiMesh** | Consolidate repeated identical meshes into MultiMeshInstance3D |
 | **Material Atlas** | Pack albedo textures into a single atlas to reduce draw calls (face materials mode) |
 | **Collision Mode** | Trimesh (legacy), per-brush convex hulls, or per-visgroup partitioned convex bodies |
 | **Bake Visible Only** | Skip hidden visgroups and invisible brushes |
@@ -387,7 +386,7 @@ transform group while paint mode is on, so only one of the two is ever live.
 
 ## Testing
 
-The verified Godot 4.7 suite on September 18, 2026 contains **4,361 tests across 241 scripts**: **4,354 passing tests**, seven intentional no-assert safety tests, and **20,505 assertions**. All checks run on every push and pull request via GitHub Actions.
+The verified Godot 4.7 suite on September 18, 2026 contains **4,358 tests across 241 scripts**: **4,351 passing tests**, seven intentional no-assert safety tests, and **20,481 assertions**. All checks run on every push and pull request via GitHub Actions.
 
 ```bash
 # Run all tests headless
@@ -432,7 +431,6 @@ See [ROADMAP.md](https://github.com/saworbit/hammerforge/blob/main/ROADMAP.md) f
 - Snap-to-edge (dock **E**) and snap-to-perpendicular (dock **P**)
 - Bake `func_detail` meshes and trigger `Area3D` volumes
 - Playtest exports with a spawned FPS player, recursive nested-node ownership, and preserved source transforms
-- MultiMesh consolidation that keeps instance transforms in baked-container space
 
 **Current tracked work:**
 - The issue tracker is clear as of September 7, 2026.

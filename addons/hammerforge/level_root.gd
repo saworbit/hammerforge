@@ -285,7 +285,6 @@ var _bake_navmesh_agent_max_slope: float = 45.0
 	get:
 		return _bake_navmesh_agent_max_slope
 @export var bake_visible_only: bool = false
-@export var bake_use_multimesh: bool = false
 @export var bake_use_atlas: bool = false
 @export var bake_auto_connectors: bool = false
 @export var bake_wire_io: bool = true

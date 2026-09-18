@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Removed
+- **The `Use MultiMesh` bake toggle** (#692). It could not consolidate anything a
+  bake produces, at any level size, in any arrangement. The report blamed the
+  grouping key, which is object identity of the `Mesh` and is indeed never shared
+  between two brushes. Fixing the key would have changed nothing: by the time
+  consolidation ran there was only one `MeshInstance3D` in the container, because
+  the structural pass merges every face into one mesh per material first, and one
+  node cannot form a group of two whatever the key is. Three other paths were
+  checked for somewhere it could fire. Props are instantiated into the exported
+  scene rather than the baked container, so it never sees them; chunked bakes and
+  visgroup layers do produce several mesh instances, but each holds distinct
+  content, so identity keying gives groups of one again. The toggle cost a bake to
+  discover and `bake-options` had already recorded that it produced byte-identical
+  output without knowing why. The stated reason for wanting it was draw calls, and
+  that is backwards: the merge already gives one draw call per material, which is
+  the floor, and pulling the crates back out would give two. What multimesh buys
+  on brushes is vertex memory. Where it would genuinely pay is repeated props,
+  which are never merged and which do share a `Mesh` resource, and that is filed
+  as #742 with the measurement and the reason it is a design decision rather than
+  a rewiring: a prop is packed as a scene instance, so collapsing it discards its
+  collision, its scripts and every child it had.
+
 ### Fixed
 - **Validate reports two brushes in one level sharing an id** (#696). Saving a
   piece of level as its own scene and instancing it twice puts the same set of

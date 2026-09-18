@@ -29,7 +29,6 @@ static func connect_settings(dock: Object) -> void:
 		[dock.bake_use_face_materials, "bake_use_face_materials"],
 		[dock.bake_navmesh, "bake_navmesh"],
 		[dock.bake_visible_only_check, "bake_visible_only"],
-		[dock.bake_use_multimesh_check, "bake_use_multimesh"],
 		[dock.bake_use_atlas_check, "bake_use_atlas"],
 		[dock.bake_auto_connectors_check, "bake_auto_connectors"],
 		[dock.bake_generate_occluders_check, "bake_generate_occluders"],

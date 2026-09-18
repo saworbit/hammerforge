@@ -184,9 +184,6 @@ func build(parent: Control) -> void:
 	adv.add_child(dock.bake_visible_only_check)
 
 	# -- MultiMesh consolidation --
-	dock.bake_use_multimesh_check = dock._make_check("Use MultiMesh")
-	dock.bake_use_multimesh_check.tooltip_text = "Consolidate repeated identical meshes into MultiMeshInstance3D"
-	adv.add_child(dock.bake_use_multimesh_check)
 
 	# -- Material Atlas --
 	dock.bake_use_atlas_check = dock._make_check("Material Atlas")
