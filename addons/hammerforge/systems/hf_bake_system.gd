@@ -555,10 +555,105 @@ func _faces_carry_materials() -> bool:
 	for brush in collect_face_bake_brushes():
 		if not (is_instance_valid(brush) and brush is DraftBrush):
 			continue
-		for face in (brush as DraftBrush).faces:
-			if face and face.material_idx >= 0:
-				return true
+		if _brush_carries_face_materials(brush as DraftBrush):
+			return true
 	return false
+
+
+## The same question about one brush, which is what decides how it enters the
+## CSG tree.
+func _brush_carries_face_materials(brush: DraftBrush) -> bool:
+	if not is_instance_valid(brush):
+		return false
+	for face in brush.faces:
+		if face and face.material_idx >= 0:
+			return true
+	return false
+
+
+## The mesh that puts a textured brush into the CSG tree with its texturing
+## intact.
+##
+## Godot's CSG carries a material per face. `CSGMesh3D` takes one from each
+## surface of its mesh and the boolean writes it through to the output, so a
+## brush handed over as a mesh with one surface per material comes out the other
+## side still wearing them. Assigning `CSGMesh3D.material` is the thing that
+## collapses them all into one, and that is what this path did to every brush -
+## so a single cutter anywhere in a level moved the whole level onto the CSG
+## path and cost every brush in it its texturing (#693).
+##
+## The faces resolve exactly as the face-material bake resolves them, through the
+## same `snapshot_brush_faces()`, so the two paths cannot disagree about what a
+## face is painted with.
+##
+## Null for a brush with no face materials, which leaves every untextured brush
+## on the prefab primitive it has always been cut with.
+func _face_material_csg_mesh(draft: DraftBrush) -> Mesh:
+	if not root.bake_use_face_materials or not root.baker:
+		return null
+	if not _brush_carries_face_materials(draft):
+		return null
+	var snapshot: Dictionary = root.baker.snapshot_brush_faces(
+		draft, root.material_manager, root.bake_material_override, false
+	)
+	var records: Array = snapshot.get("records", [])
+	if records.is_empty():
+		return null
+	# A boolean needs a closed solid. The face-material bake path draws whatever
+	# triangles it is given and a hole costs it one invisible face, but a hole in
+	# a CSG operand is a hole in the result, so a brush whose faces did not all
+	# triangulate goes back on the primitive, which is always closed.
+	var solid_faces := 0
+	for face in draft.faces:
+		if face:
+			solid_faces += 1
+	if records.size() != solid_faces:
+		return null
+	# Grouped by material, because a surface is a material and the whole point is
+	# to hand CSG more than one of them.
+	var groups: Dictionary = {}
+	var order: Array = []
+	for rec in records:
+		var mat: Material = rec.get("material", null)
+		var key: Variant = mat if mat != null else "_default"
+		if not groups.has(key):
+			groups[key] = {
+				"material": mat,
+				"verts": PackedVector3Array(),
+				"uvs": PackedVector2Array(),
+				"normals": PackedVector3Array(),
+			}
+			order.append(key)
+		var group: Dictionary = groups[key]
+		var verts: PackedVector3Array = rec.get("verts", PackedVector3Array())
+		var uvs: PackedVector2Array = rec.get("uvs", PackedVector2Array())
+		var normals: PackedVector3Array = rec.get("normals", PackedVector3Array())
+		var face_normal: Vector3 = rec.get("face_normal", Vector3.UP)
+		for i in range(verts.size()):
+			group["verts"].append(verts[i])
+			group["uvs"].append(uvs[i] if uvs.size() > i else Vector2.ZERO)
+			group["normals"].append(normals[i] if normals.size() > i else face_normal)
+	var mesh := ArrayMesh.new()
+	for key in order:
+		var group: Dictionary = groups[key]
+		var verts: PackedVector3Array = group["verts"]
+		if verts.is_empty():
+			continue
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		var mat: Material = group["material"]
+		if mat:
+			st.set_material(mat)
+		var uvs: PackedVector2Array = group["uvs"]
+		var normals: PackedVector3Array = group["normals"]
+		for i in range(verts.size()):
+			if normals.size() > i:
+				st.set_normal(normals[i])
+			if uvs.size() > i:
+				st.set_uv(uvs[i])
+			st.add_vertex(verts[i])
+		st.commit(mesh)
+	return mesh if mesh.get_surface_count() > 0 else null
 
 
 func _has_effective_structural_subtractors() -> bool:
@@ -761,24 +856,23 @@ func _bake_impl(
 	if root.bake_use_face_materials and not use_face_material_path:
 		# Independent face triangulation has no boolean subtraction stage.
 		# Keep every effective cutter by switching this bake to CSG.
-		bake_options["use_face_materials"] = false
-		root._log("Face-material bake switched to CSG to preserve active cuts")
-		# And say so where the mapper is looking. The branch below has always sent a
-		# user_message for the case they chose - Use Face Materials unticked by hand
-		# - while the case they hit by accident, by drawing a cutter, said nothing
-		# anywhere but the Console: the checkbox stayed ticked and the Manage tab
-		# looked exactly as it had (#694). Only worth saying when there is
-		# something to lose, which is the same guard the branch below uses.
-		if _faces_carry_materials():
-			var why := "this bake was asked for as CSG"
-			if not force_csg:
-				var cutters := _count_effective_structural_subtractors()
-				var one := cutters == 1
-				why = (
-					"the level has %d subtractive brush%s, which %s the CSG path"
-					% [cutters, "" if one else "es", "needs" if one else "need"]
+		#
+		# The texturing no longer goes with it. A textured brush enters the CSG
+		# tree as a mesh with one surface per material and comes out of the
+		# boolean still wearing them, so the mapper keeps what they painted and
+		# the cut still cuts (#693). Nothing to warn about, which is why the
+		# user_message that used to fire here is gone: it said the materials were
+		# dropped, and they are not.
+		if force_csg:
+			root._log("Face-material bake switched to CSG: this bake was asked for as CSG")
+		else:
+			var cutters := _count_effective_structural_subtractors()
+			root._log(
+				(
+					"Face-material bake switched to CSG to preserve %d active cut%s"
+					% [cutters, "" if cutters == 1 else "s"]
 				)
-			root.emit_signal("user_message", "Per-face materials were not baked: %s" % why, 1)
+			)
 	elif not root.bake_use_face_materials and _faces_carry_materials():
 		# The only log on this path used to fire the other way round, so the
 		# silent case was a mapper texturing a level, pressing Bake and getting one
@@ -1811,22 +1905,39 @@ func append_brush_list_to_csg(
 			and (force_subtract or draft.operation == CSGShape3D.OPERATION_SUBTRACTION)
 		):
 			continue
+		var subtracts: bool = force_subtract or draft.operation == CSGShape3D.OPERATION_SUBTRACTION
 		var csg_shape: CSGShape3D = null
 		var placement := draft.global_transform
-		var authored: Mesh = _authored_brush_mesh(draft)
-		if authored != null:
-			var csg_mesh := CSGMesh3D.new()
-			csg_mesh.mesh = authored
-			csg_mesh.use_collision = true
-			csg_shape = csg_mesh
-			# The mesh is in the mesh instance's own space, so that is where it goes.
-			placement = draft.mesh_instance.global_transform
+		# A cutter carries no materials out of the boolean, so it stays on the
+		# primitive either way.
+		var face_mesh: Mesh = null if subtracts else _face_material_csg_mesh(draft)
+		if face_mesh != null:
+			var csg_faces := CSGMesh3D.new()
+			csg_faces.mesh = face_mesh
+			csg_faces.use_collision = true
+			csg_shape = csg_faces
+			# The face records are in the brush's own space, which is where the
+			# snapshot's basis and origin put them back from.
 		else:
-			csg_shape = PrefabFactory.create_prefab(draft.shape, draft.size, max(3, draft.sides))
+			var authored: Mesh = _authored_brush_mesh(draft)
+			if authored != null:
+				var csg_mesh := CSGMesh3D.new()
+				csg_mesh.mesh = authored
+				csg_mesh.use_collision = true
+				csg_shape = csg_mesh
+				# The mesh is in the mesh instance's own space, so that is where it goes.
+				placement = draft.mesh_instance.global_transform
+			else:
+				csg_shape = PrefabFactory.create_prefab(
+					draft.shape, draft.size, max(3, draft.sides)
+				)
 		csg_shape.operation = (
 			CSGShape3D.OPERATION_SUBTRACTION if force_subtract else draft.operation
 		)
-		if csg_shape.operation != CSGShape3D.OPERATION_SUBTRACTION:
+		# Setting `material` on a CSGMesh3D overrides every surface of its mesh
+		# with the one, which is the whole of #693. A brush that brought its own
+		# materials keeps them.
+		if csg_shape.operation != CSGShape3D.OPERATION_SUBTRACTION and face_mesh == null:
 			var mat = draft.material_override
 			if not mat:
 				mat = root._make_brush_material(csg_shape.operation)
