@@ -122,26 +122,40 @@ func _what_one_subtractor_does_to_the_materials() -> void:
 		)
 
 
+## What the two paths cost, textured and not.
+##
+## Keeping the materials through the boolean is not free: a textured brush is
+## triangulated and snapshotted before it goes into the CSG tree, which is the
+## face path's own cost moved onto the CSG path. An untextured level pays none of
+## it and still goes in as a prefab primitive. The textured-with-a-cutter row is
+## the one a real map pays on every bake, so it is the one to watch.
 func _what_it_does_to_the_cost() -> void:
-	for with_cutter in [false, true]:
-		var root: Node3D = await fresh_root()
-		root.auto_spawn_player = false
-		_palette(root, 6)
-		for i in 60:
-			box(root, Vector3(2, 3, 0.3), Vector3((i % 10) * 2.5, 1.5, (i / 10) * 4.0))
-		if with_cutter:
-			var c = box(root, Vector3(0.6, 0.6, 0.6), Vector3(0, 1.5, 0))
-			c.operation = CSGShape3D.OPERATION_SUBTRACTION
-		await frame()
-		var t := Time.get_ticks_msec()
-		await root.bake(false, false)
-		await frame()
-		var ms := Time.get_ticks_msec() - t
-		var mats := _surface_materials(root.get_node_or_null("BakedGeometry"), [])
-		note(
-			"60 walls, one subtractor = %s" % with_cutter,
-			"bake %d ms, %d surface(s)" % [ms, mats.size()]
-		)
+	for textured in [false, true]:
+		for with_cutter in [false, true]:
+			var root: Node3D = await fresh_root()
+			root.auto_spawn_player = false
+			_palette(root, 6)
+			for i in 60:
+				var wall = box(
+					root, Vector3(2, 3, 0.3), Vector3((i % 10) * 2.5, 1.5, (i / 10) * 4.0)
+				)
+				if textured:
+					for f in wall.faces.size():
+						if wall.faces[f]:
+							wall.faces[f].material_idx = f % 6
+			if with_cutter:
+				var c = box(root, Vector3(0.6, 0.6, 0.6), Vector3(0, 1.5, 0))
+				c.operation = CSGShape3D.OPERATION_SUBTRACTION
+			await frame()
+			var t := Time.get_ticks_msec()
+			await root.bake(false, false)
+			await frame()
+			var ms := Time.get_ticks_msec() - t
+			var mats := _surface_materials(root.get_node_or_null("BakedGeometry"), [])
+			note(
+				"60 walls, textured = %s, one subtractor = %s" % [textured, with_cutter],
+				"bake %d ms, %d surface(s)" % [ms, mats.size()]
+			)
 
 
 ## The other half of a finding like this: whether what the mapper is told matches

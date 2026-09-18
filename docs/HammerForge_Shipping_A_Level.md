@@ -104,9 +104,15 @@ Merge meshes and per-face materials work together: merging combines the meshes,
 and the materials stay as separate surfaces on the merged mesh.
 
 One thing to know: a level with **any** subtractive brush in it falls back to the
-CSG bake path, which resolves one material per brush rather than one per face. A
-toast says so and names how many cutters caused it. Until that is fixed, a level
-that needs both cuts and per-face texturing has to choose.
+CSG bake path, because independent face triangulation has no boolean stage. Your
+texturing goes with it — a textured brush enters the boolean as a mesh with one
+surface per material and comes out still wearing them — so cutting a window does
+not cost the level its materials. What the CSG path does not do is the material
+atlas, so a level that leans on atlasing to cut draw calls loses that once it has
+a cut in it.
+
+The interior face a cut exposes is new surface nobody textured, and it bakes with
+no material on it.
 
 ## Things to turn off
 
