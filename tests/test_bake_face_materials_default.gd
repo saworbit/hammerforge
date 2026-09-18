@@ -25,6 +25,19 @@ func _palette_material(colour: Color) -> StandardMaterial3D:
 	return mat
 
 
+## Every material on every surface of the baked geometry.
+func _baked_materials(node: Node, out: Array = []) -> Array:
+	if node is MeshInstance3D and node.mesh:
+		var mesh: Mesh = node.mesh
+		for surface in mesh.get_surface_count():
+			var mat := mesh.surface_get_material(surface)
+			if mat and not out.has(mat):
+				out.append(mat)
+	for child in node.get_children():
+		_baked_materials(child, out)
+	return out
+
+
 func test_a_fresh_level_bakes_the_materials_its_faces_carry() -> void:
 	var root := _fresh_root()
 	assert_true(
@@ -52,10 +65,105 @@ func test_a_level_with_structural_subtractors_still_falls_back_to_csg() -> void:
 		source.contains("not _has_effective_structural_subtractors()"),
 		"the face-material path is still gated on the level having no effective cutters"
 	)
-	assert_true(
-		source.contains("Face-material bake switched to CSG to preserve active cuts"),
-		"and the fallback still says so"
+
+
+func test_a_cutter_does_not_cost_the_rest_of_the_level_its_materials() -> void:
+	# The CSG path resolves a material per brush, so a level that fell back to it
+	# came out with one material over everything: cutting a window cost the whole
+	# map its texturing (#693). CSG carries a material per face, so a textured
+	# brush now enters the boolean as a mesh with one surface per material and
+	# comes out still wearing them.
+	var root := _fresh_root()
+	root.bake_use_face_materials = true
+	root.set_materials(
+		[
+			_palette_material(Color.RED),
+			_palette_material(Color.BLUE),
+			_palette_material(Color.GREEN)
+		]
 	)
+	var wall = (
+		root
+		. create_brush_from_info(
+			{
+				"shape": LevelRoot.BrushShape.BOX,
+				"size": Vector3(64, 64, 64),
+				"center": Vector3.ZERO,
+				"operation": CSGShape3D.OPERATION_UNION,
+				"brush_id": "textured_wall",
+			}
+		)
+	)
+	for i in wall.faces.size():
+		wall.faces[i].material_idx = i % 3
+	wall.rebuild_preview()
+	(
+		root
+		. create_brush_from_info(
+			{
+				"shape": LevelRoot.BrushShape.BOX,
+				"size": Vector3(16, 16, 96),
+				"center": Vector3.ZERO,
+				"operation": CSGShape3D.OPERATION_SUBTRACTION,
+				"brush_id": "window_cutter",
+			}
+		)
+	)
+
+	await root.bake(true, false, 0)
+
+	var baked: Node3D = root.baked_container
+	assert_not_null(baked, "the cut has to bake at all")
+	var found := _baked_materials(baked)
+	for expected in root.material_manager.materials:
+		assert_true(
+			found.has(expected),
+			"a window in one wall must not cost the level the material on every other face"
+		)
+
+
+func test_a_cutter_does_not_claim_the_materials_were_dropped() -> void:
+	# The mirror of the test above. The message that used to fire here was true
+	# when the CSG path flattened the level to one material and is a lie now.
+	var root := _fresh_root()
+	root.bake_use_face_materials = true
+	root.set_materials([_palette_material(Color.RED), _palette_material(Color.BLUE)])
+	var brush = (
+		root
+		. create_brush_from_info(
+			{
+				"shape": LevelRoot.BrushShape.BOX,
+				"size": Vector3(64, 64, 64),
+				"center": Vector3.ZERO,
+				"operation": CSGShape3D.OPERATION_UNION,
+				"brush_id": "textured_wall",
+			}
+		)
+	)
+	brush.faces[0].material_idx = 1
+	brush.rebuild_preview()
+	(
+		root
+		. create_brush_from_info(
+			{
+				"shape": LevelRoot.BrushShape.BOX,
+				"size": Vector3(16, 16, 16),
+				"center": Vector3.ZERO,
+				"operation": CSGShape3D.OPERATION_SUBTRACTION,
+				"brush_id": "window_cutter",
+			}
+		)
+	)
+
+	var messages: Array = []
+	root.user_message.connect(func(text: String, _severity: int) -> void: messages.append(text))
+	await root.bake(true, false, 0)
+
+	var claims: Array = []
+	for text in messages:
+		if str(text).contains("Per-face materials were not baked"):
+			claims.append(str(text))
+	assert_eq(claims, [], "the cut keeps the texturing, so nothing should say it was dropped")
 
 
 func test_a_bake_that_drops_face_materials_says_so() -> void:
@@ -87,52 +195,6 @@ func test_a_bake_that_drops_face_materials_says_so() -> void:
 	assert_true(
 		said, "turning the flag off is a choice; losing the materials without being told is not"
 	)
-
-
-func test_a_cutter_that_drops_face_materials_says_so() -> void:
-	# The mirror of the test above, for the case a mapper hits by accident. Drawing
-	# a cutter turns the face-material path off for the whole level, and the only
-	# thing that said so was a Console line: the checkbox stayed ticked and the
-	# Manage tab looked exactly as it had.
-	var root := _fresh_root()
-	root.bake_use_face_materials = true
-	root.set_materials([_palette_material(Color.RED), _palette_material(Color.BLUE)])
-	var brush = (
-		root
-		. create_brush_from_info(
-			{
-				"shape": LevelRoot.BrushShape.BOX,
-				"size": Vector3(64, 64, 64),
-				"center": Vector3.ZERO,
-				"operation": CSGShape3D.OPERATION_UNION,
-				"brush_id": "textured_wall",
-			}
-		)
-	)
-	brush.faces[0].material_idx = 1
-	(
-		root
-		. create_brush_from_info(
-			{
-				"shape": LevelRoot.BrushShape.BOX,
-				"size": Vector3(16, 16, 16),
-				"center": Vector3.ZERO,
-				"operation": CSGShape3D.OPERATION_SUBTRACTION,
-				"brush_id": "window_cutter",
-			}
-		)
-	)
-
-	var messages: Array = []
-	root.user_message.connect(func(text: String, _severity: int) -> void: messages.append(text))
-	await root.bake(true, false, 0)
-
-	var said := ""
-	for text in messages:
-		if str(text).contains("Per-face materials"):
-			said = str(text)
-	assert_ne(said, "", "drawing a cutter is not a choice to stop texturing the level")
-	assert_true(said.contains("subtractive brush"), "and the message names the cause: %s" % said)
 
 
 func test_a_cutter_with_nothing_textured_says_nothing() -> void:

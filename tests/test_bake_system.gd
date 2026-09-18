@@ -2866,6 +2866,85 @@ func test_a_primitive_brush_still_takes_the_prefab_path():
 	assert_true(shape is CSGBox3D, "a box is still built as a box")
 
 
+# ===========================================================================
+# A textured brush carries its materials through the boolean (#693)
+# ===========================================================================
+
+
+func _texture_every_face(brush: DraftBrush) -> void:
+	var manager: MaterialManager = autofree(MaterialManager.new())
+	for i in 3:
+		var mat := StandardMaterial3D.new()
+		mat.resource_name = "mat_%d" % i
+		manager.add_material(mat)
+	root.material_manager = manager
+	root.bake_use_face_materials = true
+	# The real one: the faces resolve through the same snapshot the face-material
+	# bake path uses, and the shim ships no baker at all.
+	root.baker = autofree(Baker.new())
+	# `_make_brush` sets the size before the brush is in the tree, where the
+	# rebuild returns early, so a primitive fixture arrives with no faces to paint.
+	if brush.faces.is_empty():
+		brush._update_visuals()
+	assert_gt(brush.faces.size(), 3, "the fixture needs faces before it can texture any")
+	for i in brush.faces.size():
+		if brush.faces[i]:
+			brush.faces[i].material_idx = i % manager.materials.size()
+	brush.rebuild_preview()
+
+
+func test_a_textured_brush_enters_the_csg_carrying_a_material_per_surface():
+	# `CSGMesh3D.material` overrides every surface with the one, which is how a
+	# level that fell back to CSG came out with one material over all of it.
+	var brush := _make_brush(root.draft_brushes_node)
+	_texture_every_face(brush)
+
+	var shape: Node3D = _only_csg_child([brush])
+
+	assert_true(shape is CSGMesh3D, "a textured brush is handed over as a mesh, not a primitive")
+	var mesh: Mesh = (shape as CSGMesh3D).mesh
+	assert_gt(mesh.get_surface_count(), 1, "one surface per material is the whole point")
+	assert_null(
+		shape.get("material"), "setting it would collapse those surfaces back into one (#693)"
+	)
+
+
+func test_a_textured_custom_brush_still_keeps_the_shape_it_was_authored_as():
+	# The sibling the material change reaches: a promoted wedge used to go in as
+	# its own mesh and now goes in as its faces. Both are the authored geometry,
+	# and the size field still describes a box that it must not become.
+	var brush := _make_wedge(root.draft_brushes_node)
+	_texture_every_face(brush)
+
+	var shape: Node3D = _only_csg_child([brush])
+
+	assert_true(shape is CSGMesh3D, "still a mesh")
+	assert_ne(
+		(shape as CSGMesh3D).mesh,
+		brush.mesh_instance.mesh,
+		"a textured brush is built from its faces, not handed the preview mesh"
+	)
+	var got: Vector3 = (shape as CSGMesh3D).mesh.get_aabb().size
+	assert_almost_eq(
+		got,
+		Vector3(8, 4, 8),
+		Vector3(0.01, 0.01, 0.01),
+		"the wedge bakes as a wedge whether or not it is textured"
+	)
+
+
+func test_a_textured_brush_with_a_face_that_will_not_triangulate_stays_on_the_primitive():
+	# A hole costs the face-material path one invisible face. It costs a boolean
+	# the whole result, so an incomplete solid goes back on the closed primitive.
+	var brush := _make_brush(root.draft_brushes_node)
+	_texture_every_face(brush)
+	brush.faces[0].local_verts = PackedVector3Array()
+
+	var shape: Node3D = _only_csg_child([brush])
+
+	assert_true(shape is CSGBox3D, "a brush that cannot describe a closed solid is cut as a box")
+
+
 func test_a_custom_brush_with_no_mesh_yet_still_reaches_the_csg():
 	# Wrong shape, but a brush that vanishes from the bake without a word is worse.
 	var brush := _make_brush(root.draft_brushes_node)
