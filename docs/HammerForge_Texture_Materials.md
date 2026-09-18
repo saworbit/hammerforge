@@ -125,12 +125,13 @@ A bake option `Use Face Materials` switches the bake pipeline to per-face materi
 
 Behavior:
 - Each face is grouped by its assigned material.
-- Faces are baked directly from face data (no CSG).
-- Subtract brushes are ignored in face-material bake.
+- With no subtract brushes in the level, faces are baked directly from face data and no CSG runs.
+- One or more subtract brushes moves the whole bake onto the CSG path, because independent face triangulation has no boolean stage. Per-face materials still reach the baked mesh: a textured brush enters the boolean as a mesh with one surface per material and comes out with them intact.
+- The interior a cut exposes is a new surface nobody textured, so it bakes with no material.
 
 When to use:
-- Use face-material bake for quick previews and texture checks.
-- Use CSG bake for boolean cuts and full brush set integration.
+- Leave it on. Cutting a window, a doorway or a vent no longer costs the level its texturing.
+- Turn it off only to bake the whole level on one material per brush, which is faster and is what the CSG path did for everything before.
 
 ## Serialization (.hflevel)
 `.hflevel` saves include:
@@ -168,7 +169,8 @@ When a brush is carved (boolean subtracted), the resulting slice pieces inherit 
 
 ## Known Limitations
 - Face selection supports marquee/box selection across multiple brushes (added in the Improved Selection & Multi-Select wave). Lasso selection is not supported.
-- Face-material bake ignores subtract/pending cuts.
+- A level with subtract brushes bakes through CSG rather than through face triangulation. The per-face materials survive it; the material atlas does not run there.
+- The interior face a cut exposes bakes with no material on it.
 - Surface paint is per-face and does not share weights across faces.
 - Preview materials are rebuilt per face and can be heavy on very large brush counts.
 - Favorites are stored in the browser instance and do not persist across editor restarts (future: save to user prefs).

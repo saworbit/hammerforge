@@ -49,6 +49,27 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   collision, its scripts and every child it had.
 
 ### Fixed
+- **One subtract brush no longer costs the whole level its per-face materials**
+  (#693). Cutting a window into a wall cost every other brush in the map its
+  texturing. The face-material path has no boolean stage, so any cutter anywhere
+  moves the whole bake onto CSG, and CSG resolved one material per brush: six
+  brushes with six materials each baked to one material and a hole. On a real map
+  the first cut goes in early and the checkbox stays ticked the whole time, so
+  the path a mapper actually works on was the one that never carried their
+  texturing. CSG was never the reason. It keeps a material per face, and a
+  `CSGMesh3D` takes one from each surface of its mesh and writes it through the
+  boolean - it was the `material` this code assigned to every shape that
+  collapsed them all into one. A textured brush now enters the CSG tree as a mesh
+  with one surface per material, built from the same `snapshot_brush_faces()` the
+  face-material path uses, so the two paths cannot disagree about what a face is
+  painted with. Untextured brushes keep the prefab primitive they have always
+  been cut with, and a brush whose faces do not all triangulate goes back on the
+  primitive too, because a hole costs the face path one invisible face and costs
+  a boolean the whole result. The interior a cut exposes is a new surface nobody
+  textured and still bakes with no material on it. The `user_message` warning
+  that the face materials were dropped is gone with the behaviour it described:
+  it would now be a lie, and it sent a mapper looking for a setting to change
+  with nothing wrong to fix.
 - **Validate reports two brushes in one level sharing an id** (#696). Saving a
   piece of level as its own scene and instancing it twice puts the same set of
   brush ids in one scene tree, because a saved scene freezes the ids it had. The
