@@ -5,6 +5,29 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **A cut's interior takes the cutter's texturing** (#746). Cutting a window left
+  the reveal untextured and there was no way to fix it: those four faces do not
+  exist until the boolean runs, so no panel in the editor can select one. The
+  cutting brush is the only handle there is, and the engine already agrees —
+  Godot's CSG gives a carved face the material of the face that cut it, which is
+  also how the Quake-family editors this lineage comes from behave. A cutter now
+  goes into the boolean as a mesh with one surface per material, the same way a
+  solid has since #693, so the reveal wears what the cutter was painted with,
+  face by face. A sill can differ from the jambs because they are different faces
+  of the cutter. A cutter with one whole-brush material instead of painted faces
+  stays on its exact prefab primitive and carries that material through.
+  An untextured cutter leaves the interior bare, which is what it has always
+  done. The friendlier-sounding alternative — inheriting the material of the wall
+  it cut — is not well defined, because one cutter can cross several brushes
+  wearing different materials, and the boolean offers nowhere to express it. What
+  it must never inherit is the editor's translucent red subtract cue, and a test
+  pins that.
+  A mirrored cutter is the exception and stays on its primitive. A negative
+  determinant inverts face winding, and the boolean reads an inverted mesh
+  operand differently from the primitive it regenerates from `size`: on one wall
+  and one cutter, 25.5000 against 25.6792. Both are wrong, because a mirrored
+  brush bakes wrong whether or not it is textured, but painting a brush must not
+  move where it cuts. Filed separately as #749.
 - **Where friction and bounce come from, written down** (#744). A baked surface
   has Godot's default friction and bounce, nothing in the plugin sets
   `physics_material_override`, and nothing said so - so the natural assumption

@@ -156,8 +156,10 @@ func _layer_from_index(index: int) -> int:
 func _assign_owner_recursive(_node: Node) -> void:
 	pass
 
+var brush_material_stub: Material = null
+
 func _make_brush_material(_op: int) -> Material:
-	return null
+	return brush_material_stub
 """
 	s.reload()
 	return s
@@ -2943,6 +2945,96 @@ func test_a_textured_brush_with_a_face_that_will_not_triangulate_stays_on_the_pr
 	var shape: Node3D = _only_csg_child([brush])
 
 	assert_true(shape is CSGBox3D, "a brush that cannot describe a closed solid is cut as a box")
+
+
+# ===========================================================================
+# A cutter's own texturing fills the interior it carves (#746)
+# ===========================================================================
+
+
+func _make_cutter(pos: Vector3 = Vector3.ZERO) -> DraftBrush:
+	var brush := _make_brush(root.draft_brushes_node, pos)
+	brush.operation = CSGShape3D.OPERATION_SUBTRACTION
+	return brush
+
+
+func test_a_textured_cutter_enters_the_csg_carrying_a_material_per_surface():
+	# The faces a cut creates do not exist until the boolean runs, so nothing in
+	# the editor can reach them. The boolean gives a carved face the material of
+	# the face that cut it, which makes the cutter the only handle there is.
+	var cutter := _make_cutter()
+	_texture_every_face(cutter)
+
+	var shape: Node3D = _only_csg_child([cutter])
+
+	assert_true(shape is CSGMesh3D, "a textured cutter is handed over as a mesh, not a primitive")
+	assert_eq(shape.operation, CSGShape3D.OPERATION_SUBTRACTION, "and it still subtracts")
+	var mesh: Mesh = (shape as CSGMesh3D).mesh
+	assert_gt(mesh.get_surface_count(), 1, "one surface per material, so a sill can differ")
+	assert_null(shape.get("material"), "setting it would collapse the reveal onto one material")
+
+
+func test_a_cutter_with_one_material_puts_it_on_the_interior():
+	# No face materials, so no mesh operand: the exact prefab primitive still
+	# does the cutting and carries the whole-brush material through the boolean.
+	var cutter := _make_cutter()
+	var mat := StandardMaterial3D.new()
+	mat.resource_name = "reveal"
+	cutter.material_override = mat
+
+	var shape: Node3D = _only_csg_child([cutter])
+
+	assert_true(shape is CSGBox3D, "an untextured-by-face cutter is still cut as a box")
+	assert_eq(
+		shape.get("material"), mat, "the interior the cut exposes wears the cutter's material"
+	)
+
+
+func test_a_mirrored_cutter_stays_on_the_primitive_so_texturing_cannot_move_the_cut():
+	# A negative determinant inverts face winding, and the boolean reads an
+	# inverted mesh operand differently from the primitive it regenerates from
+	# `size`. A mirrored cutter bakes wrong either way; what it must not do is
+	# bake differently because someone painted it.
+	var cutter := _make_cutter()
+	cutter.scale = Vector3(-1, 1, 1)
+	_texture_every_face(cutter)
+
+	var shape: Node3D = _only_csg_child([cutter])
+
+	assert_true(shape is CSGBox3D, "a mirrored cutter is cut with the exact primitive")
+
+
+func test_a_mirrored_solid_still_carries_its_face_materials():
+	# The guard is the cutter's, not every brush's. Both operand paths agree on
+	# an added brush, so a mirrored solid keeps the texturing it was given.
+	var brush := _make_brush(root.draft_brushes_node)
+	brush.scale = Vector3(-1, 1, 1)
+	_texture_every_face(brush)
+
+	var shape: Node3D = _only_csg_child([brush])
+
+	assert_true(shape is CSGMesh3D, "a mirrored solid is still handed over as its faces")
+
+
+func test_an_untextured_cutter_never_takes_the_subtract_preview_material():
+	# `_make_brush_material(OPERATION_SUBTRACTION)` is the editor's translucent
+	# red cue. It is the right thing to see in the viewport and must never be
+	# what a reveal bakes with, so a bare cutter leaves the interior bare.
+	var preview := StandardMaterial3D.new()
+	preview.resource_name = "editor_subtract_cue"
+	root.brush_material_stub = preview
+
+	var cutter := _make_cutter()
+	var solid := _make_brush(root.draft_brushes_node, Vector3(40, 0, 0))
+
+	assert_null(
+		_only_csg_child([cutter]).get("material"), "a bare cutter carries nothing into the boolean"
+	)
+	assert_eq(
+		_only_csg_child([solid]).get("material"),
+		preview,
+		"while a bare solid still takes the default, or this test could not fail"
+	)
 
 
 func test_a_custom_brush_with_no_mesh_yet_still_reaches_the_csg():

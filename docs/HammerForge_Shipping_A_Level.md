@@ -111,8 +111,11 @@ not cost the level its materials. What the CSG path does not do is the material
 atlas, so a level that leans on atlasing to cut draw calls loses that once it has
 a cut in it.
 
-The interior face a cut exposes is new surface nobody textured, and it bakes with
-no material on it.
+The interior a cut exposes — the reveal inside a window or a doorway — takes its
+texturing from the cutting brush, face by face, so a sill can differ from the
+jambs. Texture the cutter the way you texture anything else. A cutter left
+untextured leaves that interior bare, and a mirrored cutter stays untextured
+whatever you paint on it, because changing the operand would move the cut.
 
 ## Things to turn off
 

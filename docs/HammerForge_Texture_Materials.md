@@ -127,7 +127,7 @@ Behavior:
 - Each face is grouped by its assigned material.
 - With no subtract brushes in the level, faces are baked directly from face data and no CSG runs.
 - One or more subtract brushes moves the whole bake onto the CSG path, because independent face triangulation has no boolean stage. Per-face materials still reach the baked mesh: a textured brush enters the boolean as a mesh with one surface per material and comes out with them intact.
-- The interior a cut exposes is a new surface nobody textured, so it bakes with no material.
+- The interior a cut exposes takes the texturing of the brush that cut it, face by face: the boolean gives a carved face the material of the face that carved it. Texture the cutter to texture the reveal. An untextured cutter leaves it bare, and a mirrored cutter stays on its primitive, so painting one changes nothing.
 
 When to use:
 - Leave it on. Cutting a window, a doorway or a vent no longer costs the level its texturing.
@@ -170,7 +170,7 @@ When a brush is carved (boolean subtracted), the resulting slice pieces inherit 
 ## Known Limitations
 - Face selection supports marquee/box selection across multiple brushes (added in the Improved Selection & Multi-Select wave). Lasso selection is not supported.
 - A level with subtract brushes bakes through CSG rather than through face triangulation. The per-face materials survive it; the material atlas does not run there.
-- The interior face a cut exposes bakes with no material on it.
+- The interior face a cut exposes wears the cutting brush's own texturing.
 - Surface paint is per-face and does not share weights across faces.
 - Preview materials are rebuilt per face and can be heavy on very large brush counts.
 - Favorites are stored in the browser instance and do not persist across editor restarts (future: save to user prefs).
