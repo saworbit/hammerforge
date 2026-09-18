@@ -107,6 +107,28 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   collision, its scripts and every child it had.
 
 ### Fixed
+- **Four more bake settings travel with the level** (#755). Walking every
+  exported property against what the `.hflevel` records turned up fourteen the
+  file never wrote. Four of them change what a bake produces and their siblings
+  were already in the file: `bake_navmesh_agent_max_climb`,
+  `bake_navmesh_agent_max_slope`, `bake_connector_stair_threshold` and
+  `bake_wire_io`. A level saved with wire I/O off reopened with it on and baked
+  a dispatcher back in, which is the same surprise the occluders were. All four
+  already had the bounded setters #373 gave their siblings, so a poisoned value
+  out of a file is clamped on the way in rather than assigned. A file written
+  before this carries none of the four keys and keeps whatever the level
+  already had, rather than being reset by an absent key.
+
+  The other nine stay out, and `capture_hflevel_settings()` now says why in
+  place so the next walk of `get_property_list()` does not have to decide it
+  again. Autosave on/off and its interval stay out because opening a level is
+  not a way to switch off the mapper's autosave. The autosave path, the entity
+  definitions path, the grid's colour, plane size and major line frequency, and
+  the default brush size are editor or project scope rather than level data.
+  `hflevel_compress` says how the file was written, which the file's own header
+  already records. `cordon_aabb` was on the list and was never missing: it goes
+  out flattened, as `cordon_aabb_pos` and `cordon_aabb_size`.
+
 - **The `docs-truth` scenario no longer reports a `.map` measurement as our own
   scale** (#754). The detector had two categories for a measurement of sixteen
   units or more: current HammerForge scale, which it flags, and a line the guide
