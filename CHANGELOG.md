@@ -5,6 +5,21 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Where friction and bounce come from, written down** (#744). A baked surface
+  has Godot's default friction and bounce, nothing in the plugin sets
+  `physics_material_override`, and nothing said so - so the natural assumption
+  after texturing a floor `ice` was that something had happened. Shipping a Level
+  now says plainly that it has not, and says where the tuning goes instead. That
+  is the decision as much as the documentation: a `PhysicsMaterial` belongs to a
+  body and a level has one body with a dozen materials, so friction cannot fall
+  out of the texturing, and a mapper reaching for a texture called `ice` is
+  choosing how a floor looks rather than asking for the physics of ice. So the
+  naming is the plugin's job and the tuning is the game's. Two ways to do it are
+  written up: a controller reading the surface name through `HFSurface` and
+  applying its own numbers, which works on any bake and is what most levels want,
+  or `bake_collision_mode` 2, which builds one `StaticBody3D` per visgroup that
+  `physics_material_override` can go on when the engine has to resolve the
+  friction itself. They do not combine, and the page says why.
 - **A hit can name the surface it hit** (#707). Texturing a level is how a
   shipped game knows what is underfoot: the footstep sound, the impact decal, the
   bullet spark are all the same lookup against the surface a ray just touched.
