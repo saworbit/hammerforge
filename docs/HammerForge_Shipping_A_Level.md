@@ -105,8 +105,8 @@ and the materials stay as separate surfaces on the merged mesh.
 
 One thing to know: a level with **any** subtractive brush in it falls back to the
 CSG bake path, because independent face triangulation has no boolean stage. Your
-texturing goes with it — a textured brush enters the boolean as a mesh with one
-surface per material and comes out still wearing them — so cutting a window does
+texturing goes with it. A textured brush enters the boolean as a mesh with one
+surface per material and comes out still wearing them, so cutting a window does
 not cost the level its materials. What the CSG path does not do is the material
 atlas, so a level that leans on atlasing to cut draw calls loses that once it has
 a cut in it.
@@ -201,4 +201,33 @@ A name is the material's `resource_name`, or its filename when it has no name, w
 
 **Why the shape index and not the triangle.** Godot documents `face_index` on a ray hit, which would resolve to a single triangle and would be the better answer. It is `-1` here, from both `intersect_ray()` and `RayCast3D.get_collision_face_index()`, because this project runs Jolt. The shape index is what survives a hit, so the bake is arranged to make it meaningful. There is a test pinning that, so if a Godot release starts populating `face_index` it fails rather than the better route going unnoticed.
 
-**Friction and bounce are Godot's defaults.** Texturing a floor `ice` names it `ice`; it does not make it slippery. See #744.
+## Friction and Bounce
+
+**A baked surface has Godot's default friction and bounce.** Texturing a floor `ice` names it `ice`. It does not make it slippery. Nothing in HammerForge sets `physics_material_override` on anything it bakes, so every surface in every level it produces slides and bounces exactly the same way.
+
+That is a decision rather than a gap. A `PhysicsMaterial` belongs to the body, and a level has one body while it has a dozen materials, so there is no arrangement in which "the floor is ice and the wall is rubber" falls out of the texturing. Deriving it anyway would mean guessing: a mapper who reaches for a texture called `ice` is picking how the floor looks, and is not necessarily asking for the physics of ice. So the naming is HammerForge's job and the tuning is yours.
+
+There are two ways to do the tuning, and they answer different questions.
+
+**Most of the time, you want the reaction, not the friction.** Slowing a player on mud, adding drag on ice, a different jump off metal grating: that is your controller reading the surface name and applying its own numbers. This works on any bake, with no options set, and it is the one to reach for first.
+
+```gdscript
+var surface := HFSurface.material_under(_floor_ray)
+var friction: float = SURFACE_FRICTION.get(surface, 1.0)
+velocity.x = move_toward(velocity.x, 0.0, friction * delta)
+```
+
+Your table lives in your game, where the tuning is, and one line changes how ice feels without re-baking a level.
+
+**When you want the engine to do it,** put the surfaces that need their own physics into their own visgroup and bake with `bake_collision_mode` set to 2. That mode builds one `StaticBody3D` per visgroup, named `Collision_<visgroup>`, and a body is what `physics_material_override` goes on:
+
+```gdscript
+var ice := $BakedGeometry/Collision_ice as StaticBody3D
+ice.physics_material_override = preload("res://physics/ice.tres")
+```
+
+Rigid bodies and anything else the engine resolves friction for will then behave without your code being involved.
+
+The two do not combine. Mode 2 is one hull per brush grouped into bodies, so it carries no surface names and `HFSurface` returns the empty string on it, as the section above says. Pick the reaction or pick the engine, per level.
+
+**Neither is set up for you.** A level you bake and ship with no further work has uniform default physics, and that is the behaviour to design around until you do one of the two.
