@@ -1,0 +1,548 @@
+extends GutTest
+
+## The undo step that records the brushes an action touches instead of the level.
+##
+## `capture_state()` walks every brush and every registry, so at 900 brushes one
+## undo step was 39 ms to take and 2.2 MB to hold, on an action that moved three
+## of them (#737). `capture_brush_scope()` records the three.
+##
+## Two things have to be true for that to be an undo rather than a speedup.
+##
+## A scoped step has to leave the level exactly where the whole-level step would.
+## That is `_assert_scoped_undo_round_trips()` below: capture the whole level, run
+## the command, put only the scope back, capture the whole level, and compare the
+## two dictionaries.
+##
+## And the commands that claim a scope have to deserve it. A scope is a claim that
+## the command changed those brushes and nothing else, and nothing in a record can
+## check it, so the last sections here run each command and assert that nothing
+## outside its scope moved.
+
+const HFPluginEditActions = preload("res://addons/hammerforge/plugin_edit_actions.gd")
+const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
+
+## Matches HFBrushSystem._RECORD_COMPARE_DEPTH. A state is a handful of values and
+## arrays of face dictionaries, so this is far past anything real.
+const COMPARE_DEPTH := 32
+
+
+## Enough of an `EditorUndoRedoManager` to see what an action registered. One
+## cannot be constructed outside the editor, and Godot 4.7 documents MERGE_ENDS
+## as keeping the first action's undo operations and the last action's do
+## operations, which is the one rule a collated run turns on.
+class FakeUndoRedo:
+	extends RefCounted
+
+	var entries: Array = []
+	var _open: Dictionary = {}
+	var _merging := false
+
+	func create_action(
+		name: String, merge_mode: int = 0, _context = null, _backward: bool = false
+	) -> void:
+		_merging = merge_mode == MERGE_ENDS and not entries.is_empty()
+		_open = {"name": name, "do": [], "undo": []}
+
+	func add_do_method(target, method: StringName, a = null) -> void:
+		_open["do"].append({"target": target, "method": str(method), "arg": a})
+
+	func add_undo_method(target, method: StringName, a = null) -> void:
+		_open["undo"].append({"target": target, "method": str(method), "arg": a})
+
+	func commit_action(execute: bool = true) -> void:
+		if execute:
+			for call_info in _open["do"]:
+				_invoke(call_info)
+		if _merging:
+			entries[-1]["do"] = _open["do"]
+		else:
+			entries.append(_open)
+		_open = {}
+
+	func undo() -> void:
+		for call_info in entries[-1]["undo"]:
+			_invoke(call_info)
+
+	func redo() -> void:
+		for call_info in entries[-1]["do"]:
+			_invoke(call_info)
+
+	func _invoke(call_info: Dictionary) -> void:
+		call_info["target"].call(call_info["method"], call_info["arg"])
+
+
+const MERGE_DISABLE := 0
+const MERGE_ENDS := 1
+
+var root: LevelRoot
+
+
+func before_each():
+	root = LevelRoot.new()
+	root.auto_spawn_player = false
+	root.commit_freeze = false
+	root.hflevel_autosave_enabled = false
+	add_child_autoqfree(root)
+
+
+func after_each():
+	root = null
+
+
+func _make_brush(position: Vector3, size: Vector3 = Vector3(32, 32, 32)) -> DraftBrush:
+	var brush = (
+		root
+		. create_brush_from_info(
+			{
+				"shape": root.BrushShape.BOX,
+				"size": size,
+				"transform": Transform3D(Basis.IDENTITY, position),
+			}
+		)
+	)
+	return brush as DraftBrush
+
+
+func _brush_id(brush: DraftBrush) -> String:
+	return str(root.get_brush_info_from_node(brush).get("brush_id", ""))
+
+
+func _brush_at_index(index: int) -> DraftBrush:
+	return root.draft_brushes_node.get_child(index) as DraftBrush
+
+
+## `==` on an Array of face dictionaries does not go down into them, and only
+## Dictionary has `recursive_equal`, so anything else is boxed into one.
+func _same_value(a, b) -> bool:
+	return {"v": a}.recursive_equal({"v": b}, COMPARE_DEPTH)
+
+
+## Which top-level keys of two level states disagree, sorted. Named rather than
+## counted, so a failure says what came back wrong instead of that something did.
+func _differing_keys(before: Dictionary, after: Dictionary) -> Array:
+	var changed: Array = []
+	for key in before:
+		if not after.has(key):
+			changed.append(key)
+		elif not _same_value(before[key], after[key]):
+			changed.append(key)
+	for key in after:
+		if not before.has(key):
+			changed.append(key)
+	changed.sort()
+	return changed
+
+
+# ===========================================================================
+# What a scope records
+# ===========================================================================
+
+
+func test_a_scope_records_only_the_brushes_it_names():
+	var a := _make_brush(Vector3.ZERO)
+	_make_brush(Vector3(64, 0, 0))
+	_make_brush(Vector3(128, 0, 0))
+	var scope: Dictionary = root.capture_brush_scope([_brush_id(a)])
+	assert_eq(scope.get("brushes", []).size(), 1, "one id must record one brush")
+	assert_eq(
+		str(scope["brushes"][0].get("brush_id", "")), _brush_id(a), "and it must be that brush"
+	)
+
+
+func test_a_scope_is_smaller_than_the_level_it_came_from():
+	var a := _make_brush(Vector3.ZERO)
+	for i in 20:
+		_make_brush(Vector3(64 * (i + 1), 0, 0))
+	var scope: Dictionary = root.capture_brush_scope([_brush_id(a)])
+	var whole: Dictionary = root.capture_state()
+	assert_eq(whole.get("brushes", []).size(), 21, "the whole level records every brush")
+	assert_eq(scope.get("brushes", []).size(), 1, "the scope records the one that moved")
+
+
+func test_a_scope_records_where_each_brush_sits():
+	_make_brush(Vector3.ZERO)
+	var b := _make_brush(Vector3(64, 0, 0))
+	_make_brush(Vector3(128, 0, 0))
+	var scope: Dictionary = root.capture_brush_scope([_brush_id(b)])
+	assert_eq(int(scope["order"][_brush_id(b)]), 1, "the middle brush is at index 1")
+
+
+func test_an_id_that_does_not_resolve_is_not_a_scope():
+	_make_brush(Vector3.ZERO)
+	assert_true(
+		root.capture_brush_scope(["no_such_brush"]).is_empty(),
+		"an unknown id has to fall back to the whole snapshot, not record nothing"
+	)
+
+
+func test_a_pending_cut_is_not_a_scope():
+	var cut = (
+		root
+		. create_brush_from_info(
+			{
+				"shape": root.BrushShape.BOX,
+				"size": Vector3(32, 32, 32),
+				"transform": Transform3D(Basis.IDENTITY, Vector3.ZERO),
+				"operation": CSGShape3D.OPERATION_SUBTRACTION,
+				"pending": true,
+			}
+		)
+	)
+	var cut_id := str(root.get_brush_info_from_node(cut).get("brush_id", ""))
+	assert_true(
+		root.capture_brush_scope([cut_id]).is_empty(),
+		"a brush outside the draft container has no index to be put back at"
+	)
+
+
+func test_no_ids_is_not_a_scope():
+	_make_brush(Vector3.ZERO)
+	assert_true(root.capture_brush_scope([]).is_empty(), "nothing named is not a scope")
+
+
+# ===========================================================================
+# What a scoped restore does
+# ===========================================================================
+
+
+func test_a_scoped_restore_puts_a_moved_brush_back():
+	var a := _make_brush(Vector3.ZERO)
+	var scope: Dictionary = root.capture_brush_scope([_brush_id(a)])
+	root.nudge_brushes_by_id([_brush_id(a)], Vector3(64, 0, 0))
+	assert_eq(a.global_position, Vector3(64, 0, 0), "the nudge has to have happened")
+	root.restore_brush_scope(scope)
+	assert_eq(_brush_at_index(0).global_position, Vector3.ZERO, "and the restore has to undo it")
+
+
+func test_a_scoped_restore_leaves_the_brush_it_only_moves_alive():
+	var a := _make_brush(Vector3.ZERO)
+	var instance_id := a.get_instance_id()
+	var scope: Dictionary = root.capture_brush_scope([_brush_id(a)])
+	root.nudge_brushes_by_id([_brush_id(a)], Vector3(64, 0, 0))
+	root.restore_brush_scope(scope)
+	assert_eq(
+		_brush_at_index(0).get_instance_id(),
+		instance_id,
+		"a transform is written onto the node, so nothing holding it loses it"
+	)
+
+
+func test_a_record_that_changes_more_than_a_transform_rebuilds():
+	var a := _make_brush(Vector3.ZERO, Vector3(32, 32, 32))
+	var brush_id := _brush_id(a)
+	var scope: Dictionary = root.capture_brush_scope([brush_id])
+	var instance_id := a.get_instance_id()
+	root.set_brush_transform_by_id(brush_id, Vector3(96, 32, 32), Vector3.ZERO)
+	assert_eq(_brush_at_index(0).size, Vector3(96, 32, 32), "the resize has to have happened")
+	root.restore_brush_scope(scope)
+	assert_eq(_brush_at_index(0).size, Vector3(32, 32, 32), "the size has to come back")
+	assert_ne(
+		_brush_at_index(0).get_instance_id(),
+		instance_id,
+		"a size is decided when the primitive is built, so that record rebuilds"
+	)
+
+
+func test_a_rebuilt_brush_goes_back_at_its_own_index():
+	_make_brush(Vector3.ZERO)
+	var b := _make_brush(Vector3(64, 0, 0))
+	_make_brush(Vector3(128, 0, 0))
+	var brush_id := _brush_id(b)
+	var scope: Dictionary = root.capture_brush_scope([brush_id])
+	root.set_brush_transform_by_id(brush_id, Vector3(96, 32, 32), Vector3(64, 0, 0))
+	root.restore_brush_scope(scope)
+	assert_eq(root.draft_brushes_node.get_child_count(), 3, "still three brushes")
+	assert_eq(
+		_brush_id(_brush_at_index(1)),
+		brush_id,
+		"a rebuilt brush is added at the end, so the order has to be put back (#660)"
+	)
+
+
+func test_a_scoped_restore_that_rebuilds_keeps_the_connections_aimed_at_it():
+	var target := _make_brush(Vector3.ZERO)
+	target.name = "TargetDoor"
+	var source := _make_brush(Vector3(64, 0, 0))
+	source.set_meta("entity_io_outputs", [{"output": "OnTrigger", "target_name": "TargetDoor"}])
+	var brush_id := _brush_id(target)
+	var scope: Dictionary = root.capture_brush_scope([brush_id])
+	root.set_brush_transform_by_id(brush_id, Vector3(96, 32, 32), Vector3.ZERO)
+	root.restore_brush_scope(scope)
+	assert_eq(
+		(source.get_meta("entity_io_outputs", []) as Array).size(),
+		1,
+		"a restore is not a delete, so it must not strip what pointed at the brush"
+	)
+
+
+func test_a_scoped_restore_of_a_brush_that_matches_changes_nothing():
+	var a := _make_brush(Vector3.ZERO)
+	var instance_id := a.get_instance_id()
+	var scope: Dictionary = root.capture_brush_scope([_brush_id(a)])
+	root.restore_brush_scope(scope)
+	assert_eq(_brush_at_index(0).get_instance_id(), instance_id, "no work for no change")
+
+
+func test_an_unreadable_record_costs_that_record_and_not_the_step():
+	var a := _make_brush(Vector3.ZERO)
+	var scope: Dictionary = root.capture_brush_scope([_brush_id(a)])
+	(scope["brushes"] as Array).push_front("not a record")
+	root.nudge_brushes_by_id([_brush_id(a)], Vector3(64, 0, 0))
+	root.restore_brush_scope(scope)
+	assert_eq(_brush_at_index(0).global_position, Vector3.ZERO, "the good record still applies")
+
+
+# ===========================================================================
+# A scoped undo has to land where the whole-level undo would
+# ===========================================================================
+
+
+## The claim the whole change rests on, made against a real level: take the whole
+## state, run the command, put only the scope back, and the whole state has to be
+## the dictionary it was. A scoped step restores nothing outside its scope, so
+## anything the command moved out there shows up here as a difference.
+func _assert_scoped_undo_round_trips(brush_ids: Array, method_name: String, args: Array) -> void:
+	var before: Dictionary = root.capture_state()
+	var scope: Dictionary = root.capture_brush_scope(brush_ids)
+	assert_false(scope.is_empty(), "%s must be scopeable in this fixture" % method_name)
+	root.callv(method_name, args)
+	var moved: Dictionary = root.capture_state()
+	assert_false(
+		moved.recursive_equal(before, COMPARE_DEPTH), "%s must change something" % method_name
+	)
+	root.restore_brush_scope(scope)
+	var after: Dictionary = root.capture_state()
+	assert_eq(
+		_differing_keys(before, after),
+		[],
+		"undoing %s through its scope must leave the level as it was" % method_name
+	)
+
+
+func test_nudge_scoped_undo_matches_the_level_before_it():
+	var a := _make_brush(Vector3.ZERO)
+	_make_brush(Vector3(64, 0, 0))
+	_make_brush(Vector3(128, 0, 0))
+	var ids := [_brush_id(a)]
+	_assert_scoped_undo_round_trips(ids, "nudge_managed_nodes", [ids, [], Vector3(16, 0, 0)])
+
+
+func test_rotate_scoped_undo_matches_the_level_before_it():
+	var a := _make_brush(Vector3.ZERO)
+	_make_brush(Vector3(64, 0, 0))
+	var ids := [_brush_id(a)]
+	_assert_scoped_undo_round_trips(ids, "rotate_managed_nodes", [ids, [], 1, 45.0, Vector3.ZERO])
+
+
+func test_flip_scoped_undo_matches_the_level_before_it():
+	var a := _make_brush(Vector3(32, 0, 0))
+	_make_brush(Vector3(64, 0, 0))
+	var ids := [_brush_id(a)]
+	_assert_scoped_undo_round_trips(ids, "flip_managed_nodes", [ids, [], 0, Vector3.ZERO])
+
+
+func test_reset_rotation_scoped_undo_matches_the_level_before_it():
+	var a := _make_brush(Vector3.ZERO)
+	root.rotate_managed_nodes([_brush_id(a)], [], 1, 30.0, Vector3.ZERO)
+	_make_brush(Vector3(64, 0, 0))
+	var ids := [_brush_id(a)]
+	_assert_scoped_undo_round_trips(ids, "reset_managed_rotation", [ids])
+
+
+## The other half of the restore. Every round trip above takes the in-place path,
+## because a transform is one of the fields a live brush can be handed. A resize
+## is not, so this one goes through `create_brush_from_info()` -- which frees a
+## node and adds a new one, and so is where the brush order and the id counter
+## can come back wrong (#660).
+func test_a_scoped_undo_that_rebuilds_matches_the_level_before_it():
+	_make_brush(Vector3.ZERO)
+	var b := _make_brush(Vector3(64, 0, 0))
+	_make_brush(Vector3(128, 0, 0))
+	var brush_id := _brush_id(b)
+	_assert_scoped_undo_round_trips(
+		[brush_id], "set_brush_transform_by_id", [brush_id, Vector3(96, 32, 32), Vector3(64, 0, 0)]
+	)
+
+
+func test_a_scoped_undo_of_several_brushes_matches_the_level_before_it():
+	var a := _make_brush(Vector3.ZERO)
+	var b := _make_brush(Vector3(64, 0, 0))
+	_make_brush(Vector3(128, 0, 0))
+	var d := _make_brush(Vector3(192, 0, 0))
+	var ids := [_brush_id(a), _brush_id(b), _brush_id(d)]
+	_assert_scoped_undo_round_trips(ids, "nudge_managed_nodes", [ids, [], Vector3(0, 16, 0)])
+
+
+# ===========================================================================
+# The commands that claim a scope have to deserve it
+# ===========================================================================
+
+
+## Run the command and report every top-level key of the level state it changed.
+func _keys_changed_by(method_name: String, args: Array) -> Array:
+	var before: Dictionary = root.capture_state()
+	root.callv(method_name, args)
+	return _differing_keys(before, root.capture_state())
+
+
+## `plugin_edit_actions.brush_scope()` hands these four commands' ids to
+## `HFUndoHelper.commit()` as a claim that the command touches those brushes and
+## nothing else. This is what holds them to it. A command that grows a registry
+## write, a palette write or an entity write fails here, and the answer is to stop
+## scoping it rather than to widen the scope.
+func test_the_scoped_commands_change_the_brushes_and_nothing_else():
+	for method_name in [
+		"nudge_managed_nodes",
+		"rotate_managed_nodes",
+		"flip_managed_nodes",
+		"reset_managed_rotation",
+	]:
+		var a := _make_brush(Vector3(32, 0, 0))
+		_make_brush(Vector3(96, 0, 0))
+		var ids := [_brush_id(a)]
+		var args: Array = []
+		match method_name:
+			"nudge_managed_nodes":
+				args = [ids, [], Vector3(16, 0, 0)]
+			"rotate_managed_nodes":
+				args = [ids, [], 1, 45.0, Vector3.ZERO]
+			"flip_managed_nodes":
+				args = [ids, [], 0, Vector3.ZERO]
+			"reset_managed_rotation":
+				root.rotate_managed_nodes(ids, [], 1, 30.0, Vector3.ZERO)
+				args = [ids]
+		assert_eq(
+			_keys_changed_by(method_name, args),
+			["brushes"],
+			"%s claims a brush scope, so brushes is the only key it may change" % method_name
+		)
+		root.clear_brushes()
+
+
+func test_a_scoped_command_leaves_the_brushes_outside_its_scope_alone():
+	var a := _make_brush(Vector3.ZERO)
+	var b := _make_brush(Vector3(64, 0, 0))
+	var before: Dictionary = root.capture_state()
+	root.nudge_managed_nodes([_brush_id(a)], [], Vector3(16, 0, 0))
+	var after: Dictionary = root.capture_state()
+	var moved: Array = []
+	for i in (before["brushes"] as Array).size():
+		var was: Dictionary = before["brushes"][i]
+		if not was.recursive_equal(after["brushes"][i], COMPARE_DEPTH):
+			moved.append(str(was.get("brush_id", "")))
+	assert_eq(moved, [_brush_id(a)], "only the scoped brush's record may differ")
+	assert_eq(b.global_position, Vector3(64, 0, 0), "the other brush has not moved")
+
+
+# ===========================================================================
+# A collated run of scoped steps
+# ===========================================================================
+
+
+## The question the issue asked about collation: a run of nudges keeps the first
+## pre-action state so undo jumps all the way back, and MERGE_ENDS keeps the last
+## do so redo replays the whole run. A scope has to compose the same way. It can,
+## because the collation tag names the brushes, so every press in a run scopes the
+## same ids as the first.
+func test_a_collated_run_of_scoped_steps_undoes_to_the_start_and_redoes_the_whole_run():
+	var a := _make_brush(Vector3.ZERO)
+	_make_brush(Vector3(256, 0, 0))
+	var ids := [_brush_id(a)]
+	var undo_redo := FakeUndoRedo.new()
+	var first_scope: Dictionary = root.capture_brush_scope(ids)
+	for press in 3:
+		HFUndoHelper.register_action(
+			undo_redo,
+			root,
+			"Nudge",
+			MERGE_DISABLE if press == 0 else MERGE_ENDS,
+			"nudge_managed_nodes",
+			[ids, [], Vector3(16, 0, 0)],
+			first_scope,
+			false,
+			true,
+			ids
+		)
+	assert_eq(undo_redo.entries.size(), 1, "three presses in a run are one undo entry")
+	assert_eq(_brush_at_index(0).global_position, Vector3(48, 0, 0), "and all three happened")
+	undo_redo.undo()
+	assert_eq(
+		_brush_at_index(0).global_position,
+		Vector3.ZERO,
+		"undo has to jump back past the whole run, not one press of it"
+	)
+	assert_eq(
+		root.draft_brushes_node.get_child_count(),
+		2,
+		"and it must not take the brush outside the scope with it"
+	)
+	undo_redo.redo()
+	assert_eq(
+		_brush_at_index(0).global_position,
+		Vector3(48, 0, 0),
+		"and redo has to replay all of it, not the last press"
+	)
+	assert_eq(root.draft_brushes_node.get_child_count(), 2, "still both brushes")
+
+
+func test_a_scoped_run_registers_the_scoped_restore_at_both_ends():
+	var a := _make_brush(Vector3.ZERO)
+	var ids := [_brush_id(a)]
+	var undo_redo := FakeUndoRedo.new()
+	HFUndoHelper.register_action(
+		undo_redo,
+		root,
+		"Nudge",
+		MERGE_DISABLE,
+		"nudge_managed_nodes",
+		[ids, [], Vector3(16, 0, 0)],
+		root.capture_brush_scope(ids),
+		false,
+		true,
+		ids
+	)
+	var entry: Dictionary = undo_redo.entries[0]
+	assert_eq(entry["do"][0]["method"], "restore_brush_scope", "redo restores the scope")
+	assert_eq(entry["undo"][0]["method"], "restore_brush_scope", "and so does undo")
+
+
+func test_without_a_scope_the_whole_level_restore_is_still_what_registers():
+	var a := _make_brush(Vector3.ZERO)
+	var ids := [_brush_id(a)]
+	var undo_redo := FakeUndoRedo.new()
+	HFUndoHelper.register_action(
+		undo_redo,
+		root,
+		"Nudge",
+		MERGE_DISABLE,
+		"nudge_managed_nodes",
+		[ids, [], Vector3(16, 0, 0)],
+		root.capture_state(),
+		false,
+		true
+	)
+	var entry: Dictionary = undo_redo.entries[0]
+	assert_eq(entry["undo"][0]["method"], "restore_state", "a command with no scope is unchanged")
+
+
+# ===========================================================================
+# When a command may not claim a scope
+# ===========================================================================
+
+
+func test_an_entity_in_the_selection_ends_the_claim():
+	assert_eq(
+		HFPluginEditActions.brush_scope(["b1"], [NodePath("Entities/Light")]),
+		[],
+		"the transform commands move entities too and a brush scope cannot record one"
+	)
+
+
+func test_brushes_on_their_own_are_a_claim():
+	assert_eq(
+		HFPluginEditActions.brush_scope(["b1", "b2"], []), ["b1", "b2"], "brushes alone scope"
+	)
+
+
+func test_no_brushes_is_not_a_claim():
+	assert_eq(HFPluginEditActions.brush_scope([], []), [], "nothing to record is not a scope")

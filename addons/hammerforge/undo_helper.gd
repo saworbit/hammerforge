@@ -15,6 +15,7 @@ static var _last_collation_tag := ""
 static var _last_collation_time := 0
 static var _last_collation_state: Dictionary = {}
 static var _last_collation_full := false
+static var _last_collation_scoped := false
 
 
 ## Register one undoable action, optionally merging it with the last one.
@@ -32,6 +33,14 @@ static var _last_collation_full := false
 ## Commands whose arguments are live nodes. `restore_state()` clears the brushes
 ## and entities and rebuilds them from their captured info, so a node an undo
 ## passed over is freed and the reference held for the redo is dangling.
+##
+## `scope_brush_ids` names the brushes the command changes, and nothing else. A
+## command that can say that gets an undo step the size of the change instead of
+## the size of the level (#737). It is a claim about the command, not about the
+## arguments: pass it only when the method changes those brushes and no entity,
+## no registry, no palette and no other brush. When the ids cannot be a scope --
+## one does not resolve, or one is a pending cut -- the whole snapshot is taken
+## as before, so a wrong-looking id costs speed and not correctness.
 static func commit(
 	undo_redo: EditorUndoRedoManager,
 	root: Node,
@@ -41,7 +50,8 @@ static func commit(
 	full_state: bool = false,
 	history_cb: Callable = Callable(),
 	collation_tag: String = "",
-	absolute_redo: bool = false
+	absolute_redo: bool = false,
+	scope_brush_ids: Array = []
 ) -> void:
 	if not root or method_name == "" or not root.has_method(method_name):
 		return
@@ -62,17 +72,26 @@ static func commit(
 		# Still maintain collation tracking + history even without undo_redo,
 		# so history UI stays consistent in edge cases.
 		var state: Dictionary = root.capture_full_state() if full_state else root.capture_state()
-		_update_collation(collation_tag, can_collate, full_state, now, state)
+		_update_collation(collation_tag, can_collate, full_state, false, now, state)
 		_fire_history_cb(history_cb, action_name, can_collate)
 		return
 
-	var state: Dictionary
+	var state: Dictionary = {}
+	var scoped := false
 	if can_collate:
 		# Reuse the *original* pre-action state from the first action in this
-		# collation run so that undo jumps all the way back.
+		# collation run so that undo jumps all the way back. A run shares one
+		# collation tag and the tag names the brushes, so every commit in it
+		# scopes the same way the first one did.
 		state = _last_collation_state
+		scoped = _last_collation_scoped
 	else:
-		state = root.capture_full_state() if full_state else root.capture_state()
+		if not full_state and not scope_brush_ids.is_empty():
+			if root.has_method("capture_brush_scope"):
+				state = root.capture_brush_scope(scope_brush_ids)
+				scoped = not state.is_empty()
+		if not scoped:
+			state = root.capture_full_state() if full_state else root.capture_state()
 
 	# merge_mode: 0 = MERGE_DISABLE, 1 = MERGE_ENDS (merges consecutive same-name actions)
 	register_action(
@@ -84,10 +103,11 @@ static func commit(
 		args,
 		state,
 		full_state,
-		absolute_redo
+		absolute_redo,
+		scope_brush_ids if scoped else []
 	)
 
-	_update_collation(collation_tag, can_collate, full_state, now, state)
+	_update_collation(collation_tag, can_collate, full_state, scoped, now, state)
 	_fire_history_cb(history_cb, action_name, can_collate)
 
 
@@ -121,6 +141,10 @@ static func commit_completed(
 	_fire_history_cb(history_cb, action_name, false)
 
 
+## `scope_brush_ids` non-empty means `state` is a brush scope rather than a whole
+## level, so both ends of the action restore through `restore_brush_scope()`.
+## `commit()` passes it only once it has a scope in hand, so this does not have
+## to decide whether the ids were usable.
 static func register_action(
 	undo_redo,
 	root: Node,
@@ -130,9 +154,13 @@ static func register_action(
 	args: Array,
 	state: Dictionary,
 	full_state: bool = false,
-	absolute_redo: bool = false
+	absolute_redo: bool = false,
+	scope_brush_ids: Array = []
 ) -> void:
+	var scoped := not scope_brush_ids.is_empty()
 	var restore_name := "restore_full_state" if full_state else "restore_state"
+	if scoped:
+		restore_name = "restore_brush_scope"
 
 	# add_do_method takes an object, a method name and varargs. GDScript cannot
 	# spread an array into varargs, so the call below is unrolled by hand and
@@ -142,9 +170,26 @@ static func register_action(
 		# Run it here, then register the result rather than the step, and commit
 		# without executing so the work is not done twice.
 		root.callv(method_name, args)
-		var after: Dictionary = root.capture_full_state() if full_state else root.capture_state()
+		var do_restore := restore_name
+		var after: Dictionary = {}
+		if scoped:
+			after = root.capture_brush_scope(scope_brush_ids)
+		if after.is_empty():
+			if scoped:
+				# The command changed which brushes exist, which is the one thing
+				# a scope promises it does not do. Undo still puts the recorded
+				# brushes back, but nothing can put back what the command added or
+				# removed, so say so rather than letting a silent half-undo ship.
+				HFLog.warn(
+					(
+						"HFUndoHelper: '%s' changed the brush set it scoped, so redo is partial"
+						% action_name
+					)
+				)
+				do_restore = "restore_state"
+			after = root.capture_full_state() if full_state else root.capture_state()
 		undo_redo.create_action(action_name, merge_mode, null, false)
-		undo_redo.add_do_method(root, restore_name, after)
+		undo_redo.add_do_method(root, do_restore, after)
 		undo_redo.add_undo_method(root, restore_name, state)
 		undo_redo.commit_action(false)
 		return
@@ -169,7 +214,7 @@ static func register_action(
 
 ## Update collation tracking after a commit.
 static func _update_collation(
-	tag: String, was_collated: bool, full: bool, now_ms: int, state: Dictionary
+	tag: String, was_collated: bool, full: bool, scoped: bool, now_ms: int, state: Dictionary
 ) -> void:
 	if tag != "":
 		if not was_collated:
@@ -177,6 +222,7 @@ static func _update_collation(
 		_last_collation_tag = tag
 		_last_collation_time = now_ms
 		_last_collation_full = full
+		_last_collation_scoped = scoped
 	else:
 		_reset_collation()
 
@@ -192,3 +238,4 @@ static func _reset_collation() -> void:
 	_last_collation_time = 0
 	_last_collation_state = {}
 	_last_collation_full = false
+	_last_collation_scoped = false

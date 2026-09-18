@@ -168,7 +168,14 @@ func create_brush_from_info(info: Dictionary) -> Node:
 	if not committed:
 		_legacy_manager_add(brush)
 	root._record_last_brush(brush.global_position)
-	var brush_id = info.get("brush_id", _next_brush_id())
+	# Not `info.get("brush_id", _next_brush_id())`. GDScript evaluates that default
+	# whether or not the key is there, so every brush a restore put back minted an
+	# id it then threw away and left `_brush_id_counter` one higher than the level
+	# it had just rebuilt. `restore_state()` hides it by setting the counter from
+	# the snapshot afterwards; a scoped step has no counter to set.
+	var brush_id = str(info.get("brush_id", ""))
+	if brush_id == "":
+		brush_id = _next_brush_id()
 	brush.brush_id = str(brush_id)
 	brush.set_meta("brush_id", brush_id)
 	_register_brush_id(str(brush_id), brush)
@@ -639,15 +646,26 @@ func reusable_draft_brushes(records: Array) -> Dictionary:
 		var brush_id := str(brush.brush_id)
 		if not wanted.has(brush_id) or keep.has(brush_id):
 			continue
-		var live: Dictionary = get_brush_info_from_node(brush)
-		if live.is_empty():
-			continue
-		var record: Dictionary = wanted[brush_id]
-		# `recursive_equal` rather than `==`, because a record carries an array of
-		# face dictionaries and `==` does not go down into those.
-		if live.recursive_equal(record, _RECORD_COMPARE_DEPTH):
+		if record_matches_node(brush, wanted[brush_id]):
 			keep[brush_id] = brush
 	return keep
+
+
+## Whether this brush is already exactly what the record describes.
+##
+## `recursive_equal` rather than `==`, because a record carries an array of face
+## dictionaries and `==` does not go down into those.
+##
+## Deliberately not a field walk. A comparer that knows the record schema is a
+## second place to add a field to, and the day someone adds one to
+## `get_brush_info_from_node()` and forgets this, a restore reuses a brush that
+## has changed and nothing says so. Capturing the record costs an allocation and
+## cannot be wrong.
+func record_matches_node(brush: Node, record: Dictionary) -> bool:
+	var live: Dictionary = get_brush_info_from_node(brush)
+	if live.is_empty():
+		return false
+	return live.recursive_equal(record, _RECORD_COMPARE_DEPTH)
 
 
 ## Put a kept brush back into the registries a cleared level no longer has it in.
@@ -909,6 +927,94 @@ func clear_brushes(keep_ids: Dictionary = {}) -> void:
 	clear_pending_cuts()
 	_clear_committed_cuts()
 	root.clear_baked_geometry()
+
+
+## The record fields a live brush can take without being rebuilt.
+##
+## A transform and a set of faces are what the transform commands change, and
+## both can be written straight onto the node. Everything else a record carries
+## -- the shape, the size, the number of sides, whether it unions or subtracts --
+## is decided when the CSG primitive is built, so a record that differs in one of
+## those has to go back through `create_brush_from_info()`.
+const IN_PLACE_RECORD_KEYS := ["transform", "faces"]
+
+
+## Put one brush back to what a record says it was. Returns the live node, or
+## null when the record could not be used.
+##
+## The scoped undo step restores a handful of brushes rather than the level
+## (#737), so this is its unit. Three outcomes, cheapest first:
+##
+## - the brush already matches the record, and nothing happens
+## - it differs only in fields that can be written onto the node, so they are,
+##   and the node, its name and anything holding a reference to it survive
+## - it differs in anything else, or it is not there at all, and it goes through
+##   `create_brush_from_info()` -- the one door every other restore uses
+##
+## The third case is what makes the second safe. The in-place list is closed and
+## the test for it is "apply these keys to what the brush records now, and see
+## whether that is the record". A field added to `get_brush_info_from_node()` and
+## to nothing else fails that test and lands in the rebuild, which is slower and
+## right, rather than being quietly skipped.
+func apply_brush_record(record: Dictionary) -> Node:
+	if record.is_empty():
+		return null
+	var brush_id := str(record.get("brush_id", ""))
+	var existing = _find_brush_by_id(brush_id) if brush_id != "" else null
+	if not (existing is DraftBrush) or not is_instance_valid(existing):
+		return create_brush_from_info(record)
+	var draft := existing as DraftBrush
+	var live: Dictionary = get_brush_info_from_node(draft)
+	if live.is_empty():
+		release_draft_brush(draft)
+		return create_brush_from_info(record)
+	if live.recursive_equal(record, _RECORD_COMPARE_DEPTH):
+		return draft
+	var probe: Dictionary = live.duplicate(true)
+	for key in IN_PLACE_RECORD_KEYS:
+		if record.has(key):
+			probe[key] = record[key]
+		else:
+			probe.erase(key)
+	if not probe.recursive_equal(record, _RECORD_COMPARE_DEPTH):
+		release_draft_brush(draft)
+		return create_brush_from_info(record)
+	# Transform, then faces, then the handedness fold, in that order, because
+	# that is the order `create_brush_from_info()` does them in and the two paths
+	# have to agree on a record either of them could be handed (#749).
+	if record.has("transform"):
+		draft.global_transform = record["transform"]
+	if record.has("faces"):
+		draft.apply_serialized_faces(record.get("faces", []))
+	if draft.global_transform.basis.determinant() < 0.0:
+		_transform_system().normalize_handedness(draft)
+	_tag_brush_node_dirty(draft)
+	return draft
+
+
+## Take one draft brush out of the level so a record can rebuild it.
+##
+## Not `delete_brush()`. That is what a user deleting a brush calls: it strips
+## group and visgroup membership and removes the entity I/O connections aimed at
+## the node, because when a brush goes those references are meant to go with it.
+## A restore is not a delete -- the brush is coming straight back from a record,
+## and a record does not carry the connections that pointed at it, so running
+## that cleanup would make every undo that rebuilds a brush quietly drop them.
+##
+## `remove_child()` before `queue_free()`, so the rebuild in the next line is not
+## competing with a name the freed node still holds. That is the same order
+## `clear_brushes()` uses and for the same reason.
+func release_draft_brush(brush: DraftBrush) -> void:
+	if not is_instance_valid(brush):
+		return
+	var brush_id := str(brush.brush_id)
+	if brush_id != "":
+		_brush_cache.erase(brush_id)
+	_brush_count = max(0, _brush_count - 1)
+	_legacy_manager_remove(brush)
+	if brush.get_parent():
+		brush.get_parent().remove_child(brush)
+	brush.queue_free()
 
 
 func _clear_generated() -> void:
