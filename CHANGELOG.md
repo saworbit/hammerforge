@@ -107,6 +107,24 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   collision, its scripts and every child it had.
 
 ### Fixed
+- **Every displacement edit records the brush it edits, not the level** (#761).
+  #737 gave four commands an undo step the size of the change and left the rest
+  recording the whole level. The displacement commands were the biggest group
+  still out there, and the sculpt drag was the worst of them: a stroke took a
+  whole-level snapshot on mouse-down and another on mouse-up, 39 ms and 2.2 MB
+  each, on a gesture a mapper holds down. It sculpts one face of one brush.
+  Create, destroy, set power, elevation, smooth, noise, sew group and the sculpt
+  drag itself now all record that brush. So does painting a material onto a
+  brush: the paint writes `material_override` on the node and never reaches the
+  palette, not even for a material no slot holds, which was the open question
+  that had kept it unscoped.
+  Sewing is the one displacement command that keeps the whole snapshot. It
+  matches every displacement in the level to its neighbours by sew group, so it
+  changes brushes the caller never named and cannot claim a brush scope.
+  `tests/test_scoped_undo_step.gd` runs each of these commands between two
+  whole-level captures and asserts `brushes` is the only key that differs, which
+  is what the claim rests on. A command that grows a registry write fails there.
+
 - **An undo step is the size of the change, not the size of the level** (#737).
   Every action recorded a whole-level snapshot. On a 900-brush map that was 39 ms
   before the brush moved, 51 ms to take back, and 2.2 MB held for the rest of the
