@@ -791,6 +791,26 @@ func test_without_a_scope_the_whole_level_restore_is_still_what_registers():
 	assert_eq(entry["undo"][0]["method"], "restore_state", "a command with no scope is unchanged")
 
 
+## A resize, which is the gizmo drag rather than a dock button. It is held down,
+## the way the sculpt drag is, and `apply_resize_transaction()` registers it
+## through `HFUndoHelper.commit()` on the one brush whose handle was pulled.
+##
+## Texture lock makes this worth asking rather than assuming: a resize defers its
+## UV work to the commit, and a UV that lived anywhere but on the brush's own
+## faces would be a write outside the scope.
+func test_a_resize_changes_the_brushes_and_nothing_else():
+	var a := _make_brush(Vector3.ZERO)
+	_make_brush(Vector3(96, 0, 0))
+	var brush_id := _brush_id(a)
+	assert_eq(
+		_keys_changed_by(
+			"set_brush_transform_by_id", [brush_id, Vector3(48, 32, 32), Vector3.ZERO]
+		),
+		["brushes"],
+		"a resize claims a brush scope, so brushes is the only key it may change"
+	)
+
+
 # ===========================================================================
 # Bevel and inset
 # ===========================================================================

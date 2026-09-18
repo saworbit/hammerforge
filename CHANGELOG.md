@@ -107,8 +107,8 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   collision, its scripts and every child it had.
 
 ### Fixed
-- **Bevel and inset record the brushes they reshape, not the level** (#761). Two
-  more of the hand-rolled undo pairs are gone. An inset shrinks one face of one
+- **Bevel, inset and a resize record the brushes they change, not the level**
+  (#761). Two more of the hand-rolled undo pairs are gone. An inset shrinks one face of one
   brush, which is the shape `dock._try_undoable_action()` already takes, so that
   site is now a call to it rather than a snapshot pair of its own. A bevel is a
   batch over the selected edges, so it keeps its own capture but scopes it to the
@@ -132,6 +132,12 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   sharing the edge and the chamfer was then built along a zero-length direction.
   It is refused. The edge selection cannot produce one, but `bevel_edge()` is
   reachable from a custom tool.
+
+  The gizmo resize drag scopes to the brush whose handle was pulled. It is held
+  down, the way the sculpt stroke is, and it was still taking a whole-level
+  snapshot per drag. Texture lock defers its UV work to the commit, so whether a
+  resize writes outside the brush was a real question rather than a formality:
+  a UV lives on the brush's own faces, and the pinning test says so.
 
 - **Every displacement edit records the brush it edits, not the level** (#761).
   #737 gave four commands an undo step the size of the change and left the rest
