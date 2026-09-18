@@ -448,6 +448,13 @@ func capture_hflevel_settings() -> Dictionary:
 		"bake_unwrap_uv0": root.bake_unwrap_uv0,
 		"bake_lightmap_uv2": root.bake_lightmap_uv2,
 		"bake_lightmap_texel_size": root.bake_lightmap_texel_size,
+		# Beside the other bake options rather than with the navmesh, because they
+		# are the same kind of thing: a level saved with occluders on reopened
+		# with them off, and baked without them, with nothing anywhere saying so.
+		# Occluders only change frame time, so the loss is invisible until
+		# somebody profiles (#710).
+		"bake_generate_occluders": root.bake_generate_occluders,
+		"bake_occluder_min_area": root.bake_occluder_min_area,
 		"bake_navmesh": root.bake_navmesh,
 		"bake_navmesh_cell_size": root.bake_navmesh_cell_size,
 		"bake_navmesh_cell_height": root.bake_navmesh_cell_height,
@@ -563,6 +570,14 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 	if settings.has("bake_lightmap_texel_size"):
 		root.bake_lightmap_texel_size = float(
 			settings.get("bake_lightmap_texel_size", root.bake_lightmap_texel_size)
+		)
+	if settings.has("bake_generate_occluders"):
+		root.bake_generate_occluders = bool(
+			settings.get("bake_generate_occluders", root.bake_generate_occluders)
+		)
+	if settings.has("bake_occluder_min_area"):
+		root.bake_occluder_min_area = float(
+			settings.get("bake_occluder_min_area", root.bake_occluder_min_area)
 		)
 	if settings.has("bake_navmesh"):
 		root.bake_navmesh = bool(settings.get("bake_navmesh", root.bake_navmesh))

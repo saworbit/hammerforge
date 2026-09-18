@@ -42,6 +42,7 @@ func test_no_bake_or_grid_setting_keeps_a_value_that_is_not_a_number():
 		"bake_navmesh_agent_radius": root.bake_navmesh_agent_radius,
 		"bake_connector_stair_height": root.bake_connector_stair_height,
 		"bake_convex_simplify": root.bake_convex_simplify,
+		"bake_occluder_min_area": root.bake_occluder_min_area,
 	}
 	for key in before.keys():
 		root.set(key, NAN)
@@ -75,6 +76,11 @@ func test_the_settings_that_must_be_positive_are_floored():
 	assert_gte(root.bake_connector_width, 1, "a piece count is at least one")
 	root.grid_plane_size = 0.0
 	assert_gt(root.grid_plane_size, 0.0)
+	# Zero or less would make an occluder of every face group in the level.
+	root.bake_occluder_min_area = 0.0
+	assert_gt(root.bake_occluder_min_area, 0.0, "a minimum area is an area")
+	root.bake_occluder_min_area = -12.0
+	assert_gt(root.bake_occluder_min_area, 0.0)
 
 
 func test_the_settings_with_a_declared_range_are_held_to_it():
@@ -121,6 +127,50 @@ func test_a_poisoned_settings_block_from_a_file_does_not_land():
 	assert_true(is_finite(root.bake_navmesh_cell_size))
 	assert_lte(root.bake_convex_simplify, 1.0)
 	assert_gte(root.bake_connector_width, 1)
+
+
+# ===========================================================================
+# The occluder settings the file did not carry at all (#710)
+# ===========================================================================
+
+
+func test_the_occluder_settings_travel_with_the_level():
+	root.bake_generate_occluders = true
+	root.bake_occluder_min_area = 12.5
+	var settings: Dictionary = root.state_system.capture_hflevel_settings()
+	assert_true(
+		bool(settings.get("bake_generate_occluders", false)),
+		"a .hflevel records that the level bakes occluders"
+	)
+	assert_almost_eq(float(settings.get("bake_occluder_min_area", -1.0)), 12.5, 0.001)
+
+	var other := LevelRootType.new()
+	other.auto_spawn_player = false
+	other.hflevel_autosave_enabled = false
+	add_child_autoqfree(other)
+	other.state_system.apply_hflevel_settings(settings)
+	assert_true(
+		other.bake_generate_occluders,
+		"and a level loaded from it still bakes them, rather than silently dropping to off"
+	)
+	assert_almost_eq(other.bake_occluder_min_area, 12.5, 0.001)
+
+
+func test_a_file_written_before_the_occluder_settings_existed_keeps_the_defaults():
+	# `apply_hflevel_settings()` reads past a key it was not given. Every level
+	# saved before this landed has no occluder keys at all.
+	root.bake_generate_occluders = true
+	root.bake_occluder_min_area = 9.0
+	root.state_system.apply_hflevel_settings({"bake_navmesh": true})
+	assert_true(root.bake_generate_occluders, "an absent key is not an off switch")
+	assert_almost_eq(root.bake_occluder_min_area, 9.0, 0.001)
+
+
+func test_a_poisoned_occluder_area_from_a_file_does_not_land():
+	root.state_system.apply_hflevel_settings({"bake_occluder_min_area": NAN})
+	assert_true(is_finite(root.bake_occluder_min_area), "NaN is not a minimum area")
+	root.state_system.apply_hflevel_settings({"bake_occluder_min_area": -3.0})
+	assert_gt(root.bake_occluder_min_area, 0.0)
 
 
 # ===========================================================================
