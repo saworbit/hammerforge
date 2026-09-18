@@ -137,6 +137,16 @@ func _numbers_the_guide_quotes() -> void:
 	# the first pass flagged "Earlier versions drew on a Quake-family grid: a 16
 	# unit snap and a 32 unit brush", which is the guide being right.
 	var unit_re := RegEx.create_from_string("([0-9]{2,5})\\s*(?:unit|units)\\b")
+	# A third category, because two were not enough (#754). A measurement in
+	# another format's own units is neither our scale nor our history. A `.map`
+	# file is Quake scale by definition, so 384 is the right number to print and
+	# it will never change. Checked before `historical` because these lines name
+	# Quake too, and counting them as history would have the note describe a
+	# permanent fact about someone else's format as a change we once made.
+	var foreign := [
+		".map",
+		"other editor",
+	]
 	var historical := [
 		"earlier version",
 		"quake",
@@ -148,6 +158,7 @@ func _numbers_the_guide_quotes() -> void:
 	]
 	var current: Dictionary = {}
 	var explained := 0
+	var not_ours := 0
 	for path in DOC_PATHS:
 		if not FileAccess.file_exists(path):
 			continue
@@ -156,14 +167,21 @@ func _numbers_the_guide_quotes() -> void:
 			for m in unit_re.search_all(line):
 				if int(m.get_string(1)) < 16:
 					continue
+				var is_foreign := false
+				for marker in foreign:
+					if lowered.find(marker) >= 0:
+						is_foreign = true
 				var is_history := false
 				for marker in historical:
 					if lowered.find(marker) >= 0:
 						is_history = true
-				if is_history:
+				if is_foreign:
+					not_ours += 1
+				elif is_history:
 					explained += 1
 				else:
 					current["%s: %s" % [path.get_file(), line.strip_edges().substr(0, 90)]] = true
+	note("measurements in another format's own units", not_ours)
 	note("pre-#625 measurements the docs explain as history", explained)
 	note("pre-#625 measurements presented as current", current.keys())
 	if current.size() > 0:

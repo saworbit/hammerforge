@@ -107,6 +107,17 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   collision, its scripts and every child it had.
 
 ### Fixed
+- **The `docs-truth` scenario no longer reports a `.map` measurement as our own
+  scale** (#754). The detector had two categories for a measurement of sixteen
+  units or more: current HammerForge scale, which it flags, and a line the guide
+  explains as history, which it excuses. A measurement in another format's own
+  units is neither. A `.map` file is Quake scale by definition, so "a 12-metre
+  room exports as 384 units" is the right number to print and it will never
+  change. That correct line was flagged on every run, which is how a real
+  finding gets ignored. There is now a third category for another format's
+  units, checked before the historical one, so the line about a 112 unit
+  corridor is not counted as a change we once made either.
+
 - **A level saved with occluders on now bakes with them on when it is reopened**
   (#710). `bake_generate_occluders` and `bake_occluder_min_area` were exported
   level properties that the `.hflevel` never wrote and never read, so the setting
