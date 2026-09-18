@@ -4698,7 +4698,10 @@ func _on_uv_param_changed(_value: float, _param: String) -> void:
 		uv_offset_x.value if uv_offset_x else 0.0, uv_offset_y.value if uv_offset_y else 0.0
 	)
 	var rotation: float = deg_to_rad(uv_rotation_spin.value) if uv_rotation_spin else 0.0
-	# Route through undo system with collation so rapid spinbox changes merge
+	# Route through undo system with collation so rapid spinbox changes merge.
+	# The scope is the one brush the spinbox is editing: set_face_uv_params()
+	# writes one face's UV fields and rebuilds that brush's preview, and the
+	# collation tag already names the brush and the face (#761).
 	HFUndoHelper.commit(
 		undo_redo,
 		level_root,
@@ -4707,7 +4710,9 @@ func _on_uv_param_changed(_value: float, _param: String) -> void:
 		[brush_id, face_idx, scale, offset, rotation],
 		false,
 		Callable(self, "record_history"),
-		"uv_param_%s_%d" % [brush_id, face_idx]
+		"uv_param_%s_%d" % [brush_id, face_idx],
+		false,
+		[brush_id]
 	)
 
 

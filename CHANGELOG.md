@@ -124,6 +124,32 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   collision, its scripts and every child it had.
 
 ### Fixed
+- **The UV spinboxes and a material dropped on a face record one brush, not the
+  level** (#761). The last two undo sites that could name the brush they change
+  and did not. Both edit one face of a brush that is already there: the spinboxes
+  write the UV fields, the drop writes the slot index, and each rebuilds that one
+  brush's preview. The spinbox path is dragged, so it was taking a whole-level
+  snapshot per tick of a drag.
+  The palette was the question worth asking of the drop rather than assuming,
+  the same one a brush paint was asked in #762. A face material is a slot index
+  rather than a material, so a slot the palette has no room for could plausibly
+  have grown one. It does not: that index is refused and nothing is written.
+  `tests/test_scoped_undo_step.gd` pins both, and pins the refusal beside them so
+  the two are each other's control.
+
+- **A material dropped on a brush that had no id did nothing** (#761). Brush ids
+  are minted lazily, and a brush the floor painter built or one authored in the
+  scene tree has not been through the mint, so its id is still empty. Seven
+  places in the dock and the gizmo plugin handle that by asking
+  `get_brush_info_from_node()` for an id, which mints one and writes it back. The
+  material drop was the one site that invented its own fallback instead, the
+  node's instance id, and nothing resolves that:
+  `assign_material_to_faces_by_id()` looks brushes up by id only, so it found no
+  brush and returned while the drop still reported success with a toast. The
+  instance id could not have survived an undo either, because a rebuilt brush
+  gets a new one and the redo would have aimed at a freed node. The drop asks for
+  the mint now, like the other seven.
+
 - **Bevel, inset and a resize record the brushes they change, not the level**
   (#761). Two more of the hand-rolled undo pairs are gone. An inset shrinks one face of one
   brush, which is the shape `dock._try_undoable_action()` already takes, so that
