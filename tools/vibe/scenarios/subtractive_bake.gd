@@ -26,6 +26,7 @@ func summary() -> String:
 
 func run() -> void:
 	await _what_one_subtractor_does_to_the_materials()
+	await _what_fills_the_interior_a_cut_exposes()
 	await _what_it_does_to_the_cost()
 	await _what_the_mapper_is_told()
 
@@ -53,6 +54,23 @@ func _textured_room(root: Node3D) -> Array:
 			if face:
 				face.material_idx = i % 6
 	return made
+
+
+## Signed volume of every baked surface, which says where the cut landed without
+## needing to know what the mesh looks like.
+func _baked_volume(node: Node) -> float:
+	var total := 0.0
+	if node is MeshInstance3D and node.mesh:
+		var m: Mesh = node.mesh
+		for s in m.get_surface_count():
+			var verts: PackedVector3Array = m.surface_get_arrays(s)[Mesh.ARRAY_VERTEX]
+			var i := 0
+			while i + 2 < verts.size():
+				total += verts[i].dot(verts[i + 1].cross(verts[i + 2])) / 6.0
+				i += 3
+	for c in node.get_children():
+		total += _baked_volume(c)
+	return total
 
 
 func _surface_materials(node: Node, out: Array) -> Array:
@@ -120,6 +138,140 @@ func _what_one_subtractor_does_to_the_materials() -> void:
 				% [distinct_before.size(), str(lost)]
 			)
 		)
+
+
+## The faces a cut creates, and whether a mapper can texture them.
+##
+## Cutting a window leaves a reveal: the four faces the cutter carved out of the
+## wall. They do not exist until the boolean runs, so no panel in the editor can
+## select one. The cutter is the only handle, and the boolean already gives a
+## carved face the material of the face that cut it, which is also how the
+## Quake-family editors this lineage comes from behave.
+func _what_fills_the_interior_a_cut_exposes() -> void:
+	var root: Node3D = await fresh_root()
+	root.auto_spawn_player = false
+	_palette(root, 6)
+	_textured_room(root)
+
+	# One more material, used by nothing but the cutter, so finding it on the
+	# baked mesh can only mean it came through the boolean.
+	var reveal := StandardMaterial3D.new()
+	reveal.albedo_color = Color(0.2, 0.9, 0.4)
+	reveal.resource_name = "reveal_only"
+	root.material_manager.materials.append(reveal)
+	var reveal_idx: int = root.material_manager.materials.size() - 1
+
+	var bare = box(root, Vector3(1.2, 1.2, 1.0), Vector3(-2, 1.6, -5))
+	bare.operation = CSGShape3D.OPERATION_SUBTRACTION
+	await frame()
+	await root.bake(false, false)
+	await frame()
+	var untextured := _surface_materials(root.get_node_or_null("BakedGeometry"), [])
+	note("surfaces with an untextured cutter", untextured)
+	note("interiors left bare", untextured.count("<none>"))
+
+	# The same window, with the cutter textured the way any other brush is.
+	for face in bare.faces:
+		if face:
+			face.material_idx = reveal_idx
+	bare.rebuild_preview()
+	await frame()
+	await root.bake(false, false)
+	await frame()
+	var textured := _surface_materials(root.get_node_or_null("BakedGeometry"), [])
+	note("surfaces with the cutter textured", textured)
+	note("the cutter's own material reached the bake", textured.has("reveal_only"))
+
+	if not textured.has("reveal_only"):
+		flag(
+			"a textured cutter still leaves the interior it carved untextured",
+			(
+				"The cutter was given a material no other brush uses and the baked mesh "
+				+ "came back without it. The reveal is the first thing a mapper sees after "
+				+ "cutting a window, and nothing in the editor can reach those faces."
+			)
+		)
+
+	# The other half: texturing the cutter must not cost the wall its own.
+	var lost: Array = []
+	for mat in root.material_manager.materials:
+		if mat and mat != reveal and not textured.has(mat.resource_name):
+			lost.append(mat.resource_name)
+	note("room materials missing once the cutter was textured", lost)
+	if not lost.is_empty():
+		flag(
+			"texturing the cutter cost the room its own materials",
+			(
+				(
+					"Handing the cutter over as a mesh changed what the boolean operates on, "
+					+ "and %s no longer reaches the baked mesh. A reveal is not worth a wall."
+				)
+				% str(lost)
+			)
+		)
+
+	await _whether_texturing_a_cutter_moves_the_cut()
+
+
+## Whether texturing a cutter changes where it cuts.
+##
+## A textured cutter stops being an exact prefab primitive and becomes a
+## triangulated mesh, which is the risk: on the additive side a bad operand is
+## one wrong-looking brush, on the subtractive side it is a wrong cut. The
+## awkward cases are the ones a prefab is exact at and a mesh has to reproduce --
+## an angle that is not axis aligned, and a mirrored brush, whose negative
+## determinant inverts face winding invisibly until a bake.
+func _whether_texturing_a_cutter_moves_the_cut() -> void:
+	for subtracts in [true, false]:
+		for placement in ["axis aligned", "rotated", "mirrored"]:
+			var volumes: Array = []
+			for textured in [false, true]:
+				var root: Node3D = await fresh_root()
+				root.auto_spawn_player = false
+				_palette(root, 2)
+				var wall = box(root, Vector3(6, 4, 1), Vector3(0, 2, 0))
+				for face in wall.faces:
+					if face:
+						face.material_idx = 0
+				var second = box(root, Vector3(1.5, 1.5, 3), Vector3(0.4, 2.2, 0))
+				if subtracts:
+					second.operation = CSGShape3D.OPERATION_SUBTRACTION
+				if placement == "rotated":
+					second.rotation = Vector3(0.3, 0.7, 0.2)
+				elif placement == "mirrored":
+					second.scale = Vector3(-1, 1, 1)
+				if textured:
+					for face in second.faces:
+						if face:
+							face.material_idx = 1
+					second.rebuild_preview()
+				await frame()
+				await root.bake(false, false)
+				await frame()
+				var baked := root.get_node_or_null("BakedGeometry")
+				volumes.append(absf(_baked_volume(baked)) if baked else -1.0)
+			var kind: String = "cutter" if subtracts else "added brush"
+			note(
+				"%s %s, volume baked" % [placement, kind],
+				"primitive operand %.4f, mesh operand %.4f" % [volumes[0], volumes[1]]
+			)
+			if volumes[0] < 0.0 or volumes[1] < 0.0:
+				flag(
+					"a %s %s baked nothing at all" % [placement, kind],
+					"One of the two operand paths produced no baked geometry for the same level."
+				)
+			elif absf(volumes[0] - volumes[1]) > 0.01:
+				flag(
+					"texturing a %s %s changed the geometry" % [placement, kind],
+					(
+						(
+							"The same pair of brushes bakes %.4f with the second one as a "
+							+ "prefab primitive and %.4f once it is textured and goes in as a "
+							+ "mesh. Texturing a brush must not change its geometry."
+						)
+						% [volumes[0], volumes[1]]
+					)
+				)
 
 
 ## What the two paths cost, textured and not.

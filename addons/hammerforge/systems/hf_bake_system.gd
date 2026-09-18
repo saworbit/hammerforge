@@ -1908,9 +1908,22 @@ func append_brush_list_to_csg(
 		var subtracts: bool = force_subtract or draft.operation == CSGShape3D.OPERATION_SUBTRACTION
 		var csg_shape: CSGShape3D = null
 		var placement := draft.global_transform
-		# A cutter carries no materials out of the boolean, so it stays on the
-		# primitive either way.
-		var face_mesh: Mesh = null if subtracts else _face_material_csg_mesh(draft)
+		# A cutter goes in as a mesh for the same reason a solid does: the
+		# boolean writes the material of the face that cut through to the face it
+		# carved, so the cutter's own texturing is what fills the interior it
+		# exposes (#746).
+		#
+		# A mirrored cutter is the exception. Its negative determinant inverts
+		# face winding, and the boolean reads an inverted mesh operand
+		# differently from the primitive it regenerates from `size`: measured on
+		# one wall and one cutter, 25.5000 against 25.6792. Both are wrong - a
+		# mirrored brush bakes wrong whether or not it is textured - but a mapper
+		# painting a cutter must not move the cut, so a mirrored one stays on the
+		# primitive. Same shape as the closed-solid guard below, and for the same
+		# reason: on this side a bad operand is a wrong cut.
+		var face_mesh: Mesh = null
+		if not (subtracts and draft.global_transform.basis.determinant() < 0.0):
+			face_mesh = _face_material_csg_mesh(draft)
 		if face_mesh != null:
 			var csg_faces := CSGMesh3D.new()
 			csg_faces.mesh = face_mesh
@@ -1937,9 +1950,12 @@ func append_brush_list_to_csg(
 		# Setting `material` on a CSGMesh3D overrides every surface of its mesh
 		# with the one, which is the whole of #693. A brush that brought its own
 		# materials keeps them.
-		if csg_shape.operation != CSGShape3D.OPERATION_SUBTRACTION and face_mesh == null:
+		if face_mesh == null:
 			var mat = draft.material_override
-			if not mat:
+			# An untextured cutter leaves the interior bare, which is what it has
+			# always done. The fallback below is the editor's translucent red
+			# subtract preview and must never reach a bake.
+			if not mat and not subtracts:
 				mat = root._make_brush_material(csg_shape.operation)
 			if mat:
 				csg_shape.set("material", mat)
