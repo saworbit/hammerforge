@@ -105,8 +105,8 @@ and the materials stay as separate surfaces on the merged mesh.
 
 One thing to know: a level with **any** subtractive brush in it falls back to the
 CSG bake path, because independent face triangulation has no boolean stage. Your
-texturing goes with it — a textured brush enters the boolean as a mesh with one
-surface per material and comes out still wearing them — so cutting a window does
+texturing goes with it. A textured brush enters the boolean as a mesh with one
+surface per material and comes out still wearing them, so cutting a window does
 not cost the level its materials. What the CSG path does not do is the material
 atlas, so a level that leans on atlasing to cut draw calls loses that once it has
 a cut in it.
