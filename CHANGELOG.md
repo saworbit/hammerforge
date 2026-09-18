@@ -88,6 +88,27 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   collision, its scripts and every child it had.
 
 ### Fixed
+- **A corrupt palette no longer raises a script error on the way back in**
+  (#752). `restore_state()` has a guard for a saved palette whose slots hold
+  something that is not a Material: `set_materials()` keeps such a slot empty and
+  names it. The fast path put in front of that guard by #705, which skips
+  repainting every brush when the palette is not part of what changed, compared
+  the two arrays with `!=` - and in GDScript `!=` between an Object and an int is
+  a runtime error rather than a false. The comparison now asks each slot's type
+  first, so a slot of a different type answers "not the same palette" instead of
+  throwing. A save produces a typed array and cannot hold junk, but a state does
+  not have to come from a save: `.hflevel` is JSON, an undo snapshot is built
+  from the same shape, and a file written by an older version or edited by hand
+  can put anything in that array.
+  What it did is narrower than it looked. The error unwinds only
+  `palette_matches()`, and a function typed `-> bool` that unwinds returns false,
+  so `set_materials()` ran anyway and the level still came back. What it cost was
+  a red error in the Debugger for a file the plugin was already written to
+  survive, and `tools/vibe/scenarios/persistence.gd` reporting a script error
+  instead of the answer it was asking for. That scenario now runs clean.
+  The rest of the restore path was checked for the same shape and does not have
+  it. It compares through `str()`, through `is`, or through `recursive_equal()`,
+  and all three are defined for any pair of types.
 - **A mirrored brush no longer bakes inside out, and a mirrored cutter cuts**
   (#749). Nothing in the editor calls this mirroring. It is `scale` with a
   negative component, which Godot's own gizmo will do to a brush if a handle is
