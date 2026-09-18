@@ -1913,14 +1913,16 @@ func append_brush_list_to_csg(
 		# carved, so the cutter's own texturing is what fills the interior it
 		# exposes (#746).
 		#
-		# A mirrored cutter is the exception. Its negative determinant inverts
-		# face winding, and the boolean reads an inverted mesh operand
-		# differently from the primitive it regenerates from `size`: measured on
-		# one wall and one cutter, 25.5000 against 25.6792. Both are wrong - a
-		# mirrored brush bakes wrong whether or not it is textured - but a mapper
-		# painting a cutter must not move the cut, so a mirrored one stays on the
-		# primitive. Same shape as the closed-solid guard below, and for the same
-		# reason: on this side a bad operand is a wrong cut.
+		# A mirrored cutter is the exception, and since #749 it is a backstop
+		# rather than a live path: `normalize_handedness()` takes the mirror off
+		# at the two doors a brush can arrive through, so one should not reach
+		# here. If one does, its negative determinant inverts face winding, and
+		# the boolean reads an inverted mesh operand differently from the
+		# primitive it regenerates from `size`: measured on one wall and one
+		# cutter, 25.5000 against 25.6792. Both are wrong, but a mapper painting a
+		# cutter must not move the cut, so a mirrored one stays on the primitive.
+		# Same shape as the closed-solid guard below, and for the same reason: on
+		# this side a bad operand is a wrong cut.
 		var face_mesh: Mesh = null
 		if not (subtracts and draft.global_transform.basis.determinant() < 0.0):
 			face_mesh = _face_material_csg_mesh(draft)

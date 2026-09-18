@@ -15,6 +15,10 @@ class_name HFTransformSystem
 ## restores a right-handed basis while leaving every world vertex exactly where
 ## the mirror puts it. See
 ## `docs/superpowers/specs/2026-09-07-free-transform-design.md`.
+##
+## `normalize_handedness()` folds the same way, for a mirror that arrived from
+## somewhere other than Flip: Godot's own scale gizmo, the Inspector, or a level
+## file written before this existed.
 
 const DraftBrush = preload("../brush_instance.gd")
 const DraftEntity = preload("../draft_entity.gd")
@@ -27,6 +31,10 @@ enum PivotMode { SELECTION_CENTER, WORLD_ORIGIN, ACTIVE, CUSTOM }
 ## Coarse enough to absorb float error, fine enough that no two brush vertices
 ## share a cell. Misjudging falls to the exact path, never to wrong geometry.
 const MIRROR_EPSILON := 0.001
+
+## Marks a brush already warned about being both mirrored and sculpted, so the
+## warning is one per brush rather than one per reconcile.
+const MIRROR_REFUSED_META := &"hf_mirror_refused"
 
 ## How far a basis column may stray from unit length, or from square with its
 ## neighbours, and still count as a turn and nothing else. Columns are unit
@@ -528,6 +536,102 @@ func selection_bounds(brush_ids: Array, entity_paths: Array) -> AABB:
 			bounds = AABB(origin, Vector3.ZERO)
 			seeded = true
 	return bounds
+
+
+# ---------------------------------------------------------------------------
+# Handedness
+# ---------------------------------------------------------------------------
+
+
+## Take a mirror off a brush's basis, leaving the brush exactly where it is.
+##
+## A basis with a negative determinant describes the same box as one without, but
+## every face built through it comes out wound the other way. A mirrored brush
+## bakes inside out, and a mirrored cutter adds its volume instead of removing it:
+## one wall of 24.0 and a cutter that should leave 21.75 left 26.25 instead (#749).
+## Nothing in the editor calls this mirroring. It is `scale` with a negative
+## component, which Godot's own gizmo and Inspector will both write to a brush,
+## and the viewport draws the brush the right shape either way.
+##
+## The reflection is folded through a local axis, the same trick `flip()` uses:
+## `basis * H` has determinant +1, and pairing it with local vertices reflected by
+## `H` puts every world vertex back exactly where it was, because `H * H` is the
+## identity. Measured on a 4 x 2 x 3 brush with six materials and six different UV
+## settings, folded through each of the three axes in turn: every face keeps its
+## appearance, at the same place in the world, all three times.
+##
+## Returns true when a mirror was taken off.
+func normalize_handedness(draft: DraftBrush) -> bool:
+	if draft == null or not is_instance_valid(draft):
+		return false
+	if draft.global_transform.basis.determinant() >= 0.0:
+		return false
+	if _has_displacement(draft):
+		# The same refusal `flip()` makes, for the same reason: a displacement grid
+		# is indexed against its face's corner order and mirroring reverses that
+		# order. Leaving the brush mirrored is wrong, and destroying somebody's
+		# sculpt to un-mirror it is worse.
+		# Once per brush, not once per call: the change tracker reconciles on
+		# every gizmo release, and a line per release buries everything else a
+		# mapper reads the console for. Cleared again the moment it is repairable,
+		# so destroying the displacement and mirroring again still says so.
+		if not draft.has_meta(MIRROR_REFUSED_META):
+			draft.set_meta(MIRROR_REFUSED_META, true)
+			HFLog.warn(
+				(
+					(
+						"HFTransformSystem: brush '%s' is mirrored and has displacement faces. "
+						+ "It will bake inside out. Destroy the displacement to have the mirror "
+						+ "taken off."
+					)
+					% str(draft.brush_id)
+				)
+			)
+		return false
+	if draft.has_meta(MIRROR_REFUSED_META):
+		draft.remove_meta(MIRROR_REFUSED_META)
+	# The symmetry test reads generated face vertices, so they have to exist first.
+	_ensure_faces(draft)
+	var local_axis := mirrored_local_axis(draft)
+	var keeps_primitive := _primitive_survives_mirror(draft, local_axis)
+	var remapped := false
+	if keeps_primitive:
+		remapped = remap_mirrored_faces(draft, local_axis)
+		if not remapped and _face_appearance_varies(draft):
+			keeps_primitive = false
+	if not keeps_primitive:
+		draft.mark_faces_authoritative()
+	draft.global_transform = Transform3D(
+		draft.global_transform.basis * reflection_basis(local_axis), draft.global_transform.origin
+	)
+	if not keeps_primitive:
+		mirror_faces(draft.get_faces(), local_axis)
+	if remapped or not keeps_primitive:
+		draft.rebuild_preview()
+	_tag_dirty(draft)
+	return true
+
+
+## Which local axis to fold a brush's mirror through.
+##
+## Any of the three gives identical world geometry and identical appearance, so
+## this only decides what the Inspector reads afterwards. A mapper who typed a
+## negative into one scale field gets that field back positive and no turn:
+## Node3D keeps the signs they typed, so one negative component names the axis.
+##
+## A gizmo drag writes the basis instead, and `Basis.get_scale()` then reports the
+## determinant's sign on all three components, naming nothing. X, then, and the
+## brush arrives carrying a half turn it did not have before. It is in the right
+## place, the right shape and the right way out, which is the part that was broken.
+static func mirrored_local_axis(draft: DraftBrush) -> int:
+	var scale: Vector3 = draft.scale
+	var negative := 0
+	var count := 0
+	for axis in 3:
+		if scale[axis] < 0.0:
+			negative = axis
+			count += 1
+	return negative if count == 1 else 0
 
 
 # ---------------------------------------------------------------------------

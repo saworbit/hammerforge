@@ -2993,8 +2993,10 @@ func test_a_cutter_with_one_material_puts_it_on_the_interior():
 func test_a_mirrored_cutter_stays_on_the_primitive_so_texturing_cannot_move_the_cut():
 	# A negative determinant inverts face winding, and the boolean reads an
 	# inverted mesh operand differently from the primitive it regenerates from
-	# `size`. A mirrored cutter bakes wrong either way; what it must not do is
-	# bake differently because someone painted it.
+	# `size`. Since #749 a mirrored brush does not reach a bake - the mirror is
+	# folded off at the door and at the tracker - so this is the backstop, held
+	# because what a cutter must never do is bake differently because someone
+	# painted it.
 	var cutter := _make_cutter()
 	cutter.scale = Vector3(-1, 1, 1)
 	_texture_every_face(cutter)

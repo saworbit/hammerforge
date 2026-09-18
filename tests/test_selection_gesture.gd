@@ -6,6 +6,7 @@ const HammerForgePlugin = preload("res://addons/hammerforge/plugin.gd")
 const DraftEntity = preload("res://addons/hammerforge/draft_entity.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 const BrushChangeTracker = preload("res://addons/hammerforge/hf_brush_change_tracker.gd")
+const DraftBrushScript = preload("res://addons/hammerforge/brush_instance.gd")
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
 const DisplacementData = preload("res://addons/hammerforge/displacement_data.gd")
 const THRESHOLD := 6.0
@@ -1338,6 +1339,40 @@ func _new_gesture() -> SelectionGesture:
 	var gesture := SelectionGesture.new()
 	autofree(gesture)
 	return gesture
+
+
+## Godot's own scale gizmo drags a handle past zero, or the Inspector takes a
+## typed negative, and neither goes near HammerForge's Flip - which folds its
+## reflection away precisely so a brush cannot end up mirrored. The brush then
+## bakes inside out, and as a cutter it adds its volume instead of removing it.
+## The tracker is where an edit Godot owns gets reconciled, so it is where the
+## mirror comes off (#749).
+func test_a_native_scale_that_mirrors_a_brush_has_the_mirror_taken_off() -> void:
+	var fake_root := ChangeTrackerRoot.new()
+	add_child_autoqfree(fake_root)
+	var brush := DraftBrushScript.new()
+	brush.shape = 0
+	brush.size = Vector3(32, 16, 8)
+	brush.brush_id = "mirrored"
+	brush.set_meta("brush_id", "mirrored")
+	brush.set_meta("hf_kind", "brush")
+	brush.set_meta("hf_container_role", "draft")
+	fake_root.add_child(brush)
+	fake_root.brushes.append(brush)
+	brush.rebuild_preview()
+	var tracker := BrushChangeTracker.new()
+	tracker.prime(fake_root)
+
+	brush.scale = Vector3(-1, 1, 1)
+	assert_lt(brush.global_transform.basis.determinant(), 0.0, "mirrored by the gizmo")
+	var before := brush.global_position
+
+	tracker.reconcile(fake_root)
+
+	assert_gt(brush.global_transform.basis.determinant(), 0.0, "the tracker took the mirror off")
+	assert_almost_eq(
+		brush.global_position.distance_to(before), 0.0, 0.0001, "without moving the brush"
+	)
 
 
 func _new_tracked_brush(fake_root: ChangeTrackerRoot, brush_id: String) -> TrackedBrush:
