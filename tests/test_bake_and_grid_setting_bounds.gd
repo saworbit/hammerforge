@@ -174,6 +174,67 @@ func test_a_poisoned_occluder_area_from_a_file_does_not_land():
 
 
 # ===========================================================================
+# The bake settings the occluder sweep left behind (#755)
+# ===========================================================================
+
+
+func test_the_remaining_bake_settings_travel_with_the_level():
+	# All four change what a bake produces, and each one's siblings were already
+	# in the file. Every value here differs from the property's default, so a key
+	# that does not travel leaves `other` on its default and fails the assert.
+	root.bake_navmesh_agent_max_climb = 0.75
+	root.bake_navmesh_agent_max_slope = 30.0
+	root.bake_connector_stair_threshold = 3.5
+	root.bake_wire_io = false
+	var settings: Dictionary = root.state_system.capture_hflevel_settings()
+
+	var other := LevelRootType.new()
+	other.auto_spawn_player = false
+	other.hflevel_autosave_enabled = false
+	add_child_autoqfree(other)
+	other.state_system.apply_hflevel_settings(settings)
+	assert_almost_eq(other.bake_navmesh_agent_max_climb, 0.75, 0.001)
+	assert_almost_eq(other.bake_navmesh_agent_max_slope, 30.0, 0.001)
+	assert_almost_eq(other.bake_connector_stair_threshold, 3.5, 0.001)
+	assert_false(other.bake_wire_io, "a level saved without wire IO does not bake it back on")
+
+
+func test_a_file_written_before_these_bake_keys_existed_keeps_the_defaults():
+	# Same shape as the occluder case above. Every level saved before this landed
+	# has none of the four keys, and an absent key is not an off switch.
+	root.bake_wire_io = false
+	root.bake_connector_stair_threshold = 3.5
+	root.state_system.apply_hflevel_settings({"bake_navmesh": true})
+	assert_false(root.bake_wire_io, "an absent key did not switch wire IO back on")
+	assert_almost_eq(root.bake_connector_stair_threshold, 3.5, 0.001)
+
+
+func test_poisoned_values_for_the_new_bake_keys_do_not_land():
+	# Asserting the clamped bound rather than "still finite" is what makes this
+	# fail when the apply side is missing. A level that never reads the key keeps
+	# its default, and 45 and 2 are not 90 and 0.01.
+	root.bake_navmesh_agent_max_climb = 0.75
+	(
+		root
+		. state_system
+		. apply_hflevel_settings(
+			{
+				"bake_navmesh_agent_max_climb": NAN,
+				"bake_navmesh_agent_max_slope": 400.0,
+				"bake_connector_stair_threshold": -8.0,
+			}
+		)
+	)
+	assert_almost_eq(
+		root.bake_navmesh_agent_max_climb, 0.75, 0.001, "NaN is not a climb height, so 0.75 stands"
+	)
+	assert_almost_eq(root.bake_navmesh_agent_max_slope, 90.0, 0.001, "and 400 is not a slope")
+	assert_almost_eq(
+		root.bake_connector_stair_threshold, 0.01, 0.001, "nor is a negative one a threshold"
+	)
+
+
+# ===========================================================================
 # The four @export_range properties that had no setter (#622)
 # ===========================================================================
 
