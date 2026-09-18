@@ -124,6 +124,38 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   collision, its scripts and every child it had.
 
 ### Fixed
+- **Bevel, inset and a resize record the brushes they change, not the level**
+  (#761). Two more of the hand-rolled undo pairs are gone. An inset shrinks one face of one
+  brush, which is the shape `dock._try_undoable_action()` already takes, so that
+  site is now a call to it rather than a snapshot pair of its own. A bevel is a
+  batch over the selected edges, so it keeps its own capture but scopes it to the
+  brushes those edges belong to. Every brush in the selection is recorded, not
+  only the ones a bevel succeeded on: an unchanged brush costs one record, and
+  one left out would not come back.
+  Both were measured before they were scoped rather than assumed: run between two
+  whole-level captures, `brushes` is the only key either changes, and a scoped
+  restore puts the level back to the dictionary it was. `tests/test_scoped_undo_step.gd`
+  now pins both, and a bevel finds its edge at run time rather than hard-coding a
+  pair, so a command that silently stopped doing anything fails the test instead
+  of passing it.
+  Deciding whether ids can be a scope is now `HFUndoHelper.capture_scope_or_state()`,
+  which returns the state and the ids that restore it as one answer. They have to
+  agree: a caller that asked for a scope, got the whole-level fallback and still
+  passed its ids would register a 25-key level state to be put back through
+  `restore_brush_scope()`. The sculpt path's own copy of that decision now calls
+  the shared one.
+  Beveling an edge that named the same vertex twice used to return true and add
+  four degenerate faces, because every face meeting that corner counted as
+  sharing the edge and the chamfer was then built along a zero-length direction.
+  It is refused. The edge selection cannot produce one, but `bevel_edge()` is
+  reachable from a custom tool.
+
+  The gizmo resize drag scopes to the brush whose handle was pulled. It is held
+  down, the way the sculpt stroke is, and it was still taking a whole-level
+  snapshot per drag. Texture lock defers its UV work to the commit, so whether a
+  resize writes outside the brush was a real question rather than a formality:
+  a UV lives on the brush's own faces, and the pinning test says so.
+
 - **Every displacement edit records the brush it edits, not the level** (#761).
   #737 gave four commands an undo step the size of the change and left the rest
   recording the whole level. The displacement commands were the biggest group

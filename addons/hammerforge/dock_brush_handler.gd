@@ -225,10 +225,15 @@ static func on_bevel_edge(dock: Object) -> void:
 		return
 	var segments: int = int(dock._bevel_segments_spin.value) if dock._bevel_segments_spin else 2
 	var radius: float = dock._bevel_radius_spin.value if dock._bevel_radius_spin else 2.0
-	# Capture state once before the batch, call each bevel, track actual successes.
-	var pre_state: Dictionary = (
-		dock.level_root.capture_state() if dock.level_root.has_method("capture_state") else {}
+	# A bevel reshapes the brushes whose edges are selected and touches nothing
+	# else, so the step records those brushes rather than the level (#761). Every
+	# brush in the selection is scoped, not only the ones a bevel succeeded on: a
+	# brush that did not change costs one unchanged record, and one left out
+	# would not come back.
+	var before: Dictionary = HFUndoHelper.capture_scope_or_state(
+		dock.level_root, vs.selected_edges.keys()
 	)
+	var pre_state: Dictionary = before["state"]
 	var count := 0
 	for brush_id in vs.selected_edges:
 		var edges: Array = vs.selected_edges[brush_id]
@@ -237,12 +242,14 @@ static func on_bevel_edge(dock: Object) -> void:
 				count += 1
 	if count > 0:
 		if dock.undo_redo and not pre_state.is_empty():
-			var post_state: Dictionary = dock.level_root.capture_state()
-			dock.undo_redo.create_action("Bevel Edge", 0, null, false)
-			dock.undo_redo.add_do_method(dock.level_root, "restore_state", post_state)
-			dock.undo_redo.add_undo_method(dock.level_root, "restore_state", pre_state)
-			dock.undo_redo.commit_action(false)
-			dock.record_history("Bevel Edge")
+			HFUndoHelper.commit_completed(
+				dock.undo_redo,
+				dock.level_root,
+				"Bevel Edge",
+				pre_state,
+				Callable(dock, "record_history"),
+				before["scope_ids"]
+			)
 		dock.show_toast("Beveled %d edge(s)" % count, 0)
 	else:
 		dock.show_toast("Bevel failed — check edge selection", 2)
@@ -263,20 +270,16 @@ static func on_bevel_inset(dock: Object) -> void:
 	var height: float = (
 		dock._bevel_inset_height_spin.value if dock._bevel_inset_height_spin else 0.0
 	)
-	var pre_state: Dictionary = (
-		dock.level_root.capture_state() if dock.level_root.has_method("capture_state") else {}
-	)
-	var ok: bool = dock.level_root.inset_face(
-		info["brush_id"], info["face_index"], inset_dist, height
+	# An inset reshapes the one brush whose face it shrinks, which is the shape
+	# `_try_undoable_action()` already takes, so the hand-rolled pair this used to
+	# register is gone and the step is that brush (#761).
+	var ok: bool = dock._try_undoable_action(
+		"Inset Face",
+		"inset_face",
+		[info["brush_id"], info["face_index"], inset_dist, height],
+		[info["brush_id"]]
 	)
 	if ok:
-		if dock.undo_redo and not pre_state.is_empty():
-			var post_state: Dictionary = dock.level_root.capture_state()
-			dock.undo_redo.create_action("Inset Face", 0, null, false)
-			dock.undo_redo.add_do_method(dock.level_root, "restore_state", post_state)
-			dock.undo_redo.add_undo_method(dock.level_root, "restore_state", pre_state)
-			dock.undo_redo.commit_action(false)
-			dock.record_history("Inset Face")
 		dock.show_toast("Face inset applied", 0)
 	else:
 		dock.show_toast("Inset failed — distance too large or face too small", 2)

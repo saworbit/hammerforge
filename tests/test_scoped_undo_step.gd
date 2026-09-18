@@ -791,6 +791,146 @@ func test_without_a_scope_the_whole_level_restore_is_still_what_registers():
 	assert_eq(entry["undo"][0]["method"], "restore_state", "a command with no scope is unchanged")
 
 
+## A resize, which is the gizmo drag rather than a dock button. It is held down,
+## the way the sculpt drag is, and `apply_resize_transaction()` registers it
+## through `HFUndoHelper.commit()` on the one brush whose handle was pulled.
+##
+## Texture lock makes this worth asking rather than assuming: a resize defers its
+## UV work to the commit, and a UV that lived anywhere but on the brush's own
+## faces would be a write outside the scope.
+func test_a_resize_changes_the_brushes_and_nothing_else():
+	var a := _make_brush(Vector3.ZERO)
+	_make_brush(Vector3(96, 0, 0))
+	var brush_id := _brush_id(a)
+	assert_eq(
+		_keys_changed_by(
+			"set_brush_transform_by_id", [brush_id, Vector3(48, 32, 32), Vector3.ZERO]
+		),
+		["brushes"],
+		"a resize claims a brush scope, so brushes is the only key it may change"
+	)
+
+
+# ===========================================================================
+# Bevel and inset
+# ===========================================================================
+
+
+## The two shaping commands on the Build tab (#761). Both reshape the brush they
+## name: a bevel replaces one edge with a chamfer, an inset shrinks one face and
+## walls the gap. Neither writes a registry, a palette or an entity.
+##
+## Same rule as everywhere else here. A command that grows a write outside the
+## brush fails this, and the answer is to take its scope away rather than widen
+## it.
+func test_the_bevel_commands_change_the_brushes_and_nothing_else():
+	var a := _make_brush(Vector3.ZERO)
+	_make_brush(Vector3(96, 0, 0))
+	var brush_id := _brush_id(a)
+	assert_eq(
+		_keys_changed_by("inset_face", [brush_id, 0, 4.0, 0.0]),
+		["brushes"],
+		"inset_face claims a brush scope, so brushes is the only key it may change"
+	)
+	root.clear_brushes()
+
+	var c := _make_brush(Vector3.ZERO)
+	_make_brush(Vector3(96, 0, 0))
+	var bevel_id := _brush_id(c)
+	assert_eq(
+		_keys_changed_by("bevel_edge", [bevel_id, _a_bevellable_edge(bevel_id), 2, 2.0]),
+		["brushes"],
+		"bevel_edge claims a brush scope, so brushes is the only key it may change"
+	)
+
+
+func test_inset_scoped_undo_matches_the_level_before_it():
+	var a := _make_brush(Vector3.ZERO)
+	_make_brush(Vector3(96, 0, 0))
+	var ids := [_brush_id(a)]
+	_assert_scoped_undo_round_trips(ids, "inset_face", [ids[0], 0, 4.0, 0.0])
+
+
+## A bevel adds faces, so the restore goes through the rebuild path rather than
+## writing a transform onto a live node, which is where brush order and the id
+## counter can come back wrong (#660).
+func test_bevel_scoped_undo_matches_the_level_before_it():
+	var a := _make_brush(Vector3.ZERO)
+	_make_brush(Vector3(96, 0, 0))
+	var ids := [_brush_id(a)]
+	_assert_scoped_undo_round_trips(ids, "bevel_edge", [ids[0], _a_bevellable_edge(ids[0]), 2, 2.0])
+
+
+## An edge `bevel_edge()` will accept, found on a throwaway brush so the one
+## under test is still untouched when its state is captured.
+##
+## The indices are into the brush's unique vertex list and only a pair shared by
+## exactly two faces bevels, so this asks rather than assumes: hard-coding a pair
+## that stopped being adjacent would leave the tests above passing on a command
+## that returned false and changed nothing.
+func _a_bevellable_edge(_subject_id: String) -> Array:
+	var probe := _make_brush(Vector3(0, 0, 192))
+	var probe_id := _brush_id(probe)
+	for i in range(8):
+		for j in range(i + 1, 8):
+			if root.bevel_edge(probe_id, [i, j], 2, 2.0):
+				root.delete_brush_by_id(probe_id)
+				return [i, j]
+	root.delete_brush_by_id(probe_id)
+	assert_true(false, "the fixture box has to have one bevellable edge")
+	return []
+
+
+# ===========================================================================
+# Taking the scope and the level state as one decision
+# ===========================================================================
+
+
+## `capture_scope_or_state()` returns the "before" state and the ids that go with
+## it, because the two have to agree. `commit_completed()` picks
+## `restore_brush_scope` from the ids alone, so a caller that asked for a scope,
+## got the whole level back, and still passed its ids would register a whole
+## level state to be restored as though it were a scope.
+func test_a_usable_scope_comes_back_with_its_ids():
+	var a := _make_brush(Vector3.ZERO)
+	_make_brush(Vector3(96, 0, 0))
+	var ids := [_brush_id(a)]
+	var before: Dictionary = HFUndoHelper.capture_scope_or_state(root, ids)
+	assert_eq(before["scope_ids"], ids, "a scope that worked keeps the ids that restore it")
+	assert_eq(
+		(before["state"] as Dictionary).keys(),
+		root.capture_brush_scope(ids).keys(),
+		"the state is the scope, not the level"
+	)
+
+
+func test_a_scope_that_did_not_work_comes_back_with_no_ids():
+	_make_brush(Vector3.ZERO)
+	var before: Dictionary = HFUndoHelper.capture_scope_or_state(root, ["not-a-brush"])
+	assert_eq(
+		before["scope_ids"],
+		[],
+		"ids that could not be a scope must not travel with the level state they fell back to"
+	)
+	assert_true(
+		(before["state"] as Dictionary).has("entities"),
+		"the fallback is the whole level, which a scope never holds"
+	)
+
+
+func test_asking_for_no_scope_takes_the_level():
+	_make_brush(Vector3.ZERO)
+	var before: Dictionary = HFUndoHelper.capture_scope_or_state(root, [])
+	assert_eq(before["scope_ids"], [], "no ids is no claim")
+	assert_true((before["state"] as Dictionary).has("entities"), "so the record is the level")
+
+
+func test_no_root_is_no_state_and_no_claim():
+	var before: Dictionary = HFUndoHelper.capture_scope_or_state(null, ["b1"])
+	assert_eq(before["state"], {}, "nothing to capture")
+	assert_eq(before["scope_ids"], [], "and nothing to claim")
+
+
 # ===========================================================================
 # When a command may not claim a scope
 # ===========================================================================

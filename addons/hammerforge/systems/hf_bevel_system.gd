@@ -47,6 +47,16 @@ func bevel_edge(brush_id: String, edge: Array, segments: int = 2, radius: float 
 		return false
 	var vi_a: int = edge[0]
 	var vi_b: int = edge[1]
+	# One vertex named twice is not an edge. It passed the size and range checks
+	# either side of this, and then every face meeting that corner counted as
+	# sharing it, so the adjacency check found three faces and agreed. The bevel
+	# was then built along `(vb - va).normalized()`, which is the zero vector: it
+	# returned true and added four degenerate faces to the brush. The edge
+	# selection cannot produce this, but `bevel_edge()` is reachable from a
+	# custom tool and from an import.
+	if vi_a == vi_b:
+		HFLog.warn("HFBevelSystem: an edge needs two different vertices")
+		return false
 	var all_verts: PackedVector3Array = _get_unique_verts(faces)
 	if vi_a < 0 or vi_a >= all_verts.size() or vi_b < 0 or vi_b >= all_verts.size():
 		HFLog.warn("HFBevelSystem: vertex index out of range")

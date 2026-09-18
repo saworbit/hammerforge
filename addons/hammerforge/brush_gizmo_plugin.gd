@@ -715,6 +715,12 @@ static func apply_resize_transaction(
 	if root and brush_id != "" and root.has_method("set_brush_transform_by_id"):
 		_restore_preview_transform(brush, previous_size, previous_position)
 		if manager:
+			# One brush, the one whose handle was pulled, so the step is that
+			# brush and not the level (#761). This is a drag a mapper holds, the
+			# same shape as the sculpt stroke. Texture lock does its UV work as
+			# part of the commit, and a UV lives on the brush's own faces, so it
+			# is inside the record rather than a write outside the claim --
+			# measured in `tests/test_scoped_undo_step.gd` rather than assumed.
 			HFUndoHelper.commit(
 				manager,
 				root,
@@ -723,7 +729,9 @@ static func apply_resize_transaction(
 				[brush_id, final_size, final_position],
 				false,
 				Callable(),
-				""
+				"",
+				false,
+				[brush_id]
 			)
 		else:
 			root.set_brush_transform_by_id(brush_id, final_size, final_position)

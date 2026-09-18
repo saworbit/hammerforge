@@ -111,6 +111,31 @@ static func commit(
 	_fire_history_cb(history_cb, action_name, can_collate)
 
 
+## The "before" half of a `commit_completed()` step: a brush scope if those ids
+## can be one, and the whole level if they cannot.
+##
+## Its own function because `commit_completed()` decides which restore to use
+## from whether `scope_brush_ids` is empty, so a caller that asks for a scope and
+## gets the fallback has to hand back `[]` with it or the undo restores a whole
+## level through `restore_brush_scope()`. Getting that pairing wrong is silent --
+## a scope is a 2-key dictionary and a state is 25, and `restore_state()` clears
+## what it is not given -- so the two are decided in one place and returned
+## together.
+##
+## `{"state": Dictionary, "scope_ids": Array}`. Pass both straight to
+## `commit_completed()`.
+static func capture_scope_or_state(root: Node, scope_brush_ids: Array) -> Dictionary:
+	if root == null:
+		return {"state": {}, "scope_ids": []}
+	if not scope_brush_ids.is_empty() and root.has_method("capture_brush_scope"):
+		var scope: Dictionary = root.capture_brush_scope(scope_brush_ids)
+		if not scope.is_empty():
+			return {"state": scope, "scope_ids": scope_brush_ids}
+	if root.has_method("capture_state"):
+		return {"state": root.capture_state(), "scope_ids": []}
+	return {"state": {}, "scope_ids": []}
+
+
 ## Register an undo step for work the caller has already done.
 ##
 ## `commit()` and `register_action()` call the method themselves and discard what
