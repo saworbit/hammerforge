@@ -53,6 +53,14 @@ func palette_matches(other: Array) -> bool:
 	if other.size() != materials.size():
 		return false
 	for i in materials.size():
+		# The type check is part of the comparison, not a guard in front of it.
+		# `!=` between an Object and an int is a runtime error in GDScript, not a
+		# false, and the array handed in can hold anything: `.hflevel` is JSON, an
+		# undo snapshot is built from the same shape, and `set_materials()` is
+		# already written for a slot that holds junk (#752). A slot of a different
+		# type is not the slot this palette holds, which is an answer.
+		if typeof(materials[i]) != typeof(other[i]):
+			return false
 		if materials[i] != other[i]:
 			return false
 	return true
