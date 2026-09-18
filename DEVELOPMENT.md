@@ -449,6 +449,10 @@ that pull request's head commit. It keys off the commit rather than the branch,
 because the newest run on a branch is frequently a superseded one and CI's own
 counts commit moves the head mid-wait.
 
+It also takes a commit: `python tools/wait_for_ci.py 1b1e341`. That is the form
+for checking a merge landed green, because a squash commit on `main` has no pull
+request whose head could be read.
+
 **Parent the node, then place it.** A `Node3D` outside the scene tree has no
 parent to measure against, so assigning `global_position` or `global_transform`
 writes the local transform instead. Nothing errors. The node lands wherever its
