@@ -86,6 +86,10 @@ var _disp_paint_active := false
 var _disp_paint_brush_id := ""
 var _disp_paint_face_idx := -1
 var _disp_paint_pre_state: Dictionary = {}
+## The brushes `_disp_paint_pre_state` records, when it is a brush scope rather
+## than the whole level. Empty means the whole level, which is what a stroke on a
+## brush that cannot be scoped still takes (#761).
+var _disp_paint_scope_ids: Array = []
 var _floor_paint_pre_state: Dictionary = {}
 var _paint_overlay_mesh: MeshInstance3D = null
 var _paint_overlay_imesh: ImmediateMesh = null

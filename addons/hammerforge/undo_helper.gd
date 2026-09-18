@@ -111,11 +111,6 @@ static func commit(
 	_fire_history_cb(history_cb, action_name, can_collate)
 
 
-## The half of `commit()` that talks to the undo manager.
-##
-## Its own function so it can be driven against a stand-in: an
-## `EditorUndoRedoManager` cannot be constructed outside the editor, and this is
-## the part where getting the do operation wrong is invisible until a redo.
 ## Register an undo step for work the caller has already done.
 ##
 ## `commit()` and `register_action()` call the method themselves and discard what
@@ -124,23 +119,38 @@ static func commit(
 ## are left, and Validate + Fix was throwing that away and re-deriving the count
 ## from two more full validation passes. Hand this the state from before the work
 ## instead, and read the result at the call site.
+##
+## `scope_brush_ids` is the same claim `commit()` takes, and `before` has to be
+## the matching `capture_brush_scope()` rather than a whole state: the caller took
+## it before the work, so only the caller can decide which one to take. Every
+## displacement edit comes through here and changes one face of one brush (#761).
 static func commit_completed(
 	undo_redo,
 	root: Node,
 	action_name: String,
 	before: Dictionary,
-	history_cb: Callable = Callable()
+	history_cb: Callable = Callable(),
+	scope_brush_ids: Array = []
 ) -> void:
 	if undo_redo:
-		var after: Dictionary = root.capture_state()
+		var restore_name := (
+			"restore_brush_scope" if not scope_brush_ids.is_empty() else "restore_state"
+		)
+		var result: Dictionary = _after_state(root, action_name, scope_brush_ids, false)
 		undo_redo.create_action(action_name, 0, null, false)
-		undo_redo.add_do_method(root, "restore_state", after)
-		undo_redo.add_undo_method(root, "restore_state", before)
+		undo_redo.add_do_method(root, result["restore"], result["state"])
+		undo_redo.add_undo_method(root, restore_name, before)
 		undo_redo.commit_action(false)
 	_reset_collation()
 	_fire_history_cb(history_cb, action_name, false)
 
 
+## The half of `commit()` that talks to the undo manager.
+##
+## Its own function so it can be driven against a stand-in: an
+## `EditorUndoRedoManager` cannot be constructed outside the editor, and this is
+## the part where getting the do operation wrong is invisible until a redo.
+##
 ## `scope_brush_ids` non-empty means `state` is a brush scope rather than a whole
 ## level, so both ends of the action restore through `restore_brush_scope()`.
 ## `commit()` passes it only once it has a scope in hand, so this does not have
@@ -170,26 +180,9 @@ static func register_action(
 		# Run it here, then register the result rather than the step, and commit
 		# without executing so the work is not done twice.
 		root.callv(method_name, args)
-		var do_restore := restore_name
-		var after: Dictionary = {}
-		if scoped:
-			after = root.capture_brush_scope(scope_brush_ids)
-		if after.is_empty():
-			if scoped:
-				# The command changed which brushes exist, which is the one thing
-				# a scope promises it does not do. Undo still puts the recorded
-				# brushes back, but nothing can put back what the command added or
-				# removed, so say so rather than letting a silent half-undo ship.
-				HFLog.warn(
-					(
-						"HFUndoHelper: '%s' changed the brush set it scoped, so redo is partial"
-						% action_name
-					)
-				)
-				do_restore = "restore_state"
-			after = root.capture_full_state() if full_state else root.capture_state()
+		var result: Dictionary = _after_state(root, action_name, scope_brush_ids, full_state)
 		undo_redo.create_action(action_name, merge_mode, null, false)
-		undo_redo.add_do_method(root, do_restore, after)
+		undo_redo.add_do_method(root, result["restore"], result["state"])
 		undo_redo.add_undo_method(root, restore_name, state)
 		undo_redo.commit_action(false)
 		return
@@ -210,6 +203,34 @@ static func register_action(
 			undo_redo.add_do_method(root, method_name, args[0], args[1], args[2], args[3], args[4])
 	undo_redo.add_undo_method(root, restore_name, state)
 	undo_redo.commit_action()
+
+
+## The state a do operation restores, once the work has already been done.
+##
+## Named ids mean the caller claimed a scope, so the result is the scope those
+## ids record now. An empty one back means the command changed which brushes
+## exist, which is the one thing a scope promises it does not do. Undo still puts
+## the recorded brushes back, but nothing can put back what the command added or
+## removed, so the do falls back to the whole level and says so rather than
+## letting a silent half-redo ship.
+##
+## Both places that register a completed action read this, so the fallback cannot
+## drift between them.
+static func _after_state(
+	root: Node, action_name: String, scope_brush_ids: Array, full_state: bool
+) -> Dictionary:
+	var scoped := not scope_brush_ids.is_empty()
+	if scoped:
+		var scope: Dictionary = root.capture_brush_scope(scope_brush_ids)
+		if not scope.is_empty():
+			return {"restore": "restore_brush_scope", "state": scope}
+		HFLog.warn(
+			"HFUndoHelper: '%s' changed the brush set it scoped, so redo is partial" % action_name
+		)
+	return {
+		"restore": "restore_full_state" if full_state else "restore_state",
+		"state": root.capture_full_state() if full_state else root.capture_state(),
+	}
 
 
 ## Update collation tracking after a commit.

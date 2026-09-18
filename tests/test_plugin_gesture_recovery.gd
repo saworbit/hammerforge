@@ -104,6 +104,7 @@ class FakePlugin:
 	var _disp_paint_brush_id := "b1"
 	var _disp_paint_face_idx := 3
 	var _disp_paint_pre_state: Dictionary = {}
+	var _disp_paint_scope_ids: Array = []
 	var _focus_recovery_queued := true
 
 	var disp_undo_commits := 0

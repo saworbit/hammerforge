@@ -80,6 +80,7 @@ class FakePlugin:
 	var _disp_paint_brush_id := "b1"
 	var _disp_paint_face_idx := 2
 	var _disp_paint_pre_state: Dictionary = {}
+	var _disp_paint_scope_ids: Array = []
 	var _vertex_mode := false
 	var hf_selection: Array = []
 	var active_root: Node = null
@@ -180,11 +181,15 @@ func _make_restorable_root() -> Node3D:
 extends Node3D
 
 var restored: Array = []
+var restored_scopes: Array = []
 var input_state = null
 var face_selection: Dictionary = {}
 
 func restore_state(state: Dictionary) -> void:
 	restored.append(state)
+
+func restore_brush_scope(scope: Dictionary) -> void:
+	restored_scopes.append(scope)
 """
 	script.reload()
 	var node := Node3D.new()
@@ -244,6 +249,24 @@ func test_escape_restores_displacement_paint_state():
 	assert_eq(plugin._disp_paint_brush_id, "")
 	assert_eq(plugin._disp_paint_face_idx, -1)
 	assert_true(plugin._disp_paint_pre_state.is_empty())
+
+
+## A stroke's pre-state is a brush scope when the brush could be scoped (#761),
+## and a scope handed to `restore_state()` reads as a level with no entities, no
+## materials and no visgroups in it and clears all three. Escape has to put it
+## back through the restore it was captured with.
+func test_escape_restores_a_scoped_stroke_through_the_scoped_restore():
+	var root := _make_restorable_root()
+	add_child_autofree(root)
+	plugin._disp_paint_active = true
+	plugin._disp_paint_pre_state = {"brushes": [], "order": {}}
+	plugin._disp_paint_scope_ids = ["b1"]
+
+	assert_true(HFPluginShortcuts.cancel_escape_step(plugin, root))
+
+	assert_eq(root.restored_scopes.size(), 1, "the scope has to go back as a scope")
+	assert_eq(root.restored.size(), 0, "and never through the whole-level restore")
+	assert_eq(plugin._disp_paint_scope_ids, [], "and the stroke is forgotten with it")
 
 
 func test_escape_yields_to_a_live_native_gizmo():
