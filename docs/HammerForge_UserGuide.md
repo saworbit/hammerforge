@@ -670,6 +670,26 @@ The **Test** tab contains an **Examples** section (collapsed by default) with 5 
 - **Study This** shows numbered annotations explaining the design decisions
 - Search/filter by title, description, tags, or difficulty level
 
+### The reference map
+
+Each example above is about one feature, and the format they are stored in
+carries brushes and point entities only. None of them can show you a material, a
+UV, a tie, a wire, a visgroup or a navmesh, because the file they live in has
+nowhere to put one.
+
+`addons/hammerforge/data/reference_map.hflevel` is a level with all of it in at
+once. Open it with **Load .hflevel** on the Test tab. It has two halls with the
+corridor's mouth cut through the inner wall of each, 119 brushes, 15 materials,
+UVs anchored to world space so the texture runs through the floor to wall join
+rather than stepping at it, a visgroup per wing, a button wired through a relay
+to a door, a spawn, and the bake options a shipped level uses. Bake it and you
+get a navmesh and occluders.
+
+It is a reference rather than a lesson: nothing in it is annotated, and it is not
+a good level. It is there to answer "what is a finished one supposed to look
+like" and to give the numbers in
+[Shipping a Level](HammerForge_Shipping_A_Level.md) something real to describe.
+
 ## Dock Layout (4 tabs)
 The dock has 4 tabs with collapsible sections for organized access to all controls. Each collapsible section has a visual separator and indented content; collapsed state persists across sessions. A "No LevelRoot" banner appears at the top when no root node is found.
 
