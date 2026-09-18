@@ -169,3 +169,30 @@ Before you call a level done:
 - [ ] The exported scene loads in your game with no second player in it
 - [ ] Lightmaps baked, if you are baking lighting
 - [ ] `.tscn` and `.hflevel` both committed; the exported scene need not be
+
+## Knowing What the Player Is Standing On
+
+A footstep sound, an impact decal, a bullet spark and a surface-specific reaction are all the same lookup: the game asks what the surface a ray or a `move_and_slide()` just hit is made of. HammerForge answers that from the texturing you already did.
+
+The bake gives each material its own collision shape and writes the surface names onto the collision body, so the `shape` index a hit reports names the material that was hit:
+
+```gdscript
+var hit := space.intersect_ray(query)
+var surface := HFSurface.material_from_hit(hit)   # "metal", "wood", "stone", ...
+```
+
+or, from a `RayCast3D` pointed at the floor:
+
+```gdscript
+var surface := HFSurface.material_under(ray)
+```
+
+`HFSurface.names_on(body)` gives every name on a body, in shape order, which is how you check a footstep table covers the level rather than finding a gap the first time somebody walks on the roof.
+
+A name is the material's `resource_name`, or its filename when it has no name, which is what the Materials tab shows you. An unpainted surface is `<none>`. Anything the lookup cannot answer is an empty string, so a table can hold a row for it.
+
+**The per-brush collision modes cannot answer.** `bake_collision_mode` 1 and 2 build one convex hull per brush, and a brush has six faces with six materials, so those bakes carry no names and every lookup returns the empty string. That is deliberate: naming one of the six would be worse than saying nothing.
+
+**Why the shape index and not the triangle.** Godot documents `face_index` on a ray hit, which would resolve to a single triangle and would be the better answer. It is `-1` here, from both `intersect_ray()` and `RayCast3D.get_collision_face_index()`, because this project runs Jolt. The shape index is what survives a hit, so the bake is arranged to make it meaningful. There is a test pinning that, so if a Godot release starts populating `face_index` it fails rather than the better route going unnoticed.
+
+**Friction and bounce are Godot's defaults.** Texturing a floor `ice` names it `ice`; it does not make it slippery. See #744.

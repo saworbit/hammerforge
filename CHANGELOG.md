@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Added
+- **A hit can name the surface it hit** (#707). Texturing a level is how a
+  shipped game knows what is underfoot: the footstep sound, the impact decal, the
+  bullet spark are all the same lookup against the surface a ray just touched.
+  None of it reached the baked collision, which was one `StaticBody3D` with no
+  metadata at all. The baked mesh had kept the materials as separate surfaces the
+  whole time; the collision kept nothing. The bake now gives each material surface
+  its own collision shape and writes the surface names onto the body, so the
+  `shape` index a hit reports names the material that was hit. `HFSurface` does
+  the lookup in one call, from a ray query result, from a `RayCast3D`, or from a
+  body and an index. `names_on()` lists every name on a body, which is how a game
+  checks its footstep table covers the level rather than finding the gap the first
+  time somebody walks on the roof. The shape index rather than the triangle
+  because the documented answer is not available: `face_index` is `-1` here from
+  both `intersect_ray()` and `RayCast3D.get_collision_face_index()`, since this
+  project runs Jolt, and a test pins that so a Godot release which starts
+  populating it fails rather than the better route going unnoticed. The per-brush
+  collision modes carry no names on purpose, because there a shape is a brush and
+  a brush has six faces with six materials, and naming one of the six would be
+  worse than saying nothing. Friction and bounce are still Godot's defaults for
+  every surface; that half is #744.
+
 ### Removed
 - **The `Use MultiMesh` bake toggle** (#692). It could not consolidate anything a
   bake produces, at any level size, in any arrangement. The report blamed the
