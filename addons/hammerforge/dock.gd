@@ -1880,20 +1880,32 @@ func _selected_face_has_displacement(info: Dictionary) -> bool:
 
 ## Execute a LevelRoot method that returns bool, wrapping in undo + history
 ## only when the call succeeds. Returns the bool result.
-func _try_undoable_action(action_name: String, method_name: String, args: Array = []) -> bool:
+##
+## `scope_brush_ids` names the brushes the method changes, and nothing else --
+## the same claim `HFUndoHelper.commit()` takes (#737, #761). Every displacement
+## command comes through here and edits one face of one brush, so the undo step
+## is that brush rather than the whole level. Sewing does not: it matches every
+## displacement to its neighbours, so it passes nothing and keeps the whole
+## snapshot. An id that cannot be a scope falls back to that snapshot too, so a
+## wrong-looking claim costs speed and not correctness.
+func _try_undoable_action(
+	action_name: String, method_name: String, args: Array = [], scope_brush_ids: Array = []
+) -> bool:
 	if not level_root or not level_root.has_method(method_name):
 		return false
-	var pre_state: Dictionary = (
-		level_root.capture_state() if level_root.has_method("capture_state") else {}
-	)
+	var pre_state: Dictionary = {}
+	var scoped: Array = []
+	if not scope_brush_ids.is_empty() and level_root.has_method("capture_brush_scope"):
+		pre_state = level_root.capture_brush_scope(scope_brush_ids)
+		if not pre_state.is_empty():
+			scoped = scope_brush_ids
+	if pre_state.is_empty() and level_root.has_method("capture_state"):
+		pre_state = level_root.capture_state()
 	var ok: bool = level_root.callv(method_name, args)
 	if ok and undo_redo and not pre_state.is_empty():
-		var post_state: Dictionary = level_root.capture_state()
-		undo_redo.create_action(action_name, 0, null, false)
-		undo_redo.add_do_method(level_root, "restore_state", post_state)
-		undo_redo.add_undo_method(level_root, "restore_state", pre_state)
-		undo_redo.commit_action(false)
-		record_history(action_name)
+		HFUndoHelper.commit_completed(
+			undo_redo, level_root, action_name, pre_state, Callable(self, "record_history"), scoped
+		)
 	return ok
 
 

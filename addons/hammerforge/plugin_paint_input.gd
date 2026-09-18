@@ -3,6 +3,8 @@ class_name HFPluginPaintInput
 extends RefCounted
 ## Floor, surface, and displacement paint pointer handling extracted from plugin.gd.
 
+const HFUndoHelper = preload("undo_helper.gd")
+
 
 static func should_start_displacement(plugin: Object, event: InputEvent, root: Node) -> bool:
 	if not event is InputEventMouseButton or not event.pressed:
@@ -37,8 +39,9 @@ static func handle_displacement(
 			var info: Dictionary = plugin.dock._get_selected_face_info()
 			if info.is_empty():
 				return EditorPlugin.AFTER_GUI_INPUT_PASS
-			if root.has_method("capture_state"):
-				plugin._disp_paint_pre_state = root.capture_state()
+			var stroke_undo: Dictionary = _capture_stroke_state(root, info["brush_id"])
+			plugin._disp_paint_pre_state = stroke_undo["state"]
+			plugin._disp_paint_scope_ids = stroke_undo["scope_ids"]
 			plugin._disp_paint_active = true
 			plugin._disp_paint_brush_id = info["brush_id"]
 			plugin._disp_paint_face_idx = info["face_index"]
@@ -46,10 +49,7 @@ static func handle_displacement(
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 		if plugin._disp_paint_active and not plugin._disp_paint_pre_state.is_empty():
 			commit_displacement_undo(plugin, root)
-		plugin._disp_paint_active = false
-		plugin._disp_paint_brush_id = ""
-		plugin._disp_paint_face_idx = -1
-		plugin._disp_paint_pre_state = {}
+		clear_displacement_stroke(plugin)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	if event is InputEventMouseMotion and plugin._disp_paint_active:
 		do_displacement_stroke(plugin, root, camera, position)
@@ -57,17 +57,70 @@ static func handle_displacement(
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
 
 
+## The state a stroke will be undone to, and the ids it is a scope for.
+##
+## A stroke moves the vertices of one face of one brush, so the brush is the undo
+## unit and the level is not: a whole snapshot was 39 ms to take and 2.2 MB to
+## hold, twice per stroke, on a drag a mapper holds down (#737, #761). A brush
+## that cannot be scoped -- a pending cut, an id that does not resolve -- falls
+## back to the snapshot every stroke used to take.
+##
+## The ids come back beside the state rather than being read off it later,
+## because which kind of dictionary it is decides which restore gets registered,
+## and a whole level handed to `restore_brush_scope()` would put nothing back.
+static func _capture_stroke_state(root: Node, brush_id: String) -> Dictionary:
+	if root.has_method("capture_brush_scope"):
+		var scope: Dictionary = root.capture_brush_scope([brush_id])
+		if not scope.is_empty():
+			return {"state": scope, "scope_ids": [brush_id]}
+	if root.has_method("capture_state"):
+		return {"state": root.capture_state(), "scope_ids": []}
+	return {"state": {}, "scope_ids": []}
+
+
+## Forget the stroke in progress.
+##
+## The pre-state and the ids it is a scope for are one fact in two fields, and
+## the three places a stroke can end all have to drop both. Ending it in one
+## function is what keeps them from drifting apart.
+static func clear_displacement_stroke(plugin: Object) -> void:
+	plugin._disp_paint_active = false
+	plugin._disp_paint_brush_id = ""
+	plugin._disp_paint_face_idx = -1
+	plugin._disp_paint_pre_state = {}
+	plugin._disp_paint_scope_ids = []
+
+
+## Throw the stroke away and put the level back to where it started, which is
+## what Escape during a sculpt does.
+##
+## Which restore that is depends on what was captured: a scope goes back through
+## `restore_brush_scope()`, and handing one to `restore_state()` instead would
+## read it as a whole level with no entities, no materials and no visgroups in it
+## and clear all three (#761).
+static func cancel_displacement_stroke(plugin: Object, root: Node) -> void:
+	if root and not plugin._disp_paint_pre_state.is_empty():
+		if not plugin._disp_paint_scope_ids.is_empty():
+			if root.has_method("restore_brush_scope"):
+				root.restore_brush_scope(plugin._disp_paint_pre_state)
+		elif root.has_method("restore_state"):
+			root.restore_state(plugin._disp_paint_pre_state)
+	clear_displacement_stroke(plugin)
+
+
 static func commit_displacement_undo(plugin: Object, root: Node) -> void:
 	if plugin == null or not plugin.undo_redo_manager or plugin._disp_paint_pre_state.is_empty():
 		return
 	if not root.has_method("restore_state") or not root.has_method("capture_state"):
 		return
-	var post_state: Dictionary = root.capture_state()
-	plugin.undo_redo_manager.create_action("Paint Displacement", 0, null, false)
-	plugin.undo_redo_manager.add_do_method(root, "restore_state", post_state)
-	plugin.undo_redo_manager.add_undo_method(root, "restore_state", plugin._disp_paint_pre_state)
-	plugin.undo_redo_manager.commit_action(false)
-	plugin._record_history("Paint Displacement")
+	HFUndoHelper.commit_completed(
+		plugin.undo_redo_manager,
+		root,
+		"Paint Displacement",
+		plugin._disp_paint_pre_state,
+		Callable(plugin, "_record_history"),
+		plugin._disp_paint_scope_ids
+	)
 
 
 static func do_displacement_stroke(

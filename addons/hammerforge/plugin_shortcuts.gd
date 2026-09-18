@@ -144,16 +144,7 @@ static func cancel_escape_step(plugin: Object, root: Node) -> bool:
 	if HFPluginPaintInput.cancel_floor_paint(plugin, root):
 		return true
 	if plugin._disp_paint_active:
-		if (
-			root
-			and not plugin._disp_paint_pre_state.is_empty()
-			and root.has_method("restore_state")
-		):
-			root.restore_state(plugin._disp_paint_pre_state)
-		plugin._disp_paint_active = false
-		plugin._disp_paint_brush_id = ""
-		plugin._disp_paint_face_idx = -1
-		plugin._disp_paint_pre_state = {}
+		HFPluginPaintInput.cancel_displacement_stroke(plugin, root)
 		return true
 	# Godot must see Escape while one of its transform/property/custom gizmos
 	# owns LMB so it can restore the exact engine-side value and clear its private

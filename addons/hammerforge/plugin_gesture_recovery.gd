@@ -10,6 +10,7 @@ extends RefCounted
 ## through. All three land here, because the alternative is a stroke that stays
 ## "active" forever and blocks every gesture after it.
 
+const HFPluginPaintInput = preload("plugin_paint_input.gd")
 const STOP := EditorPlugin.AFTER_GUI_INPUT_STOP
 const PASS := EditorPlugin.AFTER_GUI_INPUT_PASS
 
@@ -58,10 +59,7 @@ static func finish_stale_paint_strokes(
 	if plugin._disp_paint_active:
 		if not plugin._disp_paint_pre_state.is_empty():
 			plugin._commit_disp_paint_undo(root)
-		plugin._disp_paint_active = false
-		plugin._disp_paint_brush_id = ""
-		plugin._disp_paint_face_idx = -1
-		plugin._disp_paint_pre_state = {}
+		HFPluginPaintInput.clear_displacement_stroke(plugin)
 		finished = true
 	return finished
 

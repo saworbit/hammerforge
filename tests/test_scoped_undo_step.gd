@@ -373,6 +373,118 @@ func test_a_scoped_undo_of_several_brushes_matches_the_level_before_it():
 	_assert_scoped_undo_round_trips(ids, "nudge_managed_nodes", [ids, [], Vector3(0, 16, 0)])
 
 
+## Every displacement command, through the same round trip the transform commands
+## take. `create_displacement` is the interesting one: it adds face data, so the
+## restore goes through the rebuild path rather than writing a transform onto a
+## live node.
+func test_the_displacement_commands_scoped_undo_matches_the_level_before_it():
+	for case in [
+		["create_displacement", 3],
+		["set_displacement_power", 5],
+		["set_displacement_elevation", 8.0],
+		["smooth_displacement", 0.5],
+		["noise_displacement", 1.0],
+		["set_displacement_sew_group", 2],
+		["destroy_displacement", null],
+	]:
+		var a := _make_brush(Vector3.ZERO)
+		_make_brush(Vector3(96, 0, 0))
+		var brush_id := _brush_id(a)
+		var method_name := str(case[0])
+		if method_name != "create_displacement":
+			root.create_displacement(brush_id, 0, 3)
+			# Sculpted, so smooth has something to flatten and the round trip is
+			# the restore being tested rather than a command that did nothing.
+			root.displacement_system.paint(brush_id, 0, _face_centre(a, 0), 24.0, 6.0, 0)
+		var args: Array = [brush_id, 0]
+		if case[1] != null:
+			args.append(case[1])
+		_assert_scoped_undo_round_trips([brush_id], method_name, args)
+		root.clear_brushes()
+
+
+## Painting a brush that had no material. The record a scope takes only carries
+## a `material` key when there is one, so undoing this paint rests on the key
+## being absent rather than on it holding null.
+func test_painting_a_material_scoped_undo_matches_the_level_before_it():
+	var a := _make_brush(Vector3.ZERO)
+	_make_brush(Vector3(96, 0, 0))
+	var brush_id := _brush_id(a)
+	_assert_scoped_undo_round_trips(
+		[brush_id], "apply_material_to_brush_by_id", [brush_id, StandardMaterial3D.new()]
+	)
+
+
+## The sculpt drag, which is the one a mapper holds down. Not through
+## `_assert_scoped_undo_round_trips()` because the stroke is a call on the
+## displacement system rather than a method on the root.
+func test_a_displacement_sculpt_scoped_undo_matches_the_level_before_it():
+	var a := _make_brush(Vector3.ZERO)
+	_make_brush(Vector3(96, 0, 0))
+	var brush_id := _brush_id(a)
+	root.create_displacement(brush_id, 0, 3)
+	var before: Dictionary = root.capture_state()
+	var scope: Dictionary = root.capture_brush_scope([brush_id])
+	assert_false(scope.is_empty(), "a sculpted brush has to be scopeable")
+	root.displacement_system.paint(brush_id, 0, _face_centre(a, 0), 16.0, 4.0, 0)
+	root.restore_brush_scope(scope)
+	assert_eq(
+		_differing_keys(before, root.capture_state()),
+		[],
+		"undoing a stroke through its scope must leave the level as it was"
+	)
+
+
+# ===========================================================================
+# An action registered after the work was already done
+# ===========================================================================
+
+
+## `commit_completed()` is the half of the helper for work the caller has run
+## itself, and it is what `dock._try_undoable_action()` and the sculpt drag reach
+## for: both need the command's return value, which `commit()` throws away.
+func test_commit_completed_registers_the_scoped_restore_at_both_ends():
+	var a := _make_brush(Vector3.ZERO)
+	var ids := [_brush_id(a)]
+	var undo_redo := FakeUndoRedo.new()
+	var before: Dictionary = root.capture_brush_scope(ids)
+	root.create_displacement(ids[0], 0, 3)
+	HFUndoHelper.commit_completed(undo_redo, root, "Create Displacement", before, Callable(), ids)
+	var entry: Dictionary = undo_redo.entries[0]
+	assert_eq(entry["do"][0]["method"], "restore_brush_scope", "redo restores the scope")
+	assert_eq(entry["undo"][0]["method"], "restore_brush_scope", "and so does undo")
+	undo_redo.undo()
+	assert_eq(_brush_at_index(0).faces[0].displacement, null, "and undo takes the sculpt off")
+	undo_redo.redo()
+	assert_ne(_brush_at_index(0).faces[0].displacement, null, "and redo puts it back")
+
+
+## A scope is a claim, and nothing in a record can check it. When the command
+## turns out to have changed which brushes exist, the after-scope comes back
+## empty and the do operation falls back to the whole level rather than shipping
+## a half redo. Same degradation `register_action()` already makes.
+func test_commit_completed_falls_back_when_the_scope_did_not_survive():
+	var a := _make_brush(Vector3.ZERO)
+	var ids := [_brush_id(a)]
+	var undo_redo := FakeUndoRedo.new()
+	var before: Dictionary = root.capture_brush_scope(ids)
+	root.clear_brushes()
+	HFUndoHelper.commit_completed(undo_redo, root, "Something Bigger", before, Callable(), ids)
+	var entry: Dictionary = undo_redo.entries[0]
+	assert_eq(entry["do"][0]["method"], "restore_state", "redo has to take the whole level")
+
+
+func test_commit_completed_without_a_scope_is_unchanged():
+	var a := _make_brush(Vector3.ZERO)
+	var undo_redo := FakeUndoRedo.new()
+	var before: Dictionary = root.capture_state()
+	root.create_displacement(_brush_id(a), 0, 3)
+	HFUndoHelper.commit_completed(undo_redo, root, "Create Displacement", before)
+	var entry: Dictionary = undo_redo.entries[0]
+	assert_eq(entry["do"][0]["method"], "restore_state", "redo restores the level")
+	assert_eq(entry["undo"][0]["method"], "restore_state", "and so does undo")
+
+
 # ===========================================================================
 # The commands that claim a scope have to deserve it
 # ===========================================================================
@@ -417,6 +529,160 @@ func test_the_scoped_commands_change_the_brushes_and_nothing_else():
 			"%s claims a brush scope, so brushes is the only key it may change" % method_name
 		)
 		root.clear_brushes()
+
+
+## The displacement commands. Every one of them edits one face of one brush: the
+## dock buttons through `dock._try_undoable_action()`, the elevation spin through
+## `HFUndoHelper.commit()`, and the sculpt drag through `commit_completed()`
+## (#761). They were the biggest group still recording the whole level, and the
+## sculpt drag is held down, so it was taking a 2.2 MB snapshot per stroke.
+##
+## Same rule as the transform commands above: a command that grows a registry
+## write or a palette write fails here, and the answer is to stop scoping it.
+func test_the_displacement_commands_change_the_brushes_and_nothing_else():
+	for method_name in [
+		"create_displacement",
+		"set_displacement_power",
+		"set_displacement_elevation",
+		"smooth_displacement",
+		"noise_displacement",
+		"set_displacement_sew_group",
+		"destroy_displacement",
+	]:
+		var a := _make_brush(Vector3.ZERO)
+		_make_brush(Vector3(96, 0, 0))
+		var brush_id := _brush_id(a)
+		var args: Array = [brush_id, 0]
+		if method_name != "create_displacement":
+			assert_true(
+				root.create_displacement(brush_id, 0, 3),
+				"%s needs a displacement to act on" % method_name
+			)
+			# Smooth and noise are no-ops on a grid that is still flat, and a
+			# command that changes nothing proves nothing here.
+			root.displacement_system.paint(brush_id, 0, _face_centre(a, 0), 24.0, 6.0, 0)
+		match method_name:
+			"create_displacement":
+				args.append(3)
+			"set_displacement_power":
+				args.append(5)
+			"set_displacement_elevation":
+				args.append(8.0)
+			"smooth_displacement":
+				args.append(0.5)
+			"noise_displacement":
+				args.append(1.0)
+			"set_displacement_sew_group":
+				args.append(2)
+		assert_eq(
+			_keys_changed_by(method_name, args),
+			["brushes"],
+			"%s claims a brush scope, so brushes is the only key it may change" % method_name
+		)
+		root.clear_brushes()
+
+
+## Where a stroke lands: the middle of the named face, in world space, which is
+## what `do_displacement_stroke()` raycasts for.
+func _face_centre(brush: DraftBrush, face_index: int) -> Vector3:
+	var face = brush.faces[face_index]
+	var centre := Vector3.ZERO
+	for local_vertex in face.local_verts:
+		centre += local_vertex
+	centre /= float(face.local_verts.size())
+	return brush.global_transform * centre
+
+
+## The sculpt drag itself, which is the stroke rather than a button. It writes
+## through `HFDisplacementSystem.paint()`, and the brush it is sculpting is the
+## one the plugin already holds in `_disp_paint_brush_id`.
+func test_a_displacement_sculpt_changes_the_brushes_and_nothing_else():
+	var a := _make_brush(Vector3.ZERO)
+	_make_brush(Vector3(96, 0, 0))
+	var brush_id := _brush_id(a)
+	assert_true(root.create_displacement(brush_id, 0, 3), "the face has to be displaced first")
+	var before: Dictionary = root.capture_state()
+	assert_true(
+		root.displacement_system.paint(brush_id, 0, _face_centre(a, 0), 16.0, 4.0, 0),
+		"the stroke has to land on the face"
+	)
+	assert_eq(
+		_differing_keys(before, root.capture_state()),
+		["brushes"],
+		"a sculpt stroke moves one brush's face and nothing else"
+	)
+
+
+## Why the two states cannot be swapped for each other.
+##
+## A stroke's pre-state is a scope now, and Escape during a sculpt throws the
+## stroke away by restoring it. `restore_state()` would take that scope for a
+## whole level -- one with no entities, no materials and no visgroups in it,
+## because a scope holds two keys and a level state holds twenty-five -- and
+## clear all of them. Nothing in the dictionary says which kind it is, so the
+## stroke carries the ids beside it and the cancel picks the matching restore.
+func test_a_scope_is_not_a_level_state_and_restore_state_cannot_read_one():
+	var a := _make_brush(Vector3.ZERO)
+	root.entity_system.create_entity_from_map({"classname": "info_player_start"})
+	var entities_before: int = (root.capture_state()["entities"] as Array).size()
+	assert_gt(entities_before, 0, "the fixture needs something outside the brushes to lose")
+	root.restore_state(root.capture_brush_scope([_brush_id(a)]))
+	assert_eq(
+		(root.capture_state()["entities"] as Array).size(),
+		0,
+		"a scope read as a level clears what it never recorded, which is why it must not be"
+	)
+
+
+## The boundary of the claim. Sewing walks every displacement in the level to
+## match its boundary vertices to its neighbours', so it changes brushes the
+## caller never named and must keep the whole snapshot it has always taken.
+func test_sewing_is_not_a_single_brush_claim():
+	# Coincident, so the two faces have the same boundary vertices and the sew
+	# has something to match. `sew_all()` pairs faces by sew group and not by
+	# where they are, which is the whole reason it cannot be scoped to a brush.
+	var a := _make_brush(Vector3.ZERO, Vector3(32, 32, 32))
+	var b := _make_brush(Vector3.ZERO, Vector3(32, 32, 32))
+	assert_true(root.create_displacement(_brush_id(a), 0, 3), "first face displaced")
+	assert_true(root.create_displacement(_brush_id(b), 0, 3), "second face displaced")
+	root.set_displacement_sew_group(_brush_id(a), 0, 0)
+	root.set_displacement_sew_group(_brush_id(b), 0, 0)
+	# A boundary vertex of one pulled under the half unit `sew_all()` matches
+	# within, so the pair is near enough to find and far enough apart to move.
+	# Both need an elevation: a sewn distance is divided by it, and a face with
+	# none takes a zero it already had.
+	root.set_displacement_elevation(_brush_id(a), 0, 1.0)
+	root.set_displacement_elevation(_brush_id(b), 0, 1.0)
+	a.faces[0].displacement.set_distance(0, 0, 0.2)
+	var before: Dictionary = root.capture_state()
+	assert_gt(root.sew_all_displacements(), 0, "the fixture has to actually sew something")
+	var after: Dictionary = root.capture_state()
+	var moved: Array = []
+	for i in (before["brushes"] as Array).size():
+		var was: Dictionary = before["brushes"][i]
+		if not was.recursive_equal(after["brushes"][i], COMPARE_DEPTH):
+			moved.append(str(was.get("brush_id", "")))
+	assert_true(
+		moved.has(_brush_id(b)),
+		"sew moved a brush the caller never named, so no call site may scope it to one"
+	)
+
+
+## Painting a material. `plugin_material_commands.paint_brush_with_undo()` already
+## went through the helper and passed no scope, and the open question was the
+## palette: if painting with a material the palette does not hold wrote a slot,
+## the claim would be false. It does not. The paint sets `material_override` on
+## the node, and `materials` is untouched by a material the palette has never
+## seen.
+func test_painting_a_material_changes_the_brushes_and_nothing_else():
+	var a := _make_brush(Vector3.ZERO)
+	_make_brush(Vector3(96, 0, 0))
+	var unseen := StandardMaterial3D.new()
+	assert_eq(
+		_keys_changed_by("apply_material_to_brush_by_id", [_brush_id(a), unseen]),
+		["brushes"],
+		"a material the palette does not hold must not write the palette"
+	)
 
 
 func test_a_scoped_command_leaves_the_brushes_outside_its_scope_alone():

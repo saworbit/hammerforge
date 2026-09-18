@@ -20,7 +20,10 @@ static func on_disp_create(dock: Object) -> void:
 		return
 	var power: int = int(dock._disp_power_spin.value) if dock._disp_power_spin else 3
 	var ok: bool = dock._try_undoable_action(
-		"Create Displacement", "create_displacement", [info["brush_id"], info["face_index"], power]
+		"Create Displacement",
+		"create_displacement",
+		[info["brush_id"], info["face_index"], power],
+		[info["brush_id"]]
 	)
 	if ok:
 		dock.show_toast("Displacement created (power %d)" % power, 0)
@@ -40,7 +43,10 @@ static func on_disp_destroy(dock: Object) -> void:
 		dock.show_toast("Select a displaced face first", 1)
 		return
 	var ok: bool = dock._try_undoable_action(
-		"Destroy Displacement", "destroy_displacement", [info["brush_id"], info["face_index"]]
+		"Destroy Displacement",
+		"destroy_displacement",
+		[info["brush_id"], info["face_index"]],
+		[info["brush_id"]]
 	)
 	if ok:
 		dock.show_toast("Displacement removed", 0)
@@ -70,7 +76,8 @@ static func on_disp_set_power(dock: Object) -> void:
 	var ok: bool = dock._try_undoable_action(
 		"Set Displacement Power",
 		"set_displacement_power",
-		[info["brush_id"], info["face_index"], power]
+		[info["brush_id"], info["face_index"], power],
+		[info["brush_id"]]
 	)
 	if ok:
 		dock.show_toast("Displacement is now power %d, sculpt kept" % power, 0)
@@ -100,7 +107,9 @@ static func on_disp_elevation_changed(dock: Object, value: float) -> void:
 		[brush_id, face_idx, value],
 		false,
 		Callable(dock, "record_history"),
-		"disp_elevation_%s_%d" % [brush_id, face_idx]
+		"disp_elevation_%s_%d" % [brush_id, face_idx],
+		false,
+		[brush_id]
 	)
 
 
@@ -119,7 +128,8 @@ static func on_disp_smooth(dock: Object) -> void:
 	var ok: bool = dock._try_undoable_action(
 		"Smooth Displacement",
 		"smooth_displacement",
-		[info["brush_id"], info["face_index"], strength]
+		[info["brush_id"], info["face_index"], strength],
+		[info["brush_id"]]
 	)
 	if ok:
 		dock.show_toast("Displacement smoothed", 0)
@@ -140,7 +150,10 @@ static func on_disp_noise(dock: Object) -> void:
 		return
 	var scale: float = dock._disp_strength_spin.value if dock._disp_strength_spin else 1.0
 	var ok: bool = dock._try_undoable_action(
-		"Noise Displacement", "noise_displacement", [info["brush_id"], info["face_index"], scale]
+		"Noise Displacement",
+		"noise_displacement",
+		[info["brush_id"], info["face_index"], scale],
+		[info["brush_id"]]
 	)
 	if ok:
 		dock.show_toast("Noise applied to displacement", 0)
@@ -188,7 +201,9 @@ static func on_disp_sew_group_changed(dock: Object, value: float) -> void:
 		[brush_id, face_idx, int(value)],
 		false,
 		Callable(dock, "record_history"),
-		"disp_sew_group_%s_%d" % [brush_id, face_idx]
+		"disp_sew_group_%s_%d" % [brush_id, face_idx],
+		false,
+		[brush_id]
 	)
 
 
