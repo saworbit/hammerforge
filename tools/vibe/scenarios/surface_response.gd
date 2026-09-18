@@ -106,20 +106,48 @@ func _what_a_raycast_gets_back() -> void:
 	for r in rows:
 		distinct[str(r.get("collider", "-"))] = true
 	note("distinct colliders across three differently-textured floors", distinct.keys())
-	if distinct.size() == 1:
+
+	# The lookup a game does, through the real bake rather than through the
+	# helper on its own (#707). One collider is still the right answer; what
+	# changed is that it can now say which of its surfaces was hit.
+	var wanted := ["metal", "wood", "stone"]
+	var answers: Array = []
+	var wrong: Array = []
+	for i in 3:
+		var q := PhysicsRayQueryParameters3D.new()
+		q.from = Vector3(i * 5.0, 2, 0)
+		q.to = Vector3(i * 5.0, -2, 0)
+		var hit: Dictionary = space.intersect_ray(q)
+		var collider: Object = hit.get("collider") if not hit.is_empty() else null
+		var shape_index: int = int(hit.get("shape", -1)) if not hit.is_empty() else -1
+		var answer: String = HFSurface.material_at(collider, shape_index)
+		answers.append({"slab": i, "wanted": wanted[i], "got": answer, "shape": shape_index})
+		if answer != wanted[i]:
+			wrong.append(answers[answers.size() - 1])
+	note("what the surface lookup answers", answers)
+	note("surface names on the body", Array(HFSurface.names_on(rows_collider(rows, space))))
+	if not wrong.is_empty():
 		flag(
-			"the baked collision carries nothing that names the material of the surface hit",
+			"a raycast cannot name the material of the surface it hit",
 			(
-				"Three floors, textured metal, wood and stone. The bake puts all of it in one "
-				+ "StaticBody3D with no metadata, so a raycast comes back with the same "
-				+ "collider, the same shape index range and nothing to distinguish them. Every "
-				+ "footstep sound, impact decal, bullet spark and surface-specific reaction in "
-				+ "a shipped game is decided by exactly this lookup, and per-face materials -- "
-				+ "the one piece of information the mapper spent the evening authoring -- are "
-				+ "the part that does not survive to runtime. The mesh keeps them; the "
-				+ "collision does not."
+				(
+					"Three floors, textured metal, wood and stone. Every footstep sound, "
+					+ "impact decal and bullet spark in a shipped game is decided by this "
+					+ "lookup, and per-face materials are the one thing the mapper spent the "
+					+ "evening authoring. %d of 3 came back wrong: %s"
+				)
+				% [wrong.size(), str(wrong)]
 			)
 		)
+
+
+## The body the rays are hitting, for reporting what it carries.
+func rows_collider(_rows: Array, space: PhysicsDirectSpaceState3D) -> Object:
+	var q := PhysicsRayQueryParameters3D.new()
+	q.from = Vector3(0, 2, 0)
+	q.to = Vector3(0, -2, 0)
+	var hit: Dictionary = space.intersect_ray(q)
+	return hit.get("collider") if not hit.is_empty() else null
 
 
 func _what_the_collision_body_carries() -> void:

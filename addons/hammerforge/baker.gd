@@ -17,6 +17,20 @@ const HFMaterialAtlasScript = preload("hf_material_atlas.gd")
 ## (#623).
 var last_atlas_report: String = ""
 
+## One name per collision shape on the baked body, so a game can tell metal from
+## wood underfoot (#707).
+##
+## The index is the `shape` a hit reports, and it names the material of the
+## surface that was hit. Its presence is also the signal that the shapes are
+## per surface: the per-brush collision modes do not write it, because there a
+## shape is a brush and a brush has six faces with six materials.
+##
+## `face_index` would have been the better answer and is not available. Both
+## `intersect_ray()` and `RayCast3D.get_collision_face_index()` return -1 on a
+## `ConcavePolygonShape3D` under Jolt, which is this project's physics engine,
+## so the index that actually survives a hit is the shape.
+const SURFACE_NAMES_META := "hf_surface_names"
+
 
 func bake_from_csg(
 	csg_node: CSGCombiner3D,
@@ -489,11 +503,70 @@ func build_mesh_from_groups(
 				col.shape = shape
 				static_body.add_child(col)
 	else:
-		var col := CollisionShape3D.new()
-		col.shape = combined_mesh.create_trimesh_shape()
-		static_body.add_child(col)
+		_add_per_surface_trimesh(static_body, combined_mesh)
 
 	return result
+
+
+## One trimesh collision shape per baked surface, rather than one for the level.
+##
+## This is what makes a footstep able to name what it is standing on (#707). The
+## documented route was `face_index` on the hit, which resolves a concave shape
+## down to a triangle. It is -1 here, from both `intersect_ray()` and
+## `RayCast3D.get_collision_face_index()`, because this project runs Jolt and
+## Jolt does not populate it. `shape` is populated, so the index that survives is
+## the one that says which shape was hit, and giving each surface its own shape
+## makes that index name a material exactly.
+##
+## The cost is a shape per material rather than one for the level, which is a
+## dozen on a real map. Collision behaviour is unchanged: the same triangles, in
+## the same places, partitioned rather than merged.
+##
+## A surface that produces no triangles is still given its shape, empty, so that
+## a shape index keeps naming the surface with the same number.
+static func _add_per_surface_trimesh(body: StaticBody3D, mesh: ArrayMesh) -> void:
+	record_surface_identity(body, mesh)
+	if mesh.get_surface_count() <= 1:
+		var single := CollisionShape3D.new()
+		single.shape = mesh.create_trimesh_shape()
+		body.add_child(single)
+		return
+	for i in mesh.get_surface_count():
+		var surface := ArrayMesh.new()
+		surface.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, mesh.surface_get_arrays(i))
+		var col := CollisionShape3D.new()
+		col.name = "SurfaceCollision_%d" % i
+		col.shape = surface.create_trimesh_shape()
+		body.add_child(col)
+
+
+## Name each collision shape after the surface it was cut from (#707).
+##
+## Written only where a shape is a surface, which is why it is called from
+## `_add_per_surface_trimesh()` rather than from the caller: the per-brush
+## collision modes index shapes by brush, and a brush has six faces. A game that
+## finds no names knows the body cannot answer, rather than being told the wrong
+## material.
+static func record_surface_identity(body: StaticBody3D, mesh: ArrayMesh) -> void:
+	if body == null or mesh == null:
+		return
+	var names := PackedStringArray()
+	for i in mesh.get_surface_count():
+		names.append(surface_label(mesh.surface_get_material(i)))
+	body.set_meta(SURFACE_NAMES_META, names)
+
+
+## What to call a surface, from the material it draws with.
+##
+## The same rule `MaterialManager.get_material_names()` uses, because a mapper
+## reading a footstep table should see the name the Materials tab showed them.
+static func surface_label(material: Material) -> String:
+	if material == null:
+		return "<none>"
+	if material.resource_name != "":
+		return material.resource_name
+	var file := material.resource_path.get_file()
+	return file if file != "" else "Material"
 
 
 ## Build convex collision shapes from per-brush vertex clusters.
