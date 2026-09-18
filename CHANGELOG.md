@@ -5,6 +5,25 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **A reference map ships with the plugin** (#710). The five examples in
+  `example_levels.json` each demonstrate one feature, and that file's schema
+  carries brush shape, position, size and operation plus point entities. It
+  cannot express a material, a UV, a tie, a wire, a visgroup, a navmesh or an
+  occluder, so none of the examples was a level with those in it at once.
+  `addons/hammerforge/data/reference_map.hflevel` is: two hollowed halls with the
+  corridor's mouth cut through the inner wall of each, 119 brushes, 15 materials,
+  216 faces with UVs anchored to world space so the texture runs through a floor
+  to wall join, a visgroup per wing, three tied brush entities wired button to
+  relay to door, a spawn the validator approves, and the bake options a shipped
+  level uses. It is the first `.hflevel` in the repo.
+  Rebuild it with `tools/build_reference_map.gd`, which is committed so the map
+  is a reviewable script rather than an opaque blob.
+  The new `reference-map` vibe scenario loads the committed file and takes it
+  through validate, invariants, bake and export. That the file is committed is
+  the point: `round-trip` and `persistence` both read a level the same build just
+  wrote, so neither would notice a format change that stops last release's file
+  from loading. This one would. It found the occluder bug below on its first run.
+
 - **A cut's interior takes the cutter's texturing** (#746). Cutting a window left
   the reveal untextured and there was no way to fix it: those four faces do not
   exist until the boolean runs, so no panel in the editor can select one. The
@@ -88,6 +107,18 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   collision, its scripts and every child it had.
 
 ### Fixed
+- **A level saved with occluders on now bakes with them on when it is reopened**
+  (#710). `bake_generate_occluders` and `bake_occluder_min_area` were exported
+  level properties that the `.hflevel` never wrote and never read, so the setting
+  reverted to off on load and the next bake produced no occluders. Nothing
+  reported it, and occluders only change frame time, so the loss stayed invisible
+  until somebody profiled. Both settings now travel with the level. A file
+  written before this has neither key and keeps whatever the level already had,
+  rather than being switched off by an absent key. `bake_occluder_min_area` also
+  gained the bounded setter its siblings got in #373 - it escaped that sweep by
+  not being in the file at the time, and a minimum area of zero or less would
+  make an occluder of every face group in the level.
+
 - **A corrupt palette no longer raises a script error on the way back in**
   (#752). `restore_state()` has a guard for a saved palette whose slots hold
   something that is not a Material: `set_materials()` keeps such a slot empty and

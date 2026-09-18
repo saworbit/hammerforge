@@ -122,6 +122,8 @@ const MIN_NAVMESH_CELL := 0.01
 const MAX_NAVMESH_CELL := 16.0
 const MIN_NAVMESH_AGENT := 0.01
 const MAX_NAVMESH_AGENT := 256.0
+const MIN_OCCLUDER_AREA := 0.01
+const MAX_OCCLUDER_AREA := 65536.0
 const MIN_CONNECTOR_STAIR_HEIGHT := 0.01
 const MAX_CONNECTOR_STAIR_HEIGHT := 256.0
 const MIN_CONNECTOR_WIDTH := 1
@@ -291,7 +293,17 @@ var _bake_navmesh_agent_max_slope: float = 45.0
 @export var bake_generate_occluders: bool = false
 ## Minimum face-group area (world units²) to generate an occluder.  Smaller
 ## surfaces rarely block enough pixels to justify the culling overhead.
-@export var bake_occluder_min_area: float = 4.0
+var _bake_occluder_min_area: float = 4.0
+## Bounded like its siblings, because the `.hflevel` now carries this and a file
+## writing a number straight onto the property is what #373 was. Zero or less
+## would make an occluder of every face group in the level.
+@export var bake_occluder_min_area: float = 4.0:
+	set(value):
+		_bake_occluder_min_area = _bounded(
+			value, MIN_OCCLUDER_AREA, MAX_OCCLUDER_AREA, _bake_occluder_min_area
+		)
+	get:
+		return _bake_occluder_min_area
 var _bake_connector_mode: int = 0
 ## HFAutoConnector.ConnectorMode (RAMP=0, STAIRS=1, AUTO=2).
 @export var bake_connector_mode: int = 0:

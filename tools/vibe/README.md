@@ -193,6 +193,7 @@ it from here.
 | `gltf-export` | what `export_baked_gltf` writes for a real level, read back off disk |
 | `streamed-world-bake` | whether a bake of a streamed world covers the parts that are not resident |
 | `walkability` | whether a body the size of the playtest player can walk the level that was baked |
+| `reference-map` | the committed reference map, loaded from disk, validated, baked and exported |
 
 ## Adding a scenario
 
