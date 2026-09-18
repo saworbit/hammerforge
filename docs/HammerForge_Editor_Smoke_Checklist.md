@@ -526,6 +526,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Click **Check Bake Issues** on a clean level; confirm no issues reported.
 - Create a brush with near-zero thickness (e.g. 0.01 on Y axis). Click **Check Bake Issues**; confirm a severity-2 "degenerate brush" issue appears.
 - Create a subtract brush floating in empty space (not intersecting any additive). Click **Check Bake Issues**; confirm a severity-1 "floating subtract" warning.
+- Save a small level as its own scene, instance it twice into a parent scene, and run **Validate** on each copy. Confirm neither reports duplicate brush ids: the two instances carry the same ids on purpose and each resolves its own. Select a brush in one copy and nudge it; confirm the matching brush in the other copy does not move.
 - Import a legacy .map file with known vertex drift (or create two adjacent brushes with edges offset by ~0.005 units). Click **Check Bake Issues**; confirm a severity-1 "micro-gap" warning appears for the near-coincident cross-brush vertices.
 - Enter vertex mode on a brush and drag a vertex slightly off-plane (quad with 4th vertex drifted ~0.05 on the normal axis). Click **Check Bake Issues**; confirm a severity-1 "non-planar" warning appears for that face.
 - Enable **Generate LODs** and bake. Confirm the bake completes without a script error and the baked meshes carry LOD levels.

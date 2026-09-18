@@ -5,6 +5,27 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **Validate reports two brushes in one level sharing an id** (#696). Saving a
+  piece of level as its own scene and instancing it twice puts the same set of
+  brush ids in one scene tree, because a saved scene freezes the ids it had. The
+  report asked whether that should be fixed by re-minting on entry or by scoping
+  the lookups. Measured first: the lookups are already scoped. Each instance has
+  its own brush cache and its own containers, each copy resolves its own
+  children, adding the second changes nothing in the first, and both bake. So the
+  answer is the rule rather than a patch, and it is written down now: **a brush id
+  is unique within one level, not within a scene**. Re-minting was the other
+  option and is deliberately not taken, because it makes ids unstable across loads
+  and the prefab system tracks by stable UID for that reason; a piece that came
+  back with different ids each time would stop being the same piece. What that
+  leaves genuinely broken is the case nothing was looking at: two brushes in *one*
+  level answering to the same id. The cache is keyed by it, so the second to
+  register overwrites the first and one of the two cannot be addressed at all, by
+  a visgroup, a group, a hollow or array record, `nudge_brushes_by_id`,
+  `tie_brushes_to_entity` or the Console. A hand-edited `.hflevel`, a `.tscn` where
+  a `DraftBrush` was copied with Godot's own node duplication, or a record naming
+  the same id twice all produce it. Validate names the id. No auto-fix: re-minting
+  one of a pair silently re-points whichever records meant it.
+
 - **A vibe scenario that breaks stops reporting clean** (#739). The sweep grades
   each scenario on its exit code, and a scenario that hits a GDScript error still
   reaches `quit(0)`. So a broken one was reported clean, which is worse than a
