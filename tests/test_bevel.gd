@@ -248,6 +248,25 @@ func test_bevel_edge_needs_two_indices():
 	_assert_captured_warning("HFBevelSystem: edge needs 2 vertex indices")
 
 
+## Two indices, both the same one. In range and two of them, so the checks
+## either side of this let it through, and then every face meeting that corner
+## counted as sharing the "edge": the adjacency test found three and agreed. The
+## chamfer was built along `(vb - va).normalized()`, the zero vector, and the
+## call returned true having added four degenerate faces.
+func test_bevel_edge_refuses_one_vertex_named_twice():
+	var brush = _make_box_brush()
+	var faces_before: int = (brush as DraftBrush).faces.size()
+	_capture_warning("HFBevelSystem: an edge needs two different vertices")
+	var ok: bool = sys.bevel_edge("box_brush", [0, 0])
+	assert_false(ok, "a zero length edge has no chamfer")
+	_assert_captured_warning("HFBevelSystem: an edge needs two different vertices")
+	assert_eq(
+		(brush as DraftBrush).faces.size(),
+		faces_before,
+		"and a refused bevel must leave the brush alone"
+	)
+
+
 func test_bevel_edge_segments_clamped():
 	var brush = _make_box_brush()
 	var face_count_before: int = brush.faces.size()

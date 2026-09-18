@@ -68,14 +68,10 @@ static func handle_displacement(
 ## The ids come back beside the state rather than being read off it later,
 ## because which kind of dictionary it is decides which restore gets registered,
 ## and a whole level handed to `restore_brush_scope()` would put nothing back.
+## That pairing is now `HFUndoHelper.capture_scope_or_state()`, shared with the
+## dock, so the two cannot answer it differently.
 static func _capture_stroke_state(root: Node, brush_id: String) -> Dictionary:
-	if root.has_method("capture_brush_scope"):
-		var scope: Dictionary = root.capture_brush_scope([brush_id])
-		if not scope.is_empty():
-			return {"state": scope, "scope_ids": [brush_id]}
-	if root.has_method("capture_state"):
-		return {"state": root.capture_state(), "scope_ids": []}
-	return {"state": {}, "scope_ids": []}
+	return HFUndoHelper.capture_scope_or_state(root, [brush_id])
 
 
 ## Forget the stroke in progress.

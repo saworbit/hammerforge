@@ -1893,14 +1893,9 @@ func _try_undoable_action(
 ) -> bool:
 	if not level_root or not level_root.has_method(method_name):
 		return false
-	var pre_state: Dictionary = {}
-	var scoped: Array = []
-	if not scope_brush_ids.is_empty() and level_root.has_method("capture_brush_scope"):
-		pre_state = level_root.capture_brush_scope(scope_brush_ids)
-		if not pre_state.is_empty():
-			scoped = scope_brush_ids
-	if pre_state.is_empty() and level_root.has_method("capture_state"):
-		pre_state = level_root.capture_state()
+	var before: Dictionary = HFUndoHelper.capture_scope_or_state(level_root, scope_brush_ids)
+	var pre_state: Dictionary = before["state"]
+	var scoped: Array = before["scope_ids"]
 	var ok: bool = level_root.callv(method_name, args)
 	if ok and undo_redo and not pre_state.is_empty():
 		HFUndoHelper.commit_completed(
