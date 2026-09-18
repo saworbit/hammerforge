@@ -115,6 +115,47 @@ func test_a_material_edited_in_place_still_matches():
 	assert_true(root.material_manager.palette_matches(live))
 
 
+func test_a_slot_that_is_not_a_material_does_not_match():
+	# The array a restore hands in is not always one a save produced. `.hflevel`
+	# is JSON, an undo snapshot is built from the same shape, and a file written
+	# by an older version or edited by hand can put anything in a slot. The
+	# question is still "is this the same palette", and the answer for a slot
+	# holding an int is no (#752).
+	var root := _painted_level()
+	# Untyped, the way a state that came from a file is. `materials` is an
+	# `Array[Material]`, so a junk slot cannot be put into a copy of it.
+	var junk: Array = []
+	junk.assign(root.material_manager.materials)
+	junk[0] = 1
+	assert_false(root.material_manager.palette_matches(junk))
+
+
+func test_junk_in_a_later_slot_does_not_match():
+	# The first slot compares cleanly and the loop carries on into one that does
+	# not, which is the shape that reached `set_materials()`'s guard.
+	var root := _painted_level()
+	var junk: Array = []
+	junk.assign(root.material_manager.materials)
+	junk[1] = "two"
+	assert_false(root.material_manager.palette_matches(junk))
+
+
+func test_an_empty_slot_and_a_filled_one_do_not_match():
+	# A library load leaves a slot null when its path did not resolve, so this is
+	# a state a real palette reaches rather than a corrupt one.
+	var root := _painted_level()
+	var emptied: Array = []
+	emptied.assign(root.material_manager.materials)
+	emptied[0] = null
+	assert_false(root.material_manager.palette_matches(emptied))
+
+
+func test_two_empty_slots_match():
+	var root := _level()
+	root.material_manager.materials.append(null)
+	assert_true(root.material_manager.palette_matches([null]))
+
+
 # ===========================================================================
 # What the restore does with it
 # ===========================================================================
@@ -172,3 +213,17 @@ func test_a_palette_that_grew_is_put_back_to_the_size_it_was():
 	assert_eq(
 		root.material_manager.materials.size(), 2, "the slot added after the snapshot is gone"
 	)
+
+
+func test_a_restore_whose_palette_holds_junk_still_restores_the_level():
+	# End to end, because the fast path sits in front of the guard that was
+	# written for this. `set_materials()` keeps a junk slot empty and says so, and
+	# the brushes named in the state are built either way (#752).
+	var root := _painted_level()
+	var state: Dictionary = root.capture_state()
+	state["materials"] = [1, "two"]
+	root.restore_state(state)
+	assert_eq(_brushes(root).size(), 3, "the three brushes in the state are there")
+	assert_eq(root.material_manager.materials.size(), 2, "both slots are still slots")
+	assert_null(root.material_manager.materials[0], "the junk slot was kept empty")
+	assert_null(root.material_manager.materials[1], "and so was the other one")
