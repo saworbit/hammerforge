@@ -882,6 +882,73 @@ func _a_bevellable_edge(_subject_id: String) -> Array:
 
 
 # ===========================================================================
+# Texturing one face
+# ===========================================================================
+
+
+## The two commands that texture a single face (#761). The UV spinboxes in the
+## dock, which are dragged, and a material dropped from the browser onto a face
+## in the viewport.
+##
+## Both were the last call sites still taking a whole-level snapshot that could
+## name the brush they change. Both write fields on one `FaceData` and rebuild
+## that brush's preview.
+##
+## The palette is the question worth asking here rather than assuming, the same
+## one #762 asked of a brush paint. A face material is a slot index rather than a
+## material, so a slot the palette does not hold could plausibly have grown one.
+## It does not: `is_usable_material_slot()` reads the palette to refuse an index
+## it has no slot for, and nothing on this path writes it.
+func test_the_face_texturing_commands_change_the_brushes_and_nothing_else():
+	var a := _make_brush(Vector3.ZERO)
+	_make_brush(Vector3(96, 0, 0))
+	var brush_id := _brush_id(a)
+	root.set_materials([StandardMaterial3D.new(), StandardMaterial3D.new()])
+	assert_eq(
+		_keys_changed_by(
+			"set_face_uv_params", [brush_id, 0, Vector2(2.0, 2.0), Vector2(8.0, 0.0), 0.5]
+		),
+		["brushes"],
+		"a UV spinbox drag claims a brush scope, so brushes is the only key it may change"
+	)
+	assert_eq(
+		_keys_changed_by("assign_material_to_faces_by_id", [brush_id, [1], 1]),
+		["brushes"],
+		"a face material claims a brush scope, so brushes is the only key it may change"
+	)
+
+
+## The slot the palette has no room for. `assign_material_to_faces_by_id()`
+## refuses it rather than growing the palette to fit, which is what keeps the
+## claim above true for an index the browser could not have offered.
+func test_a_face_material_slot_the_palette_does_not_hold_changes_nothing():
+	var a := _make_brush(Vector3.ZERO)
+	root.set_materials([StandardMaterial3D.new()])
+	assert_eq(
+		_keys_changed_by("assign_material_to_faces_by_id", [_brush_id(a), [0], 7]),
+		[],
+		"an index past the palette is refused, not added to it"
+	)
+
+
+func test_set_face_uv_params_scoped_undo_matches_the_level_before_it():
+	var a := _make_brush(Vector3.ZERO)
+	_make_brush(Vector3(96, 0, 0))
+	var ids := [_brush_id(a)]
+	_assert_scoped_undo_round_trips(
+		ids, "set_face_uv_params", [ids[0], 0, Vector2(2.0, 2.0), Vector2(8.0, 0.0), 0.5]
+	)
+
+
+func test_a_face_material_scoped_undo_matches_the_level_before_it():
+	var a := _make_brush(Vector3.ZERO)
+	_make_brush(Vector3(96, 0, 0))
+	root.set_materials([StandardMaterial3D.new(), StandardMaterial3D.new()])
+	var ids := [_brush_id(a)]
+	_assert_scoped_undo_round_trips(ids, "assign_material_to_faces_by_id", [ids[0], [1], 1])
+
+
+# ===========================================================================
 # Taking the scope and the level state as one decision
 # ===========================================================================
 

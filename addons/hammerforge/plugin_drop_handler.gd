@@ -174,7 +174,19 @@ static func handle_material_drop(plugin: Object, position: Vector2, data: Varian
 	var face_idx: int = int(hit.get("face_idx", -1))
 	if brush == null or face_idx < 0:
 		return
-	var brush_key: String = brush.brush_id if brush.brush_id != "" else str(brush.get_instance_id())
+	# The same mint the dock and the gizmo plugin ask for when a brush's id is
+	# still empty. This site used to fall back to the node's instance id instead,
+	# and nothing resolves one: assign_material_to_faces_by_id() looks brushes up
+	# by id only, so the drop found no brush and returned. An instance id would
+	# not have survived the undo record either, because a rebuilt brush gets a
+	# new one and the redo would aim at a freed node.
+	# An empty key would match the first brush that has no id, so it is refused.
+	var brush_key: String = str(root.get_brush_info_from_node(brush).get("brush_id", ""))
+	if brush_key == "":
+		return
+	# One brush, one face. assign_material_to_faces_by_id() writes face.material_idx
+	# and rebuilds that brush's preview; the palette is read to check the slot is
+	# usable and never written (#761).
 	HFUndoHelper.commit(
 		plugin._get_undo_redo(),
 		root,
@@ -182,7 +194,10 @@ static func handle_material_drop(plugin: Object, position: Vector2, data: Varian
 		"assign_material_to_faces_by_id",
 		[brush_key, [face_idx], mat_idx],
 		false,
-		Callable(plugin, "_record_history")
+		Callable(plugin, "_record_history"),
+		"",
+		false,
+		[brush_key]
 	)
 	if plugin.dock:
 		plugin.dock._selected_material_index = mat_idx
