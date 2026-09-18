@@ -25,9 +25,10 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   A mirrored cutter is the exception and stays on its primitive. A negative
   determinant inverts face winding, and the boolean reads an inverted mesh
   operand differently from the primitive it regenerates from `size`: on one wall
-  and one cutter, 25.5000 against 25.6792. Both are wrong, because a mirrored
-  brush bakes wrong whether or not it is textured, but painting a brush must not
-  move where it cuts. Filed separately as #749.
+  and one cutter, 25.5000 against 25.6792. Painting a brush must not move where it
+  cuts, so a mirrored one takes the exact path. #749, below, then stopped a brush
+  reaching a bake mirrored at all, which leaves that guard as a backstop rather
+  than a path anything travels.
 - **Where friction and bounce come from, written down** (#744). A baked surface
   has Godot's default friction and bounce, nothing in the plugin sets
   `physics_material_override`, and nothing said so - so the natural assumption
@@ -87,6 +88,34 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   collision, its scripts and every child it had.
 
 ### Fixed
+- **A mirrored brush no longer bakes inside out, and a mirrored cutter cuts**
+  (#749). Nothing in the editor calls this mirroring. It is `scale` with a
+  negative component, which Godot's own gizmo will do to a brush if a handle is
+  dragged past zero, and which the Inspector will take as a typed number. The
+  basis then has a negative determinant, which inverts the winding of every face
+  built through it: measured on one 2 x 2 x 2 brush, all twelve triangles came out
+  the other way round. The viewport draws the brush the right shape either way, so
+  the bake was the first place it showed, and on a cutter it showed as a window
+  that did not open - the wall and cutter that should have left 21.75 left 26.25,
+  which is the wall plus the cutter. It was not cutting less. It was being added.
+  HammerForge's own Flip has never had this problem, because it folds its
+  reflection back through a local axis so the basis stays right-handed. That same
+  fold is now applied to a mirror that arrived from anywhere else, at the two
+  doors a brush transform can come through: `create_brush_from_info()`, which is
+  undo restore, duplication, prefab instancing, `.map` import and `.hflevel` load,
+  so levels already on disk are repaired as they load; and the brush change
+  tracker's reconcile, which is where an edit Godot owns is settled, so a gizmo
+  drag or an Inspector edit is repaired on release. The fold is bookkeeping, not a
+  move: `basis * H` paired with local vertices reflected by `H` leaves every world
+  vertex exactly where it was, and each face's material, UV offset, scale and
+  rotation travel to the face that takes its place, so the brush looks identical
+  from the world. Measured through all three local axes in turn, and all three
+  agree. A mapper who typed a negative into one scale field gets that field back
+  positive and no turn behind it; a gizmo drag cannot say which axis it was, so
+  that one arrives with a half turn it did not have, in the right place, the right
+  shape and the right way out. A brush carrying a sculpted displacement is refused
+  with a warning rather than repaired, the same refusal Flip makes, because the
+  displacement grid is indexed against its face's corner order.
 - **One subtract brush no longer costs the whole level its per-face materials**
   (#693). Cutting a window into a wall cost every other brush in the map its
   texturing. The face-material path has no boolean stage, so any cutter anywhere
