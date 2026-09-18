@@ -321,6 +321,7 @@ func validate(auto_fix: bool = false) -> Dictionary:
 
 	_check_convexity(brush_nodes, issues)
 	_check_coincident_brushes(brush_nodes, issues)
+	_check_duplicate_brush_ids(brush_nodes, issues)
 	_check_spawn(issues)
 
 	return {"issues": issues, "fixed": fixed}
@@ -374,6 +375,49 @@ func _check_coincident_brushes(brush_nodes: Array, issues: Array) -> void:
 				"%d brushes occupy the same space: %s"
 				% [names.size(), ", ".join(PackedStringArray(names))]
 			)
+		)
+
+
+## Two brushes in one level answering to the same id.
+##
+## `brush_id` is the address for everything that refers to a brush without
+## holding a reference: visgroup and group membership, the hollow and array
+## records, `nudge_brushes_by_id`, `tie_brushes_to_entity`, the Console. The
+## brush cache is keyed by it, so the second brush to register overwrites the
+## first and one of the two becomes unreachable -- every later lookup answers
+## with whichever won, and the other cannot be addressed at all (#696).
+##
+## Within one level, because that is the scope an id is unique in. Two instances
+## of the same saved level piece carry the same ids on purpose and each root
+## resolves its own children, so walking a whole scene here would report every
+## brush in both copies for an arrangement that works.
+##
+## The ways in are ordinary: a hand-edited `.hflevel`, a `.tscn` where a
+## `DraftBrush` was copied with Godot's own node duplication rather than Ctrl+D,
+## or a state record naming the same id twice. `restore_state()` already refuses
+## the last of those; nothing said anything about the other two.
+##
+## No `auto_fix`. Re-minting one of the pair silently re-points whichever
+## registry entries happened to mean it, and which one the mapper wants is not
+## knowable from here.
+func _check_duplicate_brush_ids(brush_nodes: Array, issues: Array) -> void:
+	var seen: Dictionary = {}
+	var duplicated: Array = []
+	for node in brush_nodes:
+		if not (node is DraftBrush):
+			continue
+		# An absent id is the absence of a value, not a value two brushes share.
+		var brush_id := str((node as DraftBrush).brush_id).strip_edges()
+		if brush_id == "":
+			continue
+		if seen.has(brush_id):
+			if not (brush_id in duplicated):
+				duplicated.append(brush_id)
+			continue
+		seen[brush_id] = true
+	for brush_id in duplicated:
+		issues.append(
+			"Brush id '%s' is answered to by more than one brush in this level" % str(brush_id)
 		)
 
 

@@ -106,6 +106,7 @@ func _save_a_piece_and_instance_it_twice() -> void:
 	for _i in 3:
 		await frame()
 
+	var roots: Array = []
 	for i in copies.size():
 		var inst: Node = copies[i]
 		var lr: Node = null
@@ -116,6 +117,7 @@ func _save_a_piece_and_instance_it_twice() -> void:
 		if lr == null:
 			flag("an instanced level piece has no LevelRoot in it", "copy %d" % i)
 			continue
+		roots.append(lr)
 		note(
 			"copy %d" % i,
 			"brushes=%s ids=%s" % [lr.brush_system.get_live_brush_count(), _brush_ids(lr)]
@@ -125,20 +127,67 @@ func _save_a_piece_and_instance_it_twice() -> void:
 	var ids1: Array = _brush_ids(copies[1])
 	var shared: Array = ids0.filter(func(i: String) -> bool: return ids1.has(i))
 	note("brush ids the two copies share", shared)
-	if not shared.is_empty():
+	note(
+		"what that means",
+		(
+			"an id is unique within one level, not within a scene (#696). A saved piece "
+			+ "freezes the ids it had, so two instances carry the same set on purpose."
+		)
+	)
+
+	# The rule only holds up if a lookup never leaves its own root. That is the
+	# thing worth checking, rather than the sharing itself.
+	var crossed: Array = []
+	if roots.size() >= 2:
+		for brush_id in shared:
+			# The LevelRoot inside each copy, not the instantiated scene root: the
+			# lookup is the root's, and asking the Node3D above it is a nonexistent
+			# function rather than a different answer.
+			var from_first = roots[0].find_brush_by_id(brush_id)
+			var from_second = roots[1].find_brush_by_id(brush_id)
+			if from_first == null or from_second == null or from_first == from_second:
+				crossed.append(brush_id)
+	note("shared ids each copy resolves to its own brush", shared.size() - crossed.size())
+	if not crossed.is_empty():
 		flag(
-			"two instances of the same level piece carry the same brush ids",
+			"a lookup by id does not stay inside its own level",
 			(
 				(
-					"brush_id is the address every visgroup, group, hollow, array and I/O wire is "
-					+ "written against, and the plugin's own id minting is per-session. Instancing "
-					+ "a saved piece twice -- the way any project reuses a corridor -- puts %d "
-					+ "duplicate ids in one scene tree, so any lookup by id in the parent scene is "
-					+ "ambiguous. The ids are %s."
+					"Two instances of a saved piece carry the same ids, which is supported "
+					+ "because each root resolves its own children. %d of %d shared ids did "
+					+ "not: one copy answered with the other's brush, or with nothing. Every "
+					+ "visgroup, group, hollow, array and I/O wire is written against an id, "
+					+ "so a lookup that crosses roots edits the wrong copy. The ids are %s."
 				)
-				% [shared.size(), shared.slice(0, 4)]
+				% [crossed.size(), shared.size(), crossed.slice(0, 4)]
 			)
 		)
+
+	# And the case that is a real corruption rather than an arrangement: one
+	# level holding two brushes with the same id. The cache is keyed by id, so
+	# one of the two becomes unreachable.
+	for i in roots.size():
+		var own: Array = _brush_ids(roots[i])
+		var seen: Dictionary = {}
+		var twice: Array = []
+		for brush_id in own:
+			if seen.has(brush_id) and not (brush_id in twice):
+				twice.append(brush_id)
+			seen[brush_id] = true
+		note("copy %d, ids it holds more than once" % i, twice)
+		if not twice.is_empty():
+			flag(
+				"one level holds two brushes with the same id",
+				(
+					(
+						"The brush cache is keyed by id, so the second to register overwrites "
+						+ "the first and one of the two cannot be addressed at all. Validate "
+						+ "reports this since #696; seeing it here means it was made rather "
+						+ "than loaded. The ids are %s."
+					)
+					% str(twice)
+				)
+			)
 	parent.queue_free()
 	await frame()
 

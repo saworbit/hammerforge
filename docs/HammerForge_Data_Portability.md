@@ -54,6 +54,16 @@ Whichever setting is on, the scene also carries the records that describe the br
 
 **Baked geometry only** needs somewhere to put the brushes. A level with no `.hflevel` path keeps them in the scene regardless, because dropping a level's only copy of its brushes is not a trade worth making silently. If the `.hflevel` is missing when such a scene opens, HammerForge says so rather than opening an empty level.
 
+### Building a Map Out of Level Pieces
+
+Saving a piece of level as its own scene and instancing it two or three times into a parent is supported, and is how a corridor, a room module or a prop cluster gets reused.
+
+**A brush id is unique within one level, not within a scene.** A saved scene freezes the ids its brushes had, so two instances of the same piece carry the same set of ids, on purpose. That is not a collision, because every lookup by id resolves inside its own `LevelRoot`: each instance has its own brush cache and its own containers, and one copy cannot answer with the other's brush. Adding a second copy does not renumber, move or unregister anything in the first, and each copy bakes its own geometry.
+
+The alternative would be re-minting every id when an instance enters the tree. That was deliberately not done: it makes ids unstable across loads, and the prefab system tracks by stable UID rather than by name for exactly that reason. A piece that came back with different ids every time it was opened would stop being the same piece.
+
+What *is* a defect is one level holding two brushes with the same id. The brush cache is keyed by it, so the second to register overwrites the first and one of the two cannot be addressed at all: not by a visgroup, a group, a hollow or array record, `nudge_brushes_by_id`, `tie_brushes_to_entity`, or the Console. The ways in are a hand-edited `.hflevel`, a `.tscn` where a `DraftBrush` was copied with Godot's own node duplication instead of Ctrl+D, or a state record naming the same id twice. **Validate** reports it, naming the id. There is no auto-fix: re-minting one of the pair silently re-points whichever records happened to mean it, and which one you wanted is not knowable.
+
 ### Entity I/O Serialization
 - Entity I/O connections are stored per-entity in the `io_outputs` key of each entity record.
 - Each connection is a Dictionary: `{output_name, target_name, input_name, parameter, delay, fire_once}`.
