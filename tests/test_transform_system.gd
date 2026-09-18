@@ -887,3 +887,134 @@ func test_four_quarter_turns_leave_the_faces_as_they_were():
 				)
 			else:
 				assert_eq(after[key], was[key], "face %d drifted in %s" % [i, key])
+
+
+# ===========================================================================
+# Handedness (#749)
+# ===========================================================================
+
+
+## A mirrored brush the way a mapper makes one: Godot's own scale field, not Flip.
+func _mirror_with_scale(draft: DraftBrush, scale: Vector3) -> void:
+	draft.scale = scale
+
+
+func _world_face_appearance(draft: DraftBrush) -> Dictionary:
+	var out := {}
+	var basis := draft.global_transform.basis
+	for face in draft.get_faces():
+		if face == null:
+			continue
+		var world_normal: Vector3 = (basis * face.normal).normalized()
+		out[str(world_normal.snapped(Vector3.ONE * 0.001))] = [
+			face.material_idx, face.uv_offset, face.uv_scale, face.uv_rotation
+		]
+	return out
+
+
+func test_a_mirrored_brush_has_the_mirror_folded_off_its_basis():
+	# A negative determinant inverts the winding of every face built through the
+	# basis. The brush looks right in the viewport and bakes inside out, and as a
+	# cutter it adds its volume instead of removing it.
+	var b := _make_brush(Vector3(48, 0, 0), Vector3(32, 16, 8), "h1")
+	_mirror_with_scale(b, Vector3(-1, 1, 1))
+	assert_lt(b.global_transform.basis.determinant(), 0.0, "mirrored to start with")
+
+	assert_true(sys.normalize_handedness(b), "reports that it took a mirror off")
+
+	assert_gt(b.global_transform.basis.determinant(), 0.0, "and the basis is right handed")
+
+
+func test_folding_a_mirror_off_leaves_every_world_vertex_where_it_was():
+	# The fold is bookkeeping, not a move. `basis * H` paired with local vertices
+	# reflected by `H` is the same world geometry, because `H * H` is the identity.
+	# A fix that shifted the brush would be worse than the bug.
+	var b := _make_brush(Vector3(48, 0, 0), Vector3(32, 16, 8), "h1")
+	_mirror_with_scale(b, Vector3(-1, 1, 1))
+	var before := _world_verts(b)
+	before.sort_custom(func(x, y): return str(x) < str(y))
+
+	sys.normalize_handedness(b)
+
+	var after := _world_verts(b)
+	after.sort_custom(func(x, y): return str(x) < str(y))
+	assert_eq(after.size(), before.size(), "the same number of vertices")
+	for i in before.size():
+		assert_almost_eq(
+			(after[i] as Vector3).distance_to(before[i]), 0.0, EPS, "vertex %d moved" % i
+		)
+
+
+func test_folding_a_mirror_off_leaves_each_face_looking_the_same_from_the_world():
+	# The mirror sends each face to where another face used to be, so the data has
+	# to travel with the geometry or a material on the right would end up on the
+	# left. Asked per world direction, which is the only place the answer matters.
+	var b := _make_brush(Vector3(48, 0, 0), Vector3(32, 16, 8), "h1")
+	for i in b.get_faces().size():
+		b.get_faces()[i].material_idx = i
+		b.get_faces()[i].uv_offset = Vector2(i * 0.25, i * 0.5)
+		b.get_faces()[i].uv_scale = Vector2(1.0 + i, 2.0)
+		b.get_faces()[i].uv_rotation = float(i) * 15.0
+	_mirror_with_scale(b, Vector3(-1, 1, 1))
+	var before := _world_face_appearance(b)
+
+	sys.normalize_handedness(b)
+
+	assert_eq(_world_face_appearance(b), before, "every face kept its look, in the same place")
+
+
+func test_a_right_handed_brush_is_left_alone():
+	var b := _make_brush(Vector3(48, 0, 0), Vector3(32, 16, 8), "h1")
+	b.scale = Vector3(2, 1, 0.5)
+	var before: Transform3D = b.global_transform
+
+	assert_false(sys.normalize_handedness(b), "nothing to take off")
+
+	assert_true(b.global_transform.is_equal_approx(before), "and nothing was touched")
+
+
+func test_folding_a_mirror_off_a_typed_negative_leaves_no_turn_behind():
+	# Node3D keeps the signs the Inspector was given, so one negative component
+	# names the axis the mapper used. Folding through that axis gives the field
+	# back positive and no rotation, which is what they expect to see.
+	var b := _make_brush(Vector3(48, 0, 0), Vector3(32, 16, 8), "h1")
+	_mirror_with_scale(b, Vector3(1, -1, 1))
+
+	assert_eq(HFTransformSystemScript.mirrored_local_axis(b), 1, "the axis they typed into")
+
+	sys.normalize_handedness(b)
+
+	assert_almost_eq(
+		b.global_transform.basis.get_euler().length(), 0.0, EPS, "and no turn was introduced"
+	)
+
+
+func test_normalize_handedness_refuses_a_displaced_brush():
+	# The same refusal Flip makes: a displacement grid is indexed against its
+	# face's corner order and mirroring reverses it. Better a warning than a
+	# destroyed sculpt.
+	var b := _make_brush(Vector3(48, 0, 0), Vector3(32, 32, 32), "h1")
+	b.get_faces()[0].displacement = Resource.new()
+	_mirror_with_scale(b, Vector3(-1, 1, 1))
+	var before: Transform3D = b.global_transform
+
+	assert_false(sys.normalize_handedness(b))
+
+	assert_true(b.global_transform.is_equal_approx(before), "left exactly as it was")
+
+
+func test_a_brush_restored_with_a_mirrored_transform_arrives_right_handed():
+	# create_brush_from_info() is the single door for undo restore, duplication,
+	# prefab instancing, .map import and .hflevel load. Levels already on disk
+	# carry mirrored brushes, and this is where they come back in.
+	var mirrored := Transform3D(Basis.IDENTITY.scaled(Vector3(-1, 1, 1)), Vector3(12, 0, 0))
+
+	var b = brushes.create_brush_from_info(
+		{"shape": 0, "size": Vector3(32, 16, 8), "transform": mirrored, "brush_id": "restored"}
+	)
+
+	assert_not_null(b)
+	assert_gt(b.global_transform.basis.determinant(), 0.0, "the mirror came off at the door")
+	assert_almost_eq(
+		b.global_position.distance_to(Vector3(12, 0, 0)), 0.0, EPS, "and the brush did not move"
+	)

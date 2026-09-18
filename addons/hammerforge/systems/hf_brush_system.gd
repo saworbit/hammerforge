@@ -174,6 +174,14 @@ func create_brush_from_info(info: Dictionary) -> Node:
 	_register_brush_id(str(brush_id), brush)
 	if info.has("faces"):
 		brush.apply_serialized_faces(info.get("faces", []))
+	# This is the single door for undo restore, duplication, prefab instancing,
+	# .map import and .hflevel load, so it is the one place a stored transform
+	# becomes a live brush. A stored mirror bakes inside out and a stored mirrored
+	# cutter adds instead of cutting, so take the mirror off here rather than
+	# leaving every consumer downstream to cope with it (#749). Faces first: the
+	# fold moves each face's appearance to the face that takes its place.
+	if brush.global_transform.basis.determinant() < 0.0:
+		_transform_system().normalize_handedness(brush)
 	if info.has("visgroups"):
 		var vgs = PackedStringArray()
 		for v in info.get("visgroups", []):
@@ -204,6 +212,14 @@ func create_brush_from_info(info: Dictionary) -> Node:
 	elif root.has_signal("brush_added"):
 		root.brush_added.emit(str(brush_id))
 	return brush
+
+
+## The level's transform system, or a bare one when a test root has none.
+func _transform_system() -> HFTransformSystem:
+	var existing = root.get("transform_system") if is_instance_valid(root) else null
+	if existing is HFTransformSystem:
+		return existing
+	return HFTransformSystem.new(root)
 
 
 func delete_brush(brush: Node, free: bool = true) -> void:

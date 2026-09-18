@@ -6,6 +6,8 @@ extends RefCounted
 ## HammerForge's incremental bake tags. The cache is deliberately keyed by the
 ## stable brush ID so native undo/redo and node recreation cannot confuse it.
 
+const DraftBrush = preload("brush_instance.gd")
+
 const PREFAB_LINK_META := [
 	&"hf_prefab_entity_id", &"hf_prefab_instance", &"hf_prefab_source", &"hf_prefab_variant"
 ]
@@ -79,6 +81,7 @@ func reconcile(root: Node) -> PackedStringArray:
 	var bake_configuration_changed := current_bake_configuration != _bake_configuration
 	var brushes := _brushes(root)
 	var repaired_ids := _normalize_brush_ids(root, brushes)
+	_normalize_handedness(root, brushes)
 	var current_instances: Dictionary = {}
 	var current_containers: Dictionary = {}
 	var current_parents: Dictionary = {}
@@ -515,6 +518,32 @@ static func _snapshot_packed_array(value: Variant) -> Variant:
 	if value is PackedFloat32Array:
 		return (value as PackedFloat32Array).duplicate()
 	return value
+
+
+## Take the mirror off any brush a native edit left with a negative determinant.
+##
+## Godot's own scale gizmo will drag a handle past zero, and the Inspector will
+## take a typed negative, and neither goes anywhere near HammerForge's own Flip -
+## which folds its reflection away precisely so this cannot happen. The brush then
+## bakes inside out, or, as a cutter, adds its volume instead of removing it
+## (#749). The viewport draws it the right shape either way, so the bake is the
+## first place it shows, and it shows as a window that did not open.
+##
+## Repaired here for the same reason `_recover_illegal_reparents()` is: this is
+## where an edit Godot owns is reconciled against what HammerForge needs to be
+## true. The fold leaves every world vertex and every face's appearance exactly
+## where it was, so there is nothing for the user to undo.
+func _normalize_handedness(root: Node, brushes: Array) -> void:
+	var transforms = null
+	for brush in brushes:
+		if not is_instance_valid(brush) or not (brush is DraftBrush):
+			continue
+		if (brush as DraftBrush).global_transform.basis.determinant() >= 0.0:
+			continue
+		if transforms == null:
+			var existing = root.get("transform_system")
+			transforms = existing if existing is HFTransformSystem else HFTransformSystem.new(root)
+		transforms.normalize_handedness(brush)
 
 
 func _normalize_brush_ids(root: Node, brushes: Array) -> bool:
