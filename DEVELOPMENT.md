@@ -222,7 +222,7 @@ addons/hammerforge/
   hf_snap_system.gd      Centralized snap (Grid/Vertex/Center/Edge/Perpendicular + custom snap lines, threshold-based candidates)
   hf_prefab.gd           Reusable brush+entity groups (variants, tags, save/load .hfprefab)
   hf_op_result.gd        Lightweight operation result (ok, message, fix_hint)
-  undo_helper.gd         HFUndoHelper: state-capture undo with collation (merges rapid edits into one step)
+  undo_helper.gd         HFUndoHelper: state-capture undo with collation (merges rapid edits into one step) and brush-scoped steps
   surface_paint.gd       Per-face surface paint tool
   uv_editor.gd           UV editing dock
   hf_outline_util.gd     Semantic outlines plus filled brush/entity gizmo collision helpers
@@ -354,6 +354,9 @@ addons/hammerforge/
 - **Brush/material caching.** `hf_brush_system.gd` uses `_brush_cache: Dictionary` for O(1) brush ID lookup, `_brush_count: int` for O(1) count, and `_material_cache: Dictionary` for material instance reuse. All CRUD methods maintain these caches.
 - **Undo/redo dynamic dispatch.** The `_commit_state_action` pattern in `dock.gd` intentionally uses string method names for undo/redo. This is one of the documented dynamic boundaries alongside focused plugin adapters and compatibility integrations.
 - **Undo/redo helper.** Use `HFUndoHelper` for editor actions to ensure consistent history and state snapshot restores. Pass a `collation_tag` for operations that fire rapidly (nudge, resize, paint) — consecutive actions with the same tag within 1 second are merged into one undo entry. Collation also requires matching `full_state` scope — a `full_state=true` action will not merge with a prior `full_state=false` run.
+
+- **Brush-scoped undo steps.** `capture_state()` is the whole level, so at 900 brushes one undo step was 39 ms to take and 2.2 MB to hold (#737). Pass `scope_brush_ids` to `HFUndoHelper.commit()` and the step records only those brushes, through `HFStateSystem.capture_brush_scope()` / `restore_brush_scope()`. The scoped restore looks each brush up by id — no `clear_brushes()`, no reconcile — and applies the record in place when only `transform` and `faces` differ, rebuilding through `create_brush_from_info()` otherwise and putting the brush back at its captured index. Only the four transform commands claim a scope today; `plugin_edit_actions.brush_scope()` is where they do it, and it refuses as soon as an entity is in the selection.
+- **What a scope claims, and what holds it to that.** `scope_brush_ids` is a claim that the command changes those brushes and no entity, registry, palette or other brush. Nothing in a record can check it, so `tests/test_scoped_undo_step.gd` runs each scoped command between two `capture_state()` calls and asserts `brushes` is the only key that differs. A command that grows a registry write fails there, and the fix is to stop scoping it rather than to widen the scope. Ids that cannot be a scope — one that does not resolve, a pending or committed cut — make `capture_brush_scope()` return `{}` and the caller falls back to the whole snapshot, so a wrong-looking id costs speed and not correctness.
 - **Undo/redo history binding.** HammerForge actions go into the **scene history** (not global) because `create_action()` passes `null` context and the first do/undo object is a Node (LevelRoot). Dock history UI (`_update_history_buttons`, `_on_history_undo/redo`) resolves the correct history via `_get_scene_history_id()` → `undo_redo.get_object_history_id(level_root)`. Never hard-code `EditorUndoRedoManager.GLOBAL_HISTORY` — use `_get_scene_undo_redo()` to get the `UndoRedo` object for the active scene.
 - **Transactions.** For multi-step operations (hollow, clip, tie), use `state_system.begin_transaction()` / `commit_transaction()` / `rollback_transaction()` to group mutations atomically. If any step fails, `rollback_transaction()` restores the snapshot.
 - **Entity definitions.** Entity types and brush entity classes are data-driven via `HFEntityDef`. Load from `entities.json` or use built-in defaults, overlaid with `res://hammerforge_entities.json` when present. New entity types should be added to the JSON file, not hardcoded. Both dock pickers read the same merged set through `load_merged_raw_entries()`, which keeps the raw JSON keys the palette renders from; `to_dict()` drops `label`, `preview` and `category`, so do not build the palette from the typed loader.
@@ -431,7 +434,7 @@ The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
 - `tools/check_placement_order.py` -- refuses a world transform written to a node that is not in the tree yet
-- **GUT unit + integration tests** -- 4,399 tests across 242 test scripts (4,392 passing plus seven intentional no-assert safety tests; 20,617 assertions; verified in CI on September 18, 2026; runs Godot headless)
+- **GUT unit + integration tests** -- 4,426 tests across 243 test scripts (4,419 passing plus seven intentional no-assert safety tests; 20,672 assertions; verified in CI on September 18, 2026; runs Godot headless)
 
 Run locally before pushing:
 ```
@@ -581,6 +584,7 @@ The table below describes the larger suites rather than all 157 files; `ls tests
 | `test_dock_history_and_playtest.gd` | 8 | Null-safe history refresh/buttons, selection typing, version updates, spawn creation, and state capture |
 | `test_baker.gd` | 32 | Material-preserving merge/face bake, indexed/non-indexed concatenation, convex collision generation, snapshots, and simplification |
 | `test_undo_helper.gd` | 10 | History callbacks, collation tags/windows/scopes, dynamic method arities, and null safety |
+| `test_scoped_undo_step.gd` | 27 | The brush-scoped undo step: what a scope records and refuses, in-place apply versus rebuild, order and connections across a rebuild, every scoped command round-tripping against the whole level state, a collated run undoing to the start and redoing the whole way, and the four commands changing nothing outside their scope |
 | `test_displacement.gd` | 40 | Displacement data, FaceData triangulation/serialization, create/destroy, painting, power/elevation, noise, and sewing |
 | `test_bevel.gd` | 20 | Face inset (basic, height extrude, collapse guard, material inheritance, connecting sides winding), edge bevel (basic, segments, neighbor update, small radius, material inheritance), slerp utility (endpoints, midpoint, parallel, anti-parallel, quarter turn) |
 | `test_occluder_generation.gd` | 13 | Occluder generation: flat mesh, chunked hierarchy (BakedChunk_* nodes), coplanar merge across chunks, plane separation, min-area filtering, idempotent re-generation, postprocess toggle (enabled/disabled), validation coverage + missing-occluder warnings |

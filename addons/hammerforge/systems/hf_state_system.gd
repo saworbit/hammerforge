@@ -80,6 +80,109 @@ func capture_state(include_transient: bool = true) -> Dictionary:
 	return state
 
 
+## An undo step that records only the brushes an action touches.
+##
+## `capture_state()` is the whole level. At 900 brushes that is 39 ms to take and
+## 2.2 MB to hold, on every action that is not collated, and an editor session
+## holds hundreds of steps with nothing bounding them -- and 24 of the 25 keys
+## are unchanged by a nudge of one brush (#737). The number of steps is the
+## editor's scene history and not ours to cap. The size of one is ours.
+##
+## What comes back is the same brush info dictionaries `capture_state()` records,
+## for the named ids only, beside where each one sits in the draft container so a
+## rebuilt brush goes back in its place rather than at the end (#660).
+##
+## An empty dictionary means these ids cannot be a scope and the caller should
+## take the whole snapshot: an id that does not resolve, or a brush sitting in
+## the pending or committed container, where a scoped restore has no index to put
+## it back at.
+##
+## This is only a correct undo unit for an action that changes those brushes and
+## nothing else. A record cannot check that, so it is opted into per command at
+## the call site, and pinned per command by a test that captures the full state
+## either side of the command and asserts nothing outside the scope moved.
+func capture_brush_scope(brush_ids: Array) -> Dictionary:
+	if brush_ids.is_empty() or root.brush_system == null or root.draft_brushes_node == null:
+		return {}
+	var records: Array = []
+	var order: Dictionary = {}
+	for raw_id in brush_ids:
+		var brush_id := str(raw_id)
+		if brush_id == "" or order.has(brush_id):
+			continue
+		var brush = root.brush_system.find_brush_by_id(brush_id)
+		if not is_instance_valid(brush) or not (brush is DraftBrush):
+			return {}
+		if brush.get_parent() != root.draft_brushes_node:
+			return {}
+		var info: Dictionary = root.get_brush_info_from_node(brush)
+		if info.is_empty():
+			return {}
+		records.append(info)
+		order[brush_id] = (brush as Node).get_index()
+	if records.is_empty():
+		return {}
+	return {"brushes": records, "order": order}
+
+
+## The mirror of `capture_brush_scope()`.
+##
+## Nothing is cleared and nothing is reconciled. `restore_state()` has to work
+## out which of 900 brushes changed, and that costs 48 of the 51 ms an undo takes
+## because it recaptures every one of them to find out. A scope already knows, so
+## this is a lookup per record.
+##
+## One unreadable record costs that record, not the step, the same way one
+## unreadable brush entry costs that entry in `restore_state()`.
+func restore_brush_scope(scope: Dictionary) -> void:
+	if scope.is_empty() or root.brush_system == null:
+		return
+	var records = scope.get("brushes", [])
+	if not (records is Array):
+		return
+	var skipped := 0
+	for info in records:
+		if not (info is Dictionary):
+			skipped += 1
+			continue
+		if root.brush_system.apply_brush_record(info as Dictionary) == null:
+			skipped += 1
+	var order = scope.get("order", {})
+	_restore_scope_order(order if order is Dictionary else {})
+	if skipped > 0:
+		HFLog.warn("HFStateSystem: skipped %d record this undo step could not use" % skipped)
+
+
+## Put the scoped brushes back at the indices they were captured at.
+##
+## Only a brush `apply_brush_record()` had to rebuild has moved -- a rebuilt one
+## is `add_child`ed and lands at the end -- but that is the ordinary case for an
+## undo, and brush order is load bearing: `append_brush_list_to_csg()` adds
+## children in order and a SUBTRACT brush only cuts what precedes it, so a cutter
+## an undo moved to the end is a different boolean from the one the mapper set up
+## (#660).
+##
+## Ascending target index, which is what makes one pass enough. Nothing outside
+## the scope moved, so when the brush with the smallest recorded index is placed,
+## every position before it already holds the node that belongs there, and the
+## same is true of each one after.
+func _restore_scope_order(order: Dictionary) -> void:
+	var container = root.draft_brushes_node
+	if container == null or order.is_empty():
+		return
+	var entries: Array = []
+	for brush_id in order:
+		entries.append([int(order[brush_id]), str(brush_id)])
+	entries.sort_custom(func(a, b): return int(a[0]) < int(b[0]))
+	for entry in entries:
+		var node = root.brush_system.find_brush_by_id(str(entry[1]))
+		if not is_instance_valid(node) or node.get_parent() != container:
+			continue
+		var target: int = clampi(int(entry[0]), 0, container.get_child_count() - 1)
+		if (node as Node).get_index() != target:
+			container.move_child(node, target)
+
+
 ## The level state that describes brushes without being one.
 ##
 ## A hollow remembers the solid it was shelled out of so it can be shelled

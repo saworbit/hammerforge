@@ -218,6 +218,37 @@ func _undo_of_one_brush_move() -> void:
 		"%.1f KB" % (float(var_to_bytes(after).size()) / 1024.0)
 	)
 
+	# The same nudge as a scoped step: what the transform commands actually
+	# register now (#737). The whole-level numbers above are still what a
+	# structural edit pays, and the gap between the two is the point.
+	var brush_id := str(root.get_brush_info_from_node(target).get("brush_id", ""))
+	# Where the brush is now, not where `before` found it: this function has
+	# already nudged it once, and a scoped step goes back to the state it was
+	# captured against.
+	var scoped_from: Vector3 = target.global_position
+	t = Time.get_ticks_usec()
+	var scope: Dictionary = root.capture_brush_scope([brush_id])
+	var scope_capture_ms := _ms(t)
+	var scope_kb := float(var_to_bytes(scope).size()) / 1024.0
+	target.global_position += Vector3(16, 0, 0)
+	t = Time.get_ticks_usec()
+	root.restore_brush_scope(scope)
+	var scope_restore_ms := _ms(t)
+	note(
+		"the same nudge as a scoped undo step",
+		"capture %.2f ms, restore %.2f ms, %.1f KB" % [scope_capture_ms, scope_restore_ms, scope_kb]
+	)
+	var settled: Node3D = root.brush_system.find_brush_by_id(brush_id)
+	if not is_instance_valid(settled) or not settled.global_position.is_equal_approx(scoped_from):
+		flag(
+			"a scoped undo of a nudge did not put the brush back",
+			(
+				"capture_brush_scope() and restore_brush_scope() are the undo unit the "
+				+ "transform commands register, so this is the undo a mapper gets for "
+				+ "an arrow key press"
+			)
+		)
+
 
 ## Face selection is the other per-frame cost: every bulk texture operation
 ## walks it.

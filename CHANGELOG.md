@@ -107,6 +107,32 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   collision, its scripts and every child it had.
 
 ### Fixed
+- **An undo step is the size of the change, not the size of the level** (#737).
+  Every action recorded a whole-level snapshot. On a 900-brush map that was 39 ms
+  before the brush moved, 51 ms to take back, and 2.2 MB held for the rest of the
+  session, on an action that moved one brush -- and 24 of the snapshot's 25 keys
+  were unchanged by it. The number of undo steps is the editor's scene history
+  and not ours to cap, so the size of one is the only lever there is.
+  A command that can say which brushes it changes, and that it changes nothing
+  else, now records only those. Arrow-key nudge, rotate, flip and reset rotation
+  can say it. At 400 brushes one of those steps is 0.06 ms to take, 0.45 ms to
+  take back and 3.6 KB, against 23.4 ms, 28.1 ms and 705 KB before.
+  A scoped undo does no clearing and no reconciling: it looks each brush up by
+  id, and writes the transform and faces straight onto the node when that is all
+  that differs, so the brush you nudged is still the brush you had selected. A
+  record that differs in anything else -- a shape, a size, an operation -- goes
+  back through `create_brush_from_info()`, the door every other restore uses, and
+  is put back at the index it was captured at.
+  Everything else is unchanged. A structural command, a mixed brush-and-entity
+  selection, and every command that does not claim a scope all take the whole
+  snapshot exactly as before.
+
+- **A restored brush no longer pushes the brush id counter up** (#737).
+  `create_brush_from_info()` read its id as `info.get("brush_id", _next_brush_id())`
+  and GDScript evaluates that default whether the key is there or not, so every
+  brush a restore put back minted an id it threw away. Loading a level left the
+  counter hundreds higher than the level it had just built.
+
 - **Four more bake settings travel with the level** (#755). Walking every
   exported property against what the `.hflevel` records turned up fourteen the
   file never wrote. Four of them change what a bake produces and their siblings

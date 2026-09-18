@@ -222,6 +222,23 @@ static func collation_tag(
 	return "|".join(parts)
 
 
+## The brushes an undo step may record instead of the whole level, or nothing.
+##
+## `HFUndoHelper.commit()` takes this as a claim that the command changes these
+## brushes and nothing else (#737). The four transform commands can make it: they
+## move, rotate, mirror and unrotate brushes that are already there, and touch no
+## registry, no palette and no other brush. `test_scoped_undo_step.gd` is what
+## holds them to it.
+##
+## An entity in the selection ends the claim. Entities are moved by the same
+## commands and a brush scope has nowhere to put one, so a mixed selection takes
+## the whole snapshot, which is what every command did before this.
+static func brush_scope(brush_ids: Array, entity_paths: Array) -> Array:
+	if brush_ids.is_empty() or not entity_paths.is_empty():
+		return []
+	return brush_ids
+
+
 static func nudge_selected(plugin: Object, root: Node, direction: Vector3) -> bool:
 	var step = root.grid_snap if root.grid_snap > 0.0 else 1.0
 	var targets := collect_managed_targets(plugin, root)
@@ -239,7 +256,8 @@ static func nudge_selected(plugin: Object, root: Node, direction: Vector3) -> bo
 		false,
 		Callable(plugin, "_record_history"),
 		collation_tag("nudge", brush_ids, entity_paths, [direction, step]),
-		true
+		true,
+		brush_scope(brush_ids, entity_paths)
 	)
 	return true
 
@@ -630,7 +648,8 @@ static func rotate_selected(plugin: Object, root: Node, direction: int) -> bool:
 		false,
 		Callable(plugin, "_record_history"),
 		collation_tag("rotate", brush_ids, entity_paths, [axis_index, signf(angle_degrees)]),
-		true
+		true,
+		brush_scope(brush_ids, entity_paths)
 	)
 	return true
 
@@ -657,7 +676,9 @@ static func flip_selected(plugin: Object, root: Node) -> bool:
 		[brush_ids, entity_paths, axis_index, pivot],
 		false,
 		Callable(plugin, "_record_history"),
-		""
+		"",
+		false,
+		brush_scope(brush_ids, entity_paths)
 	)
 	return true
 
@@ -681,6 +702,8 @@ static func reset_rotation_selected(plugin: Object, root: Node) -> bool:
 		[brush_ids],
 		false,
 		Callable(plugin, "_record_history"),
-		""
+		"",
+		false,
+		brush_scope(brush_ids, [])
 	)
 	return true
