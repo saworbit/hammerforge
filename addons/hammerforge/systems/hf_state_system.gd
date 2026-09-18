@@ -428,6 +428,34 @@ func capture_hflevel_payload() -> Dictionary:
 
 
 func capture_hflevel_settings() -> Dictionary:
+	# What the file does not carry, and why, so the next walk of
+	# `get_property_list()` does not have to decide it again (#755):
+	#
+	#   brush_size_default    the size of the next brush you draw, not a property
+	#                         of the level you drew already.
+	#   grid_color, grid_plane_size, grid_major_line_frequency
+	#                         how the grid looks. `grid_snap` is here because it
+	#                         decides where geometry lands; these three do not.
+	#   entity_definitions_path
+	#                         project wide, so a level carrying it would repoint
+	#                         the whole project's entity set on open.
+	#   hflevel_compress      how the file is written rather than what the level
+	#                         holds, and the header already says which it was.
+	#   hflevel_autosave_path a file saying where it ought to live, which is wrong
+	#                         the moment anybody copies it.
+	#   hflevel_autosave_enabled, hflevel_autosave_minutes
+	#                         opening a level would switch off the mapper's
+	#                         autosave, or change how often it runs. That is a way
+	#                         to lose work that is not this level's to take.
+	#                         `hflevel_autosave_keep` is here already and only
+	#                         decides how many backups are kept.
+	#
+	# Three more look absent against `get_property_list()` and are not.
+	# `cordon_aabb` goes out flattened, as `cordon_aabb_pos` and `cordon_aabb_size`
+	# at the end. `live_registries` and `map_worldspawn_properties` are level state
+	# and travel in `capture_state()`. `level_uid` is `@export_storage`: it names
+	# the scene rather than the level, and a copied file claiming another level's
+	# identity is the bug, not the fix.
 	return {
 		"grid_snap": root.grid_snap,
 		"bake_chunk_size": root.bake_chunk_size,
@@ -460,6 +488,8 @@ func capture_hflevel_settings() -> Dictionary:
 		"bake_navmesh_cell_height": root.bake_navmesh_cell_height,
 		"bake_navmesh_agent_height": root.bake_navmesh_agent_height,
 		"bake_navmesh_agent_radius": root.bake_navmesh_agent_radius,
+		"bake_navmesh_agent_max_climb": root.bake_navmesh_agent_max_climb,
+		"bake_navmesh_agent_max_slope": root.bake_navmesh_agent_max_slope,
 		"bake_use_thread_pool": root.bake_use_thread_pool,
 		"bake_collision_mode": root.bake_collision_mode,
 		"bake_convex_clean": root.bake_convex_clean,
@@ -468,6 +498,8 @@ func capture_hflevel_settings() -> Dictionary:
 		"bake_connector_mode": root.bake_connector_mode,
 		"bake_connector_stair_height": root.bake_connector_stair_height,
 		"bake_connector_width": root.bake_connector_width,
+		"bake_connector_stair_threshold": root.bake_connector_stair_threshold,
+		"bake_wire_io": root.bake_wire_io,
 		"hflevel_autosave_keep": root.hflevel_autosave_keep,
 		"region_streaming_enabled":
 		root.paint_system.region_streaming_enabled if root.paint_system else false,
@@ -533,6 +565,12 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 		root.bake_connector_width = int(
 			settings.get("bake_connector_width", root.bake_connector_width)
 		)
+	if settings.has("bake_connector_stair_threshold"):
+		root.bake_connector_stair_threshold = float(
+			settings.get("bake_connector_stair_threshold", root.bake_connector_stair_threshold)
+		)
+	if settings.has("bake_wire_io"):
+		root.bake_wire_io = bool(settings.get("bake_wire_io", root.bake_wire_io))
 	if settings.has("bake_collision_layer_index"):
 		root.bake_collision_layer_index = int(
 			settings.get("bake_collision_layer_index", root.bake_collision_layer_index)
@@ -596,6 +634,14 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 	if settings.has("bake_navmesh_agent_radius"):
 		root.bake_navmesh_agent_radius = float(
 			settings.get("bake_navmesh_agent_radius", root.bake_navmesh_agent_radius)
+		)
+	if settings.has("bake_navmesh_agent_max_climb"):
+		root.bake_navmesh_agent_max_climb = float(
+			settings.get("bake_navmesh_agent_max_climb", root.bake_navmesh_agent_max_climb)
+		)
+	if settings.has("bake_navmesh_agent_max_slope"):
+		root.bake_navmesh_agent_max_slope = float(
+			settings.get("bake_navmesh_agent_max_slope", root.bake_navmesh_agent_max_slope)
 		)
 	if settings.has("bake_use_thread_pool"):
 		root.bake_use_thread_pool = bool(
