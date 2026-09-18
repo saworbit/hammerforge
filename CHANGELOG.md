@@ -129,6 +129,11 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   already records. `cordon_aabb` was on the list and was never missing: it goes
   out flattened, as `cordon_aabb_pos` and `cordon_aabb_size`.
 
+  Fixed while in there: importing a settings file whose
+  `connector_stair_threshold` is not a number put 32 in the dock rather than the
+  2 the property defaults to. Every other fallback in that block already matched
+  its property, and 32 is a pre-#625 number.
+
 - **The `docs-truth` scenario no longer reports a `.map` measurement as our own
   scale** (#754). The detector had two categories for a measurement of sixteen
   units or more: current HammerForge scale, which it flags, and a line the guide

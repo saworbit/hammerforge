@@ -5173,8 +5173,11 @@ func _apply_editor_settings(data: Dictionary) -> void:
 		if bake_connector_width_spin and bake.has("connector_width"):
 			bake_connector_width_spin.value = _setting_int(bake, "connector_width", 2)
 		if bake_connector_stair_threshold_spin and bake.has("connector_stair_threshold"):
+			# 2.0 because that is the property's default and the constant #570 turned
+			# into it. Every other fallback in this block matches its property; this
+			# one said 32, which is a pre-#625 number.
 			bake_connector_stair_threshold_spin.value = _setting_number(
-				bake, "connector_stair_threshold", 32.0
+				bake, "connector_stair_threshold", 2.0
 			)
 		_sync_bake_option_visibility()
 
