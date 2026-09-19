@@ -41,14 +41,15 @@ release workflow re-checks the built output rather than trusting the list.
 python tools/build_release_tree.py /tmp/release   # inspect what would ship
 ```
 
-### The two artefacts are not the same file
+### The artefacts are not the same file
 
-One tree, two ways out, and they differ on purpose:
+One tree, three ways out, and they differ on purpose:
 
 | Artefact | Built by | Root contains |
 |---|---|---|
 | Asset Library download | `git archive` of the `release` branch, by GitHub | `addons/`, `LICENSE` |
-| `hammerforge-<version>.zip` | `zip` over the built tree, in the workflow | those plus `README.md`, `.gitignore`, `.gitattributes` |
+| `hammerforge-<version>-addon.zip` | `zip addons` over the built tree | `addons/` alone |
+| `hammerforge-<version>.zip` | `zip` over the built tree | those plus `LICENSE`, `README.md`, `.gitignore`, `.gitattributes` |
 
 Godot's asset installer strips the `<repo>-<sha>/` wrapper and then offers
 everything left at the archive root, pre-checked, into the **project root**. So

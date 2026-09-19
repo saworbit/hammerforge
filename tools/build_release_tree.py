@@ -75,9 +75,12 @@ RELEASE_README = """# HammerForge
 Brush-based level editor for Godot 4.7+. Draw rooms, carve doorways, paint
 terrain and bake to optimised meshes without leaving the Godot editor.
 
-This is the release tree: the plugin and nothing else. Copy `addons/hammerforge`
-into your project and enable **HammerForge** under
-*Project > Project Settings > Plugins*.
+This is the release tree. Copy `addons/hammerforge` into your project and
+enable **HammerForge** under *Project > Project Settings > Plugins*.
+
+If you would rather not copy anything out, the release page also carries
+`hammerforge-<version>-addon.zip`, which is the plugin alone and extracts
+straight into a project.
 
 - Documentation: https://saworbit.github.io/hammerforge/
 - Source, issues and development: https://github.com/saworbit/hammerforge

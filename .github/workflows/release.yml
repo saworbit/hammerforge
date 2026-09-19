@@ -96,6 +96,26 @@ jobs:
           cd "$RUNNER_TEMP/release"
           zip -qr "$RUNNER_TEMP/hammerforge-$VERSION.zip" .
 
+          # The one most people want: the plugin and nothing else, carrying the
+          # addons/hammerforge/ path so it extracts straight into a project. The
+          # full zip above keeps LICENSE, README.md and .gitignore beside it for
+          # anyone who wants them.
+          zip -qr "$RUNNER_TEMP/hammerforge-$VERSION-addon.zip" addons
+
+          # Checked here rather than assumed, because this is the archive a
+          # mapper extracts over their own project.
+          unzip -Z1 "$RUNNER_TEMP/hammerforge-$VERSION-addon.zip" |
+            cut -d/ -f1 | sort -u > "$RUNNER_TEMP/addon_roots.txt"
+          echo addons > "$RUNNER_TEMP/addon_expected.txt"
+          if ! diff -u "$RUNNER_TEMP/addon_expected.txt" "$RUNNER_TEMP/addon_roots.txt"; then
+            echo "::error::the addon zip is not addons/ alone"
+            exit 1
+          fi
+          unzip -Z1 "$RUNNER_TEMP/hammerforge-$VERSION-addon.zip" |
+            grep -qx "addons/hammerforge/plugin.cfg" || {
+              echo "::error::the addon zip has no plugin.cfg in it"; exit 1; }
+          echo "addon zip: $(unzip -Z1 "$RUNNER_TEMP/hammerforge-$VERSION-addon.zip" | wc -l) entries under addons/"
+
       - name: Update the release branch
         env:
           GH_TOKEN: ${{ github.token }}
@@ -134,12 +154,12 @@ jobs:
         # "Refuse to ship development tooling" checks the built tree.
         run: |
           cd "$RUNNER_TEMP/relbranch"
-          git archive HEAD | tar -t | cut -d/ -f1 | sort -u > /tmp/roots.txt
+          git archive HEAD | tar -t | cut -d/ -f1 | sort -u > "$RUNNER_TEMP/roots.txt"
           {
             echo LICENSE
             echo addons
-          } > /tmp/expected.txt
-          if ! diff -u /tmp/expected.txt /tmp/roots.txt; then
+          } > "$RUNNER_TEMP/expected.txt"
+          if ! diff -u "$RUNNER_TEMP/expected.txt" "$RUNNER_TEMP/roots.txt"; then
             echo "::error::the Asset Library download would not be addons/ and LICENSE alone"
             echo "Anything at the archive root lands beside the mapper's own files."
             echo "See RELEASE_GITATTRIBUTES in tools/build_release_tree.py."
@@ -167,7 +187,7 @@ jobs:
             echo "no release for ${GITHUB_REF_NAME} yet; creating one"
             gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --prerelease --generate-notes
           fi
-          gh release upload "${GITHUB_REF_NAME}" "$RUNNER_TEMP/hammerforge-$VERSION.zip" --clobber
+          gh release upload "${GITHUB_REF_NAME}" "$RUNNER_TEMP/hammerforge-$VERSION-addon.zip" "$RUNNER_TEMP/hammerforge-$VERSION.zip" --clobber
 
       - name: Asset Library commit
         # Printed rather than submitted: the Asset Library has no API for
