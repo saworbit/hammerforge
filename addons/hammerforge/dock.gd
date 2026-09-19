@@ -408,6 +408,9 @@ var _terrain_slot_pick_index: int = -1
 var _terrain_slot_refreshing := false
 var _region_settings_refreshing := false
 var _bake_disabled := false
+## When the running bake started, so the row can say how long it took (#773).
+## Zero means this dock did not see the start and will not guess.
+var _bake_started_msec: int = 0
 var _perf_frame_counter: int = 0
 var _hints_dirty: bool = true
 var _syncing_paint_tab: bool = false
@@ -5258,6 +5261,20 @@ func _set_status(message: String, is_error: bool = false, timeout: float = 0.0) 
 	var clear_time = timeout if timeout > 0.0 else (5.0 if is_error else 0.0)
 	if clear_time > 0.0:
 		_start_status_timer(clear_time)
+	else:
+		_stop_status_timer()
+
+
+## A result worth noticing rather than a line of body text. The plain branch of
+## `_set_status()` deliberately *removes* the colour override, so a success that
+## wants to be seen has to ask for one (#773).
+func _set_status_success(message: String, timeout: float = 0.0) -> void:
+	if status_label:
+		status_label.text = message
+		var ok_color = _get_editor_color("success_color", Color(0.45, 0.95, 0.5))
+		status_label.add_theme_color_override("font_color", ok_color)
+	if timeout > 0.0:
+		_start_status_timer(timeout)
 	else:
 		_stop_status_timer()
 

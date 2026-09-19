@@ -32,6 +32,9 @@ const HFFileSystemType = preload("systems/hf_file_system.gd")
 const HFPrototypeTextures = preload("hf_prototype_textures.gd")
 const HFIORuntime = preload("hf_io_runtime.gd")
 const HFOutlineUtil = preload("hf_outline_util.gd")
+## Both halves of the playtest request live in one leaf script, so neither this
+## nor the dock handler has to name the other's class (#771).
+const HFPlaytestRequest = preload("hf_playtest_request.gd")
 
 const RELOAD_LOCK_PATH := "res://.hammerforge/reload.lock"
 const RELOAD_POLL_SECONDS := 0.5
@@ -890,16 +893,7 @@ var _hflevel_freshness_reported: bool = false
 
 
 func _ready():
-	_setup_draft_container()
-	_setup_pending_container()
-	_setup_committed()
-	_setup_entities_container()
-	_setup_decals_container()
-	_setup_manager()
-	_setup_material_manager()
-	_setup_baker()
-	_setup_paint_system()
-	_setup_surface_paint()
+	_ensure_child_nodes()
 	# Runtime baking and reload keep this small core. Editor tools are loaded below.
 	entity_system = HFEntitySystemType.new(self)
 	brush_system = HFBrushSystemType.new(self)
@@ -950,7 +944,10 @@ func _ready():
 		# debug player arrived beside the game's own (#699). A release build takes
 		# neither, whatever the properties say.
 		_setup_runtime_reload()
-		if auto_spawn_player:
+		# Collected unconditionally, so a request is spent by the first run after it
+		# whatever that run decides -- it must not queue up behind this one.
+		var requested := HFPlaytestRequest.consume()
+		if auto_spawn_player or requested:
 			call_deferred("_start_playtest")
 
 
@@ -3378,6 +3375,62 @@ func get_material_names() -> Array:
 # ===========================================================================
 
 
+## Get-or-create every node the level keeps its contents in.
+##
+## Each `_setup_*` is already a get-or-create, so this is safe to run again. It
+## has to be: undoing Create Starter Level away and redoing it back puts the
+## `LevelRoot` node back without running `_ready()` a second time, so the node
+## returns with none of these and whatever runs next is holding freed references
+## (#772).
+func _ensure_child_nodes() -> void:
+	_setup_draft_container()
+	_setup_pending_container()
+	_setup_committed()
+	_setup_entities_container()
+	_setup_decals_container()
+	_setup_manager()
+	_setup_material_manager()
+	_setup_baker()
+	_setup_paint_system()
+	_setup_surface_paint()
+	_reassert_container_owners()
+
+
+## Hand the scene back the containers it owns.
+##
+## Each `_setup_*` assigns an owner only on the branch that *creates* the node,
+## which is enough the first time. It is not enough on the way back from undo:
+## taking the `LevelRoot` out of the tree and putting it back clears the owner of
+## everything beneath it, and a container that survived unowned would stay that
+## way -- missing from the Scene dock, and missing from the `.tscn` the next save
+## writes (#772).
+##
+## Goes through `_assign_owner()` rather than setting `owner` directly, so the
+## nodes that are meant to have none -- a level's sources under `BAKE_ONLY` --
+## still get none.
+func _reassert_container_owners() -> void:
+	for node in [
+		draft_brushes_node,
+		pending_node,
+		committed_node,
+		entities_node,
+		decals_node,
+		brush_manager,
+		material_manager,
+		baker,
+		paint_layers,
+		generated_node,
+		generated_floors,
+		generated_walls,
+		generated_heightmap_floors,
+		generated_region_overlay,
+		paint_tool,
+		surface_paint,
+	]:
+		if node != null and is_instance_valid(node) and node.owner == null:
+			_assign_owner(node)
+
+
 func _setup_draft_container() -> void:
 	draft_brushes_node = get_node_or_null("DraftBrushes") as Node3D
 	if not draft_brushes_node:
@@ -3507,6 +3560,12 @@ func _setup_paint_system() -> void:
 		generated_region_overlay.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		generated_node.add_child(generated_region_overlay)
 		_assign_owner(generated_region_overlay)
+	if generated_region_overlay.mesh == null:
+		# An ArrayMesh with no surfaces: nothing is drawn until a region is painted,
+		# but a MeshInstance3D with no mesh at all warns in the Scene dock for the
+		# life of the level (#774). Outside the branch above on purpose, so a level
+		# saved before this stops warning as soon as it is opened.
+		generated_region_overlay.mesh = ArrayMesh.new()
 
 	paint_tool = get_node_or_null("PaintTool") as HFPaintTool
 	if not paint_tool:
@@ -3837,6 +3896,9 @@ func create_floor() -> void:
 ## Create a starter level with floor, directional light, and player spawn.
 ## Intended for brand-new scenes so users can immediately draw.
 func create_new_level() -> void:
+	# Redo runs this on a LevelRoot that undo took out of the tree, which comes
+	# back without the children `_ready()` gave it (#772).
+	_ensure_child_nodes()
 	# Floor
 	create_floor()
 
