@@ -1,9 +1,24 @@
 version: 2
+
+# Godot itself is pinned in ci.yml and cannot be tracked here. Everything that
+# can be is below: the actions the workflows call, and the Python tooling that
+# CI and the docs build install.
+#
+# Each ecosystem is split in two by update type, and the split is the point.
+# Patches and minors arrive as one grouped pull request that
+# .github/workflows/dependabot-auto-merge.yml merges once CI is green. Majors
+# arrive on their own and wait for a human, because reading the changelog is the
+# work. Grouped together, one major would hold every safe patch behind it until
+# somebody had time to read that changelog.
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+    # Four possible pull requests a week across both ecosystems, and only two of
+    # them need reading. Explicit so the default cannot drift under us.
+    open-pull-requests-limit: 5
     commit-message:
       prefix: "ci"
     labels:
@@ -12,15 +27,24 @@ updates:
       actions:
         patterns:
           - "*"
+        update-types:
+          - "minor"
+          - "patch"
+      actions-major:
+        patterns:
+          - "*"
+        update-types:
+          - "major"
 
-  # Godot itself is pinned in ci.yml and cannot be tracked here, but the Python
-  # tooling can be. It used to be inline `pip install` arguments that nothing
-  # watched; as requirements files, a bump arrives as a pull request that runs
-  # the suite against it before anyone accepts it.
+  # This used to be inline `pip install` arguments that nothing watched. As
+  # requirements files, a bump arrives as a pull request that runs the suite
+  # against it before anyone accepts it.
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
     commit-message:
       prefix: "ci"
     labels:
@@ -29,3 +53,11 @@ updates:
       python-tooling:
         patterns:
           - "*"
+        update-types:
+          - "minor"
+          - "patch"
+      python-tooling-major:
+        patterns:
+          - "*"
+        update-types:
+          - "major"
