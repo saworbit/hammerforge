@@ -231,9 +231,15 @@ def verdict(
     head_subject: str,
     head_version: str,
     age_days: int,
-    edit: PendingEdit | None,
+    queue: list[PendingEdit],
 ) -> tuple[str, list[str]]:
-    """current, mislabelled, submitted, rejected, pending or stale, and why."""
+    """current, mislabelled, submitted, rejected, pending or stale, and why.
+
+    Takes the whole queue rather than one edit chosen in advance, because the
+    two failures want different edits out of it. A commit paste and a version
+    correction can both be waiting, and picking the first of them before
+    knowing which question is being asked would let one hide the other.
+    """
     head = head_sha.lower()
     if entry_commit.lower() == head:
         if same_version(entry_version, head_version):
@@ -241,7 +247,8 @@ def verdict(
                 f"The Asset Library is serving {_named(entry_version)}, "
                 f"which is {head_sha[:7]}, the head of `{RELEASE_BRANCH}`."
             ]
-        return _mislabelled(entry_version, head_sha, head_version, edit)
+        fix = next((e for e in queue if same_version(e.version, head_version)), None)
+        return _mislabelled(entry_version, head_sha, head_version, fix)
 
     disagree = [
         f"The Asset Library entry and the `{RELEASE_BRANCH}` branch disagree.",
@@ -252,7 +259,8 @@ def verdict(
     ]
     paste = ["", f"Paste {head_sha} into the Download Commit field at {EDIT_URL}"]
 
-    if edit is not None and edit.commit.lower() == head:
+    edit = next((e for e in queue if e.commit.lower() == head), None)
+    if edit is not None:
         if edit.status == "rejected":
             said = f": {edit.reason}" if edit.reason else "."
             return "rejected", [
@@ -332,13 +340,17 @@ def _age_days(stamp: str) -> int:
     return max((datetime.now(timezone.utc) - when).days, 0)
 
 
-def _pending_edit(head_sha: str, head_version: str) -> PendingEdit | None:
-    """The unsettled edit that would put either field right, if there is one.
+def _pending_edits(head_sha: str, head_version: str) -> list[PendingEdit]:
+    """Every unsettled edit that would put either field right.
 
     Either field, because an edit is reported by what it changes. A correction
     to a version that was typed wrong carries no commit at all, and matching on
     the commit alone would miss it and ask for the paste a second time.
+
+    All of them rather than the first, because two can be waiting at once and
+    the caller is the only thing that knows which field it is asking about.
     """
+    found: list[PendingEdit] = []
     query = urllib.parse.urlencode({"asset": ASSET_ID})
     listing = _get_json(f"{API_ROOT}/asset/edit?{query}").get("result") or []
     for record in listing[:MAX_EDITS_READ]:
@@ -362,15 +374,17 @@ def _pending_edit(head_sha: str, head_version: str) -> PendingEdit | None:
             waiting = _age_days(str(record.get("submit_date") or ""))
         except ValueError:
             waiting = 0
-        return PendingEdit(
-            edit_id=edit_id,
-            status=status,
-            commit=commit,
-            version=version,
-            waiting_days=waiting,
-            reason=str(detail.get("reason") or "").strip(),
+        found.append(
+            PendingEdit(
+                edit_id=edit_id,
+                status=status,
+                commit=commit,
+                version=version,
+                waiting_days=waiting,
+                reason=str(detail.get("reason") or "").strip(),
+            )
         )
-    return None
+    return found
 
 
 def _release_head(repo: str) -> tuple[str, str, int]:
@@ -532,6 +546,34 @@ VERSION_CASES = [
     ),
 ]
 
+# Two edits can be unsettled at once and they do not fix the same field, so
+# whichever is listed first must not answer for the other. Head is SHA_B at
+# 0.3.2 throughout, and the divergence is well past grace.
+# (name, entry commit, entry version, queue, expected state)
+QUEUE_CASES = [
+    (
+        "a queued paste does not hide a queued version fix",
+        SHA_B,
+        "0.3.0",
+        [_edit("new", SHA_B), _edit("new", "", "0.3.2")],
+        "submitted",
+    ),
+    (
+        "a queued version fix does not hide a missing paste",
+        SHA_A,
+        "0.3.0",
+        [_edit("new", "", "0.3.2"), _edit("new", SHA_B)],
+        "submitted",
+    ),
+    (
+        "and does not stand in for one that was never made",
+        SHA_A,
+        "0.3.0",
+        [_edit("new", "", "0.3.2")],
+        "stale",
+    ),
+]
+
 # A stale entry names an old version as well as an old commit, and must still
 # read as stale: the fix is the commit field, and a version paste alone would
 # leave it serving the old tree under the new name, which is worse.
@@ -595,7 +637,7 @@ def selftest() -> int:
             "HammerForge 0.0.0",
             "0.0.0",
             age_days,
-            edit,
+            [edit] if edit else [],
         )
         if state != expected:
             print(f"selftest: {name} should be {expected}, got {state}")
@@ -612,7 +654,7 @@ def selftest() -> int:
             f"HammerForge {head_version}",
             head_version,
             age_days,
-            edit,
+            [edit] if edit else [],
         )
         if state != expected:
             print(f"selftest: {name} should be {expected}, got {state}")
@@ -629,7 +671,21 @@ def selftest() -> int:
             "HammerForge 0.3.2",
             "0.3.2",
             age_days,
-            edit,
+            [edit] if edit else [],
+        )
+        if state != expected:
+            print(f"selftest: {name} should be {expected}, got {state}")
+            failures += 1
+
+    for name, entry_commit, entry_version, queue, expected in QUEUE_CASES:
+        state, _ = verdict(
+            entry_commit,
+            entry_version,
+            SHA_B,
+            "HammerForge 0.3.2",
+            "0.3.2",
+            13,
+            queue,
         )
         if state != expected:
             print(f"selftest: {name} should be {expected}, got {state}")
@@ -657,6 +713,7 @@ def selftest() -> int:
         len(CASES)
         + len(VERSION_CASES)
         + len(BOTH_CASES)
+        + len(QUEUE_CASES)
         + len(CFG_CASES)
         + len(ENTRY_CASES)
     )
@@ -692,13 +749,13 @@ def main() -> int:
         entry_commit, entry_version = parse_entry(_get_json(ENTRY_URL))
         head_sha, head_subject, age_days = _release_head(repo)
         head_version = _release_version(repo)
-        edit = None
-        # Only when something disagrees. The queue costs two more requests per
-        # edit read and has nothing to say while the entry is right.
+        queue: list[PendingEdit] = []
+        # Only when something disagrees. Reading the queue costs a request per
+        # edit and has nothing to say while the entry is right.
         if entry_commit != head_sha.lower() or not same_version(
             entry_version, head_version
         ):
-            edit = _pending_edit(head_sha, head_version)
+            queue = _pending_edits(head_sha, head_version)
     except CheckError as err:
         # Already retried, so this is not a blip. A check that cannot reach what
         # it checks and reports success is the exact failure this exists to
@@ -713,7 +770,7 @@ def main() -> int:
         head_subject,
         head_version,
         age_days,
-        edit,
+        queue,
     )
     _report(lines)
     if state == "stale":
