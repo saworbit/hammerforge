@@ -10,10 +10,7 @@ extends GutTest
 ## one (#771). These are the two halves, and they have to keep disagreeing.
 
 const HFDockManageHandler = preload("res://addons/hammerforge/dock_manage_handler.gd")
-
-# Long enough for a bake and a process launch, short enough that yesterday's
-# file is not a request. Mirrors LevelRoot.PLAYTEST_REQUEST_SECONDS.
-const STALE_SECONDS := 600.0
+const HFPlaytestRequest = preload("res://addons/hammerforge/hf_playtest_request.gd")
 
 
 func before_each() -> void:
@@ -27,8 +24,8 @@ func after_each() -> void:
 
 
 func _clear_request() -> void:
-	var abs_path := ProjectSettings.globalize_path(LevelRoot.PLAYTEST_REQUEST_PATH)
-	if FileAccess.file_exists(LevelRoot.PLAYTEST_REQUEST_PATH):
+	var abs_path := ProjectSettings.globalize_path(HFPlaytestRequest.PATH)
+	if FileAccess.file_exists(HFPlaytestRequest.PATH):
 		DirAccess.remove_absolute(abs_path)
 
 
@@ -65,11 +62,11 @@ func _player_of(root: LevelRoot) -> Node:
 
 
 func _write_request_aged(seconds_ago: float) -> void:
-	var dir := LevelRoot.PLAYTEST_REQUEST_PATH.get_base_dir()
+	var dir := HFPlaytestRequest.PATH.get_base_dir()
 	var abs_dir := ProjectSettings.globalize_path(dir)
 	if not DirAccess.dir_exists_absolute(abs_dir):
 		DirAccess.make_dir_recursive_absolute(abs_dir)
-	var file := FileAccess.open(LevelRoot.PLAYTEST_REQUEST_PATH, FileAccess.WRITE)
+	var file := FileAccess.open(HFPlaytestRequest.PATH, FileAccess.WRITE)
 	file.store_string(str(Time.get_unix_time_from_system() - seconds_ago))
 	file.close()
 
@@ -130,7 +127,7 @@ func test_a_run_nobody_requested_builds_no_player() -> void:
 func test_a_stale_request_is_not_a_request() -> void:
 	# The editor can write a request and then never launch - a refused bake, a
 	# crash. That file must not turn the mapper's next F5 into a playtest.
-	_write_request_aged(STALE_SECONDS + 60.0)
+	_write_request_aged(HFPlaytestRequest.WINDOW_SECONDS + 60.0)
 
 	var root := _root()
 	await wait_frames(4)
@@ -141,9 +138,7 @@ func test_a_stale_request_is_not_a_request() -> void:
 func test_the_request_is_consumed_by_the_run_it_launched() -> void:
 	var dock := _dock()
 	HFDockManageHandler.launch_playtest(dock)
-	assert_true(
-		FileAccess.file_exists(LevelRoot.PLAYTEST_REQUEST_PATH), "the launch wrote a request"
-	)
+	assert_true(FileAccess.file_exists(HFPlaytestRequest.PATH), "the launch wrote a request")
 
 	var first := _root()
 	await wait_for_signal(first.bake_finished, 10.0)
@@ -151,7 +146,7 @@ func test_the_request_is_consumed_by_the_run_it_launched() -> void:
 	assert_not_null(_player_of(first), "the launched run took it")
 
 	assert_false(
-		FileAccess.file_exists(LevelRoot.PLAYTEST_REQUEST_PATH),
+		FileAccess.file_exists(HFPlaytestRequest.PATH),
 		"and took it away with it, so it cannot fire twice"
 	)
 

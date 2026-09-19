@@ -5,6 +5,7 @@ extends RefCounted
 
 const DraftEntity = preload("draft_entity.gd")
 const HFUndoHelper = preload("undo_helper.gd")
+const HFPlaytestRequest = preload("hf_playtest_request.gd")
 
 
 static func on_bake(dock: Object) -> void:
@@ -704,16 +705,10 @@ static func launch_playtest(dock: Object) -> void:
 ## instance, and would then be on for their shipped game too -- which is the
 ## second character controller #719 removed.
 static func request_playtest_player(dock: Object) -> void:
-	var abs_dir := ProjectSettings.globalize_path(LevelRoot.PLAYTEST_REQUEST_PATH.get_base_dir())
-	if not DirAccess.dir_exists_absolute(abs_dir):
-		DirAccess.make_dir_recursive_absolute(abs_dir)
-	var file = FileAccess.open(LevelRoot.PLAYTEST_REQUEST_PATH, FileAccess.WRITE)
-	if not file:
-		if dock != null:
-			dock._log("Failed to write the playtest request file", true)
+	if HFPlaytestRequest.write():
 		return
-	file.store_string(str(Time.get_unix_time_from_system()))
-	file.close()
+	if dock != null:
+		dock._log("Failed to write the playtest request file", true)
 
 
 static func notify_running_instances(dock: Object) -> void:

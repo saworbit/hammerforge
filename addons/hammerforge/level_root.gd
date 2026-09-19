@@ -32,17 +32,12 @@ const HFFileSystemType = preload("systems/hf_file_system.gd")
 const HFPrototypeTextures = preload("hf_prototype_textures.gd")
 const HFIORuntime = preload("hf_io_runtime.gd")
 const HFOutlineUtil = preload("hf_outline_util.gd")
+## Both halves of the playtest request live in one leaf script, so neither this
+## nor the dock handler has to name the other's class (#771).
+const HFPlaytestRequest = preload("hf_playtest_request.gd")
 
 const RELOAD_LOCK_PATH := "res://.hammerforge/reload.lock"
 const RELOAD_POLL_SECONDS := 0.5
-
-## How the editor asks a run for a playtest player. A level cannot tell
-## Test Level apart from the mapper pressing F5 on their own game -- it is the
-## same scene either way -- so the launcher leaves this behind and the run takes
-## it. Under a dot directory, which an export does not ship, and stamped so a
-## request nobody collected expires instead of waiting for the next run (#771).
-const PLAYTEST_REQUEST_PATH := "res://.hammerforge/playtest.request"
-const PLAYTEST_REQUEST_SECONDS := 600.0
 
 enum BrushShape {
 	BOX,
@@ -951,7 +946,7 @@ func _ready():
 		_setup_runtime_reload()
 		# Collected unconditionally, so a request is spent by the first run after it
 		# whatever that run decides -- it must not queue up behind this one.
-		var requested := _consume_playtest_request()
+		var requested := HFPlaytestRequest.consume()
 		if auto_spawn_player or requested:
 			call_deferred("_start_playtest")
 
@@ -3784,26 +3779,6 @@ func _set_hflevel_autosave_keep(value: int) -> void:
 	if _hflevel_autosave_keep == clamped:
 		return
 	_hflevel_autosave_keep = clamped
-
-
-## Take the editor's request for a playtest player, if there is a live one.
-##
-## Always removes the file. A request nobody collected -- a bake that was
-## refused, an editor that went away -- is spent rather than lying in wait to
-## turn the mapper's next ordinary run into a playtest.
-func _consume_playtest_request() -> bool:
-	if not FileAccess.file_exists(PLAYTEST_REQUEST_PATH):
-		return false
-	var stamp := 0.0
-	var file = FileAccess.open(PLAYTEST_REQUEST_PATH, FileAccess.READ)
-	if file:
-		stamp = file.get_as_text().strip_edges().to_float()
-		# Closed before the remove: an open handle refuses the delete on Windows.
-		file.close()
-	DirAccess.remove_absolute(ProjectSettings.globalize_path(PLAYTEST_REQUEST_PATH))
-	if stamp <= 0.0:
-		return false
-	return Time.get_unix_time_from_system() - stamp <= PLAYTEST_REQUEST_SECONDS
 
 
 func _read_reload_timestamp() -> int:
