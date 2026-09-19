@@ -5,6 +5,31 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Something notices when the Asset Library entry goes stale** (#778). The last
+  step of a release is a commit hash pasted into a web form by hand, and nothing
+  looked at whether it had happened. `release.yml` prints the hash to its job
+  summary, which is read once in the minutes after a release and never again, so
+  a forgotten paste stayed invisible: the entry looks fine, the download works,
+  and it quietly hands out an old plugin. A new weekly workflow compares the
+  entry's `download_commit` against the head of `release` and fails once they
+  have disagreed for more than three days. The grace period is the point. At the
+  moment a release is cut they correctly disagree, and going red for that would
+  be the kind of red that teaches people to ignore red.
+  Comparing those two alone turned out not to be enough. An Asset Library edit
+  does not take effect when it is submitted; it waits in a moderation queue. So
+  there is a window where the paste has happened and the entry still serves the
+  old commit, and a check that could not tell those apart would have said the
+  paste was forgotten and asked for it again, which only adds a second record to
+  the queue. That was the live state while this was being written: 0.3.2's paste
+  was submitted 27 minutes after the release and was still queued. The check now
+  reads the pending edits too, and a rejected one fails with the reason it was
+  rejected.
+  `release.yml` also carried the claim that the Asset Library has no API for
+  updating an entry. It has one. The reason to keep pasting by hand is that its
+  token comes from a username and password, and the edit is moderated either
+  way, so automating it would put the account password in Actions secrets and
+  still not remove the human. Corrected in place rather than left to be looked
+  up a third time.
 - **The plugin folder explains itself** (#780). `addons/hammerforge/` had 108
   entries at its top level and no README, so nothing in it said what it was, how
   to turn it on, or what not to do with it. That was survivable while the only
