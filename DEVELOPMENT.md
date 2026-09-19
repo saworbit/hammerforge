@@ -86,8 +86,14 @@ or `main` into it, and expect its contents to be replaced wholesale each time.
    the excluded paths rather than trusting the list that produced it, replaces
    the contents of `release` with it, and attaches a zip to the GitHub Release.
 4. The run summary prints the new `release` commit hash. Paste it into the
-   Asset Library entry's **Download Commit** field. There is no API for that,
-   so it stays the one manual step.
+   Asset Library entry's **Download Commit** field. There is an API for that,
+   `POST /asset/{id}`, but its token comes from a username and password and the
+   edit is moderated either way, so this stays the one manual step on purpose
+   rather than for want of an endpoint.
+5. The edit waits in a moderation queue before it takes effect, so the entry
+   goes on serving the old commit for a while after the paste. That part is not
+   yours to fix. The weekly **Asset Library freshness** workflow tells a queued
+   paste apart from a forgotten one and only complains about the second.
 
 To see what a release would contain before tagging anything:
 

@@ -205,8 +205,16 @@ jobs:
           gh release upload "${GITHUB_REF_NAME}" "$RUNNER_TEMP/hammerforge-$VERSION-addon.zip" "$RUNNER_TEMP/hammerforge-$VERSION.zip" --clobber
 
       - name: Asset Library commit
-        # Printed rather than submitted: the Asset Library has no API for
-        # updating an entry, so the hash has to be pasted into the form by hand.
+        # Printed rather than submitted. There is an API for updating an entry,
+        # despite what this comment used to say: POST /asset/{id}. Its token
+        # comes from POST /login, which takes a username and password and
+        # nothing else, and the edit lands in a moderation queue either way. So
+        # the hash is still pasted into the form by hand, deliberately.
+        #
+        # This summary is read once, in the minutes after a release, and never
+        # again, so it is not what catches a paste that did not happen. The
+        # weekly Asset Library freshness workflow is. See
+        # tools/check_assetlib_freshness.py.
         run: |
           {
             echo "### Asset Library"
