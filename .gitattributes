@@ -1,0 +1,13 @@
+# Normalize EOL for all files that Git considers text files.
+* text=auto eol=lf
+
+# The reference map is a compressed .hflevel. text=auto guesses, and a wrong
+# guess would mangle line endings inside the payload on checkout.
+addons/hammerforge/data/reference_map.hflevel binary
+
+# What the Asset Library downloads is a git archive of this branch, and these
+# three have no meaning in the project it is installed into. LICENSE and addons/
+# do. Set by tools/build_release_tree.py.
+/.gitattributes export-ignore
+/.gitignore export-ignore
+/README.md export-ignore
