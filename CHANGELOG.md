@@ -124,6 +124,29 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   collision, its scripts and every child it had.
 
 ### Fixed
+- **Nudging, rotating or flipping an entity records that entity, not the level**
+  (#761). The last of the undo sites that could name what they change. A
+  selection with an entity in it, and a selection of nothing but entities, both
+  took a whole-level snapshot per keypress, which the issue measured at 23.4 ms
+  and 705 KB at 400 brushes, against 0.06 ms and 3.6 KB for the scoped step the
+  same command already took on brushes alone. Arrow keys are held down, so it was
+  the seam the issue said it was: the same keypress fast or slow depending on
+  what else was selected.
+  A scope now carries its entities beside its brushes, keyed by the node path
+  the commands already name them by, and `apply_entity_record()` writes the
+  record back onto the live node. That is what the issue parked this on: a
+  restore that *rebuilds* an entity changes its node path, which is true of
+  `restore_state()` and of nothing a scope does. Nudge, rotate and flip write
+  `global_transform` and the `angle` property onto entities that are already
+  there, so a scoped undo frees nothing and no path moves.
+  The node name is written back only when no sibling holds it. Godot renames a
+  node given a name one of its siblings has, so an unguarded write would move
+  the very path the rest of the step looks its entities up by.
+  `plugin_edit_actions.brush_scope()` is gone rather than widened. It existed to
+  refuse a selection with an entity in it, and the only rule left is "at least
+  one object", which every one of the four commands has already checked by the
+  time it commits.
+
 - **The UV spinboxes and a material dropped on a face record one brush, not the
   level** (#761). The last two undo sites that could name the brush they change
   and did not. Both edit one face of a brush that is already there: the spinboxes

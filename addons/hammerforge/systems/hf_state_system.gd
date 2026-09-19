@@ -80,7 +80,7 @@ func capture_state(include_transient: bool = true) -> Dictionary:
 	return state
 
 
-## An undo step that records only the brushes an action touches.
+## An undo step that records only the objects an action touches.
 ##
 ## `capture_state()` is the whole level. At 900 brushes that is 39 ms to take and
 ## 2.2 MB to hold, on every action that is not collated, and an editor session
@@ -90,19 +90,24 @@ func capture_state(include_transient: bool = true) -> Dictionary:
 ##
 ## What comes back is the same brush info dictionaries `capture_state()` records,
 ## for the named ids only, beside where each one sits in the draft container so a
-## rebuilt brush goes back in its place rather than at the end (#660).
+## rebuilt brush goes back in its place rather than at the end (#660), and the
+## same entity infos keyed by node path when the caller named entities too. The
+## pair keeps its name: `restore_brush_scope` goes into undo entries as a string,
+## so a step an editor session took before a plugin reload still has to find it.
 ##
-## An empty dictionary means these ids cannot be a scope and the caller should
-## take the whole snapshot: an id that does not resolve, or a brush sitting in
-## the pending or committed container, where a scoped restore has no index to put
-## it back at.
+## An empty dictionary means these objects cannot be a scope and the caller
+## should take the whole snapshot: an id that does not resolve, a brush sitting
+## in the pending or committed container, where a scoped restore has no index to
+## put it back at, or a path that is not a managed entity.
 ##
-## This is only a correct undo unit for an action that changes those brushes and
+## This is only a correct undo unit for an action that changes those objects and
 ## nothing else. A record cannot check that, so it is opted into per command at
 ## the call site, and pinned per command by a test that captures the full state
 ## either side of the command and asserts nothing outside the scope moved.
-func capture_brush_scope(brush_ids: Array) -> Dictionary:
-	if brush_ids.is_empty() or root.brush_system == null or root.draft_brushes_node == null:
+func capture_brush_scope(brush_ids: Array, entity_paths: Array = []) -> Dictionary:
+	if root.brush_system == null or root.draft_brushes_node == null:
+		return {}
+	if brush_ids.is_empty() and entity_paths.is_empty():
 		return {}
 	var records: Array = []
 	var order: Dictionary = {}
@@ -120,9 +125,22 @@ func capture_brush_scope(brush_ids: Array) -> Dictionary:
 			return {}
 		records.append(info)
 		order[brush_id] = (brush as Node).get_index()
-	if records.is_empty():
+	var entities: Dictionary = {}
+	if not entity_paths.is_empty():
+		if root.entity_system == null:
+			return {}
+		entities = root.entity_system.capture_entity_scope(entity_paths)
+		if entities.is_empty():
+			return {}
+	if records.is_empty() and entities.is_empty():
 		return {}
-	return {"brushes": records, "order": order}
+	var scope: Dictionary = {"brushes": records, "order": order}
+	# Only when there are entities, so a brush-only scope is the two-key dictionary
+	# it has always been and the steps an editor session is already holding stay
+	# exactly the shape the restore below reads.
+	if not entities.is_empty():
+		scope["entities"] = entities
+	return scope
 
 
 ## The mirror of `capture_brush_scope()`.
@@ -132,16 +150,18 @@ func capture_brush_scope(brush_ids: Array) -> Dictionary:
 ## because it recaptures every one of them to find out. A scope already knows, so
 ## this is a lookup per record.
 ##
+## The entities go back onto the nodes they came from, which is the whole reason
+## a selection with one in it can be scoped at all (#761): nothing is freed, so
+## no node path moves and no entity has to be found by anything but its path.
+##
 ## One unreadable record costs that record, not the step, the same way one
 ## unreadable brush entry costs that entry in `restore_state()`.
 func restore_brush_scope(scope: Dictionary) -> void:
 	if scope.is_empty() or root.brush_system == null:
 		return
 	var records = scope.get("brushes", [])
-	if not (records is Array):
-		return
 	var skipped := 0
-	for info in records:
+	for info in records if records is Array else []:
 		if not (info is Dictionary):
 			skipped += 1
 			continue
@@ -149,6 +169,9 @@ func restore_brush_scope(scope: Dictionary) -> void:
 			skipped += 1
 	var order = scope.get("order", {})
 	_restore_scope_order(order if order is Dictionary else {})
+	var entities = scope.get("entities", {})
+	if entities is Dictionary and not entities.is_empty() and root.entity_system != null:
+		skipped += root.entity_system.restore_entity_scope(entities as Dictionary)
 	if skipped > 0:
 		HFLog.warn("HFStateSystem: skipped %d record this undo step could not use" % skipped)
 
