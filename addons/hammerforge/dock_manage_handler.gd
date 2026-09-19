@@ -140,6 +140,16 @@ static func on_bake_check_issues(dock: Object) -> void:
 		push_warning("HF Bake Issue: %s" % issue.get("message", ""))
 
 
+## One way of saying how long something takes, so the estimate before a bake and
+## the report after it cannot drift into two different formats.
+static func format_duration_ms(ms: int) -> String:
+	if ms < 1000:
+		return "%d ms" % ms
+	if ms < 60000:
+		return "%.1f s" % (float(ms) / 1000.0)
+	return "%.1f min" % (float(ms) / 60000.0)
+
+
 static func update_bake_estimate(dock: Object) -> void:
 	if dock == null or not dock.level_root or not dock.bake_estimate_label:
 		return
@@ -147,14 +157,7 @@ static func update_bake_estimate(dock: Object) -> void:
 	var ms: int = est.get("estimated_ms", 0)
 	var count: int = est.get("brush_count", 0)
 	var tip: String = est.get("tip", "")
-	var time_str := ""
-	if ms < 1000:
-		time_str = "%d ms" % ms
-	elif ms < 60000:
-		time_str = "%.1f s" % (float(ms) / 1000.0)
-	else:
-		time_str = "%.1f min" % (float(ms) / 60000.0)
-	var label_text := "Est: %s (%d brushes)" % [time_str, count]
+	var label_text := "Est: %s (%d brushes)" % [format_duration_ms(ms), count]
 	if tip != "":
 		label_text += " — %s" % tip
 	dock.bake_estimate_label.text = label_text
@@ -172,6 +175,7 @@ static func on_bake_started(dock: Object) -> void:
 	if dock == null:
 		return
 	update_bake_estimate(dock)
+	dock._bake_started_msec = Time.get_ticks_msec()
 	dock._set_status("Baking...", false, 0.0)
 	if dock.progress_bar:
 		dock.progress_bar.max_value = 100
@@ -202,8 +206,15 @@ static func on_bake_progress(dock: Object, value: float, label: String) -> void:
 static func on_bake_finished(dock: Object, success: bool) -> void:
 	if dock == null:
 		return
+	var started: int = int(dock._bake_started_msec)
+	dock._bake_started_msec = 0
 	if success:
-		dock._set_status("Bake complete", false, 3.0)
+		# A bake this dock did not see the start of is reported without a duration
+		# rather than with one measured from zero.
+		var message := "Bake complete"
+		if started > 0:
+			message = "Bake complete in %s" % format_duration_ms(Time.get_ticks_msec() - started)
+		dock._set_status_success(message, 3.0)
 		dock.show_toast("Bake complete", 0)
 	else:
 		dock._set_status("Bake failed - check Output for details", true)
@@ -290,9 +301,7 @@ static func on_quick_play(dock: Object) -> void:
 			dock.level_root.spawn_system.show_validation_debug(spawn, validation, 6.0)
 			dock.show_toast("Spawn warning: %s" % "\n".join(issues), 1)
 
-	notify_running_instances(dock)
-	if dock.editor_interface:
-		dock.editor_interface.play_current_scene()
+	launch_playtest(dock)
 
 
 static func on_quick_play_from_camera(dock: Object) -> void:
@@ -363,9 +372,7 @@ static func on_quick_play_from_camera(dock: Object) -> void:
 			dock.level_root.spawn_system.show_validation_debug(spawn, validation, 6.0)
 			dock.show_toast("Camera spawn warning: %s" % "\n".join(issues), 1)
 
-	notify_running_instances(dock)
-	if dock.editor_interface:
-		dock.editor_interface.play_current_scene()
+	launch_playtest(dock)
 
 	restore_spawn(spawn, old_pos, old_angle)
 
@@ -425,9 +432,7 @@ static func on_quick_play_selected_area(dock: Object) -> void:
 			dock.level_root.spawn_system.show_validation_debug(spawn, validation, 6.0)
 			dock.show_toast("Spawn warning: %s" % "\n".join(issues), 1)
 
-	notify_running_instances(dock)
-	if dock.editor_interface:
-		dock.editor_interface.play_current_scene()
+	launch_playtest(dock)
 
 	restore_cordon_state(dock, prev_cordon_enabled, prev_cordon_aabb)
 
@@ -557,9 +562,7 @@ static func show_spawn_fix_dialog(
 				dock.level_root.spawn_system.cleanup_debug()
 				record_spawn_move_undo(dock, spawn, old_pos, spawn.global_position)
 				dock.show_toast("Spawn fixed — launching playtest", 0)
-			notify_running_instances(dock)
-			if dock.editor_interface:
-				dock.editor_interface.play_current_scene()
+			launch_playtest(dock)
 			dialog.queue_free()
 	)
 	dialog.canceled.connect(
@@ -682,6 +685,35 @@ static func on_show_spawn_debug_toggled(dock: Object, enabled: bool) -> void:
 		dock.level_root.spawn_system.show_validation_debug(spawn, validation, 0.0)
 	else:
 		dock.level_root.spawn_system.cleanup_debug()
+
+
+## Every way the dock starts a playtest goes through here, so that the run it
+## starts can tell itself apart from the mapper running their own game (#771).
+static func launch_playtest(dock: Object) -> void:
+	if dock == null:
+		return
+	request_playtest_player(dock)
+	notify_running_instances(dock)
+	if dock.editor_interface:
+		dock.editor_interface.play_current_scene()
+
+
+## Leave the request the launched run will collect. Written rather than set on
+## the node because `play_current_scene()` plays the scene *file*: a property set
+## here would have to be saved into the mapper's own scene to reach the running
+## instance, and would then be on for their shipped game too -- which is the
+## second character controller #719 removed.
+static func request_playtest_player(dock: Object) -> void:
+	var abs_dir := ProjectSettings.globalize_path(LevelRoot.PLAYTEST_REQUEST_PATH.get_base_dir())
+	if not DirAccess.dir_exists_absolute(abs_dir):
+		DirAccess.make_dir_recursive_absolute(abs_dir)
+	var file = FileAccess.open(LevelRoot.PLAYTEST_REQUEST_PATH, FileAccess.WRITE)
+	if not file:
+		if dock != null:
+			dock._log("Failed to write the playtest request file", true)
+		return
+	file.store_string(str(Time.get_unix_time_from_system()))
+	file.close()
 
 
 static func notify_running_instances(dock: Object) -> void:

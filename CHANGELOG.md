@@ -6,6 +6,62 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 ## [Unreleased]
 
 ## [0.3.2] - 2026-09-19
+### Fixed
+- **Test Level starts a level with a player in it again** (#771). It bakes,
+  validates the spawn and launches, and the window that came up was flat grey:
+  no player, and so no camera. That is the loop the documentation leads with.
+  `_start_playtest()` is the only thing that builds a `PlaytestPlayer`, and it
+  was gated behind `auto_spawn_player`, whose default #719 flipped from `true`
+  to `false` -- after 0.3.0 shipped, and three days after the last run of the
+  release gate, which is why nothing caught it until this one.
+  #719 was right about its own bug: a mapper's own game scene with a `LevelRoot`
+  in it should not get a second character controller. The two cases are
+  genuinely indistinguishable from inside the level, because Test Level plays
+  the same scene the mapper would play themselves -- so the launcher now says
+  which it is. Every way the dock starts a playtest goes through
+  `HFDockManageHandler.launch_playtest()`, which leaves a stamped request at
+  `res://.hammerforge/playtest.request`, and the run collects it in `_ready()`.
+  Under a dot directory, which an export does not ship. The request is removed
+  by the first run after it whatever that run decides, so one that nobody
+  collected -- a refused bake, an editor that went away -- expires rather than
+  turning the mapper's next ordinary F5 into a playtest; and one older than ten
+  minutes is not a request at all.
+  Written to a file rather than set on the node because `play_current_scene()`
+  plays the scene *file*: a property set on the live node would have to be saved
+  into the mapper's own scene to reach the running instance, and would then be
+  on for their shipped game too.
+  Not caught by the suite or by the vibe scenarios because every one of them
+  sets `auto_spawn_player` itself before `add_child()`, so none went through the
+  path the button takes. The new coverage goes through `launch_playtest()`.
+
+- **Redo of Create Starter Level brings the player spawn back** (#772). Undoing
+  it twice takes the contents and then the `LevelRoot`; redoing put the node
+  back and ran `create_new_level()` on it again, but `_ready()` does not run a
+  second time, so the node returned without any of the children `_ready()` had
+  given it. The floor and the sun came back regardless, because those are
+  get-or-create against the root. The spawn did not, because it needs the
+  entities container, and that reference was dangling. The `_setup_*` calls are
+  now `_ensure_child_nodes()`, which `_ready()` and `create_new_level()` both
+  run; each one was already get-or-create, so running it again is free.
+
+- **The Bake row says how long the bake took, and is coloured** (#773). The
+  release gate asks for both and the build did neither: the message was the
+  literal `"Bake complete"`, and `_set_status(msg, false, ...)` *removes* the
+  colour override rather than setting one, so a finished bake read as ordinary
+  body text. There is now a `_set_status_success()` beside the warning and error
+  ones, and the row reads `Bake complete in 340 ms`. The duration is formatted by
+  `format_duration_ms()`, extracted from the estimate label so the guess before a
+  bake and the report after it cannot drift into two formats. A bake whose start
+  this dock did not see is reported without a duration rather than with one
+  measured from zero.
+
+- **A new level no longer arrives with a warning on it** (#774).
+  `Generated/RegionOverlay` is a `MeshInstance3D` that has nothing to draw until
+  a region is painted, and Godot warns about a mesh instance with no mesh -- so
+  every level ever created carried a yellow triangle in the Scene dock and sat
+  at one warning from the moment it existed. It gets an empty `ArrayMesh`, which
+  satisfies the editor and renders nothing. Applied outside the create branch, so
+  a level saved before this stops warning as soon as it is opened.
 ### Added
 - **`tools/wait_for_ci.py` takes a commit as well as a pull request** (#763).
   The internals were always keyed to a commit; only the argument parser insisted
