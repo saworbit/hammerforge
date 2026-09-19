@@ -123,6 +123,31 @@ jobs:
           fi
           echo "RELEASE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
+      - name: Check what the Asset Library will download
+        # The Asset Library serves this branch as a *git archive*, so
+        # `export-ignore` -- not the ship list -- decides what a mapper ends up
+        # with. Godot's installer strips the `<repo>-<sha>/` wrapper and then
+        # offers everything left at the root, checked, into their project root.
+        #
+        # Checked against the archive itself rather than against the
+        # .gitattributes that is supposed to produce it, for the same reason
+        # "Refuse to ship development tooling" checks the built tree.
+        run: |
+          cd "$RUNNER_TEMP/relbranch"
+          git archive HEAD | tar -t | cut -d/ -f1 | sort -u > /tmp/roots.txt
+          {
+            echo LICENSE
+            echo addons
+          } > /tmp/expected.txt
+          if ! diff -u /tmp/expected.txt /tmp/roots.txt; then
+            echo "::error::the Asset Library download would not be addons/ and LICENSE alone"
+            echo "Anything at the archive root lands beside the mapper's own files."
+            echo "See RELEASE_GITATTRIBUTES in tools/build_release_tree.py."
+            exit 1
+          fi
+          echo "installing this gives a project addons/ and LICENSE, and nothing else"
+
+
       - name: Attach the zip to the GitHub Release
         # `gh release upload` needs the release to exist already. Until 0.3.2
         # one always did, because release-drafter had drafted it -- but the
