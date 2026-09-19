@@ -34,13 +34,14 @@ static var _last_collation_scoped := false
 ## and entities and rebuilds them from their captured info, so a node an undo
 ## passed over is freed and the reference held for the redo is dangling.
 ##
-## `scope_brush_ids` names the brushes the command changes, and nothing else. A
-## command that can say that gets an undo step the size of the change instead of
-## the size of the level (#737). It is a claim about the command, not about the
-## arguments: pass it only when the method changes those brushes and no entity,
-## no registry, no palette and no other brush. When the ids cannot be a scope --
-## one does not resolve, or one is a pending cut -- the whole snapshot is taken
-## as before, so a wrong-looking id costs speed and not correctness.
+## `scope_brush_ids` and `scope_entity_paths` name the objects the command
+## changes, and nothing else. A command that can say that gets an undo step the
+## size of the change instead of the size of the level (#737). It is a claim
+## about the command, not about the arguments: pass them only when the method
+## changes those objects and no registry, no palette and nothing else in the
+## level. When they cannot be a scope -- an id does not resolve, one is a pending
+## cut, a path is not a managed entity -- the whole snapshot is taken as before,
+## so a wrong-looking claim costs speed and not correctness.
 static func commit(
 	undo_redo: EditorUndoRedoManager,
 	root: Node,
@@ -51,7 +52,8 @@ static func commit(
 	history_cb: Callable = Callable(),
 	collation_tag: String = "",
 	absolute_redo: bool = false,
-	scope_brush_ids: Array = []
+	scope_brush_ids: Array = [],
+	scope_entity_paths: Array = []
 ) -> void:
 	if not root or method_name == "" or not root.has_method(method_name):
 		return
@@ -81,14 +83,15 @@ static func commit(
 	if can_collate:
 		# Reuse the *original* pre-action state from the first action in this
 		# collation run so that undo jumps all the way back. A run shares one
-		# collation tag and the tag names the brushes, so every commit in it
+		# collation tag and the tag names the objects, so every commit in it
 		# scopes the same way the first one did.
 		state = _last_collation_state
 		scoped = _last_collation_scoped
 	else:
-		if not full_state and not scope_brush_ids.is_empty():
+		var claimed := not scope_brush_ids.is_empty() or not scope_entity_paths.is_empty()
+		if not full_state and claimed:
 			if root.has_method("capture_brush_scope"):
-				state = root.capture_brush_scope(scope_brush_ids)
+				state = root.capture_brush_scope(scope_brush_ids, scope_entity_paths)
 				scoped = not state.is_empty()
 		if not scoped:
 			state = root.capture_full_state() if full_state else root.capture_state()
@@ -104,7 +107,8 @@ static func commit(
 		state,
 		full_state,
 		absolute_redo,
-		scope_brush_ids if scoped else []
+		scope_brush_ids if scoped else [],
+		scope_entity_paths if scoped else []
 	)
 
 	_update_collation(collation_tag, can_collate, full_state, scoped, now, state)
@@ -161,7 +165,7 @@ static func commit_completed(
 		var restore_name := (
 			"restore_brush_scope" if not scope_brush_ids.is_empty() else "restore_state"
 		)
-		var result: Dictionary = _after_state(root, action_name, scope_brush_ids, false)
+		var result: Dictionary = _after_state(root, action_name, scope_brush_ids, [], false)
 		undo_redo.create_action(action_name, 0, null, false)
 		undo_redo.add_do_method(root, result["restore"], result["state"])
 		undo_redo.add_undo_method(root, restore_name, before)
@@ -176,10 +180,10 @@ static func commit_completed(
 ## `EditorUndoRedoManager` cannot be constructed outside the editor, and this is
 ## the part where getting the do operation wrong is invisible until a redo.
 ##
-## `scope_brush_ids` non-empty means `state` is a brush scope rather than a whole
+## Either scope list non-empty means `state` is a scope rather than a whole
 ## level, so both ends of the action restore through `restore_brush_scope()`.
-## `commit()` passes it only once it has a scope in hand, so this does not have
-## to decide whether the ids were usable.
+## `commit()` passes them only once it has a scope in hand, so this does not have
+## to decide whether the objects were usable.
 static func register_action(
 	undo_redo,
 	root: Node,
@@ -190,9 +194,10 @@ static func register_action(
 	state: Dictionary,
 	full_state: bool = false,
 	absolute_redo: bool = false,
-	scope_brush_ids: Array = []
+	scope_brush_ids: Array = [],
+	scope_entity_paths: Array = []
 ) -> void:
-	var scoped := not scope_brush_ids.is_empty()
+	var scoped := not scope_brush_ids.is_empty() or not scope_entity_paths.is_empty()
 	var restore_name := "restore_full_state" if full_state else "restore_state"
 	if scoped:
 		restore_name = "restore_brush_scope"
@@ -205,7 +210,9 @@ static func register_action(
 		# Run it here, then register the result rather than the step, and commit
 		# without executing so the work is not done twice.
 		root.callv(method_name, args)
-		var result: Dictionary = _after_state(root, action_name, scope_brush_ids, full_state)
+		var result: Dictionary = _after_state(
+			root, action_name, scope_brush_ids, scope_entity_paths, full_state
+		)
 		undo_redo.create_action(action_name, merge_mode, null, false)
 		undo_redo.add_do_method(root, result["restore"], result["state"])
 		undo_redo.add_undo_method(root, restore_name, state)
@@ -232,25 +239,29 @@ static func register_action(
 
 ## The state a do operation restores, once the work has already been done.
 ##
-## Named ids mean the caller claimed a scope, so the result is the scope those
-## ids record now. An empty one back means the command changed which brushes
-## exist, which is the one thing a scope promises it does not do. Undo still puts
-## the recorded brushes back, but nothing can put back what the command added or
-## removed, so the do falls back to the whole level and says so rather than
-## letting a silent half-redo ship.
+## Named objects mean the caller claimed a scope, so the result is the scope
+## those objects record now. An empty one back means the command changed which
+## brushes or entities exist, which is the one thing a scope promises it does not
+## do. Undo still puts the recorded objects back, but nothing can put back what
+## the command added or removed, so the do falls back to the whole level and says
+## so rather than letting a silent half-redo ship.
 ##
 ## Both places that register a completed action read this, so the fallback cannot
 ## drift between them.
 static func _after_state(
-	root: Node, action_name: String, scope_brush_ids: Array, full_state: bool
+	root: Node,
+	action_name: String,
+	scope_brush_ids: Array,
+	scope_entity_paths: Array,
+	full_state: bool
 ) -> Dictionary:
-	var scoped := not scope_brush_ids.is_empty()
+	var scoped := not scope_brush_ids.is_empty() or not scope_entity_paths.is_empty()
 	if scoped:
-		var scope: Dictionary = root.capture_brush_scope(scope_brush_ids)
+		var scope: Dictionary = root.capture_brush_scope(scope_brush_ids, scope_entity_paths)
 		if not scope.is_empty():
 			return {"restore": "restore_brush_scope", "state": scope}
 		HFLog.warn(
-			"HFUndoHelper: '%s' changed the brush set it scoped, so redo is partial" % action_name
+			"HFUndoHelper: '%s' changed the object set it scoped, so redo is partial" % action_name
 		)
 	return {
 		"restore": "restore_full_state" if full_state else "restore_state",

@@ -18,7 +18,6 @@ extends GutTest
 ## check it, so the last sections here run each command and assert that nothing
 ## outside its scope moved.
 
-const HFPluginEditActions = preload("res://addons/hammerforge/plugin_edit_actions.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 
 ## Matches HFBrushSystem._RECORD_COMPARE_DEPTH. A state is a handful of values and
@@ -105,6 +104,26 @@ func _make_brush(position: Vector3, size: Vector3 = Vector3(32, 32, 32)) -> Draf
 
 func _brush_id(brush: DraftBrush) -> String:
 	return str(root.get_brush_info_from_node(brush).get("brush_id", ""))
+
+
+## An entity in the level, and the path the transform commands name it by.
+##
+## `light_point` is a real class out of `entities.json`, so the record carries
+## the properties its schema fills in rather than an empty dictionary. `angle` is
+## put there by hand because rotate and flip write it, no light declares one, and
+## it is the one field of an entity record that is not the transform.
+func _make_entity(position: Vector3, entity_name: String = "TestLight") -> DraftEntity:
+	var entity := DraftEntity.new()
+	entity.name = entity_name
+	entity.entity_type = "light_point"
+	root.entity_system.add_entity(entity)
+	entity.global_position = position
+	entity.entity_data["angle"] = 0.0
+	return entity
+
+
+func _entity_path(entity: DraftEntity) -> NodePath:
+	return root.get_path_to(entity)
 
 
 func _brush_at_index(index: int) -> DraftBrush:
@@ -301,9 +320,11 @@ func test_an_unreadable_record_costs_that_record_and_not_the_step():
 ## state, run the command, put only the scope back, and the whole state has to be
 ## the dictionary it was. A scoped step restores nothing outside its scope, so
 ## anything the command moved out there shows up here as a difference.
-func _assert_scoped_undo_round_trips(brush_ids: Array, method_name: String, args: Array) -> void:
+func _assert_scoped_undo_round_trips(
+	brush_ids: Array, method_name: String, args: Array, entity_paths: Array = []
+) -> void:
 	var before: Dictionary = root.capture_state()
-	var scope: Dictionary = root.capture_brush_scope(brush_ids)
+	var scope: Dictionary = root.capture_brush_scope(brush_ids, entity_paths)
 	assert_false(scope.is_empty(), "%s must be scopeable in this fixture" % method_name)
 	root.callv(method_name, args)
 	var moved: Dictionary = root.capture_state()
@@ -497,11 +518,11 @@ func _keys_changed_by(method_name: String, args: Array) -> Array:
 	return _differing_keys(before, root.capture_state())
 
 
-## `plugin_edit_actions.brush_scope()` hands these four commands' ids to
-## `HFUndoHelper.commit()` as a claim that the command touches those brushes and
+## `plugin_edit_actions` hands these four commands' selections to
+## `HFUndoHelper.commit()` as a claim that the command touches those objects and
 ## nothing else. This is what holds them to it. A command that grows a registry
-## write, a palette write or an entity write fails here, and the answer is to stop
-## scoping it rather than to widen the scope.
+## write or a palette write fails here, and the answer is to stop scoping it
+## rather than to widen the scope.
 func test_the_scoped_commands_change_the_brushes_and_nothing_else():
 	for method_name in [
 		"nudge_managed_nodes",
@@ -631,6 +652,29 @@ func test_a_scope_is_not_a_level_state_and_restore_state_cannot_read_one():
 		(root.capture_state()["entities"] as Array).size(),
 		0,
 		"a scope read as a level clears what it never recorded, which is why it must not be"
+	)
+
+
+## And the other half of that, for an entity scope.
+##
+## An entity scope keys its records by node path, so `entities` in one is a set
+## where `entities` in a level state is a list, and that is a shape
+## `HFValidation.level_state_problem()` refuses outright. So an entity scope read
+## as a level clears nothing, where the brush scope above clears everything.
+##
+## Pinned because it is the only thing standing between a hand-rolled restore of
+## an entity scope and a wiped level, and a record shape that made the two look
+## alike would take it away with nothing said.
+func test_an_entity_scope_is_refused_by_restore_state_rather_than_read_as_a_level():
+	_make_brush(Vector3.ZERO)
+	var light := _make_entity(Vector3(32, 0, 0))
+	var scope: Dictionary = root.capture_brush_scope([], [_entity_path(light)])
+	var before: Dictionary = root.capture_state()
+	root.restore_state(scope)
+	assert_eq(
+		_differing_keys(before, root.capture_state()),
+		[],
+		"an entity scope is not a level state and restore_state has to refuse it"
 	)
 
 
@@ -980,8 +1024,8 @@ func test_a_scope_that_did_not_work_comes_back_with_no_ids():
 		"ids that could not be a scope must not travel with the level state they fell back to"
 	)
 	assert_true(
-		(before["state"] as Dictionary).has("entities"),
-		"the fallback is the whole level, which a scope never holds"
+		(before["state"] as Dictionary).has("id_counter"),
+		"the fallback is the whole level, and a scope never holds the id counter"
 	)
 
 
@@ -989,7 +1033,7 @@ func test_asking_for_no_scope_takes_the_level():
 	_make_brush(Vector3.ZERO)
 	var before: Dictionary = HFUndoHelper.capture_scope_or_state(root, [])
 	assert_eq(before["scope_ids"], [], "no ids is no claim")
-	assert_true((before["state"] as Dictionary).has("entities"), "so the record is the level")
+	assert_true((before["state"] as Dictionary).has("id_counter"), "so the record is the level")
 
 
 func test_no_root_is_no_state_and_no_claim():
@@ -999,23 +1043,308 @@ func test_no_root_is_no_state_and_no_claim():
 
 
 # ===========================================================================
-# When a command may not claim a scope
+# The entity half of a scope
 # ===========================================================================
 
 
-func test_an_entity_in_the_selection_ends_the_claim():
-	assert_eq(
-		HFPluginEditActions.brush_scope(["b1"], [NodePath("Entities/Light")]),
-		[],
-		"the transform commands move entities too and a brush scope cannot record one"
+## What #761 parked, and why it did not need parking.
+##
+## The issue held the entity scope back on identity: a restore that rebuilds an
+## entity changes its node path, and the commands name entities by path. That is
+## true of `restore_state()`, which clears every entity and builds new ones. It
+## is not true of a scope. Nudge, rotate and flip write onto entities that are
+## already there, so a scoped restore frees nothing, and the node a record came
+## from is the node it goes back onto.
+func test_an_entity_on_its_own_is_a_scope():
+	_make_brush(Vector3.ZERO)
+	var light := _make_entity(Vector3(32, 0, 0))
+	var scope: Dictionary = root.capture_brush_scope([], [_entity_path(light)])
+	assert_false(scope.is_empty(), "a selection of one entity records that entity")
+	assert_eq((scope.get("entities", {}) as Dictionary).size(), 1, "one record")
+	assert_eq(scope.get("brushes", []), [], "and no brush, though the level has one")
+
+
+func test_a_mixed_selection_is_a_scope():
+	var a := _make_brush(Vector3.ZERO)
+	_make_brush(Vector3(64, 0, 0))
+	var light := _make_entity(Vector3(32, 0, 0))
+	var scope: Dictionary = root.capture_brush_scope([_brush_id(a)], [_entity_path(light)])
+	assert_eq((scope.get("brushes", []) as Array).size(), 1, "the brush it named")
+	assert_eq((scope.get("entities", {}) as Dictionary).size(), 1, "and the entity beside it")
+
+
+func test_a_path_that_is_not_an_entity_is_not_a_scope():
+	var a := _make_brush(Vector3.ZERO)
+	assert_true(
+		root.capture_brush_scope([_brush_id(a)], [NodePath("Entities/NoSuchLight")]).is_empty(),
+		"a path that resolves to nothing falls back to the whole snapshot"
 	)
 
 
-func test_brushes_on_their_own_are_a_claim():
-	assert_eq(
-		HFPluginEditActions.brush_scope(["b1", "b2"], []), ["b1", "b2"], "brushes alone scope"
+func test_nothing_named_is_still_not_a_scope():
+	_make_entity(Vector3.ZERO)
+	assert_true(root.capture_brush_scope([], []).is_empty(), "an empty selection records nothing")
+
+
+## A brush-only scope is the record it was before entities could be in one. An
+## editor session holds steps taken before this change, and the restore tells the
+## two apart by shape rather than by a flag.
+func test_a_brush_only_scope_is_the_record_it_always_was():
+	var a := _make_brush(Vector3.ZERO)
+	_make_entity(Vector3(32, 0, 0))
+	var scope: Dictionary = root.capture_brush_scope([_brush_id(a)])
+	assert_eq(scope.keys(), ["brushes", "order"], "no entity key when no entity was named")
+
+
+func test_a_scoped_restore_puts_an_entity_back_onto_the_node_it_came_from():
+	var light := _make_entity(Vector3(32, 0, 0))
+	var node_id := light.get_instance_id()
+	var path_before := str(_entity_path(light))
+	var scope: Dictionary = root.capture_brush_scope([], [_entity_path(light)])
+	light.global_position = Vector3(96, 0, 0)
+	light.entity_data["angle"] = 90.0
+	root.restore_brush_scope(scope)
+	assert_eq(light.global_position, Vector3(32, 0, 0), "the transform goes back")
+	assert_eq(light.entity_data.get("angle"), 0.0, "and so do the properties")
+	assert_eq(light.get_instance_id(), node_id, "onto the same node, which is the whole point")
+	assert_eq(str(_entity_path(light)), path_before, "so the path the record is keyed by held")
+
+
+func test_a_scoped_restore_leaves_the_entities_outside_it_alone():
+	var moved := _make_entity(Vector3.ZERO, "Moved")
+	var other := _make_entity(Vector3(64, 0, 0), "Other")
+	var scope: Dictionary = root.capture_brush_scope([], [_entity_path(moved)])
+	moved.global_position = Vector3(16, 0, 0)
+	other.global_position = Vector3(80, 0, 0)
+	root.restore_brush_scope(scope)
+	assert_eq(moved.global_position, Vector3.ZERO, "the one it recorded comes back")
+	assert_eq(other.global_position, Vector3(80, 0, 0), "and the one it did not is not touched")
+
+
+## A record the restore cannot use costs that record and not the step, the same
+## way an unreadable brush entry does.
+func test_an_entity_the_restore_cannot_find_costs_that_record_only():
+	var light := _make_entity(Vector3.ZERO, "Present")
+	var scope: Dictionary = root.capture_brush_scope([], [_entity_path(light)])
+	var records: Dictionary = scope["entities"]
+	records[NodePath("Entities/Gone")] = {"entity_type": "light_point"}
+	light.global_position = Vector3(48, 0, 0)
+	root.restore_brush_scope(scope)
+	assert_eq(light.global_position, Vector3.ZERO, "the entity that is there still comes back")
+
+
+# ===========================================================================
+# Writing a record back onto a live entity
+# ===========================================================================
+
+
+func test_a_record_puts_a_free_name_back():
+	var light := _make_entity(Vector3.ZERO, "Alpha")
+	var record: Dictionary = root.entity_system.capture_entity_info(light)
+	light.name = "Renamed"
+	root.entity_system.apply_entity_record(light, record)
+	assert_eq(str(light.name), "Alpha", "a name nothing else holds goes back")
+
+
+## The one write in a record that could move the path the record is keyed by.
+## Godot renames a node that is given a name a sibling already holds, so putting
+## the name back unconditionally would leave every later lookup in the step
+## pointing at nothing.
+func test_a_record_keeps_a_name_a_sibling_already_holds():
+	var first := _make_entity(Vector3.ZERO, "Alpha")
+	var second := _make_entity(Vector3(64, 0, 0), "Beta")
+	var record: Dictionary = root.entity_system.capture_entity_info(second)
+	second.name = "Gamma"
+	first.name = "Beta"
+	root.entity_system.apply_entity_record(second, record)
+	assert_eq(str(second.name), "Gamma", "the name is refused rather than uniquified")
+	assert_eq(str(first.name), "Beta", "and the sibling that holds it keeps it")
+
+
+## The record is what the entity was, so a field it does not carry is cleared
+## rather than left as it is. A command that added an output and was undone would
+## otherwise keep it.
+func test_a_record_clears_the_metadata_it_does_not_carry():
+	var light := _make_entity(Vector3.ZERO)
+	var record: Dictionary = root.entity_system.capture_entity_info(light)
+	light.set_meta("entity_io_outputs", [{"output_name": "OnFire"}])
+	light.set_meta("entity_name", "light_1")
+	root.entity_system.apply_entity_record(light, record)
+	assert_eq(light.get_meta("entity_io_outputs", []), [], "the wiring goes back to none")
+	assert_eq(str(light.get_meta("entity_name", "")), "", "and so does the authored name")
+
+
+## Every field a record carries, through a write and back.
+##
+## `capture_entity_info()` is what a whole-level state records per entity, so two
+## of those either side of a record write is the same comparison
+## `_assert_scoped_undo_round_trips()` makes for the level. A field
+## `apply_entity_record()` forgets shows up here rather than going quietly
+## missing on an undo of a command that changed it.
+func test_a_record_round_trips_every_field_it_carries():
+	var light := _make_entity(Vector3(32, 8, 0), "Alpha")
+	light.set_meta("entity_io_outputs", [{"output_name": "OnFire", "target_name": "door_1"}])
+	light.set_meta("entity_name", "light_1")
+	light.set_meta("visgroups", PackedStringArray(["wing_a"]))
+	light.set_meta("group_id", "group_3")
+	light.entity_data["range"] = 24.0
+	var record: Dictionary = root.entity_system.capture_entity_info(light)
+	light.name = "Beta"
+	light.entity_type = "door_basic"
+	light.global_transform = Transform3D(Basis(Vector3.UP, 1.2), Vector3(-9.0, 0.0, 5.0))
+	light.entity_data = {"speed": 3.0}
+	light.remove_meta("entity_io_outputs")
+	light.set_meta("entity_name", "other")
+	light.set_meta("visgroups", PackedStringArray(["wing_b"]))
+	light.remove_meta("group_id")
+	root.entity_system.apply_entity_record(light, record)
+	assert_true(
+		root.entity_system.capture_entity_info(light).recursive_equal(record, COMPARE_DEPTH),
+		"what the entity records now has to be the record that was put back onto it"
 	)
 
 
-func test_no_brushes_is_not_a_claim():
-	assert_eq(HFPluginEditActions.brush_scope([], []), [], "nothing to record is not a scope")
+## The type is written before the properties. The type setter fills `entity_data`
+## in from the class schema, so the other order would put the record's properties
+## back and then grow schema keys onto them.
+func test_a_record_puts_the_properties_back_without_the_schema_growing_them():
+	var light := _make_entity(Vector3.ZERO)
+	var record: Dictionary = root.entity_system.capture_entity_info(light)
+	light.entity_data["range"] = 99.0
+	light.entity_data["invented"] = true
+	root.entity_system.apply_entity_record(light, record)
+	assert_eq(light.entity_data, record["properties"], "the record's properties, exactly")
+
+
+# ===========================================================================
+# The transform commands, on a selection they could not scope before
+# ===========================================================================
+
+
+func test_an_entity_nudge_scoped_undo_matches_the_level_before_it():
+	_make_brush(Vector3.ZERO)
+	var light := _make_entity(Vector3(32, 0, 0))
+	var paths := [_entity_path(light)]
+	_assert_scoped_undo_round_trips(
+		[], "nudge_managed_nodes", [[], paths, Vector3(16, 0, 0)], paths
+	)
+
+
+func test_a_mixed_nudge_scoped_undo_matches_the_level_before_it():
+	var a := _make_brush(Vector3.ZERO)
+	_make_brush(Vector3(64, 0, 0))
+	var light := _make_entity(Vector3(32, 0, 0))
+	var ids := [_brush_id(a)]
+	var paths := [_entity_path(light)]
+	_assert_scoped_undo_round_trips(
+		ids, "nudge_managed_nodes", [ids, paths, Vector3(16, 0, 0)], paths
+	)
+
+
+func test_a_mixed_rotate_scoped_undo_matches_the_level_before_it():
+	var a := _make_brush(Vector3.ZERO)
+	_make_brush(Vector3(64, 0, 0))
+	var light := _make_entity(Vector3(32, 0, 0))
+	var ids := [_brush_id(a)]
+	var paths := [_entity_path(light)]
+	_assert_scoped_undo_round_trips(
+		ids, "rotate_managed_nodes", [ids, paths, 1, 45.0, Vector3.ZERO], paths
+	)
+
+
+func test_a_mixed_flip_scoped_undo_matches_the_level_before_it():
+	var a := _make_brush(Vector3.ZERO)
+	_make_brush(Vector3(64, 0, 0))
+	var light := _make_entity(Vector3(32, 0, 0))
+	var ids := [_brush_id(a)]
+	var paths := [_entity_path(light)]
+	_assert_scoped_undo_round_trips(ids, "flip_managed_nodes", [ids, paths, 0, Vector3.ZERO], paths)
+
+
+## The claim, for the selections the four transform commands could not make it
+## for until now. Same rule as everywhere else here: these are the only keys they
+## may change, and a command that grows a registry or palette write fails here
+## and loses its scope rather than widening it.
+func test_the_transform_commands_with_an_entity_change_nothing_else():
+	var a := _make_brush(Vector3.ZERO)
+	var light := _make_entity(Vector3(32, 0, 0))
+	var ids := [_brush_id(a)]
+	var paths := [_entity_path(light)]
+	var cases := [
+		["nudge_managed_nodes", [ids, paths, Vector3(16, 0, 0)]],
+		["rotate_managed_nodes", [ids, paths, 1, 45.0, Vector3.ZERO]],
+		["flip_managed_nodes", [ids, paths, 0, Vector3.ZERO]],
+	]
+	for case in cases:
+		assert_eq(
+			_keys_changed_by(str(case[0]), case[1] as Array),
+			["brushes", "entities"],
+			"%s may change the objects it named and nothing else" % str(case[0])
+		)
+
+
+## The more common selection than the mixed one the issue named, and it was
+## unscoped for the same reason: an empty `brush_ids` used to end the claim too.
+func test_nudging_an_entity_alone_changes_the_entities_and_nothing_else():
+	_make_brush(Vector3.ZERO)
+	var light := _make_entity(Vector3(32, 0, 0))
+	assert_eq(
+		_keys_changed_by("nudge_managed_nodes", [[], [_entity_path(light)], Vector3(16, 0, 0)]),
+		["entities"],
+		"a light on its own records the light"
+	)
+
+
+## The wiring, end to end. The transform commands hand their whole selection to
+## the helper now, and an entity in it has to reach the scope rather than send
+## the step back to the whole level.
+func test_a_mixed_selection_registers_the_scoped_restore_at_both_ends():
+	var a := _make_brush(Vector3.ZERO)
+	var light := _make_entity(Vector3(32, 0, 0))
+	var ids := [_brush_id(a)]
+	var paths := [_entity_path(light)]
+	var undo_redo := FakeUndoRedo.new()
+	HFUndoHelper.register_action(
+		undo_redo,
+		root,
+		"Nudge",
+		MERGE_DISABLE,
+		"nudge_managed_nodes",
+		[ids, paths, Vector3(16, 0, 0)],
+		root.capture_brush_scope(ids, paths),
+		false,
+		true,
+		ids,
+		paths
+	)
+	var entry: Dictionary = undo_redo.entries[0]
+	assert_eq(entry["do"][0]["method"], "restore_brush_scope", "redo restores the scope")
+	assert_eq(entry["undo"][0]["method"], "restore_brush_scope", "and so does undo")
+	assert_eq(light.global_position, Vector3(48, 0, 0), "the nudge happened")
+	undo_redo.undo()
+	assert_eq(light.global_position, Vector3(32, 0, 0), "and undo puts the entity back")
+	undo_redo.redo()
+	assert_eq(light.global_position, Vector3(48, 0, 0), "and redo moves it again")
+
+
+## The other half of that: an entity the scope could not record sends the step
+## back to the whole level, so the claim degrades to what every command did
+## before rather than to a half restore.
+func test_an_unrecordable_entity_sends_the_step_back_to_the_whole_level():
+	var a := _make_brush(Vector3.ZERO)
+	var ids := [_brush_id(a)]
+	var paths := [NodePath("Entities/NoSuchLight")]
+	var undo_redo := FakeUndoRedo.new()
+	HFUndoHelper.register_action(
+		undo_redo,
+		root,
+		"Nudge",
+		MERGE_DISABLE,
+		"nudge_managed_nodes",
+		[ids, paths, Vector3(16, 0, 0)],
+		root.capture_state(),
+		false,
+		true
+	)
+	var entry: Dictionary = undo_redo.entries[0]
+	assert_eq(entry["undo"][0]["method"], "restore_state", "the fallback is the whole snapshot")

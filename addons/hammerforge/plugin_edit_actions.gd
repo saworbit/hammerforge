@@ -189,6 +189,19 @@ static func duplicate_selected(plugin: Object, root: Node) -> bool:
 
 ## Brush ids and entity paths for the current selection, shaped the way the
 ## `*_managed_nodes` methods on LevelRoot take them.
+##
+## The four transform commands pass both arrays on to `HFUndoHelper.commit()` as
+## a scope, which is a claim that the command changes those objects and nothing
+## else (#737, #761). They can make it: they move, rotate, mirror and unrotate
+## brushes and entities that are already there, and touch no registry, no palette
+## and nothing else in the level. Nothing in a record can check a claim, so
+## `test_scoped_undo_step.gd` is what holds them to it.
+##
+## There is no filter on the way. An entity used to end the claim, because a
+## scope had nowhere to put one, and now it has one. The only rule left is "at
+## least one object", which each command has already checked by the time it
+## commits, and an id or a path that cannot be recorded makes
+## `capture_brush_scope()` refuse and take the whole snapshot instead.
 static func collect_managed_targets(plugin: Object, root: Node) -> Dictionary:
 	var nodes = plugin._current_selection_nodes()
 	var brush_ids: Array = []
@@ -222,23 +235,6 @@ static func collation_tag(
 	return "|".join(parts)
 
 
-## The brushes an undo step may record instead of the whole level, or nothing.
-##
-## `HFUndoHelper.commit()` takes this as a claim that the command changes these
-## brushes and nothing else (#737). The four transform commands can make it: they
-## move, rotate, mirror and unrotate brushes that are already there, and touch no
-## registry, no palette and no other brush. `test_scoped_undo_step.gd` is what
-## holds them to it.
-##
-## An entity in the selection ends the claim. Entities are moved by the same
-## commands and a brush scope has nowhere to put one, so a mixed selection takes
-## the whole snapshot, which is what every command did before this.
-static func brush_scope(brush_ids: Array, entity_paths: Array) -> Array:
-	if brush_ids.is_empty() or not entity_paths.is_empty():
-		return []
-	return brush_ids
-
-
 static func nudge_selected(plugin: Object, root: Node, direction: Vector3) -> bool:
 	var step = root.grid_snap if root.grid_snap > 0.0 else 1.0
 	var targets := collect_managed_targets(plugin, root)
@@ -257,7 +253,8 @@ static func nudge_selected(plugin: Object, root: Node, direction: Vector3) -> bo
 		Callable(plugin, "_record_history"),
 		collation_tag("nudge", brush_ids, entity_paths, [direction, step]),
 		true,
-		brush_scope(brush_ids, entity_paths)
+		brush_ids,
+		entity_paths
 	)
 	return true
 
@@ -649,7 +646,8 @@ static func rotate_selected(plugin: Object, root: Node, direction: int) -> bool:
 		Callable(plugin, "_record_history"),
 		collation_tag("rotate", brush_ids, entity_paths, [axis_index, signf(angle_degrees)]),
 		true,
-		brush_scope(brush_ids, entity_paths)
+		brush_ids,
+		entity_paths
 	)
 	return true
 
@@ -678,7 +676,8 @@ static func flip_selected(plugin: Object, root: Node) -> bool:
 		Callable(plugin, "_record_history"),
 		"",
 		false,
-		brush_scope(brush_ids, entity_paths)
+		brush_ids,
+		entity_paths
 	)
 	return true
 
@@ -704,6 +703,6 @@ static func reset_rotation_selected(plugin: Object, root: Node) -> bool:
 		Callable(plugin, "_record_history"),
 		"",
 		false,
-		brush_scope(brush_ids, [])
+		brush_ids
 	)
 	return true

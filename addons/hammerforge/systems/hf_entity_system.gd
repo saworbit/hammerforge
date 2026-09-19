@@ -199,6 +199,156 @@ func restore_entity_from_info(info: Dictionary) -> DraftEntity:
 	return entity
 
 
+## The entities an undo step records instead of the whole level.
+##
+## The brush half of this is `HFStateSystem.capture_brush_scope()`, and #761
+## parked the entity half on identity: a restore that rebuilds an entity changes
+## its node path, and the commands name entities by path. That is true of
+## `restore_state()`, which clears every entity and builds new ones. It is not
+## true of a scope. Nudge, rotate and flip write `global_transform` and
+## `entity_data["angle"]` onto entities that are already there, so a scoped undo
+## frees nothing, rebuilds nothing and moves no path, and the record can be
+## written straight back onto the node it came from.
+##
+## Keyed by node path, which is both how the commands name an entity and what
+## the restore looks it up by. It is also what keeps a scope from being read as a
+## level: a level state's `entities` is a list, this is a set, and
+## `HFValidation.level_state_problem()` refuses the swap on that alone. A brush
+## scope has no such guard and a `restore_state()` handed one clears the level,
+## so a list here would be a quiet way to lose everything.
+##
+## An empty dictionary back means these paths cannot be a scope and the caller
+## should take the whole snapshot: a path that does not resolve to a managed
+## entity is the one case, and it is the same refusal `capture_brush_scope()`
+## makes for an id that does not resolve.
+func capture_entity_scope(entity_paths: Array) -> Dictionary:
+	var records: Dictionary = {}
+	for raw_path in entity_paths:
+		var entity_path := str(raw_path)
+		if entity_path == "" or records.has(entity_path):
+			continue
+		var entity := _entity_at_path(entity_path)
+		if entity == null:
+			return {}
+		var info: Dictionary = capture_entity_info(entity)
+		if info.is_empty():
+			return {}
+		records[entity_path] = info
+	return records
+
+
+## The mirror of `capture_entity_scope()`. Returns how many records it could not
+## use, which the caller adds to its own count for one warning per step.
+##
+## One unreadable record costs that record and not the step, the same way one
+## unreadable brush entry does.
+func restore_entity_scope(records: Dictionary) -> int:
+	var skipped := 0
+	for entity_path in records:
+		var info = records[entity_path]
+		if not (info is Dictionary):
+			skipped += 1
+			continue
+		var entity := _entity_at_path(str(entity_path))
+		if entity == null:
+			skipped += 1
+			continue
+		apply_entity_record(entity, info as Dictionary)
+	return skipped
+
+
+## Write a captured record back onto the entity it was captured from.
+##
+## `restore_entity_from_info()` is the other mirror of `capture_entity_info()`:
+## it builds a new node, because a whole-level restore cleared them all first.
+## This one is for an entity that is still there, and every field the record
+## carries -- type, properties, transform, name, io outputs, visgroups, group id
+## and the authored name -- is writable onto a live node.
+##
+## The record is authoritative, so a field it does not carry is cleared rather
+## than left as it is. Setting the type first and the properties after is the
+## order that matters: the type setter fills `entity_data` in from the class
+## schema, so the other way round would put back the record's properties and then
+## grow keys onto them.
+func apply_entity_record(entity: DraftEntity, info: Dictionary) -> void:
+	if entity == null or info.is_empty():
+		return
+	var scene_before := _authored_scene_value(entity)
+	entity.entity_type = str(info.get("entity_type", info.get("entity_class", "")))
+	var props = info.get("properties", {})
+	entity.entity_data = (props as Dictionary).duplicate(true) if props is Dictionary else {}
+	var outputs = info.get("io_outputs", null)
+	_apply_entity_meta(
+		entity, "entity_io_outputs", outputs.duplicate(true) if outputs is Array else null
+	)
+	var visgroups = info.get("visgroups", null)
+	if visgroups is Array:
+		var packed := PackedStringArray()
+		for visgroup in visgroups:
+			packed.append(str(visgroup))
+		_apply_entity_meta(entity, "visgroups", packed)
+	else:
+		_apply_entity_meta(entity, "visgroups", null)
+	_apply_entity_meta(entity, "group_id", _record_string(info, "group_id"))
+	_apply_entity_meta(entity, "entity_name", _record_string(info, "entity_name"))
+	if info.has("transform"):
+		entity.global_transform = info["transform"]
+	_rename_entity_in_place(entity, str(info.get("name", "")))
+	# The preview is built from the class and from the scene path the class names,
+	# and from nothing else. The type setter already rebuilt it if the type moved,
+	# so this is the other input.
+	if _authored_scene_value(entity) != scene_before:
+		entity.refresh_preview()
+
+
+## A record's string field, or null when it does not carry one. `null` rather
+## than `""` because the metadata it becomes is either there or it is not, and
+## `capture_entity_info()` writes these only when they are non-empty.
+func _record_string(info: Dictionary, key: String):
+	var value := str(info.get(key, ""))
+	return value if value != "" else null
+
+
+func _apply_entity_meta(entity: DraftEntity, meta_name: StringName, value) -> void:
+	if value == null:
+		if entity.has_meta(meta_name):
+			entity.remove_meta(meta_name)
+		return
+	entity.set_meta(meta_name, value)
+
+
+## Put the node name back, and only when it is free.
+##
+## Godot documents `Node.name` as unique among siblings and renames the node
+## itself when it is set to a name one of them holds. A scoped undo finds its
+## entities by node path, so a silent uniquify here would leave every later
+## lookup in the step pointing at nothing. None of the commands that scope
+## renames an entity, so this is a no-op in practice and a refusal in the one
+## case that would break the record.
+func _rename_entity_in_place(entity: DraftEntity, wanted: String) -> void:
+	if wanted == "" or str(entity.name) == wanted:
+		return
+	var parent := entity.get_parent()
+	if parent != null and parent.has_node(NodePath(wanted)):
+		HFLog.warn(
+			(
+				"HFEntitySystem: '%s' kept its name because a sibling already holds '%s'"
+				% [str(entity.name), wanted]
+			)
+		)
+		return
+	entity.name = wanted
+
+
+## The scene path this entity's class names, when it names one. Two of these
+## either side of a record write say whether the viewport preview is stale.
+func _authored_scene_value(entity: DraftEntity) -> String:
+	var scene_property := entity.authored_scene_property()
+	if scene_property == "":
+		return ""
+	return str(entity.entity_data.get(scene_property, ""))
+
+
 func build_duplicate_info(entity: DraftEntity, offset: Vector3) -> Dictionary:
 	var info := capture_entity_info(entity)
 	if info.is_empty():

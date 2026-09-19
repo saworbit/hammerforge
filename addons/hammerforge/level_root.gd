@@ -2672,8 +2672,8 @@ func restore_state(state: Dictionary) -> void:
 
 ## Undo dispatches by method name on this node, so the scoped step needs its pair
 ## here the way the whole-level one does.
-func capture_brush_scope(brush_ids: Array) -> Dictionary:
-	return state_system.capture_brush_scope(brush_ids)
+func capture_brush_scope(brush_ids: Array, entity_paths: Array = []) -> Dictionary:
+	return state_system.capture_brush_scope(brush_ids, entity_paths)
 
 
 func restore_brush_scope(scope: Dictionary) -> void:
