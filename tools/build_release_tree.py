@@ -86,6 +86,39 @@ Licensed under the MIT License. See `LICENSE`.
 """
 
 
+# The release branch is what the Asset Library downloads, and it downloads it as
+# a *git archive* -- so `export-ignore` decides what a user actually installs.
+#
+# `.gitignore` and this file mean nothing inside somebody else's project, and the
+# README above is written for someone who took the zip by hand. Godot's installer
+# strips the `<repo>-<sha>/` wrapper and then offers everything left at the root,
+# so without this a mapper installing into a fresh project gets HammerForge's
+# README and HammerForge's ignore rules dropped in beside their own files.
+#
+# They stay in the branch: the Asset Library requires the repository to carry a
+# .gitignore and a licence file, and `export-ignore` only changes what
+# `git archive` emits. The hand-downloaded zip is built by `zip` from this tree
+# rather than by `git archive`, so it keeps the README that explains it.
+#
+# LICENSE is deliberately not excluded. It is the file a reviewer is most likely
+# to look for in a download, and a licence beside an addon folder is unremarkable
+# where a stranger's README is not.
+RELEASE_GITATTRIBUTES = """# Normalize EOL for all files that Git considers text files.
+* text=auto eol=lf
+
+# The reference map is a compressed .hflevel. text=auto guesses, and a wrong
+# guess would mangle line endings inside the payload on checkout.
+addons/hammerforge/data/reference_map.hflevel binary
+
+# What the Asset Library downloads is a git archive of this branch, and these
+# three have no meaning in the project it is installed into. LICENSE and addons/
+# do. Set by tools/build_release_tree.py.
+/.gitattributes export-ignore
+/.gitignore export-ignore
+/README.md export-ignore
+"""
+
+
 def plugin_version() -> str:
     """Read the version from plugin.cfg, so there is one source of truth."""
     cfg = (REPO / "addons/hammerforge/plugin.cfg").read_text(encoding="utf-8")
@@ -141,9 +174,12 @@ def main() -> int:
     # survives a user who installs only addons/hammerforge.
     shutil.copy2(REPO / "LICENSE", dest / "addons/hammerforge/LICENSE")
     (dest / "README.md").write_text(RELEASE_README, encoding="utf-8", newline="\n")
+    (dest / ".gitattributes").write_text(
+        RELEASE_GITATTRIBUTES, encoding="utf-8", newline="\n"
+    )
 
     version = plugin_version()
-    print(f"HammerForge {version}: {count + 2} files in {dest}")
+    print(f"HammerForge {version}: {count + 3} files in {dest}")
     for entry in sorted(p.name for p in dest.iterdir()):
         print(f"  {entry}")
     return 0

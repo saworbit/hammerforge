@@ -41,6 +41,38 @@ release workflow re-checks the built output rather than trusting the list.
 python tools/build_release_tree.py /tmp/release   # inspect what would ship
 ```
 
+### The two artefacts are not the same file
+
+One tree, two ways out, and they differ on purpose:
+
+| Artefact | Built by | Root contains |
+|---|---|---|
+| Asset Library download | `git archive` of the `release` branch, by GitHub | `addons/`, `LICENSE` |
+| `hammerforge-<version>.zip` | `zip` over the built tree, in the workflow | those plus `README.md`, `.gitignore`, `.gitattributes` |
+
+Godot's asset installer strips the `<repo>-<sha>/` wrapper and then offers
+everything left at the archive root, pre-checked, into the **project root**. So
+anything up there lands beside the mapper's own files. It refuses to overwrite --
+a conflicting file is unchecked and reported as "won't be installed" -- but on a
+fresh project a stray `README.md` and a stray `.gitignore` do get written.
+
+`RELEASE_GITATTRIBUTES` in `tools/build_release_tree.py` marks those
+`export-ignore`, which `git archive` honours and GitHub's archive endpoint
+honours with it. They stay in the branch, because the Asset Library requires the
+*repository* to carry a `.gitignore` and a licence file, and `export-ignore`
+only changes what is exported. The hand-downloaded zip is not a `git archive`,
+so it keeps the README that explains what to do with it.
+
+`LICENSE` is deliberately left in both. It is the file a reviewer is most likely
+to look for in a download, and a licence beside an addon folder is unremarkable
+where a stranger's README is not. The plugin carries its own copy at
+`addons/hammerforge/LICENSE` regardless, so the licence travels with the addon
+even for someone who installs only that folder.
+
+The workflow checks the archive rather than the `.gitattributes` meant to
+produce it, for the same reason it re-checks the built tree rather than the ship
+list.
+
 ### Cutting a release
 
 The `release` branch holds the built tree. It is what the Asset Library
