@@ -41,7 +41,7 @@ Then open `res://samples/hf_editor_smoke_start.tscn` with the plugin enabled.
 
 - The plugin enables with nothing red in the Output panel.
 - **HammerForge** sits in the main-screen switcher beside 2D / 3D / Script, and the left dock tab reads **HammerForge**.
-- **Create Starter Level** makes a `LevelRoot` with a floor, a sun and a spawn. It is two undo actions, not one: the first Ctrl+Z takes the starter contents and leaves the `LevelRoot` standing, the second takes the `LevelRoot`. Two Ctrl+Shift+Z bring both back.
+- **Create Starter Level** makes a `LevelRoot` with a floor, a sun and a spawn. It is two undo actions, not one: the first Ctrl+Z takes the starter contents and leaves the `LevelRoot` standing, the second takes the `LevelRoot`. Two Ctrl+Shift+Z bring both back -- and "both" means the spawn and the containers as well as the floor and the sun, and means them *owned*: the Scene dock lists them, and a Ctrl+S after the redo writes them (#772).
 - Draw a box brush. Drag one yellow resize handle; the box resizes and it is one undo step.
 - Click that brush in the 3D viewport. The 3D view is still what you are looking at. (#592: a plugin that declares a main screen and also handles the selected object gets switched to by Godot.)
 - Select a `Camera3D`. The dock stays connected to the existing `LevelRoot` and no brush behind the camera is selected.
@@ -54,39 +54,48 @@ Then open `res://samples/hf_editor_smoke_start.tscn` with the plugin enabled.
 
 One line, edited by hand when the gate passes. The release workflow reads it.
 
-Gate passed: 0.3.0
+Gate passed: 0.3.2
 
 Last run: 2026-09-19, Godot v4.7.stable.official, against the 0.3.2 build.
-**The gate did not pass**, so the line above stays at 0.3.0 and 0.3.2 is not
-tagged.
+All ten checks executed and passed, including the two that had never been run
+before.
 
-Executed and passed: the plugin enables with 0 errors in the Output panel; the
-switcher entry and the dock tab; Create Starter Level, its two-step undo and both
-redos; drawing a box brush by dragging in the viewport, which had never been
-executed before and does work; the resize-handle drag, which resized the brush
-and was one undo step; clicking a brush in the 3D viewport twice without the
-editor leaving 3D, so #592 holds; selecting a `Camera3D`, after which the dock
-still read `Live Brushes: 1` and had picked no brush.
+It took two passes. The first found four defects and the gate was recorded as
+**not passed** rather than waived; this is the run after they were fixed.
 
-Failed, and the reason the gate did not pass: **Test Level launches a level with
-no player and no camera in it** (#771). The window is flat grey. The running
-game's remote scene tree carries `RemoteReloadTimer` but no `PlaytestPlayer`,
-which isolates it to `auto_spawn_player` — whose default #719 flipped from `true`
-to `false` on 2026-09-17, three days after the run below. That is the loop the
-documentation leads with.
+What the first pass found, all now fixed and each verified here in the editor:
 
-Turned up in the same run and filed rather than fixed: redo of Create Starter
-Level does not restore the player spawn (#772); the Bake row names no duration
-and is not green, so the Bake check above asks for something this build does not
-do (#773); every new level carries a config warning on `RegionOverlay` (#774).
+- **Test Level launched a level with no player and no camera** (#771), so the
+  window came up flat grey. The loop the documentation leads with. Caused by
+  #719 flipping the `auto_spawn_player` default three days after the previous
+  run below. Now: the level renders, and `res://.hammerforge/playtest.request`
+  is written by the launch and gone afterwards, which is the run having
+  collected it.
+- **Redo of Create Starter Level lost the player spawn** (#772), and the
+  containers it rebuilt came back unowned, so a Ctrl+S after an undo and a redo
+  wrote a 3.6 KB scene with no brushes and no spawn in it. Now 28 KB, the same
+  as an untouched level, and the Scene dock lists them again.
+- **The Bake row named no duration and was not green** (#773), which is what
+  this document asked for and the build did not do. Now reads
+  `Bake complete in 25 ms`, in green.
+- **Every new level carried a config warning** on an empty `RegionOverlay`
+  (#774). Gone; a fresh level sits at zero errors and does not add a warning.
 
-**Not executed**, and still unverified for 0.3.2: the save / restart Godot /
-reopen check, and the plugin disable-and-re-enable check.
+The two checks that had never been executed both pass: saving, restarting Godot
+and reopening brings the `LevelRoot`, the spawn and the brush back with
+`Live Brushes: 1`; and disabling the plugin removes the switcher entry and the
+dock tab, and re-enabling brings both back with nothing left behind.
 
-A note for whoever runs this next, because it cost time here: the Draw tool does
-take synthetic mouse input, but only as a press, a run of small moves, and then a
-*click* to commit each of the two steps. A single press-drag-release call delivers
-no motion and the base step never ends.
+Two notes for whoever runs this next, because both cost time here:
+
+- The Draw tool **does** take synthetic mouse input, contrary to what an earlier
+  note claimed -- but as a press, a run of small moves, and then a *click*. A
+  single press-drag-release delivers no motion and the base step never ends.
+- Run it against a `.godot` that has settled. A fresh `--import` makes the first
+  editor launch report reimport errors, and a half-built class cache can report
+  cyclic-reference parse errors in `tests/` that are not real -- the same tree
+  comes up at zero errors on the next launch. Confirm any parse error headlessly
+  before believing it.
 
 Previous run: 2026-09-16, Godot 4.7.2.stable. It corrected two of the checks
 above, and running the resize handle turned up a real defect: undoing a resize
