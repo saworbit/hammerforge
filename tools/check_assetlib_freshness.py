@@ -34,6 +34,26 @@ failing on it weekly is the kind of red that trains people to ignore red.
 A rejected edit is the opposite and does fail, because that one needs doing
 again and carries the reason why.
 
+Two fields, one paste
+---------------------
+The entry carries the commit it serves and the version it calls that commit,
+and they are typed into the same form separately. So it is entirely possible to
+paste the right hash and leave the version reading the old one, at which point
+the download is correct and the page advertises something else. That is the
+number a person reads before deciding whether to update, and it is the same
+shape of failure as a forgotten paste: a fact stops being true, everything goes
+on working, and nothing says so.
+
+Reported as `mislabelled` rather than as staleness, because it is not staleness
+and the fix is different: the version field, not the commit field. It fails
+rather than warns. Unlike a moderation queue, a maintainer can fix it today.
+
+The version compared against is `version=` in `addons/hammerforge/plugin.cfg`
+on the release branch, which is the literal thing being described. The branch
+head's commit subject carries it too, because release.yml writes it there, but
+that is a message rather than a field and it would start lying the day somebody
+reworded the commit. One more API call is the cheaper of the two.
+
 Why it does not just do the paste
 ---------------------------------
 It could, nearly. The Asset Library has `POST /asset/{id}`, documented in
@@ -57,6 +77,7 @@ would fix browse and break issues. Left alone on purpose.
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import time
@@ -75,6 +96,10 @@ EDIT_URL = "https://godotengine.org/asset-library/asset/edit"
 # The branch the Asset Library downloads, by commit hash. Never merged either
 # way; see the header of .github/workflows/release.yml.
 RELEASE_BRANCH = "release"
+
+# The file that decides what a release calls itself, and so what the entry's
+# Version String has to agree with.
+PLUGIN_CFG = "addons/hammerforge/plugin.cfg"
 
 # How long a divergence is allowed to be normal. A release and its paste happen
 # in the same sitting, so three days is generous rather than tight, and it is
@@ -98,11 +123,16 @@ class CheckError(Exception):
 
 
 class PendingEdit(NamedTuple):
-    """An unaccepted edit that would set the entry to `commit`."""
+    """An unaccepted edit, and the two fields it would set.
+
+    Either can be empty: the API reports an edit by what it changes, so a
+    version-only correction carries no commit and vice versa.
+    """
 
     edit_id: str
     status: str
     commit: str
+    version: str
     waiting_days: int
     reason: str
 
@@ -151,7 +181,47 @@ def parse_entry(payload: dict) -> tuple[str, str]:
         raise CheckError("the entry has no download_commit")
     if not is_sha(commit):
         raise CheckError(f"the entry's download_commit is not a sha: {commit!r}")
-    return commit.lower(), version or "an unnamed version"
+    # The version is handed back as it was typed, empty included. An entry that
+    # names no version is not a divergence to be papered over with a label; it
+    # is one of the ways the version can be wrong.
+    return commit.lower(), version
+
+
+def parse_version(text: str) -> str:
+    """`version=` out of a plugin.cfg.
+
+    Its own function so the parse is checked without the network, and so a
+    plugin.cfg that has stopped carrying a version fails loudly instead of
+    comparing the entry against an empty string forever.
+    """
+    for line in text.splitlines():
+        key, sep, value = line.partition("=")
+        # On the key, not on a prefix of it: `version_control=` is not this.
+        if sep and key.strip() == "version":
+            return value.strip().strip('"').strip()
+    raise CheckError("no version= in the release branch's plugin.cfg")
+
+
+def same_version(left: str, right: str) -> bool:
+    """Whether two version strings name the same release.
+
+    A leading `v` is allowed on either side. Nobody is misled by `v0.3.2` next
+    to `0.3.2`, and failing on it would be exactly the red that teaches people
+    to ignore red. Nothing else is normalised: `0.3` is not `0.3.0`, because a
+    reader deciding whether to update would notice the difference.
+    """
+    return _bare(left) == _bare(right)
+
+
+def _bare(version: str) -> str:
+    stripped = version.strip()
+    if stripped[:1] in ("v", "V"):
+        stripped = stripped[1:]
+    return stripped.lower()
+
+
+def _named(version: str) -> str:
+    return version or "an unnamed version"
 
 
 def verdict(
@@ -159,27 +229,38 @@ def verdict(
     entry_version: str,
     head_sha: str,
     head_subject: str,
+    head_version: str,
     age_days: int,
-    edit: PendingEdit | None,
+    queue: list[PendingEdit],
 ) -> tuple[str, list[str]]:
-    """current, submitted, rejected, pending or stale, and why."""
+    """current, mislabelled, submitted, rejected, pending or stale, and why.
+
+    Takes the whole queue rather than one edit chosen in advance, because the
+    two failures want different edits out of it. A commit paste and a version
+    correction can both be waiting, and picking the first of them before
+    knowing which question is being asked would let one hide the other.
+    """
     head = head_sha.lower()
     if entry_commit.lower() == head:
-        return "current", [
-            f"The Asset Library is serving {entry_version}, "
-            f"which is {head_sha[:7]}, the head of `{RELEASE_BRANCH}`."
-        ]
+        if same_version(entry_version, head_version):
+            return "current", [
+                f"The Asset Library is serving {_named(entry_version)}, "
+                f"which is {head_sha[:7]}, the head of `{RELEASE_BRANCH}`."
+            ]
+        fix = next((e for e in queue if same_version(e.version, head_version)), None)
+        return _mislabelled(entry_version, head_sha, head_version, fix)
 
     disagree = [
         f"The Asset Library entry and the `{RELEASE_BRANCH}` branch disagree.",
         "",
-        f"    entry {ASSET_ID}   {entry_version} at {entry_commit[:7]}",
+        f"    entry {ASSET_ID}   {_named(entry_version)} at {entry_commit[:7]}",
         f"    {RELEASE_BRANCH:<12} {head_subject} at {head_sha[:7]}, "
         f"pushed {_days(age_days)} ago",
     ]
     paste = ["", f"Paste {head_sha} into the Download Commit field at {EDIT_URL}"]
 
-    if edit is not None and edit.commit.lower() == head:
+    edit = next((e for e in queue if e.commit.lower() == head), None)
+    if edit is not None:
         if edit.status == "rejected":
             said = f": {edit.reason}" if edit.reason else "."
             return "rejected", [
@@ -206,6 +287,47 @@ def verdict(
     return "stale", [*disagree, *paste]
 
 
+def _mislabelled(
+    entry_version: str,
+    head_sha: str,
+    head_version: str,
+    edit: PendingEdit | None,
+) -> tuple[str, list[str]]:
+    """The right tree under the wrong name, and whether that is already in hand.
+
+    Kept apart from the commit divergence above because it is a different
+    failure with a different fix. Nothing here is stale: the download is the
+    current one, and only the label a reader goes by is wrong.
+    """
+    wrong = [
+        "The Asset Library entry serves the right tree under the wrong name.",
+        "",
+        f"    entry {ASSET_ID}   calls {head_sha[:7]} {_named(entry_version)}",
+        f"    {RELEASE_BRANCH:<12} calls {head_sha[:7]} {_named(head_version)}",
+        "",
+        "The download is correct. The version people read before deciding "
+        "whether to update is not.",
+    ]
+    fix = ["", f"Put {head_version} in the Version String field at {EDIT_URL}"]
+
+    if edit is not None and same_version(edit.version, head_version):
+        if edit.status == "rejected":
+            said = f": {edit.reason}" if edit.reason else "."
+            return "rejected", [
+                *wrong,
+                "",
+                f"Edit {edit.edit_id} would have fixed this and was rejected{said}",
+                *fix[1:],
+            ]
+        return "submitted", [
+            *wrong,
+            "",
+            f"Nothing to do. Edit {edit.edit_id} is already in the queue with the "
+            f"right version, waiting {_days(edit.waiting_days)} for a moderator.",
+        ]
+    return "mislabelled", [*wrong, *fix]
+
+
 def _days(count: int) -> str:
     return f"{count} day{'' if count == 1 else 's'}"
 
@@ -218,8 +340,17 @@ def _age_days(stamp: str) -> int:
     return max((datetime.now(timezone.utc) - when).days, 0)
 
 
-def _pending_edit(head_sha: str) -> PendingEdit | None:
-    """The unsettled edit that would set the entry to `head_sha`, if there is one."""
+def _pending_edits(head_sha: str, head_version: str) -> list[PendingEdit]:
+    """Every unsettled edit that would put either field right.
+
+    Either field, because an edit is reported by what it changes. A correction
+    to a version that was typed wrong carries no commit at all, and matching on
+    the commit alone would miss it and ask for the paste a second time.
+
+    All of them rather than the first, because two can be waiting at once and
+    the caller is the only thing that knows which field it is asking about.
+    """
+    found: list[PendingEdit] = []
     query = urllib.parse.urlencode({"asset": ASSET_ID})
     listing = _get_json(f"{API_ROOT}/asset/edit?{query}").get("result") or []
     for record in listing[:MAX_EDITS_READ]:
@@ -236,20 +367,24 @@ def _pending_edit(head_sha: str) -> PendingEdit | None:
             continue
         detail = _get_json(f"{API_ROOT}/asset/edit/{edit_id}")
         commit = str(detail.get("download_commit") or "").strip().lower()
-        if commit != head_sha.lower():
+        version = str(detail.get("version_string") or "").strip()
+        if commit != head_sha.lower() and not same_version(version, head_version):
             continue
         try:
             waiting = _age_days(str(record.get("submit_date") or ""))
         except ValueError:
             waiting = 0
-        return PendingEdit(
-            edit_id=edit_id,
-            status=status,
-            commit=commit,
-            waiting_days=waiting,
-            reason=str(detail.get("reason") or "").strip(),
+        found.append(
+            PendingEdit(
+                edit_id=edit_id,
+                status=status,
+                commit=commit,
+                version=version,
+                waiting_days=waiting,
+                reason=str(detail.get("reason") or "").strip(),
+            )
         )
-    return None
+    return found
 
 
 def _release_head(repo: str) -> tuple[str, str, int]:
@@ -276,12 +411,42 @@ def _release_head(repo: str) -> tuple[str, str, int]:
     return sha, subject, max((datetime.now(timezone.utc) - pushed).days, 0)
 
 
+def _release_version(repo: str) -> str:
+    """The version the release branch's plugin.cfg declares.
+
+    Read from the branch rather than from the checkout: this runs on `main`,
+    where plugin.cfg is already the next version as often as not, and the
+    question is what the thing being downloaded calls itself.
+    """
+    # The object form, not `.raw`: `_get_json` decodes JSON, and the content
+    # arrives base64'd inside it.
+    headers = {"Accept": "application/vnd.github+json"}
+    token = os.environ.get("GITHUB_TOKEN", "")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    url = (
+        f"https://api.github.com/repos/{repo}/contents/{PLUGIN_CFG}"
+        f"?ref={RELEASE_BRANCH}"
+    )
+    payload = _get_json(url, headers)
+    encoded = str(payload.get("content") or "")
+    if not encoded:
+        raise CheckError(f"no {PLUGIN_CFG} on {repo}@{RELEASE_BRANCH}")
+    return parse_version(base64.b64decode(encoded).decode("utf-8"))
+
+
 SHA_A = "395a272b30bb0d38aaba631d46271317946bea88"
 SHA_B = "1dc1afee478191b992488497400dfeb83e65ebfa"
 
 
-def _edit(status: str, commit: str, waiting: int = 1, reason: str = "") -> PendingEdit:
-    return PendingEdit("24358", status, commit, waiting, reason)
+def _edit(
+    status: str,
+    commit: str,
+    version: str = "",
+    waiting: int = 1,
+    reason: str = "",
+) -> PendingEdit:
+    return PendingEdit("24358", status, commit, version, waiting, reason)
 
 
 # (name, entry commit, head sha, age in days, pending edit, expected state)
@@ -338,6 +503,94 @@ CASES = [
     ),
 ]
 
+# The version half. Everything above holds the two versions equal so it stays
+# about the commit; these hold the commit still and move the version.
+# (name, entry version, head version, age in days, pending edit, expected state)
+VERSION_CASES = [
+    ("the same version is current", "0.3.2", "0.3.2", 0, None, "current"),
+    ("a leading v is the same version", "v0.3.2", "0.3.2", 0, None, "current"),
+    ("and the other way round", "0.3.2", "v0.3.2", 0, None, "current"),
+    ("case does not decide it either", "V0.3.2", "0.3.2", 0, None, "current"),
+    ("padding does not decide it", "  0.3.2 ", "0.3.2", 0, None, "current"),
+    # The gap this was written for: the right tree, advertised as the old one.
+    ("the right commit under the old name", "0.3.0", "0.3.2", 0, None, "mislabelled"),
+    ("an entry that names no version", "", "0.3.2", 0, None, "mislabelled"),
+    # Not normalised on purpose: a reader would read these as different.
+    ("a truncated version is a different one", "0.3", "0.3.0", 0, None, "mislabelled"),
+    ("grace does not cover a mislabel", "0.3.0", "0.3.2", 99, None, "mislabelled"),
+    # A version fix goes into the same moderation queue a commit paste does, so
+    # it gets the same treatment: asking for it twice would only queue it twice.
+    (
+        "a queued version fix is not a forgotten one",
+        "0.3.0",
+        "0.3.2",
+        0,
+        _edit("new", "", "0.3.2"),
+        "submitted",
+    ),
+    (
+        "a rejected version fix needs doing again",
+        "0.3.0",
+        "0.3.2",
+        0,
+        _edit("rejected", "", "0.3.2", reason="version must match the tag"),
+        "rejected",
+    ),
+    (
+        "a queued edit naming some third version does not count",
+        "0.3.0",
+        "0.3.2",
+        0,
+        _edit("new", "", "0.3.1"),
+        "mislabelled",
+    ),
+]
+
+# Two edits can be unsettled at once and they do not fix the same field, so
+# whichever is listed first must not answer for the other. Head is SHA_B at
+# 0.3.2 throughout, and the divergence is well past grace.
+# (name, entry commit, entry version, queue, expected state)
+QUEUE_CASES = [
+    (
+        "a queued paste does not hide a queued version fix",
+        SHA_B,
+        "0.3.0",
+        [_edit("new", SHA_B), _edit("new", "", "0.3.2")],
+        "submitted",
+    ),
+    (
+        "a queued version fix does not hide a missing paste",
+        SHA_A,
+        "0.3.0",
+        [_edit("new", "", "0.3.2"), _edit("new", SHA_B)],
+        "submitted",
+    ),
+    (
+        "and does not stand in for one that was never made",
+        SHA_A,
+        "0.3.0",
+        [_edit("new", "", "0.3.2")],
+        "stale",
+    ),
+]
+
+# A stale entry names an old version as well as an old commit, and must still
+# read as stale: the fix is the commit field, and a version paste alone would
+# leave it serving the old tree under the new name, which is worse.
+# (name, entry commit, entry version, head version, age, edit, expected state)
+BOTH_CASES = [
+    ("a stale entry is stale, not mislabelled", SHA_A, "0.3.0", 13, None, "stale"),
+    ("a fresh one is pending, not mislabelled", SHA_A, "0.3.0", 0, None, "pending"),
+    (
+        "a queued commit paste still reads as submitted",
+        SHA_A,
+        "0.3.0",
+        13,
+        _edit("new", SHA_B, "0.3.2"),
+        "submitted",
+    ),
+]
+
 # (name, payload, expected commit, or None when it should be refused)
 ENTRY_CASES = [
     ("a normal entry", {"download_commit": SHA_A, "version_string": "0.3.0"}, SHA_A),
@@ -351,17 +604,100 @@ ENTRY_CASES = [
 ]
 
 
+# The real thing, as release.yml leaves it on the branch.
+PLUGIN_CFG_TEXT = """[plugin]
+name="HammerForge"
+description="Brush-based level editor for Godot 4.7+"
+author="Shane Wall"
+version="0.3.2"
+script="plugin.gd"
+"""
+
+# (name, plugin.cfg body, expected version, or None when it should be refused)
+CFG_CASES = [
+    ("a normal plugin.cfg", PLUGIN_CFG_TEXT, "0.3.2"),
+    ("unquoted", "version=0.3.2", "0.3.2"),
+    ("padded", '  version = "0.3.2"  ', "0.3.2"),
+    # A file that has stopped carrying a version must not read as an empty one:
+    # every entry would then be mislabelled, forever, for no reason.
+    ("no version line at all", '[plugin]\nname="HammerForge"', None),
+    ("an empty file", "", None),
+    # `version` is the key, not a prefix of one.
+    ("a key that merely starts the same", 'version_control="git"', None),
+]
+
+
 def selftest() -> int:
     failures = 0
     for name, entry_commit, head_sha, age_days, edit, expected in CASES:
         state, lines = verdict(
-            entry_commit, "0.0.0", head_sha, "HammerForge 0.0.0", age_days, edit
+            entry_commit,
+            "0.0.0",
+            head_sha,
+            "HammerForge 0.0.0",
+            "0.0.0",
+            age_days,
+            [edit] if edit else [],
         )
         if state != expected:
             print(f"selftest: {name} should be {expected}, got {state}")
             failures += 1
         elif not lines:
             print(f"selftest: {name} returned no explanation")
+            failures += 1
+
+    for name, entry_version, head_version, age_days, edit, expected in VERSION_CASES:
+        state, lines = verdict(
+            SHA_A,
+            entry_version,
+            SHA_A,
+            f"HammerForge {head_version}",
+            head_version,
+            age_days,
+            [edit] if edit else [],
+        )
+        if state != expected:
+            print(f"selftest: {name} should be {expected}, got {state}")
+            failures += 1
+        elif not lines:
+            print(f"selftest: {name} returned no explanation")
+            failures += 1
+
+    for name, entry_commit, entry_version, age_days, edit, expected in BOTH_CASES:
+        state, _ = verdict(
+            entry_commit,
+            entry_version,
+            SHA_B,
+            "HammerForge 0.3.2",
+            "0.3.2",
+            age_days,
+            [edit] if edit else [],
+        )
+        if state != expected:
+            print(f"selftest: {name} should be {expected}, got {state}")
+            failures += 1
+
+    for name, entry_commit, entry_version, queue, expected in QUEUE_CASES:
+        state, _ = verdict(
+            entry_commit,
+            entry_version,
+            SHA_B,
+            "HammerForge 0.3.2",
+            "0.3.2",
+            13,
+            queue,
+        )
+        if state != expected:
+            print(f"selftest: {name} should be {expected}, got {state}")
+            failures += 1
+
+    for name, text, want in CFG_CASES:
+        try:
+            read: str | None = parse_version(text)
+        except CheckError:
+            read = None
+        if read != want:
+            print(f"selftest: {name} should be {want}, got {read}")
             failures += 1
 
     for name, payload, expected in ENTRY_CASES:
@@ -373,7 +709,14 @@ def selftest() -> int:
             print(f"selftest: {name} should be {expected}, got {got}")
             failures += 1
 
-    total = len(CASES) + len(ENTRY_CASES)
+    total = (
+        len(CASES)
+        + len(VERSION_CASES)
+        + len(BOTH_CASES)
+        + len(QUEUE_CASES)
+        + len(CFG_CASES)
+        + len(ENTRY_CASES)
+    )
     if failures:
         print(f"selftest: {failures} of {total} cases wrong")
         return 1
@@ -405,9 +748,14 @@ def main() -> int:
     try:
         entry_commit, entry_version = parse_entry(_get_json(ENTRY_URL))
         head_sha, head_subject, age_days = _release_head(repo)
-        edit = None
-        if entry_commit != head_sha.lower():
-            edit = _pending_edit(head_sha)
+        head_version = _release_version(repo)
+        queue: list[PendingEdit] = []
+        # Only when something disagrees. Reading the queue costs a request per
+        # edit and has nothing to say while the entry is right.
+        if entry_commit != head_sha.lower() or not same_version(
+            entry_version, head_version
+        ):
+            queue = _pending_edits(head_sha, head_version)
     except CheckError as err:
         # Already retried, so this is not a blip. A check that cannot reach what
         # it checks and reports success is the exact failure this exists to
@@ -416,11 +764,23 @@ def main() -> int:
         return 1
 
     state, lines = verdict(
-        entry_commit, entry_version, head_sha, head_subject, age_days, edit
+        entry_commit,
+        entry_version,
+        head_sha,
+        head_subject,
+        head_version,
+        age_days,
+        queue,
     )
     _report(lines)
     if state == "stale":
         print(f"::error::the Asset Library entry has been stale for {_days(age_days)}")
+        return 1
+    if state == "mislabelled":
+        print(
+            f"::error::the Asset Library entry calls {head_sha[:7]} "
+            f"{_named(entry_version)}, and it is {_named(head_version)}"
+        )
         return 1
     if state == "rejected":
         print("::error::the Asset Library edit that would fix this was rejected")

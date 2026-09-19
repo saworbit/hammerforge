@@ -80,8 +80,9 @@ jobs:
       # The freshness check itself runs weekly, in its own workflow, because it
       # asks two web APIs a question. Its reasoning is ordinary code and runs
       # here, so the states it has to tell apart -- a forgotten paste, a paste
-      # still in the moderation queue, a rejected one -- are checked on every
-      # pull request rather than once a week against whatever the library says.
+      # still in the moderation queue, a rejected one, and the right tree
+      # advertised under the wrong version -- are checked on every pull request
+      # rather than once a week against whatever the library says.
       - name: Check the Asset Library guard still detects
         run: python3 tools/check_assetlib_freshness.py --selftest
 
@@ -116,6 +117,17 @@ jobs:
 
       - name: Check for dead declarations
         run: python3 tools/check_dead_declarations.py
+
+      # Godot keeps a script's stable id in a .uid beside it, and a script
+      # committed without one gets a fresh id per machine, so it comes back
+      # untracked in whoever imported last and two people can commit different
+      # values for it. tests/test_scoped_undo_step.gd went ten pull requests
+      # that way before a release import happened to notice.
+      - name: Check the uid guard still detects
+        run: python3 tools/check_uid_parity.py --selftest
+
+      - name: Check uid parity
+        run: python3 tools/check_uid_parity.py
 
   tooling-checks:
     name: Workflow & Tooling Lint
