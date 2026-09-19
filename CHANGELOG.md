@@ -43,6 +43,16 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   entities container, and that reference was dangling. The `_setup_*` calls are
   now `_ensure_child_nodes()`, which `_ready()` and `create_new_level()` both
   run; each one was already get-or-create, so running it again is free.
+  Rebuilding them was only half of it. Taking the `LevelRoot` out of the tree and
+  putting it back also clears the owner of everything beneath it, and each
+  `_setup_*` assigned an owner only on the branch that *creates* a node -- so a
+  container that survived stayed unowned, which meant it was missing from the
+  Scene dock and, worse, from the `.tscn` the next save wrote. Saving after an
+  undo and a redo produced a 3.6 KB scene with no brushes and no spawn in it;
+  it now produces the same 28 KB scene an untouched level does.
+  `_reassert_container_owners()` goes through `_assign_owner()` rather than
+  setting `owner` directly, so the nodes that are meant to have none -- a level's
+  sources under `BAKE_ONLY` -- still get none.
 
 - **The Bake row says how long the bake took, and is coloured** (#773). The
   release gate asks for both and the build did neither: the message was the

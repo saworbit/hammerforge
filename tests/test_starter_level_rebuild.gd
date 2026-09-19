@@ -75,3 +75,37 @@ func test_a_rebuilt_level_gets_its_containers_back() -> void:
 	)
 	assert_not_null(root.draft_brushes_node, "and so is the one brushes go in")
 	assert_true(is_instance_valid(root.draft_brushes_node), "and it is live too")
+
+
+# ---------------------------------------------------------------------------
+# Ownership: what a rebuilt container is worth if the scene does not keep it
+# ---------------------------------------------------------------------------
+
+
+func test_a_rebuilt_container_is_owned_by_the_scene_again() -> void:
+	# Taking the LevelRoot out of the tree and putting it back clears the owner
+	# of everything under it. Each `_setup_*` only assigns an owner on the branch
+	# that *creates* the node, so a container that survived unowned stayed that
+	# way -- it vanishes from the Scene dock and, worse, is not written when the
+	# scene is saved (#772).
+	var scene := Node3D.new()
+	add_child_autoqfree(scene)
+	var root := LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
+	scene.add_child(root)
+	root.owner = scene
+
+	root._ensure_child_nodes()
+
+	var brushes := root.get_node_or_null("DraftBrushes")
+	assert_not_null(brushes, "the container is there")
+	if brushes == null:
+		return
+	assert_eq(
+		brushes.owner, scene, "and the scene owns it, so a save writes it and the dock lists it"
+	)
+	var entities := root.get_node_or_null("Entities")
+	assert_not_null(entities, "and so is the one the player spawn goes in")
+	if entities != null:
+		assert_eq(entities.owner, scene, "owned too, or the spawn is lost on the next save")

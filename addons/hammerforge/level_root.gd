@@ -3393,6 +3393,42 @@ func _ensure_child_nodes() -> void:
 	_setup_baker()
 	_setup_paint_system()
 	_setup_surface_paint()
+	_reassert_container_owners()
+
+
+## Hand the scene back the containers it owns.
+##
+## Each `_setup_*` assigns an owner only on the branch that *creates* the node,
+## which is enough the first time. It is not enough on the way back from undo:
+## taking the `LevelRoot` out of the tree and putting it back clears the owner of
+## everything beneath it, and a container that survived unowned would stay that
+## way -- missing from the Scene dock, and missing from the `.tscn` the next save
+## writes (#772).
+##
+## Goes through `_assign_owner()` rather than setting `owner` directly, so the
+## nodes that are meant to have none -- a level's sources under `BAKE_ONLY` --
+## still get none.
+func _reassert_container_owners() -> void:
+	for node in [
+		draft_brushes_node,
+		pending_node,
+		committed_node,
+		entities_node,
+		decals_node,
+		brush_manager,
+		material_manager,
+		baker,
+		paint_layers,
+		generated_node,
+		generated_floors,
+		generated_walls,
+		generated_heightmap_floors,
+		generated_region_overlay,
+		paint_tool,
+		surface_paint,
+	]:
+		if node != null and is_instance_valid(node) and node.owner == null:
+			_assign_owner(node)
 
 
 func _setup_draft_container() -> void:
