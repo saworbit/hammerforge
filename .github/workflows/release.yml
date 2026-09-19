@@ -124,12 +124,25 @@ jobs:
           echo "RELEASE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - name: Attach the zip to the GitHub Release
+        # `gh release upload` needs the release to exist already. Until 0.3.2
+        # one always did, because release-drafter had drafted it -- but the
+        # drafter only ever names the *next* version, so a tag that skips one
+        # (0.3.0 straight to 0.3.2) has nothing to attach to. This step then
+        # failed with "release not found" *after* the release branch had been
+        # pushed, which leaves the worst state there is: a release branch the
+        # Asset Library would serve, and no zip for anyone installing by hand.
+        #
+        # Prerelease because every release so far is one; when this project
+        # starts cutting full releases, that flag is the line to revisit.
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release upload "${GITHUB_REF_NAME}" \
-            "$RUNNER_TEMP/hammerforge-$VERSION.zip" --clobber
+          if ! gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            echo "no release for ${GITHUB_REF_NAME} yet; creating one"
+            gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --prerelease --generate-notes
+          fi
+          gh release upload "${GITHUB_REF_NAME}" "$RUNNER_TEMP/hammerforge-$VERSION.zip" --clobber
 
       - name: Asset Library commit
         # Printed rather than submitted: the Asset Library has no API for
