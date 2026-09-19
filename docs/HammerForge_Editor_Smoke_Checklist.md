@@ -56,14 +56,42 @@ One line, edited by hand when the gate passes. The release workflow reads it.
 
 Gate passed: 0.3.0
 
-Last run: 2026-09-16, Godot 4.7.2.stable. The resize-handle drag has since been
-executed and passed: dragging a handle resized the brush against the grid, the
-opposite face stayed put, and it was one undo step. The half of that line still
-**not executed** is drawing a box by dragging in the viewport.
+Last run: 2026-09-19, Godot v4.7.stable.official, against the 0.3.2 build.
+**The gate did not pass**, so the line above stays at 0.3.0 and 0.3.2 is not
+tagged.
 
-That run earned its place. It corrected two of the checks above, and running the
-resize handle turned up a real defect: undoing a resize rebuilt every brush
-without its name, which silently unwires entity I/O. Fixed in #597.
+Executed and passed: the plugin enables with 0 errors in the Output panel; the
+switcher entry and the dock tab; Create Starter Level, its two-step undo and both
+redos; drawing a box brush by dragging in the viewport, which had never been
+executed before and does work; the resize-handle drag, which resized the brush
+and was one undo step; clicking a brush in the 3D viewport twice without the
+editor leaving 3D, so #592 holds; selecting a `Camera3D`, after which the dock
+still read `Live Brushes: 1` and had picked no brush.
+
+Failed, and the reason the gate did not pass: **Test Level launches a level with
+no player and no camera in it** (#771). The window is flat grey. The running
+game's remote scene tree carries `RemoteReloadTimer` but no `PlaytestPlayer`,
+which isolates it to `auto_spawn_player` — whose default #719 flipped from `true`
+to `false` on 2026-09-17, three days after the run below. That is the loop the
+documentation leads with.
+
+Turned up in the same run and filed rather than fixed: redo of Create Starter
+Level does not restore the player spawn (#772); the Bake row names no duration
+and is not green, so the Bake check above asks for something this build does not
+do (#773); every new level carries a config warning on `RegionOverlay` (#774).
+
+**Not executed**, and still unverified for 0.3.2: the save / restart Godot /
+reopen check, and the plugin disable-and-re-enable check.
+
+A note for whoever runs this next, because it cost time here: the Draw tool does
+take synthetic mouse input, but only as a press, a run of small moves, and then a
+*click* to commit each of the two steps. A single press-drag-release call delivers
+no motion and the base step never ends.
+
+Previous run: 2026-09-16, Godot 4.7.2.stable. It corrected two of the checks
+above, and running the resize handle turned up a real defect: undoing a resize
+rebuilt every brush without its name, which silently unwires entity I/O. Fixed
+in #597.
 
 ## Checklist
 
