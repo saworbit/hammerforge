@@ -91,9 +91,11 @@ static func clear_displacement_stroke(plugin: Object) -> void:
 ## what Escape during a sculpt does.
 ##
 ## Which restore that is depends on what was captured: a scope goes back through
-## `restore_brush_scope()`, and handing one to `restore_state()` instead would
-## read it as a whole level with no entities, no materials and no visgroups in it
-## and clear all three (#761).
+## `restore_brush_scope()`, and handing one to `restore_state()` instead used to
+## free every brush the scope did not name, clear the entities and restore the
+## visgroups, groups and generators from nothing (#761, #768). A scope now says
+## it is one and `restore_state()` refuses it, so the pick below is what makes
+## Escape work rather than what keeps it from losing the level.
 static func cancel_displacement_stroke(plugin: Object, root: Node) -> void:
 	if root and not plugin._disp_paint_pre_state.is_empty():
 		if not plugin._disp_paint_scope_ids.is_empty():

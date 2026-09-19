@@ -637,34 +637,83 @@ func test_a_displacement_sculpt_changes_the_brushes_and_nothing_else():
 ## Why the two states cannot be swapped for each other.
 ##
 ## A stroke's pre-state is a scope now, and Escape during a sculpt throws the
-## stroke away by restoring it. `restore_state()` would take that scope for a
-## whole level -- one with no entities, no materials and no visgroups in it,
-## because a scope holds two keys and a level state holds twenty-five -- and
-## clear all of them. Nothing in the dictionary says which kind it is, so the
-## stroke carries the ids beside it and the cancel picks the matching restore.
-func test_a_scope_is_not_a_level_state_and_restore_state_cannot_read_one():
+## stroke away by restoring it. A scope handed to `restore_state()` used to be
+## read as a whole level: every brush the scope did not name freed, the entities
+## cleared, and the visgroups, groups and generators restored from nothing. It
+## passed every check because a scope has a `brushes` list in it and so does a
+## level (#768).
+##
+## The fixture holds one of each thing that used to go: a brush outside the
+## scope, an entity, and a visgroup. `_differing_keys()` names any of the
+## twenty-five that moved, so this fails with what was lost rather than that
+## something was.
+func test_a_scope_is_not_a_level_state_and_restore_state_refuses_one():
 	var a := _make_brush(Vector3.ZERO)
+	_make_brush(Vector3(64, 0, 0))
 	root.entity_system.create_entity_from_map({"classname": "info_player_start"})
-	var entities_before: int = (root.capture_state()["entities"] as Array).size()
-	assert_gt(entities_before, 0, "the fixture needs something outside the brushes to lose")
+	root.create_visgroup("wing")
+	var before: Dictionary = root.capture_state()
+	assert_gt((before["entities"] as Array).size(), 0, "the fixture needs an entity to lose")
+	assert_false((before["visgroups"] as Dictionary).is_empty(), "and a registry to lose")
+
 	root.restore_state(root.capture_brush_scope([_brush_id(a)]))
+
 	assert_eq(
-		(root.capture_state()["entities"] as Array).size(),
-		0,
-		"a scope read as a level clears what it never recorded, which is why it must not be"
+		_differing_keys(before, root.capture_state()),
+		[],
+		"a scope is not a level state, so restore_state has to turn it away untouched"
+	)
+
+
+## And the refusal says so rather than doing nothing.
+##
+## A silent no-op would leave the caller believing the undo it asked for
+## happened. `restore_state()` already reports a malformed level the same way, so
+## a scope goes down the same path.
+func test_a_refused_scope_is_reported():
+	var a := _make_brush(Vector3.ZERO)
+	var messages: Array = []
+	root.user_message.connect(func(text: String, _level: int): messages.append(text))
+
+	root.restore_state(root.capture_brush_scope([_brush_id(a)]))
+
+	assert_eq(messages.size(), 1, "the refusal has to be said out loud")
+	assert_true(
+		str(messages[0]).contains("restore_brush_scope"),
+		"and name the restore that does read a scope, got: %s" % messages
+	)
+
+
+## A scope an editor session captured before the tag existed.
+##
+## `restore_brush_scope` goes into an undo entry as a method name, so a step
+## taken before a plugin reload is still in the history and still gets called
+## with the dictionary it recorded. That dictionary has no tag on it, and the
+## restore has to read it anyway.
+func test_an_untagged_scope_from_an_older_session_still_restores():
+	var a := _make_brush(Vector3.ZERO)
+	var scope: Dictionary = root.capture_brush_scope([_brush_id(a)])
+	scope.erase(HFValidation.UNDO_SCOPE_KEY)
+	assert_eq(scope.keys(), ["brushes", "order"], "which is the record as it used to be")
+
+	root.nudge_brushes_by_id([_brush_id(a)], Vector3(64, 0, 0))
+	root.restore_brush_scope(scope)
+
+	assert_eq(
+		_brush_at_index(0).global_position, Vector3.ZERO, "an old step still puts its brush back"
 	)
 
 
 ## And the other half of that, for an entity scope.
 ##
-## An entity scope keys its records by node path, so `entities` in one is a set
-## where `entities` in a level state is a list, and that is a shape
-## `HFValidation.level_state_problem()` refuses outright. So an entity scope read
-## as a level clears nothing, where the brush scope above clears everything.
+## This one was already refused before #768, but by accident: an entity scope
+## keys its records by node path, so `entities` in one is a set where `entities`
+## in a level state is a list, and `HFValidation.level_state_problem()` turned it
+## away on the type. That held only as long as the record shape did.
 ##
-## Pinned because it is the only thing standing between a hand-rolled restore of
-## an entity scope and a wiped level, and a record shape that made the two look
-## alike would take it away with nothing said.
+## Both kinds now carry the key and are refused for saying what they are, so this
+## is here to hold the entity kind to the same answer it gave when the answer was
+## a side effect.
 func test_an_entity_scope_is_refused_by_restore_state_rather_than_read_as_a_level():
 	_make_brush(Vector3.ZERO)
 	var light := _make_entity(Vector3(32, 0, 0))
@@ -1086,14 +1135,18 @@ func test_nothing_named_is_still_not_a_scope():
 	assert_true(root.capture_brush_scope([], []).is_empty(), "an empty selection records nothing")
 
 
-## A brush-only scope is the record it was before entities could be in one. An
-## editor session holds steps taken before this change, and the restore tells the
-## two apart by shape rather than by a flag.
-func test_a_brush_only_scope_is_the_record_it_always_was():
+## A brush-only scope carries no entity key. The restore tells a scope with
+## entities in it from one without by whether the key is there, so a scope that
+## named no entity must not carry an empty one.
+func test_a_brush_only_scope_carries_no_entity_key():
 	var a := _make_brush(Vector3.ZERO)
 	_make_entity(Vector3(32, 0, 0))
 	var scope: Dictionary = root.capture_brush_scope([_brush_id(a)])
-	assert_eq(scope.keys(), ["brushes", "order"], "no entity key when no entity was named")
+	assert_eq(
+		scope.keys(),
+		["brushes", "order", HFValidation.UNDO_SCOPE_KEY],
+		"no entity key when no entity was named"
+	)
 
 
 func test_a_scoped_restore_puts_an_entity_back_onto_the_node_it_came_from():

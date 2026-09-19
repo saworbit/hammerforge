@@ -211,11 +211,12 @@ func restore_entity_from_info(info: Dictionary) -> DraftEntity:
 ## written straight back onto the node it came from.
 ##
 ## Keyed by node path, which is both how the commands name an entity and what
-## the restore looks it up by. It is also what keeps a scope from being read as a
-## level: a level state's `entities` is a list, this is a set, and
-## `HFValidation.level_state_problem()` refuses the swap on that alone. A brush
-## scope has no such guard and a `restore_state()` handed one clears the level,
-## so a list here would be a quiet way to lose everything.
+## the restore looks it up by. It used to be the only thing keeping a scope from
+## being read as a level, because a level state's `entities` is a list and this
+## is a set, so `HFValidation.level_state_problem()` refused the swap. That was a
+## side effect of a record shape rather than a decision, and a brush-only scope
+## had no equivalent, so a scope now carries a key that says what it is and the
+## refusal rests on that instead (#768).
 ##
 ## An empty dictionary back means these paths cannot be a scope and the caller
 ## should take the whole snapshot: a path that does not resolve to a managed

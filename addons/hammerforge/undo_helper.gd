@@ -121,10 +121,10 @@ static func commit(
 ## Its own function because `commit_completed()` decides which restore to use
 ## from whether `scope_brush_ids` is empty, so a caller that asks for a scope and
 ## gets the fallback has to hand back `[]` with it or the undo restores a whole
-## level through `restore_brush_scope()`. Getting that pairing wrong is silent --
-## a scope is a 2-key dictionary and a state is 25, and `restore_state()` clears
-## what it is not given -- so the two are decided in one place and returned
-## together.
+## level through `restore_brush_scope()`, which puts the brushes back and none of
+## the rest. That direction is still silent. The other one is not any more: a
+## scope says it is one and `restore_state()` refuses it (#768). So the two are
+## decided in one place and returned together.
 ##
 ## `{"state": Dictionary, "scope_ids": Array}`. Pass both straight to
 ## `commit_completed()`.

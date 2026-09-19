@@ -124,6 +124,33 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   collision, its scripts and every child it had.
 
 ### Fixed
+- **An undo scope handed to `restore_state()` is refused instead of read as a
+  level** (#768). A scope is the brushes one action touched. A level state is the
+  twenty-five keys `capture_state()` writes. Both have a `brushes` list in them,
+  so a scope passed every check and was then read as a level that had nothing in
+  it: every brush the scope did not name freed, the entities cleared, and the
+  visgroups, groups, generators, duplicators, hollows and prefab instances all
+  restored from nothing. The palette survived, because that is the one thing
+  `restore_state()` only touches when the state carries it.
+  An entity scope was already refused, but by accident. It keys its records by
+  node path, which makes `entities` a set where a level state's is a list, and
+  the shape check turned it away. A brush-only scope had no equivalent tell, so
+  the safety was a property of a record shape rather than a decision.
+  `capture_brush_scope()` now puts `HFValidation.UNDO_SCOPE_KEY` on what it
+  returns, and `level_state_problem()` refuses any dictionary carrying that key
+  on presence alone. The sites that keep a pre-state still pick the restore by
+  hand, and that is still theirs to get right, but getting it wrong this way now
+  costs the step and says so rather than costing the level in silence.
+  A scope an editor session captured before this change carries no key, and
+  `restore_brush_scope()` reads it exactly as it did: it takes the records and
+  ignores everything else, so a live undo history keeps working across the
+  reload.
+  The comment at `plugin_paint_input.gd` that described the trap was wrong in
+  both directions -- it said the materials were cleared, which they were not,
+  and it did not mention the brushes outside the scope, which were deleted. It
+  and the matching notes in `undo_helper.gd`, `hf_entity_system.gd` and
+  `DEVELOPMENT.md` now say what happens.
+
 - **Nudging, rotating or flipping an entity records that entity, not the level**
   (#761). The last of the undo sites that could name what they change. A
   selection with an entity in it, and a selection of nothing but entities, both

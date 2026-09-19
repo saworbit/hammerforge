@@ -386,7 +386,7 @@ transform group while paint mode is on, so only one of the two is ever live.
 
 ## Testing
 
-The verified Godot 4.7 suite on September 19, 2026 contains **4,471 tests across 243 scripts**: **4,464 passing tests**, seven intentional no-assert safety tests, and **20,807 assertions**. All checks run on every push and pull request via GitHub Actions.
+The verified Godot 4.7 suite on September 19, 2026 contains **4,473 tests across 243 scripts**: **4,466 passing tests**, seven intentional no-assert safety tests, and **20,813 assertions**. All checks run on every push and pull request via GitHub Actions.
 
 ```bash
 # Run all tests headless

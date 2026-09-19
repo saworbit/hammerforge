@@ -95,6 +95,13 @@ func capture_state(include_transient: bool = true) -> Dictionary:
 ## pair keeps its name: `restore_brush_scope` goes into undo entries as a string,
 ## so a step an editor session took before a plugin reload still has to find it.
 ##
+## The dictionary says what it is. `HFValidation.UNDO_SCOPE_KEY` is on it and
+## `HFValidation.level_state_problem()` refuses anything carrying that key, so a
+## scope handed to `restore_state()` is turned away rather than read as a level
+## with nothing in it and clearing everything it never recorded (#768). Which
+## restore a site uses is still the site's to get right; what changed is that
+## getting it wrong this way costs the step and not the level.
+##
 ## An empty dictionary means these objects cannot be a scope and the caller
 ## should take the whole snapshot: an id that does not resolve, a brush sitting
 ## in the pending or committed container, where a scoped restore has no index to
@@ -134,10 +141,9 @@ func capture_brush_scope(brush_ids: Array, entity_paths: Array = []) -> Dictiona
 			return {}
 	if records.is_empty() and entities.is_empty():
 		return {}
-	var scope: Dictionary = {"brushes": records, "order": order}
-	# Only when there are entities, so a brush-only scope is the two-key dictionary
-	# it has always been and the steps an editor session is already holding stay
-	# exactly the shape the restore below reads.
+	var scope: Dictionary = {"brushes": records, "order": order, HFValidation.UNDO_SCOPE_KEY: true}
+	# Only when there are entities. The restore below skips an absent key and an
+	# empty set alike, so the key is there when it carries something.
 	if not entities.is_empty():
 		scope["entities"] = entities
 	return scope
@@ -156,6 +162,11 @@ func capture_brush_scope(brush_ids: Array, entity_paths: Array = []) -> Dictiona
 ##
 ## One unreadable record costs that record, not the step, the same way one
 ## unreadable brush entry costs that entry in `restore_state()`.
+##
+## The scope tag is read by `restore_state()` and not here. A step an editor
+## session captured before that tag existed has no key on it, and this still has
+## to put it back: only the records are read, and anything else on the dictionary
+## is ignored.
 func restore_brush_scope(scope: Dictionary) -> void:
 	if scope.is_empty() or root.brush_system == null:
 		return
