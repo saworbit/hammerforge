@@ -86,6 +86,10 @@ jobs:
           done
           test -f addons/hammerforge/plugin.cfg || { echo "::error::no plugin"; exit 1; }
           test -f addons/hammerforge/LICENSE   || { echo "::error::no licence"; exit 1; }
+          # The addon zip and the Asset Library install are both addons/ and
+          # nothing else, so this file is the only thing in either of them that
+          # says what a mapper has just installed (#780).
+          test -f addons/hammerforge/README.md || { echo "::error::no readme"; exit 1; }
           echo "release tree: $(find . -type f | wc -l) files"
 
       - name: Package
@@ -154,7 +158,8 @@ jobs:
         # "Refuse to ship development tooling" checks the built tree.
         run: |
           cd "$RUNNER_TEMP/relbranch"
-          git archive HEAD | tar -t | cut -d/ -f1 | sort -u > "$RUNNER_TEMP/roots.txt"
+          git archive HEAD | tar -t > "$RUNNER_TEMP/archive.txt"
+          cut -d/ -f1 "$RUNNER_TEMP/archive.txt" | sort -u > "$RUNNER_TEMP/roots.txt"
           {
             echo LICENSE
             echo addons
@@ -165,6 +170,16 @@ jobs:
             echo "See RELEASE_GITATTRIBUTES in tools/build_release_tree.py."
             exit 1
           fi
+          # The step above only compares the archive's *roots*, so it cannot see
+          # a file lost from inside addons/. The addon README is the one that
+          # would go quietly: `/README.md export-ignore` is anchored to the root
+          # by that leading slash, and dropping the slash would strip this one
+          # too, leaving an Asset Library install with no explanation in it.
+          grep -qx "addons/hammerforge/README.md" "$RUNNER_TEMP/archive.txt" || {
+            echo "::error::the addon README is not in the Asset Library download"
+            echo "Check the export-ignore rules in RELEASE_GITATTRIBUTES."
+            exit 1
+          }
           echo "installing this gives a project addons/ and LICENSE, and nothing else"
 
 

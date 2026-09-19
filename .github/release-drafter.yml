@@ -47,11 +47,28 @@ version-resolver:
 change-template: "- $TITLE (#$NUMBER) @$AUTHOR"
 no-changes-template: "- No user-facing changes."
 
+# Two archives are attached, with near-identical names, and the bigger one sorts
+# first. So the notes have to say which is which or people take the wrong one
+# and then dig `addons/hammerforge` back out of it by hand.
+#
+# `<version>` is written literally rather than as $RESOLVED_VERSION, because the
+# drafter names the *next* version and the tag that actually ships is not always
+# it: 0.3.0 went straight to 0.3.2, and a confidently wrong filename is worse
+# than a pattern a reader can match against the assets listed below it.
 template: |
   $CHANGES
 
   **Full changelog:** https://github.com/saworbit/hammerforge/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION
 
-  Installing: download the zip below, or point the Godot Asset Library at the
-  `release` branch. See [CHANGELOG.md](https://github.com/saworbit/hammerforge/blob/main/CHANGELOG.md)
+  ## Installing
+
+  - `hammerforge-<version>-addon.zip` is the plugin on its own. Extract it into
+    your project, then enable HammerForge under
+    **Project > Project Settings > Plugins**. **Most people want this one.**
+  - `hammerforge-<version>.zip` is the same plugin with `LICENSE`, `README.md`
+    and `.gitignore` beside it.
+  - Or install from inside Godot: open **AssetLib**, search for HammerForge and
+    press **Install**.
+
+  See [CHANGELOG.md](https://github.com/saworbit/hammerforge/blob/main/CHANGELOG.md)
   for the curated account of this release.
